@@ -70,10 +70,7 @@ class TypeRefPrinterTest extends Test {
 	// --- route 2: free short name -> import + short name ---
 
 	public function testFreeNameGetsImportAndShortName(): Void {
-		final src: String = 'package pkg;\n\nclass C {}\n';
-		final p: TypeRefPrinter = printer(src);
-		Assert.equals('Widget', p.print('pkg.deep.Widget').text);
-		Assert.equals('import pkg.deep.Widget;', importText(p));
+		assertImported('package pkg;\n\nclass C {}\n');
 	}
 
 	public function testRepeatedPrintImportsOnce(): Void {
@@ -96,13 +93,81 @@ class TypeRefPrinterTest extends Test {
 		Assert.equals('package pkg;\nimport a.deep.Alpha;\nimport z.deep.Zeta;\n\nclass C {}\n', applyImports(p, src));
 	}
 
+	// --- route 2: what a LITERAL's text is allowed to veto ---
+
+	/**
+	 * A double-quoted Haxe string NEVER interpolates, so its whole content is inert text. The
+	 * pre-mask reading refused the import on the strength of an assertion message.
+	 */
+	public function testDoubleQuotedStringMentionDoesNotVetoTheImport(): Void {
+		assertImported(withBody('"Widget should exist"'));
+	}
+
+	/** The plain-text fragments of a single-quoted string are inert too — nothing there binds. */
+	public function testPlainSingleQuotedStringMentionDoesNotVetoTheImport(): Void {
+		assertImported(withBody("'Widget should exist'"));
+	}
+
+	/** A regex body is pattern syntax, not Haxe — no identifier of the file's scope lives in it. */
+	public function testRegexLiteralMentionDoesNotVetoTheImport(): Void {
+		assertImported(withBody('~/Widget[0-9]/g'));
+	}
+
+	/**
+	 * `$$` is the ESCAPED dollar, so what follows it is text, not the `$name` shorthand — the
+	 * segment split has to survive one trigger to read the next fragment correctly.
+	 */
+	public function testEscapedDollarBeforeTheNameDoesNotVetoTheImport(): Void {
+		assertImported(withBody("'cost $$Widget'"));
+	}
+
+	/**
+	 * The hole of an interpolation is CODE, and a literal nested inside it is text again — so
+	 * masking has to recurse through the hole rather than stop at the outer literal.
+	 */
+	public function testNestedLiteralInsideAnInterpolationHoleDoesNotVetoTheImport(): Void {
+		assertImported(withBody("'a ${g(\"Widget\")} b'"));
+	}
+
+	/** A double-quoted literal decodes escapes but never interpolates — `\x24Widget` is text. */
+	public function testEscapeSpelledDollarInADoubleQuotedStringDoesNotVetoTheImport(): Void {
+		assertImported(withBody('"a \\x24Widget b"'));
+	}
+
+	/** `${ … }` in a single-quoted string IS a reference — the whole reason a literal is not masked whole. */
+	public function testInterpolationHoleMentionStillVetoesTheImport(): Void {
+		assertNotImported(withBody("'a ${Widget.x} b'"));
+	}
+
+	/** The `$name` shorthand is a read of `Widget` exactly as a bare identifier would be. */
+	public function testInterpolationShorthandMentionStillVetoesTheImport(): Void {
+		assertNotImported(withBody("'a $Widget b'"));
+	}
+
+	/**
+	 * Haxe decodes escapes BEFORE it scans a single-quoted literal for interpolation, so
+	 * `'\x24Widget'` is a read of `Widget`. Only the tree knows — the raw bytes spell a plain
+	 * fragment — which is why the mask is taken off the projection and not off a lexer.
+	 */
+	public function testEscapeSpelledInterpolationStillVetoesTheImport(): Void {
+		assertNotImported(withBody("'a \\x24Widget b'"));
+	}
+
+	/**
+	 * A `${ … }` whose trigger was escape-spelled is a hole the rescan DISCOVERS, and it carries
+	 * no parsed child expression — so nothing inside it can be recognised as text and the whole
+	 * hole stays unmasked. Fail-closed by construction, and the fixture is here because the
+	 * opposite is one list entry away: adding `Block` to the text segments would drop this veto
+	 * with the rest of the suite still green.
+	 */
+	public function testDiscoveredInterpolationHoleStillVetoesTheImport(): Void {
+		assertNotImported(withBody("'a \\x24{Widget.x} b'"));
+	}
+
 	// --- route 3: taken short name -> correct fully-qualified form ---
 
 	public function testImportedOtherPathStaysQualified(): Void {
-		final src: String = 'package pkg;\n\nimport other.Widget;\n\nclass C {}\n';
-		final p: TypeRefPrinter = printer(src);
-		Assert.equals('pkg.deep.Widget', p.print('pkg.deep.Widget').text);
-		Assert.isFalse(p.hasPendingImports());
+		assertNotImported('package pkg;\n\nimport other.Widget;\n\nclass C {}\n');
 	}
 
 	public function testAliasBoundNameStaysQualified(): Void {
@@ -642,6 +707,25 @@ class TypeRefPrinterTest extends Test {
 
 	private function printer(source: String): TypeRefPrinter {
 		return printerWith(source, null);
+	}
+
+	/** A one-class file whose only mention of `Widget` outside the printed path is the literal `body`. */
+	private function withBody(body: String): String {
+		return 'package pkg;\n\nclass C {\n\n\tfunction f() {\n\t\tfinal s = $body;\n\t}\n\n}\n';
+	}
+
+	/** `pkg.deep.Widget` printed into `src` takes route 2: the short name plus a fresh import. */
+	private function assertImported(src: String): Void {
+		final p: TypeRefPrinter = printer(src);
+		Assert.equals('Widget', p.print('pkg.deep.Widget').text);
+		Assert.equals('import pkg.deep.Widget;', importText(p));
+	}
+
+	/** `pkg.deep.Widget` printed into `src` falls to route 3: the name is taken, so no import is promised. */
+	private function assertNotImported(src: String): Void {
+		final p: TypeRefPrinter = printer(src);
+		Assert.equals('pkg.deep.Widget', p.print('pkg.deep.Widget').text);
+		Assert.isFalse(p.hasPendingImports());
 	}
 
 	private function printerWith(source: String, index: Null<SymbolIndex>): TypeRefPrinter {
