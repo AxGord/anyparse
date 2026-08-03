@@ -123,6 +123,24 @@ typedef TypeDeclInfo = {
 	var typeParamArity: Int;
 
 	/**
+	 * The WRITTEN names of the declaration header's type parameters, in header order
+	 * (`class Box<T:Item, K>` → `['T', 'K']`). Lets a consumer substitute a member declared as
+	 * one of them for the matching type ARGUMENT of the receiver that reached it.
+	 *
+	 * EMPTY when the header carried none OR when its `<…>` list could not be read as a plain
+	 * name list (a segment that is not an identifier after its metadata run and before its `:`
+	 * constraint or `=` default). Never read empty as "non-generic" — `typeParamArity` answers
+	 * that question, and the two disagree exactly when the names were unreadable, which is the
+	 * case a substituting consumer must refuse rather than guess at.
+	 *
+	 * The list is POSITIONAL — its index IS the argument index a consumer substitutes through — so
+	 * a phantom entry is worse than an empty list: it shifts every parameter after it. That is why
+	 * the header segmentation (`RefactorSupport.splitTypeArgumentList`) has to know every delimiter
+	 * a Haxe constraint may nest a comma inside, structures (`<T:{a:Int, b:Int}>`) included.
+	 */
+	var typeParamNames: Array<String>;
+
+	/**
 	 * Simple names (last `.` segment) of this type's `extends` / `implements`
 	 * targets — its direct supertypes. Drives `hasSubtype`, the first gate of a
 	 * cross-file-safe private-member rename (a subtype could access the member).
@@ -539,20 +557,127 @@ final class SymbolIndex {
 	 * Null when the root, any intermediate type, or any member is unresolved / ambiguous (fails
 	 * closed). Feeds `RefactorSupport.staticRootPathTypeSource` and the value-root gate.
 	 */
-	public function resolvePathFinalMemberTypeSource(fromFile: String, startTypeName: String, memberPath: Array<String>): Null<String> {
+	public inline function resolvePathFinalMemberTypeSource(
+		fromFile: String, startTypeName: String, memberPath: Array<String>
+	): Null<String> {
+		return pathFinalMemberWalk(fromFile, startTypeName, memberPath, false);
+	}
+
+	/**
+	 * `resolvePathFinalMemberTypeSource` with TYPE-ARGUMENT SUBSTITUTION: `startTypeSource` is the
+	 * root's WRITTEN type (`Box<Item>`, arguments included), and a member declared as one of its
+	 * type's parameters answers the matching argument instead of the parameter name. Resolves
+	 * `Box<Item>.payload : T` to `Item`, which is what makes a generic container's element member
+	 * reachable at all — the verbatim `T` resolves to no type.
+	 *
+	 * Strictly more conservative than the plain walk wherever it is unsure: substitution applies
+	 * ONLY to a member declared DIRECTLY on the current type (an INHERITED member's `T` names the
+	 * SUPERTYPE's parameter, and the extends-clause argument mapping is not modelled), and any
+	 * effective source that STILL mentions a parameter name of the type it came from aborts THIS
+	 * walk. Null on every unresolved / ambiguous link, exactly like the plain walk.
+	 *
+	 * "Aborts this walk" is the honest scope: the caller
+	 * (`RefactorSupport.pathReceiverMemberTypeSource`) treats a null the same way it treats one from
+	 * the plain walk and drops to its package-blind fallback, which may still answer the verbatim
+	 * parameter source. That keeps the deep answer a superset of the shallow one, and a bare
+	 * parameter name is not a type any consumer of this chain acts on.
+	 */
+	public inline function resolveGenericPathFinalMemberTypeSource(
+		fromFile: String, startTypeSource: String, memberPath: Array<String>
+	): Null<String> {
+		return pathFinalMemberWalk(fromFile, startTypeSource, memberPath, true);
+	}
+
+	/**
+	 * The shared body of the two path walks. With `substitute == false` it is the plain
+	 * import-aware walk, byte for byte what `resolvePathFinalMemberTypeSource` always did; with
+	 * `substitute == true` it additionally carries the receiver's written type ARGUMENTS alongside
+	 * the current type and rewrites a parameter-typed member through them.
+	 *
+	 * `args` is re-seeded at every step from the effective member source, so the substitution
+	 * follows a chain of generic containers (`Array<Box<Item>>` → `Box<Item>` → `Item`). The
+	 * fail-closed rule that ends the walk when a parameter name survives substitution is what keeps
+	 * that sound: without it an unsubstituted `T` would travel forward as if it were a concrete
+	 * argument and could collide with the NEXT type's parameter of the same name, or with a project
+	 * type literally called `T` / `K` / `V`.
+	 */
+	private function pathFinalMemberWalk(fromFile: String, startSource: String, memberPath: Array<String>, substitute: Bool): Null<String> {
 		if (memberPath.length == 0) return null;
 		final origin: Null<FileInfo> = _files.find(f -> f.file == fromFile);
 		if (origin == null) return null;
-		var current: Null<ResolvedType> = resolveTypeRef(startTypeName, origin);
+		var args: Array<String> = [];
+		var startName: String = startSource;
+		if (substitute) {
+			final startArgs: Null<Array<String>> = RefactorSupport.typeArgumentSourcesOf(startSource);
+			if (startArgs != null) {
+				final head: Null<String> = RefactorSupport.outerNominalOf(startSource);
+				if (head == null) return null;
+				args = startArgs;
+				startName = head;
+			}
+		}
+		var current: Null<ResolvedType> = resolveTypeRef(startName, origin);
 		for (i in 0...memberPath.length - 1) {
 			if (current == null) return null;
 			final cur: ResolvedType = current;
 			final memberSource: Null<String> = memberTypeSourceWalk(cur, memberPath[i], []);
 			if (memberSource == null) return null;
-			final nominal: String = StringTools.trim(memberSource.split('<')[0]);
+			final effective: Null<String> = substitute ? substitutedMemberSource(cur, memberPath[i], memberSource, args) : memberSource;
+			if (effective == null) return null;
+			if (substitute) args = RefactorSupport.typeArgumentSourcesOf(effective) ?? [];
+			final nominal: String = StringTools.trim(effective.split('<')[0]);
 			current = resolveTypeRef(nominal, cur.file);
 		}
-		return current == null ? null : memberTypeSourceWalk(current, memberPath[memberPath.length - 1], []);
+		if (current == null) return null;
+		final last: ResolvedType = current;
+		final member: String = memberPath[memberPath.length - 1];
+		final finalSource: Null<String> = memberTypeSourceWalk(last, member, []);
+		if (finalSource == null || !substitute) return finalSource;
+		return substitutedMemberSource(last, member, finalSource, args);
+	}
+
+	/**
+	 * `memberSource` with `cur`'s type parameters resolved through `args`, or null when the result
+	 * would still name one of them.
+	 *
+	 * Substitution fires only when ALL three hold: the member is declared DIRECTLY on `cur.type`
+	 * (an inherited one's parameter name belongs to the supertype's header, a mapping this index
+	 * does not model); its trimmed source is EXACTLY one parameter name (a source that merely
+	 * CONTAINS one, `Array<T>`, would need a rewrite, not a lookup); and that name's position is
+	 * covered by the arguments actually written on the receiver. Otherwise the verbatim source
+	 * stands — and is then rejected by the parameter-mention gate if it names a parameter, so an
+	 * unsubstitutable parameter can never leave this function as if it were a concrete type.
+	 *
+	 * The DIRECT-member gate is the one that stops a wrong CONCRETE type, not merely an
+	 * unresolvable one: a subtype whose header parameter happens to share the supertype's name but
+	 * passes something else up (`class Der<T:Item> extends Base<Str>`, `Base<T> { var u:T; }`)
+	 * would otherwise substitute `Der`'s argument into `Base`'s parameter and resolve `u` to the
+	 * wrong type entirely. `SimplifyNegatedCompoundCheckTest.testSupertypeParamNameCollisionKeepsWrap`
+	 * is the fixture that fails if it is removed.
+	 */
+	private function substitutedMemberSource(cur: ResolvedType, member: String, memberSource: String, args: Array<String>): Null<String> {
+		final params: Array<String> = cur.type.typeParamNames;
+		final at: Int = params.indexOf(StringTools.trim(memberSource));
+		final declaredHere: Bool = cur.type.members.exists(m -> m.name == member);
+		final effective: String = declaredHere && at >= 0 && at < args.length ? args[at] : memberSource;
+		return mentionsTypeParam(effective, params) ? null : effective;
+	}
+
+	/** Whether `text` names any of `params` as a WHOLE identifier token — `Item` does not mention `T`, `Array<T>` does. */
+	private static function mentionsTypeParam(text: String, params: Array<String>): Bool {
+		if (params.length == 0) return false;
+		var i: Int = 0;
+		while (i < text.length) {
+			if (!RefactorSupport.isIdentStartChar(StringTools.fastCodeAt(text, i))) {
+				i++;
+				continue;
+			}
+			var end: Int = i + 1;
+			while (end < text.length && RefactorSupport.isIdentChar(StringTools.fastCodeAt(text, end))) end++;
+			if (params.contains(text.substring(i, end))) return true;
+			i = end;
+		}
+		return false;
 	}
 
 	/**

@@ -151,12 +151,15 @@ final class SymbolIndexBuilder {
 			if (typeDecl != null) {
 				final supersRaw: Array<String> = collectSupertypesRaw(node);
 				final isAbstract: Bool = abstractKinds.contains(typeDecl.kind);
+				final paramsText: Null<String> = declTypeParamListText(source, typeDecl);
+				final paramSegments: Array<String> = paramsText == null ? [] : RefactorSupport.splitTypeArgumentList(paramsText);
 				types.push({
 					name: typeDecl.name,
 					kind: typeDecl.kind,
 					span: typeDecl.fullSpan,
 					isMain: typeDecl.name == basename,
-					typeParamArity: declTypeParamArity(source, typeDecl),
+					typeParamArity: paramSegments.length,
+					typeParamNames: declTypeParamNames(paramSegments),
 					supertypes: supersRaw.map(simpleName),
 					supertypesRaw: supersRaw,
 					interfaces: collectImplementsRaw(node).map(simpleName),
@@ -441,42 +444,83 @@ final class SymbolIndexBuilder {
 	}
 
 	/**
-	 * Count the type parameters written on `decl`'s header: locate the name token
-	 * in the header text (the projection drops `<...>` params entirely, so no node's
-	 * span points AT the name), then bracket-match a following `<...>` (a `->`
-	 * return arrow's `>` is not a closer) and count the top-level commas. No `<`
-	 * after the name yields 0 (non-generic).
+	 * The INNER text of the `<...>` type-parameter list written on `decl`'s header
+	 * (`class Cell<Data, K:B>` -> `Data, K:B`), or null when the header carries no
+	 * `<` after its name or the bracket run never closes. Locate the name token in
+	 * the header text (the projection drops `<...>` params entirely, so no node's
+	 * span points AT the name), then bracket-match the following `<...>` (a `->`
+	 * return arrow's `>` is not a closer).
 	 *
 	 * The scan starts at `decl.nameNode`'s span, falling back to `fullSpan`. The
 	 * name node IS the header for every shape - the inner `ClassForm` of a `final
 	 * class`, the `*Head` of a split-header conditional region - so the scan never
 	 * has to cross a `final` keyword or a whole `#if` line to reach the name.
+	 *
+	 * ONE scan answers both header questions: the arity (`splitTypeArgumentList`'s
+	 * segment count) and the parameter NAMES. They used to be separate scans with
+	 * separate comma logic, which is how they could have disagreed.
 	 */
-	private static function declTypeParamArity(source: String, decl: TypeDeclMatch): Int {
+	private static function declTypeParamListText(source: String, decl: TypeDeclMatch): Null<String> {
 		final anchor: Null<Span> = decl.nameNode.span;
 		final from: Int = anchor == null ? decl.fullSpan.from : anchor.from;
 		final bodyAt: Int = source.indexOf('{', from);
 		final nameAt: Int = source.indexOf(decl.name, from);
-		if (nameAt < 0 || (bodyAt >= 0 && nameAt > bodyAt)) return 0;
+		if (nameAt < 0 || (bodyAt >= 0 && nameAt > bodyAt)) return null;
 		var i: Int = nameAt + decl.name.length;
 		while (i < source.length && StringTools.isSpace(source, i)) i++;
-		if (i >= source.length || StringTools.fastCodeAt(source, i) != '<'.code) return 0;
+		if (i >= source.length || StringTools.fastCodeAt(source, i) != '<'.code) return null;
+		final start: Int = i + 1;
 		var depth: Int = 0;
-		var commas: Int = 0;
 		while (i < source.length) {
 			switch StringTools.fastCodeAt(source, i) {
 				case '<'.code:
 					depth++;
 				case '>'.code if (StringTools.fastCodeAt(source, i - 1) != '-'.code):
 					depth--;
-					if (depth == 0) return commas + 1;
-				case ','.code if (depth == 1):
-					commas++;
+					if (depth == 0) return source.substring(start, i);
 				case _:
 			}
 			i++;
 		}
-		return 0;
+		return null;
+	}
+
+	/**
+	 * The WRITTEN name of one header type-parameter segment (`K:Base` -> `K`), or null when the
+	 * segment does not start with a plain identifier. The name ends at the first `:` (constraint),
+	 * `=` (default) or whitespace - the only three things Haxe lets follow it.
+	 *
+	 * Metadata on a type parameter (`class C<@:const N>`) is deliberately NOT stepped over: the
+	 * grammar does not parse that declaration at all, so such a file is skipped by the index long
+	 * before this runs. Were it ever to parse, the segment would yield no identifier and refuse
+	 * the whole header - which is the fail-closed direction anyway.
+	 */
+	private static function typeParamNameOf(segment: String): Null<String> {
+		final text: String = StringTools.trim(segment);
+		var end: Int = 0;
+		while (end < text.length) {
+			final ch: Int = StringTools.fastCodeAt(text, end);
+			if (ch == ':'.code || ch == '='.code || RefactorSupport.isSpace(ch)) break;
+			end++;
+		}
+		final name: String = text.substring(0, end);
+		return RefactorSupport.isIdentifier(name) ? name : null;
+	}
+
+	/**
+	 * Every segment's parameter name, or EMPTY when ANY segment fails to yield one -
+	 * a partial list would silently mis-index a substitution, so all-or-nothing is
+	 * the only safe answer. Empty is also what a non-generic header gives, which is
+	 * why `TypeDeclInfo.typeParamNames` must never be read as proof of non-genericity.
+	 */
+	private static function declTypeParamNames(segments: Array<String>): Array<String> {
+		final out: Array<String> = [];
+		for (segment in segments) {
+			final name: Null<String> = typeParamNameOf(segment);
+			if (name == null) return [];
+			out.push(name);
+		}
+		return out;
 	}
 
 	/**

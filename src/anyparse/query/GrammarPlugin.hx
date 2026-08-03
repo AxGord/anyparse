@@ -1741,6 +1741,35 @@ typedef RefShape = {
 	@:optional var indexedElementTypeParams: Map<String, Int>;
 
 	/**
+	 * Scope-introducing node kinds whose OWN name binds the ITERATION ELEMENT and whose
+	 * `children[0]` is the iterable expression (Haxe `ForStmt` / `ForExpr`). Lets a consumer
+	 * answer the type of a `for` binder, which no `:Type` annotation covers: the binder has
+	 * none, so `TypeInfoProvider.declaredTypes` has no entry for it and the element type can
+	 * only come from the iterable.
+	 *
+	 * DISTINCT from the singular `forStmtKind`, which names the STATEMENT kind
+	 * `redundant-map-iter-key` reads a discarded key off: this is the BINDER question, so it
+	 * also lists the comprehension / expression form of the loop, whose binder scopes exactly
+	 * the same way. Optional; unset makes the for-binding element-type arm a no-op (every
+	 * binder stays unresolved, which is the conservative direction).
+	 */
+	@:optional var iterationBindingKinds: Array<String>;
+
+	/**
+	 * Maps a container type's SIMPLE name to the index of the type parameter a `for` iteration
+	 * over it YIELDS (Haxe `Array<T>` → 0, `Map<K, V>` → 1, since iterating a map yields its
+	 * VALUES). Only containers whose iteration provably yields the listed parameter belong
+	 * here; any other container leaves the binder unresolved.
+	 *
+	 * A DIFFERENT question from `indexedElementTypeParams`, which answers what INDEX ACCESS
+	 * `x[k]` yields. The two happen to agree on the three container names they share, but the
+	 * questions are independent — a container can be iterable without being indexable and vice
+	 * versa — so they must not be merged. Optional; unset makes the for-binding element-type
+	 * arm a no-op.
+	 */
+	@:optional var iterationElementTypeParams: Map<String, Int>;
+
+	/**
 	 * Expression kinds whose SUBTREE escapes the type system (Haxe `untyped` —
 	 * `UntypedExpr`). A write inside one has neither a trustworthy receiver type
 	 * nor a trustworthy RHS type, so `FieldWriteIndex` treats the subtree like an

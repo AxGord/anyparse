@@ -13,6 +13,7 @@ import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
+import anyparse.query.RefactorSupport.ChainTypeContext;
 
 /**
  * Shared scan helpers for the `run` / `fix` paths of the analysis checks.
@@ -236,11 +237,25 @@ final class CheckScan {
 	 * `BooleanLogicSupport.negateCondition`. Answers a node's declared type nominal through the
 	 * run's resolution scope, or null for anything it cannot pin, which keeps the wrap.
 	 *
-	 * The probe is `RefactorSupport.expressionTypeNominal`, which resolves a METHOD CALL's return
-	 * nominal through its receiver chain (`chain.indexOf(x)` → `Int`) on top of the plain
-	 * identifier / field-path answer. That is added PROOF only: every extra resolution can turn a
-	 * `!(a < b)` wrap into a licensed flip, never the reverse, so the unproven → refuse default
-	 * every guard-family consumer relies on is untouched.
+	 * The probe is `RefactorSupport.expressionTypeNominal`, run in its DEEP mode — the
+	 * `ChainTypeContext` built below. On top of the plain identifier / field-path answer it
+	 * resolves three further shapes:
+	 *
+	 *  - a METHOD CALL's return nominal, through its receiver chain (`chain.indexOf(x)` → `Int`);
+	 *  - a `for` BINDER's type, read off the iterable's element type parameter — the binder carries
+	 *    no `:Type`, so it has no `declaredTypes` entry of its own;
+	 *  - a generic member's TYPE ARGUMENT, so `b.payload.text` on a `b:Box<Item>` reaches `Item`'s
+	 *    member instead of stopping at the verbatim parameter name `T`.
+	 *
+	 * All three are added PROOF only: every extra resolution can turn a conservative `!(a < b)`
+	 * wrap into a licensed flip, never the reverse, so the unproven → refuse default every
+	 * guard-family consumer relies on is untouched.
+	 *
+	 * That is exactly why the deep mode is an OPT-IN parameter rather than a widening of
+	 * `RefactorSupport.valueTypeNominal`: its other consumers (`map-keys-lookup`,
+	 * `prefer-static-extension`) read a resolved nominal as a licence to ACT, where more resolution
+	 * is the unsafe direction. They stay shallow BY CONSTRUCTION — they do not pass a chain context
+	 * and there is no way for one to reach them — not by a convention a later edit could forget.
 	 *
 	 * Null when the grammar carries no type information at all: the caller then passes nothing
 	 * and every ordered comparison stays wrapped, exactly as before this seam existed.
@@ -255,7 +270,8 @@ final class CheckScan {
 		// The resolution index sees the std + configured libraries, so a member type such as
 		// `Array.length` resolves; the report index alone would stop at the project boundary.
 		final resolved: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
-		return node -> RefactorSupport.expressionTypeNominal(node, tree, shape, declaredTypes, resolved, file);
+		final chain: ChainTypeContext = { declaredTypeSources: provider.declaredTypeSources(source), source: source };
+		return node -> RefactorSupport.expressionTypeNominal(node, tree, shape, declaredTypes, resolved, file, chain);
 	}
 
 	/**

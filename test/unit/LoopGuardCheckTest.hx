@@ -60,9 +60,11 @@ class LoopGuardCheckTest extends Test {
 	}
 
 	public function testLessThanNotFlagged(): Void {
-		// The lifted header would read `if (!(x < 10))` — `x`'s type does not license the flip,
-		// so the header buys nothing over the `continue` guard and the site is left alone.
-		Assert.equals(0, violations(wrap('for (x in xs) {\n\t\t\tif (x < 10) continue;\n\t\t\ttrace(x);\n\t\t}')).length);
+		// The lifted header would read `if (!(q < 10))` — `q` is unbound, so its type does not
+		// license the flip, the header buys nothing over the `continue` guard and the site is left
+		// alone. Deliberately NOT the loop variable `x`: `wrap` declares `xs:Array<Int>` and the
+		// for-binding element-type arm types `x` as `Int`, which licenses the flip.
+		Assert.equals(0, violations(wrap('for (x in xs) {\n\t\t\tif (q < 10) continue;\n\t\t\ttrace(x);\n\t\t}')).length);
 	}
 
 	public function testComplexCondDeMorgan(): Void {

@@ -505,6 +505,38 @@ class SymbolIndexSliceTest extends Test {
 	}
 
 	/**
+	 * The header type-parameter table: arity AND the ordered names, over every written form the
+	 * scan has to segment. `typeParamNames` is POSITIONAL — its index is the argument index the
+	 * substituting path walk reads — so a phantom or shifted entry resolves a member to the wrong
+	 * type. The shape worth naming is the STRUCTURAL constraint `<T:{a:Int, b:Int}>`: its comma is
+	 * not a parameter separator, and a brace-blind segmentation read it as a second parameter
+	 * named after the structure's second field.
+	 *
+	 * Two forms are absent on purpose, both because the grammar refuses them outright (a file
+	 * carrying either is skipped by the index, so no scan ever sees it): the Haxe 3 paren
+	 * multi-constraint `<T:(A, B)>` — `<T:A & B>` is its modern spelling and is pinned here — and
+	 * metadata on a parameter, `<@:const N>`.
+	 */
+	public function testHeaderTypeParamNames(): Void {
+		assertHeaderParams('class Plain {}', 0, []);
+		assertHeaderParams('class One<T> {}', 1, ['T']);
+		assertHeaderParams('class Two<K, V> {}', 2, ['K', 'V']);
+		assertHeaderParams('class Bound<T:Item> {}', 1, ['T']);
+		assertHeaderParams('class Amp<T:A & B> {}', 1, ['T']);
+		assertHeaderParams('class Struct<T:{a:Int, b:Int}> {}', 1, ['T']);
+		assertHeaderParams('class Nested<T:Array<Int>, K> {}', 2, ['T', 'K']);
+		assertHeaderParams('class Fn<T:Int->Void> {}', 1, ['T']);
+	}
+
+	/** Build a one-type index from `source` and assert its single declaration's type-parameter arity and names. */
+	private function assertHeaderParams(source: String, arity: Int, names: Array<String>): Void {
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/H.hx', source: source }], plugin());
+		final decl: TypeDeclInfo = fileInfoOf(index, 'src/H.hx').types[0];
+		Assert.equals(arity, decl.typeParamArity, 'arity of $source');
+		Assert.equals(names.join(','), decl.typeParamNames.join(','), 'names of $source');
+	}
+
+	/**
 	 * An `import` guarded by a `#if ... #end` region is LIFTED into the file's
 	 * import scope, so a reference resolvable only through that guarded import is
 	 * seen by the index. The top-level import is kept alongside it.

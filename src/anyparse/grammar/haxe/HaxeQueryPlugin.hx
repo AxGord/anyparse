@@ -585,6 +585,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			fnExprKind: 'FnExpr',
 			typeAnnotationKinds: ['Named', 'Anon', 'Arrow', 'ArrowFn'],
 			forStmtKind: 'ForStmt',
+			iterationBindingKinds: ['ForStmt', 'ForExpr'],
 			paramKinds: ['Required', 'Optional', 'Rest'],
 			supertypeClauseKinds: ['ExtendsClause', 'ImplementsClause'],
 			noBodyKind: 'NoBody',
@@ -724,6 +725,19 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			publicModifierKind: 'Public',
 			classDeclKinds: ['ClassDecl', 'AbstractClassDecl'],
 			indexedElementTypeParams: ['Map' => 1, 'Array' => 0, 'Vector' => 0],
+			// Haxe iteration semantics: `Array<T>` / `haxe.ds.Vector<T>` / `List<T>` yield `T`;
+			// `Iterable<T>` yields `T` through the `iterator():Iterator<T>` it declares, and an
+			// `Iterator<T>` is itself iterable yielding `T`. `Map<K, V>` is the odd one: its
+			// `iterator()` yields the VALUES, so the element parameter is 1, not 0 (the keys need
+			// the explicit `for (k => v in m)` form, which the binder arm refuses).
+			iterationElementTypeParams: [
+				'Array' => 0,
+				'Vector' => 0,
+				'List' => 0,
+				'Iterable' => 0,
+				'Iterator' => 0,
+				'Map' => 1
+			],
 			untypedKinds: ['UntypedExpr'],
 			casePatternBinderKinds: ['Capture'],
 			aliasingDeclKinds: ['TypedefDecl', 'AbstractDecl', 'EnumAbstractDecl'],
