@@ -241,7 +241,6 @@ final class TypeRefPrinter {
 		return buf.toString();
 	}
 
-
 	/**
 	 * The declaration path the written reference `ref` denotes IN THIS FILE, PROVEN against the
 	 * resolution index: `pack.Module` for a module's main type, `pack.Module.SubType` for a
@@ -324,10 +323,28 @@ final class TypeRefPrinter {
 		_pkg = root == null ? null : packageOf(root);
 		_module = root == null ? null : mainTypeNameOf(root);
 		_aliasTargets = source == null || root == null ? [] : aliasTargetsOf(source, root);
+		// Ctor-hoisted like every sibling scan: both `shadowedByGuardedImport` and
+		// `shadowedByBulkImport` ask for these, once per printed reference.
+		_guardedImports = root == null ? [] : guardedImportDecls(root);
+		_bulkImports = root == null ? [] : bulkImportDecls(root, _guardedImports);
 		// A `package` declaration with no recoverable span leaves no legal anchor: the file-start
 		// fallback would splice the import AHEAD of `package`, which does not parse. Refuse to
 		// import at all rather than emit that.
 		_canAnchorImports = root == null || !hasSpanlessPackage(root);
+	}
+
+	/**
+	 * The file's COMMENT regions, lexed on FIRST use and cached for the rest of this printer's
+	 * life. Lazy rather than ctor-hoisted because only `canAddImport` needs them, and only after
+	 * the shadowing and pending-collision gates have already let a path through — most printed
+	 * references never reach it, and the lex is a whole-file pass.
+	 */
+	private function commentRegions(source: String): Array<Span> {
+		final cached: Null<Array<Span>> = _commentRegions;
+		if (cached != null) return cached;
+		final regions: Array<Span> = RefactorSupport.collectCommentRegions(source);
+		_commentRegions = regions;
+		return regions;
 	}
 
 	/** Whether the file carries a `package` declaration whose span the grammar did not record. */
@@ -384,7 +401,13 @@ final class TypeRefPrinter {
 		if (source == null || _root == null || !_canAnchorImports) return false;
 		if (shadowedLocally(canonical, simple)) return false;
 		if (_pendingImports.exists(p -> p != canonical && lastSegment(p) == simple)) return false;
-		return !RefactorSupport.referencedInRange(source, simple, 0, source.length, owned ?? []);
+		// A COMMENT mention of the simple name is masked out: the scan asks whether anything in
+		// this file BINDS the name, and a comment binds nothing — while the T15 reading refused
+		// the import on the strength of a word in a doc-comment or an assertion message. String
+		// literals stay unmasked on purpose (`collectCommentRegions`): a single-quoted Haxe string
+		// interpolates, so `'${Foo.x}'` is a real reference.
+		final exempt: Array<Span> = (owned ?? []).concat(commentRegions(source));
+		return !RefactorSupport.referencedInRange(source, simple, 0, source.length, exempt);
 	}
 
 	/**
@@ -541,7 +564,7 @@ final class TypeRefPrinter {
 		// indexed file (the std is in the default resolution scope), and the argument is loop-invariant.
 		final declarers: Array<FileInfo> = index == null ? [] : index.declaringFiles(simple);
 		if (index != null && declarers.length == 0) return false;
-		for (c in bulkImportDecls(root)) {
+		for (c in _bulkImports) {
 			final path: Null<String> = c.name;
 			if (path == null) continue;
 			if (c.kind == WILDCARD_IMPORT_KIND) {
@@ -566,26 +589,42 @@ final class TypeRefPrinter {
 	 * conservative reading; ignoring it was a FALSE NEGATIVE — the direction that emits a short
 	 * name binding a different type in one build configuration.
 	 */
-	private static function bulkImportDecls(root: QueryNode): Array<QueryNode> {
+	private static function bulkImportDecls(root: QueryNode, guarded: Array<QueryNode>): Array<QueryNode> {
 		final out: Array<QueryNode> = [for (c in root.children) if (BULK_IMPORT_KINDS.contains(c.kind)) c];
-		for (c in guardedImportDecls(root)) if (BULK_IMPORT_KINDS.contains(c.kind)) out.push(c);
+		for (c in guarded) if (BULK_IMPORT_KINDS.contains(c.kind)) out.push(c);
 		return out;
 	}
 
 	/**
-	 * The file's import-ish declarations LIFTED out of a `#if … #end` region — the ones the
-	 * grammar nests under a `Conditional` rather than leaving at the top level, and therefore
-	 * exactly the ones `_importMap` and `_aliasTargets` (both top-level scans) cannot see. One
-	 * level of nesting is the whole shape: the grammar lifts a guarded declaration into the
-	 * region node's own children, it does not re-nest per directive branch.
+	 * The file's import-ish declarations LIFTED out of a `#if … #end` region — the ones the grammar
+	 * nests under a `Conditional` rather than leaving at the top level, and therefore exactly the ones
+	 * `_importMap` and `_aliasTargets` (both top-level scans) cannot see.
+	 *
+	 * The walk RECURSES. Flattening is a property of a region's BRANCHES, not of nested regions: the
+	 * grammar lifts every `#if` / `#elseif` / `#else` branch of ONE directive into that region node's
+	 * own children, but a region written INSIDE another (`#if a #if b import … #end #end`) projects as
+	 * `Conditional > Conditional > ImportDecl`. A one-level reading of that shape sees no import at
+	 * all, which is a FALSE NEGATIVE in the direction that matters — it lets a short name bind a
+	 * different type in the build where both guards hold.
 	 */
 	private static function guardedImportDecls(root: QueryNode): Array<QueryNode> {
 		final out: Array<QueryNode> = [];
-		for (c in root.children) if (c.kind == 'Conditional' || c.kind == 'CondSharedBodyDecl') for (inner in c.children) if (
-			IMPORT_DECL_KINDS.contains(inner.kind)
-		)
-			out.push(inner);
+		collectGuardedImports(root, false, out);
 		return out;
+	}
+
+	/**
+	 * Append every import-ish declaration reachable from `node` through conditional regions ONLY —
+	 * the walk never enters a type body, so it stays proportional to the file's directive nesting
+	 * rather than its size. `guarded` is false at the file's top level and true once the walk has
+	 * entered a region, so an UNGUARDED top-level import is skipped (it is already in
+	 * `_importMap` / `_aliasTargets`).
+	 */
+	private static function collectGuardedImports(node: QueryNode, guarded: Bool, out: Array<QueryNode>): Void {
+		for (c in node.children) if (c.kind == 'Conditional' || c.kind == 'CondSharedBodyDecl')
+			collectGuardedImports(c, true, out);
+		else if (guarded && IMPORT_DECL_KINDS.contains(c.kind))
+			out.push(c);
 	}
 
 	/**
@@ -611,7 +650,7 @@ final class TypeRefPrinter {
 		final root: Null<QueryNode> = _root;
 		final source: Null<String> = _source;
 		if (root == null || source == null) return false;
-		for (c in guardedImportDecls(root)) {
+		for (c in _guardedImports) {
 			final raw: Null<String> = c.name;
 			if (raw == null) continue;
 			final span: Null<Span> = c.span;
@@ -792,5 +831,14 @@ final class TypeRefPrinter {
 
 	/** Paths `print` promised an import for, in first-promised order. */
 	private final _pendingImports: Array<String> = [];
+
+	/** Every `#if`-guarded import-ish declaration of the file, at any directive nesting depth; empty with no tree. */
+	private final _guardedImports: Array<QueryNode>;
+
+	/** The file's BULK import statements, guarded ones included — the `shadowedByBulkImport` input; empty with no tree. */
+	private final _bulkImports: Array<QueryNode>;
+
+	/** The file's COMMENT regions, lexed on FIRST use and cached — see `commentRegions`. */
+	private var _commentRegions: Null<Array<Span>> = null;
 
 }

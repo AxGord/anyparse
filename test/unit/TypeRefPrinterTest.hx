@@ -127,10 +127,15 @@ class TypeRefPrinterTest extends Test {
 	}
 
 	public function testAliasedCommentedImportDecodesItsRealTarget(): Void {
-		// A comment between `import` and the path must not be read AS the path — decoding
-		// `pkg.deep.Foo` there would print the alias for a type it does not name.
+		// A comment between `import` and the path must not be read AS the path: a decoder that
+		// read `pkg.deep.Foo` there would bind it to the alias and print `Renamed` for a type the
+		// statement does not name. That — not the qualified form — is what this discriminates.
+		// The alias claims only `Renamed`, so the simple name is genuinely free and route 2 takes
+		// it; the comment's own mention is masked, since a comment binds nothing.
 		final src: String = 'package pkg;\n\nimport /* pkg.deep.Foo */ other.Bar as Renamed;\n\nclass C {}\n';
-		Assert.equals('pkg.deep.Foo', printer(src).print('pkg.deep.Foo').text);
+		final p: TypeRefPrinter = printer(src);
+		Assert.equals('Foo', p.print('pkg.deep.Foo').text);
+		Assert.equals('import pkg.deep.Foo;', importText(p));
 	}
 
 	public function testSecondSameNamedPathDoesNotGetASecondImport(): Void {

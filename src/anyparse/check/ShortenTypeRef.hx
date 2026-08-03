@@ -19,7 +19,7 @@ import anyparse.query.TypeResolver;
  * (never the construct around it), the path as written, and whether it sits inside a
  * `#if … #end` region.
  */
-typedef Occurrence = {
+private typedef Occurrence = {
 	var path: String;
 	var span: Span;
 	var conditional: Bool;
@@ -28,21 +28,22 @@ typedef Occurrence = {
 /**
  * The verdict for ONE written path in one file: how `TypeRefPrinter` says it should be spelled,
  * the import that spelling needs (null when none), whether the resolution index proves the
- * original names the declaration the reprint denotes, every occurrence of the path (`owned` —
- * the printer's freeness exemption), and the ones this rule rewrites (`targets`).
+ * original names the declaration the reprint denotes, and the occurrences this rule rewrites.
  */
 private typedef PathPlan = {
 	var path: String;
 	var text: String;
 	var importPath: Null<String>;
 	var proven: Bool;
-	var owned: Array<Span>;
 	var targets: Array<Span>;
 }
 
-/** One file's plan: the parsed tree the import materialiser re-uses, and every path verdict. */
+/**
+ * One file's plan: every path verdict, plus the printer that produced them — it carries the
+ * pending-import set the add-import arm promised, which is what `fix` materialises.
+ */
 private typedef FilePlan = {
-	var tree: QueryNode;
+	var printer: TypeRefPrinter;
 	var plans: Array<PathPlan>;
 }
 
@@ -52,6 +53,8 @@ private typedef ScanContext = {
 	var shape: RefShape;
 	var typeKinds: Array<String>;
 	var metaKinds: Array<String>;
+	var opaqueKinds: Array<String>;
+	var comments: Array<Span>;
 	var tree: QueryNode;
 }
 
@@ -93,9 +96,11 @@ private typedef ScanContext = {
  * construction HERE and only here: the gate refuses an import whose simple name occurs anywhere
  * in the source, and the very text being shortened contains that name as its own last segment.
  * `print`'s `owned` parameter is the exemption — the occurrences of the path ITSELF, which are
- * bound to it by the qualification. Every OTHER occurrence of the simple name still refuses the
- * import, so a local type declaration, a second import, a type parameter or a `#if`-guarded
- * import of the same name all keep the path long.
+ * bound to it by the qualification. Every OTHER occurrence of the simple name in CODE still
+ * refuses the import, so a local type declaration, a second import, a type parameter or a
+ * `#if`-guarded import of the same name all keep the path long; a mention inside a COMMENT does
+ * not, since a comment binds nothing (`collectCommentRegions` — string literals deliberately
+ * stay unmasked, a single-quoted Haxe string interpolates and `'${Name.x}'` IS a reference).
  *
  * ## What counts as an occurrence
  *
@@ -136,6 +141,17 @@ private typedef ScanContext = {
  *    rule does not model.
  *  - **Reification.** An `opaqueKinds` subtree (a `macro { … }` quotation) is skipped — its
  *    spliced code is not literal source.
+ *
+ * ## Locating a path the grammar gives no span for
+ *
+ * Every type-position node's span STARTS at the path, so the rewrite range is its leading `name`
+ * bytes. ONE shape breaks that: a `new pkg.T(...)` node's span opens on the `new` keyword and the
+ * grammar projects no separate node for the type name, so the path is SEARCHED for inside the
+ * span — as a whole path token, and skipping COMMENT regions. The only thing that can sit between
+ * `new` and the path is trivia, so a block comment naming the same path would otherwise win the
+ * search; and losing that race is not a compile error but a silent one — the COMMENT gets
+ * rewritten, the real path stays qualified, the file still compiles, the verifier confirms it, and
+ * the next fixpoint pass shortens the real path with the mangled comment left behind.
  *
  * ## Verified, not trusted — `RiskyFix`
  *
@@ -208,10 +224,18 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	}
 
 	/**
-	 * Rewrite each proven occurrence and splice the imports the short forms rely on. The decision
-	 * is RE-DERIVED here rather than carried on the violation — `run`'s verdict travels only as
-	 * the message, so a finding the report left unproven yields no edit even if this call sees a
-	 * wider index.
+	 * Rewrite each proven occurrence and splice the imports the short forms rely on. The decision is
+	 * RE-DERIVED here rather than carried on the violation — `run`'s verdict travels only as the
+	 * message, so a finding the report left unproven yields no edit even if this call sees a wider
+	 * index.
+	 *
+	 * ATOMICITY — a gap this contract cannot close. `FixVerifier` calls `fix` ONCE per file with the
+	 * whole rule-filtered finding set and then bisects the returned EDIT ARRAY by index, so a probe
+	 * that drops a path's shortening edits while keeping its `import` line is expressible: the result
+	 * is an orphan import, which COMPILES, so the confirming typecheck accepts it. Grouping an import
+	 * with the occurrences that depend on it is the verifier's concern — a `Check` cannot say it
+	 * through the flat `{span, text}` return. Nothing here can detect or prevent it; the alternative
+	 * of withholding imports on a partial input would need a caller that passes one, and none does.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -230,24 +254,14 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		final plan: Null<FilePlan> = planFor(source, plugin, scope);
 		if (plan == null) return [];
 		final edits: Array<{ span: Span, text: String }> = [];
-		final importing: Array<PathPlan> = [];
-		for (path in plan.plans) if (path.proven) {
-			var applied: Bool = false;
-			for (target in path.targets) if (wanted.contains(spanKey(target))) {
-				edits.push({ span: target, text: path.text });
-				applied = true;
-			}
-			if (applied && path.importPath != null) importing.push(path);
-		}
-		if (importing.length == 0) return edits;
-		// A SECOND printer materialises the imports, replaying ONLY the paths whose occurrences
-		// actually made it into `edits`. The planning printer has already promised an import for
-		// every path that reached the add-import arm, and a caller handing in a SUBSET of the
-		// findings (a `FixVerifier` bisect does exactly that) would otherwise splice an import no
-		// surviving edit uses.
-		final printer: TypeRefPrinter = printerFor(source, plan.tree, plugin, scope);
-		for (path in importing) printer.print(path.path, path.owned);
-		for (importEdit in printer.pendingImportEdits()) edits.push(importEdit);
+		for (path in plan.plans) if (path.proven) for (target in path.targets) if (wanted.contains(spanKey(target)))
+			edits.push({ span: target, text: path.text });
+		if (edits.length == 0) return edits;
+		// The PLANNING printer's pending set is already exactly right: `print` is handed the
+		// freeness exemption only for a path that cleared both the threshold and the index proof,
+		// and such a path always comes back with a changed spelling, so every promised import
+		// belongs to a plan that contributed edits above.
+		for (importEdit in plan.printer.pendingImportEdits()) edits.push(importEdit);
 		return edits;
 	}
 
@@ -281,11 +295,14 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		if (tree == null || refsTree == null) return null;
 		// Re-bind: a null-check does not narrow into an anonymous-structure literal.
 		final scoped: QueryNode = tree;
+		final shape: RefShape = plugin.refShape();
 		final context: ScanContext = {
 			source: source,
-			shape: plugin.refShape(),
+			shape: shape,
 			typeKinds: plugin.typeRefShape().typeRefKinds,
 			metaKinds: plugin.metaShape().metaKinds,
+			opaqueKinds: shape.opaqueKinds ?? [],
+			comments: RefactorSupport.collectCommentRegions(source),
 			tree: scoped
 		};
 		final occurrences: Array<Occurrence> = [];
@@ -295,21 +312,20 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		for (path in distinctPaths(occurrences)) {
 			final targets: Array<Span> = [for (o in occurrences) if (o.path == path && !o.conditional) o.span];
 			if (targets.length == 0) continue;
-			final owned: Array<Span> = [for (o in occurrences) if (o.path == path) o.span];
 			final proven: Bool = printer.resolvePath(path) != null;
 			final importable: Bool = proven && targets.length >= IMPORT_THRESHOLD;
-			final printed: PrintedTypeRef = printer.print(path, importable ? owned : null);
+			final owned: Null<Array<Span>> = importable ? [for (o in occurrences) if (o.path == path) o.span] : null;
+			final printed: PrintedTypeRef = printer.print(path, owned);
 			if (printed.text == path) continue;
 			plans.push({
 				path: path,
 				text: printed.text,
 				importPath: printed.importPath,
 				proven: proven,
-				owned: owned,
 				targets: targets
 			});
 		}
-		return { tree: scoped, plans: plans };
+		return { printer: printer, plans: plans };
 	}
 
 	/** A printer over `source` with the file's plain-import map and the run's resolution index. */
@@ -346,7 +362,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	private static function scan(
 		node: QueryNode, context: ScanContext, conditional: Bool, underUpperField: Bool, out: Array<Occurrence>
 	): Void {
-		if ((context.shape.opaqueKinds ?? []).contains(node.kind) || context.metaKinds.contains(node.kind)) return;
+		if (context.opaqueKinds.contains(node.kind) || context.metaKinds.contains(node.kind)) return;
 		final region: Bool = conditional || CheckScan.opensConditionalRegion(node, context.source, context.shape.conditionalIfKeyword);
 		final found: Null<Occurrence> = occurrenceOf(node, context, region, underUpperField);
 		if (found != null) out.push(found);
@@ -374,7 +390,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		if (name == null) return null;
 		if (context.typeKinds.contains(node.kind)) {
 			if (name.indexOf('.') == -1 || !RefactorSupport.isUpperInitial(lastSegment(name))) return null;
-			final span: Null<Span> = pathSpanOf(node, name, context.source);
+			final span: Null<Span> = pathSpanOf(node, name, context);
 			return span == null ? null : { path: name, span: span, conditional: conditional };
 		}
 		if (node.kind != context.shape.fieldAccessKind || underUpperField || !RefactorSupport.isUpperInitial(name)) return null;
@@ -397,12 +413,12 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	 * after the argument list instead, so the path is located inside it — as a whole token, since
 	 * a bare `indexOf` would also match a longer path's tail.
 	 */
-	private static function pathSpanOf(node: QueryNode, name: String, source: String): Null<Span> {
+	private static function pathSpanOf(node: QueryNode, name: String, context: ScanContext): Null<Span> {
 		final span: Null<Span> = node.span;
 		if (span == null) return null;
-		if (span.from + name.length <= span.to && source.substring(span.from, span.from + name.length) == name)
+		if (span.from + name.length <= span.to && context.source.substring(span.from, span.from + name.length) == name)
 			return new Span(span.from, span.from + name.length);
-		final at: Int = tokenOffset(source, name, span.from, span.to);
+		final at: Int = tokenOffset(context, name, span.from, span.to);
 		return at < 0 ? null : new Span(at, at + name.length);
 	}
 
@@ -436,11 +452,19 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	}
 
 	/**
-	 * The offset of `token` inside `source[from...to)` as a whole PATH token — neither neighbour
-	 * an identifier character or a `.`, so a tail of a longer dotted path never matches — or -1
-	 * when it does not occur.
+	 * The offset of `token` inside `source[from...to)` as a whole PATH token in CODE — neither
+	 * neighbour an identifier character or a `.`, so the tail of a longer dotted path never matches,
+	 * and never inside a comment — or -1 when it does not occur.
+	 *
+	 * The comment mask is the whole point. The only caller is the `new pkg.T(...)` shape, whose node
+	 * span opens on the `new` keyword, and the only thing that can sit between that keyword and the
+	 * path is trivia — so a BLOCK COMMENT naming the same path is a first-match trap: the rewrite then
+	 * lands in the COMMENT and leaves the real path qualified. That output COMPILES, so the `RiskyFix`
+	 * verifier confirms it rather than reverting, and the next fixpoint pass shortens the real path
+	 * with the mangled comment left behind.
 	 */
-	private static function tokenOffset(source: String, token: String, from: Int, to: Int): Int {
+	private static function tokenOffset(context: ScanContext, token: String, from: Int, to: Int): Int {
+		final source: String = context.source;
 		var i: Int = from;
 		while (i + token.length <= to) {
 			final at: Int = source.indexOf(token, i);
@@ -448,7 +472,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 			final after: Int = at + token.length;
 			final boundedLeft: Bool = at == 0 || !isPathChar(StringTools.fastCodeAt(source, at - 1));
 			final boundedRight: Bool = after >= source.length || !isPathChar(StringTools.fastCodeAt(source, after));
-			if (boundedLeft && boundedRight) return at;
+			if (boundedLeft && boundedRight && !RefactorSupport.offsetWithinAny(at, context.comments)) return at;
 			i = at + 1;
 		}
 		return -1;

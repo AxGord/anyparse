@@ -85,6 +85,33 @@ class ShortenTypeRefCheckTest extends Test {
 		Assert.isTrue(out.indexOf('new Foo();') != -1, 'shortened, got: $out');
 	}
 
+	/**
+	 * A `new pkg.T(...)` node's span opens on the `new` keyword, so the path is LOCATED inside it
+	 * rather than read off the span start — and a comment between the two is the trap. A
+	 * comment-blind forward search takes the FIRST match, rewrites the COMMENT and leaves the real
+	 * path qualified; the result compiles, so the `RiskyFix` verifier never reverts it, and the
+	 * next fixpoint pass shortens the real path with the mangled comment left behind.
+	 */
+	public function testNewExpressionWithAnInteriorCommentShortensTheRealPath(): Void {
+		final src: String = inClass('import pkg.deep.Foo;\n\n', '\t\tfinal a = new /* pkg.deep.Foo */ pkg.deep.Foo();\n');
+		Assert.equals(1, violations(src).length);
+		Assert.isTrue(applyFix(src).indexOf('new /* pkg.deep.Foo */ Foo();') != -1, 'comment intact, got: ${applyFix(src)}');
+	}
+
+	/**
+	 * The same shape on the add-import arm, where TWO comment-blind scans have to be fixed: the
+	 * `owned` freeness exemption must name the REAL path (pointed at the comment, the real path's
+	 * own token vetoes the import), and the freeness scan itself must not read the comment's
+	 * mention of the name as a binding — a comment binds nothing.
+	 */
+	public function testNewExpressionWithAnInteriorCommentStillEarnsItsImport(): Void {
+		final src: String = inClass('', '\t\tfinal a = new /* pkg.deep.Foo */ pkg.deep.Foo();\n\t\tfinal b = new pkg.deep.Foo();\n');
+		final out: String = applyFix(src);
+		Assert.isTrue(out.indexOf('import pkg.deep.Foo;') != -1, 'import added, got: $out');
+		Assert.isTrue(out.indexOf('new /* pkg.deep.Foo */ Foo();') != -1, 'comment intact, got: $out');
+		Assert.isTrue(out.indexOf('final b = new Foo();') != -1, 'second use shortened, got: $out');
+	}
+
 	public function testStaticAccessChainShortens(): Void {
 		final out: String = applyFix(inClass('import pkg.deep.Foo;\n\n', '\t\tg(pkg.deep.Foo.make());\n'));
 		Assert.isTrue(out.indexOf('g(Foo.make());') != -1, 'shortened, got: $out');
@@ -193,7 +220,17 @@ class ShortenTypeRefCheckTest extends Test {
 		Assert.equals(0, violations(src).length);
 	}
 
-	/** Gate 4: every occurrence guarded means no import — the file may not spell the name at all in some build. */
+	/**
+	 * A path whose EVERY occurrence sits inside `#if` gets no import: the file may not spell the name
+	 * at all in some build.
+	 *
+	 * A BEHAVIOUR pin, not a gate test. The `targets.length == 0` early-out that reads as its guard
+	 * does not discriminate it — deleting that line flips nothing, because a path with no plain
+	 * occurrence is never offered the freeness exemption either, so the printer answers with the
+	 * canonical path and the plan is dropped one line later. What DOES flip this is the
+	 * `!o.conditional` target filter, and that filter already has four sibling tests. Same honest
+	 * label as `testModuleLocalTypeOfTheSameNameRefusesTheShortForm`.
+	 */
 	public function testConditionalOnlyOccurrencesGetNoImport(): Void {
 		final src: String = inClass('', '\t\t#if sys\n\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n\t\t#end\n');
 		Assert.equals(0, violations(src).length);
@@ -232,6 +269,20 @@ class ShortenTypeRefCheckTest extends Test {
 	public function testGuardedImportOfTheSameNameRefusesTheShortForm(): Void {
 		final src: String =
 			'package app;\n\nimport pkg.deep.Foo;\n#if flash\nimport other.Foo;\n#end\n\nclass C {\n\n\tpublic function f():Void {\n\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n\t}\n\n}\n';
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/**
+	 * Gate 1, NESTED. The grammar flattens a conditional region's BRANCHES into one node's
+	 * children, but it does NOT flatten nested REGIONS: `#if a #if b import … #end #end` projects
+	 * as `Conditional > Conditional > ImportDecl`, so a one-level walk over the top-level
+	 * conditionals never reaches the import and the bare name shortens into the other path under
+	 * `flash && legacy`. The one-level sibling above is the control.
+	 */
+	public function testNestedGuardedImportOfTheSameNameRefusesTheShortForm(): Void {
+		final src: String =
+			'package app;\n\nimport pkg.deep.Foo;\n#if flash\n#if legacy\nimport other.Foo;\n#end\n#end\n\nclass C {\n\n\tpublic function f():Void {\n\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n\t}\n\n}\n';
 		Assert.equals(0, violations(src).length);
 		Assert.equals(src, applyFix(src));
 	}
