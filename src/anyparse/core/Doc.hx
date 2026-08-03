@@ -11,11 +11,18 @@ package anyparse.core;
  * Based on Wadler's "A prettier printer" with adjustments for strict
  * evaluation and Haxe ergonomics.
  *
- * PROBE FAMILY — the three ctors that decide from a PRECOMPUTED width
- * rather than by measuring their own subtree. They look
- * interchangeable and are not; each divergence below is justified only
- * at its own call sites, and re-deriving it from one member is how a
- * wrong "every walker forwards to flatDoc" claim got written once
+ * PROBE FAMILY — the ctors whose width test reads the frame's INDENT
+ * rather than the live pen column, and so answers the same for every
+ * sibling rendered at that indent. (The column-reading probes —
+ * `IfWidthExceeds`, `IfFirstLineExceeds`, `IfLineExceeds`,
+ * `IfResidualLineExceeds`, `IfFullLineExceeds`,
+ * `IfNaturalFirstLineFitsOpenDelim` — are a separate population; they are
+ * documented in the primitive list below and are NOT rows here.) Two of
+ * the four carry a precomputed content width, two measure `flatDoc` at
+ * render time, and the last also carries the indent its break branch lands
+ * on. They look interchangeable and are not; each divergence below is
+ * justified only at its own call sites, and re-deriving it from one member
+ * is how a wrong "every walker forwards to flatDoc" claim got written once
  * already:
  *
  * | ctor | probes | fits when | both-branch walkers descend |
@@ -23,6 +30,7 @@ package anyparse.core;
  * | `IfArrowContinuationFits` | `indent + extraIndent + flatWidth` | `< n` (strict — calibrated to a continuation LINE, so the budget excludes the column `n` itself) | both branches (its two branches are genuinely different shapes: head glued vs paren opened) |
  * | `IfIndentWidthExceeds` | `indent + flatWidth` | `<= n` (the `Group` family convention) | FLAT branch only (both branches wrap the same body — see its own doc) |
  * | `IfNaturalFirstLineExceeds` | measures `flatDoc`'s natural first line at render time | `< n` | both branches |
+ * | `IfGluedFirstLineExceeds` | measures `flatDoc`'s natural first line at render time — same measurer as the row above, but called WITHOUT `resolveOpenDelim`, and followed by a second re-measure at the break indent (see its own doc: the width test alone is not the whole verdict) | `<= n` (the `Group` family convention), PLUS two break-side gates that can keep the flat branch even when `n` is exceeded | FLAT branch only (both branches wrap the same body — see its own doc) |
  *
  * The single-branch walkers (`DocMeasure`, `WrapList`, `D`) are a
  * separate axis again: each picks break-side or flat-side per its OWN
@@ -421,10 +429,10 @@ enum Doc {
 	 * the two branches wrap the SAME body, differing only in the separator
 	 * before it. That last property is load-bearing — a walker asking about
 	 * subtree CONTENT gets the same answer from either branch, so the
-	 * both-branch walkers (`CollapsePass.walk`, `Renderer.scanBreakShape`,
-	 * `MatrixWrap`) descend the FLAT branch ONLY. Descending both doubles
-	 * the visited node count per nested probe, which is 2^depth for nested
-	 * switches; one branch is the whole content for one traversal.
+	 * both-branch walkers (`CollapsePass.walk`, `Renderer.findCollapseProbe`,
+	 * `MatrixWrap.isMultiline`) descend the FLAT branch ONLY. Descending both
+	 * doubles the visited node count per nested probe, which is 2^depth for
+	 * nested switches; one branch is the whole content for one traversal.
 	 *
 	 * See the PROBE FAMILY table on the enum header for how this ctor's
 	 * fits-strictness and per-walker branch choice compare to its two
@@ -432,6 +440,69 @@ enum Doc {
 	 * divergence is justified only at its own call sites.
 	 */
 	IfIndentWidthExceeds(flatWidth: Int, n: Int, breakDoc: Doc, flatDoc: Doc);
+
+	/**
+	 * Glued-body placement decision (ω-glue-width). Renders `breakDoc` when the
+	 * NATURAL first line of `flatDoc`, measured from the live pen column,
+	 * EXCEEDS `n` — AND the same body's first line WOULD fit once moved to
+	 * `indent + bodyIndent`, AND it carries more there than its own opening
+	 * delimiter. Else `flatDoc`, the `<= n` fits convention of the `Group`
+	 * family. Sole consumer: `BodyFit.glueLayout`; `bodyIndent` is the `Nest`
+	 * amount inside `breakDoc`, carried here so the render arm can re-measure at
+	 * the column the break would land on rather than guess it.
+	 *
+	 * The two extra conditions are not optimisations. Together they state the
+	 * honest contract — a body moves down when moving it down FIXES the
+	 * overflow, never merely because the glued line was long — and each refuses
+	 * a shape the width test alone got wrong: the fit test covers the residual
+	 * slop of the measurer (below), and the opening-delimiter test keeps a
+	 * statement block from stranding its `{` on a line of its own for a two-
+	 * column gain. The render arm names the corpus site behind each.
+	 *
+	 * Reads as `IfNaturalFirstLineExceeds` with two deliberate departures, and
+	 * each one is why it is a separate ctor rather than a second call site:
+	 *
+	 *  - Both branches wrap the SAME body, differing only in the separator
+	 *    before it (glued vs. next-line-one-deeper). A walker asking about
+	 *    subtree CONTENT therefore gets one answer from either side, so the
+	 *    both-branch walkers (`CollapsePass.walk`, `Renderer.findCollapseProbe`,
+	 *    `MatrixWrap.isMultiline`) descend the FLAT branch ONLY — as they do for
+	 *    `IfIndentWidthExceeds`, and unlike `IfNaturalFirstLineExceeds`, whose
+	 *    branches are genuinely different shapes. Measured: routing this
+	 *    population through the both-branch ctor moved unrelated collapse-paren
+	 *    decisions in two corpus files, because a probe in the body-glue slot
+	 *    doubles what those walkers see.
+	 *  - `WrapList.startsWithHardline` reads the FLAT side too, again unlike
+	 *    the rest of the family. The break side opens with a hardline BY
+	 *    CONSTRUCTION here, so a break-side read would answer "this body leads
+	 *    with a newline" for every glued body in the tree and flip cond-wrap
+	 *    shapes that have nothing to do with this decision. The flat side is
+	 *    the status-quo shape, which is what keeps a glue that survives the
+	 *    probe byte-identical.
+	 *
+	 * WHY the natural measurer and not a static one: the question is "will the
+	 * header line, with this body glued after it, actually overflow?", and only
+	 * a speculative render answers it. A flat first-line walk counts a
+	 * condition that the renderer WILL wrap, so it breaks bodies whose glued
+	 * shape was never over-wide (measured: 11 corpus files, most of them
+	 * regressions); `DocMeasure.breakableHead` stops at the first break
+	 * OPPORTUNITY, which for a construct-group body is its opening `(` — it can
+	 * never fire. The natural walk resolves each inner `Group` (and `BodyGroup`
+	 * — `naturalWidthStructural` treats it as a real group, the Doc stanza
+	 * above notwithstanding) by its own `fitsFlat` at the running column, which
+	 * is the renderer's own decision procedure.
+	 *
+	 * Residual: the natural walk resolves `IfFirstLineExceeds` /
+	 * `IfNaturalFirstLineFitsOpenDelim` / `IfArrowContinuationFits` /
+	 * `IfIndentWidthExceeds` — and this ctor itself, so a NESTED glue measures
+	 * as glued during an outer probe's walk — on their FLAT side
+	 * (`naturalWidthStructural`), so a body whose own bracket opens through one
+	 * of those probes measures as if it had stayed packed. That over-measures,
+	 * i.e. it can break a glue whose rendered first line would have fitted; the
+	 * second gate absorbs most of it, and `BodyFit.glueLayout` documents the one
+	 * corpus site it does not.
+	 */
+	IfGluedFirstLineExceeds(n: Int, bodyIndent: Int, breakDoc: Doc, flatDoc: Doc);
 	Fill(items: Array<Doc>, sep: Doc, ?tailReserve: Int);
 
 	/**

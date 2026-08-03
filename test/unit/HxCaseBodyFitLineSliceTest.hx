@@ -44,12 +44,13 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  * BOUNDARY CONTRACT, and its scope: on the MEASURED outcome a case line of
  * exactly `maxLineLength` columns stays inline and one column more breaks
  * (`Group` fit is `<= lineWidth`; no `width + 1` calibration here). The
- * GLUE outcome is placed without measurement, so its case line may exceed
- * `maxLineLength` and keeps growing with the header — measured:
- * `case 1: if (<114 c's>) {` renders at 141 columns under
- * `maxLineLength: 140`. That is not a fit bug; it is the same
- * unconditional glue `Same` / `Keep` give, and the same one a block body
- * gets from `sameLine.ifBody` / `forBody` / `whileBody`.
+ * GLUE outcome was originally placed without measurement of any kind, so
+ * its case line could exceed `maxLineLength` without bound; ω-glue-width
+ * (`BodyFit.glueLayout`, pinned by `HxGlueWidthSliceTest`) gave it a width
+ * answer of its own — the body moves to the next line when the glued line
+ * overflows AND moving it fixes the overflow. Everything below still holds:
+ * the glue is the same shape `Same` gives whenever that answer says stay,
+ * which is every fixture in this class.
  *
  * COMPOSITION:
  *  - `refuseFlatOnComplexExpr` wins over the fit measurement — an

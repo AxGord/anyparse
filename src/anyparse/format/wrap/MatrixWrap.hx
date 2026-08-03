@@ -111,14 +111,17 @@ final class MatrixWrap {
 				case Fill(parts, sep, _) | FillWithRestProbe(parts, sep, _) | FillBreakAfterWrap(parts, sep, _):
 					for (p in parts) stack.push(p);
 					stack.push(sep);
-				case IfIndentWidthExceeds(_, _, _, flat):
-					// ω-case-sym-linear: `IfIndentWidthExceeds` is EXCLUDED from the
-					// both-branch descent on purpose. Its two branches wrap the SAME
-					// body object and differ only in the separator before it, so a walk
-					// asking about subtree CONTENT sees the identical answer either way
-					// — while descending both doubles the visited node count per nested
-					// probe, i.e. 2^depth for nested switches. One branch is the whole
-					// content and costs one traversal.
+				case IfIndentWidthExceeds(_, _, _, flat) | IfGluedFirstLineExceeds(_, _, _, flat):
+					// ω-case-sym-linear + ω-glue-width: both `BodyFit` width probes are
+					// EXCLUDED from the both-branch descent, for COST alone — descending
+					// both doubles the visited node count per nested probe, 2^depth for
+					// nested switches. Note this walker is hardline-SENSITIVE, so the
+					// usual "the branches differ only in a separator" argument does not
+					// carry it: the break branch leads with a `Line('\n')` the flat one
+					// lacks. What makes the answer identical here is the construction
+					// invariant — `BodyFit.fitLineLayout` reaches either probe only when
+					// `WrapList.flatLength(body) == -1`, so the body already carries a
+					// hardline and both sides answer `true`.
 					stack.push(flat);
 				case IfBreak(brk, flat) | IfWidthExceeds(_, brk, flat) | IfFirstLineExceeds(_, brk, flat) | IfLineExceeds(_, brk, flat) | IfResidualLineExceeds(
 					_, brk, flat
