@@ -236,6 +236,12 @@ final class CheckScan {
 	 * `BooleanLogicSupport.negateCondition`. Answers a node's declared type nominal through the
 	 * run's resolution scope, or null for anything it cannot pin, which keeps the wrap.
 	 *
+	 * The probe is `RefactorSupport.expressionTypeNominal`, which resolves a METHOD CALL's return
+	 * nominal through its receiver chain (`chain.indexOf(x)` → `Int`) on top of the plain
+	 * identifier / field-path answer. That is added PROOF only: every extra resolution can turn a
+	 * `!(a < b)` wrap into a licensed flip, never the reverse, so the unproven → refuse default
+	 * every guard-family consumer relies on is untouched.
+	 *
 	 * Null when the grammar carries no type information at all: the caller then passes nothing
 	 * and every ordered comparison stays wrapped, exactly as before this seam existed.
 	 */
@@ -249,7 +255,7 @@ final class CheckScan {
 		// The resolution index sees the std + configured libraries, so a member type such as
 		// `Array.length` resolves; the report index alone would stop at the project boundary.
 		final resolved: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
-		return node -> RefactorSupport.valueTypeNominal(node, tree, shape, declaredTypes, resolved, file);
+		return node -> RefactorSupport.expressionTypeNominal(node, tree, shape, declaredTypes, resolved, file);
 	}
 
 	/**

@@ -107,7 +107,12 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 					accSrc = p.src;
 					accPrec = p.prec;
 				} else {
-					accSrc = joinOr(plain(cond, source), { src: accSrc, prec: accPrec, declined: false });
+					accSrc = joinOr(plain(cond, source), {
+						src: accSrc,
+						prec: accPrec,
+						declined: false,
+						notDelta: 0
+					});
 					accPrec = PREC_OR;
 				}
 			} else {
@@ -117,7 +122,12 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 					accSrc = n.src;
 					accPrec = n.prec;
 				} else {
-					accSrc = joinAnd(n, { src: accSrc, prec: accPrec, declined: false });
+					accSrc = joinAnd(n, {
+						src: accSrc,
+						prec: accPrec,
+						declined: false,
+						notDelta: 0
+					});
 					accPrec = PREC_AND;
 				}
 			}
@@ -150,6 +160,71 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 		return negate(cond, source, false, typeNominalOf).declined;
 	}
 
+	/**
+	 * The De Morgan simplification of `!(a || b)` / `!(a && b)`, or null when `not` is not a
+	 * logical-not over a `&&` / `||` compound, or when the rewrite would not PAY. The text is
+	 * `negate`'s — the same NaN-safe engine `negateCondition` exposes, so an ordered comparison
+	 * that `typeNominalOf` cannot prove NaN-free stays wrapped `!(a < b)` inside the result
+	 * rather than flipping.
+	 *
+	 * The worth gate is `Operand.notDelta <= 0`: the rewrite drops the one outer `!` and buys
+	 * `notDelta` further ones, so it is offered exactly when the unary-`!` count strictly falls.
+	 * That admits the PARTIAL shapes (`!(!a || f < 0.5)` → `a && !(f < 0.5)`, one `!` fewer) and
+	 * refuses the pure distributions (`!(a || b)` → `!a && !b`, one more) with no separate rule.
+	 * Parentheses are never a cost: the input already carried a pair around the compound, and
+	 * the output carries at most one.
+	 *
+	 * `parent` picks the parenthesisation: `slotPrecedence` answers what the surrounding slot
+	 * requires, and `wrap` adds a pair only when the result binds looser than that. A null
+	 * `parent` — or a slot that constrains nothing (a condition, an argument, a statement) —
+	 * emits the bare form.
+	 */
+	public function simplifyNegatedCompound(
+		not: QueryNode, parent: Null<QueryNode>, source: String, ?typeNominalOf: (QueryNode) -> Null<String>
+	): Null<String> {
+		final inner: Null<QueryNode> = compoundOperandOf(not);
+		if (inner == null) return null;
+		final negated: Operand = negate(inner, source, false, typeNominalOf);
+		if (negated.notDelta > 0) return null;
+		final slot: Null<Precedence> = parent == null ? null : slotPrecedence(parent.kind);
+		return slot == null ? negated.src : wrap(negated, slot);
+	}
+
+	/**
+	 * The `&&` / `||` compound a `!( … )` node negates — parentheses unwrapped — or null when
+	 * `not` is not a logical-not, or its operand is anything else (a call, a comparison, another
+	 * not: `!!x` and `!(!x)` belong to `double-negation`, not here).
+	 */
+	private static function compoundOperandOf(not: QueryNode): Null<QueryNode> {
+		if (not.kind != 'Not' || not.children.length != 1) return null;
+		var inner: QueryNode = not.children[0];
+		while (inner.kind == 'ParenExpr' && inner.children.length == 1) inner = inner.children[0];
+		return inner.kind == 'Or' || inner.kind == 'And' ? inner : null;
+	}
+
+	/**
+	 * The precedence an expression must bind at to sit UNPARENTHESISED in a `parentKind` child
+	 * slot, or null when the slot constrains nothing — a statement, a condition, a call
+	 * argument, an array element, an already-parenthesised expression: any expression is
+	 * grammatical there.
+	 *
+	 * A POSITIVE list of the operator kinds, deliberately NOT `precedence` itself: that function
+	 * answers `PREC_ATOM` for every kind it does not list, which is the right default for an
+	 * OPERAND (an unlisted kind is an atom) and exactly the wrong one for a SLOT (an unlisted
+	 * kind imposes nothing, and `PREC_ATOM` would parenthesise every condition and argument).
+	 * The assignment family is absent for the same reason as a statement slot — its right-hand
+	 * side takes a whole expression.
+	 */
+	private static function slotPrecedence(parentKind: String): Null<Precedence> {
+		return switch parentKind {
+			case 'Not', 'Neg': PREC_ATOM;
+			case 'Or', 'And', 'NullCoal', 'Ternary', 'Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq', 'Is', 'In', 'BitOr', 'BitXor', 'BitAnd',
+				'Shl', 'Shr', 'UShr', 'Add', 'Sub', 'Mul', 'Div', 'Mod', 'Interval', 'CastExpr':
+				precedence(parentKind);
+			case _: null;
+		};
+	}
+
 	/** `node`'s boolean-literal value, or null when it is not a `true` / `false` literal. */
 	private static function boolValue(node: QueryNode, source: String): Null<Bool> {
 		if (node.kind != 'BoolLit') return null;
@@ -169,7 +244,12 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 
 	/** A node carried verbatim: its source plus its precedence. */
 	private static function plain(node: QueryNode, source: String): Operand {
-		return { src: src(node, source), prec: precedence(node.kind), declined: false };
+		return {
+			src: src(node, source),
+			prec: precedence(node.kind),
+			declined: false,
+			notDelta: 0
+		};
 	}
 
 	/** Parenthesise `o`'s source iff it binds strictly looser than `targetPrec`. */
@@ -197,7 +277,8 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 				return {
 					src: '${wrap(l, PREC_AND)} && ${wrap(r, PREC_AND)}',
 					prec: PREC_AND,
-					declined: l.declined || r.declined
+					declined: l.declined || r.declined,
+					notDelta: l.notDelta + r.notDelta
 				};
 			case 'And':
 				final l: Operand = negate(node.children[0], source, flipOrdered, types);
@@ -205,7 +286,8 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 				return {
 					src: '${wrap(l, PREC_OR)} || ${wrap(r, PREC_OR)}',
 					prec: PREC_OR,
-					declined: l.declined || r.declined
+					declined: l.declined || r.declined,
+					notDelta: l.notDelta + r.notDelta
 				};
 			case 'Eq':
 				return flip(node, source, '!=');
@@ -224,9 +306,19 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 				// (`!(a && b)` -> `a && b`); wrap() re-adds parens where precedence demands.
 				var inner: QueryNode = node.children[0];
 				if (inner.kind == 'ParenExpr' && inner.children.length == 1) inner = inner.children[0];
-				return { src: src(inner, source), prec: precedence(inner.kind), declined: false };
+				return {
+					src: src(inner, source),
+					prec: precedence(inner.kind),
+					declined: false,
+					notDelta: -1
+				};
 			case 'BoolLit':
-				return { src: boolValue(node, source) == false ? 'true' : 'false', prec: PREC_ATOM, declined: false };
+				return {
+					src: boolValue(node, source) == false ? 'true' : 'false',
+					prec: PREC_ATOM,
+					declined: false,
+					notDelta: 0
+				};
 			case 'ParenExpr':
 				// Drop the parens, negate the inner; wrap() re-adds parens where needed.
 				return node.children.length == 1 ? negate(node.children[0], source, flipOrdered, types) : wrapNot(node, source);
@@ -238,7 +330,12 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	/** Negate an opaque operand: `!x` for an atom, `!(x)` otherwise. */
 	private static function wrapNot(node: QueryNode, source: String): Operand {
 		final s: String = src(node, source);
-		return { src: precedence(node.kind) >= PREC_ATOM ? '!$s' : '!($s)', prec: PREC_NOT, declined: false };
+		return {
+			src: precedence(node.kind) >= PREC_ATOM ? '!$s' : '!($s)',
+			prec: PREC_NOT,
+			declined: false,
+			notDelta: 1
+		};
 	}
 
 	/**
@@ -249,7 +346,12 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	 */
 	private static function declinedFlip(node: QueryNode, source: String): Operand {
 		final wrapped: Operand = wrapNot(node, source);
-		return { src: wrapped.src, prec: wrapped.prec, declined: true };
+		return {
+			src: wrapped.src,
+			prec: wrapped.prec,
+			declined: true,
+			notDelta: wrapped.notDelta
+		};
 	}
 
 	/** A comparison `a <op> b` rewritten with `newOp`, its boolean negation. */
@@ -257,7 +359,8 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 		return node.children.length == 2 ? {
 			src: '${src(node.children[0], source)} $newOp ${src(node.children[1], source)}',
 			prec: PREC_CMP,
-			declined: false
+			declined: false,
+			notDelta: 0
 		} : wrapNot(node, source);
 	}
 
@@ -334,6 +437,21 @@ private typedef Operand = {
 	 * read better can refuse the site. A wrap the engine could never avoid does not set it.
 	 */
 	var declined: Bool;
+
+	/**
+	 * How many unary `!` operators this operand's emitted form ADDS relative to the verbatim
+	 * source it replaces: `+1` for every `!(…)` wrap the negation had to introduce, `-1` for
+	 * every existing `!` it stripped, `0` for a flip (`==` ↔ `!=`, an ordered comparison) and
+	 * for anything carried verbatim. Nested `!` inside a verbatim operand are NOT counted —
+	 * they survive the rewrite unchanged and cancel on both sides.
+	 *
+	 * Read by `simplifyNegatedCompound` as its WORTH gate: rewriting `!(cond)` into
+	 * `negate(cond)` trades the one outer `!` for `notDelta` further ones, so it pays exactly
+	 * when `notDelta <= 0`. A cost model, not a second inverter — the emitted text always
+	 * comes from `negate` itself, and the counter rides along with it so the two can never
+	 * disagree about which branch was taken.
+	 */
+	var notDelta: Int;
 };
 
 /**

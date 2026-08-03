@@ -2040,6 +2040,41 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * The simple nominal of the type ANY expression carries: `valueTypeNominal`'s identifier /
+	 * field-path answer, plus the METHOD-CALL tail it stops at — `<chain>.method(…)` resolves the
+	 * receiver's own nominal (recursively, so `a.b.c().d()` walks) and reads the method's return
+	 * nominal off it through `SymbolIndex.returnNominalOf`. Null stays "unknown", so every caller
+	 * keeps its conservative branch exactly as with `valueTypeNominal`.
+	 *
+	 * A STRICT superset of `valueTypeNominal`, kept SEPARATE from it on purpose: that function is
+	 * also consumed by gates whose safe direction is the OTHER way round (`map-keys-lookup` and
+	 * `prefer-static-extension` act on a resolved nominal and refuse an unresolved one), and
+	 * widening a shared predicate under them is the trap this project has paid for before. The
+	 * added capacity is opt-in per call site; today the NaN gate behind
+	 * `CheckScan.typeNominalResolver` is the one that takes it, where more proof can only turn a
+	 * conservative wrap into a licensed flip.
+	 *
+	 * Deliberately NOT resolved (safe misses, each a null): a bare `f()` / `this.f()` call, whose
+	 * enclosing-type lookup is a different mechanism; a `Type.staticMethod()` whose receiver is a
+	 * SINGLE unbound identifier, since `valueTypeNominal` answers null for it rather than guessing
+	 * that an unbound name is a type.
+	 */
+	public static function expressionTypeNominal(
+		node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>, file: String
+	): Null<String> {
+		final direct: Null<String> = valueTypeNominal(node, root, shape, declaredTypes, index, file);
+		if (direct != null) return direct;
+		final callKind: Null<String> = shape.callKind;
+		final fieldKind: Null<String> = shape.fieldAccessKind;
+		if (callKind == null || fieldKind == null || index == null || node.kind != callKind || node.children.length == 0) return null;
+		final callee: QueryNode = node.children[0];
+		final method: Null<String> = callee.name;
+		if (callee.kind != fieldKind || method == null || callee.children.length != 1) return null;
+		final receiver: Null<String> = expressionTypeNominal(callee.children[0], root, shape, declaredTypes, index, file);
+		return receiver == null ? null : index.returnNominalOf(receiver, method);
+	}
+
+	/**
 	 * The report + resolution-scope `SymbolIndex` the plugin host carries — a subtype declared in a
 	 * configured resolution library, or in the implicitly-scoped Haxe std, is indexed there too — or
 	 * null when the plugin is not a resolution host or no scope reached it at all (the caller falls

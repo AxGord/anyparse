@@ -7,6 +7,7 @@ using Lambda;
 
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.check.SimplifyBooleanTernary;
+import anyparse.check.SimplifyNegatedCompound;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
 
@@ -85,6 +86,9 @@ final class Linter {
 			new JoinReturn(),
 			new PreferSingleQuotes(),
 			new SimplifyBooleanTernary(),
+			// After `simplify-boolean-ternary` in the registry, but order-free: the two never
+			// claim the same node — one owns a ternary, the other a logical-not.
+			new SimplifyNegatedCompound(),
 			new AssignmentInCondition(),
 			new DuplicateTernaryBranches(),
 			new PreferBind(),

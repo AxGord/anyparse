@@ -310,6 +310,7 @@ import unit.PreferSingleQuotesCheckTest;
 import unit.CachingGrammarPluginTest;
 import unit.RefsCacheTest;
 import unit.SimplifyBooleanTernaryCheckTest;
+import unit.SimplifyNegatedCompoundCheckTest;
 import unit.AssignmentInConditionCheckTest;
 import unit.DuplicateTernaryBranchesCheckTest;
 import unit.PreferBindCheckTest;
@@ -1068,6 +1069,7 @@ class RunTests {
 		addCase(new CachingGrammarPluginTest());
 		addCase(new RefsCacheTest());
 		addCase(new SimplifyBooleanTernaryCheckTest());
+		addCase(new SimplifyNegatedCompoundCheckTest());
 		addCase(new SimplifyBooleanReturnChainCheckTest());
 		addCase(new AssignmentInConditionCheckTest());
 		addCase(new DuplicateTernaryBranchesCheckTest());
