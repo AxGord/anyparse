@@ -7,13 +7,14 @@ import anyparse.check.FixVerifier;
 using Lambda;
 
 /**
- * Unit coverage of `FixVerifier.isolateFailers` — the per-edit bisect that
- * replaces the old whole-file revert when a risky-fix edit set fails the oracle.
- * Drives it with a deterministic FAKE probe (no compiler): independent failers
- * isolate exactly, a failing PAIR yields a SAFE complement (the property that
- * matters, not a specific index set), and an over-tight budget falls back to
- * `null` for the caller to revert the whole file. The internal bisect is reached
- * through `@:access`.
+ * Unit coverage of `FixVerifier.isolateFailers` — the bisect that replaces the old
+ * whole-file revert when a risky-fix edit set fails the oracle. It searches over UNIT
+ * indices (one unit per edit, or per `GroupedFix` group — `verifyEntry` owns that
+ * mapping), and every fixture here drives the ungrouped shape, where a unit IS an edit.
+ * Driven by a deterministic FAKE probe (no compiler): independent failers isolate
+ * exactly, a failing PAIR yields a SAFE complement (the property that matters, not a
+ * specific index set), and an over-tight budget falls back to `null` for the caller to
+ * revert the whole file. The internal bisect is reached through `@:access`.
  */
 @:access(anyparse.check.FixVerifier)
 @:nullSafety(Strict)

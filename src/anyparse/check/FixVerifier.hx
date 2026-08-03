@@ -29,13 +29,14 @@ typedef FixVerifyResult = {
 /**
  * Per (risky-check, file) detail for a file whose full edit set failed the oracle
  * and was BISECTED: `appliedEdits` survived (the safe complement was written),
- * `revertedEdits` were isolated as the failer(s) — or all of them on a budget /
- * confirm fallback (`appliedEdits == 0`). Both stay EDIT counts even when the
- * bisect worked in GROUPS (a `GroupedFix` check), so a reader never has to know
- * whether the rule grouped anything. `oracleInvocations` is the total compiler
- * spawns spent verifying this file: the initial full-set typecheck, the bisect
- * probes, and the complement confirm. Emitted only for the bisect path; a
- * fully-applied file or a single-unit file carries no entry.
+ * `revertedEdits` were reverted — the isolated failer(s) plus, for a `GroupedFix`
+ * check, every edit sharing their group — or all of them on a budget / confirm
+ * fallback (`appliedEdits == 0`). Both stay EDIT counts even when the bisect worked
+ * in GROUPS, so a reader never has to know whether the rule grouped anything.
+ * `oracleInvocations` is the total compiler spawns spent verifying this file: the
+ * initial full-set typecheck, the bisect probes, and the complement confirm. Emitted
+ * only for the bisect path; a fully-applied file or a single-unit file carries no
+ * entry.
  */
 typedef FixVerifyPartial = {
 	var file: String;
@@ -235,8 +236,8 @@ final class FixVerifier {
 			return Partial(0, edits.length, 1 + spent[0]);
 		}
 		final failerUnits: Array<Int> = failers;
-		final kept: Array<Int> = [for (u in 0...n) if (!failerUnits.contains(u)) u];
-		final safe: Array<{ span: Span, text: String }> = editsOfUnits(edits, units, kept);
+		final keptUnits: Array<Int> = [for (u in 0...n) if (!failerUnits.contains(u)) u];
+		final safe: Array<{ span: Span, text: String }> = editsOfUnits(edits, units, keptUnits);
 		final invocations: Int = 1 + spent[0] + 1;
 		return switch RefactorSupport.canonicalize(before, safe, false, plugin, opts) {
 			case Ok(safeText) if (safeText != before):
@@ -287,8 +288,10 @@ final class FixVerifier {
 
 	/**
 	 * The plain `{span, text}` edits held by the UNITS `unitIndices` names, in ascending
-	 * EDIT order — what a probe, and the safe complement, hands to `canonicalize`. The
-	 * sort is for determinism only; `RefactorSupport.applyEdits` orders the splice itself.
+	 * EDIT order — which is exactly what the ungrouped path produced before, and what keeps
+	 * the splice reproducible: `RefactorSupport.applyEdits` orders by DESCENDING
+	 * `span.from`, so two edits sharing a `from` (two zero-width insertions at one anchor)
+	 * still resolve by input order.
 	 */
 	private static function editsOfUnits(
 		edits: Array<GroupedEdit>, units: Array<Array<Int>>, unitIndices: Array<Int>

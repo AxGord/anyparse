@@ -20,7 +20,7 @@ import anyparse.runtime.Span;
  */
 @:access(anyparse.check.FixVerifier)
 @:nullSafety(Strict)
-class FixVerifierGroupTest extends Test {
+final class FixVerifierGroupTest extends Test {
 
 	public function testUngroupedEditsStayOneUnitEach(): Void {
 		Assert.same([[0], [1], [2]], FixVerifier.unitsOf(editsGrouped([null, null, null])));

@@ -15,6 +15,7 @@ import anyparse.runtime.Span;
 import anyparse.check.Check.RiskyFix;
 import anyparse.query.TypeRefPrinter.PrintedTypeRef;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypeRefPrinter.PendingImportEdit;
 
 /**
  * One written occurrence of a qualified type path: the exact byte range of the path ITSELF
@@ -239,10 +240,10 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	}
 
 	/**
-	 * Rewrite each proven occurrence and splice the imports the short forms rely on. The decision is
-	 * RE-DERIVED here rather than carried on the violation — `run`'s verdict travels only as the
-	 * message, so a finding the report left unproven yields no edit even if this call sees a wider
-	 * index.
+	 * Rewrite each proven occurrence and splice the imports the short forms rely on, one atomic
+	 * GROUP per import bucket. The decision is RE-DERIVED here rather than carried on the violation —
+	 * `run`'s verdict travels only as the message, so a finding the report left unproven yields no edit
+	 * even if this call sees a wider index.
 	 *
 	 * ATOMICITY. An import edit and every use-site rewrite that depends on it form ONE group, so
 	 * `FixVerifier`'s bisect keeps or drops them together and can no longer strand an orphan import —
@@ -251,11 +252,20 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	 * it binds its rewrites to the same unit, and no probe can split two shortenings that share an
 	 * import line either.
 	 *
+	 * The cost is COARSENESS, and how coarse depends on the anchoring `ImportOrder.insertOffset`
+	 * picks. Fresh paths that interleave into a sorted import run get distinct offsets and therefore
+	 * independent buckets; paths that all sort past the run's end, and every path in a file whose block
+	 * is unsorted (the fallback anchors them all after the last import), collapse into ONE bucket — and
+	 * then a single failing path drags every import-driven shortening in the file back with it.
+	 * Splitting a bucket is not available: `RefactorSupport.applyEdits` gives no defined relative order
+	 * to several zero-width edits at one offset, which is exactly why the printer merges them.
+	 *
 	 * The residual is a caller that hands in a strict SUBSET of the file's findings. The plan — and
 	 * with it the promised imports — is re-derived from the whole file, so an import can still be
-	 * promised for a path whose rewrites this call was not asked for; it then forms a group of one and
-	 * is applied alone. No caller does that today (`FixVerifier` passes the whole rule-filtered set for
-	 * the file), and nothing here can detect it.
+	 * promised for a path whose rewrites this call was not asked for. It is then applied either alone
+	 * in a bucket of its own, or, when it merged with a bucket a wanted path also uses, INSIDE that
+	 * path's group, riding along with rewrites it has nothing to do with. No caller does that today
+	 * (`FixVerifier` passes the whole rule-filtered set for the file), and nothing here can detect it.
 	 */
 	public function fixGrouped(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -275,9 +285,9 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		if (plan == null) return [];
 		// One bucket can serve SEVERAL paths (the printer merges imports landing on one anchor), so
 		// the group is the bucket and every path in it binds its own rewrites to that same unit.
-		final importEdits: Array<{ span: Span, text: String, paths: Array<String> }> = plan.printer.pendingImportEdits();
+		final importEdits: Array<PendingImportEdit> = plan.printer.pendingImportEdits();
 		final byPath: Map<String, Int> = [];
-		for (group in 0...importEdits.length) for (importPath in importEdits[group].paths) byPath[importPath] = group;
+		for (group => importEdit in importEdits) for (importPath in importEdit.paths) byPath[importPath] = group;
 		final edits: Array<GroupedEdit> = [
 			for (path in plan.plans) if (path.proven) for (target in path.targets) if (wanted.contains(spanKey(target)))
 				{ span: target, text: path.text, group: groupOf(byPath, path.importPath) }
@@ -287,15 +297,17 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		// freeness exemption only for a path that cleared both the threshold and the index proof,
 		// and such a path always comes back with a changed spelling, so every promised import
 		// belongs to a plan that contributed edits above.
-		for (group in 0...importEdits.length) edits.push({ span: importEdits[group].span, text: importEdits[group].text, group: group });
+		for (group => importEdit in importEdits) edits.push({ span: importEdit.span, text: importEdit.text, group: group });
 		return edits;
 	}
 
 	/**
 	 * The atomic group a use-site rewrite joins: the bucket of the import edit its short spelling
-	 * needs, or null when the spelling needs no import and the rewrite stands alone. A promised
-	 * import missing from the pending set also lands ungrouped — that is the pre-grouping behaviour,
-	 * never less safe than it was.
+	 * needs, or null when the spelling needs no import and the rewrite stands alone. The map-miss arm
+	 * is unreachable for a `planFor` plan — a non-null `importPath` is by construction the canonical
+	 * `print` pushed onto the printer's pending set, and every pending path lands in some bucket — so
+	 * it exists only for a caller that builds a plan itself, and it degrades to the pre-grouping
+	 * per-edit behaviour rather than to anything less safe.
 	 */
 	private static inline function groupOf(byPath: Map<String, Int>, importPath: Null<String>): Null<Int> {
 		return importPath == null ? null : byPath[importPath];

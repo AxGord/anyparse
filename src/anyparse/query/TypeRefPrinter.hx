@@ -21,6 +21,19 @@ typedef PrintedTypeRef = {
 	var importPath: Null<String>;
 }
 
+/**
+ * One pending `import <path>;` insert: the zero-width `span` to splice at, the statement `text`
+ * already carrying its own newline, and `paths` — the canonical import paths this ONE edit
+ * materialises. `pendingImportEdits` merges every path landing on the same anchor offset into a
+ * single edit, so `paths` is what tells a caller which use sites the edit is inseparable from
+ * (see `anyparse.check.Check.GroupedFix`); a caller that only splices the edit ignores it.
+ */
+typedef PendingImportEdit = {
+	var span: Span;
+	var text: String;
+	var paths: Array<String>;
+}
+
 /** One import insert: the byte offset to splice at, and the statement text already carrying its own newline. */
 private typedef ImportAnchor = {
 	var offset: Int;
@@ -299,7 +312,7 @@ final class TypeRefPrinter {
 	 * ranges), so the bucket's order is well defined; with no run to read the codepoint reading
 	 * is the deterministic default.
 	 */
-	public function pendingImportEdits(): Array<{ span: Span, text: String, paths: Array<String> }> {
+	public function pendingImportEdits(): Array<PendingImportEdit> {
 		final buckets: Array<{ offset: Int, order: Int, lines: Array<{ path: String, text: String }> }> = [];
 		for (path in _pendingImports) {
 			final anchor: ImportAnchor = anchorFor(path);

@@ -69,6 +69,12 @@ final class FixVerifierGroupE2ETest extends Test {
 		{ find: '"ccc"', text: 'NoSuchType.value', group: null }
 	];
 
+	/** Every edit in ONE group: the whole set is a single indivisible unit, so there is no subset to salvage. */
+	private static final SINGLE_GROUP_TABLE: Array<FakeEdit> = [
+		{ find: 'alpha', text: 'beta', group: 0 },
+		{ find: 'alpha', text: 'NoSuchType.value', group: 0 }
+	];
+
 	private static final HXML: String = '-cp .\n-main Main\n';
 	#end
 
@@ -92,8 +98,8 @@ final class FixVerifierGroupE2ETest extends Test {
 		Assert.equals(-1, after.indexOf('"AAA"'), 'its compiling group-mate reverts WITH it — the acceptance criterion');
 		Assert.notEquals(-1, after.indexOf('"CCC"'), 'the independent ungrouped edit survives');
 		Assert.equals(1, result.partials.length);
-		Assert.equals(1, result.partials[0].appliedEdits, 'kept / reverted stay EDIT counts, never unit counts');
-		Assert.equals(2, result.partials[0].revertedEdits);
+		Assert.equals(1, result.partials[0].appliedEdits);
+		Assert.equals(2, result.partials[0].revertedEdits, 'kept / reverted stay EDIT counts — one reverted UNIT held two edits');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
@@ -123,6 +129,36 @@ final class FixVerifierGroupE2ETest extends Test {
 		Assert.equals(1, result.partials.length);
 		Assert.equals(2, result.partials[0].appliedEdits, 'a group is probed and kept as ONE unit');
 		Assert.equals(1, result.partials[0].revertedEdits);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * One group holding EVERY edit is a single unit, and a single unit has no salvageable subset:
+	 * `verifyEntry` takes the `n < 2` arm, reverts the whole file and emits NO `FixVerifyPartial`,
+	 * where the per-edit bisect would have probed both halves, failed both, and still reported a
+	 * `Partial(0, 2)`. That empty `partials` is the discriminator — the disk state alone is not.
+	 */
+	public function testAGroupSpanningEveryEditRevertsWholeWithoutABisectReport(): Void {
+		#if (sys || nodejs)
+		if (!oracleWorks()) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final dir: String = CliFixture.writeDir('fixverifgroup', [
+			{ name: 'Main.hx', source: DEPENDENT_MAIN },
+			{ name: 'check.hxml', source: HXML }
+		]);
+		final files: Array<{ file: String, source: String }> = [{ file: '$dir/Main.hx', source: DEPENDENT_MAIN }];
+		final result: FixVerifyResult = FixVerifier.verify(
+			files, [new TableFake(SINGLE_GROUP_TABLE)], new HaxeQueryPlugin(), 'check.hxml', dir, File.saveContent
+		);
+		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
+		Assert.equals(0, result.partials.length, 'a single unit is not bisected, so no partial is reported');
+		Assert.equals(1, result.reverted.length, 'the file reverts whole');
+		Assert.equals(DEPENDENT_MAIN, File.getContent('$dir/Main.hx'), 'disk is byte-identical to the input');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');

@@ -230,9 +230,9 @@ interface CrossFileFix {
  * indivisible unit, and nothing more.
  */
 typedef GroupedEdit = {
-	var span: Span;
-	var text: String;
-	var group: Null<Int>;
+	final span: Span;
+	final text: String;
+	final group: Null<Int>;
 }
 
 /**
@@ -244,16 +244,23 @@ typedef GroupedEdit = {
  * that subset is wrong. The flat `Array<{span, text}>` of `Check.fix` carries no slot
  * to say so; this seam adds one.
  *
- * The ONLY consumer is `FixVerifier`'s bisect — the one place an edit set is ever
- * SPLIT. The safe (non-risky) fix loop and `Cli`'s oracle-assisted batch are whole-file
- * all-or-nothing: they keep or revert a file's entire edit set, so no group can be
- * broken there and they go on calling `fix`. A check that does NOT implement this
- * interface is bisected per edit exactly as before, byte for byte.
+ * The ONLY consumer is `FixVerifier`'s bisect, so grouping is honoured ONLY on the
+ * `RiskyFix` path that verifier serves — and both implementors today are `RiskyFix`.
+ * It is not honoured in the safe fix loop, which is also capable of splitting an edit
+ * set: `Cli.computeFileLintEdits` gates per CHECK (`editsOverlapAny`) but then filters
+ * per EDIT through `RefactorSupport.dropContainedEdits`. A `RiskyFix` check never
+ * enters that loop (`Cli.applyLintFixes` routes it to the verifier instead), which is
+ * why the gap is theoretical today — a future `GroupedFix` check that is NOT also
+ * `RiskyFix` would have no grouping guarantee. `Cli`'s oracle-assisted batch is the
+ * one path that genuinely cannot break a group: `verifyOracleBatch` restores a whole
+ * file's `before`. A check that does not implement this interface is bisected per edit
+ * exactly as before, byte for byte.
  *
  * CONTRACT: a `GroupedFix`'s `Check.fix` MUST be the pure projection of `fixGrouped`
  * (`[for (e in fixGrouped(...)) { span: e.span, text: e.text }]`), so the flat and the
  * grouped view can never disagree about WHICH edits a fix produces — only about how
- * they may be split.
+ * they may be split. Nothing detects a divergence, so the obligation is on the
+ * implementor.
  */
 @:nullSafety(Strict)
 interface GroupedFix {
