@@ -70,10 +70,11 @@ import anyparse.runtime.Span;
  *
  * The `${ … }` INTERPOLATION slot is delimited on the same terms — `${` and `}` are
  * hard tokens and the one expression between them parses at the loosest precedence —
- * and the parenthesis is the only thing the drop removes: it changes no brace, no
- * `$`, no quote and no line break, which is every character the REAL compiler's
- * interpolation scanner reads while it brace-counts its way to the closing `}` (see
- * `HaxeStringFoldSupport.interpolationBlockSafe` for that scanner's rules). So a
+ * and the parenthesis is the only thing the drop removes: it is none of the four
+ * characters the REAL compiler's interpolation scanner reacts to (`{`, `}`, `$`, a
+ * backslash) and none of the line breaks that end the literal, so that scanner
+ * brace-counts its way to the same closing `}` over the same text (see
+ * `HaxeStringFoldSupport.interpolationBlockSafe` for its rules). So a
  * content shape that survives the scan WITH the parentheses survives it without them
  * — object literals (`${({a: 1})}` → `${{a: 1}}`), nested same-quote strings and
  * their own `${ … }` blocks included, the interior reproduced byte-for-byte. Only

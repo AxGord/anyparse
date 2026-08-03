@@ -349,8 +349,8 @@ class RedundantParensCheckTest extends Test {
 	 * span and nothing else, so the drop would delete it. A comment AFTER it needs no gate:
 	 * trailing trivia is absorbed into the content node's own span, so the byte-exact
 	 * reproduction carries it through, and the block still prints what it printed with the
-	 * parentheses (a comment holds no brace, `$`, quote or line break, the only characters
-	 * the compiler's interpolation scanner reads).
+	 * parentheses: the drop removes the two parentheses and nothing else, so the compiler's
+	 * interpolation scanner reads the same text on either spelling.
 	 */
 	public function testInterpolationCommentInsideParens(): Void {
 		Assert.equals(0, violations(inFn("var s = '${(/* c */ a + c)}';")).length);

@@ -745,8 +745,9 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// interpolation scanner slices the text between `${` and the brace-counted
 			// matching `}` and parses that slice standalone, so nothing outside the
 			// braces can bind into it. Dropping a paren pair inside the braces cannot
-			// disturb that scan either — the pair changes no brace, no `$`, no quote
-			// and no line break, the four things the scanner is sensitive to.
+			// disturb that scan either — a parenthesis is none of the four characters
+			// that scanner reacts to (`{`, `}`, `$`, a backslash) and none of the line
+			// breaks that end the literal, so it reads exactly the same text either way.
 			delimitedAllChildKinds: [
 				'Block',
 				'VarStmt',
