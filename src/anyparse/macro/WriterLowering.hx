@@ -6389,14 +6389,20 @@ class WriterLowering {
 		final ifExprIndentArgs: Null<Array<String>> = opts.ifExprIndentArgs;
 		final bodyValueExpr: Expr = opts.bodyValueExpr;
 		final gluedBody: Expr = wrapIfExprNest(macro _body, ifExprIndentArgs, bodyValueExpr);
+		// ω-glue-width: every glue this builder emits is width-gated at the ONE
+		// policy owner (`BodyFit.glueLayout`) — a body that cannot render flat
+		// still puts its FIRST line on the header line, and that line has to fit.
+		// The two arms below reach the glue by the same `flatLength == -1` test
+		// the shared `fitLineLayout` uses, so all three inherit one answer.
+		final gluedLayout: Expr = macro anyparse.format.BodyFit.glueLayout(_cols, _body, _dc([_dop(' '), $gluedBody]), opt.lineWidth);
 		final multilineGlue: Expr = kwNewlineExpr != null
 			? macro ($kwNewlineExpr
 				&& (opt.opAddSubChainWrap.defaultMode == anyparse.format.wrap.WrapMode.Keep
 					|| opt.opBoolChainWrap.defaultMode == anyparse.format.wrap.WrapMode.Keep)
 				&& !anyparse.format.wrap.WrapList.startsWithHardline(_body)
 				? _dn(_cols, _dc([_dhl(), _body]))
-				: _dc([_dop(' '), $gluedBody]))
-			: macro _dc([_dop(' '), $gluedBody]);
+				: $gluedLayout)
+			: gluedLayout;
 		// ω-condwrap-fitline-construct-group: under a construct-level BodyGroup
 		// (see WrapBodyOpts.condFitGroup) the flat-body FitLine layout is the
 		// soft line — the group's whole-construct fitsFlat owns the same-vs-next
@@ -6413,7 +6419,7 @@ class WriterLowering {
 			// ω-case-body-fitline-shared: the plain FitLine shape now has ONE
 			// owner (`anyparse.format.BodyFit`), shared with the case-body Star
 			// path. `nestGluedBody = false` keeps this site byte-identical.
-			macro anyparse.format.BodyFit.fitLineLayout(_cols, _body, false);
+			macro anyparse.format.BodyFit.fitLineLayout(_cols, _body, false, opt.lineWidth, anyparse.format.BodyFit.SIBLING_NONE);
 		if (elseFieldName == null) return macro {
 			final _body: anyparse.core.Doc = $writeCall;
 			$fitInnerExpr;
@@ -14611,7 +14617,7 @@ class WriterLowering {
 		return macro {
 			if (_fitCase)
 				_dwb(anyparse.format.BodyFit.fitLineLayout(
-					_cols, _dc(_docs), !opt.alignInlineSwitchCaseBody, opt._caseSiblingFlatWidth, opt.lineWidth
+					_cols, _dc(_docs), !opt.alignInlineSwitchCaseBody, opt.lineWidth, opt._caseSiblingFlatWidth
 				));
 			else
 				_dwb(opt.alignInlineSwitchCaseBody ? _dc(_docs) : _dn(_cols, _dc(_docs)));

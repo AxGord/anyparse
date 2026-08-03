@@ -322,7 +322,7 @@ class Renderer {
 					_, _, _
 				) | IfFullLineExceeds(_, _, _) | IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineFitsOpenDelim(_, _, _) | IfArrowContinuationFits(
 					_, _, _, _, _
-				) | IfIndentWidthExceeds(_, _, _, _):
+				) | IfIndentWidthExceeds(_, _, _, _) | IfGluedFirstLineExceeds(_, _, _, _):
 					pushExceedsBranch(f, stack, ctx.col, pendingSpaceWidth(ctx), width, decisions);
 				case Fill(_, _, _) | FillWithRestProbe(_, _, _) | FillBreakAfterWrap(_, _, _):
 					// Fill family — per-item / all-flat layout, no scalar layout
@@ -461,14 +461,16 @@ class Renderer {
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
-				case IfIndentWidthExceeds(_, _, _, fl):
-					// ω-case-sym-linear: `IfIndentWidthExceeds` is EXCLUDED from the
-					// both-branch descent on purpose. Its two branches wrap the SAME
-					// body object and differ only in the separator before it, so a walk
-					// asking about subtree CONTENT sees the identical answer either way
-					// — while descending both doubles the visited node count per nested
-					// probe, i.e. 2^depth for nested switches. One branch is the whole
-					// content and costs one traversal.
+				case IfIndentWidthExceeds(_, _, _, fl) | IfGluedFirstLineExceeds(_, _, _, fl):
+					// ω-case-sym-linear + ω-glue-width: both `BodyFit` width probes are
+					// EXCLUDED from the both-branch descent. Their two branches wrap the
+					// SAME body object and differ only in the separator before it, so a
+					// walk asking about subtree CONTENT sees one answer either way, while
+					// descending both doubles the visited node count per nested probe —
+					// 2^depth for nested switches. See the ctor docs in `Doc` for the
+					// per-walker branch contract; a walker that is NOT content-only must
+					// decide for itself (`WrapList.startsWithHardline` reads the flat side
+					// of the glue probe for exactly that reason).
 					stack.push(fl);
 				case IfBreak(brk, fl) | IfWidthExceeds(_, brk, fl) | IfFirstLineExceeds(_, brk, fl) | IfLineExceeds(_, brk, fl) | IfResidualLineExceeds(
 					_, brk, fl
@@ -926,7 +928,7 @@ class Renderer {
 				_, _, fl
 			) | IfFullLineExceeds(_, _, fl) | IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineFitsOpenDelim(_, _, fl) | IfArrowContinuationFits(
 				_, _, _, _, fl
-			) | IfIndentWidthExceeds(_, _, _, fl):
+			) | IfIndentWidthExceeds(_, _, _, fl) | IfGluedFirstLineExceeds(_, _, _, fl):
 				inner.push({ doc: fl, mode: MFlat });
 				return null;
 			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
@@ -1010,9 +1012,9 @@ class Renderer {
 				_, _, inner
 			) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(_, _, _, _, inner) | IfIndentWidthExceeds(
 				_, _, _, inner
-			) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(
+			) | IfGluedFirstLineExceeds(_, _, _, inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(
 				inner
-			) | CollapseChainProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
+			) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
 				// Single-child transparent descend: structural wrappers (Nest /
 				// Group), the flat side of every render-time `If*` probe, the
 				// force-flat markers, and the cond-indent markers all contribute
@@ -1105,9 +1107,9 @@ class Renderer {
 				_, _, inner
 			) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(_, _, _, _, inner) | IfIndentWidthExceeds(
 				_, _, _, inner
-			) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(
+			) | IfGluedFirstLineExceeds(_, _, _, inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(
 				inner
-			) | CollapseChainProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
+			) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
 				// Single-child transparent descend at the same indent in MFlat.
 				// A `Group`'s nested flat content; the flat side of every
 				// render-time `If*` probe (the column/first-line/rest-of-stack/
@@ -1203,7 +1205,9 @@ class Renderer {
 				_, _, innerDoc
 			) | IfLineExceeds(_, _, innerDoc) | IfResidualLineExceeds(_, _, innerDoc) | IfFullLineExceeds(_, _, innerDoc) | IfNaturalFirstLineFitsOpenDelim(
 				_, _, innerDoc
-			) | IfArrowContinuationFits(_, _, _, _, innerDoc) | IfIndentWidthExceeds(_, _, _, innerDoc):
+			) | IfArrowContinuationFits(_, _, _, _, innerDoc) | IfIndentWidthExceeds(_, _, _, innerDoc) | IfGluedFirstLineExceeds(
+				_, _, _, innerDoc
+			):
 				// Static walk: descend in MFlat. Runtime Group decision is
 				// unknowable here; flat-side measurement matches the cascade
 				// rule semantic. The natural-first-line / rest-of-stack probes
@@ -1465,9 +1469,9 @@ class Renderer {
 				});
 			case IfFirstLineExceeds(_, _, inner) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(_, _, _, _, inner) | IfIndentWidthExceeds(
 				_, _, _, inner
-			) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
+			) | IfGluedFirstLineExceeds(_, _, _, inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(
 				inner
-			) | ConditionalMarkerDecrease(inner):
+			) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
 				// Preserve-mode transparent descend to the flat / inner doc:
 				// the callarg under-wrap probe (`IfFirstLineExceeds`), the
 				// nested cond-paren-glue probes (render-time, seen flat here),
@@ -1741,9 +1745,9 @@ class Renderer {
 				});
 			case IfFirstLineExceeds(_, _, inner) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(_, _, _, _, inner) | IfIndentWidthExceeds(
 				_, _, _, inner
-			) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
+			) | IfGluedFirstLineExceeds(_, _, _, inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(
 				inner
-			) | ConditionalMarkerDecrease(inner):
+			) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
 				// Preserve-mode transparent descend to the flat / inner doc:
 				// the callarg under-wrap probe (`IfFirstLineExceeds` — the
 				// NoWrap-pinned call paren is measured kept-flat for the parent
@@ -1873,7 +1877,7 @@ class Renderer {
 				}
 			case IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineFitsOpenDelim(_, _, _) | IfArrowContinuationFits(_, _, _, _, _) | IfIndentWidthExceeds(
 				_, _, _, _
-			):
+			) | IfGluedFirstLineExceeds(_, _, _, _):
 				// Natural-shape family — inner Groups resolve by their own
 				// `fitsFlat` (or a precomputed arrow width). Delegated to the
 				// static `pushNaturalBranch`.
@@ -2912,6 +2916,36 @@ class Renderer {
 					final pushMode: Mode = contFits ? f.mode : MBreak;
 					stack.push(new Frame(f.indent, pushMode, contFits ? flatDoc : breakDoc));
 				}
+			case IfGluedFirstLineExceeds(n, bodyIndent, breakDoc, flatDoc):
+				// ω-glue-width: the body-glue width answer, three conjuncts deep.
+				// Each one refuses a shape the previous two would have moved, and
+				// each was measured on the two corpora before it went in.
+				//
+				// 1. Does the glued shape overflow? Same measurer as
+				//    `IfNaturalFirstLineExceeds` — `naturalFirstLineWidth` folds
+				//    `col` into its result, so the raw value is compared against `n`
+				//    — but `<= n` FITS (the `Group` convention) where that sibling
+				//    uses a strict `<`: this probe is calibrated to a whole rendered
+				//    LINE against `maxLineLength`, and a line landing exactly on the
+				//    limit is a line that fits.
+				// 2/3. Is the move WORTH it? `brokenBodyIsWorthMoving` asks both
+				//    remaining questions off one re-measure at the indent the break
+				//    lands on, and it is called only when gate 1 fires — `&&` guards
+				//    the second walk, not just its comparisons.
+				//
+				// `resolveOpenDelim` is left at its default `false`, where the
+				// `IfNaturalFirstLineExceeds` sibling passes `true`. That flag makes
+				// the walk resolve `IfNaturalFirstLineFitsOpenDelim` by its real
+				// glue-vs-open predicate; turning it on here changes which shape one
+				// probe family predicts, and no corpus site asked for it. Revisit it
+				// with a measurement, not by matching the sibling.
+				if (f.forceFlat) {
+					stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
+				} else {
+					final exceeds: Bool = naturalFirstLineWidth(flatDoc, col, f.indent, width) > n
+						&& brokenBodyIsWorthMoving(flatDoc, f.indent + bodyIndent, n, width);
+					stack.push(new Frame(f.indent, exceeds ? MBreak : f.mode, exceeds ? breakDoc : flatDoc));
+				}
 			case IfIndentWidthExceeds(flatWidth, n, breakDoc, flatDoc):
 				// ω-case-sibling-symmetry: `flatWidth` is a build-time constant the
 				// emitter supplies (the widest sibling's flat width), NOT a
@@ -2932,6 +2966,42 @@ class Renderer {
 		}
 	}
 
+
+	/**
+	 * ω-glue-width gates 2 and 3: would moving a glued body to `brokenIndent`
+	 * be worth it? Answered off ONE natural first-line re-measure of the glued
+	 * Doc, taken as if the pen sat one column LEFT of `brokenIndent` — the walk
+	 * spends that column on the glue separator (`OptSpace(' ')`, which every
+	 * `BodyFit.glueLayout` caller puts first in the glued shape) and the body
+	 * then lands exactly on the indent it would break to. `broken -
+	 * brokenIndent` is therefore the body's own first-line width there.
+	 *
+	 * Two ways to answer no, each closing a measured hole:
+	 *
+	 *  - `broken > n` — still over-wide after the move, so the move fixes
+	 *    nothing and only costs a line and an indent level. Mirrors the fit-gate
+	 *    in `collapseParenCommitsOpen`: when the inner cannot be made a single
+	 *    fitting line, opening does not help. This is also what absorbs the
+	 *    measurer's own slop — `naturalWidthStructural` resolves the
+	 *    `IfFirstLineExceeds` probe family on its FLAT side, so a body whose
+	 *    bracket opens through one measures a few columns too wide, and without
+	 *    this test that slop broke a `return <ternary>` whose rendered line sat
+	 *    exactly at the limit.
+	 *  - `broken <= brokenIndent + 1` — the body would put at most ONE column on
+	 *    that line: it breaks right after its own opening token. A statement
+	 *    block, or a literal already committed to breaking, gives the header
+	 *    back only those columns and strands its `{` on a line of its own. The
+	 *    same reasoning `selfBreakingBraceBody` applies to the arrow-body
+	 *    marker, though not the same predicate — that one also demands a
+	 *    `{`-leading body and reads a flat measurer, while this is a pure width
+	 *    test and refuses any one-column first line. Constructed (a `case` label
+	 *    ALREADY past the limit whose body is a block) the move came out
+	 *    strictly worse than the glue.
+	 */
+	private static inline function brokenBodyIsWorthMoving(flatDoc: Doc, brokenIndent: Int, n: Int, width: Int): Bool {
+		final broken: Int = naturalFirstLineWidth(flatDoc, brokenIndent - 1, brokenIndent, width);
+		return broken <= n && broken > brokenIndent + 1;
+	}
 
 	/**
 	 * First-line column width of `d`'s flat projection WHEN that projection
@@ -2987,9 +3057,11 @@ class Renderer {
 					_, _, inner
 				) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(_, _, _, _, inner) | IfIndentWidthExceeds(
 					_, _, _, inner
-				) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(
+				) | IfGluedFirstLineExceeds(_, _, _, inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(
 					inner
-				) | CollapseChainProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
+				) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(
+					inner
+				):
 					stack.push(inner);
 			}
 		}

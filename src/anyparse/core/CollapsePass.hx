@@ -1007,14 +1007,16 @@ fitems.length > 1
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
-				case IfIndentWidthExceeds(_, _, _, fl):
-					// ω-case-sym-linear: `IfIndentWidthExceeds` is EXCLUDED from the
-					// both-branch descent on purpose. Its two branches wrap the SAME
-					// body object and differ only in the separator before it, so a walk
-					// asking about subtree CONTENT sees the identical answer either way
-					// — while descending both doubles the visited node count per nested
-					// probe, i.e. 2^depth for nested switches. One branch is the whole
-					// content and costs one traversal.
+				case IfIndentWidthExceeds(_, _, _, fl) | IfGluedFirstLineExceeds(_, _, _, fl):
+					// ω-case-sym-linear + ω-glue-width: both `BodyFit` width probes are
+					// EXCLUDED from the both-branch descent. Their two branches wrap the
+					// SAME body object and differ only in the separator before it, so a
+					// walk asking about subtree CONTENT sees one answer either way, while
+					// descending both doubles the visited node count per nested probe —
+					// 2^depth for nested switches. See the ctor docs in `Doc` for the
+					// per-walker branch contract; a walker that is NOT content-only must
+					// decide for itself (`WrapList.startsWithHardline` reads the flat side
+					// of the glue probe for exactly that reason).
 					stack.push(fl);
 				case IfBreak(brk, fl) | IfWidthExceeds(_, brk, fl) | IfFirstLineExceeds(_, brk, fl) | IfLineExceeds(_, brk, fl) | IfResidualLineExceeds(
 					_, brk, fl
@@ -1082,6 +1084,7 @@ fitems.length > 1
 			case IfNaturalFirstLineFitsOpenDelim(n, brk, fl): IfNaturalFirstLineFitsOpenDelim(n, f(brk), f(fl));
 			case IfArrowContinuationFits(ei, fw, n, brk, fl): IfArrowContinuationFits(ei, fw, n, f(brk), f(fl));
 			case IfIndentWidthExceeds(fw, n, brk, fl): IfIndentWidthExceeds(fw, n, f(brk), f(fl));
+			case IfGluedFirstLineExceeds(n, bi, brk, fl): IfGluedFirstLineExceeds(n, bi, f(brk), f(fl));
 			case _: null;
 		};
 	}

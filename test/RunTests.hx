@@ -546,6 +546,7 @@ import unit.PreferLambdaExpressionBodyCheckTest;
 import unit.HxArrowBlockBodyOpenSliceTest;
 import unit.DocMeasureFirstVisibleTextTest;
 import unit.HxCaseBodyFitLineSliceTest;
+import unit.HxGlueWidthSliceTest;
 import unit.HxCaseBodySymmetrySliceTest;
 import unit.UnusedLocalShadowTest;
 import unit.HxCallParamOuterFirstWrapSliceTest;
@@ -818,6 +819,7 @@ class RunTests {
 		addCase(new HxCatchBodySliceTest());
 		addCase(new HxCaseBodyPolicySliceTest());
 		addCase(new HxCaseBodyFitLineSliceTest());
+		addCase(new HxGlueWidthSliceTest());
 		addCase(new HxCaseBodySymmetrySliceTest());
 		addCase(new HxCaseExprPositionPropagateTest());
 		addCase(new HxIfStmtExprPositionDispatchTest());

@@ -430,7 +430,7 @@ class WrapList {
 					_, b, _
 				) | IfFullLineExceeds(_, b, _) | IfNaturalFirstLineExceeds(_, b, _) | IfNaturalFirstLineFitsOpenDelim(_, b, _) | IfArrowContinuationFits(
 					_, _, _, b, _
-				) | IfIndentWidthExceeds(_, _, b, _):
+				) | IfIndentWidthExceeds(_, _, b, _) | IfGluedFirstLineExceeds(_, _, b, _):
 					w(b, depth);
 				case Concat(items):
 					for (it in items) w(it, depth);
@@ -640,6 +640,17 @@ class WrapList {
 				// Break-side leading-edge walk: descend the break branch
 				// (mirrors the If*Exceeds siblings).
 				node = brk;
+			case IfGluedFirstLineExceeds(_, _, _, flat):
+				// ω-glue-width: the ONE family member read on its FLAT side here.
+				// Its break branch opens with a hardline BY CONSTRUCTION (that is
+				// the whole decision), so a break-side read would answer "leads with
+				// a newline" for every glued body in the tree — and this predicate
+				// drives the cond-wrap engine's close-delimiter placement, which has
+				// nothing to do with where a body was put. Measured: two corpus
+				// files changed their `if (…)` shape from the break-side read alone.
+				// The flat side is the status-quo glue, so a glue that survives its
+				// own probe stays byte-identical everywhere.
+				node = flat;
 			case Concat(items):
 				final first: Null<Doc> = items.find(it -> !isLeadingTransparent(it));
 				if (first == null) return false;
@@ -728,7 +739,7 @@ class WrapList {
 				_, _, flat
 			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
 				_, _, _, _, flat
-			) | IfIndentWidthExceeds(_, _, _, flat):
+			) | IfIndentWidthExceeds(_, _, _, flat) | IfGluedFirstLineExceeds(_, _, _, flat):
 				node = flat;
 			case Concat(items):
 				final first: Null<Doc> = items.find(it -> !isLeadingTransparent(it));
@@ -779,7 +790,7 @@ class WrapList {
 				_, _, flat
 			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
 				_, _, _, _, flat
-			) | IfIndentWidthExceeds(_, _, _, flat):
+			) | IfIndentWidthExceeds(_, _, _, flat) | IfGluedFirstLineExceeds(_, _, _, flat):
 				node = flat;
 			case Concat(items):
 				final last: Null<Doc> = findLastNonTrailingTransparent(items);
@@ -822,7 +833,7 @@ class WrapList {
 				_, _, flat
 			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
 				_, _, _, _, flat
-			) | IfIndentWidthExceeds(_, _, _, flat):
+			) | IfIndentWidthExceeds(_, _, _, flat) | IfGluedFirstLineExceeds(_, _, _, flat):
 				node = flat;
 			case Concat(items):
 				final last: Null<Doc> = findLastNonTrailingTransparent(items);
@@ -873,7 +884,7 @@ class WrapList {
 					_, b, f
 				) | IfFullLineExceeds(_, b, f) | IfNaturalFirstLineExceeds(_, b, f) | IfNaturalFirstLineFitsOpenDelim(_, b, f) | IfArrowContinuationFits(
 					_, _, _, b, f
-				) | IfIndentWidthExceeds(_, _, b, f):
+				) | IfIndentWidthExceeds(_, _, b, f) | IfGluedFirstLineExceeds(_, _, b, f):
 					// Both branches of a chain cascade carry the same
 					// separators; walk only the break branch to avoid
 					// double-counting.
@@ -935,7 +946,7 @@ class WrapList {
 				_, _, flat
 			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
 				_, _, _, _, flat
-			) | IfIndentWidthExceeds(_, _, _, flat):
+			) | IfIndentWidthExceeds(_, _, _, flat) | IfGluedFirstLineExceeds(_, _, _, flat):
 				node = flat;
 			case Concat(items):
 				final first: Null<Doc> = items.find(it -> !isLeadingTransparent(it));
@@ -975,7 +986,7 @@ class WrapList {
 				_, _, flat
 			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
 				_, _, _, _, flat
-			) | IfIndentWidthExceeds(_, _, _, flat):
+			) | IfIndentWidthExceeds(_, _, _, flat) | IfGluedFirstLineExceeds(_, _, _, flat):
 				node = flat;
 			case Concat(items):
 				final last: Null<Doc> = findLastNonTrailingTransparent(items);
@@ -1416,9 +1427,9 @@ class WrapList {
 				stack.push(flatDoc);
 			case IfFullLineExceeds(_, _, flatDoc):
 				stack.push(flatDoc);
-			case IfIndentWidthExceeds(_, _, _, flatDoc) | IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(
+			case IfIndentWidthExceeds(_, _, _, flatDoc) | IfGluedFirstLineExceeds(_, _, _, flatDoc) | IfNaturalFirstLineExceeds(
 				_, _, flatDoc
-			) | IfArrowContinuationFits(_, _, _, _, flatDoc):
+			) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(_, _, _, _, flatDoc):
 				stack.push(flatDoc);
 			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
 				var k: Int = items.length;
@@ -2107,7 +2118,7 @@ class WrapList {
 					_, _, _
 				) | IfFullLineExceeds(_, _, _) | IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineFitsOpenDelim(_, _, _) | IfArrowContinuationFits(
 					_, _, _, _, _
-				) | IfIndentWidthExceeds(_, _, _, _):
+				) | IfIndentWidthExceeds(_, _, _, _) | IfGluedFirstLineExceeds(_, _, _, _):
 					return true;
 				case WrapBoundary(inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner) | Nest(_, inner) | Flatten(inner) | HardFlatten(
 					inner
@@ -2801,7 +2812,7 @@ class WrapList {
 			case IfFullLineExceeds(_, _, _): false;
 			case IfNaturalFirstLineExceeds(_, _, _): false;
 			case IfNaturalFirstLineFitsOpenDelim(_, _, _): false;
-			case IfArrowContinuationFits(_, _, _, _, _) | IfIndentWidthExceeds(_, _, _, _): false;
+			case IfArrowContinuationFits(_, _, _, _, _) | IfIndentWidthExceeds(_, _, _, _) | IfGluedFirstLineExceeds(_, _, _, _): false;
 			case _: null;
 		};
 	}
@@ -3261,6 +3272,8 @@ class WrapList {
 				IfArrowContinuationFits(ei, fw, n, groupifyInlineBodies(b), groupifyInlineBodies(f));
 			case IfIndentWidthExceeds(fw, n, b, f):
 				IfIndentWidthExceeds(fw, n, groupifyInlineBodies(b), groupifyInlineBodies(f));
+			case IfGluedFirstLineExceeds(n, bi, b, f):
+				IfGluedFirstLineExceeds(n, bi, groupifyInlineBodies(b), groupifyInlineBodies(f));
 			case Fill(items, sep, tr):
 				Fill([for (it in items) groupifyInlineBodies(it)], groupifyInlineBodies(sep), tr);
 			case FillWithRestProbe(items, sep, tr):
