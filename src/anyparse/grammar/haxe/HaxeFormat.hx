@@ -212,9 +212,11 @@ final class HaxeFormat implements TextFormat {
 	 * `case X: foo();` shape is preserved; otherwise the body keeps the
 	 * source's multiline layout. Setting either to `Same` flattens
 	 * single-stmt bodies unconditionally; setting either to `FitLine`
-	 * (ω-case-body-fitline) hands the same-vs-next choice to the renderer,
-	 * which measures the flat `case <patterns>: <body>` line against
-	 * `lineWidth`. `caseBody` corresponds to
+	 * (ω-case-body-fitline) hands the same-vs-next choice to
+	 * `anyparse.format.BodyFit`, which measures the flat
+	 * `case <patterns>: <body>` line against `lineWidth` when the body can
+	 * render on one line and glues it to the label when it cannot.
+	 * `caseBody` corresponds to
 	 * haxe-formatter's `sameLine.caseBody: @:default(Next)`;
 	 * `expressionCase` to `sameLine.expressionCase: @:default(Same)`.
 	 * We pick `Keep` over upstream's `Same` to avoid a `;`-cascade regression — Keep gates on source same-line-ness so multi-line source bodies

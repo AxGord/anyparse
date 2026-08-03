@@ -107,13 +107,23 @@ import anyparse.format.UniformStatementBlanksPolicy;
  *    (`case X: foo();`); `Next` keeps `case X:` and the body on separate
  *    lines; `Keep` (default) flattens only when the source had the stmt
  *    on the same line as `:` (reads `Trivial<T>.newlineBefore` of the
- *    body's first element); `FitLine` (ω-case-body-fitline) measures the
- *    flat `case <patterns>: <body>` line — the live column after the
- *    header plus the body's flat width incl. its `;` and any folded
- *    trailing comment — against `lineWidth`, staying inline at
- *    `<= lineWidth` and moving the WHOLE body one indent deeper
- *    otherwise. `FitLine` ignores the source shape (that axis is
- *    `Keep`'s), so an author-broken body that fits re-joins the label.
+ *    body's first element); `FitLine` (ω-case-body-fitline) asks
+ *    `anyparse.format.BodyFit.fitLineLayout` — the SAME emitter the
+ *    bare-Ref `FitLine` bodies use — which splits on whether the body
+ *    CAN render on one line at all:
+ *      - it can (`WrapList.flatLength >= 0`, no hardline anywhere) —
+ *        the flat `case <patterns>: <body>` line is measured against
+ *        `lineWidth`, counting the live column after the header plus the
+ *        body's flat width incl. its `;` and any folded trailing
+ *        comment; inline at `<= lineWidth`, WHOLE body one indent deeper
+ *        past it.
+ *      - it cannot (a block, a wrap cascade that refuses one line, a
+ *        source-multi-line literal the emitter keeps broken) — no budget
+ *        makes it fit, so it GLUES to the label exactly as `Same` does,
+ *        and the case line may exceed `lineWidth`.
+ *    Neither outcome consults the source line shape (that axis is
+ *    `Keep`'s), so an author-broken body that fits re-joins the label and
+ *    one format pass reaches the `writeRoundTrip(s) == s` fixed point.
  *    Multi-stmt bodies always stay multiline.
  *  - `expressionCase` — same shape, selected instead of `caseBody` when
  *    `_inExprPosition` is set (expression-context switches such as

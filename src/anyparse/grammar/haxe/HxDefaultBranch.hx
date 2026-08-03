@@ -28,9 +28,10 @@ package anyparse.grammar.haxe;
  * `caseBody` defaults to `Next`; `expressionCase` defaults to `Keep`,
  * so author-written `default: foo();` round-trips byte-identically.
  * `FitLine` (ω-case-body-fitline) shares the mechanism too — the same
- * single-stmt eligibility routes to the deferred `_fitCase` layout, so
- * a `default:` body follows the identical fit measurement. See
- * `HxCaseBranch.body`'s doc for the contract.
+ * single-stmt eligibility routes to the deferred `_fitCase` layout and
+ * on to `anyparse.format.BodyFit.fitLineLayout`, so a `default:` body
+ * follows the identical measure-or-glue split. See `HxCaseBranch.body`'s
+ * doc for the contract.
  *
  * `@:fmt(flatChildOpt('A=B', ...))` (ω-expression-case-flat-fanout)
  * mirrors `HxCaseBranch.body` — when the flat gate fires, the body's

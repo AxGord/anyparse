@@ -71,16 +71,31 @@ package anyparse.grammar.haxe;
  *
  * ω-case-body-fitline adds the DEFERRED sibling of that gate: when the
  * dispatched flag is `FitLine`, the same single-stmt eligibility fires
- * `_fitCase` instead of `_flatCase`, and the Star emits
- * `BodyGroup(Nest(cols, [Line, body]))` — the exact Doc shape
- * `WriterLowering.buildBodyFitExpr` builds for a bare-Ref `FitLine`
- * body, so `case X: expr;` and `return expr;` measure by ONE route. The
- * renderer's `fitsFlat` sees the live column (the `case <patterns>:`
- * header is already emitted) plus the flat width of ` <body>`; at
- * `<= lineWidth` the body stays inline, otherwise the WHOLE body drops
- * one indent deeper rather than wrapping inside the value's own
- * delimiters. `refuseFlatOnComplexExpr` gates BOTH paths, so a refused
- * body breaks even when it fits.
+ * `_fitCase` instead of `_flatCase`, and the Star hands the body to
+ * `anyparse.format.BodyFit.fitLineLayout` — the one emitter that also
+ * serves `WriterLowering.buildBodyFitExpr`'s bare-Ref bodies, so
+ * `case X: expr;` and `return expr;` cannot drift apart. That emitter
+ * first asks whether the body can render on one line AT ALL
+ * (`WrapList.flatLength(body) >= 0` — no hardline anywhere in its Doc):
+ *  - yes → `BodyGroup(Nest(cols, [Line, body]))`. The renderer's
+ *    `fitsFlat` sees the live column (the `case <patterns>:` header is
+ *    already emitted) plus the flat width of ` <body>`; at
+ *    `<= lineWidth` the body stays inline, otherwise the WHOLE body
+ *    drops one indent deeper rather than wrapping inside the value's own
+ *    delimiters.
+ *  - no → the body GLUES to the label with an `OptSpace`, the same shape
+ *    `Same` produces. No measurement happens (none would be meaningful),
+ *    so the case line may exceed `lineWidth`.
+ * Asking the flat-length question FIRST is what keeps the decision out of
+ * the source line shape: `fitsFlat` DEFERS a nested `BodyGroup` while
+ * `WrapList.flatLength` DESCENDS one, and the writer wraps
+ * source-multi-line literals in a `BodyGroup` and single-line ones not —
+ * so `fitsFlat` alone answered differently for the two source shapes of
+ * one AST and `fitLine` needed two passes to settle.
+ * `refuseFlatOnComplexExpr` gates BOTH paths, so a refused body breaks
+ * even when it fits; a case label carrying its own trailing comment is
+ * refused by `_fitCase` too (the comment would land on the wrong side of
+ * the emitter-owned separator, and it forces a physical break anyway).
  *
  * `@:fmt(flatChildOpt('A=B', ...))` (ω-expression-case-flat-fanout) opts
  * the body's child writer call into a copy-on-flat opt-fanout: when the
