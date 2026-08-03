@@ -113,6 +113,10 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 		+ '\t\t\tswitch (c) {\n#else\n\t\tfor (i in 0...tmp.length) {\n\t\t\tswitch (fast(tmp, i)) {\n#end\n'
 		+ '\t\t\t\tcase 1: aa(bb);\n\t\t\t\tcase 2: cc(ddddddddddddddd);\n\t\t\t\tcase _: ee(ff);\n\t\t\t}\n\t\t}\n\t}\n}\n';
 
+	/** A switch whose ONLY element is a `#if` region — the whole case list lives inside one directive block. */
+	private static final LONE_REGION_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n#if js\n'
+		+ '\t\t\tcase 1: aa(bb);\n\t\t\tcase 2: cc(ddddddddddddddd);\n#end\n\t\t};\n\t}\n}\n';
+
 	/** `HxSwitchCase.CondSpliceCase` — a region that splits a case's LABELS from the body they share after `#end`. */
 	private static final SPLICE_CASE_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tvar w = switch ext(a) {\n#if hxbitmini\n'
 		+ '\t\t\tcase ATLAS, BINATLAS:\n#else\n\t\t\tcase ATLAS:\n#end\n\t\t\t\tcc(ddddddddddddddd);\n\t\t\tcase PNG: tiles[a];\n'
@@ -375,6 +379,19 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 	public function testCondSpliceCaseContributesNothing(): Void {
 		final out: String = write(SPLICE_CASE_SRC, json(39));
 		Assert.isTrue(out.indexOf('case PNG: tiles[a];') != -1, 'a label-splice region must not spread its siblings: <$out>');
+	}
+
+	/**
+	 * A switch whose ONLY element is a `#if` region holding several cases.
+	 * The pre-slice one-element short-circuit read `_arr.length > 1` and
+	 * skipped the pre-pass here, so the region's two cases decided
+	 * separately and kept the mixed shape; the count is now over EXPANDED
+	 * units, so the two coordinate like any pair of siblings.
+	 */
+	public function testALoneRegionsCasesCoordinateWithEachOther(): Void {
+		final out: String = write(LONE_REGION_SRC, json(39));
+		Assert.isTrue(out.indexOf('case 1:\n\t\t\t\taa(bb);') != -1, 'the region\'s narrower case must follow its widest: <$out>');
+		Assert.isTrue(out.indexOf('case 2:\n\t\t\t\tcc(ddddddddddddddd);') != -1, '<$out>');
 	}
 
 	public function testIsIdempotentOnAConditionalSwitch(): Void {
