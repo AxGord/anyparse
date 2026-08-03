@@ -331,10 +331,175 @@ class GuardReturnCheckTest extends Test {
 		Assert.equals(130, Linter.builtins().length);
 	}
 
+	// --- implicit Void tail: an `if` with no explicit trailing return -----------------------
+
+	/**
+	 * The reference shape: a bare trailing `if` as the whole body of a `: Void` method, whose
+	 * then-branch ends in a plain CALL — the terminal gate the explicit-pair arm applies would
+	 * reject it, and the implicit-tail arm deliberately does not.
+	 */
+	public function testImplicitVoidTailFlaggedAndFixed(): Void {
+		final source: String =
+			'class C {\n\tpublic function disable():Void {\n\t\tif (_handle != null) {\n\t\t\tlog(_handle);\n\t\t\tdetach(_handle);\n\t\t}\n\t}\n}\n';
+		final expected: String =
+			'class C {\n\tpublic function disable():Void {\n\t\tif (_handle == null) return;\n\t\tlog(_handle);\n\t\tdetach(_handle);\n\t}\n}\n';
+		Assert.equals(1, vSource(source).length);
+		Assert.equals(canon(expected), fxSource(source));
+	}
+
+	/** A function with NO return annotation and no value `return` in its own scope infers `Void`. */
+	public function testUnannotatedNoValueReturnFlagged(): Void {
+		Assert.equals(1, vSource('class C {\n\tfunction f(a:Int) {\n\t\tif (a > 0) {\n\t\t\tp(a);\n\t\t\tq(a);\n\t\t}\n\t}\n}\n').length);
+	}
+
+	/** A constructor carries no return-type child and no value return, so the inference branch proves it. */
+	public function testConstructorImplicitTailFlagged(): Void {
+		Assert.equals(
+			1, vSource('class C {\n\tpublic function new(a:Int) {\n\t\tif (a > 0) {\n\t\t\tp(a);\n\t\t\tq(a);\n\t\t}\n\t}\n}\n').length
+		);
+	}
+
+	/**
+	 * THE VOID-GATE DISCRIMINATOR: every other gate passes for this one. The body COMPILES —
+	 * the trailing `if` is unreachable after the `throw` — and holds no value `return`, so only
+	 * the declared `: Int` annotation stands between the arm and an inserted `return;` that
+	 * would not compile.
+	 */
+	public function testAnnotatedNonVoidUnreachableTailNotFlagged(): Void {
+		Assert.equals(
+			0,
+			vSource('class C {\n\tfunction f(a:Int):Int {\n\t\tthrow \'no\';\n\t\tif (a > 0) {\n\t\t\tp(a);\n\t\t\tq(a);\n\t\t}\n\t}\n}\n').length
+		);
+	}
+
+	/** An un-annotated function holding a value `return` elsewhere does not infer `Void`. */
+	public function testValueReturnInScopeNotFlagged(): Void {
+		Assert.equals(
+			0,
+			vSource(
+				'class C {\n\tfunction f(a:Int) {\n\t\tif (a < 0) return 1;\n\t\tif (a > 0) {\n\t\t\tp(a);\n\t\t\tq(a);\n\t\t}\n\t}\n}\n'
+			).length
+		);
+	}
+
+	/**
+	 * THE TAIL-POSITION DISCRIMINATOR: a loop body is not the function's tail — falling off its
+	 * end goes round again, not out — so a trailing `if` there stays `guard-continue`'s turf.
+	 */
+	public function testIfLastInLoopBodyNotFlagged(): Void {
+		Assert.equals(0, vVoid('while (more()) {\n\t\t\tp(a);\n\t\t\tif (a > 0) {\n\t\t\t\tr(a);\n\t\t\t\ts(a);\n\t\t\t}\n\t\t}').length);
+	}
+
+	/** A plain nested `{ … }` block is not the function's tail either — only the body block is. */
+	public function testIfLastInNestedBlockNotFlagged(): Void {
+		Assert.equals(0, vVoid('{\n\t\t\tp(a);\n\t\t\tif (a > 0) {\n\t\t\t\tr(a);\n\t\t\t\ts(a);\n\t\t\t}\n\t\t}').length);
+	}
+
+	/** EVERY branch of a tail-position `#if` region is itself a tail — mutually exclusive configurations. */
+	public function testConditionalBranchImplicitTailFlaggedAndFixed(): Void {
+		final code: String = 'p(a);\n\t\t#if debug\n\t\tif (a > 0) {\n\t\t\tr(a);\n\t\t\ts(a);\n\t\t}\n\t\t#else\n\t\tif (a > 1) {'
+			+ '\n\t\t\tt(a);\n\t\t\tu(a);\n\t\t}\n\t\t#end';
+		Assert.equals(2, vVoid(code).length);
+		Assert.equals(
+			canon(
+				wrapVoid(
+					'p(a);\n\t\t#if debug\n\t\tif (a <= 0) return;\n\t\tr(a);\n\t\ts(a);\n\t\t#else\n\t\tif (a <= 1) return;'
+					+ '\n\t\tt(a);\n\t\tu(a);\n\t\t#end'
+				)
+			),
+			fxVoid(code)
+		);
+	}
+
+	/** A region that is NOT the body's last statement is no tail: the inserted `return` would skip what follows `#end`. */
+	public function testConditionalRegionNotLastNotFlagged(): Void {
+		Assert.equals(0, vVoid('#if debug\n\t\tif (a > 0) {\n\t\t\tr(a);\n\t\t\ts(a);\n\t\t}\n\t\t#end\n\t\tafter(a);').length);
+	}
+
+	/** `MIN_THEN_STATEMENTS` applies to this arm too — one statement is not worth a guard. */
+	public function testOneStatementThenBranchNotFlagged(): Void {
+		Assert.equals(0, vVoid('if (a > 0) {\n\t\t\tr(a);\n\t\t}').length);
+	}
+
+	/** A comment trailing the `if`'s closing brace would end up documenting the last de-nested statement. */
+	public function testTrailingCommentAfterIfNotFlagged(): Void {
+		Assert.equals(0, vVoid('if (a > 0) {\n\t\t\tr(a);\n\t\t\ts(a);\n\t\t} // note').length);
+	}
+
+	/**
+	 * THE LAMBDA-EXCLUSION DISCRIMINATOR. `FnExpr` is the one lambda kind whose body really is a
+	 * `blockBodyKind`, so it is the only shape that would open a tail chain if the lambda kinds
+	 * joined `functionKinds` - the arrow forms are already rejected one level earlier, by the
+	 * `VarStmt` that is not a `#if` region (the same clause the loop / nested-block cases test).
+	 * Lambdas are excluded wholesale because an ARROW function with a block body DOES yield its
+	 * last expression's value, so de-nesting could change its inferred return type and make the
+	 * inserted `return;` illegal.
+	 */
+	public function testLambdaBlockTailNotFlagged(): Void {
+		Assert.equals(0, vVoid('var g = function() {\n\t\t\tif (a > 0) {\n\t\t\t\tp(a);\n\t\t\t\tq(a);\n\t\t\t}\n\t\t};').length);
+	}
+
+	/**
+	 * The positive twin of `testAnnotatedNonVoidUnreachableTailNotFlagged`: WITHOUT an annotation
+	 * the same body infers `Void` - a `throw`-only path does not make the return type a free
+	 * monomorph (measured on Haxe 4.3.7) - so no throw guard stands between the arm and the fix.
+	 */
+	public function testUnannotatedThrowThenTailFlagged(): Void {
+		Assert.equals(
+			1,
+			vSource('class C {\n\tfunction f(a:Int) {\n\t\tthrow \'no\';\n\t\tif (a > 0) {\n\t\t\tp(a);\n\t\t\tq(a);\n\t\t}\n\t}\n}\n').length
+		);
+	}
+
+	/**
+	 * A type-parameter CONSTRAINT projects the same node kind in the same child slot as a return
+	 * annotation, and `<T: Void>` is legal Haxe - so reading the child before the body as the
+	 * annotation would PROVE Void on a function that returns `Int`. `CheckScan.returnAnnotationText`
+	 * tells them apart by position relative to the parameter list, and the un-annotated inference
+	 * branch then sees the `return 1` and refuses. The body compiles (the trailing `if` is
+	 * unreachable), so this is a real shape, not a parse curiosity.
+	 */
+	public function testVoidConstrainedGenericNotFlagged(): Void {
+		Assert.equals(0, vSource(constrainedGeneric('if (flag) return 1;\n\t\t')).length);
+	}
+
+	/**
+	 * The control for `testVoidConstrainedGenericNotFlagged`: the SAME `<T:Void>` header with the
+	 * value `return` dropped IS flagged. Every gate but the value-`return` scan therefore passes
+	 * for that shape, which is what makes the sibling's zero attributable to the Void proof - and
+	 * what a "child before the body" reading of the annotation would skip.
+	 */
+	public function testConstrainedGenericWithoutValueReturnFlagged(): Void {
+		Assert.equals(1, vSource(constrainedGeneric('')).length);
+	}
+
+	/** The inner `if` is not a tail until the outer one de-nests, so the pair flattens over two `--fix` passes. */
+	public function testNestedVoidTailsFlattenOverPasses(): Void {
+		Assert.equals(
+			canon(wrapVoid('if (a <= 0) return;\n\t\tp(a);\n\t\tif (b == null) return;\n\t\tq(a);\n\t\tr(a);')),
+			fxVoid('if (a > 0) {\n\t\t\tp(a);\n\t\t\tif (b != null) {\n\t\t\t\tq(a);\n\t\t\t\tr(a);\n\t\t\t}\n\t\t}')
+		);
+	}
+
 	// --- helpers --------------------------------------------------------------------------
 
 	private function wrap(bodyCode: String): String {
 		return 'class C {\n\tfunction f(a:Int, b:Node):Bool {\n\t\t$bodyCode\n\t}\n}\n';
+	}
+
+	/** `wrap`'s `: Void` twin — the return type the implicit-tail arm's proof needs. */
+	private function wrapVoid(bodyCode: String): String {
+		return 'class C {\n\tfunction f(a:Int, b:Node):Void {\n\t\t$bodyCode\n\t}\n}\n';
+	}
+
+	/**
+	 * A PARAMETERLESS `<T:Void>`-constrained method — the one header where the constraint occupies
+	 * the child slot a return annotation would — with `head` prefixed to its body. Conditions are
+	 * bare booleans so the negation is a clean `!flag`, licensed with no operand types.
+	 */
+	private function constrainedGeneric(head: String): String {
+		return 'class C {\n\tvar flag:Bool;\n\tvar other:Bool;\n\n\tfunction m<T:Void>() {\n\t\t${head}throw \'no\';'
+			+ '\n\t\tif (other) {\n\t\t\tp(1);\n\t\t\tq(1);\n\t\t}\n\t}\n}\n';
 	}
 
 	private function cond(c: String): String {
@@ -342,7 +507,17 @@ class GuardReturnCheckTest extends Test {
 	}
 
 	private function v(bodyCode: String): Array<Violation> {
-		return new GuardReturn().run([{ file: 'C.hx', source: wrap(bodyCode) }], new HaxeQueryPlugin());
+		return vSource(wrap(bodyCode));
+	}
+
+	/** The check's violations for a whole `source`, no wrapper. */
+	private function vSource(source: String): Array<Violation> {
+		return new GuardReturn().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+	}
+
+	/** `v` through `wrapVoid` — a body whose enclosing function returns nothing. */
+	private function vVoid(bodyCode: String): Array<Violation> {
+		return vSource(wrapVoid(bodyCode));
 	}
 
 	private function edits(source: String): Array<{ span: Span, text: String }> {
@@ -353,6 +528,11 @@ class GuardReturnCheckTest extends Test {
 	/** Canonicalise the body then invert to a fixpoint, exactly as the `lint --fix` CLI does. */
 	private function fx(bodyCode: String): String {
 		return fxSource(wrap(bodyCode));
+	}
+
+	/** `fx` through `wrapVoid`. */
+	private function fxVoid(bodyCode: String): String {
+		return fxSource(wrapVoid(bodyCode));
 	}
 
 	private function fxSource(source: String): String {

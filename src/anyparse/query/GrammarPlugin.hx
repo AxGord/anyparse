@@ -1569,6 +1569,15 @@ typedef RefShape = {
 	 */
 	@:optional var blockBodyKind: String;
 
+	/**
+	 * The language's unit / void type NAME exactly as it is written in a return-type
+	 * annotation (Haxe `Void`). `guard-return`'s implicit-tail arm compares a function's
+	 * DECLARED return type's source text to it to prove that a value-less `return;`
+	 * compiles before inserting one. Optional; unset → a function carrying ANY declared
+	 * return type is refused and only the un-annotated / no-value-return inference path
+	 * remains.
+	 */
+	@:optional var voidTypeName: String;
 
 	/**
 	 * The metadata tag requesting a final class (Haxe `@:final`) — the
