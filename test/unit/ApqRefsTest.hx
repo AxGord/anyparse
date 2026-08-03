@@ -573,4 +573,48 @@ class ApqRefsTest extends Test {
 		return line;
 	}
 
+
+	/**
+	 * The VALUE binder of a key-value `for (k => v in m)` is its own decl. The loop node
+	 * names only the KEY, so `v` used to have no declaration node at all: the body read
+	 * resolved outward to whatever `v` meant in the enclosing scope, which is how a rename
+	 * of that outer binding silently rewrote a reference the loop owns.
+	 */
+	public function testKeyValueValueBinderShadowsOuter(): Void {
+		final source: String = 'class X { static function f(m:Map<String, Int>):Void { var v:Int = 0; g(v); for (k => v in m) g(v); } }';
+		final hits: Array<RefHit> = findIn(source, 'v');
+		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(2, decls.length, 'outer var v + KeyValueBinder — got ${describe(hits)}');
+		Assert.equals(2, reads.length, 'one read outside the loop, one in its body — got ${describe(hits)}');
+		final outerDecl: RefHit = decls[0];
+		final binderDecl: RefHit = decls[1];
+		final outerRead: Null<Span> = reads[0].bindingSpan;
+		final bodyRead: Null<Span> = reads[1].bindingSpan;
+		Assert.notNull(outerRead);
+		Assert.notNull(bodyRead);
+		if (outerRead != null) Assert.equals(outerDecl.span.from, outerRead.from, 'the pre-loop read keeps the outer binding');
+		if (bodyRead != null) {
+			Assert.equals(binderDecl.span.from, bodyRead.from, 'the body read binds to the value binder');
+			Assert.notEquals(outerDecl.span.from, bodyRead.from, 'the body read must NOT bind to the shadowed outer var');
+		}
+	}
+
+	/**
+	 * The key-value binder of a COMPREHENSION (`ForExpr`) binds the same way — the two loop
+	 * forms carry the slot independently, so a fixture on the statement form alone would pass
+	 * over a grammar that surfaced only one of them.
+	 */
+	public function testKeyValueValueBinderBindsInComprehension(): Void {
+		final source: String = 'class X { static function f(m:Map<String, Int>):Void { var ys = [for (k => v in m) v * 2]; } }';
+		final hits: Array<RefHit> = findIn(source, 'v');
+		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(1, decls.length, 'one KeyValueBinder decl — got ${describe(hits)}');
+		Assert.equals(1, reads.length, 'one read at `v * 2` — got ${describe(hits)}');
+		final boundTo: Null<Span> = reads[0].bindingSpan;
+		Assert.notNull(boundTo);
+		if (boundTo != null) Assert.equals(decls[0].span.from, boundTo.from, 'comprehension read binds to the value binder');
+	}
+
 }

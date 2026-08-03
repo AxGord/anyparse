@@ -106,7 +106,6 @@ final class RedundantThis implements Check {
 			bindingKinds: bindingKinds,
 			patternKind: shape.plainCasePatternKind,
 			patternBinderKinds: shape.casePatternBinderKinds ?? [],
-			binderHeaderKinds: shape.selfScopeDeclKinds ?? [],
 			lambdaKinds: shape.lambdaKinds ?? [],
 			underlyingThisKinds: shape.underlyingThisTypeKinds ?? [],
 			containerKinds: shape.visibilityContainerKinds ?? [],
@@ -121,14 +120,16 @@ final class RedundantThis implements Check {
 	/**
 	 * Every grammar kind that DECLARES a name into the enclosing function scope and carries it
 	 * on the node: parameters, local `var` / `final` in statement, expression and STATIC form,
-	 * the self-scoped binders (loop iterator, catch variable) and local functions, plain and
-	 * `inline`. The shapes that bind without such a node are recovered in `collectBindingNames`.
+	 * the self-scoped binders (loop iterator, catch variable), a key-value iteration's VALUE
+	 * binder and local functions, plain and `inline`. The shapes that bind without such a node
+	 * are recovered in `collectBindingNames`.
 	 */
 	private static function namedBindingKinds(shape: RefShape): Array<String> {
 		return (shape.paramKinds ?? []).concat(shape.localDeclKinds ?? [])
 			.concat(shape.localDeclExprKinds ?? [])
 			.concat(shape.staticLocalDeclKinds ?? [])
 			.concat(shape.selfScopeDeclKinds ?? [])
+			.concat(shape.iterationValueBinderKinds ?? [])
 			.concat(shape.localFunctionKinds ?? [])
 			.concat(shape.inlineFunctionKinds ?? []);
 	}
@@ -193,18 +194,20 @@ final class RedundantThis implements Check {
 
 	/**
 	 * Collect every shadowing binding name in `node`'s subtree: the `bindingKinds` nodes,
-	 * which carry the name themselves, plus the two shapes that do not and would otherwise
-	 * cost a load-bearing `this.` — a bare-identifier lambda parameter (`bareLambdaParam`)
-	 * and the slots a self-scoped binder's header drops, which only its source text shows
-	 * (the VALUE of a key-value `for`, invisible as a node). Case-pattern captures are
-	 * collected once per member function by the caller.
+	 * which carry the name themselves, plus the one shape that does not and would otherwise
+	 * cost a load-bearing `this.` — a bare-identifier lambda parameter (`bareLambdaParam`).
+	 * Case-pattern captures are collected once per member function by the caller.
+	 *
+	 * A key-value `for`'s VALUE binder used to be read off the loop's header TEXT, the only
+	 * place it existed; it is a node of its own now (`iterationValueBinderKinds`, folded into
+	 * `bindingKinds`), so the walk below reaches it like every other binding — and stops
+	 * collecting the loop keyword and a catch clause's type name along with it.
 	 */
 	private static function collectBindingNames(node: QueryNode, source: String, c: Ctx, names: Array<String>): Void {
 		if (c.bindingKinds.contains(node.kind)) {
 			final name: Null<String> = node.name;
 			if (name != null) names.push(name);
 		}
-		if (c.binderHeaderKinds.contains(node.kind)) for (ident in RefactorSupport.binderHeaderIdents(source, node)) names.push(ident);
 		final param: Null<String> = bareLambdaParam(node, c);
 		if (param != null) names.push(param);
 		for (child in node.children) collectBindingNames(child, source, c, names);
@@ -294,7 +297,6 @@ private typedef Ctx = {
 	bindingKinds: Array<String>,
 	patternKind: Null<String>,
 	patternBinderKinds: Array<String>,
-	binderHeaderKinds: Array<String>,
 	lambdaKinds: Array<String>,
 	underlyingThisKinds: Array<String>,
 	containerKinds: Array<String>,

@@ -502,7 +502,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		if (hidesBindingNamed(node, span, source, field)) return false;
 		final nowPattern: Bool = inPattern || node.kind == 'Plain';
 		if (!renameFieldRef(node, span, source, field, propName, shadowsProp, classQualified, className, nowPattern, out)) return false;
-		final childShadows: Bool = shadowsProp || (isFnScope(node) && functionBindsName(node, source, propName));
+		final childShadows: Bool = shadowsProp || (isFnScope(node) && functionBindsName(node, propName));
 		return
 			renameChildren(node, source, field, skipSpans, fieldNode, propName, nowPattern, childShadows, className, classQualified, out);
 	}
@@ -598,9 +598,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 * correct, while MISSING a binder silently re-binds the reference to it (a loop variable
 	 * named like the property turned `if (color == _color)` into the always-true `color == color`).
 	 */
-	private static function functionBindsName(node: QueryNode, source: String, name: String): Bool {
-		if (bindsNameHere(node, source, name)) return true;
-		for (c in node.children) if (functionBindsName(c, source, name)) return true;
+	private static function functionBindsName(node: QueryNode, name: String): Bool {
+		if (bindsNameHere(node, name)) return true;
+		for (c in node.children) if (functionBindsName(c, name)) return true;
 		return false;
 	}
 
@@ -608,17 +608,16 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 * Whether `node` ITSELF binds `name`. Every binding form the grammar projects as a named
 	 * node: a parameter (`Required` / `Optional` / `Rest` / `LambdaParam`), a local declaration
 	 * (`VarStmt` / `FinalStmt`, their expression twins, and the `VarMore` continuation of a
-	 * multi-var list), a local function, a catch variable, and the self-scoped `for` iterator
-	 * (`ForStmt` / `ForExpr` — the array-comprehension form is a `ForExpr`).
+	 * multi-var list), a local function, a catch variable, the self-scoped `for` iterator
+	 * (`ForStmt` / `ForExpr` — the array-comprehension form is a `ForExpr`) and the `KeyValueBinder`
+	 * carrying the VALUE of a key-value `for (k => v in m)`, whose KEY is the loop node's own name.
 	 *
-	 * Three shapes carry no named binding node and are recovered here: a key-value
-	 * `for (k => v in m)` header keeps only the KEY on the node (`forHeaderBinds` reads the
-	 * header text); a single-parameter thin arrow `v -> ...` projects its parameter as a bare
-	 * child-0 `IdentExpr`; and a case PATTERN (`Plain`) projects its captures as bare
-	 * identifiers, so ANY mention of `name` inside one counts (a constructor name that happens
-	 * to match only over-qualifies).
+	 * Two shapes carry no named binding node and are recovered here: a single-parameter thin arrow
+	 * `v -> ...` projects its parameter as a bare child-0 `IdentExpr`; and a case PATTERN (`Plain`)
+	 * projects its captures as bare identifiers, so ANY mention of `name` inside one counts (a
+	 * constructor name that happens to match only over-qualifies).
 	 */
-	private static function bindsNameHere(node: QueryNode, source: String, name: String): Bool {
+	private static function bindsNameHere(node: QueryNode, name: String): Bool {
 		return switch node.kind {
 			case 'Required' | 'Optional' | 'Rest' | 'LambdaParam' | 'VarStmt' | 'FinalStmt' | 'VarExpr' | 'FinalExpr' | 'VarMore'
 				| 'StaticVarStmt'
@@ -627,9 +626,10 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 				| 'LocalInlineFnStmt'
 				| 'NamedFnExpr'
 				| 'CatchClause'
+				| 'ForStmt'
+				| 'ForExpr'
+				| 'KeyValueBinder'
 				| 'Capture': node.name == name;
-			case 'ForStmt' | 'ForExpr':
-				node.name == name || RefactorSupport.binderHeaderMentions(source, node, name);
 			case 'ThinArrow':
 				node.children.length > 0 && node.children[0].kind == 'IdentExpr' && node.children[0].name == name;
 			case 'Plain': mentionsField(node, name);
@@ -807,22 +807,22 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	}
 
 	/**
-	 * Whether `node` can BIND a name the grammar drops from the projection, and that hidden slot
-	 * textually mentions `field` — the blind spot of the by-name shadow refusal in `renameWalk`. A
-	 * key-value `for (k => _x in m)` / `[for (k => _x in m) …]` header keeps only the KEY name, so a
-	 * shadowing `_x` there is invisible as a node. A multi-variable declaration's later bindings DO
-	 * project (`VarMore`), so the multi-var arm ASKS THE TREE for one: a text-level comma scan cannot
-	 * tell `var a = 1, b = 2` from the comma inside a `Map<K, V>` annotation, and refused the latter.
-	 * Either way any word-match of `field` in the region refuses the fix (conservative: a multi-var
-	 * INIT reading the real field also refuses).
+	 * Whether `node` BINDS `field`, hiding the backing field from the by-name shadow refusal in
+	 * `renameWalk`. A loop binds its iterator (`ForStmt` / `ForExpr`) or, in the key-value form
+	 * `for (k => _x in m)` / `[for (k => _x in m) …]`, a second name on a `KeyValueBinder` child.
+	 * A multi-variable declaration's later bindings project as `VarMore`, so the multi-var arm ASKS
+	 * THE TREE for one: a text-level comma scan cannot tell `var a = 1, b = 2` from the comma inside
+	 * a `Map<K, V>` annotation, and refused the latter. In that one arm any word-match of `field` in
+	 * the declaration refuses the fix (conservative: a multi-var INIT reading the real field also
+	 * refuses). A missing span refuses everywhere — an unreadable construct binds everything.
 	 */
 	private static function hidesBindingNamed(node: QueryNode, span: Null<Span>, source: String, field: String): Bool {
 		switch node.kind {
 			case 'VarStmt' | 'FinalStmt':
 				if (span == null) return true;
 				return node.children.exists(c -> c.kind == 'VarMore') && RefactorSupport.identTokenOffset(source, span, field) >= 0;
-			case 'ForStmt' | 'ForExpr':
-				return span == null || RefactorSupport.binderHeaderMentions(source, node, field);
+			case 'ForStmt' | 'ForExpr' | 'KeyValueBinder':
+				return span == null || node.name == field;
 			case _:
 				return false;
 		}
@@ -1507,7 +1507,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			)
 		)
 			return false;
-		final childShadows: Bool = shadowsProp || (isFnScope(node) && functionBindsName(node, source, propName));
+		final childShadows: Bool = shadowsProp || (isFnScope(node) && functionBindsName(node, propName));
 		final isWrite: Bool = isWriteNodeKind(node.kind);
 		for (i in 0...node.children.length) if (!subtypeRefWalk(
 			node.children[i], field, owner, propName, index, source, ownerFileScan, cls2, isWrite && i == 0, childShadows, renameEdits,

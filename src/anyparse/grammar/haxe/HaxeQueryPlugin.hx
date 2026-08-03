@@ -78,7 +78,12 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * `VarMore` is the `@:spanned('VarMore')` struct carrying every binding
 	 * AFTER the first in `var a = 1, b = 2;` — without it those bindings had
 	 * no declaration node at all, so `Refs` could not resolve their uses and
-	 * every declaration-walking check was blind to them.
+	 * every declaration-walking check was blind to them. `KeyValueBinder` is
+	 * the same lift for the VALUE binder of `for (k => v in m)`: the loop
+	 * node's own name is the KEY, so `v` had no declaration node either. It
+	 * is a decl host rather than a `selfScopeDeclKinds` entry because it
+	 * opens no scope of its own — it binds into the frame the LOOP opens,
+	 * which is what `Refs.collectIntoMulti` does with a decl-host child.
 	 */
 	private static final DECL_HOST_KINDS: Array<String> = [
 		'VarDecl',
@@ -109,6 +114,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		'VarField',
 		'FinalField',
 		'FnField',
+		'KeyValueBinder',
 	];
 
 	/**
@@ -586,6 +592,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			typeAnnotationKinds: ['Named', 'Anon', 'Arrow', 'ArrowFn'],
 			forStmtKind: 'ForStmt',
 			iterationBindingKinds: ['ForStmt', 'ForExpr'],
+			iterationValueBinderKinds: ['KeyValueBinder'],
 			paramKinds: ['Required', 'Optional', 'Rest'],
 			supertypeClauseKinds: ['ExtendsClause', 'ImplementsClause'],
 			noBodyKind: 'NoBody',

@@ -30,6 +30,7 @@ private typedef ScanCtx = {
 	var opaqueKinds: Array<String>;
 	var localDeclKinds: Array<String>;
 	var selfScopeDeclKinds: Array<String>;
+	var valueBinderKinds: Array<String>;
 	var conditionalIfKeyword: Null<String>;
 }
 
@@ -131,6 +132,7 @@ final class UnusedLocal implements Check {
 				opaqueKinds: shape.opaqueKinds ?? [],
 				localDeclKinds: shape.localDeclKinds ?? [],
 				selfScopeDeclKinds: shape.selfScopeDeclKinds,
+				valueBinderKinds: shape.iterationValueBinderKinds ?? [],
 				conditionalIfKeyword: shape.conditionalIfKeyword
 			};
 			walk(ctx, tree, null);
@@ -271,8 +273,22 @@ final class UnusedLocal implements Check {
 	private static function collectShadowedRegions(ctx: ScanCtx, node: QueryNode, name: String, out: Array<Span>): Void {
 		final kind: String = node.kind;
 		if (ctx.opaqueKinds.contains(kind) || CheckScan.opensConditionalRegion(node, ctx.source, ctx.conditionalIfKeyword)) return;
-		if (ctx.selfScopeDeclKinds.contains(kind) && node.name == name) appendShadowedRegion(ctx, node, name, out);
+		if (ctx.selfScopeDeclKinds.contains(kind) && bindsShadowingName(ctx, node, name)) appendShadowedRegion(ctx, node, name, out);
 		for (c in node.children) collectShadowedRegions(ctx, c, name, out);
+	}
+
+	/**
+	 * Whether the self-scoped binder `node` binds `name` — its own name (the `for` iterator,
+	 * the `catch` exception) or the VALUE binder a key-value iteration carries as a separate
+	 * child (`RefShape.iterationValueBinderKinds`).
+	 *
+	 * The loop node's own name is the KEY only, so `for (k => item in m)` used to leave a
+	 * shadowing `item` unseen and the outer declaration silently live. The binder region
+	 * `appendShadowedRegion` then cuts is the same either way — it locates the binder TOKEN in
+	 * the header, which holds both names.
+	 */
+	private static function bindsShadowingName(ctx: ScanCtx, node: QueryNode, name: String): Bool {
+		return node.name == name || Lambda.exists(node.children, c -> ctx.valueBinderKinds.contains(c.kind) && c.name == name);
 	}
 
 	/**

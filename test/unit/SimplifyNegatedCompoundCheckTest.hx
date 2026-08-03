@@ -196,17 +196,31 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		Assert.equals(fixed, fixedWith(source, model));
 	}
 
-	public function testKeyValueLoopBinderKeepsWrap(): Void {
-		// The `=>` gate. `for (kk => vv in m)` projects as `(ForStmt kk (IdentExpr m) …)` — the
-		// VALUE binder is dropped, so the node's name is the KEY. Reading the element parameter
-		// off `Map<Fl, Cnt>` would type `kk` as `Cnt` (an `Int` field) and license the flip, but
-		// `kk` is really an `Fl` whose field is a `Float`, where `!(a < b)` and `a >= b` differ
-		// under NaN. The partial form is the only sound answer, and this fixture is what fails
-		// if the header `=>` test is removed.
+	public function testKeyValueLoopKeyBinderKeepsWrap(): Void {
+		// The KEY half of the key-value gate. `for (kk => vv in m)` projects as
+		// `(ForStmt kk (KeyValueBinder vv) (IdentExpr m) …)` — the node's own name is the KEY.
+		// Reading the ELEMENT parameter off `Map<Fl, Cnt>` would type `kk` as `Cnt` (an `Int`
+		// field) and license the flip, but `kk` is really an `Fl` whose field is a `Float`, where
+		// `!(a < b)` and `a >= b` differ under NaN. `iterationElementTypeParams` answers the
+		// element question only, so the key binder must stay unresolved — this fixture is what
+		// fails if that refusal is dropped along with the old header `=>` scan.
 		final model: String = 'class Fl {\n\tpublic var v:Float;\n}\n' + 'class Cnt {\n\tpublic var v:Int;\n}';
 		final params: String = 'q:Bool, m:Map<Fl, Cnt>';
 		final source: String = wrapTyped('for (kk => vv in m) {\n\t\t\tvar b = !(!q || kk.v < 0);\n\t\t}', params);
 		final fixed: String = wrapTyped('for (kk => vv in m) {\n\t\t\tvar b = q && !(kk.v < 0);\n\t\t}', params);
+		Assert.equals(fixed, fixedWith(source, model));
+	}
+
+	public function testKeyValueLoopValueBinderProvesFlip(): Void {
+		// The VALUE half. `vv` IS what iterating a `Map<Fl, Cnt>` yields, so it reads the same
+		// `iterationElementTypeParams` entry a single-binder `for (vv in m)` would — `Cnt`, whose
+		// `v` is an `Int`, where the flip is sound. The arm refused this whole shape while the
+		// binder existed only in the header text; the sibling fixture above pins that flipping the
+		// refusal did NOT also license the key.
+		final model: String = 'class Fl {\n\tpublic var v:Float;\n}\n' + 'class Cnt {\n\tpublic var v:Int;\n}';
+		final params: String = 'q:Bool, m:Map<Fl, Cnt>';
+		final source: String = wrapTyped('for (kk => vv in m) {\n\t\t\tvar b = !(!q || vv.v < 0);\n\t\t}', params);
+		final fixed: String = wrapTyped('for (kk => vv in m) {\n\t\t\tvar b = q && vv.v >= 0;\n\t\t}', params);
 		Assert.equals(fixed, fixedWith(source, model));
 	}
 

@@ -1507,4 +1507,25 @@ class NamingCheckTest extends Test {
 		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 
+
+	/**
+	 * The VALUE binder of a key-value `for` is a local like any other, so it is name-checked
+	 * like the KEY beside it. It was unreachable while the loop node carried only the key name
+	 * — the naming rule saw one binding where the source has two.
+	 */
+	public function testKeyValueLoopValueBinderNameChecked(): Void {
+		final vs: Array<Violation> = violations(
+			'class C {\n\tpublic function f(m:Map<Int, Int>):Void {\n\t\tfor (k => __value in m) trace(k + __value);\n\t}\n}'
+		);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('__value') != -1, vs[0].message);
+	}
+
+	/** A discarded VALUE binder is the `_` idiom, not a naming violation — the same exemption the key already had. */
+	public function testKeyValueLoopDiscardValueBinderNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C {\n\tpublic function f(m:Map<Int, Int>):Void {\n\t\tfor (k => _ in m) trace(k);\n\t}\n}').length
+		);
+	}
+
 }

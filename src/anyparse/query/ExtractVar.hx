@@ -109,6 +109,9 @@ final class ExtractVar {
 		'FinalStmt',
 		'LocalFnStmt',
 		'ForStmt',
+		// The VALUE binder of `for (k => v in m)` — the loop node names only the KEY, so
+		// without this a collision with `v` goes unseen and the new binding captures it.
+		'KeyValueBinder',
 		'CatchClause',
 	];
 

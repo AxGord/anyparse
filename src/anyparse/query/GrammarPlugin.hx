@@ -1741,11 +1741,15 @@ typedef RefShape = {
 	@:optional var indexedElementTypeParams: Map<String, Int>;
 
 	/**
-	 * Scope-introducing node kinds whose OWN name binds the ITERATION ELEMENT and whose
-	 * `children[0]` is the iterable expression (Haxe `ForStmt` / `ForExpr`). Lets a consumer
-	 * answer the type of a `for` binder, which no `:Type` annotation covers: the binder has
-	 * none, so `TypeInfoProvider.declaredTypes` has no entry for it and the element type can
+	 * Scope-introducing node kinds whose OWN name binds the ITERATION KEY-OR-ELEMENT and whose
+	 * FIRST NON-BINDER child is the iterable expression (Haxe `ForStmt` / `ForExpr`). Lets a
+	 * consumer answer the type of a `for` binder, which no `:Type` annotation covers: the binder
+	 * has none, so `TypeInfoProvider.declaredTypes` has no entry for it and the element type can
 	 * only come from the iterable.
+	 *
+	 * "First NON-binder child" rather than `children[0]`: a key-value iteration carries its VALUE
+	 * binder as an `iterationValueBinderKinds` node ahead of the iterable, so a consumer that
+	 * indexes `children[0]` blindly reads the binder where it wanted the iterable.
 	 *
 	 * DISTINCT from the singular `forStmtKind`, which names the STATEMENT kind
 	 * `redundant-map-iter-key` reads a discarded key off: this is the BINDER question, so it
@@ -1754,6 +1758,22 @@ typedef RefShape = {
 	 * binder stays unresolved, which is the conservative direction).
 	 */
 	@:optional var iterationBindingKinds: Array<String>;
+
+	/**
+	 * Node kinds carrying the VALUE binder of a key-value iteration — the `v` in Haxe's
+	 * `for (k => v in m)` (`KeyValueBinder`). The node is a direct child of an
+	 * `iterationBindingKinds` loop, sits BEFORE the iterable child, carries the bound name on
+	 * itself and spans exactly that identifier.
+	 *
+	 * Two independent jobs. A consumer reading the loop's OPERANDS must skip these to reach the
+	 * iterable (see `iterationBindingKinds`). A consumer collecting BOUND NAMES must include
+	 * them: the loop node's own `name` is the KEY only, so a scan keyed on it alone misses every
+	 * value binder — the blindness that made shadow scans read the loop's header TEXT instead.
+	 *
+	 * Optional; unset means the grammar has no separate value binder (either it does not have
+	 * key-value iteration, or its loop node names both bindings some other way).
+	 */
+	@:optional var iterationValueBinderKinds: Array<String>;
 
 	/**
 	 * Maps a container type's SIMPLE name to the index of the type parameter a `for` iteration

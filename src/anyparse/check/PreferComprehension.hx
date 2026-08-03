@@ -62,7 +62,7 @@ import anyparse.runtime.Span;
 @:nullSafety(Strict)
 final class PreferComprehension implements Check {
 
-	/** A `for` node has exactly [iterable, body] children. */
+	/** A `for` node has exactly [iterable, body] OPERAND children — a key-value VALUE binder is not one. */
 	private static inline final FOR_CHILD_COUNT: Int = 2;
 
 	/** An `if` with no `else` has exactly [condition, then-branch] children. */
@@ -144,7 +144,8 @@ final class PreferComprehension implements Check {
 			blockStmtKind: blockStmtKind,
 			identKind: shape.identKind,
 			ifKinds: shape.ifStatementKinds ?? [],
-			opaqueKinds: shape.opaqueKinds ?? []
+			opaqueKinds: shape.opaqueKinds ?? [],
+			valueBinderKinds: shape.iterationValueBinderKinds ?? []
 		};
 	}
 
@@ -209,9 +210,10 @@ final class PreferComprehension implements Check {
 		node: QueryNode, name: String, source: String, s: Seams, checkNodes: Array<QueryNode>
 	): Null<String> {
 		if (node.kind == s.forStmtKind) {
-			if (node.children.length != FOR_CHILD_COUNT) return null;
-			final iterable: QueryNode = node.children[0];
-			final body: QueryNode = node.children[1];
+			final operands: Array<QueryNode> = loopOperands(node, s);
+			if (operands.length != FOR_CHILD_COUNT) return null;
+			final iterable: QueryNode = operands[0];
+			final body: QueryNode = operands[1];
 			final nodeSpan: Null<Span> = node.span;
 			final bodySpan: Null<Span> = body.span;
 			if (nodeSpan == null || bodySpan == null) return null;
@@ -275,6 +277,18 @@ final class PreferComprehension implements Check {
 		return buf.toString() == '[]';
 	}
 
+
+	/**
+	 * The OPERAND children of a `for` node — its iterable and its body — with a key-value
+	 * iteration's VALUE binder (`RefShape.iterationValueBinderKinds`) filtered out. That binder
+	 * is a real child sitting AHEAD of the iterable, so a bare `children[0]` reads it instead,
+	 * and a bare `children.length` refuses every key-value loop the transcription handles fine
+	 * (the header text it emits is sliced from the source, `=>` included).
+	 */
+	private static function loopOperands(node: QueryNode, s: Seams): Array<QueryNode> {
+		return [for (c in node.children) if (!s.valueBinderKinds.contains(c.kind)) c];
+	}
+
 }
 
 /** The `RefShape` kinds `PreferComprehension` reads, bundled once so the walkers take one argument. */
@@ -288,6 +302,7 @@ private typedef Seams = {
 	var identKind: String;
 	var ifKinds: Array<String>;
 	var opaqueKinds: Array<String>;
+	var valueBinderKinds: Array<String>;
 }
 
 /** A flagged declaration-plus-loop pair: the full replacement span and its comprehension text. */

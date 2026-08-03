@@ -64,7 +64,10 @@ using Lambda;
 @:nullSafety(Strict)
 final class PreferFind implements Check {
 
-	/** A `for` node has exactly [iterable, body] children; the loop variable is its name. */
+	/**
+	 * A `for` node has exactly [iterable, body] children; the loop variable is its name. A
+	 * key-value loop carries a third — its VALUE binder — and is refused before the count.
+	 */
 	private static inline final FOR_CHILD_COUNT: Int = 2;
 
 	/** An `if` with no `else` has exactly [condition, then-branch] children. */
@@ -176,6 +179,7 @@ final class PreferFind implements Check {
 			identKind: shape.identKind,
 			ifKinds: ifKinds,
 			opaqueKinds: shape.opaqueKinds ?? [],
+			valueBinderKinds: shape.iterationValueBinderKinds ?? [],
 			localDeclKinds: shape.localDeclKinds ?? [],
 			exprStmtKind: shape.exprStatementKind,
 			assignKind: shape.assignKind,
@@ -215,7 +219,7 @@ final class PreferFind implements Check {
 			iterable: QueryNode,
 			cond: QueryNode,
 			then: QueryNode
-		}> = forIfHead(forNode, source, s);
+		}> = forIfHead(forNode, s);
 		if (head == null) return null;
 		final returned: Null<QueryNode> = returnValue(head.then, s);
 		if (returned == null || returned.kind != s.identKind || returned.name != head.loopVar) return null;
@@ -237,7 +241,7 @@ final class PreferFind implements Check {
 			iterable: QueryNode,
 			cond: QueryNode,
 			then: QueryNode
-		}> = forIfHead(forNode, source, s);
+		}> = forIfHead(forNode, s);
 		return head != null && isAssignBreakBody(head.then, declName, head.loopVar, s)
 			? buildViolation(forNode, head.iterable, head.loopVar, head.cond, '', file, source)
 			: null;
@@ -302,11 +306,12 @@ final class PreferFind implements Check {
 		return null;
 	}
 
-	/** Whether the `for` header carries a `k => v` key-value binding (`.find` iterates values, not KV pairs). */
-	private static function isKeyValueLoop(source: String, forNode: QueryNode, iterable: QueryNode): Bool {
-		final forSpan: Null<Span> = forNode.span;
-		final iterSpan: Null<Span> = iterable.span;
-		return forSpan != null && iterSpan != null && source.substring(forSpan.from, iterSpan.from).indexOf('=>') != -1;
+	/**
+	 * Whether the `for` binds a `k => v` key-value pair (`.find` iterates values, not KV pairs) —
+	 * i.e. whether it carries the VALUE binder node a key-value iteration projects.
+	 */
+	private static function isKeyValueLoop(forNode: QueryNode, s: Seams): Bool {
+		return forNode.children.exists(c -> s.valueBinderKinds.contains(c.kind));
 	}
 
 	/** Whether the iterable is a range `a...b` — its `IntIterator` is not `Iterable`, so `Lambda.find` would not compile. */
@@ -356,19 +361,26 @@ final class PreferFind implements Check {
 	 * The shared for-if-head destructure both forms start from: `for (v in xs) if (cond) <then>`
 	 * — the loop variable, iterable, condition and if-body — or null when `forNode` is not that
 	 * shape (wrong kind/arity, a key-value / range / call iterable, or a non-if / else-bearing body).
+	 *
+	 * The key-value refusal is a MODEL test (`isKeyValueLoop`), not an arity side effect: the
+	 * operand count is taken AFTER the VALUE binder is filtered out, so a key-value loop reaches
+	 * `FOR_CHILD_COUNT` exactly like a single-binder one and only the explicit gate stops it.
+	 * `Lambda.find` iterates values, so rewriting a `k => v` loop would bind the value where the
+	 * loop bound the key.
 	 */
-	private static function forIfHead(forNode: QueryNode, source: String, s: Seams): Null<{
+	private static function forIfHead(forNode: QueryNode, s: Seams): Null<{
 		loopVar: String,
 		iterable: QueryNode,
 		cond: QueryNode,
 		then: QueryNode
 	}> {
-		if (forNode.kind != s.forStmtKind || forNode.children.length != FOR_CHILD_COUNT) return null;
+		if (forNode.kind != s.forStmtKind || isKeyValueLoop(forNode, s)) return null;
+		final operands: Array<QueryNode> = [for (c in forNode.children) if (!s.valueBinderKinds.contains(c.kind)) c];
 		final loopVar: Null<String> = forNode.name;
-		if (loopVar == null) return null;
-		final iterable: QueryNode = forNode.children[0];
-		if (isKeyValueLoop(source, forNode, iterable) || isRangeIterable(iterable, s) || isCallIterable(iterable, s)) return null;
-		final body: QueryNode = unwrapSole(forNode.children[1], s);
+		if (loopVar == null || operands.length != FOR_CHILD_COUNT) return null;
+		final iterable: QueryNode = operands[0];
+		if (isRangeIterable(iterable, s) || isCallIterable(iterable, s)) return null;
+		final body: QueryNode = unwrapSole(operands[1], s);
 		return !s.ifKinds.contains(body.kind) || body.children.length != IF_NO_ELSE_CHILD_COUNT ? null : {
 			loopVar: loopVar,
 			iterable: iterable,
@@ -390,7 +402,7 @@ final class PreferFind implements Check {
 				iterable: QueryNode,
 				cond: QueryNode,
 				then: QueryNode
-			}> = forIfHead(a, source, s);
+			}> = forIfHead(a, s);
 			if (headA != null) {
 				final returned: Null<QueryNode> = returnValue(headA.then, s);
 				if (
@@ -415,7 +427,7 @@ final class PreferFind implements Check {
 				iterable: QueryNode,
 				cond: QueryNode,
 				then: QueryNode
-			}> = forIfHead(b, source, s);
+			}> = forIfHead(b, s);
 			if (!(headB != null && isAssignBreakBody(headB.then, declName, headB.loopVar, s))) continue;
 			final span: Null<Span> = b.span;
 			if (span != null) out['${span.from}:${span.to}'] = {
@@ -535,6 +547,7 @@ private typedef Seams = {
 	var identKind: String;
 	var ifKinds: Array<String>;
 	var opaqueKinds: Array<String>;
+	var valueBinderKinds: Array<String>;
 	var localDeclKinds: Array<String>;
 	var exprStmtKind: Null<String>;
 	var assignKind: Null<String>;

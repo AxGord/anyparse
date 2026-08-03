@@ -29,6 +29,10 @@ class RenameSliceTest extends Test {
 	private static final FIXTURE: String = 'class C {\n\tvar count:Int = 0;\n\tfunction f(count:Int):Int {\n\t\tvar total = count;\n'
 		+ '\t\tfor (count in 0...10) total += count;\n' + '\t\treturn total + this.count;\n' + '\t}\n' + '}';
 
+	/** A local `v` shadowed by the VALUE binder of a key-value loop — the two are separate bindings. */
+	private static final KV_FIXTURE: String = 'class C {\n\tfunction f(m:Map<String, Int>):Void {\n\t\tvar v:Int = 0;\n\t\tg(v);\n'
+		+ '\t\tfor (k => v in m) g(k + v);\n' + '\t}\n' + '}';
+
 	/**
 	 * Param `count` (decl `3:13`) → `n`: only the param decl and its sole
 	 * read (`var total = count`) change. The field (`var count` /
@@ -318,6 +322,26 @@ class RenameSliceTest extends Test {
 	private static function renameQualified(source: String, line: Int, col: Int, newName: String): RenameResult {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		return Rename.rename(source, line, col, newName, plugin, plugin.refShape(), true);
+	}
+
+
+	/**
+	 * The regression this slice closes, on the rename side. In `for (k => v in m)` the loop
+	 * node named only the KEY, so the body's `v` resolved OUTWARD to the enclosing local —
+	 * and renaming that local rewrote the loop body's read while leaving the binder alone,
+	 * producing `for (k => v in m) g(k + w)`: valid-looking, unparseable-by-meaning, silent.
+	 */
+	public function testRenameOuterLocalLeavesKeyValueBinderVerbatim(): Void {
+		final expected: String = 'class C {\n\tfunction f(m:Map<String, Int>):Void {\n\t\tvar w:Int = 0;\n\t\tg(w);\n'
+			+ '\t\tfor (k => v in m) g(k + v);\n' + '\t}\n' + '}';
+		assertRename(KV_FIXTURE, 3, 3, 'w', expected);
+	}
+
+	/** The value binder is addressable in its own right: renaming it rewrites the binder and its body reads only. */
+	public function testRenameKeyValueBinderTouchesOnlyItsBinding(): Void {
+		final expected: String = 'class C {\n\tfunction f(m:Map<String, Int>):Void {\n\t\tvar v:Int = 0;\n\t\tg(v);\n'
+			+ '\t\tfor (k => w in m) g(k + w);\n' + '\t}\n' + '}';
+		assertRename(KV_FIXTURE, 5, 13, 'w', expected);
 	}
 
 }

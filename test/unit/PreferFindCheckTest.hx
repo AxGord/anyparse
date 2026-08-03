@@ -75,6 +75,15 @@ class PreferFindCheckTest extends Test {
 		Assert.equals(0, violations(fn('for (k => v in m) if (v > 2) return v;\n\t\treturn null;', 'Null<Int>')).length);
 	}
 
+	public function testKeyValueLoopReturningItsKeyNotFlagged(): Void {
+		// The fixture above is refused by a LATER gate — the returned `v` is not the loop node's
+		// name — so it proves nothing about the key-value refusal itself. Here the returned name
+		// IS the loop's own (the KEY), so every later gate passes and only `isKeyValueLoop` can
+		// stop the rewrite. It must: `Lambda.find` iterates a map's VALUES, so `m.find(k -> …)`
+		// would silently bind the value where the loop bound the key.
+		Assert.equals(0, violations(fn('for (k => v in m) if (v > 2) return k;\n\t\treturn null;', 'Null<Int>')).length);
+	}
+
 	public function testCallIterableNotFlagged(): Void {
 		// A `.keys()` / any call iterable may yield an Iterator, not an Iterable — Lambda.find
 		// would not compile, so a call-expression iterable is skipped.

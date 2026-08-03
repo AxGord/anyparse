@@ -5,13 +5,15 @@ import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxForExpr;
 import anyparse.grammar.haxe.HxForStmt;
 import anyparse.grammar.haxe.HxStatement;
+import anyparse.grammar.haxe.HxKeyValueBinder;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.QueryNode;
+import anyparse.runtime.Span;
 
 /**
  * Slice apq-P5-K2: map key-value `for (k => v in m)` iteration.
  *
- * `HxForStmt` and `HxForExpr` gained an optional `valueName` field
- * (`@:optional @:lead('=>') var valueName:Null<HxIdentLit>`) between
- * `varName` and the `in` keyword — the same optional-single-Ref-with-
+ * `HxForStmt` and `HxForExpr` gained an optional `valueName` field (`@:optional @:lead('=>') var valueName:Null<HxKeyValueBinder>`) between `varName` and the `in` keyword — the same optional-single-Ref-with-
  * literal-commit pattern as `HxParamBody.defaultValue`
  * (`@:optional @:lead('=')`) and `HxFnDecl.returnType`
  * (`@:optional @:lead(':')`). Additive: zero core/synth/writer change.
@@ -33,7 +35,7 @@ class HxForKeyValueSliceTest extends HxTestHelpers {
 		final fs: HxForStmt = expectForStmt(body[0]);
 		Assert.equals('k', (fs.varName: String));
 		Assert.notNull(fs.valueName);
-		Assert.equals('v', (fs.valueName: String));
+		Assert.equals('v', valueBinderName(fs.valueName));
 	}
 
 	public function testForStmtSingleIterStillNull(): Void {
@@ -49,7 +51,7 @@ class HxForKeyValueSliceTest extends HxTestHelpers {
 		);
 		final fs: HxForStmt = expectForStmt(body[0]);
 		Assert.equals('key', (fs.varName: String));
-		Assert.equals('val', (fs.valueName: String));
+		Assert.equals('val', valueBinderName(fs.valueName));
 	}
 
 	public function testNestedForStmtKeyValue(): Void {
@@ -58,10 +60,10 @@ class HxForKeyValueSliceTest extends HxTestHelpers {
 		);
 		final outer: HxForStmt = expectForStmt(body[0]);
 		Assert.equals('k', (outer.varName: String));
-		Assert.equals('v', (outer.valueName: String));
+		Assert.equals('v', valueBinderName(outer.valueName));
 		final inner: HxForStmt = expectForStmt(outer.body);
 		Assert.equals('k2', (inner.varName: String));
-		Assert.equals('v2', (inner.valueName: String));
+		Assert.equals('v2', valueBinderName(inner.valueName));
 	}
 
 	// --- expression-comprehension scope ---
@@ -72,7 +74,7 @@ class HxForKeyValueSliceTest extends HxTestHelpers {
 		Assert.equals(1, elems.length);
 		final fe: HxForExpr = expectForExpr(elems[0]);
 		Assert.equals('k', (fe.varName: String));
-		Assert.equals('v', (fe.valueName: String));
+		Assert.equals('v', valueBinderName(fe.valueName));
 	}
 
 	public function testForExprComprehensionSingleIterStillNull(): Void {
@@ -80,6 +82,11 @@ class HxForKeyValueSliceTest extends HxTestHelpers {
 		final fe: HxForExpr = expectForExpr(expectArrayExpr(init)[0]);
 		Assert.equals('i', (fe.varName: String));
 		Assert.isNull(fe.valueName);
+	}
+
+	/** The bound name of an optional key-value VALUE binder, or null when the loop is single-iter. */
+	private static function valueBinderName(binder: Null<HxKeyValueBinder>): Null<String> {
+		return binder == null ? null : (binder.name: String);
 	}
 
 	private function parseBody(source: String): Array<HxStatement> {
@@ -113,6 +120,47 @@ class HxForKeyValueSliceTest extends HxTestHelpers {
 			case ArrayExpr(elems): elems;
 			case _: throw 'expected ArrayExpr, got $e';
 		};
+	}
+
+
+	/**
+	 * The QueryNode projection, which is the contract every consumer indexes on: the loop keeps
+	 * the KEY as its own `name`, the VALUE arrives as a `KeyValueBinder` child spanning exactly
+	 * the identifier, and it sits AHEAD of the iterable — so a consumer reading loop operands
+	 * has to skip it (`RefShape.iterationValueBinderKinds`) rather than take `children[0]`.
+	 */
+	public function testKeyValueProjectsBinderChildBeforeIterable(): Void {
+		final source: String = 'class C { function f(m:Map<Int,Int>):Void { for (k => v in m) trace(v); } }';
+		final loop: QueryNode = firstOfKind(new HaxeQueryPlugin().parseFile(source), 'ForStmt');
+		Assert.equals('k', loop.name);
+		Assert.equals(3, loop.children.length);
+		final binder: QueryNode = loop.children[0];
+		Assert.equals('KeyValueBinder', binder.kind);
+		Assert.equals('v', binder.name);
+		final binderSpan: Null<Span> = binder.span;
+		Assert.notNull(binderSpan);
+		if (binderSpan != null) Assert.equals('v', source.substring(binderSpan.from, binderSpan.to));
+		Assert.equals('IdentExpr', loop.children[1].kind);
+	}
+
+	/** A single-binder loop projects no binder child at all — the shape every existing consumer was written against. */
+	public function testSingleIterProjectsNoBinderChild(): Void {
+		final loop: QueryNode = firstOfKind(
+			new HaxeQueryPlugin().parseFile('class C { function f(xs:Array<Int>):Void { for (v in xs) trace(v); } }'), 'ForStmt'
+		);
+		Assert.equals('v', loop.name);
+		Assert.equals(2, loop.children.length);
+		Assert.equals('IdentExpr', loop.children[0].kind);
+	}
+
+	/** The first node of `kind` in pre-order; throws when the tree holds none (a broken fixture, not a soft failure). */
+	private static function firstOfKind(node: QueryNode, kind: String): QueryNode {
+		if (node.kind == kind) return node;
+		for (c in node.children) {
+			final hit: Null<QueryNode> = try firstOfKind(c, kind) catch (exception: String) null;
+			if (hit != null) return hit;
+		}
+		throw 'no $kind node in the parsed tree';
 	}
 
 }
