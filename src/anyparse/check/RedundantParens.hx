@@ -36,7 +36,8 @@ import anyparse.runtime.Span;
  * The delimited positions come from two NEW optional lists —
  * `RefShape.delimitedAllChildKinds` (every child of the host: var / final
  * initializer, `return` value, array-literal element, object-literal field value,
- * `new T(args)` argument) and `delimitedTailChildKinds` (every child but the head:
+ * `new T(args)` argument, `${ … }` string-interpolation slot) and
+ * `delimitedTailChildKinds` (every child but the head:
  * call ARGUMENT, not the callee; assignment RIGHT-hand side, not the target) — plus
  * the PRE-EXISTING condition seams `conditionFirstChildKinds` /
  * `conditionLastChildKinds` (`if` / `while` / `do … while`, whose own `(` `)` are
@@ -66,6 +67,20 @@ import anyparse.runtime.Span;
  *
  * Both tests read the content that would be left BARE (paren layers unwrapped
  * first), so `((macro final w = 1))` still collapses to one pair rather than none.
+ *
+ * The `${ … }` INTERPOLATION slot is delimited on the same terms — `${` and `}` are
+ * hard tokens and the one expression between them parses at the loosest precedence —
+ * and the parenthesis is the only thing the drop removes: it changes no brace, no
+ * `$`, no quote and no line break, which is every character the REAL compiler's
+ * interpolation scanner reads while it brace-counts its way to the closing `}` (see
+ * `HaxeStringFoldSupport.interpolationBlockSafe` for that scanner's rules). So a
+ * content shape that survives the scan WITH the parentheses survives it without them
+ * — object literals (`${({a: 1})}` → `${{a: 1}}`), nested same-quote strings and
+ * their own `${ … }` blocks included, the interior reproduced byte-for-byte. Only
+ * the pair sitting DIRECTLY inside the braces takes this slot: in `${(a) + (b)}` the
+ * two pairs are operands of the `+`, left to the operand arms below, and
+ * `${(name)}` loses its parentheses without becoming `$name` — which shorthand a
+ * block deserves is `fold-adjacent-string-literals`' question, not this rule's.
  *
  * Deliberately NOT delimited:
  *
