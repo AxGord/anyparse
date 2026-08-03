@@ -32,15 +32,38 @@ package anyparse.core;
  * | `IfNaturalFirstLineExceeds` | measures `flatDoc`'s natural first line at render time | `< n` | both branches |
  * | `IfGluedFirstLineExceeds` | measures `flatDoc`'s natural first line at render time — same measurer as the row above, but called WITHOUT `resolveOpenDelim`, and followed by a second re-measure at the break indent (see its own doc: the width test alone is not the whole verdict) | `<= n` (the `Group` family convention), PLUS two break-side gates that can keep the flat branch even when `n` is exceeded | FLAT branch only (both branches wrap the same body — see its own doc) |
  *
- * The single-branch walkers (`DocMeasure`, `WrapList`, `D`) are a
- * separate axis again: each picks break-side or flat-side per its OWN
- * contract, not per ctor. `DocMeasure.breakableHeadStep` takes the
- * BREAK side for most of the family because it promises a LOWER bound
- * on head width (a break branch leading with `Line` terminates the head
- * at width 0) but the FLAT side for `IfArrowContinuationFits`, the one
- * probe whose break branch is the WIDER shape. Before adding a member,
- * fill in this row for it and check every walker rather than copying a
- * neighbour's alternative list.
+ * FITS-STRICTNESS ANOMALY, recorded rather than fixed: rows 3 and 4 run
+ * the SAME measurer (`Renderer.naturalFirstLineWidth`) and disagree at
+ * the boundary by one column — `IfNaturalFirstLineExceeds` crosses on
+ * `>= n`, `IfGluedFirstLineExceeds` on `> n`. Neither is a typo: the
+ * first is calibrated to a continuation budget, the second to a whole
+ * rendered LINE against `maxLineLength`, where landing exactly on the
+ * limit fits. Unifying them MOVES the corpora, so the convention stands;
+ * a new member picks its boundary from what it measures, not from the
+ * member it borrowed its measurer from.
+ *
+ * The single-branch walkers (`DocMeasure`, `WrapList`, `D`,
+ * `BinaryChainEmit`, `MethodChainEmit`) are a separate axis again: each
+ * picks break-side or flat-side per its OWN contract, not per ctor.
+ * `DocMeasure.breakableHeadStep` takes the BREAK side for most of the
+ * family because it promises a LOWER bound on head width (a break branch
+ * leading with `Line` terminates the head at width 0) but the FLAT side
+ * for `IfArrowContinuationFits`, the one probe whose break branch is the
+ * WIDER shape. The nine hand-written SPINE walkers —
+ * `BinaryChainEmit.leadingOperandOpensDelim`,
+ * `MethodChainEmit.endsWithLineComment`, and `WrapList`'s
+ * `lastVisibleText` / `firstVisibleText` /
+ * `firstVisibleTextIsFunctionKw` / `hasTopLevelElse` /
+ * `isMethodChainItem` / `isTopLevelChain` / `startsWithHardline` — each
+ * carries an explicit arm per member, and their switches are EXHAUSTIVE
+ * (no `case _`) so a new ctor here fails to compile in every one of them
+ * instead of silently inheriting a default. Two of the nine diverge from
+ * their own side for the body-placement pair and say why at the arm
+ * (`hasTopLevelElse` needs the `Nest`-carrying break branch for its depth
+ * counter; `isMethodChainItem` must avoid reading a body separator as a
+ * dot-break); `DocProbeFamilyWalkerTest` pins every side. Before adding a
+ * member, fill in this row for it and check every walker rather than
+ * copying a neighbour's alternative list.
  *
  * Primitives:
  *

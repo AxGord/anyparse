@@ -1883,6 +1883,11 @@ class Renderer {
 				// static `pushNaturalBranch`.
 				pushNaturalBranch(f, stack, col, width);
 			case _:
+				// Unreachable: `render` routes only the eleven `If*` ctors here and
+				// every one has an arm above. Same contract as `pushFlatWidthBranch`'s
+				// tail — falling through would push no frame and silently delete the
+				// node's subtree from the output, so an unrouted ctor throws instead.
+				throw 'pushExceedsBranch: unrouted probe ctor ${f.doc.getName()}';
 		}
 	}
 
@@ -2831,6 +2836,14 @@ class Renderer {
 					stack.push(new Frame(f.indent, pushMode, lineCrosses ? breakDoc : flatDoc));
 				}
 			case _:
+				// Unreachable: `pushExceedsBranch` routes only the five flat-width
+				// probes here, and each has an arm above. A silent fall-through would
+				// push NOTHING — the frame's whole subtree would vanish from the
+				// output — so a new probe ctor routed here but not wired up must fail
+				// loudly rather than delete code. (The compile-time net for adding a
+				// `Doc` ctor sits on `render`'s own dispatch switch, which is
+				// exhaustive; this guards the hand-written split BELOW it.)
+				throw 'pushFlatWidthBranch: unrouted probe ctor ${f.doc.getName()}';
 		}
 	}
 

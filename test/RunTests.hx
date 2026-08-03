@@ -545,6 +545,7 @@ import unit.PreferIfExpressionChainCheckTest;
 import unit.PreferLambdaExpressionBodyCheckTest;
 import unit.HxArrowBlockBodyOpenSliceTest;
 import unit.DocMeasureFirstVisibleTextTest;
+import unit.DocProbeFamilyWalkerTest;
 import unit.HxCaseBodyFitLineSliceTest;
 import unit.HxGlueWidthSliceTest;
 import unit.HxCaseBodySymmetrySliceTest;
@@ -755,6 +756,7 @@ class RunTests {
 		addCase(new HxArrowResidualLineWrapSliceTest());
 		addCase(new HxArrowBlockBodyOpenSliceTest());
 		addCase(new DocMeasureFirstVisibleTextTest());
+		addCase(new DocProbeFamilyWalkerTest());
 		addCase(new HxFnSigExceedsBoundaryWrapTest());
 		addCase(new HxFnSigFillLastParamBoundaryTest());
 		addCase(new HxFnSigSingleParamWrapIndentTest());
