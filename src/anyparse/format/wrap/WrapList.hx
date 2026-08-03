@@ -1130,7 +1130,7 @@ class WrapList {
 			//    (fork `firstLineLen > maxLen → continue`); else GLUE.
 			if (items.length == 1) {
 				final split: Null<{ head: Doc, body: Doc }> = bareArrowSplit(items[0]);
-				if (split != null && !firstVisibleTextStartsWith(split.body, '{'.code) && bareArrowBodyBreaks(split.body)) {
+				if (split != null && !DocMeasure.firstVisibleTextStartsWith(split.body, '{'.code) && bareArrowBodyBreaks(split.body)) {
 					final openShape: Doc = shapeAt(dm, leadBreak);
 					final flatShape: Doc = shapeAt(NoWrap, leadFlat);
 					final glueShape: Doc = bareArrowGlueShape(open, close, openInside, closeInside, split.head, split.body, cols);
@@ -1729,7 +1729,7 @@ class WrapList {
 			// the object fits there (fork keeps the object flat); if it exceeds its
 			// own line it stays brace-hugged and its fields wrap (fork `({`-glued +
 			// explode). Arrays / nested calls keep the open-delim-glue path below.
-			return firstVisibleTextStartsWith(items[0], '{'.code)
+			return DocMeasure.firstVisibleTextStartsWith(items[0], '{'.code)
 				? IfArrowContinuationFits(cols, DocMeasure.flatTokenWidth(items[0]), lineWidth, glued, broken)
 				: IfNaturalFirstLineFitsOpenDelim(lineWidth, broken, glued);
 		}
@@ -2003,7 +2003,7 @@ class WrapList {
 	// `anonFunctionCurly` newline policy).
 	private static function arrowBodyIsBlock(item: Doc): Bool {
 		return switch item {
-			case WrapBoundary(IfResidualLineExceeds(_, _, flatBody)): firstVisibleTextStartsWith(flatBody, '{'.code);
+			case WrapBoundary(IfResidualLineExceeds(_, _, flatBody)): DocMeasure.firstVisibleTextStartsWith(flatBody, '{'.code);
 			case Concat(arr) if (arr.length > 0): arrowBodyIsBlock(arr[arr.length - 1]);
 			case _: false;
 		};
@@ -2166,7 +2166,7 @@ class WrapList {
 				var hit: Bool = false;
 				for (k in 0...arr.length) if (!hit) switch arr[k] {
 					case Line(flat) if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code && k + 1 < arr.length
-						&& firstVisibleTextStartsWith(arr[k + 1], '.'.code)):
+						&& DocMeasure.firstVisibleTextStartsWith(arr[k + 1], '.'.code)):
 						hit = true;
 					// Follow ONLY a bare chain-tail `Nest` (where MethodChainEmit
 					// parks segments 1..N). Sub-construct `Group`/`WrapBoundary`
@@ -2176,37 +2176,6 @@ class WrapList {
 					case _:
 				}
 				hit;
-			case _: false;
-		};
-	}
-
-	// First visible Text leaf's leading char-code, comparing to `c`. Skips
-	// transparent wrappers (Empty / Line / OptSpace* / leading Concat slot /
-	// Group family / Nest / Flatten / WrapBoundary). Returns false if no Text
-	// leaf is reached before a non-skippable, non-`c` token.
-	private static function firstVisibleTextStartsWith(d: Doc, c: Int): Bool {
-		return switch d {
-			case Text(s):
-				s.length > 0 && StringTools.fastCodeAt(s, 0) == c;
-			case Concat(arr):
-				var found: Bool = false;
-				var hit: Bool = false;
-				for (it in arr) if (!found) switch it {
-					case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
-						| OptHardlineSkipBeforeHardline:
-					case _:
-						found = true;
-						hit = firstVisibleTextStartsWith(it, c);
-				}
-				hit;
-			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(
-				i
-			) | WrapBoundary(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
-				firstVisibleTextStartsWith(i, c);
-			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfResidualLineExceeds(
-				_, _, flat
-			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
-				firstVisibleTextStartsWith(flat, c);
 			case _: false;
 		};
 	}

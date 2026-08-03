@@ -541,6 +541,8 @@ import unit.FormatConfigDiscoveryTest;
 import unit.HxTernaryBranchChainIndentTest;
 import unit.PreferIfExpressionChainCheckTest;
 import unit.PreferLambdaExpressionBodyCheckTest;
+import unit.HxArrowBlockBodyOpenSliceTest;
+import unit.DocMeasureFirstVisibleTextTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -741,6 +743,8 @@ class RunTests {
 		addCase(new HxThinArrowIfElseBreakSliceTest());
 		addCase(new HxArrowPlainIfOpenSliceTest());
 		addCase(new HxArrowResidualLineWrapSliceTest());
+		addCase(new HxArrowBlockBodyOpenSliceTest());
+		addCase(new DocMeasureFirstVisibleTextTest());
 		addCase(new HxFnSigExceedsBoundaryWrapTest());
 		addCase(new HxFnSigFillLastParamBoundaryTest());
 		addCase(new HxFnSigSingleParamWrapIndentTest());
