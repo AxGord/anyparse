@@ -11,6 +11,29 @@ package anyparse.core;
  * Based on Wadler's "A prettier printer" with adjustments for strict
  * evaluation and Haxe ergonomics.
  *
+ * PROBE FAMILY — the three ctors that decide from a PRECOMPUTED width
+ * rather than by measuring their own subtree. They look
+ * interchangeable and are not; each divergence below is justified only
+ * at its own call sites, and re-deriving it from one member is how a
+ * wrong "every walker forwards to flatDoc" claim got written once
+ * already:
+ *
+ * | ctor | probes | fits when | both-branch walkers descend |
+ * |---|---|---|---|
+ * | `IfArrowContinuationFits` | `indent + extraIndent + flatWidth` | `< n` (strict — calibrated to a continuation LINE, so the budget excludes the column `n` itself) | both branches (its two branches are genuinely different shapes: head glued vs paren opened) |
+ * | `IfIndentWidthExceeds` | `indent + flatWidth` | `<= n` (the `Group` family convention) | FLAT branch only (both branches wrap the same body — see its own doc) |
+ * | `IfNaturalFirstLineExceeds` | measures `flatDoc`'s natural first line at render time | `< n` | both branches |
+ *
+ * The single-branch walkers (`DocMeasure`, `WrapList`, `D`) are a
+ * separate axis again: each picks break-side or flat-side per its OWN
+ * contract, not per ctor. `DocMeasure.breakableHeadStep` takes the
+ * BREAK side for most of the family because it promises a LOWER bound
+ * on head width (a break branch leading with `Line` terminates the head
+ * at width 0) but the FLAT side for `IfArrowContinuationFits`, the one
+ * probe whose break branch is the WIDER shape. Before adding a member,
+ * fill in this row for it and check every walker rather than copying a
+ * neighbour's alternative list.
+ *
  * Primitives:
  *
  * - `Empty`          — nothing.
@@ -371,10 +394,19 @@ enum Doc {
 	 * cannot depend on the source's line shape and a single format pass
 	 * reaches the `writeRoundTrip(s) == s` fixed point.
 	 *
-	 * Sister to `IfArrowContinuationFits`, which shares the
-	 * precomputed-width idea but re-bases to a continuation indent and
-	 * uses a strict `<` fits test. Pure render-time decision — every
-	 * static Doc walker forwards to `flatDoc`.
+	 * Pure render-time decision: no static walker evaluates the width, and
+	 * the two branches wrap the SAME body, differing only in the separator
+	 * before it. That last property is load-bearing — a walker asking about
+	 * subtree CONTENT gets the same answer from either branch, so the
+	 * both-branch walkers (`CollapsePass.walk`, `Renderer.scanBreakShape`,
+	 * `MatrixWrap`) descend the FLAT branch ONLY. Descending both doubles
+	 * the visited node count per nested probe, which is 2^depth for nested
+	 * switches; one branch is the whole content for one traversal.
+	 *
+	 * See the PROBE FAMILY table on the enum header for how this ctor's
+	 * fits-strictness and per-walker branch choice compare to its two
+	 * siblings — every member of the family diverges somewhere, and each
+	 * divergence is justified only at its own call sites.
 	 */
 	IfIndentWidthExceeds(flatWidth: Int, n: Int, breakDoc: Doc, flatDoc: Doc);
 	Fill(items: Array<Doc>, sep: Doc, ?tailReserve: Int);

@@ -38,12 +38,17 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
  *    three arms apart to match the long one reads worse than the mix;
  *  - a REFUSED body (`refuseFlatOnComplexExpr`, or a case label carrying
  *    its own trailing comment). Spec T17 rule 4 asked for these to
- *    count; measured on TM first: ZERO case bodies in the tree have the
- *    `A && B` shape, and the label-comment cases are `case X: // no op`
- *    with an EMPTY body, which spreads nothing. The rule would have been
- *    a no-op with a real cost (the refusal is invisible to a flat-width
- *    measure, so it needs a second channel), so it is deliberately not
- *    implemented — see the report for the site list.
+ *    count; measured on TM first, and the measurement is what decided
+ *    it. ZERO case bodies in the tree have the `A && B` shape the
+ *    complex-expression refusal targets, so that half is a no-op on real
+ *    code. The label-comment half has 15 sites, and they split: 7 have an
+ *    EMPTY body (`case X: // no op`) and spread nothing, 7 more are
+ *    MULTI-STATEMENT and are already excluded by the rule above — which
+ *    leaves exactly ONE site in the whole tree where counting refusals
+ *    would change anything (`PitchArea.onStageKeyDown`, whose sibling is
+ *    itself a wrapped-pattern case). Buying one site costs a second,
+ *    non-flat-width channel through the pre-pass, since a refusal is
+ *    invisible to `flatLength`. Deliberately not implemented.
  *
  * Per `feedback_unit_test_trivia_writer.md`: the knobs are visible only
  * through `HaxeModuleTriviaParser` / `HaxeModuleTriviaWriter`.
@@ -179,6 +184,29 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 		Assert.isTrue(keep.indexOf('case 2: cc(ddddddddddddddd);') != -1, '<$keep>');
 	}
 
+	public function testDeeplyNestedSwitchesStayLinear(): Void {
+		// ω-case-sym-linear regression pin. The coordination pre-pass writes
+		// each element twice (measure + emit) and the probe holds the body in
+		// BOTH branches, so a switch nested d deep used to cost 2^d — twice
+		// over: once in writer invocations (the pre-pass re-entered nested
+		// pre-passes) and once in Doc-walk node visits (`CollapsePass` and its
+		// two both-branch siblings descended break AND flat). Measured on the
+		// shape below: depth 15 took 6.0s and depth 17 took 23.4s before the
+		// fix, 0.13s after — flat with the knobs off.
+		// utest has no timing assertion, so this pins the OUTPUT only —
+		// correct and idempotent at a depth that used to cost seconds. On the
+		// pre-fix engine this very fixture still PASSED, just slowly, so the
+		// test does not discriminate the fix by itself; what it buys is a
+		// canary whose cost doubles per depth if either half of the fix is
+		// undone (add two levels and the suite visibly stalls). The
+		// discriminating evidence is the CLI timing in the slice report.
+		final src: String = deepSwitch(15);
+		final j: String = '{"wrapping": {"maxLineLength": 140}, "sameLine": {"caseBody": "fitLine", "expressionCase": "fitLine"}}';
+		final pass1: String = write(src, j);
+		Assert.equals(pass1, write(pass1, j), 'a deeply nested switch must still reach its fixed point in one pass');
+		Assert.isTrue(pass1.indexOf('case 3: aa(bb);') != -1, 'the innermost body still fits and stays inline: <$pass1>');
+	}
+
 	private inline function json(maxLineLength: Int, alignInline: Bool = false): String {
 		return '{"wrapping": {"maxLineLength": $maxLineLength}, "indentation": {"alignInlineSwitchCaseBody": $alignInline'
 			+ '}, "sameLine": {"expressionCase": "fitLine"}}';
@@ -186,6 +214,13 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 
 	private inline function write(src: String, cfg: String): String {
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormatConfigLoader.loadHxFormatJson(cfg));
+	}
+
+	/** `d` switch statements nested through each other's first case body. */
+	private static function deepSwitch(d: Int): String {
+		var body: String = 'aa(bb);';
+		for (i in 0...d) body = 'switch (y$i) {\n\t\t\tcase 3: $body\n\t\t\tcase _: cc(dd);\n\t\t}';
+		return 'class D {\n\tfunction f():Void {\n\t\t$body\n\t}\n}\n';
 	}
 
 }
