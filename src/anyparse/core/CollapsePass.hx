@@ -1009,9 +1009,9 @@ fitems.length > 1
 					for (it in items) stack.push(it);
 				case IfBreak(brk, fl) | IfWidthExceeds(_, brk, fl) | IfFirstLineExceeds(_, brk, fl) | IfLineExceeds(_, brk, fl) | IfResidualLineExceeds(
 					_, brk, fl
-				) | IfFullLineExceeds(_, brk, fl) | IfNaturalFirstLineExceeds(_, brk, fl) | IfNaturalFirstLineFitsOpenDelim(_, brk, fl) | IfArrowContinuationFits(
-					_, _, _, brk, fl
-				):
+				) | IfIndentWidthExceeds(_, _, brk, fl) | IfFullLineExceeds(_, brk, fl) | IfNaturalFirstLineExceeds(_, brk, fl) | IfNaturalFirstLineFitsOpenDelim(
+					_, brk, fl
+				) | IfArrowContinuationFits(_, _, _, brk, fl):
 					stack.push(brk);
 					stack.push(fl);
 				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
@@ -1072,6 +1072,7 @@ fitems.length > 1
 			case IfNaturalFirstLineExceeds(n, brk, fl): IfNaturalFirstLineExceeds(n, f(brk), f(fl));
 			case IfNaturalFirstLineFitsOpenDelim(n, brk, fl): IfNaturalFirstLineFitsOpenDelim(n, f(brk), f(fl));
 			case IfArrowContinuationFits(ei, fw, n, brk, fl): IfArrowContinuationFits(ei, fw, n, f(brk), f(fl));
+			case IfIndentWidthExceeds(fw, n, brk, fl): IfIndentWidthExceeds(fw, n, f(brk), f(fl));
 			case _: null;
 		};
 	}

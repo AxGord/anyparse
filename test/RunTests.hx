@@ -544,6 +544,7 @@ import unit.PreferLambdaExpressionBodyCheckTest;
 import unit.HxArrowBlockBodyOpenSliceTest;
 import unit.DocMeasureFirstVisibleTextTest;
 import unit.HxCaseBodyFitLineSliceTest;
+import unit.HxCaseBodySymmetrySliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -811,6 +812,7 @@ class RunTests {
 		addCase(new HxCatchBodySliceTest());
 		addCase(new HxCaseBodyPolicySliceTest());
 		addCase(new HxCaseBodyFitLineSliceTest());
+		addCase(new HxCaseBodySymmetrySliceTest());
 		addCase(new HxCaseExprPositionPropagateTest());
 		addCase(new HxIfStmtExprPositionDispatchTest());
 		addCase(new HxAnonFnBodyStmtPositionSliceTest());

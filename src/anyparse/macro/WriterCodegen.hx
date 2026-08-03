@@ -553,6 +553,38 @@ class WriterCodegen {
 	 * literal that is the direct branch value. Emitted only when the opt
 	 * typedef carries `_inValueIfBranch:Bool`.
 	 */
+	/**
+	 * ω-case-sibling-symmetry — opt-fanout shim for the
+	 * `caseSiblingSymmetry` meta on a case-list Star. Stamps the switch's
+	 * widest-sibling flat width onto the element opt so every sibling body
+	 * reaches the same placement verdict.
+	 *
+	 * Unlike the boolean `_set*` shims this is a SETTER with a value and no
+	 * idempotence short-circuit on "already set": the width is per-switch,
+	 * so a nested switch must OVERWRITE the enclosing one's rather than
+	 * inherit it. It does short-circuit when the value is already equal,
+	 * which is the common no-coordination case (`-1` into `-1`) and keeps
+	 * the allocation off every non-switch Star. Emitted only when the opt
+	 * typedef carries `_caseSiblingFlatWidth:Int`.
+	 */
+	private static function setCaseSiblingWidthField(optionsCT: ComplexType): Field {
+		return {
+			name: '_setCaseSiblingWidth',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{ name: 'o', type: optionsCT }, { name: 'w', type: macro :Int }],
+				ret: optionsCT,
+				expr: macro {
+					if (o._caseSiblingFlatWidth == w) return o;
+					final _c: $optionsCT = _copyOpt(o);
+					_c._caseSiblingFlatWidth = w;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
 	private static function setValueIfBranchField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setValueIfBranch',
@@ -2143,6 +2175,8 @@ class WriterCodegen {
 			fields.push(setElseIfBranchField(optionsCT));
 			fields.push(clearElseIfBranchField(optionsCT));
 		}
+		// ω-case-sibling-symmetry: per-switch widest-sibling width fanout.
+		if (optionsHasField(optionsTypePath, '_caseSiblingFlatWidth')) fields.push(setCaseSiblingWidthField(optionsCT));
 		if (hasValueIfBranch) {
 			fields.push(setValueIfBranchField(optionsCT));
 			fields.push(clearValueIfBranchField(optionsCT));

@@ -1028,6 +1028,19 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	formatStringInterpolation: Bool,
 	metadataFunctionLineEnd: MetadataLineEndPolicy,
 	_inExprPosition: Bool,
+	// ω-case-sibling-symmetry — the widest sibling case clause's FLAT width
+	// (`case <patterns>: <body>`, separator included), measured once per
+	// switch by the cases Star's `@:fmt(caseSiblingSymmetry(...))` pre-pass
+	// and handed to every sibling body. `BodyFit.fitLineLayout` turns it
+	// into an `IfIndentWidthExceeds` probe, so all siblings of one switch
+	// reach ONE placement verdict: if the widest does not fit, every body
+	// drops to the next line, including the ones that would fit and the
+	// glued ones. `-1` (the default, and what the pre-pass records when no
+	// sibling could render inline at all) means "no coordination" — every
+	// body decides for itself, exactly as before the slice. Always written
+	// by the pre-pass, never inherited, so a nested switch coordinates its
+	// own cases rather than the enclosing switch's.
+	_caseSiblingFlatWidth: Int,
 	// ω-expressionif-collapse — narrow companion to `_inExprPosition`, set
 	// ONLY on the immediate value of a value-yielded `if`/`else` branch
 	// (`HxIfExpr.thenBranch` / `elseBranch` carrying

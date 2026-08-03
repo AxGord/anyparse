@@ -56,12 +56,36 @@ import anyparse.format.wrap.WrapList;
  */
 final class BodyFit {
 
-	public static function fitLineLayout(cols: Int, body: Doc, nestGluedBody: Bool): Doc {
-		if (WrapList.flatLength(body) == -1) {
+	/**
+	 * Build the `FitLine` placement Doc for `body` under a header rendered at
+	 * the enclosing indent.
+	 *
+	 * `siblingWidth < 0` (the default) is the per-construct decision described
+	 * on the class: measure when the body can render flat, glue when it
+	 * cannot.
+	 *
+	 * `siblingWidth >= 0` opts into the SIBLING-COORDINATED decision
+	 * (ω-case-sibling-symmetry). The caller has measured every sibling of this
+	 * body's group and passes the WIDEST one's flat width; the result is an
+	 * `IfIndentWidthExceeds` probe on that width, so every sibling — which
+	 * renders at the same indent — answers identically. Exceeds the budget:
+	 * the body goes to the next line one indent deeper, and so does every
+	 * sibling, including ones that would have fit and ones that would have
+	 * glued. Fits: the probe falls through to the per-construct decision
+	 * above, which by construction then picks the inline shape for every
+	 * sibling (each sibling's own width is `<= siblingWidth`), so a group that
+	 * triggers nothing is byte-identical to the uncoordinated emit.
+	 */
+	public static function fitLineLayout(cols: Int, body: Doc, nestGluedBody: Bool, siblingWidth: Int = -1, lineWidth: Int = 0): Doc {
+		final own: Doc = if (WrapList.flatLength(body) == -1) {
 			final glued: Doc = Doc.Concat([Doc.OptSpace(' '), body]);
-			return nestGluedBody ? Doc.Nest(cols, glued) : glued;
+			nestGluedBody ? Doc.Nest(cols, glued) : glued;
 		}
-		return Doc.BodyGroup(Doc.Nest(cols, Doc.Concat([Doc.Line(' '), body])));
+		else
+			Doc.BodyGroup(Doc.Nest(cols, Doc.Concat([Doc.Line(' '), body])));
+		return siblingWidth < 0
+			? own
+			: Doc.IfIndentWidthExceeds(siblingWidth, lineWidth, Doc.Nest(cols, Doc.Concat([Doc.Line('\n'), body])), own);
 	}
 
 }

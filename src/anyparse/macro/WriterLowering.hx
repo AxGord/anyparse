@@ -1664,7 +1664,7 @@ class WriterLowering {
 			uniformBetweenOptField, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, blockEndedFlag ? sepText : null,
 			blockEndedFlag, blockEndedFlag ? (starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE): Null<String>) : null,
 			blockEndedFlag ? _formatInfo.schemaTypePath : null, condLeadingDocInfo, clearExprPositionNonTail, beginTypeKnob, endTypeKnob,
-			uniformStmtBlanks, emptyBlockBreak
+			uniformStmtBlanks, emptyBlockBreak, starNode.fmtReadStringArgs('caseSiblingSymmetry')
 		);
 		final blockStarNested: Expr = macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
@@ -11441,11 +11441,19 @@ class WriterLowering {
 		// omega-condswitchopen-for-close: force an empty body to break its close
 		// onto its own line (the outer-block `}` of a `#if for { switch { #end`
 		// region). See `triviaBlockEmptyDocExpr`.
-		forceEmptyBreak: Bool = false
+		forceEmptyBreak: Bool = false,
+		// ω-case-sibling-symmetry: `@:fmt(caseSiblingSymmetry('<stmtKnob>',
+		// '<exprKnob>'))` on a case-list Star. The two names are the
+		// statement-/expression-position body policies whose `FitLine` value
+		// arms the coordination; null (every other block Star) ⇒ no pre-pass,
+		// no element-opt copy, byte-identical emit.
+		?caseSiblingSymmetryKnobs: Array<String>
 	): Expr {
 		// ω-condcomp-stray-semi (Stage A): the schema-instance predicate-call build
 		// moved to `triviaBlockPredCallExpr` (consumed by `triviaBlockSepExprs`).
-		final triviaElemCall: Expr = triviaBlockElemCallExpr(elemFn, clearAnonFnBodyOnElems, clearExprPositionNonTail);
+		final caseSym: Bool = caseSiblingSymmetryKnobs != null && caseSiblingSymmetryKnobs.length == 2;
+		final caseSiblingWidthExpr: Expr = caseSiblingWidthProbeExpr(elemFn, caseSym ? caseSiblingSymmetryKnobs : null);
+		final triviaElemCall: Expr = triviaBlockElemCallExpr(elemFn, clearAnonFnBodyOnElems, clearExprPositionNonTail, caseSym);
 		final emptyText: String = openText + closeText;
 		// ω-empty-curly-break / ω-anonfunction-empty-curly / ω-blockempty:
 		// empty-body Doc dispatch moved to `triviaBlockEmptyDocExpr`.
@@ -11604,6 +11612,7 @@ class WriterLowering {
 			uniformBetweenOptField: uniformBetweenOptField,
 			anyEmptyLinesFlag: anyEmptyLinesFlag,
 			uniformStmtBlanks: uniformStmtBlanks,
+			caseSiblingWidthExpr: caseSiblingWidthExpr,
 		};
 		return triviaBlockMainExpr(ctx);
 	}
@@ -14601,7 +14610,9 @@ class WriterLowering {
 	private static function triviaTryparseCaseWrapExpr(): Expr {
 		return macro {
 			if (_fitCase)
-				_dwb(anyparse.format.BodyFit.fitLineLayout(_cols, _dc(_docs), !opt.alignInlineSwitchCaseBody));
+				_dwb(anyparse.format.BodyFit.fitLineLayout(
+					_cols, _dc(_docs), !opt.alignInlineSwitchCaseBody, opt._caseSiblingFlatWidth, opt.lineWidth
+				));
 			else
 				_dwb(opt.alignInlineSwitchCaseBody ? _dc(_docs) : _dn(_cols, _dc(_docs)));
 		};
@@ -16111,7 +16122,9 @@ class WriterLowering {
 	 * barrier wrap, and the final `elemFn(_t.node, opt)` call. Extracted so the
 	 * orchestrator stays under the complexity gate.
 	 */
-	private static function triviaBlockElemCallExpr(elemFn: String, clearAnonFnBodyOnElems: Bool, clearExprPositionNonTail: Bool): Expr {
+	private static function triviaBlockElemCallExpr(
+		elemFn: String, clearAnonFnBodyOnElems: Bool, clearExprPositionNonTail: Bool, caseSiblingSymmetry: Bool = false
+	): Expr {
 		// ω-arrow-lambda-body-context: when the call site opts in via
 		// `@:fmt(leftCurlyAnonFnOverride(...))` on the parent Star, the per-
 		// element write call passes `_clearAnonFnBody(opt)` so the flag is
@@ -16119,7 +16132,13 @@ class WriterLowering {
 		// statements / nested BlockExpr inside the body) fall back to the
 		// default `blockLeftCurly` knob rather than re-triggering the
 		// anon-fn override.
-		final elemOptExpr: Expr = clearAnonFnBodyOnElems ? macro _clearAnonFnBody(opt) : macro opt;
+		final elemOptBase: Expr = clearAnonFnBodyOnElems ? macro _clearAnonFnBody(opt) : macro opt;
+		// ω-case-sibling-symmetry: stamp the switch's widest-sibling flat width
+		// (`_csW`, computed by the pre-pass in `triviaBlockMainExpr`) onto every
+		// element's opt. ALWAYS written, never inherited, so a nested switch
+		// overwrites the enclosing one's width instead of coordinating against
+		// it. Flag off ⇒ the identical Expr as before.
+		final elemOptExpr: Expr = caseSiblingSymmetry ? macro _setCaseSiblingWidth($elemOptBase, _csW) : elemOptBase;
 		// ω-value-yielded-if-tail-barrier (SI-2): the per-element opt arg. When
 		// `clearExprPositionNonTail` is set (BlockExpr / BlockStmt), every block
 		// statement EXCEPT the tail gets `_clearExprPosition` so a discarded
@@ -16982,9 +17001,11 @@ class WriterLowering {
 		final closeText: String = c.closeText;
 		final emptyTrailExpr: Expr = c.emptyTrailExpr;
 		final emptyDocExpr: Expr = c.emptyDocExpr;
+		final caseSiblingWidthExpr: Expr = c.caseSiblingWidthExpr;
 		final elseBody: Expr = triviaBlockElseBody(c);
 		return macro {
 			final _arr = $fieldAccess;
+			final _csW: Int = $caseSiblingWidthExpr;
 			final _trailLC: Array<String> = $trailLC;
 			final _trailBB: Bool = $trailBB;
 			final _trailClose: Null<String> = $trailClose;
@@ -17163,6 +17184,68 @@ class WriterLowering {
 				},
 			]),
 			pos: Context.currentPos(),
+		};
+	}
+
+
+	/**
+	 * ω-case-sibling-symmetry — build the widest-sibling flat-width pre-pass
+	 * for a case-list Star, or `macro -1` when the Star does not opt in.
+	 *
+	 * THE PROBLEM: each case body's `FitLine` placement is decided
+	 * independently, so one over-wide body drops below its label while its
+	 * short siblings stay inline. The user-visible ask is per-SWITCH
+	 * symmetry — if one body spreads, all do. The renderer cannot see the
+	 * sibling set, and the emitter cannot see the indent, so neither can
+	 * answer alone.
+	 *
+	 * THE SPLIT: the emitter contributes what only it knows — every
+	 * sibling's FLAT width — and the renderer contributes what only it
+	 * knows — the indent. This pre-pass writes each element once with the
+	 * coordination CLEARED (`_setCaseSiblingWidth(opt, -1)`, so the probe
+	 * is absent from the measured Doc) and takes the maximum
+	 * `WrapList.flatLength`. `-1` results (an element whose Doc commits to
+	 * a hardline: a glued body, a multi-statement body, a refused body, a
+	 * `#if` region) contribute nothing — they could not have shared the
+	 * label line under ANY budget, so they are not evidence that the switch
+	 * is too wide. All elements `-1` ⇒ the pre-pass yields `-1` and the
+	 * emit stays uncoordinated, which is what keeps an all-glued switch
+	 * (a comparator table of `case X: (a, b) -> { … }`) exactly as it
+	 * renders without this slice.
+	 *
+	 * `WrapList.flatLength` is the measure specifically because it DESCENDS
+	 * `BodyGroup` where `Renderer.fitsFlat` defers it — the T16b lesson:
+	 * anything that reads render-time group state makes the verdict depend
+	 * on the source's line shape, and `fmt` then needs a second pass to
+	 * settle.
+	 *
+	 * The knob gate keeps the double write off every config that cannot use
+	 * it: the pre-pass runs only when the policy the case bodies will
+	 * actually consult (`opt._inExprPosition` selects which of the two) is
+	 * `FitLine`. Under `Same` / `Keep` / `Next` the elements are written
+	 * exactly once, as before.
+	 */
+	private static function caseSiblingWidthProbeExpr(elemFn: String, knobs: Null<Array<String>>): Expr {
+		if (knobs == null) return macro -1;
+		final fitPat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'FitLine']);
+		final stmtAccess: Expr = optFieldAccess(knobs[0]);
+		final exprAccess: Expr = optFieldAccess(knobs[1]);
+		final probeCall: Expr = {
+			expr: ECall(macro $i{elemFn}, [macro _arr[_csI].node, macro _csOpt]),
+			pos: Context.currentPos(),
+		};
+		return macro {
+			var _csMax: Int = -1;
+			if ((opt._inExprPosition ? $exprAccess : $stmtAccess) == $fitPat) {
+				final _csOpt = _setCaseSiblingWidth(opt, -1);
+				var _csI: Int = 0;
+				while (_csI < _arr.length) {
+					final _csFlat: Int = anyparse.format.wrap.WrapList.flatLength($probeCall);
+					if (_csFlat > _csMax) _csMax = _csFlat;
+					_csI++;
+				}
+			}
+			_csMax;
 		};
 	}
 
@@ -17712,6 +17795,9 @@ typedef BlockStarCtx = {
 	final uniformBetweenOptField: Null<String>;
 	final anyEmptyLinesFlag: Bool;
 	final uniformStmtBlanks: Bool;
+
+	/** ω-case-sibling-symmetry: `final _csW: Int = …;` widest-sibling pre-pass, or `macro -1` when the Star has no `caseSiblingSymmetry` meta. */
+	final caseSiblingWidthExpr: Expr;
 };
 typedef EofStarCtx = {
 	final fieldAccess: Expr;
