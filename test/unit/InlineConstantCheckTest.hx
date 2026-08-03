@@ -12,18 +12,20 @@ import anyparse.runtime.Span;
 /**
  * The `inline-constant` check: a `static final` constant of a basic scalar type (Int /
  * Float / Bool, NOT String) whose initializer is a compile-time constant is flagged `Info`
- * and rewritten to `static inline final` (the `:Type` annotation kept). The initializer may be
- * a literal OR a reference — bare or `Other.A`-qualified — that provably resolves to an
- * already-`static inline` constant of such a literal; declaration order is irrelevant. PUBLIC
- * constants are included, gated by the reflection-name and macro-consumption checks. A String
- * constant, a non-static / already-inline / `var` field, a non-literal initializer, constant
- * arithmetic over a proven reference (Phase 2, deferred), a reference to a non-inline / String /
- * `#if`-guarded / non-field / unresolvable target, a deeper `pkg.Other.A` chain, a reflected name,
- * a macro-consumed module, a `@:keep` / `@:rtti` field or class, and an enum-abstract / `#if`
- * member are all left alone. Three fixtures pin the qualified arm's certainty requirements, each
- * of which would otherwise emit code that does not compile in some configuration: unanimity across
- * a multi-candidate simple name, a type declared twice through `#if`, and a reference through an
- * ALIAS import (the one import kind the index does not bring into simple-name scope).
+ * and rewritten to `static inline final` (the `:Type` annotation kept). The initializer may be a
+ * literal OR a BARE same-class reference that provably resolves to an already-`static inline`
+ * constant of such a literal; declaration order is irrelevant. PUBLIC constants are included, gated
+ * by the reflection-name and macro-consumption checks. A String constant, a non-static /
+ * already-inline / `var` field, a non-literal initializer, constant arithmetic over a proven
+ * reference (Phase 2, deferred), a reference to a non-inline / String / `#if`-guarded / non-field /
+ * unresolvable target, ANY qualified reference (`Other.A` and `pkg.Other.A` alike — cross-file
+ * simple-name binding is not provable to autofix standard, see `isInlinableInitializer`), a
+ * reflected name, a macro-consumed module, a `@:keep` / `@:rtti` field or class, and an
+ * enum-abstract / `#if` member are all left alone.
+ *
+ * The reference fixtures that assert a single finding fold their count and name assertions into ONE
+ * predicate: utest keeps running after a failed assertion, and eager interpolation of `vs[0]` on an
+ * empty array would surface a TypeError instead of the intended diagnostic.
  */
 class InlineConstantCheckTest extends Test {
 
@@ -319,16 +321,12 @@ class InlineConstantCheckTest extends Test {
 	/** A bare reference to a same-class `static inline final` scalar folds, so the referencing constant is inlinable too. */
 	public function testSameClassInlineRefFlagged(): Void {
 		final vs: Array<Violation> = violations('class C { static inline final A:Int = 1; static final B:Int = A; }');
-		// One predicate, because utest keeps running after a failed assertion and eager interpolation
-		// of `vs[0]` on an empty array would surface a TypeError instead of the intended diagnostic.
 		Assert.isTrue(vs.length == 1 && vs[0].message.indexOf("'B'") >= 0, 'expected exactly B flagged, got: $vs');
 	}
 
 	/** Declaration ORDER is irrelevant - a forward reference compiles and folds (verified live). */
 	public function testForwardInlineRefFlagged(): Void {
 		final vs: Array<Violation> = violations('class C { static final B:Int = A; static inline final A:Int = 1; }');
-		// One predicate, because utest keeps running after a failed assertion and eager interpolation
-		// of `vs[0]` on an empty array would surface a TypeError instead of the intended diagnostic.
 		Assert.isTrue(vs.length == 1 && vs[0].message.indexOf("'B'") >= 0, 'expected exactly B flagged, got: $vs');
 	}
 
@@ -338,20 +336,6 @@ class InlineConstantCheckTest extends Test {
 	 */
 	public function testInlineVarTargetRefFlagged(): Void {
 		final vs: Array<Violation> = violations('class C { @:keep static inline var A:Int = 1; static final B:Int = A; }');
-		// One predicate, because utest keeps running after a failed assertion and eager interpolation
-		// of `vs[0]` on an empty array would surface a TypeError instead of the intended diagnostic.
-		Assert.isTrue(vs.length == 1 && vs[0].message.indexOf("'B'") >= 0, 'expected exactly B flagged, got: $vs');
-	}
-
-	/** A qualified `Other.A` resolves through the SymbolIndex against this file's import scope. */
-	public function testCrossClassQualifiedRefFlagged(): Void {
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'Other.hx', source: 'class Other { public static inline final A:Int = 1; }' },
-			{ file: 'C.hx', source: 'class C { static final B:Int = Other.A; }' }
-		];
-		final vs: Array<Violation> = new InlineConstant().run(files, new HaxeQueryPlugin());
-		// One predicate, because utest keeps running after a failed assertion and eager interpolation
-		// of `vs[0]` on an empty array would surface a TypeError instead of the intended diagnostic.
 		Assert.isTrue(vs.length == 1 && vs[0].message.indexOf("'B'") >= 0, 'expected exactly B flagged, got: $vs');
 	}
 
@@ -385,7 +369,20 @@ class InlineConstantCheckTest extends Test {
 		Assert.equals(0, violations('class C { static final B:Int = A; }').length);
 	}
 
-	/** A qualified reference whose type the index does not declare proves nothing. */
+	/**
+	 * A QUALIFIED reference is never attempted, even when the target is right there and conforming:
+	 * proving which declaration a cross-file simple name binds to is beyond what the `SymbolIndex`
+	 * can currently establish with the certainty an autofix needs (see `isInlinableInitializer`).
+	 */
+	public function testQualifiedRefNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'Other.hx', source: 'class Other { @:keep public static inline final A:Int = 1; }' },
+			{ file: 'C.hx', source: 'class C { static final B:Int = Other.A; }' }
+		];
+		Assert.equals(0, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	/** A qualified reference whose type nothing declares proves nothing either. */
 	public function testUnresolvedQualifiedRefNotFlagged(): Void {
 		Assert.equals(0, violations('class C { static final B:Int = Other.A; }').length);
 	}
@@ -406,64 +403,6 @@ class InlineConstantCheckTest extends Test {
 	 */
 	public function testBareRefToFunctionNotFlagged(): Void {
 		Assert.equals(0, violations('class C { static inline function A():Int return 1; static final B:Int = A; }').length);
-	}
-
-	/**
-	 * UNANIMITY: the root-package `Other` is in simple-name scope from every file, so `Other.A`
-	 * collects TWO candidates. One conforms and one does not, and a single non-conforming candidate
-	 * refuses the whole proof. `@:keep` pins both targets so only `B` could ever be flagged.
-	 */
-	public function testQualifiedRefAmbiguousCandidatesNotFlagged(): Void {
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'p/C.hx', source: 'package p;\nclass C { static final B:Int = Other.A; }' },
-			{ file: 'p/Other.hx', source: 'package p;\nclass Other { @:keep public static inline final A:Int = 1; }' },
-			{ file: 'Other.hx', source: 'class Other { @:keep public static final A:Int = 1; }' }
-		];
-		Assert.equals(0, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
-	}
-
-	/**
-	 * A type declared twice through `#if` is deduped to ONE index candidate, so taking the first
-	 * container node would prove the reference from whichever branch is written first and break the
-	 * other configuration. `soleContainer` refuses the ambiguity instead.
-	 */
-	public function testQualifiedRefConditionalTypeNotFlagged(): Void {
-		final files: Array<{ file: String, source: String }> = [
-			{
-				file: 'Other.hx',
-				source: '#if debug\nclass Other { @:keep public static inline final A:Int = 1; }\n'
-					+ '#else\nclass Other { @:keep public static final A:Int = 1; }\n#end'
-			},
-			{ file: 'C.hx', source: 'class C { static final B:Int = Other.A; }' }
-		];
-		Assert.equals(0, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
-	}
-
-	/**
-	 * An ALIAS import is the one import kind `SymbolIndex.simpleRefInScope` does not bring into
-	 * simple-name scope, so the candidate set can MISS the real target - here Haxe binds `Alias` to
-	 * the non-inline `pkg.Other`, while the index would offer the same-package `q.Alias`. Unanimity
-	 * cannot vet a candidate that was never collected, so the alias refuses outright.
-	 */
-	public function testQualifiedRefThroughImportAliasNotFlagged(): Void {
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/Other.hx', source: 'package pkg;\nclass Other { @:keep public static final A:Int = 1; }' },
-			{ file: 'q/Alias.hx', source: 'package q;\nclass Alias { @:keep public static inline final A:Int = 1; }' },
-			{ file: 'q/C.hx', source: 'package q;\nimport pkg.Other as Alias;\nclass C { static final B:Int = Alias.A; }' }
-		];
-		Assert.equals(0, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
-	}
-
-	/**
-	 * A deeper `pkg.Other.A` chain (whose receiver is itself a field access) is not attempted. The
-	 * import makes `Other` resolvable from `C.hx`, so ONLY the bare-receiver gate can reject this.
-	 */
-	public function testDeepQualifiedChainNotFlagged(): Void {
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'Other.hx', source: 'package pkg;\nclass Other { public static inline final A:Int = 1; }' },
-			{ file: 'C.hx', source: 'import pkg.Other;\nclass C { static final B:Int = pkg.Other.A; }' }
-		];
-		Assert.equals(0, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
 	}
 
 	/** The reflection-name gate covers a reference-initialized constant exactly as it covers a literal one. */

@@ -65,10 +65,12 @@ import anyparse.runtime.Span;
  * a `Conditional` rather than being a direct child, so it is invisible and the position is
  * skipped; and an INHERITED field is not a member of this container at all, so a superclass's
  * annotation is never read for a subclass's `this.f`. A field access on any OTHER receiver
- * (`o.a = …`) would need `o`'s own type resolved first and is refused outright. So is a container
- * whose `this` is the UNDERLYING value rather than an instance (`underlyingThisTypeKinds` - an
- * `abstract` / `enum abstract`): `this.f` there reads the UNDERLYING type's field, never a member of
- * the container at all, so its annotation may not stand in for the discarded runtime check.
+ * (`o.a = …`) would need `o`'s own type resolved first and is refused outright. So is an `abstract`,
+ * whose `this` is the UNDERLYING value rather than an instance (`underlyingThisTypeKinds`): `this.f`
+ * there reads the UNDERLYING type's field, never a member of the container at all, so its annotation
+ * may not stand in for the discarded runtime check. An `enum abstract` never REACHES that gate — it
+ * is not a `visibilityContainerKinds` node, so the container is null there and the null conjunct
+ * refuses first; it stays in the gate so the answer survives that list growing.
  *
  * The (c) GENERICS veto does NOT apply to (d), for the same reason it does not apply to (a) or
  * (b): the lvalue's annotation FIXES the type rather than being driven by the value assigned.
@@ -449,9 +451,12 @@ final class RedundantCastType implements Check implements DefaultOff {
 	 * The second shape is an EXPLICITLY self-qualified `this.f` - a `fieldAccessKind` node whose single
 	 * child is the `selfReferenceText` identifier - resolved against the enclosing container's OWN members.
 	 * Any other receiver (`o.a = ...`) would need `o`'s own type resolved first and is refused. So is a
-	 * container listed in `underlyingThisTypeKinds`: inside an `abstract` / `enum abstract` `this` IS the
-	 * underlying value, so `this.f` reads the UNDERLYING type's field and the container's own member of
-	 * that name - if it happens to declare one - is a DIFFERENT slot whose annotation proves nothing.
+	 * container listed in `underlyingThisTypeKinds`: inside an `abstract` `this` IS the underlying value,
+	 * so `this.f` reads the UNDERLYING type's field and the container's own member of that name - if it
+	 * happens to declare one - is a DIFFERENT slot whose annotation proves nothing. Of that seam's two
+	 * entries only `AbstractDecl` can reach here; an `enum abstract` is not a `visibilityContainerKinds`
+	 * node, so `enclosingContainer` is null there and the conjunct above refuses first. The entry stays
+	 * so the answer survives that list growing.
 	 */
 	private static function assignTargetAnnotation(
 		target: QueryNode, enclosingContainer: Null<QueryNode>, root: QueryNode, types: FileTypes

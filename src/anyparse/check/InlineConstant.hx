@@ -4,13 +4,9 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
-import anyparse.query.SymbolIndex.FileInfo;
-import anyparse.query.SymbolIndex.ImportKind;
-import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 
 /**
@@ -38,11 +34,10 @@ import anyparse.runtime.Span;
  * `static final A`, the very same line fails to compile with
  * "Inline variable initialization must be a constant value".
  *
- * `isInlinableInitializer` owns the proof and documents every gate; in outline, a BARE name is
- * resolved against the owning container's DIRECT children and a QUALIFIED `Other.A` through the
- * `SymbolIndex` against this file's import scope, both refusing every shape whose binding is not
- * certain. `RefactorSupport.lazySymbolIndex` backs the qualified arm, so a run with no qualified
- * reference never builds — nor asks the plugin host for — an index.
+ * Only a BARE name resolves, against the owning container's DIRECT children.
+ * `isInlinableInitializer` owns the proof, documents every gate, and records why a QUALIFIED
+ * `Other.A` is deliberately NOT attempted — cross-file simple-name binding is not something the
+ * `SymbolIndex` can currently prove with the certainty an autofix needs.
  *
  * The String exclusion applies TRANSITIVELY for free: `inlineConstantLiteralKinds` omits the
  * string kinds, so a reference to a String constant fails `isInlinableLiteral` on the TARGET; no
@@ -146,9 +141,8 @@ import anyparse.runtime.Span;
  * Reads `visibilityContainerKinds` / `memberDeclKinds` / `fieldDeclKinds` / `mutableFieldDeclKinds`
  * (the final-field host = field minus mutable), `visibilityModifierKinds` +
  * `defaultVisibilityModifierText`, `staticModifierKind`, `inlineModifierKind`, `identKind`,
- * `fieldAccessKind`, `inlineConstantLiteralKinds`, `numericLiteralKinds` + `negationKind`, plus
- * `metaShape().metaKinds` and `stringFoldSupport()`. Any required seam unset makes the check a
- * no-op; an unset `fieldAccessKind` only disables the cross-class reference arm.
+ * `inlineConstantLiteralKinds`, `numericLiteralKinds` + `negationKind`, plus `metaShape().metaKinds`
+ * and `stringFoldSupport()`. Any required seam unset makes the check a no-op.
  */
 @:nullSafety(Strict)
 final class InlineConstant implements Check {
@@ -181,10 +175,7 @@ final class InlineConstant implements Check {
 		final seams: Seams = resolved;
 		final reflected: Array<String> = collectReflectedNames(files, plugin, seams.stringFold);
 		final macroConsumed: Array<String> = collectMacroConsumedModules(files);
-		// Lazy: a run whose every candidate initializer is a literal or a same-class reference
-		// never builds - nor asks the plugin host for - a resolution index.
-		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
-		final proof: InitProof = (container, init, file) -> isInlinableInitializer(container, init, file, seams, plugin, index);
+		final proof: InitProof = (container, init) -> isInlinableInitializer(container, init, seams);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
@@ -308,7 +299,7 @@ final class InlineConstant implements Check {
 		final containerName: Null<String> = container.name;
 		if (exported && containerName != null && macroConsumed.contains(containerName)) return;
 		final init: Null<QueryNode> = initializerOf(field);
-		if (init == null || !proof(container, init, file)) return;
+		if (init == null || !proof(container, init)) return;
 		final detail: String = isInlinableLiteral(init, seams) ? 'is a scalar literal' : 'folds to an inline constant';
 		flag(out, file, span, 'static constant \'$name\' $detail; use inline');
 	}
@@ -337,71 +328,47 @@ final class InlineConstant implements Check {
 	 * gate: with a plain non-inline `static final A`, the very same line fails to compile with
 	 * "Inline variable initialization must be a constant value".
 	 *
-	 * Two shapes resolve. A bare `identKind` name is looked up among the OWNING container's direct
-	 * children (`declaresInlineConstant`). A `fieldAccessKind` whose single child is a bare
-	 * `identKind` TYPE name (`Other.A`) is resolved through `SymbolIndex.resolveTypeRefsFrom`
-	 * against THIS file's import scope, and every candidate must agree — one unresolvable or
-	 * non-conforming candidate refuses the whole proof. A deeper chain (`pkg.Other.A`, whose child
-	 * is itself a field access) is not attempted.
+	 * ONE shape resolves: a bare `identKind` name, looked up among the OWNING container's direct
+	 * children (`declaresInlineConstant`). Everything else — a qualified `Other.A`, a deeper
+	 * `pkg.Other.A` chain, arithmetic — is refused.
 	 *
-	 * An ALIAS import binding the receiver name (`import pkg.Other as Alias;` … `Alias.A`) refuses
-	 * outright, and that gate is NOT redundant with unanimity. `SymbolIndex.simpleRefInScope` leaves
-	 * the alias kind unhandled, so an aliased path never enters simple-name scope; for every other
-	 * import kind the candidate set is a SUPERSET of the real binding — which is exactly what makes
-	 * unanimity conservative — but for an alias the true target can be absent entirely, and
-	 * unanimity cannot vet a candidate that was never collected. Haxe binds the alias to the
-	 * imported path, so a same-simple-named local type would be proven in its place. The gate lives
-	 * here rather than in `simpleRefInScope` because that query's other consumers (rename / move /
-	 * unused-import) read a spurious hit as "bail out" — the safe direction for them, the opposite
-	 * of this one (see the shared-predicate note: the conservative direction belongs to the caller).
+	 * ## Why the QUALIFIED arm is deferred, not merely unimplemented
+	 *
+	 * A cross-class `Other.A` was implemented against `SymbolIndex.resolveTypeRefsFrom` and withdrawn:
+	 * proving WHICH declaration a simple type name binds to is not something the index can currently
+	 * answer with the certainty an autofix needs, and each hole found produced a `--fix` edit that
+	 * does not compile in some configuration:
+	 *
+	 *  - an ALIAS import (`import pkg.Other as Alias;`) never enters simple-name scope at all — the
+	 *    grammar's `ImportAliasDecl` carries only the alias, never the imported path — so a
+	 *    same-simple-named local type is proven in the real target's place;
+	 *  - an explicit import of a type OUTSIDE the resolution scope (a haxelib module, a file the lint
+	 *    scope excludes) is likewise absent from the candidate set, and unanimity across candidates
+	 *    cannot vet a declaration that was never collected;
+	 *  - a type declared twice through `#if` is deduped BY DESIGN — `SymbolIndexBuilder` keeps the
+	 *    first declaration of a name so `declaringFiles` does not report a phantom ambiguity — and
+	 *    `TypeDeclInfo` carries no `guarded` flag, so "is this binding branch-dependent?" has no
+	 *    model-level answer. Counting container NODES in the parsed tree only half-closes it: a
+	 *    branch re-pointing the name through a `typedef` / `interface` / `enum` projects no container
+	 *    node, so one node is found and the proof goes through.
+	 *
+	 * Each of those was a separately discovered leak patched with one more exclusion — the shape that
+	 * says the filter is enumerating harm instead of proving benefit. The honest positive criterion
+	 * ("this simple name CERTAINLY binds to this declaration") needs `SymbolIndex` to model aliased
+	 * import paths, out-of-scope imports and branch-guarded type declarations; until it does, the arm
+	 * stays out. Measured cost of leaving it out: ZERO findings lost across ~1400 real files (the TM
+	 * tree and anyparse's own sources) — every real qualified-reference constant there is already
+	 * `inline`.
 	 *
 	 * The String exclusion applies transitively for free: `inlineConstantLiteralKinds` omits the
 	 * string kinds, so a reference to a String constant fails `isInlinableLiteral` ON THE TARGET.
-	 * Constant ARITHMETIC over references (`A * 2`, which also compiles) is deliberately out of
-	 * scope — a known conservative miss, deferred rather than half-proven.
+	 * Constant ARITHMETIC over references (`A * 2`, which also compiles) is likewise out of scope — a
+	 * known conservative miss, deferred rather than half-proven.
 	 */
-	private static function isInlinableInitializer(
-		container: QueryNode, init: QueryNode, file: String, seams: Seams, plugin: GrammarPlugin, index: () -> Null<SymbolIndex>
-	): Bool {
+	private static function isInlinableInitializer(container: QueryNode, init: QueryNode, seams: Seams): Bool {
 		if (isInlinableLiteral(init, seams)) return true;
 		final name: Null<String> = init.name;
-		if (name == null) return false;
-		if (init.kind == seams.identKind) return declaresInlineConstant(container, name, seams);
-		if (init.kind != seams.fieldAccessKind || init.children.length != 1) return false;
-		final receiver: QueryNode = init.children[0];
-		final typeName: Null<String> = receiver.name;
-		if (receiver.kind != seams.identKind || typeName == null) return false;
-		final built: Null<SymbolIndex> = index();
-		if (built == null) return false;
-		final resolver: SymbolIndex = built;
-		if (isImportAlias(resolver, file, typeName)) return false;
-		final candidates: Array<{ file: FileInfo, type: TypeDeclInfo }> = resolver.resolveTypeRefsFrom(typeName, file);
-		if (candidates.length == 0) return false;
-		for (candidate in candidates) {
-			final source: Null<String> = resolver.sourceOf(candidate.file.file);
-			if (source == null) return false;
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-			if (tree == null) return false;
-			final host: Null<QueryNode> = soleContainer(tree, candidate.type.name, seams.containers);
-			if (host == null || !declaresInlineConstant(host, name, seams)) return false;
-		}
-		return true;
-	}
-
-	/**
-	 * Whether `file` binds the simple name `name` through an ALIAS import — the one import kind
-	 * `SymbolIndex.simpleRefInScope` does not bring into simple-name scope, so a reference through it
-	 * resolves to a candidate set that may not contain the real target at all. Both `raw` and `alias`
-	 * are tested because the alias kind carries the bound name in `raw`; over-matching only ever
-	 * REFUSES a proof. An unindexed `file` answers false — the candidate lookup below it then finds
-	 * nothing and refuses anyway.
-	 */
-	private static function isImportAlias(index: SymbolIndex, file: String, name: String): Bool {
-		final scope: Null<FileInfo> = index.fileInfo(file);
-		if (scope == null) return false;
-		for (imported in scope.imports) if (imported.kind == ImportKind.Alias && (imported.alias == name || imported.raw == name))
-			return true;
-		return false;
+		return name != null && init.kind == seams.identKind && declaresInlineConstant(container, name, seams);
 	}
 
 	/**
@@ -449,32 +416,23 @@ final class InlineConstant implements Check {
 	}
 
 	/**
-	 * The SOLE `visibilityContainerKinds` node named `name` anywhere under `node`, or null when the
-	 * tree declares none — or more than one. Recursive rather than top-level-only because a
-	 * `final class` nests its body in a `FinalDecl` wrapper, exactly as `walk` has to recurse for the
-	 * same reason.
+	 * The `visibilityContainerKinds` node named `name` anywhere under `node`, or null when the tree
+	 * declares none. Recursive rather than top-level-only because a `final class` nests its body in a
+	 * `FinalDecl` wrapper, exactly as `walk` has to recurse for the same reason.
 	 *
-	 * Refusing ambiguity is what keeps the `#if`-divergence discipline the bare-name arm already has
-	 * at MEMBER level (direct children only) from being lost one level up at TYPE level. A file may
-	 * declare the same type twice only through `#if`, and `SymbolIndex` dedups the two decls to one
-	 * candidate, so taking the FIRST hit would prove a reference from whichever branch happens to be
-	 * written first and emit "Inline variable initialization must be a constant value" in the other
-	 * configuration. A single-branch `#if class Other … #end` still has exactly one node and stays
-	 * provable, so the strictness costs no true positives.
+	 * Taking the FIRST hit is safe only because `declaredExactlyOnce` has already established, from
+	 * the index, that the file declares this name once — the `#if`-divergence question is answered at
+	 * MODEL level before the tree is ever walked. Re-answering it here by counting container nodes
+	 * would be both redundant and strictly less complete (a `typedef` / `interface` / `enum` half of a
+	 * divergent pair projects no container node at all).
 	 */
-	private static function soleContainer(node: QueryNode, name: String, containers: Array<String>): Null<QueryNode> {
-		var found: Null<QueryNode> = null;
-		function scan(current: QueryNode): Bool {
-			for (child in current.children) {
-				if (containers.contains(child.kind) && child.name == name) {
-					if (found != null) return false;
-					found = child;
-				} else if (!scan(child))
-					return false;
-			}
-			return true;
+	private static function findContainer(node: QueryNode, name: String, containers: Array<String>): Null<QueryNode> {
+		for (child in node.children) {
+			if (containers.contains(child.kind) && child.name == name) return child;
+			final nested: Null<QueryNode> = findContainer(child, name, containers);
+			if (nested != null) return nested;
 		}
-		return scan(node) ? found : null;
+		return null;
 	}
 
 	/** Every plain string literal's raw content across `files` — the names a constant might be reflected by. */
@@ -526,7 +484,6 @@ final class InlineConstant implements Check {
 			staticKind: staticKind,
 			inlineKind: shape.inlineModifierKind,
 			identKind: shape.identKind,
-			fieldAccessKind: shape.fieldAccessKind,
 			metaKinds: plugin.metaShape().metaKinds,
 			literalKinds: literalKinds,
 			stringLiteralKinds: stringKinds,
@@ -685,7 +642,6 @@ private typedef Seams = {
 	final staticKind: String;
 	final inlineKind: Null<String>;
 	final identKind: String;
-	final fieldAccessKind: Null<String>;
 	final metaKinds: Array<String>;
 	final literalKinds: Array<String>;
 	final stringLiteralKinds: Array<String>;
@@ -700,4 +656,4 @@ private typedef Seams = {
  * seams, the plugin and the LAZY resolution index in `run`, so a run with no qualified reference
  * never pays for an index.
  */
-private typedef InitProof = (container:QueryNode, init:QueryNode, file:String) -> Bool;
+private typedef InitProof = (container:QueryNode, init:QueryNode) -> Bool;

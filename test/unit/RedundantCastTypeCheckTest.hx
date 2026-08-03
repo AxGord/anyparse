@@ -342,7 +342,11 @@ class RedundantCastTypeCheckTest extends Test {
 		// Inside an `abstract`, `this` IS the underlying value, so `this.value` reads the UNDERLYING
 		// type's field - never the abstract's OWN `value:Foo`, whose annotation must not stand in.
 		Assert.equals(
-			0, violations('class Foo {} abstract W(H) { static var value:Foo; function a(v:Dynamic) this.value = cast(v, Foo); }').length
+			0,
+			violations(
+				'class Foo {} class H { public var value:Foo; } '
+				+ 'abstract W(H) { static var value:Foo; function a(v:Dynamic) this.value = cast(v, Foo); }'
+			).length
 		);
 	}
 
