@@ -535,6 +535,7 @@ import unit.PreferTryExpressionAssignmentCheckTest;
 import unit.PreferTryExpressionReturnCheckTest;
 import unit.RedundantCondCompParensCheckTest;
 import unit.ApqLitDirectivesCliTest;
+import unit.HxTernaryBranchChainIndentTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -674,6 +675,7 @@ class RunTests {
 		addCase(new HxParenWrapSourceNewlineSliceTest());
 		addCase(new HxParenTernaryOpenWrapSliceTest());
 		addCase(new HxTernaryCallArgRestAwareTest());
+		addCase(new HxTernaryBranchChainIndentTest());
 		addCase(new HxTernaryDeclInitRestAwareTest());
 		addCase(new HxExprParenDivOpenBoundaryTest());
 		addCase(new HxOpAddParenInnerBreakTest());

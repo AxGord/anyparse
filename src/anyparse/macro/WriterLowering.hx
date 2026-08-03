@@ -475,7 +475,10 @@ class WriterLowering {
 		// argument suppresses its own continuation Nest — the leading-break
 		// call-arg Nest already supplies the +cols indent. Runtime-gated on the
 		// cascade default (mirror of the condWrap `_chainModeOverride` path);
-		// consumed exactly once at the chain dispatch via `_clearCallArgChainNest`.
+		// consumed exactly once via `_clearCallArgChainNest` — at the outermost
+		// infix chain (`lowerInfixChain`, which HONOURS it) or at a ternary
+		// (`lowerTernaryBranch`, which only CLEARS it: a ternary always keeps its
+		// own `?` / `:` Nest, so the flag is stale for its operands).
 		// `wrapRulesField` is read here (and reused by the sepList dispatch below)
 		// so the per-element opt and the args-list cascade share one lookup.
 		final wrapRulesField: Null<String> = branch.fmtReadString('wrapRules');
@@ -6598,7 +6601,9 @@ class WriterLowering {
 
 	/**
 	 * Ternary branch (`@:fmt`-driven `ternary.op`): dispatch to the
-	 * chain-emit engine with a degenerate 3-item / 2-op chain.
+	 * chain-emit engine with a degenerate 3-item / 2-op chain. Like the infix
+	 * dispatch it CONSUMES `_callArgChainNest` (see the body) — but it never
+	 * suppresses its OWN Nest, so the flag is cleared, not honoured.
 	 */
 	private function lowerTernaryBranch(c: LowerBranchCtx): Expr {
 		final branch: ShapeNode = c.branch;
@@ -6656,6 +6661,19 @@ class WriterLowering {
 			}
 			: macro {};
 		return macro {
+			// omega-ternary-operand-chain-nest: consume the chain-nest flag HERE, the
+			// way every other chain dispatch does (`lowerInfixChain`'s
+			// `_clearCallArgChainNest`). This dispatch passes `nestSuppress = false`
+			// — a ternary ALWAYS adds its own +cols for the `?` / `:` lines — so the
+			// +cols the flag advertises (a leading-break call argument's Nest, or the
+			// `#if`-splice tail's enclosing chain) is NOT the base indent of the
+			// OPERANDS: their branch line is. Left set, an operand that is itself a
+			// chain suppresses ITS continuation Nest and the continuation co-indents
+			// with `?` / `:`, reading as a third ternary rung
+			// (`cond\n? a\n+ b\n: ''`). Every other host already cleared the flag
+			// before the ternary saw it (an enclosing chain / paren consumed it),
+			// which is why only the call-arg context rendered wrong.
+			final opt = _clearCallArgChainNest(opt);
 			final _items: Array<anyparse.core.Doc> = [$condCall, $middleCall, $rightCall];
 			final _ops: Array<String> = [$v{ternaryOp}, $v{sep}];
 			var _forceKeep: Bool = false;
@@ -9742,7 +9760,9 @@ class WriterLowering {
 		// instead of compounding a second indent level. Reuses the call-arg chain-nest
 		// channel (`_setCallArgChainNest` → `_chainNestSuppress`); the flag is consumed
 		// and cleared at the tail's outermost chain, so only a bare-ternary tail could
-		// reach the sister `ternaryRestAware` coupling.
+		// reach the sister `ternaryRestAware` coupling — and that tail CLEARS without
+		// suppressing (`lowerTernaryBranch`: a ternary always keeps its own `?` / `:`
+		// Nest), so the co-indent this flag buys never reaches a bare-ternary tail.
 		final chainNestSuppress: Bool = child.fmtHasFlag('chainNestSuppress');
 		final optArgExpr: Expr = if (boolFlagArgs != null) {
 			macro _wo;
