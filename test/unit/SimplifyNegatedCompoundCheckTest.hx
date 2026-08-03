@@ -151,6 +151,95 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		);
 	}
 
+	public function testForBindingElementTypeProvesFlip(): Void {
+		// ARM 1 alone: the for-binding element type. `it` carries no `:Type` annotation, so
+		// `declaredTypes` has no entry for it; its type comes from `items:Array<Item>` through
+		// `RefShape.iterationElementTypeParams`. No type parameter is substituted anywhere along
+		// the chain, so this fixture discriminates the for-binding arm and nothing else.
+		final model: String = 'class Str {\n\tpublic function indexOf(s:Str):Int return 0;\n}\n' + 'class Item {\n\tpublic var text:Str;\n}';
+		final params: String = 'q:Bool, items:Array<Item>, k:Str';
+		final source: String = wrapTyped('for (it in items) {\n\t\t\tvar b = !(!q || it.text.indexOf(k) < 0);\n\t\t}', params);
+		final fixed: String = wrapTyped('for (it in items) {\n\t\t\tvar b = q && it.text.indexOf(k) >= 0;\n\t\t}', params);
+		Assert.equals(fixed, fixedWith(source, model));
+	}
+
+	public function testTypeArgumentSubstitutionProvesFlip(): Void {
+		// ARM 2 alone: type-argument substitution. `box` IS annotated, so the for-binding arm is
+		// never consulted; what the shallow walk cannot do is turn `Box.payload : T` into `Item`
+		// using the receiver's written argument. Without the substitution the chain stops at the
+		// verbatim `T`, which names no type.
+		final model: String = 'class Str {\n\tpublic function indexOf(s:Str):Int return 0;\n}\n'
+			+ 'class Item {\n\tpublic var text:Str;\n}\n' + 'class Box<T:Item> {\n\tpublic var payload:T;\n}';
+		final params: String = 'q:Bool, box:Box<Item>, k:Str';
+		final source: String = wrapTyped('var b = !(!q || box.payload.text.indexOf(k) < 0);', params);
+		final fixed: String = wrapTyped('var b = q && box.payload.text.indexOf(k) >= 0;', params);
+		Assert.equals(fixed, fixedWith(source, model));
+	}
+
+	public function testForBindingOverGenericElementProvesFlip(): Void {
+		// BOTH arms in one chain — the shape this whole seam exists for. The binder's element
+		// type is itself a generic application (`Array<Box<Item>>` yields `Box<Item>`), and that
+		// application's argument is what resolves the member `payload`. Either arm alone leaves
+		// this site wrapped.
+		final model: String = 'class Str {\n\tpublic function indexOf(s:Str):Int return 0;\n}\n'
+			+ 'class Item {\n\tpublic var text:Str;\n}\n' + 'class Box<T:Item> {\n\tpublic var payload:T;\n}';
+		final params: String = 'q:Bool, items:Array<Box<Item>>, k:Str';
+		final source: String = wrapTyped('for (it in items) {\n\t\t\tvar b = !(!q || it.payload.text.indexOf(k) < 0);\n\t\t}', params);
+		final fixed: String = wrapTyped('for (it in items) {\n\t\t\tvar b = q && it.payload.text.indexOf(k) >= 0;\n\t\t}', params);
+		Assert.equals(fixed, fixedWith(source, model));
+	}
+
+	public function testKeyValueLoopBinderKeepsWrap(): Void {
+		// The `=>` gate. `for (kk => vv in m)` projects as `(ForStmt kk (IdentExpr m) …)` — the
+		// VALUE binder is dropped, so the node's name is the KEY. Reading the element parameter
+		// off `Map<Fl, Cnt>` would type `kk` as `Cnt` (an `Int` field) and license the flip, but
+		// `kk` is really an `Fl` whose field is a `Float`, where `!(a < b)` and `a >= b` differ
+		// under NaN. The partial form is the only sound answer, and this fixture is what fails
+		// if the header `=>` test is removed.
+		final model: String = 'class Fl {\n\tpublic var v:Float;\n}\n' + 'class Cnt {\n\tpublic var v:Int;\n}';
+		final params: String = 'q:Bool, m:Map<Fl, Cnt>';
+		final source: String = wrapTyped('for (kk => vv in m) {\n\t\t\tvar b = !(!q || kk.v < 0);\n\t\t}', params);
+		final fixed: String = wrapTyped('for (kk => vv in m) {\n\t\t\tvar b = q && !(kk.v < 0);\n\t\t}', params);
+		Assert.equals(fixed, fixedWith(source, model));
+	}
+
+	public function testIntervalLoopBinderKeepsWrap(): Void {
+		// An `Interval` iterable is not a nominal path at all, so `valueTypeSourceDeep` answers
+		// null for it and the binder stays unresolved. Pins that the arm reads the iterable's
+		// DECLARED type and never guesses `Int` from the loop's shape.
+		final model: String = 'class Str {\n\tpublic function indexOf(s:Str):Int return 0;\n}';
+		final params: String = 'q:Bool';
+		final source: String = wrapTyped('for (i in 0...10) {\n\t\t\tvar b = !(!q || i < 0);\n\t\t}', params);
+		final fixed: String = wrapTyped('for (i in 0...10) {\n\t\t\tvar b = q && !(i < 0);\n\t\t}', params);
+		Assert.equals(fixed, fixedWith(source, model));
+	}
+
+	public function testInheritedGenericMemberKeepsWrap(): Void {
+		// Substitution is DIRECT-MEMBERS-ONLY. `u` is declared on `Base<U>`, so its `U` names the
+		// SUPERTYPE's parameter; mapping it through `extends Base<T>` to `Der`'s `T` and on to the
+		// written `Item` is a link this index does not model. The verbatim `U` resolves to no type,
+		// so the chain dies and the wrap stays.
+		final model: String = 'class Str {\n\tpublic function indexOf(s:Str):Int return 0;\n}\n'
+			+ 'class Item {\n\tpublic var text:Str;\n}\n' + 'class Base<U> {\n\tpublic var u:U;\n}\n'
+			+ 'class Der<T:Item> extends Base<T> {}';
+		final params: String = 'q:Bool, d:Der<Item>, k:Str';
+		final source: String = wrapTyped('var b = !(!q || d.u.text.indexOf(k) < 0);', params);
+		final fixed: String = wrapTyped('var b = q && !(d.u.text.indexOf(k) < 0);', params);
+		Assert.equals(fixed, fixedWith(source, model));
+	}
+
+	public function testSelfReferentialLoopTerminates(): Void {
+		// The recursion guard. The iterable is a CHILD of the loop node, so in `for (x in x)` the
+		// iterable's `x` resolves straight back to the binder; without `seen` the arm would call
+		// itself forever. Reaching the assertion at all is the real subject — the unresolved
+		// answer that keeps the wrap is what termination looks like from outside.
+		final model: String = 'class Str {\n\tpublic function indexOf(s:Str):Int return 0;\n}';
+		final params: String = 'q:Bool, k:Str';
+		final source: String = wrapTyped('for (x in x) {\n\t\t\tvar b = !(!q || x.text.indexOf(k) < 0);\n\t\t}', params);
+		final fixed: String = wrapTyped('for (x in x) {\n\t\t\tvar b = q && !(x.text.indexOf(k) < 0);\n\t\t}', params);
+		Assert.equals(fixed, fixedWith(source, model));
+	}
+
 	public function testRegisteredInBuiltins(): Void {
 		Assert.notNull(Linter.byId('simplify-negated-compound'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];

@@ -109,21 +109,24 @@ class GuardContinueCheckTest extends Test {
 	}
 
 	public function testLessThanNotFlagged(): Void {
-		// `x` has no resolvable type, so the flip is not licensed; the guard would have to wrap
-		// `!(x < 10)`, which reads worse than the nesting it removes — the site is left alone.
-		Assert.equals(0, v(cond('x < 10')).length);
+		// `q` is unbound, so the flip is not licensed; the guard would have to wrap `!(q < 10)`,
+		// which reads worse than the nesting it removes — the site is left alone. NOT the loop
+		// variable `x`: `wrap` declares `xs:Array<Int>`, and the for-binding element-type arm now
+		// types `x` as `Int`, which WOULD license the flip. The operand has to be genuinely
+		// unresolvable for this to pin the unproven -> refuse direction.
+		Assert.equals(0, v(cond('q < 10')).length);
 	}
 
 	public function testLessEqNotFlagged(): Void {
-		Assert.equals(0, v(cond('x <= 10')).length);
+		Assert.equals(0, v(cond('q <= 10')).length);
 	}
 
 	public function testGreaterThanNotFlagged(): Void {
-		Assert.equals(0, v(cond('x > 10')).length);
+		Assert.equals(0, v(cond('q > 10')).length);
 	}
 
 	public function testGreaterEqNotFlagged(): Void {
-		Assert.equals(0, v(cond('x >= 10')).length);
+		Assert.equals(0, v(cond('q >= 10')).length);
 	}
 
 	public function testEqFlipped(): Void {
@@ -147,8 +150,10 @@ class GuardContinueCheckTest extends Test {
 	}
 
 	public function testDeMorganOrderedOperandNotFlagged(): Void {
-		// One declined operand poisons the whole conjunction: `!(x < 10) || !ok` still wraps.
-		Assert.equals(0, v(cond('x < 10 && ok')).length);
+		// One declined operand poisons the whole conjunction: `!(q < 10) || !ok` still wraps.
+		// `q` is unbound on purpose — the loop variable `x` now types as `Int` (see
+		// `testLessThanNotFlagged`) and would license the flip instead of declining it.
+		Assert.equals(0, v(cond('q < 10 && ok')).length);
 	}
 
 	public function testDeMorganDoubleNegationOperands(): Void {

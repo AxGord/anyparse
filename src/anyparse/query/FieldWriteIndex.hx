@@ -672,36 +672,8 @@ final class FieldWriteIndex {
 		final params: Null<String> = parsed.params;
 		final at: Null<Int> = c.elementTypeParams[parsed.name];
 		if (params == null || at == null) return null;
-		final split: Array<String> = splitTypeParams(params);
+		final split: Array<String> = RefactorSupport.splitTypeArgumentList(params);
 		return at < split.length ? split[at] : null;
-	}
-
-	/**
-	 * Split a type-parameter list on its TOP-LEVEL commas, respecting nested
-	 * `<…>` / `(…)` groups (`Map<String, (Int, Int) -> Void>` splits into two) and
-	 * the `->` arrow whose `>` is not a bracket closer.
-	 */
-	private static function splitTypeParams(text: String): Array<String> {
-		final out: Array<String> = [];
-		var depth: Int = 0;
-		var start: Int = 0;
-		var prev: Int = 0;
-		for (i in 0...text.length) {
-			final ch: Int = StringTools.fastCodeAt(text, i);
-			if (ch == '<'.code || ch == '('.code)
-				depth++;
-			else if (ch == ')'.code)
-				depth--;
-			else if (ch == '>'.code && prev != '-'.code)
-				depth--;
-			else if (ch == ','.code && depth == 0) {
-				out.push(StringTools.trim(text.substring(start, i)));
-				start = i + 1;
-			}
-			prev = ch;
-		}
-		out.push(StringTools.trim(text.substring(start)));
-		return out;
 	}
 
 	/** Whether `s` is a plain dotted identifier path (`pkg.sub.Name`), with no other characters. */
@@ -803,7 +775,7 @@ final class FieldWriteIndex {
 		}
 		if (depth != 0) return [];
 		final out: Array<String> = [];
-		for (p in splitTypeParams(source.substring(start, j - 1))) {
+		for (p in RefactorSupport.splitTypeArgumentList(source.substring(start, j - 1))) {
 			final colon: Int = p.indexOf(':');
 			final nm: String = StringTools.trim(colon < 0 ? p : p.substring(0, colon));
 			if (isDottedIdentPath(nm) && !out.contains(nm)) out.push(nm);
