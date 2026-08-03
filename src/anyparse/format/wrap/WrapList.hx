@@ -1729,9 +1729,40 @@ class WrapList {
 			// the object fits there (fork keeps the object flat); if it exceeds its
 			// own line it stays brace-hugged and its fields wrap (fork `({`-glued +
 			// explode). Arrays / nested calls keep the open-delim-glue path below.
-			return DocMeasure.firstVisibleTextStartsWith(items[0], '{'.code)
-				? IfArrowContinuationFits(cols, DocMeasure.flatTokenWidth(items[0]), lineWidth, glued, broken)
-				: IfNaturalFirstLineFitsOpenDelim(lineWidth, broken, glued);
+			if (DocMeasure.firstVisibleTextStartsWith(items[0], '{'.code))
+				return IfArrowContinuationFits(cols, DocMeasure.flatTokenWidth(items[0]), lineWidth, glued, broken);
+			// ω-outer-first-wrap (T20) SCOPE: a `[`-leading sole arg — array literal
+			// or `for`/`while`/map comprehension — is excluded. A bracket-delimited
+			// collection owns its own multi-line layout: its `[` IS its wrap point,
+			// so the call hugs it and only the bracket opens
+			// (`dispatch([\n\t…\n]);`). That policy predates this slice and is
+			// pinned by `HxComprehensionDeclRhsBracketWrapTest`; the outer-first
+			// priority governs where a CALL-level wrap competes with a nested
+			// PAREN group, not collection literals.
+			if (DocMeasure.firstVisibleTextStartsWith(items[0], '['.code)) return IfNaturalFirstLineFitsOpenDelim(lineWidth, broken, glued);
+			// ω-outer-first-wrap (T20): OUTER boundaries win over inner ones. When
+			// breaking at THIS list's own delimiters already yields an argument that
+			// renders as one flat line at its continuation indent, take that shape —
+			// no inner group needs to break at all. Only when the argument still
+			// overflows its own continuation line does the decision fall through to
+			// the open-delim glue probe, which keeps the prefix hugged and lets the
+			// inner construct leading-break (`f(g(\n\t…\n))`).
+			// MEASURE: `flatLength` (NOT `DocMeasure.flatTokenWidth`) is load-
+			// bearing — it DESCENDS `BodyGroup` and answers `-1` for any forced
+			// hardline, so an argument that cannot be one line (a block body, a
+			// multi-line string, an already-exploded collection) is never mistaken
+			// for a fitting one. A `-1` argument skips the probe entirely and keeps
+			// the legacy glue decision.
+			// THRESHOLD: `lineWidth + 1` with the arm's strict `<` — the produced line is
+			// `indent + cols + argWidth` columns wide and fits when it lands ON the
+			// limit, so the threshold must be one past it (the width+1 off-by-one
+			// class this land is prone to — both edges are pinned in
+			// `HxCallParamOuterFirstWrapSliceTest`).
+			final argFlat: Int = flatLength(items[0]);
+			final innerGlue: Doc = IfNaturalFirstLineFitsOpenDelim(lineWidth, broken, glued);
+			return argFlat < 0
+				? innerGlue
+				: IfArrowContinuationFits(cols, argFlat + (appendTrailingComma ? sep.length : 0), lineWidth + 1, innerGlue, broken);
 		}
 		return null;
 	}
@@ -1962,9 +1993,9 @@ class WrapList {
 	// after the arrow's broken body. `WrapBoundary` preserves the marker's
 	// force-flat reset.
 	private static function coupledMarker(n: Int, brk: Doc, fl: Doc, closeInside: Doc, close: String): Doc {
-		return WrapBoundary(IfResidualLineExceeds(
-			n, Concat([brk, Line('\n'), closeInside, Text(close)]), Concat([fl, closeInside, Text(close)])
-		));
+		return WrapBoundary(
+			IfResidualLineExceeds(n, Concat([brk, Line('\n'), closeInside, Text(close)]), Concat([fl, closeInside, Text(close)]))
+		);
 	}
 
 	// ω-inc5: does the arrow body's FLAT side carry a structural hardline
