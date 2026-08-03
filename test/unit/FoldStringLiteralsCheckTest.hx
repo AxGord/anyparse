@@ -187,6 +187,20 @@ class FoldStringLiteralsCheckTest extends Test {
 		Assert.equals("'$a.b'", foldOf(wrap("a + '.b'")));
 	}
 
+	/**
+	 * The `$name` lookahead reads the DECODED first character of the text that follows,
+	 * not its raw one. `"\x41b"` starts with an `A`, which would extend the name, so the
+	 * ident needs its braces — emitting the bare `'$x\x41b'` made the compiler read a
+	 * local `xAb`, a silent VALUE change (compile-and-run verified: `X!Ab` before,
+	 * `XAB-WRONG` after). A raw `\` really starting the text (`'\\x41b'`) is not an
+	 * identifier character and keeps the bare form.
+	 */
+	public function testConcatIdentBeforeDecodedIdentCharBraced(): Void {
+		Assert.equals("'${x}\\x41b'", foldOf(wrap('x + "\\x41b"')));
+		Assert.equals("'${x}\\u0041b'", foldOf(wrap('x + "\\u0041b"')));
+		Assert.equals("'$x\\\\x41b'", foldOf(wrap('x + "\\\\x41b"')));
+	}
+
 	public function testConcatDollarInSingleLiteral(): Void {
 		Assert.equals("'$$$v'", foldOf(wrap("'$' + v")));
 	}
@@ -404,14 +418,36 @@ class FoldStringLiteralsCheckTest extends Test {
 
 	/**
 	 * A `\x24` decodes to `$` BEFORE Haxe scans a single-quoted literal for
-	 * interpolation, so a text carrying one may not be re-emitted into one: merging
-	 * `"a\x24b" + 'c'` to `'a\x24bc'` would print the value of the local `bc` instead
-	 * of the text `a$bc`. Verified against Haxe 4.3.7.
+	 * interpolation, so a DOUBLE-quoted text carrying one may not be re-emitted into
+	 * one: merging `"a\x24b" + 'c'` to `'a\x24bc'` would print the value of the local
+	 * `bc` instead of the text `a$bc`. Verified against Haxe 4.3.7.
 	 */
 	public function testHexEscapeNotMergedIntoSingleQuoted(): Void {
 		Assert.equals(0, violations(wrap('"a\\x24b" + \'c\'')).length);
 		Assert.equals(0, violations(wrap('"\\x24" + name')).length);
-		Assert.equals(0, violations(wrap("'a\\x24b' + 'c'")).length);
+	}
+
+	/**
+	 * The SINGLE-quoted spelling of the same escape is not a text hazard at all — it is
+	 * live interpolation the parser used to hide. `'a\x24b'` reads the local `b`, and
+	 * `HxInterpProjection` now says so, which turns the concatenation into the ordinary
+	 * text + ident + text fold: `'a${b}c'`, the braces added because a bare `$b` would
+	 * swallow the following `c`. Compile-and-run confirms both spellings print `aBBBc`
+	 * on `--interp` and `-js`.
+	 *
+	 * Pinned at 0 findings until this slice: the seam refused the whole group because a
+	 * blunt "carries any `\x` / `\u` escape" test could not tell a hidden trigger from
+	 * an ordinary `\x41`.
+	 */
+	public function testHexEscapedInterpolationFoldsAsInterpolation(): Void {
+		Assert.equals(1, violations(wrap("'a\\x24b' + 'c'")).length);
+		Assert.equals("'a${b}c'", foldOf(wrap("'a\\x24b' + 'c'")));
+	}
+
+	/** An escape decoding to something ORDINARY never blocked anything but the blunt test — `\x41` is an `A`. */
+	public function testNonTriggerEscapeMergesIntoSingleQuoted(): Void {
+		Assert.equals("'a\\x41bc'", foldOf(wrap("'a\\x41b' + 'c'")));
+		Assert.equals("'a\\x41bc'", foldOf(wrap('"a\\x41b" + \'c\'')));
 	}
 
 	/** `$` is the same trap spelled the other way. */
@@ -430,6 +466,20 @@ class FoldStringLiteralsCheckTest extends Test {
 	public function testUnbalancedBraceOperandNotMerged(): Void {
 		Assert.equals(0, violations(wrap("'a' + q(\"}\") + 'z'")).length);
 		Assert.equals(0, violations(wrap("'a' + q(\"{\") + 'z'")).length);
+	}
+
+	/**
+	 * The same brace count runs over the DECODED text, so an operand may spell its
+	 * unbalancing brace as `\x7D` and read as balanced. The audit's answer is that
+	 * `interpolationBlockSafe` needs no decoder to see it: it already refuses ANY
+	 * backslash — nothing in an expression source can carry an escape past that — and
+	 * the operand stays bare, exactly as it does for the raw spelling above. Already
+	 * true before this slice, and pinned so a later "the backslash rule is too strict"
+	 * relaxation has to answer this case first.
+	 */
+	public function testEscapeSpelledBraceOperandNotMerged(): Void {
+		Assert.equals(0, violations(wrap("'a' + q(\"\\x7D\") + 'z'")).length);
+		Assert.equals(0, violations(wrap("'a' + q(\"\\x24x\") + 'z'")).length);
 	}
 
 	/** A BALANCED brace closes where that scanner expects it to, so it merges. */

@@ -14,18 +14,21 @@ import anyparse.runtime.Span;
  * modernization matching the Haxe idiom (single quotes by default), with an
  * autofix.
  *
- * A double-quoted literal is KEPT when its content contains a `$` (the double
- * quotes deliberately suppress interpolation that single quotes would trigger) or
- * a `'` (which would terminate the single-quoted form). Every other escape
- * (`\"`, `\n`, `\t`, `\\`, ...) stays valid verbatim inside single quotes, so the
- * rewrite only swaps the two delimiter characters and copies the inner source
+ * A double-quoted literal is KEPT when its content would mean something else in
+ * single quotes — because it holds a `$` (the double quotes deliberately suppress
+ * interpolation that single quotes would trigger), because an escape DECODES to one
+ * (`"\x24a"` is the text `$a`; `'\x24a'` is the value of the local `a`), or because
+ * an unescaped `'` would terminate the single-quoted form. Every other escape
+ * (`\"`, `\'`, `\n`, `\t`, `\\`, ...) stays valid verbatim inside single quotes, so
+ * the rewrite only swaps the two delimiter characters and copies the inner source
  * unchanged.
  *
  * ## Grammar-agnostic
  *
  * Reuses `StringFoldSupport` (the `fold-adjacent-string-literals` seam): a node
  * for which `literalOf` yields a `quote == '"'` literal is a plain double-quoted
- * string, and its `content` is the raw inner source. A grammar without string-fold
+ * string, and `requoteVerbatim` decides — with the grammar's own lexer rules —
+ * whether its raw content survives the quote swap. A grammar without string-fold
  * support (binary formats) makes the check a no-op.
  *
  * ## Limitation
@@ -104,22 +107,17 @@ final class PreferSingleQuotes implements Check {
 	}
 
 	/**
-	 * The single-quoted rewrite for `node` when it is a convertible double-quoted
-	 * literal — one whose raw content has no `$` (would interpolate) and no `'`
-	 * (would close the single-quoted form); else null.
+	 * The single-quoted rewrite for `node` when it is a double-quoted literal whose
+	 * raw content the grammar will re-spell verbatim between the two quotings; else
+	 * null. The judgement is `requoteVerbatim`'s, not this check's: whether a content
+	 * byte can END the target quoting or START interpolation is lexer knowledge, and a
+	 * local rescan of it would be a second, worse lexer — the one that shipped the
+	 * `"\x24a"` value change (the escape decodes to `$` before the interpolation scan
+	 * runs, so the single-quoted form prints the local `a`).
 	 */
 	private static function single(node: QueryNode, source: String, support: StringFoldSupport): Null<String> {
 		final literal: Null<StringLiteral> = support.literalOf(node, source);
-		return literal == null || literal.quote != '"' ? null : !convertible(literal.content) ? null : '\'${literal.content}\'';
-	}
-
-	/** Whether `content` (raw inner source) can be re-wrapped in single quotes unchanged. */
-	private static function convertible(content: String): Bool {
-		for (i in 0...content.length) {
-			final c: Int = StringTools.fastCodeAt(content, i);
-			if (c == "$".code || c == "'".code) return false;
-		}
-		return true;
+		return literal == null || literal.quote != '"' ? null : support.requoteVerbatim(literal, "'");
 	}
 
 	/** Index every convertible double-quoted literal by its `from:to` span key (for `fix` to re-find it). */

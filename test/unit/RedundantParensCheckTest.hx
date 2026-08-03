@@ -298,6 +298,19 @@ class RedundantParensCheckTest extends Test {
 	}
 
 	/**
+	 * A REGRESSION guard on the slot, not a discriminator — the count was 0 before
+	 * `HxInterpProjection` existed too, the parens then sitting inside an opaque
+	 * `Literal`. Now the projection DOES give `'\x24{(a)}'` (which the compiler decodes
+	 * to `${(a)}`) a `Block` node, and the point is that the block is CHILDLESS: its
+	 * interior is not contiguous source anyparse can re-read, so the rule must keep
+	 * finding nothing rather than a paren pair whose span it would mis-address. The raw
+	 * spelling above is unaffected, which is what real code writes.
+	 */
+	public function testEscapeSpelledInterpolationSlotNotFlagged(): Void {
+		Assert.equals(0, violations(inFn("var s = '\\x24{(a)}';")).length);
+	}
+
+	/**
 	 * The pair goes and the braces STAY: whether a one-identifier block deserves the
 	 * `$name` shorthand is `fold-adjacent-string-literals`' question about segmentation,
 	 * not this rule's about parentheses. Pinned so the two never both claim the site.

@@ -44,6 +44,7 @@ import unit.HxMemberVarTrailOptSliceTest;
 import unit.HxMultiVarDeclSliceTest;
 import unit.HxTrailOptSourceTrackSliceTest;
 import unit.HxStructFieldTrailPresentSliceTest;
+import unit.HxStringEscapeTest;
 import unit.HxStringInterpNoFormatSliceTest;
 import unit.HxParenWrapSourceNewlineSliceTest;
 import unit.HxToplevelVarFnSliceTest;
@@ -683,6 +684,7 @@ class RunTests {
 		addCase(new HxMultiVarDeclSliceTest());
 		addCase(new HxTrailOptSourceTrackSliceTest());
 		addCase(new HxStructFieldTrailPresentSliceTest());
+		addCase(new HxStringEscapeTest());
 		addCase(new HxStringInterpNoFormatSliceTest());
 		addCase(new HxParenWrapSourceNewlineSliceTest());
 		addCase(new HxParenTernaryOpenWrapSliceTest());

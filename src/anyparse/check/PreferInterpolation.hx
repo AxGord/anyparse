@@ -232,13 +232,24 @@ final class PreferInterpolation implements Check {
 		return !interpolationSafe(src) ? null : '\'$${$src}\'';
 	}
 
-	/** Whether `src` can sit inside a single-quoted `'${ … }'` without breaking the string. */
+	/**
+	 * Whether `src` can sit inside a single-quoted `'${ … }'` without breaking the
+	 * string or changing what it says. A single-quote, double-quote, dollar or newline
+	 * would close or re-interpolate the wrapping literal.
+	 *
+	 * A BACKSLASH is refused for a subtler reason, the same one
+	 * `HaxeStringFoldSupport.interpolationBlockSafe` states: the compiler DECODES a
+	 * literal's escapes before it reads the interpolation inside it, so an escape in the
+	 * moved source is re-read one level up. `Std.string(~/\x24/)` is the regex for a
+	 * literal `$`; `'${~/\x24/}'` decodes to `'${~/$/}'`, the end-of-input anchor — a
+	 * silent VALUE change (compile-and-run verified). Only a regex literal can carry a
+	 * backslash past the quote refusals above, so the cost of refusing all of them is
+	 * nil.
+	 */
 	private static function interpolationSafe(src: String): Bool {
 		for (i in 0...src.length) {
 			final c: Int = StringTools.fastCodeAt(src, i);
-			// A single-quote, double-quote, dollar, or newline in the argument source would
-			// close or re-interpolate the wrapping '${ … }', making the rewrite unsafe.
-			if (c == "'".code || c == '"'.code || c == "$".code || c == '\n'.code || c == '\r'.code) return false;
+			if (c == "'".code || c == '"'.code || c == "$".code || c == '\n'.code || c == '\r'.code || c == '\\'.code) return false;
 		}
 		return true;
 	}

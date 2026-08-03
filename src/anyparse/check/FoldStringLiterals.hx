@@ -81,10 +81,14 @@ import anyparse.runtime.Span;
  *   counts braces, so both mis-lex there even though anyparse's own interp scanner
  *   accepts them. It does not reject the construct — it only forces that segment
  *   into a group of its own, rendered bare.
- * - A text segment carrying a `\x..` / `\u....` escape may not be re-emitted into a
- *   SINGLE-quoted literal: Haxe DECODES those escapes before it scans for `$`, so
+ * - A DOUBLE-quoted text segment whose escapes DECODE to a `$` may not be re-emitted
+ *   into a SINGLE-quoted literal: Haxe decodes before it scans for `$`, so
  *   `"a\x24b" + 'c'` folded to `'a\x24bc'` would silently print the value of the
  *   local `bc`. The seam refuses the group, and the construct is left as it stands.
+ *   Only the trigger is refused, not every `\x..` / `\u....`: `"a\x41b"` is an `A`
+ *   and folds. The SINGLE-quoted spelling of the same escape is not a text hazard —
+ *   `'a\x24b'` IS a read of `b`, which `HxInterpProjection` projects as such, so it
+ *   folds through the ordinary ident path into `'a${b}c'`.
  * - A `+` chain INSIDE a `${ … }` block: the walk stops at string literals, so a
  *   nested chain is never folded into an interpolation inside an interpolation.
  * - ANNOTATION arguments (`MetaShape.metaKinds`) and reification

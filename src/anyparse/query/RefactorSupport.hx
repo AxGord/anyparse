@@ -156,6 +156,9 @@ final class RefactorSupport {
 	/** The grammar kind an anonymous structure projects as, in BOTH a typedef body and a type expression. */
 	private static final ANON_KIND: String = 'Anon';
 
+	/** The numeric escapes that spell the interpolation trigger `$` (see `interpolationEscapeBefore`). */
+	private static final DOLLAR_ESCAPES: Array<String> = ['\\x24', '\\u0024'];
+
 	public static final FIELD_MEMBER_KINDS: Array<String> = [
 		'VarMember',
 		'FinalMember',
@@ -1048,6 +1051,11 @@ final class RefactorSupport {
 	 * macro reification) at the cost of also counting the name in comments /
 	 * strings — which only ever keeps a binding, never wrongly deletes one.
 	 * `end` is clamped to the source length.
+	 *
+	 * One boundary is not spelled with a boundary CHARACTER: a numeric escape
+	 * (`\x24`, `$`) that decodes to the interpolation trigger `$` ends in a
+	 * hex digit, so a plain word-boundary test reads `'\x24name'` as one long
+	 * token and misses a real read (see `interpolationEscapeBefore`).
 	 */
 	public static function referencedInRange(source: String, name: String, from: Int, end: Int, excluded: Array<Span>): Bool {
 		final len: Int = name.length;
@@ -1057,13 +1065,31 @@ final class RefactorSupport {
 		while (i + len <= stop) {
 			final at: Int = source.indexOf(name, i);
 			if (at < 0 || at + len > stop) return false;
-			final beforeOk: Bool = at == 0 || !isIdentChar(StringTools.fastCodeAt(source, at - 1));
+			final beforeOk: Bool = at == 0 || !isIdentChar(StringTools.fastCodeAt(source, at - 1)) || interpolationEscapeBefore(source, at);
 			final afterIdx: Int = at + len;
 			final afterOk: Bool = afterIdx >= source.length || !isIdentChar(StringTools.fastCodeAt(source, afterIdx));
 			if (beforeOk && afterOk && !offsetWithinAny(at, excluded)) return true;
 			i = at + 1;
 		}
 		return false;
+	}
+
+	/**
+	 * Whether the text directly before `at` is a numeric escape spelling the
+	 * interpolation trigger `$` — `\x24` or `$`. A string literal's escapes are
+	 * DECODED before the interpolation scan runs over the result, so `'\x24name'` is a
+	 * read of `name` exactly as `'$name'` is; but the escape ends in a hex digit, which
+	 * the word-boundary test above reads as "still the same token" and would report as
+	 * NO reference — the one direction that costs a wrongly deleted binding.
+	 *
+	 * Deliberately spelling-based, not decode-based: this scan runs over raw source
+	 * with no idea which regions are string literals, so `'\\x24name'` (a literal
+	 * backslash, decoding to no `$` at all) also answers yes. That is the harmless
+	 * direction — an extra KEPT binding, the same over-counting the textual scan
+	 * already accepts for names inside comments.
+	 */
+	private static function interpolationEscapeBefore(source: String, at: Int): Bool {
+		return DOLLAR_ESCAPES.exists(e -> at >= e.length && source.substr(at - e.length, e.length) == e);
 	}
 
 	/**
