@@ -134,6 +134,24 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	];
 
 	/**
+	 * The value-position hosts a conditional chain may be rewritten inside. Shared so
+	 * `switchExpressionHostKinds` and `ifExpressionChainHostKinds` (which adds the
+	 * arrow-lambda bodies) cannot drift: a new value host is added here once and both
+	 * follow. A `case` arm and a bare expression STATEMENT are deliberately absent — a
+	 * chain there yields no value anyone reads, and rewriting it would hand the site to
+	 * the statement-side rule family instead.
+	 */
+	private static final SWITCH_EXPRESSION_HOST_KINDS: Array<String> = [
+		'ReturnStmt',
+		'ReturnExpr',
+		'VarStmt',
+		'FinalStmt',
+		'VarMember',
+		'FinalMember',
+		'Assign',
+	];
+
+	/**
 	 * Search-only kind-equivalence. A Haxe `var` declaration surfaces
 	 * as three position-specific `QueryNode` kinds — module-level
 	 * `VarDecl`, class-field `VarMember`, local `VarStmt` — all
@@ -542,15 +560,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			],
 			andOperatorText: '&&',
 			ternaryKind: 'Ternary',
-			switchExpressionHostKinds: [
-				'ReturnStmt',
-				'ReturnExpr',
-				'VarStmt',
-				'FinalStmt',
-				'VarMember',
-				'FinalMember',
-				'Assign'
-			],
+			switchExpressionHostKinds: SWITCH_EXPRESSION_HOST_KINDS,
+			// The switch hosts plus the three arrow-lambda bodies: a comparator written as
+			// `(a, b) -> if (…) -1 else if (…) 1 else 0` is the established TM shape, while a
+			// `switch` in that slot is not — so the if-chain seam is a proper superset.
+			ifExpressionChainHostKinds: SWITCH_EXPRESSION_HOST_KINDS.concat(['ThinArrow', 'ThinParenLambdaExpr', 'ParenLambdaExpr']),
 			nullLiteralKind: 'NullLit',
 			nullCoalesceKind: 'NullCoal',
 			nullCoalesceOperatorText: '??',

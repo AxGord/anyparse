@@ -275,6 +275,52 @@ final class SwitchChain {
 	}
 
 	/**
+	 * Whether the chain at `head` is one a switch rule would REPORT — every SCAN gate of the
+	 * type doc passes and a subject can be spelled. Gate 8 (comments) is deliberately not
+	 * applied: it lives in `editsOf`, so a comment-carrying equality chain still REPORTS as a
+	 * switch finding and must still be deferred to, even though no edit is emitted for it.
+	 *
+	 * The deferral seam a sibling rewrite asks before taking a chain of its own
+	 * (`prefer-if-expression-chain`), so the two never double-report one site. It asks THIS
+	 * scanner rather than mirroring its gates structurally: a mirror is a second implementation
+	 * of one question and drifts the moment a gate here moves.
+	 *
+	 * `resolveIndex` must be the SAME resolver the switch rule would use — a caller that hands
+	 * in a thunk yielding null makes every qualified-static constant unprovable and
+	 * under-reports the claim, which is the direction that DOUBLE-claims. Build it with
+	 * `lazyIndexOf` over the same file set.
+	 */
+	public static function claims(source: String, head: QueryNode, seams: ChainSeams, resolveIndex: () -> Null<SymbolIndex>): Bool {
+		final scanned: Null<ChainScan> = scan(source, head, seams, resolveIndex);
+		return scanned != null && subjectText(scanned, seams) != null;
+	}
+
+	/**
+	 * A memoised resolver for the cross-file `SymbolIndex` a qualified-static pattern is
+	 * proved against: the caller's `given` index when it has one, else the plugin's
+	 * resolution-scope index, else one built from `files`. Returned as a THUNK so a run
+	 * whose chains are all literal never builds anything — `scan` calls it only after a
+	 * structural qualified-reference pre-check has already matched.
+	 *
+	 * Public because a rule that DEFERS to the switch claim (`claims`) has to ask with the
+	 * same resolver the switch rule itself would use; a weaker one under-reports the claim,
+	 * which is the direction that double-claims a site.
+	 */
+	public static function lazyIndexOf(
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?given: SymbolIndex
+	): () -> Null<SymbolIndex> {
+		var cached: Null<SymbolIndex> = given;
+		function resolve(): Null<SymbolIndex> {
+			final have: Null<SymbolIndex> = cached;
+			if (have != null) return have;
+			final built: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin);
+			cached = built;
+			return built;
+		}
+		return resolve;
+	}
+
+	/**
 	 * Visit every chain HEAD under `node`: a `chainKinds` node NOT reached as another
 	 * chain node's else-slot (so an inner rung is never re-reported as its own head)
 	 * and whose PARENT kind `hostAccepts`. The parent kind is null at the root only.
@@ -382,27 +428,6 @@ final class SwitchChain {
 	 */
 	private static inline function subjectText(scan: ChainScan, seams: ChainSeams): Null<String> {
 		return groupText(scan.discTexts, seams);
-	}
-
-	/**
-	 * A memoised resolver for the cross-file `SymbolIndex` a qualified-static pattern is
-	 * proved against: the caller's `given` index when it has one, else the plugin's
-	 * resolution-scope index, else one built from `files`. Returned as a THUNK so a run
-	 * whose chains are all literal never builds anything — `scan` calls it only after a
-	 * structural qualified-reference pre-check has already matched.
-	 */
-	private static function lazyIndexOf(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?given: SymbolIndex
-	): () -> Null<SymbolIndex> {
-		var cached: Null<SymbolIndex> = given;
-		function resolve(): Null<SymbolIndex> {
-			final have: Null<SymbolIndex> = cached;
-			if (have != null) return have;
-			final built: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin);
-			cached = built;
-			return built;
-		}
-		return resolve;
 	}
 
 	/**

@@ -11,11 +11,20 @@ import sys.io.File;
  * End-to-end proof that `apq lint --fix` iterates to a FIXED POINT in a
  * single invocation. Each fixture is a cascade where the first fix exposes a
  * finding only a later pass can see: a `redundant-else` `else if` chain (the
- * inner else surfaces once the outer is de-nested) and a dead-code deletion
- * that leaves a local unused. Methods are `public` so `unused-private` does
- * not subsume the whole method, and each fixture is byte-canonical under
- * default writer opts (trailing newline included) so the first-pass canonical
- * gate admits it.
+ * inner else surfaces once the outer is de-nested, `prefer-ternary-return` then
+ * collapses the two guards into a nested ternary, and `prefer-if-expression-chain`
+ * converts that into the canonical 3-value if-expression chain — four fixes, three
+ * rules, one invocation) and a dead-code deletion that leaves a local unused.
+ * Methods are `public` so `unused-private` does not subsume the whole method, and
+ * each fixture is byte-canonical under default writer opts (trailing newline
+ * included) so the first-pass canonical gate admits it.
+ *
+ * The `else`-chain fixture used to assert that NO `else` survived, which held only
+ * while the cascade stopped at the nested ternary. `prefer-if-expression-chain`
+ * adds the last step of the project's conditional canon (2 values -> ternary,
+ * 3+ -> if-expression chain), so the pin is now the canonical chain itself — a
+ * stronger assertion than "no `else`", since it names the exact fixed point rather
+ * than one property of it.
  */
 class LintFixFixedPointCliTest extends Test {
 
@@ -27,7 +36,8 @@ class LintFixFixedPointCliTest extends Test {
 		final path: String = '$dir/Foo.hx';
 		Assert.equals(0, Cli.run(['lint', '--fix', path]), 'lint --fix exits ok');
 		final out: String = File.getContent(path);
-		Assert.isTrue(out.indexOf('else') == -1, 'every else de-nested in one invocation: $out');
+		Assert.isTrue(out.indexOf('if (a) return 1;') == -1, 'the guard chain is de-nested and collapsed: $out');
+		Assert.isTrue(out.indexOf('return if (a) 1 else if (b) 2 else 3;') != -1, 'the whole cascade lands on the canonical chain: $out');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
