@@ -1136,6 +1136,21 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * Every COMMENT region of `source` as `[from, to)` spans in source order — the strictly
+	 * narrower sibling of `collectNonCodeRegions`, for a caller masking text that cannot possibly
+	 * bind or reference a name.
+	 *
+	 * STRING literals are deliberately NOT included, and the distinction is load-bearing rather
+	 * than cosmetic: a single-quoted Haxe string INTERPOLATES, so `'${Foo.x}'` is a genuine
+	 * reference to `Foo`, and masking it would let a name-freeness scan conclude the name is
+	 * unbound when it is read right there. A comment carries no such risk. Not memoised: each
+	 * call re-lexes, so a per-file caller should hoist it.
+	 */
+	public static function collectCommentRegions(source: String): Array<Span> {
+		return [for (token in collectCommentTokens(source)) new Span(token.from, token.to)];
+	}
+
+	/**
 	 * Whether `tok` is a DOC block — opened with the doc marker and carrying a
 	 * non-blank body. A line comment, a plain `/* … *\/` banner (a license header, a
 	 * section label) and the empty `/**` `*\/` form are all NOT docs, which is the
@@ -2180,7 +2195,7 @@ final class RefactorSupport {
 	}
 
 	/** Is `offset` inside any of `spans` (`from`-inclusive, `to`-exclusive)? */
-	private static function offsetWithinAny(offset: Int, spans: Array<Span>): Bool {
+	public static function offsetWithinAny(offset: Int, spans: Array<Span>): Bool {
 		for (s in spans) if (offset >= s.from && offset < s.to) return true;
 		return false;
 	}
