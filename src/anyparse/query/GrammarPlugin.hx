@@ -577,6 +577,25 @@ typedef RefShape = {
 	@:optional var switchExpressionHostKinds: Array<String>;
 
 	/**
+	 * Parent kinds in which a value-position conditional chain may be rewritten to an
+	 * if-EXPRESSION chain (`if (c1) v1 else if (c2) v2 else v3`) — the positions where the
+	 * multi-line if-chain reads at least as well as the nested ternary it replaces (Haxe: a
+	 * `return`, a local / member initializer, an assignment r-value, an arrow-lambda body).
+	 * A SUPERSET of `switchExpressionHostKinds`, which lists the same value hosts for the
+	 * heavier `switch` rewrite; the lambda bodies are added here because a comparator written
+	 * as an if-chain is the established shape while a `switch` in that slot is not.
+	 *
+	 * Deliberately a WHITELIST rather than "any expression position", for the same reason the
+	 * switch seam is one: an if-chain spliced into a call argument or into a construct's own
+	 * `(` … `)` condition slot parses (an `if`-expression is a legal expression atom
+	 * everywhere a ternary is, and its else-arm is parsed at the same precedence, so no
+	 * position re-associates) but reads WORSE than the ternary it replaced. The
+	 * `prefer-if-expression-chain` check requires a chain head's PARENT kind to be one of
+	 * these. Optional; unset makes that check a no-op.
+	 */
+	@:optional var ifExpressionChainHostKinds: Array<String>;
+
+	/**
 	 * The null-literal node kind (`null`) — lets `prefer-null-coalescing`
 	 * recognise the `… != null` / `… == null` guard. Optional.
 	 */

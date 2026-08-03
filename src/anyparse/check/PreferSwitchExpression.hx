@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.SwitchChain.ChainSeams;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -104,6 +105,26 @@ final class PreferSwitchExpression implements Check {
 	): Array<{ span: Span, text: String }> {
 		final config: Null<Config> = configOf(plugin);
 		return config == null ? [] : SwitchChain.editsOf(source, violations, plugin, config.seams, hostAccepts.bind(config.hosts), index);
+	}
+
+	/**
+	 * Whether THIS rule claims the chain at `head`, whose parent kind is `parentKind` — both
+	 * its host gate and every `SwitchChain` gate pass. The deferral seam
+	 * `prefer-if-expression-chain` asks before converting a chain of its own, so one site is
+	 * never reported by both: the switch rewrite wins wherever it applies, and the if-chain
+	 * rewrite takes the rest (including every equality-shaped chain in a host this rule's
+	 * narrower whitelist does not accept).
+	 *
+	 * `resolveIndex` must be the resolver THIS rule would have used — `SwitchChain.lazyIndexOf`
+	 * over the same file set. A weaker one leaves a qualified-static constant unprovable, and
+	 * an under-reported claim is exactly the direction that double-claims.
+	 */
+	public static function claims(
+		source: String, head: QueryNode, parentKind: Null<String>, plugin: GrammarPlugin, resolveIndex: () -> Null<SymbolIndex>
+	): Bool {
+		final config: Null<Config> = configOf(plugin);
+		if (config == null || !hostAccepts(config.hosts, parentKind)) return false;
+		return SwitchChain.claims(source, head, config.seams, resolveIndex);
 	}
 
 	/**

@@ -72,6 +72,9 @@ final class Linter {
 			new PreferTernaryReturn(),
 			new PreferTernaryAssignment(),
 			new PreferTernaryExpression(),
+			// After `prefer-switch-expression` in intent, not in position: the two never both
+			// claim a chain (this one asks that check first), so registry order is free.
+			new PreferIfExpressionChain(),
 			new ReturnReassignTernary(),
 			new PreferIfExpressionReturn(),
 			new PreferIfExpressionAssignment(),
@@ -86,6 +89,9 @@ final class Linter {
 			new DuplicateTernaryBranches(),
 			new PreferBind(),
 			new PreferArrowCallback(),
+			// After `prefer-arrow-callback`, which normalises a `function` literal into the
+			// arrow form this check then collapses — composed across fixed-point passes.
+			new PreferLambdaExpressionBody(),
 			new RedundantMapIterKey(),
 			new UnusedParameter(),
 			new SwallowedException(),

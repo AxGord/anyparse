@@ -537,6 +537,8 @@ import unit.RedundantCondCompParensCheckTest;
 import unit.ApqLitDirectivesCliTest;
 import unit.FormatConfigDiscoveryTest;
 import unit.HxTernaryBranchChainIndentTest;
+import unit.PreferIfExpressionChainCheckTest;
+import unit.PreferLambdaExpressionBodyCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1042,6 +1044,8 @@ class RunTests {
 		addCase(new PreferIfExpressionAssignmentCheckTest());
 		addCase(new PreferSwitchExpressionAssignmentCheckTest());
 		addCase(new PreferTernaryExpressionCheckTest());
+		addCase(new PreferIfExpressionChainCheckTest());
+		addCase(new PreferLambdaExpressionBodyCheckTest());
 		addCase(new PreferTryExpressionAssignmentCheckTest());
 		addCase(new PreferTryExpressionReturnCheckTest());
 		addCase(new JoinDeclarationAssignmentCheckTest());

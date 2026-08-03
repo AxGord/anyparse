@@ -328,7 +328,7 @@ class GuardReturnCheckTest extends Test {
 		Assert.notNull(Linter.byId('guard-return'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.isTrue(ids.contains('guard-return'));
-		Assert.equals(128, Linter.builtins().length);
+		Assert.equals(130, Linter.builtins().length);
 	}
 
 	// --- helpers --------------------------------------------------------------------------
