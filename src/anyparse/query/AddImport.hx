@@ -11,10 +11,10 @@ import haxe.Exception;
  *
  * Given a dotted module path, the operation collects the existing
  * top-level `import` / `using` / `package` nodes, refuses a duplicate of
- * the same kind, splices the raw new statement on its own line (in the
- * plain-import block's own ORDER when it carries one — see `ImportOrder`;
- * else after the last import / using, else after `package`, else at file
- * start), and finalizes through `RefactorSupport.canonicalize` — so the result is
+ * the same kind, splices the raw new statement on its own line (inside the
+ * plain-import RUN it belongs to, in that run's own order — see
+ * `ImportOrder`; else after the last import / using, else after `package`,
+ * else at file start), and finalizes through `RefactorSupport.canonicalize` — so the result is
  * WRITER-FORMATTED and re-parse-validated, the source canonical-gated
  * unless `reformat` is set.
  *
@@ -58,14 +58,13 @@ final class AddImport {
 
 		final stmt: String = '${(isUsing ? 'using ' : 'import ') + trimmed};';
 
-		// Insertion site, in priority order: the ORDERED slot inside the
-		// existing plain-import block when that block already carries an
-		// order (`ImportOrder`), else after the last existing import /
-		// using (extend the block), else after the package declaration,
-		// else at the very start of the file. Exact whitespace is the
-		// writer's concern — the canonicalize finalize re-emits the whole
-		// file.
-		final orderedSlot: Int = orderable(trimmed, isUsing) ? ImportOrder.insertOffset(ImportOrder.slotsOf(tree), trimmed) : -1;
+		// Insertion site, in priority order: the slot `ImportOrder` picks
+		// inside the plain-import RUN the path belongs to, else after the
+		// last existing import / using (extend the block), else after the
+		// package declaration, else at the very start of the file. Exact
+		// whitespace is the writer's concern — the canonicalize finalize
+		// re-emits the whole file.
+		final orderedSlot: Int = orderable(trimmed, isUsing) ? ImportOrder.insertOffset(source, ImportOrder.slotsOf(tree), trimmed) : -1;
 		final lastImportTo: Int = spanTo(lastImport);
 		final packageTo: Int = spanTo(packageDecl);
 		final edit: { span: Span, text: String } = if (orderedSlot >= 0)
@@ -81,7 +80,7 @@ final class AddImport {
 	}
 
 	/**
-	 * Whether the statement being added may take the ORDERED slot inside the plain-import block.
+	 * Whether the statement being added may take the ordered slot inside a plain-import RUN.
 	 * Only a plain module path may: a `using`'s position ranks static-extension resolution, and a
 	 * wildcard (`pkg.*`) or an aliased payload (`pkg.T as U`) binds names the plain-import
 	 * ordering cannot see, so both keep the append that has always placed them.

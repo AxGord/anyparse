@@ -262,24 +262,23 @@ final class MoveSymbol {
 	}
 
 	/**
-	 * Offset at which a fresh import line of `path` should be inserted: the ORDERED slot inside
-	 * the existing plain-import block when that block already carries an order `ImportOrder`
-	 * recognises, else the start of the line AFTER the last existing import statement, else after
-	 * the package declaration, else the very start of the file. The returned offset is always a
-	 * line start, so the caller appends `text + '\n'`.
+	 * Offset at which a fresh import line of `path` should be inserted: the slot `ImportOrder`
+	 * picks inside the plain-import RUN `path` belongs to, else the start of the line AFTER the
+	 * last existing import statement, else after the package declaration, else the very start of
+	 * the file. The returned offset is always a line start, so the caller appends `text + '\n'`.
 	 *
 	 * `path` is optional only for a caller with nothing to place (a plain "where does the import
-	 * block end" question); without it the ordered slot cannot be computed and the append offset
+	 * block end" question); without it the run slot cannot be computed and the append offset
 	 * is returned, which is what every caller got before ordering existed.
 	 */
 	public static function importInsertionOffset(source: String, info: FileInfo, ?path: String): Int {
 		if (path != null) {
-			// TOP-LEVEL plain imports only, in source order — the block whose order is preserved.
+			// TOP-LEVEL plain imports only, in source order — the statements the runs are cut from.
 			final block: Array<ImportSlot> = [
 				for (imp in info.imports)
-					if (!imp.guarded && imp.kind == ImportKind.Import) { path: imp.raw, from: imp.span.from }
+					if (!imp.guarded && imp.kind == ImportKind.Import) { path: imp.raw, from: imp.span.from, to: imp.span.to }
 			];
-			final slot: Int = ImportOrder.insertOffset(block, path);
+			final slot: Int = ImportOrder.insertOffset(source, block, path);
 			if (slot >= 0) return slot;
 		}
 		var anchorEnd: Int = -1;
