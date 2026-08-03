@@ -50,6 +50,22 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
  *    non-flat-width channel through the pre-pass, since a refusal is
  *    invisible to `flatLength`. Deliberately not implemented.
  *
+ * A `#if`-GUARDED CASE REGION IS NOT ONE ELEMENT (ω-if-leader-case-symmetry).
+ * Measured whole it always answers `-1` — its Doc carries the directive
+ * hardlines — so it could FOLLOW a sibling's break and never LEAD one. The
+ * Star's generated `caseSiblingUnits_HxSwitchCase` flattener expands the
+ * region into the inner case ELEMENTS of every branch (`#if` / `#elseif` /
+ * `#else` are alternatives, so the maximum across them is the conservative
+ * trigger) and each is measured on the terms above — a glued or
+ * multi-statement inner case still contributes nothing. Two shapes stay
+ * whole: `CondSpliceCase`, whose labels are byte-verbatim so it has no
+ * inner case list, and a pattern-scope conditional (`case #if js "a" #else
+ * "b" #end:`), which is a plain `CaseBranch` that already measures flat.
+ * `HxCondSpliceSwitchOpen.cases` is opted in for the same reason a switch
+ * is; `HxConditionalCase.body` / `elseBody` and `HxElseifCase.body` are
+ * deliberately NOT, so the enclosing switch's verdict flows into the region
+ * instead of a per-region pre-pass overwriting it.
+ *
  * Per `feedback_unit_test_trivia_writer.md`: the knobs are visible only
  * through `HaxeModuleTriviaParser` / `HaxeModuleTriviaWriter`.
  */
@@ -62,6 +78,45 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 	 */
 	private static final MIXED_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n\t\t\tcase 1: aa(bb);\n'
 		+ '\t\t\tcase 2: cc(ddddddddddddddd);\n\t\t\tcase _: ee(ff);\n\t\t};\n\t}\n}\n';
+
+	/**
+	 * `MIXED_SRC` with its widest body — the same 12 + 28 = 40 columns —
+	 * moved inside a `#if` region. Before ω-if-leader-case-symmetry the
+	 * region was ONE element measuring `-1`, so this switch kept the mixed
+	 * shape at 39: `case 2` alone below its label, its two siblings inline.
+	 */
+	private static final CONDITIONAL_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n'
+		+ '\t\t\tcase 1: aa(bb);\n#if js\n\t\t\tcase 2: cc(ddddddddddddddd);\n#end\n\t\t\tcase _: ee(ff);\n\t\t};\n\t}\n}\n';
+
+	/** The widest case (still 40 columns) sits in the `#else` branch, behind an `#elseif` that also holds one. */
+	private static final BRANCHES_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n\t\t\tcase 1: aa(bb);\n'
+		+ '#if js\n\t\t\tcase 2: gg(h);\n#elseif cpp\n\t\t\tcase 3: ii(jj);\n#else\n\t\t\tcase 4: cc(ddddddddddddddd);\n#end\n'
+		+ '\t\t\tcase _: ee(ff);\n\t\t};\n\t}\n}\n';
+
+	/** The widest case sits inside a `#if` nested in another `#if`. */
+	private static final NESTED_REGION_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n'
+		+ '\t\t\tcase 1: aa(bb);\n#if js\n#if debug\n\t\t\tcase 2: cc(ddddddddddddddd);\n#end\n\t\t\tcase 3: gg(h);\n#end\n'
+		+ '\t\t\tcase _: ee(ff);\n\t\t};\n\t}\n}\n';
+
+	/** A `#if` region whose only case has a block-lambda body — a unit that could not have shared its label line at any width. */
+	private static final GLUED_REGION_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n#if js\n'
+		+ '\t\t\tcase 1: (a, b) -> {\n\t\t\t\tfinal t:Int = kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk(a, b);\n\t\t\t\tt;\n\t\t\t}\n'
+		+ '#end\n\t\t\tcase _: gg(hh);\n\t\t};\n\t}\n}\n';
+
+	/**
+	 * `HxCondSpliceSwitchOpen` — a token-splice region whose every branch
+	 * opens a block and a `switch (…) {` header, with the case list shared
+	 * after `#end`. Its cases sit at 4 tabs, so the widest is 16 + 28 = 44
+	 * columns.
+	 */
+	private static final SPLICE_SWITCH_OPEN_SRC: String = 'class M {\n\tfunction f():Void {\n#if utf16\n\t\tfor (c in it(tmp)) {\n'
+		+ '\t\t\tswitch (c) {\n#else\n\t\tfor (i in 0...tmp.length) {\n\t\t\tswitch (fast(tmp, i)) {\n#end\n'
+		+ '\t\t\t\tcase 1: aa(bb);\n\t\t\t\tcase 2: cc(ddddddddddddddd);\n\t\t\t\tcase _: ee(ff);\n\t\t\t}\n\t\t}\n\t}\n}\n';
+
+	/** `HxSwitchCase.CondSpliceCase` — a region that splits a case's LABELS from the body they share after `#end`. */
+	private static final SPLICE_CASE_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tvar w = switch ext(a) {\n#if hxbitmini\n'
+		+ '\t\t\tcase ATLAS, BINATLAS:\n#else\n\t\t\tcase ATLAS:\n#end\n\t\t\t\tcc(ddddddddddddddd);\n\t\t\tcase PNG: tiles[a];\n'
+		+ '\t\t};\n\t}\n}\n';
 
 	public function new(): Void {
 		super();
@@ -205,6 +260,141 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 		final pass1: String = write(src, j);
 		Assert.equals(pass1, write(pass1, j), 'a deeply nested switch must still reach its fixed point in one pass');
 		Assert.isTrue(pass1.indexOf('case 3: aa(bb);') != -1, 'the innermost body still fits and stays inline: <$pass1>');
+	}
+
+	/**
+	 * Probe1 shape: the only over-wide body sits inside a `#if` region.
+	 * Measured whole, the region's Doc carries directive hardlines and
+	 * answers `-1`, so before this slice it could only FOLLOW a sibling's
+	 * break — the switch kept the mixed shape. The flattener measures the
+	 * region's inner case ELEMENT instead, so it now LEADS: all three
+	 * bodies drop below their labels.
+	 */
+	public function testAConditionalRegionLeadsTheSpread(): Void {
+		final out: String = write(CONDITIONAL_SRC, json(39));
+		Assert.isTrue(out.indexOf('case 1:\n\t\t\t\taa(bb);') != -1, 'a plain sibling must follow a `#if`-guarded trigger: <$out>');
+		Assert.isTrue(out.indexOf('case 2:\n\t\t\t\tcc(ddddddddddddddd);') != -1, 'the guarded body itself breaks: <$out>');
+		Assert.isTrue(out.indexOf('case _:\n\t\t\t\tee(ff);') != -1, 'and so does the wildcard: <$out>');
+	}
+
+	/**
+	 * One column wider than the region's own case and the switch stays
+	 * fully inline — the trigger is the widest UNIT's width, never the
+	 * mere presence of a directive region.
+	 *
+	 * A guard, NOT a discriminator: the pre-slice engine never triggered
+	 * on a region either, so this shape is byte-identical there. What it
+	 * pins is over-triggering, and it is the companion half of
+	 * `testAConditionalRegionLeadsTheSpread` (which does discriminate).
+	 */
+	public function testARegionIsNotATriggerByItself(): Void {
+		final out: String = write(CONDITIONAL_SRC, json(40));
+		Assert.isTrue(out.indexOf('case 1: aa(bb);') != -1, 'exactly maxLineLength on the widest unit stays inline: <$out>');
+		Assert.isTrue(out.indexOf('case 2: cc(ddddddddddddddd);') != -1, 'including the guarded one: <$out>');
+		Assert.isTrue(out.indexOf('case _: ee(ff);') != -1, '<$out>');
+	}
+
+	/**
+	 * The widest case sits in the `#else` branch, behind an `#elseif` that
+	 * holds one too. Branches are ALTERNATIVES — only one is ever compiled
+	 * — so the pre-pass takes the maximum ACROSS all of them and the one
+	 * emitted file serves every compilation variant.
+	 */
+	public function testTheWidestUnitMayLiveInAnyBranch(): Void {
+		final out: String = write(BRANCHES_SRC, json(39));
+		Assert.isTrue(out.indexOf('case 1:\n\t\t\t\taa(bb);') != -1, 'an `#else`-branch case must lead the spread: <$out>');
+		Assert.isTrue(out.indexOf('case 2:\n\t\t\t\tgg(h);') != -1, 'the `#if` branch spreads with it: <$out>');
+		Assert.isTrue(out.indexOf('case 3:\n\t\t\t\tii(jj);') != -1, 'and so does the `#elseif` branch: <$out>');
+		Assert.isTrue(out.indexOf('case 4:\n\t\t\t\tcc(ddddddddddddddd);') != -1, '<$out>');
+		Assert.isTrue(out.indexOf('case _:\n\t\t\t\tee(ff);') != -1, '<$out>');
+	}
+
+	/**
+	 * `#if` inside `#if`. The flattener recurses because case-scope
+	 * conditionals do NOT lift indent (`HxConditionalCase.body` carries
+	 * `padLeading, padTrailing, conditionalBodyIndent`, never
+	 * `alignedNestedIncrease`), so a doubly-nested case renders at the
+	 * SAME indent as the switch's own and its width is comparable.
+	 */
+	public function testANestedRegionStillLeads(): Void {
+		final out: String = write(NESTED_REGION_SRC, json(39));
+		Assert.isTrue(out.indexOf('case 1:\n\t\t\t\taa(bb);') != -1, 'a doubly-nested `#if` case must lead the spread: <$out>');
+		Assert.isTrue(out.indexOf('case 2:\n\t\t\t\tcc(ddddddddddddddd);') != -1, '<$out>');
+		Assert.isTrue(out.indexOf('case 3:\n\t\t\t\tgg(h);') != -1, 'the outer region spreads with it: <$out>');
+		Assert.isTrue(out.indexOf('case _:\n\t\t\t\tee(ff);') != -1, '<$out>');
+	}
+
+	/**
+	 * A `#if` region whose only case has a block-lambda body. The unit
+	 * measures `-1` on exactly the terms a top-level glued sibling does,
+	 * so it is no evidence the switch is too wide and the plain sibling
+	 * stays inline. This is the guard against measuring a region's Doc
+	 * SEGMENTS rather than its units: that lambda's interior statement
+	 * line is 60+ columns and would read as an enormous width.
+	 *
+	 * A guard, NOT a discriminator — byte-identical on the pre-slice
+	 * engine, which measured the whole region as `-1` anyway.
+	 */
+	public function testGlueInsideARegionIsNotATrigger(): Void {
+		final out: String = write(GLUED_REGION_SRC, json(140));
+		Assert.isTrue(out.indexOf('case 1: (a, b) -> {') != -1, 'the glued body inside the region stays glued: <$out>');
+		Assert.isTrue(out.indexOf('case _: gg(hh);') != -1, 'and its plain sibling stays inline: <$out>');
+	}
+
+	/**
+	 * `#if <open> switch (…) { #else … #end <cases> } }` — the shared case
+	 * list of a token-splice switch header. It is a ROOT case list with no
+	 * enclosing coordinated Star, so before the opt-in it got no
+	 * coordination at all and its one over-wide body broke alone.
+	 */
+	public function testCondSpliceSwitchOpenCoordinatesItsSharedCaseList(): Void {
+		final out: String = write(SPLICE_SWITCH_OPEN_SRC, jsonCaseBody(43));
+		Assert.isTrue(out.indexOf('case 1:\n\t\t\t\t\taa(bb);') != -1, 'a shared case list coordinates as one switch: <$out>');
+		Assert.isTrue(out.indexOf('case 2:\n\t\t\t\t\tcc(ddddddddddddddd);') != -1, '<$out>');
+		Assert.isTrue(out.indexOf('case _:\n\t\t\t\t\tee(ff);') != -1, '<$out>');
+	}
+
+	/** One column wider than its widest case and the same shared list stays fully inline (the fits half of the pair above). */
+	public function testCondSpliceSwitchOpenStaysInlineWhenEverythingFits(): Void {
+		final out: String = write(SPLICE_SWITCH_OPEN_SRC, jsonCaseBody(44));
+		Assert.isTrue(out.indexOf('case 1: aa(bb);') != -1, 'nothing spreads while the widest case fits: <$out>');
+		Assert.isTrue(out.indexOf('case 2: cc(ddddddddddddddd);') != -1, '<$out>');
+		Assert.isTrue(out.indexOf('case _: ee(ff);') != -1, '<$out>');
+	}
+
+	/**
+	 * `HxSwitchCase.CondSpliceCase` — a region that splits a case's LABELS
+	 * from the body they share after `#end`. Those labels are captured
+	 * byte-verbatim in an `HxCondSpliceRaw`, so there is no inner
+	 * case-element list to measure and the element stays ONE
+	 * non-contributing unit: the plain sibling keeps its own verdict.
+	 *
+	 * A guard, NOT a discriminator — the pre-slice engine also measured
+	 * this element as `-1`.
+	 */
+	public function testCondSpliceCaseContributesNothing(): Void {
+		final out: String = write(SPLICE_CASE_SRC, json(39));
+		Assert.isTrue(out.indexOf('case PNG: tiles[a];') != -1, 'a label-splice region must not spread its siblings: <$out>');
+	}
+
+	public function testIsIdempotentOnAConditionalSwitch(): Void {
+		final j: String = json(39);
+		final pass1: String = write(CONDITIONAL_SRC, j);
+		final pass2: String = write(pass1, j);
+		final pass3: String = write(pass2, j);
+		Assert.equals(pass1, pass2, 'the region-aware verdict must reach its fixed point in ONE pass');
+		Assert.equals(pass2, pass3);
+	}
+
+	public function testKnobOffIsInertOnAConditionalSwitch(): Void {
+		final keep: String = write(CONDITIONAL_SRC, '{"wrapping": {"maxLineLength": 39}, "sameLine": {"expressionCase": "keep"}}');
+		Assert.isTrue(keep.indexOf('case 1: aa(bb);') != -1, 'Keep preserves the source shape, region or not: <$keep>');
+		Assert.isTrue(keep.indexOf('case 2: cc(ddddddddddddddd);') != -1, '<$keep>');
+		Assert.isTrue(keep.indexOf('case _: ee(ff);') != -1, '<$keep>');
+	}
+
+	private inline function jsonCaseBody(maxLineLength: Int): String {
+		return '{"wrapping": {"maxLineLength": $maxLineLength}, "sameLine": {"caseBody": "fitLine"}}';
 	}
 
 	private inline function json(maxLineLength: Int, alignInline: Bool = false): String {

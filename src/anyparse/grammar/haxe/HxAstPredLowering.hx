@@ -39,6 +39,10 @@ final class HxAstPredLowering extends AstPredLowering {
 
 	private static inline final HX_ELSEIF_DECL: String = 'anyparse.grammar.haxe.HxElseifDecl';
 
+	private static inline final HX_CONDITIONAL_CASE: String = 'anyparse.grammar.haxe.HxConditionalCase';
+
+	private static inline final HX_ELSEIF_CASE: String = 'anyparse.grammar.haxe.HxElseifCase';
+
 	/**
 	 * `HxExpr` `*Assign` ctor names — every right-associative `=` infix
 	 * (`Assign` plus the 14 compound forms). `stmtExprNoSemi` walks
@@ -228,6 +232,9 @@ final class HxAstPredLowering extends AstPredLowering {
 			elementIsConditionalEnumField(HX_SWITCH_CASE, 'c'),
 			elementIsConditionalEnumField(HX_OBJECT_FIELD, 'f'),
 			elementIsConditionalDeclField(),
+			caseSiblingUnitsField(),
+			caseSiblingUnitsIntoField(),
+			addCaseSiblingUnitField(),
 			elementIsConditionalFalseField(
 				HX_EXPR, 'e',
 				'Byte-parity: `HxExpr`\'s conditional shapes use the ctor names `ConditionalExpr` / `ConditionalArgs` / '
@@ -429,6 +436,138 @@ final class HxAstPredLowering extends AstPredLowering {
 	private function elementIsConditionalFalseField(rule: String, argName: String, doc: String): Field {
 		return predField(
 			'elementIsConditional_${AstPredLowering.simpleName(rule)}', [valueArg(argName, rule)], macro :Bool, macro false, doc
+		);
+	}
+
+	/**
+	 * `caseSiblingUnits_<ElemRule>(c) → Null<Array<…>>` — the case UNITS
+	 * one switch-case Star element stands for, or `null` when the element
+	 * is its own single unit. Consumed by the widest-sibling pre-pass of
+	 * `@:fmt(caseSiblingSymmetry(…))` (see
+	 * `WriterLowering.caseSiblingWidthProbeExpr`), which splices the
+	 * returned units in place of the element before measuring.
+	 *
+	 * A `#if <cond> case … #end` region projects as ONE
+	 * `HxSwitchCase.Conditional` element whose Doc carries directive
+	 * hardlines, so its own `WrapList.flatLength` is `-1`: the region can
+	 * FOLLOW a plain sibling's break but could never LEAD one. Flattening
+	 * it into its inner case elements hands the pre-pass the same per-case
+	 * widths it already has for a plain sibling, so an over-wide
+	 * `#if`-guarded body now triggers the spread like any other.
+	 *
+	 * `null` — never `[]` — is the answer for every non-region element:
+	 * this runs for every case of every switch, so the hot path must not
+	 * allocate. Deliberately `null` as well:
+	 *
+	 *  - `CondSpliceCase`, the region shape that splits a case's LABELS
+	 *    from the body they share after `#end`. Its labels live in a
+	 *    byte-verbatim `HxCondSpliceRaw`, so there is no inner
+	 *    case-element list to measure and the element stays one
+	 *    non-contributing unit.
+	 *  - a PATTERN-scope conditional (`case #if js "a" #else "b" #end:`),
+	 *    which parses as a plain `CaseBranch` and never reaches this arm —
+	 *    it already measures FLAT (the directives render inline in the
+	 *    flat walk) and already contributes.
+	 *  - a `#if` inside a case BODY (statement scope): the element is a
+	 *    `CaseBranch` whose own Doc measures `-1`, unchanged.
+	 */
+	private function caseSiblingUnitsField(): Field {
+		final unitsCT: ComplexType = ruleArrayCT(HX_SWITCH_CASE);
+		final collect: Expr = macro {
+			final _u: $unitsCT = [];
+			_caseSiblingUnitsInto(_i, _u);
+			_u;
+		};
+		final body: Expr = nullSwitch(ident('c'), macro null, [caseBind(HX_SWITCH_CASE, 'Conditional', [0 => '_i'], collect)], macro null);
+		return predField(
+			'caseSiblingUnits_${AstPredLowering.simpleName(HX_SWITCH_CASE)}', [valueArg('c', HX_SWITCH_CASE)],
+			ruleNullArrayCT(HX_SWITCH_CASE), body,
+			'The case units a `#if`-guarded switch-case element expands to, or null when it is its own single unit.'
+		);
+	}
+
+	/**
+	 * Worker of `caseSiblingUnits_*`: appends every case element of every
+	 * branch of ONE `#if` case region to `out`, in `body` →
+	 * `elseifs[i].body` → `elseBody` order.
+	 *
+	 * The units are taken ACROSS the branches because `#if` / `#elseif` /
+	 * `#else` are ALTERNATIVES — only one of them is ever compiled — so
+	 * the maximum over all of them is the conservative trigger, and the
+	 * bytes this writer emits are one file serving every compilation
+	 * variant.
+	 */
+	private function caseSiblingUnitsIntoField(): Field {
+		inline function addUnit(elem: Expr): Expr
+			return { expr: ECall(ident('_addCaseSiblingUnit'), [elem, ident('out')]), pos: Context.currentPos() };
+		final addBody: Expr = addUnit(starElem(HX_CONDITIONAL_CASE, 'body', macro _b[_i]));
+		final clauseBody: Expr = field(starElem(HX_CONDITIONAL_CASE, 'elseifs', ident('_cl')), 'body');
+		final addClause: Expr = addUnit(starElem(HX_ELSEIF_CASE, 'body', macro _cb[_k]));
+		final addElse: Expr = addUnit(starElem(HX_CONDITIONAL_CASE, 'elseBody', macro _eb[_m]));
+		final body: Expr = macro {
+			if (p == null) return;
+			final _b = p.body;
+			var _i: Int = 0;
+			while (_i < _b.length) {
+				$addBody;
+				_i++;
+			}
+			final _els = p.elseifs;
+			var _j: Int = 0;
+			while (_j < _els.length) {
+				final _cl = _els[_j];
+				final _cb = $clauseBody;
+				var _k: Int = 0;
+				while (_k < _cb.length) {
+					$addClause;
+					_k++;
+				}
+				_j++;
+			}
+			final _eb = p.elseBody;
+			if (_eb != null) {
+				var _m: Int = 0;
+				while (_m < _eb.length) {
+					$addElse;
+					_m++;
+				}
+			}
+		};
+		return predField(
+			'_caseSiblingUnitsInto', [
+				valueArg('p', HX_CONDITIONAL_CASE),
+				{ name: 'out', type: ruleArrayCT(HX_SWITCH_CASE) }
+			],
+			macro :Void, body, 'Appends every case element of every branch of one `#if` case region to `out`.'
+		);
+	}
+
+	/**
+	 * Appends ONE switch-case Star element to `out` as units: a nested
+	 * `#if` region recurses back through `_caseSiblingUnitsInto` (so a
+	 * region inside a region flattens all the way down), anything else
+	 * pushes itself.
+	 *
+	 * The recursion keeps the widths comparable because case-scope
+	 * conditionals do NOT lift indent — `HxConditionalCase.body` carries
+	 * only `padLeading, padTrailing, conditionalBodyIndent`, never
+	 * `alignedNestedIncrease` — so a doubly-nested region's cases render
+	 * at the SAME indent as the switch's own cases.
+	 */
+	private function addCaseSiblingUnitField(): Field {
+		final regionOf: Expr = sw(ident('n'), [caseBind(HX_SWITCH_CASE, 'Conditional', [0 => '_i'], ident('_i'))], macro null);
+		final regionCT: ComplexType = ruleNullCT(HX_CONDITIONAL_CASE);
+		final body: Expr = macro {
+			final _c: $regionCT = $regionOf;
+			if (_c == null) {
+				out.push(n);
+				return;
+			}
+			_caseSiblingUnitsInto(_c, out);
+		};
+		return predField(
+			'_addCaseSiblingUnit', [bareArg('n', HX_SWITCH_CASE), { name: 'out', type: ruleArrayCT(HX_SWITCH_CASE) }], macro :Void, body,
+			'Appends one switch-case element to `out`, flattening a nested `#if` region into its own units.'
 		);
 	}
 
@@ -810,6 +949,16 @@ final class HxAstPredLowering extends AstPredLowering {
 	/** Non-null single-value predicate argument (Star elements are never null). */
 	private function bareArg(name: String, rule: String): FunctionArg {
 		return { name: name, type: ruleCT(rule) };
+	}
+
+	/** `Array<T>` over a rule's mode value type — the unit-list type of the `caseSiblingUnits_*` family. */
+	private function ruleArrayCT(rule: String): ComplexType {
+		return TPath({ pack: [], name: 'Array', params: [TPType(ruleCT(rule))] });
+	}
+
+	/** `Null<Array<T>>` — the `caseSiblingUnits_*` return type (`null` = the element is its own single unit). */
+	private function ruleNullArrayCT(rule: String): ComplexType {
+		return TPath({ pack: [], name: 'Null', params: [TPType(ruleArrayCT(rule))] });
 	}
 
 	/**

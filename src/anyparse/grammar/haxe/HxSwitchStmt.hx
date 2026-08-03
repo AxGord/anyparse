@@ -55,17 +55,42 @@ package anyparse.grammar.haxe;
  * `WriterLowering.caseSiblingWidthProbeExpr` for what does and does not
  * count as a trigger.
  *
- * `#if` INTERACTS ONE-DIRECTIONALLY, by construction. A conditional case
- * region projects as a single `HxSwitchCase.Conditional` /
- * `CondSpliceCase` element whose Doc carries directive hardlines, so its
- * `WrapList.flatLength` is `-1`. A `-1` element contributes nothing to
- * the maximum but still receives the verdict — so a `#if`-guarded case
- * FOLLOWS a plain sibling's break (probed: it moves down with the rest),
- * and can never LEAD one (probed: a switch whose only over-wide body sits
- * inside `#if` keeps the mixed shape). Making a conditional region able
- * to trigger needs its inner cases measured through the directive lines,
- * which is a separate slice; the current behaviour is safe in the sense
- * that it never spreads a switch that nothing else spread.
+ * `#if` NOW LEADS AS WELL AS FOLLOWS (ω-if-leader-case-symmetry). A
+ * conditional case region projects as a single `HxSwitchCase.Conditional`
+ * element whose own Doc carries directive hardlines, so measured whole its
+ * `WrapList.flatLength` is `-1` — it received the verdict but could never
+ * produce one. So the pre-pass does not measure it whole: the generated
+ * `caseSiblingUnits_HxSwitchCase` flattener expands the region into its
+ * inner case ELEMENTS and each one is measured on its own, so an over-wide
+ * `#if`-guarded body now LEADS the spread as well as follows it.
+ *
+ * The units are taken across the `#if` / `#elseif` / `#else` branches
+ * because branches are ALTERNATIVES — only one of them is ever compiled —
+ * so the maximum over all of them is the conservative trigger, and the one
+ * emitted file serves every compilation variant. A region nested inside a
+ * region flattens recursively: case-scope conditionals do not lift indent
+ * (`HxConditionalCase.body` carries only `padLeading, padTrailing,
+ * conditionalBodyIndent`, never `alignedNestedIncrease`), so their cases
+ * render at the SAME indent as this switch's own and the widths stay
+ * comparable.
+ *
+ * Two shapes still contribute nothing. `CondSpliceCase` — a region that
+ * splits a case's LABELS from the body they share after `#end` — keeps
+ * those labels byte-verbatim in an `HxCondSpliceRaw`, so it has no inner
+ * case list to measure. And an inner case that cannot itself render flat (a
+ * glued, multi-statement or refused body) is excluded on exactly the terms
+ * above, the same as a top-level sibling.
+ *
+ * `HxConditionalCase.body` / `elseBody` and `HxElseifCase.body` are
+ * deliberately NOT opted into `caseSiblingSymmetry`, against a literal
+ * reading of "every case list coordinates". The element-opt width stamp is
+ * ALWAYS written and never inherited, so an opted-in inner Star would run
+ * its OWN pre-pass and overwrite this switch's verdict for the cases inside
+ * the region — fragmenting one switch into per-region coordination. Leaving
+ * them out is what lets the outer verdict flow through, so the switch
+ * coordinates as ONE switch. `HxCondSpliceSwitchOpen.cases` IS opted in for
+ * the opposite reason: it is a ROOT case list with no enclosing coordinated
+ * Star to inherit a verdict from.
  */
 @:peg
 typedef HxSwitchStmt = {
