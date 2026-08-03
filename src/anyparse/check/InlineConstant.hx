@@ -11,10 +11,47 @@ import anyparse.runtime.Span;
 
 /**
  * Flags a `static final` constant of a basic scalar type whose initializer is a compile-time
- * literal, and rewrites it to `static inline final` by inserting the `inline` keyword.
+ * constant, and rewrites it to `static inline final` by inserting the `inline` keyword.
  * `Severity.Info` (a codegen / modernization cleanup), with an autofix. An inline scalar constant
  * folds to an immediate at every use site instead of a static-field load. PUBLIC constants are
  * included, gated by the reflection-name and macro-consumption checks below.
+ *
+ * ## The initializer: a literal, or a REFERENCE to an inline constant
+ *
+ * A bare `inlineConstantLiteralKinds` literal (or `negationKind` over a numeric one) is the
+ * primary shape. The second is a REFERENCE that provably resolves to an already-`static inline`
+ * final / var whose OWN initializer is such a literal — the `PLAYER_MALE_GENDER` shape:
+ *
+ * ```
+ * public static inline final PLAYER_MALE_GENDER:Int = 1;
+ * private static final GENDER:Int = PLAYER_MALE_GENDER;   // -> private static inline final
+ * ```
+ *
+ * Measured live with `haxe --interp`: `static inline final B:Int = A;` compiles and folds when `A`
+ * is `static inline` (final OR var — both are valid targets), and it does so REGARDLESS of
+ * declaration order, so a forward reference is legal and nothing gates on source position. The
+ * `inline` on the TARGET is the single load-bearing gate: against a plain non-inline
+ * `static final A`, the very same line fails to compile with
+ * "Inline variable initialization must be a constant value".
+ *
+ * Only a BARE name resolves, against the owning container's DIRECT children.
+ * `isInlinableInitializer` owns the proof, documents every gate, and records why a QUALIFIED
+ * `Other.A` is deliberately NOT attempted — cross-file simple-name binding is not something the
+ * `SymbolIndex` can currently prove with the certainty an autofix needs.
+ *
+ * The String exclusion applies TRANSITIVELY for free: `inlineConstantLiteralKinds` omits the
+ * string kinds, so a reference to a String constant fails `isInlinableLiteral` on the TARGET; no
+ * second check is needed. Likewise the reflection-name and macro-consumption gates cover the new
+ * candidates unchanged, because `consider` runs both BEFORE testing the initializer — extending
+ * only the initializer predicate routes the reference arm through them automatically.
+ *
+ * Constant ARITHMETIC over references (`static inline final C:Int = A * 2;`, which also compiles)
+ * is deliberately OUT OF SCOPE — a known conservative miss, deferred rather than half-proven.
+ *
+ * A CHAIN reaches its fixpoint over successive `--fix` passes rather than within one: given
+ * `static final A = 1; static final B = A;`, pass one inlines only `A` (the proof reads the SOURCE,
+ * where `A` is not yet inline), and pass two then inlines `B`. That is deliberate — treating a
+ * fellow candidate as already-inline would stake `B`'s proof on a gate that may still veto `A`.
  *
  * ## Also: `static inline var` -> `static inline final`
  *
@@ -26,7 +63,8 @@ import anyparse.runtime.Span;
  * here (excluded for the add-inline case) for the same reason: no per-use-site codegen change, only
  * the keyword. The reflection-name and `#if`-divergent gates below still apply, except a self-named
  * event constant (`X = 'X'`) does not self-trip the reflection gate (its own value is subtracted
- * from the reflection-key count).
+ * from the reflection-key count). This arm's own initializer test (`isConstLiteral`) stays
+ * LITERAL-only — it is not extended to references.
  *
  * ## The type annotation is PRESERVED (not dropped)
  *
@@ -80,10 +118,12 @@ import anyparse.runtime.Span;
  *    field off any external reflection / macro surface.
  * 2. STATIC final only. `inline` requires a static field; an instance `final` and a `var` are
  *    skipped, as is an already-`inline` field (nothing to do).
- * 3. COMPILE-TIME LITERAL initializer only — a bare `inlineConstantLiteralKinds` literal, or
- *    `negationKind` wrapping a numeric one (`-5`). Any other initializer (arithmetic, a call,
- *    another identifier, an array / object literal, `null`, an `#if`-divergent value, a String) is
- *    not provably a basic constant and is left alone.
+ * 3. COMPILE-TIME CONSTANT initializer only — a bare `inlineConstantLiteralKinds` literal,
+ *    `negationKind` wrapping a numeric one (`-5`), or a reference PROVEN to resolve to a
+ *    `static inline` constant of such a literal (see above). Any other initializer (arithmetic —
+ *    including arithmetic over a proven reference, a call, an array / object literal, `null`, an
+ *    `#if`-divergent value, a String, an unresolvable or ambiguous reference) is not provably a
+ *    basic constant and is left alone.
  * 4. NO reflection. A constant whose NAME appears as a string literal ANYWHERE in the lint scope is
  *    skipped — it may be read by `Reflect.field(o, "NAME")`, which an inline field (whose value is
  *    erased) would break. Conservative: the name matches any string content, which only ever KEEPS a
@@ -94,13 +134,13 @@ import anyparse.runtime.Span;
  * 6. ENUM ABSTRACT and `#if` members are structurally excluded — an enum abstract's values live
  *    under `EnumAbstractDecl` (not a `visibilityContainerKinds` host, and handled by
  *    `prefer-enum-abstract`), and a `#if`-guarded member is nested in a `Conditional` rather than a
- *    direct container child, so neither is ever scanned.
+ *    direct container child, so neither is ever scanned — as a candidate OR as a reference target.
  *
  * ## Grammar-agnostic
  *
  * Reads `visibilityContainerKinds` / `memberDeclKinds` / `fieldDeclKinds` / `mutableFieldDeclKinds`
  * (the final-field host = field minus mutable), `visibilityModifierKinds` +
- * `defaultVisibilityModifierText`, `staticModifierKind`, `inlineModifierKind`,
+ * `defaultVisibilityModifierText`, `staticModifierKind`, `inlineModifierKind`, `identKind`,
  * `inlineConstantLiteralKinds`, `numericLiteralKinds` + `negationKind`, plus `metaShape().metaKinds`
  * and `stringFoldSupport()`. Any required seam unset makes the check a no-op.
  */
@@ -130,14 +170,16 @@ final class InlineConstant implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = resolveSeams(plugin);
-		if (seams == null) return [];
+		final resolved: Null<Seams> = resolveSeams(plugin);
+		if (resolved == null) return [];
+		final seams: Seams = resolved;
 		final reflected: Array<String> = collectReflectedNames(files, plugin, seams.stringFold);
 		final macroConsumed: Array<String> = collectMacroConsumedModules(files);
+		final proof: InitProof = (container, init) -> isInlinableInitializer(container, init, seams);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, seams, reflected, macroConsumed, false);
+			if (tree != null) walk(violations, entry.file, entry.source, tree, seams, reflected, macroConsumed, false, proof);
 		}
 		return violations;
 	}
@@ -178,7 +220,7 @@ final class InlineConstant implements Check {
 	 */
 	private static function walk(
 		out: Array<Violation>, file: String, source: String, node: QueryNode, seams: Seams, reflected: Array<String>,
-		macroConsumed: Array<String>, inheritedPin: Bool
+		macroConsumed: Array<String>, inheritedPin: Bool, proof: InitProof
 	): Void {
 		var classPinned: Bool = inheritedPin;
 		for (child in node.children) {
@@ -186,8 +228,8 @@ final class InlineConstant implements Check {
 				classPinned = classPinned || isPinMeta(child.name);
 			else {
 				if (seams.containers.contains(child.kind))
-					scanContainer(out, file, source, child, seams, reflected, macroConsumed, classPinned);
-				walk(out, file, source, child, seams, reflected, macroConsumed, classPinned);
+					scanContainer(out, file, source, child, seams, reflected, macroConsumed, classPinned, proof);
+				walk(out, file, source, child, seams, reflected, macroConsumed, classPinned, proof);
 				classPinned = false;
 			}
 		}
@@ -203,9 +245,8 @@ final class InlineConstant implements Check {
 	 */
 	private static function scanContainer(
 		out: Array<Violation>, file: String, source: String, container: QueryNode, seams: Seams, reflected: Array<String>,
-		macroConsumed: Array<String>, classPinned: Bool
+		macroConsumed: Array<String>, classPinned: Bool, proof: InitProof
 	): Void {
-		final containerName: Null<String> = container.name;
 		var sawStatic: Bool = false;
 		var sawInline: Bool = false;
 		var exported: Bool = false;
@@ -222,7 +263,7 @@ final class InlineConstant implements Check {
 				sawKeep = sawKeep || isPinMeta(child.name);
 			else if (seams.members.contains(kind)) {
 				if (seams.finalFieldKinds.contains(kind) && sawStatic && !sawInline && !sawKeep && !classPinned)
-					consider(out, file, child, seams, reflected, macroConsumed, containerName, exported);
+					consider(out, file, child, seams, reflected, macroConsumed, container, exported, proof);
 				else if (seams.mutableFieldKinds.contains(kind) && sawStatic && sawInline && !sawKeep)
 					considerInlineVar(out, file, source, child, seams, reflected);
 				sawStatic = false;
@@ -249,16 +290,18 @@ final class InlineConstant implements Check {
 	 */
 	private static function consider(
 		out: Array<Violation>, file: String, field: QueryNode, seams: Seams, reflected: Array<String>, macroConsumed: Array<String>,
-		containerName: Null<String>, exported: Bool
+		container: QueryNode, exported: Bool, proof: InitProof
 	): Void {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
 		if (name == null || span == null) return;
 		if (reflected.contains(name)) return;
+		final containerName: Null<String> = container.name;
 		if (exported && containerName != null && macroConsumed.contains(containerName)) return;
 		final init: Null<QueryNode> = initializerOf(field);
-		if (init == null || !isInlinableLiteral(init, seams)) return;
-		flag(out, file, span, 'static constant \'$name\' is a scalar literal; use inline');
+		if (init == null || !proof(container, init)) return;
+		final detail: String = isInlinableLiteral(init, seams) ? 'is a scalar literal' : 'folds to an inline constant';
+		flag(out, file, span, 'static constant \'$name\' $detail; use inline');
 	}
 
 	/** The member host's initializer — its last child (the value expression; the type annotation is not a child). */
@@ -272,6 +315,124 @@ final class InlineConstant implements Check {
 		if (seams.literalKinds.contains(init.kind)) return true;
 		if (seams.negationKind == null || init.kind != seams.negationKind || init.children.length != 1) return false;
 		return seams.numericKinds.contains(init.children[0].kind);
+	}
+
+	/**
+	 * Whether `init` proves the constant inlinable — a bare scalar literal, OR a REFERENCE that
+	 * resolves to an already-`static inline` constant whose own initializer is such a literal.
+	 *
+	 * The reference arm exists because Haxe folds one inline constant into another:
+	 * `static inline final B:Int = A;` compiles and folds when `A` is itself `static inline`
+	 * (verified live with `haxe --interp`, in BOTH declaration orders — a forward reference is
+	 * legal, so nothing here gates on source order). The `inline` on the TARGET is the load-bearing
+	 * gate: with a plain non-inline `static final A`, the very same line fails to compile with
+	 * "Inline variable initialization must be a constant value".
+	 *
+	 * ONE shape resolves: a bare `identKind` name, looked up among the OWNING container's direct
+	 * children (`declaresInlineConstant`). Everything else — a qualified `Other.A`, a deeper
+	 * `pkg.Other.A` chain, arithmetic — is refused.
+	 *
+	 * ## Why the QUALIFIED arm is deferred, not merely unimplemented
+	 *
+	 * A cross-class `Other.A` was implemented against `SymbolIndex.resolveTypeRefsFrom` and withdrawn:
+	 * proving WHICH declaration a simple type name binds to is not something the index can currently
+	 * answer with the certainty an autofix needs, and each hole found produced a `--fix` edit that
+	 * does not compile in some configuration:
+	 *
+	 *  - an ALIAS import (`import pkg.Other as Alias;`) never enters simple-name scope at all — the
+	 *    grammar's `ImportAliasDecl` carries only the alias, never the imported path — so a
+	 *    same-simple-named local type is proven in the real target's place;
+	 *  - an explicit import of a type OUTSIDE the resolution scope (a haxelib module, a file the lint
+	 *    scope excludes) is likewise absent from the candidate set, and unanimity across candidates
+	 *    cannot vet a declaration that was never collected;
+	 *  - a type declared twice through `#if` is deduped BY DESIGN — `SymbolIndexBuilder` keeps the
+	 *    first declaration of a name so `declaringFiles` does not report a phantom ambiguity — and
+	 *    `TypeDeclInfo` carries no `guarded` flag, so "is this binding branch-dependent?" has no
+	 *    model-level answer. Counting container NODES in the parsed tree only half-closes it: a
+	 *    branch re-pointing the name through a `typedef` / `interface` / `enum` projects no container
+	 *    node, so one node is found and the proof goes through.
+	 *
+	 * Each of those was a separately discovered leak patched with one more exclusion — the shape that
+	 * says the filter is enumerating harm instead of proving benefit. The honest positive criterion
+	 * ("this simple name CERTAINLY binds to this declaration") needs `SymbolIndex` to model aliased
+	 * import paths, out-of-scope imports and branch-guarded type declarations; until it does, the arm
+	 * stays out. Measured cost of leaving it out: ZERO findings lost across ~1400 real files (the TM
+	 * tree and anyparse's own sources) — every real qualified-reference constant there is already
+	 * `inline`.
+	 *
+	 * The String exclusion applies transitively for free: `inlineConstantLiteralKinds` omits the
+	 * string kinds, so a reference to a String constant fails `isInlinableLiteral` ON THE TARGET.
+	 * Constant ARITHMETIC over references (`A * 2`, which also compiles) is likewise out of scope — a
+	 * known conservative miss, deferred rather than half-proven.
+	 */
+	private static function isInlinableInitializer(container: QueryNode, init: QueryNode, seams: Seams): Bool {
+		if (isInlinableLiteral(init, seams)) return true;
+		final name: Null<String> = init.name;
+		return name != null && init.kind == seams.identKind && declaresInlineConstant(container, name, seams);
+	}
+
+	/**
+	 * Whether `container` DIRECTLY declares a `static inline` final / var named `name` whose own
+	 * initializer is an accepted scalar literal. Same running-modifier-flag walk `scanContainer`
+	 * uses: `static` / `inline` project as childless siblings PRECEDING the member they attach to,
+	 * so the flags standing when a member appears describe that member, and each member resets them.
+	 *
+	 * Both `static inline final` and `static inline var` are valid fold targets (verified live).
+	 * Direct children only, so a `#if`-guarded target is nested in a `Conditional` and stays
+	 * invisible — exactly the conservative answer wanted, since the reference may be compiled in a
+	 * configuration where that member does not exist.
+	 *
+	 * The reset discipline is load-bearing HERE in a way it is not in `scanContainer`, and the two
+	 * copies must not be kept in step by accident: a stale `sawInline` there merely SKIPS a
+	 * candidate, while a stale one here PROVES a non-inline target and emits code that does not
+	 * compile. Every `memberDeclKinds` child resets, so a preceding `static inline function` cannot
+	 * leak its modifiers onto the next member.
+	 *
+	 * `isField` is a shape guard rather than a provable gate: the only `memberDeclKinds` entries it
+	 * excludes are the FUNCTION forms, whose last child is a body node and so never satisfies the
+	 * terminal literal test either. It states the intent (a fold target is a FIELD) and costs
+	 * nothing, but no fixture can isolate it.
+	 */
+	private static function declaresInlineConstant(container: QueryNode, name: String, seams: Seams): Bool {
+		var sawStatic: Bool = false;
+		var sawInline: Bool = false;
+		for (child in container.children) {
+			final kind: String = child.kind;
+			if (kind == seams.staticKind)
+				sawStatic = true;
+			else if (seams.inlineKind != null && kind == seams.inlineKind)
+				sawInline = true;
+			else if (seams.members.contains(kind)) {
+				if (child.name == name) {
+					final isField: Bool = seams.finalFieldKinds.contains(kind) || seams.mutableFieldKinds.contains(kind);
+					final init: Null<QueryNode> = initializerOf(child);
+					return isField && sawStatic && sawInline && init != null && isInlinableLiteral(init, seams);
+				}
+				sawStatic = false;
+				sawInline = false;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * The `visibilityContainerKinds` node named `name` anywhere under `node`, or null when the tree
+	 * declares none. Recursive rather than top-level-only because a `final class` nests its body in a
+	 * `FinalDecl` wrapper, exactly as `walk` has to recurse for the same reason.
+	 *
+	 * Taking the FIRST hit is safe only because `declaredExactlyOnce` has already established, from
+	 * the index, that the file declares this name once — the `#if`-divergence question is answered at
+	 * MODEL level before the tree is ever walked. Re-answering it here by counting container nodes
+	 * would be both redundant and strictly less complete (a `typedef` / `interface` / `enum` half of a
+	 * divergent pair projects no container node at all).
+	 */
+	private static function findContainer(node: QueryNode, name: String, containers: Array<String>): Null<QueryNode> {
+		for (child in node.children) {
+			if (containers.contains(child.kind) && child.name == name) return child;
+			final nested: Null<QueryNode> = findContainer(child, name, containers);
+			if (nested != null) return nested;
+		}
+		return null;
 	}
 
 	/** Every plain string literal's raw content across `files` — the names a constant might be reflected by. */
@@ -322,6 +483,7 @@ final class InlineConstant implements Check {
 			defaultVis: defaultVis,
 			staticKind: staticKind,
 			inlineKind: shape.inlineModifierKind,
+			identKind: shape.identKind,
 			metaKinds: plugin.metaShape().metaKinds,
 			literalKinds: literalKinds,
 			stringLiteralKinds: stringKinds,
@@ -479,6 +641,7 @@ private typedef Seams = {
 	final defaultVis: String;
 	final staticKind: String;
 	final inlineKind: Null<String>;
+	final identKind: String;
 	final metaKinds: Array<String>;
 	final literalKinds: Array<String>;
 	final stringLiteralKinds: Array<String>;
@@ -486,3 +649,11 @@ private typedef Seams = {
 	final negationKind: Null<String>;
 	final stringFold: Null<StringFoldSupport>;
 };
+
+/**
+ * The initializer proof `scanContainer` threads down to `consider` — "does this member's
+ * initializer make it inlinable, given its owning container and file". Closed over the resolved
+ * seams, the plugin and the LAZY resolution index in `run`, so a run with no qualified reference
+ * never pays for an index.
+ */
+private typedef InitProof = (container:QueryNode, init:QueryNode) -> Bool;

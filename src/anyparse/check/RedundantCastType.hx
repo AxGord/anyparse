@@ -17,7 +17,7 @@ import anyparse.runtime.Span;
  * form's type argument only restates it. The fix rewrites to the UNCHECKED `cast e`:
  * `final s:Sprite = cast(x, Sprite);` becomes `final s:Sprite = cast x;`. `Severity.Info`.
  *
- * ## Three positions, direct child only
+ * ## Four positions, direct child only
  *
  * Only `RefShape.checkedCastKind` (Haxe `TypedCastExpr`) with exactly one child is inspected;
  * the unchecked `cast e` and the `(e : T)` ascription are different kinds and are never
@@ -37,8 +37,43 @@ import anyparse.runtime.Span;
  *    bare identifier resolving to a function DECLARED in this file, EVERY parameter up to and
  *    including the slot is plain required with no default value, and the parameter's type is a
  *    plain nominal DECLARED in the `SymbolIndex`.
+ *  - (d) a plain ASSIGNMENT to an already-declared, explicitly annotated lvalue —
+ *    `_cp = cast(_mc.getChildByName('centerPoint'), MovieClip);` where `_cp` is declared
+ *    `private var _cp:MovieClip;`.
  *
  * Macro-reification subtrees (`RefShape.opaqueKinds`) are never descended into.
+ *
+ * ## Position (d): the assignment arm's discipline
+ *
+ * Only the PLAIN `=` kind (`RefShape.assignKind`) qualifies. A compound assignment projects as a
+ * DIFFERENT kind entirely (`x += e` is `AddAssign`, not `Assign`), so it never reaches the arm —
+ * and rightly so: the expected type there is the OPERATOR's, not the lvalue's. The cast must be
+ * the WHOLE right-hand side (`children[1]`), which keeps `a = cast(v, Foo).x` and
+ * `a = c ? cast(v, Foo) : o` out of scope for the same direct-child reason (a)-(c) enforce.
+ *
+ * Two lvalue shapes are provable. A BARE identifier is resolved by
+ * `TypeResolver.identDeclaredTypeSource`, which covers a local, a parameter and an OWN instance /
+ * static field in ONE call and carries three bails for free — a name RE-SHADOWED in a visible
+ * scope, an unresolved binding, and an INFERENCE-typed declaration with no written annotation. It
+ * is called with `skipNullableOptionalParam = true` because an optional / `= null`-defaulted /
+ * rest parameter's body type is `Null<T>` rather than its written `T`, which does not pin `T`.
+ *
+ * The second shape is an explicitly self-qualified `this.f`: the field name is looked up among the
+ * enclosing `visibilityContainerKinds` container's DIRECT children of a `fieldDeclKinds` kind (the
+ * container is threaded down the walk exactly as the enclosing function is), and more than one
+ * match refuses. Direct-children-only does TWO jobs at once — a `#if`-guarded member is nested in
+ * a `Conditional` rather than being a direct child, so it is invisible and the position is
+ * skipped; and an INHERITED field is not a member of this container at all, so a superclass's
+ * annotation is never read for a subclass's `this.f`. A field access on any OTHER receiver
+ * (`o.a = …`) would need `o`'s own type resolved first and is refused outright. So is an `abstract`,
+ * whose `this` is the UNDERLYING value rather than an instance (`underlyingThisTypeKinds`): `this.f`
+ * there reads the UNDERLYING type's field, never a member of the container at all, so its annotation
+ * may not stand in for the discarded runtime check. An `enum abstract` never REACHES that gate — it
+ * is not a `visibilityContainerKinds` node, so the container is null there and the null conjunct
+ * refuses first; it stays in the gate so the answer survives that list growing.
+ *
+ * The (c) GENERICS veto does NOT apply to (d), for the same reason it does not apply to (a) or
+ * (b): the lvalue's annotation FIXES the type rather than being driven by the value assigned.
  *
  * ## SEMANTIC NOTE - the trade-off this rule makes (user-approved)
  *
@@ -58,8 +93,8 @@ import anyparse.runtime.Span;
  *
  * A parameter type must be a plain nominal that some indexed file DECLARES. A type PARAMETER
  * (`function pick<T>(v:T):T`) is declared nowhere, so the gate vetoes the one shape where the
- * argument's type would DRIVE inference rather than be constrained by it. Positions (a) and (b)
- * need no such veto - their annotation FIXES the type. Consequence: a builtin-typed parameter
+ * argument's type would DRIVE inference rather than be constrained by it. Positions (a), (b) and
+ * (d) need no such veto - their annotation FIXES the type. Consequence: a builtin-typed parameter
  * (`p:Int`) resolves only when the std / configured libraries are in the resolution scope, and
  * is a safe miss otherwise.
  *
@@ -135,9 +170,10 @@ final class RedundantCastType implements Check implements DefaultOff {
 	/**
 	 * Append every finding in ONE file to `violations`. Split out of `run` so the tree walk's
 	 * branching is its own unit and `run` owns only the seam resolution plus the shared lazy index.
-	 * The walk threads the cast's PARENT and its enclosing function down instead of building a parent
-	 * map: both position gates need exactly one step of context, and a lambda has to CLEAR the
-	 * enclosing function rather than be looked up through.
+	 * The walk threads the cast's PARENT, its enclosing function and its enclosing visibility
+	 * CONTAINER down instead of building a parent map: each position gate needs exactly one step of
+	 * context, a lambda has to CLEAR the enclosing function rather than be looked up through, and the
+	 * container is what position (d)'s `this.f` arm scans for the field's own declaration.
 	 */
 	private static function scanFile(
 		entry: { file: String, source: String }, plugin: GrammarPlugin, shape: RefShape, typed: TypeInfoProvider, castKind: String,
@@ -159,14 +195,20 @@ final class RedundantCastType implements Check implements DefaultOff {
 		final functionKinds: Array<String> = shape.functionKinds ?? [];
 		final lambdaKinds: Array<String> = shape.lambdaKinds ?? [];
 		final bodyKinds: Array<String> = shape.functionBodyKinds ?? [];
-		function walk(node: QueryNode, parent: Null<QueryNode>, enclosingFn: Null<QueryNode>): Void {
+		final containerKinds: Array<String> = shape.visibilityContainerKinds ?? [];
+		function walk(
+			node: QueryNode, parent: Null<QueryNode>, enclosingFn: Null<QueryNode>, enclosingContainer: Null<QueryNode>
+		): Void {
 			if (opaqueKinds.contains(node.kind)) return;
 			final nextFn: Null<QueryNode> = lambdaKinds.contains(node.kind)
 				? null
 				: ownsFunctionBody(node, functionKinds, bodyKinds) ? node : enclosingFn;
+			final nextContainer: Null<QueryNode> = containerKinds.contains(node.kind) ? node : enclosingContainer;
 			final span: Null<Span> = node.span;
 			if (node.kind == castKind && span != null && parent != null) {
-				final targetSource: Null<String> = redundantTargetSource(node, span, parent, enclosingFn, root, types, resolutionIndex);
+				final targetSource: Null<String> = redundantTargetSource(
+					node, span, parent, enclosingFn, enclosingContainer, root, types, resolutionIndex
+				);
 				if (targetSource != null) violations.push({
 					file: entry.file,
 					span: span,
@@ -175,9 +217,9 @@ final class RedundantCastType implements Check implements DefaultOff {
 					message: 'redundant cast type - the position is already typed $targetSource'
 				});
 			}
-			for (c in node.children) walk(c, node, nextFn);
+			for (c in node.children) walk(c, node, nextFn, nextContainer);
 		}
-		walk(root, null, null);
+		walk(root, null, null, null);
 	}
 
 	/**
@@ -190,8 +232,8 @@ final class RedundantCastType implements Check implements DefaultOff {
 	 * ("Cast type parameters must be Dynamic").
 	 */
 	private static function redundantTargetSource(
-		castNode: QueryNode, castSpan: Span, parent: QueryNode, enclosingFn: Null<QueryNode>, root: QueryNode, types: FileTypes,
-		resolutionIndex: () -> SymbolIndex
+		castNode: QueryNode, castSpan: Span, parent: QueryNode, enclosingFn: Null<QueryNode>, enclosingContainer: Null<QueryNode>,
+		root: QueryNode, types: FileTypes, resolutionIndex: () -> SymbolIndex
 	): Null<String> {
 		if (castNode.children.length != 1) return null;
 		final operandSpan: Null<Span> = castNode.children[0].span;
@@ -200,18 +242,19 @@ final class RedundantCastType implements Check implements DefaultOff {
 		final targetSource: String = rawTarget;
 		if (isNullableWrapper(targetSource, types.wrapperNames)) return null;
 		if (deletedRegionHasComment(types.source, castSpan, operandSpan)) return null;
-		final expected: Null<String> = expectedTypeSource(castNode, parent, enclosingFn, root, types, resolutionIndex);
+		final expected: Null<String> = expectedTypeSource(castNode, parent, enclosingFn, enclosingContainer, root, types, resolutionIndex);
 		return expected != null && TypeResolver.sameTypeSource(expected, targetSource, types.importMap) ? targetSource : null;
 	}
 
 	/**
 	 * The written type source the POSITION of `castNode` demands, or null when the position is not
-	 * one of the three provable shapes. Dispatches on `parent`: an annotated declaration whose
-	 * initializer is the cast, a `return` under an annotated function, or a call-argument slot.
+	 * one of the four provable shapes. Dispatches on `parent`: an annotated declaration whose
+	 * initializer is the cast, a `return` under an annotated function, a plain `=` assignment whose
+	 * WHOLE right-hand side is the cast, or a call-argument slot.
 	 */
 	private static function expectedTypeSource(
-		castNode: QueryNode, parent: QueryNode, enclosingFn: Null<QueryNode>, root: QueryNode, types: FileTypes,
-		resolutionIndex: () -> SymbolIndex
+		castNode: QueryNode, parent: QueryNode, enclosingFn: Null<QueryNode>, enclosingContainer: Null<QueryNode>, root: QueryNode,
+		types: FileTypes, resolutionIndex: () -> SymbolIndex
 	): Null<String> {
 		final shape: RefShape = types.shape;
 		final declKinds: Array<String> = (shape.localDeclKinds ?? []).concat(shape.fieldDeclKinds ?? []);
@@ -219,6 +262,8 @@ final class RedundantCastType implements Check implements DefaultOff {
 		if (declKinds.contains(parent.kind) && isFirstChild) return declAnnotation(parent, castNode, types.declaredTypeSources);
 		if ((shape.valueReturnKinds ?? []).contains(parent.kind) && isFirstChild)
 			return enclosingFn == null ? null : returnAnnotation(enclosingFn, shape, types.source);
+		if (parent.kind == shape.assignKind && parent.children.length == 2 && parent.children[1] == castNode)
+			return assignTargetAnnotation(parent.children[0], enclosingContainer, root, types);
 		return parent.kind == shape.callKind ? paramAnnotation(castNode, parent, root, types, resolutionIndex) : null;
 	}
 
@@ -391,6 +436,74 @@ final class RedundantCastType implements Check implements DefaultOff {
 	private static function hasDefaultValue(param: QueryNode, annotationKinds: Array<String>): Bool {
 		for (child in param.children) if (!annotationKinds.contains(child.kind)) return true;
 		return false;
+	}
+
+	/**
+	 * Position (d): the written annotation of the assignment TARGET, or null when the lvalue is not one of
+	 * the two provable shapes. A BARE identifier goes through `TypeResolver.identDeclaredTypeSource`, which
+	 * resolves a local, a parameter or an OWN instance / static field in ONE call and carries three bails
+	 * for free - a name RE-SHADOWED in a visible scope (the resolved binding is then untrustworthy), an
+	 * unresolved binding, and an INFERENCE-typed declaration with no written annotation to compare against.
+	 * `skipNullableOptionalParam` is passed true because an optional / `= null`-defaulted / rest parameter's
+	 * body type is `Null<T>` rather than its written `T`, which does NOT pin `T` - the runtime check there
+	 * is not redundant.
+	 *
+	 * The second shape is an EXPLICITLY self-qualified `this.f` - a `fieldAccessKind` node whose single
+	 * child is the `selfReferenceText` identifier - resolved against the enclosing container's OWN members.
+	 * Any other receiver (`o.a = ...`) would need `o`'s own type resolved first and is refused. So is a
+	 * container listed in `underlyingThisTypeKinds`: inside an `abstract` `this` IS the underlying value,
+	 * so `this.f` reads the UNDERLYING type's field and the container's own member of that name - if it
+	 * happens to declare one - is a DIFFERENT slot whose annotation proves nothing. Of that seam's two
+	 * entries only `AbstractDecl` can reach here; an `enum abstract` is not a `visibilityContainerKinds`
+	 * node, so `enclosingContainer` is null there and the conjunct above refuses first. The entry stays
+	 * so the answer survives that list growing.
+	 */
+	private static function assignTargetAnnotation(
+		target: QueryNode, enclosingContainer: Null<QueryNode>, root: QueryNode, types: FileTypes
+	): Null<String> {
+		final shape: RefShape = types.shape;
+		if (target.kind == shape.identKind)
+			return TypeResolver.identDeclaredTypeSource(target, shape, root, () -> types.declaredTypeSources, true);
+		final self: Null<String> = shape.selfReferenceText;
+		final fieldName: Null<String> = target.name;
+		if (
+			target.kind != shape.fieldAccessKind || target.children.length != 1 || self == null || fieldName == null
+			|| enclosingContainer == null
+		)
+			return null;
+		if ((shape.underlyingThisTypeKinds ?? []).contains(enclosingContainer.kind)) return null;
+		final receiver: QueryNode = target.children[0];
+		return receiver.kind == shape.identKind && receiver.name == self
+			? ownFieldAnnotation(enclosingContainer, fieldName, shape, types.declaredTypeSources)
+			: null;
+	}
+
+	/**
+	 * The written annotation of the member named `field` among `container`'s DIRECT children of a
+	 * `fieldDeclKinds` kind, or null when none - or more than one - carries that name. The lookup keys
+	 * `declaredTypeSources` at the matched member's `span.from`: every modifier projects as a separate
+	 * PRECEDING sibling node, so a member node starts at its own `var` / `final` keyword, which is exactly
+	 * the offset that map keys a declaration on. Keying the declaration rather than scanning its whole span
+	 * is what keeps an UNANNOTATED member with a type-bearing initializer (`var f = function(x:Int) {};`)
+	 * from surrendering the nested `Int` as if it were the field's own type.
+	 *
+	 * Direct children only is deliberate and does TWO jobs at once: a `#if`-guarded member is nested in a
+	 * `Conditional` rather than being a direct child, so it is invisible here and the position is skipped;
+	 * and an INHERITED field is not a member of this container at all, so a superclass annotation is never
+	 * read for this class's `this.f`.
+	 */
+	private static function ownFieldAnnotation(
+		container: QueryNode, field: String, shape: RefShape, declaredTypeSources: Map<Int, String>
+	): Null<String> {
+		final fieldKinds: Array<String> = shape.fieldDeclKinds ?? [];
+		var found: Null<QueryNode> = null;
+		for (child in container.children) if (fieldKinds.contains(child.kind) && child.name == field) {
+			if (found != null) return null;
+			found = child;
+		}
+		if (found == null) return null;
+		final span: Null<Span> = found.span;
+		return span == null ? null : declaredTypeSources[span.from];
 	}
 
 	/**
