@@ -963,10 +963,13 @@ class WriterCodegen {
 	 * ω-callarg-chain-nest — sister reset helper to `_setCallArgChainNest`.
 	 * Returns the input opt unchanged when `_callArgChainNest` is already
 	 * `false` (no allocation off the call-arg path); otherwise returns a
-	 * `_copyOpt(o)` with the flag cleared. Consumed at the outermost chain
-	 * dispatch (`makeInfixWriteCall`) so the flag fires exactly once — leaf
-	 * operands / nested chains fall back to their own continuation Nest. Paired
-	 * with `_setCallArgChainNest` emission.
+	 * `_copyOpt(o)` with the flag cleared. Consumed at each chain dispatch —
+	 * the outermost infix chain (`makeInfixWriteCall`, which also HONOURS the
+	 * flag as `_chainNestSuppress`) and the ternary (`lowerTernaryBranch`,
+	 * which only clears it: a ternary always adds its own `?` / `:` Nest, so
+	 * the advertised +cols is not its operands' base indent) — so the flag
+	 * fires exactly once and leaf operands / nested chains fall back to their
+	 * own continuation Nest. Paired with `_setCallArgChainNest` emission.
 	 */
 	private static function clearCallArgChainNestField(optionsCT: ComplexType): Field {
 		return {
