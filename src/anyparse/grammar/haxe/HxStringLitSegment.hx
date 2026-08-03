@@ -28,8 +28,16 @@ package anyparse.grammar.haxe;
  *
  * `from String to String` keeps test assertion casts compiling. The
  * underlying `String` is the raw source slice (escapes intact), NOT a
- * decoded value; a consumer needing the decoded runtime value must call
- * a decoder helper.
+ * decoded value; a consumer needing the decoded runtime value calls
+ * `HxStringEscape`.
+ *
+ * The regex stops at a RAW `$`, which is NOT every `$` the compiler
+ * sees: it decodes escapes BEFORE it scans for interpolation, so a
+ * `\x24` inside this run is a live trigger (`'\x24a'` is the value of
+ * the local `a`). A `Literal` segment therefore UNDER-reports
+ * interpolation by construction — `HxInterpProjection` re-splits it in
+ * the query tree, which is where consumers ask. The parse tree keeps
+ * the author's spelling, as the writer needs.
  */
 @:re("(?:[^'\\\\$]|\\\\.)+")
 @:rawString

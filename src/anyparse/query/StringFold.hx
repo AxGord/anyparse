@@ -69,6 +69,23 @@ interface StringFoldSupport {
 	public function literalOf(node: QueryNode, source: String): Null<StringLiteral>;
 
 	/**
+	 * `literal` re-spelled with `quote` as its delimiter and its raw content copied
+	 * VERBATIM, or null when that copy would not denote the same string — the
+	 * "can this literal simply change quotes" question `prefer-single-quotes` asks.
+	 *
+	 * It belongs to the grammar and not to the caller because the answer is pure
+	 * lexer knowledge: which characters end the target quoting, and which of them a
+	 * content byte can spell INDIRECTLY. Haxe decodes `\x24` to `$` before it scans a
+	 * single-quoted literal for interpolation, so a raw scan for `$` passes a content
+	 * that starts interpolating the moment it changes quotes — a silent VALUE change,
+	 * which is what this seam exists to make impossible for every caller at once.
+	 *
+	 * Returns the WHOLE new literal text (delimiters included), so a grammar whose
+	 * quoting is not a single character on each side can still answer.
+	 */
+	public function requoteVerbatim(literal: StringLiteral, quote: String): Null<String>;
+
+	/**
 	 * `node` decomposed into its `ConcatSegment` pieces when it IS a string literal,
 	 * else null. A plain literal yields one `SegText`; an interpolated one yields its
 	 * child sequence mapped piece-per-fragment, so re-decomposing this check's OWN

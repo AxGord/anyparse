@@ -19,15 +19,19 @@ import anyparse.query.StringFold.ConcatSegment;
  * is deliberately excluded even though it is literal text — a caller appending to
  * such a literal would turn the trailing `$` into live interpolation.
  *
+ * `requoteVerbatim` answers the neighbouring "may this literal simply change quotes"
+ * question (`prefer-single-quotes`' whole decision) on the same lexer terms.
+ *
  * `segmentsOf` / `expressionSegment` are the general decomposition the width-aware
  * `fold-adjacent-string-literals` grouping runs on, and `renderGroup` / `renderBare`
  * are their inverse. Three Haxe facts live here and nowhere else: `PRIMARY_KINDS`,
  * the expression kinds that bind at least as tightly as `+` (so a bare operand needs
  * no parentheses); the single-quoted escaping rules — a lone `$` normalises to `$$`,
  * a double-quoted literal re-escapes `\"` to `"`, `$` to `$$` and `'` to `\'`, and a
- * raw carrying a `\x..` / `\u....` escape may not be re-emitted into a single-quoted
- * literal at all, because the compiler DECODES those escapes before it scans for
- * `$`; and `interpolationBlockSafe`, what a `${ … }` block may contain.
+ * double-quoted raw whose escapes DECODE to a `$` (`"\x24a"`) may not be re-emitted
+ * into a single-quoted literal at all, because the compiler decodes before it scans
+ * for `$`, so the text `$a` would become the VALUE of `a` (`HxStringEscape`); and
+ * `interpolationBlockSafe`, what a `${ … }` block may contain.
  */
 @:nullSafety(Strict)
 final class HaxeStringFoldSupport implements StringFoldSupport {
@@ -86,6 +90,28 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 			} : null;
 			case _: null;
 		}
+	}
+
+	/**
+	 * Only the double→single direction is modelled, the one `prefer-single-quotes`
+	 * asks about. Two conditions, both about what the CONTENT can spell rather than
+	 * about which escapes it happens to use:
+	 *
+	 *  - a raw `'` would close the single-quoted form early. An ESCAPED one (`\'`)
+	 *    may not — it means `'` under both quotings — and so may a `\x27`, which
+	 *    decodes to `'` only AFTER the literal's extent is already fixed;
+	 *  - the content must decode to no `$`, spelled raw or through an escape. Haxe
+	 *    decodes before it scans for interpolation, so `"\x24a"` (the text `$a`)
+	 *    would become the VALUE of `a` the moment it moved into single quotes —
+	 *    compile-and-run verified, and the reason this lives behind the seam.
+	 *
+	 * A `"` needs nothing: it is an ordinary character inside `'…'`, and the `\"`
+	 * escape stays valid there too.
+	 */
+	public function requoteVerbatim(literal: StringLiteral, quote: String): Null<String> {
+		if (quote != "'" || literal.quote != '"') return null;
+		if (unescapedQuote(literal.content) || HxStringEscape.carriesDollar(literal.content)) return null;
+		return "'" + literal.content + "'";
 	}
 
 	/**
@@ -163,12 +189,16 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	 * An all-text group as ONE plain literal in the quote its texts share, joined by
 	 * RAW concatenation — the original `fold-adjacent-string-literals` semantics,
 	 * kept so `"a" + "b"` still folds to `"ab"` rather than switching the file's
-	 * quoting to `'ab'`. A SINGLE-quoted result still has to clear `escapedTexts`:
-	 * Haxe decodes `\x..` / `\u....` before it scans a `'…'` for interpolation, so a
-	 * `\x24` carried into the merged literal would become a live `$`.
+	 * quoting to `'ab'`.
+	 *
+	 * Neither quoting needs a guard here. Same-quote texts concatenate by definition,
+	 * and the one hazard — an escape that DECODES to `$` and starts interpolating once
+	 * it lands in a single-quoted literal — cannot reach a single-quoted `SegText`:
+	 * `HxInterpProjection` has already split every escape-spelled trigger out of the
+	 * fragment it came from, so a group holding one is no longer all-text and never
+	 * arrives here. A DOUBLE-quoted group interpolates nothing whatever its escapes say.
 	 */
-	private static function renderPlain(quote: String, segments: Array<ConcatSegment>): Null<String> {
-		if (quote == "'" && escapedTexts(segments) == null) return null;
+	private static function renderPlain(quote: String, segments: Array<ConcatSegment>): String {
 		final buf: StringBuf = new StringBuf();
 		buf.add(quote);
 		for (s in segments) switch s {
@@ -201,7 +231,7 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 				buf.add('$${$src}');
 			case SegIdent(name):
 				final nc: Int = nextOutputChar(segments, escaped, i + 1);
-				buf.add(nc != -1 && isIdentContinue(nc) ? '$${$name}' : '$$$name');
+				buf.add(nc != -1 && HxStringEscape.isIdentContinue(nc) ? '$${$name}' : '$$$name');
 		}
 		buf.add("'");
 		return buf.toString();
@@ -298,32 +328,33 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	}
 
 	/**
-	 * The single-quoted-context escaping of a text segment's raw content (its `quote`
-	 * selects the rule), or null when the raw carries a `\x..` / `\u....` escape.
-	 * Those are REFUSED rather than copied: Haxe DECODES them before it scans a
-	 * `'…'` for interpolation, so a `\x24` reaching the output is a live `$` —
-	 * `'\x24a'` is the value of the local `a`, not the text `$a`.
+	 * The single-quoted-context escaping of a DOUBLE-quoted text segment's raw content,
+	 * or the single-quoted one's own content with its lone dollars normalised.
+	 *
+	 * The double-quoted side is null when an ESCAPE of its raw decodes to a `$`: Haxe
+	 * decodes `\x24` / `$` / `\u{24}` before it scans a `'…'` for interpolation,
+	 * so such a raw reaching the output is a live `$` — `"\x24a"` is the text `$a`, but
+	 * `'\x24a'` is the VALUE of the local `a`. A RAW `$` is no obstacle;
+	 * `escapeDoubleToSingle` doubles it. And the test is precise, not "any `\x` /
+	 * `\u` escape": `"\x41b"` denotes `Ab` under either quoting and folds fine.
+	 *
+	 * The single-quoted side asks nothing, and must not: its `$`s are the deliberate
+	 * `$$` that `segmentsOf` emits for a `Dollar` fragment, and an escape-SPELLED
+	 * trigger can no longer reach it — `HxInterpProjection` splits every one of those
+	 * out of the `Literal` fragment before this seam ever sees the tree.
 	 */
 	private static function escapeLiteral(quote: String, raw: String): Null<String> {
-		if (hasNumericEscape(raw)) return null;
-		return quote == "'" ? normalizeSingleDollars(raw) : escapeDoubleToSingle(raw);
+		if (quote == "'") return normalizeSingleDollars(raw);
+		return HxStringEscape.carriesEscapedDollar(raw) ? null : escapeDoubleToSingle(raw);
 	}
 
-	/**
-	 * Whether `raw` carries a `\x..` or `\u....` escape. A `\\` is consumed as one
-	 * unit, so the literal backslash in `'\\x24'` does not count.
-	 */
-	private static function hasNumericEscape(raw: String): Bool {
+	/** Whether `content` holds a `'` that is not part of an escape — the one character that ends a single-quoted literal. */
+	private static function unescapedQuote(content: String): Bool {
 		var i: Int = 0;
-		while (i < raw.length) {
-			if (StringTools.fastCodeAt(raw, i) != '\\'.code) {
-				i++;
-				continue;
-			}
-			if (i + 1 >= raw.length) return false;
-			final next: Int = StringTools.fastCodeAt(raw, i + 1);
-			if (next == 'x'.code || next == 'u'.code) return true;
-			i += 2;
+		while (i < content.length) {
+			final c: Int = StringTools.fastCodeAt(content, i);
+			if (c == "'".code) return true;
+			i += c == '\\'.code ? 2 : 1;
 		}
 		return false;
 	}
@@ -331,8 +362,11 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	/**
 	 * Normalize a single-quoted literal's already-escaped raw content for reuse
 	 * inside a single-quoted interpolation: a lone `$` becomes `$$`, an existing
-	 * `$$` pair is preserved. Every other character (`\'`, `\n`, `\\`) is copied
-	 * verbatim; a `\x..` / `\u....` never arrives, `escapeLiteral` having refused it.
+	 * `$$` pair is preserved. Every other character (`\'`, `\n`, `\\`, `\x..`,
+	 * `\u....`) is copied verbatim, which is sound because it stays in the SAME
+	 * quoting: an escape means there what it meant here. The one escape that would
+	 * not — a `\x24` decoding to a live `$` — cannot be in this raw at all, since
+	 * `HxInterpProjection` split it into its own segment before the seam saw the tree.
 	 */
 	private static function normalizeSingleDollars(s: String): String {
 		final buf: StringBuf = new StringBuf();
@@ -353,8 +387,10 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	/**
 	 * Re-escape a double-quoted literal's raw content for a single-quoted
 	 * interpolation: `\"` becomes `"`, `$` becomes `$$`, `'` becomes `\'`; other
-	 * escapes (`\n`, `\t`, `\\`) and plain characters are copied verbatim. A
-	 * `\x..` / `\u....` never arrives, `escapeLiteral` having refused it.
+	 * escapes (`\n`, `\t`, `\\`) and plain characters are copied verbatim. A `\x..` /
+	 * `\u....` is copied verbatim TOO and that is deliberate — it denotes the same
+	 * character under either quoting. Only one that DECODES to a `$` would not, and
+	 * `escapeLiteral` has already refused the whole raw for that (`carriesEscapedDollar`).
 	 */
 	private static function escapeDoubleToSingle(raw: String): String {
 		final buf: StringBuf = new StringBuf();
@@ -385,24 +421,24 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	}
 
 	/**
-	 * The first output character code that `segments[j...]` emits, or -1 when none
-	 * remain. `escaped` is `escapedTexts`' parallel array — the text slots are read
-	 * from it rather than re-escaped.
+	 * The first character code that `segments[j...]` emits AS THE COMPILER READS IT, or
+	 * -1 when none remain. `escaped` is `escapedTexts`' parallel array — the text slots
+	 * are read from it rather than re-escaped.
+	 *
+	 * DECODED, not raw: the caller is deciding whether the character would extend a
+	 * `$name` it is about to emit, and the compiler decodes the literal before it scans
+	 * for that name's end. A text starting `\x41b` begins with an `A`, so `'$x\x41b'`
+	 * reads a local `xAb` — reading the raw backslash instead saw a boundary that is not
+	 * there and shipped that VALUE change (compile-and-run verified).
 	 */
 	private static function nextOutputChar(segments: Array<ConcatSegment>, escaped: Array<String>, j: Int): Int {
 		for (k in j ... segments.length) switch segments[k] {
 			case SegText(_, _):
-				if (escaped[k].length > 0) return StringTools.fastCodeAt(escaped[k], 0);
+				if (escaped[k].length > 0) return HxStringEscape.firstCode(escaped[k]);
 			case SegExpr(_, _), SegIdent(_):
 				return "$".code;
 		}
 		return -1;
-	}
-
-	/** Whether `code` continues an identifier (a letter, a digit, or an underscore). */
-	private static function isIdentContinue(code: Int): Bool {
-		return code >= 'a'.code && code <= 'z'.code || code >= 'A'.code && code <= 'Z'.code || code >= '0'.code && code <= '9'.code
-			|| code == '_'.code;
 	}
 
 }

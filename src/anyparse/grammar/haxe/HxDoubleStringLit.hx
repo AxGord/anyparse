@@ -19,9 +19,10 @@ package anyparse.grammar.haxe;
  *
  * Trade-off: the underlying `String` is the raw source slice (with
  * quotes and escapes), NOT a decoded value. Consumers wanting the
- * decoded runtime value must call a decoder helper. Phase 3 (formatter)
- * needs no decoded access; future Phase 4 transforms (ax3→Haxe etc.)
- * can add the decoder when needed.
+ * decoded runtime value call `HxStringEscape` — which is what any
+ * rewrite MOVING this content into a single-quoted context has to do,
+ * since Haxe decodes before it scans for interpolation and a `\x24`
+ * that is plain text here becomes a live `$` there.
  *
  * `from String to String` keeps test assertion literals compiling
  * without explicit casts.

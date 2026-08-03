@@ -42,6 +42,41 @@ class PreferSingleQuotesCheckTest extends Test {
 		Assert.equals(0, violations("class C { function f() { final a = \"it's\"; } }").length);
 	}
 
+	/**
+	 * The escape that spells the trigger. Haxe DECODES `\x24` / `$` / `\u{24}`
+	 * before it scans a single-quoted literal for interpolation, so `"\x24a"` — the
+	 * text `$a` — prints the VALUE of the local `a` the moment it changes quotes.
+	 * Compile-and-run verified on `--interp` and `-js`; the check shipped this
+	 * rewrite until the judgement moved to `StringFoldSupport.requoteVerbatim`.
+	 */
+	public function testEscapedDollarKept(): Void {
+		Assert.equals(0, violations("class C { function f() { final a = \"\\x24a\"; } }").length);
+		Assert.equals(0, violations("class C { function f() { final a = \"\\u0024a\"; } }").length);
+		Assert.equals(0, violations("class C { function f() { final a = \"\\u{24}a\"; } }").length);
+		Assert.equals(0, violations("class C { function f() { final a = \"\\x24{a}\"; } }").length);
+	}
+
+	/** Only the TRIGGER is refused: `\x41` is an `A` and the swap keeps it verbatim. */
+	public function testNonTriggerEscapeConverted(): Void {
+		Assert.equals("'\\x41b'", singleOf('class C { function f() { final a = "\\x41b"; } }'));
+	}
+
+	/**
+	 * An ESCAPED apostrophe is not a terminator: `\'` means `'` under both quotings, so
+	 * only a RAW one closes the single-quoted form (`testApostropheKept`). The old
+	 * character blacklist could not tell the two apart and refused both — this is the
+	 * one WIDENING the seam brings.
+	 *
+	 * The `\x27` spelling was always converted (no `'` byte to blacklist) and is pinned
+	 * here as correct rather than lucky: the literal's extent is fixed BEFORE escapes
+	 * decode, so a decoded `'` cannot terminate anything. Compile-and-run: `'\x27'` is
+	 * the one-character string `'`, on `--interp` and `-js`.
+	 */
+	public function testEscapedApostropheConverted(): Void {
+		Assert.equals("'it\\'s'", singleOf('class C { function f() { final a = "it\\\'s"; } }'));
+		Assert.equals("'it\\x27s'", singleOf('class C { function f() { final a = "it\\x27s"; } }'));
+	}
+
 	public function testSingleQuotedNotFlagged(): Void {
 		Assert.equals(0, violations("class C { function f() { final a = 'hi'; } }").length);
 	}

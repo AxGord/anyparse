@@ -1128,8 +1128,18 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return HaxeQueryWalker.typeParamNames(source);
 	}
 
+	/**
+	 * The walked tree with `HxInterpProjection` applied: a single-quoted literal's
+	 * text fragment may SPELL its interpolation through escapes (`'\x24a'` is a read
+	 * of `a`), which the `@:rawString` terminal deliberately keeps verbatim and every
+	 * tree consumer would otherwise read as plain text. Applied at this one seat so
+	 * `parseFile` and `parseFileTypeRefs` — and through them every check, op and
+	 * probe — see the same model the compiler does.
+	 */
 	private function buildTree(source: String, withTypeRefs: Bool): QueryNode {
-		return new QueryNode('module', null, HaxeQueryWalker.walk(source, withTypeRefs));
+		final tree: QueryNode = new QueryNode('module', null, HaxeQueryWalker.walk(source, withTypeRefs));
+		HxInterpProjection.reproject(tree, source);
+		return tree;
 	}
 
 	/**

@@ -50,6 +50,21 @@ class PreferInterpolationCheckTest extends Test {
 		Assert.equals(0, violations(wrap("Std.string(c == 'a')")).length);
 	}
 
+	/**
+	 * A BACKSLASH in the argument source is refused for the reason
+	 * `HaxeStringFoldSupport.interpolationBlockSafe` already states: the compiler
+	 * decodes a literal's escapes before it reads the interpolation inside it, so an
+	 * escape moved into `'${ … }'` is re-read one level up. `Std.string(~/\x24/)` is the
+	 * regex for a literal `$`; `'${~/\x24/}'` decodes to `'${~/$/}'`, the end-of-input
+	 * anchor — compile-and-run shows `~/\x24/` becoming `~/$/`, a silent value change
+	 * this check shipped. A regex literal is the only argument shape that reaches here
+	 * with a backslash; a string one is already refused by the quote test above.
+	 */
+	public function testEscapeBearingArgNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('Std.string(~/\\x24/)')).length);
+		Assert.equals(0, violations(wrap('Std.string(~/\\x7D/)')).length);
+	}
+
 	public function testNestedFlaggedOnce(): Void {
 		Assert.equals(1, violations(wrap('Std.string(Std.string(x))')).length);
 	}
