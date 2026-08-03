@@ -94,8 +94,8 @@ private typedef ImportAnchor = {
  * was strictly worse — it emitted the hybrid VERBATIM, which typechecks while the import that
  * props it up survives and breaks silently later.
  *
- * The printer is per-file and stateful only in its pending-import set; every resolution
- * input is immutable. `importsOnly` builds the degenerate form for a caller with no parsed
+ * The printer is per-file and stateful only in its pending-import set and a lazy
+ * comment-region memo; every resolution input is immutable. `importsOnly` builds the degenerate form for a caller with no parsed
  * file — a pure shorten-or-qualify that never inserts an import.
  */
 @:nullSafety(Strict)
