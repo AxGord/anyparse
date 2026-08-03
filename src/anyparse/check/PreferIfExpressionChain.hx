@@ -80,11 +80,16 @@ import anyparse.runtime.Span;
  *   PARSE rather than an omission — an `else` that could have followed the chain was already
  *   bound INTO the terminal (`a ? 1 : if (q) p() else X` parses as
  *   `a ? 1 : (if (q) p() else X)`), which makes that node a RUNG; so a terminal that is
- *   else-less proves nothing follows it that could re-parent.
+ *   else-less proves nothing follows it that could re-parent. The scan and that exemption
+ *   live in `IfExpressionChain.holdsElseLessConditional`, shared with
+ *   `prefer-if-expression-return` and `prefer-if-expression-assignment`: those collapse an
+ *   `if` CHAIN rather than a ternary one, but emit the same ` else ` and so carry the same
+ *   hazard.
  * - **No comment in a dropped region.** The `?` / `:` glue goes away, so a comment sitting
  *   between the copied conditions and values would be lost; the finding is skipped instead,
  *   per the family's fail-closed guard. Each copied span is first cut back to its last TOKEN
- *   (`tokenSpan`), so a comment the parser folded into a node's TRAILING trivia —
+ *   (`IfExpressionChain.tokenSpan`, shared with the two statement-side collapse rules for the
+ *   same reason), so a comment the parser folded into a node's TRAILING trivia —
  *   `a < b // why` before the `?` — counts as dropped and skips the chain, instead of being
  *   welded in front of the emitted ` else `, which it would comment out.
  *
@@ -206,9 +211,7 @@ final class PreferIfExpressionChain implements Check {
 		return {
 			ternaryKind: ternaryKind,
 			chainKinds: chainKinds,
-			// Every `if` form, statement and expression: an else-less one of EITHER kind
-			// inside a rung value would absorb the ` else ` emitted after it.
-			conditionalKinds: ifExpressionKinds.concat(shape.ifStatementKinds ?? []),
+			conditionalKinds: IfExpressionChain.conditionalKinds(shape),
 			hostKinds: hostKinds,
 			parenKind: shape.parenKind,
 			opaqueKinds: shape.opaqueKinds ?? []
@@ -261,7 +264,7 @@ final class PreferIfExpressionChain implements Check {
 		final rawTerminal: Null<Span> = cur.span;
 		if (rungs.length < MIN_RUNGS || ternaryRungs == 0 || rawTerminal == null) return null;
 		if (PreferSwitchExpression.claims(source, head, parentKind, plugin, resolveIndex)) return null;
-		final terminalSpan: Span = tokenSpan(rawTerminal, source, comments);
+		final terminalSpan: Span = IfExpressionChain.tokenSpan(rawTerminal, source, comments);
 		final kept: Array<Span> = [terminalSpan];
 		final pairs: Array<{ cond: String, value: String }> = [];
 		for (rung in rungs) {
@@ -271,9 +274,10 @@ final class PreferIfExpressionChain implements Check {
 			// conditional can absorb it — the value would silently become that `if`'s else
 			// branch. The terminal needs no such gate: an `else` that could follow the chain
 			// was already bound INTO the terminal by the parser, which turns it into a rung.
-			if (rawCond == null || rawValue == null || holdsElseLessConditional(rung.value, s)) return null;
-			final condSpan: Span = tokenSpan(rawCond, source, comments);
-			final valueSpan: Span = tokenSpan(rawValue, source, comments);
+			if (rawCond == null || rawValue == null || IfExpressionChain.holdsElseLessConditional(rung.value, s.conditionalKinds))
+				return null;
+			final condSpan: Span = IfExpressionChain.tokenSpan(rawCond, source, comments);
+			final valueSpan: Span = IfExpressionChain.tokenSpan(rawValue, source, comments);
 			kept.push(condSpan);
 			kept.push(valueSpan);
 			pairs.push({ cond: source.substring(condSpan.from, condSpan.to), value: source.substring(valueSpan.from, valueSpan.to) });
@@ -284,57 +288,6 @@ final class PreferIfExpressionChain implements Check {
 			editSpan: new Span(headSpan.from, terminalSpan.to),
 			text: IfExpressionChain.buildValue(pairs, source.substring(terminalSpan.from, terminalSpan.to))
 		};
-	}
-
-	/**
-	 * `span` with its trailing TRIVIA cut off — an expression node's span runs on past its
-	 * last token, through the whitespace and any comment that follows, up to the next
-	 * construct's start. Two things depend on the tight end: the copied text (a trailing
-	 * `// …` inside a raw slice would comment out the ` else ` welded after it, and even a
-	 * block comment would arrive re-indented into a position the author did not write), and
-	 * the replaced region, whose loose end would splice away spacing the author wrote.
-	 *
-	 * Cutting the comment out of the KEPT span is also what makes the comment guard see it:
-	 * a token now outside every kept span is one the rebuild would drop, so the chain is
-	 * skipped instead of being emitted with the comment in a new place.
-	 */
-	private static function tokenSpan(span: Span, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>): Span {
-		var end: Int = span.to;
-		var shrunk: Bool = true;
-		while (shrunk) {
-			shrunk = false;
-			while (end > span.from && isTrailingSpace(source, end - 1)) {
-				end--;
-				shrunk = true;
-			}
-			for (token in comments) if (token.to == end && token.from >= span.from) {
-				end = token.from;
-				shrunk = true;
-				break;
-			}
-		}
-		return new Span(span.from, end);
-	}
-
-	/** Whether `source[at]` is whitespace — the trivia `tokenSpan` walks back over. */
-	private static inline function isTrailingSpace(source: String, at: Int): Bool {
-		final c: Int = StringTools.fastCodeAt(source, at);
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
-	}
-
-	/**
-	 * Whether `node`'s subtree holds a conditional with NO else-slot. Such a construct ends
-	 * an expression OPEN: the ` else ` this check emits after a non-terminal rung value would
-	 * re-parent onto it, turning the next rung into that `if`'s else branch — a silent
-	 * behaviour change that still parses, so the `--fix` re-parse gate would wave it through.
-	 * The whole subtree is scanned rather than only its right spine: an else-less `if` in a
-	 * delimited interior (a call argument, a paren) is harmless, but proving WHICH is which
-	 * costs more than the rare cleanup it buys, and the answer to any uncertainty is skip.
-	 */
-	private static function holdsElseLessConditional(node: QueryNode, s: Seams): Bool {
-		if (s.conditionalKinds.contains(node.kind) && node.children.length < CHAIN_WITH_ELSE_CHILD_COUNT) return true;
-		for (child in node.children) if (holdsElseLessConditional(child, s)) return true;
-		return false;
 	}
 
 }

@@ -413,6 +413,35 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * A nested if-chain arm whose NON-TERMINAL branch value ends in an else-less `if` is refused:
+	 * the arm's built value would be `if (e) if (q) 2 else 5`, where the ` else ` the hoist emits
+	 * after the first branch re-parents onto `if (q)` and the `!e` path stops yielding a value.
+	 * The arm nesting runs through `AssignmentTreeHoist.ifChainValue`, so the if-rule's gate covers
+	 * this rule for free.
+	 */
+	public function testElseLessConditionalInNestedIfArmNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				wrap(
+					'var x:Int;\n\t\tswitch v {\n\t\t\tcase 1: if (e) {\n\t\t\t\tx = if (q) 2;\n\t\t\t} else {\n\t\t\t\tx = 5;\n\t\t\t}\n\t\t\tcase _: x = 9;\n\t\t}'
+				)
+			).length
+		);
+	}
+
+	/**
+	 * An arm whose r-value is an else-less conditional at its ROOT is refused: the parser folds the
+	 * statement's own `;` into it, so the arm would be emitted as ` case 1: if (q) 2;;`, which
+	 * anyparse re-parses but Haxe rejects. The gate sits in `AssignmentTreeHoist.unitValue` — the
+	 * single point a leaf r-value becomes emitted text — so this rule inherits it from the if-rule
+	 * work rather than carrying its own copy.
+	 */
+	public function testElseLessConditionalAtArmRootNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('var x:Int;\n\t\tswitch v {\n\t\t\tcase 1: x = if (q) 2;\n\t\t\tcase _: x = 9;\n\t\t}')).length);
+	}
+
 	/** Run `fix` and re-emit through the canonical writer — the `lint --fix` path in one pass. */
 	private function applyFixOnce(src: String): String {
 		return switch RefactorSupport.canonicalize(src, edits(src), true, new HaxeQueryPlugin(), null) {

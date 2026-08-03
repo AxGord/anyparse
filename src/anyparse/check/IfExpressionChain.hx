@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
@@ -29,6 +30,13 @@ typedef IfChain = {
  * an `if`-EXPRESSION whose conditions are the verbatim `if (…)` conditions, so a branch
  * runs under EXACTLY the narrowing it had as a statement — the transformation is
  * null-safety-preserving by construction.
+ *
+ * Two hazards of EMITTING that ` else ` reach further than the chain shape does:
+ * `prefer-if-expression-chain` rewrites a nested TERNARY rather than an `if` chain, yet
+ * assembles the same text and so runs the same risks. `holdsElseLessConditional` (a branch
+ * value that would ABSORB the emitted ` else `) and `tokenSpan` (a copied span that would
+ * SWALLOW the trailing comment after its last token) therefore live here too, and all three
+ * rules share them.
  */
 @:nullSafety(Strict)
 final class IfExpressionChain {
@@ -142,6 +150,95 @@ final class IfExpressionChain {
 			if (!inside) return true;
 		}
 		return false;
+	}
+
+
+	/**
+	 * Every `if` form the grammar has — the expression kinds and the statement kinds together.
+	 * This is the set the else-less scan below must recognise, and it is deliberately BOTH: an
+	 * else-less conditional of either kind absorbs a ` else ` emitted after it, and a rule that
+	 * emits one cannot afford to know only the kind its own construct is written in (a
+	 * statement-position `if` reaches an expression branch value through a block unwrap, and an
+	 * if-EXPRESSION is a legal branch statement).
+	 */
+	public static function conditionalKinds(shape: RefShape): Array<String> {
+		return (shape.ifExpressionKinds ?? []).concat(shape.ifStatementKinds ?? []);
+	}
+
+	/**
+	 * Whether `node` ITSELF is a conditional with no else-slot (fewer children than the
+	 * `[condition, then, else]` an `if`/`else` has). The one definition of "else-less"; the
+	 * subtree scan below and the terminal gates in the statement-side rules both ask it, so they
+	 * cannot drift apart on what counts.
+	 */
+	public static function isElseLessConditional(node: QueryNode, conditionalKinds: Array<String>): Bool {
+		return conditionalKinds.contains(node.kind) && node.children.length < IF_ELSE_CHILD_COUNT;
+	}
+
+	/**
+	 * Whether `node`'s subtree holds an else-less conditional anywhere. Such a construct ends an
+	 * expression OPEN: the ` else ` the collapse rules emit after a NON-TERMINAL branch value
+	 * re-parents onto it, turning the rest of the chain into that `if`'s else branch — a silent
+	 * behaviour change whose output still PARSES, so the `--fix` re-parse gate would wave it
+	 * through. (Verified on 4.3.7 with a `Void`-typed carrier, where the input is legal Haxe: the
+	 * collapse changes what runs for every input combination and still compiles.)
+	 *
+	 * The whole subtree is scanned rather than only its right spine: an else-less `if` in a
+	 * delimited interior (a call argument, a paren) is harmless, but proving WHICH is which
+	 * costs more than the rare cleanup it buys, and the answer to any uncertainty is skip.
+	 *
+	 * The TERMINAL branch value is EXEMPT from THIS scan, and that is a fact about the PARSE
+	 * rather than an omission: an `else` that could have followed the chain was already bound
+	 * INTO the terminal, which would have made it one more link. The per-level exemption
+	 * survives NESTING for one reason worth stating outright, because it is not obvious — at
+	 * every OUTER level the caller scans the branch's WHOLE STATEMENT subtree, which SUBSUMES
+	 * any nested chain's own exempted terminal. So a nested chain whose terminal ends in an
+	 * else-less `if` is exempt where nothing follows it, and still refused by the level whose
+	 * ` else ` would actually re-parent onto it.
+	 *
+	 * A terminal is exempt from RE-PARENTING only. The statement-side rules apply the ROOT-only
+	 * `isElseLessConditional` to it separately, for the unrelated span reason documented there.
+	 */
+	public static function holdsElseLessConditional(node: QueryNode, conditionalKinds: Array<String>): Bool {
+		if (isElseLessConditional(node, conditionalKinds)) return true;
+		for (child in node.children) if (holdsElseLessConditional(child, conditionalKinds)) return true;
+		return false;
+	}
+
+	/**
+	 * `span` with its trailing TRIVIA cut off — an expression node's span runs on past its last
+	 * token, through the whitespace and any comment that follows, up to the next construct's
+	 * start. Two things depend on the tight end: the copied text (a trailing `// …` inside a raw
+	 * slice would comment out whatever the rebuild welds after it, and even a block comment
+	 * would arrive re-indented into a position the author did not write), and the replaced
+	 * region, whose loose end would splice away spacing the author wrote.
+	 *
+	 * Cutting the comment out of the KEPT span is also what makes `droppedComment` see it: a
+	 * token now outside every kept span is one the rebuild would drop, so the site is skipped
+	 * instead of being emitted with the comment in a new place.
+	 */
+	public static function tokenSpan(span: Span, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>): Span {
+		var end: Int = span.to;
+		var shrunk: Bool = true;
+		while (shrunk) {
+			shrunk = false;
+			while (end > span.from && isTrailingSpace(source, end - 1)) {
+				end--;
+				shrunk = true;
+			}
+			for (token in comments) if (token.to == end && token.from >= span.from) {
+				end = token.from;
+				shrunk = true;
+				break;
+			}
+		}
+		return new Span(span.from, end);
+	}
+
+	/** Whether `source[at]` is whitespace — the trivia `tokenSpan` walks back over. */
+	private static inline function isTrailingSpace(source: String, at: Int): Bool {
+		final c: Int = StringTools.fastCodeAt(source, at);
+		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 	}
 
 }
