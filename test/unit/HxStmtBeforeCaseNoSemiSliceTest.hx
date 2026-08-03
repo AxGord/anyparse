@@ -102,11 +102,9 @@ class HxStmtBeforeCaseNoSemiSliceTest extends HxTestHelpers {
 	// related boundary: two `;`-less calls in sequence still throw.
 
 	public function testBareCallFollowedByBareCallRegression(): Void {
-		Assert.raises(
-			HaxeParser.parse.bind(
-				'class C {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase "a":\n\t\t\t\tfoo()\n\t\t\t\tbar()\n\t\t\tcase "b":\n\t\t\t\treturn 2;\n\t\t}\n\t}\n}'
-			)
-		);
+		Assert.raises(HaxeParser.parse.bind(
+			'class C {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase "a":\n\t\t\t\tfoo()\n\t\t\t\tbar()\n\t\t\tcase "b":\n\t\t\t\treturn 2;\n\t\t}\n\t}\n}'
+		));
 	}
 
 }

@@ -64,19 +64,15 @@ class AvoidDynamicNarrowFixTest extends Test {
 
 	public function testUsingExtensionMemberSkipped(): Void {
 		// `x.trim()` under `using StringTools` is a String-obligation, NOT a "any type with trim" — skip.
-		Assert.isNull(
-			narrow(
-				'using StringTools;\nclass C {\n\tfunction f(s:String):Void {\n\t\tvar x:Dynamic = s;\n\t\tx.trim();\n\t\tvar y:String = x;\n\t}\n}'
-			)
-		);
+		Assert.isNull(narrow(
+			'using StringTools;\nclass C {\n\tfunction f(s:String):Void {\n\t\tvar x:Dynamic = s;\n\t\tx.trim();\n\t\tvar y:String = x;\n\t}\n}'
+		));
 	}
 
 	public function testIsCheckSkipped(): Void {
-		Assert.isNull(
-			narrow(
-				'class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tif (x is Foo) return;\n\t\tvar y:Foo = x;\n\t}\n}$FOO'
-			)
-		);
+		Assert.isNull(narrow(
+			'class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tif (x is Foo) return;\n\t\tvar y:Foo = x;\n\t}\n}$FOO'
+		));
 	}
 
 	public function testOperatorSkipped(): Void {
@@ -84,11 +80,9 @@ class AvoidDynamicNarrowFixTest extends Test {
 	}
 
 	public function testNullComparisonSkipped(): Void {
-		Assert.isNull(
-			narrow(
-				'class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tif (x == null) return;\n\t\tvar y:Foo = x;\n\t}\n}$FOO'
-			)
-		);
+		Assert.isNull(narrow(
+			'class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tif (x == null) return;\n\t\tvar y:Foo = x;\n\t}\n}$FOO'
+		));
 	}
 
 	public function testNullAssignmentSkipped(): Void {
@@ -130,11 +124,9 @@ class AvoidDynamicNarrowFixTest extends Test {
 	}
 
 	public function testTernaryBranchSkipped(): Void {
-		Assert.isNull(
-			narrow(
-				'class C {\n\tfunction f(a:Foo, c:Bool):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Foo = x;\n\t\tvar r = c ? x : a;\n\t}\n}$FOO'
-			)
-		);
+		Assert.isNull(narrow(
+			'class C {\n\tfunction f(a:Foo, c:Bool):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Foo = x;\n\t\tvar r = c ? x : a;\n\t}\n}$FOO'
+		));
 	}
 
 	public function testUntypedSinkSkipped(): Void {
@@ -160,11 +152,9 @@ class AvoidDynamicNarrowFixTest extends Test {
 
 	public function testStdIsOfTypeGuardSkipped(): Void {
 		// The dogfood FP: `Std.isOfType(raw, Array)` guards a genuinely heterogeneous value. Skip.
-		Assert.isNull(
-			narrow(
-				'class C {\n\tfunction f(o:Foo):Void {\n\t\tvar raw:Dynamic = Reflect.field(o, \'k\');\n\t\tif (Std.isOfType(raw, Array)) {\n\t\t\tvar arr:Array<Dynamic> = raw;\n\t\t}\n\t}\n}$FOO'
-			)
-		);
+		Assert.isNull(narrow(
+			'class C {\n\tfunction f(o:Foo):Void {\n\t\tvar raw:Dynamic = Reflect.field(o, \'k\');\n\t\tif (Std.isOfType(raw, Array)) {\n\t\t\tvar arr:Array<Dynamic> = raw;\n\t\t}\n\t}\n}$FOO'
+		));
 	}
 
 	public function testHeterogeneousSinksSkipped(): Void {
@@ -189,22 +179,17 @@ class AvoidDynamicNarrowFixTest extends Test {
 	public function testAbstractTypeSkipped(): Void {
 		// Reviewer repro: an abstract's @:to fires on the STATIC type — narrowing to it
 		// compiles but changes runtime dispatch. The plain-nominal gate refuses abstracts.
-		Assert.isNull(
-			narrow(
-				'class C {\n\tfunction f(a:Money):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Money = x;\n\t}\n}'
-				+ '\nabstract Money(Int) from Int {}'
-			)
-		);
+		Assert.isNull(narrow(
+			'class C {\n\tfunction f(a:Money):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Money = x;\n\t}\n}'
+			+ '\nabstract Money(Int) from Int {}'
+		));
 	}
 
 	public function testTypedefTypeSkipped(): Void {
 		// A typedef may alias an abstract or Dynamic — not provably plain → skip.
-		Assert.isNull(
-			narrow(
-				'class C {\n\tfunction f(a:Alias):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Alias = x;\n\t}\n}'
-				+ '\ntypedef Alias = Dynamic;'
-			)
-		);
+		Assert.isNull(narrow(
+			'class C {\n\tfunction f(a:Alias):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Alias = x;\n\t}\n}' + '\ntypedef Alias = Dynamic;'
+		));
 	}
 
 	// ---- Positions the local fix never touches ----

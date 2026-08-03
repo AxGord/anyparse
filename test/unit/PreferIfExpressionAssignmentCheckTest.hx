@@ -207,11 +207,9 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 	public function testNestedChainElseLessTerminalNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(
-				wrap(
-					'if (a) {\n\t\t\tif (e) {\n\t\t\t\tx = 1;\n\t\t\t} else {\n\t\t\t\tx = if (q) 2;\n\t\t\t}\n\t\t} else if (b) {\n\t\t\tx = 3;\n\t\t} else {\n\t\t\tx = 4;\n\t\t}'
-				)
-			).length
+			violations(wrap(
+				'if (a) {\n\t\t\tif (e) {\n\t\t\t\tx = 1;\n\t\t\t} else {\n\t\t\t\tx = if (q) 2;\n\t\t\t}\n\t\t} else if (b) {\n\t\t\tx = 3;\n\t\t} else {\n\t\t\tx = 4;\n\t\t}'
+			)).length
 		);
 	}
 

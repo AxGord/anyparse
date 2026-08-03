@@ -68,9 +68,9 @@ final class ImpossibleCast implements Check {
 				if (node.kind == kind && node.children.length == 1) {
 					final span: Null<Span> = node.span;
 					if (span != null) {
-						final sName: Null<String> = TypeResolver.simpleNominalName(TypeResolver.identTypeName(
-							node.children[0], root, shape, declaredTypes
-						));
+						final sName: Null<String> = TypeResolver.simpleNominalName(
+							TypeResolver.identTypeName(node.children[0], root, shape, declaredTypes)
+						);
 						final tName: Null<String> = TypeResolver.simpleNominalName(TypeResolver.castTargetWithin(span, castTargets));
 						if (sName != null && tName != null && index.unrelatedClasses(sName, tName)) violations.push({
 							file: entry.file,

@@ -186,18 +186,14 @@ class PreferSwitchExpressionCheckTest extends Test {
 	public function testCrossFileConstantChainFixed(): Void {
 		final fixed: String = fixedSource(TUPLE_CHAIN, CONSTANTS);
 		Assert.isTrue(fixed.indexOf('switch [obj.boardNodeRecord.kind, targetType] {') >= 0);
-		Assert.isTrue(
-			fixed.indexOf(
-				'case [NodeMeta.KIND_RECTANGLE_SOLID, NodeMeta.KIND_RECTANGLE_STROKE]: '
-				+ 'EdgeShade(readCurrent ? cast(obj, RectangleNode).edgeShade : newShade);'
-			) >= 0
-		);
-		Assert.isTrue(
-			fixed.indexOf(
-				'case [NodeMeta.KIND_TEXT_NODE_BUBBLE, NodeMeta.KIND_TEXT_NODE_BUBBLE_FILL_SHADE]: '
-				+ 'AreaShade(readCurrent ? cast(obj, TextNodeBubble).areaShade : newShade);'
-			) >= 0
-		);
+		Assert.isTrue(fixed.indexOf(
+			'case [NodeMeta.KIND_RECTANGLE_SOLID, NodeMeta.KIND_RECTANGLE_STROKE]: '
+			+ 'EdgeShade(readCurrent ? cast(obj, RectangleNode).edgeShade : newShade);'
+		) >= 0);
+		Assert.isTrue(fixed.indexOf(
+			'case [NodeMeta.KIND_TEXT_NODE_BUBBLE, NodeMeta.KIND_TEXT_NODE_BUBBLE_FILL_SHADE]: '
+			+ 'AreaShade(readCurrent ? cast(obj, TextNodeBubble).areaShade : newShade);'
+		) >= 0);
 		Assert.isTrue(fixed.indexOf('case _: Shade(readCurrent ? obj.shade : newShade);') >= 0);
 	}
 

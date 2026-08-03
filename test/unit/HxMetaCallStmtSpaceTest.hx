@@ -39,11 +39,9 @@ class HxMetaCallStmtSpaceTest extends HxTestHelpers {
 	// mandatory Ref stays quiet because trivia Stars that emit their
 	// own leading hardline would get a doubled break.
 	public function testMetaCallPlusBareMetaBeforeUnbracedIfKeepsStmtSpace(): Void {
-		final written: String = HxModuleWriter.write(
-			HaxeModuleParser.parse(
-				'class C {\n\tfunction f():Void {\n\t\t@:a(b) @:c if (value != null) target.field = value;\n\t\tnext = 1;\n\t}\n}\n'
-			)
-		);
+		final written: String = HxModuleWriter.write(HaxeModuleParser.parse(
+			'class C {\n\tfunction f():Void {\n\t\t@:a(b) @:c if (value != null) target.field = value;\n\t\tnext = 1;\n\t}\n}\n'
+		));
 		Assert.isTrue(written.indexOf('@:c if (') != -1, 'space between last meta and `if` lost: <$written>');
 	}
 

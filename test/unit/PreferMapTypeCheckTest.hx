@@ -434,9 +434,9 @@ class PreferMapTypeCheckTest extends Test {
 	public function testConditionalElseBranchNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(imp(
-				'IntMap', 'class C {\n#if js\n\tvar a:Int;\n#elseif cpp\n\tvar m:IntMap<Int>;\n#else\n\tvar n:IntMap<Int>;\n#end\n}'
-			)).length
+			violations(
+				imp('IntMap', 'class C {\n#if js\n\tvar a:Int;\n#elseif cpp\n\tvar m:IntMap<Int>;\n#else\n\tvar n:IntMap<Int>;\n#end\n}')
+			).length
 		);
 	}
 

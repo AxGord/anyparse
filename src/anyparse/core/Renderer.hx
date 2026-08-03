@@ -2631,9 +2631,9 @@ class Renderer {
 				// break (which hasn't been emitted yet). Disabled-mode
 				// (`fillLineStart < 0`) propagates `-1`.
 				final nextStart: Int = f.fillLineStart < 0 ? -1 : (fits ? ctx.lineCount : ctx.lineCount + 1);
-				stack.push(Frame.fillCont(
-					f.indent, fillRest, idx + 1, fillSep, tailReserve, f.forceFlat, f.fillRestProbe, f.hardFlat, nextStart
-				));
+				stack.push(
+					Frame.fillCont(f.indent, fillRest, idx + 1, fillSep, tailReserve, f.forceFlat, f.fillRestProbe, f.hardFlat, nextStart)
+				);
 			}
 			stack.push(new Frame(f.indent, MBreak, fillRest[idx], f.forceFlat, f.hardFlat));
 			stack.push(new Frame(f.indent, fits ? MFlat : MBreak, fillSep, f.forceFlat, f.hardFlat));

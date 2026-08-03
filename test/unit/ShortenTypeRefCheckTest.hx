@@ -163,18 +163,18 @@ class ShortenTypeRefCheckTest extends Test {
 	 * that, and this is the assertion that the rule goes through it rather than appending.
 	 */
 	public function testTheImportLandsInsideASortedBlock(): Void {
-		final out: String = applyFix(inClass(
-			'import aaa.First;\nimport zzz.Last;\n\n', '\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n'
-		));
+		final out: String = applyFix(
+			inClass('import aaa.First;\nimport zzz.Last;\n\n', '\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n')
+		);
 		Assert.equals(
 			'package app;\n\nimport aaa.First;\nimport pkg.deep.Foo;\nimport zzz.Last;\n\n', out.substring(0, out.indexOf('class C'))
 		);
 	}
 
 	public function testAnUnsortedBlockIsAppendedTo(): Void {
-		final out: String = applyFix(inClass(
-			'import zzz.Last;\nimport aaa.First;\n\n', '\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n'
-		));
+		final out: String = applyFix(
+			inClass('import zzz.Last;\nimport aaa.First;\n\n', '\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n')
+		);
 		Assert.equals(
 			'package app;\n\nimport zzz.Last;\nimport aaa.First;\nimport pkg.deep.Foo;\n\n', out.substring(0, out.indexOf('class C'))
 		);
@@ -250,9 +250,9 @@ class ShortenTypeRefCheckTest extends Test {
 	 * and veto the import the two plain uses have earned.
 	 */
 	public function testConditionalOccurrenceDoesNotVetoTheImport(): Void {
-		final out: String = applyFix(inClass(
-			'', '\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n\t\t#if sys\n\t\tg(pkg.deep.Foo.c());\n\t\t#end\n'
-		));
+		final out: String = applyFix(
+			inClass('', '\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n\t\t#if sys\n\t\tg(pkg.deep.Foo.c());\n\t\t#end\n')
+		);
 		Assert.isTrue(out.indexOf('import pkg.deep.Foo;') != -1, 'import added, got: $out');
 		Assert.isTrue(out.indexOf('g(Foo.a());') != -1 && out.indexOf('g(Foo.b());') != -1, 'plain uses shortened, got: $out');
 		Assert.isTrue(out.indexOf('g(pkg.deep.Foo.c());') != -1, 'the guarded use stays qualified, got: $out');

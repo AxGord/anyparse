@@ -118,8 +118,9 @@ class GuardReturnCheckTest extends Test {
 	}
 
 	public function testOrderedFlippedThroughMemberPath(): Void {
-		Assert.isTrue(fixedWith(memberPathSource(), 'typedef Res = {\n\tcount:Int\n};\n').indexOf('if (res.count <= 0) return false;')
-			!= -1);
+		Assert.isTrue(
+			fixedWith(memberPathSource(), 'typedef Res = {\n\tcount:Int\n};\n').indexOf('if (res.count <= 0) return false;') != -1
+		);
 	}
 
 	public function testOrderedFlippedThroughStructuralExtension(): Void {
@@ -401,12 +402,10 @@ class GuardReturnCheckTest extends Test {
 			+ '\n\t\t\tt(a);\n\t\t\tu(a);\n\t\t}\n\t\t#end';
 		Assert.equals(2, vVoid(code).length);
 		Assert.equals(
-			canon(
-				wrapVoid(
-					'p(a);\n\t\t#if debug\n\t\tif (a <= 0) return;\n\t\tr(a);\n\t\ts(a);\n\t\t#else\n\t\tif (a <= 1) return;'
-					+ '\n\t\tt(a);\n\t\tu(a);\n\t\t#end'
-				)
-			),
+			canon(wrapVoid(
+				'p(a);\n\t\t#if debug\n\t\tif (a <= 0) return;\n\t\tr(a);\n\t\ts(a);\n\t\t#else\n\t\tif (a <= 1) return;'
+				+ '\n\t\tt(a);\n\t\tu(a);\n\t\t#end'
+			)),
 			fxVoid(code)
 		);
 	}
@@ -619,12 +618,10 @@ class GuardReturnCheckTest extends Test {
 			+ '\n\t\t\tlog(n);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t\t#end\n\t\treturn true;';
 		Assert.equals(1, v(code).length);
 		Assert.equals(
-			canon(
-				wrap(
-					'#if x\n\t\tfinal n = pre();\n\t\treturn n > 0;\n\t\t#elseif y\n\t\tif (!ok) return false;\n\t\tfinal n = other();'
-					+ '\n\t\tlog(n);\n\t\treturn true;\n\t\t#end\n\t\treturn true;'
-				)
-			),
+			canon(wrap(
+				'#if x\n\t\tfinal n = pre();\n\t\treturn n > 0;\n\t\t#elseif y\n\t\tif (!ok) return false;\n\t\tfinal n = other();'
+				+ '\n\t\tlog(n);\n\t\treturn true;\n\t\t#end\n\t\treturn true;'
+			)),
 			fx(code)
 		);
 	}

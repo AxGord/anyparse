@@ -502,11 +502,9 @@ class GuardContinueCheckTest extends Test {
 			'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (cond) {\n\t\t\t\t@:nullSafety(Off) var b:String = other();\n\t\t\t\tuse(b);\n\t\t\t}\n\t\t}';
 		Assert.equals(1, v(code).length);
 		Assert.equals(
-			canon(
-				wrap(
-					'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (!cond) continue;\n\t\t\t@:nullSafety(Off) var b2:String = other();\n\t\t\tuse(b2);\n\t\t}'
-				)
-			),
+			canon(wrap(
+				'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (!cond) continue;\n\t\t\t@:nullSafety(Off) var b2:String = other();\n\t\t\tuse(b2);\n\t\t}'
+			)),
 			fx(code)
 		);
 	}
@@ -517,11 +515,9 @@ class GuardContinueCheckTest extends Test {
 			'for (x in xs) {\n\t\t\t@:nullSafety(Off) var b:String = pre();\n\t\t\tif (cond) {\n\t\t\t\tfinal b = other();\n\t\t\t\tuse(b);\n\t\t\t}\n\t\t}';
 		Assert.equals(1, v(code).length);
 		Assert.equals(
-			canon(
-				wrap(
-					'for (x in xs) {\n\t\t\t@:nullSafety(Off) var b:String = pre();\n\t\t\tif (!cond) continue;\n\t\t\tfinal b2 = other();\n\t\t\tuse(b2);\n\t\t}'
-				)
-			),
+			canon(wrap(
+				'for (x in xs) {\n\t\t\t@:nullSafety(Off) var b:String = pre();\n\t\t\tif (!cond) continue;\n\t\t\tfinal b2 = other();\n\t\t\tuse(b2);\n\t\t}'
+			)),
 			fx(code)
 		);
 	}

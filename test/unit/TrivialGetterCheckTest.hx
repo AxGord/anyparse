@@ -33,11 +33,9 @@ import anyparse.runtime.Span;
 class TrivialGetterCheckTest extends Test {
 
 	public function testBasicBlockBodyFlagged(): Void {
-		final vs: Array<Violation> = violations(
-			cls(
-				'public var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tprivate function get_active():Bool { return _active; }'
-			)
-		);
+		final vs: Array<Violation> = violations(cls(
+			'public var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tprivate function get_active():Bool { return _active; }'
+		));
 		Assert.equals(1, vs.length);
 		Assert.equals('trivial-getter', vs[0].rule);
 		Assert.equals(Severity.Info, vs[0].severity);
@@ -50,22 +48,18 @@ class TrivialGetterCheckTest extends Test {
 	public function testExpressionBodyFlagged(): Void {
 		Assert.equals(
 			1,
-			violations(
-				cls(
-					'public var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tprivate inline function get_active():Bool return _active;'
-				)
-			).length
+			violations(cls(
+				'public var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tprivate inline function get_active():Bool return _active;'
+			)).length
 		);
 	}
 
 	public function testThisAccessFlagged(): Void {
 		Assert.equals(
 			1,
-			violations(
-				cls(
-					'public var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool { return this._active; }'
-				)
-			).length
+			violations(cls(
+				'public var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool { return this._active; }'
+			)).length
 		);
 	}
 
@@ -87,11 +81,9 @@ class TrivialGetterCheckTest extends Test {
 	public function testDifferentFieldNameStillFlagged(): Void {
 		Assert.equals(
 			1,
-			violations(
-				cls(
-					'public var active(get, never):Bool;\n\tprivate var backing:Bool = false;\n\tfunction get_active():Bool return backing;'
-				)
-			).length
+			violations(cls(
+				'public var active(get, never):Bool;\n\tprivate var backing:Bool = false;\n\tfunction get_active():Bool return backing;'
+			)).length
 		);
 	}
 
@@ -107,11 +99,9 @@ class TrivialGetterCheckTest extends Test {
 	public function testExtraStatementNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(
-				cls(
-					'public var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool { trace(\'x\'); return _active; }'
-				)
-			).length
+			violations(cls(
+				'public var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool { trace(\'x\'); return _active; }'
+			)).length
 		);
 	}
 
@@ -122,11 +112,9 @@ class TrivialGetterCheckTest extends Test {
 	public function testDynamicGetterNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(
-				cls(
-					'public var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tdynamic function get_active():Bool return _active;'
-				)
-			).length
+			violations(cls(
+				'public var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tdynamic function get_active():Bool return _active;'
+			)).length
 		);
 	}
 
@@ -142,11 +130,9 @@ class TrivialGetterCheckTest extends Test {
 	public function testCustomAccessorNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(
-				cls(
-					'public var active(myGet, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction myGet_active():Bool return _active;'
-				)
-			).length
+			violations(cls(
+				'public var active(myGet, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction myGet_active():Bool return _active;'
+			)).length
 		);
 	}
 
@@ -430,11 +416,9 @@ class TrivialGetterCheckTest extends Test {
 	}
 
 	public function testShapeATrivialGetterRealSetterFlagged(): Void {
-		final vs: Array<Violation> = violations(
-			cls(
-				'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }'
-			)
-		);
+		final vs: Array<Violation> = violations(cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }'
+		));
 		Assert.equals(1, vs.length);
 		Assert.equals(
 			'property \'active\' has a trivial getter over backing field \'_active\'; use \'var active(default, set)\' and remove get_active',
@@ -443,11 +427,9 @@ class TrivialGetterCheckTest extends Test {
 	}
 
 	public function testShapeAFixToDefaultSet(): Void {
-		final fixed: String = fixedText(
-			cls(
-				'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }'
-			)
-		);
+		final fixed: String = fixedText(cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }'
+		));
 		Assert.isTrue(fixed.indexOf('active(default, set)') >= 0);
 		Assert.isTrue(fixed.indexOf('= false') >= 0);
 		Assert.isTrue(fixed.indexOf('return active = v') >= 0);
@@ -456,11 +438,9 @@ class TrivialGetterCheckTest extends Test {
 	}
 
 	public function testShapeAExternalWriteBypassFlagged(): Void {
-		final vs: Array<Violation> = violations(
-			cls(
-				'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction reset():Void { _active = true; }'
-			)
-		);
+		final vs: Array<Violation> = violations(cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction reset():Void { _active = true; }'
+		));
 		Assert.equals(1, vs.length);
 		Assert.equals(
 			'property \'active\' has a trivial getter over backing field \'_active\'; use \'var active(default, set)\', remove get_active and mark 1 external write(s) with @:bypassAccessor',
@@ -500,11 +480,9 @@ class TrivialGetterCheckTest extends Test {
 	}
 
 	public function testBothTrivialCollapsesToPlainVar(): Void {
-		final vs: Array<Violation> = violations(
-			cls(
-				'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool return _active = v;'
-			)
-		);
+		final vs: Array<Violation> = violations(cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool return _active = v;'
+		));
 		Assert.equals(1, vs.length);
 		Assert.equals(
 			'property \'active\' has a trivial getter and setter over backing field \'_active\'; use a plain field \'var active\' and remove get_active/set_active',
@@ -522,11 +500,9 @@ class TrivialGetterCheckTest extends Test {
 	}
 
 	public function testShapeCTrivialSetterRealGetterFlagged(): Void {
-		final vs: Array<Violation> = violations(
-			cls(
-				'public var count(get, set):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count + 1;\n\tfunction set_count(v:Int):Int return _count = v;'
-			)
-		);
+		final vs: Array<Violation> = violations(cls(
+			'public var count(get, set):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count + 1;\n\tfunction set_count(v:Int):Int return _count = v;'
+		));
 		Assert.equals(1, vs.length);
 		Assert.equals(
 			'property \'count\' has a trivial setter over backing field \'_count\'; use \'var count(get, default)\' and remove set_count',
@@ -535,11 +511,9 @@ class TrivialGetterCheckTest extends Test {
 	}
 
 	public function testShapeCFixToGetDefault(): Void {
-		final fixed: String = fixedText(
-			cls(
-				'public var count(get, set):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count + 1;\n\tfunction set_count(v:Int):Int return _count = v;'
-			)
-		);
+		final fixed: String = fixedText(cls(
+			'public var count(get, set):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count + 1;\n\tfunction set_count(v:Int):Int return _count = v;'
+		));
 		Assert.isTrue(fixed.indexOf('count(get, default):Int = 0') >= 0);
 		Assert.isTrue(fixed.indexOf('return count + 1') >= 0);
 		Assert.isTrue(fixed.indexOf('set_count') == -1);
@@ -574,11 +548,9 @@ class TrivialGetterCheckTest extends Test {
 	}
 
 	public function testShapeABypassFix(): Void {
-		final fixed: String = fixedText(
-			cls(
-				'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction reset():Void { _active = true; }'
-			)
-		);
+		final fixed: String = fixedText(cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction reset():Void { _active = true; }'
+		));
 		Assert.isTrue(fixed.indexOf('@:bypassAccessor active = true') >= 0);
 		Assert.isTrue(fixed.indexOf('active(default, set)') >= 0);
 		Assert.isTrue(fixed.indexOf('get_active') == -1);
@@ -1025,11 +997,9 @@ class TrivialGetterCheckTest extends Test {
 		// mutating use of the backing field (`resize`, assignment to an Array slot).
 		Assert.equals(
 			0,
-			violations(
-				cls(
-					'public var headers(get, never):ReadOnlyArray<Header>;\n\tprivate final _headers:Array<Header> = [];\n\tprivate inline function get_headers():ReadOnlyArray<Header> return _headers;'
-				)
-			).length
+			violations(cls(
+				'public var headers(get, never):ReadOnlyArray<Header>;\n\tprivate final _headers:Array<Header> = [];\n\tprivate inline function get_headers():ReadOnlyArray<Header> return _headers;'
+			)).length
 		);
 	}
 
@@ -1056,13 +1026,11 @@ class TrivialGetterCheckTest extends Test {
 	 * `VarMore`, and an initializer reading the backing field keeps the collapse refused.
 	 */
 	public function testMultiVarDeclStillRefusesFix(): Void {
-		assertFixRefused(
-			cls(
-				'public var frame(get, never):Int;\n' + '\tprivate var _currentFrame:Int = 0;\n'
-				+ '\tprivate inline function get_frame():Int return _currentFrame;\n'
-				+ '\tpublic function touch():Void { var a = _currentFrame, frame = 2; trace(a + frame); }'
-			)
-		);
+		assertFixRefused(cls(
+			'public var frame(get, never):Int;\n' + '\tprivate var _currentFrame:Int = 0;\n'
+			+ '\tprivate inline function get_frame():Int return _currentFrame;\n'
+			+ '\tpublic function touch():Void { var a = _currentFrame, frame = 2; trace(a + frame); }'
+		));
 	}
 
 }

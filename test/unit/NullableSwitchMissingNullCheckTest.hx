@@ -116,11 +116,9 @@ class NullableSwitchMissingNullCheckTest extends Test {
 	public function testGuardedBareFieldSubjectNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(
-				cls(
-					'var fld:Null<Int> = null;\n\tfunction f():Void { if (fld == null) return; switch fld { case 1: trace(1); case _: trace(0); } }'
-				)
-			).length
+			violations(cls(
+				'var fld:Null<Int> = null;\n\tfunction f():Void { if (fld == null) return; switch fld { case 1: trace(1); case _: trace(0); } }'
+			)).length
 		);
 	}
 
@@ -134,11 +132,9 @@ class NullableSwitchMissingNullCheckTest extends Test {
 	public function testLengthGuardedPopNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(
-				cls(
-					'function f(stack:Array<Int>):Void { while (stack.length > 0) { final node = stack.pop(); switch node { case 1: trace(1); case _: trace(0); } } }'
-				)
-			).length
+			violations(cls(
+				'function f(stack:Array<Int>):Void { while (stack.length > 0) { final node = stack.pop(); switch node { case 1: trace(1); case _: trace(0); } } }'
+			)).length
 		);
 	}
 
@@ -200,11 +196,9 @@ class NullableSwitchMissingNullCheckTest extends Test {
 		// A compound `||` argument proves no single operand — the positional scanner refuses it.
 		Assert.equals(
 			1,
-			violations(
-				cls(
-					'function f(x:Null<Int>, y:Bool):Void { Assert.isTrue(y || x != null); switch x { case 1: trace(1); case _: trace(0); } }'
-				)
-			).length
+			violations(cls(
+				'function f(x:Null<Int>, y:Bool):Void { Assert.isTrue(y || x != null); switch x { case 1: trace(1); case _: trace(0); } }'
+			)).length
 		);
 	}
 

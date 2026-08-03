@@ -41,9 +41,9 @@ class PreferFindCheckTest extends Test {
 	}
 
 	public function testBreakFormFlagged(): Void {
-		final vs: Array<Violation> = violations(fn(
-			'var r:Null<Int> = null;\n\t\tfor (x in xs) if (x > 2) { r = x; break; }\n\t\treturn r;', 'Null<Int>'
-		));
+		final vs: Array<Violation> = violations(
+			fn('var r:Null<Int> = null;\n\t\tfor (x in xs) if (x > 2) { r = x; break; }\n\t\treturn r;', 'Null<Int>')
+		);
 		Assert.equals(1, vs.length);
 		Assert.equals('prefer-find', vs[0].rule);
 		Assert.isTrue(vs[0].message.indexOf('xs.find(x -> x > 2)') != -1);
@@ -125,9 +125,9 @@ class PreferFindCheckTest extends Test {
 	}
 
 	public function testFixBreakFormRewritesAndDeletesLoop(): Void {
-		final out: String = fixResult(file(
-			'var r:Null<Int> = null;\n\t\tfor (x in xs) if (x > 2) { r = x; break; }\n\t\treturn r;', 'Null<Int>', true
-		));
+		final out: String = fixResult(
+			file('var r:Null<Int> = null;\n\t\tfor (x in xs) if (x > 2) { r = x; break; }\n\t\treturn r;', 'Null<Int>', true)
+		);
 		Assert.isTrue(out.indexOf('var r:Null<Int> = xs.find(x -> x > 2);') != -1);
 		Assert.isTrue(out.indexOf('for (') == -1);
 		Assert.isTrue(out.indexOf('break') == -1);
@@ -176,17 +176,17 @@ class PreferFindCheckTest extends Test {
 	}
 
 	public function testFixNonNullableBreakDeclNotRewritten(): Void {
-		final out: String = fixResult(file(
-			'var found:Int = null;\n\t\tfor (x in xs) if (x > 2) { found = x; break; }\n\t\treturn found;', 'Int', true
-		));
+		final out: String = fixResult(
+			file('var found:Int = null;\n\t\tfor (x in xs) if (x > 2) { found = x; break; }\n\t\treturn found;', 'Int', true)
+		);
 		Assert.isTrue(out.indexOf('.find(') == -1);
 		Assert.isTrue(out.indexOf('for (') != -1);
 	}
 
 	public function testFixExtraBodyStatementNotRewritten(): Void {
-		final out: String = fixResult(file(
-			'for (x in xs) if (x > 2) { Assert.fail("bad"); return x; }\n\t\treturn null;', 'Null<Int>', false
-		));
+		final out: String = fixResult(
+			file('for (x in xs) if (x > 2) { Assert.fail("bad"); return x; }\n\t\treturn null;', 'Null<Int>', false)
+		);
 		Assert.isTrue(out.indexOf('.find(') == -1);
 		Assert.isTrue(out.indexOf('for (') != -1);
 	}

@@ -38,11 +38,9 @@ class ReturnReassignTernaryCheckTest extends Test {
 
 	/** The TM reference shape (`src/api/API.hx`): the tail guard on an accumulator string. */
 	public function testReferenceShapeFixed(): Void {
-		final es: Array<{ span: Span, text: String }> = edits(
-			fn(
-				'var errorMessages = g();\n\t\tif (errorMessages.length == 0) errorMessages = unknownErrorMessage(localize);\n\t\treturn errorMessages;'
-			)
-		);
+		final es: Array<{ span: Span, text: String }> = edits(fn(
+			'var errorMessages = g();\n\t\tif (errorMessages.length == 0) errorMessages = unknownErrorMessage(localize);\n\t\treturn errorMessages;'
+		));
 		Assert.equals(1, es.length);
 		Assert.equals('return errorMessages.length == 0 ? unknownErrorMessage(localize) : errorMessages;', es[0].text);
 	}
@@ -254,12 +252,10 @@ class ReturnReassignTernaryCheckTest extends Test {
 	 * only the tail merges -- `prefer-final` must NOT follow.
 	 */
 	public function testAccumulatorStaysVar(): Void {
-		final merged: String = applyFixOnce(
-			canon(
-				'class C {\n\tfunction f(ms:Array<String>):String {\n\t\tvar x = \'\';\n\t\tfor (m in ms) x += m;\n'
-				+ '\t\tif (x.length == 0) x = \'none\';\n\t\treturn x;\n\t}\n}'
-			)
-		);
+		final merged: String = applyFixOnce(canon(
+			'class C {\n\tfunction f(ms:Array<String>):String {\n\t\tvar x = \'\';\n\t\tfor (m in ms) x += m;\n'
+			+ '\t\tif (x.length == 0) x = \'none\';\n\t\treturn x;\n\t}\n}'
+		));
 		Assert.isTrue(merged.indexOf('return x.length == 0 ? \'none\' : x;') >= 0);
 		Assert.isTrue(merged.indexOf('var x = \'\';') >= 0);
 		Assert.equals(merged, applyPreferFinalOnce(merged));

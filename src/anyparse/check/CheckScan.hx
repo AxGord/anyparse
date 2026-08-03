@@ -157,9 +157,9 @@ final class CheckScan {
 		fillParents(root, parents);
 		final byKey: Map<String, QueryNode> = [];
 		RefactorSupport.indexNodesByKind(root, flaggedKinds, byKey);
-		return nonOverlappingEdits(collectSpanEdits(
-			violations, byKey, (node, _) -> conditionEdit(node, alwaysTrueOf(node), parents, source, seams)
-		));
+		return nonOverlappingEdits(
+			collectSpanEdits(violations, byKey, (node, _) -> conditionEdit(node, alwaysTrueOf(node), parents, source, seams))
+		);
 	}
 
 	/**

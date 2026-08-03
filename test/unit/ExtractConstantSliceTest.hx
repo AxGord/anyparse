@@ -169,9 +169,9 @@ class ExtractConstantSliceTest extends Test {
 	/** A literal that does not occur anywhere in the scope is refused. */
 	public function testCrossFileZeroOccurrenceRefused(): Void {
 		final a: String = "package pkg;\n\nclass A {\n\tstatic function f(k: String): Bool {\n\t\treturn k == 'present';\n\t}\n}";
-		assertErrInto(ExtractConstant.extractInto(
-			[{ file: 'A.hx', source: a }], 'pkg', 'Keys', false, null, 'ABSENT', 'absent', true, plugin()
-		));
+		assertErrInto(
+			ExtractConstant.extractInto([{ file: 'A.hx', source: a }], 'pkg', 'Keys', false, null, 'ABSENT', 'absent', true, plugin())
+		);
 	}
 
 	/** A name that is not a valid identifier is refused. */

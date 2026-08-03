@@ -118,9 +118,9 @@ final class ListenerSymmetry implements Check {
 				out.push(finding(file, source, m.span, '\'${m.name}\' has no matching \'$twinName\' declared in this type'));
 			else if (twin.isStatic != m.isStatic) {
 				if (isAdd)
-					out.push(finding(
-						file, source, m.span, '\'${m.name}\' and \'$twinName\' must match in static-ness to form a listener pair'
-					));
+					out.push(
+						finding(file, source, m.span, '\'${m.name}\' and \'$twinName\' must match in static-ness to form a listener pair')
+					);
 			} else if (isAdd && intAbs(m.index - twin.index) != 1)
 				out.push(finding(file, source, m.span, '\'${m.name}\' and \'$twinName\' should be declared next to each other'));
 		}

@@ -200,9 +200,9 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		final nameExpr: Expr = firstNonNullName([
 			for (i in 0...branch.children.length) nameOfValue(branch.children[i], ident(argNames[i]))
 		]);
-		body.push(macro into.push(new anyparse.query.QueryNode(
-			$v{ctor}, $nameExpr, anyparse.query.QueryWalkSupport.orderBySpan(_children), _span
-		)));
+		body.push(macro into.push(
+			new anyparse.query.QueryNode($v{ctor}, $nameExpr, anyparse.query.QueryWalkSupport.orderBySpan(_children), _span)
+		));
 		return { values: [pattern], expr: block(body) };
 	}
 
@@ -226,9 +226,9 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		for (child in node.children) for (e in seqFieldDescent(child, '_children', field(ident('v'), PairedShapeLowering.SPAN_FIELD)))
 			body.push(e);
 		final nameExpr: Expr = call(nameFnName(rule), [ident('v')]);
-		body.push(macro into.push(new anyparse.query.QueryNode(
-			v._kind, $nameExpr, anyparse.query.QueryWalkSupport.orderBySpan(_children), v._span
-		)));
+		body.push(macro into.push(
+			new anyparse.query.QueryNode(v._kind, $nameExpr, anyparse.query.QueryWalkSupport.orderBySpan(_children), v._span)
+		));
 		return block(body);
 	}
 

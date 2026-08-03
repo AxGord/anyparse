@@ -1748,9 +1748,9 @@ class Lowering {
 		// the trailing after the sep (`elem, // c\n`) — covered by the
 		// `_trailingBeforeSep == null && _sepAfter` gate so we don't
 		// double-capture.
-		parseSteps.push(buildTriviaCloseLoopBody(
-			elemCT, elemCall, accumRef, terminationCheck, sepMatchExpr, trailBBLocal, trailNLLocal, trailLCLocal
-		));
+		parseSteps.push(
+			buildTriviaCloseLoopBody(elemCT, elemCall, accumRef, terminationCheck, sepMatchExpr, trailBBLocal, trailNLLocal, trailLCLocal)
+		);
 		if (closeText != null) {
 			parseSteps.push(macro skipWs(ctx));
 			parseSteps.push(macro expectLit(ctx, $v{closeText}));
@@ -3973,9 +3973,9 @@ class Lowering {
 			final predicateName: Null<String> = starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE);
 			final predicateCall: Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRef) : macro false;
 			final sepStartsElement: Bool = starNode.annotations.get(AnnotationKeys.LIT_SEP_STARTS_ELEMENT) == true;
-			parseSteps.push(buildCloseBlockEndedBody(
-				elemCall, accumRef, closeNotNextExpr, sepCharCode, sepText, predicateCall, sepStartsElement
-			));
+			parseSteps.push(
+				buildCloseBlockEndedBody(elemCall, accumRef, closeNotNextExpr, sepCharCode, sepText, predicateCall, sepStartsElement)
+			);
 		} else {
 			parseSteps.push(buildClosePeekBody(elemCall, accumRef, closeNotNextExpr, sepText));
 		}

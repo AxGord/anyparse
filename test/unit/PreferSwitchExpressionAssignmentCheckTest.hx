@@ -160,11 +160,9 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 	public function testConditionalArmNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(
-				wrap(
-					'var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\t#if debug\n\t\t\tcase 2: x = \'b\';\n\t\t\t#end\n\t\t\tcase _: x = \'d\';\n\t\t}'
-				)
-			).length
+			violations(wrap(
+				'var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\t#if debug\n\t\t\tcase 2: x = \'b\';\n\t\t\t#end\n\t\t\tcase _: x = \'d\';\n\t\t}'
+			)).length
 		);
 	}
 
@@ -244,11 +242,9 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 
 	/** The driving case: a field-access l-value assigned in every arm hoists out of the switch. */
 	public function testLvalueFieldFlagged(): Void {
-		final es: Array<{ span: Span, text: String }> = edits(
-			wrap(
-				'switch x {\n\t\t\tcase A: controlsHolder.y = 1;\n\t\t\tcase B: controlsHolder.y = 2;\n\t\t\tcase _: controlsHolder.y = 0;\n\t\t}'
-			)
-		);
+		final es: Array<{ span: Span, text: String }> = edits(wrap(
+			'switch x {\n\t\t\tcase A: controlsHolder.y = 1;\n\t\t\tcase B: controlsHolder.y = 2;\n\t\t\tcase _: controlsHolder.y = 0;\n\t\t}'
+		));
 		Assert.equals(1, es.length);
 		Assert.equals('controlsHolder.y = switch x { case A: 1; case B: 2; case _: 0; };', es[0].text);
 	}
@@ -333,11 +329,9 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 	public function testLvalueConditionalArmNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(
-				wrap(
-					'switch v {\n\t\t\tcase 1: obj.y = 1;\n\t\t\t#if debug\n\t\t\tcase 2: obj.y = 2;\n\t\t\t#end\n\t\t\tcase _: obj.y = 0;\n\t\t}'
-				)
-			).length
+			violations(wrap(
+				'switch v {\n\t\t\tcase 1: obj.y = 1;\n\t\t\t#if debug\n\t\t\tcase 2: obj.y = 2;\n\t\t\t#end\n\t\t\tcase _: obj.y = 0;\n\t\t}'
+			)).length
 		);
 	}
 
@@ -423,11 +417,9 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 	public function testElseLessConditionalInNestedIfArmNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(
-				wrap(
-					'var x:Int;\n\t\tswitch v {\n\t\t\tcase 1: if (e) {\n\t\t\t\tx = if (q) 2;\n\t\t\t} else {\n\t\t\t\tx = 5;\n\t\t\t}\n\t\t\tcase _: x = 9;\n\t\t}'
-				)
-			).length
+			violations(wrap(
+				'var x:Int;\n\t\tswitch v {\n\t\t\tcase 1: if (e) {\n\t\t\t\tx = if (q) 2;\n\t\t\t} else {\n\t\t\t\tx = 5;\n\t\t\t}\n\t\t\tcase _: x = 9;\n\t\t}'
+			)).length
 		);
 	}
 

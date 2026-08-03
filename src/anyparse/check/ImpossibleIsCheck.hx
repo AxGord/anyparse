@@ -71,9 +71,9 @@ final class ImpossibleIsCheck implements Check {
 					final operand: QueryNode = node.children[0];
 					final typeSpan: Null<Span> = node.children[1].span;
 					if (span != null && typeSpan != null) {
-						final sName: Null<String> = TypeResolver.simpleNominalName(TypeResolver.identTypeName(
-							operand, root, shape, declaredTypes
-						));
+						final sName: Null<String> = TypeResolver.simpleNominalName(
+							TypeResolver.identTypeName(operand, root, shape, declaredTypes)
+						);
 						final tName: Null<String> = TypeResolver.simpleNominalName(entry.source.substring(typeSpan.from, typeSpan.to));
 						if (sName != null && tName != null && index.unrelatedClasses(sName, tName)) violations.push({
 							file: entry.file,
