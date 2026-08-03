@@ -17202,22 +17202,31 @@ class WriterLowering {
 	 * THE SPLIT: the emitter contributes what only it knows — every
 	 * sibling's FLAT width — and the renderer contributes what only it
 	 * knows — the indent. This pre-pass writes each element once with the
-	 * coordination CLEARED (`_setCaseSiblingWidth(opt, -1)`, so the probe
-	 * is absent from the measured Doc) and takes the maximum
-	 * `WrapList.flatLength`. `-1` results (an element whose Doc commits to
-	 * a hardline: a glued body, a multi-statement body, a refused body, a
-	 * `#if` region) contribute nothing — they could not have shared the
-	 * label line under ANY budget, so they are not evidence that the switch
-	 * is too wide. All elements `-1` ⇒ the pre-pass yields `-1` and the
-	 * emit stays uncoordinated, which is what keeps an all-glued switch
-	 * (a comparator table of `case X: (a, b) -> { … }`) exactly as it
-	 * renders without this slice.
+	 * coordination suppressed and takes the maximum `WrapList.flatLength`.
+	 * `SIBLING_NONE` results (an element whose Doc commits to a hardline: a
+	 * glued body, a multi-statement body, a refused body, a `#if` region)
+	 * contribute nothing — they could not have shared the label line under
+	 * ANY budget, so they are not evidence that the switch is too wide. All
+	 * elements negative ⇒ the pre-pass yields `SIBLING_NONE` and the emit
+	 * stays uncoordinated, which is what keeps an all-glued switch (a
+	 * comparator table of `case X: (a, b) -> { … }`) exactly as it renders
+	 * without this slice.
 	 *
 	 * `WrapList.flatLength` is the measure specifically because it DESCENDS
 	 * `BodyGroup` where `Renderer.fitsFlat` defers it — the T16b lesson:
 	 * anything that reads render-time group state makes the verdict depend
 	 * on the source's line shape, and `fmt` then needs a second pass to
 	 * settle.
+	 *
+	 * WHY THE PRE-PASS DOES NOT NEST (ω-case-sym-linear): writing an element
+	 * twice — once to measure, once to emit — costs 2x per switch LEVEL, so
+	 * a switch nested d deep cost 2^d. The recursion is pure waste, because
+	 * `flatLength` forwards `IfIndentWidthExceeds` to its FLAT branch: a
+	 * nested switch's own coordination is INVISIBLE to the measurement that
+	 * contains it. The `SIBLING_PROBING` marker therefore rides down the
+	 * whole subtree — every Star already inside a pre-pass returns it
+	 * unchanged instead of running its own — so each level is measured once
+	 * and emitted once. Depth-15 nesting went from ~6s to flat.
 	 *
 	 * The knob gate keeps the double write off every config that cannot use
 	 * it: the pre-pass runs only when the policy the case bodies will
@@ -17235,14 +17244,20 @@ class WriterLowering {
 			pos: Context.currentPos(),
 		};
 		return macro {
-			var _csMax: Int = -1;
-			if ((opt._inExprPosition ? $exprAccess : $stmtAccess) == $fitPat) {
-				final _csOpt = _setCaseSiblingWidth(opt, -1);
-				var _csI: Int = 0;
-				while (_csI < _arr.length) {
-					final _csFlat: Int = anyparse.format.wrap.WrapList.flatLength($probeCall);
-					if (_csFlat > _csMax) _csMax = _csFlat;
-					_csI++;
+			var _csMax: Int = anyparse.format.BodyFit.SIBLING_PROBING;
+			if (opt._caseSiblingFlatWidth != anyparse.format.BodyFit.SIBLING_PROBING) {
+				_csMax = anyparse.format.BodyFit.SIBLING_NONE;
+				// A one-element list cannot be asymmetric: the coordinated
+				// verdict on a lone sibling is by definition its own
+				// uncoordinated one, so the pre-pass would buy nothing.
+				if (_arr.length > 1 && (opt._inExprPosition ? $exprAccess : $stmtAccess) == $fitPat) {
+					final _csOpt = _setCaseSiblingWidth(opt, anyparse.format.BodyFit.SIBLING_PROBING);
+					var _csI: Int = 0;
+					while (_csI < _arr.length) {
+						final _csFlat: Int = anyparse.format.wrap.WrapList.flatLength($probeCall);
+						if (_csFlat > _csMax) _csMax = _csFlat;
+						_csI++;
+					}
 				}
 			}
 			_csMax;

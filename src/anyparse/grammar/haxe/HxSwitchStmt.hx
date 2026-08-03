@@ -44,6 +44,28 @@ package anyparse.grammar.haxe;
  * `HxClassDecl.members` still uses bare `leftCurly` because class/
  * interface/abstract member braces are not Block-category in fork's
  * `detectCurlyPolicy`.
+ *
+ * `@:fmt(caseSiblingSymmetry('caseBody', 'expressionCase'))`
+ * (ω-case-sibling-symmetry) opts this Star into the per-SWITCH placement
+ * verdict: a widest-sibling pre-pass measures every element's flat width
+ * and hands the maximum to all of them, so if one case body takes the
+ * width-driven break they all do. The two names are the statement- and
+ * expression-position body policies whose `FitLine` value arms it; under
+ * every other policy the Star behaves exactly as before. See
+ * `WriterLowering.caseSiblingWidthProbeExpr` for what does and does not
+ * count as a trigger.
+ *
+ * `#if` INTERACTS ONE-DIRECTIONALLY, by construction. A conditional case
+ * region projects as a single `HxSwitchCase.Conditional` /
+ * `CondSpliceCase` element whose Doc carries directive hardlines, so its
+ * `WrapList.flatLength` is `-1`. A `-1` element contributes nothing to
+ * the maximum but still receives the verdict — so a `#if`-guarded case
+ * FOLLOWS a plain sibling's break (probed: it moves down with the rest),
+ * and can never LEAD one (probed: a switch whose only over-wide body sits
+ * inside `#if` keeps the mixed shape). Making a conditional region able
+ * to trigger needs its inner cases measured through the directive lines,
+ * which is a separate slice; the current behaviour is safe in the sense
+ * that it never spreads a switch that nothing else spread.
  */
 @:peg
 typedef HxSwitchStmt = {

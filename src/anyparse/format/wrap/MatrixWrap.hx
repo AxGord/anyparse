@@ -111,11 +111,20 @@ final class MatrixWrap {
 				case Fill(parts, sep, _) | FillWithRestProbe(parts, sep, _) | FillBreakAfterWrap(parts, sep, _):
 					for (p in parts) stack.push(p);
 					stack.push(sep);
+				case IfIndentWidthExceeds(_, _, _, flat):
+					// ω-case-sym-linear: `IfIndentWidthExceeds` is EXCLUDED from the
+					// both-branch descent on purpose. Its two branches wrap the SAME
+					// body object and differ only in the separator before it, so a walk
+					// asking about subtree CONTENT sees the identical answer either way
+					// — while descending both doubles the visited node count per nested
+					// probe, i.e. 2^depth for nested switches. One branch is the whole
+					// content and costs one traversal.
+					stack.push(flat);
 				case IfBreak(brk, flat) | IfWidthExceeds(_, brk, flat) | IfFirstLineExceeds(_, brk, flat) | IfLineExceeds(_, brk, flat) | IfResidualLineExceeds(
 					_, brk, flat
 				) | IfFullLineExceeds(_, brk, flat) | IfNaturalFirstLineExceeds(_, brk, flat) | IfNaturalFirstLineFitsOpenDelim(
 					_, brk, flat
-				) | IfArrowContinuationFits(_, _, _, brk, flat) | IfIndentWidthExceeds(_, _, brk, flat):
+				) | IfArrowContinuationFits(_, _, _, brk, flat):
 					stack.push(brk);
 					stack.push(flat);
 			}

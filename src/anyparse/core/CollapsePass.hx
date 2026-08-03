@@ -1007,11 +1007,20 @@ fitems.length > 1
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
+				case IfIndentWidthExceeds(_, _, _, fl):
+					// ω-case-sym-linear: `IfIndentWidthExceeds` is EXCLUDED from the
+					// both-branch descent on purpose. Its two branches wrap the SAME
+					// body object and differ only in the separator before it, so a walk
+					// asking about subtree CONTENT sees the identical answer either way
+					// — while descending both doubles the visited node count per nested
+					// probe, i.e. 2^depth for nested switches. One branch is the whole
+					// content and costs one traversal.
+					stack.push(fl);
 				case IfBreak(brk, fl) | IfWidthExceeds(_, brk, fl) | IfFirstLineExceeds(_, brk, fl) | IfLineExceeds(_, brk, fl) | IfResidualLineExceeds(
 					_, brk, fl
-				) | IfIndentWidthExceeds(_, _, brk, fl) | IfFullLineExceeds(_, brk, fl) | IfNaturalFirstLineExceeds(_, brk, fl) | IfNaturalFirstLineFitsOpenDelim(
-					_, brk, fl
-				) | IfArrowContinuationFits(_, _, _, brk, fl):
+				) | IfFullLineExceeds(_, brk, fl) | IfNaturalFirstLineExceeds(_, brk, fl) | IfNaturalFirstLineFitsOpenDelim(_, brk, fl) | IfArrowContinuationFits(
+					_, _, _, brk, fl
+				):
 					stack.push(brk);
 					stack.push(fl);
 				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):

@@ -57,6 +57,30 @@ import anyparse.format.wrap.WrapList;
 final class BodyFit {
 
 	/**
+	 * `_caseSiblingFlatWidth` sentinel: no sibling coordination — every body
+	 * decides for itself, exactly as before ω-case-sibling-symmetry. What a
+	 * case-list Star records when it is not opted in, when its policy is not
+	 * `FitLine`, when it holds one element or fewer, or when no element could
+	 * have rendered inline at all.
+	 */
+	public static inline final SIBLING_NONE: Int = -1;
+
+	/**
+	 * `_caseSiblingFlatWidth` sentinel: a widest-sibling pre-pass is IN
+	 * PROGRESS somewhere above (ω-case-sym-linear). Suppresses coordination
+	 * like `SIBLING_NONE`, and additionally tells every nested case-list Star
+	 * to skip its OWN pre-pass and pass the marker further down.
+	 *
+	 * The suppression has no output consequence because the pre-pass consumes
+	 * its Docs only through `WrapList.flatLength`, which forwards
+	 * `IfIndentWidthExceeds` to the FLAT branch — a nested switch's
+	 * coordination cannot change the width being measured. Without the marker
+	 * every nesting level re-measures its whole subtree, which is the
+	 * 2^depth blow-up this sentinel exists to prevent.
+	 */
+	public static inline final SIBLING_PROBING: Int = -2;
+
+	/**
 	 * Build the `FitLine` placement Doc for `body` under a header rendered at
 	 * the enclosing indent.
 	 *
