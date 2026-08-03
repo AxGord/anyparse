@@ -371,6 +371,29 @@ enum Doc {
 	 * (`DocMeasure.flatTokenWidth`) — column-independent, so no render-time
 	 * measurer call is needed; the arm just checks
 	 * `f.indent + extraIndent + flatWidth < n`.
+	 *
+	 * SLOT INVERSION at the two NON-arrow consumers. `WrapList.shapeSingleArgGlue`
+	 * reuses this ctor twice — for a sole `{`-object-literal argument
+	 * (ω-callparam-single-objectlit) and for the sole-argument outer-first probe
+	 * (ω-outer-first-wrap) — and both pass `breakDoc` = the GLUED / fall-through
+	 * shape and `flatDoc` = the OPEN-paren shape, the reverse of the arrow
+	 * consumer's pairing. The arm itself is unchanged (fits → `flatDoc`); what
+	 * swaps is which layout each slot holds, because at those sites "fits at the
+	 * continuation" is the reason to OPEN the call rather than to keep it inline.
+	 *
+	 * That inversion is visible to every walker that resolves this ctor to ONE
+	 * slot. `WrapList.flatLength` takes `flatDoc`, so for such a call it walks a
+	 * shape carrying hardlines and answers `-1` — "cannot be laid out on one
+	 * line" — even though the call's glued form is perfectly flat. Two behaviours
+	 * currently rest on that answer, so do not "correct" it without reading both:
+	 *  - `WriterLowering.caseSiblingWidthProbeExpr` (ω-case-sibling-symmetry)
+	 *    consumes its bodies only through `flatLength`, so a case body holding
+	 *    such a call never raises the widest-sibling maximum and the group falls
+	 *    back to `BodyFit.SIBLING_NONE` — sibling coordination cannot be
+	 *    triggered by one;
+	 *  - the enclosing natural-first-line walk sees the OPEN shape and therefore
+	 *    keeps an outer prefix glued, pinned by
+	 *    `HxCallParamOuterFirstWrapSliceTest.testNestedCallSoleArgHugsWhenTheInnerCallLeadingBreaks`.
 	 */
 	IfArrowContinuationFits(extraIndent: Int, flatWidth: Int, n: Int, breakDoc: Doc, flatDoc: Doc);
 
