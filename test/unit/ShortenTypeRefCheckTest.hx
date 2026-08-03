@@ -13,12 +13,12 @@ import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.runtime.Span;
 
 /**
- * The `shorten-type-ref` check: a DOTTED type reference in a local `var` / `final` annotation
- * the file itself spells differently. Covers the `pack.SubType` HYBRID repair (to the short
- * name with the import present, to the module-qualified path without it), plain
- * over-qualification, the shadowed path left alone, the index proof degrading a run to
- * report-only, the per-type-parameter proof, the `#if` and multi-declarator refusals, and
- * idempotency.
+ * The `shorten-type-ref` check: a DOTTED type reference the file itself spells differently.
+ * Covers the `pack.SubType` HYBRID repair (to the short name with the import present, to the
+ * module-qualified path without it), plain over-qualification across every type position the
+ * grammar projects, the add-import arm and its threshold, the `#if` counting / rewriting /
+ * freeness split, the five conflict gates, the metadata-argument and value-receiver refusals,
+ * the index proof degrading a run to report-only, and idempotency.
  */
 class ShortenTypeRefCheckTest extends Test {
 
@@ -37,24 +37,24 @@ class ShortenTypeRefCheckTest extends Test {
 		Assert.isTrue(vs[0].message.indexOf('report-only') == -1, 'proven, got: ${vs[0].message}');
 	}
 
-	public function testViolationSpanIsTheAnnotationOnly(): Void {
+	public function testViolationSpanIsThePathOnly(): Void {
 		final src: String = consumer('import pkg.deep.Mod.Sub;\n\n', 'pkg.deep.Sub');
 		final vs: Array<Violation> = violations(src);
 		Assert.equals('pkg.deep.Sub', src.substring(vs[0].span.from, vs[0].span.to));
 	}
 
 	/**
-	 * The whole point of the rule: with the import GONE the hybrid no longer resolves, so the
+	 * The whole point of arm 1: with the import GONE the hybrid no longer resolves, so the
 	 * repair is the module-qualified path — never the short name (nothing binds it here) and
-	 * never a fresh import.
+	 * never a fresh import (one occurrence is below the threshold).
 	 */
 	public function testHybridWithoutTheImportBecomesModuleQualified(): Void {
 		final out: String = applyFix(consumer('', 'pkg.deep.Sub'));
 		Assert.equals('\t\tfinal v:pkg.deep.Mod.Sub = g();', annotationLine(out));
-		Assert.equals(-1, out.indexOf('import '), 'the rule never adds an import');
+		Assert.equals(-1, out.indexOf('import '), 'no import for a single occurrence');
 	}
 
-	// --- ARM 2: plain over-qualification ---
+	// --- ARM 2: the short name is already visible ---
 
 	public function testImportedMainTypeShortens(): Void {
 		Assert.equals('\t\tfinal v:Foo = g();', annotationLine(applyFix(consumer('import pkg.deep.Foo;\n\n', 'pkg.deep.Foo'))));
@@ -75,6 +75,255 @@ class ShortenTypeRefCheckTest extends Test {
 		Assert.equals(0, violations(consumer('import pkg.deep.Foo;\n\n', 'Foo')).length);
 	}
 
+	public function testIsOperandShortens(): Void {
+		final out: String = applyFix(inClass('import pkg.deep.Foo;\n\n', '\t\tif (g() is pkg.deep.Foo) g();\n'));
+		Assert.isTrue(out.indexOf('if (g() is Foo)') != -1, 'shortened, got: $out');
+	}
+
+	public function testNewExpressionShortens(): Void {
+		final out: String = applyFix(inClass('import pkg.deep.Foo;\n\n', '\t\tfinal v = new pkg.deep.Foo();\n'));
+		Assert.isTrue(out.indexOf('new Foo();') != -1, 'shortened, got: $out');
+	}
+
+	public function testStaticAccessChainShortens(): Void {
+		final out: String = applyFix(inClass('import pkg.deep.Foo;\n\n', '\t\tg(pkg.deep.Foo.make());\n'));
+		Assert.isTrue(out.indexOf('g(Foo.make());') != -1, 'shortened, got: $out');
+	}
+
+	public function testHeritageShortens(): Void {
+		final src: String = 'package app;\n\nimport pkg.deep.Foo;\n\nclass C extends pkg.deep.Foo {\n\n}\n';
+		Assert.isTrue(applyFix(src).indexOf('class C extends Foo {') != -1, 'shortened, got: ${applyFix(src)}');
+	}
+
+	/**
+	 * Field, parameter and return annotations. The rule was locals-only while it sliced an
+	 * annotation REGION out of the source text; the type-refs projection hands each nominal out
+	 * as a node with an exact span, so every host shape is now the same code.
+	 */
+	public function testFieldParameterAndReturnAnnotationsShorten(): Void {
+		final src: String =
+			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic var field:pkg.deep.Foo;\n\n\tpublic function f(p:pkg.deep.Foo):pkg.deep.Foo {\n\t\treturn p;\n\t}\n\n}\n';
+		Assert.equals(3, violations(src).length);
+		final out: String = applyFix(src);
+		Assert.isTrue(out.indexOf('public var field:Foo;') != -1, 'field, got: $out');
+		Assert.isTrue(out.indexOf('function f(p:Foo):Foo {') != -1, 'param + return, got: $out');
+	}
+
+	// --- ARM 3: add the import ---
+
+	public function testRepeatedPathGainsAnImport(): Void {
+		final out: String = applyFix(inClass('', '\t\tg(pkg.deep.Foo.make());\n\t\tg(pkg.deep.Foo.other());\n'));
+		// The raw edit anchors on the `package` statement's own end; `lint --fix` canonicalises the
+		// file afterwards, which is what restores the blank line between the two.
+		Assert.equals('package app;\nimport pkg.deep.Foo;\n\n', out.substring(0, out.indexOf('class C')));
+		Assert.isTrue(out.indexOf('g(Foo.make());') != -1 && out.indexOf('g(Foo.other());') != -1, 'both shortened, got: $out');
+	}
+
+	public function testTheAddedImportIsReportedAsSuch(): Void {
+		final vs: Array<Violation> = violations(inClass('', '\t\tg(pkg.deep.Foo.make());\n\t\tg(pkg.deep.Foo.other());\n'));
+		Assert.equals(2, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('an import would let it') != -1, 'import arm, got: ${vs[0].message}');
+	}
+
+	public function testOneImportForSeveralOccurrences(): Void {
+		final out: String = applyFix(inClass('', '\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n\t\tg(pkg.deep.Foo.c());\n'));
+		Assert.isTrue(out.indexOf('import pkg.deep.Foo;') != -1, 'import added, got: $out');
+		Assert.equals(out.indexOf('import pkg.deep.Foo;'), out.lastIndexOf('import pkg.deep.Foo;'));
+	}
+
+	/**
+	 * The insert respects the ORDER the file's own import block carries — `ImportOrder` owns
+	 * that, and this is the assertion that the rule goes through it rather than appending.
+	 */
+	public function testTheImportLandsInsideASortedBlock(): Void {
+		final out: String = applyFix(inClass(
+			'import aaa.First;\nimport zzz.Last;\n\n', '\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n'
+		));
+		Assert.equals(
+			'package app;\n\nimport aaa.First;\nimport pkg.deep.Foo;\nimport zzz.Last;\n\n', out.substring(0, out.indexOf('class C'))
+		);
+	}
+
+	public function testAnUnsortedBlockIsAppendedTo(): Void {
+		final out: String = applyFix(inClass(
+			'import zzz.Last;\nimport aaa.First;\n\n', '\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n'
+		));
+		Assert.equals(
+			'package app;\n\nimport zzz.Last;\nimport aaa.First;\nimport pkg.deep.Foo;\n\n', out.substring(0, out.indexOf('class C'))
+		);
+	}
+
+	public function testSingleOccurrenceGetsNoImport(): Void {
+		final src: String = inClass('', '\t\tg(pkg.deep.Foo.make());\n');
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	public function testTwoDifferentPathsEachGainTheirOwnImport(): Void {
+		final out: String = applyFix(
+			inClass('', '\t\tg(pkg.deep.Foo.a(), pkg.deep.Bar.a());\n\t\tg(pkg.deep.Foo.b(), pkg.deep.Bar.b());\n')
+		);
+		Assert.equals('package app;\nimport pkg.deep.Bar;\nimport pkg.deep.Foo;\n\n', out.substring(0, out.indexOf('class C')));
+		Assert.isTrue(out.indexOf('g(Foo.a(), Bar.a());') != -1, 'both shortened, got: $out');
+	}
+
+	public function testImportArmIsIdempotent(): Void {
+		final once: String = applyFix(inClass('', '\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n'));
+		Assert.isTrue(once.indexOf('import pkg.deep.Foo;') != -1, 'import added, got: $once');
+		Assert.equals(0, violations(once).length, 'the rewritten source is already canonical');
+		Assert.equals(once, applyFix(once));
+	}
+
+	// --- conditional compilation ---
+
+	public function testConditionalRegionIsNotRewritten(): Void {
+		final src: String =
+			'package app;\n\nimport pkg.deep.Mod.Sub;\n\nclass C {\n\n\tpublic function f():Void {\n\t\t#if debug\n\t\tfinal v:pkg.deep.Sub = g();\n\t\t#end\n\t}\n\n}\n';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * An EXPRESSION-position `#if` projects as `ConditionalExpr`, not the `Conditional` that
+	 * `RefShape.conditionalMemberKind` names — which is why the skip tests the `#if` DIRECTIVE
+	 * rather than a kind.
+	 */
+	public function testConditionalExpressionRegionIsNotRewritten(): Void {
+		final src: String =
+			'package app;\n\nimport pkg.deep.Mod.Sub;\n\nclass C {\n\n\tpublic function f():Void {\n\t\tfinal x = #if debug { final v:pkg.deep.Sub = g(); v; } #else 0 #end;\n\t}\n\n}\n';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/** Gate 4: every occurrence guarded means no import — the file may not spell the name at all in some build. */
+	public function testConditionalOnlyOccurrencesGetNoImport(): Void {
+		final src: String = inClass('', '\t\t#if sys\n\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n\t\t#end\n');
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/** A guarded occurrence does not COUNT: one plain use plus one guarded use stays below the threshold. */
+	public function testConditionalOccurrenceDoesNotCountTowardTheThreshold(): Void {
+		final src: String = inClass('', '\t\tg(pkg.deep.Foo.a());\n\t\t#if sys\n\t\tg(pkg.deep.Foo.b());\n\t\t#end\n');
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/**
+	 * A guarded occurrence IS exempt from the printer's freeness scan, though — it is still the
+	 * path's own text. Without the exemption the guarded `Foo` would read as a foreign binding
+	 * and veto the import the two plain uses have earned.
+	 */
+	public function testConditionalOccurrenceDoesNotVetoTheImport(): Void {
+		final out: String = applyFix(inClass(
+			'', '\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n\t\t#if sys\n\t\tg(pkg.deep.Foo.c());\n\t\t#end\n'
+		));
+		Assert.isTrue(out.indexOf('import pkg.deep.Foo;') != -1, 'import added, got: $out');
+		Assert.isTrue(out.indexOf('g(Foo.a());') != -1 && out.indexOf('g(Foo.b());') != -1, 'plain uses shortened, got: $out');
+		Assert.isTrue(out.indexOf('g(pkg.deep.Foo.c());') != -1, 'the guarded use stays qualified, got: $out');
+	}
+
+	// --- conflict gates ---
+
+	/**
+	 * Gate 1 — DUELLING imports of one simple name. A `#if`-guarded `import other.Foo;` beside
+	 * an unconditional `import pkg.deep.Foo;` makes a bare `Foo` mean different types in
+	 * different builds; the plain-import map is a top-level scan and sees only the unconditional
+	 * one, so without `TypeRefPrinter.shadowedByGuardedImport` arm 2 would shorten both uses.
+	 */
+	public function testGuardedImportOfTheSameNameRefusesTheShortForm(): Void {
+		final src: String =
+			'package app;\n\nimport pkg.deep.Foo;\n#if flash\nimport other.Foo;\n#end\n\nclass C {\n\n\tpublic function f():Void {\n\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n\t}\n\n}\n';
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/** Gate 2 — an ALIAS is not "an exact import": the alias NAME is what resolves, so that is what is printed. */
+	public function testAliasedImportPrintsTheAlias(): Void {
+		final out: String = applyFix(inClass('import pkg.deep.Foo as F;\n\n', '\t\tg(pkg.deep.Foo.make());\n'));
+		Assert.isTrue(out.indexOf('g(F.make());') != -1, 'alias printed, got: $out');
+	}
+
+	/**
+	 * Gate 2 — an alias CLAIMING the simple name for ANOTHER path keeps the reference qualified,
+	 * even beside an exact import of it: Haxe lets the last binding of a simple name win, so a
+	 * bare `Foo` here is `other.Bar`. Without the alias arm of `shadowedLocally` the exact import
+	 * would answer "already visible" and the rewrite would silently rebind the reference.
+	 */
+	public function testAliasClaimingTheShortNameRefusesTheShortForm(): Void {
+		final src: String = inClass(
+			'import pkg.deep.Foo;\nimport other.Bar as Foo;\n\n', '\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n'
+		);
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/**
+	 * Gate 3 — two consecutive upper-initial segments is a SUB-MODULE type access
+	 * (`pkg.deep.Mod.Sub`), whose short form has resolution semantics this rule does not model.
+	 * The import of `Mod` and the indexed `pkg.deep.Mod` are what make this discriminate: drop
+	 * the gate and the `pkg.deep.Mod` half becomes a proven, already-imported arm-2 candidate.
+	 */
+	public function testSubModuleAccessChainIsRefused(): Void {
+		final src: String = inClass('import pkg.deep.Mod;\n\n', '\t\tg(pkg.deep.Mod.Sub.make());\n');
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/** Gate 5 — a PARAMETER holding the simple name; an import would collide with it. */
+	public function testShortNameBoundByAParameterRefusesTheImport(): Void {
+		final src: String =
+			'package app;\n\nclass C {\n\n\tpublic function f(Foo:Int):Void {\n\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n\t}\n\n}\n';
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/**
+	 * A type DECLARED in this module already binds the simple name, and in Haxe's resolution
+	 * order it OUTRANKS an import of the same name — so the reference stays qualified.
+	 *
+	 * A BEHAVIOUR pin, not a gate test: THREE independent arms refuse this shape (the
+	 * module-local arm of `shadowedLocally`, the same-package arm — the index sees the very
+	 * declaration — and, in the add-import direction, the freeness scan, which reads the
+	 * declaration's own `Foo` token). None of them flips this on its own, verified by disabling
+	 * each; no fixture can isolate the module-local arm while an index is present, because a
+	 * module-local type IS a same-package type to the index.
+	 */
+	public function testModuleLocalTypeOfTheSameNameRefusesTheShortForm(): Void {
+		final src: String =
+			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic function f():Void {\n\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n\t}\n\n}\n\nclass Foo {}\n';
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/**
+	 * Metadata ARGUMENTS are dot-paths the compiler resolves without the file's imports —
+	 * verified against the compiler, `@:access(Foo)` beside an `import pkg.deep.Foo;` silently
+	 * grants nothing and the build then fails at the private access. The import here is what
+	 * makes this discriminate: without the metadata skip it is a proven arm-2 candidate.
+	 */
+	public function testMetadataArgumentIsNeverShortened(): Void {
+		final src: String = 'package app;\n\nimport pkg.deep.Foo;\n\n@:access(pkg.deep.Foo)\nclass C {\n\n}\n';
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/**
+	 * A receiver that resolves to a VALUE binding makes the chain an instance field access, not
+	 * a package path — `holder.Holder.x` where `holder` is a parameter. `pkg.Holder` is indexed,
+	 * so dropping the binding check would shorten this into a compile error.
+	 */
+	public function testValueReceiverChainIsNotATypePath(): Void {
+		final src: String =
+			'package app;\n\nclass C {\n\n\tpublic function f(pkg:Dynamic):Void {\n\t\tg(pkg.Holder.a);\n\t\tg(pkg.Holder.b);\n\t}\n\n}\n';
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	public function testMacroReificationIsSkipped(): Void {
+		final src: String =
+			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tmacro static function m() {\n\t\treturn macro { final v:pkg.deep.Foo = g(); };\n\t}\n\n}\n';
+		Assert.equals(0, violations(src).length);
+	}
+
 	// --- the index proof ---
 
 	public function testWithoutAResolutionIndexTheRunIsReportOnly(): Void {
@@ -88,7 +337,14 @@ class ShortenTypeRefCheckTest extends Test {
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length, 'an unproven finding yields no edit');
 	}
 
-	// --- type parameters ---
+	/** An unproven path is never even OFFERED the add-import arm — the freeness exemption is gated on the proof. */
+	public function testAnUnprovenRepeatedPathGainsNoImport(): Void {
+		final src: String = inClass('', '\t\tg(zz.absent.Ghost.a());\n\t\tg(zz.absent.Ghost.b());\n');
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	// --- type parameters, per-occurrence independence ---
 
 	public function testTypeParameterShortens(): Void {
 		Assert.equals(
@@ -97,11 +353,14 @@ class ShortenTypeRefCheckTest extends Test {
 	}
 
 	/**
-	 * One unproven component makes the WHOLE annotation report-only — `Sub` is indexed and
-	 * `Foo` is not, so the annotation is never half-rewritten. The sibling test above, whose
-	 * only changed run is the proven `Sub`, is what discriminates this from a blanket refusal.
+	 * Each nominal of an annotation is its OWN occurrence with its own span and its own proof —
+	 * the type-refs projection hands them out one node each. Here BOTH components change (`Sub`
+	 * is the hybrid, `Foo` has an exact import) but only `Sub` is in the resolution scope, so the
+	 * proven half is repaired and the unproven half is reported and left exactly as written. The
+	 * annotation is no longer an all-or-nothing unit, which it had to be while it was reprinted
+	 * from one sliced string.
 	 */
-	public function testOneUnprovenComponentBlocksTheWholeAnnotation(): Void {
+	public function testProvenAndUnprovenComponentsAreIndependent(): Void {
 		final src: String = consumer('import pkg.deep.Mod.Sub;\nimport pkg.deep.Foo;\n\n', 'Map<pkg.deep.Sub, pkg.deep.Foo>');
 		final report: Array<{ file: String, source: String }> = [{ file: 'app/C.hx', source: src }];
 		final check: ShortenTypeRef = new ShortenTypeRef();
@@ -112,71 +371,47 @@ class ShortenTypeRefCheckTest extends Test {
 			sources: () -> {report: report, library: new LibrarySources([{ file: 'pkg/deep/Mod.hx', source: MOD_SOURCE }]) }
 		});
 		final vs: Array<Violation> = check.run(report, scoped);
-		Assert.equals(1, vs.length);
-		Assert.isTrue(vs[0].message.indexOf('report-only') != -1, 'degraded message, got: ${vs[0].message}');
-		Assert.equals(0, check.fix(src, vs, scoped).length);
+		Assert.equals(2, vs.length);
+		Assert.equals(1, [for (v in vs) if (v.message.indexOf('report-only') == -1) v].length, 'exactly one proven half');
+		Assert.equals('\t\tfinal v:Map<Sub, pkg.deep.Foo> = g();', annotationLine(applyFixWith(src, scoped, report)));
 	}
 
-	// --- refusals ---
+	// --- shapes the annotation-region slice used to refuse ---
 
-	public function testConditionalRegionIsSkipped(): Void {
+	public function testCommentInsideTheAnnotationNoLongerMatters(): Void {
+		// The region slice carried the comment into the reprint, so it refused the whole
+		// annotation; the projection hands out the nominal's own span and the comment is trivia.
 		final src: String =
-			'package app;\n\nimport pkg.deep.Mod.Sub;\n\nclass C {\n\n\tpublic function f():Void {\n\t\t#if debug\n\t\tfinal v:pkg.deep.Sub = g();\n\t\t#end\n\t}\n\n}\n';
-		Assert.equals(0, violations(src).length);
+			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic function f():Void {\n\t\tfinal v:/* c */ pkg.deep.Foo = g();\n\t}\n\n}\n';
+		Assert.equals(1, violations(src).length);
+		Assert.isTrue(applyFix(src).indexOf('final v:/* c */ Foo = g();') != -1, 'shortened, got: ${applyFix(src)}');
+	}
+
+	public function testMultiDeclaratorStatementShortens(): Void {
+		// The region slice spanned both declarators of the one grammar node and refused on the
+		// depth-0 comma; the projection addresses the annotation itself.
+		final src: String =
+			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic function f():Void {\n\t\tvar a:pkg.deep.Foo, b = null;\n\t}\n\n}\n';
+		Assert.isTrue(applyFix(src).indexOf('var a:Foo, b = null;') != -1, 'shortened, got: ${applyFix(src)}');
+	}
+
+	public function testTopLevelAnonymousStructureAnnotationShortens(): Void {
+		// The region slice needed an `=` after the `:` and the grammar makes the `Anon` child 0,
+		// so the region came out empty; the projection carries a node per anon FIELD type.
+		final src: String =
+			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic function f():Void {\n\t\tfinal u:{x:pkg.deep.Foo} = g();\n\t}\n\n}\n';
+		Assert.isTrue(applyFix(src).indexOf('final u:{x:Foo} = g();') != -1, 'shortened, got: ${applyFix(src)}');
 	}
 
 	/**
-	 * An EXPRESSION-position `#if` projects as `ConditionalExpr`, not the `Conditional` that
-	 * `RefShape.conditionalMemberKind` names — which is why the skip tests the `#if` DIRECTIVE
-	 * rather than a kind.
+	 * KNOWN MISS — an anonymous structure used as a GENERIC ARGUMENT. The type-refs projection
+	 * stops at the generic head there (`QueryWalkerLowering` emits nothing for the `Anon` ctor
+	 * reached through a `type` field), so no node carries the nominal inside it. Every other
+	 * nesting — anon at the annotation head, generic in generic, function type in generic — does
+	 * project. A behaviour pin, not a gate: closing it is a grammar-projection slice.
 	 */
-	public function testConditionalExpressionRegionIsSkipped(): Void {
-		final src: String =
-			'package app;\n\nimport pkg.deep.Mod.Sub;\n\nclass C {\n\n\tpublic function f():Void {\n\t\tfinal x = #if debug { final v:pkg.deep.Sub = g(); v; } #else 0 #end;\n\t}\n\n}\n';
-		Assert.equals(0, violations(src).length);
-	}
-
-	public function testMacroReificationIsSkipped(): Void {
-		final src: String =
-			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tmacro static function m() {\n\t\treturn macro { final v:pkg.deep.Foo = g(); };\n\t}\n\n}\n';
-		Assert.equals(0, violations(src).length);
-	}
-
-	public function testCommentInsideTheAnnotationIsRefused(): Void {
-		// The comment is trivia, so it sits INSIDE the sliced region; reprinting would walk it as
-		// if it were type text.
-		final src: String =
-			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic function f():Void {\n\t\tfinal v:/* c */ pkg.deep.Foo = g();\n\t}\n\n}\n';
-		Assert.equals(0, violations(src).length);
-	}
-
-	public function testTopLevelAnonymousStructureAnnotationIsRefused(): Void {
-		// The grammar makes the `Anon` child 0, so the prefix holds no `=` and the region comes out
-		// empty. A BEHAVIOUR pin rather than a gate test: two checks refuse it independently, so
-		// neither flips this on its own. The second assertion is what keeps the refusal narrow —
-		// the same structure nested one level down IS rewritten.
-		final anon: String =
-			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic function f():Void {\n\t\tfinal u:{x:pkg.deep.Foo} = g();\n\t}\n\n}\n';
-		Assert.equals(0, violations(anon).length);
-		Assert.equals(
-			'\t\tfinal v:Array<{x:Foo}> = g();', annotationLine(applyFix(consumer('import pkg.deep.Foo;\n\n', 'Array<{x:pkg.deep.Foo}>')))
-		);
-	}
-
-	public function testFieldAndReturnAnnotationsAreOutOfScope(): Void {
-		// The rule is locals-only by design (see the class doc's Scope section); this pins that
-		// boundary so a future widening is a deliberate change, not a silent one.
-		final src: String =
-			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic var field:pkg.deep.Foo;\n\n\tpublic function f(p:pkg.deep.Foo):pkg.deep.Foo {\n\t\treturn p;\n\t}\n\n}\n';
-		Assert.equals(0, violations(src).length);
-	}
-
-	public function testMultiDeclaratorStatementIsRefused(): Void {
-		// The grammar projects `var a:T, b = null;` as ONE node; the annotation slice would span
-		// both declarators, so a depth-0 comma refuses the whole region.
-		final src: String =
-			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic function f():Void {\n\t\tvar a:pkg.deep.Foo, b = null;\n\t}\n\n}\n';
-		Assert.equals(0, violations(src).length);
+	public function testAnonymousStructureInsideAGenericArgumentIsAKnownMiss(): Void {
+		Assert.equals(0, violations(consumer('import pkg.deep.Foo;\n\n', 'Array<{x:pkg.deep.Foo}>')).length);
 	}
 
 	public function testAnnotationWithoutAnInitializerShortens(): Void {
@@ -231,12 +466,23 @@ class ShortenTypeRefCheckTest extends Test {
 	/** A second library module whose main type `Foo` is the plain over-qualification subject. */
 	private static inline final FOO_SOURCE: String = 'package pkg.deep;\n\nclass Foo {}\n';
 
+	/** A third library module, so an add-import test can prove two paths each get their own line. */
+	private static inline final BAR_SOURCE: String = 'package pkg.deep;\n\nclass Bar {}\n';
+
 	/** A same-simple-name type in ANOTHER package — the shadow that keeps a qualified path qualified. */
 	private static inline final OTHER_FOO_SOURCE: String = 'package other;\n\nclass Foo {}\n';
 
+	/** A type one package deep, for the `pkg.Holder` chain whose receiver a parameter can shadow. */
+	private static inline final HOLDER_SOURCE: String = 'package pkg;\n\nclass Holder {}\n';
+
 	/** A consumer in `package app;` carrying `imports` verbatim and one local annotated `annotation`. */
 	private function consumer(imports: String, annotation: String): String {
-		return 'package app;\n\n${imports}class C {\n\n\tpublic function f():Void {\n\t\tfinal v:$annotation = g();\n\t}\n\n}\n';
+		return inClass(imports, '\t\tfinal v:$annotation = g();\n');
+	}
+
+	/** A consumer in `package app;` carrying `imports` verbatim and `body` as its one method's statements. */
+	private function inClass(imports: String, body: String): String {
+		return 'package app;\n\n${imports}class C {\n\n\tpublic function f():Void {\n$body\t}\n\n}\n';
 	}
 
 	/** The declaration line of the local named `v`, for an exact whole-line assertion. */
@@ -257,6 +503,8 @@ class ShortenTypeRefCheckTest extends Test {
 				library: new LibrarySources([
 					{ file: 'pkg/deep/Mod.hx', source: MOD_SOURCE },
 					{ file: 'pkg/deep/Foo.hx', source: FOO_SOURCE },
+					{ file: 'pkg/deep/Bar.hx', source: BAR_SOURCE },
+					{ file: 'pkg/Holder.hx', source: HOLDER_SOURCE },
 					{ file: 'other/Foo.hx', source: OTHER_FOO_SOURCE }
 				])
 			}

@@ -180,8 +180,13 @@ final class TypeRefPrinter {
 	 * path, or the `pack.SubType` HYBRID a compiler prints for a secondary type — the hybrid
 	 * is canonicalised first, so the result is never one. A returned non-null `importPath` is
 	 * also RECORDED for `pendingImportEdits`.
+	 *
+	 * `owned` is passed through to `canAddImport`: the byte ranges that are written occurrences
+	 * of `fqn` itself, which the caller is rewriting. Only a caller that SHORTENS existing
+	 * qualified text has any (see `canAddImport`); everyone else omits it and route 2 keeps its
+	 * whole-source freeness scan.
 	 */
-	public function print(fqn: String): PrintedTypeRef {
+	public function print(fqn: String, ?owned: Array<Span>): PrintedTypeRef {
 		final trimmed: String = StringTools.trim(fqn);
 		// A dotless run carries no derivable module path, and a lower-initial final segment is a
 		// package path or a structural field name, never a type — both pass through untouched.
@@ -197,7 +202,7 @@ final class TypeRefPrinter {
 			final inScope: String = visible;
 			return { text: inScope, importPath: null };
 		}
-		if (!canAddImport(canonical, simple)) return { text: canonical, importPath: null };
+		if (!canAddImport(canonical, simple, owned)) return { text: canonical, importPath: null };
 		if (!_pendingImports.contains(canonical)) _pendingImports.push(canonical);
 		return { text: simple, importPath: canonical };
 	}
@@ -207,19 +212,14 @@ final class TypeRefPrinter {
 	 * `t` through `print`, copying generic punctuation, spaces and structural field names
 	 * verbatim — `Array<pkg.Mod.Sub>` shortens (or qualifies) only its component. The
 	 * whole-annotation entry point; `print` is the single-nominal one.
+	 *
+	 * A caller holding a PARSED type reference should address `print` directly instead: the
+	 * grammar's `parseFileTypeRefs` projection carries one node per nominal with an exact span,
+	 * so nothing has to be re-lexed out of an annotation's text. This entry point is for a type
+	 * expression the caller only has as a STRING — a compiler oracle's answer, a synthesised
+	 * annotation.
 	 */
 	public function printTypeExpr(t: String): String {
-		return walkTypeExpr(t, (_, _) -> {});
-	}
-
-	/**
-	 * `printTypeExpr` with the per-run decision exposed: the rewritten expression is returned as
-	 * usual, and `onRun` additionally sees each maximal qualified-nominal run's ORIGINAL text
-	 * beside its `print` result. The single walk both entry points share, so a caller that must
-	 * judge each run (`shorten-type-ref` proves every CHANGED one against the resolution index)
-	 * cannot drift from what the plain rewrite emits.
-	 */
-	public function walkTypeExpr(t: String, onRun: (String, PrintedTypeRef) -> Void): String {
 		final buf: StringBuf = new StringBuf();
 		final n: Int = t.length;
 		var i: Int = 0;
@@ -236,13 +236,11 @@ final class TypeRefPrinter {
 				if (!RefactorSupport.isIdentChar(cc) && cc != '.'.code) break;
 				i++;
 			}
-			final run: String = t.substring(start, i);
-			final printed: PrintedTypeRef = print(run);
-			buf.add(printed.text);
-			onRun(run, printed);
+			buf.add(print(t.substring(start, i)).text);
 		}
 		return buf.toString();
 	}
+
 
 	/**
 	 * The declaration path the written reference `ref` denotes IN THIS FILE, PROVEN against the
@@ -368,16 +366,25 @@ final class TypeRefPrinter {
 	 * when a binding already visible here holds the name (`shadowedLocally`), when a PENDING
 	 * import of a DIFFERENT path already claimed it (Haxe accepts two imports of one simple name
 	 * silently — the last one wins, so the earlier short form would bind the wrong type), when
-	 * the name occurs anywhere in the source as a word-boundary token (an occurrence with no
-	 * binding to `canonical` must resolve to something else), or when no import can be anchored.
-	 * False, too, without a file scope: an import needs an anchor and a freeness proof.
+	 * the name occurs anywhere in the source as a word-boundary token OUTSIDE `owned` (an
+	 * occurrence with no binding to `canonical` must resolve to something else), or when no
+	 * import can be anchored. False, too, without a file scope: an import needs an anchor and a
+	 * freeness proof.
+	 *
+	 * `owned` is the caller's list of byte ranges that are WRITTEN OCCURRENCES OF `canonical`
+	 * ITSELF — a `pkg.Type` the caller is about to shorten. The simple name inside such a range
+	 * is the path's own last segment, already bound to `canonical` by the qualification, so
+	 * counting it as a foreign occurrence would veto the import by construction: the very text
+	 * being rewritten is what makes the name look taken. Omitted (the default) the scan sees the
+	 * whole source, which is the conservative reading every non-rewriting caller wants — it may
+	 * only cost the short form and fall back to the fully-qualified path.
 	 */
-	private function canAddImport(canonical: String, simple: String): Bool {
+	private function canAddImport(canonical: String, simple: String, owned: Null<Array<Span>>): Bool {
 		final source: Null<String> = _source;
 		if (source == null || _root == null || !_canAnchorImports) return false;
 		if (shadowedLocally(canonical, simple)) return false;
 		if (_pendingImports.exists(p -> p != canonical && lastSegment(p) == simple)) return false;
-		return !RefactorSupport.referencedInRange(source, simple, 0, source.length, []);
+		return !RefactorSupport.referencedInRange(source, simple, 0, source.length, owned ?? []);
 	}
 
 	/**
@@ -484,6 +491,7 @@ final class TypeRefPrinter {
 		if (bound != null && bound != canonical) return true;
 		final aliased: Null<String> = _aliasTargets[simple];
 		if (aliased != null && aliased != canonical) return true;
+		if (shadowedByGuardedImport(canonical, simple)) return true;
 		final root: Null<QueryNode> = _root;
 		if (root != null && declaresTypeNamed(root, simple) && moduleLocalPathOf(simple) != canonical) return true;
 		final pkg: Null<String> = _pkg;
@@ -559,16 +567,64 @@ final class TypeRefPrinter {
 	 * name binding a different type in one build configuration.
 	 */
 	private static function bulkImportDecls(root: QueryNode): Array<QueryNode> {
-		final out: Array<QueryNode> = [];
-		for (c in root.children) {
-			if (BULK_IMPORT_KINDS.contains(c.kind))
-				out.push(c);
-			// One level of nesting is the whole shape: the grammar lifts a guarded declaration into
-			// the region node's own children, it does not re-nest per directive branch.
-			else if (c.kind == 'Conditional' || c.kind == 'CondSharedBodyDecl')
-				for (inner in c.children) if (BULK_IMPORT_KINDS.contains(inner.kind)) out.push(inner);
-		}
+		final out: Array<QueryNode> = [for (c in root.children) if (BULK_IMPORT_KINDS.contains(c.kind)) c];
+		for (c in guardedImportDecls(root)) if (BULK_IMPORT_KINDS.contains(c.kind)) out.push(c);
 		return out;
+	}
+
+	/**
+	 * The file's import-ish declarations LIFTED out of a `#if … #end` region — the ones the
+	 * grammar nests under a `Conditional` rather than leaving at the top level, and therefore
+	 * exactly the ones `_importMap` and `_aliasTargets` (both top-level scans) cannot see. One
+	 * level of nesting is the whole shape: the grammar lifts a guarded declaration into the
+	 * region node's own children, it does not re-nest per directive branch.
+	 */
+	private static function guardedImportDecls(root: QueryNode): Array<QueryNode> {
+		final out: Array<QueryNode> = [];
+		for (c in root.children) if (c.kind == 'Conditional' || c.kind == 'CondSharedBodyDecl') for (inner in c.children) if (
+			IMPORT_DECL_KINDS.contains(inner.kind)
+		)
+			out.push(inner);
+		return out;
+	}
+
+	/**
+	 * Whether a `#if`-GUARDED plain or aliased import binds `simple` to something OTHER than
+	 * `canonical`. Such a file spells one simple name two ways depending on the build — the shape
+	 * observed in the wild is an unconditional `import openfl.system.Capabilities;` beside a
+	 * `#if flash import flash.system.Capabilities; #end`, with both types then written fully
+	 * qualified in disjoint `#elseif` branches, deliberately. `_importMap` is a TOP-LEVEL scan, so
+	 * it sees only the unconditional one and would answer that the short name is free for it;
+	 * under the guarded build that same short name means the other type.
+	 *
+	 * The arm therefore runs ABOVE the explicit-import short-circuit in `shadowedLocally`, not
+	 * with the bulk imports at the bottom: an unconditional import outranks a wildcard, but it does
+	 * NOT outrank a second explicit import of the same simple name — Haxe lets the last one win,
+	 * and which one is last depends on the directive.
+	 *
+	 * A guarded import binding `simple` to `canonical` ITSELF is not a shadow, and it still cannot
+	 * enable the short form: it is absent from `_importMap`, so route 1 never fires, and its own
+	 * statement text carries the simple name, so route 2's freeness scan refuses. An alias whose
+	 * target does not decode counts as a shadow — the alias occupies the name whatever it names.
+	 */
+	private function shadowedByGuardedImport(canonical: String, simple: String): Bool {
+		final root: Null<QueryNode> = _root;
+		final source: Null<String> = _source;
+		if (root == null || source == null) return false;
+		for (c in guardedImportDecls(root)) {
+			final raw: Null<String> = c.name;
+			if (raw == null) continue;
+			final span: Null<Span> = c.span;
+			switch c.kind {
+				case 'ImportDecl':
+					if (lastSegment(raw) == simple && raw != canonical) return true;
+				// The grammar's name slot for an alias declaration IS the alias, never the aliased path.
+				case 'ImportAliasDecl' | 'ImportAliasInDecl':
+					if (raw == simple && (span == null || aliasTargetOf(source.substring(span.from, span.to)) != canonical)) return true;
+				case _:
+			}
+		}
+		return false;
 	}
 
 	/** Whether the type named `name` in `file` is that module's MAIN type — the only kind a package wildcard binds. */
