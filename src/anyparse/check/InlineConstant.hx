@@ -36,8 +36,8 @@ import anyparse.runtime.Span;
  *
  * Only a BARE name resolves, against the owning container's DIRECT children.
  * `isInlinableInitializer` owns the proof, documents every gate, and records why a QUALIFIED
- * `Other.A` is deliberately NOT attempted — cross-file simple-name binding is not something the
- * `SymbolIndex` can currently prove with the certainty an autofix needs.
+ * `Other.A` is deliberately NOT attempted — twice measured at ZERO yield, over a receiver the
+ * check cannot even prove to be a TYPE.
  *
  * The String exclusion applies TRANSITIVELY for free: `inlineConstantLiteralKinds` omits the
  * string kinds, so a reference to a String constant fails `isInlinableLiteral` on the TARGET; no
@@ -332,38 +332,52 @@ final class InlineConstant implements Check {
 	 * children (`declaresInlineConstant`). Everything else — a qualified `Other.A`, a deeper
 	 * `pkg.Other.A` chain, arithmetic — is refused.
 	 *
-	 * ## Why the QUALIFIED arm is deferred, not merely unimplemented
+	 * ## Why the QUALIFIED arm stays out — measured twice, not merely unimplemented
 	 *
-	 * A cross-class `Other.A` was implemented against `SymbolIndex.resolveTypeRefsFrom` and withdrawn:
-	 * proving WHICH declaration a simple type name binds to is not something the index can currently
-	 * answer with the certainty an autofix needs, and each hole found produced a `--fix` edit that
-	 * does not compile in some configuration:
+	 * A cross-class `Other.A` was implemented against `SymbolIndex.resolveTypeRefsFrom` and withdrawn,
+	 * then re-costed before any second attempt. The premise is real — `static inline final B:Int =
+	 * Other.A;` compiles and folds when the target is itself `static inline` — but the arm has no INPUT.
+	 * Across 2831 real files (TM 798, anyparse 636, Pony 677, OpenFL 720) exactly TEN `static final`
+	 * fields carry a qualified initializer; NINE are already `inline`, and the tenth is
+	 * `SOME_STRING.length`, which `inline` refuses in EVERY configuration ("Inline variable
+	 * initialization must be a constant value", verified live against both an inline and a non-inline
+	 * target). Yield zero, ceiling zero — the idiom is written WITH the keyword
+	 * (`static inline final C:UInt = Colors.MEDIUM_GREY;`).
 	 *
-	 *  - an ALIAS import (`import pkg.Other as Alias;`) never enters simple-name scope at all — the
-	 *    grammar's `ImportAliasDecl` carries only the alias, never the imported path — so a
-	 *    same-simple-named local type is proven in the real target's place;
-	 *  - an explicit import of a type OUTSIDE the resolution scope (a haxelib module, a file the lint
-	 *    scope excludes) is likewise absent from the candidate set, and unanimity across candidates
-	 *    cannot vet a declaration that was never collected;
-	 *  - a type declared twice through `#if` is deduped BY DESIGN — `SymbolIndexBuilder` keeps the
-	 *    first declaration of a name so `declaringFiles` does not report a phantom ambiguity — and
-	 *    `TypeDeclInfo` carries no `guarded` flag, so "is this binding branch-dependent?" has no
-	 *    model-level answer. Counting container NODES in the parsed tree only half-closes it: a
-	 *    branch re-pointing the name through a `typedef` / `interface` / `enum` projects no container
-	 *    node, so one node is found and the proof goes through.
+	 * That is decisive, because the proof is not close to reachable either. Every hole found emitted a
+	 * `--fix` edit that does not compile in some configuration:
 	 *
-	 * Each of those was a separately discovered leak patched with one more exclusion — the shape that
-	 * says the filter is enumerating harm instead of proving benefit. The honest positive criterion
-	 * ("this simple name CERTAINLY binds to this declaration") needs `SymbolIndex` to model aliased
-	 * import paths, out-of-scope imports and branch-guarded type declarations; until it does, the arm
-	 * stays out. Measured cost of leaving it out: ZERO findings lost across ~1400 real files (the TM
-	 * tree and anyparse's own sources) — every real qualified-reference constant there is already
-	 * `inline`.
+	 *  - the receiver need not be a TYPE at all. A static field of the ENCLOSING class spelled like an
+	 *    in-scope type wins in expression position, so `T.A` reads the VALUE's field while the arm proves
+	 *    the type's constant, and the emitted `inline` then fails to compile (verified live; an INHERITED
+	 *    static does not shadow — Haxe does not inherit statics). The single non-inline site in the whole
+	 *    corpus is exactly this shape, so the arm's real input is dominated by the class it cannot see;
+	 *  - an ALIAS import (`import pkg.Other as Alias;`) never enters simple-name scope — the grammar's
+	 *    `ImportAliasDecl` carries only the alias — so a same-simple-named local type is proven in the
+	 *    real target's place. `TypeRefPrinter.aliasTargetsOf` recovers the target by re-reading the
+	 *    import's own source span for the file it is printing: a per-file text scan, not an index
+	 *    capability, so the arm can only REFUSE an alias-bound receiver, never resolve through it;
+	 *  - an import of a type OUTSIDE the resolution scope (a haxelib module, a file the lint scope
+	 *    excludes) is absent from the candidate set, and unanimity across candidates cannot vet a
+	 *    declaration that was never collected. An `import.hx` is the same hole with no per-file evidence
+	 *    at all — anyparse ignores `import.hx` repo-wide;
+	 *  - a type declared twice through `#if` is deduped BY DESIGN — `SymbolIndexBuilder` keeps the first
+	 *    declaration of a name so `declaringFiles` does not report a phantom ambiguity. This one is now
+	 *    cheap to close: the builder's `GuardedNode` already carries a per-decl `guarded` flag (as
+	 *    `ImportInfo` publishes its own), so plumbing it onto `TypeDeclInfo` and refusing a guarded
+	 *    candidate would also cover the `typedef` / `interface` / `enum` half that counting container
+	 *    NODES could not.
 	 *
-	 * The String exclusion applies transitively for free: `inlineConstantLiteralKinds` omits the
-	 * string kinds, so a reference to a String constant fails `isInlinableLiteral` ON THE TARGET.
-	 * Constant ARITHMETIC over references (`A * 2`, which also compiles) is likewise out of scope — a
-	 * known conservative miss, deferred rather than half-proven.
+	 * The first attempt found its leaks one at a time and patched each with one more exclusion — the shape
+	 * that says a filter is enumerating harm instead of proving benefit; the receiver hole above came
+	 * later still, from re-reading the corpus rather than the model. Re-adding is therefore gated on YIELD
+	 * FIRST — a corpus that actually holds non-inline qualified constants — and only then on the index
+	 * work, which buys nothing until such a corpus exists.
+	 *
+	 * The String exclusion applies transitively for free: `inlineConstantLiteralKinds` omits the string
+	 * kinds, so a reference to a String constant fails `isInlinableLiteral` ON THE TARGET. Constant
+	 * ARITHMETIC over references (`A * 2`, which also compiles) is likewise out of scope — a known
+	 * conservative miss, deferred rather than half-proven.
 	 */
 	private static function isInlinableInitializer(container: QueryNode, init: QueryNode, seams: Seams): Bool {
 		if (isInlinableLiteral(init, seams)) return true;
@@ -413,26 +427,6 @@ final class InlineConstant implements Check {
 			}
 		}
 		return false;
-	}
-
-	/**
-	 * The `visibilityContainerKinds` node named `name` anywhere under `node`, or null when the tree
-	 * declares none. Recursive rather than top-level-only because a `final class` nests its body in a
-	 * `FinalDecl` wrapper, exactly as `walk` has to recurse for the same reason.
-	 *
-	 * Taking the FIRST hit is safe only because `declaredExactlyOnce` has already established, from
-	 * the index, that the file declares this name once — the `#if`-divergence question is answered at
-	 * MODEL level before the tree is ever walked. Re-answering it here by counting container nodes
-	 * would be both redundant and strictly less complete (a `typedef` / `interface` / `enum` half of a
-	 * divergent pair projects no container node at all).
-	 */
-	private static function findContainer(node: QueryNode, name: String, containers: Array<String>): Null<QueryNode> {
-		for (child in node.children) {
-			if (containers.contains(child.kind) && child.name == name) return child;
-			final nested: Null<QueryNode> = findContainer(child, name, containers);
-			if (nested != null) return nested;
-		}
-		return null;
 	}
 
 	/** Every plain string literal's raw content across `files` — the names a constant might be reflected by. */
