@@ -253,9 +253,10 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		final scope: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
 		final plan: Null<FilePlan> = planFor(source, plugin, scope);
 		if (plan == null) return [];
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (path in plan.plans) if (path.proven) for (target in path.targets) if (wanted.contains(spanKey(target)))
-			edits.push({ span: target, text: path.text });
+		final edits: Array<{ span: Span, text: String }> = [
+			for (path in plan.plans) if (path.proven) for (target in path.targets) if (wanted.contains(spanKey(target)))
+				{ span: target, text: path.text }
+		];
 		if (edits.length == 0) return edits;
 		// The PLANNING printer's pending set is already exactly right: `print` is handed the
 		// freeness exemption only for a path that cleared both the threshold and the index proof,
