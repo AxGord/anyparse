@@ -128,10 +128,15 @@ typedef TypeDeclInfo = {
 	 * one of them for the matching type ARGUMENT of the receiver that reached it.
 	 *
 	 * EMPTY when the header carried none OR when its `<…>` list could not be read as a plain
-	 * name list (a segment that is not an identifier after its metadata / `?` prefix and before
-	 * its `:` constraint or `=` default). Never read empty as "non-generic" — `typeParamArity`
-	 * answers that question, and the two disagree exactly when the names were unreadable, which
-	 * is the case a substituting consumer must refuse rather than guess at.
+	 * name list (a segment that is not an identifier after its metadata run and before its `:`
+	 * constraint or `=` default). Never read empty as "non-generic" — `typeParamArity` answers
+	 * that question, and the two disagree exactly when the names were unreadable, which is the
+	 * case a substituting consumer must refuse rather than guess at.
+	 *
+	 * The list is POSITIONAL — its index IS the argument index a consumer substitutes through — so
+	 * a phantom entry is worse than an empty list: it shifts every parameter after it. That is why
+	 * the header segmentation (`RefactorSupport.splitTypeArgumentList`) has to know every delimiter
+	 * a Haxe constraint may nest a comma inside, structures (`<T:{a:Int, b:Int}>`) included.
 	 */
 	var typeParamNames: Array<String>;
 
@@ -552,7 +557,9 @@ final class SymbolIndex {
 	 * Null when the root, any intermediate type, or any member is unresolved / ambiguous (fails
 	 * closed). Feeds `RefactorSupport.staticRootPathTypeSource` and the value-root gate.
 	 */
-	public function resolvePathFinalMemberTypeSource(fromFile: String, startTypeName: String, memberPath: Array<String>): Null<String> {
+	public inline function resolvePathFinalMemberTypeSource(
+		fromFile: String, startTypeName: String, memberPath: Array<String>
+	): Null<String> {
 		return pathFinalMemberWalk(fromFile, startTypeName, memberPath, false);
 	}
 
@@ -566,10 +573,16 @@ final class SymbolIndex {
 	 * Strictly more conservative than the plain walk wherever it is unsure: substitution applies
 	 * ONLY to a member declared DIRECTLY on the current type (an INHERITED member's `T` names the
 	 * SUPERTYPE's parameter, and the extends-clause argument mapping is not modelled), and any
-	 * effective source that STILL mentions a parameter name of the type it came from aborts the
-	 * whole walk. Null on every unresolved / ambiguous link, exactly like the plain walk.
+	 * effective source that STILL mentions a parameter name of the type it came from aborts THIS
+	 * walk. Null on every unresolved / ambiguous link, exactly like the plain walk.
+	 *
+	 * "Aborts this walk" is the honest scope: the caller
+	 * (`RefactorSupport.pathReceiverMemberTypeSource`) treats a null the same way it treats one from
+	 * the plain walk and drops to its package-blind fallback, which may still answer the verbatim
+	 * parameter source. That keeps the deep answer a superset of the shallow one, and a bare
+	 * parameter name is not a type any consumer of this chain acts on.
 	 */
-	public function resolveGenericPathFinalMemberTypeSource(
+	public inline function resolveGenericPathFinalMemberTypeSource(
 		fromFile: String, startTypeSource: String, memberPath: Array<String>
 	): Null<String> {
 		return pathFinalMemberWalk(fromFile, startTypeSource, memberPath, true);
@@ -634,6 +647,13 @@ final class SymbolIndex {
 	 * covered by the arguments actually written on the receiver. Otherwise the verbatim source
 	 * stands — and is then rejected by the parameter-mention gate if it names a parameter, so an
 	 * unsubstitutable parameter can never leave this function as if it were a concrete type.
+	 *
+	 * The DIRECT-member gate is the one that stops a wrong CONCRETE type, not merely an
+	 * unresolvable one: a subtype whose header parameter happens to share the supertype's name but
+	 * passes something else up (`class Der<T:Item> extends Base<Str>`, `Base<T> { var u:T; }`)
+	 * would otherwise substitute `Der`'s argument into `Base`'s parameter and resolve `u` to the
+	 * wrong type entirely. `SimplifyNegatedCompoundCheckTest.testSupertypeParamNameCollisionKeepsWrap`
+	 * is the fixture that fails if it is removed.
 	 */
 	private function substitutedMemberSource(cur: ResolvedType, member: String, memberSource: String, args: Array<String>): Null<String> {
 		final params: Array<String> = cur.type.typeParamNames;

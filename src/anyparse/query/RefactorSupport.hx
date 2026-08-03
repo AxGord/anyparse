@@ -132,6 +132,18 @@ private typedef LexRegion = {
 	final to: Int;
 	final kind: LexRegionKind;
 };
+
+/**
+ * A receiver path's ROOT, reduced to whichever of the two things a root can BE. EXACTLY one field
+ * is set: `selfTypeName` for the self reference (already resolved to its enclosing declaration's
+ * name, since nothing further can be asked of it), `bindingFrom` for a value, whose declared type
+ * each consumer then reads its own way. Produced only by `RefactorSupport.pathRootBinding`, which
+ * answers null rather than an all-null record when the root resolves to neither.
+ */
+private typedef PathRoot = {
+	final selfTypeName: Null<String>;
+	final bindingFrom: Null<Int>;
+};
 /**
  * The declaration side of a null-guarded constructor-default fold: the field name and
  * its declaration span, the `(default, null)` property head to drop (null for a plain
@@ -1969,12 +1981,23 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * Split a type-argument list on its TOP-LEVEL commas, respecting nested `<…>` / `(…)` groups
-	 * (`Map<String, (Int, Int) -> Void>` splits into two) and the `->` arrow whose `>` is not a
-	 * bracket closer. The one reader of a written generic application's comma structure: the
-	 * index-access element lookup (`FieldWriteIndex.elementTypeSource`), the declaration-header
-	 * type-parameter scan (`SymbolIndexBuilder`) and `typeArgumentSourcesOf` all route through it,
-	 * so the paren-awareness a constraint list needs (`<T:(A, B)>` is ONE parameter) is stated once.
+	 * Split a type-argument list on its TOP-LEVEL commas, respecting EVERY delimiter a written
+	 * Haxe type may nest a comma inside — `<…>` arguments, `(…)` multi-constraints, `{…}`
+	 * structures, `[…]` — and the `->` arrow whose `>` is not a bracket closer. So
+	 * `Map<String, (Int, Int) -> Void>` is two segments, `<T:(A, B)>` is ONE parameter, and
+	 * `<T:{a:Int, b:Int}>` is one too.
+	 *
+	 * Each of those four groups is load-bearing for a caller, not defensive: the index-access
+	 * element lookup (`FieldWriteIndex.elementTypeSource`), the declaration-header type-parameter
+	 * scan (`SymbolIndexBuilder.declTypeParamNames`, whose result is a POSITIONAL substitution
+	 * table — a phantom segment there shifts every parameter after it) and `typeArgumentSourcesOf`
+	 * all route through this one function. Brace-blindness read `<T:{a:Int, b:Int}>` as the two
+	 * parameters `T` and `b`; the structural constraint is ordinary Haxe.
+	 *
+	 * The scan is delimiter-only, so a comma inside a string literal in metadata still splits. No
+	 * caller feeds it metadata (`SymbolIndexBuilder` strips a parameter's metadata run AFTER this
+	 * split), and the failure direction there is a segment that yields no plain identifier, which
+	 * refuses the whole header.
 	 */
 	public static function splitTypeArgumentList(text: String): Array<String> {
 		final out: Array<String> = [];
@@ -1983,9 +2006,9 @@ final class RefactorSupport {
 		var prev: Int = 0;
 		for (i in 0...text.length) {
 			final ch: Int = StringTools.fastCodeAt(text, i);
-			if (ch == '<'.code || ch == '('.code)
+			if (ch == '<'.code || ch == '('.code || ch == '{'.code || ch == '['.code)
 				depth++;
-			else if (ch == ')'.code)
+			else if (ch == ')'.code || ch == '}'.code || ch == ']'.code)
 				depth--;
 			else if (ch == '>'.code && prev != '-'.code)
 				depth--;
@@ -2038,6 +2061,24 @@ final class RefactorSupport {
 	public static function pathRootTypeName(
 		recv: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, shape: RefShape
 	): Null<String> {
+		final resolved: Null<PathRoot> = pathRootBinding(recv, root, shape);
+		if (resolved == null) return null;
+		final bindingFrom: Null<Int> = resolved.bindingFrom;
+		return bindingFrom == null ? resolved.selfTypeName : declaredTypes[bindingFrom];
+	}
+
+	/**
+	 * A receiver path's ROOT reduced to whichever of the two things a root can BE: the enclosing
+	 * type declaration (the self reference) or a value BINDING. Null when the path's root is not
+	 * a bare identifier at all, or the one thing it is cannot be resolved.
+	 *
+	 * Extracted because `pathRootTypeName` and its deep-mode twin `pathRootTypeSourceDeep` differ
+	 * ONLY in what they do with a resolved binding — one reads a nominal off `declaredTypes`, the
+	 * other prefers the written source and falls through to the for-binding arm. Everything before
+	 * that (walking down single-child wrappers to the root identifier, and the self-reference
+	 * branch) is one question with one answer, and had no business being written twice.
+	 */
+	private static function pathRootBinding(recv: QueryNode, root: QueryNode, shape: RefShape): Null<PathRoot> {
 		final identKind: Null<String> = shape.identKind;
 		if (identKind == null) return null;
 		var node: QueryNode = recv;
@@ -2045,10 +2086,11 @@ final class RefactorSupport {
 		if (node.kind != identKind) return null;
 		if (node.name == shape.selfReferenceText) {
 			final span: Null<Span> = recv.span ?? node.span;
-			return span == null ? null : TypeResolver.enclosingTypeName(root, span);
+			final enclosing: Null<String> = span == null ? null : TypeResolver.enclosingTypeName(root, span);
+			return enclosing == null ? null : { selfTypeName: enclosing, bindingFrom: null };
 		}
 		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(node, root, shape);
-		return bindingFrom == null ? null : declaredTypes[bindingFrom];
+		return bindingFrom == null ? null : { selfTypeName: null, bindingFrom: bindingFrom };
 	}
 
 	/**
@@ -2156,8 +2198,12 @@ final class RefactorSupport {
 	 *    shallow walk keeps the verbatim `T`, which resolves to nothing.
 	 *
 	 * Both are additive PROOF for the one consumer that opts in, and both fail closed everywhere
-	 * they are unsure (`SymbolIndex.resolveGenericPathFinalMemberTypeSource` even refuses an
-	 * effective source that still mentions a parameter name, rather than carrying it forward).
+	 * they are unsure: `SymbolIndex.resolveGenericPathFinalMemberTypeSource` refuses an effective
+	 * source that still mentions a parameter name rather than carrying it forward. That refusal is
+	 * the SUBSTITUTING walk's, not the whole answer's — `pathReceiverMemberTypeSource` still runs
+	 * its package-blind fallback afterwards, which can hand back the verbatim parameter source. That
+	 * is deliberate: the fallback is exactly what keeps deep mode a superset of shallow, and a
+	 * parameter name resolves to no type in the one consumer's whitelist either way.
 	 *
 	 * Deliberately NOT resolved (safe misses, each a null): a bare `f()` / `this.f()` call, whose
 	 * enclosing-type lookup is a different mechanism; a `Type.staticMethod()` whose receiver is a
@@ -2172,10 +2218,15 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * `expressionTypeNominal`'s body, threading the for-binding recursion guard `seen` the public
-	 * signature does not expose. The method-call tail recurses through THIS function so the guard
-	 * and the `chain` opt-in survive a `a.b().c()` walk — a fresh `seen` per receiver would let
-	 * `for (x in x)` recurse forever.
+	 * `expressionTypeNominal`'s body, threading the `chain` opt-in and the for-binding recursion
+	 * guard `seen` that the public signature does not expose. The method-call tail recurses through
+	 * THIS function rather than the public entry so that a `a.b().c()` walk stays in deep mode
+	 * instead of silently dropping to the shallow answer at the first receiver.
+	 *
+	 * `seen` rides along rather than being re-created per receiver only for tidiness: the call-tail
+	 * recursion is structurally decreasing, and the cycle the guard actually exists for lives
+	 * entirely inside `forBindingElementTypeSource`, which recurses into `valueTypeSourceDeep`
+	 * directly and never comes back through here.
 	 */
 	private static function expressionNominalWalk(
 		node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>, file: String,
@@ -2212,6 +2263,14 @@ final class RefactorSupport {
 	 *
 	 * A null root source is NOT a bail: `pathReceiverMemberTypeSource` reads it as the static-TYPE
 	 * root case and starts from `path[0]`, exactly as `valueTypeNominal` does today.
+	 *
+	 * Deliberately NOT merged with `valueTypeNominal` even though the two walks are the same shape:
+	 * their single-segment answers differ in KIND, this one handing back a written source with its
+	 * arguments intact where that one hands back a nominal. Folding them would mean routing the
+	 * shallow answer through `outerNominalOf` — harmless today, since every `declaredTypes` value is
+	 * already a package-stripped simple name, but it would put a transformation on the path of the
+	 * consumers this seam exists to leave untouched. The shared prefix that IS one question
+	 * (resolving the path's root to a binding) is factored out as `pathRootBinding`.
 	 */
 	private static function valueTypeSourceDeep(
 		node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, chain: ChainTypeContext,
@@ -2241,17 +2300,10 @@ final class RefactorSupport {
 		recv: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, chain: ChainTypeContext,
 		index: Null<SymbolIndex>, file: String, seen: Array<Int>
 	): Null<String> {
-		final identKind: Null<String> = shape.identKind;
-		if (identKind == null) return null;
-		var node: QueryNode = recv;
-		while (node.kind != identKind && node.children.length == 1) node = node.children[0];
-		if (node.kind != identKind) return null;
-		if (node.name == shape.selfReferenceText) {
-			final span: Null<Span> = recv.span ?? node.span;
-			return span == null ? null : TypeResolver.enclosingTypeName(root, span);
-		}
-		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(node, root, shape);
-		if (bindingFrom == null) return null;
+		final resolved: Null<PathRoot> = pathRootBinding(recv, root, shape);
+		if (resolved == null) return null;
+		final bindingFrom: Null<Int> = resolved.bindingFrom;
+		if (bindingFrom == null) return resolved.selfTypeName;
 		final annotated: Null<String> = chain.declaredTypeSources[bindingFrom] ?? declaredTypes[bindingFrom];
 		return annotated ?? forBindingElementTypeSource(bindingFrom, root, shape, declaredTypes, chain, index, file, seen);
 	}
@@ -2303,9 +2355,20 @@ final class RefactorSupport {
 		return at < args.length ? args[at] : null;
 	}
 
-	/** The first node in pre-order whose kind is one of `kinds` AND whose span starts exactly at `from`, or null. */
+	/**
+	 * The first node in pre-order whose kind is one of `kinds` AND whose span starts exactly at
+	 * `from`, or null.
+	 *
+	 * A spanned subtree that does not CONTAIN `from` is pruned rather than descended: the offset is
+	 * a node's own start, so every node starting there is an ancestor-chain descendant of every
+	 * spanned node covering it. Without the prune this is a whole-tree walk on every call, and it
+	 * is called for every unannotated root binding — a plain `var x = 5;` in a guard operand, not
+	 * just a `for` binder. A node with NO span states nothing about containment and is descended
+	 * into normally.
+	 */
 	private static function nodeStartingAt(node: QueryNode, from: Int, kinds: Array<String>): Null<QueryNode> {
 		final span: Null<Span> = node.span;
+		if (span != null && (from < span.from || from >= span.to)) return null;
 		if (span != null && span.from == from && kinds.contains(node.kind)) return node;
 		for (child in node.children) {
 			final hit: Null<QueryNode> = nodeStartingAt(child, from, kinds);

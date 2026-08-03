@@ -25,6 +25,15 @@ import anyparse.runtime.Span;
  */
 class SimplifyNegatedCompoundCheckTest extends Test {
 
+	/** Resolution-scope model: the only NaN-free tail every chain fixture ends in (`Str.indexOf` -> `Int`). */
+	private static final MODEL_STR: String = 'class Str {\n\tpublic function indexOf(s:Str):Int return 0;\n}';
+
+	/** `MODEL_STR` plus the one-field carrier the chain fixtures walk THROUGH to reach it. */
+	private static final MODEL_STR_ITEM: String = MODEL_STR + '\nclass Item {\n\tpublic var text:Str;\n}';
+
+	/** The generic carrier whose member is declared as its own type parameter — the substitution fixtures' subject. */
+	private static final MODEL_BOX: String = 'class Box<T:Item> {\n\tpublic var payload:T;\n}';
+
 	public function testNegatedDisjunctionWithNegatedTermFlagged(): Void {
 		final vs: Array<Violation> = violations(wrap('var b = !(!p || q);'));
 		Assert.equals(1, vs.length);
@@ -137,7 +146,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 	public function testChainCallReturnTypeProvesFlip(): Void {
 		// `it.text.indexOf(k)` — a call whose receiver is a FIELD CHAIN. Resolving the chain to
 		// `Str`, then `Str.indexOf` to `Int`, is what licenses the `< 0` -> `>= 0` flip.
-		final model: String = 'class Str {\n\tpublic function indexOf(s:Str):Int return 0;\n}\n' + 'class Item {\n\tpublic var text:Str;\n}';
+		final model: String = MODEL_STR_ITEM;
 		final source: String = wrapTyped('var b = !(!p || it.text.indexOf(k) < 0);', 'p:Bool, it:Item, k:Str');
 		Assert.equals(wrapTyped('var b = p && it.text.indexOf(k) >= 0;', 'p:Bool, it:Item, k:Str'), fixedWith(source, model));
 	}
@@ -156,7 +165,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		// `declaredTypes` has no entry for it; its type comes from `items:Array<Item>` through
 		// `RefShape.iterationElementTypeParams`. No type parameter is substituted anywhere along
 		// the chain, so this fixture discriminates the for-binding arm and nothing else.
-		final model: String = 'class Str {\n\tpublic function indexOf(s:Str):Int return 0;\n}\n' + 'class Item {\n\tpublic var text:Str;\n}';
+		final model: String = MODEL_STR_ITEM;
 		final params: String = 'q:Bool, items:Array<Item>, k:Str';
 		final source: String = wrapTyped('for (it in items) {\n\t\t\tvar b = !(!q || it.text.indexOf(k) < 0);\n\t\t}', params);
 		final fixed: String = wrapTyped('for (it in items) {\n\t\t\tvar b = q && it.text.indexOf(k) >= 0;\n\t\t}', params);
@@ -168,8 +177,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		// never consulted; what the shallow walk cannot do is turn `Box.payload : T` into `Item`
 		// using the receiver's written argument. Without the substitution the chain stops at the
 		// verbatim `T`, which names no type.
-		final model: String = 'class Str {\n\tpublic function indexOf(s:Str):Int return 0;\n}\n'
-			+ 'class Item {\n\tpublic var text:Str;\n}\n' + 'class Box<T:Item> {\n\tpublic var payload:T;\n}';
+		final model: String = MODEL_STR_ITEM + '\n' + MODEL_BOX;
 		final params: String = 'q:Bool, box:Box<Item>, k:Str';
 		final source: String = wrapTyped('var b = !(!q || box.payload.text.indexOf(k) < 0);', params);
 		final fixed: String = wrapTyped('var b = q && box.payload.text.indexOf(k) >= 0;', params);
@@ -181,8 +189,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		// type is itself a generic application (`Array<Box<Item>>` yields `Box<Item>`), and that
 		// application's argument is what resolves the member `payload`. Either arm alone leaves
 		// this site wrapped.
-		final model: String = 'class Str {\n\tpublic function indexOf(s:Str):Int return 0;\n}\n'
-			+ 'class Item {\n\tpublic var text:Str;\n}\n' + 'class Box<T:Item> {\n\tpublic var payload:T;\n}';
+		final model: String = MODEL_STR_ITEM + '\n' + MODEL_BOX;
 		final params: String = 'q:Bool, items:Array<Box<Item>>, k:Str';
 		final source: String = wrapTyped('for (it in items) {\n\t\t\tvar b = !(!q || it.payload.text.indexOf(k) < 0);\n\t\t}', params);
 		final fixed: String = wrapTyped('for (it in items) {\n\t\t\tvar b = q && it.payload.text.indexOf(k) >= 0;\n\t\t}', params);
@@ -207,7 +214,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		// An `Interval` iterable is not a nominal path at all, so `valueTypeSourceDeep` answers
 		// null for it and the binder stays unresolved. Pins that the arm reads the iterable's
 		// DECLARED type and never guesses `Int` from the loop's shape.
-		final model: String = 'class Str {\n\tpublic function indexOf(s:Str):Int return 0;\n}';
+		final model: String = MODEL_STR;
 		final params: String = 'q:Bool';
 		final source: String = wrapTyped('for (i in 0...10) {\n\t\t\tvar b = !(!q || i < 0);\n\t\t}', params);
 		final fixed: String = wrapTyped('for (i in 0...10) {\n\t\t\tvar b = q && !(i < 0);\n\t\t}', params);
@@ -219,9 +226,28 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		// SUPERTYPE's parameter; mapping it through `extends Base<T>` to `Der`'s `T` and on to the
 		// written `Item` is a link this index does not model. The verbatim `U` resolves to no type,
 		// so the chain dies and the wrap stays.
-		final model: String = 'class Str {\n\tpublic function indexOf(s:Str):Int return 0;\n}\n'
-			+ 'class Item {\n\tpublic var text:Str;\n}\n' + 'class Base<U> {\n\tpublic var u:U;\n}\n'
-			+ 'class Der<T:Item> extends Base<T> {}';
+		//
+		// This one does NOT discriminate the direct-member gate: the parameter names differ, so the
+		// index-lookup gate (`U` is not among `Der`'s parameters) rejects it first. The fixture that
+		// does is `testSupertypeParamNameCollisionKeepsWrap` below.
+		final model: String = MODEL_STR_ITEM + '\nclass Base<U> {\n\tpublic var u:U;\n}\nclass Der<T:Item> extends Base<T> {}';
+		final params: String = 'q:Bool, d:Der<Item>, k:Str';
+		final source: String = wrapTyped('var b = !(!q || d.u.text.indexOf(k) < 0);', params);
+		final fixed: String = wrapTyped('var b = q && !(d.u.text.indexOf(k) < 0);', params);
+		Assert.equals(fixed, fixedWith(source, model));
+	}
+
+	public function testSupertypeParamNameCollisionKeepsWrap(): Void {
+		// The DIRECT-MEMBER gate, isolated — and the one shape where losing it produces a WRONG
+		// concrete type rather than merely an unresolvable one. `Base<T>` and `Der<T>` both spell
+		// their parameter `T`, but `Der` passes `Str` up, not its own `T`. So `d.u` is a `Str`,
+		// which has no `text` member and no resolution: the wrap is the only sound answer.
+		//
+		// Without the gate the walk would find `u`'s source `T` through the supertype, match it
+		// against `Der`'s OWN parameter list, and substitute `Der`'s argument `Item` — after which
+		// `Item.text` resolves, `Str.indexOf` returns `Int`, and the comparison flips. Every later
+		// gate passes; only the direct-member test rejects this.
+		final model: String = MODEL_STR_ITEM + '\nclass Base<T> {\n\tpublic var u:T;\n}\nclass Der<T:Item> extends Base<Str> {}';
 		final params: String = 'q:Bool, d:Der<Item>, k:Str';
 		final source: String = wrapTyped('var b = !(!q || d.u.text.indexOf(k) < 0);', params);
 		final fixed: String = wrapTyped('var b = q && !(d.u.text.indexOf(k) < 0);', params);
@@ -233,7 +259,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		// iterable's `x` resolves straight back to the binder; without `seen` the arm would call
 		// itself forever. Reaching the assertion at all is the real subject — the unresolved
 		// answer that keeps the wrap is what termination looks like from outside.
-		final model: String = 'class Str {\n\tpublic function indexOf(s:Str):Int return 0;\n}';
+		final model: String = MODEL_STR;
 		final params: String = 'q:Bool, k:Str';
 		final source: String = wrapTyped('for (x in x) {\n\t\t\tvar b = !(!q || x.text.indexOf(k) < 0);\n\t\t}', params);
 		final fixed: String = wrapTyped('for (x in x) {\n\t\t\tvar b = q && !(x.text.indexOf(k) < 0);\n\t\t}', params);

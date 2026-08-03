@@ -486,54 +486,25 @@ final class SymbolIndexBuilder {
 	}
 
 	/**
-	 * The WRITTEN name of one header type-parameter segment (`@:const ?K:Base = Int`
-	 * -> `K`), or null when the segment does not start with a plain identifier once
-	 * its metadata run and optional `?` are stripped. The name ends at the first
-	 * `:` (constraint), `=` (default), `(` or whitespace.
+	 * The WRITTEN name of one header type-parameter segment (`K:Base` -> `K`), or null when the
+	 * segment does not start with a plain identifier. The name ends at the first `:` (constraint),
+	 * `=` (default) or whitespace - the only three things Haxe lets follow it.
+	 *
+	 * Metadata on a type parameter (`class C<@:const N>`) is deliberately NOT stepped over: the
+	 * grammar does not parse that declaration at all, so such a file is skipped by the index long
+	 * before this runs. Were it ever to parse, the segment would yield no identifier and refuse
+	 * the whole header - which is the fail-closed direction anyway.
 	 */
 	private static function typeParamNameOf(segment: String): Null<String> {
-		final stripped: Null<String> = stripLeadingMeta(segment);
-		if (stripped == null) return null;
-		var text: String = stripped;
-		if (text.length > 0 && StringTools.fastCodeAt(text, 0) == '?'.code) text = StringTools.trim(text.substring(1));
+		final text: String = StringTools.trim(segment);
 		var end: Int = 0;
 		while (end < text.length) {
 			final ch: Int = StringTools.fastCodeAt(text, end);
-			if (ch == ':'.code || ch == '='.code || ch == '('.code || RefactorSupport.isSpace(ch)) break;
+			if (ch == ':'.code || ch == '='.code || RefactorSupport.isSpace(ch)) break;
 			end++;
 		}
 		final name: String = text.substring(0, end);
 		return RefactorSupport.isIdentifier(name) ? name : null;
-	}
-
-	/**
-	 * `segment` trimmed and stripped of any leading metadata run - Haxe allows one on a type
-	 * parameter (`class C<@:const N>`), and it sits between the segment start and the name. Null
-	 * when a metadata argument list opens and never closes, which is the only shape this cannot
-	 * step over; `typeParamNameOf` turns that into a refusal for the whole header.
-	 */
-	private static function stripLeadingMeta(segment: String): Null<String> {
-		var text: String = StringTools.trim(segment);
-		while (text.length > 0 && StringTools.fastCodeAt(text, 0) == '@'.code) {
-			var i: Int = 1;
-			if (i < text.length && StringTools.fastCodeAt(text, i) == ':'.code) i++;
-			while (i < text.length && RefactorSupport.isIdentChar(StringTools.fastCodeAt(text, i))) i++;
-			if (i < text.length && StringTools.fastCodeAt(text, i) == '('.code) {
-				var depth: Int = 0;
-				while (i < text.length) {
-					final ch: Int = StringTools.fastCodeAt(text, i);
-					if (ch == '('.code)
-						depth++;
-					else if (ch == ')'.code)
-						depth--;
-					i++;
-					if (depth == 0) break;
-				}
-				if (depth != 0) return null;
-			}
-			text = StringTools.trim(text.substring(i));
-		}
-		return text;
 	}
 
 	/**
