@@ -11,6 +11,10 @@ import anyparse.query.TypeInfoProvider;
 
 using Lambda;
 
+import anyparse.query.SymbolIndex.FileInfo;
+import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.query.SymbolIndex.ImportKind;
+
 /**
  * Flags a class / abstract / interface member that omits an explicit type — a
  * field with no `:Type`, a function parameter with no `:Type`, or a function with
@@ -32,6 +36,35 @@ using Lambda;
  */
 @:nullSafety(Strict)
 final class ExplicitType implements Check {
+
+	/**
+	 * Simple names visible WITHOUT an import from every Haxe module — the standard library's root
+	 * package. `collectInheritedParamEdits` may copy one of these across files unconditionally;
+	 * every other name has to be proven to denote the same type on both sides. Hand-maintained on
+	 * purpose: the resolution index does not model the standard library unless a project happens to
+	 * name it as a resolution library, so this list — not the index — is what makes the common
+	 * `str:String` copy possible at all.
+	 */
+	private static final AMBIENT_TYPES: Array<String> = [
+		'Any',
+		'Array',
+		'Bool',
+		'Class',
+		'Dynamic',
+		'Enum',
+		'EnumValue',
+		'Float',
+		'Int',
+		'Iterable',
+		'Iterator',
+		'KeyValueIterator',
+		'Map',
+		'Null',
+		'Single',
+		'String',
+		'UInt',
+		'Void'
+	];
 
 	public function new() {}
 
@@ -89,6 +122,7 @@ final class ExplicitType implements Check {
 		final memberKinds: Array<String> = shape.memberDeclKinds ?? [];
 		final functions: Array<String> = [for (k in memberKinds) if (!fields.contains(k)) k];
 		collectVoidReturnEdits(tree, source, shape, violations, functions, memberKinds, edits);
+		collectInheritedParamEdits(tree, source, violations, plugin, index, functions, params, edits);
 		return edits;
 	}
 
@@ -236,6 +270,285 @@ final class ExplicitType implements Check {
 
 
 	/**
+	 * The INHERITED-SIGNATURE pass of `fix()`: type a flagged parameter by COPYING the annotation
+	 * the SAME method carries on a supertype or implemented interface of the enclosing type.
+	 * `class H implements I { public function get(str) … }` against
+	 * `interface I { function get(str:String):Bytes; }` yields `str:String` — the one parameter
+	 * type that is not an inference guess but a written declaration the implementation must match.
+	 *
+	 * The search is the transitive `supertypes` + `interfaces` closure of the enclosing type, and
+	 * EVERY ambiguity is a conservative skip that leaves the finding report-only, because a wrong
+	 * annotation breaks the build:
+	 *
+	 * - no `SymbolIndex` (the check ran outside a resolving fix path) or the enclosing type is not
+	 *   indexed / not found by span;
+	 * - a constructor — `new` is never inherited, so a supertype ctor's signature is unrelated;
+	 * - no type in the closure declares a member of that name (a plain method: its type would need
+	 *   the compiler oracle, which this pass does not use);
+	 * - a declaring type whose source is unavailable or does not parse, whose parameter list is
+	 *   SHORTER, whose parameter at that position carries a different OPTIONALITY (`?p` vs `p` are
+	 *   different node kinds and a mismatched implementation would not compile), or which leaves
+	 *   that parameter untyped as well;
+	 * - a GENERIC declaring type (`typeParamArity != 0`): it states its members with its own type
+	 *   parameters, which the implementation binds to anything, so a copied `T` names nothing here;
+	 * - two declaring types stating DIFFERENT type sources for the position;
+	 * - a parameter the initializer pass already annotated from its default value;
+	 * - a type source not usable from THIS file verbatim (`typeUsableFrom`). The pass copies a type
+	 *   REFERENCE, never an import: `AddImport` returns a whole rewritten source rather than a span
+	 *   edit, and a file whose import block sits inside `#if` regions has no safe insert slot to
+	 *   compute from a check's `fix`.
+	 */
+	private static function collectInheritedParamEdits(
+		tree: QueryNode, source: String, violations: Array<Violation>, plugin: GrammarPlugin, index: Null<SymbolIndex>,
+		functions: Array<String>, params: Array<String>, edits: Array<{ span: Span, text: String }>
+	): Void {
+		if (index == null || functions.length == 0 || params.length == 0 || violations.length == 0) return;
+		// Re-bound to a non-null local: strict null-safety narrowing does not reach a struct literal.
+		final idx: SymbolIndex = index;
+		final file: String = violations[0].file;
+		final fi: Null<FileInfo> = idx.fileInfo(file);
+		if (fi == null) return;
+		final owners: Array<TypeDeclInfo> = fi.types;
+		final flagged: Map<String, Bool> = [];
+		for (v in violations) {
+			final vs: Null<Span> = v.span;
+			if (vs != null) flagged['${vs.from}:${vs.to}'] = true;
+		}
+		final seams: InheritedSeams = {
+			idx: idx,
+			plugin: plugin,
+			file: file,
+			functions: functions,
+			params: params
+		};
+
+		function visit(node: QueryNode): Void {
+			final name: Null<String> = node.name;
+			if (functions.contains(node.kind) && name != null && name != 'new') {
+				final own: Array<QueryNode> = [for (c in node.children) if (params.contains(c.kind)) c];
+				final owner: Null<TypeDeclInfo> = enclosingType(owners, node.span);
+				if (owner != null) for (i in 0...own.length) paramEdit(seams, owner, name, own, i, source, edits, flagged);
+			}
+			for (c in node.children) visit(c);
+		}
+		visit(tree);
+	}
+
+	/**
+	 * Push the annotation edit for `own[i]` when it is flagged, not already annotated by another
+	 * pass, and the inherited declaration yields a type source usable from this file. Every failed
+	 * gate is a silent skip — the finding stays report-only.
+	 */
+	private static function paramEdit(
+		s: InheritedSeams, owner: TypeDeclInfo, method: String, own: Array<QueryNode>, i: Int, source: String,
+		edits: Array<{ span: Span, text: String }>, flagged: Map<String, Bool>
+	): Void {
+		final node: QueryNode = own[i];
+		final span: Null<Span> = node.span;
+		if (span == null || !flagged.exists('${span.from}:${span.to}')) return;
+		for (e in edits) if (e.span.from >= span.from && e.span.from <= span.to) return;
+		final found: Null<InheritedParam> = inheritedParam(s, owner, method, i, node.kind);
+		if (found == null) return;
+		if (!typeUsableFrom(s, found.text, found.file)) return;
+		final at: Int = node.children.length > 0 ? LiteralInfer.insertPoint(node, node.children[0], source) : span.to;
+		if (at >= 0) edits.push({ span: new Span(at, at), text: ':${found.text}' });
+	}
+
+	/** The innermost indexed type declaration of this file whose span contains `span`, or null. */
+	private static function enclosingType(owners: Array<TypeDeclInfo>, span: Null<Span>): Null<TypeDeclInfo> {
+		final s: Null<Span> = span;
+		if (s == null) return null;
+		var best: Null<TypeDeclInfo> = null;
+		for (t in owners) if (t.span.from <= s.from && s.to <= t.span.to) {
+			final b: Null<TypeDeclInfo> = best;
+			if (b == null || t.span.from >= b.span.from) best = t;
+		}
+		return best;
+	}
+
+	/**
+	 * The type source written for parameter `paramIndex` of `method` by the transitive supertype /
+	 * interface closure of `owner`, or null when no declaring type states one UNAMBIGUOUSLY. A type
+	 * that declares a member of that name but cannot yield a matching typed parameter aborts the
+	 * whole lookup rather than being skipped: it is evidence the position is not what this pass
+	 * assumes.
+	 */
+	private static function inheritedParam(
+		s: InheritedSeams, owner: TypeDeclInfo, method: String, paramIndex: Int, paramKind: String
+	): Null<InheritedParam> {
+		final queue: Array<String> = owner.supertypes.concat(owner.interfaces);
+		final seen: Array<String> = [owner.name];
+		var found: Null<InheritedParam> = null;
+		var at: Int = 0;
+		while (at < queue.length) {
+			final name: String = queue[at++];
+			if (seen.contains(name)) continue;
+			seen.push(name);
+			// A generic declaring type states its members with its OWN type parameters, which the
+			// implementation may bind to anything -- copying `T` verbatim never compiles. Refusing the
+			// whole lookup (not just this candidate) keeps the answer conservative.
+			for (fi in s.idx.declaringFiles(name)) for (t in fi.types) if (t.name == name) {
+				for (sup in t.supertypes.concat(t.interfaces)) queue.push(sup);
+				if (!t.members.exists(m -> m.name == method)) continue;
+				if (t.typeParamArity != 0) return null;
+				final src: Null<String> = s.idx.sourceOf(fi.file);
+				if (src == null) return null;
+				final text: Null<String> = declaredParamType(s, src, t.span, method, paramIndex, paramKind);
+				if (text == null) return null;
+				final prev: Null<InheritedParam> = found;
+				if (prev != null && prev.text != text) return null;
+				found = { text: text, file: fi.file };
+			}
+		}
+		return found;
+	}
+
+	/**
+	 * The verbatim `:Type` source of the `paramIndex`-th parameter of `method` declared inside
+	 * `typeSpan` of `src`, or null when the method node, the position, the optionality
+	 * (`paramKind`) or the annotation itself is not there.
+	 */
+	private static function declaredParamType(
+		s: InheritedSeams, src: String, typeSpan: Span, method: String, paramIndex: Int, paramKind: String
+	): Null<String> {
+		final provider: Null<TypeInfoProvider> = (s.plugin is TypeInfoProvider) ? cast s.plugin : null;
+		if (provider == null) return null;
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(s.plugin, src);
+		if (tree == null) return null;
+		final fn: Null<QueryNode> = memberNamed(tree, typeSpan, method, s.functions);
+		if (fn == null) return null;
+		final own: Array<QueryNode> = [for (c in fn.children) if (s.params.contains(c.kind)) c];
+		if (paramIndex >= own.length || own[paramIndex].kind != paramKind) return null;
+		final span: Null<Span> = own[paramIndex].span;
+		return span == null ? null : provider.declaredTypeSources(src)[span.from];
+	}
+
+	/**
+	 * The function node named `method` inside `typeSpan` — located by span containment rather than
+	 * by a type-declaration kind, so no extra grammar seam is needed. A node that is itself a
+	 * parameter host is the only shape searched, and a local function / lambda never carries a
+	 * member kind, so nesting cannot produce a false hit.
+	 */
+	private static function memberNamed(node: QueryNode, typeSpan: Span, method: String, functions: Array<String>): Null<QueryNode> {
+		final span: Null<Span> = node.span;
+		if (functions.contains(node.kind) && node.name == method && span != null && span.from >= typeSpan.from && span.to <= typeSpan.to)
+			return node;
+		for (c in node.children) {
+			final hit: Null<QueryNode> = memberNamed(c, typeSpan, method, functions);
+			if (hit != null) return hit;
+		}
+		return null;
+	}
+
+	/**
+	 * Whether `typeText` can be written VERBATIM in the file being fixed and MEAN THERE WHAT IT
+	 * MEANS in `declFile`. Both halves matter: a name that merely resolves on both sides can still
+	 * resolve to two DIFFERENT types (`import a.Payload` here, `import b.Payload` in the interface),
+	 * and Haxe rejects the resulting override with a type mismatch.
+	 *
+	 * Per nominal, in order:
+	 *
+	 * - one of `AMBIENT_TYPES` → yes, it means the same thing in every module;
+	 * - brought in by a `#if`-guarded import on EITHER side → no: `ImportInfo.guarded` marks an
+	 *   import whose presence is branch-dependent while the index is branch-blind, so the name
+	 *   would not resolve in the other configuration;
+	 * - resolvable from BOTH files to exactly one declaration each, and it is the SAME declaration
+	 *   (same file, same span) → yes;
+	 * - resolvable from neither (a type the index does not model at all — the standard library is
+	 *   normally absent) AND both files carry the identical plain `import` path for the name → yes;
+	 * - anything else → no. That includes a name resolvable on one side only (it would need an
+	 *   import this pass does not add), an ambiguous simple name, and a type declared in a file the
+	 *   index SKIPPED, which is indistinguishable from an unknown one.
+	 */
+	private static function typeUsableFrom(s: InheritedSeams, typeText: String, declFile: String): Bool {
+		final here: Null<FileInfo> = s.idx.fileInfo(s.file);
+		final there: Null<FileInfo> = s.idx.fileInfo(declFile);
+		if (here == null || there == null) return false;
+		for (n in nominalsOf(typeText)) {
+			if (AMBIENT_TYPES.contains(n)) continue;
+			if (guardedImportOf(here, n) || guardedImportOf(there, n)) return false;
+			final mine: Array<{ file: FileInfo, type: TypeDeclInfo }> = s.idx.resolveTypeRefsFrom(n, s.file);
+			final theirs: Array<{ file: FileInfo, type: TypeDeclInfo }> = s.idx.resolveTypeRefsFrom(n, declFile);
+			if (mine.length == 1 && theirs.length == 1) {
+				if (mine[0].file.file != theirs[0].file.file || mine[0].type.span.from != theirs[0].type.span.from) return false;
+				continue;
+			}
+			if (mine.length != 0 || theirs.length != 0) return false;
+			final path: Null<String> = plainImportPathOf(here, n);
+			if (path == null || path != plainImportPathOf(there, n)) return false;
+		}
+		return true;
+	}
+
+	/** Whether `fi` names `simple` in an import / using path's last segment, or binds it as an import alias. */
+	private static function plainImportPathOf(fi: FileInfo, simple: String): Null<String> {
+		var found: Null<String> = null;
+		for (imp in fi.imports) if (!imp.guarded && imp.kind == ImportKind.Import) {
+			final dot: Int = imp.raw.lastIndexOf('.');
+			if ((dot < 0 ? imp.raw : imp.raw.substr(dot + 1)) != simple) continue;
+			if (found != null && found != imp.raw) return null;
+			found = imp.raw;
+		}
+		return found;
+	}
+
+	/**
+	 * Whether `fi` brings `simple` into scope only under a conditional-compilation guard — an
+	 * `ImportInfo.guarded` import (or an alias binding the name). The reference index is branch-blind,
+	 * so such an import reads as unconditional; copying a type that rests on it emits a name that does
+	 * not resolve in the other configuration.
+	 */
+	private static function guardedImportOf(fi: FileInfo, simple: String): Bool {
+		for (imp in fi.imports) if (imp.guarded) switch imp.kind {
+			case ImportKind.Import | ImportKind.Using:
+				final dot: Int = imp.raw.lastIndexOf('.');
+				if ((dot < 0 ? imp.raw : imp.raw.substr(dot + 1)) == simple) return true;
+			case ImportKind.Alias:
+				if (imp.alias == simple) return true;
+			case ImportKind.Wild:
+				return true;
+		}
+		return false;
+	}
+
+	/**
+	 * The distinct SIMPLE nominal names a written type source mentions — `Null<pkg.Box<Int>>` →
+	 * `Null`, `Box`, `Int`. Identifier runs are split on every other character (so generics,
+	 * function arrows and anonymous-structure punctuation all fall away), each run is reduced to
+	 * its last dotted segment, and a run that does not start upper-case (a package segment, an
+	 * anonymous field name) is dropped.
+	 *
+	 * A type PARAMETER is NOT distinguishable here — `T` scans exactly like a nominal — which is
+	 * why the generic case is refused one level up, on the declaring type's `typeParamArity`,
+	 * rather than left to `typeUsableFrom`.
+	 */
+	private static function nominalsOf(typeText: String): Array<String> {
+		final out: Array<String> = [];
+		var i: Int = 0;
+		while (i < typeText.length) {
+			if (!isNominalPart(StringTools.fastCodeAt(typeText, i))) {
+				i++;
+				continue;
+			}
+			final start: Int = i;
+			while (i < typeText.length && isNominalPart(StringTools.fastCodeAt(typeText, i))) i++;
+			final token: String = typeText.substring(start, i);
+			final dot: Int = token.lastIndexOf('.');
+			final simple: String = dot < 0 ? token : token.substr(dot + 1);
+			final head: Int = StringTools.fastCodeAt(simple, 0);
+			if (head >= 'A'.code && head <= 'Z'.code && !out.contains(simple)) out.push(simple);
+		}
+		return out;
+	}
+
+	/** Whether `c` continues a dotted type-reference token — a letter, digit, `_` or `.`. */
+	private static inline function isNominalPart(c: Int): Bool {
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code
+			|| c == '.'.code;
+	}
+
+
+	/**
 	 * The initializer pass of `fix()`: for each flagged field / parameter whose
 	 * initializer's type is statically certain, push a `:T` annotation edit.
 	 * Return-type violations key the whole function and are absent from the
@@ -273,3 +586,27 @@ final class ExplicitType implements Check {
 	}
 
 }
+
+/**
+ * One inherited parameter annotation: the VERBATIM type source `text` written for the position,
+ * and the `file` of the supertype / interface that wrote it — the second half is what
+ * `ExplicitType.typeUsableFrom` needs to tell an ambient top-level name from one that only
+ * resolved because the DECLARING file imported it.
+ */
+private typedef InheritedParam = {
+	final text: String;
+	final file: String;
+};
+
+/**
+ * The read-only context `ExplicitType.collectInheritedParamEdits` threads through its helpers: the
+ * resolving `idx`, the `plugin` that parses a declaring file, the `file` being fixed (the
+ * resolution origin for every copied type reference), and the member / parameter kind seams.
+ */
+private typedef InheritedSeams = {
+	final idx: SymbolIndex;
+	final plugin: GrammarPlugin;
+	final file: String;
+	final functions: Array<String>;
+	final params: Array<String>;
+};

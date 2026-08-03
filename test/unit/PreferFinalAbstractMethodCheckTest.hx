@@ -212,6 +212,32 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * lime's `@:forward abstract Bytes(HaxeBytes)` shape: the underlying is spelled with the
+	 * DECLARING file's import alias (`import haxe.io.Bytes as HaxeBytes`), which a simple-name
+	 * index can never resolve. "Underlying not found" is therefore no evidence either way, so the
+	 * walk must answer UNKNOWN and let the caller's stdlib whitelist decide -- `Bytes` is
+	 * final-safe, so the field IS flagged. Answering "rebinds" made ADDING the library to the
+	 * resolution scope silence a field that was flagged without it.
+	 *
+	 * Discriminated against `testForwardToUnresolvedUnderlyingNotFlagged` above, whose abstract
+	 * (`W3`) is NOT on the whitelist: same unresolved underlying, still conservatively kept.
+	 */
+	public function testForwardToAliasedUnderlyingWhitelistedNameFlagged(): Void {
+		final vs: Array<Violation> = fieldViolations(
+			'@:forward abstract Bytes(HaxeBytes) { public inline function new(v:HaxeBytes) this = v; } class C { private var _b:Bytes = make(); function r():Void _b.blit(); function make():Bytes return null; }'
+		);
+		Assert.equals(1, vs.length);
+	}
+
+	/** The local mirror of the aliased-underlying case -- same unknown-not-unsafe resolution, same verdict. */
+	public function testForwardToAliasedUnderlyingWhitelistedNameLocalFlagged(): Void {
+		final vs: Array<Violation> = localViolations(
+			'@:forward abstract Bytes(HaxeBytes) { public inline function new(v:HaxeBytes) this = v; } class C { function r():Void { var b:Bytes = make(); b.blit(); trace(b); } function make():Bytes return null; }'
+		);
+		Assert.equals(1, vs.length);
+	}
+
 	private function fieldViolations(src: String): Array<Violation> {
 		return new PreferFinalField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

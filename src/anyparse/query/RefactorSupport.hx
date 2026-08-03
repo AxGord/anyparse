@@ -1641,27 +1641,33 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * Whether a never-reassigned `var` (field or local) named `name` with declared
-	 * simple type `declType` must STAY mutable because a method call on it may reassign
-	 * an `abstract`'s underlying `this` — a mutation the assignment-operator write scans
-	 * cannot see (`abstract Step(Int) { function next():Void this = this + 1; }` mutated
-	 * only via `_s.next()`). Finalizing such a binding produces code the compiler rejects
-	 * ("Cannot modify abstract value of final field").
-	 *
-	 * `index` is forced lazily — only after a method call is found — so most runs never build it. When
-	 * the plugin carries a resolution scope, the forced index resolves against the configured libraries
-	 * too, so a library abstract (e.g. openfl `ByteArray`) is recognised rather than treated as unknown.
-	 *
-	 * True (keep the `var`) when `name` has a method call in `source` outside its own declaration
-	 * `exclude` AND its type either resolves to an abstract that may REBIND `this`
-	 * (`SymbolIndex.abstractRebindsThis`) or is an UNRESOLVED non-stdlib type whose abstractness cannot
-	 * be ruled out. False — the `final` suggestion stays sound and useful — for a resolved non-abstract
-	 * type, a RESOLVED abstract whose only `this`-writes are in its constructor (the compiler forbids
-	 * `this =` outside inline members and `final` rejects an inline this-writer transitively, so a
-	 * ctor-only writer like `ByteArray` is final-safe) or that only `@:forward`s to a class underlying
-	 * (which mutates the object, never the binding), a stdlib value type, an untyped binding, or no
+		 * Whether a never-reassigned `var` (field or local) named `name` with declared
+		 * simple type `declType` must STAY mutable because a method call on it may reassign
+		 * an `abstract`'s underlying `this` — a mutation the assignment-operator write scans
+		 * cannot see (`abstract Step(Int) { function next():Void this = this + 1; }` mutated
+		 * only via `_s.next()`). Finalizing such a binding produces code the compiler rejects
+		 * ("Cannot modify abstract value of final field").
+		 *
+		 * `index` is forced lazily — only after a method call is found — so most runs never build it. When
+		 * the plugin carries a resolution scope, the forced index resolves against the configured libraries
+		 * too, so a library abstract (e.g. openfl `ByteArray`) is recognised rather than treated as unknown.
+		 *
+		 * True (keep the `var`) when `name` has a method call in `source` outside its own declaration
+		 * `exclude` AND its type either resolves to an abstract that may REBIND `this`
+		 * (`SymbolIndex.abstractRebindsThis`) or is an UNRESOLVED non-stdlib type whose abstractness cannot
+		 * be ruled out. False — the `final` suggestion stays sound and useful — for a resolved non-abstract
+		 * type, a RESOLVED abstract whose only `this`-writes are in its constructor (the compiler forbids
+		 * `this =` outside inline members and `final` rejects an inline this-writer transitively, so a
+		 * ctor-only writer like `ByteArray` is final-safe) or that only `@:forward`s to a class underlying
+		  * (which mutates the object, never the binding), a stdlib value type, an untyped binding, or no
 	 * method call. A `@:build` abstract bails conservative (its members may be macro-generated and
-	 * invisible). Conservative: it only ever KEEPS a `var`, never produces a wrong `final`.
+	 * invisible).
+	 *
+	 * The `finalSafeStdlibTypes` whitelist is the ONE place this can be wrong, and its authority now
+	 * extends past the fully-unresolved case: an abstract whose `@:forward` underlying the index cannot
+	 * resolve answers `null` (see `SymbolIndex.abstractRebindsThis`), so a WHITELISTED simple name
+	 * shadowed by such an abstract is called final-safe on the whitelist's word. Everything else only
+	 * ever KEEPS a `var`.
 	 */
 	public static function abstractMethodMayMutate(
 		source: String, name: String, declType: Null<String>, exclude: Span, index: () -> Null<SymbolIndex>, abstractKinds: Array<String>

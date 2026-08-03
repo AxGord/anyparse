@@ -8,6 +8,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import anyparse.query.SymbolIndex;
 
 /**
  * The `explicit-type` check: a member field with no `:Type`, a function parameter
@@ -346,6 +347,243 @@ class ExplicitTypeCheckTest extends Test {
 	public function testFixSkipsParenBareNew(): Void {
 		// A bare `new Foo()` could be generic — the paren must not change that verdict.
 		Assert.equals(0, fixCount('class C { public var a = (new Foo()); }'));
+	}
+
+	// --- parameter types copied from an implemented / overridden signature ---
+
+	private static inline final IFACE: String =
+		'interface I {\n\tpublic function grab(str:String):Int;\n\tpublic function opt(?flag:Bool):Void;\n}';
+
+	/** The implemented interface states the parameter type, so the implementation copies it verbatim. */
+	public function testFixParamFromInterface(): Void {
+		final out: String = scopedFix('class Impl implements I { public function grab(str):Int return 0; }');
+		Assert.isTrue(out.indexOf('grab(str:String)') != -1, 'got: $out');
+	}
+
+	/** An overridden SUPERCLASS method is the same lookup — `supertypes` and `interfaces` share one closure. */
+	public function testFixParamFromSuperclass(): Void {
+		final out: String = scopedFix('class Impl extends B { override public function take(v):Void {} }', [
+			{ file: 'B.hx', source: 'class B {\n\tpublic function new() {}\n\tpublic function take(v:Float):Void {}\n}' }
+		]);
+		Assert.isTrue(out.indexOf('take(v:Float)') != -1, 'got: $out');
+	}
+
+	/** The closure is TRANSITIVE: the type comes from the interface the implemented one extends. */
+	public function testFixParamFromTransitiveInterface(): Void {
+		final out: String = scopedFix('class Impl implements Mid { public function deep(n):Void {} }', [
+			{ file: 'Mid.hx', source: 'interface Mid extends Root {}' },
+			{ file: 'Root.hx', source: 'interface Root {\n\tpublic function deep(n:Int):Void;\n}' }
+		]);
+		Assert.isTrue(out.indexOf('deep(n:Int)') != -1, 'got: $out');
+	}
+
+	/** An optional parameter matches an optional declaration — the `?` sigil is part of the node kind, and it agrees. */
+	public function testFixOptionalParamFromInterface(): Void {
+		final out: String = scopedFix('class Impl implements I { public function opt(?flag):Void {} }');
+		Assert.isTrue(out.indexOf('opt(?flag:Bool)') != -1, 'got: $out');
+	}
+
+	/** A NON-optional implementation of an optional declaration is a signature mismatch — skipped, not "fixed" into one. */
+	public function testFixSkipsOptionalitySigilMismatch(): Void {
+		final out: String = scopedFix('class Impl implements I { public function opt(flag):Void {} }');
+		Assert.equals(-1, out.indexOf(':Bool'), 'got: $out');
+	}
+
+	/**
+	 * A method no supertype declares has no written type to copy — report-only (its type would
+	 * need the compiler oracle). CONTRACT, not a gate revert: there is no datum to find, so no
+	 * implementation of the pass could emit here.
+	 */
+	public function testFixSkipsMethodWithNoDeclaredCounterpart(): Void {
+		final out: String = scopedFix('class Impl implements I { public function solo(v):Void {} }');
+		Assert.equals(-1, out.indexOf('solo(v:'), 'got: $out');
+	}
+
+	/** A constructor is never inherited — a superclass ctor's parameter list says nothing about this one. */
+	public function testFixSkipsConstructor(): Void {
+		final out: String = scopedFix(
+			'class Impl extends B { public function new(v) { super(); } }',
+			[{ file: 'B.hx', source: 'class B {\n\tpublic function new(v:Float) {}\n}' }]
+		);
+		Assert.equals(-1, out.indexOf('new(v:'), 'got: $out');
+	}
+
+	/** Two implemented interfaces stating DIFFERENT types for the position: no unambiguous answer, so no edit. */
+	public function testFixSkipsConflictingDeclarations(): Void {
+		final out: String = scopedFix('class Impl implements A implements B2 { public function both(v):Void {} }', [
+			{ file: 'A.hx', source: 'interface A {\n\tpublic function both(v:Int):Void;\n}' },
+			{ file: 'B2.hx', source: 'interface B2 {\n\tpublic function both(v:String):Void;\n}' }
+		]);
+		Assert.equals(-1, out.indexOf('both(v:'), 'got: $out');
+	}
+
+	/**
+	 * The declaring type states the member but with a SHORTER parameter list — the position is not
+	 * what the pass assumes. CONTRACT, not a gate revert: the guard is a bounds check whose removal
+	 * cannot compile under strict null-safety, so no build discriminates it; what it pins is that a
+	 * mismatched arity yields NO annotation rather than one copied from a clamped position.
+	 */
+	public function testFixSkipsShorterDeclaredParamList(): Void {
+		final out: String = scopedFix('class Impl implements Sh { public function pair(a:Int, b):Void {} }', [
+			{ file: 'Sh.hx', source: 'interface Sh {\n\tpublic function pair(a:Int):Void;\n}' }
+		]);
+		Assert.equals(-1, out.indexOf('b:'), 'got: $out');
+	}
+
+	/**
+	 * The declaring type leaves the same parameter untyped — nothing to copy. CONTRACT, not a gate
+	 * revert: `declaredTypeSources` simply has no entry for the position.
+	 */
+	public function testFixSkipsUntypedDeclaredParam(): Void {
+		final out: String = scopedFix(
+			'class Impl implements Un { public function u(v):Void {} }',
+			[{ file: 'Un.hx', source: 'interface Un {\n\tpublic function u(v):Void;\n}' }]
+		);
+		Assert.equals(-1, out.indexOf('u(v:'), 'got: $out');
+	}
+
+	/**
+	 * The declared type is visible to the INTERFACE (which imports it) but not to this file — the
+	 * pass copies a type reference, never an import, so it skips rather than emit a name that does
+	 * not resolve here.
+	 */
+	public function testFixSkipsTypeNotInScopeHere(): Void {
+		final out: String = scopedFix('class Impl implements Pk { public function take(p):Void {} }', packaged());
+		Assert.equals(-1, out.indexOf('take(p:'), 'got: $out');
+	}
+
+	/** The same shape once THIS file imports the type: it resolves here, so the annotation is copied. */
+	public function testFixCopiesTypeAlreadyImportedHere(): Void {
+		final out: String = scopedFix('import pkg.Payload;\n\nclass Impl implements Pk { public function take(p):Void {} }', packaged());
+		Assert.isTrue(out.indexOf('take(p:Payload)') != -1, 'got: $out');
+	}
+
+	/**
+	 * Without a `SymbolIndex` (a non-resolving fix path) the pass cannot look anything up and stays
+	 * silent. CONTRACT, not a gate revert: the null check is what makes the pass type-check at all.
+	 */
+	public function testFixWithoutIndexSkips(): Void {
+		final src: String = '${IFACE}\n\nclass Impl implements I { public function grab(str):Int return 0; }';
+		final check: ExplicitType = new ExplicitType();
+		final vs: Array<Violation> = check.run([{ file: 'Impl.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	/**
+	 * A GENERIC interface states its members with its OWN type parameter, which the implementation
+	 * binds to anything — copying `T` verbatim emits a name that resolves to nothing. Refused on
+	 * the declaring type's `typeParamArity`, because a type parameter scans exactly like a nominal
+	 * and no name-level gate can tell them apart.
+	 */
+	public function testFixSkipsGenericDeclaringType(): Void {
+		final out: String = scopedFix('class Impl implements Gen { public function f(v):Void {} }', [
+			{ file: 'Gen.hx', source: 'interface Gen<T> {\n\tpublic function f(v:T):Void;\n}' }
+		]);
+		Assert.equals(-1, out.indexOf('f(v:'), 'got: $out');
+	}
+
+	/**
+	 * The nominal resolves on BOTH sides but to DIFFERENT declarations (`a.Payload` in the
+	 * interface, `b.Payload` here). Copying it produces an override Haxe rejects with a type
+	 * mismatch, so "the name resolves here" is not on its own a sufficient gate.
+	 */
+	public function testFixSkipsSameNameDifferentPackages(): Void {
+		final out: String = scopedFix('import b.Payload;\n\nclass Impl implements Dp { public function take(p):Void {} }', [
+			{ file: 'a/Payload.hx', source: 'package a;\n\nclass Payload {\n\tpublic function new() {}\n}' },
+			{ file: 'b/Payload.hx', source: 'package b;\n\nclass Payload {\n\tpublic function new() {}\n}' },
+			{ file: 'Dp.hx', source: 'import a.Payload;\n\ninterface Dp {\n\tpublic function take(p:Payload):Void;\n}' }
+		]);
+		Assert.equals(-1, out.indexOf('take(p:'), 'got: $out');
+	}
+
+	/**
+	 * A LOCAL function in an earlier member carries the same name slot and is reached first in
+	 * pre-order, so the declaring-method lookup must test the member KIND — copying the local's
+	 * parameter type would annotate the override with an unrelated one.
+	 */
+	public function testFixIgnoresLocalFunctionOfTheSameName(): Void {
+		final out: String = scopedFix('class Impl extends Lb { override public function f(v):Void {} }', [
+			{
+				file: 'Lb.hx',
+				source: 'class Lb {\n\tpublic function new() {}\n\tpublic function a():Void { function f(v:String) { trace(v); } f("x"); }\n\tpublic function f(v:Float):Void {}\n}'
+			}
+		]);
+		Assert.isTrue(out.indexOf('f(v:Float)') != -1, 'got: $out');
+	}
+
+	/**
+	 * The only import bringing the type into THIS file sits inside `#if` — `ImportInfo.guarded`.
+	 * The reference index is branch-blind, so it reads as unconditional; copying a type that rests
+	 * on it emits a name that does not resolve in the other configuration.
+	 */
+	public function testFixSkipsGuardedImport(): Void {
+		final out: String = scopedFix(
+			'#if js\nimport pkg.Payload;\n#end\n\nclass Impl implements Pk { public function take(p):Void {} }', packaged()
+		);
+		Assert.equals(-1, out.indexOf('take(p:'), 'got: $out');
+	}
+
+	/**
+	 * Neither side's index models the type (a standard-library one, and the standard library is
+	 * normally outside the resolution scope), but both files carry the IDENTICAL plain import path
+	 * — the one shape where an un-indexed name still provably means the same thing on both sides.
+	 * PIN of preserved behaviour across the `typeUsableFrom` rewrite, not a gate revert.
+	 */
+	public function testFixCopiesUnindexedTypeImportedIdenticallyOnBothSides(): Void {
+		final out: String = scopedFix('import haxe.io.Bytes;\n\nclass Impl implements By { public function w(b):Void {} }', [
+			{ file: 'By.hx', source: 'import haxe.io.Bytes;\n\ninterface By {\n\tpublic function w(b:Bytes):Void;\n}' }
+		]);
+		Assert.isTrue(out.indexOf('w(b:Bytes)') != -1, 'got: $out');
+	}
+
+	/**
+	 * The same un-indexed type imported by the DECLARING file only: nothing proves it resolves here,
+	 * so it is skipped. PIN of preserved behaviour across the `typeUsableFrom` rewrite.
+	 */
+	public function testFixSkipsUnindexedTypeImportedOnOneSide(): Void {
+		final out: String = scopedFix('class Impl implements By { public function w(b):Void {} }', [
+			{ file: 'By.hx', source: 'import haxe.io.Bytes;\n\ninterface By {\n\tpublic function w(b:Bytes):Void;\n}' }
+		]);
+		Assert.equals(-1, out.indexOf('w(b:'), 'got: $out');
+	}
+
+	/**
+	 * `String` needs no import in any module, so it copies with nothing indexed at all — the
+	 * motivating case, and what `AMBIENT_TYPES` exists for. PIN: it must survive every tightening
+	 * of `typeUsableFrom`, since no index models the standard library.
+	 */
+	public function testFixCopiesAmbientTypeWithNothingIndexed(): Void {
+		final out: String = scopedFix('class Impl implements I { public function grab(str):Int return 0; }');
+		Assert.isTrue(out.indexOf('grab(str:String)') != -1, 'got: $out');
+	}
+
+	/** A `pkg.Payload` the interface imports and the implementation does not. */
+	private function packaged(): Array<{ file: String, source: String }> {
+		return [
+			{ file: 'pkg/Payload.hx', source: 'package pkg;\n\nclass Payload {\n\tpublic function new() {}\n}' },
+			{ file: 'Pk.hx', source: 'import pkg.Payload;\n\ninterface Pk {\n\tpublic function take(p:Payload):Void;\n}' }
+		];
+	}
+
+	/**
+	 * Apply `fix` to `impl` (keyed `Impl.hx`) with a `SymbolIndex` built over it plus `decls`
+	 * (default: the shared `I` interface) — the resolving path `lint --fix` takes.
+	 */
+	private function scopedFix(impl: String, ?decls: Array<{ file: String, source: String }>): String {
+		final files: Array<{ file: String, source: String }> = [{ file: 'Impl.hx', source: impl }].concat(decls ?? [
+			{
+				file: 'I.hx',
+				source: IFACE
+			}
+		]);
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: ExplicitType = new ExplicitType();
+		final vs: Array<Violation> = check.run(files, plugin).filter(v -> v.file == 'Impl.hx');
+		final edits: Array<{ span: Span, text: String }> = check.fix(impl, vs, plugin, SymbolIndex.build(files, plugin));
+		edits.sort((a, b) -> b.span.from - a.span.from);
+		var result: String = impl;
+		for (e in edits) result = result.substring(0, e.span.from) + e.text + result.substring(e.span.to);
+		return result;
 	}
 
 	private function violations(src: String): Array<Violation> {

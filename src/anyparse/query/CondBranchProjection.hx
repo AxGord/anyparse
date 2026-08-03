@@ -20,7 +20,13 @@ final class CondBranchProjection {
 	 * The synthetic node kind `branchAwareTree` wraps one conditional-compilation branch's
 	 * statement run in. A grammar opts into the projection by naming it in its
 	 * `ControlFlowSupport.blockKinds()`; it must NOT join `emptyFlagKinds()` (an empty branch is
-	 * not an empty block) nor `RefShape.scopeKinds` (a `#if` branch is not a scope).
+	 * not an empty block) nor `RefShape.scopeKinds` (a `#if` branch is not a scope: a declaration
+	 * written inside `#if` is still visible after `#end`, and a scope kind would hide it from the
+	 * enclosing frame's pre-collect).
+	 *
+	 * `Refs.walkMulti` nonetheless treats the kind as a resolution PREFERENCE — a reference
+	 * inside a branch binds to that branch's own declaration before a same-name declaration of a
+	 * mutually exclusive sibling branch — without making it a scope; see the comment there.
 	 */
 	public static inline final COND_BRANCH_KIND: String = 'CondBranch';
 

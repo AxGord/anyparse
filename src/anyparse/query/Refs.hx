@@ -135,16 +135,8 @@ final class Refs {
 		// ref emission; only a macro interpolation (`interpolationKinds`: `${…}` /
 		// `$v{…}`) re-opens normal resolution for its own subtree, where an
 		// identifier IS a genuine compile-time reference.
-		final isScope: Bool = !macroEmit && shape.scopeKinds.contains(node.kind);
-		if (isScope) {
-			final frame: ScopeFrame = new ScopeFrame(node);
-			collectDeclsMulti(node, shape, frame, out);
-			final selfSpan: Null<Span> = node.span;
-			final selfName: Null<String> = node.name;
-			if (selfSpan != null && selfName != null && out.exists(selfName) && shape.selfScopeDeclKinds.contains(node.kind))
-				frame.declare(selfName, selfSpan);
-			scopes.push(frame);
-		}
+		final frame: Null<ScopeFrame> = frameFor(node, shape, macroEmit, out);
+		if (frame != null) scopes.push(frame);
 		if (!macroEmit) {
 			final nname: Null<String> = node.name;
 			if (nname != null) {
@@ -168,7 +160,42 @@ final class Refs {
 		final isWriteParent: Bool = shape.writeParentKinds.contains(node.kind);
 		final children: Array<QueryNode> = node.children;
 		for (i in 0...children.length) walkMulti(children[i], shape, scopes, out, isWriteParent && i == 0, childMacroEmit, skipped);
-		if (isScope) scopes.pop();
+		if (frame != null) scopes.pop();
+	}
+
+	/**
+	 * The scope frame `node` opens, primed with the declarations it binds, or null when it opens none.
+	 * Two kinds open one:
+	 *
+	 * - a grammar `scopeKinds` node — a real lexical scope, which also binds its OWN name when it is a
+	 *   `selfScopeDeclKinds` host (a `for` iterator, a catch-clause exception);
+	 * - the branch-aware projection's synthetic `CondBranch`. That one is NOT a lexical scope — a
+	 *   declaration written inside `#if` stays visible after `#end`, and the enclosing frame's
+	 *   pre-collect already holds it — but a resolution PREFERENCE: a reference inside a branch binds
+	 *   to that branch's own declaration before any same-name declaration of a MUTUALLY EXCLUSIVE
+	 *   sibling branch. Without the frame the enclosing block's first-wins rule binds EVERY branch's
+	 *   reads to the FIRST branch's declaration, so a name declared in two sibling branches reads as
+	 *   twice-referenced in one branch and unreferenced in the other.
+	 *
+	 * The preference is exact INSIDE a region only: a reference past `#end` still resolves through the
+	 * enclosing frame, i.e. to the first branch's declaration, while the compiler resolves it to
+	 * whichever branch is active. A consumer that reasons about a branch declaration's reference COUNT
+	 * must handle that itself (`JoinReturn.escapesConditionalRegion`).
+	 *
+	 * Only the branch-aware projection carries the kind, so a plain parse frames byte-identically to
+	 * before.
+	 */
+	private static function frameFor(node: QueryNode, shape: RefShape, macroEmit: Bool, out: Map<String, Array<RefHit>>): Null<ScopeFrame> {
+		if (macroEmit) return null;
+		final isScope: Bool = shape.scopeKinds.contains(node.kind);
+		if (!isScope && node.kind != CondBranchProjection.COND_BRANCH_KIND) return null;
+		final frame: ScopeFrame = new ScopeFrame(node);
+		collectDeclsMulti(node, shape, frame, out);
+		final selfSpan: Null<Span> = node.span;
+		final selfName: Null<String> = node.name;
+		if (isScope && selfSpan != null && selfName != null && out.exists(selfName) && shape.selfScopeDeclKinds.contains(node.kind))
+			frame.declare(selfName, selfSpan);
+		return frame;
 	}
 
 	private static function collectDeclsMulti(
