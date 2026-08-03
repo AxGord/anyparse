@@ -107,8 +107,14 @@ import anyparse.format.UniformStatementBlanksPolicy;
  *    (`case X: foo();`); `Next` keeps `case X:` and the body on separate
  *    lines; `Keep` (default) flattens only when the source had the stmt
  *    on the same line as `:` (reads `Trivial<T>.newlineBefore` of the
- *    body's first element); `FitLine` degrades to `Next`. Multi-stmt
- *    bodies always stay multiline.
+ *    body's first element); `FitLine` (ω-case-body-fitline) measures the
+ *    flat `case <patterns>: <body>` line — the live column after the
+ *    header plus the body's flat width incl. its `;` and any folded
+ *    trailing comment — against `lineWidth`, staying inline at
+ *    `<= lineWidth` and moving the WHOLE body one indent deeper
+ *    otherwise. `FitLine` ignores the source shape (that axis is
+ *    `Keep`'s), so an author-broken body that fits re-joins the label.
+ *    Multi-stmt bodies always stay multiline.
  *  - `expressionCase` — same shape, selected instead of `caseBody` when
  *    `_inExprPosition` is set (expression-context switches such as
  *    `var x = switch … { case Y: 1; }`). Sibling JSON key in

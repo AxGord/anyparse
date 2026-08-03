@@ -63,9 +63,12 @@ package anyparse.grammar.haxe.format;
  * is the sibling knob for switches used in expression position
  * (`var x = switch ... { case Y: 1; }`); the loader maps it onto the
  * runtime `expressionCase` option. Both knobs feed the same Star body
- * site at runtime (the writer ORs them together — any `Same` value
- * triggers single-stmt flatten; `FitLine` and `Keep` degrade to `Next`
- * until those policies are wired for case bodies in a follow-up slice).
+ * site at runtime, dispatched on `opt._inExprPosition` (ω-issue-423-
+ * mech-a) rather than OR-ed: `Same` flattens a single-stmt body
+ * unconditionally, `Keep` flattens only when the source had it on the
+ * case line, and `FitLine` (ω-case-body-fitline) defers the choice to
+ * the renderer — the body stays inline while `case <patterns>: <body>`
+ * fits `maxLineLength` and moves one indent deeper otherwise.
  *
  * `functionBody` (ω-functionBody-policy) is the same three-way body-
  * placement knob shape as `ifBody`, gating the separator between the
