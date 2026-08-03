@@ -205,6 +205,21 @@ class ImportBlockOrderCheckTest extends Test {
 		Assert.equals(0, violations(inserted).length, 'the insert seat and the rule agree:\n$inserted');
 	}
 
+	public function testAnInsertIntoARunSplitFileSatisfiesTheRule(): Void {
+		// The two-wave incident, as the acceptance for the RUN model. A `using` splits the imports
+		// into two runs, each sorted, their concatenation not — read as one list the file looks
+		// unordered, the fresh import is appended past the file's last import, and THIS rule then
+		// reports the line the inserter had just placed. One shared run model, zero waves.
+		final src: String = 'package app;\n\nimport a.Alpha;\nimport m.Mid;\nimport z.Zeta;\n'
+			+ '\nusing ext.Tools;\n\nimport b.Bee;\nimport c.Cee;\n\nclass C {}\n';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		Assert.equals(0, violations(src).length, 'the shape starts clean');
+		final printer: TypeRefPrinter = TypeRefPrinter.forFile(src, plugin.parseFile(src), plugin.importMap(src));
+		printer.print('a.Aaa');
+		final inserted: String = RefactorSupport.applyEdits(src, printer.pendingImportEdits());
+		Assert.equals(0, violations(inserted).length, 'the insert seat and the rule agree:\n$inserted');
+	}
+
 	// --- comment pinning ---
 
 	public function testLineCommentTravelsWithItsImport(): Void {

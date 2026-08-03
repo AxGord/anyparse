@@ -41,6 +41,28 @@ class AddImportSliceTest extends Test {
 	}
 
 	/**
+	 * A block no order explains is still appended to WITHIN its run. The op's own fallback anchor
+	 * is the file's last import statement — which for a file whose imports are followed by a
+	 * `using` sits PAST that `using`, opening a stray third run that every later insert extends.
+	 * This is the TM incident shape: an unordered run, a `using`, and a fixer adding one import.
+	 */
+	public function testUnorderedRunKeepsTheImportBeforeTheUsing(): Void {
+		final source: String = 'package foo;\n\nimport m.Mid;\nimport z.Zed;\nimport a.Al;\n\nusing e.Ext;\n\nclass C {}\n';
+		final expected: String =
+			'package foo;\n\nimport m.Mid;\nimport z.Zed;\nimport a.Al;\nimport b.Bee;\n\nusing e.Ext;\n\nclass C {}\n';
+		assertAdd(source, 'b.Bee', false, expected);
+	}
+
+	/** Two runs split by a `using`: the fresh import takes its slot in the run it sorts into, not the last run's end. */
+	public function testAddLandsInTheRunItSortsInto(): Void {
+		final source: String =
+			'package foo;\n\nimport a.Al;\nimport m.Mid;\n\nusing e.Ext;\n\nimport b.Bee;\nimport c.Cee;\n\nclass C {}\n';
+		final expected: String =
+			'package foo;\n\nimport a.Al;\nimport h.Host;\nimport m.Mid;\n\nusing e.Ext;\n\nimport b.Bee;\nimport c.Cee;\n\nclass C {}\n';
+		assertAdd(source, 'h.Host', false, expected);
+	}
+
+	/**
 	 * A path whose SIMPLE NAME an existing import already binds appends. Haxe lets the LAST import
 	 * of a name win, so an ordered slot ahead of the incumbent would add an import that binds
 	 * nothing — the op must still deliver the name the caller asked for.

@@ -5,6 +5,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ImportOrder;
+import anyparse.query.ImportOrder.ImportLine;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -12,14 +13,6 @@ import anyparse.runtime.Span;
 import haxe.ds.ArraySort;
 
 using Lambda;
-
-/** One plain `import` line of a block: the path it names, its declaration start, and the WHOLE-LINE region that moves with it. */
-private typedef ImportLine = {
-	final path: String;
-	final declFrom: Int;
-	final chunkFrom: Int;
-	final chunkTo: Int;
-}
 
 /**
  * Flags a contiguous block of plain `import` statements that carries NO recognisable order —
@@ -32,7 +25,9 @@ private typedef ImportLine = {
  *
  * ## What counts as a block
  *
- * A maximal run of TOP-LEVEL plain `import` statements on consecutive lines. A run ENDS at:
+ * A maximal run of TOP-LEVEL plain `import` statements on consecutive lines — `ImportOrder.runsOf`,
+ * the same split the inserting fixers place a fresh line by, so the seat and this rule cannot
+ * disagree about what a block is. A run ENDS at:
  *
  *  - a blank line (the visual groups a project separates its imports into are preserved —
  *    each group is ordered on its own, and no line ever crosses a group boundary);
@@ -110,7 +105,7 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
 			final requested: Int = requestedOrder(config);
 			for (block in blocksOf(entry.source, tree)) {
-				final paths: Array<String> = [for (line in block) line.path];
+				final paths: Array<String> = ImportOrder.pathsOf(block);
 				if (acceptable(paths, requested)) continue;
 				final offender: ImportLine = firstOutOfPlace(block, fixOrder(requested, paths));
 				violations.push({
@@ -143,7 +138,7 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 		for (block in blocksOf(source, tree)) {
 			if (!block.exists(line -> flagged.contains(line.declFrom))) continue;
 			if (!reorderable(block, source, moduleTypes)) continue;
-			final order: Int = fixOrder(requested, [for (line in block) line.path]);
+			final order: Int = fixOrder(requested, ImportOrder.pathsOf(block));
 			final sorted: Array<ImportLine> = block.copy();
 			ArraySort.sort(sorted, (a, b) -> ImportOrder.compare(order, a.path, b.path));
 			final from: Int = block[0].chunkFrom;
@@ -204,7 +199,7 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	 * of the block's meaning, so the block stays report-only.
 	 */
 	private static function reorderable(block: Array<ImportLine>, source: String, moduleTypes: Map<String, Array<String>>): Bool {
-		if (block[0].chunkFrom != startOfLine(source, block[0].declFrom)) return false;
+		if (block[0].chunkFrom != RefactorSupport.startOfLine(source, block[0].declFrom)) return false;
 		final bound: Array<String> = [];
 		for (line in block) for (name in boundNames(line.path, moduleTypes)) {
 			if (bound.contains(name)) return false;
@@ -230,85 +225,11 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	}
 
 	/**
-	 * The file's plain-import BLOCKS: maximal runs of top-level `ImportDecl` statements whose
-	 * whole-line regions are directly adjacent, so anything between two of them — a blank line, a
-	 * `using`, a wildcard / alias import, a `#if` region, a block comment — ends the run.
+	 * The file's plain-import BLOCKS — `ImportOrder.runsOf` minus the runs of ONE, which have no
+	 * order to be out of and nothing to permute.
 	 */
 	private static function blocksOf(source: String, tree: QueryNode): Array<Array<ImportLine>> {
-		final out: Array<Array<ImportLine>> = [];
-		var current: Array<ImportLine> = [];
-		for (c in tree.children) {
-			final line: Null<ImportLine> = c.kind == 'ImportDecl' ? importLineOf(source, c) : null;
-			if (line == null) {
-				if (current.length > 1) out.push(current);
-				current = [];
-				continue;
-			}
-			// Directly adjacent = nothing at all between the previous line's end and this one's
-			// start; a blank line or any other text is what ends the run.
-			if (current.length > 0 && current[current.length - 1].chunkTo != line.chunkFrom) {
-				if (current.length > 1) out.push(current);
-				current = [];
-			}
-			current.push(line);
-		}
-		if (current.length > 1) out.push(current);
-		return out;
-	}
-
-	/**
-	 * The whole-line region that moves with the import `node`, or null when the statement is not
-	 * cleanly separable: its line carries code before it, something other than a `//` comment
-	 * after it, or NO terminating newline at all (a chunk without one would glue the next import
-	 * onto its line the moment it stops being last). The region extends BACKWARD over the
-	 * whole-line `//` comments directly above the statement (a comment written for an import
-	 * travels with it) and FORWARD over the rest of the statement's own line, its newline
-	 * included.
-	 */
-	private static function importLineOf(source: String, node: QueryNode): Null<ImportLine> {
-		final path: Null<String> = node.name;
-		final span: Null<Span> = node.span;
-		if (path == null || span == null) return null;
-		final lineStart: Int = startOfLine(source, span.from);
-		if (StringTools.trim(source.substring(lineStart, span.from)) != '') return null;
-		final newline: Int = source.indexOf('\n', span.to);
-		if (newline < 0) return null;
-		if (!isPureTail(StringTools.trim(source.substring(span.to, newline)))) return null;
-		// Re-bind: narrowing does not propagate into an anonymous-structure literal.
-		final named: String = path;
-		return {
-			path: named,
-			declFrom: span.from,
-			chunkFrom: withLeadingComments(source, lineStart),
-			chunkTo: newline + 1
-		};
-	}
-
-	/** Whether what follows the statement on its own line is nothing, or a `//` comment — the only two shapes a whole-line move may carry. */
-	private static inline function isPureTail(tail: String): Bool {
-		return tail == '' || StringTools.startsWith(tail, '//');
-	}
-
-	/**
-	 * `lineStart` extended backward over every directly preceding line that is a WHOLE-LINE `//`
-	 * comment. A line carrying a block-comment delimiter stops the walk: a `//` inside a `/* … *\/`
-	 * region is comment TEXT, and absorbing it into a movable chunk would tear the region apart.
-	 */
-	private static function withLeadingComments(source: String, lineStart: Int): Int {
-		var from: Int = lineStart;
-		while (from > 0) {
-			final previousStart: Int = startOfLine(source, from - 1);
-			final previous: String = StringTools.trim(source.substring(previousStart, from - 1));
-			if (!StringTools.startsWith(previous, '//')) break;
-			if (previous.indexOf('/*') >= 0 || previous.indexOf('*/') >= 0) break;
-			from = previousStart;
-		}
-		return from;
-	}
-
-	/** The offset of the start of the line `at` sits on. */
-	private static inline function startOfLine(source: String, at: Int): Int {
-		return RefactorSupport.startOfLine(source, at);
+		return ImportOrder.runsOf(source, ImportOrder.slotsOf(tree)).filter(run -> run.length > 1);
 	}
 
 	/** The last dotted segment of `dotted` — the simple name an import binds. */
