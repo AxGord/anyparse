@@ -100,7 +100,7 @@ class RedundantParensOperandArmsTest extends Test {
 	 */
 	public function testAtomInterpolationOperandsDrop(): Void {
 		assertDrop(inFn("var s = '${(p) + (q)}';"), inFn("var s = '${p + q}';"), atoms());
-		assertKeepUnderNoArm(inFn("var s = '${(p) + (q)}';"));
+		Assert.equals(inFn("var s = '${(p) + (q)}';"), fixed(inFn("var s = '${(p) + (q)}';"), none()));
 	}
 
 	public function testAtomThisReceiverDrops(): Void {
@@ -406,11 +406,6 @@ class RedundantParensOperandArmsTest extends Test {
 	}
 
 	/** `fixed(before)` must equal `after`, and the two must parse to the same paren-free shape. */
-	/** `src` untouched when no operand arm is on — the shipped arms' answer, pinned separately. */
-	private function assertKeepUnderNoArm(src: String): Void {
-		Assert.equals(src, fixed(src, none()));
-	}
-
 	private function assertDrop(before: String, after: String, resolve: (String) -> LintConfig): Void {
 		Assert.equals(after, fixed(before, resolve));
 		Assert.equals(bareTree(before), bareTree(after), 'paren drop preserved the tree shape');
