@@ -1492,6 +1492,10 @@ final class HaxeFormatConfigLoader {
 		// context propagation that the bodyPolicyWrap engine cannot
 		// derive in isolation (a `Next` on the inner body force-breaks
 		// legitimate inline arrow bodies — see `fitline_arrow_body_if.hxtest`).
+		// NOTE (ω-case-body-fitline): `sameLine.caseBody` /
+		// `sameLine.expressionCase` DO now carry real `FitLine` semantics —
+		// but they are measured AT the case-body site, driven by the case's
+		// own width, not fanned out from here. This gate is unchanged.
 		// Programmatic users can still set the three knobs independently
 		// for finer control.
 		// ω-expression-case-flat-fanout: HxCaseBranch.body uses

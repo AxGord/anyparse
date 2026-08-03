@@ -12078,6 +12078,29 @@ class WriterLowering {
 		return macro ($optFlag == $samePat || ($optFlag == $keepPat && !_arr[0].newlineBefore));
 	}
 
+	/**
+	 * ω-case-body-fitline — per-flag FIT predicate: `opt.<flag> == FitLine`.
+	 *
+	 * Sister to `buildCaseBodyFlagPredicate`, which answers "is the body
+	 * COMMITTED to the case-header line at write time" (`Same`, or `Keep`
+	 * with same-line source). This one answers "is the placement DEFERRED
+	 * to the renderer" — the emit then lays the body out as
+	 * `BodyGroup(Nest(cols, [Line, body]))` so the renderer's own
+	 * `fitsFlat` picks inline when `indent + patterns + ': ' + flat body`
+	 * fits `lineWidth` and next-line-at-one-deeper otherwise. Mirrors the
+	 * bare-Ref `bodyPolicyWrap` `FitLine` layout (`buildBodyFitExpr`), so a
+	 * case body and a `return` body measure by the SAME route.
+	 *
+	 * Deliberately does NOT read `_arr[0].newlineBefore`: `FitLine` is a
+	 * width decision, not a source-shape one — an author-broken body that
+	 * fits re-joins the case line, which is the point of asking for it.
+	 */
+	private static function buildCaseBodyFitPredicate(flagName: String): Expr {
+		final fitPat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'FitLine']);
+		final optFlag: Expr = optFieldAccess(flagName);
+		return macro ($optFlag == $fitPat);
+	}
+
 	private static function triviaTryparseStarExpr(
 		fieldAccess: Expr, elemFn: String, sepExpr: Expr, sepBeforeFirst: Bool, nestBody: Bool, trailBBAccess: Null<Expr>,
 		trailLCAccess: Null<Expr>, trailBAAccess: Null<Expr>, ?firstSepOverride: Expr, ?subsequentSepOverride: Expr,
@@ -12199,6 +12222,7 @@ class WriterLowering {
 		final firstSepExpr: Expr = firstSepOverride ?? sepExpr;
 		final subsequentSepExpr: Expr = subsequentSepOverride ?? sepExpr;
 		final flatGateExpr: Expr = triviaTryparseFlatGateExpr(caseBodyFlagNames);
+		final fitGateExpr: Expr = triviaTryparseFitGateExpr(caseBodyFlagNames);
 		final writerOptExpr: Expr = triviaTryparseWriterOptExpr(flatChildOptPairs, propagateExprPosition);
 		final padLeadingExpr: Expr = macro $v{padLeading};
 		final padTrailingExpr: Expr = macro $v{padTrailing};
@@ -12230,6 +12254,7 @@ class WriterLowering {
 			nestBodyExpr: nestBodyExpr,
 			shapeRefusalExpr: shapeRefusalExpr,
 			flatGateExpr: flatGateExpr,
+			fitGateExpr: fitGateExpr,
 			writerOptExpr: writerOptExpr,
 			padLeadingExpr: padLeadingExpr,
 			padTrailingExpr: padTrailingExpr,
@@ -14102,6 +14127,7 @@ class WriterLowering {
 		final nestBodyExpr: Expr = c.nestBodyExpr;
 		final shapeRefusalExpr: Expr = c.shapeRefusalExpr;
 		final flatGateExpr: Expr = c.flatGateExpr;
+		final fitGateExpr: Expr = c.fitGateExpr;
 		final writerOptExpr: Expr = c.writerOptExpr;
 		final padLeadingExpr: Expr = c.padLeadingExpr;
 		final padTrailingExpr: Expr = c.padTrailingExpr;
@@ -14123,8 +14149,18 @@ class WriterLowering {
 			final _trailBA: Bool = $trailBA;
 			final _sepFirst: Bool = $sepBeforeFirstExpr;
 			final _nestBody: Bool = $nestBodyExpr;
-			final _flatCase: Bool = _nestBody && _arr.length == 1 && _trailLC.length == 0 && _arr[0].leadingComments.length == 0
-				&& $shapeRefusalExpr && $flatGateExpr;
+			// ω-case-body-fitline: the single-statement, comment-free, non-refused
+			// body shape is the eligibility for BOTH placement decisions. `_flatCase`
+			// commits to the case-header line at write time (`Same` / same-line
+			// `Keep`); `_fitCase` defers the same-vs-next choice to the renderer
+			// (`FitLine`). They are mutually exclusive by construction — one policy
+			// value cannot be both — and every other policy (`Next`, and `Keep` with
+			// a source-broken body) leaves both false, which is the pre-slice
+			// nestBody break.
+			final _caseBodyFlattenable: Bool = _nestBody && _arr.length == 1 && _trailLC.length == 0 && _arr[0].leadingComments.length == 0
+				&& $shapeRefusalExpr;
+			final _flatCase: Bool = _caseBodyFlattenable && $flatGateExpr;
+			final _fitCase: Bool = _caseBodyFlattenable && !_flatCase && $fitGateExpr;
 			final _writerOpt = $writerOptExpr;
 			// ω-cond-mod-pad: padLeading/padTrailing emit a space (single-line
 			// shape) or hardline (multi-line, when first element carries a
@@ -14305,11 +14341,18 @@ class WriterLowering {
 		final forceInlineSep: Bool = c.forceInlineSep;
 		final elemSelfTrailsNewline: Bool = c.elemSelfTrailsNewline;
 		final leadCommentEmit: Expr = triviaTryparseLeadCommentSepExpr();
+		final forceInlineCond: Expr = triviaTryparseForceInlineSepCond(forceInlineSep);
 		return macro {
 			if (_t.leadingComments.length > 0) {
 				$leadCommentEmit;
 			} else if (_flatCase) {
 				_docs.push(_dt(' '));
+			} else if (_fitCase) {
+				// ω-case-body-fitline: soft `Line` instead of the committed hard
+				// space — the enclosing `BodyGroup` (see the wrap dispatch) turns it
+				// into ` ` when `case <patterns>: <flat body>` fits `lineWidth` and
+				// into `\n` + one-deeper indent when it does not.
+				_docs.push(_dl());
 			} else if (_nestBody) {
 				// ω-nestbody-blank: case / default body statements preserve a source
 				// blank line between elements (fork keeps inter-statement blanks in
@@ -14341,31 +14384,7 @@ class WriterLowering {
 				// single space, producing the canonical `@A @B @C`
 				// inline shape ahead of the trailing hardline.
 				_docs.push(_dt(' '));
-			} else if (
-				_si > 0 && $v{forceInlineSep} && Type.enumParameters(cast _arr[_si - 1].node).length == 0
-				&& Type.enumParameters(cast _t.node).length == 0
-			) {
-				// ω-slice-45: `@:fmt(forceInlineSep)` collapses every
-				// source linebreak between consecutive SimpleCtor
-				// elements to a single space. Modifier Stars
-				// (`HxMemberDecl.modifiers`, `HxTopLevelDecl.modifiers`)
-				// opt in so multi-line `static\n\toverload` round-trips
-				// as `static overload`. ParamCtor elements (current
-				// consumers: `Conditional(inner:HxConditionalMod)` —
-				// the `#if … #end` modifier region) are gated OUT so
-				// the existing CondMod layout (issue_332 V1/V4: source
-				// newline between `#end` and the next keyword
-				// preserved) stays byte-identical. Plugin-agnostic
-				// ctor classification via `Type.enumParameters` — no
-				// reflection by ctor name. The `cast` suppresses
-				// macro-time type-checking on `.node` (struct-shaped
-				// Star elements like `HxMemberDeclT`/`HxTopLevelDeclT`
-				// would otherwise fail `EnumValue` unification — dead-
-				// code elimination runs AFTER type-check); compile-
-				// time `$v{forceInlineSep}` short-circuit keeps the
-				// runtime reflection cost on opted-in modifier Stars
-				// only, where `.node` IS an enum (`HxMemberModifier` /
-				// `HxModifier`).
+			} else if ($forceInlineCond) {
 				_docs.push(_dt(' '));
 			} else if (_si > 0 && _t.newlineBefore) {
 				// ω-cond-mod-newline: preserve a single source newline
@@ -14393,6 +14412,33 @@ class WriterLowering {
 				_docs.push($firstSepExpr);
 			}
 		};
+	}
+
+	/**
+	 * ω-slice-45 — the `@:fmt(forceInlineSep)` arm's runtime condition, built
+	 * here so its `&&` chain does not count against the cascade builder's
+	 * complexity budget.
+	 *
+	 * `@:fmt(forceInlineSep)` collapses every source linebreak between
+	 * consecutive SimpleCtor elements to a single space. Modifier Stars
+	 * (`HxMemberDecl.modifiers`, `HxTopLevelDecl.modifiers`) opt in so
+	 * multi-line `static\n\toverload` round-trips as `static overload`.
+	 * ParamCtor elements (current consumers: `Conditional(inner:
+	 * HxConditionalMod)` — the `#if … #end` modifier region) are gated OUT so
+	 * the existing CondMod layout (issue_332 V1/V4: source newline between
+	 * `#end` and the next keyword preserved) stays byte-identical.
+	 * Plugin-agnostic ctor classification via `Type.enumParameters` — no
+	 * reflection by ctor name. The `cast` suppresses macro-time type-checking
+	 * on `.node` (struct-shaped Star elements like `HxMemberDeclT` /
+	 * `HxTopLevelDeclT` would otherwise fail `EnumValue` unification —
+	 * dead-code elimination runs AFTER type-check); the compile-time
+	 * `$v{forceInlineSep}` short-circuit keeps the runtime reflection cost on
+	 * opted-in modifier Stars only, where `.node` IS an enum
+	 * (`HxMemberModifier` / `HxModifier`).
+	 */
+	private static function triviaTryparseForceInlineSepCond(forceInlineSep: Bool): Expr {
+		return macro _si > 0 && $v{forceInlineSep} && Type.enumParameters(cast _arr[_si - 1].node).length == 0
+			&& Type.enumParameters(cast _t.node).length == 0;
 	}
 
 	/**
@@ -14539,6 +14585,7 @@ class WriterLowering {
 	 * neither can glue a follower onto a `//` comment.
 	 */
 	private static function triviaTryparseWrapDispatchExpr(finalWrapDocs: Expr): Expr {
+		final caseWrap: Expr = triviaTryparseCaseWrapExpr();
 		return macro {
 			// ω-force-flat-engine sister-coverage: tryparse Star is used
 			// for inner-Star bodies (case bodies, `HxConditionalDecl.body`)
@@ -14546,7 +14593,7 @@ class WriterLowering {
 			// position. Each leaf branch hand-rolls its terminal Doc — wrap
 			// uniformly in `_dwb` so a nested wrap-engine reads its own
 			// independent layout. `_dwb` is no-op outside Flatten frame.
-			if (_flatCase) {
+			if (_flatCase || _fitCase) {
 				// ω-flat-case-wrap-indent: when bodyPolicy flattens the
 				// case body inline (`case X: foo({...});`) but the body
 				// breaks at render time (e.g. call-args wrap-rules fire),
@@ -14569,7 +14616,23 @@ class WriterLowering {
 				// existing flat-case fixtures); inline non-wrapping
 				// bodies have no inner newline so dropping it is a no-op
 				// there too.
-				_dwb(opt.alignInlineSwitchCaseBody ? _dc(_docs) : _dn(_cols, _dc(_docs)));
+				//
+				// ω-case-body-fitline: `BodyGroup(Nest(cols, [Line, body]))` — the
+				// same Doc shape `bodyPolicyWrap`'s `FitLine` branch builds for a
+				// bare-Ref body (`return` / `if` / `for`), so a case body measures
+				// by the SAME route: the renderer's `fitsFlat` sees the live column
+				// (indent + `case <patterns>:` already emitted) plus the flat width
+				// of ` <body>` incl. its `;`.
+				//
+				// The `Nest` stays UNCONDITIONAL here, unlike the `_flatCase` arm's
+				// `alignInlineSwitchCaseBody` opt-out: that knob exists because a
+				// COMMITTED-inline body may still wrap internally and then needs no
+				// second indent level. Under `FitLine` that state is unreachable —
+				// a body that cannot render flat makes the group break, and then
+				// the `Nest` is exactly the one indent step the body owes the case
+				// label. In the flat outcome the `Nest` is inert (no newline
+				// inside), so the knob composes to the identical bytes either way.
+				$caseWrap;
 			} else if (_nestBody) {
 				if (_arr.length > 0 && _trailDocs.length > 0) {
 					_dwb(_dc([_dn(_cols, _dc(_docs)), _dc(_trailDocs)]));
@@ -14664,23 +14727,47 @@ class WriterLowering {
 
 	/**
 	 * Tryparse-Star `flatGateExpr` builder (ω-case-body-policy /
-	 * ω-issue-423-mech-a). Builds the runtime flatten gate from the
+	 * ω-issue-423-mech-a). Builds the runtime COMMITTED-flatten gate from the
 	 * `@:fmt(bodyPolicy(...))` flag names: single-flag, dual-flag (dispatch
 	 * on `opt._inExprPosition`), or `false`.
 	 */
 	private static function triviaTryparseFlatGateExpr(caseBodyFlagNames: Null<Array<String>>): Expr {
+		return triviaTryparseCaseGateExpr(caseBodyFlagNames, false);
+	}
+
+	/**
+	 * ω-case-body-fitline — the `FitLine` sibling of `triviaTryparseFlatGateExpr`.
+	 *
+	 * Same dual-flag dispatch, different per-flag predicate: reports that
+	 * the resolved policy is `FitLine`, i.e. the flat/break choice is the
+	 * renderer's. Consumed by the `_fitCase` runtime local, which is
+	 * computed AFTER `_flatCase` and is mutually exclusive with it (a
+	 * policy is `Same`/`Keep` or `FitLine`, never both).
+	 */
+	private static function triviaTryparseFitGateExpr(caseBodyFlagNames: Null<Array<String>>): Expr {
+		return triviaTryparseCaseGateExpr(caseBodyFlagNames, true);
+	}
+
+	/**
+	 * Shared body of the two case-body gate builders: arity validation plus
+	 * the single-flag / dual-flag (`opt._inExprPosition` dispatch) shape.
+	 * `fit` selects which per-flag predicate the arms are built from.
+	 */
+	private static function triviaTryparseCaseGateExpr(caseBodyFlagNames: Null<Array<String>>, fit: Bool): Expr {
 		if (caseBodyFlagNames != null && caseBodyFlagNames.length > 2)
 			Context.fatalError(
 				'WriterLowering: @:fmt(bodyPolicy(...)) takes at most 2 args (stmtFlag, exprFlag), got ${caseBodyFlagNames.length}',
 				Context.currentPos()
 			);
+		inline function pred(flagName: String): Expr
+			return fit ? buildCaseBodyFitPredicate(flagName) : buildCaseBodyFlagPredicate(flagName);
 		return if (caseBodyFlagNames == null || caseBodyFlagNames.length == 0)
 			macro false;
 		else if (caseBodyFlagNames.length == 1)
-			buildCaseBodyFlagPredicate(caseBodyFlagNames[0]);
+			pred(caseBodyFlagNames[0]);
 		else {
-			final stmtPred: Expr = buildCaseBodyFlagPredicate(caseBodyFlagNames[0]);
-			final exprPred: Expr = buildCaseBodyFlagPredicate(caseBodyFlagNames[1]);
+			final stmtPred: Expr = pred(caseBodyFlagNames[0]);
+			final exprPred: Expr = pred(caseBodyFlagNames[1]);
 			macro (opt._inExprPosition ? $exprPred : $stmtPred);
 		};
 	}
@@ -17006,6 +17093,35 @@ class WriterLowering {
 		};
 	}
 
+
+	/**
+	 * ω-case-body-fitline — the terminal Doc for a single-statement case /
+	 * default body that the policy places on the case line, split out of
+	 * `triviaTryparseWrapDispatchExpr` so the flat and fit layouts share one
+	 * arm there (and so this two-way choice does not count against that
+	 * cascade's complexity budget).
+	 *
+	 * `_fitCase` (policy `FitLine`) wraps the body in
+	 * `BodyGroup(Nest(cols, …))` and lets the renderer pick same-line vs
+	 * next-line; the `Nest` is inert in the flat outcome and is exactly the
+	 * one indent step the body owes the label in the broken one, so
+	 * `alignInlineSwitchCaseBody` has nothing to correct on this path.
+	 *
+	 * `_flatCase` (policy `Same`, or `Keep` on same-line source) is COMMITTED
+	 * to the label line, so its body may still wrap internally; the `Nest`
+	 * gives those wrapped lines their +1 continuation indent, and
+	 * `alignInlineSwitchCaseBody` drops it for configs whose wrapped argument
+	 * already indents relative to the case line.
+	 */
+	private static function triviaTryparseCaseWrapExpr(): Expr {
+		return macro {
+			if (_fitCase)
+				_dwb(_dbg(_dn(_cols, _dc(_docs))));
+			else
+				_dwb(opt.alignInlineSwitchCaseBody ? _dc(_docs) : _dn(_cols, _dc(_docs)));
+		};
+	}
+
 }
 
 /** Output of WriterLowering for one rule. */
@@ -17717,6 +17833,7 @@ typedef TryparseStarCtx = {
 	final nestBodyExpr: Expr;
 	final shapeRefusalExpr: Expr;
 	final flatGateExpr: Expr;
+	final fitGateExpr: Expr;
 	final writerOptExpr: Expr;
 	final padLeadingExpr: Expr;
 	final padTrailingExpr: Expr;

@@ -69,6 +69,19 @@ package anyparse.grammar.haxe;
  * (so author-written `case X: foo();` round-trips byte-identically).
  * Multi-stmt bodies keep the multiline `nestBody` shape regardless.
  *
+ * ω-case-body-fitline adds the DEFERRED sibling of that gate: when the
+ * dispatched flag is `FitLine`, the same single-stmt eligibility fires
+ * `_fitCase` instead of `_flatCase`, and the Star emits
+ * `BodyGroup(Nest(cols, [Line, body]))` — the exact Doc shape
+ * `WriterLowering.buildBodyFitExpr` builds for a bare-Ref `FitLine`
+ * body, so `case X: expr;` and `return expr;` measure by ONE route. The
+ * renderer's `fitsFlat` sees the live column (the `case <patterns>:`
+ * header is already emitted) plus the flat width of ` <body>`; at
+ * `<= lineWidth` the body stays inline, otherwise the WHOLE body drops
+ * one indent deeper rather than wrapping inside the value's own
+ * delimiters. `refuseFlatOnComplexExpr` gates BOTH paths, so a refused
+ * body breaks even when it fits.
+ *
  * `@:fmt(flatChildOpt('A=B', ...))` (ω-expression-case-flat-fanout) opts
  * the body's child writer call into a copy-on-flat opt-fanout: when the
  * runtime flat gate fires, the body's element is written with a

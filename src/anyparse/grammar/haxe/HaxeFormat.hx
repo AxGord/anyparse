@@ -211,7 +211,10 @@ final class HaxeFormat implements TextFormat {
 	 * the body's first element had no preceding source newline, the
 	 * `case X: foo();` shape is preserved; otherwise the body keeps the
 	 * source's multiline layout. Setting either to `Same` flattens
-	 * single-stmt bodies unconditionally. `caseBody` corresponds to
+	 * single-stmt bodies unconditionally; setting either to `FitLine`
+	 * (ω-case-body-fitline) hands the same-vs-next choice to the renderer,
+	 * which measures the flat `case <patterns>: <body>` line against
+	 * `lineWidth`. `caseBody` corresponds to
 	 * haxe-formatter's `sameLine.caseBody: @:default(Next)`;
 	 * `expressionCase` to `sameLine.expressionCase: @:default(Same)`.
 	 * We pick `Keep` over upstream's `Same` to avoid a `;`-cascade regression — Keep gates on source same-line-ness so multi-line source bodies

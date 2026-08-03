@@ -21,7 +21,7 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  * `Same` and `Next` are wired through opt.<flag> directly. `Keep`
  * (ω-case-body-keep) reads `Trivial<T>.newlineBefore` of the body's
  * first element to flatten only when the source had the stmt on the
- * same line as `:`. `FitLine` falls through to the `Next` path.
+ * same line as `:`. `FitLine` measures the flat case line against `lineWidth` (ω-case-body-fitline; see `HxCaseBodyFitLineSliceTest`).
  *
  * ω-issue-423-mech-a flipped the dual-flag gate from OR-of-both to
  * dispatch on `opt._inExprPosition`: top-level switch case bodies
@@ -121,13 +121,20 @@ final class HxCaseBodyPolicySliceTest extends Test {
 		Assert.isTrue(out.indexOf('case 1: foo();') != -1, 'expected inline `case 1: foo();` (both knobs Same) in: <$out>');
 	}
 
-	public function testFitLineDegradesToNext(): Void {
+	public function testFitLineMeasuresInsteadOfDegradingToNext(): Void {
+		// Re-pinned by ω-case-body-fitline. This test previously enshrined
+		// the limitation that `FitLine` matched no arm of the boolean
+		// `_flatCase` gate and therefore fell through to the `Next` break.
+		// The slice gave the knob real semantics, so the contract flips: a
+		// body that fits `lineWidth` now stays on the case line. The
+		// break half of the contract is pinned in
+		// `HxCaseBodyFitLineSliceTest` (exact-fit / fit+1 boundary).
 		final src: String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.caseBody = BodyPolicy.FitLine;
 		opts.expressionCase = BodyPolicy.Next;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-		Assert.isTrue(out.indexOf('case 1:\n') != -1, 'FitLine must not flatten today (degrades to Next): <$out>');
+		Assert.isTrue(out.indexOf('case 1: foo();') != -1, 'FitLine must keep a fitting body on the case line: <$out>');
 	}
 
 	public function testKeepFlattensSameLineSource(): Void {
