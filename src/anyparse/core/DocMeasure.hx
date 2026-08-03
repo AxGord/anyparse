@@ -337,6 +337,74 @@ final class DocMeasure {
 	}
 
 	/**
+	 * Left-spine walk: does this `Doc` render with its FIRST visible `Text`
+	 * leaf starting at char-code `c`? Spine sister of `endsWithCloseBrace` —
+	 * same wrapper-transparency discipline, opposite end of the render.
+	 *
+	 * Transparent for the `Concat` / `Fill` item scan: `Empty`, `Line`,
+	 * `OptSpace`, `OptSpaceSkipAfterHardline` and the three `OptHardline`
+	 * kinds. Note `OptSpace` IS transparent here, unlike in
+	 * `endsWithCloseBrace` whose right-spine reads a trailing `OptSpace` as
+	 * content — a leading pad emitted by a whitespace policy must not hide the
+	 * token it pads.
+	 *
+	 * The FIRST non-transparent item decides: its subtree is walked and its
+	 * verdict returned; later siblings never contribute. So an empty
+	 * `Text('')` answers `false` and STOPS the scan.
+	 *
+	 * Consumers:
+	 *  - `WrapList`'s arrow / collection shape gates — `emitZeroThresholdAgree`'s
+	 *    thin-arrow leg, `shapeSingleArgGlue`, `arrowBodyIsBlock` (itself read
+	 *    by `shapeSoleArrowUniform` / `arrowBodyCloseParenShape`) and
+	 *    `isMethodChainItem` — which ask "is this item's body a `{ }` block /
+	 *    an object literal / a `.` chain tail".
+	 *  - `Renderer.pushFlatWidthBranch`'s arrow-block-body suppression, which
+	 *    forces the flat side of an `IfResidualLineExceeds` arrow-body marker
+	 *    whose body is a block (the break side would only strand `{` on its
+	 *    own line).
+	 *
+	 * Recursive rather than `endsWithCloseBrace`'s explicit stack — matching
+	 * the module's other recursive walk, `scanTail`. The left spine's "first
+	 * visible child decides, and an exhausted subtree is a definitive `false`"
+	 * is a per-node verdict; a flat sibling stack would instead fall through to
+	 * the next sibling and change the answer.
+	 */
+	public static function firstVisibleTextStartsWith(d: Doc, c: Int): Bool {
+		return switch d {
+			case Text(s):
+				s.length > 0 && StringTools.fastCodeAt(s, 0) == c;
+			// Whitespace-only leaves carry no visible text. As an item of the
+			// list arm below they are skipped; as the probed node itself they
+			// answer false. `isWhitespaceOnlyLeaf` is the one place that set
+			// is written down, so the two readings cannot drift.
+			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+				| OptHardlineSkipBeforeHardline:
+				false;
+			// `Fill` and its two variants are item lists like `Concat` — their
+			// inter-item separator never precedes the first item (the renderer
+			// emits it only from index 1 in both its flat and its break path),
+			// so the same first-visible-item scan applies.
+			case Concat(arr) | Fill(arr, _, _) | FillWithRestProbe(arr, _, _) | FillBreakAfterWrap(arr, _, _):
+				var hit: Bool = false;
+				for (it in arr) if (!isWhitespaceOnlyLeaf(it)) {
+					hit = firstVisibleTextStartsWith(it, c);
+					break;
+				}
+				hit;
+			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(
+				i
+			) | CollapseBoolProbe(i) | CollapseChainProbe(i) | WrapBoundary(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
+				firstVisibleTextStartsWith(i, c);
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfResidualLineExceeds(
+				_, _, flat
+			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
+				_, _, _, _, flat
+			):
+				firstVisibleTextStartsWith(flat, c);
+		};
+	}
+
+	/**
 	 * True iff the rightmost emitted byte of `d` is `}` (block-closed)
 	 * OR `;` (already-statement-terminated). Used by Session-3
 	 * `@:sep(';', tailRelax, blockEnded)` Star writers to suppress
@@ -664,6 +732,32 @@ final class DocMeasure {
 				stack.push(inner);
 				return { add: 0, stop: false, delim: null };
 		}
+	}
+
+
+	/**
+	 * Does `d` render no visible characters of its own? The transparent set of
+	 * `firstVisibleTextStartsWith`'s left-spine item scan, factored out so the scan's
+	 * skip test and the probed-node arm read the same list.
+	 *
+	 * `Line` counts as whitespace-only in both its flat (`OptSpace`-style pad) and its
+	 * hardline form — neither contributes a visible token, and the caller is asking
+	 * which TOKEN comes first, not where the lines fall.
+	 *
+	 * The `case _` here is deliberate and is NOT the silent-default hazard the module
+	 * bans elsewhere: this is a two-way classification whose safe answer for anything
+	 * unrecognised is "not whitespace", and its sole caller
+	 * `firstVisibleTextStartsWith` enumerates every `Doc` ctor with no catch-all ten
+	 * lines below — so a new ctor still breaks compilation there and forces the author
+	 * past this list.
+	 */
+	private static inline function isWhitespaceOnlyLeaf(d: Doc): Bool {
+		return switch d {
+			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+				| OptHardlineSkipBeforeHardline:
+				true;
+			case _: false;
+		};
 	}
 
 }

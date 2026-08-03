@@ -2709,6 +2709,82 @@ class Renderer {
 					final pushMode: Mode = firstLineCrosses ? MBreak : f.mode;
 					stack.push(new Frame(f.indent, pushMode, firstLineCrosses ? breakDoc : flatDoc));
 				}
+			case IfResidualLineExceeds(_, _, flatDoc) if (selfBreakingBraceBody(flatDoc)):
+				// ω-arrow-block-body-open: an `IfResidualLineExceeds` is the
+				// `@:fmt(arrowBodyLineWrap)` marker of a `->` / `=>` lambda
+				// body. When that body opens with `{` and breaks IMMEDIATELY
+				// after it — a multi-statement block, or a `{ … }` literal
+				// whose own wrap cascade already committed to breaking — it
+				// terminates the head line by itself. Take the flat side: the
+				// break side buys nothing there, and the probe that would pick
+				// it is measuring a different line.
+				//
+				// `selfBreakingBraceBody` states why each of its three
+				// conjuncts is load-bearing, which fixture measured the hole
+				// each one closes, and why a FLAT object-literal body — or one
+				// whose hardline comes later than its `{` — must keep its break.
+				//
+				// Break side is useless for this population: it renders
+				// `Nest(cols, Concat([hardline, body]))`, i.e. it moves the
+				// body's opening `{` onto its own line and pushes the whole
+				// body one indent deeper. The head line already ENDED at the
+				// body's own forced hardline right after `{`, so nothing gets
+				// shorter — the only effect is a stranded `->` / `{` pair
+				// (`.onComplete(() ->\n\t{\n\t\t…`).
+				//
+				// Why the shared arm below mis-fires: its predicate adds
+				// `flatTokenWidthOfRestStack(stack)`, the content that would
+				// ride the SAME rendered line. For a self-breaking `{` body
+				// that content actually lands on the body's CLOSING line
+				// (`}).onUpdate(…)`), because the body hardlines right after
+				// `{`. And `flatTokenWidth(flatDoc)` is ~0 for a statement
+				// block (it sits behind a `BodyGroup`, which
+				// `flatTokenWidthStep` defers to width 0), so the test
+				// degenerates to `col + restOfStackWidth >= n` — the
+				// discriminator becomes the TRAILING chain link's argument
+				// width, which says nothing about the arrow.
+				//
+				// Why not at lowering: the emitted
+				// `WrapBoundary(IfResidualLineExceeds(…))` signature is
+				// load-bearing for `WrapList.isArrowBodyMarker` (8 consumer
+				// sites) — `shapeMultiArgBlockLambda` WANTS block-bodied
+				// arrows to match it, and `shapeSingleArgGlue` gates on
+				// `!isArrowBodyMarker`. Dropping or reshaping the marker at
+				// emit time silently flips both.
+				//
+				// The fork applies a related exclusion:
+				// `MarkWrapping.applyArrowWrapping` skips arrows whose body
+				// starts with `{` (`bodyFirst.match(BrOpen)`, issue_538), and
+				// `WrapList` mirrors that `{`-only test in three sibling
+				// paths — `shapeSoleArrowUniform`, the close-paren shape via
+				// `arrowBodyIsBlock`, and the thin-arrow bare-ident leg. This
+				// arm closes the one arrow path that never got the skip, but
+				// deliberately asks the STRICTER question: those three siblings
+				// pick between two shapes that both keep `{` glued, whereas
+				// this one decides whether a break happens at all, so a flat
+				// object literal must keep its break.
+				//
+				// The two NATURAL-walk resolutions of this marker
+				// (`naturalGluableStructural` and the natural-width walk's
+				// own `IfResidualLineExceeds` arm) need no gate for the
+				// population this arm claims: neither carries a rest-stack
+				// term, and a statement block sits behind a `BodyGroup` that
+				// `flatTokenWidth` defers to 0, so their test reduces to
+				// `col >= n` — already-blown lines only. MEASURED for that
+				// population, not assumed: `final cb:Void->Void = () -> {`
+				// with a ~340-char block body stays cuddled at col ~30. A
+				// self-breaking OBJECT LITERAL body is not `BodyGroup`-
+				// deferred, so those walks do see its width — which is why
+				// the two conjuncts above must agree with them rather than
+				// override them.
+				//
+				// Frame flags: `hardFlat` implies `forceFlat`, so forwarding
+				// `f.forceFlat` / `f.hardFlat` reproduces BOTH pre-existing
+				// flat paths byte-exactly — the `forceFlat` path pushes
+				// `Frame(f.indent, f.mode, flatDoc, true, f.hardFlat)` and
+				// the non-crossing path pushes
+				// `Frame(f.indent, f.mode, flatDoc)` with both flags false.
+				stack.push(new Frame(f.indent, f.mode, flatDoc, f.forceFlat, f.hardFlat));
 			case IfLineExceeds(n, breakDoc, flatDoc) | IfResidualLineExceeds(n, breakDoc, flatDoc):
 				// Line-length-aware probe: rule fires when `col +
 				// DocMeasure.flatTokenWidth(flatDoc) +
@@ -2891,6 +2967,52 @@ class Renderer {
 			}
 		}
 		return -1;
+	}
+
+
+	/**
+	 * omega-arrow-block-body-open: does `flatDoc` — the FLAT side of an
+	 * `@:fmt(arrowBodyLineWrap)` arrow-body marker — open with `{` and break
+	 * IMMEDIATELY after it, before any other token? That is the population whose head
+	 * line the body terminates by itself, so an extra break after `->` shortens
+	 * nothing: a multi-statement block, or a `{ … }` literal whose own wrap cascade
+	 * committed to breaking at build time.
+	 *
+	 * All three conjuncts are load-bearing, each closing a measured hole:
+	 *
+	 *  - `{`-leading alone is NOT "is a block". `x -> { a: 1, b: 2 }` is an object
+	 *    literal whose flat doc also starts with `{`, and a FLAT one rides the head
+	 *    line in full, so breaking after `->` genuinely shortens it. Suppressing that
+	 *    break pushed a fixture from 127 to 141 columns against a 140 budget.
+	 *  - `hasForcedBreak` alone is not enough either, in BOTH directions. A non-brace
+	 *    body that breaks internally still gains a shorter head line from the arrow
+	 *    break; and a `{`-leading body can break somewhere OTHER than right after `{`
+	 *    — under `wrapping.objectLiteral.defaultWrap: "keep"` a one-line source
+	 *    literal reproduces its own layout, so `{ onDone: () -> { … }, tag: 1 }` has
+	 *    a forced hardline (the inner block's) while its head line runs on. That took
+	 *    a fixture from 108 to 146 columns.
+	 *  - `flatTokenWidthFirstLine(flatDoc) <= 1` is what states "breaks before any
+	 *    other token". MEASURED, not assumed: a statement block sits behind a
+	 *    `BodyGroup` that the first-line walk defers to 0, and a self-breaking object
+	 *    literal measures exactly 1 (its `{`, then the hardline) — both stay in the
+	 *    population, while the keep-mode literal above measures its whole head run
+	 *    and drops out.
+	 *
+	 * Read STRUCTURALLY — all three walkers resolve every conditional on its flat
+	 * side — so no render-time width measurement can change which arm a construct
+	 * takes. That is a deliberate limit: an object literal that breaks only AT RENDER
+	 * TIME (its own `Group` losing a width probe) answers `false` here, takes the
+	 * arrow break, and then breaks anyway, so its `{` still lands alone. Measured on
+	 * a 40-case width sweep, the gate removes 40 of 56 stranded opens and adds zero
+	 * over-width lines, and the 16 it leaves are all that band — byte-identical to
+	 * the pre-slice writer, since no line of an object-literal rendering changes.
+	 * Closing them needs a width-aware answer, which would make this guard disagree
+	 * with the two natural walks that resolve the same marker without a rest-stack
+	 * term; that trade is a separate slice.
+	 */
+	private static inline function selfBreakingBraceBody(flatDoc: Doc): Bool {
+		return DocMeasure.firstVisibleTextStartsWith(flatDoc, '{'.code) && DocMeasure.hasForcedBreak(flatDoc)
+			&& flatTokenWidthFirstLine(flatDoc) <= 1;
 	}
 
 }
