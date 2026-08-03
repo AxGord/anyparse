@@ -46,6 +46,15 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  *
  * Fixture sources are anonymised, length-preserving renames of a real project
  * tree; every case asserts a fixed point as well as the shape.
+ *
+ * The fixture literals are DOUBLE-quoted on purpose and stay that way: several
+ * carry a `$entryId` / `$rowId` that single quotes would interpolate, silently
+ * changing the bytes under test. `prefer-single-quotes` and
+ * `fold-adjacent-string-literals` therefore report ~130 advisories against
+ * this file (info severity, hidden without `--all`). They are left
+ * unsuppressed deliberately: the only region-scoped suppression the linter
+ * offers takes no rule names, so silencing them would blind every other check
+ * over the fixtures too.
  */
 @:nullSafety(Strict)
 final class HxCallParamOuterFirstWrapSliceTest extends Test {
@@ -153,6 +162,36 @@ final class HxCallParamOuterFirstWrapSliceTest extends Test {
 		final expected: String = "class NonGluable {\n" + "\tprivate function plain():Void {\n"
 			+ "\t\tfinal row:ResultRow = store.query(\n"
 			+ "\t\t\t'SELECT filepath FROM files WHERE folder = 1 AND folder_id AND some AND more AND yet AND plenty AND still'\n"
+			+ "\t\t);\n" + "\t}\n" + "}";
+		assertWrite(expected, src);
+	}
+
+	/**
+	 * A REDUNDANT paren around the sole argument (`f(('...'))`) stays WHOLE on the
+	 * continuation line — `f(\n\t('...')\n)` — instead of the call break splitting
+	 * the paren pair away from its content (`f((\n\t'...'\n))`). The paren group is
+	 * `flatLength`-flat, so the outer-first probe fires on it like any other
+	 * argument and the pair rides the same line as the string it wraps.
+	 *
+	 * Pinned because it is a REAL behaviour change this slice made under the
+	 * project config and nothing else asserts it — a later wrap slice could revert
+	 * it silently. It is a shape change only: both the old and the new output
+	 * reparse and are fixed points. (The slice report originally described this as
+	 * a fix for column-0 un-indented output; that symptom does not reproduce on the
+	 * pre-slice binary at any width and the claim was withdrawn — what changed is
+	 * only WHERE the paren pair sits.)
+	 *
+	 * One column wider and the argument stops fitting its continuation line, the
+	 * probe declines, and the pre-slice `f((\n\t…\n))` shape returns — the same
+	 * fall-through the at-limit / past-limit pair above pins directly.
+	 */
+	public function testRedundantParenSoleArgStaysWholeAtTheContinuation(): Void {
+		final src: String = "class RedundantParen {\n" + "\tprivate function wrap():Void {\n"
+			+ "\t\tfinal payload:String = encodeIt(('zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz'));\n"
+			+ "\t}\n" + "}";
+		final expected: String = "class RedundantParen {\n" + "\tprivate function wrap():Void {\n"
+			+ "\t\tfinal payload:String = encodeIt(\n"
+			+ "\t\t\t('zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz')\n"
 			+ "\t\t);\n" + "\t}\n" + "}";
 		assertWrite(expected, src);
 	}
