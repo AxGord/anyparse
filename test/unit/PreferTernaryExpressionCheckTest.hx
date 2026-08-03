@@ -189,6 +189,20 @@ class PreferTernaryExpressionCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}
 
+	/**
+	 * A `${ … }` interpolation is a delimited slot like any other — `${` and `}` bound its
+	 * one expression, which parses at the loosest precedence — so a bare `?:` may land
+	 * there. The plain-string twin discriminates: `"…"` never interpolates, so the same
+	 * characters are text carrying no `if`-expression to flag.
+	 */
+	public function testInterpolationSlotFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits("class C {\n\tfunction f():Void {\n\t\tvar x = '${if (c) 1 else 2}';\n\t}\n}");
+		Assert.equals(1, es.length);
+		Assert.equals('c ? 1 : 2', es[0].text);
+		Assert.equals(0, violations("class C {\n\tfunction f():Void {\n\t\tvar x = \"${if (c) 1 else 2}\";\n\t}\n}").length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferTernaryExpression().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

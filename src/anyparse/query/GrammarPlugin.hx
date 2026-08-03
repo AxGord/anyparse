@@ -1779,8 +1779,10 @@ typedef RefShape = {
 	 * `VarMember` / `FinalMember` — `= expr` up to `;` or `,`), the value returns
 	 * (`ReturnStmt` / `ReturnExpr` — the `return` keyword parses its value as a full
 	 * expression), the array / map literal (`ArrayExpr` — `[` `,` … `,` `]`), the
-	 * object-literal field (`Field` — `:` … `,` or `}`) and `new T(args)`
-	 * (`NewExpr`). A host may also carry non-expression children (a type annotation,
+	 * object-literal field (`Field` — `:` … `,` or `}`), `new T(args)`
+	 * (`NewExpr`) and the `${ … }` string interpolation (`Block` — `${` … `}`,
+	 * whose one expression child the compiler slices out on brace count and parses
+	 * standalone). A host may also carry non-expression children (a type annotation,
 	 * a type argument); those never project as `parenKind`, so listing the host is
 	 * still exact. Read by `redundant-parens` and by `prefer-ternary-expression`, which asks
 	 * the same question from the other side — a bare `?:` may only LAND in such a slot.

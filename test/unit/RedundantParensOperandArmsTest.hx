@@ -93,6 +93,16 @@ class RedundantParensOperandArmsTest extends Test {
 		assertDrop(inFn("var b = ('a${p + q}b').length;"), inFn("var b = 'a${p + q}b'.length;"), atoms());
 	}
 
+	/**
+	 * Inside a `${ … }` block the SOLE pair is the shipped delimited-slot arm's (see
+	 * `RedundantParensCheckTest`); an operand pair there is this arm's, on the same terms
+	 * as anywhere else. Pins that opening the slot did not double-claim the operands.
+	 */
+	public function testAtomInterpolationOperandsDrop(): Void {
+		assertDrop(inFn("var s = '${(p) + (q)}';"), inFn("var s = '${p + q}';"), atoms());
+		assertKeepUnderNoArm(inFn("var s = '${(p) + (q)}';"));
+	}
+
 	public function testAtomThisReceiverDrops(): Void {
 		assertDrop(inFn('var b = (this).q;'), inFn('var b = this.q;'), atoms());
 	}
@@ -396,6 +406,11 @@ class RedundantParensOperandArmsTest extends Test {
 	}
 
 	/** `fixed(before)` must equal `after`, and the two must parse to the same paren-free shape. */
+	/** `src` untouched when no operand arm is on — the shipped arms' answer, pinned separately. */
+	private function assertKeepUnderNoArm(src: String): Void {
+		Assert.equals(src, fixed(src, none()));
+	}
+
 	private function assertDrop(before: String, after: String, resolve: (String) -> LintConfig): Void {
 		Assert.equals(after, fixed(before, resolve));
 		Assert.equals(bareTree(before), bareTree(after), 'paren drop preserved the tree shape');

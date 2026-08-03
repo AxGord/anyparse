@@ -737,7 +737,19 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// Star with `)`. The `VarStmt`/`VarMember` type-annotation child and the
 			// `NewExpr` type arguments project as type kinds (`Anon` / `Named`), never
 			// as `ParenExpr`, so a whole-host listing stays exact.
+			//
+			// `HxStringSegment.Block` — the `${ … }` interpolation of a single-quoted
+			// literal — is the same fact stated by a lead / trail pair: `@:lead('${')`
+			// and `@:trail('}')` bound its ONE expression child, which `parseHxExpr`
+			// reads at minPrec 0. The REAL compiler agrees by a different route: its
+			// interpolation scanner slices the text between `${` and the brace-counted
+			// matching `}` and parses that slice standalone, so nothing outside the
+			// braces can bind into it. Dropping a paren pair inside the braces cannot
+			// disturb that scan either — a parenthesis is none of the four characters
+			// that scanner reacts to (`{`, `}`, `$`, a backslash) and none of the line
+			// breaks that end the literal, so it reads exactly the same text either way.
 			delimitedAllChildKinds: [
+				'Block',
 				'VarStmt',
 				'FinalStmt',
 				'VarExpr',
