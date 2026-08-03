@@ -141,6 +141,17 @@ package anyparse.grammar.haxe.format;
  *    leading-break layout byte-identical. Block-bodied, nested and `while`
  *    comprehensions are deliberately excluded — see
  *    `WriteOptions.comprehensionCuddledOpen`.
+ *  - `methodChainCuddledLinks`: bool → `methodChainCuddledLinks` (slice
+ *    ω-methodchain-cuddled-links). Also not a cascade — a Bool layout
+ *    policy on the two dot-break method-chain shapes: a link whose
+ *    PRECEDING link rendered multi-line and ended in a dedented closing-
+ *    delimiter run (`})`) starts on that closing line instead of on its own
+ *    indented line, giving the compact fluent shape
+ *    `…(…, {…}).applied(… -> {…}).fault(…)`. Default `false` (config
+ *    absent) keeps the pre-slice exploded layout byte-identical. Keep-mode
+ *    and comment-bearing chains, and links whose predecessor breaks only by
+ *    width, are deliberately excluded — see
+ *    `WriteOptions.methodChainCuddledLinks`.
  */
 @:peg typedef HxFormatWrappingSection = {
 
@@ -149,6 +160,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var arrayMatrixWrap: String;
 
 	@:optional var comprehensionCuddledOpen: Bool;
+
+	@:optional var methodChainCuddledLinks: Bool;
 
 	@:optional var arrayWrap: HxFormatWrapRules;
 

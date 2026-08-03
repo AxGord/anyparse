@@ -222,6 +222,55 @@ typedef WriteOptions = {
 	comprehensionCuddledOpen: Bool,
 
 	/**
+	 * When `true`, a method-chain link whose PRECEDING link already rendered
+	 * multi-line and ended in a dedented closing-delimiter run (`}` / `})` /
+	 * `}]`) starts ON that closing line instead of on a fresh indented line of
+	 * its own — the compact fluent shape
+	 * `…postLocked(null, {\n\t…\n}).applied(… -> {\n\t…\n}).fault(…)` — while
+	 * every other link keeps the dot-break the cascade chose. Applies only to
+	 * the two dot-break chain shapers (`OnePerLineAfterFirst` / `OnePerLine`);
+	 * the cuddled link joins the run of the link it rides on, so its own body
+	 * indents from the statement head rather than gaining one extra level per
+	 * link.
+	 *
+	 * The gate is emit-time and STRUCTURAL — `DocMeasure.endsWithForcedCloseLine`
+	 * over the preceding link: a FORCED hardline whose entire tail is close
+	 * delimiters and whitespace. Every conditional is read on its flat side, so
+	 * a construct the RENDERER would break for being too wide answers `false`
+	 * and keeps the pre-knob layout — no column measurement ever changes a
+	 * chain's shape here. The closes-only tail requirement additionally pins the
+	 * cuddle point to a low column (base indent plus two or three characters),
+	 * so the cuddled `.method(` head cannot by itself blow the line.
+	 *
+	 * Which links therefore cuddle, measured rather than assumed: a link whose
+	 * argument is a lambda BLOCK body with at least one statement always does
+	 * (that body breaks even when the source wrote it on one line), which is
+	 * what compacts the real fluent-callback shapes. A link whose argument is a
+	 * BRACKETED LITERAL does iff that literal's own wrap cascade already
+	 * committed to breaking it at build time — under the stock object-literal
+	 * rules, an item count above the threshold breaks even a one-line source
+	 * literal, while at or below it `Keep` semantics reproduce the source's own
+	 * line breaks, so the same AST can cuddle or not depending on how it was
+	 * written. A trailing comma is an output of that break, not its cause.
+	 *
+	 * Three shapes are deliberately NOT covered: `Keep`-mode chains (they
+	 * already reproduce the source's own dot boundaries), chains carrying a
+	 * trailing line comment (routed through `shapeKeep` by
+	 * `commentBreakMask` — a link cuddled after a `//` would be swallowed),
+	 * and links whose predecessor breaks only at render time, for width.
+	 *
+	 * Default `false` — absent from config means byte-identical output to the
+	 * pre-knob writer, since both shapers early-return their pre-knob
+	 * construction when no gap cuddles. Fed by
+	 * `wrapping.methodChainCuddledLinks` through `HaxeFormatConfigLoader`.
+	 * Lives on the base options alongside the other cascade-independent layout
+	 * policies the wrap engine reads directly; the shapes it recognises are
+	 * expressed purely in `Doc` terms, so any grammar emitting method chains
+	 * through `MethodChainEmit` inherits it.
+	 */
+	methodChainCuddledLinks: Bool,
+
+	/**
 	 * Cap on consecutive line-end runs in the rendered output. Read once
 	 * by `Renderer.render` as the final post-pass: any run of `N+1` or
 	 * more consecutive `lineEnd` sequences is truncated to exactly

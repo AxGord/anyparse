@@ -127,7 +127,7 @@ class MethodChainEmit {
 			// `.field` onto a line comment.
 			return hasCommentBreak && mode != Keep
 				? shapeKeep(receiver, segments, cols, commentBreakMask(mode, segments.length, commentForcedBreak))
-				: shape(mode, receiver, segments, cols, opt.lineWidth, sourceBreakBefore);
+				: shape(mode, receiver, segments, cols, opt.lineWidth, opt.methodChainCuddledLinks, sourceBreakBefore);
 		}
 
 		// Normal path: cascade evaluated against (exceeds=false /
@@ -192,13 +192,13 @@ class MethodChainEmit {
 	}
 
 	private static function shape(
-		mode: WrapMode, receiver: Doc, segments: Array<Doc>, cols: Int, lineWidth: Int, ?sourceBreakBefore: Array<Bool>
+		mode: WrapMode, receiver: Doc, segments: Array<Doc>, cols: Int, lineWidth: Int, cuddledLinks: Bool, ?sourceBreakBefore: Array<Bool>
 	): Doc {
 		return switch mode {
 			case NoWrap: shapeNoWrap(receiver, segments);
-			case OnePerLine: shapeOnePerLine(receiver, segments, cols, lineWidth);
+			case OnePerLine: shapeOnePerLine(receiver, segments, cols, lineWidth, cuddledLinks);
 			case OnePerLineAfterFirst:
-				shapeOnePerLineAfterFirst(receiver, segments, cols, lineWidth);
+				shapeOnePerLineAfterFirst(receiver, segments, cols, lineWidth, cuddledLinks);
 			// ω-keep-chain (increment 9): JSON `"defaultWrap": "keep"` on
 			// method-chain configs (`methodChain.defaultWrap = "keep"`)
 			// reproduces the source's per-segment dot-boundary line breaks
@@ -222,7 +222,7 @@ class MethodChainEmit {
 			// Fall back to OnePerLineAfterFirst (the most common chain
 			// break shape) — a future slice can split if a fixture
 			// demands it.
-			case _: shapeOnePerLineAfterFirst(receiver, segments, cols, lineWidth);
+			case _: shapeOnePerLineAfterFirst(receiver, segments, cols, lineWidth, cuddledLinks);
 		};
 	}
 
@@ -386,7 +386,9 @@ class MethodChainEmit {
 		return false;
 	}
 
-	private static function shapeOnePerLineAfterFirst(receiver: Doc, segments: Array<Doc>, cols: Int, lineWidth: Int): Doc {
+	private static function shapeOnePerLineAfterFirst(
+		receiver: Doc, segments: Array<Doc>, cols: Int, lineWidth: Int, cuddledLinks: Bool
+	): Doc {
 		// `receiver seg0` inline; remaining segments each on their own
 		// indented line. The macro-side dispatch guards with
 		// `segments.length >= 2`, so a one-segment input here is a
@@ -396,12 +398,81 @@ class MethodChainEmit {
 		if (segments.length < 2)
 			throw 'MethodChainEmit.shapeOnePerLineAfterFirst: macro-side ≥2 guard violated (segments=${segments.length})';
 		final segs: Array<Doc> = restAwareCallParamSegments(segments, lineWidth);
-		final tail: Array<Doc> = [];
-		for (i in 1...segs.length) {
-			tail.push(Line('\n'));
-			tail.push(segs[i]);
+		// ω-methodchain-cuddled-links: gap `i` (the boundary before
+		// `segs[i]`) cuddles when the doc rendered immediately before it
+		// ends in a forced hardline whose whole tail is close delimiters —
+		// `Concat([receiver, segs[0]])` for the first gap, `segs[i-1]`
+		// after. `false` everywhere (knob off, or nothing structurally
+		// multi-line) takes the pre-knob construction below verbatim.
+		final cuddle: Array<Bool> = cuddledLinks ? [
+			for (i in 1...segs.length)
+				endsWithMultilineClose(i == 1 ? Concat([receiver, segs[0]]) : segs[i - 1])
+		] : [];
+		if (cuddle.indexOf(true) == -1) {
+			final tail: Array<Doc> = [];
+			for (i in 1...segs.length) {
+				tail.push(Line('\n'));
+				tail.push(segs[i]);
+			}
+			return Concat([receiver, segs[0], Nest(cols, Concat(tail))]);
 		}
-		return Concat([receiver, segs[0], Nest(cols, Concat(tail))]);
+		return Concat(cuddledRuns([receiver, segs[0]], segs, 1, cuddle, cols));
+	}
+
+	/**
+	 * ω-methodchain-cuddled-links — assemble a dot-broken chain's segment tail
+	 * as RUNS of segments that share one nest depth.
+	 *
+	 * `lead` is the already-placed prefix that stays at the statement's base
+	 * indent (`[receiver, segs[0]]` for `OnePerLineAfterFirst`, `[receiver]`
+	 * for `OnePerLine`); `first` is the index of the first segment the tail
+	 * places; `cuddle[k]` answers the gap before `segs[first + k]`.
+	 *
+	 * A cuddled segment is appended BARE to the run it rides on, so it renders
+	 * on the previous segment's closing-delimiter line and — crucially — at
+	 * the SAME nest depth, since `Nest` is cumulative against the frame indent
+	 * (`Renderer.pushStructural`: `nextIndent = f.mode == MBreak ? f.indent + n
+	 * : f.indent`). Appending it to a fresh `Nest` instead would push its
+	 * lambda/object body one level deeper per link, which is exactly the
+	 * layout this slice removes. A BREAK gap opens a new
+	 * `Nest(cols, Concat([Line('\n'), …]))` run at one indent below base, and
+	 * every segment cuddled onto a broken segment lands inside that same
+	 * `Nest`.
+	 */
+	private static function cuddledRuns(lead: Array<Doc>, segs: Array<Doc>, first: Int, cuddle: Array<Bool>, cols: Int): Array<Doc> {
+		final out: Array<Doc> = lead.copy();
+		var run: Null<Array<Doc>> = null;
+		for (i in first ... segs.length) {
+			if (cuddle[i - first]) {
+				if (run == null)
+					out.push(segs[i]);
+				else
+					run.push(segs[i]);
+				continue;
+			}
+			if (run != null) out.push(Nest(cols, Concat(run)));
+			run = [Line('\n'), segs[i]];
+		}
+		if (run != null) out.push(Nest(cols, Concat(run)));
+		return out;
+	}
+
+	/**
+	 * ω-methodchain-cuddled-links — may a chain link start on `doc`'s last
+	 * rendered line? Yes exactly when that line is a dedented CLOSING line: a
+	 * forced hardline followed only by close delimiters and whitespace, which
+	 * `DocMeasure.endsWithForcedCloseLine` answers structurally (never by width,
+	 * so no render-time measurement can change a chain's shape) — read its doc
+	 * for what does and does not force such a hardline, including the
+	 * input-layout sensitivity of an object-literal tail.
+	 *
+	 * The closes-only half of that predicate is load-bearing here beyond mere
+	 * shape: it pins the ride-along point to a low column (base indent plus two
+	 * or three characters), so a cuddled `.method(` head cannot blow the line by
+	 * itself.
+	 */
+	private static inline function endsWithMultilineClose(doc: Doc): Bool {
+		return DocMeasure.endsWithForcedCloseLine(doc);
 	}
 
 	/**
@@ -435,19 +506,29 @@ class MethodChainEmit {
 		return Concat([receiver, Nest(cols, Concat(tail))]);
 	}
 
-	private static function shapeOnePerLine(receiver: Doc, segments: Array<Doc>, cols: Int, lineWidth: Int): Doc {
+	private static function shapeOnePerLine(receiver: Doc, segments: Array<Doc>, cols: Int, lineWidth: Int, cuddledLinks: Bool): Doc {
 		// Receiver inline, then ALL segments on their own indented
 		// lines (including the first). Mirrors fork's
 		// `WrappingType.onePerLine` shape for chain origin —
 		// the receiver stays at the call-site column and the chain
 		// breaks below it at one indent level deeper.
 		final segs: Array<Doc> = restAwareCallParamSegments(segments, lineWidth);
-		final tail: Array<Doc> = [];
-		for (s in segs) {
-			tail.push(Line('\n'));
-			tail.push(s);
+		// ω-methodchain-cuddled-links: gap `i` is the boundary before
+		// `segs[i]`, so its predecessor is the receiver at `i == 0` and
+		// `segs[i-1]` after. No cuddling gap keeps the pre-knob shape below.
+		final cuddle: Array<Bool> = cuddledLinks ? [
+			for (i in 0...segs.length)
+				endsWithMultilineClose(i == 0 ? receiver : segs[i - 1])
+		] : [];
+		if (cuddle.indexOf(true) == -1) {
+			final tail: Array<Doc> = [];
+			for (s in segs) {
+				tail.push(Line('\n'));
+				tail.push(s);
+			}
+			return Concat([receiver, Nest(cols, Concat(tail))]);
 		}
-		return Concat([receiver, Nest(cols, Concat(tail))]);
+		return Concat(cuddledRuns([receiver], segs, 0, cuddle, cols));
 	}
 
 	/**

@@ -57,6 +57,7 @@ final class MiniBlockStrictFormat {
 		conditionalPolicy: ConditionalIndentationPolicy.Aligned,
 		alignInlineSwitchCaseBody: false,
 		comprehensionCuddledOpen: false,
+		methodChainCuddledLinks: false,
 		addLineCommentSpace: true,
 		normalizeLineCommentIndent: false,
 		compressSuccessiveParenthesis: true,

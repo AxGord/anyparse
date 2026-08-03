@@ -106,6 +106,11 @@ import anyparse.grammar.haxe.format.HxFormatCommentsSection;
  *   comprehension's head on the `[` line (`[ for (x in xs)`) when the
  *   head fits and the comprehension lays out multi-line. Default `false`
  *   (absent) is byte-inert.
+ * - `wrapping.methodChainCuddledLinks` (ω-methodchain-cuddled-links):
+ *   bool → `methodChainCuddledLinks`. In a dot-broken method chain, a link
+ *   whose PRECEDING link rendered multi-line and ended in a dedented
+ *   closing-delimiter run (`})`) starts on that closing line instead of on
+ *   its own indented line. Default `false` (absent) is byte-inert.
  * - `wrapping.arrayWrap` (ω-arraylit-wraprules + ω-peg-byname-array):
  *   `WrapRules` cascade → `arrayLiteralWrap`. `defaultWrap:String` sets
  *   the cascade's `defaultMode`; `rules:Array<HxFormatWrapRule>` is
@@ -690,6 +695,7 @@ final class HaxeFormatConfigLoader {
 			implementsExtendsWrap: base.implementsExtendsWrap,
 			arrayMatrixWrap: base.arrayMatrixWrap,
 			comprehensionCuddledOpen: base.comprehensionCuddledOpen,
+			methodChainCuddledLinks: base.methodChainCuddledLinks,
 			conditionalPolicy: base.conditionalPolicy,
 			alignInlineSwitchCaseBody: base.alignInlineSwitchCaseBody,
 			addLineCommentSpace: base.addLineCommentSpace,
@@ -1371,6 +1377,7 @@ final class HaxeFormatConfigLoader {
 			if (resolved != null) opt.arrayMatrixWrap = resolved;
 		}
 		if (section.comprehensionCuddledOpen != null) opt.comprehensionCuddledOpen = section.comprehensionCuddledOpen;
+		if (section.methodChainCuddledLinks != null) opt.methodChainCuddledLinks = section.methodChainCuddledLinks;
 	}
 
 	private static function applyWrappingRulesA(section: HxFormatWrappingSection, opt: HxModuleWriteOptions): Void {

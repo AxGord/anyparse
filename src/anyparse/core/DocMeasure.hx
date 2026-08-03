@@ -430,6 +430,118 @@ final class DocMeasure {
 		return false;
 	}
 
+	/**
+	 * Right-spine walk: does `d`'s rendered tail consist of a FORCED hardline
+	 * followed only by close delimiters (`)` / `}` / `]`) and whitespace? In
+	 * other words, does `d` end on a dedented closing line that some following
+	 * token could legally ride?
+	 *
+	 * Sister of `endsWithCloseBrace`, which asks only about the LAST visible
+	 * character and cannot tell a one-line `{ a: 1 }` from a broken-open block.
+	 * The extra fact here is that the close was reached across a break, so the
+	 * answer is a property of the SHAPE, not of the final byte.
+	 *
+	 * The question is answered STRUCTURALLY, never by width: only an
+	 * unconditional `Line('\n')` counts, and every conditional ctor is read on
+	 * its FLAT side (mirroring `hasForcedBreak` / `flatText` /
+	 * `endsWithCloseBrace`), so a construct the RENDERER would break for being
+	 * too wide answers `false`. `BodyGroup` is DESCENDED, and that descent is
+	 * the point: a lambda block body's own forced hardline is the signal.
+	 *
+	 * What actually forces such a hardline in the Haxe writer, measured:
+	 *  - a lambda / function BLOCK body with at least one statement — always,
+	 *    even when the source wrote it on one line;
+	 *  - a bracketed literal exactly when its OWN wrap cascade already committed
+	 *    to breaking it at build time. Which is why is the cascade's business,
+	 *    not this walk's: under the stock object-literal rules an item count
+	 *    above the threshold breaks a one-line source literal, while at or below
+	 *    it `Keep` semantics reproduce the source's own line breaks — so the
+	 *    same AST can answer either way depending on how it was written. What
+	 *    the cascade defers to the RENDERER (`ExceedsMaxLineLength`) never
+	 *    reaches here, since conditionals are read flat. A trailing comma is an
+	 *    OUTPUT of a break, never a cause of one.
+	 *
+	 * Introduced for the cuddled-link gate
+	 * (`WriteOptions.methodChainCuddledLinks`), where the closes-only
+	 * requirement additionally pins the ride-along point to a low column.
+	 */
+	public static function endsWithForcedCloseLine(d: Doc): Bool {
+		return scanTail(d) == TailBreak;
+	}
+
+	/**
+	 * Tri-state right-to-left walker behind `endsWithForcedCloseLine`:
+	 * `TailCloses` while only close delimiters and whitespace have been seen,
+	 * `TailBreak` once a forced hardline is reached with such a tail,
+	 * `TailOther` as soon as substantive content appears.
+	 *
+	 * Arms are grouped as in `endsWithCloseBrace` (its right-spine model) and
+	 * enumerate every `Doc` ctor with no catch-all, so a new ctor breaks
+	 * compilation here rather than silently taking a default. Unlike the
+	 * stack-based walks in this class this one recurses, because the verdict of
+	 * a child decides whether its left siblings are visited at all — the same
+	 * reason `MethodChainEmit.endsWithLineComment` recurses; depth is bounded
+	 * by expression nesting.
+	 *
+	 * The `Fill*` separator is skipped, matching `endsWithCloseBrace`: it never
+	 * renders after the last item. Skipping it can only UNDER-report (a
+	 * hardline separator is not seen), never manufacture a false `TailBreak`.
+	 */
+	private static function scanTail(d: Doc): DocTailScan {
+		return switch d {
+			// No visible tail content. A trailing `OptHardline*` is treated as
+			// transparent rather than as a break — no emitter produces one in
+			// tail position, and reading it as a break would claim a closing
+			// line that the atom has already terminated.
+			case Empty | OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline | OptSpaceSkipAfterHardline:
+				TailCloses;
+			case Line(flat) if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code):
+				TailBreak;
+			case Text(s) | OptSpace(s) | Line(s):
+				closesOnly(s) ? TailCloses : TailOther;
+			case Concat(items) | Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
+				scanTailItems(items);
+			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
+				inner
+			) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
+				inner
+			) | ConditionalMarkerDecrease(inner):
+				scanTail(inner);
+			case IfBreak(_, flatDoc) | IfWidthExceeds(_, _, flatDoc) | IfFirstLineExceeds(_, _, flatDoc) | IfLineExceeds(_, _, flatDoc) | IfResidualLineExceeds(
+				_, _, flatDoc
+			) | IfFullLineExceeds(_, _, flatDoc) | IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(
+				_, _, _, _, flatDoc
+			):
+				scanTail(flatDoc);
+		};
+	}
+
+	/**
+	 * Scan a container's children right-to-left, stopping at the first child
+	 * that is not `TailCloses` — that child's own verdict is the container's. A
+	 * container whose every child is closes-only is itself closes-only.
+	 */
+	private static function scanTailItems(items: Array<Doc>): DocTailScan {
+		var i: Int = items.length - 1;
+		while (i >= 0) {
+			final r: DocTailScan = scanTail(items[i]);
+			if (r != TailCloses) return r;
+			i--;
+		}
+		return TailCloses;
+	}
+
+	/** True iff `s` holds nothing but close delimiters (`)` / `}` / `]`) and whitespace. */
+	private static function closesOnly(s: String): Bool {
+		final t: String = StringTools.rtrim(s);
+		for (i in 0...t.length) {
+			final c: Int = StringTools.fastCodeAt(t, i);
+			if (c == ' '.code || c == '\t'.code) continue;
+			if (c != ')'.code && c != '}'.code && c != ']'.code) return false;
+		}
+		return true;
+	}
+
 	/** True iff char code `c` may start an identifier (letter / `_` / `$`). */
 	private static inline function isIdentStart(c: Int): Bool {
 		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code || c == '$'.code;
@@ -553,5 +665,22 @@ final class DocMeasure {
 				return { add: 0, stop: false, delim: null };
 		}
 	}
+
+}
+
+/**
+ * Tri-state verdict of `DocMeasure.scanTail`'s right-to-left walk over a
+ * `Doc`'s rendered tail.
+ */
+private enum abstract DocTailScan(Int) {
+
+	/** A forced hardline was reached and everything to its right was close delimiters / whitespace. */
+	final TailBreak = 0;
+
+	/** Only close delimiters and whitespace seen so far; keep scanning left. */
+	final TailCloses = 1;
+
+	/** Substantive content sits to the right of any hardline — the tail is not a closing line. */
+	final TailOther = 2;
 
 }
