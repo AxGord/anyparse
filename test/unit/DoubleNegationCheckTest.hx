@@ -10,9 +10,11 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 
 /**
- * The `double-negation` check: a not-node directly wrapping another (`!!x`) is flagged `Info`; `fix` strips it when the
+ * The `double-negation` check: a not-node wrapping another (`!!x`, and `!(!x)` through any
+ * parentheses between them) is flagged `Info`; `fix` strips it when the
  * operand is provably non-null. A single `!`, or a `!` wrapping a non-`!`
- * expression, is not.
+ * expression, is not — a `!` over a `&&` / `||` compound is `simplify-negated-compound`'s
+ * shape, not this one's.
  */
 class DoubleNegationCheckTest extends Test {
 
@@ -32,12 +34,29 @@ class DoubleNegationCheckTest extends Test {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar b = !(a && c);\n\t}\n}').length);
 	}
 
+	public function testParenthesisedDoubleNegationFlagged(): Void {
+		// `!(!x)` is the same redundancy as `!!x`, spelled longer — the scan reads through parens.
+		final vs: Array<Violation> = violations('class C {\n\tfunction f():Void {\n\t\tvar b = !(!x);\n\t}\n}');
+		Assert.equals(1, vs.length);
+		Assert.equals('double-negation', vs[0].rule);
+	}
+
 	public function testTripleNegationFlaggedOnce(): Void {
 		Assert.equals(1, violations('class C {\n\tfunction f():Void {\n\t\tvar b = !!!x;\n\t}\n}').length);
 	}
 
 	public function testFixStripsDoubleNegation(): Void {
 		Assert.equals(wrap('var b = x;'), applyFix(wrap('var b = !!x;')));
+	}
+
+	public function testFixStripsParenthesisedDoubleNegation(): Void {
+		Assert.equals(wrap('var b = x;'), applyFix(wrap('var b = !(!x);')));
+	}
+
+	public function testFixKeepsCompoundOperandParens(): Void {
+		// The operand's own source carries its parentheses, so the result needs no precedence
+		// analysis of its own; `redundant-parens` drops the survivor on a later pass.
+		Assert.equals(wrap('var b = (a && c);'), applyFix(wrap('var b = !(!(a && c));')));
 	}
 
 	public function testFixStripsParenOperand(): Void {

@@ -68,4 +68,22 @@ interface BooleanLogicSupport {
 	 */
 	public function negateConditionDeclinesFlip(cond: QueryNode, source: String, ?typeNominalOf: (QueryNode) -> Null<String>): Bool;
 
+	/**
+	 * The De Morgan simplification of `not` — a logical-not over a `&&` / `||` COMPOUND — as
+	 * source replacing the whole not node, or null when `not` is not that shape or the rewrite
+	 * would not PAY: the same NaN-safe engine as `negateCondition` produces the text, and the
+	 * result is offered only when it carries strictly fewer unary `!` operators than the input
+	 * (`!(!a || b)` → `a && !b` pays; `!(a || b)` → `!a && !b` does not, and answers null).
+	 * A term the NaN gate refuses to flip stays wrapped inside the result, so a PARTIAL
+	 * simplification is still offered whenever the count still falls.
+	 *
+	 * `parent` is the not node's parent — the slot the replacement lands in — so the result can
+	 * be parenthesised exactly when the surrounding operator binds tighter than it (`x && !(a
+	 * && b)` → `x && (a != … || …)`); pass null for a slot that accepts any expression.
+	 * `typeNominalOf` is the same operand-type probe `negateCondition` takes.
+	 */
+	public function simplifyNegatedCompound(
+		not: QueryNode, parent: Null<QueryNode>, source: String, ?typeNominalOf: (QueryNode) -> Null<String>
+	): Null<String>;
+
 }

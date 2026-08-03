@@ -9,18 +9,30 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 /**
- * Flags a double logical negation `!!x` — a not-node directly wrapping another. In Haxe
+ * Flags a double logical negation `!!x` — a not-node wrapping another, through any
+ * parentheses between them (`!(!x)` is the same redundancy, spelled longer). In Haxe
  * `!` already yields `Bool`, so the pair is redundant. `Severity.Info`; `fix` strips the pair (`!!x` → `x`,
- * `!!!x` → `!x`), but only for a provably non-null operand: `!!null` is
+ * `!!!x` → `!x`, `!(!x)` → `x`), but only for a provably non-null operand: `!!null` is
  * `false` where `null` is not, so an operand reaching a nullable-access
  * kind is reported, never auto-stripped.
  *
+ * The stripped text is the inner operand's own SOURCE, parentheses included
+ * (`!(!(a && b))` → `(a && b)`), so the result needs no precedence analysis of its own: the
+ * operand already bound tightly enough to sit under a `!`, and a redundant surviving pair is
+ * `redundant-parens`' business on the next pass.
+ *
  * ## Grammar-agnostic
  *
- * The logical-not kind comes from `RefShape.notKind` (unset → no-op). The OUTERMOST not of
- * a chain is flagged once; the check does not descend into it. Macro-reification subtrees
- * (`RefShape.opaqueKinds`) are not descended into either — a `!!x` that exists only as
- * reified macro source is generated code, not authored style, and is left alone.
+ * The logical-not and parenthesis kinds come from `RefShape.notKind` / `RefShape.parenKind`
+ * (an unset `notKind` → no-op; an unset `parenKind` → the bare `!!x` shape only). The
+ * OUTERMOST not of a chain is flagged once; the check does not descend into it.
+ * Macro-reification subtrees (`RefShape.opaqueKinds`) are not descended into either — a
+ * `!!x` that exists only as reified macro source is generated code, not authored style, and
+ * is left alone.
+ *
+ * A not over a `&&` / `||` COMPOUND (`!(!a || b)`) is a different rewrite — De Morgan, with
+ * a worth gate — and belongs to `simplify-negated-compound`; the two shapes are disjoint, so
+ * neither ever claims the other's node.
  */
 @:nullSafety(Strict)
 final class DoubleNegation implements Check {
@@ -41,7 +53,7 @@ final class DoubleNegation implements Check {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, tree, seams.notKind, seams.opaqueKinds);
+			if (tree != null) walk(violations, entry.file, tree, seams);
 		}
 		return violations;
 	}
@@ -60,19 +72,16 @@ final class DoubleNegation implements Check {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		return seams == null
 			? []
-			: CheckScan.applyBySpan(
-				plugin, source, violations, [seams.notKind],
-				(node, span) -> negationEdit(node, span, seams.notKind, seams.nullableKinds, source)
-			);
+			: CheckScan.applyBySpan(plugin, source, violations, [seams.notKind], (node, span) -> negationEdit(node, span, seams, source));
 	}
 
 	/**
-	 * Walk `node`; flag a not directly wrapping another not, then STOP descending into it.
-	 * A macro-reification subtree (`opaqueKinds`) is skipped wholesale.
+	 * Walk `node`; flag a not wrapping another not (parentheses transparent), then STOP
+	 * descending into it. A macro-reification subtree (`opaqueKinds`) is skipped wholesale.
 	 */
-	private static function walk(out: Array<Violation>, file: String, node: QueryNode, notKind: String, opaqueKinds: Array<String>): Void {
-		if (opaqueKinds.contains(node.kind)) return;
-		if (node.kind == notKind && node.children.length == 1 && node.children[0].kind == notKind) {
+	private static function walk(out: Array<Violation>, file: String, node: QueryNode, seams: Seams): Void {
+		if (seams.opaqueKinds.contains(node.kind)) return;
+		if (innerNotOf(node, seams) != null) {
 			final span: Null<Span> = node.span;
 			if (span != null) {
 				out.push({
@@ -85,7 +94,20 @@ final class DoubleNegation implements Check {
 				return;
 			}
 		}
-		for (c in node.children) walk(out, file, c, notKind, opaqueKinds);
+		for (c in node.children) walk(out, file, c, seams);
+	}
+
+	/**
+	 * The inner not `node` redundantly negates — parentheses between the two unwrapped — or
+	 * null when `node` is not a not, or its operand is anything else. `!(!x)` and `!!x` are the
+	 * same redundancy, so both answer here; an unset `parenKind` leaves only the bare form.
+	 */
+	private static function innerNotOf(node: QueryNode, seams: Seams): Null<QueryNode> {
+		if (node.kind != seams.notKind || node.children.length != 1) return null;
+		var inner: QueryNode = node.children[0];
+		final parenKind: Null<String> = seams.parenKind;
+		while (parenKind != null && inner.kind == parenKind && inner.children.length == 1) inner = inner.children[0];
+		return inner.kind == seams.notKind ? inner : null;
 	}
 
 	/** Whether `operand`'s subtree reaches any kind whose nullness the check cannot rule out. */
@@ -103,7 +125,12 @@ final class DoubleNegation implements Check {
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
 		final nullSafeKind: Null<String> = shape.nullSafeAccessKind;
 		final nullableKinds: Array<String> = shape.nullableOperandKinds ?? (nullSafeKind != null ? [nullSafeKind] : []);
-		return { notKind: notKind, opaqueKinds: opaqueKinds, nullableKinds: nullableKinds };
+		return {
+			notKind: notKind,
+			parenKind: shape.parenKind,
+			opaqueKinds: opaqueKinds,
+			nullableKinds: nullableKinds
+		};
 	}
 
 
@@ -112,14 +139,11 @@ final class DoubleNegation implements Check {
 	 * rewritten: the indexed node isn't a not-wrapping-not, or the fully-stripped
 	 * operand isn't provably non-null (see `fix`'s doc for the `!!null` caveat).
 	 */
-	private static function negationEdit(
-		node: QueryNode, span: Span, notKind: String, nullableKinds: Array<String>, source: String
-	): Null<{ span: Span, text: String }> {
-		if (node.children.length != 1 || node.children[0].kind != notKind) return null;
-		final inner: QueryNode = node.children[0];
-		if (inner.children.length != 1) return null;
+	private static function negationEdit(node: QueryNode, span: Span, seams: Seams, source: String): Null<{ span: Span, text: String }> {
+		final inner: Null<QueryNode> = innerNotOf(node, seams);
+		if (inner == null || inner.children.length != 1) return null;
 		final operand: QueryNode = inner.children[0];
-		if (operand.kind != notKind && operandIsNullable(operand, nullableKinds)) return null;
+		if (operand.kind != seams.notKind && operandIsNullable(operand, seams.nullableKinds)) return null;
 		final operandSpan: Null<Span> = operand.span;
 		return operandSpan == null ? null : { span: span, text: source.substring(operandSpan.from, operandSpan.to) };
 	}
@@ -129,6 +153,10 @@ final class DoubleNegation implements Check {
 /** The resolved seams `DoubleNegation` reads in both `run` and `fix`. */
 private typedef Seams = {
 	final notKind: String;
+
+	/** The parenthesis kind the redundancy scan reads THROUGH (`!(!x)`), or null when the grammar has none — then only the bare `!!x` shape is seen. */
+	final parenKind: Null<String>;
+
 	final opaqueKinds: Array<String>;
 	final nullableKinds: Array<String>;
 };
