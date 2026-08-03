@@ -86,8 +86,11 @@ final class Linter {
 			new JoinReturn(),
 			new PreferSingleQuotes(),
 			new SimplifyBooleanTernary(),
-			// After `simplify-boolean-ternary` in the registry, but order-free: the two never
-			// claim the same node — one owns a ternary, the other a logical-not.
+			// Registered after `double-negation`, and THAT ordering is load-bearing: on
+			// `!(!(!x) || q)` the two rules claim distinct but NESTED nodes; the earlier
+			// double-negation edit lands first and the shared fix pass converges (2 passes,
+			// then stable). `simplify-boolean-ternary` is genuinely order-free — different
+			// node kinds.
 			new SimplifyNegatedCompound(),
 			new AssignmentInCondition(),
 			new DuplicateTernaryBranches(),
