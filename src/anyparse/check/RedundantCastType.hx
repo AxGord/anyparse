@@ -32,7 +32,8 @@ import anyparse.runtime.Span;
  *    nested forms no seam names — `LocalInlineFnStmt`, `NamedFnExpr` — resolve against their own
  *    annotation), a `lambdaKinds` node CLEARS it, so a lambda return always bails. The annotation
  *    itself is told from a type-parameter CONSTRAINT — same node kind, same child slot — by
- *    position relative to the parameter list (`afterParamList`);
+ *    position relative to the parameter list (`CheckScan.returnAnnotationText`, shared with
+ *    `guard-return`'s Void proof);
  *  - (c) a call-argument slot whose parameter is written `T`, and only when the callee is a
  *    bare identifier resolving to a function DECLARED in this file, EVERY parameter up to and
  *    including the slot is plain required with no default value, and the parameter's type is a
@@ -261,7 +262,7 @@ final class RedundantCastType implements Check implements DefaultOff {
 		final isFirstChild: Bool = parent.children.length > 0 && parent.children[0] == castNode;
 		if (declKinds.contains(parent.kind) && isFirstChild) return declAnnotation(parent, castNode, types.declaredTypeSources);
 		if ((shape.valueReturnKinds ?? []).contains(parent.kind) && isFirstChild)
-			return enclosingFn == null ? null : returnAnnotation(enclosingFn, shape, types.source);
+			return enclosingFn == null ? null : CheckScan.returnAnnotationText(enclosingFn, shape, types.source);
 		if (parent.kind == shape.assignKind && parent.children.length == 2 && parent.children[1] == castNode)
 			return assignTargetAnnotation(parent.children[0], enclosingContainer, root, types);
 		return parent.kind == shape.callKind ? paramAnnotation(castNode, parent, root, types, resolutionIndex) : null;
@@ -281,68 +282,6 @@ final class RedundantCastType implements Check implements DefaultOff {
 		final declSpan: Null<Span> = decl.span;
 		final castSpan: Null<Span> = castNode.span;
 		return declSpan == null || castSpan == null ? null : earliestTypeSourceIn(declSpan.from, castSpan.from, declaredTypeSources);
-	}
-
-	/**
-	 * Position (b): the enclosing function's RETURN annotation — the SOLE `typeAnnotationKinds`
-	 * direct child that starts AFTER the parameter list's closing `)`. Position is the whole gate:
-	 * a type-parameter CONSTRAINT (`function f<T:Foo>()`) projects the very same `Named` node in
-	 * the very same child slot, always BEFORE the parameter list, so trusting "exactly one
-	 * annotation child" made a constrained function with NO return type read as annotated `Foo`.
-	 * The `)` is searched from the last parameter's end (or the function's start when it declares
-	 * none), which puts a default value's parentheses behind the cursor; metadata projects as a
-	 * sibling node outside the function span. A parameter's own annotation nests UNDER the
-	 * parameter node, never as a direct child of the function, so it is never a candidate.
-	 */
-	private static function returnAnnotation(fn: QueryNode, shape: RefShape, source: String): Null<String> {
-		final fnSpan: Null<Span> = fn.span;
-		if (fnSpan == null) return null;
-		final paramsEnd: Int = lastParamEnd(fn, shape.paramKinds ?? []);
-		final annotationKinds: Array<String> = shape.typeAnnotationKinds ?? [];
-		var found: Null<Span> = null;
-		var prevEnd: Int = fnSpan.from;
-		for (child in fn.children) {
-			final childSpan: Null<Span> = child.span;
-			if (childSpan == null) return null;
-			if (annotationKinds.contains(child.kind) && afterParamList(childSpan, prevEnd, paramsEnd, source)) {
-				if (found != null) return null;
-				found = childSpan;
-			}
-			prevEnd = childSpan.to;
-		}
-		return found == null ? null : source.substring(found.from, found.to);
-	}
-
-	/**
-	 * The end offset of `fn`'s LAST declared parameter, or -1 when it declares none.
-	 */
-	private static function lastParamEnd(fn: QueryNode, paramKinds: Array<String>): Int {
-		var end: Int = -1;
-		for (child in fn.children) if (paramKinds.contains(child.kind)) {
-			final paramSpan: Null<Span> = child.span;
-			if (paramSpan != null && paramSpan.to > end) end = paramSpan.to;
-		}
-		return end;
-	}
-
-	/**
-	 * Whether the annotation at `annotationSpan` sits AFTER the parameter list — the test that tells a
-	 * RETURN type from a type-parameter CONSTRAINT, which projects the same node kind in the same child
-	 * slot but always precedes the parameter list.
-	 *
-	 * With at least one declared parameter the answer is purely structural: every constraint precedes
-	 * the first parameter, so starting after the LAST one settles it, whatever the header contains.
-	 * A parameterless function has no such landmark, so the empty list's `)` is located in the text
-	 * between the preceding sibling and the annotation. That window is guarded: a `)` may also sit
-	 * inside a structural constraint (`<A:{ function n():Void; }, B:Foo>`), which is why the search
-	 * starts at `prevEnd` rather than at the function's start, and a comment in the window refuses
-	 * outright rather than letting a `)` inside it stand in for the parameter list.
-	 */
-	private static function afterParamList(annotationSpan: Span, prevEnd: Int, lastParamEnd: Int, source: String): Bool {
-		if (lastParamEnd >= 0) return annotationSpan.from > lastParamEnd;
-		if (CheckScan.hasCommentMarker(source, prevEnd, annotationSpan.from)) return false;
-		final close: Int = source.indexOf(')', prevEnd);
-		return close != -1 && close < annotationSpan.from;
 	}
 
 	/**
