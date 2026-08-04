@@ -45,11 +45,26 @@ package anyparse.grammar.haxe;
  * deeper than the statement position; `body` mirrors
  * `HxCondSpliceBlockOpen.body`'s `@:fmt(nestBody, rightCurly)` +
  * `@:sep` block-Star contract.
+ *
+ * `cases` also reuses `HxSwitchStmt.cases`'s
+ * `@:fmt(caseSiblingSymmetry('caseBody', 'expressionCase'))`
+ * (omega-if-leader-case-symmetry). This shared case list IS the whole
+ * switch - it is a ROOT case list, not a region nested inside one - so
+ * nothing above it runs a widest-sibling pre-pass whose verdict it could
+ * inherit, and without the opt-in its cases got no coordination at all
+ * (probed: one over-wide body dropped below its label while its inline
+ * siblings stayed put). That is the exact opposite of
+ * `HxConditionalCase.body` / `elseBody` and `HxElseifCase.body`, which are
+ * deliberately NOT opted in: those sit INSIDE an opted-in switch, and an
+ * opted-in inner Star would run its OWN pre-pass and overwrite the
+ * enclosing switch's verdict, fragmenting one switch into per-region
+ * coordination.
  */
 @:peg
 typedef HxCondSpliceSwitchOpen = {
 	var raw: HxCondSwitchOpenRaw;
-	@:trail('}') @:trivia @:fmt(nestBody, indentCaseLabels, rightCurly, condSwitchOpenCasesNest) var cases: Array<HxSwitchCase>;
+	@:trail('}') @:trivia @:fmt(nestBody, indentCaseLabels, rightCurly, condSwitchOpenCasesNest,
+		caseSiblingSymmetry('caseBody', 'expressionCase')) var cases: Array<HxSwitchCase>;
 	@:trail('}') @:trivia @:fmt(nestBody, rightCurly, emptyBlockBreak) @:sep(';', tailRelax, blockEnded(
 		'stmtNoSemi', sepStartsElement
 	)) var body: Array<HxStatement>;
