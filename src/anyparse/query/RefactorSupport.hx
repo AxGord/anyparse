@@ -677,6 +677,31 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * The span of the first standalone `name` token within `source[from, stop)` that a `$`
+	 * does NOT precede, or null when the window holds none — the BINDER a self-scoped
+	 * construct spells first (`for (item in …)`, `var name = …`).
+	 *
+	 * Word-boundary matching rides on `identTokenOffset`, so the token model stays in one
+	 * place; the only thing this adds is the `$` rejection. That one gate is what separates a
+	 * binder scan from a REFERENCE scan: `'$name'` is a simple interpolation READ, and a
+	 * caller that accepted it would place the binder token inside a string literal — claiming
+	 * a shadowed region the declaration never owns (`unused-local`) or renaming an occurrence
+	 * that is not the declaration (`guard-continue`'s de-nest). The opposite direction is
+	 * `referencedInRange`, which deliberately COUNTS `$name` (and even the `\x24name` escape
+	 * spelling) because there a missed read costs a wrongly deleted binding.
+	 */
+	public static function binderTokenSpan(source: String, from: Int, stop: Int, name: String): Null<Span> {
+		var at: Int = from;
+		while (at < stop) {
+			final hit: Int = identTokenOffset(source, new Span(at, stop), name);
+			if (hit < 0) return null;
+			if (hit == 0 || StringTools.fastCodeAt(source, hit - 1) != '$'.code) return new Span(hit, hit + name.length);
+			at = hit + 1;
+		}
+		return null;
+	}
+
+	/**
 	 * Is `offset` inside a COMMENT region? The first lexical region that
 	 * contains it decides; a string literal is not a comment, so code
 	 * interpolated inside one stays eligible.

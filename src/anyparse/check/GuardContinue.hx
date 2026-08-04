@@ -539,21 +539,14 @@ final class GuardContinue implements Check {
 	}
 
 	/**
-	 * The span of the binder token inside a declaration node: the FIRST standalone `name`
-	 * (neighbours outside `[A-Za-z0-9_]`) not preceded by `$`. The declaration node starts at
-	 * the `var` / `final` keyword — a metadata wrapper projects as a separate sibling — so
-	 * nothing ahead of the binder can hold the name. Null when the grammar's span does not
-	 * cover it.
+	 * The span of the binder token inside a declaration node — `RefactorSupport.binderTokenSpan`
+	 * over the declaration's own span. The declaration node starts at the `var` / `final`
+	 * keyword — a metadata wrapper projects as a separate sibling — so nothing ahead of the
+	 * binder can hold the name. Null when the grammar's span does not cover it.
 	 */
 	private static function binderSpan(source: String, decl: QueryNode, name: String): Null<Span> {
 		final span: Null<Span> = decl.span;
-		if (span == null) return null;
-		var at: Int = source.indexOf(name, span.from);
-		while (at != -1 && at + name.length <= span.to) {
-			if (isStandaloneAt(source, at, name.length) && source.charAt(at - 1) != '$') return new Span(at, at + name.length);
-			at = source.indexOf(name, at + 1);
-		}
-		return null;
+		return span == null ? null : RefactorSupport.binderTokenSpan(source, span.from, span.to, name);
 	}
 
 	/** Append the span of every `name` read in `node`'s subtree — a plain identifier, or the identifier of a `$name` interpolation. */
