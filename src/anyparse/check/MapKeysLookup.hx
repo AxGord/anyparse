@@ -263,10 +263,12 @@ final class MapKeysLookup implements Check {
 		if (loop.children.length < MIN_BINARY_CHILD_COUNT) return null;
 		final keyName: Null<String> = loop.name;
 		if (keyName == null) return null;
-		// The iterable is the first NON-binder child: a key-value loop puts its VALUE binder ahead
-		// of it. Such a loop is not a `.keys()` loop and `keysReceiver` would reject the binder
-		// anyway, but reading the wrong child to reach that refusal is the trap this slice exists
-		// to close.
+		// A loop that ALREADY destructures is not this rule's shape: `for (k => v in m.keys())`
+		// binds a second name the suggested `for (k => value in m)` would drop. Refuse it here,
+		// explicitly. Reading `children[0]` used to reach the same refusal by accident — the binder
+		// sits ahead of the iterable, so `keysReceiver` rejected the binder rather than the loop —
+		// and taking the real iterable removes that accident along with the trap.
+		if (RefactorSupport.hasIterationValueBinder(loop, cfg.valueBinderKinds)) return null;
 		final iterable: Null<QueryNode> = RefactorSupport.iterationIterable(loop, cfg.valueBinderKinds);
 		if (iterable == null) return null;
 		final body: QueryNode = loop.children[loop.children.length - 1];
@@ -307,16 +309,23 @@ final class MapKeysLookup implements Check {
 	}
 
 	/**
-		  * Whether the path ROOT `rootName` or the key `keyName` is re-bound anywhere in `node` (a
+	 * Whether the path ROOT `rootName` or the key `keyName` is re-bound anywhere in `node` (a
 	 * local, a nested param, a nested loop var, or a nested key-value loop's VALUE binder). Only
 	 * the root matters for a path: a `session.files` read resolves `files` as a member of whatever
 	 * `session` denotes, so a local named after an intermediate SEGMENT cannot shadow it —
 	 * re-binding the root can.
 	 *
-	 * The VALUE binder is the one this check must not miss twice over: `map-keys-lookup` EMITS
-	 * `for (k => value in m)`, so it manufactures the very shape a blind scan cannot see. While the
-	 * binder had no node, `for (k in m.keys()) for (a => k in n) trace(m[k])` rewrote the inner
-	 * `m[k]` — a read of the INNER `k` — into the outer loop's `value`.
+	 * The VALUE binder is the one this check has the most reason not to miss: `map-keys-lookup`
+	 * EMITS `for (k => value in m)`, so it manufactures the very shape a blind scan cannot see.
+	 * While the binder had no node, `for (k in m.keys()) for (a => k in n) trace(m[k])` rewrote the
+	 * inner `m[k]` — a read of the INNER `k` — into the outer loop's `value`.
+	 *
+	 * The kind set is NOT the language's full binding model: it is `localDeclKinds`, `paramKinds`,
+	 * the singular `forStmtKind` and the value-binder kinds. A comprehension's KEY binder
+	 * (`ForExpr`), a `catch` variable, a case-pattern capture and a bare thin-arrow parameter all
+	 * still shadow unseen — each a pre-existing miss of the same class, and each fixable by
+	 * composing the `RefShape` binding seams (`selfScopeDeclKinds` alone covers `ForExpr` and
+	 * `CatchClause`) the way `RedundantThis.namedBindingKinds` already does.
 	 */
 	private static function rebinds(node: QueryNode, rootName: String, keyName: String, cfg: Cfg): Bool {
 		if (cfg.opaqueKinds.contains(node.kind)) return false;
@@ -483,7 +492,11 @@ final class MapKeysLookup implements Check {
 	): Void {
 		if (cfg.opaqueKinds.contains(node.kind)) return;
 		if (node.kind == cfg.forKind && node.children.length >= MIN_BINARY_CHILD_COUNT) {
-			final iterSpan: Null<Span> = node.children[0].span;
+			// Keyed on the same child `match` spans the violation at — the first NON-binder one.
+			// A positional `children[0]` here reads a key-value loop's binder instead, so the two
+			// walks disagree on the key and `--fix` silently declines a violation `lint` reported.
+			final iterable: Null<QueryNode> = RefactorSupport.iterationIterable(node, cfg.valueBinderKinds);
+			final iterSpan: Null<Span> = iterable == null ? null : iterable.span;
 			if (iterSpan != null && wanted.contains('${iterSpan.from}:${iterSpan.to}')) {
 				final e: Null<Array<{ span: Span, text: String }>> = buildMapEdits(node, source, cfg);
 				if (e != null) for (edit in e) out.push(edit);

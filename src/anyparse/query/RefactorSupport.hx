@@ -2381,10 +2381,14 @@ final class RefactorSupport {
 	 * of `for (k => v in m)`, whose kinds the grammar publishes as
 	 * `RefShape.iterationValueBinderKinds`.
 	 *
-	 * Public because the binder is an EXTRA child ahead of the iterable, so every consumer that
-	 * reads a loop's operands positionally has the same question to answer; four of them answered
-	 * it with their own private copy before this and the fifth forgot to, which is the bug class
-	 * the binder node exists to close.
+	 * Public, with its three siblings below, because the binder is an EXTRA child ahead of the
+	 * iterable, so every consumer reading a loop's operands positionally faces the same question.
+	 * Four of them answered it with a private copy in the commit that introduced the binder — one
+	 * question, four implementations, which is the drift the binder node exists to end.
+	 *
+	 * The kinds still arrive as a parameter, so a caller passing `[]` gets the pre-binder
+	 * `children[0]` behaviour back with no compile error. Read them from
+	 * `RefShape.iterationValueBinderKinds`.
 	 */
 	public static function iterationValueBinder(loop: QueryNode, valueBinderKinds: Array<String>): Null<QueryNode> {
 		return loop.children.find(c -> valueBinderKinds.contains(c.kind));

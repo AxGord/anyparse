@@ -503,6 +503,22 @@ class MapKeysLookupCheckTest extends Test {
 		);
 	}
 
+	/** A loop that already destructures is not this rule's shape — the suggested `for (k => value in m)` would drop its second binding. */
+	public function testAlreadyKeyValueKeysLoopNotFlagged(): Void {
+		Assert.equals(0, violations(wrapMap('for (k => v in m.keys()) trace(m[k] + v);')).length);
+	}
+
+	/**
+	 * Every reported site must be FIXABLE. The reporter and the fixer locate a loop by its
+	 * iterable's span, and a positional `children[0]` in one of the two walks reads a key-value
+	 * loop's binder instead — the two then disagree on the key and `--fix` silently declines what
+	 * `lint` reported. Asserting the rewritten text is what catches that; a report-only fixture
+	 * cannot.
+	 */
+	public function testReportedSiteIsAlsoFixed(): Void {
+		assertFixCanonical(wrapMap('for (k in m.keys()) trace(m[k]);'), 'for (k => value in m) trace(value);', 'm.keys()');
+	}
+
 	private function wrapMap(loopCode: String): String {
 		return 'class C {\n\tfunction f(m:Map<String,Int>):Void {\n\t\t$loopCode\n\t}\n}';
 	}
