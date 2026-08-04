@@ -370,7 +370,7 @@ final class GuardContinue implements Check {
 		var prevTo: Int = ifSpan.to;
 		for (t in tail) {
 			final ts: Null<Span> = t.span;
-			if (ts == null || gapComment(source, prevTo, ts.from)) return false;
+			if (ts == null || CheckScan.hasCommentMarker(source, prevTo, ts.from)) return false;
 			prevTo = ts.to;
 		}
 		return true;
@@ -605,15 +605,8 @@ final class GuardContinue implements Check {
 		final condSpan: Null<Span> = cond.span;
 		final thenSpan: Null<Span> = thenBlock.span;
 		if (ifSpan == null || condSpan == null || thenSpan == null) return true;
-		final headerGap: Bool = gapComment(source, ifSpan.from, condSpan.from);
-		return headerGap || gapComment(source, condSpan.to, thenSpan.from);
-	}
-
-	/** Whether `[from, to)` of `source` holds a `//` or `/*` comment marker. */
-	private static function gapComment(source: String, from: Int, to: Int): Bool {
-		if (from >= to) return false;
-		final gap: String = source.substring(from, to);
-		return gap.indexOf('//') != -1 || gap.indexOf('/*') != -1;
+		final headerGap: Bool = CheckScan.hasCommentMarker(source, ifSpan.from, condSpan.from);
+		return headerGap || CheckScan.hasCommentMarker(source, condSpan.to, thenSpan.from);
 	}
 
 	/**

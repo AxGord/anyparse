@@ -459,14 +459,17 @@ final class CheckScan {
 	}
 
 	/**
-	 * Whether `[from, to)` of `source` holds a `//` or `/*` comment marker — a
-	 * conservative "don't delete a comment" guard (a marker inside a string only ever
-	 * refuses a fix, never deletes code, the safe direction for an autofix).
+	 * Whether `[from, to)` of `source` holds a `//` or `/*` comment marker — the check
+	 * layer's entry point to `RefactorSupport.hasCommentMarker`, which owns the scan and
+	 * the recorded per-caller argument for why it stays string-blind.
+	 *
+	 * The conservative "don't delete a comment" guard: for every consumer but the negation
+	 * pair below, a marker found inside a string literal only ever REFUSES a fix, never
+	 * deletes code. `negateConditionText` / `negationIsClean` read it as a tier selector
+	 * instead — see the primitive's doc before changing anything here.
 	 */
-	public static function hasCommentMarker(source: String, from: Int, to: Int): Bool {
-		if (from >= to) return false;
-		final s: String = source.substring(from, to);
-		return s.indexOf('//') != -1 || s.indexOf('/*') != -1;
+	public static inline function hasCommentMarker(source: String, from: Int, to: Int): Bool {
+		return RefactorSupport.hasCommentMarker(source, from, to);
 	}
 
 	/**

@@ -956,7 +956,7 @@ final class MemberOrder implements Check implements ConfigAware {
 			final trimmed: String = StringTools.ltrim(line);
 			if (trimmed == '') continue;
 			if (!StringTools.startsWith(trimmed, '#')) return false;
-			if (trimmed.indexOf('//') >= 0 || trimmed.indexOf('/*') >= 0) return false;
+			if (RefactorSupport.textHasCommentMarker(trimmed)) return false;
 		}
 		return true;
 	}

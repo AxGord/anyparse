@@ -1165,6 +1165,47 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * Whether `text` holds a `//` or `/*` comment marker. The primitive under
+	 * `hasCommentMarker` and under `CheckScan.hasCommentMarker`, exposed separately for the
+	 * callers whose subject is not a contiguous source range — a concatenation of trivia
+	 * gaps, or one already-trimmed line.
+	 *
+	 * Deliberately STRING-BLIND: a marker inside a string literal (`'http://x'`) answers yes.
+	 * See `hasCommentMarker` for why that stays.
+	 */
+	public static inline function textHasCommentMarker(text: String): Bool {
+		return text.indexOf('//') >= 0 || text.indexOf('/*') >= 0;
+	}
+
+	/**
+	 * Whether `[from, to)` of `source` holds a `//` or `/*` comment marker — the "don't
+	 * delete a comment" guard every rewriting check consults before regenerating a region.
+	 * An empty or reversed range answers no; the guard is load-bearing, since
+	 * `String.substring` SWAPS a reversed pair and would otherwise scan the wrong text.
+	 *
+	 * ## Why it stays string-blind
+	 *
+	 * The scan cannot tell a real marker from one inside a string literal, so `'http://x'`
+	 * reads as a comment. Teaching it about literals would make it answer `false` on inputs
+	 * where it now answers `true` — a TIGHTENING, and a shared predicate may only be
+	 * tightened when every caller's conservative direction points the same way.
+	 *
+	 * It does not. For all but one consumer a spurious `true` REFUSES a rewrite (report-only
+	 * instead of autofixed) — harmless, and the direction that never deletes a comment. The
+	 * exception is the negation pair `CheckScan.negateConditionText` /
+	 * `CheckScan.negationIsClean`, where the answer is not a refusal but a TIER SELECTOR: a
+	 * `true` routes the rewrite to the verbatim text fallback, and `negationIsClean` then
+	 * reports the site as clean precisely BECAUSE that tier declines nothing. Making the
+	 * scan literal-aware moves such a condition onto the De Morgan tier, which can decline —
+	 * flipping a finding off. That is a real behaviour change, not extra safety, so the
+	 * string-blind answer is the shared contract and any caller that needs precision must
+	 * ask the lexical regions (`scanLexicalRegions`) rather than tighten this.
+	 */
+	public static function hasCommentMarker(source: String, from: Int, to: Int): Bool {
+		return from < to && textHasCommentMarker(source.substring(from, to));
+	}
+
+	/**
 	 * Format `text` into a doc-comment block, one ` * ` line per line. Leading /
 	 * trailing blank lines of the payload are trimmed (a stdin / heredoc payload
 	 * always carries a trailing newline — an edge blank is a delivery artifact,
@@ -3592,13 +3633,7 @@ final class RefactorSupport {
 	 * statement terminator, so no string literal can occupy either region.
 	 */
 	private static function statementCommentFree(source: String, stmt: Span, target: Span): Bool {
-		return !commentInRange(source, stmt.from, target.from) && !commentInRange(source, target.to, stmt.to);
-	}
-
-	/** Whether `[from, to)` of `source` opens a comment. */
-	private static inline function commentInRange(source: String, from: Int, to: Int): Bool {
-		final text: String = source.substring(from, to);
-		return text.indexOf('//') >= 0 || text.indexOf('/*') >= 0;
+		return !hasCommentMarker(source, stmt.from, target.from) && !hasCommentMarker(source, target.to, stmt.to);
 	}
 
 	/**
