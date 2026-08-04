@@ -739,8 +739,11 @@ final class RefactorSupport {
 	 *  1. Canonical gate — unless `reformat`, the source must already be
 	 *     writer-canonical (`writeRoundTrip(source) == source`). A
 	 *     non-canonical file is refused, because a whole-file rewrite would
-	 *     also reflow its unrelated hand-wrapping into a surprise diff.
-	 *     `--reformat` opts into that whole-file canonicalisation.
+	 *     also reflow its unrelated hand-wrapping into a surprise diff. The
+	 *     mutation commands' `--reformat` opts into that canonicalisation;
+	 *     `lint --fix` — which shares this gate — has no such flag, so the
+	 *     refusal message leads with `apq fmt --write`, the remedy every
+	 *     caller's user can reach.
 	 *  2. Splice the caller's edits (raw text) into the source.
 	 *  3. Re-emit the WHOLE spliced file through `writeRoundTrip` (the
 	 *     trivia / comment-preserving pipeline). This BOTH validates (an
@@ -770,8 +773,14 @@ final class RefactorSupport {
 				)
 				catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 			if (canon == null) return Err('the "${plugin.langName()}" grammar has no writer — cannot writer-format the result');
+			// The remedy names `apq fmt --write` FIRST and `--reformat` only as a
+			// conditional: this gate is shared with `lint --fix`, which has no
+			// `--reformat` flag, and an unconditional "re-run with --reformat" sent that
+			// user after a flag their command rejects.
 			if (canon != source)
-				return Err('file is not in canonical form — re-run with --reformat to canonicalise the whole file, or format it first');
+				return Err(
+					'file is not in canonical form — format it first (`apq fmt --write <file>`); a command that accepts `--reformat` can canonicalise the whole file in place instead'
+				);
 		}
 
 		final spliced: String = applyEdits(source, edits);
