@@ -27,6 +27,10 @@ final class HxAstPredLowering extends AstPredLowering {
 
 	private static inline final HX_SWITCH_CASE: String = 'anyparse.grammar.haxe.HxSwitchCase';
 
+	private static inline final HX_CASE_BRANCH: String = 'anyparse.grammar.haxe.HxCaseBranch';
+
+	private static inline final HX_DEFAULT_BRANCH: String = 'anyparse.grammar.haxe.HxDefaultBranch';
+
 	private static inline final HX_OBJECT_FIELD: String = 'anyparse.grammar.haxe.HxObjectField';
 
 	private static inline final HX_MEMBER_DECL: String = 'anyparse.grammar.haxe.HxMemberDecl';
@@ -235,6 +239,7 @@ final class HxAstPredLowering extends AstPredLowering {
 			caseSiblingUnitsField(),
 			caseSiblingUnitsIntoField(),
 			addCaseSiblingUnitField(),
+			caseUnitStructuralBreakField(),
 			elementIsConditionalFalseField(
 				HX_EXPR, 'e',
 				'Byte-parity: `HxExpr`\'s conditional shapes use the ctor names `ConditionalExpr` / `ConditionalArgs` / '
@@ -575,6 +580,79 @@ final class HxAstPredLowering extends AstPredLowering {
 		return predField(
 			'_addCaseSiblingUnit', [bareArg('n', HX_SWITCH_CASE), { name: 'out', type: ruleArrayCT(HX_SWITCH_CASE) }], macro :Void, body,
 			'Appends one switch-case element to `out`, flattening a nested `#if` region into its own units.'
+		);
+	}
+
+	/**
+	 * `caseUnitStructuralBreak_<ElemRule>(c) → Bool` — true iff ONE case
+	 * unit's body renders on the line(s) BELOW its own label whatever the
+	 * budget, so the per-switch symmetry verdict can be reached without a
+	 * width comparison at all. Consumed by the
+	 * `@:fmt(caseSiblingSymmetry(…))` pre-pass
+	 * (`WriterLowering.caseSiblingWidthProbeExpr`), which drops the whole
+	 * widest-sibling measurement for `BodyFit.SIBLING_FORCE_BREAK` on the
+	 * first unit that answers true.
+	 *
+	 * The verdict is the body statement COUNT plus the flat-refusal gate,
+	 * on `CaseBranch.body` and `DefaultBranch.stmts` alike:
+	 *
+	 *  - two or more statements — the body cannot share the label line, so
+	 *    it already sits below it;
+	 *  - exactly one statement that `caseBodyRefusesFlat` refuses (an
+	 *    outermost `&&` / `||`) — the same placement, reached through the
+	 *    shape gate instead of the count;
+	 *  - exactly one statement otherwise — false, and that deliberately
+	 *    covers a GLUED body (a lambda / block / object literal whose Doc
+	 *    carries a hardline). Its FIRST line shares the label line, which is
+	 *    not a below-label placement; a triggered switch still moves it, it
+	 *    just never leads;
+	 *  - ZERO statements — false. There is no body to place, and a forced
+	 *    break would have nothing to move.
+	 *
+	 * `CondSpliceCase` is true with no check at all. It splits a case's
+	 * LABELS from the body they share after `#end`, and that body is
+	 * MANDATORY (`HxCondSpliceCase.tail`, plus whatever `rest` absorbs) and
+	 * renders on the line(s) BELOW those labels at every budget — there is no
+	 * count to take and no width that could put it back on a label line. A
+	 * `Conditional` region, by contrast, never reaches this predicate AS
+	 * ITSELF: the pre-pass flattens it through `caseSiblingUnits_*` first, so
+	 * the predicate runs per INNER unit and a multi-statement case inside a
+	 * `#if` leads the outer spread like any other unit. Every other ctor is
+	 * false.
+	 *
+	 * RESIDUAL: three further shapes that also render below their label are
+	 * NOT trigger inputs — a body element with leading comments, a body Star
+	 * with orphan trailing comments, and a label carrying its own trailing
+	 * comment. Nothing in those trees resists the question; the obstacle is
+	 * generated-table UNIFORMITY. One predicate name emits ONE body, shared
+	 * by the plain / trivia / spans AST families, and the slots holding those
+	 * three shapes are trivia-family-specific — so reading them would make
+	 * one predicate answer differently per family for the same tree. Only the
+	 * trivia mode consumes this predicate today, which is what keeps the
+	 * uniformity a cost rather than a wall; a trigger channel for
+	 * comment-refused bodies is a separate slice.
+	 */
+	private function caseUnitStructuralBreakField(): Field {
+		inline function verdict(rule: String, fieldName: String, holder: String): Expr {
+			final stmts: Expr = field(ident(holder), fieldName);
+			final refuses: Expr = {
+				expr: ECall(ident('caseBodyRefusesFlat'), [starElem(rule, fieldName, macro _cs[0])]),
+				pos: Context.currentPos(),
+			};
+			return macro {
+				final _cs = $stmts;
+				_cs.length >= 2 || (_cs.length == 1 && $refuses);
+			};
+		}
+		final body: Expr = nullSwitch(ident('c'), macro false, [
+			caseBind(HX_SWITCH_CASE, 'CaseBranch', [0 => '_b'], verdict(HX_CASE_BRANCH, 'body', '_b')),
+			caseBind(HX_SWITCH_CASE, 'DefaultBranch', [0 => '_d'], verdict(HX_DEFAULT_BRANCH, 'stmts', '_d')),
+			caseOf(HX_SWITCH_CASE, ['CondSpliceCase'], macro true),
+		], macro false);
+		return predField(
+			'caseUnitStructuralBreak_${AstPredLowering.simpleName(HX_SWITCH_CASE)}', [valueArg('c', HX_SWITCH_CASE)], macro :Bool, body,
+			'True iff a case unit\'s body sits below its label at any budget (multi-statement, one refused statement, '
+			+ 'or a label-splice region).'
 		);
 	}
 

@@ -82,6 +82,25 @@ final class BodyFit {
 	public static inline final SIBLING_PROBING: Int = -2;
 
 	/**
+	 * `_caseSiblingFlatWidth` FORCE channel (ω-case-sibling-symmetry widened):
+	 * a width so large that `IfIndentWidthExceeds` takes its break branch at
+	 * every real indent and budget, so every coordinated body in the group
+	 * goes below its label.
+	 *
+	 * It is an ordinary `siblingWidth >= 0` — `fitLineLayout` needs no arm for
+	 * it and the renderer needs no new ctor. What it encodes is a verdict the
+	 * emitter reached STRUCTURALLY rather than by measurement: some unit of
+	 * the group renders below its own label whatever the budget (a multi-
+	 * statement body, a single-statement body `caseBodyRefusesFlat` refuses,
+	 * or a label-splice region, whose shared body always sits below the labels
+	 * it was split from), so the per-switch rule "if one body is below its
+	 * label, all are" fires without a width comparison. The trigger set and
+	 * the shapes it leaves out are both enumerated in
+	 * `WriterLowering.caseSiblingWidthProbeExpr`'s doc.
+	 */
+	public static inline final SIBLING_FORCE_BREAK: Int = 0x0FFFFFF0;
+
+	/**
 	 * Build the `FitLine` placement Doc for `body` under a header rendered at
 	 * the enclosing indent.
 	 *
@@ -93,23 +112,31 @@ final class BodyFit {
 	 * seam exists to remove.
 	 *
 	 * `siblingWidth >= 0` opts into the SIBLING-COORDINATED decision
-	 * (ω-case-sibling-symmetry). The caller has measured every sibling of this
-	 * body's group and passes the WIDEST one's flat width; the result is an
-	 * `IfIndentWidthExceeds` probe on that width, so every sibling — which
-	 * renders at the same indent — answers identically. Exceeds the budget:
-	 * the body goes to the next line one indent deeper, and so does every
-	 * sibling, including ones that would have fit and ones that would have
-	 * glued. Fits: the probe falls through to the per-construct decision above,
-	 * which picks the inline shape for every MEASURED sibling (each one's own
-	 * width is `<= siblingWidth`).
+	 * (ω-case-sibling-symmetry). The caller passes ONE width for the whole
+	 * group and the result is an `IfIndentWidthExceeds` probe on it, so every
+	 * sibling — which renders at the same indent — answers identically.
+	 * Exceeds the budget: the body goes to the next line one indent deeper,
+	 * and so does every sibling, including ones that would have fit and ones
+	 * that would have glued. Fits: the probe falls through to the
+	 * per-construct decision above, which picks the inline shape for every
+	 * MEASURED sibling (each one's own width is `<= siblingWidth`).
 	 *
-	 * GLUE outcomes sit outside the coordinated set in one direction only, and
-	 * that asymmetry is deliberate. A coordinated break still moves them (they
-	 * are inside the probe's break branch like everyone else), but a glue that
-	 * `glueLayout` turns into a break does NOT move its siblings: the widest-
-	 * sibling pre-pass consumes bodies through `WrapList.flatLength`, which
-	 * answers `-1` for a glued body, so a glue never raises the maximum and
-	 * never triggers the coordination. Pinned by
+	 * TWO CHANNELS reach that width, and this function cannot tell them apart
+	 * — deliberately. The measured one is the widest sibling's flat width. The
+	 * other is `SIBLING_FORCE_BREAK`, which the emitter substitutes when some
+	 * unit of the group is STRUCTURALLY below its own label (a multi-statement
+	 * body, a single-statement body the flat-refusal gate rejects, or a
+	 * label-splice region): no real indent and budget can fit it, so the probe
+	 * always breaks and the whole group follows. A GLUED body is not such a
+	 * unit — its first line shares the label line — but a coordinated break
+	 * still moves it, since it sits inside the probe's break branch like
+	 * everyone else.
+	 *
+	 * Some shapes DO render below their label and still cannot LEAD the group;
+	 * `WriterLowering.caseSiblingWidthProbeExpr`'s doc enumerates them. The
+	 * render-time one is a glue that `glueLayout` turns into a break: that
+	 * verdict is reached at the LIVE PEN COLUMN, which no emitter-side walk
+	 * can see, so the pre-pass never learns of it. Pinned by
 	 * `HxGlueWidthSliceTest.testGlueTurnedBreakIsNotASiblingSymmetryTrigger`.
 	 */
 	public static function fitLineLayout(cols: Int, body: Doc, nestGluedBody: Bool, lineWidth: Int, siblingWidth: Int = SIBLING_NONE): Doc {

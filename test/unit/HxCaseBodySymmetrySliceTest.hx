@@ -9,46 +9,55 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 /**
  * ω-case-sibling-symmetry — per-SWITCH placement for `FitLine` case bodies.
  *
- * T16 decided each case body on its own width, so one over-wide body
- * dropped below its label while its short siblings stayed inline. The
- * result reads as an accident of measurement rather than a shape the
- * author chose. This slice makes the decision per switch: if ANY sibling
- * takes the width-driven break, every sibling body goes to the next line
- * — the fitting ones and the glued ones alike. If none does, the output
- * is byte-for-byte what T16 produced.
+ * T16 decided each case body on its own, so one body that landed below its
+ * label left its short siblings inline. The result reads as an accident of
+ * measurement rather than a shape the author chose. This slice makes the
+ * decision per switch: if ANY case body renders on the line(s) BELOW its
+ * label, every sibling body goes below its label too. If none does, the
+ * output is byte-for-byte what T16 produced.
  *
- * MECHANISM, and why it is split across emitter and renderer: the
- * emitter knows every sibling's FLAT width but not the indent; the
+ * MECHANISM, and why it is split across emitter and renderer: the emitter
+ * knows every sibling's shape and FLAT width but not the indent; the
  * renderer knows the indent but never sees the sibling set. The cases
- * Star's `@:fmt(caseSiblingSymmetry(...))` pre-pass writes each element
- * once, takes `max(WrapList.flatLength)`, and hands that ONE number to
- * every sibling body; `BodyFit` turns it into an `IfIndentWidthExceeds`
- * probe. Since all siblings render at the same indent and receive the
- * same width, they cannot disagree.
+ * Star's `@:fmt(caseSiblingSymmetry(...))` pre-pass hands ONE number to
+ * every sibling body and `BodyFit` turns it into an `IfIndentWidthExceeds`
+ * probe. Since all siblings render at the same indent and receive the same
+ * number, they cannot disagree.
  *
- * WHAT COUNTS AS A TRIGGER — only a width-driven break. An element whose
- * Doc commits to a hardline measures `-1` and contributes nothing:
- *  - a GLUED body (block / lambda / `{`-opening value) — it could not
- *    have shared the label line under any budget, so it is not evidence
- *    the switch is too wide (an all-glued comparator table stays glued);
- *  - a MULTI-STATEMENT body — its spread is AUTHORED, not produced by
- *    the formatter. Decided against triggering on real code: TM's
- *    `FileListSelect.getSaveItemPath` is a lookup switch of three
- *    compact arms plus one twelve-line `case LIST:`, and pulling the
- *    three arms apart to match the long one reads worse than the mix;
- *  - a REFUSED body (`refuseFlatOnComplexExpr`, or a case label carrying
- *    its own trailing comment). Spec T17 rule 4 asked for these to
- *    count; measured on TM first, and the measurement is what decided
- *    it. ZERO case bodies in the tree have the `A && B` shape the
- *    complex-expression refusal targets, so that half is a no-op on real
- *    code. The label-comment half has 15 sites, and they split: 7 have an
- *    EMPTY body (`case X: // no op`) and spread nothing, 7 more are
- *    MULTI-STATEMENT and are already excluded by the rule above — which
- *    leaves exactly ONE site in the whole tree where counting refusals
- *    would change anything (`PitchArea.onStageKeyDown`, whose sibling is
- *    itself a wrapped-pattern case). Buying one site costs a second,
- *    non-flat-width channel through the pre-pass, since a refusal is
- *    invisible to `flatLength`. Deliberately not implemented.
+ * WHAT COUNTS AS A TRIGGER — any unit that is below its label, by either of
+ * two channels.
+ *
+ * STRUCTURAL, decided without measuring anything
+ * (`caseUnitStructuralBreak_HxSwitchCase`):
+ *  - a MULTI-STATEMENT body — two or more statements cannot share the label
+ *    line at any budget;
+ *  - a REFUSED body — one statement whose outermost expression is `&&` or
+ *    `||`, which `refuseFlatOnComplexExpr` refuses inline;
+ *  - a `CondSpliceCase` region — the body it shares after `#end` is
+ *    mandatory and renders below the labels it was split from at every
+ *    budget.
+ * The pre-pass substitutes `BodyFit.SIBLING_FORCE_BREAK` on the first such
+ * unit and skips the width measurement entirely.
+ *
+ * WIDTH, the original channel and now the fallback: the widest unit's flat
+ * width does not fit at the switch's indent.
+ *
+ * NOT triggers, and each for its own reason:
+ *  - an EMPTY body (`case X:` with no statements) — there is no body to
+ *    place below the label, and a forced break would have nothing to move;
+ *  - a GLUED body (a block / lambda / `{`-opening value) — its FIRST line
+ *    SHARES the label line, so it is not a below-label placement. It still
+ *    MOVES under someone else's trigger; it just never leads. An all-glued
+ *    comparator table therefore stays glued;
+ *  - a glue that the width gate turns into a break. That verdict is reached
+ *    at the LIVE PEN COLUMN, which no emitter-side walk can see, so the
+ *    pre-pass never learns of it. The known residual, pinned by
+ *    `HxGlueWidthSliceTest.testGlueTurnedBreakIsNotASiblingSymmetryTrigger`;
+ *  - a body refused by a COMMENT (a leading comment on the body's first
+ *    statement, an orphan trailing comment in the body, a trailing comment
+ *    captured on the label). Those live in trivia slots the structural
+ *    predicate cannot read without answering differently per AST family —
+ *    see `HxAstPredLowering.caseUnitStructuralBreakField`.
  *
  * A `#if`-GUARDED CASE REGION IS NOT ONE ELEMENT (ω-if-leader-case-symmetry).
  * Measured whole it always answers `-1` — its Doc carries the directive
@@ -56,13 +65,15 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
  * Star's generated `caseSiblingUnits_HxSwitchCase` flattener expands the
  * region into the inner case ELEMENTS of every branch (`#if` / `#elseif` /
  * `#else` are alternatives, so the maximum across them is the conservative
- * trigger) and each is measured on the terms above — a glued or
- * multi-statement inner case still contributes nothing. Two shapes stay
- * whole: `CondSpliceCase`, whose labels are byte-verbatim so it has no
- * inner case list, and a pattern-scope conditional (`case #if js "a" #else
- * "b" #end:`), which is a plain `CaseBranch` that already measures flat.
- * `HxCondSpliceSwitchOpen.cases` is opted in for the same reason a switch
- * is; `HxConditionalCase.body` / `elseBody` and `HxElseifCase.body` are
+ * trigger) and each is judged on the terms above — by width AND by shape, so
+ * a multi-statement case inside a region leads too. Two shapes stay whole:
+ * `CondSpliceCase`, whose labels are byte-verbatim so it has no inner case
+ * list (it still LEADS, as ONE unit and structurally — the body it shares
+ * after `#end` is always below those labels), and a pattern-scope
+ * conditional (`case #if js "a" #else "b" #end:`), which is a plain
+ * `CaseBranch` that already measures flat.
+ * `HxCondSpliceSwitchOpen.cases` is opted in for the same reason a switch is;
+ * `HxConditionalCase.body` / `elseBody` and `HxElseifCase.body` are
  * deliberately NOT, so the enclosing switch's verdict flows into the region
  * instead of a per-region pre-pass overwriting it.
  *
@@ -126,6 +137,34 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 		+ '\t\t\tcase ATLAS, BINATLAS:\n#else\n\t\t\tcase ATLAS:\n#end\n\t\t\t\tcc(ddddddddddddddd);\n\t\t\tcase PNG: tiles[a];\n'
 		+ '\t\t};\n\t}\n}\n';
 
+	/**
+	 * A one-line body beside a two-statement one. Nothing here is over-wide
+	 * — the trigger is the SHAPE of `case 2`'s body, not any width.
+	 */
+	private static final MULTI_STMT_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n'
+		+ '\t\t\tcase 1: aa(bb);\n\t\t\tcase 2:\n\t\t\t\tfinal t:Int = k();\n\t\t\t\tt;\n\t\t};\n\t}\n}\n';
+
+	/** A single-statement body the flat-refusal gate rejects (outermost `&&`) beside a body that would have fit. */
+	private static final REFUSED_FLAT_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n'
+		+ '\t\t\tcase 1: a && b;\n\t\t\tcase 2: cc(d);\n\t\t};\n\t}\n}\n';
+
+	/** `MULTI_STMT_SRC` with the multi-statement branch as `default:` — the other body-carrying ctor and field. */
+	private static final DEFAULT_MULTI_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n'
+		+ '\t\t\tcase 1: aa(bb);\n\t\t\tdefault:\n\t\t\t\tfinal t:Int = k();\n\t\t\t\tt;\n\t\t};\n\t}\n}\n';
+
+	/** A block-lambda (GLUED) body beside a two-statement one: the glue cannot lead, but it must follow. */
+	private static final GLUED_UNDER_TRIGGER_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n'
+		+ '\t\t\tcase 1: (a, b) -> {\n\t\t\t\tfinal t:Int = k(a, b);\n\t\t\t\tt;\n\t\t\t}\n\t\t\tcase 2:\n'
+		+ '\t\t\t\tfinal u:Int = m();\n\t\t\t\tu;\n\t\t};\n\t}\n}\n';
+
+	/** The two-statement body sits inside a `#if` region; its plain sibling is outside it. */
+	private static final COND_MULTI_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n'
+		+ '\t\t\tcase 1: aa(bb);\n#if js\n\t\t\tcase 2:\n\t\t\t\tfinal t:Int = k();\n\t\t\t\tt;\n#end\n\t\t};\n\t}\n}\n';
+
+	/** An EMPTY case body beside a one-line one — no body to place, so nothing to spread. */
+	private static final EMPTY_BODY_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n'
+		+ '\t\t\tcase 1:\n\t\t\tcase _: ee(ff);\n\t\t};\n\t}\n}\n';
+
 	public function new(): Void {
 		super();
 	}
@@ -181,13 +220,89 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 		Assert.isTrue(out.indexOf('case 1:\n\t\t\t\t(a, b) -> {') != -1, 'a glued body must follow a width trigger down: <$out>');
 	}
 
-	public function testMultiStatementBodyIsNotATrigger(): Void {
-		// Decided from real code (see the class doc): an authored
-		// multi-statement body does not pull its compact siblings apart.
-		final src: String = 'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n\t\t\tcase 1: aa(bb);\n'
-			+ '\t\t\tcase _:\n\t\t\t\tfinal t:Int = k();\n\t\t\t\tt;\n\t\t};\n\t}\n}\n';
-		final out: String = write(src, json(140));
-		Assert.isTrue(out.indexOf('case 1: aa(bb);') != -1, 'a multi-statement sibling must not spread the one-liners: <$out>');
+	/**
+	 * A multi-statement body is a STRUCTURAL trigger: its statements already
+	 * sit below the label at every budget, so the per-switch rule "if one
+	 * body is below its label, all are" fires with no width involved. The
+	 * budget here is 140 and the widest line is a fraction of it.
+	 */
+	public function testMultiStatementSiblingSpreadsBreak(): Void {
+		final out: String = write(MULTI_STMT_SRC, json(140));
+		Assert.isTrue(out.indexOf('case 1:\n\t\t\t\taa(bb);') != -1, 'a one-liner must follow a multi-statement sibling down: <$out>');
+		Assert.isTrue(out.indexOf('case 2:\n\t\t\t\tfinal t:Int = k();') != -1, 'the multi-statement body stays below its label: <$out>');
+	}
+
+	/**
+	 * The other structural shape: a single-statement body whose outermost
+	 * expression is `&&` / `||`. `refuseFlatOnComplexExpr` refuses it inline,
+	 * so it renders below its label and its fitting sibling follows it there.
+	 */
+	public function testRefusedFlatSiblingSpreadsBreak(): Void {
+		final out: String = write(REFUSED_FLAT_SRC, json(140));
+		Assert.isTrue(out.indexOf('case 2:\n\t\t\t\tcc(d);') != -1, 'a fitting sibling must follow a refused body down: <$out>');
+		Assert.isTrue(out.indexOf('case 1:\n\t\t\t\ta && b;') != -1, 'the refused body itself sits below its label: <$out>');
+	}
+
+	/** `default:` carries its statements in a different ctor and field (`HxDefaultBranch.stmts`) and triggers the same way. */
+	public function testDefaultBranchMultiStatementSpreads(): Void {
+		final out: String = write(DEFAULT_MULTI_SRC, json(140));
+		Assert.isTrue(out.indexOf('case 1:\n\t\t\t\taa(bb);') != -1, 'a `default:` body spreads its case siblings: <$out>');
+		Assert.isTrue(out.indexOf('default:\n\t\t\t\tfinal t:Int = k();') != -1, '<$out>');
+	}
+
+	/**
+	 * A glued body never LEADS — its first line SHARES the label line, which
+	 * is not a below-label placement — but it must FOLLOW: under a structural
+	 * trigger it moves below its label with everyone else.
+	 */
+	public function testGluedBodyMovesUnderStructuralTrigger(): Void {
+		final out: String = write(GLUED_UNDER_TRIGGER_SRC, json(140));
+		Assert.isTrue(out.indexOf('case 1:\n\t\t\t\t(a, b) -> {') != -1, 'a glued body must follow a structural trigger down: <$out>');
+	}
+
+	/**
+	 * The structural verdict is taken per expanded UNIT, so a multi-statement
+	 * case inside a `#if` region leads the spread exactly as an over-wide one
+	 * does.
+	 */
+	public function testConditionalRegionInnerMultiStatementSpreads(): Void {
+		final out: String = write(COND_MULTI_SRC, json(140));
+		Assert.isTrue(out.indexOf('case 1:\n\t\t\t\taa(bb);') != -1, 'a plain sibling must follow a guarded multi-statement body: <$out>');
+		Assert.isTrue(out.indexOf('case 2:\n\t\t\t\tfinal t:Int = k();') != -1, '<$out>');
+	}
+
+	/**
+	 * An EMPTY body is not a trigger: there is no body to place below the
+	 * label, and a forced break would have nothing to move. A guard against
+	 * over-triggering, NOT a discriminator — byte-identical before this
+	 * widening.
+	 */
+	public function testEmptyBodyDoesNotTrigger(): Void {
+		final out: String = write(EMPTY_BODY_SRC, json(140));
+		Assert.isTrue(out.indexOf('case _: ee(ff);') != -1, 'an empty-body case must not spread its sibling: <$out>');
+	}
+
+	/**
+	 * The structural verdict must reach its fixed point in ONE pass, like the
+	 * width one. The first assertion of each round pins that the fixture
+	 * really did spread, so what is being checked is the idempotence of the
+	 * NEW shape and not of the pre-widening one.
+	 */
+	public function testIsIdempotentOnAStructurallySpreadSwitch(): Void {
+		final j: String = json(140);
+		final fixtures: Array<{ name: String, src: String }> = [
+			{ name: 'MULTI_STMT_SRC', src: MULTI_STMT_SRC },
+			{ name: 'REFUSED_FLAT_SRC', src: REFUSED_FLAT_SRC },
+			{ name: 'GLUED_UNDER_TRIGGER_SRC', src: GLUED_UNDER_TRIGGER_SRC },
+			{ name: 'COND_MULTI_SRC', src: COND_MULTI_SRC },
+		];
+		for (f in fixtures) {
+			final pass1: String = write(f.src, j);
+			Assert.isTrue(pass1.indexOf('case 1:\n') != -1, '${f.name} must really have spread: <$pass1>');
+			final pass2: String = write(pass1, j);
+			Assert.equals(pass1, pass2, '${f.name}: a structural spread must reach its fixed point in one pass');
+			Assert.equals(pass2, write(pass2, j), '${f.name}: the fixed point must hold on a third pass');
+		}
 	}
 
 	public function testStatementPositionCaseBodyGetsTheSameSymmetry(): Void {
@@ -375,15 +490,17 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 	 * `HxSwitchCase.CondSpliceCase` — a region that splits a case's LABELS
 	 * from the body they share after `#end`. Those labels are captured
 	 * byte-verbatim in an `HxCondSpliceRaw`, so there is no inner
-	 * case-element list to measure and the element stays ONE
-	 * non-contributing unit: the plain sibling keeps its own verdict.
+	 * case-element list and the region stays ONE unit — but that unit IS a
+	 * structural trigger: `HxCondSpliceCase.tail` is mandatory, so the shared
+	 * body always renders on the line(s) below the labels, and the
+	 * per-switch rule takes the plain sibling down with it.
 	 *
-	 * A guard, NOT a discriminator — the pre-slice engine also measured
-	 * this element as `-1`.
+	 * The budget plays no part: `case PNG: tiles[a];` is 31 columns against
+	 * 39 and still goes below its label.
 	 */
-	public function testCondSpliceCaseContributesNothing(): Void {
+	public function testCondSpliceCaseTriggersSpread(): Void {
 		final out: String = write(SPLICE_CASE_SRC, json(39));
-		Assert.isTrue(out.indexOf('case PNG: tiles[a];') != -1, 'a label-splice region must not spread its siblings: <$out>');
+		Assert.isTrue(out.indexOf('case PNG:\n\t\t\t\ttiles[a];') != -1, 'a label-splice region must spread its siblings: <$out>');
 	}
 
 	/**

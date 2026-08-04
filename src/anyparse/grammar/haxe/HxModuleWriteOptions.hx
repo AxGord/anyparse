@@ -1028,18 +1028,32 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	formatStringInterpolation: Bool,
 	metadataFunctionLineEnd: MetadataLineEndPolicy,
 	_inExprPosition: Bool,
-	// ω-case-sibling-symmetry — the widest sibling case clause's FLAT width
-	// (`case <patterns>: <body>`, separator included), measured once per
-	// switch by the cases Star's `@:fmt(caseSiblingSymmetry(...))` pre-pass
-	// and handed to every sibling body. `BodyFit.fitLineLayout` turns it
-	// into an `IfIndentWidthExceeds` probe, so all siblings of one switch
-	// reach ONE placement verdict: if the widest does not fit, every body
-	// drops to the next line, including the ones that would fit and the
-	// glued ones. `-1` (the default, and what the pre-pass records when no
-	// sibling could render inline at all) means "no coordination" — every
-	// body decides for itself, exactly as before the slice. Always written
-	// by the pre-pass, never inherited, so a nested switch coordinates its
-	// own cases rather than the enclosing switch's.
+	// ω-case-sibling-symmetry — ONE placement number for a whole switch's
+	// case bodies, written once per switch by the cases Star's
+	// `@:fmt(caseSiblingSymmetry(...))` pre-pass and handed to every sibling
+	// body. `BodyFit.fitLineLayout` turns it into an `IfIndentWidthExceeds`
+	// probe, so all siblings of one switch reach ONE placement verdict: if
+	// the number does not fit, every body drops to the next line, including
+	// the ones that would fit and the glued ones. THREE values, not two:
+	//  - a plain `>= 0` — the MEASURED channel: the widest sibling case
+	//    clause's FLAT width (`case <patterns>: <body>`, separator
+	//    included);
+	//  - `BodyFit.SIBLING_FORCE_BREAK` — the STRUCTURAL channel. Not a
+	//    measurement but a verdict, reached because some unit of the switch
+	//    renders below its own label at every budget (a multi-statement
+	//    body, a flat-refused one, a label-splice region); it is spelled as
+	//    an ordinary large width precisely so nothing downstream needs an
+	//    arm for it;
+	//  - `BodyFit.SIBLING_NONE` (`-1`, the default, and what the pre-pass
+	//    records when no sibling could render inline at all) — "no
+	//    coordination": every body decides for itself, exactly as before
+	//    the slice.
+	// `BodyFit.SIBLING_PROBING` (`-2`) also lands here, but only in
+	// transit: the pre-pass stamps it for the duration of its own
+	// measurement so a nested Star returns its subtree unchanged instead of
+	// running a second pre-pass (ω-case-sym-linear). Always written by the
+	// pre-pass, never inherited, so a nested switch coordinates its own
+	// cases rather than the enclosing switch's.
 	_caseSiblingFlatWidth: Int,
 	// ω-expressionif-collapse — narrow companion to `_inExprPosition`, set
 	// ONLY on the immediate value of a value-yielded `if`/`else` branch

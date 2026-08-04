@@ -1660,6 +1660,7 @@ class WriterLowering {
 		final emptyBlockBreak: Bool = starNode.fmtHasFlag('emptyBlockBreak');
 		final caseSymArgs: Null<Array<String>> = starNode.fmtReadStringArgs('caseSiblingSymmetry');
 		final caseSiblingUnitsFn: Null<Expr> = caseSiblingUnitsFnExpr(caseSymArgs, elemRefName);
+		final caseSiblingStructuralFn: Null<Expr> = caseSiblingStructuralFnExpr(caseSymArgs, elemRefName);
 		final blockStar: Expr = triviaBlockStarExpr(
 			fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText, false,
 			afterDocComments, keepBetweenFields, beforeDocComments, interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType,
@@ -1667,7 +1668,7 @@ class WriterLowering {
 			uniformBetweenOptField, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, blockEndedFlag ? sepText : null,
 			blockEndedFlag, blockEndedFlag ? (starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE): Null<String>) : null,
 			blockEndedFlag ? _formatInfo.schemaTypePath : null, condLeadingDocInfo, clearExprPositionNonTail, beginTypeKnob, endTypeKnob,
-			uniformStmtBlanks, emptyBlockBreak, caseSymArgs, caseSiblingUnitsFn
+			uniformStmtBlanks, emptyBlockBreak, caseSymArgs, caseSiblingUnitsFn, caseSiblingStructuralFn
 		);
 		final blockStarNested: Expr = macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
@@ -11471,12 +11472,20 @@ class WriterLowering {
 		// elements for the widest-sibling pre-pass. Null alongside a null
 		// `caseSiblingSymmetryKnobs` ⇒ no pre-pass at all; null WITH knobs is
 		// a macro-time error (an opted-in Star needs the flattener).
-		?caseSiblingUnitsFn: Expr
+		?caseSiblingUnitsFn: Expr,
+		// ω-case-sibling-symmetry widened: the
+		// `caseUnitStructuralBreak_<ElemRule>` fn-ref that answers whether ONE
+		// expanded unit is below its label for structural reasons. Same
+		// nullability contract as `caseSiblingUnitsFn` — null alongside null
+		// knobs, a macro-time error with knobs.
+		?caseSiblingStructuralFn: Expr
 	): Expr {
 		// ω-condcomp-stray-semi (Stage A): the schema-instance predicate-call build
 		// moved to `triviaBlockPredCallExpr` (consumed by `triviaBlockSepExprs`).
 		final caseSym: Bool = caseSiblingSymmetryKnobs != null && caseSiblingSymmetryKnobs.length == 2;
-		final caseSiblingWidthExpr: Expr = caseSiblingWidthProbeExpr(elemFn, caseSym ? caseSiblingSymmetryKnobs : null, caseSiblingUnitsFn);
+		final caseSiblingWidthExpr: Expr = caseSiblingWidthProbeExpr(
+			elemFn, caseSym ? caseSiblingSymmetryKnobs : null, caseSiblingUnitsFn, caseSiblingStructuralFn
+		);
 		final triviaElemCall: Expr = triviaBlockElemCallExpr(elemFn, clearAnonFnBodyOnElems, clearExprPositionNonTail, caseSym);
 		final emptyText: String = openText + closeText;
 		// ω-empty-curly-break / ω-anonfunction-empty-curly / ω-blockempty:
@@ -17223,72 +17232,115 @@ class WriterLowering {
 
 
 	/**
-	 * ω-case-sibling-symmetry — build the widest-sibling flat-width pre-pass
-	 * for a case-list Star, or `macro -1` when the Star does not opt in.
+	 * ω-case-sibling-symmetry — build the per-SWITCH placement pre-pass for a
+	 * case-list Star, or `macro -1` when the Star does not opt in.
 	 *
 	 * THE PROBLEM: each case body's `FitLine` placement is decided
-	 * independently, so one over-wide body drops below its label while its
-	 * short siblings stay inline. The user-visible ask is per-SWITCH
-	 * symmetry — if one body spreads, all do. The renderer cannot see the
-	 * sibling set, and the emitter cannot see the indent, so neither can
-	 * answer alone.
+	 * independently, so one body that lands below its label leaves its short
+	 * siblings inline. The user-visible ask is per-SWITCH symmetry — if ANY
+	 * body renders below its label, all of them do.
 	 *
-	 * THE SPLIT: the emitter contributes what only it knows — every
-	 * sibling's FLAT width — and the renderer contributes what only it
-	 * knows — the indent. This pre-pass writes each element once with the
-	 * coordination suppressed and takes the maximum `WrapList.flatLength`.
-	 * `SIBLING_NONE` results (an element whose Doc commits to a hardline: a
-	 * glued body, a multi-statement body, a refused body) contribute nothing
-	 * — they could not have shared the label line under ANY budget, so they
-	 * are not evidence that the switch is too wide. All elements negative ⇒
-	 * the pre-pass yields `SIBLING_NONE` and the emit stays uncoordinated,
-	 * which is what keeps an all-glued switch (a comparator table of
-	 * `case X: (a, b) -> { … }`) exactly as it renders without this slice.
+	 * THE RULE, in one sentence: a switch is TRIGGERED when some unit is
+	 * below-label STRUCTURALLY, and otherwise when the widest unit's flat
+	 * width does not fit. The two channels reach the same output slot
+	 * (`_caseSiblingFlatWidth`, consumed by `BodyFit.fitLineLayout` as an
+	 * `IfIndentWidthExceeds` probe width), so nothing downstream has to know
+	 * which one fired.
 	 *
-	 * WHAT A DIRECTIVE REGION CONTRIBUTES (ω-if-leader-case-symmetry): not
-	 * one element, but its inner case UNITS. A `#if`-guarded region projects
-	 * as ONE Star element whose Doc carries directive hardlines, so measured
-	 * whole it is always `SIBLING_NONE` — it could FOLLOW a plain sibling's
-	 * break and never LEAD one. When the format generates AST predicates the
-	 * Star's `caseSiblingUnits_<ElemRule>` flattener expands the region into
-	 * the inner case elements of EVERY branch (`#if` / `#elseif` / `#else`
-	 * are alternatives — only one is ever compiled — so the maximum over all
-	 * of them is the conservative trigger) and each inner element is
-	 * measured on its own. The one-element short-circuit moved with it: what
-	 * must exceed 1 is the UNIT count, so a switch whose only element is a
-	 * region holding several cases still coordinates. Two shapes still
-	 * contribute nothing — a `CondSpliceCase` region, whose labels are
-	 * byte-verbatim so there is no inner case list to measure, and any inner
-	 * case whose own body glues or spreads, on exactly the terms above.
-	 * The flattener is MANDATORY for an opted-in Star: a
-	 * format carrying the meta without generated AST predicates is a
-	 * macro-time error here, not a silent fallback — carrying a second,
-	 * never-exercised copy of this pre-pass is exactly the drift the trivia
-	 * web's predicate-only `@:fmt` features refuse.
+	 * STRUCTURAL CHANNEL (this slice). The generated
+	 * `caseUnitStructuralBreak_<ElemRule>` predicate answers, per expanded
+	 * unit, whether its body sits below its label at ANY budget: a body of two
+	 * or more statements, a single statement `caseBodyRefusesFlat` refuses, or
+	 * a `CondSpliceCase` label-splice region, whose shared body is mandatory
+	 * and always renders below the labels it was split from. Two shapes
+	 * deliberately do not trigger: an EMPTY body (nothing to place, and
+	 * nothing a forced break could move) and a GLUED body (a lambda / block /
+	 * object literal — its FIRST line shares the label line, so it is not a
+	 * below-label placement). A glued body still MOVES under someone else's
+	 * trigger; it just never leads.
 	 *
-	 * `WrapList.flatLength` is the measure specifically because it DESCENDS
-	 * `BodyGroup` where `Renderer.fitsFlat` defers it — the T16b lesson:
-	 * anything that reads render-time group state makes the verdict depend
-	 * on the source's line shape, and `fmt` then needs a second pass to
+	 * WHAT THE CHANNEL COSTS. The first `true` sets
+	 * `BodyFit.SIBLING_FORCE_BREAK` and the measuring loop is SKIPPED — so a
+	 * TRIGGERED switch now costs ONE write per element instead of the
+	 * pre-pass's two. A switch that does NOT trigger pays the other side of
+	 * that trade: the predicate walk visits every unit before the measuring
+	 * loop begins, an O(N) pass the width-only pre-pass did not make. It reads
+	 * AST fields and allocates nothing, so it is cheap against the writes it
+	 * exists to avoid — but it is not free.
+	 *
+	 * WIDTH CHANNEL (the original slice, now the fallback). With no structural
+	 * unit, the pre-pass writes each element once with the coordination
+	 * suppressed and takes the maximum `WrapList.flatLength`. Elements that
+	 * answer `-1` (glued bodies, and the shapes below) contribute nothing to
+	 * that maximum. All negative ⇒ `SIBLING_NONE` and the emit stays
+	 * uncoordinated, which is what keeps an all-glued switch (a comparator
+	 * table of `case X: (a, b) -> { … }`) exactly as it renders without this
+	 * slice.
+	 *
+	 * THE RESIDUALS — shapes that DO render below their label and still cannot
+	 * LEAD. One is render-time: a glue that `BodyFit.glueLayout` turns into a
+	 * break. That verdict is reached at the LIVE PEN COLUMN — the header is
+	 * already emitted and only the renderer knows how wide it came out — so no
+	 * emitter-side walk can predict it, and the switch it belongs to is not
+	 * triggered by it. Pinned by
+	 * `HxGlueWidthSliceTest.testGlueTurnedBreakIsNotASiblingSymmetryTrigger`.
+	 * Three more stay out on an unrelated ground: a body element with leading
+	 * comments, a body Star with orphan trailing comments, and a label
+	 * carrying its own trailing comment all refuse `_fitCase` and therefore
+	 * render below the label. Their trees are perfectly readable; the obstacle
+	 * is that one predicate NAME emits one predicate BODY, shared by the plain
+	 * / trivia / spans AST families, and those three shapes sit in slots only
+	 * the trivia family carries — see
+	 * `HxAstPredLowering.caseUnitStructuralBreakField` for the full argument.
+	 *
+	 * WHAT A DIRECTIVE REGION CONTRIBUTES (ω-if-leader-case-symmetry): not one
+	 * element, but its inner case UNITS. A `#if`-guarded region projects as ONE
+	 * Star element whose Doc carries directive hardlines, so measured whole it
+	 * is always `-1` — it could FOLLOW a plain sibling's break and never LEAD
+	 * one. The Star's `caseSiblingUnits_<ElemRule>` flattener expands the
+	 * region into the inner case elements of EVERY branch (`#if` / `#elseif` /
+	 * `#else` are alternatives — only one is ever compiled — so the maximum
+	 * over all of them is the conservative trigger), and BOTH channels then run
+	 * per inner unit: an over-wide guarded body leads by width, a
+	 * multi-statement one leads structurally. The one-element short-circuit
+	 * moved with it: what must exceed 1 is the UNIT count, so a switch whose
+	 * only element is a region holding several cases still coordinates. A
+	 * `CondSpliceCase` region is the exception that does NOT expand — its
+	 * labels are byte-verbatim, so there is no inner case list — but it stays
+	 * one unit that LEADS, because the structural channel answers true for it
+	 * outright.
+	 *
+	 * Both predicates are MANDATORY for an opted-in Star: a format carrying the
+	 * meta without generated AST predicates is a macro-time error here, not a
+	 * silent fallback — carrying a second, never-exercised copy of this
+	 * pre-pass is exactly the drift the trivia web's predicate-only `@:fmt`
+	 * features refuse.
+	 *
+	 * `WrapList.flatLength` is the width measure specifically because it
+	 * DESCENDS `BodyGroup` where `Renderer.fitsFlat` defers it — the T16b
+	 * lesson: anything that reads render-time group state makes the verdict
+	 * depend on the source's line shape, and `fmt` then needs a second pass to
 	 * settle.
 	 *
 	 * WHY THE PRE-PASS DOES NOT NEST (ω-case-sym-linear): writing an element
-	 * twice — once to measure, once to emit — costs 2x per switch LEVEL, so
-	 * a switch nested d deep cost 2^d. The recursion is pure waste, because
-	 * `flatLength` forwards `IfIndentWidthExceeds` to its FLAT branch: a
-	 * nested switch's own coordination is INVISIBLE to the measurement that
-	 * contains it. The `SIBLING_PROBING` marker therefore rides down the
-	 * whole subtree — every Star already inside a pre-pass returns it
-	 * unchanged instead of running its own — so each level is measured once
-	 * and emitted once. Depth-15 nesting went from ~6s to flat.
+	 * twice — once to measure, once to emit — costs 2x per switch LEVEL, so a
+	 * switch nested d deep cost 2^d. The recursion is pure waste, because
+	 * `flatLength` forwards `IfIndentWidthExceeds` to its FLAT branch: a nested
+	 * switch's own coordination is INVISIBLE to the measurement that contains
+	 * it. The `SIBLING_PROBING` marker therefore rides down the whole subtree —
+	 * every Star already inside a pre-pass returns it unchanged instead of
+	 * running its own — so each level is measured once and emitted once.
+	 * Depth-15 nesting went from ~6s to flat.
 	 *
-	 * The knob gate keeps the double write off every config that cannot use
-	 * it: the pre-pass runs only when the policy the case bodies will
-	 * actually consult (`opt._inExprPosition` selects which of the two) is
-	 * `FitLine`. Under `Same` / `Keep` / `Next` the elements are written
-	 * exactly once, as before.
+	 * The knob gate keeps the double write off every config that cannot use it:
+	 * the pre-pass runs only when the policy the case bodies will actually
+	 * consult (`opt._inExprPosition` selects which of the two) is `FitLine`.
+	 * Under `Same` / `Keep` / `Next` the elements are written exactly once, as
+	 * before.
 	 */
-	private static function caseSiblingWidthProbeExpr(elemFn: String, knobs: Null<Array<String>>, ?unitsFn: Expr): Expr {
+	private static function caseSiblingWidthProbeExpr(
+		elemFn: String, knobs: Null<Array<String>>, ?unitsFn: Expr, ?structuralFn: Expr
+	): Expr {
 		if (knobs == null) return macro -1;
 		final fitPat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'FitLine']);
 		final stmtAccess: Expr = optFieldAccess(knobs[0]);
@@ -17298,14 +17350,17 @@ class WriterLowering {
 		// runtime channel, so it follows the trivia web's rule for such metas:
 		// fail LOUDLY rather than carry a second, untestable copy of the
 		// pre-pass for a grammar that opts in without generating predicates.
-		if (unitsFn == null) {
-			Context.fatalError(
-				'WriterLowering: caseSiblingSymmetry needs generated AST predicates (no caseSiblingUnits_* flattener)',
-				Context.currentPos()
-			);
+		// Both predicates are mandatory: without the flattener a `#if` region
+		// could not lead, and without the structural verdict the rule would
+		// silently degrade to the width-only one it replaced. The message names
+		// the one that is missing, so it points at the gap it found.
+		if (unitsFn == null || structuralFn == null) {
+			final missing: String = unitsFn == null ? 'caseSiblingUnits_* flattener' : 'caseUnitStructuralBreak_* verdict';
+			Context.fatalError('WriterLowering: caseSiblingSymmetry needs the generated $missing', Context.currentPos());
 			throw 'unreachable';
 		}
 		final expandExpr: Expr = caseSiblingUnitExpandExpr(unitsFn);
+		final structuralCall: Expr = { expr: ECall(structuralFn, [macro _csUnits[_csS]]), pos: Context.currentPos() };
 		final unitProbeCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _csUnits[_csK], macro _csOpt]),
 			pos: Context.currentPos(),
@@ -17321,12 +17376,29 @@ class WriterLowering {
 					// units, so a switch whose only element is a `#if` region
 					// holding several cases still coordinates.
 					if (_csUnits.length > 1) {
-						final _csOpt = _setCaseSiblingWidth(opt, anyparse.format.BodyFit.SIBLING_PROBING);
-						var _csK: Int = 0;
-						while (_csK < _csUnits.length) {
-							final _csFlat: Int = anyparse.format.wrap.WrapList.flatLength($unitProbeCall);
-							if (_csFlat > _csMax) _csMax = _csFlat;
-							_csK++;
+						// Structural pass FIRST, and it writes nothing: one unit
+						// already below its own label settles the whole switch,
+						// so the measuring loop (two writes per element) is
+						// skipped entirely for a triggered switch.
+						var _csForce: Bool = false;
+						var _csS: Int = 0;
+						while (_csS < _csUnits.length) {
+							if ($structuralCall) {
+								_csForce = true;
+								break;
+							}
+							_csS++;
+						}
+						if (_csForce)
+							_csMax = anyparse.format.BodyFit.SIBLING_FORCE_BREAK;
+						else {
+							final _csOpt = _setCaseSiblingWidth(opt, anyparse.format.BodyFit.SIBLING_PROBING);
+							var _csK: Int = 0;
+							while (_csK < _csUnits.length) {
+								final _csFlat: Int = anyparse.format.wrap.WrapList.flatLength($unitProbeCall);
+								if (_csFlat > _csMax) _csMax = _csFlat;
+								_csK++;
+							}
 						}
 					}
 				}
@@ -17372,28 +17444,51 @@ class WriterLowering {
 	}
 
 	/**
-	 * ω-if-leader-case-symmetry: the `caseSiblingUnits_<ElemRule>` fn-ref
-	 * handed to a block Star's widest-sibling pre-pass, or null when the Star
-	 * does not opt into `caseSiblingSymmetry` (⇒ `caseSiblingWidthProbeExpr`
-	 * yields `macro -1` and no pre-pass runs) or the format generates no AST
-	 * predicates (⇒ that builder fatal-errors: the flattener is mandatory for
-	 * an opted-in Star, the same loud failure every other predicate-only
-	 * `@:fmt` feature gives).
+	 * The `<namePrefix>_<ElemRule>` fn-ref a block Star's case-symmetry
+	 * pre-pass consumes, or null when the Star does not opt into
+	 * `caseSiblingSymmetry` (⇒ `caseSiblingWidthProbeExpr` yields `macro -1`
+	 * and no pre-pass runs) or the format generates no AST predicates (⇒ that
+	 * builder fatal-errors: both predicates are mandatory for an opted-in
+	 * Star, the same loud failure every other predicate-only `@:fmt` feature
+	 * gives — carrying a second, never-exercised copy of the pre-pass is
+	 * exactly the drift those features refuse).
 	 *
-	 * A `#if`-guarded case region is ONE Star element whose Doc carries
-	 * directive hardlines (flat width `-1`), so without the flattener the
-	 * region could only FOLLOW a sibling's break, never LEAD one; the
-	 * predicate expands it into its inner case elements so each one is
-	 * measured on its own. Resolved from the Star's ELEMENT rule — the same
-	 * seam as `tryparseElemCondFn`, though the grammar generates this one for
+	 * Resolved from the Star's ELEMENT rule — the same seam as
+	 * `tryparseElemCondFn`, though the grammar generates both of these for
 	 * `HxSwitchCase` alone, so a `caseSiblingSymmetry` Star over any other
 	 * element rule fails at macro time with an unresolved field. Split out of
 	 * `emitTriviaBlockStarDispatch` to keep that helper under the complexity
 	 * gate.
 	 */
-	private function caseSiblingUnitsFnExpr(caseSymArgs: Null<Array<String>>, elemRefName: String): Null<Expr> {
+	private function casePredFnExpr(caseSymArgs: Null<Array<String>>, elemRefName: String, namePrefix: String): Null<Expr> {
 		if (!_formatInfo.astPreds || caseSymArgs == null || caseSymArgs.length != 2) return null;
-		return AstPredLowering.predFnExpr(_shape.root, true, false, 'caseSiblingUnits_${simpleName(elemRefName)}');
+		return AstPredLowering.predFnExpr(_shape.root, true, false, '${namePrefix}_${simpleName(elemRefName)}');
+	}
+
+	/**
+	 * ω-if-leader-case-symmetry: the case-UNIT flattener. A `#if`-guarded case
+	 * region is ONE Star element whose Doc carries directive hardlines (flat
+	 * width `-1`), so without this predicate the region could only FOLLOW a
+	 * sibling's break, never LEAD one; it expands the region into its inner
+	 * case elements, and both channels of the pre-pass then judge each one on
+	 * its own.
+	 */
+	private inline function caseSiblingUnitsFnExpr(caseSymArgs: Null<Array<String>>, elemRefName: String): Null<Expr> {
+		return casePredFnExpr(caseSymArgs, elemRefName, 'caseSiblingUnits');
+	}
+
+	/**
+	 * ω-case-sibling-symmetry widened: the STRUCTURAL verdict, answering what
+	 * the flat-width measurement cannot — whether a unit sits below its label
+	 * for reasons of SHAPE (a multi-statement body, a single statement the
+	 * flat-refusal gate rejects, or a label-splice region, whose shared body
+	 * always renders below the labels it was split from). One `true` in the
+	 * expanded unit list decides the whole switch, so the pre-pass short-
+	 * circuits to `BodyFit.SIBLING_FORCE_BREAK` and never runs the measuring
+	 * loop at all.
+	 */
+	private inline function caseSiblingStructuralFnExpr(caseSymArgs: Null<Array<String>>, elemRefName: String): Null<Expr> {
+		return casePredFnExpr(caseSymArgs, elemRefName, 'caseUnitStructuralBreak');
 	}
 
 }

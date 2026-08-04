@@ -47,11 +47,17 @@ package anyparse.grammar.haxe;
  *
  * `@:fmt(caseSiblingSymmetry('caseBody', 'expressionCase'))`
  * (ω-case-sibling-symmetry) opts this Star into the per-SWITCH placement
- * verdict: a widest-sibling pre-pass measures every element's flat width
- * and hands the maximum to all of them, so if one case body takes the
- * width-driven break they all do. The two names are the statement- and
- * expression-position body policies whose `FitLine` value arms it; under
- * every other policy the Star behaves exactly as before. See
+ * verdict: if ANY case body of this switch renders on the line(s) BELOW
+ * its label, every case body does. Two channels reach that verdict. A
+ * STRUCTURAL one — the generated `caseUnitStructuralBreak_HxSwitchCase`
+ * predicate flags a unit whose body is multi-statement, whose single
+ * statement `caseBodyRefusesFlat` refuses, or which is a label-splice
+ * region, since such a body is below its label at any budget. And a WIDTH
+ * one — a widest-sibling pre-pass measures every unit's flat width and
+ * hands the maximum to all of them, so a width-driven break spreads too.
+ * The two names are the statement- and expression-position body policies
+ * whose `FitLine` value arms both; under every other policy the Star
+ * behaves exactly as before. See
  * `WriterLowering.caseSiblingWidthProbeExpr` for what does and does not
  * count as a trigger.
  *
@@ -61,8 +67,9 @@ package anyparse.grammar.haxe;
  * `WrapList.flatLength` is `-1` — it received the verdict but could never
  * produce one. So the pre-pass does not measure it whole: the generated
  * `caseSiblingUnits_HxSwitchCase` flattener expands the region into its
- * inner case ELEMENTS and each one is measured on its own, so an over-wide
- * `#if`-guarded body now LEADS the spread as well as follows it.
+ * inner case ELEMENTS and each one is judged on its own, so an over-wide or
+ * multi-statement `#if`-guarded body now LEADS the spread as well as
+ * follows it.
  *
  * The units are taken across the `#if` / `#elseif` / `#else` branches
  * because branches are ALTERNATIVES — only one of them is ever compiled —
@@ -79,12 +86,19 @@ package anyparse.grammar.haxe;
  * region can still come out asymmetric. Measured byte-identical to the
  * pre-slice engine there: a limitation carried forward, not introduced.
  *
- * Two shapes still contribute nothing. `CondSpliceCase` — a region that
- * splits a case's LABELS from the body they share after `#end` — keeps
- * those labels byte-verbatim in an `HxCondSpliceRaw`, so it has no inner
- * case list to measure. And an inner case that cannot itself render flat (a
- * glued, multi-statement or refused body) is excluded on exactly the terms
- * above, the same as a top-level sibling.
+ * Two shapes still contribute nothing. An EMPTY case body has no body to
+ * place at all, so it neither leads nor has anything to move. And a GLUED
+ * body (a lambda / block / object literal whose Doc carries a hardline)
+ * measures `-1` and is not below its label either — its first line SHARES
+ * the label line — so it follows a trigger without ever being one, exactly
+ * as a top-level sibling does.
+ *
+ * `CondSpliceCase` is NOT one of them. That region splits a case's LABELS
+ * from the body they share after `#end` and keeps the labels byte-verbatim
+ * in an `HxCondSpliceRaw`, so it has no inner case list and stays ONE unit
+ * — but the shared body is mandatory and renders below those labels at
+ * every budget, so the structural predicate answers true for it and the
+ * region LEADS the spread.
  *
  * `HxConditionalCase.body` / `elseBody` and `HxElseifCase.body` are
  * deliberately NOT opted into `caseSiblingSymmetry`, against a literal
