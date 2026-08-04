@@ -65,9 +65,29 @@ class EmptyCommentCheckTest extends Test {
 		Assert.equals(1, violations('class C {\n\t// above\n\n\t//\n\t// below\n}').length);
 	}
 
-	/** A block comment is not a `//` prose block: it carries its own paragraph breaks, so a bare `//` beside one is still noise. */
-	public function testSeparatorBetweenBlockCommentsFlagged(): Void {
-		Assert.equals(1, violations('class C {\n\t/* above */\n\t//\n\t/* below */\n}').length);
+	/**
+	 * A block comment is not a `//` prose block: it carries its own paragraph breaks, so a
+	 * bare `//` beside one is still noise. Each assertion isolates one side, and the third
+	 * discriminates the gate's `tok.isLine` clause — an empty BLOCK comment between two
+	 * prose lines passes every other clause and would be kept without it.
+	 */
+	public function testSeparatorBesideBlockCommentsFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\t/* above */\n\t//\n\t// below\n}').length);
+		Assert.equals(1, violations('class C {\n\t// above\n\t//\n\t/* below */\n}').length);
+		Assert.equals(1, violations('class C {\n\t// above\n\t/* */\n\t// below\n}').length);
+	}
+
+	/**
+	 * A RUN of blank `//` lines inside a prose block keeps exactly ONE separator and reports
+	 * the rest. That is what the "content above" clause buys: without it every blank of the
+	 * run saw another blank beside it, all were kept, and the padding was unreducible;
+	 * requiring content on BOTH sides would instead flag every blank and let the fix merge
+	 * the two paragraphs. The fix output pins which one survives — the first.
+	 */
+	public function testBlankRunKeepsOneSeparator(): Void {
+		final src: String = 'class C {\n\t// first\n\t//\n\t//\n\t//\n\t// second\n}';
+		Assert.equals(2, violations(src).length);
+		Assert.equals('class C {\n\t// first\n\t//\n\t// second\n}', applyFix(src));
 	}
 
 	public function testNoqaDirectiveKept(): Void {

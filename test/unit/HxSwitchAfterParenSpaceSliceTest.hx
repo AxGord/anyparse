@@ -6,7 +6,6 @@ import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
-import anyparse.grammar.haxe.HxModuleWriteOptions;
 
 /**
  * ω-switch-after-paren: a `switch` expression directly after an open `(` —
@@ -92,8 +91,7 @@ final class HxSwitchAfterParenSpaceSliceTest extends Test {
 		final input: String = 'class C {\n\tfunction m() {\n\t\tcaller(switch mode { case One: alpha; case Two: beta; }, other);\n\t}\n}';
 		final expected: String =
 			'class C {\n\tfunction m() {\n\t\tcaller(\n\t\t\tswitch mode {\n\t\t\t\tcase One: alpha;\n\t\t\t\tcase Two: beta;\n\t\t\t},\n\t\t\tother\n\t\t);\n\t}\n}\n';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
-		Assert.equals(expected, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(input), opts));
+		Assert.equals(expected, triviaWriteWith(cfg, input));
 	}
 
 	/**
@@ -127,8 +125,7 @@ final class HxSwitchAfterParenSpaceSliceTest extends Test {
 	}
 
 	private inline function triviaWriteAround(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(AROUND);
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		return triviaWriteWith(AROUND, src);
 	}
 
 

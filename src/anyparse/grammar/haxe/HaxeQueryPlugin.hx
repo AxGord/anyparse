@@ -764,9 +764,12 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// it reads exactly the same text either way, whatever it makes of that text.
 			//
 			// `DollarBlockExpr` — the MACRO reification `${ … }` — is bound by the same
-			// two hard tokens and is deliberately ABSENT. Inside a `macro` quotation a
-			// paren reifies as an `EParenthesis` node, so dropping it changes the AST the
-			// quotation builds, not merely the text it was spelled as.
+			// two hard tokens and is ABSENT, but only conservatively: `${ … }` is the
+			// reification ESCAPE, its content is macro-TIME code, and `macro ${(e)}`
+			// builds exactly what `macro ${e}` builds (measured — no `EParenthesis`
+			// survives). The pair that DOES reify is one written in the quoted region,
+			// which `parenOpaqueSubtreeKinds` covers. Listing this kind is untaken work,
+			// not a refused hazard.
 			delimitedAllChildKinds: [
 				'Block',
 				'VarStmt',

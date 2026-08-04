@@ -81,10 +81,11 @@ import anyparse.runtime.Span;
  *
  * `HaxeStringFoldSupport.interpolationBlockSafe` describes a NEIGHBOURING question —
  * "may this source be MOVED into a `${ … }` block" — and is anyparse's own model of
- * the scanner, deliberately STRICTER than the compiler: it refuses every line break,
- * which a real `${if (a)\n\tb\nelse c}` is free to contain. It is a useful reference
- * for what the scanner reacts to, not the law this arm rests on; nothing here asks it
- * anything.
+ * the scanner, STRICTER than the compiler: it refuses every line break, which a real
+ * `${if (a)\n\tb\nelse c}` is free to contain (a line break does not end a Haxe string
+ * literal; that helper's own doc says otherwise and is wrong). It is a useful
+ * reference for what the scanner reacts to, not the law this arm rests on; nothing
+ * here asks it anything.
  *
  * The differential argument is also VACUOUS on a source the scanner cannot close at
  * all. `${("}")}` counts the `}` inside the nested string — the scanner does not lex
@@ -103,11 +104,15 @@ import anyparse.runtime.Span;
  *
  * - The MACRO-reification `${ … }` (`DollarBlockExpr`) — bracket-delimited by exactly
  *   the same two hard tokens as the interpolation block above, and left out anyway.
- *   There the parentheses are not layout: inside a `macro` quotation a pair reifies as
- *   an `EParenthesis` node, so dropping it changes the AST the quotation BUILDS, not
- *   just the text it was written as. (The operand arms are separately blind to it —
- *   `MacroExpr` is a `parenOpaqueSubtreeKinds` member — but the delimited arm needs
- *   its own exclusion, which is this absence from `delimitedAllChildKinds`.)
+ *   NOT for a safety reason, and the tempting one is false: a pair written inside a
+ *   `macro` QUOTATION does reify as `EParenthesis`, but `${ … }` is the reification
+ *   ESCAPE — its content is ordinary macro-TIME code, and `macro ${(e)}` builds exactly
+ *   what `macro ${e}` builds (measured). The quoted region is separately handled, by
+ *   `MacroExpr` in `parenOpaqueSubtreeKinds`, and that covers only the OPERAND arms —
+ *   `dropsParens` does not gate the delimited arm on `opaque` — so opening this slot
+ *   would need `DollarBlockExpr` in `delimitedAllChildKinds`, where its absence is a
+ *   conservative omission nobody has needed rather than a decision. Listed here so the
+ *   next reader stops looking for the argument.
  * - The `switch` SUBJECT — excluded by project decision, not by a safety argument.
  *   The Haxe grammar keeps a parenthesized `SwitchStmt` (carrying its own `(` `)`,
  *   like `if` / `while`) apart from a bare `SwitchStmtBare`, so a `parenKind` child
@@ -191,19 +196,21 @@ import anyparse.runtime.Span;
  * the chain — the intermediate `(` `)` of `((e))` are the chain, not trivia.
  *
  * "Flush against the content" is measured against that SPAN, not against the visible
- * text, and the two part company on the trailing side. A comment after the expression
- * is absorbed into the expression node's own span in the interpolation slot, so there
- * the gap is blank, the pair drops, and the comment is CARRIED out with the content — a
- * trailing block comment inside `${( … )}` survives into `${ … }` verbatim (pinned by
- * `RedundantParensCheckTest.testInterpolationCommentInsideParens`). In ordinary
- * expression position the same comment lands outside the span and the pair is refused
- * (`RedundantParensOperandArmsTest.testParensCarryingACommentAreSkipped`). A LEADING
- * comment is outside the span in both, and refuses in both.
+ * text, and on the TRAILING side the two part company. Whether a trailing comment is
+ * refused or CARRIED out with the content is decided by the content NODE'S KIND, not by
+ * the slot: an operator node's span runs past its last child to the consumed-trivia
+ * boundary and absorbs the comment, so the gap reads blank and the pair drops
+ * (`(a + c <block comment>)` collapses with the comment intact — in the interpolation
+ * slot, pinned by `RedundantParensCheckTest.testInterpolationCommentInsideParens`, and
+ * identically in every ordinary delimited position). A leaf or bracket-closed node's
+ * span stops at its last token, the comment lands outside it, and the pair is refused
+ * (`(a <block comment>)` —
+ * `RedundantParensOperandArmsTest.testParensCarryingACommentAreSkipped`). A LEADING
+ * comment is outside the span for every kind, and refuses everywhere.
  *
- * Carrying it is sound wherever it happens — the bytes move with the expression they
- * annotate and the fix's own re-parse sees them — so the asymmetry is a projection
- * difference, not two policies. It is documented rather than levelled because levelling
- * it in either direction would change output.
+ * Carrying is sound wherever it happens: the bytes move with the expression they
+ * annotate and the fix's own re-parse sees them. What the gate guarantees is the one
+ * direction that matters — a comment the fix would DELETE always refuses.
  */
 @:nullSafety(Strict)
 final class RedundantParens implements Check implements ConfigAware {
@@ -416,10 +423,11 @@ final class RedundantParens implements Check implements ConfigAware {
 	 * intermediate `(` `)` of `((e))` are the chain, not trivia. An unmeasurable span
 	 * answers true, which keeps the parentheses.
 	 *
-	 * Measuring against the span is what makes the trailing side slot-dependent: where
-	 * the projection absorbs a trailing comment INTO the expression's span (the
-	 * interpolation slot), the gap is blank and the drop carries the comment out rather
-	 * than deleting it. See the class doc's Trivia section.
+	 * Measuring against the span is what makes the trailing side depend on the content
+	 * node's KIND: an operator node's span already absorbs a trailing comment, so the gap
+	 * reads blank and the drop carries the comment out rather than deleting it; a leaf or
+	 * bracket-closed node's does not, and the pair refuses. See the class doc's Trivia
+	 * section.
 	 */
 	private static function triviaInsideParens(source: String, node: QueryNode, slots: ParenSlots): Bool {
 		var n: QueryNode = node;

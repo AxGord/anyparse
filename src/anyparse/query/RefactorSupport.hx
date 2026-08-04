@@ -1199,18 +1199,19 @@ final class RefactorSupport {
 	 * where it now answers `true` — a TIGHTENING, and a shared predicate may only be
 	 * tightened when every caller's conservative direction points the same way.
 	 *
-	 * It does not. For all but one consumer a spurious `true` REFUSES a rewrite (report-only
+	 * It does not. For nearly every consumer a spurious `true` REFUSES a rewrite (report-only
 	 * instead of autofixed) — harmless, and the direction that never deletes a comment. The
-	 * exception is the negation pair `CheckScan.negateConditionText` /
-	 * `CheckScan.negationIsClean`, where the answer is not a refusal but a TIER SELECTOR: a
-	 * `true` routes the rewrite to the verbatim text fallback, and `negationIsClean` then
-	 * reports the site as clean precisely BECAUSE that tier declines nothing. Making the
-	 * scan literal-aware moves such a condition onto the De Morgan tier, which can decline —
-	 * flipping a finding off. That is a real behaviour change, not extra safety, so the
+	 * exceptions are `CheckScan`'s negation machinery — `negateConditionText`,
+	 * `negationIsClean` and the `eqFlipText` it dispatches through — where the answer is not
+	 * a refusal but a TIER SELECTOR: a `true` routes the rewrite to the verbatim text
+	 * fallback, and `negationIsClean` then reports the site as clean precisely BECAUSE that
+	 * tier declines nothing. Making the scan literal-aware moves such a condition onto the
+	 * De Morgan tier, which can decline — flipping a finding off — and changes the text
+	 * `eqFlipText` emits. That is a real behaviour change, not extra safety, so the
 	 * string-blind answer is the shared contract and any caller that needs precision must
 	 * ask the lexical regions (`scanLexicalRegions`) rather than tighten this.
 	 */
-	public static function hasCommentMarker(source: String, from: Int, to: Int): Bool {
+	public static inline function hasCommentMarker(source: String, from: Int, to: Int): Bool {
 		return from < to && textHasCommentMarker(source.substring(from, to));
 	}
 

@@ -43,11 +43,18 @@ private typedef CommentToken = {
  * whose interiors this rule never inspects.)
  *
  * The criterion is positive and purely lexical: the empty comment and BOTH neighbours are
- * line comments, each alone on its line, on three CONSECUTIVE lines. A bare `//` at the
- * head or tail of a run has nothing on one side to separate and stays flagged — that one
- * is padding. So does one whose neighbour shares its line with code, or is a block
- * comment (a block carries its paragraph breaks inside itself), or sits a blank line away
- * (the blank already separates).
+ * line comments, each alone on its line, on three CONSECUTIVE lines, and the one ABOVE
+ * carries content. A bare `//` at the head or tail of a run has nothing on one side to
+ * separate and stays flagged — that one is padding. So does one whose neighbour shares its
+ * line with code, or is a block comment (a block carries its paragraph breaks inside
+ * itself), or sits a blank line away (the blank already separates).
+ *
+ * The content clause on the line above is what keeps a RUN of blank `//` lines reachable.
+ * Without it each blank of a run saw another blank beside it, every one was kept, and the
+ * padding was unreducible. One-sided is the correct side: in `// a` `//` `//` `// b` only
+ * the first blank has content above it, so exactly one separator survives and the extra
+ * padding reports. Requiring content on BOTH sides would flag every blank of the run and
+ * let the fix merge the paragraphs.
  *
  * ## Fix
  *
@@ -108,13 +115,22 @@ final class EmptyComment implements Check {
 	 * alone on its line, and the three sit on consecutive lines. Neighbours are read from
 	 * the token stream rather than the raw text, so a slash-slash inside a string literal
 	 * can never stand in for one (`collectCommentTokens` is string-aware).
+	 *
+	 * The neighbour must also carry CONTENT. Without that clause a RUN of blank `//` lines
+	 * inside a prose block was unreachable in both directions at once — each blank saw
+	 * another blank beside it and every one was kept, so `// a` `//` `//` `// b` could
+	 * never be reduced. The clause is one-sided on purpose: only the FIRST blank of the
+	 * run has content on its left, so exactly it is kept and the rest report, which is the
+	 * separator the author meant plus the padding they did not. Requiring content on BOTH
+	 * sides would be the opposite error — every blank of the run would report, and the fix
+	 * would merge the two paragraphs outright.
 	 */
 	private static function isParagraphSeparator(source: String, toks: Array<CommentToken>, i: Int): Bool {
 		if (i == 0 || i + 1 >= toks.length) return false;
 		final tok: CommentToken = toks[i];
 		final prev: CommentToken = toks[i - 1];
 		final next: CommentToken = toks[i + 1];
-		if (!tok.isLine || !prev.isLine || !next.isLine) return false;
+		if (!tok.isLine || !prev.isLine || !next.isLine || isEmpty(source, prev)) return false;
 		return aloneOnLine(source, tok.from) && aloneOnLine(source, prev.from) && aloneOnLine(source, next.from)
 			&& oneLineApart(source, prev.to, tok.from) && oneLineApart(source, tok.to, next.from);
 	}
@@ -131,10 +147,10 @@ final class EmptyComment implements Check {
 		return true;
 	}
 
-	/** Whether `[from, to)` is whitespace holding EXACTLY one newline — the two tokens sit on consecutive lines. */
-	private static function oneLineApart(source: String, from: Int, to: Int): Bool {
+	/** Whether the gap `[gapStart, gapEnd)` between two tokens is whitespace holding EXACTLY one newline — they sit on consecutive lines. */
+	private static function oneLineApart(source: String, gapStart: Int, gapEnd: Int): Bool {
 		var newlines: Int = 0;
-		for (i in from...to) {
+		for (i in gapStart ... gapEnd) {
 			final c: Int = StringTools.fastCodeAt(source, i);
 			if (c == '\n'.code)
 				newlines++

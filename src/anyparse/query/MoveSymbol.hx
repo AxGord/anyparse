@@ -232,7 +232,9 @@ final class MoveSymbol {
 			// would be carried into the destination as an unconditional import,
 			// which could be platform-inappropriate.
 			final provider: Null<ImportInfo> = cursorInfo.imports.find(
-				imp -> !imp.guarded && (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using) && RefactorSupport.lastSegment(imp.raw) == dep
+				imp ->
+					!imp.guarded && (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using)
+					&& RefactorSupport.lastSegment(imp.raw) == dep
 			);
 			if (provider == null) continue;
 			// Already present in the destination → no carry.

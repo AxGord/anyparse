@@ -8,37 +8,16 @@ import anyparse.format.WriteOptions;
 using Lambda;
 
 /**
- * Runtime helper that emits a `Doc` for a delimited list whose layout
- * is driven by a `WrapRules` cascade.
- *
- * Used by macro-generated writers via a single call inserted at sites
- * tagged with `@:fmt(wrapRules('<optionFieldName>'))` on their `Star`
- * field. The macro feeds in the open / close / separator literals,
- * the per-item `Doc` array, the resolved `WriteOptions`, the inside-
- * delimiter padding `Doc`s and the rule set looked up by name on
- * `opt`. Everything else — flat-length measurement, cascade
- * evaluation, shape selection — happens at runtime in this class.
- *
- * The `ExceedsMaxLineLength` predicate is resolved without a
- * column-aware probe: the cascade runs twice (`exceeds=false` and
- * `exceeds=true`) and, when the two runs disagree, the result is
- * wrapped in `Group(IfBreak(brkDoc, flatDoc))` so the renderer's
- * standard fit/break decision picks the right mode at layout time.
- * When both runs agree the chosen mode is unconditional and no Group
- * wrap is needed.
- *
- * Items containing hardlines (e.g. block bodies, multi-line strings)
- * are intrinsically un-flattenable — the cascade is forced to the
- * `exceeds=true` branch in that case.
- */
-/**
  * The optional axes of `WrapList.emit` — everything past the list's own identity
  * (delimiters, separator, item Docs, `WriteOptions`, inside padding, rule set). Each field
- * is optional and each omission reproduces the legacy positional default exactly, so
- * omitting the argument is the plain cascade with no decoration.
+ * is optional and each omission is the plain cascade with no decoration, so omitting the
+ * whole argument is the undecorated list.
  *
- * The defaults are applied ONCE, in `emit`'s prologue. `trailBreak` and `forceMode` stay
- * nullable past that point because null is a MEANINGFUL state for both, not an absent one.
+ * Defaults are resolved ONCE, in `emit`'s prologue. Two fields need reading with care
+ * there. `forceMode` keeps null past the prologue, because null is its MEANINGFUL state —
+ * "run the cascade". `trailBreak` does NOT: null and omitted collapse together into the
+ * legacy `Line('\n')` close, and the value that means something is `Empty` (a glued
+ * close), which is why it is a field rather than a `Bool`.
  */
 typedef WrapListOptions = {
 
@@ -172,6 +151,30 @@ typedef WrapListOptions = {
 
 }
 
+/**
+ * Runtime helper that emits a `Doc` for a delimited list whose layout
+ * is driven by a `WrapRules` cascade.
+ *
+ * Used by macro-generated writers via a single call inserted at sites
+ * tagged with `@:fmt(wrapRules('<optionFieldName>'))` on their `Star`
+ * field. The macro feeds in the open / close / separator literals,
+ * the per-item `Doc` array, the resolved `WriteOptions`, the inside-
+ * delimiter padding `Doc`s and the rule set looked up by name on
+ * `opt`. Everything else — flat-length measurement, cascade
+ * evaluation, shape selection — happens at runtime in this class.
+ *
+ * The `ExceedsMaxLineLength` predicate is resolved without a
+ * column-aware probe: the cascade runs twice (`exceeds=false` and
+ * `exceeds=true`) and, when the two runs disagree, the result is
+ * wrapped in `Group(IfBreak(brkDoc, flatDoc))` so the renderer's
+ * standard fit/break decision picks the right mode at layout time.
+ * When both runs agree the chosen mode is unconditional and no Group
+ * wrap is needed.
+ *
+ * Items containing hardlines (e.g. block bodies, multi-line strings)
+ * are intrinsically un-flattenable — the cascade is forced to the
+ * `exceeds=true` branch in that case.
+ */
 class WrapList {
 
 	/**
@@ -186,27 +189,25 @@ class WrapList {
 		open: String, close: String, sep: String, items: Array<Doc>, opt: WriteOptions, openInside: Doc, closeInside: Doc,
 		keepInnerWhenEmpty: Bool, rules: WrapRules, ?options: WrapListOptions
 	): Doc {
-		// Unpack the optional axes ONCE. Every default below is the pre-struct
-		// positional default, so an omitted field and the old omitted argument are
-		// the same layout. `trailBreak` / `forceMode` deliberately stay nullable —
-		// there null is a MEANINGFUL state, not an absent one.
-		final o: WrapListOptions = options ?? {};
-		final appendTrailingComma: Bool = o.appendTrailingComma ?? false;
-		final leadFlat: Doc = o.leadFlat ?? Empty;
-		final leadBreak: Doc = o.leadBreak ?? Empty;
-		final forceExceeds: Bool = o.forceExceeds ?? false;
-		final forceMode: Null<WrapMode> = o.forceMode;
-		final compactContinuation: Bool = o.compactContinuation ?? false;
-		final groupRestProbe: Bool = o.groupRestProbe ?? false;
-		final sepBeforeFlags: Null<Array<Bool>> = o.sepBeforeFlags;
-		final sourceMultilineKeep: Bool = o.sourceMultilineKeep ?? false;
-		final sourceBreakBefore: Null<Array<Bool>> = o.sourceBreakBefore;
-		final keepCloseGlued: Bool = o.keepCloseGlued ?? false;
-		final flatTrailingComma: Bool = o.flatTrailingComma ?? false;
-		final comprehensionFitMeasure: Bool = o.comprehensionFitMeasure ?? false;
-		// `Line('\n')` is not a Haxe-constant default — unwrap a null
-		// sentinel into the legacy hardcoded hardline here.
-		final trailBreakDoc: Doc = o.trailBreak ?? Line('\n');
+		// Resolve every optional axis ONCE, into locals the body then reads as plain
+		// values. `forceMode` alone stays nullable: null is its meaningful state.
+		final axes: WrapListOptions = options ?? {};
+		final appendTrailingComma: Bool = axes.appendTrailingComma ?? false;
+		final leadFlat: Doc = axes.leadFlat ?? Empty;
+		final leadBreak: Doc = axes.leadBreak ?? Empty;
+		final forceExceeds: Bool = axes.forceExceeds ?? false;
+		final forceMode: Null<WrapMode> = axes.forceMode;
+		final compactContinuation: Bool = axes.compactContinuation ?? false;
+		final groupRestProbe: Bool = axes.groupRestProbe ?? false;
+		final sepBeforeFlags: Null<Array<Bool>> = axes.sepBeforeFlags;
+		final sourceMultilineKeep: Bool = axes.sourceMultilineKeep ?? false;
+		final sourceBreakBefore: Null<Array<Bool>> = axes.sourceBreakBefore;
+		final keepCloseGlued: Bool = axes.keepCloseGlued ?? false;
+		final flatTrailingComma: Bool = axes.flatTrailingComma ?? false;
+		final comprehensionFitMeasure: Bool = axes.comprehensionFitMeasure ?? false;
+		// `Line('\n')` is not a Haxe-constant default — unwrap the absent
+		// case into the legacy hardcoded hardline here.
+		final trailBreakDoc: Doc = axes.trailBreak ?? Line('\n');
 		if (items.length == 0) return WrapBoundary(Text(open + (keepInnerWhenEmpty ? ' ' : '') + close));
 
 		// ω-arrowif-open: a call/array arg whose body is a PLAIN `if` (no else,
