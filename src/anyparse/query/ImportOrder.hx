@@ -244,8 +244,8 @@ final class ImportOrder {
 	 * splices `'import <path>;\n'` at it.
 	 */
 	public static function insertOffset(source: String, block: Array<ImportSlot>, path: String): Int {
-		final simple: String = lastSegment(path);
-		if (block.exists(slot -> lastSegment(slot.path) == simple)) return -1;
+		final simple: String = RefactorSupport.lastSegment(path);
+		if (block.exists(slot -> RefactorSupport.lastSegment(slot.path) == simple)) return -1;
 		final chosen: Null<RunChoice> = chooseRun(runsOf(source, block), path);
 		if (chosen == null) return -1;
 		final run: Array<ImportLine> = chosen.run;
@@ -290,12 +290,6 @@ final class ImportOrder {
 	/** The paths of `run`, in run order — the list every order question is asked about. */
 	public static inline function pathsOf(run: Array<ImportLine>): Array<String> {
 		return [for (line in run) line.path];
-	}
-
-	/** The last dotted segment of `dotted` — the simple name a plain import binds. */
-	public static inline function lastSegment(dotted: String): String {
-		final dot: Int = dotted.lastIndexOf('.');
-		return dot == -1 ? dotted : dotted.substring(dot + 1);
 	}
 
 	/**

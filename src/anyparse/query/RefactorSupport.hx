@@ -615,6 +615,20 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * The last dotted segment of `dotted` — the simple name a plain import binds
+	 * (`pkg.sub.Foo` -> `Foo`), and the whole string when it carries no dot at all.
+	 *
+	 * Purely textual: it splits on the LAST `.` and asks nothing of the tree, so it
+	 * is equally correct for an import payload, a canonical type path, a `using`
+	 * target and a dotted field path. Callers that need the module-vs-sub-type
+	 * distinction (`pkg.Mod.Sub`) must resolve that themselves — this returns `Sub`.
+	 */
+	public static inline function lastSegment(dotted: String): String {
+		final dot: Int = dotted.lastIndexOf('.');
+		return dot < 0 ? dotted : dotted.substring(dot + 1);
+	}
+
+	/**
 	 * Offset of the first word-boundary occurrence of `name` within
 	 * `[span.from, span.to)`, or -1 when not found. A word boundary
 	 * requires the characters immediately before and after the match to

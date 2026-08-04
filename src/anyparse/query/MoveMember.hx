@@ -387,11 +387,6 @@ final class MoveMember {
 		return block.substring(from, to);
 	}
 
-	private static function lastSegment(path: String): String {
-		final dot: Int = path.lastIndexOf('.');
-		return dot == -1 ? path : path.substring(dot + 1);
-	}
-
 	/**
 	 * Resolve endpoints and run every guard: source type + member (must be
 	 * static), unique same-package destination without a name collision,
@@ -478,9 +473,9 @@ final class MoveMember {
 			final info: Null<FileInfo> = index.fileInfo(entry.file);
 			if (info == null) continue;
 			for (imp in info.imports) {
-				if (imp.kind == ImportKind.Using && lastSegment(imp.raw) == srcTypeName)
+				if (imp.kind == ImportKind.Using && RefactorSupport.lastSegment(imp.raw) == srcTypeName)
 					return '${entry.file} has "using ${imp.raw}" — extension-call sites are not findable, refusing';
-				if (imp.kind == ImportKind.Using && lastSegment(imp.raw) == destTypeName)
+				if (imp.kind == ImportKind.Using && RefactorSupport.lastSegment(imp.raw) == destTypeName)
 					return '${entry.file} has "using ${imp.raw}" — moving a member into a type under `using` could '
 						+ 'hijack extension calls, refusing';
 				if (imp.kind == ImportKind.Import && memberNames.exists(name -> StringTools.endsWith(imp.raw, '.$srcTypeName.$name')))

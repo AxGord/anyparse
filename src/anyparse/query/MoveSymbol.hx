@@ -232,7 +232,7 @@ final class MoveSymbol {
 			// would be carried into the destination as an unconditional import,
 			// which could be platform-inappropriate.
 			final provider: Null<ImportInfo> = cursorInfo.imports.find(
-				imp -> !imp.guarded && (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using) && lastSegment(imp.raw) == dep
+				imp -> !imp.guarded && (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using) && RefactorSupport.lastSegment(imp.raw) == dep
 			);
 			if (provider == null) continue;
 			// Already present in the destination → no carry.
@@ -425,12 +425,6 @@ final class MoveSymbol {
 	private static function importLineFor(imp: ImportInfo): String {
 		final keyword: String = imp.kind == ImportKind.Using ? 'using' : 'import';
 		return '$keyword ${imp.raw};';
-	}
-
-	/** Last dotted segment of a path (`pkg.sub.Foo` -> `Foo`). */
-	private static inline function lastSegment(path: String): String {
-		final dot: Int = path.lastIndexOf('.');
-		return dot < 0 ? path : path.substr(dot + 1);
 	}
 
 	/** Start offset of the line containing `offset`. */
