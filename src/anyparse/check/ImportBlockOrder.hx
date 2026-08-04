@@ -221,7 +221,7 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	 */
 	private static function boundNames(path: String, moduleTypes: Map<String, Array<String>>): Array<String> {
 		final types: Null<Array<String>> = moduleTypes[path];
-		return types == null || types.length == 0 ? [ImportOrder.lastSegment(path)] : types;
+		return types == null || types.length == 0 ? [RefactorSupport.lastSegment(path)] : types;
 	}
 
 	/**

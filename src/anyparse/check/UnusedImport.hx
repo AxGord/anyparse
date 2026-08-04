@@ -143,7 +143,7 @@ final class UnusedImport implements Check {
 			// appears nowhere in the file text at all — otherwise the branch-blind
 			// scan cannot tell used-here from used-in-another-branch. Never a
 			// Warning: the fix must not delete a line inside a `#if` region.
-			final bound: String = imp.alias ?? lastSegment(imp.raw);
+			final bound: String = imp.alias ?? RefactorSupport.lastSegment(imp.raw);
 			if (!RefactorSupport.referencedInRange(source, bound, 0, source.length, importSpans))
 				out.push(make(
 					file, imp, Severity.Info,
@@ -157,7 +157,7 @@ final class UnusedImport implements Check {
 			case ImportKind.Using:
 				addUsingViolation(out, file, imp, source, importSpans, plugin);
 			case _:
-				final bound: String = imp.alias ?? lastSegment(imp.raw);
+				final bound: String = imp.alias ?? RefactorSupport.lastSegment(imp.raw);
 				if (RefactorSupport.referencedInRange(source, bound, 0, source.length, importSpans)) return;
 				// A plain `import pkg.Mod;` binds every top-level type of the
 				// module, not only the main one — a reference to a SECONDARY
@@ -202,13 +202,6 @@ final class UnusedImport implements Check {
 		};
 	}
 
-	/** Last dot-segment of a path (`pkg.Mod.Sub` -> `Sub`); the whole string when undotted. */
-	private static function lastSegment(path: String): String {
-		final segments: Array<String> = path.split('.');
-		final last: Null<String> = segments.length > 0 ? segments[segments.length - 1] : path;
-		return last ?? path;
-	}
-
 	/**
 	 * Append the verdict for a `using` import. It is in use when its bound name is
 	 * referenced outside the imports — a static / type reference such as
@@ -223,7 +216,7 @@ final class UnusedImport implements Check {
 	private static function addUsingViolation(
 		out: Array<Violation>, file: String, imp: ImportInfo, source: String, importSpans: Array<Span>, plugin: GrammarPlugin
 	): Void {
-		final bound: String = lastSegment(imp.raw);
+		final bound: String = RefactorSupport.lastSegment(imp.raw);
 		if (RefactorSupport.referencedInRange(source, bound, 0, source.length, importSpans)) return;
 		final methods: Null<Array<String>> = plugin.knownExtensionMethods(imp.raw);
 		if (methods == null) {

@@ -299,13 +299,17 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	}
 
 	/**
-	 * Whether `src` can sit inside a single-quoted `'${ … }'` block. Both refusals
-	 * follow the REAL Haxe compiler's interpolation scanner, which is cruder than
-	 * anyparse's own lexer:
+	 * Whether `src` can sit inside a single-quoted `'${ … }'` block. The `$` and brace
+	 * refusals follow the REAL Haxe compiler's interpolation scanner, which is cruder
+	 * than anyparse's own lexer; the LINE-BREAK refusal is this model's own, and is
+	 * STRICTER than the compiler:
 	 *
-	 *  - a `$` would re-interpolate and a line break would break the literal, and a
-	 *    BACKSLASH is refused because the scanner does not process escapes inside a
-	 *    nested same-quote string (`'\\'` reports "Unterminated string");
+	 *  - a `$` would re-interpolate, and a BACKSLASH is refused because the scanner does
+	 *    not process escapes inside a nested same-quote string (`'\\'` reports
+	 *    "Unterminated string"). A line break is refused because FOLDING one into a block
+	 *    would reflow the caller's literal, NOT because the compiler rejects it: a Haxe
+	 *    string literal spans lines freely and `${if (a)\n\tb\nelse c}` compiles. Callers
+	 *    reasoning about what the scanner ACCEPTS must not read this as its rule;
 	 *  - the block's closing `}` is found by counting `{` / `}` NAIVELY, without
 	 *    lexing nested strings, so a brace inside one still counts. A source whose
 	 *    running depth ever goes negative closes the block early (`q("}")` reports

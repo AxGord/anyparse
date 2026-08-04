@@ -370,7 +370,7 @@ final class GuardContinue implements Check {
 		var prevTo: Int = ifSpan.to;
 		for (t in tail) {
 			final ts: Null<Span> = t.span;
-			if (ts == null || gapComment(source, prevTo, ts.from)) return false;
+			if (ts == null || CheckScan.hasCommentMarker(source, prevTo, ts.from)) return false;
 			prevTo = ts.to;
 		}
 		return true;
@@ -539,21 +539,14 @@ final class GuardContinue implements Check {
 	}
 
 	/**
-	 * The span of the binder token inside a declaration node: the FIRST standalone `name`
-	 * (neighbours outside `[A-Za-z0-9_]`) not preceded by `$`. The declaration node starts at
-	 * the `var` / `final` keyword — a metadata wrapper projects as a separate sibling — so
-	 * nothing ahead of the binder can hold the name. Null when the grammar's span does not
-	 * cover it.
+	 * The span of the binder token inside a declaration node — `RefactorSupport.binderTokenSpan`
+	 * over the declaration's own span. The declaration node starts at the `var` / `final`
+	 * keyword — a metadata wrapper projects as a separate sibling — so nothing ahead of the
+	 * binder can hold the name. Null when the grammar's span does not cover it.
 	 */
 	private static function binderSpan(source: String, decl: QueryNode, name: String): Null<Span> {
 		final span: Null<Span> = decl.span;
-		if (span == null) return null;
-		var at: Int = source.indexOf(name, span.from);
-		while (at != -1 && at + name.length <= span.to) {
-			if (isStandaloneAt(source, at, name.length) && source.charAt(at - 1) != '$') return new Span(at, at + name.length);
-			at = source.indexOf(name, at + 1);
-		}
-		return null;
+		return span == null ? null : RefactorSupport.binderTokenSpan(source, span.from, span.to, name);
 	}
 
 	/** Append the span of every `name` read in `node`'s subtree — a plain identifier, or the identifier of a `$name` interpolation. */
@@ -612,15 +605,8 @@ final class GuardContinue implements Check {
 		final condSpan: Null<Span> = cond.span;
 		final thenSpan: Null<Span> = thenBlock.span;
 		if (ifSpan == null || condSpan == null || thenSpan == null) return true;
-		final headerGap: Bool = gapComment(source, ifSpan.from, condSpan.from);
-		return headerGap || gapComment(source, condSpan.to, thenSpan.from);
-	}
-
-	/** Whether `[from, to)` of `source` holds a `//` or `/*` comment marker. */
-	private static function gapComment(source: String, from: Int, to: Int): Bool {
-		if (from >= to) return false;
-		final gap: String = source.substring(from, to);
-		return gap.indexOf('//') != -1 || gap.indexOf('/*') != -1;
+		final headerGap: Bool = CheckScan.hasCommentMarker(source, ifSpan.from, condSpan.from);
+		return headerGap || CheckScan.hasCommentMarker(source, condSpan.to, thenSpan.from);
 	}
 
 	/**

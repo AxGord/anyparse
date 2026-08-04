@@ -100,6 +100,28 @@ class AddMemberSliceTest extends Test {
 		assertRefused(source, 'C', 'var y:Int;');
 	}
 
+	/**
+	 * The canonical-gate refusal must not INSTRUCT the user to re-run with `--reformat`.
+	 * The gate is shared with `lint --fix`, which has no such flag, and the message it
+	 * used to carry sent that user after an argument their command rejects. It now names
+	 * `apq fmt --write` — the remedy every caller's user can reach — and mentions
+	 * `--reformat` only as something a command may accept. The negative half is the
+	 * regression guard; the positive one only requires the remedy to be PRESENT, since
+	 * pinning its position would break on any rewording.
+	 */
+	public function testNonCanonicalRefusalLeadsWithFmtNotReformat(): Void {
+		final source: String = 'class C {\n    var x:Int;\n}\n';
+		switch addOf(source, 'C', 'var y:Int;', false) {
+			case Ok(text):
+				Assert.fail('expected the canonical-gate refusal, got Ok:\n$text');
+			case Err(message):
+				Assert.isTrue(message.indexOf('apq fmt --write') >= 0, 'refusal must name the always-available remedy: $message');
+				Assert.isTrue(
+					message.indexOf('re-run with --reformat') < 0, 'refusal must not order a flag the command may lack: $message'
+				);
+		}
+	}
+
 	/** `reformat` proceeds on a non-canonical file, canonicalising it. */
 	public function testReformatProceedsOnNonCanonical(): Void {
 		final source: String = 'class C {\n    var x:Int;\n}\n';

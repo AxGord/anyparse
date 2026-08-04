@@ -69,22 +69,50 @@ import anyparse.runtime.Span;
  * first), so `((macro final w = 1))` still collapses to one pair rather than none.
  *
  * The `${ … }` INTERPOLATION slot is delimited on the same terms — `${` and `}` are
- * hard tokens and the one expression between them parses at the loosest precedence —
- * and the parenthesis is the only thing the drop removes: it is none of the four
- * characters the REAL compiler's interpolation scanner reacts to (`{`, `}`, `$`, a
- * backslash) and none of the line breaks that end the literal, so that scanner
- * brace-counts its way to the same closing `}` over the same text (see
- * `HaxeStringFoldSupport.interpolationBlockSafe` for its rules). So a
- * content shape that survives the scan WITH the parentheses survives it without them
- * — object literals (`${({a: 1})}` → `${{a: 1}}`), nested same-quote strings and
- * their own `${ … }` blocks included, the interior reproduced byte-for-byte. Only
- * the pair sitting DIRECTLY inside the braces takes this slot: in `${(a) + (b)}` the
- * two pairs are operands of the `+`, left to the operand arms below, and
+ * hard tokens and the one expression between them parses at the loosest precedence.
+ * The safety argument is DIFFERENTIAL, and deliberately so: the drop removes a
+ * parenthesis and nothing else, and a parenthesis is none of the four characters the
+ * real compiler's interpolation scanner reacts to (`{`, `}`, `$`, a backslash) and no
+ * line break. So the scanner brace-counts its way over the same text on either
+ * spelling, whatever it makes of that text — a content shape that survives the scan
+ * WITH the parentheses survives it without them, object literals
+ * (`${({a: 1})}` → `${{a: 1}}`), nested same-quote strings and their own `${ … }`
+ * blocks included, the interior reproduced byte-for-byte.
+ *
+ * `HaxeStringFoldSupport.interpolationBlockSafe` describes a NEIGHBOURING question —
+ * "may this source be MOVED into a `${ … }` block" — and is anyparse's own model of
+ * the scanner, STRICTER than the compiler: it refuses every line break, which a real
+ * `${if (a)\n\tb\nelse c}` is free to contain (a line break does not end a Haxe string
+ * literal; that helper's own doc says otherwise and is wrong). It is a useful
+ * reference for what the scanner reacts to, not the law this arm rests on; nothing
+ * here asks it anything.
+ *
+ * The differential argument is also VACUOUS on a source the scanner cannot close at
+ * all. `${("}")}` counts the `}` inside the nested string — the scanner does not lex
+ * strings — closes the block early and reports "Unterminated string" WITH the
+ * parentheses just as it does without them. Such a site is flagged and fixed like any
+ * other, and that is correct in the only sense available: the file does not compile
+ * on either spelling, so the rule cannot make it worse. It is not evidence the drop
+ * is safe on code that DOES compile — that comes from the paragraph above.
+ *
+ * Only the pair sitting DIRECTLY inside the braces takes this slot: in `${(a) + (b)}`
+ * the two pairs are operands of the `+`, left to the operand arms below, and
  * `${(name)}` loses its parentheses without becoming `$name` — which shorthand a
  * block deserves is `fold-adjacent-string-literals`' question, not this rule's.
  *
  * Deliberately NOT delimited:
  *
+ * - The MACRO-reification `${ … }` (`DollarBlockExpr`) — bracket-delimited by exactly
+ *   the same two hard tokens as the interpolation block above, and left out anyway.
+ *   NOT for a safety reason, and the tempting one is false: a pair written inside a
+ *   `macro` QUOTATION does reify as `EParenthesis`, but `${ … }` is the reification
+ *   ESCAPE — its content is ordinary macro-TIME code, and `macro ${(e)}` builds exactly
+ *   what `macro ${e}` builds (measured). The quoted region is separately handled, by
+ *   `MacroExpr` in `parenOpaqueSubtreeKinds`, and that covers only the OPERAND arms —
+ *   `dropsParens` does not gate the delimited arm on `opaque` — so opening this slot
+ *   would need `DollarBlockExpr` in `delimitedAllChildKinds`, where its absence is a
+ *   conservative omission nobody has needed rather than a decision. Listed here so the
+ *   next reader stops looking for the argument.
  * - The `switch` SUBJECT — excluded by project decision, not by a safety argument.
  *   The Haxe grammar keeps a parenthesized `SwitchStmt` (carrying its own `(` `)`,
  *   like `if` / `while`) apart from a bare `SwitchStmtBare`, so a `parenKind` child
@@ -162,10 +190,27 @@ import anyparse.runtime.Span;
  *
  * ## Trivia
  *
- * Every arm refuses a pair whose parentheses do not sit flush against their content:
- * the fix reproduces the content's source and drops everything else, so a comment
- * between `(` and the expression would be deleted. The test walks each layer of the
- * chain, since the intermediate `(` `)` of `((e))` are not trivia.
+ * The fix reproduces the CONTENT NODE's source span and drops every other byte of the
+ * pair, so anything in the gap between a parenthesis and that span is deleted. Every
+ * arm therefore refuses a pair with a non-blank gap on either side, at EVERY layer of
+ * the chain — the intermediate `(` `)` of `((e))` are the chain, not trivia.
+ *
+ * "Flush against the content" is measured against that SPAN, not against the visible
+ * text, and on the TRAILING side the two part company. Whether a trailing comment is
+ * refused or CARRIED out with the content is decided by the content NODE'S KIND, not by
+ * the slot: an operator node's span runs past its last child to the consumed-trivia
+ * boundary and absorbs the comment, so the gap reads blank and the pair drops
+ * (`(a + c <block comment>)` collapses with the comment intact — in the interpolation
+ * slot, pinned by `RedundantParensCheckTest.testInterpolationCommentInsideParens`, and
+ * identically in every ordinary delimited position). A leaf or bracket-closed node's
+ * span stops at its last token, the comment lands outside it, and the pair is refused
+ * (`(a <block comment>)` —
+ * `RedundantParensOperandArmsTest.testParensCarryingACommentAreSkipped`). A LEADING
+ * comment is outside the span for every kind, and refuses everywhere.
+ *
+ * Carrying is sound wherever it happens: the bytes move with the expression they
+ * annotate and the fix's own re-parse sees them. What the gate guarantees is the one
+ * direction that matters — a comment the fix would DELETE always refuses.
  */
 @:nullSafety(Strict)
 final class RedundantParens implements Check implements ConfigAware {
@@ -372,11 +417,17 @@ final class RedundantParens implements Check implements ConfigAware {
 	}
 
 	/**
-	 * Whether anything but whitespace sits between a parenthesis and the expression it
-	 * wraps, at ANY layer of the chain — a comment the fix would delete, since it
-	 * reproduces the content's source and nothing else. Walked layer by layer because
-	 * the intermediate `(` `)` of `((e))` are the chain, not trivia. An unmeasurable
-	 * span answers true, which keeps the parentheses.
+	 * Whether anything but whitespace sits between a parenthesis and the SPAN of the
+	 * expression it wraps, at ANY layer of the chain — a comment the fix would delete,
+	 * since it reproduces that span and nothing else. Walked layer by layer because the
+	 * intermediate `(` `)` of `((e))` are the chain, not trivia. An unmeasurable span
+	 * answers true, which keeps the parentheses.
+	 *
+	 * Measuring against the span is what makes the trailing side depend on the content
+	 * node's KIND: an operator node's span already absorbs a trailing comment, so the gap
+	 * reads blank and the drop carries the comment out rather than deleting it; a leaf or
+	 * bracket-closed node's does not, and the pair refuses. See the class doc's Trivia
+	 * section.
 	 */
 	private static function triviaInsideParens(source: String, node: QueryNode, slots: ParenSlots): Bool {
 		var n: QueryNode = node;

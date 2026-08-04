@@ -318,7 +318,7 @@ final class PreferArrowCallback implements Check {
 			if (es == null) return null;
 			kept.push(bodySpan);
 			final gap: String = ctx.source.substring(bodySpan.from, es.from) + ctx.source.substring(es.to, bodySpan.to);
-			if (hasComment(gap)) return null;
+			if (RefactorSupport.textHasCommentMarker(gap)) return null;
 			return ctx.source.substring(es.from, es.to);
 		}
 		kept.push(bodySpan);
@@ -329,7 +329,7 @@ final class PreferArrowCallback implements Check {
 			final inner: Null<Span> = lone.children[0].span;
 			if (inner != null) {
 				final interior: String = ctx.source.substring(bodySpan.from, inner.from) + ctx.source.substring(inner.to, bodySpan.to);
-				if (!hasComment(interior)) return ctx.source.substring(inner.from, inner.to);
+				if (!RefactorSupport.textHasCommentMarker(interior)) return ctx.source.substring(inner.from, inner.to);
 			}
 		}
 		return ctx.source.substring(bodySpan.from, bodySpan.to);
@@ -346,12 +346,7 @@ final class PreferArrowCallback implements Check {
 			if (s.to > cursor) cursor = s.to;
 		}
 		if (outer.to > cursor) gaps += ctx.source.substring(cursor, outer.to);
-		return hasComment(gaps);
-	}
-
-	/** Whether `text` contains a line- or block-comment marker. */
-	private static function hasComment(text: String): Bool {
-		return text.indexOf('//') >= 0 || text.indexOf('/*') >= 0;
+		return RefactorSupport.textHasCommentMarker(gaps);
 	}
 
 	/**

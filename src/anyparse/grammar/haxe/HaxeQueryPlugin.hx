@@ -771,8 +771,16 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// matching `}` and parses that slice standalone, so nothing outside the
 			// braces can bind into it. Dropping a paren pair inside the braces cannot
 			// disturb that scan either — a parenthesis is none of the four characters
-			// that scanner reacts to (`{`, `}`, `$`, a backslash) and none of the line
-			// breaks that end the literal, so it reads exactly the same text either way.
+			// that scanner reacts to (`{`, `}`, `$`, a backslash) and no line break, so
+			// it reads exactly the same text either way, whatever it makes of that text.
+			//
+			// `DollarBlockExpr` — the MACRO reification `${ … }` — is bound by the same
+			// two hard tokens and is ABSENT, but only conservatively: `${ … }` is the
+			// reification ESCAPE, its content is macro-TIME code, and `macro ${(e)}`
+			// builds exactly what `macro ${e}` builds (measured — no `EParenthesis`
+			// survives). The pair that DOES reify is one written in the quoted region,
+			// which `parenOpaqueSubtreeKinds` covers. Listing this kind is untaken work,
+			// not a refused hazard.
 			delimitedAllChildKinds: [
 				'Block',
 				'VarStmt',

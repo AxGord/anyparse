@@ -335,28 +335,10 @@ final class UnusedLocal implements Check {
 		if (span == null || children.length == 0) return;
 		final body: Null<Span> = children[children.length - 1].span;
 		if (body == null || body.to > span.to || body.from <= span.from || !onlyTrivia(ctx.source, body.to, span.to)) return;
-		final binder: Null<Span> = binderSpan(ctx.source, span.from, body.from, name);
+		final binder: Null<Span> = RefactorSupport.binderTokenSpan(ctx.source, span.from, body.from, name);
 		if (binder == null) return;
 		out.push(binder);
 		out.push(body);
-	}
-
-	/**
-	 * The span of the first standalone `name` token of `source` within `[from, stop)` — a
-	 * self-scoped construct's binder, the first thing its head spells. A `$` prefix
-	 * disqualifies a match: that is an interpolation read, never a binder.
-	 */
-	private static function binderSpan(source: String, from: Int, stop: Int, name: String): Null<Span> {
-		final length: Int = name.length;
-		var at: Int = source.indexOf(name, from);
-		while (at >= 0 && at + length <= stop) {
-			final before: Int = at > 0 ? StringTools.fastCodeAt(source, at - 1) : 0;
-			final after: Int = at + length < source.length ? StringTools.fastCodeAt(source, at + length) : 0;
-			if (before != '$'.code && !RefactorSupport.isIdentChar(before) && !RefactorSupport.isIdentChar(after))
-				return new Span(at, at + length);
-			at = source.indexOf(name, at + 1);
-		}
-		return null;
 	}
 
 	/**

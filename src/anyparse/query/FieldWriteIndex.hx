@@ -307,7 +307,7 @@ final class FieldWriteIndex {
 		for (imp in fi.imports) if (imp.kind != ImportKind.Wild) {
 			if (imp.kind == ImportKind.Alias) {
 				if (imp.raw == name) return true;
-			} else if (lastSegment(imp.raw) == name && imp.raw != declaredPath)
+			} else if (RefactorSupport.lastSegment(imp.raw) == name && imp.raw != declaredPath)
 				return true;
 		}
 		return false;
@@ -654,10 +654,10 @@ final class FieldWriteIndex {
 			}
 		}
 		final lt: Int = t.indexOf('<');
-		if (lt < 0) return isDottedIdentPath(t) ? { name: lastSegment(t), params: null } : null;
+		if (lt < 0) return isDottedIdentPath(t) ? { name: RefactorSupport.lastSegment(t), params: null } : null;
 		if (!StringTools.endsWith(t, '>')) return null;
 		final head: String = StringTools.trim(t.substring(0, lt));
-		return isDottedIdentPath(head) ? { name: lastSegment(head), params: t.substring(lt + 1, t.length - 1) } : null;
+		return isDottedIdentPath(head) ? { name: RefactorSupport.lastSegment(head), params: t.substring(lt + 1, t.length - 1) } : null;
 	}
 
 	/**
@@ -691,12 +691,6 @@ final class FieldWriteIndex {
 				return false;
 		}
 		return !expectStart;
-	}
-
-	/** The last `.`-separated segment of `path` (its simple name). */
-	private static function lastSegment(path: String): String {
-		final dot: Int = path.lastIndexOf('.');
-		return dot < 0 ? path : path.substring(dot + 1);
 	}
 
 	/**

@@ -438,7 +438,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		final name: Null<String> = node.name;
 		if (name == null) return null;
 		if (context.typeKinds.contains(node.kind)) {
-			if (name.indexOf('.') == -1 || !RefactorSupport.isUpperInitial(lastSegment(name))) return null;
+			if (name.indexOf('.') == -1 || !RefactorSupport.isUpperInitial(RefactorSupport.lastSegment(name))) return null;
 			final span: Null<Span> = pathSpanOf(node, name, context);
 			return span == null ? null : { path: name, span: span, conditional: conditional };
 		}
@@ -530,12 +530,6 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	/** Whether `c` can sit INSIDE a dotted type path — an identifier character or the separator itself. */
 	private static inline function isPathChar(c: Int): Bool {
 		return c == '.'.code || RefactorSupport.isIdentChar(c);
-	}
-
-	/** The last dotted segment of `dotted`, or the whole string when unqualified. */
-	private static inline function lastSegment(dotted: String): String {
-		final dot: Int = dotted.lastIndexOf('.');
-		return dot == -1 ? dotted : dotted.substring(dot + 1);
 	}
 
 	/** A span as the key `fix` matches a re-derived occurrence against the violation it was reported as. */

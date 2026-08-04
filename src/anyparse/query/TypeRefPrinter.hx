@@ -210,12 +210,12 @@ final class TypeRefPrinter {
 		final trimmed: String = StringTools.trim(fqn);
 		// A dotless run carries no derivable module path, and a lower-initial final segment is a
 		// package path or a structural field name, never a type — both pass through untouched.
-		if (trimmed.indexOf('.') == -1 || !RefactorSupport.isUpperInitial(lastSegment(trimmed))) return {
+		if (trimmed.indexOf('.') == -1 || !RefactorSupport.isUpperInitial(RefactorSupport.lastSegment(trimmed))) return {
 			text: trimmed,
 			importPath: null
 		};
 		final canonical: String = canonicalize(trimmed);
-		final simple: String = lastSegment(canonical);
+		final simple: String = RefactorSupport.lastSegment(canonical);
 		final visible: Null<String> = visibleNameFor(canonical, simple);
 		// Re-bind: a null-check does not narrow into an anonymous-structure literal.
 		if (visible != null) {
@@ -287,9 +287,9 @@ final class TypeRefPrinter {
 		// The same two rejections `print` opens with, so both entry points read one input class:
 		// a dotless run carries no derivable module path, and a lower-initial final segment is a
 		// package path or a structural field name, never a type.
-		if (trimmed.indexOf('.') == -1 || !RefactorSupport.isUpperInitial(lastSegment(trimmed))) return null;
+		if (trimmed.indexOf('.') == -1 || !RefactorSupport.isUpperInitial(RefactorSupport.lastSegment(trimmed))) return null;
 		final canonical: String = canonicalize(trimmed);
-		return declaredAtPath(canonical, lastSegment(canonical)) ? canonical : null;
+		return declaredAtPath(canonical, RefactorSupport.lastSegment(canonical)) ? canonical : null;
 	}
 
 	/**
@@ -430,7 +430,7 @@ final class TypeRefPrinter {
 		final source: Null<String> = _source;
 		if (source == null || _root == null || !_canAnchorImports) return false;
 		if (shadowedLocally(canonical, simple)) return false;
-		if (_pendingImports.exists(p -> p != canonical && lastSegment(p) == simple)) return false;
+		if (_pendingImports.exists(p -> p != canonical && RefactorSupport.lastSegment(p) == simple)) return false;
 		// A mention in INERT text — a comment, or the literal text of a string / regex — is masked
 		// out: the scan asks whether anything in this file BINDS the name, and neither binds
 		// anything, while the T15 reading refused the import on the strength of a word in a
@@ -486,7 +486,7 @@ final class TypeRefPrinter {
 	 * repairing it would rewrite one real type into another.
 	 */
 	private function canonicalize(raw: String): String {
-		final simple: String = lastSegment(raw);
+		final simple: String = RefactorSupport.lastSegment(raw);
 		if (declaredAtPath(raw, simple)) return raw;
 		final imported: Null<String> = _importMap[simple];
 		if (imported != null && imported != raw && dropModuleSegment(imported) == raw) return imported;
@@ -609,7 +609,7 @@ final class TypeRefPrinter {
 				final prefix: String = dot < 0 ? '' : path.substring(0, dot);
 				if (declarers.exists(f -> f.pkg == prefix && isMainTypeIn(f, simple) && pathOfTypeIn(f, simple) != canonical)) return true;
 			} else if (index == null) {
-				if (lastSegment(path) == simple) return true;
+				if (RefactorSupport.lastSegment(path) == simple) return true;
 			} else if (declarers.exists(f -> f.module == path && pathOfTypeIn(f, simple) != canonical))
 				return true;
 		}
@@ -691,7 +691,7 @@ final class TypeRefPrinter {
 			final span: Null<Span> = c.span;
 			switch c.kind {
 				case 'ImportDecl':
-					if (lastSegment(raw) == simple && raw != canonical) return true;
+					if (RefactorSupport.lastSegment(raw) == simple && raw != canonical) return true;
 				// The grammar's name slot for an alias declaration IS the alias, never the aliased path.
 				case 'ImportAliasDecl' | 'ImportAliasInDecl':
 					if (raw == simple && (span == null || aliasTargetOf(source.substring(span.from, span.to)) != canonical)) return true;
@@ -832,12 +832,6 @@ final class TypeRefPrinter {
 	private static function packageOf(root: QueryNode): String {
 		for (c in root.children) if (c.kind == 'PackageDecl') return c.name ?? '';
 		return '';
-	}
-
-	/** The last dotted segment of `dotted`, or the whole string when unqualified. */
-	private static inline function lastSegment(dotted: String): String {
-		final dot: Int = dotted.lastIndexOf('.');
-		return dot == -1 ? dotted : dotted.substring(dot + 1);
 	}
 
 	/** The file's `package` declaration payload (`''` for the root package), or null when the printer has no tree. */

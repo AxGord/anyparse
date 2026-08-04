@@ -307,7 +307,8 @@ class WriterLowering {
 		final cwf: String = callWrapField;
 		final callRulesExpr: Expr = optFieldAccess(cwf);
 		final argsListExpr: Expr = macro anyparse.format.wrap.WrapList.emit(
-			$v{callOpen}, $v{callClose}, $v{callSep}, _argDocs, opt, _de(), _de(), false, $callRulesExpr, $callTcExpr
+			$v{callOpen}, $v{callClose}, $v{callSep}, _argDocs, opt, _de(), _de(), false, $callRulesExpr,
+			{ appendTrailingComma: $callTcExpr }
 		);
 		final chainRulesExpr: Expr = optFieldAccess(chainField);
 		final writeIdent: Expr = {
@@ -1792,7 +1793,7 @@ class WriterLowering {
 			// `HxType.Anon.fields`), thread the flag into
 			// `triviaSepStarExpr` so its no-trivia branch emits a
 			// runtime `opt._inTypedefBody ? WrapMode.OnePerLine :
-			// null` as `WrapList.emit`'s 15th `forceMode` arg.
+			// null` as `WrapList.emit`'s `forceMode` option.
 			// Bypasses the cascade only when the typedef-RHS
 			// context is active — non-typedef anon consumers
 			// (var-type-hint, fn-return-type) stay cascade-driven.
@@ -2030,7 +2031,7 @@ class WriterLowering {
 		// Star fields whose outer Group should bias toward MBreak when
 		// significant same-line content trails (typedef LHS typeParams,
 		// followed by ` = Rhs<…>;`). Mirrors fork's `lengthAfter` rule
-		// at Group layer. Plain-path 17th param to `WrapList.emit`;
+		// at Group layer. Plain-path `groupRestProbe` option of `WrapList.emit`;
 		// trivia path mirror lives in `triviaSepStarExpr` (dual-dispatch
 		// per [[feedback-wraprules-dispatch-dual-path]]).
 		final groupRestProbe: Bool = starNode.fmtHasFlag('groupRestProbe');
@@ -2038,8 +2039,11 @@ class WriterLowering {
 			final rulesExpr: Expr = optFieldAccess(wrapRulesField);
 			final compactContExpr: Expr = macro $v{bodyAware};
 			macro anyparse.format.wrap.WrapList.emit(
-				$v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, $rulesExpr,
-				$tcExpr, _de(), _de(), false, null, null, $compactContExpr, $v{groupRestProbe}
+				$v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, $rulesExpr, {
+					appendTrailingComma: $tcExpr,
+					compactContinuation: $compactContExpr,
+					groupRestProbe: $v{groupRestProbe}
+				}
 			);
 		} else if (useFill) {
 			macro fillList(
@@ -5155,7 +5159,7 @@ class WriterLowering {
 		// `@:fmt(forceMultiInTypedef)` on `HxType.Anon`. Threads the
 		// flag into `triviaSepStarExpr` so the no-trivia branch
 		// emits a runtime `opt._inTypedefBody ? WrapMode.OnePerLine
-		// : null` as `WrapList.emit`'s 15th `forceMode` arg. Closes
+		// : null` as `WrapList.emit`'s `forceMode` option. Closes
 		// the `issue_301` typedef-anon source-flat → fork-multi
 		// shape gap by forcing OnePerLine when the parent
 		// `HxTypedefDecl.type` Ref has flipped `_inTypedefBody=true`
@@ -5431,7 +5435,8 @@ class WriterLowering {
 			final listCall: Expr = if (wrapRulesField != null) {
 				final rulesExpr: Expr = optFieldAccess(wrapRulesField);
 				macro anyparse.format.wrap.WrapList.emit(
-					$v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, false, $rulesExpr, $tcExpr
+					$v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, false, $rulesExpr,
+					{ appendTrailingComma: $tcExpr }
 				);
 			} else {
 				macro sepList(
@@ -6032,8 +6037,12 @@ class WriterLowering {
 			// sep-list ctor passes a constant `false` -- byte-inert.
 			final groupRestProbeExpr: Expr = c.branch.fmtHasFlag('groupRestProbe') ? (macro !opt._suppressCallRestProbe) : (macro false);
 			final wrapListExpr: Expr = macro anyparse.format.wrap.WrapList.emit(
-				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $callInsideOpen, $callInsideClose, false, $rulesExpr, $tcExpr,
-				_de(), _de(), false, null, null, false, $groupRestProbeExpr, _sepBeforeFlags, false, null, $keepCloseGluedExpr
+				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $callInsideOpen, $callInsideClose, false, $rulesExpr, {
+					appendTrailingComma: $tcExpr,
+					groupRestProbe: $groupRestProbeExpr,
+					sepBeforeFlags: _sepBeforeFlags,
+					keepCloseGlued: $keepCloseGluedExpr
+				}
 			);
 			if (c.isTriviaStar) {
 				final keepDoc: Expr = lowerPostfixKeepDoc(c);
@@ -9991,9 +10000,10 @@ class WriterLowering {
 					_ml = $linkMoreAccess;
 				}
 				anyparse.format.wrap.WrapList.emit(
-					'', '', ',', _items, opt, anyparse.core.Doc.Empty, anyparse.core.Doc.Empty, false, $knobAccess, false,
-					anyparse.core.Doc.Empty, anyparse.core.Doc.Empty, false, anyparse.core.Doc.Empty, null, false, false, null, false,
-					_breaks
+					'', '', ',', _items, opt, anyparse.core.Doc.Empty, anyparse.core.Doc.Empty, false, $knobAccess, {
+						trailBreak: anyparse.core.Doc.Empty,
+						sourceBreakBefore: _breaks
+					}
 				);
 			} else
 				_headPlusMore;
@@ -15484,7 +15494,7 @@ class WriterLowering {
 				}
 			}
 			: macro (null: Null<anyparse.core.Doc>);
-		// ω-typedef-anon-force-multi: 15th positional arg to
+		// ω-typedef-anon-force-multi: the `forceMode` option of
 		// `WrapList.emit` — a runtime `Null<WrapMode>` predicate. When
 		// the Star opted into `@:fmt(forceMultiInTypedef)` AND the
 		// parent typedef-RHS Ref flipped `opt._inTypedefBody=true` via
@@ -15659,10 +15669,20 @@ class WriterLowering {
 					: $rulesExpr;
 				final _effSmlKeep: Bool = _comprehensionFit ? false : _smlKeep;
 				final _wlResult: anyparse.core.Doc = anyparse.format.wrap.WrapList.emit(
-					$v{openText}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideDoc, $closeInsideDoc, false, _effRules,
-					$appendTrailingCommaExpr, $wrapLeadFlatDoc, $wrapLeadBreakDoc, $forceExceedsExpr, $wrapTrailBreakDoc, $forceModeExpr,
-					$compactContExpr, $v{c.groupRestProbe}, _sepBeforeFlags, _effSmlKeep, null, false, $flatTrailingCommaExpr,
-					_comprehensionFit
+					$v{openText}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideDoc, $closeInsideDoc, false, _effRules, {
+						appendTrailingComma: $appendTrailingCommaExpr,
+						leadFlat: $wrapLeadFlatDoc,
+						leadBreak: $wrapLeadBreakDoc,
+						forceExceeds: $forceExceedsExpr,
+						trailBreak: $wrapTrailBreakDoc,
+						forceMode: $forceModeExpr,
+						compactContinuation: $compactContExpr,
+						groupRestProbe: $v{c.groupRestProbe},
+						sepBeforeFlags: _sepBeforeFlags,
+						sourceMultilineKeep: _effSmlKeep,
+						flatTrailingComma: $flatTrailingCommaExpr,
+						comprehensionFitMeasure: _comprehensionFit
+					}
 				);
 				// ω-comprehension-count idempotence: a `for`/`while` array comprehension
 				// self-lays-out (the writer re-emits a wide one as `[` then a newline then `for…`). The non-

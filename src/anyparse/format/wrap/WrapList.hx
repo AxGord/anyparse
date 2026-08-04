@@ -8,6 +8,150 @@ import anyparse.format.WriteOptions;
 using Lambda;
 
 /**
+ * The optional axes of `WrapList.emit` — everything past the list's own identity
+ * (delimiters, separator, item Docs, `WriteOptions`, inside padding, rule set). Each field
+ * is optional and each omission is the plain cascade with no decoration, so omitting the
+ * whole argument is the undecorated list.
+ *
+ * Defaults are resolved ONCE, in `emit`'s prologue. Two fields need reading with care
+ * there. `forceMode` keeps null past the prologue, because null is its MEANINGFUL state —
+ * "run the cascade". `trailBreak` does NOT: null and omitted collapse together into the
+ * legacy `Line('\n')` close, and the value that means something is `Empty` (a glued
+ * close), which is why it is a field rather than a `Bool`.
+ */
+typedef WrapListOptions = {
+
+	/** Emit the separator after the final item in break-mode shapes. Default `false`. */
+	var ?appendTrailingComma: Bool;
+
+	/**
+	 * Doc prepended INSIDE the engine's `Group(IfBreak(brk, flat))` on the FLAT side, so a
+	 * per-construct decoration (typically a leftCurly placement: hardline for Allman, Empty
+	 * for cuddled) tracks the wrap engine's flat/break decision. When the cascade collapses
+	 * to a single mode (no Group wrap), the lead is selected via `isFlatMode`. Default
+	 * `Empty` — an omitting caller sees no decoration. ω-objectlit-leftCurly-cascade — first
+	 * consumer is `triviaSepStarExpr` for `HxObjectLit.fields` knob-form leftCurly.
+	 */
+	var ?leadFlat: Doc;
+
+	/** The `leadFlat` counterpart on the BREAK side of the same `IfBreak`. Default `Empty`. */
+	var ?leadBreak: Doc;
+
+	/**
+	 * Replace both cascade evaluations (`exceeds=false` and `exceeds=true`) with a single
+	 * `exceeds=true` decide call, so the engine commits unconditionally to the break-mode
+	 * shape (typically `OnePerLine` for default cascades). Used by sep-Stars whose source
+	 * carried a trailing separator AND whose `@:fmt(trailingComma(...))` knob is on — the
+	 * trailing sep is an explicit "stay multi-line" hint even when item widths would
+	 * otherwise collapse the list flat. Default `false`. ω-objectlit-source-trail-comma —
+	 * first consumer is `HxObjectLit.fields`.
+	 */
+	var ?forceExceeds: Bool;
+
+	/**
+	 * The Doc emitted immediately before `Text(close)` in the `OnePerLine` shape. Omitted
+	 * (null) means `Line('\n')` — the legacy hardcoded close-on-own-line layout — so an
+	 * omitting caller stays byte-identical. Per-construct `RightCurlyPlacement` knobs pass
+	 * `Empty` for `Inline` (close glued to the last body token) or `Line('\n')` for `Same`;
+	 * `Empty` is therefore a REAL value here, distinct from omission. Mirrors the trivia
+	 * branch's `triviaTrailDoc` in `WriterLowering.triviaSepStarExpr` so the wrap-engine and
+	 * trivia paths honour the same `RightCurlyPlacement.{Inline,Same}` semantic. Honoured by
+	 * `shapeOnePerLine` only — `OnePerLineAfterFirst` / `FillLine` glue the close by mode
+	 * design and have no Inline-vs-Same axis to express. ω-wraplist-trailbreakdoc — first
+	 * consumers are `HxObjectLit.fields` and `HxType.Anon` via `triviaSepStarExpr`.
+	 */
+	var ?trailBreak: Doc;
+
+	/**
+	 * A `WrapMode` override that bypasses the cascade and forces a single mode regardless of
+	 * `evalAt(...)`. Omitted (null) runs the cascade normally; a value short-circuits both
+	 * the `exceeds=false` and `exceeds=true` evaluations to it AND skips extra-threshold
+	 * enumeration, so the renderer commits unconditionally to one shape (no `IfBreak` wrap
+	 * needed). Used by `@:fmt(forceMultiInTypedef)` on typedef-RHS anon types to thread
+	 * `WrapMode.OnePerLine` when `opt._inTypedefBody` holds, matching the fork's
+	 * `MarkLineEnds.markTypedef` parent-walk forcing the `=\n{\n\t...\n}` shape regardless of
+	 * field count or fit. ω-typedef-anon-force-multi.
+	 */
+	var ?forceMode: WrapMode;
+
+	/** Charge the continuation indent compactly (body-aware Stars). Default `false`. */
+	var ?compactContinuation: Bool;
+
+	/**
+	 * Charge the same-line tail after the close delimiter (the `;` of `= [ … ];`) to the
+	 * zero-threshold fit probe, so the list does not commit flat one column past the limit.
+	 * Default `false`.
+	 */
+	var ?groupRestProbe: Bool;
+
+	/**
+	 * Per-element `Bool` array, length-aligned with `items`. When `flags[i]` is true the
+	 * engine SKIPS the separator that would otherwise land between `items[i-1]` and
+	 * `items[i]` — used by sep-Stars whose source omits a comma at a specific inter-element
+	 * slot (canonical case: a `Conditional` (`#if`/`#end`) ctor inside `HxFnDecl.params`
+	 * where the source elides the outer comma in favour of the cond-comp block's own leading
+	 * sep). `flags[0]` is unused (no element precedes item 0), and any out-of-bounds index or
+	 * an omitted array treats every slot as sep-emitting — flag-less consumers stay
+	 * byte-identical. The trailing-comma decision stays on the `appendTrailingComma` axis.
+	 * Honoured by `shapeNoWrap`, `shapeOnePerLine`, `shapeOnePerLineAfterFirst` and
+	 * `shapeFillLine` at chunk boundaries; `shapeFillLineWithLeadingBreak`'s
+	 * `Fill(items, softSep)` packing keeps the legacy uniform softSep. First consumer is
+	 * `HxFnDecl.params` via the wrap-rules (`ignoreSourceNewlinesForWrap`) no-trivia branch
+	 * in `triviaSepStarExpr`.
+	 */
+	var ?sepBeforeFlags: Array<Bool>;
+
+	/** The source had this list broken across lines and the cascade must floor to a break mode. Default `false`. */
+	var ?sourceMultilineKeep: Bool;
+
+	/** Per-element `Bool` array marking the elements the SOURCE placed a break before. Omitted = no source breaks recorded. */
+	var ?sourceBreakBefore: Array<Bool>;
+
+	/**
+	 * ω-keep-callclose-newline: when the SOLE call-arg is a Keep-mode method chain whose
+	 * source had NO newline before the outer close `)` (the chain glued the close —
+	 * `})));`), keep the close glued instead of routing through `shapeFillLine`'s
+	 * `isChainOPLBreak` close-on-own-line break. Set only by
+	 * `WriterLowering.lowerPostfixStar` when the Call ctor's `methodChain` rules are `Keep`
+	 * and the parser's `argsCloseNewline` slot is false. Default `false` → every non-keep /
+	 * source-broke caller keeps the legacy chain-OPL close placement, so the axis is
+	 * byte-inert.
+	 */
+	var ?keepCloseGlued: Bool;
+
+	/**
+	 * ω-nowrap-source-trail-comma: source-only trailing-comma signal forwarded to the flat
+	 * (`NoWrap`) shape. The writer passes `<field>TrailPresent` here (NOT the
+	 * `trailPresent || knob` value of `appendTrailingComma`), so a single-line list preserves
+	 * its source `,` while the knob still only drives break-mode. Default `false` → every
+	 * other caller stays byte-identical.
+	 */
+	var ?flatTrailingComma: Bool;
+
+	/**
+	 * ω-comprehension-fit-measure: this list is a `for`/`while` array comprehension resolved
+	 * through the fit cascade (`HaxeFormat.defaultComprehensionWrap`), whose ONLY rule is
+	 * `exceedsMaxLineLength` — a pure WIDTH question, so anything a static measure cannot see
+	 * is a wrong answer rather than a rounding error. Set by `WriterLowering`'s sep-Star emit
+	 * when `_comprehensionFit` holds. TWO consumers, both about that width:
+	 *
+	 *  - the `groupifyInlineBodies` pass in `emit` — a generator body parked behind a
+	 *    `BodyGroup` (a filter `if`'s then-branch under `sameLine.ifBody: fitLine`) is
+	 *    deferred to width 0, so the item under-measures and the bracket never opens;
+	 *  - the `groupRestProbe` argument of `emitZeroThreshold` — the fit decision must also
+	 *    charge the same-line tail after `]` (the `;` of `= [ … ];`), or the bracket holds
+	 *    one column past the limit.
+	 *
+	 * Honoured on the zero-threshold path ONLY. `emitOneThreshold`, `buildThresholdTree` and
+	 * the `anyHardline || forceExceeds` path ignore it — unreachable today because
+	 * `defaultComprehensionWrap` carries no `LineLengthLargerThan` rule, so `extraThresholds`
+	 * is always empty; a cascade rule added there would silently drop the rest probe.
+	 */
+	var ?comprehensionFitMeasure: Bool;
+
+}
+
+/**
  * Runtime helper that emits a `Doc` for a delimited list whose layout
  * is driven by a `WrapRules` cascade.
  *
@@ -34,116 +178,36 @@ using Lambda;
 class WrapList {
 
 	/**
-	 * `leadFlat` / `leadBreak`: optional Docs prepended INSIDE the
-	 * engine's `Group(IfBreak(brk, flat))` so a per-construct decoration
-	 * (typically a leftCurly placement: hardline for Allman / Empty for
-	 * cuddled) tracks the wrap engine's flat/break decision. When the
-	 * cascade collapses to a single mode (no Group wrap), the
-	 * appropriate lead is selected via `isFlatMode`. Defaults to
-	 * `Empty`/`Empty` — default-passing callers see no behavioural change. ω-objectlit-leftCurly-cascade — first consumer is
-	 * `triviaSepStarExpr` for `HxObjectLit.fields` knob-form leftCurly.
-	 *
-	 * `forceExceeds`: when `true`, both cascade evaluations
-	 * (`exceeds=false` and `exceeds=true`) are replaced with a single
-	 * `exceeds=true` decide call so the engine commits unconditionally
-	 * to the break-mode shape (typically `OnePerLine` for default
-	 * cascades). Used by sep-Stars whose source carried a trailing
-	 * separator AND whose `@:fmt(trailingComma(...))` knob is on — the
-	 * trailing-sep is treated as an explicit "stay multi-line" hint
-	 * even when item widths would otherwise collapse the list flat.
-	 * ω-objectlit-source-trail-comma — first consumer is
-	 * `HxObjectLit.fields`.
-	 *
-	 * `trailBreak`: the Doc emitted immediately before `Text(close)` in
-	 * the `OnePerLine` shape. Null defaults to `Line('\n')` — the
-	 * legacy hardcoded close-on-own-line layout — so null-passing callers stay byte-identical. Per-construct `RightCurlyPlacement` knobs
-	 * pass `Empty` for `Inline` (close glued to last body token) or
-	 * `Line('\n')` for `Same`. Mirrors the trivia branch's
-	 * `triviaTrailDoc` in `WriterLowering.triviaSepStarExpr` so wrap-
-	 * engine and trivia paths honour the same
-	 * `RightCurlyPlacement.{Inline,Same}` semantic. Honoured by
-	 * `shapeOnePerLine` only — `OnePerLineAfterFirst` / `FillLine` glue
-	 * close by mode design and have no Inline-vs-Same axis to express.
-	 * ω-wraplist-trailbreakdoc — first consumers are
-	 * `HxObjectLit.fields` and `HxType.Anon` via `triviaSepStarExpr`.
-	 *
-	 * `forceMode`: optional `WrapMode` override that bypasses the
-	 * cascade and forces a single mode regardless of `evalAt(...)`.
-	 * `null` (default) — the cascade runs normally. Non-null short-circuits both `exceeds=false` and
-	 * `exceeds=true` evaluations to the supplied mode AND skips
-	 * extra-threshold enumeration, so the renderer commits
-	 * unconditionally to one shape (no `IfBreak` wrapping needed).
-	 * Used by `@:fmt(forceMultiInTypedef)` on typedef-RHS anon types
-	 * to thread `WrapMode.OnePerLine` when `opt._inTypedefBody=true`,
-	 * matching fork's `MarkLineEnds.markTypedef` parent-walk forcing
-	 * `=\n{\n\t...\n}` shape regardless of field count or fit. ω-typedef-anon-force-multi.
-	 *
-	 * `sepBeforeFlags`: optional per-element `Bool` array, length-aligned
-	 * with `items`. When `flags[i] == true`, the engine SKIPS the
-	 * separator that would otherwise land between `items[i-1]` and
-	 * `items[i]` — used by sep-Stars whose source omits a comma at a
-	 * specific inter-element slot (canonical case: a `Conditional`
-	 * (`#if`/`#end`) ctor inside `HxFnDecl.params` where the source
-	 * elides the outer comma in favour of the cond-comp block's own
-	 * leading sep). `flags[0]` is unused (no element precedes item 0)
-	 * and any out-of-bounds / null treats every slot as sep-emitting,
-	 * keeping flag-less consumers byte-identical. The trailing-comma
-	 * decision stays on the existing `appendTrailingComma` axis.
-	 * Honoured by `shapeNoWrap`, `shapeOnePerLine`,
-	 * `shapeOnePerLineAfterFirst`, and `shapeFillLine` at chunk
-	 * boundaries; `shapeFillLineWithLeadingBreak`'s `Fill(items,
-	 * softSep)` packing keeps the legacy uniform softSep. First consumer is `HxFnDecl.params` via the wrap-rules
-	 * (`ignoreSourceNewlinesForWrap`) no-trivia branch in
-	 * `triviaSepStarExpr`.
+	 * Emit the `Doc` for one delimited list. The positional arguments are the list's
+	 * IDENTITY — its delimiters and separator, the per-item Docs, the resolved
+	 * `WriteOptions`, the inside-delimiter padding and the rule set — and every one of
+	 * them is passed at every call site. Every OPTIONAL axis lives on `options`
+	 * (`WrapListOptions`), where each field carries its own contract; omitting the
+	 * argument entirely is the default cascade with no decoration.
 	 */
 	public static function emit(
 		open: String, close: String, sep: String, items: Array<Doc>, opt: WriteOptions, openInside: Doc, closeInside: Doc,
-		keepInnerWhenEmpty: Bool, rules: WrapRules, appendTrailingComma: Bool = false, leadFlat: Doc = Empty, leadBreak: Doc = Empty,
-		forceExceeds: Bool = false, ?trailBreak: Doc, ?forceMode: Null<WrapMode>, compactContinuation: Bool = false,
-		groupRestProbe: Bool = false, ?sepBeforeFlags: Array<Bool>, sourceMultilineKeep: Bool = false, ?sourceBreakBefore: Array<Bool>,
-		// ω-keep-callclose-newline: when the SOLE call-arg is a Keep-mode method
-		// chain whose source had NO newline before the outer close `)` (the chain
-		// glued the close — `})));`), keep the close glued instead of routing
-		// through `shapeFillLine`'s `isChainOPLBreak` close-on-own-line break. Set
-		// only by `WriterLowering.lowerPostfixStar` when the Call ctor's
-		// `methodChain` rules are `Keep` and the parser's `argsCloseNewline` slot
-		// is false. Default `false` → every non-keep / source-broke caller keeps
-		// the legacy chain-OPL close placement, so the change is byte-inert.
-		keepCloseGlued: Bool = false,
-		// ω-nowrap-source-trail-comma: source-only trailing-comma signal forwarded
-		// to the flat (`NoWrap`) shape. The writer passes `<field>TrailPresent`
-		// here (NOT the `trailPresent || knob` value of `appendTrailingComma`), so
-		// a single-line list preserves its source `,` while the knob still only
-		// drives break-mode. Default `false` → every other caller stays byte-
-		// identical.
-		flatTrailingComma: Bool = false,
-		// ω-comprehension-fit-measure: this list is a `for`/`while` array
-		// comprehension resolved through the fit cascade
-		// (`HaxeFormat.defaultComprehensionWrap`), whose ONLY rule is
-		// `exceedsMaxLineLength` — a pure WIDTH question, so anything a static
-		// measure cannot see is a wrong answer rather than a rounding error.
-		// Set by `WriterLowering`'s sep-Star emit when `_comprehensionFit`
-		// holds. TWO consumers, both about that width:
-		//
-		//  - the `groupifyInlineBodies` pass below — a generator body parked
-		//    behind a `BodyGroup` (a filter `if`'s then-branch under
-		//    `sameLine.ifBody: fitLine`) is deferred to width 0, so the item
-		//    under-measures and the bracket never opens;
-		//  - the `groupRestProbe` argument of `emitZeroThreshold` — the fit
-		//    decision must also charge the same-line tail after `]` (the `;`
-		//    of `= [ … ];`), or the bracket holds one column past the limit.
-		//
-		// Honoured on the zero-threshold path ONLY. `emitOneThreshold`,
-		// `buildThresholdTree` and the `anyHardline || forceExceeds` path
-		// ignore it — unreachable today because `defaultComprehensionWrap`
-		// carries no `LineLengthLargerThan` rule, so `extraThresholds` is
-		// always empty; a cascade rule added there would silently drop the
-		// rest probe.
-		comprehensionFitMeasure: Bool = false
+		keepInnerWhenEmpty: Bool, rules: WrapRules, ?options: WrapListOptions
 	): Doc {
-		// `Line('\n')` is not a Haxe-constant default — unwrap a null
-		// sentinel into the legacy hardcoded hardline here.
-		final trailBreakDoc: Doc = trailBreak ?? Line('\n');
+		// Resolve every optional axis ONCE, into locals the body then reads as plain
+		// values. `forceMode` alone stays nullable: null is its meaningful state.
+		final axes: WrapListOptions = options ?? {};
+		final appendTrailingComma: Bool = axes.appendTrailingComma ?? false;
+		final leadFlat: Doc = axes.leadFlat ?? Empty;
+		final leadBreak: Doc = axes.leadBreak ?? Empty;
+		final forceExceeds: Bool = axes.forceExceeds ?? false;
+		final forceMode: Null<WrapMode> = axes.forceMode;
+		final compactContinuation: Bool = axes.compactContinuation ?? false;
+		final groupRestProbe: Bool = axes.groupRestProbe ?? false;
+		final sepBeforeFlags: Null<Array<Bool>> = axes.sepBeforeFlags;
+		final sourceMultilineKeep: Bool = axes.sourceMultilineKeep ?? false;
+		final sourceBreakBefore: Null<Array<Bool>> = axes.sourceBreakBefore;
+		final keepCloseGlued: Bool = axes.keepCloseGlued ?? false;
+		final flatTrailingComma: Bool = axes.flatTrailingComma ?? false;
+		final comprehensionFitMeasure: Bool = axes.comprehensionFitMeasure ?? false;
+		// `Line('\n')` is not a Haxe-constant default — unwrap the absent
+		// case into the legacy hardcoded hardline here.
+		final trailBreakDoc: Doc = axes.trailBreak ?? Line('\n');
 		if (items.length == 0) return WrapBoundary(Text(open + (keepInnerWhenEmpty ? ' ' : '') + close));
 
 		// ω-arrowif-open: a call/array arg whose body is a PLAIN `if` (no else,

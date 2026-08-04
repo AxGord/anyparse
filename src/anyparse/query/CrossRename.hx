@@ -264,8 +264,7 @@ final class CrossRename {
 	private static function importSegmentOffset(source: String, span: Span, pathName: Null<String>, typeName: String): Int {
 		if (pathName == null) return -1;
 		final lastDot: Int = pathName.lastIndexOf('.');
-		final lastSegment: String = lastDot < 0 ? pathName : pathName.substr(lastDot + 1);
-		if (lastSegment != typeName) return -1;
+		if (RefactorSupport.lastSegment(pathName) != typeName) return -1;
 		final pathStart: Int = source.indexOf(pathName, span.from);
 		return pathStart < 0 || pathStart >= span.to ? -1 : pathStart + lastDot + 1;
 	}
