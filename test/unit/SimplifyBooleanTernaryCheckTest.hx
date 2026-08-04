@@ -122,14 +122,62 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 		Assert.equals(0, violations('return p ? true : c;').length);
 	}
 
+	/**
+	 * THE FLAGSHIP REGRESSION: a `String`-typed ordered comparison keeps its `!( … )` wrap.
+	 * Before this rule threaded a type resolver it flipped ordered comparisons UNCONDITIONALLY,
+	 * so `(s < t) ? false : a && b` became `s >= t && a && b` — and with `s = null` the original
+	 * yields `true` while the rewrite yields `false` (measured on `--interp` and `js`, Haxe
+	 * 4.3.7). Haxe has no non-nullable string type, so a `String` declaration proves nothing
+	 * about null and the flip is never licensed.
+	 */
+	public function testStringOrderedComparisonKeepsWrap(): Void {
+		Assert.equals('!(s < t) && x > 0', simplifyOf('return s < t ? false : x > 0;'));
+	}
+
+	/** Same licence in the `cond ? x : true` arm — the other form that negates the condition. */
+	public function testStringOrderedComparisonKeepsWrapInOrArm(): Void {
+		Assert.equals('!(s < t) || x > 0', simplifyOf('return s < t ? x > 0 : true;'));
+	}
+
+	/** And in the pure-literal `cond ? false : true` arm, whose whole output IS the negation. */
+	public function testStringOrderedComparisonKeepsWrapInPureArm(): Void {
+		Assert.equals('!(s < t)', simplifyOf('return s < t ? false : true;'));
+	}
+
+	/**
+	 * A `Float` operand is refused for the other reason the flip can break: `!(y < 0.5)` is
+	 * `true` for a NaN `y` where `y >= 0.5` is `false`. The unconditional mode got this wrong
+	 * too — the `String` repro is just the one a reviewer reproduced first.
+	 */
+	public function testFloatOrderedComparisonKeepsWrap(): Void {
+		Assert.equals('!(y < 0.5) && x > 0', simplifyOf('return y < 0.5 ? false : x > 0;'));
+	}
+
+	/**
+	 * PIN (not a discrimination test): an `Int` operand is totally ordered by `<`, so the flip
+	 * is licensed and the output is byte-identical to what the unconditional mode emitted. This
+	 * passes with the change reverted — that is the point: it pins the promise that proven-Int
+	 * shapes did not move.
+	 */
+	public function testIntOrderedComparisonStillFlips(): Void {
+		Assert.equals('x >= 0 && x > 0', simplifyOf('return x < 0 ? false : x > 0;'));
+	}
+
+	/** A non-ordered `==` flips regardless of the operand type — NaN and null agree with the wrap. */
+	public function testStringEqualityStillFlips(): Void {
+		Assert.equals('s != t && x > 0', simplifyOf('return s == t ? false : x > 0;'));
+	}
+
 	private function violations(body: String): Array<Violation> {
-		final src: String = 'class C { static function f(a: Int, b: Int, c: Bool, p: Bool, x: Int): Dynamic ${body} }';
+		final src: String =
+			'class C { static function f(a: Int, b: Int, c: Bool, p: Bool, x: Int, s: String, t: String, y: Float): Dynamic ${body} }';
 		return new SimplifyBooleanTernary().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
 	/** The rewrite text the fix emits for the first ternary in `body` (empty if none). */
 	private function simplifyOf(body: String): String {
-		final src: String = 'class C { static function f(a: Int, b: Int, c: Bool, p: Bool, x: Int): Dynamic ${body} }';
+		final src: String =
+			'class C { static function f(a: Int, b: Int, c: Bool, p: Bool, x: Int, s: String, t: String, y: Float): Dynamic ${body} }';
 		final check: SimplifyBooleanTernary = new SimplifyBooleanTernary();
 		final edits: Array<{ span: Span, text: String }> = check.fix(
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()

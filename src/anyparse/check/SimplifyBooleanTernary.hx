@@ -60,12 +60,16 @@ final class SimplifyBooleanTernary implements Check {
 	): Array<{ span: Span, text: String }> {
 		final ternaryKind: Null<String> = plugin.refShape().ternaryKind;
 		final support: Null<BooleanLogicSupport> = plugin.booleanLogicSupport();
-		if (ternaryKind == null || support == null) return [];
+		if (ternaryKind == null || support == null || violations.length == 0) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 
 		final nodeBySpan: Map<String, QueryNode> = [];
 		indexTernaries(tree, ternaryKind, nodeBySpan);
+		// The type probe licenses the ordered-comparison FLIP inside a negated condition
+		// (`(x < 0) ? false : p` -> `x >= 0 && p` for an `Int` x); without it the negation
+		// keeps the sound `!(x < 0)` wrap. `run` deliberately builds none — see `walk`.
+		final types: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(source, plugin, tree, violations[0].file, index);
 
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
@@ -73,14 +77,21 @@ final class SimplifyBooleanTernary implements Check {
 			if (span == null) continue;
 			final node: Null<QueryNode> = nodeBySpan['${span.from}:${span.to}'];
 			if (node == null) continue;
-			final replacement: Null<String> = support.simplifyBooleanTernary(node, source);
+			final replacement: Null<String> = support.simplifyBooleanTernary(node, source, types);
 			if (replacement == null) continue;
 			edits.push({ span: span, text: replacement });
 		}
 		return edits;
 	}
 
-	/** Walk `node`, flagging each ternary the seam can reduce, except a null-narrowing-guarded one. */
+	/**
+	 * Walk `node`, flagging each ternary the seam can reduce, except a null-narrowing-guarded one.
+	 *
+	 * No type resolver is passed: the probe only decides whether a negated ordered comparison
+	 * FLIPS or stays wrapped, never whether the seam can reduce at all, so the yes/no answer
+	 * this pass needs is resolver-independent — and building one walks the whole resolution
+	 * scope per file. `fix` builds it, since only `fix` consumes the text.
+	 */
 	private static function walk(
 		out: Array<Violation>, file: String, source: String, node: QueryNode, ternaryKind: String, support: BooleanLogicSupport,
 		shape: RefShape
