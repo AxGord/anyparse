@@ -39,6 +39,37 @@ class EmptyCommentCheckTest extends Test {
 		Assert.equals(0, violations('class C {\n\t//--------\n}').length);
 	}
 
+	/**
+	 * A bare `//` between two comment-only lines is the blank line of a prose block, so it
+	 * is kept and its `fix` is a no-op — deleting it would merge two paragraphs.
+	 */
+	public function testParagraphSeparatorKept(): Void {
+		final src: String = 'class C {\n\t// first paragraph\n\t//\n\t// second paragraph\n}';
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/**
+	 * The gate's four boundaries, each still FLAGGED — every clause of
+	 * `isParagraphSeparator` is a positive requirement, so exactly one broken clause per
+	 * case discriminates:
+	 *  - head of a run (nothing above to separate from);
+	 *  - tail of a run (nothing below);
+	 *  - a neighbour sharing its line with code (not a prose block);
+	 *  - a neighbour a blank line away (the blank already separates).
+	 */
+	public function testParagraphSeparatorBoundariesStillFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\t//\n\t// below only\n}').length);
+		Assert.equals(1, violations('class C {\n\t// above only\n\t//\n}').length);
+		Assert.equals(1, violations('class C {\n\tvar x:Int = 0; // above\n\t//\n\t// below\n}').length);
+		Assert.equals(1, violations('class C {\n\t// above\n\n\t//\n\t// below\n}').length);
+	}
+
+	/** A block comment is not a `//` prose block: it carries its own paragraph breaks, so a bare `//` beside one is still noise. */
+	public function testSeparatorBetweenBlockCommentsFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\t/* above */\n\t//\n\t/* below */\n}').length);
+	}
+
 	public function testNoqaDirectiveKept(): Void {
 		Assert.equals(0, violations('class C {\n\tvar x:Int = 0; // noqa\n}').length);
 	}

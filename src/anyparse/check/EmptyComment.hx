@@ -6,12 +6,19 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+/** One comment token as `RefactorSupport.collectCommentTokens` yields it: its span, and whether it is a `//` line comment. */
+private typedef CommentToken = {
+	var from: Int;
+	var to: Int;
+	var isLine: Bool;
+}
 /**
  * Flags a content-free comment — a line comment with only whitespace after the
  * slashes, an empty block comment, or an empty doc comment (including a multi-line
  * one whose interior is only stars and whitespace). Deliberate divider runs (dashed
- * rules), directive comments (noqa), and any printable content are kept;
- * conditional-compilation lines are not comments and never match. `Warning`.
+ * rules), directive comments (noqa), PARAGRAPH SEPARATORS (below), and any printable
+ * content are kept; conditional-compilation lines are not comments and never match.
+ * `Warning`.
  *
  * ## Detection
  *
@@ -20,6 +27,27 @@ import anyparse.runtime.Span;
  * line comment is empty when every unit after the slashes is whitespace; a block or
  * doc comment when it is closed and its interior between the delimiters is only
  * whitespace and stars.
+ *
+ * ## The paragraph separator — content-free, and NOT noise
+ *
+ * A bare `//` on its own line, with a comment-only line directly above it and another
+ * directly below, is the blank line of a `//` prose block. It carries no characters and
+ * every content test calls it empty, but deleting it MERGES two paragraphs — a change to
+ * what the comment SAYS, not a cleanup. It is kept, for the same reason a dashed divider
+ * run is: the emptiness is the point.
+ *
+ * That is not a marginal shape. Measured over this repository's own 636 files, ALL 136
+ * findings the rule produced without this gate were paragraph separators and none was
+ * stray noise — an autofix would have silently reflowed 136 prose blocks. (The reference
+ * project reports none either way; it writes its multi-paragraph prose as doc comments,
+ * whose interiors this rule never inspects.)
+ *
+ * The criterion is positive and purely lexical: the empty comment and BOTH neighbours are
+ * line comments, each alone on its line, on three CONSECUTIVE lines. A bare `//` at the
+ * head or tail of a run has nothing on one side to separate and stays flagged — that one
+ * is padding. So does one whose neighbour shares its line with code, or is a block
+ * comment (a block carries its paragraph breaks inside itself), or sits a blank line away
+ * (the blank already separates).
  *
  * ## Fix
  *
@@ -59,9 +87,10 @@ final class EmptyComment implements Check {
 		return edits;
 	}
 
-	/** Scan every comment token in `source`, flagging each content-free one. */
+	/** Scan every comment token in `source`, flagging each content-free one that is not a paragraph separator. */
 	private static function scan(out: Array<Violation>, file: String, source: String): Void {
-		for (tok in RefactorSupport.collectCommentTokens(source)) if (isEmpty(source, tok)) out.push({
+		final toks: Array<CommentToken> = RefactorSupport.collectCommentTokens(source);
+		for (i => tok in toks) if (isEmpty(source, tok) && !isParagraphSeparator(source, toks, i)) out.push({
 			file: file,
 			span: new Span(tok.from, tok.to),
 			rule: 'empty-comment',
@@ -71,12 +100,57 @@ final class EmptyComment implements Check {
 	}
 
 	/**
+	 * Whether the empty comment at `toks[i]` is a paragraph separator inside a `//` prose
+	 * block — see the class doc for why such a comment is kept.
+	 *
+	 * Every clause is a positive requirement, so an unlisted shape fails by construction:
+	 * this token and both its NEIGHBOURS in the comment stream are LINE comments, each
+	 * alone on its line, and the three sit on consecutive lines. Neighbours are read from
+	 * the token stream rather than the raw text, so a slash-slash inside a string literal
+	 * can never stand in for one (`collectCommentTokens` is string-aware).
+	 */
+	private static function isParagraphSeparator(source: String, toks: Array<CommentToken>, i: Int): Bool {
+		if (i == 0 || i + 1 >= toks.length) return false;
+		final tok: CommentToken = toks[i];
+		final prev: CommentToken = toks[i - 1];
+		final next: CommentToken = toks[i + 1];
+		if (!tok.isLine || !prev.isLine || !next.isLine) return false;
+		return aloneOnLine(source, tok.from) && aloneOnLine(source, prev.from) && aloneOnLine(source, next.from)
+			&& oneLineApart(source, prev.to, tok.from) && oneLineApart(source, tok.to, next.from);
+	}
+
+	/** Whether only whitespace separates `from` from the start of its line — the comment opens the line. */
+	private static function aloneOnLine(source: String, from: Int): Bool {
+		var i: Int = from;
+		while (i > 0) {
+			final c: Int = StringTools.fastCodeAt(source, i - 1);
+			if (c == '\n'.code) return true;
+			if (c != ' '.code && c != '\t'.code && c != '\r'.code) return false;
+			i--;
+		}
+		return true;
+	}
+
+	/** Whether `[from, to)` is whitespace holding EXACTLY one newline — the two tokens sit on consecutive lines. */
+	private static function oneLineApart(source: String, from: Int, to: Int): Bool {
+		var newlines: Int = 0;
+		for (i in from...to) {
+			final c: Int = StringTools.fastCodeAt(source, i);
+			if (c == '\n'.code)
+				newlines++
+			else if (!isWs(c))
+				return false;
+		}
+		return newlines == 1;
+	}
+
+	/**
 	 * Whether the comment token is content-free: a line comment with only whitespace
 	 * after the slashes, or a closed block/doc comment whose interior between the
 	 * delimiters is only whitespace and stars (doc gutters). An unclosed block comment
 	 * is never treated as empty.
 	 */
-	private static function isEmpty(source: String, tok: { from: Int, to: Int, isLine: Bool }): Bool {
+	private static function isEmpty(source: String, tok: CommentToken): Bool {
 		if (!tok.isLine) return RefactorSupport.blockCommentIsBlank(source, tok);
 		for (i in tok.from + 2...tok.to) if (!isWs(StringTools.fastCodeAt(source, i))) return false;
 		return true;
