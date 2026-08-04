@@ -24,8 +24,16 @@ interface BooleanLogicSupport {
 	 * boolean literal (nothing to simplify), when both branches are the SAME
 	 * literal (collapsing would drop `cond`'s evaluation), or when the node is not
 	 * a well-formed ternary. `source` is the file text the node's spans index into.
+	 *
+	 * `typeNominalOf` is the same operand-type probe `negateCondition` takes, and it
+	 * governs the same one thing: whether negating the condition may FLIP an ordered
+	 * comparison (`!(a < b)` -> `a >= b`) or must keep it wrapped. Omit it — or return
+	 * null — and every ordered comparison in the condition keeps the verbatim wrap,
+	 * which is the sound form for an operand that may be a NaN or a `null`. It never
+	 * changes WHETHER a ternary reduces, only the text of the reduction, so a caller
+	 * that only needs the yes/no answer (a check's `run` pass) can skip building it.
 	 */
-	public function simplifyBooleanTernary(ternary: QueryNode, source: String): Null<String>;
+	public function simplifyBooleanTernary(ternary: QueryNode, source: String, ?typeNominalOf: (QueryNode) -> Null<String>): Null<String>;
 
 	/**
 	 * The flat boolean expression equivalent to a boolean guard chain
@@ -37,9 +45,15 @@ interface BooleanLogicSupport {
 	 * the node spans. Each `cond_i` is an `if` condition — non-null `Bool` under strict
 	 * null-safety, since the source compiles — so joining them with `&&` / `||` is
 	 * sound; conditions are kept verbatim, preserving any `== true` null-safety idiom.
+	 *
+	 * `typeNominalOf` is the same operand-type probe `negateCondition` takes: it licenses
+	 * the ordered-comparison FLIP (`!(a < b)` -> `a >= b`) inside a negated condition, and
+	 * without it every ordered comparison keeps the sound verbatim wrap. Like
+	 * `simplifyBooleanTernary`'s, it never changes WHETHER the chain reduces — only the
+	 * text — so a caller that only needs the yes/no answer can skip building it.
 	 */
 	public function reduceBooleanGuardChain(
-		conds: Array<QueryNode>, lits: Array<QueryNode>, finalLit: QueryNode, source: String
+		conds: Array<QueryNode>, lits: Array<QueryNode>, finalLit: QueryNode, source: String, ?typeNominalOf: (QueryNode) -> Null<String>
 	): Null<String>;
 
 	/**

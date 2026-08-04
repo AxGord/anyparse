@@ -71,24 +71,35 @@ final class SimplifyBooleanReturnChain implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final ctx: Null<Ctx> = context(plugin);
-		if (ctx == null) return [];
+		if (ctx == null || violations.length == 0) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final bySpan: Map<String, Chain> = [];
 		for (chain in collectChains(tree, ctx)) bySpan['${chain.span.from}:${chain.span.to}'] = chain;
+		// The type probe licenses the ordered-comparison FLIP inside a negated guard condition
+		// (`if (x < 0) return false;` -> `x >= 0 && …` for an `Int` x); without it the negation
+		// keeps the sound `!(x < 0)` wrap. `run` builds none — see `reducible`.
+		final types: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(source, plugin, tree, violations[0].file, index);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
 			final chain: Null<Chain> = bySpan['${span.from}:${span.to}'];
 			if (chain == null) continue;
-			final expr: Null<String> = ctx.support.reduceBooleanGuardChain(chain.conds, chain.lits, chain.finalLit, source);
+			final expr: Null<String> = ctx.support.reduceBooleanGuardChain(chain.conds, chain.lits, chain.finalLit, source, types);
 			if (expr != null) edits.push({ span: span, text: 'return $expr;' });
 		}
 		return edits;
 	}
 
-	/** Whether the seam can reduce `chain` without dropping a condition's evaluation. */
+	/**
+	 * Whether the seam can reduce `chain` without dropping a condition's evaluation.
+	 *
+	 * No type resolver is passed, and none is needed: the probe only decides whether a negated
+	 * ordered comparison FLIPS or stays wrapped, never whether the chain reduces at all (no
+	 * `return null` path in `reduceBooleanGuardChain` consults the negation), so this gate's answer
+	 * is resolver-independent. `fix` builds it, since only `fix` consumes the text.
+	 */
 	private static function reducible(chain: Chain, source: String, c: Ctx): Bool {
 		return c.support.reduceBooleanGuardChain(chain.conds, chain.lits, chain.finalLit, source) != null;
 	}
