@@ -442,10 +442,9 @@ final class CheckScan {
 		return false;
 	}
 
-	/** The last dot-segment of a module path — the name a call site spells (`utils.TextUtil` -> `TextUtil`). */
+	/** The last dot-segment of a module path — the name a call site spells (`utils.TextUtil` -> `TextUtil`); `RefactorSupport.lastSegment` under a name that says which question the check layer is asking. */
 	public static inline function simpleModuleName(path: String): String {
-		final dot: Int = path.lastIndexOf('.');
-		return dot == -1 ? path : path.substring(dot + 1);
+		return RefactorSupport.lastSegment(path);
 	}
 
 	/** The module paths of every top-level `using` declaration in `tree` — the read side of `hasUsingModule`. */
