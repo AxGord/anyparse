@@ -503,6 +503,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			callKind: 'Call',
 			caseBranchKind: 'CaseBranch',
 			switchKinds: ['SwitchStmt', 'SwitchStmtBare', 'SwitchExpr', 'SwitchExprBare'],
+			// The two statement-position forms of the four above: a bare subject and a
+			// parenthesised one. Their arms need not be exhaustive, which is what a case
+			// guard's fall-through to the next pattern requires.
+			switchStatementKinds: ['SwitchStmt', 'SwitchStmtBare'],
 			parenKind: 'ParenExpr',
 			macroModifierKind: 'Macro',
 			boolLitKind: 'BoolLit',

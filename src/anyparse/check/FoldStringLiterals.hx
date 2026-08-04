@@ -638,10 +638,8 @@ final class FoldStringLiterals implements Check {
 	}
 
 	/** The column width of `source[from...to)`, counting a tab as `indentWidth` columns. */
-	private static function columnWidth(ctx: PlanContext, from: Int, to: Int): Int {
-		var cols: Int = 0;
-		for (i in from ... to) cols += StringTools.fastCodeAt(ctx.source, i) == '\t'.code ? ctx.metrics.indentWidth : 1;
-		return cols;
+	private static inline function columnWidth(ctx: PlanContext, from: Int, to: Int): Int {
+		return CheckScan.displayColumn(ctx.source, from, to, ctx.metrics.indentWidth);
 	}
 
 	/** Whether `code` is a space or a tab. */
@@ -706,10 +704,8 @@ final class FoldStringLiterals implements Check {
 	}
 
 	/** `line`'s width in columns, counting a tab as `indentWidth`. */
-	private static function displayWidth(line: String, indentWidth: Int): Int {
-		var cols: Int = 0;
-		for (i in 0...line.length) cols += StringTools.fastCodeAt(line, i) == '\t'.code ? indentWidth : 1;
-		return cols;
+	private static inline function displayWidth(line: String, indentWidth: Int): Int {
+		return CheckScan.displayColumn(line, 0, line.length, indentWidth);
 	}
 
 	/** The finding text, naming the direction the segmentation moves in. */

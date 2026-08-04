@@ -556,6 +556,8 @@ import unit.FixVerifierGroupTest;
 import unit.FixVerifierGroupE2ETest;
 import unit.HxChainOuterOperatorWrapSliceTest;
 import unit.HxOpAddChainOperatorFirstSliceTest;
+import unit.PreferCaseGuardCheckTest;
+import unit.PreferCaseGuardOracleE2ETest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1145,6 +1147,8 @@ class RunTests {
 		addCase(new HxCondDeclPrefixKeywordSliceTest());
 		addCase(new HxPpCondDottedSliceTest());
 		addCase(new CondBranchSplitTest());
+		addCase(new PreferCaseGuardCheckTest());
+		addCase(new PreferCaseGuardOracleE2ETest());
 		utest.ui.Report.create(runner);
 		runner.run();
 	}

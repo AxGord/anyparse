@@ -1476,6 +1476,18 @@ typedef RefShape = {
 	@:optional var switchKinds: Array<String>;
 
 	/**
+	 * STATEMENT-position `switch` kinds (Haxe `SwitchStmt` / `SwitchStmtBare`) — the
+	 * subset of `switchKinds` whose arms need not yield a value, so the arm list need
+	 * not be exhaustive. Mirrors the `ifStatementKinds` / `ifExpressionKinds` and
+	 * `tryStatementKinds` / `tryExpressionKinds` splits, and exists for the same
+	 * reason: a rewrite that is sound on a statement switch can break an expression
+	 * one. The `prefer-case-guard` check converts a case body into a case GUARD, and a
+	 * guard that evaluates false resumes matching — sound only where the arm list may
+	 * leave a value unmatched. Optional; unset makes that check a no-op.
+	 */
+	@:optional var switchStatementKinds: Array<String>;
+
+	/**
 	 * The unary-negation node kind (`Neg`) — a `-1` initializer parses as a negation
 	 * wrapping a non-negative literal (`Neg(IntLit 1)`). Lets `prefer-enum-abstract`
 	 * see a negative-literal constant (`X_UNKNOWN = -1`) as numeric. Optional; unset

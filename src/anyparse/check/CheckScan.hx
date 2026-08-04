@@ -910,6 +910,20 @@ final class CheckScan {
 		return close != -1 && close < annotationSpan.from;
 	}
 
+
+	/**
+	 * The display width of `source[from, to)` with tabs expanded to `indentWidth` -- the
+	 * column arithmetic every width-aware check needs. Pass a line's own `[lineStart, pos)`
+	 * for the column `pos` sits at, or `[0, line.length)` for a whole line's width.
+	 * Shared so `fold-adjacent-string-literals` and `prefer-case-guard` cannot drift on
+	 * what a tab is worth.
+	 */
+	public static function displayColumn(source: String, from: Int, to: Int, indentWidth: Int): Int {
+		var cols: Int = 0;
+		for (i in from ... to) cols += StringTools.fastCodeAt(source, i) == '\t'.code ? indentWidth : 1;
+		return cols;
+	}
+
 }
 
 /**
