@@ -18,18 +18,19 @@ import anyparse.runtime.Span;
  * preserved; the re-parse gate in the fix pipeline rejects anything malformed.
  *
  * `negateCondition` exposes that same engine to `guard-continue` / `loop-guard`,
- * but NaN-safe: an ordered comparison (`< <= > >=`) is kept wrapped `!(a < b)`
- * rather than flipped to `a >= b`, since the two differ under NaN — UNLESS the
- * caller passes a type resolver that proves BOTH operands non-floating-point,
- * which removes the one case they differ in and lets the flip through. `==` /
- * `!=` flip either way (NaN-equivalent).
+ * but ORDER-SAFE: an ordered comparison (`< <= > >=`) is kept wrapped `!(a < b)`
+ * rather than flipped to `a >= b`, since the two differ whenever an operand is a
+ * NaN or a `null` — UNLESS the caller passes a type resolver that proves BOTH
+ * operands drawn from a value set `<` orders totally (`TOTAL_ORDER_TYPES`), which
+ * removes both cases they differ in and lets the flip through. `==` / `!=` flip
+ * either way (equivalent under NaN and null alike).
  *
  * `simplifyNegatedCompound` runs that same engine over a `!( … )` node and offers the
  * result only when the unary-`!` count strictly falls. Two operand shapes reach it —
  * `negatedOperandOf` is the single test for both: a `&&` / `||` compound, which De Morgan
  * distributes (`!(!a || b)` -> `a && !b`), and a lone comparison, whose operator flips
- * (`!(x < 0)` -> `x >= 0` where the NaN gate licenses it, `!(a == b)` -> `a != b` always).
- * The one worth gate is what implements the NaN licence for the second arm: a flip costs no
+ * (`!(x < 0)` -> `x >= 0` where the order gate licenses it, `!(a == b)` -> `a != b` always).
+ * The one worth gate is what implements the order licence for the second arm: a flip costs no
  * `!`, a declined flip costs one, and the wrap it would emit is the input verbatim.
  *
  * The ternary / guard-chain reductions above flip ordered comparisons
@@ -47,19 +48,35 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	private static final BOOL_OP_KINDS: Array<String> = ['Or', 'And', 'Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq', 'Not'];
 
 	/**
-	 * Literal kinds whose value can never be a floating-point NaN. A `FloatLit` is
-	 * deliberately absent: `1e3` is a `Float`, and comparing against one is exactly the
-	 * case the wrap protects.
+	 * Literal kinds `<` orders TOTALLY: neither a NaN nor a `null` can reach a comparison
+	 * through one, so an operand of one of these kinds can never break `!(a < b)` <=> `a >= b`.
+	 * A `FloatLit` is deliberately absent: `1e3` is a `Float`, and comparing against one is
+	 * exactly the case the wrap protects. The two STRING literal kinds ARE here even though the
+	 * `String` nominal is not — a literal is non-null BY CONSTRUCTION, which is precisely the
+	 * proof a declaration cannot give (see `TOTAL_ORDER_TYPES`).
 	 */
-	private static final NAN_FREE_LITERAL_KINDS: Array<String> = ['IntLit', 'HexLit', 'SingleStringExpr', 'DoubleStringExpr'];
+	private static final TOTAL_ORDER_LITERAL_KINDS: Array<String> = ['IntLit', 'HexLit', 'SingleStringExpr', 'DoubleStringExpr'];
 
 	/**
-	 * Declared type nominals with no NaN in their value set, so `!(a < b)` and `a >= b`
-	 * agree for them. `Null<Int>` resolves to the nominal `Null` and is deliberately NOT
-	 * here: on a dynamic target a null operand compares `false` both ways, which the flip
-	 * would not preserve.
+	 * Declared type nominals whose value set `<` orders TOTALLY, so `!(a < b)` and `a >= b`
+	 * agree for them. TWO values break that equivalence, and a nominal earns its place here only
+	 * by excluding BOTH: a NaN, which inhabits `Float` alone, and a `null` — with a null operand
+	 * `!(a < b)` is true where `a >= b` is false, for all four ordered operators (measured on
+	 * `--interp`, `js` and `neko`, Haxe 4.3.7).
+	 *
+	 * `String` is deliberately NOT here, and its absence is what the list's name now guards. A
+	 * `String` carries no NaN, which is why it once WAS here — but Haxe has no non-nullable
+	 * string type, so `s:String`, `?s:String` and an unannotated `s` alike prove nothing about
+	 * null, and the flip is unsound for every one of them. The compiler draws the same line: it
+	 * folds `!(a < b)` into `a >= b` ITSELF for `Int`, and emits `!(a < b)` verbatim for `String`
+	 * and for `Float` (read off generated JS). Re-adding the nominal needs a NON-NULL proof this
+	 * seam does not carry — the one non-null string shape, a literal, is licensed by
+	 * `TOTAL_ORDER_LITERAL_KINDS` instead.
+	 *
+	 * `Null<Int>` resolves to the nominal `Null` and is likewise absent — one conservative step
+	 * beyond the compiler, which folds that flip too.
 	 */
-	private static final NAN_FREE_TYPES: Array<String> = ['Int', 'UInt', 'String'];
+	private static final TOTAL_ORDER_TYPES: Array<String> = ['Int', 'UInt'];
 
 	/**
 	 * The operand families `simplifyNegatedCompound` PAYS for: the `&&` / `||` compounds De Morgan
@@ -159,11 +176,12 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	}
 
 	/**
-	 * The NaN-safe De Morgan negation of `cond` — the seam `guard-continue` /
+	 * The order-safe De Morgan negation of `cond` — the seam `guard-continue` /
 	 * `loop-guard` use to invert a lifted condition. `!` stripped, `&&` / `||`
 	 * distributed, `==` / `!=` flipped, but an ordered comparison (`< <= > >=`)
-	 * wrapped `!(…)` verbatim (never flipped — `!(a < b)` and `a >= b` differ under
-	 * NaN). Operands carry precedence-safe parentheses; a comment in the operator
+	 * wrapped `!(…)` verbatim (flipped only where `typeNominalOf` proves both operands
+	 * totally ordered — `!(a < b)` and `a >= b` differ whenever either side is a NaN or
+	 * a `null`). Operands carry precedence-safe parentheses; a comment in the operator
 	 * glue between operands is dropped, so the caller gates on a comment-free span.
 	 */
 	public function negateCondition(cond: QueryNode, source: String, ?typeNominalOf: (QueryNode) -> Null<String>): String {
@@ -172,10 +190,11 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 
 	/**
 	 * Whether `negateCondition` had to DECLINE a rewrite it knows how to perform — an ordered
-	 * comparison `typeNominalOf` could not prove NaN-free, kept as `!(a < b)` instead of flipped.
-	 * A caller that inverts a condition purely so a block reads better refuses such a site: the
-	 * negation buys nothing over the positive form it would replace. A wrap the engine could
-	 * never avoid (`!(a is B)`, `!(a ?? b)`) is NOT a decline — that IS the canonical negation.
+	 * comparison `typeNominalOf` could not prove totally ordered (NaN- AND null-free), kept as
+	 * `!(a < b)` instead of flipped. A caller that inverts a condition purely so a block reads
+	 * better refuses such a site: the negation buys nothing over the positive form it would
+	 * replace. A wrap the engine could never avoid (`!(a is B)`, `!(a ?? b)`) is NOT a decline —
+	 * that IS the canonical negation.
 	 */
 	public function negateConditionDeclinesFlip(cond: QueryNode, source: String, ?typeNominalOf: (QueryNode) -> Null<String>): Bool {
 		return negate(cond, source, false, typeNominalOf).declined;
@@ -185,15 +204,15 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	 * The simplification of `!( … )` over either arm `negatedOperandOf` accepts — a `&&` / `||`
 	 * compound De Morgan distributes (`!(!a || b)` → `a && !b`), or a single comparison whose
 	 * operator flips (`!(x < 0)` → `x >= 0`, `!(a == b)` → `a != b`) — or null when `not` is
-	 * neither shape, or when the rewrite would not PAY. The text is `negate`'s — the same NaN-safe
-	 * engine `negateCondition` exposes, so an ordered comparison that `typeNominalOf` cannot prove
-	 * NaN-free stays wrapped `!(a < b)` rather than flipping.
+	 * neither shape, or when the rewrite would not PAY. The text is `negate`'s — the same
+	 * order-safe engine `negateCondition` exposes, so an ordered comparison that `typeNominalOf`
+	 * cannot prove totally ordered stays wrapped `!(a < b)` rather than flipping.
 	 *
 	 * The worth gate is `Operand.notDelta <= 0`: the rewrite drops the one outer `!` and buys
 	 * `notDelta` further ones, so it is offered exactly when the unary-`!` count strictly falls.
 	 * That admits the PARTIAL compounds (`!(!a || f < 0.5)` → `a && !(f < 0.5)`, one `!` fewer) and
 	 * refuses the pure distributions (`!(a || b)` → `!a && !b`, one more) with no separate rule.
-	 * For the single-comparison arm it IS the NaN licence with no extra code: a flip is `notDelta`
+	 * For the single-comparison arm it IS the order licence with no extra code: a flip is `notDelta`
 	 * 0 and is offered, a `declinedFlip` is `notDelta` +1 and is refused — the wrap it would emit
 	 * is byte-for-byte the input. Parentheses are never a cost: the input already carried a pair
 	 * around the operand, and the output carries at most one.
@@ -303,9 +322,10 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	 * `flipOrdered` governs the ordered comparisons `< <= > >=`: `true` flips them
 	 * (`!(a < b)` -> `a >= b`), sound over the reals and the behaviour the ternary /
 	 * guard-chain callers keep; `false` wraps them `!(a < b)` verbatim UNLESS `types`
-	 * proves the comparison NaN-free (`nanFree`) — the wrap is the only sound negation
-	 * for an operand that may be NaN, since `!(a < b)` and `a >= b` then differ.
-	 * `==` / `!=` flip either way (a flip is NaN-equivalent to the wrap for them).
+	 * proves both operands totally ordered by `<` (`totallyOrdered`) — the wrap is the
+	 * only sound negation for an operand that may be a NaN or a `null`, since
+	 * `!(a < b)` and `a >= b` differ for both. `==` / `!=` flip either way (a flip is
+	 * NaN- and null-equivalent to the wrap for them).
 	 */
 	private static function negate(node: QueryNode, source: String, flipOrdered: Bool, ?types: (QueryNode) -> Null<String>): Operand {
 		switch node.kind {
@@ -332,13 +352,13 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 			case 'NotEq':
 				return flip(node, source, '==');
 			case 'Lt':
-				return flipOrdered || nanFree(node, types) ? flip(node, source, '>=') : declinedFlip(node, source);
+				return flipOrdered || totallyOrdered(node, types) ? flip(node, source, '>=') : declinedFlip(node, source);
 			case 'LtEq':
-				return flipOrdered || nanFree(node, types) ? flip(node, source, '>') : declinedFlip(node, source);
+				return flipOrdered || totallyOrdered(node, types) ? flip(node, source, '>') : declinedFlip(node, source);
 			case 'Gt':
-				return flipOrdered || nanFree(node, types) ? flip(node, source, '<=') : declinedFlip(node, source);
+				return flipOrdered || totallyOrdered(node, types) ? flip(node, source, '<=') : declinedFlip(node, source);
 			case 'GtEq':
-				return flipOrdered || nanFree(node, types) ? flip(node, source, '<') : declinedFlip(node, source);
+				return flipOrdered || totallyOrdered(node, types) ? flip(node, source, '<') : declinedFlip(node, source);
 			case 'Not':
 				// !!x -> x : strip the existing negation, unwrapping one redundant paren
 				// (`!(a && b)` -> `a && b`); wrap() re-adds parens where precedence demands.
@@ -403,27 +423,30 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	}
 
 	/**
-	 * Whether an ordered comparison's operands are BOTH provably non-floating-point, so
-	 * flipping its operator preserves meaning. NaN is the only value for which `!(a < b)`
-	 * and `a >= b` disagree, and it inhabits `Float` alone — proving neither side is a
-	 * `Float` therefore licenses the flip. One unresolved operand is enough to refuse.
+	 * Whether an ordered comparison's operands are BOTH provably drawn from a value set `<`
+	 * orders TOTALLY, so flipping its operator preserves meaning. Exactly two values make
+	 * `!(a < b)` and `a >= b` disagree — a NaN, which inhabits `Float` alone, and a `null` —
+	 * so proving each side can be neither licenses the flip. One unresolved operand is enough
+	 * to refuse: unproven means keep the wrap.
 	 */
-	private static function nanFree(node: QueryNode, types: Null<(QueryNode) -> Null<String>>): Bool {
-		return node.children.length == 2 && nanFreeOperand(node.children[0], types) && nanFreeOperand(node.children[1], types);
+	private static function totallyOrdered(node: QueryNode, types: Null<(QueryNode) -> Null<String>>): Bool {
+		if (node.children.length != 2) return false;
+		return totallyOrderedOperand(node.children[0], types) && totallyOrderedOperand(node.children[1], types);
 	}
 
 	/**
-	 * Whether one comparison operand provably holds no NaN: a non-float literal, or a value
-	 * whose declared type `types` resolves to a nominal with no NaN in its value set.
-	 * Parentheses and a unary minus are transparent — `-(x)` is a `Float` exactly when `x` is.
+	 * Whether one comparison operand provably holds neither a NaN nor a `null`: a literal of a
+	 * totally-ordered kind, or a value whose declared type `types` resolves to a nominal in
+	 * `TOTAL_ORDER_TYPES`. Parentheses and a unary minus are transparent — `-(x)` is a `Float`
+	 * exactly when `x` is, and is `null` exactly when `x` is.
 	 */
-	private static function nanFreeOperand(node: QueryNode, types: Null<(QueryNode) -> Null<String>>): Bool {
+	private static function totallyOrderedOperand(node: QueryNode, types: Null<(QueryNode) -> Null<String>>): Bool {
 		var n: QueryNode = node;
 		while ((n.kind == 'ParenExpr' || n.kind == 'Neg') && n.children.length == 1) n = n.children[0];
-		if (NAN_FREE_LITERAL_KINDS.contains(n.kind)) return true;
+		if (TOTAL_ORDER_LITERAL_KINDS.contains(n.kind)) return true;
 		if (types == null) return false;
 		final nominal: Null<String> = types(n);
-		return nominal != null && NAN_FREE_TYPES.contains(nominal);
+		return nominal != null && TOTAL_ORDER_TYPES.contains(nominal);
 	}
 
 	/** Operator-precedence rank of a node kind — higher binds tighter. */

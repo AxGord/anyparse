@@ -129,6 +129,18 @@ class GuardContinueCheckTest extends Test {
 		Assert.equals(0, v(cond('q >= 10')).length);
 	}
 
+	public function testOrderedStringOperandsNotFlagged(): Void {
+		// Unlike `q` above, both operands here RESOLVE — and are still refused. `String` carries
+		// no NaN, but Haxe has no non-nullable string type, so a null operand makes `!(s < k)`
+		// true where `s >= k` is false and the flip is unsound; `negationIsClean` therefore
+		// declines and the site is not flagged. The `x < 10` twin below, over the `Int` loop
+		// binder, is the same shape with a licensed nominal and IS flagged.
+		final str: String =
+			'class C {\n\tfunction f(ss:Array<String>, k:String):Void {\n\t\tfor (s in ss) {\n\t\t\tpre();\n\t\t\tif (s < k) {\n\t\t\t\tbody();\n\t\t\t}\n\t\t}\n\t}\n}\n';
+		Assert.equals(0, new GuardContinue().run([{ file: 'C.hx', source: str }], new HaxeQueryPlugin()).length);
+		Assert.equals(1, v(cond('x < 10')).length);
+	}
+
 	public function testEqFlipped(): Void {
 		Assert.isTrue(fx(cond('x == 10')).indexOf('if (x != 10) continue;') != -1);
 	}

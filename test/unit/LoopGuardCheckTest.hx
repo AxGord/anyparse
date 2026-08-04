@@ -168,6 +168,18 @@ class LoopGuardCheckTest extends Test {
 		);
 	}
 
+	public function testOrderedStringGuardNotFlagged(): Void {
+		// The lifted header would read `if (!(s < k))`, which buys nothing over the `continue`
+		// guard: `String` is nullable in every Haxe target, so the flip `s >= k` is not licensed
+		// (a null operand makes the two disagree) and `negationIsClean` refuses the site. The
+		// `Int` twin below it in the same fixture shape IS flagged, so the refusal is the type
+		// gate and not the loop shape.
+		final str: String =
+			'class C {\n\tfunction f(ss:Array<String>, k:String):Void {\n\t\tfor (s in ss) {\n\t\t\tif (s < k) continue;\n\t\t\ttrace(s);\n\t\t}\n\t}\n}';
+		Assert.equals(0, violations(str).length);
+		Assert.equals(1, violations(wrap('for (x in xs) {\n\t\t\tif (x < 0) continue;\n\t\t\ttrace(x);\n\t\t}')).length);
+	}
+
 	public function testApplyFixByteExact(): Void {
 		final input: String =
 			'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\tfor (x in xs) {\n\t\t\tif (x == 0) continue;\n\t\t\ttrace(x);\n\t\t}\n\t}\n}';

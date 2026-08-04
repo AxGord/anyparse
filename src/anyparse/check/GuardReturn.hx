@@ -39,14 +39,15 @@ using Lambda;
  * unconditionally and whatever follows the `#end` is exactly as unreachable after the fix as it
  * was before it. The implicit-tail arm carries a tail-position model of its own, below.
  *
- * ## The `if (!cond)` inversion - De Morgan when possible, NaN-safe
+ * ## The `if (!cond)` inversion - De Morgan when possible, order-safe
  *
  * `cond` is negated by `CheckScan.negateConditionText`, the engine `loop-guard` and
  * `guard-continue` share, two-tier. When the grammar exposes a `BooleanLogicSupport` and
  * the condition span is comment-free, the negation is pushed inward by De Morgan
  * (`a && b` -> `!a || !b`, `!(a || b)` -> `a && b`, `==` / `!=` flipped NaN-safely), with the
- * ordered comparisons `< <= > >=` deliberately KEPT wrapped `!(a < b)` - never flipped,
- * since `!(a < b)` and `a >= b` differ under NaN. Falling back - a seam-less grammar, a
+ * ordered comparisons `< <= > >=` deliberately KEPT wrapped `!(a < b)` - flipped only where
+ * the operand types prove both totally ordered, since `!(a < b)` and `a >= b` differ whenever
+ * an operand is a NaN or a `null`. Falling back - a seam-less grammar, a
  * comment in the condition the De Morgan rewrite would drop, or the stranded-narrowing
  * gate below - the text engine wraps `!(cond)` VERBATIM. Either tier is sound and compiles.
  *

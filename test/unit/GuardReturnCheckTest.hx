@@ -117,6 +117,18 @@ class GuardReturnCheckTest extends Test {
 		Assert.equals(0, v(cond('a > 0.5')).length);
 	}
 
+	public function testOrderedStringOperandsNotFlagged(): Void {
+		// `String` carries no NaN, but Haxe has no non-nullable string type, so the ordered flip
+		// is not licensed: with a null operand `!(s < k)` is `true` where `s >= k` is `false`. The
+		// engine declines, `negationIsClean` answers false, and the site is not flagged — the
+		// inversion would have had to emit `if (!(s < k)) return false;`, worse than the positive
+		// branch it replaces. `testOrderedFlippedWhenBothOperandsInt` is the same shape over a
+		// licensed nominal and still fires.
+		final source: String =
+			'class C {\n\tfunction f(s:String, k:String):Bool {\n\t\tif (s < k) {\n\t\t\tlog(s);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t}\n}\n';
+		Assert.equals(0, new GuardReturn().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
+	}
+
 	public function testOrderedFlippedThroughMemberPath(): Void {
 		Assert.isTrue(
 			fixedWith(memberPathSource(), 'typedef Res = {\n\tcount:Int\n};\n').indexOf('if (res.count <= 0) return false;') != -1

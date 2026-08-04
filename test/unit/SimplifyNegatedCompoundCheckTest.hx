@@ -86,6 +86,26 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		Assert.equals(wrapTyped('var b = n >= 0;', 'n:Int'), applyFix(wrapTyped('var b = !(n < 0);', 'n:Int')));
 	}
 
+	public function testNullableStringOrderedComparisonNotFlagged(): Void {
+		// `String` is NOT a totally-ordered nominal. It carries no NaN — which is why it once
+		// licensed the flip — but Haxe has no non-nullable string type, so `s:String` proves
+		// nothing about null, and with a null operand `!(s < t)` is `true` where `s >= t` is
+		// `false` (measured on `--interp`, `js` and `neko`, all four ordered operators). The flip
+		// is declined, and on this arm a decline is an outright refusal: the wrap IS the input.
+		final source: String = wrapTyped('var b = !(s < t);', 's:String, t:String');
+		Assert.equals(0, violations(source).length);
+		Assert.equals(source, applyFix(source));
+	}
+
+	public function testStringLiteralOrderedComparisonStillFlips(): Void {
+		// The NOMINAL is refused; the LITERAL kinds are not. A string literal is non-null by
+		// construction — exactly the proof a `String` declaration cannot give — so both operands
+		// are totally ordered and the flip is sound. Pins that dropping the nominal did not also
+		// drop the two string entries from `TOTAL_ORDER_LITERAL_KINDS`. It passes with the nominal
+		// restored as well — a pin on the literal path, NOT a discriminator for the narrowing.
+		Assert.equals(wrap('var b = "a" >= "b";'), applyFix(wrap('var b = !("a" < "b");')));
+	}
+
 	public function testNegatedEqualityFlaggedWithoutTypes(): Void {
 		// No type proof needed: IEEE makes `NaN == x` false and `NaN != x` true, so the flipped
 		// operator and the wrap agree for every operand — including an unresolved one.
@@ -185,6 +205,17 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 
 	public function testFixFlipsOrderedComparisonWhenIntProven(): Void {
 		Assert.equals(wrapTyped('var b = p && n >= 0;', 'p:Bool, n:Int'), applyFix(wrapTyped('var b = !(!p || n < 0);', 'p:Bool, n:Int')));
+	}
+
+	public function testFixKeepsStringOrderedComparisonWrappedInCompound(): Void {
+		// The COMPOUND arm shares the one licence, so the `String` term stays wrapped and only the
+		// partial simplification is offered — one `!` fewer, still worth it. While `String` was a
+		// licensed nominal this read `p && s >= t`, an unsound rewrite; this is its regression pin,
+		// and the `n:Int` twin directly above is what proves the licence itself still works.
+		Assert.equals(
+			wrapTyped('var b = p && !(s < t);', 'p:Bool, s:String, t:String'),
+			applyFix(wrapTyped('var b = !(!p || s < t);', 'p:Bool, s:String, t:String'))
+		);
 	}
 
 	public function testFixPreservesCallCountAndOrder(): Void {
