@@ -2024,8 +2024,9 @@ typedef RefShape = {
 	 * `parenKind` wrapping one as an operand of a `comparisonOperandHostKinds` operator
 	 * is redundant on every reading. A fail-closed WHITELIST in the manner of
 	 * `ternaryConditionUnwrapKinds`: a kind absent from it keeps its parentheses. Haxe:
-	 * the arithmetic `Add` / `Sub` (tier 8), `Mul` / `Div` (tier 9) and `Mod` (tier 10),
-	 * plus the unary `Neg`.
+	 * the arithmetic `Add` / `Sub` (tier 8), `Mul` / `Div` (tier 9) and `Mod` (tier 10).
+	 * The unary `Neg` is NOT on it — `unaryMinusKinds` refuses a leading minus at any
+	 * depth, which subsumes the bare `Neg` root.
 	 *
 	 * A DELIBERATE SUBSET, not an exhaustive one — the tighter-binding kinds left out are
 	 * choices, each for its own reason. The BITWISE kinds (`BitAnd` / `BitOr` / `BitXor`,
@@ -2045,14 +2046,119 @@ typedef RefShape = {
 	@:optional var comparisonOperandUnwrapKinds: Array<String>;
 
 	/**
+	 * Binary operator kinds of the ADDITIVE tier — the hosts whose parenthesized operands
+	 * the opt-in `redundant-parens` arm `additiveOperands` may unwrap. Haxe: `Add` and
+	 * `Sub`, the two `@:infix(…, 8)` ctors.
+	 *
+	 * The additive tier ALONE, deliberately — never the multiplicative one just above it.
+	 * Haxe binds `%` a whole tier tighter than `*` and `/`, so `a * (b % c)` would be
+	 * provable HERE; but C makes the three ONE tier, where a bare `a * b % c` reads
+	 * `(a * b) % c`, so the pair is what makes the two readings agree. The same class of
+	 * cross-language trap as the bitwise exclusion on `comparisonOperandUnwrapKinds`, and
+	 * kept out the same way. The bitwise and shift tiers are not hosts either, and NOT
+	 * because a drop there would be wrong — `(a * b) & c` bare re-parses to the tree it
+	 * already had, in this language and in C alike. They are out on the same READABILITY
+	 * ground that keeps the shift tier off `comparisonOperandUnwrapKinds`: a bitwise or
+	 * shift operand is habitually parenthesized. Admitting either later is additive and
+	 * breaks nothing. Read by `redundant-parens` with `additiveOperandUnwrapKinds`;
+	 * optional, unset drops that arm.
+	 */
+	@:optional var additiveOperandHostKinds: Array<String>;
+
+	/**
+	 * The kinds binding STRICTLY tighter than the additive tier that also parse alike
+	 * across the C family, so a `parenKind` wrapping one as an operand of an
+	 * `additiveOperandHostKinds` operator is redundant on every reading. A fail-closed
+	 * WHITELIST in the manner of `comparisonOperandUnwrapKinds`: a kind absent from it
+	 * keeps its parentheses. Haxe: `Mul` / `Div` (tier 9) and `Mod` (tier 10) — C agrees
+	 * that all three bind tighter than `+` and `-`, which is what the `%` exclusion on the
+	 * HOST side does not get to assume.
+	 *
+	 * The SAME-TIER kinds (`Add` / `Sub`) are the reason this is a whitelist rather than a
+	 * tier test: dropping the pair around one RE-ASSOCIATES the expression
+	 * (`a + (b - c)` becomes `(a + b) - c`), a different rounding for floats and a
+	 * different value outright under `-`. The unary `Neg` IS provable — `a - (-b)` binds
+	 * the same either way — and is out on READABILITY alone, since the bare form reads
+	 * `a - -b`. Everything looser (bitwise, shift, comparison and below) is excluded by
+	 * construction: such content re-associates outward on unwrap. Read by
+	 * `redundant-parens` with `additiveOperandHostKinds`; optional, unset drops that arm.
+	 */
+	@:optional var additiveOperandUnwrapKinds: Array<String>;
+
+	/**
+	 * Expression kinds that CAPTURE EVERYTHING TO THEIR RIGHT — a construct whose extent
+	 * ends only where its enclosing bracket does, so a `parenKind` around content that
+	 * ends in one is load-bearing however tight the content's ROOT binds. Haxe: the
+	 * prefix keywords whose operand is a whole expression (`untyped`, `macro`, `cast`,
+	 * `throw`, `return`, `inline`, a metadata annotation), the function literals and
+	 * arrow lambdas, the block-like expressions whose trailing branch is open
+	 * (`if … else`, `for`, `while`, `try … catch`) and the ternary's else branch.
+	 *
+	 * Read by `redundant-parens` for EVERY precedence-gated slot — the three opt-in
+	 * operand arms and the shipped, default-on ternary condition — because all four judge
+	 * the content's root kind alone: `a + (b * untyped c) - d` has an arithmetic root over
+	 * a tail that swallows the `- d` (measured against the compiler: 9 with the pair, 7
+	 * without). The DELIMITED slots do not need it; their own separator bounds the capture,
+	 * which is what the narrower `separatorGreedyExprKinds` is for.
+	 *
+	 * ERR INCLUSIVE. A kind wrongly listed costs a missed cleanup; a kind wrongly omitted
+	 * is a rewrite that changes the parse, and the tree-shape oracle CANNOT catch it —
+	 * this parser's own model of `cast` and of a metadata annotation disagrees with the
+	 * compiler about exactly this extent, so both trees look equivalent while the real
+	 * ones are not. Optional; unset leaves every slot judging the root alone.
+	 */
+	@:optional var rightGreedyExprKinds: Array<String>;
+
+	/**
+	 * The UNARY MINUS kinds. Content whose leftmost token is one of them keeps its
+	 * parentheses in the `comparisonOperands` / `additiveOperands` slots, whatever its
+	 * root: `a + (-b * c)` has a `Mul` root and still reads `a + -b * c` bare, the defect
+	 * those arms exclude a bare `Neg` root for. Haxe: `Neg`.
+	 *
+	 * A READABILITY gate, not a correctness one — every such drop is provable. Read by
+	 * `redundant-parens`; optional, unset judges the root alone, which is what those arms
+	 * did before.
+	 */
+	@:optional var unaryMinusKinds: Array<String>;
+
+	/**
+	 * Kinds that PREFIX an expression with an annotation binding to whatever that
+	 * expression starts with. A `parenKind` on the LEFT EDGE beneath one is what holds the
+	 * annotation over its own content, so it keeps its parentheses. Haxe: `MetaExpr` (the
+	 * `@:m expr` wrapper; the `@:m(args)` annotation itself is a `MetaCall` CHILD of it,
+	 * and its arguments are the separate concern `parenRequiredHostKinds` covers).
+	 *
+	 * A CORRECTNESS gate rather than an operand-arm concern, so it is read whether or not a
+	 * project opted an arm in: this parser models `@:m` as wrapping everything that
+	 * follows, while the compiler binds it to the immediate primary, and the difference is
+	 * a compile error (`@:privateAccess (A.s * B.s) + 1` compiles, the bare form does not).
+	 *
+	 * NOT the same list as `parenRequiredHostKinds`, and deliberately narrower. That one
+	 * answers for a DIRECT paren child and holds statement hosts (`CaseBranch`, the
+	 * `switch` subjects) whose header ends in a hard token — nothing binds across a
+	 * `case … :`, so a pair further inside is ordinary. Reading this rule off that list
+	 * instead measurably over-suppressed: two corpus ternary conditions written as
+	 * `case _: (v <= 2) ? a : b;` stopped being reported. Optional, unset excludes nothing.
+	 */
+	@:optional var prefixAnnotationKinds: Array<String>;
+
+	/**
 	 * Host kinds whose DIRECT `parenKind` child keeps its parentheses — either the
 	 * grammar requires the pair there or the project declines to own the idiom. Haxe:
 	 * `CaseBranch` (its direct paren child is the mandatory `case X if (g)` guard — a
 	 * branch BODY arrives wrapped in a statement kind, so it is still reached),
 	 * the `switch` subject kinds (the construct carries its own `(` `)`, so a paren
 	 * child there is a second pair whose presence is a style choice), and the metadata
-	 * kinds (`MetaCall` arguments, a `MetaExpr` annotated expression). Read by
-	 * `redundant-parens` for its opt-in operand arms; optional, unset excludes nothing.
+	 * kinds (`MetaCall` arguments, a `MetaExpr` annotated expression).
+	 *
+	 * Read by `redundant-parens` for a DIRECT `parenKind` child and, for the metadata
+	 * kinds, along the LEFT EDGE of the annotated expression: this parser models `@:m`
+	 * as wrapping everything that follows, while the compiler binds it to the immediate
+	 * primary, so `@:privateAccess (a * b) + c` needs its pair to hold the annotation over
+	 * the multiplication (measured: the bare form fails with `Cannot access private
+	 * field`). That makes this list a CORRECTNESS gate for the shipped, default-on arms
+	 * rather than an operand-arm concern, so — unlike `parenOpaqueSubtreeKinds` — it is
+	 * read whether or not a project opted an arm in. Optional, unset excludes nothing.
 	 */
 	@:optional var parenRequiredHostKinds: Array<String>;
 

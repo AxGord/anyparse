@@ -11,7 +11,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.format.Text;
 
 /**
- * The three OPERAND arms of `redundant-parens`, each opt-in per project and each
+ * The four OPERAND arms of `redundant-parens`, each opt-in per project and each
  * proof-based rather than precedence-modelled.
  *
  * `atoms` — a pair wrapping a single ATOMIC expression (identifier, `this`,
@@ -37,6 +37,15 @@ import anyparse.query.format.Text;
  * binds `&` `|` `^` LOOSER than equality, unlike Haxe — while the SHIFT tier binds
  * tighter than a comparison in C exactly as in Haxe and is left out purely on
  * READABILITY: a shift operand is habitually parenthesized.
+ *
+ * `additiveOperands` — the same shape one tier down: a pair on EITHER side of `+`
+ * or `-` whose bare content is on the strictly tighter multiplicative tiers (`*`
+ * `/` `%`), which C agrees bind tighter than either additive operator. The sibling
+ * symmetry rule is `comparisonOperands`' unchanged. SAME-TIER content (`a + (b - c)`)
+ * is excluded for CORRECTNESS — the drop re-associates — and `Neg` for READABILITY
+ * (`a - -b`). `*` and `/` are deliberately NOT hosts: Haxe binds `%` tighter than
+ * either, but C makes the three one tier, so the pair in `a * (b % c)` is what makes
+ * the two readings agree — the same cross-language trap as the bitwise exclusion.
  *
  * Every drop asserted here is checked against a TREE-EQUIVALENCE oracle: both the
  * before and after source are parsed, every paren node is spliced out of each, and
@@ -293,7 +302,17 @@ class RedundantParensOperandArmsTest extends Test {
 		assertDrop(inFn('var v = a > (b - c);'), inFn('var v = a > b - c;'), comparisonOperands());
 		assertDrop(inFn('var v = (a * b) < c;'), inFn('var v = a * b < c;'), comparisonOperands());
 		assertDrop(inFn('var v = (a % b) == c;'), inFn('var v = a % b == c;'), comparisonOperands());
-		assertDrop(inFn('var v = (-a) > b;'), inFn('var v = -a > b;'), comparisonOperands());
+	}
+
+	/**
+	 * A bare `Neg` root USED to drop here (`(-a) > b` -> `-a > b`). It no longer does: the
+	 * leading-minus rule refuses a minus written first at ANY depth, and a bare `Neg` root
+	 * is the shallowest case of that. A deliberate narrowing of shipped behaviour — one
+	 * readability rule instead of a root test that could not see `(-a * c) > b`.
+	 */
+	public function testABareNegationRootNoLongerDrops(): Void {
+		Assert.equals(0, violations(inFn('var v = (-a) > b;'), comparisonOperands()).length);
+		Assert.equals(0, violations(inFn('var v = a > (-b);'), comparisonOperands()).length);
 	}
 
 	/**
@@ -362,12 +381,273 @@ class RedundantParensOperandArmsTest extends Test {
 		Assert.equals(inFn('var v = (a - b) > (c);'), converged(inFn('var v = (a - b) > ((c));'), comparisonOperands()));
 	}
 
-	/** The three arms are independent: no opt-in reaches another's candidates. */
+	public function testAdditiveOperandArmIsOffByDefault(): Void {
+		Assert.equals(0, violations(inFn('var v = a - (b / c);'), none()).length);
+		Assert.equals(0, violations(inFn('var v = a - (b / c);'), atoms()).length);
+		Assert.equals(0, violations(inFn('var v = a - (b / c);'), sameOperatorLeft()).length);
+		Assert.equals(0, violations(inFn('var v = a - (b / c);'), comparisonOperands()).length);
+	}
+
+	/**
+	 * The shape this arm was built for: a division parenthesized as an operand of a
+	 * subtraction. `/` is a whole tier tighter than `-` in Haxe and in every C-family
+	 * language, so the bare form parses to the tree it already had on either reading.
+	 */
+	public function testAdditiveTighterOperandDrops(): Void {
+		assertDrop(inFn('var v = a * s - (w / 2.0);'), inFn('var v = a * s - w / 2.0;'), additiveOperands());
+	}
+
+	/** Either side is a candidate, over the whole multiplicative whitelist. */
+	public function testAdditiveSingleOperandDrops(): Void {
+		assertDrop(inFn('var v = a - (b / c);'), inFn('var v = a - b / c;'), additiveOperands());
+		assertDrop(inFn('var v = a + (b * c);'), inFn('var v = a + b * c;'), additiveOperands());
+		assertDrop(inFn('var v = (a * b) - c;'), inFn('var v = a * b - c;'), additiveOperands());
+		assertDrop(inFn('var v = a - (b % c);'), inFn('var v = a - b % c;'), additiveOperands());
+	}
+
+	/**
+	 * An additive chain nests to the LEFT, so a middle operand is the right child of the
+	 * inner node and reaches this arm on exactly the same terms as an outer one.
+	 */
+	public function testAdditiveChainMiddleOperandDrops(): Void {
+		assertDrop(inFn('var v = a + (b * c) + d;'), inFn('var v = a + b * c + d;'), additiveOperands());
+	}
+
+	/** The content is judged by its ROOT kind — a dotted read inside it is ordinary structure. */
+	public function testAdditiveNestedContentDrops(): Void {
+		assertDrop(inFn('var v = (x.y / 2.0) + z;'), inFn('var v = x.y / 2.0 + z;'), additiveOperands());
+	}
+
+	/**
+	 * SAME-TIER content RE-ASSOCIATES on unwrap: `a + (b - c)` becomes `(a + b) - c`, a
+	 * different rounding for floats and a different value outright under `-`. The
+	 * fail-closed whitelist holds only the strictly tighter tiers, so none of these is on
+	 * it. `(a + b) - c` is `sameOperatorLeft`'s candidate, never this arm's.
+	 */
+	public function testAdditiveSameTierContentStays(): Void {
+		Assert.equals(0, violations(inFn('var v = a + (b - c);'), additiveOperands()).length);
+		Assert.equals(0, violations(inFn('var v = a - (b + c);'), additiveOperands()).length);
+		Assert.equals(0, violations(inFn('var v = a + (b + c);'), additiveOperands()).length);
+		Assert.equals(0, violations(inFn('var v = (a + b) - c;'), additiveOperands()).length);
+	}
+
+	/**
+	 * A unary minus IS strictly tighter and the drop would be provable, but `a - (-b)`
+	 * bare reads `a - -b`. Off the whitelist on READABILITY alone.
+	 */
+	public function testAdditiveNegContentStays(): Void {
+		Assert.equals(0, violations(inFn('var v = a - (-b);'), additiveOperands()).length);
+		Assert.equals(0, violations(inFn('var v = (-a) + b;'), additiveOperands()).length);
+	}
+
+	/**
+	 * The hosts are ADDITIVE only. Haxe binds `%` tighter than `*` and `/`, but C makes
+	 * the three one tier — so a C-trained reader parses a bare `a * b % c` as
+	 * `(a * b) % c`, and the pair in `a * (b % c)` is what makes the two readings agree.
+	 * `(a + b) * c` is looser content under a tighter host, never in scope for any arm.
+	 */
+	public function testAdditiveArmDoesNotReachATighterHost(): Void {
+		Assert.equals(0, violations(inFn('var v = a * (b % c);'), additiveOperands()).length);
+		Assert.equals(0, violations(inFn('var v = a / (b * c);'), additiveOperands()).length);
+		Assert.equals(0, violations(inFn('var v = (a + b) * c;'), additiveOperands()).length);
+	}
+
+	/**
+	 * Bitwise and shift are out on BOTH sides, for two different reasons. As CONTENT they
+	 * bind LOOSER than `+` / `-`, so a drop re-associates outward — the fail-closed
+	 * whitelist settles that. As HOSTS the drop would be PROVABLE (`(a * b) & c` bare
+	 * re-parses to the tree it already had, here and in C); they stay out on the same
+	 * READABILITY ground that keeps shifts off the comparison whitelist.
+	 */
+	public function testAdditiveBitwiseAndShiftStayOut(): Void {
+		Assert.equals(0, violations(inFn('var v = (a & b) + c;'), additiveOperands()).length);
+		Assert.equals(0, violations(inFn('var v = a + (b << c);'), additiveOperands()).length);
+		Assert.equals(0, violations(inFn('var v = (a * b) & c;'), additiveOperands()).length);
+		Assert.equals(0, violations(inFn('var v = (a * b) << c;'), additiveOperands()).length);
+	}
+
+	/**
+	 * `comparisonOperands`' symmetry rule, applied unchanged: a parenthesized sibling that
+	 * is NOT itself provable vetoes the drop, so the expression is never left lopsided.
+	 * `(a * b) + (c - d)` keeps both pairs even though the left one is provable alone —
+	 * the two together are a symmetry the author wrote. The bare fixture pins that the
+	 * sibling is what rejects it.
+	 */
+	public function testAdditiveSiblingPairVetoesTheDrop(): Void {
+		Assert.equals(0, violations(inFn('var v = (a * b) + (c - d);'), additiveOperands()).length);
+		Assert.equals(1, violations(inFn('var v = (a * b) + c;'), additiveOperands()).length);
+	}
+
+	/** Two provable operands go in the SAME pass — the symmetry is dissolved, never halved. */
+	public function testAdditiveBothOperandsDropInOnePass(): Void {
+		assertDrop(inFn('var v = (a * b) + (c / d);'), inFn('var v = a * b + c / d;'), additiveOperands());
+	}
+
+	/** With `atoms` on as well an atomic sibling counts as PROVABLE, so the pair settles in one pass. */
+	public function testAdditiveConvergesWithTheAtomArm(): Void {
+		final out: String = fixed(inFn('var v = (a * b) + (x);'), additiveAndAtoms());
+		Assert.equals(inFn('var v = a * b + x;'), out);
+		Assert.equals(out, fixed(out, additiveAndAtoms()));
+		Assert.equals(bareTree(inFn('var v = (a * b) + (x);')), bareTree(out), 'paren drop preserved the tree shape');
+	}
+
+	/** The double-paren arm and this one compose: the whole chain goes in one edit. */
+	public function testAdditiveDoubleParensCollapseFully(): Void {
+		assertDrop(inFn('var v = ((a * b)) + c;'), inFn('var v = a * b + c;'), additiveOperands());
+	}
+
+	/** Inside a `macro` quotation a paren reifies as data, so no operand arm drops one. */
+	public function testAdditiveArmIsSuppressedInAMacroQuotation(): Void {
+		Assert.equals(0, violations(inFn('var e = macro (a * b) + c;'), additiveOperands()).length);
+		Assert.equals(1, violations(inFn('var e = (a * b) + c;'), additiveOperands()).length);
+	}
+
+	/** A comparison host is the other arm's turf: with only this arm on its operands are untouched. */
+	public function testAdditiveArmDoesNotReachAComparisonHost(): Void {
+		Assert.equals(0, violations(inFn('var v = (a * b) < (c - d);'), additiveOperands()).length);
+		Assert.equals(0, violations(inFn('var v = (a * b) < c;'), additiveOperands()).length);
+	}
+
+	/** Both precedence-gated operand arms on at once: each owns its own host tier, and they compose. */
+	public function testAdditiveAndComparisonArmsCoexist(): Void {
+		assertDrop(inFn('var v = (a * b) < (c - d);'), inFn('var v = a * b < c - d;'), comparisonAndAdditive());
+		assertDrop(inFn('var v = a - (b / c);'), inFn('var v = a - b / c;'), comparisonAndAdditive());
+	}
+
+	/**
+	 * A construct that captures everything to its RIGHT, sitting at the right edge of the
+	 * content, makes the parentheses load-bearing in EVERY precedence-gated slot: the
+	 * whitelists judge the content's ROOT, and `a + (b * untyped c) - d` has an arithmetic
+	 * root over a tail that swallows the `- d` once the pair is gone (measured against the
+	 * real compiler: 9 with the parentheses, 7 without). The default-on ternary-condition
+	 * arm is reached too, with no opt-in at all.
+	 */
+	public function testRightGreedyContentTailIsRefusedInEverySlot(): Void {
+		Assert.equals(0, violations(inFn('var v = a + (b * untyped c) - d;'), additiveOperands()).length);
+		Assert.equals(0, violations(inFn('var v = (b * untyped c) > d;'), comparisonOperands()).length);
+		Assert.equals(0, violations(inFn('var v = (b + untyped c) - d;'), sameOperatorLeft()).length);
+		Assert.equals(0, violations(inFn('var v = q = (b * untyped c) ? x : y;'), none()).length);
+		// The bare fixtures pin that the greedy tail is what rejects each of these.
+		Assert.equals(1, violations(inFn('var v = a + (b * w) - d;'), additiveOperands()).length);
+		Assert.equals(1, violations(inFn('var v = (b * w) > d;'), comparisonOperands()).length);
+		Assert.equals(1, violations(inFn('var v = (b + w) - d;'), sameOperatorLeft()).length);
+		Assert.equals(1, violations(inFn('var v = q = (b * w) ? x : y;'), none()).length);
+	}
+
+	/**
+	 * The whole right-greedy vocabulary, one shape apiece. `cast` is here because the REAL
+	 * compiler captures rightward through it (`x + b * cast c - d` is 7, not 9) while this
+	 * parser models it as bounded — so the tree-shape oracle would have called that drop
+	 * safe. See the note on `HxExpr`'s `CastExpr`.
+	 */
+	public function testEveryRightGreedyKindIsRefused(): Void {
+		for (tail in [
+			'untyped c',
+			'macro c',
+			'cast c',
+			'function() return c',
+			'@:m c',
+			'if (p) q else c',
+			'throw c',
+			'inline g()',
+			'(z) -> c'
+		]) Assert.equals(0, violations(inFn('var v = a + (b * $tail) - d;'), additiveOperands()).length, 'tail: $tail');
+	}
+
+	/**
+	 * A greedy construct bounded by its own closing token is NOT at the right edge of the
+	 * content — the spine walk stops where the parent closes after its last child — so the
+	 * pair still drops. This is the positive control for the gate above.
+	 */
+	public function testBoundedGreedyContentStillFires(): Void {
+		assertDrop(inFn('var v = a + (b * f(untyped c)) - d;'), inFn('var v = a + b * f(untyped c) - d;'), additiveOperands());
+		assertDrop(inFn('var v = a + (b * (untyped c)) - d;'), inFn('var v = a + b * (untyped c) - d;'), additiveOperands());
+	}
+
+	/**
+	 * This parser models `@:m` as wrapping the whole expression that follows, but the real
+	 * compiler binds the annotation to the immediate primary — so a pair at the LEFT EDGE
+	 * under a metadata prefix is what holds the annotation over its operand. Measured:
+	 * `@:privateAccess (A.s * B.s) + 1` compiles, `@:privateAccess A.s * B.s + 1` fails with
+	 * `Cannot access private field`. The pair is load-bearing in every slot, the default-on
+	 * ternary arm included.
+	 */
+	public function testAMetadataPrefixKeepsALeftEdgeParen(): Void {
+		Assert.equals(0, violations(inFn('var v = @:privateAccess (a * b) + c;'), additiveOperands()).length);
+		Assert.equals(0, violations(inFn('var v = @:privateAccess (a * b) > c;'), comparisonOperands()).length);
+		Assert.equals(0, violations(inFn('var v = @:privateAccess (a + b) - c;'), sameOperatorLeft()).length);
+		Assert.equals(0, violations(inFn('var v = q = @:privateAccess (a * b) ? x : y;'), none()).length);
+		Assert.equals(0, violations(inFn('var v = @:privateAccess (a * b) + c;'), atoms()).length);
+	}
+
+	/**
+	 * A `case … :` header ends in a hard token, so a pair inside the BODY is ordinary — the
+	 * prefix rule must not be read off `parenRequiredHostKinds`, which lists `CaseBranch`
+	 * for its mandatory guard pair. Reading it there suppressed two real corpus sites of
+	 * exactly this shape.
+	 */
+	public function testACaseBodyIsNotUnderAPrefixAnnotation(): Void {
+		assertDrop(
+			inFn('switch p {\n\t\t\tcase _: q = (v <= 2) ? x : y;\n\t\t}'), inFn('switch p {\n\t\t\tcase _: q = v <= 2 ? x : y;\n\t\t}'),
+			none()
+		);
+	}
+
+	/** The annotated expression's own left edge only — a pair further right is not what the meta binds to. */
+	public function testAMetadataPrefixDoesNotReachPastTheLeftEdge(): Void {
+		assertDrop(inFn('var v = @:privateAccess a + (b * c);'), inFn('var v = @:privateAccess a + b * c;'), additiveOperands());
+		Assert.equals(1, violations(inFn('var v = (a * b) + c;'), additiveOperands()).length);
+	}
+
+	/** A metadata prefix directly on the pair is the shipped required-host rule, and still keeps it. */
+	public function testAMetadataPrefixOnThePairItselfIsUnchanged(): Void {
+		Assert.equals(0, violations(inFn('var v = @:privateAccess (a * b);'), additiveOperands()).length);
+		Assert.equals(0, violations(inFn('var v = @:privateAccess (a * b);'), none()).length);
+	}
+
+	/**
+	 * Content whose LEFTMOST token is a unary minus is refused, whatever its root kind:
+	 * `a + (-b * c)` bare reads `a + -b * c`, the same defect the `Neg` root is excluded
+	 * for. The `atoms` arm still owns its own candidates, so only the whitelist arms
+	 * consult this. The comparison fixture pins a DELIBERATE change to shipped behaviour.
+	 */
+	public function testContentLeadingWithAUnaryMinusIsRefused(): Void {
+		Assert.equals(0, violations(inFn('var v = a + (-b * c);'), additiveOperands()).length);
+		Assert.equals(0, violations(inFn('var v = a - (-1 * b);'), additiveOperands()).length);
+		Assert.equals(0, violations(inFn('var v = a > (-c * d);'), comparisonOperands()).length);
+		Assert.equals(0, violations(inFn('var v = (-c * d) > a;'), comparisonOperands()).length);
+	}
+
+	/** A minus anywhere but the leftmost token is untouched — the positive control for the gate above. */
+	public function testAnInteriorUnaryMinusStillFires(): Void {
+		assertDrop(inFn('var v = a - (b * -c);'), inFn('var v = a - b * -c;'), additiveOperands());
+		assertDrop(inFn('var v = a > (b * -c);'), inFn('var v = a > b * -c;'), comparisonOperands());
+	}
+
+	/** A sibling pair leading with a unary minus is not provable, so it vetoes the drop like any other. */
+	public function testAUnaryMinusSiblingVetoesTheDrop(): Void {
+		Assert.equals(0, violations(inFn('var v = (a * b) + (-c * d);'), additiveOperands()).length);
+		Assert.equals(2, violations(inFn('var v = (a * b) + (c * d);'), additiveOperands()).length);
+	}
+
+	/** The four arms are independent: no opt-in reaches another's candidates. */
 	public function testArmsAreIndependentlyGated(): Void {
 		Assert.equals(0, violations(inFn('var b = (a) + c;'), sameOperatorLeft()).length);
 		Assert.equals(0, violations(inFn('var v = (p * q) / r;'), atoms()).length);
 		Assert.equals(0, violations(inFn('var b = (a) + c;'), comparisonOperands()).length);
 		Assert.equals(0, violations(inFn('var v = (p * q) / r;'), comparisonOperands()).length);
+		Assert.equals(0, violations(inFn('var b = (a) + c;'), additiveOperands()).length);
+		Assert.equals(0, violations(inFn('var v = (p * q) / r;'), additiveOperands()).length);
+		Assert.equals(0, violations(inFn('var v = (a - b) > c;'), additiveOperands()).length);
+	}
+
+	/** All four arms on one fixture, one statement apiece: every drop lands in a single pass. */
+	public function testAllArmsFixInOnePass(): Void {
+		final before: String = inFn('var v = (a) + b;\n\t\tvar w = (p * q) / r;\n\t\tvar y = (m - n) > c;\n\t\tvar z = d - (e / f);');
+		final after: String = inFn('var v = a + b;\n\t\tvar w = p * q / r;\n\t\tvar y = m - n > c;\n\t\tvar z = d - e / f;');
+		Assert.equals(after, fixed(before, allArms()));
+		Assert.equals(after, fixed(after, allArms()));
+		Assert.equals(bareTree(before), bareTree(after), 'paren drop preserved the tree shape');
 	}
 
 	public function testFixIsIdempotent(): Void {
@@ -394,6 +674,18 @@ class RedundantParensOperandArmsTest extends Test {
 	public function testDropKeepsASeparatorAgainstAWordToken(): Void {
 		assertDrop(inFn('var b = (s)is String;'), inFn('var b = s is String;'), atoms());
 		assertDrop(inFn('var b = a + (s)is String;'), inFn('var b = a + s is String;'), atoms());
+	}
+
+	/**
+	 * The OPERATOR half of the same guard, which the multiplicative content this arm
+	 * unwraps is the first to reach: `a-(-b * c)` bare would read `a--b * c`, a decrement
+	 * the lexer takes greedily and the parser then rejects. Whitespace-free source is not
+	 * what `lint --fix` sees (it refuses a non-canonical file, and the writer separates
+	 * these itself), but `fix` is callable on any source and must not depend on that.
+	 */
+	public function testDropKeepsASeparatorAgainstAnOperatorToken(): Void {
+		assertDrop(inFn('var v = a-(--p * q);'), inFn('var v = a- --p * q;'), additiveOperands());
+		assertDrop(inFn('var v = a-(--p*q)-d;'), inFn('var v = a- --p*q-d;'), additiveOperands());
 	}
 
 	/**
@@ -471,6 +763,25 @@ class RedundantParensOperandArmsTest extends Test {
 
 	private static inline function comparisonAndAtoms(): (String) -> LintConfig {
 		return configured('{"rules": {"redundant-parens": {"atoms": true, "comparisonOperands": true}}}');
+	}
+
+	private static inline function additiveOperands(): (String) -> LintConfig {
+		return configured('{"rules": {"redundant-parens": {"additiveOperands": true}}}');
+	}
+
+	private static inline function additiveAndAtoms(): (String) -> LintConfig {
+		return configured('{"rules": {"redundant-parens": {"atoms": true, "additiveOperands": true}}}');
+	}
+
+	private static inline function comparisonAndAdditive(): (String) -> LintConfig {
+		return configured('{"rules": {"redundant-parens": {"additiveOperands": true, "comparisonOperands": true}}}');
+	}
+
+	/** Every opt-in arm at once — what a project switching the whole family on gets. */
+	private static inline function allArms(): (String) -> LintConfig {
+		return configured(
+			'{"rules": {"redundant-parens": {"atoms": true, "sameOperatorLeft": true, "comparisonOperands": true, "additiveOperands": true}}}'
+		);
 	}
 
 	private static function configured(json: String): (String) -> LintConfig {

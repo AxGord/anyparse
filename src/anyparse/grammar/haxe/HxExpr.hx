@@ -450,6 +450,20 @@ enum HxExpr {
 	@:kw('cast') @:fmt(tightKw)
 	TypedCastExpr(info: HxTypedCast);
 
+	/**
+	 * KNOWN DIVERGENCE from the compiler, in the EXTENT of the operand. This grammar parses
+	 * it as an atom, so `x + b * cast c - d` projects as `(x + b * cast c) - d`; the compiler
+	 * takes the whole expression, giving `x + b * cast (c - d)` — measured, 7 against this
+	 * model's 9. A metadata annotation diverges the same way (see `MetaExpr`).
+	 *
+	 * The consequence reaches any transform that treats the tree as the last word: a
+	 * before/after AST comparison cannot see either divergence, because BOTH sides are built
+	 * by this parser and agree. `redundant-parens` is the one that met it, and it does not
+	 * ask the tree — `RefShape.rightGreedyExprKinds` names `CastExpr` on the COMPILER's
+	 * answer, and `parenRequiredHostKinds` covers the metadata case, both from a live probe.
+	 * Widening the operand here would fix it at the root and let those entries go; the cost
+	 * is a re-measure of every corpus fixture that contains a bare `cast`.
+	 */
 	@:kw('cast') @:fmt(atomOperand, tightOnParenOperand('ParenExpr', 'ECheckTypeExpr'))
 	CastExpr(operand: HxExpr);
 
@@ -502,6 +516,14 @@ enum HxExpr {
 	@:postfix('#if') @:fmt(capturePostfixOpSpace)
 	CondSpliceTail(operand: HxExpr, raw: HxCondSpliceRaw);
 
+	/**
+	 * KNOWN DIVERGENCE from the compiler, in what the annotation BINDS TO. This grammar wraps
+	 * the whole expression that follows, so `@:privateAccess A.s * B.s + 1` projects with the
+	 * annotation over the entire sum; the compiler binds it to the immediate primary, and
+	 * that source fails to compile with `Cannot access private field` on `B.s`. `CastExpr`
+	 * diverges the same way, in extent rather than binding — see the note there for why an
+	 * AST-shape oracle cannot detect either.
+	 */
 	MetaExpr(v: HxMetaExpr);
 
 	IdentExpr(v: HxExprIdentLit);

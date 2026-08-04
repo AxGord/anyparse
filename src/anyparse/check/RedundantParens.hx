@@ -134,9 +134,9 @@ import anyparse.runtime.Span;
  * chain and does not descend into it, so a site yields one finding and one edit, and
  * in a delimited position `((e))` collapses to `e` outright.
  *
- * ## The three OPERAND arms (opt-in, off by default)
+ * ## The four OPERAND arms (opt-in, off by default)
  *
- * All three reach the operand positions the arms above refuse, and all three replace a
+ * All four reach the operand positions the arms above refuse, and all four replace a
  * precedence MODEL with a per-site proof. Each is a separate `apqlint.json` option on
  * this rule, default false, so a project that declares none sees byte-identical
  * behaviour:
@@ -174,6 +174,34 @@ import anyparse.runtime.Span;
  *   does, so `(a << b) > c` would be provable on both readings, but a shift operand is
  *   habitually parenthesized and this arm declines to take that away. Atom content is off
  *   it too — the `atoms` arm owns atoms, and the two converge over `lint --fix` passes.
+ * - `"additiveOperands"` — the pair is an operand of an ADDITIVE binary operator
+ *   (`RefShape.additiveOperandHostKinds` — `+` and `-`) and its bare content is on the
+ *   strictly TIGHTER multiplicative tiers (`RefShape.additiveOperandUnwrapKinds`), a
+ *   fail-closed whitelist of kinds binding tighter than the host HERE and in every
+ *   C-family language — so `a * s - (w / 2.0)` re-parses to the tree it already had on
+ *   either reading. EITHER side is a candidate, a chain's MIDDLE operand included (an
+ *   additive chain nests to the left, so a middle operand is simply the right child of
+ *   the inner node), and the two sides are judged TOGETHER under the same symmetry rule
+ *   `comparisonOperands` applies: a parenthesized sibling that is itself provable (same
+ *   whitelist, or an ATOM when that arm is on too) goes in the same pass, and one that is
+ *   not vetoes the drop — `(a * b) + (c - d)` keeps both pairs, since firing on the
+ *   provable half alone would leave the expression lopsided. Four exclusions, each for
+ *   its own reason. SAME-TIER content (`a + (b - c)`, `a - (b + c)`, `a + (b + c)`) is
+ *   out for CORRECTNESS: the drop RE-ASSOCIATES, which changes the rounding for floats
+ *   and the value outright under `-`. Content whose LEFTMOST token is a unary minus
+ *   (`RefShape.unaryMinusKinds`) is provable and out on READABILITY, since the bare form
+ *   reads `a - -b` — a LEFT-SPINE test, so `a + (-b * c)` goes with `a - (-b)` rather than
+ *   slipping through on its arithmetic root. The multiplicative operators are no
+ *   HOSTS — Haxe binds `%` tighter than `*` and `/`, but C makes the three ONE tier, so
+ *   a bare `a * b % c` reads `(a * b) % c` to a C-trained eye and the pair in
+ *   `a * (b % c)` is what makes the two readings agree; the same cross-language trap the
+ *   BITWISE exclusion above guards against. `%` CONTENT under `+` / `-` is fine — C
+ *   agrees it binds tighter than either. Bitwise and shift are out on both sides, for two
+ *   DIFFERENT reasons: as CONTENT they bind LOOSER than the additive tier, so a drop
+ *   re-associates outward, which the fail-closed whitelist settles; as HOSTS a drop would
+ *   be provable — `(a * b) & c` bare re-parses to the tree it already had, here and in C —
+ *   and they stay out on the READABILITY ground that keeps shifts off the comparison
+ *   whitelist.
  *
  * Readability parens on a MIXED-operator expression are a human choice, so
  * `sameOperatorLeft` is restricted to the same-family left operand and nothing else —
@@ -183,10 +211,40 @@ import anyparse.runtime.Span;
  * worse to read than either keeping or dropping both. Measured on a 798-file corpus,
  * that veto is what separates the clean drops from the disfiguring ones.
  *
- * All three arms are additionally suppressed inside `RefShape.parenOpaqueSubtreeKinds` (a
+ * All four arms are additionally suppressed inside `RefShape.parenOpaqueSubtreeKinds` (a
  * `macro` quotation, where a pair reifies as data; a case pattern, matched
  * structurally) and at a direct child of `RefShape.parenRequiredHostKinds` (a `case`
  * guard, a `switch` subject, metadata).
+ *
+ * ## Two gates every PRECEDENCE-GATED slot shares
+ *
+ * The three opt-in arms and the shipped ternary condition all prove the drop from the
+ * content's ROOT kind. Two things a root cannot see make the parentheses load-bearing
+ * anyway, so both gates run for all four slots — and the ternary one is default-ON, which
+ * is where each bug was actually shipping.
+ *
+ * A RIGHT-GREEDY TAIL. A construct whose extent ends only at its enclosing bracket, sitting
+ * at the right edge of the content, eats whatever followed the pair:
+ * `a + (b * untyped c) - d` has a `Mul` root and evaluates to 9, while the bare form is 7
+ * because `untyped` takes `c - d`. `RefShape.rightGreedyExprKinds` names those kinds and
+ * `spineEndsWith` finds them, the same right-spine walk the delimited arm already used for
+ * `separatorGreedyExprKinds` — a greedy construct ALWAYS ends up at the right edge of
+ * whatever bounds it, which is what makes one walk enough. A construct closed by its own
+ * token (`f(untyped c)`) is not at that edge and does not gate.
+ *
+ * A METADATA PREFIX. This parser models `@:m` as wrapping the whole expression that
+ * follows; the compiler binds it to the immediate primary. So in `@:privateAccess (a * b) + c`
+ * the pair is what holds the annotation over the multiplication, and dropping it turns
+ * compiling code into `Cannot access private field` — measured, not reasoned. The pair is
+ * treated as `Required` whenever it sits on the LEFT EDGE of an expression a
+ * `RefShape.parenRequiredHostKinds` construct annotates, which the walk carries down as a
+ * flag beside `opaque`. A pair further right (`@:privateAccess a + (b * c)`) is not what
+ * the annotation binds to and still drops.
+ *
+ * Both gates exist because the tree-shape oracle is BLIND to them: this parser's model and
+ * the compiler's disagree about the extent of `cast` and of a metadata annotation, so the
+ * before and after trees compare equal while the real ones do not. `RefShape` is where that
+ * disagreement is recorded; see the note on `HxExpr`'s `CastExpr`.
  *
  * ## Trivia
  *
@@ -215,8 +273,11 @@ import anyparse.runtime.Span;
 @:nullSafety(Strict)
 final class RedundantParens implements Check implements ConfigAware {
 
-	/** The rule id — also the `apqlint.json` key its three opt-in options hang off. */
+	/** The rule id — also the `apqlint.json` key its four opt-in options hang off. */
 	private static final ID: String = 'redundant-parens';
+
+	/** The characters operators are spelled from — two of them side by side lex as one longer operator. */
+	private static final OPERATOR_CHARS: String = '+-*/%=<>!&|^~?:';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
@@ -243,7 +304,7 @@ final class RedundantParens implements Check implements ConfigAware {
 		for (entry in files) {
 			final slots: ParenSlots = slotsOf(shape, entry.file);
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, slots, SlotKind.Plain, false);
+			if (tree != null) walk(violations, entry.file, entry.source, tree, slots, SlotKind.Plain, false, false);
 		}
 		return violations;
 	}
@@ -263,7 +324,7 @@ final class RedundantParens implements Check implements ConfigAware {
 		if (tree == null) return [];
 
 		final siteByKey: Map<String, ParenSite> = [];
-		indexParens(tree, slots, SlotKind.Plain, false, siteByKey);
+		indexParens(tree, slots, SlotKind.Plain, false, false, siteByKey);
 
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
@@ -279,11 +340,12 @@ final class RedundantParens implements Check implements ConfigAware {
 				continue;
 			}
 			// A parenthesis can be the ONLY thing separating its content from a
-			// neighbouring word token — `return(a);` before it, `(s)is String` after —
-			// and dropping it bare would weld the two into one identifier, which still
-			// PARSES and so survives the caller's re-parse. Re-separate either side.
-			final lead: String = isWordCharAt(source, span.from - 1) ? ' ' : '';
-			final trail: String = isWordCharAt(source, span.to) ? ' ' : '';
+			// neighbouring token, and dropping it bare welds the two — into one identifier
+			// (`return(a);` before it, `(s)is String` after), which still PARSES and so
+			// survives the caller's re-parse, or into one longer operator
+			// (`a-(-b * c)` -> `a--b * c`), which does not. Re-separate either side.
+			final lead: String = separator(source, span.from - 1, text.charCodeAt(0) ?? 0);
+			final trail: String = separator(source, span.to, text.charCodeAt(text.length - 1) ?? 0);
 			edits.push({ span: span, text: '$lead$text$trail' });
 		}
 		return edits;
@@ -305,7 +367,8 @@ final class RedundantParens implements Check implements ConfigAware {
 		final atomArm: Bool = config.boolOption(ID, 'atoms') == true;
 		final familyArm: Bool = config.boolOption(ID, 'sameOperatorLeft') == true;
 		final comparisonArm: Bool = config.boolOption(ID, 'comparisonOperands') == true;
-		final operandArm: Bool = atomArm || familyArm || comparisonArm;
+		final additiveArm: Bool = config.boolOption(ID, 'additiveOperands') == true;
+		final operandArm: Bool = atomArm || familyArm || comparisonArm || additiveArm;
 		return {
 			parenKind: shape.parenKind ?? '',
 			ternaryKind: shape.ternaryKind,
@@ -322,6 +385,11 @@ final class RedundantParens implements Check implements ConfigAware {
 			families: armVocabulary(shape.leftAssociativeBinaryFamilies, familyArm),
 			comparisonHost: armVocabulary(shape.comparisonOperandHostKinds, comparisonArm),
 			comparisonUnwrap: armVocabulary(shape.comparisonOperandUnwrapKinds, comparisonArm),
+			additiveHost: armVocabulary(shape.additiveOperandHostKinds, additiveArm),
+			additiveUnwrap: armVocabulary(shape.additiveOperandUnwrapKinds, additiveArm),
+			rightGreedy: shape.rightGreedyExprKinds ?? [],
+			unaryMinus: shape.unaryMinusKinds ?? [],
+			prefixAnnotation: shape.prefixAnnotationKinds ?? [],
 			requiredHost: armVocabulary(shape.parenRequiredHostKinds, operandArm),
 			opaqueSubtree: armVocabulary(shape.parenOpaqueSubtreeKinds, operandArm)
 		};
@@ -333,14 +401,39 @@ final class RedundantParens implements Check implements ConfigAware {
 	}
 
 	/**
-	 * Whether `source` holds an identifier / number character at `at` — a neighbour the
-	 * unwrapped content could lex into one token with, once the parenthesis between them
-	 * is gone. Out of range answers false: nothing there to weld with.
+	 * The separator a drop needs at one edge of the pair: a space when the source
+	 * character at `at` would lex into ONE token with `abutting` — the content character
+	 * landing beside it once the parenthesis between them is gone — and nothing otherwise.
+	 * Out of range there is no neighbour, so nothing is needed.
+	 *
+	 * Two classes weld. An identifier / number neighbour is treated as welding with ANY
+	 * content, which is why `return(-a)` also keeps a space it does not strictly need: the
+	 * cost is one character and the alternative is reasoning about every keyword. Two
+	 * OPERATOR characters weld because the lexer takes the longest match — `a-(-b * c)`
+	 * bare is `a--b * c`, a decrement.
+	 *
+	 * Both character classes are spelled out here rather than read from the grammar: they
+	 * are the C-family lexical conventions every grammar this check has met shares. The two
+	 * directions of being wrong are NOT symmetric. A character wrongly IN `OPERATOR_CHARS`
+	 * costs one space nobody needed. A character wrongly LEFT OUT is fail-open — no space,
+	 * the two tokens weld, and the result can still PARSE as something else, which is how
+	 * `a-(--p * q)` becomes `a---p * q`, a postfix decrement of `a`. Add to the set on
+	 * suspicion.
 	 */
-	private static function isWordCharAt(source: String, at: Int): Bool {
-		if (at < 0 || at >= source.length) return false;
-		final c: Int = source.charCodeAt(at) ?? 0;
+	private static function separator(source: String, at: Int, abutting: Int): String {
+		if (at < 0 || at >= source.length) return '';
+		final neighbour: Int = source.charCodeAt(at) ?? 0;
+		return isWordChar(neighbour) || (isOperatorChar(neighbour) && isOperatorChar(abutting)) ? ' ' : '';
+	}
+
+	/** Whether `c` is an identifier or number character — one a neighbouring token can lex into. */
+	private static inline function isWordChar(c: Int): Bool {
 		return c == '_'.code || c >= 'a'.code && c <= 'z'.code || c >= 'A'.code && c <= 'Z'.code || c >= '0'.code && c <= '9'.code;
+	}
+
+	/** Whether `c` is a character operators are spelled from, which the lexer reads greedily. */
+	private static inline function isOperatorChar(c: Int): Bool {
+		return OPERATOR_CHARS.indexOf(String.fromCharCode(c)) >= 0;
 	}
 
 	/**
@@ -351,14 +444,15 @@ final class RedundantParens implements Check implements ConfigAware {
 	 * subtree where a paren is not merely grouping.
 	 */
 	private static function walk(
-		out: Array<Violation>, file: String, source: String, node: QueryNode, slots: ParenSlots, slot: SlotKind, opaque: Bool
+		out: Array<Violation>, file: String, source: String, node: QueryNode, slots: ParenSlots, slot: SlotKind, opaque: Bool,
+		prefixed: Bool
 	): Void {
 		// `children.length == 1` is defensive: a grammar's paren wraps exactly one
 		// expression, so no fixture can reach the else side in Haxe (`()` does not
 		// parse). It guards a grammar whose paren kind is shaped differently.
 		if (
 			node.kind == slots.parenKind && node.children.length == 1
-			&& (dropsParens(node.children[0], slots, slot, opaque) || node.children[0].kind == slots.parenKind)
+			&& (dropsParens(node.children[0], slots, slot, opaque, prefixed) || node.children[0].kind == slots.parenKind)
 			&& !triviaInsideParens(source, node, slots)
 		) {
 			final span: Null<Span> = node.span;
@@ -374,7 +468,9 @@ final class RedundantParens implements Check implements ConfigAware {
 			}
 		}
 		final inner: Bool = opaque || slots.opaqueSubtree.contains(node.kind);
-		for (i => c in node.children) walk(out, file, source, c, slots, slotOf(node, i, slots), inner);
+		final host: Bool = slots.prefixAnnotation.contains(node.kind);
+		for (i => c in node.children)
+			walk(out, file, source, c, slots, slotOf(node, i, slots), inner, host || prefixed && startsTogether(node, c));
 	}
 
 	/**
@@ -383,22 +479,64 @@ final class RedundantParens implements Check implements ConfigAware {
 	 * would not turn a splice-sensitive reification loose in a splicing host — or, under
 	 * the opt-in operand arms, the content is provably inert wherever it sits (`atoms`)
 	 * or provably re-parses to the tree it already had in this operand slot
-	 * (`sameOperatorLeft`, `comparisonOperands`).
+	 * (`sameOperatorLeft`, `comparisonOperands`, `additiveOperands`).
+	 *
+	 * `prefixed` says the pair sits at the LEFT EDGE of an expression a
+	 * `RefShape.parenRequiredHostKinds` construct annotates, where the pair holds that
+	 * annotation over its content — the same answer as `Required`, reached from an
+	 * ancestor rather than the immediate parent.
+	 *
+	 * Every PRECEDENCE-GATED slot additionally refuses content that ends in a
+	 * `RefShape.rightGreedyExprKinds` construct. Those four slots prove the drop from the
+	 * content's ROOT kind, and a root binds nothing about its right EDGE: `(b * untyped c)`
+	 * has an arithmetic root over a tail that swallows whatever follows the pair.
+	 *
+	 * The switch is EXHAUSTIVE on purpose — no `case _`. A new `SlotKind` then fails to
+	 * compile here instead of inheriting whichever branch it happens to fall into, which
+	 * for this rule would be the permissive one.
 	 */
-	private static function dropsParens(inner: QueryNode, slots: ParenSlots, slot: SlotKind, opaque: Bool): Bool {
+	private static function dropsParens(inner: QueryNode, slots: ParenSlots, slot: SlotKind, opaque: Bool, prefixed: Bool): Bool {
 		// The fix drops the WHOLE chain, so every test reads the content that would be
 		// left bare, not the next paren layer down.
 		final bare: QueryNode = RefactorSupport.unwrapParens(inner, slots.parenKind);
-		if (slot == SlotKind.Required) return false;
+		if (prefixed) return false;
 		// The operand arms answer per CONTENT, so they apply in any slot the shipped arms
 		// leave alone — but never inside a subtree where a paren carries meaning.
-		final comparisonProvable: Bool = slot == SlotKind.ComparisonOperand && slots.comparisonUnwrap.contains(bare.kind);
-		if (!opaque && (isAtom(bare, slots) || slot == SlotKind.SameFamilyLeft || comparisonProvable)) return true;
-		if (slot == SlotKind.Plain || slot == SlotKind.SameFamilyLeft || slot == SlotKind.ComparisonOperand) return false;
-		// A ternary condition drops its parens only when the bare content binds strictly
-		// tighter than `?:` — otherwise unwrapping lets it absorb the `? … : …` branches.
-		if (slot == SlotKind.TernaryCondition) return slots.ternaryUnwrap.contains(bare.kind);
-		return (slot != SlotKind.DelimitedSplice || !slots.splice.contains(bare.kind)) && !separatorGreedy(bare, slots);
+		final atom: Bool = !opaque && isAtom(bare, slots);
+		final ungreedy: Bool = !spineEndsWith(bare, slots.rightGreedy);
+		return switch slot {
+			case SlotKind.Required: false;
+			case SlotKind.Plain: atom;
+			case SlotKind.SameFamilyLeft:
+				!opaque && ungreedy;
+			case SlotKind.ComparisonOperand:
+				!opaque && (isAtom(bare, slots) || tighterTierContent(bare, slots.comparisonUnwrap, slots)) && ungreedy;
+			case SlotKind.AdditiveOperand:
+				!opaque && (isAtom(bare, slots) || tighterTierContent(bare, slots.additiveUnwrap, slots)) && ungreedy;
+			// A ternary condition drops its parens only when the bare content binds strictly
+			// tighter than `?:` — otherwise unwrapping lets it absorb the `? … : …` branches.
+			case SlotKind.TernaryCondition:
+				(atom || slots.ternaryUnwrap.contains(bare.kind)) && ungreedy;
+			case SlotKind.Delimited:
+				atom || !spineEndsWith(bare, slots.greedy);
+			case SlotKind.DelimitedSplice:
+				atom || !slots.splice.contains(bare.kind) && !spineEndsWith(bare, slots.greedy);
+		}
+	}
+
+	/**
+	 * Whether `bare` is content one of the two whitelist operand slots can drop: its root
+	 * is on `unwrapKinds` AND its leftmost token is not a unary minus.
+	 *
+	 * The leading-minus half is a READABILITY rule, not a correctness one — `a + (-b * c)`
+	 * re-parses to the tree it already had. It reads `a + -b * c`, which is the defect a
+	 * bare `Neg` root was excluded for, and a root kind cannot see it: the minus is a leaf
+	 * of a `Mul`. Asking the left SPINE covers both, so the whitelists no longer name
+	 * `Neg` at all. Shared with the sibling test in `tighterTierOperand`, so a sibling
+	 * leading with a minus is not provable either.
+	 */
+	private static function tighterTierContent(bare: QueryNode, unwrapKinds: Array<String>, slots: ParenSlots): Bool {
+		return unwrapKinds.contains(bare.kind) && !spineStartsWith(bare, slots.unaryMinus);
 	}
 
 	/**
@@ -448,32 +586,65 @@ final class RedundantParens implements Check implements ConfigAware {
 	}
 
 	/**
-	 * Whether a construct that can consume the separator ending this slot sits at the
-	 * RIGHT EDGE of `inner`, which makes the parentheses around it load-bearing. The
-	 * walk follows the last child while that child ends where its parent ends, so it
-	 * reaches through a metadata wrapper / trailing ternary branch / trailing operand
-	 * and stops at a bracket-closed host, whose own closing token already bounds the
-	 * construct.
+	 * Whether a kind of `kinds` sits at the RIGHT EDGE of `inner`, which makes the
+	 * parentheses around it load-bearing. The walk follows the last child while that child
+	 * ends where its parent ends, so it reaches through a metadata wrapper / trailing
+	 * ternary branch / trailing operand and stops at a bracket-closed host, whose own
+	 * closing token already bounds the construct.
+	 *
+	 * TWO vocabularies ask it. `RefShape.separatorGreedyExprKinds` for a DELIMITED slot —
+	 * what can eat the separator that ends the slot — and `RefShape.rightGreedyExprKinds`
+	 * for the four precedence-gated slots, what can eat whatever follows the pair. The walk
+	 * is the same; only the terminal set differs.
 	 */
-	private static function separatorGreedy(inner: QueryNode, slots: ParenSlots): Bool {
+	private static inline function spineEndsWith(inner: QueryNode, kinds: Array<String>): Bool {
+		return spineTerminal(inner, kinds, false);
+	}
+
+	/**
+	 * The LEFT-edge mirror of `spineEndsWith`: whether a kind of `kinds` owns the leftmost
+	 * token of `inner`. Reaches through a chain of binary operators to whatever is written
+	 * first and stops as soon as something of the parent's own opens before it.
+	 */
+	private static inline function spineStartsWith(inner: QueryNode, kinds: Array<String>): Bool {
+		return spineTerminal(inner, kinds, true);
+	}
+
+	/**
+	 * The walk both spine tests are: descend the `leading` edge of `inner` — first child
+	 * going left, last child going right — for as long as that child sits flush against it,
+	 * and answer whether a kind of `kinds` was reached. The two directions are one
+	 * algorithm; `spineStartsWith` / `spineEndsWith` name them so no call site reads a bare
+	 * boolean.
+	 */
+	private static function spineTerminal(inner: QueryNode, kinds: Array<String>, leading: Bool): Bool {
 		var n: QueryNode = inner;
-		while (!slots.greedy.contains(n.kind)) {
+		while (!kinds.contains(n.kind)) {
 			if (n.children.length == 0) return false;
-			final last: QueryNode = n.children[n.children.length - 1];
-			if (!endsTogether(n, last)) return false;
-			n = last;
+			final next: QueryNode = leading ? n.children[0] : n.children[n.children.length - 1];
+			if (!edgeAligned(n, next, leading)) return false;
+			n = next;
 		}
 		return true;
 	}
 
-	/** Whether `child` is the last thing inside `parent` — nothing of `parent`'s own closes after it. */
-	private static function endsTogether(parent: QueryNode, child: QueryNode): Bool {
-		// A grammar that leaves spans unset cannot be measured; keep descending, which
-		// errs towards KEEPING the parentheses.
+	/** Whether `child` is the first thing inside `parent` — nothing of `parent`'s own opens before it. */
+	private static inline function startsTogether(parent: QueryNode, child: QueryNode): Bool {
+		return edgeAligned(parent, child, true);
+	}
+
+	/**
+	 * Whether `child` sits flush against one edge of `parent` — its START when `leading`,
+	 * its END otherwise. Nothing of `parent`'s own opens before, or closes after, it.
+	 */
+	private static function edgeAligned(parent: QueryNode, child: QueryNode, leading: Bool): Bool {
+		// A grammar that leaves spans unset cannot be measured; keep descending, which errs
+		// towards FINDING the construct at the edge — and for every caller of either walk,
+		// that keeps the parentheses.
 		final p: Null<Span> = parent.span;
 		if (p == null) return true;
 		final c: Null<Span> = child.span;
-		return c == null || p.to == c.to;
+		return c == null || (leading ? p.from == c.from : p.to == c.to);
 	}
 
 	/** How `parent`'s child at `i` is bounded — see `SlotKind`. */
@@ -485,7 +656,8 @@ final class RedundantParens implements Check implements ConfigAware {
 		// parenthesized child 1, and a child that is not a paren never reaches
 		// `dropsParens`. It pins the slot as the LEFT operand's for a reader.
 		if (i == 0 && sameFamilyLeftOperand(parent, slots)) return SlotKind.SameFamilyLeft;
-		if (comparisonOperand(parent, i, slots)) return SlotKind.ComparisonOperand;
+		if (tighterTierOperand(parent, i, slots.comparisonHost, slots.comparisonUnwrap, slots)) return SlotKind.ComparisonOperand;
+		if (tighterTierOperand(parent, i, slots.additiveHost, slots.additiveUnwrap, slots)) return SlotKind.AdditiveOperand;
 		return !childDelimited(parent, i, slots)
 			? SlotKind.Plain
 			: slots.spliceHost.contains(parent.kind) ? SlotKind.DelimitedSplice : SlotKind.Delimited;
@@ -512,27 +684,34 @@ final class RedundantParens implements Check implements ConfigAware {
 	}
 
 	/**
-	 * Whether `parent`'s child at `i` is a parenthesized operand of a COMPARISON-tier
-	 * operator, on either side — the slot the opt-in `comparisonOperands` arm drops when
-	 * the content left bare is on `comparisonUnwrap`. Every kind of that whitelist binds
-	 * strictly tighter than a comparison in this language AND in the C family, so the
-	 * drop holds on both readings.
+	 * Whether `parent`'s child at `i` is a parenthesized operand — EITHER side — of a
+	 * binary operator on `hostKinds` whose bare content is on `unwrapKinds`: the slot the
+	 * two precedence-gated operand arms drop. Every kind of such a whitelist binds strictly
+	 * tighter than its hosts in this language AND in the C family, so the drop holds on
+	 * both readings; a kind absent from it keeps its parentheses.
 	 *
 	 * The sibling test is a SYMMETRY rule rather than the hard veto `sameFamilyLeftOperand`
 	 * applies. A parenthesized sibling that is itself PROVABLE — its bare content is on the
 	 * same whitelist, or it is an ATOM the opt-in `atoms` arm would drop anyway — takes the
-	 * slot with it: both pairs go in the SAME pass, so the comparison is never left
+	 * slot with it: both pairs go in the SAME pass, so the expression is never left
 	 * lopsided. Only a sibling pair that is not provable refuses the slot, which keeps the
 	 * two exactly as the author wrote them. The atom half is inert unless `atoms` is on as
 	 * well, since `slots.atoms` is empty otherwise.
+	 *
+	 * `comparisonOperands` and `additiveOperands` share this one test because the question
+	 * is identical — only the two vocabularies differ, and each is asked with its OWN pair,
+	 * so neither arm's whitelist can prove a sibling for the other. An arm that is off
+	 * supplies EMPTY vocabularies, which answer false for every host.
 	 */
-	private static function comparisonOperand(parent: QueryNode, i: Int, slots: ParenSlots): Bool {
-		if (!slots.comparisonHost.contains(parent.kind) || parent.children.length != 2) return false;
+	private static function tighterTierOperand(
+		parent: QueryNode, i: Int, hostKinds: Array<String>, unwrapKinds: Array<String>, slots: ParenSlots
+	): Bool {
+		if (!hostKinds.contains(parent.kind) || parent.children.length != 2) return false;
 		if (parent.children[i].kind != slots.parenKind) return false;
 		final sibling: QueryNode = parent.children[1 - i];
 		if (sibling.kind != slots.parenKind) return true;
 		final bare: QueryNode = RefactorSupport.unwrapParens(sibling, slots.parenKind);
-		return slots.comparisonUnwrap.contains(bare.kind) || isAtom(bare, slots);
+		return tighterTierContent(bare, unwrapKinds, slots) || isAtom(bare, slots);
 	}
 
 	/**
@@ -555,18 +734,20 @@ final class RedundantParens implements Check implements ConfigAware {
 
 	/** Index every paren node by its `from:to` span key, recording whether its own pair can be dropped entirely. */
 	private static function indexParens(
-		node: QueryNode, slots: ParenSlots, slot: SlotKind, opaque: Bool, out: Map<String, ParenSite>
+		node: QueryNode, slots: ParenSlots, slot: SlotKind, opaque: Bool, prefixed: Bool, out: Map<String, ParenSite>
 	): Void {
 		// Same defensive `children.length == 1` as `walk` — see the note there.
 		if (node.kind == slots.parenKind && node.children.length == 1) {
 			final span: Null<Span> = node.span;
 			if (span != null) out['${span.from}:${span.to}'] = {
 				node: node,
-				dropsParens: dropsParens(node.children[0], slots, slot, opaque)
+				dropsParens: dropsParens(node.children[0], slots, slot, opaque, prefixed)
 			};
 		}
 		final inner: Bool = opaque || slots.opaqueSubtree.contains(node.kind);
-		for (i => c in node.children) indexParens(c, slots, slotOf(node, i, slots), inner, out);
+		final host: Bool = slots.prefixAnnotation.contains(node.kind);
+		for (i => c in node.children)
+			indexParens(c, slots, slotOf(node, i, slots), inner, host || prefixed && startsTogether(node, c), out);
 	}
 
 }
@@ -578,13 +759,22 @@ final class RedundantParens implements Check implements ConfigAware {
  * `greedy`, the interior kinds whose parens stay even in a delimited slot.
  *
  * `atoms` (self-delimiting kinds), `atomChains` (transparent links, atomic only when
- * every child is), `families`, and `comparisonHost` / `comparisonUnwrap` (the
- * comparison-tier hosts and the arithmetic content provable in their operand slots)
- * carry the three OPERAND arms, with `requiredHost` / `opaqueSubtree` bounding them.
- * Each holds the grammar's vocabulary when this project opted the owning arm in and an
- * EMPTY array otherwise, so a default run answers every operand question uniformly
- * false with no second flag to read. Resolved once per file so the walk never re-reads
- * the shape or the config.
+ * every child is), `families`, and the two host / unwrap PAIRS — `comparisonHost` /
+ * `comparisonUnwrap` (comparison-tier hosts, arithmetic content) and `additiveHost` /
+ * `additiveUnwrap` (additive hosts, multiplicative content) — carry the four OPERAND
+ * arms, with `opaqueSubtree` bounding them. Each holds the grammar's vocabulary when this
+ * project opted the owning arm in and an EMPTY array otherwise, so a default run answers
+ * every operand question uniformly false with no second flag to read. Resolved once per
+ * file so the walk never re-reads the shape or the config.
+ *
+ * `rightGreedy`, `unaryMinus` and `requiredHost` are deliberately NOT arm-scoped. The
+ * first two gate the SHIPPED, default-on ternary-condition arm as well as the opt-in ones,
+ * and the third states where a metadata annotation binds — a correctness rule that holds
+ * whatever a project opted in.
+ *
+ * WHEN A THIRD PRECEDENCE-GATED HOST/UNWRAP PAIR LANDS beside `comparison*` and
+ * `additive*`, collapse the parallel fields into one array of pairs and loop `slotOf` over
+ * it. Two pairs still read better spelled out; three is the trigger.
  */
 private typedef ParenSlots = {
 	var parenKind: String;
@@ -602,6 +792,11 @@ private typedef ParenSlots = {
 	var families: Array<Array<String>>;
 	var comparisonHost: Array<String>;
 	var comparisonUnwrap: Array<String>;
+	var additiveHost: Array<String>;
+	var additiveUnwrap: Array<String>;
+	var rightGreedy: Array<String>;
+	var unaryMinus: Array<String>;
+	var prefixAnnotation: Array<String>;
 	var requiredHost: Array<String>;
 	var opaqueSubtree: Array<String>;
 }
@@ -631,7 +826,18 @@ private typedef ParenSite = {
  * precedence-gated slot where the paren drops only for the arithmetic content on
  * `RefShape.comparisonOperandUnwrapKinds`, and only when a parenthesized sibling is
  * itself provable (on that same whitelist, or as an atom when the `atoms` arm is
- * on) — the opt-in `comparisonOperands` arm.
+ * on) — the opt-in `comparisonOperands` arm. `AdditiveOperand` — the next arm down:
+ * either operand of a `RefShape.additiveOperandHostKinds` operator, where the paren
+ * drops for the strictly tighter multiplicative content on
+ * `RefShape.additiveOperandUnwrapKinds` under the identical sibling rule — the opt-in
+ * `additiveOperands` arm.
+ *
+ * The four PRECEDENCE-GATED slots — `TernaryCondition`, `SameFamilyLeft`,
+ * `ComparisonOperand`, `AdditiveOperand` — additionally refuse content ending in a
+ * `RefShape.rightGreedyExprKinds` construct, and the two whitelist ones refuse content
+ * whose leftmost token is a `RefShape.unaryMinusKinds`. `dropsParens` switches over this
+ * enum EXHAUSTIVELY, so a new member fails to compile until it states which of those it
+ * wants.
  */
 private enum abstract SlotKind(Int) {
 
@@ -648,5 +854,7 @@ private enum abstract SlotKind(Int) {
 	final Required = 5;
 
 	final ComparisonOperand = 6;
+
+	final AdditiveOperand = 7;
 
 }

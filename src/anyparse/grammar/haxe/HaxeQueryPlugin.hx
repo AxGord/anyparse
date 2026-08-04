@@ -903,8 +903,58 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// the pair is gone. The SHIFT tier (7) binds tighter than a comparison in C
 			// exactly as it does here and WOULD be provable; it is out on READABILITY
 			// alone, since a shift operand is habitually parenthesized. Atoms are the
-			// `atoms` arm's; the two converge over `lint --fix` passes.
-			comparisonOperandUnwrapKinds: ['Add', 'Sub', 'Mul', 'Div', 'Mod', 'Neg'],
+			// `atoms` arm's; the two converge over `lint --fix` passes. `Neg` USED to be
+			// here as a root; `unaryMinusKinds` now owns the whole leading-minus rule,
+			// so listing it as well would be a whitelist entry nothing can pass.
+			comparisonOperandUnwrapKinds: ['Add', 'Sub', 'Mul', 'Div', 'Mod'],
+			// The prec-8 tier. NOT the multiplicative one above it: Haxe binds `%` tighter
+			// than `*` and `/`, but C makes the three ONE tier, so a bare `a * b % c` reads
+			// `(a * b) % c` to a C-trained eye and the pair in `a * (b % c)` is what makes
+			// the two readings agree. Bitwise and shift are no hosts either — not for
+			// correctness (`(a * b) & c` bare re-parses the same here and in C) but on the
+			// READABILITY ground that keeps shifts off the comparison whitelist.
+			additiveOperandHostKinds: ['Add', 'Sub'],
+			// Tiers 9 and 10 — strictly tighter than `+` / `-` here AND in C, so the drop is
+			// right on both readings. The SAME tier (`Add` / `Sub`) is out for CORRECTNESS:
+			// `a + (b - c)` bare is `(a + b) - c`, a different value. `Neg` is provable and
+			// out on READABILITY alone (`a - (-b)` bare reads `a - -b`). Everything looser
+			// re-associates outward and is excluded by construction.
+			additiveOperandUnwrapKinds: ['Mul', 'Div', 'Mod'],
+			// Everything whose extent runs to the enclosing bracket. Probed one shape
+			// apiece: each of these swallows a trailing `- d` that a parenthesis would
+			// have kept out. `CastExpr` is here on the COMPILER's answer, not this
+			// parser's — `x + b * cast c - d` is 7 there and this grammar models the
+			// cast as bounded; `MetaExpr` diverges the same way. Deliberately absent:
+			// the brace- and bracket-closed forms (`switch`, a block, an object or
+			// array literal, `cast(e, T)`, `(e : T)`, `macro class`, `new T(…)`) and
+			// the tight unary prefixes (`-`, `!`, `~`, `++`, `--`), none of which reach
+			// past their own last token.
+			rightGreedyExprKinds: [
+				'UntypedExpr',
+				'MacroExpr',
+				'MetaExpr',
+				'CastExpr',
+				'FnExpr',
+				'NamedFnExpr',
+				'ThinParenLambdaExpr',
+				'ParenLambdaExpr',
+				'ThrowExpr',
+				'ReturnExpr',
+				'InlineExpr',
+				'IfExpr',
+				'ForExpr',
+				'ForReifExpr',
+				'WhileExpr',
+				'TryExpr',
+				'Ternary',
+			],
+			// `a + (-b * c)` bare reads `a + -b * c` — a `Mul` root over a leading
+			// minus, the same defect a bare `Neg` root is excluded for.
+			unaryMinusKinds: ['Neg'],
+			// `@:m expr` — the annotation binds to whatever `expr` starts with, so a pair
+			// on that left edge is holding it there. `MetaCall` is the annotation node
+			// INSIDE this one, not a prefix of anything.
+			prefixAnnotationKinds: ['MetaExpr'],
 			// A direct paren child of these is grammar syntax (`case X if (g)`) or an
 			// idiom the project keeps out of scope (a second `switch` subject pair,
 			// metadata arguments).
