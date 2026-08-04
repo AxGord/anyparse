@@ -558,6 +558,9 @@ import unit.HxChainOuterOperatorWrapSliceTest;
 import unit.HxOpAddChainOperatorFirstSliceTest;
 import unit.PreferCaseGuardCheckTest;
 import unit.PreferCaseGuardOracleE2ETest;
+import unit.HxCaseBodyControlFlowGlueTest;
+import unit.HxCaseBodyTrailCommentInlineTest;
+import unit.HxArrowValueIfReflowSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -806,6 +809,7 @@ class RunTests {
 		addCase(new HxMethodChainDotBreakOverReglueSliceTest());
 		addCase(new HxMethodChainCallParamRestAwareSliceTest());
 		addCase(new HxObjectLitArrowBodyPadSliceTest());
+		addCase(new HxArrowValueIfReflowSliceTest());
 		addCase(new HxMethodChainCloseTrailingTest());
 		addCase(new HxWrapRulesIngestTest());
 		addCase(new PairedConvertersSmokeTest());
@@ -833,6 +837,8 @@ class RunTests {
 		addCase(new HxCaseBodyFitLineSliceTest());
 		addCase(new HxGlueWidthSliceTest());
 		addCase(new HxCaseBodySymmetrySliceTest());
+		addCase(new HxCaseBodyControlFlowGlueTest());
+		addCase(new HxCaseBodyTrailCommentInlineTest());
 		addCase(new HxCaseExprPositionPropagateTest());
 		addCase(new HxIfStmtExprPositionDispatchTest());
 		addCase(new HxAnonFnBodyStmtPositionSliceTest());

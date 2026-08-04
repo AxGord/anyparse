@@ -53,6 +53,15 @@ class WriterLowering {
 	/** See `_predRootStatic` — the second half of the same build-scoped mirror pair. */
 	private static var _astPredsOnStatic: Bool = false;
 
+	/**
+	 * omega-arrow-value-if-reflow - the per-field opt-in flag read at four
+	 * unrelated lowering sites (body policy, pre-kw separator, both branch
+	 * opt-fanouts). Named once so a rename cannot desynchronise them; the
+	 * class has no other flag-name constants, so this is the convention's
+	 * first member rather than an existing group.
+	 */
+	private static inline final ARROW_VALUE_IF_SITE: String = 'arrowValueIfReflowSite';
+
 	public function new(shape: ShapeBuilder.ShapeResult, formatInfo: FormatReader.FormatInfo, ctx: LoweringCtx) {
 		_shape = shape;
 		_formatInfo = formatInfo;
@@ -1141,7 +1150,7 @@ class WriterLowering {
 		final dcExpr: Expr = multiVarKnob == null || multiVarMoreField == null
 			? dcCall(parts)
 			: buildMultiVarWrapFold(parts, typePath, multiVarKnob, multiVarMoreField);
-		return finalizeStructReturn(node, dcExpr);
+		return finalizeStructReturn(node, arrowValueIfReflowWrap(node, dcExpr));
 		// (empty-body detection + ctor-set dispatch live in finalizeStructReturn)
 	}
 
@@ -1404,6 +1413,21 @@ class WriterLowering {
 		// `HxDefaultBranch.stmts` to mirror fork's
 		// `MarkSameLine.markExpressionCase` body-shape check.
 		final refuseFlatOnComplex: Bool = starNode.fmtHasFlag('refuseFlatOnComplexExpr');
+		// omega-case-body-controlflow-glue: `@:fmt(refuseGlueOnControlFlowRoot)`
+		// tells the `FitLine` case-body path to REFUSE the glue outcome when
+		// the body's single statement is keyword-led control flow (the
+		// generated `caseBodyControlFlowRoot` predicate of the build's AST
+		// family). Such a construct's continuation lines are siblings of its
+		// head, so glued they render at the head's indent, which under
+		// `alignInlineSwitchCaseBody` is the LABEL's. Wired on
+		// `HxCaseBranch.body` / `HxDefaultBranch.stmts` alongside
+		// `refuseFlatOnComplexExpr`.
+		//
+		// The SAME meta gates the accompanying sibling FORCE in the case-LIST
+		// Star's pre-pass - `caseSiblingControlFlowFnExpr` reads it back off this
+		// body Star through `elemBodyStarHasFlag`, so the two halves cannot be
+		// enabled apart. Flag off => byte-identical on BOTH.
+		final refuseGlueOnControlFlow: Bool = starNode.fmtHasFlag('refuseGlueOnControlFlowRoot');
 		// ω-metadata-line-end-function: `@:fmt(metaLineEndPolicy('<optField>'))`
 		// on a `@:trivia @:tryparse` Star wires inter-element + post-Star
 		// separator dispatch through `opt.<optField>:MetadataLineEndPolicy`.
@@ -1501,7 +1525,7 @@ class WriterLowering {
 			cascadeInfos.betweenSameCtorIfNotInfos, tryparseLineLengthAware, tryparsePriorAfterTrailExpr, tryparseForceInlineSep,
 			(tryparseBlockEnded || tryparseSepFaithful) ? tryparseSepText : null, tryparseBlockEnded, tryparseSepFaithful,
 			tryparseHeritageWrap, tryparseCondBodyIndent, tryparseOperandBreakAfterMultilineBrace, clearExprPositionNonTail,
-			tryparseSepBeforeAccess, tryparseElemSelfTrailsNewline, tryparseElemCondFn
+			tryparseSepBeforeAccess, tryparseElemSelfTrailsNewline, tryparseElemCondFn, refuseGlueOnControlFlow
 		));
 	}
 
@@ -1661,6 +1685,7 @@ class WriterLowering {
 		final caseSymArgs: Null<Array<String>> = starNode.fmtReadStringArgs('caseSiblingSymmetry');
 		final caseSiblingUnitsFn: Null<Expr> = caseSiblingUnitsFnExpr(caseSymArgs, elemRefName);
 		final caseSiblingStructuralFn: Null<Expr> = caseSiblingStructuralFnExpr(caseSymArgs, elemRefName);
+		final caseSiblingControlFlowFn: Null<Expr> = caseSiblingControlFlowFnExpr(caseSymArgs, elemRefName);
 		final blockStar: Expr = triviaBlockStarExpr(
 			fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText, false,
 			afterDocComments, keepBetweenFields, beforeDocComments, interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType,
@@ -1668,7 +1693,7 @@ class WriterLowering {
 			uniformBetweenOptField, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, blockEndedFlag ? sepText : null,
 			blockEndedFlag, blockEndedFlag ? (starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE): Null<String>) : null,
 			blockEndedFlag ? _formatInfo.schemaTypePath : null, condLeadingDocInfo, clearExprPositionNonTail, beginTypeKnob, endTypeKnob,
-			uniformStmtBlanks, emptyBlockBreak, caseSymArgs, caseSiblingUnitsFn, caseSiblingStructuralFn
+			uniformStmtBlanks, emptyBlockBreak, caseSymArgs, caseSiblingUnitsFn, caseSiblingStructuralFn, caseSiblingControlFlowFn
 		);
 		final blockStarNested: Expr = macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
@@ -3019,9 +3044,18 @@ class WriterLowering {
 		final sepWithBeforeKwExpr: Expr = beforeKwLeadingExpr != null
 			? macro kwBeforeDoc($beforeKwLeadingExpr, $sepBaseExpr, opt)
 			: sepBaseExpr;
-		return beforeKwTrailingExpr != null
+		final sepExpr: Expr = beforeKwTrailingExpr != null
 			? macro kwBeforeTrailingDoc($beforeKwTrailingExpr, $sepWithBeforeKwExpr, opt)
 			: sepWithBeforeKwExpr;
+		// omega-arrow-value-if-reflow: on `HxIfExpr.elseBranch` the pre-`else`
+		// gap becomes a SOFT `Line(' ')` when the struct-level gate local
+		// `_aifReflow` fires - the single break axis of an arrow-body value-if
+		// chain. Flat inside the `Group` `lowerStruct` wraps the node in, a
+		// newline at the `if`'s own indent when that group breaks. Replaces the
+		// whole computed gap (the `shapeAware` hardline AND the `Same`-policy
+		// space), since with the branch policy forced to `Same` the shape-aware
+		// arm is suppressed and the space would leave the chain unbreakable.
+		return child.fmtHasFlag(ARROW_VALUE_IF_SITE) ? macro (_aifReflow ? _dl() : $sepExpr) : sepExpr;
 	}
 
 	/**
@@ -6220,16 +6254,52 @@ class WriterLowering {
 		};
 		final fallbackFlagName: Null<String> = opts.fallbackFlagName;
 		final elseFieldName: Null<String> = opts.elseFieldName;
-		if (fallbackFlagName == null || elseFieldName == null) return ctorOverriddenOptFlag;
-		final elseAccess: Expr = { expr: EField(macro value, elseFieldName), pos: Context.currentPos() };
-		final fallbackAccess: Expr = optFieldAccess(fallbackFlagName);
 		final bpPath: Array<String> = ['anyparse', 'format', 'BodyPolicy'];
 		final samePat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Same']));
 		final keepPat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Keep']));
-		return macro {
-			final _resolvedBP: anyparse.format.BodyPolicy = $ctorOverriddenOptFlag;
-			($elseAccess == null && _resolvedBP != $samePat && _resolvedBP != $keepPat) ? $fallbackAccess : _resolvedBP;
+		final baseResolved: Expr = if (fallbackFlagName == null || elseFieldName == null)
+			ctorOverriddenOptFlag;
+		else {
+			final elseAccess: Expr = { expr: EField(macro value, elseFieldName), pos: Context.currentPos() };
+			final fallbackAccess: Expr = optFieldAccess(fallbackFlagName);
+			macro {
+				final _resolvedBP: anyparse.format.BodyPolicy = $ctorOverriddenOptFlag;
+				($elseAccess == null && _resolvedBP != $samePat && _resolvedBP != $keepPat) ? $fallbackAccess : _resolvedBP;
+			};
 		};
+		return arrowValueIfPolicy(opts, baseResolved, samePat);
+	}
+
+	/**
+	 * omega-arrow-value-if-reflow - outermost arm of `resolveBodyOptFlag`.
+	 *
+	 * A body field carrying `@:fmt(arrowValueIfReflowSite)` reads `Same`
+	 * instead of its own resolved policy whenever the struct-level gate local
+	 * `_aifReflow` is set (the enclosing `HxIfExpr` is the direct body of an
+	 * arrow lambda, the config knob is on, and the chain carries no captured
+	 * comment). Glueing every branch value to its own condition is what leaves
+	 * the chain with exactly ONE break axis - the soft `Line` before each
+	 * `else` - so the `Group` that `lowerStruct` wraps the whole node in can
+	 * decide flat-vs-one-arm-per-line for the chain as a unit.
+	 *
+	 * The override is additionally gated on the sibling `else` being PRESENT
+	 * (`elseFieldName`, the same access `noSiblingFallback` reads): an
+	 * else-less arrow-body `if` (`item -> if (c) body`) has no chain to
+	 * re-flow and keeps the `noSiblingFallback` answer it has today.
+	 *
+	 * Returns `resolved` unchanged when the field does not carry the flag, so
+	 * every other body site is byte-inert.
+	 */
+	private function arrowValueIfPolicy(opts: WrapBodyOpts, resolved: Expr, samePat: Expr): Expr {
+		if (opts.arrowValueIfSite != true) return resolved;
+		final elseFieldName: Null<String> = opts.elseFieldName;
+		final gate: Expr = if (elseFieldName == null)
+			macro _aifReflow;
+		else {
+			final elseAccess: Expr = { expr: EField(macro value, elseFieldName), pos: Context.currentPos() };
+			macro _aifReflow && $elseAccess != null;
+		};
+		return macro ($gate ? $samePat : $resolved);
 	}
 
 	/**
@@ -8314,6 +8384,220 @@ class WriterLowering {
 	}
 
 	/**
+	 * omega-arrow-value-if-reflow - struct-level wrap for a type carrying
+	 * `@:fmt(arrowValueIfReflow('<knobField>', '<spineField>', '<spineCtor>'))`
+	 * (sole consumer: `HxIfExpr`).
+	 *
+	 * Emits two things around the struct's assembled Doc:
+	 *
+	 *  - the gate locals, declared BEFORE the Doc is built so the field-level
+	 *    sites inside it (`arrowValueIfPolicy` on both branches, the pre-`else`
+	 *    gap in `beforeKwSeparator`, `arrowValueIfBlockOpt` on both branch
+	 *    opt-fanouts) read one runtime answer. `_aifReflow` fires when the
+	 *    config knob is on, the node sits in an arrow-lambda body
+	 *    (`opt._inArrowLambdaBody`), no ANCESTOR member of the chain already
+	 *    refused (`opt._arrowValueIfBlocked`), and no member from here DOWN the
+	 *    `else`-spine carries a captured comment;
+	 *  - a `Group` around the whole node, which turns the soft `Line` before
+	 *    each `else` into the chain's single flat-vs-broken decision.
+	 *
+	 * The Group is gated on `!opt._inValueIfBranch`, which is what
+	 * distinguishes the OUTERMOST chain member from the nested `else if (...)`
+	 * ones: the arrow body's opt has the flag cleared (`_setExprPosition` runs
+	 * on the way in), while every `else`-branch descent sets it via
+	 * `propagateValueIfBranch`. So one group spans the whole chain and the
+	 * nested members contribute only their soft `Line`s - nested groups would
+	 * let an inner `else if ... else ...` tail re-join while the outer broke.
+	 *
+	 * The group is NOT additionally gated on the Doc being able to render flat.
+	 * A body that cannot (a `{ ... }` branch) makes the group commit to its
+	 * break branch, which is the same output the bare soft `Line`s would give -
+	 * while skipping the group would ALSO skip nothing, since the forced-`Same`
+	 * policies and the soft separators are already in the Doc by then. The
+	 * earlier `flatLength != -1` conjunct was measured to cost `} else {`
+	 * cuddling on block-bodied branches for no gain.
+	 *
+	 * Returns `dcExpr` untouched for every type without the meta.
+	 */
+	private function arrowValueIfReflowWrap(node: ShapeNode, dcExpr: Expr): Expr {
+		final args: Null<Array<String>> = node.fmtReadStringArgs('arrowValueIfReflow');
+		if (args == null) return dcExpr;
+		if (args.length != 3)
+			Context.fatalError(
+				'WriterLowering: @:fmt(arrowValueIfReflow) expects 3 string args (knobField, spineField, spineCtor), got ${args.length}',
+				Context.currentPos()
+			);
+		final knobAccess: Expr = optFieldAccess(args[0]);
+		final spineCleanExpr: Expr = arrowValueIfSpineCleanExpr(node, args[1], args[2]);
+		return macro {
+			final _aifGate: Bool = $knobAccess && opt._inArrowLambdaBody;
+			final _aifReflow: Bool = _aifGate && !opt._arrowValueIfBlocked && $spineCleanExpr;
+			// The refusal is chain-wide in BOTH directions: the spine walk above
+			// covers a comment on this member or any member below it, and
+			// `_aifBlocked` (read by `arrowValueIfBlockOpt` on the branch
+			// descents) carries the verdict down to members the walk already
+			// judged, so an ANCESTOR's comment reaches them too. Only ever true
+			// with the knob ON, so the OFF path is byte-inert.
+			final _aifBlocked: Bool = _aifGate && !_aifReflow;
+			final _aifDoc: anyparse.core.Doc = $dcExpr;
+			_aifReflow && !opt._inValueIfBranch ? _dg(_aifDoc) : _aifDoc;
+		};
+	}
+
+	/**
+	 * omega-arrow-value-if-reflow - the no-comment gate, decided over the whole
+	 * `else`-SPINE rather than over this node alone.
+	 *
+	 * A comment sits on ONE member of an `else if` chain, but each member runs
+	 * its own copy of this gate, so a per-node answer splits the chain: the
+	 * member holding the comment keeps its policy shape while the rest re-flows,
+	 * and the output carries both forms at once. The model already carries the
+	 * spine - the optional `<spineField>` is the next member wrapped in the
+	 * `<spineCtor>` constructor - so the walk asks every member from here down
+	 * and folds one answer.
+	 *
+	 * Emitted as an iterative walk rather than a recursive helper because the
+	 * generated writer has no place to hang a per-type static: the cursor starts
+	 * at `value` and the spine constructor's payload has that same type, so the
+	 * reassignment types itself with no annotation. `break` inside the `switch`
+	 * leaves the LOOP (Haxe `switch` has no fallthrough), which is how a
+	 * non-`<spineCtor>` tail ends the walk.
+	 *
+	 * Plain (non-trivia) mode captures no comments and synthesises no slots, so
+	 * `arrowValueIfNoCommentExpr` degrades to `true` and the walk with it.
+	 */
+	private function arrowValueIfSpineCleanExpr(node: ShapeNode, spineField: String, spineCtor: String): Expr {
+		final ownClean: Expr = arrowValueIfNoCommentExpr(node, macro _aifCur);
+		final spineNode: Null<ShapeNode> = findFieldByName(node, spineField);
+		if (spineNode == null)
+			Context.fatalError(
+				'WriterLowering: @:fmt(arrowValueIfReflow) spineField "$spineField" not found on the struct', Context.currentPos()
+			);
+		final spineRef: Null<String> = spineNode.annotations.get(AnnotationKeys.BASE_REF);
+		final capture: Null<Expr> = spineRef == null ? null : ctorCapturePattern(spineRef, spineCtor, '_aifInner');
+		if (capture == null) return macro {
+			final _aifCur = value;
+			$ownClean;
+		};
+		final spineAccess: Expr = { expr: EField(macro _aifCur, spineField), pos: Context.currentPos() };
+		final stepCases: Array<Case> = [
+			{ values: [capture], expr: macro _aifCur = _aifInner, guard: null },
+			{ values: [macro _], expr: macro break, guard: null },
+		];
+		final stepSwitch: Expr = { expr: ESwitch(macro _aifNext, stepCases, null), pos: Context.currentPos() };
+		return macro {
+			var _aifCur = value;
+			var _aifClean: Bool = true;
+			while (true) {
+				if (!$ownClean) {
+					_aifClean = false;
+					break;
+				}
+				final _aifNext = $spineAccess;
+				if (_aifNext == null) break;
+				$stepSwitch;
+			}
+			_aifClean;
+		};
+	}
+
+	/**
+	 * omega-arrow-value-if-reflow - `findCtorPattern` with a BINDING in the
+	 * first constructor slot instead of a wildcard, so the spine walk can step
+	 * onto the payload it just matched. Every remaining slot stays `_`.
+	 */
+	private function ctorCapturePattern(bodyTypePath: String, ctorName: String, captureName: String): Null<Expr> {
+		final rule: Null<ShapeNode> = _shape.rules.get(bodyTypePath);
+		if (rule == null || rule.kind != Alt) return null;
+		for (branch in rule.children) {
+			final branchCtor: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
+			if (branchCtor != ctorName) continue;
+			final arity: Int = branch.children.length + branchSynthExtraArity(bodyTypePath, branch);
+			if (arity == 0) return null;
+			final ctorRef: Expr = MacroStringTools.toFieldExpr(ruleCtorPath(bodyTypePath, branchCtor));
+			final ctorArgs: Array<Expr> = [macro $i{captureName}].concat([for (_ in 1...arity) macro _]);
+			return { expr: ECall(ctorRef, ctorArgs), pos: Context.currentPos() };
+		}
+		return null;
+	}
+
+	/**
+	 * omega-arrow-value-if-reflow - the no-comment half of the `_aifReflow`
+	 * gate: an AND-fold over every trivia slot of `node` that can hold a
+	 * captured comment, so a chain carrying one refuses the reflow.
+	 *
+	 * The slot set is derived from the same three predicates
+	 * `TriviaTypeSynth` gates the slots themselves on, rather than from a
+	 * hand-listed field name per grammar: an optional-kw field owns the four
+	 * kw-gap slots (`AfterKw` / `KwLeading` / `BeforeKwLeading` /
+	 * `BeforeKwTrailing`), a bare non-first Ref owns `BeforeLeading`, and a
+	 * `@:trail`-bearing Ref owns `AfterTrail`. For `HxIfExpr` that is exactly
+	 * the six places a `//` can sit inside `if (c) a else b`.
+	 *
+	 * Plain (non-trivia) mode captures no comments and synthesises no slots,
+	 * so the fold degrades to `true`.
+	 */
+	private function arrowValueIfNoCommentExpr(node: ShapeNode, rootExpr: Expr): Expr {
+		if (!_ctx.trivia) return macro true;
+		final pos: Position = Context.currentPos();
+		var pred: Expr = macro true;
+		for (child in node.children) {
+			final fieldName: Null<String> = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
+			if (fieldName == null) continue;
+			for (slot in arrowValueIfCommentSlots(child, node)) {
+				final access: Expr = { expr: EField(rootExpr, fieldName + slot.suffix), pos: pos };
+				pred = slot.isList ? macro $pred && $access.length == 0 : macro $pred && $access == null;
+			}
+		}
+		return pred;
+	}
+
+	/**
+	 * omega-arrow-value-if-reflow - the comment-bearing trivia slots `child`
+	 * owns, as `(suffix, isList)` pairs. `isList` picks the emptiness test:
+	 * an `Array<String>` slot is empty at `length == 0`, a `Null<String>` one
+	 * at `null`. Mirrors `TriviaTypeSynth`'s own synth gates.
+	 */
+	@:access(anyparse.macro.TriviaTypeSynth)
+	private function arrowValueIfCommentSlots(child: ShapeNode, node: ShapeNode): Array<{ suffix: String, isList: Bool }> {
+		final slots: Array<{ suffix: String, isList: Bool }> = [];
+		if (TriviaTypeSynth.isOptionalKw(child)) {
+			slots.push({ suffix: TriviaTypeSynth.AFTER_KW_SUFFIX, isList: false });
+			slots.push({ suffix: TriviaTypeSynth.KW_LEADING_SUFFIX, isList: true });
+			slots.push({ suffix: TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX, isList: true });
+			slots.push({ suffix: TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX, isList: false });
+		}
+		if (TriviaTypeSynth.isBareNonFirstRef(child, node)) slots.push({ suffix: TriviaTypeSynth.BEFORE_LEADING_SUFFIX, isList: true });
+		if (TriviaTypeSynth.isTrailRef(child)) slots.push({ suffix: TriviaTypeSynth.AFTER_TRAIL_SUFFIX, isList: false });
+		return slots;
+	}
+
+	/**
+	 * omega-arrow-value-if-reflow - branch opt-fanout arm for a body field
+	 * carrying `@:fmt(arrowValueIfReflowSite)`.
+	 *
+	 * The spine walk gives each member a verdict over ITSELF AND EVERYTHING
+	 * BELOW it, which settles a comment on a DESCENDANT. A comment on an
+	 * ANCESTOR is the other direction and the model has no upward link, so the
+	 * refusing member stamps `_arrowValueIfBlocked` on its branch writes and
+	 * every deeper member reads it. With both halves the chain has exactly one
+	 * verdict wherever the comment sits.
+	 *
+	 * The signal is its own opt field: clearing the shared `_inArrowLambdaBody`
+	 * instead would also switch off the object-literal arrow knobs inside the
+	 * refused branch, which is a different feature answering a different
+	 * question.
+	 *
+	 * Returns `optExpr` unchanged for every field without the flag, and
+	 * `_aifBlocked` is only ever true with the knob on, so both the flagless
+	 * sites and the default config are byte-inert.
+	 */
+	private function arrowValueIfBlockOpt(child: ShapeNode, optExpr: Expr): Expr {
+		return child.fmtHasFlag(ARROW_VALUE_IF_SITE) ? macro (_aifBlocked ? _setArrowValueIfBlocked($optExpr) : $optExpr) : optExpr;
+	}
+
+
+	/**
 	 * ω-anonfnsignature-body-aware-indent: build the runtime `Bool` Expr that
 	 * decides whether the named function-body field is empty (drives
 	 * `opt._fnSigBodyEmpty`). Dispatches the empty-body switch on the body
@@ -8769,6 +9053,7 @@ class WriterLowering {
 			inlineBlockBodyArgs: inlineBlockBodyArgs,
 			condFitGroup: condFitGroup,
 			ssbTrailCommentExpr: ssbTrailCommentExpr,
+			arrowValueIfSite: child.fmtHasFlag(ARROW_VALUE_IF_SITE),
 		}));
 		return { access: fieldAccess, typePath: refName };
 	}
@@ -9500,6 +9785,7 @@ class WriterLowering {
 				bodyOnSameLineExpr: bodyOnSameLineExpr,
 				indentObjArgs: indentObjArgs,
 				inlineBlockBodyArgs: inlineBlockBodyArgs,
+				arrowValueIfSite: child.fmtHasFlag(ARROW_VALUE_IF_SITE),
 			}));
 		} else if (child.fmtHasFlag('nestBodyOnSourceNewline') && bodyOnSameLineExpr != null) {
 			// ω-cond-comp-expr-body-nest: optional-kw-Ref body
@@ -9849,6 +10135,7 @@ class WriterLowering {
 			// branch (not a statement-`if`) flips the narrow flag.
 			if (propagateValueIfBranch) e = macro _setValueIfBranch($e);
 			if (clearElseIfBranch) e = macro _clearElseIfBranch($e);
+			e = arrowValueIfBlockOpt(child, e);
 			e;
 		};
 		final baseRawWriteCall: Expr = {
@@ -10140,6 +10427,7 @@ class WriterLowering {
 			if (propagateExpr) e = macro _setExprPosition($e);
 			if (propagateAnonFn) e = macro _setAnonFnBody($e);
 			if (propagateValueIfBranch) e = macro _setValueIfBranch($e);
+			e = arrowValueIfBlockOpt(child, e);
 			if (propagateElseIfBranch) {
 				final ifPat: Null<Expr> = findCtorPattern(refName, 'IfStmt');
 				if (ifPat != null) {
@@ -11478,13 +11766,19 @@ class WriterLowering {
 		// expanded unit is below its label for structural reasons. Same
 		// nullability contract as `caseSiblingUnitsFn` — null alongside null
 		// knobs, a macro-time error with knobs.
-		?caseSiblingStructuralFn: Expr
+		?caseSiblingStructuralFn: Expr,
+		// omega-case-body-controlflow-glue: the
+		// `caseUnitControlFlowBody_<ElemRule>` fn-ref that answers whether ONE
+		// expanded unit holds a single control-flow body statement. Same
+		// nullability contract as the two above — null alongside null knobs, a
+		// macro-time error with knobs.
+		?caseSiblingControlFlowFn: Expr
 	): Expr {
 		// ω-condcomp-stray-semi (Stage A): the schema-instance predicate-call build
 		// moved to `triviaBlockPredCallExpr` (consumed by `triviaBlockSepExprs`).
 		final caseSym: Bool = caseSiblingSymmetryKnobs != null && caseSiblingSymmetryKnobs.length == 2;
 		final caseSiblingWidthExpr: Expr = caseSiblingWidthProbeExpr(
-			elemFn, caseSym ? caseSiblingSymmetryKnobs : null, caseSiblingUnitsFn, caseSiblingStructuralFn
+			elemFn, caseSym ? caseSiblingSymmetryKnobs : null, caseSiblingUnitsFn, caseSiblingStructuralFn, caseSiblingControlFlowFn
 		);
 		final triviaElemCall: Expr = triviaBlockElemCallExpr(elemFn, clearAnonFnBodyOnElems, clearExprPositionNonTail, caseSym);
 		final emptyText: String = openText + closeText;
@@ -12218,7 +12512,16 @@ class WriterLowering {
 		// `_arr[_si - 1].node` (blockEnded sep suppression). Null → both
 		// sites emit their inert `false`, byte-identical for formats
 		// without generated predicates.
-		?elemCondFnExpr: Expr
+		?elemCondFnExpr: Expr,
+		// omega-case-body-controlflow-glue: when the case-body Star carries
+		// `@:fmt(refuseGlueOnControlFlowRoot)`, a `FitLine` body that cannot
+		// render flat AND whose single statement is keyword-led control flow
+		// takes the BREAK shape instead of gluing onto the case label. The
+		// enclosing case-LIST Star reads the same meta back off this one
+		// (`elemBodyStarHasFlag`) to gate its sibling FORCE, so the placement and
+		// the spread turn on together. False -> byte-identical to the pre-slice
+		// call, here and in the pre-pass.
+		refuseGlueOnControlFlow: Bool = false
 	): Expr {
 		// noqa: complexity
 		// ω-bug-2c-inner-star — cascade emit for the tryparse-Star path.
@@ -12288,6 +12591,7 @@ class WriterLowering {
 		// `opt.<metaLineEndOptField>` (0 = None default, byte-identical).
 		final metaPolicyExpr: Expr = metaLineEndOptField != null ? optFieldAccess(metaLineEndOptField) : macro 0;
 		final shapeRefusalExpr: Expr = triviaTryparseShapeRefusalExpr(refuseFlatOnComplex);
+		final glueRefusalExpr: Expr = triviaTryparseGlueRefusalExpr(refuseGlueOnControlFlow);
 		final tryparseBlockEndedSepEmit: Expr = triviaTryparseBlockEndedSepEmit(sepText, blockEnded, sepFaithful, elemCondFnExpr);
 		final tryparseBlockEndedTrailEmit: Expr = triviaTryparseBlockEndedTrailEmit(sepText, blockEnded, sepFaithful);
 		final c: TryparseStarCtx = {
@@ -12298,6 +12602,7 @@ class WriterLowering {
 			sepBeforeFirstExpr: sepBeforeFirstExpr,
 			nestBodyExpr: nestBodyExpr,
 			shapeRefusalExpr: shapeRefusalExpr,
+			glueRefusalExpr: glueRefusalExpr,
 			flatGateExpr: flatGateExpr,
 			fitGateExpr: fitGateExpr,
 			writerOptExpr: writerOptExpr,
@@ -14530,7 +14835,7 @@ class WriterLowering {
 		final lastTrailTerminatorEmit: Expr = c.lastTrailTerminatorEmit;
 		final finalWrapDocs: Expr = c.finalWrapDocs;
 		final trailDocsExpr: Expr = triviaTryparseTrailDocsExpr();
-		final wrapDispatch: Expr = triviaTryparseWrapDispatchExpr(finalWrapDocs);
+		final wrapDispatch: Expr = triviaTryparseWrapDispatchExpr(finalWrapDocs, c.glueRefusalExpr);
 		return macro {
 			$tryparseBlockEndedTrailEmit;
 			// ω-cond-indent-policy: under AlignedIncrease hold the trailing
@@ -14631,6 +14936,23 @@ class WriterLowering {
 	 * (`_fitCase` refuses a case label that captured a trailing comment,
 	 * which is the only other thing that can precede the body in `_docs`).
 	 *
+	 * `$glueRefusalExpr` is the `refuseGlue` argument
+	 * (omega-case-body-controlflow-glue): true when the body's single
+	 * statement is keyword-led control flow, which turns the glue outcome
+	 * into a break. It is read only here, where `_arr.length == 1` holds by
+	 * construction, and it is inert (`false`) for any Star that does not
+	 * carry `@:fmt(refuseGlueOnControlFlowRoot)`.
+	 *
+	 * `_trailDocs` (the body Star's ORPHAN trailing comments) is appended
+	 * AFTER the placement Doc, outside whatever `Nest` the placement chose, so
+	 * the comment run renders at LABEL indent. That matches the `nestBody`
+	 * arm's NON-EMPTY-body sub-shape (issue_392) and only that one: with no
+	 * body statements at all, `nestBody` folds the run INTO its `_dn` so an
+	 * only-comment case keeps body-level indent. That shape cannot reach here
+	 * - `_caseBodyFlattenable` requires exactly one element. Both arms handle it uniformly; on the `_flatCase`
+	 * arm the run is provably empty (that gate still requires it), so the
+	 * append is inert there.
+	 *
 	 * `alignInlineSwitchCaseBody` reaches the fit path too, as
 	 * `nestGluedBody`: it is the same "does the body's container already
 	 * indent relative to the case line" question, and it is live on the GLUE
@@ -14640,14 +14962,15 @@ class WriterLowering {
 	 * `WrapList.flatLength(body) >= 0`, i.e. the body holds no hardline at
 	 * all, so no inner line exists for a `Nest` to move.
 	 */
-	private static function triviaTryparseCaseWrapExpr(): Expr {
+	private static function triviaTryparseCaseWrapExpr(glueRefusalExpr: Expr): Expr {
 		return macro {
-			if (_fitCase)
-				_dwb(anyparse.format.BodyFit.fitLineLayout(
-					_cols, _dc(_docs), !opt.alignInlineSwitchCaseBody, opt.lineWidth, opt._caseSiblingFlatWidth
-				));
+			final _caseBody: anyparse.core.Doc = if (_fitCase)
+				anyparse.format.BodyFit.fitLineLayout(
+					_cols, _dc(_docs), !opt.alignInlineSwitchCaseBody, opt.lineWidth, opt._caseSiblingFlatWidth, $glueRefusalExpr
+				);
 			else
-				_dwb(opt.alignInlineSwitchCaseBody ? _dc(_docs) : _dn(_cols, _dc(_docs)));
+				opt.alignInlineSwitchCaseBody ? _dc(_docs) : _dn(_cols, _dc(_docs));
+			_dwb(_trailDocs.length > 0 ? _dc([_caseBody, _dc(_trailDocs)]) : _caseBody);
 		};
 	}
 
@@ -14660,14 +14983,15 @@ class WriterLowering {
 	 * `triviaTryparseAssemblyExpr` stays under the complexity gate.
 	 *
 	 * ω-line-comment-directive-break: only the `_condIncrease` and default arms
-	 * carry the line-comment break guard. The case-body arms require an empty
-	 * orphan trail and a single element, and no `nestBody` Star carries
-	 * `padTrailing` (case / default bodies are always followed by a
-	 * hardline-led sibling), so neither can glue a follower onto a `//`
-	 * comment.
+	 * carry the line-comment break guard. The case-body arms need none: no
+	 * `nestBody` Star carries `padTrailing` (case / default bodies are always
+	 * followed by a hardline-led sibling), and since
+	 * omega-case-trail-comment-inline the `_fitCase` arm that may now hold an
+	 * orphan trail run ends with that run's own hardline-led docs — so neither
+	 * can glue a follower onto a `//` comment.
 	 */
-	private static function triviaTryparseWrapDispatchExpr(finalWrapDocs: Expr): Expr {
-		final caseWrap: Expr = triviaTryparseCaseWrapExpr();
+	private static function triviaTryparseWrapDispatchExpr(finalWrapDocs: Expr, glueRefusalExpr: Expr): Expr {
+		final caseWrap: Expr = triviaTryparseCaseWrapExpr(glueRefusalExpr);
 		return macro {
 			// ω-force-flat-engine sister-coverage: tryparse Star is used
 			// for inner-Star bodies (case bodies, `HxConditionalDecl.body`)
@@ -14938,6 +15262,21 @@ class WriterLowering {
 		if (!refuseFlatOnComplex) return macro true;
 		final refuses: Expr = astPredCallT('caseBodyRefusesFlat', [macro _arr[0].node]);
 		return macro !$refuses;
+	}
+
+	/**
+	 * Tryparse-Star `glueRefusalExpr` builder
+	 * (omega-case-body-controlflow-glue): the `refuseGlue` argument handed to
+	 * `BodyFit.fitLineLayout` on the `_fitCase` path — the generated typed
+	 * `caseBodyControlFlowRoot` predicate applied to the body's single
+	 * statement. Flag off ⇒ `macro false`, which is `fitLineLayout`'s own
+	 * default and therefore byte-inert.
+	 *
+	 * Read only inside the `_fitCase` arm, where `_arr.length == 1` holds by
+	 * construction (`_caseBodyFlattenable`).
+	 */
+	private static function triviaTryparseGlueRefusalExpr(refuseGlueOnControlFlow: Bool): Expr {
+		return refuseGlueOnControlFlow ? astPredCallT('caseBodyControlFlowRoot', [macro _arr[0].node]) : macro false;
 	}
 
 	/**
@@ -17172,20 +17511,32 @@ class WriterLowering {
 	 * `_caseBodyFlattenable` / `_flatCase` / `_fitCase` runtime locals.
 	 *
 	 * One eligibility, two placement decisions. The eligibility is the body
-	 * SHAPE: a `nestBody` Star holding exactly one element, with no orphan
-	 * trailing comment, no leading comment on that element, and not refused
-	 * by `refuseFlatOnComplexExpr`. On top of it, `_flatCase` COMMITS the
-	 * body to the case-header line at write time (`Same`, or `Keep` on
-	 * same-line source) and `_fitCase` defers the same-vs-next choice to the
-	 * renderer (`FitLine`). Every other policy — `Next`, and `Keep` with a
-	 * source-broken body — leaves both false, which is the plain `nestBody`
-	 * break.
+	 * SHAPE: a `nestBody` Star holding exactly one element, with no leading
+	 * comment on that element, and not refused by `refuseFlatOnComplexExpr`.
+	 * On top of it, `_flatCase` COMMITS the body to the case-header line at
+	 * write time (`Same`, or `Keep` on same-line source) and `_fitCase` defers
+	 * the same-vs-next choice to the renderer (`FitLine`). Every other policy —
+	 * `Next`, and `Keep` with a source-broken body — leaves both false, which
+	 * is the plain `nestBody` break.
 	 *
 	 * The two are mutually exclusive because one policy value cannot be both
 	 * `Same`/`Keep` and `FitLine`; the explicit `!_flatCase` keeps that true
 	 * by construction, so the two consumers may test them in either order
 	 * (the separator cascade asks `_flatCase` first, the wrap helper asks
 	 * `_fitCase` first) without the orderings ever disagreeing.
+	 *
+	 * `_flatCase` additionally requires an EMPTY orphan trailing-comment run
+	 * (omega-case-trail-comment-inline). The eligibility used to carry that
+	 * clause, which pushed a body below its label for a comment that never
+	 * needed it out of the way — one commented-out case between two live ones
+	 * made the switch read asymmetric with no visible cause. `_fitCase` no
+	 * longer asks: `BodyFit.fitLineLayout` places the body and the wrap helper
+	 * appends the trail docs after it at LABEL level, exactly where the
+	 * `nestBody` arm already renders them (issue_392). `_flatCase` keeps the clause deliberately - it is the policy the fork
+	 * corpus runs under (which is what keeps that corpus byte-identical per
+	 * fixture; a `fitLine` tree does move, by design), and its separator is
+	 * already pushed by the cascade, so relaxing it there would be a parity
+	 * change rather than a placement fix.
 	 *
 	 * `_fitCase` additionally refuses a case label that captured a same-line
 	 * trailing comment. `BodyFit.fitLineLayout` owns the header→body
@@ -17203,8 +17554,7 @@ class WriterLowering {
 	private static function triviaTryparseCaseGateDecls(
 		shapeRefusalExpr: Expr, flatGateExpr: Expr, fitGateExpr: Expr, priorAfterTrailRaw: Expr
 	): Expr {
-		final eligible: Expr = macro _nestBody && _arr.length == 1 && _trailLC.length == 0 && _arr[0].leadingComments.length == 0
-			&& $shapeRefusalExpr;
+		final eligible: Expr = macro _nestBody && _arr.length == 1 && _arr[0].leadingComments.length == 0 && $shapeRefusalExpr;
 		return {
 			expr: EVars([
 				{
@@ -17216,7 +17566,7 @@ class WriterLowering {
 				{
 					name: '_flatCase',
 					type: macro :Bool,
-					expr: macro _caseBodyFlattenable && $flatGateExpr,
+					expr: macro _caseBodyFlattenable && _trailLC.length == 0 && $flatGateExpr,
 					isFinal: true
 				},
 				{
@@ -17242,12 +17592,13 @@ class WriterLowering {
 	 *
 	 * THE RULE, in one sentence: a switch is TRIGGERED when some unit is
 	 * below-label STRUCTURALLY, and otherwise when the widest unit's flat
-	 * width does not fit. The two channels reach the same output slot
+	 * width does not fit or some unit is both unmeasurable and refused the
+	 * glue. Every channel reaches the same output slot
 	 * (`_caseSiblingFlatWidth`, consumed by `BodyFit.fitLineLayout` as an
 	 * `IfIndentWidthExceeds` probe width), so nothing downstream has to know
 	 * which one fired.
 	 *
-	 * STRUCTURAL CHANNEL (this slice). The generated
+	 * STRUCTURAL CHANNEL. The generated
 	 * `caseUnitStructuralBreak_<ElemRule>` predicate answers, per expanded
 	 * unit, whether its body sits below its label at ANY budget: a body of two
 	 * or more statements, a single statement `caseBodyRefusesFlat` refuses, or
@@ -17277,6 +17628,28 @@ class WriterLowering {
 	 * table of `case X: (a, b) -> { … }`) exactly as it renders without this
 	 * slice.
 	 *
+	 * THE CONTROL-FLOW VERDICT rides that loop rather than the structural pass
+	 * (omega-case-body-controlflow-glue). `BodyFit.fitLineLayout` refuses the
+	 * glue for a body whose single statement is keyword-led control flow, so
+	 * such a body renders below its label and must lead like a structural
+	 * one — but only when it CANNOT render flat, and `case X: if (c) x();` and
+	 * `case X: if (c) { x(); }` have the same statement kind. Kind alone
+	 * therefore cannot decide it; the loop asks
+	 * `caseUnitControlFlowBody_<ElemRule>` exactly on the units that measured
+	 * `-1`, and the first `true` substitutes `SIBLING_FORCE_BREAK`. The arm is
+	 * emitted ONLY for an element rule whose body Star carries
+	 * `@:fmt(refuseGlueOnControlFlowRoot)` (resolved at macro time by
+	 * `elemBodyStarHasFlag`), so the spread and the placement it accompanies
+	 * can never be enabled apart.
+	 *
+	 * That verdict also reaches PAST the shape it was written for, and
+	 * correctly so: it reads the statement KIND and never the trivia, so a
+	 * COMMENT-refused body - one a leading comment on its element, or a
+	 * trailing comment captured on its label, already pushed below its label -
+	 * leads the spread too when its single statement is control-flow. It
+	 * measures `-1` for the comment's sake and answers true for the
+	 * statement's, and both point the same way.
+	 *
 	 * THE RESIDUALS — shapes that DO render below their label and still cannot
 	 * LEAD. One is render-time: a glue that `BodyFit.glueLayout` turns into a
 	 * break. That verdict is reached at the LIVE PEN COLUMN — the header is
@@ -17284,14 +17657,23 @@ class WriterLowering {
 	 * emitter-side walk can predict it, and the switch it belongs to is not
 	 * triggered by it. Pinned by
 	 * `HxGlueWidthSliceTest.testGlueTurnedBreakIsNotASiblingSymmetryTrigger`.
-	 * Three more stay out on an unrelated ground: a body element with leading
-	 * comments, a body Star with orphan trailing comments, and a label
-	 * carrying its own trailing comment all refuse `_fitCase` and therefore
-	 * render below the label. Their trees are perfectly readable; the obstacle
-	 * is that one predicate NAME emits one predicate BODY, shared by the plain
-	 * / trivia / spans AST families, and those three shapes sit in slots only
-	 * the trivia family carries — see
-	 * `HxAstPredLowering.caseUnitStructuralBreakField` for the full argument.
+	 * The other is a COMMENT-refused body whose single statement is NOT
+	 * control-flow - the paragraph above closes the control-flow half of that
+	 * class, not the class. Its tree is perfectly readable; the obstacle is
+	 * that one predicate NAME emits one predicate BODY, shared by the plain /
+	 * trivia / spans AST families, and the slots holding those comments are
+	 * trivia-family-specific - see
+	 * `HxCasePredLowering.caseUnitStructuralBreakField` for the full argument.
+	 *
+	 * A body Star with ORPHAN trailing comments used to be a third such shape;
+	 * since omega-case-trail-comment-inline it flattens instead, so it is no
+	 * longer below its label. It still contributes no WIDTH — its element Doc
+	 * carries the comment run's hardline, so the pre-pass measures it `-1`,
+	 * exactly as it measures a glued body — which means it never leads a
+	 * spread by WIDTH and always follows one. That is deliberate: the rule the
+	 * owner asked for is about whether the BODY can share its label line, and
+	 * the comment sits outside the `BodyGroup` the fit path wraps the body in,
+	 * so an over-wide such body still breaks on its own at render time.
 	 *
 	 * WHAT A DIRECTIVE REGION CONTRIBUTES (ω-if-leader-case-symmetry): not one
 	 * element, but its inner case UNITS. A `#if`-guarded region projects as ONE
@@ -17300,7 +17682,7 @@ class WriterLowering {
 	 * one. The Star's `caseSiblingUnits_<ElemRule>` flattener expands the
 	 * region into the inner case elements of EVERY branch (`#if` / `#elseif` /
 	 * `#else` are alternatives — only one is ever compiled — so the maximum
-	 * over all of them is the conservative trigger), and BOTH channels then run
+	 * over all of them is the conservative trigger), and every channel then runs
 	 * per inner unit: an over-wide guarded body leads by width, a
 	 * multi-statement one leads structurally. The one-element short-circuit
 	 * moved with it: what must exceed 1 is the UNIT count, so a switch whose
@@ -17310,11 +17692,13 @@ class WriterLowering {
 	 * one unit that LEADS, because the structural channel answers true for it
 	 * outright.
 	 *
-	 * Both predicates are MANDATORY for an opted-in Star: a format carrying the
-	 * meta without generated AST predicates is a macro-time error here, not a
-	 * silent fallback — carrying a second, never-exercised copy of this
-	 * pre-pass is exactly the drift the trivia web's predicate-only `@:fmt`
-	 * features refuse.
+	 * The flattener and the structural verdict are MANDATORY for an opted-in
+	 * Star: a format carrying the meta without generated AST predicates is a
+	 * macro-time error here, not a silent fallback - carrying a second,
+	 * never-exercised copy of this pre-pass is exactly the drift the trivia
+	 * web's predicate-only `@:fmt` features refuse. The control-flow verdict is
+	 * the one OPTIONAL member, because it belongs to a second, independently
+	 * declared meta.
 	 *
 	 * `WrapList.flatLength` is the width measure specifically because it
 	 * DESCENDS `BodyGroup` where `Renderer.fitsFlat` defers it — the T16b
@@ -17339,7 +17723,7 @@ class WriterLowering {
 	 * before.
 	 */
 	private static function caseSiblingWidthProbeExpr(
-		elemFn: String, knobs: Null<Array<String>>, ?unitsFn: Expr, ?structuralFn: Expr
+		elemFn: String, knobs: Null<Array<String>>, ?unitsFn: Expr, ?structuralFn: Expr, ?controlFlowFn: Expr
 	): Expr {
 		if (knobs == null) return macro -1;
 		final fitPat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'FitLine']);
@@ -17364,6 +17748,17 @@ class WriterLowering {
 		final unitProbeCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _csUnits[_csK], macro _csOpt]),
 			pos: Context.currentPos(),
+		};
+		// omega-case-body-controlflow-glue: emitted ONLY when the element rule's
+		// body Star carries `@:fmt(refuseGlueOnControlFlowRoot)` - the same meta
+		// that turns the glue into a break. Null (flag absent) drops the arm, so
+		// the pre-pass is byte-identical to the width-only one.
+		final controlFlowForce: Expr = controlFlowFn == null ? macro {} : {
+			final call: Expr = { expr: ECall(controlFlowFn, [macro _csUnits[_csK]]), pos: Context.currentPos() };
+			macro if (_csFlat == -1 && $call) {
+				_csMax = anyparse.format.BodyFit.SIBLING_FORCE_BREAK;
+				break;
+			};
 		};
 		return macro {
 			var _csMax: Int = anyparse.format.BodyFit.SIBLING_PROBING;
@@ -17396,6 +17791,13 @@ class WriterLowering {
 							var _csK: Int = 0;
 							while (_csK < _csUnits.length) {
 								final _csFlat: Int = anyparse.format.wrap.WrapList.flatLength($unitProbeCall);
+								// omega-case-body-controlflow-glue: a unit that
+								// cannot render flat AND holds a single
+								// control-flow statement is refused the glue by
+								// `BodyFit.fitLineLayout`, so it renders below its
+								// own label — the same verdict the structural pass
+								// reaches, but only measurable here.
+								$controlFlowForce;
 								if (_csFlat > _csMax) _csMax = _csFlat;
 								_csK++;
 							}
@@ -17448,13 +17850,16 @@ class WriterLowering {
 	 * pre-pass consumes, or null when the Star does not opt into
 	 * `caseSiblingSymmetry` (⇒ `caseSiblingWidthProbeExpr` yields `macro -1`
 	 * and no pre-pass runs) or the format generates no AST predicates (⇒ that
-	 * builder fatal-errors: both predicates are mandatory for an opted-in
-	 * Star, the same loud failure every other predicate-only `@:fmt` feature
-	 * gives — carrying a second, never-exercised copy of the pre-pass is
-	 * exactly the drift those features refuse).
+	 * builder fatal-errors: the flattener and the structural verdict are
+	 * mandatory for an opted-in Star, the same loud failure every other
+	 * predicate-only `@:fmt` feature gives - carrying a second,
+	 * never-exercised copy of the pre-pass is exactly the drift those features
+	 * refuse). The control-flow verdict is the one OPTIONAL member of the
+	 * family: it is gated on a second meta and its absence drops an arm rather
+	 * than failing (see `caseSiblingControlFlowFnExpr`).
 	 *
 	 * Resolved from the Star's ELEMENT rule — the same seam as
-	 * `tryparseElemCondFn`, though the grammar generates both of these for
+	 * `tryparseElemCondFn`, though the grammar generates all of these for
 	 * `HxSwitchCase` alone, so a `caseSiblingSymmetry` Star over any other
 	 * element rule fails at macro time with an unresolved field. Split out of
 	 * `emitTriviaBlockStarDispatch` to keep that helper under the complexity
@@ -17489,6 +17894,60 @@ class WriterLowering {
 	 */
 	private inline function caseSiblingStructuralFnExpr(caseSymArgs: Null<Array<String>>, elemRefName: String): Null<Expr> {
 		return casePredFnExpr(caseSymArgs, elemRefName, 'caseUnitStructuralBreak');
+	}
+
+	/**
+	 * omega-case-body-controlflow-glue: the CONTROL-FLOW verdict — whether a
+	 * unit holds exactly one body statement and that statement is keyword-led
+	 * control flow. Paired with the pre-pass's own `flatLength == -1`
+	 * measurement, since the statement KIND alone cannot tell an inline-able
+	 * `case X: if (c) x();` from a refused `case X: if (c) { x(); }`.
+	 */
+	private function caseSiblingControlFlowFnExpr(caseSymArgs: Null<Array<String>>, elemRefName: String): Null<Expr> {
+		if (!elemBodyStarHasFlag(elemRefName, 'refuseGlueOnControlFlowRoot')) return null;
+		return casePredFnExpr(caseSymArgs, elemRefName, 'caseUnitControlFlowBody');
+	}
+
+	/**
+	 * True iff the case-list Star's ELEMENT rule reaches a body Star carrying
+	 * `@:fmt(<flag>)` - the macro-time link that keeps the two halves of the
+	 * glue refusal gated by ONE meta.
+	 *
+	 * The refusal itself is read off `HxCaseBranch.body` /
+	 * `HxDefaultBranch.stmts` inside the body Star's own emit; the sibling
+	 * FORCE that must accompany it is emitted in the case-LIST Star's pre-pass,
+	 * a different rule with a different meta. Left ungated, a grammar opting
+	 * into `caseSiblingSymmetry` without the body flag would spread every
+	 * sibling for a body that then GLUED to its label - the exact contradiction
+	 * the symmetry rule exists to prevent.
+	 *
+	 * The walk is bounded to ONE rule hop on purpose: the element rule's own
+	 * Star fields, plus those of the rules its direct `Ref` children name (for
+	 * an `Alt` element rule that is each ctor's payload - `CaseBranch` ->
+	 * `HxCaseBranch`). Following refs transitively would answer "does the flag
+	 * exist ANYWHERE in the grammar", which is true as soon as it is declared
+	 * once and would gate nothing.
+	 */
+	private function elemBodyStarHasFlag(elemRefName: String, flag: String): Bool {
+		final elem: Null<ShapeNode> = _shape.rules.get(elemRefName);
+		if (elem == null) return false;
+		return ownStarHasFlag(elem, flag) || elem.children.exists(branch -> refStarHasFlag(branch, flag));
+	}
+
+	/** Any direct `Star` child of `node` carrying `@:fmt(<flag>)`. */
+	private function ownStarHasFlag(node: ShapeNode, flag: String): Bool {
+		return node.children.exists(c -> c.kind == Star && c.fmtHasFlag(flag));
+	}
+
+	/** `ownStarHasFlag` on the rules named by `node`'s own direct `Ref` children (one hop, no recursion). */
+	private function refStarHasFlag(node: ShapeNode, flag: String): Bool {
+		for (child in node.children) {
+			final ref: Null<String> = child.annotations.get(AnnotationKeys.BASE_REF);
+			if (ref == null) continue;
+			final target: Null<ShapeNode> = _shape.rules.get(ref);
+			if (target != null && ownStarHasFlag(target, flag)) return true;
+		}
+		return false;
 	}
 
 }
@@ -17652,7 +18111,15 @@ typedef WrapBodyOpts = {
 	// ω-single-stmt-braces trailing-comment hoist: runtime Null<String> comment to
 	// fold after a de-braced body's `;` (hoistTrailingComment result). Null off the
 	// dropSingleStmtBraces path so buildBodyWriteCall skips the fold (byte-inert).
-	?ssbTrailCommentExpr: Null<Expr>
+	?ssbTrailCommentExpr: Null<Expr>,
+	// omega-arrow-value-if-reflow: true for a body field carrying
+	// `@:fmt(arrowValueIfReflowSite)` (HxIfExpr.thenBranch / elseBranch).
+	// The resolved BodyPolicy is then overridden to `Same` whenever the
+	// struct-level gate local `_aifReflow` is set at runtime, so every
+	// branch value glues to its own condition and the enclosing
+	// `Group` owns the one flat-vs-broken decision for the whole chain.
+	// False everywhere else -> byte-inert.
+	?arrowValueIfSite: Bool
 };
 
 /**
@@ -18204,6 +18671,7 @@ typedef TryparseStarCtx = {
 	final sepBeforeFirstExpr: Expr;
 	final nestBodyExpr: Expr;
 	final shapeRefusalExpr: Expr;
+	final glueRefusalExpr: Expr;
 	final flatGateExpr: Expr;
 	final fitGateExpr: Expr;
 	final writerOptExpr: Expr;

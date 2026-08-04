@@ -73,10 +73,19 @@ final class HxGlueWidthSliceTest extends Test {
 		+ '\t\t\tif (subItem.kind == ItemData.KIND_SUBSTITUTE /*&& cast( subItem, ItemBase ).markedOnDeck*/) {\n'
 		+ '\t\t\t\tsubItem.y = 1;\n\t\t\t}\n\t}\n}\n';
 
-	/** The same glued body as a case body: 12 columns of indent + `case 1: ` + the 93-column `if (…) {` = 113 glued, 109 broken. */
+	/**
+	 * A glued case body carrying real content before its first break — a call
+	 * whose `{`-lambda argument breaks. Glued, the case line is 59 columns;
+	 * broken, the body line is 55, so the break window is [55, 58].
+	 *
+	 * The body must be a VALUE, not a keyword-led statement: since
+	 * omega-case-body-controlflow-glue a control-flow body that cannot render
+	 * flat is refused the glue outright, so it would never reach the width
+	 * question this fixture exists to ask.
+	 */
 	private static final CASE_GLUE_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tswitch (x) {\n'
-		+ '\t\t\tcase 1: if (subItem.kind == ItemData.KIND_SUBSTITUTE /*&& cast( subItem, ItemBase ).markedOnDeck*/) {\n'
-		+ '\t\t\t\tfoo();\n\t\t\t}\n\t\t\tcase _: bar();\n\t\t}\n\t}\n}\n';
+		+ '\t\t\tcase 1: listedThings.exists(function(subItem) {\n\t\t\t\treturn subItem.kind == ItemData.KIND_SUBSTITUTE;\n'
+		+ '\t\t\t});\n\t\t\tcase _: bar();\n\t\t}\n\t}\n}\n';
 
 	/**
 	 * A case body that IS a block: its first line is the bare `{`, and the case
@@ -180,17 +189,17 @@ final class HxGlueWidthSliceTest extends Test {
 		// The shared seam: the case-body Star reaches `BodyFit.fitLineLayout`
 		// by a different writer path than the `forBody` fixture above, and gets
 		// the same width answer without a case-specific rule. The case line is
-		// 113 columns glued and the body line 109 broken, so the window is
-		// [109, 112] — both edges pinned here.
-		final breaks: String = write(CASE_GLUE_SRC, caseFitJson(112));
+		// 59 columns glued and the body line 55 broken, so the window is
+		// [55, 58] — both edges pinned here.
+		final breaks: String = write(CASE_GLUE_SRC, caseFitJson(58));
 		Assert.isTrue(
-			breaks.indexOf('\t\t\tcase 1:\n\t\t\t\tif (subItem.kind') != -1, 'an over-wide glued case body must break: <$breaks>'
+			breaks.indexOf('\t\t\tcase 1:\n\t\t\t\tlistedThings.exists(') != -1, 'an over-wide glued case body must break: <$breaks>'
 		);
-		final glued: String = write(CASE_GLUE_SRC, caseFitJson(113));
-		Assert.isTrue(glued.indexOf('\t\t\tcase 1: if (subItem.kind') != -1, 'a case line exactly at the limit stays glued: <$glued>');
-		final tooTight: String = write(CASE_GLUE_SRC, caseFitJson(108));
+		final glued: String = write(CASE_GLUE_SRC, caseFitJson(59));
+		Assert.isTrue(glued.indexOf('\t\t\tcase 1: listedThings.exists(') != -1, 'a case line exactly at the limit stays glued: <$glued>');
+		final tooTight: String = write(CASE_GLUE_SRC, caseFitJson(54));
 		Assert.isTrue(
-			tooTight.indexOf('\t\t\tcase 1: if (subItem.kind') != -1,
+			tooTight.indexOf('\t\t\tcase 1: listedThings.exists(') != -1,
 			'below the window the break stops helping and the glue comes back: <$tooTight>'
 		);
 	}
@@ -221,8 +230,10 @@ final class HxGlueWidthSliceTest extends Test {
 		// a spread trigger, and turning one into a break must not make it one.
 		// `case _: bar();` fits and must stay on its label line even though its
 		// sibling just moved down.
-		final out: String = write(CASE_GLUE_SRC, caseFitJson(112));
-		Assert.isTrue(out.indexOf('\t\t\tcase 1:\n\t\t\t\tif (subItem.kind') != -1, 'the glued sibling must really have broken: <$out>');
+		final out: String = write(CASE_GLUE_SRC, caseFitJson(58));
+		Assert.isTrue(
+			out.indexOf('\t\t\tcase 1:\n\t\t\t\tlistedThings.exists(') != -1, 'the glued sibling must really have broken: <$out>'
+		);
 		Assert.isTrue(out.indexOf('case _: bar();') != -1, 'a fitting sibling must not be dragged down by a glue-turned-break: <$out>');
 	}
 

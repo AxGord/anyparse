@@ -140,11 +140,26 @@ package anyparse.grammar.haxe;
  * assignment variant nests hierarchically in fork's token tree and
  * stays inline. Mirrors fork's `markExpressionCase` body-shape check
  * (`dblDot.children.length == 2 && second.tok != CommentLine`).
+ *
+ * `@:fmt(refuseGlueOnControlFlowRoot)` (omega-case-body-controlflow-glue)
+ * adds the second body-shape gate, on the `FitLine` path only: a body
+ * that cannot render flat AND whose single statement is keyword-led
+ * control flow (the generated `caseBodyControlFlowRoot` predicate) takes
+ * the BREAK shape instead of gluing onto the case label. Such a
+ * construct's continuation lines (`else if`, `} while`, `catch`, a
+ * region's `#else` / `#end`) are siblings of its head, so glued they
+ * render at the HEAD's indent — which under
+ * `indentation.alignInlineSwitchCaseBody` is the case LABEL's own column,
+ * and at the default one level under it. Either way the arms line up
+ * with, or above, the body they belong to, and the statement reads as if
+ * it had left the branch. A `{`-opening VALUE
+ * (block, object literal, lambda) is untouched — its brace ends the label
+ * line and its interior is unambiguously the body's.
  */
 @:peg
 typedef HxCaseBranch = {
 	@:sep(',') @:trail(':') @:fmt(wrapRules('casePatternWrap'), beforeNewlineSlotFirst, captureTrailComment) var patterns: Array<HxCasePattern>;
 	@:trivia @:tryparse @:fmt(nestBody, bodyPolicy('caseBody', 'expressionCase'),
 		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase'), propagateExprPosition,
-		clearExprPositionNonTail, refuseFlatOnComplexExpr) var body: Array<HxStatement>;
+		clearExprPositionNonTail, refuseFlatOnComplexExpr, refuseGlueOnControlFlowRoot) var body: Array<HxStatement>;
 };

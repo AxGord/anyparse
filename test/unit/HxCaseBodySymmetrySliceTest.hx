@@ -40,7 +40,10 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
  * unit and skips the width measurement entirely.
  *
  * WIDTH, the original channel and now the fallback: the widest unit's flat
- * width does not fit at the switch's indent.
+ * width does not fit at the switch's indent — or some unit measures `-1`
+ * AND holds a single keyword-led control-flow statement, which
+ * `BodyFit.fitLineLayout` refuses the glue, so it renders below its own
+ * label (`HxCaseBodyControlFlowGlueTest`).
  *
  * NOT triggers, and each for its own reason:
  *  - an EMPTY body (`case X:` with no statements) — there is no body to
@@ -53,11 +56,13 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
  *    at the LIVE PEN COLUMN, which no emitter-side walk can see, so the
  *    pre-pass never learns of it. The known residual, pinned by
  *    `HxGlueWidthSliceTest.testGlueTurnedBreakIsNotASiblingSymmetryTrigger`;
- *  - a body refused by a COMMENT (a leading comment on the body's first
- *    statement, an orphan trailing comment in the body, a trailing comment
- *    captured on the label). Those live in trivia slots the structural
+ *  - a body refused by a COMMENT (a leading comment on the body's
+ *    first statement, or a trailing comment captured on the label — an
+ *    ORPHAN trailing comment in the body stopped refusing at
+ *    omega-case-trail-comment-inline, see
+ *    `HxCaseBodyTrailCommentInlineTest`). Those live in trivia slots the structural
  *    predicate cannot read without answering differently per AST family —
- *    see `HxAstPredLowering.caseUnitStructuralBreakField`.
+ *    see `HxCasePredLowering.caseUnitStructuralBreakField`.
  *
  * A `#if`-GUARDED CASE REGION IS NOT ONE ELEMENT (ω-if-leader-case-symmetry).
  * Measured whole it always answers `-1` — its Doc carries the directive

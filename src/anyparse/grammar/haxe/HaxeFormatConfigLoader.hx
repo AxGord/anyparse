@@ -616,6 +616,7 @@ final class HaxeFormatConfigLoader {
 			tryPolicy: base.tryPolicy,
 			elseIf: base.elseIf,
 			fitLineIfWithElse: base.fitLineIfWithElse,
+			expressionIfArrowBodyReflow: base.expressionIfArrowBodyReflow,
 			ifElseSemicolonNextLine: base.ifElseSemicolonNextLine,
 			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
 			existingBetweenFields: base.existingBetweenFields,
@@ -730,6 +731,7 @@ final class HaxeFormatConfigLoader {
 			_inElseIfBranch: base._inElseIfBranch,
 			_inValueIfBranch: base._inValueIfBranch,
 			_inArrowLambdaBody: base._inArrowLambdaBody,
+			_arrowValueIfBlocked: base._arrowValueIfBlocked,
 			_classExtern: base._classExtern,
 			_inAnonFnBody: base._inAnonFnBody,
 			_inTypedefBody: base._inTypedefBody,
@@ -1018,6 +1020,11 @@ final class HaxeFormatConfigLoader {
 		applyExpressionIfFanout(section, opt);
 		if (section.elseIf != null) opt.elseIf = keywordPlacementToRuntime(section.elseIf);
 		if (section.fitLineIfWithElse != null) opt.fitLineIfWithElse = section.fitLineIfWithElse;
+		// omega-arrow-value-if-reflow: independent Bool knob, read here rather
+		// than in `applyExpressionIfFanout` because it does not fan out into the
+		// three `expressionIf*` body policies - it overrides them, and only for
+		// a value-if chain that is the direct body of an arrow lambda.
+		if (section.expressionIfArrowBodyReflow != null) opt.expressionIfArrowBodyReflow = section.expressionIfArrowBodyReflow;
 		if (section.ifElseSemicolonNextLine != null) opt.ifElseSemicolonNextLine = section.ifElseSemicolonNextLine;
 		if (section.expressionTry != null) opt.expressionTry = sameLineToRuntime(section.expressionTry);
 		if (section.expressionIfWithBlocks != null) opt.expressionIfWithBlocks = section.expressionIfWithBlocks;

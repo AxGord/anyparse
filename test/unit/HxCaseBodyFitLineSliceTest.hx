@@ -260,12 +260,18 @@ final class HxCaseBodyFitLineSliceTest extends Test {
 		// it is the same "does the body's container already indent relative
 		// to the case line" question the committed-flat path asks, and
 		// `BodyFit`'s `nestGluedBody` is how the fit path asks it.
-		final src: String =
-			'class M {\n\tfunction f():Void {\n\t\tswitch (x) {\n\t\t\tcase 1: if (a) {\n\t\t\t\tfoo();\n\t\t\t}\n\t\t}\n\t}\n}\n';
+		//
+		// The body must be a `{`-opening VALUE: since
+		// omega-case-body-controlflow-glue a keyword-led statement body is
+		// refused the glue outright and never reaches `nestGluedBody`.
+		final src: String = 'class M {\n\tfunction f():Void {\n\t\tswitch (x) {\n\t\t\tcase 1: (p, q) -> {\n\t\t\t\tfoo(p, q);\n'
+			+ '\t\t\t}\n\t\t}\n\t}\n}\n';
 		final off: String = write(src, caseFitJson(false));
-		Assert.isTrue(off.indexOf('case 1: if (a) {\n\t\t\t\t\tfoo();') != -1, 'knob off must keep the +1 continuation indent: <$off>');
+		Assert.isTrue(
+			off.indexOf('case 1: (p, q) -> {\n\t\t\t\t\tfoo(p, q);') != -1, 'knob off must keep the +1 continuation indent: <$off>'
+		);
 		final on: String = write(src, caseFitJson(true));
-		Assert.isTrue(on.indexOf('case 1: if (a) {\n\t\t\t\tfoo();') != -1, 'knob on must drop the +1 continuation indent: <$on>');
+		Assert.isTrue(on.indexOf('case 1: (p, q) -> {\n\t\t\t\tfoo(p, q);') != -1, 'knob on must drop the +1 continuation indent: <$on>');
 	}
 
 	public function testTrailingBodyCommentCountsTowardTheFitMeasure(): Void {
@@ -397,9 +403,13 @@ final class HxCaseBodyFitLineSliceTest extends Test {
 			same.indexOf('case 1: if (a) foo();') != -1, 'the committed-flat path DOES fan out `ifBody` to `expressionCase`: <$same>'
 		);
 		final fit: String = write(src, '{"wrapping": {"maxLineLength": 140}, "sameLine": {"caseBody": "fitLine", $base}}');
-		Assert.isTrue(
-			fit.indexOf('case 1: if (a)\n') != -1, 'the fit path must NOT fan out `ifBody`, so the inner body still breaks: <$fit>'
-		);
+		// The discriminator is the INNER placement — whether the swapped
+		// `ifBody` reached the `if`. Where the case body itself sits is a
+		// different question, and since omega-case-body-controlflow-glue it
+		// answers "below the label": `ifBody: next` gives the body a hardline,
+		// and a control-flow body that cannot render flat is refused the glue.
+		Assert.isTrue(fit.indexOf('if (a)\n') != -1, 'the fit path must NOT fan out `ifBody`, so the inner body still breaks: <$fit>');
+		Assert.isTrue(fit.indexOf('if (a) foo();') == -1, 'a fanned-out `ifBody` would have kept the inner body inline: <$fit>');
 		Assert.isTrue(fit.indexOf('foo();') != -1, 'the inner body must survive the break: <$fit>');
 	}
 

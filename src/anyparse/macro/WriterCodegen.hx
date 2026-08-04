@@ -515,13 +515,17 @@ class WriterCodegen {
 	 * call this helper), and is dropped the moment a propagating ctor
 	 * re-establishes expression position one level deeper.
 	 */
-	private static function setExprPositionField(optionsCT: ComplexType, clearsValueIfBranch: Bool, clearsArrowLambdaBody: Bool): Field {
+	private static function setExprPositionField(
+		optionsCT: ComplexType, clearsValueIfBranch: Bool, clearsArrowLambdaBody: Bool, clearsArrowValueIfBlocked: Bool
+	): Field {
 		var guard: Expr = macro o._inExprPosition;
 		if (clearsValueIfBranch) guard = macro $guard && !o._inValueIfBranch;
 		if (clearsArrowLambdaBody) guard = macro $guard && !o._inArrowLambdaBody;
+		if (clearsArrowValueIfBlocked) guard = macro $guard && !o._arrowValueIfBlocked;
 		final clears: Array<Expr> = [];
 		if (clearsValueIfBranch) clears.push(macro _c._inValueIfBranch = false);
 		if (clearsArrowLambdaBody) clears.push(macro _c._inArrowLambdaBody = false);
+		if (clearsArrowValueIfBlocked) clears.push(macro _c._arrowValueIfBlocked = false);
 		final body: Expr = macro {
 			if ($guard) return o;
 			final _c: $optionsCT = _copyOpt(o);
@@ -627,6 +631,40 @@ class WriterCodegen {
 					if (!o._inValueIfBranch) return o;
 					final _c: $optionsCT = _copyOpt(o);
 					_c._inValueIfBranch = false;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * omega-arrow-value-if-reflow - opt-fanout setter for the chain-refusal
+	 * descent signal. An `HxIfExpr` that refuses the arrow-body reflow (a
+	 * comment anywhere on its `else`-spine) stamps this on both branch writes
+	 * so every deeper member of the SAME chain reads the refusal too - without
+	 * it the member holding the comment keeps its policy shape while the
+	 * comment-free tail re-flows, and the output carries both forms at once.
+	 *
+	 * Deliberately its OWN field rather than a clear of `_inArrowLambdaBody`:
+	 * that flag is a shared context signal the object-literal arrow knobs also
+	 * read, so borrowing it as a private refusal channel silently disabled the
+	 * objlit open-pad / reflow inside the refused branch.
+	 *
+	 * Idempotent, and cleared by `_setExprPosition` on any fresh
+	 * expression-position frame, so it never leaves the chain that set it.
+	 */
+	private static function setArrowValueIfBlockedField(optionsCT: ComplexType): Field {
+		return {
+			name: '_setArrowValueIfBlocked',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{ name: 'o', type: optionsCT }],
+				ret: optionsCT,
+				expr: macro {
+					if (o._arrowValueIfBlocked) return o;
+					final _c: $optionsCT = _copyOpt(o);
+					_c._arrowValueIfBlocked = true;
 					return _c;
 				},
 			}),
@@ -2164,10 +2202,18 @@ class WriterCodegen {
 		// noqa: complexity
 		final hasValueIfBranch: Bool = optionsHasField(optionsTypePath, '_inValueIfBranch');
 		final hasArrowLambdaBody: Bool = optionsHasField(optionsTypePath, '_inArrowLambdaBody');
+		// omega-arrow-value-if-reflow: the chain-refusal descent signal shares
+		// the consumed-once discipline of `_inValueIfBranch` - a fresh
+		// expression-position frame (call arg, operand, a NESTED arrow body) is
+		// a new chain, so `_setExprPosition` clears it. The chain's own
+		// `else`-descent carries no `propagateExprPosition` and therefore keeps
+		// it, which is exactly the reach the signal needs.
+		final hasArrowValueIfBlocked: Bool = optionsHasField(optionsTypePath, '_arrowValueIfBlocked');
 		if (optionsHasInExprPosition(optionsTypePath)) {
-			fields.push(setExprPositionField(optionsCT, hasValueIfBranch, hasArrowLambdaBody));
+			fields.push(setExprPositionField(optionsCT, hasValueIfBranch, hasArrowLambdaBody, hasArrowValueIfBlocked));
 			fields.push(clearExprPositionField(optionsCT));
 		}
+		if (hasArrowValueIfBlocked) fields.push(setArrowValueIfBlockedField(optionsCT));
 		// ω-elseif-body-break: opt-fanout helper pair for `propagateElseIfBranch`
 		// (HxIfStmt.elseBody set-site) and `clearElseIfBranch` (inner if's
 		// then-body one-level clear). Gated on `_inElseIfBranch:Bool` presence.

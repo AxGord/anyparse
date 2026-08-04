@@ -131,6 +131,22 @@ package anyparse.grammar.haxe.format;
  * `@:fmt(inlineBlockBodyIfFlag('expressionIfWithBlocks'))` on both
  * branches; non-block bodies fall through to the `expressionIf*`
  * cascade unchanged.
+ *
+ * omega-arrow-value-if-reflow: `expressionIfArrowBodyReflow` (default
+ * `false`, absent = fork parity) is a `Bool` knob for the ONE context
+ * the `expressionIf` cascade cannot canonicalise - a value-`if`/`else`
+ * chain in an arrow-lambda body. When set, the chain
+ * becomes a width-decided unit: it renders flat
+ * (`(a, b) -> if (c) -1 else 0`) when it fits, and one arm per line with
+ * each branch value glued to its own condition when it does not. Off,
+ * the `expressionIf` policy decides each branch on its own and even a
+ * flat-fitting chain still explodes. Wired via
+ * `@:fmt(arrowValueIfReflow('expressionIfArrowBodyReflow'))` on the
+ * `HxIfExpr` typedef plus `@:fmt(arrowValueIfReflowSite)` on both
+ * branches. A chain carrying a comment anywhere on its `else`-spine
+ * refuses the reflow as a WHOLE and keeps the policy-driven shape; the
+ * reach is `_inArrowLambdaBody`, which also covers a `cast` operand, an
+ * `untyped` / `@:meta` prefix and an enclosing value-`if`'s condition.
  */
 @:peg typedef HxFormatSameLineSection = {
 
@@ -179,5 +195,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var expressionIf: HxFormatBodyPolicy;
 
 	@:optional var expressionIfWithBlocks: Bool;
+
+	@:optional var expressionIfArrowBodyReflow: Bool;
+
 	@:optional var comprehensionFor: HxFormatBodyPolicy;
 };

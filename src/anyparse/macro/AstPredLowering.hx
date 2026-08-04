@@ -283,6 +283,11 @@ class AstPredLowering {
 		return { name: name, type: ruleNullCT(rule) };
 	}
 
+	/** Non-null single-value predicate argument — for a Star element, which is never null. */
+	private function bareArg(name: String, rule: String): FunctionArg {
+		return { name: name, type: ruleCT(rule) };
+	}
+
 	/**
 	 * Whether elements of the `Seq` rule's Star field are
 	 * `Trivial<…>`-wrapped in this lowering's family — trivia mode,

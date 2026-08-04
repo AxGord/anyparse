@@ -849,6 +849,30 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	tryPolicy: WhitespacePolicy,
 	elseIf: KeywordPlacement,
 	fitLineIfWithElse: Bool,
+
+	/**
+	 * omega-arrow-value-if-reflow: when `true`, a value-`if`/`else` chain in
+	 * an arrow-lambda body becomes one width-decided unit instead of a
+	 * per-branch policy cascade - the whole chain renders flat when it fits
+	 * at its column, otherwise one arm per line with each branch value glued
+	 * to its own condition. Default `false` keeps the `expressionIfBody` /
+	 * `expressionElseBody` policies in charge (fork parity), where a
+	 * flat-fitting chain in an arrow body still explodes.
+	 *
+	 * Read at the `HxIfExpr` sites (`arrowValueIfReflow` on the typedef,
+	 * `arrowValueIfReflowSite` on both branches) and gated at runtime on
+	 * `_inArrowLambdaBody`, on `_arrowValueIfBlocked` (an ancestor member's
+	 * refusal) and on an `else`-spine walk for captured comments - a chain
+	 * carrying a comment ANYWHERE keeps the policy shape, in one piece.
+	 *
+	 * "In an arrow-lambda body" is the reach of `_inArrowLambdaBody`, which
+	 * is slightly wider than the immediate body: it also survives a
+	 * `cast(..., T)` operand, a `untyped` / `@:meta` prefix, and an
+	 * enclosing value-`if`'s CONDITION. Those three positions re-flow too
+	 * (measured non-corrupt and idempotent); `HxIfExpr`'s own doc lists
+	 * them. Fed by `sameLine.expressionIfArrowBodyReflow`.
+	 */
+	expressionIfArrowBodyReflow: Bool,
 	ifElseSemicolonNextLine: Bool,
 	afterFieldsWithDocComments: CommentEmptyLinesPolicy,
 	existingBetweenFields: KeepEmptyLinesPolicy,
@@ -1083,6 +1107,17 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// LEFTMOST-LEAF object literal of the body — the one whose `{` sits right
 	// after the `->` token — sees the flag. Default `false`.
 	_inArrowLambdaBody: Bool,
+	// omega-arrow-value-if-reflow - set on the branch writes of an `HxIfExpr`
+	// that REFUSED the arrow-body reflow (a comment anywhere on its
+	// `else`-spine), so every deeper member of the same chain refuses too and
+	// the chain renders in ONE shape. Its own field rather than a clear of
+	// `_inArrowLambdaBody`: that flag is shared with the object-literal arrow
+	// knobs, and borrowing it as a refusal channel silently disabled the
+	// objlit open-pad / reflow inside the refused branch. Cleared by
+	// `_setExprPosition` on any fresh expression-position frame (call arg,
+	// operand, nested arrow body), so it never leaves its own chain. Default
+	// `false`.
+	_arrowValueIfBlocked: Bool,
 	_classExtern: Bool,
 	_inAnonFnBody: Bool,
 	_inTypedefBody: Bool,

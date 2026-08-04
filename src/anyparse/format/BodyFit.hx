@@ -25,7 +25,10 @@ import anyparse.format.wrap.WrapList;
  *    the same answer `BodyPolicy.Same` gives, with an `OptSpace` separator
  *    so a body that opens with its own hardline does not leave a trailing
  *    space behind — but the glue is width-gated by `glueLayout`, since the
- *    body's FIRST line is a real line and does have to fit.
+ *    body's FIRST line is a real line and does have to fit. A caller may
+ *    also refuse the glue outright for this body (`refuseGlue`), which
+ *    takes `breakLayout` instead; that decision is about the body's KIND,
+ *    not its width, and belongs to the caller.
  *  - otherwise — `BodyGroup(Nest(cols, [Line, body]))`. The renderer's
  *    `fitsFlat` sees the live column (the header is already emitted) plus
  *    the body's flat width and picks same-line or next-line-one-deeper.
@@ -89,14 +92,14 @@ final class BodyFit {
 	 *
 	 * It is an ordinary `siblingWidth >= 0` — `fitLineLayout` needs no arm for
 	 * it and the renderer needs no new ctor. What it encodes is a verdict the
-	 * emitter reached STRUCTURALLY rather than by measurement: some unit of
-	 * the group renders below its own label whatever the budget (a multi-
-	 * statement body, a single-statement body `caseBodyRefusesFlat` refuses,
-	 * or a label-splice region, whose shared body always sits below the labels
-	 * it was split from), so the per-switch rule "if one body is below its
-	 * label, all are" fires without a width comparison. The trigger set and
-	 * the shapes it leaves out are both enumerated in
-	 * `WriterLowering.caseSiblingWidthProbeExpr`'s doc.
+	 * emitter reached without a width COMPARISON: some unit of the group
+	 * renders below its own label whatever the budget (a multi-statement body,
+	 * a single-statement body `caseBodyRefusesFlat` refuses, a label-splice
+	 * region whose shared body always sits below the labels it was split from,
+	 * or a body that measured `-1` and is refused the glue by
+	 * `caseBodyControlFlowRoot`), so the per-switch rule "if one body is below
+	 * its label, all are" fires. The trigger set and the shapes it leaves out
+	 * are both enumerated in `WriterLowering.caseSiblingWidthProbeExpr`'s doc.
 	 */
 	public static inline final SIBLING_FORCE_BREAK: Int = 0x0FFFFFF0;
 
@@ -124,13 +127,25 @@ final class BodyFit {
 	 * TWO CHANNELS reach that width, and this function cannot tell them apart
 	 * — deliberately. The measured one is the widest sibling's flat width. The
 	 * other is `SIBLING_FORCE_BREAK`, which the emitter substitutes when some
-	 * unit of the group is STRUCTURALLY below its own label (a multi-statement
-	 * body, a single-statement body the flat-refusal gate rejects, or a
-	 * label-splice region): no real indent and budget can fit it, so the probe
-	 * always breaks and the whole group follows. A GLUED body is not such a
-	 * unit — its first line shares the label line — but a coordinated break
-	 * still moves it, since it sits inside the probe's break branch like
-	 * everyone else.
+	 * unit of the group is below its own label at every budget (a
+	 * multi-statement body, a single-statement body the flat-refusal gate
+	 * rejects, a label-splice region, or a `refuseGlue` body that measured
+	 * `-1`): no real indent and budget can fit it, so the probe always breaks
+	 * and the whole group follows. A GLUED body is not such a unit — its first
+	 * line shares the label line — but a coordinated break still moves it,
+	 * since it sits inside the probe's break branch like everyone else.
+	 *
+	 * `refuseGlue` replaces the glue outcome with `breakLayout`. It is the
+	 * CALLER's verdict rather than anything measured here: the case-body path
+	 * passes it when the body's single statement is keyword-led control flow
+	 * (`caseBodyControlFlowRoot`). Such a construct's continuation lines (`else if`, `} while`,
+	 * `catch`) are siblings of its head, so glued they render at the HEAD's
+	 * indent rather than under the body — at the case LABEL's own column when
+	 * `alignInlineSwitchCaseBody` drops the continuation nest, one level under
+	 * it otherwise. Both read as if the statement had left the branch. The flag cannot reach the MEASURED
+	 * outcome: a body that renders flat never enters this branch, so
+	 * `case X: if (c) x();` is untouched. The bare-Ref caller leaves it
+	 * `false` and stays byte-identical.
 	 *
 	 * Some shapes DO render below their label and still cannot LEAD the group;
 	 * `WriterLowering.caseSiblingWidthProbeExpr`'s doc enumerates them. The
@@ -139,16 +154,32 @@ final class BodyFit {
 	 * can see, so the pre-pass never learns of it. Pinned by
 	 * `HxGlueWidthSliceTest.testGlueTurnedBreakIsNotASiblingSymmetryTrigger`.
 	 */
-	public static function fitLineLayout(cols: Int, body: Doc, nestGluedBody: Bool, lineWidth: Int, siblingWidth: Int = SIBLING_NONE): Doc {
-		final own: Doc = if (WrapList.flatLength(body) == -1) {
+	public static function fitLineLayout(
+		cols: Int, body: Doc, nestGluedBody: Bool, lineWidth: Int, siblingWidth: Int = SIBLING_NONE, refuseGlue: Bool = false
+	): Doc {
+		final flat: Int = WrapList.flatLength(body);
+		final own: Doc = if (flat != -1)
+			Doc.BodyGroup(Doc.Nest(cols, Doc.Concat([Doc.Line(' '), body])));
+		else if (refuseGlue)
+			breakLayout(cols, body);
+		else {
 			final glued: Doc = Doc.Concat([Doc.OptSpace(' '), body]);
 			glueLayout(cols, body, nestGluedBody ? Doc.Nest(cols, glued) : glued, lineWidth);
 		}
-		else
-			Doc.BodyGroup(Doc.Nest(cols, Doc.Concat([Doc.Line(' '), body])));
-		return siblingWidth < 0
-			? own
-			: Doc.IfIndentWidthExceeds(siblingWidth, lineWidth, Doc.Nest(cols, Doc.Concat([Doc.Line('\n'), body])), own);
+		return siblingWidth < 0 ? own : Doc.IfIndentWidthExceeds(siblingWidth, lineWidth, breakLayout(cols, body), own);
+	}
+
+	/**
+	 * The BREAK shape every `FitLine` outcome falls back to: `body` on the
+	 * next line, one indent level deeper than the header.
+	 *
+	 * Three sites want exactly this Doc — the sibling-coordinated probe's
+	 * break branch, `glueLayout`'s over-wide answer, and the control-flow
+	 * glue refusal — so it has one owner rather than three literal copies to
+	 * keep in step.
+	 */
+	public static inline function breakLayout(cols: Int, body: Doc): Doc {
+		return Doc.Nest(cols, Doc.Concat([Doc.Line('\n'), body]));
 	}
 
 	/**
@@ -214,9 +245,7 @@ final class BodyFit {
 	 * width to spend.
 	 */
 	public static function glueLayout(cols: Int, body: Doc, glued: Doc, lineWidth: Int): Doc {
-		return lineWidth <= 0
-			? glued
-			: Doc.IfGluedFirstLineExceeds(lineWidth, cols, Doc.Nest(cols, Doc.Concat([Doc.Line('\n'), body])), glued);
+		return lineWidth <= 0 ? glued : Doc.IfGluedFirstLineExceeds(lineWidth, cols, breakLayout(cols, body), glued);
 	}
 
 }

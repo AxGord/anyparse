@@ -130,13 +130,53 @@ package anyparse.grammar.haxe;
  * any deeper expression-position descent (`_setExprPosition` resets it),
  * so an object literal nested as e.g. a call argument inside the branch
  * (`if (c) f({obj})`) keeps its source-multiline shape.
+ *
+ * `@:fmt(arrowValueIfReflowSite)` on both branches, paired with the
+ * TYPE-level `@:fmt(arrowValueIfReflow('expressionIfArrowBodyReflow',
+ * 'elseBranch', 'IfExpr'))` (omega-arrow-value-if-reflow) - the one
+ * context the `expressionIf` cascade cannot canonicalise: a value-if
+ * chain in an arrow-lambda body. The type-level meta declares the runtime
+ * gate locals and wraps the whole node in a `Group`; the field-level flags
+ * make both branch policies read `Same` and turn the pre-`else` gap into a
+ * soft `Line`, so the chain has exactly ONE break axis and the group
+ * decides it for every arm at once: flat when it fits, `if (c) v` /
+ * `else if (c) v` / `else v` one per line when it does not. The group is
+ * gated on `!opt._inValueIfBranch` so only the OUTERMOST member of an
+ * `else if` chain opens one; the nested members inherit it and contribute
+ * their soft `Line`s. The thenBranch override additionally requires
+ * `elseBranch != null`, leaving an else-less arrow-body `if`
+ * (`item -> if (c) body`) on its `noSiblingFallback` answer. Default
+ * `false` keeps the per-branch policy cascade (fork parity).
+ *
+ * The reflow is REFUSED, for the chain as a whole, when any member carries
+ * a captured comment - forcing `Same` would put a `//` inline next to a
+ * branch value. Both directions are covered because neither alone is
+ * enough: the `spineField` / `spineCtor` args drive an `else`-spine walk
+ * so a member sees comments BELOW it, and a refusing member stamps
+ * `opt._arrowValueIfBlocked` on its branch writes so members below see a
+ * refusal ABOVE them. With one only, the chain rendered half re-flowed and
+ * half in policy shape. `_arrowValueIfBlocked` is a dedicated field rather
+ * than a clear of `_inArrowLambdaBody`, which is shared with the
+ * object-literal arrow knobs and would have switched those off inside the
+ * refused branch.
+ *
+ * RESIDUAL - "in an arrow-lambda body" is `_inArrowLambdaBody`'s reach,
+ * which is wider than the immediate body: the flag survives into a
+ * `cast(<if>, T)` operand, past an `untyped` / `@:meta` prefix, and into
+ * an enclosing value-`if`'s CONDITION (`if (if (a) b else c) x else y`).
+ * All three re-flow under the knob. Measured non-corrupt and idempotent,
+ * and the meta-prefix case is arguably the wanted answer, so they are
+ * recorded rather than gated; tightening to the strict DIRECT body would
+ * mean `_setExprPosition`-style clears on the cast operand and the
+ * condition field.
  */
 @:peg
+@:fmt(arrowValueIfReflow('expressionIfArrowBodyReflow', 'elseBranch', 'IfExpr'))
 typedef HxIfExpr = {
 	@:lead('(') @:trail(')') @:fmt(condWrap('conditionWrap')) var cond: HxExpr;
 	@:trailOpt(';') @:fmt(bodyPolicy('ifBody', 'expressionIfBody'),
 		indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), noSiblingFallback('ifBody'),
-		inlineBlockBodyIfFlag('expressionIfWithBlocks'), propagateValueIfBranch) var thenBranch: HxExpr;
+		inlineBlockBodyIfFlag('expressionIfWithBlocks'), propagateValueIfBranch, arrowValueIfReflowSite) var thenBranch: HxExpr;
 	@:optional @:kw('else') @:fmt(bodyPolicy('elseBody', 'expressionElseBody'), sameLine('sameLineExpressionElse'), shapeAware, elseIf,
-		inlineBlockBodyIfFlag('expressionIfWithBlocks'), propagateValueIfBranch) var elseBranch: Null<HxExpr>;
+		inlineBlockBodyIfFlag('expressionIfWithBlocks'), propagateValueIfBranch, arrowValueIfReflowSite) var elseBranch: Null<HxExpr>;
 };

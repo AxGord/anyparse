@@ -55,10 +55,15 @@ package anyparse.grammar.haxe;
  * flat-gate so a `default: A || B;` body refuses inline regardless of
  * the dual flat-gate's verdict. See `HxCaseBranch.body`'s doc for the
  * body-shape contract.
+ *
+ * `@:fmt(refuseGlueOnControlFlowRoot)` (omega-case-body-controlflow-glue)
+ * mirrors `HxCaseBranch.body` too — a `FitLine` body that cannot render
+ * flat and holds a single keyword-led control-flow statement goes BELOW
+ * the `default:` label instead of gluing onto it.
  */
 @:peg
 typedef HxDefaultBranch = {
 	@:lead(':') @:trivia @:tryparse @:fmt(nestBody, bodyPolicy('caseBody', 'expressionCase'),
 		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase'), propagateExprPosition,
-		clearExprPositionNonTail, refuseFlatOnComplexExpr) var stmts: Array<HxStatement>;
+		clearExprPositionNonTail, refuseFlatOnComplexExpr, refuseGlueOnControlFlowRoot) var stmts: Array<HxStatement>;
 };
