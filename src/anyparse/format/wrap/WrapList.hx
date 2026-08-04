@@ -1099,15 +1099,17 @@ class WrapList {
 				| Fill(_, _, _) | FillWithRestProbe(_, _, _) | FillBreakAfterWrap(_, _, _):
 				// Layout atoms bear no text. `Fill` is deliberately opaque here: its
 				// break-mode packing decides at render time WHICH item lands last, so
-				// there is no static last-visible token to report. Two of the three
-				// consumers want a definite `}` and read `null` as "no" —
-				// `isBlockBodyComprehensionItem` and
-				// `BinaryChainEmit.ternaryHugCollectionBranchIndex`. The third,
-				// `isCuddleableComprehensionItem`, INVERTS the test (`!= '}'`), so `null`
-				// reads as "yes" there; it stays honest through its own
-				// `firstVisibleText(item) == 'for'` conjunct, which is `null` for a `Fill`
-				// too. Enumerated rather than left to `case _` so a new `Doc` ctor fails
-				// to compile here instead of silently inheriting `null`.
+				// there is no static last-visible token to report. Both consumers want a
+				// definite `}` and read `null` as "no" —
+				// `isHeadGluedBraceBodyComprehension` (shared by
+				// `isBlockBodyComprehensionItem` and, negated,
+				// `isCuddleableComprehensionItem`) and
+				// `BinaryChainEmit.ternaryHugCollectionBranchIndex`. The negating
+				// consumer therefore reads `null` as "cuddleable"; it stays honest
+				// through its own `firstVisibleText(item) == 'for'` conjunct, which is
+				// `null` for a `Fill` too. Enumerated rather than left to `case _` so a
+				// new `Doc` ctor fails to compile here instead of silently inheriting
+				// `null`.
 				null;
 		};
 	}
@@ -3034,17 +3036,51 @@ class WrapList {
 	 * ω-comprehension-block-hug: true iff `item` is a `for` / `while`
 	 * comprehension element with a BLOCK body — the array-comprehension analog
 	 * of the block lambda. `for` / `while` are reserved keywords so an exact
-	 * first-visible-Text match is unambiguous; the forced-hardline test
-	 * (`flatLength < 0`) restricts to block bodies (a single-expression
-	 * comprehension body renders inline, carries no hardline, and must NOT
-	 * head-hug).
+	 * first-visible-Text match is unambiguous; the body test lives in
+	 * `isHeadGluedBraceBodyComprehension` (a `{` at the end of the head line
+	 * and a `}` at the tail); the forced-hardline test (`flatLength < 0`) drops
+	 * a `{ }` body compact enough to render inline, which has nothing to hug.
 	 */
 	private static function isBlockBodyComprehensionItem(item: Doc): Bool {
 		final t: Null<String> = firstVisibleText(item);
-		// Require a `{ … }` BLOCK body (last token `}`), not merely any hardline:
-		// an expression-body comprehension that WRAPS also carries a hardline but
-		// its close is placed differently by the fork (`]` on its own line).
-		return (t == 'for' || t == 'while') && lastVisibleText(item) == '}' && flatLength(item) < 0;
+		return (t == 'for' || t == 'while') && isHeadGluedBraceBodyComprehension(item) && flatLength(item) < 0;
+	}
+
+	/**
+	 * ω-comprehension-closer: true iff `item`'s multi-line-ness is owned by a
+	 * `{ … }` construct GLUED to the generator head — the only shape for which
+	 * `} ]` is a coherent close, because the `}` has already returned to the
+	 * container's own indent by the time the `]` joins it.
+	 *
+	 * Two conjuncts, both required:
+	 *  - the last visible Text is `}` — the item's own close is a curly, so
+	 *    there is a `}` for the `]` to ride;
+	 *  - the item's FIRST structural break is immediately preceded by `{`
+	 *    (`firstBreakIsDelimChar`) — i.e. that curly sits at the END of the
+	 *    head line. This is the discriminator: under the padded-bracket regime
+	 *    that `shapeComprehensionBlockHug` gates on, a block-ctor body bypasses
+	 *    the body-policy switch entirely and is emitted `Concat([OptSpace(' '),
+	 *    block])` — glued, first break right after `{`. An EXPRESSION body is
+	 *    emitted `Nest(cols, Concat([Line('\n'), body]))` — pushed to a
+	 *    continuation line, first break right after the head's `)`.
+	 *
+	 * WHY the tail test alone is not enough (the bug this conjunct fixes): a
+	 * `}` tail is a property of the LAST token, not of the body's construct.
+	 * Every expression body whose final token happens to be a curly —
+	 * a macro reification (`macro if (…) $p{['source', f.field]}`), a ternary
+	 * whose else-branch is an object literal, a trailing `switch` expression —
+	 * read as a block, took the head-hug shape, and got its `]` glued to a
+	 * body line at BODY indent (`… $p{[…]} ];`). Two canonical closers for one
+	 * construct in one file. The head-glue test refuses all of them: their
+	 * first break precedes their body, so the cuddled-open shape applies and
+	 * the `]` drops to its own line at container indent.
+	 *
+	 * Sister-predicate contract: `isCuddleableComprehensionItem` NEGATES this,
+	 * so the two stay exact complements and no comprehension can fall between
+	 * them into the generic cascade.
+	 */
+	private static function isHeadGluedBraceBodyComprehension(item: Doc): Bool {
+		return lastVisibleText(item) == '}' && firstBreakIsDelimChar(item, '{'.code);
 	}
 
 	/**
@@ -3223,12 +3259,18 @@ class WrapList {
 	 * sibling predicates:
 	 *  - first visible Text is the reserved `for` keyword (exact match —
 	 *    unambiguous, as in `isBlockBodyComprehensionItem`);
-	 *  - last visible Text is NOT `}` — a BLOCK body head-hugs through
-	 *    `shapeComprehensionBlockHug`, which runs first and glues `} ]`.
-	 *    That intercept only fires on PADDED brackets, so under tight
-	 *    brackets this gate is the only thing stopping the `}` and the `]`
-	 *    from being split across two lines
-	 *    (`testTightBracketBlockBodyNotCuddled`);
+	 *  - the body is NOT a head-glued `{ … }`
+	 *    (`isHeadGluedBraceBodyComprehension`, the exact negation of
+	 *    `isBlockBodyComprehensionItem`'s own body test) — such a body
+	 *    head-hugs through `shapeComprehensionBlockHug`, which runs first
+	 *    and glues `} ]`. That intercept only fires on PADDED brackets, so
+	 *    under tight brackets this gate is the only thing stopping the `}`
+	 *    and the `]` from being split across two lines
+	 *    (`testTightBracketBlockBodyNotCuddled`). An expression body whose
+	 *    last token merely HAPPENS to be `}` (macro reification, object-
+	 *    literal / `switch` tail) is NOT excluded — it is pushed to a
+	 *    continuation line like any other expression body, so its `]`
+	 *    belongs on its own line (ω-comprehension-closer);
 	 *  - the item carries a forced hardline (`flatLength < 0`), i.e. it
 	 *    genuinely lays out across lines. A cascade can resolve `OnePerLine`
 	 *    on a NON-width rule (the generic `arrayWrap` cascade's
@@ -3245,7 +3287,8 @@ class WrapList {
 	 * (`testNestedComprehensionNotCuddled`).
 	 */
 	private static function isCuddleableComprehensionItem(item: Doc): Bool {
-		return firstVisibleText(item) == 'for' && lastVisibleText(item) != '}' && flatLength(item) < 0 && countGeneratorKeywords(item) == 1;
+		return firstVisibleText(item) == 'for' && !isHeadGluedBraceBodyComprehension(item) && flatLength(item) < 0
+			&& countGeneratorKeywords(item) == 1;
 	}
 
 	/**
@@ -3364,7 +3407,23 @@ class WrapList {
 	 * the first line break, answers whether that char is `[`. O(spine up to the
 	 * first break), no re-measure.
 	 */
-	private static function firstBreakIsArrayDelim(d: Doc): Bool {
+	private static inline function firstBreakIsArrayDelim(d: Doc): Bool {
+		return firstBreakIsDelimChar(d, '['.code);
+	}
+
+	/**
+	 * `firstBreakIsArrayDelim` generalised over the delimiter character — the
+	 * whole walk is char-agnostic, only the answer at the first break names a
+	 * delimiter. Second consumer is `isHeadGluedBraceBodyComprehension`
+	 * (`'{'`), which asks the same "did the construct open at the END of the
+	 * head line" question about a comprehension's block body.
+	 *
+	 * The soft-line stop is part of the contract for BOTH consumers: a soft
+	 * line reached before the delimiter means the construct is nested inside a
+	 * chain (opAdd / opBool / ternary continuation) whose own wrap owns the
+	 * layout, so the delimiter is not what the first line ends on.
+	 */
+	private static function firstBreakIsDelimChar(d: Doc, ch: Int): Bool {
 		final stack: Array<Doc> = [d];
 		var lastCh: Int = -1;
 		while (stack.length > 0) {
@@ -3374,12 +3433,13 @@ class WrapList {
 					if (s.length > 0) lastCh = StringTools.fastCodeAt(s, s.length - 1);
 				case Line(_):
 					// A SOFT line (opAdd / opBool / ternary continuation) reaching before
-					// the bracket means the array is NOT the arg's first break — its owning
-					// chain has its own wrap semantics (fork explodes the call, does not
-					// hug). Stop here: only a `[` at the VERY first break qualifies.
-					return lastCh == '['.code;
+					// the delimiter means the delimited construct is NOT what `d` first
+					// breaks at — its owning chain has its own wrap semantics (fork
+					// explodes the call, does not hug). Stop here: only `ch` at the VERY
+					// first break qualifies.
+					return lastCh == ch;
 				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
-					return lastCh == '['.code;
+					return lastCh == ch;
 				case _:
 					flatPushChildren(node, stack);
 			}

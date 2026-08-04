@@ -396,6 +396,7 @@ import unit.HxCondElseifChainBlankTest;
 import unit.HxComprehensionChainIdempotencyTest;
 import unit.HxComprehensionFitLineNoBreakTest;
 import unit.HxComprehensionCuddledOpenTest;
+import unit.HxComprehensionCloserSliceTest;
 import unit.HxComprehensionDeclRhsBracketWrapTest;
 import unit.HxMethodChainCuddledLinkTest;
 import unit.HxTypeParamFieldNoWrapSliceTest;
@@ -772,6 +773,7 @@ class RunTests {
 		addCase(new HxCallParamObjectLiteralSliceTest());
 		addCase(new HxCallParamFunctionLambdaSliceTest());
 		addCase(new HxComprehensionBlockHugSliceTest());
+		addCase(new HxComprehensionCloserSliceTest());
 		addCase(new HxCallParamNestedArrayHugSliceTest());
 		addCase(new HxCallParamOuterFirstWrapSliceTest());
 		addCase(new HxChainOuterOperatorWrapSliceTest());
