@@ -1266,7 +1266,6 @@ fitems.length > 1
 		return Concat(glued);
 	}
 
-
 	/**
 	 * ω-opadd-op-first: commit the FORWARD chain glue — WIDTH-GATED when the
 	 * chain is a tagged pure-opAddSub chain.
@@ -1302,9 +1301,15 @@ fitems.length > 1
 	 *    "ends at an open delim" question is calibrated to the opAddSub glue
 	 *    shape, and no measured site asked for the others. Widening it is a
 	 *    measurement, not a tidy-up.
-	 *  - `!insideBroken` — inside an already-broken outer add-chain the inverse
-	 *    collapse (`rewriteTaggedAddChain`'s `insideBroken` leg) IS the glued
-	 *    shape, so the probe would pair two identical branches.
+	 *  - `!insideBroken` — inside an already-broken outer add-chain both
+	 *    branches derive from the same `flat`
+	 *    (`rewriteTaggedAddChain`'s `insideBroken` leg vs `commitOpens(flat)`),
+	 *    so the probe buys nothing there; the pre-slice commit is kept as the
+	 *    byte-inert choice. Note `commitOpens()` itself (its nested
+	 *    `chainGluedIfOpens` re-entry, ~line 861) stays UNGATED: a tagged chain
+	 *    reached inside an already-committed glue region takes the
+	 *    unconditional path — deliberate scope limit (fork
+	 *    `collapseInnerChainBreaks` semantics, zero measured occurrences).
 	 *
 	 * WIDTH ARGUMENT: bare `width` (= `opt.lineWidth`), NOT `width + 1`. This
 	 * ctor has exactly two producers — here and `BinaryChainEmit`'s
