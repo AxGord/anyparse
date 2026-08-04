@@ -548,11 +548,18 @@ final class HxAstPredLowering extends AstPredLowering {
 	 * region inside a region flattens all the way down), anything else
 	 * pushes itself.
 	 *
-	 * The recursion keeps the widths comparable because case-scope
-	 * conditionals do NOT lift indent — `HxConditionalCase.body` carries
-	 * only `padLeading, padTrailing, conditionalBodyIndent`, never
-	 * `alignedNestedIncrease` — so a doubly-nested region's cases render
-	 * at the SAME indent as the switch's own cases.
+	 * Under the DEFAULT `indentation.conditionalPolicy: aligned` a region's
+	 * body renders at the enclosing case-list indent, so a nested unit's
+	 * flat width is directly comparable with a top-level sibling's. The
+	 * `Increase` / `Decrease` policies do lift a region body one level per
+	 * conditional depth (`@:fmt(conditionalBodyIndent)` on
+	 * `HxConditionalCase.body` reads `opt.conditionalPolicy`), and the
+	 * pre-pass measures every unit at the switch's own indent while
+	 * `IfIndentWidthExceeds` evaluates each body at ITS indent — so under
+	 * those policies a region can still come out asymmetric. Measured
+	 * byte-identical to the pre-slice engine there, so that is a limitation
+	 * carried forward rather than introduced; a depth-aware unit width is a
+	 * separate slice.
 	 */
 	private function addCaseSiblingUnitField(): Field {
 		final regionOf: Expr = sw(ident('n'), [caseBind(HX_SWITCH_CASE, 'Conditional', [0 => '_i'], ident('_i'))], macro null);

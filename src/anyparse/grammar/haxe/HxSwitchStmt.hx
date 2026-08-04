@@ -68,11 +68,16 @@ package anyparse.grammar.haxe;
  * because branches are ALTERNATIVES — only one of them is ever compiled —
  * so the maximum over all of them is the conservative trigger, and the one
  * emitted file serves every compilation variant. A region nested inside a
- * region flattens recursively: case-scope conditionals do not lift indent
- * (`HxConditionalCase.body` carries only `padLeading, padTrailing,
- * conditionalBodyIndent`, never `alignedNestedIncrease`), so their cases
- * render at the SAME indent as this switch's own and the widths stay
- * comparable.
+ * region flattens recursively; under the DEFAULT
+ * `indentation.conditionalPolicy: aligned` its cases render at the SAME
+ * indent as this switch's own, so the widths stay comparable. The
+ * `Increase` / `Decrease` policies DO lift a region body one level per
+ * conditional depth (`@:fmt(conditionalBodyIndent)` on
+ * `HxConditionalCase.body` reads `opt.conditionalPolicy`), and the pre-pass
+ * measures every unit at this switch's indent while `IfIndentWidthExceeds`
+ * evaluates each body at ITS own — so under those policies a switch with a
+ * region can still come out asymmetric. Measured byte-identical to the
+ * pre-slice engine there: a limitation carried forward, not introduced.
  *
  * Two shapes still contribute nothing. `CondSpliceCase` — a region that
  * splits a case's LABELS from the body they share after `#end` — keeps

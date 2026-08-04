@@ -17234,8 +17234,11 @@ class WriterLowering {
 	 * contribute nothing — a `CondSpliceCase` region, whose labels are
 	 * byte-verbatim so there is no inner case list to measure, and any inner
 	 * case whose own body glues or spreads, on exactly the terms above.
-	 * Without generated predicates the flattener is null and this builder
-	 * emits the pre-slice loop, byte for byte.
+	 * The flattener is MANDATORY for an opted-in Star: a
+	 * format carrying the meta without generated AST predicates is a
+	 * macro-time error here, not a silent fallback — carrying a second,
+	 * never-exercised copy of this pre-pass is exactly the drift the trivia
+	 * web's predicate-only `@:fmt` features refuse.
 	 *
 	 * `WrapList.flatLength` is the measure specifically because it DESCENDS
 	 * `BodyGroup` where `Renderer.fitsFlat` defers it — the T16b lesson:
@@ -17265,30 +17268,16 @@ class WriterLowering {
 		final stmtAccess: Expr = optFieldAccess(knobs[0]);
 		final exprAccess: Expr = optFieldAccess(knobs[1]);
 		final policyGate: Expr = macro (opt._inExprPosition ? $exprAccess : $stmtAccess) == $fitPat;
+		// `caseSiblingSymmetry` is a predicate-only feature with no legacy
+		// runtime channel, so it follows the trivia web's rule for such metas:
+		// fail LOUDLY rather than carry a second, untestable copy of the
+		// pre-pass for a grammar that opts in without generating predicates.
 		if (unitsFn == null) {
-			final probeCall: Expr = {
-				expr: ECall(macro $i{elemFn}, [macro _arr[_csI].node, macro _csOpt]),
-				pos: Context.currentPos(),
-			};
-			return macro {
-				var _csMax: Int = anyparse.format.BodyFit.SIBLING_PROBING;
-				if (opt._caseSiblingFlatWidth != anyparse.format.BodyFit.SIBLING_PROBING) {
-					_csMax = anyparse.format.BodyFit.SIBLING_NONE;
-					// A one-element list cannot be asymmetric: the coordinated
-					// verdict on a lone sibling is by definition its own
-					// uncoordinated one, so the pre-pass would buy nothing.
-					if (_arr.length > 1 && $policyGate) {
-						final _csOpt = _setCaseSiblingWidth(opt, anyparse.format.BodyFit.SIBLING_PROBING);
-						var _csI: Int = 0;
-						while (_csI < _arr.length) {
-							final _csFlat: Int = anyparse.format.wrap.WrapList.flatLength($probeCall);
-							if (_csFlat > _csMax) _csMax = _csFlat;
-							_csI++;
-						}
-					}
-				}
-				_csMax;
-			};
+			Context.fatalError(
+				'WriterLowering: caseSiblingSymmetry needs generated AST predicates (no caseSiblingUnits_* flattener)',
+				Context.currentPos()
+			);
+			throw 'unreachable';
 		}
 		final expandExpr: Expr = caseSiblingUnitExpandExpr(unitsFn);
 		final unitProbeCall: Expr = {
@@ -17356,22 +17345,25 @@ class WriterLowering {
 		};
 	}
 
-
 	/**
 	 * ω-if-leader-case-symmetry: the `caseSiblingUnits_<ElemRule>` fn-ref
-	 * handed to a block Star's widest-sibling pre-pass, or null when the
-	 * Star does not opt into `caseSiblingSymmetry` or the format generates
-	 * no AST predicates (both ⇒ `caseSiblingWidthProbeExpr` emits the
-	 * pre-slice loop, byte for byte).
+	 * handed to a block Star's widest-sibling pre-pass, or null when the Star
+	 * does not opt into `caseSiblingSymmetry` (⇒ `caseSiblingWidthProbeExpr`
+	 * yields `macro -1` and no pre-pass runs) or the format generates no AST
+	 * predicates (⇒ that builder fatal-errors: the flattener is mandatory for
+	 * an opted-in Star, the same loud failure every other predicate-only
+	 * `@:fmt` feature gives).
 	 *
 	 * A `#if`-guarded case region is ONE Star element whose Doc carries
 	 * directive hardlines (flat width `-1`), so without the flattener the
 	 * region could only FOLLOW a sibling's break, never LEAD one; the
 	 * predicate expands it into its inner case elements so each one is
 	 * measured on its own. Resolved from the Star's ELEMENT rule — the same
-	 * seam as `tryparseElemCondFn`. Split out of
-	 * `emitTriviaBlockStarDispatch` to keep that helper under the
-	 * complexity gate.
+	 * seam as `tryparseElemCondFn`, though the grammar generates this one for
+	 * `HxSwitchCase` alone, so a `caseSiblingSymmetry` Star over any other
+	 * element rule fails at macro time with an unresolved field. Split out of
+	 * `emitTriviaBlockStarDispatch` to keep that helper under the complexity
+	 * gate.
 	 */
 	private function caseSiblingUnitsFnExpr(caseSymArgs: Null<Array<String>>, elemRefName: String): Null<Expr> {
 		if (!_formatInfo.astPreds || caseSymArgs == null || caseSymArgs.length != 2) return null;

@@ -117,6 +117,10 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 	private static final LONE_REGION_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n#if js\n'
 		+ '\t\t\tcase 1: aa(bb);\n\t\t\tcase 2: cc(ddddddddddddddd);\n#end\n\t\t};\n\t}\n}\n';
 
+	/** A PATTERN-scope conditional — the region sits inside the pattern list and the `:` is outside it. */
+	private static final PATTERN_REGION_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n'
+		+ '\t\t\tcase #if js "a" #else "b" #end: cc(dd);\n\t\t\tcase _: ee(ff);\n\t\t};\n\t}\n}\n';
+
 	/** `HxSwitchCase.CondSpliceCase` — a region that splits a case's LABELS from the body they share after `#end`. */
 	private static final SPLICE_CASE_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tvar w = switch ext(a) {\n#if hxbitmini\n'
 		+ '\t\t\tcase ATLAS, BINATLAS:\n#else\n\t\t\tcase ATLAS:\n#end\n\t\t\t\tcc(ddddddddddddddd);\n\t\t\tcase PNG: tiles[a];\n'
@@ -314,11 +318,12 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 	}
 
 	/**
-	 * `#if` inside `#if`. The flattener recurses because case-scope
-	 * conditionals do NOT lift indent (`HxConditionalCase.body` carries
-	 * `padLeading, padTrailing, conditionalBodyIndent`, never
-	 * `alignedNestedIncrease`), so a doubly-nested case renders at the
-	 * SAME indent as the switch's own and its width is comparable.
+	 * `#if` inside `#if`. The flattener recurses, and under the DEFAULT
+	 * `indentation.conditionalPolicy: aligned` a doubly-nested case renders at
+	 * the SAME indent as the switch's own, so its width is comparable. (The
+	 * `Increase` / `Decrease` policies lift a region body one level per depth
+	 * and a switch with a region can still come out asymmetric there — a
+	 * limitation carried over from before this slice, unpinned by any fixture.)
 	 */
 	public function testANestedRegionStillLeads(): Void {
 		final out: String = write(NESTED_REGION_SRC, json(39));
@@ -392,6 +397,25 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 		final out: String = write(LONE_REGION_SRC, json(39));
 		Assert.isTrue(out.indexOf('case 1:\n\t\t\t\taa(bb);') != -1, 'the region\'s narrower case must follow its widest: <$out>');
 		Assert.isTrue(out.indexOf('case 2:\n\t\t\t\tcc(ddddddddddddddd);') != -1, '<$out>');
+	}
+
+	/**
+	 * A PATTERN-scope conditional (`case #if js "a" #else "b" #end:`) is a
+	 * plain `CaseBranch`, not a `Conditional`, so the flattener never sees
+	 * it — and it needs no flattening: the directives render inline in the
+	 * flat walk, so the element already measures a real width and already
+	 * leads. Pins that the region expansion did not capture the shape (it
+	 * would then answer an empty unit list and the element would stop
+	 * contributing). A guard, NOT a discriminator — byte-identical on the
+	 * pre-slice engine.
+	 */
+	public function testAPatternScopeConditionalStillMeasuresFlat(): Void {
+		final wide: String = write(PATTERN_REGION_SRC, json(51));
+		Assert.isTrue(wide.indexOf('#end: cc(dd);') != -1, 'the widest unit fits, so nothing spreads: <$wide>');
+		Assert.isTrue(wide.indexOf('case _: ee(ff);') != -1, '<$wide>');
+		final over: String = write(PATTERN_REGION_SRC, json(50));
+		Assert.isTrue(over.indexOf('#end:\n\t\t\t\tcc(dd);') != -1, 'one column less and the pattern-region case leads: <$over>');
+		Assert.isTrue(over.indexOf('case _:\n\t\t\t\tee(ff);') != -1, 'its plain sibling follows it down: <$over>');
 	}
 
 	public function testIsIdempotentOnAConditionalSwitch(): Void {
