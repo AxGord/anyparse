@@ -25,10 +25,12 @@ import anyparse.format.wrap.WrapList;
  * Both corpora are 0-diff across the sweep, which is the byte net but also
  * the reason nothing in the end-to-end suite pins the new arms (the same
  * situation `DocMeasureFirstVisibleTextTest` records for its own promotion).
- * These cases pin them directly: for every walker × newly-covered ctor, one
- * assertion that the arm is REACHED (the answer moves off the old default)
- * and one that it reads the side the walker's contract picks (the mirrored
- * fixture, which fails if the branch is flipped).
+ * These cases pin them directly: every walker × newly-covered ctor is asserted
+ * both to REACH the arm (the answer moves off the old default) and to read the
+ * side the walker's contract picks. Most pairs need two assertions — a fixture
+ * and its mirror — but where the walker returns a VALUE rather than a Bool
+ * (`lastVisibleText`, `firstVisibleText`) one assertion does both jobs, since
+ * the opposite branch carries a different token.
  *
  * SIDE per walker, derived from each walker's own contract rather than
  * copied from a neighbour:
@@ -57,21 +59,6 @@ import anyparse.format.wrap.WrapList;
 @:access(anyparse.format.wrap.MethodChainEmit)
 @:access(anyparse.format.wrap.WrapList)
 final class DocProbeFamilyWalkerTest extends Test {
-
-	/** The emitters' break branch for both body-placement probes (`BodyFit`): the body one indent deeper after a hardline. */
-	private static function bodyBreak(body: Doc): Doc {
-		return Nest(1, Concat([Line('\n'), body]));
-	}
-
-	/** The emitters' flat branch for `BodyFit.glueLayout`: the body glued after the one-column separator, NO `Nest`. */
-	private static function bodyGlue(body: Doc): Doc {
-		return Concat([OptSpace(' '), body]);
-	}
-
-	/** A method-chain item shape — a hardline whose next sibling's first visible text starts with `.`. */
-	private static function chainShape(): Doc {
-		return Concat([Text('a'), Line('\n'), Text('.b()')]);
-	}
 
 	public function new(): Void {
 		super();
@@ -194,6 +181,24 @@ final class DocProbeFamilyWalkerTest extends Test {
 		Assert.isFalse(WrapList.isMethodChainItem(IfGluedFirstLineExceeds(140, 1, bodyBreak(dotBody), bodyGlue(dotBody))));
 	}
 
+	/**
+	 * `isTopLevelChain` is the walker whose new reach can actually move output — it
+	 * has no depth argument making the arm inert, and `BinaryChainEmit.emit` builds
+	 * an `IfArrowContinuationFits` INSIDE the chain's own `WrapBoundary`, i.e. at
+	 * exactly the depth this walk counts operators at. This fixture reproduces that
+	 * emit signature rather than a bare `Text` leaf: before the sweep the probe
+	 * blinded the walk and the answer was `false`; now the `+` is found, which is
+	 * the honest answer and flips `emitCondition`'s cond-paren route and
+	 * `shapeSoleArrowContGlue`'s suppression gate for such a body.
+	 */
+	public function testIsTopLevelChainSeesChainEmitArrowContinuationShape(): Void {
+		final chain: Doc = Concat([Text('a'), Line(' '), Text('+ '), Text('(b - c)')]);
+		final brk: Doc = Group(IfBreak(CollapseAddProbe(chain), chain));
+		final glueProbe: Doc = IfNaturalFirstLineFitsOpenDelim(140, brk, chain);
+		final emitted: Doc = WrapBoundary(IfLineExceeds(140, IfArrowContinuationFits(1, 12, 140, glueProbe, chain), chain));
+		Assert.isTrue(WrapList.isTopLevelChain(emitted));
+	}
+
 	/** `isTopLevelChain` reads the BREAK side of all three; its operator `Text` counts only past a `WrapBoundary`. */
 	public function testIsTopLevelChainReadsBreakSide(): Void {
 		Assert.isTrue(WrapList.isTopLevelChain(WrapBoundary(IfArrowContinuationFits(1, 4, 140, Text('&&'), Text('x')))));
@@ -205,10 +210,18 @@ final class DocProbeFamilyWalkerTest extends Test {
 	}
 
 	/**
-	 * Same sweep, second hole: six of these walkers listed `CollapseProbe` and
+	 * Same sweep, second hole: eight `WrapList` walkers listed `CollapseProbe` and
 	 * `CollapseAddProbe` among the render-transparent wrappers but not their two
 	 * later siblings, contradicting both ctors' own doc ("all Doc walkers treat it
-	 * as a transparent pass-through"). They descend now.
+	 * as a transparent pass-through"). They descend now — including
+	 * `bareArrowBodyBreaks` and `chainKeepFlatCandidate`, which the family sweep
+	 * itself does not otherwise touch (`bareArrowBodyBreaks` already had an arm for
+	 * every conditional; `chainKeepFlatCandidate` descends none of them by design)
+	 * but which sit in the same file with the same marker gap —
+	 * `chainKeepFlatCandidate` is evaluated as a PAIR with `isTopLevelChain` at both
+	 * `emitCondition` sites, so leaving half the pair marker-blind is the drift this
+	 * sweep exists to remove. `BinaryChainEmit` / `MethodChainEmit` already listed
+	 * both markers, which is why no walker of theirs appears here.
 	 */
 	public function testLateCollapseProbesAreTransparent(): Void {
 		Assert.equals('}', WrapList.lastVisibleText(CollapseBoolProbe(Text('}'))));
@@ -223,6 +236,27 @@ final class DocProbeFamilyWalkerTest extends Test {
 		Assert.isTrue(WrapList.isMethodChainItem(CollapseChainProbe(chainShape())));
 		Assert.isTrue(WrapList.isTopLevelChain(WrapBoundary(CollapseBoolProbe(Text('&&')))));
 		Assert.isTrue(WrapList.isTopLevelChain(WrapBoundary(CollapseChainProbe(Text('&&')))));
+		Assert.isTrue(WrapList.bareArrowBodyBreaks(CollapseBoolProbe(Line('\n'))));
+		Assert.isTrue(WrapList.bareArrowBodyBreaks(CollapseChainProbe(Line('\n'))));
+		Assert.isTrue(WrapList.chainKeepFlatCandidate(WrapBoundary(CollapseBoolProbe(IfNaturalFirstLineFitsOpenDelim(140, Empty, Empty)))));
+		Assert.isTrue(
+			WrapList.chainKeepFlatCandidate(WrapBoundary(CollapseChainProbe(IfNaturalFirstLineFitsOpenDelim(140, Empty, Empty))))
+		);
+	}
+
+	/** The emitters' break branch for both body-placement probes (`BodyFit`): the body one indent deeper after a hardline. */
+	private static function bodyBreak(body: Doc): Doc {
+		return Nest(1, Concat([Line('\n'), body]));
+	}
+
+	/** The emitters' flat branch for `BodyFit.glueLayout`: the body glued after the one-column separator, NO `Nest`. */
+	private static function bodyGlue(body: Doc): Doc {
+		return Concat([OptSpace(' '), body]);
+	}
+
+	/** A method-chain item shape — a hardline whose next sibling's first visible text starts with `.`. */
+	private static function chainShape(): Doc {
+		return Concat([Text('a'), Line('\n'), Text('.b()')]);
 	}
 
 }

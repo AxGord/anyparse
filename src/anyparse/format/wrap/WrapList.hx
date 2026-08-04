@@ -1029,18 +1029,26 @@ class WrapList {
 				// each: `IfArrowContinuationFits` closes BOTH of its layouts with the
 				// list's own `Text(close)`, and the two body-placement probes wrap the
 				// SAME body object, differing only in the separator BEFORE it, which a
-				// right-spine walk never reaches.
+				// right-spine walk never reaches. The file's two OTHER right-spine
+				// close-token walkers (`endsWithCloseDelim`, `endsWithCondEnd`) read the
+				// same three FLAT. Not a disagreement to resolve: side-independence is
+				// what makes both readings correct, and each walker keeps whichever side
+				// it already used for the eight older conditionals.
 				lastVisibleText(brk);
 			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
 				| OptHardlineSkipBeforeHardline
 				| Fill(_, _, _) | FillWithRestProbe(_, _, _) | FillBreakAfterWrap(_, _, _):
 				// Layout atoms bear no text. `Fill` is deliberately opaque here: its
 				// break-mode packing decides at render time WHICH item lands last, so
-				// there is no static last-visible token to report — the two consumers
-				// (`isBlockBodyComprehensionItem`, `BinaryChainEmit`'s bare-paren tail)
-				// both want a definite `}` / `)`, and `null` is the honest answer.
-				// Enumerated rather than left to `case _` so a new `Doc` ctor fails to
-				// compile here instead of silently inheriting `null`.
+				// there is no static last-visible token to report. Two of the three
+				// consumers want a definite `}` and read `null` as "no" —
+				// `isBlockBodyComprehensionItem` and
+				// `BinaryChainEmit.ternaryHugCollectionBranchIndex`. The third,
+				// `isCuddleableComprehensionItem`, INVERTS the test (`!= '}'`), so `null`
+				// reads as "yes" there; it stays honest through its own
+				// `firstVisibleText(item) == 'for'` conjunct, which is `null` for a `Fill`
+				// too. Enumerated rather than left to `case _` so a new `Doc` ctor fails
+				// to compile here instead of silently inheriting `null`.
 				null;
 		};
 	}
@@ -1351,7 +1359,7 @@ class WrapList {
 			switch n {
 				case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(
 					i
-				) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
+				) | CollapseBoolProbe(i) | CollapseChainProbe(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
 					w(i, depth);
 				case WrapBoundary(i):
 					w(i, depth + 1);
@@ -1359,7 +1367,21 @@ class WrapList {
 					if (depth == 1) found = true;
 				case Concat(items):
 					for (it in items) w(it, depth);
-				case _:
+				case Empty | Text(_) | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+					| OptHardlineSkipBeforeHardline
+					| Fill(_, _, _) | FillWithRestProbe(_, _, _) | FillBreakAfterWrap(_, _, _) | IfBreak(_, _) | IfWidthExceeds(_, _, _) | IfFirstLineExceeds(
+					_, _, _
+				) | IfLineExceeds(_, _, _) | IfResidualLineExceeds(_, _, _) | IfFullLineExceeds(_, _, _) | IfNaturalFirstLineExceeds(
+					_, _, _
+				) | IfArrowContinuationFits(_, _, _, _, _) | IfIndentWidthExceeds(_, _, _, _) | IfGluedFirstLineExceeds(_, _, _, _):
+					// Every OTHER conditional stops the walk: this predicate asks whether
+					// the chain's own outermost wrap level IS the keep-flat probe, so a
+					// different probe there is a `false` answer, not a subtree to search.
+					// Layout atoms and `Fill` bodies carry no wrap level at all.
+					// Enumerated rather than left to `case _` so a new `Doc` ctor fails to
+					// compile here — this walker is evaluated as a PAIR with
+					// `isTopLevelChain` at both `emitCondition` sites, and the pair must
+					// be swept together.
 			}
 		}
 		w(d, 0);
@@ -2151,7 +2173,9 @@ class WrapList {
 					return true;
 				case WrapBoundary(inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner) | Nest(_, inner) | Flatten(inner) | HardFlatten(
 					inner
-				) | CollapseProbe(inner) | CollapseAddProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
+				) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
+					inner
+				) | ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(arr):
 					for (it in arr) stack.push(it);
@@ -2161,7 +2185,11 @@ class WrapList {
 					if (s.length > 0 && StringTools.fastCodeAt(s, 0) == '\n'.code) return true;
 				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
 					return true;
-				case _:
+				case Empty | Text(_) | OptSpace(_) | OptSpaceSkipAfterHardline:
+					// Content atoms are not break points. Enumerated rather than left to
+					// `case _` so a new `Doc` ctor fails to compile here — this walker
+					// already carried an arm for all eleven conditionals, so the family
+					// sweep only had to close its transparent-marker and default tails.
 			}
 		}
 		return false;
@@ -2243,13 +2271,13 @@ class WrapList {
 				// break side it takes everywhere else, and the reason is this walker's
 				// own dot-break test rather than a content difference. Both branches
 				// wrap the SAME body; the break branch is `Nest(cols, Concat([Line('\n'),
-				// body]))` by construction, and the bare-`Nest` leg of the Concat scan
-				// below follows exactly that shape — so a break-side read hands the
-				// scan a hardline immediately followed by the body and asks it to
-				// decide, on the body's first token, whether the construct broke at a
-				// `.`. That hardline is the BODY's placement, never a chain link. The
-				// flat side carries the same body behind a soft separator, so it
-				// answers the question this walker actually asks.
+				// body]))` by construction — which the transparent-wrapper arm above
+				// unwraps straight into the Concat scan's hardline GUARD below. A
+				// break-side read therefore hands that guard a hardline immediately
+				// followed by the body and asks it to decide, on the body's first token,
+				// whether the construct broke at a `.`. That hardline is the BODY's
+				// placement, never a chain link. The flat side carries the same body
+				// behind a soft separator, so it answers the question this walker asks.
 				isMethodChainItem(flat);
 			case Concat(arr):
 				var hit: Bool = false;

@@ -438,9 +438,13 @@ final class BinaryChainEmit {
 			) | IfIndentWidthExceeds(_, _, _, flat) | IfGluedFirstLineExceeds(_, _, _, flat):
 				// PROBE FAMILY (Doc.hx header table), flat side for all three:
 				//  - `IfArrowContinuationFits` is a two-SHAPE probe like the natural
-				//    siblings above, and both of its shapes open with the list's own
-				//    `Text(open)`, so the first-token answer is side-independent; flat
-				//    keeps this walker on one side for the whole two-shape population.
+				//    siblings above, and its two shapes always share a leading token —
+				//    the list's own `Text(open)` at the three call-argument consumers,
+				//    `items[0]` at the chain consumer this file emits itself (`emit`'s
+				//    arrow-continuation glue, which pairs two layouts of the same
+				//    operand array and no delimiter at all). Side-independent either
+				//    way; flat keeps this walker on one side for the whole two-shape
+				//    population.
 				//  - the two body-placement probes wrap the SAME body object and
 				//    differ only in the separator before it (`Line('\n')` vs
 				//    `OptSpace(' ')` / `Line(' ')`), both of which this walker's

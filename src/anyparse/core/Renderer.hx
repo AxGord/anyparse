@@ -2976,6 +2976,13 @@ class Renderer {
 					stack.push(new Frame(f.indent, exceeds ? MBreak : f.mode, exceeds ? breakDoc : flatDoc));
 				}
 			case _:
+				// Unreachable, and the one of these tails most likely to be TESTED:
+				// this helper owns the four PROBE FAMILY ctors the `Doc` header table
+				// documents, so a new member lands here first. `pushExceedsBranch`
+				// routes exactly five ctors in and every one has an arm above. Falling
+				// through would push no frame and silently delete the node's subtree
+				// from the output — same contract as its `pushFlatWidthBranch` sibling.
+				throw 'pushNaturalBranch: unrouted probe ctor ${f.doc.getName()}';
 		}
 	}
 

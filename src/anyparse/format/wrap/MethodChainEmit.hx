@@ -676,6 +676,14 @@ class MethodChainEmit {
 	/**
 	 * True iff `d`'s first visible content is a hard `Line('\n')` — descends the
 	 * argument `Nest` and leading `Concat` padding.
+	 *
+	 * DELIBERATELY NARROW, and deliberately NOT the `WrapList` function of the same
+	 * name. It recognises ONE emit signature — a callParameter break branch whose
+	 * argument starts on its own line — so "anything else" is its answer, not a
+	 * hole. It is therefore outside the exhaustive-spine-walker net the `Doc` enum
+	 * header describes, and its `case _` must stay: descending wrappers or probes
+	 * here would report a break BELOW the argument's own top level as a leading
+	 * one, which is exactly the distinction `brkLeadingBreaks` is asking about.
 	 */
 	private static function startsWithHardline(d: Doc): Bool {
 		return switch d {

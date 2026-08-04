@@ -49,21 +49,48 @@ package anyparse.core;
  * family because it promises a LOWER bound on head width (a break branch
  * leading with `Line` terminates the head at width 0) but the FLAT side
  * for `IfArrowContinuationFits`, the one probe whose break branch is the
- * WIDER shape. The nine hand-written SPINE walkers —
- * `BinaryChainEmit.leadingOperandOpensDelim`,
- * `MethodChainEmit.endsWithLineComment`, and `WrapList`'s
- * `lastVisibleText` / `firstVisibleText` /
- * `firstVisibleTextIsFunctionKw` / `hasTopLevelElse` /
- * `isMethodChainItem` / `isTopLevelChain` / `startsWithHardline` — each
- * carries an explicit arm per member, and their switches are EXHAUSTIVE
- * (no `case _`) so a new ctor here fails to compile in every one of them
- * instead of silently inheriting a default. Two of the nine diverge from
- * their own side for the body-placement pair and say why at the arm
- * (`hasTopLevelElse` needs the `Nest`-carrying break branch for its depth
- * counter; `isMethodChainItem` must avoid reading a body separator as a
- * dot-break); `DocProbeFamilyWalkerTest` pins every side. Before adding a
- * member, fill in this row for it and check every walker rather than
- * copying a neighbour's alternative list.
+ * WIDER shape.
+ *
+ * THE COMPILE-TIME NET, and its exact edge. Thirteen hand-written SPINE
+ * walkers carry an explicit arm per family member, and each one's OUTER
+ * switch is exhaustive — no `case _` — so a new ctor added to this enum
+ * fails to compile in every one of them instead of silently inheriting a
+ * default:
+ *
+ *  - `BinaryChainEmit.leadingOperandOpensDelim`;
+ *  - `MethodChainEmit.endsWithLineComment`;
+ *  - `WrapList`'s `lastVisibleText`, `firstVisibleText`,
+ *    `firstVisibleTextIsFunctionKw`, `hasTopLevelElse`,
+ *    `isMethodChainItem`, `isTopLevelChain`, `chainKeepFlatCandidate`,
+ *    `bareArrowBodyBreaks`, `startsWithHardline`, `endsWithCloseDelim`,
+ *    `endsWithCondEnd`.
+ *
+ * Five of the thirteen also run a nested `case _` over a `Doc` INSIDE
+ * their leading/trailing `Concat` scan. Four of those forward to the
+ * recursive call, so the outer switch still catches the new ctor;
+ * `isMethodChainItem`'s is an empty SKIP, so after its outer compile
+ * error is fixed, a new ctor appearing as a `Concat` element there is
+ * still dropped. Fix that one by hand.
+ *
+ * Three more hand-written `Doc` switches keep `case _` DELIBERATELY and
+ * are outside the net: `MethodChainEmit.startsWithHardline`,
+ * `WrapList.isOPLShape` and `WrapList.isArrowBrkShape` match one exact
+ * structural signature each, so "anything else" is their answer, not a
+ * hole.
+ *
+ * THREE of the thirteen diverge from their own side for one family
+ * member, and each says why at the arm: `hasTopLevelElse` needs the
+ * `Nest`-carrying BREAK branch of the body-placement pair for its depth
+ * counter; `isMethodChainItem` reads that pair FLAT so a body separator
+ * is not mistaken for a dot-break; `startsWithHardline` reads
+ * `IfGluedFirstLineExceeds` FLAT because that probe's break branch opens
+ * with a hardline by construction, so a break-side read would answer
+ * "leads with a newline" for every glued body in the tree (measured: two
+ * corpus files changed their `if (…)` shape from it alone).
+ * `DocProbeFamilyWalkerTest` pins every side of the eight walkers the
+ * family sweep touched; the other five predate it and are pinned only by
+ * the corpora. Before adding a member, fill in this row for it and check
+ * every walker rather than copying a neighbour's alternative list.
  *
  * Primitives:
  *
