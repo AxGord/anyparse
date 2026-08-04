@@ -760,8 +760,13 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// matching `}` and parses that slice standalone, so nothing outside the
 			// braces can bind into it. Dropping a paren pair inside the braces cannot
 			// disturb that scan either — a parenthesis is none of the four characters
-			// that scanner reacts to (`{`, `}`, `$`, a backslash) and none of the line
-			// breaks that end the literal, so it reads exactly the same text either way.
+			// that scanner reacts to (`{`, `}`, `$`, a backslash) and no line break, so
+			// it reads exactly the same text either way, whatever it makes of that text.
+			//
+			// `DollarBlockExpr` — the MACRO reification `${ … }` — is bound by the same
+			// two hard tokens and is deliberately ABSENT. Inside a `macro` quotation a
+			// paren reifies as an `EParenthesis` node, so dropping it changes the AST the
+			// quotation builds, not merely the text it was spelled as.
 			delimitedAllChildKinds: [
 				'Block',
 				'VarStmt',

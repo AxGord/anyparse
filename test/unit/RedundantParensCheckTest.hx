@@ -400,6 +400,20 @@ class RedundantParensCheckTest extends Test {
 		Assert.equals(inFn("var s = macro '${$a{args}}';"), fixed(inFn("var s = macro '${($a{args})}';")));
 	}
 
+	/**
+	 * PINNED, and vacuous by construction. The compiler's interpolation scanner counts
+	 * braces without lexing nested strings, so the `}` inside `"}"` closes the block early
+	 * and the literal is broken WITH the parentheses exactly as it is without them. The
+	 * rule's differential argument ("the drop changes no character the scan reacts to")
+	 * still holds, and there is no compiling source for it to be wrong about — so the site
+	 * is flagged and fixed like any other. Pinned so that any future attempt to make this
+	 * class a refusal is a deliberate act, not a side effect.
+	 */
+	public function testInterpolationUncloseableBlockIsStillFlagged(): Void {
+		Assert.equals(1, violations(inFn("var s = '${(\"}\")}';")).length);
+		Assert.equals(inFn("var s = '${\"}\"}';"), fixed(inFn("var s = '${(\"}\")}';")));
+	}
+
 	public function testInterpolationFixIsIdempotent(): Void {
 		final once: String = fixed(inFn("var s = '${((a + c))} ${(b)}';"));
 		Assert.equals(once, fixed(once));
