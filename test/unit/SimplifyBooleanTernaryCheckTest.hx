@@ -168,6 +168,21 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 		Assert.equals('s != t && x > 0', simplifyOf('return s == t ? false : x > 0;'));
 	}
 
+	/**
+	 * A declined flip never suppresses the finding: unlike the guard family, this rule is not
+	 * inverting a condition for readability — it is eliminating a ternary, and a `!( … )`
+	 * operand is already its normal output for any opaque condition. So the site is still
+	 * FLAGGED, just reduced with the wrap.
+	 *
+	 * PIN, not a discrimination test: flagging never consulted the type probe (`run` passes
+	 * none, and no `return null` path in the seam reads the negation), so this passes with the
+	 * change reverted too. What it pins is the deliberate decision NOT to add a decline gate
+	 * here — and, with it, the run/fix invariant that lets `run` skip the resolver.
+	 */
+	public function testStringOrderedComparisonStillFlagged(): Void {
+		Assert.equals(1, violations('return s < t ? false : x > 0;').length);
+	}
+
 	private function violations(body: String): Array<Violation> {
 		final src: String =
 			'class C { static function f(a: Int, b: Int, c: Bool, p: Bool, x: Int, s: String, t: String, y: Float): Dynamic ${body} }';
