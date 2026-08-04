@@ -285,6 +285,25 @@ class RenameSliceTest extends Test {
 		}
 	}
 
+	/**
+	 * The regression this slice closes, on the rename side. In `for (k => v in m)` the loop
+	 * node named only the KEY, so the body's `v` resolved OUTWARD to the enclosing local —
+	 * and renaming that local rewrote the loop body's read while leaving the binder alone,
+	 * producing `for (k => v in m) g(k + w)`: valid-looking, unparseable-by-meaning, silent.
+	 */
+	public function testRenameOuterLocalLeavesKeyValueBinderVerbatim(): Void {
+		final expected: String = 'class C {\n\tfunction f(m:Map<String, Int>):Void {\n\t\tvar w:Int = 0;\n\t\tg(w);\n'
+			+ '\t\tfor (k => v in m) g(k + v);\n' + '\t}\n' + '}';
+		assertRename(KV_FIXTURE, 3, 3, 'w', expected);
+	}
+
+	/** The value binder is addressable in its own right: renaming it rewrites the binder and its body reads only. */
+	public function testRenameKeyValueBinderTouchesOnlyItsBinding(): Void {
+		final expected: String = 'class C {\n\tfunction f(m:Map<String, Int>):Void {\n\t\tvar v:Int = 0;\n\t\tg(v);\n'
+			+ '\t\tfor (k => w in m) g(k + w);\n' + '\t}\n' + '}';
+		assertRename(KV_FIXTURE, 5, 13, 'w', expected);
+	}
+
 	private function assertRename(source: String, line: Int, col: Int, newName: String, expected: String): Void {
 		final result: RenameResult = renameOf(source, line, col, newName);
 		switch result {
@@ -322,26 +341,6 @@ class RenameSliceTest extends Test {
 	private static function renameQualified(source: String, line: Int, col: Int, newName: String): RenameResult {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		return Rename.rename(source, line, col, newName, plugin, plugin.refShape(), true);
-	}
-
-
-	/**
-	 * The regression this slice closes, on the rename side. In `for (k => v in m)` the loop
-	 * node named only the KEY, so the body's `v` resolved OUTWARD to the enclosing local —
-	 * and renaming that local rewrote the loop body's read while leaving the binder alone,
-	 * producing `for (k => v in m) g(k + w)`: valid-looking, unparseable-by-meaning, silent.
-	 */
-	public function testRenameOuterLocalLeavesKeyValueBinderVerbatim(): Void {
-		final expected: String = 'class C {\n\tfunction f(m:Map<String, Int>):Void {\n\t\tvar w:Int = 0;\n\t\tg(w);\n'
-			+ '\t\tfor (k => v in m) g(k + v);\n' + '\t}\n' + '}';
-		assertRename(KV_FIXTURE, 3, 3, 'w', expected);
-	}
-
-	/** The value binder is addressable in its own right: renaming it rewrites the binder and its body reads only. */
-	public function testRenameKeyValueBinderTouchesOnlyItsBinding(): Void {
-		final expected: String = 'class C {\n\tfunction f(m:Map<String, Int>):Void {\n\t\tvar v:Int = 0;\n\t\tg(v);\n'
-			+ '\t\tfor (k => w in m) g(k + w);\n' + '\t}\n' + '}';
-		assertRename(KV_FIXTURE, 5, 13, 'w', expected);
 	}
 
 }

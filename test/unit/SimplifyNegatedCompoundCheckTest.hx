@@ -203,7 +203,9 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		// field) and license the flip, but `kk` is really an `Fl` whose field is a `Float`, where
 		// `!(a < b)` and `a >= b` differ under NaN. `iterationElementTypeParams` answers the
 		// element question only, so the key binder must stay unresolved — this fixture is what
-		// fails if that refusal is dropped along with the old header `=>` scan.
+		// fails if that refusal is dropped along with the old header `=>` scan. It pins the MAP
+		// half of the refusal only; the array-index half the arm doc also names is not
+		// expressible as a fixture (a wrongly-typed `Int` index reads the same as a right one).
 		final model: String = 'class Fl {\n\tpublic var v:Float;\n}\n' + 'class Cnt {\n\tpublic var v:Int;\n}';
 		final params: String = 'q:Bool, m:Map<Fl, Cnt>';
 		final source: String = wrapTyped('for (kk => vv in m) {\n\t\t\tvar b = !(!q || kk.v < 0);\n\t\t}', params);
@@ -342,6 +344,20 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};
+	}
+
+
+	/**
+	 * The comprehension form of the same pair. `iterationBindingKinds` lists BOTH loop kinds and the
+	 * grammar carries the binder slot on both, so a fixture on the statement form alone would pass
+	 * over a model that surfaced only one of them.
+	 */
+	public function testKeyValueComprehensionValueBinderProvesFlip(): Void {
+		final model: String = 'class Fl {\n\tpublic var v:Float;\n}\n' + 'class Cnt {\n\tpublic var v:Int;\n}';
+		final params: String = 'q:Bool, m:Map<Fl, Cnt>';
+		final source: String = wrapTyped('var xs = [for (kk => vv in m) !(!q || vv.v < 0)];', params);
+		final fixed: String = wrapTyped('var xs = [for (kk => vv in m) q && vv.v >= 0];', params);
+		Assert.equals(fixed, fixedWith(source, model));
 	}
 
 }

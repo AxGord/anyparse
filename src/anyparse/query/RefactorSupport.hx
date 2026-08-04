@@ -2329,8 +2329,8 @@ final class RefactorSupport {
 		final hit: Null<LoopBinderHit> = loopBinderAt(root, bindingFrom, kinds, valueBinderKinds);
 		if (hit == null) return null;
 		final loop: QueryNode = hit.loop;
-		if (!hit.isValueBinder && hasValueBinder(loop, valueBinderKinds)) return null;
-		final iterable: Null<QueryNode> = iterableChildOf(loop, valueBinderKinds);
+		if (!hit.isValueBinder && hasIterationValueBinder(loop, valueBinderKinds)) return null;
+		final iterable: Null<QueryNode> = iterationIterable(loop, valueBinderKinds);
 		if (iterable == null) return null;
 		seen.push(bindingFrom);
 		final iterableSource: Null<String> = valueTypeSourceDeep(iterable, root, shape, declaredTypes, chain, index, file, seen);
@@ -2376,17 +2376,40 @@ final class RefactorSupport {
 		return null;
 	}
 
+	/**
+	 * The VALUE binder an iteration node carries, or null for a single-binder loop — the `v` node
+	 * of `for (k => v in m)`, whose kinds the grammar publishes as
+	 * `RefShape.iterationValueBinderKinds`.
+	 *
+	 * Public because the binder is an EXTRA child ahead of the iterable, so every consumer that
+	 * reads a loop's operands positionally has the same question to answer; four of them answered
+	 * it with their own private copy before this and the fifth forgot to, which is the bug class
+	 * the binder node exists to close.
+	 */
+	public static function iterationValueBinder(loop: QueryNode, valueBinderKinds: Array<String>): Null<QueryNode> {
+		return loop.children.find(c -> valueBinderKinds.contains(c.kind));
+	}
+
 	/** Whether `loop` carries a key-value VALUE binder — i.e. it binds a key AND a value. */
-	private static inline function hasValueBinder(loop: QueryNode, valueBinderKinds: Array<String>): Bool {
-		return loop.children.exists(c -> valueBinderKinds.contains(c.kind));
+	public static inline function hasIterationValueBinder(loop: QueryNode, valueBinderKinds: Array<String>): Bool {
+		return iterationValueBinder(loop, valueBinderKinds) != null;
 	}
 
 	/**
-	 * The ITERABLE child of an iteration node — its first child that is not a value binder. The
-	 * binder sits ahead of the iterable in source order, so a bare `children[0]` reads the binder
-	 * on every key-value loop.
+	 * The OPERAND children of an iteration node — its iterable and its body — with the VALUE binder
+	 * of a key-value iteration filtered out. A consumer indexing `children[0]` for the iterable, or
+	 * comparing `children.length` against a fixed operand count, reads the binder instead on every
+	 * key-value loop.
 	 */
-	private static function iterableChildOf(loop: QueryNode, valueBinderKinds: Array<String>): Null<QueryNode> {
+	public static function loopOperands(loop: QueryNode, valueBinderKinds: Array<String>): Array<QueryNode> {
+		return [for (c in loop.children) if (!valueBinderKinds.contains(c.kind)) c];
+	}
+
+	/**
+	 * The ITERABLE child of an iteration node — its first child that is not a value binder — or null
+	 * for a node with no operands at all.
+	 */
+	public static function iterationIterable(loop: QueryNode, valueBinderKinds: Array<String>): Null<QueryNode> {
 		return loop.children.find(child -> !valueBinderKinds.contains(child.kind));
 	}
 

@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -45,14 +46,12 @@ final class RedundantMapIterKey implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final shape: RefShape = plugin.refShape();
-		final forStmtKind: Null<String> = shape.forStmtKind;
-		if (forStmtKind == null) return [];
-		final valueBinderKinds: Array<String> = shape.iterationValueBinderKinds ?? [];
+		final s: Null<Seams> = readSeams(plugin.refShape());
+		if (s == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, forStmtKind, valueBinderKinds);
+			if (tree != null) walk(violations, entry.file, entry.source, tree, s);
 		}
 		return violations;
 	}
@@ -61,15 +60,13 @@ final class RedundantMapIterKey implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final shape: RefShape = plugin.refShape();
-		final forStmtKind: Null<String> = shape.forStmtKind;
-		if (forStmtKind == null) return [];
-		final valueBinderKinds: Array<String> = shape.iterationValueBinderKinds ?? [];
+		final s: Null<Seams> = readSeams(plugin.refShape());
+		if (s == null) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 
 		final nodeByKey: Map<String, QueryNode> = [];
-		indexFor(tree, forStmtKind, nodeByKey);
+		indexFor(tree, s.forStmtKind, nodeByKey);
 
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
@@ -77,16 +74,20 @@ final class RedundantMapIterKey implements Check {
 			if (span == null) continue;
 			final node: Null<QueryNode> = nodeByKey['${span.from}:${span.to}'];
 			if (node == null) continue;
-			final cut: Null<Span> = keyPrefixSpan(node, source, valueBinderKinds);
+			final cut: Null<Span> = keyPrefixSpan(node, source, s.valueBinderKinds);
 			if (cut != null) edits.push({ span: cut, text: '' });
 		}
 		return edits;
 	}
 
-	private static function walk(
-		out: Array<Violation>, file: String, source: String, node: QueryNode, forStmtKind: String, valueBinderKinds: Array<String>
-	): Void {
-		if (node.kind == forStmtKind && node.name == '_' && keyPrefixSpan(node, source, valueBinderKinds) != null) {
+	/** The loop kind and the value-binder kinds, or null when the grammar names no `for` statement (the check is then a no-op). */
+	private static function readSeams(shape: RefShape): Null<Seams> {
+		final forStmtKind: Null<String> = shape.forStmtKind;
+		return forStmtKind == null ? null : { forStmtKind: forStmtKind, valueBinderKinds: shape.iterationValueBinderKinds ?? [] };
+	}
+
+	private static function walk(out: Array<Violation>, file: String, source: String, node: QueryNode, s: Seams): Void {
+		if (node.kind == s.forStmtKind && node.name == '_' && keyPrefixSpan(node, source, s.valueBinderKinds) != null) {
 			final span: Null<Span> = node.span;
 			if (span != null) out.push({
 				file: file,
@@ -99,7 +100,7 @@ final class RedundantMapIterKey implements Check {
 		// Descend regardless of a match: a discarded-key loop can nest inside another
 		// (`for (_ => v in m) for (_ => w in v) …`), and the two are independent — fixing
 		// the outer header does nothing for the inner — so both must be reported.
-		for (c in node.children) walk(out, file, source, c, forStmtKind, valueBinderKinds);
+		for (c in node.children) walk(out, file, source, c, s);
 	}
 
 	/**
@@ -109,7 +110,7 @@ final class RedundantMapIterKey implements Check {
 	 */
 	private static function keyPrefixSpan(node: QueryNode, source: String, valueBinderKinds: Array<String>): Null<Span> {
 		final forSpan: Null<Span> = node.span;
-		final binder: Null<QueryNode> = valueBinder(node, valueBinderKinds);
+		final binder: Null<QueryNode> = RefactorSupport.iterationValueBinder(node, valueBinderKinds);
 		final valueSpan: Null<Span> = binder == null ? null : binder.span;
 		if (forSpan == null || valueSpan == null) return null;
 		final open: Int = source.indexOf('(', forSpan.from);
@@ -124,11 +125,6 @@ final class RedundantMapIterKey implements Check {
 		return StringTools.trim(source.substring(keyStart, arrow)) != '_'
 			? null
 			: keyStart < valueSpan.from ? new Span(keyStart, valueSpan.from) : null;
-	}
-
-	/** The loop's VALUE binder child (`for (k => v in m)` — the `v` node), or null for a single-binder loop. */
-	private static function valueBinder(node: QueryNode, valueBinderKinds: Array<String>): Null<QueryNode> {
-		return node.children.find(c -> valueBinderKinds.contains(c.kind));
 	}
 
 	/** First index at or after `from` (bounded by `stop`) that is not ASCII whitespace. */
@@ -152,3 +148,9 @@ final class RedundantMapIterKey implements Check {
 	}
 
 }
+
+/** The grammar seams `redundant-map-iter-key` reads: the loop kind it flags, and the kinds its VALUE binder projects as. */
+private typedef Seams = {
+	var forStmtKind: String;
+	var valueBinderKinds: Array<String>;
+};

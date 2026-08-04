@@ -210,7 +210,7 @@ final class PreferComprehension implements Check {
 		node: QueryNode, name: String, source: String, s: Seams, checkNodes: Array<QueryNode>
 	): Null<String> {
 		if (node.kind == s.forStmtKind) {
-			final operands: Array<QueryNode> = loopOperands(node, s);
+			final operands: Array<QueryNode> = RefactorSupport.loopOperands(node, s.valueBinderKinds);
 			if (operands.length != FOR_CHILD_COUNT) return null;
 			final iterable: QueryNode = operands[0];
 			final body: QueryNode = operands[1];
@@ -275,18 +275,6 @@ final class PreferComprehension implements Check {
 			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code) buf.addChar(c);
 		}
 		return buf.toString() == '[]';
-	}
-
-
-	/**
-	 * The OPERAND children of a `for` node — its iterable and its body — with a key-value
-	 * iteration's VALUE binder (`RefShape.iterationValueBinderKinds`) filtered out. That binder
-	 * is a real child sitting AHEAD of the iterable, so a bare `children[0]` reads it instead,
-	 * and a bare `children.length` refuses every key-value loop the transcription handles fine
-	 * (the header text it emits is sliced from the source, `=>` included).
-	 */
-	private static function loopOperands(node: QueryNode, s: Seams): Array<QueryNode> {
-		return [for (c in node.children) if (!s.valueBinderKinds.contains(c.kind)) c];
 	}
 
 }

@@ -179,6 +179,7 @@ final class MapKeysLookup implements Check {
 			localDeclKinds: shape.localDeclKinds ?? [],
 			immutableLocalDeclKinds: immutableLocalDeclKinds(shape),
 			paramKinds: shape.paramKinds ?? [],
+			valueBinderKinds: shape.iterationValueBinderKinds ?? [],
 			mapFamily: shape.nullableIndexTypeNames ?? [],
 			nullableWrappers: shape.nullableWrapperTypeNames ?? [],
 			safeAnnotationTypes: safeAnnotationTypeNames(shape),
@@ -262,7 +263,12 @@ final class MapKeysLookup implements Check {
 		if (loop.children.length < MIN_BINARY_CHILD_COUNT) return null;
 		final keyName: Null<String> = loop.name;
 		if (keyName == null) return null;
-		final iterable: QueryNode = loop.children[0];
+		// The iterable is the first NON-binder child: a key-value loop puts its VALUE binder ahead
+		// of it. Such a loop is not a `.keys()` loop and `keysReceiver` would reject the binder
+		// anyway, but reading the wrong child to reach that refusal is the trap this slice exists
+		// to close.
+		final iterable: Null<QueryNode> = RefactorSupport.iterationIterable(loop, cfg.valueBinderKinds);
+		if (iterable == null) return null;
 		final body: QueryNode = loop.children[loop.children.length - 1];
 		final recv: Null<QueryNode> = keysReceiver(iterable, cfg);
 		if (recv == null) return null;
@@ -301,15 +307,21 @@ final class MapKeysLookup implements Check {
 	}
 
 	/**
-	 * Whether the path ROOT `rootName` or the key `keyName` is re-bound anywhere in `node` (a
-	 * local, a nested param, or a nested loop var). Only the root matters for a path: a
-	 * `session.files` read resolves `files` as a member of whatever `session` denotes, so a
-	 * local named after an intermediate SEGMENT cannot shadow it — re-binding the root can.
+		  * Whether the path ROOT `rootName` or the key `keyName` is re-bound anywhere in `node` (a
+	 * local, a nested param, a nested loop var, or a nested key-value loop's VALUE binder). Only
+	 * the root matters for a path: a `session.files` read resolves `files` as a member of whatever
+	 * `session` denotes, so a local named after an intermediate SEGMENT cannot shadow it —
+	 * re-binding the root can.
+	 *
+	 * The VALUE binder is the one this check must not miss twice over: `map-keys-lookup` EMITS
+	 * `for (k => value in m)`, so it manufactures the very shape a blind scan cannot see. While the
+	 * binder had no node, `for (k in m.keys()) for (a => k in n) trace(m[k])` rewrote the inner
+	 * `m[k]` — a read of the INNER `k` — into the outer loop's `value`.
 	 */
 	private static function rebinds(node: QueryNode, rootName: String, keyName: String, cfg: Cfg): Bool {
 		if (cfg.opaqueKinds.contains(node.kind)) return false;
 		final introducesBinding: Bool = cfg.localDeclKinds.contains(node.kind) || cfg.paramKinds.contains(node.kind)
-			|| node.kind == cfg.forKind;
+			|| node.kind == cfg.forKind || cfg.valueBinderKinds.contains(node.kind);
 		if (introducesBinding && (node.name == rootName || node.name == keyName)) return true;
 		for (c in node.children) if (rebinds(c, rootName, keyName, cfg)) return true;
 		return false;
@@ -610,6 +622,7 @@ private typedef Cfg = {
 	var localDeclKinds: Array<String>;
 	var immutableLocalDeclKinds: Array<String>;
 	var paramKinds: Array<String>;
+	var valueBinderKinds: Array<String>;
 	var mapFamily: Array<String>;
 	var nullableWrappers: Array<String>;
 	var safeAnnotationTypes: Array<String>;

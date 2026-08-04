@@ -475,6 +475,34 @@ class MapKeysLookupCheckTest extends Test {
 		]).length);
 	}
 
+	/**
+	 * A nested key-value loop whose VALUE binder re-binds the outer loop's KEY refuses the rewrite.
+	 * This rule EMITS `for (k => value in m)`, so it manufactures the very shape its shadow scan has
+	 * to see; while the value binder had no node, `rebinds` looked only at loop NAMES (the key) and
+	 * turned the inner `m[k]` — a read of the INNER `k` — into the outer loop's `value`, silently
+	 * changing which entry is read.
+	 */
+	public function testNestedKeyValueRebindingTheKeyNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f(m:Map<String,Int>, n:Map<String,String>):Void {'
+				+ '\n\t\tfor (k in m.keys()) {\n\t\t\tfor (a => k in n) trace(m[k]);\n\t\t}\n\t}\n}'
+			).length
+		);
+	}
+
+	/** The discrimination check for the fixture above: an inner key-value loop that binds OTHER names still flags. */
+	public function testNestedKeyValueBindingOtherNamesStillFlagged(): Void {
+		Assert.equals(
+			1,
+			violations(
+				'class C {\n\tfunction f(m:Map<String,Int>, n:Map<String,String>):Void {'
+				+ '\n\t\tfor (k in m.keys()) {\n\t\t\tfor (a => b in n) trace(m[k] + b);\n\t\t}\n\t}\n}'
+			).length
+		);
+	}
+
 	private function wrapMap(loopCode: String): String {
 		return 'class C {\n\tfunction f(m:Map<String,Int>):Void {\n\t\t$loopCode\n\t}\n}';
 	}
@@ -501,7 +529,6 @@ class MapKeysLookupCheckTest extends Test {
 	private function violationsForFiles(files: Array<{ file: String, source: String }>): Array<Violation> {
 		return new MapKeysLookup().run(files, new HaxeQueryPlugin());
 	}
-
 
 	private function assertFixCanonical(src: String, present: String, absent: String): Void {
 		final check: MapKeysLookup = new MapKeysLookup();

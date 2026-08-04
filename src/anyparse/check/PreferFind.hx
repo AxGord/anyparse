@@ -306,13 +306,6 @@ final class PreferFind implements Check {
 		return null;
 	}
 
-	/**
-	 * Whether the `for` binds a `k => v` key-value pair (`.find` iterates values, not KV pairs) —
-	 * i.e. whether it carries the VALUE binder node a key-value iteration projects.
-	 */
-	private static function isKeyValueLoop(forNode: QueryNode, s: Seams): Bool {
-		return forNode.children.exists(c -> s.valueBinderKinds.contains(c.kind));
-	}
 
 	/** Whether the iterable is a range `a...b` — its `IntIterator` is not `Iterable`, so `Lambda.find` would not compile. */
 	private static function isRangeIterable(iterable: QueryNode, s: Seams): Bool {
@@ -362,11 +355,13 @@ final class PreferFind implements Check {
 	 * — the loop variable, iterable, condition and if-body — or null when `forNode` is not that
 	 * shape (wrong kind/arity, a key-value / range / call iterable, or a non-if / else-bearing body).
 	 *
-	 * The key-value refusal is a MODEL test (`isKeyValueLoop`), not an arity side effect: the
-	 * operand count is taken AFTER the VALUE binder is filtered out, so a key-value loop reaches
-	 * `FOR_CHILD_COUNT` exactly like a single-binder one and only the explicit gate stops it.
-	 * `Lambda.find` iterates values, so rewriting a `k => v` loop would bind the value where the
-	 * loop bound the key.
+	 * The key-value refusal is an explicit MODEL test, and the operand count that follows it is taken
+	 * with the VALUE binder filtered OUT. Read together those look redundant — the refusal already
+	 * returned — and that is the point: were the refusal ever dropped, a key-value loop would reach
+	 * `FOR_CHILD_COUNT` exactly like a single-binder one and be rewritten, so the refusal is the sole
+	 * gate and a test can prove it. Counting raw children instead would let arity mask its removal.
+	 * `Lambda.find` iterates values, so rewriting a `k => v` loop would bind the value where the loop
+	 * bound the key.
 	 */
 	private static function forIfHead(forNode: QueryNode, s: Seams): Null<{
 		loopVar: String,
@@ -374,8 +369,8 @@ final class PreferFind implements Check {
 		cond: QueryNode,
 		then: QueryNode
 	}> {
-		if (forNode.kind != s.forStmtKind || isKeyValueLoop(forNode, s)) return null;
-		final operands: Array<QueryNode> = [for (c in forNode.children) if (!s.valueBinderKinds.contains(c.kind)) c];
+		if (forNode.kind != s.forStmtKind || RefactorSupport.hasIterationValueBinder(forNode, s.valueBinderKinds)) return null;
+		final operands: Array<QueryNode> = RefactorSupport.loopOperands(forNode, s.valueBinderKinds);
 		final loopVar: Null<String> = forNode.name;
 		if (loopVar == null || operands.length != FOR_CHILD_COUNT) return null;
 		final iterable: QueryNode = operands[0];

@@ -16,7 +16,10 @@ using StringTools;
  * binding scoped to the loop and the outer declaration is dead in every compile.
  *
  * The check's occurrence test is a raw text scan, so those occurrences used to read
- * as references and the declaration stayed silent. It now re-runs the SAME scan with the regions a self-scoped binding owns (`RefShape.selfScopeDeclKinds` — the `for` iterator, the `catch` exception, plus a key-value loop\s VALUE binder via `RefShape.iterationValueBinderKinds`) excluded, and flags the declaration when nothing textual survives outside them.
+ * as references and the declaration stayed silent. It now re-runs the SAME scan with the regions a self-scoped
+ * binding owns (`RefShape.selfScopeDeclKinds` — the `for` iterator, the `catch` exception, plus a key-value
+ * loop's VALUE binder via `RefShape.iterationValueBinderKinds`) excluded, and flags the declaration when nothing
+ * textual survives outside them.
  *
  * The rest of these fixtures pin the refusals that bound the class: a post-loop read
  * (the loop scope is its body, so the name resolves to the outer declaration again),

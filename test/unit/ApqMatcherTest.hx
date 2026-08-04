@@ -234,4 +234,25 @@ class ApqMatcherTest extends Test {
 		Assert.equals(1, Matcher.search(pattern, tree).length);
 	}
 
+
+	/**
+	 * A single-binder `for` pattern no longer matches a KEY-VALUE loop. While the value binder had
+	 * no node the two shapes were indistinguishable, so `for ($v in $m)` matched `for (k => v in m)`
+	 * and bound `$v` to the KEY — a silently wrong capture for every `search`/`rewrite` consumer.
+	 * The binder is an extra child now, so the arities differ and only the matching shape hits.
+	 */
+	public function testSingleBinderForPatternSkipsKeyValueLoop(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final source: String = 'class X {\n\tstatic function f(m:Map<Int,Int>, xs:Array<Int>) {\n\t\tfor (a in xs) trace(a);\n'
+			+ '\t\tfor (k => b in m) trace(b);\n' + '\t}\n' + '}';
+		final tree: QueryNode = plugin.parseFile(source);
+		final plain: Array<Match> = Matcher.search(plugin.parsePattern("for ($v in $m) $body"), tree);
+		Assert.equals(1, plain.length, 'only the single-binder loop matches — got ${plain.length}');
+		final bound: Null<QueryNode> = plain[0].bindings.get('v');
+		Assert.notNull(bound);
+		if (bound != null) Assert.equals('a', bound.name);
+		final keyValue: Array<Match> = Matcher.search(plugin.parsePattern("for ($k => $v in $m) $body"), tree);
+		Assert.equals(1, keyValue.length, 'the key-value pattern matches exactly the key-value loop');
+	}
+
 }

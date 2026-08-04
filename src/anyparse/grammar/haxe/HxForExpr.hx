@@ -22,7 +22,9 @@ package anyparse.grammar.haxe;
  * body type.
  *
  * Map key-value iteration `for (k => v in m)` is supported via the
- * optional `valueName` field — `@:optional @:lead('=>')`, mirroring `HxForStmt` — whose doc carries the full rationale, including why the slot holds a `@:spanned('KeyValueBinder')` wrapper rather than a bare `HxIdentLit`.
+ * optional `valueName` field — `@:optional @:lead('=>')`, mirroring `HxForStmt` — whose doc carries the full
+ * rationale, including why the slot holds a `@:spanned('KeyValueBinder')` wrapper rather than a bare
+ * `HxIdentLit`.
  *
  * `@:fmt(bodyPolicy('expressionForBody'))` on `body` — distinct from
  * `HxForStmt`'s `forBody` knob because expression-position `for`

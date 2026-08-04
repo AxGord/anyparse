@@ -736,7 +736,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// `Iterable<T>` yields `T` through the `iterator():Iterator<T>` it declares, and an
 			// `Iterator<T>` is itself iterable yielding `T`. `Map<K, V>` is the odd one: its
 			// `iterator()` yields the VALUES, so the element parameter is 1, not 0 (the keys need
-			// the explicit `for (k => v in m)` form, which the binder arm refuses).
+			// the explicit `for (k => v in m)` form, whose KEY binder the element-type arm refuses).
+			// OBLIGATION: this map answers the ELEMENT question, and the same entry now also types a
+			// key-value loop's VALUE binder — so every name here must have `iterator()` element type
+			// == `keyValueIterator()` value type. All six do; a container where they diverge does not
+			// belong here, since the arm licenses NaN-unsound ordered-comparison rewrites.
 			iterationElementTypeParams: [
 				'Array' => 0,
 				'Vector' => 0,

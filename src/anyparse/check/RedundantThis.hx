@@ -33,13 +33,11 @@ import anyparse.query.RefactorSupport;
  * `self`; unset → no-op), the access node from `fieldAccessKind`, the receiver
  * ident from `identKind`. Shadowing names are collected from `paramKinds`,
  * `localDeclKinds`, `localDeclExprKinds`, `staticLocalDeclKinds`, `selfScopeDeclKinds`
- * (loop iterator / catch var), `localFunctionKinds` and `inlineFunctionKinds`, plus the
- * three shapes that bind WITHOUT a named declaration node: a `plainCasePatternKind`
- * pattern's captures and every `casePatternBinderKinds` node (`RefactorSupport.casePatternNames`),
- * the bare single parameter of a `lambdaKinds` lambda, and the dropped slots of a
- * `selfScopeDeclKinds` header (the VALUE of a key-value `for`), recovered from the header
- * text by `RefactorSupport.binderHeaderIdents`. All of it is scoped to each enclosing
- * member function. Member names
+ * (loop iterator / catch var), `localFunctionKinds` and `inlineFunctionKinds`, plus `iterationValueBinderKinds`
+ * (a key-value loop's VALUE binder), plus the two shapes that bind WITHOUT a named declaration node: a
+ * `plainCasePatternKind` pattern's captures and every `casePatternBinderKinds` node
+ * (`RefactorSupport.casePatternNames`), and the bare single parameter of a `lambdaKinds` lambda. All of it is
+ * scoped to each enclosing member function. Member names
  * come from `memberDeclKinds` hosts inside a `visibilityContainerKinds` type; a
  * grammar supplying neither leaves the membership gate inert (shadow-only test).
  * A compile-time abstract's `this.field` (where `this` is the underlying value
