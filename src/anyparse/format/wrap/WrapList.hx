@@ -3066,18 +3066,28 @@ class WrapList {
 	 *
 	 * WHY the tail test alone is not enough (the bug this conjunct fixes): a
 	 * `}` tail is a property of the LAST token, not of the body's construct.
-	 * Every expression body whose final token happens to be a curly —
-	 * a macro reification (`macro if (…) $p{['source', f.field]}`), a ternary
-	 * whose else-branch is an object literal, a trailing `switch` expression —
-	 * read as a block, took the head-hug shape, and got its `]` glued to a
-	 * body line at BODY indent (`… $p{[…]} ];`). Two canonical closers for one
-	 * construct in one file. The head-glue test refuses all of them: their
-	 * first break precedes their body, so the cuddled-open shape applies and
-	 * the `]` drops to its own line at container indent.
+	 * A body PUSHED to a continuation line whose final token happens to be a
+	 * curly — a macro reification (`macro if (…) $p{['source', f.field]}`), a
+	 * ternary whose else-branch is an object literal or a `switch` — read as a
+	 * block, took the head-hug shape, and got its `]` glued to a body line at
+	 * BODY indent (`… $p{[…]} ];`). Two canonical closers for one construct in
+	 * one file. The head-glue test refuses all of them: their first break
+	 * precedes their body, so the cuddled-open shape applies and the `]` drops
+	 * to its own line at container indent.
 	 *
-	 * Sister-predicate contract: `isCuddleableComprehensionItem` NEGATES this,
-	 * so the two stay exact complements and no comprehension can fall between
-	 * them into the generic cascade.
+	 * The refusal is about PLACEMENT, not about the construct: the same
+	 * `switch` (or object literal) written so it opens ON the head line stays
+	 * head-glued and keeps `} ]`, because there the `}` really has come back to
+	 * container indent. Verified both directions in
+	 * `HxComprehensionCloserSliceTest`.
+	 *
+	 * Sister-predicate contract: `isCuddleableComprehensionItem` negates THIS
+	 * BODY TEST, so no comprehension is ever both hugged and cuddled, and none
+	 * falls between the two on body shape alone. It is not a total partition of
+	 * comprehensions: the sibling adds its own `for`-only and single-generator
+	 * exclusions (see its doc), so a `while` comprehension and a nested-
+	 * generator one satisfy NEITHER predicate and reach the generic cascade —
+	 * deliberately, and pinned there.
 	 */
 	private static function isHeadGluedBraceBodyComprehension(item: Doc): Bool {
 		return lastVisibleText(item) == '}' && firstBreakIsDelimChar(item, '{'.code);
@@ -3412,6 +3422,26 @@ class WrapList {
 	}
 
 	/**
+	 * True iff the Text atom `s` is a COMMENT rather than source tokens — the
+	 * verbatim `trailingCommentDocVerbatim` / leading-comment output, i.e. a
+	 * trimmed atom opening `//` or `/*`. A string literal can never collide:
+	 * its Text leaf carries its own quotes, so it trims to `'…` / `"…` (the
+	 * same reasoning `countGeneratorKeywords` relies on), and a division
+	 * operand trims to a bare `/`.
+	 *
+	 * BOTH comment forms count here, unlike `MethodChainEmit
+	 * .endsWithLineComment` which accepts only `//`: that probe asks "is a
+	 * BREAK forced after this token", where a block comment genuinely differs
+	 * (content may follow it on the same line). This one asks "which source
+	 * token does the line structurally end on", and neither comment form is
+	 * that token.
+	 */
+	private static function isCommentTextAtom(s: String): Bool {
+		final t: String = StringTools.trim(s);
+		return StringTools.startsWith(t, '//') || StringTools.startsWith(t, '/*');
+	}
+
+	/**
 	 * `firstBreakIsArrayDelim` generalised over the delimiter character — the
 	 * whole walk is char-agnostic, only the answer at the first break names a
 	 * delimiter. Second consumer is `isHeadGluedBraceBodyComprehension`
@@ -3422,6 +3452,24 @@ class WrapList {
 	 * line reached before the delimiter means the construct is nested inside a
 	 * chain (opAdd / opBool / ternary continuation) whose own wrap owns the
 	 * layout, so the delimiter is not what the first line ends on.
+	 *
+	 * COMMENT-TRANSPARENT (`isCommentTextAtom`): a trailing comment attached to
+	 * the delimiter's line (`{ // note`, `[ /* note *\/`) is emitted as its own
+	 * Text atom after the delimiter, and taking ITS last char would answer for
+	 * the comment rather than for the construct. The question this walk asks is
+	 * structural — "did the delimiter open at the end of the head line" — and a
+	 * trailing comment does not change that answer, so comment atoms are
+	 * skipped when tracking `lastCh`. Without it a commented block-body
+	 * comprehension read as an expression body and split its `}` and `]` onto
+	 * two lines at the same indent
+	 * (`HxComprehensionCloserSliceTest.testBlockBodyWithTrailing*Comment*`).
+	 *
+	 * Transparency is SHARED with the `'['` consumer by construction, and
+	 * deliberately so — the same argument holds there (a `[` followed only by a
+	 * trailing comment still ends its line). No shape was found where it
+	 * changes that consumer's answer: an A/B on a commented array arg is
+	 * byte-identical, and so are the suite, the anyparse own corpus, TM `src`
+	 * and the fork corpus apart from the comprehension fixtures above.
 	 */
 	private static function firstBreakIsDelimChar(d: Doc, ch: Int): Bool {
 		final stack: Array<Doc> = [d];
@@ -3430,7 +3478,7 @@ class WrapList {
 			final node: Doc = stack.pop();
 			switch (node) {
 				case Text(s):
-					if (s.length > 0) lastCh = StringTools.fastCodeAt(s, s.length - 1);
+					if (s.length > 0 && !isCommentTextAtom(s)) lastCh = StringTools.fastCodeAt(s, s.length - 1);
 				case Line(_):
 					// A SOFT line (opAdd / opBool / ternary continuation) reaching before
 					// the delimiter means the delimited construct is NOT what `d` first
