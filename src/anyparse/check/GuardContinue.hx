@@ -21,13 +21,13 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
  * fixpoint, so a two-level `if (a) { … if (b) { … } }` chain flattens over two `--fix`
  * passes. `Severity.Info`.
  *
- * ## The `if (!cond)` inversion — De Morgan when possible, NaN-safe
+ * ## The `if (!cond)` inversion — De Morgan when possible, order-safe
  *
  * `cond` is negated by `CheckScan.negateConditionText`, two-tier. When the grammar exposes
  * a `BooleanLogicSupport` and the condition span is comment-free, the negation is pushed
  * inward by De Morgan (`a && b` → `!a || !b`, `!(a || b)` → `a && b`, `==` / `!=` flipped),
- * with the ordered comparisons `< <= > >=` deliberately KEPT wrapped `!(a < b)` (never
- * flipped — `!(a < b)` and `a >= b` differ under NaN). Falling back — a seam-less grammar, a
+ * with the ordered comparisons `< <= > >=` deliberately KEPT wrapped `!(a < b)` unless
+ * proven totally ordered — a NaN or `null` breaks it. Falling back — a seam-less grammar, a
  * comment in the condition the De Morgan rewrite would drop, or a condition whose flattened
  * `||` chain would STRAND a null-safety narrowing (`CheckScan.narrowingStranded`: Haxe
  * carries a narrowing fact into a later `||` operand from the FIRST operand only, so

@@ -18,7 +18,7 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
  * lifts the guard into the loop header:
  * `for (x in xs) { if (c) continue; REST }` → `for (x in xs) if (INV) { REST }`.
  *
- * ## The inversion — De Morgan when possible, sound over IEEE floats
+ * ## The inversion — De Morgan when possible, sound over NaN and null
  *
  * `INV` negates the guard condition `c` so the surviving iterations are the ones the
  * `continue` skipped. When the grammar exposes a `BooleanLogicSupport` and `c` is
@@ -30,8 +30,8 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
  * - `!e` → `e` (strip the `!`, unwrapping a redundant paren so `!(a && b)` → `a && b`);
  * - `a == b` → `a != b`, `a != b` → `a == b` (NaN-safe: IEEE `NaN == x` is false and
  *   `NaN != x` true, so `!(a == b)` is `a != b` even with a NaN operand);
- * - an ordered comparison `<` / `<=` / `>` / `>=` is deliberately NOT flipped — `!(a < b)`
- *   and `a >= b` DIFFER when an operand is NaN — so it is kept wrapped `!(a < b)`;
+ * - an ordered comparison `<` / `<=` / `>` / `>=` flips only where the operand types license it:
+ *   `!(a < b)` and `a >= b` DIFFER when an operand is a NaN or a `null`, so it stays wrapped;
  * - `&&` / `||` distribute by De Morgan (`a && b` → `!a || !b`) on the seam path, or the
  *   whole `c` wraps `!(c)` on the fallback path; a bare identifier / call / field access
  *   → `!c`.

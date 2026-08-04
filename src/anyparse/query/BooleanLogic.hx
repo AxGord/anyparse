@@ -43,28 +43,33 @@ interface BooleanLogicSupport {
 	): Null<String>;
 
 	/**
-	 * The NaN-safe logical negation of condition `cond`, pushed inward by De
+	 * The order-safe logical negation of condition `cond`, pushed inward by De
 	 * Morgan: `!` stripped, `&&` / `||` distributed, `==` / `!=` flipped; an
 	 * ordered comparison (`<` `<=` `>` `>=`) is wrapped `!(…)` verbatim rather than
-	 * flipped — `!(a < b)` and `a >= b` differ under NaN. Operands carry
-	 * precedence-safe parentheses. Comments in the operator glue between
-	 * operands are dropped, so the caller must gate: `CheckScan.negateConditionText`
-	 * falls back to a verbatim wrap when the condition span holds a comment marker.
+	 * flipped — `!(a < b)` and `a >= b` differ whenever an operand is a NaN or a
+	 * `null`. Operands carry precedence-safe parentheses. Comments in the operator
+	 * glue between operands are dropped, so the caller must gate:
+	 * `CheckScan.negateConditionText` falls back to a verbatim wrap when the
+	 * condition span holds a comment marker.
 	 *
-	 * `typeNominalOf` lifts that wrap where NaN cannot arise: it answers an operand
-	 * node's declared type nominal (null = unknown), and an ordered comparison whose
-	 * BOTH operands are provably not floating-point flips like `==` / `!=` does. Omit
-	 * it — or return null — and every ordered comparison keeps the verbatim wrap.
+	 * `typeNominalOf` lifts that wrap where the comparison is provably total: it answers
+	 * an operand node's declared type nominal (null = unknown), and an ordered
+	 * comparison whose BOTH operands are provably drawn from a value set the
+	 * comparison orders TOTALLY flips like `==` / `!=` does. Which nominals qualify is
+	 * the grammar engine's call — for Haxe it is `Int` / `UInt`, and notably NOT
+	 * `String`, since Haxe has no non-nullable string type. Omit the probe — or return null —
+	 * and every ordered comparison keeps the verbatim wrap.
 	 */
 	public function negateCondition(cond: QueryNode, source: String, ?typeNominalOf: (QueryNode) -> Null<String>): String;
 
 	/**
 	 * Whether `negateCondition` had to DECLINE a rewrite it knows how to perform — in the Haxe
-	 * engine, an ordered comparison `typeNominalOf` could not prove NaN-free, so it stayed
-	 * `!(a < b)` instead of flipping. A caller that inverts a condition purely so a block reads
-	 * better asks this FIRST and refuses the site when it answers true: the wrapped negation is
-	 * sound, but it reads worse than the positive condition it would replace. A wrap the engine
-	 * could never avoid (`!(a is B)`) is NOT a decline — that IS the canonical negation.
+	 * engine, an ordered comparison `typeNominalOf` could not prove totally ordered (free of both
+	 * NaN and `null`), so it stayed `!(a < b)` instead of flipping. A caller that inverts a
+	 * condition purely so a block reads better asks this FIRST and refuses the site when it answers
+	 * true: the wrapped negation is sound, but it reads worse than the positive condition it would
+	 * replace. A wrap the engine could never avoid (`!(a is B)`) is NOT a decline — that IS the
+	 * canonical negation.
 	 */
 	public function negateConditionDeclinesFlip(cond: QueryNode, source: String, ?typeNominalOf: (QueryNode) -> Null<String>): Bool;
 
@@ -87,18 +92,18 @@ interface BooleanLogicSupport {
 	/**
 	 * The simplification of `not` — a logical-not over one of the two shapes `negatedOperandOf`
 	 * accepts — as source replacing the whole not node, or null when `not` is neither shape or the
-	 * rewrite would not PAY. Both arms are produced by the same NaN-safe engine as
+	 * rewrite would not PAY. Both arms are produced by the same order-safe engine as
 	 * `negateCondition`:
 	 *
 	 *  - a `&&` / `||` COMPOUND, which De Morgan distributes (`!(!a || b)` → `a && !b`);
-	 *  - a SINGLE comparison, whose operator simply flips (`!(x < 0)` → `x >= 0` when the NaN gate
+	 *  - a SINGLE comparison, whose operator simply flips (`!(x < 0)` → `x >= 0` when the order gate
 	 *    licenses it, `!(a == b)` → `a != b` always).
 	 *
 	 * ONE worth gate serves both: the result is offered only when it carries strictly fewer unary
 	 * `!` operators than the input (`!(a || b)` → `!a && !b` does not, and answers null). Inside a
-	 * compound, a term the NaN gate refuses to flip stays wrapped, so a PARTIAL simplification is
+	 * compound, a term the order gate refuses to flip stays wrapped, so a PARTIAL simplification is
 	 * still offered whenever the count still falls. For the single-comparison arm that same gate IS
-	 * the NaN licence: a flip is `notDelta` 0 (offered — the outer `!` is shed), a declined flip is
+	 * the order licence: a flip is `notDelta` 0 (offered — the outer `!` is shed), a declined flip is
 	 * `notDelta` +1 (refused — the wrap IS the input).
 	 *
 	 * The method NAME keeps "Compound" because the rule id it serves, `simplify-negated-compound`,

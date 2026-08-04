@@ -20,7 +20,8 @@ import anyparse.runtime.Span;
  * SINGLE comparison has its operator flipped (`!(n < 0)` → `n >= 0`, `!(a == b)` → `a != b`).
  *
  * The rewrite text comes from the same `BooleanLogicSupport` engine the guard family inverts with,
- * so an ordered comparison stays wrapped `!(a < b)` unless both operands resolve to a NaN-free type
+ * so an ordered comparison stays wrapped `!(a < b)` unless both operands resolve to a type `<` orders
+ * TOTALLY (`Int` / `UInt`, never `String` — Haxe cannot prove a string non-null)
  * — which includes a method call's return type resolved through its receiver chain. On the
  * single-comparison arm that wrap IS the input, so the worth gate turns "unproven" into an outright
  * refusal; on the compound arm the same wrap survives inside a still-worthwhile partial result.
@@ -31,7 +32,7 @@ import anyparse.runtime.Span;
  */
 class SimplifyNegatedCompoundCheckTest extends Test {
 
-	/** Resolution-scope model: the only NaN-free tail every chain fixture ends in (`Str.indexOf` -> `Int`). */
+	/** Resolution-scope model: the only totally-ordered tail every chain fixture ends in (`Str.indexOf` -> `Int`). */
 	private static final MODEL_STR: String = 'class Str {\n\tpublic function indexOf(s:Str):Int return 0;\n}';
 
 	/** `MODEL_STR` plus the one-field carrier the chain fixtures walk THROUGH to reach it. */
@@ -60,7 +61,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 
 	public function testUnprovenSingleOrderedComparisonNotFlagged(): Void {
 		// The single-comparison arm READS this site now; the WORTH gate is what refuses it. `f` has
-		// no declared type, so the NaN gate declines the flip and the only text the engine can emit
+		// no declared type, so the order gate declines the flip and the only text the engine can emit
 		// is `!(f < 0.5)` — the input verbatim, `notDelta` +1. Unproven -> refuse, with no partial
 		// form to fall back on: one term leaves nothing else to shed a `!` from.
 		Assert.equals(0, violations(wrap('var b = !(f < 0.5);')).length);
@@ -73,7 +74,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 	}
 
 	public function testNegatedOrderedComparisonFlaggedWhenIntProven(): Void {
-		// `n:Int` proves the comparison NaN-free, so the flip is licensed and costs no `!` while the
+		// `n:Int` proves both operands totally ordered, so the flip is licensed and costs no `!` while the
 		// outer one is shed. The wording names the arm that accepted the site.
 		final vs: Array<Violation> = violations(wrapTyped('var b = !(n < 0);', 'n:Int'));
 		Assert.equals(1, vs.length);
@@ -86,8 +87,30 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		Assert.equals(wrapTyped('var b = n >= 0;', 'n:Int'), applyFix(wrapTyped('var b = !(n < 0);', 'n:Int')));
 	}
 
+	public function testNullableStringOrderedComparisonNotFlagged(): Void {
+		// `String` is NOT a totally-ordered nominal. It carries no NaN — which is why it once
+		// licensed the flip — but Haxe has no non-nullable string type, so `s:String` proves
+		// nothing about null, and with a null operand `!(s < t)` is `true` where `s >= t` is
+		// `false` (measured on `--interp`, `js` and `neko`, all four ordered operators). The flip
+		// is declined, and on this arm a decline is an outright refusal: the wrap IS the input.
+		final source: String = wrapTyped('var b = !(s < t);', 's:String, t:String');
+		Assert.equals(0, violations(source).length);
+		Assert.equals(source, applyFix(source));
+	}
+
+	public function testStringLiteralOrderedComparisonStillFlips(): Void {
+		// The NOMINAL is refused; the LITERAL kinds are not. A string literal is non-null by
+		// construction — exactly the proof a `String` declaration cannot give — so both operands
+		// are totally ordered and the flip is sound. Pins that dropping the nominal did not also
+		// drop the two string entries from `TOTAL_ORDER_LITERAL_KINDS`. It passes with the nominal
+		// restored as well — a pin on the literal path, NOT a discriminator for the narrowing (the
+		// literal kinds are consulted before the nominal resolver ever runs).
+		Assert.equals(wrap('var b = "a" >= "b";'), applyFix(wrap('var b = !("a" < "b");')));
+	}
+
 	public function testNegatedEqualityFlaggedWithoutTypes(): Void {
-		// No type proof needed: IEEE makes `NaN == x` false and `NaN != x` true, so the flipped
+		// No type proof needed: IEEE makes `NaN == x` false and `NaN != x` true, and a `null` operand
+		// answers the same both ways, so the flipped
 		// operator and the wrap agree for every operand — including an unresolved one.
 		Assert.equals(1, violations(wrap('var b = !(a == b2);')).length);
 	}
@@ -141,7 +164,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 	public function testConditionalCompilationInSingleComparisonNotFlagged(): Void {
 		// A refusal pin for the inherited `#if` gate. The arm has to be the EQUALITY one: an
 		// ordered comparison whose operand is a `#if` region is refused by the WORTH gate first
-		// (a `ConditionalExpr` operand is not NaN-provable, so the flip declines), which would
+		// (a `ConditionalExpr` operand is not order-provable, so the flip declines), which would
 		// leave the `#if` gate untested. `==` needs no proof, so only the `#if` gate can say no.
 		Assert.equals(0, violations(wrapTyped('var b = !(n == #if js 0 #else 1 #end);', 'n:Int')).length);
 	}
@@ -178,13 +201,24 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 	}
 
 	public function testFixKeepsUnprovenOrderedComparisonWrapped(): Void {
-		// The NaN gate cannot type `f`, so its comparison stays wrapped — a PARTIAL
+		// The order gate cannot type `f`, so its comparison stays wrapped — a PARTIAL
 		// simplification, still one `!` fewer than the input.
 		Assert.equals(wrap('var b = p && !(f < 0.5);'), applyFix(wrap('var b = !(!p || f < 0.5);')));
 	}
 
 	public function testFixFlipsOrderedComparisonWhenIntProven(): Void {
 		Assert.equals(wrapTyped('var b = p && n >= 0;', 'p:Bool, n:Int'), applyFix(wrapTyped('var b = !(!p || n < 0);', 'p:Bool, n:Int')));
+	}
+
+	public function testFixKeepsStringOrderedComparisonWrappedInCompound(): Void {
+		// The COMPOUND arm shares the one licence, so the `String` term stays wrapped and only the
+		// partial simplification is offered — one `!` fewer, still worth it. While `String` was a
+		// licensed nominal this read `p && s >= t`, an unsound rewrite; this is its regression pin,
+		// and the `n:Int` twin directly above is what proves the licence itself still works.
+		Assert.equals(
+			wrapTyped('var b = p && !(s < t);', 'p:Bool, s:String, t:String'),
+			applyFix(wrapTyped('var b = !(!p || s < t);', 'p:Bool, s:String, t:String'))
+		);
 	}
 
 	public function testFixPreservesCallCountAndOrder(): Void {

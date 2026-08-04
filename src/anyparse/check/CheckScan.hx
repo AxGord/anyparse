@@ -170,11 +170,12 @@ final class CheckScan {
 	 * When a grammar `support` is passed AND the condition span holds no comment marker AND the
 	 * condition does not strand a null-safety narrowing (`narrowingStranded`), the negation is
 	 * delegated to `BooleanLogicSupport.negateCondition`: De Morgan pushed inward
-	 * (`a && b` → `!a || !b`) NaN-safely — ordered comparisons stay wrapped `!(a < b)`, never
-	 * flipped. The comment scan is STRING-LITERAL-BLIND: a `//` or `/*` inside a string operand
-	 * conservatively forces the fallback (a verbatim `!(cond)` wrap — correct output, just not
-	 * De-Morganed). With no `support`, a comment in the condition span, or a stranded narrowing,
-	 * the text engine below is used, in three shapes, in order:
+	 * (`a && b` → `!a || !b`) order-safely — ordered comparisons stay wrapped `!(a < b)` unless
+	 * `typeNominalOf` proves both operands totally ordered. The comment scan is
+	 * STRING-LITERAL-BLIND: a `//` or `/*` inside a string operand conservatively forces the
+	 * fallback (a verbatim `!(cond)` wrap — correct output, just not De-Morganed). With no
+	 * `support`, a comment in the condition span, or a stranded narrowing, the text engine below is
+	 * used, in three shapes, in order:
 	 *
 	 *  - a leading logical-not is STRIPPED (`!e` → `e`), unwrapping one redundant paren
 	 *    (`!(a && b)` → `a && b`, `!!x` → `!x`) — the inner source verbatim;
@@ -183,9 +184,9 @@ final class CheckScan {
 	 *    gap, which the flip would drop, so it falls through to the verbatim wrap;
 	 *  - everything else (ordered comparisons `< <= > >=`, `&& || ?? ?:`, a call, …) is
 	 *    wrapped `!(<cond>)` VERBATIM — the only sound negation for `<` / `>=` (they DIFFER
-	 *    from their flips under NaN) and comment-preserving for every shape. A bare atomic
-	 *    (`atomicKinds`) drops the parens (`!cond`); the wrap is always fully parenthesised,
-	 *    so a low-precedence body (`a ?? b`, `c ? t : e`) negates correctly.
+	 *    from their flips when an operand is a NaN or a `null`) and comment-preserving for every
+	 *    shape. A bare atomic (`atomicKinds`) drops the parens (`!cond`); the wrap is always fully
+	 *    parenthesised, so a low-precedence body (`a ?? b`, `c ? t : e`) negates correctly.
 	 *
 	 * For every standard type and normal abstract this is exactly `!(cond)`. The flip and
 	 * strip assume standard boolean algebra, so they are UNSOUND only for the pathological
@@ -212,8 +213,8 @@ final class CheckScan {
 	 * Whether inverting `cond` is worth doing at all — true unless the negation engine had to
 	 * DECLINE a rewrite it knows how to perform. The three inverting checks gate on this BEFORE
 	 * they flag: their purpose is to make a block read better by shedding a nesting level, and an
-	 * inversion that has to keep `!(a < b)` wrapped — because the flip could not be proven
-	 * NaN-free — trades that nesting for a negation the positive form did not need.
+	 * inversion that has to keep `!(a < b)` wrapped — because the flip could not be proven free of
+	 * both NaN and `null` — trades that nesting for a negation the positive form did not need.
 	 *
 	 * A wrap the engine could never avoid (`!(a is B)`, `!(a ?? b)`) is NOT a decline: that IS
 	 * the canonical negation, and such a site still inverts. The text fallback tier (no grammar

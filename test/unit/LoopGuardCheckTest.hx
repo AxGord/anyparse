@@ -67,6 +67,19 @@ class LoopGuardCheckTest extends Test {
 		Assert.equals(0, violations(wrap('for (x in xs) {\n\t\t\tif (q < 10) continue;\n\t\t\ttrace(x);\n\t\t}')).length);
 	}
 
+	public function testOrderedStringGuardNotFlagged(): Void {
+		// The sibling above leaves the operand UNRESOLVED; here both operands resolve and the site
+		// is still refused. The lifted header would read `if (!(s < k))`, which buys nothing over
+		// the `continue` guard: Haxe has no non-nullable string type, so the flip `s >= k` is not
+		// licensed (a null operand makes the two disagree) and `negationIsClean` refuses. The `Int`
+		// twin in the second assertion is the same fixture shape over a licensed nominal and IS
+		// flagged, so what refuses the first is the type gate and not the loop shape.
+		final str: String =
+			'class C {\n\tfunction f(ss:Array<String>, k:String):Void {\n\t\tfor (s in ss) {\n\t\t\tif (s < k) continue;\n\t\t\ttrace(s);\n\t\t}\n\t}\n}';
+		Assert.equals(0, violations(str).length);
+		Assert.equals(1, violations(wrap('for (x in xs) {\n\t\t\tif (x < 0) continue;\n\t\t\ttrace(x);\n\t\t}')).length);
+	}
+
 	public function testComplexCondDeMorgan(): Void {
 		Assert.equals(
 			wrap('for (x in xs) if (!a || !b) {\n\t\t\ttrace(x);\n\t\t}'),

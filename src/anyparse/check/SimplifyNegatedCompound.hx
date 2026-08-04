@@ -20,7 +20,7 @@ import anyparse.runtime.Span;
  *    simply flips.
  *
  * The shape is not only hand-written: it is what the guard family's inverter EMITS when its
- * NaN gate cannot prove an ordered comparison float-free — `negateCondition` then wraps the
+ * order gate cannot prove an ordered comparison free of NaN and `null` — it then wraps the
  * whole condition `!( … )` rather than flipping `<` to `>=`. Once the gate learns the type
  * (see `RefactorSupport.expressionTypeNominal`), the leftover wraps are exactly this rule's
  * input, so the two compose across `--fix` passes.
@@ -37,14 +37,16 @@ import anyparse.runtime.Span;
  *  - `!(a == b && c != d)` → `a != b || c == d` — the outer `!` is gone, offered;
  *  - `!(a || b)` → `!a && !b` — one `!` more, refused;
  *  - `!(!a || f < 0.5)` with `f:Float` → `a && !(f < 0.5)` — a PARTIAL simplification (the
- *    NaN gate keeps the comparison wrapped) that still sheds one `!`, so it is offered.
+ *    order gate keeps the comparison wrapped) that still sheds one `!`, so it is offered.
  *
- * For the single-comparison arm that same gate is EXACTLY the NaN licence. An ordered
- * comparison the type resolver cannot prove float-free declines the flip, and the decline costs
+ * For the single-comparison arm that same gate is EXACTLY the order licence. An ordered
+ * comparison the type resolver cannot prove totally ordered declines the flip, and that costs
  * `+1` `!` — the only text it could emit is the input verbatim — so the site is refused:
- * `!(f < 0.5)` with `f:Float` stays put, and `!(n < 0)` with `n:Int` becomes `n >= 0`. `!(a ==
+ * `!(f < 0.5)` with `f:Float` — and `!(s < t)` with `s:String`, which Haxe can never prove
+ * non-null — stays put, while `!(n < 0)` with `n:Int` becomes `n >= 0`. `!(a ==
  * b)` → `a != b` needs no type proof at all: IEEE makes `NaN == x` false and `NaN != x` true,
- * so the flip and the wrap agree for every operand. There is no partial form on this arm — with
+ * and a `null` operand answers the same both ways, so the flip and the wrap agree for every
+ * operand — neither breaker reaches equality. There is no partial form on this arm — with
  * one term there is nothing left to keep wrapped.
  *
  * `!(!x)` is `double-negation`'s node and never this rule's: the seam's operand whitelist
