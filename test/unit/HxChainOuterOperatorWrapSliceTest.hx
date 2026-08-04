@@ -101,7 +101,9 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 	 * `OptSpace`, no trailing `;` on that line): it broke a line that fits. The
 	 * gate is now `IfFullLineExceeds(maxLineLength + 1)`, whose `n > width` form
 	 * charges the pending space, so BOTH contexts read the physical line.
-	 * Reverting either the ctor or the `+ 1` turns this red.
+	 * Reverting the `+ 1` turns this red (together with T20's continuation
+	 * pin); the ctor half is pinned at the statement context by
+	 * `HxOpAddParenInnerBreakTest.testOpAddSubInnerParenBreaksBeforeLast`.
 	 */
 	public function testOpAddSubTailExactlyAtLineLimitKeepsTheFlatArgument(): Void {
 		final src: String = "class Sample {\n" + "\tprivate function query():Void {\n"
@@ -132,8 +134,8 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 	}
 
 	/**
-	 * RUNG-4 FALLBACK, static prune. The paren tail is 150 columns, so the
-	 * operator break could not fit at ANY indent and the arm is skipped at
+	 * RUNG-4 FALLBACK, static prune. The operator continuation (`contWidth`)
+	 * measures 150 columns, so it could not fit at ANY indent and the arm is skipped at
 	 * lowering (`contWidth > maxLineLength`): the glue probe keeps the call
 	 * hugged and the paren opens, exactly as before T37. The prune is not merely
 	 * a render-time optimisation — the fits probe is slot-inverted, so an emitted
@@ -169,9 +171,10 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 	}
 
 	/**
-	 * KNOWN RESIDUAL, pinned so a later slice notices when it closes. The paren
-	 * tail is 133 columns: narrow enough to survive the static prune, too wide to
-	 * fit the continuation at THIS indent, so the render correctly declines and
+	 * KNOWN RESIDUAL, pinned so a later slice notices when it closes. The
+	 * operator continuation (`contWidth`) measures 135 columns: narrow enough to
+	 * survive the static prune, too wide to fit at THIS indent, so the render
+	 * correctly declines and
 	 * the chain glues. The enclosing sole-argument call does not see that
 	 * decision — `naturalGluableStructural` resolves `IfArrowContinuationFits`
 	 * on its flat side, which is the SLOT-INVERTED forced-break shape here — so

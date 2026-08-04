@@ -877,12 +877,17 @@ final class BinaryChainEmit {
 			//    un-flushed `OptSpace` after an `=` that lands on the same line but is
 			//    not yet in `col`. `IfLineExceeds(lineWidth)` reads a column one short
 			//    of the truth, which the statement context cancels (its trailing `;`
-			//    is invisible to the rest-of-stack walk by the same one column) and
-			//    the CALL-ARGUMENT continuation does not — there `col` is exact and
-			//    the rest is 0, so it fired on a line landing EXACTLY on the limit and
-			//    broke an argument that fits. Both edges are pinned
-			//    (`HxOpAddParenInnerBreakTest` at the statement, T20's continuation
-			//    pins at the call argument).
+			//    IS counted by the rest-of-stack walk — the extra rest column offsets
+			//    the short `col`; under this ctor the charged pending space and the
+			//    `+ 1` on `n` cancel the same way, so statement output is unchanged
+			//    at every probed width) and the CALL-ARGUMENT continuation does not —
+			//    there `col` is exact and the rest is 0, so it fired on a line
+			//    landing EXACTLY on the limit and broke an argument that fits. The
+			//    ctor swap also swaps the rest-of-stack walker
+			//    (`flatTokenWidthOfRestStack` defers `BodyGroup`, the `Full` form
+			//    descends it) — probed nil on this arm's shapes. Both edges are
+			//    pinned (`HxOpAddParenInnerBreakTest` at the statement, T20's
+			//    continuation pins at the call argument).
 			//  - `IfArrowContinuationFits`'s own `n` is `lineWidth + 1` for the family
 			//    reason: it fits on strict `<`, so the budget must exclude the column
 			//    `n` itself for a continuation landing ON the limit to count as
