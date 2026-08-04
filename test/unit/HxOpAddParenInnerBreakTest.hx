@@ -8,11 +8,14 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 
 /**
- * opadd-trailing-paren-break: a 2-operand `a + (bare paren)` whose paren wraps a
- * same-class opAddSub subexpression (`(b - c)`) BREAKS the chain beforeLast when
- * the line overflows and the paren fits its continuation, matching the fork
- * (`unwrapAddOps`). A paren wrapping a ternary (or other-class operator) is
- * content the fork keeps GLUED (opens the paren). Identifiers are synthetic.
+ * opadd-trailing-paren-break: a 2-operand `a OP (bare paren)` whose rendered line
+ * overflows BREAKS the chain beforeLast when the paren fits its own continuation
+ * line, leaving the delimited group intact and the break at the outer boundary.
+ *
+ * The class of the operator INSIDE the paren is not a gate (T37 retired that
+ * restriction — a deliberate divergence from fork `unwrapAddOps`, which keeps a
+ * ternary-inner paren glued). Only a paren too wide to fit the continuation falls
+ * through to the glue probe. Identifiers are synthetic.
  */
 @:nullSafety(Strict)
 final class HxOpAddParenInnerBreakTest extends Test {
@@ -46,10 +49,18 @@ final class HxOpAddParenInnerBreakTest extends Test {
 		);
 	}
 
-	/** DISCRIMINATOR: a ternary-inner paren OPENS (glues), it does NOT break the chain. */
-	public function testTernaryInnerParenOpensNotBreaks(): Void {
+	/**
+	 * RE-PINNED (T37): a ternary-inner paren BREAKS the chain, exactly as an
+	 * opAddSub-inner one does. The operand class of the paren contents was this arm
+	 * gate until T37 and is no longer — the rule is that a break inside an inner `()`
+	 * is less preferable than a break at an outer boundary, and `?` vs `-` inside the
+	 * group says nothing about which boundary is outer. Deliberate divergence from
+	 * fork `unwrapAddOps`. The paren still has to FIT its own continuation line; a
+	 * wider one stays on the glue probe via the `contWidth > lineWidth` prune.
+	 */
+	public function testTernaryInnerParenBreaksTheChain(): Void {
 		Assert.equals(
-			'class Sample {\n\n\tfunction run() {\n\t\tpivotAnchorInverted.horizontalPosValue = slideMovementOrigin.horizontal + (\n\t\t\ttogglePointerActiveNowFlag ? slidePointerTrackingHorizontalX : baseX\n\t\t);\n\t}\n\n}',
+			'class Sample {\n\n\tfunction run() {\n\t\tpivotAnchorInverted.horizontalPosValue = slideMovementOrigin.horizontal\n\t\t\t+ (togglePointerActiveNowFlag ? slidePointerTrackingHorizontalX : baseX);\n\t}\n\n}',
 			triviaWrite(
 				'class Sample {\n\tfunction run() {\n\t\tpivotAnchorInverted.horizontalPosValue = slideMovementOrigin.horizontal + (togglePointerActiveNowFlag ? slidePointerTrackingHorizontalX : baseX);\n\t}\n}',
 				CFG

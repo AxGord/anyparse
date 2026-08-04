@@ -430,14 +430,17 @@ enum Doc {
 	 * measurer call is needed; the arm just checks
 	 * `f.indent + extraIndent + flatWidth < n`.
 	 *
-	 * SLOT INVERSION at the two NON-arrow consumers. `WrapList.shapeSingleArgGlue`
+	 * SLOT INVERSION at the three NON-arrow consumers. `WrapList.shapeSingleArgGlue`
 	 * reuses this ctor twice — for a sole `{`-object-literal argument
 	 * (ω-callparam-single-objectlit) and for the sole-argument outer-first probe
-	 * (ω-outer-first-wrap) — and both pass `breakDoc` = the GLUED / fall-through
-	 * shape and `flatDoc` = the OPEN-paren shape, the reverse of the arrow
+	 * (ω-outer-first-wrap), and `BinaryChainEmit.emitNoThreshold` a third time for
+	 * the trailing-paren operator break (ω-opadd-trailing-paren-break) — all three
+	 * pass `breakDoc` = the GLUED / fall-through
+	 * shape and `flatDoc` = the OPENED shape, the reverse of the arrow
 	 * consumer's pairing. The arm itself is unchanged (fits → `flatDoc`); what
 	 * swaps is which layout each slot holds, because at those sites "fits at the
-	 * continuation" is the reason to OPEN the call rather than to keep it inline.
+	 * continuation" is the reason to break the OUTER boundary rather than to keep it
+	 * inline.
 	 *
 	 * That inversion is visible to every walker that resolves this ctor to ONE
 	 * slot. `WrapList.flatLength` takes `flatDoc`, so for such a call it walks a

@@ -131,21 +131,21 @@ final class HxCallParamOuterFirstWrapSliceTest extends Test {
 	}
 
 	/**
-	 * Fits+1 edge: one column wider than the fixture above, so the continuation
-	 * line would be 141 columns. The probe declines and the pre-slice glue
-	 * decision stands. This fixture does NOT discriminate against reverting the
-	 * slice (the pre-slice engine produced the same bytes) — it bounds the
-	 * threshold from the other side: at `maxLineLength + 2` the parens open here
-	 * and the over-wide argument then has to break internally, a strictly worse
-	 * shape.
+	 * Fits+1 edge, RE-PINNED (T37). One column wider than the fixture above, so the
+	 * argument would be 141 columns on its continuation line and T20 flat-argument
+	 * rung declines. The argument carries a top-level binary seam whose tail is a bare
+	 * paren, so the next rung applies: the call still opens and the argument wraps at
+	 * its own `+`, leaving the paren group intact — instead of the pre-T37 glue that
+	 * broke INSIDE the paren. The at-limit sibling above is the discriminator for the
+	 * boundary: these two must never render the same shape.
 	 */
-	public function testContinuationOneColumnPastLineLimitFallsThroughToGlue(): Void {
+	public function testContinuationOneColumnPastLineLimitWrapsAtTheOperator(): Void {
 		final src: String = "class EdgePastLimit {\n" + "\tprivate function edge():Void {\n"
 			+ "\t\tfinal row:ResultRow = store.query('SELECT filepath FROM files WHERE folder = xxxxxxxxxxxxxxxxxxxx' + (flag ? '1 AND folder_id = $rowId' : '0 AND plain_id = $rowX'));\n"
 			+ "\t}\n" + "}";
 		final expected: String = "class EdgePastLimit {\n" + "\tprivate function edge():Void {\n"
-			+ "\t\tfinal row:ResultRow = store.query('SELECT filepath FROM files WHERE folder = xxxxxxxxxxxxxxxxxxxx' + (\n"
-			+ "\t\t\tflag ? '1 AND folder_id = $rowId' : '0 AND plain_id = $rowX'\n" + "\t\t));\n" + "\t}\n" + "}";
+			+ "\t\tfinal row:ResultRow = store.query(\n" + "\t\t\t'SELECT filepath FROM files WHERE folder = xxxxxxxxxxxxxxxxxxxx'\n"
+			+ "\t\t\t+ (flag ? '1 AND folder_id = $rowId' : '0 AND plain_id = $rowX')\n" + "\t\t);\n" + "\t}\n" + "}";
 		assertWrite(expected, src);
 	}
 

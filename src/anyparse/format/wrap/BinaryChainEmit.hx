@@ -826,27 +826,79 @@ final class BinaryChainEmit {
 				&& WrapList.endsWithCloseDelim(items[items.length - 1]) && !leadingOperandOpensDelim(items[0]);
 			if (!isBareParenTail) return WrapBoundary(brkDoc);
 			final glueProbe: Doc = IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, brkDoc, shapeNoWrapAt(flat.location));
-			// ω-opadd-trailing-paren-break: a 2-operand `a + (bare paren)` at the
-			// trailing-`;` boundary — the fork BREAKS the chain (`a\n+ (paren)`) when
-			// the paren fits its own continuation line, rather than gluing to an opened
-			// paren. The flat line overflows only via the un-counted `= ` pending space
-			// + `;`, so detect it with the pending-aware `IfFullLineExceeds(lineWidth +
-			// 1)`; `IfArrowContinuationFits` then routes a paren that FITS its
-			// continuation to a forced beforeLast break and a WIDER paren to the glue
-			// probe (fork `unwrapAddOps`). Scoped to `items.length == 2` so the forced
-			// `OnePerLineAfterFirst` equals the fillLine-beforeLast shape; 3+-operand
-			// chains keep the glue probe unchanged (no bac488c regression).
-			// Break the chain ONLY when the bare-paren operand wraps a same-class
-			// opAddSub subexpression (`(b - c)`) — the fork treats it as part of
-			// the add chain. A paren wrapping a ternary / other-class operator
-			// (`(cond ? a : b)`, `((b - c) * s)`) is content the fork keeps GLUED
-			// (opens the paren, `unwrapAddOps`), so it stays on the glue probe.
-			if (items.length != 2 || !WrapList.isPureOpAddSubChain(items[items.length - 1], true)) return WrapBoundary(glueProbe);
+			// ω-opadd-trailing-paren-break: a 2-operand `a OP (bare paren)` whose
+			// rendered line OVERFLOWS breaks the chain at its own operator
+			// (`a\n+ (paren)`) whenever the paren operand FITS the continuation line
+			// it would land on — the outer-first priority (ω-outer-first-wrap's rung
+			// at the chain level): the seam BETWEEN the two operands is an outer
+			// boundary, the paren's own `(` an inner one, so the delimited group
+			// stays intact and the break lands one level up. Only when the paren
+			// cannot fit that continuation does the decision fall through to
+			// `glueProbe`, which keeps the head glued and lets the paren open
+			// (`a + (` … `)` — fork `unwrapAddOps`).
+			//
+			// OPERAND CLASS IS NOT A GATE (T37). The arm shipped restricted to a
+			// paren wrapping a same-class opAddSub subexpression (`(b - c)`), with a
+			// ternary / other-class paren (`(cond ? a : b)`) kept on the glue probe
+			// as fork parity. That restriction is retired: the user-facing rule is
+			// "a break inside an inner `()` is less preferable than a break at an
+			// outer boundary", and the operator class of the paren's CONTENTS says
+			// nothing about which boundary is outer. A DELIBERATE fork divergence,
+			// re-pinned in `HxOpAddParenInnerBreakTest` and
+			// `HxCallParamOuterFirstWrapSliceTest`.
+			//
+			// SCOPE `items.length == 2`: the forced `OnePerLineAfterFirst` equals the
+			// fillLine-beforeLast shape only for one gap; 3+-operand chains keep the
+			// glue probe unchanged (no bac488c regression, and
+			// `HxOpAddTrailingParenGlueSliceTest`'s 3-operand glue stays pinned).
+			//
+			// UNREACHABLE-ARM PRUNE `contWidth > opt.lineWidth`: the continuation is
+			// `indent + cols + contWidth` columns wide and `indent + cols >= 0`, so a
+			// tail wider than the limit can NEVER win the fits probe. Emitting the
+			// probe anyway would be render-inert but NOT walker-inert: the fits arm
+			// is SLOT-INVERTED (see below), so every walker that resolves
+			// `IfArrowContinuationFits` on its flat side would see the forced-break
+			// shape and answer questions about it — measured, that flipped an
+			// enclosing sole-arg call from hugged to opened for a paren whose ternary
+			// branches carry their own chain breaks (`HxTernaryBranchChainIndentTest`).
+			// Pruning the dead arm keeps those shapes on the glue probe by
+			// CONSTRUCTION rather than by a render-time answer no walker sees.
+			//
+			// SLOT INVERSION: `IfArrowContinuationFits` renders its FLAT slot when
+			// the continuation fits, and here "fits" is the reason to BREAK — so
+			// `forcedBreak` sits in the flat slot and `glueProbe` in the break slot,
+			// the reverse of the arrow consumer's pairing (Doc.hx records the same
+			// inversion at `WrapList.shapeSingleArgGlue`'s two consumers).
+			//
+			// WIDTH CONVENTIONS, both `lineWidth + 1`, and neither is decorative:
+			//  - the outer gate is `IfFullLineExceeds`, NOT `IfLineExceeds`. The
+			//    question is "does the rendered PHYSICAL line exceed the limit", and
+			//    only the `n > width` form of that probe charges `pendingSpace` — the
+			//    un-flushed `OptSpace` after an `=` that lands on the same line but is
+			//    not yet in `col`. `IfLineExceeds(lineWidth)` reads a column one short
+			//    of the truth, which the statement context cancels (its trailing `;`
+			//    IS counted by the rest-of-stack walk — the extra rest column offsets
+			//    the short `col`; under this ctor the charged pending space and the
+			//    `+ 1` on `n` cancel the same way, so statement output is unchanged
+			//    at every probed width) and the CALL-ARGUMENT continuation does not —
+			//    there `col` is exact and the rest is 0, so it fired on a line
+			//    landing EXACTLY on the limit and broke an argument that fits. The
+			//    ctor swap also swaps the rest-of-stack walker
+			//    (`flatTokenWidthOfRestStack` defers `BodyGroup`, the `Full` form
+			//    descends it) — probed nil on this arm's shapes. Both edges are
+			//    pinned (`HxOpAddParenInnerBreakTest` at the statement, T20's
+			//    continuation pins at the call argument).
+			//  - `IfArrowContinuationFits`'s own `n` is `lineWidth + 1` for the family
+			//    reason: it fits on strict `<`, so the budget must exclude the column
+			//    `n` itself for a continuation landing ON the limit to count as
+			//    fitting.
+			if (items.length != 2) return WrapBoundary(glueProbe);
 			final cols: Int = nestSuppress ? 0 : indentUnitOf(opt);
 			final contWidth: Int = ops[ops.length - 1].length + 1 + DocMeasure.flatTokenWidth(items[items.length - 1]);
+			if (contWidth > opt.lineWidth) return WrapBoundary(glueProbe);
 			final forcedBreak: Doc = shapeOnePerLineAfterFirst(items, ops, cols, BeforeLast);
-			return WrapBoundary(IfLineExceeds(
-				opt.lineWidth, IfArrowContinuationFits(cols, contWidth, opt.lineWidth, glueProbe, forcedBreak),
+			return WrapBoundary(IfFullLineExceeds(
+				opt.lineWidth + 1, IfArrowContinuationFits(cols, contWidth, opt.lineWidth + 1, glueProbe, forcedBreak),
 				shapeNoWrapAt(flat.location)
 			));
 		}

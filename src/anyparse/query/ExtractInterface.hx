@@ -115,9 +115,8 @@ final class ExtractInterface {
 			return Err('rewritten $srcFile does not parse: ${exception.message}');
 
 		final incomplete: Array<String> = [for (m in selected) if (m.signature.indexOf(':') < 0) m.name];
-		final advisory: String = 'extracted ${selected.length} method(s) into interface "$ifaceName"' + (
-			incomplete.length > 0 ? '; method(s) without an explicit return type may need annotations: ${incomplete.join(', ')}' : ''
-		);
+		final advisory: String = 'extracted ${selected.length} method(s) into interface "$ifaceName"'
+			+ (incomplete.length > 0 ? '; method(s) without an explicit return type may need annotations: ${incomplete.join(', ')}' : '');
 		final changes: Array<MoveChange> = [
 			{ file: ifaceFile, newSource: ifaceSource },
 			{ file: srcFile, newSource: newSrc },
