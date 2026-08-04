@@ -64,11 +64,13 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	/**
 	 * The operand families `simplifyNegatedCompound` PAYS for: the `&&` / `||` compounds De Morgan
 	 * distributes, and the six comparisons whose operator flips. A POSITIVE list, deliberately not
-	 * "anything the worth gate accepts". `Not` is excluded on purpose — `!(!x)` would pass the worth
-	 * gate (`notDelta` -1) but is `double-negation`'s shape, and the two rules must stay disjoint.
-	 * Everything else (a call, `is`, `??`, a bitwise operator, a bare identifier) the worth gate
-	 * refuses too, so the list buys the guarantee that a FUTURE kind cannot leak in the day its
-	 * `notDelta` happens to reach zero.
+	 * "anything the worth gate accepts". TWO kinds the worth gate would let through are excluded
+	 * here by name: `Not`, because `!(!x)` (`notDelta` -1) is `double-negation`'s shape and the two
+	 * rules must stay disjoint, and `BoolLit`, because `!(true)` negates to `false` at `notDelta` 0
+	 * and is `constant-condition`'s territory, not a De Morgan simplification. Everything else (a
+	 * call, `is`, `??`, a bitwise operator, a bare identifier) the worth gate refuses too, so the
+	 * list buys the guarantee that a FUTURE kind cannot leak in the day its `notDelta` happens to
+	 * reach zero.
 	 */
 	private static final NEGATABLE_OPERAND_KINDS: Array<String> = ['Or', 'And', 'Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq'];
 
@@ -238,12 +240,24 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	 * kind imposes nothing, and `PREC_ATOM` would parenthesise every condition and argument).
 	 * The assignment family is absent for the same reason as a statement slot — its right-hand
 	 * side takes a whole expression.
+	 *
+	 * Nor is the answer always the parent's OWN precedence. `wrap` parenthesises on
+	 * `result.prec < slot`, which admits a result of exactly the slot's rank — sound only where
+	 * the parent operator is associative (`&&` / `||`), and wrong for the comparison tier, whose
+	 * members share one left-associative rank while meaning nothing like each other. Those slots
+	 * therefore answer one tier up; see the case itself.
 	 */
 	private static function slotPrecedence(parentKind: String): Null<Precedence> {
 		return switch parentKind {
-			case 'Not', 'Neg': PREC_ATOM;
-			case 'Or', 'And', 'NullCoal', 'Ternary', 'Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq', 'Is', 'In', 'BitOr', 'BitXor', 'BitAnd',
-				'Shl', 'Shr', 'UShr', 'Add', 'Sub', 'Mul', 'Div', 'Mod', 'Interval', 'CastExpr':
+			case 'Not', 'Neg':
+				PREC_ATOM;
+			// The comparison tier is left-associative but NOT associative in meaning, so a result at
+			// PREC_CMP may not sit bare in either of its slots: `c == (n >= 0)` de-parenthesised is
+			// `(c == n) >= 0`. Demanding the next tier up parenthesises exactly the PREC_CMP results
+			// and nothing else — anything binding tighter already sits at PREC_BINARY or above.
+			case 'Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq': PREC_BINARY;
+			case 'Or', 'And', 'NullCoal', 'Ternary', 'Is', 'In', 'BitOr', 'BitXor', 'BitAnd', 'Shl', 'Shr', 'UShr', 'Add', 'Sub', 'Mul',
+				'Div', 'Mod', 'Interval', 'CastExpr':
 				precedence(parentKind);
 			case _: null;
 		};

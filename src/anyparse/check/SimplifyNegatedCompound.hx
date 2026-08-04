@@ -51,7 +51,10 @@ import anyparse.runtime.Span;
  * excludes the not-kind, even though its `notDelta` of `-1` would pass the worth gate.
  *
  * Parentheses never enter the count: the input already carries a pair around the operand,
- * and the output carries at most one — the seam re-adds it only where the surrounding
+ * and the output carries at most one — the seam re-adds it only where the surrounding slot
+ * needs it. A comparison slot needs one around a FLIPPED comparison — `c == !(x < 0)` emits
+ * `c == (x >= 0)`, since that tier is a single left-associative rank and the bare form would
+ * re-associate — and elsewhere the pair appears exactly where the surrounding
  * operator binds tighter than the result.
  *
  * ## Short-circuit and single evaluation
@@ -94,7 +97,7 @@ final class SimplifyNegatedCompound implements Check {
 	}
 
 	public function description(): String {
-		return 'a negated boolean compound that De Morgan simplifies to fewer negations';
+		return 'a negated boolean compound or comparison that simplifies to fewer negations';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -121,7 +124,8 @@ final class SimplifyNegatedCompound implements Check {
 	}
 
 	/**
-	 * Replace each flagged `!( … )` with the seam's De Morgan form. The candidate set is
+	 * Replace each flagged `!( … )` with the seam's simplified form — De Morgan for a compound,
+	 * the flipped operator for a single comparison. The candidate set is
 	 * recomputed from `source` under the same gates `run` applied, so a finding whose site no
 	 * longer qualifies (an earlier check's edit in the same batch changed it) yields no edit.
 	 */
@@ -160,7 +164,7 @@ final class SimplifyNegatedCompound implements Check {
 	}
 
 	/**
-	 * Every accepted rewrite in `node`'s subtree, outermost-first: a `!( … )` whose compound
+	 * Every accepted rewrite in `node`'s subtree, outermost-first: a `!( … )` whose operand
 	 * passes the comment / `#if` / narrowing gates and whose seam rewrite pays. Descent STOPS at
 	 * an accepted node, so a nested candidate is left for the next `--fix` pass and no two edits
 	 * can overlap; a REJECTED node is descended into normally, since nothing will consume it.

@@ -139,8 +139,21 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 	}
 
 	public function testConditionalCompilationInSingleComparisonNotFlagged(): Void {
-		// A refusal pin for the inherited `#if` gate, same otherwise-licensed shape.
-		Assert.equals(0, violations(wrapTyped('var b = !(n < #if js 0 #else 1 #end);', 'n:Int')).length);
+		// A refusal pin for the inherited `#if` gate. The arm has to be the EQUALITY one: an
+		// ordered comparison whose operand is a `#if` region is refused by the WORTH gate first
+		// (a `ConditionalExpr` operand is not NaN-provable, so the flip declines), which would
+		// leave the `#if` gate untested. `==` needs no proof, so only the `#if` gate can say no.
+		Assert.equals(0, violations(wrapTyped('var b = !(n == #if js 0 #else 1 #end);', 'n:Int')).length);
+	}
+
+	public function testFixParenthesisesFlippedComparisonInComparisonSlot(): Void {
+		// The flipped result binds at the comparison tier, which in Haxe is ONE left-associative
+		// rank: emitted bare into a comparison's right slot, `c == n >= 0` re-associates to
+		// `(c == n) >= 0`. Both arms are pinned because the equality one needs no type proof and
+		// so reaches any tree — `d == a != b2` reads `(d == a) != b2`, which compiles under
+		// `Dynamic` and answers differently.
+		Assert.equals(wrapTyped('var b = c == (n >= 0);', 'c:Bool, n:Int'), applyFix(wrapTyped('var b = c == !(n < 0);', 'c:Bool, n:Int')));
+		Assert.equals(wrap('var b = d == (a != b2);'), applyFix(wrap('var b = d == !(a == b2);')));
 	}
 
 	public function testSingleComparisonFixIsIdempotent(): Void {
@@ -149,9 +162,10 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 	}
 
 	public function testBitwiseOperandNotFlagged(): Void {
-		// `|` is a bitwise operator, not the logical-or chain kind, so the compound gate never
-		// reads it as a chain — and it is opaque to the negation engine besides, so the worth gate
-		// would refuse it anyway. Two independent reasons; the fixture pins the outcome, not one.
+		// `|` is a bitwise operator and is absent from the seam's operand whitelist, so
+		// `negatedOperandOf` never returns it — and it is opaque to the negation engine besides,
+		// so the worth gate would refuse it anyway. Two independent reasons; the fixture pins the
+		// outcome, not one.
 		Assert.equals(0, violations(wrap('var b = !(x | y);')).length);
 	}
 

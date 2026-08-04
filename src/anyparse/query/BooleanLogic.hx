@@ -104,9 +104,11 @@ interface BooleanLogicSupport {
 	 * The method NAME keeps "Compound" because the rule id it serves, `simplify-negated-compound`,
 	 * is user- and config-visible; the mismatch with the widened contract is deliberate.
 	 *
-	 * `parent` is the not node's parent — the slot the replacement lands in — so the result can
-	 * be parenthesised exactly when the surrounding operator binds tighter than it (`x && !(a
-	 * && b)` → `x && (a != … || …)`); pass null for a slot that accepts any expression.
+	 * `parent` is the not node's parent — the slot the replacement lands in — so the result can be
+	 * parenthesised exactly when the slot needs it (`x && !(a && b)` → `x && (a != … || …)`); pass
+	 * null for a slot that accepts any expression. A slot whose own operator is non-associative
+	 * needs the pair even when the result binds at the SAME rank — `c == !(x < 0)` must emit
+	 * `c == (x >= 0)`, since bare `c == x >= 0` re-associates to `(c == x) >= 0`.
 	 * `typeNominalOf` is the same operand-type probe `negateCondition` takes.
 	 */
 	public function simplifyNegatedCompound(

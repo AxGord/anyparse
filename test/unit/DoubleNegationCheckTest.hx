@@ -13,8 +13,8 @@ import anyparse.runtime.Span;
  * The `double-negation` check: a not-node wrapping another (`!!x`, and `!(!x)` through any
  * parentheses between them) is flagged `Info`; `fix` strips it when the
  * operand is provably non-null. A single `!`, or a `!` wrapping a non-`!`
- * expression, is not — a `!` over a `&&` / `||` compound is `simplify-negated-compound`'s
- * shape, not this one's.
+ * expression, is not — a `!` over a `&&` / `||` compound, or over a single comparison, is
+ * `simplify-negated-compound`'s shape, not this one's.
  */
 class DoubleNegationCheckTest extends Test {
 
