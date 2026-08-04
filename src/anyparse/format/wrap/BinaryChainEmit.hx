@@ -433,9 +433,34 @@ final class BinaryChainEmit {
 				leadingOperandOpensDelim(i, parenOnly);
 			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfResidualLineExceeds(
 				_, _, flat
-			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
+			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
+				_, _, _, _, flat
+			) | IfIndentWidthExceeds(_, _, _, flat) | IfGluedFirstLineExceeds(_, _, _, flat):
+				// PROBE FAMILY (Doc.hx header table), flat side for all three:
+				//  - `IfArrowContinuationFits` is a two-SHAPE probe like the natural
+				//    siblings above, and its two shapes always share a leading token —
+				//    the list's own `Text(open)` at the three call-argument consumers,
+				//    `items[0]` at the chain consumer this file emits itself (`emit`'s
+				//    arrow-continuation glue, which pairs two layouts of the same
+				//    operand array and no delimiter at all). Side-independent either
+				//    way; flat keeps this walker on one side for the whole two-shape
+				//    population.
+				//  - the two body-placement probes wrap the SAME body object and
+				//    differ only in the separator before it (`Line('\n')` vs
+				//    `OptSpace(' ')` / `Line(' ')`), both of which this walker's
+				//    Concat scan skips as leading layout atoms — so either side
+				//    reaches the same first token, and flat is the family's
+				//    content-walker convention (`CollapsePass.walk`,
+				//    `MatrixWrap.isMultiline`, `Renderer.findCollapseProbe`).
 				leadingOperandOpensDelim(flat, parenOnly);
-			case _: false;
+			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+				| OptHardlineSkipBeforeHardline
+				| Fill(_, _, _) | FillWithRestProbe(_, _, _) | FillBreakAfterWrap(_, _, _):
+				// Layout atoms carry no token; a `Fill` is the wrap engine's own
+				// packing of a LIST, never a single operand's head shape. Enumerated
+				// rather than left to `case _` so a new `Doc` ctor fails to compile
+				// here instead of silently inheriting `false`.
+				false;
 		};
 	}
 

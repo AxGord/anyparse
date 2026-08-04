@@ -1017,13 +1017,38 @@ class WrapList {
 				r;
 			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(
 				i
-			) | WrapBoundary(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
+			) | CollapseBoolProbe(i) | CollapseChainProbe(i) | WrapBoundary(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
 				lastVisibleText(i);
 			case IfBreak(brk, _) | IfWidthExceeds(_, brk, _) | IfFirstLineExceeds(_, brk, _) | IfLineExceeds(_, brk, _) | IfResidualLineExceeds(
 				_, brk, _
-			) | IfFullLineExceeds(_, brk, _) | IfNaturalFirstLineExceeds(_, brk, _) | IfNaturalFirstLineFitsOpenDelim(_, brk, _):
+			) | IfFullLineExceeds(_, brk, _) | IfNaturalFirstLineExceeds(_, brk, _) | IfNaturalFirstLineFitsOpenDelim(_, brk, _) | IfArrowContinuationFits(
+				_, _, _, brk, _
+			) | IfIndentWidthExceeds(_, _, brk, _) | IfGluedFirstLineExceeds(_, _, brk, _):
+				// PROBE FAMILY (Doc.hx header table), break side for all three — the
+				// side this right-spine walk already takes, and side-independent for
+				// each: `IfArrowContinuationFits` closes BOTH of its layouts with the
+				// list's own `Text(close)`, and the two body-placement probes wrap the
+				// SAME body object, differing only in the separator BEFORE it, which a
+				// right-spine walk never reaches. The file's two OTHER right-spine
+				// close-token walkers (`endsWithCloseDelim`, `endsWithCondEnd`) read the
+				// same three FLAT. Not a disagreement to resolve: side-independence is
+				// what makes both readings correct, and each walker keeps whichever side
+				// it already used for the eight older conditionals.
 				lastVisibleText(brk);
-			case _:
+			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+				| OptHardlineSkipBeforeHardline
+				| Fill(_, _, _) | FillWithRestProbe(_, _, _) | FillBreakAfterWrap(_, _, _):
+				// Layout atoms bear no text. `Fill` is deliberately opaque here: its
+				// break-mode packing decides at render time WHICH item lands last, so
+				// there is no static last-visible token to report. Two of the three
+				// consumers want a definite `}` and read `null` as "no" —
+				// `isBlockBodyComprehensionItem` and
+				// `BinaryChainEmit.ternaryHugCollectionBranchIndex`. The third,
+				// `isCuddleableComprehensionItem`, INVERTS the test (`!= '}'`), so `null`
+				// reads as "yes" there; it stays honest through its own
+				// `firstVisibleText(item) == 'for'` conjunct, which is `null` for a `Fill`
+				// too. Enumerated rather than left to `case _` so a new `Doc` ctor fails
+				// to compile here instead of silently inheriting `null`.
 				null;
 		};
 	}
@@ -1277,13 +1302,21 @@ class WrapList {
 			switch n {
 				case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(
 					i
-				) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
+				) | CollapseBoolProbe(i) | CollapseChainProbe(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
 					w(i, depth);
 				case WrapBoundary(i):
 					w(i, depth + 1);
 				case IfBreak(b, _) | IfWidthExceeds(_, b, _) | IfFirstLineExceeds(_, b, _) | IfLineExceeds(_, b, _) | IfResidualLineExceeds(
 					_, b, _
-				) | IfFullLineExceeds(_, b, _) | IfNaturalFirstLineExceeds(_, b, _) | IfNaturalFirstLineFitsOpenDelim(_, b, _):
+				) | IfFullLineExceeds(_, b, _) | IfNaturalFirstLineExceeds(_, b, _) | IfNaturalFirstLineFitsOpenDelim(_, b, _) | IfArrowContinuationFits(
+					_, _, _, b, _
+				) | IfIndentWidthExceeds(_, _, b, _) | IfGluedFirstLineExceeds(_, _, b, _):
+					// PROBE FAMILY (Doc.hx header table), break side for all three — the
+					// side this walk already takes, and side-independent for each. The
+					// operator `Text` this scan hunts only counts at `depth == 1`, i.e.
+					// past a `WrapBoundary`; no family member is one, so neither branch
+					// can change the depth at which a chain operator is found, and the
+					// two body-placement probes hold the SAME body on both sides anyway.
 					w(b, depth);
 				case Concat(items):
 					for (it in items) w(it, depth);
@@ -1296,7 +1329,11 @@ class WrapList {
 							found = true;
 						case _:
 					}
-				case _:
+				case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+					| OptHardlineSkipBeforeHardline:
+					// Layout atoms bear no operator token. Enumerated rather than left
+					// to `case _` so a new `Doc` ctor fails to compile here instead of
+					// silently going unvisited.
 			}
 		}
 		w(d, 0);
@@ -1322,7 +1359,7 @@ class WrapList {
 			switch n {
 				case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(
 					i
-				) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
+				) | CollapseBoolProbe(i) | CollapseChainProbe(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
 					w(i, depth);
 				case WrapBoundary(i):
 					w(i, depth + 1);
@@ -1330,7 +1367,21 @@ class WrapList {
 					if (depth == 1) found = true;
 				case Concat(items):
 					for (it in items) w(it, depth);
-				case _:
+				case Empty | Text(_) | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+					| OptHardlineSkipBeforeHardline
+					| Fill(_, _, _) | FillWithRestProbe(_, _, _) | FillBreakAfterWrap(_, _, _) | IfBreak(_, _) | IfWidthExceeds(_, _, _) | IfFirstLineExceeds(
+					_, _, _
+				) | IfLineExceeds(_, _, _) | IfResidualLineExceeds(_, _, _) | IfFullLineExceeds(_, _, _) | IfNaturalFirstLineExceeds(
+					_, _, _
+				) | IfArrowContinuationFits(_, _, _, _, _) | IfIndentWidthExceeds(_, _, _, _) | IfGluedFirstLineExceeds(_, _, _, _):
+					// Every OTHER conditional stops the walk: this predicate asks whether
+					// the chain's own outermost wrap level IS the keep-flat probe, so a
+					// different probe there is a `false` answer, not a subtree to search.
+					// Layout atoms and `Fill` bodies carry no wrap level at all.
+					// Enumerated rather than left to `case _` so a new `Doc` ctor fails to
+					// compile here — this walker is evaluated as a PAIR with
+					// `isTopLevelChain` at both `emitCondition` sites, and the pair must
+					// be swept together.
 			}
 		}
 		w(d, 0);
@@ -2122,7 +2173,9 @@ class WrapList {
 					return true;
 				case WrapBoundary(inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner) | Nest(_, inner) | Flatten(inner) | HardFlatten(
 					inner
-				) | CollapseProbe(inner) | CollapseAddProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
+				) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
+					inner
+				) | ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(arr):
 					for (it in arr) stack.push(it);
@@ -2132,7 +2185,11 @@ class WrapList {
 					if (s.length > 0 && StringTools.fastCodeAt(s, 0) == '\n'.code) return true;
 				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
 					return true;
-				case _:
+				case Empty | Text(_) | OptSpace(_) | OptSpaceSkipAfterHardline:
+					// Content atoms are not break points. Enumerated rather than left to
+					// `case _` so a new `Doc` ctor fails to compile here — this walker
+					// already carried an arm for all eleven conditionals, so the family
+					// sweep only had to close its transparent-marker and default tails.
 			}
 		}
 		return false;
@@ -2198,12 +2255,30 @@ class WrapList {
 		return switch item {
 			case WrapBoundary(inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner) | Nest(_, inner) | Flatten(inner) | HardFlatten(
 				inner
-			) | CollapseProbe(inner) | CollapseAddProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
+			) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
+				inner
+			) | ConditionalMarkerDecrease(inner):
 				isMethodChainItem(inner);
 			case IfBreak(brk, _) | IfWidthExceeds(_, brk, _) | IfFirstLineExceeds(_, brk, _) | IfLineExceeds(_, brk, _) | IfResidualLineExceeds(
 				_, brk, _
-			) | IfFullLineExceeds(_, brk, _) | IfNaturalFirstLineExceeds(_, brk, _) | IfNaturalFirstLineFitsOpenDelim(_, brk, _):
+			) | IfFullLineExceeds(_, brk, _) | IfNaturalFirstLineExceeds(_, brk, _) | IfNaturalFirstLineFitsOpenDelim(_, brk, _) | IfArrowContinuationFits(
+				_, _, _, brk, _
+			):
 				isMethodChainItem(brk);
+			case IfIndentWidthExceeds(_, _, _, flat) | IfGluedFirstLineExceeds(_, _, _, flat):
+				// PROBE FAMILY (Doc.hx header table). The two body-placement probes are
+				// the one family pair this walker reads on its FLAT side, against the
+				// break side it takes everywhere else, and the reason is this walker's
+				// own dot-break test rather than a content difference. Both branches
+				// wrap the SAME body; the break branch is `Nest(cols, Concat([Line('\n'),
+				// body]))` by construction — which the transparent-wrapper arm above
+				// unwraps straight into the Concat scan's hardline GUARD below. A
+				// break-side read therefore hands that guard a hardline immediately
+				// followed by the body and asks it to decide, on the body's first token,
+				// whether the construct broke at a `.`. That hardline is the BODY's
+				// placement, never a chain link. The flat side carries the same body
+				// behind a soft separator, so it answers the question this walker asks.
+				isMethodChainItem(flat);
 			case Concat(arr):
 				var hit: Bool = false;
 				for (k in 0...arr.length) if (!hit) switch arr[k] {
@@ -2218,7 +2293,14 @@ class WrapList {
 					case _:
 				}
 				hit;
-			case _: false;
+			case Empty | Text(_) | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+				| OptHardlineSkipBeforeHardline
+				| Fill(_, _, _) | FillWithRestProbe(_, _, _) | FillBreakAfterWrap(_, _, _):
+				// A single atom is not a layout; a `Fill` is a LIST's own packing, not
+				// this item's outermost shape. Enumerated rather than left to `case _`
+				// so a new `Doc` ctor fails to compile here instead of silently
+				// inheriting `false`.
+				false;
 		};
 	}
 
@@ -2862,13 +2944,29 @@ class WrapList {
 				hit;
 			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(
 				i
-			) | WrapBoundary(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
+			) | CollapseBoolProbe(i) | CollapseChainProbe(i) | WrapBoundary(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
 				firstVisibleTextIsFunctionKw(i);
 			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfResidualLineExceeds(
 				_, _, flat
-			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
+			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
+				_, _, _, _, flat
+			) | IfIndentWidthExceeds(_, _, _, flat) | IfGluedFirstLineExceeds(_, _, _, flat):
+				// PROBE FAMILY (Doc.hx header table), flat side for all three — this
+				// walker's own side, and side-independent for each.
+				// `IfArrowContinuationFits` opens BOTH of its layouts with the list's
+				// own `Text(open)`; the two body-placement probes wrap the SAME body
+				// behind separators (`Line('\n')` vs `OptSpace(' ')` / `Line(' ')`) that
+				// the Concat scan above skips as leading layout atoms, so either side
+				// reaches the same first token. Flat is also the family's content-walker
+				// convention (`CollapsePass.walk`, `MatrixWrap.isMultiline`).
 				firstVisibleTextIsFunctionKw(flat);
-			case _:
+			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+				| OptHardlineSkipBeforeHardline
+				| Fill(_, _, _) | FillWithRestProbe(_, _, _) | FillBreakAfterWrap(_, _, _):
+				// Layout atoms bear no text. A `Fill` is a LIST body — a `function`
+				// keyword can only lead an item INSIDE one, never the Fill itself.
+				// Enumerated rather than left to `case _` so a new `Doc` ctor fails to
+				// compile here instead of silently inheriting `false`.
 				false;
 		};
 	}
@@ -2911,13 +3009,27 @@ class WrapList {
 				r;
 			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(
 				i
-			) | WrapBoundary(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
+			) | CollapseBoolProbe(i) | CollapseChainProbe(i) | WrapBoundary(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
 				firstVisibleText(i);
 			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfResidualLineExceeds(
 				_, _, flat
-			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
+			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
+				_, _, _, _, flat
+			) | IfIndentWidthExceeds(_, _, _, flat) | IfGluedFirstLineExceeds(_, _, _, flat):
+				// PROBE FAMILY (Doc.hx header table), flat side for all three — this
+				// walker's own side, and side-independent for each, by the same
+				// argument as `firstVisibleTextIsFunctionKw` above: both
+				// `IfArrowContinuationFits` layouts open with the list's `Text(open)`,
+				// and the two body-placement probes wrap the SAME body behind leading
+				// layout atoms this walk skips.
 				firstVisibleText(flat);
-			case _:
+			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+				| OptHardlineSkipBeforeHardline
+				| Fill(_, _, _) | FillWithRestProbe(_, _, _) | FillBreakAfterWrap(_, _, _):
+				// Layout atoms bear no text; a `Fill` is a LIST body whose first token
+				// belongs to an item, not to the Fill. Enumerated rather than left to
+				// `case _` so a new `Doc` ctor fails to compile here instead of silently
+				// inheriting `null`.
 				null;
 		};
 	}
@@ -2961,15 +3073,43 @@ class WrapList {
 				false;
 			case Nest(_, inner):
 				hasTopLevelElse(inner, depth + 1);
-			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(i) | WrapBoundary(
+			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(i) | CollapseBoolProbe(
 				i
-			) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
+			) | CollapseChainProbe(i) | WrapBoundary(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
 				hasTopLevelElse(i, depth);
 			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfResidualLineExceeds(
 				_, _, flat
-			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
+			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
+				_, _, _, _, flat
+			):
+				// PROBE FAMILY (Doc.hx header table): `IfArrowContinuationFits` keeps
+				// this walker's flat side, and here the choice is load-bearing rather
+				// than free. Its two layouts hold the same argument at DIFFERENT depths
+				// — the break (glued) side is `Concat([Text(open), …, item, …])` with
+				// the item at depth 0, the flat (opened) side buries it in the wrap
+				// engine's `Nest`. An `else` inside a call argument belongs to an inner
+				// `if`, so only the `Nest`-carrying side keeps this walk's depth
+				// counter honest.
 				hasTopLevelElse(flat, depth);
-			case _:
+			case IfIndentWidthExceeds(_, _, brk, _) | IfGluedFirstLineExceeds(_, _, brk, _):
+				// PROBE FAMILY: the two body-placement probes are read on their BREAK
+				// side, against this walker's flat side everywhere else, for the same
+				// depth reason. Both branches wrap the SAME body, but only the break
+				// branch is `Nest(cols, …)` by construction; the flat branch may be a
+				// bare `Concat([OptSpace(' '), body])` (`BodyFit.glueLayout` with
+				// `nestGluedBody == false`), which would expose the body's own
+				// `else` at depth 0 and report an inner `if … else` as the outer one.
+				// A construct's body is one indent deeper by definition, which is
+				// exactly what the break branch encodes.
+				hasTopLevelElse(brk, depth);
+			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+				| OptHardlineSkipBeforeHardline
+				| Fill(_, _, _) | FillWithRestProbe(_, _, _) | FillBreakAfterWrap(_, _, _):
+				// Layout atoms bear no keyword. A `Fill` packs a LIST — an `else` can
+				// only ride inside an item, and an `if … else` is never a wrap-engine
+				// list element at this construct's own level. Enumerated rather than
+				// left to `case _` so a new `Doc` ctor fails to compile here instead of
+				// silently inheriting `false`.
 				false;
 		};
 	}

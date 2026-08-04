@@ -270,9 +270,24 @@ class MethodChainEmit {
 				endsWithLineComment(inner);
 			case IfBreak(breakDoc, _), IfWidthExceeds(_, breakDoc, _), IfFirstLineExceeds(_, breakDoc, _), IfLineExceeds(_, breakDoc, _),
 				IfResidualLineExceeds(_, breakDoc, _), IfFullLineExceeds(_, breakDoc, _), IfNaturalFirstLineExceeds(_, breakDoc, _),
-				IfNaturalFirstLineFitsOpenDelim(_, breakDoc, _):
+				IfNaturalFirstLineFitsOpenDelim(_, breakDoc, _), IfArrowContinuationFits(_, _, _, breakDoc, _),
+				IfIndentWidthExceeds(_, _, breakDoc, _), IfGluedFirstLineExceeds(_, _, breakDoc, _):
+				// PROBE FAMILY (Doc.hx header table). The stanza's own rule — both
+				// branches end with the same trailing comment token by construction —
+				// holds for all three additions, so the break side stays this walker's
+				// single side: `IfArrowContinuationFits` pairs a glued and an opened
+				// layout of the SAME item list (both closed by the list's `Text(close)`),
+				// and the two body-placement probes wrap the SAME body object, differing
+				// only in the separator BEFORE it — which a right-spine walk never
+				// reaches.
 				endsWithLineComment(breakDoc);
-			case _:
+			case Empty, Line(_), OptSpace(_), OptSpaceSkipAfterHardline, OptHardline, OptHardlineSkipAtOpenDelim,
+				OptHardlineSkipBeforeHardline, Fill(_, _, _), FillWithRestProbe(_, _, _), FillBreakAfterWrap(_, _, _):
+				// Layout atoms bear no token. A `Fill` is reachable only as a wrap-
+				// engine list body, never as a chain segment's tail, and the comment
+				// this probe hunts is spliced by the trivia writer OUTSIDE any Fill.
+				// Enumerated rather than left to `case _` so a new `Doc` ctor fails to
+				// compile here instead of silently inheriting `false`.
 				false;
 		};
 	}
@@ -661,6 +676,14 @@ class MethodChainEmit {
 	/**
 	 * True iff `d`'s first visible content is a hard `Line('\n')` — descends the
 	 * argument `Nest` and leading `Concat` padding.
+	 *
+	 * DELIBERATELY NARROW, and deliberately NOT the `WrapList` function of the same
+	 * name. It recognises ONE emit signature — a callParameter break branch whose
+	 * argument starts on its own line — so "anything else" is its answer, not a
+	 * hole. It is therefore outside the exhaustive-spine-walker net the `Doc` enum
+	 * header describes, and its `case _` must stay: descending wrappers or probes
+	 * here would report a break BELOW the argument's own top level as a leading
+	 * one, which is exactly the distinction `brkLeadingBreaks` is asking about.
 	 */
 	private static function startsWithHardline(d: Doc): Bool {
 		return switch d {
