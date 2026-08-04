@@ -11452,9 +11452,9 @@ class WriterLowering {
 		?caseSiblingSymmetryKnobs: Array<String>,
 		// ω-if-leader-case-symmetry: the `caseSiblingUnits_<ElemRule>` fn-ref
 		// that expands a `#if`-guarded case region into its inner case
-		// elements for the widest-sibling pre-pass. Null (no generated AST
-		// predicates, or no `caseSiblingSymmetry` meta) ⇒ the pre-pass emits
-		// its pre-slice loop verbatim.
+		// elements for the widest-sibling pre-pass. Null alongside a null
+		// `caseSiblingSymmetryKnobs` ⇒ no pre-pass at all; null WITH knobs is
+		// a macro-time error (an opted-in Star needs the flattener).
 		?caseSiblingUnitsFn: Expr
 	): Expr {
 		// ω-condcomp-stray-semi (Stage A): the schema-instance predicate-call build
