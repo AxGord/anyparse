@@ -69,13 +69,40 @@ interface BooleanLogicSupport {
 	public function negateConditionDeclinesFlip(cond: QueryNode, source: String, ?typeNominalOf: (QueryNode) -> Null<String>): Bool;
 
 	/**
-	 * The De Morgan simplification of `not` — a logical-not over a `&&` / `||` COMPOUND — as
-	 * source replacing the whole not node, or null when `not` is not that shape or the rewrite
-	 * would not PAY: the same NaN-safe engine as `negateCondition` produces the text, and the
-	 * result is offered only when it carries strictly fewer unary `!` operators than the input
-	 * (`!(!a || b)` → `a && !b` pays; `!(a || b)` → `!a && !b` does not, and answers null).
-	 * A term the NaN gate refuses to flip stays wrapped inside the result, so a PARTIAL
-	 * simplification is still offered whenever the count still falls.
+	 * The operand a logical-not negates — parentheses unwrapped — whenever `simplifyNegatedCompound`
+	 * would consider `not` at all; null when `not` is not a logical-not, or wraps a shape this
+	 * simplification never touches.
+	 *
+	 * This is THE single shape test for the rule. The consuming check asks this instead of
+	 * re-deriving the kind set from `RefShape`, so the two can never disagree about the rule's
+	 * input — before this seam the predicate existed as two copies, one in the check over
+	 * `RefShape` kinds and one private in the Haxe engine, that had to be widened in lockstep.
+	 *
+	 * A non-null answer does NOT promise a rewrite: the worth gate inside `simplifyNegatedCompound`
+	 * still decides, and refuses whatever would not pay. The NODE is returned rather than a `Bool`
+	 * so the caller can run its own operand-level gates on it (`CheckScan.narrowingStranded`).
+	 */
+	public function negatedOperandOf(not: QueryNode): Null<QueryNode>;
+
+	/**
+	 * The simplification of `not` — a logical-not over one of the two shapes `negatedOperandOf`
+	 * accepts — as source replacing the whole not node, or null when `not` is neither shape or the
+	 * rewrite would not PAY. Both arms are produced by the same NaN-safe engine as
+	 * `negateCondition`:
+	 *
+	 *  - a `&&` / `||` COMPOUND, which De Morgan distributes (`!(!a || b)` → `a && !b`);
+	 *  - a SINGLE comparison, whose operator simply flips (`!(x < 0)` → `x >= 0` when the NaN gate
+	 *    licenses it, `!(a == b)` → `a != b` always).
+	 *
+	 * ONE worth gate serves both: the result is offered only when it carries strictly fewer unary
+	 * `!` operators than the input (`!(a || b)` → `!a && !b` does not, and answers null). Inside a
+	 * compound, a term the NaN gate refuses to flip stays wrapped, so a PARTIAL simplification is
+	 * still offered whenever the count still falls. For the single-comparison arm that same gate IS
+	 * the NaN licence: a flip is `notDelta` 0 (offered — the outer `!` is shed), a declined flip is
+	 * `notDelta` +1 (refused — the wrap IS the input).
+	 *
+	 * The method NAME keeps "Compound" because the rule id it serves, `simplify-negated-compound`,
+	 * is user- and config-visible; the mismatch with the widened contract is deliberate.
 	 *
 	 * `parent` is the not node's parent — the slot the replacement lands in — so the result can
 	 * be parenthesised exactly when the surrounding operator binds tighter than it (`x && !(a

@@ -14,14 +14,20 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 /**
- * The `simplify-negated-compound` check: a logical-not over a `&&` / `||` compound is
- * flagged `Info` and De Morganed — but ONLY when the rewrite strictly reduces the unary-`!`
- * count, so `!(!a || b)` → `a && !b` is offered and `!(a || b)` → `!a && !b` is not. The
- * rewrite text comes from the same `BooleanLogicSupport` engine the guard family inverts
- * with, so an ordered comparison stays wrapped `!(a < b)` unless both operands resolve to a
- * NaN-free type — which now includes a method call's return type resolved through its
- * receiver chain. Gates: a comment in the span, a `#if` region, a stranded null-safety
- * narrowing, a macro-reification subtree, and a non-logical (`|` / `&`) operand all refuse.
+ * The `simplify-negated-compound` check over its two arms. A logical-not is flagged `Info` and
+ * rewritten when — and only when — the result strictly reduces the unary-`!` count: a `&&` / `||`
+ * compound is De Morganed (`!(!a || b)` → `a && !b` offered, `!(a || b)` → `!a && !b` not), and a
+ * SINGLE comparison has its operator flipped (`!(n < 0)` → `n >= 0`, `!(a == b)` → `a != b`).
+ *
+ * The rewrite text comes from the same `BooleanLogicSupport` engine the guard family inverts with,
+ * so an ordered comparison stays wrapped `!(a < b)` unless both operands resolve to a NaN-free type
+ * — which includes a method call's return type resolved through its receiver chain. On the
+ * single-comparison arm that wrap IS the input, so the worth gate turns "unproven" into an outright
+ * refusal; on the compound arm the same wrap survives inside a still-worthwhile partial result.
+ *
+ * Gates, shared by both arms: a comment in the span, a `#if` region, a stranded null-safety
+ * narrowing, a macro-reification subtree, and any operand outside the seam's whitelist (`|`, `&`,
+ * `is`, a call, another `!`) all refuse.
  */
 class SimplifyNegatedCompoundCheckTest extends Test {
 
@@ -52,12 +58,94 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		Assert.equals(0, violations(wrap('var b = !(x == y || f(x));')).length);
 	}
 
-	public function testSingleTermNotFlagged(): Void {
-		// Not a compound. `!(f < 0.5)` is the NaN wrap, refused by the worth gate (the wrap is all
-		// the negation can emit); `!(!p)` is `double-negation`'s shape and WOULD pay, so it is the
-		// compound-kind gate alone that keeps this rule off it.
+	public function testUnprovenSingleOrderedComparisonNotFlagged(): Void {
+		// The single-comparison arm READS this site now; the WORTH gate is what refuses it. `f` has
+		// no declared type, so the NaN gate declines the flip and the only text the engine can emit
+		// is `!(f < 0.5)` — the input verbatim, `notDelta` +1. Unproven -> refuse, with no partial
+		// form to fall back on: one term leaves nothing else to shed a `!` from.
 		Assert.equals(0, violations(wrap('var b = !(f < 0.5);')).length);
+	}
+
+	public function testSingleNegationNotFlagged(): Void {
+		// `!(!p)` WOULD pay (`notDelta` -1) — it is the seam's operand whitelist, which excludes the
+		// not-kind, that keeps this rule off `double-negation`'s shape and the two disjoint.
 		Assert.equals(0, violations(wrap('var b = !(!p);')).length);
+	}
+
+	public function testNegatedOrderedComparisonFlaggedWhenIntProven(): Void {
+		// `n:Int` proves the comparison NaN-free, so the flip is licensed and costs no `!` while the
+		// outer one is shed. The wording names the arm that accepted the site.
+		final vs: Array<Violation> = violations(wrapTyped('var b = !(n < 0);', 'n:Int'));
+		Assert.equals(1, vs.length);
+		Assert.equals('simplify-negated-compound', vs[0].rule);
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.equals('this negated comparison simplifies to the flipped operator', vs[0].message);
+	}
+
+	public function testFixFlipsSingleOrderedComparison(): Void {
+		Assert.equals(wrapTyped('var b = n >= 0;', 'n:Int'), applyFix(wrapTyped('var b = !(n < 0);', 'n:Int')));
+	}
+
+	public function testNegatedEqualityFlaggedWithoutTypes(): Void {
+		// No type proof needed: IEEE makes `NaN == x` false and `NaN != x` true, so the flipped
+		// operator and the wrap agree for every operand — including an unresolved one.
+		Assert.equals(1, violations(wrap('var b = !(a == b2);')).length);
+	}
+
+	public function testFixFlipsSingleEquality(): Void {
+		Assert.equals(wrap('var b = a != b2;'), applyFix(wrap('var b = !(a == b2);')));
+		Assert.equals(wrap('var b = a == b2;'), applyFix(wrap('var b = !(a != b2);')));
+	}
+
+	public function testFixParenthesisesFlippedComparisonInNotSlot(): Void {
+		// The OUTER `!` wraps a `Not`, which the whitelist refuses, so the walk descends; the INNER
+		// one is accepted and its replacement lands inside the outer negation's own parens. One pass
+		// therefore leaves a `!( … )` that the NEXT pass hands to this same rule (`!(n >= 0)` ->
+		// `n < 0`), which is why the fixpoint loop reports three passes on this shape.
+		Assert.equals(wrapTyped('var b = !(n >= 0);', 'n:Int'), applyFix(wrapTyped('var b = !(!(n < 0));', 'n:Int')));
+	}
+
+	public function testSingleComparisonChainCallReturnTypeProvesFlip(): Void {
+		// The single-term twin of `testChainCallReturnTypeProvesFlip`, and the shape the real tree
+		// carries: resolving `it.text` to `Str` and `Str.indexOf` to `Int` is the whole licence.
+		final model: String = MODEL_STR_ITEM;
+		final source: String = wrapTyped('var b = !(it.text.indexOf(k) < 0);', 'it:Item, k:Str');
+		Assert.equals(wrapTyped('var b = it.text.indexOf(k) >= 0;', 'it:Item, k:Str'), fixedWith(source, model));
+	}
+
+	public function testUnresolvedSingleChainCallNotFlagged(): Void {
+		// The same shape with NO resolution scope: the return type is unknown, the flip is declined,
+		// and on this arm a decline is a refusal — the site is left exactly as written. A refusal
+		// pin, not a proof of the arm: it reads 0 before the widening too, for the other reason.
+		final source: String = wrapTyped('var b = !(it.text.indexOf(k) < 0);', 'it:Item, k:Str');
+		Assert.equals(0, violations(source).length);
+		Assert.equals(source, applyFix(source));
+	}
+
+	public function testIsOperandNotFlagged(): Void {
+		// A refusal pin, not a proof of the arm: `is` is outside the whitelist, and its wrap is the
+		// canonical negation anyway, so the worth gate would refuse it too. Both readings say 0.
+		Assert.equals(0, violations(wrap('var b = !(x is Int);')).length);
+	}
+
+	public function testCallOperandNotFlagged(): Void {
+		// Same kind of pin: a call is opaque to the negation engine, so `!(g(x))` is all it can emit.
+		Assert.equals(0, violations(wrap('var b = !(g(x));')).length);
+	}
+
+	public function testCommentInSingleComparisonSpanNotFlagged(): Void {
+		// A refusal pin for the inherited comment gate — the arm is otherwise a licensed `Int` flip.
+		Assert.equals(0, violations(wrapTyped('var b = !(n < 0 /* why */);', 'n:Int')).length);
+	}
+
+	public function testConditionalCompilationInSingleComparisonNotFlagged(): Void {
+		// A refusal pin for the inherited `#if` gate, same otherwise-licensed shape.
+		Assert.equals(0, violations(wrapTyped('var b = !(n < #if js 0 #else 1 #end);', 'n:Int')).length);
+	}
+
+	public function testSingleComparisonFixIsIdempotent(): Void {
+		final once: String = applyFix(wrapTyped('var b = !(n < 0);', 'n:Int'));
+		Assert.equals(once, applyFix(once));
 	}
 
 	public function testBitwiseOperandNotFlagged(): Void {
