@@ -138,9 +138,11 @@ final class CollapsePass {
 		// anchor: `(paren) / 2 - …`). `chainGluedIfOpens` reads only the flat
 		// branch, so the `CollapseAddProbe` on the discarded brk is moot here —
 		// taking the inverse intercept first would re-`WrapBoundary` the chain
-		// with the original brk and double-indent the opened paren.
+		// with the original brk and double-indent the opened paren. The commit
+		// itself is WIDTH-GATED for a tagged pure-opAddSub chain — see
+		// `commitChainGlue`.
 		final glued: Null<Doc> = chainGluedIfOpens(d, decisions);
-		if (glued != null) return WrapBoundary(commitOpens(glued, decisions));
+		if (glued != null) return commitChainGlue(d, glued, decisions, insideBroken, width);
 
 		// COMPARE-OP-GLUE (leg 2): a never-wrap-marked binary operator Group
 		// `Group(Concat([<head-break add-chain>, Nest(cols, [Line, op, right])]))`
@@ -1262,6 +1264,85 @@ fitems.length > 1
 			glued.push(rewrite(items[i], decisions, false, width));
 		}
 		return Concat(glued);
+	}
+
+	/**
+	 * ω-opadd-op-first: commit the FORWARD chain glue — WIDTH-GATED when the
+	 * chain is a tagged pure-opAddSub chain.
+	 *
+	 * The forward glue exists because an inner expression paren that OPENS
+	 * makes the enclosing chain's own break decision moot: fork
+	 * `collapseChainBreaksAfter` glues the operators so the head rides the
+	 * open-delim line and the tail rides the close-paren line (`a + (` … `) +
+	 * b`). Committing that UNCONDITIONALLY, though, reads the inner paren's
+	 * break as an ORDER on the outer chain — the exact inversion of the
+	 * standing priority that a break inside an inner `()` is the LAST resort
+	 * (T20 → T37). Measured on a 13-operand `+` chain (TM
+	 * `CloudDatabaseMigrationV1ToV2:210`) the unconditional commit CASCADES:
+	 * the glued head runs ~166 columns against a 140 budget, so every later
+	 * paren / call operand crosses at ITS own column and opens too, and the
+	 * whole argument renders as one glue cascade with the operators trailing
+	 * at line ends.
+	 *
+	 * The gate asks the same question the chain emit's own trailing-paren arm
+	 * asks (`BinaryChainEmit`'s `glueProbe`), but about the COMMITTED glue:
+	 * `IfNaturalFirstLineFitsOpenDelim` renders the glued shape only when its
+	 * natural first line both FITS and ENDS at an open delimiter — i.e. only
+	 * when the glue actually buys the `head … (` layout it was introduced for.
+	 * Otherwise the break slot holds the chain's ordinary rewrite
+	 * (`rewriteTaggedAddChain` — the cascade-decided FillLine shape), so the
+	 * chain breaks at its top-level `+`/`-` seams and every operand's own
+	 * delimited group stays intact.
+	 *
+	 * Gates, each excluding a measured regression:
+	 *  - `taggedAddChain(d) != null` — ONLY a pure `+`/`-` chain, since
+	 *    `CollapseAddProbe` is emitted for no other operator class. An opBool /
+	 *    ternary / method chain keeps the unconditional commit: the probe's
+	 *    "ends at an open delim" question is calibrated to the opAddSub glue
+	 *    shape, and no measured site asked for the others. Widening it is a
+	 *    measurement, not a tidy-up.
+	 *  - `!insideBroken` — inside an already-broken outer add-chain both
+	 *    branches derive from the same `flat`
+	 *    (`rewriteTaggedAddChain`'s `insideBroken` leg vs `commitOpens(flat)`),
+	 *    so the probe buys nothing there; the pre-slice commit is kept as the
+	 *    byte-inert choice. Note `commitOpens()` itself (its nested
+	 *    `chainGluedIfOpens` re-entry, ~line 861) stays UNGATED: a tagged chain
+	 *    reached inside an already-committed glue region takes the
+	 *    unconditional path — deliberate scope limit (fork
+	 *    `collapseInnerChainBreaks` semantics, zero measured occurrences).
+	 *
+	 * WIDTH ARGUMENT: bare `width` (= `opt.lineWidth`), NOT `width + 1`. This
+	 * ctor has exactly two producers — here and `BinaryChainEmit`'s
+	 * `glueProbe`, which passes bare `opt.lineWidth` — and they must share one
+	 * calibration, else a glued head landing on the same column would count as
+	 * fitting in one and not the other. The calibration MEASURED through this
+	 * consumer: a glued first line of exactly `maxLineLength` glues, one column
+	 * more breaks. Both sides are pinned at the ±1 boundary by
+	 * `HxOpAddChainOperatorFirstSliceTest`'s two `testGlueBoundary*` fixtures —
+	 * the renderer's own `< n` compare is against a walker result, not against
+	 * a rendered column, so the boundary is a measured fact and not derivable
+	 * from the comparison operator.
+	 *
+	 * NOT WIDENED (measured, T38): forcing the operator break for a 3+-operand
+	 * chain whose LAST operand is a bare paren — `BinaryChainEmit`'s
+	 * `items.length == 2` rung — costs two PASSING fork goldens
+	 * (`wrapping/expression_paren_wrapping_ternary`,
+	 * `wrapping/ternary_collapse_after_opadd`) plus two pinned anyparse shapes
+	 * (`HxChainOuterOperatorWrapSliceTest.testThreeOperandChainKeepsTheGlue`,
+	 * `HxCallGroupRestProbeChainOperandTest.testChainHeadCallStaysFlat`) for
+	 * ONE extra TM site. The trailing-paren glue stays the fallback there.
+	 *
+	 * Grammar-agnostic: reads Doc shape only (the `CollapseAddProbe` tag and
+	 * the two-branch chain signature), never Haxe syntax.
+	 */
+	private static function commitChainGlue(
+		d: Doc, glued: Doc, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>, insideBroken: Bool, width: Int
+	): Doc {
+		final committed: Doc = WrapBoundary(commitOpens(glued, decisions));
+		final tagged: Null<{ marker: Doc, brk: Doc, flat: Doc }> = insideBroken ? null : taggedAddChain(d);
+		return tagged == null
+			? committed
+			: IfNaturalFirstLineFitsOpenDelim(width, rewriteTaggedAddChain(tagged, decisions, insideBroken, width), committed);
 	}
 
 }

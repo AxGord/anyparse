@@ -851,6 +851,10 @@ final class BinaryChainEmit {
 			// fillLine-beforeLast shape only for one gap; 3+-operand chains keep the
 			// glue probe unchanged (no bac488c regression, and
 			// `HxOpAddTrailingParenGlueSliceTest`'s 3-operand glue stays pinned).
+			// Widening MEASURED AND REFUSED by T38: it costs two PASSING fork
+			// goldens + two pinned anyparse shapes for one TM site — full record in
+			// `CollapsePass.commitChainGlue`'s doc (which fixed the 3+-operand
+			// cascade at its real seam, the width-blind forward glue commit).
 			//
 			// UNREACHABLE-ARM PRUNE `contWidth > opt.lineWidth`: the continuation is
 			// `indent + cols + contWidth` columns wide and `indent + cols >= 0`, so a

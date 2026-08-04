@@ -554,6 +554,7 @@ import unit.HxCallParamOuterFirstWrapSliceTest;
 import unit.FixVerifierGroupTest;
 import unit.FixVerifierGroupE2ETest;
 import unit.HxChainOuterOperatorWrapSliceTest;
+import unit.HxOpAddChainOperatorFirstSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -699,6 +700,7 @@ class RunTests {
 		addCase(new HxExprParenDivOpenBoundaryTest());
 		addCase(new HxOpAddParenInnerBreakTest());
 		addCase(new HxOpAddTrailingParenGlueSliceTest());
+		addCase(new HxOpAddChainOperatorFirstSliceTest());
 		addCase(new HxToplevelVarFnSliceTest());
 		addCase(new HxToplevelPackageSliceTest());
 		addCase(new HxToplevelImportUsingSliceTest());
