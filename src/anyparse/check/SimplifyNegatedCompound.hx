@@ -11,9 +11,13 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 /**
- * Flags a logical-not over a boolean COMPOUND — `!(!a || b)`, `!(a == b && !c)` — that De
- * Morgan simplifies to a form carrying strictly fewer `!` operators (`a && !b`,
- * `a != b || c`). `Severity.Info` with an autofix.
+ * Flags a logical-not that simplifies to a form carrying strictly fewer `!` operators.
+ * `Severity.Info` with an autofix. Two shapes reach the rule:
+ *
+ *  - a boolean COMPOUND — `!(!a || b)` → `a && !b`, `!(a == b && !c)` → `a != b || c` — which
+ *    De Morgan distributes;
+ *  - a SINGLE comparison — `!(x < 0)` → `x >= 0`, `!(a == b)` → `a != b` — whose operator
+ *    simply flips.
  *
  * The shape is not only hand-written: it is what the guard family's inverter EMITS when its
  * NaN gate cannot prove an ordered comparison float-free — `negateCondition` then wraps the
@@ -26,8 +30,8 @@ import anyparse.runtime.Span;
  * De Morgan applied blindly makes code WORSE: `!(a || b)` → `!a && !b` trades one negation
  * for two. The rewrite is offered only when the unary-`!` count strictly falls, which
  * `BooleanLogicSupport.simplifyNegatedCompound` decides by counting inside the negation
- * engine itself (`Operand.notDelta`) rather than by a second, drift-prone model here. That
- * one gate produces every wanted case and refuses every unwanted one:
+ * engine itself (`Operand.notDelta`) rather than by a second, drift-prone model here. ONE gate
+ * serves both arms, producing every wanted case and refusing every unwanted one:
  *
  *  - `!(!a || b)` → `a && !b` — one `!` fewer, offered;
  *  - `!(a == b && c != d)` → `a != b || c == d` — the outer `!` is gone, offered;
@@ -35,8 +39,22 @@ import anyparse.runtime.Span;
  *  - `!(!a || f < 0.5)` with `f:Float` → `a && !(f < 0.5)` — a PARTIAL simplification (the
  *    NaN gate keeps the comparison wrapped) that still sheds one `!`, so it is offered.
  *
- * Parentheses never enter the count: the input already carries a pair around the compound,
- * and the output carries at most one — the seam re-adds it only where the surrounding
+ * For the single-comparison arm that same gate is EXACTLY the NaN licence. An ordered
+ * comparison the type resolver cannot prove float-free declines the flip, and the decline costs
+ * `+1` `!` — the only text it could emit is the input verbatim — so the site is refused:
+ * `!(f < 0.5)` with `f:Float` stays put, and `!(n < 0)` with `n:Int` becomes `n >= 0`. `!(a ==
+ * b)` → `a != b` needs no type proof at all: IEEE makes `NaN == x` false and `NaN != x` true,
+ * so the flip and the wrap agree for every operand. There is no partial form on this arm — with
+ * one term there is nothing left to keep wrapped.
+ *
+ * `!(!x)` is `double-negation`'s node and never this rule's: the seam's operand whitelist
+ * excludes the not-kind, even though its `notDelta` of `-1` would pass the worth gate.
+ *
+ * Parentheses never enter the count: the input already carries a pair around the operand,
+ * and the output carries at most one — the seam re-adds it only where the surrounding slot
+ * needs it. A comparison slot needs one around a FLIPPED comparison — `c == !(x < 0)` emits
+ * `c == (x >= 0)`, since that tier is a single left-associative rank and the bare form would
+ * re-associate — and elsewhere the pair appears exactly where the surrounding
  * operator binds tighter than the result.
  *
  * ## Short-circuit and single evaluation
@@ -57,14 +75,16 @@ import anyparse.runtime.Span;
  * siblings, so a rebuilt chain would splice both arms together. A macro-reification subtree
  * (`RefShape.opaqueKinds`) is never entered. Only the OUTERMOST candidate of a nest is
  * flagged; a `!( … )` inside it becomes reachable on the next `--fix` pass, so two edits can
- * never overlap.
+ * never overlap. The single-comparison arm inherits every one of them unchanged — including
+ * `narrowingStranded`, which answers false for a lone comparison and so cannot reject it.
  *
  * ## Grammar-agnostic
  *
- * The not / paren / `&&` / `||` kinds come from `RefShape`, and every rewrite decision —
- * negation, precedence, parenthesisation, the worth count — lives behind
- * `BooleanLogicSupport`. A grammar missing either seam makes the check a no-op. `!!x` and
- * `!(!x)` are NOT this rule's shape: a single-term double negation belongs to
+ * The shape test itself is `BooleanLogicSupport.negatedOperandOf`, and every rewrite decision
+ * — negation, precedence, parenthesisation, the worth count — lives behind the same seam, so
+ * a grammar without it makes the check a no-op. `RefShape` is read only for the opaque kinds
+ * and for the and / or kinds that word the finding and drive the shared narrowing gate. `!!x`
+ * and `!(!x)` are NOT this rule's shape: a single-term double negation belongs to
  * `double-negation`, which reads through parentheses for exactly that reason.
  */
 @:nullSafety(Strict)
@@ -77,7 +97,7 @@ final class SimplifyNegatedCompound implements Check {
 	}
 
 	public function description(): String {
-		return 'a negated boolean compound that De Morgan simplifies to fewer negations';
+		return 'a negated boolean compound or comparison that simplifies to fewer negations';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -97,14 +117,15 @@ final class SimplifyNegatedCompound implements Check {
 				span: c.span,
 				rule: 'simplify-negated-compound',
 				severity: Severity.Info,
-				message: 'this negated compound simplifies by De Morgan'
+				message: c.message
 			});
 		}
 		return violations;
 	}
 
 	/**
-	 * Replace each flagged `!( … )` with the seam's De Morgan form. The candidate set is
+	 * Replace each flagged `!( … )` with the seam's simplified form — De Morgan for a compound,
+	 * the flipped operator for a single comparison. The candidate set is
 	 * recomputed from `source` under the same gates `run` applied, so a finding whose site no
 	 * longer qualifies (an earlier check's edit in the same batch changed it) yields no edit.
 	 */
@@ -129,16 +150,21 @@ final class SimplifyNegatedCompound implements Check {
 		return edits;
 	}
 
-	/** Whether any `!( … )` over a `&&` / `||` compound exists at all — the cheap pre-gate before the type resolver is built. */
+	/**
+	 * Whether any `!( … )` this rule could CONSIDER exists at all — the cheap pre-gate before the
+	 * type resolver is built. The single-comparison arm makes it true for more files than the
+	 * compound arm alone did, which is inherent: that arm's licence IS the type resolver, so the
+	 * resolver has to run before the site can be accepted or refused.
+	 */
 	private static function hasShape(node: QueryNode, s: Seams): Bool {
 		if (s.opaqueKinds.contains(node.kind)) return false;
-		if (compoundOf(node, s) != null) return true;
+		if (s.support.negatedOperandOf(node) != null) return true;
 		for (c in node.children) if (hasShape(c, s)) return true;
 		return false;
 	}
 
 	/**
-	 * Every accepted rewrite in `node`'s subtree, outermost-first: a `!( … )` whose compound
+	 * Every accepted rewrite in `node`'s subtree, outermost-first: a `!( … )` whose operand
 	 * passes the comment / `#if` / narrowing gates and whose seam rewrite pays. Descent STOPS at
 	 * an accepted node, so a nested candidate is left for the next `--fix` pass and no two edits
 	 * can overlap; a REJECTED node is descended into normally, since nothing will consume it.
@@ -160,16 +186,26 @@ final class SimplifyNegatedCompound implements Check {
 	private static function candidateAt(
 		node: QueryNode, parent: Null<QueryNode>, source: String, s: Seams, types: Null<(QueryNode) -> Null<String>>
 	): Null<Candidate> {
-		final compound: Null<QueryNode> = compoundOf(node, s);
+		final operand: Null<QueryNode> = s.support.negatedOperandOf(node);
 		final span: Null<Span> = node.span;
-		if (compound == null || span == null) return null;
+		if (operand == null || span == null) return null;
 		// The engine rebuilds the operator glue between operands, so a comment inside the span
 		// would be dropped; a `#if` region projects as flat siblings, so a rebuilt chain would
 		// splice both arms together. Both refuse rather than emit a lossy rewrite.
 		if (CheckScan.hasCommentMarker(source, span.from, span.to) || hasConditionalRegion(node)) return null;
-		if (CheckScan.narrowingStranded(compound, s.negation)) return null;
+		// Verified no-op for a single comparison: `narrowingStranded` returns false immediately for
+		// any kind that is neither the and-kind nor the or-kind. The gate is inherited unchanged by
+		// the new arm rather than being N/A by omission.
+		if (CheckScan.narrowingStranded(operand, s.negation)) return null;
 		final text: Null<String> = s.support.simplifyNegatedCompound(node, parent, source, types);
-		return text == null ? null : { span: span, text: text };
+		return text == null ? null : { span: span, text: text, message: messageFor(operand, s) };
+	}
+
+	/** Which arm accepted the site, as the finding's wording — the compound text is pinned by a test. */
+	private static function messageFor(operand: QueryNode, s: Seams): String {
+		return operand.kind == s.negation.andKind || operand.kind == s.negation.orKind
+			? 'this negated compound simplifies by De Morgan'
+			: 'this negated comparison simplifies to the flipped operator';
 	}
 
 	/** Whether a `#if … #end` region sits anywhere in `node` — block, expression or mid-expression splice alike. */
@@ -180,30 +216,15 @@ final class SimplifyNegatedCompound implements Check {
 	}
 
 	/**
-	 * The `&&` / `||` compound `node` negates — parentheses unwrapped — or null when `node` is
-	 * not a logical-not or its operand is anything else. Structural only: the rewrite itself is
-	 * the seam's, this just recognises the shape the seam accepts.
+	 * Bundle the opaque-kind list + the boolean-logic seam. The shape test now lives entirely
+	 * behind that seam (`negatedOperandOf`), so a missing `booleanLogicSupport` is the ONLY thing
+	 * that makes the check a no-op; the and / or kinds still come from `RefShape`, but only to
+	 * word the finding and to run the shared narrowing gate.
 	 */
-	private static function compoundOf(node: QueryNode, s: Seams): Null<QueryNode> {
-		if (node.kind != s.notKind || node.children.length != 1) return null;
-		var inner: QueryNode = node.children[0];
-		while (inner.kind == s.parenKind && inner.children.length == 1) inner = inner.children[0];
-		return inner.kind == s.andKind || inner.kind == s.orKind ? inner : null;
-	}
-
-	/** Bundle the `RefShape` kinds + the boolean-logic seam, or null when the grammar lacks one (the check is then a no-op). */
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
-		final notKind: Null<String> = shape.notKind;
-		final parenKind: Null<String> = shape.parenKind;
-		final andKind: Null<String> = shape.logicalAndKind;
-		final orKind: Null<String> = shape.logicalOrKind;
 		final support: Null<BooleanLogicSupport> = plugin.booleanLogicSupport();
-		return notKind == null || parenKind == null || andKind == null || orKind == null || support == null ? null : {
-			notKind: notKind,
-			parenKind: parenKind,
-			andKind: andKind,
-			orKind: orKind,
+		return support == null ? null : {
 			opaqueKinds: shape.opaqueKinds ?? [],
 			negation: CheckScan.negationSeams(shape),
 			support: support
@@ -212,18 +233,15 @@ final class SimplifyNegatedCompound implements Check {
 
 }
 
-/** One accepted rewrite: the `!( … )` node's span and the source replacing it. */
+/** One accepted rewrite: the `!( … )` node's span, the source replacing it, and the arm that accepted it. */
 private typedef Candidate = {
 	final span: Span;
 	final text: String;
+	final message: String;
 };
 
 /** The resolved seams `SimplifyNegatedCompound` reads in both `run` and `fix`. */
 private typedef Seams = {
-	final notKind: String;
-	final parenKind: String;
-	final andKind: String;
-	final orKind: String;
 	final opaqueKinds: Array<String>;
 	final negation: NegationSeams;
 	final support: BooleanLogicSupport;

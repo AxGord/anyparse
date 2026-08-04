@@ -30,9 +30,10 @@ import anyparse.runtime.Span;
  * `!!x` that exists only as reified macro source is generated code, not authored style, and
  * is left alone.
  *
- * A not over a `&&` / `||` COMPOUND (`!(!a || b)`) is a different rewrite — De Morgan, with
- * a worth gate — and belongs to `simplify-negated-compound`; the two shapes are disjoint, so
- * neither ever claims the other's node.
+ * A not over a `&&` / `||` COMPOUND (`!(!a || b)`), or over a single COMPARISON (`!(x < 0)`),
+ * is a different rewrite — De Morgan or an operator flip, both behind a worth gate — and
+ * belongs to `simplify-negated-compound`. That rule's operand whitelist excludes the not-kind
+ * outright, so the two shapes stay disjoint and neither ever claims the other's node.
  */
 @:nullSafety(Strict)
 final class DoubleNegation implements Check {

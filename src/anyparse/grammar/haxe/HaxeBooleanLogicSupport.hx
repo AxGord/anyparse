@@ -24,6 +24,14 @@ import anyparse.runtime.Span;
  * which removes the one case they differ in and lets the flip through. `==` /
  * `!=` flip either way (NaN-equivalent).
  *
+ * `simplifyNegatedCompound` runs that same engine over a `!( … )` node and offers the
+ * result only when the unary-`!` count strictly falls. Two operand shapes reach it —
+ * `negatedOperandOf` is the single test for both: a `&&` / `||` compound, which De Morgan
+ * distributes (`!(!a || b)` -> `a && !b`), and a lone comparison, whose operator flips
+ * (`!(x < 0)` -> `x >= 0` where the NaN gate licenses it, `!(a == b)` -> `a != b` always).
+ * The one worth gate is what implements the NaN licence for the second arm: a flip costs no
+ * `!`, a declined flip costs one, and the wrap it would emit is the input verbatim.
+ *
  * The ternary / guard-chain reductions above flip ordered comparisons
  * unconditionally, as before; their only other visible effect is that a
  * `!(compound)` condition sheds redundant parens (the `Not` case unwraps a single
@@ -52,6 +60,19 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	 * would not preserve.
 	 */
 	private static final NAN_FREE_TYPES: Array<String> = ['Int', 'UInt', 'String'];
+
+	/**
+	 * The operand families `simplifyNegatedCompound` PAYS for: the `&&` / `||` compounds De Morgan
+	 * distributes, and the six comparisons whose operator flips. A POSITIVE list, deliberately not
+	 * "anything the worth gate accepts". TWO kinds the worth gate would let through are excluded
+	 * here by name: `Not`, because `!(!x)` (`notDelta` -1) is `double-negation`'s shape and the two
+	 * rules must stay disjoint, and `BoolLit`, because `!(true)` negates to `false` at `notDelta` 0
+	 * and is `constant-condition`'s territory, not a De Morgan simplification. Everything else (a
+	 * call, `is`, `??`, a bitwise operator, a bare identifier) the worth gate refuses too, so the
+	 * list buys the guarantee that a FUTURE kind cannot leak in the day its `notDelta` happens to
+	 * reach zero.
+	 */
+	private static final NEGATABLE_OPERAND_KINDS: Array<String> = ['Or', 'And', 'Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq'];
 
 	public function new() {}
 
@@ -161,18 +182,21 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	}
 
 	/**
-	 * The De Morgan simplification of `!(a || b)` / `!(a && b)`, or null when `not` is not a
-	 * logical-not over a `&&` / `||` compound, or when the rewrite would not PAY. The text is
-	 * `negate`'s — the same NaN-safe engine `negateCondition` exposes, so an ordered comparison
-	 * that `typeNominalOf` cannot prove NaN-free stays wrapped `!(a < b)` inside the result
-	 * rather than flipping.
+	 * The simplification of `!( … )` over either arm `negatedOperandOf` accepts — a `&&` / `||`
+	 * compound De Morgan distributes (`!(!a || b)` → `a && !b`), or a single comparison whose
+	 * operator flips (`!(x < 0)` → `x >= 0`, `!(a == b)` → `a != b`) — or null when `not` is
+	 * neither shape, or when the rewrite would not PAY. The text is `negate`'s — the same NaN-safe
+	 * engine `negateCondition` exposes, so an ordered comparison that `typeNominalOf` cannot prove
+	 * NaN-free stays wrapped `!(a < b)` rather than flipping.
 	 *
 	 * The worth gate is `Operand.notDelta <= 0`: the rewrite drops the one outer `!` and buys
 	 * `notDelta` further ones, so it is offered exactly when the unary-`!` count strictly falls.
-	 * That admits the PARTIAL shapes (`!(!a || f < 0.5)` → `a && !(f < 0.5)`, one `!` fewer) and
+	 * That admits the PARTIAL compounds (`!(!a || f < 0.5)` → `a && !(f < 0.5)`, one `!` fewer) and
 	 * refuses the pure distributions (`!(a || b)` → `!a && !b`, one more) with no separate rule.
-	 * Parentheses are never a cost: the input already carried a pair around the compound, and
-	 * the output carries at most one.
+	 * For the single-comparison arm it IS the NaN licence with no extra code: a flip is `notDelta`
+	 * 0 and is offered, a `declinedFlip` is `notDelta` +1 and is refused — the wrap it would emit
+	 * is byte-for-byte the input. Parentheses are never a cost: the input already carried a pair
+	 * around the operand, and the output carries at most one.
 	 *
 	 * `parent` picks the parenthesisation: `slotPrecedence` answers what the surrounding slot
 	 * requires, and `wrap` adds a pair only when the result binds looser than that. A null
@@ -182,7 +206,7 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	public function simplifyNegatedCompound(
 		not: QueryNode, parent: Null<QueryNode>, source: String, ?typeNominalOf: (QueryNode) -> Null<String>
 	): Null<String> {
-		final inner: Null<QueryNode> = compoundOperandOf(not);
+		final inner: Null<QueryNode> = negatedOperandOf(not);
 		if (inner == null) return null;
 		final negated: Operand = negate(inner, source, false, typeNominalOf);
 		if (negated.notDelta > 0) return null;
@@ -191,15 +215,17 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	}
 
 	/**
-	 * The `&&` / `||` compound a `!( … )` node negates — parentheses unwrapped — or null when
-	 * `not` is not a logical-not, or its operand is anything else (a call, a comparison, another
-	 * not: `!!x` and `!(!x)` belong to `double-negation`, not here).
+	 * The operand a `!( … )` node negates — parentheses unwrapped — when it is one of the families
+	 * `NEGATABLE_OPERAND_KINDS` lists, or null when `not` is not a logical-not or its operand is
+	 * anything else (a call, `is`, `??`, a bitwise operator, another not: `!!x` and `!(!x)` belong
+	 * to `double-negation`, not here). Shape only — whether the rewrite pays is
+	 * `simplifyNegatedCompound`'s worth gate.
 	 */
-	private static function compoundOperandOf(not: QueryNode): Null<QueryNode> {
+	public function negatedOperandOf(not: QueryNode): Null<QueryNode> {
 		if (not.kind != 'Not' || not.children.length != 1) return null;
 		var inner: QueryNode = not.children[0];
 		while (inner.kind == 'ParenExpr' && inner.children.length == 1) inner = inner.children[0];
-		return inner.kind == 'Or' || inner.kind == 'And' ? inner : null;
+		return NEGATABLE_OPERAND_KINDS.contains(inner.kind) ? inner : null;
 	}
 
 	/**
@@ -214,12 +240,24 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	 * kind imposes nothing, and `PREC_ATOM` would parenthesise every condition and argument).
 	 * The assignment family is absent for the same reason as a statement slot — its right-hand
 	 * side takes a whole expression.
+	 *
+	 * Nor is the answer always the parent's OWN precedence. `wrap` parenthesises on
+	 * `result.prec < slot`, which admits a result of exactly the slot's rank — sound only where
+	 * the parent operator is associative (`&&` / `||`), and wrong for the comparison tier, whose
+	 * members share one left-associative rank while meaning nothing like each other. Those slots
+	 * therefore answer one tier up; see the case itself.
 	 */
 	private static function slotPrecedence(parentKind: String): Null<Precedence> {
 		return switch parentKind {
-			case 'Not', 'Neg': PREC_ATOM;
-			case 'Or', 'And', 'NullCoal', 'Ternary', 'Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq', 'Is', 'In', 'BitOr', 'BitXor', 'BitAnd',
-				'Shl', 'Shr', 'UShr', 'Add', 'Sub', 'Mul', 'Div', 'Mod', 'Interval', 'CastExpr':
+			case 'Not', 'Neg':
+				PREC_ATOM;
+			// The comparison tier is left-associative but NOT associative in meaning, so a result at
+			// PREC_CMP may not sit bare in either of its slots: `c == (n >= 0)` de-parenthesised is
+			// `(c == n) >= 0`. Demanding the next tier up parenthesises exactly the PREC_CMP results
+			// and nothing else — anything binding tighter already sits at PREC_BINARY or above.
+			case 'Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq': PREC_BINARY;
+			case 'Or', 'And', 'NullCoal', 'Ternary', 'Is', 'In', 'BitOr', 'BitXor', 'BitAnd', 'Shl', 'Shr', 'UShr', 'Add', 'Sub', 'Mul',
+				'Div', 'Mod', 'Interval', 'CastExpr':
 				precedence(parentKind);
 			case _: null;
 		};
