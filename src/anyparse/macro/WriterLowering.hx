@@ -307,7 +307,8 @@ class WriterLowering {
 		final cwf: String = callWrapField;
 		final callRulesExpr: Expr = optFieldAccess(cwf);
 		final argsListExpr: Expr = macro anyparse.format.wrap.WrapList.emit(
-			$v{callOpen}, $v{callClose}, $v{callSep}, _argDocs, opt, _de(), _de(), false, $callRulesExpr, $callTcExpr
+			$v{callOpen}, $v{callClose}, $v{callSep}, _argDocs, opt, _de(), _de(), false, $callRulesExpr,
+			{ appendTrailingComma: $callTcExpr }
 		);
 		final chainRulesExpr: Expr = optFieldAccess(chainField);
 		final writeIdent: Expr = {
@@ -2037,7 +2038,11 @@ class WriterLowering {
 			final compactContExpr: Expr = macro $v{bodyAware};
 			macro anyparse.format.wrap.WrapList.emit(
 				$v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, $rulesExpr,
-				$tcExpr, _de(), _de(), false, null, null, $compactContExpr, $v{groupRestProbe}
+				{
+					appendTrailingComma: $tcExpr,
+					compactContinuation: $compactContExpr,
+					groupRestProbe: $v{groupRestProbe}
+				}
 			);
 		} else if (useFill) {
 			macro fillList(
@@ -5429,7 +5434,8 @@ class WriterLowering {
 			final listCall: Expr = if (wrapRulesField != null) {
 				final rulesExpr: Expr = optFieldAccess(wrapRulesField);
 				macro anyparse.format.wrap.WrapList.emit(
-					$v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, false, $rulesExpr, $tcExpr
+					$v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, false, $rulesExpr,
+					{ appendTrailingComma: $tcExpr }
 				);
 			} else {
 				macro sepList(
@@ -6030,8 +6036,13 @@ class WriterLowering {
 			// sep-list ctor passes a constant `false` -- byte-inert.
 			final groupRestProbeExpr: Expr = c.branch.fmtHasFlag('groupRestProbe') ? (macro !opt._suppressCallRestProbe) : (macro false);
 			final wrapListExpr: Expr = macro anyparse.format.wrap.WrapList.emit(
-				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $callInsideOpen, $callInsideClose, false, $rulesExpr, $tcExpr,
-				_de(), _de(), false, null, null, false, $groupRestProbeExpr, _sepBeforeFlags, false, null, $keepCloseGluedExpr
+				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $callInsideOpen, $callInsideClose, false, $rulesExpr,
+				{
+					appendTrailingComma: $tcExpr,
+					groupRestProbe: $groupRestProbeExpr,
+					sepBeforeFlags: _sepBeforeFlags,
+					keepCloseGlued: $keepCloseGluedExpr
+				}
 			);
 			if (c.isTriviaStar) {
 				final keepDoc: Expr = lowerPostfixKeepDoc(c);
@@ -9989,9 +10000,11 @@ class WriterLowering {
 					_ml = $linkMoreAccess;
 				}
 				anyparse.format.wrap.WrapList.emit(
-					'', '', ',', _items, opt, anyparse.core.Doc.Empty, anyparse.core.Doc.Empty, false, $knobAccess, false,
-					anyparse.core.Doc.Empty, anyparse.core.Doc.Empty, false, anyparse.core.Doc.Empty, null, false, false, null, false,
-					_breaks
+					'', '', ',', _items, opt, anyparse.core.Doc.Empty, anyparse.core.Doc.Empty, false, $knobAccess,
+					{
+						trailBreak: anyparse.core.Doc.Empty,
+						sourceBreakBefore: _breaks
+					}
 				);
 			} else
 				_headPlusMore;
@@ -15652,9 +15665,20 @@ class WriterLowering {
 				final _effSmlKeep: Bool = _comprehensionFit ? false : _smlKeep;
 				final _wlResult: anyparse.core.Doc = anyparse.format.wrap.WrapList.emit(
 					$v{openText}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideDoc, $closeInsideDoc, false, _effRules,
-					$appendTrailingCommaExpr, $wrapLeadFlatDoc, $wrapLeadBreakDoc, $forceExceedsExpr, $wrapTrailBreakDoc, $forceModeExpr,
-					$compactContExpr, $v{c.groupRestProbe}, _sepBeforeFlags, _effSmlKeep, null, false, $flatTrailingCommaExpr,
-					_comprehensionFit
+					{
+						appendTrailingComma: $appendTrailingCommaExpr,
+						leadFlat: $wrapLeadFlatDoc,
+						leadBreak: $wrapLeadBreakDoc,
+						forceExceeds: $forceExceedsExpr,
+						trailBreak: $wrapTrailBreakDoc,
+						forceMode: $forceModeExpr,
+						compactContinuation: $compactContExpr,
+						groupRestProbe: $v{c.groupRestProbe},
+						sepBeforeFlags: _sepBeforeFlags,
+						sourceMultilineKeep: _effSmlKeep,
+						flatTrailingComma: $flatTrailingCommaExpr,
+						comprehensionFitMeasure: _comprehensionFit
+					}
 				);
 				// ω-comprehension-count idempotence: a `for`/`while` array comprehension
 				// self-lays-out (the writer re-emits a wide one as `[` then a newline then `for…`). The non-
