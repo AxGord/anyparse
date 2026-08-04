@@ -21,7 +21,8 @@ import anyparse.query.CachingGrammarPlugin.LibrarySources;
  * runs through the shared `CheckScan.negateConditionText`, so `==` / `!=` flip
  * (NaN-safe), `!e` strips, `a && b` De Morgans to `!a || !b`, and an ordered
  * comparison stays wrapped `!(a < b)` unless BOTH its operands resolve to a
- * NaN-free type, which flips it (`a <= b`). Gates: a ONE-statement then-branch is
+ * type `<` orders TOTALLY — free of both NaN and `null`, so never `String` — which
+ * flips it (`a <= b`). Gates: a ONE-statement then-branch is
  * `prefer-ternary-return`'s shape and is skipped, a non-terminal then-branch, an
  * `else`, an unbraced then-branch, a statement between the `if` and the tail, a
  * conditional-compilation region, a dropped-glue comment, a comment on the tail
@@ -122,8 +123,9 @@ class GuardReturnCheckTest extends Test {
 		// is not licensed: with a null operand `!(s < k)` is `true` where `s >= k` is `false`. The
 		// engine declines, `negationIsClean` answers false, and the site is not flagged — the
 		// inversion would have had to emit `if (!(s < k)) return false;`, worse than the positive
-		// branch it replaces. `testOrderedFlippedWhenBothOperandsInt` is the same shape over a
-		// licensed nominal and still fires.
+		// branch it replaces. `testOrderedFlippedWhenBothOperandsInt` is the same GUARD shape over a
+		// licensed nominal and still fires; it compares against a LITERAL, so this fixture is also the
+		// only one in the file that asks the resolver to prove BOTH operands from declarations.
 		final source: String =
 			'class C {\n\tfunction f(s:String, k:String):Bool {\n\t\tif (s < k) {\n\t\t\tlog(s);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t}\n}\n';
 		Assert.equals(0, new GuardReturn().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);

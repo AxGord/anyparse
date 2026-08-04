@@ -45,7 +45,8 @@ import anyparse.runtime.Span;
  * `!(f < 0.5)` with `f:Float` — and `!(s < t)` with `s:String`, which Haxe can never prove
  * non-null — stays put, while `!(n < 0)` with `n:Int` becomes `n >= 0`. `!(a ==
  * b)` → `a != b` needs no type proof at all: IEEE makes `NaN == x` false and `NaN != x` true,
- * so the flip and the wrap agree for every operand. There is no partial form on this arm — with
+ * and a `null` operand answers the same both ways, so the flip and the wrap agree for every
+ * operand — neither breaker reaches equality. There is no partial form on this arm — with
  * one term there is nothing left to keep wrapped.
  *
  * `!(!x)` is `double-negation`'s node and never this rule's: the seam's operand whitelist

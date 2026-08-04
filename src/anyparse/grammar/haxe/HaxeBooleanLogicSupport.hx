@@ -59,10 +59,13 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 
 	/**
 	 * Declared type nominals whose value set `<` orders TOTALLY, so `!(a < b)` and `a >= b`
-	 * agree for them. TWO values break that equivalence, and a nominal earns its place here only
-	 * by excluding BOTH: a NaN, which inhabits `Float` alone, and a `null` — with a null operand
-	 * `!(a < b)` is true where `a >= b` is false, for all four ordered operators (measured on
-	 * `--interp`, `js` and `neko`, Haxe 4.3.7).
+	 * agree for them. The criterion is the NAME, not a value blacklist: `<` must BE the built-in
+	 * total order on the type. Among the built-in scalar comparisons two values break it — a NaN,
+	 * which inhabits `Float` alone, and a `null`: with a null operand `!(a < b)` is true where
+	 * `a >= b` is false, for all four ordered operators (measured on `--interp`, `js` and `neko`,
+	 * Haxe 4.3.7). Ruling those two out is NOT sufficient on its own, so do not admit a nominal on
+	 * that test alone: a Haxe abstract may define `@:op(A < B)` and `@:op(A >= B)` independently,
+	 * and a non-complementary pair disagrees with no NaN and no null in sight.
 	 *
 	 * `String` is deliberately NOT here, and its absence is what the list's name now guards. A
 	 * `String` carries no NaN, which is why it once WAS here — but Haxe has no non-nullable
@@ -320,8 +323,9 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	 * A non-decomposable operand becomes `!x` (`!(x)` when not atomic).
 	 *
 	 * `flipOrdered` governs the ordered comparisons `< <= > >=`: `true` flips them
-	 * (`!(a < b)` -> `a >= b`), sound over the reals and the behaviour the ternary /
-	 * guard-chain callers keep; `false` wraps them `!(a < b)` verbatim UNLESS `types`
+	 * (`!(a < b)` -> `a >= b`) UNCONDITIONALLY — sound over the reals, but not over a NaN or a
+	 * `null` operand; it is the behaviour the ternary / guard-chain callers keep, and they pass no
+	 * `types`; `false` wraps them `!(a < b)` verbatim UNLESS `types`
 	 * proves both operands totally ordered by `<` (`totallyOrdered`) — the wrap is the
 	 * only sound negation for an operand that may be a NaN or a `null`, since
 	 * `!(a < b)` and `a >= b` differ for both. `==` / `!=` flip either way (a flip is
@@ -424,9 +428,9 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 
 	/**
 	 * Whether an ordered comparison's operands are BOTH provably drawn from a value set `<`
-	 * orders TOTALLY, so flipping its operator preserves meaning. Exactly two values make
-	 * `!(a < b)` and `a >= b` disagree — a NaN, which inhabits `Float` alone, and a `null` —
-	 * so proving each side can be neither licenses the flip. One unresolved operand is enough
+	 * orders TOTALLY, so flipping its operator preserves meaning. The proof is a nominal from
+	 * `TOTAL_ORDER_TYPES` (or a literal kind), never an ad-hoc "has no NaN and no null" test —
+	 * see that list for why the weaker test is not sufficient. One unresolved operand is enough
 	 * to refuse: unproven means keep the wrap.
 	 */
 	private static function totallyOrdered(node: QueryNode, types: Null<(QueryNode) -> Null<String>>): Bool {
@@ -438,7 +442,8 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	 * Whether one comparison operand provably holds neither a NaN nor a `null`: a literal of a
 	 * totally-ordered kind, or a value whose declared type `types` resolves to a nominal in
 	 * `TOTAL_ORDER_TYPES`. Parentheses and a unary minus are transparent — `-(x)` is a `Float`
-	 * exactly when `x` is, and is `null` exactly when `x` is.
+	 * exactly when `x` is, and cannot introduce a `null` that `x` did not already carry (the only
+	 * direction the licence relies on).
 	 */
 	private static function totallyOrderedOperand(node: QueryNode, types: Null<(QueryNode) -> Null<String>>): Bool {
 		var n: QueryNode = node;

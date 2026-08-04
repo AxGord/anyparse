@@ -52,12 +52,12 @@ interface BooleanLogicSupport {
 	 * `CheckScan.negateConditionText` falls back to a verbatim wrap when the
 	 * condition span holds a comment marker.
 	 *
-	 * `typeNominalOf` lifts that wrap where neither trap value can arise: it answers
+	 * `typeNominalOf` lifts that wrap where the comparison is provably total: it answers
 	 * an operand node's declared type nominal (null = unknown), and an ordered
 	 * comparison whose BOTH operands are provably drawn from a value set the
 	 * comparison orders TOTALLY flips like `==` / `!=` does. Which nominals qualify is
 	 * the grammar engine's call — for Haxe it is `Int` / `UInt`, and notably NOT
-	 * `String`, whose values are always nullable. Omit the probe — or return null —
+	 * `String`, since Haxe has no non-nullable string type. Omit the probe — or return null —
 	 * and every ordered comparison keeps the verbatim wrap.
 	 */
 	public function negateCondition(cond: QueryNode, source: String, ?typeNominalOf: (QueryNode) -> Null<String>): String;

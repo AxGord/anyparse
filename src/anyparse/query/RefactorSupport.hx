@@ -2173,7 +2173,7 @@ final class RefactorSupport {
 	 * also consumed by gates whose safe direction is the OTHER way round (`map-keys-lookup` and
 	 * `prefer-static-extension` act on a resolved nominal and refuse an unresolved one), and
 	 * widening a shared predicate under them is the trap this project has paid for before. The
-	 * added capacity is opt-in per call site; today the NaN gate behind
+	 * added capacity is opt-in per call site; today the ordered-comparison gate behind
 	 * `CheckScan.typeNominalResolver` is the one that takes it, where more proof can only turn a
 	 * conservative wrap into a licensed flip.
 	 *
