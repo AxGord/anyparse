@@ -159,6 +159,18 @@ class ExtractVarSliceTest extends Test {
 		assertRefused(source, 3, 10, 'x');
 	}
 
+	/**
+	 * Refuse a name that collides with the VALUE binder of a key-value `for`. The loop node names
+	 * only the KEY, so before that binder was a node of its own the collision was invisible and the
+	 * hoisted `final v = …` silently captured every `v` the loop body meant to read.
+	 */
+	public function testRefuseCollidesKeyValueLoopValueBinder(): Void {
+		final source: String = 'class C {\n\tfunction f(a:Int, b:Int, m:Map<Int, Int>):Int {\n\t\tfor (k => v in m) trace(k + v);\n'
+			+ '\t\treturn a + b;\n' + '\t}\n' + '}';
+		// Line 4 col 10 — the `a`; name `v` already names the loop's value binder.
+		assertRefused(source, 4, 10, 'v');
+	}
+
 	private function assertExtract(source: String, line: Int, col: Int, name: String, expected: String): Void {
 		final result: ExtractResult = extractOf(source, line, col, name);
 		switch result {

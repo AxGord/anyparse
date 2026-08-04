@@ -16,9 +16,9 @@ using StringTools;
  * binding scoped to the loop and the outer declaration is dead in every compile.
  *
  * The check's occurrence test is a raw text scan, so those occurrences used to read
- * as references and the declaration stayed silent. It now re-runs the SAME scan with
- * the regions a self-scoped binding owns (`RefShape.selfScopeDeclKinds` — the `for`
- * iterator, the `catch` exception) excluded, and flags the declaration when nothing
+ * as references and the declaration stayed silent. It now re-runs the SAME scan with the regions a self-scoped
+ * binding owns (`RefShape.selfScopeDeclKinds` — the `for` iterator, the `catch` exception, plus a key-value
+ * loop's VALUE binder via `RefShape.iterationValueBinderKinds`) excluded, and flags the declaration when nothing
  * textual survives outside them.
  *
  * The rest of these fixtures pin the refusals that bound the class: a post-loop read
@@ -136,15 +136,56 @@ class UnusedLocalShadowTest extends Test {
 	}
 
 	/**
-	 * A documented miss, pinned so a future widening is a deliberate act: `for (k => item in
-	 * m)` surfaces only the KEY on the loop node, so the value binder's shadow is invisible
-	 * to a model keyed on the construct's name and the declaration stays silent.
+	 * The VALUE binder of `for (k => item in m)` shadows the declaration exactly as a plain
+	 * iterator does. It was a documented MISS while the loop node carried only the KEY name;
+	 * the binder is a node of its own now (`RefShape.iterationValueBinderKinds`), so the
+	 * region model reaches it through the same self-scoped path.
+	 *
+	 * Both spacings, because what the model reads is the binder's SPAN: a tight `k=>item`
+	 * puts it at different offsets than a padded `k => item`, and the region cut still has to
+	 * land on the binder token.
 	 */
-	public function testKeyValueValueBinderNotFlagged(): Void {
+	public function testKeyValueValueBinderShadowFlagged(): Void {
+		for (header in ['k => item', 'k=>item']) {
+			final vs: Array<Violation> = violations(
+				'class C {\n\tfunction f(m:Map<String, String>) {\n\t\tvar item:String;\n\t\tfor ($header in m) trace(k + item);\n\t}\n}'
+			);
+			Assert.equals(1, vs.length, 'header "$header"');
+			Assert.isTrue(vs[0].message.contains("'item'"), 'header "$header"');
+		}
+	}
+
+	/** The autofix deletes the declaration the key-value VALUE binder shadowed, loop untouched. */
+	public function testKeyValueValueBinderShadowFixDeletesDeclaration(): Void {
+		final src: String =
+			'class C {\n\tfunction f(m:Map<String, String>) {\n\t\tvar item:String;\n\t\tfor (k => item in m) trace(k + item);\n\t}\n}';
+		Assert.equals('class C {\n\tfunction f(m:Map<String, String>) {\n\t\tfor (k => item in m) trace(k + item);\n\t}\n}', applyFix(src));
+	}
+
+	/**
+	 * The KEY binder still shadows through the loop node's own name — the arm the value
+	 * binder was ADDED to, not replaced in. Without this the value-binder test alone would
+	 * pass over a model that had dropped the key.
+	 */
+	public function testKeyValueKeyBinderShadowFlagged(): Void {
+		Assert.equals(
+			1,
+			violations(
+				'class C {\n\tfunction f(m:Map<String, String>) {\n\t\tvar item:String;\n\t\tfor (item => v in m) trace(item + v);\n\t}\n}'
+			).length
+		);
+	}
+
+	/**
+	 * A read of the OUTER binding after the loop keeps the declaration live even when the
+	 * value binder shares its name — the excluded region is the binder token plus the body,
+	 * never the whole enclosing scope.
+	 */
+	public function testKeyValueValueBinderPostLoopReadKeepsDeclaration(): Void {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(m:Map<String, String>) {\n\t\tvar item:String;\n\t\tfor (k => item in m) trace(k + item);\n\t}\n}'
+				'class C {\n\tfunction f(m:Map<String, String>) {\n\t\tvar item:String = "a";\n\t\tfor (k => item in m) trace(k + item);\n\t\ttrace(item);\n\t}\n}'
 			).length
 		);
 	}

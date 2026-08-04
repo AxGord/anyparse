@@ -145,6 +145,16 @@ private typedef PathRoot = {
 	final bindingFrom: Null<Int>;
 };
 /**
+ * Which binder of an iteration node a binding offset landed on: the loop node itself (its own
+ * key-or-element binder, sharing the loop's start offset) or the VALUE binder it carries as a
+ * separate child in a key-value iteration. The two type DIFFERENTLY, so the answer cannot be a
+ * bare node — see `RefactorSupport.loopBinderAt`.
+ */
+private typedef LoopBinderHit = {
+	final loop: QueryNode;
+	final isValueBinder: Bool;
+};
+/**
  * The declaration side of a null-guarded constructor-default fold: the field name and
  * its declaration span, the `(default, null)` property head to drop (null for a plain
  * `var`), the default expression, and the ` = <default>` region the fold deletes.
@@ -1847,55 +1857,6 @@ final class RefactorSupport {
 		return result;
 	}
 
-	/**
-	 * The HEADER span of a self-scoped binder node — everything from its own start up to
-	 * its first child, i.e. `for (k => v in ` / `catch (e:T) ` — or null when either span
-	 * is missing. The header is the only place a binder the projection DROPS can still be
-	 * seen: a key-value `for (k => v in m)` surfaces just the KEY on the node, so the
-	 * VALUE binding exists in the source text and nowhere in the tree. Every shadow scan
-	 * that must not miss a binding reads it through `binderHeaderMentions` /
-	 * `binderHeaderIdents`.
-	 */
-	public static function binderHeaderSpan(node: QueryNode): Null<Span> {
-		final span: Null<Span> = node.span;
-		if (span == null || node.children.length == 0) return null;
-		final firstSpan: Null<Span> = node.children[0].span;
-		return firstSpan == null || firstSpan.from < span.from ? null : new Span(span.from, firstSpan.from);
-	}
-
-	/**
-	 * Whether the header of binder node `node` mentions `name` as an identifier token.
-	 * TRUE when the header cannot be located: an unreadable header is treated as binding
-	 * everything, the conservative answer for every caller (one more qualifier, one fewer
-	 * rewrite — never a reference re-bound to a binding nobody saw).
-	 */
-	public static function binderHeaderMentions(source: String, node: QueryNode, name: String): Bool {
-		final header: Null<Span> = binderHeaderSpan(node);
-		return header == null || identTokenOffset(source, header, name) >= 0;
-	}
-
-	/**
-	 * Every identifier token in binder node `node`'s header — the name-collecting form of
-	 * `binderHeaderMentions`, for a scan that gathers bound names instead of testing one.
-	 * Keywords and type names in the header come along; a caller collecting SHADOW names
-	 * only ever loses a report to them, never a soundness gate.
-	 */
-	public static function binderHeaderIdents(source: String, node: QueryNode): Array<String> {
-		final header: Null<Span> = binderHeaderSpan(node);
-		if (header == null) return [];
-		final out: Array<String> = [];
-		var i: Int = header.from;
-		while (i < header.to) {
-			if (!isIdentStartChar(StringTools.fastCodeAt(source, i))) {
-				i++;
-				continue;
-			}
-			final from: Int = i;
-			while (i < header.to && isIdentChar(StringTools.fastCodeAt(source, i))) i++;
-			out.push(source.substring(from, i));
-		}
-		return out;
-	}
 
 	/**
 	 * Every name a case PATTERN binds in `node`'s subtree: each name inside a
@@ -2348,14 +2309,14 @@ final class RefactorSupport {
 	 *    never terminate. The binding offset is pushed for the duration of the recursive call only.
 	 *  - The loop node is found by a kind-FILTERED walk for an exact `span.from` match, not by
 	 *    "first node starting here" — the binding offset is the loop's own start, which several
-	 *    co-starting nodes share.
-	 *  - The KEY-VALUE form is refused outright. `for (k => v in m)` projects as
-	 *    `(ForStmt k (IdentExpr m) …)`: the VALUE binder is dropped entirely, so the node's name is
-	 *    the KEY, and typing it as the element would be plain wrong (for a map it would name the
-	 *    value type; for `for (i => v in arr)` it would name the element where `i` is an `Int`
-	 *    index). The test is a `=>` anywhere in the header text between the loop keyword and the
-	 *    iterable — a `=>` inside a header COMMENT only makes it refuse, which is the safe way to
-	 *    be wrong.
+	 *    co-starting nodes share. A key-value loop's VALUE binder is its own node, so the same
+	 *    walk also matches a binder child's start (`loopBinderAt` reports which of the two hit).
+	 *  - The KEY binder of a key-value loop is refused. `for (k => v in m)` binds `k` to the
+	 *    container's KEY, not to what iteration yields: for a map that is the key type, and for
+	 *    `for (i => v in arr)` it is a plain `Int` index no type parameter of `Array` names at
+	 *    all. `iterationElementTypeParams` answers only the ELEMENT question, so the key binder
+	 *    stays unresolved. Its VALUE binder is the element and resolves normally — the same
+	 *    parameter a single-binder `for (v in m)` reads.
 	 */
 	private static function forBindingElementTypeSource(
 		bindingFrom: Int, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, chain: ChainTypeContext,
@@ -2364,13 +2325,13 @@ final class RefactorSupport {
 		final kinds: Null<Array<String>> = shape.iterationBindingKinds;
 		final elementParams: Null<Map<String, Int>> = shape.iterationElementTypeParams;
 		if (kinds == null || elementParams == null || seen.contains(bindingFrom)) return null;
-		final loop: Null<QueryNode> = nodeStartingAt(root, bindingFrom, kinds);
-		if (loop == null || loop.children.length == 0) return null;
-		final loopSpan: Null<Span> = loop.span;
-		final iterable: QueryNode = loop.children[0];
-		final iterableSpan: Null<Span> = iterable.span;
-		if (loopSpan == null || iterableSpan == null) return null;
-		if (chain.source.substring(loopSpan.from, iterableSpan.from).indexOf('=>') >= 0) return null;
+		final valueBinderKinds: Array<String> = shape.iterationValueBinderKinds ?? [];
+		final hit: Null<LoopBinderHit> = loopBinderAt(root, bindingFrom, kinds, valueBinderKinds);
+		if (hit == null) return null;
+		final loop: QueryNode = hit.loop;
+		if (!hit.isValueBinder && hasIterationValueBinder(loop, valueBinderKinds)) return null;
+		final iterable: Null<QueryNode> = iterationIterable(loop, valueBinderKinds);
+		if (iterable == null) return null;
 		seen.push(bindingFrom);
 		final iterableSource: Null<String> = valueTypeSourceDeep(iterable, root, shape, declaredTypes, chain, index, file, seen);
 		seen.pop();
@@ -2384,8 +2345,10 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * The first node in pre-order whose kind is one of `kinds` AND whose span starts exactly at
-	 * `from`, or null.
+	 * The iteration binder starting at `from` in pre-order: the `kinds` loop node itself (its own
+	 * key-or-element binder, which shares the loop's start offset) or a `valueBinderKinds` child of
+	 * one (a key-value loop's VALUE binder, which starts at its own identifier). Null when neither
+	 * matches.
 	 *
 	 * A spanned subtree that does not CONTAIN `from` is pruned rather than descended: the offset is
 	 * a node's own start, so every node starting there is an ancestor-chain descendant of every
@@ -2394,15 +2357,64 @@ final class RefactorSupport {
 	 * just a `for` binder. A node with NO span states nothing about containment and is descended
 	 * into normally.
 	 */
-	private static function nodeStartingAt(node: QueryNode, from: Int, kinds: Array<String>): Null<QueryNode> {
+	private static function loopBinderAt(
+		node: QueryNode, from: Int, kinds: Array<String>, valueBinderKinds: Array<String>
+	): Null<LoopBinderHit> {
 		final span: Null<Span> = node.span;
 		if (span != null && (from < span.from || from >= span.to)) return null;
-		if (span != null && span.from == from && kinds.contains(node.kind)) return node;
+		if (kinds.contains(node.kind)) {
+			if (span != null && span.from == from) return { loop: node, isValueBinder: false };
+			for (child in node.children) if (valueBinderKinds.contains(child.kind)) {
+				final binderSpan: Null<Span> = child.span;
+				if (binderSpan != null && binderSpan.from == from) return { loop: node, isValueBinder: true };
+			}
+		}
 		for (child in node.children) {
-			final hit: Null<QueryNode> = nodeStartingAt(child, from, kinds);
+			final hit: Null<LoopBinderHit> = loopBinderAt(child, from, kinds, valueBinderKinds);
 			if (hit != null) return hit;
 		}
 		return null;
+	}
+
+	/**
+	 * The VALUE binder an iteration node carries, or null for a single-binder loop — the `v` node
+	 * of `for (k => v in m)`, whose kinds the grammar publishes as
+	 * `RefShape.iterationValueBinderKinds`.
+	 *
+	 * Public, with its three siblings below, because the binder is an EXTRA child ahead of the
+	 * iterable, so every consumer reading a loop's operands positionally faces the same question.
+	 * Four of them answered it with a private copy in the commit that introduced the binder — one
+	 * question, four implementations, which is the drift the binder node exists to end.
+	 *
+	 * The kinds still arrive as a parameter, so a caller passing `[]` gets the pre-binder
+	 * `children[0]` behaviour back with no compile error. Read them from
+	 * `RefShape.iterationValueBinderKinds`.
+	 */
+	public static function iterationValueBinder(loop: QueryNode, valueBinderKinds: Array<String>): Null<QueryNode> {
+		return loop.children.find(c -> valueBinderKinds.contains(c.kind));
+	}
+
+	/** Whether `loop` carries a key-value VALUE binder — i.e. it binds a key AND a value. */
+	public static inline function hasIterationValueBinder(loop: QueryNode, valueBinderKinds: Array<String>): Bool {
+		return iterationValueBinder(loop, valueBinderKinds) != null;
+	}
+
+	/**
+	 * The OPERAND children of an iteration node — its iterable and its body — with the VALUE binder
+	 * of a key-value iteration filtered out. A consumer indexing `children[0]` for the iterable, or
+	 * comparing `children.length` against a fixed operand count, reads the binder instead on every
+	 * key-value loop.
+	 */
+	public static function loopOperands(loop: QueryNode, valueBinderKinds: Array<String>): Array<QueryNode> {
+		return [for (c in loop.children) if (!valueBinderKinds.contains(c.kind)) c];
+	}
+
+	/**
+	 * The ITERABLE child of an iteration node — its first child that is not a value binder — or null
+	 * for a node with no operands at all.
+	 */
+	public static function iterationIterable(loop: QueryNode, valueBinderKinds: Array<String>): Null<QueryNode> {
+		return loop.children.find(child -> !valueBinderKinds.contains(child.kind));
 	}
 
 	/**

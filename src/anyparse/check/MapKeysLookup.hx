@@ -179,6 +179,7 @@ final class MapKeysLookup implements Check {
 			localDeclKinds: shape.localDeclKinds ?? [],
 			immutableLocalDeclKinds: immutableLocalDeclKinds(shape),
 			paramKinds: shape.paramKinds ?? [],
+			valueBinderKinds: shape.iterationValueBinderKinds ?? [],
 			mapFamily: shape.nullableIndexTypeNames ?? [],
 			nullableWrappers: shape.nullableWrapperTypeNames ?? [],
 			safeAnnotationTypes: safeAnnotationTypeNames(shape),
@@ -262,7 +263,14 @@ final class MapKeysLookup implements Check {
 		if (loop.children.length < MIN_BINARY_CHILD_COUNT) return null;
 		final keyName: Null<String> = loop.name;
 		if (keyName == null) return null;
-		final iterable: QueryNode = loop.children[0];
+		// A loop that ALREADY destructures is not this rule's shape: `for (k => v in m.keys())`
+		// binds a second name the suggested `for (k => value in m)` would drop. Refuse it here,
+		// explicitly. Reading `children[0]` used to reach the same refusal by accident — the binder
+		// sits ahead of the iterable, so `keysReceiver` rejected the binder rather than the loop —
+		// and taking the real iterable removes that accident along with the trap.
+		if (RefactorSupport.hasIterationValueBinder(loop, cfg.valueBinderKinds)) return null;
+		final iterable: Null<QueryNode> = RefactorSupport.iterationIterable(loop, cfg.valueBinderKinds);
+		if (iterable == null) return null;
 		final body: QueryNode = loop.children[loop.children.length - 1];
 		final recv: Null<QueryNode> = keysReceiver(iterable, cfg);
 		if (recv == null) return null;
@@ -302,14 +310,27 @@ final class MapKeysLookup implements Check {
 
 	/**
 	 * Whether the path ROOT `rootName` or the key `keyName` is re-bound anywhere in `node` (a
-	 * local, a nested param, or a nested loop var). Only the root matters for a path: a
-	 * `session.files` read resolves `files` as a member of whatever `session` denotes, so a
-	 * local named after an intermediate SEGMENT cannot shadow it — re-binding the root can.
+	 * local, a nested param, a nested loop var, or a nested key-value loop's VALUE binder). Only
+	 * the root matters for a path: a `session.files` read resolves `files` as a member of whatever
+	 * `session` denotes, so a local named after an intermediate SEGMENT cannot shadow it —
+	 * re-binding the root can.
+	 *
+	 * The VALUE binder is the one this check has the most reason not to miss: `map-keys-lookup`
+	 * EMITS `for (k => value in m)`, so it manufactures the very shape a blind scan cannot see.
+	 * While the binder had no node, `for (k in m.keys()) for (a => k in n) trace(m[k])` rewrote the
+	 * inner `m[k]` — a read of the INNER `k` — into the outer loop's `value`.
+	 *
+	 * The kind set is NOT the language's full binding model: it is `localDeclKinds`, `paramKinds`,
+	 * the singular `forStmtKind` and the value-binder kinds. A comprehension's KEY binder
+	 * (`ForExpr`), a `catch` variable, a case-pattern capture and a bare thin-arrow parameter all
+	 * still shadow unseen — each a pre-existing miss of the same class, and each fixable by
+	 * composing the `RefShape` binding seams (`selfScopeDeclKinds` alone covers `ForExpr` and
+	 * `CatchClause`) the way `RedundantThis.namedBindingKinds` already does.
 	 */
 	private static function rebinds(node: QueryNode, rootName: String, keyName: String, cfg: Cfg): Bool {
 		if (cfg.opaqueKinds.contains(node.kind)) return false;
 		final introducesBinding: Bool = cfg.localDeclKinds.contains(node.kind) || cfg.paramKinds.contains(node.kind)
-			|| node.kind == cfg.forKind;
+			|| node.kind == cfg.forKind || cfg.valueBinderKinds.contains(node.kind);
 		if (introducesBinding && (node.name == rootName || node.name == keyName)) return true;
 		for (c in node.children) if (rebinds(c, rootName, keyName, cfg)) return true;
 		return false;
@@ -471,7 +492,11 @@ final class MapKeysLookup implements Check {
 	): Void {
 		if (cfg.opaqueKinds.contains(node.kind)) return;
 		if (node.kind == cfg.forKind && node.children.length >= MIN_BINARY_CHILD_COUNT) {
-			final iterSpan: Null<Span> = node.children[0].span;
+			// Keyed on the same child `match` spans the violation at — the first NON-binder one.
+			// A positional `children[0]` here reads a key-value loop's binder instead, so the two
+			// walks disagree on the key and `--fix` silently declines a violation `lint` reported.
+			final iterable: Null<QueryNode> = RefactorSupport.iterationIterable(node, cfg.valueBinderKinds);
+			final iterSpan: Null<Span> = iterable == null ? null : iterable.span;
 			if (iterSpan != null && wanted.contains('${iterSpan.from}:${iterSpan.to}')) {
 				final e: Null<Array<{ span: Span, text: String }>> = buildMapEdits(node, source, cfg);
 				if (e != null) for (edit in e) out.push(edit);
@@ -610,6 +635,7 @@ private typedef Cfg = {
 	var localDeclKinds: Array<String>;
 	var immutableLocalDeclKinds: Array<String>;
 	var paramKinds: Array<String>;
+	var valueBinderKinds: Array<String>;
 	var mapFamily: Array<String>;
 	var nullableWrappers: Array<String>;
 	var safeAnnotationTypes: Array<String>;

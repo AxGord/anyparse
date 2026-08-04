@@ -33,13 +33,11 @@ import anyparse.query.RefactorSupport;
  * `self`; unset → no-op), the access node from `fieldAccessKind`, the receiver
  * ident from `identKind`. Shadowing names are collected from `paramKinds`,
  * `localDeclKinds`, `localDeclExprKinds`, `staticLocalDeclKinds`, `selfScopeDeclKinds`
- * (loop iterator / catch var), `localFunctionKinds` and `inlineFunctionKinds`, plus the
- * three shapes that bind WITHOUT a named declaration node: a `plainCasePatternKind`
- * pattern's captures and every `casePatternBinderKinds` node (`RefactorSupport.casePatternNames`),
- * the bare single parameter of a `lambdaKinds` lambda, and the dropped slots of a
- * `selfScopeDeclKinds` header (the VALUE of a key-value `for`), recovered from the header
- * text by `RefactorSupport.binderHeaderIdents`. All of it is scoped to each enclosing
- * member function. Member names
+ * (loop iterator / catch var), `localFunctionKinds` and `inlineFunctionKinds`, plus `iterationValueBinderKinds`
+ * (a key-value loop's VALUE binder), plus the two shapes that bind WITHOUT a named declaration node: a
+ * `plainCasePatternKind` pattern's captures and every `casePatternBinderKinds` node
+ * (`RefactorSupport.casePatternNames`), and the bare single parameter of a `lambdaKinds` lambda. All of it is
+ * scoped to each enclosing member function. Member names
  * come from `memberDeclKinds` hosts inside a `visibilityContainerKinds` type; a
  * grammar supplying neither leaves the membership gate inert (shadow-only test).
  * A compile-time abstract's `this.field` (where `this` is the underlying value
@@ -106,7 +104,6 @@ final class RedundantThis implements Check {
 			bindingKinds: bindingKinds,
 			patternKind: shape.plainCasePatternKind,
 			patternBinderKinds: shape.casePatternBinderKinds ?? [],
-			binderHeaderKinds: shape.selfScopeDeclKinds ?? [],
 			lambdaKinds: shape.lambdaKinds ?? [],
 			underlyingThisKinds: shape.underlyingThisTypeKinds ?? [],
 			containerKinds: shape.visibilityContainerKinds ?? [],
@@ -121,14 +118,16 @@ final class RedundantThis implements Check {
 	/**
 	 * Every grammar kind that DECLARES a name into the enclosing function scope and carries it
 	 * on the node: parameters, local `var` / `final` in statement, expression and STATIC form,
-	 * the self-scoped binders (loop iterator, catch variable) and local functions, plain and
-	 * `inline`. The shapes that bind without such a node are recovered in `collectBindingNames`.
+	 * the self-scoped binders (loop iterator, catch variable), a key-value iteration's VALUE
+	 * binder and local functions, plain and `inline`. The shapes that bind without such a node
+	 * are recovered in `collectBindingNames`.
 	 */
 	private static function namedBindingKinds(shape: RefShape): Array<String> {
 		return (shape.paramKinds ?? []).concat(shape.localDeclKinds ?? [])
 			.concat(shape.localDeclExprKinds ?? [])
 			.concat(shape.staticLocalDeclKinds ?? [])
 			.concat(shape.selfScopeDeclKinds ?? [])
+			.concat(shape.iterationValueBinderKinds ?? [])
 			.concat(shape.localFunctionKinds ?? [])
 			.concat(shape.inlineFunctionKinds ?? []);
 	}
@@ -193,18 +192,20 @@ final class RedundantThis implements Check {
 
 	/**
 	 * Collect every shadowing binding name in `node`'s subtree: the `bindingKinds` nodes,
-	 * which carry the name themselves, plus the two shapes that do not and would otherwise
-	 * cost a load-bearing `this.` — a bare-identifier lambda parameter (`bareLambdaParam`)
-	 * and the slots a self-scoped binder's header drops, which only its source text shows
-	 * (the VALUE of a key-value `for`, invisible as a node). Case-pattern captures are
-	 * collected once per member function by the caller.
+	 * which carry the name themselves, plus the one shape that does not and would otherwise
+	 * cost a load-bearing `this.` — a bare-identifier lambda parameter (`bareLambdaParam`).
+	 * Case-pattern captures are collected once per member function by the caller.
+	 *
+	 * A key-value `for`'s VALUE binder used to be read off the loop's header TEXT, the only
+	 * place it existed; it is a node of its own now (`iterationValueBinderKinds`, folded into
+	 * `bindingKinds`), so the walk below reaches it like every other binding — and stops
+	 * collecting the loop keyword and a catch clause's type name along with it.
 	 */
 	private static function collectBindingNames(node: QueryNode, source: String, c: Ctx, names: Array<String>): Void {
 		if (c.bindingKinds.contains(node.kind)) {
 			final name: Null<String> = node.name;
 			if (name != null) names.push(name);
 		}
-		if (c.binderHeaderKinds.contains(node.kind)) for (ident in RefactorSupport.binderHeaderIdents(source, node)) names.push(ident);
 		final param: Null<String> = bareLambdaParam(node, c);
 		if (param != null) names.push(param);
 		for (child in node.children) collectBindingNames(child, source, c, names);
@@ -294,7 +295,6 @@ private typedef Ctx = {
 	bindingKinds: Array<String>,
 	patternKind: Null<String>,
 	patternBinderKinds: Array<String>,
-	binderHeaderKinds: Array<String>,
 	lambdaKinds: Array<String>,
 	underlyingThisKinds: Array<String>,
 	containerKinds: Array<String>,

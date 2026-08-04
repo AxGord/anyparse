@@ -22,10 +22,9 @@ package anyparse.grammar.haxe;
  * body type.
  *
  * Map key-value iteration `for (k => v in m)` is supported via the
- * optional `valueName` field — `@:optional @:lead('=>')`, mirroring
- * `HxForStmt`. The earlier "not yet supported" note is obsolete; the
- * lift was the additive optional-single-Ref pattern (precedent
- * `HxParamBody.defaultValue`), not a destructured-iter reshape.
+ * optional `valueName` field — `@:optional @:lead('=>')`, mirroring `HxForStmt` — whose doc carries the full
+ * rationale, including why the slot holds a `@:spanned('KeyValueBinder')` wrapper rather than a bare
+ * `HxIdentLit`.
  *
  * `@:fmt(bodyPolicy('expressionForBody'))` on `body` — distinct from
  * `HxForStmt`'s `forBody` knob because expression-position `for`
@@ -57,7 +56,7 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxForExpr = {
 	@:lead('(') var varName: HxIdentLit;
-	@:optional @:lead('=>') var valueName: Null<HxIdentLit>;
+	@:optional @:lead('=>') var valueName: Null<HxKeyValueBinder>;
 	@:kw('in') @:trail(')') var iterable: HxExpr;
 	@:trailOpt(';') @:fmt(bodyPolicy('expressionForBody'), bodyAllmanIndentForCtor('ObjectLit', 'indentObjectLiteral')) var body: HxExpr;
 };

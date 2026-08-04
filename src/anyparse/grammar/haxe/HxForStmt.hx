@@ -36,13 +36,21 @@ package anyparse.grammar.haxe;
  * `for (v in m)` leaves it null (the `=>` peek fails on `in`). It
  * sits inside the `conditionWrap` span (`varName` start … `iterable`
  * end); the generic optional-Ref writer path emits ` => v` when
- * present. Surfacing `valueName` as a second scope binding in the apq
- * refs plugin is a separate, non-parse-blocking enhancement.
+ * present.
+ *
+ * The slot holds `HxKeyValueBinder` — a `@:spanned('KeyValueBinder')`
+ * one-field wrapper — rather than the bare `HxIdentLit` it started
+ * as. A Terminal projects no `QueryNode`, so the value binder used to
+ * be invisible to `refs` / `rename` and to every declaration-walking
+ * check; the wrapper gives it a name and a span of its own. Only the
+ * field's TYPE changed — the `=>` lead, the field's position and the
+ * writer path are the ones the bare terminal already used, so the
+ * emitted bytes are unchanged.
  */
 @:peg
 typedef HxForStmt = {
 	@:lead('(') @:fmt(condWrap('conditionWrap')) var varName: HxIdentLit;
-	@:optional @:lead('=>') var valueName: Null<HxIdentLit>;
+	@:optional @:lead('=>') var valueName: Null<HxKeyValueBinder>;
 	@:kw('in') @:trail(')') @:fmt(condWrapEnd) var iterable: HxExpr;
 	@:trailOpt(';') @:fmt(bodyPolicy('forBody'), dropSingleStmtBraces) var body: HxStatement;
 };

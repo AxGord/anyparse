@@ -78,7 +78,12 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * `VarMore` is the `@:spanned('VarMore')` struct carrying every binding
 	 * AFTER the first in `var a = 1, b = 2;` — without it those bindings had
 	 * no declaration node at all, so `Refs` could not resolve their uses and
-	 * every declaration-walking check was blind to them.
+	 * every declaration-walking check was blind to them. `KeyValueBinder` is
+	 * the same lift for the VALUE binder of `for (k => v in m)`: the loop
+	 * node's own name is the KEY, so `v` had no declaration node either. It
+	 * is a decl host rather than a `selfScopeDeclKinds` entry because it
+	 * opens no scope of its own — it binds into the frame the LOOP opens,
+	 * which is what `Refs.collectIntoMulti` does with a decl-host child.
 	 */
 	private static final DECL_HOST_KINDS: Array<String> = [
 		'VarDecl',
@@ -109,6 +114,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		'VarField',
 		'FinalField',
 		'FnField',
+		'KeyValueBinder',
 	];
 
 	/**
@@ -586,6 +592,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			typeAnnotationKinds: ['Named', 'Anon', 'Arrow', 'ArrowFn'],
 			forStmtKind: 'ForStmt',
 			iterationBindingKinds: ['ForStmt', 'ForExpr'],
+			iterationValueBinderKinds: ['KeyValueBinder'],
 			paramKinds: ['Required', 'Optional', 'Rest'],
 			supertypeClauseKinds: ['ExtendsClause', 'ImplementsClause'],
 			noBodyKind: 'NoBody',
@@ -729,7 +736,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// `Iterable<T>` yields `T` through the `iterator():Iterator<T>` it declares, and an
 			// `Iterator<T>` is itself iterable yielding `T`. `Map<K, V>` is the odd one: its
 			// `iterator()` yields the VALUES, so the element parameter is 1, not 0 (the keys need
-			// the explicit `for (k => v in m)` form, which the binder arm refuses).
+			// the explicit `for (k => v in m)` form, whose KEY binder the element-type arm refuses).
+			// OBLIGATION: this map answers the ELEMENT question, and the same entry now also types a
+			// key-value loop's VALUE binder — so every name here must have `iterator()` element type
+			// == `keyValueIterator()` value type. All six do; a container where they diverge does not
+			// belong here, since the arm licenses NaN-unsound ordered-comparison rewrites.
 			iterationElementTypeParams: [
 				'Array' => 0,
 				'Vector' => 0,

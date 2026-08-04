@@ -1741,11 +1741,15 @@ typedef RefShape = {
 	@:optional var indexedElementTypeParams: Map<String, Int>;
 
 	/**
-	 * Scope-introducing node kinds whose OWN name binds the ITERATION ELEMENT and whose
-	 * `children[0]` is the iterable expression (Haxe `ForStmt` / `ForExpr`). Lets a consumer
-	 * answer the type of a `for` binder, which no `:Type` annotation covers: the binder has
-	 * none, so `TypeInfoProvider.declaredTypes` has no entry for it and the element type can
+	 * Scope-introducing node kinds whose OWN name binds the ITERATION KEY-OR-ELEMENT and whose
+	 * FIRST NON-BINDER child is the iterable expression (Haxe `ForStmt` / `ForExpr`). Lets a
+	 * consumer answer the type of a `for` binder, which no `:Type` annotation covers: the binder
+	 * has none, so `TypeInfoProvider.declaredTypes` has no entry for it and the element type can
 	 * only come from the iterable.
+	 *
+	 * "First NON-binder child" rather than `children[0]`: a key-value iteration carries its VALUE
+	 * binder as an `iterationValueBinderKinds` node ahead of the iterable, so a consumer that
+	 * indexes `children[0]` blindly reads the binder where it wanted the iterable.
 	 *
 	 * DISTINCT from the singular `forStmtKind`, which names the STATEMENT kind
 	 * `redundant-map-iter-key` reads a discarded key off: this is the BINDER question, so it
@@ -1756,10 +1760,36 @@ typedef RefShape = {
 	@:optional var iterationBindingKinds: Array<String>;
 
 	/**
-	 * Maps a container type's SIMPLE name to the index of the type parameter a `for` iteration
+		 * Node kinds carrying the VALUE binder of a key-value iteration — the `v` in Haxe's
+		 * `for (k => v in m)` (`KeyValueBinder`). The node is a direct child of an
+		 * `iterationBindingKinds` loop, sits BEFORE the iterable child, carries the bound name on
+		 * itself and spans exactly that identifier.
+		 *
+		 * Two independent jobs. A consumer reading the loop's OPERANDS must skip these to reach the
+		 * iterable (see `iterationBindingKinds`). A consumer collecting BOUND NAMES must include
+		 * them: the loop node's own `name` is the KEY only, so a scan keyed on it alone misses every
+		 * value binder — the blindness that made shadow scans read the loop's header TEXT instead.
+		 *
+		  * Optional; unset means the grammar has no separate value binder. OBLIGATION on a grammar that
+	 * DOES have key-value iteration: publish the kind here. Consumers read an unset field as "no
+	 * loop binds two names", so a grammar that binds two and names neither kind here leaves them
+	 * unable to tell a KEY binder from a VALUE one — and the element-type arm
+	 * (`iterationElementTypeParams`) would then type a key as the element and license a rewrite on
+	 * it. Unset is only safe when no loop in the grammar binds a second name.
+	 */
+	@:optional var iterationValueBinderKinds: Array<String>;
+
+	/**
+	  * Maps a container type's SIMPLE name to the index of the type parameter a `for` iteration
 	 * over it YIELDS (Haxe `Array<T>` → 0, `Map<K, V>` → 1, since iterating a map yields its
 	 * VALUES). Only containers whose iteration provably yields the listed parameter belong
 	 * here; any other container leaves the binder unresolved.
+	 *
+	 * The same entry answers for a key-value loop's VALUE binder, which is the same yield — so an
+	 * entry is admissible only when the container's single-binder element type and its key-value
+	 * VALUE type coincide. They can diverge in principle (a type is free to declare unrelated
+	 * `iterator()` and `keyValueIterator()`), and a consumer of this map may license a rewrite off
+	 * the answer, so a divergent container must be left out rather than approximated.
 	 *
 	 * A DIFFERENT question from `indexedElementTypeParams`, which answers what INDEX ACCESS
 	 * `x[k]` yields. The two happen to agree on the three container names they share, but the
