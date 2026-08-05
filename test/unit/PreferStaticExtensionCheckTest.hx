@@ -9,6 +9,7 @@ import anyparse.check.PreferStaticExtension;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
+import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import anyparse.query.CachingGrammarPlugin;
@@ -400,12 +401,53 @@ class PreferStaticExtensionCheckTest extends Test {
 	}
 
 	public function testUntabledStaticCallIterableStaysUnresolved(): Void {
-		// `Reflect.copy` is deliberately absent from the static-return table — no element type, so
-		// the binder is unresolved and the site keeps its hedge.
+		// `Reflect.copy` is deliberately absent from the static-return table. A forward pin: the
+		// table must stay an enumeration, so a future over-broad entry cannot silently type a binder
+		// the return does not justify.
 		final files: Array<{ file: String, source: String }> = strExtFiles('for (key in Reflect.copy(o)) StrExt.deco(key, 1);');
 		final vs: Array<Violation> = violationsOf(files, STREXT_CONFIG);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('receiver type unresolved') != -1, vs[0].message);
+	}
+
+	public function testTabledStaticCallOnValueBoundReceiverStaysUnresolved(): Void {
+		// A PARAMETER named `Reflect` shadows the type, so `Reflect.fields(o)` is an INSTANCE field
+		// access whose return the table cannot speak for — `receiverRootIsUnboundType` refuses it.
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'C.hx',
+				source: 'using StrExt;\n\nclass C {\n\tfunction f(Reflect:Holder, o:Dynamic):Void {\n'
+					+ '\t\tfor (key in Reflect.fields(o)) StrExt.deco(key, 1);\n\t}\n}\n'
+			},
+			{ file: 'StrExt.hx', source: STREXT_SOURCE },
+			{ file: 'String.hx', source: 'class String {}\n' },
+			{ file: 'Holder.hx', source: 'class Holder {\n\tpublic var fields:Widget;\n}\n' },
+			{ file: 'Widget.hx', source: WIDGET_SOURCE }
+		];
+		final vs: Array<Violation> = violationsOf(files, STREXT_CONFIG);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('receiver type unresolved') != -1, vs[0].message);
+	}
+
+	public function testTabledStaticCallSurvivesAnIndexedStdDeclaration(): Void {
+		// The std-EXEMPTION half of the shadow gate, and the whole reason it is not the sibling
+		// arm's "declared at all" test: the std is normally indexed (`StdResolver` joins it), so a
+		// `Reflect` declared UNDER the std root must not veto the table. Skipped when no std is
+		// discoverable (`APQ_NO_STD`, a machine with no Haxe) — there is nothing to attribute then.
+		final stdDir: Null<String> = StdResolver.stdDir();
+		if (stdDir == null) {
+			Assert.pass();
+			return;
+		}
+		final files: Array<{ file: String, source: String }> = strExtFiles('for (key in Reflect.fields(o)) StrExt.deco(key, 1);').concat([
+			{
+				file: haxe.io.Path.join([stdDir, 'Reflect.hx']),
+				source: 'extern class Reflect {\n\tpublic static function fields(o: Dynamic): Array<String>;\n}\n'
+			}
+		]);
+		final vs: Array<Violation> = violationsOf(files, STREXT_CONFIG);
+		Assert.equals(1, vs.length);
+		Assert.equals(-1, vs[0].message.indexOf('receiver type unresolved'), vs[0].message);
 	}
 
 	public function testStaticCallReceiverReportedOnly(): Void {

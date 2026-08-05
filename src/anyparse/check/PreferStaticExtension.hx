@@ -391,9 +391,18 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	 * OPT-IN per consumer precisely because a resolved nominal is this rule's licence to ACT: the
 	 * arms above are taken not because they resolve MORE but because each is type-CORRECT and fails
 	 * closed — the element-parameter table carries the obligation that `iterator()` and
-	 * `keyValueIterator()` agree, the substitution walk refuses any source still naming a parameter,
-	 * and the static table is refused for a type any non-std indexed file redeclares. A future arm
-	 * that merely widens coverage without that guarantee does NOT belong under this opt-in.
+	 * `keyValueIterator()` agree, and the static table is refused for a type any non-std indexed
+	 * file redeclares. A future arm that merely widens coverage without that guarantee does NOT
+	 * belong under this opt-in.
+	 *
+	 * The substitution arm is the one whose failure is NOT closed, and the reason it is still safe
+	 * here is a downstream gate rather than the walk: `pathReceiverMemberTypeSource`'s package-blind
+	 * fallback can hand back a verbatim type-PARAMETER name (`T` off a `Box<T>` reached through a
+	 * subtype) after the substituting walk has refused it. What neutralises that is `verdictFor` —
+	 * `typeProvablyLacksMember` requires the nominal to resolve to exactly one indexed declaration,
+	 * which a bare parameter name does not, so the site degrades to report-only instead of Fixable.
+	 * Deep mode makes this strictly BETTER, not worse: with substitution the same receiver resolves
+	 * to the real argument type and the shadow gate can DROP a site the shallow walk called fixable.
 	 *
 	 * The kind whitelist in front of the walk is the POSTFIX-SAFETY invariant made structural: a
 	 * spliced receiver is written verbatim ahead of `.method(`, so only a form that already binds

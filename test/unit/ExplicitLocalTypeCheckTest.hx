@@ -598,59 +598,6 @@ class ExplicitLocalTypeCheckTest extends Test {
 		assertNoFix('var Date:C = this;\n\t\tfinal n = Date.now();');
 	}
 
-	// --- fix: index access whose container type pins the element through generic substitution ---
-
-	public function testFixMapIndexAccessIsNullableValue(): Void {
-		// The TM macro-context shape: `final foundKeys = strings[key];` on a
-		// `Map<String, Array<String>>` — the VALUE parameter, wrapped `Null<…>` as Haxe types it.
-		assertFixContains('final m:Map<String, Array<String>> = [];\n\t\tfinal v = m["a"];', 'v:Null<Array<String>>');
-	}
-
-	public function testFixArrayIndexAccessIsElement(): Void {
-		// An `Array<T>` subscript is `T`, NOT `Null<T>` — only the map family is nullable-indexed.
-		assertFixContains('final a:Array<Int> = [];\n\t\tfinal v = a[0];', 'v:Int');
-	}
-
-	public function testFixNullWrappedMapIndexAccess(): Void {
-		// One `Null<…>` wrapper is peeled off the container before the element lookup.
-		assertFixContains('final m:Null<Map<String, Int>> = null;\n\t\tfinal v = m["a"];', 'v:Null<Int>');
-	}
-
-	public function testSkipIndexAccessUnresolvedContainer(): Void {
-		// The container carries no written type — the element parameter cannot be read.
-		assertNoFix('final m = makeMap();\n\t\tfinal v = m["a"];');
-	}
-
-	public function testSkipIndexAccessUnknownContainerType(): Void {
-		// A container whose nominal names no `indexedElementTypeParams` entry (a user abstract with
-		// `@:arrayAccess`) yields nothing — the element type is not derivable from the written type.
-		assertNoFix('final b:Bag = null;\n\t\tfinal v = b["a"];');
-	}
-
-	public function testSkipIndexAccessContainerWithoutTypeArguments(): Void {
-		assertNoFix('final m:Map = null;\n\t\tfinal v = m["a"];');
-	}
-
-	public function testSkipIndexAccessOversizedAnonElement(): Void {
-		// An anonymous-structure element over the `maxInferredTypeLength` cap is declined exactly as
-		// the oracle tail declines one — the rule's output must not depend on which tier named it.
-		assertNoFix(
-			'final rows:Array<{alpha:String, beta:String, gamma:String, delta:String, epsilon:String, zeta:String, eta:String}> = [];\n'
-			+ '\t\tfinal r = rows[0];'
-		);
-	}
-
-	public function testFixIndexAccessSmallAnonElement(): Void {
-		// Under the cap, an anon-struct element still annotates — the gate is length, not shape.
-		assertFixContains('final rows:Array<{a:Int}> = [];\n\t\tfinal r = rows[0];', 'r:{a:Int}');
-	}
-
-	public function testSkipIndexAccessRestParamContainer(): Void {
-		// A rest parameter's BODY type is `haxe.Rest<Array<Int>>` while its written source is the
-		// bare `Array<Int>`, so `xs[0]` is an `Array<Int>` — copying the source would say `Int`.
-		assertNoFixSrc('class C {\n\tfunction f(...xs:Array<Int>):Void {\n\t\tfinal v = xs[0];\n\t}\n}');
-	}
-
 	public function testSkipStaticMethodIndexShadowedType(): Void {
 		// An indexed project type named `Date` shadows the stdlib -> its `now()` may differ -> report-only.
 		assertNoFixIdx(wrap('final n = Date.now();'), [

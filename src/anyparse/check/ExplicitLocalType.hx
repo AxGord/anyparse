@@ -82,8 +82,10 @@ import anyparse.check.LintConfig;
  *    container as Haxe types a map read. Pure generic substitution on the written source, so it
  *    works inside a macro function where the display oracle is blind; the container is resolved
  *    only to a local / parameter / own-file field, which is what makes copying its argument text
- *    import-safe. An unresolved container, one with no written arguments, or a nominal outside
- *    the table stays report-only.
+ *    import-safe. An unresolved container, one with no written arguments, a nominal outside the
+ *    table or SHADOWED by a non-std indexed type, a `Dynamic` element (which the compiler leaves
+ *    an unbound monomorph, not a `Dynamic`), and an anonymous-structure element over the
+ *    `maxInferredTypeLength` cap all stay report-only.
  *  - a plain identifier read `= ident` whose binding (a local, a parameter or an
  *    own-class field) carries a WRITTEN type → that type VERBATIM, copied unchanged
  *    (a `Null<…>` field read stays `Null<…>` — a transcription of an existing
@@ -252,9 +254,10 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		// so `Null<String>` survives — `declaredTypes` would collapse it to the outer `Null`),
 		// resolved lazily and cached like the cast targets above.
 		final declaredTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, source);
-		// The anonymous-structure length cap is the SAME knob the oracle tail applies: a shape this
-		// rule refuses to spell when a compiler names it must not be spelled when the structural
-		// tier names it either, or the rule's output would depend on whether an oracle is configured.
+		// The anonymous-structure length cap is the SAME knob the oracle tail applies, so a shape
+		// this rule refuses to spell when a compiler names it is not spelled when the index-access
+		// arm names it either. It is read here rather than per-arm because `fix` is the one place
+		// holding the violations the config resolver keys off.
 		final anonCap: Int = maxAnonLen(violations);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
@@ -301,9 +304,14 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 * so a wrapped initializer would otherwise miss all of them. The arms: the shared
 	 * `LiteralInfer` shapes (literal / neg-numeric / written-generic `new` / cast), then a
 	 * bare non-generic `new T()`, a homogeneous array literal, a fixed-return method call on
-	 * a provable-String receiver, a cross-class `Type.staticField` read (via `index`), and a
-	 * plain identifier read whose binding carries a written type. Null when none pins the
-	 * type.
+	 * a provable-String receiver, a tabled `Type.staticMethod()` return, a cross-class
+	 * `Type.staticField` read (via `index`), an index access over a written container type,
+	 * and finally a plain identifier read whose binding carries a written type. Null when
+	 * none pins the type.
+	 *
+	 * `maxAnonLen` is the `maxInferredTypeLength` cap; only the index-access arm consults it
+	 * today, because it is the only arm that lifts a SUBSTRING out of a larger annotation
+	 * rather than transcribing one the reader has already seen.
 	 *
 	 * There are TWO peels and they overlap. `LiteralInfer.inferType` peels for itself, so a
 	 * field and a parameter agree with a local on the shared shapes; on those shapes either
@@ -326,7 +334,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			LiteralInfer.inferType(init, source, shape, castTargets) ?? bareNewType(init, source, shape, index) ?? arrayType(init, shape) ?? methodReturnType(
 				init, shape, tree, declaredTypeSources
 			) ?? staticMethodReturnType(init, shape, tree, index) ?? staticFieldType(init, shape, tree, index) ?? indexAccessType(
-				init, shape, tree, declaredTypeSources, maxAnonLen
+				init, shape, tree, declaredTypeSources, index, maxAnonLen
 			) ?? TypeResolver.identDeclaredTypeSource(init, shape, tree, declaredTypeSources, true);
 	}
 
@@ -339,24 +347,40 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 * answers inside a macro function.
 	 *
 	 * The container is resolved with `TypeResolver.identDeclaredTypeSource`, which reaches only a
-	 * LOCAL, a PARAMETER or an OWN-FILE field. That restriction is what makes the copy sound with no
-	 * import analysis: the argument text is spelled in THIS file, so whatever names it uses are
-	 * already in scope here. A cross-file member would have to clear the same import test
-	 * `staticFieldType` runs, and is left report-only instead.
+	 * LOCAL, a PARAMETER or an OWN-FILE field. That restriction is what makes the argument text
+	 * IMPORT-safe with no import analysis: it is spelled in THIS file, so whatever names it uses
+	 * already resolve here. A cross-file member would have to clear the same import test
+	 * `staticFieldType` runs, and is left report-only instead. What the restriction does NOT buy is
+	 * resolution-safety against a type PARAMETER re-bound between the container's declaration and
+	 * the annotation site (`class C<T> { var xs:Array<T>; function g<T>() { … } }`) — a shape the
+	 * pre-existing identifier-read arm copies wrongly too, so it is a known module-wide limitation
+	 * rather than one this arm introduces.
 	 *
 	 * `skipNullableOptionalParam` is TRUE: a rest parameter's body type is `haxe.Rest<T>` while its
 	 * written source is the bare `T`, so `xs[0]` on a `...xs:Array<Int>` is an `Array<Int>` and the
 	 * verbatim source would wrongly yield `Int`. One `Null<…>` layer is peeled off the container
-	 * first (`Null<Map<K, V>>` indexes exactly as `Map<K, V>` does). A container with no arguments,
-	 * an unresolved one, or a nominal absent from the table (a user abstract with its own
-	 * `@:arrayAccess`) yields null — as does an ANONYMOUS-STRUCTURE element longer than
-	 * `maxAnonLen`, the same `maxInferredTypeLength` cap `normalizeWith` applies to the oracle's
-	 * answer: a container of anon structs spells its element in full, and a shape this rule declines
-	 * to write when the compiler names it must not appear merely because the structural tier
-	 * reached it first.
+	 * first (`Null<Map<K, V>>` indexes exactly as `Map<K, V>` does).
+	 *
+	 * Four refusals, each yielding null:
+	 *
+	 *  - a container with no written arguments, or a nominal absent from the table (a user abstract
+	 *    with its own `@:arrayAccess`, whose return this cannot know);
+	 *  - a nominal a NON-std indexed file declares (`RefactorSupport.shadowedByNonStdType`). The
+	 *    table is keyed on the SIMPLE name, so a project `Vector<T>` with its own `@:arrayAccess`
+	 *    would otherwise be read as the stdlib one; every sibling arm carries the same shadow gate;
+	 *  - a `Dynamic` element. `Array<Dynamic>[0]` does NOT infer `Dynamic` — the compiler leaves the
+	 *    local an unbound monomorph that unifies with its first real use, so writing `:Dynamic`
+	 *    SILENCES errors that would otherwise be raised. That is the dispatch-shifting narrowing
+	 *    this rule's own soundness argument forbids;
+	 *  - an ANONYMOUS-STRUCTURE element longer than `maxAnonLen`, the same `maxInferredTypeLength`
+	 *    cap `normalizeWith` applies to the oracle's answer. The cap sits on THIS arm rather than on
+	 *    the whole chain because the transcription argument that exempts the others fails here: they
+	 *    copy an annotation the reader has seen written out, while this one lifts a SUBSTRING out of
+	 *    a larger one, so the element never appeared standalone in the source.
 	 */
 	private static function indexAccessType(
-		init: QueryNode, shape: RefShape, tree: QueryNode, declaredTypeSources: () -> Map<Int, String>, maxAnonLen: Int
+		init: QueryNode, shape: RefShape, tree: QueryNode, declaredTypeSources: () -> Map<Int, String>, index: Null<SymbolIndex>,
+		maxAnonLen: Int
 	): Null<String> {
 		final indexKind: Null<String> = shape.indexAccessKind;
 		final elementParams: Null<Map<String, Int>> = shape.indexedElementTypeParams;
@@ -369,8 +393,9 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		final args: Null<Array<String>> = RefactorSupport.typeArgumentSourcesOf(container);
 		if (nominal == null || args == null) return null;
 		final at: Null<Int> = elementParams[nominal];
-		if (at == null || at >= args.length) return null;
+		if (at == null || at >= args.length || RefactorSupport.shadowedByNonStdType(index, nominal)) return null;
 		final element: String = args[at];
+		if (element == shape.rawDynamicTypeName) return null;
 		final annotation: String = (shape.nullableIndexTypeNames ?? []).contains(nominal) ? 'Null<$element>' : element;
 		return annotation.indexOf('{') != -1 && annotation.length > maxAnonLen ? null : annotation;
 	}
@@ -566,42 +591,29 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	/**
 	 * The fixed return type of a static call `Type.method(...)` whose `Type.method` names a
 	 * `shape.staticMethodReturns` entry (`Context.resolvePath` → `String`, `Context.currentPos`
-	 * → `haxe.macro.Expr.Position`, `Date.now` → `Date`, …). The receiver must be a genuine TYPE
-	 * reference — a `fieldAccessKind` callee over an ident, or a dotted `pkg.Type` chain, whose
-	 * ROOT ident resolves to NO value binding (a local / parameter / field of the same name would
-	 * make it an INSTANCE access) — and, when an `index` is threaded, must NOT be shadowed by a
-	 * same-named indexed project type (whose method could return something else). Mirrors
-	 * `TypeResolver.isPureStdlibCall`'s receiver resolution; unlike a String-receiver call the
-	 * arguments are irrelevant, the return being fixed. Null when the shape lacks the seams, the
-	 * call is not the `Type.method(...)` form, the method is untabled, or the receiver is not a
-	 * provable type reference. This is the ONLY structural route to a sound annotation inside a
-	 * macro function, where the display oracle is blind.
+	 * → `haxe.macro.Expr.Position`, `Date.now` → `Date`, …). The shape match and the genuine-TYPE
+	 * receiver gate live in the shared `RefactorSupport.tabledStaticCall`; what stays here is the
+	 * SHADOW POLICY, which differs from the deep resolver's and is the only reason the two are not
+	 * one function — see the comment in the body. Null when the shape does not match, the method is
+	 * untabled, the receiver is not a provable type reference, or an indexed type carries the name.
+	 * This is the ONLY structural route to a sound annotation inside a macro function, where the
+	 * display oracle is blind.
 	 */
 	private static function staticMethodReturnType(
 		init: QueryNode, shape: RefShape, tree: QueryNode, index: Null<SymbolIndex>
 	): Null<String> {
-		final table: Null<Map<String, String>> = shape.staticMethodReturns;
-		final callKind: Null<String> = shape.callKind;
-		final faKind: Null<String> = shape.fieldAccessKind;
-		if (table == null || callKind == null || faKind == null) return null;
-		if (init.kind != callKind || init.children.length == 0) return null;
-		final callee: QueryNode = init.children[0];
-		if (callee.kind != faKind || callee.children.length != 1) return null;
-		final method: Null<String> = callee.name;
-		final receiver: QueryNode = callee.children[0];
-		final typeName: Null<String> = receiver.name;
-		if (method == null || typeName == null) return null;
-		final ret: Null<String> = table['$typeName.$method'];
-		if (ret == null) return null;
-		if (!TypeResolver.receiverRootIsUnboundType(receiver, tree, shape)) return null;
+		final hit: Null<{ typeName: String, returnSource: String }> = RefactorSupport.tabledStaticCall(init, tree, shape);
+		if (hit == null) return null;
 		// The table is the FALLBACK for a type absent from the resolution index (a config-less
 		// run): its values are deliberately import-safe (`sys.io.FileOutput` fully qualified).
 		// When the type IS indexed (std joined via `StdResolver`, or a same-named project type),
 		// defer (null): `SymbolIndex.returnNominalOf` verifies these same return types (see
 		// `StdResolverReturnTypeTest`) but yields a SIMPLE nominal that may be out of the consumer's
 		// import scope, so the oracle — or report-only — resolves it rather than risk a wrong
-		// structural annotation.
-		return index != null && index.declaringFiles(typeName).length > 0 ? null : ret;
+		// structural annotation. That is a STRICTER policy than the deep resolver's
+		// `shadowedByNonStdType`, and deliberately so: this arm copies the source into the user's
+		// file, where an oracle-named type is always the better answer.
+		return index != null && index.declaringFiles(hit.typeName).length > 0 ? null : hit.returnSource;
 	}
 
 

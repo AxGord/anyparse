@@ -523,6 +523,7 @@ import unit.MisplacedTypeDocCheckTest;
 import unit.PreferTypedThrowCheckTest;
 import unit.TypeRefPrinterTest;
 import unit.ExplicitLocalTypePrinterTest;
+import unit.ExplicitLocalTypeIndexAccessTest;
 import unit.HxLineCommentIndentSliceTest;
 import unit.ShortenTypeRefCheckTest;
 import unit.CondAssignMergeCheckTest;
@@ -958,6 +959,7 @@ class RunTests {
 		addCase(new OversizedTypeCheckTest());
 		addCase(new ListenerSymmetryCheckTest());
 		addCase(new ExplicitLocalTypeCheckTest());
+		addCase(new ExplicitLocalTypeIndexAccessTest());
 		addCase(new ExplicitLocalTypeOracleTest());
 		addCase(new ExplicitLocalTypeOracleE2ETest());
 		addCase(new MagicNumberCheckTest());

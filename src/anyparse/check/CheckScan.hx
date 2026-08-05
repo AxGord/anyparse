@@ -240,7 +240,7 @@ final class CheckScan {
 	 *
 	 * The probe is `RefactorSupport.expressionTypeNominal`, run in its DEEP mode — the
 	 * `ChainTypeContext` built below. On top of the plain identifier / field-path answer it
-	 * resolves three further shapes:
+	 * resolves four further shapes:
 	 *
 	 *  - a METHOD CALL's return nominal, through its receiver chain (`chain.indexOf(x)` → `Int`);
 	 *  - a `for` BINDER's type, read off the iterable's element type parameter — the binder carries

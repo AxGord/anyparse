@@ -369,6 +369,26 @@ class PreferIndexAccessCheckTest extends Test {
 		Assert.equals(0, violationsAcross([base, sub]).length);
 	}
 
+	public function testBareArrowParamShadowingInheritedFieldNotFlagged(): Void {
+		// A BARE single-parameter arrow (`m -> …`) projects its parameter as a plain identifier
+		// expression, so the scope resolver has no binder to bind and the name looks unbound —
+		// exactly like an inherited member. Rewriting here produced `Array access is not allowed on
+		// haxe.ds.StringMap` on real code. The parenthesized form `(m) -> …` DOES bind and is
+		// covered by the positive control below.
+		final base: String = 'class Base {\n\tpublic final m:Map<String, Int> = [];\n}';
+		final sub: String = 'class Sub extends Base {\n\tfunction f():Void {\n\t\tfinal g = m -> m.set("a", 1);\n\t}\n}';
+		Assert.equals(0, violationsAcross([base, sub]).length);
+	}
+
+	public function testParenthesizedLambdaParamStillResolvesToItsOwnBinding(): Void {
+		// The positive control for the veto above: a parenthesized parameter carries a real binder
+		// node, so the resolver answers it and the inherited-member arm is never consulted — the
+		// receiver is the parameter's own StringMap type, which is not flagged.
+		final base: String = 'class Base {\n\tpublic final m:Map<String, Int> = [];\n}';
+		final sub: String = 'class Sub extends Base {\n\tfunction f():Void {\n\t\tfinal g = (m:StringMap<Int>) -> m.set("a", 1);\n\t}\n}';
+		Assert.equals(0, violationsAcross([base, sub]).length);
+	}
+
 	public function testInheritedMemberOfImportedBaseFlaggedAcrossPackages(): Void {
 		// Positive control for the namesake fixture below: with the import-correct `a.Base` carrying
 		// the Map, the same layout DOES flag — so that test's zero is the namesake being excluded,

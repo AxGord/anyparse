@@ -99,21 +99,22 @@ final class PreferIndexAccess implements Check {
 			final root: QueryNode = tree;
 			final declaredTypes: Map<Int, String> = c.typed.declaredTypes(entry.source);
 			final declaredTypeSources: Map<Int, String> = c.typed.declaredTypeSources(entry.source);
-			// The pattern-binder scan is per FILE while the implicit-`this` gate is per site, and
-			// most files never reach it — so it is built at most once, on first demand.
-			var patternNames: Null<Array<String>> = null;
-			final resolvePatternNames: () -> Array<String> = () -> {
-				var names: Null<Array<String>> = patternNames;
-				if (names == null) {
-					names = RefactorSupport.casePatternNames(root, c.shape.plainCasePatternKind, c.shape.casePatternBinderKinds ?? []);
-					patternNames = names;
+			// The invisible-binder scan is per FILE while the implicit-`this` gate is per site, and
+			// most files never reach it — so it is built at most once, on first demand. `computed`
+			// distinguishes a cached null (the grammar cannot answer) from "not yet scanned".
+			var binders: Null<Array<String>> = null;
+			var bindersComputed: Bool = false;
+			final resolveBinders: () -> Null<Array<String>> = () -> {
+				if (!bindersComputed) {
+					bindersComputed = true;
+					binders = RefactorSupport.resolverInvisibleBinderNames(root, c.shape);
 				}
-				return names;
+				return binders;
 			};
 			final matcher: (
 				QueryNode, Null<String>
 			) -> Null<Match> = (call, parentKind) ->
-				match(call, parentKind, root, declaredTypes, declaredTypeSources, c, resolveSymbols, entry.file, resolvePatternNames);
+				match(call, parentKind, root, declaredTypes, declaredTypeSources, c, resolveSymbols, entry.file, resolveBinders);
 			collect(
 				root, null, c, matcher, m -> violations.push({
 					file: entry.file,
@@ -206,12 +207,12 @@ final class PreferIndexAccess implements Check {
 	 */
 	private static function match(
 		call: QueryNode, parentKind: Null<String>, root: QueryNode, declaredTypes: Map<Int, String>, declaredTypeSources: Map<Int, String>,
-		cfg: Cfg, symbols: () -> Null<SymbolIndex>, file: String, patternNames: () -> Array<String>
+		cfg: Cfg, symbols: () -> Null<SymbolIndex>, file: String, invisibleBinders: () -> Null<Array<String>>
 	): Null<Match> {
 		final m: Null<Match> = structuralMatch(call, parentKind, cfg);
 		if (m == null) return null;
 		final matched: Match = m;
-		if (!receiverIsMap(matched.recv, root, declaredTypes, declaredTypeSources, cfg, symbols, file, patternNames)) return null;
+		if (!receiverIsMap(matched.recv, root, declaredTypes, declaredTypeSources, cfg, symbols, file, invisibleBinders)) return null;
 		for (i in 1...call.children.length) {
 			if (containsFragileNullGuard(call.children[i], matched.callSpan, root, declaredTypes, cfg)) return null;
 		}
@@ -239,21 +240,22 @@ final class PreferIndexAccess implements Check {
 	 * identifier resolves through its binding annotation, or — when it names no value binding at all
 	 * — through the enclosing type's member closure as an implicit-`this` read
 	 * (`RefactorSupport.implicitThisMemberTypeSource`, which walks the `extends` chain import-aware
-	 * and refuses a case-pattern-shadowed name); a path resolves its root the same way (or, for
-	 * `this`, the enclosing type; or, for a static TYPE-name root, the unique type it names in
-	 * scope) and walks each field segment's member type cross-file through `symbols`. An unresolved
-	 * binding / path / type is a conservative miss — index access `[]` compiles only on the
-	 * abstract, so this gate never flags without positive Map proof.
+	 * and refuses a name any resolver-invisible binder shadows); a path resolves its root through
+	 * `pathRootTypeName` (a binding annotation, or, for `this`, the enclosing type; or, for a static
+	 * TYPE-name root, the unique type it names in scope — NOT the implicit-`this` arm, which is
+	 * bare-identifier only) and walks each field segment's member type cross-file through `symbols`.
+	 * An unresolved binding / path / type is a conservative miss — index access `[]` compiles only on
+	 * the abstract, so this gate never flags without positive Map proof.
 	 */
 	private static function receiverIsMap(
 		recv: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, declaredTypeSources: Map<Int, String>, cfg: Cfg,
-		symbols: () -> Null<SymbolIndex>, file: String, patternNames: () -> Array<String>
+		symbols: () -> Null<SymbolIndex>, file: String, invisibleBinders: () -> Null<Array<String>>
 	): Bool {
 		final path: Null<Array<String>> = RefactorSupport.pathOf(recv, cfg.identKind, cfg.fieldKind);
 		if (path == null) return false;
 		if (path.length == 1) {
 			final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(recv, root, cfg.shape);
-			if (bindingFrom == null) return inheritedIsMap(recv, root, cfg, symbols, file, patternNames);
+			if (bindingFrom == null) return inheritedIsMap(recv, root, cfg, symbols, file, invisibleBinders);
 			final typeName: Null<String> = declaredTypes[bindingFrom];
 			return typeName != null && nominalIsMap(typeName, declaredTypeSources[bindingFrom], cfg);
 		}
@@ -270,16 +272,18 @@ final class PreferIndexAccess implements Check {
 
 	/**
 	 * Whether an UNBOUND bare identifier is an implicit-`this` read of a `Map`-abstract member of
-	 * the enclosing type — the member a supertype declares, which the scope resolver cannot see
-	 * because it is not in this file. Requires the cross-file index; an unresolved member, or one
+	 * the enclosing type — in practice a member declared by a SUPERTYPE, which the scope resolver
+	 * does not answer for because it resolves declarations, not inheritance (an own-class field IS
+	 * answered, in this file or not). Requires the cross-file index; an unresolved member, or one
 	 * whose written type is not a `Map`, is a conservative miss like every other receiver here.
 	 */
 	private static function inheritedIsMap(
-		recv: QueryNode, root: QueryNode, cfg: Cfg, symbols: () -> Null<SymbolIndex>, file: String, patternNames: () -> Array<String>
+		recv: QueryNode, root: QueryNode, cfg: Cfg, symbols: () -> Null<SymbolIndex>, file: String,
+		invisibleBinders: () -> Null<Array<String>>
 	): Bool {
 		final index: Null<SymbolIndex> = symbols();
 		if (index == null) return false;
-		final src: Null<String> = RefactorSupport.implicitThisMemberTypeSource(recv, root, cfg.shape, index, file, patternNames());
+		final src: Null<String> = RefactorSupport.implicitThisMemberTypeSource(recv, root, cfg.shape, index, file, invisibleBinders());
 		if (src == null) return false;
 		final nominal: Null<String> = RefactorSupport.outerNominalOf(src);
 		return nominal != null && nominalIsMap(nominal, src, cfg);
