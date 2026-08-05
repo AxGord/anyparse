@@ -518,6 +518,7 @@ import unit.PreferArrowCallbackCheckTest;
 import unit.GuardReturnCheckTest;
 import unit.NoUnderscorePrefixCheckTest;
 import unit.ImportBlockOrderCheckTest;
+import unit.RedundantImportCheckTest;
 import unit.MisplacedTypeDocCheckTest;
 import unit.PreferTypedThrowCheckTest;
 import unit.TypeRefPrinterTest;
@@ -1067,6 +1068,7 @@ class RunTests {
 		addCase(new PreferArrowCallbackCheckTest());
 		addCase(new NoUnderscorePrefixCheckTest());
 		addCase(new ImportBlockOrderCheckTest());
+		addCase(new RedundantImportCheckTest());
 		addCase(new MisplacedTypeDocCheckTest());
 		addCase(new PreferTypedThrowCheckTest());
 		addCase(new ShortenTypeRefCheckTest());

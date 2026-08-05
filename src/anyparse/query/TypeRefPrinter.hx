@@ -60,6 +60,8 @@ private typedef ImportAnchor = {
  *     - an ALIASED `import pack.Module as U;` whose target is this path — the ALIAS is
  *       printed (the grammar drops an alias's original path, so it is recovered by slicing
  *       the statement's own source);
+ *     - a SECONDARY top-level type of a module the file plainly imports (`import pack.Module;`
+ *       binds every type `Module` declares, not only its main one — `moduleImportBinds`);
  *     - a type declared in THIS module (a same-file secondary type);
  *     - the MAIN type of another module in the SAME package (`pkg.Name` where the file's
  *       package is `pkg`) — visible with no import. A same-package SUB-module type
@@ -401,11 +403,42 @@ final class TypeRefPrinter {
 		if (shadowedLocally(canonical, simple)) return null;
 		if (alwaysInScope(canonical, simple)) return simple;
 		if (_importMap[simple] == canonical) return simple;
+		if (moduleImportBinds(canonical, simple)) return simple;
 		final root: Null<QueryNode> = _root;
 		if (root != null && declaresTypeNamed(root, simple) && canonical == moduleLocalPathOf(simple)) return simple;
 		final pkg: Null<String> = _pkg;
 		if (pkg != null && canonical == (pkg == '' ? simple : '$pkg.$simple')) return simple;
 		return null;
+	}
+
+	/**
+	 * Whether a plain `import <module>;` ALREADY in this file binds `simple` to `canonical` — i.e.
+	 * `canonical` is `<module>.<simple>`, a SECONDARY top-level type of a module the file imports.
+	 * A module import brings in every top-level type the module declares, not only its main one, so
+	 * the short name is already visible and a fresh `import <module>.<simple>;` would be pure noise
+	 * (the shape `redundant-import` reports; without this route the printer was the thing WRITING
+	 * it — `import fs.FileSystemInterface.FileSystemCloudAction;` into a file already carrying
+	 * `import fs.FileSystemInterface;`).
+	 *
+	 * `_importMap` is a plain-import map, so an ALIASED module import is absent from it and never
+	 * qualifies — correctly, since an alias binds only the alias.
+	 *
+	 * The INDEX is consulted as a VETO, not as the evidence: only a MODULE may be plainly imported,
+	 * so the import statement itself proves the parent path is one, and a module-qualified path
+	 * under it can only name that module's sub-type. An index that knows the simple name and places
+	 * it in OTHER modules only contradicts that reading, and the route steps aside for route 2
+	 * (which prints the same short name but adds an import that pins it). An index that has never
+	 * heard of the name — the module outside the resolution scope — vetoes nothing.
+	 */
+	private function moduleImportBinds(canonical: String, simple: String): Bool {
+		final dot: Int = canonical.length - simple.length - 1;
+		if (dot <= 0 || canonical.charCodeAt(dot) != '.'.code) return false;
+		final module: String = canonical.substring(0, dot);
+		if (_importMap[RefactorSupport.lastSegment(module)] != module) return false;
+		final index: Null<SymbolIndex> = _index;
+		if (index == null) return true;
+		final declarers: Array<FileInfo> = index.declaringFiles(simple);
+		return declarers.length == 0 || declarers.exists(f -> f.module == module);
 	}
 
 	/**
