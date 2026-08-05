@@ -195,14 +195,27 @@ final class CheckScan {
 	 * always-parenthesised wrap is the sound form there. This edge is shared with `loop-guard`.
 	 */
 	public static function negateConditionText(
-		cond: QueryNode, source: String, seams: NegationSeams, ?support: BooleanLogicSupport, ?typeNominalOf: (QueryNode) -> Null<String>
+		cond: QueryNode, source: String, seams: NegationSeams, ?support: BooleanLogicSupport, ?typeNominalOf: (QueryNode) -> Null<String>,
+		?slotKind: String
 	): String {
 		final cs: Null<Span> = cond.span;
 		if (cs == null) return '';
 		if (support != null && !hasCommentMarker(source, cs.from, cs.to) && !narrowingStranded(cond, seams))
-			return support.negateCondition(cond, source, typeNominalOf);
-		final unwrapped: Null<String> = notUnwrapText(cond, source, seams);
-		if (unwrapped != null) return unwrapped;
+			return support.negateCondition(cond, source, typeNominalOf, slotKind);
+		final inner: Null<QueryNode> = notUnwrapNode(cond, seams);
+		if (inner != null) {
+			final innerSpan: Null<Span> = inner.span;
+			// The STRIP arm is the ONE fallback shape that can bind looser than the slot it lands in
+			// (`!(a || b)` hands back `a || b` verbatim); the flip and the wrap below both bind tighter
+			// than `&&`. The `&&` slot is also the only one `RefShape` describes — via the same
+			// `andLowerPrecedenceKinds` list `collapsible-if` merges with, which must stay in step with
+			// the seam engine's own `slotPrecedence` answering this question for the De Morgan tier.
+			if (innerSpan != null) {
+				final text: String = source.substring(innerSpan.from, innerSpan.to);
+				final loose: Bool = slotKind != null && slotKind == seams.andKind && seams.andLowerPrecedenceKinds.contains(inner.kind);
+				return loose ? '($text)' : text;
+			}
+		}
 		final flipped: Null<String> = eqFlipText(cond, source, seams);
 		if (flipped != null) return flipped;
 		final src: String = source.substring(cs.from, cs.to);
@@ -304,7 +317,8 @@ final class CheckScan {
 			],
 			andKind: shape.logicalAndKind,
 			orKind: shape.logicalOrKind,
-			identKind: shape.identKind
+			identKind: shape.identKind,
+			andLowerPrecedenceKinds: shape.andLowerPrecedenceKinds ?? []
 		};
 	}
 
@@ -673,19 +687,19 @@ final class CheckScan {
 	}
 
 	/**
-	 * The `!e` → `e` STRIP arm of `negateConditionText`: unwraps a leading logical-not
-	 * (and one redundant paren under it), returning the inner source verbatim.
-	 * Null when `cond` is not a not-node or the shape does not match.
+	 * The `!e` -> `e` STRIP arm of `negateConditionText`: unwraps a leading logical-not
+	 * (and one redundant paren under it), returning the inner NODE — the caller reads its
+	 * source and asks `slotWrap` whether the slot it lands in needs a parenthesis pair.
+	 * Null when `cond` is not a not-node.
 	 */
-	private static function notUnwrapText(cond: QueryNode, source: String, seams: NegationSeams): Null<String> {
+	private static function notUnwrapNode(cond: QueryNode, seams: NegationSeams): Null<QueryNode> {
 		final notKind: Null<String> = seams.notKind;
 		if (notKind == null || cond.kind != notKind || cond.children.length < 1) return null;
-		var inner: QueryNode = cond.children[0];
+		final inner: QueryNode = cond.children[0];
 		final parenKind: Null<String> = seams.parenKind;
-		if (parenKind != null && inner.kind == parenKind && inner.children.length == 1) inner = inner.children[0];
-		final innerSpan: Null<Span> = inner.span;
-		return innerSpan == null ? null : source.substring(innerSpan.from, innerSpan.to);
+		return parenKind != null && inner.kind == parenKind && inner.children.length == 1 ? inner.children[0] : inner;
 	}
+
 
 	/**
 	 * The `==` / `!=` FLIP arm of `negateConditionText`: rewrites a binary (in)equality
@@ -950,7 +964,9 @@ private typedef CondSimplifySeams = {
  * `==` / `!=` kinds (`eqKind` / `notEqKind`) it flips, the atomic-expression kinds
  * (`atomicKinds`) that take a bare `!` rather than `!(…)`, and the logical
  * (`andKind` / `orKind`) plus plain-identifier (`identKind`) kinds the
- * stranded-narrowing gate walks.
+ * stranded-narrowing gate walks. `andLowerPrecedenceKinds` is the `RefShape` list
+ * `collapsible-if` merges with — it decides the parenthesis pair when a caller asks
+ * for the negation as an operand of the logical-and slot.
  */
 typedef NegationSeams = {
 	final notKind: Null<String>;
@@ -961,4 +977,5 @@ typedef NegationSeams = {
 	final andKind: Null<String>;
 	final orKind: Null<String>;
 	final identKind: String;
+	final andLowerPrecedenceKinds: Array<String>;
 };

@@ -196,9 +196,21 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	 * totally ordered — `!(a < b)` and `a >= b` differ whenever either side is a NaN or
 	 * a `null`). Operands carry precedence-safe parentheses; a comment in the operator
 	 * glue between operands is dropped, so the caller gates on a comment-free span.
+	 *
+	 * `slotKind` is the kind-addressed twin of `simplifyNegatedCompound`'s `parent`: it names
+	 * the operator slot the result lands in, and `slotPrecedence` / `wrap` add a pair exactly
+	 * when the negation binds looser than that slot (`'And'` + a De Morgan `||` result → the
+	 * pair). A caller whose slot is synthetic — `loop-guard` merging a guard into a header
+	 * `if` — has no parent node to pass, which is why the seam takes the kind. Null keeps the
+	 * bare form, and so does a kind `slotPrecedence` does not model — the caller owns that
+	 * contract (see the interface doc).
 	 */
-	public function negateCondition(cond: QueryNode, source: String, ?typeNominalOf: (QueryNode) -> Null<String>): String {
-		return negate(cond, source, typeNominalOf).src;
+	public function negateCondition(
+		cond: QueryNode, source: String, ?typeNominalOf: (QueryNode) -> Null<String>, ?slotKind: String
+	): String {
+		final negated: Operand = negate(cond, source, typeNominalOf);
+		final slot: Null<Precedence> = slotKind == null ? null : slotPrecedence(slotKind);
+		return slot == null ? negated.src : wrap(negated, slot);
 	}
 
 	/**
@@ -261,8 +273,7 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	}
 
 	/**
-	 * The precedence an expression must bind at to sit UNPARENTHESISED in a `parentKind` child
-	 * slot, or null when the slot constrains nothing — a statement, a condition, a call
+	 * The precedence an expression must bind at to sit UNPARENTHESISED in a `slotKind` child slot, or null when the slot constrains nothing — including a kind this function does not model, since an unlisted kind is by construction one no caller may rely on — a statement, a condition, a call
 	 * argument, an array element, an already-parenthesised expression: any expression is
 	 * grammatical there.
 	 *
@@ -279,8 +290,8 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	 * members share one left-associative rank while meaning nothing like each other. Those slots
 	 * therefore answer one tier up; see the case itself.
 	 */
-	private static function slotPrecedence(parentKind: String): Null<Precedence> {
-		return switch parentKind {
+	private static function slotPrecedence(slotKind: String): Null<Precedence> {
+		return switch slotKind {
 			case 'Not', 'Neg':
 				PREC_ATOM;
 			// The comparison tier is left-associative but NOT associative in meaning, so a result at
@@ -290,7 +301,7 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 			case 'Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq': PREC_BINARY;
 			case 'Or', 'And', 'NullCoal', 'Ternary', 'Is', 'In', 'BitOr', 'BitXor', 'BitAnd', 'Shl', 'Shr', 'UShr', 'Add', 'Sub', 'Mul',
 				'Div', 'Mod', 'Interval', 'CastExpr':
-				precedence(parentKind);
+				precedence(slotKind);
 			case _: null;
 		};
 	}

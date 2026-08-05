@@ -10,15 +10,17 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 
 /**
- * The `loop-guard` check: a `for` / `while` whose braced body opens with a bare
- * `if (c) continue;` guard is flagged `Info` and the guard is lifted into the loop
- * header with an inverted condition (`for (x in xs) if (INV) { REST }`). The inversion
- * pushes De Morgan inward (`a && b` → `!a || !b`), flips `==` / `!=` (NaN-safe), and keeps
- * an ordered comparison (`< <= > >=`) wrapped `!(…)` (unflipped, since `!(a < b)` and
- * `a >= b` differ under NaN); a comment inside the condition — or a condition whose
- * flattened `||` chain would strand a null-safety narrowing — falls back to the verbatim
- * `!(cond)` wrap. A cascade of guards, a guard-only body, an unbraced body, an `else`
- * branch and a comment inside the guard are safe misses; a later `continue` deeper in the
+ * The `loop-guard` check in both arms. LIFT: a `for` / `while` whose braced body opens with a
+ * bare `if (g) continue;` guard is flagged `Info` and the guard moves into a NEW loop header
+ * with an inverted condition (`for (x in xs) if (INV) { REST }`). MERGE: a loop whose body is
+ * already a lifted header `if (c) { … }` gets the inversion joined onto that header with `&&`
+ * (`for (x in xs) if (c && INV) { REST }`), each side parenthesised only when it binds looser
+ * than `&&`. The inversion pushes De Morgan inward (`a && b` → `!a || !b`), flips `==` / `!=`
+ * (NaN-safe), and keeps an ordered comparison (`< <= > >=`) wrapped `!(…)` (unflipped, since
+ * `!(a < b)` and `a >= b` differ under NaN); a comment inside the condition — or a condition
+ * whose flattened `||` chain would strand a null-safety narrowing — falls back to the verbatim
+ * `!(cond)` wrap. A cascade of guards, a guard-only body, an unbraced body, an `else` branch
+ * and a comment inside the guard are safe misses on both arms; a later `continue` deeper in the
  * body is preserved.
  */
 class LoopGuardCheckTest extends Test {
@@ -200,8 +202,139 @@ class LoopGuardCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { for (x in xs) { if (x) continue;').length);
 	}
 
-	private function wrap(loopCode: String): String {
-		return 'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\t$loopCode\n\t}\n}';
+	public function testHeaderIfGuardFlagged(): Void {
+		Assert.equals(1, violations(wrap('for (x in xs) if (x > 0) {\n\t\t\tif (x == 3) continue;\n\t\t\ttrace(x);\n\t\t}')).length);
+	}
+
+	public function testHeaderIfMergedFix(): Void {
+		Assert.equals(
+			wrap('for (x in xs) if (x > 0 && x != 3) {\n\t\t\ttrace(x);\n\t\t}'),
+			applyFix(wrap('for (x in xs) if (x > 0) {\n\t\t\tif (x == 3) continue;\n\t\t\ttrace(x);\n\t\t}'))
+		);
+	}
+
+	public function testHeaderIfOrNegationParenthesised(): Void {
+		// De Morgan turns the `&&` guard into a top-level `||`, which binds looser than the
+		// `&&` slot it lands in — without the pair the merged header would re-associate.
+		Assert.equals(
+			wrap('for (x in xs) if (c && (!a || !b)) {\n\t\t\ttrace(x);\n\t\t}'),
+			applyFix(wrap('for (x in xs) if (c) {\n\t\t\tif (a && b) continue;\n\t\t\ttrace(x);\n\t\t}'))
+		);
+	}
+
+	public function testHeaderIfLooseHeaderCondParenthesised(): Void {
+		Assert.equals(
+			wrap('for (x in xs) if ((a || b) && !skip) {\n\t\t\ttrace(x);\n\t\t}'),
+			applyFix(wrap('for (x in xs) if (a || b) {\n\t\t\tif (skip) continue;\n\t\t\ttrace(x);\n\t\t}'))
+		);
+	}
+
+	public function testHeaderIfTightNegationNotParenthesised(): Void {
+		Assert.equals(
+			wrap('for (x in xs) if (c && !skip) {\n\t\t\ttrace(x);\n\t\t}'),
+			applyFix(wrap('for (x in xs) if (c) {\n\t\t\tif (skip) continue;\n\t\t\ttrace(x);\n\t\t}'))
+		);
+	}
+
+	public function testHeaderIfNestedNotStripMerged(): Void {
+		Assert.equals(
+			wrap('for (x in xs) if (c && a && b) {\n\t\t\ttrace(x);\n\t\t}'),
+			applyFix(wrap('for (x in xs) if (c) {\n\t\t\tif (!(a && b)) continue;\n\t\t\ttrace(x);\n\t\t}'))
+		);
+	}
+
+	public function testWhileHeaderIfFlaggedAndFixed(): Void {
+		final src: String = wrap('while (xs.length > 0) if (ok) {\n\t\t\tif (xs.length == 3) continue;\n\t\t\ttrace(xs);\n\t\t}');
+		Assert.equals(1, violations(src).length);
+		Assert.equals(wrap('while (xs.length > 0) if (ok && xs.length != 3) {\n\t\t\ttrace(xs);\n\t\t}'), applyFix(src));
+	}
+
+	public function testHeaderIfElseNotFlagged(): Void {
+		// Merging the guard into the header would change WHEN the `else` runs: it fires on
+		// `!c` today and would fire on `!c || g` after.
+		Assert.equals(0, violations(wrap('for (x in xs) if (c) {\n\t\t\tif (g) continue;\n\t\t\ttrace(x);\n\t\t} else trace(0);')).length);
+	}
+
+	public function testHeaderIfCascadeNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(wrap('for (x in xs) if (c) {\n\t\t\tif (x == 0) continue;\n\t\t\tif (x == 1) continue;\n\t\t\ttrace(x);\n\t\t}')).length
+		);
+	}
+
+	public function testHeaderIfGuardOnlyBodyNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('for (x in xs) if (c) {\n\t\t\tif (x == 0) continue;\n\t\t}')).length);
+	}
+
+	public function testHeaderIfUnbracedThenNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('for (x in xs) if (c) if (x == 0) continue;')).length);
+	}
+
+	public function testHeaderIfLaterContinuePreserved(): Void {
+		// A `continue` deeper in REST still targets the same loop after the merge, so it rides along.
+		final src: String = wrap(
+			'for (x in xs) if (c) {\n\t\t\tif (x == 0) continue;\n\t\t\ttrace(x);\n\t\t\tif (x == 5) continue;\n\t\t\ttrace(x + 1);\n\t\t}'
+		);
+		Assert.equals(1, violations(src).length);
+		Assert.equals(
+			wrap('for (x in xs) if (c && x != 0) {\n\t\t\ttrace(x);\n\t\t\tif (x == 5) continue;\n\t\t\ttrace(x + 1);\n\t\t}'),
+			applyFix(src)
+		);
+	}
+
+	public function testHeaderIfNestedMergeCandidatesFixOuterFirst(): Void {
+		// Two merge candidates, one inside the other. Both are reported, but the outer block edit
+		// CONTAINS the inner pair, so `dropContainedEdits` keeps only the outer and the inner merges on
+		// the next `--fix` pass — the same staging the LIFT arm already relies on.
+		final inner: String = 'for (y in xs) if (d) {\n\t\t\t\tif (y == 1) continue;\n\t\t\t\ttrace(y);\n\t\t\t}';
+		final src: String = wrap('for (x in xs) if (c) {\n\t\t\tif (x == 0) continue;\n\t\t\t$inner\n\t\t}');
+		Assert.equals(2, violations(src).length);
+		Assert.equals(wrap('for (x in xs) if (c && x != 0) {\n\t\t\t$inner\n\t\t}'), applyFix(src));
+	}
+
+	public function testHeaderIfNotStripOfLooseOperandParenthesised(): Void {
+		// The STRIP shapes: `!( … )` hands its operand back VERBATIM, so whether the merged `&&` slot
+		// needs a pair is decided by that operand OWN kind, not by anything the negation built.
+		Assert.equals(
+			wrap('for (x in xs) if (c && (p || q)) {\n\t\t\ttrace(x);\n\t\t}'),
+			applyFix(wrap('for (x in xs) if (c) {\n\t\t\tif (!(p || q)) continue;\n\t\t\ttrace(x);\n\t\t}'))
+		);
+		Assert.equals(
+			wrap('for (x in xs) if (c && (p ?? q)) {\n\t\t\ttrace(x);\n\t\t}'),
+			applyFix(wrap('for (x in xs) if (c) {\n\t\t\tif (!(p ?? q)) continue;\n\t\t\ttrace(x);\n\t\t}'))
+		);
+		Assert.equals(
+			wrap('for (x in xs) if (c && (p ? q : r)) {\n\t\t\ttrace(x);\n\t\t}'),
+			applyFix(wrap('for (x in xs) if (c) {\n\t\t\tif (!(p ? q : r)) continue;\n\t\t\ttrace(x);\n\t\t}'))
+		);
+	}
+
+	public function testHeaderIfCommentBeforeGuardNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(wrap('for (x in xs) if (c) {\n\t\t\t// explain the guard\n\t\t\tif (x == 0) continue;\n\t\t\ttrace(x);\n\t\t}')).length
+		);
+	}
+
+	public function testHeaderIfCommentInsideGuardNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('for (x in xs) if (c) {\n\t\t\tif (x == 0) /* skip */ continue;\n\t\t\ttrace(x);\n\t\t}')).length);
+	}
+
+	public function testHeaderIfDeclinedFlipNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('for (x in xs) if (c) {\n\t\t\tif (q < 10) continue;\n\t\t\ttrace(x);\n\t\t}')).length);
+	}
+
+	public function testHeaderIfCanaryShapeMerged(): Void {
+		final sig: String = 'os:Array<Obj>, allowedType:Bool, name:String';
+		final input: String =
+			'for (o in os) if (!o.locked) {\n\t\t\tif (o is PlayerBase && !(allowedType && name == o.type)) continue;\n\t\t\ttrace(o);\n\t\t}';
+		final merged: String =
+			'for (o in os) if (!o.locked && (!(o is PlayerBase) || allowedType && name == o.type)) {\n\t\t\ttrace(o);\n\t\t}';
+		Assert.equals(wrapIn(sig, merged), applyFix(wrapIn(sig, input)));
+	}
+
+	private inline function wrap(loopCode: String): String {
+		return wrapIn('xs:Array<Int>', loopCode);
 	}
 
 	private function violations(source: String): Array<Violation> {
@@ -217,6 +350,11 @@ class LoopGuardCheckTest extends Test {
 		var out: String = source;
 		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
 		return out;
+	}
+
+
+	private function wrapIn(signature: String, loopCode: String): String {
+		return 'class C {\n\tfunction f($signature):Void {\n\t\t$loopCode\n\t}\n}';
 	}
 
 }
