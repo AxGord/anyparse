@@ -115,6 +115,78 @@ class RedundantParensCheckTest extends Test {
 		Assert.equals(inFn('var o = {x: a + c};'), fixed(inFn('var o = {x: (a + c)};')));
 	}
 
+	/**
+	 * The array-INDEX slot: `[` and `]` bound it and the one expression between them parses
+	 * at the loosest precedence, so a pair filling the whole slot binds nothing — the same
+	 * delimited argument a call argument or an array element rests on. The RECEIVER twin
+	 * discriminates: `(a ? b : c)[i]` is an operand position and keeps its parens.
+	 */
+	public function testIndexSlotFlagged(): Void {
+		Assert.equals(1, violations(inFn('out[(outPos++)] = 1;')).length);
+		Assert.equals(inFn('out[outPos++] = 1;'), fixed(inFn('out[(outPos++)] = 1;')));
+		Assert.equals(inFn('var b = enc[c >>> 10];'), fixed(inFn('var b = enc[(c >>> 10)];')));
+		Assert.equals(inFn('var b = enc[c >>> 12 & 0x3f];'), fixed(inFn('var b = enc[(c >>> 12 & 0x3f)];')));
+		Assert.equals(inFn('var b = enc[(c & 0x03) << 4];'), fixed(inFn('var b = enc[((c & 0x03) << 4)];')));
+	}
+
+	public function testIndexSlotNestedIndexFlagged(): Void {
+		Assert.equals(inFn('var b = a[b[i++]];'), fixed(inFn('var b = a[(b[i++])];')));
+	}
+
+	public function testIndexReceiverNotFlagged(): Void {
+		Assert.equals(0, violations(inFn('var b = (a ? p : q)[i];')).length);
+		Assert.equals(0, violations(inFn('var b = (arr)[i];')).length);
+	}
+
+	public function testIndexSlotDoubleParensCollapseFully(): Void {
+		Assert.equals(1, violations(inFn('var b = a[((i))];')).length);
+		Assert.equals(inFn('var b = a[i];'), fixed(inFn('var b = a[((i))];')));
+	}
+
+	/**
+	 * A right-greedy construct is bounded by the `]` that ends the slot, so it needs no pair
+	 * of its own — `arr[untyped i]`, `arr[cast i]` and `arr[@:privateAccess b.v]` all compile
+	 * and evaluate as their parenthesized spellings do (measured against the compiler). This
+	 * is the delimited arm, where the content's precedence is irrelevant; the operand arms'
+	 * `rightGreedyExprKinds` gate has nothing to protect here.
+	 */
+	public function testIndexSlotRightGreedyContentIsUnwrapped(): Void {
+		Assert.equals(inFn('var b = arr[untyped i];'), fixed(inFn('var b = arr[(untyped i)];')));
+		Assert.equals(inFn('var b = arr[cast i];'), fixed(inFn('var b = arr[(cast i)];')));
+		Assert.equals(inFn('var b = arr[@:privateAccess q.v];'), fixed(inFn('var b = arr[(@:privateAccess q.v)];')));
+	}
+
+	/**
+	 * The separator-greedy gate applies in this slot like any other, and is CONSERVATIVE
+	 * here — a `]` is no separator a multi-declarator can consume. Pinned so relaxing it
+	 * stays a deliberate act; the macro non-declaration twin discriminates.
+	 */
+	public function testIndexSlotMacroDeclarationKeepsItsParens(): Void {
+		Assert.equals(0, violations(inFn('var b = a[(macro final w = 1)];')).length);
+		Assert.equals(inFn('var b = a[macro 1];'), fixed(inFn('var b = a[(macro 1)];')));
+	}
+
+	/**
+	 * An index holds exactly ONE expression, so it is no splicing host: `macro a[$a{args}]`
+	 * and `macro a[($a{args})]` both build an array-literal index, differing only by the
+	 * transparent `EParenthesis` (measured with `ExprTools.toString`). Nothing for the splice
+	 * gate to protect, and the ordinary delimited-slot rule unwraps.
+	 */
+	public function testIndexSlotIsNotASplicingHost(): Void {
+		Assert.equals(inFn("var a = macro g[$a{args}];"), fixed(inFn("var a = macro g[($a{args})];")));
+	}
+
+	/**
+	 * A map-literal KEY is an operand of `=>`, not a bracket-bounded slot — the pair is what
+	 * stops the ternary from swallowing the arrow, and dropping it makes the compiler report
+	 * `Unexpected =>` (measured). The index twin above is what a real bracket slot looks
+	 * like.
+	 */
+	public function testMapLiteralKeyNotFlagged(): Void {
+		Assert.equals(0, violations(inFn('var m = [(a ? p : q) => d];')).length);
+		Assert.equals(0, violations(inFn('var m = [(a + c) => d];')).length);
+	}
+
 	public function testIfConditionFlagged(): Void {
 		Assert.equals(inFn('if (a) g();'), fixed(inFn('if ((a)) g();')));
 		Assert.equals(inFn('if (a + c) g();'), fixed(inFn('if ((a + c)) g();')));

@@ -38,7 +38,7 @@ import anyparse.runtime.Span;
  * initializer, `return` value, array-literal element, object-literal field value,
  * `new T(args)` argument, `${ … }` string-interpolation slot) and
  * `delimitedTailChildKinds` (every child but the head:
- * call ARGUMENT, not the callee; assignment RIGHT-hand side, not the target) — plus
+ * call ARGUMENT, not the callee; array INDEX, not the receiver; assignment RIGHT-hand side, not the target) — plus
  * the PRE-EXISTING condition seams `conditionFirstChildKinds` /
  * `conditionLastChildKinds` (`if` / `while` / `do … while`, whose own `(` `)` are
  * grammar syntax rather than a node).
@@ -124,7 +124,7 @@ import anyparse.runtime.Span;
  *   as delimited would strip syntax the language requires.
  * - Every operand position of a unary or binary operator: an operand is parsed above
  *   the loosest precedence, so its interior re-associates outward — `(a + b) * c` ≢
- *   `a + b * c`, and a map-literal key `[(a ? b : c) => d]` ≢ `[a ? b : c => d]`.
+ *   `a + b * c`, and a map-literal key `[(a ? b : c) => d]` ≢ `[a ? b : c => d]` (bare: `Unexpected =>`, measured).
  *   That is why a call's CALLEE and an assignment's TARGET are excluded while their
  *   tails are not, and why the map-literal `=>` VALUE is left alone even though its
  *   right-associative prec-0 operator would make it provably safe. The lone exception
