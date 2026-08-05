@@ -9,14 +9,15 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeInfoProvider;
+import haxe.Exception;
 
 /**
  * Flags a comparison against a boolean literal — `x == true`, `x != false` and the like —
- * where the literal adds nothing (SonarLint S1125). Purely structural plus a declared-type
- * gate; `Severity.Info`. `fix` rewrites the comparison to its operand — `x == true` /
+ * where the literal adds nothing (SonarLint S1125). Structural shape plus a type gate;
+ * `Severity.Info`. `fix` rewrites the comparison to its operand — `x == true` /
  * `x != false` → `x`, `x == false` / `x != true` → `!x` — but ONLY when the operand is
- * provably non-null Bool: a boolean-operator result, or a bare identifier whose declared
- * type proves it. See the null-safety caveat below.
+ * provably non-null Bool. All four rewrites ride the SAME proof, because on a nullable
+ * operand they are not symmetric (see the null-safety caveat below).
  *
  * ## Constant fold
  *
@@ -29,25 +30,43 @@ import anyparse.query.TypeInfoProvider;
  * ## Null-safety caveat
  *
  * Under strict null-safety `expr == true` on a `Null<Bool>` is REQUIRED — `if (x)` on a
- * nullable Bool does not compile — so that `== true` is load-bearing, not redundant. The
- * check conservatively SKIPS any operand whose subtree reaches a kind whose nullness it
- * cannot rule out (`RefShape.nullableOperandKinds` — Haxe `Call` / `FieldAccess` /
- * `SafeFieldAccess`: a method or `Map.get` result, a possibly-`@:optional` field, a `?.`
- * access). A BARE-IDENTIFIER operand is resolved through the grammar's `TypeInfoProvider`:
- * it is reported only when its declared type proves non-null Bool
- * (`TypeResolver.isProvablyNonNull`) — a `Null<Bool>` local (`final elseBool:Null<Bool>`)
- * or an unannotated / unresolvable identifier stays silent (unverifiable). Grammars with
- * no `TypeInfoProvider` fall back to reporting bare identifiers for a human to judge. It
- * also does not descend into macro-reification subtrees (`RefShape.opaqueKinds`), whose
- * comparisons are generated code rather than authored style.
+ * nullable Bool does not compile — so that `== true` is load-bearing, not redundant. And
+ * even where it does compile the four rewrites diverge: measured on hxcpp with a `null`
+ * `Null<Bool>`, `x == true` is `false` and `x != true` is `true`, matching `x` / `!x`,
+ * while `x == false` is `false` where `!x` is `true` — so the `false`-literal pair would
+ * CHANGE the value. Rather than license two of four on a nullable operand, the check
+ * demands a non-nullable Bool for all four and stays silent otherwise.
  *
- * The autofix applies that SAME provably-Bool gate (`operandProvablyBool`): it strips a
- * boolean-operator operand (`RefShape.comparisonKinds` ∪ `RefShape.notKind`, parentheses
- * unwrapped — non-null `Bool` by construction) AND a bare-identifier operand whose declared
- * type proves non-null Bool (`TypeResolver.isProvablyNonNull` over
- * `TypeInfoProvider.declaredTypes`). The one asymmetry vs the report: without a
- * `TypeInfoProvider` it keeps the unresolved bare identifier for a human, while `fix` leaves
- * it untouched — no proof, so its `== true` may be load-bearing.
+ * Two proofs grant it, and an operand with neither is skipped. STRUCTURALLY: a
+ * boolean-operator result (`RefShape.comparisonKinds` ∪ `RefShape.notKind`, parentheses
+ * unwrapped — non-null `Bool` by construction), or a bare identifier whose declared type
+ * proves non-null Bool (`TypeResolver.isProvablyNonNull` over
+ * `TypeInfoProvider.declaredTypes`) — a `Null<Bool>` local, an optional parameter, or an
+ * unannotated / unresolvable identifier stays silent. This arm sits behind a blanket veto
+ * on any operand subtree reaching `RefShape.nullableOperandKinds` (Haxe `Call` /
+ * `FieldAccess` / `SafeFieldAccess`: a method or `Map.get` result, a possibly-`@:optional`
+ * field, a `?.` access). BY RESOLVED TYPE: a FIELD ACCESS whose receiver type resolves and
+ * whose member's declared type is one of `RefShape.nonNullableTypeNames` — `object.visible`
+ * on an `openfl` `DisplayObject`, and (through `TypeInfoProvider.castTargetSources`, since
+ * the projection drops the written target) `cast(object, DisplayObjectContainer).mouseEnabled`
+ * on the cast target's own or INHERITED member. This is the one arm that may pass the veto:
+ * the veto refuses an operand of UNKNOWN nullability, and a member whose declared type the
+ * index resolved is not unknown. `memberLookupIsPinned` refuses the lookups the index cannot
+ * answer soundly — an anon-struct receiver, a simple-name homonym, a `#if`-guarded declaration.
+ *
+ * The resolved-type arm inherits the `nonNullableTypeNames` PREMISE — that a declared `Bool`
+ * holds no null — from the identifier arm beside it (`TypeResolver.isProvablyNonNull` returns
+ * true for a `Bool` annotation with no null-safety involved at all). That premise is exact on a
+ * static target and NOT exact on a dynamic one, where an uninitialized or `@:optional`
+ * `public var flag:Bool` class field reads `null`: there `o.flag == false` is `false` while
+ * `!o.flag` is `true`. BOTH arms share the hole — the identifier arm has carried it since the
+ * declared-type gate landed — so closing it belongs to the shared premise (or to a per-target
+ * seam), not to one arm.
+ *
+ * Grammars with no `TypeInfoProvider` fall back to reporting bare identifiers for a human to
+ * judge; `fix` leaves those untouched (no proof, so the `== true` may be load-bearing). The check
+ * does not descend into macro-reification subtrees (`RefShape.opaqueKinds`), whose comparisons
+ * are generated code rather than authored style.
  *
  * ## Grammar-agnostic
  *
@@ -55,9 +74,11 @@ import anyparse.query.TypeInfoProvider;
  * the nullable-operand skip from `RefShape.nullableOperandKinds` (falling back to the single
  * `RefShape.nullSafeAccessKind` when unset), the macro skip from `RefShape.opaqueKinds`, the
  * identifier gate from `TypeInfoProvider.declaredTypes` + the nullability seams
- * (`nonNullableTypeNames` / `nullableWrapperTypeNames`), and the boolean-operator half of the
- * provably-Bool gate from `RefShape.comparisonKinds` + `RefShape.notKind`. Unset equality
- * kinds or literal kind makes the check a no-op.
+ * (`nonNullableTypeNames` / `nullableWrapperTypeNames`), the boolean-operator half of the
+ * provably-Bool gate from `RefShape.comparisonKinds` + `RefShape.notKind`, and the
+ * resolved-type arm from `RefShape.fieldAccessKind` / `typedCastKinds` +
+ * `TypeInfoProvider.castTargetSources` + the `SymbolIndex`. Unset equality kinds or literal
+ * kind makes the check a no-op; an unset `fieldAccessKind` drops just the resolved-type arm.
  */
 @:nullSafety(Strict)
 final class ComparisonToBoolean implements Check {
@@ -78,15 +99,14 @@ final class ComparisonToBoolean implements Check {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
 		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		// Lazy: the resolution scope reads the configured libraries, and only the field-access
+		// proof ever demands it — after every cheaper arm on every candidate has failed.
+		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			final declaredTypes: Null<Map<Int, String>> = provider != null ? provider.declaredTypes(entry.source) : null;
-			walk(
-				violations, entry.file, tree, tree, seams.shape, declaredTypes, seams.equalityKinds, seams.boolLitKind,
-				seams.nullableKinds, seams.opaqueKinds, seams.boolOpKinds
-			);
+			walk(violations, tree, seams, proofOf(entry.file, entry.source, tree, provider, index));
 		}
 		return violations;
 	}
@@ -94,15 +114,17 @@ final class ComparisonToBoolean implements Check {
 	/**
 	 * Rewrite each flagged comparison to its operand. `x == true` / `x != false` collapse
 	 * to the operand verbatim; `x == false` / `x != true` collapse to its negation
-	 * (`!operand`, parenthesized unless the operand is a bare identifier or already
-	 * parenthesized, so the unary `!` binds correctly). Emitted for any operand
-	 * `operandProvablyBool` accepts — a boolean-operator result, or a bare identifier whose
-	 * declared type proves non-null Bool (`TypeResolver.isProvablyNonNull` over the plugin's
-	 * `TypeInfoProvider.declaredTypes`, resolved from `root`). An unprovable identifier — a
-	 * `Null<Bool>` / unannotated local, or any identifier when the grammar exposes no declared
-	 * types — is left to the report, since its `== true` may be load-bearing under strict
-	 * null-safety. `eqKind` tells `==` from `!=` — it is required HERE only (unset →
-	 * report-only), not in `run`'s gate.
+	 * (`!operand`, parenthesized unless the operand is atomic — a bare identifier, an
+	 * already-parenthesized expression, or a field access — so the unary `!` binds correctly).
+	 * Emitted for any operand `operandProven` accepts, with the no-proof fallback OFF: an
+	 * unresolved bare identifier is left to the report, since its `== true` may be
+	 * load-bearing under strict null-safety. `eqKind` tells `==` from `!=` — it is required
+	 * HERE only (unset → report-only), not in `run`'s gate.
+	 *
+	 * The resolved-type arm needs a `SymbolIndex`; `fixIndex` supplies the run's
+	 * resolution-scoped one when the plugin hosts it, the caller's otherwise, and as a last
+	 * resort one built over `source` alone (enough for a same-file receiver type). The file the
+	 * member lookup resolves imports against comes from the violations themselves.
 	 *
 	 * When both operands are boolean literals (`true == true`), the whole comparison is
 	 * folded to its constant value instead — `true == true` → `true`, `true != true` →
@@ -114,48 +136,73 @@ final class ComparisonToBoolean implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = resolveSeams(plugin);
-		if (seams == null) return [];
+		if (seams == null || violations.length == 0) return [];
 		final maybeEqKind: Null<String> = seams.eqKind;
 		final maybeRoot: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (maybeEqKind == null || maybeRoot == null) return [];
 		final eqKind: String = maybeEqKind;
 		final root: QueryNode = maybeRoot;
 		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
-		final declaredTypes: Null<Map<Int, String>> = provider != null ? provider.declaredTypes(source) : null;
+		final file: String = violations[0].file;
+		for (violation in violations) if (violation.file != file)
+			throw new Exception('$RULE_ID: fix() takes ONE file\'s violations, got $file and ${violation.file}');
+		// `lazySymbolIndex` prefers the run's resolution scope, then the caller's report index, and
+		// only then builds over `source` alone — enough for a same-file receiver type.
+		final resolver: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex([{ file: file, source: source }], plugin, index);
+		final proof: TypeProof = proofOf(file, source, root, provider, resolver);
 		return CheckScan.applyBySpan(
-			plugin, source, violations, seams.equalityKinds,
-			(node, span) ->
-				comparisonEdit(node, span, source, root, seams.shape, declaredTypes, seams.boolLitKind, eqKind, seams.boolOpKinds)
+			plugin, source, violations, seams.equalityKinds, (node, span) -> comparisonEdit(node, span, source, seams, proof, eqKind)
 		);
 	}
 
 	/**
+	 * The per-file resolution context the resolved-type proof reads. `castTargets` is memoized
+	 * because recovering it costs a SECOND full parse of the file, and `index` is the run's lazy
+	 * `SymbolIndex` — neither is touched until a field-access operand actually reaches the proof.
+	 */
+	private static function proofOf(
+		file: String, source: String, root: QueryNode, provider: Null<TypeInfoProvider>, index: () -> Null<SymbolIndex>
+	): TypeProof {
+		var casts: Null<Map<Int, String>> = null;
+		return {
+			file: file,
+			root: root,
+			declaredTypes: provider?.declaredTypes(source),
+			castTargets: () -> {
+				final ready: Null<Map<Int, String>> = casts;
+				if (ready != null) return ready;
+				final p: Null<TypeInfoProvider> = provider;
+				final computed: Map<Int, String> = p != null ? p.castTargetSources(source) : [];
+				casts = computed;
+				return computed;
+			},
+			index: index
+		};
+	}
+
+	/**
 	 * Walk `node`, flagging an equality whose exactly one operand is a boolean literal and
-	 * whose other operand is provably non-null Bool. A non-identifier operand must not reach
-	 * `nullableKinds`; a BARE-IDENTIFIER operand is reported only when the grammar provides
-	 * type info AND its declared type proves non-null (`TypeResolver.isProvablyNonNull`) — a
-	 * `Null<Bool>` local's `== true` is load-bearing under strict null-safety, and an
-	 * unresolvable / unannotated identifier cannot be verified, so both stay silent. Without
-	 * a `TypeInfoProvider` the identifier falls back to being reported for a human to judge.
-	 * Macro reification subtrees (`opaqueKinds`) are not descended into.
+	 * whose other operand `operandProven` accepts with the report's no-proof fallback ON —
+	 * a boolean-operator result, a bare identifier whose declared type proves non-null Bool, or
+	 * a field access whose resolved member type does. A `Null<Bool>` local's `== true` is
+	 * load-bearing under strict null-safety, and an unresolvable / unannotated identifier cannot
+	 * be verified, so both stay silent; without a `TypeInfoProvider` the identifier falls back to
+	 * being reported for a human to judge. Macro reification subtrees (`opaqueKinds`) are not
+	 * descended into.
 	 *
 	 * A comparison where BOTH operands are boolean literals (`true == true`) is flagged
 	 * unconditionally in a separate branch — no provably-Bool gate applies, since two literal
 	 * operands are provably non-null.
 	 */
-	private static function walk(
-		out: Array<Violation>, file: String, node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Null<Map<Int, String>>,
-		equalityKinds: Array<String>, boolLitKind: String, nullableKinds: Array<String>, opaqueKinds: Array<String>,
-		boolOpKinds: Array<String>
-	): Void {
-		if (opaqueKinds.contains(node.kind)) return;
+	private static function walk(out: Array<Violation>, node: QueryNode, seams: Seams, proof: TypeProof): Void {
+		if (seams.opaqueKinds.contains(node.kind)) return;
 		final span: Null<Span> = node.span;
-		if (span != null && node.children.length == 2 && equalityKinds.contains(node.kind)) {
-			final leftIsBool: Bool = node.children[0].kind == boolLitKind;
-			final rightIsBool: Bool = node.children[1].kind == boolLitKind;
+		if (span != null && node.children.length == 2 && seams.equalityKinds.contains(node.kind)) {
+			final leftIsBool: Bool = node.children[0].kind == seams.boolLitKind;
+			final rightIsBool: Bool = node.children[1].kind == seams.boolLitKind;
 			if (leftIsBool && rightIsBool) {
 				out.push({
-					file: file,
+					file: proof.file,
 					span: span,
 					rule: RULE_ID,
 					severity: Severity.Info,
@@ -163,10 +210,8 @@ final class ComparisonToBoolean implements Check {
 				});
 			} else if (leftIsBool != rightIsBool) {
 				final other: QueryNode = leftIsBool ? node.children[1] : node.children[0];
-				if (
-					operandProvablyBool(other, root, shape, declaredTypes, boolOpKinds, true) && !operandIsNullable(other, nullableKinds)
-				) out.push({
-					file: file,
+				if (operandProven(other, seams, proof, true)) out.push({
+					file: proof.file,
 					span: span,
 					rule: RULE_ID,
 					severity: Severity.Info,
@@ -174,25 +219,124 @@ final class ComparisonToBoolean implements Check {
 				});
 			}
 		}
-		for (c in node.children)
-			walk(out, file, c, root, shape, declaredTypes, equalityKinds, boolLitKind, nullableKinds, opaqueKinds, boolOpKinds);
+		for (c in node.children) walk(out, c, seams, proof);
 	}
 
 	/**
-	 * Whether `other` is a PROVABLY non-null Bool operand — the shared gate for BOTH the
-	 * report (`walk`) and the autofix (`comparisonEdit`), closing the array-element /
-	 * `ps[i] == true`-style false positive. Two proofs: a boolean-operator result (comparison
-	 * / `&&` / `||` / `!`, parentheses unwrapped — `RefactorSupport.provablyBoolOperand`,
-	 * non-null Bool by construction), or a bare identifier whose declared type proves non-null
-	 * Bool (`TypeResolver.isProvablyNonNull` over `declaredTypes`). Any other operand — an
-	 * array element, a `Map.get` / method result, a possibly-`@:optional` field, a `?.` access,
-	 * a `Null<Bool>` / unannotated identifier — is NOT provably non-null Bool, so its
-	 * `== true` may be load-bearing under strict null-safety.
+	 * Whether `other` is a PROVABLY non-null Bool operand — the shared gate for BOTH the report
+	 * (`walk`) and the autofix (`comparisonEdit`). Two independent proofs, cheapest first:
+	 *
+	 *  - the STRUCTURAL one (`operandProvablyBool`), behind the blanket `nullableKinds` subtree
+	 *    veto that has always guarded it: a boolean-operator result, or a bare identifier whose
+	 *    declared type proves non-null Bool.
+	 *  - the RESOLVED-TYPE one (`resolvedNonNullBool`), which reads a FIELD ACCESS's member type
+	 *    out of the `SymbolIndex`. It is the ONE arm allowed past that veto, and only because the
+	 *    veto exists to refuse an operand of UNKNOWN nullability — a member declared plain `Bool`
+	 *    is not of unknown nullability, it is resolved.
+	 *
+	 * `fallbackReport` settles the no-type-info case for the structural arm: with no
+	 * `TypeInfoProvider` a bare identifier cannot be proven either way. The report passes `true`
+	 * (surface it for a human to judge); the autofix passes `false` (never strip without proof —
+	 * an unproven `== true` may be load-bearing).
+	 */
+	private static function operandProven(other: QueryNode, seams: Seams, proof: TypeProof, fallbackReport: Bool): Bool {
+		final structural: Bool = !operandIsNullable(other, seams.nullableKinds)
+			&& operandProvablyBool(other, proof.root, seams.shape, proof.declaredTypes, seams.boolOpKinds, fallbackReport);
+		return structural || resolvedNonNullBool(other, seams.shape, proof);
+	}
+
+	/**
+	 * Whether `other`'s resolved DECLARED type is a non-nullable Bool. `fieldAccessTypeNominal`
+	 * reads the member's written type off the `SymbolIndex`; the answer counts only when the
+	 * resulting nominal is one of `RefShape.nonNullableTypeNames`. A `Null<Bool>` member reduces
+	 * to the wrapper nominal `Null` and fails, as does every nominal the shape does not vouch for
+	 * — `Dynamic` / `Any`, and a user abstract over `Bool` whose own null behaviour is its own.
+	 *
+	 * Bool-ness needs no separate seam: `other` is compared against a BOOLEAN literal, so the one
+	 * value type that can survive the comparison's own typing is the boolean one.
+	 */
+	private static function resolvedNonNullBool(other: QueryNode, shape: RefShape, proof: TypeProof): Bool {
+		final nominal: Null<String> = fieldAccessTypeNominal(other, shape, proof);
+		return nominal != null && (shape.nonNullableTypeNames ?? []).contains(nominal);
+	}
+
+	/**
+	 * The simple nominal of the type a FIELD-ACCESS operand carries: its receiver's type resolved
+	 * to a nominal, then that type's member `other.name` looked up through the import- and
+	 * inheritance-aware `SymbolIndex` walk. Null for any other operand kind, for an unresolved
+	 * receiver, for a receiver `memberLookupIsPinned` refuses, and for an unresolved member.
+	 *
+	 * `SymbolIndex`'s package-blind simple-name fallback is deliberately NOT used here. Its stated
+	 * purpose is the aliased conditional supertype the import-aware walk cannot follow — but it has
+	 * no supertype walk of its own, so for THIS arm it can only ever answer from a same-simple-named
+	 * type in another package: a wrong answer rather than a wider one.
+	 */
+	private static function fieldAccessTypeNominal(other: QueryNode, shape: RefShape, proof: TypeProof): Null<String> {
+		final faKind: Null<String> = shape.fieldAccessKind;
+		final field: Null<String> = other.name;
+		if (faKind == null || other.kind != faKind || other.children.length != 1 || field == null) return null;
+		final index: Null<SymbolIndex> = proof.index();
+		if (index == null) return null;
+		final resolved: SymbolIndex = index;
+		final recvType: Null<String> = receiverTypeNominal(other.children[0], shape, proof, resolved);
+		if (recvType == null || !memberLookupIsPinned(recvType, field, resolved)) return null;
+		final memberSource: Null<String> = resolved.resolvePathFinalMemberTypeSource(proof.file, recvType, [field]);
+		return memberSource == null ? null : RefactorSupport.outerNominalOf(memberSource);
+	}
+
+	/**
+	 * Whether the `recvType.field` member lookup can be TRUSTED — three refusals, each a known
+	 * blind spot of the simple-name `SymbolIndex` that this arm would otherwise turn into a
+	 * value-changing rewrite:
+	 *
+	 *  - an ANONYMOUS-STRUCTURE receiver. An `@:optional` structural field is nullable while
+	 *    carrying a bare `Bool` annotation, and the member table records both forms identically.
+	 *  - a receiver type whose SIMPLE NAME is declared in more than one file. The index keys types
+	 *    by simple name, so a homonym in another package can answer for the type actually in scope —
+	 *    a root `T` declaring `flag:Bool` standing in for a `p.T extends Base` that INHERITS
+	 *    `flag:Null<Bool>` (p.T declares nothing directly, so nothing else notices the swap).
+	 *    Conservative: the in-scope type often resolves correctly anyway, but proving which of the
+	 *    index's arms answered costs more than the refusal.
+	 *  - a `#if`-GUARDED declaration of `field` on `recvType`. The index is branch-blind and its
+	 *    inheritance walk is first-wins, so which branch is written first would decide the proof;
+	 *    `MemberInfo.guarded` exists precisely so a rewriting consumer bails. A member declared on a
+	 *    SUPERTYPE has no direct declaration to inspect here, so its guardedness stays invisible — a
+	 *    residual hole, narrower than the one it replaces.
+	 *
+	 * Nothing checks the member's WRITTEN TYPE for agreement or presence: past the first two refusals
+	 * exactly one type is named `recvType`, so Haxe permits at most one non-`#if` declaration of
+	 * `field` on it, and a type-less member (a method) makes the walk itself answer null.
+	 */
+	private static function memberLookupIsPinned(recvType: String, field: String, index: SymbolIndex): Bool {
+		if (index.isAnonStructType(recvType) || index.declaringFiles(recvType).length != 1) return false;
+		for (declaration in index.memberDeclarationsOf(recvType, field)) if (declaration.member.guarded) return false;
+		return true;
+	}
+
+	private static function receiverTypeNominal(recv: QueryNode, shape: RefShape, proof: TypeProof, index: SymbolIndex): Null<String> {
+		final recvSpan: Null<Span> = recv.span;
+		if ((shape.typedCastKinds ?? []).contains(recv.kind))
+			return recvSpan == null ? null : TypeResolver.simpleNominalName(TypeResolver.castTargetWithin(recvSpan, proof.castTargets()));
+		final declaredTypes: Null<Map<Int, String>> = proof.declaredTypes;
+		return declaredTypes == null
+			? null
+			: TypeResolver.simpleNominalName(RefactorSupport.valueTypeNominal(recv, proof.root, shape, declaredTypes, index, proof.file));
+	}
+
+	/**
+	 * The STRUCTURAL half of `operandProven`: whether `other` is provably non-null Bool by shape
+	 * alone. Two proofs: a boolean-operator result (comparison / `&&` / `||` / `!`, parentheses
+	 * unwrapped — `RefactorSupport.provablyBoolOperand`, non-null Bool by construction), or a bare
+	 * identifier whose declared type proves non-null Bool (`TypeResolver.isProvablyNonNull` over
+	 * `declaredTypes`). Any other operand — an array element, a `Map.get` / method result, a
+	 * possibly-`@:optional` field, a `?.` access, a `Null<Bool>` / unannotated identifier — is not
+	 * proven here; a field access may still be proven by `resolvedNonNullBool`, which asks the
+	 * `SymbolIndex` for the member's declared type instead of reading the operand's shape.
 	 *
 	 * `fallbackReport` settles the no-type-info case: when the grammar exposes no
-	 * `TypeInfoProvider` (`declaredTypes == null`) a bare identifier cannot be proven either
-	 * way. The report passes `true` (surface it for a human to judge); the autofix passes
-	 * `false` (never strip without proof — an unproven `== true` may be load-bearing).
+	 * `TypeInfoProvider` (`declaredTypes == null`) a bare identifier cannot be proven either way.
+	 * The report passes `true` (surface it for a human to judge); the autofix passes `false` (never
+	 * strip without proof — an unproven `== true` may be load-bearing).
 	 */
 	private static function operandProvablyBool(
 		other: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Null<Map<Int, String>>, boolOpKinds: Array<String>,
@@ -209,9 +353,15 @@ final class ComparisonToBoolean implements Check {
 		return false;
 	}
 
-	/** `!operand`, parenthesizing a non-atomic operand so the unary `!` binds correctly. */
-	private static function negate(operand: QueryNode, src: String, identKind: String, parenKind: Null<String>): String {
-		return operand.kind == identKind || operand.kind == parenKind ? '!$src' : '!($src)';
+	/**
+	 * `!operand`, parenthesizing a non-atomic operand so the unary `!` binds correctly. A bare
+	 * identifier, an already-parenthesized operand and a FIELD ACCESS are atomic — member access
+	 * binds tighter than the unary `!`, so `!o.flag` and `!cast(o, T).flag` need no parentheses
+	 * (and adding them would only give `redundant-parens` something to strip).
+	 */
+	private static function negate(operand: QueryNode, src: String, shape: RefShape): String {
+		final atomic: Bool = operand.kind == shape.identKind || operand.kind == shape.parenKind || operand.kind == shape.fieldAccessKind;
+		return atomic ? '!$src' : '!($src)';
 	}
 
 	/**
@@ -227,10 +377,10 @@ final class ComparisonToBoolean implements Check {
 	 * negation (`negate` parenthesises unless the operand is an ident / paren).
 	 */
 	private static function comparisonEdit(
-		node: QueryNode, span: Span, source: String, root: QueryNode, shape: RefShape, declaredTypes: Null<Map<Int, String>>,
-		boolLitKind: String, eqKind: String, boolOpKinds: Array<String>
+		node: QueryNode, span: Span, source: String, seams: Seams, proof: TypeProof, eqKind: String
 	): Null<{ span: Span, text: String }> {
 		if (node.children.length != 2) return null;
+		final boolLitKind: String = seams.boolLitKind;
 		final leftIsBool: Bool = node.children[0].kind == boolLitKind;
 		final rightIsBool: Bool = node.children[1].kind == boolLitKind;
 		if (!leftIsBool && !rightIsBool) return null;
@@ -246,14 +396,14 @@ final class ComparisonToBoolean implements Check {
 		}
 		final lit: QueryNode = leftIsBool ? node.children[0] : node.children[1];
 		final other: QueryNode = leftIsBool ? node.children[1] : node.children[0];
-		if (!operandProvablyBool(other, root, shape, declaredTypes, boolOpKinds, false)) return null;
+		if (!operandProven(other, seams, proof, false)) return null;
 		final litSpan: Null<Span> = lit.span;
 		final otherSpan: Null<Span> = other.span;
 		if (litSpan == null || otherSpan == null) return null;
 		final litIsTrue: Bool = spanText(litSpan, source) == 'true';
 		final isEq: Bool = node.kind == eqKind;
 		final otherSrc: String = spanText(otherSpan, source);
-		return { span: span, text: isEq == litIsTrue ? otherSrc : negate(other, otherSrc, shape.identKind, shape.parenKind) };
+		return { span: span, text: isEq == litIsTrue ? otherSrc : negate(other, otherSrc, seams.shape) };
 	}
 
 	/** Resolve the equality / bool-literal / paren seam kinds, or null when any required kind is unset. */
@@ -299,4 +449,20 @@ private typedef Seams = {
 	final identKind: String;
 	final parenKind: Null<String>;
 	final boolOpKinds: Array<String>;
+};
+
+/**
+ * One file's resolution context for the resolved-type Bool proof: the parsed `root` the scope
+ * resolver walks, the file's `declaredTypes`, and two deferred seams — `castTargets` and `index`
+ * (the run's `SymbolIndex`, which reads the configured libraries). `index` is genuinely lazy and
+ * shared across the run. `castTargets` is memoized per file: on a `CachingGrammarPlugin` it is a
+ * read off the same memoized span-info bundle `declaredTypes` already forced, so the memo saves a
+ * map rebuild rather than a parse; against a bare plugin it saves the second full parse.
+ */
+private typedef TypeProof = {
+	final file: String;
+	final root: QueryNode;
+	final declaredTypes: Null<Map<Int, String>>;
+	final castTargets: () -> Map<Int, String>;
+	final index: () -> Null<SymbolIndex>;
 };
