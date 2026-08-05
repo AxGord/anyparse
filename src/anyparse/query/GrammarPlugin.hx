@@ -1222,6 +1222,19 @@ typedef RefShape = {
 	@:optional var checkedCastKind: String;
 
 	/**
+	 * The UNCHECKED cast expression kind — Haxe `cast expr`, which performs no runtime test and takes
+	 * its result type from the CONTEXT rather than from the expression itself (the checked forms, which
+	 * carry their own type and THROW on a non-null mismatch, are `typedCastKinds`). `prefer-comprehension`
+	 * counts it among the PURE expression kinds its evaluation-order gates accept, precisely because
+	 * nothing is tested and nothing can throw. Historically it was also the motivating example of a
+	 * LOAD-BEARING type annotation — `final t:T = cast e` is what gives the cast its result type — but
+	 * the annotation decision no longer consults this seam: every inlined local keeps its annotation as
+	 * an ascription unless the target position provably restates it. Optional; unset only costs that
+	 * purity reach.
+	 */
+	@:optional var uncheckedCastKind: String;
+
+	/**
 	 * Identifier names that project as a plain identifier expression but denote a
 	 * loop jump (Haxe `break` / `continue` surface as `IdentExpr` nodes named so,
 	 * not as dedicated kinds) — the `dead-store` check treats one as jumping to an
