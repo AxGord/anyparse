@@ -563,6 +563,7 @@ import unit.HxCaseBodyControlFlowGlueTest;
 import unit.HxCaseBodyTrailCommentInlineTest;
 import unit.HxArrowValueIfReflowSliceTest;
 import unit.HxElseIfCommentReflowSliceTest;
+import unit.CollapseNestedSwitchCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1060,6 +1061,7 @@ class RunTests {
 		addCase(new RedundantElseCheckTest());
 		addCase(new TailMergeCheckTest());
 		addCase(new ComparisonToBooleanCheckTest());
+		addCase(new CollapseNestedSwitchCheckTest());
 		addCase(new CollapsibleIfCheckTest());
 		addCase(new CollapsibleElseIfCheckTest());
 		addCase(new DoubleNegationCheckTest());

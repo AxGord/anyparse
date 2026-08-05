@@ -755,6 +755,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			],
 			untypedKinds: ['UntypedExpr'],
 			casePatternBinderKinds: ['Capture'],
+			// The Haxe extractor: `case f(_) => p:` evaluates `f` on the subject before
+			// matching `p`. Reaching such an arm RUNS code, so a rewrite that newly makes
+			// one reachable has to refuse it.
+			casePatternExtractorKinds: ['Arrow'],
 			aliasingDeclKinds: ['TypedefDecl', 'AbstractDecl', 'EnumAbstractDecl'],
 			// Delimited expression slots, derived from the grammar productions:
 			// `HxVarDecl.init` is `@:lead('=')` up to the decl's `;` / `,`;
