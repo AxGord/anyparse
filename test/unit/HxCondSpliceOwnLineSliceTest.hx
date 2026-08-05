@@ -30,6 +30,14 @@ import anyparse.grammar.haxe.HxStatement;
 final class HxCondSpliceOwnLineSliceTest extends HxTestHelpers {
 
 	/**
+	 * The dogfood project's own wrapping profile, reduced to the two knobs
+	 * the chain-wrap consequence needs: a 140-column budget and cuddled
+	 * method-chain links.
+	 */
+	private static final WIDTH_140_CHAIN_CONFIG: String =
+		'{"wrapping": {"maxLineLength": 140, "methodChainCuddledLinks": true}, "indentation": {"character": "tab", "tabWidth": 4}}';
+
+	/**
 	 * `lime/system/ThreadPool.hx:1029` -- an own-line `#if` whose fragment
 	 * opens with the infix `-`. Skip-parse before this slice.
 	 */
@@ -142,6 +150,43 @@ final class HxCondSpliceOwnLineSliceTest extends HxTestHelpers {
 	}
 
 	/**
+	 * REGRESSION GUARD -- `dogfood utils/CleanExit.hx:36`: a bare-body
+	 * expression `try` whose catch body is a `{}` block, followed by an
+	 * own-line `#if cpp ... #else ... #end` statement region.
+	 *
+	 * The gap-scan half of the gate (`hasNewlineIn(_preWsPos, ctx.pos)`) is
+	 * BLIND here in Trivia mode: `HxTryCatchExpr.catches` is a
+	 * `@:trivia @:tryparse` Star whose no-match iteration already consumed
+	 * the `\n` and stashed the signal into `ctx.pendingTrivia`, so the
+	 * postfix loop saves `_preWsPos` PAST the newline and reads the region
+	 * as a SAME-LINE splice tail. The stash is the second newline source --
+	 * same mechanism the `captureChainNewline` chain-newline capture already
+	 * reads (`Lowering.chainNlValue`).
+	 */
+	public function testOwnLineStatementConditionalAfterBareBodyTryRoundTrips(): Void {
+		final src: String = 'class C {\n\tfunction f(code:Int) {\n\t\ttry a() catch (_:Exception) {}\n'
+			+ '\t\t#if cpp\n\t\tb(code);\n\t\t#else\n\t\tc(code);\n\t\t#end\n\t}\n}';
+		Assert.equals(src, triviaWrite(src));
+	}
+
+	/**
+	 * The consequence of the mis-parse above, at the WRITER level: with the
+	 * region bound as a `CondSpliceTail` postfix, its whole raw fragment
+	 * joins the operand's rest-stack, so the width probe on the try body's
+	 * method chain sees ~200 columns and breaks a chain that fits on one
+	 * line. The neighbouring `stdout` statement (identical length, no
+	 * region after it) stays flat -- the asymmetry is the tell.
+	 */
+	public function testOwnLineConditionalAfterTryDoesNotForceChainWrap(): Void {
+		final src: String = 'class C {\n\tpublic static function exit(code:Int):Void {\n'
+			+ '\t\ttry Sys.stdout().flush() catch (_:Exception) {}\n\t\ttry Sys.stderr().flush() catch (_:Exception) {}\n'
+			+ '\t\t#if cpp\n\t\t// skips C++ static destructors and atexit handlers, unlike the libc\n'
+			+ '\t\t// exit() route that Sys.exit takes on every hxcpp target\n'
+			+ '\t\tuntyped __cpp__("std::_Exit({0})", code);\n\t\t#else\n\t\tSys.exit(code);\n\t\t#end\n\t}\n}';
+		Assert.equals(src, triviaWrite(src, WIDTH_140_CHAIN_CONFIG));
+	}
+
+	/**
 	 * REGRESSION GUARD, the other direction: a SAME-LINE `#if` after a
 	 * block-ended operand is still a splice tail. The gate only ever
 	 * consults the operand's trailing byte and the fragment shape when the
@@ -183,8 +228,8 @@ final class HxCondSpliceOwnLineSliceTest extends HxTestHelpers {
 		return fnBodyStmts(parseSingleFnDecl(source));
 	}
 
-	private inline function triviaWrite(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private inline function triviaWrite(src: String, ?json: String): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json ?? '{}');
 		opts.finalNewline = false;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
