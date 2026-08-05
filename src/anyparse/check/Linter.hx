@@ -156,6 +156,8 @@ final class Linter {
 			new GuardReturn(),
 			new MapKeysLookup(),
 			new PreferRangeLoop(),
+			new PreferKeyValueLoop(),
+			new DeadBinderCounterLoop(),
 			new TrivialGetter(),
 			new NullableSwitchMissingNull(),
 			new DuplicateCode(),
