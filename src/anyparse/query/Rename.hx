@@ -132,7 +132,7 @@ final class Rename {
 		if (qualifyShadowed) {
 			final member: Bool = isMemberBindingAt(source, tree, cursor, shape);
 			final qualified: Null<Qualification> = qualifyCaptured(rewritten, newTree, mismatch, newName, shape, member);
-			if (qualified != null) return verifyQualified(qualified, occurrences, newName, cursor, plugin, shape);
+			if (qualified != null) return verifyQualified(qualified, occurrences, occurrences, newName, cursor, plugin, shape);
 		}
 
 		final first: Capture = mismatch[0];
@@ -492,9 +492,16 @@ final class Rename {
 	/**
 	 * The qualified rewrite, accepted only when it parses AND re-resolves clean -
 	 * the qualification must have removed every capture, not merely moved it.
+	 *
+	 * `edits` is every span the rewrite replaced (it drives the offset arithmetic);
+	 * `resolved` is the subset the reference resolver itself produced, which is what
+	 * the re-resolution must reproduce. They differ when the caller rewrote more than
+	 * the resolver bound - the `naming` autofix renames a distinctive comment mention
+	 * along - and coincide for a plain `rename`.
 	 */
 	private static function verifyQualified(
-		qualification: Qualification, occurrences: Array<Span>, newName: String, cursor: Int, plugin: GrammarPlugin, shape: RefShape
+		qualification: Qualification, edits: Array<Span>, resolved: Array<Span>, newName: String, cursor: Int, plugin: GrammarPlugin,
+		shape: RefShape
 	): RenameResult {
 		final qualified: String = qualification.source;
 		final tree: QueryNode = try plugin.parseFile(qualified) catch (exception: ParseError) return Err(
@@ -502,19 +509,23 @@ final class Rename {
 		)
 		catch (exception: Exception) return Err('qualified rewrite does not parse: ${exception.message}');
 
-		// Where each rewritten occurrence landed: the rename's own length delta, then
-		// one prefix length per insertion at or before it.
-		final sorted: Array<Span> = occurrences.copy();
+		// Where each rewritten occurrence landed: the rename's own length delta accumulated
+		// over the edits that PRECEDE it (not `delta * i`, which is only right when every edit
+		// is also a resolved occurrence), then one prefix length per insertion at or before it.
+		final sorted: Array<Span> = edits.copy();
 		sorted.sort((a, b) -> a.from - b.from);
 		final delta: Int = newName.length - (sorted[0].to - sorted[0].from);
+		final resolvedFrom: Array<Int> = [for (occ in resolved) occ.from];
 		final expected: Array<Int> = [];
+		var shift: Int = 0;
 		var newCursor: Int = -1;
-		for (i in 0...sorted.length) {
-			final inRewrite: Int = sorted[i].from + delta * i;
+		for (occ in sorted) {
+			final inRewrite: Int = occ.from + shift;
 			var at: Int = inRewrite;
 			for (insertion in qualification.insertions) if (insertion <= inRewrite) at += qualification.prefixLength;
-			expected.push(at);
-			if (newCursor < 0 && cursor >= sorted[i].from && cursor <= sorted[i].to) newCursor = at;
+			if (resolvedFrom.contains(occ.from)) expected.push(at);
+			if (newCursor < 0 && cursor >= occ.from && cursor <= occ.to) newCursor = at;
+			shift += delta;
 		}
 		if (newCursor < 0) newCursor = expected[0];
 

@@ -1528,4 +1528,106 @@ class NamingCheckTest extends Test {
 		);
 	}
 
+
+	/**
+	 * A leading ACRONYM run lowercases whole EXCEPT its last character, which heads the next
+	 * word: `URLPath` -> `urlPath`. The pre-arm normalizer only lowered the first letter and
+	 * emitted `uRLPath`.
+	 */
+	public function testFixLowercasesLeadingAcronymLocal(): Void {
+		final src: String = 'class C {\n\tpublic function f() {\n\t\tvar URLPath = 1;\n\t\ttrace(URLPath);\n\t}\n}';
+		assertFixCanonical(src, 'urlPath', 'uRLPath');
+	}
+
+	/** The acronym run is delimited by the first LOWERCASE letter, wherever it falls: `HTTPServer` -> `httpServer`. */
+	public function testFixLowercasesAcronymRunBeforeWord(): Void {
+		final src: String = 'class C {\n\tpublic function f() {\n\t\tvar HTTPServer = 1;\n\t\ttrace(HTTPServer);\n\t}\n}';
+		assertFixCanonical(src, 'httpServer', 'hTTPServer');
+	}
+
+	/**
+	 * An all-uppercase word with NO lowercase letter after it is not an acronym run - the
+	 * whole-segment arm still lowercases it (`HEIGHT` -> `height`). Pins behaviour the
+	 * acronym arm must not disturb.
+	 */
+	public function testFixLowercasesAllCapsWordWhole(): Void {
+		final src: String = 'class C {\n\tpublic function f() {\n\t\tvar HEIGHT = 1;\n\t\ttrace(HEIGHT);\n\t}\n}';
+		assertFixCanonical(src, 'height', 'HEIGHT');
+	}
+
+	/**
+	 * The acronym arm is LEADING-only and needs a run of two or more: `MyURLPath` opens with a
+	 * one-letter run, so only the final first-character lowering applies and the INTERIOR
+	 * acronym is left alone. (The bare one-letter run is pinned by `testFixRenamesLocal`.)
+	 */
+	public function testFixLeavesInteriorAcronymAlone(): Void {
+		final src: String = 'class C {\n\tpublic function f() {\n\t\tvar MyURLPath = 1;\n\t\ttrace(MyURLPath);\n\t}\n}';
+		assertFixCanonical(src, 'myURLPath', 'MyURLPath');
+	}
+
+	/**
+	 * A lowercase head over an all-uppercase tail is an artifact of the old first-letter-lowercasing
+	 * normalizer (`HEIGHT` -> `hEIGHT`). camelCase accepts it, yet it is not a name anyone wrote.
+	 */
+	public function testNormalizerArtifactLocalFlagged(): Void {
+		final vs: Array<Violation> = violations('class C {\n\tpublic function f() {\n\t\tvar hEIGHT = 1;\n\t}\n}');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("'hEIGHT'"), vs[0].message);
+		Assert.isTrue(vs[0].message.contains('normalizer artifact'), vs[0].message);
+	}
+
+	/** The correction for a normalizer artifact is the whole name lowercased. */
+	public function testNormalizerArtifactLocalLowercased(): Void {
+		final src: String = 'class C {\n\tpublic function f() {\n\t\tvar hEIGHT = 1;\n\t\ttrace(hEIGHT);\n\t}\n}';
+		assertFixCanonical(src, 'height', 'hEIGHT');
+	}
+
+	/** A two-character tail is an `iOS`-style deliberate name, not an artifact - the arm needs three. */
+	public function testShortAcronymNameNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tpublic function f() {\n\t\tvar iOS = true;\n\t}\n}').length);
+	}
+
+	/** An ordinary camelCase name whose tail carries a lowercase letter is no artifact. */
+	public function testCamelNameWithUppercaseWordNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tpublic function f() {\n\t\tvar xPos = 1;\n\t}\n}').length);
+	}
+
+	/** A digit-only tail lowercases to itself, so there is no correction to report. */
+	public function testDigitTailNameNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tpublic function f() {\n\t\tvar x123 = 1;\n\t}\n}').length);
+	}
+
+	/**
+	 * A private field whose corrected name the constructor PARAMETER already holds is the param
+	 * idiom: the field write would become a self-assignment, so the write is qualified through
+	 * `this.` instead of the rename being refused.
+	 */
+	public function testFixQualifiesParamCapturedFieldRename(): Void {
+		final src: String =
+			'package pkg;\nclass C {\n\tprivate final __position:Int;\n\tpublic function new(_position:Int) {\n\t\t__position = _position;\n\t}\n}';
+		assertFixCanonicalWithIndex(src, 'this._position = _position', '__position');
+	}
+
+	/**
+	 * A capture by a LOCAL is a naming mistake, not the param idiom - qualifying it would emit
+	 * correct but confusing code, so the rename stays refused. Pins `Rename.qualifyCaptured`'s
+	 * boundary through the `naming` path.
+	 */
+	public function testFixRefusesLocalCapturedFieldRename(): Void {
+		final src: String =
+			'package pkg;\nclass C {\n\tprivate final __position:Int = 0;\n\tpublic function f(position:Int):Int {\n\t\tfinal _position:Int = position;\n\t\treturn __position + _position;\n\t}\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	/**
+	 * A STATIC member can never be named through `this.`, so the qualification arm must not be
+	 * reached for one. Pins the check's own static gate, ahead of the expensive occurrence
+	 * resolution - without it the capture repair emits `this.run()` for a static method.
+	 */
+	public function testFixRefusesStaticMemberCapture(): Void {
+		final src: String =
+			'package pkg;\nclass C {\n\tprivate static function __run():Void {}\n\tpublic function f(run:Int):Void {\n\t\ttrace(run);\n\t\t__run();\n\t}\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
 }

@@ -443,15 +443,40 @@ final class HaxeNamingSupport implements NamingSupport {
 
 
 	/**
-	 * One `snake_case` segment normalized: an ALL-UPPERCASE segment (a screaming
+	 * One `snake_case` segment normalized. An ALL-UPPERCASE segment (a screaming
 	 * constant word like `FILE`) is lowercased whole so the camel join reads
-	 * naturally (`missingFile`, not `mISSINGFILE`); any segment carrying a lowercase
-	 * letter is kept verbatim, preserving an already-camel word (`Id`, `scaleX`). A
-	 * digit-only segment has no letters and is kept as-is. Not `inline` - a helper of
-	 * `snakeToCamel`.
+	 * naturally (`missingFile`, not `mISSINGFILE`). A segment OPENING with an acronym
+	 * run - two or more uppercase (or embedded digit) characters immediately followed by
+	 * a lowercase letter - lowercases that run EXCEPT its last character, which heads the
+	 * next word (`URLPath` -> `urlPath`, `HTTP2Server` -> `http2Server`). Any other segment
+	 * carrying a lowercase letter is kept verbatim, preserving an already-camel word (`Id`,
+	 * `scaleX`). A digit-only segment has no letters and is kept as-is. Not `inline` - a
+	 * helper of `snakeToCamel`.
 	 */
 	private static function smartSegment(segment: String): String {
-		return new EReg("^[A-Z][A-Z0-9]*$", '').match(segment) ? segment.toLowerCase() : segment;
+		if (new EReg("^[A-Z][A-Z0-9]*$", '').match(segment)) return segment.toLowerCase();
+		final run: Int = leadingAcronymRun(segment);
+		return run < 2 ? segment : segment.substr(0, run - 1).toLowerCase() + segment.substr(run - 1);
+	}
+
+	/**
+	 * The length of `segment`'s leading uppercase (or embedded-digit) run when a LOWERCASE
+	 * letter follows it, else 0: `URLPath` -> 4, `HTTP2Server` -> 6, `MyLocal` -> 1,
+	 * `HEIGHT` -> 0 (nothing follows the run), `scaleX` -> 0. A digit counts only inside the
+	 * run, never as its first character, so a name can never open with a digit anyway.
+	 */
+	private static function leadingAcronymRun(segment: String): Int {
+		var i: Int = 0;
+		while (i < segment.length) {
+			final c: Int = StringTools.fastCodeAt(segment, i);
+			final upper: Bool = c >= 'A'.code && c <= 'Z'.code;
+			final digit: Bool = i > 0 && c >= '0'.code && c <= '9'.code;
+			if (!upper && !digit) break;
+			i++;
+		}
+		if (i == 0 || i >= segment.length) return 0;
+		final next: Int = StringTools.fastCodeAt(segment, i);
+		return next >= 'a'.code && next <= 'z'.code ? i : 0;
 	}
 
 
@@ -459,8 +484,9 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * The mechanical fix for a local / param / catch name violating camelCase: strip
 	 * every leading underscore, convert internal `snake_case` segments to camelCase,
 	 * and lowercase the first letter. An all-uppercase segment is lowercased whole
-	 * (`MISSING_FILE` -> `missingFile`); a mixed-case segment is preserved
-	 * (`coachingQualification_Id` -> `coachingQualificationId`), so `_items` ->
+	 * (`MISSING_FILE` -> `missingFile`); a segment opening with an acronym run keeps only
+	 * that run's last character capitalised (`URLPath` -> `urlPath`); a mixed-case segment
+	 * is preserved (`coachingQualification_Id` -> `coachingQualificationId`), so `_items` ->
 	 * `items`, `__scaleX` -> `scaleX`, `MyLocal` -> `myLocal`, `min_gap` -> `minGap`.
 	 * Returns null when nothing survives the strip (`_`, `__`) or the result is a Haxe
 	 * keyword (`_new` -> `new`) - neither is a usable identifier, so the binding stays
