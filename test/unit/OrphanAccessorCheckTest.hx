@@ -1,0 +1,233 @@
+package unit;
+
+import anyparse.check.Check;
+import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.Violation;
+import anyparse.check.Linter;
+import anyparse.check.Severity;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
+
+/**
+ * The `orphan-accessor` check: a `get_X` / `set_X` method whose property `X` declares no matching
+ * accessor slot anywhere in the inheritance chain is an accessor Haxe never calls. A property that
+ * DOES declare the slot — in the class, in a superclass an `override` accessor serves, in an
+ * implemented interface, or via `dynamic` — is legit. The autofix deletes the method (with its
+ * modifier run and doc comment) only when the absence is proven and the name has zero direct call
+ * references.
+ */
+class OrphanAccessorCheckTest extends Test {
+
+	public function testDefaultSetPropertyWithGetterFlagged(): Void {
+		final src: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tfunction set_data(v:Int):Int return data = v;\n'
+			+ '\tpublic inline function get_data():Int {\n\t\treturn data;\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals('orphan-accessor', vs[0].rule);
+		Assert.equals(Severity.Warning, vs[0].severity);
+		Assert.equals('get_data has no property to serve: data declares no get accessor', vs[0].message);
+	}
+
+	public function testGetSetPropertyNotFlagged(): Void {
+		final src: String = 'class C {\n\tpublic var data(get, set):Int;\n\tfunction get_data():Int return 1;\n'
+			+ '\tfunction set_data(v:Int):Int return v;\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testGetNullPropertySetterFlagged(): Void {
+		final src: String = 'class C {\n\tpublic var data(get, null):Int;\n\tfunction get_data():Int return 1;\n'
+			+ '\tfunction set_data(v:Int):Int return v;\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals('set_data has no property to serve: data declares no set accessor', vs[0].message);
+	}
+
+	public function testDynamicAccessorCountsAsDeclared(): Void {
+		// A `dynamic` accessor is a real, re-bindable one — the slot IS declared.
+		final src: String = 'class C {\n\tpublic var data(dynamic, dynamic):Int;\n\tdynamic function get_data():Int return 1;\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testPlainFieldWithGetterFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\tpublic var data:Int = 0;\n\tfunction get_data():Int return data;\n}').length);
+	}
+
+	public function testNoPropertyAtAllFlagged(): Void {
+		final vs: Array<Violation> = violations('class C {\n\tfunction get_data():Int return 1;\n}');
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals('get_data has no property to serve: neither C nor its supertypes declare data', vs[0].message);
+	}
+
+	public function testOverrideOfInheritedPropertyNotFlagged(): Void {
+		final base: String = 'class Base {\n\tpublic var selected(default, set):Bool = false;\n'
+			+ '\tpublic function set_selected(v:Bool):Bool {\n\t\tselected = v;\n\t\treturn v;\n\t}\n}';
+		final sub: String =
+			'class Sub extends Base {\n\toverride public function set_selected(v:Bool):Bool return super.set_selected(v);\n}';
+		Assert.equals(0, violationsOf([{ file: 'Base.hx', source: base }, { file: 'Sub.hx', source: sub }]).length);
+	}
+
+	public function testOverrideOfSlotlessInheritedPropertyFlagged(): Void {
+		final base: String = 'class Base {\n\tpublic var selected(default, null):Bool = false;\n}';
+		final sub: String = 'class Sub extends Base {\n\toverride public function set_selected(v:Bool):Bool return v;\n}';
+		final vs: Array<Violation> = violationsOf([{ file: 'Base.hx', source: base }, { file: 'Sub.hx', source: sub }]);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals('set_selected has no property to serve: selected declares no set accessor', vs[0].message);
+	}
+
+	public function testInterfacePropertyNotFlagged(): Void {
+		final iface: String = 'interface IData {\n\tpublic var data(get, never):Int;\n}';
+		final impl: String = 'class C implements IData {\n\tpublic function get_data():Int return 1;\n}';
+		Assert.equals(0, violationsOf([{ file: 'IData.hx', source: iface }, { file: 'C.hx', source: impl }]).length);
+	}
+
+	public function testParentPackageSupertypeSlotSilencesTheFinding(): Void {
+		// `a.b.Sub` names `a.Base` with no import — legal Haxe (a parent package needs none) but
+		// invisible to the index's import-visibility resolution. The unique-simple-name fallback
+		// finds the property and its `get` slot, so nothing is reported.
+		final base: String = 'package a;\nclass Base {\n\tpublic var v(get, never):Int;\n\tfunction get_v():Int return 1;\n}';
+		final sub: String = 'package a.b;\nclass Sub extends Base {\n\toverride function get_v():Int return 2;\n}';
+		Assert.equals(0, violationsOf([{ file: 'a/Base.hx', source: base }, { file: 'a/b/Sub.hx', source: sub }]).length);
+	}
+
+	public function testParentPackageSupertypeWithoutSlotStaysInfoOnly(): Void {
+		// The same fallback resolution, but the parent declares `v` with NO get slot. A
+		// speculatively-resolved type may not be the real supertype, so its member list never
+		// promotes the finding to `Warning` — it stays the unproven `Info` arm, and unfixed.
+		final base: String = 'package a;\nclass Base {\n\tpublic var v(default, null):Int = 0;\n}';
+		final sub: String = 'package a.b;\nclass Sub extends Base {\n\toverride function get_v():Int return 2;\n}';
+		final vs: Array<Violation> = violationsOf([{ file: 'a/Base.hx', source: base }, { file: 'a/b/Sub.hx', source: sub }]);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals(Severity.Info, vs[0].severity);
+	}
+
+	public function testAmbiguousSimpleNameIsNotSpeculativelyResolved(): Void {
+		// Two `Base` declarations — the fallback refuses to guess, so the chain stays unresolved.
+		final one: String = 'package a;\nclass Base {\n\tpublic var v(get, never):Int;\n\tfunction get_v():Int return 1;\n}';
+		final two: String = 'package c;\nclass Base {\n\tpublic var v(get, never):Int;\n\tfunction get_v():Int return 1;\n}';
+		final sub: String = 'package a.b;\nclass Sub extends Base {\n\toverride function get_v():Int return 2;\n}';
+		final vs: Array<Violation> = violationsOf([
+			{ file: 'a/Base.hx', source: one },
+			{ file: 'c/Base.hx', source: two },
+			{ file: 'a/b/Sub.hx', source: sub }
+		]);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals(Severity.Info, vs[0].severity);
+	}
+
+	public function testUnresolvableSupertypeIsInfoOnly(): Void {
+		final vs: Array<Violation> = violations('class C extends Unknown {\n\tfunction get_data():Int return 1;\n}');
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.isTrue(StringTools.startsWith(vs[0].message, 'get_data may have no property to serve'));
+	}
+
+	public function testUnresolvableSupertypeNotFixed(): Void {
+		final src: String = 'class C extends Unknown {\n\tfunction get_data():Int return 1;\n}';
+		Assert.equals(src, applyFix(src));
+	}
+
+	public function testOwnClassDeclarationBeatsUnresolvableSupertype(): Void {
+		// Haxe forbids redeclaring an inherited field, so the own-class `data` is conclusive
+		// even though `Unknown` never resolves — the finding is a proven orphan and IS fixed.
+		final src: String =
+			'class C extends Unknown {\n\tpublic var data(default, set):Int = 0;\n\tfunction get_data():Int return data;\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals(Severity.Warning, vs[0].severity);
+		Assert.equals('class C extends Unknown {\n\tpublic var data(default, set):Int = 0;\n}', applyFix(src));
+	}
+
+	public function testFixDeletesMethodWithModifierRun(): Void {
+		final src: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tpublic inline function get_data():Int {\n'
+			+ '\t\treturn data;\n\t}\n}';
+		Assert.equals('class C {\n\tpublic var data(default, set):Int = 0;\n}', applyFix(src));
+	}
+
+	public function testFixDeletesLeadingDocComment(): Void {
+		final src: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\n\t/** The data. */\n'
+			+ '\tpublic function get_data():Int return data;\n}';
+		Assert.equals('class C {\n\tpublic var data(default, set):Int = 0;\n\n}', applyFix(src));
+	}
+
+	public function testDirectCallBlocksFix(): Void {
+		final src: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tfunction get_data():Int return data;\n'
+			+ '\tfunction f():Int return get_data();\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	public function testCrossFileCallBlocksFix(): Void {
+		final owner: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tpublic function get_data():Int return data;\n}';
+		final user: String = 'class U {\n\tfunction f(c:C):Int return c.get_data();\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: owner }, { file: 'U.hx', source: user }];
+		final check: Null<Check> = Linter.byId('orphan-accessor');
+		Assert.notNull(check);
+		if (check == null) return;
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final vs: Array<Violation> = check.run(files, plugin);
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(owner, vs, plugin).length);
+	}
+
+	public function testEmptyPropertyNameSkipped(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction get_():Int return 1;\n}').length);
+	}
+
+	public function testNonAccessorMethodIgnored(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction getData():Int return 1;\n}').length);
+	}
+
+	public function testInterfaceBodyIgnored(): Void {
+		Assert.equals(0, violations('interface I {\n\tpublic function get_data():Int;\n}').length);
+	}
+
+	public function testAbstractBodyIgnored(): Void {
+		Assert.equals(0, violations('abstract A(Int) {\n\tpublic function get_data():Int return this;\n}').length);
+	}
+
+	public function testStaticPropertyNotFlagged(): Void {
+		final src: String = 'class C {\n\tpublic static var data(get, never):Int;\n\tstatic function get_data():Int return 1;\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testRegisteredInBuiltinsAndDefaultOff(): Void {
+		final check: Null<Check> = Linter.byId('orphan-accessor');
+		Assert.notNull(check);
+		if (check != null) Assert.isTrue(check is DefaultOff);
+	}
+
+	public function testSkipParseNoCrash(): Void {
+		Assert.equals(0, violations('class Bad { function get_data():Int {').length);
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return violationsOf([{ file: 'C.hx', source: src }]);
+	}
+
+	private function violationsOf(files: Array<{ file: String, source: String }>): Array<Violation> {
+		final check: Null<Check> = Linter.byId('orphan-accessor');
+		return check == null ? [] : check.run(files, new HaxeQueryPlugin());
+	}
+
+	private function applyFix(src: String): String {
+		final check: Null<Check> = Linter.byId('orphan-accessor');
+		if (check == null) return src;
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+		edits.sort((a, b) -> b.span.from - a.span.from);
+		var out: String = src;
+		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
+		return out;
+	}
+
+}

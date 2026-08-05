@@ -563,6 +563,7 @@ import unit.HxCaseBodyControlFlowGlueTest;
 import unit.HxCaseBodyTrailCommentInlineTest;
 import unit.HxArrowValueIfReflowSliceTest;
 import unit.HxElseIfCommentReflowSliceTest;
+import unit.OrphanAccessorCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1029,6 +1030,7 @@ class RunTests {
 		addCase(new UnguardedNullableDerefTest());
 		addCase(new SelfAssignmentCheckTest());
 		addCase(new RedundantBypassAccessorCheckTest());
+		addCase(new OrphanAccessorCheckTest());
 		addCase(new DuplicateCaseCheckTest());
 		addCase(new RedundantParensCheckTest());
 		addCase(new RedundantParensOperandArmsTest());

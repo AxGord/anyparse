@@ -167,6 +167,7 @@ final class Linter {
 			new ExplicitLocalType(),
 			new PreferTypedThrow(),
 			new RedundantBypassAccessor(),
+			new OrphanAccessor(),
 			new FieldInitAtDeclaration(),
 			new PreferInline(),
 			new InlineConstant(),
