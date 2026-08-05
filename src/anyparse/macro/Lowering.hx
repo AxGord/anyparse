@@ -3669,14 +3669,32 @@ class Lowering {
 		// The same-line case is untouched (no newline => always a splice tail),
 		// so the relaxation only ever ADDS accepted input.
 		//
+		// TRIVIA-MODE NEWLINE SOURCE #2 (ω-cond-splice-stash-newline). The gap
+		// scan alone is BLIND when the operand's own parse pre-consumed the gap:
+		// a construct ending in a `@:trivia @:tryparse` Star
+		// (`HxTryCatchExpr.catches`) runs one no-match iteration past the
+		// operand, which skips the newline and stashes the signal into
+		// `ctx.pendingTrivia` (the ω-untyped-keep stash). The postfix loop then
+		// saves `_preWsPos` PAST the newline, the gap scan reads empty, and an
+		// own-line statement region binds as a SAME-LINE splice tail --
+		// `try f() catch (_:Exception) {}` followed by an own-line
+		// `#if cpp ... #end` raw-swallowed the whole region (dogfood
+		// `utils/CleanExit.hx:36`); the glue then fed the region's flat width
+		// into the operand's rest-stack and wrapped a method chain that fit.
+		// `pendingTrivia.newlineBefore` is the same second newline source that
+		// `captureChainNewline` already ORs in (see `chainNlValue`). The flag is
+		// NOT cleared here -- downstream `collectTrivia` readers own it.
+		//
 		// The leading `peekLit` is a pure cost guard: `matchKw` has to stay LAST
 		// (it consumes on success), so without it both scanners would run at
 		// every postfix-loop iteration whose operand happens to end a line.
+		final gapNewline: Expr = _ctx.trivia
+			? macro (hasNewlineIn(ctx.input, _preWsPos, ctx.pos) || (ctx.pendingTrivia != null && ctx.pendingTrivia.newlineBefore))
+			: macro hasNewlineIn(ctx.input, _preWsPos, ctx.pos);
 		var matchExpr: Expr = endsWithWordChar(op)
-			? macro peekLit(ctx, $v{op})
-				&& (!hasNewlineIn(ctx.input, _preWsPos, ctx.pos)
-					|| (!endsWithBlockClose(ctx.input, _preWsPos) && spliceFragmentIsInfix(ctx.input, ctx.pos + $v{op.length})))
-				&& matchKw(ctx, $v{op})
+			? macro peekLit(ctx, $v{op}) && (
+				!$gapNewline || (!endsWithBlockClose(ctx.input, _preWsPos) && spliceFragmentIsInfix(ctx.input, ctx.pos + $v{op.length}))
+			) && matchKw(ctx, $v{op})
 			: macro matchLit(ctx, $v{op});
 		for (other in allOps) {
 			if (other.length > op.length && StringTools.startsWith(other, op)) {
