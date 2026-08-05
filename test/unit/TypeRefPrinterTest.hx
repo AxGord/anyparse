@@ -96,6 +96,23 @@ class TypeRefPrinterTest extends Test {
 	}
 
 	/**
+	 * A type the file's OWN module declares OUTRANKS every import in Haxe (verified on 4.3.7: a
+	 * module-local `typedef Sub = Int` beside `import pkg.Mod;` whose `Mod` declares its own `Sub`
+	 * resolves the bare name to the LOCAL one). So an imported module carrying that name is no
+	 * shadow here, and the module-local route must still print short — the shadow arm has to exempt
+	 * it rather than veto the whole file.
+	 */
+	public function testModuleImportDoesNotShadowTheModuleLocalRoute(): Void {
+		final index: SymbolIndex = indexOf([
+			{ file: 'pkg/Mod.hx', source: 'package pkg;\n\nclass Mod {}\n\ntypedef Sub = Float;\n' },
+			{ file: 'app/Host.hx', source: 'package app;\n\nimport pkg.Mod;\n\nclass Host {}\n\ntypedef Sub = Int;\n' }
+		]);
+		final p: TypeRefPrinter = printerWith('package app;\n\nimport pkg.Mod;\n\nclass Host {}\n\ntypedef Sub = Int;\n', index);
+		Assert.equals('Sub', p.print('app.Host.Sub').text);
+		Assert.isFalse(p.hasPendingImports());
+	}
+
+	/**
 	 * TWO imported modules each declaring a `Sub`: the bare name means whichever import comes LAST,
 	 * which no printer route can decide, so the reference stays fully qualified. Without the shadow
 	 * arm the visibility route fired on the first module and emitted a bare `Sub` bound to the other

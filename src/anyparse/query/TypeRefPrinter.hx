@@ -611,7 +611,7 @@ final class TypeRefPrinter {
 		// `Foo` wins over both). The bulk arm may only veto what a wildcard genuinely outranks —
 		// the same-package, builtin and root-package routes below it.
 		if (_importMap[simple] == canonical) return false;
-		if (root != null && declaresTypeNamed(root, simple) && moduleLocalPathOf(simple) == canonical) return false;
+		if (moduleLocalBinds(canonical, simple)) return false;
 		return shadowedByBulkImport(canonical, simple);
 	}
 
@@ -628,8 +628,15 @@ final class TypeRefPrinter {
 	 * bare name means is a statement-ORDER question this predicate does not try to answer: it reports
 	 * the ambiguity as a shadow, which costs only the short form (the caller falls back to the
 	 * fully-qualified path) and never emits a name bound to something else. It therefore vetoes ABOVE
-	 * the explicit-import short-circuit at the end of `shadowedLocally` — unlike a wildcard, a
-	 * competing module import genuinely can outrank an explicit one.
+	 * the EXPLICIT-import short-circuit at the end of `shadowedLocally` — unlike a wildcard, a
+	 * competing module import genuinely can outrank an explicit import.
+	 *
+	 * It does NOT outrank a MODULE-LOCAL declaration, which is why that route is exempted here rather
+	 * than left to the same short-circuit: a type the file's own module declares wins over every
+	 * import unconditionally (verified on 4.3.7 — a module-local `typedef Sub = Int` beside an
+	 * `import pkg.Mod;` whose `Mod` declares its own `Sub` resolves the bare name to the LOCAL one).
+	 * Vetoing there cost the module-local short form in every file that imported any module carrying
+	 * one of its type names.
 	 *
 	 * Needs the index — only it knows what a module declares. Without one the question is
 	 * unanswerable and the arm stays silent, the reading every caller had before it existed.
@@ -637,6 +644,7 @@ final class TypeRefPrinter {
 	private function shadowedByModuleImport(canonical: String, simple: String): Bool {
 		final index: Null<SymbolIndex> = _index;
 		if (index == null) return false;
+		if (moduleLocalBinds(canonical, simple)) return false;
 		final imported: Array<String> = [for (path in _importMap) path];
 		return index.declaringFiles(simple).exists(f -> imported.contains(f.module) && pathOfTypeIn(f, simple) != canonical);
 	}
@@ -819,6 +827,18 @@ final class TypeRefPrinter {
 		final pkg: Null<String> = _pkg;
 		return index != null && pkg != null && index.declaringFiles(simple)
 			.exists(f -> f.pkg == pkg && pathOfTypeIn(f, simple) != canonical);
+	}
+
+	/**
+	 * Whether THIS module's own top level declares `simple` AND that declaration is `canonical` — the
+	 * MODULE-LOCAL binding, which outranks every import in Haxe's resolution order. Asked at two
+	 * priorities (`shadowedByModuleImport` exempts it, `shadowedLocally` short-circuits on it), so it
+	 * lives here rather than being spelled twice: the two sites must never drift apart about what
+	 * "the file declares this type itself" means.
+	 */
+	private inline function moduleLocalBinds(canonical: String, simple: String): Bool {
+		final root: Null<QueryNode> = _root;
+		return root != null && declaresTypeNamed(root, simple) && moduleLocalPathOf(simple) == canonical;
 	}
 
 	/** The dotted path a type named `simple` declared in THIS module carries: `pkg.Module.simple`, reduced to `pkg.Module` when it IS the main type. */
