@@ -202,24 +202,22 @@ class ComparisonToBooleanCheckTest extends Test {
 
 	/** An EXTERN class's `Bool` property resolves like any other member — flagged, and `== false` negates it. */
 	public function testExternBoolPropertyFlagged(): Void {
-		final src: String = 'extern class T {\n\tpublic var visible(get, set):Bool;\n}\n\n'
-			+ 'class C {\n\tfunction f(o:T):Void {\n\t\tvar b = o.visible == false;\n\t}\n}';
-		Assert.equals(1, violations(src).length);
-		Assert.equals(StringTools.replace(src, 'o.visible == false', '!o.visible'), applyFix(src));
+		Assert.equals(1, violations(externFixture('var b = o.visible == false;')).length);
+		Assert.equals(externFixture('var b = !o.visible;'), applyFix(externFixture('var b = o.visible == false;')));
 	}
 
 	/** The receiver type resolves THROUGH `cast(e, T)` to T's own member. */
 	public function testTypedCastReceiverMemberFlagged(): Void {
-		final src: String = castFixture('class T {\n\tpublic var flag:Bool;\n}');
-		Assert.equals(1, violations(src).length);
-		Assert.equals(StringTools.replace(src, 'cast(o, T).flag == true', 'cast(o, T).flag'), applyFix(src));
+		final types: String = 'class T {\n\tpublic var flag:Bool;\n}';
+		Assert.equals(1, violations(castFixture(types, 'cast(o, T).flag == true')).length);
+		Assert.equals(castFixture(types, 'cast(o, T).flag'), applyFix(castFixture(types, 'cast(o, T).flag == true')));
 	}
 
 	/** The cast target's INHERITED member resolves too — the `cast(object, DisplayObjectContainer).mouseEnabled` shape. */
 	public function testTypedCastInheritedMemberFlagged(): Void {
-		final src: String = castFixture('class B {\n\tpublic var flag:Bool;\n}\n\nclass T extends B {}');
-		Assert.equals(1, violations(src).length);
-		Assert.equals(StringTools.replace(src, 'cast(o, T).flag == true', 'cast(o, T).flag'), applyFix(src));
+		final types: String = 'class B {\n\tpublic var flag:Bool;\n}\n\nclass T extends B {}';
+		Assert.equals(1, violations(castFixture(types, 'cast(o, T).flag == true')).length);
+		Assert.equals(castFixture(types, 'cast(o, T).flag'), applyFix(castFixture(types, 'cast(o, T).flag == true')));
 	}
 
 	/**
@@ -227,14 +225,8 @@ class ComparisonToBooleanCheckTest extends Test {
 	 * `Bool` annotation, and the member table cannot tell the two apart.
 	 */
 	public function testAnonStructReceiverSkipped(): Void {
-		Assert.equals(
-			0,
-			violations('typedef T = {\n\t?flag:Bool\n}\n\nclass C {\n\tfunction f(o:T):Void {\n\t\tvar b = o.flag == true;\n\t}\n}').length
-		);
-		Assert.equals(
-			0,
-			violations('typedef T = {\n\tflag:Bool\n}\n\nclass C {\n\tfunction f(o:T):Void {\n\t\tvar b = o.flag == true;\n\t}\n}').length
-		);
+		Assert.equals(0, violations(anonFixture('?flag:Bool')).length);
+		Assert.equals(0, violations(anonFixture('flag:Bool')).length);
 	}
 
 	/** A two-type fixture: a `T` declaring `member`, and a `C.f(o:T)` whose body is `body`. */
@@ -242,9 +234,19 @@ class ComparisonToBooleanCheckTest extends Test {
 		return 'class T {\n\t$member\n}\n\nclass C {\n\tfunction f(o:T):Void {\n\t\t$body\n\t}\n}';
 	}
 
-	/** A cast fixture: `types` declares the cast target `T`, read through `cast(o, T).flag`. */
-	private function castFixture(types: String): String {
-		return '$types\n\nclass C {\n\tfunction f(o:Dynamic):Void {\n\t\tvar b = cast(o, T).flag == true;\n\t}\n}';
+	/** An EXTERN fixture: a `T` with a `Bool` property, and a `C.f(o:T)` whose body is `body`. */
+	private function externFixture(body: String): String {
+		return 'extern class T {\n\tpublic var visible(get, set):Bool;\n}\n\nclass C {\n\tfunction f(o:T):Void {\n\t\t$body\n\t}\n}';
+	}
+
+	/** A cast fixture: `types` declares the cast target `T`, and `read` is the field-access expression. */
+	private function castFixture(types: String, read: String): String {
+		return '$types\n\nclass C {\n\tfunction f(o:Dynamic):Void {\n\t\tvar b = $read;\n\t}\n}';
+	}
+
+	/** An anonymous-structure fixture: a `T` carrying one `field`, read through `o.flag == true`. */
+	private function anonFixture(field: String): String {
+		return 'typedef T = {\n\t$field\n}\n\nclass C {\n\tfunction f(o:T):Void {\n\t\tvar b = o.flag == true;\n\t}\n}';
 	}
 
 	private function violations(src: String): Array<Violation> {

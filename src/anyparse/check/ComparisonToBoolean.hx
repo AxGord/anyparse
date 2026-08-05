@@ -102,31 +102,6 @@ final class ComparisonToBoolean implements Check {
 	}
 
 	/**
-	 * The per-file resolution context the resolved-type proof reads. `castTargets` is memoized
-	 * because recovering it costs a SECOND full parse of the file, and `index` is the run's lazy
-	 * `SymbolIndex` — neither is touched until a field-access operand actually reaches the proof.
-	 */
-	private static function proofOf(
-		file: String, source: String, root: QueryNode, provider: Null<TypeInfoProvider>, index: () -> Null<SymbolIndex>
-	): TypeProof {
-		var casts: Null<Map<Int, String>> = null;
-		return {
-			file: file,
-			root: root,
-			declaredTypes: provider != null ? provider.declaredTypes(source) : null,
-			castTargets: () -> {
-				final ready: Null<Map<Int, String>> = casts;
-				if (ready != null) return ready;
-				final p: Null<TypeInfoProvider> = provider;
-				final computed: Map<Int, String> = p != null ? p.castTargetSources(source) : [];
-				casts = computed;
-				return computed;
-			},
-			index: index
-		};
-	}
-
-	/**
 	 * Rewrite each flagged comparison to its operand. `x == true` / `x != false` collapse
 	 * to the operand verbatim; `x == false` / `x != true` collapse to its negation
 	 * (`!operand`, parenthesized unless the operand is atomic — a bare identifier, an
@@ -181,6 +156,31 @@ final class ComparisonToBoolean implements Check {
 			final fresh: SymbolIndex = SymbolIndex.build([{ file: file, source: source }], plugin);
 			built = fresh;
 			return fresh;
+		};
+	}
+
+	/**
+	 * The per-file resolution context the resolved-type proof reads. `castTargets` is memoized
+	 * because recovering it costs a SECOND full parse of the file, and `index` is the run's lazy
+	 * `SymbolIndex` — neither is touched until a field-access operand actually reaches the proof.
+	 */
+	private static function proofOf(
+		file: String, source: String, root: QueryNode, provider: Null<TypeInfoProvider>, index: () -> Null<SymbolIndex>
+	): TypeProof {
+		var casts: Null<Map<Int, String>> = null;
+		return {
+			file: file,
+			root: root,
+			declaredTypes: provider != null ? provider.declaredTypes(source) : null,
+			castTargets: () -> {
+				final ready: Null<Map<Int, String>> = casts;
+				if (ready != null) return ready;
+				final p: Null<TypeInfoProvider> = provider;
+				final computed: Map<Int, String> = p != null ? p.castTargetSources(source) : [];
+				casts = computed;
+				return computed;
+			},
+			index: index
 		};
 	}
 
