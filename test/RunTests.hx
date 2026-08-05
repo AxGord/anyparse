@@ -344,6 +344,7 @@ import unit.UnreachableCatchTest;
 import unit.ImpossibleCastTest;
 import unit.RedundantUpcastTest;
 import unit.RedundantCastTypeCheckTest;
+import unit.RedundantAscriptionTest;
 import unit.DeadNullGuardTest;
 import unit.DeadSafeNavTest;
 import unit.DeadNullCoalescingTest;
@@ -1044,6 +1045,7 @@ class RunTests {
 		addCase(new ImpossibleCastTest());
 		addCase(new RedundantUpcastTest());
 		addCase(new RedundantCastTypeCheckTest());
+		addCase(new RedundantAscriptionTest());
 		addCase(new DeadNullGuardTest());
 		addCase(new DeadSafeNavTest());
 		addCase(new AlwaysNullComparisonTest());

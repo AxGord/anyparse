@@ -1222,6 +1222,14 @@ typedef RefShape = {
 	@:optional var checkedCastKind: String;
 
 	/**
+	 * The compile-time type-check / ascription node kind (Haxe `(x : T)` — `ECheckTypeExpr`),
+	 * distinct from the runtime-CHECKED `checkedCastKind`. The `redundant-ascription` check reads
+	 * it (with `newExprKind`) to flag a `(new T(...) : T)` whose ascribed type only restates the
+	 * construction it wraps. Optional; unset makes the check a no-op.
+	 */
+	@:optional var checkTypeKind: String;
+
+	/**
 	 * Identifier names that project as a plain identifier expression but denote a
 	 * loop jump (Haxe `break` / `continue` surface as `IdentExpr` nodes named so,
 	 * not as dedicated kinds) — the `dead-store` check treats one as jumping to an
