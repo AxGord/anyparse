@@ -178,6 +178,75 @@ class ComparisonToBooleanCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * A field access whose member resolves to a plain `Bool` is provably non-null, so the
+	 * `nullableOperandKinds` blanket veto is bypassed by the resolved-type proof.
+	 */
+	public function testFieldAccessBoolMemberFlagged(): Void {
+		Assert.equals(1, violations(typed('public var flag:Bool;', 'var b = o.flag == true;')).length);
+	}
+
+	/** The same shape's autofix strips the literal, leaving the field read. */
+	public function testFixStripsFieldAccessBoolMember(): Void {
+		Assert.equals(
+			typed('public var flag:Bool;', 'var b = o.flag;'), applyFix(typed('public var flag:Bool;', 'var b = o.flag == true;'))
+		);
+	}
+
+	/** A `Null<Bool>` member's `== true` is load-bearing — no proof, so silent and unfixed. */
+	public function testNullableBoolMemberSkipped(): Void {
+		final src: String = typed('public var flag:Null<Bool>;', 'var b = o.flag == true;');
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/** An EXTERN class's `Bool` property resolves like any other member — flagged, and `== false` negates it. */
+	public function testExternBoolPropertyFlagged(): Void {
+		final src: String = 'extern class T {\n\tpublic var visible(get, set):Bool;\n}\n\n'
+			+ 'class C {\n\tfunction f(o:T):Void {\n\t\tvar b = o.visible == false;\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(StringTools.replace(src, 'o.visible == false', '!o.visible'), applyFix(src));
+	}
+
+	/** The receiver type resolves THROUGH `cast(e, T)` to T's own member. */
+	public function testTypedCastReceiverMemberFlagged(): Void {
+		final src: String = castFixture('class T {\n\tpublic var flag:Bool;\n}');
+		Assert.equals(1, violations(src).length);
+		Assert.equals(StringTools.replace(src, 'cast(o, T).flag == true', 'cast(o, T).flag'), applyFix(src));
+	}
+
+	/** The cast target's INHERITED member resolves too — the `cast(object, DisplayObjectContainer).mouseEnabled` shape. */
+	public function testTypedCastInheritedMemberFlagged(): Void {
+		final src: String = castFixture('class B {\n\tpublic var flag:Bool;\n}\n\nclass T extends B {}');
+		Assert.equals(1, violations(src).length);
+		Assert.equals(StringTools.replace(src, 'cast(o, T).flag == true', 'cast(o, T).flag'), applyFix(src));
+	}
+
+	/**
+	 * An anonymous-structure receiver gets NO proof: an `@:optional` field is nullable despite its
+	 * `Bool` annotation, and the member table cannot tell the two apart.
+	 */
+	public function testAnonStructReceiverSkipped(): Void {
+		Assert.equals(
+			0,
+			violations('typedef T = {\n\t?flag:Bool\n}\n\nclass C {\n\tfunction f(o:T):Void {\n\t\tvar b = o.flag == true;\n\t}\n}').length
+		);
+		Assert.equals(
+			0,
+			violations('typedef T = {\n\tflag:Bool\n}\n\nclass C {\n\tfunction f(o:T):Void {\n\t\tvar b = o.flag == true;\n\t}\n}').length
+		);
+	}
+
+	/** A two-type fixture: a `T` declaring `member`, and a `C.f(o:T)` whose body is `body`. */
+	private function typed(member: String, body: String): String {
+		return 'class T {\n\t$member\n}\n\nclass C {\n\tfunction f(o:T):Void {\n\t\t$body\n\t}\n}';
+	}
+
+	/** A cast fixture: `types` declares the cast target `T`, read through `cast(o, T).flag`. */
+	private function castFixture(types: String): String {
+		return '$types\n\nclass C {\n\tfunction f(o:Dynamic):Void {\n\t\tvar b = cast(o, T).flag == true;\n\t}\n}';
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new ComparisonToBoolean().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
