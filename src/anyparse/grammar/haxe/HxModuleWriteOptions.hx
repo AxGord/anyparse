@@ -873,6 +873,40 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * them. Fed by `sameLine.expressionIfArrowBodyReflow`.
 	 */
 	expressionIfArrowBodyReflow: Bool,
+
+	/**
+	 * omega-elseif-comment-reflow: when `true`, an `else if` whose nested `if`
+	 * carries EXACTLY one interposed `//` line comment glues as usual and
+	 * re-emits that comment at the end of the nested `if`'s head line - after
+	 * the then-body's `{` when it is braced, after the condition's `)` when the
+	 * body policy already puts a bare body on the next line. Both are the same
+	 * structural position: the first unconditional break after the condition.
+	 *
+	 * Default `false` keeps the pre-knob layout, which is what the old
+	 * haxe-formatter produced and what the writer round-trips byte for byte:
+	 * `else` alone on its line, the comment one indent deeper, the nested
+	 * `if` back at the outer indent.
+	 *
+	 * Read at `HxIfStmt.elseBody` (`@:fmt(elseIfCommentReflow)`) on the
+	 * `elseIf` glue path only, and refused - layout unchanged - for a block
+	 * comment, for more than one comment, for a same-line comment cuddled to
+	 * the `else` itself, for a nested `if` head that ALREADY carries a trailing
+	 * `//`, for an EMPTY then-body (`{}` closes on the head line, so the next
+	 * break already belongs to that `if`'s own `else`), and whenever the nested
+	 * `if`'s own emission offers no provable head-line anchor (a body that
+	 * renders flat, or any Doc shape the walk cannot name).
+	 * `sameLine.elseBody: "keep"` also disables it: a `Keep`
+	 * policy routes the else through `buildBodyKeepLayout`, which the knob does
+	 * not reach.
+	 *
+	 * Width never causes a refusal - an over-long glued head line is accepted
+	 * rather than re-wrapped - but the relocated comment does stay visible to a
+	 * `conditionWrapping` probe that measures the whole rendered line, exactly
+	 * as a hand-written trailing comment in that position would; hiding it
+	 * there would cost idempotence. Statement position only - the value-position
+	 * twin `HxIfExpr` is out of scope. Fed by `sameLine.elseIfCommentReflow`.
+	 */
+	elseIfCommentReflow: Bool,
 	ifElseSemicolonNextLine: Bool,
 	afterFieldsWithDocComments: CommentEmptyLinesPolicy,
 	existingBetweenFields: KeepEmptyLinesPolicy,

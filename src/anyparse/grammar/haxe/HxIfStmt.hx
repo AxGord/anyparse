@@ -52,6 +52,42 @@ package anyparse.grammar.haxe;
  * own bodyPolicy, so `else if (...)` stays inline by default even
  * though `elseBody=Next` pushes non-if branches to the next line.
  *
+ * `@:fmt(elseIfCommentReflow)` on `elseBody` (no argument - psi-6
+ * principle) opts the `elseIf` glue path into the `opt.elseIfCommentReflow`
+ * writer knob (JSON `sameLine.elseIfCommentReflow`). The mechanism is a
+ * two-part swap on the `elseIf`-ctor `Same` arm ONLY: the `kwGapDoc`
+ * separator - which renders the captured `<field>KwLeading` comments on
+ * their own lines and pushes the nested `if` to the next line - drops to a
+ * plain space, and the one comment is spliced into the ALREADY-BUILT body
+ * Doc by `anyparse.format.ElseIfCommentReflow.insertHeadTrail`. That splice
+ * anchors it at the first UNCONDITIONAL break after the condition, which is
+ * the single position both promised placements share: after the then-body
+ * block's `{` when the body is braced, after the condition's `)` when the
+ * body policy breaks a bare body onto the next line. The condition is
+ * stepped over as one opaque `WrapBoundary`, so a wrapped condition's own
+ * breaks are never mistaken for the end of the head.
+ *
+ * Two gates, both failing closed to the untouched `Same` layout, so the
+ * comment can never be dropped or duplicated: the `elseBody` kw-trivia
+ * slots must hold EXACTLY one `//` comment and no same-line `AfterKw`
+ * comment, and the splice must find its anchor - it returns `null` for a
+ * body that renders flat, for an EMPTY then-body (`{}` closes on the head
+ * line, so the next break already belongs to the nested `if`'s own `else`),
+ * for a head that already carries a trailing `//` or a rendered `;`, and for
+ * any Doc shape it cannot name.
+ *
+ * Width never causes a refusal - an over-long glued head line is accepted,
+ * as with the case-emitter trail comment - though the relocated comment
+ * does stay visible to a `conditionWrapping` probe measuring the whole
+ * rendered line, which is what keeps the reflow output a fixed point.
+ *
+ * Trivia mode only - the plain writer has no comments. `sameLine.elseBody:
+ * "keep"` disables the reflow: a `Keep` policy routes the whole else
+ * through `buildBodyKeepLayout`'s own `Same` arm, which the knob does not
+ * reach - coherent, since "keep" asks for the source shape. The flag lives
+ * on `HxIfStmt.elseBody` ONLY; the value-position twin `HxIfExpr.elseBranch`
+ * is deliberately out of scope.
+ *
  * `@:fmt(fitLineIfWithElse)` on BOTH `thenBody` and `elseBody` (ψ₁₂)
  * gates the `FitLine` body policy on sibling-else presence at runtime:
  * when `opt.fitLineIfWithElse` is `false` (default) and the `if` has
@@ -92,5 +128,6 @@ typedef HxIfStmt = {
 		'ifBody', 'expressionIfBody'
 	), fitLineIfWithElse, clearElseIfBranch, dropSingleStmtBraces) var thenBody: HxStatement;
 	@:optional @:trailOpt(';') @:kw('else') @:fmt(sameLine('sameLineElse'), shapeAware, semicolonNextLineElse,
-		bodyPolicy('elseBody', 'expressionElseBody'), elseIf, fitLineIfWithElse, propagateElseIfBranch, dropSingleStmtBraces) var elseBody: Null<HxStatement>;
+		bodyPolicy('elseBody', 'expressionElseBody'), elseIf, elseIfCommentReflow, fitLineIfWithElse, propagateElseIfBranch,
+		dropSingleStmtBraces) var elseBody: Null<HxStatement>;
 };

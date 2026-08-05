@@ -72,11 +72,15 @@ package anyparse.core;
  * error is fixed, a new ctor appearing as a `Concat` element there is
  * still dropped. Fix that one by hand.
  *
- * Three more hand-written `Doc` switches keep `case _` DELIBERATELY and
+ * Four more hand-written `Doc` switches keep `case _` DELIBERATELY and
  * are outside the net: `MethodChainEmit.startsWithHardline`,
  * `WrapList.isOPLShape` and `WrapList.isArrowBrkShape` match one exact
  * structural signature each, so "anything else" is their answer, not a
- * hole.
+ * hole. `ElseIfCommentReflow.scan` is the fourth and inverts the reason:
+ * it ACCEPTS only the ctors it can prove belong to a construct's head
+ * line, so its `case _` is a refusal — a ctor added later fails closed
+ * there (the reflow is declined, the source layout kept) instead of
+ * acquiring an anchor by default, which is the answer a new member wants.
  *
  * THREE of the thirteen diverge from their own side for one family
  * member, and each says why at the arm: `hasTopLevelElse` needs the

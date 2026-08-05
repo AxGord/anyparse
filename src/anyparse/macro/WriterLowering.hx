@@ -3776,6 +3776,7 @@ class WriterLowering {
 			nextLayoutExpr: nextLayoutExpr,
 			blockLayoutExpr: blockLayoutExpr,
 			fitExpr: fitExpr,
+			elseIfSameLayoutExpr: buildElseIfCommentReflowLayout(opts, shared, sameLayoutExpr),
 		};
 		final blockSplit: { tagged: Array<Expr>, untagged: Array<Expr> } = collectBlockCtorPatternsByLeftCurly(opts.bodyTypePath);
 		final ifStmtPattern: Null<Expr> = opts.hasElseIf
@@ -6371,6 +6372,53 @@ class WriterLowering {
 	}
 
 	/**
+	 * omega-elseif-comment-reflow: build the `Same` layout the `elseIf`-ctor arm uses.
+	 *
+	 * Off-path (no `@:fmt(elseIfCommentReflow)` on the field, plain mode, or a site
+	 * without the kw-trivia slots) it IS `sameLayoutExpr`, so every other grammar and
+	 * the knob's own `false` default stay byte-identical.
+	 *
+	 * On-path it prepends one runtime gate. The knob must be on, the `else` itself
+	 * must carry no same-line comment (`AfterKw`), and the kw-leading slot must hold
+	 * EXACTLY one `//` comment - anything else is a shape whose relocation is not
+	 * modelled. The splice then anchors that comment at the nested `if`'s head line
+	 * inside the ALREADY-BUILT body Doc; when the body offers no anchor the splice
+	 * returns `null` and the untouched `sameLayoutExpr` runs, comment still in its
+	 * `kwGapDoc` position. The separator drops to a plain space because the comment no
+	 * longer travels through `kwGapDoc` - the same byte that helper emits for empty
+	 * trivia slots.
+	 */
+	private function buildElseIfCommentReflowLayout(opts: WrapBodyOpts, shared: BodyWrapShared, sameLayoutExpr: Expr): Expr {
+		final afterKwExpr: Null<Expr> = opts.afterKwExpr;
+		final kwLeadingExpr: Null<Expr> = opts.kwLeadingExpr;
+		if (opts.elseIfCommentReflow != true || !_ctx.trivia || afterKwExpr == null || kwLeadingExpr == null) return sameLayoutExpr;
+		// The refusal arm RE-STATES the `Same` layout over the hoisted body local
+		// instead of re-splicing `sameLayoutExpr` (whose own copy of the writeCall
+		// made a refused else-if chain rebuild its body once per link — 2^n). That
+		// re-statement is only equivalent for the plain shape, so a field pairing
+		// this knob with either opt that makes `buildBodySameLayout` emit something
+		// else is a COMPILE error rather than a silently inert knob. No grammar
+		// pairs them today; the check exists so the day one does is loud.
+		if (opts.widthAware == true || opts.ifExprIndentArgs != null)
+			Context.fatalError(
+				'WriterLowering: @:fmt(elseIfCommentReflow) cannot be combined with @:fmt(${opts.widthAware == true ? 'widthAware' : 'indentValueIfCtor'}) — the reflow arm re-states the Same layout and would drop that opt\'s shape',
+				Context.currentPos()
+			);
+		final writeCall: Expr = shared.writeCall;
+		final sameSepNb: Expr = shared.sameSepNb;
+		return macro {
+			final _eicrBody: anyparse.core.Doc = $writeCall;
+			final _eicrLead: Array<String> = $kwLeadingExpr;
+			final _eicrDoc: Null<anyparse.core.Doc> = (
+				opt.elseIfCommentReflow && $afterKwExpr == null && _eicrLead.length == 1 && StringTools.startsWith(_eicrLead[0], '//')
+			)
+				? anyparse.format.ElseIfCommentReflow.insertHeadTrail(_eicrBody, trailingCommentDocGuarded(_eicrLead[0], opt))
+				: null;
+			_eicrDoc != null ? _dc([_dt(' '), _eicrDoc]) : _dc([$sameSepNb, _eicrBody]);
+		};
+	}
+
+	/**
 	 * Build the `Same`-policy layout Expr (ω-returnbody-widthaware + the
 	 * value-expr Nest wrap).
 	 */
@@ -6586,8 +6634,11 @@ class WriterLowering {
 			final kpPath: Array<String> = ['anyparse', 'format', 'KeywordPlacement'];
 			final kpNextPat: Expr = MacroStringTools.toFieldExpr(kpPath.concat(['Next']));
 			final elseIfCases: Array<Case> = [{ values: [kpNextPat], expr: nextLayoutExpr, guard: null },];
+			// omega-elseif-comment-reflow: the glued arm is the ONE place the knob
+			// acts - `layouts.elseIfSameLayoutExpr` is `sameLayoutExpr` itself
+			// off-path, and the gated variant on it.
 			final elseIfSwitch: Expr = {
-				expr: ESwitch(macro opt.elseIf, elseIfCases, sameLayoutExpr),
+				expr: ESwitch(macro opt.elseIf, elseIfCases, layouts.elseIfSameLayoutExpr),
 				pos: Context.currentPos(),
 			};
 			outerCases.push({ values: [ifStmtPattern], expr: elseIfSwitch, guard: null });
@@ -9786,6 +9837,7 @@ class WriterLowering {
 				indentObjArgs: indentObjArgs,
 				inlineBlockBodyArgs: inlineBlockBodyArgs,
 				arrowValueIfSite: child.fmtHasFlag(ARROW_VALUE_IF_SITE),
+				elseIfCommentReflow: child.fmtHasFlag('elseIfCommentReflow'),
 			}));
 		} else if (child.fmtHasFlag('nestBodyOnSourceNewline') && bodyOnSameLineExpr != null) {
 			// ω-cond-comp-expr-body-nest: optional-kw-Ref body
@@ -18119,7 +18171,16 @@ typedef WrapBodyOpts = {
 	// branch value glues to its own condition and the enclosing
 	// `Group` owns the one flat-vs-broken decision for the whole chain.
 	// False everywhere else -> byte-inert.
-	?arrowValueIfSite: Bool
+	?arrowValueIfSite: Bool,
+	// omega-elseif-comment-reflow: true for the body field carrying
+	// `@:fmt(elseIfCommentReflow)` (HxIfStmt.elseBody). On the `elseIf`-ctor
+	// `Same` arm ONLY, and only when `opt.elseIfCommentReflow` is set and the
+	// kw-trivia slots hold exactly one `//` comment, the `kwGapDoc` separator
+	// is swapped for a plain space and that comment is spliced onto the nested
+	// `if`'s head line by `ElseIfCommentReflow.insertHeadTrail`. Every other
+	// arm, and a splice that finds no anchor, keep the untouched layout.
+	// False everywhere else -> byte-inert.
+	?elseIfCommentReflow: Bool
 };
 
 /**
@@ -18145,6 +18206,15 @@ typedef BodyLayouts = {
 	final nextLayoutExpr: Expr;
 	final blockLayoutExpr: Expr;
 	final fitExpr: Expr;
+
+	/**
+	 * omega-elseif-comment-reflow: the `Same` layout the `elseIf`-ctor arm
+	 * uses. Identical to `sameLayoutExpr` unless the field carries
+	 * `@:fmt(elseIfCommentReflow)`, in which case it is that layout behind a
+	 * runtime gate that first tries the glued form with the interposed
+	 * comment spliced onto the nested `if`'s head line.
+	 */
+	final elseIfSameLayoutExpr: Expr;
 };
 
 /**

@@ -562,6 +562,7 @@ import unit.PreferCaseGuardOracleE2ETest;
 import unit.HxCaseBodyControlFlowGlueTest;
 import unit.HxCaseBodyTrailCommentInlineTest;
 import unit.HxArrowValueIfReflowSliceTest;
+import unit.HxElseIfCommentReflowSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -811,6 +812,7 @@ class RunTests {
 		addCase(new HxMethodChainCallParamRestAwareSliceTest());
 		addCase(new HxObjectLitArrowBodyPadSliceTest());
 		addCase(new HxArrowValueIfReflowSliceTest());
+		addCase(new HxElseIfCommentReflowSliceTest());
 		addCase(new HxMethodChainCloseTrailingTest());
 		addCase(new HxWrapRulesIngestTest());
 		addCase(new PairedConvertersSmokeTest());

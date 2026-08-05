@@ -147,6 +147,23 @@ package anyparse.grammar.haxe.format;
  * refuses the reflow as a WHOLE and keeps the policy-driven shape; the
  * reach is `_inArrowLambdaBody`, which also covers a `cast` operand, an
  * `untyped` / `@:meta` prefix and an enclosing value-`if`'s condition.
+ *
+ * omega-elseif-comment-reflow: `elseIfCommentReflow` (default `false`,
+ * absent = fork parity) is a `Bool` knob for the ONE comment position the
+ * `elseIf` glue cannot canonicalise - a single `//` line comment written
+ * between `else` and its nested `if`. Off, that comment forces the
+ * three-line fork layout (`else` alone on its line, the comment one indent
+ * deeper, the nested `if` back at the outer indent). On, the link glues
+ * (`} else if (b) {`) and the comment becomes a trailing comment at the end
+ * of the nested `if`'s head line - after the then-body's `{` when it is
+ * braced, after the condition's `)` when the body policy already puts a bare
+ * body on the next line. Wired via `@:fmt(elseIfCommentReflow)` on
+ * `HxIfStmt.elseBody`; statement position only. A block comment, more than
+ * one comment, a comment cuddled to the `else` itself, a nested `if` head
+ * that already carries its own trailing `//`, an empty then-body, and a body
+ * that offers no provable head-line anchor all refuse and keep the knob-off
+ * layout - as
+ * does `elseBody: "keep"`, whose `Keep` layout path the knob does not reach.
  */
 @:peg typedef HxFormatSameLineSection = {
 
@@ -197,6 +214,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var expressionIfWithBlocks: Bool;
 
 	@:optional var expressionIfArrowBodyReflow: Bool;
+
+	@:optional var elseIfCommentReflow: Bool;
 
 	@:optional var comprehensionFor: HxFormatBodyPolicy;
 };

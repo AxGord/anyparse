@@ -617,6 +617,7 @@ final class HaxeFormatConfigLoader {
 			elseIf: base.elseIf,
 			fitLineIfWithElse: base.fitLineIfWithElse,
 			expressionIfArrowBodyReflow: base.expressionIfArrowBodyReflow,
+			elseIfCommentReflow: base.elseIfCommentReflow,
 			ifElseSemicolonNextLine: base.ifElseSemicolonNextLine,
 			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
 			existingBetweenFields: base.existingBetweenFields,
@@ -1025,6 +1026,10 @@ final class HaxeFormatConfigLoader {
 		// three `expressionIf*` body policies - it overrides them, and only for
 		// a value-if chain that is the direct body of an arrow lambda.
 		if (section.expressionIfArrowBodyReflow != null) opt.expressionIfArrowBodyReflow = section.expressionIfArrowBodyReflow;
+		// omega-elseif-comment-reflow: an independent Bool knob on the `elseIf`
+		// glue path - it changes no body policy, it decides whether ONE interposed
+		// line comment may move to the nested if's head line.
+		if (section.elseIfCommentReflow != null) opt.elseIfCommentReflow = section.elseIfCommentReflow;
 		if (section.ifElseSemicolonNextLine != null) opt.ifElseSemicolonNextLine = section.ifElseSemicolonNextLine;
 		if (section.expressionTry != null) opt.expressionTry = sameLineToRuntime(section.expressionTry);
 		if (section.expressionIfWithBlocks != null) opt.expressionIfWithBlocks = section.expressionIfWithBlocks;
