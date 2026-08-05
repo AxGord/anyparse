@@ -212,13 +212,6 @@ class ComparisonToBooleanCheckTest extends Test {
 		Assert.equals(0, violations(typed('#if js\n\tpublic var flag:Bool;\n\t#end', 'var b = o.flag == true;')).length);
 	}
 
-	/** Two branches declaring `field` with DIFFERENT written types: whichever is written first would decide. */
-	public function testConflictingMemberDeclarationsSkipped(): Void {
-		Assert.equals(
-			0,
-			violations(typed('#if js\n\tpublic var flag:Bool;\n\t#else\n\tpublic var flag:Null<Bool>;\n\t#end', 'var b = o.flag == true;')).length
-		);
-	}
 
 	/**
 	 * A receiver type whose SIMPLE NAME is declared in two files is refused CONSERVATIVELY: the
@@ -227,7 +220,9 @@ class ComparisonToBooleanCheckTest extends Test {
 	 * correctly — the refusal is the price of not having to prove which arm answered.
 	 */
 	public function testHomonymReceiverTypeSkipped(): Void {
-		final other: String = 'package p;\n\nclass T {\n\tpublic var flag:Null<Bool>;\n}';
+		// `p.T` declares NOTHING directly and inherits `flag:Null<Bool>`, so only the
+		// declared-in-one-file refusal stands between the root `T`'s own `flag:Bool` and the proof.
+		final other: String = 'package p;\n\nclass Base {\n\tpublic var flag:Null<Bool>;\n}\n\nclass T extends Base {}';
 		final src: String = typed('public var flag:Bool;', 'var b = o.flag == true;');
 		Assert.equals(0, violationsAcross([{ file: 'C.hx', source: src }, { file: 'p/T.hx', source: other }]).length);
 	}

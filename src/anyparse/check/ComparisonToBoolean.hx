@@ -292,26 +292,24 @@ final class ComparisonToBoolean implements Check {
 	 *  - an ANONYMOUS-STRUCTURE receiver. An `@:optional` structural field is nullable while
 	 *    carrying a bare `Bool` annotation, and the member table records both forms identically.
 	 *  - a receiver type whose SIMPLE NAME is declared in more than one file. The index keys types
-	 *    by simple name, and its package-blind arms can answer from the homonym rather than from the
-	 *    type actually in scope — a root `T` declaring `flag:Bool` answering for a `p.T extends Base`
-	 *    that inherits `flag:Null<Bool>`. Conservative: an in-scope root type would often resolve
-	 *    correctly, but proving WHICH arm answered costs more than the refusal.
-	 *  - a `#if`-GUARDED declaration of `field` on `recvType`, several declarations disagreeing about
-	 *    the written type, or one carrying no written type at all (a method). The index is
-	 *    branch-blind and its inheritance walk is first-wins, so the answer would otherwise depend on
-	 *    which branch happens to be written first (`MemberInfo.guarded` exists for exactly this). A
-	 *    member declared on a SUPERTYPE has no direct declaration to inspect here, so its guardedness
-	 *    stays invisible — a residual hole, narrower than the one it replaces.
+	 *    by simple name, so a homonym in another package can answer for the type actually in scope —
+	 *    a root `T` declaring `flag:Bool` standing in for a `p.T extends Base` that INHERITS
+	 *    `flag:Null<Bool>` (p.T declares nothing directly, so nothing else notices the swap).
+	 *    Conservative: the in-scope type often resolves correctly anyway, but proving which of the
+	 *    index's arms answered costs more than the refusal.
+	 *  - a `#if`-GUARDED declaration of `field` on `recvType`. The index is branch-blind and its
+	 *    inheritance walk is first-wins, so which branch is written first would decide the proof;
+	 *    `MemberInfo.guarded` exists precisely so a rewriting consumer bails. A member declared on a
+	 *    SUPERTYPE has no direct declaration to inspect here, so its guardedness stays invisible — a
+	 *    residual hole, narrower than the one it replaces.
+	 *
+	 * Nothing checks the member's WRITTEN TYPE for agreement or presence: past the first two refusals
+	 * exactly one type is named `recvType`, so Haxe permits at most one non-`#if` declaration of
+	 * `field` on it, and a type-less member (a method) makes the walk itself answer null.
 	 */
 	private static function memberLookupIsPinned(recvType: String, field: String, index: SymbolIndex): Bool {
 		if (index.isAnonStructType(recvType) || index.declaringFiles(recvType).length != 1) return false;
-		var written: Null<String> = null;
-		for (declaration in index.memberDeclarationsOf(recvType, field)) {
-			if (declaration.member.guarded) return false;
-			final source: Null<String> = declaration.member.typeSource;
-			if (source == null || (written != null && written != source)) return false;
-			written = source;
-		}
+		for (declaration in index.memberDeclarationsOf(recvType, field)) if (declaration.member.guarded) return false;
 		return true;
 	}
 
