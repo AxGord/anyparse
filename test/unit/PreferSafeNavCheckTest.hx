@@ -214,6 +214,45 @@ class PreferSafeNavCheckTest extends Test {
 		Assert.equals(0, violations(local('trace(x == null ? null /* c */ : x.f);')).length);
 	}
 
+	/** The `!=` polarity puts the dropped `null` AFTER the kept branch — the suffix half of the comment gate. */
+	public function testTernaryCommentAfterKeptBranchNotFlagged(): Void {
+		Assert.equals(0, violations(local('trace(x != null ? x.f /* c */ : null);')).length);
+	}
+
+	public function testTernaryMidChainIndexFixed(): Void {
+		Assert.equals(1, violations(local('trace(x == null ? null : x.arr[0].c);')).length);
+		Assert.equals(local('trace(x?.arr[0].c);'), applyFix(local('trace(x == null ? null : x.arr[0].c);')));
+	}
+
+	public function testStatementThisReceiverFixed(): Void {
+		final source: String = 'abstract A(Array<P>) {\n\tpublic function f():Void {\n\t\tif (this != null) this.m();\n\t}\n}';
+		final expected: String = 'abstract A(Array<P>) {\n\tpublic function f():Void {\n\t\tthis?.m();\n\t}\n}';
+		Assert.equals(1, violations(source).length);
+		Assert.equals(expected, applyFix(source));
+	}
+
+	/** A `cast` on the receiver spine breaks the chain — `(cast x?.a).m()` dereferences null. */
+	public function testStatementCastOnSpineNotFlagged(): Void {
+		Assert.equals(0, violations(local('if (x != null) (cast x.a).m();')).length);
+	}
+
+	/** An operator on the receiver spine breaks the chain — `(x?.a + b).m()` adds to a `Null<T>`. */
+	public function testStatementOperatorOnSpineNotFlagged(): Void {
+		Assert.equals(0, violations(local('if (x != null) (x.a + b).m();')).length);
+	}
+
+	public function testStatementMidChainIndexFixed(): Void {
+		Assert.equals(1, violations(local('if (x != null) x.arr[0].b();')).length);
+		Assert.equals(local('x?.arr[0].b();'), applyFix(local('if (x != null) x.arr[0].b();')));
+	}
+
+	/** A comment between the receiver and its dot would swallow the inserted `?` — reported, left unfixed. */
+	public function testCommentBeforeDotNotFixed(): Void {
+		final source: String = local('trace(x == null ? null : x /* a.b */ .f);');
+		Assert.equals(1, violations(source).length);
+		Assert.equals(source, applyFix(source));
+	}
+
 	private function local(stmt: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\tvar x:Sys = mk();\n\t\t$stmt\n\t}\n}';
 	}

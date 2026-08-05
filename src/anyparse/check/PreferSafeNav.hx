@@ -45,7 +45,8 @@ using Lambda;
  * `@:to function toString() return this == null ? null : this.map(f).join(',');`.
  *
  * The then-branch must be exactly ONE expression statement whose expression is a
- * CALL rooted at the guarded identifier (`x.m(...)` / `x.a.b(...)`), so:
+ * CALL that is a plain chain rooted at the guarded identifier (`x.m(...)` /
+ * `x.a.b(...)` — see `chainAccess` below), so:
  *
  * - a multi-statement block is NOT flagged (the user groups those under one `if`
  *   deliberately);
@@ -66,18 +67,24 @@ using Lambda;
  * the LAST conjunct is dropped, leaving the preceding conjuncts as the surviving
  * `if` condition (kept verbatim, so a comment inside them is preserved).
  *
- * ## Ternary arm — the branch must BE the chain
+ * ## The kept region must BE the chain — `chainAccess`, shared by both arms
  *
- * The rewrite replaces the WHOLE ternary with the guarded branch, so that branch has to
- * be the receiver chain itself and nothing more: `x == null ? null : x.f + 1` is NOT
- * flagged, because `x?.f + 1` adds to a `Null<T>` rather than yielding null. The descent
- * therefore walks ONLY chain nodes (`fieldAccessKind` / `callKind` / `indexAccessKind`)
- * from the branch down to the guarded identifier, and the junction off that identifier
- * must be a plain `.` (`fieldAccessKind`) — an index (`x[0].f`) or an already-safe `x?.f`
- * root is left alone, as in the statement arm. The other branch must be exactly the
- * `null` literal; `x == null ? 0 : x.f` guards a real fallback value, which is
- * `prefer-null-coalescing` territory at most. Both branches keep the type the ternary
- * already had — `?.` yields `Null<T>` just as the `null` branch did.
+ * The rewrite replaces the whole guard with the kept region, so that region has to be the
+ * receiver chain itself and nothing more. `chainAccess` therefore descends the `children[0]`
+ * receiver spine through CHAIN steps only (`chainKinds` — `fieldAccessKind`, `callKind`,
+ * `indexAccessKind`), and the junction off the guarded identifier must be a plain `.`
+ * (`fieldAccessKind`), so an index root (`x[0].f`) and an already-safe `x?.f` root are left
+ * alone. `?.` short-circuits every chain step after it, so an index or a call MID-chain
+ * (`x.arr[0].c`, `x.map(f).join(',')`) collapses fine — but a `cast`, a parenthesis, an
+ * ascription or an operator on the spine does NOT: `(cast x.a).m()` would become
+ * `(cast x?.a).m()`, which dereferences null, and `x == null ? null : x.f + 1` would become
+ * `x?.f + 1`, which adds to a `Null<T>`. A spine node outside `chainKinds` ends the descent
+ * with no match, which refuses all of those by construction.
+ *
+ * The ternary arm additionally requires the OTHER branch to be exactly the `null` literal;
+ * `x == null ? 0 : x.f` guards a real fallback value, which is `prefer-null-coalescing`
+ * territory at most. The kept branch keeps the type the ternary already had — `?.` yields
+ * `Null<T>` just as the `null` branch did.
  *
  * ## Autofix
  *
@@ -87,17 +94,19 @@ using Lambda;
  * (`if (x != null) x.a.b();` → `x?.a.b();`, `x == null ? null : x.a.b()` → `x?.a.b()`):
  * only the guard being removed is encoded, inner nullables stay the author's concern.
  * A comment inside a DROPPED part of the removed region would be lost, so such a guard
- * is left unflagged.
+ * is left unflagged; a comment between the receiver and its dot would SWALLOW the inserted
+ * `?`, so that one leaves the guard reported but unfixed.
  *
  * ## Grammar-agnostic
  *
  * Driven by `ifStatementKinds`, `notEqKind`, `nullLiteralKind`, `callKind`,
  * `fieldAccessKind`, `exprStatementKind`, `blockStmtKind` (any unset → no-op),
- * plus `logicalAndKind` for the conjunction form, `ternaryKind` / `eqKind` for the
- * ternary arm (either unset → that arm alone is off), `indexAccessKind` for an index
- * step in a ternary chain, `selfReferenceText` for the `this` receiver, `localDeclKinds`
- * / `paramKinds` / `scopeKinds` for the binding resolution, `parenKind` to unwrap a
- * parenthesized condition, and `opaqueKinds` to skip reification subtrees.
+ * plus `logicalAndKind` for the conjunction form, `ternaryKind` for the ternary arm
+ * (unset → that arm alone is off) with `eqKind` adding its `x == null ? null : …`
+ * polarity, `indexAccessKind` for an index step on a chain, `selfReferenceText` for the
+ * `this` receiver, `localDeclKinds` / `paramKinds` / `scopeKinds` for the binding
+ * resolution, `parenKind` to unwrap a parenthesized condition or ternary branch, and
+ * `opaqueKinds` to skip reification subtrees.
  */
 @:nullSafety(Strict)
 final class PreferSafeNav implements Check {
@@ -146,24 +155,29 @@ final class PreferSafeNav implements Check {
 		if (seams == null) return [];
 		final s: Seams = seams;
 		final ternaryKind: Null<String> = s.ternaryKind;
-		final indexKinds: Array<String> = ternaryKind == null ? s.ifKinds : s.ifKinds.concat([ternaryKind]);
-		final edits: Array<{ span: Span, text: String }> = CheckScan.applyBySpan(plugin, source, violations, indexKinds, (node, span) -> {
-			final m: Null<Candidate> = candidate(node, source, s);
-			if (m == null) return null;
-			final stmtSpan: Null<Span> = m.stmt.span;
-			final rootSpan: Null<Span> = m.rootIdent.span;
-			if (stmtSpan == null || rootSpan == null) return null;
-			final dotPos: Int = source.indexOf('.', rootSpan.to);
-			if (dotPos < 0 || dotPos >= stmtSpan.to) return null;
-			final prefix: String = source.substring(stmtSpan.from, dotPos);
-			final suffix: String = source.substring(dotPos + 1, stmtSpan.to);
-			final body: String = '$prefix?.$suffix';
-			final rest: Null<QueryNode> = m.restCond;
-			final restSpan: Null<Span> = rest != null ? rest.span : null;
-			if (rest != null && restSpan == null) return null;
-			final text: String = restSpan != null ? 'if (${StringTools.trim(source.substring(restSpan.from, restSpan.to))}) $body' : body;
-			return { span: span, text: text };
-		});
+		final spanIndexKinds: Array<String> = ternaryKind == null ? s.ifKinds : s.ifKinds.concat([ternaryKind]);
+		final edits: Array<{ span: Span, text: String }> =
+			CheckScan.applyBySpan(plugin, source, violations, spanIndexKinds, (node, span) -> {
+				final m: Null<Candidate> = candidate(node, source, s);
+				if (m == null) return null;
+				final stmtSpan: Null<Span> = m.stmt.span;
+				final rootSpan: Null<Span> = m.rootIdent.span;
+				if (stmtSpan == null || rootSpan == null) return null;
+				final dotPos: Int = source.indexOf('.', rootSpan.to);
+				if (dotPos < 0 || dotPos >= stmtSpan.to) return null;
+				// A comment between the receiver and its dot would swallow the inserted `?`.
+				if (CheckScan.hasCommentMarker(source, rootSpan.to, dotPos)) return null;
+				final prefix: String = source.substring(stmtSpan.from, dotPos);
+				final suffix: String = source.substring(dotPos + 1, stmtSpan.to);
+				final body: String = '$prefix?.$suffix';
+				final rest: Null<QueryNode> = m.restCond;
+				final restSpan: Null<Span> = rest?.span;
+				if (rest != null && restSpan == null) return null;
+				final text: String = restSpan != null
+					? 'if (${StringTools.trim(source.substring(restSpan.from, restSpan.to))}) $body'
+					: body;
+				return { span: span, text: text };
+			});
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
@@ -201,7 +215,7 @@ final class PreferSafeNav implements Check {
 			localDeclKinds: shape.localDeclKinds ?? [],
 			paramKinds: shape.paramKinds ?? [],
 			andKind: shape.logicalAndKind,
-			ternaryKind: shape.eqKind == null ? null : shape.ternaryKind,
+			ternaryKind: shape.ternaryKind,
 			eqKind: shape.eqKind,
 			chainKinds: chainKinds,
 			selfText: shape.selfReferenceText
@@ -345,18 +359,6 @@ final class PreferSafeNav implements Check {
 	}
 
 	/**
-	 * Descend the `children[0]` receiver chain of `node` (`FieldAccess` / `Call` /
-	 * index / safe-nav wrappers all carry the receiver there) until the receiver is
-	 * a plain identifier, returning the node that directly holds it (the FIRST access
-	 * off the root). Null when the chain bottoms out without one.
-	 */
-	private static function chainRoot(node: QueryNode, identKind: String): Null<QueryNode> {
-		if (node.children.length < 1) return null;
-		final recv: QueryNode = node.children[0];
-		return recv.kind == identKind ? node : chainRoot(recv, identKind);
-	}
-
-	/**
 	 * Whether `ident` is a receiver whose double read is provably free: the self reference
 	 * (a keyword, never an accessor), or a local / param binding whose scope encloses it and
 	 * that lexically precedes it.
@@ -416,12 +418,9 @@ final class PreferSafeNav implements Check {
 		return expr.children.length == 1 && expr.children[0].kind == s.callKind ? expr : null;
 	}
 
-	/** The FIRST access off the call's chain root when it is a plain `.` field access (`fieldAccessKind`); else null. */
+	/** The FIRST access off the body call's chain root when it is a plain `.` field access — `chainAccess` on the call. */
 	private static function firstAccess(stmt: QueryNode, s: Seams): Null<QueryNode> {
-		final call: QueryNode = stmt.children[0];
-		if (call.children.length < 1) return null;
-		final access: Null<QueryNode> = chainRoot(call.children[0], s.identKind);
-		return access != null && access.kind == s.fieldAccessKind ? access : null;
+		return chainAccess(stmt.children[0], s);
 	}
 
 	/** Whether two identifier nodes carry the same source name. */
