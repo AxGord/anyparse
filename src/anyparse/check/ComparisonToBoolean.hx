@@ -9,6 +9,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeInfoProvider;
+import haxe.Exception;
 
 /**
  * Flags a comparison against a boolean literal — `x == true`, `x != false` and the like —
@@ -48,15 +49,24 @@ import anyparse.query.TypeInfoProvider;
  * whose member's declared type is one of `RefShape.nonNullableTypeNames` — `object.visible`
  * on an `openfl` `DisplayObject`, and (through `TypeInfoProvider.castTargetSources`, since
  * the projection drops the written target) `cast(object, DisplayObjectContainer).mouseEnabled`
- * on the cast target's own or INHERITED member. This is the one arm that may pass the veto,
- * because a member declared plain `Bool` is not of unknown nullability. An ANONYMOUS-STRUCTURE
- * receiver is refused wholesale: an `@:optional` field is nullable while carrying a bare
- * `Bool` annotation, and the member table records both identically.
+ * on the cast target's own or INHERITED member. This is the one arm that may pass the veto:
+ * the veto refuses an operand of UNKNOWN nullability, and a member whose declared type the
+ * index resolved is not unknown. `memberLookupIsPinned` refuses the lookups the index cannot
+ * answer soundly — an anon-struct receiver, a simple-name homonym, a `#if`-guarded declaration.
+ *
+ * The resolved-type arm inherits the `nonNullableTypeNames` PREMISE — that a declared `Bool`
+ * holds no null — from the identifier arm beside it (`TypeResolver.isProvablyNonNull` returns
+ * true for a `Bool` annotation with no null-safety involved at all). That premise is exact on a
+ * static target and NOT exact on a dynamic one, where an uninitialized or `@:optional`
+ * `public var flag:Bool` class field reads `null`: there `o.flag == false` is `false` while
+ * `!o.flag` is `true`. BOTH arms share the hole — the identifier arm has carried it since the
+ * declared-type gate landed — so closing it belongs to the shared premise (or to a per-target
+ * seam), not to one arm.
  *
  * Grammars with no `TypeInfoProvider` fall back to reporting bare identifiers for a human to
- * judge; `fix` leaves those untouched (no proof, so the `== true` may be load-bearing). The
- * check does not descend into macro-reification subtrees (`RefShape.opaqueKinds`), whose
- * comparisons are generated code rather than authored style.
+ * judge; `fix` leaves those untouched (no proof, so the `== true` may be load-bearing). The check
+ * does not descend into macro-reification subtrees (`RefShape.opaqueKinds`), whose comparisons
+ * are generated code rather than authored style.
  *
  * ## Grammar-agnostic
  *
@@ -126,37 +136,23 @@ final class ComparisonToBoolean implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = resolveSeams(plugin);
-		if (seams == null) return [];
+		if (seams == null || violations.length == 0) return [];
 		final maybeEqKind: Null<String> = seams.eqKind;
 		final maybeRoot: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (maybeEqKind == null || maybeRoot == null) return [];
 		final eqKind: String = maybeEqKind;
 		final root: QueryNode = maybeRoot;
 		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
-		final file: String = violations.length > 0 ? violations[0].file : '';
-		final proof: TypeProof = proofOf(file, source, root, provider, fixIndex(file, source, plugin, index));
+		final file: String = violations[0].file;
+		for (violation in violations) if (violation.file != file)
+			throw new Exception('$RULE_ID: fix() takes ONE file\'s violations, got $file and ${violation.file}');
+		// `lazySymbolIndex` prefers the run's resolution scope, then the caller's report index, and
+		// only then builds over `source` alone — enough for a same-file receiver type.
+		final resolver: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex([{ file: file, source: source }], plugin, index);
+		final proof: TypeProof = proofOf(file, source, root, provider, resolver);
 		return CheckScan.applyBySpan(
 			plugin, source, violations, seams.equalityKinds, (node, span) -> comparisonEdit(node, span, source, seams, proof, eqKind)
 		);
-	}
-
-	/**
-	 * The lazy `SymbolIndex` the fix resolves member types through: the run's resolution-scoped
-	 * index when the plugin hosts one, else the caller's report-scoped index, else — a direct
-	 * `check.fix` against a bare plugin — one built over `source` ALONE, which still resolves a
-	 * same-file receiver type. Lazy, so a fix set with no field-access operand builds nothing.
-	 */
-	private static function fixIndex(
-		file: String, source: String, plugin: GrammarPlugin, supplied: Null<SymbolIndex>
-	): () -> Null<SymbolIndex> {
-		var built: Null<SymbolIndex> = null;
-		return () -> {
-			final ready: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? supplied ?? built;
-			if (ready != null) return ready;
-			final fresh: SymbolIndex = SymbolIndex.build([{ file: file, source: source }], plugin);
-			built = fresh;
-			return fresh;
-		};
 	}
 
 	/**
@@ -171,7 +167,7 @@ final class ComparisonToBoolean implements Check {
 		return {
 			file: file,
 			root: root,
-			declaredTypes: provider != null ? provider.declaredTypes(source) : null,
+			declaredTypes: provider?.declaredTypes(source),
 			castTargets: () -> {
 				final ready: Null<Map<Int, String>> = casts;
 				if (ready != null) return ready;
@@ -266,14 +262,14 @@ final class ComparisonToBoolean implements Check {
 
 	/**
 	 * The simple nominal of the type a FIELD-ACCESS operand carries: its receiver's type resolved
-	 * to a nominal, then that type's member `other.name` looked up through the index — import- and
-	 * inheritance-aware first, falling back to the package-blind simple-name walk for the aliased
-	 * supertypes the import-aware walk cannot follow. Null for any other operand kind, for an
-	 * unresolved receiver, and for an unresolved member.
+	 * to a nominal, then that type's member `other.name` looked up through the import- and
+	 * inheritance-aware `SymbolIndex` walk. Null for any other operand kind, for an unresolved
+	 * receiver, for a receiver `memberLookupIsPinned` refuses, and for an unresolved member.
 	 *
-	 * An ANONYMOUS-STRUCTURE receiver is refused wholesale: an `@:optional` structural field is
-	 * nullable despite carrying a bare `Bool` annotation, and the member table records the two
-	 * forms identically — so no anon field can be proven non-null here.
+	 * `SymbolIndex`'s package-blind simple-name fallback is deliberately NOT used here. Its stated
+	 * purpose is the aliased conditional supertype the import-aware walk cannot follow — but it has
+	 * no supertype walk of its own, so for THIS arm it can only ever answer from a same-simple-named
+	 * type in another package: a wrong answer rather than a wider one.
 	 */
 	private static function fieldAccessTypeNominal(other: QueryNode, shape: RefShape, proof: TypeProof): Null<String> {
 		final faKind: Null<String> = shape.fieldAccessKind;
@@ -283,20 +279,42 @@ final class ComparisonToBoolean implements Check {
 		if (index == null) return null;
 		final resolved: SymbolIndex = index;
 		final recvType: Null<String> = receiverTypeNominal(other.children[0], shape, proof, resolved);
-		if (recvType == null || resolved.isAnonStructType(recvType)) return null;
-		final memberSource: Null<String> =
-			resolved.resolvePathFinalMemberTypeSource(proof.file, recvType, [field]) ?? resolved.memberTypeSourceOf(recvType, field);
+		if (recvType == null || !memberLookupIsPinned(recvType, field, resolved)) return null;
+		final memberSource: Null<String> = resolved.resolvePathFinalMemberTypeSource(proof.file, recvType, [field]);
 		return memberSource == null ? null : RefactorSupport.outerNominalOf(memberSource);
 	}
 
 	/**
-	 * The simple nominal of a field-access RECEIVER's type. A TYPED CAST (`cast(e, T)` / `(e : T)`)
-	 * answers its TARGET type, recovered from `TypeInfoProvider.castTargetSources` — the
-	 * `QueryNode` projection drops the written type, and without this the whole
-	 * `cast(e, T).member` shape is unresolvable. Every other receiver goes through
-	 * `RefactorSupport.valueTypeNominal`, which covers a bare identifier, the self reference, and
-	 * a longer `a.b` receiver path.
+	 * Whether the `recvType.field` member lookup can be TRUSTED — three refusals, each a known
+	 * blind spot of the simple-name `SymbolIndex` that this arm would otherwise turn into a
+	 * value-changing rewrite:
+	 *
+	 *  - an ANONYMOUS-STRUCTURE receiver. An `@:optional` structural field is nullable while
+	 *    carrying a bare `Bool` annotation, and the member table records both forms identically.
+	 *  - a receiver type whose SIMPLE NAME is declared in more than one file. The index keys types
+	 *    by simple name, and its package-blind arms can answer from the homonym rather than from the
+	 *    type actually in scope — a root `T` declaring `flag:Bool` answering for a `p.T extends Base`
+	 *    that inherits `flag:Null<Bool>`. Conservative: an in-scope root type would often resolve
+	 *    correctly, but proving WHICH arm answered costs more than the refusal.
+	 *  - a `#if`-GUARDED declaration of `field` on `recvType`, several declarations disagreeing about
+	 *    the written type, or one carrying no written type at all (a method). The index is
+	 *    branch-blind and its inheritance walk is first-wins, so the answer would otherwise depend on
+	 *    which branch happens to be written first (`MemberInfo.guarded` exists for exactly this). A
+	 *    member declared on a SUPERTYPE has no direct declaration to inspect here, so its guardedness
+	 *    stays invisible — a residual hole, narrower than the one it replaces.
 	 */
+	private static function memberLookupIsPinned(recvType: String, field: String, index: SymbolIndex): Bool {
+		if (index.isAnonStructType(recvType) || index.declaringFiles(recvType).length != 1) return false;
+		var written: Null<String> = null;
+		for (declaration in index.memberDeclarationsOf(recvType, field)) {
+			if (declaration.member.guarded) return false;
+			final source: Null<String> = declaration.member.typeSource;
+			if (source == null || (written != null && written != source)) return false;
+			written = source;
+		}
+		return true;
+	}
+
 	private static function receiverTypeNominal(recv: QueryNode, shape: RefShape, proof: TypeProof, index: SymbolIndex): Null<String> {
 		final recvSpan: Null<Span> = recv.span;
 		if ((shape.typedCastKinds ?? []).contains(recv.kind))
@@ -437,9 +455,11 @@ private typedef Seams = {
 
 /**
  * One file's resolution context for the resolved-type Bool proof: the parsed `root` the scope
- * resolver walks, the file's `declaredTypes`, and two LAZY seams — `castTargets` (a second full
- * parse) and `index` (the run's `SymbolIndex`, which reads the configured libraries). Both stay
- * unforced until a field-access operand reaches `fieldAccessTypeNominal`.
+ * resolver walks, the file's `declaredTypes`, and two deferred seams — `castTargets` and `index`
+ * (the run's `SymbolIndex`, which reads the configured libraries). `index` is genuinely lazy and
+ * shared across the run. `castTargets` is memoized per file: on a `CachingGrammarPlugin` it is a
+ * read off the same memoized span-info bundle `declaredTypes` already forced, so the memo saves a
+ * map rebuild rather than a parse; against a bare plugin it saves the second full parse.
  */
 private typedef TypeProof = {
 	final file: String;

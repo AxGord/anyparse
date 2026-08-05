@@ -12,13 +12,16 @@ import anyparse.runtime.Span;
 /**
  * The `comparison-to-boolean` check: a comparison against a boolean literal
  * (`x == true`, `x != false`, `true == x`) is flagged `Info` when the operand is
- * provably non-null Bool. A bare identifier goes through the declared-type gate:
- * flagged only when its declared type proves non-null Bool; a `Null<Bool>` /
- * optional-param / unannotated identifier stays silent (its `== true` may be
- * load-bearing under strict null-safety). An operand whose nullness the check
- * cannot rule out — a `?.` access, a call / `Map.get` result, a
- * possibly-`@:optional` field — is SKIPPED too. `fix` rewrites only a
- * boolean-operator operand. Comparisons inside macro reification are skipped.
+ * provably non-null Bool, and `fix` then rewrites it. Two proofs. STRUCTURAL: a
+ * boolean-operator result, or a bare identifier whose declared type proves non-null
+ * Bool — a `Null<Bool>` / optional-param / unannotated identifier stays silent (its
+ * `== true` may be load-bearing under strict null-safety), and the arm sits behind a
+ * blanket veto on an operand reaching a `?.` access / a call / `Map.get` result.
+ * RESOLVED-TYPE: a field access whose receiver type resolves and whose member's
+ * declared type is a non-nullable Bool, the receiver resolving through `cast(e, T)`
+ * too. That arm refuses what the `SymbolIndex` cannot answer soundly — an
+ * anonymous-structure receiver, a simple-name homonym, a `#if`-guarded member.
+ * Comparisons inside macro reification are skipped.
  */
 class ComparisonToBooleanCheckTest extends Test {
 
@@ -193,11 +196,40 @@ class ComparisonToBooleanCheckTest extends Test {
 		);
 	}
 
-	/** A `Null<Bool>` member's `== true` is load-bearing — no proof, so silent and unfixed. */
+	/** A `Null<Bool>` member's `== true` is load-bearing — no proof, so it stays silent. */
 	public function testNullableBoolMemberSkipped(): Void {
-		final src: String = typed('public var flag:Null<Bool>;', 'var b = o.flag == true;');
-		Assert.equals(0, violations(src).length);
-		Assert.equals(src, applyFix(src));
+		Assert.equals(0, violations(typed('public var flag:Null<Bool>;', 'var b = o.flag == true;')).length);
+	}
+
+	/**
+	 * A `#if`-GUARDED member declaration is refused: the index is branch-blind and its
+	 * inheritance walk is first-wins, so whichever branch is written first would decide the
+	 * proof. Written `Bool`-first here, the shape that would otherwise be flagged.
+	 */
+	public function testGuardedMemberDeclarationSkipped(): Void {
+		// ONE guarded declaration, so only the `guarded` clause can refuse it — a two-branch
+		// fixture would also trip the written-type-disagreement clause and prove nothing here.
+		Assert.equals(0, violations(typed('#if js\n\tpublic var flag:Bool;\n\t#end', 'var b = o.flag == true;')).length);
+	}
+
+	/** Two branches declaring `field` with DIFFERENT written types: whichever is written first would decide. */
+	public function testConflictingMemberDeclarationsSkipped(): Void {
+		Assert.equals(
+			0,
+			violations(typed('#if js\n\tpublic var flag:Bool;\n\t#else\n\tpublic var flag:Null<Bool>;\n\t#end', 'var b = o.flag == true;')).length
+		);
+	}
+
+	/**
+	 * A receiver type whose SIMPLE NAME is declared in two files is refused CONSERVATIVELY: the
+	 * index keys types by simple name, and its package-blind arms can answer from the homonym
+	 * rather than from the type actually in scope. Here the in-scope root `T` would in fact resolve
+	 * correctly — the refusal is the price of not having to prove which arm answered.
+	 */
+	public function testHomonymReceiverTypeSkipped(): Void {
+		final other: String = 'package p;\n\nclass T {\n\tpublic var flag:Null<Bool>;\n}';
+		final src: String = typed('public var flag:Bool;', 'var b = o.flag == true;');
+		Assert.equals(0, violationsAcross([{ file: 'C.hx', source: src }, { file: 'p/T.hx', source: other }]).length);
 	}
 
 	/** An EXTERN class's `Bool` property resolves like any other member — flagged, and `== false` negates it. */
@@ -250,7 +282,12 @@ class ComparisonToBooleanCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new ComparisonToBoolean().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return violationsAcross([{ file: 'C.hx', source: src }]);
+	}
+
+	/** `violations` over SEVERAL files — the only way to build a cross-file homonym. */
+	private function violationsAcross(files: Array<{ file: String, source: String }>): Array<Violation> {
+		return new ComparisonToBoolean().run(files, new HaxeQueryPlugin());
 	}
 
 	/** Wrap a single statement body in a minimal class+function so it parses. */
