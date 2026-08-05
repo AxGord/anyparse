@@ -8,16 +8,24 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import anyparse.query.RefactorSupport;
 
 /**
- * The `prefer-safe-nav` check: a null guard on a LOCAL / PARAM / `this` receiver is
- * flagged `Info` and rewritten to safe navigation (only the FIRST dot becomes `?.`) —
- * both the statement form `if (x != null) x.m(...)` → `x?.m(...);` and the ternary form
- * `x == null ? null : x.m(...)` / `x != null ? x.m(...) : null` → `x?.m(...)`. A field /
- * `this.`-qualified receiver, a multi-statement block, an `else` branch, an assignment
- * l-value, a compound condition, an already-safe-nav body and a comment in the removed
- * region are all safe misses; so is a ternary whose guarded branch is not itself the
- * chain (`x.f + 1`) or whose other branch is not `null`.
+ * The `prefer-safe-nav` check: a null guard on an accessor-free receiver — a LOCAL / PARAM /
+ * `this`, or a FIELD the enclosing type declares as a plain `var` / `final` — is flagged `Info`
+ * and rewritten to safe navigation (only the FIRST dot becomes `?.`). Three arms: the statement
+ * form `if (x != null) x.m(...)` → `x?.m(...);`, the ternary form `x == null ? null : x.m(...)` /
+ * `x != null ? x.m(...) : null` → `x?.m(...)`, and the assignment form
+ * `var r = null; if (x != null) r = x.m(...);` → `var r = x?.m(...);`.
+ *
+ * A get-accessor property, a member of another kind, a name the enclosing type does not declare,
+ * an `extern` host, a `this.`-qualified receiver, a multi-statement block, an `else` branch, an
+ * assignment l-value, a compound condition (statement arm: unless the null-check is the last
+ * conjunct; assignment arm: never), an already-safe-nav body and a comment in the removed region
+ * are all safe misses; so is a ternary whose guarded branch is not itself the chain (`x.f + 1`)
+ * or whose other branch is not `null`, and an assignment arm whose declaration is not
+ * null-initialized, not adjacent, multi-declarator, in a different `#if` branch, or referenced by
+ * the right-hand side.
  */
 class PreferSafeNavCheckTest extends Test {
 
@@ -55,9 +63,56 @@ class PreferSafeNavCheckTest extends Test {
 		Assert.isTrue(applyFix(source).indexOf('p?.command("k");') != -1);
 	}
 
-	public function testFieldReceiverNotFlagged(): Void {
+	public function testPlainFieldReceiverFlaggedAndFixed(): Void {
 		final source: String = 'class C {\n\tvar fld:Sys;\n\tfunction f():Void {\n\t\tif (fld != null) fld.command("z");\n\t}\n}';
-		Assert.equals(0, violations(source).length);
+		final expected: String = 'class C {\n\tvar fld:Sys;\n\tfunction f():Void {\n\t\tfld?.command("z");\n\t}\n}';
+		Assert.equals(1, violations(source).length);
+		Assert.equals(expected, applyFix(source));
+	}
+
+	public function testFinalFieldReceiverFlagged(): Void {
+		Assert.equals(
+			1, violations('class C {\n\tfinal fld:Sys;\n\tfunction f():Void {\n\t\tif (fld != null) fld.command("z");\n\t}\n}').length
+		);
+	}
+
+	public function testSetterOnlyPropertyFieldFlagged(): Void {
+		// A `(default, set)` write accessor does not run code on a READ, so the double read is
+		// still a no-op — only a get-accessor moves the receiver out of reach.
+		Assert.equals(
+			1,
+			violations('class C {\n\tvar fld(default, set):Sys;\n\tfunction f():Void {\n\t\tif (fld != null) fld.command("z");\n\t}\n}').length
+		);
+	}
+
+	public function testGetterPropertyFieldNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations('class C {\n\tvar fld(get, never):Sys;\n\tfunction f():Void {\n\t\tif (fld != null) fld.command("z");\n\t}\n}').length
+		);
+	}
+
+	public function testMethodMemberReceiverNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction fld():Sys return null;\n\tfunction f():Void {\n\t\tif (fld != null) fld.command("z");\n\t}\n}'
+			).length
+		);
+	}
+
+	public function testUnresolvedReceiverNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tif (fld != null) fld.command("z");\n\t}\n}').length);
+	}
+
+	public function testExternFieldReceiverNotFlagged(): Void {
+		// An extern declaration's `var` is a foreign slot whose read may run host code, so the
+		// double-read proof does not hold. `extern inline` is how an extern member legally
+		// carries a body, so the fixture is real Haxe and the gate is its only rejector.
+		Assert.equals(
+			0,
+			violations('extern class C {\n\tvar fld:Sys;\n\tinline function f():Void {\n\t\tif (fld != null) fld.command("z");\n\t}\n}').length
+		);
 	}
 
 	public function testThisReceiverNotFlagged(): Void {
@@ -180,10 +235,21 @@ class PreferSafeNavCheckTest extends Test {
 		Assert.equals(expected, applyFix(source));
 	}
 
-	public function testTernaryFieldReceiverNotFlagged(): Void {
+	public function testTernaryPlainFieldReceiverFlaggedAndFixed(): Void {
 		final source: String =
 			'class C {\n\tvar fld:Sys;\n\tfunction f():Void {\n\t\ttrace(fld == null ? null : fld.command("z"));\n\t}\n}';
-		Assert.equals(0, violations(source).length);
+		final expected: String = 'class C {\n\tvar fld:Sys;\n\tfunction f():Void {\n\t\ttrace(fld?.command("z"));\n\t}\n}';
+		Assert.equals(1, violations(source).length);
+		Assert.equals(expected, applyFix(source));
+	}
+
+	public function testTernaryGetterPropertyFieldNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tvar fld(get, never):Sys;\n\tfunction f():Void {\n\t\ttrace(fld == null ? null : fld.command("z"));\n\t}\n}'
+			).length
+		);
 	}
 
 	public function testTernaryNonChainBranchNotFlagged(): Void {
@@ -251,6 +317,96 @@ class PreferSafeNavCheckTest extends Test {
 		final source: String = local('trace(x == null ? null : x /* a.b */ .f);');
 		Assert.equals(1, violations(source).length);
 		Assert.equals(source, applyFix(source));
+	}
+
+	public function testAssignmentArmFlaggedAndFixed(): Void {
+		// Byte-exact: the deleted `if` must take its whole line with it, leaving no blank one.
+		final source: String = local('var r:Null<Int> = null;\n\t\tif (x != null) r = x.count();');
+		Assert.equals(1, violations(source).length);
+		Assert.equals(local('var r:Null<Int> = x?.count();') + '\n', fixCanonical(source));
+	}
+
+	public function testAssignmentArmChainFixed(): Void {
+		final source: String = local('var r:Null<Int> = null;\n\t\tif (x != null) r = x.a.b("c");');
+		Assert.equals(1, violations(source).length);
+		Assert.equals(local('var r:Null<Int> = x?.a.b("c");') + '\n', fixCanonical(source));
+	}
+
+	public function testAssignmentArmMultiDeclaratorNotFlagged(): Void {
+		// A continuation declarator makes the declaration node multi-child, so the `= null`
+		// initializer is no longer the whole of it and the fold has no single slot to write.
+		Assert.equals(0, violations(local('var r:Null<Int> = null, b:Int = 1;\n\t\tif (x != null) r = x.count();')).length);
+		Assert.equals(0, violations(local('var b:Int = 1, r:Null<Int> = null;\n\t\tif (x != null) r = x.count();')).length);
+	}
+
+	public function testAssignmentArmAcrossConditionalBranchesNotFlagged(): Void {
+		// The two branches of a `#if` region project as FLATTENED siblings, so the declaration
+		// and the guard LOOK adjacent while no execution ever sees both.
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tvar r:Null<Int>;\n\tfunction f(x:Null<Sys>):Void {\n\t\t#if js\n\t\tvar r:Null<Int> = null;\n\t\t#else\n\t\tif (x != null) r = x.count();\n\t\t#end\n\t}\n}'
+			).length
+		);
+	}
+
+	public function testAssignmentArmFieldReceiverFixed(): Void {
+		final source: String =
+			'class C {\n\tvar fld:Sys;\n\tfunction f():Void {\n\t\tvar r:Null<Int> = null;\n\t\tif (fld != null) r = fld.count();\n\t}\n}';
+		Assert.equals(1, violations(source).length);
+		Assert.isTrue(fixCanonical(source).indexOf('var r:Null<Int> = fld?.count();') != -1);
+	}
+
+	public function testAssignmentArmNonNullInitNotFlagged(): Void {
+		// Skipping the assignment must be equivalent to assigning null — only a null initializer
+		// makes that true; `0` would be silently overwritten by the folded `?.` result.
+		Assert.equals(0, violations(local('var r:Null<Int> = 0;\n\t\tif (x != null) r = x.count();')).length);
+	}
+
+	public function testAssignmentArmNonAdjacentDeclNotFlagged(): Void {
+		Assert.equals(0, violations(local('var r:Null<Int> = null;\n\t\ttrace(1);\n\t\tif (x != null) r = x.count();')).length);
+	}
+
+	public function testAssignmentArmOtherTargetNotFlagged(): Void {
+		Assert.equals(0, violations(local('var r:Null<Int> = null;\n\t\tif (x != null) q = x.count();')).length);
+	}
+
+	public function testAssignmentArmSelfTargetNotFlagged(): Void {
+		// `var x = x?.self();` would reference the declaration inside its own initializer.
+		Assert.equals(0, violations(local('var x:Null<Sys> = null;\n\t\tif (x != null) x = x.self();')).length);
+	}
+
+	public function testAssignmentArmTargetInRightHandSideNotFlagged(): Void {
+		Assert.equals(0, violations(local('var r:Null<Int> = null;\n\t\tif (x != null) r = x.count(r);')).length);
+	}
+
+	public function testAssignmentArmConjunctionGuardNotFlagged(): Void {
+		Assert.equals(0, violations(local('var r:Null<Int> = null;\n\t\tif (ok && x != null) r = x.count();')).length);
+	}
+
+	public function testAssignmentArmElseBranchNotFlagged(): Void {
+		Assert.equals(0, violations(local('var r:Null<Int> = null;\n\t\tif (x != null) r = x.count() else r = 0;')).length);
+	}
+
+	public function testAssignmentArmNonChainRightHandSideNotFlagged(): Void {
+		Assert.equals(0, violations(local('var r:Null<Sys> = null;\n\t\tif (x != null) r = x;')).length);
+	}
+
+	public function testAssignmentArmCommentInDroppedRegionNotFlagged(): Void {
+		Assert.equals(0, violations(local('var r:Null<Int> = null;\n\t\tif (x != null) /* why */ r = x.count();')).length);
+	}
+
+	private function fixCanonical(source: String): String {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: PreferSafeNav = new PreferSafeNav();
+		final edits: Array<{ span: Span, text: String }> = check.fix(source, check.run([{ file: 'C.hx', source: source }], plugin), plugin);
+		switch RefactorSupport.canonicalize(source, edits, true, plugin) {
+			case Ok(text):
+				return text;
+			case Err(message):
+				Assert.fail('canonicalize Err: $message');
+		}
+		return '';
 	}
 
 	private function local(stmt: String): String {

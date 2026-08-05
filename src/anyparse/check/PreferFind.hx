@@ -19,7 +19,7 @@ using Lambda;
  * iterating to find the first matching element. `Severity.Info`, with an autofix that rewrites the loop to `xs.find(x -> cond)` and inserts a `using Lambda;` when the file lacks one. Purely structural, so it holds without a
  * type-checker. Grammar-agnostic over `RefShape`.
  *
- * ## The two shapes it accepts
+ * ## The three shapes it accepts
  *
  * - **Form A (return).** `for (x in xs) if (cond) return x;` whose immediately
  *   following block sibling is a value-returning `return` — the fallback. The
@@ -32,7 +32,13 @@ using Lambda;
  *   a null-initialized local immediately followed by a loop whose `if`-body is
  *   exactly the assignment of the loop variable to that local, then a `break`. The
  *   local's later use is the point (`r = xs.find(x -> cond)`), so nothing after the
- *   loop is inspected.
+ *   loop is inspected. The fix folds the `find` into the declaration and deletes the
+ *   loop.
+ * - **Form B under a guard.** `var r = null; if (g) for (x in xs) if (cond) { r = x; break; }`
+ *   — the same loop as the guard's SOLE statement, under an ARBITRARY guard `g`. Here
+ *   the declaration KEEPS its `null` (that is exactly what a false `g` must still
+ *   observe) and only the loop collapses: `if (g) r = xs.find(x -> cond);`. Every
+ *   Form-B gate carries over unchanged, plus an `else`-less guard.
  *
  * ## Soundness gates
  *
@@ -40,7 +46,7 @@ using Lambda;
  *   `x` is the loop variable; `return x.field` or any transformed value is
  *   `map` / `filter` territory and is skipped.
  * - **No `else`.** The `if` must have no `else` branch (a two-way choice is not a
- *   find).
+ *   find) — and, for the guarded form, neither may the guard.
  * - **Form A fallback is a value return.** The trailing sibling must be a
  *   value-returning `return`; a `return null;` yields the plain suggestion, a
  *   non-null fallback the `?? <fallback>` suffix.
@@ -51,7 +57,7 @@ using Lambda;
  * - **No key-value loop.** `for (k => v in m)` is skipped — `.find` iterates an
  *   iterable's values, not map key-value pairs. A call iterable (`xs.keys()` / `<expr>.m()`) or a range `a...b` is likewise skipped — a call may yield an `Iterator`, not an `Iterable`, so `Lambda.find` would not compile, and a call result's type is unknowable without types.
  * - **Adjacency.** The loop and its trailing `return` (Form A), or the declaration
- *   and its loop (Form B), must be real, immediately adjacent block siblings.
+ *   and its loop / guard (Form B), must be real, immediately adjacent block siblings.
  *
  * ## Grammar-agnostic
  *
@@ -59,7 +65,7 @@ using Lambda;
  * `identKind` and `ifStatementKinds` (any unset → the check is a no-op), with
  * `opaqueKinds` to skip reification subtrees. Form B additionally needs
  * `localDeclKinds`, `exprStatementKind`, `assignKind` and `breakStatementKind`; any
- * of those unset disables the break form while the return form still runs.
+ * of those unset disables both break forms while the return form still runs.
  */
 @:nullSafety(Strict)
 final class PreferFind implements Check {
@@ -99,7 +105,7 @@ final class PreferFind implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin.refShape());
+		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
 		final s: Seams = seams;
 		final violations: Array<Violation> = [];
@@ -116,19 +122,22 @@ final class PreferFind implements Check {
 	 * (`for … if (cond) return v; return f;`) collapses the loop and its trailing
 	 * fallback into one `return xs.find(v -> cond) [?? f];`; Form B
 	 * (`var r = null; for … if (cond) { r = v; break; }`) rewrites the declaration's
-	 * `null` initializer to the `find` and deletes the loop. When ANY loop is rewritten
+	 * `null` initializer to the `find` and deletes the loop; the GUARDED Form B
+	 * (`var r = null; if (g) for … `) leaves the declaration's `null` in place — a
+	 * false `g` must still observe it — and replaces only the loop, in place, with
+	 * `r = xs.find(v -> cond);`. When ANY loop is rewritten
 	 * and the file lacks a `using Lambda;`, one is inserted after the last import so
 	 * `.find` resolves. Beyond the detector's shape gates this fix is stricter — a loop
 	 * stays a report-only finding (no edit) unless its condition is provably
 	 * side-effect-free (no assignment / `++` / `--` / `new` / free-function call; only
-	 * field reads and accessor-style method calls pass) and, for Form B, the declared
+	 * field reads and accessor-style method calls pass) and, for both break forms, the declared
 	 * type tolerates a `Null<T>` result (no type, or `Null<…>`). An edit that would
 	 * overlap an already-accepted one is skipped (the loser stays a finding).
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final s: Null<Seams> = readSeams(plugin.refShape());
+		final s: Null<Seams> = readSeams(plugin);
 		if (s == null) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
@@ -160,8 +169,11 @@ final class PreferFind implements Check {
 		return edits;
 	}
 
-	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
-	private static function readSeams(shape: RefShape): Null<Seams> {
+	/**
+	 * Bundle the required + optional `RefShape` kinds, or null when a required one is unset — including the statement-list kinds every form pairs siblings within (the check is then a no-op).
+	 */
+	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
 		final forStmtKind: Null<String> = shape.forStmtKind;
 		if (forStmtKind == null) return null;
 		final returnKind: Null<String> = shape.returnStatementKind;
@@ -171,7 +183,10 @@ final class PreferFind implements Check {
 		final nullLitKind: Null<String> = shape.nullLiteralKind;
 		if (nullLitKind == null) return null;
 		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
-		return ifKinds.length == 0 ? null : {
+		// Every form pairs adjacent statement-list siblings, so without the statement-list kinds
+		// the check has nothing to walk — a no-op stated up front rather than one that emerges.
+		final blockKinds: Array<String> = plugin.controlFlowSupport()?.blockKinds() ?? [];
+		return ifKinds.length == 0 || blockKinds.length == 0 ? null : {
 			forStmtKind: forStmtKind,
 			returnKind: returnKind,
 			blockStmtKind: blockStmtKind,
@@ -192,7 +207,8 @@ final class PreferFind implements Check {
 			forceFieldAccessKind: shape.forceFieldAccessKind,
 			indexAccessKind: shape.indexAccessKind,
 			parenKind: shape.parenKind,
-			ternaryKind: shape.ternaryKind
+			ternaryKind: shape.ternaryKind,
+			blockKinds: blockKinds
 		};
 	}
 
@@ -200,10 +216,10 @@ final class PreferFind implements Check {
 	private static function walk(node: QueryNode, file: String, source: String, s: Seams, out: Array<Violation>): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		final kids: Array<QueryNode> = node.children;
-		for (i in 0...kids.length - 1) {
+		if (s.blockKinds.contains(node.kind)) for (i in 0...kids.length - 1) {
 			final v: Null<Violation> = tryReturnForm(kids[i], kids[i + 1], file, source, s) ?? tryBreakForm(
 				kids[i], kids[i + 1], file, source, s
-			);
+			) ?? tryGuardedBreakForm(kids[i], kids[i + 1], file, source, s);
 			if (v != null) out.push(v);
 		}
 		for (c in kids) walk(c, file, source, s, out);
@@ -245,6 +261,65 @@ final class PreferFind implements Check {
 		return head != null && isAssignBreakBody(head.then, declName, head.loopVar, s)
 			? buildViolation(forNode, head.iterable, head.loopVar, head.cond, '', file, source)
 			: null;
+	}
+
+	/**
+	 * Form B under a guard: `decl` is a null-initialized local and `ifNode` is
+	 * `if (g) for (v in xs) if (cond) { r = v; break; }` — the capture-and-break loop is the
+	 * guard's SOLE statement. Returns the violation, anchored at the loop, when so, else null.
+	 */
+	private static function tryGuardedBreakForm(
+		decl: QueryNode, ifNode: QueryNode, file: String, source: String, s: Seams
+	): Null<Violation> {
+		final found: Null<GuardedBreak> = guardedBreakOf(decl, ifNode, s);
+		return found == null ? null : buildViolation(found.forNode, found.iterable, found.loopVar, found.cond, '', file, source);
+	}
+
+	/**
+	 * The guarded capture-and-break shape `decl` / `ifNode` form, or null when they are not it:
+	 * a null-initialized local followed by an `else`-less `if` whose sole statement is
+	 * `for (v in xs) if (cond) { <declName> = v; break; }`.
+	 *
+	 * The guard `g` is ARBITRARY and kept verbatim — what makes the rewrite sound is the `null`
+	 * initializer, which is exactly the value the loop leaves behind when it matches nothing, so
+	 * `if (g) r = xs.find(v -> cond);` observes what the loop did on both the match and the
+	 * no-match path. An `else` branch is refused: the loop is then no longer the guard's sole
+	 * statement, and the shape the transformation is proven on is `if (g) <loop>`.
+	 */
+	private static function guardedBreakOf(decl: QueryNode, ifNode: QueryNode, s: Seams): Null<GuardedBreak> {
+		final declName: Null<String> = nullInitLocalName(decl, s);
+		if (declName == null || !s.ifKinds.contains(ifNode.kind) || ifNode.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
+		// The guard runs BETWEEN the declaration and the loop — the one place the unguarded form
+		// has nothing at all — so a guard that WRITES the holder breaks the `null` premise:
+		// `if ((r = seed) != null) for …` leaves `seed` behind on the no-match path, where the
+		// rewrite leaves `null`. A local can only be written through its own name (nothing else
+		// can reach it), so refusing any MENTION of it in the guard is exact.
+		if (mentionsName(ifNode.children[0], declName, s)) return null;
+		final loop: QueryNode = unwrapSole(ifNode.children[1], s);
+		final head: Null<{
+			loopVar: String,
+			iterable: QueryNode,
+			cond: QueryNode,
+			then: QueryNode
+		}> = forIfHead(loop, s);
+		if (head == null || !isAssignBreakBody(head.then, declName, head.loopVar, s)) return null;
+		return {
+			forNode: loop,
+			declName: declName,
+			loopVar: head.loopVar,
+			iterable: head.iterable,
+			cond: head.cond
+		};
+	}
+
+	/**
+	 * Whether `name` occurs as an identifier anywhere in `node`'s subtree. An opaque reification
+	 * subtree counts as a possible occurrence (conservative).
+	 */
+	private static function mentionsName(node: QueryNode, name: String, s: Seams): Bool {
+		if (s.opaqueKinds.contains(node.kind)) return true;
+		if (node.kind == s.identKind && node.name == name) return true;
+		return node.children.exists(c -> mentionsName(c, name, s));
 	}
 
 	/** The name of a `var`/`final` local initialized to exactly `null` — Form B's captured-value holder — or null otherwise. */
@@ -389,7 +464,7 @@ final class PreferFind implements Check {
 	private static function collectFixCandidates(node: QueryNode, source: String, s: Seams, out: Map<String, FixCandidate>): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		final kids: Array<QueryNode> = node.children;
-		for (i in 0...kids.length - 1) {
+		if (s.blockKinds.contains(node.kind)) for (i in 0...kids.length - 1) {
 			final a: QueryNode = kids[i];
 			final b: QueryNode = kids[i + 1];
 			final headA: Null<{
@@ -406,7 +481,8 @@ final class PreferFind implements Check {
 				) {
 					final span: Null<Span> = a.span;
 					if (span != null) out['${span.from}:${span.to}'] = {
-						isBreak: false,
+						form: FindForm.Return,
+						declName: null,
 						forNode: a,
 						sibling: b,
 						loopVar: headA.loopVar,
@@ -417,6 +493,20 @@ final class PreferFind implements Check {
 			}
 			final declName: Null<String> = nullInitLocalName(a, s);
 			if (declName == null) continue;
+			final guarded: Null<GuardedBreak> = guardedBreakOf(a, b, s);
+			if (guarded != null) {
+				final guardedSpan: Null<Span> = guarded.forNode.span;
+				if (guardedSpan != null) out['${guardedSpan.from}:${guardedSpan.to}'] = {
+					form: FindForm.GuardedBreak,
+					declName: guarded.declName,
+					forNode: guarded.forNode,
+					sibling: a,
+					loopVar: guarded.loopVar,
+					iterable: guarded.iterable,
+					cond: guarded.cond
+				};
+				continue;
+			}
 			final headB: Null<{
 				loopVar: String,
 				iterable: QueryNode,
@@ -426,7 +516,8 @@ final class PreferFind implements Check {
 			if (!(headB != null && isAssignBreakBody(headB.then, declName, headB.loopVar, s))) continue;
 			final span: Null<Span> = b.span;
 			if (span != null) out['${span.from}:${span.to}'] = {
-				isBreak: true,
+				form: FindForm.Break,
+				declName: declName,
 				forNode: b,
 				sibling: a,
 				loopVar: headB.loopVar,
@@ -446,7 +537,16 @@ final class PreferFind implements Check {
 		if (iterSpan == null || condSpan == null || forSpan == null) return null;
 		final iterSrc: String = parenthesizeUnless(source.substring(iterSpan.from, iterSpan.to), postfixSafe(cand.iterable.kind, s));
 		final findExpr: String = '$iterSrc.find(${cand.loopVar} -> ${source.substring(condSpan.from, condSpan.to)})';
-		if (cand.isBreak) {
+		if (cand.form == FindForm.GuardedBreak) {
+			// The declaration is NOT rewritten: its `null` is what the guard's false path must
+			// still observe. Only the loop — the guard's whole body — collapses to the assignment.
+			final decl: QueryNode = cand.sibling;
+			final declName: Null<String> = cand.declName;
+			return declName == null || !declTypeTolerable(decl, source) || loopRegionHasComment(source, forSpan, iterSpan, condSpan)
+				? null
+				: [{ span: forSpan, text: '$declName = $findExpr;' }];
+		}
+		if (cand.form == FindForm.Break) {
 			final decl: QueryNode = cand.sibling;
 			if (!declTypeTolerable(decl, source) || decl.children.length < 1) return null;
 			final nullSpan: Null<Span> = decl.children[0].span;
@@ -526,9 +626,19 @@ final class PreferFind implements Check {
 	 * their spans are excluded; refusing here keeps such a loop a report-only finding.
 	 */
 	private static function droppedRegionHasComment(source: String, forSpan: Span, iterSpan: Span, condSpan: Span, retSpan: Span): Bool {
+		return loopRegionHasComment(source, forSpan, iterSpan, condSpan) || CheckScan.hasCommentMarker(source, forSpan.to, retSpan.from);
+	}
+
+	/**
+	 * Whether a comment sits ANYWHERE in the loop but its two re-spliced sub-expressions — the
+	 * for-header around the iterable and the condition, and the whole loop body. Every form
+	 * replaces the loop node wholesale, so such a comment is silently dropped; refusing here
+	 * leaves the loop a report-only finding.
+	 */
+	private static function loopRegionHasComment(source: String, forSpan: Span, iterSpan: Span, condSpan: Span): Bool {
 		return CheckScan.hasCommentMarker(source, forSpan.from, iterSpan.from)
 			|| CheckScan.hasCommentMarker(source, iterSpan.to, condSpan.from)
-			|| CheckScan.hasCommentMarker(source, condSpan.to, forSpan.to) || CheckScan.hasCommentMarker(source, forSpan.to, retSpan.from);
+			|| CheckScan.hasCommentMarker(source, condSpan.to, forSpan.to);
 	}
 
 }
@@ -556,14 +666,48 @@ private typedef Seams = {
 	var indexAccessKind: Null<String>;
 	var parenKind: Null<String>;
 	var ternaryKind: Null<String>;
+
+	/**
+	 * The STATEMENT-LIST kinds (`ControlFlowSupport.blockKinds`) whose direct children may be
+	 * paired. A conditional-compilation region is deliberately absent: its branches project as
+	 * FLATTENED siblings, so pairing under it would join a declaration in one `#if` branch to a
+	 * loop in another and rewrite across the boundary.
+	 */
+	var blockKinds: Array<String>;
 }
 
 /** A recovered first-match loop ready to rewrite: the form flag, the loop node, its partner (Form A trailing return / Form B declaration) and the destructured head. */
 private typedef FixCandidate = {
-	var isBreak: Bool;
+	/** Which of the three shapes was recovered — the tag `buildEdits` dispatches on. */
+	var form: FindForm;
+
+	/** The holder local's name for either break form, null for the return form. */
+	var declName: Null<String>;
 	var forNode: QueryNode;
 	var sibling: QueryNode;
 	var loopVar: String;
 	var iterable: QueryNode;
 	var cond: QueryNode;
+}
+
+/** A recovered GUARDED capture-and-break loop: the loop node, the holder local's name, and the destructured head. */
+private typedef GuardedBreak = {
+	var forNode: QueryNode;
+	var declName: String;
+	var loopVar: String;
+	var iterable: QueryNode;
+	var cond: QueryNode;
+}
+
+/**
+ * Which of the three first-match shapes a fix candidate recovered. A single tag rather than
+ * two booleans: the guarded break form IS a break form, so an `isBreak` flag alone could not
+ * discriminate it and the two branches would depend on their own order.
+ */
+private enum abstract FindForm(Int) {
+
+	final Return = 0;
+	final Break = 1;
+	final GuardedBreak = 2;
+
 }
