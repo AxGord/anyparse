@@ -16,7 +16,7 @@ import utest.Test;
  * modifier run and doc comment) only when the absence is proven and the name has zero direct call
  * references.
  */
-class OrphanAccessorCheckTest extends Test {
+@:nullSafety(Strict) class OrphanAccessorCheckTest extends Test {
 
 	public function testDefaultSetPropertyWithGetterFlagged(): Void {
 		final src: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tfunction set_data(v:Int):Int return data = v;\n'
@@ -93,10 +93,98 @@ class OrphanAccessorCheckTest extends Test {
 	}
 
 	public function testBuildMacroClassNotFlagged(): Void {
-		// A build macro can declare the very property the accessor serves; its members never
-		// reach the index, so the whole class is skipped rather than mis-flagged.
-		Assert.equals(0, violations('@:build(M.f()) class C {\n\tfunction get_data():Int return 1;\n}').length);
-		Assert.equals(0, violations('@:autoBuild(M.f()) class C {\n\tfunction get_data():Int return 1;\n}').length);
+		// A `@:build` macro can declare the very property the accessor serves; its members never
+		// reach the index, so the whole class is skipped. The bare source IS a finding — the pair
+		// is what shows the metadata is doing the work.
+		final body: String = 'class C {\n\tfunction get_data():Int return 1;\n}';
+		Assert.equals(1, violations(body).length);
+		Assert.equals(0, violations('@:build(M.f()) $body').length);
+	}
+
+	public function testAutoBuildOnTheCarrierDoesNotProtectIt(): Void {
+		// `@:autoBuild` generates into DESCENDANTS, never into the type carrying it — so the
+		// carrier's own accessor is judged normally. (`@:build` is the one that protects here.)
+		Assert.equals(1, violations('@:autoBuild(M.f()) class C {\n\tfunction get_data():Int return 1;\n}').length);
+	}
+
+	public function testAutoBuildSuperclassProtectsDescendant(): Void {
+		final base: String = '@:autoBuild(M.f()) class Base {\n\tpublic function new() {}\n}';
+		final sub: String = 'class Sub extends Base {\n\tfunction get_v():Int return 1;\n}';
+		final plain: String = 'class Base {\n\tpublic function new() {}\n}';
+		Assert.equals(1, violationsOf([{ file: 'Base.hx', source: plain }, { file: 'Sub.hx', source: sub }]).length);
+		Assert.equals(0, violationsOf([{ file: 'Base.hx', source: base }, { file: 'Sub.hx', source: sub }]).length);
+	}
+
+	public function testAutoBuildInterfaceProtectsImplementor(): Void {
+		// The canonical Haxe idiom: `@:autoBuild` on an interface, members generated into every
+		// `implements` — the implementor's property is invisible to the index.
+		final iface: String = '@:autoBuild(M.f()) interface IGen {}';
+		final impl: String = 'class C implements IGen {\n\tfunction get_v():Int return 1;\n}';
+		Assert.equals(0, violationsOf([{ file: 'IGen.hx', source: iface }, { file: 'C.hx', source: impl }]).length);
+	}
+
+	public function testStaticPropertyDoesNotSatisfyInstanceAccessor(): Void {
+		// Statics and instance members are separate namespaces: the static `v` is not the property
+		// an instance `get_v` serves.
+		final src: String = 'class C {\n\tpublic static var v(get, never):Int;\n\tstatic function get_v():Int return 1;\n}';
+		Assert.equals(0, violations(src).length);
+		final mixed: String = 'class Base {\n\tpublic static var v(get, never):Int;\n\tstatic function get_v():Int return 1;\n}';
+		final sub: String = 'class Sub extends Base {\n\tfunction get_v():Int return 2;\n}';
+		Assert.equals(1, violationsOf([{ file: 'Base.hx', source: mixed }, { file: 'Sub.hx', source: sub }]).length);
+	}
+
+	public function testInstancePropertyDoesNotSatisfyStaticAccessor(): Void {
+		final src: String = 'class C {\n\tpublic var v(get, never):Int;\n\tfunction get_v():Int return 1;\n'
+			+ '\tpublic static var w:Int = 0;\n\tstatic function get_w():Int return w;\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals('get_w has no property to serve: w declares no get accessor', vs[0].message);
+	}
+
+	public function testAmbiguousSubtypeSimpleNameBlocksTheFinding(): Void {
+		// `Leaf` reaches `Base` only through `Mid`, a simple name two packages declare. A walk that
+		// re-resolves that link by name proves nothing and answers "not a subtype" — which for this
+		// gate is the UNSAFE default: `Base.get_v` would be reported and deleted while `Leaf.v` is
+		// still served by it.
+		final base: String = 'class Base {\n\tfunction get_v():Int return 1;\n}';
+		final midA: String = 'package a;\nclass Mid extends Base {}';
+		final midB: String = 'package b;\nclass Mid extends Base {}';
+		final leaf: String = 'package a;\nclass Leaf extends Mid {\n\tpublic var v(get, never):Int;\n}';
+		Assert.equals(0, violationsOf([
+			{ file: 'Base.hx', source: base },
+			{ file: 'a/Mid.hx', source: midA },
+			{ file: 'b/Mid.hx', source: midB },
+			{ file: 'a/Leaf.hx', source: leaf }
+		]).length);
+	}
+
+	public function testMemberKeepBlocksFix(): Void {
+		final src: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\t@:keep function get_data():Int return data;\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	public function testPrecedingFieldModifiersDoNotLeakOntoTheAccessor(): Void {
+		// The `static` and `@:keep` here belong to `other`, not to `get_data` — a run that reset
+		// only at methods would read the accessor as static (no instance property found -> a
+		// different arm and message) and as kept (never fixed).
+		final src: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\t@:keep public static var other:Int = 0;\n'
+			+ '\tfunction get_data():Int return data;\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals('get_data has no property to serve: data declares no get accessor', vs[0].message);
+		Assert.equals('class C {\n\tpublic var data(default, set):Int = 0;\n\t@:keep public static var other:Int = 0;\n}', applyFix(src));
+	}
+
+	public function testInterpolatedReflectionTargetBlocksFix(): Void {
+		// `literalOf` answers null for an interpolated string, so its static FRAGMENTS are what
+		// carry the reflection intent — `'get_$suffix'` may name this very method at runtime.
+		final owner: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tpublic function get_data():Int return data;\n}';
+		final user: String = 'class U {\n\tfunction f(c:C, suffix:String):Dynamic return Reflect.field(c, \'get_$$suffix\');\n}';
+		Assert.equals(1, fixEditCount(owner, [{ file: 'C.hx', source: owner }]));
+		Assert.equals(0, fixEditCount(owner, [{ file: 'C.hx', source: owner }, { file: 'U.hx', source: user }]));
 	}
 
 	public function testKeepClassFlaggedButNotFixed(): Void {
@@ -332,6 +420,15 @@ class OrphanAccessorCheckTest extends Test {
 	private function violationsOf(files: Array<{ file: String, source: String }>): Array<Violation> {
 		final check: Null<Check> = Linter.byId('orphan-accessor');
 		return check == null ? [] : check.run(files, new HaxeQueryPlugin());
+	}
+
+	/** The number of edits `fix` yields for `owner` after `run` over `files` — the deletion gate's verdict. */
+	private function fixEditCount(owner: String, files: Array<{ file: String, source: String }>): Int {
+		final check: Null<Check> = Linter.byId('orphan-accessor');
+		Assert.notNull(check);
+		if (check == null) return -1;
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		return check.fix(owner, check.run(files, plugin), plugin).length;
 	}
 
 	private function applyFix(src: String): String {

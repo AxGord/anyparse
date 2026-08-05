@@ -37,11 +37,19 @@ using Lambda;
  * redeclaration in the subclass — the chain walk finds the supertype's property and the method is
  * legit.
  *
+ * Statics and instance members are separate namespaces, so a candidate matches only a member of
+ * its OWN staticness: a `static var v(get, never)` is not the property an instance `get_v` serves,
+ * and reading it as one hides a real orphan in one direction and reports a live accessor in the
+ * other. The accessor's staticness (and its `@:keep`) come from the modifier / metadata run
+ * preceding it, which resets at every MEMBER — a `static` written on a preceding FIELD belongs to
+ * that field.
+ *
  * Haxe resolves an accessor UPWARD from the property, so the chain is not the whole story: a
  * property declared by a SUBTYPE is legitimately served by a method inherited from here. That is
  * checked (`SymbolIndex.subtypeDeclaresMember`) on the found-nothing arm only — an `X` found at or
  * above this class forbids a subtype redeclaring the same field, so the declared-without-slot arm
- * cannot be reached that way.
+ * cannot be reached that way. That query walks from the subtype DECLARATION and treats an
+ * ambiguous supertype link as a MAY, since here `true` means "leave the method alone".
  *
  * ## Three arms
  *
@@ -54,8 +62,10 @@ using Lambda;
  * 3. No `X` anywhere but a supertype link did NOT resolve — `Info`, report-only: the property may
  *    live in the unread type. Never fixed.
  *
- * A class whose declaration carries `@:build` / `@:autoBuild` is skipped WHOLE: the macro can
- * declare the very property the accessor serves, and its members never reach the index.
+ * Two macro shapes take the class out of scope entirely, because their generated members never
+ * reach the index and the property may be among them: `@:build` on the class itself, and
+ * `@:autoBuild` on ANY ancestor — that one generates into DESCENDANTS, not into its carrier, so it
+ * is read while walking the chain rather than off the class in hand.
  *
  * A supertype the index cannot resolve by IMPORT VISIBILITY — Haxe needs no import to name a type
  * from a PARENT package, a visibility `SymbolIndex.simpleRefInScope` does not model — is still
@@ -70,18 +80,27 @@ using Lambda;
  *
  * The fix DELETES the method (with its modifier / metadata run and its leading doc comment, via
  * `docExtendedSpan`), and only for arms 1 and 2, when four further gates hold: no report file
- * skip-parses (a file the parser could not read might hold a call); the owning class is not
- * `@:keep` (its members are reached by machinery no scan models); the method name has ZERO direct
- * call or value references — no `IdentExpr` / `FieldAccess` / string-interpolation ident carries it
- * anywhere in REPORT SCOPE; and the name appears in no string literal in that scope, a possible
- * `Reflect.field` target whose breakage is SILENT at runtime rather than a compile error.
+ * skip-parses (a file the parser could not read might hold a call); neither the class nor the
+ * member carries `@:keep` (they are reached by machinery no scan models); the method name has ZERO
+ * direct call or value references — no `IdentExpr` / `FieldAccess` / string-interpolation ident
+ * carries it anywhere in REPORT SCOPE; and no string literal in that scope names it, a possible
+ * `Reflect.field` target whose breakage is SILENT at runtime rather than a compile error. An
+ * INTERPOLATED string is matched the other way round — `literalOf` answers null for one by
+ * contract, so its static `Literal` fragments are collected and a fragment CONTAINED IN the method
+ * name blocks the deletion (`'get_$suffix'` may name it at runtime); fragments shorter than an
+ * accessor prefix carry no intent and are ignored.
  *
  * The zero-reference gate is NOT the orphan test: a REAL accessor is invoked through property
  * access and shows zero textual calls too, which is exactly why the orphan test is the
  * property-slot absence. It gates only the DELETE, catching the case where `get_X` is also called
- * by hand as an ordinary method. Its scope is the REPORT set, so — as for every reference-based
- * deletion in this linter — a narrowed lint scope narrows the proof: run `--fix` over the whole
- * project, never a subdirectory.
+ * by hand as an ordinary method.
+ *
+ * REPORT SCOPE is the boundary of every scan here — the reference scans, the string scans, and the
+ * subtype query all see the file set the lint was given (widened to the resolution scope where one
+ * is configured). A narrowed scope therefore narrows both halves: `--fix` over a subdirectory can
+ * delete a method the rest of the project calls, and a REPORT over a subdirectory can raise a
+ * `Warning` on an accessor whose property is declared by a subtype outside it. Run the rule
+ * whole-project; a subdirectory run is a preview, not a verdict.
  *
  * Scope is class bodies (`CheckScan.classBodies`: `class` / `final class` / `abstract class`).
  * An `interface` declares no accessor bodies; an `abstract` type's accessors are left alone (its
@@ -99,11 +118,14 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	/** The class-body member kinds a method declaration projects as — a plain method and a `final` one. */
 	private static final METHOD_KINDS: Array<String> = ['FnMember', 'FinalModifiedMember'];
 
-	/** The wrapper node a `final class` declaration projects as, holding the class body as its child. */
-	private static inline final FINAL_DECL_KIND: String = 'FinalDecl';
+	/** The metadata that pins a member against removal — its uses are not all in the source. */
+	private static inline final KEEP_META: String = '@:keep';
 
-	/** Non-metadata nodes a type declaration's leading run may carry without breaking the metadata's attachment. */
-	private static final MODIFIER_RUN_KINDS: Array<String> = ['Private', 'Extern'];
+	/** The node kinds a string expression projects as — the hosts whose `Literal` children are interpolation fragments. */
+	private static final STRING_EXPR_KINDS: Array<String> = ['SingleStringExpr', 'DoubleStringExpr'];
+
+	/** The static-text child kind inside an interpolated string expression. */
+	private static inline final STRING_FRAGMENT_KIND: String = 'Literal';
 
 	/**
 	 * `<file>#<from>:<to>` of every flagged accessor whose deletion `run` PROVED safe. The
@@ -133,9 +155,11 @@ final class OrphanAccessor implements Check implements DefaultOff {
 		// library (openfl's DisplayObject) declares the property slot a report-only index cannot
 		// see, and reading it as absent would flag every inherited accessor.
 		final wide: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+		final reflection: { whole: Array<String>, fragments: Array<String> } = stringContents(files, plugin);
 		final ctx: Ctx = {
 			referenced: referencedAccessorNames(files, plugin),
-			reflected: stringContents(files, plugin),
+			reflected: reflection.whole,
+			fragments: reflection.fragments,
 			scanComplete: index.skippedFiles().length == 0
 		};
 		for (entry in files) {
@@ -146,10 +170,7 @@ final class OrphanAccessor implements Check implements DefaultOff {
 			final scope: SymbolIndex = wide.fileInfo(entry.file) == null ? index : wide;
 			final info: Null<FileInfo> = scope.fileInfo(entry.file);
 			if (info == null) continue;
-			final host: FileInfo = info;
-			final classMeta: Map<String, ClassMeta> = [];
-			collectClassMeta(tree, classMeta);
-			for (cls in CheckScan.classBodies(tree)) considerClass(out, cls, scope, host, ctx, classMeta);
+			for (cls in CheckScan.classBodies(tree)) considerClass(out, cls, scope, info, ctx);
 		}
 		return out;
 	}
@@ -186,30 +207,51 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	 * not declare, and record the ones whose deletion is proven safe. `host` is the class's own
 	 * declaring file, `scope` the index the chain walk resolves supertypes through.
 	 */
-	private function considerClass(
-		out: Array<Violation>, cls: QueryNode, scope: SymbolIndex, host: FileInfo, ctx: Ctx, classMeta: Map<String, ClassMeta>
-	): Void {
+	private function considerClass(out: Array<Violation>, cls: QueryNode, scope: SymbolIndex, host: FileInfo, ctx: Ctx): Void {
 		final owner: Null<String> = cls.name;
 		if (owner == null) return;
-		final meta: Null<ClassMeta> = classMeta[owner];
-		// A build macro can declare the very property the accessor serves, and its members are
-		// invisible to the index — the class is skipped whole rather than mis-flagged.
-		if (meta != null && meta.generated) return;
 		final declared: Null<TypeDeclInfo> = host.types.find(t -> t.name == owner);
 		if (declared == null) return;
-		final self: TypeDeclInfo = declared;
+		// A `@:build` macro can declare the very property the accessor serves, and its members are
+		// invisible to the index — the class is skipped whole rather than mis-flagged. `@:autoBuild`
+		// on the class ITSELF generates into its descendants, never here; the chain walk reads that.
+		if (declared.hasBuild) return;
 		final file: String = host.file;
-		for (child in cls.children) if (METHOD_KINDS.contains(child.kind)) {
+		var mods: Array<String> = [];
+		var metas: Array<String> = [];
+		for (child in cls.children) {
+			final isMethod: Bool = METHOD_KINDS.contains(child.kind);
+			// The run resets at EVERY member, not only at a method: a `static` / `@:keep` written
+			// on a preceding FIELD would otherwise carry onto the next accessor and answer for it.
+			if (!isMethod && !RefactorSupport.isMemberDeclKind(child.kind)) {
+				final leading: Null<String> = child.name;
+				if (RefactorSupport.META_KINDS.contains(child.kind)) {
+					if (leading != null) metas.push(leading);
+				} else
+					mods.push(child.kind);
+				continue;
+			}
 			final name: Null<String> = child.name;
 			final span: Null<Span> = child.span;
-			if (name == null || span == null) continue;
+			final memberKept: Bool = metas.contains(KEEP_META);
+			final isStatic: Bool = mods.contains('Static');
+			mods = [];
+			metas = [];
+			if (!isMethod || name == null || span == null) continue;
 			final wantGetter: Bool = StringTools.startsWith(name, GET_PREFIX);
 			if (!wantGetter && !StringTools.startsWith(name, SET_PREFIX)) continue;
 			final prop: String = name.substr(GET_PREFIX.length);
 			if (prop == '') continue;
-			final found: Resolution = { declared: false, withSlot: false, unresolved: false };
-			walkChain(scope, host, self, prop, wantGetter, found, [], false);
-			if (found.withSlot) continue;
+			final found: Resolution = {
+				declared: false,
+				withSlot: false,
+				unresolved: false,
+				generated: false
+			};
+			walkChain(scope, host, declared, prop, wantGetter, isStatic, found, [], false);
+			// A `@:autoBuild` ancestor generates members INTO this class, the property among them
+			// possibly — its member set is not knowable, so the method is left alone.
+			if (found.withSlot || found.generated) continue;
 			// Haxe resolves an accessor UPWARD from the property, so a property declared by a
 			// SUBTYPE is legitimately served by this inherited method. Only the found-nothing arm
 			// needs the check: a declaration found at or above this class forbids a subtype
@@ -229,7 +271,7 @@ final class OrphanAccessor implements Check implements DefaultOff {
 					? '$name has no property to serve: $prop declares no $slot accessor'
 					: '$name has no property to serve: neither $owner nor its supertypes declare $prop'
 			));
-			if (deletable(ctx, meta, name)) _deletable.push(key(file, span));
+			if (deletable(ctx, declared.hasKeep || memberKept, name)) _deletable.push(key(file, span));
 		}
 	}
 
@@ -240,9 +282,13 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	 * and it must appear in no string literal in scope — a possible `Reflect.field` target, whose
 	 * breakage is SILENT at runtime rather than a compile error.
 	 */
-	private static function deletable(ctx: Ctx, meta: Null<ClassMeta>, name: String): Bool {
-		if (!ctx.scanComplete || (meta != null && meta.kept) || ctx.referenced.contains(name)) return false;
-		return !ctx.reflected.exists(content -> content.indexOf(name) >= 0);
+	private static function deletable(ctx: Ctx, kept: Bool, name: String): Bool {
+		if (!ctx.scanComplete || kept || ctx.referenced.contains(name)) return false;
+		if (ctx.reflected.exists(content -> content.indexOf(name) >= 0)) return false;
+		// A LITERAL FRAGMENT of an interpolated string (`Reflect.field(o, 'get_$suffix')`) is only
+		// ever part of the runtime name, so containment is asked the other way round. Fragments
+		// shorter than an accessor prefix carry no intent and would block every deletion in scope.
+		return !ctx.fragments.exists(f -> f.length >= GET_PREFIX.length && name.indexOf(f) >= 0);
 	}
 
 	/**
@@ -253,8 +299,8 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	 * inherited field, so an unread supertype cannot hold a second `prop`).
 	 */
 	private static function walkChain(
-		scope: SymbolIndex, host: FileInfo, type: TypeDeclInfo, prop: String, wantGetter: Bool, found: Resolution, seen: Array<String>,
-		speculative: Bool
+		scope: SymbolIndex, host: FileInfo, type: TypeDeclInfo, prop: String, wantGetter: Bool, wantStatic: Bool, found: Resolution,
+		seen: Array<String>, speculative: Bool
 	): Void {
 		// The key carries `speculative`: a type stamped during a speculative walk deliberately
 		// withheld its `declared` evidence, so reaching it again through a RESOLVED link must
@@ -262,7 +308,11 @@ final class OrphanAccessor implements Check implements DefaultOff {
 		final visited: String = '${host.file}#${type.name}#$speculative';
 		if (found.withSlot || seen.contains(visited)) return;
 		seen.push(visited);
-		for (m in type.members) if (m.name == prop) {
+		// Statics and instance members live in separate namespaces: a static `v` can never be the
+		// property an instance `get_v` serves, and vice versa. Matching without this reads a
+		// same-named static as the property and both directions are wrong — one hides a real
+		// orphan, the other reports a live accessor whose real property sits in the other namespace.
+		for (m in type.members) if (m.name == prop && m.isStatic == wantStatic) {
 			if (wantGetter ? m.hasGetter : m.hasSetter) {
 				found.withSlot = true;
 				return;
@@ -283,7 +333,13 @@ final class OrphanAccessor implements Check implements DefaultOff {
 			final speculate: Bool = resolved.length == 0;
 			final supers: Array<{ file: FileInfo, type: TypeDeclInfo }> = speculate ? uniqueDeclaration(scope, raw) : resolved;
 			if (speculate) found.unresolved = true;
-			for (s in supers) walkChain(scope, s.file, s.type, prop, wantGetter, found, seen, speculative || speculate);
+			for (s in supers) {
+				// `@:autoBuild` generates into DESCENDANTS, so an ancestor carrying it owns an
+				// invisible member set on the class the walk started from. Read speculatively too:
+				// suppressing on a type that may not be the real ancestor is the safe direction.
+				if (s.type.hasAutoBuild) found.generated = true;
+				walkChain(scope, s.file, s.type, prop, wantGetter, wantStatic, found, seen, speculative || speculate);
+			}
 		}
 	}
 
@@ -326,11 +382,13 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	 * structural scan cannot see. Empty when the grammar exposes no string-fold support, which
 	 * only loses the gate (the deletion then rests on the structural scan alone).
 	 */
-	private static function stringContents(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<String> {
+	private static function stringContents(
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin
+	): { whole: Array<String>, fragments: Array<String> } {
+		final out: { whole: Array<String>, fragments: Array<String> } = { whole: [], fragments: [] };
 		final stringFold: Null<StringFoldSupport> = plugin.stringFoldSupport();
-		if (stringFold == null) return [];
+		if (stringFold == null) return out;
 		final fold: StringFoldSupport = stringFold;
-		final out: Array<String> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null) collectStringContents(tree, entry.source, fold, out);
@@ -339,57 +397,21 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	}
 
 	/** Collect into `out` the literal content of every string `node` and its descendants carry. */
-	private static function collectStringContents(node: QueryNode, source: String, fold: StringFoldSupport, out: Array<String>): Void {
+	private static function collectStringContents(
+		node: QueryNode, source: String, fold: StringFoldSupport, out: { whole: Array<String>, fragments: Array<String> }
+	): Void {
 		final literal: Null<StringLiteral> = fold.literalOf(node, source);
-		if (literal != null) out.push(literal.content);
+		if (literal != null)
+			out.whole.push(literal.content);
+		else if (STRING_EXPR_KINDS.contains(node.kind))
+			for (child in node.children) {
+				final fragment: Null<String> = child.name;
+				if (child.kind == STRING_FRAGMENT_KIND && fragment != null && !out.fragments.contains(fragment))
+					out.fragments.push(fragment);
+			}
 		for (child in node.children) collectStringContents(child, source, fold, out);
 	}
 
-
-	/** Record for each class in `tree` whether a macro-build or `@:keep` metadata precedes its declaration. */
-	private static function collectClassMeta(tree: QueryNode, out: Map<String, ClassMeta>): Void {
-		final kids: Array<QueryNode> = tree.children;
-		for (i in 0...kids.length) {
-			final child: QueryNode = kids[i];
-			// A `final class` projects as a `FinalDecl` WRAPPER around the class body, so the
-			// metadata run sits before the wrapper — reading the body's own sibling list would
-			// find nothing and silently clear every gate on exactly the classes this repo writes.
-			final body: Null<QueryNode> = classBodyOf(child);
-			final name: Null<String> = body == null ? null : body.name;
-			if (body == null || name == null) {
-				collectClassMeta(child, out);
-				continue;
-			}
-			out[name] = {
-				generated: metaPrecedes(kids, i, '@:build') || metaPrecedes(kids, i, '@:autoBuild'),
-				kept: metaPrecedes(kids, i, '@:keep')
-			};
-			// Descend into the BODY, never back through the wrapper: revisiting the class body as
-			// a sibling of its own `FinalDecl` re-records it with an empty metadata run and
-			// silently overwrites the entry just computed.
-			collectClassMeta(body, out);
-		}
-	}
-
-	/** The class body `child` is or directly wraps (a `final class`'s `FinalDecl`), or null. */
-	private static function classBodyOf(child: QueryNode): Null<QueryNode> {
-		if (CheckScan.isClassBodyKind(child.kind)) return child;
-		return child.kind == FINAL_DECL_KIND ? child.children.find(c -> CheckScan.isClassBodyKind(c.kind)) : null;
-	}
-
-	/** Whether `metaName` sits in the metadata / modifier run immediately before `siblings[index]`. */
-	private static function metaPrecedes(siblings: Array<QueryNode>, index: Int, metaName: String): Bool {
-		var i: Int = index - 1;
-		while (i >= 0) {
-			final kind: String = siblings[i].kind;
-			if (RefactorSupport.META_KINDS.contains(kind)) {
-				if (siblings[i].name == metaName) return true;
-			} else if (!MODIFIER_RUN_KINDS.contains(kind))
-				return false;
-			i--;
-		}
-		return false;
-	}
 
 	/** Collect into `out` the accessor-shaped names `node` and its descendants carry on a `kinds` node. */
 	private static function collectReferences(node: QueryNode, kinds: Array<String>, out: Array<String>): Void {
@@ -438,6 +460,9 @@ private typedef Resolution = {
 	/** Whether a supertype reference resolved to no indexed declaration, leaving absence unproven. */
 	var unresolved: Bool;
 
+	/** Whether an ancestor carries `@:autoBuild` — it generates members into the class the walk started from. */
+	var generated: Bool;
+
 };
 
 /** The whole-run deletion evidence, gathered once where the entire file set is in hand. */
@@ -446,21 +471,13 @@ private typedef Ctx = {
 	/** Accessor-shaped names that occur as an identifier / field access / interpolated ident in report scope. */
 	var referenced: Array<String>;
 
-	/** Every string-literal content in report scope — the reflection surface. */
+	/** Every WHOLE, non-interpolated string-literal content in report scope — the reflection surface. */
 	var reflected: Array<String>;
+
+	/** The static text FRAGMENTS of every interpolated string in scope — a partially computed reflection name. */
+	var fragments: Array<String>;
 
 	/** Whether every report file parsed, so the two scans above saw the whole scope. */
 	var scanComplete: Bool;
 
-};
-
-/** The deletion-relevant metadata of one class declaration. */
-private typedef ClassMeta = {
-
-	/** Whether a build macro may add members the index cannot see (`@:build` / `@:autoBuild`). */
-	var generated: Bool;
-
-	/** Whether the class is `@:keep` — its members are reached by machinery no scan models. */
-	var kept: Bool;
-
-};
+}

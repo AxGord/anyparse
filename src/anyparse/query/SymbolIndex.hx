@@ -187,6 +187,26 @@ typedef TypeDeclInfo = {
 	 */
 	var hasRtti: Bool;
 
+	/**
+	 * True when the declaration carries a `@:build` macro directly — the macro may add members
+	 * this index never sees, so a check reasoning about the type's member set must bail.
+	 */
+	var hasBuild: Bool;
+
+	/**
+	 * True when the declaration carries `@:autoBuild`. Unlike `hasBuild` this says nothing about
+	 * THIS type's members: the macro runs on every DESCENDANT (subclass / implementor), so the
+	 * flag must be read while walking a chain UPWARD — a type whose ancestor carries it has an
+	 * invisible generated member set of its own.
+	 */
+	var hasAutoBuild: Bool;
+
+	/**
+	 * True when the declaration carries `@:keep` — its members are reached by machinery no source
+	 * scan models (reflection, a framework's runtime lookup), so none of them is provably dead.
+	 */
+	var hasKeep: Bool;
+
 	/** This type's directly-declared members (name + getter-property flag), for type-aware purity. */
 	var members: Array<MemberInfo>;
 
@@ -853,8 +873,34 @@ final class SymbolIndex {
 	public function subtypeDeclaresMember(typeName: String, member: String): Bool {
 		for (fi in _files) for (t in fi.types) if (t.name != typeName && t.members.exists(m ->
 			m.name == member
-		) && isSubtype(t.name, typeName))
+		) && declMayBeSubtype(t, typeName, [t.name]))
 			return true;
+		return false;
+	}
+
+	/**
+	 * Whether `t` MAY be a transitive subtype of `target`. Deliberately NOT `isSubtype`: that one
+	 * re-resolves a link by SIMPLE NAME and answers `false` when several types share it, which is
+	 * the safe default only for a caller that acts on `true` (`redundant-upcast` rewrites a cast,
+	 * `naming` rebinds an occurrence). Every caller of `subtypeDeclaresMember` reads `true` as
+	 * "bail out" instead, so it needs the opposite default: an AMBIGUOUS link is a MAY. Two other
+	 * differences follow from starting at the declaration rather than its name — the root type is
+	 * never ambiguous (we hold it), and only a genuinely ambiguous ANCESTOR link goes conservative.
+	 * A link naming no indexed type is skipped, as in `isSubtype`: it cannot be `target`, which is
+	 * indexed by construction.
+	 */
+	private function declMayBeSubtype(t: TypeDeclInfo, target: String, seen: Array<String>): Bool {
+		for (sup in t.supertypes) {
+			if (sup == target) return true;
+			if (seen.contains(sup)) continue;
+			seen.push(sup);
+			final ds: Array<TypeDeclInfo> = declsNamed(sup);
+			if (ds.length != 1) {
+				if (ds.length > 1) return true;
+				continue;
+			}
+			if (declMayBeSubtype(ds[0], target, seen)) return true;
+		}
 		return false;
 	}
 
