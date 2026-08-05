@@ -35,6 +35,121 @@ class TypeRefPrinterTest extends Test {
 		Assert.equals('Sub', printer(src).print('pkg.deep.Mod.Sub').text);
 	}
 
+	/**
+	 * A plain `import pkg.deep.Mod;` binds every TOP-LEVEL type the module declares, not only its
+	 * main one — so a secondary type of that module is already visible and must print short with
+	 * NO fresh import. Route 2 firing here is what put `import fs.FileSystemInterface.FileSystemCloudAction;`
+	 * into a file already carrying `import fs.FileSystemInterface;`.
+	 */
+	public function testModuleImportMakesItsSecondaryTypeVisible(): Void {
+		final index: SymbolIndex = indexOf([
+			{ file: 'pkg/deep/Mod.hx', source: 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n' }
+		]);
+		final p: TypeRefPrinter = printerWith('package app;\n\nimport pkg.deep.Mod;\n\nclass C {}\n', index);
+		Assert.equals('Sub', p.print('pkg.deep.Mod.Sub').text);
+		Assert.isFalse(p.hasPendingImports());
+	}
+
+	/**
+	 * With NO index the module import is still proof enough: only a MODULE may be plainly imported,
+	 * so `pkg.deep.Mod.Sub` beside `import pkg.deep.Mod;` can only be that module's sub-type.
+	 */
+	public function testModuleImportSecondaryVisibleWithoutAnIndex(): Void {
+		final p: TypeRefPrinter = printer('package app;\n\nimport pkg.deep.Mod;\n\nclass C {}\n');
+		Assert.equals('Sub', p.print('pkg.deep.Mod.Sub').text);
+		Assert.isFalse(p.hasPendingImports());
+	}
+
+	/** No module import, no visibility — the sub-type takes route 2 and gets its own import. */
+	public function testSecondaryTypeWithoutTheModuleImportStillImports(): Void {
+		final p: TypeRefPrinter = printer('package app;\n\nclass C {}\n');
+		Assert.equals('Sub', p.print('pkg.deep.Mod.Sub').text);
+		Assert.equals('import pkg.deep.Mod.Sub;', importText(p));
+	}
+
+	/** An ALIASED module import binds only the alias, so it brings no secondary type into scope. */
+	public function testAliasedModuleImportDoesNotMakeItsSecondaryTypeVisible(): Void {
+		final p: TypeRefPrinter = printer('package app;\n\nimport pkg.deep.Mod as M;\n\nclass C {}\n');
+		Assert.equals('Sub', p.print('pkg.deep.Mod.Sub').text);
+		Assert.equals('import pkg.deep.Mod.Sub;', importText(p));
+	}
+
+	/** The index CONTRADICTING the path — `Sub` declared by another module — refuses the module-import route. */
+	public function testModuleImportRouteRefusedWhenIndexDeclaresTheNameElsewhere(): Void {
+		final index: SymbolIndex = indexOf([
+			{ file: 'pkg/deep/Mod.hx', source: 'package pkg.deep;\n\nclass Mod {}\n' },
+			{ file: 'other/Other.hx', source: 'package other;\n\nclass Other {}\n\ntypedef Sub = Int;\n' }
+		]);
+		final p: TypeRefPrinter = printerWith('package app;\n\nimport pkg.deep.Mod;\n\nclass C {}\n', index);
+		Assert.equals('Sub', p.print('pkg.deep.Mod.Sub').text);
+		Assert.equals('import pkg.deep.Mod.Sub;', importText(p));
+	}
+
+	/** A `using <module>;` IS an `import <module>;` plus static extension — it binds the module's types too. */
+	public function testUsingTheModuleMakesItsSecondaryTypeVisible(): Void {
+		final index: SymbolIndex = indexOf([
+			{ file: 'pkg/deep/Mod.hx', source: 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n' }
+		]);
+		final p: TypeRefPrinter = printerWith('package app;\n\nusing pkg.deep.Mod;\n\nclass C {}\n', index);
+		Assert.equals('Sub', p.print('pkg.deep.Mod.Sub').text);
+		Assert.isFalse(p.hasPendingImports());
+	}
+
+	/**
+	 * A type the file's OWN module declares OUTRANKS every import in Haxe (verified on 4.3.7: a
+	 * module-local `typedef Sub = Int` beside `import pkg.Mod;` whose `Mod` declares its own `Sub`
+	 * resolves the bare name to the LOCAL one). So an imported module carrying that name is no
+	 * shadow here, and the module-local route must still print short — the shadow arm has to exempt
+	 * it rather than veto the whole file.
+	 */
+	public function testModuleImportDoesNotShadowTheModuleLocalRoute(): Void {
+		final index: SymbolIndex = indexOf([
+			{ file: 'pkg/Mod.hx', source: 'package pkg;\n\nclass Mod {}\n\ntypedef Sub = Float;\n' },
+			{ file: 'app/Host.hx', source: 'package app;\n\nimport pkg.Mod;\n\nclass Host {}\n\ntypedef Sub = Int;\n' }
+		]);
+		final p: TypeRefPrinter = printerWith('package app;\n\nimport pkg.Mod;\n\nclass Host {}\n\ntypedef Sub = Int;\n', index);
+		Assert.equals('Sub', p.print('app.Host.Sub').text);
+		Assert.isFalse(p.hasPendingImports());
+	}
+
+	/**
+	 * TWO imported modules each declaring a `Sub`: the bare name means whichever import comes LAST,
+	 * which no printer route can decide, so the reference stays fully qualified. Without the shadow
+	 * arm the visibility route fired on the first module and emitted a bare `Sub` bound to the other
+	 * type — silently, and it compiles.
+	 */
+	public function testSecondModuleDeclaringTheNameRefusesTheShortForm(): Void {
+		final index: SymbolIndex = indexOf([
+			{ file: 'pkg/deep/Mod.hx', source: 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n' },
+			{ file: 'other/Other.hx', source: 'package other;\n\nclass Other {}\n\ntypedef Sub = Float;\n' }
+		]);
+		final src: String = 'package app;\n\nimport pkg.deep.Mod;\nimport other.Other;\n\nclass C {}\n';
+		final p: TypeRefPrinter = printerWith(src, index);
+		Assert.equals('pkg.deep.Mod.Sub', p.print('pkg.deep.Mod.Sub').text);
+		Assert.isFalse(p.hasPendingImports());
+	}
+
+	/** The mirror: a module import's SECONDARY type shadows the bare name for a path that is NOT it. */
+	public function testModuleImportSecondaryShadowsAnUnrelatedPath(): Void {
+		final index: SymbolIndex = indexOf([
+			{ file: 'pkg/deep/Mod.hx', source: 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n' },
+			{ file: 'other/Sub.hx', source: 'package other;\n\nclass Sub {}\n' }
+		]);
+		final p: TypeRefPrinter = printerWith('package app;\n\nimport pkg.deep.Mod;\n\nclass C {}\n', index);
+		Assert.equals('other.Sub', p.print('other.Sub').text);
+		Assert.isFalse(p.hasPendingImports());
+	}
+
+	/**
+	 * A PENDING import from an earlier `print` claims the simple name before this one asks for it —
+	 * both would land in the same file, and Haxe lets the LAST import of a name win.
+	 */
+	public function testPendingImportOfAnotherPathRefusesTheModuleRoute(): Void {
+		final p: TypeRefPrinter = printer('package app;\n\nimport pkg.deep.Mod;\n\nclass C {}\n');
+		Assert.equals('Sub', p.print('other.Sub').text);
+		Assert.equals('pkg.deep.Mod.Sub', p.print('pkg.deep.Mod.Sub').text);
+	}
+
 	public function testCompilerHybridRepairedThroughImport(): Void {
 		// The compiler prints a secondary type as `pack.SubType` — the hybrid that resolves only
 		// while a matching import exists. It must resolve back to the imported short name.
@@ -349,11 +464,13 @@ class TypeRefPrinterTest extends Test {
 
 	public function testSecondaryTypeImportSortsByItsWholePath(): Void {
 		// A `Module.SubType` import sorts as the WHOLE string it is written as — `a.Mod.Sub`
-		// belongs between `a.Mod` and `a.Other`, not wherever its module alone would land.
-		final src: String = 'package app;\n\nimport a.Mod;\nimport a.Other;\n\nclass C {}\n';
+		// belongs between `a.Mid` and `a.Other`. The module is deliberately NOT imported here:
+		// a file that already imports `a.Mod` never gets a fresh `a.Mod.Sub` at all, since the
+		// module import already binds the name (`moduleImportBinds`).
+		final src: String = 'package app;\n\nimport a.Mid;\nimport a.Other;\n\nclass C {}\n';
 		final p: TypeRefPrinter = printer(src);
 		p.print('a.Mod.Sub');
-		Assert.equals('package app;\n\nimport a.Mod;\nimport a.Mod.Sub;\nimport a.Other;\n\nclass C {}\n', applyImports(p, src));
+		Assert.equals('package app;\n\nimport a.Mid;\nimport a.Mod.Sub;\nimport a.Other;\n\nclass C {}\n', applyImports(p, src));
 	}
 
 	public function testBlankSeparatedGroupsKeepTheirSort(): Void {
