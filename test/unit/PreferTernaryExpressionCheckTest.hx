@@ -180,6 +180,27 @@ class PreferTernaryExpressionCheckTest extends Test {
 		Assert.equals(src.indexOf('b ,') + 1, es[0].span.to);
 	}
 
+	/**
+	 * The array-INDEX slot is delimited on the same terms as a call argument — `[` and `]`
+	 * bound it — so a bare `?:` may land there. Shares `RefShape.delimitedTailChildKinds`
+	 * with `redundant-parens`; the RECEIVER at child 0 is an operand position, so nothing
+	 * licenses a bare `?:` there — but an if-expression can only REACH that position already
+	 * parenthesized (`if (c) p else q[i]` parses the index into the then-branch), and the
+	 * paren is a delimited host in its own right. So the receiver case is flagged by the
+	 * PAREN, not by the index slot, and the edit lands inside the parens it keeps — measured
+	 * identical on the pre-`IndexAccess` engine, i.e. not this arm's doing.
+	 */
+	public function testIndexSlotFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Void {\n\t\tvar x = arr[if (c) 1 else 2];\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('c ? 1 : 2', es[0].text);
+		final rec: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Void {\n\t\tvar x = (if (c) p else q)[i];\n\t}\n}');
+		Assert.equals(1, rec.length);
+		Assert.equals('c ? p : q', rec[0].text);
+	}
+
 	public function testRegisteredInBuiltins(): Void {
 		Assert.notNull(Linter.byId('prefer-ternary-expression'));
 		Assert.isTrue([for (c in Linter.builtins()) c.id()].contains('prefer-ternary-expression'));

@@ -804,9 +804,16 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// `(` / `,` / `)`. The assignment family's child 0 is likewise the target,
 			// while the right-hand side is the right operand of a prec-0
 			// right-associative operator, i.e. parsed at minPrec 0 up to the enclosing
-			// terminator. `Interval`, `Arrow` and the other infix kinds are deliberately
-			// absent: their operands parse above minPrec 0 and re-associate on unwrap.
-			delimitedTailChildKinds: ['Call'].concat(ASSIGN_KINDS),
+			// terminator. `IndexAccess` is the same shape one bracket over: child 0 is the
+			// RECEIVER, an operand position (`(a ? b : c)[i]` needs its parens), while the
+			// index at child 1 is bounded by the `[` and `]` themselves and parses at
+			// minPrec 0 — `arr[untyped i]`, `arr[cast i]`, `arr[if (c) 1 else 2]` and
+			// `arr[@:privateAccess q.v]` all compile bare, the `]` ending each of them.
+			// `Interval`, `Arrow` and the other infix kinds are deliberately absent: their
+			// operands parse above minPrec 0 and re-associate on unwrap — a map-literal key
+			// `[(a ? b : c) => d]` bare is `Unexpected =>`, which is why an index slot and
+			// an `=>` operand are not the same question.
+			delimitedTailChildKinds: ['Call', 'IndexAccess'].concat(ASSIGN_KINDS),
 			// `macro final w = 1` re-enters the unrestricted expression parse, where the
 			// declaration's `, b = 2` continuation reaches past the separator that ends
 			// the slot — so a paren around one is load-bearing while it is the last thing

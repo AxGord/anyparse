@@ -58,7 +58,9 @@ class RedundantParensOperandArmsTest extends Test {
 
 	public function testAtomArmIsOffByDefault(): Void {
 		Assert.equals(0, violations(inFn('var b = (a) + c;'), none()).length);
-		Assert.equals(0, violations(inFn('var b = arr[(i)];'), none()).length);
+		// The index SLOT is delimited and fires with no arm on (`RedundantParensCheckTest`);
+		// the RECEIVER beside it is an operand position only this arm reaches.
+		Assert.equals(0, violations(inFn('var b = (arr)[i];'), none()).length);
 	}
 
 	public function testSameOperatorLeftArmIsOffByDefault(): Void {
@@ -129,8 +131,11 @@ class RedundantParensOperandArmsTest extends Test {
 		assertDrop(inFn('(x) = 1;'), inFn('x = 1;'), atoms());
 	}
 
+	/**
+	 * The RECEIVER, which is the operand half of an index access — the index slot beside it
+	 * is bracket-delimited and drops with no arm on at all (`RedundantParensCheckTest`).
+	 */
 	public function testAtomIndexOperandDrops(): Void {
-		assertDrop(inFn('var b = arr[(i)];'), inFn('var b = arr[i];'), atoms());
 		assertDrop(inFn('var b = (arr)[i];'), inFn('var b = arr[i];'), atoms());
 	}
 

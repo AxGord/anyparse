@@ -1867,13 +1867,17 @@ typedef RefShape = {
 	 * Node kinds whose children are delimited EXCEPT the first — a head plus a
 	 * delimited tail. Haxe: `Call` (the callee at child 0 is NOT delimited —
 	 * `(a ? b : c)(x)` needs its parens — while every argument after it is bounded
-	 * by `(` / `,` … `,` / `)`), and the assignment family (`Assign` and the
-	 * compound `*Assign` forms: the target at child 0 is an operand position, the
-	 * right-hand side is not — those operators are the loosest precedence tier AND
-	 * right-associative, so their right operand is parsed as a full expression that
-	 * already reaches the slot's terminator). Read by `redundant-parens` together
-	 * with `delimitedAllChildKinds`, and by `prefer-ternary-expression` for the slot a bare
-	 * `?:` may land in (child 0 excluded there too). Optional; unset lists no such host.
+	 * by `(` / `,` … `,` / `)`), `IndexAccess` (the receiver at child 0 is likewise
+	 * an operand position, while the index at child 1 is bounded by the `[` and `]`
+	 * themselves and parses at the loosest precedence — `arr[untyped i]`,
+	 * `arr[if (c) 1 else 2]`, `arr[@:privateAccess q.v]` all compile bare), and the
+	 * assignment family (`Assign` and the compound `*Assign` forms: the target at
+	 * child 0 is an operand position, the right-hand side is not — those operators
+	 * are the loosest precedence tier AND right-associative, so their right operand
+	 * is parsed as a full expression that already reaches the slot's terminator).
+	 * Read by `redundant-parens` together with `delimitedAllChildKinds`, and by
+	 * `prefer-ternary-expression` for the slot a bare `?:` may land in (child 0
+	 * excluded there too). Optional; unset lists no such host.
 	 */
 	@:optional var delimitedTailChildKinds: Array<String>;
 
