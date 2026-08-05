@@ -6,6 +6,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ImportOrder;
 import anyparse.query.ImportOrder.ImportLine;
+import anyparse.query.ImportOrder.ImportSlot;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -13,6 +14,20 @@ import anyparse.runtime.Span;
 import haxe.ds.ArraySort;
 
 using Lambda;
+
+/**
+ * One `using` WEDGE: the import runs a `using` group sits between, read as the ONE block they
+ * would be with the group moved below them. `imports` is every merged line in SOURCE order (the
+ * list the merge sorts), `usings` the wedged `using` lines in their own source order (the group
+ * moves whole, so that order is preserved verbatim), and `from` … `to` the region the fix
+ * rewrites: the first merged import's line start through the last one's line end.
+ */
+private typedef UsingWedge = {
+	final imports: Array<ImportLine>;
+	final usings: Array<ImportLine>;
+	final from: Int;
+	final to: Int;
+}
 
 /**
  * Flags a contiguous block of plain `import` statements that carries NO recognisable order —
@@ -35,10 +50,31 @@ using Lambda;
  *    pkg.*;`, an aliased `import a.B as C;`, a `#if` region, a type declaration;
  *  - a BLOCK comment between two imports (only whole-line `//` comments are pinned; see below).
  *
- * `using` is never part of a run and is never reordered: Haxe ranks static extensions in
- * REVERSE declaration order, so a `using`'s position is semantics rather than layout. A
- * wildcard and an alias split a run for the same reason in miniature — both bind names the
- * ordering cannot see.
+ * A `using` is never part of a run and its ordering WITHIN the `using` group is never touched:
+ * Haxe ranks static extensions in REVERSE declaration order, so one `using`'s position relative
+ * to another is semantics rather than layout. A wildcard and an alias split a run for the same
+ * reason in miniature — both bind names the ordering cannot see.
+ *
+ * ## The `using` WEDGE
+ *
+ * That a `using` ENDS a run does not mean the runs around it are two blocks. A `using` group
+ * wedged between two import runs leaves a file whose imports read as one sorted block only if you
+ * skip over the middle — and, because each run is ordered on its own, NO finding is produced and
+ * no fix ever runs: the shape is a fixed point. It is what an older inserting fixer left behind,
+ * and what a hand edit leaves whenever a fresh import is appended past the `using`.
+ *
+ * So a wedge is reported and, by default, repaired: the runs merge into ONE sorted block and the
+ * wedged `using` lines move BELOW it, keeping their own relative order. This is layout, not
+ * semantics — a `using`'s rank against another `using` is what Haxe reads in reverse, and moving
+ * the group as a whole preserves it exactly. The one semantic edge is NAME BINDING: a `using`
+ * also imports its module's types, so overtaking an import that binds one of those names would
+ * flip which declaration the short name means. That is a refusal (see below), not a rewrite.
+ *
+ * A merge requires the gap between two runs to hold NOTHING but `using` lines and blank lines. A
+ * wildcard, an alias, a `#if` region, a block comment or a type declaration in the gap keeps the
+ * runs separate exactly as before, and a gap with no `using` at all is a blank-line GROUP, which
+ * is preserved. A `using` sitting before every import, or after every import, wedges nothing and
+ * is left alone.
  *
  * ## Autofix
  *
@@ -64,6 +100,12 @@ using Lambda;
  *    label), and a reorder can neither move it nor leave it behind without saying something
  *    false.
  *
+ * A WEDGE merge answers to both of those (over the union of the merged runs) plus one of its own:
+ * a wedged `using` may not OVERTAKE an import it currently loses a simple name to. The `using`
+ * imports its module's types, so with the import below it that import wins the name today and the
+ * `using` would win it after the move. The name set is read from the resolution index, the same
+ * source and the same residual limit as the duplicate-name refusal above.
+ *
  * ## Options
  *
  *  - `order` — the order a block must carry: `any` (default) accepts EITHER recognised order
@@ -71,6 +113,10 @@ using Lambda;
  *    `case-insensitive` requires the case-folded one. The autofix sorts under the named order,
  *    and under `any` sorts a block under whichever order it breaks LEAST often — the convention
  *    it was nearly following, so one appended line moves instead of the whole block.
+ *  - `usingAfterImports` — whether a `using` WEDGE is a finding at all. `true` (default) merges
+ *    the runs and moves the wedged `using` lines below them; `false` restores the pre-wedge
+ *    reading, where a `using` is an immovable run boundary and the runs around it are judged
+ *    separately.
  */
 @:nullSafety(Strict)
 final class ImportBlockOrder implements Check implements DefaultOff implements ConfigAware {
@@ -79,6 +125,9 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 
 	/** The `order` option value accepting EITHER recognised order — the default, and the least opinionated reading. */
 	private static inline final ORDER_ANY: String = 'any';
+
+	/** The option gating the `using` WEDGE merge — on unless a project opts out. */
+	private static inline final OPTION_USING_AFTER: String = 'usingAfterImports';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
@@ -104,6 +153,16 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 			if (tree == null) continue;
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
 			final requested: Int = requestedOrder(config);
+			for (wedge in wedgesOf(entry.source, tree, config)) {
+				final first: ImportLine = wedge.usings[0];
+				violations.push({
+					file: entry.file,
+					span: new Span(first.declFrom, first.declFrom + 'using'.length),
+					rule: RULE_ID,
+					severity: Severity.Warning,
+					message: 'using \'${first.path}\' splits the import block; using statements belong after every import'
+				});
+			}
 			for (block in blocksOf(entry.source, tree)) {
 				final paths: Array<String> = ImportOrder.pathsOf(block);
 				if (acceptable(paths, requested)) continue;
@@ -135,7 +194,22 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 		}
 		final moduleTypes: Map<String, Array<String>> = moduleTypesOf(index);
 		final edits: Array<{ span: Span, text: String }> = [];
+		// A merged wedge REWRITES the region its runs live in, so a run it takes over must not also
+		// get the per-run reorder edit below: the two spans overlap and the caller batches both.
+		final merged: Array<Int> = [];
+		for (wedge in wedgesOf(source, tree, config)) {
+			if (!flagged.contains(wedge.usings[0].declFrom)) continue;
+			if (!mergeable(wedge, source, moduleTypes)) continue;
+			final order: Int = fixOrder(requested, ImportOrder.pathsOf(wedge.imports));
+			final sorted: Array<ImportLine> = wedge.imports.copy();
+			ArraySort.sort(sorted, (a, b) -> ImportOrder.compare(order, a.path, b.path));
+			final text: String = [for (line in sorted) source.substring(line.chunkFrom, line.chunkTo)].join('') + '\n'
+				+ [for (line in wedge.usings) source.substring(line.chunkFrom, line.chunkTo)].join('');
+			for (line in wedge.imports) merged.push(line.declFrom);
+			edits.push({ span: new Span(wedge.from, wedge.to), text: text });
+		}
 		for (block in blocksOf(source, tree)) {
+			if (block.exists(line -> merged.contains(line.declFrom))) continue;
 			if (!block.exists(line -> flagged.contains(line.declFrom))) continue;
 			if (!reorderable(block, source, moduleTypes)) continue;
 			final order: Int = fixOrder(requested, ImportOrder.pathsOf(block));
@@ -147,6 +221,104 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 			if (text != source.substring(from, to)) edits.push({ span: new Span(from, to), text: text });
 		}
 		return edits;
+	}
+
+	/**
+	 * The file's `using` WEDGES — see the class doc. A run pair joins one wedge when the GAP between
+	 * them holds nothing but `using` lines and whitespace; anything else (a wildcard, an alias, a
+	 * `#if` region, a block comment, a type declaration) ends the chain there, and so does a gap
+	 * with no `using` in it at all, which is a blank-line GROUP the rule preserves.
+	 *
+	 * Empty under the `usingAfterImports` opt-out, for a file with fewer than two runs or no
+	 * top-level `using`, and — wholesale — when ANY top-level `using` is not liftable as a line
+	 * (`ImportOrder.lineOf`): a file carrying one such statement is one whose `using` group cannot
+	 * be moved intact, so no wedge in it may be repaired.
+	 */
+	private static function wedgesOf(source: String, tree: QueryNode, config: LintConfig): Array<UsingWedge> {
+		if (config.boolOption(RULE_ID, OPTION_USING_AFTER) == false) return [];
+		final runs: Array<Array<ImportLine>> = ImportOrder.runsOf(source, ImportOrder.slotsOf(tree));
+		if (runs.length < 2) return [];
+		final usings: Array<ImportLine> = [];
+		for (slot in usingSlotsOf(tree)) {
+			final line: Null<ImportLine> = ImportOrder.lineOf(source, slot);
+			if (line == null) return [];
+			usings.push(line);
+		}
+		if (usings.length == 0) return [];
+		final out: Array<UsingWedge> = [];
+		var imports: Array<ImportLine> = runs[0].copy();
+		var wedged: Array<ImportLine> = [];
+		inline function flush(): Void {
+			if (wedged.length > 0) out.push({
+				imports: imports,
+				usings: wedged,
+				from: imports[0].chunkFrom,
+				to: imports[imports.length - 1].chunkTo
+			});
+		}
+		for (i in 1...runs.length) {
+			final gapFrom: Int = imports[imports.length - 1].chunkTo;
+			final gapTo: Int = runs[i][0].chunkFrom;
+			final inGap: Array<ImportLine> = usings.filter(line -> line.chunkFrom >= gapFrom && line.chunkTo <= gapTo);
+			if (inGap.length == 0 || !gapHoldsOnly(source, gapFrom, gapTo, inGap)) {
+				flush();
+				imports = runs[i].copy();
+				wedged = [];
+				continue;
+			}
+			for (line in inGap) wedged.push(line);
+			for (line in runs[i]) imports.push(line);
+		}
+		flush();
+		return out;
+	}
+
+	/** Whether `[from, to)` is `lines` (in that order) and whitespace, and nothing else. */
+	private static function gapHoldsOnly(source: String, from: Int, to: Int, lines: Array<ImportLine>): Bool {
+		var rest: String = '';
+		var at: Int = from;
+		for (line in lines) {
+			if (line.chunkFrom < at) return false;
+			rest += source.substring(at, line.chunkFrom);
+			at = line.chunkTo;
+		}
+		return StringTools.trim(rest + source.substring(at, to)) == '';
+	}
+
+	/**
+	 * Whether `wedge` may be merged — the two refusals `reorderable` makes over the merged import
+	 * union (an absorbed leading comment on the block's first line, two imports binding one simple
+	 * name), plus the wedge's own: a `using` may not OVERTAKE an import that binds a name its module
+	 * also declares. Below that import today the import wins the name; above it the `using` would,
+	 * so the move is a silent rebind rather than a relayout.
+	 */
+	private static function mergeable(wedge: UsingWedge, source: String, moduleTypes: Map<String, Array<String>>): Bool {
+		if (!reorderable(wedge.imports, source, moduleTypes)) return false;
+		for (statement in wedge.usings) {
+			final names: Array<String> = boundNames(statement.path, moduleTypes);
+			for (line in wedge.imports) {
+				if (line.declFrom > statement.declFrom && boundNames(line.path, moduleTypes).exists(name -> names.contains(name)))
+					return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Every top-level `using` statement of `root` as a slot, in source order. The mirror of
+	 * `ImportOrder.slotsOf` for the other statement kind: a `using` inside a `#if` lives in the
+	 * `Conditional` and is not seen here, which is exactly right — the guarded region ENDS the runs
+	 * around it, so no wedge ever spans one.
+	 */
+	private static function usingSlotsOf(root: QueryNode): Array<ImportSlot> {
+		return [
+			for (c in root.children) if (c.kind == 'UsingDecl' && c.name != null) {
+				// Re-bind: narrowing does not propagate into an anonymous-structure literal.
+				final path: String = c.name ?? '';
+				final span: Null<Span> = c.span;
+				{ path: path, from: span == null ? -1 : span.from, to: span == null ? -1 : span.to };
+			}
+		];
 	}
 
 	/** The `order` option as an `ImportOrder` id, or -1 for `any` (the default, and any unrecognised value). */

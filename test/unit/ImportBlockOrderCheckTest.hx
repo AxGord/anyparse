@@ -29,6 +29,17 @@ class ImportBlockOrderCheckTest extends Test {
 	private static inline final APPENDED: String = 'package app;\n\nimport app.base.Host;\nimport pkg.mid.events.Alpha;\n'
 		+ 'import pkg.mid.SetBeta;\nimport util.Valid;\nimport app.deep.Mod.Widget;\n\nclass C {}\n';
 
+	/**
+	 * The WEDGE incident, verbatim from `TM/src/tests/unit/FileSystemSyncTest.hx`: a `#if`-guarded
+	 * `#error` header, a wildcard import, a sorted run, a `using`, then a SECOND sorted run.
+	 */
+	private static inline final WEDGE: String = 'package tests.unit;\n\n#if !UNIT_TESTS\n#error "unit only"\n#end\n'
+		+ 'import tink.unit.Assert.*;\nimport fs.DrillsFolderWatcher;\nimport fs.FSUtil;\nimport haxe.io.Path;\n\n'
+		+ 'using tink.CoreApi;\n\nimport fs.FolderWatcher;\nimport haxe.Exception;\n\nclass C {}\n';
+
+	/** The `usingAfterImports` opt-out — the pre-wedge reading, where a `using` is an immovable run boundary. */
+	private static inline final KEEP_USING: String = '{"rules":{"import-order":{"usingAfterImports":false}}}';
+
 	public function testAppendedImportFlagged(): Void {
 		final vs: Array<Violation> = violations(APPENDED);
 		Assert.equals(1, vs.length);
@@ -100,16 +111,106 @@ class ImportBlockOrderCheckTest extends Test {
 		Assert.equals('package app;\n\nimport z.Alpha;\nimport z.Zeta;\n\nimport a.Alpha;\nimport a.Beta;\n\nclass C {}\n', fixed(src));
 	}
 
-	public function testUsingSplitsTheBlockAndStaysPut(): Void {
-		// A `using`'s POSITION ranks static-extension resolution, so it is never part of a run and
-		// never moves — the two import runs around it are ordered separately.
+	public function testUsingSplitsTheBlockAndStaysPutUnderTheOptOut(): Void {
+		// `"usingAfterImports": false` restores the pre-wedge reading: a `using` is a run boundary
+		// that never moves, and the two import runs around it are ordered separately.
 		final src: String =
 			'package app;\n\nimport z.Zeta;\nimport z.Alpha;\nusing ext.Tools;\nimport a.Beta;\nimport a.Alpha;\n\nclass C {}\n';
-		Assert.equals(2, violations(src).length);
+		Assert.equals(2, violations(src, KEEP_USING).length);
 		Assert.equals(
 			'package app;\n\nimport z.Alpha;\nimport z.Zeta;\nusing ext.Tools;\nimport a.Alpha;\nimport a.Beta;\n\nclass C {}\n',
-			fixed(src)
+			fixed(src, KEEP_USING)
 		);
+	}
+
+	// --- the `using` wedge: runs separated by a `using` group are ONE block ---
+
+	public function testWedgedUsingIsFlagged(): Void {
+		final vs: Array<Violation> = violations(WEDGE);
+		Assert.equals(1, vs.length);
+		Assert.equals('import-order', vs[0].rule);
+		Assert.equals(Severity.Warning, vs[0].severity);
+		Assert.isTrue(vs[0].message.contains("'tink.CoreApi'"), 'names the wedged using: ${vs[0].message}');
+	}
+
+	public function testWedgedUsingIsMovedBelowTheMergedBlock(): Void {
+		// The TM shape: a `#if`-guarded `#error` header, a wildcard import, a sorted run, a `using`,
+		// then a second sorted run. Both runs are ordered on their own, so nothing was reported
+		// before — the file was a fixed point no rule repaired.
+		Assert.equals(
+			'package tests.unit;\n\n#if !UNIT_TESTS\n#error "unit only"\n#end\nimport tink.unit.Assert.*;\n'
+			+ 'import fs.DrillsFolderWatcher;\nimport fs.FSUtil;\nimport fs.FolderWatcher;\nimport haxe.Exception;\n'
+			+ 'import haxe.io.Path;\n\nusing tink.CoreApi;\n\nclass C {}\n',
+			fixed(WEDGE)
+		);
+	}
+
+	public function testWedgeFixOutputSurvivesTheWriter(): Void {
+		switch RefactorSupport.canonicalize(WEDGE, edits(WEDGE), true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('import haxe.io.Path;\n\nusing tink.CoreApi;') >= 0, text);
+				Assert.isTrue(text.indexOf('import fs.FSUtil;\nimport fs.FolderWatcher;') >= 0, text);
+			case Err(message):
+				Assert.fail('wedge canonicalize Err: $message');
+		}
+	}
+
+	public function testWedgeIsNotTouchedUnderTheOptOut(): Void {
+		Assert.equals(0, violations(WEDGE, KEEP_USING).length);
+		Assert.equals(0, edits(WEDGE, KEEP_USING).length);
+	}
+
+	public function testSeveralWedgedUsingsKeepTheirRelativeOrder(): Void {
+		// Haxe ranks static extensions in REVERSE declaration order, so the group may only move as a
+		// whole — `ext.Two` must still follow `ext.One` after the merge.
+		final src: String = 'package app;\n\nimport z.Zeta;\nusing ext.One;\nusing ext.Two;\nimport a.Alpha;\n\nclass C {}\n';
+		Assert.equals('package app;\n\nimport a.Alpha;\nimport z.Zeta;\n\nusing ext.One;\nusing ext.Two;\n\nclass C {}\n', fixed(src));
+	}
+
+	public function testABlankLineGapWithNoUsingIsStillNotMerged(): Void {
+		// Only a `using` wedge merges runs; a project's visual grouping is not a defect.
+		Assert.equals(
+			0, violations('package app;\n\nimport z.Alpha;\nimport z.Zeta;\n\nimport a.Alpha;\nimport a.Beta;\n\nclass C {}\n').length
+		);
+	}
+
+	public function testAWildcardBesideTheUsingBlocksTheMerge(): Void {
+		// The gap must hold NOTHING but the `using` group: a wildcard binds names the ordering cannot
+		// see, so the runs around it stay separate.
+		Assert.equals(
+			0, violations('package app;\n\nimport z.Zeta;\nusing ext.Tools;\nimport other.*;\nimport a.Alpha;\n\nclass C {}\n').length
+		);
+	}
+
+	public function testAGuardedRegionBesideTheUsingBlocksTheMerge(): Void {
+		final src: String =
+			'package app;\n\nimport z.Zeta;\nusing ext.Tools;\n#if js\nimport js.Browser;\n#end\nimport a.Alpha;\n\nclass C {}\n';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testWedgeWithALeadingCommentOnTheBlockIsReportOnly(): Void {
+		// Same refusal as the plain reorder: a comment above the block's FIRST import belongs to the
+		// block, and the merge can neither carry it nor strand it.
+		final src: String = 'package app;\n\n// third-party\nimport z.Zeta;\nusing ext.Tools;\nimport a.Alpha;\n\nclass C {}\n';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
+	public function testUsingOvertakingAnImportItShadowsIsReportOnly(): Void {
+		// `using ext.Tools` currently loses `Alpha` to the import BELOW it; moving it past that
+		// import would silently rebind the name, so the merge is refused.
+		final src: String = 'package app;\n\nimport z.Zeta;\nusing ext.Tools;\nimport a.Alpha;\n\nclass C {}\n';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'app/C.hx', source: src },
+			{ file: 'a/Alpha.hx', source: 'package a;\n\nclass Alpha {}\n' },
+			{ file: 'ext/Tools.hx', source: 'package ext;\n\nclass Tools {}\n\nclass Alpha {}\n' },
+			{ file: 'z/Zeta.hx', source: 'package z;\n\nclass Zeta {}\n' }
+		];
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: ImportBlockOrder = new ImportBlockOrder();
+		final vs: Array<Violation> = check.run(files, plugin).filter(v -> v.file == 'app/C.hx');
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, plugin, SymbolIndex.build(files, plugin)).length);
 	}
 
 	public function testWildcardSplitsTheBlock(): Void {
@@ -210,14 +311,17 @@ class ImportBlockOrderCheckTest extends Test {
 		// into two runs, each sorted, their concatenation not — read as one list the file looks
 		// unordered, the fresh import is appended past the file's last import, and THIS rule then
 		// reports the line the inserter had just placed. One shared run model, zero waves.
+		// Read under the `usingAfterImports` opt-out, which is where the run model alone decides the
+		// verdict: with the wedge merge on, the shape is a finding in its own right (see
+		// `testWedgedUsingIsFlagged`) and would mask what this acceptance is about.
 		final src: String = 'package app;\n\nimport a.Alpha;\nimport m.Mid;\nimport z.Zeta;\n'
 			+ '\nusing ext.Tools;\n\nimport b.Bee;\nimport c.Cee;\n\nclass C {}\n';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		Assert.equals(0, violations(src).length, 'the shape starts clean');
+		Assert.equals(0, violations(src, KEEP_USING).length, 'the shape starts clean');
 		final printer: TypeRefPrinter = TypeRefPrinter.forFile(src, plugin.parseFile(src), plugin.importMap(src));
 		printer.print('a.Aaa');
 		final inserted: String = RefactorSupport.applyEdits(src, printer.pendingImportEdits());
-		Assert.equals(0, violations(inserted).length, 'the insert seat and the rule agree:\n$inserted');
+		Assert.equals(0, violations(inserted, KEEP_USING).length, 'the insert seat and the rule agree:\n$inserted');
 	}
 
 	// --- comment pinning ---

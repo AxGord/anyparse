@@ -352,8 +352,12 @@ final class ImportOrder {
 	 * other than a `//` comment follows it on that line, or the line has NO terminating newline
 	 * (a chunk without one would glue the next import onto its line the moment it stops being
 	 * last).
+	 *
+	 * Public because a slot is not always a plain import: `import-order`'s wedge merge reads the
+	 * `using` statements between two runs through this same separability contract, so a `using` the
+	 * line machinery cannot lift is one the merge refuses rather than one it moves wrongly.
 	 */
-	private static function lineOf(source: String, slot: ImportSlot): Null<ImportLine> {
+	public static function lineOf(source: String, slot: ImportSlot): Null<ImportLine> {
 		if (slot.from < 0 || slot.to < 0) return null;
 		final lineStart: Int = RefactorSupport.startOfLine(source, slot.from);
 		if (StringTools.trim(source.substring(lineStart, slot.from)) != '') return null;
