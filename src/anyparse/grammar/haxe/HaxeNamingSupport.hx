@@ -305,15 +305,22 @@ final class HaxeNamingSupport implements NamingSupport {
 
 
 	/**
-	 * The mechanical fix for a private field missing its `_` prefix: prepend `_`
-	 * and lowercase the first letter (`shape`→`_shape`, `Shape`→`_shape`). Not
-	 * `inline` — passed as a `NamingRule.normalize` function value.
+	 * The mechanical fix for a private field missing its `_` prefix: prepend `_`, apply the shared
+	 * camel word policy of `smartSegment`, and lowercase the first letter (`shape` -> `_shape`,
+	 * `Shape` -> `_shape`, `HEIGHT` -> `_height`, `URLPath` -> `_urlPath`). Sharing `smartSegment`
+	 * is what stops the fix MANUFACTURING a lowercase-head-over-caps-tail name (`_hEIGHT`), which
+	 * the `naming` artifact arm could never report back - its pattern is anchored at the head, and
+	 * the `_` prefix hides it. It splits no `snake_case`: an internal `_` is part of a private
+	 * field's own spelling, so that stays `snakeToCamel`'s job. Not `inline` - passed as a
+	 * `NamingRule.normalize` function value.
 	 */
 	private static function underscoreCamel(name: String): Null<String> {
 		var start: Int = 0;
 		while (start < name.length && StringTools.fastCodeAt(name, start) == '_'.code) start++;
 		final core: String = name.substr(start);
-		return core.length == 0 ? null : '_${core.charAt(0).toLowerCase()}${core.substr(1)}';
+		if (core.length == 0) return null;
+		final camel: String = smartSegment(core);
+		return '_${camel.charAt(0).toLowerCase()}${camel.substr(1)}';
 	}
 
 	/**

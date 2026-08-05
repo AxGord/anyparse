@@ -1592,9 +1592,13 @@ class NamingCheckTest extends Test {
 		Assert.equals(0, violations('class C {\n\tpublic function f() {\n\t\tvar xPos = 1;\n\t}\n}').length);
 	}
 
-	/** A digit-only tail lowercases to itself, so there is no correction to report. */
+	/**
+	 * A digit-only tail lowercases to itself, so there is no correction to report. The fixture
+	 * carries a FOUR-character tail so the pattern accepts it and the no-change gate is what
+	 * rejects it.
+	 */
 	public function testDigitTailNameNotFlagged(): Void {
-		Assert.equals(0, violations('class C {\n\tpublic function f() {\n\t\tvar x123 = 1;\n\t}\n}').length);
+		Assert.equals(0, violations('class C {\n\tpublic function f() {\n\t\tvar x1234 = 1;\n\t}\n}').length);
 	}
 
 	/**
@@ -1628,6 +1632,43 @@ class NamingCheckTest extends Test {
 		final src: String =
 			'package pkg;\nclass C {\n\tprivate static function __run():Void {}\n\tpublic function f(run:Int):Void {\n\t\ttrace(run);\n\t\t__run();\n\t}\n}';
 		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+
+	/**
+	 * A member of a Haxe `abstract` cannot be named through `this.` (there `this` is the
+	 * underlying value), so the collision must stay a refusal - the qualified rewrite would not
+	 * compile. Pins the check's own arm through the shared reachability predicate.
+	 */
+	public function testFixRefusesAbstractMemberCapture(): Void {
+		final src: String =
+			'package pkg;\nabstract A(Int) {\n\tprivate function __run():Int return this + 1;\n\tpublic function f(run:Int):Int return __run() + run;\n}';
+		assertFixSkipped([{ file: 'pkg/A.hx', source: src }], 'pkg/A.hx', src);
+	}
+
+	/**
+	 * The private-field normalizer shares the camel word-splitting policy: a leading acronym run
+	 * lowercases all but its last character, so the fix cannot manufacture the very
+	 * lowercase-head-over-caps-tail shape the artifact arm exists to remove.
+	 */
+	public function testFixLowercasesLeadingAcronymPrivateField(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tprivate var URLPath:Int = 0;\n\tpublic function f():Int return URLPath;\n}';
+		assertFixCanonicalWithIndex(src, '_urlPath', '_uRLPath');
+	}
+
+	/** An all-caps private field lowercases whole, not first-letter-only: `HEIGHT` -> `_height`, never `_hEIGHT`. */
+	public function testFixLowercasesAllCapsPrivateField(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tprivate var HEIGHT:Int = 0;\n\tpublic function f():Int return HEIGHT;\n}';
+		assertFixCanonicalWithIndex(src, '_height', '_hEIGHT');
+	}
+
+	/**
+	 * A three-character tail cannot be told apart from a deliberate head-plus-acronym name
+	 * (`sRGB`, `xDPI`, `dBFS`), so the arm must not claim it - lowercasing `sRGB` to `srgb`
+	 * destroys a name someone wrote on purpose.
+	 */
+	public function testHeadPlusAcronymNameNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tpublic function f() {\n\t\tvar sRGB = 1;\n\t}\n}').length);
 	}
 
 }

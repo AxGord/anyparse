@@ -130,8 +130,8 @@ final class Rename {
 		if (mismatch.length == 0) return Ok(rewritten);
 
 		if (qualifyShadowed) {
-			final member: Bool = isMemberBindingAt(source, tree, cursor, shape);
-			final qualified: Null<Qualification> = qualifyCaptured(rewritten, newTree, mismatch, newName, shape, member);
+			final reachable: Bool = selfReachableBindingAt(source, tree, cursor, shape);
+			final qualified: Null<Qualification> = qualifyCaptured(rewritten, newTree, mismatch, newName, shape, reachable);
 			if (qualified != null) return verifyQualified(qualified, occurrences, occurrences, newName, cursor, plugin, shape);
 		}
 
@@ -222,17 +222,36 @@ final class Rename {
 	}
 
 	/**
-	 * Does the binding the cursor resolves to belong to a TYPE (a field / method),
-	 * as opposed to a local, a parameter or a loop variable? Decides whether a lost
-	 * occurrence may be repaired by a `this.` qualification.
+	 * Is the binding the cursor resolves to reachable through `selfReferenceText` - can a captured
+	 * occurrence of it be repaired by writing `this.<name>`? Three conditions, all language facts
+	 * the grammar publishes:
+	 *
+	 *  - it must be a TYPE member (a field / method), not a local, a parameter or a loop variable;
+	 *  - it must be an INSTANCE member - a `static` one is not a field of `this`, and qualifying it
+	 *    yields "Cannot access static field f from a class instance" (verified);
+	 *  - its enclosing type must be one where `this` denotes an instance. In a Haxe `abstract` /
+	 *    `enum abstract` (`RefShape.underlyingThisTypeKinds`) `this` IS the underlying value, so
+	 *    `this.<member>` looks the name up on THAT type and never finds the abstract's own -
+	 *    "Int has no field f" (verified).
+	 *
+	 * The static test is on the BINDING, not on the function containing the capture; that separate
+	 * fact (there is no `this` inside a static function at all) is gated where the capture site is
+	 * known, in `qualifyCaptured`.
 	 */
-	public static function isMemberBindingAt(source: String, tree: QueryNode, cursor: Int, shape: RefShape): Bool {
+	public static function selfReachableBindingAt(source: String, tree: QueryNode, cursor: Int, shape: RefShape): Bool {
 		final node: Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
 		if (node == null) return false;
 		final targetName: Null<String> = node.name;
 		if (targetName == null) return false;
 		final bindingFrom: Null<Int> = RefactorSupport.resolveBindingFrom(node, Refs.find(targetName, tree, shape));
-		return bindingFrom == null ? false : nodeAtFromIsFieldMember(tree, bindingFrom);
+		if (bindingFrom == null) return false;
+		final from: Int = bindingFrom;
+		final decl: Null<QueryNode> = fieldMemberAtFrom(tree, from);
+		if (decl == null) return false;
+		final staticKind: Null<String> = shape.staticModifierKind;
+		if (staticKind != null && modifierPrecedes(tree, decl, staticKind, shape.modifierOrderKinds ?? [])) return false;
+		final underlyingThis: Array<String> = shape.underlyingThisTypeKinds ?? [];
+		return underlyingThis.length == 0 || innermostOfKinds(tree, from, underlyingThis) == null;
 	}
 
 	/**
@@ -326,19 +345,28 @@ final class Rename {
 	}
 
 	/**
-	 * Is the node whose span starts at `from` a class-member declaration
-	 * (a field / method)? Drives whether the occurrence set is augmented
-	 * with `this.<name>` field accesses.
+	 * The class-member declaration (a field / method) whose span starts at `from`, or null when
+	 * the node there is not one. Scans the whole tree rather than stopping at the first node at
+	 * that offset: a member's own span can co-start with an inner node's.
 	 */
-	private static function nodeAtFromIsFieldMember(tree: QueryNode, from: Int): Bool {
-		var found: Bool = false;
+	private static function fieldMemberAtFrom(tree: QueryNode, from: Int): Null<QueryNode> {
+		var found: Null<QueryNode> = null;
 		function walk(node: QueryNode): Void {
 			final span: Null<Span> = node.span;
-			if (span != null && span.from == from && RefactorSupport.isFieldMemberKind(node.kind)) found = true;
+			if (span != null && span.from == from && RefactorSupport.isFieldMemberKind(node.kind)) found = node;
 			for (c in node.children) walk(c);
 		}
 		walk(tree);
 		return found;
+	}
+
+	/**
+	 * Is the node whose span starts at `from` a class-member declaration
+	 * (a field / method)? Drives whether the occurrence set is augmented
+	 * with `this.<name>` field accesses.
+	 */
+	private static inline function nodeAtFromIsFieldMember(tree: QueryNode, from: Int): Bool {
+		return fieldMemberAtFrom(tree, from) != null;
 	}
 
 	/**
@@ -418,25 +446,27 @@ final class Rename {
 	/**
 	 * The source with `this.` (the grammar's `selfReferenceText`) inserted before
 	 * every re-bound occurrence, or null when qualification does not apply and the
-	 * rename must be refused instead. It applies ONLY to the param idiom - a
-	 * capture by a PARAMETER of the enclosing function, in a non-static function -
-	 * because there the param and the member are the same concept and `this.x = x`
-	 * is the idiomatic form. A capture by a local or a loop variable is a naming
-	 * mistake, not an idiom: qualifying it would emit correct but confusing code
-	 * (`return this.t + t`), so it stays a refusal. A lost occurrence can only be
-	 * qualified when the renamed binding is a member (`fieldBinding`).
+	 * rename must be refused instead. Two independent reachability facts must hold.
+	 *
+	 * The BINDING side is `selfReachable` (see `selfReachableBindingAt`): only an instance
+	 * member of a type whose `this` is an instance can be named `this.<name>` at all.
+	 *
+	 * The CAPTURE-SITE side is checked here, where the site is known: the capture must be by a
+	 * PARAMETER of the enclosing function - there the param and the member are the same concept
+	 * and `this.x = x` is the idiomatic form, whereas a capture by a local or a loop variable is
+	 * a naming mistake and qualifying it would emit correct but confusing code (`return this.t + t`)
+	 * - and that function must not be `static`, since a static body has no `this`.
 	 */
 	private static function qualifyCaptured(
-		rewritten: String, newTree: QueryNode, mismatch: Array<Capture>, newName: String, shape: RefShape, fieldBinding: Bool
+		rewritten: String, newTree: QueryNode, mismatch: Array<Capture>, newName: String, shape: RefShape, selfReachable: Bool
 	): Null<Qualification> {
 		final self: Null<String> = shape.selfReferenceText;
 		final paramKinds: Array<String> = shape.paramKinds ?? [];
 		final fnKinds: Array<String> = shape.functionKinds ?? [];
 		final staticKind: Null<String> = shape.staticModifierKind;
-		if (self == null || paramKinds.length == 0 || fnKinds.length == 0) return null;
+		if (self == null || paramKinds.length == 0 || fnKinds.length == 0 || !selfReachable) return null;
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (capture in mismatch) {
-			if (!capture.extra && !fieldBinding) return null;
 			final fn: Null<QueryNode> = innermostOfKinds(newTree, capture.offset, fnKinds);
 			if (fn == null || !declaresParam(fn, newName, paramKinds)) return null;
 			final modifierKinds: Array<String> = shape.modifierOrderKinds ?? [];

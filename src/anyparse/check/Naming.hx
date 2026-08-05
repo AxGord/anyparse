@@ -52,8 +52,10 @@ import anyparse.query.TypeInfoProvider;
 @:nullSafety(Strict)
 final class Naming implements Check implements CrossFileFix {
 
-	/** A lowercase head over an all-uppercase / digit tail of three or more characters - see `normalizerArtifactName`. */
-	private static final ARTIFACT_NAME_PATTERN: EReg = new EReg("^[a-z][A-Z0-9]{3,}$", '');
+	/**
+	 * A lowercase head over an all-uppercase / digit tail of four or more characters - see `normalizerArtifactName`.
+	 */
+	private static final ARTIFACT_NAME_PATTERN: EReg = new EReg("^[a-z][A-Z0-9]{4,}$", '');
 
 	public function new() {}
 
@@ -204,12 +206,17 @@ final class Naming implements Check implements CrossFileFix {
 	}
 
 	/**
-	 * The lowercased spelling of `name` when it is a normalizer ARTIFACT - a lowercase head over
-	 * an all-uppercase / digit tail of at least three characters (`hEIGHT`, `wIDTH`, `hTML`), the
-	 * shape the former first-letter-lowercasing normalizer produced out of a screaming constant.
-	 * Null when `name` is not one, or when lowercasing changes nothing (a digit-only tail such as
-	 * `x123`). The three-character floor is what keeps a deliberate `iOS` / `dB` / `xY` out while
-	 * still catching every real artifact.
+	 * The lowercased spelling of `name` when it is a normalizer ARTIFACT - a lowercase head over an
+	 * all-uppercase / digit tail of at least FOUR characters (`hEIGHT`, `wIDTH`), the shape the
+	 * former first-letter-lowercasing normalizer produced out of a screaming constant. Null when
+	 * `name` is not one, or when lowercasing changes nothing (a digit-only tail such as `x1234`).
+	 *
+	 * The four-character floor is a deliberate TRADE-OFF, not a complete test. A head plus a
+	 * three-letter acronym is a name people write on purpose (`sRGB`, `xDPI`, `dBFS`, `mRNA`) and is
+	 * spelled identically to an artifact of a three-letter constant (`HTML` -> `hTML`), so the two
+	 * cannot be told apart here. The floor buys silence on the deliberate names at the cost of
+	 * letting three-letter-acronym artifacts through; lowercasing an `sRGB` someone chose is the
+	 * worse error, since the check's own autofix would destroy it.
 	 */
 	private static function normalizerArtifactName(name: String): Null<String> {
 		if (!ARTIFACT_NAME_PATTERN.match(name)) return null;
@@ -362,9 +369,12 @@ final class Naming implements Check implements CrossFileFix {
 	}
 
 	/**
-	 * Can a collision on `decl` be repaired by naming the member through `this.`? Only a NON-STATIC
-	 * field or method can: a static member is unreachable through `this.`, and a Constant is static
-	 * by construction, so both stay refused.
+	 * A cheap PRE-gate on `decl`: is it even the KIND of declaration a `this.` qualification could
+	 * reach - a field or method that is not `static` (a Constant is static by construction)? Placed
+	 * ahead of the occurrence resolution so the ordinary refusal path costs nothing extra. It is NOT
+	 * the proof: whether the binding is truly reachable through `selfReferenceText` - which also
+	 * depends on the enclosing type, since an `abstract`'s `this` is the underlying value - is
+	 * decided by `Rename.selfReachableBindingAt` inside `qualifyCapturedEdits`.
 	 */
 	private static inline function qualifiableMember(decl: NamedDecl): Bool {
 		return (decl.category == NamingCategory.Field || decl.category == NamingCategory.Method) && !decl.mods.contains('static');
@@ -404,8 +414,8 @@ final class Naming implements Check implements CrossFileFix {
 		final tr: QueryNode = newTree;
 		final mismatch: Array<Capture> = Rename.captureMismatch(rewritten, tr, renameSpans, resolved, newName, declFrom, shape);
 		if (mismatch.length == 0) return null;
-		final member: Bool = Rename.isMemberBindingAt(source, tree, declFrom, shape);
-		final qualification: Null<Qualification> = Rename.qualifyCaptured(rewritten, tr, mismatch, newName, shape, member);
+		final reachable: Bool = Rename.selfReachableBindingAt(source, tree, declFrom, shape);
+		final qualification: Null<Qualification> = Rename.qualifyCaptured(rewritten, tr, mismatch, newName, shape, reachable);
 		if (qualification == null) return null;
 		final q: Qualification = qualification;
 		switch Rename.verifyQualified(q, renameSpans, resolved, newName, declFrom, plugin, shape) {

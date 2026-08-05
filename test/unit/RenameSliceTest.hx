@@ -343,4 +343,39 @@ class RenameSliceTest extends Test {
 		return Rename.rename(source, line, col, newName, plugin, plugin.refShape(), true);
 	}
 
+
+	/**
+	 * In a Haxe `abstract`, `this` IS the underlying value, so `this.<member>` looks the name up
+	 * on THAT type and never reaches the abstract's own members. The qualification repair must
+	 * refuse there even though the shape is otherwise the param idiom - the emitted
+	 * `this.run()` fails to compile with `Int has no field run` (verified).
+	 */
+	public function testQualifyShadowedRefusesInAbstract(): Void {
+		final source: String =
+			'abstract A(Int) {\n\tfunction m_run():Int return this + 1;\n\tpublic function f(run:Int):Int return m_run() + run;\n}';
+		switch renameQualified(source, 2, 11, 'run') {
+			case Ok(text):
+				Assert.fail('expected Err, got Ok:\n$text');
+			case Err(message):
+				Assert.isTrue(message.indexOf('capture') >= 0, 'message lacks "capture": $message');
+		}
+	}
+
+	/**
+	 * A STATIC binding is not a field of `this`, whatever the capture site is. The static gate
+	 * asked only whether the function CONTAINING the capture is static, so a static member
+	 * captured by a param of a NON-static method was qualified to `this.run()` - which fails to
+	 * compile with `Cannot access static field run from a class instance` (verified).
+	 */
+	public function testQualifyShadowedRefusesStaticBindingInInstanceFunction(): Void {
+		final source: String =
+			'class C {\n\tstatic function m_run():Int return 1;\n\tpublic function f(run:Int):Int {\n\t\treturn m_run() + run;\n\t}\n}';
+		switch renameQualified(source, 2, 18, 'run') {
+			case Ok(text):
+				Assert.fail('expected Err, got Ok:\n$text');
+			case Err(message):
+				Assert.isTrue(message.indexOf('capture') >= 0, 'message lacks "capture": $message');
+		}
+	}
+
 }
