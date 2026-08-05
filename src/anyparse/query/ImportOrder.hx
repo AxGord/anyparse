@@ -5,9 +5,13 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /**
- * One existing import statement as the ordering machinery reads it: the module path it names and
- * the byte offsets it STARTS and ENDS at. Both are negative when the grammar recorded no span —
- * such a statement cannot be placed on a line, so it ENDS the run it sits in (see `runsOf`).
+ * One existing import-family statement as the ordering machinery reads it: the module path it
+ * names and the byte offsets it STARTS and ENDS at. Both are negative when the grammar recorded no
+ * span — such a statement cannot be placed on a line, so it ENDS the run it sits in (see `runsOf`).
+ *
+ * A plain `import` is the ordinary case, and `slotsOf` reads only those. `usingLinesOf` reads a
+ * `using` through the same shape for its POSITION alone: a `using` slot never joins a run and
+ * never reaches the ordering surface.
  */
 typedef ImportSlot = {
 	final path: String;
@@ -276,20 +280,51 @@ final class ImportOrder {
 	 * negative offsets: it cannot be placed on a line, so it ENDS the run it sits in rather than
 	 * joining it — the run around a line the machinery cannot see must not be read as one block.
 	 */
-	public static function slotsOf(root: QueryNode): Array<ImportSlot> {
+	public static inline function slotsOf(root: QueryNode): Array<ImportSlot> {
+		return slotsOfKind(root, 'ImportDecl');
+	}
+
+	/**
+	 * Every top-level `using` statement of `root` as a movable whole LINE, in source order, or null
+	 * when ANY of them is not liftable as a line (`lineOf` — its line carries other code, a block
+	 * comment follows it, the file ends without a newline, the grammar recorded no span). Null is
+	 * "this file's `using` group cannot be moved intact", the answer the `import-order` wedge merge
+	 * needs before it relocates the group below the imports; a file with no top-level `using` is an
+	 * EMPTY array, not null.
+	 *
+	 * A guarded `using` lives inside its `Conditional` and is not a top-level child, so it is never
+	 * seen here — which is right for the merge: the guarded region ENDS the import runs around it,
+	 * so no wedge ever spans one.
+	 *
+	 * The lines returned describe POSITION, never order. They must not reach `compare` / `orderOf`
+	 * / `slotIn` and the rest of the ordering surface: Haxe ranks static extensions in REVERSE
+	 * declaration order, so sorting a `using` group is a semantic rewrite, not a relayout.
+	 */
+	public static function usingLinesOf(source: String, root: QueryNode): Null<Array<ImportLine>> {
+		final out: Array<ImportLine> = [];
+		for (slot in slotsOfKind(root, 'UsingDecl')) {
+			final line: Null<ImportLine> = lineOf(source, slot);
+			if (line == null) return null;
+			out.push(line);
+		}
+		return out;
+	}
+
+	/** The paths of `run`, in run order — the list every order question is asked about. */
+	public static inline function pathsOf(run: Array<ImportLine>): Array<String> {
+		return [for (line in run) line.path];
+	}
+
+	/** Every top-level statement of `root` whose node `kind` matches, as a slot, in source order. */
+	private static function slotsOfKind(root: QueryNode, kind: String): Array<ImportSlot> {
 		return [
-			for (c in root.children) if (c.kind == 'ImportDecl' && c.name != null) {
+			for (c in root.children) if (c.kind == kind && c.name != null) {
 				// Re-bind: narrowing does not propagate into an anonymous-structure literal.
 				final path: String = c.name ?? '';
 				final span: Null<Span> = c.span;
 				{ path: path, from: span == null ? -1 : span.from, to: span == null ? -1 : span.to };
 			}
 		];
-	}
-
-	/** The paths of `run`, in run order — the list every order question is asked about. */
-	public static inline function pathsOf(run: Array<ImportLine>): Array<String> {
-		return [for (line in run) line.path];
 	}
 
 	/**
@@ -353,11 +388,10 @@ final class ImportOrder {
 	 * (a chunk without one would glue the next import onto its line the moment it stops being
 	 * last).
 	 *
-	 * Public because a slot is not always a plain import: `import-order`'s wedge merge reads the
-	 * `using` statements between two runs through this same separability contract, so a `using` the
-	 * line machinery cannot lift is one the merge refuses rather than one it moves wrongly.
+	 * Purely POSITIONAL, so it serves a `using` slot as faithfully as an import one (`usingLinesOf`):
+	 * every deviant shape falls to the refusal side, never to a false lift.
 	 */
-	public static function lineOf(source: String, slot: ImportSlot): Null<ImportLine> {
+	private static function lineOf(source: String, slot: ImportSlot): Null<ImportLine> {
 		if (slot.from < 0 || slot.to < 0) return null;
 		final lineStart: Int = RefactorSupport.startOfLine(source, slot.from);
 		if (StringTools.trim(source.substring(lineStart, slot.from)) != '') return null;
