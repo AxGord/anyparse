@@ -1,8 +1,6 @@
 package unit;
 
 import anyparse.check.Check;
-import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
@@ -84,6 +82,123 @@ class OrphanAccessorCheckTest extends Test {
 		final iface: String = 'interface IData {\n\tpublic var data(get, never):Int;\n}';
 		final impl: String = 'class C implements IData {\n\tpublic function get_data():Int return 1;\n}';
 		Assert.equals(0, violationsOf([{ file: 'IData.hx', source: iface }, { file: 'C.hx', source: impl }]).length);
+	}
+
+	public function testSubtypeDeclaredPropertyNotFlagged(): Void {
+		// Haxe resolves an accessor UPWARD from the property, so `Sub.v(get, never)` is served by
+		// `Base.get_v` — the base method is legit even though nothing at or above Base declares v.
+		final base: String = 'class Base {\n\tfunction get_v():Int return 42;\n}';
+		final sub: String = 'class Sub extends Base {\n\tpublic var v(get, never):Int;\n}';
+		Assert.equals(0, violationsOf([{ file: 'Base.hx', source: base }, { file: 'Sub.hx', source: sub }]).length);
+	}
+
+	public function testBuildMacroClassNotFlagged(): Void {
+		// A build macro can declare the very property the accessor serves; its members never
+		// reach the index, so the whole class is skipped rather than mis-flagged.
+		Assert.equals(0, violations('@:build(M.f()) class C {\n\tfunction get_data():Int return 1;\n}').length);
+		Assert.equals(0, violations('@:autoBuild(M.f()) class C {\n\tfunction get_data():Int return 1;\n}').length);
+	}
+
+	public function testKeepClassFlaggedButNotFixed(): Void {
+		// `@:keep` members are reached by machinery no scan models — reported, never deleted.
+		final src: String = '@:keep class C {\n\tpublic var data(default, set):Int = 0;\n\tfunction get_data():Int return data;\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	public function testFinalClassMetadataIsStillSeen(): Void {
+		// A `final class` projects as a FinalDecl WRAPPER, so the metadata run sits before the
+		// wrapper — reading the body's own sibling list would clear the gate on every such class.
+		Assert.equals(0, violations('@:build(M.f()) final class C {\n\tfunction get_data():Int return 1;\n}').length);
+	}
+
+	public function testReflectionStringBlocksFix(): Void {
+		// A `Reflect.field(c, 'get_data')` breakage is SILENT at runtime, not a compile error.
+		final owner: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tpublic function get_data():Int return data;\n}';
+		final user: String = 'class U {\n\tfunction f(c:C):Dynamic return Reflect.field(c, \'get_data\');\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: owner }, { file: 'U.hx', source: user }];
+		final check: Null<Check> = Linter.byId('orphan-accessor');
+		Assert.notNull(check);
+		if (check == null) return;
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final vs: Array<Violation> = check.run(files, plugin);
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(owner, vs, plugin).length);
+	}
+
+	public function testInterpolatedReferenceBlocksFix(): Void {
+		// A simple `$name` inside an interpolated string projects as its OWN kind, not identKind.
+		final src: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tfunction get_data():Int return data;\n'
+			+ '\tfunction tag():String return \'$$get_data\';\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	public function testSpeculativeWalkDoesNotMaskALaterResolvedDeclaration(): Void {
+		// `Common` resolves only speculatively (parent package, no import) and withholds its
+		// `declared` evidence; `IPar` resolves normally and declares `v` with no set slot. The
+		// arm-1 proof must survive regardless of which clause the walk reaches first.
+		final common: String = 'package a;\ninterface Common {\n\tpublic var v(get, never):Int;\n}';
+		final par: String = 'package a.b;\ninterface IPar {\n\tpublic var v(default, null):Int;\n}';
+		final first: String = 'package a.b;\nclass Sub implements Common implements IPar {\n\tfunction set_v(x:Int):Int return x;\n}';
+		final second: String = 'package a.b;\nclass Sub implements IPar implements Common {\n\tfunction set_v(x:Int):Int return x;\n}';
+		for (sub in [first, second]) {
+			final vs: Array<Violation> = violationsOf([
+				{ file: 'a/Common.hx', source: common },
+				{ file: 'a/b/IPar.hx', source: par },
+				{ file: 'a/b/Sub.hx', source: sub }
+			]);
+			Assert.equals(1, vs.length);
+			if (vs.length != 1) continue;
+			Assert.equals('set_v has no property to serve: v declares no set accessor', vs[0].message);
+		}
+	}
+
+	public function testFinalMethodAccessorFlagged(): Void {
+		// `FinalModifiedMember` is the other half of METHOD_KINDS — flagged and deleted like a plain one.
+		final src: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tfinal function get_data():Int return data;\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals('class C {\n\tpublic var data(default, set):Int = 0;\n}', applyFix(src));
+	}
+
+	public function testAbstractClassAccessorFlagged(): Void {
+		final src: String = 'abstract class C {\n\tpublic var data(default, set):Int = 0;\n\tfunction get_data():Int return data;\n}';
+		Assert.equals(1, violations(src).length);
+	}
+
+	public function testSkipParseInScopeBlocksFix(): Void {
+		// An unparseable report file could hold a call the scans cannot see.
+		final owner: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tpublic function get_data():Int return data;\n}';
+		final broken: String = 'class Bad { function f() {';
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: owner }, { file: 'Bad.hx', source: broken }];
+		final check: Null<Check> = Linter.byId('orphan-accessor');
+		Assert.notNull(check);
+		if (check == null) return;
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final vs: Array<Violation> = check.run(files, plugin);
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(owner, vs, plugin).length);
+	}
+
+	public function testFixWithoutRunEditsNothing(): Void {
+		// The deletability memo is populated by `run`; a bare `fix` is fail-closed.
+		final src: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tfunction get_data():Int return data;\n}';
+		final check: Null<Check> = Linter.byId('orphan-accessor');
+		Assert.notNull(check);
+		if (check == null) return;
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final probe: Null<Check> = Linter.byId('orphan-accessor');
+		if (probe == null) return;
+		final vs: Array<Violation> = probe.run([{ file: 'C.hx', source: src }], plugin);
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, plugin).length);
+	}
+
+	public function testDynamicWriteSlotCountsAsDeclared(): Void {
+		Assert.equals(
+			0,
+			violations('class C {\n\tpublic var data(default, dynamic):Int;\n\tdynamic function set_data(v:Int):Int return v;\n}').length
+		);
 	}
 
 	public function testParentPackageSupertypeSlotSilencesTheFinding(): Void {

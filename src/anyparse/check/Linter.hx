@@ -167,6 +167,10 @@ final class Linter {
 			new ExplicitLocalType(),
 			new PreferTypedThrow(),
 			new RedundantBypassAccessor(),
+			// Deletes `get_x` / `set_x` methods, as `trivial-getter` does — but the two can never
+			// claim the same method: that check requires the property's read accessor to BE `get`
+			// (the slot names the method), this one requires no slot to name it at all. Registry
+			// order is therefore free; the comment records why nobody needs to re-derive it.
 			new OrphanAccessor(),
 			new FieldInitAtDeclaration(),
 			new PreferInline(),
