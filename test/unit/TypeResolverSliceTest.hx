@@ -85,6 +85,44 @@ class TypeResolverSliceTest extends Test {
 		Assert.equals(0, fixEdits(src).length, 'a custom-method read accessor may run code — kept');
 	}
 
+	/**
+	 * Two TRANSPARENT single-child wrapper shapes reuse the underlying operand's
+	 * purity: the unchecked cast `cast expr` and a parenthesized expression. Both
+	 * are exercised alone, nested together, and with an impure operand (kept) —
+	 * plus the runtime-CHECKED `cast(expr, T)`, which stays refused because it can
+	 * THROW on a type mismatch (a negative fixture pinning that invariant).
+	 */
+	public function testUncheckedCastOfPlainFieldDeleted(): Void {
+		final src: String = 'class T { public var f:Int; } class C { static function m(t:T):Int { final dead = cast t.f; return 1; } }';
+		Assert.equals(1, fixEdits(src).length, 'an unchecked cast of a plain field read is transparent — deletable');
+	}
+
+	public function testParenWrappedFieldDeleted(): Void {
+		final src: String = 'class T { public var f:Int; } class C { static function m(t:T):Int { final dead = (t.f); return 1; } }';
+		Assert.equals(1, fixEdits(src).length, 'a parenthesized plain field read is transparent — deletable');
+	}
+
+	public function testNestedCastParenDeleted(): Void {
+		final src: String = 'class T { public var f:Int; } class C { static function m(t:T):Int { final dead = cast (t.f); return 1; } }';
+		Assert.equals(1, fixEdits(src).length, 'a cast wrapping a parenthesized plain field read is deletable through both wrappers');
+	}
+
+	public function testUncheckedCastOfImpureCallKept(): Void {
+		final src: String = 'class C { static function m(o:T):Int { final dead = cast o.foo(); return 1; } }';
+		Assert.equals(0, fixEdits(src).length, 'an unchecked cast of an unresolved instance call stays impure through the wrapper — kept');
+	}
+
+	public function testParenWrappedImpureCallKept(): Void {
+		final src: String = 'class C { static function m(o:T):Int { final dead = (o.foo()); return 1; } }';
+		Assert.equals(0, fixEdits(src).length, 'a parenthesized unresolved instance call stays impure through the wrapper — kept');
+	}
+
+	public function testTypedCastKept(): Void {
+		final src: String =
+			'class T { public var f:Int; } class C { static function m(t:T):Int { final dead = cast(t.f, Int); return 1; } }';
+		Assert.equals(0, fixEdits(src).length, 'the runtime-CHECKED cast can throw on a mismatch — not a transparent wrapper, kept');
+	}
+
 	public function testNonNullValueType(): Void {
 		Assert.isTrue(
 			nonNull('class C { static function m(x:Int):Void { if (x != null) {} } }'),

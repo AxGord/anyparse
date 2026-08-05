@@ -1222,6 +1222,15 @@ typedef RefShape = {
 	@:optional var checkedCastKind: String;
 
 	/**
+	 * The single-argument UNCHECKED cast node kind (Haxe `cast expr`, no target type —
+	 * `CastExpr`), distinct from `checkedCastKind`'s runtime-checked `cast(expr, T)`. It never
+	 * throws and is a transparent single-child wrapper, so `TypeResolver.isDeletionPure` treats
+	 * one as pure exactly when its operand is. Optional; unset means the wrapper arm never
+	 * fires and an unchecked cast falls through to the conservative default.
+	 */
+	@:optional var uncheckedCastKind: String;
+
+	/**
 	 * Identifier names that project as a plain identifier expression but denote a
 	 * loop jump (Haxe `break` / `continue` surface as `IdentExpr` nodes named so,
 	 * not as dedicated kinds) — the `dead-store` check treats one as jumping to an
