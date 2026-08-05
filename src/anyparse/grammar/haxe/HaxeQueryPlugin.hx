@@ -696,7 +696,14 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'Context.resolvePath' => 'String',
 				'Context.currentPos' => 'haxe.macro.Expr.Position',
 				'Date.now' => 'Date',
-				'File.append' => 'sys.io.FileOutput'
+				'File.append' => 'sys.io.FileOutput',
+				// Reflection statics whose return is a plain `Array<String>` on every target — the
+				// shapes real code iterates (`for (key in Reflect.fields(o))`), where the binder
+				// carries no annotation and the element type is only readable from this return.
+				'Reflect.fields' => 'Array<String>',
+				'Type.getInstanceFields' => 'Array<String>',
+				'Type.getClassFields' => 'Array<String>',
+				'Type.getEnumConstructs' => 'Array<String>'
 			],
 			nullableIndexTypeNames: ['Map', 'StringMap', 'IntMap', 'ObjectMap', 'EnumValueMap', 'WeakMap'],
 			mapAbstractTypeNames: ['Map'],

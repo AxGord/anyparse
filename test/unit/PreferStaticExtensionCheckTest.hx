@@ -41,6 +41,13 @@ class PreferStaticExtensionCheckTest extends Test {
 	/** A config declaring no rule options at all — the `types` / `addUsing` defaults then apply. */
 	private static inline final EMPTY_CONFIG: String = '{"rules": {}}';
 
+	/** A `String`-receiver static utility, for the tabled-static-call iterable fixtures. */
+	private static inline final STREXT_SOURCE: String =
+		'class StrExt {\n\tpublic static function deco(s: String, n: Int): String return s;\n}\n';
+
+	/** The `StrExt`-only config, paired with `strExtFiles`. */
+	private static inline final STREXT_CONFIG: String = '{"rules": {"prefer-static-extension": {"types": ["StrExt"]}}}';
+
 	public function testFixableRewriteWithUsingPresent(): Void {
 		final vs: Array<Violation> = violationsOf(fileSet(user('using Ext;\n\n', 'Ext.deco(w, 1);')));
 		Assert.equals(1, vs.length);
@@ -368,6 +375,39 @@ class PreferStaticExtensionCheckTest extends Test {
 		Assert.isTrue(out.indexOf('m.self().make().deco(1);') != -1, out);
 	}
 
+	public function testForBinderOverTabledStaticCallResolvesReceiver(): Void {
+		// The TM shape: `for (key in Reflect.fields(o)) StringTools.urlEncode(key)`. The iterable is
+		// a TABLED stdlib static (`Reflect.fields` -> `Array<String>`), so the binder's element type
+		// is `String` and the receiver resolves — the finding drops the unresolved-receiver hedge
+		// and becomes fixable.
+		final files: Array<{ file: String, source: String }> = strExtFiles('for (key in Reflect.fields(o)) StrExt.deco(key, 1);');
+		final vs: Array<Violation> = violationsOf(files, STREXT_CONFIG);
+		Assert.equals(1, vs.length);
+		Assert.equals(-1, vs[0].message.indexOf('receiver type unresolved'), vs[0].message);
+		Assert.isTrue(vs[0].message.indexOf('key.deco(1)') != -1, vs[0].message);
+		Assert.isTrue(editsOf(files, STREXT_CONFIG).length > 0);
+	}
+
+	public function testForBinderOverTabledStaticCallOfShadowedTypeStaysUnresolved(): Void {
+		// An indexed PROJECT type named `Reflect` shadows the stdlib one, so its `fields` may return
+		// anything — the table is refused and the binder stays untyped (report-only, hedged).
+		final files: Array<{ file: String, source: String }> = strExtFiles('for (key in Reflect.fields(o)) StrExt.deco(key, 1);').concat([
+			{ file: 'Reflect.hx', source: 'class Reflect {\n\tpublic static function fields(o: Dynamic): Array<Widget> return null;\n}\n' }
+		]);
+		final vs: Array<Violation> = violationsOf(files, STREXT_CONFIG);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('receiver type unresolved') != -1, vs[0].message);
+	}
+
+	public function testUntabledStaticCallIterableStaysUnresolved(): Void {
+		// `Reflect.copy` is deliberately absent from the static-return table — no element type, so
+		// the binder is unresolved and the site keeps its hedge.
+		final files: Array<{ file: String, source: String }> = strExtFiles('for (key in Reflect.copy(o)) StrExt.deco(key, 1);');
+		final vs: Array<Violation> = violationsOf(files, STREXT_CONFIG);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('receiver type unresolved') != -1, vs[0].message);
+	}
+
 	public function testStaticCallReceiverReportedOnly(): Void {
 		// A single UNBOUND identifier is not guessed to be a type name, so `Mk.make()` resolves to
 		// nothing and the site stays report-only — the conservative miss, pinned deliberately.
@@ -411,6 +451,20 @@ class PreferStaticExtensionCheckTest extends Test {
 	/** A `C.hx` source with `head` before the class and `body` as the sole statement of `f(w: Widget)`. */
 	private function user(head: String, body: String): String {
 		return '${head}class C {\n\tfunction f(w:Widget):Void {\n\t\t$body\n\t}\n}\n';
+	}
+
+	/**
+	 * A `C.hx` whose `f(o:Dynamic)` body is `body`, plus the `StrExt` utility and a memberless
+	 * `String` fixture — the latter is what lets the closure gate PROVE `String` declares no
+	 * `deco`, so a resolved receiver reaches the fixable verdict.
+	 */
+	private function strExtFiles(body: String): Array<{ file: String, source: String }> {
+		return [
+			{ file: 'C.hx', source: 'using StrExt;\n\nclass C {\n\tfunction f(o:Dynamic):Void {\n\t\t$body\n\t}\n}\n' },
+			{ file: 'StrExt.hx', source: STREXT_SOURCE },
+			{ file: 'String.hx', source: 'class String {}\n' },
+			{ file: 'Widget.hx', source: WIDGET_SOURCE }
+		];
 	}
 
 	/** The `Maker` fixture the CALL-receiver gates resolve through: `make` returns a `Widget`, `self` chains. */

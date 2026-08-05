@@ -76,6 +76,14 @@ import anyparse.check.LintConfig;
  *    resolution; the arguments are irrelevant, the return being fixed. This is the ONLY
  *    structural route inside a macro function, where the display oracle is blind. A method
  *    absent from the table (a generic / inference-dependent return) stays report-only.
+ *  - an INDEX ACCESS `= container[key]` whose container is a bare identifier with a written
+ *    container type → the type ARGUMENT the grammar's `indexedElementTypeParams` names
+ *    (`Map<K, V>` → `V`, `Array<T>` → `T`), wrapped `Null<…>` for a `nullableIndexTypeNames`
+ *    container as Haxe types a map read. Pure generic substitution on the written source, so it
+ *    works inside a macro function where the display oracle is blind; the container is resolved
+ *    only to a local / parameter / own-file field, which is what makes copying its argument text
+ *    import-safe. An unresolved container, one with no written arguments, or a nominal outside
+ *    the table stays report-only.
  *  - a plain identifier read `= ident` whose binding (a local, a parameter or an
  *    own-class field) carries a WRITTEN type → that type VERBATIM, copied unchanged
  *    (a `Null<…>` field read stays `Null<…>` — a transcription of an existing
@@ -133,6 +141,8 @@ import anyparse.check.LintConfig;
  * `TypeInfoProvider`) for the method-call shape; `identKind` + `optionalParamKind` +
  * the `TypeInfoProvider` also drive the identifier-read shape; `fieldAccessKind` +
  * `identKind` + the cross-file `SymbolIndex` drive the static-field-read shape. `staticMethodReturns` + `callKind` + `fieldAccessKind` + `identKind` (+ the cross-file `SymbolIndex`) drive the static-method-call shape.
+ * `indexAccessKind` + `indexedElementTypeParams` + `nullableIndexTypeNames` (+ the
+ * `TypeInfoProvider`) drive the index-access shape.
  * `parenKind` peels the initializer's parentheses BEFORE any of them runs, so a
  * wrapped `(-1)` infers exactly as a bare `-1` does — `LiteralInfer` peels for its own
  * shared arms too, which is what keeps a field, a parameter and a local in agreement.
@@ -242,6 +252,10 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		// so `Null<String>` survives — `declaredTypes` would collapse it to the outer `Null`),
 		// resolved lazily and cached like the cast targets above.
 		final declaredTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, source);
+		// The anonymous-structure length cap is the SAME knob the oracle tail applies: a shape this
+		// rule refuses to spell when a compiler names it must not be spelled when the structural
+		// tier names it either, or the rule's output would depend on whether an oracle is configured.
+		final anonCap: Int = maxAnonLen(violations);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
@@ -249,7 +263,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			final node: Null<QueryNode> = byKey['${span.from}:${span.to}'];
 			if (node == null || node.children.length == 0) continue;
 			final init: QueryNode = node.children[0];
-			final typeSource: Null<String> = inferLocalType(init, source, shape, tree, castTargets, declaredTypeSources, index);
+			final typeSource: Null<String> = inferLocalType(init, source, shape, tree, castTargets, declaredTypeSources, index, anonCap);
 			if (typeSource == null) continue;
 			final at: Int = LiteralInfer.insertPoint(node, init, source);
 			if (at >= 0) edits.push({ span: new Span(at, at), text: ':$typeSource' });
@@ -305,15 +319,60 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 */
 	private static function inferLocalType(
 		rawInit: QueryNode, source: String, shape: RefShape, tree: QueryNode, castTargets: () -> Map<Int, String>,
-		declaredTypeSources: () -> Map<Int, String>, index: Null<SymbolIndex>
+		declaredTypeSources: () -> Map<Int, String>, index: Null<SymbolIndex>, maxAnonLen: Int
 	): Null<String> {
 		final init: QueryNode = RefactorSupport.unwrapParens(rawInit, shape.parenKind);
 		return
 			LiteralInfer.inferType(init, source, shape, castTargets) ?? bareNewType(init, source, shape, index) ?? arrayType(init, shape) ?? methodReturnType(
 				init, shape, tree, declaredTypeSources
-			) ?? staticMethodReturnType(init, shape, tree, index) ?? staticFieldType(init, shape, tree, index) ?? TypeResolver.identDeclaredTypeSource(
-				init, shape, tree, declaredTypeSources, true
-			);
+			) ?? staticMethodReturnType(init, shape, tree, index) ?? staticFieldType(init, shape, tree, index) ?? indexAccessType(
+				init, shape, tree, declaredTypeSources, maxAnonLen
+			) ?? TypeResolver.identDeclaredTypeSource(init, shape, tree, declaredTypeSources, true);
+	}
+
+	/**
+	 * The ELEMENT type an index access `container[key]` yields, when `container` is a bare
+	 * identifier whose WRITTEN type names a `RefShape.indexedElementTypeParams` container: the type
+	 * ARGUMENT at the listed position (`Map<K, V>` → `V`, `Array<T>` → `T`), wrapped `Null<…>` for a
+	 * `RefShape.nullableIndexTypeNames` container, which is exactly how Haxe types a map read. Pure
+	 * generic substitution over the written source — no oracle, so it is one of the few arms that
+	 * answers inside a macro function.
+	 *
+	 * The container is resolved with `TypeResolver.identDeclaredTypeSource`, which reaches only a
+	 * LOCAL, a PARAMETER or an OWN-FILE field. That restriction is what makes the copy sound with no
+	 * import analysis: the argument text is spelled in THIS file, so whatever names it uses are
+	 * already in scope here. A cross-file member would have to clear the same import test
+	 * `staticFieldType` runs, and is left report-only instead.
+	 *
+	 * `skipNullableOptionalParam` is TRUE: a rest parameter's body type is `haxe.Rest<T>` while its
+	 * written source is the bare `T`, so `xs[0]` on a `...xs:Array<Int>` is an `Array<Int>` and the
+	 * verbatim source would wrongly yield `Int`. One `Null<…>` layer is peeled off the container
+	 * first (`Null<Map<K, V>>` indexes exactly as `Map<K, V>` does). A container with no arguments,
+	 * an unresolved one, or a nominal absent from the table (a user abstract with its own
+	 * `@:arrayAccess`) yields null — as does an ANONYMOUS-STRUCTURE element longer than
+	 * `maxAnonLen`, the same `maxInferredTypeLength` cap `normalizeWith` applies to the oracle's
+	 * answer: a container of anon structs spells its element in full, and a shape this rule declines
+	 * to write when the compiler names it must not appear merely because the structural tier
+	 * reached it first.
+	 */
+	private static function indexAccessType(
+		init: QueryNode, shape: RefShape, tree: QueryNode, declaredTypeSources: () -> Map<Int, String>, maxAnonLen: Int
+	): Null<String> {
+		final indexKind: Null<String> = shape.indexAccessKind;
+		final elementParams: Null<Map<String, Int>> = shape.indexedElementTypeParams;
+		if (indexKind == null || elementParams == null || init.kind != indexKind || init.children.length == 0) return null;
+		final containerSource: Null<String> =
+			TypeResolver.identDeclaredTypeSource(init.children[0], shape, tree, declaredTypeSources, true);
+		if (containerSource == null) return null;
+		final container: String = unwrapNullable(containerSource, shape);
+		final nominal: Null<String> = RefactorSupport.outerNominalOf(container);
+		final args: Null<Array<String>> = RefactorSupport.typeArgumentSourcesOf(container);
+		if (nominal == null || args == null) return null;
+		final at: Null<Int> = elementParams[nominal];
+		if (at == null || at >= args.length) return null;
+		final element: String = args[at];
+		final annotation: String = (shape.nullableIndexTypeNames ?? []).contains(nominal) ? 'Null<$element>' : element;
+		return annotation.indexOf('{') != -1 && annotation.length > maxAnonLen ? null : annotation;
 	}
 
 	/**

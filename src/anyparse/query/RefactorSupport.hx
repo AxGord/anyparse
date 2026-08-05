@@ -2350,6 +2350,12 @@ final class RefactorSupport {
 	 * already a package-stripped simple name, but it would put a transformation on the path of the
 	 * consumers this seam exists to leave untouched. The shared prefix that IS one question
 	 * (resolving the path's root to a binding) is factored out as `pathRootBinding`.
+	 *
+	 * Ahead of the path walk sits the TABLED-STATIC arm (`tabledStaticCallTypeSource`): a call whose
+	 * `Type.method` names a `RefShape.staticMethodReturns` entry answers that written return type.
+	 * It is the only shape here that is not a path, and it exists because a call is what a `for`
+	 * header usually iterates — `for (key in Reflect.fields(o))` has no other route to an element
+	 * type, the binder carrying no annotation and the index holding no method RETURN sources.
 	 */
 	private static function valueTypeSourceDeep(
 		node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, chain: ChainTypeContext,
@@ -2358,12 +2364,95 @@ final class RefactorSupport {
 		final identKind: Null<String> = shape.identKind;
 		final fieldKind: Null<String> = shape.fieldAccessKind;
 		if (identKind == null || fieldKind == null) return null;
+		final tabled: Null<String> = tabledStaticCallTypeSource(node, root, shape, index);
+		if (tabled != null) return tabled;
 		final path: Null<Array<String>> = pathOf(node, identKind, fieldKind);
 		if (path == null) return null;
 		final rootSource: Null<String> = pathRootTypeSourceDeep(node, root, shape, declaredTypes, chain, index, file, seen);
 		if (path.length == 1) return rootSource;
 		if (index == null) return null;
 		return pathReceiverMemberTypeSource(path, rootSource, index, file, true);
+	}
+
+	/**
+	 * The written RETURN type source of a call `Type.method(…)` whose flattened `Type.method` names
+	 * a `RefShape.staticMethodReturns` entry (`Reflect.fields` → `Array<String>`, `Date.now` →
+	 * `Date`, …), or null for every other node. The table's values are written import-safe (fully
+	 * qualified where the simple name would not resolve), so the source can be carried forward or
+	 * copied verbatim.
+	 *
+	 * Two gates, both failing closed:
+	 *
+	 *  - the receiver must be a genuine TYPE reference — its ROOT identifier binds to no value
+	 *    (`TypeResolver.receiverRootIsUnboundType`), so a local / parameter / field named after the
+	 *    module makes the access an INSTANCE call and is refused;
+	 *  - no NON-std indexed file may declare the type's simple name. The stdlib itself is normally
+	 *    indexed (`StdResolver` joins it to the resolution scope), so "declared at all" cannot be the
+	 *    test the way it is for `ExplicitLocalType`'s copy-into-the-file arm — what would make the
+	 *    table wrong is a PROJECT or LIBRARY type shadowing the stdlib name, and that is what this
+	 *    asks. With no index the question cannot be asked and the table is trusted, matching every
+	 *    other unindexed-run fallback.
+	 */
+	private static function tabledStaticCallTypeSource(
+		node: QueryNode, root: QueryNode, shape: RefShape, index: Null<SymbolIndex>
+	): Null<String> {
+		final table: Null<Map<String, String>> = shape.staticMethodReturns;
+		final callKind: Null<String> = shape.callKind;
+		final fieldKind: Null<String> = shape.fieldAccessKind;
+		if (table == null || callKind == null || fieldKind == null) return null;
+		if (node.kind != callKind || node.children.length == 0) return null;
+		final callee: QueryNode = node.children[0];
+		if (callee.kind != fieldKind || callee.children.length != 1) return null;
+		final method: Null<String> = callee.name;
+		final receiver: QueryNode = callee.children[0];
+		final typeName: Null<String> = receiver.name;
+		if (method == null || typeName == null) return null;
+		final ret: Null<String> = table['$typeName.$method'];
+		if (ret == null) return null;
+		if (!TypeResolver.receiverRootIsUnboundType(receiver, root, shape)) return null;
+		return nonStdDeclares(index, typeName) ? null : ret;
+	}
+
+	/** Whether any indexed file OUTSIDE the auto-discovered Haxe std declares a top-level type named `typeName`. */
+	private static function nonStdDeclares(index: Null<SymbolIndex>, typeName: String): Bool {
+		if (index == null) return false;
+		for (fi in index.declaringFiles(typeName)) if (!StdResolver.isStdFile(fi.file)) return true;
+		return false;
+	}
+
+	/**
+	 * The verbatim declared type SOURCE a BARE identifier carries when it names no value binding at
+	 * all but IS a member — declared directly or INHERITED — of the enclosing type declaration: the
+	 * implicit-`this` read Haxe resolves without the qualifier. `SymbolIndex`'s import-aware walk
+	 * supplies it (`resolvePathFinalMemberTypeSource` over a one-segment member path), so the
+	 * extends chain is followed to the SPECIFIC supertype each clause names rather than to any
+	 * same-simple-named type elsewhere in the scope.
+	 *
+	 * Null — the caller keeps its conservative branch — whenever: `ident` is not an identifier node;
+	 * it DOES resolve to a value binding (a local, a parameter, or an own-file field, all of which
+	 * the scope resolver already answers, so this arm must not second-guess them); no enclosing type
+	 * declaration covers it; or the member is unresolved / ambiguous anywhere along the chain.
+	 *
+	 * The case-pattern gate is the one that is not about resolution but about VISIBILITY: a pattern
+	 * binder (`case Leaf(m):`) is not a scope-resolver binding, so a name it introduces looks exactly
+	 * like an unbound one — and would then resolve to the inherited member it shadows. Any pattern in
+	 * the file that binds or mentions the name refuses the whole answer, and a grammar exposing
+	 * neither pattern seam refuses every name (it cannot rule the shadow out at all). `patternNames`
+	 * is passed in rather than computed here because the walk is per-file while this is per-site.
+	 */
+	public static function implicitThisMemberTypeSource(
+		ident: QueryNode, root: QueryNode, shape: RefShape, index: SymbolIndex, file: String, patternNames: Array<String>
+	): Null<String> {
+		final identKind: Null<String> = shape.identKind;
+		final name: Null<String> = ident.name;
+		final span: Null<Span> = ident.span;
+		if (identKind == null || ident.kind != identKind || name == null || span == null) return null;
+		if (name == shape.selfReferenceText) return null;
+		if (shape.plainCasePatternKind == null && (shape.casePatternBinderKinds ?? []).length == 0) return null;
+		if (patternNames.contains(name)) return null;
+		if (TypeResolver.resolveBindingFrom(name, span, root, shape) != null) return null;
+		final enclosing: Null<String> = TypeResolver.enclosingTypeName(root, span);
+		return enclosing == null ? null : index.resolvePathFinalMemberTypeSource(file, enclosing, [name]);
 	}
 
 	/**

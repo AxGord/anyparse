@@ -58,10 +58,12 @@ import anyparse.runtime.Span;
  *
  * The first argument is read WITHOUT its redundant parentheses (`Ext.deco((w), 1)` has the same
  * receiver as the bare form; the peeled `(` / `)` sit inside the deleted regions), and its
- * nominal type is resolved through `RefactorSupport.expressionTypeNominal` (a bare identifier via
- * its binding annotation; a plain field path cross-file through a `SymbolIndex`; a METHOD CALL on
- * either through the called method's declared return type, recursively along a chain), plus
- * `literalTypeNames` for a `stringLiteralKinds` receiver. Everything else stays UNRESOLVED: an
+ * nominal type is resolved through `RefactorSupport.expressionTypeNominal` in its DEEP mode (a bare
+ * identifier via its binding annotation, or — for an unannotated `for` binder — via the iterable's
+ * element type parameter; a plain field path cross-file through a `SymbolIndex`, with type-argument
+ * substitution along the chain; a METHOD CALL on either through the called method's declared return
+ * type, recursively along a chain, or through the `staticMethodReturns` table for a tabled stdlib
+ * static), plus `literalTypeNames` for a `stringLiteralKinds` receiver. Everything else stays UNRESOLVED: an
  * operator expression, a ternary, a `?.` chain, a bare `this` (whose meaning differs inside an
  * abstract), a `Null<…>` / `Any` declared type — and a NUMERIC literal, which is a deliberately
  * skipped FIXABLE class rather than an unresolvable one: `255.hex(2)` compiles fine under
@@ -112,12 +114,13 @@ import anyparse.runtime.Span;
  * - A FULLY QUALIFIED call site (`haxe.io.Path.withoutExtension(p)`) is invisible: the callee's
  *   root is a `fieldAccessKind` chain, not a bare `identKind`, so it never matches the shape.
  *   Import the module and the site becomes a candidate.
- * - A receiver that is itself a STATIC call (`Ext.deco(Mk.make(), 1)`) stays report-only: its
- *   nominal would have to come from reading the single unbound identifier `Mk` as a type name,
- *   which the resolution walk refuses to guess, and a type that declares a static and an instance
- *   member of one name would answer for the wrong one. An EXTENSION call is the same miss from the
- *   other end: the method is not a member of the receiver's type, so it names no return type to
- *   read — a chain of them never resolves however many `--fix` passes run.
+ * - A receiver that is itself a STATIC call (`Ext.deco(Mk.make(), 1)`) stays report-only unless
+ *   `Mk.make` is a `staticMethodReturns` entry: otherwise its nominal would have to come from
+ *   reading the single unbound identifier `Mk` as a type name, which the resolution walk refuses to
+ *   guess, and a type that declares a static and an instance member of one name would answer for
+ *   the wrong one. An EXTENSION call is the same miss from the other end: the method is not a member
+ *   of the receiver's type, so it names no return type to read — a chain of them never resolves
+ *   however many `--fix` passes run.
  * - An `import.hx`-provided `using` is invisible (anyparse ignores `import.hx` repo-wide):
  *   worst case an inserted `using` that was already implied, or a conservative miss of a
  *   conflicting module. Neither breaks a build.
@@ -284,6 +287,9 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		collectCalls(tree, s, calls);
 		if (calls.length == 0) return [];
 		final declaredTypes: Map<Int, String> = s.typed.declaredTypes(source);
+		// DEEP-mode resolution context (see `receiverNominal`): built once per file, and only for a
+		// file that actually holds a call on a configured module.
+		final chain: ChainTypeContext = { declaredTypeSources: s.typed.declaredTypeSources(source), source: source };
 		final usings: Array<String> = CheckScan.usingModules(tree);
 		// The conflict verdict depends only on (module, method), while a file repeats the same
 		// pair across every call site — and each miss costs a whole-index member-closure query.
@@ -291,7 +297,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final out: Array<Candidate> = [];
 		for (call in calls) {
 			final candidate: Null<Candidate> = classify(
-				call, tree, source, file, s, options, plugin, symbols, declaredTypes, usings, conflicts
+				call, tree, source, file, s, options, plugin, symbols, declaredTypes, chain, usings, conflicts
 			);
 			if (candidate != null) out.push(candidate);
 		}
@@ -313,7 +319,8 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	 */
 	private static function classify(
 		call: QueryNode, root: QueryNode, source: String, file: String, s: Seams, options: Options, plugin: GrammarPlugin,
-		symbols: () -> Null<SymbolIndex>, declaredTypes: Map<Int, String>, usings: Array<String>, conflicts: Map<String, Bool>
+		symbols: () -> Null<SymbolIndex>, declaredTypes: Map<Int, String>, chain: ChainTypeContext, usings: Array<String>,
+		conflicts: Map<String, Bool>
 	): Null<Candidate> {
 		if (call.children.length < MIN_CALL_CHILDREN) return null;
 		final callee: QueryNode = call.children[0];
@@ -336,7 +343,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final recv: QueryNode = RefactorSupport.unwrapParens(call.children[1], s.parenKind);
 		if (callSpan == null || recv.span == null) return null;
 		if (CheckScan.conflictingUsing(usings, module, method, plugin, symbols, conflicts)) return null;
-		final nominal: Null<String> = receiverNominal(recv, root, s, declaredTypes, symbols, file);
+		final nominal: Null<String> = receiverNominal(recv, root, s, declaredTypes, chain, symbols, file);
 		// A `Dynamic` receiver dispatches no extension at RUNTIME while the rewrite still compiles.
 		if (nominal != null && nominal == s.dynamicTypeName) return null;
 		final verdict: Null<Verdict> = verdictFor(nominal, method, symbols);
@@ -376,23 +383,35 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	 * inside an abstract, and a nullable / top-type wrapper (`Null` / `Any`) names no member host —
 	 * both read as unresolved. `Dynamic` passes through so the caller can drop it.
 	 *
+	 * The walk runs in DEEP mode (a `ChainTypeContext`), which adds three resolutions the shallow
+	 * one structurally cannot have: a `for` BINDER's type read off the iterable's element parameter
+	 * (`for (key in Reflect.fields(o)) StringTools.urlEncode(key)` — the binder carries no
+	 * annotation, so shallow answers null and every such site stayed hedged), a TABLED stdlib static
+	 * call's return type, and type-argument substitution along a member chain. Deep mode is an
+	 * OPT-IN per consumer precisely because a resolved nominal is this rule's licence to ACT: the
+	 * arms above are taken not because they resolve MORE but because each is type-CORRECT and fails
+	 * closed — the element-parameter table carries the obligation that `iterator()` and
+	 * `keyValueIterator()` agree, the substitution walk refuses any source still naming a parameter,
+	 * and the static table is refused for a type any non-std indexed file redeclares. A future arm
+	 * that merely widens coverage without that guarantee does NOT belong under this opt-in.
+	 *
 	 * The kind whitelist in front of the walk is the POSTFIX-SAFETY invariant made structural: a
 	 * spliced receiver is written verbatim ahead of `.method(`, so only a form that already binds
 	 * tighter than a field access may resolve here. It is not merely a restatement of what
-	 * `expressionTypeNominal` happens to answer today — that function is SHARED with a gate whose
-	 * safe direction is the opposite one (more proof there can only turn a conservative wrap into a
-	 * licensed flip), so a future widening of it to operators or ternaries would otherwise reach
-	 * this rule as an unparenthesized splice that silently reassociates. No fixture can
-	 * discriminate the whitelist while that widening has not happened — the walk answers null for
-	 * every kind outside it — and that is the point: it is the guard that holds when it does.
+	 * `expressionTypeNominal` happens to answer today — deep mode resolves MORE of the same kinds,
+	 * never new ones, but a future widening of the shared walk to operators or ternaries would
+	 * otherwise reach this rule as an unparenthesized splice that silently reassociates. No fixture
+	 * can discriminate the whitelist while that widening has not happened — the walk answers null
+	 * for every kind outside it — and that is the point: it is the guard that holds when it does.
 	 */
 	private static function receiverNominal(
-		recv: QueryNode, root: QueryNode, s: Seams, declaredTypes: Map<Int, String>, symbols: () -> Null<SymbolIndex>, file: String
+		recv: QueryNode, root: QueryNode, s: Seams, declaredTypes: Map<Int, String>, chain: ChainTypeContext,
+		symbols: () -> Null<SymbolIndex>, file: String
 	): Null<String> {
 		if (s.stringLiteralKinds.contains(recv.kind)) return s.literalTypeNames[recv.kind];
 		if (recv.kind == s.identKind && recv.name == s.shape.selfReferenceText) return null;
 		if (recv.kind != s.identKind && recv.kind != s.fieldKind && recv.kind != s.callKind) return null;
-		final nominal: Null<String> = RefactorSupport.expressionTypeNominal(recv, root, s.shape, declaredTypes, symbols(), file);
+		final nominal: Null<String> = RefactorSupport.expressionTypeNominal(recv, root, s.shape, declaredTypes, symbols(), file, chain);
 		if (nominal == null || nominal == s.dynamicTypeName) return nominal;
 		return s.nullableWrappers.contains(nominal) ? null : nominal;
 	}
