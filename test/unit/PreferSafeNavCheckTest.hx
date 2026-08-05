@@ -10,12 +10,14 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 
 /**
- * The `prefer-safe-nav` check: a single-statement null guard
- * `if (x != null) x.m(...)` on a LOCAL / PARAM receiver is flagged `Info` and
- * rewritten to `x?.m(...);` (only the FIRST dot becomes `?.`). A field / `this.`
- * receiver, a multi-statement block, an `else` branch, an assignment l-value, a
- * compound condition, an already-safe-nav body and a comment in the removed `if`
- * region are all safe misses.
+ * The `prefer-safe-nav` check: a null guard on a LOCAL / PARAM / `this` receiver is
+ * flagged `Info` and rewritten to safe navigation (only the FIRST dot becomes `?.`) —
+ * both the statement form `if (x != null) x.m(...)` → `x?.m(...);` and the ternary form
+ * `x == null ? null : x.m(...)` / `x != null ? x.m(...) : null` → `x?.m(...)`. A field /
+ * `this.`-qualified receiver, a multi-statement block, an `else` branch, an assignment
+ * l-value, a compound condition, an already-safe-nav body and a comment in the removed
+ * region are all safe misses; so is a ternary whose guarded branch is not itself the
+ * chain (`x.f + 1`) or whose other branch is not `null`.
  */
 class PreferSafeNavCheckTest extends Test {
 
@@ -154,8 +156,109 @@ class PreferSafeNavCheckTest extends Test {
 		Assert.equals(0, violations(local('if (ok && /* c */ x != null) x.command("q");')).length);
 	}
 
+	public function testTernaryEqLocalFlaggedAndFixed(): Void {
+		final vs: Array<Violation> = violations(local('trace(x == null ? null : x.a.b("c"));'));
+		Assert.equals(1, vs.length);
+		Assert.equals('prefer-safe-nav', vs[0].rule);
+		Assert.equals(local('trace(x?.a.b("c"));'), applyFix(local('trace(x == null ? null : x.a.b("c"));')));
+	}
+
+	public function testTernaryNotEqLocalFlaggedAndFixed(): Void {
+		Assert.equals(1, violations(local('trace(x != null ? x.f : null);')).length);
+		Assert.equals(local('trace(x?.f);'), applyFix(local('trace(x != null ? x.f : null);')));
+	}
+
+	public function testTernaryReversedNullOperandFixed(): Void {
+		Assert.equals(local('trace(x?.f);'), applyFix(local('trace(null == x ? null : x.f);')));
+		Assert.equals(local('trace(x?.f);'), applyFix(local('trace(null != x ? x.f : null);')));
+	}
+
+	public function testTernaryAbstractThisReceiverFlaggedAndFixed(): Void {
+		final source: String = abstractSelf("return this == null ? null : this.map(p -> '${p.x}').join(',');");
+		final expected: String = abstractSelf("return this?.map(p -> '${p.x}').join(',');");
+		Assert.equals(1, violations(source).length);
+		Assert.equals(expected, applyFix(source));
+	}
+
+	public function testTernaryFieldReceiverNotFlagged(): Void {
+		final source: String =
+			'class C {\n\tvar fld:Sys;\n\tfunction f():Void {\n\t\ttrace(fld == null ? null : fld.command("z"));\n\t}\n}';
+		Assert.equals(0, violations(source).length);
+	}
+
+	public function testTernaryNonChainBranchNotFlagged(): Void {
+		Assert.equals(0, violations(local('trace(x == null ? null : x.f + 1);')).length);
+	}
+
+	public function testTernaryOtherReceiverNotFlagged(): Void {
+		Assert.equals(0, violations(local('trace(x == null ? null : y.f);')).length);
+	}
+
+	public function testTernaryNonNullBranchNotFlagged(): Void {
+		Assert.equals(0, violations(local('trace(x == null ? 0 : x.f);')).length);
+	}
+
+	public function testTernaryGuardInArgumentNotFlagged(): Void {
+		Assert.equals(0, violations(local('trace(x == null ? null : x.command(x));')).length);
+	}
+
+	public function testTernaryAlreadySafeNavNotFlagged(): Void {
+		Assert.equals(0, violations(local('trace(x == null ? null : x?.f);')).length);
+	}
+
+	public function testTernaryIndexJunctionNotFlagged(): Void {
+		Assert.equals(0, violations(local('trace(x == null ? null : x[0].f);')).length);
+	}
+
+	public function testTernaryCommentInDroppedRegionNotFlagged(): Void {
+		Assert.equals(0, violations(local('trace(x == null ? null /* c */ : x.f);')).length);
+	}
+
+	/** The `!=` polarity puts the dropped `null` AFTER the kept branch — the suffix half of the comment gate. */
+	public function testTernaryCommentAfterKeptBranchNotFlagged(): Void {
+		Assert.equals(0, violations(local('trace(x != null ? x.f /* c */ : null);')).length);
+	}
+
+	public function testTernaryMidChainIndexFixed(): Void {
+		Assert.equals(1, violations(local('trace(x == null ? null : x.arr[0].c);')).length);
+		Assert.equals(local('trace(x?.arr[0].c);'), applyFix(local('trace(x == null ? null : x.arr[0].c);')));
+	}
+
+	public function testStatementThisReceiverFixed(): Void {
+		final source: String = 'abstract A(Array<P>) {\n\tpublic function f():Void {\n\t\tif (this != null) this.m();\n\t}\n}';
+		final expected: String = 'abstract A(Array<P>) {\n\tpublic function f():Void {\n\t\tthis?.m();\n\t}\n}';
+		Assert.equals(1, violations(source).length);
+		Assert.equals(expected, applyFix(source));
+	}
+
+	/** A `cast` on the receiver spine breaks the chain — `(cast x?.a).m()` dereferences null. */
+	public function testStatementCastOnSpineNotFlagged(): Void {
+		Assert.equals(0, violations(local('if (x != null) (cast x.a).m();')).length);
+	}
+
+	/** An operator on the receiver spine breaks the chain — `(x?.a + b).m()` adds to a `Null<T>`. */
+	public function testStatementOperatorOnSpineNotFlagged(): Void {
+		Assert.equals(0, violations(local('if (x != null) (x.a + b).m();')).length);
+	}
+
+	public function testStatementMidChainIndexFixed(): Void {
+		Assert.equals(1, violations(local('if (x != null) x.arr[0].b();')).length);
+		Assert.equals(local('x?.arr[0].b();'), applyFix(local('if (x != null) x.arr[0].b();')));
+	}
+
+	/** A comment between the receiver and its dot would swallow the inserted `?` — reported, left unfixed. */
+	public function testCommentBeforeDotNotFixed(): Void {
+		final source: String = local('trace(x == null ? null : x /* a.b */ .f);');
+		Assert.equals(1, violations(source).length);
+		Assert.equals(source, applyFix(source));
+	}
+
 	private function local(stmt: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\tvar x:Sys = mk();\n\t\t$stmt\n\t}\n}';
+	}
+
+	private function abstractSelf(stmt: String): String {
+		return 'abstract A(Array<P>) {\n\t@:to public function toString():String {\n\t\t$stmt\n\t}\n}';
 	}
 
 	private function violations(source: String): Array<Violation> {
