@@ -85,6 +85,54 @@ class TypeRefPrinterTest extends Test {
 		Assert.equals('import pkg.deep.Mod.Sub;', importText(p));
 	}
 
+	/** A `using <module>;` IS an `import <module>;` plus static extension — it binds the module's types too. */
+	public function testUsingTheModuleMakesItsSecondaryTypeVisible(): Void {
+		final index: SymbolIndex = indexOf([
+			{ file: 'pkg/deep/Mod.hx', source: 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n' }
+		]);
+		final p: TypeRefPrinter = printerWith('package app;\n\nusing pkg.deep.Mod;\n\nclass C {}\n', index);
+		Assert.equals('Sub', p.print('pkg.deep.Mod.Sub').text);
+		Assert.isFalse(p.hasPendingImports());
+	}
+
+	/**
+	 * TWO imported modules each declaring a `Sub`: the bare name means whichever import comes LAST,
+	 * which no printer route can decide, so the reference stays fully qualified. Without the shadow
+	 * arm the visibility route fired on the first module and emitted a bare `Sub` bound to the other
+	 * type — silently, and it compiles.
+	 */
+	public function testSecondModuleDeclaringTheNameRefusesTheShortForm(): Void {
+		final index: SymbolIndex = indexOf([
+			{ file: 'pkg/deep/Mod.hx', source: 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n' },
+			{ file: 'other/Other.hx', source: 'package other;\n\nclass Other {}\n\ntypedef Sub = Float;\n' }
+		]);
+		final src: String = 'package app;\n\nimport pkg.deep.Mod;\nimport other.Other;\n\nclass C {}\n';
+		final p: TypeRefPrinter = printerWith(src, index);
+		Assert.equals('pkg.deep.Mod.Sub', p.print('pkg.deep.Mod.Sub').text);
+		Assert.isFalse(p.hasPendingImports());
+	}
+
+	/** The mirror: a module import's SECONDARY type shadows the bare name for a path that is NOT it. */
+	public function testModuleImportSecondaryShadowsAnUnrelatedPath(): Void {
+		final index: SymbolIndex = indexOf([
+			{ file: 'pkg/deep/Mod.hx', source: 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n' },
+			{ file: 'other/Sub.hx', source: 'package other;\n\nclass Sub {}\n' }
+		]);
+		final p: TypeRefPrinter = printerWith('package app;\n\nimport pkg.deep.Mod;\n\nclass C {}\n', index);
+		Assert.equals('other.Sub', p.print('other.Sub').text);
+		Assert.isFalse(p.hasPendingImports());
+	}
+
+	/**
+	 * A PENDING import from an earlier `print` claims the simple name before this one asks for it —
+	 * both would land in the same file, and Haxe lets the LAST import of a name win.
+	 */
+	public function testPendingImportOfAnotherPathRefusesTheModuleRoute(): Void {
+		final p: TypeRefPrinter = printer('package app;\n\nimport pkg.deep.Mod;\n\nclass C {}\n');
+		Assert.equals('Sub', p.print('other.Sub').text);
+		Assert.equals('pkg.deep.Mod.Sub', p.print('pkg.deep.Mod.Sub').text);
+	}
+
 	public function testCompilerHybridRepairedThroughImport(): Void {
 		// The compiler prints a secondary type as `pack.SubType` — the hybrid that resolves only
 		// while a matching import exists. It must resolve back to the imported short name.

@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.RefactorSupport;
@@ -7,7 +8,6 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 using Lambda;
-using StringTools;
 
 /**
  * Flags a SUB-MODULE type import (`import pkg.Mod.Sub;`) whose MODULE is already imported in the
@@ -23,7 +23,7 @@ using StringTools;
  *
  * ## The evidence a finding needs
  *
- * Every gate fails CLOSED — an unprovable case is left alone, never deleted:
+ * Every gate demands POSITIVE evidence — an unprovable case is left alone, never deleted:
  *
  *  - the statement is a PLAIN, UNALIASED, unguarded `import` whose leaf is UPPER-INITIAL (a
  *    lower-initial leaf imports a static field, which a module import does not bring in) and whose
@@ -36,16 +36,29 @@ using StringTools;
  *    module (outside the lint scope) yields no finding, and an enum CONSTRUCTOR / static import
  *    (`import pkg.Colors.Red;`) fails this gate by construction — `Red` is a member, not a type;
  *  - nothing ELSE in the file binds the same simple name: another plain import or `using` whose
- *    module declares it, an alias of that name, a package wildcard binding a main type of that
- *    name, a duplicate of this very path, or a type the file itself declares. Haxe accepts two
- *    imports of one simple name and lets the LAST win, so removing one where a second binder exists
- *    could change what the name means.
+ *    module declares it, an alias of that name, a duplicate of this very path, or a type the file
+ *    itself declares. Haxe accepts two imports of one simple name and lets the LAST win, so removing
+ *    one where a second binder exists could change what the name means. A wildcard is measured to be
+ *    outranked by the surviving module import and is deliberately NOT a binder (`bindsElsewhere`).
+ *
+ * ## Why `RiskyFix`, not a trusted deletion
+ *
+ * The last gate is only as complete as the RESOLUTION INDEX, and that is a property of the RUN, not
+ * of the file: a competing module OUTSIDE the lint scope contributes no veto, so the same file
+ * yields "delete" or "refuse" depending on what else was linted. The window where that matters is
+ * narrow — a third module must declare a type of the SAME simple name AND sit positionally BETWEEN
+ * the qualifying module import and this one, since only then does deleting change which binder is
+ * last — but it is not a structurally-provable shape invariant, which is exactly `Check.RiskyFix`'s
+ * definition. So the deletions are applied speculatively and REVERTED per file when the project's
+ * `compilerOracle` says the build broke; with no oracle configured the rule stays report-only. A
+ * silent survivor still needs the two same-named types to be assignment-compatible, which the
+ * report leaves for a human.
  *
  * `fix` deletes the flagged statement; the caller batches the deletions into one whole-file
  * canonicalize, which drops the blank line.
  */
 @:nullSafety(Strict)
-final class RedundantImport implements Check {
+final class RedundantImport implements Check implements RiskyFix {
 
 	public function new() {}
 
@@ -131,6 +144,16 @@ final class RedundantImport implements Check {
 	 * Whether anything in `info` OTHER than `imp` and the qualifying module import binds `name`.
 	 * Two imports of one simple name are legal in Haxe and the LAST one wins, so a second binder
 	 * makes the deletion a possible retarget rather than a no-op — refuse it.
+	 *
+	 * A WILDCARD is deliberately not a binder here, measured rather than assumed: a package
+	 * `import pkg.*;` is OUTRANKED by an explicit module import in either statement order (verified
+	 * on 4.3.7), and the qualifying module import always survives the deletion — so a wildcard can
+	 * never become the winner and vetoing on one would only suppress a true finding. A module
+	 * wildcard `import pkg.Mod.*;` binds statics and enum constructors, no type name at all.
+	 *
+	 * A type the FILE ITSELF declares outranks every import, so the deletion would be safe there
+	 * too; it stays a veto because the finding's MESSAGE would be false — the module import is not
+	 * what binds the name in that file.
 	 */
 	private static function bindsElsewhere(info: FileInfo, imp: ImportInfo, module: String, name: String, index: SymbolIndex): Bool {
 		if (info.types.exists(t -> t.name == name)) return true;
@@ -138,24 +161,11 @@ final class RedundantImport implements Check {
 			case ImportKind.Alias:
 				if ((o.alias ?? o.raw) == name) return true;
 			case ImportKind.Wild:
-				if (wildcardBindsType(index, o.raw, name)) return true;
 			case _:
 				if (RefactorSupport.lastSegment(o.raw) == name) return true;
 				if (o.raw != module && moduleDeclaresType(index, o.raw, name)) return true;
 		}
 		return false;
-	}
-
-	/**
-	 * Whether the wildcard `raw` can bind the TYPE name `name`. A PACKAGE wildcard (`import pkg.*;`)
-	 * binds the MAIN type of every module in that package and nothing else; a MODULE wildcard
-	 * (`import pkg.Mod.*;`, an upper-initial last segment) imports statics and enum constructors,
-	 * so it binds no type name at all.
-	 */
-	private static function wildcardBindsType(index: SymbolIndex, raw: String, name: String): Bool {
-		final base: String = raw.endsWith('.*') ? raw.substr(0, raw.length - 2) : raw;
-		if (RefactorSupport.isUpperInitial(RefactorSupport.lastSegment(base))) return false;
-		return index.declaringFiles(name).exists(f -> f.pkg == base && f.types.exists(t -> t.name == name && t.isMain));
 	}
 
 }

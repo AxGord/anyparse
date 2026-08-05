@@ -1,7 +1,7 @@
 package unit;
 
 import anyparse.check.Check;
-import anyparse.check.Check.Violation;
+import anyparse.check.Check.RiskyFix;
 import anyparse.check.Linter;
 import anyparse.check.RedundantImport;
 import anyparse.check.Severity;
@@ -68,8 +68,8 @@ class RedundantImportCheckTest extends Test {
 	/**
 	 * An ALIASED sub-type import binds the alias, a name the module import does not provide. Today
 	 * the grammar exposes only the ALIAS in an import's `raw` (the documented `ImportInfo` limit),
-	 * so the statement never even presents a dotted sub-type path; the rule's kind gate is the
-	 * forward guard for when that limit is lifted, and no fixture can discriminate it meanwhile.
+	 * so the statement never even presents a dotted sub-type path — the kind gate is not what refuses
+	 * THIS fixture. `testUsingOfASubModuleTypeIsKept` is the one that discriminates it.
 	 */
 	public function testAliasedSubTypeImportIsKept(): Void {
 		final src: String = 'package app;\n\nimport pkg.deep.Mod;\nimport pkg.deep.Mod.Sub as S;\n\nclass C {\n\n\tvar s:S;\n\n}\n';
@@ -82,7 +82,25 @@ class RedundantImportCheckTest extends Test {
 		Assert.equals(0, violations(src).length);
 	}
 
-	/** An ALIASED module import binds only the alias — it brings no secondary type into scope. */
+	/**
+	 * A `using pkg.Mod.SubTools;` is a STATIC EXTENSION on a sub-module type — deleting it removes
+	 * the `.method()` calls it enables, which the module import does NOT restore. It is the fixture
+	 * that discriminates the rule's import-KIND gate: its `raw` IS a dotted sub-type path, so every
+	 * other gate would wave it through.
+	 */
+	public function testUsingOfASubModuleTypeIsKept(): Void {
+		final src: String = 'package app;\n\nimport pkg.deep.Mod;\nusing pkg.deep.Mod.SubTools;\n\nclass C {\n\n\tvar s:Sub;\n\n}\n';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'app/C.hx', source: src },
+			{
+				file: 'pkg/deep/Mod.hx',
+				source: 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n\nclass SubTools {\n\n\tpublic static function twice(v:Int):Int {\n\t\treturn v * 2;\n\t}\n\n}\n'
+			}
+		];
+		Assert.equals(0, new RedundantImport().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	/** An ALIASED module import binds only the alias — it brings no secondary type into scope. Refused on the path shape: an alias's `raw` IS the alias, never a dotted module path. */
 	public function testAliasedModuleImportDoesNotMakeTheSubTypeImportRedundant(): Void {
 		final src: String = 'package app;\n\nimport pkg.deep.Mod as M;\nimport pkg.deep.Mod.Sub;\n\nclass C {\n\n\tvar s:Sub;\n\n}\n';
 		Assert.equals(0, violations(src).length);
@@ -108,10 +126,15 @@ class RedundantImportCheckTest extends Test {
 		Assert.equals(0, violations(src).length);
 	}
 
-	/** Another module import binding the SAME simple name decides what the short name means — leave both alone. */
+	/**
+	 * Another module import binding the SAME simple name decides what the short name means — leave
+	 * both alone. The competitor sits BETWEEN the two `pkg.deep.Mod` statements on purpose: that is
+	 * the only position where the deletion actually changes the winner (Haxe lets the LAST import of
+	 * a simple name win, so a competitor before the module import or after this one wins either way).
+	 */
 	public function testAnotherModuleBindingTheSameNameKeepsIt(): Void {
 		final src: String =
-			'package app;\n\nimport pkg.deep.Mod;\nimport pkg.deep.Mod.Sub;\nimport other.Other;\n\nclass C {\n\n\tvar s:Sub;\n\n}\n';
+			'package app;\n\nimport pkg.deep.Mod;\nimport other.Other;\nimport pkg.deep.Mod.Sub;\n\nclass C {\n\n\tvar s:Sub;\n\n}\n';
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'app/C.hx', source: src },
 			{ file: 'pkg/deep/Mod.hx', source: MOD },
@@ -148,17 +171,21 @@ class RedundantImportCheckTest extends Test {
 	}
 
 	/**
-	 * A wildcard import brings statics / constructors, never a type name — a different statement
-	 * entirely. Its `raw` leaf is `*`, so the leaf-case and index gates refuse it ahead of the kind
-	 * gate; the assertion is on the BEHAVIOUR, not on which gate delivers it.
+	 * A wildcard import brings statics / constructors, never a type name — never a CANDIDATE. Its
+	 * `raw` leaf is `*`, so the kind gate and the leaf-case gate both refuse it; the assertion is on
+	 * the BEHAVIOUR, not on which gate delivers it.
 	 */
 	public function testWildcardImportIsNeverFlagged(): Void {
 		final src: String = 'package app;\n\nimport pkg.deep.Mod;\nimport pkg.deep.Mod.*;\n\nclass C {}\n';
 		Assert.equals(0, violations(src).length);
 	}
 
-	/** A package wildcard can bind the module's MAIN type name, but never a secondary one — still nothing to say. */
-	public function testPackageWildcardBindingTheNameKeepsIt(): Void {
+	/**
+	 * A package wildcard declaring the same name is NOT a second binder: an explicit module import
+	 * outranks a wildcard in EITHER statement order (measured on 4.3.7), and the module import
+	 * survives the deletion — so the wildcard can never become the winner and the finding stands.
+	 */
+	public function testPackageWildcardDoesNotSuppressTheFinding(): Void {
 		final src: String =
 			'package app;\n\nimport pkg.deep.Mod;\nimport pkg.deep.Mod.Sub;\nimport far.*;\n\nclass C {\n\n\tvar s:Sub;\n\n}\n';
 		final files: Array<{ file: String, source: String }> = [
@@ -166,7 +193,7 @@ class RedundantImportCheckTest extends Test {
 			{ file: 'pkg/deep/Mod.hx', source: MOD },
 			{ file: 'far/Sub.hx', source: 'package far;\n\nclass Sub {}\n' }
 		];
-		Assert.equals(0, new RedundantImport().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(1, new RedundantImport().run(files, new HaxeQueryPlugin()).length);
 	}
 
 	// --- the live repro shape ---
@@ -204,9 +231,16 @@ class RedundantImportCheckTest extends Test {
 
 	// --- registration ---
 
-	public function testRegistered(): Void {
+	/**
+	 * Registered, and a `RiskyFix`: the second-binder veto is only as complete as the RESOLUTION
+	 * INDEX, so a deletion's safety is a property of the run's scope rather than a structurally
+	 * provable shape — the deletions go through the oracle's typecheck-and-revert, and stay
+	 * report-only where no oracle is configured.
+	 */
+	public function testRegisteredAsARiskyFix(): Void {
 		final check: Null<Check> = Linter.byId('redundant-import');
 		Assert.notNull(check);
+		Assert.isTrue(Std.isOfType(check, RiskyFix), 'redundant-import deletions are oracle-verified');
 		Assert.equals(133, Linter.builtins().length);
 	}
 
