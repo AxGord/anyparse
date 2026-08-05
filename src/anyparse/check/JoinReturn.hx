@@ -380,6 +380,14 @@ final class JoinReturn implements Check {
 	 * declaration is dropped). So when `T` carries no type parameters the ascription is a pure
 	 * restatement with nothing left to pin, and `buildReturn` skips it; a generic annotation
 	 * always keeps the ascription -- its type parameters are exactly what it pins.
+	 *
+	 * The `ann`-has-no-`<` check is stated explicitly rather than left to fall out of the name
+	 * comparison below: under the Haxe grammar `initNode.name` (`HxNewTypeName`) can never
+	 * itself contain `<`, so a generic `ann` already fails that comparison on its own -- but
+	 * that is an incidental property of ONE grammar's constructor-name terminal, not something
+	 * `RefShape.newExprKind` guarantees for every plugin. Stating the condition explicitly keeps
+	 * this gate correct on its own semantic terms (`T` carries no type parameters), independent
+	 * of what a future grammar's constructor node happens to encode in `.name`.
 	 */
 	private static function isRedundantNewAscription(initNode: QueryNode, ann: String, newExprKind: Null<String>): Bool {
 		if (newExprKind == null || initNode.kind != newExprKind) return false;
