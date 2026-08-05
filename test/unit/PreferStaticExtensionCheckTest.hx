@@ -346,6 +346,62 @@ class PreferStaticExtensionCheckTest extends Test {
 		Assert.equals(0, editsOf(files, config).length);
 	}
 
+	public function testMethodCallReceiverRewritten(): Void {
+		// The TM shape: `StringTools.ltrim(str.substr(1))`. A method-call receiver carries the
+		// method's RETURN type, so the shadow gate has a real type to prove absence against.
+		final out: String = fixResultOf(makerFiles('Ext.deco(m.make(), 1);'));
+		Assert.isTrue(out.indexOf('m.make().deco(1);') != -1, out);
+		Assert.isTrue(out.indexOf('Ext.deco(') == -1, out);
+	}
+
+	public function testMethodCallReceiverInstanceShadowNotFlagged(): Void {
+		// The safety pin for the widened receiver: the resolved RETURN type shadows `deco`, so the
+		// site must DROP exactly as an ident receiver of the same type would.
+		final files: Array<{ file: String, source: String }> = makerFiles(
+			'Ext.deco(m.make(), 1);', 'class Widget {\n\tpublic function deco(n: Int): Widget return this;\n}\n'
+		);
+		Assert.equals(0, violationsOf(files).length);
+	}
+
+	public function testChainedMethodCallReceiverRewritten(): Void {
+		final out: String = fixResultOf(makerFiles('Ext.deco(m.self().make(), 1);'));
+		Assert.isTrue(out.indexOf('m.self().make().deco(1);') != -1, out);
+	}
+
+	public function testStaticCallReceiverReportedOnly(): Void {
+		// A single UNBOUND identifier is not guessed to be a type name, so `Mk.make()` resolves to
+		// nothing and the site stays report-only — the conservative miss, pinned deliberately.
+		final source: String = user('using Ext;\n\n', 'Ext.deco(Mk.make(), 1);');
+		final files: Array<{ file: String, source: String }> = fileSet(source, WIDGET_SOURCE, [
+			{ file: 'Mk.hx', source: 'class Mk {\n\tpublic static function make(): Widget return null;\n}\n' }
+		]);
+		final vs: Array<Violation> = violationsOf(files);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('receiver type unresolved') != -1, vs[0].message);
+		Assert.equals(0, editsOf(files).length);
+	}
+
+	public function testParenthesizedReceiverUnwrapped(): Void {
+		final out: String = fixResultOf(fileSet(user('using Ext;\n\n', 'Ext.deco((w), 1);')));
+		Assert.isTrue(out.indexOf('w.deco(1);') != -1, out);
+	}
+
+	public function testTernaryReceiverReportedOnly(): Void {
+		// Both branches resolve to `Widget`, so the null nominal comes from the TERNARY node itself
+		// — and a ternary is exactly the shape whose spliced text would need parentheses, which the
+		// rewrite never adds. What refuses it TODAY is the resolution walk, not the kind whitelist
+		// in `receiverNominal`: that one is a standing guard for a future widening of the shared
+		// walk, and no fixture can discriminate it while the walk itself answers only postfix-safe
+		// forms.
+		final source: String =
+			'using Ext;\n\nclass C {\n\tfunction f(b:Bool, w:Widget, v:Widget):Void {\n\t\tExt.deco(b ? w : v, 1);\n\t}\n}\n';
+		final files: Array<{ file: String, source: String }> = fileSet(source);
+		final vs: Array<Violation> = violationsOf(files);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('receiver type unresolved') != -1, vs[0].message);
+		Assert.equals(0, editsOf(files).length);
+	}
+
 	public function testAddUsingFalseWithUsingPresentStillFixes(): Void {
 		final config: String = '{"rules": {"prefer-static-extension": {"types": ["Ext"], "addUsing": false}}}';
 		final out: String = fixResultOf(fileSet(user('using Ext;\n\n', 'Ext.deco(w, 1);')), config);
@@ -355,6 +411,16 @@ class PreferStaticExtensionCheckTest extends Test {
 	/** A `C.hx` source with `head` before the class and `body` as the sole statement of `f(w: Widget)`. */
 	private function user(head: String, body: String): String {
 		return '${head}class C {\n\tfunction f(w:Widget):Void {\n\t\t$body\n\t}\n}\n';
+	}
+
+	/** The `Maker` fixture the CALL-receiver gates resolve through: `make` returns a `Widget`, `self` chains. */
+	private function makerFiles(body: String, widget: String = WIDGET_SOURCE): Array<{ file: String, source: String }> {
+		return fileSet('using Ext;\n\nclass C {\n\tfunction f(m:Maker):Void {\n\t\t$body\n\t}\n}\n', widget, [
+			{
+				file: 'Maker.hx',
+				source: 'class Maker {\n\tpublic function make(): Widget return null;\n\n\tpublic function self(): Maker return this;\n}\n'
+			}
+		]);
 	}
 
 	/** A `C.hx` calling `StringTools.<method>` on an UNANNOTATED parameter (an unresolvable receiver). */
