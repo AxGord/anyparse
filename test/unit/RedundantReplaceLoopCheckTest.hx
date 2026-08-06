@@ -19,7 +19,10 @@ import anyparse.query.RefactorSupport;
  * contains `S`): `Warning`, report-only — the loop is infinite for any input containing
  * `S`. Arm C (either operand a PARAMETER): `Info`, report-only — the outcome is the
  * caller's to decide, and only a containment guard that DOMINATES the loop suppresses it.
- * `DefaultOff`.
+ * A PARAMETER `S` with a LITERAL `B` splits out of arm C, since the literal decides the
+ * verdict without the caller: an EMPTY `B` makes the loop merely REDUNDANT (report-only —
+ * a collapse would change the degenerate empty-`S` hang into a return), a NON-EMPTY one
+ * loops forever for exactly those `S` that occur in it. `DefaultOff`.
  */
 class RedundantReplaceLoopCheckTest extends Test {
 
@@ -180,13 +183,12 @@ class RedundantReplaceLoopCheckTest extends Test {
 	}
 
 	public function testCanaryStripWordFlagged(): Void {
-		// crashdumper/SystemData.hx:317 — S is the parameter `word`, B the literal `''`. Exactly
+		// crashdumper/SystemData.hx:314 — S is the parameter `word`, B the literal `''`. Exactly
 		// why arm C must admit a literal / parameter MIX rather than demand two parameters.
 		final vs: Array<Violation> = violations(stripWordSource());
 		Assert.equals(1, vs.length);
 		if (vs.length != 1) return;
 		Assert.equals(Severity.Info, vs[0].severity);
-		Assert.isTrue(StringTools.startsWith(vs[0].message, 'potential infinite loop when \'\' contains word'));
 	}
 
 	public function testUnguardedArmCCarriesNoCaveatClause(): Void {
@@ -436,6 +438,133 @@ class RedundantReplaceLoopCheckTest extends Test {
 			+ '\t\t\twhile (line.indexOf(word) != -1) line = line.replace(word, \'_\');\n\t\t\treturn line;\n\t\t}\n'
 			+ '\t\treturn helper(\'y\') + inner(\'x\');\n\t}\n}';
 		Assert.equals(0, violations(src).length);
+	}
+
+	// --- arm C split: a LITERAL `B` with a PARAMETER `S` — the literal decides on its own ---
+
+	public function testEmptyLiteralReplacementReportsRedundancyNotAnInfiniteLoop(): Void {
+		// The `stripWord` canary. An empty `B` can never CONTAIN a non-empty `S`, and
+		// `replace(word, '')` REMOVES rather than reinserts — the arm-C infinite-loop wording was
+		// nonsense here, so the message must not carry a word of it.
+		final vs: Array<Violation> = violations(stripWordSource());
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.equals(-1, vs[0].message.indexOf('potential infinite loop'));
+		Assert.equals(-1, vs[0].message.indexOf('reinserts'));
+	}
+
+	public function testEmptyLiteralReplacementNamesTheOneCallThatSuffices(): Void {
+		final vs: Array<Violation> = violations(stripWordSource());
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.isTrue(
+			StringTools.startsWith(vs[0].message, 'this while (line.indexOf(word) != -1) loop is redundant for any non-empty word')
+		);
+		Assert.isTrue(vs[0].message.indexOf('so one line = line.replace(word, \'\'); does the same work') >= 0);
+	}
+
+	public function testEmptyLiteralReplacementNotesTheDegenerateEmptySearch(): Void {
+		// The one behavioural difference a collapse would make: `indexOf('') == 0`, so the ORIGINAL
+		// loop hangs on an empty `word` — which is exactly why this stays report-only.
+		final vs: Array<Violation> = violations(stripWordSource());
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.isTrue(vs[0].message.indexOf('the ORIGINAL loop spins forever on a degenerate word == \'\' (indexOf(\'\') == 0)') >= 0);
+	}
+
+	public function testEmptyLiteralReplacementNeverFixed(): Void {
+		assertFixRefused(stripWordSource());
+	}
+
+	public function testEmptyLiteralReplacementSurvivesAnEqualityGuard(): Void {
+		// `if (word == '') return line;` rules out the degenerate input, but redundancy is a property
+		// of the loop shape, not of the caller — the verdict is guard-independent and the finding stays.
+		final vs: Array<Violation> = violations(
+			wrapParams('if (word == \'\') return line;\n\t\twhile (line.indexOf(word) != -1) line = line.replace(word, \'\');')
+		);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.isTrue(
+			StringTools.startsWith(vs[0].message, 'this while (line.indexOf(word) != -1) loop is redundant for any non-empty word')
+		);
+	}
+
+	public function testNonEmptyLiteralReplacementNamesTheLiteralCondition(): Void {
+		// A NON-empty literal `B` with a parameter `S` is still a live infinite-loop hazard, but a
+		// precisely stated one: it fires for exactly those `word` that occur in the literal.
+		final vs: Array<Violation> = violations(wrapParams('while (line.indexOf(word) != -1) line = line.replace(word, \'-*-\');'));
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.isTrue(StringTools.startsWith(vs[0].message, 'potential infinite loop when word occurs in \'-*-\''));
+		Assert.isTrue(vs[0].message.indexOf('those word that are a substring of \'-*-\'') >= 0);
+		Assert.isTrue(vs[0].message.indexOf('the equal word == \'-*-\' included') >= 0);
+	}
+
+	public function testNonEmptyLiteralReplacementDropsTheOldContainsWording(): Void {
+		// The old text read `when '-*-' contains word` — backwards, since it is `word` that must
+		// occur in the literal, not the literal in `word`.
+		final vs: Array<Violation> = violations(wrapParams('while (line.indexOf(word) != -1) line = line.replace(word, \'-*-\');'));
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals(-1, vs[0].message.indexOf('\'-*-\' contains word'));
+	}
+
+	public function testNonEmptyLiteralReplacementEqualityGuardSharpensTheMessage(): Void {
+		final vs: Array<Violation> = violations(
+			wrapParams('if (word == \'-*-\') return line;\n\t\twhile (line.indexOf(word) != -1) line = line.replace(word, \'-*-\');')
+		);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.isTrue(vs[0].message.indexOf('rules out only the equal case') >= 0);
+	}
+
+	public function testNonEmptyLiteralReplacementContainmentGuardSuppresses(): Void {
+		// The literal is the guard's RECEIVER here; the same `matchGuard` reads it, so the one static
+		// proof still applies to the literal-`B` half of the split.
+		Assert.equals(
+			0,
+			violations(wrapParams(
+				'if (\'-*-\'.indexOf(word) != -1) return line;\n\t\twhile (line.indexOf(word) != -1) line = line.replace(word, \'-*-\');'
+			)).length
+		);
+	}
+
+	public function testNonEmptyLiteralReplacementNeverFixed(): Void {
+		assertFixRefused(wrapParams('while (line.indexOf(word) != -1) line = line.replace(word, \'-*-\');'));
+	}
+
+	// --- message pins: the arms the split must leave byte-identical ---
+
+	public function testArmAMessageUnchanged(): Void {
+		Assert.equals(
+			'this while (now.indexOf(\' \') != -1) loop runs at most once — replace() already replaces every occurrence; collapses to now = now.replace(\' \', \'_\');',
+			violations(wrapFn('while (now.indexOf(\' \') != -1) now = now.replace(\' \', \'_\');'))[0].message
+		);
+	}
+
+	public function testArmBMessageUnchanged(): Void {
+		Assert.equals(
+			'this loop never terminates for any now containing \'a\' — replace(\'a\', \'aa\') reintroduces it every time, since \'aa\' itself contains \'a\'',
+			violations(wrapFn('while (now.indexOf(\'a\') != -1) now = now.replace(\'a\', \'aa\');'))[0].message
+		);
+	}
+
+	public function testArmCBothParametersMessageUnchanged(): Void {
+		Assert.equals(
+			'potential infinite loop when replace contains word — replace(word, replace) reinserts word on every pass, so the guard never goes false',
+			violations(wrapParams('while (line.indexOf(word) != -1) line = line.replace(word, replace);'))[0].message
+		);
+	}
+
+	public function testArmCLiteralSearchParameterReplacementMessageUnchanged(): Void {
+		// The MIRROR mix — a literal `S` with a parameter `B` — is still undecidable and keeps the
+		// generic arm-C wording; only a literal `B` moved into the split.
+		Assert.equals(
+			'potential infinite loop when replace contains \' \' — replace(\' \', replace) reinserts \' \' on every pass, so the guard never goes false',
+			violations(wrapParams('while (line.indexOf(\' \') != -1) line = line.replace(\' \', replace);'))[0].message
+		);
 	}
 
 	// --- registry / robustness ---
