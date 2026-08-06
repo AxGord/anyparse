@@ -641,11 +641,21 @@ fitems.length > 1
 	/**
 	 * ω-methodchain-reeval-after-callparam — the rendered width of the glued
 	 * chain's FIRST line when the last segment's call args break. `glue` is the
-	 * NoWrap `Concat([receiver, seg0, …, segN])`; the first line is every part
-	 * flat EXCEPT the last segment, which contributes only its prefix up to (and
-	 * including) the first open delimiter (`(`/`[`/`{`) — the point the call
-	 * args break after. Null when `glue` is not the expected Concat shape or the
-	 * last segment has no open delim (not a breakable call).
+	 * NoWrap `Concat([seg0, …, segN])`; the first line is every part flat EXCEPT
+	 * the last segment, which contributes only its prefix up to (and including)
+	 * the first open delimiter (`(`/`[`/`{`) — the point the call args break
+	 * after. The RECEIVER is not a part: since ω-methodchain-all-or-nothing it
+	 * renders outside the probe, and the caller's captured column already
+	 * accounts for it.
+	 *
+	 * Null when `glue` is not the expected Concat shape or the last segment has
+	 * no open delim (not a breakable call). The `>= 2` shape guard used to mean
+	 * "receiver plus at least one segment" and now means "at least two
+	 * segments", so the one-link chains the widened macro gate admits always
+	 * answer null here — `maybeTagReglue` may still tag them, but
+	 * `rewriteChainProbe` can never act on the tag. Deliberate: a one-link chain
+	 * has no dot-break to strip that the all-or-nothing probe did not already
+	 * decide against the real head-end column.
 	 */
 	private static function gluedFirstLineWidth(glue: Doc): Null<Int> {
 		final parts: Null<Array<Doc>> = switch glue {

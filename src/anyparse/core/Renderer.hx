@@ -2191,9 +2191,14 @@ class Renderer {
 				// tagged for the re-glue re-measure. Pure render pass-through (no
 				// layout effect), EXACTLY like `CollapseBoolProbe`. In the
 				// measure-only pass (`decisions != null`) record the ACTUAL VISUAL
-				// COLUMN the chain receiver starts at (`indent = col`, NOT `f.indent`
-				// — the glued-first-line fit test needs the real column the chain is
-				// measured against). `CollapsePass.rewriteChainProbe` reads that
+				// COLUMN the marker sits at (`indent = col`, NOT `f.indent` — the
+				// glued-first-line fit test needs the real column the chain tail is
+				// measured against). Since ω-methodchain-all-or-nothing that column
+				// is where the chain RECEIVER ENDS, not where it starts: `emit`
+				// emits `Concat([receiver, <tagged decision>])`, so the pen has
+				// already crossed the receiver when this frame is reached — which is
+				// exactly why `CollapsePass.gluedFirstLineWidth` no longer adds the
+				// receiver's own width. `CollapsePass.rewriteChainProbe` reads that
 				// column and strips the chain dot-break (re-glues) when the full
 				// glued flat overflows but the glued first line (last call's args
 				// broken) fits at `col` — mirror fork

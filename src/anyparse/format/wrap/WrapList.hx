@@ -2351,6 +2351,38 @@ class WrapList {
 					// children are NOT this item's own layout — skip them.
 					case Nest(_, nested):
 						hit = isMethodChainItem(nested);
+					// ω-methodchain-all-or-nothing: a chain is now
+					// `Concat([receiver, <width decision>])`, so the wrapper the
+					// outer switch used to meet at the item's own top level — the
+					// cascade `Group`, the `IfFullLineExceeds` probe, the re-glue
+					// `CollapseChainProbe`, or a bare collapsed-shape `Concat` —
+					// now sits one Concat child in. Following the SAME ctor set
+					// here keeps every shape `MethodChainEmit.emit` can produce
+					// answering as it did before that slice; without this arm four
+					// of its five shapes silently regressed to `false`.
+					//
+					// POSITION-GATED to `Concat([receiver, tail])` — second of
+					// exactly two children — because that is the only place a
+					// chain parks its decision. Following these ctors at any index
+					// of any `Concat` reads a SUB-construct's own break as this
+					// item's layout: measured, that made a call whose sole
+					// collection argument sits inside a chain segment refuse the
+					// glue it had always taken (`HxArrowBlockBodyOpenSliceTest`'s
+					// crash-report fixture) and drifted three further TM files.
+					// Deliberate omissions: `Nest` keeps its own ungated arm above
+					// (pre-slice behaviour), and the nested `case _` stays a SKIP —
+					// the hole the `Doc` enum header flags for this walker is
+					// NARROWED here, not closed.
+					case WrapBoundary(_) | Group(_) | BodyGroup(_) | GroupWithRestProbe(_) | Flatten(_) | HardFlatten(_) | CollapseProbe(_) | CollapseAddProbe(
+						_
+					) | CollapseBoolProbe(_) | CollapseChainProbe(_) | ConditionalMarkerZero(_) | ConditionalMarkerDecrease(_) | Concat(_) | IfBreak(
+						_, _
+					) | IfWidthExceeds(_, _, _) | IfFirstLineExceeds(_, _, _) | IfLineExceeds(_, _, _) | IfResidualLineExceeds(_, _, _) | IfFullLineExceeds(
+						_, _, _
+					) | IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineFitsOpenDelim(_, _, _) | IfArrowContinuationFits(
+						_, _, _, _, _
+					) | IfIndentWidthExceeds(_, _, _, _) | IfGluedFirstLineExceeds(_, _, _, _) if (arr.length == 2 && k == 1):
+						hit = isMethodChainItem(arr[k]);
 					case _:
 				}
 				hit;
@@ -2755,10 +2787,13 @@ class WrapList {
 	 *  - Collapsed cascade (modes equal at flat/break): `<shape>` direct.
 	 *  - Split cascade no-threshold: `IfFullLineExceeds(_, <break-shape>, _)`.
 	 *
-	 * Shape signature: `Concat([_, Nest(_, _)])` (length=2, second child
-	 * is `Nest`). Distinguishes OPL (`MethodChainEmit.shapeOnePerLine`)
-	 * from OPLAF (`shapeOnePerLineAfterFirst`, length=3) at the chain
-	 * layer.
+	  * Shape signature (ω-methodchain-all-or-nothing): `Concat([receiver,
+	 * <tail>])` where the tail is `Concat([Nest(_, _)])` — one child,
+	 * opening with the break BEFORE segment 0. Distinguishes OPL
+	 * (`MethodChainEmit.shapeOnePerLine`) from OPLAF
+	 * (`shapeOnePerLineAfterFirst`, whose tail leads with `segs[0]`) at
+	 * the chain layer. Pre-slice the receiver lived inside the shape and
+	 * the discriminator was the shape's own child count (2 vs 3).
 	 *
 	 * False-positive footprint: `BinaryChainEmit`'s `sameRule`-collapse
 	 * path can also emit `WrapBoundary(Concat([_, Nest(_)]))` directly
@@ -2779,14 +2814,33 @@ class WrapList {
 
 	private static function isOPLShape(d: Doc): Bool {
 		return switch d {
-			case Concat(arr) if (arr.length == 2):
-				switch arr[1] {
-					case Nest(_, _):
-						true;
-					case _:
-						false;
-				}
-			case IfFullLineExceeds(_, brk, _): isOPLShape(brk);
+			// ω-methodchain-all-or-nothing: `MethodChainEmit.emit` always emits
+			// `Concat([receiver, <tail>])`; the tail is the width decision or,
+			// on a collapsed cascade, the shape itself.
+			case Concat(arr) if (arr.length == 2): isOPLTail(arr[1]);
+			case _: false;
+		};
+	}
+
+	/**
+	 * ω-methodchain-all-or-nothing — is a chain's TAIL the `OnePerLine` shape?
+	 * That tail is `Concat([Nest(cols, …)])`: a single child, opening with the
+	 * break before segment 0, i.e. nothing glued to the head. `OnePerLineAfterFirst`
+	 * (`Concat([seg0, Nest(…)])`) and a cuddled `OnePerLine` whose first link
+	 * rides the receiver's closing line both put a segment first and answer
+	 * `false` — in each of those the head line DOES carry a link, which is what
+	 * this predicate's consumer asks about.
+	 *
+	 * COLLISION, pre-existing and still live: `shapeKeepTail` emits the same
+	 * `Concat([Nest(…)])` even for a fully GLUED keep mask, so a `Keep` chain
+	 * answers `true` here without breaking anywhere. The consumer short-circuits
+	 * that case on `keepCloseGlued` before consulting this predicate; the old
+	 * `Concat([receiver, Nest])` signature had the identical collision.
+	 */
+	private static function isOPLTail(d: Doc): Bool {
+		return switch d {
+			case IfFullLineExceeds(_, brk, _): isOPLTail(brk);
+			case Concat(arr) if (arr.length == 1): arr[0].match(Nest(_, _));
 			case _: false;
 		};
 	}

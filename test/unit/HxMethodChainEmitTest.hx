@@ -65,6 +65,27 @@ class HxMethodChainEmitTest extends Test {
 		Assert.isTrue(out.indexOf('\n\t\t\t.b()') != -1, 'expected .b() indented on own line: <$out>');
 	}
 
+	/**
+	 * ω-methodchain-all-or-nothing: the SAME `OnePerLine` mode on a cascade that
+	 * carries `chainItemsAfterCloseParenOnly` uses fork's `isDotAfterPClose`
+	 * definition of a chain item — a `.` counts only after a `)`. `a.b()`'s dot
+	 * follows the bare ident `a`, so `.b()` is not an item: it stays with the
+	 * head while `.c()` and `.d()` break. The test above is the same input under
+	 * the same mode WITHOUT the flag, and it breaks all three — the pair is what
+	 * keeps the flag from being a no-op, and what keeps an explicitly configured
+	 * `onePerLine` on the fork's literal semantics (five fork corpus fixtures
+	 * depend on that).
+	 */
+	public function testPolicyCascadeKeepsANonChainItemGluedToTheHead(): Void {
+		final src: String = 'class Foo { static function f() { a.b().c().d(); } }';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.methodChainWrap = { rules: [], defaultMode: WrapMode.OnePerLine, chainItemsAfterCloseParenOnly: true };
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('a.b()') != -1, 'expected the non-chain-item `.b()` glued to the head: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\t.c()') != -1, 'expected .c() on own indented line: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\t.d()') != -1, 'expected .d() on own indented line: <$out>');
+	}
+
 	public function testThreeSegmentChainOnePerLineAfterFirstKeepsFirstInline(): Void {
 		final src: String = 'class Foo { static function f() { a.b().c().d(); } }';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
