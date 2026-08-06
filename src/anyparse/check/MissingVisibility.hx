@@ -2,9 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.CondBranchProjection;
-import anyparse.query.CondBranchProjection.CondBranchRun;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -66,7 +64,20 @@ import anyparse.runtime.Span;
  * NOTHING but a visibility keyword (`#if cpp public #else private #end function f()`)
  * is a modifier for the member AFTER `#end`, so a branch ending on a visibility keyword
  * carries that keyword out of the region. Conversely a keyword written BEFORE the `#if`
- * reaches into every branch, since whichever branch compiles is the one it modifies.
+ * reaches into every branch, since whichever branch compiles is the one it modifies —
+ * and an `insertAt` slot claimed before the `#if` does NOT, because one shared offset
+ * cannot take one keyword per branch; each branch's keyword goes at its own member.
+ *
+ * A carried-out keyword is exempting, not proving: `#if cpp public #end function f()`
+ * leaves `f` unmarked in a `!cpp` build, and the check no longer reports it. The carry
+ * therefore RAISES the visibility the fix would assume rather than lowering it (an
+ * `override` carried the same way resolves through the supertype, which can be `public`)
+ * — the direction that costs a finding, never a compile error.
+ *
+ * Only the `conditionalMemberKind` shape is covered. A `#if` that splits a member's own
+ * SIGNATURE rather than listing whole members (`#if cpp function f():Int #else function
+ * f():Float #end return 1;`) parses as a straddling `CondSplice*` form carrying no
+ * recoverable member run, and its members stay unreported — as they were before.
  *
  * ## Grammar-agnostic
  *
@@ -184,28 +195,28 @@ final class MissingVisibility implements Check {
 
 	/**
 	 * Walk `node`; for every visibility-requiring container NOT preceded by an extern modifier,
-	 * flag each member lacking a visibility modifier. `incomingExtern` carries that skip into a
-	 * wrapper decl node (Haxe `final class` projects the class as a `ClassForm` nested in a
-	 * `FinalDecl`); the returned flag tells a caller frame a child subtree opened a container, so
-	 * its own modifier run resets there and the extern flag reaches exactly one declaration.
+	 * flag each member lacking a visibility modifier. `incomingExtern` carries that skip into the
+	 * declaration the modifier belongs to, including a wrapper decl node (Haxe `final class`
+	 * projects the class as a `ClassForm` nested in a `FinalDecl`).
+	 *
+	 * The run ends at the first child that is not itself a modifier (`Seams.modifierRunKinds`) —
+	 * that child IS the declaration the run modified. Ending it on the CONTAINER kind instead
+	 * leaks the flag past any declaration this check does not scan: `extern interface I {}` then
+	 * `class C {}` exempted every member of `C`.
 	 */
-	private static function walk(ctx: ScanCtx, node: QueryNode, incomingExtern: Bool): Bool {
+	private static function walk(ctx: ScanCtx, node: QueryNode, incomingExtern: Bool): Void {
 		final externKind: Null<String> = ctx.seams.externKind;
 		var isExtern: Bool = incomingExtern;
-		var sawDecl: Bool = false;
 		for (child in node.children) {
 			if (externKind != null && child.kind == externKind) isExtern = true;
-			final childConsumes: Bool = if (ctx.seams.containers.contains(child.kind)) {
+			if (ctx.seams.modifierRunKinds.contains(child.kind)) continue;
+			if (ctx.seams.containers.contains(child.kind)) {
 				if (!isExtern) scanRun(ctx, child.children, false);
 				walk(ctx, child, false);
-				true;
 			} else
 				walk(ctx, child, isExtern);
-			if (!childConsumes) continue;
 			isExtern = false;
-			sawDecl = true;
 		}
-		return sawDecl;
 	}
 
 	/**
@@ -244,18 +255,23 @@ final class MissingVisibility implements Check {
 	 * written before the region modifies whichever branch compiles), and a branch ENDING on a
 	 * visibility keyword carries it out — a region holding nothing but `public` / `private` is a
 	 * modifier for the member after `#end`, not a region of members of its own. Any branch carrying
-	 * out is enough: the conservative direction, since a spurious carry only exempts a member.
+	 * out is enough — a spurious carry only exempts a member, never reports one.
 	 *
-	 * A shape the splitter refuses — or a region with no children at all — is scanned as ONE flat
-	 * run rather than skipped: losing the branch boundaries costs the straddling case above, losing
-	 * the region costs every member in it.
+	 * A shape the splitter refuses — or a region with no children at all — falls back to ONE flat
+	 * run: losing the branch boundaries costs the straddling case above, losing the region costs
+	 * every member in it. The fallback drops `incoming` though, and with a keyword already in
+	 * flight it skips the region outright: flattened, that keyword is consumed by the FIRST member
+	 * and every later one is reported, but each is in a mutually exclusive branch the keyword also
+	 * modifies — a false positive whose fix writes a second keyword onto the same member.
 	 */
 	private static function scanConditional(ctx: ScanCtx, region: QueryNode, incoming: Bool): Bool {
 		final runs: Null<Array<CondBranchRun>> = CondBranchProjection.conditionalBranchRuns(
 			region, ctx.source, ctx.seams.elseKeywords, ctx.comments
 		);
-		if (runs == null || runs.length == 0) return scanRun(ctx, region.children, incoming);
+		if (runs == null || runs.length == 0) return incoming || scanRun(ctx, region.children, false);
 		var carry: Bool = false;
+		// Not `runs.exists(...)`: every branch must be scanned for its own violations, and `exists`
+		// stops at the first branch that carries out.
 		for (run in runs) if (scanRun(ctx, run.nodes, incoming)) carry = true;
 		return carry;
 	}
@@ -264,29 +280,28 @@ final class MissingVisibility implements Check {
 	 * Walk `node`; insert the keyword on each flagged member of a container. A container
 	 * preceded by an extern modifier or a public-default meta (`@:publicFields`) is skipped
 	 * — its members are implicitly public, so inserting `private` would change visibility.
-	 * `incomingPublicDefault` carries that skip into a wrapper decl node (Haxe `final class`
-	 * projects the class as a `ClassForm` nested in a `FinalDecl`); the returned flag tells a
-	 * caller frame a child subtree opened a container, so its own run resets there.
+	 * `incomingPublicDefault` carries that skip into the declaration the modifier belongs to,
+	 * including a wrapper decl node (Haxe `final class` projects the class as a `ClassForm` nested
+	 * in a `FinalDecl`). The run ends at the first non-modifier child — that child IS the
+	 * declaration it modified. Ending it on the CONTAINER kind instead leaked the flag past a
+	 * declaration this walk does not visit: `@:publicFields interface I {}` then `class C {}` left
+	 * `C`'s members report-only forever.
 	 */
-	private static function insertWalk(ctx: FixCtx, node: QueryNode, incomingPublicDefault: Bool): Bool {
+	private static function insertWalk(ctx: FixCtx, node: QueryNode, incomingPublicDefault: Bool): Void {
 		final externKind: Null<String> = ctx.seams.externKind;
 		var publicDefault: Bool = incomingPublicDefault;
-		var sawDecl: Bool = false;
 		for (child in node.children) {
 			final metaName: Null<String> = child.name;
 			if (externKind != null && child.kind == externKind || metaName != null && ctx.seams.publicMetaNames.contains(metaName))
 				publicDefault = true;
-			final childConsumes: Bool = if (ctx.seams.containers.contains(child.kind)) {
+			if (ctx.seams.modifierRunKinds.contains(child.kind)) continue;
+			if (ctx.seams.containers.contains(child.kind)) {
 				if (!publicDefault) insertRun(ctx, child.children, child.name, { insertAt: -1, sawOverride: false });
 				insertWalk(ctx, child, false);
-				true;
 			} else
 				insertWalk(ctx, child, publicDefault);
-			if (!childConsumes) continue;
 			publicDefault = false;
-			sawDecl = true;
 		}
-		return sawDecl;
 	}
 
 	/**
@@ -305,7 +320,7 @@ final class MissingVisibility implements Check {
 				insertAt = after.insertAt;
 				sawOverride = after.sawOverride;
 			} else if (ctx.seams.members.contains(child.kind)) {
-				insertMember(ctx, child, typeName, insertAt, sawOverride);
+				insertMember(ctx, child, typeName, { insertAt: insertAt, sawOverride: sawOverride });
 				insertAt = -1;
 				sawOverride = false;
 			} else {
@@ -320,21 +335,31 @@ final class MissingVisibility implements Check {
 	}
 
 	/**
-	 * The fix-side mirror of `scanConditional`: every branch is walked as its own modifier run
-	 * starting from the state that reached the `#if`, so a flagged member gets its keyword at its
-	 * own declaration inside the branch rather than before the region. The state carried past
-	 * `#end` keeps only `sawOverride` (any branch is enough — the conservative direction, an
-	 * override resolves through the index instead of getting a forced `private`); `insertAt` resets,
-	 * putting the keyword immediately before that member, which is a valid slot under any preceding
-	 * modifier.
+	 * The fix-side mirror of `scanConditional`: every branch is walked as its own modifier run, so a
+	 * flagged member gets its keyword at its own declaration inside the branch rather than before
+	 * the region.
+	 *
+	 * `insertAt` does NOT cross the `#if` in either direction. Inwards, a slot claimed by a modifier
+	 * BEFORE the region is one offset that cannot receive one keyword per branch — passing it in
+	 * emitted N identical zero-width inserts at it (`private private static`). Outwards, a slot
+	 * claimed INSIDE a branch must not place the keyword of a member after `#end`. Both ends reset
+	 * to -1, putting each keyword immediately before its own member — a valid slot under any
+	 * preceding modifier, even if not the canonical one.
+	 *
+	 * `sawOverride` does cross, from any branch: a member after `#end` that is an override in even
+	 * one build resolves through the index rather than being forced to `private`.
 	 */
 	private static function insertConditional(ctx: FixCtx, region: QueryNode, typeName: Null<String>, incoming: RunState): RunState {
+		final entry: RunState = { insertAt: -1, sawOverride: incoming.sawOverride };
 		final runs: Null<Array<CondBranchRun>> = CondBranchProjection.conditionalBranchRuns(
 			region, ctx.source, ctx.seams.elseKeywords, ctx.comments
 		);
-		if (runs == null || runs.length == 0) return insertRun(ctx, region.children, typeName, incoming);
+		if (runs == null || runs.length == 0)
+			return { insertAt: -1, sawOverride: insertRun(ctx, region.children, typeName, entry).sawOverride };
 		var sawOverride: Bool = false;
-		for (run in runs) if (insertRun(ctx, run.nodes, typeName, incoming).sawOverride) sawOverride = true;
+		// Not `runs.exists(...)`: every branch must emit its own edits, and `exists` stops at the
+		// first branch that carries an override out.
+		for (run in runs) if (insertRun(ctx, run.nodes, typeName, entry).sawOverride) sawOverride = true;
 		return { insertAt: -1, sawOverride: sawOverride };
 	}
 
@@ -344,22 +369,21 @@ final class MissingVisibility implements Check {
 	 * provable → no edit). The keyword lands at `insertAt`, else immediately before the member host
 	 * — after any `override` / `@:meta`, which rank at or below visibility.
 	 */
-	private static function insertMember(ctx: FixCtx, member: QueryNode, typeName: Null<String>, insertAt: Int, sawOverride: Bool): Void {
+	private static function insertMember(ctx: FixCtx, member: QueryNode, typeName: Null<String>, state: RunState): Void {
 		final span: Null<Span> = member.span;
 		if (span == null || !ctx.flagged.contains(span.from)) return;
 		final memberName: Null<String> = member.name;
 		final index: Null<SymbolIndex> = ctx.index;
-		final insert: Null<String> = if (!sawOverride)
+		final insert: Null<String> = if (!state.sawOverride)
 			ctx.keyword;
 		else if (index != null && typeName != null && memberName != null)
 			index.memberVisibilityOf(typeName, memberName);
 		else
 			null;
 		if (insert == null) return;
-		final pos: Int = insertAt >= 0 ? insertAt : span.from;
+		final pos: Int = state.insertAt >= 0 ? state.insertAt : span.from;
 		ctx.edits.push({ span: new Span(pos, pos), text: '$insert ' });
 	}
-
 
 	/** Resolve the container / member / visibility seam kinds plus the fix-only autofix seams, or null when any required kind is unset. */
 	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
@@ -377,6 +401,7 @@ final class MissingVisibility implements Check {
 			members: members,
 			visibility: visibility,
 			order: order,
+			modifierRunKinds: modifierRunKinds(shape, plugin.metaShape()),
 			keyword: shape.defaultVisibilityModifierText,
 			overrideKind: shape.overrideModifierKind,
 			externKind: shape.externModifierKind,
@@ -387,6 +412,22 @@ final class MissingVisibility implements Check {
 		};
 	}
 
+	/**
+	 * The kinds that may PRECEDE a declaration without ending its modifier run — every modifier
+	 * (`modifierOrderKinds` plus the visibility keywords and `externModifierKind`) and every
+	 * annotation kind. Deliberately a positive criterion: anything else a walk meets IS the
+	 * declaration the run modified, so the run ends there whether or not this check scans it.
+	 */
+	private static function modifierRunKinds(shape: RefShape, meta: MetaShape): Array<String> {
+		final externKind: Null<String> = shape.externModifierKind;
+		final all: Array<String> = (
+			shape.modifierOrderKinds ?? []
+		).concat(shape.visibilityModifierKinds ?? []).concat(meta.metaKinds).concat(externKind == null ? [] : [externKind]);
+		final out: Array<String> = [];
+		for (k in all) if (!out.contains(k)) out.push(k);
+		return out;
+	}
+
 }
 
 /** The resolved seams `MissingVisibility` reads in both `run` and `fix`. */
@@ -395,6 +436,10 @@ private typedef Seams = {
 	final members: Array<String>;
 	final visibility: Array<String>;
 	final order: Array<String>;
+
+	/** The kinds a declaration's preceding modifier run may hold; any other kind ENDS the run. */
+	final modifierRunKinds: Array<String>;
+
 	final keyword: Null<String>;
 	final overrideKind: Null<String>;
 	final externKind: Null<String>;

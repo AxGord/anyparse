@@ -187,6 +187,16 @@ class MissingVisibilityCheckTest extends Test {
 		Assert.equals(1, violations('extern class E { function f():Void; }\nclass C { function g():Void {} }').length);
 	}
 
+	/**
+	 * The declaration that consumes `extern` need not be one this check scans. An interface / enum
+	 * ends the modifier run just as a class does — ending it only on a scanned CONTAINER left the
+	 * flag alive and exempted the next class in the module.
+	 */
+	public function testExternSkipDoesNotLeakPastUnscannedDecl(): Void {
+		Assert.equals(1, violations('extern interface I { function h():Void; }\nclass C { function g():Void {} }').length);
+		Assert.equals(1, violations('extern enum E { A; }\nclass C { function g():Void {} }').length);
+	}
+
 	/** A `@:publicFields` class defaults its members to public; the autofix must NOT force `private`. */
 	public function testFixSkipsPublicFieldsClass(): Void {
 		Assert.equals(1, violations('@:publicFields class D { function g():Void {} }').length);
@@ -196,6 +206,17 @@ class MissingVisibilityCheckTest extends Test {
 	/** `final class` wraps the class in a decl node; the extern skip must carry into that wrapper to reach the members. */
 	public function testExternFinalClassMembersNotFlagged(): Void {
 		Assert.equals(0, violations('extern final class C { function f():Void; }').length);
+	}
+
+	/**
+	 * The public-default meta ends its run on the interface, not on the next class the fix walk
+	 * happens to visit — otherwise `g` is reported but never fixable, and `--fix` converges
+	 * silently with the finding still standing.
+	 */
+	public function testFixPublicFieldsSkipDoesNotLeakToNextClass(): Void {
+		final src: String = '@:publicFields\ninterface I { function h():Void; }\nclass C { function g():Void {} }';
+		Assert.equals(1, violations(src).length);
+		Assert.isTrue(fixedSource(src).indexOf('private function g') >= 0);
 	}
 
 	/** A `@:publicFields final class` (the project's house form) must also stay report-only, not get `private`. */
@@ -284,6 +305,19 @@ class MissingVisibilityCheckTest extends Test {
 	public function testFixConditionalMemberKeywordPosition(): Void {
 		final fixed: String = fixedSource('class C {\n\t#if cpp\n\tstatic inline function f():Void {}\n\t#end\n}');
 		Assert.equals('class C {\n\t#if cpp\n\tprivate static inline function f():Void {}\n\t#end\n}', fixed);
+	}
+
+	/**
+	 * A modifier before the `#if` claims ONE insert offset, and one offset cannot receive one
+	 * keyword per branch: carrying it in emitted N identical zero-width inserts there, which
+	 * `applyEdits` renders as `private private static`. Each branch's keyword goes at its own
+	 * member instead.
+	 */
+	public function testFixConditionalDoesNotDuplicateAtSharedSlot(): Void {
+		final src: String = 'class C {\n\tstatic\n\t#if cpp\n\tfunction a():Void {}\n\t#else\n\tfunction b():Void {}\n\t#end\n}';
+		final want: String =
+			'class C {\n\tstatic\n\t#if cpp\n\tprivate function a():Void {}\n\t#else\n\tprivate function b():Void {}\n\t#end\n}';
+		Assert.equals(want, fixedSource(src));
 	}
 
 	/** Meta ranks at or below visibility, inside a branch as anywhere else — the keyword goes after it. */
