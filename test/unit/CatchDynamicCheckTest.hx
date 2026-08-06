@@ -13,8 +13,11 @@ import anyparse.check.LintConfig;
 /**
  * The `catch-dynamic` check: a `catch` clause whose declared exception type is
  * `Dynamic` (or `Any`) is flagged `Warning` (prefer `catch (exception:Exception)`).
- * A typed catch of any other name (`Exception`, a custom class, `String`) and an
- * untyped `catch (e)` are not flagged. `fix` swaps an UNUSED catch-all to `Exception` (adding the import); a used one stays a finding.
+ * A bare untyped `catch (e)` — implicitly `haxe.Exception` since Haxe 4.1 — is
+ * ALSO flagged, so its type can be annotated explicitly; a typed catch of any
+ * other name (`Exception`, a custom class, `String`) is left alone. `fix` swaps
+ * an UNUSED catch-all to `Exception` (adding the import; a used one stays a
+ * finding) and ALWAYS annotates a bare catch (zero behaviour change either way).
  */
 class CatchDynamicCheckTest extends Test {
 
@@ -51,8 +54,25 @@ class CatchDynamicCheckTest extends Test {
 		Assert.equals(0, violations('class C {\n\tpublic function f():Void {\n\t\ttry g() catch (e:String) {}\n\t}\n}').length);
 	}
 
-	public function testUntypedCatchNotFlagged(): Void {
-		Assert.equals(0, violations('class C {\n\tpublic function f():Void {\n\t\ttry g() catch (e) {}\n\t}\n}').length);
+	public function testUntypedCatchFlagged(): Void {
+		// Arm (c): a bare `catch (e)` is implicitly `haxe.Exception` since Haxe 4.1 — flagged so the
+		// type gets annotated explicitly. Zero behaviour change either way, so this is unconditional.
+		final vs: Array<Violation> = violations('class C {\n\tpublic function f():Void {\n\t\ttry g() catch (e) {}\n\t}\n}');
+		Assert.equals(1, vs.length);
+		Assert.equals('catch-dynamic', vs[0].rule);
+		Assert.equals(Severity.Warning, vs[0].severity);
+		Assert.equals('untyped catch clause is implicitly Exception (Haxe 4.1+) — prefer catch (exception:Exception)', vs[0].message);
+	}
+
+	public function testUntypedCatchSpanIsParameterRegion(): Void {
+		final src: String = 'class C {\n\tpublic function f():Void {\n\t\ttry g() catch (e) {}\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals('(e)', src.substring(vs[0].span.from, vs[0].span.to));
+	}
+
+	public function testUntypedUnderscoreCatchFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\tpublic function f():Void {\n\t\ttry g() catch (_) {}\n\t}\n}').length);
 	}
 
 	public function testMixedCatchesFlagsOnlyDynamic(): Void {
@@ -295,6 +315,61 @@ class CatchDynamicCheckTest extends Test {
 		// which keeps the original var name.
 		final out: String = applyFixLogging('class C { public function f():Void { try g() catch (e:Dynamic) {} } }');
 		Assert.isTrue(out.indexOf('(e:Exception)') != -1, 'arm-a keeps the var name, got: $out');
+	}
+
+	public function testFixAnnotatesUntypedCatchAndImports(): Void {
+		// Arm (c): a bare catch swaps to an explicit `:Exception` unconditionally — no usage
+		// gating, since the type doesn't change (Haxe 4.1 already infers `haxe.Exception` here).
+		// `fixLoggingUses` is irrelevant to this arm; the default resolver (option OFF) is used.
+		final out: String = applyFix('class C { public function f():Void { try g() catch (e) { trace(e); } } }');
+		Assert.isTrue(out.indexOf('(e:Exception)') != -1, 'type should become Exception, got: $out');
+		Assert.isTrue(out.indexOf('import haxe.Exception;') != -1, 'import should be added, got: $out');
+	}
+
+	public function testFixAnnotatesUntypedCatchKeepsVarName(): Void {
+		final out: String = applyFix('class C { public function f():Void { try g() catch (msg) { log(msg.toString()); } } }');
+		Assert.isTrue(out.indexOf('(msg:Exception)') != -1, 'var name must be unchanged, got: $out');
+	}
+
+	public function testFixAnnotatesUntypedCatchNoDuplicateImportWhenAlreadyImported(): Void {
+		final out: String = applyFix('import haxe.Exception;\nclass C { public function f():Void { try g() catch (e) {} } }');
+		Assert.isTrue(out.indexOf('(e:Exception)') != -1, 'should use the already-imported short name, got: $out');
+		Assert.equals(
+			-1, out.indexOf('import haxe.Exception;', out.indexOf('import haxe.Exception;') + 1), 'no duplicate import, got: $out'
+		);
+	}
+
+	public function testFixAnnotatesUntypedCatchQualifiedOnCollision(): Void {
+		// A same-file type named `Exception` would shadow a bare `Exception`, so the annotation
+		// uses fully-qualified `haxe.Exception` and adds no import — same convention as arm (a).
+		final out: String = applyFix('class Exception {} class C { public function f():Void { try g() catch (e) {} } }');
+		Assert.isTrue(out.indexOf('(e:haxe.Exception)') != -1, 'should use qualified name, got: $out');
+		Assert.isTrue(out.indexOf('import haxe.Exception;') == -1, 'no import on collision, got: $out');
+	}
+
+	public function testFixAnnotatesUntypedCatchInsideConditionalQualifiedNoImport(): Void {
+		final out: String = applyFix(
+			'class C {\n\tpublic function f():Void {\n\t\t#if debug\n\t\ttry g() catch (e) {}\n\t\t#end\n\t}\n}'
+		);
+		Assert.isTrue(out.indexOf('(e:haxe.Exception)') != -1, 'conditional annotation should use qualified name, got: $out');
+		Assert.isTrue(out.indexOf('import haxe.Exception;') == -1, 'no import for a conditional-only annotation, got: $out');
+	}
+
+	public function testFixMixedUntypedAndDynamicCatches(): Void {
+		// A bare catch (arm c) and a Dynamic catch-all (arm a) side by side both get annotated,
+		// keeping their own variable names, sharing the single added import.
+		final src: String = 'class C { public function f():Void { try a() catch (e) {} try b() catch (x:Dynamic) {} } }';
+		final out: String = applyFix(src);
+		Assert.isTrue(out.indexOf('(e:Exception)') != -1, 'bare catch annotated, got: $out');
+		Assert.isTrue(out.indexOf('(x:Exception)') != -1, 'dynamic catch swapped, got: $out');
+		Assert.equals(
+			-1, out.indexOf('import haxe.Exception;', out.indexOf('import haxe.Exception;') + 1), 'import added once, got: $out'
+		);
+	}
+
+	public function testFixDoesNotTouchTypedExceptionCatch(): Void {
+		final src: String = 'class C { public function f():Void { try g() catch (e:Exception) {} } }';
+		Assert.equals(0, editCount(src));
 	}
 
 }

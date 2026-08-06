@@ -48,12 +48,23 @@ import anyparse.check.Check.ConfigAware;
  * / `return`, an argument to another call) — that reads or propagates the raw-value API and stays
  * report-only for a manual `.unwrap` decision.
  *
+ * ## Autofix — arm (c): the catch has no declared type at all
+ *
+ * A bare `catch (e)` — no `:Type` at all — has been implicitly `haxe.Exception` since Haxe 4.1's
+ * unified exceptions; annotating it is a pure clarity improvement, NOT a behaviour change (the
+ * runtime type is identical before and after). `fix` therefore ALWAYS adds the `:Exception`
+ * annotation, with no usage gating (unlike arm (b), which must reason about what the body does
+ * with the value) and no rename — the bound variable name is left exactly as written. The type is
+ * spelled by the same shared `TypeRefPrinter` convention as arms (a)/(b): short name when visible,
+ * short name plus an inserted `import haxe.Exception;` when the name is free, fully-qualified on a
+ * collision or inside a `#if … #end` conditional region (no import added there either).
+ *
  * ## What is flagged
  *
  * A `catchClauseKind` whose declared type (read from the clause header source, between the first
- * `:` and the closing `)`) resolves to a `catchAllTypeNames` name (`Dynamic` / `Any`). A typed
- * catch of any other name (`Exception`, a custom class, `String`, …) and an untyped `catch (e)` —
- * which the grammar records with no type text — are left alone.
+ * `:` and the closing `)`) resolves to a `catchAllTypeNames` name (`Dynamic` / `Any`) — OR whose
+ * header has no `:` at all (a bare `catch (e)`, arm (c)). A typed catch of any other name
+ * (`Exception`, a custom class, `String`, …) is left alone.
  */
 @:nullSafety(Strict)
 final class CatchDynamic implements Check implements ConfigAware {
@@ -146,7 +157,10 @@ final class CatchDynamic implements Check implements ConfigAware {
 		return edits;
 	}
 
-	/** Walk `node`, flagging every catch clause whose declared type is a catch-all name. */
+	/** The message for a bare, untyped `catch (e)` (arm (c)) — shared by `run` and any diagnostics. */
+	private static final UNTYPED_MESSAGE: String = 'untyped catch clause is implicitly Exception (Haxe 4.1+) — prefer catch (exception:Exception)';
+
+	/** Walk `node`, flagging every catch clause whose declared type is a catch-all name, plus every bare untyped catch. */
 	private static function walk(
 		out: Array<Violation>, file: String, source: String, node: QueryNode, catchKind: String, catchAll: Array<String>
 	): Void {
@@ -155,14 +169,26 @@ final class CatchDynamic implements Check implements ConfigAware {
 	}
 
 	/**
-	 * Append a `Warning` when `catchNode`'s declared exception type is a catch-all name.
-	 * The `(var:Type)` parameter region is decoded by `catchParamRegion`, so an untyped
-	 * `catch (e)` (no `:`) and a non-nominal type (a function type / generics) are skipped.
-	 * The violation span covers only the parameter region, not the handler body.
+	 * Append a `Warning` when `catchNode`'s declared exception type is a catch-all name, or when
+	 * the clause has no declared type at all (arm (c) — a bare `catch (e)`). The `(var:Type)`
+	 * parameter region is decoded by `catchParamRegion`, so a non-nominal type (a function type /
+	 * generics) is skipped; the bare case is decoded separately by `catchBareRegion` since it has
+	 * no `:` to anchor on. The violation span covers only the parameter region, not the handler body.
 	 */
 	private static function flagCatch(
 		out: Array<Violation>, file: String, source: String, catchNode: QueryNode, catchAll: Array<String>
 	): Void {
+		final bare = catchBareRegion(catchNode, source);
+		if (bare != null) {
+			out.push({
+				file: file,
+				span: new Span(bare.from, bare.to),
+				rule: 'catch-dynamic',
+				severity: Severity.Warning,
+				message: UNTYPED_MESSAGE
+			});
+			return;
+		}
 		final p = catchParamRegion(catchNode, source);
 		if (p == null || !catchAll.contains(p.typeName)) return;
 		out.push({
@@ -212,6 +238,29 @@ final class CatchDynamic implements Check implements ConfigAware {
 	}
 
 	/**
+	 * The `(var)` parameter region of a BARE, untyped catch clause — arm (c) — decoded the same
+	 * way as `catchParamRegion` but requiring the ABSENCE of a `:` in the header (a typed clause is
+	 * `catchParamRegion`'s concern, not this one). Null when the header has a `:`, or the parens
+	 * can't be found, or the enclosed text is empty (defensive; the grammar always supplies a name).
+	 */
+	private static function catchBareRegion(catchNode: QueryNode, source: String): Null<{ from: Int, to: Int, varName: String }> {
+		final cs: Null<Span> = catchNode.span;
+		final kids: Array<QueryNode> = catchNode.children;
+		if (cs == null || kids.length == 0) return null;
+		final bodyNode: QueryNode = kids[kids.length - 1];
+		final body: Null<Span> = bodyNode.span;
+		if (body == null) return null;
+		final start: Int = cs.from;
+		final header: String = source.substring(start, body.from);
+		final open: Int = header.indexOf('(');
+		final colon: Int = header.indexOf(':');
+		final close: Int = header.lastIndexOf(')');
+		if (open == -1 || close == -1 || close <= open || colon != -1) return null;
+		final varName: String = StringTools.trim(header.substring(open + 1, close));
+		return varName.length == 0 ? null : { from: start + open, to: start + close + 1, varName: varName };
+	}
+
+	/**
 	 * The `(var:Exception)` rewrite for a flagged catch clause, or null when it must stay
 	 * a finding. Fires only when the clause was flagged (its region span is in `flagged`),
 	 * its type is a catch-all name, and the bound variable is never mentioned in the body —
@@ -225,6 +274,21 @@ final class CatchDynamic implements Check implements ConfigAware {
 		if (p == null || !catchAll.contains(p.typeName)) return null;
 		final unfixable: Bool = !flagged.exists('${p.from}:${p.to}') || p.varName.length == 0 || mentionsName(p.body, p.varName);
 		return unfixable ? null : { span: new Span(p.from, p.to), text: '(${p.varName}:$exText)' };
+	}
+
+	/**
+	 * The `(var:Exception)` rewrite for a flagged BARE catch clause — arm (c) — or null when it
+	 * wasn't flagged (or isn't bare). Unlike `swapEdit` this has no usage gate: the annotation is a
+	 * zero-behaviour-change clarification (Haxe 4.1 already binds a bare `catch (e)` as
+	 * `haxe.Exception`), so it fires unconditionally, keeping the original variable name.
+	 */
+	private static function bareSwapEdit(catchNode: QueryNode, source: String, exText: String, flagged: Map<String, Bool>): Null<{
+		span: Span,
+		text: String
+	}> {
+		final b = catchBareRegion(catchNode, source);
+		if (b == null || !flagged.exists('${b.from}:${b.to}')) return null;
+		return { span: new Span(b.from, b.to), text: '(${b.varName}:$exText)' };
 	}
 
 	/** Whether any node in `node`'s subtree carries `name` — catches plain identifiers, field-access names, and string-interpolation idents alike (a conservative reference test). */
@@ -324,14 +388,19 @@ final class CatchDynamic implements Check implements ConfigAware {
 	}
 
 	/**
-	 * The rewrite edits for ONE flagged catch clause: arm (a) (swap an unused catch-all, keeping the
-	 * variable name) when the value is unused, else arm (b) (rename a logging-only value to
-	 * `exception`) when `fixLogging` is on, else empty — the clause stays a report-only finding.
+	 * The rewrite edits for ONE flagged catch clause: arm (c) (annotate a bare, untyped catch —
+	 * unconditional, keeping the variable name) when the clause has no declared type at all; else
+	 * arm (a) (swap an unused catch-all, keeping the variable name) when the value is unused; else
+	 * arm (b) (rename a logging-only value to `exception`) when `fixLogging` is on; else empty —
+	 * the clause stays a report-only finding. The three arms are mutually exclusive: a clause is
+	 * either bare (arm (c)'s concern) or typed (arms (a)/(b)'s), never both.
 	 */
 	private static function catchRewriteEdits(
 		node: QueryNode, source: String, catchAll: Array<String>, exText: String, flagged: Map<String, Bool>, fixLogging: Bool,
 		callKind: String, fieldKind: String, identKind: String
 	): Array<{ span: Span, text: String }> {
+		final bareEdit: Null<{ span: Span, text: String }> = bareSwapEdit(node, source, exText, flagged);
+		if (bareEdit != null) return [bareEdit];
 		final unusedEdit: Null<{ span: Span, text: String }> = swapEdit(node, source, catchAll, exText, flagged);
 		if (unusedEdit != null) return [unusedEdit];
 		return fixLogging ? loggingSwapEdits(node, source, catchAll, exText, flagged, callKind, fieldKind, identKind) : [];
