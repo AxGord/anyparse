@@ -141,7 +141,8 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 	}
 
 	public function description(): String {
-		return 'a while (x.indexOf(S) != -1) x = x.replace(S, B); loop — replace() already replaces every occurrence in one call';
+		return
+			'a while (x.indexOf(S) != -1) x = x.replace(S, B); loop — replace() already replaces every occurrence in one call; a PARAMETER S / B cannot be decided statically and is reported as a potential infinite loop';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
