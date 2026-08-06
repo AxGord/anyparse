@@ -228,6 +228,30 @@ class RedundantReplaceLoopCheckTest extends Test {
 		Assert.equals(Severity.Info, vs[0].severity);
 	}
 
+	public function testEnclosingMethodParameterInLambdaFlagged(): Void {
+		// The loop sits in a LAMBDA, but `S` / `B` are the ENCLOSING METHOD's parameters — just as
+		// caller-chosen as the lambda's own, so the parameter test walks OUTWARD through every
+		// enclosing scope, not only the innermost one.
+		final src: String = 'class C {\n\tpublic static function f(word:String, replace:String):String {\n'
+			+ '\t\tfinal strip = function(line:String):String {\n'
+			+ '\t\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);\n\t\t\treturn line;\n\t\t};\n'
+			+ '\t\treturn strip(\'x\');\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.isTrue(StringTools.startsWith(vs[0].message, 'potential infinite loop when replace contains word'));
+	}
+
+	public function testEnclosingFunctionParameterInLocalFunctionFlagged(): Void {
+		// The same outward walk through a named LOCAL function: `word` belongs to `outer`, which
+		// ENCLOSES `inner`, so `outer`'s caller still chooses it and arm C applies.
+		final src: String = 'class C {\n\tpublic static function outer(word:String):String {\n'
+			+ '\t\tfunction inner(line:String):String {\n\t\t\twhile (line.indexOf(word) != -1) line = line.replace(word, \'_\');\n'
+			+ '\t\t\treturn line;\n\t\t}\n\t\treturn inner(\'x\');\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+	}
+
 	public function testContainmentGuardSuppressesArmC(): Void {
 		Assert.equals(
 			0,
@@ -314,6 +338,27 @@ class RedundantReplaceLoopCheckTest extends Test {
 		);
 	}
 
+	public function testGuardOutsideTheLambdaDoesNotSuppress(): Void {
+		// The containment guard sits in the enclosing METHOD, outside the lambda holding the loop.
+		// Dominance is rooted at the INNERMOST function, so the guard is never read — the opposite
+		// direction from the parameter test, which walks every enclosing scope.
+		final src: String = 'class C {\n\tpublic static function f(word:String, replace:String):String {\n'
+			+ '\t\tif (replace.indexOf(word) != -1) return word;\n' + '\t\tfinal strip = function(line:String):String {\n'
+			+ '\t\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);\n\t\t\treturn line;\n\t\t};\n'
+			+ '\t\treturn strip(\'x\');\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+	}
+
+	public function testGuardInsideTheLambdaSuppresses(): Void {
+		// The same guard MOVED into the lambda does dominate the loop — the discriminating half of
+		// the pair above, so neither test can pass for the other's reason.
+		final src: String = 'class C {\n\tpublic static function f(word:String, replace:String):String {\n'
+			+ '\t\tfinal strip = function(line:String):String {\n' + '\t\t\tif (replace.indexOf(word) != -1) return line;\n'
+			+ '\t\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);\n\t\t\treturn line;\n\t\t};\n'
+			+ '\t\treturn strip(\'x\');\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
 	// --- arm C: what a DOMINATING guard may look like ---
 
 	public function testMultiStatementGuardBodySuppressesArmC(): Void {
@@ -383,12 +428,13 @@ class RedundantReplaceLoopCheckTest extends Test {
 	}
 
 	public function testParameterOfAnotherFunctionNotFlagged(): Void {
-		// The loop sits in the LOCAL function `inner`, whose own parameters are just `line`; `word`
-		// belongs to `outer`. The receiver type gate passes (`line:String`), so this exercises the
-		// enclosing-function parameter gate and nothing else.
-		final src: String = 'class C {\n\tpublic static function outer(word:String):String {\n'
-			+ '\t\tfunction inner(line:String):String {\n\t\t\twhile (line.indexOf(word) != -1) line = line.replace(word, \'_\');\n'
-			+ '\t\t\treturn line;\n\t\t}\n\t\treturn inner(\'x\');\n\t}\n}';
+		// `word` is a parameter of the SIBLING local function `helper`, which does NOT enclose the
+		// loop — the outward walk climbs the loop's own chain of enclosing scopes and stops there.
+		// The receiver type gate passes (`line:String`), so this pins the operand OUTCOME.
+		final src: String = 'class C {\n\tpublic static function outer():String {\n'
+			+ '\t\tfunction helper(word:String):String return word;\n' + '\t\tfunction inner(line:String):String {\n'
+			+ '\t\t\twhile (line.indexOf(word) != -1) line = line.replace(word, \'_\');\n\t\t\treturn line;\n\t\t}\n'
+			+ '\t\treturn helper(\'y\') + inner(\'x\');\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 

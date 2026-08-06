@@ -2786,7 +2786,7 @@ final class RefactorSupport {
 	 */
 	public static inline function resolutionSourcesOf(plugin: GrammarPlugin): Null<Array<{ file: String, source: String }>> {
 		final host: Null<SymbolIndexHost> = (plugin is SymbolIndexHost) ? cast plugin : null;
-		return host == null ? null : host.resolutionFiles();
+		return (host != null && host.hasAnyResolutionScope()) ? host.resolutionFiles() : null;
 	}
 
 	/**
