@@ -59,6 +59,8 @@ import anyparse.format.UniformStatementBlanksPolicy;
 import anyparse.grammar.haxe.format.HxFormatUniformStatementBlanksPolicy;
 import anyparse.format.CommentStyle;
 import anyparse.grammar.haxe.format.HxFormatCommentsSection;
+import anyparse.format.TrailingCommaPolicy;
+import anyparse.grammar.haxe.format.HxFormatWrappingTrailingCommaPolicy;
 
 /**
  * Loads a haxe-formatter `hxformat.json` config and maps the subset of
@@ -696,6 +698,7 @@ final class HaxeFormatConfigLoader {
 			expressionWrappingWrap: base.expressionWrappingWrap,
 			implementsExtendsWrap: base.implementsExtendsWrap,
 			arrayMatrixWrap: base.arrayMatrixWrap,
+			trailingComma: base.trailingComma,
 			comprehensionCuddledOpen: base.comprehensionCuddledOpen,
 			methodChainCuddledLinks: base.methodChainCuddledLinks,
 			conditionalPolicy: base.conditionalPolicy,
@@ -1389,6 +1392,7 @@ final class HaxeFormatConfigLoader {
 			final resolved: Null<ArrayMatrixWrap> = ArrayMatrixWrap.resolve(section.arrayMatrixWrap);
 			if (resolved != null) opt.arrayMatrixWrap = resolved;
 		}
+		if (section.trailingComma != null) opt.trailingComma = trailingCommaRemovalToRuntime(section.trailingComma);
 		if (section.comprehensionCuddledOpen != null) opt.comprehensionCuddledOpen = section.comprehensionCuddledOpen;
 		if (section.methodChainCuddledLinks != null) opt.methodChainCuddledLinks = section.methodChainCuddledLinks;
 	}
@@ -1895,6 +1899,19 @@ final class HaxeFormatConfigLoader {
 			opt.comprehensionBracketsOpen = WhitespacePolicy.After;
 			opt.comprehensionBracketsClose = WhitespacePolicy.Before;
 		}
+	}
+
+
+	/**
+	 * Maps the `wrapping.trailingComma` config string onto the runtime
+	 * `TrailingCommaPolicy`. Unknown / absent values fall back to `Keep`,
+	 * the byte-inert default.
+	 */
+	private static function trailingCommaRemovalToRuntime(policy: HxFormatWrappingTrailingCommaPolicy): TrailingCommaPolicy {
+		return switch policy {
+			case HxFormatWrappingTrailingCommaPolicy.Remove: TrailingCommaPolicy.Remove;
+			case _: TrailingCommaPolicy.Keep;
+		};
 	}
 
 }

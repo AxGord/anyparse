@@ -2,6 +2,7 @@ package anyparse.format.text;
 
 import anyparse.format.ArrayMatrixWrap;
 import anyparse.format.Encoding;
+import anyparse.format.TrailingCommaPolicy;
 import anyparse.format.WriteOptions;
 import anyparse.format.text.TextFormat.BlockCommentDelims;
 import anyparse.format.text.TextFormat.BoolLiterals;
@@ -107,6 +108,7 @@ final class JsonFormat implements TextFormat {
 		maxConsecutiveBlanks: -1,
 		commentStyle: Verbatim,
 		arrayMatrixWrap: ArrayMatrixWrap.NoMatrixWrap,
+		trailingComma: TrailingCommaPolicy.Keep,
 		conditionalPolicy: ConditionalIndentationPolicy.Aligned,
 		alignInlineSwitchCaseBody: false,
 		comprehensionCuddledOpen: false,

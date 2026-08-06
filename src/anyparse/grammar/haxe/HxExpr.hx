@@ -381,8 +381,8 @@ enum HxExpr {
 	@:lead("$")
 	DollarIdentExpr(name: HxIdentLit);
 
-	@:trivia @:lead('[') @:trail(']') @:sep(',') @:fmt(trailingComma('trailingCommaArrays'), wrapRules('arrayLiteralWrap'),
-		reflowSourceMultiline, bracketKindPad, arrayMatrixWrap, propagateExprPosition)
+	@:trivia @:lead('[') @:trail(']') @:sep(',') @:fmt(trailingComma('trailingCommaArrays'), trailingCommaRemovable,
+		wrapRules('arrayLiteralWrap'), reflowSourceMultiline, bracketKindPad, arrayMatrixWrap, propagateExprPosition, uniformStmtBlanks)
 	ArrayExpr(elems: Array<HxExpr>);
 
 	ObjectLit(lit: HxObjectLit);
@@ -558,8 +558,8 @@ enum HxExpr {
 	@:postfix('[', ']') @:fmt(accessBrackets)
 	IndexAccess(operand: HxExpr, index: HxExpr);
 
-	@:postfix('(', ')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), callParens, callParensInside, wrapRules('callParameterWrap'),
-		methodChain('methodChainWrap'), propagateExprPosition, callArgChainNest, groupRestProbe)
+	@:postfix('(', ')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), trailingCommaRemovable, callParens, callParensInside,
+		wrapRules('callParameterWrap'), methodChain('methodChainWrap'), propagateExprPosition, callArgChainNest, groupRestProbe)
 	Call(operand: HxExpr, args: Array<HxExpr>);
 
 	@:postfix('++')

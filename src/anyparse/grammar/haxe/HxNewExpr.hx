@@ -42,11 +42,18 @@ package anyparse.grammar.haxe;
  * wins over Ignore and the per-element `newlineBefore` swap preserves
  * the source per-argument line breaks (the
  * `new FastMatrix3(a, b, c,\n d, e, f, …)` grid).
+ *
+ * `@:fmt(trailingCommaRemovable)` (slice ω-multiline-trailing-comma-
+ * remove) opts the argument list into `wrapping.trailingComma`: under
+ * `remove` a broken argument list never ends with a `,`, whatever the
+ * source had and whatever `trailingCommas.callArgumentDefault` asks for.
+ * The trailing separator is optional here, so the removal direction is
+ * always syntactically safe.
  */
 @:peg
 typedef HxNewExpr = {
 	var type: HxNewTypeName;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var params: Null<Array<HxType>>;
-	@:trivia @:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), wrapRules('callParameterWrap'),
-		ignoreSourceNewlinesForWrap, groupRestProbe) var args: Array<HxExpr>;
+	@:trivia @:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), trailingCommaRemovable,
+		wrapRules('callParameterWrap'), ignoreSourceNewlinesForWrap, groupRestProbe) var args: Array<HxExpr>;
 };

@@ -112,9 +112,16 @@ package anyparse.grammar.haxe;
  * The close-side pad is unaffected. Config `objectLiteralBraces.arrowBodyOpenPad: true` disables the suppression (keeps the pad — a deliberate divergence from the fork). Cleared by `_setExprPosition` on
  * every fresh expression-position descent, so only the literal whose
  * `{` sits right after the `->` token sees the flag.
+ *
+ * `@:fmt(trailingCommaRemovable)` (slice ω-multiline-trailing-comma-
+ * remove) opts the field list into `wrapping.trailingComma`: under
+ * `remove` a broken object literal never ends with a `,`, whatever the
+ * source had and whatever `trailingCommas.objectLiteralDefault` asks
+ * for. A FLAT `{a: 1,}` keeps its source comma.
  */
 @:peg
 typedef HxObjectLit = {
 	@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose, wrapRules('objectLiteralWrap'), leftCurly('objectLiteralLeftCurly'),
-		rightCurly('objectLiteralRightCurly'), trailingComma('trailingCommaObjectLits'), reflowInExprPosition, arrowBodyOpenPadSuppress) @:lead('{') @:trail('}') @:sep(',') @:trivia var fields: Array<HxObjectField>;
+		rightCurly('objectLiteralRightCurly'), trailingComma('trailingCommaObjectLits'), trailingCommaRemovable, reflowInExprPosition,
+		arrowBodyOpenPadSuppress) @:lead('{') @:trail('}') @:sep(',') @:trivia var fields: Array<HxObjectField>;
 }

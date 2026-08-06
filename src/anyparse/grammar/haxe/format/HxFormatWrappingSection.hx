@@ -159,6 +159,8 @@ package anyparse.grammar.haxe.format;
 
 	@:optional var arrayMatrixWrap: String;
 
+	@:optional var trailingComma: HxFormatWrappingTrailingCommaPolicy;
+
 	@:optional var comprehensionCuddledOpen: Bool;
 
 	@:optional var methodChainCuddledLinks: Bool;

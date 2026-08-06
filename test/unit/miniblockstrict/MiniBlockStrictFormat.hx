@@ -3,6 +3,7 @@ package unit.miniblockstrict;
 import anyparse.format.ArrayMatrixWrap;
 import anyparse.format.ConditionalIndentationPolicy;
 import anyparse.format.Encoding;
+import anyparse.format.TrailingCommaPolicy;
 import anyparse.format.WriteOptions;
 import anyparse.format.text.FieldLookup;
 import anyparse.format.text.KeySyntax;
@@ -54,6 +55,7 @@ final class MiniBlockStrictFormat {
 		maxConsecutiveBlanks: -1,
 		commentStyle: Verbatim,
 		arrayMatrixWrap: ArrayMatrixWrap.NoMatrixWrap,
+		trailingComma: TrailingCommaPolicy.Keep,
 		conditionalPolicy: ConditionalIndentationPolicy.Aligned,
 		alignInlineSwitchCaseBody: false,
 		comprehensionCuddledOpen: false,

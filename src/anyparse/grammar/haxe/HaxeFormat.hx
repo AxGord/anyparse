@@ -29,6 +29,7 @@ import anyparse.format.wrap.WrapRules;
 import anyparse.format.wrap.WrappingLocation;
 import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
 import anyparse.format.UniformStatementBlanksPolicy;
+import anyparse.format.TrailingCommaPolicy;
 
 /**
  * Text-format descriptor for the Haxe programming language.
@@ -787,6 +788,7 @@ final class HaxeFormat implements TextFormat {
 		expressionWrappingWrap: HaxeFormat.defaultExpressionWrappingWrap(),
 		implementsExtendsWrap: HaxeFormat.defaultImplementsExtendsWrap(),
 		arrayMatrixWrap: ArrayMatrixWrap.MatrixWrapWithAlign,
+		trailingComma: TrailingCommaPolicy.Keep,
 		conditionalPolicy: ConditionalIndentationPolicy.Aligned,
 		alignInlineSwitchCaseBody: false,
 		comprehensionCuddledOpen: false,
