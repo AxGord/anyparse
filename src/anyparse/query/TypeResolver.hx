@@ -133,11 +133,18 @@ final class TypeResolver {
 	 * `RefactorSupport.isSideEffectFree`. It must stay SEPARATE from that shared
 	 * predicate: `Inline` reuses `isSideEffectFree` to DUPLICATE an initializer
 	 * across every read, where an array / object literal's identity matters, so
-	 * widening the shared kind-set would corrupt inlining. Three shapes the base
+	 * widening the shared kind-set would corrupt inlining. Shapes the base
 	 * predicate conservatively rejects are added here: an array literal whose
 	 * elements are each deletion-pure, a plain (non-getter) field read
-	 * (`isPlainFieldRead`), and a provably-pure stdlib static call
-	 * (`isPureStdlibCall`). Any other node keeps the base conservative answer.
+	 * (`isPlainFieldRead`), a provably-pure stdlib static call
+	 * (`isPureStdlibCall`), and two TRANSPARENT single-child wrappers — a
+	 * parenthesized expression (`shape.parenKind`) and the UNCHECKED cast
+	 * `cast expr` (`shape.uncheckedCastKind`) — each pure iff its one child is.
+	 * The runtime-CHECKED `cast(expr, T)` (`shape.checkedCastKind`) is
+	 * deliberately NOT a wrapper here: it performs a runtime type test and can
+	 * THROW on a mismatch, so discarding it is an observable behaviour change —
+	 * it falls through to the conservative default. Any other node keeps that
+	 * base conservative answer.
 	 */
 	public static function isDeletionPure(
 		node: QueryNode, tree: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: SymbolIndex
@@ -148,6 +155,12 @@ final class TypeResolver {
 			for (c in node.children) if (!isDeletionPure(c, tree, shape, declaredTypes, index)) return false;
 			return true;
 		}
+		final parenKind: Null<String> = shape.parenKind;
+		if (parenKind != null && node.kind == parenKind && node.children.length == 1)
+			return isDeletionPure(node.children[0], tree, shape, declaredTypes, index);
+		final uncheckedCastKind: Null<String> = shape.uncheckedCastKind;
+		if (uncheckedCastKind != null && node.kind == uncheckedCastKind && node.children.length == 1)
+			return isDeletionPure(node.children[0], tree, shape, declaredTypes, index);
 		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
 		if (fieldAccessKind != null && node.kind == fieldAccessKind) return isPlainFieldRead(node, tree, shape, declaredTypes, index);
 		final callKind: Null<String> = shape.callKind;
