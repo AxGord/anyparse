@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.MemberBranchScan;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
@@ -179,7 +180,11 @@ final class InlineConstant implements Check {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, seams, reflected, macroConsumed, false, proof);
+			if (tree != null)
+				walk(
+					violations, entry.file, entry.source, tree, seams, reflected, macroConsumed, false, proof,
+					MemberBranchScan.seamsOf(plugin.refShape(), entry.source)
+				);
 		}
 		return violations;
 	}
@@ -220,7 +225,7 @@ final class InlineConstant implements Check {
 	 */
 	private static function walk(
 		out: Array<Violation>, file: String, source: String, node: QueryNode, seams: Seams, reflected: Array<String>,
-		macroConsumed: Array<String>, inheritedPin: Bool, proof: InitProof
+		macroConsumed: Array<String>, inheritedPin: Bool, proof: InitProof, branch: MemberBranchSeams
 	): Void {
 		var classPinned: Bool = inheritedPin;
 		for (child in node.children) {
@@ -228,8 +233,8 @@ final class InlineConstant implements Check {
 				classPinned = classPinned || isPinMeta(child.name);
 			else {
 				if (seams.containers.contains(child.kind))
-					scanContainer(out, file, source, child, seams, reflected, macroConsumed, classPinned, proof);
-				walk(out, file, source, child, seams, reflected, macroConsumed, classPinned, proof);
+					scanContainer(out, file, source, child, seams, reflected, macroConsumed, classPinned, proof, branch);
+				walk(out, file, source, child, seams, reflected, macroConsumed, classPinned, proof, branch);
 				classPinned = false;
 			}
 		}
@@ -245,33 +250,29 @@ final class InlineConstant implements Check {
 	 */
 	private static function scanContainer(
 		out: Array<Violation>, file: String, source: String, container: QueryNode, seams: Seams, reflected: Array<String>,
-		macroConsumed: Array<String>, classPinned: Bool, proof: InitProof
+		macroConsumed: Array<String>, classPinned: Bool, proof: InitProof, branch: MemberBranchSeams
 	): Void {
-		var sawStatic: Bool = false;
-		var sawInline: Bool = false;
-		var exported: Bool = false;
-		var sawKeep: Bool = false;
-		for (child in container.children) {
-			final kind: String = child.kind;
-			if (kind == seams.staticKind)
-				sawStatic = true;
-			else if (seams.inlineKind != null && kind == seams.inlineKind)
-				sawInline = true;
-			else if (seams.visibility.contains(kind))
-				exported = exported || isExportedVisibility(source, child, seams.defaultVis);
-			else if (seams.metaKinds.contains(kind))
-				sawKeep = sawKeep || isPinMeta(child.name);
-			else if (seams.members.contains(kind)) {
-				if (seams.finalFieldKinds.contains(kind) && sawStatic && !sawInline && !sawKeep && !classPinned)
-					consider(out, file, child, seams, reflected, macroConsumed, container, exported, proof);
-				else if (seams.mutableFieldKinds.contains(kind) && sawStatic && sawInline && !sawKeep)
-					considerInlineVar(out, file, source, child, seams, reflected);
-				sawStatic = false;
-				sawInline = false;
-				exported = false;
-				sawKeep = false;
+		MemberBranchScan.eachMember(branch, container, child -> seams.members.contains(child.kind), (member, run) -> {
+			final kind: String = member.kind;
+			var sawStatic: Bool = false;
+			var sawInline: Bool = false;
+			var exported: Bool = false;
+			var sawKeep: Bool = false;
+			for (mod in run) {
+				if (mod.kind == seams.staticKind)
+					sawStatic = true;
+				else if (seams.inlineKind != null && mod.kind == seams.inlineKind)
+					sawInline = true;
+				else if (seams.visibility.contains(mod.kind))
+					exported = exported || isExportedVisibility(source, mod, seams.defaultVis);
+				else if (seams.metaKinds.contains(mod.kind))
+					sawKeep = sawKeep || isPinMeta(mod.name);
 			}
-		}
+			if (seams.finalFieldKinds.contains(kind) && sawStatic && !sawInline && !sawKeep && !classPinned)
+				consider(out, file, member, seams, reflected, macroConsumed, container, exported, proof);
+			else if (seams.mutableFieldKinds.contains(kind) && sawStatic && sawInline && !sawKeep)
+				considerInlineVar(out, file, source, member, seams, reflected);
+		});
 	}
 
 	/** Whether `child` (a visibility modifier) is a non-default (exported) keyword — `public` rather than the private default. */

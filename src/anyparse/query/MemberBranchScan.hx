@@ -106,6 +106,30 @@ final class MemberBranchScan {
 		return seams.condKind != null && node.kind == seams.condKind;
 	}
 
+
+	/**
+	 * Visit every member declaration of `container` in source order — descending into every
+	 * member-position conditional-compilation region branch by branch — with the modifier and
+	 * annotation siblings that precede it in its OWN run. `isMember` names what counts as a
+	 * declaration; everything else accumulates into the run and is handed to `visit` with the
+	 * member it modifies.
+	 *
+	 * The ergonomic form of `fold` for the many checks whose state is exactly "the modifier siblings
+	 * since the last member". Its join is concatenation — the run a member sees is the union of what
+	 * every branch carried out, which is the fail-closed reading for a modifier: a gate that any
+	 * build's modifiers would trip, trips.
+	 */
+	public static function eachMember(
+		seams: MemberBranchSeams, container: QueryNode, isMember: QueryNode -> Bool,
+		visit: (member:QueryNode, run:Array<QueryNode>) -> Void
+	): Void {
+		fold(seams, container.children, [], (run, child) -> {
+			if (!isMember(child)) return run.concat([child]);
+			visit(child, run);
+			return [];
+		}, (a, b) -> a.concat(b));
+	}
+
 }
 
 /**
