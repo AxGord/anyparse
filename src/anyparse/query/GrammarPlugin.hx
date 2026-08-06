@@ -1856,6 +1856,15 @@ typedef RefShape = {
 	@:optional var casePatternBinderKinds: Array<String>;
 
 	/**
+	 * Case-pattern node kinds that EVALUATE an expression while MATCHING — the Haxe
+	 * extractor `Arrow` (`case f(_) => p:` calls `f` on the subject, then matches `p`
+	 * against the result). A rewrite that makes a previously-unreachable arm reachable
+	 * has to refuse these: reaching one newly RUNS its expression, exactly what a case
+	 * guard would. Optional; unset models a family whose patterns evaluate nothing.
+	 */
+	@:optional var casePatternExtractorKinds: Array<String>;
+
+	/**
 	 * Type-declaration kinds with ALIASING semantics — a value's field access does
 	 * not target the declared name itself: a typedef (an alias of another type) and
 	 * an abstract (whose `@:forward` field access reaches the UNDERLYING type).
