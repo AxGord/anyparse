@@ -265,6 +265,7 @@ import unit.ApqHxqDxV8CliTest;
 import unit.ApqHxqDxV10CliTest;
 import unit.ApqLitCommentsCliTest;
 import unit.ApqDxTier3CliTest;
+import unit.ApqTestSummaryTinkTest;
 import unit.ApqDxTier4CliTest;
 import unit.ApqDxTier5CliTest;
 import unit.HxCondCompStmtTrailOptSliceTest;
@@ -1171,6 +1172,7 @@ class RunTests {
 		addCase(new ApqHxqDxV10CliTest());
 		addCase(new ApqLitCommentsCliTest());
 		addCase(new ApqDxTier3CliTest());
+		addCase(new ApqTestSummaryTinkTest());
 		addCase(new ApqDxTier4CliTest());
 		addCase(new ApqDxTier5CliTest());
 		addCase(new ApqDepthSemanticsTest());

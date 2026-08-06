@@ -106,13 +106,20 @@ enum abstract TestSummaryFailureKind(Int) {
 }
 
 /**
- * First-failure locus captured by `Cli.parseTestSummary` from a utest
- * stdout transcript. `className` is the unindented CamelCase test class
- * header utest emits above the test group; empty string when the
- * transcript doesn't carry one. `line` is the 1-indexed source line
- * decoded from the detail row's `line: N, …` prefix, or `-1` when only
- * a bare detail was emitted (utest's `Print.formatFailure` omits the
- * prefix for plain-string failures).
+ * First-failure locus captured by `Cli.parseTestSummary` from a utest OR
+ * tink_testrunner stdout transcript (format auto-detected — see
+ * `parseTestSummary`). `className` is the suite/class header emitted
+ * above the test group (utest: unindented CamelCase; tink: the
+ * `SuiteName: [file:line]` header); empty string when the transcript
+ * doesn't carry one. `testName` is the failing test/case name. `line` is
+ * the 1-indexed source line — for utest, decoded from the detail row's
+ * `line: N, …` prefix (`-1` when only a bare detail was emitted, since
+ * utest's `Print.formatFailure` omits the prefix for plain-string
+ * failures); for tink, read directly from the assertion row's own
+ * `[file:line]` position (`-1` only for a case-level throw, which has no
+ * assertion row at all). `message` is the diagnostic text: utest's
+ * detail-row content, or tink's assertion-failure detail line /
+ * case-throw message.
  */
 typedef TestSummaryFailureLocus = {
 	className: String,
@@ -123,9 +130,13 @@ typedef TestSummaryFailureLocus = {
 };
 
 /**
- * Structured result of parsing a utest stdout transcript. `firstFailure`
- * is null when the run had no failures or errors; otherwise it carries
- * the first encountered locus (subsequent failures only bump counters).
+ * Structured result of parsing a utest OR tink_testrunner stdout
+ * transcript. `tests` counts PASSING test cases (utest: `OK`-marked test
+ * rows; tink: case blocks with no failed/thrown assertion) — legacy
+ * contract, matches neither framework's own "total run" count.
+ * `firstFailure` is null when the run had no failures or errors;
+ * otherwise it carries the first encountered locus (subsequent failures
+ * only bump counters).
  */
 typedef TestSummaryResult = {
 	tests: Int,
@@ -12637,11 +12648,187 @@ final class Cli {
 
 	#if (sys || nodejs)
 	/**
-	 * Pure parser over a utest stdout transcript. Exposed for unit tests so
-	 * the structured result (counts + first-failure locus) can be asserted
-	 * directly without the stdout-capture round-trip Cli.run would impose.
+	 * Strips ANSI SGR color escapes (`ESC [ <params> m`) from `s`. Both
+	 * transcript formats this parser reads (utest, tink_testrunner) are
+	 * commonly captured with color on (tink's `AnsiFormatter` wraps every
+	 * status token — `[OK]`/`[FAIL]`, positions, the summary line — in
+	 * `ESC[<n>m ... ESC[39m`); stripping first keeps every downstream
+	 * regex a plain-text match instead of threading ANSI-tolerant
+	 * patterns through both parsers. Built from `String.fromCharCode(27)`
+	 * rather than a `\x1b` literal so the escape byte is unambiguous
+	 * across targets.
+	 */
+	private static function stripAnsi(s: String): String {
+		final esc: String = String.fromCharCode(27); // noqa: magic-number
+		final re: EReg = new EReg(esc + '\\[[0-9;]*m', 'g');
+		return re.replace(s, '');
+	}
+
+	/**
+	 * Format sniff for `parseTestSummary`: does `lines` look like a
+	 * tink_testrunner transcript rather than utest? Checked via either of
+	 * tink's two unambiguous, ANSI-independent markers — an assertion row
+	 * (`- [OK] [...]` / `- [FAIL] [...]`) or the final summary block
+	 * (`N Assertions   N Success   N Failure   N Error`). Neither shape
+	 * occurs in a utest transcript (utest's own summary line and
+	 * per-test rows use `testName: OK/FAIL/ERROR`, no `[OK]`/`[FAIL]`
+	 * bracket token and no `Assertions   ... Success` block).
+	 */
+	private static function looksLikeTinkTranscript(lines: Array<String>): Bool {
+		final assertRe: EReg = ~/^\s*-\s*\[(OK|FAIL)\]\s*\[[^\]]+\]/;
+		final summaryRe: EReg = ~/^\d+\s+Assertions?\s+\d+\s+Success\s+\d+\s+Failures?\s+\d+\s+Errors?\s*$/;
+		for (line in lines) if (assertRe.match(line) || summaryRe.match(line)) return true;
+		return false;
+	}
+
+	/**
+	 * Pure parser over a tink_testrunner (tink_unittest) stdout
+	 * transcript — the reporter TM's `openfl test macos -DUNIT_TESTS`
+	 * suite uses (haxelib tink_testrunner, `BasicReporter`). Dispatched
+	 * from `parseTestSummary` once `looksLikeTinkTranscript` flags the
+	 * shape; `lines` is already ANSI-stripped.
 	 *
-	 * Line shape recognition (utest 1.13.x):
+	 * Line shape recognition (tink_testrunner 0.9.x `BasicReporter`):
+	 *  - `SuiteName: [file:line]` (0-indent) — suite header; tracked for
+	 *    `firstFailure.className`.
+	 *  - `  case description: [file:line] ` (2-indent) — case header;
+	 *    tracked for `firstFailure.testName`. A case with no failed/
+	 *    thrown assertion counts toward `tests` (the passing-case tally)
+	 *    once the NEXT header or the summary line closes it.
+	 *  - `    - [OK] [file:line] desc` / `    - [FAIL] [file:line] desc`
+	 *    (4-indent, dashed) — one assertion; `desc` is the caller-supplied
+	 *    assertion label (same for pass/fail, NOT the failure reason).
+	 *  - `        <message>` (8-indent, no dash) following a `[FAIL]` row
+	 *    — that assertion's actual failure detail (`Failure(msg)`'s
+	 *    `msg`); captured as `firstFailure.message` when it's the first.
+	 *  - `    - <message>` (4-indent, dashed, NO `[...]` brackets) — a
+	 *    case-level throw with no assertion row at all
+	 *    (`CaseResultType.Failed(e)`). Buckets as an ERROR, matching
+	 *    `BatchResult.summary()`'s own classification (`AssertionFailed`
+	 *    -> failures, everything else, incl. `CaseFailed`/`SuiteFailed`
+	 *    -> errors).
+	 *  - `N Assertions   N Success   N Failure   N Error` (0-indent) —
+	 *    final summary; authoritative when present (overrides the
+	 *    per-row tally, which is otherwise a decent estimate for a
+	 *    transcript truncated before the summary block was written).
+	 *
+	 * Only the FIRST failing/thrown row sets `firstFailure` — subsequent
+	 * ones only bump counters (same contract as the utest path).
+	 */
+	private static function parseTinkTestSummary(lines: Array<String>): TestSummaryResult {
+		final assertRe: EReg = ~/^\s*-\s*\[(OK|FAIL)\]\s*\[([^\]]+)\]\s*(.*)$/;
+		final suiteRe: EReg = ~/^([A-Za-z_]\w*(?:\.\w+)*):\s*\[([^\]]+)\]\s*$/;
+		final caseRe: EReg = ~/^  ([^\s\[][^\[]*?):\s*\[([^\]]+)\]\s*.*$/;
+		final caseFailRe: EReg = ~/^ {4}-\s+(.+)$/; // noqa: magic-number
+		final summaryRe: EReg = ~/^(\d+)\s+Assertions?\s+(\d+)\s+Success\s+(\d+)\s+Failures?\s+(\d+)\s+Errors?\s*$/;
+		final locRe: EReg = ~/^(.*):(\d+)$/;
+		// The FAILED-assertion detail row: `println(indent(failure, 8))`
+		// in BasicReporter — 8-space indent, no leading dash, no
+		// `[...]` brackets (that shape is the assertion row itself,
+		// already consumed by `assertRe` before this ever runs). The
+		// 8-space floor is exact enough to stay clear of the 4-indent
+		// assertion/case-throw rows and the 2-indent case header.
+		final detailRe: EReg = ~/^\s{8,}(\S.*)$/; // noqa: magic-number
+		var assertions: Int = 0;
+		var failures: Int = 0;
+		var errors: Int = 0;
+		var currentClass: String = '';
+		var currentCase: String = '';
+		var caseFailed: Bool = false;
+		var caseHasAssertion: Bool = false;
+		var passingCases: Int = 0;
+		var firstFailure: Null<TestSummaryFailureLocus> = null;
+		var awaitingDetail: Bool = false;
+		inline function closeCase(): Void {
+			if (caseHasAssertion && !caseFailed) passingCases++;
+			caseFailed = false;
+			caseHasAssertion = false;
+		}
+		for (line in lines) {
+			if (awaitingDetail) {
+				awaitingDetail = false;
+				final locus: Null<TestSummaryFailureLocus> = firstFailure;
+				if (locus != null && detailRe.match(line)) {
+					locus.message = StringTools.trim(detailRe.matched(1));
+					continue;
+				}
+				// Not a detail row (assertion held with no failure detail
+				// printed, or the next row arrived immediately) — fall
+				// through and classify this line normally.
+			}
+			if (assertRe.match(line)) {
+				caseHasAssertion = true;
+				assertions++;
+				final failed: Bool = assertRe.matched(1) == 'FAIL';
+				final locRaw: String = assertRe.matched(2);
+				final locLine: Int = locRe.match(locRaw) ? parsePositiveInt(locRe.matched(2)) : -1;
+				if (failed) {
+					failures++;
+					caseFailed = true;
+					if (firstFailure == null) {
+						firstFailure = {
+							className: currentClass,
+							testName: currentCase,
+							line: locLine,
+							message: StringTools.trim(assertRe.matched(3)),
+							kind: TestSummaryFailureKind.Fail
+						};
+						awaitingDetail = true;
+					}
+				}
+			} else if (summaryRe.match(line)) {
+				closeCase();
+				currentClass = '';
+				currentCase = '';
+				assertions = parsePositiveInt(summaryRe.matched(1));
+				failures = parsePositiveInt(summaryRe.matched(3));
+				errors = parsePositiveInt(summaryRe.matched(4));
+			} else if (suiteRe.match(line)) {
+				closeCase();
+				currentClass = suiteRe.matched(1);
+				currentCase = '';
+			} else if (caseRe.match(line)) {
+				closeCase();
+				currentCase = StringTools.trim(caseRe.matched(1));
+			} else if (caseFailRe.match(line)) {
+				errors++;
+				caseFailed = true;
+				if (firstFailure == null) firstFailure = {
+					className: currentClass,
+					testName: currentCase,
+					line: -1,
+					message: StringTools.trim(caseFailRe.matched(1)),
+					kind: TestSummaryFailureKind.Error
+				};
+			}
+			// Anything else (compile noise, plain trace() lines, blank
+			// separators) is not part of the reporter's own output shape
+			// — ignored, same as utest's fallthrough.
+		}
+		closeCase();
+		return {
+			tests: passingCases,
+			assertions: assertions,
+			failures: failures,
+			errors: errors,
+			firstFailure: firstFailure
+		};
+	}
+
+	/**
+	 * Pure parser over a utest OR tink_testrunner stdout transcript.
+	 * Exposed for unit tests so the structured result (counts +
+	 * first-failure locus) can be asserted directly without the
+	 * stdout-capture round-trip Cli.run would impose.
+	 *
+	 * ANSI color escapes are stripped first (see `stripAnsi`) so neither
+	 * format's regexes need to tolerate embedded `ESC[...m` sequences,
+	 * then `looksLikeTinkTranscript` picks the parser: tink_testrunner's
+	 * shape (`- [OK]/[FAIL] [file:line] ...` rows, `N Assertions   N
+	 * Success   ...` summary — see `parseTinkTestSummary`) or, by
+	 * default, utest's.
+	 *
+	 * utest line shape recognition (utest 1.13.x):
 	 *  - `  testName: OK <dots>` — pass; dot-count adds to assertions.
 	 *  - `  testName: FAIL[URE] <…>` — failure counter.
 	 *  - `  testName: ERR[OR] <…>` — error counter.
@@ -12656,6 +12843,8 @@ final class Cli {
 	 * `firstFailure` is set, subsequent failures only bump counters.
 	 */
 	public static function parseTestSummary(raw: String): TestSummaryResult {
+		final lines: Array<String> = stripAnsi(raw).split('\n');
+		if (looksLikeTinkTranscript(lines)) return parseTinkTestSummary(lines);
 		final okRe: EReg = ~/^\s+(\w[\w.]*):\s+OK(\s+(\.+))?/;
 		final failRe: EReg = ~/^\s+(\w[\w.]*):\s+FAIL/;
 		final errRe: EReg = ~/^\s+(\w[\w.]*):\s+ERR/;
@@ -12673,7 +12862,7 @@ final class Cli {
 		var currentClass: String = '';
 		var firstFailure: Null<TestSummaryFailureLocus> = null;
 		var awaitingDetail: Bool = false;
-		for (line in raw.split('\n')) {
+		for (line in lines) {
 			if (awaitingDetail) {
 				awaitingDetail = false;
 				final locus: Null<TestSummaryFailureLocus> = firstFailure;
