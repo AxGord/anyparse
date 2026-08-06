@@ -262,7 +262,7 @@ final class PreferTryExpressionAssignment implements Check {
 		// Any occurrence beyond the assignments' own l-values self-references the folded initializer.
 		if (!assignedOnlyByTargets(name, tryStmt, targets, s)) return null;
 
-		final prefix: Null<{ text: String, keptTo: Int }> = declPrefix(declSpan, init, source);
+		final prefix: Null<{ text: String, keptTo: Int }> = TryExpressionShape.declPrefix(declSpan, init, source);
 		final value: Null<String> = TryExpressionShape.buildValue(parts, source, s.tryShape);
 		if (prefix == null || value == null) return null;
 		final prefixSpan: Span = new Span(declSpan.from, declSpan.from + prefix.text.length);
@@ -348,18 +348,7 @@ final class PreferTryExpressionAssignment implements Check {
 	/** Whether `clause`'s exception variable is a name the l-value path references (a shadowed target). */
 	private static function shadowsTarget(clause: QueryNode, lvalue: QueryNode, s: Seams): Bool {
 		final bound: Null<String> = clause.name;
-		return bound != null && referencesName(lvalue, bound, s);
-	}
-
-	/**
-	 * Whether any descendant of `node` (or `node` itself) is an occurrence of `name` — a plain
-	 * `identKind` reference or a `stringInterpKind` one (a braceless `$name` inside a
-	 * single-quoted string, which projects as a distinct kind).
-	 */
-	private static function referencesName(node: QueryNode, name: String, s: Seams): Bool {
-		if ((node.kind == s.identKind || node.kind == s.stringInterpKind) && node.name == name) return true;
-		for (c in node.children) if (referencesName(c, name, s)) return true;
-		return false;
+		return bound != null && TryExpressionShape.referencesName(lvalue, bound, s.identKind, s.stringInterpKind);
 	}
 
 	/** The plain `=` assignment a body holds — bare, or wrapped in an expression statement. Null for anything else. */
@@ -399,26 +388,6 @@ final class PreferTryExpressionAssignment implements Check {
 			if (!targets.exists(t -> h.span.from == t.from)) return false;
 		}
 		return true;
-	}
-
-	/**
-	 * The declaration's own prefix (`var x:T`, keyword and type verbatim — the `var` -> `final`
-	 * upgrade is `prefer-final`'s) plus the offset up to which the declaration source is copied
-	 * verbatim, the kept region for the comment guard: before the `=` for an initialized
-	 * declaration, before the trailing `;` for a bare one. Null on a malformed declaration.
-	 */
-	private static function declPrefix(declSpan: Span, init: Null<QueryNode>, source: String): Null<{ text: String, keptTo: Int }> {
-		final prefixEnd: Int = if (init != null) {
-			final initSpan: Null<Span> = init.span;
-			if (initSpan == null) return null;
-			final eq: Int = source.lastIndexOf('=', initSpan.from);
-			if (eq < declSpan.from) return null;
-			eq;
-		} else {
-			if (declSpan.to <= declSpan.from || source.charAt(declSpan.to - 1) != ';') return null;
-			declSpan.to - 1;
-		}
-		return { text: StringTools.rtrim(source.substring(declSpan.from, prefixEnd)), keptTo: prefixEnd };
 	}
 
 }
