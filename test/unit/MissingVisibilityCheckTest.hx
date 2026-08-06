@@ -159,7 +159,22 @@ class MissingVisibilityCheckTest extends Test {
 	 */
 	public function testExternClassMembersNotFlagged(): Void {
 		Assert.equals(0, violations('extern class C { function f():Void; }').length);
-		Assert.equals(-1, fixedSource('extern class C { function f():Void; }').indexOf('private'));
+	}
+
+	/**
+	 * The fix re-checks extern on its own, so a caller handing it a violation list detection would
+	 * never have produced still cannot lower an extern member to `private`. Asserting this through
+	 * `fixedSource` would be vacuous now that detection returns nothing to fix.
+	 */
+	public function testFixRefusesForcedExternViolation(): Void {
+		final src: String = 'extern class C { function f():Void; }';
+		Assert.equals(src, fixedSourceForced(src, src.indexOf('function f')));
+	}
+
+	/** The control for the refusal above: the same forced violation DOES insert in a plain class. */
+	public function testFixAppliesForcedViolationInPlainClass(): Void {
+		final src: String = 'class C { function f():Void {} }';
+		Assert.equals('class C { private function f():Void {} }', fixedSourceForced(src, src.indexOf('function f')));
 	}
 
 	/** The extern skip survives the module-level `private extern class` form (a private TYPE, not a private member). */
@@ -178,10 +193,9 @@ class MissingVisibilityCheckTest extends Test {
 		Assert.equals(-1, fixedSource('@:publicFields class D { function g():Void {} }').indexOf('private'));
 	}
 
-	/** `final class` wraps the class in a decl node; the extern skip must still reach the members. */
+	/** `final class` wraps the class in a decl node; the extern skip must carry into that wrapper to reach the members. */
 	public function testExternFinalClassMembersNotFlagged(): Void {
 		Assert.equals(0, violations('extern final class C { function f():Void; }').length);
-		Assert.equals(-1, fixedSource('extern final class C { function f():Void; }').indexOf('private'));
 	}
 
 	/** A `@:publicFields final class` (the project's house form) must also stay report-only, not get `private`. */
@@ -197,12 +211,31 @@ class MissingVisibilityCheckTest extends Test {
 
 	/** A member written inside a member-position `#if` is a member of the class and must be flagged like any other. */
 	public function testConditionalMemberFlagged(): Void {
-		Assert.equals(1, violations('class C {\n\t#if cpp\n\tvar a:Int;\n\t#end\n}').length);
+		final src: String = 'class C {\n\t#if cpp\n\tvar a:Int;\n\t#end\n}';
+		Assert.equals(1, violations(src).length);
 	}
 
-	/** Every branch of the region is scanned, not just the first. */
+	/** A region with a member in each branch reports each of them. */
 	public function testConditionalBothBranchesFlagged(): Void {
-		Assert.equals(2, violations('class C {\n\t#if cpp\n\tvar a:Int;\n\t#else\n\tvar b:Int;\n\t#end\n}').length);
+		final src: String = 'class C {\n\t#if cpp\n\tvar a:Int;\n\t#else\n\tvar b:Int;\n\t#end\n}';
+		Assert.equals(2, violations(src).length);
+	}
+
+	/** An `#elseif` chain is branches all the way down, not a two-way split. */
+	public function testConditionalElseIfBranchesAllFlagged(): Void {
+		final src: String = 'class C {\n\t#if cpp\n\tvar a:Int;\n\t#elseif js\n\tvar b:Int;\n\t#else\n\tvar c:Int;\n\t#end\n}';
+		Assert.equals(3, violations(src).length);
+	}
+
+	/**
+	 * A visibility keyword written BEFORE the `#if` modifies whichever branch compiles, so it
+	 * reaches into EVERY branch. The only fixture that discriminates the per-branch restart: a flat
+	 * scan of the region's flattened children consumes the keyword on the first member and flags
+	 * the second.
+	 */
+	public function testConditionalIncomingVisibilityReachesEveryBranch(): Void {
+		final src: String = 'class C {\n\tpublic\n\t#if cpp\n\tvar a:Int;\n\t#else\n\tvar b:Int;\n\t#end\n}';
+		Assert.equals(0, violations(src).length);
 	}
 
 	/** A visibility keyword inside the region still exempts its own member; its unmarked neighbour is still flagged. */
@@ -213,12 +246,25 @@ class MissingVisibilityCheckTest extends Test {
 
 	/** A conditional member coexists with members outside the region; both positions report. */
 	public function testConditionalAndPlainMembersBothFlagged(): Void {
-		Assert.equals(2, violations('class C {\n\tvar out:Int;\n\t#if cpp\n\tvar inA:Int;\n\t#end\n}').length);
+		final src: String = 'class C {\n\tvar out:Int;\n\t#if cpp\n\tvar inA:Int;\n\t#end\n}';
+		Assert.equals(2, violations(src).length);
 	}
 
 	/** A region nested inside another region's branch is reached too. */
 	public function testNestedConditionalMemberFlagged(): Void {
 		final src: String = 'class C {\n\t#if cpp\n\t#if debug\n\tvar a:Int;\n\t#end\n\t#end\n}';
+		Assert.equals(1, violations(src).length);
+	}
+
+	/** Nesting in ONE branch does not hide the sibling branch: the nested member and the plain one both report. */
+	public function testNestedConditionalInOneBranchFlagged(): Void {
+		final src: String = 'class C {\n\t#if cpp\n\t#if debug\n\tvar a:Int;\n\t#end\n\t#else\n\tvar b:Int;\n\t#end\n}';
+		Assert.equals(2, violations(src).length);
+	}
+
+	/** An abstract is a visibility-requiring container too, `#if`-guarded members included. */
+	public function testConditionalMemberInAbstractFlagged(): Void {
+		final src: String = 'abstract A(Int) {\n\t#if cpp\n\tfunction g():Void {}\n\t#end\n}';
 		Assert.equals(1, violations(src).length);
 	}
 
@@ -237,7 +283,13 @@ class MissingVisibilityCheckTest extends Test {
 	/** The canonical slot rule (before `static` / `inline`) holds inside a branch as well. */
 	public function testFixConditionalMemberKeywordPosition(): Void {
 		final fixed: String = fixedSource('class C {\n\t#if cpp\n\tstatic inline function f():Void {}\n\t#end\n}');
-		Assert.isTrue(fixed.indexOf('private static inline function f') >= 0);
+		Assert.equals('class C {\n\t#if cpp\n\tprivate static inline function f():Void {}\n\t#end\n}', fixed);
+	}
+
+	/** Meta ranks at or below visibility, inside a branch as anywhere else — the keyword goes after it. */
+	public function testFixConditionalMetaMemberKeywordPosition(): Void {
+		final fixed: String = fixedSource('class C {\n\t#if cpp\n\t@:keep var a:Int;\n\t#end\n}');
+		Assert.equals('class C {\n\t#if cpp\n\t@:keep private var a:Int;\n\t#end\n}', fixed);
 	}
 
 	/**
@@ -249,9 +301,47 @@ class MissingVisibilityCheckTest extends Test {
 		Assert.equals(0, violations(src).length);
 	}
 
-	/** An extern class whose members sit in a `#if` region stays skipped — the extern flag reaches into the branch. */
+	/** The carry-out is per branch, not "the first branch wins": a keyword in the LAST branch exempts too. */
+	public function testStraddlingModifierInLaterBranchNotFlagged(): Void {
+		final src: String = 'class C {\n\t#if cpp\n\tprivate\n\t#else\n\tpublic\n\t#end\n\tvar a:Int;\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * A straddling `override` governs the member after `#end` as well, so the fix must route it
+	 * through the index rather than force `private` — which would lower visibility below the
+	 * supertype, a compile error.
+	 */
+	public function testFixStraddlingOverrideStaysReportOnly(): Void {
+		final src: String = 'class C extends B {\n\t#if cpp\n\toverride\n\t#end\n\tfunction f():Void {}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(-1, fixedSource(src).indexOf('private'));
+	}
+
+	/**
+	 * An `override` written BEFORE the `#if` governs the member of whichever branch compiles, so
+	 * every branch must start the fix run from it. The fix-side counterpart of
+	 * `testConditionalIncomingVisibilityReachesEveryBranch`: a flat scan consumes the override on
+	 * the first branch's member and forces `private` on the second, lowering visibility below the
+	 * supertype — a compile error.
+	 */
+	public function testFixIncomingOverrideReachesEveryBranch(): Void {
+		final src: String =
+			'class C extends B {\n\toverride\n\t#if cpp\n\tfunction f():Void {}\n\t#else\n\tfunction g():Void {}\n\t#end\n}';
+		Assert.equals(2, violations(src).length);
+		Assert.equals(-1, fixedSource(src).indexOf('private'));
+	}
+
+	/** A straddling `static` does NOT claim the insert slot: the keyword lands at the member, after `#end`. */
+	public function testFixStraddlingStaticInsertsAtMember(): Void {
+		final fixed: String = fixedSource('class C {\n\t#if cpp\n\tstatic\n\t#end\n\tfunction f():Void {}\n}');
+		Assert.equals('class C {\n\t#if cpp\n\tstatic\n\t#end\n\tprivate function f():Void {}\n}', fixed);
+	}
+
+	/** An extern container is skipped whatever its members look like — the region is never descended into at all. */
 	public function testExternConditionalMembersNotFlagged(): Void {
-		Assert.equals(0, violations('extern class C {\n\t#if cpp\n\tfunction f():Void;\n\t#end\n}').length);
+		final src: String = 'extern class C {\n\t#if cpp\n\tfunction f():Void;\n\t#end\n}';
+		Assert.equals(0, violations(src).length);
 	}
 
 	private function violations(src: String): Array<Violation> {
@@ -263,6 +353,25 @@ class MissingVisibilityCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
 		return applyEdits(src, edits);
+	}
+
+	/**
+	 * `fixedSource` driven by a violation SYNTHESIZED at `memberAt` rather than by `run` — the only
+	 * way to reach a fix-side guard that detection now makes unreachable on its own.
+	 */
+	private function fixedSourceForced(src: String, memberAt: Int): String {
+		final check: MissingVisibility = new MissingVisibility();
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final forced: Array<Violation> = [
+			{
+				file: 'C.hx',
+				span: new Span(memberAt, memberAt + 1),
+				rule: 'missing-visibility',
+				severity: Severity.Warning,
+				message: 'forced'
+			}
+		];
+		return applyEdits(src, check.fix(src, forced, plugin));
 	}
 
 	/** `fixedSource` with a `SymbolIndex` built over `others` + the fixed file itself — the production `--fix` shape. */
