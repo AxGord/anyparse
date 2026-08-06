@@ -13,13 +13,20 @@ import anyparse.runtime.Span;
 
 /**
  * The `cond-assign-merge` check: a statement-scope `#if … #else … #end` region whose every
- * arm is a single assignment to the SAME l-value (or a single declaration of the same local)
- * collapses into ONE statement whose r-value carries the directives. `Info`, DEFAULT OFF.
+ * arm is a single assignment to the SAME l-value (or a single declaration of the same local,
+ * or a value `return` / `throw`) collapses into ONE statement whose value carries the
+ * directives. `Info`, DEFAULT OFF.
  *
- * The gates all fail closed: a missing `#else`, an arm with zero or two statements, a
- * non-plain assignment, a chained `a = b = c`, a differing l-value / declaration prefix, a
- * r-value that itself holds directives, a comment inside the region, and a region that is
- * not a direct child of a statement list are safe misses.
+ * The EXIT arms additionally take a region with NO `#else` that is immediately followed by an
+ * unconditional exit of the same keyword — the follower is the implicit else, dead inside the
+ * region's conditions, and the merge consumes it. That shape is UNSOUND for the assignment and
+ * declaration arms (both statements run, so the follower would win) and stays refused there.
+ *
+ * The gates all fail closed: a missing `#else` with no exit follower, an arm with zero or two
+ * statements, a non-plain assignment, a chained `a = b = c`, a differing l-value / declaration
+ * prefix, a `return` arm beside a `throw` one, a value-less `return;`, a value that itself holds
+ * directives, a comment inside the merged span, and a region that is not a direct child of a
+ * statement list are safe misses.
  */
 class CondAssignMergeCheckTest extends Test {
 
@@ -240,6 +247,150 @@ class CondAssignMergeCheckTest extends Test {
 	/** The merged inline form is a writer fixed point: a second canonicalize pass is byte-identical. */
 	public function testMergedFormIsWriterIdempotent(): Void {
 		final once: String = applyFixOnce(wrap('#if mobile\n\t\tscale = 2;\n\t\t#else\n\t\tscale = 1.2;\n\t\t#end'));
+		Assert.equals(once, canonicalize(once, []));
+		Assert.equals(once, canonicalize(canonicalize(once, []), []));
+	}
+
+	/** The RETURN shape: every branch a VALUE return collapses the same way, the keyword kept once. */
+	public function testReturnPairFlagged(): Void {
+		final vs: Array<Violation> = violations(wrap('#if release\n\t\treturn true;\n\t\t#else\n\t\treturn ssl();\n\t\t#end'));
+		Assert.equals(1, vs.length);
+		Assert.equals('cond-assign-merge', vs[0].rule);
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.equals(
+			'every branch of this conditional-compilation region exits with the same keyword - merge it into one statement with a conditional value',
+			vs[0].message
+		);
+	}
+
+	public function testFixReturnPair(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits(wrap('#if release\n\t\treturn true;\n\t\t#else\n\t\treturn ssl();\n\t\t#end'));
+		Assert.equals(1, es.length);
+		Assert.equals('return #if release true #else ssl() #end;', es[0].text);
+	}
+
+	public function testFixReturnElseifChain(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits(wrap('#if a\n\t\treturn 1;\n\t\t#elseif b\n\t\treturn 2;\n\t\t#else\n\t\treturn 3;\n\t\t#end'));
+		Assert.equals(1, es.length);
+		Assert.equals('return #if a 1 #elseif b 2 #else 3 #end;', es[0].text);
+	}
+
+	/** The `throw` analog falls out of the same keyword-prefix split. */
+	public function testFixThrowPair(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrap('#if a\n\t\tthrow new E(1);\n\t\t#else\n\t\tthrow new F(2);\n\t\t#end'));
+		Assert.equals(1, es.length);
+		Assert.equals('throw #if a new E(1) #else new F(2) #end;', es[0].text);
+	}
+
+	/** A value-less `return;` is a distinct kind with no value to carry the directives. */
+	public function testVoidReturnArmNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('#if a\n\t\treturn;\n\t\t#else\n\t\treturn 1;\n\t\t#end')).length);
+	}
+
+	/** The merged statement carries ONE keyword, so a `return` arm beside a `throw` arm is refused. */
+	public function testMixedExitKeywordsNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('#if a\n\t\treturn 1;\n\t\t#else\n\t\tthrow e;\n\t\t#end')).length);
+	}
+
+	public function testReturnBesideAssignNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('#if a\n\t\treturn 1;\n\t\t#else\n\t\tx = 2;\n\t\t#end')).length);
+	}
+
+	/**
+	 * The IMPLICIT-else shape: a region with NO `#else` whose every present branch is a value
+	 * return, immediately followed by an unconditional one — the follower is the else branch
+	 * (dead inside the region's conditions, since the branch exits) and the merge consumes it.
+	 */
+	public function testImplicitElseReturnFlagged(): Void {
+		final vs: Array<Violation> = violations(wrap("#if windows\n\t\treturn 'a';\n\t\t#end\n\t\treturn 'b';"));
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.stringContains('implicit else', vs[0].message);
+	}
+
+	public function testFixImplicitElseReturn(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrap("#if windows\n\t\treturn 'a';\n\t\t#end\n\t\treturn 'b';"));
+		Assert.equals(1, es.length);
+		Assert.equals("return #if windows 'a' #else 'b' #end;", es[0].text);
+	}
+
+	public function testFixImplicitElseElseifChain(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits(wrap('#if a\n\t\treturn 1;\n\t\t#elseif b\n\t\treturn 2;\n\t\t#end\n\t\treturn 3;'));
+		Assert.equals(1, es.length);
+		Assert.equals('return #if a 1 #elseif b 2 #else 3 #end;', es[0].text);
+	}
+
+	public function testFixImplicitElseThrow(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrap('#if a\n\t\tthrow new E();\n\t\t#end\n\t\tthrow new F();'));
+		Assert.equals(1, es.length);
+		Assert.equals('throw #if a new E() #else new F() #end;', es[0].text);
+	}
+
+	/** One keyword in the merged statement — a `return` region closed by a `throw` cannot use it. */
+	public function testImplicitElseMixedExitKeywordsNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('#if a\n\t\treturn 1;\n\t\t#end\n\t\tthrow e;')).length);
+	}
+
+	/**
+	 * The implicit-else shape is UNSOUND for the assignment arm: both statements execute and the
+	 * follower — not the branch — wins. Only an EXITING branch makes the follower dead code.
+	 */
+	public function testImplicitElseAssignNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('#if a\n\t\tx = 1;\n\t\t#end\n\t\tx = 2;')).length);
+	}
+
+	/** Same unsoundness for the declaration arm. */
+	public function testImplicitElseDeclarationNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('#if a\n\t\tvar q = 1;\n\t\t#end\n\t\tvar q = 2;')).length);
+	}
+
+	/** A follower that does not exit leaves the region's own exit conditional. */
+	public function testImplicitElseNonExitFollowerNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('#if a\n\t\treturn 1;\n\t\t#end\n\t\tg();')).length);
+	}
+
+	/** A value-less `return;` follower has no value to carry into the merged statement. */
+	public function testImplicitElseVoidReturnFollowerNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('#if a\n\t\treturn 1;\n\t\t#end\n\t\treturn;')).length);
+	}
+
+	/** With no statement after it the region has no implicit else at all. */
+	public function testImplicitElseWithoutFollowerNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('#if a\n\t\treturn 1;\n\t\t#end')).length);
+	}
+
+	/** The implicit else is the IMMEDIATE next statement — anything between the two refuses. */
+	public function testImplicitElseFollowerNotAdjacentNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('#if a\n\t\treturn 1;\n\t\t#end\n\t\tg();\n\t\treturn 2;')).length);
+	}
+
+	/** A follower already carrying directives would nest them inside the merged statement. */
+	public function testImplicitElseDirectiveInFollowerNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('#if a\n\t\treturn 1;\n\t\t#end\n\t\treturn #if b 2 #else 3 #end;')).length);
+	}
+
+	/** A comment between the region and its implicit else would be dropped — report-only. */
+	public function testImplicitElseCommentBeforeFollowerReportOnly(): Void {
+		final src: String = wrap('#if a\n\t\treturn 1;\n\t\t#end\n\t\t// note\n\t\treturn 2;');
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.stringContains('comment', vs[0].message);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** End-to-end through the canonical writer: the region AND the consumed follower are gone. */
+	public function testFixOutputMergesImplicitElse(): Void {
+		final out: String = applyFixOnce(wrap("#if windows\n\t\treturn 'a';\n\t\t#end\n\t\treturn 'b';"));
+		Assert.isTrue(out.indexOf("return #if windows 'a' #else 'b' #end;") != -1);
+		Assert.equals(-1, out.indexOf('#end\n'));
+		Assert.equals(-1, out.indexOf("return 'b';"));
+	}
+
+	public function testMergedExitFormIsWriterIdempotent(): Void {
+		final once: String = applyFixOnce(wrap("#if windows\n\t\treturn 'a';\n\t\t#end\n\t\treturn 'b';"));
 		Assert.equals(once, canonicalize(once, []));
 		Assert.equals(once, canonicalize(canonicalize(once, []), []));
 	}
