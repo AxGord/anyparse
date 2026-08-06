@@ -1232,12 +1232,15 @@ typedef RefShape = {
 	/**
 	 * The single-argument UNCHECKED cast expression kind — Haxe `cast expr`, no target type
 	 * (`CastExpr`) — which performs no runtime test and takes its result type from the CONTEXT
-	 * rather than from the expression itself (the checked forms, which carry their own type and
-	 * THROW on a non-null mismatch, are `checkedCastKind` / `typedCastKinds`). Two consumers read
-	 * it, both off the same "nothing is tested, nothing can throw" fact: it is a transparent
-	 * single-child wrapper, so `TypeResolver.isDeletionPure` treats one as pure exactly when its
-	 * operand is, and `prefer-comprehension` counts it among the PURE expression kinds its
-	 * evaluation-order gates accept. Historically it was also the motivating example of a
+	 * rather than from the expression itself. The form that carries its own type AND throws on a
+	 * non-null mismatch is `checkedCastKind`; it shares `typedCastKinds` with the compile-time
+	 * `checkTypeKind` ascription, which carries a type but never throws — so `typedCastKinds` as a
+	 * whole is not a "throws" set. Three read sites across two consumers, and they do NOT share one
+	 * fact. `TypeResolver.isDeletionPure` and `prefer-comprehension`'s `pureKinds` both read the
+	 * "nothing is tested, nothing can throw" purity fact — it is a transparent single-child wrapper.
+	 * `prefer-comprehension`'s `readEagerKinds` reads a separate one, that the wrapper evaluates its
+	 * child exactly once in place; see that check's own doc for why deriving either list from the
+	 * other would force a wrong answer on one side. Historically it was also the motivating example of a
 	 * LOAD-BEARING type annotation — `final t:T = cast e` is what gives the cast its result type —
 	 * but the annotation decision no longer consults this seam: every inlined local keeps its
 	 * annotation as an ascription unless the target position provably restates it. Optional; unset
