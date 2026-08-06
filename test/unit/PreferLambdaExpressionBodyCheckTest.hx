@@ -13,10 +13,19 @@ import anyparse.runtime.Span;
 
 /**
  * The `prefer-lambda-expression-body` check: an ARROW lambda whose `{ … }` body holds one
- * value `return` or one bare expression statement is flagged `Info` and `fix` replaces the
+ * value `return`, one bare expression statement, or one control-flow expression statement
+ * (`if` / `switch` / `for` / `while` / `throw`) is flagged `Info` and `fix` replaces the
  * whole block with that expression. A multi-statement body, a value-less `return;`, a
- * declaration, a `#if` region, an empty brace pair, a `function` literal (owned by
- * `prefer-arrow-callback`) and a comment in a dropped region are all left alone.
+ * declaration, a `do … while`, a `#if` region, an empty brace pair, a `function` literal
+ * (owned by `prefer-arrow-callback`) and a comment in a dropped region are all left alone.
+ *
+ * Two gates guard the emitted text, and one fixture each pins them: a lambda in the
+ * brace-less then-branch of an `if` that HAS an `else` is refused when its body could absorb
+ * that `else` (`testDanglingElsePositionRefused`, `testDanglingElseOnTheValueArmRefused` for
+ * the same hazard on the value arms, and `testDanglingElseThroughConditionalRegionRefused`
+ * for the flat-sibling projection of a `#if` region), and a control-flow statement whose
+ * terminator cannot be recovered structurally — `while (c);`, `if (c) return;`, a `#if`
+ * region on the tail — is refused outright rather than emitted without it.
  */
 class PreferLambdaExpressionBodyCheckTest extends Test {
 
@@ -70,9 +79,10 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 	public function testVoidReturnNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tg(v -> { return; });\n\t}\n}').length);
 		// `return;` projects with ZERO children, so the arity guard rejects it before the
-		// kind test ever runs. A `throw` has exactly one child and clears that guard, so it
-		// is the fixture that actually isolates the kind whitelist.
-		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tg(v -> { throw v; });\n\t}\n}').length);
+		// kind test ever runs. A local declaration projects as `VarStmt t (IdentExpr v)` —
+		// exactly one child — so it clears that guard and is the fixture that actually
+		// isolates the kind whitelist.
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tg(v -> { var t = v; });\n\t}\n}').length);
 	}
 
 	public function testLocalDeclarationBodyNotFlagged(): Void {
@@ -166,6 +176,211 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 	 */
 	public function testBlockUnderAnOperatorNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar b = v -> { return 1; } != null;\n\t}\n}').length);
+	}
+
+	/**
+	 * An `if` is an EXPRESSION in Haxe and a block's value is its last expression, so the
+	 * collapse preserves the body's type. Its span runs through the `;` that ended its
+	 * then-branch, and that terminator is dropped: `if (c) f();` emits `if (c) f()`.
+	 */
+	public function testIfWithoutElseFlagged(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tg(() -> { if (c) f(); });\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		final es: Array<{ span: Span, text: String }> = edits(src);
+		Assert.equals(1, es.length);
+		Assert.equals('if (c) f()', es[0].text);
+	}
+
+	/**
+	 * With an `else` the INTERIOR `;` survives — only the trailing one is dropped. A `;`
+	 * before `else` is legal Haxe, so `if (c) f(); else g()` is the verbatim slice minus its
+	 * own terminator, not a re-assembled text.
+	 */
+	public function testIfElseKeepsTheInteriorSemicolon(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Void {\n\t\tg(() -> { if (c) f(); else g2(); });\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('if (c) f(); else g2()', es[0].text);
+	}
+
+	/**
+	 * The canary shape for the terminator strip: a braced then-branch ends on `}`, not on a
+	 * `;`, so the recursion must stop at the block and keep both braces. Stripping there
+	 * would emit `if (c) { a(); b() }` and lose a statement's terminator.
+	 */
+	public function testMultiStatementThenBranchKeepsItsBraces(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Void {\n\t\tg(() -> { if (c) { a(); b(); } });\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('if (c) { a(); b(); }', es[0].text);
+	}
+
+	/** A bare `switch` ends on its own `}`, which is NOT a droppable terminator — the full span is kept. */
+	public function testSwitchBodyKeepsItsClosingBrace(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Void {\n\t\tg(() -> { switch v { case 1: f(); } });\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('switch v { case 1: f(); }', es[0].text);
+	}
+
+	/** Both loop forms whose body is their LAST child end on their body's `;`, which the strip drops. */
+	public function testLoopBodiesDropTheirTerminator(): Void {
+		final forEdits: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Void {\n\t\tg(() -> { for (x in xs) f(x); });\n\t}\n}');
+		Assert.equals(1, forEdits.length);
+		Assert.equals('for (x in xs) f(x)', forEdits[0].text);
+		final whileEdits: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Void {\n\t\tg(() -> { while (c) f(); });\n\t}\n}');
+		Assert.equals(1, whileEdits.length);
+		Assert.equals('while (c) f()', whileEdits[0].text);
+	}
+
+	/**
+	 * A `throw` is an expression that unifies with any type, so a block holding one collapses
+	 * like the others. This is the shape the check used to REFUSE, and the refusal fixture
+	 * moved to the local declaration in `testVoidReturnNotFlagged`.
+	 */
+	public function testThrowBodyFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> = edits('class C {\n\tfunction f():Void {\n\t\tg(v -> { throw v; });\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('throw v', es[0].text);
+	}
+
+	/**
+	 * A lambda argument FOLLOWED by more arguments: the emitted body ends before the `,` that
+	 * separates them, so the call's argument list survives the collapse intact. Only an
+	 * applied edit pins that — the edit text alone cannot show what it welds onto.
+	 */
+	public function testLambdaArgumentFollowedByMoreArguments(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tm(() -> { if (c) f(); }, 2);\n\t}\n}';
+		final es: Array<{ span: Span, text: String }> = edits(src);
+		Assert.equals(1, es.length);
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\tm(() -> if (c) f(), 2);\n\t}\n}', RefactorSupport.applyEdits(src, es));
+	}
+
+	/** An `else if` chain is ONE `if` statement, so it collapses whole — every link rides along in the verbatim slice. */
+	public function testIfExpressionChainPreserved(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Void {\n\t\tg(() -> { if (a) x() else if (b) y() else z(); });\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('if (a) x() else if (b) y() else z()', es[0].text);
+	}
+
+	/**
+	 * THE hazard the position gate exists for. `if (x) cb = () -> { if (c) g(); }; else h();`
+	 * collapsed to `if (x) cb = () -> if (c) g(); else h();` re-parents `else h()` onto the
+	 * INNER `if (c)` — Haxe allows a `;` before `else` — so the outer else-branch stops
+	 * running. The output still PARSES, so the `--fix` re-parse gate waves it through; only
+	 * this gate stops it. The lambda sits in the brace-less then-branch of an `if` that has an
+	 * `else`, the one position where an `else` can follow, and its body holds an else-less
+	 * conditional, the one construct that would absorb it.
+	 */
+	public function testDanglingElsePositionRefused(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tif (x) cb = () -> { if (c) g(); }; else h();\n\t}\n}').length);
+	}
+
+	/**
+	 * The same unshielded position with a body that holds NO else-less conditional: a `switch`
+	 * cannot absorb the trailing `else`, so the site is accepted. This is what proves the gate
+	 * is the else-less scan and not a blanket "unshielded ⇒ refuse".
+	 */
+	public function testUnshieldedPositionWithoutElseLessConditionalFlagged(): Void {
+		Assert.equals(
+			1,
+			violations('class C {\n\tfunction f():Void {\n\t\tif (x) cb = () -> { switch v { case 1: g(); } }; else h();\n\t}\n}').length
+		);
+	}
+
+	/**
+	 * The VALUE arms carry the same hazard and the same gate answers it: `return if (c) g();`
+	 * emits an else-less `if`, so in the unshielded then-branch position the trailing
+	 * `else h()` re-parents onto it exactly as in `testDanglingElsePositionRefused`. This
+	 * shape predates the control-flow arm — it was simply unanswerable before the position
+	 * walk existed.
+	 */
+	public function testDanglingElseOnTheValueArmRefused(): Void {
+		Assert.equals(
+			0, violations('class C {\n\tfunction f():Void {\n\t\tif (x) cb = () -> { return if (c) g(); }; else h();\n\t}\n}').length
+		);
+	}
+
+	/**
+	 * The same hazard reached THROUGH a `#if` region. A conditional projects every branch's
+	 * nodes as FLAT siblings, so the region's first child has a following sibling and the
+	 * "separated by a non-`else` token" rule would call it shielded — but that sibling is the
+	 * `#else` branch, and under `-D A` the child is the last thing the then-branch emits, with
+	 * `else h()` next. Collapsed, `else h()` re-parents onto the inner `if (c)` and the outer
+	 * else-branch stops running (reproduced with `--interp`), so a conditional region's
+	 * children inherit its exposure instead of claiming a sibling shield.
+	 */
+	public function testDanglingElseThroughConditionalRegionRefused(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f():Void {\n\t\tif (x)\n\t\t\t#if A\n\t\t\tcb = () -> { if (c) g(); };\n\t\t\t#else\n\t\t\tcb = null;\n\t\t\t#end\n\t\telse\n\t\t\th();\n\t}\n}'
+			).length
+		);
+	}
+
+	/**
+	 * A control-flow statement whose TAIL is a `#if` region has no recoverable terminator: the
+	 * region closes on a mandatory `#end` and the `;` to drop sits inside it, ahead of that
+	 * keyword. Emitting the region whole gives `() -> if (c) #if A f(); #end`, which the Haxe
+	 * compiler rejects once the branch is active — and anyparse's own parser accepts it, so
+	 * the `--fix` re-parse gate is not the net here either.
+	 */
+	public function testConditionalRegionOnTheTailNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f():Void {\n\t\tg(() -> {\n\t\t\tif (c)\n\t\t\t\t#if A\n\t\t\t\tf();\n\t\t\t\t#end\n\t\t});\n\t}\n}'
+			).length
+		);
+	}
+
+	/**
+	 * A metadata-prefixed sole statement projects ONE `MetaExpr` whose span swallows the `;`,
+	 * so the value arm's verbatim slice would emit `@:privateAccess if (c) h();` — text `haxe`
+	 * rejects and this parser accepts, so the re-parse gate is no net. The gapless-terminator
+	 * test refuses it. Predates the control-flow arm.
+	 */
+	public function testGaplessTerminatedStatementNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tg(() -> { @:privateAccess if (c) h(); });\n\t}\n}').length);
+	}
+
+	/**
+	 * `while (c);` ends on an EMPTY statement whose whole source IS the terminator, so no
+	 * structural end survives the strip — emitting `while (c)` would not compile. The
+	 * recursion returns null and the site is refused.
+	 */
+	public function testEmptyStatementLoopTailNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tg(() -> { while (c); });\n\t}\n}').length);
+	}
+
+	/**
+	 * A value-less `return;` / `break;` is a CHILDLESS terminated node — its `;` is not
+	 * recoverable from any child span — so a control-flow statement ending in one is refused
+	 * rather than emitted with the terminator still attached.
+	 */
+	public function testValuelessExitInsideControlFlowNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tg(() -> { if (c) return; });\n\t}\n}').length);
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tg(() -> { for (x in xs) break; });\n\t}\n}').length);
+	}
+
+	/**
+	 * `do … while` is deliberately outside the accepted set: its condition is the LAST child,
+	 * so the body-tail recursion the strip relies on does not describe it. It falls through to
+	 * the arity guard (two children) and is refused there.
+	 */
+	public function testDoWhileNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tg(() -> { do f(); while (c); });\n\t}\n}').length);
+	}
+
+	/** The fail-closed comment guard holds on the new arm too: the braces go away, so a comment sitting there refuses the site. */
+	public function testCommentInDroppedRegionAroundControlFlowNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C {\n\tfunction f():Void {\n\t\tg(() -> {\n\t\t\t// why\n\t\t\tif (c) f();\n\t\t});\n\t}\n}').length
+		);
 	}
 
 	public function testRegisteredInBuiltins(): Void {
