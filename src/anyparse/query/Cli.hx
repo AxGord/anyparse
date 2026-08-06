@@ -1499,7 +1499,13 @@ final class Cli {
 			// rule to report-only. When no resolution scope exists the gate falls back to the file set
 			// it is handed, so on the active SUBSET a catch declared elsewhere reads as absent and a
 			// throw a first pass correctly refused would be boxed by a later one.
-			'prefer-typed-throw'
+			'prefer-typed-throw',
+			// orphan-accessor's every deletion gate is whole-project: the property is resolved through
+			// the supertype chain, and the zero-direct-call proof scans every file in report scope. On
+			// the active SUBSET a supertype declared elsewhere reads as unresolvable and a call site in
+			// an unchanged file reads as absent — the first would silence a real finding, the second
+			// would delete a method something still calls.
+			'orphan-accessor'
 		];
 		final activeScopeChecks: Array<Check> = [for (c in safeChecks) if (!fullScopeIds.contains(c.id())) c];
 		final fullScopeChecks: Array<Check> = [for (c in safeChecks) if (fullScopeIds.contains(c.id())) c];

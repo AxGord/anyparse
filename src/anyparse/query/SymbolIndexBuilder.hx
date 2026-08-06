@@ -168,6 +168,9 @@ final class SymbolIndexBuilder {
 					isAnonStruct: typeDecl.kind == TYPEDEF_DECL_KIND && node.children.exists(c -> c.kind == ANON_KIND),
 					aliasTargetNominal: aliasTargetOf(source, typeDecl, node, gn.guarded),
 					hasRtti: pendingMeta.contains('@:rtti'),
+					hasBuild: pendingMeta.contains('@:build'),
+					hasAutoBuild: pendingMeta.contains('@:autoBuild'),
+					hasKeep: pendingMeta.contains('@:keep'),
 					members: collectMembers(node, source, accessors, writeAccessors, returnTypes, typeSources, memberSeams),
 					abstractSelfRebind: isAbstract && abstractRebindsThisScan(node, shape, pendingMeta),
 					abstractForwardUnderlying: isAbstract ? forwardUnderlyingOf(node, pendingMeta) : null
