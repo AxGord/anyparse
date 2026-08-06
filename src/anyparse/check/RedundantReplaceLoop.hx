@@ -19,7 +19,8 @@ import haxe.Exception;
  * Flags `while (x.indexOf(S) != -1) x = x.replace(S, B);` — a search-and-replace
  * loop that is redundant BY CONSTRUCTION: `StringTools.replace` already replaces
  * EVERY occurrence of `S` in one call (verified live), so looping on `indexOf`
- * either does nothing extra or never stops. Three arms:
+ * either does nothing extra or never stops. Three arms, the last of which splits
+ * again once a LITERAL `B` decides what its parameter `S` cannot:
  *
  * - **Arm A — `S` and `B` are both LITERALS and `B` does NOT contain `S`.** After
  *   one `replace`, `x` has zero occurrences of `S` left, so the guard is false and
@@ -34,7 +35,9 @@ import haxe.Exception;
  *   real bug, not a style nit: `Severity.Warning`, report-only (there is no
  *   mechanical fix for "the author meant something else").
  * - **Arm C — at least one of `S` / `B` is a PARAMETER of an enclosing
- *   function.** `Severity.Info`, report-only; see its own section below.
+ *   function.** `Severity.Info`, report-only; see its own section below. A PARAMETER `S`
+ *   paired with a LITERAL `B` splits out of it into two decided sub-arms, since that
+ *   literal settles the question with no knowledge of the caller.
  *
  * ## What is matched
  *
@@ -70,17 +73,46 @@ import haxe.Exception;
  * loops forever, `replaceWord(line, 'a', 'b')` returns. Both readings are live, so
  * the finding is `Severity.Info` and REPORT-ONLY — there is no arm-A collapse to
  * make (the loop is not provably redundant) and no arm-B certainty to claim. The
- * message names both operands' VERBATIM source text, so the reader decides. Note
- * the literal / parameter MIX is deliberately admitted here: `stripWord(line,
- * word)` looping on `line.replace(word, '')` has a parameter `S` and a literal
- * `B`, and is exactly the shape that motivates the arm.
+ * message names both operands' VERBATIM source text, so the reader decides. That
+ * covers two parameters, and a LITERAL `S` with a PARAMETER `B` (`line.replace(' ',
+ * sep)`) — there the literal says nothing about what the caller's `sep` contains.
+ *
+ * ## The literal-`B` hybrids — a PARAMETER `S`, and the literal decides
+ *
+ * The reverse mix is NOT undecidable, and reporting it in arm C's words produced
+ * plain nonsense on `stripWord(line, word)` looping on `line.replace(word, '')`:
+ * "potential infinite loop when '' contains word" — an empty literal contains no
+ * non-empty word, and `replace(word, '')` REMOVES rather than reinserts. So a
+ * literal `B` under a parameter `S` splits into two decided sub-arms:
+ *
+ * - **EMPTY literal `B`.** For every non-empty `S` one `replace` deletes ALL
+ *   occurrences, the guard is false on the next check, and the loop is simply
+ *   REDUNDANT — the message says exactly that and names the single call that does
+ *   the same work. It stays REPORT-ONLY nonetheless: `indexOf('') == 0`, so on the
+ *   degenerate `S == ''` the ORIGINAL loop spins forever while the collapsed form
+ *   returns at once. That difference is a behaviour change, and an autofix may not
+ *   silently trade a hang for a return — the caller may be relying on neither, but
+ *   the rule cannot know, and a hang is the kind of bug a human must see. The
+ *   message carries the degenerate hazard for the same reason. Being a REDUNDANCY
+ *   verdict rather than a hazard one, it is also the single arm no dominating guard
+ *   can suppress: no guard makes a redundant loop non-redundant, so `classifyArm`
+ *   answers before the guard walk.
+ * - **NON-EMPTY literal `B`.** The hazard is real but its condition is EXACT: the
+ *   loop runs forever for precisely those `S` that occur in that literal, the equal
+ *   `S == B` included. The message states that condition and quotes the literal
+ *   verbatim instead of arm C's undecidable phrasing, and the whole dominating-guard
+ *   apparatus below still applies — `if ('xy'.indexOf(word) != -1) return …;` does
+ *   prove the loop terminates, and an `S == B` equality guard removes exactly one of
+ *   the offending `S` values, which the caveat clause says in those terms.
  *
  * The one static proof that the hazard cannot happen is a CONTAINMENT test that
  * EXITS before the loop — `if (B.indexOf(S) != -1) return …;`, its reversed order,
  * or `if (B.contains(S)) return …;` (read by the same `matchGuard`, held to the
  * same operand identity), whose then-branch unconditionally exits
  * (`CheckScan.branchAlwaysExits`: a `return` / `throw` / `break` / `continue`, bare
- * or as the LAST statement of a block). That suppresses arm C outright.
+ * or as the LAST statement of a block). That suppresses arm C — and the non-empty
+ * literal-`B` hybrid — outright; the empty-literal one is never suppressed, its
+ * redundancy verdict holding whatever any guard says.
  *
  * Such a guard must DOMINATE the loop, not merely precede it in the text: the walk
  * ascends from the `while` through the enclosing statement lists
@@ -163,7 +195,7 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 
 	public function description(): String {
 		return
-			'a while (x.indexOf(S) != -1) x = x.replace(S, B); loop — replace() already replaces every occurrence in one call; a PARAMETER S / B cannot be decided statically and is reported as a potential infinite loop';
+			'a while (x.indexOf(S) != -1) x = x.replace(S, B); loop — replace() already replaces every occurrence in one call; an undecidable PARAMETER pair is reported as a potential infinite loop, while a PARAMETER S with a LITERAL B is decided by that literal: an empty one makes the loop merely redundant, a non-empty one loops forever for exactly those S occurring in it';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -370,6 +402,14 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 	 * `operandOf`'s parameter branch, which refuses outright when no enclosing function holds
 	 * the binding as a parameter. Reaching the throw below would mean that invariant broke.
 	 *
+	 * PAST the two-literal return, a non-null `B` content means a PARAMETER `S` with a LITERAL
+	 * `B` — the hybrid arms `CEmptyB` / `CLiteralB`, where the literal decides the verdict with
+	 * no knowledge of the caller. The EMPTY one answers BEFORE the dominating-guard walk on
+	 * purpose: its verdict is that the loop is REDUNDANT, which no guard can turn false, so
+	 * there is nothing for a containment proof to suppress (and `''.indexOf(S) != -1` holds only
+	 * for the degenerate empty `S` anyway). A non-empty literal keeps the full arm-C treatment —
+	 * `if ('xy'.indexOf(word) != -1) return …;` really does prove the loop terminates.
+	 *
 	 * The DOMINANCE walk takes the INNERMOST enclosing function (`fns`' last element) — a guard
 	 * outside a lambda may not have run when a loop inside it is reached — the opposite
 	 * direction from the parameter test `operandOf` runs over the whole chain.
@@ -383,9 +423,11 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 			return { arm: replacementContent.indexOf(searchContent) == -1 ? Arm.A : Arm.B, eqGuarded: false };
 		if (fns.length == 0)
 			throw new Exception('$RULE_ID: arm C reached with no enclosing function — operandOf refuses a parameter operand without one');
+		if (replacementContent == '') return { arm: Arm.CEmptyB, eqGuarded: false };
 		final guards: Array<QueryNode> = dominatingGuards(fns[fns.length - 1], whileNode, s);
 		if (guardsContainment(guards, fns, search, replacement, root, source, s)) return null;
-		return { arm: Arm.C, eqGuarded: guardsEquality(guards, fns, search, replacement, root, source, s) };
+		final eqGuarded: Bool = guardsEquality(guards, fns, search, replacement, root, source, s);
+		return { arm: replacementContent == null ? Arm.C : Arm.CLiteralB, eqGuarded: eqGuarded };
 	}
 
 	/**
@@ -615,16 +657,16 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 	}
 
 	/**
-	 * `m` as its `Violation`: `Info` for arm A (redundant, autofixable) and for arm C (a parameter
-	 * operand, report-only), `Warning` for arm B (provably infinite, report-only). Switched
-	 * exhaustively on the `enum abstract`, so a fourth arm is a compile error rather than silently
-	 * landing in the `Info` branch.
+	 * `m` as its `Violation`: `Info` for arm A (redundant, autofixable) and for every arm-C shape
+	 * (a parameter operand, report-only), `Warning` for arm B (provably infinite, report-only).
+	 * Switched exhaustively on the `enum abstract`, so a further arm is a compile error rather
+	 * than silently landing in the `Info` branch.
 	 */
 	private static function toViolation(file: String, m: Match): Violation {
 		final search: String = excerpt(m.searchSrc);
 		final replacement: String = excerpt(m.replacementSrc);
 		final severity: Severity = switch m.arm {
-			case Arm.A, Arm.C: Severity.Info;
+			case Arm.A, Arm.C, Arm.CEmptyB, Arm.CLiteralB: Severity.Info;
 			case Arm.B: Severity.Warning;
 		};
 		final message: String = switch m.arm {
@@ -633,6 +675,8 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 			case Arm.B:
 				'this loop never terminates for any ${m.receiverName} containing $search — replace($search, $replacement) reintroduces it every time, since $replacement itself contains $search';
 			case Arm.C: armCMessage(m, search, replacement);
+			case Arm.CEmptyB: emptyReplacementMessage(m, search, replacement);
+			case Arm.CLiteralB: literalReplacementMessage(m, search, replacement);
 		};
 		return {
 			file: file,
@@ -653,6 +697,34 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 			'potential infinite loop when $replacement contains $search — replace($search, $replacement) reinserts $search on every pass, so the guard never goes false';
 		return m.eqGuarded
 			? '$head; the $search == $replacement guard does not cover containment — a $replacement that merely CONTAINS $search still loops forever'
+			: head;
+	}
+
+	/**
+	 * The EMPTY-literal `B` message: `replace(S, '')` REMOVES every occurrence in one call, so the
+	 * loop adds nothing over a single unconditional assignment — the finding is REDUNDANCY, never
+	 * the infinite loop arm C claims (an empty literal cannot contain a non-empty `S`, and nothing
+	 * is reinserted). The degenerate note is why it is still report-only rather than arm A's
+	 * autofix: `indexOf('') == 0`, so on an empty `S` the ORIGINAL loop hangs where the collapsed
+	 * form returns, and no rewrite may silently trade a hang for a return.
+	 */
+	private static function emptyReplacementMessage(m: Match, search: String, replacement: String): String {
+		return
+			'this while (${m.receiverName}.indexOf($search) != -1) loop is redundant for any non-empty $search — replace($search, $replacement) REMOVES every occurrence in one call, so one ${m.receiverName} = ${m.receiverName}.replace($search, $replacement); does the same work; not autofixed: the ORIGINAL loop spins forever on a degenerate $search == $replacement (indexOf($replacement) == 0), and collapsing it would silently turn that hang into a return';
+	}
+
+	/**
+	 * The NON-empty-literal `B` message: the hazard is real but its condition is exact — the loop
+	 * runs forever for precisely those `S` that occur in the literal, equality included — so the
+	 * message states THAT rather than arm C's undecidable "when `B` contains `S`", and names the
+	 * literal verbatim so the reader can check the condition by eye. The equality-guard caveat is
+	 * sharper here for the same reason: the guard removes exactly one of those `S`.
+	 */
+	private static function literalReplacementMessage(m: Match, search: String, replacement: String): String {
+		final head: String =
+			'potential infinite loop when $search occurs in $replacement — replace($search, $replacement) writes $replacement back into ${m.receiverName} on every pass, so the loop runs forever for exactly those $search that are a substring of $replacement (the equal $search == $replacement included)';
+		return m.eqGuarded
+			? '$head; the $search == $replacement guard rules out only the equal case — a shorter $search that still occurs in $replacement loops forever'
 			: head;
 	}
 
@@ -716,7 +788,7 @@ private typedef Operand = {
 };
 
 /**
- * Which arm a matched loop falls in — the three outcomes the type doc describes.
+ * Which arm a matched loop falls in — the outcomes the type doc describes.
  */
 private enum abstract Arm(Int) {
 
@@ -726,8 +798,14 @@ private enum abstract Arm(Int) {
 	/** Both operands are literals and `B` contains `S`: provably infinite, `Warning`, report-only. */
 	final B = 1;
 
-	/** At least one operand is a parameter: infinite for some argument, `Info`, report-only. */
+	/** Neither literal-`B` hybrid: the pair is undecidable here, infinite for some argument, `Info`, report-only. */
 	final C = 2;
+
+	/** A PARAMETER `S` with the EMPTY literal `B`: redundant for every non-empty `S`, `Info`, report-only. */
+	final CEmptyB = 3;
+
+	/** A PARAMETER `S` with a NON-EMPTY literal `B`: infinite for exactly those `S` occurring in `B`, `Info`, report-only. */
+	final CLiteralB = 4;
 
 }
 
