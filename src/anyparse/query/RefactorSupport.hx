@@ -1221,7 +1221,13 @@ final class RefactorSupport {
 	 * rest), never to a field access, so `0...Limit.MAX` reads `Limit` as the bare
 	 * reference it is. And a dot inside a COMMENT qualifies nothing — the period
 	 * ending `// … before the process dies.` sits directly before the next line's
-	 * first token and would otherwise mark a live call as a qualified tail.
+	 * first token and would otherwise mark a live call as a qualified tail. Only a
+	 * LINE comment can end in a bare `.` that way — every other inert construct
+	 * closes with its own delimiter — but the mask is exact for all of them.
+	 *
+	 * WHITESPACE only, not trivia: a comment spliced between the dot and the name
+	 * stops the walk short, so that occurrence reads as unqualified and COUNTS.
+	 * The over-counting direction — an import kept, never one deleted.
 	 */
 	private static function qualifiedBefore(source: String, at: Int, commentRegions: Null<Array<Span>>): Bool {
 		if (commentRegions == null) return false;

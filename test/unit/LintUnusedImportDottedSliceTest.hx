@@ -76,14 +76,6 @@ class LintUnusedImportDottedSliceTest extends Test {
 		Assert.equals(0, run(use).length);
 	}
 
-	/** A doc comment is masked the same way: its prose periods stay inert. */
-	public function testDocCommentPeriodIsNotQualification(): Void {
-		final use: String =
-			'package pkg;\n\nimport a.b.Limit;\n\nclass C {\n\t/**\n\t * Drains the queue.\n\t */\n\tpublic function f(): Void Limit.drain();\n}';
-
-		Assert.equals(0, run(use).length);
-	}
-
 	/**
 	 * A `//` inside a STRING is not a comment: the qualifier dot after it still
 	 * qualifies, so the import stays reported. Pins that the mask comes from the
@@ -98,10 +90,14 @@ class LintUnusedImportDottedSliceTest extends Test {
 		Assert.equals(Severity.Warning, vs[0].severity);
 	}
 
-	/** A qualifier dot separated from the name by a newline / spaces still qualifies. */
+	/**
+	 * A qualifier dot separated from its name by a newline / indentation still
+	 * qualifies — the dot ends the line, the name opens the next, and only the
+	 * backward whitespace walk connects them.
+	 */
 	public function testWhitespaceBetweenDotAndNameStillQualifies(): Void {
 		final use: String =
-			'package pkg;\n\nimport a.b.Ctx;\n\nclass C {\n\tpublic function f(): Int return a.b\n\t\t.Ctx.currentPos();\n}';
+			'package pkg;\n\nimport a.b.Ctx;\n\nclass C {\n\tpublic function f(): Int return a.b.\n\t\tCtx.currentPos();\n}';
 		final vs: Array<Violation> = run(use);
 
 		Assert.equals(1, vs.length);
@@ -145,6 +141,30 @@ class LintUnusedImportDottedSliceTest extends Test {
 
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Warning, vs[0].severity);
+	}
+
+	/**
+	 * The `using` arm asks the same question of its bound name: a fully-qualified
+	 * call goes through no import, so the `using` drops to the unverifiable
+	 * advisory (its extension methods are unknown) instead of reading as live.
+	 */
+	public function testUsingBoundNameQualifiedTailIsNotAUse(): Void {
+		final use: String = 'package pkg;\n\nusing a.b.Limit;\n\nclass C {\n\tpublic var x: Int = a.b.Limit.MAX;\n}';
+		final vs: Array<Violation> = run(use);
+
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.isTrue(vs[0].message.contains('using import'));
+	}
+
+	/** The static-wildcard arm too: a member reached as `Type.MEMBER` never came through the wildcard. */
+	public function testWildcardMemberQualifiedTailDoesNotKeepImport(): Void {
+		final use: String = 'package pkg;\n\nimport a.b.Limit.*;\n\nclass C {\n\tpublic var x: Int = a.b.Limit.MAX;\n}';
+		final vs: Array<Violation> = run(use);
+
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Warning, vs[0].severity);
+		Assert.isTrue(vs[0].message.contains('unused wildcard import'));
 	}
 
 	/** Run the check over `use` plus the fixed support modules it may import. */
