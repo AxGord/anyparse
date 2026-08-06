@@ -22,7 +22,9 @@ import anyparse.runtime.Span;
  * candidate, of every sole-write init accepted on the legacy path and of every field
  * that already carries a declaration initializer, so none of them can observe an
  * in-class static another one's foreign code writes. A `#if` member region refuses the
- * whole container (its interior is trivia here). A static field, a property, a
+ * whole container (its interior is trivia here). An explicit `super(...)` ANYWHERE in
+ * the constructor refuses the candidate on both paths: declaration initializers run in
+ * the prologue, ahead of the base constructor. A static field, a property, a
  * right-hand side referencing a constructor parameter / `this` / another instance
  * member, a conditional / read-before-init write, a multi-write field behind a broken
  * chain or an in-class-reading co-mover, and a class without a single constructor are
@@ -125,7 +127,13 @@ class FieldInitAtDeclarationCheckTest extends Test {
 		Assert.equals(0, violations(src).length);
 	}
 
-	/** A leading `super(...)` is not a candidate init, so the chain breaks — left alone. */
+	/**
+	 * A leading `super(...)` is now refused TWICE over. The base-constructor gate rejects the
+	 * candidate outright — Haxe emits declaration initializers ahead of the `super()` call — and it
+	 * runs BEFORE the chain walk, so the chain break this fixture originally pinned (a `super(...)`
+	 * is not a candidate init) no longer decides the outcome. Both refusals hold; only the first one
+	 * is reached.
+	 */
 	public function testSuperBeforeInitNotMoved(): Void {
 		final src: String = 'class C extends B { private var _x:Int; public function new() { super(); _x = 1; }'
 			+ ' function s():Void { _x = 2; } }';
@@ -369,10 +377,13 @@ class FieldInitAtDeclarationCheckTest extends Test {
 		// unresolved lowercase ident in a subclass is indistinguishable from an
 		// inherited member and must fail closed ("Cannot access this or other
 		// member field in variable initialization" once moved). Uppercase roots
-		// (type refs like `Colors.WHITE`) stay movable.
-		final sub: String = 'class C extends B { private var _a:X; public function new() { super(); _a = new X(_w / 2); } }';
+		// (type refs like `Colors.WHITE`) stay movable. Neither constructor calls
+		// `super()`: an explicit base-constructor call is its own refusal now (see
+		// `testSuperCallInCtorNotMoved`), and it would mask the resolver arm this
+		// fixture exists to discriminate.
+		final sub: String = 'class C extends B { private var _a:X; public function new() { _a = new X(_w / 2); } }';
 		Assert.equals(0, violations(sub).length);
-		final upper: String = 'class C extends B { private var _a:X; public function new() { super(); _a = new X(Colors.WHITE); } }';
+		final upper: String = 'class C extends B { private var _a:X; public function new() { _a = new X(Colors.WHITE); } }';
 		Assert.equals(1, violations(upper).length);
 	}
 
@@ -447,11 +458,11 @@ class FieldInitAtDeclarationCheckTest extends Test {
 
 	/**
 	 * The whitelist must not over-refuse. A plain call and a local declaration both leave the init
-	 * unconditionally reached, so each one still moves. `super(…)` is deliberately NOT pinned
-	 * here: it projects as a plain expression statement and the gate therefore accepts it, but
-	 * Haxe emits declaration initializers BEFORE an explicit `super()`, so hoisting across one
-	 * crosses the base-constructor boundary — a pre-existing sole-write-path hazard recorded in
-	 * `FieldInitAtDeclaration`'s "Known gaps", not a shape this fixture should bless.
+	 * unconditionally reached, so each one still moves. `super(…)` clears this whitelist too — it
+	 * projects as a plain expression statement — but a gate of its own refuses it now, because Haxe
+	 * emits declaration initializers BEFORE an explicit `super()` and the hoist would cross the
+	 * base-constructor boundary. `testSuperCallInCtorNotMoved` pins that, so neither fixture here
+	 * carries one.
 	 */
 	public function testStraightLinePrefixStillMoved(): Void {
 		Assert.equals(1, violations('class C { var _a:Array<Int>; public function new() { trace(1); _a = new Array<Int>(); } }').length);
@@ -502,6 +513,75 @@ class FieldInitAtDeclarationCheckTest extends Test {
 		final src: String = 'class C { var _a:Array<Int>; public function new(c:Bool) { if (c) { while (true) { } }'
 			+ ' _a = new Array<Int>(); } }';
 		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * Haxe emits declaration initializers into the constructor PROLOGUE — ahead of the
+	 * constructor BODY, and therefore ahead of an explicit `super()` inside it — so hoisting an
+	 * init that sits AFTER one runs it before the BASE constructor. Reproduced end to end on
+	 * 4.3.7 `--interp`: a subclass whose constructor reads `super(); asset = Loader.get('pack');`
+	 * over a base constructor that sets the `Loader.ready` flag `get` consults printed
+	 * `real:pack` as written and `TOO-EARLY:pack` once the init moved onto the declaration. ANY
+	 * explicit `super(...)` anywhere in the constructor refuses the hoist, on both acceptance
+	 * paths.
+	 */
+	public function testSuperCallInCtorNotMoved(): Void {
+		final src: String = 'class C extends B { var asset:String; public function new() { super(); asset = Loader.get("pack"); } }';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * The positive control for the fixture above: the SAME class with the `super();` statement
+	 * deleted still moves, so the `super()` call is the only difference between the two. The
+	 * shape is REAL Haxe, not a syntactic stand-in: `super()` is required only when the BASE
+	 * class DECLARES a constructor. Verified on 4.3.7 `--interp` — `class B { public var z:Int
+	 * = 0; }` plus `class C extends B { public var asset:String; public function new()
+	 * { asset = 'x'; } }` compiles and runs, printing `x` then `0`, and it is adding
+	 * `public function new() {}` to `B` that turns it into `Missing super constructor call`.
+	 * So the gate does not refuse every `extends` class — only the ones that call up.
+	 */
+	public function testNoSuperCallStillMoved(): Void {
+		final src: String = 'class C extends B { var asset:String; public function new() { asset = Loader.get("pack"); } }';
+		Assert.equals(1, violations(src).length);
+	}
+
+	/**
+	 * The load-bearing premise of the "deliberately COARSER" argument, under test rather than
+	 * only argued: a `super(…)` need not be a top-level statement, so "the init precedes THE
+	 * super call" often has no answer at all and the gate refuses the whole constructor
+	 * instead. A branch-conditional base-constructor call is legal Haxe — verified on 4.3.7
+	 * `--interp`, where `if (c) super(1) else super(2);` and a one-sided `if (f) super(7);`
+	 * both compile and run. Measured against the two binaries: 1 violation before the gate,
+	 * 0 after.
+	 */
+	public function testSuperInsideBranchNotMoved(): Void {
+		final src: String = 'class C extends B { var a:Int; public function new(f:Bool) { if (f) super(); a = 1; } }';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * The ACCEPTED over-refusal, as a decision under test rather than a paragraph of prose. This
+	 * is the `pony/net/cs/SocketClient` shape: the init sits BEFORE the `super(…)`, so it does
+	 * NOT cross the base-constructor boundary and the finer rule would keep it. The coarse gate
+	 * refuses it anyway, and the class doc argues that one lost cleanup per 676 files is the
+	 * right price. Measured: 1 violation before the gate, 0 after. Whoever implements the finer
+	 * rule flips THIS assertion back to 1.
+	 */
+	public function testInitBeforeSuperStillNotMoved(): Void {
+		final src: String = 'class C extends B { var _x:Int; public function new() { _x = 1; super(); } function s():Void { _x = 2; } }';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * `holdsSuperCall` matches a CALL whose callee is the bare `super` identifier, deliberately
+	 * NOT any `super` reference at all: `super.foo()` is a base-MEMBER access on an already
+	 * constructed base, which the prologue does not race. The branch had no coverage. Measured:
+	 * 1 violation before the gate and 1 after — this fixture is the one the gate must leave
+	 * alone.
+	 */
+	public function testSuperMemberCallStillMoved(): Void {
+		final src: String = 'class C extends B { var _a:Array<Int>; public function new() { super.foo(); _a = new Array<Int>(); } }';
+		Assert.equals(1, violations(src).length);
 	}
 
 	/** Assert `src` yields exactly one violation and that its declaration span names `field`. */

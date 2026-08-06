@@ -1012,6 +1012,19 @@ typedef RefShape = {
 	@:optional var selfReferenceText: Null<String>;
 
 	/**
+	 * The identifier that denotes the BASE object — `super` in curly-brace
+	 * families. The `field-init-at-declaration` check reads it to recognise an
+	 * explicit base-constructor call (`super(…)`), across which no declaration
+	 * initializer may be hoisted: the prologue runs ahead of the base
+	 * constructor. Optional — unset, and identically with `callKind` unset,
+	 * that gate falls back to the coarser `supertypeClauseKinds` test,
+	 * which refuses MORE — but only while THAT seam is itself declared:
+	 * with it unset too the fallback answers false for every container
+	 * and the gate is ABSENT, not coarser.
+	 */
+	@:optional var superReferenceText: Null<String>;
+
+	/**
 	 * Type-declaration kinds whose `this` is the underlying value rather than an
 	 * instance — a compile-time `abstract A(T)` / `enum abstract`, where a
 	 * `this.field` accesses the underlying type's member and the `this.` qualifier
