@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.IfExpressionChain.ShieldSeams;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
@@ -300,8 +301,9 @@ import haxe.Exception;
  * the function literal, no block kinds, or NEITHER value-carrying statement kind → the
  * check is a no-op.
  *
- * The control-flow arm reads four more seams. Three of them unset simply narrow it; the
- * fourth, `conditionalKinds`, is the one that must be set for a grammar that HAS an `if`:
+ * The control-flow arm reads four more seams (the last two arrive bundled as
+ * `shield: ShieldSeams`). Three of them unset simply narrow it; the fourth,
+ * `conditionalKinds`, is the one that must be set for a grammar that HAS an `if`:
  *
  * - `controlFlowKinds` — `ifExpressionKinds` + `ifStatementKinds` + `switchKinds` +
  *   `loopStatementKinds` + `throwKinds`. EMPTY leaves the arm inert and the check exactly
@@ -480,9 +482,8 @@ final class PreferLambdaExpressionBody implements Check {
 		final exprStatementKind: Null<String> = shape.exprStatementKind;
 		if (arrowKinds.length == 0 || blockKinds.length == 0) return null;
 		if (valueReturnKinds.length == 0 && exprStatementKind == null) return null;
-		final conditionalKinds: Array<String> = IfExpressionChain.conditionalKinds(shape);
+		final shield: ShieldSeams = IfExpressionChain.shieldSeams(shape, blockKinds);
 		final throwKinds: Array<String> = shape.throwKinds ?? [];
-		final shieldKinds: Array<String> = IfExpressionChain.shieldKinds(shape, blockKinds);
 		// A union of existing statement seams, so duplicates are expected and harmless —
 		// membership is the only question ever asked of it.
 		final terminatedKinds: Array<String> = valueReturnKinds.concat(throwKinds)
@@ -497,9 +498,10 @@ final class PreferLambdaExpressionBody implements Check {
 			valueReturnKinds: valueReturnKinds,
 			exprStatementKind: exprStatementKind,
 			opaqueKinds: shape.opaqueKinds ?? [],
-			controlFlowKinds: conditionalKinds.concat(shape.switchKinds ?? []).concat(shape.loopStatementKinds ?? []).concat(throwKinds),
-			conditionalKinds: conditionalKinds,
-			shieldKinds: shieldKinds,
+			controlFlowKinds: shield.conditionalKinds.concat(shape.switchKinds ?? [])
+				.concat(shape.loopStatementKinds ?? [])
+				.concat(throwKinds),
+			shield: shield,
 			terminatedKinds: terminatedKinds
 		};
 	}
@@ -518,7 +520,7 @@ final class PreferLambdaExpressionBody implements Check {
 			if (m != null) out.push(m);
 		}
 		for (i => child in node.children)
-			walk(child, source, comments, s, out, IfExpressionChain.childShielded(node, i, s.shieldKinds, s.conditionalKinds, shielded));
+			walk(child, source, comments, s, out, IfExpressionChain.childShielded(node, i, s.shield, shielded));
 	}
 
 	/**
@@ -563,7 +565,7 @@ final class PreferLambdaExpressionBody implements Check {
 		if (s.controlFlowKinds.contains(stmt.kind)) {
 			// Unshielded, an emitted else-less `if` anywhere in the subtree would swallow the
 			// `else` that follows the lambda. See the dangling-else section of the class doc.
-			if (!shielded && IfExpressionChain.holdsElseLessConditional(stmt, s.conditionalKinds)) return null;
+			if (!shielded && IfExpressionChain.holdsElseLessConditional(stmt, s.shield.conditionalKinds)) return null;
 			return { node: stmt, terminated: true };
 		}
 		if (stmt.children.length != SINGLE_VALUE_CHILD) return null;
@@ -574,7 +576,7 @@ final class PreferLambdaExpressionBody implements Check {
 		// identically. Predates the control-flow arm; the position walk is what makes it
 		// answerable.
 		final value: QueryNode = stmt.children[0];
-		if (!shielded && IfExpressionChain.holdsElseLessConditional(value, s.conditionalKinds)) return null;
+		if (!shielded && IfExpressionChain.holdsElseLessConditional(value, s.shield.conditionalKinds)) return null;
 		// The value arm emits its child's span verbatim, which is sound only while the statement's
 		// own terminator lies OUTSIDE that child. A gapless terminated statement means the model
 		// swallowed the terminator into the value (`{ @:privateAccess if (c) h(); }` projects the
@@ -642,11 +644,11 @@ private typedef Seams = {
 	/** The control-flow statements a body may hold whole — `if` / `switch` / loop / `throw`. Empty leaves that arm inert. */
 	var controlFlowKinds: Array<String>;
 
-	/** Every `if` form, statement and expression — what an emitted ` else ` could re-parent onto. */
-	var conditionalKinds: Array<String>;
-
-	/** Parents that close every child with a delimiter, so no `else` can follow one. */
-	var shieldKinds: Array<String>;
+	/**
+	 * The dangling-`else` gate's inputs: the parents that close every child with a delimiter,
+	 * and every `if` form an emitted else-less conditional could be absorbed by.
+	 */
+	var shield: ShieldSeams;
 
 	/** Statement kinds whose span covers a trailing terminator the emitted text must not carry. */
 	var terminatedKinds: Array<String>;
