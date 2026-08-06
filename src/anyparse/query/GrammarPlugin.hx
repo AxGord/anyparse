@@ -1222,11 +1222,19 @@ typedef RefShape = {
 	@:optional var checkedCastKind: String;
 
 	/**
-	 * The single-argument UNCHECKED cast node kind (Haxe `cast expr`, no target type —
-	 * `CastExpr`), distinct from `checkedCastKind`'s runtime-checked `cast(expr, T)`. It never
-	 * throws and is a transparent single-child wrapper, so `TypeResolver.isDeletionPure` treats
-	 * one as pure exactly when its operand is. Optional; unset means the wrapper arm never
-	 * fires and an unchecked cast falls through to the conservative default.
+	 * The single-argument UNCHECKED cast expression kind — Haxe `cast expr`, no target type
+	 * (`CastExpr`) — which performs no runtime test and takes its result type from the CONTEXT
+	 * rather than from the expression itself (the checked forms, which carry their own type and
+	 * THROW on a non-null mismatch, are `checkedCastKind` / `typedCastKinds`). Two consumers read
+	 * it, both off the same "nothing is tested, nothing can throw" fact: it is a transparent
+	 * single-child wrapper, so `TypeResolver.isDeletionPure` treats one as pure exactly when its
+	 * operand is, and `prefer-comprehension` counts it among the PURE expression kinds its
+	 * evaluation-order gates accept. Historically it was also the motivating example of a
+	 * LOAD-BEARING type annotation — `final t:T = cast e` is what gives the cast its result type —
+	 * but the annotation decision no longer consults this seam: every inlined local keeps its
+	 * annotation as an ascription unless the target position provably restates it. Optional; unset
+	 * means the wrapper arm never fires (an unchecked cast falls through to the conservative
+	 * default) and costs that purity reach.
 	 */
 	@:optional var uncheckedCastKind: String;
 
