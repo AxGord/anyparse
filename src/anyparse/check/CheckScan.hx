@@ -35,6 +35,21 @@ final class CheckScan {
 	/** The grammar's `using` declaration kind, spelled literally (see `hasUsingModule`). */
 	public static inline final USING_DECL_KIND: String = 'UsingDecl';
 
+	/** The class-body member kinds a method declaration projects as — a plain method and a `final` one. */
+	public static final METHOD_KINDS: Array<String> = ['FnMember', 'FinalModifiedMember'];
+
+	/** The read-accessor method-name prefix; its length also slices the property name off. */
+	public static inline final GET_PREFIX: String = 'get_';
+
+	/** The write-accessor method-name prefix (same length as `GET_PREFIX`, which slices both). */
+	public static inline final SET_PREFIX: String = 'set_';
+
+	/** The node kinds a string expression projects as — the hosts whose `Literal` children are interpolation fragments. */
+	public static final STRING_EXPR_KINDS: Array<String> = ['SingleStringExpr', 'DoubleStringExpr'];
+
+	/** The static-text child kind inside an interpolated string expression. */
+	public static inline final STRING_FRAGMENT_KIND: String = 'Literal';
+
 	/** The top-level declaration kinds a `using` insert anchors after — the file's package / import / using header. */
 	private static final USING_ANCHOR_KINDS: Array<String> = [
 		'PackageDecl',
@@ -939,6 +954,48 @@ final class CheckScan {
 		var cols: Int = 0;
 		for (i in from ... to) cols += StringTools.fastCodeAt(source, i) == '\t'.code ? indentWidth : 1;
 		return cols;
+	}
+
+	/**
+	 * The delete-the-whole-member edit for `node`: its modifier / metadata run (`declGroupSpan`,
+	 * which needs the declaring `parent` for the sibling run) folded in, then the whole line
+	 * (`lineExtendedSpan`), so no blank modifier line is left behind. The member's LEADING DOC
+	 * COMMENT is kept — `unused-private`'s shape. Use `docDeletionEdit` to take the doc with it.
+	 */
+	public static inline function deletionEdit(
+		source: String, node: QueryNode, parent: QueryNode, span: Span
+	): { span: Span, text: String } {
+		return { span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.declGroupSpan(node, parent, span)), text: '' };
+	}
+
+	/**
+	 * `deletionEdit` widened to swallow the member's leading DOC COMMENT (`docExtendedSpan`) as
+	 * well, so deleting a documented method strands nothing — the shape `orphan-accessor` and
+	 * `unused-public-member` delete with.
+	 */
+	public static inline function docDeletionEdit(
+		source: String, node: QueryNode, parent: QueryNode, span: Span
+	): { span: Span, text: String } {
+		final group: Span = RefactorSupport.declGroupSpan(node, parent, span);
+		return { span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, group)), text: '' };
+	}
+
+	/** The `<file>#<from>:<to>` key one declaration is memoised under between a check's `run` and its `fix`. */
+	public static inline function spanKey(file: String, span: Span): String {
+		return '$file#${span.from}:${span.to}';
+	}
+
+	/**
+	 * Whether `branch` (an `if`'s then-branch, or any statement in branch position)
+	 * unconditionally exits: a terminal statement directly, or a block whose LAST direct child
+	 * is terminal. The shared reading of "this branch never falls through" — `redundant-else`
+	 * de-nests on it, `redundant-replace-loop` reads a pre-loop guard with it.
+	 */
+	public static function branchAlwaysExits(branch: QueryNode, support: ControlFlowSupport): Bool {
+		if (support.isTerminal(branch)) return true;
+		if (!support.blockKinds().contains(branch.kind)) return false;
+		final kids: Array<QueryNode> = branch.children;
+		return kids.length > 0 && support.isTerminal(kids[kids.length - 1]);
 	}
 
 }

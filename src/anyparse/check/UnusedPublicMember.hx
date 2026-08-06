@@ -1,8 +1,12 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NamingPolicy.NamedDecl;
+import anyparse.query.NamingPolicy.NamingCategory;
+import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
@@ -11,8 +15,10 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
+import haxe.Exception;
 
 using Lambda;
+using StringTools;
 
 /**
  * Flags a PUBLIC METHOD of a class whose NAME occurs NOWHERE in scope outside its own
@@ -26,7 +32,7 @@ using Lambda;
  * ## RUN IT WHOLE-PROJECT
  *
  * Report scope bounds every scan here — the token map, the occurrence confirm, and the
- * chain / subtype queries all see the file set the lint was given (widened to the resolution
+ * inheritance-chain walk all see the file set the lint was given (widened to the resolution
  * scope where one is configured). A subdirectory run is a PREVIEW, not a verdict: a call site
  * in an unlinted file reads as absent, so the report over-reports and `--fix` would delete a
  * method the rest of the project calls. That is also why the rule is registered in the
@@ -34,17 +40,20 @@ using Lambda;
  *
  * ## The reference test — two complementary text mechanisms
  *
- * 1. A GLOBAL identifier-token count map, built ONCE per run over every source in report
- *    UNION resolution scope. It is the cost-bounded pre-filter: a per-candidate scan of a
- *    scope that carries the configured libraries (lime / openfl / … — thousands of files)
- *    would be quadratic. The member is a candidate only when the map's count for its name
- *    EQUALS the count of the same tokens inside the member's OWN exclusion region — i.e.
- *    every occurrence in the whole scope is its own declaration.
- * 2. The authoritative confirm, on the REPORT index only:
- *    `SymbolIndex.nameOccursOutside`, whose `RefactorSupport.referencedInRange` also sees the
- *    `\x24name` interpolation ESCAPE the plain tokenizer reads as one long token. That closes
- *    the tokenizer's single unsafe blind spot exactly where it matters — the project's own
- *    files.
+ * 1. A GLOBAL identifier-token count map, built once per `run` — i.e. once per lint report and
+ *    once per `--fix` PASS, not once per process — over every source in report UNION resolution
+ *    scope. It is the cost-bounded pre-filter: a per-candidate scan of a scope that carries the
+ *    configured libraries (lime / openfl / … — thousands of files) would be quadratic. The
+ *    member is a candidate only when the map's count for its name EQUALS the count of the same
+ *    tokens inside the member's OWN exclusion region — i.e. every occurrence in the whole scope
+ *    is its own declaration. That comparison is a proof only because the map is built over a
+ *    SUPERSET of the member's own file (`tokenCounts` unions the report set in by path).
+ * 2. The authoritative confirm, on the REPORT index only: `SymbolIndex.nameOccursOutside`. Its
+ *    ONE added power over the token map is `RefactorSupport.DOLLAR_ESCAPES`: a `\x24name` /
+ *    `$name` interpolation escape relaxes the LEFT word boundary, and the plain tokenizer
+ *    reads `\x24name` as the single token `x24name` instead. Nothing else about it is stronger,
+ *    and it is the rule's dominant cost — a per-candidate scan of every report file — which is
+ *    why it runs only on candidates the map already cleared.
  *
  * Both are raw-text scans, which makes the rule conservative in the SAFE direction: a name
  * that merely OCCURS — in a comment, in a string literal, in a library, in a `#if` branch, or
@@ -68,14 +77,20 @@ using Lambda;
  * - No explicit `public` modifier. A Haxe member with no visibility keyword is PRIVATE, and
  *   `unused-private` owns it.
  * - An `override` — reached polymorphically through the supertype's own call.
- * - ANY `@:meta` in the run (`RefactorSupport.META_KINDS`). Metadata makes a member
- *   implicitly reachable — this is the Haxe grammar's own `isImplicitlyReachable` rule;
+ * - ANY `@:meta` in the run (`RefactorSupport.META_KINDS`), and any `#if` region in it, which
+ *   projects as a `Conditional` WRAPPING the metadata (`#if js @:keep #end` is
+ *   `(Conditional (Meta (Meta @:keep)))`) — neither a meta kind nor a member decl, so a run
+ *   walk that did not name it would leave the annotation count at zero. Metadata makes a
+ *   member implicitly reachable — this is the Haxe grammar's own `isImplicitlyReachable` rule;
  *   `@:keep` is the motivating case, but the whole class of metadata is treated the same
  *   rather than enumerating a whitelist that would leak by category.
- * - A name reached without ever being written: `new` (a constructor), `main` (an entry
- *   point), `toString` (implicit string coercion), and a dunder `__x__` (module init /
- *   target hook). A `get_` / `set_` prefix is `orphan-accessor`'s territory — skipped
- *   outright so the two rules can never claim the same method.
+ * - A name reached without ever being written (`IMPLICIT_NAMES`), a dunder `__x__` (module
+ *   init / target hook), or a `get_` / `set_` prefix — that last is `orphan-accessor`'s
+ *   territory, skipped outright so the two rules can never claim the same method.
+ * - A member a FRAMEWORK reaches with no written call: `NamingSupport.frameworkReachable`, the
+ *   very predicate `unused-private` routes through, so the two unused-* rules cannot disagree
+ *   about one member. In Haxe that is a utest `test*` method of a class transitively extending
+ *   `Test`.
  * - An enclosing class the index says is out of reach: `@:keep` or `@:build` on the class
  *   (a build macro may generate the call), an `extern class` (its members are declarations
  *   over a foreign object), or `SymbolIndex.transitivelyCarriesRtti` (the hierarchy is
@@ -87,26 +102,39 @@ using Lambda;
  *   doubtful chain yields NOTHING. (`OrphanAccessor`'s speculative unique-simple-name
  *   fallback is deliberately not reused — it exists to let a resolved slot SILENCE a finding
  *   while keeping the link marked unresolved, and here an unresolved link already silences.)
- * - A supertype declaring a member of the same name (`supertypeDeclaresMember` — an unmarked
- *   abstract-method implementation carries no `override`), an implemented interface declaring
- *   it (`implementsInterfaceDeclaringMember`, which is also true for an interface it cannot
- *   resolve), or a SUBTYPE declaring it (`subtypeDeclaresMember` — deleting the base breaks
- *   the subtype's `override`).
  * - ANY report file that skip-parses. The parser could not read it, so it may hold the only
- *   call; the whole run then reports nothing.
+ *   call; the whole run then reports nothing. The RESOLUTION scope needs no such gate: its
+ *   tokens are counted from RAW SOURCE, which a skip-parse does not withhold.
  *
- * ## Autofix
+ * There is deliberately NO separate "a supertype / interface / subtype declares this name"
+ * query: the text scan SUBSUMES all three. A same-named declaration anywhere in scope — above,
+ * beside or below the class — is itself an occurrence of the token, so such a candidate never
+ * reaches an index-resolved gate at all.
  *
- * The deletion adds ONE gate on top of every report gate: no static `Literal` FRAGMENT of an
- * INTERPOLATED string in report scope may be CONTAINED IN the member name — `'do$suffix'`
- * may name it at runtime, and `literalOf` answers null for an interpolated string by
- * contract, so its fragments are what carry the intent. Fragments shorter than
- * `MIN_FRAGMENT_LENGTH` carry no intent and would block every deletion in scope.
+ * ## Autofix — `RiskyFix`
  *
- * A WHOLE (non-interpolated) reflection literal needs no separate gate: a string literal's
- * content is raw text in the source, so the token map and the occurrence confirm already see
- * the name inside it and the member is never even REPORTED. That is a strictly stronger
- * outcome than `orphan-accessor`'s, where the same literal only blocks the fix.
+ * The fix DELETES a public method, and the reachability gate list above is a NEGATIVE one:
+ * every entry is a shape somebody found leaking, so the next implicitly-called name (the
+ * `for`-desugaring and serializer names in `IMPLICIT_NAMES` were exactly that) leaks until
+ * someone trips over it. Combined with the concatenated-reflection hole below, that is enough
+ * to make the deletions `RiskyFix`: with a `compilerOracle` configured they are applied
+ * through the typecheck-and-revert pipeline, and with none the rule is report-only.
+ *
+ * The deletion adds ONE gate of its own on top of every report gate
+ * (`noRuntimeNameFragment`): no static `Literal` FRAGMENT of an INTERPOLATED string in report
+ * scope may be CONTAINED IN the member name — `'do$suffix'` may name it at runtime, and
+ * `literalOf` answers null for an interpolated string by contract, so its fragments are what
+ * carry the intent. Fragments shorter than `MIN_FRAGMENT_LENGTH` carry no intent and would
+ * block every deletion in scope.
+ *
+ * A reflection literal that carries the WHOLE name needs no gate: a string literal's content
+ * is raw text in the source, so the token map and the occurrence confirm already see the name
+ * inside it and the member is never even REPORTED. The gap is a name no single literal spells:
+ * `Reflect.field(t, 'zqxwvDo' + 'Thing')` defeats BOTH mechanisms (neither literal carries the
+ * whole token) AND both gates (the fragment gate inspects only INTERPOLATION fragments, and
+ * these are whole literals), and it breaks SILENTLY at runtime rather than as a compile error.
+ * Closing it by asking containment the other way round for every literal would veto far too
+ * much; `RiskyFix` plus this paragraph is the answer.
  *
  * `fix` deletes the method with its modifier / metadata run and its leading doc comment,
  * whole-line, so nothing orphaned is left behind. The verdict itself is computed in `run`,
@@ -118,22 +146,45 @@ using Lambda;
  * type by rules the index does not model, and an `enum` / `typedef` declares no methods.
  */
 @:nullSafety(Strict)
-final class UnusedPublicMember implements Check implements DefaultOff {
+final class UnusedPublicMember implements Check implements DefaultOff implements RiskyFix {
 
 	/** This check's stable id — named once so the literal is not itself a repeated string. */
 	private static inline final RULE_ID: String = 'unused-public-member';
 
-	/** The class-body member kinds a method declaration projects as — a plain method and a `final` one. */
-	private static final METHOD_KINDS: Array<String> = ['FnMember', 'FinalModifiedMember'];
+	/**
+	 * Method names the runtime or the compiler reaches with NO call token anywhere in source —
+	 * so the reference test, which only ever sees written text, cannot possibly find one.
+	 *
+	 * - `new` — a constructor, reached through `new C(…)`.
+	 * - `main` — the entry point the compiler names from the build arguments.
+	 * - `toString` — implicit string coercion (`'$x'`, `Std.string(x)`, `'' + x`).
+	 * - `iterator` / `keyValueIterator` — Haxe DESUGARS `for (v in x)` / `for (k => v in x)`
+	 *   into a call to one of these; neither name appears as a token at the loop.
+	 * - `hasNext` / `next` — the same desugaring then drives the returned iterator through
+	 *   these two, so a hand-written iterator declares three methods nothing ever spells.
+	 * - `hxSerialize` / `hxUnserialize` — `haxe.Serializer` / `haxe.Unserializer` call these by
+	 *   name on the instance when a class defines them.
+	 *
+	 * Not a stylistic whitelist: each of these is a name the LANGUAGE calls, and a member
+	 * deleted here breaks the build (or, for the serializer pair, the saved data) with nothing
+	 * in source pointing back at it. Names that merely happen to occur in the Haxe std are NOT
+	 * covered by this list — they survive only when a resolution scope carries that std, which
+	 * is luck rather than a gate, which is why the list must name them here.
+	 */
+	private static final IMPLICIT_NAMES: Array<String> = [
+		'new',
+		'main',
+		'toString',
+		'iterator',
+		'keyValueIterator',
+		'hasNext',
+		'next',
+		'hxSerialize',
+		'hxUnserialize'
+	];
 
-	/** Method names the runtime or the compiler reaches without any written call. */
-	private static final IMPLICIT_NAMES: Array<String> = ['new', 'main', 'toString'];
-
-	/** The read-accessor prefix — `orphan-accessor`'s territory, never claimed here. */
-	private static inline final GET_PREFIX: String = 'get_';
-
-	/** The write-accessor prefix — `orphan-accessor`'s territory, never claimed here. */
-	private static inline final SET_PREFIX: String = 'set_';
+	/** The wrapper a `#if` region projects as — inside a modifier run it can HIDE a `@:meta`. */
+	private static inline final CONDITIONAL_KIND: String = 'Conditional';
 
 	/** The wrapper of a dunder name (`__init__`) — a compiler hook, not a call target. */
 	private static inline final DUNDER: String = '__';
@@ -143,12 +194,6 @@ final class UnusedPublicMember implements Check implements DefaultOff {
 
 	/** The modifier sibling `override` projects as. */
 	private static inline final OVERRIDE_MODIFIER: String = 'Override';
-
-	/** The node kinds a string expression projects as — the hosts whose `Literal` children are interpolation fragments. */
-	private static final STRING_EXPR_KINDS: Array<String> = ['SingleStringExpr', 'DoubleStringExpr'];
-
-	/** The static-text child kind inside an interpolated string expression. */
-	private static inline final STRING_FRAGMENT_KIND: String = 'Literal';
 
 	/**
 	 * Shortest interpolation FRAGMENT that can block a deletion. Same rationale as
@@ -160,10 +205,10 @@ final class UnusedPublicMember implements Check implements DefaultOff {
 
 	/**
 	 * `<file>#<from>:<to>` of every flagged method whose deletion `run` PROVED safe. Every gate
-	 * is whole-project (the token map, the occurrence confirm, the chain and subtype queries,
-	 * skip-parse completeness) and `fix` sees ONE file — so the verdict is computed once where
-	 * the whole file set is in hand and read back by span. A finding with no entry here is
-	 * report-only; `fix` called without a preceding `run` therefore edits nothing (fail-closed).
+	 * is whole-project (the token map, the occurrence confirm, the chain walk, skip-parse
+	 * completeness) and `fix` sees ONE file — so the verdict is computed once where the whole
+	 * file set is in hand and read back by span. A finding with no entry here is report-only;
+	 * `fix` called without a preceding `run` therefore edits nothing (fail-closed).
 	 */
 	private var _deletable: Array<String> = [];
 
@@ -179,8 +224,10 @@ final class UnusedPublicMember implements Check implements DefaultOff {
 
 	/**
 	 * Report every provably unreferenced public method across `files`, and record the ones whose
-	 * deletion is proven safe. A single skip-parsed report file aborts the whole run: the parser
-	 * could not read it, so it may hold the only call to any candidate.
+	 * deletion is proven safe. A single skip-parsed REPORT file aborts the whole run: the parser
+	 * could not read it, so it may hold the only call to any candidate. A skip-parsed RESOLUTION
+	 * file needs no such gate — `tokenCounts` reads that scope's raw bytes, which parse status
+	 * does not withhold.
 	 */
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		_deletable = [];
@@ -189,15 +236,18 @@ final class UnusedPublicMember implements Check implements DefaultOff {
 		// Names resolve over report UNION resolution scope: a call from a configured library is a
 		// real reference, and reading it as absent would report every method a library reaches.
 		final wide: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? index;
-		final ctx: Ctx = { tokens: tokenCounts(wide), fragments: interpolationFragments(files, plugin) };
+		final ctx: Ctx = {
+			tokens: tokenCounts(files, wide, plugin),
+			fragments: interpolationFragments(files, plugin),
+			naming: plugin.namingSupport()
+		};
 		final out: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			// The resolution index carries the report files too, but only when a scope reached the
-			// run at all — fall back to the report index rather than skipping the file. A report
-			// file absent from BOTH leaves its own tokens out of the map, which under-counts and so
-			// only ever silences a finding.
+			// run at all — fall back to the report index rather than skipping the file. The token
+			// map covers the file either way (`tokenCounts` unions the report set in by path).
 			final scope: SymbolIndex = wide.fileInfo(entry.file) == null ? index : wide;
 			final info: Null<FileInfo> = scope.fileInfo(entry.file);
 			if (info == null) continue;
@@ -211,7 +261,8 @@ final class UnusedPublicMember implements Check implements DefaultOff {
 	 * run (`declGroupSpan`) and its leading doc comment (`docExtendedSpan`), then the whole line
 	 * (`lineExtendedSpan`), so no orphaned doc comment or blank modifier line is left behind. A
 	 * finding absent from `_deletable` (an interpolation fragment naming it, or a bare `fix`)
-	 * yields no edit.
+	 * yields no edit. As a `RiskyFix` these edits reach the tree only through the compiler
+	 * oracle's typecheck-and-revert pipeline.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -219,7 +270,7 @@ final class UnusedPublicMember implements Check implements DefaultOff {
 		final wanted: Array<String> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
-			if (span != null && _deletable.contains(key(v.file, span))) wanted.push('${span.from}:${span.to}');
+			if (span != null && _deletable.contains(CheckScan.spanKey(v.file, span))) wanted.push('${span.from}:${span.to}');
 		}
 		if (wanted.length == 0) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
@@ -227,17 +278,17 @@ final class UnusedPublicMember implements Check implements DefaultOff {
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (cls in CheckScan.classBodies(tree)) for (child in cls.children) {
 			final span: Null<Span> = child.span;
-			if (span != null && METHOD_KINDS.contains(child.kind) && wanted.contains('${span.from}:${span.to}'))
-				edits.push(deletionEdit(source, child, cls, span));
+			if (span != null && CheckScan.METHOD_KINDS.contains(child.kind) && wanted.contains('${span.from}:${span.to}'))
+				edits.push(CheckScan.docDeletionEdit(source, child, cls, span));
 		}
 		return edits;
 	}
 
 	/**
 	 * Flag every unreferenced public method of `cls`, and record the ones whose deletion is proven
-	 * safe. `host` is the class's own declaring file, `scope` the index the chain and member
-	 * queries resolve through, `index` the REPORT index the authoritative occurrence confirm runs
-	 * over.
+	 * safe. `host` is the class's own declaring file, `scope` the index the chain walk and the
+	 * framework-reachability predicate resolve through, `index` the REPORT index the authoritative
+	 * occurrence confirm runs over.
 	 *
 	 * The cheap candidate scan runs FIRST and the index-resolved gates only after it yields
 	 * something: each of those walks the whole scope, and on a real tree almost no member survives
@@ -260,11 +311,7 @@ final class UnusedPublicMember implements Check implements DefaultOff {
 		if (chain.unresolved || chain.generated) return;
 		for (candidate in candidates) {
 			final name: String = candidate.name;
-			if (
-				scope.supertypeDeclaresMember(owner, name) || scope.implementsInterfaceDeclaringMember(owner, name)
-				|| scope.subtypeDeclaresMember(owner, name)
-			)
-				continue;
+			if (frameworkReachable(ctx, name, owner, candidate.span, scope)) continue;
 			out.push({
 				file: host.file,
 				span: candidate.span,
@@ -272,7 +319,7 @@ final class UnusedPublicMember implements Check implements DefaultOff {
 				severity: Severity.Warning,
 				message: 'unused public $name: no reference to it anywhere in scope'
 			});
-			if (deletable(ctx, name)) _deletable.push(key(host.file, candidate.span));
+			if (noRuntimeNameFragment(ctx, name)) _deletable.push(CheckScan.spanKey(host.file, candidate.span));
 		}
 	}
 
@@ -288,12 +335,15 @@ final class UnusedPublicMember implements Check implements DefaultOff {
 		var mods: Array<String> = [];
 		var annotations: Int = 0;
 		for (child in cls.children) {
-			final isMethod: Bool = METHOD_KINDS.contains(child.kind);
+			final isMethod: Bool = CheckScan.METHOD_KINDS.contains(child.kind);
 			// The run resets at EVERY member, not only at a method: a `public` or a `@:keep`
 			// written on a preceding FIELD would otherwise carry onto the next method and answer
 			// for it — inventing a finding in one direction and hiding one in the other.
 			if (!isMethod && !RefactorSupport.isMemberDeclKind(child.kind)) {
-				if (RefactorSupport.META_KINDS.contains(child.kind))
+				// A `#if` region in the run WRAPS whatever it holds, so `#if js @:keep #end` is a
+				// `Conditional`, not a `Meta`. Counting the wrapper itself as an annotation is the
+				// conservative reading: at worst a `#if`-guarded MODIFIER silences a finding.
+				if (RefactorSupport.META_KINDS.contains(child.kind) || child.kind == CONDITIONAL_KIND)
 					annotations++;
 				else
 					mods.push(child.kind);
@@ -320,39 +370,62 @@ final class UnusedPublicMember implements Check implements DefaultOff {
 	/**
 	 * Whether every occurrence of `name` in scope lies inside `region`, its own declaration. The
 	 * cheap global token map decides it first (equal counts = nothing outside), then the
-	 * authoritative report-scope confirm agrees — `nameOccursOutside` reads the `\x24name`
-	 * interpolation escape the plain tokenizer cannot see.
+	 * authoritative report-scope confirm agrees — `nameOccursOutside` additionally reads the
+	 * `\x24name` / `$name` interpolation ESCAPE (`RefactorSupport.DOLLAR_ESCAPES`), which the
+	 * plain tokenizer swallows into one long token.
 	 */
 	private static function provablyUnreferenced(
 		name: String, file: String, source: String, region: Span, index: SymbolIndex, ctx: Ctx
 	): Bool {
 		final own: Map<String, Int> = [];
 		countTokens(source, region.from, region.to, own);
-		if (ctx.tokens[name] != own[name]) return false;
-		return !index.nameOccursOutside(name, file, region);
+		// Short-circuit deliberate: the confirm is a per-candidate scan of every report file, so
+		// it must never run for a name the cheap map already saw somewhere else.
+		return ctx.tokens[name] == own[name] && !index.nameOccursOutside(name, file, region);
 	}
 
 	/**
-	 * Whether the member `name` may be DELETED: no static FRAGMENT of an interpolated string in
-	 * report scope is CONTAINED IN it. `literalOf` answers null for an interpolated string by
-	 * contract, so a fragment is only ever PART of a runtime name (`'do$suffix'`) and containment
-	 * is asked the other way round. A WHOLE string literal naming the member needs no gate here —
-	 * its content is raw text, so the reference test already refused to report the member at all.
+	 * Whether a FRAMEWORK reaches `name` with no written call — in Haxe, a utest `test*` method of
+	 * a class transitively extending `Test`. Routed through `NamingSupport.frameworkReachable`,
+	 * the same predicate `unused-private` consults, so the two unused-* rules can never give
+	 * different answers about one member. Resolved through `scope` (report UNION resolution) so a
+	 * `Test` base living in a configured library still counts; a grammar exposing no naming
+	 * support answers `false` and the member is judged on the text scan alone.
 	 */
-	private static function deletable(ctx: Ctx, name: String): Bool {
+	private static function frameworkReachable(ctx: Ctx, name: String, owner: String, span: Span, scope: SymbolIndex): Bool {
+		final naming: Null<NamingSupport> = ctx.naming;
+		if (naming == null) return false;
+		final decl: NamedDecl = {
+			span: span,
+			name: name,
+			category: NamingCategory.Method,
+			mods: [],
+			enclosingType: owner
+		};
+		return naming.frameworkReachable(decl, scope);
+	}
+
+	/**
+	 * Whether NO interpolation fragment could spell the member `name` at runtime — the ONE gate
+	 * `fix` adds over the report gates, and deliberately narrower than a full "safe to delete"
+	 * verdict (see the type doc's Autofix section for what it does NOT cover). No static FRAGMENT
+	 * of an interpolated string in report scope may be CONTAINED IN `name`: `literalOf` answers
+	 * null for an interpolated string by contract, so a fragment is only ever PART of a runtime
+	 * name (`'do$suffix'`) and containment is asked the other way round.
+	 */
+	private static function noRuntimeNameFragment(ctx: Ctx, name: String): Bool {
 		return !ctx.fragments.exists(f -> f.length >= MIN_FRAGMENT_LENGTH && name.indexOf(f) >= 0);
 	}
 
 	/**
-	 * Whether `name` is a candidate at all: not one of the names reached with no written call
-	 * (`new` / `main` / `toString`), not a dunder compiler hook, and not accessor-prefixed —
+	 * Whether `name` is a candidate at all: not one of the names the language itself calls with no
+	 * written token (`IMPLICIT_NAMES`), not a dunder compiler hook, and not accessor-prefixed —
 	 * a `get_` / `set_` method is `orphan-accessor`'s finding, and reporting it here would
 	 * double-claim it.
 	 */
 	private static function reportableName(name: String): Bool {
-		if (IMPLICIT_NAMES.contains(name) || StringTools.startsWith(name, GET_PREFIX) || StringTools.startsWith(name, SET_PREFIX))
-			return false;
-		return !StringTools.startsWith(name, DUNDER) || !StringTools.endsWith(name, DUNDER);
+		return !IMPLICIT_NAMES.contains(name) && !name.startsWith(CheckScan.GET_PREFIX) && !name.startsWith(CheckScan.SET_PREFIX)
+			&& !(name.startsWith(DUNDER) && name.endsWith(DUNDER));
 	}
 
 	/**
@@ -378,14 +451,45 @@ final class UnusedPublicMember implements Check implements DefaultOff {
 		}
 	}
 
-	/** The identifier-token occurrence counts of every source `scope` indexes — the run's cost-bounded pre-filter. */
-	private static function tokenCounts(scope: SymbolIndex): Map<String, Int> {
+	/**
+	 * The identifier-token occurrence counts over report UNION resolution scope — the run's
+	 * cost-bounded pre-filter.
+	 *
+	 * Two invariants the count comparison in `provablyUnreferenced` rests on, both established
+	 * here by construction:
+	 *
+	 * 1. The map is a SUPERSET of every REPORT file, `files` included. `wide` may legitimately
+	 *    lack one (`run` handles that case), and a map missing the declaration's OWN tokens can
+	 *    make `global == own` hold by coincidence against unrelated library occurrences the
+	 *    report-scope confirm cannot see — a false finding, and a deletion. The report set is
+	 *    therefore unioned in, keyed by PATH so nothing is counted twice.
+	 * 2. Nothing in the resolution scope is silently missing. Counting tokens is a RAW-TEXT
+	 *    operation that needs no parse, so the scope's own sources are read when the host exposes
+	 *    them — a library file the parser skipped still contributes. Reading them off the INDEX
+	 *    instead would drop such a file from both `allFiles` and `sourceOf`, and a call inside it
+	 *    would read as absent. The index path is the fallback for a plugin hosting no scope, where
+	 *    `wide` IS the report index and the union below covers it whole anyway.
+	 */
+	private static function tokenCounts(
+		files: Array<{ file: String, source: String }>, wide: SymbolIndex, plugin: GrammarPlugin
+	): Map<String, Int> {
+		final sources: Map<String, String> = [];
+		final resolution: Null<Array<{ file: String, source: String }>> = RefactorSupport.resolutionSourcesOf(plugin);
+		if (resolution == null)
+			for (fi in wide.allFiles()) sources[fi.file] = indexedSource(wide, fi.file);
+		else
+			for (entry in resolution) sources[entry.file] = entry.source;
+		for (entry in files) sources[entry.file] = entry.source;
 		final out: Map<String, Int> = [];
-		for (fi in scope.allFiles()) {
-			final src: Null<String> = scope.sourceOf(fi.file);
-			if (src != null) countTokens(src, 0, src.length, out);
-		}
+		for (src in sources) countTokens(src, 0, src.length, out);
 		return out;
+	}
+
+	/** `scope`'s source for `file`. The index writes it in lockstep with the `FileInfo`, so an absent one is a broken index. */
+	private static function indexedSource(scope: SymbolIndex, file: String): String {
+		final src: Null<String> = scope.sourceOf(file);
+		if (src == null) throw new Exception('SymbolIndex lists \'$file\' but holds no source for it');
+		return src;
 	}
 
 	/**
@@ -399,12 +503,12 @@ final class UnusedPublicMember implements Check implements DefaultOff {
 		final stop: Int = to <= source.length ? to : source.length;
 		var i: Int = from;
 		while (i < stop) {
-			if (!RefactorSupport.isIdentStartChar(StringTools.fastCodeAt(source, i))) {
+			if (!RefactorSupport.isIdentStartChar(source.fastCodeAt(i))) {
 				i++;
 				continue;
 			}
 			var end: Int = i + 1;
-			while (end < stop && RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, end))) end++;
+			while (end < stop && RefactorSupport.isIdentChar(source.fastCodeAt(end))) end++;
 			final token: String = source.substring(i, end);
 			out[token] = (out[token] ?? 0) + 1;
 			i = end;
@@ -431,22 +535,11 @@ final class UnusedPublicMember implements Check implements DefaultOff {
 	/** Collect into `out` the static `Literal` fragments of every interpolated string `node` and its descendants carry. */
 	private static function collectFragments(node: QueryNode, source: String, fold: StringFoldSupport, out: Array<String>): Void {
 		final literal: Null<StringLiteral> = fold.literalOf(node, source);
-		if (literal == null && STRING_EXPR_KINDS.contains(node.kind)) for (child in node.children) {
+		if (literal == null && CheckScan.STRING_EXPR_KINDS.contains(node.kind)) for (child in node.children) {
 			final fragment: Null<String> = child.name;
-			if (child.kind == STRING_FRAGMENT_KIND && fragment != null && !out.contains(fragment)) out.push(fragment);
+			if (child.kind == CheckScan.STRING_FRAGMENT_KIND && fragment != null && !out.contains(fragment)) out.push(fragment);
 		}
 		for (child in node.children) collectFragments(child, source, fold, out);
-	}
-
-	/** The whole-line deletion of `node` including its modifier / metadata run and its doc comment. */
-	private static function deletionEdit(source: String, node: QueryNode, parent: QueryNode, span: Span): { span: Span, text: String } {
-		final group: Span = RefactorSupport.declGroupSpan(node, parent, span);
-		return { span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, group)), text: '' };
-	}
-
-	/** The `_deletable` key of one method declaration. */
-	private static inline function key(file: String, span: Span): String {
-		return '$file#${span.from}:${span.to}';
 	}
 
 }
@@ -481,5 +574,8 @@ private typedef Ctx = {
 
 	/** The static text FRAGMENTS of every interpolated string in report scope — the deletion gate. */
 	final fragments: Array<String>;
+
+	/** The grammar's naming projection, for its framework-reachability predicate; null when it exposes none. */
+	final naming: Null<NamingSupport>;
 
 };

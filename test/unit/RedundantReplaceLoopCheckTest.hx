@@ -14,9 +14,12 @@ import anyparse.query.RefactorSupport;
  * The `redundant-replace-loop` check: `while (x.indexOf(S) != -1) x = x.replace(S, B);`
  * (plus its reversed-comparison and `.contains()` spellings) is redundant BY
  * CONSTRUCTION — `StringTools.replace` already replaces every occurrence of `S` in one
- * call. Arm A (`B` does not contain `S`): `Info`, autofix collapses the loop to the
- * single unconditional assignment. Arm B (`B` contains `S`): `Warning`, report-only —
- * the loop is infinite for any input containing `S`. `DefaultOff`.
+ * call. Three arms. Arm A (two literals, `B` does not contain `S`): `Info`, autofix
+ * collapses the loop to the single unconditional assignment. Arm B (two literals, `B`
+ * contains `S`): `Warning`, report-only — the loop is infinite for any input containing
+ * `S`. Arm C (either operand a PARAMETER): `Info`, report-only — the outcome is the
+ * caller's to decide, and only a containment guard that DOMINATES the loop suppresses it.
+ * `DefaultOff`.
  */
 class RedundantReplaceLoopCheckTest extends Test {
 
@@ -186,12 +189,43 @@ class RedundantReplaceLoopCheckTest extends Test {
 		Assert.isTrue(StringTools.startsWith(vs[0].message, 'potential infinite loop when \'\' contains word'));
 	}
 
-	public function testEqualityGuardAloneDoesNotSuppress(): Void {
-		// The caveat clause is only added when the guard is there; the finding stands either way.
+	public function testUnguardedArmCCarriesNoCaveatClause(): Void {
+		// No guard at all — the caveat clause is added only when an equality guard is there.
 		final vs: Array<Violation> = violations(wrapParams('while (line.indexOf(word) != -1) line = line.replace(word, replace);'));
 		Assert.equals(1, vs.length);
 		if (vs.length != 1) return;
 		Assert.equals(-1, vs[0].message.indexOf('does not cover containment'));
+	}
+
+	public function testEqualityGuardDoesNotSuppress(): Void {
+		// `S == B` rules out only the degenerate case; every `B` that merely CONTAINS `S` still
+		// loops forever, so the guard sharpens the message and never removes the finding.
+		final vs: Array<Violation> = violations(
+			wrapParams('if (word == replace) return line;\n\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);')
+		);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.isTrue(vs[0].message.indexOf('does not cover containment') >= 0);
+	}
+
+	public function testLiteralSearchWithParameterReplacementFlagged(): Void {
+		// The mirror of the `stripWord` mix: a LITERAL `S` in both positions and a PARAMETER `B`.
+		final vs: Array<Violation> = violations(wrapParams('while (line.indexOf(\' \') != -1) line = line.replace(\' \', replace);'));
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.isTrue(StringTools.startsWith(vs[0].message, 'potential infinite loop when replace contains \' \''));
+	}
+
+	public function testLambdaParameterOperandFlagged(): Void {
+		// The `stripWord` canary written as a lambda: its parameters are just as caller-chosen as
+		// a method's, so `lambdaKinds` must join the enclosing-function ancestor set.
+		final src: String = 'class C {\n\tpublic static final strip = function(line:String, word:String):String {\n'
+			+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, \'\');\n\t\treturn line;\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals(Severity.Info, vs[0].severity);
 	}
 
 	public function testContainmentGuardSuppressesArmC(): Void {
@@ -210,6 +244,105 @@ class RedundantReplaceLoopCheckTest extends Test {
 				'if (replace.contains(word)) return line;\n\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);'
 			)).length
 		);
+	}
+
+	// --- arm C: only a guard that DOMINATES the loop suppresses it ---
+
+	public function testGuardNestedInsideAnotherIfDoesNotSuppress(): Void {
+		// The outer `if` may be false, so the guard need not have run at all.
+		Assert.equals(
+			1,
+			violations(wrapParams(
+				'if (line.length > 0) { if (replace.indexOf(word) != -1) return line; }\n'
+				+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);'
+			)).length
+		);
+	}
+
+	public function testGuardInAnElseBranchDoesNotSuppress(): Void {
+		// The `else` runs only when the head condition is false — not a proof about every path.
+		Assert.equals(
+			1,
+			violations(wrapParams(
+				'if (line.length > 0) return line;\n\t\telse if (replace.indexOf(word) != -1) return line;\n'
+				+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);'
+			)).length
+		);
+	}
+
+	public function testGuardInsideALoopBodyDoesNotSuppress(): Void {
+		// A `for` body may never run, so nothing inside it dominates what follows.
+		Assert.equals(
+			1,
+			violations(wrapParams(
+				'for (i in 0...0) if (replace.indexOf(word) != -1) return line;\n'
+				+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);'
+			)).length
+		);
+	}
+
+	public function testGuardInsideASwitchArmDoesNotSuppress(): Void {
+		// One arm of a switch is one path of several.
+		Assert.equals(
+			1,
+			violations(wrapParams(
+				'switch line {\n\t\t\tcase \'x\': if (replace.indexOf(word) != -1) return line;\n\t\t\tcase _:\n\t\t}\n'
+				+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);'
+			)).length
+		);
+	}
+
+	public function testGuardInsideAConditionalRegionDoesNotSuppress(): Void {
+		// A `#if windows` guard protects ONE target; suppressing on it silences every other.
+		Assert.equals(
+			1,
+			violations(wrapParams(
+				'#if windows\n\t\tif (replace.indexOf(word) != -1) return line;\n\t\t#end\n'
+				+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);'
+			)).length
+		);
+	}
+
+	public function testGuardInsideANestedFunctionDoesNotSuppress(): Void {
+		// A local function that nothing calls guards nothing.
+		Assert.equals(
+			1,
+			violations(wrapParams(
+				'function unused():String {\n\t\t\tif (replace.indexOf(word) != -1) return line;\n\t\t\treturn line;\n\t\t}\n'
+				+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);'
+			)).length
+		);
+	}
+
+	// --- arm C: what a DOMINATING guard may look like ---
+
+	public function testMultiStatementGuardBodySuppressesArmC(): Void {
+		// The exit need not be the branch's ONLY statement — its LAST one is what decides.
+		Assert.equals(
+			0,
+			violations(wrapParams(
+				'if (replace.indexOf(word) != -1) { trace(\'refusing\'); return line; }\n'
+				+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);'
+			)).length
+		);
+	}
+
+	public function testThrowingGuardSuppressesArmC(): Void {
+		// A `throw` exits just as unconditionally as a `return`.
+		Assert.equals(
+			0,
+			violations(wrapParams(
+				'if (replace.indexOf(word) != -1) throw \'bad\';\n'
+				+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);'
+			)).length
+		);
+	}
+
+	public function testBareVoidReturnGuardSuppressesArmC(): Void {
+		final src: String = 'class C {\n\tpublic static function f(line:String, word:String, replace:String):Void {\n'
+			+ '\t\tif (replace.indexOf(word) != -1) return;\n'
+			+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);\n\t}\n}';
+		Assert.equals(0, violations(src).length);
 	}
 
 	public function testGuardOnTheWrongOperandsDoesNotSuppress(): Void {
@@ -235,6 +368,9 @@ class RedundantReplaceLoopCheckTest extends Test {
 	}
 
 	public function testFieldAccessOperandNotFlagged(): Void {
+		// Behavioural, not gate-specific: `this.word` is neither a plain string literal nor a bare
+		// identifier bound to a parameter, so it is not an operand this rule reads — several gates
+		// agree on that and the test pins the OUTCOME rather than which one answers first.
 		final src: String = 'class C {\n\tpublic var word:String = \' \';\n\tpublic function f(line:String):String {\n'
 			+ '\t\twhile (line.indexOf(this.word) != -1) line = line.replace(this.word, \'_\');\n\t\treturn line;\n\t}\n}';
 		Assert.equals(0, violations(src).length);

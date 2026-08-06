@@ -109,23 +109,8 @@ using Lambda;
 @:nullSafety(Strict)
 final class OrphanAccessor implements Check implements DefaultOff {
 
-	/** The read-accessor method-name prefix; its length also slices the property name off. */
-	private static inline final GET_PREFIX: String = 'get_';
-
-	/** The write-accessor method-name prefix (same length as `GET_PREFIX`, which slices both). */
-	private static inline final SET_PREFIX: String = 'set_';
-
-	/** The class-body member kinds a method declaration projects as — a plain method and a `final` one. */
-	private static final METHOD_KINDS: Array<String> = ['FnMember', 'FinalModifiedMember'];
-
 	/** The metadata that pins a member against removal — its uses are not all in the source. */
 	private static inline final KEEP_META: String = '@:keep';
-
-	/** The node kinds a string expression projects as — the hosts whose `Literal` children are interpolation fragments. */
-	private static final STRING_EXPR_KINDS: Array<String> = ['SingleStringExpr', 'DoubleStringExpr'];
-
-	/** The static-text child kind inside an interpolated string expression. */
-	private static inline final STRING_FRAGMENT_KIND: String = 'Literal';
 
 	/**
 	 * `<file>#<from>:<to>` of every flagged accessor whose deletion `run` PROVED safe. The
@@ -188,7 +173,7 @@ final class OrphanAccessor implements Check implements DefaultOff {
 		final wanted: Array<String> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
-			if (span != null && _deletable.contains(key(v.file, span))) wanted.push('${span.from}:${span.to}');
+			if (span != null && _deletable.contains(CheckScan.spanKey(v.file, span))) wanted.push('${span.from}:${span.to}');
 		}
 		if (wanted.length == 0) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
@@ -196,8 +181,8 @@ final class OrphanAccessor implements Check implements DefaultOff {
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (cls in CheckScan.classBodies(tree)) for (child in cls.children) {
 			final span: Null<Span> = child.span;
-			if (span != null && METHOD_KINDS.contains(child.kind) && wanted.contains('${span.from}:${span.to}'))
-				edits.push(deletionEdit(source, child, cls, span));
+			if (span != null && CheckScan.METHOD_KINDS.contains(child.kind) && wanted.contains('${span.from}:${span.to}'))
+				edits.push(CheckScan.docDeletionEdit(source, child, cls, span));
 		}
 		return edits;
 	}
@@ -220,7 +205,7 @@ final class OrphanAccessor implements Check implements DefaultOff {
 		var mods: Array<String> = [];
 		var metas: Array<String> = [];
 		for (child in cls.children) {
-			final isMethod: Bool = METHOD_KINDS.contains(child.kind);
+			final isMethod: Bool = CheckScan.METHOD_KINDS.contains(child.kind);
 			// The run resets at EVERY member, not only at a method: a `static` / `@:keep` written
 			// on a preceding FIELD would otherwise carry onto the next accessor and answer for it.
 			if (!isMethod && !RefactorSupport.isMemberDeclKind(child.kind)) {
@@ -238,9 +223,9 @@ final class OrphanAccessor implements Check implements DefaultOff {
 			mods = [];
 			metas = [];
 			if (!isMethod || name == null || span == null) continue;
-			final wantGetter: Bool = StringTools.startsWith(name, GET_PREFIX);
-			if (!wantGetter && !StringTools.startsWith(name, SET_PREFIX)) continue;
-			final prop: String = name.substr(GET_PREFIX.length);
+			final wantGetter: Bool = StringTools.startsWith(name, CheckScan.GET_PREFIX);
+			if (!wantGetter && !StringTools.startsWith(name, CheckScan.SET_PREFIX)) continue;
+			final prop: String = name.substr(CheckScan.GET_PREFIX.length);
 			if (prop == '') continue;
 			final found: Resolution = {
 				declared: false,
@@ -271,7 +256,7 @@ final class OrphanAccessor implements Check implements DefaultOff {
 					? '$name has no property to serve: $prop declares no $slot accessor'
 					: '$name has no property to serve: neither $owner nor its supertypes declare $prop'
 			));
-			if (deletable(ctx, declared.hasKeep || memberKept, name)) _deletable.push(key(file, span));
+			if (deletable(ctx, declared.hasKeep || memberKept, name)) _deletable.push(CheckScan.spanKey(file, span));
 		}
 	}
 
@@ -288,7 +273,7 @@ final class OrphanAccessor implements Check implements DefaultOff {
 		// A LITERAL FRAGMENT of an interpolated string (`Reflect.field(o, 'get_$suffix')`) is only
 		// ever part of the runtime name, so containment is asked the other way round. Fragments
 		// shorter than an accessor prefix carry no intent and would block every deletion in scope.
-		return !ctx.fragments.exists(f -> f.length >= GET_PREFIX.length && name.indexOf(f) >= 0);
+		return !ctx.fragments.exists(f -> f.length >= CheckScan.GET_PREFIX.length && name.indexOf(f) >= 0);
 	}
 
 	/**
@@ -403,10 +388,10 @@ final class OrphanAccessor implements Check implements DefaultOff {
 		final literal: Null<StringLiteral> = fold.literalOf(node, source);
 		if (literal != null)
 			out.whole.push(literal.content);
-		else if (STRING_EXPR_KINDS.contains(node.kind))
+		else if (CheckScan.STRING_EXPR_KINDS.contains(node.kind))
 			for (child in node.children) {
 				final fragment: Null<String> = child.name;
-				if (child.kind == STRING_FRAGMENT_KIND && fragment != null && !out.fragments.contains(fragment))
+				if (child.kind == CheckScan.STRING_FRAGMENT_KIND && fragment != null && !out.fragments.contains(fragment))
 					out.fragments.push(fragment);
 			}
 		for (child in node.children) collectStringContents(child, source, fold, out);
@@ -418,21 +403,11 @@ final class OrphanAccessor implements Check implements DefaultOff {
 		final name: Null<String> = node.name;
 		if (
 			name != null && kinds.contains(node.kind)
-			&& (StringTools.startsWith(name, GET_PREFIX) || StringTools.startsWith(name, SET_PREFIX)) && !out.contains(name)
+			&& (StringTools.startsWith(name, CheckScan.GET_PREFIX) || StringTools.startsWith(name, CheckScan.SET_PREFIX))
+			&& !out.contains(name)
 		)
 			out.push(name);
 		for (child in node.children) collectReferences(child, kinds, out);
-	}
-
-	/** The whole-line deletion of `node` including its modifier / metadata run and its doc comment. */
-	private static function deletionEdit(source: String, node: QueryNode, parent: QueryNode, span: Span): { span: Span, text: String } {
-		final group: Span = RefactorSupport.declGroupSpan(node, parent, span);
-		return { span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, group)), text: '' };
-	}
-
-	/** The `_deletable` key of one accessor declaration. */
-	private static inline function key(file: String, span: Span): String {
-		return '$file#${span.from}:${span.to}';
 	}
 
 	/** One finding of this rule. */

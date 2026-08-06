@@ -37,4 +37,13 @@ interface SymbolIndexHost {
 	/** The memoised resolution-scoped `SymbolIndex` (built once, over report files UNION the library roots), or null when no scope is configured. */
 	function resolutionIndex(): Null<SymbolIndex>;
 
+	/**
+	 * The resolution scope's RAW sources — report files UNION the library roots — or null when no
+	 * scope reached the run. Text, not trees: a source the parser SKIPPED still carries its bytes
+	 * here, where the parsed `SymbolIndex` above drops it from both `allFiles` and `sourceOf`.
+	 * The seam a raw-text whole-scope scan (`unused-public-member`'s token map) needs so a
+	 * skip-parsing library file cannot read as holding no references at all.
+	 */
+	function resolutionFiles(): Null<Array<{ file: String, source: String }>>;
+
 }

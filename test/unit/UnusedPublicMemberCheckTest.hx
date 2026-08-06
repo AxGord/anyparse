@@ -86,6 +86,19 @@ import utest.Test;
 		Assert.equals(0, withUser('Reflect.field(c, \'orphaned\');').length);
 	}
 
+	public function testInterpolationEscapeKeepsTheMember(): Void {
+		// `'\x24zqxwvEscaped'` DECODES to `'$zqxwvEscaped'`, a real read. The token map cannot see
+		// it — a word-boundary scan reads `x24zqxwvEscaped` as ONE token — so this is the whole of
+		// what the `nameOccursOutside` confirm adds over the map (`RefactorSupport.DOLLAR_ESCAPES`).
+		// The sibling method pins that the file is not silencing the class wholesale.
+		final owner: String = 'class C {\n\tpublic function zqxwvEscaped():Void {}\n\tpublic function zqxwvPlain():Void {}\n}';
+		final user: String = 'class U {\n\tpublic static function main(e:C):Dynamic return Reflect.field(e, \'\\x24zqxwvEscaped\');\n}';
+		final vs: Array<Violation> = violationsOf([{ file: 'C.hx', source: owner }, { file: 'U.hx', source: user }]);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals('unused public zqxwvPlain: no reference to it anywhere in scope', vs[0].message);
+	}
+
 	public function testOwnDocCommentDoesNotCountAsAReference(): Void {
 		// `docExtendedSpan` folds the doc into the exclusion region — otherwise every documented
 		// member would read as referenced by its own documentation.
@@ -104,8 +117,8 @@ import utest.Test;
 	}
 
 	public function testOverrideNotFlagged(): Void {
-		// The base deliberately declares NO `orphaned`, so the supertype-member gate cannot reject
-		// this and the `override` modifier is the only thing that can. The pair shows it does.
+		// The base deliberately declares NO `orphaned`, so nothing else in scope writes the name
+		// and the `override` modifier is the only thing that can reject it. The pair shows it does.
 		final base: String = 'class Base {}';
 		final plain: String = 'class Sub extends Base {\n\tpublic function orphaned():Void {}\n}';
 		final overridden: String = 'class Sub extends Base {\n\toverride public function orphaned():Void {}\n}';
@@ -118,6 +131,14 @@ import utest.Test;
 		Assert.equals(0, violations('class C {\n\t@:keep public function orphaned():Void {}\n}').length);
 	}
 
+	public function testConditionalMetadataInTheRunNotFlagged(): Void {
+		// `#if js @:keep #end` projects as `(Conditional (Meta (Meta @:keep)))`, which is neither a
+		// META_KINDS sibling nor a member decl — read as a plain modifier it would leave the
+		// annotation count at zero and make a `@:keep`ed method reportable AND deletable.
+		Assert.equals(1, violations('class C {\n\tpublic function orphaned():Void {}\n}').length);
+		Assert.equals(0, violations('class C {\n\t#if js @:keep #end public function orphaned():Void {}\n}').length);
+	}
+
 	public function testPrecedingFieldModifiersDoNotLeakOntoTheMethod(): Void {
 		// The `@:keep` and the `public` here belong to `other`; a run that reset only at methods
 		// would read the next method as kept (and as public when it is not).
@@ -125,9 +146,40 @@ import utest.Test;
 		Assert.equals(1, violations(src).length);
 	}
 
+	public function testPrecedingFieldModifiersDoNotInventVisibility(): Void {
+		// The mirror direction: the `public` belongs to `other`, so the keyword-less — therefore
+		// PRIVATE — method must not read as public and become this rule's finding.
+		Assert.equals(0, violations('class C {\n\tpublic var other:Int = 0;\n\tfunction orphaned():Void {}\n}').length);
+	}
+
+	public function testUtestMethodOfATestClassNotFlagged(): Void {
+		// Routed through the same `NamingSupport.frameworkReachable` predicate `unused-private`
+		// uses: utest calls a `test*` method of a class transitively extending `Test` by
+		// reflection, so no source token ever names it.
+		final base: String = 'class Test {}';
+		final suite: String = 'class MySuite extends Test {\n\tpublic function testZqxwvAlpha():Void {}\n}';
+		final plain: String = 'class MySuite extends Test {\n\tpublic function zqxwvAlpha():Void {}\n}';
+		Assert.equals(0, violationsOf([{ file: 'Test.hx', source: base }, { file: 'MySuite.hx', source: suite }]).length);
+		Assert.equals(1, violationsOf([{ file: 'Test.hx', source: base }, { file: 'MySuite.hx', source: plain }]).length);
+	}
+
 	public function testImplicitlyReachableNamesNotFlagged(): Void {
 		for (name in ['new', 'main', 'toString', '__init__'])
 			Assert.equals(0, violations('class C {\n\tpublic function $name():Void {}\n}').length, 'flagged $name');
+	}
+
+	public function testImplicitlyCalledIterationAndSerializationNamesNotFlagged(): Void {
+		// Nothing in source spells `iterator` / `hasNext` / `next` (the `for` desugaring calls them)
+		// or `hxSerialize` / `hxUnserialize` (`haxe.Serializer` calls them) — without the gate these
+		// survive only when the resolution scope happens to carry a std that mentions them.
+		for (name in [
+			'iterator',
+			'keyValueIterator',
+			'hasNext',
+			'next',
+			'hxSerialize',
+			'hxUnserialize'
+		]) Assert.equals(0, violations('class C {\n\tpublic function $name():Void {}\n}').length, 'flagged $name');
 	}
 
 	public function testAccessorNamesLeftToOrphanAccessor(): Void {
@@ -169,26 +221,27 @@ import utest.Test;
 		Assert.equals(0, violations('class C extends Unknown {\n\tpublic function orphaned():Void {}\n}').length);
 	}
 
-	public function testSupertypeDeclaringTheMemberNotFlagged(): Void {
-		// Two independent reasons agree here, and the cheaper one answers first: the base's own
-		// declaration is an occurrence of the name, so the whole-scope token scan already refuses.
-		// `supertypeDeclaresMember` is the index-resolved second opinion behind it.
+	public function testSameNamedDeclarationInASupertypeIsItselfAnOccurrence(): Void {
+		// The text scan SUBSUMES an index-resolved supertype query: the base's own declaration
+		// writes the name, so the whole-scope token count exceeds the subclass's own region and
+		// the candidate never survives. No separate `supertypeDeclaresMember` gate is reachable.
 		final base: String = 'class Base {\n\tpublic function orphaned():Void {}\n}';
 		final sub: String = 'class Sub extends Base {\n\tpublic function orphaned():Void {}\n}';
 		Assert.equals(0, violationsOf([{ file: 'Base.hx', source: base }, { file: 'Sub.hx', source: sub }]).length);
 	}
 
-	public function testInterfaceDeclaringTheMemberNotFlagged(): Void {
-		// As above: the interface declaration is itself an occurrence, so the token scan refuses
-		// first and `implementsInterfaceDeclaringMember` backs it up.
+	public function testSameNamedDeclarationInAnInterfaceIsItselfAnOccurrence(): Void {
+		// As above: the interface's declaration of the name is an occurrence in scope, so the text
+		// scan refuses before any `implementsInterfaceDeclaringMember` question could be asked.
 		final iface: String = 'interface I {\n\tpublic function orphaned():Void;\n}';
 		final impl: String = 'class C implements I {\n\tpublic function orphaned():Void {}\n}';
 		Assert.equals(0, violationsOf([{ file: 'I.hx', source: iface }, { file: 'C.hx', source: impl }]).length);
 	}
 
-	public function testSubtypeDeclaringTheMemberNotFlagged(): Void {
-		// Deleting the base method would break the subtype's declaration; the subtype's own
-		// occurrence of the name is what the token scan sees, `subtypeDeclaresMember` the model.
+	public function testSameNamedDeclarationInASubtypeIsItselfAnOccurrence(): Void {
+		// And downward: the subtype's `override` declaration writes the name too, so deleting the
+		// base is refused by the same count comparison — the direction a `subtypeDeclaresMember`
+		// query would have covered.
 		final base: String = 'class Base {\n\tpublic function orphaned():Void {}\n}';
 		final sub: String = 'class Sub extends Base {\n\toverride public function orphaned():Void {}\n}';
 		Assert.equals(0, violationsOf([{ file: 'Base.hx', source: base }, { file: 'Sub.hx', source: sub }]).length);

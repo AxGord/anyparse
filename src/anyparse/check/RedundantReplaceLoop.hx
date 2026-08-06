@@ -4,6 +4,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
@@ -41,8 +42,10 @@ import anyparse.runtime.Span;
  * of `S` (the guard's `indexOf` / `contains` argument AND `replace`'s first
  * argument) and `B` (`replace`'s second argument) must be EITHER a plain string
  * literal (`StringFoldSupport.literalOf` — no interpolation) OR a bare identifier
- * bound to a PARAMETER of the function enclosing the loop (a `RefShape.paramKinds`
- * child of the nearest `RefShape.functionKinds` ancestor). Anything else — a field
+ * bound to a PARAMETER of the function OR LAMBDA enclosing the loop (a
+ * `RefShape.paramKinds` child of the nearest `RefShape.functionKinds` /
+ * `lambdaKinds` ancestor — a lambda's parameters are just as caller-chosen as a
+ * method's, and they carry the same param kinds). Anything else — a field
  * access, a call, an index access, a LOCAL `var`, an unresolvable identifier — is
  * not this pattern and is left alone. The two `S` positions must be the SAME
  * thing: equal literal content, or the same parameter binding; a literal /
@@ -72,10 +75,20 @@ import anyparse.runtime.Span;
  * `B`, and is exactly the shape that motivates the arm.
  *
  * The one static proof that the hazard cannot happen is a CONTAINMENT test that
- * RETURNS before the loop — `if (B.indexOf(S) != -1) return …;`, its reversed
- * order, or `if (B.contains(S)) return …;` (read by the same `matchGuard`, held to
- * the same operand identity), anywhere in the enclosing function and ending at or
- * before the `while` begins. That suppresses arm C outright.
+ * EXITS before the loop — `if (B.indexOf(S) != -1) return …;`, its reversed order,
+ * or `if (B.contains(S)) return …;` (read by the same `matchGuard`, held to the
+ * same operand identity), whose then-branch unconditionally exits
+ * (`CheckScan.branchAlwaysExits`: a `return` / `throw` / `break` / `continue`, bare
+ * or as the LAST statement of a block). That suppresses arm C outright.
+ *
+ * Such a guard must DOMINATE the loop, not merely precede it in the text: the walk
+ * ascends from the `while` through the enclosing statement lists
+ * (`ControlFlowSupport.blockKinds`) and considers only the PRECEDING SIBLINGS at
+ * each level. A guard nested inside another `if`, in an `else` arm, in a loop or
+ * `switch` body, inside a `#if` region (one `Conditional` node, not a statement
+ * list — so it protects ONE target and would silence every other), or in a nested
+ * function or lambda nothing calls, may never have run when the loop is reached and
+ * proves nothing.
  *
  * An EQUALITY guard does NOT: `if (S == B) return …;` rules out only the
  * degenerate `B == S`, while every `B` that merely CONTAINS `S` still loops
@@ -97,10 +110,17 @@ import anyparse.runtime.Span;
  * `unaryMinusKinds` and `numericLiteralKinds` (any unset, or the plugin's
  * `stringFoldSupport()` null, → the check is a no-op), plus `parenKind`
  * (optional, one guard-condition unwrap) and `opaqueKinds` to skip reification
- * subtrees. Arm C adds `functionKinds` / `paramKinds` (a parameter operand) and
- * `ifStatementKinds` / `returnStatementKind` / `voidReturnKind` / `eqKind` (the
- * two pre-loop guards); each is optional, and leaving them unset costs only arm C
- * — the literals-only arms A / B behave exactly as they did without them.
+ * subtrees.
+ *
+ * Two further seam groups are optional, and they fail in OPPOSITE directions.
+ * `functionKinds` / `lambdaKinds` / `paramKinds` ENABLE arm C: with none of them a
+ * parameter operand can never be recognised, so arm C is unreachable and the check
+ * keeps its literals-only behaviour exactly as before parameters were admitted.
+ * `ifStatementKinds`, `GrammarPlugin.controlFlowSupport()` and `eqKind` drive the
+ * SUPPRESSION instead: leaving `ifStatementKinds` or the control-flow support unset
+ * does not disable arm C, it disables the dominating-guard proof, so arm C then
+ * reports strictly MORE; leaving `eqKind` unset only drops the message's
+ * equality-guard caveat. Arms A / B are untouched by every seam in this paragraph.
  */
 @:nullSafety(Strict)
 final class RedundantReplaceLoop implements Check implements DefaultOff {
@@ -208,11 +228,9 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 		if (numericLiteralKinds.length == 0) return null;
 		final strings: Null<StringFoldSupport> = plugin.stringFoldSupport();
 		if (strings == null) return null;
-		final returnKinds: Array<String> = [];
-		final returnStatementKind: Null<String> = shape.returnStatementKind;
-		if (returnStatementKind != null) returnKinds.push(returnStatementKind);
-		final voidReturnKind: Null<String> = shape.voidReturnKind;
-		if (voidReturnKind != null) returnKinds.push(voidReturnKind);
+		// Optional, and in the SUPPRESSING direction: with no control-flow support no guard can be
+		// read as exiting, so arm C reports strictly more rather than going silent.
+		final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		return {
 			shape: shape,
 			whileStmtKind: whileStmtKind,
@@ -225,10 +243,13 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 			exprStmtKind: exprStmtKind,
 			unaryMinusKinds: unaryMinusKinds,
 			numericLiteralKinds: numericLiteralKinds,
-			functionKinds: shape.functionKinds ?? [],
+			// A lambda's parameters are just as caller-chosen as a method's, so both host kinds
+			// count as the enclosing function a parameter operand may belong to.
+			fnKinds: (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []),
 			paramKinds: shape.paramKinds ?? [],
 			ifStatementKinds: shape.ifStatementKinds ?? [],
-			returnKinds: returnKinds,
+			flow: flow,
+			blockKinds: flow == null ? [] : flow.blockKinds(),
 			eqKind: shape.eqKind,
 			parenKind: shape.parenKind,
 			strings: strings,
@@ -284,47 +305,16 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 		final search: Null<Operand> = operandOf(guard.search, root, fn, source, s);
 		if (search == null) return null;
 
-		final body: QueryNode = whileNode.children[1];
-		final stmt: Null<QueryNode> = singleStatementOf(body, s);
-		if (stmt == null || stmt.children.length != 1) return null;
-		final assign: QueryNode = stmt.children[0];
-		if (assign.kind != s.assignKind || assign.children.length != ASSIGN_CHILD_COUNT) return null;
-		final target: QueryNode = assign.children[0];
-		if (target.kind != s.identKind || TypeResolver.identBindingFrom(target, root, s.shape) != bindingFrom) return null;
-
-		final value: QueryNode = assign.children[1];
-		final replaceCall: Null<MethodCall> = methodCallParts(value, s);
-		if (
-			replaceCall == null || replaceCall.method != REPLACE_METHOD || value.children.length != REPLACE_CALL_CHILD_COUNT
-			|| replaceCall.recv.kind != s.identKind || TypeResolver.identBindingFrom(replaceCall.recv, root, s.shape) != bindingFrom
-		)
-			return null;
-		final search2: Null<Operand> = operandOf(value.children[1], root, fn, source, s);
-		if (search2 == null || !sameOperand(search, search2)) return null;
-		final replacement: Null<Operand> = operandOf(value.children[2], root, fn, source, s);
-		if (replacement == null) return null;
-		final stmtSpan: Null<Span> = stmt.span;
-		if (stmtSpan == null) return null;
-
-		final searchContent: Null<String> = search.literal;
-		final replacementContent: Null<String> = replacement.literal;
-		var arm: Arm = Arm.C;
-		var eqGuarded: Bool = false;
-		if (searchContent != null && replacementContent != null)
-			// Two literals decide the outcome statically — arms A / B, byte-identical to the
-			// behaviour from before parameters were admitted as operands.
-			arm = replacementContent.indexOf(searchContent) == -1 ? Arm.A : Arm.B;
-		else if (fn == null || guardsContainment(fn, whileSpan, search, replacement, root, source, s))
-			// ARM C, suppressed: a containment test that returns before the loop is the one static
-			// proof that `B` never contains `S`, whatever the caller passes.
-			return null;
-		else
-			eqGuarded = guardsEquality(fn, whileSpan, search, replacement, root, source, s);
+		final body: Null<BodyMatch> = matchBody(whileNode.children[1], root, fn, source, bindingFrom, search, s);
+		if (body == null) return null;
+		final replacement: Operand = body.replacement;
+		final classified: Null<Classification> = classifyArm(search, replacement, fn, whileNode, root, source, s);
+		if (classified == null) return null;
 		return {
 			whileSpan: whileSpan,
-			stmtSpan: stmtSpan,
-			arm: arm,
-			eqGuarded: eqGuarded,
+			stmtSpan: body.stmtSpan,
+			arm: classified.arm,
+			eqGuarded: classified.eqGuarded,
 			receiverName: receiver.name ?? '',
 			// The operand's OWN verbatim source (delimiters included for a literal), not a
 			// hand-rewrapped `.content` — content may itself carry a quote character (`"'"`), and
@@ -332,6 +322,61 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 			searchSrc: search.src,
 			replacementSrc: replacement.src
 		};
+	}
+
+	/**
+	 * The loop BODY's half of the match: `body` must be exactly one assignment `x = x.replace(S, B)`
+	 * whose target and receiver are the SAME binding the guard tested (`bindingFrom`) and whose
+	 * first argument is the same `S` (`sameOperand`). Returns that statement's span — arm A's
+	 * replacement text — and the resolved `B`, or null when the body is anything else. Any
+	 * additional statement means the loop is doing more than a redundant replace.
+	 */
+	private static function matchBody(
+		body: QueryNode, root: QueryNode, fn: Null<QueryNode>, source: String, bindingFrom: Int, search: Operand, s: Seams
+	): Null<BodyMatch> {
+		final stmt: Null<QueryNode> = singleStatementOf(body, s);
+		if (stmt == null || stmt.children.length != 1) return null;
+		final assign: QueryNode = stmt.children[0];
+		if (assign.kind != s.assignKind || assign.children.length != ASSIGN_CHILD_COUNT) return null;
+		final target: QueryNode = assign.children[0];
+		if (target.kind != s.identKind || TypeResolver.identBindingFrom(target, root, s.shape) != bindingFrom) return null;
+		final value: QueryNode = assign.children[1];
+		final replaceCall: Null<MethodCall> = methodCallParts(value, s);
+		if (
+			replaceCall == null || replaceCall.method != REPLACE_METHOD || value.children.length != REPLACE_CALL_CHILD_COUNT
+			|| replaceCall.recv.kind != s.identKind || TypeResolver.identBindingFrom(replaceCall.recv, root, s.shape) != bindingFrom
+		)
+			return null;
+		final replaceSearch: Null<Operand> = operandOf(value.children[1], root, fn, source, s);
+		if (replaceSearch == null || !sameOperand(search, replaceSearch)) return null;
+		final replacement: Null<Operand> = operandOf(value.children[2], root, fn, source, s);
+		final stmtSpan: Null<Span> = stmt.span;
+		return replacement == null || stmtSpan == null ? null : { stmtSpan: stmtSpan, replacement: replacement };
+	}
+
+	/**
+	 * Which arm the matched loop falls in, or null when it must not be reported at all (arm C
+	 * with a dominating containment guard). Two literals decide the outcome statically — arms
+	 * A / B, byte-identical to the behaviour from before parameters were admitted as operands;
+	 * anything else is arm C, where a containment test that exits before the loop is the one
+	 * static proof that `B` never contains `S` whatever the caller passes, and an equality
+	 * guard only sharpens the message. The two guard walks share ONE dominating-guard list.
+	 *
+	 * `fn` cannot actually be null here on the arm-C path: a null `literal` comes only from
+	 * `operandOf`'s parameter branch, which refuses outright without an enclosing function. The
+	 * check below is that narrowing written out, not a live "no enclosing function" case.
+	 */
+	private static function classifyArm(
+		search: Operand, replacement: Operand, fn: Null<QueryNode>, whileNode: QueryNode, root: QueryNode, source: String, s: Seams
+	): Null<Classification> {
+		final searchContent: Null<String> = search.literal;
+		final replacementContent: Null<String> = replacement.literal;
+		if (searchContent != null && replacementContent != null)
+			return { arm: replacementContent.indexOf(searchContent) == -1 ? Arm.A : Arm.B, eqGuarded: false };
+		if (fn == null) return null;
+		final guards: Array<QueryNode> = dominatingGuards(fn, whileNode, s);
+		if (guardsContainment(guards, fn, search, replacement, root, source, s)) return null;
+		return { arm: Arm.C, eqGuarded: guardsEquality(guards, fn, search, replacement, root, source, s) };
 	}
 
 	/**
@@ -368,11 +413,11 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 		if (span == null) return null;
 		final src: String = source.substring(span.from, span.to);
 		final literal: Null<StringLiteral> = s.strings.literalOf(node, source);
-		if (literal != null) return { literal: literal.content, paramFrom: null, src: src };
+		if (literal != null) return { literal: literal.content, paramBindingFrom: null, src: src };
 		if (node.kind != s.identKind || fn == null) return null;
 		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(node, root, s.shape);
 		if (bindingFrom == null || !isParameterOf(fn, bindingFrom, s)) return null;
-		return { literal: null, paramFrom: bindingFrom, src: src };
+		return { literal: null, paramBindingFrom: bindingFrom, src: src };
 	}
 
 	/** Whether the binding at `bindingFrom` is one of `fn`'s own parameter declarations (`Seams.paramKinds`). */
@@ -388,35 +433,35 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 	private static function sameOperand(a: Operand, b: Operand): Bool {
 		final literal: Null<String> = a.literal;
 		if (literal != null) return literal == b.literal;
-		final paramFrom: Null<Int> = a.paramFrom;
-		return paramFrom != null && paramFrom == b.paramFrom;
+		final bindingFrom: Null<Int> = a.paramBindingFrom;
+		return bindingFrom != null && bindingFrom == b.paramBindingFrom;
 	}
 
 	/**
-	 * The INNERMOST function declaration (`Seams.functionKinds`) whose span contains `target`, or
-	 * null when the loop sits outside any (or the grammar names no function kinds — arm C is then
+	 * The INNERMOST function or LAMBDA (`Seams.fnKinds`) whose span contains `target`, or null when
+	 * the loop sits outside any (or the grammar names no function / lambda kinds — arm C is then
 	 * unreachable and the check keeps its literals-only behaviour). A parameter operand needs one
-	 * to be a parameter OF.
+	 * to be a parameter OF, and a lambda's parameters are just as caller-chosen as a method's.
 	 */
 	private static function enclosingFunction(node: QueryNode, target: Span, s: Seams, found: Null<QueryNode>): Null<QueryNode> {
 		final span: Null<Span> = node.span;
 		if (span != null && (span.from > target.from || span.to < target.to)) return found;
-		var best: Null<QueryNode> = s.functionKinds.contains(node.kind) ? node : found;
+		var best: Null<QueryNode> = s.fnKinds.contains(node.kind) ? node : found;
 		for (child in node.children) best = enclosingFunction(child, target, s, best);
 		return best;
 	}
 
 	/**
-	 * Whether `fn` provably tests containment of `search` in `replacement` and RETURNS before the
-	 * loop at `whileSpan` — `B.indexOf(S) != -1` / `-1 != B.indexOf(S)` / `B.contains(S)`, the same
-	 * three spellings `matchGuard` reads for the loop's own condition, held to the same operand
-	 * identity. Such a function never reaches the loop with a `B` that contains `S`, so arm C has
-	 * nothing to report.
+	 * Whether any of the loop's DOMINATING `guards` tests containment of `search` in `replacement`
+	 * — `B.indexOf(S) != -1` / `-1 != B.indexOf(S)` / `B.contains(S)`, the same three spellings
+	 * `matchGuard` reads for the loop's own condition, held to the same operand identity. Every
+	 * path that reaches the loop ran such a guard and did not take its exit, so `B` provably does
+	 * not contain `S` there and arm C has nothing to report.
 	 */
 	private static function guardsContainment(
-		fn: QueryNode, whileSpan: Span, search: Operand, replacement: Operand, root: QueryNode, source: String, s: Seams
+		guards: Array<QueryNode>, fn: QueryNode, search: Operand, replacement: Operand, root: QueryNode, source: String, s: Seams
 	): Bool {
-		for (cond in precedingReturnGuards(fn, whileSpan, s)) {
+		for (cond in guards) {
 			final guard: Null<{ receiver: QueryNode, search: QueryNode }> = matchGuard(cond, source, s);
 			if (guard == null) continue;
 			final receiver: Null<Operand> = operandOf(guard.receiver, root, fn, source, s);
@@ -427,17 +472,16 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 	}
 
 	/**
-	 * Whether `fn` tests `S == B` (either operand order) and RETURNS before the loop. Such a guard
-	 * is INSUFFICIENT — it rules out only the degenerate `B == S`, never the `B` that merely
+	 * Whether any of the loop's DOMINATING `guards` tests `S == B` (either operand order). Such a
+	 * guard is INSUFFICIENT — it rules out only the degenerate `B == S`, never the `B` that merely
 	 * CONTAINS `S` — so it never suppresses the finding; it only sharpens the message.
 	 */
 	private static function guardsEquality(
-		fn: QueryNode, whileSpan: Span, search: Operand, replacement: Operand, root: QueryNode, source: String, s: Seams
+		guards: Array<QueryNode>, fn: QueryNode, search: Operand, replacement: Operand, root: QueryNode, source: String, s: Seams
 	): Bool {
 		final eqKind: Null<String> = s.eqKind;
 		if (eqKind == null) return false;
-		for (cond in precedingReturnGuards(fn, whileSpan, s)) {
-			if (cond.kind != eqKind || cond.children.length != COMPARISON_CHILD_COUNT) continue;
+		for (cond in guards) if (cond.kind == eqKind && cond.children.length == COMPARISON_CHILD_COUNT) {
 			final left: Null<Operand> = operandOf(cond.children[0], root, fn, source, s);
 			final right: Null<Operand> = operandOf(cond.children[1], root, fn, source, s);
 			if (left == null || right == null) continue;
@@ -451,35 +495,58 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 	}
 
 	/**
-	 * The CONDITIONS of every `if` inside `fn` that ends at or before `whileSpan` starts and whose
-	 * then-branch is a `return` (bare, or the sole statement of a block) — the shapes that make the
-	 * function exit before the loop can run. One optional paren layer is unwrapped, as in the
-	 * loop's own condition.
+	 * The CONDITIONS of every `if` that DOMINATES `whileNode` inside `fn`: the walk ascends from
+	 * the loop through the enclosing statement lists (`Seams.blockKinds`, the grammar's
+	 * `ControlFlowSupport`) and at each level reads only the PRECEDING SIBLINGS of the node it
+	 * came up through, keeping those whose then-branch unconditionally exits. Preceding IN THE
+	 * TEXT is not enough — a guard nested inside another `if`, in an `else` arm, in a loop or
+	 * `switch` body, inside a `#if` region (which projects as one `Conditional` node, never a
+	 * statement list), or in a nested function or lambda nothing calls, may not have run at all
+	 * when the loop is reached. Empty when the grammar exposes no control-flow support, which
+	 * only loses the suppression.
 	 */
-	private static function precedingReturnGuards(fn: QueryNode, whileSpan: Span, s: Seams): Array<QueryNode> {
+	private static function dominatingGuards(fn: QueryNode, whileNode: QueryNode, s: Seams): Array<QueryNode> {
+		final flow: Null<ControlFlowSupport> = s.flow;
+		if (flow == null) return [];
+		final path: Array<QueryNode> = [];
+		if (!pathTo(fn, whileNode, path)) return [];
 		final out: Array<QueryNode> = [];
-		collectReturnGuards(fn, whileSpan, s, out);
+		for (i in 0...path.length - 1) {
+			final host: QueryNode = path[i];
+			if (!s.blockKinds.contains(host.kind)) continue;
+			for (sibling in host.children) {
+				if (sibling == path[i + 1]) break;
+				final cond: Null<QueryNode> = exitGuardCondition(sibling, flow, s);
+				if (cond != null) out.push(cond);
+			}
+		}
 		return out;
 	}
 
-	/** `precedingReturnGuards`'s recursion over `node`'s subtree. */
-	private static function collectReturnGuards(node: QueryNode, whileSpan: Span, s: Seams, out: Array<QueryNode>): Void {
-		final span: Null<Span> = node.span;
-		if (
-			s.ifStatementKinds.contains(node.kind) && span != null && span.to <= whileSpan.from
-			&& node.children.length >= COMPARISON_CHILD_COUNT && returnsImmediately(node.children[1], s)
-		) {
-			var cond: QueryNode = node.children[0];
-			if (s.parenKind != null && cond.kind == s.parenKind && cond.children.length == 1) cond = cond.children[0];
-			out.push(cond);
-		}
-		for (child in node.children) collectReturnGuards(child, whileSpan, s, out);
+	/**
+	 * Push onto `out` the node chain from `node` down to `target` inclusive, answering whether
+	 * `target` is a descendant at all. Every element is a direct child of the one before it, which
+	 * is what lets `dominatingGuards` split each level into siblings before and after the path.
+	 */
+	private static function pathTo(node: QueryNode, target: QueryNode, out: Array<QueryNode>): Bool {
+		out.push(node);
+		if (node == target) return true;
+		for (child in node.children) if (pathTo(child, target, out)) return true;
+		out.pop();
+		return false;
 	}
 
-	/** Whether `branch` is a `return` statement (valued or bare), or a block whose only statement is one. */
-	private static function returnsImmediately(branch: QueryNode, s: Seams): Bool {
-		if (s.returnKinds.contains(branch.kind)) return true;
-		return branch.kind == s.blockStmtKind && branch.children.length == 1 && s.returnKinds.contains(branch.children[0].kind);
+	/**
+	 * `guard`'s condition when it is an `if` whose then-branch unconditionally exits — a `return`
+	 * (valued or bare), a `throw`, a `break` or a `continue`, bare or as the LAST statement of a
+	 * block (`CheckScan.branchAlwaysExits`, the shared reading `redundant-else` de-nests on) —
+	 * else null. One optional paren layer is unwrapped, as in the loop's own condition.
+	 */
+	private static function exitGuardCondition(guard: QueryNode, flow: ControlFlowSupport, s: Seams): Null<QueryNode> {
+		if (!s.ifStatementKinds.contains(guard.kind) || guard.children.length < COMPARISON_CHILD_COUNT) return null;
+		if (!CheckScan.branchAlwaysExits(guard.children[1], flow)) return null;
+		final cond: QueryNode = guard.children[0];
+		return s.parenKind != null && cond.kind == s.parenKind && cond.children.length == 1 ? cond.children[0] : cond;
 	}
 
 	/** `x.METHOD(...)` destructured into its receiver + method name, or null when `node` is not a field-access call. */
@@ -513,25 +580,32 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 		return null;
 	}
 
-	/** `m` as its `Info` (arm A, autofixable) or `Warning` (arm B, infinite-loop hazard, report-only) `Violation`. */
+	/**
+	 * `m` as its `Violation`: `Info` for arm A (redundant, autofixable) and for arm C (a parameter
+	 * operand, report-only), `Warning` for arm B (provably infinite, report-only). Switched
+	 * exhaustively on the `enum abstract`, so a fourth arm is a compile error rather than silently
+	 * landing in the `Info` branch.
+	 */
 	private static function toViolation(file: String, m: Match): Violation {
 		final search: String = excerpt(m.searchSrc);
 		final replacement: String = excerpt(m.replacementSrc);
-		if (m.arm == Arm.B) return {
-			file: file,
-			span: m.whileSpan,
-			rule: RULE_ID,
-			severity: Severity.Warning,
-			message: 'this loop never terminates for any ${m.receiverName} containing $search — replace($search, $replacement) reintroduces it every time, since $replacement itself contains $search'
+		final severity: Severity = switch m.arm {
+			case Arm.A, Arm.C: Severity.Info;
+			case Arm.B: Severity.Warning;
+		};
+		final message: String = switch m.arm {
+			case Arm.A:
+				'this while (${m.receiverName}.indexOf($search) != -1) loop runs at most once — replace() already replaces every occurrence; collapses to ${m.receiverName} = ${m.receiverName}.replace($search, $replacement);';
+			case Arm.B:
+				'this loop never terminates for any ${m.receiverName} containing $search — replace($search, $replacement) reintroduces it every time, since $replacement itself contains $search';
+			case Arm.C: armCMessage(m, search, replacement);
 		};
 		return {
 			file: file,
 			span: m.whileSpan,
 			rule: RULE_ID,
-			severity: Severity.Info,
-			message: m.arm == Arm.A
-				? 'this while (${m.receiverName}.indexOf($search) != -1) loop runs at most once — replace() already replaces every occurrence; collapses to ${m.receiverName} = ${m.receiverName}.replace($search, $replacement);'
-				: armCMessage(m, search, replacement)
+			severity: severity,
+			message: message
 		};
 	}
 
@@ -548,7 +622,11 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 			: head;
 	}
 
-	/** `text` (a literal's verbatim source, delimiters included), capped to `EXCERPT_MAX` characters (an ellipsis marks the cut) for a finding message. */
+	/**
+	 * `text` — one operand's verbatim source: a literal WITH its delimiters, or, on arm C, the bare
+	 * parameter name — capped to `EXCERPT_MAX` characters (an ellipsis marks the cut) for a
+	 * finding message.
+	 */
 	private static function excerpt(text: String): String {
 		return text.length <= EXCERPT_MAX ? text : text.substring(0, EXCERPT_MAX) + '…';
 	}
@@ -568,10 +646,11 @@ private typedef Seams = {
 	final exprStmtKind: String;
 	final unaryMinusKinds: Array<String>;
 	final numericLiteralKinds: Array<String>;
-	final functionKinds: Array<String>;
+	final fnKinds: Array<String>;
 	final paramKinds: Array<String>;
 	final ifStatementKinds: Array<String>;
-	final returnKinds: Array<String>;
+	final flow: Null<ControlFlowSupport>;
+	final blockKinds: Array<String>;
 	final eqKind: Null<String>;
 	final parenKind: Null<String>;
 	final strings: StringFoldSupport;
@@ -583,9 +662,10 @@ private typedef MethodCall = {
 	final recv: QueryNode;
 	final method: String;
 };
+
 /**
  * One resolved `S` / `B` operand: EITHER a plain string literal, OR a bare identifier bound to a
- * PARAMETER of the enclosing function. Exactly one of the two fields is non-null; `src` is the
+ * PARAMETER of the enclosing function or lambda. Exactly one of the two fields is non-null; `src` is the
  * operand's verbatim source text, which a finding message echoes (never a re-wrapped `.content`).
  */
 private typedef Operand = {
@@ -593,13 +673,14 @@ private typedef Operand = {
 	/** The literal content when the operand is a plain string literal, else null. */
 	final literal: Null<String>;
 
-	/** The binding offset when the operand is a parameter of the enclosing function, else null. */
-	final paramFrom: Null<Int>;
+	/** The START OFFSET of the parameter declaration this operand is bound to, else null. */
+	final paramBindingFrom: Null<Int>;
 
 	/** The operand's verbatim source text, delimiters included. */
 	final src: String;
 
 };
+
 /**
  * Which arm a matched loop falls in — the three outcomes the type doc describes.
  */
@@ -616,13 +697,53 @@ private enum abstract Arm(Int) {
 
 }
 
-/** A matched redundant-replace loop: both spans, which arm it is, and the text for the message. */
+/**
+ * A matched redundant-replace loop: both spans, which arm it is, whether an (insufficient)
+ * equality guard precedes it, and the verbatim text the message echoes.
+ */
 private typedef Match = {
+
+	/** The whole `while` statement — the finding's span, and what arm A's fix replaces. */
 	final whileSpan: Span;
+
+	/** The loop body's single assignment statement — arm A's replacement text, copied verbatim. */
 	final stmtSpan: Span;
+
+	/** Which of the three arms this loop falls in. */
 	final arm: Arm;
+
+	/** Arm C only: whether a dominating `S == B` guard precedes the loop, which adds the message's caveat clause. */
 	final eqGuarded: Bool;
+
+	/** The receiver identifier's name, echoed in the message. */
 	final receiverName: String;
+
+	/** The `S` operand's verbatim source (a literal with its delimiters, or a bare parameter name). */
 	final searchSrc: String;
+
+	/** The `B` operand's verbatim source (a literal with its delimiters, or a bare parameter name). */
 	final replacementSrc: String;
+
+};
+
+/** `matchBody`'s result: the body statement's span (arm A's replacement text) and the resolved `B` operand. */
+private typedef BodyMatch = {
+
+	/** The loop body's single assignment statement — arm A's replacement text, copied verbatim. */
+	final stmtSpan: Span;
+
+	/** The resolved `B` operand — `replace`'s second argument. */
+	final replacement: Operand;
+
+};
+
+/** `classifyArm`'s verdict: the arm a matched loop falls in, plus arm C's equality-guard caveat flag. */
+private typedef Classification = {
+
+	/** Which of the three arms the loop falls in. */
+	final arm: Arm;
+
+	/** Whether a dominating `S == B` guard precedes the loop (arm C's message caveat); always false for arms A / B. */
+	final eqGuarded: Bool;
+
 };

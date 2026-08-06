@@ -2779,6 +2779,17 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * The resolution scope's RAW sources (report UNION the library roots) when `plugin` hosts one, else
+	 * null. The text counterpart of `resolutionIndexOf`, for a scan that needs no parse: the index drops
+	 * a skip-parsed file from both `allFiles` and `sourceOf`, so a whole-scope TEXT proof read off the
+	 * index would treat that file as holding nothing at all.
+	 */
+	public static inline function resolutionSourcesOf(plugin: GrammarPlugin): Null<Array<{ file: String, source: String }>> {
+		final host: Null<SymbolIndexHost> = (plugin is SymbolIndexHost) ? cast plugin : null;
+		return host == null ? null : host.resolutionFiles();
+	}
+
+	/**
 	 * A memoized `SymbolIndex` builder — built at most once, on first call, over `files`. Shared by
 	 * checks whose path-receiver type gate needs cross-file resolution only after cheaper structural
 	 * gates pass, so most runs never trigger the build. When `plugin` is a `SymbolIndexHost` carrying
