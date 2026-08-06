@@ -116,6 +116,17 @@ typedef TypeDeclInfo = {
 	var isMain: Bool;
 
 	/**
+	 * Whether the declaration carries the language's EXTERN modifier — a type whose runtime
+	 * representation belongs to the target rather than to the compiler. Load-bearing for any
+	 * consumer reasoning about what a runtime does with an instance: an extern type's methods
+	 * are declarations over a foreign object, so a non-extern type's method is the one the
+	 * compiler provably wires every use to. `redundant-tostring` reads it to tell a Haxe
+	 * `toString` the runtime's string coercion also calls from an `extern class Date` /
+	 * `extern class Array` whose coercion goes native and diverges.
+	 */
+	var isExtern: Bool;
+
+	/**
 	 * The number of type parameters written on the declaration header
 	 * (`class Box<T, U>` → 2; 0 = non-generic). Drives bare-`new` local-type
 	 * annotation: an arity-0 type's written name IS its complete type.

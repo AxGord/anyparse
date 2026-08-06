@@ -144,9 +144,18 @@ final class SymbolIndexBuilder {
 		final imports: Array<ImportInfo> = [];
 		final types: Array<TypeDeclInfo> = [];
 		var pendingMeta: Array<String> = [];
+		// The EXTERN modifier projects as a NAMELESS sibling node preceding its declaration
+		// (`(Extern) (ClassDecl Date …)`), the same splice shape a visibility modifier takes, so it
+		// is carried forward like `pendingMeta` and consumed by the next type declaration.
+		final externModifierKind: Null<String> = shape.externModifierKind;
+		var pendingExtern: Bool = false;
 
 		for (gn in declNodes(tree)) {
 			final node: QueryNode = gn.node;
+			if (externModifierKind != null && node.kind == externModifierKind) {
+				pendingExtern = true;
+				continue;
+			}
 			final typeDecl: Null<TypeDeclMatch> = typeDeclAt(node);
 			if (typeDecl != null) {
 				final supersRaw: Array<String> = collectSupertypesRaw(node);
@@ -158,6 +167,7 @@ final class SymbolIndexBuilder {
 					kind: typeDecl.kind,
 					span: typeDecl.fullSpan,
 					isMain: typeDecl.name == basename,
+					isExtern: pendingExtern,
 					typeParamArity: paramSegments.length,
 					typeParamNames: declTypeParamNames(paramSegments),
 					supertypes: supersRaw.map(simpleName),
@@ -173,6 +183,7 @@ final class SymbolIndexBuilder {
 					abstractForwardUnderlying: isAbstract ? forwardUnderlyingOf(node, pendingMeta) : null
 				});
 				pendingMeta = [];
+				pendingExtern = false;
 				continue;
 			}
 
@@ -197,6 +208,7 @@ final class SymbolIndexBuilder {
 				case 'PackageDecl':
 					pkg = name;
 					pendingMeta = [];
+					pendingExtern = false;
 				case 'ImportDecl':
 					imports.push({
 						raw: name,

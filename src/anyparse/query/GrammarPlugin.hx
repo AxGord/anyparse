@@ -1239,6 +1239,18 @@ typedef RefShape = {
 	@:optional var stringInterpIdentKind: String;
 
 	/**
+	 * The string-interpolation BLOCK kind (Haxe `Block` — a `${ … }` segment inside a
+	 * single-quoted string, spanning the `$` through the closing `}`) — the only
+	 * string-literal child that can own a subtree, so it is what tells `redundant-tostring`
+	 * that an expression sits in a position the language ALREADY stringifies. It owns the
+	 * one expression the compiler slices out of it WHEN THE PARSER READ THE INTERPOLATION
+	 * DIRECTLY; a rescanned, escape-spelled `${ … }` synthesizes a CHILDLESS `Block`
+	 * instead (see `HxInterpProjection`), so a consumer must check the child count rather
+	 * than assume one. Optional; unset makes that check's interpolation arm inert.
+	 */
+	@:optional var stringInterpBlockKind: String;
+
+	/**
 	 * The language's reserved words — identifiers no binding may be named. A check that
 	 * DERIVES a new identifier (`no-underscore-prefix` strips a leading `_`) must refuse a
 	 * result that lands on one, or it emits source the parser rejects. A naming policy cannot
