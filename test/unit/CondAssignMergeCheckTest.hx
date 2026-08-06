@@ -232,6 +232,18 @@ class CondAssignMergeCheckTest extends Test {
 		Assert.equals('loader = #if !html5 fast ? new A() : new B() #else new C() #end;', es[0].text);
 	}
 
+	/**
+	 * A VALUE broken across lines cannot go inline verbatim either: its continuation would land
+	 * between two directives and read as part of a branch it does not belong to.
+	 */
+	public function testMultiLineValueNotFlagged(): Void {
+		Assert.equals(0, violations(wrap("#if a\n\t\ts = 'p'\n\t\t\t+ 'q';\n\t\t#else\n\t\ts = 'r';\n\t\t#end")).length);
+	}
+
+	public function testMultiLineReturnValueNotFlagged(): Void {
+		Assert.equals(0, violations(wrap("#if a\n\t\treturn 'p'\n\t\t\t+ 'q';\n\t\t#end\n\t\treturn 'r';")).length);
+	}
+
 	/** A condition broken across lines cannot go inline verbatim. */
 	public function testMultiLineConditionNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('#if (mobile\n\t\t\t|| air)\n\t\tscale = 2;\n\t\t#else\n\t\tscale = 3;\n\t\t#end')).length);
@@ -357,12 +369,80 @@ class CondAssignMergeCheckTest extends Test {
 		Assert.equals(0, violations(wrap('#if a\n\t\treturn 1;\n\t\t#end\n\t\treturn;')).length);
 	}
 
+	/**
+	 * A region that DOES reach `#else` never consumes the statement after it: the merged edit
+	 * stops at `#end`, and the unconditional exit that follows survives.
+	 */
+	public function testExplicitElseDoesNotConsumeFollower(): Void {
+		final src: String = wrap('#if a\n\t\treturn 1;\n\t\t#else\n\t\treturn 2;\n\t\t#end\n\t\treturn 3;');
+		final es: Array<{ span: Span, text: String }> = edits(src);
+		Assert.equals(1, es.length);
+		Assert.equals('return #if a 1 #else 2 #end;', es[0].text);
+		Assert.equals(src.indexOf('#end') + '#end'.length, es[0].span.to);
+		Assert.isTrue(applyFixOnce(src).indexOf('return 3;') != -1);
+	}
+
+	/** The assignment analogue: an explicit-`#else` region leaves the assignment after it alone. */
+	public function testExplicitElseAssignDoesNotConsumeFollower(): Void {
+		final src: String = wrap('#if a\n\t\tx = 1;\n\t\t#else\n\t\tx = 2;\n\t\t#end\n\t\tx = 3;');
+		final es: Array<{ span: Span, text: String }> = edits(src);
+		Assert.equals(1, es.length);
+		Assert.equals('x = #if a 1 #else 2 #end;', es[0].text);
+		Assert.isTrue(applyFixOnce(src).indexOf('x = 3;') != -1);
+	}
+
+	/**
+	 * The statement-list position gate is what keeps the implicit else in ONE statement list. A
+	 * region under a BRACE-LESS `if` body is a child of that `if`, not of the enclosing block, so
+	 * the exit after `#end` is not its follower — merging would delete a statement that runs
+	 * whenever the `if` does not.
+	 */
+	public function testImplicitElseUnderBracelessIfNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('if (c)\n\t\t#if a\n\t\treturn 1;\n\t\t#end\n\t\treturn 2;')).length);
+	}
+
+	public function testImplicitElseUnderBracelessWhileNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('while (c)\n\t\t#if a\n\t\treturn 1;\n\t\t#end\n\t\treturn 2;')).length);
+	}
+
+	/** The exit keywords must agree in the other direction too. */
+	public function testImplicitElseThrowRegionWithReturnFollowerNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('#if a\n\t\tthrow e;\n\t\t#end\n\t\treturn 2;')).length);
+	}
+
+	/** A comment INSIDE the region is in the merged span as much as one in the consumed gap. */
+	public function testImplicitElseCommentInRegionReportOnly(): Void {
+		final src: String = wrap('#if a\n\t\t// note\n\t\treturn 1;\n\t\t#end\n\t\treturn 2;');
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.stringContains('comment', vs[0].message);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** An exit region with an explicit `#else` obeys the same comment gate. */
+	public function testCommentInExitRegionReportOnly(): Void {
+		final src: String = wrap('#if a\n\t\treturn 1; // why\n\t\t#else\n\t\treturn 2;\n\t\t#end');
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.stringContains('comment', vs[0].message);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** A condition broken across lines refuses the exit arms too. */
+	public function testMultiLineConditionExitArmNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('#if (a\n\t\t\t|| b)\n\t\treturn 1;\n\t\t#end\n\t\treturn 2;')).length);
+	}
+
 	/** With no statement after it the region has no implicit else at all. */
 	public function testImplicitElseWithoutFollowerNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('#if a\n\t\treturn 1;\n\t\t#end')).length);
 	}
 
-	/** The implicit else is the IMMEDIATE next statement — anything between the two refuses. */
+	/**
+	 * The implicit else is the IMMEDIATE next statement, never the first exit found by scanning
+	 * forward. This shape trips the non-exit-follower gate as well, and cannot be made to trip
+	 * adjacency alone: any intervening EXIT would itself be a sound follower.
+	 */
 	public function testImplicitElseFollowerNotAdjacentNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('#if a\n\t\treturn 1;\n\t\t#end\n\t\tg();\n\t\treturn 2;')).length);
 	}

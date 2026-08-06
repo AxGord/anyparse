@@ -64,13 +64,17 @@ import anyparse.runtime.Span;
  * This shape is UNSOUND for the assignment and declaration arms and stays refused there: both
  * statements execute, so the follower would win rather than the branch. It needs a follower at
  * all, so a region that is the LAST statement of its list is refused, as is one separated from
- * the following exit by any other statement.
+ * the following exit by any other statement. A region that DOES reach `#else` never consumes
+ * its follower, whatever that follower is.
  *
  * ## What is flagged
  *
  * A region that is a DIRECT CHILD of a statement list (`ControlFlowSupport.blockKinds`) —
  * statement position, never a member run, a case group or an expression slot, where the
- * merged form would not be a statement — and where ALL of:
+ * merged form would not be a statement. That gate is also what keeps the implicit else in ONE
+ * statement list: a region under a brace-less `if` / loop / `try` body is a child of that host,
+ * not of the enclosing block, so the exit after `#end` is never mistaken for its else branch.
+ * Beyond the position, ALL of:
  *
  *  - every branch is present, `#else` INCLUDED, or the implicit-else shape above supplies it.
  *    Without either, the statement stays conditional and merging would make it unconditional,
@@ -84,18 +88,22 @@ import anyparse.runtime.Span;
  *    (`a = b = c` would leave the inner one inside the merged r-value), or a single-declarator
  *    local declaration WITH an initializer, or a value return / throw
  *    (`RefShape.returnStatementKind` / `throwKinds`);
- *  - the text before the value is IDENTICAL in every branch — the l-value for the
+ *  - every branch agrees on SHAPE and on the text before the value — the l-value for the
  *    assignment shape, the `<keyword> <name>[:<type>] =` prefix for the declaration one, the
  *    exit keyword for the return / throw one. Every prefix is a verbatim source slice (only the
  *    assignment shape's `=` is re-spelled, since the l-value slice stops short of it), so a
  *    branch spelling its target differently — down to the whitespace inside it — is a safe miss
- *    rather than a guess about which spelling to keep. The same equality separates the arms from
- *    each other: an assignment and a declaration prefix always end in `=`, an exit prefix never
- *    does, so no two shapes can agree;
+ *    rather than a guess about which spelling to keep. The shape is compared on its own rather
+ *    than inferred from the prefix: which arm produced a branch is what the merged statement's
+ *    soundness turns on, and it must not rest on prefix spellings never colliding;
  *  - no branch statement contains a `#`. That rejects the r-value that already carries
  *    directives (`a = #if air 1 #else 2 #end;`, which the merge would nest) and, with it,
  *    every string literal whose text could have been mistaken for a branch marker by the
  *    directive scan below;
+ *  - every branch VALUE is single-line. A value broken across lines would splice its
+ *    continuation between two directives, where it reads as belonging to a branch it does not —
+ *    the same reason a multi-line condition is refused below, measured on the other half of the
+ *    clause;
  *  - each branch header (`#if <cond>` / `#elseif <cond>` / `#else`), read with its comments
  *    removed, is single-line — a condition broken across lines cannot go inline verbatim. The
  *    comment removal is what keeps this SHAPE verdict independent of the comment gate below:
@@ -143,8 +151,8 @@ import anyparse.runtime.Span;
 @:nullSafety(Strict)
 final class CondAssignMerge implements Check implements DefaultOff {
 
-	/** ASCII-only note appended when a comment inside the region withholds the autofix. */
-	private static inline final COMMENT_NOTE: String = ' (comment in the region - merge by hand)';
+	/** ASCII-only note appended when a comment inside the merged span withholds the autofix. */
+	private static inline final COMMENT_NOTE: String = ' (comment in the merged span - merge by hand)';
 
 	private static inline final MESSAGE: String =
 		'every branch of this conditional-compilation region assigns the same target - merge it into one assignment with a conditional r-value';
@@ -171,7 +179,7 @@ final class CondAssignMerge implements Check implements DefaultOff {
 
 	public function description(): String {
 		return
-			'a `#if … #else … #end` region whose every branch assigns the same target, or returns / throws — mergeable into one conditional value';
+			'a `#if … #else … #end` region whose every branch assigns the same target, or returns / throws — mergeable into one conditional value; an `#else`-less region of exits also absorbs the exit that follows it';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -240,7 +248,6 @@ final class CondAssignMerge implements Check implements DefaultOff {
 		final exprStmtKind: Null<String> = shape.exprStatementKind;
 		final assignKind: Null<String> = shape.assignKind;
 		final localDeclKinds: Null<Array<String>> = shape.localDeclKinds;
-		final throwKinds: Null<Array<String>> = shape.throwKinds;
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		if (ifKeyword == null || exprStmtKind == null || assignKind == null || support == null) return null;
 		return localDeclKinds == null || localDeclKinds.length == 0 ? null : {
@@ -249,7 +256,7 @@ final class CondAssignMerge implements Check implements DefaultOff {
 			assignKind: assignKind,
 			localDeclKinds: localDeclKinds,
 			returnKind: shape.returnStatementKind,
-			throwKinds: throwKinds == null ? [] : throwKinds,
+			throwKinds: shape.throwKinds ?? [],
 			blockKinds: support.blockKinds()
 		};
 	}
@@ -290,7 +297,7 @@ final class CondAssignMerge implements Check implements DefaultOff {
 		// the implicit else — and only when its branches EXIT, which is what makes that statement
 		// dead inside them. Without a follower there is no else branch to merge at all.
 		final follower: Null<Arm> = region.hasElse ? null : followerArm(next, span);
-		if (follower == null && !region.hasElse) return null;
+		if (!region.hasElse && follower == null) return null;
 		final all: Array<Arm> = follower == null ? region.arms : region.arms.concat([follower]);
 		final parts: Null<Array<Parts>> = agreedParts(source, all, seams);
 		if (parts == null || (follower != null && !parts[0].exit)) return null;
@@ -311,8 +318,11 @@ final class CondAssignMerge implements Check implements DefaultOff {
 
 	/**
 	 * The statement after the region as an extra arm — the implicit else — or null when there is
-	 * none. Its header offset is the region's own end, which `branchHeaders` never reads: the
-	 * merged form spells this branch `#else`, since the region carries no directive for it.
+	 * none. Its header offset is the region's own end, which `branchHeaders` never reads (the
+	 * caller passes it the region's own arms): the merged form spells this branch `#else`, since
+	 * the region carries no directive for it. Were it ever read, the slice from `#end` to the
+	 * follower is whitespace and trims to `''`, which `branchHeaders` refuses — the misuse fails
+	 * closed.
 	 */
 	private static function followerArm(next: Null<QueryNode>, region: Span): Null<Arm> {
 		if (next == null) return null;
@@ -392,10 +402,21 @@ final class CondAssignMerge implements Check implements DefaultOff {
 		final out: Array<Parts> = [];
 		for (arm in arms) {
 			final parts: Null<Parts> = armParts(source, arm, seams);
-			if (parts == null || (out.length > 0 && parts.prefix != out[0].prefix)) return null;
+			if (parts == null || isMultiLine(parts.value)) return null;
+			if (out.length > 0 && (parts.prefix != out[0].prefix || parts.exit != out[0].exit)) return null;
 			out.push(parts);
 		}
 		return out;
+	}
+
+	/**
+	 * Whether `text` spans more than one line — the verdict the branch HEADERS already get,
+	 * applied to the values. A value broken across lines cannot go inline verbatim any more than
+	 * a condition can: the merge would splice its continuation lines between two directives, where
+	 * they read as belonging to a branch they do not.
+	 */
+	private static function isMultiLine(text: String): Bool {
+		return text.indexOf('\n') != -1 || text.indexOf('\r') != -1;
 	}
 
 	/**
@@ -461,8 +482,6 @@ final class CondAssignMerge implements Check implements DefaultOff {
 	 *
 	 * The prefix is the exit keyword itself, which is what makes `agreedParts`' prefix equality
 	 * reject a `return` arm beside a `throw` one: the merged statement can spell only one of them.
-	 * No exit prefix can collide with an assignment or declaration prefix either — those always
-	 * end in `=`.
 	 */
 	private static function exitParts(source: String, stmt: QueryNode, stmtSpan: Span): Null<Parts> {
 		if (stmt.children.length != 1) return null;
