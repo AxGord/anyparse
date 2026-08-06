@@ -302,6 +302,45 @@ class UnusedLocalShadowTest extends Test {
 		);
 	}
 
+	/**
+	 * A local `inline function` — the form this project's Haxe style prescribes for a local
+	 * helper — joined `RefShape.scopeKinds`, which is the seam this check reads for its
+	 * enclosing-scope span. The helper is NOT a self-scoped declaration, so its own name is
+	 * neither a local declaration nor a shadowing region: the enclosing local it CAPTURES stays
+	 * referenced, and the helper's own name never surfaces as a finding.
+	 */
+	public function testLocalCapturedByInlineHelperKeepsDeclaration(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f() {\n\t\tvar total:Int = 0;\n\t\tinline function add(n:Int) total += n;\n\t\tadd(1);\n\t}\n}'
+			).length
+		);
+	}
+
+	/**
+	 * A declaration shadowed by an inline helper's PARAMETER is not flagged, exactly as the
+	 * lambda-parameter case above: a parameter is not in `selfScopeDeclKinds`, so the helper's
+	 * body is not a region the second scan subtracts. The over-count is the safe direction.
+	 */
+	public function testInlineHelperParameterShadowNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String;\n\t\tinline function use(item:String) trace(item);\n\t\tfor (s in xs) use(s);\n\t}\n}'
+			).length
+		);
+	}
+
+	/** A local declared INSIDE an inline helper's body is still flagged — the new frame does not hide it. */
+	public function testUnusedLocalInsideInlineHelperFlagged(): Void {
+		final vs: Array<Violation> = violations(
+			'class C {\n\tfunction f() {\n\t\tinline function h() {\n\t\t\tvar dead:Int = 1;\n\t\t\ttrace(2);\n\t\t}\n\t\th();\n\t}\n}'
+		);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("'dead'"));
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new UnusedLocal().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

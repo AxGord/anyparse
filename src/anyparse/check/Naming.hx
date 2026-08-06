@@ -954,7 +954,11 @@ final class Naming implements Check implements CrossFileFix {
 				: unrelatedTypeSpans(tree, owner, shape, resolutionIndex);
 			return RefactorSupport.nameBoundInRange(source, newName, 0, source.length, unrelated, plugin);
 		}
-		final funcKinds: Array<String> = shape.functionKinds ?? [];
+		// A local `inline function` is a function BODY for scope purposes even though it is not a
+		// measured `functionKinds` unit (`complexity` folds it into its host): its parameters and
+		// locals are visible only inside it, exactly as the plain local form's are. Without the union
+		// a sibling helper's same-named parameter read as an in-scope collision and vetoed the strip.
+		final funcKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
 		// The binding is visible throughout its innermost enclosing function - INCLUDING the nested closures
 		// / local functions that capture it - so a same-named binding anywhere in that function conflicts.
 		// Only a function DISJOINT from it (a sibling / unrelated body) is out of scope. Fall back to a

@@ -56,11 +56,13 @@ import anyparse.runtime.Span;
  * to whatever the local function shadows. `Naming.declaringFileRenameSpans` refuses the
  * rename rather than rewrite a read that belongs to a member (`bodyScoped`).
  *
- * A local `inline function` projects as `LocalInlineFnStmt`, a kind the reference walker does
- * not index as a declaration host: no occurrence set is provable, so the fix fails closed and
- * the finding stays report-only. Such a binding is also kept OUT of the same-target candidate
- * set - a rename that can never be emitted must not claim a target and block a provable
- * sibling's strip over a conflict that cannot materialise.
+ * A local `inline function` projects as its own kind, `LocalInlineFnStmt` - the grammar folds the
+ * `inline` keyword into the ctor rather than pairing a modifier - and it is governed identically:
+ * it hosts its binding in the reference walker and opens its own parameter scope, so its strip is
+ * provable and its parameters never collide with a sibling helper's. A candidate whose occurrence
+ * set does NOT resolve - whatever the reason - is kept OUT of the same-target candidate set: a
+ * rename that can never be emitted must not claim a target and block a provable sibling's strip
+ * over a conflict that cannot materialise.
  *
  * ## Autofix
  *
@@ -228,9 +230,9 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 			if (span == null || !flaggedFroms.contains(span.from)) continue;
 			final target: Null<String> = strippedName(decl, policy, shape);
 			if (target == null) continue;
-			// A binding the resolver cannot bind (a local `inline function`, whose kind is no declaration
-			// host) can never be renamed, so it must not CLAIM the target either - leaving it in the set
-			// would block a provable sibling's rename over a conflict that can never materialise.
+			// A binding the resolver cannot bind (one declared inside a macro reification subtree, say)
+			// can never be renamed, so it must not CLAIM the target either - leaving it in the set would
+			// block a provable sibling's rename over a conflict that can never materialise.
 			if (Rename.renameOccurrences(source, tree, span.from, shape).length == 0) continue;
 			// Re-bind to a non-null final: strict null-safety does not narrow inside a struct literal.
 			final name: String = target;

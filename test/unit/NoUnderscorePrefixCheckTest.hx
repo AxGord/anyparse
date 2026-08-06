@@ -549,16 +549,36 @@ class NoUnderscorePrefixCheckTest extends Test {
 	}
 
 	/**
-	 * An unprovable `inline function` candidate must not claim the target name: `_step` strips to
-	 * `step` cleanly, and blocking it over a conflict with a binding that can never be renamed would
-	 * be pure coverage loss.
+	 * A local `inline function` and a local `var` differing only in underscore count strip to the
+	 * SAME name from the same block, so neither renames - the sibling-collision refusal
+	 * `testTwoLocalFunctionsStrippingToTheSameNameBothSkipped` documents for the plain form.
+	 *
+	 * This fixture previously asserted the OPPOSITE for the inline form: `_step` -> `step` landed
+	 * while `__step` stayed, because `LocalInlineFnStmt` was in neither `DECL_HOST_KINDS` nor
+	 * `scopeKinds`, so its occurrence set never resolved and the unprovable candidate was dropped
+	 * from the claim set. That old expectation was the bug it was written around - the two bindings
+	 * ARE siblings in one block, and renaming either alone puts two `step` bindings there.
 	 */
-	public function testUnprovableInlineFunctionDoesNotBlockSiblingStrip(): Void {
+	public function testInlineFunctionAndLocalStrippingToTheSameNameBothSkipped(): Void {
 		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
 			+ '\t\tinline function __step():Void {\n\t\t\ttrace(1);\n\t\t}\n\t\tvar _step:Int = 1;\n\t\t__step();\n'
 			+ '\t\ttrace(_step);\n\t}\n}';
 		Assert.equals(2, violations(src).length);
-		assertFixed(src, ['var step:Int = 1;', 'trace(step);', 'inline function __step():Void'], ['_step:Int']);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/**
+	 * The claim set still drops a candidate whose occurrence set does not resolve - the gate is
+	 * general, not a local-inline-function special case. A binding declared inside a macro
+	 * reification subtree (`opaqueKinds`) is invisible to the reference walker, so it can never be
+	 * renamed and must not block the provable `_step` next to it.
+	 */
+	public function testUnprovableCandidateDoesNotBlockSiblingStrip(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
+			+ '\t\tvar e = macro {\n\t\t\tvar __step:Int = 1;\n\t\t\ttrace(__step);\n\t\t};\n'
+			+ '\t\tvar _step:Int = 1;\n\t\ttrace(_step);\n\t\ttrace(e);\n\t}\n}';
+		// The absent marker must not be a SUFFIX of the macro-declared `__step:Int`, which stays put.
+		assertFixed(src, ['var step:Int = 1;', 'trace(step);', 'var __step:Int = 1;'], ['var _step']);
 	}
 
 	/** A local of the target name in the ENCLOSING body is in scope for the local function, so the strip is refused. */
@@ -602,15 +622,49 @@ class NoUnderscorePrefixCheckTest extends Test {
 	}
 
 	/**
-	 * A local `inline function` projects as `LocalInlineFnStmt`, a kind the reference walker
-	 * does not index as a declaration host: no occurrence set is provable, so the gate fails
-	 * CLOSED - the finding stands, the strip is not emitted.
+	 * A local `inline function` is a binding scoped to one body exactly as the plain form is, and
+	 * `LocalInlineFnStmt` now hosts that binding in the reference walker - so the strip lands and
+	 * rewrites the call site along with the declaration.
+	 *
+	 * Before `LocalInlineFnStmt` joined `DECL_HOST_KINDS` / `scopeKinds` this asserted
+	 * `edits(src).length == 0`: no occurrence set resolved, so the fix failed closed and the
+	 * finding stayed report-only. That old value was the gap, not a policy.
 	 */
-	public function testLocalInlineFunctionFlaggedReportOnly(): Void {
+	public function testLocalInlineFunctionRenamed(): Void {
 		final src: String = 'package pkg;\n'
 			+ 'class C {\n\tpublic function draw():Void {\n\t\tinline function __h():Void {\n\t\t\ttrace(1);\n\t\t}\n\t\t__h();\n\t}\n}';
 		Assert.equals(1, violations(src).length);
+		assertFixed(src, ['inline function h():Void', 'h();'], ['__h']);
+	}
+
+	/**
+	 * The scope an inline local function binds INTO is its enclosing body, never its own span -
+	 * the same rule the plain form needs (`testSiblingLocalFunctionHoldingTheTargetNameSkipped`).
+	 * A SIBLING inline function already holding the target name is therefore a real collision.
+	 */
+	public function testSiblingInlineFunctionHoldingTheTargetNameSkipped(): Void {
+		// The sibling is referenced ONLY from inside itself: any other shape leaves an occurrence of
+		// the target in the ENCLOSING body, which the occurrence scan catches whatever the scope
+		// lookup returns - and the fixture would then pass with the exclusion reverted.
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
+			+ '\t\tinline function finish(n:Int):Void {\n\t\t\tif (n > 0) trace(n);\n\t\t}\n'
+			+ '\t\tinline function __finish():Void {\n\t\t\ttrace(1);\n\t\t}\n\t\t__finish();\n\t}\n}';
+		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
+	}
+
+	/**
+	 * Two sibling inline local functions' SAME-NAMED parameters are separate bindings in disjoint
+	 * scopes, so `_n` in the first strips to `n` without colliding with the second's `n`. Before
+	 * `LocalInlineFnStmt` opened a scope frame both parameters collected into the enclosing
+	 * method's single frame, where the sibling `n` WAS in scope and vetoed the strip.
+	 */
+	public function testSiblingInlineFunctionParametersRenameIndependently(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
+			+ '\t\tinline function a(_n:Int):Int {\n\t\t\treturn _n;\n\t\t}\n'
+			+ '\t\tinline function b(n:String):String {\n\t\t\treturn n;\n\t\t}\n\t\ttrace(a(1) + b("x"));\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		assertFixed(src, ['inline function a(n:Int):Int', 'inline function b(n:String):String'], ['_n']);
 	}
 
 }

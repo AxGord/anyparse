@@ -487,6 +487,54 @@ class ApqRefsTest extends Test {
 	}
 
 	/**
+	 * The same for a local `inline function` - the form the project's Haxe style prescribes for a
+	 * local helper. It projects as its own ctor (`LocalInlineFnStmt`, the `inline` keyword folded
+	 * into the kind), which was in neither `scopeKinds` nor `declHostKinds`: the parameters of two
+	 * sibling inline helpers collected into the ENCLOSING function's single frame, so the second
+	 * one's read of `p` bound to the FIRST one's declaration.
+	 */
+	public function testSiblingLocalInlineFnParamsDoNotCrossBind(): Void {
+		final source: String = 'class X { static function outer() {\n\tinline function a(p:Int):Int { return p; }\n'
+			+ '\tinline function b(p:String):String { return p; }\n' + '} }';
+		final hits: Array<RefHit> = findIn(source, 'p');
+		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(2, decls.length, 'two param decls expected, got ${describe(hits)}');
+		Assert.equals(2, reads.length, 'two reads expected, got ${describe(hits)}');
+		for (r in reads) {
+			final binding: Null<Span> = r.bindingSpan;
+			Assert.notNull(binding, 'read must resolve to a binding');
+			if (binding == null) continue;
+			final sameLine: Bool = lineOf(source, r.span.from) == lineOf(source, binding.from);
+			Assert.isTrue(sameLine, 'read at ${r.span.from} bound across sibling inline fns (binding ${binding.from})');
+		}
+	}
+
+	/** A local `inline function`'s name is a Decl visible from the enclosing body, exactly as the plain form's is. */
+	public function testLocalInlineFnNameIsDecl(): Void {
+		final source: String = 'class X { static function outer() {\n\tinline function helper():Void {}\n\thelper();\n} }';
+		final hits: Array<RefHit> = findIn(source, 'helper');
+		Assert.equals(1, hits.filter(h -> h.kind == RefKind.Decl).length, 'inline local fn decl expected, got ${describe(hits)}');
+		Assert.equals(1, hits.filter(h -> h.kind == RefKind.Read).length, 'call-site read expected, got ${describe(hits)}');
+	}
+
+	/**
+	 * A binding of the enclosing body stays visible INSIDE a local `inline function` - the new
+	 * frame must nest, not isolate. Were it isolating, a capture would resolve to nothing and
+	 * every consumer that counts references would read the captured local as dead.
+	 */
+	public function testLocalInlineFnCapturesEnclosingLocal(): Void {
+		final source: String = 'class X { static function outer() {\n\tvar total:Int = 0;\n'
+			+ '\tinline function add(n:Int):Int { return total + n; }\n\treturn add(1);\n} }';
+		final hits: Array<RefHit> = findIn(source, 'total');
+		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(1, decls.length, 'one local decl expected, got ${describe(hits)}');
+		Assert.equals(1, reads.length, 'one captured read expected, got ${describe(hits)}');
+		Assert.equals(decls[0].span.from, reads[0].bindingSpan?.from, 'capture must bind to the enclosing local');
+	}
+
+	/**
 	 * A qualified static call is a member access, so `find` — a value-binding walker —
 	 * classifies nothing for it. That is by design (`rename` rewrites every hit, and a
 	 * local `f` must not drag `obj.f` with it); the skip COUNT is what makes the omission

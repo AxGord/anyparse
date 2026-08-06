@@ -290,9 +290,9 @@ final class HaxeNamingSupport implements NamingSupport {
 	/**
 	 * The naming category of a declaration node, or null if its kind is not name-checked. A local
 	 * `function` / `inline function` statement is a Local: its name is a binding scoped to one body,
-	 * exactly like a `var`, so the same rules govern it. `LocalInlineFnStmt` is not a decl host of the
-	 * reference walker, so its occurrence set is unprovable and any rename derived from it fails closed
-	 * (report-only) - the categorisation still buys the FINDING.
+	 * exactly like a `var`, so the same rules govern it. Both forms are decl hosts of the reference
+	 * walker and open their own parameter scope, so a rename derived from either resolves its
+	 * occurrence set like any other local's.
 	 */
 	private static function categoryOf(node: QueryNode, mods: Array<String>): Null<NamingCategory> {
 		return switch node.kind {
