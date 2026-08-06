@@ -42,7 +42,10 @@ import anyparse.runtime.Span;
  *
  * Adjacency is required: a statement between the declaration and the assignment would have
  * its evaluation reordered by the join, so only the IMMEDIATELY following assignment
- * qualifies. The reported span is the declaration.
+ * qualifies. That is also what makes this rule immune to the reachability hazard its
+ * constructor-arm siblings carry -- nothing at all can sit between the two, so the join can
+ * never hop a guard or an early exit (`var x:Int; if (c) return; x = f();` is not a
+ * candidate). The reported span is the declaration.
  *
  * ## Autofix
  *

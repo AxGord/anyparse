@@ -335,6 +335,36 @@ class PreferFinalFieldCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * SIBLING-ARM PIN. This arm moves NO code — it swaps the `var` keyword for `final` and
+	 * nothing else — so an early return before the sole constructor assignment leaves it
+	 * behaviour-preserving and it stays flagged. Verified on Haxe 4.3.x `--interp` that the
+	 * compiler does NOT enforce definite assignment for a `final` INSTANCE field:
+	 * `class Q { final f:String; public function new(c:Bool) { if (!c) return; f = 'a'; } }`
+	 * compiles, and `new Q(false).f` is `null` — exactly what the `var` gave. The gate
+	 * `field-init-at-declaration` grew for that prefix must therefore NOT be pushed down into
+	 * `RefactorSupport.ctorSoleAssignmentFinalizable`: three consumers share it and
+	 * `prefer-read-only-field` CEDES exactly its candidates, so narrowing it would leave this
+	 * field class claimed by NEITHER rule with a green suite.
+	 */
+	public function testEarlyReturnBeforeSoleCtorWriteStillFlagged(): Void {
+		Assert.equals(1, violations('class C { private var _x:Int; public function new(c:Bool) { if (!c) return; _x = 5; } }').length);
+	}
+
+	/**
+	 * SIBLING-ARM PIN for the arm that DOES move code — the conditional-default fold lifts the
+	 * declaration default INTO the constructor. It is already gated by
+	 * `RefactorSupport.guardReachedIntact`, which refuses when any `controlExitKinds` node
+	 * starts before the guard: with an early `return` ahead of `if (p != null) _x = p;` the
+	 * fold is declined, where the identical class without it folds
+	 * (`testCtorConditionalDefaultPrivateFlagged`).
+	 */
+	public function testCtorConditionalDefaultBehindEarlyReturnNotFolded(): Void {
+		final src: String =
+			'class C { private var _x:Int = 0; public function new(?p:Int, c:Bool) { if (c) return; if (p != null) _x = p; } }';
+		Assert.equals(0, violations(src).length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferFinalField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

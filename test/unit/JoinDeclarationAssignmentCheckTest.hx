@@ -125,6 +125,15 @@ class JoinDeclarationAssignmentCheckTest extends Test {
 		Assert.isTrue(ids.contains('join-declaration-assignment'));
 	}
 
+	/**
+	 * SIBLING-ARM PIN. This rule is immune BY CONSTRUCTION to the reachability hazard its
+	 * constructor-arm siblings carry: it requires the assignment to IMMEDIATELY follow the
+	 * declaration, so a guard can never sit between them to be hopped. The identical pair
+	 * with nothing in between joins (`testBasicFlagged`).
+	 */
+	public function testGuardBetweenDeclarationAndAssignmentNotJoined(): Void {
+		Assert.equals(0, violations(wrap('var x:Int;\n\t\tif (c) return;\n\t\tx = f();\n\t\ttrace(x);')).length);
+	}
 
 	/** Wrap a statement body in a minimal parseable class + method. */
 	private function wrap(body: String): String {

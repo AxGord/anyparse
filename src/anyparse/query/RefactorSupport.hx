@@ -1742,6 +1742,52 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * Whether the constructor statement starting at `boundary` is UNCONDITIONALLY REACHED:
+	 * every top-level statement lexically before it runs, and none of them can leave the
+	 * constructor first. The question to ask before hoisting that statement's code into the
+	 * declaration PROLOGUE, which runs ahead of the constructor body and therefore ahead of
+	 * every guard the body holds — a guarded initialisation moved there becomes an unguarded
+	 * one, and nothing downstream notices: the result still type-checks and still parses.
+	 *
+	 * Decided as a POSITIVE WHITELIST, never as a negative "and not an `if`, and not a
+	 * `switch`, and not …" list — a negative list leaks by CATEGORY, letting through whatever
+	 * statement shape nobody thought to enumerate. The straight-line set is `exprStatementKind`
+	 * + `localDeclKinds` + `staticLocalDeclKinds`; a top-level statement of ANY other kind
+	 * before `boundary` refuses, so an `if` / `switch` / loop / `try` / `return` / `throw` /
+	 * nested block / `#if` region all fail by construction. `super(…)` projects as a plain
+	 * expression statement on the Haxe grammar and stays allowed.
+	 *
+	 * A kind whitelist alone is not enough, because a statement's KIND does not bound what its
+	 * SUBTREE holds: a non-block `try` body projects as a plain expression statement
+	 * (`try return catch (e:Dynamic) {}` is `ExprStmt(TryExpr(VoidReturnExpr …))`), so a control
+	 * exit hides inside an ACCEPTED kind. Any `controlExitKinds` node starting before `boundary`
+	 * anywhere in the body subtree therefore refuses too. That scan also refuses a `return`
+	 * inside a lambda passed as an argument, which exits nothing — over-refusal is the safe
+	 * direction for a soundness gate, and the shape is rare.
+	 *
+	 * Fails closed twice: with no resolvable block body, and with `controlExitKinds` unset — an
+	 * empty set would make the subtree scan a silent no-op that accepts every early return,
+	 * exactly the reasoning `guardReachedIntact` records for its own use of that seam.
+	 */
+	public static function ctorPrefixUnconditional(ctor: QueryNode, boundary: Int, shape: RefShape): Bool {
+		final bodyKind: Null<String> = shape.blockBodyKind;
+		final exitKinds: Array<String> = shape.controlExitKinds ?? [];
+		if (bodyKind == null || exitKinds.length == 0) return false;
+		final body: Null<QueryNode> = ctor.children.find(c -> c.kind == bodyKind);
+		if (body == null) return false;
+		final straightLine: Array<String> = (shape.localDeclKinds ?? []).concat(shape.staticLocalDeclKinds ?? []);
+		final stmtKind: Null<String> = shape.exprStatementKind;
+		if (stmtKind != null) straightLine.push(stmtKind);
+		for (stmt in body.children) {
+			final span: Null<Span> = stmt.span;
+			// A statement whose position is unknown cannot be placed relative to the boundary.
+			if (span == null) return false;
+			if (span.from < boundary && !straightLine.contains(stmt.kind)) return false;
+		}
+		return !kindStartsBefore(body, exitKinds, boundary);
+	}
+
+	/**
 	 * The class-like container and the field member declared at `fieldFrom`, found by
 	 * re-walking `tree` — the fix-side re-derivation from a violation's span (a
 	 * violation carries only its file and span, so the container and field are

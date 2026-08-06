@@ -376,6 +376,87 @@ class FieldInitAtDeclarationCheckTest extends Test {
 		Assert.equals(1, violations(upper).length);
 	}
 
+	/**
+	 * THE live regression, anonymized. An early-return guard sits between the constructor's
+	 * first statement and the init, so the constructor may exit before ever reaching it — but a
+	 * declaration initializer runs in the PROLOGUE, unconditionally, which turned a guarded
+	 * asset load into an unguarded one. Nothing downstream catches it: the moved code still
+	 * type-checks and still parses. `RefactorSupport.ctorPrefixUnconditional` refuses it.
+	 */
+	public function testEarlyReturnGuardBeforeInitNotMoved(): Void {
+		final src: String = 'class C { static inline final USE_CACHE:Bool = false; static var _instance:C; var asset:Movie;'
+			+ ' public function new() { _instance = this; if (!USE_CACHE) return; asset = Loader.get("pack:item");'
+			+ ' asset.cached = false; build(); } }';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * The positive control for the fixture above: the SAME class with the guard deleted is
+	 * still flagged. The leading `_instance = this;` is a straight-line statement the whitelist
+	 * accepts, so the guard is the only difference between the two — which is what proves the
+	 * refusal above belongs to the new prefix gate and not to some older one.
+	 */
+	public function testUnconditionalPrefixStillMoved(): Void {
+		final src: String = 'class C { static inline final USE_CACHE:Bool = false; static var _instance:C; var asset:Movie;'
+			+ ' public function new() { _instance = this; asset = Loader.get("pack:item"); asset.cached = false; build(); } }';
+		Assert.equals(1, violations(src).length);
+	}
+
+	/** A `switch` before the init is not straight-line — an arm may exit, and no arm need match. */
+	public function testSwitchBeforeInitNotMoved(): Void {
+		final src: String = 'class C { var _a:Array<Int>; public function new(k:Int) { switch k { case 1: return; case _: }'
+			+ ' _a = new Array<Int>(); } }';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/** A loop before the init is not straight-line — its body may exit the constructor. */
+	public function testLoopBeforeInitNotMoved(): Void {
+		final src: String = 'class C { var _a:Array<Int>; public function new(xs:Array<Int>) { for (x in xs) if (x == 0) return;'
+			+ ' _a = new Array<Int>(); } }';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/** A `throw` before the init leaves the constructor outright. */
+	public function testThrowBeforeInitNotMoved(): Void {
+		Assert.equals(0, violations('class C { var _a:Array<Int>; public function new() { throw "x"; _a = new Array<Int>(); } }').length);
+	}
+
+	/**
+	 * The hole a kind whitelist alone leaves: a non-block `try` body projects as a plain
+	 * EXPRESSION statement, so `try return catch (e:Dynamic) {}` clears the straight-line set
+	 * while still exiting the constructor. Only the second term — any `controlExitKinds` node
+	 * starting before the init, anywhere in the body subtree — refuses it.
+	 */
+	public function testNonBlockTryReturnBeforeInitNotMoved(): Void {
+		final src: String = 'class C { var _a:Array<Int>; public function new() { try return catch (e:Dynamic) {}'
+			+ ' _a = new Array<Int>(); } }';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * The whitelist must not over-refuse. A plain call, a `super(…)` and a local declaration all
+	 * leave the init unconditionally reached, so each one still moves — `super(…)` projects as a
+	 * plain expression statement on this grammar, so it stays allowed exactly as before.
+	 */
+	public function testStraightLinePrefixStillMoved(): Void {
+		Assert.equals(1, violations('class C { var _a:Array<Int>; public function new() { trace(1); _a = new Array<Int>(); } }').length);
+		Assert.equals(
+			1, violations('class C extends B { var _a:Array<Int>; public function new() { super(); _a = new Array<Int>(); } }').length
+		);
+		Assert.equals(
+			1, violations('class C { var _a:Array<Int>; public function new() { var t:Int = 1; _a = new Array<Int>(); } }').length
+		);
+	}
+
+	/**
+	 * Only the lexical PREFIX matters: a branch AFTER the init cannot stop the constructor from
+	 * reaching it, so the site still moves.
+	 */
+	public function testBranchAfterInitStillMoved(): Void {
+		final src: String = 'class C { var _a:Array<Int>; public function new(c:Bool) { _a = new Array<Int>(); if (c) return; } }';
+		Assert.equals(1, violations(src).length);
+	}
+
 	/** Assert `src` yields exactly one violation and that its declaration span names `field`. */
 	private function assertSoleViolationOn(src: String, field: String): Void {
 		final vs: Array<Violation> = violations(src);

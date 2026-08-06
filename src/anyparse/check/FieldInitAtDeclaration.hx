@@ -34,6 +34,18 @@ import haxe.Exception;
  * (`FieldWriteIndex.writeCount == 1` and no unresolved write to the field NAME), the
  * moved statement is the field's SOLE assignment, so the move preserves behaviour.
  *
+ * ORDER is only half of what the prologue changes; REACHABILITY is the other half. A
+ * constructor body need not reach its own statements — an early `return` behind a
+ * feature flag, a `throw`, a branch — while a declaration initializer ALWAYS runs. So
+ * a candidate additionally demands `RefactorSupport.ctorPrefixUnconditional`: every
+ * top-level statement before its init is straight-line (an expression statement or a
+ * local declaration; `super(…)` is one of those) and no control exit starts before it
+ * anywhere in the body subtree. The live regression that bought this gate hoisted an
+ * asset load out from behind `if (!USE_CACHE) return;`, making it unconditional; the
+ * moved code still type-checked and still parsed, so nothing downstream could catch
+ * it. The gate sits on the CANDIDATE, not on either acceptance path below, so neither
+ * path can miss it.
+ *
  * A field whose cross-file write count DIFFERS FROM ONE (a `dispose()` null-out, say)
  * can still move, on the ACCEPTED-CANDIDATE CHAIN: every top-level constructor
  * statement before its init must itself be the init of another accepted candidate of
@@ -67,11 +79,11 @@ import haxe.Exception;
  *   what makes `--fix` safe to run to a FIXPOINT: a candidate one pass refuses
  *   cannot be unblocked by the co-mover that same pass moved out.
  *
- * The sole-write path is UNCHANGED and joins no chain: with `writeCount == 1` the
- * moved statement is the field's only assignment whatever precedes it. It does,
+ * The sole-write path is otherwise UNCHANGED and joins no chain: with `writeCount == 1`
+ * the moved statement is the field's only assignment whatever precedes it. It does,
  * however, count as a CO-MOVER — a sole-write init that reads in-class state refuses
- * every chained candidate in the same constructor. The unresolved-write bail and the
- * read-before-init gate apply to both paths.
+ * every chained candidate in the same constructor. The unresolved-write bail, the
+ * read-before-init gate and the reachable-prefix gate apply to both paths.
  *
  * ## Known gaps
  *
@@ -86,12 +98,14 @@ import haxe.Exception;
  *   through such state and still swap — a second moved right-hand side, or a
  *   PRE-EXISTING declaration initializer, either will do. On the chain path both are
  *   gated; on the sole-write path neither is.
- * - The SOLE-WRITE path is gated by none of the above, and its largest exposure is
- *   not co-movers at all: it reorders against ARBITRARY EARLIER CONSTRUCTOR
- *   STATEMENTS. `new() { s = 5; _a = s; }` and `new() { _b = bump(); _a = n; }` both
- *   fire and both change behaviour, unchanged from before the chain existed. The
- *   CHAIN path bars that shape outright — any non-candidate statement breaks the
- *   chain — while the legacy path never looks.
+ * - The SOLE-WRITE path is gated by neither of those, and its remaining exposure is
+ *   not co-movers at all: it reorders against ARBITRARY EARLIER STRAIGHT-LINE
+ *   CONSTRUCTOR STATEMENTS. `new() { s = 5; _a = s; }` and
+ *   `new() { _b = bump(); _a = n; }` both fire and both change behaviour, unchanged
+ *   from before the chain existed. What it can no longer do is hop a BRANCH or an
+ *   early exit — `ctorPrefixUnconditional` refuses a prefix that is not straight-line
+ *   on BOTH paths. The CHAIN path is stricter still: any non-candidate statement
+ *   breaks the chain, where the legacy path only asks that the prefix be reached.
  *
  * The in-class veto is also deliberately coarse: an IMMUTABLE static (`static
  * inline`, `static final`) can never be the channel these gaps describe, yet reading
@@ -514,6 +528,11 @@ final class FieldInitAtDeclaration implements Check {
 		if (init == null) return null;
 		final stmtSpan: Null<Span> = init.stmt.span;
 		if (stmtSpan == null || writeIndex.hasUnresolvedWrite(mv.name)) return null;
+		// Gating the CANDIDATE rather than one of the two acceptance paths is what makes both
+		// inherit it: the chain path already demanded an unbroken run of accepted inits, so
+		// this is a no-op there, and the sole-write path — which looks at no prefix at all —
+		// is the one that needed it.
+		if (!RefactorSupport.ctorPrefixUnconditional(ctor, stmtSpan.from, shape)) return null;
 		final unsafeRead: Bool = readBeforeInit(ctor, mv.span.from, mv.name, stmtSpan.from, container, shape);
 		return !contextFreeRhs(init.rhs, container, statics, shape, true) || unsafeRead ? null : {
 			name: mv.name,
