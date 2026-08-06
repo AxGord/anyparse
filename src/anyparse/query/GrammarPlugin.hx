@@ -1016,9 +1016,11 @@ typedef RefShape = {
 	 * families. The `field-init-at-declaration` check reads it to recognise an
 	 * explicit base-constructor call (`super(…)`), across which no declaration
 	 * initializer may be hoisted: the prologue runs ahead of the base
-	 * constructor. Optional — unset makes that gate fall back to the coarser
-	 * supertype-clause test, which refuses MORE (a soundness gate must never
-	 * fail open).
+	 * constructor. Optional — unset, and identically with `callKind` unset,
+	 * that gate falls back to the coarser `supertypeClauseKinds` test,
+	 * which refuses MORE — but only while THAT seam is itself declared:
+	 * with it unset too the fallback answers false for every container
+	 * and the gate is ABSENT, not coarser.
 	 */
 	@:optional var superReferenceText: Null<String>;
 

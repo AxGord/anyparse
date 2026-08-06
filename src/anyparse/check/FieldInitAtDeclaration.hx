@@ -59,8 +59,15 @@ import haxe.Exception;
  * refuses a candidate whose constructor calls up ANYWHERE, and it gates the CANDIDATE for
  * the same reason `ctorPrefixUnconditional` does, so both acceptance paths inherit it. With
  * `superReferenceText` or `callKind` unset the call cannot be recognised at all, and the
- * gate falls back to `hasSupertype`, which refuses every subclass — a soundness gate fails
- * closed, never open.
+ * gate falls back to `hasSupertype`, which refuses every subclass — coarser, still
+ * closed. That fallback rests on ONE MORE optional seam, and there the gate does degrade
+ * OPEN: `hasSupertype` reads `supertypeClauseKinds ?? []` and answers false on an empty
+ * list, so a plugin declaring NONE of the three seams gets no gate at all rather than a
+ * coarse one. Deliberately not closed in code by making an undeclared
+ * `supertypeClauseKinds` refuse every container — that would kill the rule for any language
+ * with no inheritance concept. Nothing is exposed today (`HaxeQueryPlugin` sets all three
+ * and is the only `RefShape` producer); this paragraph is the contract a future plugin
+ * author reads.
  *
  * That rule is deliberately COARSER than the sound one. Only an init sitting AFTER the
  * `super(…)` crosses the boundary — `new() { x = 1; super(); }` is fine, and 4.3.7 prints
@@ -75,8 +82,9 @@ import haxe.Exception;
  * tree (34 -> 19), FOURTEEN put the init after the `super(…)` — real hazards, correctly
  * refused — and ONE (`pony/net/cs/SocketClient`, whose `super(host, port, …)` is the
  * constructor's LAST statement) is an over-refusal the finer rule would have kept. On the
- * other two measured trees the cost is zero: `TM-Haxe4/src` (798 files) and this repo
- * (1254 files) report nothing for the rule either way. At `Severity.Info` — a cosmetic
+ * other two measured trees there is nothing to weigh either way: `TM-Haxe4/src` (798
+ * files) and this repo (1254 files) report the rule dormant BEFORE and AFTER, so they
+ * neither confirm the figure above nor add to it. At `Severity.Info` — a cosmetic
  * move — one lost cleanup per 676 files does not buy the branch analysis.
  *
  * A field whose cross-file write count DIFFERS FROM ONE (a `dispose()` null-out, say)
@@ -511,9 +519,12 @@ final class FieldInitAtDeclaration implements Check {
 	 * Whether `ctor` holds an explicit base-constructor call — a `callKind` node anywhere in
 	 * its subtree whose callee is the bare `superReferenceText` identifier. Deliberately NOT
 	 * any `super` reference at all: `super.foo()` is a base-MEMBER access, which the prologue
-	 * does not race. With either seam unset the question cannot be asked, so the answer falls
-	 * back to `hasSupertype` — coarser, refusing every subclass rather than only the ones that
-	 * call up; a soundness gate must never fail open.
+	 * does not race. With `superReferenceText` OR `callKind` unset the question cannot be asked,
+	 * so the answer falls back to `hasSupertype` — coarser, refusing every subclass rather than
+	 * only the ones that call up. Closed only while `supertypeClauseKinds` is itself declared:
+	 * with that seam unset too, `hasSupertype` is false for every container and this gate is
+	 * ABSENT rather than coarser. All three seams are optional independently, so a grammar
+	 * declaring none of them disarms the gate; `HaxeQueryPlugin` declares all three.
 	 */
 	private static function ctorCallsSuper(ctor: QueryNode, container: QueryNode, shape: RefShape): Bool {
 		final superText: Null<String> = shape.superReferenceText;
@@ -598,7 +609,9 @@ final class FieldInitAtDeclaration implements Check {
 		if (!RefactorSupport.ctorPrefixUnconditional(ctor, stmtSpan.from, shape)) return null;
 		// Haxe emits declaration initializers ahead of the constructor BODY, an explicit `super()`
 		// included, so no init may be hoisted across one. Gated on the CANDIDATE for the same reason
-		// as the line above — see the class doc.
+		// as the line above — see the class doc. Unlike that line the answer is CONTAINER-invariant,
+		// so this re-walks the whole constructor subtree once per member; it sits here anyway so
+		// both acceptance paths inherit it from one place.
 		if (ctorCallsSuper(ctor, container, shape)) return null;
 		final unsafeRead: Bool = readBeforeInit(ctor, mv.span.from, mv.name, stmtSpan.from, container, shape);
 		return !contextFreeRhs(init.rhs, container, statics, shape, true) || unsafeRead ? null : {
