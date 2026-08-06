@@ -1717,4 +1717,86 @@ class NamingCheckTest extends Test {
 		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 
+
+	/** Assert the naming autofix emits edits for `targetFile` that never overlap one another. */
+	private function assertFixEditsDisjoint(files: Array<{ file: String, source: String }>, targetFile: String, targetSrc: String): Void {
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == targetFile);
+		Assert.isTrue(vs.length >= 2);
+		final edits: Array<{ span: Span, text: String }> = check.fix(targetSrc, vs, new HaxeQueryPlugin(), index);
+		for (i in 0...edits.length) for (j in i + 1...edits.length) {
+			final a: Span = edits[i].span;
+			final b: Span = edits[j].span;
+			Assert.isFalse(a.from < b.to && b.from < a.to, 'edits $i and $j overlap');
+		}
+	}
+
+	/**
+	 * The captured occurrence must be one that READ the member: a PARAMETER of the same name
+	 * shadowed it, so the occurrence read the param, and `this.width` would rebind it to the field -
+	 * valid, type-correct, a different program. Member existence alone is not the proof.
+	 */
+	public function testFixRefusesLocalRenameCapturingParamShadowedMember(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tpublic var width:Int = 7;\n\tpublic function f(width:Int):Void {\n'
+			+ '\t\tfinal wIDTH:Int = 1;\n\t\ttrace(width + wIDTH);\n\t}\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	/**
+	 * A `#if`-guarded own `static` member still decides: the SymbolIndex sees a guarded declaration,
+	 * so an own-member scan that stopped at the type body's direct children would read this as "no
+	 * own declaration", let the inherited instance `width` answer, and emit a `this.` the guarded
+	 * build rejects.
+	 */
+	public function testFixRefusesLocalRenameCapturingConditionalGuardedStatic(): Void {
+		final baseSrc: String = 'package pkg;\nclass Base {\n\tpublic var width:Int = 0;\n}';
+		final cSrc: String = 'package pkg;\nclass C extends Base {\n\t#if debug\n\tpublic static var width:Int = 0;\n\t#end\n'
+			+ '\tpublic function f():Void {\n\t\tfinal wIDTH:Int = 1;\n\t\ttrace(width + wIDTH);\n\t}\n}';
+		assertFixSkipped([{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }], 'pkg/C.hx', cSrc);
+	}
+
+	/**
+	 * The supertype proof must follow the IMPORT, not the simple name: `C extends b.Base` inherits
+	 * nothing, and an unrelated `a.Base` declaring `width` must not supply the proof - the emitted
+	 * `this.width` would not compile.
+	 */
+	public function testFixRefusesLocalRenameCapturingAmbiguouslyNamedSupertypeMember(): Void {
+		final aSrc: String = 'package a;\nclass Base {\n\tpublic var width:Int = 0;\n}';
+		final bSrc: String = 'package b;\nclass Base {\n\tpublic var depth:Int = 0;\n}';
+		final cSrc: String = 'package pkg;\nimport b.Base;\nclass C extends Base {\n\tpublic function f():Void {\n'
+			+ '\t\tfinal wIDTH:Int = 1;\n\t\ttrace(width + wIDTH);\n\t}\n}';
+		assertFixSkipped([
+			{ file: 'a/Base.hx', source: aSrc },
+			{ file: 'b/Base.hx', source: bSrc },
+			{ file: 'pkg/C.hx', source: cSrc }
+		], 'pkg/C.hx', cSrc);
+	}
+
+	/**
+	 * Two flagged declarations wanting the SAME token: the local's qualification rewrites a bare
+	 * `width` that the private field's own rename also owns. Overlapping edits have no defined
+	 * winner, so one of the two must defer rather than silently clobber the other.
+	 */
+	public function testFixEmitsDisjointEditsForCollidingRenames(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f():Void {\n\t\tfinal wIDTH:Int = 1;\n'
+			+ '\t\ttrace(width + wIDTH);\n\t}\n\tprivate var width:Int = 0;\n}';
+		assertFixEditsDisjoint([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	/**
+	 * The repair under a NON-ZERO rename delta - `_width` is one character longer than `width`, so
+	 * the qualified rewrite's offsets only map back when the per-occurrence length change is
+	 * accumulated rather than assumed zero.
+	 */
+	public function testFixQualifiesCaptureUnderNonZeroRenameDelta(): Void {
+		final baseSrc: String = 'package pkg;\nclass Base {\n\tpublic var width:Int = 0;\n}';
+		final cSrc: String = 'package pkg;\nclass C extends Base {\n\tpublic function f():Void {\n'
+			+ '\t\tfinal _width:Int = 1;\n\t\ttrace(width + _width);\n\t}\n}';
+		assertLocalRenamed(
+			[{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }], 'pkg/C.hx', cSrc, 'trace(this.width + width)',
+			'_width'
+		);
+	}
+
 }

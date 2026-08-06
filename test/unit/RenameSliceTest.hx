@@ -433,4 +433,30 @@ class RenameSliceTest extends Test {
 		assertQualifyRefused(source, 3, 9, 'width');
 	}
 
+
+	/**
+	 * A member of the target name that a PARAMETER already shadows was never what the captured
+	 * occurrence read - qualifying it would rebind a param read to the field, which compiles and
+	 * means something else. Existence of the member is not the proof; the absence of a shadowing
+	 * binding is.
+	 */
+	public function testQualifyShadowedRefusesMemberShadowedByParam(): Void {
+		final source: String = 'class C {\n\tvar width:Int = 7;\n\tfunction f(width:Int):Void {\n'
+			+ '\t\tfinal wIDTH:Int = 1;\n\t\ttrace(width + wIDTH);\n\t}\n}';
+		assertQualifyRefused(source, 4, 9, 'width');
+	}
+
+	/**
+	 * The captured-member repair under a NON-ZERO rename delta: the qualified rewrite's offsets are
+	 * the rename's own length change accumulated per preceding occurrence PLUS one prefix per
+	 * insertion, and a fixture whose old and new names happen to be the same length proves neither.
+	 */
+	public function testQualifyShadowedRepairsCaptureUnderNonZeroDelta(): Void {
+		final source: String =
+			'class C {\n\tvar width:Int = 0;\n\tfunction f():Void {\n\t\tfinal w:Int = 1;\n\t\ttrace(width + w);\n\t}\n}';
+		final expected: String =
+			'class C {\n\tvar width:Int = 0;\n\tfunction f():Void {\n\t\tfinal width:Int = 1;\n\t\ttrace(this.width + width);\n\t}\n}';
+		assertQualified(source, 4, 9, 'width', expected);
+	}
+
 }

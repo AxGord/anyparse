@@ -128,9 +128,15 @@ final class Naming implements Check implements CrossFileFix {
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (decl in support.project(tree)) {
 			final rename: Null<Array<{ span: Span, text: String }>> = renameEditsFor(
-				decl, source, tree, policy, shape, plugin, flaggedFroms, otherSources, confinedMemo, resolutionIndex, index
+				decl, source, tree, policy, shape, plugin, flaggedFroms, otherSources, confinedMemo, resolutionIndex, index,
+				violations[0].file
 			);
-			if (rename != null) for (edit in rename) edits.push(edit);
+			// Two flagged declarations can want the SAME token: the qualification arm rewrites a bare
+			// reference to a MEMBER that may itself be flagged and renamed in this very pass. Overlapping
+			// edits have no defined winner in `applyEdits` (`dropContainedEdits` resolves by array index),
+			// so the second declaration DEFERS - `naming` is a full-scope check, and a rename deferred by a
+			// same-file conflict re-fires on the next pass, by which time the first one has landed.
+			if (rename != null && !RefactorSupport.editsOverlapAny(rename, edits)) for (edit in rename) edits.push(edit);
 		}
 		return edits;
 	}
@@ -318,7 +324,7 @@ final class Naming implements Check implements CrossFileFix {
 	private static function renameEditsFor(
 		decl: NamedDecl, source: String, tree: QueryNode, policy: NamingPolicy, shape: RefShape, plugin: GrammarPlugin,
 		flaggedFroms: Array<Int>, otherSources: Array<String>, confinedMemo: Map<String, Bool>, resolutionIndex: Null<SymbolIndex>,
-		?index: SymbolIndex
+		index: Null<SymbolIndex>, file: String
 	): Null<Array<{ span: Span, text: String }>> {
 		final span: Null<Span> = decl.span;
 		if (span == null || !flaggedFroms.contains(span.from) || !isRenameSafe(decl, source, index, otherSources, confinedMemo))
@@ -365,7 +371,8 @@ final class Naming implements Check implements CrossFileFix {
 		if (renameSpans == null) return null;
 		final spans: Array<Span> = renameSpans;
 		final edits: Array<{ span: Span, text: String }> = [for (occ in spans) { span: occ, text: newName }];
-		return collides ? qualifyCapturedEdits(source, tree, span.from, spans, newName, shape, plugin, edits, resolutionIndex) : edits;
+		return
+			collides ? qualifyCapturedEdits(source, tree, span.from, spans, newName, shape, plugin, edits, resolutionIndex, file) : edits;
 	}
 
 	/**
@@ -409,7 +416,7 @@ final class Naming implements Check implements CrossFileFix {
 	@:access(anyparse.query.Rename)
 	private static function qualifyCapturedEdits(
 		source: String, tree: QueryNode, declFrom: Int, renameSpans: Array<Span>, newName: String, shape: RefShape, plugin: GrammarPlugin,
-		edits: Array<{ span: Span, text: String }>, resolutionIndex: Null<SymbolIndex>
+		edits: Array<{ span: Span, text: String }>, resolutionIndex: Null<SymbolIndex>, file: String
 	): Null<Array<{ span: Span, text: String }>> {
 		final self: Null<String> = shape.selfReferenceText;
 		if (self == null) return null;
@@ -424,7 +431,7 @@ final class Naming implements Check implements CrossFileFix {
 		if (mismatch.length == 0) return null;
 		final reachable: Bool = Rename.selfReachableBindingAt(source, tree, declFrom, shape);
 		final qualification: Null<Qualification> = Rename.qualifyCaptured(
-			rewritten, tr, mismatch, newName, shape, reachable, resolutionIndex
+			rewritten, tr, mismatch, newName, shape, reachable, resolutionIndex, file
 		);
 		if (qualification == null) return null;
 		final q: Qualification = qualification;
@@ -453,11 +460,9 @@ final class Naming implements Check implements CrossFileFix {
 			if (source.substring(orig, end) != newName || sorted.exists(s -> orig < s.to && end > s.from)) return null;
 			captured.push({ span: new Span(orig, end), text: '$self.$newName' });
 		}
-		final out: Array<{ span: Span, text: String }> = [
+		return [
 			for (e in edits) { span: e.span, text: targets.contains(e.span.from) ? '$self.$newName' : e.text }
-		];
-		for (e in captured) out.push(e);
-		return out;
+		].concat(captured);
 	}
 
 	/**

@@ -839,7 +839,7 @@ final class Cli {
 		if (scope != null) return runRenameScope(filePath, source, pos.line, pos.col, newNameStr, scope, write, plugin);
 
 		final shape: RefShape = plugin.refShape();
-		final result: RenameResult = Rename.rename(source, pos.line, pos.col, newNameStr, plugin, shape, qualifyShadowed);
+		final result: RenameResult = Rename.rename(source, pos.line, pos.col, newNameStr, plugin, shape, qualifyShadowed, filePath);
 		switch result {
 			case Ok(text):
 				if (write) {
@@ -5464,8 +5464,13 @@ final class Cli {
 		sysPrint('Options:\n');
 		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
 		sysPrint('  --scope <dir>       Cross-file rename of a TYPE or a MEMBER across <dir>\n');
-		sysPrint('  --qualify-shadowed  On a capture by a PARAMETER of the same name, insert\n');
-		sysPrint('                      `this.` on the member access instead of refusing\n');
+		sysPrint('  --qualify-shadowed  Insert `this.` instead of refusing a capture: on the\n');
+		sysPrint('                      member access when a PARAMETER of the same name\n');
+		sysPrint('                      captures it, and on the captured references when a\n');
+		sysPrint('                      renamed LOCAL shadows a member. Reaching an INHERITED\n');
+		sysPrint('                      member needs a resolution scope, which this in-file op\n');
+		sysPrint('                      carries none of - there it repairs only a member of the\n');
+		sysPrint('                      enclosing type (`apq lint --fix` has the wider scope)\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
 		sysPrint('Scope-correct, format-preserving rename of the binding identified by\n');
