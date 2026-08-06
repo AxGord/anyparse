@@ -500,6 +500,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			lambdaKinds: ['ThinArrow', 'ThinParenLambdaExpr', 'ParenLambdaExpr', 'FnExpr'],
 			comparisonKinds: ['Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq', 'And', 'Or'],
 			assignKind: 'Assign',
+			addAssignKind: 'AddAssign',
 			callKind: 'Call',
 			caseBranchKind: 'CaseBranch',
 			switchKinds: ['SwitchStmt', 'SwitchStmtBare', 'SwitchExpr', 'SwitchExprBare'],

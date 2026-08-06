@@ -474,6 +474,7 @@ import unit.ReturnReassignTernaryCheckTest;
 import unit.PreferIfExpressionAssignmentCheckTest;
 import unit.PreferIfExpressionReturnCheckTest;
 import unit.JoinDeclarationAssignmentCheckTest;
+import unit.JoinStringAppendCheckTest;
 import unit.InvertNegatedIfElseCheckTest;
 import unit.FieldInitAtDeclarationCheckTest;
 import unit.ExtractConstantSliceTest;
@@ -1094,6 +1095,7 @@ class RunTests {
 		addCase(new PreferTryExpressionAssignmentCheckTest());
 		addCase(new PreferTryExpressionReturnCheckTest());
 		addCase(new JoinDeclarationAssignmentCheckTest());
+		addCase(new JoinStringAppendCheckTest());
 		addCase(new JoinReturnCheckTest());
 		addCase(new PreferSingleQuotesCheckTest());
 		addCase(new CachingGrammarPluginTest());

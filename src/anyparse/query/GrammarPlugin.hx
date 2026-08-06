@@ -371,6 +371,14 @@ typedef RefShape = {
 	@:optional var assignKind: String;
 
 	/**
+	 * The `+=` compound-assignment node kind (Haxe `AddAssign`) — the
+	 * `join-string-append` check folds a run of consecutive `x += e;` statements on
+	 * the same target (optionally preceded by one plain `x = e0;`, `assignKind`) into
+	 * a single `x += e1 + e2 + …;`. Optional; unset makes the check a no-op.
+	 */
+	@:optional var addAssignKind: String;
+
+	/**
 	 * The function-call node kind — lets the `identical-operands` check EXCLUDE an
 	 * operand that contains a call (so `g() == g()`, whose two calls may differ, is
 	 * not flagged). Optional.
