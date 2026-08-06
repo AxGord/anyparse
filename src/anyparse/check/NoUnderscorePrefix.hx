@@ -14,6 +14,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
 import anyparse.query.Refs.RefKind;
+import anyparse.query.Rename;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -41,14 +42,25 @@ import anyparse.runtime.Span;
  * ## Local functions
  *
  * A local `function` statement is a binding scoped to one body exactly as a `var` is, so
- * the `locals` option governs it and the same rename machinery strips it. Two things are
- * particular to it. The scope it binds INTO is the ENCLOSING body, never its own span, so
- * both scope lookups (the in-scope collision proof and the same-target conflict between two
- * flagged bindings) exclude the declaration's own node - reading it as the scope would make
- * every SIBLING local function look disjoint, and a sibling already holding the target name
- * is a real collision. And a local `inline function` projects as `LocalInlineFnStmt`, a kind
- * the reference walker does not index as a declaration host: no occurrence set is provable,
- * so the fix fails closed and the finding stays report-only.
+ * the `locals` option governs it and the same rename machinery strips it. Three things are
+ * particular to it.
+ *
+ * The scope it binds INTO is the ENCLOSING body, never its own span - it is the one
+ * declaration kind that opens a scope its own name does not enter. Every scope lookup made
+ * from such a declaration therefore excludes the declaration's own node
+ * (`Naming.localFunctionDeclSpan`): reading it as the scope would make every SIBLING local
+ * function look disjoint, and a sibling already holding the target name is a real collision.
+ *
+ * Haxe does not hoist a local function, so an occurrence resolved BEFORE the declaration is
+ * the resolver over-reaching - it binds the whole block, while the compiler binds that read
+ * to whatever the local function shadows. `Naming.declaringFileRenameSpans` refuses the
+ * rename rather than rewrite a read that belongs to a member (`bodyScoped`).
+ *
+ * A local `inline function` projects as `LocalInlineFnStmt`, a kind the reference walker does
+ * not index as a declaration host: no occurrence set is provable, so the fix fails closed and
+ * the finding stays report-only. Such a binding is also kept OUT of the same-target candidate
+ * set - a rename that can never be emitted must not claim a target and block a provable
+ * sibling's strip over a conflict that cannot materialise.
  *
  * ## Autofix
  *
@@ -216,14 +228,20 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 			if (span == null || !flaggedFroms.contains(span.from)) continue;
 			final target: Null<String> = strippedName(decl, policy, shape);
 			if (target == null) continue;
+			// A binding the resolver cannot bind (a local `inline function`, whose kind is no declaration
+			// host) can never be renamed, so it must not CLAIM the target either - leaving it in the set
+			// would block a provable sibling's rename over a conflict that can never materialise.
+			if (Rename.renameOccurrences(source, tree, span.from, shape).length == 0) continue;
 			// Re-bind to a non-null final: strict null-safety does not narrow inside a struct literal.
 			final name: String = target;
 			candidates.push({
 				decl: decl,
 				target: name,
-				// `span` excluded: a local `function` statement opens a scope of its own, but the scope
-				// its NAME binds into is the enclosing body - the one two sibling local functions share.
-				scope: Naming.innermostSpanOfKinds(tree, functionScopeKinds(shape), span.from, span)
+				// A local `function` statement opens a scope of its own, but the scope its NAME binds
+				// into is the enclosing body - the one two sibling local functions share.
+				scope: Naming.innermostSpanOfKinds(
+					tree, functionScopeKinds(shape), span.from, Naming.localFunctionDeclSpan(tree, span.from, shape)
+				)
 			});
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
@@ -297,7 +315,7 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 		if (collidesWithProjectSymbol(decl, target, resolutionIndex, allowInheritedShadow)) return null;
 		return Naming.declaringFileRenameSpans(
 			source, tree, span.from, decl.name, shape, plugin, Naming.isDistinctiveName(decl.name),
-			interpolationReadSpans(tree, source, decl.name, span, shape)
+			Naming.isBodyScopedCategory(decl.category), interpolationReadSpans(tree, source, decl.name, span, shape)
 		);
 	}
 
@@ -369,7 +387,9 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 		var declCount: Int = 0;
 		for (h in Refs.find(name, tree, shape)) if (h.kind == RefKind.Decl) declCount++;
 		if (declCount != 1) return [];
-		final scope: Null<Span> = Naming.innermostSpanOfKinds(tree, functionScopeKinds(shape), declSpan.from, declSpan);
+		final scope: Null<Span> = Naming.innermostSpanOfKinds(
+			tree, functionScopeKinds(shape), declSpan.from, Naming.localFunctionDeclSpan(tree, declSpan.from, shape)
+		);
 		if (scope == null) return [];
 		final out: Array<Span> = [];
 		collectInterpolationReads(tree, interpKind, name, source, scope, out);

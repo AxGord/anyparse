@@ -522,15 +522,43 @@ class NoUnderscorePrefixCheckTest extends Test {
 	}
 
 	/**
-	 * A local function's name is visible throughout the enclosing body, so a call BEFORE the
-	 * declaration and a recursive call inside it are both occurrences the rename must carry.
+	 * A local function is visible from its declaration to the end of the block, so a recursive call
+	 * inside its body and a call after it are both occurrences the rename must carry. Haxe does NOT
+	 * hoist it - a call BEFORE the declaration is a different binding, covered by the next test.
 	 */
-	public function testLocalFunctionReferencedBeforeAndAfterDeclarationRenamed(): Void {
-		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n\t\t__finish();\n'
-			+ '\t\tfunction __finish():Void {\n\t\t\t__finish();\n\t\t}\n\t\t__finish();\n\t}\n}';
+	public function testLocalFunctionReferencedRecursivelyAndAfterDeclarationRenamed(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
+			+ '\t\tfunction __finish(n:Int):Void {\n\t\t\tif (n > 0) __finish(n - 1);\n\t\t}\n\t\t__finish(2);\n\t}\n}';
 		Assert.equals(1, violations(src).length);
-		Assert.equals(4, edits(src).length);
-		assertFixed(src, ['function finish():Void'], ['__finish']);
+		Assert.equals(3, edits(src).length);
+		assertFixed(src, ['function finish(n:Int):Void', 'finish(2);'], ['__finish']);
+	}
+
+	/**
+	 * The resolver binds a local function's name across its whole block, INCLUDING the region before
+	 * the declaration; Haxe binds a read there to whatever the local function shadows - here the
+	 * method `__finish`. Rewriting that read would emit a call to a name nothing declares, so an
+	 * occurrence resolved before the declaration refuses the whole rename.
+	 */
+	public function testOccurrenceBeforeLocalFunctionDeclarationSkipped(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tprivate function __finish():Void {\n\t\ttrace(1);\n\t}\n\n'
+			+ '\tpublic function draw():Void {\n\t\t__finish();\n\t\tfunction __finish():Void {\n\t\t\ttrace(2);\n\t\t}\n'
+			+ '\t\t__finish();\n\t}\n}';
+		Assert.isTrue(violations(src).length >= 1);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/**
+	 * An unprovable `inline function` candidate must not claim the target name: `_step` strips to
+	 * `step` cleanly, and blocking it over a conflict with a binding that can never be renamed would
+	 * be pure coverage loss.
+	 */
+	public function testUnprovableInlineFunctionDoesNotBlockSiblingStrip(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
+			+ '\t\tinline function __step():Void {\n\t\t\ttrace(1);\n\t\t}\n\t\tvar _step:Int = 1;\n\t\t__step();\n'
+			+ '\t\ttrace(_step);\n\t}\n}';
+		Assert.equals(2, violations(src).length);
+		assertFixed(src, ['var step:Int = 1;', 'trace(step);', 'inline function __step():Void'], ['_step:Int']);
 	}
 
 	/** A local of the target name in the ENCLOSING body is in scope for the local function, so the strip is refused. */

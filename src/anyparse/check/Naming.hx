@@ -366,7 +366,7 @@ final class Naming implements Check implements CrossFileFix {
 		// gate the cross-file path applies to its declaring file — a `#if` / string / `noqa` / resolver-missed
 		// active-code occurrence bails, a distinctive comment mention renames along (see `declaringFileRenameSpans`).
 		final renameSpans: Null<Array<Span>> = declaringFileRenameSpans(
-			source, tree, span.from, decl.name, shape, plugin, isDistinctiveName(decl.name)
+			source, tree, span.from, decl.name, shape, plugin, isDistinctiveName(decl.name), isBodyScopedCategory(decl.category)
 		);
 		if (renameSpans == null) return null;
 		final spans: Array<Span> = renameSpans;
@@ -588,6 +588,11 @@ final class Naming implements Check implements CrossFileFix {
 	 * (null); a distinctive-name `CommentTrivia` mention renames along. Null on a parse failure
 	 * when the fail-closed raw scan finds an uncovered mention.
 	 *
+	 * `bodyScoped` marks a binding visible only from its declaration on (a local, a parameter, a
+	 * catch variable); an occurrence resolved BEFORE the declaration is then the resolver
+	 * over-reaching past a shadowed member and the whole rename is refused. A MEMBER's references
+	 * legitimately precede it, so the flag defaults off.
+	 *
 	 * `extraSpans` carries occurrences of the SAME binding that the reference walker does not
 	 * index and the CALLER resolved instead - a simple `$name` string-interpolation read, which
 	 * `no-underscore-prefix` collects through the grammar's `stringInterpIdentKind`. They join
@@ -595,11 +600,18 @@ final class Naming implements Check implements CrossFileFix {
 	 */
 	private static function declaringFileRenameSpans(
 		source: String, tree: QueryNode, declFrom: Int, name: String, shape: RefShape, plugin: GrammarPlugin, distinctive: Bool,
-		?extraSpans: Array<Span>
+		bodyScoped: Bool = false, ?extraSpans: Array<Span>
 	): Null<Array<Span>> {
 		final resolved: Array<Span> = Rename.renameOccurrences(source, tree, declFrom, shape);
 		if (resolved.length == 0) return null;
 		final covered: Array<Span> = extraSpans == null ? resolved : resolved.concat(extraSpans);
+		// A body-scoped binding (local / param / catch variable) is visible from its DECLARATION on -
+		// no language here hoists one - so an occurrence resolved BEFORE `declFrom` is the scope
+		// resolver over-reaching: it binds a whole block to the declaration, while the compiler binds
+		// the earlier read to whatever it shadows (a member, a static, an import). Rewriting that read
+		// emits an unknown identifier, so the whole rename is refused. Never true for a MEMBER, whose
+		// references legitimately precede its declaration - hence the caller-supplied flag.
+		if (bodyScoped) for (occ in covered) if (occ.from < declFrom) return null;
 		// Attribute every OTHER same-name occurrence to its binding: one provably bound to a DIFFERENT
 		// binding (a param / loop var / sibling local sharing the name) is neither a rename target nor a
 		// blocker for THIS binding, so it joins the resolved set as an excluded span. An occurrence whose
@@ -614,7 +626,9 @@ final class Naming implements Check implements CrossFileFix {
 		// the same distinctive name can name an UNRELATED binding elsewhere in the file, and a comment about
 		// THAT one must not be rewritten (nor block this rename). A field's container is its type, so its
 		// comment-along still spans the whole class.
-		final container: Null<Span> = innermostSpanOfKinds(tree, shape.scopeKinds.concat(['CaseBranch', 'DefaultBranch']), declFrom);
+		final container: Null<Span> = innermostSpanOfKinds(
+			tree, shape.scopeKinds.concat(['CaseBranch', 'DefaultBranch']), declFrom, localFunctionDeclSpan(tree, declFrom, shape)
+		);
 		for (occ in classified) switch occ.kind {
 			case OccurrenceClass.CommentTrivia if (distinctive):
 				if (container != null && occ.span.from >= container.from && occ.span.from < container.to) spans.push(occ.span);
@@ -931,8 +945,7 @@ final class Naming implements Check implements CrossFileFix {
 	): Bool {
 		final span: Null<Span> = decl.span;
 		if (span == null) return true;
-		final cat: NamingCategory = decl.category;
-		if (cat != NamingCategory.Local && cat != NamingCategory.Param && cat != NamingCategory.CatchVar) {
+		if (!isBodyScopedCategory(decl.category)) {
 			// Whole-file EXCEPT the sibling hierarchies sharing the module: a same-named member of an
 			// UNRELATED class is not reachable from this one, so it is no collision (see `unrelatedTypeSpans`).
 			final owner: Null<String> = decl.enclosingType;
@@ -946,11 +959,11 @@ final class Naming implements Check implements CrossFileFix {
 		// / local functions that capture it - so a same-named binding anywhere in that function conflicts.
 		// Only a function DISJOINT from it (a sibling / unrelated body) is out of scope. Fall back to a
 		// whole-file scan when no enclosing function is found (defensive; a local / param always has one).
-		// `span` is EXCLUDED: a local `function` statement is both a binding and a function node, and
-		// the scope it binds into is the enclosing body. Reading its own span as the scope would make
-		// every SIBLING local function look disjoint - and a sibling already holding `newName` is a
-		// real collision.
-		final enclosing: Null<Span> = innermostSpanOfKinds(tree, funcKinds, span.from, span);
+		// A local `function` statement is EXCLUDED from its own scope lookup: it is both a binding and
+		// a function node, and the scope it binds into is the enclosing body. Reading its own span as
+		// the scope would make every SIBLING local function look disjoint - and a sibling already
+		// holding `newName` is a real collision.
+		final enclosing: Null<Span> = innermostSpanOfKinds(tree, funcKinds, span.from, localFunctionDeclSpan(tree, span.from, shape));
 		final excluded: Array<Span> = RefactorSupport.structureFieldNameSpans(tree, source, shape);
 		if (enclosing != null) collectDisjointFunctionSpans(tree, funcKinds, enclosing, excluded);
 		return RefactorSupport.nameBoundInRange(source, newName, 0, source.length, excluded, plugin);
@@ -989,7 +1002,7 @@ final class Naming implements Check implements CrossFileFix {
 			final s: Null<Span> = n.span;
 			if (
 				s != null && s.from <= pos && pos < s.to && kinds.contains(n.kind) && s.from > bestFrom
-				&& !(s.from == excludeFrom && s.to == excludeTo)
+				&& (s.from != excludeFrom || s.to != excludeTo)
 			) {
 				bestFrom = s.from;
 				best = s;
@@ -1030,6 +1043,38 @@ final class Naming implements Check implements CrossFileFix {
 			if (resolutionIndex.provablyNotSubtype(n, ownerName)) out.push(span);
 		}
 		return out;
+	}
+
+
+	/**
+	 * The span of the local FUNCTION declared at `declFrom`, or null when the declaration there is
+	 * anything else. A local `function` is the one declaration kind that opens a scope its own NAME
+	 * does not bind into - the name belongs to the enclosing body - so every scope lookup made FROM
+	 * such a declaration must exclude the declaration's own node. A self-scoped binding (a loop
+	 * iterator, a catch variable) is the opposite case and is deliberately not matched: its own node
+	 * IS the scope its name lives in.
+	 */
+	private static function localFunctionDeclSpan(tree: QueryNode, declFrom: Int, shape: RefShape): Null<Span> {
+		final kinds: Array<String> = (shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
+		if (kinds.length == 0) return null;
+		var found: Null<Span> = null;
+		function walk(n: QueryNode): Void {
+			final s: Null<Span> = n.span;
+			if (s != null && s.from == declFrom && kinds.contains(n.kind)) found = s;
+			for (c in n.children) walk(c);
+		}
+		walk(tree);
+		return found;
+	}
+
+
+	/**
+	 * Whether `category` is a binding scoped to one function BODY - a local, a parameter, a catch
+	 * variable. The three categories the scope-aware collision proof governs, and the ones whose
+	 * references can never precede their declaration.
+	 */
+	private static inline function isBodyScopedCategory(category: NamingCategory): Bool {
+		return category == NamingCategory.Local || category == NamingCategory.Param || category == NamingCategory.CatchVar;
 	}
 
 }
