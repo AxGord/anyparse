@@ -246,6 +246,14 @@ final class Inline {
 		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read && h.bindingSpan != null && bindingSpanFrom(h) == binding);
 		if (reads.length == 0) return PErr('"$name" has no reads to inline');
 
+		// A braceless `$name` interpolation read is a position only a bare IDENTIFIER may
+		// occupy: substituting an expression there yields literal text (`'$name'` becomes
+		// `'$(a + b)'`), and the re-parse gate cannot catch it because the rewrite is a
+		// perfectly valid string. Refuse — the author can rebrace the read, and a `${ … }`
+		// hole IS an ordinary expression position this op handles.
+		if (reads.exists(h -> h.interpolated))
+			return PErr('"$name" is read through a braceless string interpolation ($$$name) - rebrace it as $${$name} first');
+
 		// The initializer subtree must be entirely inline-safe.
 		if (!RefactorSupport.isSideEffectFree(initializer))
 			return PErr('"$name" initializer is not inline-safe (contains calls/field-access/collection/lambda)');

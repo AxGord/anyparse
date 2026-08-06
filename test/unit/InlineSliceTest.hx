@@ -173,4 +173,25 @@ class InlineSliceTest extends Test {
 		return Inline.inlineVar(source, line, col, plugin, shape);
 	}
 
+
+	/**
+	 * A read spelled as a braceless `$x` interpolation is refused: only a bare identifier
+	 * can follow `$`, so substituting the initializer would produce the LITERAL text
+	 * `$(a + b)` — a valid string, so the re-parse gate would pass a silent miscompile.
+	 */
+	public function testRefusesBracelessInterpolationRead(): Void {
+		assertRefused("class C {\n\tfunction f(a:Int, b:Int):String {\n\t\tvar x = a + b;\n\t\treturn 'v $x';\n\t}\n}", 3, 3);
+	}
+
+	/**
+	 * The braced `${x}` form IS an ordinary expression position, so the same initializer
+	 * inlines into it — the refusal above is about the braceless spelling only.
+	 */
+	public function testInlinesIntoBracedInterpolationRead(): Void {
+		assertInline(
+			"class C {\n\tfunction f(a:Int, b:Int):String {\n\t\tvar x = a + b;\n\t\treturn 'v ${x}';\n\t}\n}", 3, 3,
+			"class C {\n\tfunction f(a:Int, b:Int):String {\n\t\treturn 'v ${(a + b)}';\n\t}\n}"
+		);
+	}
+
 }
