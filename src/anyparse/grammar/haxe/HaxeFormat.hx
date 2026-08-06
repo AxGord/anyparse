@@ -1234,8 +1234,19 @@ final class HaxeFormat implements TextFormat {
 	 * cleanly to the existing `exceeds` semantic via the standard
 	 * `IfBreak` pivot; user-modified `lineWidth` now routes the answer
 	 * through the renderer's column-aware probe. The cascade also covers
-	 * the common cases via `IfBreak`-split between `NoWrap` and
-	 * `OnePerLineAfterFirst`, picked at render time by the parent `Group`.
+	 * the common cases via `IfBreak`-split between `NoWrap` and the break
+	 * mode, picked at render time by the parent `Group`.
+	 *
+	 * ω-methodchain-all-or-nothing DIVERGES FROM UPSTREAM here, by user
+	 * decision: every break mode is `OnePerLine`, where the fork's rule
+	 * set says `OnePerLineAfterFirst`. A broken chain therefore leaves its
+	 * head line bare instead of gluing the first link to it — the
+	 * companion half of `MethodChainEmit`'s head-end-column probe. This is
+	 * the one place the ported cascade no longer matches
+	 * `resources/default-hxformat.json`; read it before concluding that a
+	 * disagreeing fork corpus fixture is a bug (ten chain fixtures fail on
+	 * this divergence, one — `callparam_single_arg_method_chain` — passes
+	 * only because of it).
 	 *
 	 * Returned as a fresh struct on each call so test code that mutates
 	 * the `defaultWriteOptions.methodChainWrap` substruct doesn't
@@ -1245,7 +1256,7 @@ final class HaxeFormat implements TextFormat {
 		return {
 			rules: [
 				{
-					mode: WrapMode.OnePerLineAfterFirst,
+					mode: WrapMode.OnePerLine,
 					conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 160 }],
 				},
 				{
@@ -1263,22 +1274,28 @@ final class HaxeFormat implements TextFormat {
 					],
 				},
 				{
-					mode: WrapMode.OnePerLineAfterFirst,
+					mode: WrapMode.OnePerLine,
 					conditions: [
 						{ cond: WrapConditionType.AnyItemLengthLargerThan, value: 30 },
 						{ cond: WrapConditionType.ItemCountLargerThan, value: 4 },
 					],
 				},
 				{
-					mode: WrapMode.OnePerLineAfterFirst,
+					mode: WrapMode.OnePerLine,
 					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 7 }],
 				},
 				{
-					mode: WrapMode.OnePerLineAfterFirst,
+					mode: WrapMode.OnePerLine,
 					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
 				},
 			],
 			defaultMode: WrapMode.NoWrap,
+			// ω-methodchain-all-or-nothing: this cascade is the Haxe layout
+			// POLICY, so it uses fork's isDotAfterPClose item rule. A user
+			// `wrapping.methodChain` section replaces the whole struct and does
+			// not carry the flag, keeping explicit modes on fork's literal
+			// semantics.
+			chainItemsAfterCloseParenOnly: true,
 		};
 	}
 

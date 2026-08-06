@@ -573,6 +573,7 @@ import unit.HxElseIfCommentReflowSliceTest;
 import unit.OrphanAccessorCheckTest;
 import unit.CollapseNestedSwitchCheckTest;
 import unit.RedundantToStringCheckTest;
+import unit.HxMethodChainAllOrNothingSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -786,6 +787,7 @@ class RunTests {
 		addCase(new HxComprehensionCuddledOpenTest());
 		addCase(new HxComprehensionDeclRhsBracketWrapTest());
 		addCase(new HxMethodChainCuddledLinkTest());
+		addCase(new HxMethodChainAllOrNothingSliceTest());
 		addCase(new HxTypeParamFieldNoWrapSliceTest());
 		addCase(new HxCallParamObjectLiteralSliceTest());
 		addCase(new HxCallParamFunctionLambdaSliceTest());

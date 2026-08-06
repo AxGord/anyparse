@@ -280,12 +280,23 @@ class WriterLowering {
 	 * non-chain operand (anything that doesn't match `Call(FieldAccess
 	 * (Call,_), _)` / `FieldAccess(Call,_)` rest of the way down).
 	 *
-	 * When the walk finds two or more segments the body short-circuits
-	 * via a `return` to `MethodChainEmit.emit(receiverDoc, segs, opt,
-	 * opt.<wrapField>)`. One-segment cases — `a.b()` plain call or
-	 * `a.b` plain field — fall through to the default emission, so
-	 * non-chain expressions pay only the cost of one `switch` per
-	 * Call/FieldAccess ctor entry (no recursion, no allocation).
+	 * When the walk finds at least one segment whose own receiver is a
+	 * Call (`_hasCallPrev` — fork's `isDotAfterPClose` chain-start rule)
+	 * the body short-circuits via a `return` to
+	 * `MethodChainEmit.emit(receiverDoc, segs, opt, opt.<wrapField>)`.
+	 * ω-methodchain-all-or-nothing widened that from two segments to one:
+	 * `f(args).g(args)` is the shape where a single link glued to an
+	 * over-wide head produced a line past `maxLineLength`, and the chain
+	 * layout is the only decision that can move that link off the head
+	 * line. `_segs.length` is not the real predicate — `_hasCallPrev` is,
+	 * and it admits EVERY `.` that follows a `)`, so `f(args).b` (a bare
+	 * field after a call) now routes through the chain layout too, and with
+	 * it through every chain-aware gate in `WrapList`. That is the widening's
+	 * true blast radius; it is wider than the `f(args).g(args)` shape that
+	 * motivated it. Non-chain shapes — `a.b()` on a bare receiver, `a.b`
+	 * plain field — still fall through to the default emission, so they pay
+	 * only the cost of one `switch` per Call/FieldAccess ctor entry (no
+	 * recursion, no allocation).
 	 *
 	 * Args list config (open/close/sep/wrapRules/trailingComma) is read
 	 * from the sibling Call ctor's annotations — keeping the chain
@@ -13649,6 +13660,13 @@ class WriterLowering {
 			var _cursor = value;
 			var _receiver = value;
 			var _hasCallPrev: Bool = false;
+			// ω-methodchain-all-or-nothing / isDotAfterPClose: did the dot that
+			// leads the INNERMOST collected segment follow a `)`? The walk runs
+			// right-to-left, so the last write is that segment's answer. `false`
+			// means the segment is not a chain item at all (fork
+			// `MarkWrapping.isDotAfterPClose`) and belongs to the head, which
+			// `MethodChainEmit.emit` renders by keeping it glued.
+			var _seg0AfterCall: Bool = false;
 			// ω-keep-chain-receiver-comment: the inner-most FieldAccess carries
 			// its operand's dot-gap trailing comment in the synth
 			// `chainLeadComment` slot. When that operand IS the chain receiver
@@ -13676,7 +13694,9 @@ class WriterLowering {
 								switch _prev {
 									case Call(_, _, _, _, _, _):
 										_hasCallPrev = true;
+										_seg0AfterCall = true;
 									case _:
+										_seg0AfterCall = false;
 										if (_opTrail != null) _recTrail = _opTrail;
 								}
 								_cursor = _prev;
@@ -13715,7 +13735,9 @@ class WriterLowering {
 						switch _prev {
 							case Call(_, _, _, _, _, _):
 								_hasCallPrev = true;
+								_seg0AfterCall = true;
 							case _:
+								_seg0AfterCall = false;
 								if (_opTrail != null) _recTrail = _opTrail;
 						}
 						_cursor = _prev;
@@ -13724,7 +13746,7 @@ class WriterLowering {
 						break;
 				}
 			}
-			if (_segs.length >= 2 && _hasCallPrev) {
+			if (_segs.length >= 1 && _hasCallPrev) {
 				final _recBaseDoc: anyparse.core.Doc = $writeIdent(_receiver, opt, $precExpr);
 				// ω-keep-chain-receiver-comment: glue the receiver's captured
 				// trailing comment (`owner // test`) to its Doc before the first
@@ -13741,7 +13763,7 @@ class WriterLowering {
 				// (`method_chain_single_arg_break_parens`). Mirror the
 				// `BinaryChainEmit` `_chainNestSuppress` gate.
 				return anyparse.format.wrap.MethodChainEmit.emit(
-					_recDoc, _segs, opt, $chainRulesExpr, _breaks, opt._callArgChainNest, $segCallLeadingBreakExpr
+					_recDoc, _segs, opt, $chainRulesExpr, _breaks, opt._callArgChainNest, $segCallLeadingBreakExpr, _seg0AfterCall
 				);
 			}
 			$body;
@@ -13766,6 +13788,10 @@ class WriterLowering {
 			var _cursor = value;
 			var _receiver = value;
 			var _hasCallPrev: Bool = false;
+			// ω-methodchain-all-or-nothing / isDotAfterPClose (plain-mode twin of
+			// the trivia walk's tracker): did the innermost collected segment's
+			// dot follow a `)`?
+			var _seg0AfterCall: Bool = false;
 			while (true) {
 				switch _cursor {
 					case Call(_op, _args):
@@ -13777,7 +13803,9 @@ class WriterLowering {
 								switch _prev {
 									case Call(_, _):
 										_hasCallPrev = true;
+										_seg0AfterCall = true;
 									case _:
+										_seg0AfterCall = false;
 								}
 								_cursor = _prev;
 							case _:
@@ -13796,7 +13824,9 @@ class WriterLowering {
 						switch _prev {
 							case Call(_, _):
 								_hasCallPrev = true;
+								_seg0AfterCall = true;
 							case _:
+								_seg0AfterCall = false;
 						}
 						_cursor = _prev;
 					case _:
@@ -13804,13 +13834,13 @@ class WriterLowering {
 						break;
 				}
 			}
-			if (_segs.length >= 2 && _hasCallPrev) {
+			if (_segs.length >= 1 && _hasCallPrev) {
 				final _recDoc: anyparse.core.Doc = $writeIdent(_receiver, opt, $precExpr);
 				// ω-methodchain-reeval-after-callparam nest-suppress prereq
 				// (plain-mode twin): pass `sourceBreakBefore = null` then the
 				// `_callArgChainNest` gate.
 				return anyparse.format.wrap.MethodChainEmit.emit(
-					_recDoc, _segs, opt, $chainRulesExpr, null, opt._callArgChainNest, $segCallLeadingBreakExpr
+					_recDoc, _segs, opt, $chainRulesExpr, null, opt._callArgChainNest, $segCallLeadingBreakExpr, _seg0AfterCall
 				);
 			}
 			$body;

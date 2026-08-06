@@ -138,14 +138,19 @@ final class HxMethodChainCuddledLinkTest extends Test {
 		+ '\t\t\t.third(yetAnotherPlainArgumentValue)\n' + '\t\t\t.fourth((r:ResponsePayload) -> {\n' + '\t\t\t\thandleResult(r);\n'
 		+ '\t\t\t}).fifth(oneMorePlainArgumentValue);\n' + '\t}\n' + '}';
 
-	/** Under a forced-`onePerLine` cascade, a chain whose RECEIVER is a broken array literal — the only shape whose first gap has no link before it. */
-	private static final RECEIVER_EXPLODED: String = 'class OnePerLineChain {\n' + '\tprivate function f():Void {\n' + '\t\t[\n'
-		+ '\t\t\talphaValue,\n' + '\t\t\tbetaValue\n' + '\t\t]\n' + '\t\t\t.second(anotherPlainArgumentValue)\n'
-		+ '\t\t\t.third(yetAnotherPlainArgumentValue);\n' + '\t}\n' + '}';
+	/**
+	 * Under a forced-`onePerLine` cascade, a chain whose RECEIVER is a call with a broken object-literal argument — the only shape whose
+	 * first gap has no link before it. The receiver must be a CALL: since ω-methodchain-all-or-nothing's isDotAfterPClose refinement, a
+	 * receiver that is not one (a bare ident, a field path, the array literal this fixture used to carry) keeps its first link glued, and
+	 * the first gap then has a link before it like every other gap.
+	 */
+	private static final RECEIVER_EXPLODED: String = 'class OnePerLineChain {\n' + '\tprivate function f():Void {\n'
+		+ '\t\tbuildSource({\n' + '\t\t\talphaField: alphaValue,\n' + '\t\t\tbetaField: betaValue,\n' + '\t\t})\n'
+		+ '\t\t\t.second(anotherPlainArgumentValue)\n' + '\t\t\t.third(yetAnotherPlainArgumentValue);\n' + '\t}\n' + '}';
 
-	/** Same chain with `.second` riding the receiver's `]` at BASE indent (no run open yet), `.third` still breaking to base + 1. */
-	private static final RECEIVER_CUDDLED: String = 'class OnePerLineChain {\n' + '\tprivate function f():Void {\n' + '\t\t[\n'
-		+ '\t\t\talphaValue,\n' + '\t\t\tbetaValue\n' + '\t\t].second(anotherPlainArgumentValue)\n'
+	/** Same chain with `.second` riding the receiver's `})` at BASE indent (no run open yet), `.third` still breaking to base + 1. */
+	private static final RECEIVER_CUDDLED: String = 'class OnePerLineChain {\n' + '\tprivate function f():Void {\n' + '\t\tbuildSource({\n'
+		+ '\t\t\talphaField: alphaValue,\n' + '\t\t\tbetaField: betaValue,\n' + '\t\t}).second(anotherPlainArgumentValue)\n'
 		+ '\t\t\t.third(yetAnotherPlainArgumentValue);\n' + '\t}\n' + '}';
 
 	/** A chain carrying a trailing line comment after its first link — routed through `shapeKeep` by the comment-forced break mask. */

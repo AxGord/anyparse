@@ -51,4 +51,22 @@ typedef WrapRules = {
 	var defaultMode: WrapMode;
 	@:optional var defaultLocation: WrappingLocation;
 	@:optional var defaultAdditionalIndent: Int;
+
+	/**
+	 * ω-methodchain-all-or-nothing — does this cascade use fork's
+	 * `MarkWrapping.isDotAfterPClose` definition of a CHAIN ITEM: a `.` counts
+	 * as one only when it follows a `)`? Read by `MethodChainEmit.emit`, which
+	 * then keeps a non-chain-item first segment glued to the head even under a
+	 * break shape that would otherwise put every segment on its own line —
+	 * `Actuate.tween(…)` stays whole instead of stranding `Actuate` on a line
+	 * of its own.
+	 *
+	 * Set ONLY by `HaxeFormat.defaultMethodChainWrap`, i.e. by the Haxe policy
+	 * cascade. A user `wrapping.methodChain` section is rebuilt by
+	 * `HaxeFormatConfigLoader.wrapRulesFromConfig`, which does not carry the
+	 * field, so an explicitly configured `onePerLine` keeps the fork's literal
+	 * every-segment semantic (five fork corpus fixtures depend on that). Absent
+	 * or `false` = pre-slice behaviour everywhere.
+	 */
+	@:optional var chainItemsAfterCloseParenOnly: Bool;
 };
