@@ -19,10 +19,11 @@ import anyparse.runtime.Span;
 
 /**
  * Flags a function PARAMETER or a LOCAL binding (a `var` / `final` local, a loop
- * variable, a comprehension variable) whose identifier carries a leading underscore
- * — `_event`, `__selectedIndex`. The `_` prefix is a private-FIELD marker; on a
- * binding that lives inside one function it carries no information, and it collides
- * with the "intentionally unused" convention `unused-parameter` writes.
+ * variable, a comprehension variable, a local `function` / `inline function`) whose
+ * identifier carries a leading underscore — `_event`, `__selectedIndex`, `__finish`.
+ * The `_` prefix is a private-FIELD marker; on a binding that lives inside one function
+ * it carries no information, and it collides with the "intentionally unused" convention
+ * `unused-parameter` writes.
  *
  * Opinionated, so DEFAULT OFF (`DefaultOff`): a project opts in with
  * `"no-underscore-prefix": { "enabled": true }`. Two options narrow it:
@@ -36,6 +37,18 @@ import anyparse.runtime.Span;
  *  - A CATCH variable. A `_`-prefixed catch variable is `swallowed-exception`'s
  *    marker for a deliberately discarded exception; de-prefixing it would turn a
  *    silenced finding back into a reported one.
+ *
+ * ## Local functions
+ *
+ * A local `function` statement is a binding scoped to one body exactly as a `var` is, so
+ * the `locals` option governs it and the same rename machinery strips it. Two things are
+ * particular to it. The scope it binds INTO is the ENCLOSING body, never its own span, so
+ * both scope lookups (the in-scope collision proof and the same-target conflict between two
+ * flagged bindings) exclude the declaration's own node - reading it as the scope would make
+ * every SIBLING local function look disjoint, and a sibling already holding the target name
+ * is a real collision. And a local `inline function` projects as `LocalInlineFnStmt`, a kind
+ * the reference walker does not index as a declaration host: no occurrence set is provable,
+ * so the fix fails closed and the finding stays report-only.
  *
  * ## Autofix
  *
@@ -139,7 +152,7 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 	}
 
 	public function description(): String {
-		return 'a parameter or local binding whose name carries a leading underscore';
+		return 'a parameter, local binding or local function whose name carries a leading underscore';
 	}
 
 	@:access(anyparse.check.UnusedParameter)
@@ -205,7 +218,13 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 			if (target == null) continue;
 			// Re-bind to a non-null final: strict null-safety does not narrow inside a struct literal.
 			final name: String = target;
-			candidates.push({ decl: decl, target: name, scope: Naming.innermostSpanOfKinds(tree, functionScopeKinds(shape), span.from) });
+			candidates.push({
+				decl: decl,
+				target: name,
+				// `span` excluded: a local `function` statement opens a scope of its own, but the scope
+				// its NAME binds into is the enclosing body - the one two sibling local functions share.
+				scope: Naming.innermostSpanOfKinds(tree, functionScopeKinds(shape), span.from, span)
+			});
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (i in 0...candidates.length) {
@@ -278,7 +297,7 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 		if (collidesWithProjectSymbol(decl, target, resolutionIndex, allowInheritedShadow)) return null;
 		return Naming.declaringFileRenameSpans(
 			source, tree, span.from, decl.name, shape, plugin, Naming.isDistinctiveName(decl.name),
-			interpolationReadSpans(tree, source, decl.name, span.from, shape)
+			interpolationReadSpans(tree, source, decl.name, span, shape)
 		);
 	}
 
@@ -332,24 +351,25 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 	}
 
 	/**
-	 * The identifier-token spans of every simple `$name` string-interpolation read of the
-	 * binding declared at `declFrom` — occurrences the reference walker does not index, so
-	 * `Rename.renameOccurrences` misses them and the completeness gate would refuse the
-	  * whole rename. Restricted to the binding's own innermost function, and returned EMPTY
-	 * (leaving any such read uncovered, hence blocking) unless the file declares the name
-	 * exactly ONCE: at zero the read binds to something the file does not declare (an
-	 * inherited field), at two or more it cannot be attributed without re-implementing scope
-	 * resolution. Both are refused rather than guessed.
+	 * The identifier-token spans of every simple `$name` string-interpolation read of the binding
+	 * declared at `declSpan` - occurrences the reference walker does not index, so
+	 * `Rename.renameOccurrences` misses them and the completeness gate would refuse the whole rename.
+	 * Restricted to the scope the binding lives in (`declSpan` itself is excluded from that lookup, so a
+	 * local FUNCTION resolves to its enclosing body rather than to its own), and returned EMPTY (leaving
+	 * any such read uncovered, hence blocking) unless the file declares the name exactly ONCE: at zero
+	 * the read binds to something the file does not declare (an inherited field), at two or more it
+	 * cannot be attributed without re-implementing scope resolution. Both are refused rather than
+	 * guessed.
 	 */
 	private static function interpolationReadSpans(
-		tree: QueryNode, source: String, name: String, declFrom: Int, shape: RefShape
+		tree: QueryNode, source: String, name: String, declSpan: Span, shape: RefShape
 	): Array<Span> {
 		final interpKind: Null<String> = shape.stringInterpIdentKind;
 		if (interpKind == null) return [];
 		var declCount: Int = 0;
 		for (h in Refs.find(name, tree, shape)) if (h.kind == RefKind.Decl) declCount++;
 		if (declCount != 1) return [];
-		final scope: Null<Span> = Naming.innermostSpanOfKinds(tree, functionScopeKinds(shape), declFrom);
+		final scope: Null<Span> = Naming.innermostSpanOfKinds(tree, functionScopeKinds(shape), declSpan.from, declSpan);
 		if (scope == null) return [];
 		final out: Array<Span> = [];
 		collectInterpolationReads(tree, interpKind, name, source, scope, out);

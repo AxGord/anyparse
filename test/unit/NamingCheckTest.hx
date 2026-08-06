@@ -1799,4 +1799,25 @@ class NamingCheckTest extends Test {
 		);
 	}
 
+
+	/**
+	 * A local `function` statement is a declaration the policy governs like any other local
+	 * binding: `snake_case` violates the camelCase local rule and the autofix corrects it.
+	 */
+	public function testLocalFunctionNameFlaggedAndRenamed(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function f() {\n\t\tfunction draw_grid() {\n\t\t\ttrace(1);\n\t\t}\n'
+			+ '\t\tdraw_grid();\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf("'draw_grid'") >= 0);
+		assertLocalRenamed([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src, 'function drawGrid()', 'draw_grid');
+	}
+
+	/** A conformant local function name is no finding. */
+	public function testCamelCaseLocalFunctionNameAccepted(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function f() {\n\t\tfunction drawGrid() {\n\t\t\ttrace(1);\n\t\t}\n'
+			+ '\t\tdrawGrid();\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
 }

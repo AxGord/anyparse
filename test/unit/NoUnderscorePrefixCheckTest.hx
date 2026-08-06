@@ -505,4 +505,84 @@ class NoUnderscorePrefixCheckTest extends Test {
 		Assert.isTrue(vs[0].message.contains("'_c'"));
 	}
 
+
+	/**
+	 * A local `function` statement is a binding scoped to one body, exactly like a `var`, so
+	 * its `_` prefix carries nothing. This is the reported shape: a `function __finish()`
+	 * declared inside a drawing method and called from it.
+	 */
+	public function testLocalFunctionFlaggedAndRenamed(): Void {
+		final src: String = 'package pkg;\n'
+			+ 'class C {\n\tpublic function draw():Void {\n\t\tfunction __finish():Void {\n\t\t\ttrace(1);\n\t\t}\n\t\t__finish();\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals('no-underscore-prefix', vs[0].rule);
+		Assert.isTrue(vs[0].message.contains("'__finish'"));
+		assertFixed(src, ['function finish():Void', 'finish();'], ['__finish']);
+	}
+
+	/**
+	 * A local function's name is visible throughout the enclosing body, so a call BEFORE the
+	 * declaration and a recursive call inside it are both occurrences the rename must carry.
+	 */
+	public function testLocalFunctionReferencedBeforeAndAfterDeclarationRenamed(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n\t\t__finish();\n'
+			+ '\t\tfunction __finish():Void {\n\t\t\t__finish();\n\t\t}\n\t\t__finish();\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(4, edits(src).length);
+		assertFixed(src, ['function finish():Void'], ['__finish']);
+	}
+
+	/** A local of the target name in the ENCLOSING body is in scope for the local function, so the strip is refused. */
+	public function testLocalFunctionCollidingWithEnclosingLocalSkipped(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n\t\tfinal finish:Int = 1;\n'
+			+ '\t\tfunction __finish():Void {\n\t\t\ttrace(finish);\n\t\t}\n\t\t__finish();\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/**
+	 * The scope a local function binds INTO is its enclosing body, never its own. A SIBLING local
+	 * function already holding the target name is therefore a collision - reading the declaration's
+	 * own span as its scope makes the sibling look disjoint and lets the strip put two `finish`
+	 * bindings in one block. The sibling here is referenced ONLY from inside itself: every other
+	 * shape leaves an occurrence of the target in the enclosing body, which the occurrence scan
+	 * catches whatever it takes for the scope.
+	 */
+	public function testSiblingLocalFunctionHoldingTheTargetNameSkipped(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
+			+ '\t\tfunction finish(n:Int):Void {\n\t\t\tif (n > 0) finish(n - 1);\n\t\t}\n'
+			+ '\t\tfunction __finish():Void {\n\t\t\ttrace(1);\n\t\t}\n\t\t__finish();\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** Two sibling local functions differing only in underscore count strip to the SAME name, so neither renames. */
+	public function testTwoLocalFunctionsStrippingToTheSameNameBothSkipped(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
+			+ '\t\tfunction _run():Void {\n\t\t\ttrace(1);\n\t\t}\n\t\tfunction __run():Void {\n\t\t\ttrace(2);\n\t\t}\n'
+			+ '\t\t_run();\n\t\t__run();\n\t}\n}';
+		Assert.equals(2, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** A local function is a LOCAL binding, so `locals: false` takes it out of scope with the rest. */
+	public function testLocalsOptionOffSkipsLocalFunctions(): Void {
+		final src: String = 'package pkg;\n'
+			+ 'class C {\n\tpublic function draw():Void {\n\t\tfunction __finish():Void {\n\t\t\ttrace(1);\n\t\t}\n\t\t__finish();\n\t}\n}';
+		Assert.equals(0, violations(src, '{"rules":{"no-underscore-prefix":{"locals":false}}}').length);
+	}
+
+	/**
+	 * A local `inline function` projects as `LocalInlineFnStmt`, a kind the reference walker
+	 * does not index as a declaration host: no occurrence set is provable, so the gate fails
+	 * CLOSED - the finding stands, the strip is not emitted.
+	 */
+	public function testLocalInlineFunctionFlaggedReportOnly(): Void {
+		final src: String = 'package pkg;\n'
+			+ 'class C {\n\tpublic function draw():Void {\n\t\tinline function __h():Void {\n\t\t\ttrace(1);\n\t\t}\n\t\t__h();\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
 }

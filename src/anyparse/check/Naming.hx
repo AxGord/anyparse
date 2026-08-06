@@ -946,7 +946,11 @@ final class Naming implements Check implements CrossFileFix {
 		// / local functions that capture it - so a same-named binding anywhere in that function conflicts.
 		// Only a function DISJOINT from it (a sibling / unrelated body) is out of scope. Fall back to a
 		// whole-file scan when no enclosing function is found (defensive; a local / param always has one).
-		final enclosing: Null<Span> = innermostSpanOfKinds(tree, funcKinds, span.from);
+		// `span` is EXCLUDED: a local `function` statement is both a binding and a function node, and
+		// the scope it binds into is the enclosing body. Reading its own span as the scope would make
+		// every SIBLING local function look disjoint - and a sibling already holding `newName` is a
+		// real collision.
+		final enclosing: Null<Span> = innermostSpanOfKinds(tree, funcKinds, span.from, span);
 		final excluded: Array<Span> = RefactorSupport.structureFieldNameSpans(tree, source, shape);
 		if (enclosing != null) collectDisjointFunctionSpans(tree, funcKinds, enclosing, excluded);
 		return RefactorSupport.nameBoundInRange(source, newName, 0, source.length, excluded, plugin);
@@ -968,13 +972,25 @@ final class Naming implements Check implements CrossFileFix {
 		for (child in node.children) collectDisjointFunctionSpans(child, functionKinds, enclosing, out);
 	}
 
-	/** The tightest enclosing node span (whose kind is in `kinds`) containing `pos`, or null when none does. */
-	private static function innermostSpanOfKinds(node: QueryNode, kinds: Array<String>, pos: Int): Null<Span> {
+	/**
+	 * The tightest enclosing node span (whose kind is in `kinds`) containing `pos`, or null when none
+	 * does. `exclude` drops the node occupying exactly that span from consideration - what a DECLARATION
+	 * that is itself a scope opener needs (a local `function` statement), since the scope it binds INTO
+	 * is the enclosing one, never its own.
+	 */
+	private static function innermostSpanOfKinds(node: QueryNode, kinds: Array<String>, pos: Int, ?exclude: Span): Null<Span> {
+		// Re-bound as Ints: strict null-safety does not narrow a captured parameter inside the
+		// nested walker. A null `exclude` becomes an impossible span, matching nothing.
+		final excludeFrom: Int = exclude == null ? -1 : exclude.from;
+		final excludeTo: Int = exclude == null ? -1 : exclude.to;
 		var bestFrom: Int = -1;
 		var best: Null<Span> = null;
 		function walk(n: QueryNode): Void {
 			final s: Null<Span> = n.span;
-			if (s != null && s.from <= pos && pos < s.to && kinds.contains(n.kind) && s.from > bestFrom) {
+			if (
+				s != null && s.from <= pos && pos < s.to && kinds.contains(n.kind) && s.from > bestFrom
+				&& !(s.from == excludeFrom && s.to == excludeTo)
+			) {
 				bestFrom = s.from;
 				best = s;
 			}
