@@ -103,6 +103,17 @@ class ExtractRepeatedExpressionTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { k(a.b.c);').length);
 	}
 
+	/**
+	 * The chain's first hop is a getter INHERITED from a supertype. `memberGetter` used to
+	 * answer `null` there, so the chain read as pure and was extracted; resolving through the
+	 * supertype makes it `true` — impure, and the group is dropped.
+	 */
+	public function testInheritedGetterReadExcluded(): Void {
+		final src: String = 'class B { public var prop(get, never):Int; function get_prop():Int return 1; } class D extends B {} '
+			+ 'class C { var obj:D; function m() { k(obj.prop.x); k(obj.prop.x); k(obj.prop.x); } }';
+		Assert.equals(0, violations(src).length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new ExtractRepeatedExpression().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

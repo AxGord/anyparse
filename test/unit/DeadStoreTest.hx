@@ -7,6 +7,8 @@ import anyparse.check.DeadStore;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.check.Linter;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SymbolIndex;
+import anyparse.runtime.Span;
 
 /**
  * The `dead-store` check: an assignment to a local / parameter whose value is
@@ -279,6 +281,21 @@ class DeadStoreTest extends Test {
 		}
 	}
 
+	public function testFixStripsInheritedPlainFieldInit(): Void {
+		// The dead initializer reads a plain field declared on a SUPERTYPE — `isPlainFieldRead`
+		// proves it accessor-less through the index, so the initializer is stripped.
+		final src: String =
+			'class Base { public var d:Int; } class Sub extends Base {} class C { static function f(s:Sub):Int { var x = s.d; x = 1; return x; } }';
+		Assert.equals(1, indexedFixEdits(src).length);
+	}
+
+	public function testFixKeepsInheritedGetterInit(): Void {
+		// The same shape with a getter on the supertype: reading it runs code, so the init stays.
+		final src: String =
+			'class Base { public var d(get, never):Int; } class Sub extends Base {} class C { static function f(s:Sub):Int { var x = s.d; x = 1; return x; } }';
+		Assert.equals(0, indexedFixEdits(src).length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new DeadStore().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
@@ -301,6 +318,15 @@ class DeadStoreTest extends Test {
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 		Assert.isTrue(vs.length > 0);
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	private function indexedFixEdits(src: String): Array<{ span: Span, text: String }> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
+		final check: DeadStore = new DeadStore();
+		final vs: Array<Violation> = check.run(files, plugin);
+		Assert.isTrue(vs.length > 0, 'the dead store must be reported before its fix can be judged');
+		return check.fix(src, vs, plugin, SymbolIndex.build(files, plugin));
 	}
 
 }

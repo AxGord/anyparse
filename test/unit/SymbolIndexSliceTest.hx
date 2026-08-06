@@ -964,4 +964,218 @@ class SymbolIndexSliceTest extends Test {
 		Assert.isTrue(SymbolIndex.build(files, new HaxeQueryPlugin()).subtypeOverridesProperty('Root', 'tag'));
 	}
 
+	/**
+	 * `memberGetter` reaches a plain instance member declared on a project-resolvable
+	 * SUPERTYPE — the inherited arm's base case. `false` means "provably accessor-less",
+	 * which is the direction `TypeResolver.isPlainFieldRead` acts on.
+	 */
+	public function testMemberGetterInheritedPlainField(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/Base.hx', source: 'class Base { public var f:Int; }' },
+			{ file: 'src/Sub.hx', source: 'class Sub extends Base {}' }
+		], plugin());
+		Assert.equals(false, index.memberGetter('Sub', 'f'), 'an inherited plain field is accessor-less');
+	}
+
+	/**
+	 * An inherited GETTER property still wins: reading it runs code, so the walk
+	 * returns `true` from the declaring supertype.
+	 */
+	public function testMemberGetterInheritedGetter(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/Base.hx', source: 'class Base { public var f(get, never):Int; }' },
+			{ file: 'src/Sub.hx', source: 'class Sub extends Base {}' }
+		], plugin());
+		Assert.equals(true, index.memberGetter('Sub', 'f'), 'an inherited getter property runs code on read');
+	}
+
+	/**
+	 * The canary shape: a member declared on a GENERIC supertype, reached through an
+	 * `extends Base<Int>` clause. The projection drops the type arguments, so
+	 * `supertypesRaw` carries the bare nominal and the link resolves.
+	 */
+	public function testMemberGetterGenericSupertypeField(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/Base.hx', source: 'class Base<T> { public final d:T; }' },
+			{ file: 'src/Sub.hx', source: 'class Sub extends Base<Int> {}' }
+		], plugin());
+		Assert.equals(false, index.memberGetter('Sub', 'd'), 'no type-argument substitution needed, accessor shape only');
+	}
+
+	/** The walk is transitive — a member three levels up still resolves. */
+	public function testMemberGetterTransitiveInheritance(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/Base.hx', source: 'class Base { public var f:Int; }' },
+			{ file: 'src/Mid.hx', source: 'class Mid extends Base {}' },
+			{ file: 'src/Leaf.hx', source: 'class Leaf extends Mid {}' }
+		], plugin());
+		Assert.equals(false, index.memberGetter('Leaf', 'f'), 'a two-hop inherited plain field resolves');
+	}
+
+	/** An `implements` link is walked like an `extends` one — an interface-declared getter is reached. */
+	public function testMemberGetterInterfaceGetter(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/ITagged.hx', source: 'interface ITagged { public var f(get, never):Int; }' },
+			{ file: 'src/Sub.hx', source: 'class Sub implements ITagged {}' }
+		], plugin());
+		Assert.equals(true, index.memberGetter('Sub', 'f'), 'a getter declared on an implemented interface is reached');
+	}
+
+	/**
+	 * Statics are NOT inherited in Haxe: a supertype's `static f` never answers a
+	 * subtype's instance access, so the inherited arm skips it and the subtype's
+	 * answer stays unknown. The ROOT arm is untouched — `Base` itself still answers
+	 * `false` for the very same member.
+	 */
+	public function testMemberGetterStaticNotInherited(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/Base.hx', source: 'class Base { public static var f:Int; }' },
+			{ file: 'src/Sub.hx', source: 'class Sub extends Base {}' }
+		], plugin());
+		Assert.isNull(index.memberGetter('Sub', 'f'), 'a supertype static is not part of the subtype instance namespace');
+		Assert.equals(false, index.memberGetter('Base', 'f'), 'root arm unchanged: the static gate is inert at the root');
+	}
+
+	/**
+	 * An out-of-scope supertype link resolves to nothing (`resolveTypeRef` is
+	 * import-aware), so that branch simply ends — the member IS indexed, as the
+	 * direct query on `Base` proves, and is still not folded in.
+	 */
+	public function testMemberGetterUnresolvedSupertypeLink(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/other/Base.hx', source: 'package other;\nclass Base { public var f:Int; }' },
+			{ file: 'src/pkg/Sub.hx', source: 'package pkg;\nclass Sub extends Base {}' }
+		], plugin());
+		Assert.isNull(index.memberGetter('Sub', 'f'), 'an out-of-scope supertype link ends the branch');
+		Assert.equals(false, index.memberGetter('Base', 'f'), 'the member itself is indexed — the null came from resolution');
+	}
+
+	/**
+	 * Two same-simple-named `Base` declarations are both in `Sub`'s package, so the
+	 * link is AMBIGUOUS and resolves to neither — a namesake's member can never be
+	 * folded in. The ROOT entry stays simple-name unioned, as it always was.
+	 */
+	public function testMemberGetterAmbiguousSupertypeLink(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/pkg/Base.hx', source: 'package pkg;\nclass Base { public var f:Int; }' },
+			{ file: 'src/pkg/Other.hx', source: 'package pkg;\nclass Other {}\nclass Base { public var f:Int; }' },
+			{ file: 'src/pkg/Sub.hx', source: 'package pkg;\nclass Sub extends Base {}' }
+		], plugin());
+		Assert.isNull(index.memberGetter('Sub', 'f'), 'an ambiguous supertype link resolves to nothing');
+		Assert.equals(false, index.memberGetter('Base', 'f'), 'the root entry stays simple-name unioned');
+	}
+
+	/**
+	 * A `@:build` macro on an INHERITED declaring type may rewrite that type's own
+	 * field into a property, so its accessor shape is unreadable from source — the
+	 * inherited arm contributes no `false` there. The ROOT arm keeps shipped
+	 * behaviour: querying `Base` directly still answers `false`.
+	 */
+	public function testMemberGetterBuildOnInheritedDeclarer(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/Base.hx', source: '@:build(M.gen())\nclass Base { public var f:Int; }' },
+			{ file: 'src/Sub.hx', source: 'class Sub extends Base {}' }
+		], plugin());
+		Assert.isNull(index.memberGetter('Sub', 'f'), '@:build may turn the inherited field into a property');
+		Assert.equals(false, index.memberGetter('Base', 'f'), 'root arm unchanged: a @:build root still answers false');
+	}
+
+	/** An inheritance cycle terminates — `seen` ends the re-entered branch as unknown. */
+	public function testMemberGetterInheritanceCycleTerminates(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/A.hx', source: 'class A extends B {}' },
+			{ file: 'src/B.hx', source: 'class B extends A {}' }
+		], plugin());
+		Assert.isNull(index.memberGetter('A', 'f'), 'a cycle ends its branch instead of recursing forever');
+	}
+
+	/**
+	 * `@:autoBuild` on an ancestor ABOVE the declaring type generates into every DESCENDANT, so
+	 * it can rewrite `Base`'s own `f` into a property — the identical hazard the `hasBuild` gate
+	 * refuses. The inherited arm's `false` is downgraded to null. The ROOT arm keeps shipped
+	 * behaviour: querying `Base` directly still answers `false`, autoBuild ancestor and all.
+	 */
+	public function testMemberGetterAutoBuildAncestorAboveDeclarer(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/Marker.hx', source: '@:autoBuild(M.gen())\ninterface Marker {}' },
+			{ file: 'src/Base.hx', source: 'class Base implements Marker { public var f:Int = 1; }' },
+			{ file: 'src/Sub.hx', source: 'class Sub extends Base {}' }
+		], plugin());
+		Assert.isNull(index.memberGetter('Sub', 'f'), '@:autoBuild above the declarer may have rewritten the field');
+		Assert.equals(false, index.memberGetter('Base', 'f'), 'root arm unchanged: the autoBuild gate is inert at the root');
+	}
+
+	/**
+	 * A declaration reached while climbing is CONCLUSIVE — Haxe forbids redeclaring an inherited
+	 * field, so `Base`'s `@:build`-shadowed `f` ends the walk at null rather than falling through
+	 * to the interface's plain one. Without the short-circuit `I` would contribute a `false`.
+	 */
+	public function testMemberGetterDeclarationStopsTheClimb(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/I.hx', source: 'interface I { public var f:Int; }' },
+			{ file: 'src/Base.hx', source: '@:build(M.gen())\nclass Base implements I { public var f:Int; }' },
+			{ file: 'src/Sub.hx', source: 'class Sub extends Base {}' }
+		], plugin());
+		Assert.isNull(index.memberGetter('Sub', 'f'), 'the @:build declaration ends the climb — the interface never answers');
+	}
+
+	/**
+	 * A `static` skipped by the inherited arm is deliberately NOT a declaration, so the climb continues
+	 * past it and reaches the instance member above. The plain-`f` half alone cannot see the gate (both
+	 * answers are `false`); the getter half is what discriminates — without the gate `Mid`'s static
+	 * would answer `false` and `Top`'s getter would never be reached.
+	 */
+	public function testMemberGetterClimbsPastSkippedStatic(): Void {
+		final plain: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/Top.hx', source: 'class Top { public var f:Int; }' },
+			{ file: 'src/Mid.hx', source: 'class Mid extends Top { public static var f:Int; }' },
+			{ file: 'src/Leaf.hx', source: 'class Leaf extends Mid {}' }
+		], plugin());
+		Assert.equals(false, plain.memberGetter('Leaf', 'f'), 'a skipped static does not stop the climb');
+		final getter: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/Top.hx', source: 'class Top { public var f(get, never):Int; }' },
+			{ file: 'src/Mid.hx', source: 'class Mid extends Top { public static var f:Int; }' },
+			{ file: 'src/Leaf.hx', source: 'class Leaf extends Mid {}' }
+		], plugin());
+		Assert.equals(true, getter.memberGetter('Leaf', 'f'), 'the instance getter above the static still answers');
+	}
+
+
+	/**
+	 * The `@:autoBuild` carrier IS in the index but is not import-visible from the type that
+	 * declares the field (`o.Marker` from `p.Base`), so `resolveTypeRef` ends that link — while the
+	 * compiler still applies the macro. A skip would FAIL OPEN here: in this scan a hit means
+	 * REFUSE, the opposite miss-direction from the evidence climb, so it falls back to a
+	 * project-wide UNIQUE simple-name lookup and reaches the carrier anyway.
+	 */
+	public function testMemberGetterAutoBuildCarrierNotImportVisible(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/o/Marker.hx', source: 'package o;\n@:autoBuild(M.gen())\ninterface Marker {}' },
+			{ file: 'src/p/Base.hx', source: 'package p;\nclass Base implements Marker { public var f:Int = 1; }' },
+			{ file: 'src/p/Sub.hx', source: 'package p;\nclass Sub extends Base {}' }
+		], plugin());
+		Assert.isNull(index.memberGetter('Sub', 'f'), 'a non-import-visible @:autoBuild carrier is still reached');
+	}
+
+	/**
+	 * That fallback is a UNIQUE simple-name lookup, never a blanket refusal on an unresolvable
+	 * link. A genuinely EXTERNAL supertype (0 in-index declarers — the `Sprite` shape the real
+	 * `unused-local` fix depends on) and an AMBIGUOUS simple name (2+ declarers) both leave the
+	 * plain inherited answer intact.
+	 */
+	public function testMemberGetterUnresolvableSupertypeDoesNotRefuse(): Void {
+		final external: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/Base.hx', source: 'class Base extends Sprite { public var f:Int; }' },
+			{ file: 'src/Sub.hx', source: 'class Sub extends Base {}' }
+		], plugin());
+		Assert.equals(false, external.memberGetter('Sub', 'f'), 'an external supertype is not evidence of a macro');
+		final ambiguous: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/x/Marker.hx', source: 'package x;\ninterface Marker {}' },
+			{ file: 'src/y/Marker.hx', source: 'package y;\n@:autoBuild(M.gen())\ninterface Marker {}' },
+			{ file: 'src/p/Base.hx', source: 'package p;\nclass Base implements Marker { public var f:Int = 1; }' },
+			{ file: 'src/p/Sub.hx', source: 'package p;\nclass Sub extends Base {}' }
+		], plugin());
+		Assert.equals(false, ambiguous.memberGetter('Sub', 'f'), 'an ambiguous simple name resolves to neither');
+	}
+
 }

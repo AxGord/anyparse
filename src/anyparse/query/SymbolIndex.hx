@@ -468,16 +468,95 @@ final class SymbolIndex {
 	}
 
 	/**
-	 * Whether type `typeName`'s member `field` is a getter-property (true → reading
-	 * it runs code), a plain member (false → side-effect-free read), or not a known
-	 * direct member (null). Conservative under ambiguity: any matching type whose
-	 * `field` is a getter yields true.
+	 * Whether type `typeName`'s member `field` is a getter-property (true → reading it runs code), a
+	 * plain member (false → side-effect-free read), or unknown (null). The member may be declared on
+	 * `typeName` ITSELF or INHERITED from a project-resolvable supertype — `memberGetterWalk` climbs
+	 * `supertypesRaw` (`extends` and `implements` alike). A direct declaration is conclusive and stops
+	 * the climb: Haxe forbids redeclaring an inherited field, so nothing above can contradict it.
+	 *
+	 * The ROOT entry is simple-name unioned across every same-simple-named declaration, exactly as it
+	 * always was; only the inherited arm is resolution-anchored. That arm resolves each written
+	 * supertype reference through `resolveTypeRef` — IMPORT-AWARE and UNAMBIGUOUS — so for the EVIDENCE
+	 * climb an external or simple-name-ambiguous link simply ends its branch (a safe miss → null) and a
+	 * namesake's member can never be folded in. Conservative under ambiguity, unchanged: any resolvable
+	 * declaration that IS a getter wins over every plain one. The `@:autoBuild` SCAN below is the one
+	 * place that does not stop there — a hit means REFUSE, so its miss direction is the unsafe one and
+	 * it follows an unresolvable link through a unique simple-name fallback.
+	 *
+	 * Three gates apply to the INHERITED arm ONLY, leaving the direct answer byte-for-byte what
+	 * shipped. Two directions of change survive that, both conservative for every consumer listed
+	 * below: a previously-`null` answer can become `false` (the widening this exists for), and a
+	 * previously-`false` one can be LIFTED to `true` — the root being a simple-name UNION, a
+	 * same-simple-named SIBLING declaration that inherits a getter now contributes its `true`
+	 * (`package a; class Sub {var f:Int;}` alongside `package b; class Sub extends Base {}` over a
+	 * `b.Base {var f(get, never):Int;}` answers `true` where it answered `false`).
+	 *
+	 * - **Statics are not inherited.** A supertype's `static` member never answers a subtype's
+	 *   instance access — the two namespaces are disjoint, the same split `OrphanAccessor.walkChain`
+	 *   turns on `isStatic == wantStatic`. Without the gate a same-named static reads as the
+	 *   subtype's field and answers `false` for a member the subtype does not have.
+	 * - **`@:build` on an inherited declaring type.** The macro may rewrite that type's own field
+	 *   into a property, so its accessor shape is not readable from source: the arm contributes no
+	 *   `false` there and answers null.
+	 * - **`@:autoBuild` at or above an inherited declaring type** (`autoBuildAtOrAbove`). That macro
+	 *   generates into every DESCENDANT of its carrier, so a marker interface far above the type that
+	 *   WRITES the field rewrites it into a property exactly as `@:build` on the declarer would —
+	 *   verified against the compiler on `@:autoBuild(M.gen()) interface Marker {}` +
+	 *   `class Base implements Marker {public var f:Int = 1;}` + `class Sub extends Base {}`, where
+	 *   reading `s.f` runs a generated getter. A `false` is downgraded to null for every carrier the
+	 *   scan can REACH: import-visible through `resolveTypeRef`, or — since skipping here fails OPEN —
+	 *   reachable through `uniqueDeclarationOf`, the project-wide unique simple-name fallback. A
+	 *   carrier that is neither (its simple name absent from the index, or declared 2+ times) is the
+	 *   residual boundary and stays missed; the fallback is deliberately NOT a blanket refusal on any
+	 *   unresolvable link, since a genuinely external supertype such as `Sprite` must keep letting a
+	 *   plain inherited member answer `false`.
+	 *
+	 * ROOT ASYMMETRY — deliberate, recorded rather than closed. The root arm consults NONE of the
+	 * three. It carries the same `@:autoBuild` hole and always did: on the shape above,
+	 * `memberGetter('Base', 'f')` answered `false` before this walk existed and still does. Closing it
+	 * at the root would not tighten the widening, it would change SHIPPED deletion policy —
+	 * `ExtractRepeatedExpression` acts on `== true`, for which a root `false` turning null changes
+	 * nothing at all, while the two `isPlainFieldRead` fixers act on `== false` and would stop
+	 * performing deletions they have always performed. Out of scope for this walk.
+	 *
+	 * GENERIC supertypes need NO type-argument substitution here. The projection drops type arguments
+	 * from an inheritance clause (`class A extends B<C>` → `(ExtendsClause (Named B))`), so
+	 * `supertypesRaw` already carries the bare nominal `B` and the link resolves; and the answer is the
+	 * member's ACCESSOR SHAPE (`hasGetter`), never its TYPE — `public final d:T` is accessor-less
+	 * whatever `T` binds to. Nothing is substituted because nothing needs to be. A consumer that wants
+	 * the member's RESOLVED TYPE must use `resolveGenericPathFinalMemberTypeSource`, the only walk that
+	 * binds type parameters to arguments — and even that one substitutes for a DIRECTLY-declared member
+	 * only, since it does not model the extends-clause argument mapping. On THIS very shape it does not
+	 * fail closed either: `class Base<T> {public final d:T;}` + `class Sub extends Base<Int> {}` yields
+	 * the UNBOUND parameter name `T`, because `substitutedMemberSource` runs `mentionsTypeParam` against
+	 * the RECEIVER's `typeParamNames` (`Sub` → empty, and an empty list early-returns false) instead of
+	 * the DECLARING type's. That is a separate PRE-EXISTING defect of `substitutedMemberSource`, left
+	 * untouched here. Answering accessor shape rather than type is what makes the inherited arm
+	 * answerable at all.
+	 *
+	 * `seen` is per-ROOT-declaration and SHARED across sibling supertype branches (matching
+	 * `inheritsMemberWalk`). Sharing it is NEUTRAL, not conservative: a `true` returns immediately
+	 * through every frame and a `false` propagates up through every frame it passes, so each node's
+	 * local answer reaches the root on that node's FIRST visit — an engine that copied `seen` per
+	 * branch would re-walk nodes and aggregate the identical set of local answers. Its one job is
+	 * terminating a cycle.
+	 *
+	 * THREE call sites across TWO predicates, feeding THREE fixers — and the conservative direction
+	 * points the same way for all of them, which is what makes widening this SHARED predicate in place
+	 * legitimate. `TypeResolver.isPlainFieldRead` (2 call sites) acts on `== false` ("provably plain
+	 * read") and feeds two code-DELETING fixers: `TypeResolver.isDeletionPure` → `UnusedLocal`'s
+	 * `--fix`, and `DeadStore.rhsSafeToDelete` directly. So every new `false` is a positive proof — the
+	 * direction this widening exists for — and every downgrade to null merely keeps code.
+	 * `ExtractRepeatedExpression.isSideEffectingGetter` (1 call site) acts on `== true` ("getter,
+	 * impure, bail"), for which `false` and `null` are indistinguishable, so new `true`s only make it
+	 * MORE conservative. None of the three reads a spurious answer as a licence to act.
 	 */
 	public function memberGetter(typeName: String, field: String): Null<Bool> {
 		var found: Null<Bool> = null;
-		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (m in t.members) if (m.name == field) {
-			if (m.hasGetter) return true;
-			found = false;
+		for (fi in _files) for (t in fi.types) if (t.name == typeName) {
+			final r: Null<Bool> = memberGetterWalk({ file: fi, type: t }, field, false, []);
+			if (r == true) return true;
+			if (r == false) found = false;
 		}
 		return found;
 	}
@@ -1121,14 +1200,24 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * Mark `cur`'s resolved `(file, name)` identity in `seen` and answer whether this is its FIRST
+	 * visit — the cycle guard every supertype walk opens with. A re-entered node answers false, and
+	 * the caller ends that branch with its own not-found value.
+	 */
+	private inline function markSeen(cur: ResolvedType, seen: Array<String>): Bool {
+		final key: String = '${cur.file.file}#${cur.type.name}';
+		if (seen.contains(key)) return false;
+		seen.push(key);
+		return true;
+	}
+
+	/**
 	 * `inheritsMemberUnambiguously`'s recursion: whether any UNAMBIGUOUSLY-resolved
 	 * supertype of `cur` declares `member`, or transitively inherits it. `seen`
 	 * cycle-guards on the resolved `(file, name)` identity.
 	 */
 	private function inheritsMemberWalk(cur: ResolvedType, member: String, seen: Array<String>): Bool {
-		final key: String = '${cur.file.file}#${cur.type.name}';
-		if (seen.contains(key)) return false;
-		seen.push(key);
+		if (!markSeen(cur, seen)) return false;
 		for (raw in cur.type.supertypesRaw) {
 			final anc: Null<ResolvedType> = resolveTypeRef(raw, cur.file);
 			if (anc == null) continue;
@@ -1146,9 +1235,7 @@ final class SymbolIndex {
 	 * resolved type, so a same-simple-name namesake never contributes a member.
 	 */
 	private function memberTypeSourceWalk(cur: ResolvedType, member: String, seen: Array<String>): Null<String> {
-		final key: String = '${cur.file.file}#${cur.type.name}';
-		if (seen.contains(key)) return null;
-		seen.push(key);
+		if (!markSeen(cur, seen)) return null;
 		final direct: Null<MemberInfo> = cur.type.members.find(m -> m.name == member);
 		if (direct != null) return direct.typeSource;
 		for (raw in cur.type.supertypesRaw) {
@@ -1158,6 +1245,71 @@ final class SymbolIndex {
 			if (src != null) return src;
 		}
 		return null;
+	}
+
+	/**
+	 * `memberGetter`'s recursion: the accessor shape of `field` on `cur`'s type or, failing a direct
+	 * declaration, on its `resolveTypeRef`-resolved supertype closure. `inherited` distinguishes the
+	 * ROOT entry — where the three gates the public doc spells out are inert, preserving the shipped
+	 * direct-member answer — from every level reached by climbing. `seen` cycle-guards on the resolved
+	 * `(file, name)` identity, shared across sibling branches like `inheritsMemberWalk`.
+	 *
+	 * A DECLARATION found here is conclusive: Haxe forbids redeclaring an inherited field, so the climb
+	 * stops even when the answer is null. A member a gate SKIPS is deliberately not such a declaration
+	 * — a `static` lives in the other namespace, so the climb walks past it and can still reach an
+	 * instance member further up (`Top {var f}` ← `Mid {static var f}` ← `Leaf` answers `false`).
+	 */
+	private function memberGetterWalk(cur: ResolvedType, field: String, inherited: Bool, seen: Array<String>): Null<Bool> {
+		if (!markSeen(cur, seen)) return null;
+		var declared: Bool = false;
+		for (m in cur.type.members) if (m.name == field && !(inherited && m.isStatic)) {
+			if (m.hasGetter) return true;
+			declared = true;
+		}
+		if (declared) return inherited && (cur.type.hasBuild || autoBuildAtOrAbove(cur, [])) ? null : false;
+		var found: Null<Bool> = null;
+		for (raw in cur.type.supertypesRaw) {
+			final anc: Null<ResolvedType> = resolveTypeRef(raw, cur.file);
+			if (anc == null) continue;
+			final up: Null<Bool> = memberGetterWalk(anc, field, true, seen);
+			if (up == true) return true;
+			if (up == false) found = false;
+		}
+		return found;
+	}
+
+	/**
+	 * Whether `cur` or any `resolveTypeRef`-resolved ancestor of it carries `@:autoBuild` — the
+	 * evidence that `cur`'s own members may have been rewritten, since that macro generates into
+	 * every DESCENDANT of its carrier. Scanned separately rather than carried as a flag down the
+	 * climb because `memberGetterWalk` reaches the DECLARING type before it would reach a marker
+	 * interface above it, so the flag would arrive too late to veto the answer. `cur` itself counts:
+	 * a type's own `@:autoBuild` does not apply to it, but folding it in costs one flag read and can
+	 * only refuse. `seen` is this scan's own — the climb's set already holds `cur`.
+	 */
+	private function autoBuildAtOrAbove(cur: ResolvedType, seen: Array<String>): Bool {
+		if (!markSeen(cur, seen)) return false;
+		if (cur.type.hasAutoBuild) return true;
+		for (raw in cur.type.supertypesRaw) {
+			final anc: Null<ResolvedType> = resolveTypeRef(raw, cur.file) ?? uniqueDeclarationOf(raw);
+			if (anc == null) continue;
+			if (autoBuildAtOrAbove(anc, seen)) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * The SINGLE project-wide declaration of `raw`'s simple name, or null when that name is absent
+	 * from the index (a genuinely EXTERNAL type) or declared more than once (AMBIGUOUS). Mirrors
+	 * `OrphanAccessor.uniqueDeclaration`, and exists for `autoBuildAtOrAbove` alone: that scan's
+	 * miss direction is the unsafe one, so an import-invisible link must still be followed, whereas
+	 * the evidence walks want the import-aware `resolveTypeRef` answer and nothing more.
+	 */
+	private function uniqueDeclarationOf(raw: String): Null<ResolvedType> {
+		final dot: Int = raw.lastIndexOf('.');
+		final simple: String = dot < 0 ? raw : raw.substr(dot + 1);
+		final declarers: Array<FileInfo> = declaringFiles(simple);
+		return declarers.length == 1 ? findDeclaredType(declarers[0].file, simple) : null;
 	}
 
 	/**
@@ -1401,10 +1553,7 @@ final class SymbolIndex {
 		var level: Array<ResolvedType> = [start];
 		while (level.length > 0) {
 			final next: Array<ResolvedType> = [];
-			for (cur in level) {
-				final key: String = '${cur.file.file}#${cur.type.name}';
-				if (seen.contains(key)) continue;
-				seen.push(key);
+			for (cur in level) if (markSeen(cur, seen)) {
 				for (i in 0...cur.type.supertypesRaw.length) {
 					if (i < cur.type.supertypes.length && cur.type.interfaces.contains(cur.type.supertypes[i])) continue;
 					final anc: Null<ResolvedType> = resolveTypeRef(cur.type.supertypesRaw[i], cur.file);

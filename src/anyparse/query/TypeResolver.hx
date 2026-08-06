@@ -100,9 +100,11 @@ final class TypeResolver {
 	 * True when `faNode` (a field-access node) is a provably side-effect-free read.
 	 * Three resolved receivers: an anonymous-struct value (fields can't be getters);
 	 * a local/param of a class/abstract type whose member `field` is a plain member;
-	 * and `this`, against the enclosing type's members. Any unresolved receiver, a
-	 * getter property, or a field that is not a known direct member returns false —
-	 * the caller keeps its conservative default.
+	 * and `this`, against the enclosing type's members. In the latter two the member
+	 * may be DECLARED by the resolved type or INHERITED from a project-resolvable
+	 * supertype — `SymbolIndex.memberGetter` walks the chain. Any unresolved receiver,
+	 * a getter property, or a field whose accessor shape the index cannot prove plain
+	 * returns false — the caller keeps its conservative default.
 	 */
 	public static function isPlainFieldRead(
 		faNode: QueryNode, tree: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: SymbolIndex
