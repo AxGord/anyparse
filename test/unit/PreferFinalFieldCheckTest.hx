@@ -343,9 +343,12 @@ class PreferFinalFieldCheckTest extends Test {
 	 * `class Q { final f:String; public function new(c:Bool) { if (!c) return; f = 'a'; } }`
 	 * compiles, and `new Q(false).f` is `null` — exactly what the `var` gave. The gate
 	 * `field-init-at-declaration` grew for that prefix must therefore NOT be pushed down into
-	 * `RefactorSupport.ctorSoleAssignmentFinalizable`: three consumers share it and
-	 * `prefer-read-only-field` CEDES exactly its candidates, so narrowing it would leave this
-	 * field class claimed by NEITHER rule with a green suite.
+	 * `RefactorSupport.ctorSoleAssignmentFinalizable`: three consumers share it, and
+	 * `prefer-read-only-field` cedes its candidates through an `if (pred) return;`. The narrowed
+	 * variant was BUILT and measured, and it costs twice over — the PRIVATE field class here is
+	 * dropped by every rule, and on the PUBLIC arm the cession stops firing, so
+	 * `prefer-read-only-field` CLAIMS the field and silently downgrades the fix from `final` to
+	 * `(default, null)`.
 	 */
 	public function testEarlyReturnBeforeSoleCtorWriteStillFlagged(): Void {
 		Assert.equals(1, violations('class C { private var _x:Int; public function new(c:Bool) { if (!c) return; _x = 5; } }').length);

@@ -395,8 +395,10 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 	/**
 	 * SYMPTOM (a), ARG-LIST EXPLOSION. The collapsed head line no longer fits, so the writer
 	 * breaks the ENCLOSING call's argument list apart: `Api.authenticate(` is left alone on its
-	 * own line with the arguments re-flowed under it. Line-neutral and the head line loses 46
-	 * characters, so clause 2 refuses it. Nothing structural distinguishes this site from an
+	 * own line with the arguments re-flowed under it. The head line loses 46 characters (63 ->
+	 * 17), but the rendering is LINE-NEUTRAL at 9 lines either way, so CLAUSE 1 is what refuses
+	 * this site and clause 2 never runs on it — the clause-2 pin is
+	 * `testOrphanArrowWithBlankLinesRefused`. Nothing structural distinguishes this site from an
 	 * accepted one — only the rendering does.
 	 */
 	public function testArgListExplosionRefused(): Void {
@@ -408,14 +410,30 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 	/**
 	 * SYMPTOM (b), ORPHAN ARROW. The body is too wide for the head line, so the writer wraps
 	 * right after the `->`: the head loses its `{`, the body stays one line down and the closing
-	 * `});` degrades to a bare `);`. Nothing is gained — line-neutral, head one character
-	 * shorter — and clause 1 refuses it. This is the shape that makes clause 1 strictly-shrink
-	 * rather than shrink-or-hold.
+	 * `});` degrades to a bare `);`. Nothing is gained — line-neutral at 9 lines either way, head
+	 * two characters shorter (40 -> 38) — and clause 1 refuses it. This is the shape that makes
+	 * clause 1 strictly-shrink rather than shrink-or-hold.
 	 */
 	public function testOrphanArrowRefused(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\titemData.forEachChild(childItemData -> {\n'
 			+ '\t\t\tcollectedEntries.push(new EntryDescriptor(childItemData.identifier, childItemData.displayName,'
 			+ ' childItemData.sortIndex));\n\t\t});\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * THE CLAUSE-2 PIN. Structurally the orphan arrow above, with a blank line on each side of
+	 * the statement inside the block. The braces take those blanks with them, so the collapse
+	 * SHRINKS the file — 11 rendered lines to 9 — on the author's blank lines alone, and clause 1
+	 * is satisfied. The head still degrades exactly as the plain orphan arrow's does (40 -> 38
+	 * trimmed), so clause 2 is the only thing that refuses this site. Every OTHER refusal fixture
+	 * here is line-neutral, which short-circuits clause 1 before clause 2 can run — delete clause
+	 * 2 and this is the one test that flips.
+	 */
+	public function testOrphanArrowWithBlankLinesRefused(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\titemData.forEachChild(childItemData -> {\n\n'
+			+ '\t\t\tcollectedEntries.push(new EntryDescriptor(childItemData.identifier, childItemData.displayName,'
+			+ ' childItemData.sortIndex));\n\n\t\t});\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -447,8 +465,8 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 
 	/** CANARY for the accept side, value arm: a `return` body collapsing onto the head line. */
 	public function testReturnArmCollapseToOneLineStillFlagged(): Void {
-		final src: String = 'class C {\n\tfunction f():Void {\n\t\tmoves.sort((a, b) -> {\n'
-			+ '\t\t\treturn a.path < b.path ? -1 : 1;\n\t\t});\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction f():Void {\n\t\tmoves.sort((a, b) -> {\n\t\t\treturn a.path < b.path ? -1 : 1;\n\t\t});\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 	}
 

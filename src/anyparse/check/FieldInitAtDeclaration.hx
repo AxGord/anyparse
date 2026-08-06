@@ -106,6 +106,16 @@ import haxe.Exception;
  *   early exit — `ctorPrefixUnconditional` refuses a prefix that is not straight-line
  *   on BOTH paths. The CHAIN path is stricter still: any non-candidate statement
  *   breaks the chain, where the legacy path only asks that the prefix be reached.
+ * - An explicit `super(…)` in that prefix is ACCEPTED and should not be. It projects as a plain
+ *   expression statement, so the straight-line whitelist lets it through — but Haxe emits
+ *   declaration initializers BEFORE the `super()` call, so hoisting an init across one moves it
+ *   ahead of the BASE constructor. Reproduced end to end on 4.3.7 with `hxq lint --fix`: a
+ *   subclass whose constructor reads `super(); asset = Loader.get('pack');`, over a base
+ *   constructor that sets the `Loader.ready` flag `get` consults, printed `real:pack` before the
+ *   fix and `TOO-EARLY:pack` after. PRE-EXISTING — the sole-write path has always done this, the
+ *   reachability gate neither opened nor closed it — and deliberately left open. The CHAIN path
+ *   bars `super(…)` outright already (its prefix admits no statement but another accepted init);
+ *   closing it on the SOLE-WRITE path would go through `hasSupertype`, already in this file.
  *
  * The in-class veto is also deliberately coarse: an IMMUTABLE static (`static
  * inline`, `static final`) can never be the channel these gaps describe, yet reading

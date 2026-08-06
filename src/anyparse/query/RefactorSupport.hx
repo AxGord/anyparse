@@ -1755,15 +1755,33 @@ final class RefactorSupport {
 	 * + `localDeclKinds` + `staticLocalDeclKinds`; a top-level statement of ANY other kind
 	 * before `boundary` refuses, so an `if` / `switch` / loop / `try` / `return` / `throw` /
 	 * nested block / `#if` region all fail by construction. `super(…)` projects as a plain
-	 * expression statement on the Haxe grammar and stays allowed.
+	 * expression statement on the Haxe grammar and stays allowed — this predicate answers only
+	 * "is `boundary` reached", so a consumer that moves code ACROSS a `super(…)` owes its own
+	 * judgement of that crossing (see `FieldInitAtDeclaration`'s "Known gaps").
 	 *
 	 * A kind whitelist alone is not enough, because a statement's KIND does not bound what its
 	 * SUBTREE holds: a non-block `try` body projects as a plain expression statement
 	 * (`try return catch (e:Dynamic) {}` is `ExprStmt(TryExpr(VoidReturnExpr …))`), so a control
 	 * exit hides inside an ACCEPTED kind. Any `controlExitKinds` node starting before `boundary`
-	 * anywhere in the body subtree therefore refuses too. That scan also refuses a `return`
-	 * inside a lambda passed as an argument, which exits nothing — over-refusal is the safe
-	 * direction for a soundness gate, and the shape is rare.
+	 * anywhere in the body subtree therefore refuses too. Neither term subsumes the other: the
+	 * subtree scan is what closes the non-block `try` hole, and the whitelist is what refuses a
+	 * prefix that never COMPLETES — a `while (true) { }` before `boundary` holds no control-exit
+	 * node anywhere, so the scan finds nothing to object to and only the kind check refuses.
+	 *
+	 * Two residual gaps, both measured and both accepted:
+	 *
+	 * - AN EXPRESSION STATEMENT THAT CANNOT RETURN IS ACCEPTED ANYWAY. `Sys.exit(0);`, or a call
+	 *   to an always-throwing helper, reads as an ordinary expression statement, so the prefix is
+	 *   judged straight-line and the hoist proceeds even though the constructor never reaches
+	 *   `boundary`. Nothing short of interprocedural analysis sees through the call, so this one
+	 *   is open by construction rather than by choice.
+	 * - THE OVER-REFUSAL IS WIDER THAN A RARE SHAPE. The subtree scan is positional, not
+	 *   scope-aware, so a `return` that exits NOTHING in the constructor still refuses: inside a
+	 *   lambda passed as an argument, inside a local `function` / `inline function` declaration,
+	 *   and inside a `macro { … }` block (all probed). A local `inline function` helper is an
+	 *   idiom this project's own style prefers, so the cost is real rather than theoretical.
+	 *   Over-refusal stays the safe direction for a soundness gate, which is why the gap is
+	 *   priced here rather than closed.
 	 *
 	 * Fails closed twice: with no resolvable block body, and with `controlExitKinds` unset — an
 	 * empty set would make the subtree scan a silent no-op that accepts every early return,
@@ -1775,14 +1793,18 @@ final class RefactorSupport {
 		if (bodyKind == null || exitKinds.length == 0) return false;
 		final body: Null<QueryNode> = ctor.children.find(c -> c.kind == bodyKind);
 		if (body == null) return false;
-		final straightLine: Array<String> = (shape.localDeclKinds ?? []).concat(shape.staticLocalDeclKinds ?? []);
+		// The straight-line set is read as three separate memberships rather than built into one
+		// array: the seams it comes from never change during a run, and this is asked once per
+		// candidate FIELD, so a per-call `concat` would allocate for nothing.
+		final localDecls: Array<String> = shape.localDeclKinds ?? [];
+		final staticLocalDecls: Array<String> = shape.staticLocalDeclKinds ?? [];
 		final stmtKind: Null<String> = shape.exprStatementKind;
-		if (stmtKind != null) straightLine.push(stmtKind);
 		for (stmt in body.children) {
 			final span: Null<Span> = stmt.span;
 			// A statement whose position is unknown cannot be placed relative to the boundary.
 			if (span == null) return false;
-			if (span.from < boundary && !straightLine.contains(stmt.kind)) return false;
+			final kind: String = stmt.kind;
+			if (span.from < boundary && kind != stmtKind && !localDecls.contains(kind) && !staticLocalDecls.contains(kind)) return false;
 		}
 		return !kindStartsBefore(body, exitKinds, boundary);
 	}

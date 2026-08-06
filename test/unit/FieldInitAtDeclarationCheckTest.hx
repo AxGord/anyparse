@@ -404,8 +404,8 @@ class FieldInitAtDeclarationCheckTest extends Test {
 
 	/** A `switch` before the init is not straight-line — an arm may exit, and no arm need match. */
 	public function testSwitchBeforeInitNotMoved(): Void {
-		final src: String = 'class C { var _a:Array<Int>; public function new(k:Int) { switch k { case 1: return; case _: }'
-			+ ' _a = new Array<Int>(); } }';
+		final src: String =
+			'class C { var _a:Array<Int>; public function new(k:Int) { switch k { case 1: return; case _: } _a = new Array<Int>(); } }';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -428,21 +428,33 @@ class FieldInitAtDeclarationCheckTest extends Test {
 	 * starting before the init, anywhere in the body subtree — refuses it.
 	 */
 	public function testNonBlockTryReturnBeforeInitNotMoved(): Void {
-		final src: String = 'class C { var _a:Array<Int>; public function new() { try return catch (e:Dynamic) {}'
-			+ ' _a = new Array<Int>(); } }';
+		final src: String =
+			'class C { var _a:Array<Int>; public function new() { try return catch (e:Dynamic) {} _a = new Array<Int>(); } }';
 		Assert.equals(0, violations(src).length);
 	}
 
 	/**
-	 * The whitelist must not over-refuse. A plain call, a `super(…)` and a local declaration all
-	 * leave the init unconditionally reached, so each one still moves — `super(…)` projects as a
-	 * plain expression statement on this grammar, so it stays allowed exactly as before.
+	 * THE KIND-WHITELIST PIN — the one shape only that term refuses. A `while (true) { }` prefix
+	 * never COMPLETES, so the constructor holds no control-exit node anywhere and the subtree
+	 * scan, the gate's other term, finds nothing to object to. The loop is neither an expression
+	 * statement nor a local declaration, so the kind whitelist alone is what refuses the hoist:
+	 * disable that term and this is the one test that flips.
+	 */
+	public function testNonTerminatingLoopBeforeInitNotMoved(): Void {
+		final src: String = 'class C { var _a:Array<Int>; public function new() { while (true) { } _a = new Array<Int>(); } }';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * The whitelist must not over-refuse. A plain call and a local declaration both leave the init
+	 * unconditionally reached, so each one still moves. `super(…)` is deliberately NOT pinned
+	 * here: it projects as a plain expression statement and the gate therefore accepts it, but
+	 * Haxe emits declaration initializers BEFORE an explicit `super()`, so hoisting across one
+	 * crosses the base-constructor boundary — a pre-existing sole-write-path hazard recorded in
+	 * `FieldInitAtDeclaration`'s "Known gaps", not a shape this fixture should bless.
 	 */
 	public function testStraightLinePrefixStillMoved(): Void {
 		Assert.equals(1, violations('class C { var _a:Array<Int>; public function new() { trace(1); _a = new Array<Int>(); } }').length);
-		Assert.equals(
-			1, violations('class C extends B { var _a:Array<Int>; public function new() { super(); _a = new Array<Int>(); } }').length
-		);
 		Assert.equals(
 			1, violations('class C { var _a:Array<Int>; public function new() { var t:Int = 1; _a = new Array<Int>(); } }').length
 		);

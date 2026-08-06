@@ -233,13 +233,31 @@ import haxe.Exception;
  *
  * Clause 1 says the collapse must remove at least one line; clause 2 says it must pull content
  * UP onto the head line rather than push it off — exactly "the head line gains a wrap it did
- * not have", measured instead of guessed. Neither clause alone separates the real tree's
- * sites, which is also why clause 1 is strictly-shrink rather than shrink-or-hold: the orphan
- * arrow is line-NEUTRAL with a head two characters shorter, so only clause 1 refuses it; the
- * hoisted condition is line-neutral with a head 64 characters LONGER, again only clause 1; and
- * the arg-list explosion shrinks the file by two lines while the head loses 73, which only
- * clause 2 catches. (Measured on the fixtures in `PreferLambdaExpressionBodyCheckTest` and on
- * `fs/FileSystemBase.hx` of that tree.)
+ * not have", measured instead of guessed. Neither clause alone separates the sites, and each
+ * has its own witness in `PreferLambdaExpressionBodyCheckTest` — every figure below measured
+ * through that suite, under this project's own `hxformat.json`:
+ *
+ * - CLAUSE 1 owns all three shapes as the SUITE spells them, because all three come out
+ *   line-NEUTRAL there: `testOrphanArrowRefused` renders 9 lines either way with a head two
+ *   characters SHORTER (40 -> 38), `testWrappedConditionHoistedIntoTheHeadRefused` 11 either
+ *   way with a head 64 characters LONGER (37 -> 101), and `testArgListExplosionRefused` 9
+ *   either way with a head 46 characters shorter (63 -> 17). That is what makes clause 1
+ *   strictly-shrink rather than shrink-or-hold — and on a line-neutral site it short-circuits,
+ *   so clause 2 never runs at all.
+ * - CLAUSE 2 owns `testOrphanArrowWithBlankLinesRefused`, the orphan arrow with a blank line on
+ *   each side of the statement inside the block. The braces take those blanks with them, so the
+ *   collapse SHRINKS the file (11 -> 9) on the author's blank lines alone and clause 1 is
+ *   satisfied, while the head degrades exactly as the plain orphan arrow's does (40 -> 38).
+ *   Nothing but clause 2 refuses it.
+ *
+ * The shape that BOUGHT clause 2 was a real-tree one, not a suite one: an arg-list explosion in
+ * `fs/FileSystemBase.hx` of that 800-file tree, which shrank the file by two lines while the
+ * head lost 73 characters. That observation does not reproduce — the tree is now at this rule's
+ * fixpoint and holds no structural candidate — so the suite pin above is the standing witness
+ * and the file-name figure is recorded here as history.
+ *
+ * RESIDUAL: clause 2 inspects only the FIRST divergent line, so a collapse that lengthens the
+ * head while degrading a LATER line passes both clauses unmeasured.
  *
  * Why the WHOLE FILE rather than a spliced-out statement: the collapse is the only edit, so
  * the file-level line delta IS the enclosing statement's line delta, and the first divergent
@@ -253,10 +271,16 @@ import haxe.Exception;
  * `violations[0].file` and refuses a mixed-file call, so both passes measure under the same
  * settings.
  *
- * Cost: one extra `writeRoundTrip` per candidate, plus one per source that has any candidate
- * at all — a file the structural walk finds nothing in pays nothing. A writer failure,
- * including the documented `CommentLossException`, folds to null and REFUSES, so a grammar
- * with no writer makes this check inert rather than unguarded.
+ * Cost: one extra `writeRoundTrip` per candidate, plus one per source that has any candidate at
+ * all — and `collect` is called by `run` AND again by `fix`, with `lint --fix` iterating to a
+ * fixpoint, so a `--fix` run pays that bill twice per pass rather than once. Measured on this
+ * repo: `src/anyparse/core/CollapsePass.hx` (1358 lines, 6 structural candidates) goes 0.27s ->
+ * 1.86s for a report-only run and 5.95s for `--fix` (2 passes); the whole tree under this rule
+ * alone (653 files, 15 candidates in 8 files) goes 12.5s -> 28.5s, and under EVERY rule 32.8s ->
+ * 34.5s (+5%); a subtree with no candidate at all pays nothing (`src/anyparse/grammar`, 263
+ * files, 0.75s either way), because the BEFORE rendering is skipped when the structural walk
+ * found none. A writer failure, including the documented `CommentLossException`, folds to null
+ * and REFUSES, so a grammar with no writer makes this check inert rather than unguarded.
  *
  * ## Autofix
  *
@@ -305,6 +329,9 @@ import haxe.Exception;
 @:nullSafety(Strict)
 final class PreferLambdaExpressionBody implements Check {
 
+	/** The rule id, spelled once — `run`, `fix` and the registry all quote it. */
+	private static inline final RULE_ID: String = 'prefer-lambda-expression-body';
+
 	/** A collapsible body block holds exactly one statement. */
 	private static inline final SINGLE_STATEMENT: Int = 1;
 
@@ -317,7 +344,7 @@ final class PreferLambdaExpressionBody implements Check {
 	public function new() {}
 
 	public function id(): String {
-		return 'prefer-lambda-expression-body';
+		return RULE_ID;
 	}
 
 	public function description(): String {
@@ -333,7 +360,7 @@ final class PreferLambdaExpressionBody implements Check {
 				{
 					file: entry.file,
 					span: m.span,
-					rule: 'prefer-lambda-expression-body',
+					rule: RULE_ID,
 					severity: Severity.Info,
 					message: 'this single-statement lambda body can be an expression body'
 				}
@@ -349,7 +376,7 @@ final class PreferLambdaExpressionBody implements Check {
 		// whole file, so `fix` must measure under exactly the settings `run` measured with.
 		final file: String = violations[0].file;
 		for (violation in violations) if (violation.file != file)
-			throw new Exception('prefer-lambda-expression-body: fix() takes ONE file\'s violations, got $file and ${violation.file}');
+			throw new Exception('$RULE_ID: fix() takes ONE file\'s violations, got $file and ${violation.file}');
 		final byKey: Map<String, Match> = [];
 		for (m in collect(plugin, source, seams, FormatConfigDiscovery.discover(file))) byKey['${m.span.from}:${m.span.to}'] = m;
 		final edits: Array<{ span: Span, text: String }> = [];
@@ -382,8 +409,8 @@ final class PreferLambdaExpressionBody implements Check {
 		// writer makes the check inert rather than leaving every collapse unmeasured.
 		final before: Null<Array<String>> = renderedLines(plugin, source, optsJson);
 		if (before == null) return [];
-		final rendering: Array<String> = before;
-		return found.filter(m -> paysForItself(plugin, source, m, optsJson, rendering));
+		final beforeLines: Array<String> = before;
+		return found.filter(m -> paysForItself(plugin, source, m, optsJson, beforeLines));
 	}
 
 	/**
@@ -396,8 +423,9 @@ final class PreferLambdaExpressionBody implements Check {
 	 *    trimmed — the collapse must pull content UP onto the lambda's head line, never push
 	 *    it off.
 	 *
-	 * A writer failure — including the documented `CommentLossException` — folds to null and
-	 * REFUSES.
+	 * `firstDivergence` cannot answer -1 below: clause 1 has already established that the two
+	 * renderings differ in length, and -1 means identical. A writer failure — including the
+	 * documented `CommentLossException` — folds to null and REFUSES.
 	 */
 	private static function paysForItself(
 		plugin: GrammarPlugin, source: String, m: Match, optsJson: Null<String>, before: Array<String>
@@ -406,13 +434,13 @@ final class PreferLambdaExpressionBody implements Check {
 		final after: Null<Array<String>> = renderedLines(plugin, collapsed, optsJson);
 		if (after == null || after.length >= before.length) return false;
 		final divergence: Int = firstDivergence(before, after);
-		return divergence >= 0 && trimmedAt(after, divergence).length > trimmedAt(before, divergence).length;
+		return trimmedAt(after, divergence).length > trimmedAt(before, divergence).length;
 	}
 
 	/** `text` as the writer would emit it, split into lines; null when the writer throws or the grammar has none. */
 	private static function renderedLines(plugin: GrammarPlugin, text: String, optsJson: Null<String>): Null<Array<String>> {
 		final written: Null<String> = try plugin.writeRoundTrip(text, optsJson) catch (exception: Exception) null;
-		return written == null ? null : written.split('\n');
+		return written?.split('\n');
 	}
 
 	/**
