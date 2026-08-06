@@ -1141,7 +1141,10 @@ final class RefactorSupport {
 	 * grammar hides under non-obvious ctors (`'$name'` simple interpolation,
 	 * macro reification) at the cost of also counting the name in comments /
 	 * strings — which only ever keeps a binding, never wrongly deletes one.
-	 * `end` is clamped to the source length.
+	 * `end` is clamped to the source length. A dotted path's tail counts too
+	 * (`this.name` IS a read of member `name`); the callers for which it is not —
+	 * `unused-import`, since an import binds a SIMPLE name — take
+	 * `referencedUnqualifiedInRange` instead.
 	 *
 	 * One boundary is not spelled with a boundary CHARACTER: a numeric escape
 	 * (`\x24`, `$`) that decodes to the interpolation trigger `$` ends in a
@@ -1149,6 +1152,48 @@ final class RefactorSupport {
 	 * token and misses a real read (see `interpolationEscapeBefore`).
 	 */
 	public static function referencedInRange(source: String, name: String, from: Int, end: Int, excluded: Array<Span>): Bool {
+		return scanReference(source, name, from, end, excluded, null);
+	}
+
+	/**
+	 * `referencedInRange` restricted to occurrences that stand as a SIMPLE name —
+	 * an occurrence whose preceding non-whitespace character is a qualification
+	 * `.` does not count. The test `unused-import` needs: a Haxe import binds a
+	 * simple name, while a dotted path resolves from its ROOT
+	 * (`haxe.macro.Context.currentPos()` needs no import at all), so a tail
+	 * segment never goes through one. The ROOT of a path is not dot-preceded and
+	 * still counts — `Mod.VALUE` is exactly what `import pkg.Mod;` provides.
+	 *
+	 * A SINGLE dot qualifies. `...` is the range / rest operator, not a
+	 * qualifier: in `for (i in 0...Limit.MAX)` the name IS dot-preceded, yet it
+	 * is a bare reference — reading that as qualification would delete an import
+	 * the build needs. Safe navigation (`o?.f`) and a field access inside string
+	 * interpolation (`'${o.f}'`) are single-dot field accesses and are correctly
+	 * skipped by the same test.
+	 *
+	 * A SEPARATE method rather than a tightening of `referencedInRange`: the
+	 * shared predicate's over-counting is load-bearing for its other callers —
+	 * `unused-private` reads `this.field` as a genuine reference, and a stricter
+	 * answer there would delete a live member.
+	 *
+	 * `commentRegions` (`collectCommentRegions`, hoisted once per file by the
+	 * caller) is REQUIRED, not a convenience: a line comment ending in a sentence
+	 * period puts a `.` directly before the next line's first token, and reading
+	 * that as qualification deletes an import the build needs. It is the only
+	 * inert construct that can end in a bare `.` — a string / regex / block
+	 * comment closes with its own delimiter — but the mask is exact for all of
+	 * them and costs one scan per file.
+	 */
+	public static function referencedUnqualifiedInRange(
+		source: String, name: String, from: Int, end: Int, excluded: Array<Span>, commentRegions: Array<Span>
+	): Bool {
+		return scanReference(source, name, from, end, excluded, commentRegions);
+	}
+
+	/** The scan behind `referencedInRange` / `referencedUnqualifiedInRange`; a non-null `commentRegions` drops dot-qualified occurrences. */
+	private static function scanReference(
+		source: String, name: String, from: Int, end: Int, excluded: Array<Span>, commentRegions: Null<Array<Span>>
+	): Bool {
 		final len: Int = name.length;
 		if (len == 0) return false;
 		final stop: Int = end <= source.length ? end : source.length;
@@ -1159,10 +1204,32 @@ final class RefactorSupport {
 			final beforeOk: Bool = at == 0 || !isIdentChar(StringTools.fastCodeAt(source, at - 1)) || interpolationEscapeBefore(source, at);
 			final afterIdx: Int = at + len;
 			final afterOk: Bool = afterIdx >= source.length || !isIdentChar(StringTools.fastCodeAt(source, afterIdx));
-			if (beforeOk && afterOk && !offsetWithinAny(at, excluded)) return true;
+			if (beforeOk && afterOk && !offsetWithinAny(at, excluded) && !qualifiedBefore(source, at, commentRegions)) return true;
 			i = at + 1;
 		}
 		return false;
+	}
+
+	/**
+	 * Is the token starting at `at` the TAIL of a dotted path — its preceding
+	 * non-whitespace character a qualification `.`? Whitespace is skipped
+	 * backwards, since a path may be broken across lines (`haxe.macro\n\t.Context`).
+	 * A null `commentRegions` disables the test entirely (the plain
+	 * `referencedInRange` scan, which counts every occurrence).
+	 *
+	 * Two dots are NOT one: a dot preceded by another belongs to `...` (range /
+	 * rest), never to a field access, so `0...Limit.MAX` reads `Limit` as the bare
+	 * reference it is. And a dot inside a COMMENT qualifies nothing — the period
+	 * ending `// … before the process dies.` sits directly before the next line's
+	 * first token and would otherwise mark a live call as a qualified tail.
+	 */
+	private static function qualifiedBefore(source: String, at: Int, commentRegions: Null<Array<Span>>): Bool {
+		if (commentRegions == null) return false;
+		var j: Int = at - 1;
+		while (j >= 0 && isSpace(StringTools.fastCodeAt(source, j))) j--;
+		if (j < 0 || StringTools.fastCodeAt(source, j) != '.'.code) return false;
+		if (j > 0 && StringTools.fastCodeAt(source, j - 1) == '.'.code) return false;
+		return !offsetWithinAny(j, commentRegions);
 	}
 
 	/**
