@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberBranchScan;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -137,16 +138,17 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		final trees: Array<{ file: String, tree: QueryNode }> = [];
+		final shape: RefShape = plugin.refShape();
+		final trees: Array<{ file: String, tree: QueryNode, branch: MemberBranchSeams }> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) trees.push({ file: entry.file, tree: tree });
+			if (tree != null) trees.push({ file: entry.file, tree: tree, branch: MemberBranchScan.seamsOf(shape, entry.source) });
 		}
 		// Pass A: the names of every LOCALLY-eligible method (single-expression / empty, and not
 		// inline / dynamic / macro / override / @:keep / constructor / self-recursive) — the only
 		// names the reference-kind scan below must resolve, keeping its blocked sets small.
 		final candidateNames: Array<String> = [];
-		for (t in trees) for (cls in CheckScan.classBodies(t.tree)) forEachMethod(cls, (name, fn, mods, metas) -> {
+		for (t in trees) for (cls in CheckScan.classBodies(t.tree)) forEachMethod(cls, t.branch, (name, fn, mods, metas) -> {
 			if (isCandidateMethod(name, fn, mods, metas, _oracleRelaxed) && !candidateNames.contains(name)) candidateNames.push(name);
 		});
 		// Pass B: the reference-kind gate over the whole scope — a candidate name used as a VALUE
@@ -160,7 +162,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		// Pass C: emit a finding for each candidate the cross-file gates leave standing.
 		final out: Array<Violation> = [];
 		for (t in trees) for (cls in CheckScan.classBodies(t.tree))
-			considerClass(out, cls, t.file, index, valueBlocked, reflectBlocked, _oracleRelaxed);
+			considerClass(out, cls, t.file, index, valueBlocked, reflectBlocked, _oracleRelaxed, t.branch);
 		return out;
 	}
 
@@ -181,7 +183,8 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			if (s != null) wanted.push('${s.from}:${s.to}');
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		for (cls in CheckScan.classBodies(tree)) forEachMethod(cls, (name, fn, mods, metas) -> {
+		final branch: MemberBranchSeams = MemberBranchScan.seamsOf(plugin.refShape(), source);
+		for (cls in CheckScan.classBodies(tree)) forEachMethod(cls, branch, (name, fn, mods, metas) -> {
 			final span: Null<Span> = fn.span;
 			if (span == null || mods.contains('Inline') || !wanted.contains('${span.from}:${span.to}')) return;
 			edits.push({ span: new Span(span.from, span.from), text: 'inline ' });
@@ -194,13 +197,15 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 */
 	private static function considerClass(
 		out: Array<Violation>, cls: QueryNode, file: String, index: SymbolIndex, valueBlocked: Array<String>,
-		reflectBlocked: Array<String>, relaxed: Bool
+		reflectBlocked: Array<String>, relaxed: Bool, branch: MemberBranchSeams
 	): Void {
 		final className: Null<String> = cls.name;
 		if (className == null) return;
-		final subtypeMembers: Array<String> = index.hasSubtype(className) ? subtypeMemberNames(index, className) : [];
+		// Re-bound to a non-null local: the narrowing does not reach into the nested callback below.
+		final owner: String = className;
+		final subtypeMembers: Array<String> = index.hasSubtype(owner) ? subtypeMemberNames(index, owner) : [];
 		final ifaces: Array<String> = implementedInterfaces(cls);
-		forEachMethod(cls, (name, fn, mods, metas) -> {
+		forEachMethod(cls, branch, (name, fn, mods, metas) -> {
 			if (!isCandidateMethod(name, fn, mods, metas, relaxed)) return;
 			if (valueBlocked.contains(name) || reflectBlocked.contains(name) || subtypeMembers.contains(name)) return;
 			// An abstract-superclass implementation carries no `override` (Haxe does
@@ -208,7 +213,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			// supertype declaring the member means this method fills a base slot and
 			// must stay physical. An unresolvable supertype stays optimistic, like
 			// the extends chain always was for this rule.
-			if (index.supertypeDeclaresMember(className, name)) return;
+			if (index.supertypeDeclaresMember(owner, name)) return;
 			if (interfaceRequires(index, ifaces, name)) return;
 			final span: Null<Span> = fn.span;
 			if (span == null) return;
@@ -230,24 +235,22 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * preceding metadata names (`@:keep` / …), both reset at each member boundary. `final function`
 	 * (`FinalModifiedMember`) and fields reset the run but are not methods.
 	 */
-	private static function forEachMethod(cls: QueryNode, cb: (String, QueryNode, Array<String>, Array<String>) -> Void): Void {
-		var mods: Array<String> = [];
-		var metas: Array<String> = [];
-		for (child in cls.children) switch child.kind {
-			case 'FnMember':
-				final name: Null<String> = child.name;
-				if (name != null) cb(name, child, mods, metas);
-				mods = [];
-				metas = [];
-			case 'VarMember' | 'FinalMember' | 'FinalModifiedMember':
-				mods = [];
-				metas = [];
-			case 'Meta' | 'MetaCall':
-				final nm: Null<String> = child.name;
+	private static function forEachMethod(
+		cls: QueryNode, branch: MemberBranchSeams, cb: (String, QueryNode, Array<String>, Array<String>) -> Void
+	): Void {
+		MemberBranchScan.eachMember(branch, cls, child -> MEMBER_KINDS.contains(child.kind), (member, run) -> {
+			if (member.kind != 'FnMember') return;
+			final name: Null<String> = member.name;
+			if (name == null) return;
+			final mods: Array<String> = [];
+			final metas: Array<String> = [];
+			for (mod in run) if (mod.kind == 'Meta' || mod.kind == 'MetaCall') {
+				final nm: Null<String> = mod.name;
 				if (nm != null) metas.push(nm);
-			case _:
-				mods.push(child.kind);
-		}
+			} else
+				mods.push(mod.kind);
+			cb(name, member, mods, metas);
+		});
 	}
 
 	/**
@@ -523,5 +526,9 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	private static function isRiskyHere(node: QueryNode, parentKind: String): Bool {
 		return node.kind == 'NullLit' && parentKind != 'Eq' && parentKind != 'NotEq' && parentKind != 'NullCoal';
 	}
+
+
+	/** The class-body member kinds that END a modifier run — a method and the three field forms. */
+	private static final MEMBER_KINDS: Array<String> = ['FnMember', 'VarMember', 'FinalMember', 'FinalModifiedMember'];
 
 }

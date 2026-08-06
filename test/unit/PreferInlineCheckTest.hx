@@ -445,4 +445,28 @@ class PreferInlineCheckTest extends Test {
 		Assert.isTrue(vs[0].message.indexOf('empty body') >= 0, vs[0].message);
 	}
 
+
+	/**
+	 * A method written inside a member-position `#if` is a method of the class like any other. The
+	 * region is ONE child of the container holding every branch's members flattened, so scanning the
+	 * container's direct children alone silently exempted it.
+	 */
+	public function testConditionalMemberFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\t#if cpp\n\tpublic function get():Int return 1;\n\t#end\n}').length);
+	}
+
+
+	/**
+	 * The modifier run restarts per branch: `override` in one branch belongs to that branch's method
+	 * only, and the other branch's plain method is still a candidate. A flat read of the region's
+	 * flattened children would hand the `override` to the first member and leave the second bare.
+	 */
+	public function testConditionalOverrideBindsToItsOwnBranch(): Void {
+		final vs: Array<Violation> = violations(
+			'class C extends B {\n\t#if cpp\n\toverride public function get():Int return 1;\n\t#else\n\tpublic function calc():Int return 2;\n\t#end\n}'
+		);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('calc') >= 0, vs[0].message);
+	}
+
 }
