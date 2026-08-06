@@ -451,6 +451,7 @@ import unit.MapKeysLookupCheckTest;
 import unit.PreferRangeLoopCheckTest;
 import unit.PreferKeyValueLoopCheckTest;
 import unit.DeadBinderCounterLoopCheckTest;
+import unit.RedundantReplaceLoopCheckTest;
 import unit.TrivialGetterCheckTest;
 import unit.NullableSwitchMissingNullCheckTest;
 import unit.DuplicateCodeCheckTest;
@@ -997,6 +998,7 @@ class RunTests {
 		addCase(new PreferRangeLoopCheckTest());
 		addCase(new PreferKeyValueLoopCheckTest());
 		addCase(new DeadBinderCounterLoopCheckTest());
+		addCase(new RedundantReplaceLoopCheckTest());
 		addCase(new TrivialGetterCheckTest());
 		addCase(new TrivialGetterStaticShadowTest());
 		addCase(new PreferInlineCheckTest());

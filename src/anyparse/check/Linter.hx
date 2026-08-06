@@ -173,6 +173,7 @@ final class Linter {
 			new PreferRangeLoop(),
 			new PreferKeyValueLoop(),
 			new DeadBinderCounterLoop(),
+			new RedundantReplaceLoop(),
 			new TrivialGetter(),
 			new NullableSwitchMissingNull(),
 			new DuplicateCode(),
