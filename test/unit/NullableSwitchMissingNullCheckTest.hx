@@ -37,12 +37,14 @@ class NullableSwitchMissingNullCheckTest extends Test {
 	public function testCaseNullNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(cls('function f(x:Null<Int>):Void { switch x { case null: trace(9); case 1: trace(1); case _: trace(0); } }')).length
+			violations(cls('function f(x:Null<Int>):Void { switch x { case null: trace(9); case 1: trace(1); case _: trace(0); } }'))
+				.length
 		);
 	}
 
 	public function testCaseNullWildcardComboNotFlagged(): Void {
-		Assert.equals(0, violations(cls('function f(x:Null<Int>):Void { switch x { case 1: trace(1); case null, _: trace(0); } }')).length);
+		Assert.equals(0, violations(cls('function f(x:Null<Int>):Void { switch x { case 1: trace(1); case null, _: trace(0); } }'))
+			.length);
 	}
 
 	public function testOptionalParamFlagged(): Void {
@@ -70,7 +72,8 @@ class NullableSwitchMissingNullCheckTest extends Test {
 	public function testLocalFromMapFlagged(): Void {
 		Assert.equals(
 			1,
-			violations(cls('function f(m:Map<String, Int>):Void { final u = m[\'k\']; switch u { case 1: trace(1); case _: trace(0); } }')).length
+			violations(cls('function f(m:Map<String, Int>):Void { final u = m[\'k\']; switch u { case 1: trace(1); case _: trace(0); } }'))
+				.length
 		);
 	}
 
@@ -96,7 +99,8 @@ class NullableSwitchMissingNullCheckTest extends Test {
 	public function testFlowNarrowedNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(cls('function f(x:Null<Int>):Void { if (x == null) return; switch x { case 1: trace(1); case _: trace(0); } }')).length
+			violations(cls('function f(x:Null<Int>):Void { if (x == null) return; switch x { case 1: trace(1); case _: trace(0); } }'))
+				.length
 		);
 	}
 
@@ -172,7 +176,8 @@ class NullableSwitchMissingNullCheckTest extends Test {
 		// `Assert.isTrue(x != null)` narrows the switch subject non-null before the switch (feature 1).
 		Assert.equals(
 			0,
-			violations(cls('function f(x:Null<Int>):Void { Assert.isTrue(x != null); switch x { case 1: trace(1); case _: trace(0); } }')).length
+			violations(cls('function f(x:Null<Int>):Void { Assert.isTrue(x != null); switch x { case 1: trace(1); case _: trace(0); } }'))
+				.length
 		);
 	}
 
@@ -180,7 +185,8 @@ class NullableSwitchMissingNullCheckTest extends Test {
 		// `Assert.isFalse(x == null)` proves the subject non-null on the false outcome.
 		Assert.equals(
 			0,
-			violations(cls('function f(x:Null<Int>):Void { Assert.isFalse(x == null); switch x { case 1: trace(1); case _: trace(0); } }')).length
+			violations(cls('function f(x:Null<Int>):Void { Assert.isFalse(x == null); switch x { case 1: trace(1); case _: trace(0); } }'))
+				.length
 		);
 	}
 
@@ -188,7 +194,8 @@ class NullableSwitchMissingNullCheckTest extends Test {
 		// `Assert.isTrue(x == null)` proves the subject IS null — not non-null — so it stays flagged.
 		Assert.equals(
 			1,
-			violations(cls('function f(x:Null<Int>):Void { Assert.isTrue(x == null); switch x { case 1: trace(1); case _: trace(0); } }')).length
+			violations(cls('function f(x:Null<Int>):Void { Assert.isTrue(x == null); switch x { case 1: trace(1); case _: trace(0); } }'))
+				.length
 		);
 	}
 

@@ -211,7 +211,8 @@ class UnusedLocalShadowTest extends Test {
 	public function testIteratedExpressionReadKeepsDeclaration(): Void {
 		Assert.equals(
 			0,
-			violations('class C {\n\tfunction f() {\n\t\tvar item:Array<String> = ["a"];\n\t\tfor (item in item) trace(item);\n\t}\n}').length
+			violations('class C {\n\tfunction f() {\n\t\tvar item:Array<String> = ["a"];\n\t\tfor (item in item) trace(item);\n\t}\n}')
+				.length
 		);
 	}
 
@@ -276,7 +277,8 @@ class UnusedLocalShadowTest extends Test {
 	public function testLambdaParameterShadowNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations('class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String;\n\t\treturn xs.map(item -> item + "!");\n\t}\n}').length
+			violations('class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String;\n\t\treturn xs.map(item -> item + "!");\n\t}\n}')
+				.length
 		);
 	}
 

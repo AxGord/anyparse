@@ -177,7 +177,8 @@ class PreferComprehensionCheckTest extends Test {
 		// Inlining a twice-used local would evaluate its initializer twice.
 		Assert.equals(
 			0,
-			violations(fnRet('final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal a = f(x);\n\t\t\tout.push(a + a);\n\t\t}')).length
+			violations(fnRet('final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal a = f(x);\n\t\t\tout.push(a + a);\n\t\t}'))
+				.length
 		);
 	}
 
@@ -224,7 +225,8 @@ class PreferComprehensionCheckTest extends Test {
 		// defence, for a grammar that projects the continuation as a SIBLING instead.
 		Assert.equals(
 			0,
-			violations(fnRet('final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal a = 1, b = 2;\n\t\t\tout.push(a + b);\n\t\t}')).length
+			violations(fnRet('final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal a = 1, b = 2;\n\t\t\tout.push(a + b);\n\t\t}'))
+				.length
 		);
 	}
 
@@ -247,7 +249,8 @@ class PreferComprehensionCheckTest extends Test {
 		// Dissolving the declaration would strand the comment inside an expression.
 		Assert.equals(
 			0,
-			violations(fnRet('final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal a = f(/* why */ x);\n\t\t\tout.push(a);\n\t\t}')).length
+			violations(fnRet('final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal a = f(/* why */ x);\n\t\t\tout.push(a);\n\t\t}'))
+				.length
 		);
 	}
 
@@ -262,7 +265,8 @@ class PreferComprehensionCheckTest extends Test {
 		// A chain link's initializer reads the array being built, so it is a self-reference too.
 		Assert.equals(
 			0,
-			violations(fnRet('final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal n = out.length;\n\t\t\tout.push(n);\n\t\t}')).length
+			violations(fnRet('final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal n = out.length;\n\t\t\tout.push(n);\n\t\t}'))
+				.length
 		);
 	}
 
@@ -318,7 +322,8 @@ class PreferComprehensionCheckTest extends Test {
 		// which is the safe direction for a conditional operand.
 		Assert.equals(
 			0,
-			violations(fnRet('final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal k = f(x);\n\t\t\tout.push([k, obj?.m]);\n\t\t}')).length
+			violations(fnRet('final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal k = f(x);\n\t\t\tout.push([k, obj?.m]);\n\t\t}'))
+				.length
 		);
 	}
 
@@ -327,7 +332,8 @@ class PreferComprehensionCheckTest extends Test {
 		// AFTER — would run first.
 		Assert.equals(
 			0,
-			violations(fnRet('final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal a = f(x);\n\t\t\tout.push(g(x) + a);\n\t\t}')).length
+			violations(fnRet('final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal a = f(x);\n\t\t\tout.push(g(x) + a);\n\t\t}'))
+				.length
 		);
 	}
 

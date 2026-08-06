@@ -158,7 +158,8 @@ final class CatchDynamic implements Check implements ConfigAware {
 	}
 
 	/** The message for a bare, untyped `catch (e)` (arm (c)) — shared by `run` and any diagnostics. */
-	private static final UNTYPED_MESSAGE: String = 'untyped catch clause is implicitly Exception (Haxe 4.1+) — prefer catch (exception:Exception)';
+	private static final UNTYPED_MESSAGE: String =
+		'untyped catch clause is implicitly Exception (Haxe 4.1+) — prefer catch (exception:Exception)';
 
 	/** Walk `node`, flagging every catch clause whose declared type is a catch-all name, plus every bare untyped catch. */
 	private static function walk(

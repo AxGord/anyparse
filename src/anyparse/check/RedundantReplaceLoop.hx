@@ -220,8 +220,9 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 	 * If `whileNode` is a qualifying redundant-replace loop, its match (spans, arm, and the
 	 * receiver/literal text for the message); else null. See the type doc for the full gate list.
 	 */
-	private static function matchWhile(whileNode: QueryNode, root: QueryNode, source: String, declaredTypes: Map<Int, String>, s: Seams):
-		Null<Match> {
+	private static function matchWhile(
+		whileNode: QueryNode, root: QueryNode, source: String, declaredTypes: Map<Int, String>, s: Seams
+	): Null<Match> {
 		if (whileNode.children.length != WHILE_CHILD_COUNT) return null;
 		var cond: QueryNode = whileNode.children[0];
 		if (s.parenKind != null && cond.kind == s.parenKind && cond.children.length == 1) cond = cond.children[0];
@@ -287,9 +288,10 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 			return null;
 		}
 		final call: Null<MethodCall> = methodCallParts(cond, s);
-		return call != null && call.method == CONTAINS_METHOD && cond.children.length == ONE_ARG_CALL_CHILD_COUNT
-			? { receiver: call.recv, search: cond.children[1] }
-			: null;
+		return call != null && call.method == CONTAINS_METHOD && cond.children.length == ONE_ARG_CALL_CHILD_COUNT ? {
+			receiver: call.recv,
+			search: cond.children[1]
+		} : null;
 	}
 
 	/** `x.METHOD(...)` destructured into its receiver + method name, or null when `node` is not a field-access call. */
@@ -319,8 +321,7 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 	/** The loop body's single statement (a plain assignment expression statement), or null when the body is not exactly one. */
 	private static function singleStatementOf(body: QueryNode, s: Seams): Null<QueryNode> {
 		if (body.kind == s.exprStmtKind) return body;
-		if (body.kind == s.blockStmtKind && body.children.length == 1 && body.children[0].kind == s.exprStmtKind)
-			return body.children[0];
+		if (body.kind == s.blockStmtKind && body.children.length == 1 && body.children[0].kind == s.exprStmtKind) return body.children[0];
 		return null;
 	}
 
@@ -328,19 +329,21 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 	private static function toViolation(file: String, m: Match): Violation {
 		final search: String = excerpt(m.searchSrc);
 		final replacement: String = excerpt(m.replacementSrc);
-		return m.armA ? {
-			file: file,
-			span: m.whileSpan,
-			rule: RULE_ID,
-			severity: Severity.Info,
-			message: 'this while (${m.receiverName}.indexOf($search) != -1) loop runs at most once — replace() already replaces every occurrence; collapses to ${m.receiverName} = ${m.receiverName}.replace($search, $replacement);'
-		} : {
-			file: file,
-			span: m.whileSpan,
-			rule: RULE_ID,
-			severity: Severity.Warning,
-			message: 'this loop never terminates for any ${m.receiverName} containing $search — replace($search, $replacement) reintroduces it every time, since $replacement itself contains $search'
-		};
+		return m.armA
+			? {
+				file: file,
+				span: m.whileSpan,
+				rule: RULE_ID,
+				severity: Severity.Info,
+				message: 'this while (${m.receiverName}.indexOf($search) != -1) loop runs at most once — replace() already replaces every occurrence; collapses to ${m.receiverName} = ${m.receiverName}.replace($search, $replacement);'
+			}
+			: {
+				file: file,
+				span: m.whileSpan,
+				rule: RULE_ID,
+				severity: Severity.Warning,
+				message: 'this loop never terminates for any ${m.receiverName} containing $search — replace($search, $replacement) reintroduces it every time, since $replacement itself contains $search'
+			};
 	}
 
 	/** `text` (a literal's verbatim source, delimiters included), capped to `EXCERPT_MAX` characters (an ellipsis marks the cut) for a finding message. */

@@ -46,64 +46,77 @@ class UnguardedNullableDerefTest extends Test {
 	}
 
 	public function testCrossFileInstanceReturnFlagged(): Void {
-		Assert.equals(1, violationsFiles([
-			{ file: 'Helper.hx', source: 'class Helper { public function findUser(s:String):Null<Foo> return null; }' },
-			{ file: 'Caller.hx', source: 'class Caller { function f(h:Helper) { var u = h.findUser(k); u.name; } }' }
-		]).length);
+		Assert.equals(
+			1, violationsFiles([
+				{ file: 'Helper.hx', source: 'class Helper { public function findUser(s:String):Null<Foo> return null; }' },
+				{ file: 'Caller.hx', source: 'class Caller { function f(h:Helper) { var u = h.findUser(k); u.name; } }' }
+			]).length
+		);
 	}
 
 	public function testCrossFileStaticReturnFlagged(): Void {
-		Assert.equals(1, violationsFiles([
-			{ file: 'Helper.hx', source: 'class Helper { public static function make():Null<Foo> return null; }' },
-			{ file: 'Caller.hx', source: 'class Caller { function g() { var u = Helper.make(); u.name; } }' }
-		]).length);
+		Assert.equals(
+			1, violationsFiles([
+				{ file: 'Helper.hx', source: 'class Helper { public static function make():Null<Foo> return null; }' },
+				{ file: 'Caller.hx', source: 'class Caller { function g() { var u = Helper.make(); u.name; } }' }
+			]).length
+		);
 	}
 
 	public function testCrossFileNonNullReturnNotFlagged(): Void {
-		Assert.equals(0, violationsFiles([
-			{ file: 'Helper.hx', source: 'class Helper { public function plain():Foo return null; }' },
-			{ file: 'Caller.hx', source: 'class Caller { function f(h:Helper) { var u = h.plain(); u.name; } }' }
-		]).length);
+		Assert.equals(
+			0, violationsFiles([
+				{ file: 'Helper.hx', source: 'class Helper { public function plain():Foo return null; }' },
+				{ file: 'Caller.hx', source: 'class Caller { function f(h:Helper) { var u = h.plain(); u.name; } }' }
+			]).length
+		);
 	}
 
 	public function testCrossFileAmbiguousReturnNotFlagged(): Void {
-		Assert.equals(0, violationsFiles([
-			{ file: 'A.hx', source: 'class Helper { public function findUser(s:String):Null<Foo> return null; }' },
-			{ file: 'B.hx', source: 'class Helper { public function findUser(s:String):Foo return null; }' },
-			{ file: 'Caller.hx', source: 'class Caller { function f(h:Helper) { var u = h.findUser(k); u.name; } }' }
-		]).length);
+		Assert.equals(
+			0, violationsFiles([
+				{ file: 'A.hx', source: 'class Helper { public function findUser(s:String):Null<Foo> return null; }' },
+				{ file: 'B.hx', source: 'class Helper { public function findUser(s:String):Foo return null; }' },
+				{ file: 'Caller.hx', source: 'class Caller { function f(h:Helper) { var u = h.findUser(k); u.name; } }' }
+			]).length
+		);
 	}
 
 	public function testInferredLocalNotMisresolvedAsType(): Void {
 		// A bound local whose type is inferred (unannotated `var Box = new Safe()`) must NOT be
 		// reinterpreted as a same-named indexed class — the static-fallback collision (R1).
-		Assert.equals(0, violationsFiles([
-			{ file: 'Box.hx', source: 'class Box { public function get():Null<Foo> return null; }' },
-			{
-				file: 'Main.hx',
-				source: 'class Safe { public function get():Foo return null; } class Main { function run() { var Box = new Safe(); var v = Box.get(); v.name; } }'
-			}
-		]).length);
+		Assert.equals(
+			0, violationsFiles([
+				{ file: 'Box.hx', source: 'class Box { public function get():Null<Foo> return null; }' },
+				{
+					file: 'Main.hx',
+					source: 'class Safe { public function get():Foo return null; } class Main { function run() { var Box = new Safe(); var v = Box.get(); v.name; } }'
+				}
+			]).length
+		);
 	}
 
 	public function testSwitchNullCaseThenWildcardNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; switch (u) { case null: return; case _: u.foo; } } }').length
+			violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; switch (u) { case null: return; case _: u.foo; } } }')
+				.length
 		);
 	}
 
 	public function testSwitchNullCaseNonExitingNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; switch (u) { case null: trace(0); case _: u.foo; } } }').length
+			violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; switch (u) { case null: trace(0); case _: u.foo; } } }')
+				.length
 		);
 	}
 
 	public function testCaseGuardNarrowsNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations('class C { function f(m:Map<String,Foo>, x:Int) { var u = m[k]; switch (x) { case _ if (u != null): u.foo; } } }').length
+			violations('class C { function f(m:Map<String,Foo>, x:Int) { var u = m[k]; switch (x) { case _ if (u != null): u.foo; } } }')
+				.length
 		);
 	}
 
@@ -118,7 +131,8 @@ class UnguardedNullableDerefTest extends Test {
 	public function testNullReturnBindingFlagged(): Void {
 		Assert.equals(
 			1,
-			violations('class C { function findUser(s:String):Null<Foo> { return null; } function g() { var u = findUser("x"); u.baz; } }').length
+			violations('class C { function findUser(s:String):Null<Foo> { return null; } function g() { var u = findUser("x"); u.baz; } }')
+				.length
 		);
 	}
 
@@ -133,7 +147,8 @@ class UnguardedNullableDerefTest extends Test {
 	public function testBareCallFlagged(): Void {
 		Assert.equals(
 			1,
-			violations('class C { function findUser(s:String):Null<Foo> { return null; } function g() { var u = findUser("x"); u(); } }').length
+			violations('class C { function findUser(s:String):Null<Foo> { return null; } function g() { var u = findUser("x"); u(); } }')
+				.length
 		);
 	}
 
@@ -150,7 +165,8 @@ class UnguardedNullableDerefTest extends Test {
 	}
 
 	public function testShortCircuitNotFlagged(): Void {
-		Assert.equals(0, violations('class C { function f(m:Map<String,Int>) { var u = m[k]; var ok = u != null && u.foo > 0; } }').length);
+		Assert.equals(0, violations('class C { function f(m:Map<String,Int>) { var u = m[k]; var ok = u != null && u.foo > 0; } }')
+			.length);
 	}
 
 	public function testReassignNonNullNotFlagged(): Void {
@@ -245,7 +261,8 @@ class UnguardedNullableDerefTest extends Test {
 		// The guard proves `k` present, not `k2` — a different-key binding is still seeded.
 		Assert.equals(
 			1,
-			violations('class C { function f(m:Map<String,Foo>, k:String, k2:String) { if (m.exists(k)) { var u = m[k2]; u.foo; } } }').length
+			violations('class C { function f(m:Map<String,Foo>, k:String, k2:String) { if (m.exists(k)) { var u = m[k2]; u.foo; } } }')
+				.length
 		);
 	}
 
@@ -263,7 +280,8 @@ class UnguardedNullableDerefTest extends Test {
 
 	public function testAssertIsTrueBareNarrowsNotFlagged(): Void {
 		// The truth-asserted `u != null` clears u's MaybeNull fact (maybe-only) — sibling of Assert.notNull.
-		Assert.equals(0, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; Assert.isTrue(u != null); u.foo; } }').length);
+		Assert.equals(0, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; Assert.isTrue(u != null); u.foo; } }')
+			.length);
 	}
 
 	public function testAssertIsFalseBareNarrowsNotFlagged(): Void {
@@ -293,7 +311,8 @@ class UnguardedNullableDerefTest extends Test {
 
 	public function testAssertIsTrueWrongPolarityStillFlagged(): Void {
 		// `Assert.isTrue(u == null)` proves u IS null, not non-null — narrows nothing on the truth path.
-		Assert.equals(1, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; Assert.isTrue(u == null); u.foo; } }').length);
+		Assert.equals(1, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; Assert.isTrue(u == null); u.foo; } }')
+			.length);
 	}
 
 	public function testAssertIsFalseWrongPolarityStillFlagged(): Void {

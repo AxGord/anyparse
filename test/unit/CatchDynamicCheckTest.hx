@@ -348,9 +348,7 @@ class CatchDynamicCheckTest extends Test {
 	}
 
 	public function testFixAnnotatesUntypedCatchInsideConditionalQualifiedNoImport(): Void {
-		final out: String = applyFix(
-			'class C {\n\tpublic function f():Void {\n\t\t#if debug\n\t\ttry g() catch (e) {}\n\t\t#end\n\t}\n}'
-		);
+		final out: String = applyFix('class C {\n\tpublic function f():Void {\n\t\t#if debug\n\t\ttry g() catch (e) {}\n\t\t#end\n\t}\n}');
 		Assert.isTrue(out.indexOf('(e:haxe.Exception)') != -1, 'conditional annotation should use qualified name, got: $out');
 		Assert.isTrue(out.indexOf('import haxe.Exception;') == -1, 'no import for a conditional-only annotation, got: $out');
 	}
@@ -362,9 +360,7 @@ class CatchDynamicCheckTest extends Test {
 		final out: String = applyFix(src);
 		Assert.isTrue(out.indexOf('(e:Exception)') != -1, 'bare catch annotated, got: $out');
 		Assert.isTrue(out.indexOf('(x:Exception)') != -1, 'dynamic catch swapped, got: $out');
-		Assert.equals(
-			-1, out.indexOf('import haxe.Exception;', out.indexOf('import haxe.Exception;') + 1), 'import added once, got: $out'
-		);
+		Assert.equals(-1, out.indexOf('import haxe.Exception;', out.indexOf('import haxe.Exception;') + 1), 'import added once, got: $out');
 	}
 
 	public function testFixDoesNotTouchTypedExceptionCatch(): Void {

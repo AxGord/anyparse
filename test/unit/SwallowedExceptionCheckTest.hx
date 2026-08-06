@@ -54,7 +54,8 @@ class SwallowedExceptionCheckTest extends Test {
 	public function testCatchUsingVariableNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations('class C {\n\tpublic function f():Void {\n\t\ttry { g(); } catch (e:Exception) {\n\t\t\ttrace(e);\n\t\t}\n\t}\n}').length
+			violations('class C {\n\tpublic function f():Void {\n\t\ttry { g(); } catch (e:Exception) {\n\t\t\ttrace(e);\n\t\t}\n\t}\n}')
+				.length
 		);
 	}
 
@@ -74,7 +75,8 @@ class SwallowedExceptionCheckTest extends Test {
 	public function testUnderscoreDiscardNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations('class C {\n\tpublic function f():Void {\n\t\ttry { g(); } catch (_:Exception) {\n\t\t\ttrace("x");\n\t\t}\n\t}\n}').length
+			violations('class C {\n\tpublic function f():Void {\n\t\ttry { g(); } catch (_:Exception) {\n\t\t\ttrace("x");\n\t\t}\n\t}\n}')
+				.length
 		);
 	}
 

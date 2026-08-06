@@ -115,7 +115,8 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 		final elseBool: Null<Bool> = boolValue(elseNode, source);
 		if (thenBool == null && elseBool == null) return null;
 		if (thenBool != null && elseBool != null)
-			return thenBool && !elseBool ? plain(cond, source).src : !thenBool && elseBool ? negate(cond, source, typeNominalOf).src : null;
+			return thenBool && !elseBool ? plain(cond, source)
+				.src : !thenBool && elseBool ? negate(cond, source, typeNominalOf).src : null;
 		// Exactly one branch is a boolean literal; the other becomes an operand of
 		// `&&` / `||`. That reduction is sound only when the non-literal branch is a
 		// non-null `Bool` — a boolean-operator result. A `null` literal, a bare

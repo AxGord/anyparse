@@ -202,10 +202,19 @@ final class JoinStringAppend implements Check implements DefaultOff {
 	 * simply drop from the whitelist, never widen it.
 	 */
 	private static function safeOperandKindsOf(shape: RefShape): Array<String> {
-		final out: Array<String> = (shape.atomExprKinds ?? []).concat(shape.atomChainKinds ?? []).concat(shape.additiveOperandUnwrapKinds ?? []);
+		final out: Array<String> = (
+			shape.atomExprKinds ?? []
+		).concat(shape.atomChainKinds ?? []).concat(shape.additiveOperandUnwrapKinds ?? []);
 		for (k in [
-			shape.callKind, shape.fieldAccessKind, shape.indexAccessKind, shape.newExprKind, shape.negationKind, shape.notKind,
-			shape.postIncrKind, shape.arrayLiteralKind, shape.parenKind
+			shape.callKind,
+			shape.fieldAccessKind,
+			shape.indexAccessKind,
+			shape.newExprKind,
+			shape.negationKind,
+			shape.notKind,
+			shape.postIncrKind,
+			shape.arrayLiteralKind,
+			shape.parenKind
 		]) if (k != null) out.push(k);
 		return out;
 	}
@@ -320,7 +329,9 @@ final class JoinStringAppend implements Check implements DefaultOff {
 	 * associative under rounding. Anything else (unresolved, inferred, a custom type) is a
 	 * safe miss.
 	 */
-	private static function typeGateOk(target: QueryNode, terms: Array<QueryNode>, tree: QueryNode, s: Seams, declaredTypeSources: () -> Map<Int, String>): Bool {
+	private static function typeGateOk(
+		target: QueryNode, terms: Array<QueryNode>, tree: QueryNode, s: Seams, declaredTypeSources: () -> Map<Int, String>
+	): Bool {
 		for (t in terms) if (s.stringLiteralKinds.contains(t.kind)) return true;
 		final declared: Null<String> = resolvedTargetType(target, tree, s, declaredTypeSources);
 		if (declared == 'Float') return false;
@@ -328,7 +339,9 @@ final class JoinStringAppend implements Check implements DefaultOff {
 	}
 
 	/** The target's explicit declared type source, one `Null<…>` wrapper unwrapped, or null when unresolved. */
-	private static function resolvedTargetType(target: QueryNode, tree: QueryNode, s: Seams, declaredTypeSources: () -> Map<Int, String>): Null<String> {
+	private static function resolvedTargetType(
+		target: QueryNode, tree: QueryNode, s: Seams, declaredTypeSources: () -> Map<Int, String>
+	): Null<String> {
 		final raw: Null<String> = TypeResolver.identDeclaredTypeSource(target, s.shape, tree, declaredTypeSources, false);
 		return raw == null ? null : unwrapNullableType(StringTools.trim(raw), s.shape);
 	}
@@ -356,7 +369,9 @@ final class JoinStringAppend implements Check implements DefaultOff {
 	 * statements) would be dropped by the rebuild, so the whole run is refused rather than
 	 * hoisted.
 	 */
-	private static function droppedComment(firstSpan: Span, to: Int, terms: Array<QueryNode>, comments: Array<{ from: Int, to: Int, isLine: Bool }>): Bool {
+	private static function droppedComment(
+		firstSpan: Span, to: Int, terms: Array<QueryNode>, comments: Array<{ from: Int, to: Int, isLine: Bool }>
+	): Bool {
 		for (tok in comments) if (tok.from >= firstSpan.from && tok.to <= to) {
 			var inTerm: Bool = false;
 			for (t in terms) {

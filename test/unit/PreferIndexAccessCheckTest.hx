@@ -84,7 +84,8 @@ class PreferIndexAccessCheckTest extends Test {
 		// A `this.<field>` path receiver resolving to Map is now flagged (path support).
 		Assert.equals(
 			1,
-			violations('class C {\n\tfinal m:Map<String, String> = [];\n\tfunction f():Void {\n\t\tvar v = this.m.get("a");\n\t}\n}').length
+			violations('class C {\n\tfinal m:Map<String, String> = [];\n\tfunction f():Void {\n\t\tvar v = this.m.get("a");\n\t}\n}')
+				.length
 		);
 	}
 
@@ -284,40 +285,52 @@ class PreferIndexAccessCheckTest extends Test {
 		// an unrelated b.Mid in another package declares m:Map DIRECTLY. The package-blind
 		// simple-name walk returned b.Mid's Map (→ a compile-breaking `[]` on a StringMap); the
 		// import-aware walk reads m off a.Mid through a.Base → StringMap → skip.
-		Assert.equals(0, violationsForFiles([
-			{ file: 'a/Base.hx', source: 'package a;\nclass Base {\n\tpublic var m:StringMap<Int>;\n}' },
-			{ file: 'a/Mid.hx', source: 'package a;\nclass Mid extends Base {\n}' },
-			{ file: 'b/Mid.hx', source: 'package b;\nclass Mid {\n\tpublic var m:Map<String, Int>;\n}' },
-			{ file: 'top/Outer.hx', source: 'package top;\nimport a.Mid;\nclass Outer {\n\tpublic static var mid:Mid;\n}' },
-			{ file: 'top/User.hx', source: 'package top;\nclass User {\n\tfunction f():Void {\n\t\tvar v = Outer.mid.m.get("a");\n\t}\n}' }
-		]).length);
+		Assert.equals(
+			0, violationsForFiles([
+				{ file: 'a/Base.hx', source: 'package a;\nclass Base {\n\tpublic var m:StringMap<Int>;\n}' },
+				{ file: 'a/Mid.hx', source: 'package a;\nclass Mid extends Base {\n}' },
+				{ file: 'b/Mid.hx', source: 'package b;\nclass Mid {\n\tpublic var m:Map<String, Int>;\n}' },
+				{ file: 'top/Outer.hx', source: 'package top;\nimport a.Mid;\nclass Outer {\n\tpublic static var mid:Mid;\n}' },
+				{
+					file: 'top/User.hx',
+					source: 'package top;\nclass User {\n\tfunction f():Void {\n\t\tvar v = Outer.mid.m.get("a");\n\t}\n}'
+				}
+			]).length
+		);
 	}
 
 	public function testValueRootCrossPackageInheritedNonMapNotFlagged(): Void {
 		// Same cross-package poison via a VALUE root `o.mid.m` (o:Outer) — proves the pre-existing
 		// value-root hole is closed too, not only the new static-root surface.
-		Assert.equals(0, violationsForFiles([
-			{ file: 'a/Base.hx', source: 'package a;\nclass Base {\n\tpublic var m:StringMap<Int>;\n}' },
-			{ file: 'a/Mid.hx', source: 'package a;\nclass Mid extends Base {\n}' },
-			{ file: 'b/Mid.hx', source: 'package b;\nclass Mid {\n\tpublic var m:Map<String, Int>;\n}' },
-			{ file: 'top/Outer.hx', source: 'package top;\nimport a.Mid;\nclass Outer {\n\tpublic var mid:Mid;\n}' },
-			{
-				file: 'top/User.hx',
-				source: 'package top;\nclass User {\n\tfunction f(o:Outer):Void {\n\t\tvar v = o.mid.m.get("a");\n\t}\n}'
-			}
-		]).length);
+		Assert.equals(
+			0, violationsForFiles([
+				{ file: 'a/Base.hx', source: 'package a;\nclass Base {\n\tpublic var m:StringMap<Int>;\n}' },
+				{ file: 'a/Mid.hx', source: 'package a;\nclass Mid extends Base {\n}' },
+				{ file: 'b/Mid.hx', source: 'package b;\nclass Mid {\n\tpublic var m:Map<String, Int>;\n}' },
+				{ file: 'top/Outer.hx', source: 'package top;\nimport a.Mid;\nclass Outer {\n\tpublic var mid:Mid;\n}' },
+				{
+					file: 'top/User.hx',
+					source: 'package top;\nclass User {\n\tfunction f(o:Outer):Void {\n\t\tvar v = o.mid.m.get("a");\n\t}\n}'
+				}
+			]).length
+		);
 	}
 
 	public function testCrossPackageDirectMapStillFlagged(): Void {
 		// Positive control: when the import-correct a.Mid ITSELF declares m:Map directly (no
 		// inheritance divergence), the same shape flags — the fix does not over-refuse ≥3-segment
 		// cross-package paths, only the poisoned ones.
-		Assert.equals(1, violationsForFiles([
-			{ file: 'a/Mid.hx', source: 'package a;\nclass Mid {\n\tpublic var m:Map<String, Int>;\n}' },
-			{ file: 'b/Mid.hx', source: 'package b;\nclass Mid {\n\tpublic var m:StringMap<Int>;\n}' },
-			{ file: 'top/Outer.hx', source: 'package top;\nimport a.Mid;\nclass Outer {\n\tpublic static var mid:Mid;\n}' },
-			{ file: 'top/User.hx', source: 'package top;\nclass User {\n\tfunction f():Void {\n\t\tvar v = Outer.mid.m.get("a");\n\t}\n}' }
-		]).length);
+		Assert.equals(
+			1, violationsForFiles([
+				{ file: 'a/Mid.hx', source: 'package a;\nclass Mid {\n\tpublic var m:Map<String, Int>;\n}' },
+				{ file: 'b/Mid.hx', source: 'package b;\nclass Mid {\n\tpublic var m:StringMap<Int>;\n}' },
+				{ file: 'top/Outer.hx', source: 'package top;\nimport a.Mid;\nclass Outer {\n\tpublic static var mid:Mid;\n}' },
+				{
+					file: 'top/User.hx',
+					source: 'package top;\nclass User {\n\tfunction f():Void {\n\t\tvar v = Outer.mid.m.get("a");\n\t}\n}'
+				}
+			]).length
+		);
 	}
 
 	// --- bare identifier bound to an INHERITED member (implicit `this`) ---
@@ -393,27 +406,31 @@ class PreferIndexAccessCheckTest extends Test {
 		// Positive control for the namesake fixture below: with the import-correct `a.Base` carrying
 		// the Map, the same layout DOES flag — so that test's zero is the namesake being excluded,
 		// not the cross-package shape being refused wholesale.
-		Assert.equals(1, violationsForFiles([
-			{ file: 'a/Base.hx', source: 'package a;\nclass Base {\n\tpublic var m:Map<String, Int>;\n}' },
-			{ file: 'b/Base.hx', source: 'package b;\nclass Base {\n\tpublic var m:StringMap<Int>;\n}' },
-			{
-				file: 'top/Sub.hx',
-				source: 'package top;\nimport a.Base;\nclass Sub extends Base {\n\tfunction f():Void {\n\t\tm.set("a", 1);\n\t}\n}'
-			}
-		]).length);
+		Assert.equals(
+			1, violationsForFiles([
+				{ file: 'a/Base.hx', source: 'package a;\nclass Base {\n\tpublic var m:Map<String, Int>;\n}' },
+				{ file: 'b/Base.hx', source: 'package b;\nclass Base {\n\tpublic var m:StringMap<Int>;\n}' },
+				{
+					file: 'top/Sub.hx',
+					source: 'package top;\nimport a.Base;\nclass Sub extends Base {\n\tfunction f():Void {\n\t\tm.set("a", 1);\n\t}\n}'
+				}
+			]).length
+		);
 	}
 
 	public function testInheritedMemberOfCrossPackageNamesakeNotFlagged(): Void {
 		// The import-correct `a.Base` declares a StringMap; an unrelated `b.Base` declares a Map.
 		// The import-aware extends walk must read `m` off a.Base only — no finding.
-		Assert.equals(0, violationsForFiles([
-			{ file: 'a/Base.hx', source: 'package a;\nclass Base {\n\tpublic var m:StringMap<Int>;\n}' },
-			{ file: 'b/Base.hx', source: 'package b;\nclass Base {\n\tpublic var m:Map<String, Int>;\n}' },
-			{
-				file: 'top/Sub.hx',
-				source: 'package top;\nimport a.Base;\nclass Sub extends Base {\n\tfunction f():Void {\n\t\tm.set("a", 1);\n\t}\n}'
-			}
-		]).length);
+		Assert.equals(
+			0, violationsForFiles([
+				{ file: 'a/Base.hx', source: 'package a;\nclass Base {\n\tpublic var m:StringMap<Int>;\n}' },
+				{ file: 'b/Base.hx', source: 'package b;\nclass Base {\n\tpublic var m:Map<String, Int>;\n}' },
+				{
+					file: 'top/Sub.hx',
+					source: 'package top;\nimport a.Base;\nclass Sub extends Base {\n\tfunction f():Void {\n\t\tm.set("a", 1);\n\t}\n}'
+				}
+			]).length
+		);
 	}
 
 	private function src(decl: String, body: String): String {

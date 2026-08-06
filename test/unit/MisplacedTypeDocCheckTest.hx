@@ -182,7 +182,8 @@ class MisplacedTypeDocCheckTest extends Test {
 	public function testEnumAbstractCountsAsASecondType(): Void {
 		Assert.equals(
 			0,
-			violations('package p;\n\n/**\n * doc.\n */\nimport a.B;\n\nclass C {}\n\nenum abstract E(Int) {\n\n\tfinal X = 1;\n\n}\n').length
+			violations('package p;\n\n/**\n * doc.\n */\nimport a.B;\n\nclass C {}\n\nenum abstract E(Int) {\n\n\tfinal X = 1;\n\n}\n')
+				.length
 		);
 	}
 

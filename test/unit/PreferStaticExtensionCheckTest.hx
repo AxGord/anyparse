@@ -85,9 +85,12 @@ class PreferStaticExtensionCheckTest extends Test {
 	}
 
 	public function testSupertypeShadowNotFlagged(): Void {
-		Assert.equals(0, violationsOf(fileSet(user('using Ext;\n\n', 'Ext.deco(w, 1);'), 'class Widget extends Base {}\n', [
-			{ file: 'Base.hx', source: 'class Base {\n\tpublic function deco(n: Int): Widget return this;\n}\n' }
-		])).length);
+		Assert.equals(
+			0,
+			violationsOf(fileSet(user('using Ext;\n\n', 'Ext.deco(w, 1);'), 'class Widget extends Base {}\n', [
+				{ file: 'Base.hx', source: 'class Base {\n\tpublic function deco(n: Int): Widget return this;\n}\n' }
+			])).length
+		);
 	}
 
 	public function testUnresolvableClosureReportedOnly(): Void {
@@ -116,15 +119,21 @@ class PreferStaticExtensionCheckTest extends Test {
 	}
 
 	public function testConflictingUsingNotFlagged(): Void {
-		Assert.equals(0, violationsOf(fileSet(user('using Ext;\nusing Other;\n\n', 'Ext.deco(w, 1);'), WIDGET_SOURCE, [
-			{ file: 'Other.hx', source: 'class Other {\n\tpublic static function deco(w: Widget, n: Int): Widget return w;\n}\n' }
-		])).length);
+		Assert.equals(
+			0,
+			violationsOf(fileSet(user('using Ext;\nusing Other;\n\n', 'Ext.deco(w, 1);'), WIDGET_SOURCE, [
+				{ file: 'Other.hx', source: 'class Other {\n\tpublic static function deco(w: Widget, n: Int): Widget return w;\n}\n' }
+			])).length
+		);
 	}
 
 	public function testNonConflictingUsingStillFlagged(): Void {
-		Assert.equals(1, violationsOf(fileSet(user('using Ext;\nusing Other;\n\n', 'Ext.deco(w, 1);'), WIDGET_SOURCE, [
-			{ file: 'Other.hx', source: 'class Other {\n\tpublic static function tag(w: Widget): Widget return w;\n}\n' }
-		])).length);
+		Assert.equals(
+			1,
+			violationsOf(fileSet(user('using Ext;\nusing Other;\n\n', 'Ext.deco(w, 1);'), WIDGET_SOURCE, [
+				{ file: 'Other.hx', source: 'class Other {\n\tpublic static function tag(w: Widget): Widget return w;\n}\n' }
+			])).length
+		);
 	}
 
 	public function testTypeNameValueShadowedNotFlagged(): Void {
@@ -392,9 +401,13 @@ class PreferStaticExtensionCheckTest extends Test {
 	public function testForBinderOverTabledStaticCallOfShadowedTypeStaysUnresolved(): Void {
 		// An indexed PROJECT type named `Reflect` shadows the stdlib one, so its `fields` may return
 		// anything — the table is refused and the binder stays untyped (report-only, hedged).
-		final files: Array<{ file: String, source: String }> = strExtFiles('for (key in Reflect.fields(o)) StrExt.deco(key, 1);').concat([
-			{ file: 'Reflect.hx', source: 'class Reflect {\n\tpublic static function fields(o: Dynamic): Array<Widget> return null;\n}\n' }
-		]);
+		final files: Array<{ file: String, source: String }> = strExtFiles('for (key in Reflect.fields(o)) StrExt.deco(key, 1);')
+			.concat([
+				{
+					file: 'Reflect.hx',
+					source: 'class Reflect {\n\tpublic static function fields(o: Dynamic): Array<Widget> return null;\n}\n'
+				}
+			]);
 		final vs: Array<Violation> = violationsOf(files, STREXT_CONFIG);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('receiver type unresolved') != -1, vs[0].message);
@@ -439,12 +452,13 @@ class PreferStaticExtensionCheckTest extends Test {
 			Assert.pass();
 			return;
 		}
-		final files: Array<{ file: String, source: String }> = strExtFiles('for (key in Reflect.fields(o)) StrExt.deco(key, 1);').concat([
-			{
-				file: haxe.io.Path.join([stdDir, 'Reflect.hx']),
-				source: 'extern class Reflect {\n\tpublic static function fields(o: Dynamic): Array<String>;\n}\n'
-			}
-		]);
+		final files: Array<{ file: String, source: String }> = strExtFiles('for (key in Reflect.fields(o)) StrExt.deco(key, 1);')
+			.concat([
+				{
+					file: haxe.io.Path.join([stdDir, 'Reflect.hx']),
+					source: 'extern class Reflect {\n\tpublic static function fields(o: Dynamic): Array<String>;\n}\n'
+				}
+			]);
 		final vs: Array<Violation> = violationsOf(files, STREXT_CONFIG);
 		Assert.equals(1, vs.length);
 		Assert.equals(-1, vs[0].message.indexOf('receiver type unresolved'), vs[0].message);

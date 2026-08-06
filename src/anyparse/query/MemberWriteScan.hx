@@ -60,9 +60,11 @@ final class MemberWriteScan {
 	public static inline function subtypeMayWrite(owner: String, name: String, index: SymbolIndex, plugin: GrammarPlugin): Bool {
 		return scopeOf(
 			index, plugin
-		).subtypeDeclMatches(
-			owner, name, (subtype, src, span, redeclares) -> redeclares || subtypeReach(scopeOf(index, plugin), subtype, name, src, span)
-		);
+		)
+			.subtypeDeclMatches(
+				owner, name,
+				(subtype, src, span, redeclares) -> redeclares || subtypeReach(scopeOf(index, plugin), subtype, name, src, span)
+			);
 	}
 
 	/**
@@ -92,11 +94,13 @@ final class MemberWriteScan {
 	): Bool {
 		return scopeOf(
 			index, plugin
-		).subtypeDeclMatches(
-			owner, name,
-			(subtype, src, span, redeclares) ->
-				redeclares || writeIndex.writtenAnywhere(subtype, name) || subtypeReach(scopeOf(index, plugin), subtype, name, src, span)
-		);
+		)
+			.subtypeDeclMatches(
+				owner, name,
+				(subtype, src, span, redeclares) ->
+					redeclares || writeIndex.writtenAnywhere(subtype, name)
+					|| subtypeReach(scopeOf(index, plugin), subtype, name, src, span)
+			);
 	}
 
 	/**

@@ -152,7 +152,8 @@ class PreferDocCommentCheckTest extends Test {
 
 	/** TRAILING — a `case` arm is not a declaration. */
 	public function testTrailingCommentOnCaseKept(): Void {
-		Assert.equals(0, violations('class C {\n\tfunction f(v:Int):Void {\n\t\tswitch v {\n\t\t\tcase 1: // first\n\t\t}\n\t}\n}').length);
+		Assert.equals(0, violations('class C {\n\tfunction f(v:Int):Void {\n\t\tswitch v {\n\t\t\tcase 1: // first\n\t\t}\n\t}\n}')
+			.length);
 	}
 
 	/** TRAILING — a CONTINUATION line of a wrapped declaration carries no anchor, so it never qualifies. */
@@ -414,7 +415,8 @@ class PreferDocCommentCheckTest extends Test {
 	public function testGroupLabelAboveSiblingsKept(): Void {
 		Assert.equals(
 			0,
-			violations('class C {\n\t// Button\n\tpublic static inline final A:Int = 1;\n\tpublic static inline final B:Int = 2;\n}').length
+			violations('class C {\n\t// Button\n\tpublic static inline final A:Int = 1;\n\tpublic static inline final B:Int = 2;\n}')
+				.length
 		);
 	}
 
@@ -422,7 +424,8 @@ class PreferDocCommentCheckTest extends Test {
 	public function testGroupLabelOverLastSiblingKept(): Void {
 		Assert.equals(
 			0,
-			violations('class C {\n\tpublic static inline final A:Int = 1;\n\t// Slider\n\tpublic static inline final B:Int = 2;\n}').length
+			violations('class C {\n\tpublic static inline final A:Int = 1;\n\t// Slider\n\tpublic static inline final B:Int = 2;\n}')
+				.length
 		);
 	}
 
@@ -439,7 +442,8 @@ class PreferDocCommentCheckTest extends Test {
 	public function testBlankSeparatedSectionLabelKept(): Void {
 		Assert.equals(
 			0,
-			violations('class C {\n\t// Popup\n\tpublic static inline final A:Int = 1;\n\n\tpublic static inline final B:Int = 2;\n}').length
+			violations('class C {\n\t// Popup\n\tpublic static inline final A:Int = 1;\n\n\tpublic static inline final B:Int = 2;\n}')
+				.length
 		);
 	}
 

@@ -116,7 +116,8 @@ class CrossRenameMemberSliceTest extends Test {
 			{ file: 'o.hx', source: o },
 		]);
 		Assert.equals(1, changes.length);
-		Assert.equals('class Foo {\n\tpublic function new() {}\n\tpublic function poke():Void {}\n}', changeFor(changes, 'a.hx').newSource);
+		Assert.equals('class Foo {\n\tpublic function new() {}\n\tpublic function poke():Void {}\n}', changeFor(changes, 'a.hx')
+			.newSource);
 		Assert.isNull(changeOrNull(changes, 'o.hx'));
 	}
 

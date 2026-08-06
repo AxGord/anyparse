@@ -55,7 +55,8 @@ class UnusedReturnValueTest extends Test {
 		// A call that is a `switch`-case body's last expression is the case VALUE.
 		Assert.equals(
 			0,
-			violations('class C { function r():Int return 1; function m(x:Int):Int { return switch x { case 0: r(); case _: 0; }; } }').length
+			violations('class C { function r():Int return 1; function m(x:Int):Int { return switch x { case 0: r(); case _: 0; }; } }')
+				.length
 		);
 	}
 

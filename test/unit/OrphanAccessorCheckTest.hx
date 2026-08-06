@@ -151,12 +151,14 @@ import utest.Test;
 		final midA: String = 'package a;\nclass Mid extends Base {}';
 		final midB: String = 'package b;\nclass Mid extends Base {}';
 		final leaf: String = 'package a;\nclass Leaf extends Mid {\n\tpublic var v(get, never):Int;\n}';
-		Assert.equals(0, violationsOf([
-			{ file: 'Base.hx', source: base },
-			{ file: 'a/Mid.hx', source: midA },
-			{ file: 'b/Mid.hx', source: midB },
-			{ file: 'a/Leaf.hx', source: leaf }
-		]).length);
+		Assert.equals(
+			0, violationsOf([
+				{ file: 'Base.hx', source: base },
+				{ file: 'a/Mid.hx', source: midA },
+				{ file: 'b/Mid.hx', source: midB },
+				{ file: 'a/Leaf.hx', source: leaf }
+			]).length
+		);
 	}
 
 	public function testMemberKeepBlocksFix(): Void {

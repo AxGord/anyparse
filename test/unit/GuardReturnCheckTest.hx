@@ -383,7 +383,8 @@ class GuardReturnCheckTest extends Test {
 	public function testAnnotatedNonVoidUnreachableTailNotFlagged(): Void {
 		Assert.equals(
 			0,
-			vSource('class C {\n\tfunction f(a:Int):Int {\n\t\tthrow \'no\';\n\t\tif (a > 0) {\n\t\t\tp(a);\n\t\t\tq(a);\n\t\t}\n\t}\n}\n').length
+			vSource('class C {\n\tfunction f(a:Int):Int {\n\t\tthrow \'no\';\n\t\tif (a > 0) {\n\t\t\tp(a);\n\t\t\tq(a);\n\t\t}\n\t}\n}\n')
+				.length
 		);
 	}
 
@@ -460,7 +461,8 @@ class GuardReturnCheckTest extends Test {
 	public function testUnannotatedThrowThenTailFlagged(): Void {
 		Assert.equals(
 			1,
-			vSource('class C {\n\tfunction f(a:Int) {\n\t\tthrow \'no\';\n\t\tif (a > 0) {\n\t\t\tp(a);\n\t\t\tq(a);\n\t\t}\n\t}\n}\n').length
+			vSource('class C {\n\tfunction f(a:Int) {\n\t\tthrow \'no\';\n\t\tif (a > 0) {\n\t\t\tp(a);\n\t\t\tq(a);\n\t\t}\n\t}\n}\n')
+				.length
 		);
 	}
 

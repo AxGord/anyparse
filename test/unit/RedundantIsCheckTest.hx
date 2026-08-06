@@ -48,7 +48,8 @@ class RedundantIsCheckTest extends Test {
 	public function testNonIdentifierOperandNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations('@:nullSafety(Strict) class C { function f() { var b = make() is String; } function make():String return ""; }').length
+			violations('@:nullSafety(Strict) class C { function f() { var b = make() is String; } function make():String return ""; }')
+				.length
 		);
 	}
 

@@ -28,7 +28,8 @@ class PreferTernaryReturnCheckTest extends Test {
 	}
 
 	public function testBracedThenFlagged(): Void {
-		Assert.equals(1, violations('class C {\n\tfunction f():Int {\n\t\tif (a) {\n\t\t\treturn 1;\n\t\t}\n\t\treturn 0;\n\t}\n}').length);
+		Assert.equals(1, violations('class C {\n\tfunction f():Int {\n\t\tif (a) {\n\t\t\treturn 1;\n\t\t}\n\t\treturn 0;\n\t}\n}')
+			.length);
 	}
 
 	public function testVoidReturnThenNotFlagged(): Void {
@@ -118,7 +119,8 @@ class PreferTernaryReturnCheckTest extends Test {
 	public function testNullNarrowingGuardNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations('class C {\n\tfunction f(s:Null<S>):Bool {\n\t\tif (s != null && s.g() != null) return true;\n\t\treturn c;\n\t}\n}').length
+			violations('class C {\n\tfunction f(s:Null<S>):Bool {\n\t\tif (s != null && s.g() != null) return true;\n\t\treturn c;\n\t}\n}')
+				.length
 		);
 	}
 
@@ -191,7 +193,8 @@ class PreferTernaryReturnCheckTest extends Test {
 	public function testPairStraddlingTwoBranchesNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations('class C {\n\tfunction f(c:Bool):Int {\n\t\t#if A\n\t\tif (c) return 1;\n\t\t#else\n\t\treturn 2;\n\t\t#end\n\t}\n}').length
+			violations('class C {\n\tfunction f(c:Bool):Int {\n\t\t#if A\n\t\tif (c) return 1;\n\t\t#else\n\t\treturn 2;\n\t\t#end\n\t}\n}')
+				.length
 		);
 	}
 

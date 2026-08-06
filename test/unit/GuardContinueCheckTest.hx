@@ -82,7 +82,8 @@ class GuardContinueCheckTest extends Test {
 		// inserted `continue` targets it, not the outer loop.
 		Assert.equals(
 			1,
-			v('for (x in xs) {\n\t\t\tfor (y in ys) {\n\t\t\t\tmid();\n\t\t\t\tif (cond) {\n\t\t\t\t\tbody();\n\t\t\t\t}\n\t\t\t}\n\t\t}').length
+			v('for (x in xs) {\n\t\t\tfor (y in ys) {\n\t\t\t\tmid();\n\t\t\t\tif (cond) {\n\t\t\t\t\tbody();\n\t\t\t\t}\n\t\t\t}\n\t\t}')
+				.length
 		);
 		Assert.equals(
 			wrap('for (x in xs) {\n\t\t\tfor (y in ys) {\n\t\t\t\tmid();\n\t\t\t\tif (!cond) continue;\n\t\t\t\tbody();\n\t\t\t}\n\t\t}'),
@@ -217,9 +218,8 @@ class GuardContinueCheckTest extends Test {
 		// `b`'s narrowing comes from operand 2 and would not reach operand 3 of the
 		// negated `||` chain, so the whole condition is wrapped instead.
 		Assert.isTrue(
-			fx(cond('a != null && b != null && p(a.length, b.length)')).indexOf(
-				'if (!(a != null && b != null && p(a.length, b.length))) continue;'
-			) != -1
+			fx(cond('a != null && b != null && p(a.length, b.length)'))
+				.indexOf('if (!(a != null && b != null && p(a.length, b.length))) continue;') != -1
 		);
 	}
 
@@ -232,9 +232,8 @@ class GuardContinueCheckTest extends Test {
 		// The negation DROPS the parens, so the emitted chain is the same flat three-operand
 		// `||` as the unparenthesised shape — the gate must see through the parens too.
 		Assert.isTrue(
-			fx(cond('a != null && (b != null && p(a.length, b.length))')).indexOf(
-				'if (!(a != null && (b != null && p(a.length, b.length)))) continue;'
-			) != -1
+			fx(cond('a != null && (b != null && p(a.length, b.length))'))
+				.indexOf('if (!(a != null && (b != null && p(a.length, b.length)))) continue;') != -1
 		);
 	}
 
@@ -359,7 +358,8 @@ class GuardContinueCheckTest extends Test {
 		// would run it early — refused (contrast testBodyReturnFlagged: no tail).
 		Assert.equals(
 			0,
-			v('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tbody();\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tdone = true;\n\t\t}').length
+			v('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tbody();\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tdone = true;\n\t\t}')
+				.length
 		);
 	}
 
@@ -367,7 +367,8 @@ class GuardContinueCheckTest extends Test {
 		// A continue targeting THIS loop skips the tail on that path — refused.
 		Assert.equals(
 			0,
-			v('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tbody();\n\t\t\t\tcontinue;\n\t\t\t}\n\t\t\tdone = true;\n\t\t}').length
+			v('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tbody();\n\t\t\t\tcontinue;\n\t\t\t}\n\t\t\tdone = true;\n\t\t}')
+				.length
 		);
 	}
 
@@ -413,7 +414,8 @@ class GuardContinueCheckTest extends Test {
 		// The colliding de-nested local is mechanically renamed to `b2`, not refused.
 		Assert.equals(
 			1,
-			v('for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (cond) {\n\t\t\t\tfinal b = other();\n\t\t\t\tuse(b);\n\t\t\t}\n\t\t}').length
+			v('for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (cond) {\n\t\t\t\tfinal b = other();\n\t\t\t\tuse(b);\n\t\t\t}\n\t\t}')
+				.length
 		);
 		Assert.equals(
 			wrap('for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (!cond) continue;\n\t\t\tfinal b2 = other();\n\t\t\tuse(b2);\n\t\t}'),
@@ -459,7 +461,8 @@ class GuardContinueCheckTest extends Test {
 		// An inner lambda could own the name (its params are invisible to the scan) — refused.
 		Assert.equals(
 			0,
-			v('for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (cond) {\n\t\t\t\tvar b = 1;\n\t\t\t\trun(() -> use(b));\n\t\t\t}\n\t\t}').length
+			v('for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (cond) {\n\t\t\t\tvar b = 1;\n\t\t\t\trun(() -> use(b));\n\t\t\t}\n\t\t}')
+				.length
 		);
 	}
 
@@ -542,7 +545,8 @@ class GuardContinueCheckTest extends Test {
 	public function testNoCollisionFlagged(): Void {
 		Assert.equals(
 			1,
-			v('for (x in xs) {\n\t\t\tfinal c = pre();\n\t\t\tif (cond) {\n\t\t\t\tfinal b = other();\n\t\t\t\tuse(b, c);\n\t\t\t}\n\t\t}').length
+			v('for (x in xs) {\n\t\t\tfinal c = pre();\n\t\t\tif (cond) {\n\t\t\t\tfinal b = other();\n\t\t\t\tuse(b, c);\n\t\t\t}\n\t\t}')
+				.length
 		);
 	}
 

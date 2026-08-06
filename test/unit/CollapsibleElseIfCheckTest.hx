@@ -75,7 +75,8 @@ class CollapsibleElseIfCheckTest extends Test {
 	public function testDanglingElseLoopBodyNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(wrap('if (x)\n\t\t\tfor (i in 0...1) if (a) p();\n\t\t\telse {\n\t\t\t\tif (b) q();\n\t\t\t}\n\t\telse r();')).length
+			violations(wrap('if (x)\n\t\t\tfor (i in 0...1) if (a) p();\n\t\t\telse {\n\t\t\t\tif (b) q();\n\t\t\t}\n\t\telse r();'))
+				.length
 		);
 	}
 

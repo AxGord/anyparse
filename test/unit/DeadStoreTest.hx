@@ -75,7 +75,8 @@ class DeadStoreTest extends Test {
 		// Branchy conservatism seeds branch exits, but a kill WITHIN one branch still works.
 		Assert.equals(
 			1,
-			violations('class C { function f(a:Int):Void { var x = 0; switch a { case 1: x = 1; x = 2; trace(x); case _: trace(x); } } }').length
+			violations('class C { function f(a:Int):Void { var x = 0; switch a { case 1: x = 1; x = 2; trace(x); case _: trace(x); } } }')
+				.length
 		);
 	}
 

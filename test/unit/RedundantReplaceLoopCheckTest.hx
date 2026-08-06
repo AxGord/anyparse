@@ -62,7 +62,9 @@ class RedundantReplaceLoopCheckTest extends Test {
 	}
 
 	public function testFixKeepsUnaffectedOuterCode(): Void {
-		final src: String = wrapFn('trace(\'a\');\n\t\twhile (now.indexOf(\' \') != -1) now = now.replace(\' \', \'_\');\n\t\ttrace(\'b\');');
+		final src: String = wrapFn(
+			'trace(\'a\');\n\t\twhile (now.indexOf(\' \') != -1) now = now.replace(\' \', \'_\');\n\t\ttrace(\'b\');'
+		);
 		final r = runAndExpectOne(src);
 		switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
@@ -113,9 +115,7 @@ class RedundantReplaceLoopCheckTest extends Test {
 	}
 
 	public function testExtraBodyStatementNotFlagged(): Void {
-		Assert.equals(
-			0, violations(wrapFn('while (now.indexOf(\' \') != -1) { now = now.replace(\' \', \'_\'); trace(now); }')).length
-		);
+		Assert.equals(0, violations(wrapFn('while (now.indexOf(\' \') != -1) { now = now.replace(\' \', \'_\'); trace(now); }')).length);
 	}
 
 	public function testFieldAccessReceiverNotFlagged(): Void {
@@ -135,9 +135,8 @@ class RedundantReplaceLoopCheckTest extends Test {
 		// No declared type to confirm String — a silent miss, not a wrong flag.
 		Assert.equals(
 			0,
-			violations(
-				'class C {\n\tfunction f(now):Void {\n\t\twhile (now.indexOf(\' \') != -1) now = now.replace(\' \', \'_\');\n\t}\n}'
-			).length
+			violations('class C {\n\tfunction f(now):Void {\n\t\twhile (now.indexOf(\' \') != -1) now = now.replace(\' \', \'_\');\n\t}\n}')
+				.length
 		);
 	}
 

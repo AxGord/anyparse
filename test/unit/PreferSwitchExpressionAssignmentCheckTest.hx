@@ -116,7 +116,8 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 	public function testFieldLvalueNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: obj.x = \'a\';\n\t\t\tcase 2: obj.x = \'b\';\n\t\t}')).length
+			violations(wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: obj.x = \'a\';\n\t\t\tcase 2: obj.x = \'b\';\n\t\t}'))
+				.length
 		);
 	}
 
@@ -124,7 +125,8 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 	public function testMultiStatementArmNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: { x = \'a\'; y = 2; }\n\t\t\tcase _: x = \'d\';\n\t\t}')).length
+			violations(wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: { x = \'a\'; y = 2; }\n\t\t\tcase _: x = \'d\';\n\t\t}'))
+				.length
 		);
 	}
 
@@ -290,7 +292,8 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 	public function testLvalueSubjectReferencesReceiverNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(wrap('switch controlsHolder {\n\t\t\tcase 1: controlsHolder.y = 1;\n\t\t\tcase _: controlsHolder.y = 0;\n\t\t}')).length
+			violations(wrap('switch controlsHolder {\n\t\t\tcase 1: controlsHolder.y = 1;\n\t\t\tcase _: controlsHolder.y = 0;\n\t\t}'))
+				.length
 		);
 	}
 
@@ -403,7 +406,8 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 	public function testDeclArmNestedSelfReferenceNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(wrap('var x:Int = 0;\n\t\tswitch v {\n\t\t\tcase A: if (x > 0) x = 1; else x = 2;\n\t\t\tcase _: x = 3;\n\t\t}')).length
+			violations(wrap('var x:Int = 0;\n\t\tswitch v {\n\t\t\tcase A: if (x > 0) x = 1; else x = 2;\n\t\t\tcase _: x = 3;\n\t\t}'))
+				.length
 		);
 	}
 

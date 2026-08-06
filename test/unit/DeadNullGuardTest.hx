@@ -58,7 +58,8 @@ class DeadNullGuardTest extends Test {
 		// The loop reassigns `x`, so the narrowing from the outer guard cannot survive the back-edge.
 		Assert.equals(
 			0,
-			violations('class C { function f(?x:String) { if (x != null) { while (cond()) { if (x != null) trace(x); x = mk(); } } } }').length
+			violations('class C { function f(?x:String) { if (x != null) { while (cond()) { if (x != null) trace(x); x = mk(); } } } }')
+				.length
 		);
 	}
 
@@ -254,7 +255,8 @@ class DeadNullGuardTest extends Test {
 		// `continue` exits the arm — the rest of the iteration only runs with `x` non-null.
 		Assert.equals(
 			1,
-			violations('class C { function f(c:Bool, ?x:String) { while (c) { if (x == null) continue; if (x != null) trace(x); } } }').length
+			violations('class C { function f(c:Bool, ?x:String) { while (c) { if (x == null) continue; if (x != null) trace(x); } } }')
+				.length
 		);
 	}
 
@@ -416,7 +418,8 @@ class DeadNullGuardTest extends Test {
 		// transitively through the alias, so a guard on `ok2` narrows `u` — the inner check is dead.
 		Assert.equals(
 			1,
-			violations('class C { function f(?u:String) { var ok = u != null; var ok2 = ok; if (ok2) { if (u != null) trace(u); } } }').length
+			violations('class C { function f(?u:String) { var ok = u != null; var ok2 = ok; if (ok2) { if (u != null) trace(u); } } }')
+				.length
 		);
 	}
 
@@ -432,12 +435,14 @@ class DeadNullGuardTest extends Test {
 
 	public function testAliasGuardFlagged(): Void {
 		// `var v = u` aliases the two — a guard on v narrows u, so the inner check on u is dead (feature 2).
-		Assert.equals(1, violations('class C { function f(?u:String) { var v = u; if (v != null) { if (u != null) trace(u); } } }').length);
+		Assert.equals(1, violations('class C { function f(?u:String) { var v = u; if (v != null) { if (u != null) trace(u); } } }')
+			.length);
 	}
 
 	public function testAliasReverseGuardFlagged(): Void {
 		// The alias is bidirectional — a guard on u narrows v.
-		Assert.equals(1, violations('class C { function f(?u:String) { var v = u; if (u != null) { if (v != null) trace(v); } } }').length);
+		Assert.equals(1, violations('class C { function f(?u:String) { var v = u; if (u != null) { if (v != null) trace(v); } } }')
+			.length);
 	}
 
 	public function testAliasWriteTargetKills(): Void {
@@ -660,7 +665,8 @@ class DeadNullGuardTest extends Test {
 		// proves NEITHER operand non-null on the then-arm, so no narrowing.
 		Assert.equals(
 			0,
-			violations('class C { function f(?u:String, ?v:String) { if (!(u == null && v == null)) { if (u != null) trace(u); } } }').length
+			violations('class C { function f(?u:String, ?v:String) { if (!(u == null && v == null)) { if (u != null) trace(u); } } }')
+				.length
 		);
 	}
 

@@ -30,12 +30,14 @@ class ImpossibleIsCheckTest extends Test {
 
 	public function testSubtypeOperandNotFlagged(): Void {
 		// `s:Sub is Base` — Base is a supertype of Sub; always true, not always false.
-		Assert.equals(0, violations('class Base {} class Sub extends Base {} class C { function f(s:Sub) { var b = s is Base; } }').length);
+		Assert.equals(0, violations('class Base {} class Sub extends Base {} class C { function f(s:Sub) { var b = s is Base; } }')
+			.length);
 	}
 
 	public function testSupertypeOperandNotFlagged(): Void {
 		// `b:Base is Sub` — may be true at runtime (b could hold a Sub).
-		Assert.equals(0, violations('class Base {} class Sub extends Base {} class C { function f(b:Base) { var x = b is Sub; } }').length);
+		Assert.equals(0, violations('class Base {} class Sub extends Base {} class C { function f(b:Base) { var x = b is Sub; } }')
+			.length);
 	}
 
 	public function testInterfaceCheckedNotFlagged(): Void {
@@ -101,7 +103,8 @@ class ImpossibleIsCheckTest extends Test {
 		// recursive closure walk reaching Base and still proving the pair unrelated.
 		Assert.equals(
 			1,
-			violations('class Base {} class A extends Base {} class B extends Base {} class C { function f(a:A) { var b = a is B; } }').length
+			violations('class Base {} class A extends Base {} class B extends Base {} class C { function f(a:A) { var b = a is B; } }')
+				.length
 		);
 	}
 

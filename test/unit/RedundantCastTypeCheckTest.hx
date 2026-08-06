@@ -191,14 +191,16 @@ class RedundantCastTypeCheckTest extends Test {
 		// takes; only its position BEFORE the parameter list separates them.
 		Assert.equals(
 			0,
-			violations('class Foo {} class C { function f<T:Foo>() { return cast(mk(), Foo); } function mk():Dynamic return null; }').length
+			violations('class Foo {} class C { function f<T:Foo>() { return cast(mk(), Foo); } function mk():Dynamic return null; }')
+				.length
 		);
 	}
 
 	public function testTypeParameterConstraintWithParamsNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations('class Foo {} class C { function f<T:Foo>(p:Int) { return cast(mk(), Foo); } function mk():Dynamic return null; }').length
+			violations('class Foo {} class C { function f<T:Foo>(p:Int) { return cast(mk(), Foo); } function mk():Dynamic return null; }')
+				.length
 		);
 	}
 
@@ -334,7 +336,8 @@ class RedundantCastTypeCheckTest extends Test {
 		// An inherited field is not a member of THIS container, so the direct-children scan misses it.
 		Assert.equals(
 			0,
-			violations('class Foo {} class B { public var g:Foo; } class C extends B { function f(v:Dynamic) { this.g = cast(v, Foo); } }').length
+			violations('class Foo {} class B { public var g:Foo; } class C extends B { function f(v:Dynamic) { this.g = cast(v, Foo); } }')
+				.length
 		);
 	}
 

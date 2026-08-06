@@ -68,7 +68,8 @@ class RedundantElseCheckTest extends Test {
 		// only the outer else is flagged; the inner surfaces after a de-nest pass.
 		Assert.equals(
 			1,
-			violations('class C {\n\tfunction f():Int {\n\t\tif (a) return 1;\n\t\telse if (b) return 2;\n\t\telse return 3;\n\t}\n}').length
+			violations('class C {\n\tfunction f():Int {\n\t\tif (a) return 1;\n\t\telse if (b) return 2;\n\t\telse return 3;\n\t}\n}')
+				.length
 		);
 	}
 

@@ -41,18 +41,20 @@ class DuplicateCodeCheckTest extends Test {
 	}
 
 	public function testTwoStatementRunNotFlagged(): Void {
-		Assert.equals(0, violations(src([
-			'class C {',
-			'\tfunction f():Void {',
-			'\t\ttrace(alpha, beta);',
-			'\t\ttrace(gamma, delta);',
-			'\t}',
-			'\tfunction g():Void {',
-			'\t\ttrace(alpha, beta);',
-			'\t\ttrace(gamma, delta);',
-			'\t}',
-			'}'
-		])).length);
+		Assert.equals(
+			0, violations(src([
+				'class C {',
+				'\tfunction f():Void {',
+				'\t\ttrace(alpha, beta);',
+				'\t\ttrace(gamma, delta);',
+				'\t}',
+				'\tfunction g():Void {',
+				'\t\ttrace(alpha, beta);',
+				'\t\ttrace(gamma, delta);',
+				'\t}',
+				'}'
+			])).length
+		);
 	}
 
 	public function testWhitespaceVariantFlagged(): Void {
@@ -76,20 +78,22 @@ class DuplicateCodeCheckTest extends Test {
 	}
 
 	public function testDifferentIdentifiersNotFlagged(): Void {
-		Assert.equals(0, violations(src([
-			'class C {',
-			'\tfunction f():Void {',
-			'\t\ttrace(alpha, beta);',
-			'\t\ttrace(gamma, delta);',
-			'\t\ttrace(epsilon, zeta);',
-			'\t}',
-			'\tfunction g():Void {',
-			'\t\ttrace(one, two);',
-			'\t\ttrace(three, four);',
-			'\t\ttrace(five, six);',
-			'\t}',
-			'}'
-		])).length);
+		Assert.equals(
+			0, violations(src([
+				'class C {',
+				'\tfunction f():Void {',
+				'\t\ttrace(alpha, beta);',
+				'\t\ttrace(gamma, delta);',
+				'\t\ttrace(epsilon, zeta);',
+				'\t}',
+				'\tfunction g():Void {',
+				'\t\ttrace(one, two);',
+				'\t\ttrace(three, four);',
+				'\t\ttrace(five, six);',
+				'\t}',
+				'}'
+			])).length
+		);
 	}
 
 	public function testFiveStatementMaximalReportedOnce(): Void {
@@ -133,20 +137,22 @@ class DuplicateCodeCheckTest extends Test {
 	}
 
 	public function testBelowContentGateNotFlagged(): Void {
-		Assert.equals(0, violations(src([
-			'class C {',
-			'\tfunction f():Void {',
-			'\t\ti++;',
-			'\t\tj++;',
-			'\t\tk++;',
-			'\t}',
-			'\tfunction g():Void {',
-			'\t\ti++;',
-			'\t\tj++;',
-			'\t\tk++;',
-			'\t}',
-			'}'
-		])).length);
+		Assert.equals(
+			0, violations(src([
+				'class C {',
+				'\tfunction f():Void {',
+				'\t\ti++;',
+				'\t\tj++;',
+				'\t\tk++;',
+				'\t}',
+				'\tfunction g():Void {',
+				'\t\ti++;',
+				'\t\tj++;',
+				'\t\tk++;',
+				'\t}',
+				'}'
+			])).length
+		);
 	}
 
 	public function testThreeOccurrencesTwoFindings(): Void {

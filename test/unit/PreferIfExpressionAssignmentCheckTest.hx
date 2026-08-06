@@ -228,7 +228,8 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 
 	/** A `#if` splice cutting through the construct (the `else` lands in a `Conditional`) leaves the `if` without an else — skipped. */
 	public function testConditionalSplitNotFlagged(): Void {
-		Assert.equals(0, violations(wrap('if (a) x = 1;\n\t\t#if foo\n\t\telse switch v {\n\t\t\tcase _: x = 2;\n\t\t}\n\t\t#end')).length);
+		Assert.equals(0, violations(wrap('if (a) x = 1;\n\t\t#if foo\n\t\telse switch v {\n\t\t\tcase _: x = 2;\n\t\t}\n\t\t#end'))
+			.length);
 	}
 
 	/**

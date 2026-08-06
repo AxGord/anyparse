@@ -68,7 +68,8 @@ class RedundantThisCheckTest extends Test {
 	public function testLocalInlineFunctionShadowNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations('class C { var helper:Int; function m() { inline function helper():Int return 1; trace(helper() + this.helper); } }').length
+			violations('class C { var helper:Int; function m() { inline function helper():Int return 1; trace(helper() + this.helper); } }')
+				.length
 		);
 	}
 

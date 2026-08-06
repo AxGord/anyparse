@@ -81,14 +81,16 @@ class PreferSafeNavCheckTest extends Test {
 		// still a no-op — only a get-accessor moves the receiver out of reach.
 		Assert.equals(
 			1,
-			violations('class C {\n\tvar fld(default, set):Sys;\n\tfunction f():Void {\n\t\tif (fld != null) fld.command("z");\n\t}\n}').length
+			violations('class C {\n\tvar fld(default, set):Sys;\n\tfunction f():Void {\n\t\tif (fld != null) fld.command("z");\n\t}\n}')
+				.length
 		);
 	}
 
 	public function testGetterPropertyFieldNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations('class C {\n\tvar fld(get, never):Sys;\n\tfunction f():Void {\n\t\tif (fld != null) fld.command("z");\n\t}\n}').length
+			violations('class C {\n\tvar fld(get, never):Sys;\n\tfunction f():Void {\n\t\tif (fld != null) fld.command("z");\n\t}\n}')
+				.length
 		);
 	}
 
@@ -111,7 +113,8 @@ class PreferSafeNavCheckTest extends Test {
 		// carries a body, so the fixture is real Haxe and the gate is its only rejector.
 		Assert.equals(
 			0,
-			violations('extern class C {\n\tvar fld:Sys;\n\tinline function f():Void {\n\t\tif (fld != null) fld.command("z");\n\t}\n}').length
+			violations('extern class C {\n\tvar fld:Sys;\n\tinline function f():Void {\n\t\tif (fld != null) fld.command("z");\n\t}\n}')
+				.length
 		);
 	}
 

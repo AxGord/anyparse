@@ -140,7 +140,8 @@ class UnreachableCatchTest extends Test {
 		// catch I then a class implementing I — the implementor is already caught.
 		Assert.equals(
 			1,
-			violations('interface I {} class A implements I {} class C { function f() { try { g(); } catch (e:I) {} catch (e:A) {} } }').length
+			violations('interface I {} class A implements I {} class C { function f() { try { g(); } catch (e:I) {} catch (e:A) {} } }')
+				.length
 		);
 	}
 

@@ -258,7 +258,8 @@ class LoopGuardCheckTest extends Test {
 	public function testHeaderIfCascadeNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(wrap('for (x in xs) if (c) {\n\t\t\tif (x == 0) continue;\n\t\t\tif (x == 1) continue;\n\t\t\ttrace(x);\n\t\t}')).length
+			violations(wrap('for (x in xs) if (c) {\n\t\t\tif (x == 0) continue;\n\t\t\tif (x == 1) continue;\n\t\t\ttrace(x);\n\t\t}'))
+				.length
 		);
 	}
 
@@ -312,12 +313,14 @@ class LoopGuardCheckTest extends Test {
 	public function testHeaderIfCommentBeforeGuardNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(wrap('for (x in xs) if (c) {\n\t\t\t// explain the guard\n\t\t\tif (x == 0) continue;\n\t\t\ttrace(x);\n\t\t}')).length
+			violations(wrap('for (x in xs) if (c) {\n\t\t\t// explain the guard\n\t\t\tif (x == 0) continue;\n\t\t\ttrace(x);\n\t\t}'))
+				.length
 		);
 	}
 
 	public function testHeaderIfCommentInsideGuardNotFlagged(): Void {
-		Assert.equals(0, violations(wrap('for (x in xs) if (c) {\n\t\t\tif (x == 0) /* skip */ continue;\n\t\t\ttrace(x);\n\t\t}')).length);
+		Assert.equals(0, violations(wrap('for (x in xs) if (c) {\n\t\t\tif (x == 0) /* skip */ continue;\n\t\t\ttrace(x);\n\t\t}'))
+			.length);
 	}
 
 	public function testHeaderIfDeclinedFlipNotFlagged(): Void {

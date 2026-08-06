@@ -176,7 +176,8 @@ class ReturnReassignTernaryCheckTest extends Test {
 	public function testMultiLineRhsNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(fn('var x = null;\n\t\tif (a) {\n\t\t\tx = {\n\t\t\t\tone: 1,\n\t\t\t\ttwo: 2\n\t\t\t};\n\t\t}\n\t\treturn x;')).length
+			violations(fn('var x = null;\n\t\tif (a) {\n\t\t\tx = {\n\t\t\t\tone: 1,\n\t\t\t\ttwo: 2\n\t\t\t};\n\t\t}\n\t\treturn x;'))
+				.length
 		);
 	}
 

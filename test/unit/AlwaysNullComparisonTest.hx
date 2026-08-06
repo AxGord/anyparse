@@ -179,7 +179,8 @@ class AlwaysNullComparisonTest extends Test {
 		// The `??=` right-hand side runs only when the target is null — its write to `y` may not have happened.
 		Assert.equals(
 			0,
-			violations('class C { function f(?x:String) { var y:Null<String> = "s"; x ??= { y = null; "d"; }; if (y == null) trace(1); } }').length
+			violations('class C { function f(?x:String) { var y:Null<String> = "s"; x ??= { y = null; "d"; }; if (y == null) trace(1); } }')
+				.length
 		);
 	}
 

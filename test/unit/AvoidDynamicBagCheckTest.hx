@@ -56,7 +56,8 @@ class AvoidDynamicBagCheckTest extends Test {
 	}
 
 	public function testUsingExtensionCalls(): Void {
-		Assert.isTrue(bagMsg(usingLocal('bag.setField("a", "x");\n\t\tvar b = bag.hasField("a");')).indexOf('DynamicAccess<String>') != -1);
+		Assert.isTrue(bagMsg(usingLocal('bag.setField("a", "x");\n\t\tvar b = bag.hasField("a");'))
+			.indexOf('DynamicAccess<String>') != -1);
 	}
 
 	// ---- non-bag shapes stay generic ----

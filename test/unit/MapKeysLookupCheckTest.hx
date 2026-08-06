@@ -436,43 +436,47 @@ class MapKeysLookupCheckTest extends Test {
 		// type that is NOT a Map — no key-value iteration), while an unrelated b.Mid declares
 		// m:Map directly. The package-blind walk resolved b.Mid's Map → flagged → a broken
 		// `for (k => v in ...)` rewrite; the import-aware walk resolves CustomKeys → skip.
-		Assert.equals(0, violationsForFiles([
-			{
-				file: 'keys/CustomKeys.hx',
-				source: 'package keys;\nclass CustomKeys {\n\tpublic function keys():Iterator<String> {\n'
-				+ '\t\treturn null;\n\t}\n\tpublic function get(k:String):Int {\n\t\treturn 0;\n\t}\n}'
-			},
-			{ file: 'a/Base.hx', source: 'package a;\nimport keys.CustomKeys;\nclass Base {\n\tpublic var m:CustomKeys;\n}' },
-			{ file: 'a/Mid.hx', source: 'package a;\nclass Mid extends Base {\n}' },
-			{ file: 'b/Mid.hx', source: 'package b;\nclass Mid {\n\tpublic var m:Map<String, Int>;\n}' },
-			{ file: 'top/Outer.hx', source: 'package top;\nimport a.Mid;\nclass Outer {\n\tpublic static var mid:Mid;\n}' },
-			{
-				file: 'top/User.hx',
-				source: 'package top;\nclass User {\n\tfunction f():Void {'
-				+ '\n\t\tfor (k in Outer.mid.m.keys()) trace(Outer.mid.m.get(k));\n\t}\n}'
-			}
-		]).length);
+		Assert.equals(
+			0, violationsForFiles([
+				{
+					file: 'keys/CustomKeys.hx',
+					source: 'package keys;\nclass CustomKeys {\n\tpublic function keys():Iterator<String> {\n'
+					+ '\t\treturn null;\n\t}\n\tpublic function get(k:String):Int {\n\t\treturn 0;\n\t}\n}'
+				},
+				{ file: 'a/Base.hx', source: 'package a;\nimport keys.CustomKeys;\nclass Base {\n\tpublic var m:CustomKeys;\n}' },
+				{ file: 'a/Mid.hx', source: 'package a;\nclass Mid extends Base {\n}' },
+				{ file: 'b/Mid.hx', source: 'package b;\nclass Mid {\n\tpublic var m:Map<String, Int>;\n}' },
+				{ file: 'top/Outer.hx', source: 'package top;\nimport a.Mid;\nclass Outer {\n\tpublic static var mid:Mid;\n}' },
+				{
+					file: 'top/User.hx',
+					source: 'package top;\nclass User {\n\tfunction f():Void {'
+					+ '\n\t\tfor (k in Outer.mid.m.keys()) trace(Outer.mid.m.get(k));\n\t}\n}'
+				}
+			]).length
+		);
 	}
 
 	public function testValueRootCrossPackageInheritedNonMapNotFlagged(): Void {
 		// Same cross-package poison via a VALUE root `o.mid.m` (o:Outer) — closes the pre-existing
 		// value-root hole too.
-		Assert.equals(0, violationsForFiles([
-			{
-				file: 'keys/CustomKeys.hx',
-				source: 'package keys;\nclass CustomKeys {\n\tpublic function keys():Iterator<String> {\n'
-				+ '\t\treturn null;\n\t}\n\tpublic function get(k:String):Int {\n\t\treturn 0;\n\t}\n}'
-			},
-			{ file: 'a/Base.hx', source: 'package a;\nimport keys.CustomKeys;\nclass Base {\n\tpublic var m:CustomKeys;\n}' },
-			{ file: 'a/Mid.hx', source: 'package a;\nclass Mid extends Base {\n}' },
-			{ file: 'b/Mid.hx', source: 'package b;\nclass Mid {\n\tpublic var m:Map<String, Int>;\n}' },
-			{ file: 'top/Outer.hx', source: 'package top;\nimport a.Mid;\nclass Outer {\n\tpublic var mid:Mid;\n}' },
-			{
-				file: 'top/User.hx',
-				source: 'package top;\nclass User {\n\tfunction f(o:Outer):Void {'
-				+ '\n\t\tfor (k in o.mid.m.keys()) trace(o.mid.m.get(k));\n\t}\n}'
-			}
-		]).length);
+		Assert.equals(
+			0, violationsForFiles([
+				{
+					file: 'keys/CustomKeys.hx',
+					source: 'package keys;\nclass CustomKeys {\n\tpublic function keys():Iterator<String> {\n'
+					+ '\t\treturn null;\n\t}\n\tpublic function get(k:String):Int {\n\t\treturn 0;\n\t}\n}'
+				},
+				{ file: 'a/Base.hx', source: 'package a;\nimport keys.CustomKeys;\nclass Base {\n\tpublic var m:CustomKeys;\n}' },
+				{ file: 'a/Mid.hx', source: 'package a;\nclass Mid extends Base {\n}' },
+				{ file: 'b/Mid.hx', source: 'package b;\nclass Mid {\n\tpublic var m:Map<String, Int>;\n}' },
+				{ file: 'top/Outer.hx', source: 'package top;\nimport a.Mid;\nclass Outer {\n\tpublic var mid:Mid;\n}' },
+				{
+					file: 'top/User.hx',
+					source: 'package top;\nclass User {\n\tfunction f(o:Outer):Void {'
+					+ '\n\t\tfor (k in o.mid.m.keys()) trace(o.mid.m.get(k));\n\t}\n}'
+				}
+			]).length
+		);
 	}
 
 	/**

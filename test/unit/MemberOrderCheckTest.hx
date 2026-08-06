@@ -461,7 +461,8 @@ class MemberOrderCheckTest extends Test {
 		final fixed: String = fixedSource(src, movableArglessNewResolver());
 		Assert.isTrue(fixed.indexOf('final t') < fixed.indexOf('var a'), 'argless-new final moved before the vars: $fixed');
 		Assert.isTrue(parses(fixed), 'reordered output parses: $fixed');
-		Assert.equals(0, violations(canonicalizedFix(src, movableArglessNewResolver())).length, 'converges through writeRoundTrip: $fixed');
+		Assert.equals(0, violations(canonicalizedFix(src, movableArglessNewResolver()))
+			.length, 'converges through writeRoundTrip: $fixed');
 	}
 
 	/**

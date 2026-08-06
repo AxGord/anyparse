@@ -130,7 +130,8 @@ class JoinStringAppendCheckTest extends Test {
 	 * `Method(cname, meth)` shape from the TM `CrashDumper.printStackItem` canary.
 	 */
 	public function testSwitchCaseBodyFlagged(): Void {
-		final body: String = "switch (itm) {\n\t\t\tcase Method(cname, meth):\n\t\t\t\tstr += cname;\n\t\t\t\tstr += '.';\n\t\t\t\tstr += meth;\n\t\t}";
+		final body: String =
+			"switch (itm) {\n\t\t\tcase Method(cname, meth):\n\t\t\t\tstr += cname;\n\t\t\t\tstr += '.';\n\t\t\t\tstr += meth;\n\t\t}";
 		final es: Array<{ span: Span, text: String }> = edits(wrap(body));
 		Assert.equals(1, es.length);
 		Assert.equals("str += cname + '.' + meth;", es[0].text);

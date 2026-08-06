@@ -65,7 +65,8 @@ class PreferFindCheckTest extends Test {
 	public function testBreakFormExtraStatementNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(fn('var r:Null<Int> = null;\n\t\tfor (x in xs) if (x > 2) { r = x; trace(x); break; }\n\t\treturn r;', 'Null<Int>')).length
+			violations(fn('var r:Null<Int> = null;\n\t\tfor (x in xs) if (x > 2) { r = x; trace(x); break; }\n\t\treturn r;', 'Null<Int>'))
+				.length
 		);
 	}
 
@@ -285,14 +286,16 @@ class PreferFindCheckTest extends Test {
 	public function testGuardedBreakFormOtherTargetNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(fn('var r:Null<Int> = null;\n\t\tif (ok) for (x in xs) if (x > 2) { q = x; break; }\n\t\treturn r;', 'Null<Int>')).length
+			violations(fn('var r:Null<Int> = null;\n\t\tif (ok) for (x in xs) if (x > 2) { q = x; break; }\n\t\treturn r;', 'Null<Int>'))
+				.length
 		);
 	}
 
 	public function testGuardedBreakFormNonNullInitNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(fn('var r:Null<Int> = 0;\n\t\tif (ok) for (x in xs) if (x > 2) { r = x; break; }\n\t\treturn r;', 'Null<Int>')).length
+			violations(fn('var r:Null<Int> = 0;\n\t\tif (ok) for (x in xs) if (x > 2) { r = x; break; }\n\t\treturn r;', 'Null<Int>'))
+				.length
 		);
 	}
 

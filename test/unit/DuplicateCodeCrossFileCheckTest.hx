@@ -108,24 +108,26 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 	}
 
 	public function testTwoStatementCrossFileNotFlagged(): Void {
-		Assert.equals(0, violations([
-			file('A.hx', [
-				'class A {',
-				'\tfunction f():Void {',
-				'\t\ttrace(alpha, beta);',
-				'\t\ttrace(gamma, delta);',
-				'\t}',
-				'}'
-			]),
-			file('B.hx', [
-				'class B {',
-				'\tfunction g():Void {',
-				'\t\ttrace(alpha, beta);',
-				'\t\ttrace(gamma, delta);',
-				'\t}',
-				'}'
-			])
-		]).length);
+		Assert.equals(
+			0, violations([
+				file('A.hx', [
+					'class A {',
+					'\tfunction f():Void {',
+					'\t\ttrace(alpha, beta);',
+					'\t\ttrace(gamma, delta);',
+					'\t}',
+					'}'
+				]),
+				file('B.hx', [
+					'class B {',
+					'\tfunction g():Void {',
+					'\t\ttrace(alpha, beta);',
+					'\t\ttrace(gamma, delta);',
+					'\t}',
+					'}'
+				])
+			]).length
+		);
 	}
 
 	public function testWhitespaceVariantCrossFileFlagged(): Void {
@@ -155,72 +157,78 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 	}
 
 	public function testDifferentIdentifiersCrossFileNotFlagged(): Void {
-		Assert.equals(0, violations([
-			file('A.hx', [
-				'class A {',
-				'\tfunction f():Void {',
-				'\t\ttrace(alpha, beta);',
-				'\t\ttrace(gamma, delta);',
-				'\t\ttrace(epsilon, zeta);',
-				'\t}',
-				'}'
-			]),
-			file('B.hx', [
-				'class B {',
-				'\tfunction g():Void {',
-				'\t\ttrace(one, two);',
-				'\t\ttrace(three, four);',
-				'\t\ttrace(five, six);',
-				'\t}',
-				'}'
-			])
-		]).length);
+		Assert.equals(
+			0, violations([
+				file('A.hx', [
+					'class A {',
+					'\tfunction f():Void {',
+					'\t\ttrace(alpha, beta);',
+					'\t\ttrace(gamma, delta);',
+					'\t\ttrace(epsilon, zeta);',
+					'\t}',
+					'}'
+				]),
+				file('B.hx', [
+					'class B {',
+					'\tfunction g():Void {',
+					'\t\ttrace(one, two);',
+					'\t\ttrace(three, four);',
+					'\t\ttrace(five, six);',
+					'\t}',
+					'}'
+				])
+			]).length
+		);
 	}
 
 	public function testBelowContentGateCrossFileNotFlagged(): Void {
-		Assert.equals(0, violations([
-			file('A.hx', [
-				'class A {',
-				'\tfunction f():Void {',
-				'\t\ti++;',
-				'\t\tj++;',
-				'\t\tk++;',
-				'\t}',
-				'}'
-			]),
-			file('B.hx', [
-				'class B {',
-				'\tfunction g():Void {',
-				'\t\ti++;',
-				'\t\tj++;',
-				'\t\tk++;',
-				'\t}',
-				'}'
-			])
-		]).length);
+		Assert.equals(
+			0, violations([
+				file('A.hx', [
+					'class A {',
+					'\tfunction f():Void {',
+					'\t\ti++;',
+					'\t\tj++;',
+					'\t\tk++;',
+					'\t}',
+					'}'
+				]),
+				file('B.hx', [
+					'class B {',
+					'\tfunction g():Void {',
+					'\t\ti++;',
+					'\t\tj++;',
+					'\t\tk++;',
+					'\t}',
+					'}'
+				])
+			]).length
+		);
 	}
 
 	public function testUnrelatedFilesEmpty(): Void {
-		Assert.equals(0, violations([
-			file('A.hx', [
-				'class A {',
-				'\tfunction f():Void {',
-				'\t\ttrace(alpha, beta);',
-				'\t\ttrace(gamma, delta);',
-				'\t\ttrace(epsilon, zeta);',
-				'\t}',
-				'}'
-			]),
-			file('B.hx', [
-				'class B {',
-				'\tfunction g():Void {',
-				'\t\ttrace(one, two);',
-				'\t\ttrace(three, four);',
-				'\t\ttrace(five, six);',
-				'\t}',
-				'}'
-			])
-		]).length);
+		Assert.equals(
+			0, violations([
+				file('A.hx', [
+					'class A {',
+					'\tfunction f():Void {',
+					'\t\ttrace(alpha, beta);',
+					'\t\ttrace(gamma, delta);',
+					'\t\ttrace(epsilon, zeta);',
+					'\t}',
+					'}'
+				]),
+				file('B.hx', [
+					'class B {',
+					'\tfunction g():Void {',
+					'\t\ttrace(one, two);',
+					'\t\ttrace(three, four);',
+					'\t\ttrace(five, six);',
+					'\t}',
+					'}'
+				])
+			]).length
+		);
 	}
 
 	public function testSrcTestPairFlaggedAcrossBoundary(): Void {
