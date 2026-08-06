@@ -21,8 +21,9 @@ import sys.io.File;
  * keyword, per-declarator `:type` and initializer preserved verbatim. The right-recursive
  * `VarMore` chain is pinned by the three-declarator fixture (the data-loss regression class).
  * A single declarator, a comma inside a generic type, a comment or a `#if` directive inside
- * the statement, the local-metadata form and a declaration that is the bare body of an
- * `if` / `while` / `case` are all safe misses. The composition pins are the point of the
+ * the statement, a reification subtree, a statement with no trailing `;`, the local-metadata
+ * form and a declaration that is the bare body of an `if` / `while` / `case` are all safe
+ * misses; a comma inside a call or object literal is not one. The composition pins are the point of the
  * rule: `prefer-final` reports NOTHING on the multi-declarator shape and picks the
  * never-reassigned binding up only after the split, in process and at the real `lint --fix`
  * fixed point.
@@ -90,13 +91,78 @@ class SplitVarDeclarationCheckTest extends Test {
 		Assert.equals(0, violations(wrap('var m:Map<Int, String> = null;')).length);
 	}
 
+	/**
+	 * The FLAGGED direction of the same question, and the data-corruption one: a top-level comma
+	 * inside a declarator's VALUE must not be read as a separator. The slice boundary comes from
+	 * the continuation node's span, so the call's and the object literal's own commas are inert.
+	 */
+	public function testCommasInsideValueExpressions(): Void {
+		final call: Array<{ span: Span, text: String }> = edits(wrap('var a = f(1, 2), b = 3;'));
+		Assert.equals(1, call.length);
+		Assert.equals('var a = f(1, 2);\n\t\tvar b = 3;', call[0].text);
+		final object: Array<{ span: Span, text: String }> = edits(wrap('var o = {x: 1, y: 2}, b = 3;'));
+		Assert.equals(1, object.length);
+		Assert.equals('var o = {x: 1, y: 2};\n\t\tvar b = 3;', object[0].text);
+	}
+
+	/** A list already wrapped across source lines splits the same way; the slices trim across the newline. */
+	public function testMultiLineWrappedListSplits(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrap('var a = 1,\n\t\t\tb = 2;'));
+		Assert.equals(1, es.length);
+		Assert.equals('var a = 1;\n\t\tvar b = 2;', es[0].text);
+	}
+
+	/**
+	 * A multi-declarator nested in another one's lambda initializer produces a CONTAINED match.
+	 * `RefactorSupport.dropContainedEdits` keeps only the outer edit -- the inner one is split on
+	 * the next `--fix` pass, once it is no longer inside a rewritten region.
+	 */
+	public function testNestedMultiVarEmitsOnlyTheOuterEdit(): Void {
+		final src: String = wrap('var g = function() { var q = 1, r = 2; }, b = 3;');
+		Assert.equals(2, violations(src).length);
+		final es: Array<{ span: Span, text: String }> = edits(src);
+		Assert.equals(1, es.length);
+		Assert.equals('var g = function() { var q = 1, r = 2; };\n\t\tvar b = 3;', es[0].text);
+	}
+
 	public function testSingleDeclaratorNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('var a = 1;')).length);
 	}
 
-	/** A comment inside the statement sits in a region the rebuild does not copy. */
+	/**
+	 * Any comment overlapping the statement declines the split. This one is BLUNTNESS, not
+	 * necessity -- the rebuild would copy the block comment into the second declarator's slice
+	 * and emit valid code. The shape the veto is load-bearing for is
+	 * `testDanglingLineCommentNotFlagged`.
+	 */
 	public function testCommentInsideStatementNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('var a = 1, /* c */ b = 2;')).length);
+	}
+
+	/**
+	 * The comment veto's LOAD-BEARING case: the head slice trims to `var a = 1 // note`, so the
+	 * `;` the rebuild appends would land inside the line comment and leave the first declaration
+	 * unterminated. Remove the veto and this fixture emits code that does not compile.
+	 */
+	public function testDanglingLineCommentNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('var a = 1 // note\n\t\t\t, b = 2;')).length);
+	}
+
+	/**
+	 * A block expression's value needs no `;` after its last statement, and the grammar accepts
+	 * it -- the rebuild owns the terminator, so a statement not ending in one declines.
+	 */
+	public function testNoTrailingSemicolonNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('var x = { var a = 1, b = 2 };')).length);
+	}
+
+	/**
+	 * A reification subtree is opaque, exactly as it is to `prefer-final` and `unused-local`.
+	 * `MacroExpr > BlockExpr` IS a real statement list, so without the `opaqueKinds` bail the
+	 * walk descends into it and splits reified source no downstream check will ever look at.
+	 */
+	public function testMacroReificationNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('var e = macro {\n\t\t\tvar a = 1, b = 2;\n\t\t};')).length);
 	}
 
 	/**

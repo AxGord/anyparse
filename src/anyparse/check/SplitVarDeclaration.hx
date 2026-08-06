@@ -47,9 +47,10 @@ import anyparse.runtime.Span;
  * branch-aware `CondBranch` -- the tree is read through `CheckScan.parseBranchAwareOrNull`, so
  * a declaration inside a `#if` region is visited) that:
  *
- * - is a local declaration (`localDeclKinds`) and is not itself a continuation node
- *   (`localDeclContinuationKinds` -- a continuation IS a `localDeclKind`, so it would otherwise
- *   be mistaken for a statement head);
+ * - is a local declaration (`localDeclKinds`) and is not itself a continuation node. A
+ *   continuation IS a `localDeclKind`, and in the Haxe grammar it is only ever reached as a
+ *   CHILD of its head -- the exclusion is grammar-agnostic insurance for a grammar that lists a
+ *   flat continuation as a statement, not a live case here;
  * - carries a continuation child (`RefactorSupport.isMultiDeclarator`). The AST is the only
  *   authority here: a comma inside a generic type (`var m:Map<Int, String> = null;`) is not a
  *   declarator separator, and a text scan for a top-level comma got that wrong.
@@ -69,23 +70,51 @@ import anyparse.runtime.Span;
  * normalises the emitted indentation on re-emit.
  *
  * A candidate is refused when a comment or a conditional-compilation directive OVERLAPS the
- * statement -- the rebuild copies only the declarator slices, so a comment sitting between two
- * declarators, or a `#if` chain selecting one declarator's initializer, would be dropped or
- * mangled. A comment AFTER the terminating `;` is outside the span, untouched by the edit, and
- * therefore stays on the line of the LAST emitted declaration. An unexpected head shape -- no
- * trailing `;`, a chain whose spans are not strictly increasing inside the statement or whose
- * leading `,` is missing, an empty declarator slice, a leading word that is not a lowercase
- * keyword followed by whitespace -- declines rather than emitting garbage.
+ * statement. Nothing is ever DROPPED by the rebuild -- the slices cover every byte of the
+ * statement but the separating commas and the `;` -- so an interior comment would survive, but a
+ * DANGLING LINE comment breaks the result: in
+ *
+ * ```haxe
+ * var a = 1 // note
+ *     , b = 2;
+ * ```
+ *
+ * the head slice trims to `var a = 1 // note` and the appended `;` lands INSIDE the comment,
+ * leaving the first declaration unterminated. Measured with the veto removed: the writer's
+ * comment-loss detector catches it, but the price is `lint --fix` refusing EVERY fix in that
+ * file with `this file cannot be rewritten without losing the comment`. That one shape is what
+ * the comment veto is load-bearing for; it stays blunt (any overlap) rather than narrowed to the
+ * dangling case, because the narrow test is the subtle one and the miss costs only a finding
+ * (`join-declaration-assignment` takes the same stance). The `#if` veto is
+ * precautionary in the same spirit: every directive shape that would genuinely break the slice
+ * arithmetic is already rejected by the parser. A comment AFTER the terminating `;` is outside
+ * the span, untouched by the edit, and therefore stays on the line of the LAST emitted
+ * declaration. An unexpected head shape -- no trailing `;` (`{ var a = 1, b = 2 }` as a block
+ * expression's value), a chain whose spans are not strictly increasing inside the statement or
+ * whose leading `,` is missing, an empty declarator slice, a leading word that is not a
+ * lowercase keyword followed by whitespace -- declines rather than emitting garbage.
+ *
+ * ## Reification is opaque
+ *
+ * A declaration inside a metaprogramming-reification subtree (`opaqueKinds`) is skipped, matching
+ * `prefer-final` and `unused-local` -- the two checks this rule exists to unblock. Splitting
+ * there would be pure churn (neither of them looks inside a reification, so no upgrade or
+ * deletion ever follows) and it is not even inert: the reified `EVars([a, b])` becomes two
+ * separate `EVars` nodes, which a macro that pattern-matches on the tree it builds can observe.
  *
  * ## Deliberate conservative miss
  *
- * A multi-declarator that is the BARE body of an `if` / `while` / `case` (`if (c) var a = 1, b
- * = 2;`) is not a direct child of a statement list, and splitting it there would move the
- * second declaration outside the branch. Those positions are refused by construction, not by a
- * special case: their parent is an `IfStmt` / `WhileStmt` / `CaseBranch`, none of which is a
- * `blockKinds` node. The local-metadata form (`@:foo var a = 1, b = 2;`) is refused the same
- * way -- it projects as an expression (`localDeclExprKinds`), never as a `localDeclKinds`
- * statement.
+ * A multi-declarator that is the BARE body of an `if` / `while` (`if (c) var a = 1, b = 2;`) or
+ * a statement of a `case` branch is not a direct child of a statement list: their parent is an
+ * `IfStmt` / `WhileStmt` / `CaseBranch`, none of which is a `blockKinds` node, so all three are
+ * refused by construction rather than by a special case. For `if` / `while` that is the only
+ * correct answer -- splitting would move the second declaration outside the branch. For a `case`
+ * branch, which holds a statement RUN, a split would be safe; it is simply not reached, and
+ * widening `blockKinds` is a grammar-level decision this check does not take unilaterally.
+ *
+ * The local-metadata form (`@:foo var a = 1, b = 2;`) IS a direct child of the statement list;
+ * what refuses it is the `localDeclKinds` gate, since it projects as an expression statement
+ * wrapping a `localDeclExprKinds` node rather than as a declaration statement.
  */
 @:nullSafety(Strict)
 final class SplitVarDeclaration implements Check {
@@ -157,6 +186,7 @@ final class SplitVarDeclaration implements Check {
 			shape: shape,
 			localDeclKinds: localDeclKinds,
 			continuationKinds: continuationKinds,
+			opaqueKinds: shape.opaqueKinds ?? [],
 			blockKinds: support.blockKinds()
 		};
 	}
@@ -173,8 +203,13 @@ final class SplitVarDeclaration implements Check {
 		return out;
 	}
 
-	/** Collect every splittable declaration reachable under `node`. */
+	/**
+	 * Collect every splittable declaration reachable under `node`. A reification subtree
+	 * (`opaqueKinds`) is skipped wholesale -- its interior IS a real statement list
+	 * (`MacroExpr > BlockExpr`), so the walk would otherwise descend into it.
+	 */
 	private static function collectMatches(node: QueryNode, source: String, blocked: Array<Span>, s: Seams, out: Array<Match>): Void {
+		if (s.opaqueKinds.contains(node.kind)) return;
 		if (s.blockKinds.contains(node.kind)) for (stmt in node.children) if (isMultiDeclaratorHead(stmt, s)) {
 			final m: Null<Match> = matchDeclaration(stmt, source, blocked, s);
 			if (m != null) out.push(m);
@@ -280,6 +315,7 @@ private typedef Seams = {
 	var shape: RefShape;
 	var localDeclKinds: Array<String>;
 	var continuationKinds: Array<String>;
+	var opaqueKinds: Array<String>;
 	var blockKinds: Array<String>;
 }
 
