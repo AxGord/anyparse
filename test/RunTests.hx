@@ -577,6 +577,7 @@ import unit.CollapseNestedSwitchCheckTest;
 import unit.RedundantToStringCheckTest;
 import unit.HxMethodChainAllOrNothingSliceTest;
 import unit.HxListLiteralEmissionSliceTest;
+import unit.SplitVarDeclarationCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1187,6 +1188,7 @@ class RunTests {
 		addCase(new CondBranchSplitTest());
 		addCase(new PreferCaseGuardCheckTest());
 		addCase(new PreferCaseGuardOracleE2ETest());
+		addCase(new SplitVarDeclarationCheckTest());
 		utest.ui.Report.create(runner);
 		runner.run();
 	}
