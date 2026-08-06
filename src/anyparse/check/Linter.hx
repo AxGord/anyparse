@@ -128,6 +128,7 @@ final class Linter {
 			new ImpossibleCast(),
 			new RedundantUpcast(),
 			new RedundantCastType(),
+			new RedundantAscription(),
 			new DeadNullGuard(),
 			new DeadNullCoalescing(),
 			new DeadSafeNav(),
