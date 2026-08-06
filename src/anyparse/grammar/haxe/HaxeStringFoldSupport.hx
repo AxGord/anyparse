@@ -24,7 +24,9 @@ import anyparse.query.StringFold.ConcatSegment;
  *
  * `segmentsOf` / `expressionSegment` are the general decomposition the width-aware
  * `fold-adjacent-string-literals` grouping runs on, and `renderGroup` / `renderBare`
- * are their inverse. Three Haxe facts live here and nowhere else: `PRIMARY_KINDS`,
+ * are their inverse. A text fragment is cut once more, at each `\n` ESCAPE it carries
+ * (`splitAtNewlines`), which is the only seam a literal with no interpolation has.
+ * Three Haxe facts live here and nowhere else: `PRIMARY_KINDS`,
  * the expression kinds that bind at least as tightly as `+` (so a bare operand needs
  * no parentheses); the single-quoted escaping rules — a lone `$` normalises to `$$`,
  * a double-quoted literal re-escapes `\"` to `"`, `$` to `$$` and `'` to `\'`, and a
@@ -129,7 +131,7 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	public function segmentsOf(node: QueryNode, source: String): Null<Array<ConcatSegment>> {
 		final span: Null<Span> = node.span;
 		if (span == null || span.to - span.from < 2) return null;
-		if (node.kind == 'DoubleStringExpr') return [SegText('"', inner(source, span))];
+		if (node.kind == 'DoubleStringExpr') return splitAtNewlines([SegText('"', inner(source, span))]);
 		if (node.kind != 'SingleStringExpr') return null;
 		final out: Array<ConcatSegment> = [];
 		for (c in node.children) {
@@ -154,7 +156,7 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 			}
 		}
 		if (out.length == 0) out.push(SegText("'", ''));
-		return coalesceText(out);
+		return splitAtNewlines(coalesceText(out));
 	}
 
 	/**
@@ -265,7 +267,9 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	 * Fuse adjacent same-quote text segments into one. A `Dollar` fragment sits
 	 * BETWEEN two `Literal` fragments of the same literal, and leaving the three
 	 * apart would let the grouping cut a plain run of TEXT at the `$` — a split
-	 * this rule promises never to make (it cuts at interpolation seams only).
+	 * this rule promises never to make. Fusing FIRST is also what lets
+	 * `splitAtNewlines` see a `\n` escape that a `$` happens to sit next to: the two
+	 * run in that order, so the only text seams that survive are the ones it cuts.
 	 */
 	private static function coalesceText(segments: Array<ConcatSegment>): Array<ConcatSegment> {
 		final out: Array<ConcatSegment> = [];
@@ -276,6 +280,56 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 				out.push(s);
 		}
 		return out;
+	}
+
+	/**
+	 * Cut every text segment after each `\n` ESCAPE it carries, the escape staying with
+	 * the LEFT piece. This is the seam that makes a lone over-long string TOKEN
+	 * layout-fixable at all: the writer can wrap a `+` chain but nothing can wrap one
+	 * literal, so a message whose own text names its line breaks has to become a chain
+	 * before layout can reach it.
+	 *
+	 * Idempotent with `renderPlain`, which is the whole reason the cut may be made here
+	 * rather than in the grouping: two same-quote pieces render back to the single
+	 * literal they came from, and re-decomposing that literal cuts it in the same two
+	 * places. A group that keeps them together is therefore indistinguishable from never
+	 * having split.
+	 *
+	 * The scan is the lexer's, not a search: a backslash consumes the character after it,
+	 * so the `n` of `\\n` is an ordinary letter and never a seam. A RAW line break in the
+	 * source is not one either — it already ends the line it sits on, so cutting there
+	 * buys no width and would leave the break dangling inside the left literal.
+	 */
+	private static function splitAtNewlines(segments: Array<ConcatSegment>): Array<ConcatSegment> {
+		final out: Array<ConcatSegment> = [];
+		for (s in segments) switch s {
+			case SegText(quote, raw):
+				for (piece in newlinePieces(raw)) out.push(SegText(quote, piece));
+			case _:
+				out.push(s);
+		}
+		return out;
+	}
+
+	/** `raw` cut after each `\n` escape, empty pieces dropped; a raw with none yields itself. */
+	private static function newlinePieces(raw: String): Array<String> {
+		final pieces: Array<String> = [];
+		var from: Int = 0;
+		var i: Int = 0;
+		while (i < raw.length) {
+			if (StringTools.fastCodeAt(raw, i) != '\\'.code) {
+				i++;
+			} else if (i + 1 < raw.length && StringTools.fastCodeAt(raw, i + 1) == 'n'.code) {
+				pieces.push(raw.substring(from, i + 2));
+				i += 2;
+				from = i;
+			} else {
+				i += 2;
+			}
+		}
+		if (from < raw.length) pieces.push(raw.substring(from));
+		if (pieces.length == 0) pieces.push(raw);
+		return pieces;
 	}
 
 	/**

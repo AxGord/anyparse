@@ -35,6 +35,7 @@ private typedef MemberSeams = {
 	final overrideKind: Null<String>;
 	final staticKind: Null<String>;
 	final inlineKind: Null<String>;
+	final macroKind: Null<String>;
 	final conditionalKind: Null<String>;
 };
 
@@ -344,7 +345,7 @@ final class SymbolIndexBuilder {
 	 * field-member-kind descendant (a type body's own `var`/`final`/`fn` members;
 	 * a method's LOCAL vars are `VarStmt`, a different kind, so excluded) — paired
 	 * with its getter-property flag from the `accessors` span map (absent = plain)
-	 * and its modifier-run visibility / override / static / inline info. Modifier
+	 * and its modifier-run visibility / override / static / inline / macro info. Modifier
 	 * siblings precede the member they attach to inside the same parent, so each
 	 * visited node scans its CHILDREN with a running modifier state, reset at every
 	 * member. The kind seams arrive pre-resolved as `seams`, so nothing here reads
@@ -364,6 +365,7 @@ final class SymbolIndexBuilder {
 			var runOverride: Bool = false;
 			var runStatic: Bool = false;
 			var runInline: Bool = false;
+			var runMacro: Bool = false;
 			for (child in n.children) {
 				final sp: Null<Span> = child.span;
 				// Enum constructors (`SimpleCtor` / `ParamCtor`) are captured as members too, so a bare
@@ -386,6 +388,7 @@ final class SymbolIndexBuilder {
 							kind: child.kind,
 							isStatic: runStatic,
 							isInline: runInline,
+							isMacro: runMacro,
 							guarded: guarded
 						});
 					}
@@ -393,6 +396,7 @@ final class SymbolIndexBuilder {
 					runOverride = false;
 					runStatic = false;
 					runInline = false;
+					runMacro = false;
 				} else if (sp != null && seams.visibilityKinds.contains(child.kind))
 					runVisibility = source.substring(sp.from, sp.to);
 				else if (child.kind == seams.overrideKind)
@@ -401,6 +405,8 @@ final class SymbolIndexBuilder {
 					runStatic = true;
 				else if (child.kind == seams.inlineKind)
 					runInline = true;
+				else if (child.kind == seams.macroKind)
+					runMacro = true;
 			}
 		});
 		return out;
@@ -417,6 +423,7 @@ final class SymbolIndexBuilder {
 			overrideKind: shape.overrideModifierKind,
 			staticKind: shape.staticModifierKind,
 			inlineKind: shape.inlineModifierKind,
+			macroKind: shape.macroModifierKind,
 			conditionalKind: shape.conditionalMemberKind
 		};
 	}

@@ -1,8 +1,10 @@
 package anyparse.check;
 
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.ConcatSegment;
 import anyparse.query.FormatConfigDiscovery;
@@ -16,7 +18,11 @@ import anyparse.runtime.Span;
  * Canonicalises a string concatenation to the MINIMAL number of `+` segments that
  * fits the file's own `maxLineLength`: adjacent literals and expression operands
  * MERGE into one interpolated literal, and an already-merged literal that overflows
- * the line SPLITS back out at its `${ … }` seams. `Severity.Info` — a layout
+ * the line SPLITS back out at its seams — a `${ … }` interpolation, or an embedded
+ * `\n` ESCAPE. That second seam is what makes a lone over-long string TOKEN
+ * layout-fixable at all: the writer can wrap a `+` chain, but nothing can wrap one
+ * literal, so a message whose own text names its line breaks has to become a chain
+ * before layout can reach it. `Severity.Info` — a layout
  * cleanup, not a defect — with an autofix, and ON by default, as the narrower
  * adjacent-literal fold it grew out of was (`"a" + "b"` -> `"ab"` still folds, and
  * still to a DOUBLE-quoted literal).
@@ -28,7 +34,7 @@ import anyparse.runtime.Span;
  *
  * A construct — the maximal left-associative `+` chain, or a standalone string
  * literal — is flattened into a list of `ConcatSegment`s. A literal operand
- * contributes its own fragments (text / `$name` / `${expr}`), a bare expression
+ * contributes its own fragments (text cut at each `\n` escape / `$name` / `${expr}`), a bare expression
  * operand contributes one segment, and the operands BEFORE the first literal
  * collapse into a single segment covering their source verbatim. Re-decomposing
  * this rule's OWN output reproduces the identical list, so any deterministic
@@ -52,6 +58,14 @@ import anyparse.runtime.Span;
  * spliced and the unchanged texts are both rendered, and the widest line among those
  * that differ is the construct's TRUE width. An overflow shrinks the budget and
  * re-plans, bounded to three passes.
+ *
+ * The fill measures from the CONTINUATION column, which is optimistic on purpose (a
+ * construct the writer wraps onto its own line is laid out there). One case refutes
+ * that optimism without ever reaching the writer: the fill reproduces the source's own
+ * boundaries — so nothing changed and nothing is measured — while the source line is
+ * over-long anyway, which proves the writer did not move the construct. `unwrapped`
+ * re-fills such a construct at its OWN column, and whatever that proposes still goes
+ * through the same verification.
  *
  * Layout policy belongs to the writer and this rule only asks it questions. Every
  * candidate that changes anything asks one, because the answer is what the
@@ -95,6 +109,14 @@ import anyparse.runtime.Span;
  *   (`RefShape.opaqueKinds`) are skipped wholesale: a metadata string argument is
  *   parsed as a normal Haxe expression, so a `$` moved into one changes what the
  *   annotation says, and a reified subtree's identifiers are spliced, not written.
+ * - CONSTANT-REQUIRED and SHAPE-READ positions (`skipsSubtree`, and the
+ *   enum-abstract arm in `walk`): a `case` pattern, a parameter default, an
+ *   enum-abstract value. The first two reject a concatenation outright; the third
+ *   accepts it and then stops answering to its own `case` patterns.
+ * - A MACRO ARGUMENT (`MacroGate`) is REPORTED but not fixed: a macro reads its
+ *   arguments as syntax, and one matching a string constant simply stops matching a
+ *   concatenation — silently. A project lifts the refusal per macro through the
+ *   `concatFoldingMacros` option, which is a claim about that macro's implementation.
  * - RE-SEGMENT ONLY WHEN OVER-LONG: only a STRICT merge — a plan with FEWER groups
  *   than the source has — runs unconditionally. A split, and equally a same-count
  *   RE-CUT at different boundaries, needs the construct's source lines to be
@@ -125,10 +147,17 @@ import anyparse.runtime.Span;
  * plugin declares no layout metrics, makes the check a no-op.
  */
 @:nullSafety(Strict)
-final class FoldStringLiterals implements Check {
+final class FoldStringLiterals implements Check implements ConfigAware {
 
 	/** The rule id, spelled once — `run`, `fix` and the registry all quote it. */
 	private static inline final RULE_ID: String = 'fold-adjacent-string-literals';
+
+	/** The `apqlint.json` option naming the macros PROVEN to fold a `+` chain of string constants. */
+	private static inline final MACRO_WHITELIST_OPTION: String = 'concatFoldingMacros';
+
+	/** What a finding adds when the macro gate turned it report-only — the reason, and the key that lifts it. */
+	private static inline final MACRO_REFUSAL: String = ', but it is an argument of a macro call and cannot be rewritten '
+		+ 'unless that macro is listed in the `$MACRO_WHITELIST_OPTION` option';
 
 	/**
 	 * Writer-verification passes per candidate. Each pass costs one `writeRoundTrip`
@@ -142,7 +171,14 @@ final class FoldStringLiterals implements Check {
 	/** The glue between two rendered groups. */
 	private static inline final GROUP_JOIN: String = ' + ';
 
+	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
+
 	public function new() {}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
 
 	public function id(): String {
 		return RULE_ID;
@@ -154,14 +190,21 @@ final class FoldStringLiterals implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = resolveSeams(plugin);
-		if (seams == null) return [];
+		if (seams == null || files.length == 0) return [];
+		final gate: MacroGate = macroGate(plugin, files, files[0].file, _resolveConfig);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final ctx: Null<PlanContext> = contextFor(plugin, seams, entry.source, FormatConfigDiscovery.discover(entry.file));
 			if (ctx == null) continue;
-			walk(violations, entry.file, ctx, tree);
+			for (planned in collectPlans(ctx, gate, tree)) violations.push({
+				file: entry.file,
+				span: planned.span,
+				rule: RULE_ID,
+				severity: Severity.Info,
+				message: planned.message
+			});
 		}
 		return violations;
 	}
@@ -185,7 +228,12 @@ final class FoldStringLiterals implements Check {
 		final ctx: Null<PlanContext> = contextFor(plugin, seams, source, FormatConfigDiscovery.discover(file));
 		if (ctx == null) return [];
 		final planContext: PlanContext = ctx;
-		return CheckScan.applyBySpan(plugin, source, violations, seams.candidateKinds, (node, span) -> {
+		// The macro-argument refusal is a property of a construct's ANCESTRY and of a
+		// cross-file symbol index, neither of which `fix` is handed — `applyBySpan` finds
+		// a node by its span alone, and `source` is one file. `run` already decided it, so
+		// the FINDING carries the decision here rather than the resolution being redone.
+		final fixable: Array<Violation> = violations.filter(v -> v.message.indexOf(MACRO_REFUSAL) == -1);
+		return CheckScan.applyBySpan(plugin, source, fixable, seams.candidateKinds, (node, span) -> {
 			final planned: Null<PlannedFold> = plan(planContext, node);
 			return planned == null ? null : { span: span, text: planned.text };
 		});
@@ -215,8 +263,15 @@ final class FoldStringLiterals implements Check {
 		return claim(node, source, concatKind, stringLiteralKinds) != null;
 	}
 
+	/** Every plan `tree` yields, in source order — the ONE traversal `run` reports from and `fix` is filtered against. */
+	private static function collectPlans(ctx: PlanContext, gate: MacroGate, tree: QueryNode): Array<PlannedFold> {
+		final out: Array<PlannedFold> = [];
+		walk(out, ctx, gate, [], tree);
+		return out;
+	}
+
 	/**
-	 * Walk `node`, flagging the OUTERMOST candidate on each path. A concatenation
+	 * Walk `node`, planning the OUTERMOST candidate on each path. A concatenation
 	 * is planned as a whole and not descended into (its operands are already part
 	 * of the plan); a string literal is planned for the SPLIT direction and never
 	 * descended into either — its children are interpolation fragments, and a `+`
@@ -224,29 +279,68 @@ final class FoldStringLiterals implements Check {
 	 * nest an interpolated string inside an interpolation block (fragile in the
 	 * real compiler's interp scanner).
 	 *
-	 * Two subtrees are skipped outright: reification (`RefShape.opaqueKinds`),
-	 * whose contents are spliced rather than executed, and ANNOTATION arguments
-	 * (`MetaShape.metaKinds`) — a metadata string argument is parsed as a normal
-	 * Haxe expression, so a `$` moved into one changes what the annotation says.
+	 * Out-of-bounds subtrees are skipped outright (`skipsSubtree`, plus the
+	 * enum-abstract arm below), and `calls` carries the simple names of the enclosing
+	 * calls so the macro gate can refuse a plan sitting inside one — a plan that is
+	 * still REPORTED, carrying the reason, since the construct genuinely does not fit.
 	 */
-	private static function walk(out: Array<Violation>, file: String, ctx: PlanContext, node: QueryNode): Void {
+	private static function walk(out: Array<PlannedFold>, ctx: PlanContext, gate: MacroGate, calls: Array<String>, node: QueryNode): Void {
 		final seams: Seams = ctx.seams;
-		if (seams.opaqueKinds.contains(node.kind) || seams.metaKinds.contains(node.kind)) return;
+		if (skipsSubtree(seams, node)) return;
 		final literal: Bool = seams.stringLiteralKinds.contains(node.kind);
 		if (literal || node.kind == seams.concatKind) {
 			final planned: Null<PlannedFold> = plan(ctx, node);
-			if (planned != null) out.push({
-				file: file,
+			if (planned != null) out.push(gate.blocks(calls, planned.groups) ? {
 				span: planned.span,
-				rule: RULE_ID,
-				severity: Severity.Info,
-				message: planned.message
-			});
+				text: planned.text,
+				groups: planned.groups,
+				message: planned.message + MACRO_REFUSAL
+			} : planned);
 			// A literal is never descended into; a chain only when it did not plan as
 			// a whole, so an inner chain still gets its own chance.
 			if (literal || planned != null) return;
 		}
-		for (c in node.children) walk(out, file, ctx, c);
+		final callee: Null<String> = calleeNameOf(seams, node);
+		if (callee != null) calls.push(callee);
+		// An enum-abstract VALUE compiles folded but stops being usable as a `case`
+		// pattern (`var A = 'a' + 'b'` makes `case A:` an "Unknown identifier" on Haxe
+		// 4.3.7), because the consumer reads the value's expression SHAPE. Only the
+		// values are out of bounds — methods declared in the same abstract are ordinary
+		// code, so the skip is decided HERE, by the declaration, rather than by a member
+		// kind that means nothing on its own.
+		final values: Bool = node.kind == seams.enumAbstractDeclKind;
+		for (c in node.children) if (!(values && RefactorSupport.isMemberDeclKind(c.kind) && !seams.functionKinds.contains(c.kind)))
+			walk(out, ctx, gate, calls, c);
+		if (callee != null) calls.pop();
+	}
+
+	/**
+	 * Whether the whole subtree at `node` is out of bounds — a position where a
+	 * concatenation either cannot be written or is not read as a value:
+	 *
+	 *  - REIFICATION (`RefShape.opaqueKinds`), whose contents are spliced rather than
+	 *    executed, and ANNOTATION arguments (`MetaShape.metaKinds`), parsed as normal
+	 *    Haxe expressions so a `$` moved into one changes what the annotation says —
+	 *    and which reject a concatenation outright (`@:native('a' + 'b')` is
+	 *    "String expected");
+	 *  - a `case` PATTERN: `case 'a\n' + 'b':` is "Unrecognized pattern";
+	 *  - a PARAMETER, whose default value must be constant ("Default argument value
+	 *    should be constant") — the whole parameter subtree goes, since the only
+	 *    literal it can hold outside its metadata IS that default.
+	 *
+	 * The fourth such position, an enum-abstract VALUE, is decided by its declaration
+	 * (see `walk`) rather than by a kind. All verified against Haxe 4.3.7.
+	 */
+	private static function skipsSubtree(seams: Seams, node: QueryNode): Bool {
+		return seams.opaqueKinds.contains(node.kind) || seams.metaKinds.contains(node.kind) || node.kind == seams.patternKind
+			|| seams.paramKinds.contains(node.kind);
+	}
+
+	/** The simple name of `node`'s call target when `node` is a call, else null — the key the macro gate resolves. */
+	private static function calleeNameOf(seams: Seams, node: QueryNode): Null<String> {
+		if (node.kind != seams.callKind || node.children.length == 0) return null;
+		final callee: QueryNode = node.children[0];
+		return callee.kind == seams.identKind || callee.kind == seams.fieldAccessKind ? callee.name : null;
 	}
 
 	/**
@@ -278,24 +372,54 @@ final class FoldStringLiterals implements Check {
 		final decomposition: Decomposition = found;
 		final current: Int = decomposition.current.length;
 		final budget: Int = ctx.metrics.lineWidth - budgetBase(ctx, decomposition.span) - GROUP_JOIN.length + 1;
-		final filled: Null<Array<Int>> = fill(ctx, decomposition.segments, budget, decomposition.startsBare);
-		if (filled == null) return null;
+		final first: Null<Array<Int>> = fill(ctx, decomposition.segments, budget, decomposition.startsBare);
+		if (first == null) return null;
+		final planned: Null<Plan> = unwrapped(ctx, decomposition, first, budget);
+		if (planned == null) return null;
+		final filled: Array<Int> = planned.groups;
 		// The back-off below only ever ADDS groups, so a plan that does not strictly
 		// MERGE can be refused here without paying for a single writer render.
 		if (filled.length >= current && !overLong(ctx, decomposition.span)) return null;
 		if (sameBoundaries(filled, decomposition.current)) return null;
-		final result: Null<Settled> = settle(ctx, decomposition, filled, budget);
+		final result: Null<Settled> = settle(ctx, decomposition, filled, planned.budget);
 		if (result == null) return null;
 		final settled: Settled = result;
 		if (sameBoundaries(settled.groups, decomposition.current)) return null;
-		if (settled.groups.length >= current && !overLong(ctx, decomposition.span)) return null;
+		final groups: Int = settled.groups.length;
+		if (groups >= current && !overLong(ctx, decomposition.span)) return null;
 		final width: Null<Int> = settled.width;
 		if (width != null && width > ctx.metrics.lineWidth && width >= sourceMaxWidth(ctx, decomposition.span)) return null;
 		return {
 			span: decomposition.span,
 			text: settled.text,
-			message: messageFor(settled.groups.length, current)
+			groups: groups,
+			message: messageFor(groups, current)
 		};
+	}
+
+	/**
+	 * `filled` re-planned against the construct's OWN start column when the optimistic
+	 * budget said it fits and the SOURCE says it does not.
+	 *
+	 * `budgetBase` measures from the continuation column on purpose — a construct the
+	 * writer wraps onto its own line is laid out there, and pricing it at its source
+	 * column would shred it. But when the fill reproduces the source's own boundaries and
+	 * the source line is over-long anyway, that optimism has been REFUTED: the writer did
+	 * not move this construct, because there was nothing to move it away from. The retry
+	 * prices it where it actually sits, and whatever it proposes still goes through the
+	 * writer verification below.
+	 *
+	 * Without it a construct that fits at the continuation column and overflows at its
+	 * own is never re-segmented and never even measured — `settle` only runs for a plan
+	 * that changes something, so the arithmetic's own optimism is what closes the case.
+	 */
+	private static function unwrapped(ctx: PlanContext, decomposition: Decomposition, filled: Array<Int>, budget: Int): Null<Plan> {
+		if (!sameBoundaries(filled, decomposition.current) || !overLong(ctx, decomposition.span)) return { groups: filled, budget: budget };
+		final own: Int = ctx.metrics.lineWidth
+			- columnWidth(ctx, lineStartOf(ctx.source, decomposition.span.from), decomposition.span.from) - GROUP_JOIN.length + 1;
+		if (own >= budget) return { groups: filled, budget: budget };
+		final refilled: Null<Array<Int>> = fill(ctx, decomposition.segments, own, decomposition.startsBare);
+		return refilled == null ? null : { groups: refilled, budget: own };
 	}
 
 	/**
@@ -712,7 +836,7 @@ final class FoldStringLiterals implements Check {
 	private static function messageFor(planned: Int, current: Int): String {
 		if (planned < current) return 'these string concatenation segments can be merged';
 		return planned > current
-			? 'this string literal can be split at its interpolation seams to fit the line width'
+			? 'this string literal can be split at its seams to fit the line width'
 			: 'these string concatenation segments can be re-cut to fit the line width';
 	}
 
@@ -773,8 +897,92 @@ final class FoldStringLiterals implements Check {
 			callKind: shape.callKind,
 			fieldAccessKind: shape.fieldAccessKind,
 			identKind: shape.identKind,
+			patternKind: shape.plainCasePatternKind,
+			paramKinds: shape.paramKinds ?? [],
+			enumAbstractDeclKind: shape.enumAbstractDeclKind,
+			functionKinds: shape.functionKinds ?? [],
 			candidateKinds: [concatKind].concat(stringLiteralKinds)
 		};
+	}
+
+	/**
+	 * The macro-argument gate for this run: the SIMPLE names of every `macro` member in
+	 * the resolution scope that the project has not whitelisted. Built lazily — the index
+	 * is only demanded once a construct has actually planned, which on a tree with no
+	 * findings is never.
+	 */
+	private static function macroGate(
+		plugin: GrammarPlugin, files: Array<{ file: String, source: String }>, path: String, resolve: Null<(String) -> LintConfig>
+	): MacroGate {
+		final whitelist: Array<String> = LintConfig.resolveWith(resolve, path).stringListOption(RULE_ID, MACRO_WHITELIST_OPTION) ?? [];
+		return new MacroGate(plugin, files, whitelist);
+	}
+
+}
+
+/**
+ * Which enclosing calls forbid re-segmenting their arguments. A `macro` function
+ * receives its arguments as unevaluated SYNTAX, and one that pattern-matches a string
+ * constant (`EConst(CString)`) sees a concatenation as a different expression
+ * altogether — silently, since the match simply stops firing. No structural check can
+ * tell whether a given macro folds one, so the default is to refuse the fix and report
+ * the construct with the reason.
+ *
+ * A macro is named by its QUALIFIED path (`pkg.Type.member`, or the `Type.member`
+ * suffix) in `apqlint.json`'s `concatFoldingMacros`, and whitelisting it is a claim
+ * about that macro's implementation — that it folds an `OpAdd` chain of constants
+ * before it reads the string.
+ *
+ * Matching is by SIMPLE NAME on purpose, and only in the blocking direction: resolving
+ * a call target exactly needs the whole import / static-extension picture, and every
+ * gap in that resolution would open the fix on a macro argument. A same-named ordinary
+ * function is therefore refused along with the macro — a false NEGATIVE, which costs a
+ * fix nobody was promised. A name is unblocked only when EVERY macro declaring it is
+ * whitelisted.
+ */
+@:nullSafety(Strict)
+private class MacroGate {
+
+	private final _plugin: GrammarPlugin;
+	private final _files: Array<{ file: String, source: String }>;
+	private final _whitelist: Array<String>;
+
+	private var _blocked: Null<Array<String>> = null;
+
+	public function new(plugin: GrammarPlugin, files: Array<{ file: String, source: String }>, whitelist: Array<String>) {
+		_plugin = plugin;
+		_files = files;
+		_whitelist = whitelist;
+	}
+
+	/**
+	 * Whether a plan of `groups` groups sitting inside the call stack `calls` must stay
+	 * report-only. A plan that renders as ONE group is never refused: it is a lone
+	 * literal, the very shape a constant-matching macro expects, and reaching it can only
+	 * remove `+` operators the argument already had.
+	 */
+	public function blocks(calls: Array<String>, groups: Int): Bool {
+		if (groups < 2 || calls.length == 0) return false;
+		final blocked: Array<String> = blockedNames();
+		for (name in calls) if (blocked.contains(name)) return true;
+		return false;
+	}
+
+	/** The blocked simple names, resolved on first demand and memoised for the rest of the pass. */
+	private function blockedNames(): Array<String> {
+		final cached: Null<Array<String>> = _blocked;
+		if (cached != null) return cached;
+		final index: SymbolIndex = RefactorSupport.resolutionIndexOf(_plugin) ?? SymbolIndex.build(_files, _plugin);
+		final names: Array<String> = [];
+		for (info in index.allFiles()) for (type in info.types) for (member in type.members) if (
+			member.isMacro && !names.contains(member.name)
+		) {
+			final scoped: String = '${type.name}.${member.name}';
+			final qualified: String = info.pkg == '' ? scoped : '${info.pkg}.$scoped';
+			if (!_whitelist.contains(qualified) && !_whitelist.contains(scoped)) names.push(member.name);
+		}
+		_blocked = names;
+		return names;
 	}
 
 }
@@ -789,6 +997,18 @@ private typedef Seams = {
 	final callKind: Null<String>;
 	final fieldAccessKind: Null<String>;
 	final identKind: String;
+
+	/** The `case` PATTERN host kind — a position where a concatenation is not legal syntax. */
+	final patternKind: Null<String>;
+
+	/** The parameter kinds, whose default value must be a compile-time constant. */
+	final paramKinds: Array<String>;
+
+	/** The enum-abstract declaration kind, whose VALUE members are read by their expression shape. */
+	final enumAbstractDeclKind: Null<String>;
+
+	/** The function-member kinds — what an enum-abstract declares that IS ordinary code. */
+	final functionKinds: Array<String>;
 
 	/** `concatKind` plus the literal kinds — the node kinds `fix` re-finds a violation's span among. */
 	final candidateKinds: Array<String>;
@@ -814,6 +1034,9 @@ private typedef Decomposition = {
 private typedef PlannedFold = {
 	final span: Span;
 	final text: String;
+
+	/** How many `+` operands the plan renders as — 1 means a single literal, the shape no gate refuses. */
+	final groups: Int;
 	final message: String;
 };
 
@@ -825,6 +1048,12 @@ private typedef Chain = {
 	final operands: Array<QueryNode>;
 	final from: Int;
 	final firstLiteral: Int;
+};
+
+/** A proposed partition and the budget it was filled against — what the writer verification re-fills from. */
+private typedef Plan = {
+	final groups: Array<Int>;
+	final budget: Int;
 };
 
 /**

@@ -5,6 +5,7 @@ import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.FoldStringLiterals;
 import anyparse.check.Linter;
+import anyparse.check.LintConfig;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.FormatConfigDiscovery;
@@ -501,6 +502,120 @@ class FoldStringLiteralsCheckTest extends Test {
 	}
 
 	/**
+	 * An over-long literal with NO interpolation at all splits at its embedded `\n`
+	 * escape, which stays with the LEFT fragment — the seam that makes a lone string
+	 * token layout-fixable at all. Before this, such a literal had one segment and
+	 * could only ever plan back to itself.
+	 */
+	public function testSplitsAtNewlineEscape(): Void {
+		Assert.equals(1, violations(newlineSource("'", 100, 60)).length);
+		Assert.equals("'" + ''.rpad('A', 100) + "\\n' + '" + ''.rpad('B', 60) + "'", foldOf(newlineSource("'", 100, 60)));
+	}
+
+	/** A DOUBLE-quoted literal interpolates nothing, so every `\n` in it is a seam — and the split stays double-quoted. */
+	public function testSplitsDoubleQuotedAtNewlineEscape(): Void {
+		Assert.equals('"' + ''.rpad('A', 100) + '\\n" + "' + ''.rpad('B', 60) + '"', foldOf(newlineSource('"', 100, 60)));
+	}
+
+	/** The split's own output re-decomposes to the same segment list, so re-linting it finds nothing. */
+	public function testNewlineSplitIsIdempotent(): Void {
+		assertFixIsIdempotent(newlineSource("'", 100, 60));
+	}
+
+	/** A literal whose line already fits is left with the author's own phrasing, `\n` or not. */
+	public function testShortLiteralWithNewlineNotSplit(): Void {
+		Assert.equals(0, violations(newlineSource("'", 20, 20)).length);
+	}
+
+	/** `\\n` is an escaped BACKSLASH followed by an `n`, not a line break — no seam, so the literal is not a candidate. */
+	public function testEscapedBackslashIsNotASeam(): Void {
+		Assert.equals(0, violations(rawSource("'" + ''.rpad('A', 100) + "\\\\n" + ''.rpad('B', 60) + "'")).length);
+	}
+
+	/**
+	 * A seam PAST the limit still splits — BEST EFFORT, the same answer the rule already
+	 * gives for a `${ … }` seam past the limit (`testLiteralSplitOnlyWhenOverLong`,
+	 * `testSplitNeverEmitsTwoLeadingBareOperands`, both of which leave their first
+	 * fragment over-long). The "does it help" gate is the shipped one — the result must
+	 * be strictly NARROWER than the source it replaces — and requiring the first fragment
+	 * to come UNDER the limit instead would regress both of those fixtures, since an
+	 * unsplittable leading run is the same shape whether it holds no `\n` or no `${ … }`.
+	 */
+	public function testSeamPastLimitStillSplitsBestEffort(): Void {
+		Assert.equals(1, violations(newlineSource("'", 150, 20)).length);
+		Assert.equals("'" + ''.rpad('A', 150) + "\\n' + '" + ''.rpad('B', 20) + "'", foldOf(newlineSource("'", 150, 20)));
+	}
+
+	/**
+	 * Gate (4): a `\n` inside a `${ … }` block belongs to an EXPRESSION segment, never
+	 * to a text one, so it is not a seam — the nested literal comes through the split
+	 * intact.
+	 */
+	public function testNewlineInsideInterpolationBlockIsNotASeam(): Void {
+		final src: String = rawSource("'" + ''.rpad('A', 100) + "${g(\"p\\nq\")}" + ''.rpad('B', 60) + "'");
+		Assert.isTrue(foldOf(src).indexOf('"p\\nq"') != -1);
+	}
+
+	/**
+	 * Gate (2): a concatenation is not a legal `case` pattern (`Unrecognized pattern`
+	 * on Haxe 4.3.7), so a literal in pattern position is skipped whatever its width.
+	 */
+	public function testCasePatternIsNotACandidate(): Void {
+		Assert.equals(0, violations(casePatternSource(100, 60)).length);
+	}
+
+	/**
+	 * Gate (3): a default argument value must be constant (`Default argument value
+	 * should be constant` on Haxe 4.3.7), so a parameter's default is skipped.
+	 */
+	public function testDefaultParamValueIsNotACandidate(): Void {
+		Assert.equals(0, violations(defaultParamSource(100, 60)).length);
+	}
+
+	/**
+	 * Gate (3): an enum-abstract VALUE folded to a concatenation still compiles, but
+	 * it stops being usable as a `case` pattern (`Unknown identifier` on Haxe 4.3.7) —
+	 * the consumer sees the expression SHAPE, so the value is skipped.
+	 */
+	public function testEnumAbstractValueIsNotACandidate(): Void {
+		Assert.equals(0, violations(enumAbstractSource(100, 60)).length);
+	}
+
+	/**
+	 * Gate (1): a macro argument is reported but NOT fixed — a macro pattern-matching
+	 * `EConst(CString)` breaks silently on a concatenation, and no structural check can
+	 * see whether it folds.
+	 */
+	public function testMacroArgumentIsReportedButNotFixed(): Void {
+		final files: Array<{ file: String, source: String }> = macroArgFiles(100, 60);
+		final check: FoldStringLiterals = new FoldStringLiterals();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('macro') != -1);
+		Assert.equals(0, check.fix(files[1].source, vs, new HaxeQueryPlugin()).length);
+	}
+
+	/** A macro PROVEN to fold `+` chains of constants is whitelisted by qualified path, and its arguments become fixable. */
+	public function testWhitelistedMacroArgumentIsFixed(): Void {
+		final files: Array<{ file: String, source: String }> = macroArgFiles(100, 60);
+		final check: FoldStringLiterals = new FoldStringLiterals();
+		check.setConfigResolver(_ -> LintConfig.parse('{"rules":{"fold-adjacent-string-literals":{"concatFoldingMacros":["m.Lang.t"]}}}'));
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		final edits: Array<{ span: Span, text: String }> = check.fix(files[1].source, vs, new HaxeQueryPlugin());
+		Assert.equals(1, edits.length);
+		Assert.equals("'" + ''.rpad('A', 100) + "\\n' + '" + ''.rpad('B', 60) + "'", edits[0].text);
+	}
+
+	/** A NON-macro call named like one resolves to no macro declaration, so its arguments fold as usual. */
+	public function testPlainCallArgumentIsFixed(): Void {
+		Assert.equals(
+			"'" + ''.rpad('A', 100) + "\\n' + '" + ''.rpad('B', 60) + "'",
+			foldOf(rawSource("'" + ''.rpad('A', 100) + "\\n" + ''.rpad('B', 60) + "'"))
+		);
+	}
+
+	/**
 	 * A `g('…' + '…')` at three tabs whose FIRST operand is 40 characters of text and
 	 * whose second is 40 more, an interpolated `$x` and `tailLen` trailing characters.
 	 * The greedy fill packs the first three segments into one group and leaves the
@@ -587,6 +702,68 @@ class FoldStringLiteralsCheckTest extends Test {
 
 	private function wrap(expr: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\tvar x = $expr;\n\t}\n}';
+	}
+
+	/** A `g(<literal>);` statement at two tabs — the plain host every `\n`-seam fixture measures at. */
+	private function rawSource(literal: String): String {
+		return 'class C {\n\tfunction f() {\n\t\tg($literal);\n\t}\n}';
+	}
+
+	/**
+	 * A `g('<aLen A>\n<bLen B>');` at two tabs in `quote` quoting. The literal starts at
+	 * column `FIXTURE_INDENT + CALL_HEAD`, so the planner's budget is `FIXTURE_BUDGET`
+	 * and the seam sits after `aLen + 4` characters of rendered fragment — under the
+	 * budget for the split fixtures, past it for the "no seam before the limit" one.
+	 */
+	private function newlineSource(quote: String, aLen: Int, bLen: Int): String {
+		return rawSource(quote + ''.rpad('A', aLen) + '\\n' + ''.rpad('B', bLen) + quote);
+	}
+
+	/** The same over-long literal in `case` PATTERN position, where a concatenation is not legal syntax. */
+	private function casePatternSource(aLen: Int, bLen: Int): String {
+		final literal: String = "'" + ''.rpad('A', aLen) + '\\n' + ''.rpad('B', bLen) + "'";
+		return 'class C {\n\tfunction f(s:String) {\n\t\tswitch (s) {\n\t\t\tcase $literal: g(1);\n\t\t\tcase _: g(2);\n\t\t}\n\t}\n}';
+	}
+
+	/** The same over-long literal as a parameter DEFAULT, where the compiler requires a constant. */
+	private function defaultParamSource(aLen: Int, bLen: Int): String {
+		final literal: String = "'" + ''.rpad('A', aLen) + '\\n' + ''.rpad('B', bLen) + "'";
+		return 'class C {\n\tfunction f(s:String = $literal) {\n\t\tg(s);\n\t}\n}';
+	}
+
+	/** The same over-long literal as an enum-abstract VALUE, which its `case` consumers read as a shape. */
+	private function enumAbstractSource(aLen: Int, bLen: Int): String {
+		final literal: String = "'" + ''.rpad('A', aLen) + '\\n' + ''.rpad('B', bLen) + "'";
+		return 'enum abstract E(String) {\n\tvar A = $literal;\n\tvar B = \'b\';\n}';
+	}
+
+	/**
+	 * Two files: a `macro` function `m.Lang.t` and a caller passing it the over-long
+	 * literal. Resolution is cross-file, so the macro modifier only reaches the check
+	 * through the symbol index built over BOTH.
+	 */
+	private function macroArgFiles(aLen: Int, bLen: Int): Array<{ file: String, source: String }> {
+		final literal: String = "'" + ''.rpad('A', aLen) + '\\n' + ''.rpad('B', bLen) + "'";
+		return [
+			{
+				file: 'm/Lang.hx',
+				source: 'package m;\nclass Lang {\n\tmacro public static function t(v:Expr):Expr {\n\t\treturn v;\n\t}\n}'
+			},
+			{ file: 'C.hx', source: 'import m.Lang.t;\nclass C {\n\tfunction f() {\n\t\tg(t($literal));\n\t}\n}' }
+		];
+	}
+
+	/** `src` fixed, canonicalised and re-linted: the canonical form must be a fixed point of the rule. */
+	private function assertFixIsIdempotent(src: String): Void {
+		final check: FoldStringLiterals = new FoldStringLiterals();
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+		switch RefactorSupport.canonicalize(src, edits, true, plugin, FormatConfigDiscovery.discover('C.hx')) {
+			case Ok(text):
+				Assert.equals(0, violations(text).length);
+			case Err(message):
+				Assert.fail('canonicalize Err: $message');
+		}
 	}
 
 	private function violations(src: String): Array<Violation> {
