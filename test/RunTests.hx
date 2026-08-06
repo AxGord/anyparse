@@ -448,6 +448,7 @@ import unit.PreferFindCheckTest;
 import unit.LoopGuardCheckTest;
 import unit.MapKeysLookupCheckTest;
 import unit.PreferRangeLoopCheckTest;
+import unit.RedundantReplaceLoopCheckTest;
 import unit.TrivialGetterCheckTest;
 import unit.NullableSwitchMissingNullCheckTest;
 import unit.DuplicateCodeCheckTest;
@@ -985,6 +986,7 @@ class RunTests {
 		addCase(new GuardReturnCheckTest());
 		addCase(new MapKeysLookupCheckTest());
 		addCase(new PreferRangeLoopCheckTest());
+		addCase(new RedundantReplaceLoopCheckTest());
 		addCase(new TrivialGetterCheckTest());
 		addCase(new TrivialGetterStaticShadowTest());
 		addCase(new PreferInlineCheckTest());
