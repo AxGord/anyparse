@@ -151,10 +151,25 @@ class MissingVisibilityCheckTest extends Test {
 		Assert.equals(-1, fixed.indexOf('override private'));
 	}
 
-	/** An extern class defaults its members to public; the autofix must NOT force `private`. */
-	public function testFixSkipsExternClass(): Void {
-		Assert.equals(1, violations('extern class C { function f():Void; }').length);
+	/**
+	 * An extern class binds an external API: its unmodified members are already PUBLIC (probed:
+	 * `e.foo()` typechecks off an `extern class`, and adding `private` makes it "Cannot access
+	 * private field"), so the rule skips the container entirely rather than reporting a finding
+	 * whose obvious remedy breaks callers.
+	 */
+	public function testExternClassMembersNotFlagged(): Void {
+		Assert.equals(0, violations('extern class C { function f():Void; }').length);
 		Assert.equals(-1, fixedSource('extern class C { function f():Void; }').indexOf('private'));
+	}
+
+	/** The extern skip survives the module-level `private extern class` form (a private TYPE, not a private member). */
+	public function testPrivateExternClassMembersNotFlagged(): Void {
+		Assert.equals(0, violations('private extern class C { function f():Void; }').length);
+	}
+
+	/** A non-extern container declared after an extern one still reports: the extern flag must not leak forward. */
+	public function testExternSkipDoesNotLeakToNextClass(): Void {
+		Assert.equals(1, violations('extern class E { function f():Void; }\nclass C { function g():Void {} }').length);
 	}
 
 	/** A `@:publicFields` class defaults its members to public; the autofix must NOT force `private`. */
@@ -163,9 +178,9 @@ class MissingVisibilityCheckTest extends Test {
 		Assert.equals(-1, fixedSource('@:publicFields class D { function g():Void {} }').indexOf('private'));
 	}
 
-	/** `final class` wraps the class in a decl node; the extern / public-default skip must still reach the members. */
-	public function testFixSkipsExternFinalClass(): Void {
-		Assert.equals(1, violations('extern final class C { function f():Void; }').length);
+	/** `final class` wraps the class in a decl node; the extern skip must still reach the members. */
+	public function testExternFinalClassMembersNotFlagged(): Void {
+		Assert.equals(0, violations('extern final class C { function f():Void; }').length);
 		Assert.equals(-1, fixedSource('extern final class C { function f():Void; }').indexOf('private'));
 	}
 
@@ -178,6 +193,65 @@ class MissingVisibilityCheckTest extends Test {
 	/** A plain `final class` still defaults members to private, so the autofix DOES insert `private`. */
 	public function testFixInsertsPrivateInFinalClass(): Void {
 		Assert.isTrue(fixedSource('final class F { function g():Void {} }').indexOf('private function g') >= 0);
+	}
+
+	/** A member written inside a member-position `#if` is a member of the class and must be flagged like any other. */
+	public function testConditionalMemberFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\t#if cpp\n\tvar a:Int;\n\t#end\n}').length);
+	}
+
+	/** Every branch of the region is scanned, not just the first. */
+	public function testConditionalBothBranchesFlagged(): Void {
+		Assert.equals(2, violations('class C {\n\t#if cpp\n\tvar a:Int;\n\t#else\n\tvar b:Int;\n\t#end\n}').length);
+	}
+
+	/** A visibility keyword inside the region still exempts its own member; its unmarked neighbour is still flagged. */
+	public function testConditionalMemberWithVisibilityNotFlagged(): Void {
+		final src: String = 'class C {\n\t#if cpp\n\tpublic var a:Int;\n\tvar b:Int;\n\t#end\n}';
+		Assert.equals(1, violations(src).length);
+	}
+
+	/** A conditional member coexists with members outside the region; both positions report. */
+	public function testConditionalAndPlainMembersBothFlagged(): Void {
+		Assert.equals(2, violations('class C {\n\tvar out:Int;\n\t#if cpp\n\tvar inA:Int;\n\t#end\n}').length);
+	}
+
+	/** A region nested inside another region's branch is reached too. */
+	public function testNestedConditionalMemberFlagged(): Void {
+		final src: String = 'class C {\n\t#if cpp\n\t#if debug\n\tvar a:Int;\n\t#end\n\t#end\n}';
+		Assert.equals(1, violations(src).length);
+	}
+
+	/** The keyword lands at the member's own declaration INSIDE the branch, not before the `#if`. */
+	public function testFixConditionalMemberInsertsInsideBranch(): Void {
+		final fixed: String = fixedSource('class C {\n\t#if cpp\n\tvar a:Int;\n\t#end\n}');
+		Assert.equals('class C {\n\t#if cpp\n\tprivate var a:Int;\n\t#end\n}', fixed);
+	}
+
+	/** A two-branch region gets one keyword per branch, each at its own member. */
+	public function testFixConditionalBothBranchesInsertInPlace(): Void {
+		final fixed: String = fixedSource('class C {\n\t#if cpp\n\tvar a:Int;\n\t#else\n\tvar b:Int;\n\t#end\n}');
+		Assert.equals('class C {\n\t#if cpp\n\tprivate var a:Int;\n\t#else\n\tprivate var b:Int;\n\t#end\n}', fixed);
+	}
+
+	/** The canonical slot rule (before `static` / `inline`) holds inside a branch as well. */
+	public function testFixConditionalMemberKeywordPosition(): Void {
+		final fixed: String = fixedSource('class C {\n\t#if cpp\n\tstatic inline function f():Void {}\n\t#end\n}');
+		Assert.isTrue(fixed.indexOf('private static inline function f') >= 0);
+	}
+
+	/**
+	 * A region holding ONLY the visibility keyword straddles into the member after `#end` — the
+	 * modifier belongs to that member, so flagging it (and inserting a second keyword) is wrong.
+	 */
+	public function testStraddlingConditionalModifierNotFlagged(): Void {
+		final src: String = 'class C {\n\t#if cpp\n\tpublic\n\t#else\n\tprivate\n\t#end\n\tfunction f():Void {}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/** An extern class whose members sit in a `#if` region stays skipped — the extern flag reaches into the branch. */
+	public function testExternConditionalMembersNotFlagged(): Void {
+		Assert.equals(0, violations('extern class C {\n\t#if cpp\n\tfunction f():Void;\n\t#end\n}').length);
 	}
 
 	private function violations(src: String): Array<Violation> {
