@@ -126,6 +126,7 @@ final class Linter {
 			new RedundantThis(),
 			new UnnecessaryNullCheck(),
 			new RedundantCast(),
+			new RedundantToString(),
 			new RedundantNullCoalescing(),
 			new UnnecessarySafeNav(),
 			new RedundantIsCheck(),

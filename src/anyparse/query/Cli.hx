@@ -1479,6 +1479,12 @@ final class Cli {
 			// or a `typedef` target declared elsewhere reads as unresolvable, so a site an earlier
 			// pass exposed degrades to report-only and the loop never converges on it.
 			'prefer-static-extension',
+			// redundant-tostring's fix gates resolve the receiver's TYPE through the index — is it
+			// declared, extern, a class. On the active SUBSET a type declared elsewhere reads as
+			// unresolvable, so a site an earlier pass exposed degrades to report-only and the loop
+			// never converges on it; worse, run() and fix() would then disagree, since
+			// computeFileLintEdits hands fix() the whole-report index either way.
+			'redundant-tostring',
 			// prefer-inline's soundness gates are ALL whole-project: the subtype-override gate
 			// (SymbolIndex.hasSubtype + a strict-subtype member lookup), the value-reference name scan, and
 			// the interface gate. On the active SUBSET a subtype / value-use / interface declared elsewhere
