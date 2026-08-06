@@ -2,12 +2,14 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import haxe.Exception;
 
 /**
  * Flags an ARROW lambda whose `{ … }` body holds exactly one statement, and collapses the
@@ -206,6 +208,56 @@ import anyparse.runtime.Span;
  * matching the sibling rewrite rules: its interior is spliced code a consumer may
  * pattern-match on, not source a human reads.
  *
+ * ## The writer-probe precondition
+ *
+ * Structural collapsibility is not enough. The collapse changes how the ENCLOSING construct
+ * wraps, and nothing in the tree says whether the result reads better. Applied to a real
+ * 800-file tree 29 sites matched structurally and 17 of them came out no better or materially
+ * WORSE, in three distinct shapes — all layout, none visible to any gate above:
+ *
+ * - ARG-LIST EXPLOSION. The collapsed head line stops fitting, so the writer breaks the
+ *   enclosing CALL apart: `Api.login(email, password, cb -> { … }, false);` becomes
+ *   `Api.login(` alone on its line with the arguments re-flowed under it.
+ * - ORPHAN ARROW. The body is too wide for the head line, so the writer wraps right after the
+ *   `->`: the head loses its `{`, the body stays one line down, and the closing `});`
+ *   degrades to a bare `);`. Nothing is gained.
+ * - MULTI-LINE CONDITION HOISTED INTO THE ARROW HEAD. The collapsed `if`'s own condition is
+ *   itself wrapped, so that wrap now lives inside the lambda head.
+ *
+ * So a site fires only when the collapse PAYS FOR ITSELF in the writer's own rendering. The
+ * file goes through `writeRoundTrip` twice — as it is, and with THIS candidate's edit and
+ * nothing else — and the site is accepted iff BOTH:
+ *
+ * 1. the after-rendering has STRICTLY FEWER lines than the before-rendering; and
+ * 2. at the FIRST line where the two diverge, the after line is LONGER once trimmed.
+ *
+ * Clause 1 says the collapse must remove at least one line; clause 2 says it must pull content
+ * UP onto the head line rather than push it off — exactly "the head line gains a wrap it did
+ * not have", measured instead of guessed. Neither clause alone separates the real tree's
+ * sites, which is also why clause 1 is strictly-shrink rather than shrink-or-hold: the orphan
+ * arrow is line-NEUTRAL with a head two characters shorter, so only clause 1 refuses it; the
+ * hoisted condition is line-neutral with a head 64 characters LONGER, again only clause 1; and
+ * the arg-list explosion shrinks the file by two lines while the head loses 73, which only
+ * clause 2 catches. (Measured on the fixtures in `PreferLambdaExpressionBodyCheckTest` and on
+ * `fs/FileSystemBase.hx` of that tree.)
+ *
+ * Why the WHOLE FILE rather than a spliced-out statement: the collapse is the only edit, so
+ * the file-level line delta IS the enclosing statement's line delta, and the first divergent
+ * line IS the lambda's head line. Nothing to scaffold, no member-scope indent-equivalence to
+ * assume, and no way for the probe to measure a different construct than the one being
+ * changed.
+ *
+ * The layout config is discovered from the file's own path (`FormatConfigDiscovery`) — layout
+ * policy belongs to the project's `hxformat.json`, and a probe against compiled defaults can
+ * "prove" a one-line result the project renders as two. `fix` reads it from
+ * `violations[0].file` and refuses a mixed-file call, so both passes measure under the same
+ * settings.
+ *
+ * Cost: one extra `writeRoundTrip` per candidate, plus one per source that has any candidate
+ * at all — a file the structural walk finds nothing in pays nothing. A writer failure,
+ * including the documented `CommentLossException`, folds to null and REFUSES, so a grammar
+ * with no writer makes this check inert rather than unguarded.
+ *
  * ## Autofix
  *
  * `fix` replaces the BLOCK's span — braces included, nothing outside them — with the
@@ -277,7 +329,7 @@ final class PreferLambdaExpressionBody implements Check {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
 		return [
-			for (entry in files) for (m in collect(plugin, entry.source, seams))
+			for (entry in files) for (m in collect(plugin, entry.source, seams, FormatConfigDiscovery.discover(entry.file)))
 				{
 					file: entry.file,
 					span: m.span,
@@ -292,9 +344,14 @@ final class PreferLambdaExpressionBody implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
+		if (seams == null || violations.length == 0) return [];
+		// The layout config comes from the violation's own path — the precondition renders the
+		// whole file, so `fix` must measure under exactly the settings `run` measured with.
+		final file: String = violations[0].file;
+		for (violation in violations) if (violation.file != file)
+			throw new Exception('prefer-lambda-expression-body: fix() takes ONE file\'s violations, got $file and ${violation.file}');
 		final byKey: Map<String, Match> = [];
-		for (m in collect(plugin, source, seams)) byKey['${m.span.from}:${m.span.to}'] = m;
+		for (m in collect(plugin, source, seams, FormatConfigDiscovery.discover(file))) byKey['${m.span.from}:${m.span.to}'] = m;
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final vspan: Null<Span> = v.span;
@@ -306,17 +363,71 @@ final class PreferLambdaExpressionBody implements Check {
 	}
 
 	/**
-	 * Every collapsible lambda body in `source` (empty when it does not parse). `run` and
-	 * `fix` both go through it, so neither can encode a gate the other misses.
+	 * Every collapsible lambda body in `source` that also PAYS FOR ITSELF in the writer's own
+	 * rendering (empty when the source does not parse, or when the writer declines it). `run`
+	 * and `fix` both go through it, so neither can encode a gate the other misses.
+	 *
+	 * The BEFORE rendering is paid for ONCE per source, and only when the structural walk
+	 * found something — a file with no candidate costs no round trip at all.
 	 */
-	private static function collect(plugin: GrammarPlugin, source: String, s: Seams): Array<Match> {
+	private static function collect(plugin: GrammarPlugin, source: String, s: Seams, optsJson: Null<String>): Array<Match> {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
-		final out: Array<Match> = [];
+		final found: Array<Match> = [];
 		// The module root is shielded: nothing follows a top-level declaration but another
 		// one, so no `else` can reach a lambda that inherits its exposure from there.
-		walk(tree, source, RefactorSupport.collectCommentTokens(source), s, out, true);
-		return out;
+		walk(tree, source, RefactorSupport.collectCommentTokens(source), s, found, true);
+		if (found.length == 0) return found;
+		// No writer, or a writer that declines this file: fail closed. A grammar with no
+		// writer makes the check inert rather than leaving every collapse unmeasured.
+		final before: Null<Array<String>> = renderedLines(plugin, source, optsJson);
+		if (before == null) return [];
+		final rendering: Array<String> = before;
+		return found.filter(m -> paysForItself(plugin, source, m, optsJson, rendering));
+	}
+
+	/**
+	 * Whether collapsing `m` — and nothing else — makes the file read BETTER under the writer,
+	 * measured rather than assumed. Both clauses must hold:
+	 *
+	 * 1. the AFTER rendering is STRICTLY shorter than the BEFORE one — the collapse must
+	 *    remove at least one line;
+	 * 2. at the FIRST line where the two renderings diverge, the AFTER line is longer once
+	 *    trimmed — the collapse must pull content UP onto the lambda's head line, never push
+	 *    it off.
+	 *
+	 * A writer failure — including the documented `CommentLossException` — folds to null and
+	 * REFUSES.
+	 */
+	private static function paysForItself(
+		plugin: GrammarPlugin, source: String, m: Match, optsJson: Null<String>, before: Array<String>
+	): Bool {
+		final collapsed: String = source.substring(0, m.span.from) + m.text + source.substring(m.span.to);
+		final after: Null<Array<String>> = renderedLines(plugin, collapsed, optsJson);
+		if (after == null || after.length >= before.length) return false;
+		final divergence: Int = firstDivergence(before, after);
+		return divergence >= 0 && trimmedAt(after, divergence).length > trimmedAt(before, divergence).length;
+	}
+
+	/** `text` as the writer would emit it, split into lines; null when the writer throws or the grammar has none. */
+	private static function renderedLines(plugin: GrammarPlugin, text: String, optsJson: Null<String>): Null<Array<String>> {
+		final written: Null<String> = try plugin.writeRoundTrip(text, optsJson) catch (exception: Exception) null;
+		return written == null ? null : written.split('\n');
+	}
+
+	/**
+	 * The index of the first line at which the two renderings differ — the shorter one's
+	 * length when it is a strict prefix of the other, and -1 when they are identical.
+	 */
+	private static function firstDivergence(before: Array<String>, after: Array<String>): Int {
+		final shared: Int = before.length < after.length ? before.length : after.length;
+		for (i in 0...shared) if (before[i] != after[i]) return i;
+		return before.length == after.length ? -1 : shared;
+	}
+
+	/** `lines[i]` without surrounding whitespace, or empty when the index is past the end. */
+	private static inline function trimmedAt(lines: Array<String>, i: Int): String {
+		return i < lines.length ? StringTools.trim(lines[i]) : '';
 	}
 
 	/**

@@ -392,6 +392,66 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}
 
+	/**
+	 * SYMPTOM (a), ARG-LIST EXPLOSION. The collapsed head line no longer fits, so the writer
+	 * breaks the ENCLOSING call's argument list apart: `Api.authenticate(` is left alone on its
+	 * own line with the arguments re-flowed under it. Line-neutral and the head line loses 46
+	 * characters, so clause 2 refuses it. Nothing structural distinguishes this site from an
+	 * accepted one — only the rendering does.
+	 */
+	public function testArgListExplosionRefused(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tApi.authenticate(emailAddress, passwordValue, errorMessage -> {\n'
+			+ '\t\t\tif (errorMessage != null) presenter.showErrorBanner(errorMessage);\n\t\t}, false);\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * SYMPTOM (b), ORPHAN ARROW. The body is too wide for the head line, so the writer wraps
+	 * right after the `->`: the head loses its `{`, the body stays one line down and the closing
+	 * `});` degrades to a bare `);`. Nothing is gained — line-neutral, head one character
+	 * shorter — and clause 1 refuses it. This is the shape that makes clause 1 strictly-shrink
+	 * rather than shrink-or-hold.
+	 */
+	public function testOrphanArrowRefused(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\titemData.forEachChild(childItemData -> {\n'
+			+ '\t\t\tcollectedEntries.push(new EntryDescriptor(childItemData.identifier, childItemData.displayName,'
+			+ ' childItemData.sortIndex));\n\t\t});\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * SYMPTOM (c), MULTI-LINE CONDITION HOISTED INTO THE ARROW HEAD. The collapsed `if`'s
+	 * condition is itself wrapped, so the head line grows — clause 2 is HAPPY here — but the
+	 * construct as a whole gains nothing: the wrapped condition now lives inside the lambda
+	 * head. Line-neutral, so clause 1 is what refuses it. The pair of clauses is what separates
+	 * this from a real win; neither alone does.
+	 */
+	public function testWrappedConditionHoistedIntoTheHeadRefused(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tsession.forEachShare(sessionUser -> {\n'
+			+ '\t\t\tif (sessionUser.isActive && !collectedResults.exists(candidate -> candidate.identifier == sessionUser.identifier)) {\n'
+			+ '\t\t\t\tcollectedResults.push(sessionUser);\n\t\t\t}\n\t\t});\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * CANARY for the accept side, control-flow arm: the collapsed `-> if (…) …` fits on the head
+	 * line, so the body's two lines disappear and the head gains 33 characters. Both clauses
+	 * hold and the site still fires — the precondition is a payoff test, not a blanket refusal
+	 * of the control-flow arm.
+	 */
+	public function testControlFlowCollapseThatFitsStillFlagged(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tpopupQueue.forEach(entry -> {\n'
+			+ '\t\t\tif (entry.isModal) entry.close();\n\t\t});\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+	}
+
+	/** CANARY for the accept side, value arm: a `return` body collapsing onto the head line. */
+	public function testReturnArmCollapseToOneLineStillFlagged(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tmoves.sort((a, b) -> {\n'
+			+ '\t\t\treturn a.path < b.path ? -1 : 1;\n\t\t});\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferLambdaExpressionBody().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
