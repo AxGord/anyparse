@@ -723,6 +723,7 @@ final class SymbolIndex {
 		return supertypeDeclares(typeName, field, []);
 	}
 
+
 	/**
 	 * Whether the type named `typeName` DECLARED IN `file` provably inherits a member
 	 * named `member` from a supertype, resolved through UNAMBIGUOUS, import-aware links
@@ -740,6 +741,23 @@ final class SymbolIndex {
 	public function inheritsMemberUnambiguously(file: String, typeName: String, member: String): Bool {
 		final start: Null<ResolvedType> = findDeclaredType(file, typeName);
 		return start != null && inheritsMemberWalk(start, member, []);
+	}
+
+	/**
+	 * Whether `typeName` DECLARED IN `file` provably inherits an INSTANCE member named `member` -
+	 * one a subtype body can still name through `this.<member>`. The instance-aware sibling of
+	 * `inheritsMemberUnambiguously`, and like it resolved through UNAMBIGUOUS, import-aware links
+	 * only: the loose simple-name walk behind `supertypeDeclaresMember` answers for whatever type
+	 * happens to share the name, which is the SAFE direction for a caller that bails on a `true` and
+	 * the acting direction here (a spurious `true` writes a `this.` the compiler rejects).
+	 *
+	 * The walk stops at the FIRST supertype declaring the name - the one resolution would bind - so a
+	 * `static` declaration answers `false` rather than letting a deeper instance one win. An
+	 * unresolvable link contributes nothing and leaves the answer `false` (fail-closed).
+	 */
+	public function inheritsInstanceMember(file: String, typeName: String, member: String): Bool {
+		final start: Null<ResolvedType> = findDeclaredType(file, typeName);
+		return start != null && inheritsInstanceMemberWalk(start, member, []) == true;
 	}
 
 	/**
@@ -1111,6 +1129,7 @@ final class SymbolIndex {
 		return false;
 	}
 
+
 	/** The `{file, type}` for the type named `typeName` declared in `file`, or null. */
 	private function findDeclaredType(file: String, typeName: String): Null<ResolvedType> {
 		final fi: Null<FileInfo> = _files.find(f -> f.file == file);
@@ -1121,22 +1140,49 @@ final class SymbolIndex {
 	}
 
 	/**
-	 * `inheritsMemberUnambiguously`'s recursion: whether any UNAMBIGUOUSLY-resolved
-	 * supertype of `cur` declares `member`, or transitively inherits it. `seen`
-	 * cycle-guards on the resolved `(file, name)` identity.
+	 * Recursive supertype walk for `inheritsMemberUnambiguously`, cycle-guarded by `seen`. Expressed
+	 * through `inheritsInstanceMemberWalk`, which asks the strictly finer question over the same
+	 * traversal: it returns non-null exactly when some ancestor in the closure declares `member`, and
+	 * discriminates instance from static on top of that.
 	 */
 	private function inheritsMemberWalk(cur: ResolvedType, member: String, seen: Array<String>): Bool {
+		return inheritsInstanceMemberWalk(cur, member, seen) != null;
+	}
+
+	/**
+	 * Recursive supertype walk for `inheritsInstanceMember`, cycle-guarded by `seen` on the same
+	 * `file#type` key as `inheritsMemberWalk`: `true` when the first supertype declaring `member`
+	 * declares it non-statically, `false` when that one is `static`, null when nobody in the closure
+	 * declares it.
+	 */
+	private function inheritsInstanceMemberWalk(cur: ResolvedType, member: String, seen: Array<String>): Null<Bool> {
 		final key: String = '${cur.file.file}#${cur.type.name}';
-		if (seen.contains(key)) return false;
+		if (seen.contains(key)) return null;
 		seen.push(key);
 		for (raw in cur.type.supertypesRaw) {
 			final anc: Null<ResolvedType> = resolveTypeRef(raw, cur.file);
 			if (anc == null) continue;
 			final ancestor: ResolvedType = anc;
-			if (ancestor.type.members.exists(m -> m.name == member)) return true;
-			if (inheritsMemberWalk(ancestor, member, seen)) return true;
+			final declared: Null<Bool> = declaredInstanceMember(ancestor.type, member);
+			if (declared != null) return declared;
+			final inherited: Null<Bool> = inheritsInstanceMemberWalk(ancestor, member, seen);
+			if (inherited != null) return inherited;
 		}
-		return false;
+		return null;
+	}
+
+	/**
+	 * Whether `type` itself declares `member` as an INSTANCE member: `true` when it declares it
+	 * non-statically, `false` when ANY declaration of that name is `static`, null when the type
+	 * declares no member of that name at all.
+	 */
+	private static function declaredInstanceMember(type: TypeDeclInfo, member: String): Null<Bool> {
+		var found: Null<Bool> = null;
+		for (m in type.members) if (m.name == member) {
+			if (m.isStatic) return false;
+			found = true;
+		}
+		return found;
 	}
 
 	/**

@@ -128,9 +128,15 @@ final class Naming implements Check implements CrossFileFix {
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (decl in support.project(tree)) {
 			final rename: Null<Array<{ span: Span, text: String }>> = renameEditsFor(
-				decl, source, tree, policy, shape, plugin, flaggedFroms, otherSources, confinedMemo, resolutionIndex, index
+				decl, source, tree, policy, shape, plugin, flaggedFroms, otherSources, confinedMemo, resolutionIndex, index,
+				violations[0].file
 			);
-			if (rename != null) for (edit in rename) edits.push(edit);
+			// Two flagged declarations can want the SAME token: the qualification arm rewrites a bare
+			// reference to a MEMBER that may itself be flagged and renamed in this very pass. Overlapping
+			// edits have no defined winner in `applyEdits` (`dropContainedEdits` resolves by array index),
+			// so the second declaration DEFERS - `naming` is a full-scope check, and a rename deferred by a
+			// same-file conflict re-fires on the next pass, by which time the first one has landed.
+			if (rename != null && !RefactorSupport.editsOverlapAny(rename, edits)) for (edit in rename) edits.push(edit);
 		}
 		return edits;
 	}
@@ -318,7 +324,7 @@ final class Naming implements Check implements CrossFileFix {
 	private static function renameEditsFor(
 		decl: NamedDecl, source: String, tree: QueryNode, policy: NamingPolicy, shape: RefShape, plugin: GrammarPlugin,
 		flaggedFroms: Array<Int>, otherSources: Array<String>, confinedMemo: Map<String, Bool>, resolutionIndex: Null<SymbolIndex>,
-		?index: SymbolIndex
+		index: Null<SymbolIndex>, file: String
 	): Null<Array<{ span: Span, text: String }>> {
 		final span: Null<Span> = decl.span;
 		if (span == null || !flaggedFroms.contains(span.from) || !isRenameSafe(decl, source, index, otherSources, confinedMemo))
@@ -355,7 +361,7 @@ final class Naming implements Check implements CrossFileFix {
 		// the param idiom, by naming the captured occurrences through `this.` (see `qualifyCapturedEdits`);
 		// everything else is refused here, before the expensive occurrence resolution below.
 		final collides: Bool = collidesInScope(decl, source, tree, newName, shape, resolutionIndex, plugin);
-		if (collides && !qualifiableMember(decl)) return null;
+		if (collides && !qualifiableBinding(decl)) return null;
 		// Completeness + comment-along: the SAME scope-correct occurrence resolution + classifyOccurrences
 		// gate the cross-file path applies to its declaring file — a `#if` / string / `noqa` / resolver-missed
 		// active-code occurrence bails, a distinctive comment mention renames along (see `declaringFileRenameSpans`).
@@ -365,19 +371,28 @@ final class Naming implements Check implements CrossFileFix {
 		if (renameSpans == null) return null;
 		final spans: Array<Span> = renameSpans;
 		final edits: Array<{ span: Span, text: String }> = [for (occ in spans) { span: occ, text: newName }];
-		return collides ? qualifyCapturedEdits(source, tree, span.from, spans, newName, shape, plugin, edits) : edits;
+		return
+			collides ? qualifyCapturedEdits(source, tree, span.from, spans, newName, shape, plugin, edits, resolutionIndex, file) : edits;
 	}
 
 	/**
-	 * A cheap PRE-gate on `decl`: is it even the KIND of declaration a `this.` qualification could
-	 * reach - a field or method that is not `static` (a Constant is static by construction)? Placed
-	 * ahead of the occurrence resolution so the ordinary refusal path costs nothing extra. It is NOT
-	 * the proof: whether the binding is truly reachable through `selfReferenceText` - which also
-	 * depends on the enclosing type, since an `abstract`'s `this` is the underlying value - is
-	 * decided by `Rename.selfReachableBindingAt` inside `qualifyCapturedEdits`.
+	 * A cheap PRE-gate on `decl`: is it even the KIND of declaration whose collision a `this.`
+	 * qualification could repair? A non-`static` field or method is - a parameter capturing its
+	 * references is the param idiom, repaired by naming the member through `this.`. A function-body
+	 * binding (Local / Param / CatchVar) is one for the MIRROR direction, where the renamed binding
+	 * itself proves nothing and it is the CAPTURED member reference that gets qualified. Everything
+	 * else (a type, a `static` member, a Constant - static by construction) is refused outright.
+	 * Placed ahead of the occurrence resolution so the ordinary refusal path costs nothing extra. It
+	 * is NOT the proof: which arm applies, and whether the binding or the capture is truly reachable
+	 * through `selfReferenceText`, is decided by `Rename.qualifyCaptured` inside
+	 * `qualifyCapturedEdits`.
 	 */
-	private static inline function qualifiableMember(decl: NamedDecl): Bool {
-		return (decl.category == NamingCategory.Field || decl.category == NamingCategory.Method) && !decl.mods.contains('static');
+	private static inline function qualifiableBinding(decl: NamedDecl): Bool {
+		return switch decl.category {
+			case NamingCategory.Field | NamingCategory.Method: !decl.mods.contains('static');
+			case NamingCategory.Local | NamingCategory.Param | NamingCategory.CatchVar: true;
+			case _: false;
+		}
 	}
 
 	/**
@@ -401,7 +416,7 @@ final class Naming implements Check implements CrossFileFix {
 	@:access(anyparse.query.Rename)
 	private static function qualifyCapturedEdits(
 		source: String, tree: QueryNode, declFrom: Int, renameSpans: Array<Span>, newName: String, shape: RefShape, plugin: GrammarPlugin,
-		edits: Array<{ span: Span, text: String }>
+		edits: Array<{ span: Span, text: String }>, resolutionIndex: Null<SymbolIndex>, file: String
 	): Null<Array<{ span: Span, text: String }>> {
 		final self: Null<String> = shape.selfReferenceText;
 		if (self == null) return null;
@@ -415,7 +430,9 @@ final class Naming implements Check implements CrossFileFix {
 		final mismatch: Array<Capture> = Rename.captureMismatch(rewritten, tr, renameSpans, resolved, newName, declFrom, shape);
 		if (mismatch.length == 0) return null;
 		final reachable: Bool = Rename.selfReachableBindingAt(source, tree, declFrom, shape);
-		final qualification: Null<Qualification> = Rename.qualifyCaptured(rewritten, tr, mismatch, newName, shape, reachable);
+		final qualification: Null<Qualification> = Rename.qualifyCaptured(
+			rewritten, tr, mismatch, newName, shape, reachable, resolutionIndex, file
+		);
 		if (qualification == null) return null;
 		final q: Qualification = qualification;
 		switch Rename.verifyQualified(q, renameSpans, resolved, newName, declFrom, plugin, shape) {
@@ -428,14 +445,24 @@ final class Naming implements Check implements CrossFileFix {
 		final delta: Int = newName.length - (sorted[0].to - sorted[0].from);
 		final starts: Array<Int> = [for (s in sorted) s.from];
 		final targets: Array<Int> = [];
+		final captured: Array<{ span: Span, text: String }> = [];
 		for (offset in q.insertions) {
 			final orig: Int = preRewriteOffset(sorted, delta, offset);
-			if (!starts.contains(orig)) return null;
-			targets.push(orig);
+			if (starts.contains(orig)) {
+				targets.push(orig);
+				continue;
+			}
+			// The MIRROR arm's insertion: a bare reference to a MEMBER the renamed local now shadows.
+			// The rename owns no edit there, so the token is rewritten whole (`width` -> `this.width`)
+			// rather than as a zero-width insertion - and it must genuinely spell `newName` and lie
+			// clear of every rename span, else the offset arithmetic has drifted and the repair is off.
+			final end: Int = orig + newName.length;
+			if (source.substring(orig, end) != newName || sorted.exists(s -> orig < s.to && end > s.from)) return null;
+			captured.push({ span: new Span(orig, end), text: '$self.$newName' });
 		}
 		return [
 			for (e in edits) { span: e.span, text: targets.contains(e.span.from) ? '$self.$newName' : e.text }
-		];
+		].concat(captured);
 	}
 
 	/**

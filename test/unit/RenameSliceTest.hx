@@ -378,4 +378,85 @@ class RenameSliceTest extends Test {
 		}
 	}
 
+
+	/** Assert that the qualifying rename at `line:col` is REFUSED with a capture diagnostic. */
+	private function assertQualifyRefused(source: String, line: Int, col: Int, newName: String): Void {
+		switch renameQualified(source, line, col, newName) {
+			case Ok(text):
+				Assert.fail('expected Err, got Ok:\n$text');
+			case Err(message):
+				Assert.isTrue(message.indexOf('capture') >= 0, 'message lacks "capture": $message');
+		}
+	}
+
+	/**
+	 * The MIRROR of the param idiom: renaming a LOCAL onto a name the enclosing type's own
+	 * INSTANCE member holds captures that member's bare reads. Qualifying them through `this.`
+	 * keeps them bound to the member, so the rename proceeds instead of being refused.
+	 */
+	public function testQualifyShadowedRepairsOwnMemberCapture(): Void {
+		final source: String =
+			'class C {\n\tvar width:Int = 0;\n\tfunction f():Void {\n\t\tfinal wIDTH:Int = 1;\n\t\ttrace(width + wIDTH);\n\t}\n}';
+		final expected: String =
+			'class C {\n\tvar width:Int = 0;\n\tfunction f():Void {\n\t\tfinal width:Int = 1;\n\t\ttrace(this.width + width);\n\t}\n}';
+		assertQualified(source, 4, 9, 'width', expected);
+	}
+
+	/**
+	 * A captured STATIC member cannot be named through `this.`, so the local rename stays refused.
+	 * The enclosing type's OWN declaration decides the staticness question, ahead of any inherited
+	 * member of the same name.
+	 */
+	public function testQualifyShadowedRefusesCapturedStaticMember(): Void {
+		final source: String =
+			'class C {\n\tstatic var width:Int = 0;\n\tfunction f():Void {\n\t\tfinal wIDTH:Int = 1;\n\t\ttrace(width + wIDTH);\n\t}\n}';
+		assertQualifyRefused(source, 4, 9, 'width');
+	}
+
+	/**
+	 * Inside a Haxe `abstract` `this` IS the underlying value, so `this.width` would look the name
+	 * up on `Int`. The captured-member arm must refuse there exactly as the member-rename arm does.
+	 */
+	public function testQualifyShadowedRefusesCapturedAbstractMember(): Void {
+		final source: String = 'abstract A(Int) {\n\tfunction width():Int return this + 1;\n'
+			+ '\tpublic function f():Int {\n\t\tfinal wIDTH:Int = 1;\n\t\treturn width() + wIDTH;\n\t}\n}';
+		assertQualifyRefused(source, 4, 9, 'width');
+	}
+
+	/**
+	 * The captured name resolves to nothing this file declares: an INHERITED member needs the
+	 * project resolution index, which the in-file op does not carry, so the rename is refused
+	 * rather than qualified on a guess.
+	 */
+	public function testQualifyShadowedRefusesUnprovableInheritedMember(): Void {
+		final source: String = 'class C extends B {\n\tfunction f():Void {\n\t\tfinal wIDTH:Int = 1;\n\t\ttrace(width + wIDTH);\n\t}\n}';
+		assertQualifyRefused(source, 3, 9, 'width');
+	}
+
+
+	/**
+	 * A member of the target name that a PARAMETER already shadows was never what the captured
+	 * occurrence read - qualifying it would rebind a param read to the field, which compiles and
+	 * means something else. Existence of the member is not the proof; the absence of a shadowing
+	 * binding is.
+	 */
+	public function testQualifyShadowedRefusesMemberShadowedByParam(): Void {
+		final source: String = 'class C {\n\tvar width:Int = 7;\n\tfunction f(width:Int):Void {\n'
+			+ '\t\tfinal wIDTH:Int = 1;\n\t\ttrace(width + wIDTH);\n\t}\n}';
+		assertQualifyRefused(source, 4, 9, 'width');
+	}
+
+	/**
+	 * The captured-member repair under a NON-ZERO rename delta: the qualified rewrite's offsets are
+	 * the rename's own length change accumulated per preceding occurrence PLUS one prefix per
+	 * insertion, and a fixture whose old and new names happen to be the same length proves neither.
+	 */
+	public function testQualifyShadowedRepairsCaptureUnderNonZeroDelta(): Void {
+		final source: String =
+			'class C {\n\tvar width:Int = 0;\n\tfunction f():Void {\n\t\tfinal w:Int = 1;\n\t\ttrace(width + w);\n\t}\n}';
+		final expected: String =
+			'class C {\n\tvar width:Int = 0;\n\tfunction f():Void {\n\t\tfinal width:Int = 1;\n\t\ttrace(this.width + width);\n\t}\n}';
+		assertQualified(source, 4, 9, 'width', expected);
+	}
+
 }
