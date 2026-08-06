@@ -74,6 +74,45 @@ class JoinReturnCheckTest extends Test {
 		Assert.equals('return (str : types.Color);', es[0].text);
 	}
 
+	// --- `new T(...)`-matches-annotation ascription skip ---
+
+	/**
+	 * A constructor call whose class name matches the annotation, under a DIFFERING explicit
+	 * return type, needs no ascription: `new Row(a, b)` already fixes its own type, so the
+	 * dropped `Row` annotation has nothing left to pin.
+	 */
+	public function testFixNewMatchingAnnotationDropsAscription(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			wrapRet('Null<DisplayObject>', 'final customLabel:Row = new Row(a, b);\n\t\treturn customLabel;')
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('return new Row(a, b);', es[0].text);
+	}
+
+	/** A generic annotation still ascribes even when the initializer is a matching `new` call -- its type parameters pin `new Map()`'s otherwise inference-open key/value types. */
+	public function testFixNewGenericAnnotationKeepsAscription(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrap('final m:Map<String,Int> = new Map();\n\t\treturn m;'));
+		Assert.equals(1, es.length);
+		Assert.equals('return (new Map() : Map<String,Int>);', es[0].text);
+	}
+
+	/** A non-`new` initializer keeps its ascription even when it happens to share the annotation's name (e.g. a factory function) -- only a literal constructor call is exempted. */
+	public function testFixNonNewInitializerKeepsAscription(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits(wrapRet('Null<DisplayObject>', 'final row:Row = makeRow();\n\t\treturn row;'));
+		Assert.equals(1, es.length);
+		Assert.equals('return (makeRow() : Row);', es[0].text);
+	}
+
+	/** The assignment arm gets the same skip: `row = new Row(a, row); return row;` needs no ascription for the param's `Row` type. */
+	public function testAssignFixNewMatchingAnnotationDropsAscription(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class C {\n\tfunction f(row:Row):Null<DisplayObject> {\n\t\trow = new Row(a, row);\n\t\treturn row;\n\t}\n}'
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('return new Row(a, row);', es[0].text);
+	}
+
 	/** A statement between the declaration and the return blocks the join (only the immediate next return qualifies). */
 	public function testNonAdjacentNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('final x = g();\n\t\tside();\n\t\treturn x;')).length);

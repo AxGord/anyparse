@@ -45,8 +45,15 @@ import anyparse.query.Refs.RefKind;
  * - unannotated decl -> always `return e;`;
  * - annotated decl AND the enclosing function's explicit return type equals the annotation
  *   (byte-identical source, whitespace ignored) -> `return e;`;
- * - annotated decl otherwise (a differing or inferred function return type) -> the
- *   annotation is kept as a type-check ascription `return (e : Type);`.
+ * - annotated decl whose initializer is a constructor call `new T(...)` -- `T` byte-identical
+ *   (whitespace ignored) to the annotation and carrying no type parameters -> `return e;` too:
+ *   the constructor call already fixes the value's own type, so the ascription would restate
+ *   it with nothing left to pin. A generic annotation (`Map<String, Int>`) still ascribes --
+ *   its type parameters are exactly what the ascription pins on an otherwise inference-open
+ *   `new Map()`;
+ * - annotated decl otherwise (a differing or inferred function return type, or an initializer
+ *   that is not a matching bare `new T(...)`) -> the annotation is kept as a type-check
+ *   ascription `return (e : Type);`.
  *
  * ## What is flagged
  *
@@ -71,7 +78,9 @@ import anyparse.query.Refs.RefKind;
  * and `controlFlowSupport` (any unset makes the check a no-op); function return-type
  * detection additionally reads `functionKinds` / `lambdaKinds` / `paramKinds` /
  * `functionBodyKinds`, and when those are unset an annotated decl always ascribes (a
- * type-check that always compiles).
+ * type-check that always compiles). The `new T(...)`-matches-annotation ascription skip
+ * additionally reads `newExprKind`; unset, that skip never fires and an annotated decl keeps
+ * ascribing -- still correct, just more conservative.
  * ## The assignment arm
  *
  * The second form is an assignment `x = e;` to a PRE-EXISTING binding (a param, or a local
@@ -198,6 +207,7 @@ final class JoinReturn implements Check {
 			paramKinds: shape.paramKinds ?? [],
 			bodyKinds: shape.functionBodyKinds ?? [],
 			blockKinds: support.blockKinds(),
+			newExprKind: shape.newExprKind,
 			shape: shape
 		};
 	}
@@ -275,7 +285,7 @@ final class JoinReturn implements Check {
 		final m: Match = {
 			declSpan: keySpan,
 			editSpan: new Span(keySpan.from, retSpan.to),
-			text: buildReturn(initSource, annotation, retType),
+			text: buildReturn(initSource, annotation, retType, init, s.newExprKind),
 			message: 'this declaration and its next-line return can be joined into a single return'
 		};
 		return m;
@@ -346,12 +356,45 @@ final class JoinReturn implements Check {
 		return otherRefs == 1 ? declNameFrom : null;
 	}
 
-	/** The single-return replacement text -- plain, or a type-check ascription when the annotation must survive. */
-	private static function buildReturn(initSource: String, annotation: Null<String>, retType: Null<String>): String {
+	/**
+	 * The single-return replacement text -- plain, or a type-check ascription when the
+	 * annotation must survive. `initNode` is the initializer's / r-value's own node, consulted
+	 * only for the `new T(...)`-matches-annotation skip (see `isRedundantNewAscription`).
+	 */
+	private static function buildReturn(
+		initSource: String, annotation: Null<String>, retType: Null<String>, initNode: QueryNode, newExprKind: Null<String>
+	): String {
 		if (annotation == null) return 'return $initSource;';
 		final ann: String = annotation;
 		if (retType != null && TypeResolver.stripWs(retType) == TypeResolver.stripWs(ann)) return 'return $initSource;';
+		if (isRedundantNewAscription(initNode, ann, newExprKind)) return 'return $initSource;';
 		return 'return ($initSource : $ann);';
+	}
+
+	/**
+	 * Whether `initNode` is a constructor call `new T(...)` whose class name is byte-equal
+	 * (whitespace-insensitive) to the annotation `ann`, with `ann` carrying no type parameters.
+	 * A bare `new T(...)` for a plain nominal `T` has an unambiguous, self-contained type --
+	 * unlike `new Map()`, whose type parameters are inference-open and rely on the surrounding
+	 * expected-type context (the annotation, or the ascription standing in for it once the
+	 * declaration is dropped). So when `T` carries no type parameters the ascription is a pure
+	 * restatement with nothing left to pin, and `buildReturn` skips it; a generic annotation
+	 * always keeps the ascription -- its type parameters are exactly what it pins.
+	 *
+	 * The `ann`-has-no-`<` check is stated explicitly rather than left to fall out of the name
+	 * comparison below: under the Haxe grammar `initNode.name` (`HxNewTypeName`) can never
+	 * itself contain `<`, so a generic `ann` already fails that comparison on its own -- but
+	 * that is an incidental property of ONE grammar's constructor-name terminal, not something
+	 * `RefShape.newExprKind` guarantees for every plugin. Stating the condition explicitly keeps
+	 * this gate correct on its own semantic terms (`T` carries no type parameters), independent
+	 * of what a future grammar's constructor node happens to encode in `.name`.
+	 */
+	private static function isRedundantNewAscription(initNode: QueryNode, ann: String, newExprKind: Null<String>): Bool {
+		if (newExprKind == null || initNode.kind != newExprKind) return false;
+		final ctorName: Null<String> = initNode.name;
+		if (ctorName == null) return false;
+		if (TypeResolver.stripWs(ann).indexOf('<') != -1) return false;
+		return TypeResolver.stripWs(ctorName) == TypeResolver.stripWs(ann);
 	}
 
 
@@ -445,7 +488,7 @@ final class JoinReturn implements Check {
 		final m: Match = {
 			declSpan: keySpan,
 			editSpan: new Span(keySpan.from, retSpan.to),
-			text: buildReturn(initSource, annotation, retType),
+			text: buildReturn(initSource, annotation, retType, rhs, s.newExprKind),
 			message: 'this assignment and its next-line return can be joined into a single return'
 		};
 		return m;
@@ -481,6 +524,7 @@ private typedef Seams = {
 	var paramKinds: Array<String>;
 	var bodyKinds: Array<String>;
 	var blockKinds: Array<String>;
+	var newExprKind: Null<String>;
 	var shape: RefShape;
 }
 
