@@ -52,6 +52,11 @@ import anyparse.query.TypeInfoProvider;
 @:nullSafety(Strict)
 final class Naming implements Check implements CrossFileFix {
 
+	/**
+	 * A lowercase head over an all-uppercase / digit tail of four or more characters - see `normalizerArtifactName`.
+	 */
+	private static final ARTIFACT_NAME_PATTERN: EReg = new EReg("^[a-z][A-Z0-9]{4,}$", '');
+
 	public function new() {}
 
 	public function id(): String {
@@ -122,10 +127,10 @@ final class Naming implements Check implements CrossFileFix {
 
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (decl in support.project(tree)) {
-			final rename: Null<RenameEdits> = renameEditsFor(
+			final rename: Null<Array<{ span: Span, text: String }>> = renameEditsFor(
 				decl, source, tree, policy, shape, plugin, flaggedFroms, otherSources, confinedMemo, resolutionIndex, index
 			);
-			if (rename != null) for (occ in rename.occurrences) edits.push({ span: occ, text: rename.name });
+			if (rename != null) for (edit in rename) edits.push(edit);
 		}
 		return edits;
 	}
@@ -175,13 +180,17 @@ final class Naming implements Check implements CrossFileFix {
 			final span: Null<Span> = decl.span;
 			if (span == null || decl.reservedName == true) continue;
 			final rule: Null<NamingRule> = applicableRule(decl, policy);
-			if (rule == null || rule.format.match(decl.name)) continue;
+			if (rule == null) continue;
+			final artifact: Null<String> = artifactCorrection(decl.name, rule);
+			if (artifact == null && rule.format.match(decl.name)) continue;
 			out.push({
 				file: file,
 				span: span,
 				rule: 'naming',
 				severity: Severity.Warning,
-				message: '${rule.label}: \'${decl.name}\''
+				message: artifact == null
+					? '${rule.label}: \'${decl.name}\''
+					: 'all-caps tail after a lowercase head (normalizer artifact): \'${decl.name}\''
 			});
 		}
 		return out;
@@ -194,6 +203,53 @@ final class Naming implements Check implements CrossFileFix {
 				rule.category == decl.category && rule.requireMods.foreach(m -> decl.mods.contains(m))
 				&& !rule.forbidMods.exists(m -> decl.mods.contains(m))
 		);
+	}
+
+	/**
+	 * The lowercased spelling of `name` when it is a normalizer ARTIFACT - a lowercase head over an
+	 * all-uppercase / digit tail of at least FOUR characters (`hEIGHT`, `wIDTH`), the shape the
+	 * former first-letter-lowercasing normalizer produced out of a screaming constant. Null when
+	 * `name` is not one, or when lowercasing changes nothing (a digit-only tail such as `x1234`).
+	 *
+	 * The four-character floor is a deliberate TRADE-OFF, not a complete test. A head plus a
+	 * three-letter acronym is a name people write on purpose (`sRGB`, `xDPI`, `dBFS`, `mRNA`) and is
+	 * spelled identically to an artifact of a three-letter constant (`HTML` -> `hTML`), so the two
+	 * cannot be told apart here. The floor buys silence on the deliberate names at the cost of
+	 * letting three-letter-acronym artifacts through; lowercasing an `sRGB` someone chose is the
+	 * worse error, since the check's own autofix would destroy it.
+	 */
+	private static function normalizerArtifactName(name: String): Null<String> {
+		if (!ARTIFACT_NAME_PATTERN.match(name)) return null;
+		final lowered: String = name.toLowerCase();
+		return lowered == name ? null : lowered;
+	}
+
+	/**
+	 * The lowercased correction for a name the policy's `format` ACCEPTS but that is a normalizer
+	 * artifact, or null when `name` is not one or the correction is not what `rule` wants. The
+	 * `rule.format.match(lowered)` gate is load-bearing: it keeps the arm inside whatever policy
+	 * governs the file - a checkstyle policy spelling the category UPPER_SNAKE rejects `height`, and
+	 * there the arm stays silent instead of reporting a violation nothing can correct - and it
+	 * guarantees every reported artifact is fixable.
+	 */
+	private static function artifactCorrection(name: String, rule: NamingRule): Null<String> {
+		final lowered: Null<String> = normalizerArtifactName(name);
+		return lowered != null && rule.format.match(lowered) ? lowered : null;
+	}
+
+	/**
+	 * The corrected spelling for `name` under `rule`: the normalizer ARTIFACT correction when the
+	 * name is one, else the rule's own `normalize`. Null when neither applies, the result is
+	 * unchanged, or it does not itself satisfy the rule's format. The single decision point for
+	 * what a name should become, shared by the report side and both fix paths so they cannot drift.
+	 */
+	private static function correctedName(name: String, rule: NamingRule): Null<String> {
+		final artifact: Null<String> = artifactCorrection(name, rule);
+		if (artifact != null) return artifact;
+		final normalize: Null<String -> Null<String>> = rule.normalize;
+		if (normalize == null) return null;
+		final newName: Null<String> = normalize(name);
+		return newName == null || newName == name || !rule.format.match(newName) ? null : newName;
 	}
 
 	/**
@@ -251,30 +307,27 @@ final class Naming implements Check implements CrossFileFix {
 	}
 
 	/**
-	 * The rename to apply to one projected declaration, or null when it must be
-	 * skipped: not among the flagged spans, not rename-safe, no applicable rule
-	 * with a normalizer, already conformant, a rename to a name already bound in
-	 * the file (a collision), or an incomplete rename — the old name still occurs
-	 * outside the resolved spans as active code, inside a `#if...#end` region, in a
-	 * string literal, or on a `noqa` directive line. A plain comment mention does
-	 * NOT block: its occurrence is added to the returned spans and renamed together
-	 * with the code. When non-null, every returned occurrence span is rewritten to
-	 * `name`.
+	 * The rename edits for one projected declaration, or null when it must be skipped: not
+	 * among the flagged spans, not rename-safe, no applicable rule with a derivable correction,
+	 * already conformant, a collision the `this.`-qualification arm cannot repair, or an
+	 * incomplete rename — the old name still occurs outside the resolved spans as active code,
+	 * inside a `#if...#end` region, in a string literal, or on a `noqa` directive line. A plain
+	 * comment mention does NOT block: its occurrence joins the returned edits and is renamed
+	 * together with the code.
 	 */
 	private static function renameEditsFor(
 		decl: NamedDecl, source: String, tree: QueryNode, policy: NamingPolicy, shape: RefShape, plugin: GrammarPlugin,
 		flaggedFroms: Array<Int>, otherSources: Array<String>, confinedMemo: Map<String, Bool>, resolutionIndex: Null<SymbolIndex>,
 		?index: SymbolIndex
-	): Null<RenameEdits> {
+	): Null<Array<{ span: Span, text: String }>> {
 		final span: Null<Span> = decl.span;
 		if (span == null || !flaggedFroms.contains(span.from) || !isRenameSafe(decl, source, index, otherSources, confinedMemo))
 			return null;
 		final rule: Null<NamingRule> = applicableRule(decl, policy);
 		if (rule == null) return null;
-		final normalize: Null<String -> Null<String>> = rule.normalize;
-		if (normalize == null) return null;
-		final newName: Null<String> = normalize(decl.name);
-		if (newName == null || newName == decl.name || !rule.format.match(newName)) return null;
+		final corrected: Null<String> = correctedName(decl.name, rule);
+		if (corrected == null) return null;
+		final newName: String = corrected;
 		// A private INSTANCE field renamed to `_x` must not REDEFINE a field named `_x`
 		// inherited from a supertype - Haxe rejects "Redefinition of variable in subclass"
 		// (verified). A METHOD has the same hazard with a different message ("Field f should be
@@ -296,20 +349,107 @@ final class Naming implements Check implements CrossFileFix {
 			if (!idx.typeProvablyLacksMember(owner, newName) || idx.transitivelyCarriesRtti(owner)) return null;
 		}
 		// Collision: a `newName` already bound where the rename lands would be duplicated or shadowed
-		// (the re-parse gate accepts it but it does not type-check), so skip. Scope-aware for a local /
+		// (the re-parse gate accepts it but it does not type-check). Scope-aware for a local /
 		// param / catch var - an occurrence in an UNRELATED function does not conflict; a field / constant
-		// stays whole-file (see `collidesInScope`).
-		if (collidesInScope(decl, source, tree, newName, shape, resolutionIndex, plugin)) return null;
+		// stays whole-file (see `collidesInScope`). A NON-STATIC member survives the collision when it is
+		// the param idiom, by naming the captured occurrences through `this.` (see `qualifyCapturedEdits`);
+		// everything else is refused here, before the expensive occurrence resolution below.
+		final collides: Bool = collidesInScope(decl, source, tree, newName, shape, resolutionIndex, plugin);
+		if (collides && !qualifiableMember(decl)) return null;
 		// Completeness + comment-along: the SAME scope-correct occurrence resolution + classifyOccurrences
 		// gate the cross-file path applies to its declaring file — a `#if` / string / `noqa` / resolver-missed
 		// active-code occurrence bails, a distinctive comment mention renames along (see `declaringFileRenameSpans`).
 		final renameSpans: Null<Array<Span>> = declaringFileRenameSpans(
 			source, tree, span.from, decl.name, shape, plugin, isDistinctiveName(decl.name)
 		);
-		return renameSpans == null ? null : {
-			occurrences: renameSpans,
-			name: newName
-		};
+		if (renameSpans == null) return null;
+		final spans: Array<Span> = renameSpans;
+		final edits: Array<{ span: Span, text: String }> = [for (occ in spans) { span: occ, text: newName }];
+		return collides ? qualifyCapturedEdits(source, tree, span.from, spans, newName, shape, plugin, edits) : edits;
+	}
+
+	/**
+	 * A cheap PRE-gate on `decl`: is it even the KIND of declaration a `this.` qualification could
+	 * reach - a field or method that is not `static` (a Constant is static by construction)? Placed
+	 * ahead of the occurrence resolution so the ordinary refusal path costs nothing extra. It is NOT
+	 * the proof: whether the binding is truly reachable through `selfReferenceText` - which also
+	 * depends on the enclosing type, since an `abstract`'s `this` is the underlying value - is
+	 * decided by `Rename.selfReachableBindingAt` inside `qualifyCapturedEdits`.
+	 */
+	private static inline function qualifiableMember(decl: NamedDecl): Bool {
+		return (decl.category == NamingCategory.Field || decl.category == NamingCategory.Method) && !decl.mods.contains('static');
+	}
+
+	/**
+	 * The rename edits with every param-captured occurrence qualified through `this.`, or null when
+	 * the collision is not the param idiom this repair addresses. `__position = position` renamed to
+	 * `_position` would become the self-assignment `position = position`; qualified it reads
+	 * `this.position = position` - the same `--qualify-shadowed` strategy the standalone `Rename` op
+	 * implements, with every boundary left where `Rename.qualifyCaptured` draws it (a capture by a
+	 * LOCAL, or one inside a STATIC function, refuses there).
+	 *
+	 * An EMPTY capture mismatch means the rewrite re-bound nothing, so the collision `collidesInScope`
+	 * saw belongs to some OTHER binding this repair does not address: the existing refusal stands
+	 * rather than the veto-side gate being weakened.
+	 *
+	 * The qualification is folded into the occurrence's own replacement text instead of being emitted
+	 * as a separate zero-width insertion, because `RefactorSupport.applyEdits` splices strictly by
+	 * descending `from`: two edits sharing a `from` have no defined order there, and one clobbers the
+	 * other. Every insertion must therefore land on a span this rename owns - one landing anywhere
+	 * else would prefix a binding the rename does not own, so it refuses.
+	 */
+	@:access(anyparse.query.Rename)
+	private static function qualifyCapturedEdits(
+		source: String, tree: QueryNode, declFrom: Int, renameSpans: Array<Span>, newName: String, shape: RefShape, plugin: GrammarPlugin,
+		edits: Array<{ span: Span, text: String }>
+	): Null<Array<{ span: Span, text: String }>> {
+		final self: Null<String> = shape.selfReferenceText;
+		if (self == null) return null;
+		// The resolver-only subset: `renameSpans` may additionally carry a comment-along mention.
+		final resolved: Array<Span> = Rename.renameOccurrences(source, tree, declFrom, shape);
+		if (resolved.length == 0) return null;
+		final rewritten: String = RefactorSupport.applyEdits(source, edits);
+		final newTree: Null<QueryNode> = CheckScan.parseOrNull(plugin, rewritten);
+		if (newTree == null) return null;
+		final tr: QueryNode = newTree;
+		final mismatch: Array<Capture> = Rename.captureMismatch(rewritten, tr, renameSpans, resolved, newName, declFrom, shape);
+		if (mismatch.length == 0) return null;
+		final reachable: Bool = Rename.selfReachableBindingAt(source, tree, declFrom, shape);
+		final qualification: Null<Qualification> = Rename.qualifyCaptured(rewritten, tr, mismatch, newName, shape, reachable);
+		if (qualification == null) return null;
+		final q: Qualification = qualification;
+		switch Rename.verifyQualified(q, renameSpans, resolved, newName, declFrom, plugin, shape) {
+			case RenameResult.Ok(_):
+			case RenameResult.Err(_):
+				return null;
+		}
+		final sorted: Array<Span> = renameSpans.copy();
+		sorted.sort((a, b) -> a.from - b.from);
+		final delta: Int = newName.length - (sorted[0].to - sorted[0].from);
+		final starts: Array<Int> = [for (s in sorted) s.from];
+		final targets: Array<Int> = [];
+		for (offset in q.insertions) {
+			final orig: Int = preRewriteOffset(sorted, delta, offset);
+			if (!starts.contains(orig)) return null;
+			targets.push(orig);
+		}
+		return [
+			for (e in edits) { span: e.span, text: targets.contains(e.span.from) ? '$self.$newName' : e.text }
+		];
+	}
+
+	/**
+	 * The offset in the ORIGINAL source of a position in the RENAME-REWRITTEN one: undo the length
+	 * delta accumulated by every rename span that starts before it. `sorted` is the rename spans
+	 * ascending by `from`, `delta` the per-span length change.
+	 */
+	private static function preRewriteOffset(sorted: Array<Span>, delta: Int, offset: Int): Int {
+		var shift: Int = 0;
+		for (s in sorted) {
+			if (s.from + shift >= offset) break;
+			shift += delta;
+		}
+		return offset - shift;
 	}
 
 	/**
@@ -363,8 +503,8 @@ final class Naming implements Check implements CrossFileFix {
 
 	/**
 	 * The corrected name for `decl` under `policy`, or null when there is none / it must not apply:
-	 * no normalizer, an unchanged or non-conformant result, a supertype that already declares the
-	 * name (Haxe's "Redefinition of variable in subclass"), or a transitive `@:rtti` serialization
+	 * no derivable correction (see `correctedName`), a supertype that already declares the name
+	 * (Haxe's "Redefinition of variable in subclass"), or a transitive `@:rtti` serialization
 	 * hierarchy (renaming a reflected field name breaks saved files). `ownerName` / `resolutionIndex`
 	 * drive the inheritance + rtti guards through the resolution scope.
 	 */
@@ -373,10 +513,8 @@ final class Naming implements Check implements CrossFileFix {
 	): Null<String> {
 		final rule: Null<NamingRule> = applicableRule(decl, policy);
 		if (rule == null) return null;
-		final normalize: Null<String -> Null<String>> = rule.normalize;
-		if (normalize == null) return null;
-		final newName: Null<String> = normalize(decl.name);
-		if (newName == null || newName == decl.name || !rule.format.match(newName)) return null;
+		final newName: Null<String> = correctedName(decl.name, rule);
+		if (newName == null) return null;
 		if (!resolutionIndex.typeProvablyLacksMember(ownerName, newName) || resolutionIndex.transitivelyCarriesRtti(ownerName)) return null;
 		return newName;
 	}
@@ -852,15 +990,6 @@ final class Naming implements Check implements CrossFileFix {
 	}
 
 }
-
-/**
- * A computed rename for one declaration: every span to rewrite and the new
- * identifier to write at each.
- */
-private typedef RenameEdits = {
-	final occurrences: Array<Span>;
-	final name: String;
-};
 
 /**
  * A resolved cross-file rename candidate: the parsed declaring file, the flagged binding's cursor
