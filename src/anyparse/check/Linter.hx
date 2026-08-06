@@ -68,6 +68,12 @@ final class Linter {
 			new PreferArrayLiteral(),
 			new PreferMapLiteral(),
 			new PreferMapType(),
+			// Ahead of `fold-adjacent-string-literals` (registered near the top, above) in
+			// READING order only — not load-bearing, `lint --fix` iterates to a fixed point
+			// either way: this rule builds the `+` chain a run of `+=` statements folds into,
+			// which that rule then folds further into `$name` interpolation, e.g.
+			// `str += ' line '; str += line;` -> `str += ' line ' + line;` -> `str += ' line $line';`.
+			new JoinStringAppend(),
 			new PreferInterpolation(),
 			new PreferFinal(),
 			new SimplifyBooleanReturnChain(),
