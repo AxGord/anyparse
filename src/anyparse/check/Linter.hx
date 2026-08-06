@@ -56,6 +56,7 @@ final class Linter {
 			new RedundantCondCompParens(),
 			new ConstantCondition(),
 			new EmptyStatement(),
+			new RedundantTrailingComma(),
 			new EmptyComment(),
 			new EmptyDocTag(),
 			new RedundantElse(),

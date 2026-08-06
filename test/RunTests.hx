@@ -577,6 +577,7 @@ import unit.CollapseNestedSwitchCheckTest;
 import unit.RedundantToStringCheckTest;
 import unit.HxMethodChainAllOrNothingSliceTest;
 import unit.HxListLiteralEmissionSliceTest;
+import unit.RedundantTrailingCommaCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1077,6 +1078,7 @@ class RunTests {
 		addCase(new TypeResolverSliceTest());
 		addCase(new ConstantConditionCheckTest());
 		addCase(new EmptyStatementCheckTest());
+		addCase(new RedundantTrailingCommaCheckTest());
 		addCase(new EmptyCommentCheckTest());
 		addCase(new EmptyDocTagCheckTest());
 		addCase(new RedundantCondCompParensCheckTest());

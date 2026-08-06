@@ -1598,6 +1598,45 @@ typedef RefShape = {
 	@:optional var objectLiteralKind: String;
 
 	/**
+	 * Node kinds whose span ENDS with the closing delimiter of a comma-separated list
+	 * whose elements are the node's own children, so a `,` between the LAST child and
+	 * that delimiter is a redundant trailing comma. The parser absorbs such a comma
+	 * into the host's own span - no node marks it - which is why
+	 * `redundant-trailing-comma` finds it by span arithmetic rather than by a tree
+	 * walk, and requiring the closer to be the host's own last byte is what separates
+	 * a trailing comma from a separator (a separator always has an element after it).
+	 * Haxe: the array / map literal (`ArrayExpr`), the object literal (`ObjectLit`),
+	 * the anonymous structure type (`Anon`), a call (`Call`), `new T(...)` (`NewExpr`)
+	 * and a metadata argument list (`MetaCall`). A PARAMETER list is deliberately not
+	 * listed - its host's span runs on past the `)` over a return type and a body, so
+	 * that check reaches it through `paramKinds` instead; a kind in BOTH lists is read
+	 * as a host (this arm answers first).
+	 *
+	 * Two conditions a host must meet. No child of it may END after the list's last
+	 * element - a child that is not an element is fine as long as it comes first, as
+	 * Haxe's `Call` callee does. And its list must accept a trailing separator after
+	 * EVERY element kind it can end with; when only some qualify, list the host here
+	 * and declare the rest in `mandatoryTrailingCommaChildKinds` (Haxe's `Anon` mixes
+	 * both). Optional; unset leaves the check with only its parameter-list arm.
+	 */
+	@:optional var trailingCommaHostKinds: Array<String>;
+
+	/**
+	 * Node kinds an ELEMENT of a comma-separated list may have whose following `,` is
+	 * MANDATORY rather than redundant, vetoing `redundant-trailing-comma` for the list
+	 * that ends in one. Haxe: `ExtendsField`, the `> Base` entry of an anonymous
+	 * structure type - `{> Base,}` compiles and `{> Base}` is `Expected ,`, and with
+	 * two entries only `{> A, > B,}` is accepted. The veto is keyed on the LAST
+	 * ELEMENT, not on the host, because the same host mixes both: `{> Base, x:Int,}`
+	 * ends in an ordinary field and its comma IS redundant. The writer knows the same
+	 * fact from the other side (`anyparse.format.TrailingCommaPolicy` - such a
+	 * construct never carries the removable flag), so the two layers must agree; a
+	 * kind missing here is a `--fix` that produces source the compiler rejects.
+	 * Optional; unset vetoes nothing.
+	 */
+	@:optional var mandatoryTrailingCommaChildKinds: Array<String>;
+
+	/**
 	 * Maps a String method name to the FIXED type its call returns on a String
 	 * receiver (`split` → `Array<String>`; `substr` / `substring` / `charAt` /
 	 * `toUpperCase` / `toLowerCase` / `toString` → `String`; `indexOf` /
