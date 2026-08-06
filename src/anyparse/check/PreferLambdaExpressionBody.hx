@@ -338,9 +338,6 @@ final class PreferLambdaExpressionBody implements Check {
 	/** A collapsible statement carries exactly one child — the value the body becomes. */
 	private static inline final SINGLE_VALUE_CHILD: Int = 1;
 
-	/** A conditional's then-branch is `children[1]`, between the condition and the else-branch. */
-	private static inline final THEN_BRANCH_INDEX: Int = 1;
-
 	public function new() {}
 
 	public function id(): String {
@@ -485,19 +482,7 @@ final class PreferLambdaExpressionBody implements Check {
 		if (valueReturnKinds.length == 0 && exprStatementKind == null) return null;
 		final conditionalKinds: Array<String> = IfExpressionChain.conditionalKinds(shape);
 		final throwKinds: Array<String> = shape.throwKinds ?? [];
-		// `blockKinds()` hands back the plugin's SHARED static array — copy before pushing,
-		// or every other consumer of that seam inherits this check's additions.
-		final shieldKinds: Array<String> = blockKinds.copy();
-		final delimitedHosts: Array<Null<String>> = [
-			shape.callKind,
-			shape.newExprKind,
-			shape.parenKind,
-			shape.arrayLiteralKind,
-			shape.indexAccessKind,
-			shape.objectFieldKind,
-			shape.caseBranchKind
-		];
-		for (host in delimitedHosts) if (host != null) shieldKinds.push(host);
+		final shieldKinds: Array<String> = IfExpressionChain.shieldKinds(shape, blockKinds);
 		// A union of existing statement seams, so duplicates are expected and harmless —
 		// membership is the only question ever asked of it.
 		final terminatedKinds: Array<String> = valueReturnKinds.concat(throwKinds)
@@ -532,27 +517,8 @@ final class PreferLambdaExpressionBody implements Check {
 			final m: Null<Match> = match(node, source, comments, s, shielded);
 			if (m != null) out.push(m);
 		}
-		for (i => child in node.children) walk(child, source, comments, s, out, childShielded(node, i, s, shielded));
-	}
-
-	/**
-	 * Whether `parent`'s child at `index` is closed by a token that cannot be an `else`.
-	 *
-	 * A SHIELD parent writes a `)` / `,` / `]` / `}` — or a next statement — after every one
-	 * of its children. A child with a FOLLOWING SIBLING is separated from it by a token that
-	 * is not an `else`, except the then-branch of a conditional, whose following sibling IS
-	 * the else-branch, and except a `#if` region, whose siblings are the OTHER branches and
-	 * separate nothing. A TAIL child is bounded by whatever bounds the parent, so it inherits
-	 * `shielded`.
-	 */
-	private static function childShielded(parent: QueryNode, index: Int, s: Seams, shielded: Bool): Bool {
-		if (s.shieldKinds.contains(parent.kind)) return true;
-		// A `#if` region projects EVERY branch's nodes as FLAT siblings, so a following sibling
-		// may belong to a different branch and separate nothing at all: under the defines that
-		// select this child's branch, whatever follows the region follows the child. Inherit.
-		if (RefactorSupport.isConditionalKind(parent.kind)) return shielded;
-		if (index < parent.children.length - 1) return !(index == THEN_BRANCH_INDEX && s.conditionalKinds.contains(parent.kind));
-		return shielded;
+		for (i => child in node.children)
+			walk(child, source, comments, s, out, IfExpressionChain.childShielded(node, i, s.shieldKinds, s.conditionalKinds, shielded));
 	}
 
 	/**

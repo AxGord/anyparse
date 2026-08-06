@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 
 /**
@@ -51,12 +52,13 @@ typedef Carried = {
 }
 
 /**
- * Machinery shared by `prefer-if-expression-assignment` and
- * `prefer-if-expression-return`: recognising an `if`-chain of single-statement branches
- * and assembling the collapsed `if (c1) v1 else if (c2) v2 … else vN` text. The rules
- * differ only in what each branch's statement must be (an assignment to the same l-value
- * vs a valued `return`) and in the copied prefix (`lhs op ` vs `return `); everything
- * structural lives here.
+ * The dangling-`else` family's shared home. Two things live here: the `if`-CHAIN shape that
+ * `prefer-if-expression-assignment` and `prefer-if-expression-return` rewrite — recognising a
+ * chain of single-statement branches and assembling the collapsed
+ * `if (c1) v1 else if (c2) v2 … else vN` text — and the machinery every rule that EMITS an
+ * ` else ` needs to know whether doing so is safe. The two collapse rules differ only in what
+ * each branch's statement must be (an assignment to the same l-value vs a valued `return`) and
+ * in the copied prefix (`lhs op ` vs `return `); everything structural lives here.
  *
  * Unlike the ternary siblings, no null-narrowing guard is needed: the collapsed form is
  * an `if`-EXPRESSION whose conditions are the verbatim `if (…)` conditions, so a branch
@@ -69,6 +71,19 @@ typedef Carried = {
  * value that would ABSORB the emitted ` else `) and `tokenSpan` (a copied span that would
  * SWALLOW the trailing comment after its last token) therefore live here too, and all three
  * rules share them.
+ *
+ * ## Position
+ *
+ * Whether an emitted ` else ` can reach ANYTHING is a property of where the rewritten
+ * construct SITS, not of its shape, and that question is not the chain rules' alone —
+ * `prefer-lambda-expression-body` collapses a lambda body to an else-less `if`, and the LIFT arm
+ * of `loop-guard` emits an else-less loop header, so a trailing `else` rebinds onto either.
+ * `shieldKinds` names the parents that close every child with a delimiter, and `childShielded`
+ * re-derives one boolean per child from that list, the conditional kinds and the parent's own
+ * answer; a walk seeds it true at the module root and carries it down. Neither consumer rewrites
+ * an `if` chain, so this module's charter is the hazard, not the chain: `conditionalKinds` /
+ * `isElseLessConditional` / `holdsElseLessConditional` say WHAT could absorb an ` else `, and
+ * `shieldKinds` / `childShielded` say WHERE one could arrive.
  *
  * ## Comments
  *
@@ -109,6 +124,9 @@ final class IfExpressionChain {
 
 	/** A real chain is a head plus at least one `else if` — a 2-branch `if`/`else` (one branch) is left to the ternary rules. */
 	private static inline final MIN_CHAIN_BRANCHES: Int = 2;
+
+	/** A conditional's then-branch is `children[1]`, between the condition and the else-branch. */
+	private static inline final THEN_BRANCH_INDEX: Int = 1;
 
 	/**
 	 * Recognise the chain rooted at `head`: follow the else-nesting (`children[2]` being
@@ -400,6 +418,54 @@ final class IfExpressionChain {
 		if (isElseLessConditional(node, conditionalKinds)) return true;
 		for (child in node.children) if (holdsElseLessConditional(child, conditionalKinds)) return true;
 		return false;
+	}
+
+	/**
+	 * The parent kinds that CLOSE every child with a delimiter, so no `else` can follow one:
+	 * `blockKinds` plus the grammar's call / `new` / paren / array-literal / index-access /
+	 * object-field / case-branch kinds, each taken only when the grammar sets it. Fewer entries
+	 * means fewer positions proved safe, so an unset seam makes `childShielded` answer "unshielded"
+	 * more often — the conservative direction. An EMPTY `blockKinds` is the extreme of that: a
+	 * block's TAIL child then INHERITS instead of being proved safe, which fails the CALLER closed,
+	 * the intended answer for a grammar with no `ControlFlowSupport`.
+	 */
+	public static function shieldKinds(shape: RefShape, blockKinds: Array<String>): Array<String> {
+		// `blockKinds()` hands back the plugin's SHARED static array — copy before pushing,
+		// or every other consumer of that seam inherits this list's additions.
+		final kinds: Array<String> = blockKinds.copy();
+		final delimitedHosts: Array<Null<String>> = [
+			shape.callKind,
+			shape.newExprKind,
+			shape.parenKind,
+			shape.arrayLiteralKind,
+			shape.indexAccessKind,
+			shape.objectFieldKind,
+			shape.caseBranchKind
+		];
+		for (host in delimitedHosts) if (host != null) kinds.push(host);
+		return kinds;
+	}
+
+	/**
+	 * Whether `parent`'s child at `index` is closed by a token that cannot be an `else`.
+	 *
+	 * A SHIELD parent writes a `)` / `,` / `]` / `}` — or a next statement — after every one
+	 * of its children. A child with a FOLLOWING SIBLING is separated from it by a token that
+	 * is not an `else`, except the then-branch of a conditional, whose following sibling IS
+	 * the else-branch, and except a `#if` region, whose siblings are the OTHER branches and
+	 * separate nothing. A TAIL child is bounded by whatever bounds the parent, so it inherits
+	 * `shielded`.
+	 */
+	public static function childShielded(
+		parent: QueryNode, index: Int, shieldKinds: Array<String>, conditionalKinds: Array<String>, shielded: Bool
+	): Bool {
+		if (shieldKinds.contains(parent.kind)) return true;
+		// A `#if` region projects EVERY branch's nodes as FLAT siblings, so a following sibling
+		// may belong to a different branch and separate nothing at all: under the defines that
+		// select this child's branch, whatever follows the region follows the child. Inherit.
+		if (RefactorSupport.isConditionalKind(parent.kind)) return shielded;
+		if (index < parent.children.length - 1) return !(index == THEN_BRANCH_INDEX && conditionalKinds.contains(parent.kind));
+		return shielded;
 	}
 
 	/**

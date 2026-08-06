@@ -21,7 +21,10 @@ import anyparse.runtime.Span;
  * whose flattened `||` chain would strand a null-safety narrowing — falls back to the verbatim
  * `!(cond)` wrap. A cascade of guards, a guard-only body, an unbraced body, an `else` branch
  * and a comment inside the guard are safe misses on both arms; a later `continue` deeper in the
- * body is preserved.
+ * body is preserved. The LIFT arm carries one gate the MERGE arm does not need: its emitted
+ * header has no `else`, so a loop sitting anywhere an `else` can follow — the then-branch of an
+ * else-carrying conditional, reached through any number of brace-less bodies — is left alone,
+ * else that trailing `else` rebinds to the emitted header.
  */
 class LoopGuardCheckTest extends Test {
 
@@ -336,8 +339,60 @@ class LoopGuardCheckTest extends Test {
 		Assert.equals(wrapIn(sig, merged), applyFix(wrapIn(sig, input)));
 	}
 
+	/**
+	 * The LIFT arm emits an `if` with no `else`, so in a position an `else` can reach that
+	 * trailing `else` REBINDS to the emitted header. Pre-gate, `hxq lint --fix --rule loop-guard`
+	 * turned `if (p) for (x in xs) { if (x == 0) continue; trace(x); } else trace(0);` into
+	 * `if (p) for (x in xs) if (x != 0) { trace(x); } else trace(0);` — the writer even
+	 * re-indented the `else` under the inner `if`. Runtime proof on 4.3.7 `--interp` with
+	 * `trace('ELSE')` in the else-branch: BEFORE, `p == false` printed ELSE once and
+	 * `p == true, xs == [0, 0]` printed nothing; AFTER, `p == false` printed nothing and
+	 * `p == true, xs == [0, 0]` printed ELSE TWICE — once per skipped element.
+	 */
+	public function testLoopInUnshieldedThenBranchNotFlagged(): Void {
+		Assert.equals(0, violations(wrapPositioned('if (p) for (x in xs) { if (x == 0) continue; trace(x); } else trace(0);')).length);
+	}
+
+	/**
+	 * The positive control for the fixture above: the SAME loop in the SAME conditional, with the
+	 * then-branch BRACED. The braces close the loop, so no `else` can reach the emitted header and
+	 * the site still fires — which is what shows the gate keys on EXPOSURE rather than on the
+	 * surrounding `if`. It stays green with the gate reverted, by design: a control BOUNDS the
+	 * over-refusal, it does not pin the gate — `testLoopInUnshieldedThenBranchNotFlagged` and
+	 * `testLoopUnderBracelessChainNotFlagged` are the two that flip.
+	 */
+	public function testLoopInBracedThenBranchStillFlagged(): Void {
+		Assert.equals(1, violations(wrapPositioned('if (p) { for (x in xs) { if (x == 0) continue; trace(x); } } else trace(0);')).length);
+	}
+
+	/** A TAIL child inherits its parent's exposure: nothing follows the else-branch, so the loop still fires. */
+	public function testLoopInElseBranchStillFlagged(): Void {
+		Assert.equals(1, violations(wrapPositioned('if (p) trace(0); else for (x in xs) { if (x == 0) continue; trace(x); }')).length);
+	}
+
+	/** The exposure reaches THROUGH a brace-less loop body: the inner `for` inherits the outer `while`'s. */
+	public function testLoopUnderBracelessChainNotFlagged(): Void {
+		Assert.equals(
+			0, violations(wrapPositioned('if (p) while (ok) for (x in xs) { if (x == 0) continue; trace(x); } else trace(0);')).length
+		);
+	}
+
+	/**
+	 * The MERGE arm needs no gate of its own. In an unshielded position the trailing `else` has
+	 * ALREADY bound to the header `if (c)`, giving it three children, and `match` accepts only the
+	 * else-less two — so the arm's own shape refuses the site and the dangling-else gate is not
+	 * what decides it.
+	 */
+	public function testMergeArmImmuneInUnshieldedPosition(): Void {
+		Assert.equals(0, violations(wrapPositioned('if (p) for (x in xs) if (c) { if (g) continue; trace(x); } else trace(0);')).length);
+	}
+
 	private inline function wrap(loopCode: String): String {
 		return wrapIn('xs:Array<Int>', loopCode);
+	}
+
+	private inline function wrapPositioned(stmt: String): String {
+		return wrapIn('p:Bool, xs:Array<Int>, ok:Bool, c:Bool, g:Bool', stmt);
 	}
 
 	private function violations(source: String): Array<Violation> {
