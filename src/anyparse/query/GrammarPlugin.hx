@@ -1719,7 +1719,19 @@ typedef RefShape = {
 	 * Loop-statement kinds whose LAST child is the loop body (Haxe `ForStmt` /
 	 * `WhileStmt`) — `loop-guard` reads the body off the last child to flag a leading
 	 * `if`-continue guard liftable to the loop header. A `do … while` is excluded (its
-	 * body is not the last child). Optional; unset makes the check a no-op.
+	 * body is not the last child; it lives in `doWhileLoopKinds`).
+	 *
+	 * A SECOND consumer asks a SOUNDNESS question of the same set, so its COMPLETENESS
+	 * is load-bearing here and not only its usefulness to `loop-guard`:
+	 * `RefactorSupport.ctorPrefixUnconditional` scans a constructor prefix for a loop,
+	 * a loop being the one statement shape that cannot be proven to COMPLETE. A kind
+	 * missing from this set lets a NESTED loop of that kind slip through that scan —
+	 * `DoWhileStmt` is missing on the Haxe grammar, by the body-position split above; a
+	 * TOP-LEVEL one is still refused, by the predicate's own kind whitelist. Unlike
+	 * `controlExitKinds`, this seam does NOT make that predicate fail closed when unset:
+	 * the loop half of its scan simply goes inert.
+	 *
+	 * Optional; unset makes `loop-guard` a no-op.
 	 */
 	@:optional var loopStatementKinds: Array<String>;
 

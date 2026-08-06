@@ -1743,32 +1743,48 @@ final class RefactorSupport {
 
 	/**
 	 * Whether the constructor statement starting at `boundary` is UNCONDITIONALLY REACHED:
-	 * every top-level statement lexically before it runs, and none of them can leave the
-	 * constructor first. The question to ask before hoisting that statement's code into the
-	 * declaration PROLOGUE, which runs ahead of the constructor body and therefore ahead of
+	 * every top-level statement lexically before it COMPLETES NORMALLY, so control arrives at
+	 * `boundary` on every path. The question to ask before hoisting that statement's code into
+	 * the declaration PROLOGUE, which runs ahead of the constructor body and therefore ahead of
 	 * every guard the body holds — a guarded initialisation moved there becomes an unguarded
 	 * one, and nothing downstream notices: the result still type-checks and still parses.
 	 *
 	 * Decided as a POSITIVE WHITELIST, never as a negative "and not an `if`, and not a
 	 * `switch`, and not …" list — a negative list leaks by CATEGORY, letting through whatever
-	 * statement shape nobody thought to enumerate. The straight-line set is `exprStatementKind`
-	 * + `localDeclKinds` + `staticLocalDeclKinds`; a top-level statement of ANY other kind
-	 * before `boundary` refuses, so an `if` / `switch` / loop / `try` / `return` / `throw` /
-	 * nested block / `#if` region all fail by construction. `super(…)` projects as a plain
-	 * expression statement on the Haxe grammar and stays allowed — this predicate answers only
-	 * "is `boundary` reached", so a consumer that moves code ACROSS a `super(…)` owes its own
-	 * judgement of that crossing (see `FieldInitAtDeclaration`'s "Known gaps").
+	 * statement shape nobody thought to enumerate. `completesNormally` holds the admitted
+	 * kinds, each read off its own `RefShape` seam: an expression statement, a local
+	 * declaration (plain or `static`), an `if`, a `switch`, a `try` / `catch`, a local
+	 * `function` / `inline function` DECLARATION (it binds a name; its body does not run here),
+	 * and a `#if` region. A top-level statement of ANY other kind before `boundary` refuses.
+	 * `super(…)` projects as a plain expression statement on the Haxe grammar and stays allowed
+	 * — this predicate answers only "is `boundary` reached", so a consumer that moves code
+	 * ACROSS a `super(…)` owes its own judgement of that crossing (see
+	 * `FieldInitAtDeclaration`'s "Known gaps").
+	 *
+	 * LOOPS ARE THE ONE DELIBERATE OMISSION, and they are the whitelist's only unique
+	 * contribution: a loop cannot be proven to terminate, so it cannot be proven to complete.
+	 * `while (true) { }` before `boundary` holds no control-exit node ANYWHERE, so the subtree
+	 * scan below finds nothing to object to and only the kind check refuses it. Every other
+	 * shape the whitelist used to refuse, the scan refuses too — which is what made widening it
+	 * free.
 	 *
 	 * A kind whitelist alone is not enough, because a statement's KIND does not bound what its
-	 * SUBTREE holds: a non-block `try` body projects as a plain expression statement
-	 * (`try return catch (e:Dynamic) {}` is `ExprStmt(TryExpr(VoidReturnExpr …))`), so a control
-	 * exit hides inside an ACCEPTED kind. Any `controlExitKinds` node starting before `boundary`
-	 * anywhere in the body subtree therefore refuses too. Neither term subsumes the other: the
-	 * subtree scan is what closes the non-block `try` hole, and the whitelist is what refuses a
-	 * prefix that never COMPLETES — a `while (true) { }` before `boundary` holds no control-exit
-	 * node anywhere, so the scan finds nothing to object to and only the kind check refuses.
+	 * SUBTREE holds, and the subtree scan closes two separate holes:
 	 *
-	 * Two residual gaps, both measured and both accepted:
+	 * - A CONTROL EXIT HIDING INSIDE AN ACCEPTED KIND. A non-block `try` body projects as a
+	 *   plain expression statement (`try return catch (e:Dynamic) {}` is
+	 *   `ExprStmt(TryExpr(VoidReturnExpr …))`), and an admitted `if` / `switch` is exactly the
+	 *   `if (!flag) return;` guard this predicate exists to refuse.
+	 * - A LOOP HIDING INSIDE AN ACCEPTED KIND. Admitting `if` / `switch` / `try` / `#if` at top
+	 *   level means `if (c) { while (true) {} }` would pass both the whitelist (its kind is an
+	 *   `if`) and an exit-only scan (it holds no return or throw) — the loop omission would
+	 *   stop holding one level down, and a top-level `for` would be refused while a nested one
+	 *   was accepted, which is incoherent.
+	 *
+	 * The scan therefore runs over `controlExitKinds` UNION `loopStatementKinds`: any node of
+	 * either set starting before `boundary` anywhere in the body subtree refuses.
+	 *
+	 * Three residual gaps, all measured and all accepted:
 	 *
 	 * - AN EXPRESSION STATEMENT THAT CANNOT RETURN IS ACCEPTED ANYWAY. `Sys.exit(0);`, or a call
 	 *   to an always-throwing helper, reads as an ordinary expression statement, so the prefix is
@@ -1779,13 +1795,22 @@ final class RefactorSupport {
 	 *   scope-aware, so a `return` that exits NOTHING in the constructor still refuses: inside a
 	 *   lambda passed as an argument, inside a local `function` / `inline function` declaration,
 	 *   and inside a `macro { … }` block (all probed). A local `inline function` helper is an
-	 *   idiom this project's own style prefers, so the cost is real rather than theoretical.
-	 *   Over-refusal stays the safe direction for a soundness gate, which is why the gap is
-	 *   priced here rather than closed.
+	 *   idiom this project's own style prefers, so the cost is real rather than theoretical —
+	 *   and doubly so now that such a declaration is an ADMITTED top-level kind, reaching the
+	 *   scan only to be refused by its own body. The loop half of the scan inherits the same
+	 *   imprecision: a loop inside a lambda before `boundary` refuses too.
+	 * - `loopStatementKinds` DOES NOT COVER `do … while`. On the Haxe grammar it is
+	 *   `['ForStmt', 'WhileStmt']`; `DoWhileStmt` lives in the separate `doWhileLoopKinds` seam,
+	 *   whose consumers read the body off `children[0]`. A TOP-LEVEL `do … while (true)` is still
+	 *   refused — no whitelist entry admits it — but one NESTED inside an admitted `if` is
+	 *   invisible to the scan, and the prefix is judged to complete.
 	 *
-	 * Fails closed twice: with no resolvable block body, and with `controlExitKinds` unset — an
+	 * Fails closed three ways: with no resolvable block body, with `controlExitKinds` unset (an
 	 * empty set would make the subtree scan a silent no-op that accepts every early return,
-	 * exactly the reasoning `guardReachedIntact` records for its own use of that seam.
+	 * exactly the reasoning `guardReachedIntact` records for its own use of that seam), and with
+	 * a prefix statement carrying no span. `loopStatementKinds` unset does NOT fail closed — it
+	 * only makes the loop half of the scan inert, which is the behaviour that held before the
+	 * scan learned about loops.
 	 */
 	public static function ctorPrefixUnconditional(ctor: QueryNode, boundary: Int, shape: RefShape): Bool {
 		final bodyKind: Null<String> = shape.blockBodyKind;
@@ -1793,20 +1818,34 @@ final class RefactorSupport {
 		if (bodyKind == null || exitKinds.length == 0) return false;
 		final body: Null<QueryNode> = ctor.children.find(c -> c.kind == bodyKind);
 		if (body == null) return false;
-		// The straight-line set is read as three separate memberships rather than built into one
-		// array: the seams it comes from never change during a run, and this is asked once per
-		// candidate FIELD, so a per-call `concat` would allocate for nothing.
-		final localDecls: Array<String> = shape.localDeclKinds ?? [];
-		final staticLocalDecls: Array<String> = shape.staticLocalDeclKinds ?? [];
-		final stmtKind: Null<String> = shape.exprStatementKind;
 		for (stmt in body.children) {
 			final span: Null<Span> = stmt.span;
 			// A statement whose position is unknown cannot be placed relative to the boundary.
 			if (span == null) return false;
-			final kind: String = stmt.kind;
-			if (span.from < boundary && kind != stmtKind && !localDecls.contains(kind) && !staticLocalDecls.contains(kind)) return false;
+			if (span.from < boundary && !completesNormally(stmt.kind, shape)) return false;
 		}
-		return !kindStartsBefore(body, exitKinds, boundary);
+		return !kindStartsBefore(body, exitKinds.concat(shape.loopStatementKinds ?? []), boundary);
+	}
+
+	/**
+	 * Whether a top-level constructor statement of `kind` ALWAYS COMPLETES NORMALLY — control
+	 * reaches the statement after it, whatever the statement does internally. Membership only:
+	 * the KIND is what is decided here, never the subtree, which is `ctorPrefixUnconditional`'s
+	 * scan's job. A LOOP is deliberately absent; that entry documents why.
+	 *
+	 * Each set is read straight off its `RefShape` seam and tested in place rather than folded
+	 * into one array: the seams never change during a run, and this is asked once per prefix
+	 * statement per candidate FIELD, so building the union per call would allocate for nothing.
+	 */
+	private static function completesNormally(kind: String, shape: RefShape): Bool {
+		return kind == shape.exprStatementKind || isConditionalKind(kind) || kindIn(shape.localDeclKinds, kind)
+			|| kindIn(shape.staticLocalDeclKinds, kind) || kindIn(shape.ifStatementKinds, kind) || kindIn(shape.switchKinds, kind)
+			|| kindIn(shape.tryStatementKinds, kind) || kindIn(shape.localFunctionKinds, kind) || kindIn(shape.inlineFunctionKinds, kind);
+	}
+
+	/** Whether `kinds` is set and holds `kind` — an unset seam contributes nothing. */
+	private static inline function kindIn(kinds: Null<Array<String>>, kind: String): Bool {
+		return kinds != null && kinds.contains(kind);
 	}
 
 	/**

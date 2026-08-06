@@ -469,6 +469,41 @@ class FieldInitAtDeclarationCheckTest extends Test {
 		Assert.equals(1, violations(src).length);
 	}
 
+	/**
+	 * Pins the WHITELIST term `ifStatementKinds`: an `if` holding no control exit ALWAYS
+	 * COMPLETES, so the init after it is still reached and still moves. Flips back to 0 if
+	 * the whitelist is narrowed to expression statements and local declarations again.
+	 */
+	public function testUnexitingIfBeforeInitStillMoved(): Void {
+		final src: String = 'class C { var _a:Array<Int>; public function new(verbose:Bool) { if (verbose) trace("x");'
+			+ ' _a = new Array<Int>(); } }';
+		Assert.equals(1, violations(src).length);
+	}
+
+	/**
+	 * Pins the WHITELIST terms `switchKinds` and `isConditionalKind`: an exit-free `switch`
+	 * and a `#if` region complete just as the `if` above does.
+	 */
+	public function testUnexitingSwitchAndConditionalBeforeInitStillMoved(): Void {
+		final sw: String = 'class C { var _a:Array<Int>; public function new(k:Int) { switch k { case 1: trace(1); case _: }'
+			+ ' _a = new Array<Int>(); } }';
+		Assert.equals(1, violations(sw).length);
+		final cond: String = 'class C { var _a:Array<Int>; public function new() { #if debug trace(1); #end _a = new Array<Int>(); } }';
+		Assert.equals(1, violations(cond).length);
+	}
+
+	/**
+	 * Pins the LOOP half of the subtree scan (`controlExitKinds` UNION `loopStatementKinds`):
+	 * a non-terminating loop NESTED inside an admitted `if` carries no control-exit node, so
+	 * only the loop half can refuse it. Without that half the whitelist would bar a TOP-LEVEL
+	 * loop while accepting this one.
+	 */
+	public function testLoopNestedInIfBeforeInitNotMoved(): Void {
+		final src: String = 'class C { var _a:Array<Int>; public function new(c:Bool) { if (c) { while (true) { } }'
+			+ ' _a = new Array<Int>(); } }';
+		Assert.equals(0, violations(src).length);
+	}
+
 	/** Assert `src` yields exactly one violation and that its declaration span names `field`. */
 	private function assertSoleViolationOn(src: String, field: String): Void {
 		final vs: Array<Violation> = violations(src);

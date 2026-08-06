@@ -36,15 +36,19 @@ import haxe.Exception;
  *
  * ORDER is only half of what the prologue changes; REACHABILITY is the other half. A
  * constructor body need not reach its own statements — an early `return` behind a
- * feature flag, a `throw`, a branch — while a declaration initializer ALWAYS runs. So
- * a candidate additionally demands `RefactorSupport.ctorPrefixUnconditional`: every
- * top-level statement before its init is straight-line (an expression statement or a
- * local declaration; `super(…)` is one of those) and no control exit starts before it
- * anywhere in the body subtree. The live regression that bought this gate hoisted an
- * asset load out from behind `if (!USE_CACHE) return;`, making it unconditional; the
- * moved code still type-checked and still parsed, so nothing downstream could catch
- * it. The gate sits on the CANDIDATE, not on either acceptance path below, so neither
- * path can miss it.
+ * feature flag, a `throw`, a loop that never ends — while a declaration initializer
+ * ALWAYS runs. So a candidate additionally demands
+ * `RefactorSupport.ctorPrefixUnconditional`: every top-level statement before its init
+ * provably COMPLETES NORMALLY (an expression statement, a local declaration, an `if` /
+ * `switch` / `try`, a local `function` declaration, a `#if` region; `super(…)` is an
+ * expression statement — a LOOP is the one shape not admitted, since it need not
+ * terminate) and no control exit AND no loop starts before it anywhere in the body
+ * subtree. The live regression that bought this gate hoisted an asset load out from
+ * behind `if (!USE_CACHE) return;`, making it unconditional; the moved code still
+ * type-checked and still parsed, so nothing downstream could catch it. The `if` itself
+ * is admitted — it is the `return` inside it that the subtree scan refuses. The gate
+ * sits on the CANDIDATE, not on either acceptance path below, so neither path can miss
+ * it.
  *
  * A field whose cross-file write count DIFFERS FROM ONE (a `dispose()` null-out, say)
  * can still move, on the ACCEPTED-CANDIDATE CHAIN: every top-level constructor
@@ -102,10 +106,12 @@ import haxe.Exception;
  *   not co-movers at all: it reorders against ARBITRARY EARLIER STRAIGHT-LINE
  *   CONSTRUCTOR STATEMENTS. `new() { s = 5; _a = s; }` and
  *   `new() { _b = bump(); _a = n; }` both fire and both change behaviour, unchanged
- *   from before the chain existed. What it can no longer do is hop a BRANCH or an
- *   early exit — `ctorPrefixUnconditional` refuses a prefix that is not straight-line
- *   on BOTH paths. The CHAIN path is stricter still: any non-candidate statement
- *   breaks the chain, where the legacy path only asks that the prefix be reached.
+ *   from before the chain existed. What it can no longer do is hop an EARLY EXIT or a
+ *   never-ending loop — `ctorPrefixUnconditional` refuses a prefix it cannot prove
+ *   completes, on BOTH paths. A BRANCH it CAN hop: an `if` / `switch` / `try` / `#if`
+ *   holding neither an exit nor a loop is admitted, since control leaves it either
+ *   way. The CHAIN path is stricter still: any non-candidate statement breaks the
+ *   chain, where the legacy path only asks that the prefix be reached.
  * - An explicit `super(…)` in that prefix is ACCEPTED and should not be. It projects as a plain
  *   expression statement, so the straight-line whitelist lets it through — but Haxe emits
  *   declaration initializers BEFORE the `super()` call, so hoisting an init across one moves it
