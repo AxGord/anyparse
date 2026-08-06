@@ -26,7 +26,7 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 final class HxCallArgMultilineStringCuddleTest extends Test {
 
 	private static final CONFIG: String =
-		'{"indentation":{"character":"tab","tabWidth":4},"wrapping":{"maxLineLength":140,"callParameter":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"itemCount <= n","value":1},{"cond":"totalItemLength <= n","value":100}],"type":"noWrap"}]}}}';
+		'{"indentation":{"character":"tab","tabWidth":4},"wrapping":{"maxLineLength":140,"callParameter":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"itemCount <= n","value":1},{"cond":"totalItemLength <= n","value":100}],"type":"noWrap"}]},"opAddSubChain":{"defaultWrap":"noWrap","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine","location":"beforeLast"}]}}}';
 
 	/**
 	 * The cuddled form is a writer fixed point. Summed flat width here is
@@ -64,8 +64,9 @@ final class HxCallArgMultilineStringCuddleTest extends Test {
 		final head: String = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 			+ 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 		final src: String = 'class C {\n\tstatic function release():Void {\n\t\tuntyped __cpp__(\'$head\n\t\t\ttail\n\t\t\');\n\t}\n}';
-		final out: String = triviaWrite(src);
-		Assert.isTrue(out.indexOf('__cpp__(\n') >= 0, 'over-wide first line keeps the leading break');
+		final wrapped: String =
+			'class C {\n\tstatic function release():Void {\n\t\tuntyped __cpp__(\n\t\t\t\'$head\n\t\t\ttail\n\t\t\'\n\t\t);\n\t}\n}';
+		Assert.equals(wrapped, triviaWrite(src));
 	}
 
 	/**
@@ -77,7 +78,26 @@ final class HxCallArgMultilineStringCuddleTest extends Test {
 		final tail: String = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, '
 			+ 'cccccccccccccccccccccccccccccccccccccc, dddddddddddddddddddddddddddddddd';
 		final src: String = 'class C {\n\tstatic function release():Void {\n\t\tf(\'\n\t\t\tx\n\t\t\', $tail);\n\t}\n}';
-		Assert.isTrue(triviaWrite(src).indexOf('f(\n') >= 0, 'over-wide tail keeps the leading break');
+		final wrapped: String = 'class C {\n\tstatic function release():Void {\n\t\tf(\n\t\t\t\'\n\t\t\tx\n\t\t\', '
+			+ 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,\n'
+			+ '\t\t\tcccccccccccccccccccccccccccccccccccccc, dddddddddddddddddddddddddddddddd\n\t\t);\n\t}\n}';
+		Assert.equals(wrapped, triviaWrite(src));
+	}
+
+	/**
+	 * A token followed by a REAL hardline (a `#if … #end` splice raw inside a
+	 * wrapping operator chain) has no measurable closing line: the chain's own
+	 * break, not the token, places what comes after. The measure reports that
+	 * as `last == -1` and the standard budget walk decides, which refuses the
+	 * flat commit — committing would emit the chain's hardlines with no
+	 * indent at all. Live instance: TM `crashdumper/CrashDumper.hx`.
+	 */
+	public function testSpliceFollowedByChainBreakKeepsIndent(): Void {
+		final src: String = 'class C {\n\tfunction sessionStr():String {\n'
+			+ '\t\treturn \'--------------------------------------$${endl}filename:\\t$${session.fileName}$$endl\' + #if !flash "package:\\t"\n'
+			+ '\t\t\t+ session.packageName + endl + "version:\\t" + session.version + endl + #end\n'
+			+ '\t\t\t\'sess. ID:\\t$${session.id}$${endl}started:\\t$${session.startTime.toString()}\';\n\t}\n}';
+		Assert.equals(src, triviaWrite(src));
 	}
 
 	/**

@@ -561,10 +561,18 @@ class Renderer {
 	}
 
 	/**
-		Returns `true` if rendering `d` in flat mode at the given indent
-		consumes at most `remaining` columns. Used to choose between flat and
-		broken layout for a `Group`/`BodyGroup`.
-	**/
+	 * Returns `true` if rendering `d` in flat mode at the given indent fits
+	 * `remaining` columns. Used to choose between flat and broken layout for a
+	 * `Group` / `BodyGroup`.
+	 *
+	 * "Fits" is per PHYSICAL line, which for all but one shape is the same as
+	 * "consumes at most `remaining` columns in total": only a VERBATIM
+	 * multi-line token (`embeddedLineWidths`) puts more than one line into a
+	 * flat rendering, and there the test is that the line the token opens on
+	 * and the line it closes on each fit. Its interior lines are emitted byte
+	 * for byte in either layout, so no caller's break can shorten them and
+	 * none is measured.
+	 */
 	private static function fitsFlat(remaining: Int, indent: Int, d: Doc): Bool {
 		if (remaining < 0) return false;
 		// omega-verbatim-firstline: `d`'s flat projection reaches an embedded
@@ -575,11 +583,15 @@ class Renderer {
 		// budget walk refuses a token whose every physical line fits, and the
 		// break it falls back to shortens nothing it measured. The two lines a
 		// layout around the token still owns are the one it opens on and the
-		// one it closes on -- both must fit. A `last` of -1 means a real
-		// hardline follows the token and lays the tail out instead, so the
-		// standard walk decides; so does `first` of -1 (no embedded newline).
+		// one it closes on -- both must fit.
+		// Either width being -1 falls THROUGH to the standard walk, which is
+		// the answer that stays correct: `first` of -1 means no embedded
+		// newline at all, and `last` of -1 means a real hardline follows the
+		// token -- content this measure cannot place, and content the walk
+		// refuses outright (`fitsFlatStep` reports a hardline as `broke`).
+		// Committing such a doc to flat would emit its hardlines unindented.
 		final embedded: { first: Int, last: Int } = embeddedLineWidths(d);
-		if (embedded.first >= 0) return embedded.last >= 0 && embedded.first <= remaining && embedded.last <= remaining;
+		if (embedded.first >= 0 && embedded.last >= 0) return embedded.first <= remaining && embedded.last <= remaining;
 		final local: Array<Frame> = [new Frame(indent, MFlat, d)];
 		var budget: Int = remaining;
 
@@ -3070,10 +3082,15 @@ class Renderer {
 	 * hardline (`Line('\n')` / `OptHardline`) or the end of the walk. `last` is
 	 * `-1` when a real hardline follows the embedded one — the tail is then laid
 	 * out by that break rather than by the token, so this walk does not claim to
-	 * know it and a caller reading `last` must fall back to its standard probe.
+	 * know it and a caller reading `last` falls back to its standard probe.
 	 *
 	 * Interior lines are deliberately NOT measured: they are emitted byte for
 	 * byte whatever the enclosing layout decides, so no wrap can shorten them.
+	 *
+	 * Constructor classification (what contributes width, what defers, what
+	 * stops the walk) must stay in LOCKSTEP with `fitsFlatStep`: `fitsFlat`
+	 * picks between the two per doc, so a divergence would answer the same
+	 * question two ways.
 	 *
 	 * Consumers: `fitsFlat` (both halves — a `Group` around such a token stays
 	 * flat when the line it opens and the line it closes both fit) and
