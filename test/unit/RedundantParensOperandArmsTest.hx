@@ -5,7 +5,10 @@ import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.check.RedundantParens;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.format.Text;
@@ -27,25 +30,32 @@ import anyparse.query.format.Text;
  * symmetry, and dropping only the removable half reads worse than either extreme.
  *
  * `comparisonOperands` — a pair on EITHER side of a comparison-tier operator
- * (`==` `!=` `<` `<=` `>` `>=`) whose bare content is purely arithmetic (`+` `-`
- * `*` `/` `%`, unary minus), all of which bind strictly tighter than a comparison
- * in Haxe AND in every C-family language. Unlike `sameOperatorLeft` a sibling pair
- * is not a blanket veto — one that is itself provable (same whitelist, or an atom
- * when `atoms` is on too) is taken along, so both drop in a single pass; the veto
- * fires only when the sibling's content is NOT provable, which would leave the
- * comparison lopsided. The BITWISE tier is off the whitelist for CORRECTNESS — C
+ * (`==` `!=` `<` `<=` `>` `>=`) whose bare content is arithmetic (`+` `-` `*` `/`
+ * `%`) or a POSTFIX in/decrement (`x++` `x--`), all of which bind strictly tighter
+ * than a comparison in Haxe AND in every C-family language. Unlike `sameOperatorLeft`
+ * a sibling pair is not a blanket veto — one that is itself provable (same whitelist,
+ * or an atom when `atoms` is on too) is taken along, so both drop in a single pass;
+ * the veto fires only when the sibling's content is NOT provable, which would leave
+ * the comparison lopsided. The BITWISE tier is off the whitelist for CORRECTNESS — C
  * binds `&` `|` `^` LOOSER than equality, unlike Haxe — while the SHIFT tier binds
  * tighter than a comparison in C exactly as in Haxe and is left out purely on
  * READABILITY: a shift operand is habitually parenthesized.
  *
  * `additiveOperands` — the same shape one tier down: a pair on EITHER side of `+`
  * or `-` whose bare content is on the strictly tighter multiplicative tiers (`*`
- * `/` `%`), which C agrees bind tighter than either additive operator. The sibling
- * symmetry rule is `comparisonOperands`' unchanged. SAME-TIER content (`a + (b - c)`)
- * is excluded for CORRECTNESS — the drop re-associates — and `Neg` for READABILITY
- * (`a - -b`). `*` and `/` are deliberately NOT hosts: Haxe binds `%` tighter than
- * either, but C makes the three one tier, so the pair in `a * (b % c)` is what makes
- * the two readings agree — the same cross-language trap as the bitwise exclusion.
+ * `/` `%`) or is a POSTFIX in/decrement, which C agrees bind tighter than either
+ * additive operator. The sibling symmetry rule is `comparisonOperands`' unchanged.
+ * SAME-TIER content (`a + (b - c)`) is excluded for CORRECTNESS — the drop
+ * re-associates — and `Neg` for READABILITY (`a - -b`). `*` and `/` are deliberately
+ * NOT hosts: Haxe binds `%` tighter than either, but C makes the three one tier, so
+ * the pair in `a * (b % c)` is what makes the two readings agree — the same
+ * cross-language trap as the bitwise exclusion.
+ *
+ * The two READABILITY exclusions differ in REACH, which the fixtures below pin. A
+ * leading unary minus is refused by a LEFT-SPINE gate (`RefShape.unaryMinusKinds`),
+ * so `a + (-b * c)` goes with `a - (-b)`. The PREFIX `++x` / `--x` have no such
+ * gate: they are simply absent from the root whitelist, so `a - (--b)` is refused
+ * while `a - (--b * c)` — a `Mul` root that merely BEGINS with `--` — still drops.
  *
  * Every drop asserted here is checked against a TREE-EQUIVALENCE oracle: both the
  * before and after source are parsed, every paren node is spliced out of each, and
@@ -635,6 +645,120 @@ class RedundantParensOperandArmsTest extends Test {
 		Assert.equals(2, violations(inFn('var v = (a * b) + (c * d);'), additiveOperands()).length);
 	}
 
+	/**
+	 * A POSTFIX in/decrement is content for the two whitelist arms and nothing else: it
+	 * rides the existing `comparisonOperands` / `additiveOperands` flags, so a project
+	 * that opted neither in sees it nowhere, and each arm still owns only its own host
+	 * tier.
+	 */
+	public function testPostfixOperandNeedsItsOwnArm(): Void {
+		Assert.equals(0, violations(inFn('var v = (a++) < 36;'), none()).length);
+		Assert.equals(0, violations(inFn('var v = (a++) < 36;'), atoms()).length);
+		Assert.equals(0, violations(inFn('var v = (a++) < 36;'), sameOperatorLeft()).length);
+		Assert.equals(0, violations(inFn('var v = (a++) < 36;'), additiveOperands()).length);
+		Assert.equals(0, violations(inFn('var v = (a++) + b;'), none()).length);
+		Assert.equals(0, violations(inFn('var v = (a++) + b;'), comparisonOperands()).length);
+	}
+
+	/**
+	 * The shape this content class was admitted for: `while ((a++) < 36)`. A postfix
+	 * `++` binds tighter than a comparison in Haxe and in every C-family language, and
+	 * it is TWO-SIDEDLY closed in a way the arithmetic roots are not — its own `++`
+	 * token ends the content, and its leftmost token is the operand rather than an
+	 * operator, so neither edge gate has anything to refuse.
+	 */
+	public function testComparisonPostfixOperandDrops(): Void {
+		assertDrop(inFn('while ((a++) < 36) g();'), inFn('while (a++ < 36) g();'), comparisonOperands());
+		assertDrop(inFn('var v = (a++) < 36;'), inFn('var v = a++ < 36;'), comparisonOperands());
+		assertDrop(inFn('var v = c > (a--);'), inFn('var v = c > a--;'), comparisonOperands());
+		assertDrop(inFn('var v = (a--) == b;'), inFn('var v = a-- == b;'), comparisonOperands());
+	}
+
+	/** The same content one tier down, on either side of `+` / `-` and in a chain's middle. */
+	public function testAdditivePostfixOperandDrops(): Void {
+		assertDrop(inFn('var v = (a++) + b;'), inFn('var v = a++ + b;'), additiveOperands());
+		assertDrop(inFn('var v = b - (a--);'), inFn('var v = b - a--;'), additiveOperands());
+		assertDrop(inFn('var v = c + (a++) + d;'), inFn('var v = c + a++ + d;'), additiveOperands());
+	}
+
+	/**
+	 * The content is judged by its ROOT kind, so the operand under the `++` is ordinary
+	 * structure — a dotted read or an index access reaches the arm on the same terms as a
+	 * bare identifier. It need not be an ATOM: what makes the drop safe is the postfix
+	 * token, not what precedes it.
+	 */
+	public function testPostfixOperandShapeIsNotRestricted(): Void {
+		assertDrop(inFn('var v = (a.b++) + c;'), inFn('var v = a.b++ + c;'), additiveOperands());
+		assertDrop(inFn('var v = (arr[i]++) < n;'), inFn('var v = arr[i]++ < n;'), comparisonOperands());
+	}
+
+	/**
+	 * A SMOKE control, and deliberately labelled one: nothing can falsify it. A `PostIncr`
+	 * span ends at its own `++`, so the right-spine walk (`edgeAligned`) never descends
+	 * into the operand — and no greedy construct can sit under a `PostIncr` root anyway,
+	 * since it would swallow the `++` and BE the root (`untyped c++` parses as
+	 * `UntypedExpr(PostIncr(c))`, which is off the whitelist). The fixture below is
+	 * bracket-bounded on its own account too, so it would drop even without the postfix
+	 * boundary. It is here to pin that the shape is reached, not to discriminate a gate.
+	 */
+	public function testAPostfixTokenClosesAGreedyTail(): Void {
+		assertDrop(inFn('var v = a + (arr[untyped i]++) - d;'), inFn('var v = a + arr[untyped i]++ - d;'), additiveOperands());
+	}
+
+	/**
+	 * The PREFIX forms are not on the whitelist. They are provable — `++` and `--` bind
+	 * tighter than either host tier here and in C — and they are left off on READABILITY
+	 * grounds: bare, `(++b) < 36` reads `++b < 36` and `a - (--b)` reads `a - --b`.
+	 *
+	 * That exclusion is ROOT-ONLY, and the last two fixtures pin its limit rather than its
+	 * effect. A leading unary minus is refused by a LEFT-SPINE gate, so `a + (-b * c)`
+	 * goes with `a - (-b)`; a prefix in/decrement has no such gate, so content that merely
+	 * BEGINS with one keeps dropping. Shipped behaviour, unchanged by admitting the
+	 * postfix forms — closing it would need a left-spine vocabulary of its own.
+	 */
+	public function testAPrefixIncrementIsRefusedAsAContentRoot(): Void {
+		Assert.equals(0, violations(inFn('var v = a + (++b);'), additiveOperands()).length);
+		Assert.equals(0, violations(inFn('var v = a - (--b);'), additiveOperands()).length);
+		Assert.equals(0, violations(inFn('var v = (++a) > c;'), comparisonOperands()).length);
+		Assert.equals(0, violations(inFn('var v = c != (--a);'), comparisonOperands()).length);
+		// The bare fixtures pin that the PREFIX spelling is what rejects each of these.
+		Assert.equals(1, violations(inFn('var v = a + (b++);'), additiveOperands()).length);
+		Assert.equals(1, violations(inFn('var v = (a++) > c;'), comparisonOperands()).length);
+		// The reach: a prefix in/decrement below the root is NOT refused, unlike a minus.
+		Assert.equals(1, violations(inFn('var v = a - (--b * c);'), additiveOperands()).length);
+		Assert.equals(1, violations(inFn('var v = (--b * c) > d;'), comparisonOperands()).length);
+		Assert.equals(0, violations(inFn('var v = a - (-b * c);'), additiveOperands()).length);
+	}
+
+	/**
+	 * `++` and `+` are spelled from the same character, but for POSTFIX content the lexer's
+	 * maximal munch lands on the reading the drop intended: measured on the compiler,
+	 * `a+b+++c` is `a + b++ + c` (1+1+1 = 3, `b` left at 2) and `a-b---c` is `a - b-- - c`.
+	 * So the fix's weld guard is belt-and-braces here — it is load-bearing for the
+	 * LEADING-operator content these arms refuse (`a-(--p * q)`, pinned by
+	 * `testDropKeepsASeparatorAgainstAnOperatorToken`), not for this one. What the
+	 * whitespace-free fixtures pin is that `fix` does not DEPEND on the writer's spacing;
+	 * the `written` assertions pin the other half, that a canonical file — the only thing
+	 * `lint --fix` runs on — already separates the two operators.
+	 */
+	public function testAPostfixDropCannotWeldOntoTheHostOperator(): Void {
+		assertDrop(inFn('var v = a+(b++)+c;'), inFn('var v = a+b++ +c;'), additiveOperands());
+		assertDrop(inFn('var v = a-(b--)-c;'), inFn('var v = a-b-- -c;'), additiveOperands());
+		assertDrop(inFn('var v = a + (b++) + c;'), inFn('var v = a + b++ + c;'), additiveOperands());
+		Assert.isTrue(written(inFn('var v = a + b++ + c;')).indexOf('a + b++ + c') != -1);
+		Assert.equals(written(inFn('var v = a + b++ + c;')), written(inFn('var v = a+b++ +c;')));
+	}
+
+	/**
+	 * The sibling SYMMETRY rule is unchanged: a postfix pair is provable, so it is taken
+	 * along by a provable sibling in the same pass and vetoed by one that is not.
+	 */
+	public function testAPostfixSiblingIsProvable(): Void {
+		assertDrop(inFn('var v = (a++) > (b - c);'), inFn('var v = a++ > b - c;'), comparisonOperands());
+		assertDrop(inFn('var v = (a++) + (b * c);'), inFn('var v = a++ + b * c;'), additiveOperands());
+		Assert.equals(0, violations(inFn('var v = (a++) > (c ?? d);'), comparisonOperands()).length);
+	}
+
 	/** The four arms are independent: no opt-in reaches another's candidates. */
 	public function testArmsAreIndependentlyGated(): Void {
 		Assert.equals(0, violations(inFn('var b = (a) + c;'), sameOperatorLeft()).length);
@@ -738,6 +862,11 @@ class RedundantParensOperandArmsTest extends Test {
 	/** `src` parsed with every parenthesis node spliced out — the shape a redundant pair must not change. */
 	private static function bareTree(src: String): String {
 		return Text.render(stripParens(new HaxeQueryPlugin().parseFile(src)));
+	}
+
+	/** `src` re-emitted by the writer — what a CANONICAL file looks like, spacing included. */
+	private static function written(src: String): String {
+		return HxModuleWriter.write(HaxeModuleParser.parse(src), HaxeFormatConfigLoader.loadHxFormatJson('{}'));
 	}
 
 	private static function stripParens(node: QueryNode): QueryNode {

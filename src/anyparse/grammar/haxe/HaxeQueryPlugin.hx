@@ -921,9 +921,18 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// and `Interval` (a `...` that abuts numeric-literal / field-access `.`
 			// lexing) share the tier but are deliberately not hosts.
 			comparisonOperandHostKinds: ['Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq'],
-			// The arithmetic core: tiers 8-10 plus unary minus, strictly tighter than a
-			// comparison here AND in every C-family language, so the drop is right on
-			// both readings. The BITWISE tier (6) is out for CORRECTNESS — C binds
+			// The arithmetic core plus the POSTFIX in/decrements: tiers 8-10 and the
+			// postfix chain links, strictly tighter than a comparison here AND in every
+			// C-family language, so the drop is right on both readings. `PostIncr` /
+			// `PostDecr` are what `while ((a++) < 36)` needs; their own `++` / `--`
+			// token closes the content, so no greedy tail can reach past the pair, and
+			// their leftmost token is the OPERAND, so the leading-minus rule has nothing
+			// to refuse. The PREFIX `PreIncr` / `PreDecr` are equally provable and stay
+			// off on READABILITY grounds — bare, `(++b) < 36` reads `++b < 36` — but by
+			// mere absence from this ROOT whitelist, not by the gate that keeps `Neg` out:
+			// `unaryMinusKinds` refuses a leading minus at ANY depth and has no prefix
+			// in/decrement analogue, so `(--b * c) > d` is a `Mul` root and still drops.
+			// The BITWISE tier (6) is out for CORRECTNESS — C binds
 			// `& | ^` LOOSER than `==`, so `(x & m) != 0` reads differently there once
 			// the pair is gone. The SHIFT tier (7) binds tighter than a comparison in C
 			// exactly as it does here and WOULD be provable; it is out on READABILITY
@@ -931,7 +940,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// `atoms` arm's; the two converge over `lint --fix` passes. `Neg` USED to be
 			// here as a root; `unaryMinusKinds` now owns the whole leading-minus rule,
 			// so listing it as well would be a whitelist entry nothing can pass.
-			comparisonOperandUnwrapKinds: ['Add', 'Sub', 'Mul', 'Div', 'Mod'],
+			comparisonOperandUnwrapKinds: ['Add', 'Sub', 'Mul', 'Div', 'Mod', 'PostIncr', 'PostDecr'],
 			// The prec-8 tier. NOT the multiplicative one above it: Haxe binds `%` tighter
 			// than `*` and `/`, but C makes the three ONE tier, so a bare `a * b % c` reads
 			// `(a * b) % c` to a C-trained eye and the pair in `a * (b % c)` is what makes
@@ -939,12 +948,17 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// correctness (`(a * b) & c` bare re-parses the same here and in C) but on the
 			// READABILITY ground that keeps shifts off the comparison whitelist.
 			additiveOperandHostKinds: ['Add', 'Sub'],
-			// Tiers 9 and 10 — strictly tighter than `+` / `-` here AND in C, so the drop is
-			// right on both readings. The SAME tier (`Add` / `Sub`) is out for CORRECTNESS:
+			// Tiers 9 and 10 and the POSTFIX in/decrements — strictly tighter than `+` / `-`
+			// here AND in C, so the drop is right on both readings; `(a++) + b` bare is the
+			// tree it already had. The SAME tier (`Add` / `Sub`) is out for CORRECTNESS:
 			// `a + (b - c)` bare is `(a + b) - c`, a different value. `Neg` is provable and
-			// out on READABILITY alone (`a - (-b)` bare reads `a - -b`). Everything looser
-			// re-associates outward and is excluded by construction.
-			additiveOperandUnwrapKinds: ['Mul', 'Div', 'Mod'],
+			// out on READABILITY alone (`a - (-b)` bare reads `a - -b`). The PREFIX
+			// `PreIncr` / `PreDecr` are off on that same ground (`a - (--b)` bare reads
+			// `a - --b`) but only as a ROOT — `Neg` has `unaryMinusKinds` refusing it at any
+			// depth, a prefix in/decrement has no such gate, so `a - (--b * c)` still drops.
+			// Only the POSTFIX spelling puts the operand first.
+			// Everything looser re-associates outward and is excluded by construction.
+			additiveOperandUnwrapKinds: ['Mul', 'Div', 'Mod', 'PostIncr', 'PostDecr'],
 			// Everything whose extent runs to the enclosing bracket. Probed one shape
 			// apiece: each of these swallows a trailing `- d` that a parenthesis would
 			// have kept out. `CastExpr` is here on the COMPILER's answer, not this

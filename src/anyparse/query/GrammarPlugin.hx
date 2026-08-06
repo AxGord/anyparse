@@ -2126,13 +2126,27 @@ typedef RefShape = {
 
 	/**
 	 * The ARITHMETIC CORE of the kinds that bind strictly tighter than the comparison
-	 * tier: those that also parse identically across the C-family languages, so a
-	 * `parenKind` wrapping one as an operand of a `comparisonOperandHostKinds` operator
-	 * is redundant on every reading. A fail-closed WHITELIST in the manner of
-	 * `ternaryConditionUnwrapKinds`: a kind absent from it keeps its parentheses. Haxe:
-	 * the arithmetic `Add` / `Sub` (tier 8), `Mul` / `Div` (tier 9) and `Mod` (tier 10).
-	 * The unary `Neg` is NOT on it — `unaryMinusKinds` refuses a leading minus at any
-	 * depth, which subsumes the bare `Neg` root.
+	 * tier, plus the POSTFIX in/decrements: those that also parse identically across the
+	 * C-family languages, so a `parenKind` wrapping one as an operand of a
+	 * `comparisonOperandHostKinds` operator is redundant on every reading. A fail-closed
+	 * WHITELIST in the manner of `ternaryConditionUnwrapKinds`: a kind absent from it
+	 * keeps its parentheses. Haxe: the arithmetic `Add` / `Sub` (tier 8), `Mul` / `Div`
+	 * (tier 9), `Mod` (tier 10) and `PostIncr` / `PostDecr`. The unary `Neg` is NOT on it
+	 * — `unaryMinusKinds` refuses a leading minus at any depth, which subsumes the bare
+	 * `Neg` root.
+	 *
+	 * A POSTFIX in/decrement is the one content shape both EDGE gates answer for by
+	 * construction, which is why it needs no vocabulary of its own: its `++` / `--` token
+	 * closes the content, so the right-spine walk stops at that boundary and no greedy
+	 * tail inside can reach past the pair; and its leftmost token is the OPERAND, so
+	 * there is no leading operator for the readability rule to refuse. `(a++) < 36` is
+	 * the shape it was admitted for. The PREFIX `PreIncr` / `PreDecr` are equally
+	 * provable and stay off the whitelist on READABILITY grounds — bare, `(++b) < 36`
+	 * reads `++b < 36`. That is a ROOT-only exclusion and NOT the ground that keeps `Neg`
+	 * out: `unaryMinusKinds` refuses a leading minus at any depth, and there is no such
+	 * gate for a prefix in/decrement, so content that merely BEGINS with one still drops
+	 * (`(--b * c) > d` has a `Mul` root and is flagged). Widening the reach would mean a
+	 * left-spine vocabulary of its own; the narrow form is what shipped.
 	 *
 	 * A DELIBERATE SUBSET, not an exhaustive one — the tighter-binding kinds left out are
 	 * choices, each for its own reason. The BITWISE kinds (`BitAnd` / `BitOr` / `BitXor`,
@@ -2142,12 +2156,12 @@ typedef RefShape = {
 	 * an author writes on purpose. The SHIFT kinds (`Shl` / `Shr` / `UShr`, tier 7) bind
 	 * tighter than a comparison in C exactly as they do here and WOULD be provable on
 	 * both readings; they are out on READABILITY alone, since a shift operand is
-	 * habitually parenthesized. The remaining unary and primary kinds
-	 * (`Not` / `BitNot` / the in/decrements, and the atoms) are out because this arm has
-	 * no need of them: `atoms` owns the atomic content and the two arms converge over
-	 * `lint --fix` passes, while the rest buy a rarity. Admitting any of them later is
-	 * additive and breaks nothing. Read by `redundant-parens` with
-	 * `comparisonOperandHostKinds`; optional, unset drops that arm.
+	 * habitually parenthesized. The remaining unary and primary kinds (`Not` / `BitNot`
+	 * and the atoms) are out because this arm has no need of them: `atoms` owns the
+	 * atomic content and the two arms converge over `lint --fix` passes, while the rest
+	 * buy a rarity. Admitting any of them later is additive and breaks nothing. Read by
+	 * `redundant-parens` with `comparisonOperandHostKinds`; optional, unset drops that
+	 * arm.
 	 */
 	@:optional var comparisonOperandUnwrapKinds: Array<String>;
 
@@ -2176,18 +2190,25 @@ typedef RefShape = {
 	 * across the C family, so a `parenKind` wrapping one as an operand of an
 	 * `additiveOperandHostKinds` operator is redundant on every reading. A fail-closed
 	 * WHITELIST in the manner of `comparisonOperandUnwrapKinds`: a kind absent from it
-	 * keeps its parentheses. Haxe: `Mul` / `Div` (tier 9) and `Mod` (tier 10) — C agrees
-	 * that all three bind tighter than `+` and `-`, which is what the `%` exclusion on the
-	 * HOST side does not get to assume.
+	 * keeps its parentheses. Haxe: `Mul` / `Div` (tier 9), `Mod` (tier 10) and the
+	 * postfix `PostIncr` / `PostDecr` — C agrees that all five bind tighter than `+` and
+	 * `-`, which is what the `%` exclusion on the HOST side does not get to assume.
 	 *
 	 * The SAME-TIER kinds (`Add` / `Sub`) are the reason this is a whitelist rather than a
 	 * tier test: dropping the pair around one RE-ASSOCIATES the expression
 	 * (`a + (b - c)` becomes `(a + b) - c`), a different rounding for floats and a
 	 * different value outright under `-`. The unary `Neg` IS provable — `a - (-b)` binds
 	 * the same either way — and is out on READABILITY alone, since the bare form reads
-	 * `a - -b`. Everything looser (bitwise, shift, comparison and below) is excluded by
-	 * construction: such content re-associates outward on unwrap. Read by
-	 * `redundant-parens` with `additiveOperandHostKinds`; optional, unset drops that arm.
+	 * `a - -b`. The PREFIX `PreIncr` / `PreDecr` are left off on that same READABILITY
+	 * ground (`a - (--b)` bare reads `a - --b`) but by a WEAKER mechanism — mere absence
+	 * from this root whitelist, where `Neg` has `unaryMinusKinds` refusing it at any
+	 * depth — so a prefix in/decrement nested under whitelisted content is NOT refused
+	 * (`a - (--b * c)` has a `Mul` root and still drops). What stays on the list is the
+	 * POSTFIX spelling: it puts the operand first, and its own `++` / `--` token closes
+	 * the content against a greedy tail. Everything looser (bitwise, shift,
+	 * comparison and below) is excluded by construction: such content re-associates
+	 * outward on unwrap. Read by `redundant-parens` with `additiveOperandHostKinds`;
+	 * optional, unset drops that arm.
 	 */
 	@:optional var additiveOperandUnwrapKinds: Array<String>;
 
