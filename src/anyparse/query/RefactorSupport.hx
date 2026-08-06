@@ -1721,11 +1721,17 @@ final class RefactorSupport {
 		final members: Array<String> = shape.memberDeclKinds ?? [];
 		if (ctorName == null) return null;
 		var found: Null<QueryNode> = null;
-		for (child in container.children) if (members.contains(child.kind) && child.name == ctorName) {
-			if (found != null) return null;
-			found = child;
-		}
-		return found;
+		var several: Bool = false;
+		// Every member host, not just the container's direct children: a constructor written inside a
+		// member-position `#if` is one level down, and reading it as absent let a caller treat a
+		// SECOND, guarded constructor's assignments as if they did not exist.
+		eachMemberHost(container, host -> {
+			for (child in host.children) if (members.contains(child.kind) && child.name == ctorName) {
+				if (found != null) several = true;
+				found = child;
+			}
+		});
+		return several ? null : found;
 	}
 
 	/**
@@ -2144,18 +2150,7 @@ final class RefactorSupport {
 		final members: Array<String> = shape.memberDeclKinds ?? [];
 		final out: Array<Int> = [];
 		if (staticKind == null) return out;
-		var pending: Bool = false;
-		for (child in container.children) {
-			if (child.kind == staticKind)
-				pending = true;
-			else if (members.contains(child.kind)) {
-				if (pending) {
-					final sp: Null<Span> = child.span;
-					if (sp != null) out.push(sp.from);
-				}
-				pending = false;
-			}
-		}
+		collectStaticFroms(container, staticKind, members, false, out);
 		return out;
 	}
 
@@ -2873,9 +2868,19 @@ final class RefactorSupport {
 	private static function findFieldContainer(
 		node: QueryNode, fieldFrom: Int, classLike: Array<String>, fields: Array<String>
 	): Null<{ container: QueryNode, field: QueryNode }> {
-		if (classLike.contains(node.kind)) for (child in node.children) if (fields.contains(child.kind)) {
-			final sp: Null<Span> = child.span;
-			if (sp != null && sp.from == fieldFrom) return { container: node, field: child };
+		// Every member host of the container, not just its direct children: a field written inside a
+		// member-position `#if` sits one level down, and reading it as absent left the fix side unable
+		// to re-find a field its own detection had flagged.
+		if (classLike.contains(node.kind)) {
+			var found: Null<QueryNode> = null;
+			eachMemberHost(node, host -> {
+				for (child in host.children) if (fields.contains(child.kind)) {
+					final sp: Null<Span> = child.span;
+					if (sp != null && sp.from == fieldFrom) found = child;
+				}
+			});
+			final field: Null<QueryNode> = found;
+			if (field != null) return { container: node, field: field };
 		}
 		for (child in node.children) {
 			final hit: Null<{ container: QueryNode, field: QueryNode }> = findFieldContainer(child, fieldFrom, classLike, fields);
@@ -3959,6 +3964,35 @@ final class RefactorSupport {
 		if (stmt.children.length != 2) return null;
 		final branch: QueryNode = stmt.children[1];
 		return branch.kind != shape.blockStmtKind ? branch : branch.children.length == 1 ? branch.children[0] : null;
+	}
+
+
+	/**
+	 * Collect the `from` of every static member under `host` into `out`, returning the modifier-run
+	 * state the host's children leave behind. Descends into every nested member host — a
+	 * member-position `#if` region above all — carrying `incoming` in, because a `static` written
+	 * before the `#if` modifies the first member of whichever branch compiles, and carrying the
+	 * region's own leftover out, because a region ending on `static` modifies the member after
+	 * `#end`. Branches are read as one flat run: the question is only WHICH members are static, and
+	 * a member the flat reading calls static is one no caller will move.
+	 */
+	private static function collectStaticFroms(
+		host: QueryNode, staticKind: String, members: Array<String>, incoming: Bool, out: Array<Int>
+	): Bool {
+		var pending: Bool = incoming;
+		for (child in host.children) {
+			if (child.kind == staticKind)
+				pending = true;
+			else if (members.contains(child.kind)) {
+				if (pending) {
+					final sp: Null<Span> = child.span;
+					if (sp != null) out.push(sp.from);
+				}
+				pending = false;
+			} else if (descendsToMemberHost(host.kind, child.kind))
+				pending = collectStaticFroms(child, staticKind, members, pending, out);
+		}
+		return pending;
 	}
 
 }
