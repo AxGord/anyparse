@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberBranchScan;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -137,8 +138,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			if (tree == null) continue;
 			final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, entry.file)
 				.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
+			final branch: MemberBranchSeams = MemberBranchScan.seamsOf(plugin.refShape(), entry.source);
 			for (cls in CheckScan.classBodies(tree))
-				considerClass(out, cls, entry.source, entry.file, index, subtypeIndex, maxBypass, sourceByFile, plugin);
+				considerClass(out, cls, entry.source, entry.file, index, subtypeIndex, maxBypass, sourceByFile, plugin, branch);
 		}
 		return out;
 	}
@@ -178,7 +180,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			if (span != null) wanted.push('${span.from}:${span.to}');
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		for (cls in CheckScan.classBodies(tree)) collectClassFixEdits(cls, source, wanted, index, edits, maxBypass);
+		final branch: MemberBranchSeams = MemberBranchScan.seamsOf(plugin.refShape(), source);
+		for (cls in CheckScan.classBodies(tree)) collectClassFixEdits(cls, source, wanted, index, edits, maxBypass, branch);
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
@@ -228,11 +231,12 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		if (tree == null) return null;
 		final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, v.file)
 			.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
+		final branch: MemberBranchSeams = MemberBranchScan.seamsOf(plugin.refShape(), src);
 		for (cls in CheckScan.classBodies(tree)) {
 			final className: Null<String> = cls.name;
 			if (className == null) continue;
 			final owner: String = className;
-			final t = memberTables(cls, src);
+			final t = memberTables(cls, src, branch);
 			for (prop in t.properties) if (prop.span.from == span.from) {
 				if (subtypeBlocks(subtypeIndex, className, prop.name)) return null;
 				final c = classifyProperty(cls, src, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
@@ -261,16 +265,17 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 */
 	private static function considerClass(
 		out: Array<Violation>, cls: QueryNode, source: String, file: String, index: SymbolIndex, subtypeIndex: SymbolIndex, maxBypass: Int,
-		sourceByFile: Map<String, String>, plugin: GrammarPlugin
+		sourceByFile: Map<String, String>, plugin: GrammarPlugin, branch: MemberBranchSeams
 	): Void {
 		final className: Null<String> = cls.name;
 		if (className == null) return;
 		final owner: String = className;
-		final t = memberTables(cls, source);
+		final t = memberTables(cls, source, branch);
 		for (prop in t.properties) {
 			if (subtypeBlocks(subtypeIndex, className, prop.name)) continue;
 			final c = classifyProperty(cls, source, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
 			if (c == null) continue;
+			if (!collapseConfinedToBranch(branch, cls, source, prop.node, c.field)) continue;
 			// A subtype references the backing field the collapse deletes; still emit when every such
 			// occurrence is a provable READ (the cross-file collapse rewrites them), else stay blocked.
 			if (
@@ -390,11 +395,11 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 */
 	private static function collectClassFixEdits(
 		cls: QueryNode, source: String, wanted: Array<String>, index: Null<SymbolIndex>, out: Array<{ span: Span, text: String }>,
-		maxBypass: Int
+		maxBypass: Int, branch: MemberBranchSeams
 	): Void {
 		final className: Null<String> = cls.name;
 		if (className == null) return;
-		final t = memberTables(cls, source);
+		final t = memberTables(cls, source, branch);
 		for (prop in t.properties) if (wanted.contains('${prop.span.from}:${prop.span.to}')) {
 			if (subtypeBlocks(index, className, prop.name)) continue;
 			final c = classifyProperty(cls, source, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
@@ -697,7 +702,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 * properties — `(get, never)`, `(get, null)` and `(get, set)`. The shape decision and
 	 * soundness gates for each live in `classifyProperty`.
 	 */
-	private static function memberTables(cls: QueryNode, source: String): {
+	private static function memberTables(cls: QueryNode, source: String, branch: MemberBranchSeams): {
 		privateFieldNodes: Map<String, QueryNode>,
 		getters: Map<String, {
 			node: QueryNode,
@@ -741,8 +746,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			isStatic: Bool,
 			write: String
 		}> = [];
-		var mods: Array<String> = [];
-		for (child in cls.children) {
+		MemberBranchScan.eachMember(branch, cls, child -> MEMBER_KINDS.contains(child.kind), (child, run) -> {
+			final mods: Array<String> = [for (mod in run) mod.kind];
 			switch child.kind {
 				case 'VarMember' | 'FinalMember':
 					final name: Null<String> = child.name;
@@ -765,8 +770,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 							});
 						}
 					}
-					mods = [];
-				case 'FnMember' | 'FinalModifiedMember':
+				case _:
 					final name: Null<String> = child.name;
 					if (name != null) {
 						final entry: {
@@ -785,11 +789,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 						else if (StringTools.startsWith(name, 'set_'))
 							setters[name] = entry;
 					}
-					mods = [];
-				case _:
-					mods.push(child.kind);
 			}
-		}
+		});
 		return {
 			privateFieldNodes: privateFieldNodes,
 			getters: getters,
@@ -1351,11 +1352,22 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		edits: Array<{ span: Span, text: String }>, source: String, cls: QueryNode, deleted: Array<{ node: QueryNode, span: Span }>,
 		fieldNode: QueryNode, ctorInit: Null<{ stmt: QueryNode, rhsSpan: Span }>
 	): Bool {
-		for (d in deleted)
-			edits.push({ span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.declGroupSpan(d.node, cls, d.span)), text: '' });
+		// The member's own host, not the container: a guarded member's modifier run lives inside the
+		// `#if` region, and a group span computed against the container would leave it behind.
+		for (d in deleted) edits.push({
+			span: RefactorSupport.lineExtendedSpan(
+				source, RefactorSupport.declGroupSpan(d.node, RefactorSupport.memberHostOf(cls, d.node), d.span)
+			),
+			text: ''
+		});
 		final fieldSpan: Null<Span> = fieldNode.span;
 		if (fieldSpan == null) return false;
-		edits.push({ span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.declGroupSpan(fieldNode, cls, fieldSpan)), text: '' });
+		edits.push({
+			span: RefactorSupport.lineExtendedSpan(
+				source, RefactorSupport.declGroupSpan(fieldNode, RefactorSupport.memberHostOf(cls, fieldNode), fieldSpan)
+			),
+			text: ''
+		});
 		if (ctorInit != null) {
 			final cs: Null<Span> = ctorInit.stmt.span;
 			if (cs == null) return false;
@@ -1634,6 +1646,33 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			out.addChar(c);
 		}
 		return out.toString();
+	}
+
+
+	/** The class-body member kinds `memberTables` reads — the two field forms and the two method forms. */
+	private static final MEMBER_KINDS: Array<String> = ['VarMember', 'FinalMember', 'FnMember', 'FinalModifiedMember'];
+
+
+	/**
+	 * Whether the collapse of a GUARDED property stays inside the branch that declares it. Always
+	 * true for an unguarded property: the name it renames the backing field to exists in every build,
+	 * so a reader anywhere is safe to rewrite.
+	 *
+	 * A guarded one is different. The collapse deletes the backing field and renames every reference
+	 * to it into the PROPERTY's name — a name that only exists where the property's branch compiles.
+	 * A reader in another branch, or outside the region, would be rewritten to a member its own build
+	 * does not have. The test is deliberately a plain occurrence scan of the field name outside the
+	 * branch: cheap, and it errs only toward refusing (a mention in a comment or an unrelated local
+	 * costs the finding, never correctness).
+	 */
+	private static function collapseConfinedToBranch(
+		branch: MemberBranchSeams, cls: QueryNode, source: String, prop: QueryNode, field: String
+	): Bool {
+		final span: Null<Span> = MemberBranchScan.branchSpanOf(branch, cls, prop);
+		if (span == null) return true;
+		final region: Span = span;
+		return !RefactorSupport.referencedInRange(source, field, 0, region.from, [])
+			&& !RefactorSupport.referencedInRange(source, field, region.to, source.length, []);
 	}
 
 }

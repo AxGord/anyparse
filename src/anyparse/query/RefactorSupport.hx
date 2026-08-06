@@ -3995,6 +3995,23 @@ final class RefactorSupport {
 		return pending;
 	}
 
+
+	/**
+	 * The member host whose DIRECT children hold `member` — `container` itself, or the
+	 * member-position conditional region one level down that actually declares it.
+	 *
+	 * Every sibling-run walk needs the real parent. Handed the container for a guarded member,
+	 * `declGroupSpan` finds no sibling index and degrades to the bare node span, so a deletion built
+	 * from it leaves the member's `private` / `@:meta` run behind — dangling text that does not parse.
+	 * Falls back to `container` when `member` is not found under it at all, which keeps every
+	 * pre-existing caller's behaviour byte for byte.
+	 */
+	public static function memberHostOf(container: QueryNode, member: QueryNode): QueryNode {
+		var found: QueryNode = container;
+		eachMemberHost(container, host -> if (host.children.contains(member)) found = host);
+		return found;
+	}
+
 }
 
 /**

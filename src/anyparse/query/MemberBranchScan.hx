@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.CondBranchProjection;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.runtime.Span;
 
 /**
  * The branch-aware member-run fold: how a member-scanning check reads a container's children
@@ -128,6 +129,54 @@ final class MemberBranchScan {
 			visit(child, run);
 			return [];
 		}, (a, b) -> a.concat(b));
+	}
+
+
+	/**
+	 * The span of the conditional BRANCH that declares `member`, or null when `member` is a direct
+	 * child of `container` and so compiles in every build.
+	 *
+	 * The unit a multi-member rewrite has to stay inside. Two members of the same region but of
+	 * DIFFERENT branches never compile together, so an edit reaching from one to the other is as
+	 * wrong as one reaching out of the region entirely — a collapse that renames a backing field
+	 * declared in `#if cpp` cannot rewrite a reader written in `#else`. A region whose boundaries the
+	 * splitter refuses answers with the whole region's span, the tightest bound still available.
+	 */
+	public static function branchSpanOf(seams: MemberBranchSeams, container: QueryNode, member: QueryNode): Null<Span> {
+		for (child in container.children) if (isRegion(seams, child)) {
+			final hit: Null<Span> = branchSpanIn(seams, child, member);
+			if (hit != null) return hit;
+		}
+		return null;
+	}
+
+
+	/**
+	 * The branch span of `member` inside `region`, or null when the region does not hold it. A region
+	 * nested in a branch answers with its OWN branch span — tighter, and still inside the outer one.
+	 */
+	private static function branchSpanIn(seams: MemberBranchSeams, region: QueryNode, member: QueryNode): Null<Span> {
+		final runs: Null<Array<CondBranchRun>> = CondBranchProjection.conditionalBranchRuns(
+			region, seams.source, seams.elseKeywords, seams.comments
+		);
+		if (runs == null || runs.length == 0)
+			return region.children.contains(member) ? region.span : nestedSpan(seams, region.children, member);
+		for (run in runs) {
+			if (run.nodes.contains(member)) return run.span;
+			final nested: Null<Span> = nestedSpan(seams, run.nodes, member);
+			if (nested != null) return nested;
+		}
+		return null;
+	}
+
+
+	/** The branch span of `member` inside any region among `nodes` — the nested-region arm of `branchSpanIn`. */
+	private static function nestedSpan(seams: MemberBranchSeams, nodes: Array<QueryNode>, member: QueryNode): Null<Span> {
+		for (node in nodes) if (isRegion(seams, node)) {
+			final hit: Null<Span> = branchSpanIn(seams, node, member);
+			if (hit != null) return hit;
+		}
+		return null;
 	}
 
 }

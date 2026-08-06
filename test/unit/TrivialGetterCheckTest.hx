@@ -1033,4 +1033,48 @@ class TrivialGetterCheckTest extends Test {
 		));
 	}
 
+
+	/**
+	 * A property and its trivial getter written inside a member-position `#if` are members of the
+	 * class like any other. The region is ONE child of the container holding every branch's members
+	 * flattened, so scanning the container's direct children alone silently exempted the whole trio.
+	 */
+	public function testConditionalMemberFlagged(): Void {
+		Assert.equals(
+			1,
+			violations(
+				'class C {\n\t#if cpp\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tprivate function get_active():Bool return _active;\n\t#end\n}'
+			).length
+		);
+	}
+
+
+	/**
+	 * The collapse renames the backing field into the PROPERTY's name, which only exists where the
+	 * property's branch compiles. A reader in another branch would be rewritten to a member its own
+	 * build does not have, so a guarded property whose backing field is mentioned outside its branch
+	 * is refused outright.
+	 */
+	public function testConditionalBackingFieldReadInAnotherBranchNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\t#if cpp\n\tpublic var active(get, never):Bool;\n\t#end\n\tprivate var _active:Bool = false;\n\tprivate function get_active():Bool return _active;\n\t#if !cpp\n\tpublic function readIt():Bool return _active;\n\t#end\n}'
+			).length
+		);
+	}
+
+
+	/**
+	 * The confined case: property, backing field and getter all in ONE branch. The collapse's edits —
+	 * the accessor-clause rewrite, the field deletion and the getter deletion, modifier runs included
+	 * — all land inside the region, leaving the directives untouched.
+	 */
+	public function testConditionalCollapseStaysInsideItsBranch(): Void {
+		assertFixContains(
+			'class C {\n\t#if cpp\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tprivate function get_active():Bool return _active;\n\t#end\n}',
+			'#if cpp\n\tpublic var active(default, null):Bool = false;\n\t#end'
+		);
+	}
+
 }
