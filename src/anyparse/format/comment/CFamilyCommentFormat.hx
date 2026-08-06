@@ -12,6 +12,7 @@ import anyparse.format.text.KeySyntax;
 import anyparse.format.text.MissingPolicy;
 import anyparse.format.text.TrailingSepPolicy;
 import anyparse.format.text.UnknownPolicy;
+import anyparse.format.TrailingCommaPolicy;
 
 /**
  * Minimal schema-format for the shared C-family block comment widget.
@@ -69,6 +70,7 @@ final class CFamilyCommentFormat implements TextFormat {
 		maxConsecutiveBlanks: -1,
 		commentStyle: Verbatim,
 		arrayMatrixWrap: ArrayMatrixWrap.NoMatrixWrap,
+		trailingComma: TrailingCommaPolicy.Keep,
 		conditionalPolicy: ConditionalIndentationPolicy.Aligned,
 		alignInlineSwitchCaseBody: false,
 		comprehensionCuddledOpen: false,

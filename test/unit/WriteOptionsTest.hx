@@ -16,6 +16,7 @@ import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueWriteOptions;
 import anyparse.grammar.json.JValueWriter;
 import anyparse.format.IndentChar;
+import anyparse.format.TrailingCommaPolicy;
 
 /**
  * σ infrastructure regression: confirm the generated `write()` entry
@@ -43,6 +44,7 @@ class WriteOptionsTest extends Test {
 			maxConsecutiveBlanks: -1,
 			commentStyle: Verbatim,
 			arrayMatrixWrap: ArrayMatrixWrap.NoMatrixWrap,
+			trailingComma: TrailingCommaPolicy.Keep,
 			conditionalPolicy: ConditionalIndentationPolicy.Aligned,
 			alignInlineSwitchCaseBody: false,
 			comprehensionCuddledOpen: false,

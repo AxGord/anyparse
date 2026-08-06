@@ -1871,11 +1871,19 @@ class WriterLowering {
 			// when `opt._inValueIfBranch` is set (the immediate value of
 			// a value-if branch). Default false → byte-inert.
 			final reflowInExprBranchStar: Bool = starNode.fmtHasFlag('reflowInExprPosition');
+			// ω-multiline-trailing-comma-remove / ω-uniform-element-blanks:
+			// struct-Star path readers. `trailingCommaRemovable` is live here
+			// (`HxObjectLit.fields`, `HxNewExpr.args`); `uniformStmtBlanks` has
+			// no struct-Star consumer yet (first consumer `HxExpr.ArrayExpr` is
+			// enum-Alt) — read for dual-dispatch symmetry.
+			final trailingCommaRemovableStar: Bool = starNode.fmtHasFlag('trailingCommaRemovable');
+			final uniformElemBlanksStar: Bool = starNode.fmtHasFlag('uniformStmtBlanks');
 			parts.push(triviaSepStarExpr(
 				fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText, sepText,
 				wrapRulesField, leftCurlyOwnedBySep ? knobLeftCurly : null, knobRightCurly, trailPresentAccess, trailingCommaField,
 				openInsideStar, closeInsideStar, false, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
-				reflowSourceMultilineStar, matrixWrapStar, trailNLAccess, false, false, reflowInExprBranchStar
+				reflowSourceMultilineStar, matrixWrapStar, trailNLAccess, false, false, reflowInExprBranchStar, trailingCommaRemovableStar,
+				uniformElemBlanksStar
 			));
 			return;
 		}
@@ -5241,11 +5249,18 @@ class WriterLowering {
 		// element as expression-position so a value-if array element stays
 		// glued (`expressionIfBody`). False on every other enum-Alt sep-Star.
 		final propagateExprPositionAlt: Bool = branch.fmtHasFlag('propagateExprPosition');
+		// ω-multiline-trailing-comma-remove / ω-uniform-element-blanks: enum-Alt
+		// branch readers for the two `HxExpr.ArrayExpr` opt-ins — the first lets
+		// `wrapping.trailingComma = remove` drop the break-mode trailing `,`, the
+		// second extends `emptyLines.uniformStatementBlanks` to element gaps.
+		final trailingCommaRemovableAlt: Bool = branch.fmtHasFlag('trailingCommaRemovable');
+		final uniformElemBlanksAlt: Bool = branch.fmtHasFlag('uniformStmtBlanks');
 		return triviaSepStarExpr(
 			c.argsAccess, slots.trailBBAccess, slots.trailLCAccess, slots.trailCloseAccess, slots.trailOpenAccess, c.elemFn, c.leadText,
 			c.trailText, c.sepText, wrapRulesField, knobLeftCurly, knobRightCurly, slots.sepTrailPresentAccess, trailingCommaField,
 			openInsideExpr, closeInsideExpr, beforeDocComments, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
-			reflowSourceMultilineAlt, matrixWrapAlt, null, typedefBodyBlanksAlt, propagateExprPositionAlt
+			reflowSourceMultilineAlt, matrixWrapAlt, null, typedefBodyBlanksAlt, propagateExprPositionAlt, false,
+			trailingCommaRemovableAlt, uniformElemBlanksAlt
 		);
 	}
 
@@ -12048,7 +12063,23 @@ class WriterLowering {
 		// element `newlineBefore` signals and the wrap cascade collapses it
 		// to single-line. Default false → every other sep-Star caller is
 		// byte-identical.
-		reflowInExprPosition: Bool = false
+		reflowInExprPosition: Bool = false,
+		// ω-multiline-trailing-comma-remove: when the sep-Star ctor carries
+		// `@:fmt(trailingCommaRemovable)` (array literal / object literal /
+		// `new` argument list), the runtime `opt.trailingComma == Remove`
+		// policy drops the BREAK-mode trailing separator — source-present or
+		// knob-added. Default false → the policy cannot reach a construct
+		// whose trailing separator is mandatory (`{ > Base, }`), and every
+		// other sep-Star caller stays byte-identical.
+		trailingCommaRemovable: Bool = false,
+		// ω-uniform-element-blanks: when the sep-Star ctor carries
+		// `@:fmt(uniformStmtBlanks)` (`HxExpr.ArrayExpr`), the
+		// `emptyLines.uniformStatementBlanks` policy also governs the gaps
+		// between adjacent list ELEMENTS — a fully blank interior gap set
+		// collapses, a selective mix or a leading comment keeps the literal
+		// byte-exact. Default false → every other sep-Star caller is
+		// byte-identical.
+		uniformStmtBlanks: Bool = false
 	): Expr {
 		// noqa: complexity
 		// ω-trivia-sep-anontype-braces (Phase B1): when the call site
@@ -12067,7 +12098,7 @@ class WriterLowering {
 		// the typedef-blank + doc-comment-cascade Expr builders that the force-multi loop
 		// and `_sepCtx` consume. Extracted to `triviaSepTypedefBlanksExprs` so the
 		// orchestrator stays under the complexity gate; behaviour byte-identical.
-		final _blanks: SepStarBlanks = triviaSepTypedefBlanksExprs(beforeDocCommentEmptyLines, typedefBodyBlanks);
+		final _blanks: SepStarBlanks = triviaSepTypedefBlanksExprs(beforeDocCommentEmptyLines, typedefBodyBlanks, uniformStmtBlanks);
 		final keepCurlyBeginExpr: Expr = _blanks.keepCurlyBeginExpr;
 		final keepCurlyEndExpr: Expr = _blanks.keepCurlyEndExpr;
 		final typedefBeginExpr: Expr = _blanks.typedefBeginExpr;
@@ -12164,7 +12195,8 @@ class WriterLowering {
 		// and `appendTrailingComma` is false — behaviour is byte-
 		// identical to the pre-slice path.
 		final _trail: SepStarTrailExprs = triviaSepTrailExprs(
-			trailingCommaField, trailPresentAccess, matrixWrap, forceMultiInTypedef, openText, closeText, sepText, triviaElemCall
+			trailingCommaField, trailPresentAccess, matrixWrap, forceMultiInTypedef, openText, closeText, sepText, triviaElemCall,
+			trailingCommaRemovable
 		);
 		final forceExceedsExpr: Expr = _trail.forceExceedsExpr;
 		final appendTrailingCommaExpr: Expr = _trail.appendTrailingCommaExpr;
@@ -12211,13 +12243,14 @@ class WriterLowering {
 			reflowSourceMultiline: reflowSourceMultiline,
 			matrixWrap: matrixWrap,
 		}
-		final _predicateScan: Expr = triviaSepPredicateScanExpr(reflowSourceMultiline, triviaElemCall);
+		final _predicateScan: Expr = triviaSepPredicateScanExpr(reflowSourceMultiline, uniformStmtBlanks, triviaElemCall);
 		final _matrixSucc: Expr = triviaSepMatrixSucceedsExpr(
 			matrixWrap, openText, closeText, sepText, appendTrailingCommaExpr, triviaElemCall
 		);
 		final _dispatchCtx: SepStarDispatchCtx = {
 			reflowSourceMultiline: reflowSourceMultiline,
 			matrixWrap: matrixWrap,
+			uniformStmtBlanks: uniformStmtBlanks,
 			keepCheckExpr: keepCheckExpr,
 			ignoreCheckExpr: ignoreCheckExpr,
 			noWrapFlatCheckExpr: noWrapFlatCheckExpr,
@@ -15643,9 +15676,11 @@ class WriterLowering {
 	 * (`stripByCurrDoc`/`addByCurrDoc`/`currHasDocCompute`/`typedefStripBetween`)
 	 * kept local.
 	 */
-	private static function triviaSepTypedefBlanksExprs(beforeDocCommentEmptyLines: Bool, typedefBodyBlanks: Bool): SepStarBlanks {
+	private static function triviaSepTypedefBlanksExprs(
+		beforeDocCommentEmptyLines: Bool, typedefBodyBlanks: Bool, uniformStmtBlanks: Bool
+	): SepStarBlanks {
 		final _curly: SepStarKeepCurly = triviaSepKeepCurlyExprs(typedefBodyBlanks);
-		final blankBeforeExpr: Expr = triviaSepBlankBeforeExpr(beforeDocCommentEmptyLines, typedefBodyBlanks);
+		final blankBeforeExpr: Expr = triviaSepBlankBeforeExpr(beforeDocCommentEmptyLines, typedefBodyBlanks, uniformStmtBlanks);
 		final initCurrDocCommentExpr: Expr = beforeDocCommentEmptyLines ? macro var _currHasDocComment: Bool = false : macro {};
 		return {
 			keepCurlyBeginExpr: _curly.keepCurlyBeginExpr,
@@ -15819,11 +15854,11 @@ class WriterLowering {
 	 */
 	private static function triviaSepTrailExprs(
 		trailingCommaField: Null<String>, trailPresentAccess: Null<Expr>, matrixWrap: Bool, forceMultiInTypedef: Bool, openText: String,
-		closeText: String, sepText: String, triviaElemCall: Expr
+		closeText: String, sepText: String, triviaElemCall: Expr, trailingCommaRemovable: Bool
 	): SepStarTrailExprs {
 		final knobAccessOrFalse: Expr = trailingCommaField == null ? macro false : optFieldAccess(trailingCommaField);
 		final forceExceedsExpr: Expr = trailPresentAccess != null && trailingCommaField != null
-			? macro $trailPresentAccess && $knobAccessOrFalse
+			? keepsTrailingCommaExpr(macro $trailPresentAccess && $knobAccessOrFalse, trailingCommaRemovable)
 			: macro false;
 		// ω-meta-allman-objectlit: when source had a trailing `,`, preserve
 		// it in any multi-line shape regardless of the knob. The change
@@ -15835,9 +15870,10 @@ class WriterLowering {
 		// Mirrors haxe-formatter's "Keep" trailing-comma policy for the
 		// meta-prefixed object-literal pattern (`return @patch { ..., }`
 		// → multi-line with closing `,`).
-		final appendTrailingCommaExpr: Expr = trailPresentAccess != null && trailingCommaField != null
-			? macro $trailPresentAccess || $knobAccessOrFalse
-			: knobAccessOrFalse;
+		final appendTrailingCommaExpr: Expr = keepsTrailingCommaExpr(
+			trailPresentAccess != null && trailingCommaField != null ? macro $trailPresentAccess || $knobAccessOrFalse : knobAccessOrFalse,
+			trailingCommaRemovable
+		);
 		// ω-nowrap-source-trail-comma: the FLAT (`NoWrap`) trailing-comma signal
 		// is source-presence ONLY (`<field>TrailPresent`), NOT the knob-inclusive
 		// `appendTrailingComma`. The fork is source-faithful for single-line
@@ -16116,12 +16152,13 @@ class WriterLowering {
 	 * element's blank/comment/source-newline signals. References the runtime
 	 * `_keepEmit`/`_ignoreEmit`/`_noWrapFlat`/`_matrixOff` locals.
 	 */
-	private static function triviaSepPredicateScanExpr(reflowSourceMultiline: Bool, triviaElemCall: Expr): Expr {
+	private static function triviaSepPredicateScanExpr(reflowSourceMultiline: Bool, uniformStmtBlanks: Bool, triviaElemCall: Expr): Expr {
+		final blankHardlineExpr: Expr = triviaSepBlankHardlineExpr(uniformStmtBlanks);
 		return macro {
 			var _ti: Int = 0;
 			while (_ti < _arr.length) {
 				final _t = _arr[_ti];
-				if (_t.blankBefore) _requiresHardline = true;
+				if ($blankHardlineExpr) _requiresHardline = true;
 				if (_t.leadingComments.length > 0) {
 					if (_ignoreEmit)
 						_hasInlineableTrivia = true;
@@ -16214,6 +16251,11 @@ class WriterLowering {
 		final keepMatrixComputeExpr: Expr = c.keepMatrixComputeExpr;
 		final forceMultiExpr: Expr = c.forceMultiExpr;
 		final noTriviaBranch: Expr = c.noTriviaBranch;
+		// ω-uniform-element-blanks: the `_uniformCollapse` pre-pass, shared with
+		// the block-Star statement policy. Declared BEFORE the predicate scan
+		// (which reads it) and before the force-multi loop's blank guard.
+		// `macro {}` for every non-opted sep-Star.
+		final uniformCollapseInitExpr: Expr = triviaUniformCollapseInitExpr(c.uniformStmtBlanks);
 		return macro {
 			// ω-keep-predicate-split + ω-cascade-emits-comments: decompose
 			// `_hasTrivia` into three orthogonal predicates so the
@@ -16281,6 +16323,7 @@ class WriterLowering {
 			// packs. Only meaningful on a matrix-eligible Star (`matrixWrap`
 			// compile-time flag); every other consumer leaves it false.
 			final _matrixOff: Bool = $v{c.matrixWrap} && opt.arrayMatrixWrap == anyparse.format.ArrayMatrixWrap.NoMatrixWrap;
+			$uniformCollapseInitExpr;
 			var _requiresHardline: Bool = _trailLC.length > 0 || _trailOpen != null;
 			var _hasSourceNewlines: Bool = false;
 			var _hasInlineableTrivia: Bool = false;
@@ -16409,7 +16452,9 @@ class WriterLowering {
 	 * Sub-split out of `triviaSepTypedefBlanksExprs` so each builder stays under
 	 * the complexity gate; byte-identical.
 	 */
-	private static function triviaSepBlankBeforeExpr(beforeDocCommentEmptyLines: Bool, typedefBodyBlanks: Bool): Expr {
+	private static function triviaSepBlankBeforeExpr(
+		beforeDocCommentEmptyLines: Bool, typedefBodyBlanks: Bool, uniformStmtBlanks: Bool
+	): Expr {
 		// noqa: complexity
 		// ω-trivia-sep-doc-comment-cascade (Phase B2): mirror the
 		// `_currHasDocComment` / `addByCurrDocExpr` machinery from
@@ -16450,11 +16495,16 @@ class WriterLowering {
 			? macro (opt._inTypedefBody
 				&& (opt.typedefBetweenFields > 0 || opt.typedefExistingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove))
 			: macro false;
+		// ω-uniform-element-blanks: suppress the source blank at every interior
+		// gap once the pre-pass found the gap set uniform. Sister to the
+		// block-Star guard in `triviaBlockBlankBeforeExpr`; `macro false` for
+		// every non-opted sep-Star keeps the emit byte-identical.
+		final uniformStripExpr: Expr = uniformStmtBlanks ? macro _uniformCollapse : macro false;
 		final blankExtras: Expr = blankBefore2ExtrasExpr(macro _inner.push(_dhl()));
 		return beforeDocCommentEmptyLines
 			? macro {
 				$currHasDocComputeExpr;
-				final _stripBlank: Bool = $stripByCurrDocExpr || $typedefStripBetweenExpr;
+				final _stripBlank: Bool = $stripByCurrDocExpr || $typedefStripBetweenExpr || $uniformStripExpr;
 				final _addBlank: Bool = $addByCurrDocExpr;
 				final _sourceBlank: Bool = _t.blankBefore && !_stripBlank;
 				if (_si > 0 && (_sourceBlank || _addBlank)) {
@@ -16463,7 +16513,7 @@ class WriterLowering {
 				}
 			}
 			: macro {
-				if (_t.blankBefore && _si > 0 && !($typedefStripBetweenExpr)) {
+				if (_t.blankBefore && _si > 0 && !($typedefStripBetweenExpr) && !($uniformStripExpr)) {
 					_inner.push(_dhl());
 					$blankExtras;
 				}
@@ -16913,16 +16963,19 @@ class WriterLowering {
 	}
 
 	/**
-	 * ω-uniform-statement-blanks: pre-pass Expr declaring `_uniformCollapse`
-	 * over the captured statement array. `true` when the runtime knob is
-	 * `Collapse` AND every interior gap between adjacent statements is blank
-	 * AND no statement carries a leading comment (a comment can be a group
-	 * header, so the grouping intent is unclear and collapse bails). Declared
-	 * as a bare `EVars` so the var lands in the `triviaBlockElseBody` scope
-	 * the per-element blank guard reads. `macro {}` (no declaration) for every
-	 * non-opted block Star, keeping the pre-slice emit byte-identical.
+	 * ω-uniform-statement-blanks / ω-uniform-element-blanks: pre-pass Expr
+	 * declaring `_uniformCollapse` over the captured element array — shared by
+	 * the block-Star (statement list) and sep-Star (array literal) emitters.
+	 * `true` when the runtime knob is `Collapse` AND every interior gap between
+	 * adjacent elements is blank AND no element carries a leading comment (a
+	 * comment can be a group header, so the grouping intent is unclear and
+	 * collapse bails). Uniformity is measured over INTERIOR gaps only, so the
+	 * edge blank right after the open delimiter never participates. Declared as
+	 * a bare `EVars` so the var lands in the enclosing emit scope the
+	 * per-element blank guard reads. `macro {}` (no declaration) for every
+	 * non-opted Star, keeping the pre-slice emit byte-identical.
 	 */
-	private static function triviaBlockUniformCollapseInitExpr(uniformStmtBlanks: Bool): Expr {
+	private static function triviaUniformCollapseInitExpr(uniformStmtBlanks: Bool): Expr {
 		if (!uniformStmtBlanks) return macro {};
 		return macro var _uniformCollapse: Bool = opt.uniformStatementBlanks == anyparse.format.UniformStatementBlanksPolicy.Collapse && {
 			var _ok: Bool = true;
@@ -17348,7 +17401,7 @@ class WriterLowering {
 		final initCurrDocCommentExpr: Expr = c.initCurrDocCommentExpr;
 		final initCurrSplitLeadingExpr: Expr = c.initCurrSplitLeadingExpr;
 		final initPrevKindExpr: Expr = c.initPrevKindExpr;
-		final uniformCollapseInitExpr: Expr = triviaBlockUniformCollapseInitExpr(c.uniformStmtBlanks);
+		final uniformCollapseInitExpr: Expr = triviaUniformCollapseInitExpr(c.uniformStmtBlanks);
 		final whileExpr: Expr = triviaBlockWhileExpr(c);
 		final blockTrailSepEmitExpr: Expr = c.blockTrailSepEmitExpr;
 		final extraInnerTrailBlankExpr: Expr = c.extraInnerTrailBlankExpr;
@@ -18000,6 +18053,36 @@ class WriterLowering {
 			if (target != null && ownStarHasFlag(target, flag)) return true;
 		}
 		return false;
+	}
+
+
+	/**
+	 * ω-multiline-trailing-comma-remove: conjoins the `wrapping.trailingComma
+	 * != Remove` veto onto a BREAK-mode trailing-separator Expr, so a source
+	 * `,` no longer round-trips and the per-construct add-knob no longer
+	 * fires. Returns `e` untouched for a Star without
+	 * `@:fmt(trailingCommaRemovable)` — the policy therefore cannot reach a
+	 * construct whose trailing separator is MANDATORY (a `{ > Base, }`
+	 * anon-type extension), and every non-opted Star's emit stays
+	 * byte-identical.
+	 */
+	private static function keepsTrailingCommaExpr(e: Expr, trailingCommaRemovable: Bool): Expr {
+		return trailingCommaRemovable ? macro ($e && opt.trailingComma != anyparse.format.TrailingCommaPolicy.Remove) : e;
+	}
+
+
+	/**
+	 * ω-uniform-element-blanks: the sep-Star predicate scan's `blankBefore`
+	 * hardline signal. A collapsed INTERIOR gap must not leave a hardline
+	 * requirement behind — the list has to take exactly the route a blank-free
+	 * source would have taken, or the next `fmt` pass (which sees no blanks)
+	 * picks a different branch and the emit is not idempotent. The EDGE blank
+	 * after the open delimiter (`_ti == 0`) is not a gap, is never emitted,
+	 * and keeps its legacy signal. `macro _t.blankBefore` (the pre-slice
+	 * expression) for every non-opted Star.
+	 */
+	private static function triviaSepBlankHardlineExpr(uniformStmtBlanks: Bool): Expr {
+		return uniformStmtBlanks ? macro (_t.blankBefore && !(_ti > 0 && _uniformCollapse)) : macro _t.blankBefore;
 	}
 
 }
@@ -18665,6 +18748,7 @@ typedef SepStarTypedefInserts = {
 typedef SepStarDispatchCtx = {
 	final reflowSourceMultiline: Bool;
 	final matrixWrap: Bool;
+	final uniformStmtBlanks: Bool;
 	final keepCheckExpr: Expr;
 	final ignoreCheckExpr: Expr;
 	final noWrapFlatCheckExpr: Expr;

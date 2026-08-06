@@ -47,6 +47,6 @@ package anyparse.grammar.haxe;
 typedef HxNewExpr = {
 	var type: HxNewTypeName;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var params: Null<Array<HxType>>;
-	@:trivia @:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), wrapRules('callParameterWrap'),
-		ignoreSourceNewlinesForWrap, groupRestProbe) var args: Array<HxExpr>;
+	@:trivia @:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), trailingCommaRemovable,
+		wrapRules('callParameterWrap'), ignoreSourceNewlinesForWrap, groupRestProbe) var args: Array<HxExpr>;
 };
