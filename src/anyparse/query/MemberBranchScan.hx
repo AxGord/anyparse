@@ -179,6 +179,31 @@ final class MemberBranchScan {
 		return null;
 	}
 
+
+	/**
+	 * Whether `member` is the ONLY member declaration of the conditional region that holds it — so
+	 * deleting it would leave a bare `#if … #end` behind. False when `member` is unguarded.
+	 *
+	 * The grammar accepts an empty BRANCH (`#if cpp #else var b; #end` parses) but not an empty
+	 * REGION, and real Haxe accepts both — so this is a model limit, not a language one, and a
+	 * deleting fix has to refuse rather than emit source the re-parse gate will reject anyway. A
+	 * member of a NESTED region counts toward its outer region too: emptying the inner one empties
+	 * the outer one with it.
+	 */
+	public static function isSoleRegionMember(
+		seams: MemberBranchSeams, container: QueryNode, member: QueryNode, isMember: QueryNode -> Bool
+	): Bool {
+		for (child in container.children) if (isRegion(seams, child)) {
+			final members: Array<QueryNode> = [];
+			RefactorSupport.eachMemberHost(child, host -> {
+				for (c in host.children) if (isMember(c))
+					members.push(c);
+			});
+			if (members.contains(member)) return members.length == 1;
+		}
+		return false;
+	}
+
 }
 
 /**

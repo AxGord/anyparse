@@ -4,6 +4,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.MemberBranchScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
@@ -155,7 +156,8 @@ final class OrphanAccessor implements Check implements DefaultOff {
 			final scope: SymbolIndex = wide.fileInfo(entry.file) == null ? index : wide;
 			final info: Null<FileInfo> = scope.fileInfo(entry.file);
 			if (info == null) continue;
-			for (cls in CheckScan.classBodies(tree)) considerClass(out, cls, scope, info, ctx);
+			final branch: MemberBranchSeams = MemberBranchScan.seamsOf(plugin.refShape(), entry.source);
+			for (cls in CheckScan.classBodies(tree)) considerClass(out, cls, scope, info, ctx, branch);
 		}
 		return out;
 	}
@@ -179,11 +181,16 @@ final class OrphanAccessor implements Check implements DefaultOff {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final edits: Array<{ span: Span, text: String }> = [];
-		for (cls in CheckScan.classBodies(tree)) for (child in cls.children) {
-			final span: Null<Span> = child.span;
-			if (span != null && CheckScan.METHOD_KINDS.contains(child.kind) && wanted.contains('${span.from}:${span.to}'))
-				edits.push(CheckScan.docDeletionEdit(source, child, cls, span));
-		}
+		// Every member host, and each accessor's OWN host as the group parent: a guarded method's
+		// modifier / doc run lives inside the `#if` region, and a group span computed against the
+		// container would leave it behind as unparseable debris.
+		for (cls in CheckScan.classBodies(tree)) RefactorSupport.eachMemberHost(cls, host -> {
+			for (child in host.children) {
+				final span: Null<Span> = child.span;
+				if (span != null && CheckScan.METHOD_KINDS.contains(child.kind) && wanted.contains('${span.from}:${span.to}'))
+					edits.push(CheckScan.docDeletionEdit(source, child, host, span));
+			}
+		});
 		return edits;
 	}
 
@@ -192,63 +199,66 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	 * not declare, and record the ones whose deletion is proven safe. `host` is the class's own
 	 * declaring file, `scope` the index the chain walk resolves supertypes through.
 	 */
-	private function considerClass(out: Array<Violation>, cls: QueryNode, scope: SymbolIndex, host: FileInfo, ctx: Ctx): Void {
-		final owner: Null<String> = cls.name;
-		if (owner == null) return;
+	private function considerClass(
+		out: Array<Violation>, cls: QueryNode, scope: SymbolIndex, host: FileInfo, ctx: Ctx, branch: MemberBranchSeams
+	): Void {
+		final className: Null<String> = cls.name;
+		if (className == null) return;
+		// Re-bound to a non-null local: the narrowing does not reach into the member callback below.
+		final owner: String = className;
 		final declared: Null<TypeDeclInfo> = host.types.find(t -> t.name == owner);
 		if (declared == null) return;
 		// A `@:build` macro can declare the very property the accessor serves, and its members are
 		// invisible to the index — the class is skipped whole rather than mis-flagged. `@:autoBuild`
 		// on the class ITSELF generates into its descendants, never here; the chain walk reads that.
 		if (declared.hasBuild) return;
+		final decl: TypeDeclInfo = declared;
 		final file: String = host.file;
-		var mods: Array<String> = [];
-		var metas: Array<String> = [];
-		for (child in cls.children) {
+		// The run resets at EVERY member, not only at a method: a `static` / `@:keep` written on a
+		// preceding FIELD would otherwise carry onto the next accessor and answer for it. A member
+		// written inside a member-position `#if` region is visited too, with its own branch's run.
+		MemberBranchScan.eachMember(branch, cls, child -> RefactorSupport.isMemberDeclKind(child.kind), (child, run) -> {
 			final isMethod: Bool = CheckScan.METHOD_KINDS.contains(child.kind);
-			// The run resets at EVERY member, not only at a method: a `static` / `@:keep` written
-			// on a preceding FIELD would otherwise carry onto the next accessor and answer for it.
-			if (!isMethod && !RefactorSupport.isMemberDeclKind(child.kind)) {
-				final leading: Null<String> = child.name;
-				if (RefactorSupport.META_KINDS.contains(child.kind)) {
-					if (leading != null) metas.push(leading);
-				} else
-					mods.push(child.kind);
-				continue;
-			}
 			final name: Null<String> = child.name;
 			final span: Null<Span> = child.span;
+			if (!isMethod || name == null || span == null) return;
+			final mods: Array<String> = [];
+			final metas: Array<String> = [];
+			for (mod in run) {
+				final leading: Null<String> = mod.name;
+				if (RefactorSupport.META_KINDS.contains(mod.kind)) {
+					if (leading != null) metas.push(leading);
+				} else
+					mods.push(mod.kind);
+			}
 			final memberKept: Bool = metas.contains(KEEP_META);
 			final isStatic: Bool = mods.contains('Static');
-			mods = [];
-			metas = [];
-			if (!isMethod || name == null || span == null) continue;
 			final wantGetter: Bool = StringTools.startsWith(name, CheckScan.GET_PREFIX);
-			if (!wantGetter && !StringTools.startsWith(name, CheckScan.SET_PREFIX)) continue;
+			if (!wantGetter && !StringTools.startsWith(name, CheckScan.SET_PREFIX)) return;
 			final prop: String = name.substr(CheckScan.GET_PREFIX.length);
-			if (prop == '') continue;
+			if (prop == '') return;
 			final found: Resolution = {
 				declared: false,
 				withSlot: false,
 				unresolved: false,
 				generated: false
 			};
-			walkChain(scope, host, declared, prop, wantGetter, isStatic, found, [], false);
+			walkChain(scope, host, decl, prop, wantGetter, isStatic, found, [], false);
 			// A `@:autoBuild` ancestor generates members INTO this class, the property among them
 			// possibly — its member set is not knowable, so the method is left alone.
-			if (found.withSlot || found.generated) continue;
+			if (found.withSlot || found.generated) return;
 			// Haxe resolves an accessor UPWARD from the property, so a property declared by a
 			// SUBTYPE is legitimately served by this inherited method. Only the found-nothing arm
 			// needs the check: a declaration found at or above this class forbids a subtype
 			// redeclaring the same field, so arm 1 cannot be reached this way.
-			if (!found.declared && scope.subtypeDeclaresMember(owner, prop)) continue;
+			if (!found.declared && scope.subtypeDeclaresMember(owner, prop)) return;
 			final slot: String = wantGetter ? 'get' : 'set';
 			if (!found.declared && found.unresolved) {
 				out.push(violation(
 					file, span, Severity.Info,
 					'$name may have no property to serve: no $prop is declared in $owner or in the supertypes that resolved, and an unresolvable supertype leaves it unproven'
 				));
-				continue;
+				return;
 			}
 			out.push(violation(
 				file, span, Severity.Warning,
@@ -256,8 +266,13 @@ final class OrphanAccessor implements Check implements DefaultOff {
 					? '$name has no property to serve: $prop declares no $slot accessor'
 					: '$name has no property to serve: neither $owner nor its supertypes declare $prop'
 			));
-			if (deletable(ctx, declared.hasKeep || memberKept, name)) _deletable.push(CheckScan.spanKey(file, span));
-		}
+			// Deleting the sole member of a `#if` region leaves a bare `#if … #end`, which the grammar
+			// does not model — the finding stays, its deletion does not.
+			if (deletable(ctx, decl.hasKeep || memberKept, name) && !MemberBranchScan.isSoleRegionMember(
+				branch, cls, child, c -> RefactorSupport.isMemberDeclKind(c.kind)
+			))
+				_deletable.push(CheckScan.spanKey(file, span));
+		});
 	}
 
 	/**
