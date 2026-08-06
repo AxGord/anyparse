@@ -50,6 +50,35 @@ import haxe.Exception;
  * sits on the CANDIDATE, not on either acceptance path below, so neither path can miss
  * it.
  *
+ * The prologue also runs ahead of the BASE constructor, which is a third boundary no init
+ * may cross. Haxe emits declaration initializers before the constructor BODY, and an
+ * explicit `super()` call lives INSIDE that body: a subclass whose constructor reads
+ * `super(); asset = Loader.get('pack');`, over a base constructor that sets the
+ * `Loader.ready` flag `get` consults, printed `real:pack` as written and `TOO-EARLY:pack`
+ * once the init moved onto the declaration (4.3.7, `--interp`). `ctorCallsSuper` therefore
+ * refuses a candidate whose constructor calls up ANYWHERE, and it gates the CANDIDATE for
+ * the same reason `ctorPrefixUnconditional` does, so both acceptance paths inherit it. With
+ * `superReferenceText` or `callKind` unset the call cannot be recognised at all, and the
+ * gate falls back to `hasSupertype`, which refuses every subclass — a soundness gate fails
+ * closed, never open.
+ *
+ * That rule is deliberately COARSER than the sound one. Only an init sitting AFTER the
+ * `super(…)` crosses the boundary — `new() { x = 1; super(); }` is fine, and 4.3.7 prints
+ * the right value for it — but the finer test is not one lexical comparison: the `super(…)`
+ * call need not be a top-level statement (it can sit inside an `if` / `switch` / `#if`
+ * region, and appear more than once on different branches), so "the init precedes THE super
+ * call" often has no answer at all, and every branch where the proof is unavailable
+ * reintroduces exactly this regression, which still type-checks, still parses, and which
+ * nothing downstream catches. What the finer rule would buy is a subclass constructor
+ * assigning a CONTEXT-FREE constant to a field BEFORE calling up, and that shape is
+ * vanishingly rare. Measured: of the 15 sites the gate removes from the 676-file `pony`
+ * tree (34 -> 19), FOURTEEN put the init after the `super(…)` — real hazards, correctly
+ * refused — and ONE (`pony/net/cs/SocketClient`, whose `super(host, port, …)` is the
+ * constructor's LAST statement) is an over-refusal the finer rule would have kept. On the
+ * other two measured trees the cost is zero: `TM-Haxe4/src` (798 files) and this repo
+ * (1254 files) report nothing for the rule either way. At `Severity.Info` — a cosmetic
+ * move — one lost cleanup per 676 files does not buy the branch analysis.
+ *
  * A field whose cross-file write count DIFFERS FROM ONE (a `dispose()` null-out, say)
  * can still move, on the ACCEPTED-CANDIDATE CHAIN: every top-level constructor
  * statement before its init must itself be the init of another accepted candidate of
@@ -87,7 +116,8 @@ import haxe.Exception;
  * the moved statement is the field's only assignment whatever precedes it. It does,
  * however, count as a CO-MOVER — a sole-write init that reads in-class state refuses
  * every chained candidate in the same constructor. The unresolved-write bail, the
- * read-before-init gate and the reachable-prefix gate apply to both paths.
+ * read-before-init gate, the reachable-prefix gate and the base-constructor gate apply to
+ * both paths.
  *
  * ## Known gaps
  *
@@ -106,22 +136,13 @@ import haxe.Exception;
  *   not co-movers at all: it reorders against ARBITRARY EARLIER STRAIGHT-LINE
  *   CONSTRUCTOR STATEMENTS. `new() { s = 5; _a = s; }` and
  *   `new() { _b = bump(); _a = n; }` both fire and both change behaviour, unchanged
- *   from before the chain existed. What it can no longer do is hop an EARLY EXIT or a
- *   never-ending loop — `ctorPrefixUnconditional` refuses a prefix it cannot prove
- *   completes, on BOTH paths. A BRANCH it CAN hop: an `if` / `switch` / `try` / `#if`
+ *   from before the chain existed. What it can no longer do is hop an EARLY EXIT, a
+ *   never-ending loop or an explicit `super(…)` — `ctorPrefixUnconditional` refuses a
+ *   prefix it cannot prove completes and `ctorCallsSuper` refuses a constructor that
+ *   calls up, on BOTH paths. A BRANCH it CAN hop: an `if` / `switch` / `try` / `#if`
  *   holding neither an exit nor a loop is admitted, since control leaves it either
  *   way. The CHAIN path is stricter still: any non-candidate statement breaks the
  *   chain, where the legacy path only asks that the prefix be reached.
- * - An explicit `super(…)` in that prefix is ACCEPTED and should not be. It projects as a plain
- *   expression statement, so the straight-line whitelist lets it through — but Haxe emits
- *   declaration initializers BEFORE the `super()` call, so hoisting an init across one moves it
- *   ahead of the BASE constructor. Reproduced end to end on 4.3.7 with `hxq lint --fix`: a
- *   subclass whose constructor reads `super(); asset = Loader.get('pack');`, over a base
- *   constructor that sets the `Loader.ready` flag `get` consults, printed `real:pack` before the
- *   fix and `TOO-EARLY:pack` after. PRE-EXISTING — the sole-write path has always done this, the
- *   reachability gate neither opened nor closed it — and deliberately left open. The CHAIN path
- *   bars `super(…)` outright already (its prefix admits no statement but another accepted init);
- *   closing it on the SOLE-WRITE path would go through `hasSupertype`, already in this file.
  *
  * The in-class veto is also deliberately coarse: an IMMUTABLE static (`static
  * inline`, `static final`) can never be the channel these gaps describe, yet reading
@@ -486,6 +507,32 @@ final class FieldInitAtDeclaration implements Check {
 		return false;
 	}
 
+	/**
+	 * Whether `ctor` holds an explicit base-constructor call — a `callKind` node anywhere in
+	 * its subtree whose callee is the bare `superReferenceText` identifier. Deliberately NOT
+	 * any `super` reference at all: `super.foo()` is a base-MEMBER access, which the prologue
+	 * does not race. With either seam unset the question cannot be asked, so the answer falls
+	 * back to `hasSupertype` — coarser, refusing every subclass rather than only the ones that
+	 * call up; a soundness gate must never fail open.
+	 */
+	private static function ctorCallsSuper(ctor: QueryNode, container: QueryNode, shape: RefShape): Bool {
+		final superText: Null<String> = shape.superReferenceText;
+		final callKind: Null<String> = shape.callKind;
+		return superText == null || callKind == null
+			? hasSupertype(container, shape)
+			: holdsSuperCall(ctor, superText, callKind, shape.identKind);
+	}
+
+	/** Whether `node`'s subtree holds a call whose callee is the bare identifier `superText`. */
+	private static function holdsSuperCall(node: QueryNode, superText: String, callKind: String, identKind: String): Bool {
+		if (node.kind == callKind && node.children.length > 0) {
+			final callee: QueryNode = node.children[0];
+			if (callee.kind == identKind && callee.name == superText) return true;
+		}
+		for (child in node.children) if (holdsSuperCall(child, superText, callKind, identKind)) return true;
+		return false;
+	}
+
 
 	/** Guarded stderr write — mirrors `LintConfig.stderr` (`#if sys` alone is false on hxnodejs). */
 	private static function stderr(s: String): Void {
@@ -549,6 +596,10 @@ final class FieldInitAtDeclaration implements Check {
 		// this is a no-op there, and the sole-write path — which looks at no prefix at all —
 		// is the one that needed it.
 		if (!RefactorSupport.ctorPrefixUnconditional(ctor, stmtSpan.from, shape)) return null;
+		// Haxe emits declaration initializers ahead of the constructor BODY, an explicit `super()`
+		// included, so no init may be hoisted across one. Gated on the CANDIDATE for the same reason
+		// as the line above — see the class doc.
+		if (ctorCallsSuper(ctor, container, shape)) return null;
 		final unsafeRead: Bool = readBeforeInit(ctor, mv.span.from, mv.name, stmtSpan.from, container, shape);
 		return !contextFreeRhs(init.rhs, container, statics, shape, true) || unsafeRead ? null : {
 			name: mv.name,

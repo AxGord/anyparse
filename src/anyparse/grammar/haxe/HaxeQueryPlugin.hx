@@ -433,6 +433,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return {
 			identKind: 'IdentExpr',
 			selfReferenceText: 'this',
+			superReferenceText: 'super',
 			underlyingThisTypeKinds: ['AbstractDecl', 'EnumAbstractDecl'],
 			declHostKinds: DECL_HOST_KINDS,
 			// `CatchClause` is surfaced by `appendNodes` from the
