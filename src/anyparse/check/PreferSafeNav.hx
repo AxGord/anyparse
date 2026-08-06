@@ -5,13 +5,15 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
 
 using Lambda;
 
 /**
- * Flags a null guard that safe navigation (`?.`) replaces. Two arms:
+ * Flags a null guard that safe navigation (`?.`) replaces. Three arms:
  *
  * - STATEMENT — `if (x != null) x.m(...)` (and the braced `if (x != null) { x.m(...); }`,
  *   plus the reversed `if (null != x) …`) collapses to `x?.m(...);`. A CONJUNCTION guard
@@ -22,31 +24,41 @@ using Lambda;
  *   `x?.m(...)`, the EXPRESSION form of the same guard. `?.` short-circuits the whole
  *   receiver chain, so a multi-step body (`x.map(f).join(',')`, `x.arr[0].c`) collapses
  *   in one step exactly like the statement arm.
+ * - ASSIGNMENT — a local declared `= null` immediately followed by its guarded assignment,
+ *   `var r:Null<T> = null; if (x != null) r = x.chain(...);`, folds into the declaration as
+ *   `var r:Null<T> = x?.chain(...);`. Sound ONLY in that adjacency: the fold makes the
+ *   guard's false path assign `null`, which is exactly what the `null` initializer already
+ *   gave it. The guard must be the SOLE condition (nothing survives the removed `if`), and
+ *   the assigned local may not appear in the right-hand side — the declaration would then
+ *   reference itself.
  *
  * `Severity.Info` (a modernization cleanup), with an autofix.
  *
- * ## Soundness — a LOCAL / PARAM / `this` receiver, a CALL body, no else, `x` only as the root
+ * ## Soundness — an accessor-free receiver, a CALL body, no else, `x` only as the root
  *
- * `if (field != null) field.m()` reads `field` twice, `field?.m()` once — so a
- * receiver backed by a property getter would change semantics. The guard is
- * flagged ONLY when the guarded identifier resolves to a local declaration
- * (`localDeclKinds`) or a parameter (`paramKinds`) whose scope encloses it: a
- * local can carry no accessor, so its double read is a provable no-op. A bare
- * field reference (implicit `this.`), a `this.x` / qualified receiver (whose
- * guard operand is not a plain identifier) and every field are left alone. The
- * surviving-condition operands (the kept conjuncts) are read the same number of
- * times before and after, so THEY may be fields.
+ * `if (r != null) r.m()` reads `r` twice, `r?.m()` once — so a receiver whose read RUNS
+ * CODE would change semantics. The guard is flagged only when the guarded identifier is
+ * proven accessor-free, which three receiver classes are:
  *
- * The self reference (`selfReferenceText`, projected as a plain identifier named
- * `this`) is accepted alongside a local / param: it is a keyword denoting the current
- * object — in an ABSTRACT, the underlying value, which is where a nullable `this`
- * actually occurs — and can carry no accessor, so reading it twice or once is the same
- * observation. That is what unlocks the abstract idiom
- * `@:to function toString() return this == null ? null : this.map(f).join(',');`.
+ * - a LOCAL declaration (`localDeclKinds`) or a PARAMETER (`paramKinds`) whose scope
+ *   encloses the use and that lexically precedes it — a local can carry no accessor;
+ * - the SELF reference (`selfReferenceText`, projected as a plain identifier named `this`)
+ *   — a keyword denoting the current object, in an ABSTRACT the underlying value, which is
+ *   where a nullable `this` actually occurs. That is what unlocks the abstract idiom
+ *   `@:to function toString() return this == null ? null : this.map(f).join(',');`;
+ * - a FIELD the enclosing type declares as a physical `var` / `final` (`fieldDeclKinds`)
+ *   with no read accessor. A Haxe field cannot be redeclared by a subtype, so a plain field
+ *   stays plain at every use of the type — the double read is a no-op there too. A
+ *   `(get, …)` / `dynamic` property, a member of any other kind, a name the enclosing type
+ *   does not itself declare, and an `extern` host all refuse (see `fieldProver`).
  *
- * The then-branch must be exactly ONE expression statement whose expression is a
- * CALL that is a plain chain rooted at the guarded identifier (`x.m(...)` /
- * `x.a.b(...)` — see `chainAccess` below), so:
+ * A `this.x` / qualified receiver is still left alone: its guard operand is not a plain
+ * identifier. The surviving-condition operands (the kept conjuncts) are read the same
+ * number of times before and after, so THEY are unconstrained.
+ *
+ * The then-branch must be exactly ONE expression statement — a CALL for the statement arm,
+ * the guarded local's assignment for the assignment arm — whose expression is a plain chain
+ * rooted at the guarded identifier (`x.m(...)` / `x.a.b(...)` — see `chainAccess` below), so:
  *
  * - a multi-statement block is NOT flagged (the user groups those under one `if`
  *   deliberately);
@@ -65,9 +77,11 @@ using Lambda;
  * Conjuncts evaluate left-to-right, so a conjunct AFTER `x != null` may rely on
  * `x` being non-null (`if (x != null && x.len > 0) …`). Only a null-check that is
  * the LAST conjunct is dropped, leaving the preceding conjuncts as the surviving
- * `if` condition (kept verbatim, so a comment inside them is preserved).
+ * `if` condition (kept verbatim, so a comment inside them is preserved). The assignment
+ * arm takes no conjunction at all — its `if` disappears entirely, leaving nowhere to keep
+ * the surviving conjuncts.
  *
- * ## The kept region must BE the chain — `chainAccess`, shared by both arms
+ * ## The kept region must BE the chain — `chainAccess`, shared by every arm
  *
  * The rewrite replaces the whole guard with the kept region, so that region has to be the
  * receiver chain itself and nothing more. `chainAccess` therefore descends the `children[0]`
@@ -93,9 +107,11 @@ using Lambda;
  * (conjunction) — with the FIRST dot off the guarded identifier turned into `?.`
  * (`if (x != null) x.a.b();` → `x?.a.b();`, `x == null ? null : x.a.b()` → `x?.a.b()`):
  * only the guard being removed is encoded, inner nullables stay the author's concern.
- * A comment inside a DROPPED part of the removed region would be lost, so such a guard
- * is left unflagged; a comment between the receiver and its dot would SWALLOW the inserted
- * `?`, so that one leaves the guard reported but unfixed.
+ * The assignment arm instead emits TWO edits — the declaration's `null` becomes the
+ * safe-nav chain and the whole `if` is deleted. A comment inside a DROPPED part of the
+ * removed region would be lost, so such a guard is left unflagged; a comment between the
+ * receiver and its dot would SWALLOW the inserted `?`, so that one leaves the guard
+ * reported but unfixed.
  *
  * ## Grammar-agnostic
  *
@@ -103,10 +119,12 @@ using Lambda;
  * `fieldAccessKind`, `exprStatementKind`, `blockStmtKind` (any unset → no-op),
  * plus `logicalAndKind` for the conjunction form, `ternaryKind` for the ternary arm
  * (unset → that arm alone is off) with `eqKind` adding its `x == null ? null : …`
- * polarity, `indexAccessKind` for an index step on a chain, `selfReferenceText` for the
+ * polarity, `assignKind` for the assignment arm (unset → that arm alone is off),
+ * `indexAccessKind` for an index step on a chain, `selfReferenceText` for the
  * `this` receiver, `localDeclKinds` / `paramKinds` / `scopeKinds` for the binding
- * resolution, `parenKind` to unwrap a parenthesized condition or ternary branch, and
- * `opaqueKinds` to skip reification subtrees.
+ * resolution, `fieldDeclKinds` / `externModifierKind` plus a `TypeInfoProvider` plugin for
+ * the field receiver (any missing → fields refuse), `parenKind` to unwrap a parenthesized
+ * condition or ternary branch, and `opaqueKinds` to skip reification subtrees.
  */
 @:nullSafety(Strict)
 final class PreferSafeNav implements Check {
@@ -123,6 +141,9 @@ final class PreferSafeNav implements Check {
 	/** A complete ternary node has exactly [condition, then-branch, else-branch] children. */
 	private static inline final TERNARY_CHILD_COUNT: Int = 3;
 
+	/** An assignment node has exactly [l-value, r-value] children. */
+	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
+
 	public function new() {}
 
 	public function id(): String {
@@ -134,7 +155,7 @@ final class PreferSafeNav implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin.refShape());
+		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
@@ -142,47 +163,57 @@ final class PreferSafeNav implements Check {
 			if (tree == null) continue;
 			final bindings: Array<{ name: String, scope: Span, declEnd: Int }> = [];
 			collectBindings(tree, null, seams, bindings);
-			walk(tree, violations, entry.file, entry.source, bindings, seams);
+			walk(tree, violations, entry.file, entry.source, bindings, fieldProver(tree, entry.source, plugin, seams), seams);
 		}
 		return violations;
 	}
 
-	/** Rewrite each flagged guard to `<root>?.<rest>`, replacing the whole `if` statement / ternary. */
+	/**
+	 * Rewrite each flagged guard to `<root>?.<rest>`: the statement and ternary arms replace the whole `if` statement / ternary in place, the assignment arm folds the chain into the null initializer of the declaration above and deletes the `if`.
+	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = readSeams(plugin.refShape());
+		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
 		final s: Seams = seams;
 		final ternaryKind: Null<String> = s.ternaryKind;
 		final spanIndexKinds: Array<String> = ternaryKind == null ? s.ifKinds : s.ifKinds.concat([ternaryKind]);
-		final edits: Array<{ span: Span, text: String }> =
-			CheckScan.applyBySpan(plugin, source, violations, spanIndexKinds, (node, span) -> {
-				final m: Null<Candidate> = candidate(node, source, s);
-				if (m == null) return null;
-				final stmtSpan: Null<Span> = m.stmt.span;
-				final rootSpan: Null<Span> = m.rootIdent.span;
-				if (stmtSpan == null || rootSpan == null) return null;
-				final dotPos: Int = source.indexOf('.', rootSpan.to);
-				if (dotPos < 0 || dotPos >= stmtSpan.to) return null;
-				// A comment between the receiver and its dot would swallow the inserted `?`.
-				if (CheckScan.hasCommentMarker(source, rootSpan.to, dotPos)) return null;
-				final prefix: String = source.substring(stmtSpan.from, dotPos);
-				final suffix: String = source.substring(dotPos + 1, stmtSpan.to);
-				final body: String = '$prefix?.$suffix';
-				final rest: Null<QueryNode> = m.restCond;
-				final restSpan: Null<Span> = rest?.span;
-				if (rest != null && restSpan == null) return null;
-				final text: String = restSpan != null
-					? 'if (${StringTools.trim(source.substring(restSpan.from, restSpan.to))}) $body'
-					: body;
-				return { span: span, text: text };
-			});
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final assigns: Map<String, AssignGuard> = [];
+		if (tree != null) collectAssignGuards(tree, source, s, assigns);
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span == null) continue;
+			final guard: Null<AssignGuard> = assigns['${span.from}:${span.to}'];
+			if (guard == null) continue;
+			final pair: Null<Array<{ span: Span, text: String }>> = assignEdits(guard, source);
+			if (pair != null) for (e in pair) edits.push(e);
+		}
+		for (e in CheckScan.applyBySpan(plugin, source, violations, spanIndexKinds, (node, span) -> {
+			// An `if` the ASSIGNMENT arm owns is folded into its declaration above, not rewritten
+			// in place — its statement-arm reading (if any) must not also fire.
+			if (assigns.exists('${span.from}:${span.to}')) return null;
+			final m: Null<Candidate> = candidate(node, source, s);
+			if (m == null) return null;
+			final stmtSpan: Null<Span> = m.stmt.span;
+			final rootSpan: Null<Span> = m.rootIdent.span;
+			if (stmtSpan == null || rootSpan == null) return null;
+			final body: Null<String> = safeNavText(source, rootSpan, stmtSpan);
+			if (body == null) return null;
+			final rest: Null<QueryNode> = m.restCond;
+			final restSpan: Null<Span> = rest?.span;
+			if (rest != null && restSpan == null) return null;
+			final text: String = restSpan != null ? 'if (${StringTools.trim(source.substring(restSpan.from, restSpan.to))}) $body' : body;
+			return { span: span, text: text };
+		})) edits.push(e);
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
-	private static function readSeams(shape: RefShape): Null<Seams> {
+	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
 		final ifKinds: Null<Array<String>> = shape.ifStatementKinds;
 		if (ifKinds == null || ifKinds.length == 0) return null;
 		final notEqKind: Null<String> = shape.notEqKind;
@@ -218,28 +249,162 @@ final class PreferSafeNav implements Check {
 			ternaryKind: shape.ternaryKind,
 			eqKind: shape.eqKind,
 			chainKinds: chainKinds,
-			selfText: shape.selfReferenceText
+			selfText: shape.selfReferenceText,
+			assignKind: shape.assignKind,
+			// The extern gate is what keeps a foreign slot's read out of the field proof, so a
+			// grammar that cannot name its extern modifier gets no field receivers at all.
+			fieldDeclKinds: shape.externModifierKind == null ? [] : shape.fieldDeclKinds ?? [],
+			externKind: shape.externModifierKind,
+			blockKinds: plugin.controlFlowSupport()?.blockKinds() ?? []
 		};
 	}
 
-	/** Walk `node`, flagging each guard that `candidate` accepts and whose operand binds to a local / param / `this`. */
+	/**
+	 * Walk `node`, flagging each guard that `candidate` accepts and whose operand binds to a
+	 * local / param / `this` / a proven plain field, plus each ASSIGNMENT-arm sibling pair
+	 * (a null-initialized declaration immediately followed by its guarded assignment).
+	 */
 	private static function walk(
 		node: QueryNode, out: Array<Violation>, file: String, source: String, bindings: Array<{ name: String, scope: Span, declEnd: Int }>,
-		s: Seams
+		fieldOk: (String, Span) -> Bool, s: Seams
 	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		final m: Null<Candidate> = candidate(node, source, s);
-		if (m != null && acceptedReceiver(m.condIdent, bindings, s)) {
-			final span: Null<Span> = node.span;
-			if (span != null) out.push({
-				file: file,
-				span: span,
-				rule: 'prefer-safe-nav',
-				severity: Severity.Info,
-				message: 'this null guard can be safe navigation (?.)'
-			});
+		if (m != null && acceptedReceiver(m.condIdent, bindings, fieldOk, s)) report(node, out, file);
+		final kids: Array<QueryNode> = node.children;
+		if (s.blockKinds.contains(node.kind)) for (i in 0...kids.length - 1) {
+			final a: Null<AssignGuard> = assignGuard(kids[i], kids[i + 1], source, s);
+			if (a != null && acceptedReceiver(a.condIdent, bindings, fieldOk, s)) report(kids[i + 1], out, file);
 		}
-		for (c in node.children) walk(c, out, file, source, bindings, s);
+		for (c in kids) walk(c, out, file, source, bindings, fieldOk, s);
+	}
+
+	/** Push the `Info` finding anchored at `node` — the guarding `if` statement, or the guarding ternary. */
+	private static function report(node: QueryNode, out: Array<Violation>, file: String): Void {
+		final span: Null<Span> = node.span;
+		if (span != null) out.push({
+			file: file,
+			span: span,
+			rule: 'prefer-safe-nav',
+			severity: Severity.Info,
+			message: 'this null guard can be safe navigation (?.)'
+		});
+	}
+
+	/**
+	 * The ASSIGNMENT arm: `decl` is a local declared `= null` and `ifNode` is the immediately
+	 * following `if (x != null) r = x.chain(...)` assigning to exactly that local. Returns the
+	 * guard when so, else null.
+	 *
+	 * Soundness rests entirely on the adjacent NULL initializer: the fold moves the assignment
+	 * into the declaration, so the path where the guard is false must observe `null` — which is
+	 * precisely what the declaration already gives it. Without the null-initialized adjacent
+	 * declaration the arm is unsound and is not attempted. The shape gates live in
+	 * `nullInitLocal` and `guardedChainAssignment`; what is decided here is the comment gate — a
+	 * comment in the dropped `if` head or tail would be lost, so such a pair is left unflagged.
+	 */
+	private static function assignGuard(decl: QueryNode, ifNode: QueryNode, source: String, s: Seams): Null<AssignGuard> {
+		final target: Null<{ name: String, nullLiteral: QueryNode }> = nullInitLocal(decl, s);
+		if (target == null) return null;
+		final found: Null<{ condIdent: QueryNode, rhs: QueryNode, root: QueryNode }> = guardedChainAssignment(ifNode, target.name, s);
+		if (found == null) return null;
+		final ifSpan: Null<Span> = ifNode.span;
+		final rhsSpan: Null<Span> = found.rhs.span;
+		if (ifSpan == null || rhsSpan == null) return null;
+		final hasComment: Bool = CheckScan.hasCommentMarker(source, ifSpan.from, rhsSpan.from)
+			|| CheckScan.hasCommentMarker(source, rhsSpan.to, ifSpan.to);
+		return hasComment ? null : {
+			condIdent: found.condIdent,
+			ifNode: ifNode,
+			rhs: found.rhs,
+			rootIdent: found.root,
+			nullLiteral: target.nullLiteral
+		};
+	}
+
+	/**
+	 * The name and `null` literal of a local declared exactly `= null` — the only declaration
+	 * shape the assignment arm may fold into — or null for every other declaration.
+	 */
+	private static function nullInitLocal(decl: QueryNode, s: Seams): Null<{ name: String, nullLiteral: QueryNode }> {
+		if (!s.localDeclKinds.contains(decl.kind) || decl.children.length != 1) return null;
+		final nullLiteral: QueryNode = decl.children[0];
+		final name: Null<String> = decl.name;
+		return nullLiteral.kind != s.nullKind || name == null ? null : { name: name, nullLiteral: nullLiteral };
+	}
+
+	/**
+	 * The `if (x != null) <declName> = x.chain(...)` shape `ifNode` carries, or null: an
+	 * `else`-less guard whose SOLE condition null-checks a plain identifier and whose sole
+	 * statement assigns to exactly `declName` a chain rooted at that identifier.
+	 *
+	 * A conjunction guard is refused — the `if` disappears entirely, leaving nowhere for the
+	 * surviving conjuncts. `declName` may appear nowhere in the right-hand side, receiver
+	 * included, or the fold would make the declaration reference itself.
+	 */
+	private static function guardedChainAssignment(
+		ifNode: QueryNode, declName: String, s: Seams
+	): Null<{ condIdent: QueryNode, rhs: QueryNode, root: QueryNode }> {
+		final assignKind: Null<String> = s.assignKind;
+		if (assignKind == null || !s.ifKinds.contains(ifNode.kind) || ifNode.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
+		final condIdent: Null<QueryNode> = guardOperand(ifNode.children[0], s);
+		final guardName: Null<String> = condIdent == null ? null : condIdent.name;
+		if (condIdent == null || guardName == null || guardName == declName) return null;
+		final stmt: Null<QueryNode> = soleExprStatement(ifNode.children[1], s);
+		if (stmt == null) return null;
+		final assign: QueryNode = stmt.children[0];
+		if (assign.kind != assignKind || assign.children.length != ASSIGN_CHILD_COUNT) return null;
+		final lhs: QueryNode = assign.children[0];
+		if (lhs.kind != s.identKind || lhs.name != declName) return null;
+		final rhs: QueryNode = assign.children[1];
+		final access: Null<QueryNode> = chainAccess(rhs, s);
+		if (access == null || !sameName(condIdent, access.children[0])) return null;
+		final root: QueryNode = access.children[0];
+		return mentionsOutsideRoot(rhs, root, guardName, s) || mentionsOutsideRoot(rhs, root, declName, s) ? null : {
+			condIdent: condIdent,
+			rhs: rhs,
+			root: root
+		};
+	}
+
+	/** Index every ASSIGNMENT-arm guard by its `if` statement's `from:to` span — the key `run` anchors its finding on. */
+	private static function collectAssignGuards(node: QueryNode, source: String, s: Seams, out: Map<String, AssignGuard>): Void {
+		if (s.opaqueKinds.contains(node.kind)) return;
+		final kids: Array<QueryNode> = node.children;
+		if (s.blockKinds.contains(node.kind)) for (i in 0...kids.length - 1) {
+			final g: Null<AssignGuard> = assignGuard(kids[i], kids[i + 1], source, s);
+			final span: Null<Span> = kids[i + 1].span;
+			if (g != null && span != null) out['${span.from}:${span.to}'] = g;
+		}
+		for (c in kids) collectAssignGuards(c, source, s, out);
+	}
+
+	/** The two edits folding `g` into its declaration: the `null` initializer becomes the safe-nav chain, the whole `if` goes. */
+	private static function assignEdits(g: AssignGuard, source: String): Null<Array<{ span: Span, text: String }>> {
+		final ifSpan: Null<Span> = g.ifNode.span;
+		final rhsSpan: Null<Span> = g.rhs.span;
+		final rootSpan: Null<Span> = g.rootIdent.span;
+		final nullSpan: Null<Span> = g.nullLiteral.span;
+		if (ifSpan == null || rhsSpan == null || rootSpan == null || nullSpan == null) return null;
+		final nav: Null<String> = safeNavText(source, rootSpan, rhsSpan);
+		// The `if` occupies a whole line of its own in the common case; deleting the bare span
+		// would leave that line behind as a blank one. `lineExtendedSpan` falls back to the bare
+		// span when the statement shares its line, so a one-line `var r = null; if (…) …;` is safe.
+		return nav == null ? null : [
+			{ span: nullSpan, text: nav },
+			{ span: RefactorSupport.lineExtendedSpan(source, ifSpan), text: '' }
+		];
+	}
+
+	/**
+	 * `region` verbatim with the FIRST dot off the receiver ending at `rootSpan` turned into
+	 * `?.`, or null when there is no such dot inside the region or a comment sits between the
+	 * receiver and it (the comment would swallow the inserted `?`).
+	 */
+	private static function safeNavText(source: String, rootSpan: Span, region: Span): Null<String> {
+		final dotPos: Int = source.indexOf('.', rootSpan.to);
+		if (dotPos < 0 || dotPos >= region.to || CheckScan.hasCommentMarker(source, rootSpan.to, dotPos)) return null;
+		return '${source.substring(region.from, dotPos)}?.${source.substring(dotPos + 1, region.to)}';
 	}
 
 	/** The candidate `node` yields — the `if`-statement guard or the ternary guard, whichever arm its kind selects. */
@@ -360,11 +525,11 @@ final class PreferSafeNav implements Check {
 
 	/**
 	 * Whether `ident` is a receiver whose double read is provably free: the self reference
-	 * (a keyword, never an accessor), or a local / param binding whose scope encloses it and
-	 * that lexically precedes it.
+	 * (a keyword, never an accessor), a local / param binding whose scope encloses it and
+	 * that lexically precedes it, or a field `fieldOk` proves physical.
 	 */
 	private static function acceptedReceiver(
-		ident: QueryNode, bindings: Array<{ name: String, scope: Span, declEnd: Int }>, s: Seams
+		ident: QueryNode, bindings: Array<{ name: String, scope: Span, declEnd: Int }>, fieldOk: (String, Span) -> Bool, s: Seams
 	): Bool {
 		final name: Null<String> = ident.name;
 		final span: Null<Span> = ident.span;
@@ -372,9 +537,95 @@ final class PreferSafeNav implements Check {
 		if (name == s.selfText) return true;
 		final useName: String = name;
 		final useSpan: Span = span;
-		return bindings.exists(
+		final bound: Bool = bindings.exists(
 			b -> b.name == useName && b.scope.from <= useSpan.from && useSpan.to <= b.scope.to && b.declEnd <= useSpan.from
 		);
+		return bound || fieldOk(useName, useSpan);
+	}
+
+	/**
+	 * The per-file predicate deciding whether a NON-local receiver named `name` at `span` is a
+	 * field whose double read is a provable no-op: it must be a PHYSICAL `var` / `final`
+	 * (`fieldDeclKinds`) with no read accessor, declared directly by the type declaration that
+	 * lexically encloses the use.
+	 *
+	 * A Haxe field cannot be redeclared by a subtype, and property accessors resolve from the
+	 * STATIC type — so a plain field stays plain at every use of the declaring type. That, and only
+	 * that, is what makes `if (f != null) f.m()` (two reads) and `f?.m()` (one) the same
+	 * observation. Everything unproven refuses: a get-accessor property (`(get, …)` / `dynamic`,
+	 * whose read RUNS code), a member of any other kind (a method value), a name the enclosing type
+	 * does not itself declare (an inherited member, a static import, an out-of-scope local — none of
+	 * which this proof can see), an EXTERN host (a foreign slot whose read may run host code), and a
+	 * grammar with no accessor information at all (`TypeInfoProvider` absent — every property would
+	 * then read as plain) or no extern modifier to name (`readSeams` empties `fieldDeclKinds`).
+	 *
+	 * Coverage is deliberately the enclosing type's OWN members. A resolution index that can prove
+	 * the same facts about an INHERITED member widens this predicate without changing any caller —
+	 * but the extern gate MUST move with it: `collectTypeScopes` reads only this file, so an
+	 * inherited field whose declaring type is an `extern` class in another module would pass a gate
+	 * that never saw it.
+	 */
+	private static function fieldProver(tree: QueryNode, source: String, plugin: GrammarPlugin, s: Seams): (String, Span) -> Bool {
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		if (provider == null || s.fieldDeclKinds.length == 0) return (_, _) -> false;
+		final accessors: Map<Int, Bool> = provider.propertyAccessors(source);
+		final scopes: Array<TypeScope> = [];
+		collectTypeScopes(tree, false, s, scopes);
+		return (name, span) -> {
+			final host: Null<TypeScope> = innermostScope(scopes, span);
+			return host != null && !host.isExtern && declaresPlainField(host.host, name, accessors, s);
+		};
+	}
+
+	/** The innermost type declaration whose span contains `span`, or null when `span` sits outside every type. */
+	private static function innermostScope(scopes: Array<TypeScope>, span: Span): Null<TypeScope> {
+		var best: Null<TypeScope> = null;
+		for (t in scopes) if (t.span.from <= span.from && span.to <= t.span.to && (best == null || t.span.from >= best.span.from)) best = t;
+		return best;
+	}
+
+	/**
+	 * Every type declaration under `node`, with the span it occupies and whether an extern
+	 * modifier precedes it. `pendingExtern` carries an `extern` keyword forward across the
+	 * modifier / metadata siblings that may sit between it and the declaration it marks — and
+	 * into nested regions, since over-attaching it only ever REFUSES more.
+	 */
+	private static function collectTypeScopes(node: QueryNode, pendingExtern: Bool, s: Seams, out: Array<TypeScope>): Void {
+		if (s.opaqueKinds.contains(node.kind)) return;
+		var marked: Bool = pendingExtern;
+		for (child in node.children) {
+			if (child.kind == s.externKind) {
+				marked = true;
+				continue;
+			}
+			final decl: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(child);
+			if (decl != null) {
+				out.push({ span: decl.fullSpan, host: decl.nameNode, isExtern: marked });
+				marked = false;
+			}
+			collectTypeScopes(child, marked, s, out);
+		}
+	}
+
+	/**
+	 * Whether `host` declares `name` as a physical field with no read accessor. A member of that
+	 * name whose kind is not a field kind, or that carries a getter, REFUSES outright rather than
+	 * being ignored — two same-named members cannot both be the receiver, so a single unproven
+	 * declaration is enough to lose the proof.
+	 */
+	private static function declaresPlainField(host: QueryNode, name: String, accessors: Map<Int, Bool>, s: Seams): Bool {
+		var proven: Bool = false;
+		var refused: Bool = false;
+		RefactorSupport.eachMemberHost(host, memberHost -> {
+			for (child in memberHost.children) if (child.name == name && RefactorSupport.isMemberDeclKind(child.kind)) {
+				final span: Null<Span> = child.span;
+				if (span == null || !s.fieldDeclKinds.contains(child.kind) || accessors[span.from] == true)
+					refused = true;
+				else
+					proven = true;
+			}
+		});
+		return proven && !refused;
 	}
 
 	/**
@@ -407,15 +658,22 @@ final class PreferSafeNav implements Check {
 	 * statement — a bare `x.m();` or a braced block wrapping only that — else null.
 	 */
 	private static function singleCallStatement(body: QueryNode, s: Seams): Null<QueryNode> {
+		final stmt: Null<QueryNode> = soleExprStatement(body, s);
+		return stmt != null && stmt.children[0].kind == s.callKind ? stmt : null;
+	}
+
+	/**
+	 * The lone single-expression statement of a then-branch that is exactly one statement — a
+	 * bare `x.m();` / `r = x.m();` or a braced block wrapping only that — else null.
+	 */
+	private static function soleExprStatement(body: QueryNode, s: Seams): Null<QueryNode> {
 		final stmt: Null<QueryNode> = if (body.kind == s.exprStmtKind)
 			body;
 		else if (body.kind == s.blockStmtKind && body.children.length == 1 && body.children[0].kind == s.exprStmtKind)
 			body.children[0];
 		else
 			null;
-		if (stmt == null) return null;
-		final expr: QueryNode = stmt;
-		return expr.children.length == 1 && expr.children[0].kind == s.callKind ? expr : null;
+		return stmt != null && stmt.children.length == 1 ? stmt : null;
 	}
 
 	/** The FIRST access off the body call's chain root when it is a plain `.` field access — `chainAccess` on the call. */
@@ -492,6 +750,23 @@ private typedef Seams = {
 	var eqKind: Null<String>;
 	var chainKinds: Array<String>;
 	var selfText: Null<String>;
+	var assignKind: Null<String>;
+
+	/** The member kinds that project a PHYSICAL field (Haxe `VarMember` / `FinalMember`) — the field-receiver proof's whitelist. */
+	var fieldDeclKinds: Array<String>;
+
+	/** The extern-modifier node kind, a preceding sibling of the type it marks — an extern host refuses the field-receiver proof. */
+	var externKind: Null<String>;
+
+	/**
+	 * The STATEMENT-LIST kinds (`ControlFlowSupport.blockKinds`) whose direct children the
+	 * assignment arm may pair. A conditional-compilation region is deliberately absent: its
+	 * branches project as FLATTENED siblings, so pairing under it would fold a declaration in
+	 * one `#if` branch into a guard in another. EMPTY when the grammar supplies no
+	 * `ControlFlowSupport` — which switches the assignment arm alone off, exactly as an unset
+	 * `ternaryKind` switches off the ternary arm.
+	 */
+	var blockKinds: Array<String>;
 }
 
 /**
@@ -504,4 +779,24 @@ private typedef Candidate = {
 	var stmt: QueryNode;
 	var rootIdent: QueryNode;
 	var restCond: Null<QueryNode>;
+}
+
+/**
+ * A matched ASSIGNMENT-arm guard: the null-checked identifier, the guarding `if` statement the
+ * fold deletes, the assigned right-hand side and its chain-root identifier, and the `null`
+ * literal of the declaration the right-hand side folds into.
+ */
+private typedef AssignGuard = {
+	var condIdent: QueryNode;
+	var ifNode: QueryNode;
+	var rhs: QueryNode;
+	var rootIdent: QueryNode;
+	var nullLiteral: QueryNode;
+}
+
+/** One type declaration's lexical extent: the span it covers, the node hosting its members, and whether `extern` marks it. */
+private typedef TypeScope = {
+	var span: Span;
+	var host: QueryNode;
+	var isExtern: Bool;
 }
