@@ -543,6 +543,7 @@ import unit.PreferSwitchExpressionCheckTest;
 import unit.PreferTernaryExpressionCheckTest;
 import unit.PreferTryExpressionAssignmentCheckTest;
 import unit.PreferTryExpressionReturnCheckTest;
+import unit.TryCatchNullGuardCheckTest;
 import unit.RedundantCondCompParensCheckTest;
 import unit.ApqLitDirectivesCliTest;
 import unit.FormatConfigDiscoveryTest;
@@ -1105,6 +1106,7 @@ class RunTests {
 		addCase(new PreferLambdaExpressionBodyCheckTest());
 		addCase(new PreferTryExpressionAssignmentCheckTest());
 		addCase(new PreferTryExpressionReturnCheckTest());
+		addCase(new TryCatchNullGuardCheckTest());
 		addCase(new JoinDeclarationAssignmentCheckTest());
 		addCase(new JoinReturnCheckTest());
 		addCase(new PreferSingleQuotesCheckTest());

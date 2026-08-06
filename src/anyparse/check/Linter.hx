@@ -83,6 +83,12 @@ final class Linter {
 			new PreferSwitchExpressionAssignment(),
 			new PreferTryExpressionAssignment(),
 			new PreferTryExpressionReturn(),
+			// Grouped after both try-expression collapses because it reads their output shape
+			// (`x = try E catch (…) null;` followed by a null guard is what
+			// `prefer-try-expression-assignment` makes out of a `try` statement). Readability
+			// only — the `--fix` driver loops to a fixed point, so the two compose whatever the
+			// registry order, and nothing here gates on the position.
+			new TryCatchNullGuard(),
 			new JoinDeclarationAssignment(),
 			new JoinReturn(),
 			new PreferSingleQuotes(),

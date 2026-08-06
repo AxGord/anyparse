@@ -1542,6 +1542,15 @@ typedef RefShape = {
 	@:optional var arrayLiteralKind: String;
 
 	/**
+	 * The object-literal node kind (Haxe `ObjectLit`, whose children are the
+	 * `objectFieldKind` fields) — `try-catch-null-guard` reads it as one of the
+	 * expression shapes that are NON-NULL by construction, the gate that lets it
+	 * move a null guard into the catch clauses. Optional; unset just narrows that
+	 * whitelist by one shape.
+	 */
+	@:optional var objectLiteralKind: String;
+
+	/**
 	 * Maps a String method name to the FIXED type its call returns on a String
 	 * receiver (`split` → `Array<String>`; `substr` / `substring` / `charAt` /
 	 * `toUpperCase` / `toLowerCase` / `toString` → `String`; `indexOf` /

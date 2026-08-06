@@ -36,11 +36,14 @@ typedef TrySeams = {
 }
 
 /**
- * Machinery shared by `prefer-try-expression-assignment` and `prefer-try-expression-return`:
- * decomposing a statement-position `try` / `catch` into per-clause bodies, and assembling the
- * `try <value> catch (…) <value> …` expression text. The rules differ only in what each body
- * must be (a plain `=` assignment to one target vs a valued `return`); everything structural
- * lives here, including the two hazards of turning a multi-line statement into ONE expression:
+ * Machinery shared by the three try-expression rules -- `prefer-try-expression-assignment`,
+ * `prefer-try-expression-return` and `try-catch-null-guard`: decomposing a `try` / `catch` into
+ * per-clause bodies, and assembling the `try <value> catch (…) <value> …` expression text. The
+ * first two differ only in what each body must be (a plain `=` assignment to one target vs a
+ * valued `return`); the third reads a `try` already in EXPRESSION position and replaces each
+ * clause's value rather than hoisting it, so it uses the decomposition and the slice / comment
+ * helpers but not `buildValue`. Everything structural lives here, including the two hazards of
+ * turning a multi-line statement into ONE expression:
  *
  * - a LINE comment anywhere inside the `try` refuses it. The rebuild joins every copied slice
  *   onto one line, so a `//` -- in a `catch (e:T) // why` header, trailing an r-value --
@@ -159,10 +162,82 @@ final class TryExpressionShape {
 		return kept;
 	}
 
+	/**
+	 * A local declaration's own prefix (`var x:T`, keyword and written type verbatim — the `var`
+	 * -> `final` upgrade is `prefer-final`'s) plus the offset up to which the declaration source
+	 * is copied verbatim, the kept region for a caller's comment guard: before the `=` for an
+	 * initialized declaration, before the trailing `;` for a bare one. Null on a malformed
+	 * declaration.
+	 *
+	 * The written type is sliced rather than read off a node because the default projection folds
+	 * a local's `:type` into trivia — there is no annotation child to copy.
+	 */
+	public static function declPrefix(declSpan: Span, init: Null<QueryNode>, source: String): Null<{ text: String, keptTo: Int }> {
+		final prefixEnd: Int = if (init != null) {
+			final initSpan: Null<Span> = init.span;
+			if (initSpan == null) return null;
+			final eq: Int = source.lastIndexOf('=', initSpan.from);
+			if (eq < declSpan.from) return null;
+			eq;
+		} else {
+			if (declSpan.to <= declSpan.from || source.charAt(declSpan.to - 1) != ';') return null;
+			declSpan.to - 1;
+		}
+		return { text: StringTools.rtrim(source.substring(declSpan.from, prefixEnd)), keptTo: prefixEnd };
+	}
+
 	/** `node`'s verbatim source slice, or null when it carries no span. */
 	public static function slice(source: String, node: QueryNode): Null<String> {
 		final span: Null<Span> = node.span;
 		return span == null ? null : source.substring(span.from, span.to);
+	}
+
+	/**
+	 * Whether any descendant of `node` (or `node` itself) is an occurrence of `name` -- a plain
+	 * `identKind` reference or a `stringInterpKind` one (a braceless `$name` inside a
+	 * single-quoted string, which projects as a distinct kind).
+	 *
+	 * Both consumers ask it about the SAME hazard from opposite ends: moving text across a
+	 * `catch (…)` boundary re-binds every name that clause declares. `prefer-try-expression-assignment`
+	 * asks whether a clause's exception variable shadows the assignment TARGET; `try-catch-null-guard`
+	 * asks whether it captures a name the TERMINATOR it moves inward reads.
+	 */
+	public static function referencesName(node: QueryNode, name: String, identKind: String, stringInterpKind: Null<String>): Bool {
+		if ((node.kind == identKind || node.kind == stringInterpKind) && node.name == name) return true;
+		for (c in node.children) if (referencesName(c, name, identKind, stringInterpKind)) return true;
+		return false;
+	}
+
+	/**
+	 * Whether `node`'s RIGHT EDGE is an open `try` -- one of `kinds` reached by walking the last
+	 * child while that child ends exactly where its parent does. A `try` sealed behind a closing
+	 * bracket cannot absorb anything (`g(1, try a catch (e:T) b)` ends at the `)`), so the walk
+	 * stops there; one at the tail can (`x + try a catch (e:T) b`), so the walk reaches it.
+	 *
+	 * The same rightmost-spine test `RefShape.separatorGreedyExprKinds` documents for the mirror
+	 * question in `redundant-parens`. A whole-subtree scan would answer this one too, but by
+	 * over-parenthesising every sealed `try` -- and those parens are permanent, since no delimited
+	 * host encloses a try-expression for `redundant-parens` to strip them from.
+	 *
+	 * Public for the third consumer, `try-catch-null-guard`, which asks the same question about
+	 * a slice it CANNOT parenthesise (a `return` / `throw` terminator) and so refuses the site
+	 * instead of wrapping it. That caller passes the terminator's returned / thrown CHILD, not
+	 * the statement: a statement's span ends at the `;` its rebuild strips, one character past
+	 * its last child, which would stop the spine walk at the top and always answer "sealed".
+	 */
+	public static function endsOpen(node: QueryNode, kinds: Array<String>): Bool {
+		var current: QueryNode = node;
+		while (true) {
+			if (kinds.contains(current.kind)) return true;
+			final span: Null<Span> = current.span;
+			final last: Null<QueryNode> = current.children.length == 0 ? null : current.children[current.children.length - 1];
+			final lastSpan: Null<Span> = last == null ? null : last.span;
+			// Split, not `||`-chained: strict null-safety carries a narrowing fact into a later
+			// `||` operand from the FIRST operand only.
+			if (last == null || span == null || lastSpan == null) return false;
+			if (lastSpan.to != span.to) return false;
+			current = last;
+		}
 	}
 
 	/**
@@ -203,32 +278,6 @@ final class TryExpressionShape {
 	private static function operand(source: String, node: QueryNode, s: TrySeams): Null<String> {
 		final src: Null<String> = slice(source, node);
 		return src == null ? null : (endsOpen(node, s.tryKinds) ? '($src)' : src);
-	}
-
-	/**
-	 * Whether `node`'s RIGHT EDGE is an open `try` -- one of `kinds` reached by walking the last
-	 * child while that child ends exactly where its parent does. A `try` sealed behind a closing
-	 * bracket cannot absorb anything (`g(1, try a catch (e:T) b)` ends at the `)`), so the walk
-	 * stops there; one at the tail can (`x + try a catch (e:T) b`), so the walk reaches it.
-	 *
-	 * The same rightmost-spine test `RefShape.separatorGreedyExprKinds` documents for the mirror
-	 * question in `redundant-parens`. A whole-subtree scan would answer this one too, but by
-	 * over-parenthesising every sealed `try` -- and those parens are permanent, since no delimited
-	 * host encloses a try-expression for `redundant-parens` to strip them from.
-	 */
-	private static function endsOpen(node: QueryNode, kinds: Array<String>): Bool {
-		var current: QueryNode = node;
-		while (true) {
-			if (kinds.contains(current.kind)) return true;
-			final span: Null<Span> = current.span;
-			final last: Null<QueryNode> = current.children.length == 0 ? null : current.children[current.children.length - 1];
-			final lastSpan: Null<Span> = last == null ? null : last.span;
-			// Split, not `||`-chained: strict null-safety carries a narrowing fact into a later
-			// `||` operand from the FIRST operand only.
-			if (last == null || span == null || lastSpan == null) return false;
-			if (lastSpan.to != span.to) return false;
-			current = last;
-		}
 	}
 
 }
