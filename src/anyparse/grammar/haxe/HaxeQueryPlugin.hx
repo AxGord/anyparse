@@ -85,8 +85,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * opens no scope of its own — it binds into the frame the LOOP opens,
 	 * which is what `Refs.collectIntoMulti` does with a decl-host child.
 	 * `LocalFnStmt` and `LocalInlineFnStmt` are the two projections of a local
-	 * `function` statement — the grammar folds the `inline` keyword into its own
-	 * ctor instead of pairing a modifier — and both bind their name into the
+	 * `function` statement - the grammar folds the `inline` keyword into its own
+	 * ctor instead of pairing a modifier - and both bind their name into the
 	 * ENCLOSING body while opening a scope of their own for their parameters
 	 * (see the matching pair in `scopeKinds`). They are decl hosts, not
 	 * `selfScopeDeclKinds` entries, for the mirror of `KeyValueBinder`'s reason:
@@ -468,8 +468,12 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				// ENCLOSING function's frame and reads mis-bind across siblings
 				// (the CallGraph `span` collision). `inline function` is the same
 				// construct with the keyword folded into its own ctor, and it is the
-				// form this project's Haxe style prescribes for a local helper — the
-				// two must never diverge here.
+				// form this project's Haxe style prescribes for a local helper - the
+				// two must never diverge HERE. They deliberately do diverge in
+				// `functionKinds` / `localFunctionKinds` below, which measure complexity
+				// units rather than scopes; a consumer that wants the scope reading unions
+				// `inlineFunctionKinds` in (`Naming.collidesInScope`,
+				// `NoUnderscorePrefix.functionScopeKinds`).
 				'LocalFnStmt',
 				'LocalInlineFnStmt',
 				'ThinParenLambdaExpr',

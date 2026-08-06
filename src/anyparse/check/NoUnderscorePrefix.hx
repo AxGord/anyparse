@@ -43,7 +43,7 @@ import anyparse.runtime.Span;
  *
  * A local `function` statement is a binding scoped to one body exactly as a `var` is, so
  * the `locals` option governs it and the same rename machinery strips it. Three things are
- * particular to it.
+ * particular to it, plus one general gate that landed with them.
  *
  * The scope it binds INTO is the ENCLOSING body, never its own span - it is the one
  * declaration kind that opens a scope its own name does not enter. Every scope lookup made
@@ -59,10 +59,11 @@ import anyparse.runtime.Span;
  * A local `inline function` projects as its own kind, `LocalInlineFnStmt` - the grammar folds the
  * `inline` keyword into the ctor rather than pairing a modifier - and it is governed identically:
  * it hosts its binding in the reference walker and opens its own parameter scope, so its strip is
- * provable and its parameters never collide with a sibling helper's. A candidate whose occurrence
- * set does NOT resolve - whatever the reason - is kept OUT of the same-target candidate set: a
- * rename that can never be emitted must not claim a target and block a provable sibling's strip
- * over a conflict that cannot materialise.
+ * provable and its parameters never collide with a sibling helper's.
+ *
+ * The claim set still refuses a candidate whose occurrence set does not resolve - a rename that can
+ * never be emitted must not claim a target and block a provable sibling - but no reachable input for
+ * that precondition is currently known; see the comment on the gate in `fix`.
  *
  * ## Autofix
  *
@@ -230,9 +231,17 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 			if (span == null || !flaggedFroms.contains(span.from)) continue;
 			final target: Null<String> = strippedName(decl, policy, shape);
 			if (target == null) continue;
-			// A binding the resolver cannot bind (one declared inside a macro reification subtree, say)
-			// can never be renamed, so it must not CLAIM the target either - leaving it in the set would
-			// block a provable sibling's rename over a conflict that can never materialise.
+			// A candidate whose occurrence set does not resolve can never be renamed, so it must not
+			// CLAIM the target either - leaving it in the set would block a provable sibling's rename
+			// over a conflict that can never materialise. NO REACHABLE INPUT IS CURRENTLY KNOWN: every
+			// kind this rule flags resolves (checked across Required / Optional / Rest / LambdaParam /
+			// VarStmt / FinalStmt / VarMore / KeyValueBinder / ForStmt / comprehension binder /
+			// LocalFnStmt / LocalInlineFnStmt), and a binding inside a reification subtree never
+			// reaches here at all - `HaxeNamingSupport.walk` returns at `MacroExpr`, so it is never
+			// projected as a candidate. The line stays as a precondition on the claim set, deliberately
+			// untested rather than removed: it was added for the local `inline function`, whose
+			// occurrence set the resolver could not build until `LocalInlineFnStmt` became a decl host,
+			// and the next kind that lands in that state must not repeat the regression.
 			if (Rename.renameOccurrences(source, tree, span.from, shape).length == 0) continue;
 			// Re-bind to a non-null final: strict null-safety does not narrow inside a struct literal.
 			final name: String = target;

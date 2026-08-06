@@ -303,11 +303,11 @@ class UnusedLocalShadowTest extends Test {
 	}
 
 	/**
-	 * A local `inline function` — the form this project's Haxe style prescribes for a local
-	 * helper — joined `RefShape.scopeKinds`, which is the seam this check reads for its
-	 * enclosing-scope span. The helper is NOT a self-scoped declaration, so its own name is
-	 * neither a local declaration nor a shadowing region: the enclosing local it CAPTURES stays
-	 * referenced, and the helper's own name never surfaces as a finding.
+	 * A GUARD, not a discriminator - it passes on the base branch too. This check tests references with
+	 * a raw TEXTUAL scan over the enclosing scope span, so the capture is found whatever the frame
+	 * boundaries are. What it pins is that a local `inline function` joining `RefShape.scopeKinds` did
+	 * not make its body a region this check subtracts: the helper is not a self-scoped declaration, so
+	 * its own name is neither a local declaration nor a shadowing region.
 	 */
 	public function testLocalCapturedByInlineHelperKeepsDeclaration(): Void {
 		Assert.equals(
@@ -320,8 +320,10 @@ class UnusedLocalShadowTest extends Test {
 
 	/**
 	 * A declaration shadowed by an inline helper's PARAMETER is not flagged, exactly as the
-	 * lambda-parameter case above: a parameter is not in `selfScopeDeclKinds`, so the helper's
-	 * body is not a region the second scan subtracts. The over-count is the safe direction.
+	 * lambda-parameter case above: a parameter is not in `selfScopeDeclKinds`, so the helper's body
+	 * is not a region the second scan subtracts. The over-count is the safe direction. A GUARD: the
+	 * governing seam is `selfScopeDeclKinds`, which this slice did not touch, so it passes on the
+	 * base branch too.
 	 */
 	public function testInlineHelperParameterShadowNotFlagged(): Void {
 		Assert.equals(
@@ -332,7 +334,11 @@ class UnusedLocalShadowTest extends Test {
 		);
 	}
 
-	/** A local declared INSIDE an inline helper's body is still flagged — the new frame does not hide it. */
+	/**
+	 * A local declared INSIDE an inline helper's BLOCK body is still flagged. A GUARD: the operative
+	 * scope is the helper's `BlockBody`, already a `scopeKinds` member before this slice, so the new
+	 * frame is never the one consulted and the fixture passes on the base branch too.
+	 */
 	public function testUnusedLocalInsideInlineHelperFlagged(): Void {
 		final vs: Array<Violation> = violations(
 			'class C {\n\tfunction f() {\n\t\tinline function h() {\n\t\t\tvar dead:Int = 1;\n\t\t\ttrace(2);\n\t\t}\n\t\th();\n\t}\n}'

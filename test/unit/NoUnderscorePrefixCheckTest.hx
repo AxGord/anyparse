@@ -568,15 +568,19 @@ class NoUnderscorePrefixCheckTest extends Test {
 	}
 
 	/**
-	 * The claim set still drops a candidate whose occurrence set does not resolve - the gate is
-	 * general, not a local-inline-function special case. A binding declared inside a macro
-	 * reification subtree (`opaqueKinds`) is invisible to the reference walker, so it can never be
-	 * renamed and must not block the provable `_step` next to it.
+	 * A binding declared inside a macro reification subtree never competes for a target name: the naming
+	 * projection returns at `MacroExpr`, so it is not even a FINDING, let alone a candidate. Measured,
+	 * not inferred - this source reports exactly one violation. Replaces the fixture that claimed to
+	 * exercise `fix`'s unresolvable-candidate gate; it never reached it, and no reachable input for
+	 * that gate is known (see the comment on the gate).
 	 */
-	public function testUnprovableCandidateDoesNotBlockSiblingStrip(): Void {
+	public function testMacroDeclaredBindingNeitherFlaggedNorClaiming(): Void {
 		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
 			+ '\t\tvar e = macro {\n\t\t\tvar __step:Int = 1;\n\t\t\ttrace(__step);\n\t\t};\n'
 			+ '\t\tvar _step:Int = 1;\n\t\ttrace(_step);\n\t\ttrace(e);\n\t}\n}';
+		// ONE finding: the reification's `__step` is not projected at all, so it is neither reported
+		// nor a candidate. The sibling `_step` therefore strips with nothing to conflict with.
+		Assert.equals(1, violations(src).length);
 		// The absent marker must not be a SUFFIX of the macro-declared `__step:Int`, which stays put.
 		assertFixed(src, ['var step:Int = 1;', 'trace(step);', 'var __step:Int = 1;'], ['var _step']);
 	}
@@ -654,10 +658,13 @@ class NoUnderscorePrefixCheckTest extends Test {
 	}
 
 	/**
-	 * Two sibling inline local functions' SAME-NAMED parameters are separate bindings in disjoint
-	 * scopes, so `_n` in the first strips to `n` without colliding with the second's `n`. Before
-	 * `LocalInlineFnStmt` opened a scope frame both parameters collected into the enclosing
-	 * method's single frame, where the sibling `n` WAS in scope and vetoed the strip.
+	 * Two sibling inline local functions' SAME-NAMED parameters live in disjoint scopes, so `_n` in the
+	 * first strips to `n` without colliding with the second's `n`. The gate is
+	 * `Naming.collidesInScope`, whose enclosing-scope lookup takes `functionKinds` UNION
+	 * `inlineFunctionKinds`; with `functionKinds` alone the innermost function containing `_n` was
+	 * the enclosing METHOD, the sibling helper was not disjoint from it, and its `n` vetoed the
+	 * strip. (The resolver's `scopeKinds` frame is a separate gate - reverting it alone leaves this
+	 * test green.)
 	 */
 	public function testSiblingInlineFunctionParametersRenameIndependently(): Void {
 		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'

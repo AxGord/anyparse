@@ -957,7 +957,12 @@ final class Naming implements Check implements CrossFileFix {
 		// A local `inline function` is a function BODY for scope purposes even though it is not a
 		// measured `functionKinds` unit (`complexity` folds it into its host): its parameters and
 		// locals are visible only inside it, exactly as the plain local form's are. Without the union
-		// a sibling helper's same-named parameter read as an in-scope collision and vetoed the strip.
+		// a sibling helper's same-named parameter read as an in-scope collision and vetoed the rename.
+		// BOTH callers see the widening - `NoUnderscorePrefix`'s underscore strip and this check's own
+		// `renameEditsFor`, which is default-ON. It fails OPEN (a wider disjoint set means fewer
+		// refusals), and that direction is safe for both: each reads `true` as "refuse". Anything the
+		// widening newly hides is a SIBLING body's span, and a binding actually visible at the target
+		// site is declared in an ancestor region, which is never disjoint from `enclosing`.
 		final funcKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
 		// The binding is visible throughout its innermost enclosing function - INCLUDING the nested closures
 		// / local functions that capture it - so a same-named binding anywhere in that function conflicts.

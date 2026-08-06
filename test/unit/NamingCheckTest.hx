@@ -1852,4 +1852,21 @@ class NamingCheckTest extends Test {
 		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 
+	/**
+	 * This check's OWN autofix shares `collidesInScope` with the underscore strip, so it sees the
+	 * inline-helper scope union too: a parameter of one local `inline function` no longer collides
+	 * with a SIBLING helper's same-named parameter, and `some_n` corrects to `someN` beside a
+	 * helper that already binds `someN`. Before the union the two parameters shared the enclosing
+	 * METHOD's span and the rename was refused.
+	 */
+	public function testInlineHelperParameterRenamesBesideSiblingHoldingTheName(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function f() {\n'
+			+ '\t\tinline function a(some_n:Int) {\n\t\t\ttrace(some_n);\n\t\t}\n'
+			+ '\t\tinline function b(someN:String) {\n\t\t\ttrace(someN);\n\t\t}\n\t\ta(1);\n\t\tb("x");\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf("'some_n'") >= 0);
+		assertLocalRenamed([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src, 'inline function a(someN:Int)', 'some_n');
+	}
+
 }
