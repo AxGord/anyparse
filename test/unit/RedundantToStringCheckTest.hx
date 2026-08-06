@@ -103,6 +103,23 @@ class RedundantToStringCheckTest extends Test {
 		Assert.equals(0, edits(src).length);
 	}
 
+	/**
+	 * The same proof, end-to-end, for a receiver type whose `extern` modifier is GUARDED —
+	 * `#if js extern class Ext {…} #end` — rather than written unconditionally. This pins that
+	 * `SymbolIndexBuilder`'s guarded-`extern` lift (`pushGuardedDecl`) actually reaches this
+	 * check's gate: before that fix, a guarded extern indexed as `isExtern == false`, so this
+	 * site would have been fixed instead of withheld — the exact false-positive rewrite the
+	 * unconditional sibling test above exists to prevent.
+	 */
+	public function testGuardedExternReceiverTypeReportedNotFixed(): Void {
+		final src: String = "#if js\nextern class Ext { function toString():String; }\n#end\n"
+			+ "@:nullSafety(Strict) class C { function f(x:Ext) { final s:String = '${x.toString()}'; } }";
+		final found: Array<Violation> = violations(src);
+		Assert.equals(1, found.length);
+		Assert.isTrue(found[0].message.indexOf('extern') != -1, 'message should name the missing proof: ' + found[0].message);
+		Assert.equals(0, edits(src).length);
+	}
+
 	public function testUnresolvedReceiverTypeReportedNotFixed(): Void {
 		// `K` is not declared in the analysed scope at all — same conservative default as extern.
 		final src: String = "@:nullSafety(Strict) class C { function f(x:K) { final s:String = '${x.toString()}'; } }";
