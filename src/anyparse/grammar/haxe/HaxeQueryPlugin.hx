@@ -472,8 +472,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				// two must never diverge HERE. They deliberately do diverge in
 				// `functionKinds` / `localFunctionKinds` below, which measure complexity
 				// units rather than scopes; a consumer that wants the scope reading unions
-				// `inlineFunctionKinds` in (`Naming.collidesInScope`,
-				// `NoUnderscorePrefix.functionScopeKinds`).
+				// `inlineFunctionKinds` back in - there are several, so enumerate them with
+				// `hxq mentions inlineFunctionKinds src/` rather than trusting a list here.
 				'LocalFnStmt',
 				'LocalInlineFnStmt',
 				'ThinParenLambdaExpr',

@@ -959,10 +959,21 @@ final class Naming implements Check implements CrossFileFix {
 		// locals are visible only inside it, exactly as the plain local form's are. Without the union
 		// a sibling helper's same-named parameter read as an in-scope collision and vetoed the rename.
 		// BOTH callers see the widening - `NoUnderscorePrefix`'s underscore strip and this check's own
-		// `renameEditsFor`, which is default-ON. It fails OPEN (a wider disjoint set means fewer
-		// refusals), and that direction is safe for both: each reads `true` as "refuse". Anything the
-		// widening newly hides is a SIBLING body's span, and a binding actually visible at the target
-		// site is declared in an ancestor region, which is never disjoint from `enclosing`.
+		// `renameEditsFor`, which is default-ON. They read a `true` DIFFERENTLY, so say it precisely:
+		// the strip refuses outright, while `renameEditsFor` refuses only what `qualifiableBinding`
+		// cannot repair - and that predicate is TRUE for every category this branch serves (Local /
+		// Param / CatchVar), so there a `true` means "rename, naming the captured occurrences through
+		// `this.`" (`qualifyCapturedEdits`). What both share is the reading of FALSE: emit the plain
+		// rename. The widening produces more FALSEs, so the question is what it can hide.
+		//
+		// It hides exactly the spans of functions DISJOINT from `enclosing`, and every span this
+		// rename rewrites lies inside `enclosing`, which stays fully scanned - so an occurrence that
+		// could be shadow-broken is still seen and still vetoes. One binding IS hidden and IS visible
+		// here: a sibling local function's own NAME, which lives in the enclosing body while its span
+		// is the sibling's. Renaming past it produces a legal shadow of a name the target body never
+		// mentions (a body that DOES mention it keeps the occurrence, and the veto stands - verified
+		// both ways). That hazard is not new: it holds identically for the plain `LocalFnStmt`, which
+		// `functionKinds` has always carried.
 		final funcKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
 		// The binding is visible throughout its innermost enclosing function - INCLUDING the nested closures
 		// / local functions that capture it - so a same-named binding anywhere in that function conflicts.

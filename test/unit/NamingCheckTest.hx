@@ -1865,6 +1865,7 @@ class NamingCheckTest extends Test {
 			+ '\t\tinline function b(someN:String) {\n\t\t\ttrace(someN);\n\t\t}\n\t\ta(1);\n\t\tb("x");\n\t}\n}';
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
 		Assert.isTrue(vs[0].message.indexOf("'some_n'") >= 0);
 		assertLocalRenamed([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src, 'inline function a(someN:Int)', 'some_n');
 	}
