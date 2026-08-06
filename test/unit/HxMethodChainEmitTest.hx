@@ -141,8 +141,7 @@ class HxMethodChainEmitTest extends Test {
 		// single-item FillLine shape to drop the Nest, mirroring fork's
 		// inline `(<item>)` emission.
 		final src: String = 'class M { function f() { a.b().c(function(x) { stmt; }); } }';
-		final cfg: String =
-			'{
+		final cfg: String = '{
 			"lineEnds":{"leftCurly":"both"},
 			"wrapping":{"methodChain":{"rules":[
 				{"conditions":[{"cond":"itemCount >= n","value":2}],"type":"onePerLine"}

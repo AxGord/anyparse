@@ -24,8 +24,7 @@ class ApqMatcherTest extends Test {
 
 	public function testThrowNewMatchesEveryThrowNewSite(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final source: String =
-			'class X {
+		final source: String = 'class X {
 			static function a() { throw new IoError("oops"); }
 			static function b() { throw new RangeError(42); }
 			static function c() { var n:Int = 0; return n; }
@@ -48,8 +47,7 @@ class ApqMatcherTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		// Pattern: `$x = $x + 1`. Should match `n = n + 1` but NOT
 		// `n = m + 1` (different `x` on each side).
-		final source: String =
-			'class X {
+		final source: String = 'class X {
 			static function a() { var n:Int = 0; n = n + 1; }
 			static function b() { var n:Int = 0; var m:Int = 0; n = m + 1; }
 		}';

@@ -697,6 +697,13 @@ class Renderer {
 	 * first-line accumulation stops there. A Group that fits stays flat
 	 * and contributes its full flat width to the running line.
 	 *
+	 * "Naturally-produced hardline" also covers a newline a VERBATIM
+	 * multi-line token carries INSIDE a `Text` leaf (a raw multi-line
+	 * string literal, a `#if ... #end` token-splice raw): those bytes are
+	 * emitted as-is, so the first physical line genuinely ends there and
+	 * `naturalWidthStep` stops the walk on it. The flat-projection
+	 * statement of the same rule is `embeddedLineWidths`.
+	 *
 	 * `BodyGroup` is DEFERRED (zero width, no first-line termination) —
 	 * its content decides its own flat/break later and is invisible to a
 	 * parent's first-line probe (Departure 2, mirrors `fitsFlat` /
@@ -1577,6 +1584,20 @@ class Renderer {
 			case Empty:
 				return { add: 0, aborted: false };
 			case Text(s):
+				// omega-verbatim-firstline (decl-init sibling): a VERBATIM
+				// multi-line token -- a raw multi-line string literal, a
+				// `#if ... #end` token-splice raw -- emits its own newlines
+				// through ONE `Text`, so the first physical line ends at the
+				// first of them and this walk stops there exactly as it does
+				// on a hardline. Summing the whole token instead reports a
+				// width no line ever reaches, and the lead-break the probe
+				// then fires shortens nothing: every line after the first is
+				// emitted byte for byte whatever the enclosing layout decides.
+				// Flat-projection sibling of the same rule:
+				// `embeddedLineWidths`, whose doc-comment carries why this arm
+				// cannot delegate to it and why it needs no LAST-line half.
+				final nl: Int = s.indexOf('\n');
+				if (nl >= 0) return { add: nl, aborted: true };
 				return { add: s.length, aborted: false };
 			case Line(flat):
 				if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code)
@@ -3091,6 +3112,16 @@ class Renderer {
 	 * stops the walk) must stay in LOCKSTEP with `fitsFlatStep`: `fitsFlat`
 	 * picks between the two per doc, so a divergence would answer the same
 	 * question two ways.
+	 *
+	 * The NATURAL walk states the same rule for itself, in one arm rather than
+	 * one function: `naturalWidthStep`'s `Text` arm stops its first-line
+	 * accumulation at the embedded newline. It cannot delegate here — this walk
+	 * resolves every `Group` flat while the natural one resolves each by its own
+	 * `fitsFlat`, so the two disagree on where the first line ends whenever a
+	 * Group breaks before the token. It needs no `last` either: an
+	 * `IfNaturalFirstLineExceeds` measures only its own `flatDoc`, with no
+	 * rest-stack lookahead, so nothing it can place rides the token's closing
+	 * line.
 	 *
 	 * Consumers: `fitsFlat` (both halves — a `Group` around such a token stays
 	 * flat when the line it opens and the line it closes both fit) and

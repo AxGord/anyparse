@@ -578,6 +578,7 @@ import unit.RedundantToStringCheckTest;
 import unit.HxMethodChainAllOrNothingSliceTest;
 import unit.HxListLiteralEmissionSliceTest;
 import unit.HxCallArgMultilineStringCuddleTest;
+import unit.HxDeclInitMultilineStringCuddleTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -878,6 +879,7 @@ class RunTests {
 		addCase(new HxLineCommentIndentSliceTest());
 		addCase(new HxCallArgCommentWriteTest());
 		addCase(new HxCallArgMultilineStringCuddleTest());
+		addCase(new HxDeclInitMultilineStringCuddleTest());
 		addCase(new HxParamCommentWriteTest());
 		addCase(new HxInfixCommentWriteTest());
 		addCase(new HxRhsCommentWriteTest());
