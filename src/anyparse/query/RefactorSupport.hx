@@ -2260,34 +2260,40 @@ final class RefactorSupport {
 	 * keeps its conservative branch exactly as with `valueTypeNominal`.
 	 *
 	 * A STRICT superset of `valueTypeNominal`, kept SEPARATE from it on purpose: that function is
-	 * also consumed by gates whose safe direction is the OTHER way round (`map-keys-lookup` and
-	 * `prefer-static-extension` act on a resolved nominal and refuse an unresolved one), and
-	 * widening a shared predicate under them is the trap this project has paid for before. The
-	 * added capacity is opt-in per call site; today the ordered-comparison gate behind
-	 * `CheckScan.typeNominalResolver` is the one that takes it, where more proof can only turn a
-	 * conservative wrap into a licensed flip.
+	 * also consumed by gates whose safe direction is the OTHER way round (`map-keys-lookup` acts on
+	 * a resolved nominal and refuses an unresolved one), and widening a shared predicate under them
+	 * is the trap this project has paid for before. The added capacity is therefore opt-in PER CALL
+	 * SITE rather than a widening, and each consumer decides for itself.
 	 *
-	 * `chain` is the second, deeper opt-in — null gives EXACTLY the answer above, non-null adds two
-	 * proof capacities the nominal-only walk structurally cannot have:
+	 * `chain` is the second, deeper opt-in — null gives EXACTLY the answer above, non-null adds
+	 * three proof capacities the nominal-only walk structurally cannot have:
 	 *
 	 *  - a `for` BINDER's type, read off the iterable's element parameter. The binder carries no
 	 *    `:Type`, so `declaredTypes` has no entry for it and the shallow walk answers null.
+	 *  - a TABLED stdlib static call's written return (`tabledStaticCallTypeSource`), which is what
+	 *    gives the binder arm an iterable to read (`for (key in Reflect.fields(o))`).
 	 *  - TYPE-ARGUMENT SUBSTITUTION along the member chain: a member declared `T` on
 	 *    `Box<T:Item>`, reached through a receiver written `Box<Item>`, resolves to `Item`. The
 	 *    shallow walk keeps the verbatim `T`, which resolves to nothing.
 	 *
-	 * Both are additive PROOF for the one consumer that opts in, and both fail closed everywhere
-	 * they are unsure: `SymbolIndex.resolveGenericPathFinalMemberTypeSource` refuses an effective
-	 * source that still mentions a parameter name rather than carrying it forward. That refusal is
-	 * the SUBSTITUTING walk's, not the whole answer's — `pathReceiverMemberTypeSource` still runs
-	 * its package-blind fallback afterwards, which can hand back the verbatim parameter source. That
-	 * is deliberate: the fallback is exactly what keeps deep mode a superset of shallow, and a
-	 * parameter name resolves to no type in the one consumer's whitelist either way.
+	 * Two consumers take the deep opt-in: `CheckScan.typeNominalResolver`'s ordered-comparison gate,
+	 * where more proof can only turn a conservative wrap into a licensed flip; and
+	 * `prefer-static-extension`, which ACTS on the answer and whose own doc records why each arm
+	 * clears the higher bar that demands.
+	 *
+	 * The three fail closed everywhere they are unsure, with ONE documented leak an acting consumer
+	 * must handle itself: `SymbolIndex.resolveGenericPathFinalMemberTypeSource` refuses an effective
+	 * source that still mentions a parameter name, but that refusal is the SUBSTITUTING walk's, not
+	 * the whole answer's — `pathReceiverMemberTypeSource` still runs its package-blind fallback
+	 * afterwards, which CAN hand back the verbatim parameter source (`payload:T` on a `Box<T>`
+	 * reached through a subtype). The fallback is what keeps deep mode a superset of shallow, so it
+	 * stays; a consumer that acts on the nominal must be one whose downstream gate rejects a name
+	 * resolving to no unique declaration.
 	 *
 	 * Deliberately NOT resolved (safe misses, each a null): a bare `f()` / `this.f()` call, whose
 	 * enclosing-type lookup is a different mechanism; a `Type.staticMethod()` whose receiver is a
-	 * SINGLE unbound identifier, since `valueTypeNominal` answers null for it rather than guessing
-	 * that an unbound name is a type.
+	 * SINGLE unbound identifier and whose `Type.method` is NOT in `staticMethodReturns`, since the
+	 * walk will not otherwise guess that an unbound name is a type.
 	 */
 	public static function expressionTypeNominal(
 		node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>, file: String,
@@ -2350,6 +2356,12 @@ final class RefactorSupport {
 	 * already a package-stripped simple name, but it would put a transformation on the path of the
 	 * consumers this seam exists to leave untouched. The shared prefix that IS one question
 	 * (resolving the path's root to a binding) is factored out as `pathRootBinding`.
+	 *
+	 * Ahead of the path walk sits the TABLED-STATIC arm (`tabledStaticCallTypeSource`): a call whose
+	 * `Type.method` names a `RefShape.staticMethodReturns` entry answers that written return type.
+	 * It is the only shape here that is not a path, and it exists because a call is what a `for`
+	 * header usually iterates — `for (key in Reflect.fields(o))` has no other route to an element
+	 * type, the binder carrying no annotation and the index holding no method RETURN sources.
 	 */
 	private static function valueTypeSourceDeep(
 		node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, chain: ChainTypeContext,
@@ -2358,12 +2370,145 @@ final class RefactorSupport {
 		final identKind: Null<String> = shape.identKind;
 		final fieldKind: Null<String> = shape.fieldAccessKind;
 		if (identKind == null || fieldKind == null) return null;
+		final tabled: Null<String> = tabledStaticCallTypeSource(node, root, shape, index);
+		if (tabled != null) return tabled;
 		final path: Null<Array<String>> = pathOf(node, identKind, fieldKind);
 		if (path == null) return null;
 		final rootSource: Null<String> = pathRootTypeSourceDeep(node, root, shape, declaredTypes, chain, index, file, seen);
 		if (path.length == 1) return rootSource;
 		if (index == null) return null;
 		return pathReceiverMemberTypeSource(path, rootSource, index, file, true);
+	}
+
+	/**
+	 * The `Type.method` a call node names TOGETHER with that method's written RETURN type source,
+	 * when the flattened `Type.method` names a `RefShape.staticMethodReturns` entry
+	 * (`Reflect.fields` → `Array<String>`, `Date.now` → `Date`, …) and the receiver is a genuine
+	 * TYPE reference — its ROOT identifier binds to no value (`TypeResolver.receiverRootIsUnboundType`),
+	 * so a local / parameter / field named after the module makes the access an INSTANCE call and is
+	 * refused. Null for every other node. The table's values are written import-safe (fully qualified
+	 * where the simple name would not resolve), so a caller may carry the source forward or copy it
+	 * verbatim.
+	 *
+	 * What it deliberately does NOT decide is whether an indexed type SHADOWS the tabled one — the
+	 * two callers need opposite answers there and each applies its own policy to `typeName`:
+	 * `ExplicitLocalType` refuses a name declared AT ALL (it copies the source into the user's file,
+	 * so an indexed name means the oracle can do better), while `tabledStaticCallTypeSource` refuses
+	 * only a name declared by a NON-std file (it produces a nominal for internal lookups, where the
+	 * normally-indexed std is not a shadow). Keeping the shape match here and the policy at the call
+	 * sites is what puts those two policies side by side instead of in two near-identical copies.
+	 */
+	public static function tabledStaticCall(
+		node: QueryNode, root: QueryNode, shape: RefShape
+	): Null<{ typeName: String, returnSource: String }> {
+		final table: Null<Map<String, String>> = shape.staticMethodReturns;
+		final callKind: Null<String> = shape.callKind;
+		final fieldKind: Null<String> = shape.fieldAccessKind;
+		if (table == null || callKind == null || fieldKind == null) return null;
+		if (node.kind != callKind || node.children.length == 0) return null;
+		final callee: QueryNode = node.children[0];
+		if (callee.kind != fieldKind || callee.children.length != 1) return null;
+		final method: Null<String> = callee.name;
+		final receiver: QueryNode = callee.children[0];
+		final typeName: Null<String> = receiver.name;
+		if (method == null || typeName == null) return null;
+		final ret: Null<String> = table['$typeName.$method'];
+		if (ret == null || !TypeResolver.receiverRootIsUnboundType(receiver, root, shape)) return null;
+		return { typeName: typeName, returnSource: ret };
+	}
+
+	/**
+	 * `tabledStaticCall`'s return source under the DEEP walk's shadow policy: refused when a NON-std
+	 * indexed file declares the type's simple name. The stdlib itself is normally indexed
+	 * (`StdResolver` joins it to the resolution scope), so "declared at all" cannot be the test here —
+	 * what would make the table wrong is a PROJECT or LIBRARY type shadowing the stdlib name. With no
+	 * index the question cannot be asked and the table is trusted, matching every other
+	 * unindexed-run fallback.
+	 */
+	private static function tabledStaticCallTypeSource(
+		node: QueryNode, root: QueryNode, shape: RefShape, index: Null<SymbolIndex>
+	): Null<String> {
+		final hit: Null<{ typeName: String, returnSource: String }> = tabledStaticCall(node, root, shape);
+		if (hit == null) return null;
+		return shadowedByNonStdType(index, hit.typeName) ? null : hit.returnSource;
+	}
+
+	/** Whether any indexed file OUTSIDE the auto-discovered Haxe std declares a top-level type named `typeName`. */
+	public static function shadowedByNonStdType(index: Null<SymbolIndex>, typeName: String): Bool {
+		return index != null && index.declaringFiles(typeName).exists(fi -> !StdResolver.isStdFile(fi.file));
+	}
+
+	/**
+	 * The verbatim declared type SOURCE a BARE identifier carries when it names no value binding at
+	 * all but IS a member — declared directly or INHERITED — of the enclosing type declaration: the
+	 * implicit-`this` read Haxe resolves without the qualifier. `SymbolIndex`'s import-aware walk
+	 * supplies it (`resolvePathFinalMemberTypeSource` over a one-segment member path), so the
+	 * extends chain is followed to the SPECIFIC supertype each clause names rather than to any
+	 * same-simple-named type elsewhere in the scope.
+	 *
+	 * Null — the caller keeps its conservative branch — whenever: `ident` is not an identifier node;
+	 * it DOES resolve to a value binding; no enclosing type declaration covers it; or the member is
+	 * unresolved / ambiguous anywhere along the chain.
+	 *
+	 * `invisibleBinders` is the gate that is not about resolution but about VISIBILITY, and it is
+	 * load-bearing: a binder the scope resolver cannot see looks EXACTLY like an unbound name, so
+	 * without it this arm answers the enclosing type's member for a local the author actually wrote
+	 * — and a rewrite built on that answer breaks the build. Build the list with
+	 * `resolverInvisibleBinderNames`, which is per-file while this is per-site. A NULL list — the
+	 * grammar exposes no seam for one of the binder classes — is refused outright: an EMPTY list
+	 * means "this file binds nothing invisibly", a null one means the question cannot be asked.
+	 */
+	public static function implicitThisMemberTypeSource(
+		ident: QueryNode, root: QueryNode, shape: RefShape, index: SymbolIndex, file: String, invisibleBinders: Null<Array<String>>
+	): Null<String> {
+		final identKind: Null<String> = shape.identKind;
+		final name: Null<String> = ident.name;
+		final span: Null<Span> = ident.span;
+		if (identKind == null || ident.kind != identKind || name == null || span == null) return null;
+		if (name == shape.selfReferenceText) return null;
+		if (invisibleBinders == null || invisibleBinders.contains(name)) return null;
+		if (TypeResolver.resolveBindingFrom(name, span, root, shape) != null) return null;
+		final enclosing: Null<String> = TypeResolver.enclosingTypeName(root, span);
+		return enclosing == null ? null : index.resolvePathFinalMemberTypeSource(file, enclosing, [name]);
+	}
+
+	/**
+	 * Every name bound in `root` by a construct the SCOPE RESOLVER cannot see — the shadow set a
+	 * consumer must subtract before reading an unbound identifier as anything but a local. Null when
+	 * the grammar exposes no seam for one of the classes, which a consumer must read as "the shadow
+	 * cannot be ruled out" rather than as an empty set.
+	 *
+	 * Two classes, each confirmed against the Haxe grammar rather than assumed (the parenthesized
+	 * lambda param, the `catch` binder and a local function's own parameters all DO resolve, and are
+	 * deliberately absent):
+	 *
+	 *  - CASE PATTERNS (`case Leaf(m):`) — the binder lives inside the pattern subtree.
+	 *  - the BARE single-parameter arrow lambda (`m -> m.f()`), whose parameter the grammar projects
+	 *    as a plain identifier expression indistinguishable from a read — the model carries no binder
+	 *    node to resolve, so the resolver has nothing to bind. Recovering that distinction in the
+	 *    projection would close this for every consumer at once and delete this arm; until then the
+	 *    name is vetoed wherever it appears in the file.
+	 */
+	public static function resolverInvisibleBinderNames(root: QueryNode, shape: RefShape): Null<Array<String>> {
+		final identKind: Null<String> = shape.identKind;
+		final lambdaKinds: Null<Array<String>> = shape.lambdaKinds;
+		final binderKinds: Array<String> = shape.casePatternBinderKinds ?? [];
+		if (identKind == null || lambdaKinds == null || (shape.plainCasePatternKind == null && binderKinds.length == 0)) return null;
+		final names: Array<String> = casePatternNames(root, shape.plainCasePatternKind, binderKinds);
+		collectBareLambdaParamNames(root, identKind, lambdaKinds, names);
+		return names;
+	}
+
+	/** Append every bare (unparenthesized) arrow-lambda parameter name in `node`'s subtree to `out`. */
+	private static function collectBareLambdaParamNames(
+		node: QueryNode, identKind: String, lambdaKinds: Array<String>, out: Array<String>
+	): Void {
+		if (lambdaKinds.contains(node.kind) && node.children.length > 0) {
+			final first: QueryNode = node.children[0];
+			final name: Null<String> = first.name;
+			if (first.kind == identKind && name != null && !out.contains(name)) out.push(name);
+		}
+		for (child in node.children) collectBareLambdaParamNames(child, identKind, lambdaKinds, out);
 	}
 
 	/**

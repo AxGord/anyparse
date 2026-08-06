@@ -26,7 +26,9 @@ import anyparse.runtime.Span;
  * outer-nominal type is a `RefShape.mapAbstractTypeNames` (`Map`), OR a
  * `RefShape.nullableWrapperTypeNames` (`Null`) whose verbatim `:Type` source unwraps to a
  * `mapAbstractTypeNames` nominal (`Null<Map<…>>`). The receiver may be a bare identifier
- * (resolved via `TypeResolver.identBindingFrom` + `TypeInfoProvider.declaredTypes`) OR a PATH
+ * (resolved via `TypeResolver.identBindingFrom` + `TypeInfoProvider.declaredTypes`, or — when it
+ * names no value binding at all — as an implicit-`this` read of an INHERITED member, resolved
+ * through `RefactorSupport.implicitThisMemberTypeSource`) OR a PATH
  * — a chain of plain field accesses over an identifier or `this` (`this.m`, `obj.m`, `a.b.c`),
  * whose root resolves the same way and whose field segments resolve cross-file through a
  * `SymbolIndex` (`RefactorSupport.pathRootTypeName` / `pathFinalMemberTypeSource`). An
@@ -97,10 +99,22 @@ final class PreferIndexAccess implements Check {
 			final root: QueryNode = tree;
 			final declaredTypes: Map<Int, String> = c.typed.declaredTypes(entry.source);
 			final declaredTypeSources: Map<Int, String> = c.typed.declaredTypeSources(entry.source);
+			// The invisible-binder scan is per FILE while the implicit-`this` gate is per site, and
+			// most files never reach it — so it is built at most once, on first demand. `computed`
+			// distinguishes a cached null (the grammar cannot answer) from "not yet scanned".
+			var binders: Null<Array<String>> = null;
+			var bindersComputed: Bool = false;
+			final resolveBinders: () -> Null<Array<String>> = () -> {
+				if (!bindersComputed) {
+					bindersComputed = true;
+					binders = RefactorSupport.resolverInvisibleBinderNames(root, c.shape);
+				}
+				return binders;
+			};
 			final matcher: (
 				QueryNode, Null<String>
 			) -> Null<Match> = (call, parentKind) ->
-				match(call, parentKind, root, declaredTypes, declaredTypeSources, c, resolveSymbols, entry.file);
+				match(call, parentKind, root, declaredTypes, declaredTypeSources, c, resolveSymbols, entry.file, resolveBinders);
 			collect(
 				root, null, c, matcher, m -> violations.push({
 					file: entry.file,
@@ -193,12 +207,12 @@ final class PreferIndexAccess implements Check {
 	 */
 	private static function match(
 		call: QueryNode, parentKind: Null<String>, root: QueryNode, declaredTypes: Map<Int, String>, declaredTypeSources: Map<Int, String>,
-		cfg: Cfg, symbols: () -> Null<SymbolIndex>, file: String
+		cfg: Cfg, symbols: () -> Null<SymbolIndex>, file: String, invisibleBinders: () -> Null<Array<String>>
 	): Null<Match> {
 		final m: Null<Match> = structuralMatch(call, parentKind, cfg);
 		if (m == null) return null;
 		final matched: Match = m;
-		if (!receiverIsMap(matched.recv, root, declaredTypes, declaredTypeSources, cfg, symbols, file)) return null;
+		if (!receiverIsMap(matched.recv, root, declaredTypes, declaredTypeSources, cfg, symbols, file, invisibleBinders)) return null;
 		for (i in 1...call.children.length) {
 			if (containsFragileNullGuard(call.children[i], matched.callSpan, root, declaredTypes, cfg)) return null;
 		}
@@ -223,21 +237,25 @@ final class PreferIndexAccess implements Check {
 	/**
 	 * Whether `recv` is an identifier or path whose declared type resolves to a `Map`-abstract
 	 * nominal — directly (`Map`), or a nullable wrapper unwrapping to one (`Null<Map<…>>`). A bare
-	 * identifier resolves through its binding annotation; a path resolves its root the same way
-	 * (or, for `this`, the enclosing type; or, for a static TYPE-name root, the unique type it
-	 * names in scope) and walks each field segment's member type cross-file through `symbols`. An
-	 * unresolved binding / path / type is a conservative miss — index access `[]` compiles only on
+	 * identifier resolves through its binding annotation, or — when it names no value binding at all
+	 * — through the enclosing type's member closure as an implicit-`this` read
+	 * (`RefactorSupport.implicitThisMemberTypeSource`, which walks the `extends` chain import-aware
+	 * and refuses a name any resolver-invisible binder shadows); a path resolves its root through
+	 * `pathRootTypeName` (a binding annotation, or, for `this`, the enclosing type; or, for a static
+	 * TYPE-name root, the unique type it names in scope — NOT the implicit-`this` arm, which is
+	 * bare-identifier only) and walks each field segment's member type cross-file through `symbols`.
+	 * An unresolved binding / path / type is a conservative miss — index access `[]` compiles only on
 	 * the abstract, so this gate never flags without positive Map proof.
 	 */
 	private static function receiverIsMap(
 		recv: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, declaredTypeSources: Map<Int, String>, cfg: Cfg,
-		symbols: () -> Null<SymbolIndex>, file: String
+		symbols: () -> Null<SymbolIndex>, file: String, invisibleBinders: () -> Null<Array<String>>
 	): Bool {
 		final path: Null<Array<String>> = RefactorSupport.pathOf(recv, cfg.identKind, cfg.fieldKind);
 		if (path == null) return false;
 		if (path.length == 1) {
 			final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(recv, root, cfg.shape);
-			if (bindingFrom == null) return false;
+			if (bindingFrom == null) return inheritedIsMap(recv, root, cfg, symbols, file, invisibleBinders);
 			final typeName: Null<String> = declaredTypes[bindingFrom];
 			return typeName != null && nominalIsMap(typeName, declaredTypeSources[bindingFrom], cfg);
 		}
@@ -247,6 +265,25 @@ final class PreferIndexAccess implements Check {
 		// root (no value binding) resolves import-aware from the reference file's scope.
 		final rootType: Null<String> = RefactorSupport.pathRootTypeName(recv, root, declaredTypes, cfg.shape);
 		final src: Null<String> = RefactorSupport.pathReceiverMemberTypeSource(path, rootType, index, file);
+		if (src == null) return false;
+		final nominal: Null<String> = RefactorSupport.outerNominalOf(src);
+		return nominal != null && nominalIsMap(nominal, src, cfg);
+	}
+
+	/**
+	 * Whether an UNBOUND bare identifier is an implicit-`this` read of a `Map`-abstract member of
+	 * the enclosing type — in practice a member declared by a SUPERTYPE, which the scope resolver
+	 * does not answer for because it resolves declarations, not inheritance (an own-class field IS
+	 * answered, in this file or not). Requires the cross-file index; an unresolved member, or one
+	 * whose written type is not a `Map`, is a conservative miss like every other receiver here.
+	 */
+	private static function inheritedIsMap(
+		recv: QueryNode, root: QueryNode, cfg: Cfg, symbols: () -> Null<SymbolIndex>, file: String,
+		invisibleBinders: () -> Null<Array<String>>
+	): Bool {
+		final index: Null<SymbolIndex> = symbols();
+		if (index == null) return false;
+		final src: Null<String> = RefactorSupport.implicitThisMemberTypeSource(recv, root, cfg.shape, index, file, invisibleBinders());
 		if (src == null) return false;
 		final nominal: Null<String> = RefactorSupport.outerNominalOf(src);
 		return nominal != null && nominalIsMap(nominal, src, cfg);

@@ -240,23 +240,26 @@ final class CheckScan {
 	 *
 	 * The probe is `RefactorSupport.expressionTypeNominal`, run in its DEEP mode — the
 	 * `ChainTypeContext` built below. On top of the plain identifier / field-path answer it
-	 * resolves three further shapes:
+	 * resolves four further shapes:
 	 *
 	 *  - a METHOD CALL's return nominal, through its receiver chain (`chain.indexOf(x)` → `Int`);
 	 *  - a `for` BINDER's type, read off the iterable's element type parameter — the binder carries
 	 *    no `:Type`, so it has no `declaredTypes` entry of its own;
+	 *  - a TABLED stdlib static call's return (`RefShape.staticMethodReturns`), which is what makes
+	 *    the binder arm reach `for (key in Reflect.fields(o))`;
 	 *  - a generic member's TYPE ARGUMENT, so `b.payload.text` on a `b:Box<Item>` reaches `Item`'s
 	 *    member instead of stopping at the verbatim parameter name `T`.
 	 *
-	 * All three are added PROOF only: every extra resolution can turn a conservative `!(a < b)`
+	 * All four are added PROOF only: every extra resolution can turn a conservative `!(a < b)`
 	 * wrap into a licensed flip, never the reverse, so the unproven → refuse default every
 	 * guard-family consumer relies on is untouched.
 	 *
-	 * That is exactly why the deep mode is an OPT-IN parameter rather than a widening of
-	 * `RefactorSupport.valueTypeNominal`: its other consumers (`map-keys-lookup`,
-	 * `prefer-static-extension`) read a resolved nominal as a licence to ACT, where more resolution
-	 * is the unsafe direction. They stay shallow BY CONSTRUCTION — they do not pass a chain context
-	 * and there is no way for one to reach them — not by a convention a later edit could forget.
+	 * The deep mode stays an OPT-IN parameter rather than a widening of
+	 * `RefactorSupport.valueTypeNominal` because its other consumers read a resolved nominal as a
+	 * licence to ACT, so each has to decide for itself. `map-keys-lookup` has not opted in;
+	 * `prefer-static-extension` HAS, deliberately — see `PreferStaticExtension.receiverNominal` for
+	 * why each deep arm is type-CORRECT and fail-closed rather than merely more permissive, which is
+	 * the bar an arm must clear before an acting consumer may take it.
 	 *
 	 * Null when the grammar carries no type information at all: the caller then passes nothing
 	 * and every ordered comparison stays wrapped, exactly as before this seam existed.
