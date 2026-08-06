@@ -618,6 +618,28 @@ class FoldStringLiteralsCheckTest extends Test {
 	}
 
 	/**
+	 * A MODULE-LEVEL `inline final` is the same compile-time constant and breaks the same
+	 * `case S:` — but it is a top-level declaration, not a member, so a gate that asked
+	 * for a member KIND folded it.
+	 */
+	public function testModuleLevelInlineValueIsNotACandidate(): Void {
+		final literal: String = "'" + ''.rpad('A', 100) + '\\n' + ''.rpad('B', 60) + "'";
+		Assert.equals(0, violations('inline final S:String = $literal;\n').length);
+		Assert.equals(1, violations('final S:String = $literal;\n').length);
+	}
+
+	/**
+	 * The modifier run ends at EVERY declaration, not only at a member. Ending it at a
+	 * member left the `@:enum` of a deprecated enum abstract set for the rest of the
+	 * MODULE — a type declaration being no member kind — so every later type's field
+	 * values were silently exempt.
+	 */
+	public function testEnumAbstractRunEndsAtItsOwnDeclaration(): Void {
+		final literal: String = "'" + ''.rpad('A', 100) + '\\n' + ''.rpad('B', 60) + "'";
+		Assert.equals(1, violations(deprecatedEnumAbstractSource(4, 4) + '\nclass C {\n\tstatic final S:String = $literal;\n}').length);
+	}
+
+	/**
 	 * Gate (1): a macro argument is reported but NOT fixed — a macro pattern-matching
 	 * `EConst(CString)` breaks silently on a concatenation, and no structural check can
 	 * see whether it folds.
@@ -668,14 +690,53 @@ class FoldStringLiteralsCheckTest extends Test {
 		Assert.equals(0, check.fix(caller.source, vs, new HaxeQueryPlugin()).length);
 	}
 
-	/** The QUALIFIED spelling of the same call is bound by a TYPE import, so the refusal has to read the receiver. */
-	public function testQualifiedMacroCallStaysRefusedWhenTheDeclarationIsOutOfScope(): Void {
-		final literal: String = "'" + ''.rpad('A', 100) + '\\n' + ''.rpad('B', 60) + "'";
-		final src: String = 'import m.Lang;\nclass C {\n\tfunction f() {\n\t\tg(Lang.t($literal));\n\t}\n}';
+	/**
+	 * Every spelling that can route the call to an out-of-scope declaration refuses, and
+	 * the two that CANNOT do not. The gate reads the import's KIND, not just its path: a
+	 * wildcard and a `using` bind every name in the file, which is why an unresolved call
+	 * under either is refused whatever it is called.
+	 */
+	public function testEveryOutOfScopeCallSpellingIsRefused(): Void {
+		for (spelling in [
+			{ imports: 'import m.Lang.t;', call: 't' },
+			{ imports: 'import m.Lang;', call: 'Lang.t' },
+			{ imports: 'import m.Lang as L;', call: 'L.t' },
+			{ imports: 'import m.*;', call: 'Lang.t' },
+			{ imports: 'import m.Lang.*;', call: 't' },
+			{ imports: 'using m.Ext;', call: 'x.t' },
+			{ imports: '', call: 'm.Lang.t' }
+		])
+			Assert.isTrue(
+				refusedIn(outOfScopeCallSource(spelling.imports, spelling.call)),
+				'expected a refusal for ${spelling.imports} ${spelling.call}'
+			);
+	}
+
+	/**
+	 * The refusal costs nothing where the source cannot route the call anywhere unseen: a
+	 * bare call the file imports nothing for is local, inherited or global, and a
+	 * receiver whose TYPE the index carries is resolved. Asked against the same gate as
+	 * the refusals above, so the pair discriminates rather than merely agreeing.
+	 */
+	public function testResolvableCallsAreNotRefused(): Void {
+		Assert.isFalse(refusedIn(outOfScopeCallSource('', 'g2')));
+		Assert.isFalse(refusedIn(outOfScopeCallSource('class Lang { public static function t(v:String):String return v; }', 'Lang.t')));
+	}
+
+	/** A whitelisted target clears the refusal whichever spelling the call site used — the entry and the call meet by dotted suffix. */
+	public function testWhitelistClearsAnOutOfScopeCall(): Void {
 		final check: FoldStringLiterals = new FoldStringLiterals();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+		check.setConfigResolver(_ -> LintConfig.parse('{"rules":{"$RULE":{"$WHITELIST_OPTION":["m.Lang.t"]}}}'));
+		for (spelling in [
+			{ imports: 'import m.Lang.t;', call: 't' },
+			{ imports: 'import m.Lang;', call: 'Lang.t' },
+			{ imports: '', call: 'm.Lang.t' }
+		]) {
+			final src: String = outOfScopeCallSource(spelling.imports, spelling.call);
+			final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+			Assert.equals(1, vs.length);
+			Assert.equals(1, check.fix(src, vs, new HaxeQueryPlugin()).length, 'expected a fix for ${spelling.imports} ${spelling.call}');
+		}
 	}
 
 	/**
@@ -872,6 +933,24 @@ class FoldStringLiteralsCheckTest extends Test {
 			},
 			{ file: 'C.hx', source: 'import m.Lang.t;\nclass C {\n\tfunction f() {\n\t\tg(t($literal));\n\t}\n}' }
 		];
+	}
+
+	/**
+	 * A `<head>` line, then the over-long literal passed to `<call>(…)` — the shape whose
+	 * target the index cannot resolve, since neither `m.Lang` nor `m.Ext` is in the run.
+	 * `head` doubles as a place to DECLARE a resolvable type, for the negative control.
+	 */
+	private function outOfScopeCallSource(head: String, call: String): String {
+		final literal: String = "'" + ''.rpad('A', 100) + '\\n' + ''.rpad('B', 60) + "'";
+		return '$head\nclass C {\n\tfunction f() {\n\t\th($call($literal));\n\t}\n}';
+	}
+
+	/** Whether `src`'s single finding is report-only — the macro gate refused it — as opposed to fixable. */
+	private function refusedIn(src: String): Bool {
+		final check: FoldStringLiterals = new FoldStringLiterals();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		return check.fix(src, vs, new HaxeQueryPlugin()).length == 0;
 	}
 
 	/** `src` fixed, canonicalised and re-linted: the canonical form must be a fixed point of the rule. */
