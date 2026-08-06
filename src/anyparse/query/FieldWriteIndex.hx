@@ -485,13 +485,25 @@ final class FieldWriteIndex {
 		});
 	}
 
-	/** Binding-span starts of the directly-declared field members of a type-body node. */
+	/**
+	 * The `from` offsets of every field this container declares — the set a resolved binding is
+	 * matched against to tell a field write from a local one.
+	 *
+	 * `RefactorSupport.eachMemberHost` supplies the hosts rather than the container's direct
+	 * children alone: a field written inside a member-position `#if` region sits one level down, and
+	 * missing it made every write to that field resolve to nothing and be DROPPED — silently proving
+	 * a guarded field never reassigned, which is the direction that turns into a wrong `final`. Every
+	 * branch's fields are collected at once, which is the only sound reading: the write index answers
+	 * for source all builds compile.
+	 */
 	private static function directMemberFroms(node: QueryNode): Array<Int> {
 		final out: Array<Int> = [];
-		for (child in node.children) if (RefactorSupport.FIELD_MEMBER_KINDS.contains(child.kind)) {
-			final sp: Null<Span> = child.span;
-			if (sp != null) out.push(sp.from);
-		}
+		RefactorSupport.eachMemberHost(node, host -> {
+			for (child in host.children) if (RefactorSupport.FIELD_MEMBER_KINDS.contains(child.kind)) {
+				final sp: Null<Span> = child.span;
+				if (sp != null) out.push(sp.from);
+			}
+		});
 		return out;
 	}
 

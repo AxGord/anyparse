@@ -261,4 +261,25 @@ class RedundantPropertyAccessCheckTest extends Test {
 		}
 	}
 
+
+	/**
+	 * A property written inside a member-position `#if` is a member of the class like any other, and
+	 * its `(default, default)` clause is just as redundant. The region is ONE node holding every
+	 * branch's members flattened as siblings, so a scan of the container's direct children never saw it.
+	 */
+	public function testConditionalMemberFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\t#if cpp\n\tpublic var a(default, default):Int;\n\t#end\n}').length);
+	}
+
+
+	/** A region with a redundant property in each branch reports each of them. */
+	public function testConditionalBothBranchesFlagged(): Void {
+		Assert.equals(
+			2,
+			violations(
+				'class C {\n\t#if cpp\n\tpublic var a(default, default):Int;\n\t#else\n\tpublic var b(default, default):Int;\n\t#end\n}'
+			).length
+		);
+	}
+
 }

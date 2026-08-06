@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.format.comment.CommentLossException;
+import anyparse.query.MemberBranchScan;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.ParseError;
@@ -1642,6 +1643,15 @@ final class RefactorSupport {
 	 * (`prefer-final-field` private path, `prefer-final-public-field`,
 	 * `prefer-read-only-field`) — each filters by `exported` and applies its own proof.
 	 * Skip-parse tolerant; a grammar lacking the visibility kind-sets yields nothing.
+	 *
+	 * A field written inside a member-position `#if` region is visited too: the region is ONE
+	 * child of the container holding every branch's fields flattened, so scanning the container's
+	 * direct children alone silently exempted every guarded field. `MemberBranchScan.fold` descends
+	 * into it branch by branch, and merges the exported flag a branch carries out with OR — the
+	 * fail-closed direction here. A field the merge calls exported when some build makes it private
+	 * is at worst reported by the public-field rules instead of the private one; the AND reading
+	 * would hand `prefer-final-field`'s file-confined write proof a field that is PUBLIC in another
+	 * build, where an out-of-file writer it never scans can exist.
 	 */
 	public static function eachFieldMember(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin,
@@ -1655,10 +1665,21 @@ final class RefactorSupport {
 		final defaultVis: Null<String> = shape.defaultVisibilityModifierText;
 		if (containers.length == 0 || members.length == 0 || mutableFields.length == 0 || visibility.length == 0 || defaultVis == null)
 			return;
+		// Re-bound to a non-null local: a narrowing does not reach into an anonymous struct literal.
+		final vis: String = defaultVis;
 		for (entry in files) {
 			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (_: Exception) null;
-			if (tree != null)
-				walkFieldContainers(tree, entry.source, entry.file, containers, members, mutableFields, visibility, defaultVis, visit);
+			if (tree != null) walkFieldContainers(tree, {
+				source: entry.source,
+				file: entry.file,
+				containers: containers,
+				members: members,
+				mutableFields: mutableFields,
+				visibility: visibility,
+				defaultVis: vis,
+				branch: MemberBranchScan.seamsOf(shape, entry.source),
+				visit: visit
+			});
 		}
 	}
 
@@ -3030,28 +3051,24 @@ final class RefactorSupport {
 	}
 
 	/** Recursive worker for `eachFieldMember`: visit a container's mutable fields, tracking exported state. */
-	private static function walkFieldContainers(
-		node: QueryNode, source: String, file: String, containers: Array<String>, members: Array<String>, mutableFields: Array<String>,
-		visibility: Array<String>, defaultVis: String,
-		visit: (owner:String, field:QueryNode, source:String, file:String, exported:Bool) -> Void
-	): Void {
-		if (containers.contains(node.kind)) {
-			final owner: Null<String> = node.name;
-			if (owner != null) {
-				var exported: Bool = false;
-				for (child in node.children) {
-					if (visibility.contains(child.kind)) {
+	private static function walkFieldContainers(node: QueryNode, ctx: FieldMemberCtx): Void {
+		if (ctx.containers.contains(node.kind)) {
+			final name: Null<String> = node.name;
+			// Re-bound to a non-null local: a narrowing does not survive into the closure below.
+			if (name != null) {
+				final owner: String = name;
+				MemberBranchScan.fold(ctx.branch, node.children, false, (exported, child) -> {
+					if (ctx.visibility.contains(child.kind)) {
 						final span: Null<Span> = child.span;
-						if (span != null && StringTools.trim(source.substring(span.from, span.to)) != defaultVis) exported = true;
-					} else if (members.contains(child.kind)) {
-						if (mutableFields.contains(child.kind)) visit(owner, child, source, file, exported);
-						exported = false;
+						return exported || span != null && StringTools.trim(ctx.source.substring(span.from, span.to)) != ctx.defaultVis;
 					}
-				}
+					if (!ctx.members.contains(child.kind)) return exported;
+					if (ctx.mutableFields.contains(child.kind)) ctx.visit(owner, child, ctx.source, ctx.file, exported);
+					return false;
+				}, (a, b) -> a || b);
 			}
 		}
-		for (child in node.children)
-			walkFieldContainers(child, source, file, containers, members, mutableFields, visibility, defaultVis, visit);
+		for (child in node.children) walkFieldContainers(child, ctx);
 	}
 
 	/** Walk back from `from` over own-line line-comments and block-comments (and the whitespace between) to the first code. */
@@ -3945,3 +3962,20 @@ final class RefactorSupport {
 	}
 
 }
+
+/**
+ * What `RefactorSupport.eachFieldMember`'s container walk threads through every frame — the
+ * kind-sets it matches on, the branch seams its member fold descends `#if` regions with, and the
+ * visitor. Resolved once per file.
+ */
+private typedef FieldMemberCtx = {
+	final source: String;
+	final file: String;
+	final containers: Array<String>;
+	final members: Array<String>;
+	final mutableFields: Array<String>;
+	final visibility: Array<String>;
+	final defaultVis: String;
+	final branch: MemberBranchSeams;
+	final visit: (owner:String, field:QueryNode, source:String, file:String, exported:Bool) -> Void;
+};

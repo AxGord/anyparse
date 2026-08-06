@@ -927,4 +927,39 @@ class PreferFinalPublicFieldCheckTest extends Test {
 		return multi(files).filter(v -> v.file == 'C.hx');
 	}
 
+
+	/**
+	 * A public field written inside a member-position `#if` is a field of the class like any other.
+	 * The region is ONE child of the container holding every branch's members flattened, so scanning
+	 * the container's direct children alone silently exempted it.
+	 */
+	public function testConditionalMemberFlaggedAndFixedInPlace(): Void {
+		final src: String = 'class C {\n\t#if cpp\n\tpublic var x:Int = 0;\n\t#end\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals('class C {\n\t#if cpp\n\tpublic final x:Int = 0;\n\t#end\n}', fixedSource(src));
+	}
+
+
+	/**
+	 * The `never reassigned` proof reads every branch AT ONCE. The field is declared under `#if cpp`
+	 * and the write index has to attribute the method's `x = 5` to it anyway — resolving the write to
+	 * a guarded declaration and then DROPPING it would prove a written field never reassigned, and
+	 * `final` there is a compile error.
+	 */
+	public function testConditionalMemberWithWriteNotFlagged(): Void {
+		final src: String = 'class C {\n\t#if cpp\n\tpublic var x:Int = 0;\n\t#end\n\tpublic function bump():Void {\n\t\tx = 5;\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+
+	/**
+	 * A region holding nothing but a visibility keyword modifies the member AFTER `#end` — in that
+	 * build only. The exported flag a branch carries out is merged with OR, the fail-closed reading:
+	 * the field is treated as public in every build, so this public rule claims it rather than
+	 * handing it to `prefer-final-field`, whose proof is only sound for a file-confined private one.
+	 */
+	public function testConditionalCarriedVisibilityTreatsFieldAsPublic(): Void {
+		Assert.equals(1, violations('class C {\n\t#if cpp\n\tpublic\n\t#end\n\tvar x:Int = 0;\n}').length);
+	}
+
 }
