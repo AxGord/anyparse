@@ -395,6 +395,7 @@ import unit.HxCondCommentDirectiveSeamTest;
 import unit.HxSourceBlankPreserveSliceTest;
 import unit.HxTernaryCollectionHugSliceTest;
 import unit.HxCondElseifChainBlankTest;
+import unit.HxCondExprValueFixpointSliceTest;
 import unit.HxComprehensionChainIdempotencyTest;
 import unit.HxComprehensionFitLineNoBreakTest;
 import unit.HxComprehensionCuddledOpenTest;
@@ -886,6 +887,7 @@ class RunTests {
 		addCase(new HxCondCommentWriteTest());
 		addCase(new HxCondCommentDirectiveSeamTest());
 		addCase(new HxCondElseifChainBlankTest());
+		addCase(new HxCondExprValueFixpointSliceTest());
 		addCase(new HxCaseCommentWriteTest());
 		addCase(new HxHeadCommentSeamWriteTest());
 		addCase(new HxGroupTrailCommentWriteTest());
