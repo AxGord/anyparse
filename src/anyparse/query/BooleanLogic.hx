@@ -73,8 +73,24 @@ interface BooleanLogicSupport {
 	 * the grammar engine's call — for Haxe it is `Int` / `UInt`, and notably NOT
 	 * `String`, since Haxe has no non-nullable string type. Omit the probe — or return null —
 	 * and every ordered comparison keeps the verbatim wrap.
+	 *
+	 * `slotKind` names the node kind of the operator slot the negation is about to land in, so
+	 * the result carries a parenthesis pair exactly when it binds LOOSER than that slot — the
+	 * kind-addressed twin of `simplifyNegatedCompound`'s `parent`, for a caller whose slot is
+	 * SYNTHETIC and therefore has no node (`loop-guard` merging a lifted guard into a header
+	 * `if` emits `c && INV`, and a De Morgan `||` result must not re-associate there). Null —
+	 * or a slot kind that constrains nothing — emits the bare form, which is what every caller
+	 * dropping the negation into a whole condition slot wants.
+	 *
+	 * The contract on `slotKind` is therefore the caller's to keep: it must be a kind the GRAMMAR
+	 * names for that operator (read off its own `RefShape`, never a literal). An unrecognised kind
+	 * is indistinguishable from null here and yields the bare form — the UNSAFE direction, and one
+	 * the fix pipeline's re-parse gate cannot catch, since a re-associated condition still parses.
+	 * A caller that cannot supply the kind must therefore refuse the site, not pass null.
 	 */
-	public function negateCondition(cond: QueryNode, source: String, ?typeNominalOf: (QueryNode) -> Null<String>): String;
+	public function negateCondition(
+		cond: QueryNode, source: String, ?typeNominalOf: (QueryNode) -> Null<String>, ?slotKind: String
+	): String;
 
 	/**
 	 * Whether `negateCondition` had to DECLINE a rewrite it knows how to perform — in the Haxe
