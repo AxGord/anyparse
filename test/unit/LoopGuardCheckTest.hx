@@ -378,13 +378,34 @@ class LoopGuardCheckTest extends Test {
 	}
 
 	/**
-	 * The MERGE arm needs no gate of its own. In an unshielded position the trailing `else` has
-	 * ALREADY bound to the header `if (c)`, giving it three children, and `match` accepts only the
-	 * else-less two — so the arm's own shape refuses the site and the dangling-else gate is not
-	 * what decides it.
+	 * The MERGE arm needs no gate of its own, and the reason is structural: it edits an `if` that
+	 * ALREADY exists — that header's condition span and the body span — and emits no new `if`, so
+	 * it changes no else-binding and position cannot matter to it. In THIS shape the site is
+	 * refused for a second, shallower reason too: the trailing `else` has bound to the header
+	 * `if (c)`, giving it three children where `match` accepts only the else-less two. That second
+	 * reason is a fact about the common non-`#if` case and NOT an invariant — the sibling below is
+	 * the counterexample, where the arm FIRES in an unshielded position.
 	 */
 	public function testMergeArmImmuneInUnshieldedPosition(): Void {
 		Assert.equals(0, violations(wrapPositioned('if (p) for (x in xs) if (c) { if (g) continue; trace(x); } else trace(0);')).length);
+	}
+
+	/**
+	 * The merge arm's REAL invariant, pinned. Inside a `#if` region the trailing `else` binds to
+	 * the OUTER `if (p)` — the parse is `IfStmt(p, Conditional(…), else)` — so the header `if (c)`
+	 * keeps its TWO children while the `Conditional` passes the unshielded flag down through
+	 * `RefactorSupport.isConditionalKind`. The arm therefore fires in an unshielded position, and
+	 * the asserted output is why that is right: only the header condition and the body change, the
+	 * `else` still belongs to `if (p)`, and nothing rebinds. Asserting the FIXED TEXT rather than
+	 * just the count is what puts "the rewrite changes no else-binding" under test.
+	 */
+	public function testMergeArmFiresInUnshieldedConditionalRegion(): Void {
+		final input: String = 'if (p)\n\t\t\t#if X\n\t\t\tfor (x in xs) if (c) { if (g) continue; trace(x); }\n'
+			+ '\t\t\t#else\n\t\t\ttrace(1);\n\t\t\t#end\n\t\telse trace(0);';
+		final merged: String = 'if (p)\n\t\t\t#if X\n\t\t\tfor (x in xs) if (c && !g) { trace(x); }\n'
+			+ '\t\t\t#else\n\t\t\ttrace(1);\n\t\t\t#end\n\t\telse trace(0);';
+		Assert.equals(1, violations(wrapPositioned(input)).length);
+		Assert.equals(wrapPositioned(merged), applyFix(wrapPositioned(input)));
 	}
 
 	private inline function wrap(loopCode: String): String {

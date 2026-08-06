@@ -533,11 +533,54 @@ class FieldInitAtDeclarationCheckTest extends Test {
 	/**
 	 * The positive control for the fixture above: the SAME class with the `super();` statement
 	 * deleted still moves, so the `super()` call is the only difference between the two. The
-	 * fixture is SYNTACTIC — a subclass constructor with no `super()` is not compilable Haxe —
-	 * as several sibling fixtures in this file already are.
+	 * shape is REAL Haxe, not a syntactic stand-in: `super()` is required only when the BASE
+	 * class DECLARES a constructor. Verified on 4.3.7 `--interp` — `class B { public var z:Int
+	 * = 0; }` plus `class C extends B { public var asset:String; public function new()
+	 * { asset = 'x'; } }` compiles and runs, printing `x` then `0`, and it is adding
+	 * `public function new() {}` to `B` that turns it into `Missing super constructor call`.
+	 * So the gate does not refuse every `extends` class — only the ones that call up.
 	 */
 	public function testNoSuperCallStillMoved(): Void {
 		final src: String = 'class C extends B { var asset:String; public function new() { asset = Loader.get("pack"); } }';
+		Assert.equals(1, violations(src).length);
+	}
+
+	/**
+	 * The load-bearing premise of the "deliberately COARSER" argument, under test rather than
+	 * only argued: a `super(…)` need not be a top-level statement, so "the init precedes THE
+	 * super call" often has no answer at all and the gate refuses the whole constructor
+	 * instead. A branch-conditional base-constructor call is legal Haxe — verified on 4.3.7
+	 * `--interp`, where `if (c) super(1) else super(2);` and a one-sided `if (f) super(7);`
+	 * both compile and run. Measured against the two binaries: 1 violation before the gate,
+	 * 0 after.
+	 */
+	public function testSuperInsideBranchNotMoved(): Void {
+		final src: String = 'class C extends B { var a:Int; public function new(f:Bool) { if (f) super(); a = 1; } }';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * The ACCEPTED over-refusal, as a decision under test rather than a paragraph of prose. This
+	 * is the `pony/net/cs/SocketClient` shape: the init sits BEFORE the `super(…)`, so it does
+	 * NOT cross the base-constructor boundary and the finer rule would keep it. The coarse gate
+	 * refuses it anyway, and the class doc argues that one lost cleanup per 676 files is the
+	 * right price. Measured: 1 violation before the gate, 0 after. Whoever implements the finer
+	 * rule flips THIS assertion back to 1.
+	 */
+	public function testInitBeforeSuperStillNotMoved(): Void {
+		final src: String = 'class C extends B { var _x:Int; public function new() { _x = 1; super(); } function s():Void { _x = 2; } }';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * `holdsSuperCall` matches a CALL whose callee is the bare `super` identifier, deliberately
+	 * NOT any `super` reference at all: `super.foo()` is a base-MEMBER access on an already
+	 * constructed base, which the prologue does not race. The branch had no coverage. Measured:
+	 * 1 violation before the gate and 1 after — this fixture is the one the gate must leave
+	 * alone.
+	 */
+	public function testSuperMemberCallStillMoved(): Void {
+		final src: String = 'class C extends B { var _a:Array<Int>; public function new() { super.foo(); _a = new Array<Int>(); } }';
 		Assert.equals(1, violations(src).length);
 	}
 
