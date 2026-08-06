@@ -14,9 +14,12 @@ import anyparse.query.RefactorSupport;
  * The `redundant-replace-loop` check: `while (x.indexOf(S) != -1) x = x.replace(S, B);`
  * (plus its reversed-comparison and `.contains()` spellings) is redundant BY
  * CONSTRUCTION — `StringTools.replace` already replaces every occurrence of `S` in one
- * call. Arm A (`B` does not contain `S`): `Info`, autofix collapses the loop to the
- * single unconditional assignment. Arm B (`B` contains `S`): `Warning`, report-only —
- * the loop is infinite for any input containing `S`. `DefaultOff`.
+ * call. Three arms. Arm A (two literals, `B` does not contain `S`): `Info`, autofix
+ * collapses the loop to the single unconditional assignment. Arm B (two literals, `B`
+ * contains `S`): `Warning`, report-only — the loop is infinite for any input containing
+ * `S`. Arm C (either operand a PARAMETER): `Info`, report-only — the outcome is the
+ * caller's to decide, and only a containment guard that DOMINATES the loop suppresses it.
+ * `DefaultOff`.
  */
 class RedundantReplaceLoopCheckTest extends Test {
 
@@ -151,6 +154,290 @@ class RedundantReplaceLoopCheckTest extends Test {
 		Assert.equals(0, violations(wrapFn('while (now.length > 0) now = now.substring(1);')).length);
 	}
 
+	// --- arm C: a parameter operand, report-only ---
+
+	public function testBothParametersFlaggedAsInfo(): Void {
+		final vs: Array<Violation> = violations(wrapParams('while (line.indexOf(word) != -1) line = line.replace(word, replace);'));
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals('redundant-replace-loop', vs[0].rule);
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.isTrue(StringTools.startsWith(vs[0].message, 'potential infinite loop when'));
+	}
+
+	public function testCanaryReplaceWordFlagged(): Void {
+		// crashdumper/SystemData.hx:310 — the equality guard reads like protection but covers only
+		// the degenerate `word == replace`; a `replace` that merely CONTAINS `word` still loops.
+		final src: String = 'class C {\n\tpublic static function replaceWord(line:String, word:String, replace:String):String {\n'
+			+ '\t\tif (word == replace) return line;\n\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);\n'
+			+ '\t\treturn line;\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.isTrue(StringTools.startsWith(vs[0].message, 'potential infinite loop when replace contains word'));
+		Assert.isTrue(vs[0].message.indexOf('the word == replace guard does not cover containment') >= 0);
+	}
+
+	public function testCanaryStripWordFlagged(): Void {
+		// crashdumper/SystemData.hx:317 — S is the parameter `word`, B the literal `''`. Exactly
+		// why arm C must admit a literal / parameter MIX rather than demand two parameters.
+		final vs: Array<Violation> = violations(stripWordSource());
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.isTrue(StringTools.startsWith(vs[0].message, 'potential infinite loop when \'\' contains word'));
+	}
+
+	public function testUnguardedArmCCarriesNoCaveatClause(): Void {
+		// No guard at all — the caveat clause is added only when an equality guard is there.
+		final vs: Array<Violation> = violations(wrapParams('while (line.indexOf(word) != -1) line = line.replace(word, replace);'));
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals(-1, vs[0].message.indexOf('does not cover containment'));
+	}
+
+	public function testEqualityGuardDoesNotSuppress(): Void {
+		// `S == B` rules out only the degenerate case; every `B` that merely CONTAINS `S` still
+		// loops forever, so the guard sharpens the message and never removes the finding.
+		final vs: Array<Violation> = violations(
+			wrapParams('if (word == replace) return line;\n\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);')
+		);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.isTrue(vs[0].message.indexOf('does not cover containment') >= 0);
+	}
+
+	public function testLiteralSearchWithParameterReplacementFlagged(): Void {
+		// The mirror of the `stripWord` mix: a LITERAL `S` in both positions and a PARAMETER `B`.
+		final vs: Array<Violation> = violations(wrapParams('while (line.indexOf(\' \') != -1) line = line.replace(\' \', replace);'));
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.isTrue(StringTools.startsWith(vs[0].message, 'potential infinite loop when replace contains \' \''));
+	}
+
+	public function testLambdaParameterOperandFlagged(): Void {
+		// The `stripWord` canary written as a lambda: its parameters are just as caller-chosen as
+		// a method's, so `lambdaKinds` must join the enclosing-function ancestor set.
+		final src: String = 'class C {\n\tpublic static final strip = function(line:String, word:String):String {\n'
+			+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, \'\');\n\t\treturn line;\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals(Severity.Info, vs[0].severity);
+	}
+
+	public function testEnclosingMethodParameterInLambdaFlagged(): Void {
+		// The loop sits in a LAMBDA, but `S` / `B` are the ENCLOSING METHOD's parameters — just as
+		// caller-chosen as the lambda's own, so the parameter test walks OUTWARD through every
+		// enclosing scope, not only the innermost one.
+		final src: String = 'class C {\n\tpublic static function f(word:String, replace:String):String {\n'
+			+ '\t\tfinal strip = function(line:String):String {\n'
+			+ '\t\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);\n\t\t\treturn line;\n\t\t};\n'
+			+ '\t\treturn strip(\'x\');\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.isTrue(StringTools.startsWith(vs[0].message, 'potential infinite loop when replace contains word'));
+	}
+
+	public function testEnclosingFunctionParameterInLocalFunctionFlagged(): Void {
+		// The same outward walk through a named LOCAL function: `word` belongs to `outer`, which
+		// ENCLOSES `inner`, so `outer`'s caller still chooses it and arm C applies.
+		final src: String = 'class C {\n\tpublic static function outer(word:String):String {\n'
+			+ '\t\tfunction inner(line:String):String {\n\t\t\twhile (line.indexOf(word) != -1) line = line.replace(word, \'_\');\n'
+			+ '\t\t\treturn line;\n\t\t}\n\t\treturn inner(\'x\');\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+	}
+
+	public function testContainmentGuardSuppressesArmC(): Void {
+		Assert.equals(
+			0,
+			violations(wrapParams(
+				'if (replace.indexOf(word) != -1) return line;\n\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);'
+			)).length
+		);
+	}
+
+	public function testContainsGuardSuppressesArmC(): Void {
+		Assert.equals(
+			0,
+			violations(wrapParams(
+				'if (replace.contains(word)) return line;\n\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);'
+			)).length
+		);
+	}
+
+	// --- arm C: only a guard that DOMINATES the loop suppresses it ---
+
+	public function testGuardNestedInsideAnotherIfDoesNotSuppress(): Void {
+		// The outer `if` may be false, so the guard need not have run at all.
+		Assert.equals(
+			1,
+			violations(wrapParams(
+				'if (line.length > 0) { if (replace.indexOf(word) != -1) return line; }\n'
+				+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);'
+			)).length
+		);
+	}
+
+	public function testGuardInAnElseBranchDoesNotSuppress(): Void {
+		// The `else` runs only when the head condition is false — not a proof about every path.
+		Assert.equals(
+			1,
+			violations(wrapParams(
+				'if (line.length > 0) return line;\n\t\telse if (replace.indexOf(word) != -1) return line;\n'
+				+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);'
+			)).length
+		);
+	}
+
+	public function testGuardInsideALoopBodyDoesNotSuppress(): Void {
+		// A `for` body may never run, so nothing inside it dominates what follows.
+		Assert.equals(
+			1,
+			violations(wrapParams(
+				'for (i in 0...0) if (replace.indexOf(word) != -1) return line;\n'
+				+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);'
+			)).length
+		);
+	}
+
+	public function testGuardInsideASwitchArmDoesNotSuppress(): Void {
+		// One arm of a switch is one path of several.
+		Assert.equals(
+			1,
+			violations(wrapParams(
+				'switch line {\n\t\t\tcase \'x\': if (replace.indexOf(word) != -1) return line;\n\t\t\tcase _:\n\t\t}\n'
+				+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);'
+			)).length
+		);
+	}
+
+	public function testGuardInsideAConditionalRegionDoesNotSuppress(): Void {
+		// A `#if windows` guard protects ONE target; suppressing on it silences every other.
+		Assert.equals(
+			1,
+			violations(wrapParams(
+				'#if windows\n\t\tif (replace.indexOf(word) != -1) return line;\n\t\t#end\n'
+				+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);'
+			)).length
+		);
+	}
+
+	public function testGuardInsideANestedFunctionDoesNotSuppress(): Void {
+		// A local function that nothing calls guards nothing.
+		Assert.equals(
+			1,
+			violations(wrapParams(
+				'function unused():String {\n\t\t\tif (replace.indexOf(word) != -1) return line;\n\t\t\treturn line;\n\t\t}\n'
+				+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);'
+			)).length
+		);
+	}
+
+	public function testGuardOutsideTheLambdaDoesNotSuppress(): Void {
+		// The containment guard sits in the enclosing METHOD, outside the lambda holding the loop.
+		// Dominance is rooted at the INNERMOST function, so the guard is never read — the opposite
+		// direction from the parameter test, which walks every enclosing scope.
+		final src: String = 'class C {\n\tpublic static function f(word:String, replace:String):String {\n'
+			+ '\t\tif (replace.indexOf(word) != -1) return word;\n' + '\t\tfinal strip = function(line:String):String {\n'
+			+ '\t\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);\n\t\t\treturn line;\n\t\t};\n'
+			+ '\t\treturn strip(\'x\');\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+	}
+
+	public function testGuardInsideTheLambdaSuppresses(): Void {
+		// The same guard MOVED into the lambda does dominate the loop — the discriminating half of
+		// the pair above, so neither test can pass for the other's reason.
+		final src: String = 'class C {\n\tpublic static function f(word:String, replace:String):String {\n'
+			+ '\t\tfinal strip = function(line:String):String {\n' + '\t\t\tif (replace.indexOf(word) != -1) return line;\n'
+			+ '\t\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);\n\t\t\treturn line;\n\t\t};\n'
+			+ '\t\treturn strip(\'x\');\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	// --- arm C: what a DOMINATING guard may look like ---
+
+	public function testMultiStatementGuardBodySuppressesArmC(): Void {
+		// The exit need not be the branch's ONLY statement — its LAST one is what decides.
+		Assert.equals(
+			0,
+			violations(wrapParams(
+				'if (replace.indexOf(word) != -1) { trace(\'refusing\'); return line; }\n'
+				+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);'
+			)).length
+		);
+	}
+
+	public function testThrowingGuardSuppressesArmC(): Void {
+		// A `throw` exits just as unconditionally as a `return`.
+		Assert.equals(
+			0,
+			violations(wrapParams(
+				'if (replace.indexOf(word) != -1) throw \'bad\';\n'
+				+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);'
+			)).length
+		);
+	}
+
+	public function testBareVoidReturnGuardSuppressesArmC(): Void {
+		final src: String = 'class C {\n\tpublic static function f(line:String, word:String, replace:String):Void {\n'
+			+ '\t\tif (replace.indexOf(word) != -1) return;\n'
+			+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testGuardOnTheWrongOperandsDoesNotSuppress(): Void {
+		// `line` is the receiver, not `B` — the guard says nothing about `replace` containing `word`.
+		Assert.equals(
+			1,
+			violations(wrapParams(
+				'if (line.indexOf(word) != -1) return line;\n\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);'
+			)).length
+		);
+	}
+
+	public function testArmCNeverFixed(): Void {
+		assertFixRefused(wrapParams('while (line.indexOf(word) != -1) line = line.replace(word, replace);'));
+	}
+
+	public function testLocalVarOperandNotFlagged(): Void {
+		// A local `var` is not a parameter — the caller cannot choose it, and the check does not
+		// track its value, so the loop is not this pattern.
+		final src: String = 'class C {\n\tpublic static function f(line:String):String {\n\t\tvar word:String = \' \';\n'
+			+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, \'_\');\n\t\treturn line;\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testFieldAccessOperandNotFlagged(): Void {
+		// Behavioural, not gate-specific: `this.word` is neither a plain string literal nor a bare
+		// identifier bound to a parameter, so it is not an operand this rule reads — several gates
+		// agree on that and the test pins the OUTCOME rather than which one answers first.
+		final src: String = 'class C {\n\tpublic var word:String = \' \';\n\tpublic function f(line:String):String {\n'
+			+ '\t\twhile (line.indexOf(this.word) != -1) line = line.replace(this.word, \'_\');\n\t\treturn line;\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testMixedLiteralAndParameterSearchNotFlagged(): Void {
+		// The two `S` positions must be the SAME thing: a literal in the guard and a parameter in
+		// the `replace` call is not one search term.
+		Assert.equals(0, violations(wrapParams('while (line.indexOf(\' \') != -1) line = line.replace(word, replace);')).length);
+	}
+
+	public function testParameterOfAnotherFunctionNotFlagged(): Void {
+		// `word` is a parameter of the SIBLING local function `helper`, which does NOT enclose the
+		// loop — the outward walk climbs the loop's own chain of enclosing scopes and stops there.
+		// The receiver type gate passes (`line:String`), so this pins the operand OUTCOME.
+		final src: String = 'class C {\n\tpublic static function outer():String {\n'
+			+ '\t\tfunction helper(word:String):String return word;\n' + '\t\tfunction inner(line:String):String {\n'
+			+ '\t\t\twhile (line.indexOf(word) != -1) line = line.replace(word, \'_\');\n\t\t\treturn line;\n\t\t}\n'
+			+ '\t\treturn helper(\'y\') + inner(\'x\');\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
 	// --- registry / robustness ---
 
 	public function testRegisteredInBuiltins(): Void {
@@ -181,6 +468,18 @@ class RedundantReplaceLoopCheckTest extends Test {
 
 	private function wrapFn(body: String): String {
 		return 'class C {\n\tfunction f(now:String):Void {\n\t\t$body\n\t}\n}';
+	}
+
+	/** A three-parameter static method body — the `replaceWord` shape arm C reads. */
+	private function wrapParams(body: String): String {
+		return
+			'class C {\n\tpublic static function f(line:String, word:String, replace:String):String {\n\t\t$body\n\t\treturn line;\n\t}\n}';
+	}
+
+	/** The verbatim `stripWord` canary shape: a parameter `S` and a literal `B`. */
+	private function stripWordSource(): String {
+		return 'class C {\n\tpublic static function stripWord(line:String, word:String):String {\n'
+			+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, \'\');\n\t\treturn line;\n\t}\n}';
 	}
 
 	private function violations(source: String): Array<Violation> {

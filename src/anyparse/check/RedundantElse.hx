@@ -143,7 +143,7 @@ final class RedundantElse implements Check {
 		comments: Array<{ from: Int, to: Int, isLine: Bool }>
 	): Void {
 		if (ifNode.children.length < IF_WITH_ELSE_CHILD_COUNT) return;
-		if (!branchAlwaysExits(ifNode.children[1], support)) return;
+		if (!CheckScan.branchAlwaysExits(ifNode.children[1], support)) return;
 		final elseSpan: Null<Span> = ifNode.children[2].span;
 		if (elseSpan != null) out.push({
 			file: file,
@@ -188,19 +188,6 @@ final class RedundantElse implements Check {
 		final first: Null<Span> = kids[0].span;
 		final last: Null<Span> = kids[kids.length - 1].span;
 		return first == null || last == null ? null : new Span(first.from, last.to);
-	}
-
-	/**
-	 * Whether `node` (an `if`'s then-branch) unconditionally exits: a terminal
-	 * statement directly, or a block whose last direct child is terminal.
-	 */
-	private static function branchAlwaysExits(node: QueryNode, support: ControlFlowSupport): Bool {
-		if (support.isTerminal(node)) return true;
-		if (support.blockKinds().contains(node.kind)) {
-			final kids: Array<QueryNode> = node.children;
-			return kids.length > 0 && support.isTerminal(kids[kids.length - 1]);
-		}
-		return false;
 	}
 
 	/**

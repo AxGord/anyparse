@@ -1511,7 +1511,16 @@ final class Cli {
 			// the active SUBSET a supertype declared elsewhere reads as unresolvable and a call site in
 			// an unchanged file reads as absent — the first would silence a real finding, the second
 			// would delete a method something still calls.
-			'orphan-accessor'
+			'orphan-accessor',
+			// unused-public-member's every gate is whole-project: the supertype chain resolution
+			// and the reference scan over the whole token map. On the active SUBSET a call site
+			// in an unchanged file reads as absent, so `--fix` would delete a method the rest of
+			// the project still calls. Its DELETIONS reach the tree through the RiskyFix verifier
+			// (which runs the whole set too) rather than this loop. `fullScopeIds` is read ONLY to
+			// partition `safeChecks`, which a RiskyFix check never joins (it is not
+			// `OracleRelaxable`), so the entry is INERT today — it is kept because it would carry
+			// the fixes again if the rule ever stopped being risky.
+			'unused-public-member'
 		];
 		final activeScopeChecks: Array<Check> = [for (c in safeChecks) if (!fullScopeIds.contains(c.id())) c];
 		final fullScopeChecks: Array<Check> = [for (c in safeChecks) if (fullScopeIds.contains(c.id())) c];

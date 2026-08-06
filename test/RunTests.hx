@@ -571,6 +571,7 @@ import unit.HxCaseBodyTrailCommentInlineTest;
 import unit.HxArrowValueIfReflowSliceTest;
 import unit.HxElseIfCommentReflowSliceTest;
 import unit.OrphanAccessorCheckTest;
+import unit.UnusedPublicMemberCheckTest;
 import unit.CollapseNestedSwitchCheckTest;
 import unit.RedundantToStringCheckTest;
 import unit.HxMethodChainAllOrNothingSliceTest;
@@ -1048,6 +1049,7 @@ class RunTests {
 		addCase(new SelfAssignmentCheckTest());
 		addCase(new RedundantBypassAccessorCheckTest());
 		addCase(new OrphanAccessorCheckTest());
+		addCase(new UnusedPublicMemberCheckTest());
 		addCase(new DuplicateCaseCheckTest());
 		addCase(new RedundantParensCheckTest());
 		addCase(new RedundantParensOperandArmsTest());

@@ -188,12 +188,12 @@ final class UnusedPrivate implements Check {
 			if (isPrivateEmptyCtor(node)) {
 				if (hasConditional) continue;
 				final ctorMeta: Null<{ hasBuild: Bool, hasKeep: Bool }> = owner == null ? null : classMeta[owner];
-				if (ctorMeta == null || !ctorMeta.hasBuild) edits.push(deletionEdit(source, node, hit.parent, span));
+				if (ctorMeta == null || !ctorMeta.hasBuild) edits.push(CheckScan.deletionEdit(source, node, hit.parent, span));
 				continue;
 			}
 			if (hasConditional && referencedElsewhere(node.name, v.file, span, scopeIndex, source)) continue;
 			if (memberDeletable(node, owner, hit.inExtends, index, classMeta, reflected))
-				edits.push(deletionEdit(source, node, hit.parent, span));
+				edits.push(CheckScan.deletionEdit(source, node, hit.parent, span));
 		}
 		return edits;
 	}
@@ -636,14 +636,6 @@ final class UnusedPrivate implements Check {
 		final name: Null<String> = node.name;
 		return name == null || !mentionedInStrings(name, reflected);
 	}
-
-	/** The delete-the-whole-member edit: the member's modifier / meta group and whole line, replaced by nothing. */
-	private static inline function deletionEdit(
-		source: String, node: QueryNode, parent: QueryNode, span: Span
-	): { span: Span, text: String } {
-		return { span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.declGroupSpan(node, parent, span)), text: '' };
-	}
-
 
 	/**
 	 * Visit each class declaration in `node`'s subtree, passing the class-scope node,
