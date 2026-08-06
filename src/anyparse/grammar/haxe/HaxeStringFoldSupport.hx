@@ -298,7 +298,9 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	 * The scan is the lexer's, not a search: a backslash consumes the character after it,
 	 * so the `n` of `\\n` is an ordinary letter and never a seam. A RAW line break in the
 	 * source is not one either — it already ends the line it sits on, so cutting there
-	 * buys no width and would leave the break dangling inside the left literal.
+	 * buys no width and would leave the break dangling inside the left literal. Nor is a
+	 * line break spelled `\x0a` / `\u000a`: it decodes to one, but only the `\n` spelling
+	 * is worth the decoder, and refusing the others costs a seam rather than correctness.
 	 */
 	private static function splitAtNewlines(segments: Array<ConcatSegment>): Array<ConcatSegment> {
 		final out: Array<ConcatSegment> = [];
@@ -311,7 +313,7 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 		return out;
 	}
 
-	/** `raw` cut after each `\n` escape, empty pieces dropped; a raw with none yields itself. */
+	/** `raw` cut after each `\n` escape; a raw ending in one yields no empty tail, and a raw with no seam yields itself. */
 	private static function newlinePieces(raw: String): Array<String> {
 		final pieces: Array<String> = [];
 		var from: Int = 0;

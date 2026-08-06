@@ -868,6 +868,16 @@ typedef RefShape = {
 	@:optional var enumAbstractDeclKind: String;
 
 	/**
+	 * The ANNOTATION name that turns an ordinary abstract declaration into an enum
+	 * abstract (Haxe's deprecated `@:enum abstract` spelling, still legal). Such a
+	 * declaration projects as the PLAIN abstract kind with the annotation as a preceding
+	 * SIBLING, so `enumAbstractDeclKind` alone does not recognise it and a consumer
+	 * reasoning about enum-abstract VALUES would fold them. Optional — unset means the
+	 * grammar has only the dedicated kind.
+	 */
+	@:optional var enumAbstractMetaName: String;
+
+	/**
 	 * The grammar's raw dynamic-type name (Haxe `Dynamic`) — the `avoid-dynamic`
 	 * check flags a whole-word occurrence of it in a declared type position (field,
 	 * parameter, return, type argument, or annotated local). A typed abstraction whose

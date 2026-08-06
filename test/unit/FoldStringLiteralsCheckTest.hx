@@ -18,7 +18,8 @@ using StringTools;
  * The `fold-adjacent-string-literals` check: a string concatenation whose
  * segmentation does not match the file's line width is flagged (`Info`) and
  * re-segmented — literals and expression operands MERGE into one interpolated
- * literal, an over-long literal SPLITS back out at its `${ … }` seams.
+ * literal, an over-long literal SPLITS back out at its seams: a `${ … }`
+ * interpolation, or an embedded `\n` escape.
  *
  * Width comes from the file's own `hxformat.json`, and every fixture here names its
  * path `C.hx`: the suite runs from the repository root, so that resolves to the
@@ -37,6 +38,12 @@ class FoldStringLiteralsCheckTest extends Test {
 	 * fixtures below read as arithmetic rather than as magic.
 	 */
 	private static inline final LINE_WIDTH: Int = 140;
+
+	/** The rule id, as the config fixtures spell it. */
+	private static inline final RULE: String = 'fold-adjacent-string-literals';
+
+	/** The macro-whitelist option name, which the refusal message names so a reader knows what lifts it. */
+	private static inline final WHITELIST_OPTION: String = 'concatFoldingMacros';
 
 	/** The tab width in that same config — what a tab counts as when a fixture measures a rendered line. */
 	private static inline final TAB_WIDTH: Int = 4;
@@ -582,6 +589,35 @@ class FoldStringLiteralsCheckTest extends Test {
 	}
 
 	/**
+	 * The DEPRECATED `@:enum abstract` spelling is the same declaration and breaks the
+	 * same way, but it projects as a plain `AbstractDecl` with the annotation as a
+	 * SIBLING — so a gate that tested the declaration's KIND folded its values.
+	 */
+	public function testDeprecatedEnumAbstractValueIsNotACandidate(): Void {
+		Assert.equals(0, violations(deprecatedEnumAbstractSource(100, 60)).length);
+	}
+
+	/**
+	 * A `#if`-guarded value sits one level down, under the conditional region rather than
+	 * under the declaration — a gate that asked only about the immediate parent was blind
+	 * to it.
+	 */
+	public function testGuardedEnumAbstractValueIsNotACandidate(): Void {
+		Assert.equals(0, violations(guardedEnumAbstractSource(100, 60)).length);
+	}
+
+	/**
+	 * An `inline` field's value IS a compile-time constant at every use site, so a `case`
+	 * pattern reads its expression shape exactly as it reads an enum-abstract value's
+	 * (`case S:` becomes an "Unknown identifier" once `S` folds). The modifier is a
+	 * preceding SIBLING, invisible from the field node itself.
+	 */
+	public function testInlineFieldValueIsNotACandidate(): Void {
+		Assert.equals(0, violations(inlineFieldSource(100, 60)).length);
+		Assert.equals(1, violations(inlineFieldSource(100, 60).replace('static inline final', 'static final')).length);
+	}
+
+	/**
 	 * Gate (1): a macro argument is reported but NOT fixed — a macro pattern-matching
 	 * `EConst(CString)` breaks silently on a concatenation, and no structural check can
 	 * see whether it folds.
@@ -591,7 +627,7 @@ class FoldStringLiteralsCheckTest extends Test {
 		final check: FoldStringLiterals = new FoldStringLiterals();
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
-		Assert.isTrue(vs[0].message.indexOf('macro') != -1);
+		Assert.isTrue(vs[0].message.indexOf(WHITELIST_OPTION) != -1);
 		Assert.equals(0, check.fix(files[1].source, vs, new HaxeQueryPlugin()).length);
 	}
 
@@ -599,7 +635,7 @@ class FoldStringLiteralsCheckTest extends Test {
 	public function testWhitelistedMacroArgumentIsFixed(): Void {
 		final files: Array<{ file: String, source: String }> = macroArgFiles(100, 60);
 		final check: FoldStringLiterals = new FoldStringLiterals();
-		check.setConfigResolver(_ -> LintConfig.parse('{"rules":{"fold-adjacent-string-literals":{"concatFoldingMacros":["m.Lang.t"]}}}'));
+		check.setConfigResolver(_ -> LintConfig.parse('{"rules":{"$RULE":{"$WHITELIST_OPTION":["m.Lang.t"]}}}'));
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
 		final edits: Array<{ span: Span, text: String }> = check.fix(files[1].source, vs, new HaxeQueryPlugin());
@@ -607,12 +643,69 @@ class FoldStringLiteralsCheckTest extends Test {
 		Assert.equals("'" + ''.rpad('A', 100) + "\\n' + '" + ''.rpad('B', 60) + "'", edits[0].text);
 	}
 
-	/** A NON-macro call named like one resolves to no macro declaration, so its arguments fold as usual. */
+	/** A call the file imports nothing for cannot be routed to an unseen macro, so its arguments fold as usual. */
 	public function testPlainCallArgumentIsFixed(): Void {
 		Assert.equals(
 			"'" + ''.rpad('A', 100) + "\\n' + '" + ''.rpad('B', 60) + "'",
 			foldOf(rawSource("'" + ''.rpad('A', 100) + "\\n" + ''.rpad('B', 60) + "'"))
 		);
+	}
+
+	/**
+	 * The gate's second refusal. The index covers only what the INVOCATION reaches, so
+	 * linting the caller ALONE cannot see `m.Lang.t`'s `macro` modifier — and reading
+	 * that as "not a macro" would rewrite the argument, making `--fix` answer differently
+	 * depending on how the linter was called. The file's own `import m.Lang.t` binds the
+	 * name, which is what makes the unresolved answer refusable rather than merely
+	 * unknown.
+	 */
+	public function testMacroArgumentStaysRefusedWhenTheDeclarationIsOutOfScope(): Void {
+		final caller: { file: String, source: String } = macroArgFiles(100, 60)[1];
+		final check: FoldStringLiterals = new FoldStringLiterals();
+		final vs: Array<Violation> = check.run([caller], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf(WHITELIST_OPTION) != -1);
+		Assert.equals(0, check.fix(caller.source, vs, new HaxeQueryPlugin()).length);
+	}
+
+	/** The QUALIFIED spelling of the same call is bound by a TYPE import, so the refusal has to read the receiver. */
+	public function testQualifiedMacroCallStaysRefusedWhenTheDeclarationIsOutOfScope(): Void {
+		final literal: String = "'" + ''.rpad('A', 100) + '\\n' + ''.rpad('B', 60) + "'";
+		final src: String = 'import m.Lang;\nclass C {\n\tfunction f() {\n\t\tg(Lang.t($literal));\n\t}\n}';
+		final check: FoldStringLiterals = new FoldStringLiterals();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	/**
+	 * The whitelist is read from the file's OWN discovered config, not from the run's
+	 * first file — one `lint` invocation can span projects that disagree about which
+	 * macros fold, and applying one project's claim to another's code rewrites an
+	 * argument nobody cleared.
+	 */
+	public function testWhitelistIsResolvedPerFile(): Void {
+		final files: Array<{ file: String, source: String }> = macroArgFiles(100, 60);
+		final other: { file: String, source: String } = { file: 'other/D.hx', source: files[1].source };
+		final check: FoldStringLiterals = new FoldStringLiterals();
+		check.setConfigResolver(path -> LintConfig.parse(path == 'C.hx' ? '{"rules":{"$RULE":{"$WHITELIST_OPTION":["m.Lang.t"]}}}' : '{}'));
+		final vs: Array<Violation> = check.run([files[0], files[1], other], new HaxeQueryPlugin());
+		Assert.equals(2, vs.length);
+		Assert.equals(1, check.fix(files[1].source, vs.filter(v -> v.file == 'C.hx'), new HaxeQueryPlugin()).length);
+		Assert.equals(0, check.fix(other.source, vs.filter(v -> v.file == other.file), new HaxeQueryPlugin()).length);
+	}
+
+	/**
+	 * `unwrapped`'s own fixture. An object-literal entry whose value is an over-long
+	 * literal: the greedy fill prices it at the CONTINUATION column, which says it fits,
+	 * so the plan reproduces the source's boundaries and nothing is ever measured — while
+	 * the source line runs past the limit, because the writer never moved the construct.
+	 * Without the own-column retry this reports nothing at all.
+	 */
+	public function testConstructTheWriterCannotWrapIsRepricedAtItsOwnColumn(): Void {
+		final src: String = objectFieldSource(60, 40);
+		Assert.equals(1, violations(src).length);
+		Assert.equals("'" + ''.rpad('A', 60) + "\\n' + '" + ''.rpad('B', 40) + "'", foldOf(src));
 	}
 
 	/**
@@ -713,7 +806,7 @@ class FoldStringLiteralsCheckTest extends Test {
 	 * A `g('<aLen A>\n<bLen B>');` at two tabs in `quote` quoting. The literal starts at
 	 * column `FIXTURE_INDENT + CALL_HEAD`, so the planner's budget is `FIXTURE_BUDGET`
 	 * and the seam sits after `aLen + 4` characters of rendered fragment — under the
-	 * budget for the split fixtures, past it for the "no seam before the limit" one.
+	 * budget for the split fixtures, past it for `testSeamPastLimitStillSplitsBestEffort`.
 	 */
 	private function newlineSource(quote: String, aLen: Int, bLen: Int): String {
 		return rawSource(quote + ''.rpad('A', aLen) + '\\n' + ''.rpad('B', bLen) + quote);
@@ -735,6 +828,34 @@ class FoldStringLiteralsCheckTest extends Test {
 	private function enumAbstractSource(aLen: Int, bLen: Int): String {
 		final literal: String = "'" + ''.rpad('A', aLen) + '\\n' + ''.rpad('B', bLen) + "'";
 		return 'enum abstract E(String) {\n\tvar A = $literal;\n\tvar B = \'b\';\n}';
+	}
+
+	/** The same declaration in Haxe's deprecated spelling: a PLAIN abstract carrying an `@:enum` annotation sibling. */
+	private function deprecatedEnumAbstractSource(aLen: Int, bLen: Int): String {
+		final literal: String = "'" + ''.rpad('A', aLen) + '\\n' + ''.rpad('B', bLen) + "'";
+		return '@:enum abstract E(String) {\n\tvar A = $literal;\n\tvar B = \'b\';\n}';
+	}
+
+	/** The same value one level down, inside a `#if` region — the declaration is no longer its immediate parent. */
+	private function guardedEnumAbstractSource(aLen: Int, bLen: Int): String {
+		final literal: String = "'" + ''.rpad('A', aLen) + '\\n' + ''.rpad('B', bLen) + "'";
+		return 'enum abstract E(String) {\n\t#if js\n\tvar A = $literal;\n\t#end\n\tvar B = \'b\';\n}';
+	}
+
+	/** The same over-long literal as an `inline` field's value — a compile-time constant at every use site. */
+	private function inlineFieldSource(aLen: Int, bLen: Int): String {
+		final literal: String = "'" + ''.rpad('A', aLen) + '\\n' + ''.rpad('B', bLen) + "'";
+		return 'class C {\n\tstatic inline final S:String = $literal;\n}';
+	}
+
+	/**
+	 * An object-literal entry at three tabs whose value is the over-long literal. The
+	 * writer keeps a field's value on the field's own line, so the continuation-column
+	 * estimate is refuted by the source itself — `unwrapped`'s shape.
+	 */
+	private function objectFieldSource(aLen: Int, bLen: Int): String {
+		final literal: String = "'" + ''.rpad('A', aLen) + '\\n' + ''.rpad('B', bLen) + "'";
+		return 'class C {\n\tfunction f() {\n\t\tg({\n\t\t\tsomeVeryLongFieldNameIndeed: $literal\n\t\t});\n\t}\n}';
 	}
 
 	/**
