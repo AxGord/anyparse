@@ -577,6 +577,7 @@ import unit.CollapseNestedSwitchCheckTest;
 import unit.RedundantToStringCheckTest;
 import unit.HxMethodChainAllOrNothingSliceTest;
 import unit.HxListLiteralEmissionSliceTest;
+import unit.HxCallArgMultilineStringCuddleTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -876,6 +877,7 @@ class RunTests {
 		addCase(new HxTriviaWriteTest());
 		addCase(new HxLineCommentIndentSliceTest());
 		addCase(new HxCallArgCommentWriteTest());
+		addCase(new HxCallArgMultilineStringCuddleTest());
 		addCase(new HxParamCommentWriteTest());
 		addCase(new HxInfixCommentWriteTest());
 		addCase(new HxRhsCommentWriteTest());
