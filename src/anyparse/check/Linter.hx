@@ -176,6 +176,8 @@ final class Linter {
 			new RedundantReplaceLoop(),
 			new TrivialGetter(),
 			new NullableSwitchMissingNull(),
+			new UnusedCaseBinder(),
+			new RedundantCaseBody(),
 			new DuplicateCode(),
 			new ListenerSymmetry(),
 			new StringLiteralDup(),
