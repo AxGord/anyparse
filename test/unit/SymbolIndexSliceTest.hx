@@ -556,6 +556,78 @@ class SymbolIndexSliceTest extends Test {
 	}
 
 	/**
+	 * `isExtern` — positive and negative controls, unconditional. A plain `extern class`
+	 * is recorded extern; a plain `class` right after it is not — the flag does not default
+	 * to true, and consuming the modifier does not smear it onto the type that follows.
+	 */
+	public function testIsExternUnconditionalControls(): Void {
+		final source: String = 'package pkg;\nextern class Native {}\nclass Plain {}\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/E.hx', source: source }], plugin());
+		final fi: FileInfo = fileInfoOf(index, 'src/pkg/E.hx');
+
+		final native: Null<TypeDeclInfo> = fi.types.find(t -> t.name == 'Native');
+		Assert.notNull(native);
+		Assert.isTrue((native: TypeDeclInfo).isExtern);
+		final plain: Null<TypeDeclInfo> = fi.types.find(t -> t.name == 'Plain');
+		Assert.notNull(plain);
+		Assert.isFalse((plain: TypeDeclInfo).isExtern);
+	}
+
+	/**
+	 * A GUARDED `extern class` — `#if js extern class B {} #end` — projects the `extern`
+	 * modifier as a nameless sibling of the `ClassDecl` inside the `Conditional` wrapper
+	 * (`(Conditional (Extern) (ClassDecl B))`). `pushGuardedDecl` already lifts a guarded
+	 * leading meta so it reaches `extractFileInfo`'s pending run; the `extern` modifier gets
+	 * the same lift, so the guarded declaration is indexed extern like its unconditional twin.
+	 */
+	public function testIsExternGuardedClassIsExtern(): Void {
+		final source: String = 'package pkg;\n#if js\nextern class B {}\n#end\nclass Cond {}\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/G.hx', source: source }], plugin());
+		final fi: FileInfo = fileInfoOf(index, 'src/pkg/G.hx');
+
+		final b: Null<TypeDeclInfo> = fi.types.find(t -> t.name == 'B');
+		Assert.notNull(b);
+		Assert.isTrue((b: TypeDeclInfo).isExtern, 'a guarded extern class must be indexed extern');
+		final cond: Null<TypeDeclInfo> = fi.types.find(t -> t.name == 'Cond');
+		Assert.notNull(cond);
+		Assert.isFalse((cond: TypeDeclInfo).isExtern);
+	}
+
+	/**
+	 * A SPLIT `extern` — `#if cpp extern #end class NativeThing {}` — guards only the
+	 * modifier, with the class declaration itself unconditional (the natural idiom for
+	 * "extern on this target only"). The `Conditional` wrapper here carries no declaration
+	 * at all (`(Conditional (Extern))`), so the lift must not require a co-located decl.
+	 */
+	public function testIsExternSplitModifierAppliesToFollowingDecl(): Void {
+		final source: String = 'package pkg;\n#if cpp\nextern\n#end\nclass NativeThing {}\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/S.hx', source: source }], plugin());
+		final fi: FileInfo = fileInfoOf(index, 'src/pkg/S.hx');
+
+		final nt: TypeDeclInfo = fi.types[0];
+		Assert.equals('NativeThing', nt.name);
+		Assert.isTrue(nt.isExtern, 'a split guarded extern modifier must mark the unconditional decl that follows it');
+	}
+
+	/**
+	 * The leak guard: a split `extern` modifier followed by an UNRELATED `import` before
+	 * the next type declaration must not smear onto that later, unrelated type. `pendingMeta`
+	 * already resets at every import / using / package boundary (6 points); `pendingExtern`
+	 * must reset at the same 6, not just 2 (type-decl-consume and `PackageDecl`) — otherwise a
+	 * stray guarded `extern` with no decl of its own in its branch leaks past an `import` onto
+	 * whichever type happens to come next.
+	 */
+	public function testIsExternDoesNotLeakPastImport(): Void {
+		final source: String = 'package pkg;\n#if cpp\nextern\n#end\nimport other.Thing;\nclass Plain {}\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/L.hx', source: source }], plugin());
+		final fi: FileInfo = fileInfoOf(index, 'src/pkg/L.hx');
+
+		final plain: TypeDeclInfo = fi.types[0];
+		Assert.equals('Plain', plain.name);
+		Assert.isFalse(plain.isExtern, 'the stray extern must not leak past the intervening import onto an unrelated type');
+	}
+
+	/**
 	 * A guarded `using` and a guarded aliased import are lifted too, each with
 	 * the correct kind and (for the alias) its alias name.
 	 */

@@ -150,7 +150,7 @@ final class SymbolIndexBuilder {
 		final externModifierKind: Null<String> = shape.externModifierKind;
 		var pendingExtern: Bool = false;
 
-		for (gn in declNodes(tree)) {
+		for (gn in declNodes(tree, externModifierKind)) {
 			final node: QueryNode = gn.node;
 			if (externModifierKind != null && node.kind == externModifierKind) {
 				pendingExtern = true;
@@ -195,10 +195,13 @@ final class SymbolIndexBuilder {
 				if (metaName != null) pendingMeta.push(metaName);
 				continue;
 			}
-			// A modifier (`private` / `extern`), comment or other module node between a meta and its decl
-			// PRESERVES the pending meta run — over-attaching a meta to the wrong decl only makes the abstract
-			// gate more conservative, while dropping one is the unsound direction. Only an import / package /
-			// using statement ends the run (a meta can never legally precede one); each clears it below.
+			// A modifier (`private` / `extern`), comment or other module node between a meta (or a
+			// split `extern`) and its decl PRESERVES the pending run — over-attaching a meta or an
+			// extern to the wrong decl only makes the abstract gate / `isExtern` more conservative,
+			// while dropping either is the unsound direction. Only an import / package / using
+			// statement ends the run (neither a meta nor an extern can legally precede one); each
+			// clears BOTH `pendingMeta` and `pendingExtern` below, so a stray guarded `extern` with
+			// no declaration of its own in its branch cannot leak past one onto an unrelated type.
 			final nullableName: Null<String> = node.name;
 			final nullableSpan: Null<Span> = node.span;
 			if (nullableName == null || nullableSpan == null) {
@@ -221,6 +224,7 @@ final class SymbolIndexBuilder {
 						guarded: gn.guarded
 					});
 					pendingMeta = [];
+					pendingExtern = false;
 				case 'ImportAliasDecl' | 'ImportAliasInDecl':
 					imports.push({
 						raw: name,
@@ -230,6 +234,7 @@ final class SymbolIndexBuilder {
 						guarded: gn.guarded
 					});
 					pendingMeta = [];
+					pendingExtern = false;
 				case 'ImportWildDecl':
 					imports.push({
 						raw: name,
@@ -239,6 +244,7 @@ final class SymbolIndexBuilder {
 						guarded: gn.guarded
 					});
 					pendingMeta = [];
+					pendingExtern = false;
 				case 'UsingDecl':
 					imports.push({
 						raw: name,
@@ -248,6 +254,7 @@ final class SymbolIndexBuilder {
 						guarded: gn.guarded
 					});
 					pendingMeta = [];
+					pendingExtern = false;
 				case _:
 			}
 		}
@@ -553,8 +560,15 @@ final class SymbolIndexBuilder {
 	 * `CondSharedBodyDecl` wrapper (a header split across `#if`, see
 	 * `HxCondSharedBodyDecl`) is passed through as ITSELF: it is the node its
 	 * declaration resolves from (`condSharedBodyDeclOf`).
+	 *
+	 * `externModifierKind` is threaded through so a guarded `extern` modifier -
+	 * whether co-located with its declaration (`#if js extern class B {} #end`)
+	 * or SPLIT from it (`#if cpp extern #end class Native {}`, the "extern on
+	 * this target only" idiom) - is lifted like a guarded leading meta, instead
+	 * of being dropped as an ordinary modifier. Null when the grammar names no
+	 * extern modifier kind, matching every other `shape`-gated seam here.
 	 */
-	private static function declNodes(tree: QueryNode): Array<GuardedNode> {
+	private static function declNodes(tree: QueryNode, externModifierKind: Null<String>): Array<GuardedNode> {
 		final out: Array<GuardedNode> = [];
 		final guardedNames: Array<String> = [];
 		// Every top-level import's dedup key, seeded up front so a guarded import
@@ -567,9 +581,9 @@ final class SymbolIndexBuilder {
 		}
 		for (node in tree.children) switch node.kind {
 			case 'Conditional':
-				collectGuardedDecls(node, out, guardedNames, seenImports);
+				collectGuardedDecls(node, out, guardedNames, seenImports, externModifierKind);
 			case 'CondSharedBodyDecl':
-				pushGuardedDecl(node, out, guardedNames, seenImports);
+				pushGuardedDecl(node, out, guardedNames, seenImports, externModifierKind);
 			case _:
 				out.push({ node: node, guarded: false });
 		}
@@ -592,22 +606,26 @@ final class SymbolIndexBuilder {
 	 * Int; #end`) are all kept.
 	 */
 	private static function collectGuardedDecls(
-		node: QueryNode, out: Array<GuardedNode>, guardedNames: Array<String>, seenImports: Array<String>
+		node: QueryNode, out: Array<GuardedNode>, guardedNames: Array<String>, seenImports: Array<String>, externModifierKind: Null<String>
 	): Void {
 		for (child in node.children) if (child.kind == 'Conditional')
-			collectGuardedDecls(child, out, guardedNames, seenImports);
+			collectGuardedDecls(child, out, guardedNames, seenImports, externModifierKind);
 		else
-			pushGuardedDecl(child, out, guardedNames, seenImports);
+			pushGuardedDecl(child, out, guardedNames, seenImports, externModifierKind);
 	}
 
 	/**
 	  * Append `node` to `out` when it is a type declaration whose name no
 	 * conditional region has contributed yet, recording the name. A guarded import / using is
-	 * lifted (deduped) into the import scope and a guarded leading `Meta` / `MetaCall` is lifted so
-	 * its abstract sees it; a lifted modifier has no place and is dropped.
+	 * lifted (deduped) into the import scope, a guarded leading `Meta` / `MetaCall` is lifted so
+	 * its abstract sees it, and a guarded `extern` modifier is lifted so it reaches
+	 * `extractFileInfo`'s `pendingExtern` run - the same "no place of its own, forwarded to the
+	 * decl it precedes" treatment the meta lift gets, since `pendingExtern` reads ANY node of
+	 * `externModifierKind` in the flattened stream, guarded or not (`extractFileInfo`'s main
+	 * loop does not distinguish). Any OTHER lifted modifier still has no place and is dropped.
 	 */
 	private static function pushGuardedDecl(
-		node: QueryNode, out: Array<GuardedNode>, guardedNames: Array<String>, seenImports: Array<String>
+		node: QueryNode, out: Array<GuardedNode>, guardedNames: Array<String>, seenImports: Array<String>, externModifierKind: Null<String>
 	): Void {
 		final decl: Null<TypeDeclMatch> = typeDeclAt(node);
 		if (decl != null) {
@@ -623,10 +641,18 @@ final class SymbolIndexBuilder {
 			out.push({ node: node, guarded: true });
 			return;
 		}
+		// A guarded `extern` modifier: lift it too, whether it shares its region with the
+		// declaration (`#if js extern class B {} #end`) or is SPLIT from it (`#if cpp extern
+		// #end class Native {}` - "extern on this target only"), so the modifier reaches
+		// `extractFileInfo`'s `pendingExtern` run and marks the declaration it precedes.
+		if (externModifierKind != null && node.kind == externModifierKind) {
+			out.push({ node: node, guarded: true });
+			return;
+		}
 		// A guarded import / using: lift it so it joins the per-file import scope,
 		// deduped against every import already seen (a top-level one seeded up
 		// front, or an earlier guarded branch). A non-import, non-declaration node
-		// (a lifted modifier) has no key and is dropped.
+		// (a lifted modifier other than `extern`) has no key and is dropped.
 		final key: Null<String> = importDedupKey(node);
 		if (key == null || seenImports.contains(key)) return;
 		seenImports.push(key);
