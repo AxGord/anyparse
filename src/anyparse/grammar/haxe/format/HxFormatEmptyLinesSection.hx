@@ -121,17 +121,18 @@ package anyparse.grammar.haxe.format;
  * `emptyLines.betweenSingleLineTypes: @:default(0)`) leaves the slot
  * source-driven; `>0` forces that many blanks regardless of source.
  *
- * `uniformStatementBlanks` (ω-uniform-statement-blanks) feeds
- * `opt.uniformStatementBlanks`. Anyparse extension with no
- * haxe-formatter counterpart, so it defaults to `"keep"` (byte-inert)
- * and never re-baselines at JSON-load entry. `"collapse"` applies the
- * "separators that separate everything separate nothing" rule inside a
- * statement block — when every interior gap between adjacent statements
- * is blank the blanks carry no grouping information and all get
- * stripped, but a SELECTIVE mix of blank / adjacent gaps expresses
- * grouping and is kept byte-exact (a comment between statements also
- * keeps the block untouched). See `UniformStatementBlanksPolicy` for the
- * full contract.
+ * `uniformStatementBlanks` (ω-uniform-statement-blanks /
+ * ω-uniform-element-blanks) feeds `opt.uniformStatementBlanks`. Anyparse
+ * extension with no haxe-formatter counterpart, so it defaults to
+ * `"keep"` (byte-inert) and never re-baselines at JSON-load entry.
+ * `"collapse"` applies the "separators that separate everything separate
+ * nothing" rule inside a statement block AND inside an array literal —
+ * when every interior gap between adjacent elements is blank the blanks
+ * carry no grouping information and all get stripped, but a SELECTIVE
+ * mix of blank / adjacent gaps expresses grouping and is kept byte-exact
+ * (a leading comment on any element also keeps the list untouched).
+ * Object literals, anon types and argument lists deliberately stay out.
+ * See `UniformStatementBlanksPolicy` for the full contract.
  */
 @:peg typedef HxFormatEmptyLinesSection = {
 

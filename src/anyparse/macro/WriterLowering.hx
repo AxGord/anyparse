@@ -1877,13 +1877,13 @@ class WriterLowering {
 			// no struct-Star consumer yet (first consumer `HxExpr.ArrayExpr` is
 			// enum-Alt) — read for dual-dispatch symmetry.
 			final trailingCommaRemovableStar: Bool = starNode.fmtHasFlag('trailingCommaRemovable');
-			final uniformElemBlanksStar: Bool = starNode.fmtHasFlag('uniformStmtBlanks');
+			final uniformStmtBlanksStar: Bool = starNode.fmtHasFlag('uniformStmtBlanks');
 			parts.push(triviaSepStarExpr(
 				fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText, sepText,
 				wrapRulesField, leftCurlyOwnedBySep ? knobLeftCurly : null, knobRightCurly, trailPresentAccess, trailingCommaField,
 				openInsideStar, closeInsideStar, false, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
 				reflowSourceMultilineStar, matrixWrapStar, trailNLAccess, false, false, reflowInExprBranchStar, trailingCommaRemovableStar,
-				uniformElemBlanksStar
+				uniformStmtBlanksStar
 			));
 			return;
 		}
@@ -5254,13 +5254,13 @@ class WriterLowering {
 		// `wrapping.trailingComma = remove` drop the break-mode trailing `,`, the
 		// second extends `emptyLines.uniformStatementBlanks` to element gaps.
 		final trailingCommaRemovableAlt: Bool = branch.fmtHasFlag('trailingCommaRemovable');
-		final uniformElemBlanksAlt: Bool = branch.fmtHasFlag('uniformStmtBlanks');
+		final uniformStmtBlanksAlt: Bool = branch.fmtHasFlag('uniformStmtBlanks');
 		return triviaSepStarExpr(
 			c.argsAccess, slots.trailBBAccess, slots.trailLCAccess, slots.trailCloseAccess, slots.trailOpenAccess, c.elemFn, c.leadText,
 			c.trailText, c.sepText, wrapRulesField, knobLeftCurly, knobRightCurly, slots.sepTrailPresentAccess, trailingCommaField,
 			openInsideExpr, closeInsideExpr, beforeDocComments, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
 			reflowSourceMultilineAlt, matrixWrapAlt, null, typedefBodyBlanksAlt, propagateExprPositionAlt, false,
-			trailingCommaRemovableAlt, uniformElemBlanksAlt
+			trailingCommaRemovableAlt, uniformStmtBlanksAlt
 		);
 	}
 
@@ -11715,7 +11715,12 @@ class WriterLowering {
 	 */
 	private static function trailingCommaExpr(node: ShapeNode): Expr {
 		final flagName: Null<String> = node.fmtReadString('trailingComma');
-		return flagName == null ? macro false : optFieldAccess(flagName);
+		if (flagName == null) return macro false;
+		// ω-multiline-trailing-comma-remove: the plain / postfix Star path
+		// (`HxExpr.Call.args`) reaches its trailing separator through this
+		// helper, not through `triviaSepTrailExprs` — apply the same veto here
+		// so one policy answers the question for every list that opts in.
+		return keepsTrailingCommaExpr(optFieldAccess(flagName), node.fmtHasFlag('trailingCommaRemovable'));
 	}
 
 	/**
@@ -15861,7 +15866,9 @@ class WriterLowering {
 			? keepsTrailingCommaExpr(macro $trailPresentAccess && $knobAccessOrFalse, trailingCommaRemovable)
 			: macro false;
 		// ω-meta-allman-objectlit: when source had a trailing `,`, preserve
-		// it in any multi-line shape regardless of the knob. The change
+		// it in any multi-line shape regardless of the ADD knob (but not
+		// regardless of `wrapping.trailingComma`, whose `Remove` value vetoes
+		// the whole expression below). The change
 		// matters when the layout is forced multi-line by some other signal
 		// — surrounding hardlines (e.g. the meta-Allman wrap from
 		// `HxMetaExpr.expr`'s `@:fmt(allmanIndentForCtor)`), natural
@@ -18073,16 +18080,27 @@ class WriterLowering {
 
 	/**
 	 * ω-uniform-element-blanks: the sep-Star predicate scan's `blankBefore`
-	 * hardline signal. A collapsed INTERIOR gap must not leave a hardline
-	 * requirement behind — the list has to take exactly the route a blank-free
-	 * source would have taken, or the next `fmt` pass (which sees no blanks)
-	 * picks a different branch and the emit is not idempotent. The EDGE blank
-	 * after the open delimiter (`_ti == 0`) is not a gap, is never emitted,
-	 * and keeps its legacy signal. `macro _t.blankBefore` (the pre-slice
-	 * expression) for every non-opted Star.
+	 * hardline signal. A collapsed gap must not leave a hardline requirement
+	 * behind — the list has to take exactly the route a blank-free source would
+	 * have taken, or the next `fmt` pass (which sees no blanks) picks a
+	 * different branch and the emit is not idempotent. `macro _t.blankBefore`
+	 * (the pre-slice expression) for every non-opted Star.
+	 *
+	 * The gate is deliberately NOT restricted to interior gaps. The blank right
+	 * after the open delimiter is already dropped upstream — it is owned by the
+	 * `afterLeftCurly` family, never reaches the emit (`_si > 0`), and an
+	 * element-0-only carve-out here was measured to change no output — so the
+	 * extra clause would be an untestable special case.
+	 *
+	 * Consequence worth stating: dropping the requirement also unblocks every
+	 * route the hardline was gating — `_smlKeep` reflow, the Keep matrix grid,
+	 * the `noWrap` flatten. Under an `arrayWrap: noWrap` config a
+	 * uniformly-blank list therefore collapses onto ONE line rather than merely
+	 * losing its blanks. That is the shape the blank-free source produces,
+	 * which is exactly the invariant this gate buys.
 	 */
 	private static function triviaSepBlankHardlineExpr(uniformStmtBlanks: Bool): Expr {
-		return uniformStmtBlanks ? macro (_t.blankBefore && !(_ti > 0 && _uniformCollapse)) : macro _t.blankBefore;
+		return uniformStmtBlanks ? macro (_t.blankBefore && !_uniformCollapse) : macro _t.blankBefore;
 	}
 
 }

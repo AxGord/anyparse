@@ -12,25 +12,32 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 
 /**
  * Wrapped list-literal emission — the three TM-driven policies that share
- * the sep-Star break-mode layout:
+ * the sep-Star break-mode layout. Two are new here; `arrayMatrixWrap` is
+ * pre-existing and covered because the three land together in TM's config
+ * and only their combination reproduces the shipped shapes.
  *
- * 1. `emptyLines.uniformStatementBlanks: collapse` extended to ARRAY-LITERAL
- * element gaps. Same rule as the statement-block policy: when EVERY interior
- * gap between adjacent elements is blank the blanks carry no grouping
- * information and are stripped; a selective mix — or a leading comment on any
- * element — leaves the literal byte-exact.
- * 2. `wrapping.trailingComma: remove` — a MULTILINE array literal / object
- * literal / `new` argument list never ends with a separator. Default `keep`
+ * 1. `emptyLines.uniformStatementBlanks: collapse` extended to
+ * ARRAY-LITERAL element gaps. Same rule as the statement-block policy: when
+ * EVERY interior gap between adjacent elements is blank the blanks carry no
+ * grouping information and are stripped; a selective mix — or a leading
+ * comment on any element — leaves the literal byte-exact. A collapsed gap
+ * also drops its hardline requirement, so the literal re-flows exactly as
+ * the same source without the blanks would (pinned under a `noWrap` array
+ * cascade, where the two routes visibly diverge).
+ * 2. `wrapping.trailingComma: remove` — a MULTILINE array literal, object
+ * literal or argument list never ends with a separator, and `remove`
+ * outranks the `trailingCommas.*Default` ADD knobs. Default `keep`
  * round-trips the source comma. Flat lists and constructs whose trailing
- * separator is mandatory (`{ > Base, }`) are out of scope.
+ * separator is mandatory (`{ > Base, }`) are out of scope, as are function
+ * parameter lists.
  * 3. `wrapping.arrayMatrixWrap: matrixWrapNoAlign` — a source matrix grid
  * keeps its row grouping but drops the column padding, so every row indents
  * with plain tabs and every comma is followed by exactly one space.
  *
  * Options come from `HaxeFormatConfigLoader.loadHxFormatJson` on the
  * load-bearing subset of TM's own `hxformat.json` (tab indent, 140 columns,
- * `commaPolicy: after`) — a defaults-only probe would be config-blind to the
- * wrap cascade these shapes hit.
+ * `commaPolicy: after`) — a defaults-only probe would be config-blind to
+ * the wrap cascade these shapes hit.
  */
 @:nullSafety(Strict)
 class HxListLiteralEmissionSliceTest extends Test {
@@ -54,6 +61,25 @@ class HxListLiteralEmissionSliceTest extends Test {
 	/** Same, with `wrapping.arrayMatrixWrap: matrixWrapNoAlign`. */
 	private static final NO_ALIGN_JSON: String = '{"indentation":{"character":"tab","tabWidth":4},'
 		+ '"wrapping":{"maxLineLength":140,"arrayMatrixWrap":"matrixWrapNoAlign"},"whitespace":{"commaPolicy":"after"}}';
+
+	/**
+	 * `collapse` plus a pure-`noWrap` array cascade — the config where the
+	 * dropped hardline requirement is OBSERVABLE: collapsing the gaps lets
+	 * the literal flatten, which is the shape a blank-free source produces.
+	 */
+	private static final COLLAPSE_NOWRAP_JSON: String = '{"indentation":{"character":"tab","tabWidth":4},'
+		+ '"wrapping":{"maxLineLength":140,"arrayWrap":{"defaultWrap":"noWrap","rules":[]}},'
+		+ '"whitespace":{"commaPolicy":"after"},"emptyLines":{"uniformStatementBlanks":"collapse"}}';
+
+	/** `wrapping.trailingComma: remove` plus the `trailingCommas` ADD knobs on. */
+	private static final REMOVE_OVER_ADD_JSON: String = '{"indentation":{"character":"tab","tabWidth":4},'
+		+ '"wrapping":{"maxLineLength":140,"trailingComma":"remove"},"whitespace":{"commaPolicy":"after"},'
+		+ '"trailingCommas":{"arrayLiteralDefault":"yes","callArgumentDefault":"yes","objectLiteralDefault":"yes"}}';
+
+	/** Same ADD knobs, `wrapping.trailingComma` absent — the `keep` baseline. */
+	private static final ADD_JSON: String = '{"indentation":{"character":"tab","tabWidth":4},'
+		+ '"wrapping":{"maxLineLength":140},"whitespace":{"commaPolicy":"after"},'
+		+ '"trailingCommas":{"arrayLiteralDefault":"yes","callArgumentDefault":"yes","objectLiteralDefault":"yes"}}';
 
 	// --- item (a): array-literal uniform element blanks ---
 	// TM `TextAreaFormGroup.createCustomLabel` shape: two elements, one gap, blank.
@@ -97,7 +123,60 @@ class HxListLiteralEmissionSliceTest extends Test {
 
 	private static final ANON_EXTENSION: String = 'typedef E = {\n\t> Base,\n}\n';
 
-	private static final PARAMS_TRAIL: String = 'class C {\n\tfunction f(\n\t\talpha: Int,\n\t\tbeta: Int,\n\t): Void {}\n}\n';
+	private static final PARAMS_TRAIL: String = 'class C {\n\tfunction f(\n\t\talphaAlphaAlphaAlphaAlpha: Int,\n'
+		+ '\t\tbetaBetaBetaBetaBetaBeta: Int,\n\t\tgammaGammaGammaGammaGamma: Int,\n\t\tdeltaDeltaDeltaDeltaDelta: Int,\n'
+		+ '\t\tepsilonEpsilonEpsilonEps: Int,\n\t): Void {}\n}\n';
+
+	private static final CALL_TRAIL: String = 'class C {\n\tfunction f() {\n\t\tg(\n\t\t\talphaAlphaAlphaAlphaAlpha,\n'
+		+ '\t\t\tbetaBetaBetaBetaBetaBeta,\n\t\t\tgammaGammaGammaGammaGamma,\n\t\t\tdeltaDeltaDeltaDeltaDelta,\n'
+		+ '\t\t\tepsilonEpsilonEpsilonEps,\n\t\t);\n\t}\n}\n';
+
+	/** Uniform gaps under a `noWrap` array cascade — no source trailing comma. */
+	private static final ARR_NOWRAP: String =
+		'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talpha,\n\n\t\t\tbeta,\n\n\t\t\tgamma\n\t\t];\n\t}\n}\n';
+
+	/** No source trailing comma anywhere — the ADD-knob path. */
+	private static final ARR_NO_TRAIL: String =
+		'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talphaAlphaAlphaAlpha,\n\t\t\tbetaBetaBetaBetaBeta,\n\t\t\tgamma\n\t\t];\n\t}\n}\n';
+
+	public function testRemoveDropsMultilineCallArgTrailingComma(): Void {
+		// A plain call has no source-trailing-comma slot, so the ADD knob is
+		// the only way its broken arg list can end with a `,` at all.
+		Assert.isTrue(addKnob(CALL_TRAIL).indexOf('epsilonEpsilonEpsilonEps,') >= 0, addKnob(CALL_TRAIL));
+		Assert.isTrue(removeOverAdd(CALL_TRAIL).indexOf('epsilonEpsilonEpsilonEps,') < 0, removeOverAdd(CALL_TRAIL));
+	}
+
+	public function testRemoveOutranksTheAddKnob(): Void {
+		Assert.isTrue(addKnob(ARR_NO_TRAIL).indexOf('gamma,\n\t\t]') >= 0, addKnob(ARR_NO_TRAIL));
+		Assert.isTrue(removeOverAdd(ARR_NO_TRAIL).indexOf('gamma\n\t\t]') >= 0, removeOverAdd(ARR_NO_TRAIL));
+	}
+
+	public function testRemoveIsIdempotent(): Void {
+		Assert.equals(remove(ARR_TRAIL), remove(remove(ARR_TRAIL)));
+		Assert.equals(remove(OBJ_TRAIL), remove(remove(OBJ_TRAIL)));
+		Assert.equals(remove(NEW_TRAIL), remove(remove(NEW_TRAIL)));
+		Assert.equals(remove(CALL_TRAIL), remove(remove(CALL_TRAIL)));
+	}
+
+	public function testCollapseIsIdempotent(): Void {
+		Assert.equals(collapse(ARR_TWO), collapse(collapse(ARR_TWO)));
+		Assert.equals(collapse(ARR_UNIFORM), collapse(collapse(ARR_UNIFORM)));
+		Assert.equals(collapse(ARR_EDGE_OPEN), collapse(collapse(ARR_EDGE_OPEN)));
+		Assert.equals(collapse(ARR_EDGE_CLOSE), collapse(collapse(ARR_EDGE_CLOSE)));
+	}
+
+	/**
+	 * The collapsed gap must ALSO drop its hardline requirement, so the
+	 * literal re-flows exactly as the blank-free source does. Under a
+	 * `noWrap` array cascade the two routes diverge visibly: with the
+	 * hardline still standing the list would stay one-element-per-line and
+	 * the next pass would flatten it, i.e. not be idempotent.
+	 */
+	public function testCollapsedGapReflowsLikeABlankFreeSource(): Void {
+		final blankFree: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talpha,\n\t\t\tbeta,\n\t\t\tgamma\n\t\t];\n\t}\n}\n';
+		Assert.equals(write(blankFree, COLLAPSE_NOWRAP_JSON), write(ARR_NOWRAP, COLLAPSE_NOWRAP_JSON));
+		Assert.equals(write(ARR_NOWRAP, COLLAPSE_NOWRAP_JSON), write(write(ARR_NOWRAP, COLLAPSE_NOWRAP_JSON), COLLAPSE_NOWRAP_JSON));
+	}
 
 	// --- item (c): matrix rows ---
 	// TM `PitchArea.mouseDownLinePen` shape: 3 rows of 2, ragged cell widths.
@@ -196,6 +275,7 @@ class HxListLiteralEmissionSliceTest extends Test {
 	}
 
 	public function testRemoveLeavesFunctionParamTrailingComma(): Void {
+		Assert.isTrue(base(PARAMS_TRAIL).indexOf('epsilonEpsilonEpsilonEps:Int,)') >= 0, base(PARAMS_TRAIL));
 		Assert.equals(base(PARAMS_TRAIL), remove(PARAMS_TRAIL));
 	}
 
@@ -219,8 +299,7 @@ class HxListLiteralEmissionSliceTest extends Test {
 	}
 
 	private static function write(source: String, json: String): String {
-		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		return HaxeModuleTriviaWriter.write(ast, opts(json));
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts(json));
 	}
 
 	private static function base(source: String): String {
@@ -237,6 +316,14 @@ class HxListLiteralEmissionSliceTest extends Test {
 
 	private static function noAlign(source: String): String {
 		return write(source, NO_ALIGN_JSON);
+	}
+
+	private static function addKnob(source: String): String {
+		return write(source, ADD_JSON);
+	}
+
+	private static function removeOverAdd(source: String): String {
+		return write(source, REMOVE_OVER_ADD_JSON);
 	}
 
 }
