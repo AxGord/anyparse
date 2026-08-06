@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan.NegationSeams;
+import anyparse.check.IfExpressionChain.ShieldSeams;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
@@ -9,7 +10,6 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
-import anyparse.check.IfExpressionChain.ShieldSeams;
 
 /**
  * Flags a loop (`for` / `while`) that opens with a bare `if (g) continue;` guard — the

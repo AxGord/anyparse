@@ -301,8 +301,8 @@ import haxe.Exception;
  * the function literal, no block kinds, or NEITHER value-carrying statement kind → the
  * check is a no-op.
  *
- * The control-flow arm reads four more seams (the last two arrive bundled as
- * `shield: ShieldSeams`). Three of them unset simply narrow it; the fourth,
+ * The control-flow arm reads four more seams (`conditionalKinds` and `shieldKinds` arrive
+ * bundled as `shield: ShieldSeams`). Three of them unset simply narrow it; the fourth,
  * `conditionalKinds`, is the one that must be set for a grammar that HAS an `if`:
  *
  * - `controlFlowKinds` — `ifExpressionKinds` + `ifStatementKinds` + `switchKinds` +

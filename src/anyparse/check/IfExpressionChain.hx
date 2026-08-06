@@ -53,8 +53,10 @@ typedef Carried = {
 
 /**
  * The two kind lists `IfExpressionChain.childShielded` reads, bundled into one argument.
- * Both are `Array<String>`, so as adjacent positional parameters a transposed call compiled
- * silently and mis-gated every site; naming them makes that transposition a type error.
+ * Both are `Array<String>`, so as adjacent positional parameters a transposed call would have
+ * compiled silently and mis-gated every site — three of them, across two modules. Bundling
+ * removes the CALL-SITE transposition entirely: there is one construction site and it fills the
+ * fields by name. A swap INSIDE that factory would still compile, which is why
  * `IfExpressionChain.shieldSeams` is the only constructor.
  */
 typedef ShieldSeams = {
