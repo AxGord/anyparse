@@ -180,7 +180,7 @@ final class Refs {
 	 * The preference is exact INSIDE a region only: a reference past `#end` still resolves through the
 	 * enclosing frame, i.e. to the first branch's declaration, while the compiler resolves it to
 	 * whichever branch is active. A consumer that reasons about a branch declaration's reference COUNT
-	 * must handle that itself (`JoinReturn.escapesConditionalRegion`).
+	 * must handle that itself (`CheckScan.escapesConditionalRegion`).
 	 *
 	 * Only the branch-aware projection carries the kind, so a plain parse frames byte-identically to
 	 * before.

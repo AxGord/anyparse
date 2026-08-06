@@ -577,6 +577,7 @@ import unit.CollapseNestedSwitchCheckTest;
 import unit.RedundantToStringCheckTest;
 import unit.HxMethodChainAllOrNothingSliceTest;
 import unit.HxListLiteralEmissionSliceTest;
+import unit.JoinSingleUseLocalCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1122,6 +1123,7 @@ class RunTests {
 		addCase(new JoinDeclarationAssignmentCheckTest());
 		addCase(new JoinStringAppendCheckTest());
 		addCase(new JoinReturnCheckTest());
+		addCase(new JoinSingleUseLocalCheckTest());
 		addCase(new PreferSingleQuotesCheckTest());
 		addCase(new CachingGrammarPluginTest());
 		addCase(new RefsCacheTest());
