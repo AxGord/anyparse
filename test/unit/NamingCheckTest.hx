@@ -1671,4 +1671,50 @@ class NamingCheckTest extends Test {
 		Assert.equals(0, violations('class C {\n\tpublic function f() {\n\t\tvar sRGB = 1;\n\t}\n}').length);
 	}
 
+
+	/**
+	 * The MIRROR of the param idiom: a normalizer-artifact LOCAL corrected to `width` would capture
+	 * the bare reads of the INHERITED `width`. Those reads are qualified through `this.` and the
+	 * rename proceeds, instead of the collision refusing it forever.
+	 */
+	public function testFixQualifiesInheritedMemberCapturedByLocalRename(): Void {
+		final baseSrc: String = 'package pkg;\nclass Base {\n\tpublic var width:Int = 0;\n}';
+		final cSrc: String = 'package pkg;\nclass C extends Base {\n\tpublic function f():Void {\n'
+			+ '\t\tfinal wIDTH:Int = 1;\n\t\ttrace(width + wIDTH);\n\t}\n}';
+		assertLocalRenamed(
+			[{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }], 'pkg/C.hx', cSrc, 'trace(this.width + width)',
+			'wIDTH'
+		);
+	}
+
+	/**
+	 * The same repair when the captured member is the enclosing type's OWN instance field - no
+	 * supertype walk needed, the declaration sits in the file being fixed.
+	 */
+	public function testFixQualifiesOwnMemberCapturedByLocalRename(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tpublic var width:Int = 0;\n\tpublic function f():Void {\n'
+			+ '\t\tfinal wIDTH:Int = 1;\n\t\ttrace(width + wIDTH);\n\t}\n}';
+		assertLocalRenamed([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src, 'trace(this.width + width)', 'wIDTH');
+	}
+
+	/**
+	 * A captured STATIC member has no `this.` spelling, so the local rename stays refused - the
+	 * mirror of `testFixRefusesStaticMemberCapture` on the member-rename side.
+	 */
+	public function testFixRefusesLocalRenameCapturingStaticMember(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tpublic static var width:Int = 0;\n\tpublic function f():Void {\n'
+			+ '\t\tfinal wIDTH:Int = 1;\n\t\ttrace(width + wIDTH);\n\t}\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	/**
+	 * An unresolvable supertype leaves the captured name unproven - qualifying it would be a guess,
+	 * so the rename is refused (fail-closed).
+	 */
+	public function testFixRefusesLocalRenameCapturingUnprovableMember(): Void {
+		final src: String = 'package pkg;\nclass C extends Missing {\n\tpublic function f():Void {\n'
+			+ '\t\tfinal wIDTH:Int = 1;\n\t\ttrace(width + wIDTH);\n\t}\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
 }

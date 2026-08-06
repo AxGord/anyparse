@@ -7,6 +7,7 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import anyparse.runtime.Span.Position;
+import anyparse.query.RefactorSupport.TypeDeclMatch;
 
 using Lambda;
 
@@ -131,7 +132,9 @@ final class Rename {
 
 		if (qualifyShadowed) {
 			final reachable: Bool = selfReachableBindingAt(source, tree, cursor, shape);
-			final qualified: Null<Qualification> = qualifyCaptured(rewritten, newTree, mismatch, newName, shape, reachable);
+			final qualified: Null<Qualification> = qualifyCaptured(
+				rewritten, newTree, mismatch, newName, shape, reachable, RefactorSupport.resolutionIndexOf(plugin)
+			);
 			if (qualified != null) return verifyQualified(qualified, occurrences, occurrences, newName, cursor, plugin, shape);
 		}
 
@@ -446,37 +449,110 @@ final class Rename {
 	/**
 	 * The source with `this.` (the grammar's `selfReferenceText`) inserted before
 	 * every re-bound occurrence, or null when qualification does not apply and the
-	 * rename must be refused instead. Two independent reachability facts must hold.
+	 * rename must be refused instead.
 	 *
-	 * The BINDING side is `selfReachable` (see `selfReachableBindingAt`): only an instance
-	 * member of a type whose `this` is an instance can be named `this.<name>` at all.
+	 * Every capture site must sit inside a function that is not `static` (a static body has no
+	 * `this` at all); beyond that the repair has TWO mirror-image arms, picked by which side of the
+	 * re-binding the occurrence is on.
 	 *
-	 * The CAPTURE-SITE side is checked here, where the site is known: the capture must be by a
-	 * PARAMETER of the enclosing function - there the param and the member are the same concept
-	 * and `this.x = x` is the idiomatic form, whereas a capture by a local or a loop variable is
-	 * a naming mistake and qualifying it would emit correct but confusing code (`return this.t + t`)
-	 * - and that function must not be `static`, since a static body has no `this`.
+	 * A capture the rename LOST (`extra == false`) is the param idiom: the renamed BINDING must be
+	 * reachable through `this` (`selfReachable`, see `selfReachableBindingAt`) and the capturing
+	 * binding must be a PARAMETER of the enclosing function, where param and member are the same
+	 * concept and `this.x = x` is the idiomatic form. A capture by a local or a loop variable is a
+	 * naming mistake and qualifying it would emit correct but confusing code (`return this.t + t`).
+	 *
+	 * A capture the rename GAINED (`extra == true`) is the mirror: a LOCAL renamed onto a name an
+	 * instance member already holds now shadows that member's bare references. There the binding
+	 * side proves nothing (a local is not reachable through `this`); the CAPTURED occurrence is
+	 * what must be, so `capturedMemberQualifiable` decides.
 	 */
 	private static function qualifyCaptured(
-		rewritten: String, newTree: QueryNode, mismatch: Array<Capture>, newName: String, shape: RefShape, selfReachable: Bool
+		rewritten: String, newTree: QueryNode, mismatch: Array<Capture>, newName: String, shape: RefShape, selfReachable: Bool,
+		?index: SymbolIndex
 	): Null<Qualification> {
 		final self: Null<String> = shape.selfReferenceText;
-		final paramKinds: Array<String> = shape.paramKinds ?? [];
 		final fnKinds: Array<String> = shape.functionKinds ?? [];
 		final staticKind: Null<String> = shape.staticModifierKind;
-		if (self == null || paramKinds.length == 0 || fnKinds.length == 0 || !selfReachable) return null;
+		if (self == null || fnKinds.length == 0) return null;
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (capture in mismatch) {
 			final fn: Null<QueryNode> = innermostOfKinds(newTree, capture.offset, fnKinds);
-			if (fn == null || !declaresParam(fn, newName, paramKinds)) return null;
+			if (fn == null) return null;
 			final modifierKinds: Array<String> = shape.modifierOrderKinds ?? [];
 			if (staticKind != null && modifierPrecedes(newTree, fn, staticKind, modifierKinds)) return null;
+			final repairable: Bool = capture.extra
+				? capturedMemberQualifiable(newTree, capture.offset, newName, shape, index)
+				: selfReachable && declaresParam(fn, newName, shape.paramKinds ?? []);
+			if (!repairable) return null;
 			edits.push({ span: new Span(capture.offset, capture.offset), text: '$self.' });
 		}
 		if (edits.length == 0) return null;
 		final offsets: Array<Int> = [for (edit in edits) edit.span.from];
 		offsets.sort((a, b) -> a - b);
 		return { source: RefactorSupport.applyEdits(rewritten, edits), insertions: offsets, prefixLength: '$self.'.length };
+	}
+
+	/**
+	 * Is the occurrence at `offset` - one the rename ADDITIONALLY captured - a bare reference to an
+	 * instance member that `this.<name>` still names? Three facts, resolved in the language's own
+	 * order:
+	 *
+	 *  - the occurrence must be a bare IDENTIFIER of that name (an already-qualified access binds to
+	 *    nothing the rename could have captured, and a declaration is not a reference at all);
+	 *  - its enclosing type must be one where `this` denotes an instance - inside a Haxe `abstract`
+	 *    (`RefShape.underlyingThisTypeKinds`) `this` IS the underlying value, so `this.<name>` looks
+	 *    the name up on THAT type;
+	 *  - the name must resolve to an INSTANCE member: the enclosing type's OWN declaration decides
+	 *    when it has one (a `static` one refuses - there is no `this.` spelling for it), and only
+	 *    when it declares none does the project index answer for the supertype closure. An
+	 *    unresolvable member - no own declaration and no index, or an index that cannot reach the
+	 *    supertype - refuses, since qualifying it would be a guess.
+	 */
+	private static function capturedMemberQualifiable(
+		tree: QueryNode, offset: Int, name: String, shape: RefShape, index: Null<SymbolIndex>
+	): Bool {
+		final ident: Null<QueryNode> = innermostOfKinds(tree, offset, [shape.identKind]);
+		if (ident == null || ident.name != name) return false;
+		final underlyingThis: Array<String> = shape.underlyingThisTypeKinds ?? [];
+		if (underlyingThis.length > 0 && innermostOfKinds(tree, offset, underlyingThis) != null) return false;
+		final host: Null<TypeDeclMatch> = enclosingTypeDecl(tree, offset);
+		if (host == null) return false;
+		final own: Null<Bool> = ownInstanceMember(tree, host.nameNode, name, shape);
+		return own ?? (index != null && index.supertypeDeclaresInstanceMember(host.name, name));
+	}
+
+	/**
+	 * The innermost type declaration whose span contains `offset`, normalised across the plain and
+	 * `final`-wrapped shapes by `RefactorSupport.typeDeclOf` (a `final class` names itself on an
+	 * inner node the outer wrapper does not carry), or null when `offset` sits outside every type.
+	 */
+	private static function enclosingTypeDecl(tree: QueryNode, offset: Int): Null<TypeDeclMatch> {
+		var best: Null<TypeDeclMatch> = null;
+		function walk(node: QueryNode): Void {
+			final match: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
+			if (match != null && offset >= match.fullSpan.from && offset < match.fullSpan.to) best = match;
+			for (child in node.children) walk(child);
+		}
+		walk(tree);
+		return best;
+	}
+
+	/**
+	 * Whether `host`'s OWN declaration of `name` is an instance member: true when it declares one
+	 * non-statically, false when a declaration of that name carries the `static` modifier, and null
+	 * when the type declares no member of that name - the caller then asks the project index about
+	 * the supertype closure.
+	 */
+	private static function ownInstanceMember(tree: QueryNode, host: QueryNode, name: String, shape: RefShape): Null<Bool> {
+		final memberKinds: Array<String> = shape.memberDeclKinds ?? [];
+		final staticKind: Null<String> = shape.staticModifierKind;
+		final modifierKinds: Array<String> = shape.modifierOrderKinds ?? [];
+		var found: Null<Bool> = null;
+		for (child in host.children) if (memberKinds.contains(child.kind) && child.name == name) {
+			if (staticKind != null && modifierPrecedes(tree, child, staticKind, modifierKinds)) return false;
+			found = true;
+		}
+		return found;
 	}
 
 	/** The innermost node of one of `kinds` whose span contains `offset`, or null. */
