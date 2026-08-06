@@ -1511,7 +1511,12 @@ final class Cli {
 			// the active SUBSET a supertype declared elsewhere reads as unresolvable and a call site in
 			// an unchanged file reads as absent — the first would silence a real finding, the second
 			// would delete a method something still calls.
-			'orphan-accessor'
+			'orphan-accessor',
+			// unused-public-member's every gate is whole-project: the supertype chain resolution,
+			// the subtype / interface member queries, and the reference scan over the whole token
+			// map. On the active SUBSET a call site in an unchanged file reads as absent, so
+			// `--fix` would delete a method the rest of the project still calls.
+			'unused-public-member'
 		];
 		final activeScopeChecks: Array<Check> = [for (c in safeChecks) if (!fullScopeIds.contains(c.id())) c];
 		final fullScopeChecks: Array<Check> = [for (c in safeChecks) if (fullScopeIds.contains(c.id())) c];

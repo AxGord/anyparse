@@ -190,6 +190,10 @@ final class Linter {
 			// (the slot names the method), this one requires no slot to name it at all. Registry
 			// order is therefore free; the comment records why nobody needs to re-derive it.
 			new OrphanAccessor(),
+			// Deletes public methods, as `orphan-accessor` deletes accessor ones — the two can never
+			// claim the same method: this rule skips every `get_` / `set_`-prefixed name outright, and
+			// that check claims nothing else. Registry order is therefore free.
+			new UnusedPublicMember(),
 			new FieldInitAtDeclaration(),
 			new PreferInline(),
 			new InlineConstant(),
