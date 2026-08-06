@@ -179,7 +179,8 @@ class RedundantToStringCheckTest extends Test {
 		// A local named `Std` is not the class, so this is not the stringifying call the arm assumes.
 		Assert.equals(
 			0,
-			violations(DECL_K + "@:nullSafety(Strict) class C { function f(x:K, Std:K) { final r:String = Std.string(x.toString()); } }").length
+			violations(DECL_K + "@:nullSafety(Strict) class C { function f(x:K, Std:K) { final r:String = Std.string(x.toString()); } }")
+				.length
 		);
 	}
 
@@ -206,7 +207,8 @@ class RedundantToStringCheckTest extends Test {
 	public function testStringRequiredParameterNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(DECL_K + "@:nullSafety(Strict) class C { function f(x:K) { g(x.toString()); } function g(s:String):Void {} }").length
+			violations(DECL_K + "@:nullSafety(Strict) class C { function f(x:K) { g(x.toString()); } function g(s:String):Void {} }")
+				.length
 		);
 	}
 
@@ -274,7 +276,7 @@ class RedundantToStringCheckTest extends Test {
 		final check: Null<Check> = Linter.byId('redundant-tostring');
 		Assert.notNull(check);
 		Assert.isTrue(Std.isOfType(check, DefaultOff), 'redundant-tostring is opt-in');
-		Assert.equals(134, Linter.builtins().length);
+		Assert.equals(142, Linter.builtins().length);
 	}
 
 	private function violations(src: String): Array<Violation> {
