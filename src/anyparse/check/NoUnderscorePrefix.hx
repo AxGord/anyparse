@@ -276,10 +276,7 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 		if (span == null) return null;
 		if (Naming.collidesInScope(decl, source, tree, target, shape, resolutionIndex, plugin)) return null;
 		if (collidesWithProjectSymbol(decl, target, resolutionIndex, allowInheritedShadow)) return null;
-		return Naming.declaringFileRenameSpans(
-			source, tree, span.from, decl.name, shape, plugin, Naming.isDistinctiveName(decl.name),
-			interpolationReadSpans(tree, source, decl.name, span.from, shape)
-		);
+		return Naming.declaringFileRenameSpans(source, tree, span.from, decl.name, shape, plugin, Naming.isDistinctiveName(decl.name));
 	}
 
 	/**
@@ -331,42 +328,6 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 		return owner == null ? false : idx.supertypeDeclaresMember(owner, target);
 	}
 
-	/**
-	 * The identifier-token spans of every simple `$name` string-interpolation read of the
-	 * binding declared at `declFrom` — occurrences the reference walker does not index, so
-	 * `Rename.renameOccurrences` misses them and the completeness gate would refuse the
-	  * whole rename. Restricted to the binding's own innermost function, and returned EMPTY
-	 * (leaving any such read uncovered, hence blocking) unless the file declares the name
-	 * exactly ONCE: at zero the read binds to something the file does not declare (an
-	 * inherited field), at two or more it cannot be attributed without re-implementing scope
-	 * resolution. Both are refused rather than guessed.
-	 */
-	private static function interpolationReadSpans(
-		tree: QueryNode, source: String, name: String, declFrom: Int, shape: RefShape
-	): Array<Span> {
-		final interpKind: Null<String> = shape.stringInterpIdentKind;
-		if (interpKind == null) return [];
-		var declCount: Int = 0;
-		for (h in Refs.find(name, tree, shape)) if (h.kind == RefKind.Decl) declCount++;
-		if (declCount != 1) return [];
-		final scope: Null<Span> = Naming.innermostSpanOfKinds(tree, functionScopeKinds(shape), declFrom);
-		if (scope == null) return [];
-		final out: Array<Span> = [];
-		collectInterpolationReads(tree, interpKind, name, source, scope, out);
-		return out;
-	}
-
-	/** Walk `node`, appending the identifier-token span of every `$name` interpolation read inside `scope`. */
-	private static function collectInterpolationReads(
-		node: QueryNode, interpKind: String, name: String, source: String, scope: Span, out: Array<Span>
-	): Void {
-		final span: Null<Span> = node.span;
-		if (node.kind == interpKind && node.name == name && span != null && span.from >= scope.from && span.to <= scope.to) {
-			final off: Int = RefactorSupport.identTokenOffset(source, span, name);
-			if (off >= 0) out.push(new Span(off, off + name.length));
-		}
-		for (child in node.children) collectInterpolationReads(child, interpKind, name, source, scope, out);
-	}
 
 	/**
 	 * Whether `name`, declared at `declSpan`, is referenced nowhere else in its innermost

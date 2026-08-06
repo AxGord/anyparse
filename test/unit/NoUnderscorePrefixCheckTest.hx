@@ -151,8 +151,8 @@ class NoUnderscorePrefixCheckTest extends Test {
 	}
 
 	public function testStringInterpolationReadRenamesAlong(): Void {
-		// A simple `$name` read is not in the reference walker's index; the check resolves it
-		// through `stringInterpIdentKind` so it renames along instead of blocking the fix.
+		// A simple `$name` read IS in the reference walker's index (`Refs` classifies
+		// `stringInterpIdentKind` as a read), so it renames along instead of blocking the fix.
 		final src: String = "package pkg;\nclass C {\n\tpublic function f(_name:String):Void {\n\t\ttrace('hi $_name');\n\t}\n}";
 		assertFixed(src, ['f(name:String)', "hi $name"], ['_name']);
 	}

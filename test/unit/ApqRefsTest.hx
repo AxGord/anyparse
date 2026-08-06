@@ -617,4 +617,97 @@ class ApqRefsTest extends Test {
 		if (boundTo != null) Assert.equals(decls[0].span.from, boundTo.from, 'comprehension read binds to the value binder');
 	}
 
+
+	/**
+	 * A braceless `$name` inside a single-quoted string is a READ bound to the enclosing
+	 * scope's declaration — the resolution fact every consumer of `Refs` reads.
+	 */
+	public function testSimpleInterpolationIsRead(): Void {
+		final source: String = "class X { static function f():Void { var n:Int = 0; trace('n is $n'); } }";
+		final hits: Array<RefHit> = findIn(source, 'n');
+		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(1, hits.filter(h -> h.kind == RefKind.Decl).length, 'one VarStmt decl — got ${describe(hits)}');
+		Assert.equals(1, reads.length, 'the braceless interpolation is one read — got ${describe(hits)}');
+		Assert.isTrue(reads[0].interpolated, 'the interpolation read must be marked — got ${describe(hits)}');
+		final boundTo: Null<Span> = reads[0].bindingSpan;
+		Assert.notNull(boundTo);
+		if (boundTo != null) Assert.equals(hits[0].span.from, boundTo.from, 'interpolation read binds to the local');
+	}
+
+	/**
+	 * The interpolation hit's span covers the bytes that SPELL the read, `$` included — the
+	 * wide-span convention a splicing consumer must locate the identifier token inside.
+	 */
+	public function testSimpleInterpolationSpanCoversDollar(): Void {
+		final source: String = "class X { static function f():Void { var n:Int = 0; trace('$n'); } }";
+		final read: RefHit = findIn(source, 'n').filter(h -> h.kind == RefKind.Read)[0];
+		Assert.equals('$$n', source.substring(read.span.from, read.span.to), 'span spells the dollar too — got ${describe([read])}');
+	}
+
+	/** An ordinary identifier read carries `interpolated == false`. */
+	public function testPlainReadIsNotMarkedInterpolated(): Void {
+		final hits: Array<RefHit> = findIn('class X { static function f():Void { var n:Int = 0; trace(n); } }', 'n');
+		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(1, reads.length);
+		Assert.isFalse(reads[0].interpolated, 'a plain IdentExpr read is not an interpolation');
+	}
+
+	/** `$$` is an escaped dollar, so `$$n` is literal text — no read of `n`. */
+	public function testEscapedDollarIsNotRead(): Void {
+		final source: String = "class X { static function f():Void { var n:Int = 0; trace('$$n'); } }";
+		final hits: Array<RefHit> = findIn(source, 'n');
+		Assert.equals(0, hits.filter(h -> h.kind == RefKind.Read).length, '`$$n` is literal text — got ${describe(hits)}');
+	}
+
+	/** A double-quoted literal never interpolates, so `"$n"` reads nothing. */
+	public function testDoubleQuotedStringIsNotRead(): Void {
+		final source: String = 'class X { static function f():Void { var n:Int = 0; trace("$$n"); } }';
+		final hits: Array<RefHit> = findIn(source, 'n');
+		Assert.equals(0, hits.filter(h -> h.kind == RefKind.Read).length, 'no interpolation in "..." — got ${describe(hits)}');
+	}
+
+	/**
+	 * A `${ … }` hole keeps its parsed expression subtree, whose identifiers are ordinary
+	 * `identKind` reads — unmarked, and unchanged by the braceless arm.
+	 */
+	public function testBracedInterpolationStaysPlainRead(): Void {
+		final source: String = "class X { static function f():Void { var n:Int = 0; trace('${n + 1}'); } }";
+		final reads: Array<RefHit> = findIn(source, 'n').filter(h -> h.kind == RefKind.Read);
+		Assert.equals(1, reads.length, 'one read inside the brace hole');
+		Assert.isFalse(reads[0].interpolated, 'a braced-hole interior read is an ordinary IdentExpr');
+	}
+
+	/**
+	 * Inside a macro-reification subtree the interpolation belongs to the GENERATED code, so
+	 * it is a runtime emit — not a reference to the enclosing scope. Same rule the plain
+	 * identifier already follows there.
+	 */
+	public function testInterpolationInsideReificationIsOpaque(): Void {
+		final source: String = "class X { static function f():Void { var n:Int = 0; var e = macro 'v $n'; } }";
+		final hits: Array<RefHit> = findIn(source, 'n');
+		Assert.equals(0, hits.filter(h -> h.kind == RefKind.Read).length, 'reified emit is not a read — got ${describe(hits)}');
+	}
+
+	/**
+	 * A metadata string argument is an ordinary expression position, so its interpolation is
+	 * indexed like any other — the seam that makes `@:meta('$x')` visible to a rename.
+	 */
+	public function testInterpolationInMetadataArgumentIsRead(): Void {
+		final source: String = "class X { static var n:Int = 0; @:tag('$n') static function f():Void {} }";
+		final reads: Array<RefHit> = findIn(source, 'n').filter(h -> h.kind == RefKind.Read);
+		Assert.equals(1, reads.length, 'the metadata-argument interpolation is a read');
+		Assert.isTrue(reads[0].interpolated);
+	}
+
+	/**
+	 * An escape-SPELLED `$` (`\x24name`) is interpolation to the compiler, and the query tree
+	 * re-projects it as the same `Ident` node — so it indexes as a read too.
+	 */
+	public function testEscapeSpelledInterpolationIsRead(): Void {
+		final source: String = "class X { static function f():Void { var n:Int = 0; trace('\\x24n'); } }";
+		final reads: Array<RefHit> = findIn(source, 'n').filter(h -> h.kind == RefKind.Read);
+		Assert.equals(1, reads.length, 'the rescanned `\\x24n` is a read');
+		Assert.isTrue(reads[0].interpolated);
+	}
+
 }
