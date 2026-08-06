@@ -308,4 +308,28 @@ class TypeResolverSliceTest extends Test {
 		Assert.equals(0, fixEdits(local).length, 'a local Date binding is not the stdlib type — kept');
 	}
 
+	/**
+	 * End-to-end canary: the dead local's initializer reads a plain field declared on a
+	 * GENERIC supertype, so `isPlainFieldRead` must prove it accessor-less and the fix
+	 * must delete the local.
+	 */
+	public function testInheritedPlainFieldDeleted(): Void {
+		final src: String =
+			'class Base<T> { public final d:T; } class Sub extends Base<Int> {} class C { static function m(s:Sub):Int { final dead = cast s.d; return 1; } }';
+		Assert.equals(1, fixEdits(src).length, 'an inherited plain field read is side-effect-free — deletable');
+	}
+
+	/** The same shape with a GETTER on the base: reading it may run code, so the local stays. */
+	public function testInheritedGetterFieldKept(): Void {
+		final src: String =
+			'class Base<T> { public var f(get, never):Int; } class Sub extends Base<Int> {} class C { static function m(s:Sub):Int { final dead = cast s.f; return 1; } }';
+		Assert.equals(0, fixEdits(src).length, 'an inherited getter property read may run code — kept');
+	}
+
+	/** The `this`-receiver branch resolves through the enclosing type's supertype chain too. */
+	public function testThisInheritedPlainFieldDeleted(): Void {
+		final src: String = 'class Base { public var f:Int; } class C extends Base { function m():Int { final dead = this.f; return 1; } }';
+		Assert.equals(1, fixEdits(src).length, 'this.f on an inherited plain field is side-effect-free — deletable');
+	}
+
 }
