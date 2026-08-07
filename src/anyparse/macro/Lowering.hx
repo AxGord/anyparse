@@ -2344,6 +2344,78 @@ class Lowering {
 		};
 	}
 
+	/**
+	 * ω-stash-nl-operator-commit: drop a stale `pendingTrivia` LINE-BREAK signal
+	 * (`newlineBefore` + `blankBefore`) at the point an operator COMMITS. Emits
+	 * `{}` outside Trivia mode, where nothing reads the stash.
+	 *
+	 * The stash is a forward signal: a Pratt / postfix loop that exits on
+	 * no-match having eaten a newline records it (`ω-untyped-keep`) so the next
+	 * SIBLING's `collectTrivia` still sees the line break the loop consumed. It
+	 * describes a boundary — and an operator match right after it proves there
+	 * is no boundary there: the newline sits strictly INSIDE this expression,
+	 * before the operator. Only a DEEPER loop can have written it (the
+	 * committing loop's own `skipWsAndStash` consumes the gap before the
+	 * operator without recording it), so nothing legitimate is dropped.
+	 *
+	 * Left standing, it is drained by whatever calls `collectTrivia` next, which
+	 * can be arbitrarily far away — a following `@:trivia` Star element, an
+	 * optional-kw field, or the FIRST element of a container the very next
+	 * operand opens — and that node reports a source line break its own leading
+	 * gap does not have.
+	 *
+	 * The observable damage is a phantom hardline. A `@:fmt(padTrailing,
+	 * captureSourceNewlineAfter)` boundary emits `_dhl()` instead of `_dt(' ')`
+	 * on the phantom signal, so `v = #if a X #elseif b c ? d : e #elseif f Y
+	 * #end;` — flat on one source line — round-tripped to a DIFFERENT layout on
+	 * the second pass than on the first: pass 1 broke the ternary (correct: no
+	 * stash yet), pass 2 read its own `?`/`:` line breaks back in, leaked the
+	 * signal onto the `#elseif` that followed the ternary, and broke THERE
+	 * instead. A writer whose output is not its own fixed point makes every
+	 * canonical-gated op (`lint --fix`, `add-member`, …) refuse the file it just
+	 * wrote. `blankBefore` travels with `newlineBefore` in both producers and
+	 * has its own consumer (a blank line ahead of the drained node), so it is
+	 * dropped in the same breath — clearing one alone leaves a
+	 * `{blankBefore: true, newlineBefore: false}` state no producer can build.
+	 *
+	 * TWO OTHER READERS of `newlineBefore` see the flag before this clear can
+	 * reach them, and both stay truthful. `chainNlValue` (the
+	 * `@:fmt(captureChainNewline)` `&&` / `||` arm) ORs the stash in because a
+	 * higher-precedence left operand routinely pre-consumes their gap — so the
+	 * infix site pushes this clear only AFTER that read, which is where the
+	 * `captureChainNewline` ctors already dropped the flag themselves. The
+	 * `#if`-splice same-line gate `gapNewline` in `buildPostfixOpMatchExpr` ORs
+	 * it for the same reason; it runs in the postfix loop's MATCH expression,
+	 * before any operator of that iteration has committed, and each iteration
+	 * re-derives its own gap from a freshly saved `_preWsPos`.
+	 *
+	 * NOT covered, both stable fixed points — cosmetic, not canonical-gate
+	 * breakers — and both left alone here:
+	 *
+	 *  - a CLOSING delimiter proves interiority just as an operator does, and
+	 *    those commits do not clear (`{k: (foo\n), m: 2}` still breaks before
+	 *    `m`);
+	 *  - the postfix loop clears at the matched iteration's TAIL, so a stash the
+	 *    RECEIVER left is still live while the suffix's own payload parses and a
+	 *    container the payload opens can drain it (`(foo\n)[{k: 1, m: 2}]`
+	 *    breaks the index literal). Clearing before `$opChain` instead is NOT
+	 *    the fix — `gapNewline` reads the flag inside the match expression, and
+	 *    a genuine boundary the receiver stashed (`try f() catch (_) {}` then an
+	 *    own-line `#if`) is unrecoverable by the no-match scanback, whose
+	 *    `_preWsPos` already sits past the newline. Closing it means threading
+	 *    the pre-clear value through every postfix branch builder.
+	 */
+	private function stashNewlineClearExpr(): Expr {
+		final clear: Expr = macro {
+			final _stashClr = ctx.pendingTrivia;
+			if (_stashClr != null) {
+				_stashClr.newlineBefore = false;
+				_stashClr.blankBefore = false;
+			}
+		};
+		return _ctx.trivia ? clear : macro {};
+	}
+
 	private function buildPrattBranchBody(branch: ShapeNode, typePath: String, simple: String, skipCall: Expr): Expr {
 		// noqa: complexity
 		final returnCT: ComplexType = ruleReturnCT(typePath);
@@ -2387,17 +2459,22 @@ class Lowering {
 			final thenTrailCapture: Expr = captureTernaryTrail
 				? macro final _thenTrailComment: Null<String> = collectTrailingFull(ctx)
 				: macro {};
+			final clearStashNl: Expr = stashNewlineClearExpr();
 			macro {
 				if ($v{precValue} < minPrec) {
 					ctx.pos = _savedPos;
 					_matched = false;
 				} else {
+					$clearStashNl;
 					$skipCall;
 					final _middle: $returnCT = $fullExprCall;
 					$thenTrailCapture;
 					$skipCall;
 					expectLit(ctx, $v{sepText});
 					$skipCall;
+					// The separator is the ternary's SECOND operator commit — the middle
+					// operand's own loop exit can have stashed the gap before it.
+					$clearStashNl;
 					final _right: $returnCT = $fullExprCall;
 					left = $ctorCall;
 				}
@@ -2472,10 +2549,9 @@ class Lowering {
 			// into pendingTrivia (where it leaks into the next operand's parse).
 			if (captureChainNl) commitParts.push(macro final _opAfterComment: Null<String> = collectTrailingFull(ctx));
 			commitParts.push(skipCall);
-			if (captureChainNl) {
-				commitParts.push(macro final _chainNl: Bool = $chainNlValue);
-				commitParts.push(macro if (ctx.pendingTrivia != null) ctx.pendingTrivia.newlineBefore = false);
-			}
+			if (captureChainNl) commitParts.push(macro final _chainNl: Bool = $chainNlValue);
+			// AFTER the `_chainNl` read (`&&`/`||` consume the very flag this drops).
+			commitParts.push(stashNewlineClearExpr());
 			commitParts.push(macro final _right: $rightCT = $rightCall);
 			// Restrict RHS-trail to BLOCK comments (`/* */`): a same-line LINE
 			// comment after the operand belongs to an enclosing chain operator's
@@ -3577,6 +3653,7 @@ class Lowering {
 		// no-match scan-back (comment-rewind / newline-stash); plain mode is
 		// the bare matchExpr dispatch loop.
 		final scanback: Expr = buildPostfixNoMatchScanback();
+		final clearStashNl: Expr = stashNewlineClearExpr();
 		return _ctx.trivia
 			? macro {
 				var left: $returnCT = $coreCall;
@@ -3590,6 +3667,11 @@ class Lowering {
 						$scanback;
 						break;
 					}
+					// A matched suffix keeps the expression open, so any stash the
+					// core / the suffix payload left describes an INTERIOR gap —
+					// `(foo\n).bar` must not report a line break before whatever
+					// follows `.bar`. See `stashNewlineClearExpr`.
+					$clearStashNl;
 				}
 				return left;
 			}
@@ -3682,8 +3764,12 @@ class Lowering {
 		// `utils/CleanExit.hx:36`); the glue then fed the region's flat width
 		// into the operand's rest-stack and wrapped a method chain that fit.
 		// `pendingTrivia.newlineBefore` is the same second newline source that
-		// `captureChainNewline` already ORs in (see `chainNlValue`). The flag is
-		// NOT cleared here -- downstream `collectTrivia` readers own it.
+		// `captureChainNewline` already ORs in (see `chainNlValue`). This scan
+		// runs in the MATCH expression, before any operator of the iteration has
+		// committed, so `stashNewlineClearExpr` at the loop's matched tail cannot
+		// blind it: the next iteration re-derives its gap from a freshly saved
+		// `_preWsPos`, and the flag that tail dropped described a gap BEFORE the
+		// operator already consumed.
 		//
 		// The leading `peekLit` is a pure cost guard: `matchKw` has to stay LAST
 		// (it consumes on success), so without it both scanners would run at

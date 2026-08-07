@@ -35,31 +35,75 @@ import anyparse.runtime.Span;
  * A conditional-compilation branch is textual, not a scope, so the declared local is visible
  * after `#end` either way — the merge does not move a binding.
  *
+ * The EXIT arms take a region whose every branch is a value `return` (or a `throw`), where the
+ * text kept once is the keyword itself: `#if release return true; #else return ok(); #end` ->
+ * `return #if release true #else ok() #end;`. A value-less `return;` is a different node kind, so
+ * a branch holding one refuses the region — the merged form has no value to carry the directives.
+ * The merged statement can spell only ONE keyword, which the prefix agreement below enforces:
+ * a `return` branch beside a `throw` branch is refused.
+ *
+ * ## The implicit else
+ *
+ * The exit arms — and ONLY they — also take a region with NO `#else` when the statement
+ * IMMEDIATELY after it is an unconditional exit of the same keyword:
+ *
+ * ```haxe
+ * #if windows
+ * return '\r\n';
+ * #end
+ * return '\n';
+ * // ->
+ * return #if windows '\r\n' #else '\n' #end;
+ * ```
+ *
+ * Inside the region's conditions that follower is dead code (the branch exits before reaching
+ * it), so it IS the else branch, and the merge consumes it — the finding's span covers both
+ * statements and a note on the message says so. An `#elseif` chain that never reaches `#else`
+ * closes the same way.
+ *
+ * This shape is UNSOUND for the assignment and declaration arms and stays refused there: both
+ * statements execute, so the follower would win rather than the branch. It needs a follower at
+ * all, so a region that is the LAST statement of its list is refused, as is one separated from
+ * the following exit by any other statement. A region that DOES reach `#else` never consumes
+ * its follower, whatever that follower is.
+ *
  * ## What is flagged
  *
  * A region that is a DIRECT CHILD of a statement list (`ControlFlowSupport.blockKinds`) —
  * statement position, never a member run, a case group or an expression slot, where the
- * merged form would not be a statement — and where ALL of:
+ * merged form would not be a statement. That gate is also what keeps the implicit else in ONE
+ * statement list: a region under a brace-less `if` / loop / `try` body is a child of that host,
+ * not of the enclosing block, so the exit after `#end` is never mistaken for its else branch.
+ * Beyond the position, ALL of:
  *
- *  - every branch is present, `#else` INCLUDED. A region without one leaves the assignment
- *    conditional; merging would make it unconditional, which is a behaviour change, so a
- *    bare `#if … #end` (and an `#elseif` chain that never reaches `#else`) is refused.
- *    `#elseif` chains WITH a final `#else` merge, each clause keeping its own condition;
+ *  - every branch is present, `#else` INCLUDED, or the implicit-else shape above supplies it.
+ *    Without either, the statement stays conditional and merging would make it unconditional,
+ *    which is a behaviour change, so a bare `#if … #end` (and an `#elseif` chain that never
+ *    reaches `#else`) is refused. `#elseif` chains WITH a final `#else` merge, each clause
+ *    keeping its own condition;
  *  - every branch holds EXACTLY ONE statement — no empty branch (whose target would silently
  *    gain a value), none with a second statement;
  *  - that statement is a BARE assignment (`RefShape.assignKind`, a plain `=` — a compound
  *    `+=` is a different kind and never matches) whose r-value is not itself an assignment
  *    (`a = b = c` would leave the inner one inside the merged r-value), or a single-declarator
- *    local declaration WITH an initializer;
- *  - the text before the r-value is IDENTICAL in every branch — the l-value for the
- *    assignment shape, the `<keyword> <name>[:<type>] =` prefix for the declaration one. Both
- *    are verbatim source slices (only the assignment shape's `=` is re-spelled, since the
- *    l-value slice stops short of it), so a branch spelling its target differently — down to
- *    the whitespace inside it — is a safe miss rather than a guess about which spelling to keep;
+ *    local declaration WITH an initializer, or a value return / throw
+ *    (`RefShape.returnStatementKind` / `throwKinds`);
+ *  - every branch agrees on SHAPE and on the text before the value — the l-value for the
+ *    assignment shape, the `<keyword> <name>[:<type>] =` prefix for the declaration one, the
+ *    exit keyword for the return / throw one. Every prefix is a verbatim source slice (only the
+ *    assignment shape's `=` is re-spelled, since the l-value slice stops short of it), so a
+ *    branch spelling its target differently — down to the whitespace inside it — is a safe miss
+ *    rather than a guess about which spelling to keep. The shape is compared on its own rather
+ *    than inferred from the prefix: which arm produced a branch is what the merged statement's
+ *    soundness turns on, and it must not rest on prefix spellings never colliding;
  *  - no branch statement contains a `#`. That rejects the r-value that already carries
  *    directives (`a = #if air 1 #else 2 #end;`, which the merge would nest) and, with it,
  *    every string literal whose text could have been mistaken for a branch marker by the
  *    directive scan below;
+ *  - every branch VALUE is single-line. A value broken across lines would splice its
+ *    continuation between two directives, where it reads as belonging to a branch it does not —
+ *    the same reason a multi-line condition is refused below, measured on the other half of the
+ *    clause;
  *  - each branch header (`#if <cond>` / `#elseif <cond>` / `#else`), read with its comments
  *    removed, is single-line — a condition broken across lines cannot go inline verbatim. The
  *    comment removal is what keeps this SHAPE verdict independent of the comment gate below:
@@ -73,42 +117,52 @@ import anyparse.runtime.Span;
  * be the one the scan reaches at depth 0, so a marker inside a string that unbalances the
  * scan fails the region closed.
  *
- * A COMMENT anywhere in the region leaves the finding REPORT-ONLY (with a note appended to
- * the message): a comment is trivia, not a child, so the rebuilt statement would drop it.
+ * A COMMENT anywhere in the merged span leaves the finding REPORT-ONLY (with a note appended to
+ * the message): a comment is trivia, not a child, so the rebuilt statement would drop it. For an
+ * implicit-else merge that span reaches past `#end` to the consumed follower.
  *
  * ## Grammar-agnostic
  *
  * The region is recognised by its span TEXT opening with the `#if` keyword
  * (`RefShape.conditionalIfKeyword`) — the same uniform, scope-independent test `if-false`
  * uses, since conditional nodes project no condition child in any scope. The statement shapes
- * come from `RefShape.exprStatementKind` / `assignKind` / `localDeclKinds`, and the position
- * gate from `GrammarPlugin.controlFlowSupport`. Any of them unset makes the check a no-op,
- * report and fix alike.
+ * come from `RefShape.exprStatementKind` / `assignKind` / `localDeclKinds` /
+ * `returnStatementKind` / `throwKinds`, and the position gate from
+ * `GrammarPlugin.controlFlowSupport`. Any of the first three unset makes the check a no-op,
+ * report and fix alike; either exit kind unset only drops that arm — and with it the
+ * implicit-else shape, which no other arm may take.
  *
  * The branch and terminator spellings (`#elseif` / `#else` / `#end`) are NOT read from a seam
  * and are the Haxe ones. `RefShape.conditionalElseKeywords` carries the first two as an
  * unordered set, which is not enough here: the scan must know WHICH keyword ends the chain
- * (only a final `#else` makes the merge sound) and must try `#elseif` before its `#else`
- * prefix, and there is no `#end` field at all. A grammar spelling them differently needs those
- * seams introduced before this check can follow it.
+ * (only a final `#else`, or an implicit one, makes the merge sound) and must try `#elseif`
+ * before its `#else` prefix, and there is no `#end` field at all. A grammar spelling them
+ * differently needs those seams introduced before this check can follow it.
  *
  * ## Autofix
  *
- * `fix` emits ONE edit per finding: the whole region span replaced by the merged statement,
+ * `fix` emits ONE edit per finding: the whole flagged span replaced by the merged statement,
  * assembled from verbatim source slices (the shared prefix, each branch header, each branch
- * r-value) plus the closing `#end;`. Exactly one branch is live on any given define set —
- * that is what `#else` being mandatory buys — so the merged statement assigns the same value
- * the region did, on every target. The caller re-emits through the canonical writer
+ * value) plus the closing `#end;`. Exactly one branch is live on any given define set — that is
+ * what a mandatory `#else`, explicit or implicit, buys — so the merged statement yields the same
+ * value the region did, on every target. The caller re-emits through the canonical writer
  * (`RefactorSupport.canonicalize`), which re-indents the merged line.
  */
 @:nullSafety(Strict)
 final class CondAssignMerge implements Check implements DefaultOff {
 
-	/** ASCII-only note appended when a comment inside the region withholds the autofix. */
-	private static inline final COMMENT_NOTE: String = ' (comment in the region - merge by hand)';
+	/** ASCII-only note appended when a comment inside the merged span withholds the autofix. */
+	private static inline final COMMENT_NOTE: String = ' (comment in the merged span - merge by hand)';
 
 	private static inline final MESSAGE: String =
 		'every branch of this conditional-compilation region assigns the same target - merge it into one assignment with a conditional r-value';
+
+	/** The EXIT arms' message: the merged statement keeps one `return` / `throw` keyword. */
+	private static inline final EXIT_MESSAGE: String =
+		'every branch of this conditional-compilation region exits with the same keyword - merge it into one statement with a conditional value';
+
+	/** ASCII-only note appended when the statement AFTER the region is merged in as the implicit else. */
+	private static inline final FOLLOWER_NOTE: String = ' (the statement after the region is the implicit else and is merged in)';
 
 	/** A binary assignment node has exactly [l-value, r-value] children. */
 	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
@@ -124,7 +178,8 @@ final class CondAssignMerge implements Check implements DefaultOff {
 	}
 
 	public function description(): String {
-		return 'a `#if … #else … #end` region whose every branch assigns the same target — mergeable into one conditional r-value';
+		return
+			'a `#if … #else … #end` region whose every branch assigns the same target, or returns / throws — mergeable into one conditional value; an `#else`-less region of exits also absorbs the exit that follows it';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -139,7 +194,7 @@ final class CondAssignMerge implements Check implements DefaultOff {
 				span: m.span,
 				rule: 'cond-assign-merge',
 				severity: Severity.Info,
-				message: m.text == null ? MESSAGE + COMMENT_NOTE : MESSAGE
+				message: message(m)
 			});
 		}
 		return violations;
@@ -173,7 +228,20 @@ final class CondAssignMerge implements Check implements DefaultOff {
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
-	/** Bundle the required kinds, or null when a required one is unset (the check is then a no-op). */
+	/**
+	 * The finding's message: which arm matched, plus a note per gate the match had to relax —
+	 * a consumed follower, and a comment that leaves the merge to the reader.
+	 */
+	private static function message(m: Match): String {
+		final base: String = (m.exit ? EXIT_MESSAGE : MESSAGE) + (m.implicitElse ? FOLLOWER_NOTE : '');
+		return m.text == null ? base + COMMENT_NOTE : base;
+	}
+
+	/**
+	 * Bundle the required kinds, or null when a required one is unset (the check is then a no-op).
+	 * The EXIT kinds are not required: either unset simply drops that arm (and with it the
+	 * implicit-else shape, which no other arm may take).
+	 */
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final ifKeyword: Null<String> = shape.conditionalIfKeyword;
@@ -187,6 +255,8 @@ final class CondAssignMerge implements Check implements DefaultOff {
 			exprStmtKind: exprStmtKind,
 			assignKind: assignKind,
 			localDeclKinds: localDeclKinds,
+			returnKind: shape.returnStatementKind,
+			throwKinds: shape.throwKinds ?? [],
 			blockKinds: support.blockKinds()
 		};
 	}
@@ -203,8 +273,9 @@ final class CondAssignMerge implements Check implements DefaultOff {
 	private static function walk(
 		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, seams: Seams, out: Array<Match>
 	): Void {
-		if (seams.blockKinds.contains(node.kind)) for (child in node.children) {
-			final m: Null<Match> = matchRegion(child, source, comments, seams);
+		if (seams.blockKinds.contains(node.kind)) for (i in 0...node.children.length) {
+			final next: Null<QueryNode> = i + 1 < node.children.length ? node.children[i + 1] : null;
+			final m: Null<Match> = matchRegion(node.children[i], next, source, comments, seams);
 			if (m != null) out.push(m);
 		}
 		for (child in node.children) walk(child, source, comments, seams, out);
@@ -216,20 +287,50 @@ final class CondAssignMerge implements Check implements DefaultOff {
 	 * makes the merge lossy — the finding is still reported, report-only.
 	 */
 	private static function matchRegion(
-		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, seams: Seams
+		node: QueryNode, next: Null<QueryNode>, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, seams: Seams
 	): Null<Match> {
 		final span: Null<Span> = node.span;
 		if (span == null || !sliceStartsWith(source, span.from, seams.ifKeyword)) return null;
-		final arms: Null<Array<Arm>> = splitArms(source, span, node.children, seams);
-		if (arms == null) return null;
-		final parts: Null<Array<Parts>> = agreedParts(source, arms, seams);
-		if (parts == null) return null;
+		final region: Null<Region> = splitArms(source, span, node.children, seams);
+		if (region == null) return null;
+		// A region that never reaches `#else` merges only by consuming the statement AFTER it as
+		// the implicit else — and only when its branches EXIT, which is what makes that statement
+		// dead inside them. Without a follower there is no else branch to merge at all.
+		final follower: Null<Arm> = region.hasElse ? null : followerArm(next, span);
+		if (!region.hasElse && follower == null) return null;
+		final all: Array<Arm> = follower == null ? region.arms : region.arms.concat([follower]);
+		final parts: Null<Array<Parts>> = agreedParts(source, all, seams);
+		if (parts == null || (follower != null && !parts[0].exit)) return null;
 		// Every SHAPE gate, the headers included, runs BEFORE the comment gate: a region the
 		// headers refuse is not reportable at all, and reporting it would advise a hand-merge
 		// of something the rule itself cannot express.
-		final headers: Null<Array<String>> = branchHeaders(source, comments, arms);
+		final headers: Null<Array<String>> = branchHeaders(source, comments, region.arms);
 		if (headers == null) return null;
-		return { span: span, text: hasComment(comments, span) ? null : assemble(headers, parts) };
+		if (follower != null) headers.push(ELSE_KEYWORD);
+		final merged: Span = follower == null ? span : new Span(span.from, follower.stmtSpan.to);
+		return {
+			span: merged,
+			exit: parts[0].exit,
+			implicitElse: follower != null,
+			text: hasComment(comments, merged) ? null : assemble(headers, parts)
+		};
+	}
+
+	/**
+	 * The statement after the region as an extra arm — the implicit else — or null when there is
+	 * none. Its header offset is the region's own end, which `branchHeaders` never reads (the
+	 * caller passes it the region's own arms): the merged form spells this branch `#else`, since
+	 * the region carries no directive for it. Were it ever read, the slice from `#end` to the
+	 * follower is whitespace and trims to `''`, which `branchHeaders` refuses — the misuse fails
+	 * closed.
+	 */
+	private static function followerArm(next: Null<QueryNode>, region: Span): Null<Arm> {
+		if (next == null) return null;
+		final nextSpan: Null<Span> = next.span;
+		if (nextSpan == null || nextSpan.from < region.to) return null;
+		// Re-bind to a non-null local: narrowing does not reach the struct literal below.
+		final armSpan: Span = nextSpan;
+		return { headerFrom: region.to, stmt: next, stmtSpan: armSpan };
 	}
 
 	/**
@@ -243,7 +344,7 @@ final class CondAssignMerge implements Check implements DefaultOff {
 	 * is nesting-aware and must reach the region's own `#end` at depth 0 with nothing but that
 	 * keyword left, so an unbalanced marker inside a string literal fails the region closed.
 	 */
-	private static function splitArms(source: String, region: Span, children: Array<QueryNode>, seams: Seams): Null<Array<Arm>> {
+	private static function splitArms(source: String, region: Span, children: Array<QueryNode>, seams: Seams): Null<Region> {
 		final markers: Array<Int> = [];
 		var chainEndsWithElse: Bool = false;
 		var depth: Int = 0;
@@ -274,7 +375,7 @@ final class CondAssignMerge implements Check implements DefaultOff {
 				i++;
 			}
 		}
-		if (!chainEndsWithElse || endAt == -1) return null;
+		if (endAt == -1) return null;
 		if (StringTools.trim(source.substring(endAt, region.to)) != END_KEYWORD) return null;
 		if (children.length != markers.length + 1) return null;
 
@@ -289,7 +390,7 @@ final class CondAssignMerge implements Check implements DefaultOff {
 			final armSpan: Span = stmtSpan;
 			arms.push({ headerFrom: bounds[a], stmt: stmt, stmtSpan: armSpan });
 		}
-		return arms;
+		return { arms: arms, hasElse: chainEndsWithElse };
 	}
 
 	/**
@@ -301,10 +402,21 @@ final class CondAssignMerge implements Check implements DefaultOff {
 		final out: Array<Parts> = [];
 		for (arm in arms) {
 			final parts: Null<Parts> = armParts(source, arm, seams);
-			if (parts == null || (out.length > 0 && parts.prefix != out[0].prefix)) return null;
+			if (parts == null || isMultiLine(parts.value)) return null;
+			if (out.length > 0 && (parts.prefix != out[0].prefix || parts.exit != out[0].exit)) return null;
 			out.push(parts);
 		}
 		return out;
+	}
+
+	/**
+	 * Whether `text` spans more than one line — the verdict the branch HEADERS already get,
+	 * applied to the values. A value broken across lines cannot go inline verbatim any more than
+	 * a condition can: the merge would splice its continuation lines between two directives, where
+	 * they read as belonging to a branch they do not.
+	 */
+	private static function isMultiLine(text: String): Bool {
+		return text.indexOf('\n') != -1 || text.indexOf('\r') != -1;
 	}
 
 	/**
@@ -359,7 +471,24 @@ final class CondAssignMerge implements Check implements DefaultOff {
 		final stmt: QueryNode = arm.stmt;
 		if (source.substring(arm.stmtSpan.from, arm.stmtSpan.to).indexOf('#') != -1) return null;
 		if (stmt.kind == seams.exprStmtKind) return assignParts(source, stmt, seams);
+		if (stmt.kind == seams.returnKind || seams.throwKinds.contains(stmt.kind)) return exitParts(source, stmt, arm.stmtSpan);
 		return seams.localDeclKinds.contains(stmt.kind) ? declParts(source, stmt, arm.stmtSpan, seams) : null;
+	}
+
+	/**
+	 * The keyword / value split of a `return <expr>;` or `throw <expr>;` statement, or null when
+	 * it carries no value. A value-less `return;` is a DIFFERENT kind, so it never reaches here
+	 * and its branch refuses the whole region.
+	 *
+	 * The prefix is the exit keyword itself, which is what makes `agreedParts`' prefix equality
+	 * reject a `return` arm beside a `throw` one: the merged statement can spell only one of them.
+	 */
+	private static function exitParts(source: String, stmt: QueryNode, stmtSpan: Span): Null<Parts> {
+		if (stmt.children.length != 1) return null;
+		final valueSpan: Null<Span> = stmt.children[0].span;
+		if (valueSpan == null) return null;
+		final prefix: String = StringTools.trim(source.substring(stmtSpan.from, valueSpan.from));
+		return prefix == '' ? null : { prefix: prefix, value: source.substring(valueSpan.from, valueSpan.to), exit: true };
 	}
 
 	/** The prefix / r-value split of a bare `<l-value> = <r-value>;` statement, or null when it is not one. */
@@ -373,7 +502,8 @@ final class CondAssignMerge implements Check implements DefaultOff {
 		final rhsSpan: Null<Span> = rhs.span;
 		return lhsSpan == null || rhsSpan == null ? null : {
 			prefix: '${source.substring(lhsSpan.from, lhsSpan.to)} =',
-			value: source.substring(rhsSpan.from, rhsSpan.to)
+			value: source.substring(rhsSpan.from, rhsSpan.to),
+			exit: false
 		};
 	}
 
@@ -390,7 +520,11 @@ final class CondAssignMerge implements Check implements DefaultOff {
 		final initSpan: Null<Span> = init.span;
 		if (initSpan == null) return null;
 		final prefix: String = StringTools.trim(source.substring(stmtSpan.from, initSpan.from));
-		return StringTools.endsWith(prefix, '=') ? { prefix: prefix, value: source.substring(initSpan.from, initSpan.to) } : null;
+		return StringTools.endsWith(prefix, '=') ? {
+			prefix: prefix,
+			value: source.substring(initSpan.from, initSpan.to),
+			exit: false
+		} : null;
 	}
 
 	/** Whether a comment token overlaps `region` — the merge rebuilds the statement, so any comment in it would be lost. */
@@ -411,6 +545,13 @@ private typedef Seams = {
 	var exprStmtKind: String;
 	var assignKind: String;
 	var localDeclKinds: Array<String>;
+
+	/** The value-returning `return` statement kind, or null when the grammar leaves it unset. */
+	var returnKind: Null<String>;
+
+	/** The `throw` kinds, empty when the grammar leaves them unset. */
+	var throwKinds: Array<String>;
+
 	var blockKinds: Array<String>;
 }
 
@@ -421,14 +562,30 @@ private typedef Arm = {
 	var stmtSpan: Span;
 }
 
+/** A split region: its branches in order, and whether the chain reaches a final `#else`. */
+private typedef Region = {
+	var arms: Array<Arm>;
+	var hasElse: Bool;
+}
+
 /** A branch statement split into the text kept once and the r-value kept per branch. */
 private typedef Parts = {
 	var prefix: String;
 	var value: String;
+
+	/** Whether the statement EXITS (`return` / `throw`) — the only shape the implicit else is sound for. */
+	var exit: Bool;
 }
 
 /** A mergeable region: its span (finding key) and the merged statement, or null text when a comment blocks the fix. */
 private typedef Match = {
 	var span: Span;
+
+	/** Whether the arms are EXIT statements — picks the message, and gates the implicit else. */
+	var exit: Bool;
+
+	/** Whether the statement AFTER the region was consumed as the implicit else. */
+	var implicitElse: Bool;
+
 	var text: Null<String>;
 }
