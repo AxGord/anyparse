@@ -103,6 +103,11 @@ final class Linter {
 			new TryCatchNullGuard(),
 			new JoinDeclarationAssignment(),
 			new JoinReturn(),
+			// Registry order is free: the two claim DISJOINT shapes. `join-return` needs the next
+			// statement to BE `return <name>;`, and this check refuses exactly that shape (it would
+			// emit the same text with none of `join-return`'s annotation handling), so no site is
+			// ever claimed twice.
+			new JoinSingleUseLocal(),
 			new PreferSingleQuotes(),
 			new SimplifyBooleanTernary(),
 			// Registered after `double-negation`, and THAT ordering is load-bearing: on

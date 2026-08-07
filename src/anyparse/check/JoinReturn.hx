@@ -272,9 +272,9 @@ final class JoinReturn implements Check {
 		// The declared local must be referenced ONLY by this return: exactly one non-decl
 		// reference resolving to it. A self-reference in the initializer or a use in
 		// unreachable trailing code makes the join unsafe.
-		final declNameFrom: Null<Int> = soleReferenceNameFrom(name, declSpan, tree, s);
+		final declNameFrom: Null<Int> = CheckScan.soleReferenceNameFrom(name, declSpan, tree, s.shape);
 		if (declNameFrom == null) return null;
-		if (escapesConditionalRegion(name, declSpan, tree, s)) return null;
+		if (CheckScan.escapesConditionalRegion(name, declSpan, tree, s.shape)) return null;
 
 		if (droppedComment(declSpan, initSpan, retSpan.to, comments)) return null;
 
@@ -289,71 +289,6 @@ final class JoinReturn implements Check {
 			message: 'this declaration and its next-line return can be joined into a single return'
 		};
 		return m;
-	}
-
-	/**
-	 * Whether a reference OUTSIDE the conditional-compilation region holding `declSpan` binds to a
-	 * same-name declaration INSIDE it — in which case the declaration is not sole-referenced and
-	 * the pair must not join.
-	 *
-	 * Branch-aware resolution (`Refs`' `CondBranch` preference frame) is exact only INSIDE a
-	 * region: past `#end` the enclosing block's first-wins rule points such a read at the FIRST
-	 * branch's declaration, while the compiler points it at whichever branch the configuration
-	 * activates. A post-region read is therefore a reference to EVERY branch's declaration at
-	 * once, and collapsing any one of them away would leave that read unbound in that branch's
-	 * configuration — a `--fix` that does not compile. Counting the read against every declaration
-	 * in the region restores the pre-branch-frame verdict for exactly this shape and nothing else:
-	 * when the region declares the name only once, the read already binds inside `declSpan` and
-	 * the sole-reference count has it.
-	 *
-	 * A null `conditionalMemberKind` (a grammar with no conditional compilation) makes this a
-	 * no-op, as does a declaration outside any region.
-	 */
-	private static function escapesConditionalRegion(name: String, declSpan: Span, tree: QueryNode, s: Seams): Bool {
-		final region: Null<Span> = enclosingConditionalRegion(tree, declSpan, s.shape.conditionalMemberKind);
-		if (region == null) return false;
-		final r: Span = region;
-		for (h in Refs.find(name, tree, s.shape)) {
-			if (h.kind == RefKind.Decl) continue;
-			final bs: Null<Span> = h.bindingSpan;
-			if (bs == null || bs.from < r.from || bs.to > r.to) continue;
-			if (h.span.from < r.from || h.span.to > r.to) return true;
-		}
-		return false;
-	}
-
-	/** The span of the innermost conditional-compilation region (`conditionalMemberKind`) containing `inner`, or null. */
-	private static function enclosingConditionalRegion(node: QueryNode, inner: Span, condKind: Null<String>): Null<Span> {
-		if (condKind == null) return null;
-		final span: Null<Span> = node.span;
-		if (span != null && (span.from > inner.from || span.to < inner.to)) return null;
-		for (c in node.children) {
-			final hit: Null<Span> = enclosingConditionalRegion(c, inner, condKind);
-			if (hit != null) return hit;
-		}
-		return node.kind == condKind ? span : null;
-	}
-
-	/**
-	 * The `from` of the declaration's own name token when the local `name` bound at `declSpan`
-	 * has EXACTLY one non-declaration reference resolving to it, or null otherwise. Reads the
-	 * name token (a self-binding hit inside `declSpan`) and counts every other hit whose
-	 * binding falls inside `declSpan`.
-	 */
-	private static function soleReferenceNameFrom(name: String, declSpan: Span, tree: QueryNode, s: Seams): Null<Int> {
-		var declNameFrom: Null<Int> = null;
-		var otherRefs: Int = 0;
-		for (h in Refs.find(name, tree, s.shape)) {
-			final hs: Span = h.span;
-			final bs: Null<Span> = h.bindingSpan;
-			final selfBind: Bool = bs != null && bs.from == hs.from && bs.to == hs.to;
-			if (selfBind && hs.from >= declSpan.from && hs.to <= declSpan.to) {
-				declNameFrom = hs.from;
-				continue;
-			}
-			if (bs != null && bs.from >= declSpan.from && bs.to <= declSpan.to) otherRefs++;
-		}
-		return otherRefs == 1 ? declNameFrom : null;
 	}
 
 	/**

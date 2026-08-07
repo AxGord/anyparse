@@ -14,6 +14,8 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.RefactorSupport.ChainTypeContext;
+import anyparse.query.Refs;
+import anyparse.query.Refs.RefKind;
 
 /**
  * Shared scan helpers for the `run` / `fix` paths of the analysis checks.
@@ -31,6 +33,9 @@ final class CheckScan {
 
 	/** The shortest disjunction that can strand a narrowing: with two operands the first operand's fact always reaches the second. */
 	private static inline final STRANDABLE_CHAIN_LENGTH: Int = 3;
+
+	/** A sole-referenced declaration has exactly one non-declaration reference resolving to it. */
+	private static inline final SOLE_REFERENCE_COUNT: Int = 1;
 
 	/** The grammar's `using` declaration kind, spelled literally (see `hasUsingModule`). */
 	public static inline final USING_DECL_KIND: String = 'UsingDecl';
@@ -1028,6 +1033,78 @@ final class CheckScan {
 			}
 		});
 		return edits;
+	}
+
+
+	/**
+	 * The `from` of the declaration's own name token when the local `name` bound at `declSpan`
+	 * has EXACTLY one non-declaration reference resolving to it, or null otherwise. Reads the
+	 * name token (a self-binding hit inside `declSpan`) and counts every other hit whose
+	 * binding falls inside `declSpan`.
+	 *
+	 * Shared by the joins that collapse a single-use local away (`join-return`,
+	 * `join-single-use-local`): both must prove the declaration has exactly ONE consumer before
+	 * they may delete it.
+	 */
+	public static function soleReferenceNameFrom(name: String, declSpan: Span, tree: QueryNode, shape: RefShape): Null<Int> {
+		var declNameFrom: Null<Int> = null;
+		var otherRefs: Int = 0;
+		for (h in Refs.find(name, tree, shape)) {
+			final hs: Span = h.span;
+			final bs: Null<Span> = h.bindingSpan;
+			final selfBind: Bool = bs != null && bs.from == hs.from && bs.to == hs.to;
+			if (selfBind && hs.from >= declSpan.from && hs.to <= declSpan.to) {
+				declNameFrom = hs.from;
+				continue;
+			}
+			if (bs != null && bs.from >= declSpan.from && bs.to <= declSpan.to) otherRefs++;
+		}
+		return otherRefs == SOLE_REFERENCE_COUNT ? declNameFrom : null;
+	}
+
+
+	/**
+	 * Whether a reference OUTSIDE the conditional-compilation region holding `declSpan` binds to a
+	 * same-name declaration INSIDE it — in which case the declaration is not sole-referenced and
+	 * whatever collapse `soleReferenceNameFrom` cleared must not happen.
+	 *
+	 * Branch-aware resolution (`Refs`' `CondBranch` preference frame) is exact only INSIDE a
+	 * region: past `#end` the enclosing block's first-wins rule points such a read at the FIRST
+	 * branch's declaration, while the compiler points it at whichever branch the configuration
+	 * activates. A post-region read is therefore a reference to EVERY branch's declaration at
+	 * once, and collapsing any one of them away would leave that read unbound in that branch's
+	 * configuration — a `--fix` that does not compile. Counting the read against every declaration
+	 * in the region restores the pre-branch-frame verdict for exactly this shape and nothing else:
+	 * when the region declares the name only once, the read already binds inside `declSpan` and
+	 * the sole-reference count has it.
+	 *
+	 * A null `conditionalMemberKind` (a grammar with no conditional compilation) makes this a
+	 * no-op, as does a declaration outside any region.
+	 */
+	public static function escapesConditionalRegion(name: String, declSpan: Span, tree: QueryNode, shape: RefShape): Bool {
+		final region: Null<Span> = enclosingConditionalRegion(tree, declSpan, shape.conditionalMemberKind);
+		if (region == null) return false;
+		final r: Span = region;
+		for (h in Refs.find(name, tree, shape)) {
+			if (h.kind == RefKind.Decl) continue;
+			final bs: Null<Span> = h.bindingSpan;
+			if (bs == null || bs.from < r.from || bs.to > r.to) continue;
+			if (h.span.from < r.from || h.span.to > r.to) return true;
+		}
+		return false;
+	}
+
+
+	/** The span of the innermost conditional-compilation region (`conditionalMemberKind`) containing `inner`, or null. */
+	public static function enclosingConditionalRegion(node: QueryNode, inner: Span, condKind: Null<String>): Null<Span> {
+		if (condKind == null) return null;
+		final span: Null<Span> = node.span;
+		if (span != null && (span.from > inner.from || span.to < inner.to)) return null;
+		for (c in node.children) {
+			final hit: Null<Span> = enclosingConditionalRegion(c, inner, condKind);
+			if (hit != null) return hit;
+		}
+		return node.kind == condKind ? span : null;
 	}
 
 }
