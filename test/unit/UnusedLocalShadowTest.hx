@@ -302,6 +302,51 @@ class UnusedLocalShadowTest extends Test {
 		);
 	}
 
+	/**
+	 * A GUARD, not a discriminator - it passes on the base branch too. This check tests references with
+	 * a raw TEXTUAL scan over the enclosing scope span, so the capture is found whatever the frame
+	 * boundaries are. What it pins is that a local `inline function` joining `RefShape.scopeKinds` did
+	 * not make its body a region this check subtracts: the helper is not a self-scoped declaration, so
+	 * its own name is neither a local declaration nor a shadowing region.
+	 */
+	public function testLocalCapturedByInlineHelperKeepsDeclaration(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f() {\n\t\tvar total:Int = 0;\n\t\tinline function add(n:Int) total += n;\n\t\tadd(1);\n\t}\n}'
+			).length
+		);
+	}
+
+	/**
+	 * A declaration shadowed by an inline helper's PARAMETER is not flagged, exactly as the
+	 * lambda-parameter case above: a parameter is not in `selfScopeDeclKinds`, so the helper's body
+	 * is not a region the second scan subtracts. The over-count is the safe direction. A GUARD: the
+	 * governing seam is `selfScopeDeclKinds`, which this slice did not touch, so it passes on the
+	 * base branch too.
+	 */
+	public function testInlineHelperParameterShadowNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String;\n\t\tinline function use(item:String) trace(item);\n\t\tfor (s in xs) use(s);\n\t}\n}'
+			).length
+		);
+	}
+
+	/**
+	 * A local declared INSIDE an inline helper's BLOCK body is still flagged. A GUARD: the operative
+	 * scope is the helper's `BlockBody`, already a `scopeKinds` member before this slice, so the new
+	 * frame is never the one consulted and the fixture passes on the base branch too.
+	 */
+	public function testUnusedLocalInsideInlineHelperFlagged(): Void {
+		final vs: Array<Violation> = violations(
+			'class C {\n\tfunction f() {\n\t\tinline function h() {\n\t\t\tvar dead:Int = 1;\n\t\t\ttrace(2);\n\t\t}\n\t\th();\n\t}\n}'
+		);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("'dead'"));
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new UnusedLocal().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

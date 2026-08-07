@@ -366,7 +366,7 @@ final class Naming implements Check implements CrossFileFix {
 		// gate the cross-file path applies to its declaring file — a `#if` / string / `noqa` / resolver-missed
 		// active-code occurrence bails, a distinctive comment mention renames along (see `declaringFileRenameSpans`).
 		final renameSpans: Null<Array<Span>> = declaringFileRenameSpans(
-			source, tree, span.from, decl.name, shape, plugin, isDistinctiveName(decl.name)
+			source, tree, span.from, decl.name, shape, plugin, isDistinctiveName(decl.name), isBodyScopedCategory(decl.category)
 		);
 		if (renameSpans == null) return null;
 		final spans: Array<Span> = renameSpans;
@@ -588,12 +588,18 @@ final class Naming implements Check implements CrossFileFix {
 	 * (null); a distinctive-name `CommentTrivia` mention renames along. Null on a parse failure
 	 * when the fail-closed raw scan finds an uncovered mention.
 	 *
+	 * `bodyScoped` marks a binding visible only from its declaration on (a local, a parameter, a
+	 * catch variable); an occurrence resolved BEFORE the declaration is then the resolver
+	 * over-reaching past a shadowed member and the whole rename is refused. A MEMBER's references
+	 * legitimately precede it, so the flag defaults off.
+	 *
 	 * A simple `$name` string-interpolation read needs no caller-side help: `Refs` indexes it as
 	 * an ordinary read, so it is already in the resolved set and renames along instead of
 	 * blocking the gate.
 	 */
 	private static function declaringFileRenameSpans(
-		source: String, tree: QueryNode, declFrom: Int, name: String, shape: RefShape, plugin: GrammarPlugin, distinctive: Bool
+		source: String, tree: QueryNode, declFrom: Int, name: String, shape: RefShape, plugin: GrammarPlugin, distinctive: Bool,
+		bodyScoped: Bool = false
 	): Null<Array<Span>> {
 		final covered: Array<Span> = Rename.renameOccurrences(source, tree, declFrom, shape);
 		if (covered.length == 0) return null;
@@ -602,6 +608,13 @@ final class Naming implements Check implements CrossFileFix {
 		// it on a name the fix has removed. `rename` refuses the same shape; the completeness
 		// scan below cannot see it, since the occurrence sits inside a string literal.
 		if (RefactorSupport.unrewrittenInterpRead(Refs.find(name, tree, shape), declFrom, covered) != null) return null;
+		// A body-scoped binding (local / param / catch variable) is visible from its DECLARATION on -
+		// no language here hoists one - so an occurrence resolved BEFORE `declFrom` is the scope
+		// resolver over-reaching: it binds a whole block to the declaration, while the compiler binds
+		// the earlier read to whatever it shadows (a member, a static, an import). Rewriting that read
+		// emits an unknown identifier, so the whole rename is refused. Never true for a MEMBER, whose
+		// references legitimately precede its declaration - hence the caller-supplied flag.
+		if (bodyScoped) for (occ in covered) if (occ.from < declFrom) return null;
 		// Attribute every OTHER same-name occurrence to its binding: one provably bound to a DIFFERENT
 		// binding (a param / loop var / sibling local sharing the name) is neither a rename target nor a
 		// blocker for THIS binding, so it joins the resolved set as an excluded span. An occurrence whose
@@ -616,7 +629,9 @@ final class Naming implements Check implements CrossFileFix {
 		// the same distinctive name can name an UNRELATED binding elsewhere in the file, and a comment about
 		// THAT one must not be rewritten (nor block this rename). A field's container is its type, so its
 		// comment-along still spans the whole class.
-		final container: Null<Span> = innermostSpanOfKinds(tree, shape.scopeKinds.concat(['CaseBranch', 'DefaultBranch']), declFrom);
+		final container: Null<Span> = innermostSpanOfKinds(
+			tree, shape.scopeKinds.concat(['CaseBranch', 'DefaultBranch']), declFrom, localFunctionDeclSpan(tree, declFrom, shape)
+		);
 		for (occ in classified) switch occ.kind {
 			case OccurrenceClass.CommentTrivia if (distinctive):
 				if (container != null && occ.span.from >= container.from && occ.span.from < container.to) spans.push(occ.span);
@@ -933,8 +948,7 @@ final class Naming implements Check implements CrossFileFix {
 	): Bool {
 		final span: Null<Span> = decl.span;
 		if (span == null) return true;
-		final cat: NamingCategory = decl.category;
-		if (cat != NamingCategory.Local && cat != NamingCategory.Param && cat != NamingCategory.CatchVar) {
+		if (!isBodyScopedCategory(decl.category)) {
 			// Whole-file EXCEPT the sibling hierarchies sharing the module: a same-named member of an
 			// UNRELATED class is not reachable from this one, so it is no collision (see `unrelatedTypeSpans`).
 			final owner: Null<String> = decl.enclosingType;
@@ -943,12 +957,36 @@ final class Naming implements Check implements CrossFileFix {
 				: unrelatedTypeSpans(tree, owner, shape, resolutionIndex);
 			return RefactorSupport.nameBoundInRange(source, newName, 0, source.length, unrelated, plugin);
 		}
-		final funcKinds: Array<String> = shape.functionKinds ?? [];
+		// A local `inline function` is a function BODY for scope purposes even though it is not a
+		// measured `functionKinds` unit (`complexity` folds it into its host): its parameters and
+		// locals are visible only inside it, exactly as the plain local form's are. Without the union
+		// a sibling helper's same-named parameter read as an in-scope collision and vetoed the rename.
+		// BOTH callers see the widening - `NoUnderscorePrefix`'s underscore strip and this check's own
+		// `renameEditsFor`, which is default-ON. They read a `true` DIFFERENTLY, so say it precisely:
+		// the strip refuses outright, while `renameEditsFor` refuses only what `qualifiableBinding`
+		// cannot repair - and that predicate is TRUE for every category this branch serves (Local /
+		// Param / CatchVar), so there a `true` means "rename, naming the captured occurrences through
+		// `this.`" (`qualifyCapturedEdits`). What both share is the reading of FALSE: emit the plain
+		// rename. The widening produces more FALSEs, so the question is what it can hide.
+		//
+		// It hides exactly the spans of functions DISJOINT from `enclosing`, and every span this
+		// rename rewrites lies inside `enclosing`, which stays fully scanned - so an occurrence that
+		// could be shadow-broken is still seen and still vetoes. One binding IS hidden and IS visible
+		// here: a sibling local function's own NAME, which lives in the enclosing body while its span
+		// is the sibling's. Renaming past it produces a legal shadow of a name the target body never
+		// mentions (a body that DOES mention it keeps the occurrence, and the veto stands - verified
+		// both ways). That hazard is not new: it holds identically for the plain `LocalFnStmt`, which
+		// `functionKinds` has always carried.
+		final funcKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
 		// The binding is visible throughout its innermost enclosing function - INCLUDING the nested closures
 		// / local functions that capture it - so a same-named binding anywhere in that function conflicts.
 		// Only a function DISJOINT from it (a sibling / unrelated body) is out of scope. Fall back to a
 		// whole-file scan when no enclosing function is found (defensive; a local / param always has one).
-		final enclosing: Null<Span> = innermostSpanOfKinds(tree, funcKinds, span.from);
+		// A local `function` statement is EXCLUDED from its own scope lookup: it is both a binding and
+		// a function node, and the scope it binds into is the enclosing body. Reading its own span as
+		// the scope would make every SIBLING local function look disjoint - and a sibling already
+		// holding `newName` is a real collision.
+		final enclosing: Null<Span> = innermostSpanOfKinds(tree, funcKinds, span.from, localFunctionDeclSpan(tree, span.from, shape));
 		final excluded: Array<Span> = RefactorSupport.structureFieldNameSpans(tree, source, shape);
 		if (enclosing != null) collectDisjointFunctionSpans(tree, funcKinds, enclosing, excluded);
 		return RefactorSupport.nameBoundInRange(source, newName, 0, source.length, excluded, plugin);
@@ -970,13 +1008,25 @@ final class Naming implements Check implements CrossFileFix {
 		for (child in node.children) collectDisjointFunctionSpans(child, functionKinds, enclosing, out);
 	}
 
-	/** The tightest enclosing node span (whose kind is in `kinds`) containing `pos`, or null when none does. */
-	private static function innermostSpanOfKinds(node: QueryNode, kinds: Array<String>, pos: Int): Null<Span> {
+	/**
+	 * The tightest enclosing node span (whose kind is in `kinds`) containing `pos`, or null when none
+	 * does. `exclude` drops the node occupying exactly that span from consideration - what a DECLARATION
+	 * that is itself a scope opener needs (a local `function` statement), since the scope it binds INTO
+	 * is the enclosing one, never its own.
+	 */
+	private static function innermostSpanOfKinds(node: QueryNode, kinds: Array<String>, pos: Int, ?exclude: Span): Null<Span> {
+		// Re-bound as Ints: strict null-safety does not narrow a captured parameter inside the
+		// nested walker. A null `exclude` becomes an impossible span, matching nothing.
+		final excludeFrom: Int = exclude == null ? -1 : exclude.from;
+		final excludeTo: Int = exclude == null ? -1 : exclude.to;
 		var bestFrom: Int = -1;
 		var best: Null<Span> = null;
 		function walk(n: QueryNode): Void {
 			final s: Null<Span> = n.span;
-			if (s != null && s.from <= pos && pos < s.to && kinds.contains(n.kind) && s.from > bestFrom) {
+			if (
+				s != null && s.from <= pos && pos < s.to && kinds.contains(n.kind) && s.from > bestFrom
+				&& (s.from != excludeFrom || s.to != excludeTo)
+			) {
 				bestFrom = s.from;
 				best = s;
 			}
@@ -1016,6 +1066,38 @@ final class Naming implements Check implements CrossFileFix {
 			if (resolutionIndex.provablyNotSubtype(n, ownerName)) out.push(span);
 		}
 		return out;
+	}
+
+
+	/**
+	 * The span of the local FUNCTION declared at `declFrom`, or null when the declaration there is
+	 * anything else. A local `function` is the one declaration kind that opens a scope its own NAME
+	 * does not bind into - the name belongs to the enclosing body - so every scope lookup made FROM
+	 * such a declaration must exclude the declaration's own node. A self-scoped binding (a loop
+	 * iterator, a catch variable) is the opposite case and is deliberately not matched: its own node
+	 * IS the scope its name lives in.
+	 */
+	private static function localFunctionDeclSpan(tree: QueryNode, declFrom: Int, shape: RefShape): Null<Span> {
+		final kinds: Array<String> = (shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
+		if (kinds.length == 0) return null;
+		var found: Null<Span> = null;
+		function walk(n: QueryNode): Void {
+			final s: Null<Span> = n.span;
+			if (s != null && s.from == declFrom && kinds.contains(n.kind)) found = s;
+			for (c in n.children) walk(c);
+		}
+		walk(tree);
+		return found;
+	}
+
+
+	/**
+	 * Whether `category` is a binding scoped to one function BODY - a local, a parameter, a catch
+	 * variable. The three categories the scope-aware collision proof governs, and the ones whose
+	 * references can never precede their declaration.
+	 */
+	private static inline function isBodyScopedCategory(category: NamingCategory): Bool {
+		return category == NamingCategory.Local || category == NamingCategory.Param || category == NamingCategory.CatchVar;
 	}
 
 }

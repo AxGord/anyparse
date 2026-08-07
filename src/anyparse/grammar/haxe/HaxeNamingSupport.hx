@@ -287,7 +287,13 @@ final class HaxeNamingSupport implements NamingSupport {
 		return mods;
 	}
 
-	/** The naming category of a declaration node, or null if its kind is not name-checked. */
+	/**
+	 * The naming category of a declaration node, or null if its kind is not name-checked. A local
+	 * `function` / `inline function` statement is a Local: its name is a binding scoped to one body,
+	 * exactly like a `var`, so the same rules govern it. Both forms are decl hosts of the reference
+	 * walker and open their own parameter scope, so a rename derived from either resolves its
+	 * occurrence set like any other local's.
+	 */
 	private static function categoryOf(node: QueryNode, mods: Array<String>): Null<NamingCategory> {
 		return switch node.kind {
 			case 'ClassDecl' | 'ClassForm' | 'AbstractClassDecl' | 'InterfaceDecl' | 'EnumDecl' | 'AbstractDecl' | 'EnumAbstractDecl'
@@ -296,7 +302,7 @@ final class HaxeNamingSupport implements NamingSupport {
 			case 'VarMember': mods.contains('static') && mods.contains('inline') ? NamingCategory.Constant : NamingCategory.Field;
 			case 'FinalMember': mods.contains('static') ? NamingCategory.Constant : NamingCategory.Field;
 			case 'SimpleCtor' | 'ParamCtor': NamingCategory.EnumValue;
-			case 'VarStmt' | 'FinalStmt' | 'ForStmt' | 'ForExpr' | 'KeyValueBinder': NamingCategory.Local;
+			case 'VarStmt' | 'FinalStmt' | 'ForStmt' | 'ForExpr' | 'KeyValueBinder' | 'LocalFnStmt' | 'LocalInlineFnStmt': NamingCategory.Local;
 			case 'Required' | 'Optional' | 'Rest' | 'LambdaParam': NamingCategory.Param;
 			case 'CatchClause': NamingCategory.CatchVar;
 			case _: null;

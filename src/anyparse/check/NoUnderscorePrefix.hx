@@ -12,15 +12,17 @@ import anyparse.query.NamingPolicy.NamingRule;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.Rename;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 /**
  * Flags a function PARAMETER or a LOCAL binding (a `var` / `final` local, a loop
- * variable, a comprehension variable) whose identifier carries a leading underscore
- * — `_event`, `__selectedIndex`. The `_` prefix is a private-FIELD marker; on a
- * binding that lives inside one function it carries no information, and it collides
- * with the "intentionally unused" convention `unused-parameter` writes.
+ * variable, a comprehension variable, a local `function` / `inline function`) whose
+ * identifier carries a leading underscore — `_event`, `__selectedIndex`, `__finish`.
+ * The `_` prefix is a private-FIELD marker; on a binding that lives inside one function
+ * it carries no information, and it collides with the "intentionally unused" convention
+ * `unused-parameter` writes.
  *
  * Opinionated, so DEFAULT OFF (`DefaultOff`): a project opts in with
  * `"no-underscore-prefix": { "enabled": true }`. Two options narrow it:
@@ -34,6 +36,32 @@ import anyparse.runtime.Span;
  *  - A CATCH variable. A `_`-prefixed catch variable is `swallowed-exception`'s
  *    marker for a deliberately discarded exception; de-prefixing it would turn a
  *    silenced finding back into a reported one.
+ *
+ * ## Local functions
+ *
+ * A local `function` statement is a binding scoped to one body exactly as a `var` is, so
+ * the `locals` option governs it and the same rename machinery strips it. Three things are
+ * particular to it, plus one general gate that landed with them.
+ *
+ * The scope it binds INTO is the ENCLOSING body, never its own span - it is the one
+ * declaration kind that opens a scope its own name does not enter. Every scope lookup made
+ * from such a declaration therefore excludes the declaration's own node
+ * (`Naming.localFunctionDeclSpan`): reading it as the scope would make every SIBLING local
+ * function look disjoint, and a sibling already holding the target name is a real collision.
+ *
+ * Haxe does not hoist a local function, so an occurrence resolved BEFORE the declaration is
+ * the resolver over-reaching - it binds the whole block, while the compiler binds that read
+ * to whatever the local function shadows. `Naming.declaringFileRenameSpans` refuses the
+ * rename rather than rewrite a read that belongs to a member (`bodyScoped`).
+ *
+ * A local `inline function` projects as its own kind, `LocalInlineFnStmt` - the grammar folds the
+ * `inline` keyword into the ctor rather than pairing a modifier - and it is governed identically:
+ * it hosts its binding in the reference walker and opens its own parameter scope, so its strip is
+ * provable and its parameters never collide with a sibling helper's.
+ *
+ * The claim set still refuses a candidate whose occurrence set does not resolve - a rename that can
+ * never be emitted must not claim a target and block a provable sibling - but no reachable input for
+ * that precondition is currently known; see the comment on the gate in `fix`.
  *
  * ## Autofix
  *
@@ -137,7 +165,7 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 	}
 
 	public function description(): String {
-		return 'a parameter or local binding whose name carries a leading underscore';
+		return 'a parameter, local binding or local function whose name carries a leading underscore';
 	}
 
 	@:access(anyparse.check.UnusedParameter)
@@ -201,9 +229,29 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 			if (span == null || !flaggedFroms.contains(span.from)) continue;
 			final target: Null<String> = strippedName(decl, policy, shape);
 			if (target == null) continue;
+			// A candidate whose occurrence set does not resolve can never be renamed, so it must not
+			// CLAIM the target either - leaving it in the set would block a provable sibling's rename
+			// over a conflict that can never materialise. NO REACHABLE INPUT IS CURRENTLY KNOWN: every
+			// kind this rule flags resolves (checked across Required / Optional / Rest / LambdaParam /
+			// VarStmt / FinalStmt / VarMore / KeyValueBinder / ForStmt / comprehension binder /
+			// LocalFnStmt / LocalInlineFnStmt), and a binding inside a reification subtree never
+			// reaches here at all - `HaxeNamingSupport.walk` returns at `MacroExpr`, so it is never
+			// projected as a candidate. The line stays as a precondition on the claim set, deliberately
+			// untested rather than removed: it was added for the local `inline function`, whose
+			// occurrence set the resolver could not build until `LocalInlineFnStmt` became a decl host,
+			// and the next kind that lands in that state must not repeat the regression.
+			if (Rename.renameOccurrences(source, tree, span.from, shape).length == 0) continue;
 			// Re-bind to a non-null final: strict null-safety does not narrow inside a struct literal.
 			final name: String = target;
-			candidates.push({ decl: decl, target: name, scope: Naming.innermostSpanOfKinds(tree, functionScopeKinds(shape), span.from) });
+			candidates.push({
+				decl: decl,
+				target: name,
+				// A local `function` statement opens a scope of its own, but the scope its NAME binds
+				// into is the enclosing body - the one two sibling local functions share.
+				scope: Naming.innermostSpanOfKinds(
+					tree, functionScopeKinds(shape), span.from, Naming.localFunctionDeclSpan(tree, span.from, shape)
+				)
+			});
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (i in 0...candidates.length) {
@@ -274,7 +322,10 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 		if (span == null) return null;
 		if (Naming.collidesInScope(decl, source, tree, target, shape, resolutionIndex, plugin)) return null;
 		if (collidesWithProjectSymbol(decl, target, resolutionIndex, allowInheritedShadow)) return null;
-		return Naming.declaringFileRenameSpans(source, tree, span.from, decl.name, shape, plugin, Naming.isDistinctiveName(decl.name));
+		return Naming.declaringFileRenameSpans(
+			source, tree, span.from, decl.name, shape, plugin, Naming.isDistinctiveName(decl.name),
+			Naming.isBodyScopedCategory(decl.category)
+		);
 	}
 
 	/**

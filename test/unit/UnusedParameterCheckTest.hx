@@ -211,6 +211,48 @@ class UnusedParameterCheckTest extends Test {
 		Assert.equals('class C {\n\tpublic function f(?_value:String):Void {}\n}', applyFix(src, true));
 	}
 
+	/**
+	 * A parameter referenced only from inside a local `inline function` is USED - the helper
+	 * captures it. `LocalInlineFnStmt` opens a scope frame of its own now, and the frame nests:
+	 * were it isolating, the capture would stop counting and the method's parameter would read as
+	 * dead. (The check's own scan is textual and would have kept it either way; this pins the
+	 * intent so a future switch to a resolver-backed scan cannot regress it silently.)
+	 */
+	public function testParameterCapturedByInlineHelperNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations('class C {\n\tpublic function f(value:Int):Void {\n\t\tinline function h():Int return value;\n\t\tg(h());\n\t}\n}')
+				.length
+		);
+	}
+
+	/**
+	 * DOCUMENTED GAP, deliberately pinned. The parameters of the local `inline function` itself
+	 * are out of this check's reach: it enumerates `RefShape.functionKinds` units, and
+	 * `LocalInlineFnStmt` is not one - unlike its plain twin `LocalFnStmt`, which IS. The
+	 * plain-form assertion below is the control.
+	 *
+	 * Closing it means adding the kind to `functionKinds` / `localFunctionKinds`, which was
+	 * measured (suite green, byte-identical findings on two real trees) but NOT taken: seven
+	 * ops-layer sites hardcode `kind == 'LocalFnStmt'` to tell a local function from a METHOD
+	 * (`CallSites`, `ChangeSig`, `RemoveParam`, `ExtractVar`, `ExtractMethod`, `InlineMethod`,
+	 * `RefactorSupport`), and this check's own `Warning` arm removes a parameter through
+	 * `RemoveParam`. An inline helper reaching those as a "method" takes the wrong call-set
+	 * proof, so the extension belongs in a slice that fixes them together.
+	 */
+	public function testInlineHelperOwnParameterNotYetReached(): Void {
+		Assert.equals(
+			0,
+			violations('class C {\n\tpublic function f():Void {\n\t\tinline function h(dead:Int):Int return 1;\n\t\tg(h(2));\n\t}\n}')
+				.length
+		);
+		final plain: Array<Violation> = violations(
+			'class C {\n\tpublic function f():Void {\n\t\tfunction h(dead:Int):Int return 1;\n\t\tg(h(2));\n\t}\n}'
+		);
+		Assert.equals(1, plain.length, 'the plain local-function control must still be flagged');
+		Assert.equals('unused parameter \'dead\'', plain[0].message);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new UnusedParameter().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

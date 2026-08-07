@@ -459,31 +459,48 @@ class ApqRefsTest extends Test {
 	 * `scopeKinds` / `declHostKinds`.
 	 */
 	public function testSiblingLocalFnParamsDoNotCrossBind(): Void {
-		final source: String = 'class X { static function outer() {\n\tfunction a(p:Int):Int { return p; }\n'
-			+ '\tfunction b(p:String):String { return p; }\n' + '} }';
-		final hits: Array<RefHit> = findIn(source, 'p');
-		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
-		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
-		Assert.equals(2, decls.length, 'two param decls expected, got ${describe(hits)}');
-		Assert.equals(2, reads.length, 'two reads expected, got ${describe(hits)}');
-		for (r in reads) {
-			final binding: Null<Span> = r.bindingSpan;
-			Assert.notNull(binding, 'read must resolve to a binding');
-			// Each read binds to the decl of ITS OWN function: the read's span
-			// sits on the same fixture line as its binding (fixture is one
-			// local fn per line).
-			if (binding == null) continue;
-			final sameLine: Bool = lineOf(source, r.span.from) == lineOf(source, binding.from);
-			Assert.isTrue(sameLine, 'read at ${r.span.from} bound across sibling local fns (binding ${binding.from})');
-		}
+		assertSiblingParamsDoNotCrossBind('function');
+	}
+
+	/**
+	 * The same for a local `inline function` - the form the project's Haxe style prescribes for a
+	 * local helper. It projects as its own ctor (`LocalInlineFnStmt`, the `inline` keyword folded
+	 * into the kind), which was in neither `scopeKinds` nor `declHostKinds`: the parameters of two
+	 * sibling inline helpers collected into the ENCLOSING function's single frame, so the second
+	 * one's read of `p` bound to the FIRST one's declaration.
+	 */
+	public function testSiblingLocalInlineFnParamsDoNotCrossBind(): Void {
+		assertSiblingParamsDoNotCrossBind('inline function');
 	}
 
 	/** A local fn's name is a Decl visible from the enclosing body (calls bind to it). */
 	public function testLocalFnNameIsDecl(): Void {
-		final source: String = 'class X { static function outer() {\n\tfunction helper():Void {}\n\thelper();\n} }';
-		final hits: Array<RefHit> = findIn(source, 'helper');
-		Assert.equals(1, hits.filter(h -> h.kind == RefKind.Decl).length, 'local fn decl expected, got ${describe(hits)}');
-		Assert.equals(1, hits.filter(h -> h.kind == RefKind.Read).length, 'call-site read expected, got ${describe(hits)}');
+		assertLocalFnNameIsDecl('function');
+	}
+
+	/** A local `inline function`'s name is a Decl visible from the enclosing body, exactly as the plain form's is. */
+	public function testLocalInlineFnNameIsDecl(): Void {
+		assertLocalFnNameIsDecl('inline function');
+	}
+
+	/**
+	 * A binding of the enclosing body stays visible INSIDE a local `inline function` - the new frame
+	 * nests rather than isolating it.
+	 *
+	 * A FORWARD GUARD, not a discriminator: it passes on the base branch too, where the helper's
+	 * `BlockBody` frame already nested the capture into the enclosing declaration. What it pins is the
+	 * one direction no other test covers - making the frame isolating.
+	 */
+	public function testLocalInlineFnCapturesEnclosingLocal(): Void {
+		final source: String = 'class X { static function outer() {\n\tvar total:Int = 0;\n'
+			+ '\tinline function add(n:Int):Int { return total + n; }\n\treturn add(1);\n} }';
+		final hits: Array<RefHit> = findIn(source, 'total');
+		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(1, decls.length, 'one local decl expected, got ${describe(hits)}');
+		Assert.equals(1, reads.length, 'one captured read expected, got ${describe(hits)}');
+		if (decls.length != 1 || reads.length != 1) return;
+		Assert.equals(decls[0].span.from, reads[0].bindingSpan?.from, 'capture must bind to the enclosing local');
 	}
 
 	/**
@@ -571,6 +588,51 @@ class ApqRefsTest extends Test {
 		var line: Int = 0;
 		for (i in 0...from) if (StringTools.fastCodeAt(s, i) == '\n'.code) line++;
 		return line;
+	}
+
+
+	/**
+	 * Two sibling local functions declared with `keyword` bind their same-named parameters
+	 * separately. Shared by the plain and the `inline` form: the grammar gives them different
+	 * ctors (`LocalFnStmt` / `LocalInlineFnStmt`) but identical binding semantics, and every
+	 * `RefShape` seam that lists one must list the other.
+	 */
+	private function assertSiblingParamsDoNotCrossBind(keyword: String): Void {
+		final source: String = 'class X { static function outer() {\n\t$keyword a(p:Int):Int { return p; }\n'
+			+ '\t$keyword b(p:String):String { return p; }\n' + '} }';
+		final hits: Array<RefHit> = findIn(source, 'p');
+		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(2, decls.length, 'two param decls expected, got ${describe(hits)}');
+		Assert.equals(2, reads.length, 'two reads expected, got ${describe(hits)}');
+		for (r in reads) {
+			final binding: Null<Span> = r.bindingSpan;
+			Assert.notNull(binding, 'read must resolve to a binding');
+			// Each read binds to the decl of ITS OWN function: the read's span
+			// sits on the same fixture line as its binding (fixture is one
+			// local fn per line).
+			if (binding == null) continue;
+			final sameLine: Bool = lineOf(source, r.span.from) == lineOf(source, binding.from);
+			Assert.isTrue(sameLine, 'read at ${r.span.from} bound across sibling $keyword decls (binding ${binding.from})');
+		}
+	}
+
+	/** A local function declared with `keyword` binds its own name into the ENCLOSING body, so the call site resolves to it. */
+	private function assertLocalFnNameIsDecl(keyword: String): Void {
+		final source: String = 'class X { static function outer() {\n\t$keyword helper():Void {}\n\thelper();\n} }';
+		final hits: Array<RefHit> = findIn(source, 'helper');
+		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(1, decls.length, '$keyword decl expected, got ${describe(hits)}');
+		Assert.equals(1, reads.length, 'call-site read expected, got ${describe(hits)}');
+		if (decls.length != 1 || reads.length != 1) return;
+		// The call sits OUTSIDE the declaration's span, so it resolves only if the name binds into the
+		// ENCLOSING frame. Counting the two hits is not enough: moving the kind from `declHostKinds` to
+		// `selfScopeDeclKinds` - the swap `RefShape`'s contract forbids - still emits a Decl and a Read,
+		// and only this assertion fails (measured: it is the sole failing mark of this test under that
+		// mutation). Adding the kind to `selfScopeDeclKinds` while it STAYS a decl host is a no-op, since
+		// the parent frame's decl-host collection binds the name there either way.
+		Assert.equals(decls[0].span.from, reads[0].bindingSpan?.from, 'the call must bind to the $keyword declaration');
 	}
 
 

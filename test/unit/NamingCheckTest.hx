@@ -1796,4 +1796,75 @@ class NamingCheckTest extends Test {
 		);
 	}
 
+
+	/**
+	 * A local `function` statement is a declaration the policy governs like any other local
+	 * binding: `snake_case` violates the camelCase local rule and the autofix corrects it.
+	 */
+	public function testLocalFunctionNameFlaggedAndRenamed(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function f() {\n\t\tfunction draw_grid() {\n\t\t\ttrace(1);\n\t\t}\n'
+			+ '\t\tdraw_grid();\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf("'draw_grid'") >= 0);
+		assertLocalRenamed([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src, 'function drawGrid()', 'draw_grid');
+	}
+
+	/** A conformant local function name is no finding. */
+	public function testCamelCaseLocalFunctionNameAccepted(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function f() {\n\t\tfunction drawGrid() {\n\t\t\ttrace(1);\n\t\t}\n'
+			+ '\t\tdrawGrid();\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+
+	/**
+	 * A sibling local function already holding the corrected name is a collision: the scope a local
+	 * function binds into is the enclosing body, so the two share it.
+	 */
+	public function testLocalFunctionCollidingWithSiblingSkipped(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function f() {\n'
+			+ '\t\tfunction drawGrid(n:Int) {\n\t\t\tif (n > 0) drawGrid(n - 1);\n\t\t}\n'
+			+ '\t\tfunction draw_grid() {\n\t\t\ttrace(1);\n\t\t}\n\t\tdraw_grid();\n\t}\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	/**
+	 * A distinctive comment mention in the ENCLOSING body renames along with the local function: the
+	 * binding's lexical container is the body it binds into, not the declaration's own span.
+	 */
+	public function testLocalFunctionCommentMentionRenamesAlong(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function f() {\n'
+			+ '\t\t// draw_grid paints the pitch.\n\t\tfunction draw_grid() {\n\t\t\ttrace(1);\n\t\t}\n\t\tdraw_grid();\n\t}\n}';
+		assertLocalRenamed([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src, '// drawGrid paints the pitch.', 'draw_grid');
+	}
+
+	/**
+	 * A read resolved BEFORE the local function's declaration belongs to the member it shadows, so the
+	 * rename is refused rather than rewriting a call the compiler binds elsewhere.
+	 */
+	public function testLocalFunctionWithOccurrenceBeforeDeclarationSkipped(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tprivate function draw_grid() {\n\t\ttrace(1);\n\t}\n\n'
+			+ '\tpublic function f() {\n\t\tdraw_grid();\n\t\tfunction draw_grid() {\n\t\t\ttrace(2);\n\t\t}\n\t\tdraw_grid();\n\t}\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	/**
+	 * This check's OWN autofix shares `collidesInScope` with the underscore strip, so it sees the
+	 * inline-helper scope union too: a parameter of one local `inline function` no longer collides
+	 * with a SIBLING helper's same-named parameter, and `some_n` corrects to `someN` beside a
+	 * helper that already binds `someN`. Before the union the two parameters shared the enclosing
+	 * METHOD's span and the rename was refused.
+	 */
+	public function testInlineHelperParameterRenamesBesideSiblingHoldingTheName(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function f() {\n'
+			+ '\t\tinline function a(some_n:Int) {\n\t\t\ttrace(some_n);\n\t\t}\n'
+			+ '\t\tinline function b(someN:String) {\n\t\t\ttrace(someN);\n\t\t}\n\t\ta(1);\n\t\tb("x");\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.isTrue(vs[0].message.indexOf("'some_n'") >= 0);
+		assertLocalRenamed([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src, 'inline function a(someN:Int)', 'some_n');
+	}
+
 }

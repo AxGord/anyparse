@@ -517,4 +517,172 @@ class NoUnderscorePrefixCheckTest extends Test {
 		Assert.equals(0, edits(src).length);
 	}
 
+	/**
+	 * A local `function` statement is a binding scoped to one body, exactly like a `var`, so
+	 * its `_` prefix carries nothing. This is the reported shape: a `function __finish()`
+	 * declared inside a drawing method and called from it.
+	 */
+	public function testLocalFunctionFlaggedAndRenamed(): Void {
+		final src: String = 'package pkg;\n'
+			+ 'class C {\n\tpublic function draw():Void {\n\t\tfunction __finish():Void {\n\t\t\ttrace(1);\n\t\t}\n\t\t__finish();\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals('no-underscore-prefix', vs[0].rule);
+		Assert.isTrue(vs[0].message.contains("'__finish'"));
+		assertFixed(src, ['function finish():Void', 'finish();'], ['__finish']);
+	}
+
+	/**
+	 * A local function is visible from its declaration to the end of the block, so a recursive call
+	 * inside its body and a call after it are both occurrences the rename must carry. Haxe does NOT
+	 * hoist it - a call BEFORE the declaration is a different binding, covered by the next test.
+	 */
+	public function testLocalFunctionReferencedRecursivelyAndAfterDeclarationRenamed(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
+			+ '\t\tfunction __finish(n:Int):Void {\n\t\t\tif (n > 0) __finish(n - 1);\n\t\t}\n\t\t__finish(2);\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(3, edits(src).length);
+		assertFixed(src, ['function finish(n:Int):Void', 'finish(2);'], ['__finish']);
+	}
+
+	/**
+	 * The resolver binds a local function's name across its whole block, INCLUDING the region before
+	 * the declaration; Haxe binds a read there to whatever the local function shadows - here the
+	 * method `__finish`. Rewriting that read would emit a call to a name nothing declares, so an
+	 * occurrence resolved before the declaration refuses the whole rename.
+	 */
+	public function testOccurrenceBeforeLocalFunctionDeclarationSkipped(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tprivate function __finish():Void {\n\t\ttrace(1);\n\t}\n\n'
+			+ '\tpublic function draw():Void {\n\t\t__finish();\n\t\tfunction __finish():Void {\n\t\t\ttrace(2);\n\t\t}\n'
+			+ '\t\t__finish();\n\t}\n}';
+		Assert.isTrue(violations(src).length >= 1);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/**
+	 * A local `inline function` and a local `var` differing only in underscore count strip to the
+	 * SAME name from the same block, so neither renames - the sibling-collision refusal
+	 * `testTwoLocalFunctionsStrippingToTheSameNameBothSkipped` documents for the plain form.
+	 *
+	 * This fixture previously asserted the OPPOSITE for the inline form: `_step` -> `step` landed
+	 * while `__step` stayed, because `LocalInlineFnStmt` was in neither `DECL_HOST_KINDS` nor
+	 * `scopeKinds`, so its occurrence set never resolved and the unprovable candidate was dropped
+	 * from the claim set. That old expectation was the bug it was written around - the two bindings
+	 * ARE siblings in one block, and renaming either alone puts two `step` bindings there.
+	 */
+	public function testInlineFunctionAndLocalStrippingToTheSameNameBothSkipped(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
+			+ '\t\tinline function __step():Void {\n\t\t\ttrace(1);\n\t\t}\n\t\tvar _step:Int = 1;\n\t\t__step();\n'
+			+ '\t\ttrace(_step);\n\t}\n}';
+		Assert.equals(2, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/**
+	 * A binding declared inside a macro reification subtree never competes for a target name: the naming
+	 * projection returns at `MacroExpr`, so it is not even a FINDING, let alone a candidate. Measured,
+	 * not inferred - this source reports exactly one violation. Replaces the fixture that claimed to
+	 * exercise `fix`'s unresolvable-candidate gate; it never reached it, and no reachable input for
+	 * that gate is known (see the comment on the gate).
+	 */
+	public function testMacroDeclaredBindingNeitherFlaggedNorClaiming(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
+			+ '\t\tvar e = macro {\n\t\t\tvar __step:Int = 1;\n\t\t\ttrace(__step);\n\t\t};\n'
+			+ '\t\tvar _step:Int = 1;\n\t\ttrace(_step);\n\t\ttrace(e);\n\t}\n}';
+		// ONE finding: the reification's `__step` is not projected at all, so it is neither reported
+		// nor a candidate. The sibling `_step` therefore strips with nothing to conflict with.
+		Assert.equals(1, violations(src).length);
+		// The absent marker must not be a SUFFIX of the macro-declared `__step:Int`, which stays put.
+		assertFixed(src, ['var step:Int = 1;', 'trace(step);', 'var __step:Int = 1;'], ['var _step']);
+	}
+
+	/** A local of the target name in the ENCLOSING body is in scope for the local function, so the strip is refused. */
+	public function testLocalFunctionCollidingWithEnclosingLocalSkipped(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n\t\tfinal finish:Int = 1;\n'
+			+ '\t\tfunction __finish():Void {\n\t\t\ttrace(finish);\n\t\t}\n\t\t__finish();\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/**
+	 * The scope a local function binds INTO is its enclosing body, never its own. A SIBLING local
+	 * function already holding the target name is therefore a collision - reading the declaration's
+	 * own span as its scope makes the sibling look disjoint and lets the strip put two `finish`
+	 * bindings in one block. The sibling here is referenced ONLY from inside itself: every other
+	 * shape leaves an occurrence of the target in the enclosing body, which the occurrence scan
+	 * catches whatever it takes for the scope.
+	 */
+	public function testSiblingLocalFunctionHoldingTheTargetNameSkipped(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
+			+ '\t\tfunction finish(n:Int):Void {\n\t\t\tif (n > 0) finish(n - 1);\n\t\t}\n'
+			+ '\t\tfunction __finish():Void {\n\t\t\ttrace(1);\n\t\t}\n\t\t__finish();\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** Two sibling local functions differing only in underscore count strip to the SAME name, so neither renames. */
+	public function testTwoLocalFunctionsStrippingToTheSameNameBothSkipped(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
+			+ '\t\tfunction _run():Void {\n\t\t\ttrace(1);\n\t\t}\n\t\tfunction __run():Void {\n\t\t\ttrace(2);\n\t\t}\n'
+			+ '\t\t_run();\n\t\t__run();\n\t}\n}';
+		Assert.equals(2, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** A local function is a LOCAL binding, so `locals: false` takes it out of scope with the rest. */
+	public function testLocalsOptionOffSkipsLocalFunctions(): Void {
+		final src: String = 'package pkg;\n'
+			+ 'class C {\n\tpublic function draw():Void {\n\t\tfunction __finish():Void {\n\t\t\ttrace(1);\n\t\t}\n\t\t__finish();\n\t}\n}';
+		Assert.equals(0, violations(src, '{"rules":{"no-underscore-prefix":{"locals":false}}}').length);
+	}
+
+	/**
+	 * A local `inline function` is a binding scoped to one body exactly as the plain form is, and
+	 * `LocalInlineFnStmt` now hosts that binding in the reference walker - so the strip lands and
+	 * rewrites the call site along with the declaration.
+	 *
+	 * Before `LocalInlineFnStmt` joined `DECL_HOST_KINDS` / `scopeKinds` this asserted
+	 * `edits(src).length == 0`: no occurrence set resolved, so the fix failed closed and the
+	 * finding stayed report-only. That old value was the gap, not a policy.
+	 */
+	public function testLocalInlineFunctionRenamed(): Void {
+		final src: String = 'package pkg;\n'
+			+ 'class C {\n\tpublic function draw():Void {\n\t\tinline function __h():Void {\n\t\t\ttrace(1);\n\t\t}\n\t\t__h();\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		assertFixed(src, ['inline function h():Void', 'h();'], ['__h']);
+	}
+
+	/**
+	 * The scope an inline local function binds INTO is its enclosing body, never its own span -
+	 * the same rule the plain form needs (`testSiblingLocalFunctionHoldingTheTargetNameSkipped`).
+	 * A SIBLING inline function already holding the target name is therefore a real collision.
+	 */
+	public function testSiblingInlineFunctionHoldingTheTargetNameSkipped(): Void {
+		// The sibling is referenced ONLY from inside itself: any other shape leaves an occurrence of
+		// the target in the ENCLOSING body, which the occurrence scan catches whatever the scope
+		// lookup returns - and the fixture would then pass with the exclusion reverted.
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
+			+ '\t\tinline function finish(n:Int):Void {\n\t\t\tif (n > 0) trace(n);\n\t\t}\n'
+			+ '\t\tinline function __finish():Void {\n\t\t\ttrace(1);\n\t\t}\n\t\t__finish();\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/**
+	 * Two sibling inline local functions' SAME-NAMED parameters live in disjoint scopes, so `_n` in the
+	 * first strips to `n` without colliding with the second's `n`. The gate is
+	 * `Naming.collidesInScope`, whose enclosing-scope lookup takes `functionKinds` UNION
+	 * `inlineFunctionKinds`; with `functionKinds` alone the innermost function containing `_n` was
+	 * the enclosing METHOD, the sibling helper was not disjoint from it, and its `n` vetoed the
+	 * strip. (The resolver's `scopeKinds` frame is a separate gate - reverting it alone leaves this
+	 * test green.)
+	 */
+	public function testSiblingInlineFunctionParametersRenameIndependently(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
+			+ '\t\tinline function a(_n:Int):Int {\n\t\t\treturn _n;\n\t\t}\n'
+			+ '\t\tinline function b(n:String):String {\n\t\t\treturn n;\n\t\t}\n\t\ttrace(a(1) + b("x"));\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		assertFixed(src, ['inline function a(n:Int):Int', 'inline function b(n:String):String'], ['_n']);
+	}
+
 }
