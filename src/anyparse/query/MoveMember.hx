@@ -40,6 +40,18 @@ private typedef MovedMember = {
 }
 
 /**
+ * One bare (unqualified) reference to a moved member that stays behind in the source
+ * file. `offset` is where the reference starts; `interp` is its whole `$name` span when
+ * it is a braceless string interpolation, null for an ordinary identifier — the two take
+ * different edits (see `qualifyEdit`).
+ */
+private typedef BareHit = {
+	var m: MovedMember;
+	var offset: Int;
+	var interp: Null<Span>;
+}
+
+/**
  * A destination field to mirror under `--scaffold`: its name and the
  * verbatim source of its declared type on the source type.
  */
@@ -536,16 +548,40 @@ final class MoveMember {
 	 * THIS binding: qualified to the destination. Bare self-references
 	 * inside the cut move along and stay bare.
 	 */
-	private static function collectBareCallerHits(prep: MovePrep, plugin: GrammarPlugin): Array<{ m: MovedMember, offset: Int }> {
-		final out: Array<{ m: MovedMember, offset: Int }> = [];
+	private static function collectBareCallerHits(prep: MovePrep, plugin: GrammarPlugin): Array<BareHit> {
+		final out: Array<BareHit> = [];
 		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti([for (m in prep.moved) m.name], prep.srcTree, plugin.refShape());
 		for (m in prep.moved) for (hit in hitsByName[m.name] ?? []) if (hit.kind != RefKind.Decl) {
 			final binding: Null<Span> = hit.bindingSpan;
 			if (binding == null || binding.from != m.span.from) continue;
 			if (insideAnyCut(prep, hit.span.from)) continue;
-			out.push({ m: m, offset: hit.span.from });
+			out.push({ m: m, offset: hit.span.from, interp: hit.interpolated ? hit.span : null });
 		}
 		return out;
+	}
+
+	/**
+	 * The edit qualifying one bare reference with `qualifier` (`Dest.` for a static, `via.`
+	 * for an instance member).
+	 *
+	 * An ordinary read takes a zero-width PREFIX insertion. A braceless `$name`
+	 * interpolation read cannot: `$` binds to a bare identifier, so a prefix there emits the
+	 * literal text `Dest.` followed by an interpolation of a name the source type no longer
+	 * declares. Its whole `$name` span is replaced with the BRACED form, which is an ordinary
+	 * expression position — sound here because the substituted text is always a dotted
+	 * identifier chain, never an arbitrary expression.
+	 */
+	private static function qualifyEdit(hit: BareHit, qualifier: String): { span: Span, text: String } {
+		final interp: Null<Span> = hit.interp;
+		return interp == null
+			? {
+				span: new Span(hit.offset, hit.offset),
+				text: qualifier
+			}
+			: {
+				span: interp,
+				text: '$${' + qualifier + hit.m.name + '}'
+			};
 	}
 
 	/**
@@ -907,12 +943,12 @@ final class MoveMember {
 		prep: MovePrep, viaField: Null<String>, scaffold: Bool, scaffoldFields: Array<ScaffoldField>, plugin: GrammarPlugin,
 		editsByFile: Map<String, Array<{ span: Span, text: String }>>, outsideCallersOf: Map<String, Int>, advisoryExtras: Array<String>
 	): Null<String> {
-		final bareHits: Array<{ m: MovedMember, offset: Int }> = collectBareCallerHits(prep, plugin);
+		final bareHits: Array<BareHit> = collectBareCallerHits(prep, plugin);
 		for (h in bareHits) if (h.m.isStatic) {
-			editsFor(editsByFile, prep.srcFile).push({ span: new Span(h.offset, h.offset), text: '${prep.destTypeName}.' });
+			editsFor(editsByFile, prep.srcFile).push(qualifyEdit(h, '${prep.destTypeName}.'));
 			outsideCallersOf[h.m.name] = (outsideCallersOf[h.m.name] ?? 0) + 1;
 		}
-		final instanceHits: Array<{ m: MovedMember, offset: Int }> = bareHits.filter(h -> !h.m.isStatic);
+		final instanceHits: Array<BareHit> = bareHits.filter(h -> !h.m.isStatic);
 		if (instanceHits.length == 0) return null;
 		final via: { name: String, scaffold: Bool } = switch resolveViaField(prep, viaField, scaffold, plugin) {
 			case VErr(message): return message;
@@ -927,7 +963,7 @@ final class MoveMember {
 					+ 'field would be read before it is initialized; move the call out of the constructor or wire the via field manually';
 		}
 		for (h in instanceHits) {
-			editsFor(editsByFile, prep.srcFile).push({ span: new Span(h.offset, h.offset), text: '${via.name}.' });
+			editsFor(editsByFile, prep.srcFile).push(qualifyEdit(h, '${via.name}.'));
 			outsideCallersOf[h.m.name] = (outsideCallersOf[h.m.name] ?? 0) + 1;
 		}
 		if (via.scaffold) {
