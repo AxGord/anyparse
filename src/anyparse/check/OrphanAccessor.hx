@@ -214,25 +214,21 @@ final class OrphanAccessor implements Check implements DefaultOff {
 		if (declared.hasBuild) return;
 		final decl: TypeDeclInfo = declared;
 		final file: String = host.file;
+		final deleting: Array<QueryNode> = [];
 		// The run resets at EVERY member, not only at a method: a `static` / `@:keep` written on a
 		// preceding FIELD would otherwise carry onto the next accessor and answer for it. A member
 		// written inside a member-position `#if` region is visited too, with its own branch's run.
-		MemberBranchScan.eachMember(branch, cls, child -> RefactorSupport.isMemberDeclKind(child.kind), (child, run) -> {
+		MemberBranchScan.eachMember(branch, cls, child -> RefactorSupport.isMemberDeclKind(child.kind), (child, run, certain) -> {
 			final isMethod: Bool = CheckScan.METHOD_KINDS.contains(child.kind);
 			final name: Null<String> = child.name;
 			final span: Null<Span> = child.span;
-			if (!isMethod || name == null || span == null) return;
-			final mods: Array<String> = [];
-			final metas: Array<String> = [];
-			for (mod in run) {
-				final leading: Null<String> = mod.name;
-				if (RefactorSupport.META_KINDS.contains(mod.kind)) {
-					if (leading != null) metas.push(leading);
-				} else
-					mods.push(mod.kind);
-			}
-			final memberKept: Bool = metas.contains(KEEP_META);
-			final isStatic: Bool = mods.contains('Static');
+			// A modifier run only SOME builds see cannot answer `static`, which this rule reads as
+			// enabling: a guarded `static` would make the accessor read as static everywhere, stop it
+			// pairing with its instance property, and produce a finding whose fix DELETES a live
+			// accessor. See `MemberBranchScan.joinRuns`.
+			if (!certain || !isMethod || name == null || span == null) return;
+			final memberKept: Bool = runCarries(run, KEEP_META, true);
+			final isStatic: Bool = runCarries(run, 'Static', false);
 			final wantGetter: Bool = StringTools.startsWith(name, CheckScan.GET_PREFIX);
 			if (!wantGetter && !StringTools.startsWith(name, CheckScan.SET_PREFIX)) return;
 			final prop: String = name.substr(CheckScan.GET_PREFIX.length);
@@ -266,13 +262,15 @@ final class OrphanAccessor implements Check implements DefaultOff {
 					? '$name has no property to serve: $prop declares no $slot accessor'
 					: '$name has no property to serve: neither $owner nor its supertypes declare $prop'
 			));
-			// Deleting the sole member of a `#if` region leaves a bare `#if … #end`, which the grammar
-			// does not model — the finding stays, its deletion does not.
-			if (deletable(ctx, decl.hasKeep || memberKept, name) && !MemberBranchScan.isSoleRegionMember(
-				branch, cls, child, c -> RefactorSupport.isMemberDeclKind(c.kind)
-			))
-				_deletable.push(CheckScan.spanKey(file, span));
+			if (deletable(ctx, decl.hasKeep || memberKept, name)) deleting.push(child);
 		});
+		// Emptying a `#if` region of members leaves a shape the grammar does not model, and the
+		// re-parse gate would then drop EVERY edit the pass had for this file — so the question is
+		// asked once over the whole class's edit set, not per member. The findings above stay.
+		for (member in MemberBranchScan.survivingDeletions(branch, cls, deleting, isDeclKind)) {
+			final span: Null<Span> = member.span;
+			if (span != null) _deletable.push(CheckScan.spanKey(file, span));
+		}
 	}
 
 	/**
@@ -434,6 +432,26 @@ final class OrphanAccessor implements Check implements DefaultOff {
 			severity: severity,
 			message: message
 		};
+	}
+
+
+	/** `RefactorSupport.isMemberDeclKind` as a node predicate — the member set every region guard counts. */
+	private static function isDeclKind(node: QueryNode): Bool {
+		return RefactorSupport.isMemberDeclKind(node.kind);
+	}
+
+
+	/**
+	 * Whether the modifier run `run` carries `wanted` — an annotation NAME when `isMeta`, otherwise a
+	 * modifier KIND. A metadata node's name and a plain modifier's kind live in different slots, so
+	 * the two questions cannot share one `contains`.
+	 */
+	private static function runCarries(run: Array<QueryNode>, wanted: String, isMeta: Bool): Bool {
+		for (mod in run) {
+			final meta: Bool = RefactorSupport.META_KINDS.contains(mod.kind);
+			if (meta == isMeta && (isMeta ? mod.name == wanted : mod.kind == wanted)) return true;
+		}
+		return false;
 	}
 
 }

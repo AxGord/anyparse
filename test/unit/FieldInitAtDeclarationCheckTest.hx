@@ -584,6 +584,42 @@ class FieldInitAtDeclarationCheckTest extends Test {
 		Assert.equals(1, violations(src).length);
 	}
 
+	/**
+	 * A field declared inside a member-position `#if` is a field of the class like any other, and its
+	 * context-free constructor init moves to its declaration inside the branch. The region is ONE
+	 * child of the container holding every branch's members flattened, so scanning the container's
+	 * direct children alone silently exempted it.
+	 */
+	public function testConditionalMemberFlaggedAndFixedInPlace(): Void {
+		final src: String = 'class C {\n\t#if cpp\n\tvar x:Int;\n\t#end\n\tpublic function new() {\n\t\tx = 5;\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('#if cpp\n\tvar x:Int = 5;\n\t#end') >= 0);
+		Assert.equals(-1, fixed.indexOf('x = 5'));
+	}
+
+	/**
+	 * Two mutually exclusive branches may declare the SAME field, and one unguarded constructor
+	 * statement then initialises whichever one compiles. Moving the init reaches exactly one of the
+	 * declarations while the statement it came from is deleted for BOTH — the other branch would lose
+	 * its initialisation outright, so the collision refuses the candidate.
+	 */
+	public function testConditionalRivalDeclarationsNotFlagged(): Void {
+		final src: String =
+			'class C {\n\t#if cpp\n\tvar x:Int;\n\t#else\n\tvar x:Int;\n\t#end\n\tpublic function new() {\n\t\tx = 5;\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * A guarded `static var` is still static: its constructor assignment runs once per construction
+	 * while a declaration initializer runs once at class init, so the move is not equivalent. The
+	 * static-member scan has to descend into the region or the field reads as an instance one.
+	 */
+	public function testConditionalStaticFieldNotFlagged(): Void {
+		final src: String = 'class C {\n\t#if cpp\n\tstatic var x:Int;\n\t#end\n\tpublic function new() {\n\t\tx = 5;\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
 	/** Assert `src` yields exactly one violation and that its declaration span names `field`. */
 	private function assertSoleViolationOn(src: String, field: String): Void {
 		final vs: Array<Violation> = violations(src);
@@ -605,45 +641,6 @@ class FieldInitAtDeclarationCheckTest extends Test {
 		var out: String = src;
 		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
 		return out;
-	}
-
-
-	/**
-	 * A field declared inside a member-position `#if` is a field of the class like any other, and its
-	 * context-free constructor init moves to its declaration inside the branch. The region is ONE
-	 * child of the container holding every branch's members flattened, so scanning the container's
-	 * direct children alone silently exempted it.
-	 */
-	public function testConditionalMemberFlaggedAndFixedInPlace(): Void {
-		final src: String = 'class C {\n\t#if cpp\n\tvar x:Int;\n\t#end\n\tpublic function new() {\n\t\tx = 5;\n\t}\n}';
-		Assert.equals(1, violations(src).length);
-		final fixed: String = fixedSource(src);
-		Assert.isTrue(fixed.indexOf('#if cpp\n\tvar x:Int = 5;\n\t#end') >= 0);
-		Assert.equals(-1, fixed.indexOf('x = 5'));
-	}
-
-
-	/**
-	 * Two mutually exclusive branches may declare the SAME field, and one unguarded constructor
-	 * statement then initialises whichever one compiles. Moving the init reaches exactly one of the
-	 * declarations while the statement it came from is deleted for BOTH — the other branch would lose
-	 * its initialisation outright, so the collision refuses the candidate.
-	 */
-	public function testConditionalRivalDeclarationsNotFlagged(): Void {
-		final src: String =
-			'class C {\n\t#if cpp\n\tvar x:Int;\n\t#else\n\tvar x:Int;\n\t#end\n\tpublic function new() {\n\t\tx = 5;\n\t}\n}';
-		Assert.equals(0, violations(src).length);
-	}
-
-
-	/**
-	 * A guarded `static var` is still static: its constructor assignment runs once per construction
-	 * while a declaration initializer runs once at class init, so the move is not equivalent. The
-	 * static-member scan has to descend into the region or the field reads as an instance one.
-	 */
-	public function testConditionalStaticFieldNotFlagged(): Void {
-		final src: String = 'class C {\n\t#if cpp\n\tstatic var x:Int;\n\t#end\n\tpublic function new() {\n\t\tx = 5;\n\t}\n}';
-		Assert.equals(0, violations(src).length);
 	}
 
 }

@@ -132,10 +132,12 @@ import anyparse.runtime.Span;
  * 5. NO `@:keep` / `@:rtti`. A `@:keep`- or `@:rtti`-annotated field, or any member of a class
  *    carrying class-level `@:keep` / `@:rtti`, is explicitly retained for reflection / external
  *    tooling; inlining would erase its reflective value.
- * 6. ENUM ABSTRACT and `#if` members are structurally excluded — an enum abstract's values live
- *    under `EnumAbstractDecl` (not a `visibilityContainerKinds` host, and handled by
- *    `prefer-enum-abstract`), and a `#if`-guarded member is nested in a `Conditional` rather than a
- *    direct container child, so neither is ever scanned — as a candidate OR as a reference target.
+ * 6. ENUM ABSTRACT values are structurally excluded — they live under `EnumAbstractDecl`, not a
+ *    `visibilityContainerKinds` host, and are handled by `prefer-enum-abstract`. A `#if`-guarded
+ *    member IS scanned: the container walk descends into the region branch by branch, so a
+ *    guarded `static final` is judged exactly like its plain sibling (adding `inline` to a scalar
+ *    constant is behaviour-preserving in whichever build compiles the branch). A member whose
+ *    modifier run only SOME builds see — a `static` carried out of a region — is refused instead.
  *
  * ## Grammar-agnostic
  *
@@ -245,14 +247,19 @@ final class InlineConstant implements Check {
 	 * they attach to, so a running flag set (`static`, `inline`, exported visibility, `@:keep` /
 	 * `@:rtti`) — reset at each member — describes the member that just appeared. Public members are
 	 * candidates too (the reflection and macro-consumption gates in `consider` keep them sound);
-	 * `classPinned` (a class-level `@:keep` / `@:rtti`) blocks the add-inline arm for every member. A
-	 * `#if`-guarded member is nested in a `Conditional` (not a direct child), so it is never seen here.
+	 * `classPinned` (a class-level `@:keep` / `@:rtti`) blocks the add-inline arm for every member.
+	 * `MemberBranchScan.eachMember` supplies the members, so a `#if`-guarded one is visited with the
+	 * modifier run of its OWN branch; a run the branches disagree on cannot answer `static` and the
+	 * member is skipped.
 	 */
 	private static function scanContainer(
 		out: Array<Violation>, file: String, source: String, container: QueryNode, seams: Seams, reflected: Array<String>,
 		macroConsumed: Array<String>, classPinned: Bool, proof: InitProof, branch: MemberBranchSeams
 	): Void {
-		MemberBranchScan.eachMember(branch, container, child -> seams.members.contains(child.kind), (member, run) -> {
+		MemberBranchScan.eachMember(branch, container, child -> seams.members.contains(child.kind), (member, run, certain) -> {
+			// A modifier run only SOME builds see cannot answer `static` / `inline`, both of which
+			// this rule reads as enabling — see `MemberBranchScan.joinRuns`.
+			if (!certain) return;
 			final kind: String = member.kind;
 			var sawStatic: Bool = false;
 			var sawInline: Bool = false;

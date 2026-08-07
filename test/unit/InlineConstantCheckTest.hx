@@ -172,21 +172,6 @@ class InlineConstantCheckTest extends Test {
 		Assert.equals(-1, fixed.indexOf('inline'));
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new InlineConstant().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
-	private function fixedSource(src: String): String {
-		final check: InlineConstant = new InlineConstant();
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
-		final sorted: Array<{ span: Span, text: String }> = edits.copy();
-		sorted.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
-	}
-
 	public function testInlineVarIntFlagged(): Void {
 		// A `static inline var` scalar constant is flagged for var -> final (behaviour-neutral:
 		// a write to a static inline var is already a compile error - verified).
@@ -421,7 +406,6 @@ class InlineConstantCheckTest extends Test {
 		);
 	}
 
-
 	/**
 	 * A `static final` written inside a member-position `#if` is a constant of the class like any
 	 * other. The region is ONE child of the container holding every branch's members flattened, so
@@ -431,6 +415,21 @@ class InlineConstantCheckTest extends Test {
 		final src: String = 'class C {\n\t#if cpp\n\tstatic final A:Int = 1;\n\t#end\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals('class C {\n\t#if cpp\n\tstatic inline final A:Int = 1;\n\t#end\n}', fixedSource(src));
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new InlineConstant().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	private function fixedSource(src: String): String {
+		final check: InlineConstant = new InlineConstant();
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+		final sorted: Array<{ span: Span, text: String }> = edits.copy();
+		sorted.sort((a, b) -> b.span.from - a.span.from);
+		var out: String = src;
+		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
+		return out;
 	}
 
 }

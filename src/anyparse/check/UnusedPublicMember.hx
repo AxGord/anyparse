@@ -184,8 +184,6 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 		'hxUnserialize'
 	];
 
-	/** The wrapper a `#if` region projects as — inside a modifier run it can HIDE a `@:meta`. */
-	private static inline final CONDITIONAL_KIND: String = 'Conditional';
 
 	/** The wrapper of a dunder name (`__init__`) — a compiler hook, not a call target. */
 	private static inline final DUNDER: String = '__';
@@ -317,6 +315,7 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 		final chain: Chain = { unresolved: false, generated: false };
 		walkChain(scope, host, declared, chain, []);
 		if (chain.unresolved || chain.generated) return;
+		final deleting: Array<QueryNode> = [];
 		for (candidate in candidates) {
 			final name: String = candidate.name;
 			if (frameworkReachable(ctx, name, owner, candidate.span, scope)) continue;
@@ -327,12 +326,14 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 				severity: Severity.Warning,
 				message: 'unused public $name: no reference to it anywhere in scope'
 			});
-			// Deleting the sole member of a `#if` region leaves a bare `#if … #end`, which the grammar
-			// does not model — the finding stays, its deletion does not.
-			if (noRuntimeNameFragment(ctx, name) && !MemberBranchScan.isSoleRegionMember(
-				branch, cls, candidate.node, c -> RefactorSupport.isMemberDeclKind(c.kind)
-			))
-				_deletable.push(CheckScan.spanKey(host.file, candidate.span));
+			if (noRuntimeNameFragment(ctx, name)) deleting.push(candidate.node);
+		}
+		// Emptying a `#if` region of members leaves a shape the grammar does not model, and the
+		// re-parse gate would then drop EVERY edit the pass had for this file — so the question is
+		// asked once over the whole class's edit set, not per member. The findings above stay.
+		for (member in MemberBranchScan.survivingDeletions(branch, cls, deleting, isDeclKind)) {
+			final span: Null<Span> = member.span;
+			if (span != null) _deletable.push(CheckScan.spanKey(host.file, span));
 		}
 	}
 
@@ -349,8 +350,12 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 		// preceding FIELD would otherwise carry onto the next method and answer for it — inventing a
 		// finding in one direction and hiding one in the other. A member written inside a
 		// member-position `#if` region is visited too, with the run of its own branch.
-		MemberBranchScan.eachMember(branch, cls, child -> RefactorSupport.isMemberDeclKind(child.kind), (child, run) -> {
-			if (!CheckScan.METHOD_KINDS.contains(child.kind)) return;
+		MemberBranchScan.eachMember(branch, cls, child -> RefactorSupport.isMemberDeclKind(child.kind), (child, run, certain) -> {
+			// A modifier run only SOME builds see cannot answer `public`, which this rule reads as
+			// enabling — see `MemberBranchScan.joinRuns`. This is also what keeps the old
+			// conservatism for `#if js public #end function f()`: a method public in one build only
+			// is not judged, let alone deleted.
+			if (!certain || !CheckScan.METHOD_KINDS.contains(child.kind)) return;
 			final name: Null<String> = child.name;
 			final span: Null<Span> = child.span;
 			if (name == null || span == null) return;
@@ -359,11 +364,11 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 			var annotated: Bool = false;
 			for (mod in run) {
 				if (mod.kind == PUBLIC_MODIFIER) isPublic = true;
-				// A `#if` region the branch splitter REFUSED still projects as one wrapper node in the
-				// run, so `#if js @:keep #end` written as a modifier reads as an annotation. Counting
-				// the wrapper itself is the conservative reading: at worst a guarded MODIFIER silences
-				// a finding.
-				if (RefactorSupport.META_KINDS.contains(mod.kind) || mod.kind == CONDITIONAL_KIND) annotated = true;
+				// A conditional region never reaches the run any more — `eachMember` descends into it
+				// and the annotations written inside surface as ordinary `Meta` siblings, while a
+				// region that merely CARRIES a modifier out makes the run uncertain and the member is
+				// skipped above. Both readings are stricter than the old wrapper count.
+				if (RefactorSupport.META_KINDS.contains(mod.kind)) annotated = true;
 				if (mod.kind == OVERRIDE_MODIFIER) isOverride = true;
 			}
 			if (!isPublic || isOverride || annotated || !reportableName(name)) return;
@@ -551,6 +556,12 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 			if (child.kind == CheckScan.STRING_FRAGMENT_KIND && fragment != null && !out.contains(fragment)) out.push(fragment);
 		}
 		for (child in node.children) collectFragments(child, source, fold, out);
+	}
+
+
+	/** `RefactorSupport.isMemberDeclKind` as a node predicate — the member set every region guard counts. */
+	private static function isDeclKind(node: QueryNode): Bool {
+		return RefactorSupport.isMemberDeclKind(node.kind);
 	}
 
 }

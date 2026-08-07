@@ -2139,11 +2139,13 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * Span starts of `container`'s member declarations that carry a `static`
-	 * modifier (the modifier projects as a separate preceding sibling node).
-	 * Shared by field-init-at-declaration and prefer-final-field: both must
-	 * exempt statics from ctor-assignment reasoning (a static initializes at
-	 * class-load, and `static final` requires a declaration initializer).
+	 * Span starts of the member declarations of `container` that carry a `static` modifier.
+	 *
+	 * Member-position `#if` regions are descended into: a guarded `static var` read as an instance
+	 * field is the unsafe direction (its constructor assignment does not mean what a declaration
+	 * initializer means). Branches are read as ONE flat run, and a `static` reaching a region from
+	 * before it, or carried out of one, marks the members on both sides — over-marking is the safe
+	 * direction here, since a member the reading calls static is one no caller will move.
 	 */
 	public static function staticMemberFroms(container: QueryNode, shape: RefShape): Array<Int> {
 		final staticKind: Null<String> = shape.staticModifierKind;
@@ -3990,7 +3992,12 @@ final class RefactorSupport {
 				}
 				pending = false;
 			} else if (descendsToMemberHost(host.kind, child.kind))
-				pending = collectStaticFroms(child, staticKind, members, pending, out);
+				// OR, not assignment: a `#if A static #end` region leaves `static` pending for the
+				// member after `#end` in the A build, and a region that consumed it leaves nothing —
+				// but `incoming` still reaches that member in the build where A is false. Over-marking
+				// is the safe direction for this function (a member the flat reading calls static is
+				// one no caller will move); dropping `incoming` was the unsafe one.
+				pending = collectStaticFroms(child, staticKind, members, pending, out) || pending;
 		}
 		return pending;
 	}

@@ -415,6 +415,78 @@ import utest.Test;
 		Assert.equals(0, violations('class Bad { function get_data():Int {').length);
 	}
 
+	/**
+	 * An accessor written inside a member-position `#if` is a method of the class like any other, and
+	 * just as orphaned. The region is ONE child of the container holding every branch's members
+	 * flattened, so scanning the container's direct children alone silently exempted it.
+	 */
+	public function testConditionalAccessorFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\t#if cpp\n\tpublic function get_gone():Int return 1;\n\t#end\n}').length);
+	}
+
+	/**
+	 * The property slot may be declared in a DIFFERENT branch from the accessor. The symbol index
+	 * collects every branch's members at once, which is the fail-closed reading here — a slot in any
+	 * branch pairs, and the accessor stays unreported rather than being deleted for the build that
+	 * needs it.
+	 */
+	public function testConditionalPropertyInAnotherBranchPairs(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\t#if cpp\n\tpublic var x(get, never):Int;\n\t#else\n\tprivate function get_x():Int return 1;\n\t#end\n}'
+			).length
+		);
+	}
+
+	/**
+	 * The deletion carries the accessor's doc comment and modifier run, both of which live INSIDE the
+	 * region — a group span computed against the container would leave them behind as debris that
+	 * does not parse. The region's other member is untouched and the directives stay.
+	 */
+	public function testConditionalAccessorDeletedInsideItsBranch(): Void {
+		final src: String =
+			'class C {\n\t#if cpp\n\t/** Doc. */\n\tprivate function get_gone():Int return 1;\n\tpublic var keeper:Int = 0;\n\t#end\n}';
+		Assert.equals('class C {\n\t#if cpp\n\tpublic var keeper:Int = 0;\n\t#end\n}', applyFix(src));
+	}
+
+	/**
+	 * Deleting the SOLE member of a region would leave a bare `#if … #end`, a shape the grammar does
+	 * not model (an empty BRANCH parses, an empty REGION does not) — the finding stays, its deletion
+	 * does not.
+	 */
+	public function testConditionalSoleAccessorReportedButNotDeleted(): Void {
+		final src: String = 'class C {\n\t#if cpp\n\tprivate function get_gone():Int return 1;\n\t#end\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/**
+	 * A `static` carried out of a `#if` region reaches the accessor in one build only. Reading it as
+	 * static everywhere stops the accessor pairing with its INSTANCE property and produces a finding
+	 * whose fix deletes a live getter — so a run the branches disagree on refuses the member outright.
+	 */
+	public function testConditionalCarriedStaticRefusesTheAccessor(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tpublic var x(get, never):Int;\n\t#if cpp\n\tstatic\n\t#end\n\tfunction get_x():Int return 1;\n\tpublic var keeper:Int = 0;\n}'
+			).length
+		);
+	}
+
+	/**
+	 * Emptying a region is a property of the whole edit SET: two orphan accessors that are together
+	 * all of a region's members each look non-sole on their own, and deleting both leaves a bare
+	 * `#if … #end` whose rejected splice would drop every other edit the pass had for the file.
+	 */
+	public function testConditionalAllRegionMembersReportedButNotDeleted(): Void {
+		final src: String =
+			'class C {\n\t#if cpp\n\tprivate function get_a():Int return 1;\n\tprivate function get_b():Int return 2;\n\t#end\n}';
+		Assert.equals(2, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return violationsOf([{ file: 'C.hx', source: src }]);
 	}
@@ -442,56 +514,6 @@ import utest.Test;
 		var out: String = src;
 		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
 		return out;
-	}
-
-
-	/**
-	 * An accessor written inside a member-position `#if` is a method of the class like any other, and
-	 * just as orphaned. The region is ONE child of the container holding every branch's members
-	 * flattened, so scanning the container's direct children alone silently exempted it.
-	 */
-	public function testConditionalAccessorFlagged(): Void {
-		Assert.equals(1, violations('class C {\n\t#if cpp\n\tpublic function get_gone():Int return 1;\n\t#end\n}').length);
-	}
-
-
-	/**
-	 * The property slot may be declared in a DIFFERENT branch from the accessor. The symbol index
-	 * collects every branch's members at once, which is the fail-closed reading here — a slot in any
-	 * branch pairs, and the accessor stays unreported rather than being deleted for the build that
-	 * needs it.
-	 */
-	public function testConditionalPropertyInAnotherBranchPairs(): Void {
-		Assert.equals(
-			0,
-			violations(
-				'class C {\n\t#if cpp\n\tpublic var x(get, never):Int;\n\t#else\n\tprivate function get_x():Int return 1;\n\t#end\n}'
-			).length
-		);
-	}
-
-
-	/**
-	 * The deletion carries the accessor's doc comment and modifier run, both of which live INSIDE the
-	 * region — a group span computed against the container would leave them behind as debris that
-	 * does not parse. The region's other member is untouched and the directives stay.
-	 */
-	public function testConditionalAccessorDeletedInsideItsBranch(): Void {
-		final src: String =
-			'class C {\n\t#if cpp\n\t/** Doc. */\n\tprivate function get_gone():Int return 1;\n\tpublic var keeper:Int = 0;\n\t#end\n}';
-		Assert.equals('class C {\n\t#if cpp\n\tpublic var keeper:Int = 0;\n\t#end\n}', applyFix(src));
-	}
-
-
-	/**
-	 * Deleting the SOLE member of a region would leave a bare `#if … #end`, a shape the grammar does
-	 * not model (an empty BRANCH parses, an empty REGION does not) — the finding stays, its deletion
-	 * does not.
-	 */
-	public function testConditionalSoleAccessorReportedButNotDeleted(): Void {
-		final src: String = 'class C {\n\t#if cpp\n\tprivate function get_gone():Int return 1;\n\t#end\n}';
-		Assert.equals(1, violations(src).length);
-		Assert.equals(src, applyFix(src));
 	}
 
 }

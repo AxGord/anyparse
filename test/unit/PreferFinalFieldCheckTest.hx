@@ -368,6 +368,60 @@ class PreferFinalFieldCheckTest extends Test {
 		Assert.equals(0, violations(src).length);
 	}
 
+	/**
+	 * A field written inside a member-position `#if` is a field of the class like any other. The
+	 * region is ONE child of the container holding every branch's members flattened, so scanning the
+	 * container's direct children alone silently exempted it.
+	 */
+	public function testConditionalMemberFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\t#if cpp\n\tprivate var _x:Int = 0;\n\t#end\n}').length);
+	}
+
+	/**
+	 * Two branches may declare the SAME field — only one of them ever compiles — and each is
+	 * separately single-assignment. The fix must land inside each member's own branch, leaving the
+	 * directives untouched.
+	 */
+	public function testConditionalBothBranchesFlaggedAndFixedInPlace(): Void {
+		final src: String = 'class C {\n\t#if cpp\n\tprivate var _x:Int = 0;\n\t#else\n\tprivate var _x:Int = 1;\n\t#end\n}';
+		Assert.equals(2, violations(src).length);
+		Assert.equals(
+			'class C {\n\t#if cpp\n\tprivate final _x:Int = 0;\n\t#else\n\tprivate final _x:Int = 1;\n\t#end\n}', fixedSource(src)
+		);
+	}
+
+	/**
+	 * The single-assignment proof reads every branch AT ONCE: the field is declared under `#if cpp`
+	 * and written under `#if !cpp`, two branches that never compile together — but the fix lands in
+	 * source both builds see, so a write in ANY branch has to block it.
+	 */
+	public function testConditionalWriteInAnotherBranchBlocks(): Void {
+		final src: String =
+			'class C {\n\t#if cpp\n\tprivate var _x:Int = 0;\n\t#end\n\tpublic function new() {\n\t\t#if !cpp\n\t\t_x = 2;\n\t\t#end\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * A visibility keyword before the `#if` modifies whichever branch compiles, so it reaches into
+	 * EVERY branch: neither guarded field is private and this private-only rule takes neither. A flat
+	 * scan would consume the keyword on the first member and hand the second to the private path.
+	 */
+	public function testConditionalIncomingVisibilityReachesEveryBranch(): Void {
+		final src: String = 'class C {\n\tpublic\n\t#if cpp\n\tvar a:Int = 0;\n\t#else\n\tvar b:Int = 0;\n\t#end\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * The project's own `macros.Lang` shape: two unmodified `static var`s inside `#if collectLang`,
+	 * assigned from a method rather than a constructor. Now that the region is scanned they must
+	 * still be left alone — the write is not the declaration's and not a sole constructor statement.
+	 */
+	public function testConditionalStaticVarsWrittenInMethodNotFlagged(): Void {
+		final src: String =
+			'class Lang {\n\t#if collectLang\n\tstatic var b_file:Output;\n\tstatic var k_file:Output;\n\t#end\n\n\tpublic static function t():Void {\n\t\t#if collectLang\n\t\tif (b_file == null) b_file = open();\n\t\tif (k_file == null) k_file = open();\n\t\t#end\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferFinalField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
@@ -386,65 +440,6 @@ class PreferFinalFieldCheckTest extends Test {
 		var out: String = src;
 		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
 		return out;
-	}
-
-
-	/**
-	 * A field written inside a member-position `#if` is a field of the class like any other. The
-	 * region is ONE child of the container holding every branch's members flattened, so scanning the
-	 * container's direct children alone silently exempted it.
-	 */
-	public function testConditionalMemberFlagged(): Void {
-		Assert.equals(1, violations('class C {\n\t#if cpp\n\tprivate var _x:Int = 0;\n\t#end\n}').length);
-	}
-
-
-	/**
-	 * Two branches may declare the SAME field — only one of them ever compiles — and each is
-	 * separately single-assignment. The fix must land inside each member's own branch, leaving the
-	 * directives untouched.
-	 */
-	public function testConditionalBothBranchesFlaggedAndFixedInPlace(): Void {
-		final src: String = 'class C {\n\t#if cpp\n\tprivate var _x:Int = 0;\n\t#else\n\tprivate var _x:Int = 1;\n\t#end\n}';
-		Assert.equals(2, violations(src).length);
-		Assert.equals(
-			'class C {\n\t#if cpp\n\tprivate final _x:Int = 0;\n\t#else\n\tprivate final _x:Int = 1;\n\t#end\n}', fixedSource(src)
-		);
-	}
-
-
-	/**
-	 * The single-assignment proof reads every branch AT ONCE: the field is declared under `#if cpp`
-	 * and written under `#if !cpp`, two branches that never compile together — but the fix lands in
-	 * source both builds see, so a write in ANY branch has to block it.
-	 */
-	public function testConditionalWriteInAnotherBranchBlocks(): Void {
-		final src: String =
-			'class C {\n\t#if cpp\n\tprivate var _x:Int = 0;\n\t#end\n\tpublic function new() {\n\t\t#if !cpp\n\t\t_x = 2;\n\t\t#end\n\t}\n}';
-		Assert.equals(0, violations(src).length);
-	}
-
-
-	/**
-	 * A visibility keyword before the `#if` modifies whichever branch compiles, so it reaches into
-	 * EVERY branch: neither guarded field is private and this private-only rule takes neither. A flat
-	 * scan would consume the keyword on the first member and hand the second to the private path.
-	 */
-	public function testConditionalIncomingVisibilityReachesEveryBranch(): Void {
-		final src: String = 'class C {\n\tpublic\n\t#if cpp\n\tvar a:Int = 0;\n\t#else\n\tvar b:Int = 0;\n\t#end\n}';
-		Assert.equals(0, violations(src).length);
-	}
-
-
-	/**
-	 * The project's own `macros.Lang` shape: two unmodified `static var`s inside `#if collectLang`,
-	 * assigned from a method rather than a constructor. Now that the region is scanned they must
-	 * still be left alone — the write is not the declaration's and not a sole constructor statement.
-	 */
-	public function testConditionalStaticVarsWrittenInMethodNotFlagged(): Void {
-		final src: String =
-			'class Lang {\n\t#if collectLang\n\tstatic var b_file:Output;\n\tstatic var k_file:Output;\n\t#end\n\n\tpublic static function t():Void {\n\t\t#if collectLang\n\t\tif (b_file == null) b_file = open();\n\t\tif (k_file == null) k_file = open();\n\t\t#end\n\t}\n}';
-		Assert.equals(0, violations(src).length);
 	}
 
 }

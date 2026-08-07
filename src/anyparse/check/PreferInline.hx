@@ -111,6 +111,47 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	/** The `Call` node kind — shared by the forward classifier and both reference scans. */
 	private static inline final CALL_KIND: String = 'Call';
 
+	/** The class-body member kinds that END a modifier run — a method and the three field forms. */
+	private static final MEMBER_KINDS: Array<String> = ['FnMember', 'VarMember', 'FinalMember', 'FinalModifiedMember'];
+
+	/**
+	 * Metadata that provably does not change what a method's BODY means, so `inline` stays
+	 * behaviour-preserving under it. Any OTHER metadata refuses the candidate.
+	 *
+	 * Positive by construction, because the harmful side is open-ended and a negative list leaks by
+	 * category: the first version listed `@:native` / `@:functionCode` / `@:extern` and a real-tree run
+	 * still produced 634 wrong findings in one lime file, every one an `@:hlNative` stub whose body is
+	 * `return 0;`. The whole target-binding family (`@:hlNative`, `@:cs.native`, `@:java.native`,
+	 * `@:python.native`, `@:jsRequire`, `@:selfCall`, ...) and the code-injection family
+	 * (`@:functionTailCode`) redirect or replace the generated call, so the written body is a
+	 * placeholder the backend discards - inlining substitutes the placeholder at the call site and the
+	 * redirect never happens, turning `native(x) == 0` into `0 == 0`.
+	 *
+	 * Refusing on an unrecognised annotation is this rule's declared bias (a miss over a wrong flag),
+	 * and the accepted list is exactly the annotations that describe VISIBILITY, DOCUMENTATION or
+	 * TYPING rather than code generation. `@:keep` is checked separately: it is about reachability, not
+	 * about what the body means.
+	 */
+	private static final INLINE_NEUTRAL_METAS: Array<String> = [
+		'@:access',
+		'@:allow',
+		'@:beta',
+		'@:deprecated',
+		'@:dox',
+		'@:final',
+		'@:from',
+		'@:isVar',
+		'@:noCompletion',
+		'@:noDoc',
+		'@:noUsing',
+		'@:nullSafety',
+		'@:op',
+		'@:pure',
+		'@:to',
+		'@:unreflective',
+		'@:value'
+	];
+
 	private var _oracleRelaxed: Bool = false;
 
 	public function new() {}
@@ -238,8 +279,11 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	private static function forEachMethod(
 		cls: QueryNode, branch: MemberBranchSeams, cb: (String, QueryNode, Array<String>, Array<String>) -> Void
 	): Void {
-		MemberBranchScan.eachMember(branch, cls, child -> MEMBER_KINDS.contains(child.kind), (member, run) -> {
-			if (member.kind != 'FnMember') return;
+		MemberBranchScan.eachMember(branch, cls, child -> MEMBER_KINDS.contains(child.kind), (member, run, certain) -> {
+			// A modifier run only SOME builds see cannot answer this rule's gates — see
+			// `MemberBranchScan.joinRuns`. It also closes the real shape `#if X inline #end function f`,
+			// where the flat reading missed the guarded `inline` and told you to inline it again.
+			if (!certain || member.kind != 'FnMember') return;
 			final name: Null<String> = member.name;
 			if (name == null) return;
 			final mods: Array<String> = [];
@@ -272,8 +316,12 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 */
 	private static function isBaseCandidateMethod(name: String, fn: QueryNode, mods: Array<String>, metas: Array<String>): Bool {
 		if (name == 'new') return false;
-		if (mods.contains('Inline') || mods.contains('Dynamic') || mods.contains('Macro') || mods.contains('Override')) return false;
-		if (metas.contains('@:keep') || metas.exists(m -> BODY_NOT_IMPLEMENTATION_METAS.contains(m))) return false;
+		if (
+			mods.contains('Inline') || mods.contains('Dynamic') || mods.contains('Macro') || mods.contains('Override')
+			|| mods.contains('Extern')
+		)
+			return false;
+		if (metas.contains('@:keep') || metas.exists(m -> !inlineNeutralMeta(m))) return false;
 		if (referencesSelf(fn, name)) return false;
 		if (isEmptyBody(fn)) return true;
 		final root: Null<QueryNode> = bodyRootExpr(fn);
@@ -527,19 +575,26 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		return node.kind == 'NullLit' && parentKind != 'Eq' && parentKind != 'NotEq' && parentKind != 'NullCoal';
 	}
 
-
-	/** The class-body member kinds that END a modifier run — a method and the three field forms. */
-	private static final MEMBER_KINDS: Array<String> = ['FnMember', 'VarMember', 'FinalMember', 'FinalModifiedMember'];
-
-
 	/**
-	 * Metadata that makes the written body NOT the implementation — the generated call is redirected
-	 * to a foreign symbol or replaced by injected target code, and the Haxe body is a placeholder the
-	 * backend discards. Inlining substitutes the placeholder AT the call site and the redirect never
-	 * happens: a `@:native` binding whose stub is `return 0` turns `native(x) == 0` into `0 == 0`,
-	 * silently always-true. Distinct from `@:keep`, which is about reachability, not about what the
-	 * body means.
+	 * Whether `meta` provably leaves the method's BODY meaning unchanged. True for every USER
+	 * annotation (a name not in the compiler's `@:` namespace is not read by any backend) and for the
+	 * listed compiler annotations; false for every other `@:` one.
+	 *
+	 * The `@:` side is a whitelist on purpose. Its complement — the target-binding family
+	 * (`@:native`, `@:hlNative`, `@:cs.native`, `@:java.native`, `@:python.native`, `@:jsRequire`,
+	 * `@:selfCall`) and the code-injection family (`@:functionCode`, `@:functionTailCode`) — is
+	 * open-ended, and a negative list leaks by category: the first version named only `@:native` /
+	 * `@:functionCode` / `@:extern` and a real-tree run still produced 634 wrong findings in one lime
+	 * file, every one an `@:hlNative` stub whose body is `return 0;`. Under those the written body is
+	 * a placeholder the backend discards, so inlining substitutes the placeholder at the call site
+	 * and the redirect never happens, turning `native(x) == 0` into `0 == 0`.
+	 *
+	 * Residual: a `@:build` macro reading a USER annotation could replace the body. That is the same
+	 * optimism this rule already applies to an unresolvable supertype, and refusing all user metadata
+	 * measurably costs real findings (`@:beta`, `@SuppressWarnings`, `@ignore` on openfl / lime).
 	 */
-	private static final BODY_NOT_IMPLEMENTATION_METAS: Array<String> = ['@:native', '@:functionCode', '@:extern'];
+	private static inline function inlineNeutralMeta(meta: String): Bool {
+		return !StringTools.startsWith(meta, '@:') || INLINE_NEUTRAL_METAS.contains(meta);
+	}
 
 }

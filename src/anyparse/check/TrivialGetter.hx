@@ -107,6 +107,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	/** Default cap on statement-level backing-field writes a shape-A collapse marks `@:bypassAccessor` before it instead falls back to inlining the getter. */
 	private static inline final DEFAULT_MAX_BYPASS_WRITES: Int = 3;
 
+	/** The class-body member kinds `memberTables` reads — the two field forms and the two method forms. */
+	private static final MEMBER_KINDS: Array<String> = ['VarMember', 'FinalMember', 'FnMember', 'FinalModifiedMember'];
+
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
@@ -275,7 +278,21 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			if (subtypeBlocks(subtypeIndex, className, prop.name)) continue;
 			final c = classifyProperty(cls, source, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
 			if (c == null) continue;
-			if (!collapseConfinedToBranch(branch, cls, source, prop.node, c.field)) continue;
+			// Every node the collapse touches: the inline arm rewrites only the getter, the collapse
+			// arm deletes the backing field and the accessors and rewrites the property head.
+			final touched: Array<QueryNode> = c.inlineGetter != null
+				? [c.inlineGetter]
+				: [prop.node, c.fieldNode].concat(c.deletedAccessors);
+			if (!collapseConfinedToBranch(branch, cls, source, touched, c.field)) continue;
+			// Emptying a `#if` region of members leaves a shape the grammar does not model, and the
+			// re-parse gate would then drop EVERY edit the pass had for this file. The collapse arm
+			// removes the field and the accessors together, so it is judged as one set.
+			if (
+				c.inlineGetter == null
+				&& MemberBranchScan.survivingDeletions(branch, cls, [c.fieldNode].concat(c.deletedAccessors), isDeclKind).length
+					!= 1 + c.deletedAccessors.length
+			)
+				continue;
 			// A subtype references the backing field the collapse deletes; still emit when every such
 			// occurrence is a provable READ (the cross-file collapse rewrites them), else stay blocked.
 			if (
@@ -746,7 +763,11 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			isStatic: Bool,
 			write: String
 		}> = [];
-		MemberBranchScan.eachMember(branch, cls, child -> MEMBER_KINDS.contains(child.kind), (child, run) -> {
+		MemberBranchScan.eachMember(branch, cls, child -> MEMBER_KINDS.contains(child.kind), (child, run, certain) -> {
+			// A modifier run only SOME builds see cannot answer `public` / `static`, both of which this
+			// rule reads as enabling — see `MemberBranchScan.joinRuns`. The member is left out of the
+			// tables entirely, so neither a property nor an accessor built on it can be collapsed.
+			if (!certain) return;
 			final mods: Array<String> = [for (mod in run) mod.kind];
 			switch child.kind {
 				case 'VarMember' | 'FinalMember':
@@ -1405,7 +1426,6 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		}
 	}
 
-
 	/**
 	 * Every report file that may reference `owner`'s backing field through inheritance: the
 	 * declaring file of each TRANSITIVE subtype of `owner`, plus every file granting itself
@@ -1595,7 +1615,6 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		return slices;
 	}
 
-
 	/**
 	 * Whether the property's declared type byte-equals (whitespace-insensitive) the
 	 * backing field's declared type. A missing annotation on either side refuses
@@ -1648,31 +1667,45 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		return out.toString();
 	}
 
-
-	/** The class-body member kinds `memberTables` reads — the two field forms and the two method forms. */
-	private static final MEMBER_KINDS: Array<String> = ['VarMember', 'FinalMember', 'FnMember', 'FinalModifiedMember'];
-
-
 	/**
-	 * Whether the collapse of a GUARDED property stays inside the branch that declares it. Always
-	 * true for an unguarded property: the name it renames the backing field to exists in every build,
-	 * so a reader anywhere is safe to rewrite.
+	 * Whether the collapse of one property is safe to emit given how its members are spread across
+	 * conditional branches. `touched` is every node the collapse deletes or rewrites — the property, its
+	 * backing field and its accessors.
 	 *
-	 * A guarded one is different. The collapse deletes the backing field and renames every reference
-	 * to it into the PROPERTY's name — a name that only exists where the property's branch compiles.
-	 * A reader in another branch, or outside the region, would be rewritten to a member its own build
-	 * does not have. The test is deliberately a plain occurrence scan of the field name outside the
-	 * branch: cheap, and it errs only toward refusing (a mention in a comment or an unrelated local
-	 * costs the finding, never correctness).
+	 * Two conditions, both necessary:
+	 *
+	 *   - Every touched node must be declared in the SAME branch (or all of them unguarded). Two
+	 *     mutually exclusive branches never compile together, so a collapse reaching from one into
+	 *     another edits members no single build has: a getter duplicated per branch is the live case,
+	 *     where the map keyed by name keeps only the last branch's and the collapse silently deletes
+	 *     the `#if` branch's side effects.
+	 *   - When that branch is a guarded one, the backing field's name must not occur outside it. The
+	 *     collapse renames the field into the PROPERTY's name, which only exists where that branch
+	 *     compiles, so a reader elsewhere would be rewritten to a member its own build lacks. The test
+	 *     is a plain occurrence scan: cheap, and it errs only toward refusing (a mention in a comment
+	 *     or an unrelated local costs the finding, never correctness).
 	 */
 	private static function collapseConfinedToBranch(
-		branch: MemberBranchSeams, cls: QueryNode, source: String, prop: QueryNode, field: String
+		branch: MemberBranchSeams, cls: QueryNode, source: String, touched: Array<QueryNode>, field: String
 	): Bool {
-		final span: Null<Span> = MemberBranchScan.branchSpanOf(branch, cls, prop);
-		if (span == null) return true;
-		final region: Span = span;
+		final first: Null<Span> = MemberBranchScan.branchSpanOf(branch, cls, touched[0]);
+		for (node in touched) {
+			final span: Null<Span> = MemberBranchScan.branchSpanOf(branch, cls, node);
+			if (first == null != (span == null) || first != null && span != null && (first.from != span.from || first.to != span.to))
+				return false;
+		}
+		if (first == null) return true;
+		final region: Span = first;
+		// Every member the collapse deletes or rewrites lives in ONE branch. What remains to prove is
+		// that nothing OUTSIDE that branch names the backing field, since the rename gives it the
+		// property's name — a member only that branch's build declares.
 		return !RefactorSupport.referencedInRange(source, field, 0, region.from, [])
 			&& !RefactorSupport.referencedInRange(source, field, region.to, source.length, []);
+	}
+
+	/** `RefactorSupport.isMemberDeclKind` as a node predicate — the member set the region guard counts. */
+	private static function isDeclKind(node: QueryNode): Bool {
+		return RefactorSupport.isMemberDeclKind(node.kind);
 	}
 
 }

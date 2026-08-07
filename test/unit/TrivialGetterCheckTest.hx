@@ -860,6 +860,162 @@ class TrivialGetterCheckTest extends Test {
 		Assert.isTrue((out['Sub.hx'] ?? '').indexOf('return label;') >= 0);
 	}
 
+	public function testAbstractClassTrivialGetterFlagged(): Void {
+		Assert.equals(
+			1,
+			violations(
+				'abstract class C {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tprivate function get_active():Bool { return _active; }\n}'
+			).length,
+			'an abstract class body is inspected like a plain class'
+		);
+	}
+
+	public function testAbstractOwnerCrossFileSubtypeReadCollapses(): Void {
+		// The OWNER is an abstract class; a subtype in another file reads its private backing field.
+		// Exercises subtypeRefWalk's owner-span exclusion / cls attribution for AbstractClassDecl:
+		// the property collapses AND the subtype's read is renamed `_active` -> `active`.
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'Base.hx',
+				source: 'abstract class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}'
+			},
+			{ file: 'Sub.hx', source: 'class Sub extends Base {\n\tpublic function peek():Bool return _active;\n}' }
+		];
+		Assert.equals(1, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+		final out: Map<String, String> = crossFixApply(files);
+		final base: String = out['Base.hx'] ?? '';
+		final sub: String = out['Sub.hx'] ?? '';
+		Assert.isTrue(base.indexOf('active(default, null):Bool = false') >= 0);
+		Assert.isTrue(base.indexOf('get_active') == -1);
+		Assert.isTrue(sub.indexOf('return active;') >= 0);
+		Assert.isTrue(sub.indexOf('_active') == -1);
+	}
+
+	public function testAbstractSubtypeWriteBlocked(): Void {
+		// The subtype is itself an abstract class and WRITES the inherited backing
+		// field — the collapse must stay blocked. Integration guard: the block is
+		// carried by SymbolIndex's subtype machinery seeing the abstract subtype.
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'Base.hx',
+				source: 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}'
+			},
+			{ file: 'Mid.hx', source: 'abstract class Mid extends Base {\n\tpublic function reset():Void _active = false;\n}' }
+		];
+		Assert.equals(0, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	public function testBackingTypeDiffersFromPropertyTypeNotFlagged(): Void {
+		// The getter performs an implicit upcast (Array -> ReadOnlyArray): collapsing
+		// to one (default, null) slot would retype the storage and break every
+		// mutating use of the backing field (`resize`, assignment to an Array slot).
+		Assert.equals(
+			0,
+			violations(cls(
+				'public var headers(get, never):ReadOnlyArray<Header>;\n\tprivate final _headers:Array<Header> = [];\n\tprivate inline function get_headers():ReadOnlyArray<Header> return _headers;'
+			)).length
+		);
+	}
+
+	/**
+	 * A local annotated with a comma-carrying generic (`Map<K, V>`) whose initializer reads the
+	 * backing field: the comma sits INSIDE `<>`, so the declaration is not a multi-var list and
+	 * the collapse must proceed. The AST already says so — only a text-level comma scan can
+	 * mistake it.
+	 */
+	public function testCommaGenericAnnotationStillCollapses(): Void {
+		assertFixContains(
+			cls(
+				'public var frame(get, never):Int;\n' + '\tprivate var _currentFrame:Int = 0;\n'
+				+ '\tprivate final _frames:Map<Int, Int> = [];\n' + '\tprivate inline function get_frame():Int return _currentFrame;\n'
+				+ '\tpublic function touch():Void { final row:Null<Map<Int, Int>> = _frames[_currentFrame]; }'
+			),
+			'_frames[frame]'
+		);
+	}
+
+	/**
+	 * The genuine multi-var list the comma scan was guarding against: a later binding projects as
+	 * `VarMore`, and an initializer reading the backing field keeps the collapse refused.
+	 */
+	public function testMultiVarDeclStillRefusesFix(): Void {
+		assertFixRefused(cls(
+			'public var frame(get, never):Int;\n' + '\tprivate var _currentFrame:Int = 0;\n'
+			+ '\tprivate inline function get_frame():Int return _currentFrame;\n'
+			+ '\tpublic function touch():Void { var a = _currentFrame, frame = 2; trace(a + frame); }'
+		));
+	}
+
+	/**
+	 * A property and its trivial getter written inside a member-position `#if` are members of the
+	 * class like any other. The region is ONE child of the container holding every branch's members
+	 * flattened, so scanning the container's direct children alone silently exempted the whole trio.
+	 */
+	public function testConditionalMemberFlagged(): Void {
+		Assert.equals(
+			1,
+			violations(
+				'class C {\n\t#if cpp\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tprivate function get_active():Bool return _active;\n\t#end\n}'
+			).length
+		);
+	}
+
+	/**
+	 * The collapse renames the backing field into the PROPERTY's name, which only exists where the
+	 * property's branch compiles. A reader in another branch would be rewritten to a member its own
+	 * build does not have, so a guarded property whose backing field is mentioned outside its branch
+	 * is refused outright.
+	 */
+	public function testConditionalBackingFieldReadInAnotherBranchNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\t#if cpp\n\tpublic var active(get, never):Bool;\n\t#end\n\tprivate var _active:Bool = false;\n\tprivate function get_active():Bool return _active;\n\t#if !cpp\n\tpublic function readIt():Bool return _active;\n\t#end\n}'
+			).length
+		);
+	}
+
+	/**
+	 * The confined case: property, backing field and getter all in ONE branch. The collapse's edits —
+	 * the accessor-clause rewrite, the field deletion and the getter deletion, modifier runs included
+	 * — all land inside the region, leaving the directives untouched.
+	 */
+	public function testConditionalCollapseStaysInsideItsBranch(): Void {
+		assertFixContains(
+			'class C {\n\t#if cpp\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tprivate function get_active():Bool return _active;\n\t#end\n}',
+			'#if cpp\n\tpublic var active(default, null):Bool = false;\n\t#end'
+		);
+	}
+
+	/**
+	 * The getter duplicated across branches: the name-keyed table keeps only the LAST branch's, so the
+	 * collapse would delete the `#if` branch's side-effecting getter and route the property straight
+	 * to storage in that build — output that parses and compiles, and is silently wrong. The gate
+	 * requires every touched member to sit in ONE branch.
+	 */
+	public function testConditionalRivalGettersNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\t#if debug\n\tprivate function get_active():Bool { trace(\'read\'); return _active; }\n\t#else\n\tprivate function get_active():Bool return _active;\n\t#end\n}'
+			).length
+		);
+	}
+
+	/**
+	 * The collapse deletes the backing field and the getter together. When those are all of a
+	 * region's members, the result is a bare `#if … #end` the grammar does not model, so the
+	 * candidate is refused rather than emitted as a permanently unfixable advisory.
+	 */
+	public function testConditionalCollapseEmptyingItsRegionNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tpublic var active(get, never):Bool;\n\t#if cpp\n\tprivate var _active:Bool = false;\n\tprivate function get_active():Bool return _active;\n\t#end\n}'
+			).length
+		);
+	}
+
 	private function cls(members: String): String {
 		return 'class C {\n\t$members\n}';
 	}
@@ -943,138 +1099,6 @@ class TrivialGetterCheckTest extends Test {
 			}
 		}
 		return out;
-	}
-
-	public function testAbstractClassTrivialGetterFlagged(): Void {
-		Assert.equals(
-			1,
-			violations(
-				'abstract class C {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tprivate function get_active():Bool { return _active; }\n}'
-			).length,
-			'an abstract class body is inspected like a plain class'
-		);
-	}
-
-	public function testAbstractOwnerCrossFileSubtypeReadCollapses(): Void {
-		// The OWNER is an abstract class; a subtype in another file reads its private backing field.
-		// Exercises subtypeRefWalk's owner-span exclusion / cls attribution for AbstractClassDecl:
-		// the property collapses AND the subtype's read is renamed `_active` -> `active`.
-		final files: Array<{ file: String, source: String }> = [
-			{
-				file: 'Base.hx',
-				source: 'abstract class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}'
-			},
-			{ file: 'Sub.hx', source: 'class Sub extends Base {\n\tpublic function peek():Bool return _active;\n}' }
-		];
-		Assert.equals(1, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
-		final out: Map<String, String> = crossFixApply(files);
-		final base: String = out['Base.hx'] ?? '';
-		final sub: String = out['Sub.hx'] ?? '';
-		Assert.isTrue(base.indexOf('active(default, null):Bool = false') >= 0);
-		Assert.isTrue(base.indexOf('get_active') == -1);
-		Assert.isTrue(sub.indexOf('return active;') >= 0);
-		Assert.isTrue(sub.indexOf('_active') == -1);
-	}
-
-	public function testAbstractSubtypeWriteBlocked(): Void {
-		// The subtype is itself an abstract class and WRITES the inherited backing
-		// field — the collapse must stay blocked. Integration guard: the block is
-		// carried by SymbolIndex's subtype machinery seeing the abstract subtype.
-		final files: Array<{ file: String, source: String }> = [
-			{
-				file: 'Base.hx',
-				source: 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}'
-			},
-			{ file: 'Mid.hx', source: 'abstract class Mid extends Base {\n\tpublic function reset():Void _active = false;\n}' }
-		];
-		Assert.equals(0, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
-	}
-
-
-	public function testBackingTypeDiffersFromPropertyTypeNotFlagged(): Void {
-		// The getter performs an implicit upcast (Array -> ReadOnlyArray): collapsing
-		// to one (default, null) slot would retype the storage and break every
-		// mutating use of the backing field (`resize`, assignment to an Array slot).
-		Assert.equals(
-			0,
-			violations(cls(
-				'public var headers(get, never):ReadOnlyArray<Header>;\n\tprivate final _headers:Array<Header> = [];\n\tprivate inline function get_headers():ReadOnlyArray<Header> return _headers;'
-			)).length
-		);
-	}
-
-
-	/**
-	 * A local annotated with a comma-carrying generic (`Map<K, V>`) whose initializer reads the
-	 * backing field: the comma sits INSIDE `<>`, so the declaration is not a multi-var list and
-	 * the collapse must proceed. The AST already says so — only a text-level comma scan can
-	 * mistake it.
-	 */
-	public function testCommaGenericAnnotationStillCollapses(): Void {
-		assertFixContains(
-			cls(
-				'public var frame(get, never):Int;\n' + '\tprivate var _currentFrame:Int = 0;\n'
-				+ '\tprivate final _frames:Map<Int, Int> = [];\n' + '\tprivate inline function get_frame():Int return _currentFrame;\n'
-				+ '\tpublic function touch():Void { final row:Null<Map<Int, Int>> = _frames[_currentFrame]; }'
-			),
-			'_frames[frame]'
-		);
-	}
-
-	/**
-	 * The genuine multi-var list the comma scan was guarding against: a later binding projects as
-	 * `VarMore`, and an initializer reading the backing field keeps the collapse refused.
-	 */
-	public function testMultiVarDeclStillRefusesFix(): Void {
-		assertFixRefused(cls(
-			'public var frame(get, never):Int;\n' + '\tprivate var _currentFrame:Int = 0;\n'
-			+ '\tprivate inline function get_frame():Int return _currentFrame;\n'
-			+ '\tpublic function touch():Void { var a = _currentFrame, frame = 2; trace(a + frame); }'
-		));
-	}
-
-
-	/**
-	 * A property and its trivial getter written inside a member-position `#if` are members of the
-	 * class like any other. The region is ONE child of the container holding every branch's members
-	 * flattened, so scanning the container's direct children alone silently exempted the whole trio.
-	 */
-	public function testConditionalMemberFlagged(): Void {
-		Assert.equals(
-			1,
-			violations(
-				'class C {\n\t#if cpp\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tprivate function get_active():Bool return _active;\n\t#end\n}'
-			).length
-		);
-	}
-
-
-	/**
-	 * The collapse renames the backing field into the PROPERTY's name, which only exists where the
-	 * property's branch compiles. A reader in another branch would be rewritten to a member its own
-	 * build does not have, so a guarded property whose backing field is mentioned outside its branch
-	 * is refused outright.
-	 */
-	public function testConditionalBackingFieldReadInAnotherBranchNotFlagged(): Void {
-		Assert.equals(
-			0,
-			violations(
-				'class C {\n\t#if cpp\n\tpublic var active(get, never):Bool;\n\t#end\n\tprivate var _active:Bool = false;\n\tprivate function get_active():Bool return _active;\n\t#if !cpp\n\tpublic function readIt():Bool return _active;\n\t#end\n}'
-			).length
-		);
-	}
-
-
-	/**
-	 * The confined case: property, backing field and getter all in ONE branch. The collapse's edits —
-	 * the accessor-clause rewrite, the field deletion and the getter deletion, modifier runs included
-	 * — all land inside the region, leaving the directives untouched.
-	 */
-	public function testConditionalCollapseStaysInsideItsBranch(): Void {
-		assertFixContains(
-			'class C {\n\t#if cpp\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tprivate function get_active():Bool return _active;\n\t#end\n}',
-			'#if cpp\n\tpublic var active(default, null):Bool = false;\n\t#end'
-		);
 	}
 
 }

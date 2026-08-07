@@ -235,6 +235,21 @@ class PreferReadOnlyFieldCheckTest extends Test {
 		Assert.equals(0, new PreferReadOnlyField().run(files, plugin).length);
 	}
 
+	/**
+	 * A public field written inside a member-position `#if` is a field of the class like any other,
+	 * and its internal-only write still restricts to `(default, null)`. Both halves were blind: the
+	 * container scan never saw the declaration, and the write index dropped every write resolving to
+	 * it — which read as "never written" and ceded the field to `prefer-final-public-field`.
+	 */
+	public function testConditionalMemberFlaggedAndFixedInPlace(): Void {
+		final src: String = 'class C {\n\t#if cpp\n\tpublic var x:Int = 0;\n\t#end\n\tpublic function bump():Void {\n\t\tx = 5;\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(
+			'class C {\n\t#if cpp\n\tpublic var x(default, null):Int = 0;\n\t#end\n\tpublic function bump():Void {\n\t\tx = 5;\n\t}\n}',
+			fixedSource(src)
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferReadOnlyField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
@@ -253,22 +268,6 @@ class PreferReadOnlyFieldCheckTest extends Test {
 		var out: String = src;
 		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
 		return out;
-	}
-
-
-	/**
-	 * A public field written inside a member-position `#if` is a field of the class like any other,
-	 * and its internal-only write still restricts to `(default, null)`. Both halves were blind: the
-	 * container scan never saw the declaration, and the write index dropped every write resolving to
-	 * it — which read as "never written" and ceded the field to `prefer-final-public-field`.
-	 */
-	public function testConditionalMemberFlaggedAndFixedInPlace(): Void {
-		final src: String = 'class C {\n\t#if cpp\n\tpublic var x:Int = 0;\n\t#end\n\tpublic function bump():Void {\n\t\tx = 5;\n\t}\n}';
-		Assert.equals(1, violations(src).length);
-		Assert.equals(
-			'class C {\n\t#if cpp\n\tpublic var x(default, null):Int = 0;\n\t#end\n\tpublic function bump():Void {\n\t\tx = 5;\n\t}\n}',
-			fixedSource(src)
-		);
 	}
 
 }

@@ -2,6 +2,9 @@ package anyparse.query;
 
 import anyparse.query.CondBranchProjection;
 import anyparse.query.GrammarPlugin.RefShape;
+
+using Lambda;
+
 import anyparse.runtime.Span;
 
 /**
@@ -92,18 +95,22 @@ final class MemberBranchScan {
 		final runs: Null<Array<CondBranchRun>> = CondBranchProjection.conditionalBranchRuns(
 			region, seams.source, seams.elseKeywords, seams.comments
 		);
-		if (runs == null || runs.length == 0) return fold(seams, region.children, incoming, step, join);
+		if (runs == null || runs.length == 0) return join(fold(seams, region.children, incoming, step, join), incoming);
 		var out: S = fold(seams, runs[0].nodes, incoming, step, join);
 		for (i in 1...runs.length) out = join(out, fold(seams, runs[i].nodes, incoming, step, join));
-		return out;
+		// The IMPLICIT branch: a `#if A … #end` contributes nothing when A is false, so `incoming`
+		// reaches the member after `#end` untouched — a run no written branch represents. Joining it
+		// unconditionally over-approximates a region closed by a plain `#else` (where some branch
+		// always compiles), which is the fail-closed direction for every caller: it can only widen
+		// what the next member's run might hold, never narrow it.
+		return join(out, incoming);
 	}
 
 	/**
-	 * Whether `region` is a member-position conditional-compilation region under `seams` — the
-	 * test `fold` itself applies, exposed for a caller that recognises the kind outside a fold
-	 * (a walk that recurses into containers itself).
+	 * Whether `node` is a member-position conditional-compilation region under `seams` — the test
+	 * `fold` itself applies.
 	 */
-	public static inline function isRegion(seams: MemberBranchSeams, node: QueryNode): Bool {
+	private static inline function isRegion(seams: MemberBranchSeams, node: QueryNode): Bool {
 		return seams.condKind != null && node.kind == seams.condKind;
 	}
 
@@ -122,25 +129,27 @@ final class MemberBranchScan {
 	 */
 	public static function eachMember(
 		seams: MemberBranchSeams, container: QueryNode, isMember: QueryNode -> Bool,
-		visit: (member:QueryNode, run:Array<QueryNode>) -> Void
+		visit: (member:QueryNode, run:Array<QueryNode>, runIsCertain:Bool) -> Void
 	): Void {
-		fold(seams, container.children, [], (run, child) -> {
-			if (!isMember(child)) return run.concat([child]);
-			visit(child, run);
-			return [];
-		}, (a, b) -> a.concat(b));
+		fold(seams, container.children, freshRun(), (run, child) -> {
+			if (!isMember(child)) return { nodes: run.nodes.concat([child]), certain: run.certain };
+			visit(child, run.nodes, run.certain);
+			return freshRun();
+		}, joinRuns);
 	}
 
 
 	/**
-	 * The span of the conditional BRANCH that declares `member`, or null when `member` is a direct
-	 * child of `container` and so compiles in every build.
+	 * The span of the conditional BRANCH that declares `member`, or null when no region under
+	 * `container` holds it — either because it is a direct child (so it compiles in every build) or
+	 * because it is not under `container` at all. A caller that reads null as "unguarded, safe" must
+	 * therefore pass a `member` it knows belongs to `container`.
 	 *
 	 * The unit a multi-member rewrite has to stay inside. Two members of the same region but of
-	 * DIFFERENT branches never compile together, so an edit reaching from one to the other is as
-	 * wrong as one reaching out of the region entirely — a collapse that renames a backing field
-	 * declared in `#if cpp` cannot rewrite a reader written in `#else`. A region whose boundaries the
-	 * splitter refuses answers with the whole region's span, the tightest bound still available.
+	 * DIFFERENT branches never compile together, so an edit reaching from one to the other is as wrong
+	 * as one reaching out of the region entirely — a collapse that renames a backing field declared in
+	 * `#if cpp` cannot rewrite a reader written in `#else`. A region whose boundaries the splitter
+	 * refuses answers with the whole region's span, the tightest bound still available.
 	 */
 	public static function branchSpanOf(seams: MemberBranchSeams, container: QueryNode, member: QueryNode): Null<Span> {
 		for (child in container.children) if (isRegion(seams, child)) {
@@ -181,27 +190,69 @@ final class MemberBranchScan {
 
 
 	/**
-	 * Whether `member` is the ONLY member declaration of the conditional region that holds it — so
-	 * deleting it would leave a bare `#if … #end` behind. False when `member` is unguarded.
+	 * The subset of `deleting` a fix may actually remove: every member whose deletion would leave a
+	 * conditional REGION with no member declaration at all is dropped, together with the rest of that
+	 * region's members.
 	 *
-	 * The grammar accepts an empty BRANCH (`#if cpp #else var b; #end` parses) but not an empty
-	 * REGION, and real Haxe accepts both — so this is a model limit, not a language one, and a
-	 * deleting fix has to refuse rather than emit source the re-parse gate will reject anyway. A
-	 * member of a NESTED region counts toward its outer region too: emptying the inner one empties
-	 * the outer one with it.
+	 * The grammar models an empty BRANCH (`#if cpp #else var b; #end` parses) but not a region emptied
+	 * of members, so such a splice is rejected by the re-parse gate — and with it EVERY other edit the
+	 * same `--fix` pass had for that file. Withholding these edits keeps the findings and lets the rest
+	 * of the file's fixes land.
+	 *
+	 * The question is per EDIT SET, not per member: two orphan members that are together all of a
+	 * region's members each look non-sole on their own. A member of a NESTED region counts toward its
+	 * outer region too, so emptying the inner one empties the outer with it.
 	 */
-	public static function isSoleRegionMember(
-		seams: MemberBranchSeams, container: QueryNode, member: QueryNode, isMember: QueryNode -> Bool
-	): Bool {
-		for (child in container.children) if (isRegion(seams, child)) {
+	public static function survivingDeletions(
+		seams: MemberBranchSeams, container: QueryNode, deleting: Array<QueryNode>, isMember: QueryNode -> Bool
+	): Array<QueryNode> {
+		final refused: Array<QueryNode> = [];
+		eachRegion(seams, container, region -> {
 			final members: Array<QueryNode> = [];
-			RefactorSupport.eachMemberHost(child, host -> {
+			RefactorSupport.eachMemberHost(region, host -> {
 				for (c in host.children) if (isMember(c))
 					members.push(c);
 			});
-			if (members.contains(member)) return members.length == 1;
+			if (members.length == 0 || members.exists(m -> !deleting.contains(m))) return;
+			for (m in members) if (!refused.contains(m))
+				refused.push(m);
+		});
+		return deleting.filter(m -> !refused.contains(m));
+	}
+
+
+	/** A member run that has seen nothing yet — every modifier it goes on to collect is certain. */
+	private static inline function freshRun(): MemberRun {
+		return { nodes: [], certain: true };
+	}
+
+
+	/**
+	 * Merge two branches' leftover modifier runs. The node set is the UNION — a gate that any build's
+	 * modifiers would trip has to trip — but the merge also records that the branches DISAGREED, and
+	 * that flag is what a caller whose gate is ENABLING must read.
+	 *
+	 * The union alone is fail-closed only for a SUPPRESSING gate (`@:keep`, `override`, `inline`:
+	 * seeing a modifier one build does not have costs a finding). For an enabling one it is
+	 * fail-OPEN: `#if cpp static #end function get_x()` would make the accessor read as static in
+	 * every build and stop pairing with its instance property — a finding whose fix deletes a live
+	 * accessor. Disagreement therefore makes the run UNCERTAIN, and `eachMember`'s callers refuse the
+	 * member rather than judge it on modifiers only some builds have.
+	 */
+	private static function joinRuns(a: MemberRun, b: MemberRun): MemberRun {
+		return {
+			nodes: a.nodes.concat([for (n in b.nodes) if (!a.nodes.contains(n)) n]),
+			certain: a.certain && b.certain && a.nodes.length == b.nodes.length && !a.nodes.exists(n -> !b.nodes.contains(n))
+		};
+	}
+
+
+	/** Visit every conditional region under `container`, nested ones included, outermost first. */
+	private static function eachRegion(seams: MemberBranchSeams, container: QueryNode, visit: QueryNode -> Void): Void {
+		for (child in container.children) {
+			if (isRegion(seams, child)) visit(child);
+			if (!RefactorSupport.isMemberDeclKind(child.kind)) eachRegion(seams, child, visit);
 		}
-		return false;
 	}
 
 }
@@ -221,4 +272,15 @@ typedef MemberBranchSeams = {
 	final elseKeywords: Array<String>;
 
 	final comments: Array<{ from: Int, to: Int, isLine: Bool }>;
+};
+
+/**
+ * One member run as `MemberBranchScan.eachMember` folds it: the modifier / annotation siblings
+ * collected since the last member, and whether EVERY build that reaches the next member sees
+ * exactly those. `certain` goes false only where conditional branches leave different runs
+ * behind — the shape an enabling gate cannot judge.
+ */
+private typedef MemberRun = {
+	final nodes: Array<QueryNode>;
+	final certain: Bool;
 };

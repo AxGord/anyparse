@@ -179,9 +179,13 @@ import haxe.Exception;
  * construction). A property (`var x(get, set)`) and a function-type field are
  * skipped (a `(` in the declaration head — a conservative over-skip). A
  * multiple-constructor (macro-generated) class is skipped: only a plain single `new`
- * qualifies, so the init timing stays unambiguous. A `#if` member REGION anywhere in
- * the container refuses every chained candidate: the projection keeps its interior as
- * trivia, so an initializer inside it cannot be inspected. A field whose write count
+ * qualifies, so the init timing stays unambiguous. A `#if`-guarded field IS a candidate —
+ * the container walk descends into the region — but only through the SOLE-write path: a
+ * region among the container's members still refuses every CHAINED candidate, because the
+ * chain's order proof needs one build's member sequence and a region's branches are several.
+ * A field name declared in two mutually exclusive branches is refused outright (its rival
+ * declarations share one constructor statement, and the move deletes that statement for
+ * both). A field whose write count
  * differs from one qualifies only through the chain; an UNRESOLVED write to the field
  * NAME disqualifies it on either path.
  */
