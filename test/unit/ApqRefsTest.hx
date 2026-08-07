@@ -560,7 +560,7 @@ class ApqRefsTest extends Test {
 
 	private static function describe(hits: Array<RefHit>): String {
 		return '[' + hits.map(h -> {
-			final base: String = '${h.kind.toString()}:${h.name}@${h.span.from}-${h.span.to}';
+			final base: String = '${h.kind.toString()}${h.interpolated ? '(interp)' : ''}:${h.name}@${h.span.from}-${h.span.to}';
 			final b: Null<Span> = h.bindingSpan;
 			return b == null ? base : '$base->bind@${b.from}-${b.to}';
 		}).join(', ') + ']';
@@ -640,7 +640,9 @@ class ApqRefsTest extends Test {
 	 */
 	public function testSimpleInterpolationSpanCoversDollar(): Void {
 		final source: String = "class X { static function f():Void { var n:Int = 0; trace('$n'); } }";
-		final read: RefHit = findIn(source, 'n').filter(h -> h.kind == RefKind.Read)[0];
+		final reads: Array<RefHit> = findIn(source, 'n').filter(h -> h.kind == RefKind.Read);
+		Assert.equals(1, reads.length, 'one interpolation read expected — got ${describe(reads)}');
+		final read: RefHit = reads[0];
 		Assert.equals('$$n', source.substring(read.span.from, read.span.to), 'span spells the dollar too — got ${describe([read])}');
 	}
 

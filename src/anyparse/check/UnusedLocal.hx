@@ -50,9 +50,13 @@ private typedef ScanCtx = {
  * the enclosing scope's source, OUTSIDE the declaration itself
  * (`RefactorSupport.referencedInRange`) — the same conservative approach
  * `unused-import` uses, for the same reason: an AST projection misses
- * reference forms the grammar surfaces under non-obvious ctors (the
- * simple-interpolation `'$name'` is an `Ident`, not the `IdentExpr` the
- * reference walker matches). A textual scan catches every reference the
+ * reference forms the resolution index does not bind — a read inside a
+ * rescanned, escape-spelled `${ … }` hole (which carries no parsed
+ * expression at all), a cross-file or implicit-`this` reference, an
+ * identifier the grammar surfaces under a ctor the walker does not match.
+ * (The braceless simple-interpolation read
+ * `'$name'` IS indexed as a read — that one is no longer a
+ * reason to prefer the scan.) A textual scan catches every reference the
  * compiler can see, at the cost of also counting the name inside comments /
  * strings / a sibling nested scope that re-declares it — which only ever
  * yields a missed finding (a kept binding), never a wrong deletion. Bounding

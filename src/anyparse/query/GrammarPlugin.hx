@@ -1293,10 +1293,12 @@ typedef RefShape = {
 	/**
 	 * The string-interpolation identifier kind (Haxe `Ident` — a simple `$name` inside a
 	 * single-quoted string projects as this, not as `identKind`). `Refs` classifies it as a
-	 * READ, so the resolution index — and with it `rename`, `unused-*`, `safe-delete` and
-	 * every other index consumer — sees an interpolated-only use. A check running its OWN
-	 * tree walk instead of the index (`dead-store`'s liveness pass, `collapse-nested-switch`'s
-	 * binder-isolation count) still reads this seam to recognise the same node. Optional.
+	 * READ, so the resolution index — and with it `rename`, `safe-delete`, `inline` and every
+	 * other index consumer — sees an interpolated-only use. A check that answers the same
+	 * question by its OWN scan does NOT inherit that and still reads this seam to recognise the
+	 * node: a tree walk (e.g. `dead-store`'s liveness pass, `collapse-nested-switch`'s
+	 * binder-isolation count) or, for the `unused-*` family, a raw scope-bounded text scan that
+	 * never consults the index at all. Optional.
 	 */
 	@:optional var stringInterpIdentKind: String;
 
