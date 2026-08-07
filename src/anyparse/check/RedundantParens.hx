@@ -157,11 +157,12 @@ import anyparse.runtime.Span;
  *   own for `%`, so `%` shares a tier with no other operator. A single-member `['Mod']`
  *   (`(a % b) % c`) would now be provable; admitting it is deliberate future work.
  * - `"comparisonOperands"` — the pair is an operand of a COMPARISON-tier binary operator
- *   (`RefShape.comparisonOperandHostKinds`) and its bare content is purely ARITHMETIC
- *   (`RefShape.comparisonOperandUnwrapKinds`), a fail-closed whitelist of kinds that bind
- *   strictly tighter than a comparison HERE and in every C-family language — so
- *   `(px - x - w) > (py - y - h + r)` re-parses to the tree it already had on either
- *   reading. EITHER side is a candidate, and the two are judged TOGETHER: unlike
+ *   (`RefShape.comparisonOperandHostKinds`) and its bare content is ARITHMETIC or a
+ *   POSTFIX in/decrement (`RefShape.comparisonOperandUnwrapKinds`), a fail-closed
+ *   whitelist of kinds that bind strictly tighter than a comparison HERE and in every
+ *   C-family language — so `(px - x - w) > (py - y - h + r)` and `(a++) < 36` re-parse
+ *   to the trees they already had on either reading. EITHER side is a candidate, and
+ *   the two are judged TOGETHER: unlike
  *   `sameOperatorLeft`, a parenthesized sibling is no blanket veto — one that is itself
  *   provable (same whitelist, or an ATOM when that arm is on too) takes the slot with it,
  *   so BOTH pairs drop in the same pass. The veto fires only when the sibling pair is NOT
@@ -172,26 +173,38 @@ import anyparse.runtime.Span;
  *   cross-language insurance an author wrote on purpose. The SHIFT tier is off it for a
  *   READABILITY reason only — C binds shifts tighter than a comparison exactly as Haxe
  *   does, so `(a << b) > c` would be provable on both readings, but a shift operand is
- *   habitually parenthesized and this arm declines to take that away. Atom content is off
- *   it too — the `atoms` arm owns atoms, and the two converge over `lint --fix` passes.
+ *   habitually parenthesized and this arm declines to take that away. The PREFIX `++x` /
+ *   `--x` are provable too and left off on a READABILITY ground of their own — bare,
+ *   `(++b) < 36` reads `++b < 36` — but only as a ROOT: unlike the leading minus, which
+ *   `RefShape.unaryMinusKinds` refuses at any depth, a prefix in/decrement has no
+ *   left-spine gate, so `(--b * c) > d` still drops. Only the postfix spelling puts the
+ *   operand first. Atom content is off it too — the `atoms` arm owns atoms, and the two
+ *   converge over `lint --fix` passes.
  * - `"additiveOperands"` — the pair is an operand of an ADDITIVE binary operator
  *   (`RefShape.additiveOperandHostKinds` — `+` and `-`) and its bare content is on the
- *   strictly TIGHTER multiplicative tiers (`RefShape.additiveOperandUnwrapKinds`), a
- *   fail-closed whitelist of kinds binding tighter than the host HERE and in every
- *   C-family language — so `a * s - (w / 2.0)` re-parses to the tree it already had on
- *   either reading. EITHER side is a candidate, a chain's MIDDLE operand included (an
+ *   strictly TIGHTER multiplicative tiers, or a POSTFIX in/decrement
+ *   (`RefShape.additiveOperandUnwrapKinds`), a fail-closed whitelist of kinds binding
+ *   tighter than the host HERE and in every C-family language — so `a * s - (w / 2.0)`
+ *   and `(a++) + b` re-parse to the trees they already had on either reading. EITHER
+ *   side is a candidate, a chain's MIDDLE operand included (an
  *   additive chain nests to the left, so a middle operand is simply the right child of
  *   the inner node), and the two sides are judged TOGETHER under the same symmetry rule
  *   `comparisonOperands` applies: a parenthesized sibling that is itself provable (same
  *   whitelist, or an ATOM when that arm is on too) goes in the same pass, and one that is
  *   not vetoes the drop — `(a * b) + (c - d)` keeps both pairs, since firing on the
- *   provable half alone would leave the expression lopsided. Four exclusions, each for
+ *   provable half alone would leave the expression lopsided. Five exclusions, each for
  *   its own reason. SAME-TIER content (`a + (b - c)`, `a - (b + c)`, `a + (b + c)`) is
  *   out for CORRECTNESS: the drop RE-ASSOCIATES, which changes the rounding for floats
  *   and the value outright under `-`. Content whose LEFTMOST token is a unary minus
  *   (`RefShape.unaryMinusKinds`) is provable and out on READABILITY, since the bare form
  *   reads `a - -b` — a LEFT-SPINE test, so `a + (-b * c)` goes with `a - (-b)` rather than
- *   slipping through on its arithmetic root. The multiplicative operators are no
+ *   slipping through on its arithmetic root. The PREFIX `++x` / `--x` are left off on
+ *   that same READABILITY ground — bare, `a - (--b)` reads `a - --b` — but by the
+ *   WEAKER mechanism of not being on the root whitelist at all, so unlike the minus
+ *   they are not refused at depth and `a - (--b * c)` still drops. What that leaves on
+ *   the whitelist is the POSTFIX spelling: it puts the operand first, and its own
+ *   `++` / `--` token closes the content, so no greedy tail inside can reach past the
+ *   pair. The multiplicative operators are no
  *   HOSTS — Haxe binds `%` tighter than `*` and `/`, but C makes the three ONE tier, so
  *   a bare `a * b % c` reads `(a * b) % c` to a C-trained eye and the pair in
  *   `a * (b % c)` is what makes the two readings agree; the same cross-language trap the
