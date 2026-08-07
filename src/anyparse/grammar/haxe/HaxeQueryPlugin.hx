@@ -728,6 +728,12 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'Type.getClassFields' => 'Array<String>',
 				'Type.getEnumConstructs' => 'Array<String>'
 			],
+			// `haxe.ds.Map`'s abstract wrappers carry no return annotation (`public inline
+			// function exists(key:K) return this.exists(key);`), so no resolution scope can read
+			// one. Both entries are the return their forwarded-to `haxe.Constraints.IMap` member
+			// declares — `exists(k:K):Bool`, `remove(k:K):Bool` — fixed on every target. `get` is
+			// absent on purpose: its `Null<V>` depends on the type argument.
+			instanceMethodReturns: ['Map.exists' => 'Bool', 'Map.remove' => 'Bool'],
 			nullableIndexTypeNames: ['Map', 'StringMap', 'IntMap', 'ObjectMap', 'EnumValueMap', 'WeakMap'],
 			mapAbstractTypeNames: ['Map'],
 			nullableInstanceReturnCalls: [

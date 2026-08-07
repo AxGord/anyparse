@@ -11,17 +11,21 @@ import anyparse.runtime.Span;
 
 /**
  * The `comparison-to-boolean` check: a comparison against a boolean literal
- * (`x == true`, `x != false`, `true == x`) is flagged `Info` when the operand is
- * provably non-null Bool, and `fix` then rewrites it. Two proofs. STRUCTURAL: a
- * boolean-operator result, or a bare identifier whose declared type proves non-null
+ * (`x == true`, `x != false`, `true == x`) is flagged `Warning` when the operand is
+ * provably non-null Bool — the severity `fix` earns by being able to rewrite it — and
+ * `Info` only where nothing can prove the operand either way. Three proofs. STRUCTURAL:
+ * a boolean-operator result, or a bare identifier whose declared type proves non-null
  * Bool — a `Null<Bool>` / optional-param / unannotated identifier stays silent (its
  * `== true` may be load-bearing under strict null-safety), and the arm sits behind a
  * blanket veto on an operand reaching a `?.` access / a call / `Map.get` result.
- * RESOLVED-TYPE: a field access whose receiver type resolves and whose member's
- * declared type is a non-nullable Bool, the receiver resolving through `cast(e, T)`
- * too. That arm refuses what the `SymbolIndex` cannot answer soundly — an
- * anonymous-structure receiver, a simple-name homonym, a `#if`-guarded member.
- * Comparisons inside macro reification are skipped.
+ * RESOLVED-MEMBER: a field access whose receiver type resolves and whose member's
+ * declared type is a non-nullable Bool. RESOLVED-RETURN: a method call whose receiver
+ * type resolves and whose method's written return type is one — the
+ * `map.exists(k) != false` shape. Both resolved arms take the receiver through
+ * `cast(e, T)` too, and both refuse what the `SymbolIndex` cannot answer soundly — an
+ * anonymous-structure receiver, a simple-name homonym, a `#if`-guarded member — and
+ * every `?.` in the receiver chain, whose result is `Null<Bool>` regardless of the
+ * annotation. Comparisons inside macro reification are skipped.
  */
 class ComparisonToBooleanCheckTest extends Test {
 
@@ -29,7 +33,7 @@ class ComparisonToBooleanCheckTest extends Test {
 		final vs: Array<Violation> = violations('class C {\n\tfunction f(x:Bool):Void {\n\t\tvar b = x == true;\n\t}\n}');
 		Assert.equals(1, vs.length);
 		Assert.equals('comparison-to-boolean', vs[0].rule);
-		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.equals(Severity.Warning, vs[0].severity);
 		Assert.equals('comparison against a boolean literal', vs[0].message);
 	}
 
@@ -254,6 +258,225 @@ class ComparisonToBooleanCheckTest extends Test {
 	public function testAnonStructReceiverSkipped(): Void {
 		Assert.equals(0, violations(anonFixture('?flag:Bool')).length);
 		Assert.equals(0, violations(anonFixture('flag:Bool')).length);
+	}
+
+	/**
+	 * A METHOD CALL whose resolved return type is a plain `Bool` is provably non-null, so the
+	 * `nullableOperandKinds` blanket veto is bypassed by the resolved-return proof — the
+	 * `moveHashMap.exists(hash) != false` shape. Fixable, so `Warning`.
+	 */
+	public function testCallReturningBoolFlagged(): Void {
+		final vs: Array<Violation> = violations(typed(BOOL_METHOD, 'var b = o.has(k) != false;'));
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Warning, vs[0].severity);
+	}
+
+	/** The same shape's autofix strips the literal, leaving the call. */
+	public function testFixStripsCallReturningBool(): Void {
+		Assert.equals(typed(BOOL_METHOD, 'var b = o.has(k);'), applyFix(typed(BOOL_METHOD, 'var b = o.has(k) != false;')));
+	}
+
+	/** `== false` on a Bool-returning call negates it; a call is atomic, so no parentheses. */
+	public function testFixNegatesCallReturningBool(): Void {
+		Assert.equals(typed(BOOL_METHOD, 'var b = !o.has(k);'), applyFix(typed(BOOL_METHOD, 'var b = o.has(k) == false;')));
+	}
+
+	/** A literal on the LEFT of a Bool-returning call collapses the same way. */
+	public function testFixStripsCallReturningBoolLiteralLeft(): Void {
+		Assert.equals(typed(BOOL_METHOD, 'var b = o.has(k);'), applyFix(typed(BOOL_METHOD, 'var b = true == o.has(k);')));
+	}
+
+	/** A `Null<Bool>`-returning method's `!= false` is NOT equivalent to the bare call — silent, never fixed. */
+	public function testNullableBoolReturnCallSkipped(): Void {
+		final member: String = 'public function has(k:String):Null<Bool> return null;';
+		Assert.equals(0, violations(typed(member, 'var b = o.has(k) != false;')).length);
+		final src: String = typed(member, 'var b = o.has(k) != false;');
+		Assert.equals(src, applyFix(src));
+	}
+
+	/** An UNRESOLVABLE receiver leaves the call's return type unknown — silent, never fixed. */
+	public function testUnknownReceiverCallSkipped(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar b = o.has(k) != false;\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/** A method with NO return annotation is unresolvable — silent, never fixed. */
+	public function testUnannotatedReturnCallSkipped(): Void {
+		final member: String = 'public function has(k:String) return true;';
+		final src: String = typed(member, 'var b = o.has(k) != false;');
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/**
+	 * A `?.` CALL result is `Null<Bool>` even when the method returns a plain `Bool`, so
+	 * `!= false` is load-bearing — silent, never fixed.
+	 */
+	public function testSafeNavCallOnBoolMethodSkipped(): Void {
+		final src: String = typed(BOOL_METHOD, 'var b = o?.has(k) != false;');
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/** A safe-nav RECEIVER under a Bool-returning call is unresolvable — silent, never fixed. */
+	public function testSafeNavReceiverCallSkipped(): Void {
+		final src: String = typed(BOOL_METHOD, 'var b = o?.inner.has(k) != false;');
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/** A BARE `has(k) != false` call has no receiver to key the lookup on — silent, never fixed. */
+	public function testBareCallSkipped(): Void {
+		final src: String = typed(BOOL_METHOD, 'var b = has(k) != false;');
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/** A `#if`-GUARDED Bool-returning method declaration is refused, exactly as a guarded field is. */
+	public function testGuardedBoolMethodSkipped(): Void {
+		final member: String = '#if js\n\tpublic function has(k:String):Bool return true;\n\t#end';
+		Assert.equals(0, violations(typed(member, 'var b = o.has(k) != false;')).length);
+	}
+
+	/** An ANON-STRUCT receiver's method gets no proof — the member table cannot rule out `@:optional`. */
+	public function testAnonStructReceiverCallSkipped(): Void {
+		final src: String = 'typedef T = {\n\tfunction has(k:String):Bool;\n}\n\n'
+			+ 'class C {\n\tfunction f(o:T, k:String):Void {\n\t\tvar b = o.has(k) != false;\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/** A Bool-returning method reached through `cast(o, T)` resolves like a field does. */
+	public function testTypedCastReceiverCallFlagged(): Void {
+		final types: String = 'class T {\n\tpublic function has(k:String):Bool return true;\n}';
+		Assert.equals(1, violations(castFixture(types, 'cast(o, T).has(k) == true')).length);
+		Assert.equals(castFixture(types, 'cast(o, T).has(k)'), applyFix(castFixture(types, 'cast(o, T).has(k) == true')));
+	}
+
+	/** A Bool-returning method INHERITED from a supertype resolves through the index's walk. */
+	public function testInheritedBoolMethodFlagged(): Void {
+		final types: String = 'class B {\n\tpublic function has(k:String):Bool return true;\n}\n\nclass T extends B {}';
+		final src: String = '$types\n\nclass C {\n\tfunction f(o:T, k:String):Void {\n\t\tvar b = o.has(k) != false;\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+	}
+
+	/** The constant fold is autofixable too, so it is a `Warning` rather than an advisory. */
+	public function testConstantFoldIsWarning(): Void {
+		final vs: Array<Violation> = violations(wrap('var b = true == true;'));
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Warning, vs[0].severity);
+	}
+
+	/** A proven bare-identifier operand is fixable, so it is a `Warning`. */
+	public function testDeclaredBoolLocalIsWarning(): Void {
+		final vs: Array<Violation> =
+			violations('class C {\n\tfunction f():Void {\n\t\tfinal x:Bool = a > c;\n\t\tvar b = x == true;\n\t}\n}');
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Warning, vs[0].severity);
+	}
+
+	/** A proven FIELD-ACCESS operand is fixable, so it is a `Warning`. */
+	public function testFieldAccessBoolMemberIsWarning(): Void {
+		final vs: Array<Violation> = violations(typed('public var flag:Bool;', 'var b = o.flag == true;'));
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Warning, vs[0].severity);
+	}
+
+	/** A `Null<Bool>` LOCAL is never fixed — the report's silence and the fixer's agree. */
+	public function testFixLeavesNullableBoolLocal(): Void {
+		final src: String = wrap('final x:Null<Bool> = g();\n\t\tvar b = x == false;');
+		Assert.equals(src, applyFix(src));
+	}
+
+	/** A `Null<Bool>` MEMBER is never fixed either. */
+	public function testFixLeavesNullableBoolMember(): Void {
+		final src: String = typed('public var flag:Null<Bool>;', 'var b = o.flag != false;');
+		Assert.equals(src, applyFix(src));
+	}
+
+	/**
+	 * `haxe.ds.Map.exists` writes NO return annotation (`public inline function exists(key:K) return
+	 * this.exists(key);`), so no resolution scope can read one — `RefShape.instanceMethodReturns`
+	 * supplies the `Bool` its forwarded-to `IMap.exists(k:K):Bool` declares. The TM shape that
+	 * motivated the arm.
+	 */
+	public function testStdMapExistsFlagged(): Void {
+		final vs: Array<Violation> = violations(mapFixture('m.exists(k) != false'));
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Warning, vs[0].severity);
+		Assert.equals(mapFixture('m.exists(k)'), applyFix(mapFixture('m.exists(k) != false')));
+		Assert.equals(mapFixture('!m.remove(k)'), applyFix(mapFixture('m.remove(k) == false')));
+	}
+
+	/** `Map.get` is absent from the table on purpose — its `Null<V>` is exactly what `== true` guards. */
+	public function testStdMapGetSkipped(): Void {
+		final src: String = mapFixture('m.get(k) == true');
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/**
+	 * A PROJECT type named `Map` shadows the stdlib name, so the table must not answer for it — even
+	 * though ONE declaration passes the homonym pin. The shadow's own `exists` is UNANNOTATED, so
+	 * `returnNominalOf` answers null exactly as it does for the std `Map`: only the table's own
+	 * non-std shadowing guard stands between that null and a `Bool` the project type never promised.
+	 */
+	public function testShadowedMapNameSkipped(): Void {
+		final own: String = 'package p;\n\nclass Map {\n\tpublic function exists(k:String) return null;\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: mapFixture('m.exists(k) != false') },
+			{ file: 'p/Map.hx', source: own }
+		];
+		Assert.equals(0, violationsAcross(files).length);
+	}
+
+	/** The same shadow ANNOTATED `Null<Bool>` is refused by the nullability gate behind it. */
+	public function testShadowedNullableMapNameSkipped(): Void {
+		final own: String = 'package p;\n\nclass Map {\n\tpublic function exists(k:String):Null<Bool> return null;\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: mapFixture('m.exists(k) != false') },
+			{ file: 'p/Map.hx', source: own }
+		];
+		Assert.equals(0, violationsAcross(files).length);
+	}
+
+	/** TWO project types named `Map` refuse the lookup at the homonym pin, before any table. */
+	public function testTwoShadowsOfMapNameSkipped(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: mapFixture('m.exists(k) != false') },
+			{ file: 'p/Map.hx', source: 'package p;\n\nclass Map {\n\tpublic function exists(k:String):Bool return true;\n}' },
+			{ file: 'q/Map.hx', source: 'package q;\n\nclass Map {\n\tpublic function exists(k:String):Bool return true;\n}' }
+		];
+		Assert.equals(0, violationsAcross(files).length);
+	}
+
+	/** A WRITTEN `this.m()` resolves through the self-reference branch of the receiver walk. */
+	public function testThisReceiverCallFlagged(): Void {
+		final src: String = 'class C {\n\tpublic function has(k:String):Bool return true;\n\n'
+			+ '\tfunction f(k:String):Void {\n\t\tvar b = this.has(k) != false;\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+	}
+
+	/**
+	 * A plain alias re-pointing at its OWN simple name — the `typedef Map<K, V> = haxe.ds.Map<K, V>`
+	 * shape Haxe's std ships — is not a second answer, so it does not make the name ambiguous.
+	 */
+	public function testSelfNamedAliasHomonymStillProven(): Void {
+		final alias: String = 'package p;\n\ntypedef T = q.T;';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: typed(BOOL_METHOD, 'var b = o.has(k) != false;') },
+			{ file: 'p/T.hx', source: alias }
+		];
+		Assert.equals(1, violationsAcross(files).length);
+	}
+
+	/** The Bool-returning method every call-arm fixture reads through `o.has(k)`. */
+	private static final BOOL_METHOD: String = 'public function has(k:String):Bool return true;';
+
+	/** A stdlib-`Map` fixture: a `C.f(m:Map<String, String>, k:String)` whose body reads `expr`. */
+	private function mapFixture(expr: String): String {
+		return 'class C {\n\tfunction f(m:Map<String, String>, k:String):Void {\n\t\tvar b = $expr;\n\t}\n}';
 	}
 
 	/** A two-type fixture: a `T` declaring `member`, and a `C.f(o:T)` whose body is `body`. */

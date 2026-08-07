@@ -941,7 +941,10 @@ typedef RefShape = {
 	 * cannot prove without a typechecker — `comparison-to-boolean` skips a
 	 * comparison whose non-literal operand subtree reaches any of these, since
 	 * `expr == true` on a `Null<Bool>` is load-bearing under strict null-safety.
-	 * (Haxe: `Call`, `FieldAccess`, `SafeFieldAccess`.) Optional; unset falls
+	 * (Haxe: `Call`, `FieldAccess`, `SafeFieldAccess`.) The veto is about UNKNOWN
+	 * nullability, so that check's two `SymbolIndex`-backed arms override it for
+	 * the one operand each RESOLVES — a field access whose member is declared
+	 * plain `Bool`, a method call annotated to return one. Optional; unset falls
 	 * back to the legacy `nullSafeAccessKind`-only skip.
 	 */
 	@:optional var nullableOperandKinds: Array<String>;
@@ -1629,6 +1632,27 @@ typedef RefShape = {
 	 * static-method-return inference.
 	 */
 	@:optional var staticMethodReturns: Map<String, String>;
+
+	/**
+	 * Maps a simple `Type.method` name of a stdlib INSTANCE method to the FIXED,
+	 * non-generic type its call returns, for the methods whose std source leaves the
+	 * return type INFERRED — `haxe.ds.Map`'s abstract wrappers are written
+	 * `public inline function exists(key:K) return this.exists(key);`, so
+	 * `TypeInfoProvider.returnTypes` has no entry and `SymbolIndex.returnNominalOf`
+	 * answers null however wide the resolution scope is. The value is the type the
+	 * forwarded-to underlying declares (`haxe.Constraints.IMap.exists(k:K):Bool`), which
+	 * is fixed on every target.
+	 *
+	 * A consumer reads it as a FALLBACK behind the index — a written annotation always
+	 * wins — and must gate it on `RefactorSupport.shadowedByNonStdType`, exactly as
+	 * `staticMethodReturns` is gated: the moment ANY non-std file declares the receiver's
+	 * simple name, the table is the WRONG answer, and an index that merely failed to
+	 * answer is no evidence that it was not (a project `Map` whose own `exists` is
+	 * unannotated resolves to null too). A method whose return depends on generics /
+	 * inference (`Map.get` → `Null<V>`) is deliberately ABSENT. Optional; unset disables
+	 * the fallback.
+	 */
+	@:optional var instanceMethodReturns: Map<String, String>;
 
 	/**
 	 * Node kinds that constitute a value-returning `return <expr>` — both the statement
