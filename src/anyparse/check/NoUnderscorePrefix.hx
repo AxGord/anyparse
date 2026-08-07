@@ -93,12 +93,14 @@ import anyparse.runtime.Span;
  * for that gate, since one adapted from a project config carries no normalizer and every
  * camelCase format matches `dynamic` just as it matches `event`.
  *
- * A simple `$name` string-interpolation read is NOT in the reference walker's index,
- * so it is resolved here (`stringInterpIdentKind`, restricted to the binding's own
- * function and only when the file declares the name once) and handed to
- * `declaringFileRenameSpans` as an already-covered occurrence — it renames along
- * instead of blocking. A `"$name"` inside a DOUBLE-quoted string is literal text, not
- * a read: it stays uncovered, and the completeness gate refuses the whole rename.
+ * A simple `$name` string-interpolation read IS in the reference walker's index, so it
+ * arrives already resolved and renames along instead of blocking - this rule collects
+ * nothing of its own for it. What still refuses is a read whose identifier token is not
+ * locatable in the raw bytes (an escape-spelled `$` or name): the splice would strand it
+ * on a name the fix has removed, so `declaringFileRenameSpans` refuses the whole rename
+ * (`RefactorSupport.unrewrittenInterpRead`). A `"$name"` inside a DOUBLE-quoted string is
+ * literal text, not a read: it stays uncovered, and the completeness gate refuses the
+ * whole rename.
  *
  * ## Cross-rule loop guard
  *

@@ -603,18 +603,20 @@ final class Naming implements Check implements CrossFileFix {
 	): Null<Array<Span>> {
 		final covered: Array<Span> = Rename.renameOccurrences(source, tree, declFrom, shape);
 		if (covered.length == 0) return null;
-		// A `$name` read whose identifier token is not in the raw bytes — an escape-spelled `$`
-		// or name — is DROPPED by `renameOccurrences`, not rewritten, so the rename would strand
-		// it on a name the fix has removed. `rename` refuses the same shape; the completeness
-		// scan below cannot see it, since the occurrence sits inside a string literal.
-		if (RefactorSupport.unrewrittenInterpRead(Refs.find(name, tree, shape), declFrom, covered) != null) return null;
 		// A body-scoped binding (local / param / catch variable) is visible from its DECLARATION on -
 		// no language here hoists one - so an occurrence resolved BEFORE `declFrom` is the scope
 		// resolver over-reaching: it binds a whole block to the declaration, while the compiler binds
 		// the earlier read to whatever it shadows (a member, a static, an import). Rewriting that read
 		// emits an unknown identifier, so the whole rename is refused. Never true for a MEMBER, whose
-		// references legitimately precede its declaration - hence the caller-supplied flag.
+		// references legitimately precede its declaration - hence the caller-supplied flag. Asked
+		// first of the two refusals: it walks `covered`, while the interpolation one below re-walks
+		// the whole tree.
 		if (bodyScoped) for (occ in covered) if (occ.from < declFrom) return null;
+		// A `$name` read whose identifier token is not in the raw bytes — an escape-spelled `$`
+		// or name — is DROPPED by `renameOccurrences`, not rewritten, so the rename would strand
+		// it on a name the fix has removed. `rename` refuses the same shape; the completeness
+		// scan below cannot see it, since the occurrence sits inside a string literal.
+		if (RefactorSupport.unrewrittenInterpRead(Refs.find(name, tree, shape), declFrom, covered) != null) return null;
 		// Attribute every OTHER same-name occurrence to its binding: one provably bound to a DIFFERENT
 		// binding (a param / loop var / sibling local sharing the name) is neither a rename target nor a
 		// blocker for THIS binding, so it joins the resolved set as an excluded span. An occurrence whose
