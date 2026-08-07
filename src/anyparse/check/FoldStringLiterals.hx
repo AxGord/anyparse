@@ -91,8 +91,17 @@ import anyparse.runtime.Span;
  *   more of them collapse into ONE segment, and on the split side no two BARE
  *   groups may precede the first group that renders as a string — the same trap
  *   read backwards (`'${1}${2} items'` must not become `1 + 2 + ' items'`).
- * - An interior COMMENT between operands: the merge would swallow it, and a check
- *   may never delete an author's comment silently.
+ * - A COMMENT between two operands does not refuse the chain — it LOCKS that boundary.
+ *   No group may merge across it, and the gap's source (the comment, the line break, the
+ *   indent and the `+`) is re-emitted verbatim, so a chain whose every line ends in a
+ *   comment still folds the adjacent pairs INSIDE each line. What the check may never do
+ *   is delete an author's comment; keeping the gap byte for byte is how it doesn't.
+ * - A comment inside an OPERAND's own span still refuses the construct: that source is
+ *   copied verbatim into a group or a bare operand, where a `//` would comment out
+ *   whatever the render puts after it.
+ * - The replaced span is the OPERAND extent, not the chain node's: a `+` node absorbs the
+ *   trivia trailing its last operand, and replacing that would delete a `// …` ending the
+ *   construct's line.
  * - An expression segment carrying `$`, a newline, a BACKSLASH or an UNBALANCED
  *   brace cannot enter a `${ … }` block: the real compiler's block scanner neither
  *   processes escapes inside a nested same-quote string nor lexes strings while it
@@ -250,7 +259,10 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		final fixable: Array<Violation> = violations.filter(v -> v.message.indexOf(MACRO_REFUSAL) == -1);
 		return CheckScan.applyBySpan(plugin, source, fixable, seams.candidateKinds, (node, span) -> {
 			final planned: Null<PlannedFold> = plan(planContext, node);
-			return planned == null ? null : { span: span, text: planned.text };
+			// The violation's span is the NODE's — `applyBySpan` keys on it — but the edit is the
+			// narrower OPERAND extent, so trivia the node's span absorbs past its last operand
+			// (a trailing `// …`, the line break) is left where the author put it.
+			return planned == null ? null : { span: planned.editSpan, text: planned.text };
 		});
 	}
 
@@ -311,6 +323,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			final planned: Null<PlannedFold> = plan(ctx, node);
 			if (planned != null) out.push(gate.blocks(calls, planned.groups) ? {
 				span: planned.span,
+				editSpan: planned.editSpan,
 				text: planned.text,
 				groups: planned.groups,
 				message: planned.message + MACRO_REFUSAL
@@ -469,26 +482,27 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		if (found == null) return null;
 		final decomposition: Decomposition = found;
 		final current: Int = decomposition.current.length;
-		final budget: Int = ctx.metrics.lineWidth - budgetBase(ctx, decomposition.span) - GROUP_JOIN.length + 1;
-		final first: Null<Array<Int>> = fill(ctx, decomposition.segments, budget, decomposition.startsBare);
+		final budget: Int = ctx.metrics.lineWidth - budgetBase(ctx, decomposition.editSpan) - GROUP_JOIN.length + 1;
+		final first: Null<Array<Int>> = fill(ctx, decomposition, budget);
 		if (first == null) return null;
 		final planned: Null<Plan> = unwrapped(ctx, decomposition, first, budget);
 		if (planned == null) return null;
 		final filled: Array<Int> = planned.groups;
 		// The back-off below only ever ADDS groups, so a plan that does not strictly
 		// MERGE can be refused here without paying for a single writer render.
-		if (filled.length >= current && !overLong(ctx, decomposition.span)) return null;
+		if (filled.length >= current && !overLong(ctx, decomposition.editSpan)) return null;
 		if (sameBoundaries(filled, decomposition.current)) return null;
 		final result: Null<Settled> = settle(ctx, decomposition, filled, planned.budget);
 		if (result == null) return null;
 		final settled: Settled = result;
 		if (sameBoundaries(settled.groups, decomposition.current)) return null;
 		final groups: Int = settled.groups.length;
-		if (groups >= current && !overLong(ctx, decomposition.span)) return null;
+		if (groups >= current && !overLong(ctx, decomposition.editSpan)) return null;
 		final width: Null<Int> = settled.width;
-		if (width != null && width > ctx.metrics.lineWidth && width >= sourceMaxWidth(ctx, decomposition.span)) return null;
+		if (width != null && width > ctx.metrics.lineWidth && width >= sourceMaxWidth(ctx, decomposition.editSpan)) return null;
 		return {
 			span: decomposition.span,
+			editSpan: decomposition.editSpan,
 			text: settled.text,
 			groups: groups,
 			message: messageFor(groups, current)
@@ -512,11 +526,11 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	 * that changes something, so the arithmetic's own optimism is what closes the case.
 	 */
 	private static function unwrapped(ctx: PlanContext, decomposition: Decomposition, filled: Array<Int>, budget: Int): Null<Plan> {
-		if (!sameBoundaries(filled, decomposition.current) || !overLong(ctx, decomposition.span)) return { groups: filled, budget: budget };
-		final own: Int = ctx.metrics.lineWidth
-			- columnWidth(ctx, lineStartOf(ctx.source, decomposition.span.from), decomposition.span.from) - GROUP_JOIN.length + 1;
+		final span: Span = decomposition.editSpan;
+		if (!sameBoundaries(filled, decomposition.current) || !overLong(ctx, span)) return { groups: filled, budget: budget };
+		final own: Int = ctx.metrics.lineWidth - columnWidth(ctx, lineStartOf(ctx.source, span.from), span.from) - GROUP_JOIN.length + 1;
 		if (own >= budget) return { groups: filled, budget: budget };
-		final refilled: Null<Array<Int>> = fill(ctx, decomposition.segments, own, decomposition.startsBare);
+		final refilled: Null<Array<Int>> = fill(ctx, decomposition, own);
 		return refilled == null ? null : { groups: refilled, budget: own };
 	}
 
@@ -535,9 +549,9 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	 * 190 columns wide while predicting 115.
 	 */
 	private static function settle(ctx: PlanContext, decomposition: Decomposition, filled: Array<Int>, startBudget: Int): Null<Settled> {
-		final first: Null<Rendered> = joinGroups(ctx, decomposition.segments, filled);
+		final first: Null<Rendered> = joinGroups(ctx, decomposition, filled);
 		if (first == null) return null;
-		final span: Span = decomposition.span;
+		final span: Span = decomposition.editSpan;
 		var budget: Int = startBudget;
 		var groups: Array<Int> = filled;
 		var rendered: Rendered = first;
@@ -546,9 +560,9 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		while (pass < MAX_BACKOFF_PASSES && width != null && width > ctx.metrics.lineWidth) {
 			final reduced: Int = Std.int(Math.min(budget - (width - ctx.metrics.lineWidth), rendered.widest - 1));
 			if (reduced <= 0) break;
-			final next: Null<Array<Int>> = fill(ctx, decomposition.segments, reduced, decomposition.startsBare);
+			final next: Null<Array<Int>> = fill(ctx, decomposition, reduced);
 			if (next == null || sameBoundaries(next, groups)) break;
-			final nextRendered: Null<Rendered> = joinGroups(ctx, decomposition.segments, next);
+			final nextRendered: Null<Rendered> = joinGroups(ctx, decomposition, next);
 			if (nextRendered == null) break;
 			final nextWidth: Null<Int> = renderedWidth(ctx, span, nextRendered.text);
 			if (nextWidth == null || nextWidth >= width) break;
@@ -582,6 +596,9 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			segments: segments,
 			current: [segments.length],
 			span: span,
+			editSpan: span,
+			locked: [],
+			glue: [],
 			startsBare: false
 		};
 	}
@@ -605,8 +622,17 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		if (claimed == null) return null;
 		final operands: Array<QueryNode> = claimed.operands;
 		final firstLitIdx: Int = claimed.firstLiteral;
+		// An operand carrying a comment INSIDE its own span is refused outright: its source
+		// is copied verbatim into a group or a bare operand, so a `//` there would comment
+		// out whatever the render puts after it. Only the GAPS between operands are modelled.
+		for (operand in operands) {
+			final own: Null<Span> = operand.span;
+			if (own == null || chainHasComment(ctx.source, own.from, own.to)) return null;
+		}
 		final segments: Array<ConcatSegment> = [];
 		final current: Array<Int> = [];
+		final locked: Array<Int> = [];
+		final glue: Map<Int, String> = [];
 		if (firstLitIdx == 1) {
 			final head: Null<ConcatSegment> = expressionSegmentOf(ctx, operands[0]);
 			if (head == null) return null;
@@ -615,9 +641,13 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		} else if (firstLitIdx > 1) {
 			final headEnd: Null<Span> = operands[firstLitIdx - 1].span;
 			if (headEnd == null) return null;
+			// The head is ONE verbatim segment spanning several operands, so a comment in a gap
+			// it swallows would ride into the render — refuse rather than model it.
+			if (chainHasComment(ctx.source, claimed.from, headEnd.to)) return null;
 			segments.push(SegExpr(ctx.source.substring(claimed.from, headEnd.to), false));
 			current.push(segments.length);
 		}
+		if (firstLitIdx >= 1) lockGapAfter(ctx.source, operands, firstLitIdx - 1, segments.length, locked, glue);
 		for (i in firstLitIdx ... operands.length) {
 			final operand: QueryNode = operands[i];
 			if (ctx.seams.stringLiteralKinds.contains(operand.kind)) {
@@ -630,6 +660,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 				segments.push(seg);
 			}
 			current.push(segments.length);
+			lockGapAfter(ctx.source, operands, i, segments.length, locked, glue);
 		}
 		// A head segment was emitted exactly when a bare operand precedes the first
 		// literal — the fact `plan` cannot recover from the segment list alone.
@@ -637,8 +668,32 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			segments: segments,
 			current: current,
 			span: span,
+			editSpan: new Span(claimed.from, claimed.to),
+			locked: locked,
+			glue: glue,
 			startsBare: firstLitIdx >= 1
 		};
+	}
+
+	/**
+	 * Records the gap after operand `i` as UNMERGEABLE when a comment sits in it: the group
+	 * boundary at segment index `end` is locked, and the gap's source — the comment, the line
+	 * break, the indent and the `+` itself — is kept verbatim as the glue `joinGroups` puts
+	 * back between the two groups.
+	 *
+	 * This is what makes a per-LINE fold possible on a chain whose every line ends in a
+	 * comment: the pairs inside each line still merge, and nothing an author wrote moves.
+	 */
+	private static function lockGapAfter(
+		source: String, operands: Array<QueryNode>, i: Int, end: Int, locked: Array<Int>, glue: Map<Int, String>
+	): Void {
+		if (i < 0 || i + 1 >= operands.length) return;
+		final left: Null<Span> = operands[i].span;
+		final right: Null<Span> = operands[i + 1].span;
+		if (left == null || right == null) return;
+		if (!chainHasComment(source, left.to, right.from)) return;
+		locked.push(end);
+		glue[end] = source.substring(left.to, right.from);
 	}
 
 	/**
@@ -649,15 +704,17 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	 *
 	 * Each refusal has its own reason:
 	 *
-	 *  - fewer than two operands, or the FIRST or LAST operand carrying no source
-	 *    span: not a chain this rule can re-render.
+	 *  - fewer than two operands, or the NODE itself or its FIRST or LAST operand
+	 *    carrying no source span: not a chain this rule can re-render.
 	 *  - NO string-literal operand (`a + b`, `1 + 2`, `Std.string(a) + Std.string(b)`)
 	 *    — the chain is not a string concatenation at all and merging it would change
 	 *    arithmetic into text.
-	 *  - An interior COMMENT between operands — the merge would swallow it, and a
-	 *    check may never delete an author's comment silently.
+	 * A comment is NOT a refusal here — `chainDecomposition` turns each commented gap into
+	 * a locked group boundary. Only a comment inside an OPERAND's own span refuses, and it
+	 * does so there rather than here.
 	 */
 	private static function claim(node: QueryNode, source: String, concatKind: String, stringLiteralKinds: Array<String>): Null<Chain> {
+		if (node.span == null) return null;
 		final operands: Array<QueryNode> = flatten(node, concatKind);
 		if (operands.length < 2) return null;
 		final firstSpan: Null<Span> = operands[0].span;
@@ -668,9 +725,10 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			firstLiteral = i;
 			break;
 		}
-		return firstLiteral == -1 || chainHasComment(source, firstSpan.from, lastSpan.to) ? null : {
+		return firstLiteral == -1 ? null : {
 			operands: operands,
 			from: firstSpan.from,
+			to: lastSpan.to,
 			firstLiteral: firstLiteral
 		};
 	}
@@ -712,13 +770,17 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	 * `ConcatSegment.SegExpr`) ends the group it would have joined, so it lands in a
 	 * group of its own and renders bare.
 	 */
-	private static function fill(ctx: PlanContext, segments: Array<ConcatSegment>, budget: Int, sourceStartsBare: Bool): Null<Array<Int>> {
+	private static function fill(ctx: PlanContext, decomposition: Decomposition, budget: Int): Null<Array<Int>> {
+		final segments: Array<ConcatSegment> = decomposition.segments;
+		final locked: Array<Int> = decomposition.locked;
 		final ends: Array<Int> = [];
 		var i: Int = 0;
 		while (i < segments.length) {
 			var best: Int = i + 1;
 			var j: Int = i + 1;
-			while (j < segments.length) {
+			// A locked boundary at `j` means segment `j` may not join what precedes it: taking
+			// it in would swallow the comment sitting in that gap.
+			while (j < segments.length && !locked.contains(j)) {
 				final candidate: Null<String> = renderRange(ctx, segments, i, j + 1);
 				if (candidate == null || candidate.length > budget) break;
 				best = j + 1;
@@ -728,7 +790,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			ends.push(best);
 			i = best;
 		}
-		return mergeLeadingBares(ctx, segments, ends, sourceStartsBare);
+		return mergeLeadingBares(ctx, decomposition, ends);
 	}
 
 	/**
@@ -748,11 +810,13 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	 * and a merge the seam cannot render abandons the plan rather than emitting
 	 * the unsafe split.
 	 */
-	private static function mergeLeadingBares(
-		ctx: PlanContext, segments: Array<ConcatSegment>, ends: Array<Int>, sourceStartsBare: Bool
-	): Null<Array<Int>> {
+	private static function mergeLeadingBares(ctx: PlanContext, decomposition: Decomposition, ends: Array<Int>): Null<Array<Int>> {
+		final segments: Array<ConcatSegment> = decomposition.segments;
 		if (ends.length < 2 || !isBareGroup(segments, 0, ends[0])) return ends;
-		if (sourceStartsBare && !isBareGroup(segments, ends[0], ends[1])) return ends;
+		// A locked first boundary carries a comment the merge would swallow — the bare head
+		// stays its own group, which is the safe side of this gate anyway.
+		if (decomposition.locked.contains(ends[0])) return ends;
+		if (decomposition.startsBare && !isBareGroup(segments, ends[0], ends[1])) return ends;
 		final merged: Array<Int> = ends.copy();
 		merged.splice(0, 1);
 		return renderRange(ctx, segments, 0, merged[0]) == null ? null : merged;
@@ -777,7 +841,8 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	 * single group, the number the back-off shrinks against. Null when a group cannot
 	 * be rendered.
 	 */
-	private static function joinGroups(ctx: PlanContext, segments: Array<ConcatSegment>, ends: Array<Int>): Null<Rendered> {
+	private static function joinGroups(ctx: PlanContext, decomposition: Decomposition, ends: Array<Int>): Null<Rendered> {
+		final segments: Array<ConcatSegment> = decomposition.segments;
 		final parts: Array<String> = [];
 		var widest: Int = 0;
 		var from: Int = 0;
@@ -788,7 +853,14 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			parts.push(part);
 			from = end;
 		}
-		return { text: parts.join(GROUP_JOIN), widest: widest };
+		final text: StringBuf = new StringBuf();
+		for (k in 0...parts.length) {
+			// A locked boundary is re-emitted from the SOURCE, so the comment, the line break and
+			// the `+` an author wrote come back byte for byte; every other boundary is plain glue.
+			if (k > 0) text.add(decomposition.glue[ends[k - 1]] ?? GROUP_JOIN);
+			text.add(parts[k]);
+		}
+		return { text: text.toString(), widest: widest };
 	}
 
 	/** Whether two group partitions cut the segment list at the same places. */
@@ -939,10 +1011,11 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	}
 
 	/**
-	 * Whether the source range `[from, to)` carries a `//` or `/*` comment OUTSIDE
-	 * any string literal — a comment between chain operands would be lost by the
-	 * merge, so such a chain is left alone. String bodies are skipped (respecting
-	 * `\` escapes) so a `'http://x'` literal does not read as a comment.
+	 * Whether the source range `[from, to)` carries a `//` or `/*` comment OUTSIDE any
+	 * string literal — asked of the GAP between two operands (which locks that group
+	 * boundary) and of an operand's own span (which refuses the construct). String bodies
+	 * are skipped (respecting `\` escapes) so a `'http://x'` literal does not read as a
+	 * comment.
 	 */
 	private static function chainHasComment(source: String, from: Int, to: Int): Bool {
 		var i: Int = from;
@@ -1290,7 +1363,25 @@ private typedef Seams = {
 private typedef Decomposition = {
 	final segments: Array<ConcatSegment>;
 	final current: Array<Int>;
+
+	/** The construct NODE's span — what a violation is anchored at, so `fix` can re-find it. */
 	final span: Span;
+
+	/**
+	 * The span the fix REPLACES: the first operand's start to the last one's end. Narrower
+	 * than `span`, because a `+` node's span absorbs the trivia trailing its last operand —
+	 * replacing that would delete a comment ending the construct's line.
+	 */
+	final editSpan: Span;
+
+	/**
+	 * Segment boundaries no group may cross: a comment sits in the gap between the two
+	 * operands they separate. `glue` holds that gap's source verbatim.
+	 */
+	final locked: Array<Int>;
+
+	/** Locked boundary -> the source between its operands (comment, line break, indent, `+`). */
+	final glue: Map<Int, String>;
 
 	/**
 	 * Whether the SOURCE opens with a BARE expression operand — the one shape whose
@@ -1304,7 +1395,13 @@ private typedef Decomposition = {
 
 /** A construct's canonical form: the span to replace, its replacement text, and the finding message. */
 private typedef PlannedFold = {
+
+	/** The construct NODE's span — the violation's anchor. */
 	final span: Span;
+
+	/** The narrower span the fix replaces — see `Decomposition.editSpan`. */
+	final editSpan: Span;
+
 	final text: String;
 
 	/** How many `+` operands the plan renders as — 1 means a single literal, the shape no gate refuses. */
@@ -1319,6 +1416,9 @@ private typedef PlannedFold = {
 private typedef Chain = {
 	final operands: Array<QueryNode>;
 	final from: Int;
+
+	/** The offset the LAST operand ends at — the far end of the span the fix replaces. */
+	final to: Int;
 	final firstLiteral: Int;
 };
 

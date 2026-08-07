@@ -425,6 +425,42 @@ class FoldStringLiteralsCheckTest extends Test {
 	}
 
 	/**
+	 * A `//` comment on the LAST line of the sub-chain the rule claims must survive the
+	 * fold. The veto reads the OPERAND spans, but the fix replaces the chain NODE's span,
+	 * which absorbs the trailing comment and the line break as trivia — so a merge that
+	 * fits the line width deleted the author's comment silently.
+	 */
+	public function testTrailingCommentInChainSurvivesFold(): Void {
+		Assert.isTrue(fixedText(trailingCommentInChainSource()).indexOf('// one') != -1);
+	}
+
+	/**
+	 * The shape this rule grew the run model for: every LINE of a wrapped chain ends in a
+	 * comment, and each line holds a pair of adjacent literals. The pairs merge, the comments
+	 * stay — the merged literal and the comment that follows it are asserted as ONE string, so
+	 * neither half can pass on its own (an unchanged input satisfies each separately).
+	 */
+	public function testPerLinePairsMergeAroundComments(): Void {
+		final fixed: String = fixedText(perLineCommentSource());
+		Assert.isTrue(fixed.indexOf("'<f i=\"1\"/><f i=\"2\"/>' // second") != -1);
+		Assert.isTrue(fixed.indexOf("'<f i=\"3\"/><f i=\"4\"/>' // third") != -1);
+		Assert.isTrue(fixed.indexOf('// first') != -1);
+	}
+
+	/** The run partition is reproduced from the rule's OWN output, so a second pass changes nothing. */
+	public function testPerLineFoldIsIdempotent(): Void {
+		assertFixIsIdempotent(perLineCommentSource());
+	}
+
+	/**
+	 * An operand whose OWN span carries a comment is refused outright rather than locked: its
+	 * source is copied verbatim into the render, where a `//` would comment out the rest.
+	 */
+	public function testCommentInsideOperandRefusesConstruct(): Void {
+		Assert.equals(0, violations(wrap("'a' + (b /* c */ + d) + 'e'")).length);
+	}
+
+	/**
 	 * A `\x24` decodes to `$` BEFORE Haxe scans a single-quoted literal for
 	 * interpolation, so a DOUBLE-quoted text carrying one may not be re-emitted into
 	 * one: merging `"a\x24b" + 'c'` to `'a\x24bc'` would print the value of the local
@@ -824,20 +860,58 @@ class FoldStringLiteralsCheckTest extends Test {
 	}
 
 	/**
+	 * A chain whose first two literals merge within the limit, the second one followed by
+	 * a `//` comment and the chain continuing on the next line — the shape where the
+	 * sub-chain the rule claims ENDS at a comment the veto never looks at.
+	 */
+	private function trailingCommentInChainSource(): String {
+		return [
+			'class C {',
+			'\tfunction f() {',
+			"\t\tvar x = '" + ''.rpad('A', 30) + "' + '" + ''.rpad('B', 30) + "' // one",
+			"\t\t\t+ '" + ''.rpad('C', 30) + "';",
+			'\t}',
+			'}'
+		].join('\n');
+	}
+
+	/**
+	 * A wrapped chain whose every line holds an adjacent-literal PAIR and ends in a `//`
+	 * comment — the shape `Editor.hx`'s test-animation XML has, minified to fit the width.
+	 */
+	private function perLineCommentSource(): String {
+		return [
+			'class C {',
+			'\tfunction f() {',
+			"\t\tvar x = '<animation>' + '<f i=\"0\"/>' // first",
+			"\t\t\t+ '<f i=\"1\"/>' + '<f i=\"2\"/>' // second",
+			"\t\t\t+ '<f i=\"3\"/>' + '<f i=\"4\"/>' // third",
+			"\t\t\t+ '</animation>';",
+			'\t}',
+			'}'
+		].join('\n');
+	}
+
+	/**
 	 * The widest line of `src` once the rule's fix is applied and the result
 	 * canonicalised through the writer — with the SAME `hxformat.json` the check
 	 * measured against, so the assertion sees the layout the rule was planning for.
 	 */
 	private function widestAfterFix(src: String): Int {
+		return widestLine(fixedText(src));
+	}
+
+	/** `src` with the rule's fix applied and canonicalised through the writer, with the SAME `hxformat.json` the check measured against. */
+	private function fixedText(src: String): String {
 		final check: FoldStringLiterals = new FoldStringLiterals();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
 		switch RefactorSupport.canonicalize(src, edits, true, plugin, FormatConfigDiscovery.discover('C.hx')) {
 			case Ok(text):
-				return widestLine(text);
+				return text;
 			case Err(message):
 				Assert.fail('canonicalize Err: $message');
-				return -1;
+				return '';
 		}
 	}
 
@@ -955,15 +1029,7 @@ class FoldStringLiteralsCheckTest extends Test {
 
 	/** `src` fixed, canonicalised and re-linted: the canonical form must be a fixed point of the rule. */
 	private function assertFixIsIdempotent(src: String): Void {
-		final check: FoldStringLiterals = new FoldStringLiterals();
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
-		switch RefactorSupport.canonicalize(src, edits, true, plugin, FormatConfigDiscovery.discover('C.hx')) {
-			case Ok(text):
-				Assert.equals(0, violations(text).length);
-			case Err(message):
-				Assert.fail('canonicalize Err: $message');
-		}
+		Assert.equals(0, violations(fixedText(src)).length);
 	}
 
 	private function violations(src: String): Array<Violation> {
