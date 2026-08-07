@@ -76,6 +76,11 @@ final class Linter {
 			// `str += ' line '; str += line;` -> `str += ' line ' + line;` -> `str += ' line $line';`.
 			new JoinStringAppend(),
 			new PreferInterpolation(),
+			// Ahead of `prefer-final` in READING order only: this rule turns a multi-declarator
+			// statement into the single-declarator ones `prefer-final` can then upgrade. Not
+			// load-bearing -- the `--fix` driver loops to a fixed point, so the two compose whatever
+			// the registry order.
+			new SplitVarDeclaration(),
 			new PreferFinal(),
 			new SimplifyBooleanReturnChain(),
 			new PreferTernaryReturn(),
