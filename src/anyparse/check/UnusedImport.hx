@@ -28,6 +28,18 @@ using Lambda;
  * the right one for an autofix: err toward a false NEGATIVE (a missed unused
  * import) over a false POSITIVE (deleting a needed one).
  *
+ * ## Dotted tails do not count
+ *
+ * The one occurrence class the scan does NOT accept is a qualified tail:
+ * `RefactorSupport.referencedUnqualifiedInRange` drops an occurrence whose
+ * preceding non-whitespace char is a qualification `.`. An import binds a
+ * SIMPLE name, while a dotted path resolves from its root — a file whose only
+ * mentions of the bound name are `haxe.macro.Context.currentPos()` needs no
+ * import, and counting those tails kept such an import alive forever. The root
+ * of a path is not dot-preceded and still counts (`Mod.VALUE` is what
+ * `import pkg.Mod;` provides), and a `...` dot is the range / rest operator,
+ * never a qualifier — `for (i in 0...Limit.MAX)` is a bare reference.
+ *
  * ## Conservative by design
  *
  * The bound name of an `import pkg.Mod;` / `import pkg.Mod.Sub;` is the leaf
@@ -44,6 +56,13 @@ using Lambda;
  *    methods are known (`knownExtensionMethods`, a `Warning` that `--fix`
  *    deletes); an unknown module stays an `Info`. See `addUsingViolation`.
  */
+/**
+ * One file's text plus the two masks every reference test takes: its import
+ * statements (an occurrence inside one is not a use) and its comment regions
+ * (a `.` inside a comment qualifies nothing). Hoisted once per file.
+ */
+private typedef FileScan = { source: String, importSpans: Array<Span>, commentRegions: Array<Span> };
+
 @:nullSafety(Strict)
 final class UnusedImport implements Check {
 
@@ -95,12 +114,14 @@ final class UnusedImport implements Check {
 		final violations: Array<Violation> = [];
 		for (info in index.allFiles()) {
 			final source: String = sourceOf[info.file] ?? '';
-			final importSpans: Array<Span> = [for (imp in info.imports) imp.span];
+			final scan: FileScan = {
+				source: source,
+				importSpans: [for (imp in info.imports) imp.span],
+				commentRegions: RefactorSupport.collectCommentRegions(source)
+			};
 			final ignoreModules: Array<String> = plugin.checkOverrides(info.file)?.unusedImportIgnoreModules ?? [];
 			for (imp in info.imports) if (!moduleIgnored(imp, ignoreModules))
-				addViolation(
-					violations, info.file, imp, source, importSpans, plugin, moduleTypes, enumCtorsByPath, membersByPath, wildMembersByPath
-				);
+				addViolation(violations, info.file, imp, scan, plugin, moduleTypes, enumCtorsByPath, membersByPath, wildMembersByPath);
 		}
 		return violations;
 	}
@@ -134,7 +155,7 @@ final class UnusedImport implements Check {
 	 * secondary top-level type of the module is referenced either.
 	 */
 	private static function addViolation(
-		out: Array<Violation>, file: String, imp: ImportInfo, source: String, importSpans: Array<Span>, plugin: GrammarPlugin,
+		out: Array<Violation>, file: String, imp: ImportInfo, scan: FileScan, plugin: GrammarPlugin,
 		moduleTypes: Map<String, Array<String>>, enumCtorsByPath: Map<String, Array<String>>, membersByPath: Map<String, Array<String>>,
 		wildMembersByPath: Map<String, Array<String>>
 	): Void {
@@ -144,7 +165,7 @@ final class UnusedImport implements Check {
 			// scan cannot tell used-here from used-in-another-branch. Never a
 			// Warning: the fix must not delete a line inside a `#if` region.
 			final bound: String = imp.alias ?? RefactorSupport.lastSegment(imp.raw);
-			if (!RefactorSupport.referencedInRange(source, bound, 0, source.length, importSpans))
+			if (!referenced(scan, bound))
 				out.push(make(
 					file, imp, Severity.Info,
 					'guarded import \'${imp.raw}\': bound name not referenced, but usage is `#if`-conditional — cannot verify unused'
@@ -153,12 +174,12 @@ final class UnusedImport implements Check {
 		}
 		switch imp.kind {
 			case ImportKind.Wild:
-				addWildViolation(out, file, imp, source, importSpans, wildMembersByPath);
+				addWildViolation(out, file, imp, scan, wildMembersByPath);
 			case ImportKind.Using:
-				addUsingViolation(out, file, imp, source, importSpans, plugin);
+				addUsingViolation(out, file, imp, scan, plugin);
 			case _:
 				final bound: String = imp.alias ?? RefactorSupport.lastSegment(imp.raw);
-				if (RefactorSupport.referencedInRange(source, bound, 0, source.length, importSpans)) return;
+				if (referenced(scan, bound)) return;
 				// A plain `import pkg.Mod;` binds every top-level type of the
 				// module, not only the main one — a reference to a SECONDARY
 				// typedef/enum keeps the import even though `Mod` itself is
@@ -167,11 +188,11 @@ final class UnusedImport implements Check {
 				// library root); a module resolvable in neither (stdlib, an
 				// unconfigured haxelib) falls back to the bound-name verdict. An
 				// alias import binds just the alias — never widened.
-				if (imp.kind == ImportKind.Import && secondaryTypeReferenced(imp.raw, bound, source, importSpans, moduleTypes)) return;
+				if (imp.kind == ImportKind.Import && secondaryTypeReferenced(imp.raw, bound, scan, moduleTypes)) return;
 				// A bare `import pkg.Enum;` whose constructor is used as a bare
 				// identifier (`Assert.equals(Private, m)`, expected-type resolved)
 				// is in use even though `Enum` itself is never named.
-				if (imp.kind == ImportKind.Import && enumCtorReferenced(imp.raw, source, importSpans, enumCtorsByPath)) return;
+				if (imp.kind == ImportKind.Import && enumCtorReferenced(imp.raw, scan, enumCtorsByPath)) return;
 				if (imp.kind == ImportKind.Import && !membersByPath.exists(imp.raw)) {
 					out.push(make(
 						file, imp, Severity.Info,
@@ -183,13 +204,24 @@ final class UnusedImport implements Check {
 		}
 	}
 
-	/** True when any OTHER top-level type of in-set module `raw` is referenced in `source` outside the imports. */
+	/** True when any OTHER top-level type of in-set module `raw` is referenced in the file outside the imports. */
 	private static function secondaryTypeReferenced(
-		raw: String, bound: String, source: String, importSpans: Array<Span>, moduleTypes: Map<String, Array<String>>
+		raw: String, bound: String, scan: FileScan, moduleTypes: Map<String, Array<String>>
 	): Bool {
 		final types: Null<Array<String>> = moduleTypes[raw];
 		if (types == null) return false;
-		return types.exists(name -> name != bound && RefactorSupport.referencedInRange(source, name, 0, source.length, importSpans));
+		return types.exists(name -> name != bound && referenced(scan, name));
+	}
+
+	/**
+	 * Is `name` referenced as a SIMPLE name anywhere in the file, outside its own
+	 * import statements? The one liveness test every arm of the check asks — see
+	 * `RefactorSupport.referencedUnqualifiedInRange` for why a dotted tail is not
+	 * a reference.
+	 */
+	private static function referenced(scan: FileScan, name: String): Bool {
+		return
+			RefactorSupport.referencedUnqualifiedInRange(scan.source, name, 0, scan.source.length, scan.importSpans, scan.commentRegions);
 	}
 
 	private static function make(file: String, imp: ImportInfo, severity: Severity, message: String): Violation {
@@ -214,16 +246,16 @@ final class UnusedImport implements Check {
 	 *    `Info` advisory, since an extension call cannot be ruled out.
 	 */
 	private static function addUsingViolation(
-		out: Array<Violation>, file: String, imp: ImportInfo, source: String, importSpans: Array<Span>, plugin: GrammarPlugin
+		out: Array<Violation>, file: String, imp: ImportInfo, scan: FileScan, plugin: GrammarPlugin
 	): Void {
 		final bound: String = RefactorSupport.lastSegment(imp.raw);
-		if (RefactorSupport.referencedInRange(source, bound, 0, source.length, importSpans)) return;
+		if (referenced(scan, bound)) return;
 		final methods: Null<Array<String>> = plugin.knownExtensionMethods(imp.raw);
 		if (methods == null) {
 			out.push(make(file, imp, Severity.Info, 'using import \'${imp.raw}\': extension use not tracked'));
 			return;
 		}
-		if (methods.exists(m -> RefactorSupport.methodCalledInSource(source, m))) return;
+		if (methods.exists(m -> RefactorSupport.methodCalledInSource(scan.source, m))) return;
 		out.push(make(file, imp, Severity.Warning, 'unused using \'${imp.raw}\''));
 	}
 
@@ -232,13 +264,11 @@ final class UnusedImport implements Check {
 		return ignore.contains(imp.raw);
 	}
 
-	/** True when any constructor of the enum-type imported by `raw` is referenced bare in `source` (outside the imports). */
-	private static function enumCtorReferenced(
-		raw: String, source: String, importSpans: Array<Span>, enumCtorsByPath: Map<String, Array<String>>
-	): Bool {
+	/** True when any constructor of the enum-type imported by `raw` is referenced bare in the file (outside the imports). */
+	private static function enumCtorReferenced(raw: String, scan: FileScan, enumCtorsByPath: Map<String, Array<String>>): Bool {
 		final ctors: Null<Array<String>> = enumCtorsByPath[raw];
 		if (ctors == null) return false;
-		return ctors.exists(name -> RefactorSupport.referencedInRange(source, name, 0, source.length, importSpans));
+		return ctors.exists(name -> referenced(scan, name));
 	}
 
 	/**
@@ -251,15 +281,14 @@ final class UnusedImport implements Check {
 	 * symbol set, so it stays an unverifiable `Info`.
 	 */
 	private static function addWildViolation(
-		out: Array<Violation>, file: String, imp: ImportInfo, source: String, importSpans: Array<Span>,
-		membersByPath: Map<String, Array<String>>
+		out: Array<Violation>, file: String, imp: ImportInfo, scan: FileScan, membersByPath: Map<String, Array<String>>
 	): Void {
 		final members: Null<Array<String>> = membersByPath[stripWildStar(imp.raw)];
 		if (members == null) {
 			out.push(make(file, imp, Severity.Info, 'wildcard import \'${imp.raw}\': usage not tracked'));
 			return;
 		}
-		if (members.exists(name -> RefactorSupport.referencedInRange(source, name, 0, source.length, importSpans))) return;
+		if (members.exists(name -> referenced(scan, name))) return;
 		out.push(make(file, imp, Severity.Warning, 'unused wildcard import \'${imp.raw}\': no member referenced'));
 	}
 
