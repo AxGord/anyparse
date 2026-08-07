@@ -270,14 +270,14 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 		final subject: QueryNode = inner.children[0];
 		if (subject.kind != seams.identKind) return null;
 		final binder: Null<String> = subject.name;
-		if (binder == null || startsUpper(binder)) return null;
+		if (binder == null || CasePatternScan.startsUpper(binder)) return null;
 		final resolvedBinder: Null<QueryNode> = isolatedBinder(seams, arm, pat, subject, binder);
 		if (resolvedBinder == null) return null;
 		final binderNode: QueryNode = resolvedBinder;
-		if (containsAnyKind(pat, [seams.assignKind])) return null;
+		if (CasePatternScan.containsAnyKind(pat, [seams.assignKind])) return null;
 		final conditional: Null<String> = seams.conditionalKind;
-		if (conditional != null && containsAnyKind(arm, [conditional])) return null;
-		if (containsAnyKind(arm, seams.opaqueKinds)) return null;
+		if (conditional != null && CasePatternScan.containsAnyKind(arm, [conditional])) return null;
+		if (CasePatternScan.containsAnyKind(arm, seams.opaqueKinds)) return null;
 		final innerArms: Array<QueryNode> = inner.children.slice(1);
 		for (innerArm in innerArms) if (innerArm.kind != seams.caseBranchKind) return null;
 		if (bindersCollide(seams, pat, binderNode, innerArms)) return null;
@@ -430,7 +430,7 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 		var catchAll: Bool = false;
 		for (i in at + 1...arms.length) {
 			final later: QueryNode = arms[i];
-			if (containsAnyKind(later, seams.extractorKinds)) return false;
+			if (CasePatternScan.containsAnyKind(later, seams.extractorKinds)) return false;
 			if (defaultKind != null && later.kind == defaultKind) {
 				if (later.children.length != 0) return false;
 				catchAll = true;
@@ -531,19 +531,13 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 	private static function boundNames(seams: Seams, node: QueryNode, skip: QueryNode, out: Array<String>): Void {
 		final name: Null<String> = node.name;
 		if (
-			node != skip && name != null && name != seams.wildcardPatternName && !startsUpper(name)
+			node != skip && name != null && name != seams.wildcardPatternName && !CasePatternScan.startsUpper(name)
 			&& (node.kind == seams.identKind || seams.binderKinds.contains(node.kind))
 		)
 			out.push(name);
 		for (child in node.children) boundNames(seams, child, skip, out);
 	}
 
-	private static function containsAnyKind(node: QueryNode, kinds: Array<String>): Bool {
-		if (kinds.length == 0) return false;
-		if (kinds.contains(node.kind)) return true;
-		for (child in node.children) if (containsAnyKind(child, kinds)) return true;
-		return false;
-	}
 
 	/** The length of `kids`' LEADING run of case-pattern wrappers. */
 	private static function patternRunLength(seams: Seams, kids: Array<QueryNode>): Int {
@@ -552,11 +546,6 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 		return run;
 	}
 
-	/** Whether `name` opens with an uppercase ASCII letter — the family spelling of a constructor reference. */
-	private static inline function startsUpper(name: String): Bool {
-		final code: Int = StringTools.fastCodeAt(name, 0);
-		return code >= 'A'.code && code <= 'Z'.code;
-	}
 
 	/** The index of `text`'s first non-whitespace character, or -1 when it has none. */
 	private static function firstNonSpace(text: String): Int {

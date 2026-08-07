@@ -576,6 +576,8 @@ import unit.HxElseIfCommentReflowSliceTest;
 import unit.OrphanAccessorCheckTest;
 import unit.UnusedPublicMemberCheckTest;
 import unit.CollapseNestedSwitchCheckTest;
+import unit.UnusedCaseBinderCheckTest;
+import unit.RedundantCaseBodyCheckTest;
 import unit.RedundantToStringCheckTest;
 import unit.HxMethodChainAllOrNothingSliceTest;
 import unit.HxListLiteralEmissionSliceTest;
@@ -1095,6 +1097,8 @@ class RunTests {
 		addCase(new TailMergeCheckTest());
 		addCase(new ComparisonToBooleanCheckTest());
 		addCase(new CollapseNestedSwitchCheckTest());
+		addCase(new UnusedCaseBinderCheckTest());
+		addCase(new RedundantCaseBodyCheckTest());
 		addCase(new CollapsibleIfCheckTest());
 		addCase(new CollapsibleElseIfCheckTest());
 		addCase(new DoubleNegationCheckTest());
