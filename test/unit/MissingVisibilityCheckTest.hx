@@ -378,6 +378,16 @@ class MissingVisibilityCheckTest extends Test {
 		Assert.equals(0, violations(src).length);
 	}
 
+	/**
+	 * A `#if A … #end` with no `#else` contributes NOTHING when A is false, so a visibility keyword
+	 * written before it reaches the member after `#end` untouched in that build. Reporting that
+	 * member is a false positive whose fix writes a SECOND keyword in front of the first —
+	 * `public private var b` does not compile.
+	 */
+	public function testConditionalNoElseCarriesIncomingVisibilityPastEnd(): Void {
+		Assert.equals(0, violations('class C {\n\tpublic\n\t#if cpp\n\tvar a:Int;\n\t#end\n\tvar b:Int;\n}').length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new MissingVisibility().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

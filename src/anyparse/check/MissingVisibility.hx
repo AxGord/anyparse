@@ -273,7 +273,11 @@ final class MissingVisibility implements Check {
 		// Not `runs.exists(...)`: every branch must be scanned for its own violations, and `exists`
 		// stops at the first branch that carries out.
 		for (run in runs) if (scanRun(ctx, run.nodes, incoming)) carry = true;
-		return carry;
+		// `|| incoming`, for the branch NO directive writes: a `#if A … #end` contributes nothing when
+		// A is false, so a keyword written before the `#if` reaches the member after `#end` untouched
+		// in that build. Dropping it reported a member that IS marked there — and the fix then wrote a
+		// second keyword in front of the first, which does not compile.
+		return carry || incoming;
 	}
 
 	/**
@@ -360,7 +364,10 @@ final class MissingVisibility implements Check {
 		// Not `runs.exists(...)`: every branch must emit its own edits, and `exists` stops at the
 		// first branch that carries an override out.
 		for (run in runs) if (insertRun(ctx, run.nodes, typeName, entry).sawOverride) sawOverride = true;
-		return { insertAt: -1, sawOverride: sawOverride };
+		// `|| incoming.sawOverride`, for the branch no directive writes — the region contributes
+		// nothing when its condition is false, so what reached the `#if` reaches the member after
+		// `#end`. Mirrors the detection side.
+		return { insertAt: -1, sawOverride: sawOverride || incoming.sawOverride };
 	}
 
 	/**

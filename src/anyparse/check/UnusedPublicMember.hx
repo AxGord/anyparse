@@ -267,26 +267,7 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final wanted: Array<String> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null && _deletable.contains(CheckScan.spanKey(v.file, span))) wanted.push('${span.from}:${span.to}');
-		}
-		if (wanted.length == 0) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final edits: Array<{ span: Span, text: String }> = [];
-		// Every member host, and each method's OWN host as the group parent: a guarded method's
-		// modifier / doc run lives inside the `#if` region, and a group span computed against the
-		// container would leave it behind as unparseable debris.
-		for (cls in CheckScan.classBodies(tree)) RefactorSupport.eachMemberHost(cls, host -> {
-			for (child in host.children) {
-				final span: Null<Span> = child.span;
-				if (span != null && CheckScan.METHOD_KINDS.contains(child.kind) && wanted.contains('${span.from}:${span.to}'))
-					edits.push(CheckScan.docDeletionEdit(source, child, host, span));
-			}
-		});
-		return edits;
+		return CheckScan.deleteMethodsFix(plugin, source, violations, _deletable);
 	}
 
 	/**

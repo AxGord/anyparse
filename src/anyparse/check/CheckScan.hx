@@ -998,6 +998,38 @@ final class CheckScan {
 		return kids.length > 0 && support.isTerminal(kids[kids.length - 1]);
 	}
 
+
+	/**
+	 * The whole `fix` of a member-DELETING check: for every violation whose span is in `deletable`,
+	 * one edit removing that method with its modifier / metadata run and its leading doc comment.
+	 *
+	 * Shared verbatim by `orphan-accessor` and `unused-public-member`, which differ only in how `run`
+	 * proved the method dead. Each method's group span is computed against its OWN host, not the
+	 * container: a method written inside a member-position `#if` region has its run one level down,
+	 * and a span computed against the container would leave it behind as debris that does not parse.
+	 */
+	public static function deleteMethodsFix(
+		plugin: GrammarPlugin, source: String, violations: Array<Violation>, deletable: Array<String>
+	): Array<{ span: Span, text: String }> {
+		final wanted: Array<String> = [];
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span != null && deletable.contains(spanKey(v.file, span))) wanted.push('${span.from}:${span.to}');
+		}
+		if (wanted.length == 0) return [];
+		final tree: Null<QueryNode> = parseOrNull(plugin, source);
+		if (tree == null) return [];
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (cls in classBodies(tree)) RefactorSupport.eachMemberHost(cls, host -> {
+			for (child in host.children) {
+				final span: Null<Span> = child.span;
+				if (span != null && METHOD_KINDS.contains(child.kind) && wanted.contains('${span.from}:${span.to}'))
+					edits.push(docDeletionEdit(source, child, host, span));
+			}
+		});
+		return edits;
+	}
+
 }
 
 /**
