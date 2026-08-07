@@ -561,12 +561,37 @@ class Renderer {
 	}
 
 	/**
-		Returns `true` if rendering `d` in flat mode at the given indent
-		consumes at most `remaining` columns. Used to choose between flat and
-		broken layout for a `Group`/`BodyGroup`.
-	**/
+	 * Returns `true` if rendering `d` in flat mode at the given indent fits
+	 * `remaining` columns. Used to choose between flat and broken layout for a
+	 * `Group` / `BodyGroup`.
+	 *
+	 * "Fits" is per PHYSICAL line, which for all but one shape is the same as
+	 * "consumes at most `remaining` columns in total": only a VERBATIM
+	 * multi-line token (`embeddedLineWidths`) puts more than one line into a
+	 * flat rendering, and there the test is that the line the token opens on
+	 * and the line it closes on each fit. Its interior lines are emitted byte
+	 * for byte in either layout, so no caller's break can shorten them and
+	 * none is measured.
+	 */
 	private static function fitsFlat(remaining: Int, indent: Int, d: Doc): Bool {
 		if (remaining < 0) return false;
+		// omega-verbatim-firstline: `d`'s flat projection reaches an embedded
+		// `\n` inside a `Text` leaf before any break point -- a VERBATIM
+		// multi-line token (a raw multi-line string literal, a `#if … #end`
+		// token splice) whose interior lines are emitted byte-for-byte in
+		// either layout. Its SUMMED width is not a line width, so the standard
+		// budget walk refuses a token whose every physical line fits, and the
+		// break it falls back to shortens nothing it measured. The two lines a
+		// layout around the token still owns are the one it opens on and the
+		// one it closes on -- both must fit.
+		// Either width being -1 falls THROUGH to the standard walk, which is
+		// the answer that stays correct: `first` of -1 means no embedded
+		// newline at all, and `last` of -1 means a real hardline follows the
+		// token -- content this measure cannot place, and content the walk
+		// refuses outright (`fitsFlatStep` reports a hardline as `broke`).
+		// Committing such a doc to flat would emit its hardlines unindented.
+		final embedded: { first: Int, last: Int } = embeddedLineWidths(d);
+		if (embedded.first >= 0 && embedded.last >= 0) return embedded.first <= remaining && embedded.last <= remaining;
 		final local: Array<Frame> = [new Frame(indent, MFlat, d)];
 		var budget: Int = remaining;
 
@@ -671,6 +696,13 @@ class Renderer {
 	 * to break, its first inner soft `Line` renders as a hardline, and
 	 * first-line accumulation stops there. A Group that fits stays flat
 	 * and contributes its full flat width to the running line.
+	 *
+	 * "Naturally-produced hardline" also covers a newline a VERBATIM
+	 * multi-line token carries INSIDE a `Text` leaf (a raw multi-line
+	 * string literal, a `#if ... #end` token-splice raw): those bytes are
+	 * emitted as-is, so the first physical line genuinely ends there and
+	 * `naturalWidthStep` stops the walk on it. The flat-projection
+	 * statement of the same rule is `embeddedLineWidths`.
 	 *
 	 * `BodyGroup` is DEFERRED (zero width, no first-line termination) —
 	 * its content decides its own flat/break later and is invisible to a
@@ -1552,6 +1584,20 @@ class Renderer {
 			case Empty:
 				return { add: 0, aborted: false };
 			case Text(s):
+				// omega-verbatim-firstline (decl-init sibling): a VERBATIM
+				// multi-line token -- a raw multi-line string literal, a
+				// `#if ... #end` token-splice raw -- emits its own newlines
+				// through ONE `Text`, so the first physical line ends at the
+				// first of them and this walk stops there exactly as it does
+				// on a hardline. Summing the whole token instead reports a
+				// width no line ever reaches, and the lead-break the probe
+				// then fires shortens nothing: every line after the first is
+				// emitted byte for byte whatever the enclosing layout decides.
+				// Flat-projection sibling of the same rule:
+				// `embeddedLineWidths`, whose doc-comment carries why this arm
+				// cannot delegate to it and why it needs no LAST-line half.
+				final nl: Int = s.indexOf('\n');
+				if (nl >= 0) return { add: nl, aborted: true };
 				return { add: s.length, aborted: false };
 			case Line(flat):
 				if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code)
@@ -3029,41 +3075,84 @@ class Renderer {
 	}
 
 	/**
-	 * First-line column width of `d`'s flat projection WHEN that projection
-	 * contains an embedded `\n` inside a `Text` leaf — a verbatim multi-line
-	 * token such as a `#if … #end` token-splice raw (`HxCondSpliceRaw`), whose
-	 * bytes (source newline included) are emitted through a single `Text`.
-	 * Returns the width up to (not including) that first embedded newline;
-	 * returns `-1` when no such embedded-`Text` newline is reached before a
-	 * real hardline (`Line('\n')` / `OptHardline`) or the end of the walk — the
-	 * caller then falls back to the standard `fitsFlat` budget probe, so a
-	 * genuinely single-line item, or one opening with a real one-per-line
-	 * hardline, keeps its existing fill behaviour.
-	 *
-	 * Lets a `Fill` pack such a multi-line token when its FIRST line fits the
+	 * First-line-only view of `embeddedLineWidths`, for the `Fill` packing probe:
+	 * lets a fill pack a verbatim multi-line token when its FIRST line fits the
 	 * remaining budget (matching haxe-formatter, which re-flows the head of a
 	 * token-splice operand onto the packed chain line) instead of breaking the
-	 * whole operand onto its own line because its full flat width overflows.
+	 * whole operand onto its own line for its full flat width. A packed item's
+	 * tail is the fill's own business, so the `last` half is not consulted.
 	 */
-	private static function embeddedFirstLineWidth(d: Doc): Int {
+	private static inline function embeddedFirstLineWidth(d: Doc): Int {
+		return embeddedLineWidths(d).first;
+	}
+
+	/**
+	 * Widths of the FIRST and the LAST physical line of `d`'s flat projection
+	 * WHEN that projection carries an embedded `\n` inside a `Text` leaf — a
+	 * VERBATIM multi-line token such as a raw multi-line string literal or a
+	 * `#if … #end` token-splice raw (`HxCondSpliceRaw`), whose bytes (source
+	 * newlines included) are emitted through a single `Text`.
+	 *
+	 * `first` is the width up to (not including) the first embedded newline —
+	 * what the token contributes to the line it starts on. `last` is the width
+	 * accumulated after the token's final embedded newline: the token's own
+	 * closing line plus everything the flat projection still emits after it,
+	 * which rides that same physical line.
+	 *
+	 * `first` is `-1` when no embedded-`Text` newline is reached before a real
+	 * hardline (`Line('\n')` / `OptHardline`) or the end of the walk. `last` is
+	 * `-1` when a real hardline follows the embedded one — the tail is then laid
+	 * out by that break rather than by the token, so this walk does not claim to
+	 * know it and a caller reading `last` falls back to its standard probe.
+	 *
+	 * Interior lines are deliberately NOT measured: they are emitted byte for
+	 * byte whatever the enclosing layout decides, so no wrap can shorten them.
+	 *
+	 * Constructor classification (what contributes width, what defers, what
+	 * stops the walk) must stay in LOCKSTEP with `fitsFlatStep`: `fitsFlat`
+	 * picks between the two per doc, so a divergence would answer the same
+	 * question two ways.
+	 *
+	 * The NATURAL walk states the same rule for itself, in one arm rather than
+	 * one function: `naturalWidthStep`'s `Text` arm stops its first-line
+	 * accumulation at the embedded newline. It cannot delegate here — this walk
+	 * resolves every `Group` flat while the natural one resolves each by its own
+	 * `fitsFlat`, so the two disagree on where the first line ends whenever a
+	 * Group breaks before the token. It needs no `last` either: an
+	 * `IfNaturalFirstLineExceeds` measures only its own `flatDoc`, with no
+	 * rest-stack lookahead, so nothing it can place rides the token's closing
+	 * line.
+	 *
+	 * Consumers: `fitsFlat` (both halves — a `Group` around such a token stays
+	 * flat when the line it opens and the line it closes both fit) and
+	 * `embeddedFirstLineWidth` (the `Fill` packing probe, `first` alone).
+	 */
+	private static function embeddedLineWidths(d: Doc): { first: Int, last: Int } {
 		final stack: Array<Doc> = [d];
 		var total: Int = 0;
+		var first: Int = -1;
 		while (stack.length > 0) {
 			final node: Doc = stack.pop();
 			switch (node) {
 				case Text(s):
 					final nl: Int = s.indexOf('\n');
-					if (nl >= 0) return total + nl;
-					total += s.length;
+					if (nl < 0) {
+						total += s.length;
+					} else {
+						if (first < 0) first = total + nl;
+						// Restart the running width at the token's LAST verbatim
+						// line: what follows rides that line, not a fresh indent.
+						total = s.length - (s.lastIndexOf('\n') + 1);
+					}
 				case OptSpace(s):
 					total += s.length;
 				case OptSpaceSkipAfterHardline:
 					total += 1;
 				case Line(flat):
-					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return -1;
+					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return { first: first, last: -1 };
 					total += flat.length;
 				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
-					return -1;
+					return { first: first, last: -1 };
 				case Empty | BodyGroup(_):
 					// Empty adds nothing; BodyGroup defers its own layout decision.
 				case Concat(items):
@@ -3090,7 +3179,7 @@ class Renderer {
 					stack.push(inner);
 			}
 		}
-		return -1;
+		return { first: first, last: total };
 	}
 
 
