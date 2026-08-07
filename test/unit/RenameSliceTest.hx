@@ -103,7 +103,7 @@ class RenameSliceTest extends Test {
 		// not spell `nm` as a token, so no occurrence covers it and the splice would leave the
 		// read behind. The one interpolation shape that still refuses.
 		final src: String = "class C {\n\tfunction f():String {\n\t\tvar nm = \"a\";\n\t\ttrace(nm);\n" + "\t\treturn 'v \\x24nm';\n\t}\n}";
-		assertRenameErr(src, 3, 7, 'q', 'escape');
+		assertRenameErr(src, 3, 7, 'q', 'no locatable identifier token');
 	}
 
 	public function testEscapeSpelledInterpolationBlockRefused(): Void {
@@ -489,6 +489,40 @@ class RenameSliceTest extends Test {
 		final expected: String =
 			'class C {\n\tvar width:Int = 0;\n\tfunction f():Void {\n\t\tfinal width:Int = 1;\n\t\ttrace(this.width + width);\n\t}\n}';
 		assertQualified(source, 4, 9, 'width', expected);
+	}
+
+
+	/**
+	 * An escape can also extend a `$name` run the PARSER already cut short: `'$n\x6d'` is a
+	 * read of `nm`, not of `n`. Renaming `n` must therefore leave the literal alone — the
+	 * projection re-reads the decoded text, so the tree names the read `nm`.
+	 */
+	public function testEscapeExtendedInterpolationNameBindsToTheLongerName(): Void {
+		final src: String = 'class C {\n\tfunction f():String {\n\t\tvar n = "N";\n\t\tvar nm = "NM";\n'
+			+ '\t\treturn \'v $$n\\x6d\' + nm;\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction f():String {\n\t\tvar q = "N";\n\t\tvar nm = "NM";\n'
+			+ '\t\treturn \'v $$n\\x6d\' + nm;\n\t}\n}';
+		assertRename(src, 3, 7, 'q', expected);
+	}
+
+	/** The same literal blocks a rename of the name it REALLY reads: its token is not in the raw bytes. */
+	public function testEscapeExtendedInterpolationRefusesTheNameItReads(): Void {
+		final src: String = 'class C {\n\tfunction f():String {\n\t\tvar n = "N";\n\t\tvar nm = "NM";\n'
+			+ '\t\treturn \'v $$n\\x6d\' + nm;\n\t}\n}';
+		assertRenameErr(src, 4, 7, 'q', 'no locatable identifier token');
+	}
+
+	/**
+	 * A `$count` read bound to a SHADOWING inner binding is none of the outer rename's
+	 * business. Matching interpolation reads by NAME refused this; matching them by their
+	 * resolved binding does not.
+	 */
+	public function testInterpolationReadOfShadowingBindingDoesNotRefuse(): Void {
+		final src: String = 'class C {\n\tfunction f():String {\n\t\tvar count = 1;\n\t\tvar g = function():String {\n'
+			+ '\t\t\tvar count = 2;\n\t\t\treturn \'v $$count\';\n\t\t};\n\t\treturn g() + count;\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction f():String {\n\t\tvar total = 1;\n\t\tvar g = function():String {\n'
+			+ '\t\t\tvar count = 2;\n\t\t\treturn \'v $$count\';\n\t\t};\n\t\treturn g() + total;\n\t}\n}';
+		assertRename(src, 3, 7, 'total', expected);
 	}
 
 }

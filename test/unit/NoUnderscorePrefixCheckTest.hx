@@ -505,4 +505,16 @@ class NoUnderscorePrefixCheckTest extends Test {
 		Assert.isTrue(vs[0].message.contains("'_c'"));
 	}
 
+
+	/**
+	 * An escape-spelled `$` puts no locatable identifier token in the raw bytes, so the
+	 * occurrence set silently DROPS that read. Renaming the declaration anyway would strand
+	 * it — the fix must stay report-only, as `rename` refuses the same shape.
+	 */
+	public function testEscapeSpelledInterpolationReadBlocksTheFix(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f(_name:String):String {\n'
+			+ '\t\treturn \'hi \\x24_name\' + _name;\n\t}\n}';
+		Assert.equals(0, edits(src).length);
+	}
+
 }

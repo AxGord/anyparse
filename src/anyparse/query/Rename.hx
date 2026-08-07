@@ -259,19 +259,22 @@ final class Rename {
 	}
 
 	/**
-	 * A same-name RESOLUTION BLIND SPOT that would turn this rename into a silent semantic change,
-	 * or null when none applies. Three cases, all scoped to the enclosing function subtree of the
-	 * cursor (a local / param cannot be referenced outside it):
+	 * A same-name RESOLUTION BLIND SPOT that would turn this rename into a silent semantic
+	 * change, or null when none applies. Three cases:
 	 *
-	 *  - a `$oldName` string-interpolation read the occurrence set does not rewrite. An ORDINARY
-	 *    one is rewritten — `Refs` indexes it and `identTokenOffset` finds its identifier token
-	 *    inside the `$name` span — so only an escape-spelled `$` or name reaches here, where the
-	 *    decoded text the projection reads and the raw bytes the splice writes disagree;
-	 *  - an escape-spelled `${ … }` hole, which the rescan synthesizes WITHOUT a parsed expression:
-	 *    a read of the name inside it is invisible to every scan, so the rename would part-apply;
-	 *  - `oldName` declared MORE THAN ONCE in one block (Haxe-legal re-declaration, reached through
-	 *    a metadata wrapper too) — the index mis-binds the references that follow the second
-	 *    declaration.
+	 *  - a `$oldName` string-interpolation read of THIS binding that the occurrence set does not
+	 *    rewrite. An ordinary one is rewritten — `Refs` indexes it and `identTokenOffset` finds
+	 *    its identifier token inside the `$name` span — so only an escape-spelled `$` or name
+	 *    reaches here, where the decoded text the projection reads and the raw bytes the splice
+	 *    writes disagree. Decided over the resolved hits, so a read bound to a SHADOWING binding
+	 *    of the same name is correctly ignored;
+	 *  - an escape-spelled `${ … }` hole, which the rescan synthesizes WITHOUT a parsed
+	 *    expression: a read of the name inside it is invisible to every scan, so the rename would
+	 *    part-apply. Scoped to the cursor's enclosing function subtree, since the hole's contents
+	 *    cannot be attributed to a binding at all;
+	 *  - `oldName` declared MORE THAN ONCE in one block (Haxe-legal re-declaration, reached
+	 *    through a metadata wrapper too) — the index mis-binds the references that follow the
+	 *    second declaration. Same function-subtree scope: a local cannot be referenced outside it.
 	 *
 	 * All three refusals are deliberately conservative: a false positive costs a manual rename, a
 	 * false negative silently changes behaviour.
@@ -279,20 +282,22 @@ final class Rename {
 	private static function sameNameBlindSpot(
 		source: String, tree: QueryNode, cursor: Int, occurrences: Array<Span>, oldName: String, plugin: GrammarPlugin, shape: RefShape
 	): Null<String> {
-		final scope: QueryNode = enclosingFunctionSubtree(tree, cursor, shape);
-		final interpKind: Null<String> = shape.stringInterpIdentKind;
-		if (interpKind != null) {
-			final stray: Null<Span> = uncoveredInterpRead(scope, interpKind, oldName, occurrences);
+		final scope: QueryNode = RefactorSupport.enclosingFunctionSubtree(tree, cursor, shape);
+		final cursorNode: Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
+		final hits: Array<RefHit> = cursorNode == null ? [] : Refs.find(oldName, tree, shape);
+		final binding: Null<Int> = cursorNode == null ? null : RefactorSupport.resolveBindingFrom(cursorNode, hits);
+		if (binding != null) {
+			final stray: Null<Span> = RefactorSupport.unrewrittenInterpRead(hits, binding, occurrences);
 			if (stray != null) {
 				final at: Position = stray.lineCol(source);
-				return 'rename of "$oldName" is unsafe: the string-interpolation read at ${at.line}:${at.col} spells its'
-					+ ' dollar or its name with an escape, so the identifier token cannot be located in the raw source'
-					+ ' - respell that read first';
+				return 'rename of "$oldName" is unsafe: the string-interpolation read at ${at.line}:${at.col} has no locatable'
+					+ ' identifier token in the raw source (its dollar or its name is escape-spelled), so the splice would leave'
+					+ ' it bound to the old name - respell that read first';
 			}
 		}
 		final blockKind: Null<String> = shape.stringInterpBlockKind;
 		if (blockKind != null) {
-			final opaque: Null<Span> = unreadableInterpBlock(scope, blockKind);
+			final opaque: Null<Span> = RefactorSupport.unreadableInterpBlock(scope, blockKind);
 			if (opaque != null) {
 				final at: Position = opaque.lineCol(source);
 				return 'rename of "$oldName" is unsafe: the escape-spelled string interpolation at ${at.line}:${at.col} carries'
@@ -308,44 +313,6 @@ final class Rename {
 		return null;
 	}
 
-	/** The deepest function / lambda subtree containing `cursor`, or the whole tree when none does. */
-	private static function enclosingFunctionSubtree(tree: QueryNode, cursor: Int, shape: RefShape): QueryNode {
-		final fnKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []).concat(shape.localFunctionKinds ?? []);
-		// No containment pruning: the parse root (and other synthesized wrappers)
-		// carries NO span, so a prune at a null-span node would stop at the root
-		// and silently widen the scope to the whole file (false refusals for a
-		// same-named local in a SIBLING function). Gate only the match.
-		var best: QueryNode = tree;
-		function walk(node: QueryNode): Void {
-			final span: Null<Span> = node.span;
-			if (span != null && cursor >= span.from && cursor < span.to && fnKinds.contains(node.kind)) best = node;
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return best;
-	}
-
-	/**
-	 * The span of a `$oldName` interpolation read in `scope` that the rename does NOT rewrite, or
-	 * null. The node's span covers the bytes that SPELL the read — the `$` included — so a rewritten
-	 * one CONTAINS its occurrence rather than being contained by it. An occurrence is missing only
-	 * when the identifier token could not be located in the raw source, which happens exactly when
-	 * the `$` or the name is escape-spelled (`'\x24nm'`): the projection reads the DECODED text while
-	 * the splice must write RAW bytes, and the two disagree.
-	 */
-	private static function uncoveredInterpRead(
-		scope: QueryNode, interpKind: String, oldName: String, occurrences: Array<Span>
-	): Null<Span> {
-		if (scope.kind == interpKind && scope.name == oldName) {
-			final span: Null<Span> = scope.span;
-			if (span != null && !occurrences.exists(o -> span.from <= o.from && o.to <= span.to)) return span;
-		}
-		for (c in scope.children) {
-			final found: Null<Span> = uncoveredInterpRead(c, interpKind, oldName, occurrences);
-			if (found != null) return found;
-		}
-		return null;
-	}
 
 	/** The span of a second same-block declaration of `oldName` in `scope`, or null. */
 	private static function sameBlockRedeclaration(scope: QueryNode, oldName: String, plugin: GrammarPlugin, shape: RefShape): Null<Span> {
@@ -750,25 +717,6 @@ final class Rename {
 		return actual.length != expected.length || !actual.foreach(off -> expected.contains(off))
 			? Err('rename to "$newName" is unsafe: qualifying the captured occurrences did not resolve the capture')
 			: Ok(qualified);
-	}
-
-
-	/**
-	 * The span of a `${ … }` interpolation in `scope` that carries NO parsed expression, or
-	 * null. Only the rescan of an escape-spelled `$` synthesizes one (`HxInterpProjection`):
-	 * its interior does not exist contiguously in the source, so no subtree is built and any
-	 * identifier read inside it is invisible to every reference scan — a rename would silently
-	 * part-apply and leave the read bound to a name that no longer exists. Refused
-	 * unconditionally, not by scanning the interior for `oldName`: the interior may spell that
-	 * name with escapes too, so a text scan cannot prove absence.
-	 */
-	private static function unreadableInterpBlock(scope: QueryNode, blockKind: String): Null<Span> {
-		if (scope.kind == blockKind && scope.children.length == 0) return scope.span;
-		for (c in scope.children) {
-			final found: Null<Span> = unreadableInterpBlock(c, blockKind);
-			if (found != null) return found;
-		}
-		return null;
 	}
 
 }

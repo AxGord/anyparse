@@ -597,6 +597,11 @@ final class Naming implements Check implements CrossFileFix {
 	): Null<Array<Span>> {
 		final covered: Array<Span> = Rename.renameOccurrences(source, tree, declFrom, shape);
 		if (covered.length == 0) return null;
+		// A `$name` read whose identifier token is not in the raw bytes — an escape-spelled `$`
+		// or name — is DROPPED by `renameOccurrences`, not rewritten, so the rename would strand
+		// it on a name the fix has removed. `rename` refuses the same shape; the completeness
+		// scan below cannot see it, since the occurrence sits inside a string literal.
+		if (RefactorSupport.unrewrittenInterpRead(Refs.find(name, tree, shape), declFrom, covered) != null) return null;
 		// Attribute every OTHER same-name occurrence to its binding: one provably bound to a DIFFERENT
 		// binding (a param / loop var / sibling local sharing the name) is neither a rename target nor a
 		// blocker for THIS binding, so it joins the resolved set as an excluded span. An occurrence whose

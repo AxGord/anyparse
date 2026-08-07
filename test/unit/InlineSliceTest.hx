@@ -194,4 +194,14 @@ class InlineSliceTest extends Test {
 		);
 	}
 
+
+	/**
+	 * An escape-spelled `${ … }` hole carries no parsed expression, so the read of `x`
+	 * inside it is invisible — and `inline` DELETES the declaration, which would strand it.
+	 * `rename` refuses the same shape.
+	 */
+	public function testRefusesUnreadableInterpolationBlockInScope(): Void {
+		assertRefused("class C {\n\tfunction f(a:Int, b:Int):String {\n\t\tvar x = a + b;\n\t\treturn 'v \\x24{x}' + x;\n\t}\n}", 3, 3);
+	}
+
 }

@@ -3944,4 +3944,69 @@ final class RefactorSupport {
 		return branch.kind != shape.blockStmtKind ? branch : branch.children.length == 1 ? branch.children[0] : null;
 	}
 
+
+	/**
+	 * The span of a braceless `$name` interpolation read of the binding at `binding` that
+	 * `occurrences` does NOT rewrite, or null when every one of them is covered.
+	 *
+	 * Asked over the resolved hits, not by walking the tree for the name: a read bound to a
+	 * SHADOWING binding of the same name is none of this rename's business, and matching on
+	 * the name alone refuses it as if it were. The read's node span covers the bytes that
+	 * SPELL it (the `$` included), so a rewritten one CONTAINS its occurrence. One is
+	 * missing exactly when `identTokenOffset` could not locate the identifier token in the
+	 * raw source — an escape-spelled `$` or name — and splicing the rest would leave that
+	 * read bound to a name the rewrite has removed.
+	 */
+	public static function unrewrittenInterpRead(hits: Array<RefHit>, binding: Int, occurrences: Array<Span>): Null<Span> {
+		for (h in hits) {
+			if (!h.interpolated) continue;
+			final bound: Null<Span> = h.bindingSpan;
+			if (bound == null || bound.from != binding) continue;
+			if (!occurrences.exists(o -> h.span.from <= o.from && o.to <= h.span.to)) return h.span;
+		}
+		return null;
+	}
+
+	/**
+	 * The span of a `${ … }` interpolation in `node`'s subtree that carries NO parsed
+	 * expression, or null. Only the rescan of an escape-spelled `$` synthesizes one
+	 * (`HxInterpProjection`): its interior does not exist contiguously in the source, so no
+	 * subtree is built and any identifier read inside it is invisible to every reference
+	 * scan — a rewrite touching such a name would silently part-apply. Reported
+	 * unconditionally rather than by scanning the interior for a name: the interior may
+	 * spell that name with escapes too, so a text scan cannot prove absence.
+	 */
+	public static function unreadableInterpBlock(node: QueryNode, blockKind: String): Null<Span> {
+		if (node.kind == blockKind && node.children.length == 0) return node.span;
+		for (c in node.children) {
+			final found: Null<Span> = unreadableInterpBlock(c, blockKind);
+			if (found != null) return found;
+		}
+		return null;
+	}
+
+
+	/**
+	 * The deepest function / lambda subtree containing `cursor`, or the whole tree when none
+	 * does — the region a local binding can be referenced from, and therefore the scope a
+	 * name-agnostic net (an unreadable interpolation hole, a same-block re-declaration) has
+	 * to sweep.
+	 *
+	 * No containment pruning: the parse root (and other synthesized wrappers) carries NO
+	 * span, so a prune at a null-span node would stop at the root and silently widen the
+	 * scope to the whole file (false refusals for a same-named local in a SIBLING function).
+	 * Gate only the match.
+	 */
+	public static function enclosingFunctionSubtree(tree: QueryNode, cursor: Int, shape: RefShape): QueryNode {
+		final fnKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []).concat(shape.localFunctionKinds ?? []);
+		var best: QueryNode = tree;
+		function walk(node: QueryNode): Void {
+			final span: Null<Span> = node.span;
+			if (span != null && cursor >= span.from && cursor < span.to && fnKinds.contains(node.kind)) best = node;
+			for (c in node.children) walk(c);
+		}
+		walk(tree);
+		return best;
+	}
+
 }
