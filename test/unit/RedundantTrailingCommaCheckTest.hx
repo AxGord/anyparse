@@ -2,6 +2,8 @@ package unit;
 
 import utest.Assert;
 import utest.Test;
+import anyparse.check.Check;
+import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.RedundantTrailingComma;
@@ -156,10 +158,12 @@ class RedundantTrailingCommaCheckTest extends Test {
 		Assert.equals('class C {\n\tvar a = [[1], 2];\n}', applyFix(src));
 	}
 
-	public function testRegisteredInBuiltins(): Void {
-		Assert.notNull(Linter.byId('redundant-trailing-comma'));
+	public function testRegisteredInBuiltinsAsDefaultOff(): Void {
+		final registered: Null<Check> = Linter.byId('redundant-trailing-comma');
+		Assert.notNull(registered);
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.isTrue(ids.contains('redundant-trailing-comma'));
+		Assert.isTrue(registered is DefaultOff, 'a trailing comma is a project style call, so the rule is opt-in');
 	}
 
 	public function testSkipParseNoCrash(): Void {

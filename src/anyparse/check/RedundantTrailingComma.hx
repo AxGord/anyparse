@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -46,9 +47,21 @@ import anyparse.runtime.Span;
  * list and the `)` that follows it is the closer.
  * `RefShape.mandatoryTrailingCommaChildKinds` vetoes either arm by the KIND of that
  * last element. With no arm set the check is a no-op.
+ *
+ * ## Default OFF - opt-in
+ *
+ * A `DefaultOff` marker: dropped from the default set and from a bare `lint ... --all`
+ * report unless a project opts in via `apqlint.json`
+ * (`"rules": { "redundant-trailing-comma": { "enabled": true } }`), or an explicit
+ * `--rule redundant-trailing-comma` selects it. Whether a list ends on a comma is a
+ * project style decision, not a defect - the same call `shorten-type-ref` makes about
+ * how qualified a type reference should be. anyparse's own house style KEEPS the
+ * trailing comma (1041 would-be findings across `src` + `test`), and a rule whose
+ * default verdict contradicts its own repository is one that trains readers to ignore
+ * the report.
  */
 @:nullSafety(Strict)
-final class RedundantTrailingComma implements Check {
+final class RedundantTrailingComma implements Check implements DefaultOff {
 
 	public function new() {}
 
