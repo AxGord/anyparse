@@ -11,21 +11,24 @@ import anyparse.runtime.Span;
 import anyparse.query.RefactorSupport;
 
 /**
- * The `prefer-safe-nav` check: a null guard on an accessor-free receiver — a LOCAL / PARAM /
- * `this`, or a FIELD the enclosing type declares as a plain `var` / `final` — is flagged `Info`
- * and rewritten to safe navigation (only the FIRST dot becomes `?.`). Three arms: the statement
- * form `if (x != null) x.m(...)` → `x?.m(...);`, the ternary form `x == null ? null : x.m(...)` /
+ * The `prefer-safe-nav` check: a null guard on an accessor-free SUBJECT — a plain identifier
+ * that is a LOCAL / PARAM / `this` / a FIELD the enclosing type declares as a plain `var` /
+ * `final`, or a one-step `<ident>.<field>` path whose step the resolution index proves
+ * physical — is flagged `Info` and rewritten to safe navigation (only the dot off the
+ * subject becomes `?.`). Three arms: the statement form `if (x != null) x.m(...)` →
+ * `x?.m(...);`, the ternary form `x == null ? null : x.m(...)` /
  * `x != null ? x.m(...) : null` → `x?.m(...)`, and the assignment form
  * `var r = null; if (x != null) r = x.m(...);` → `var r = x?.m(...);`.
  *
- * A get-accessor property, a member of another kind, a name the enclosing type does not declare,
- * an `extern` host, a `this.`-qualified receiver, a multi-statement block, an `else` branch, an
- * assignment l-value, a compound condition (statement arm: unless the null-check is the last
- * conjunct; assignment arm: never), an already-safe-nav body and a comment in the removed region
- * are all safe misses; so is a ternary whose guarded branch is not itself the chain (`x.f + 1`)
+ * A get-accessor property, a member of another kind, a name the enclosing type does not
+ * declare, an `extern` host, a path step on a getter or on a type the index cannot resolve,
+ * a path deeper than one step, a multi-statement block, an `else` branch, an assignment
+ * l-value, a compound condition (statement arm: unless the null-check is the last conjunct;
+ * assignment arm: never), an already-safe-nav body and a comment in the removed region are
+ * all safe misses; so is a ternary whose guarded branch is not itself the chain (`x.f + 1`)
  * or whose other branch is not `null`, and an assignment arm whose declaration is not
- * null-initialized, not adjacent, multi-declarator, in a different `#if` branch, or referenced by
- * the right-hand side.
+ * null-initialized, not adjacent, multi-declarator, in a different `#if` branch, or
+ * referenced by the right-hand side.
  */
 class PreferSafeNavCheckTest extends Test {
 
@@ -118,8 +121,79 @@ class PreferSafeNavCheckTest extends Test {
 		);
 	}
 
-	public function testThisReceiverNotFlagged(): Void {
+	public function testThisQualifiedReceiverFlaggedAndFixed(): Void {
 		final source: String = 'class C {\n\tvar fld:Sys;\n\tfunction f():Void {\n\t\tif (this.fld != null) this.fld.command("z");\n\t}\n}';
+		final expected: String = 'class C {\n\tvar fld:Sys;\n\tfunction f():Void {\n\t\tthis.fld?.command("z");\n\t}\n}';
+		Assert.equals(1, violations(source).length);
+		Assert.equals(expected, applyFix(source));
+	}
+
+	public function testQualifiedFieldPathFlaggedAndFixed(): Void {
+		final source: String =
+			'class C {\n\tvar fld:P;\n\tfunction f():Void {\n\t\tif (fld.next != null) fld.next.command("z");\n\t}\n}\n\nclass P {\n\tpublic var next:Sys;\n}';
+		final expected: String =
+			'class C {\n\tvar fld:P;\n\tfunction f():Void {\n\t\tfld.next?.command("z");\n\t}\n}\n\nclass P {\n\tpublic var next:Sys;\n}';
+		Assert.equals(1, violations(source).length);
+		Assert.equals(expected, applyFix(source));
+	}
+
+	public function testQualifiedGetterStepNotFlagged(): Void {
+		final source: String =
+			'class C {\n\tvar fld:P;\n\tfunction f():Void {\n\t\tif (fld.next != null) fld.next.command("z");\n\t}\n}\n\nclass P {\n\tpublic var next(get, never):Sys;\n\n\tfunction get_next():Sys {\n\t\treturn null;\n\t}\n}';
+		Assert.equals(0, violations(source).length);
+	}
+
+	public function testQualifiedStepOnUnresolvedTypeNotFlagged(): Void {
+		// `Absent` reaches no declaration, so the index cannot prove `next` physical.
+		final source: String =
+			'class C {\n\tvar fld:Absent;\n\tfunction f():Void {\n\t\tif (fld.next != null) fld.next.command("z");\n\t}\n}';
+		Assert.equals(0, violations(source).length);
+	}
+
+	public function testDeepQualifiedPathNotFlagged(): Void {
+		final source: String =
+			'class C {\n\tvar fld:P;\n\tfunction f():Void {\n\t\tif (fld.mid.next != null) fld.mid.next.command("z");\n\t}\n}\n\nclass P {\n\tpublic var mid:Q;\n}\n\nclass Q {\n\tpublic var next:Sys;\n}';
+		Assert.equals(0, violations(source).length);
+	}
+
+	public function testQualifiedSubjectInArgumentsNotFlagged(): Void {
+		final source: String =
+			'class C {\n\tvar fld:P;\n\tfunction f():Void {\n\t\tif (fld.next != null) fld.next.command(fld.next);\n\t}\n}\n\nclass P {\n\tpublic var next:Sys;\n}';
+		Assert.equals(0, violations(source).length);
+	}
+
+	public function testQualifiedTernaryFlaggedAndFixed(): Void {
+		final source: String =
+			'class C {\n\tvar fld:P;\n\tfunction f():Int {\n\t\treturn fld.next == null ? null : fld.next.command("z");\n\t}\n}\n\nclass P {\n\tpublic var next:Sys;\n}';
+		Assert.equals(1, violations(source).length);
+		Assert.isTrue(applyFix(source).indexOf('return fld.next?.command("z");') != -1);
+	}
+
+	public function testThisQualifiedSubjectWithBareMentionNotFlagged(): Void {
+		// `this.fld` and `fld` are one narrowed value under two spellings — `this.fld?.use(fld)`
+		// would leave the argument back at `Null<T>`.
+		final source: String = 'class C {\n\tvar fld:Sys;\n\tfunction f():Void {\n\t\tif (this.fld != null) this.fld.use(fld);\n\t}\n}';
+		Assert.equals(0, violations(source).length);
+	}
+
+	public function testBareFieldSubjectWithThisMentionNotFlagged(): Void {
+		final source: String = 'class C {\n\tvar fld:Sys;\n\tfunction f():Void {\n\t\tif (fld != null) fld.use(this.fld);\n\t}\n}';
+		Assert.equals(0, violations(source).length);
+	}
+
+	public function testAssignmentArmQualifiedSubjectFixed(): Void {
+		// The self-reference gate compares the subject's ROOT, so a step whose name merely
+		// coincides with the declared local (`next` / `next`) still folds.
+		final source: String =
+			'class C {\n\tvar fld:P;\n\tfunction f():Void {\n\t\tvar next:Null<Int> = null;\n\t\tif (fld.next != null) next = fld.next.count();\n\t}\n}\n\nclass P {\n\tpublic var next:Sys;\n}';
+		Assert.equals(1, violations(source).length);
+		Assert.isTrue(fixCanonical(source).indexOf('var next:Null<Int> = fld.next?.count();') != -1);
+	}
+
+	public function testAssignmentArmQualifiedSubjectRootIsTargetNotFlagged(): Void {
+		// Folding would make the declaration reference itself through the guard's root.
+		final source: String =
+			'class C {\n\tfunction f():Void {\n\t\tvar r:Null<P> = null;\n\t\tif (r.next != null) r = r.next.self();\n\t}\n}\n\nclass P {\n\tpublic var next:P;\n}';
 		Assert.equals(0, violations(source).length);
 	}
 

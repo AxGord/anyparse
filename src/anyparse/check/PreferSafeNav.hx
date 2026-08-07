@@ -8,6 +8,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -18,7 +19,7 @@ using Lambda;
  * - STATEMENT — `if (x != null) x.m(...)` (and the braced `if (x != null) { x.m(...); }`,
  *   plus the reversed `if (null != x) …`) collapses to `x?.m(...);`. A CONJUNCTION guard
  *   `if (C && ... && x != null) x.m(...)` drops the null-check, keeping the rest:
- *   `if (C && ...) x?.m(...);`.
+ *   `if (C && ...) x?.m(...)`.
  * - TERNARY — `x == null ? null : x.m(...)` and its dual `x != null ? x.m(...) : null`
  *   (either polarity, the `null` operand on either side of the comparison) collapse to
  *   `x?.m(...)`, the EXPRESSION form of the same guard. `?.` short-circuits the whole
@@ -34,11 +35,19 @@ using Lambda;
  *
  * `Severity.Info` (a modernization cleanup), with an autofix.
  *
- * ## Soundness — an accessor-free receiver, a CALL body, no else, `x` only as the root
+ * ## The guard SUBJECT — a plain identifier or a one-step `<ident>.<field>` path
  *
- * `if (r != null) r.m()` reads `r` twice, `r?.m()` once — so a receiver whose read RUNS
- * CODE would change semantics. The guard is flagged only when the guarded identifier is
- * proven accessor-free, which three receiver classes are:
+ * `x` above stands for the guard SUBJECT, which `subjectOf` admits in two shapes: a plain
+ * identifier, and a one-step field path reached by a plain `.` (`fld.parent != null`,
+ * `this.fld != null`). A DEEPER path (`a.b.c`) refuses — each step would need its own
+ * proof — and so does an already-safe `x?.f`, which projects as another kind and is the
+ * dead- / unnecessary-safe-nav checks' territory.
+ *
+ * ## Soundness — an accessor-free subject, a CALL body, no else, `x` only as the root
+ *
+ * `if (r != null) r.m()` reads `r` twice, `r?.m()` once — so a subject whose read RUNS
+ * CODE would change semantics. The guard is flagged only when the subject is proven
+ * accessor-free. For the ROOT identifier that is three receiver classes:
  *
  * - a LOCAL declaration (`localDeclKinds`) or a PARAMETER (`paramKinds`) whose scope
  *   encloses the use and that lexically precedes it — a local can carry no accessor;
@@ -52,13 +61,18 @@ using Lambda;
  *   `(get, …)` / `dynamic` property, a member of any other kind, a name the enclosing type
  *   does not itself declare, and an `extern` host all refuse (see `fieldProver`).
  *
- * A `this.x` / qualified receiver is still left alone: its guard operand is not a plain
- * identifier. The surviving-condition operands (the kept conjuncts) are read the same
- * number of times before and after, so THEY are unconstrained.
+ * A one-step path reads BOTH parts twice, so it needs the root proof AND a second one for
+ * the step: `TypeResolver.isPlainFieldRead` against the run's resolution-scoped index,
+ * which resolves the root's declared type and walks its supertypes for the member's
+ * accessor shape. A getter property, a type the index cannot resolve, and a run with no
+ * resolution scope at all each leave the step unproven, and the guard unflagged. That proof
+ * reads the member's DECLARED shape, so — unlike the enclosing-type field proof above — it
+ * does not carry an extern gate: an `extern` host whose `var` is a foreign slot is admitted
+ * when the index resolves it. Tightening that belongs in the shared predicate, not here.
  *
  * The then-branch must be exactly ONE expression statement — a CALL for the statement arm,
  * the guarded local's assignment for the assignment arm — whose expression is a plain chain
- * rooted at the guarded identifier (`x.m(...)` / `x.a.b(...)` — see `chainAccess` below), so:
+ * rooted at the guard subject (`x.m(...)` / `x.a.b(...)` — see `subjectAccess` below), so:
  *
  * - a multi-statement block is NOT flagged (the user groups those under one `if`
  *   deliberately);
@@ -68,9 +82,13 @@ using Lambda;
  *   access projects as `nullSafeAccessKind`, not `fieldAccessKind` (the dead- /
  *   unnecessary-safe-nav checks' territory);
  * - an `else` branch makes the guard a real two-way choice — NOT flagged;
- * - the guarded identifier appearing in the body anywhere but the chain root
+ * - the guard subject appearing in the body anywhere but the chain root
  *   (`x.m(x)`, `x.a(x).b()`, `x.arr[x]`) is NOT flagged — after `x?.` it stays
- *   typed `Null<T>`, breaking `@:nullSafety(Strict)`.
+ *   typed `Null<T>`, breaking `@:nullSafety(Strict)`. A subject rooted at a LOCAL
+ *   counts as a WHOLE, so its bare root elsewhere (`x.f?.m(x)`) is fine — the guard
+ *   never narrowed it. A member of the ENCLOSING object is the exception: `f` and
+ *   `this.f` are one narrowed value under two spellings, so either spelling elsewhere
+ *   in the body refuses the guard (`denotesSubject`).
  *
  * ## Conjunction — the null-check must be the LAST conjunct
  *
@@ -81,19 +99,19 @@ using Lambda;
  * arm takes no conjunction at all — its `if` disappears entirely, leaving nowhere to keep
  * the surviving conjuncts.
  *
- * ## The kept region must BE the chain — `chainAccess`, shared by every arm
+ * ## The kept region must BE the chain — `subjectAccess`, shared by every arm
  *
  * The rewrite replaces the whole guard with the kept region, so that region has to be the
- * receiver chain itself and nothing more. `chainAccess` therefore descends the `children[0]`
- * receiver spine through CHAIN steps only (`chainKinds` — `fieldAccessKind`, `callKind`,
- * `indexAccessKind`), and the junction off the guarded identifier must be a plain `.`
- * (`fieldAccessKind`), so an index root (`x[0].f`) and an already-safe `x?.f` root are left
- * alone. `?.` short-circuits every chain step after it, so an index or a call MID-chain
- * (`x.arr[0].c`, `x.map(f).join(',')`) collapses fine — but a `cast`, a parenthesis, an
- * ascription or an operator on the spine does NOT: `(cast x.a).m()` would become
- * `(cast x?.a).m()`, which dereferences null, and `x == null ? null : x.f + 1` would become
- * `x?.f + 1`, which adds to a `Null<T>`. A spine node outside `chainKinds` ends the descent
- * with no match, which refuses all of those by construction.
+ * receiver chain itself and nothing more. `subjectAccess` therefore descends the
+ * `children[0]` receiver spine through CHAIN steps only (`chainKinds` — `fieldAccessKind`,
+ * `callKind`, `indexAccessKind`) until the receiver IS the subject, and the junction off it
+ * must be a plain `.` (`fieldAccessKind`), so an index root (`x[0].f`) and an already-safe
+ * `x?.f` root are left alone. `?.` short-circuits every chain step after it, so an index or
+ * a call MID-chain (`x.arr[0].c`, `x.map(f).join(',')`) collapses fine — but a `cast`, a
+ * parenthesis, an ascription or an operator on the spine does NOT: `(cast x.a).m()` would
+ * become `(cast x?.a).m()`, which dereferences null, and `x == null ? null : x.f + 1` would
+ * become `x?.f + 1`, which adds to a `Null<T>`. A spine node outside `chainKinds` ends the
+ * descent with no match, which refuses all of those by construction.
  *
  * The ternary arm additionally requires the OTHER branch to be exactly the `null` literal;
  * `x == null ? 0 : x.f` guards a real fallback value, which is `prefer-null-coalescing`
@@ -104,13 +122,13 @@ using Lambda;
  *
  * The whole `if` statement (or the whole ternary) is replaced by the body statement /
  * guarded branch — for the statement arm optionally under `if (<surviving condition>)`
- * (conjunction) — with the FIRST dot off the guarded identifier turned into `?.`
- * (`if (x != null) x.a.b();` → `x?.a.b();`, `x == null ? null : x.a.b()` → `x?.a.b()`):
+ * (conjunction) — with the FIRST dot off the guard subject turned into `?.`
+ * (`if (x != null) x.a.b();` → `x?.a.b();`, `if (x.f != null) x.f.b();` → `x.f?.b();`):
  * only the guard being removed is encoded, inner nullables stay the author's concern.
  * The assignment arm instead emits TWO edits — the declaration's `null` becomes the
  * safe-nav chain and the whole `if` is deleted. A comment inside a DROPPED part of the
  * removed region would be lost, so such a guard is left unflagged; a comment between the
- * receiver and its dot would SWALLOW the inserted `?`, so that one leaves the guard
+ * subject and its dot would SWALLOW the inserted `?`, so that one leaves the guard
  * reported but unfixed.
  *
  * ## Grammar-agnostic
@@ -124,7 +142,10 @@ using Lambda;
  * `this` receiver, `localDeclKinds` / `paramKinds` / `scopeKinds` for the binding
  * resolution, `fieldDeclKinds` / `externModifierKind` plus a `TypeInfoProvider` plugin for
  * the field receiver (any missing → fields refuse), `parenKind` to unwrap a parenthesized
- * condition or ternary branch, and `opaqueKinds` to skip reification subtrees.
+ * condition or ternary branch, and `opaqueKinds` to skip reification subtrees. The one-step
+ * path arm additionally needs the `TypeInfoProvider` declared-type sources and a
+ * `SymbolIndex` (`RefactorSupport.lazySymbolIndex`); without either, only plain-identifier
+ * subjects are flagged.
  */
 @:nullSafety(Strict)
 final class PreferSafeNav implements Check {
@@ -158,12 +179,20 @@ final class PreferSafeNav implements Check {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
 		final violations: Array<Violation> = [];
+		final getIndex: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final shape: RefShape = plugin.refShape();
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+			final parsed: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			if (parsed == null) continue;
+			final tree: QueryNode = parsed;
 			final bindings: Array<{ name: String, scope: Span, declEnd: Int }> = [];
 			collectBindings(tree, null, seams, bindings);
-			walk(tree, violations, entry.file, entry.source, bindings, fieldProver(tree, entry.source, plugin, seams), seams);
+			final declaredTypes: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, entry.source);
+			final plainRead: QueryNode -> Bool = subject -> {
+				final index: Null<SymbolIndex> = getIndex();
+				return index != null && TypeResolver.isPlainFieldRead(subject, tree, shape, declaredTypes(), index);
+			};
+			walk(tree, violations, entry.file, entry.source, bindings, fieldProver(tree, entry.source, plugin, seams), plainRead, seams);
 		}
 		return violations;
 	}
@@ -266,17 +295,17 @@ final class PreferSafeNav implements Check {
 	 */
 	private static function walk(
 		node: QueryNode, out: Array<Violation>, file: String, source: String, bindings: Array<{ name: String, scope: Span, declEnd: Int }>,
-		fieldOk: (String, Span) -> Bool, s: Seams
+		fieldOk: (String, Span) -> Bool, plainRead: QueryNode -> Bool, s: Seams
 	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		final m: Null<Candidate> = candidate(node, source, s);
-		if (m != null && acceptedReceiver(m.condIdent, bindings, fieldOk, s)) report(node, out, file);
+		if (m != null && acceptedReceiver(m.condIdent, bindings, fieldOk, plainRead, s)) report(node, out, file);
 		final kids: Array<QueryNode> = node.children;
 		if (s.blockKinds.contains(node.kind)) for (i in 0...kids.length - 1) {
 			final a: Null<AssignGuard> = assignGuard(kids[i], kids[i + 1], source, s);
-			if (a != null && acceptedReceiver(a.condIdent, bindings, fieldOk, s)) report(kids[i + 1], out, file);
+			if (a != null && acceptedReceiver(a.condIdent, bindings, fieldOk, plainRead, s)) report(kids[i + 1], out, file);
 		}
-		for (c in kids) walk(c, out, file, source, bindings, fieldOk, s);
+		for (c in kids) walk(c, out, file, source, bindings, fieldOk, plainRead, s);
 	}
 
 	/** Push the `Info` finding anchored at `node` — the guarding `if` statement, or the guarding ternary. */
@@ -335,8 +364,8 @@ final class PreferSafeNav implements Check {
 
 	/**
 	 * The `if (x != null) <declName> = x.chain(...)` shape `ifNode` carries, or null: an
-	 * `else`-less guard whose SOLE condition null-checks a plain identifier and whose sole
-	 * statement assigns to exactly `declName` a chain rooted at that identifier.
+	 * `else`-less guard whose SOLE condition null-checks a guard subject and whose sole
+	 * statement assigns to exactly `declName` a chain rooted at that subject.
 	 *
 	 * A conjunction guard is refused — the `if` disappears entirely, leaving nowhere for the
 	 * surviving conjuncts. `declName` may appear nowhere in the right-hand side, receiver
@@ -348,8 +377,7 @@ final class PreferSafeNav implements Check {
 		final assignKind: Null<String> = s.assignKind;
 		if (assignKind == null || !s.ifKinds.contains(ifNode.kind) || ifNode.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
 		final condIdent: Null<QueryNode> = guardOperand(ifNode.children[0], s);
-		final guardName: Null<String> = condIdent == null ? null : condIdent.name;
-		if (condIdent == null || guardName == null || guardName == declName) return null;
+		if (condIdent == null || subjectRoot(condIdent, s).name == declName) return null;
 		final stmt: Null<QueryNode> = soleExprStatement(ifNode.children[1], s);
 		if (stmt == null) return null;
 		final assign: QueryNode = stmt.children[0];
@@ -357,10 +385,10 @@ final class PreferSafeNav implements Check {
 		final lhs: QueryNode = assign.children[0];
 		if (lhs.kind != s.identKind || lhs.name != declName) return null;
 		final rhs: QueryNode = assign.children[1];
-		final access: Null<QueryNode> = chainAccess(rhs, s);
-		if (access == null || !sameName(condIdent, access.children[0])) return null;
+		final access: Null<QueryNode> = subjectAccess(rhs, condIdent, s);
+		if (access == null) return null;
 		final root: QueryNode = access.children[0];
-		return mentionsOutsideRoot(rhs, root, guardName, s) || mentionsOutsideRoot(rhs, root, declName, s) ? null : {
+		return mentionsOutsideRoot(rhs, root, condIdent, s) || mentionsOutsideRoot(rhs, root, lhs, s) ? null : {
 			condIdent: condIdent,
 			rhs: rhs,
 			root: root
@@ -415,10 +443,10 @@ final class PreferSafeNav implements Check {
 
 	/**
 	 * If `ternary` is a null guard whose guarded branch is exactly a receiver chain rooted
-	 * at the guarded identifier — `x == null ? null : x.chain(...)` or its dual
+	 * at the guard subject — `x == null ? null : x.chain(...)` or its dual
 	 * `x != null ? x.chain(...) : null` — return that guard; else null. The other branch
-	 * must be the bare `null` literal, the chain must reach the identifier through plain
-	 * `.` / call / index steps only (so `x.f + 1` is refused), the identifier must not
+	 * must be the bare `null` literal, the chain must reach the subject through plain
+	 * `.` / call / index steps only (so `x.f + 1` is refused), the subject must not
 	 * appear anywhere in the branch but at the chain root, and no comment may sit in the
 	 * dropped text around the branch.
 	 */
@@ -429,16 +457,14 @@ final class PreferSafeNav implements Check {
 		// `==` puts `null` in the THEN branch and the guarded chain in the ELSE branch; `!=` mirrors that.
 		final elseIsGuarded: Bool = cond.kind == s.eqKind;
 		if (!elseIsGuarded && cond.kind != s.notEqKind) return null;
-		final condIdent: Null<QueryNode> = plainOperand(cond, s);
+		final condIdent: Null<QueryNode> = subjectOperand(cond, s);
 		if (condIdent == null) return null;
 		final branch: QueryNode = RefactorSupport.unwrapParens(ternary.children[elseIsGuarded ? 2 : 1], s.parenKind);
 		final fallback: QueryNode = RefactorSupport.unwrapParens(ternary.children[elseIsGuarded ? 1 : 2], s.parenKind);
 		if (fallback.kind != s.nullKind) return null;
-		final access: Null<QueryNode> = chainAccess(branch, s);
-		if (access == null || !sameName(condIdent, access.children[0])) return null;
-		final guardName: Null<String> = condIdent.name;
-		if (guardName == null) return null;
-		if (mentionsOutsideRoot(branch, access.children[0], guardName, s)) return null;
+		final access: Null<QueryNode> = subjectAccess(branch, condIdent, s);
+		if (access == null) return null;
+		if (mentionsOutsideRoot(branch, access.children[0], condIdent, s)) return null;
 		final ternarySpan: Null<Span> = ternary.span;
 		final branchSpan: Null<Span> = branch.span;
 		if (ternarySpan == null || branchSpan == null) return null;
@@ -452,29 +478,36 @@ final class PreferSafeNav implements Check {
 		};
 	}
 
-	/** The plain-identifier operand of a `<ident> <op> null` / `null <op> <ident>` comparison, or null for any other shape. */
-	private static function plainOperand(cond: QueryNode, s: Seams): Null<QueryNode> {
+	/** The guard SUBJECT of a `<subject> <op> null` / `null <op> <subject>` comparison, or null for any other shape. */
+	private static function subjectOperand(cond: QueryNode, s: Seams): Null<QueryNode> {
 		final a: QueryNode = cond.children[0];
 		final b: QueryNode = cond.children[1];
-		return if (a.kind == s.nullKind && b.kind == s.identKind)
-			b;
-		else if (b.kind == s.nullKind && a.kind == s.identKind)
-			a;
-		else
-			null;
+		if (a.kind == s.nullKind) return subjectOf(b, s);
+		return b.kind == s.nullKind ? subjectOf(a, s) : null;
+	}
+
+	/**
+	 * `node` when it is a guard SUBJECT — a plain identifier, or a one-step `<ident>.<field>`
+	 * path whose junction is a plain `.` — else null. A deeper path (`a.b.c`) and an already-safe
+	 * `x?.f` project as other shapes and refuse: the first would need a proof per step, the
+	 * second is the dead- / unnecessary-safe-nav checks' territory.
+	 */
+	private static function subjectOf(node: QueryNode, s: Seams): Null<QueryNode> {
+		if (node.kind == s.identKind) return node;
+		return node.kind == s.fieldAccessKind && node.children.length == 1 && node.children[0].kind == s.identKind ? node : null;
 	}
 
 	/**
 	 * Descend `node`'s receiver spine through CHAIN steps only (`chainKinds` — field access,
-	 * call, index) until the receiver is a plain identifier, returning the node that directly
-	 * holds it, and only when that node is a plain `.` field access. Null when `node` is not a
-	 * chain at all (`x.f + 1`), when the spine bottoms out on something else, or when the
-	 * junction off the identifier is an index / already-safe access.
+	 * call, index) until the receiver IS `subject`, returning the step that directly holds it,
+	 * and only when that step is a plain `.` field access. Null when `node` is not a chain at
+	 * all (`x.f + 1`), when the spine bottoms out without meeting the subject, or when the
+	 * junction off it is an index / already-safe access.
 	 */
-	private static function chainAccess(node: QueryNode, s: Seams): Null<QueryNode> {
+	private static function subjectAccess(node: QueryNode, subject: QueryNode, s: Seams): Null<QueryNode> {
 		var n: QueryNode = node;
 		while (s.chainKinds.contains(n.kind) && n.children.length > 0) {
-			if (n.children[0].kind == s.identKind) return n.kind == s.fieldAccessKind ? n : null;
+			if (sameSubject(n.children[0], subject, s)) return n.kind == s.fieldAccessKind ? n : null;
 			n = n.children[0];
 		}
 		return null;
@@ -482,8 +515,8 @@ final class PreferSafeNav implements Check {
 
 	/**
 	 * If `ifNode` is a no-`else` guard whose then-branch is a single call statement
-	 * rooted at a plain identifier `x` reached by a plain `.`, return the guard
-	 * operand, the body statement, the chain-root identifier and the surviving
+	 * rooted at the guard subject `x` reached by a plain `.`, return the guard
+	 * operand, the body statement, the chain-root subject and the surviving
 	 * condition (`restCond`, null for a sole guard); else null. Two condition shapes:
 	 * `if (x != null) x.chain(...)` (sole) and `if (C && ... && x != null) x.chain(...)`
 	 * (the null-check is the LAST conjunct — see `guardCondition`). Bails when `x`
@@ -498,13 +531,10 @@ final class PreferSafeNav implements Check {
 		final rest: Null<QueryNode> = guard.rest;
 		final stmt: Null<QueryNode> = singleCallStatement(ifNode.children[1], s);
 		if (stmt == null) return null;
-		final access: Null<QueryNode> = firstAccess(stmt, s);
+		final access: Null<QueryNode> = subjectAccess(stmt.children[0], condIdent, s);
 		if (access == null) return null;
 		final root: QueryNode = access.children[0];
-		if (!sameName(condIdent, root)) return null;
-		final guardName: Null<String> = condIdent.name;
-		if (guardName == null) return null;
-		if (mentionsOutsideRoot(stmt.children[0], root, guardName, s)) return null;
+		if (mentionsOutsideRoot(stmt.children[0], root, condIdent, s)) return null;
 		final ifSpan: Null<Span> = ifNode.span;
 		final stmtSpan: Null<Span> = stmt.span;
 		if (ifSpan == null || stmtSpan == null) return null;
@@ -524,15 +554,22 @@ final class PreferSafeNav implements Check {
 	}
 
 	/**
-	 * Whether `ident` is a receiver whose double read is provably free: the self reference
+	 * Whether `subject` is a receiver whose double read is provably free: the self reference
 	 * (a keyword, never an accessor), a local / param binding whose scope encloses it and
 	 * that lexically precedes it, or a field `fieldOk` proves physical.
+	 *
+	 * A one-step `<root>.<field>` path reads BOTH parts twice, so it needs both proofs: `root`
+	 * accepted on its own terms, and `plainRead` — the resolution index proving the step itself
+	 * resolves to a physical member rather than a property whose read runs a getter.
 	 */
 	private static function acceptedReceiver(
-		ident: QueryNode, bindings: Array<{ name: String, scope: Span, declEnd: Int }>, fieldOk: (String, Span) -> Bool, s: Seams
+		subject: QueryNode, bindings: Array<{ name: String, scope: Span, declEnd: Int }>, fieldOk: (String, Span) -> Bool,
+		plainRead: QueryNode -> Bool, s: Seams
 	): Bool {
-		final name: Null<String> = ident.name;
-		final span: Null<Span> = ident.span;
+		if (subject.kind == s.fieldAccessKind)
+			return acceptedReceiver(subject.children[0], bindings, fieldOk, plainRead, s) && plainRead(subject);
+		final name: Null<String> = subject.name;
+		final span: Null<Span> = subject.span;
 		if (name == null || span == null) return false;
 		if (name == s.selfText) return true;
 		final useName: String = name;
@@ -647,10 +684,10 @@ final class PreferSafeNav implements Check {
 		for (c in node.children) collectBindings(c, childScope, s, out);
 	}
 
-	/** The plain-identifier operand of a `x != null` / `null != x` guard condition, or null when `cond` is not that shape. */
+	/** The guard SUBJECT of a `x != null` / `null != x` guard condition, or null when `cond` is not that shape. */
 	private static function guardOperand(cond: QueryNode, s: Seams): Null<QueryNode> {
 		final c: QueryNode = RefactorSupport.unwrapParens(cond, s.parenKind);
-		return c.kind == s.notEqKind && c.children.length == COMPARISON_CHILD_COUNT ? plainOperand(c, s) : null;
+		return c.kind == s.notEqKind && c.children.length == COMPARISON_CHILD_COUNT ? subjectOperand(c, s) : null;
 	}
 
 	/**
@@ -676,21 +713,27 @@ final class PreferSafeNav implements Check {
 		return stmt != null && stmt.children.length == 1 ? stmt : null;
 	}
 
-	/** The FIRST access off the body call's chain root when it is a plain `.` field access — `chainAccess` on the call. */
-	private static function firstAccess(stmt: QueryNode, s: Seams): Null<QueryNode> {
-		return chainAccess(stmt.children[0], s);
+	/** The root identifier a guard subject is rooted at — the subject itself when it IS one, else the path's receiver. */
+	private static function subjectRoot(subject: QueryNode, s: Seams): QueryNode {
+		return subject.kind == s.fieldAccessKind ? subject.children[0] : subject;
 	}
 
-	/** Whether two identifier nodes carry the same source name. */
-	private static function sameName(a: QueryNode, b: QueryNode): Bool {
+	/**
+	 * Whether two nodes denote the same guard subject: two identifiers carrying one source name,
+	 * or two one-step field accesses agreeing in both the field name and the root identifier.
+	 */
+	private static function sameSubject(a: QueryNode, b: QueryNode, s: Seams): Bool {
 		final an: Null<String> = a.name;
 		final bn: Null<String> = b.name;
-		return an != null && bn != null && an == bn;
+		if (a.kind != b.kind || an == null || bn == null || an != bn) return false;
+		if (a.kind == s.identKind) return true;
+		return a.kind == s.fieldAccessKind && a.children.length == 1 && b.children.length == 1
+			&& sameSubject(a.children[0], b.children[0], s);
 	}
 
 
 	/**
-	 * Analyse an `if` condition for a null guard on a plain identifier, returning the
+	 * Analyse an `if` condition for a null guard on a guard subject, returning the
 	 * guarded operand and the surviving REMAINING condition (null for a sole guard):
 	 *
 	 * - `x != null` / `null != x` — the sole condition, `rest` is null;
@@ -715,17 +758,44 @@ final class PreferSafeNav implements Check {
 
 
 	/**
-	 * Whether the guarded identifier `name` appears in `node`'s subtree anywhere OTHER
-	 * than at the chain root `root`. The rewrite narrows nothing after the `?.`, so any
-	 * other `x` — a call argument (`x.m(x)`), an intermediate-chain argument
-	 * (`x.a(x).b()`), an index (`x.arr[x]`) — stays typed `Null<T>` and breaks
-	 * `@:nullSafety(Strict)`; such a guard is left unflagged. An opaque reification
-	 * subtree counts as a possible mention (conservative).
+	 * Whether the guard subject appears in `node`'s subtree anywhere OTHER than at the chain
+	 * root `root`. The rewrite narrows nothing after the `?.`, so any other occurrence — a call
+	 * argument (`x.m(x)`), an intermediate-chain argument (`x.a(x).b()`), an index
+	 * (`x.arr[x]`) — stays typed `Null<T>` and breaks `@:nullSafety(Strict)`; such a guard is
+	 * left unflagged. A qualified subject rooted at a LOCAL is matched as a whole, so its bare
+	 * root elsewhere in the body (`x.f?.m(x)`) is fine — the guard never narrowed it. An opaque
+	 * reification subtree counts as a possible mention (conservative).
 	 */
-	private static function mentionsOutsideRoot(node: QueryNode, root: QueryNode, name: String, s: Seams): Bool {
+	private static function mentionsOutsideRoot(node: QueryNode, root: QueryNode, subject: QueryNode, s: Seams): Bool {
 		if (s.opaqueKinds.contains(node.kind)) return true;
-		if (node != root && node.kind == s.identKind && node.name == name) return true;
-		return node.children.exists(c -> mentionsOutsideRoot(c, root, name, s));
+		if (node != root && denotesSubject(node, subject, s)) return true;
+		return node.children.exists(c -> mentionsOutsideRoot(c, root, subject, s));
+	}
+
+	/**
+	 * Whether `node` denotes the same value as the guard subject for the mention scan — a WIDER
+	 * question than `sameSubject`, which the rewrite side must keep tight.
+	 *
+	 * A member of the ENCLOSING object has two spellings, `f` and `this.f`, and one null guard
+	 * narrows both. Matching only the written shape would leave the other spelling un-narrowed
+	 * after the rewrite (`if (this.f != null) this.f.use(f);` → `this.f?.use(f);`, where the
+	 * argument `f` is back to `Null<T>`), so the two spellings match here. A bare identifier
+	 * that is really a LOCAL matches a same-named `this.` member it has nothing to do with —
+	 * conservative in the refusing direction, which is the safe one for this caller.
+	 */
+	private static function denotesSubject(node: QueryNode, subject: QueryNode, s: Seams): Bool {
+		if (sameSubject(node, subject, s)) return true;
+		final name: Null<String> = selfMemberName(node, s);
+		return name != null && name == selfMemberName(subject, s);
+	}
+
+	/** The member name `node` reads off the enclosing object — a bare identifier, or the field of a `this.<field>` path — else null. */
+	private static function selfMemberName(node: QueryNode, s: Seams): Null<String> {
+		if (node.kind == s.identKind) return node.name == s.selfText ? null : node.name;
+		return node.kind == s.fieldAccessKind && node.children.length == 1 && node.children[0].kind == s.identKind
+			&& node.children[0].name == s.selfText
+			? node.name
+			: null;
 	}
 
 }
