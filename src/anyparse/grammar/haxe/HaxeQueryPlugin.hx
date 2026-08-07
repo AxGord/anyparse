@@ -650,6 +650,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// (or, for a boundary scan, as no body at all).
 			functionBodyKinds: ['BlockBody', 'UntypedBlockBody', 'ExprBody', 'NoBody', 'CondBody'],
 			enumAbstractDeclKind: 'EnumAbstractDecl',
+			enumAbstractMetaName: '@:enum',
 			rawDynamicTypeName: 'Dynamic',
 			bareConstructorTypeKinds: ['EnumDecl', 'EnumAbstractDecl'],
 			overrideModifierKind: 'Override',

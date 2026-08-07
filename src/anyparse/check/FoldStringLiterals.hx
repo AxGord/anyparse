@@ -1,8 +1,10 @@
 package anyparse.check;
 
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.ConcatSegment;
 import anyparse.query.FormatConfigDiscovery;
@@ -10,16 +12,24 @@ import anyparse.query.GrammarPlugin.LayoutMetrics;
 import anyparse.query.GrammarPlugin.RefShape;
 import haxe.Exception;
 import anyparse.query.SymbolIndex;
+import anyparse.query.SymbolIndex.FileInfo;
+import anyparse.query.SymbolIndex.ImportInfo;
+import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.runtime.Span;
 
 /**
  * Canonicalises a string concatenation to the MINIMAL number of `+` segments that
  * fits the file's own `maxLineLength`: adjacent literals and expression operands
  * MERGE into one interpolated literal, and an already-merged literal that overflows
- * the line SPLITS back out at its `${ … }` seams. `Severity.Info` — a layout
- * cleanup, not a defect — with an autofix, and ON by default, as the narrower
- * adjacent-literal fold it grew out of was (`"a" + "b"` -> `"ab"` still folds, and
- * still to a DOUBLE-quoted literal).
+ * the line SPLITS back out at its seams — a `${ … }` interpolation, or an embedded
+ * `\n` ESCAPE. That second seam is what makes a lone over-long string TOKEN
+ * layout-fixable at all: the writer can wrap a `+` chain, but nothing can wrap one
+ * literal, so a message whose own text names its line breaks has to become a chain
+ * before layout can reach it.
+ *
+ * `Severity.Info` — a layout cleanup, not a defect — with an autofix, and ON by
+ * default, as the narrower adjacent-literal fold it grew out of was (`"a" + "b"` ->
+ * `"ab"` still folds, and still to a DOUBLE-quoted literal).
  *
  * Both directions are one decision over one representation, which is what makes the
  * rule idempotent: canonical input yields zero findings.
@@ -28,9 +38,9 @@ import anyparse.runtime.Span;
  *
  * A construct — the maximal left-associative `+` chain, or a standalone string
  * literal — is flattened into a list of `ConcatSegment`s. A literal operand
- * contributes its own fragments (text / `$name` / `${expr}`), a bare expression
- * operand contributes one segment, and the operands BEFORE the first literal
- * collapse into a single segment covering their source verbatim. Re-decomposing
+ * contributes its own fragments (text, cut at each `\n` escape / `$name` / `${expr}`),
+ * a bare expression operand contributes one segment, and the operands BEFORE the first
+ * literal collapse into a single segment covering their source verbatim. Re-decomposing
  * this rule's OWN output reproduces the identical list, so any deterministic
  * grouping over it is a fixed point by construction — the property every other
  * piece of the design is arranged to protect.
@@ -52,6 +62,14 @@ import anyparse.runtime.Span;
  * spliced and the unchanged texts are both rendered, and the widest line among those
  * that differ is the construct's TRUE width. An overflow shrinks the budget and
  * re-plans, bounded to three passes.
+ *
+ * The fill measures from the CONTINUATION column, which is optimistic on purpose (a
+ * construct the writer wraps onto its own line is laid out there). One case refutes
+ * that optimism without ever reaching the writer: the fill reproduces the source's own
+ * boundaries — so nothing changed and nothing is measured — while the source line is
+ * over-long anyway, which proves the writer did not move the construct. `unwrapped`
+ * re-fills such a construct at its OWN column, and whatever that proposes still goes
+ * through the same verification.
  *
  * Layout policy belongs to the writer and this rule only asks it questions. Every
  * candidate that changes anything asks one, because the answer is what the
@@ -95,6 +113,18 @@ import anyparse.runtime.Span;
  *   (`RefShape.opaqueKinds`) are skipped wholesale: a metadata string argument is
  *   parsed as a normal Haxe expression, so a `$` moved into one changes what the
  *   annotation says, and a reified subtree's identifiers are spliced, not written.
+ * - CONSTANT-REQUIRED positions (`skipsSubtree`): a `case` pattern and a parameter
+ *   default, both of which reject a concatenation outright.
+ * - CONSTANT-READ FIELDS (`walkChildren`): an enum-abstract value and an `inline`
+ *   field. Both compile folded and then stop answering to their own `case` patterns,
+ *   because the pattern reads the value's expression SHAPE.
+ * - A CALL ARGUMENT the gate cannot clear (`MacroGate`) is REPORTED but not fixed: a
+ *   macro reads its arguments as syntax, and one matching a string constant simply
+ *   stops matching a concatenation — silently. Refused both for a name a `macro` member
+ *   declares and for one NOTHING in the resolution scope declares, since that scope is
+ *   bounded by the invocation and the narrow answer is the dangerous one. A project
+ *   clears a target through the `concatFoldingMacros` option, which is a claim about
+ *   that target's implementation.
  * - RE-SEGMENT ONLY WHEN OVER-LONG: only a STRICT merge — a plan with FEWER groups
  *   than the source has — runs unconditionally. A split, and equally a same-count
  *   RE-CUT at different boundaries, needs the construct's source lines to be
@@ -125,10 +155,18 @@ import anyparse.runtime.Span;
  * plugin declares no layout metrics, makes the check a no-op.
  */
 @:nullSafety(Strict)
-final class FoldStringLiterals implements Check {
+final class FoldStringLiterals implements Check implements ConfigAware {
 
 	/** The rule id, spelled once — `run`, `fix` and the registry all quote it. */
 	private static inline final RULE_ID: String = 'fold-adjacent-string-literals';
+
+	/** The `apqlint.json` option naming the macros PROVEN to fold a `+` chain of string constants. */
+	private static inline final MACRO_WHITELIST_OPTION: String = 'concatFoldingMacros';
+
+	/** What a finding adds when the macro gate turned it report-only — the reason, and the key that lifts it. */
+	private static inline final MACRO_REFUSAL: String = ', but it is an argument of a call this rule cannot prove folds a '
+		+ 'concatenation, and rewriting one a macro pattern-matches breaks it silently — list the target in the '
+		+ '`$MACRO_WHITELIST_OPTION` option to allow it';
 
 	/**
 	 * Writer-verification passes per candidate. Each pass costs one `writeRoundTrip`
@@ -142,7 +180,14 @@ final class FoldStringLiterals implements Check {
 	/** The glue between two rendered groups. */
 	private static inline final GROUP_JOIN: String = ' + ';
 
+	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
+
 	public function new() {}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
 
 	public function id(): String {
 		return RULE_ID;
@@ -154,14 +199,27 @@ final class FoldStringLiterals implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = resolveSeams(plugin);
-		if (seams == null) return [];
+		if (seams == null || files.length == 0) return [];
+		final macros: MacroIndex = new MacroIndex(plugin, files);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final ctx: Null<PlanContext> = contextFor(plugin, seams, entry.source, FormatConfigDiscovery.discover(entry.file));
 			if (ctx == null) continue;
-			walk(violations, entry.file, ctx, tree);
+			// The whitelist is resolved PER FILE: `apqlint.json` is discovered by walking up
+			// from each file, so one run can span several configs, and reading the first
+			// file's would apply one project's claim about its macros to another's.
+			final whitelist: Null<Array<String>> = LintConfig.resolveWith(_resolveConfig, entry.file)
+				.stringListOption(RULE_ID, MACRO_WHITELIST_OPTION);
+			final gate: MacroGate = new MacroGate(macros, whitelist ?? [], entry.file);
+			for (planned in collectPlans(ctx, gate, tree)) violations.push({
+				file: entry.file,
+				span: planned.span,
+				rule: RULE_ID,
+				severity: Severity.Info,
+				message: planned.message
+			});
 		}
 		return violations;
 	}
@@ -185,7 +243,12 @@ final class FoldStringLiterals implements Check {
 		final ctx: Null<PlanContext> = contextFor(plugin, seams, source, FormatConfigDiscovery.discover(file));
 		if (ctx == null) return [];
 		final planContext: PlanContext = ctx;
-		return CheckScan.applyBySpan(plugin, source, violations, seams.candidateKinds, (node, span) -> {
+		// The macro-argument refusal is a property of a construct's ANCESTRY and of a
+		// cross-file symbol index, neither of which `fix` is handed — `applyBySpan` finds
+		// a node by its span alone, and `source` is one file. `run` already decided it, so
+		// the FINDING carries the decision here rather than the resolution being redone.
+		final fixable: Array<Violation> = violations.filter(v -> v.message.indexOf(MACRO_REFUSAL) == -1);
+		return CheckScan.applyBySpan(plugin, source, fixable, seams.candidateKinds, (node, span) -> {
 			final planned: Null<PlannedFold> = plan(planContext, node);
 			return planned == null ? null : { span: span, text: planned.text };
 		});
@@ -215,8 +278,15 @@ final class FoldStringLiterals implements Check {
 		return claim(node, source, concatKind, stringLiteralKinds) != null;
 	}
 
+	/** Every plan `tree` yields, in source order — the ONE traversal `run` reports from and `fix` is filtered against. */
+	private static function collectPlans(ctx: PlanContext, gate: MacroGate, tree: QueryNode): Array<PlannedFold> {
+		final out: Array<PlannedFold> = [];
+		walk(out, ctx, gate, [], tree, false);
+		return out;
+	}
+
 	/**
-	 * Walk `node`, flagging the OUTERMOST candidate on each path. A concatenation
+	 * Walk `node`, planning the OUTERMOST candidate on each path. A concatenation
 	 * is planned as a whole and not descended into (its operands are already part
 	 * of the plan); a string literal is planned for the SPLIT direction and never
 	 * descended into either — its children are interpolation fragments, and a `+`
@@ -224,29 +294,151 @@ final class FoldStringLiterals implements Check {
 	 * nest an interpolated string inside an interpolation block (fragile in the
 	 * real compiler's interp scanner).
 	 *
-	 * Two subtrees are skipped outright: reification (`RefShape.opaqueKinds`),
-	 * whose contents are spliced rather than executed, and ANNOTATION arguments
-	 * (`MetaShape.metaKinds`) — a metadata string argument is parsed as a normal
-	 * Haxe expression, so a `$` moved into one changes what the annotation says.
+	 * Out-of-bounds subtrees are skipped outright (`skipsSubtree`, plus the constant-read
+	 * fields `walkChildren` decides), and `calls` carries the simple names of the
+	 * enclosing calls so the macro gate can refuse a plan sitting inside one — a plan
+	 * that is still REPORTED, carrying the reason, since the construct genuinely does not
+	 * fit. `constantMembers` says whether THIS node's field children are read as
+	 * compile-time constants; `walkChildren` owns how it is derived.
 	 */
-	private static function walk(out: Array<Violation>, file: String, ctx: PlanContext, node: QueryNode): Void {
+	private static function walk(
+		out: Array<PlannedFold>, ctx: PlanContext, gate: MacroGate, calls: Array<CallRef>, node: QueryNode, constantMembers: Bool
+	): Void {
 		final seams: Seams = ctx.seams;
-		if (seams.opaqueKinds.contains(node.kind) || seams.metaKinds.contains(node.kind)) return;
+		if (skipsSubtree(seams, node)) return;
 		final literal: Bool = seams.stringLiteralKinds.contains(node.kind);
 		if (literal || node.kind == seams.concatKind) {
 			final planned: Null<PlannedFold> = plan(ctx, node);
-			if (planned != null) out.push({
-				file: file,
+			if (planned != null) out.push(gate.blocks(calls, planned.groups) ? {
 				span: planned.span,
-				rule: RULE_ID,
-				severity: Severity.Info,
-				message: planned.message
-			});
+				text: planned.text,
+				groups: planned.groups,
+				message: planned.message + MACRO_REFUSAL
+			} : planned);
 			// A literal is never descended into; a chain only when it did not plan as
 			// a whole, so an inner chain still gets its own chance.
 			if (literal || planned != null) return;
 		}
-		for (c in node.children) walk(out, file, ctx, c);
+		final callee: Null<CallRef> = calleeNameOf(seams, node);
+		if (callee != null) calls.push(callee);
+		walkChildren(out, ctx, gate, calls, node, constantMembers);
+		if (callee != null) calls.pop();
+	}
+
+	/**
+	 * `node`'s children walked, with the two decisions only a PARENT can make.
+	 *
+	 * CONSTANT-READ FIELDS. An enum-abstract value and an `inline` field are both read as
+	 * compile-time constants by a `case` pattern, and folding either costs it that:
+	 * `var A = 'a' + 'b'` / `static inline final S = 'a' + 'b'` turn `case A:` / `case S:`
+	 * into an "Unknown identifier" on Haxe 4.3.7 while still compiling everywhere else.
+	 * Neither fact is visible from the field node — the modifier is a preceding SIBLING,
+	 * and the enum-abstract-ness belongs to the declaration — so the running modifier
+	 * state is kept here, exactly as `SymbolIndexBuilder.collectMembers` keeps its own.
+	 *
+	 * The run ends at every child that is neither a modifier nor an annotation — not only
+	 * at a MEMBER, which is what a first attempt did and what let `@:enum abstract E {…}`
+	 * mark every LATER declaration in the module as an enum abstract, a type declaration
+	 * being no member kind. `runInline` likewise does not ask whether what follows is a
+	 * member: a module-level `inline final S = …` is a top-level declaration whose value
+	 * a `case` pattern reads exactly the same way.
+	 *
+	 * WHICH DECLARATIONS OPEN A VALUE REGION. The dedicated `enumAbstractDeclKind`, and
+	 * also whatever declaration an `enumAbstractMetaName` annotation precedes — Haxe's
+	 * DEPRECATED `@:enum abstract` spelling projects as a plain abstract with the
+	 * annotation as a sibling, so a kind test alone reads it as an ordinary abstract and
+	 * folds its values. A conditional-compilation region INHERITS the region it sits in:
+	 * a `#if`-guarded value is the declaration's child one level down, and a gate that
+	 * asked only about the immediate parent was blind to it. Both verified by compiling
+	 * the folded output.
+	 */
+	private static function walkChildren(
+		out: Array<PlannedFold>, ctx: PlanContext, gate: MacroGate, calls: Array<CallRef>, node: QueryNode, constantMembers: Bool
+	): Void {
+		final seams: Seams = ctx.seams;
+		final metaName: Null<String> = seams.enumAbstractMetaName;
+		var runInline: Bool = false;
+		var runEnumMeta: Bool = false;
+		for (c in node.children) {
+			if (seams.modifierKinds.contains(c.kind)) {
+				if (c.kind == seams.inlineKind) runInline = true;
+				continue;
+			}
+			if (seams.metaKinds.contains(c.kind)) {
+				if (metaName != null && c.name == metaName) runEnumMeta = true;
+				continue;
+			}
+			// EVERY other child ends the run — a member, a nested type, a statement. Ending it
+			// only at a MEMBER left `@:enum abstract E {…}` marking every LATER declaration in
+			// the module as an enum abstract, since a type declaration is not a member kind.
+			final fn: Bool = seams.functionKinds.contains(c.kind);
+			final value: Bool = constantMembers && !fn && RefactorSupport.isMemberDeclKind(c.kind);
+			// `runInline` is not asked whether the declaration is a MEMBER: a module-level
+			// `inline final S = …` projects as a top-level declaration, and its value is the
+			// same compile-time constant a `case` pattern reads the shape of.
+			if (!(value || (runInline && !fn)))
+				walk(
+					out, ctx, gate, calls, c,
+					c.kind == seams.enumAbstractDeclKind || runEnumMeta || (constantMembers && c.kind == seams.conditionalKind)
+				);
+			runInline = false;
+			runEnumMeta = false;
+		}
+	}
+
+	/**
+	 * Whether the whole subtree at `node` is out of bounds — a position where a
+	 * concatenation either cannot be written or is not read as a value:
+	 *
+	 *  - REIFICATION (`RefShape.opaqueKinds`), whose contents are spliced rather than
+	 *    executed, and ANNOTATION arguments (`MetaShape.metaKinds`), parsed as normal
+	 *    Haxe expressions so a `$` moved into one changes what the annotation says —
+	 *    and which reject a concatenation outright (`@:native('a' + 'b')` is
+	 *    "String expected");
+	 *  - a `case` PATTERN: `case 'a\n' + 'b':` is "Unrecognized pattern";
+	 *  - a PARAMETER, whose default value must be constant ("Default argument value
+	 *    should be constant") — the whole parameter subtree goes, since the only
+	 *    literal it can hold outside its metadata IS that default.
+	 *
+	 * The CONSTANT-READ FIELDS — an enum-abstract value, an `inline` field — are decided
+	 * by their declaration and their modifier run instead (see `walkChildren`), neither
+	 * of which a kind test can see. Both positions above verified against Haxe 4.3.7.
+	 */
+	private static function skipsSubtree(seams: Seams, node: QueryNode): Bool {
+		return seams.opaqueKinds.contains(node.kind) || seams.metaKinds.contains(node.kind) || node.kind == seams.patternKind
+			|| seams.paramKinds.contains(node.kind);
+	}
+
+	/**
+	 * `node`'s call target as the macro gate reads it — the member's simple name plus the
+	 * RECEIVER's, when the call is written qualified. Null when `node` is not a call, or
+	 * when its callee is an expression rather than a name (the gate has nothing to ask
+	 * about a computed target, and such a call cannot be a macro invocation).
+	 *
+	 * The receiver is carried because the two spellings of the same import bind DIFFERENT
+	 * names: `import pkg.Lang.t` binds `t`, `import pkg.Lang` binds `Lang`, and the gate's
+	 * unresolved-target refusal asks whether the caller's own imports could route the call
+	 * somewhere the index cannot see.
+	 */
+	private static function calleeNameOf(seams: Seams, node: QueryNode): Null<CallRef> {
+		if (node.kind != seams.callKind || node.children.length == 0) return null;
+		final callee: QueryNode = node.children[0];
+		final name: Null<String> = callee.name;
+		if (name == null) return null;
+		if (callee.kind == seams.identKind) return { name: name, receiver: null, qualified: false };
+		if (callee.kind != seams.fieldAccessKind || callee.children.length != 1) return null;
+		final receiver: QueryNode = callee.children[0];
+		return receiver.kind == seams.identKind || receiver.kind == seams.fieldAccessKind
+			? {
+				name: name,
+				receiver: receiver.name,
+				qualified: receiver.kind == seams.fieldAccessKind
+			}
+			: {
+				name: name,
+				receiver: null,
+				qualified: false
+			};
 	}
 
 	/**
@@ -278,24 +470,54 @@ final class FoldStringLiterals implements Check {
 		final decomposition: Decomposition = found;
 		final current: Int = decomposition.current.length;
 		final budget: Int = ctx.metrics.lineWidth - budgetBase(ctx, decomposition.span) - GROUP_JOIN.length + 1;
-		final filled: Null<Array<Int>> = fill(ctx, decomposition.segments, budget, decomposition.startsBare);
-		if (filled == null) return null;
+		final first: Null<Array<Int>> = fill(ctx, decomposition.segments, budget, decomposition.startsBare);
+		if (first == null) return null;
+		final planned: Null<Plan> = unwrapped(ctx, decomposition, first, budget);
+		if (planned == null) return null;
+		final filled: Array<Int> = planned.groups;
 		// The back-off below only ever ADDS groups, so a plan that does not strictly
 		// MERGE can be refused here without paying for a single writer render.
 		if (filled.length >= current && !overLong(ctx, decomposition.span)) return null;
 		if (sameBoundaries(filled, decomposition.current)) return null;
-		final result: Null<Settled> = settle(ctx, decomposition, filled, budget);
+		final result: Null<Settled> = settle(ctx, decomposition, filled, planned.budget);
 		if (result == null) return null;
 		final settled: Settled = result;
 		if (sameBoundaries(settled.groups, decomposition.current)) return null;
-		if (settled.groups.length >= current && !overLong(ctx, decomposition.span)) return null;
+		final groups: Int = settled.groups.length;
+		if (groups >= current && !overLong(ctx, decomposition.span)) return null;
 		final width: Null<Int> = settled.width;
 		if (width != null && width > ctx.metrics.lineWidth && width >= sourceMaxWidth(ctx, decomposition.span)) return null;
 		return {
 			span: decomposition.span,
 			text: settled.text,
-			message: messageFor(settled.groups.length, current)
+			groups: groups,
+			message: messageFor(groups, current)
 		};
+	}
+
+	/**
+	 * `filled` re-planned against the construct's OWN start column when the optimistic
+	 * budget said it fits and the SOURCE says it does not.
+	 *
+	 * `budgetBase` measures from the continuation column on purpose — a construct the
+	 * writer wraps onto its own line is laid out there, and pricing it at its source
+	 * column would shred it. But when the fill reproduces the source's own boundaries and
+	 * the source line is over-long anyway, that optimism has been REFUTED: the writer did
+	 * not move this construct, because there was nothing to move it away from. The retry
+	 * prices it where it actually sits, and whatever it proposes still goes through the
+	 * writer verification below.
+	 *
+	 * Without it a construct that fits at the continuation column and overflows at its
+	 * own is never re-segmented and never even measured — `settle` only runs for a plan
+	 * that changes something, so the arithmetic's own optimism is what closes the case.
+	 */
+	private static function unwrapped(ctx: PlanContext, decomposition: Decomposition, filled: Array<Int>, budget: Int): Null<Plan> {
+		if (!sameBoundaries(filled, decomposition.current) || !overLong(ctx, decomposition.span)) return { groups: filled, budget: budget };
+		final own: Int = ctx.metrics.lineWidth
+			- columnWidth(ctx, lineStartOf(ctx.source, decomposition.span.from), decomposition.span.from) - GROUP_JOIN.length + 1;
+		if (own >= budget) return { groups: filled, budget: budget };
+		final refilled: Null<Array<Int>> = fill(ctx, decomposition.segments, own, decomposition.startsBare);
+		return refilled == null ? null : { groups: refilled, budget: own };
 	}
 
 	/**
@@ -712,7 +934,7 @@ final class FoldStringLiterals implements Check {
 	private static function messageFor(planned: Int, current: Int): String {
 		if (planned < current) return 'these string concatenation segments can be merged';
 		return planned > current
-			? 'this string literal can be split at its interpolation seams to fit the line width'
+			? 'this string literal can be split at its seams to fit the line width'
 			: 'these string concatenation segments can be re-cut to fit the line width';
 	}
 
@@ -773,11 +995,257 @@ final class FoldStringLiterals implements Check {
 			callKind: shape.callKind,
 			fieldAccessKind: shape.fieldAccessKind,
 			identKind: shape.identKind,
+			patternKind: shape.plainCasePatternKind,
+			paramKinds: shape.paramKinds ?? [],
+			enumAbstractDeclKind: shape.enumAbstractDeclKind,
+			enumAbstractMetaName: shape.enumAbstractMetaName,
+			conditionalKind: shape.conditionalMemberKind,
+			inlineKind: shape.inlineModifierKind,
+			modifierKinds: CheckScan.modifierKinds(shape),
+			functionKinds: shape.functionKinds ?? [],
 			candidateKinds: [concatKind].concat(stringLiteralKinds)
 		};
 	}
 
 }
+
+/**
+ * Which enclosing calls forbid re-segmenting their arguments. A `macro` function
+ * receives its arguments as unevaluated SYNTAX, and one that pattern-matches a string
+ * constant (`EConst(CString)`) sees a concatenation as a different expression
+ * altogether — silently, since the match simply stops firing. No structural check can
+ * tell whether a given macro folds one, so the default is to refuse the fix and report
+ * the construct with the reason.
+ *
+ * A call target is named in `apqlint.json`'s `concatFoldingMacros` by its QUALIFIED path
+ * (`pkg.Type.member`), by any dotted SUFFIX of it (`Type.member`, `member`), and listing
+ * it is a claim about that target's implementation — that it folds an `OpAdd` chain of
+ * constants before it reads the string. The list comes from the CALLER's own config, so
+ * a run spanning several projects honours each one's claim rather than the first file's.
+ *
+ * TWO refusals, and the second is the one that keeps the gate honest:
+ *
+ *  - a name some `macro` member declares, unless EVERY such declaration is listed.
+ *    Matching is by SIMPLE NAME on purpose: resolving a call target exactly needs the
+ *    whole import / static-extension picture, and every gap in that resolution would
+ *    open the fix on a macro argument. A same-named ordinary function is refused along
+ *    with the macro — a false NEGATIVE, which costs a fix nobody was promised.
+ *  - a call whose TARGET TYPE the index does not carry. The index covers the resolution
+ *    scope, and that scope is bounded by the INVOCATION: linting one FILE of a project
+ *    cannot see a macro declared in another, so reading "no macro declares this name" as
+ *    "not a macro" made `--fix` answer differently depending on how the linter was
+ *    called — and the narrow answer is the dangerous one.
+ *
+ *    The question is asked at TYPE granularity, never by member name. A name test cannot
+ *    answer it: the std alone declares thirteen members called `t` (anonymous-structure
+ *    fields in `haxe.macro.Type` among them), so "something declares this name" was true
+ *    for the very call the refusal exists for, and the hole stayed open in every real CLI
+ *    run. What the caller's source DOES say is which type it means — through the import
+ *    that binds the call (`import pkg.Lang.t`, `import pkg.Lang`, a wildcard, a `using`)
+ *    or through a written qualified receiver — and whether the index carries that type is
+ *    a question with one answer. A call the file imports nothing for and writes no
+ *    receiver on is local, inherited or global, and no import can make it a macro.
+ *
+ *    One consequence is worth stating: a WILDCARD or a `using` whose own target the index
+ *    cannot see binds every name in the file, so every unresolved call in it is refused.
+ *    That is the honest answer — such an import genuinely can route any call into the
+ *    package it names — and it costs nothing on a whole-project run, where the package is
+ *    in scope. Measured: zero refusals over this repository's own 654 files, four over a
+ *    802-file application tree, all four the real macro.
+ */
+@:nullSafety(Strict)
+private class MacroGate {
+
+	private final _macros: MacroIndex;
+	private final _whitelist: Array<String>;
+	private final _file: String;
+
+	public function new(macros: MacroIndex, whitelist: Array<String>, file: String) {
+		_macros = macros;
+		_whitelist = whitelist;
+		_file = file;
+	}
+
+	/**
+	 * Whether a plan of `groups` groups sitting inside the call stack `calls` must stay
+	 * report-only. A plan that renders as ONE group is never refused: it is a lone
+	 * literal, the very shape a constant-matching macro expects, and reaching it can only
+	 * remove `+` operators the argument already had.
+	 */
+	public function blocks(calls: Array<CallRef>, groups: Int): Bool {
+		if (groups < 2) return false;
+		for (call in calls) if (blocksCall(call)) return true;
+		return false;
+	}
+
+	/**
+	 * Whether `call` refuses the rewrite — the two refusals in the type doc, in order.
+	 *
+	 * The whitelist is consulted against every spelling of the target the call site can
+	 * supply, because which one exists depends on what the index could resolve: the bare
+	 * name, the resolved macro path, the written `Receiver.member`, and the binding
+	 * import's path with the member appended.
+	 */
+	private function blocksCall(call: CallRef): Bool {
+		if (whitelisted(call.name)) return false;
+		final declarations: Null<Array<String>> = _macros.macroPathsOf(call.name);
+		if (declarations != null) {
+			for (path in declarations) if (!whitelisted(path)) return true;
+			return false;
+		}
+		final receiver: Null<String> = call.receiver;
+		if (receiver != null && (_macros.declaresType(receiver) || whitelisted('$receiver.${call.name}'))) return false;
+		final binding: Null<String> = _macros.unresolvedBinding(_file, receiver ?? call.name);
+		if (binding != null) return !whitelisted('$binding.${call.name}');
+		// A WRITTEN qualified receiver names a type path directly, so it refuses on its own
+		// evidence: `pkg.Lang.t(…)` needs no import at all, and nothing else in the file
+		// says where `Lang` lives.
+		return call.qualified;
+	}
+
+	/**
+	 * Whether `path` is listed. Matching is by dotted SUFFIX in BOTH directions, because
+	 * the two sides name the same target at different lengths and neither side chooses:
+	 * a project writes the fully qualified `pkg.Lang.t`, while what the gate holds is
+	 * whatever the CALL SITE said — the resolved `pkg.Lang.t` for a macro the index
+	 * carries, the import's `m.Lang`, or a written `Lang.t`. Comparing one direction only
+	 * meant the entry that worked depended on the invocation's scope.
+	 */
+	private function whitelisted(path: String): Bool {
+		for (entry in _whitelist) if (entry == path || StringTools.endsWith(entry, '.$path') || StringTools.endsWith(path, '.$entry'))
+			return true;
+		return false;
+	}
+
+}
+
+/**
+ * The run's macro knowledge, built ONCE and lazily: the qualified paths of every `macro`
+ * member by simple name, plus the index itself for the TYPE questions the second refusal
+ * asks. Shared across the run's per-file gates, since the index is the expensive part and
+ * the whitelist is not, and demanded only once a construct has actually planned, which on
+ * a tree with no findings is never.
+ */
+@:nullSafety(Strict)
+private class MacroIndex {
+
+	private final _plugin: GrammarPlugin;
+	private final _files: Array<{ file: String, source: String }>;
+
+	private var _index: Null<SymbolIndex> = null;
+	private var _macros: Null<Map<String, Array<String>>> = null;
+
+	public function new(plugin: GrammarPlugin, files: Array<{ file: String, source: String }>) {
+		_plugin = plugin;
+		_files = files;
+	}
+
+	/** The qualified paths of the `macro` members named `name`, or null when none is. */
+	public function macroPathsOf(name: String): Null<Array<String>> {
+		build();
+		final macros: Null<Map<String, Array<String>>> = _macros;
+		if (macros == null) throw new Exception('fold-adjacent-string-literals: the macro index was read before it was built');
+		return macros[name];
+	}
+
+	/** Whether the index carries a TYPE declaration named `name`. */
+	public function declaresType(name: String): Bool {
+		build();
+		return index().declaringFiles(name).length > 0;
+	}
+
+	/**
+	 * The raw path of the first import of `file` that BINDS `name` and whose own target
+	 * type the index does NOT carry, or null when nothing binds it or what does is in
+	 * scope. That is the question "could this file's imports route this call to a
+	 * declaration the resolution scope cannot see".
+	 *
+	 * Binding is per import KIND, and the two wildcard forms are why the kind has to be
+	 * read rather than the path: a plain import binds its last segment, an alias binds the
+	 * alias, and a WILDCARD or a `using` binds everything — the first because it pulls a
+	 * package's types or a type's statics in under their own names, the second because a
+	 * static extension routes by receiver TYPE and can answer any method call in the file.
+	 */
+	public function unresolvedBinding(file: String, name: String): Null<String> {
+		build();
+		final info: Null<FileInfo> = index().fileInfo(file);
+		if (info == null) return null;
+		// The wildcard's own `*` is dropped from the answer: the caller appends the member
+		// name to it to probe the whitelist, and `m.Lang.*.t` names nothing.
+		for (imported in info.imports) if (binds(imported, name) && !carriesTarget(imported.raw))
+			return StringTools.endsWith(imported.raw, '.*') ? imported.raw.substr(0, imported.raw.length - 2) : imported.raw;
+		return null;
+	}
+
+	/** Whether `imported` puts `name` in scope — see the kind-by-kind reasoning on `unresolvedBinding`. */
+	private function binds(imported: ImportInfo, name: String): Bool {
+		return switch imported.kind {
+			case ImportKind.Alias: imported.alias == name;
+			case ImportKind.Wild, ImportKind.Using: true;
+			case _: lastSegment(imported.raw) == name;
+		}
+	}
+
+	/**
+	 * Whether the index carries the TYPE an import path names. WHICH segment that is
+	 * cannot be known from the path alone — `pkg.Lang.t` is a member of `Lang`, `pkg.a.Lang`
+	 * is a type in `pkg.a` — so both trailing segments are tried, a wildcard's `*` dropped
+	 * first. Trying too many is the safe direction: it can only conclude the target IS in
+	 * scope, which is the answer that allows a fix the caller was going to get anyway.
+	 */
+	private function carriesTarget(raw: String): Bool {
+		final segments: Array<String> = raw.split('.');
+		if (segments[segments.length - 1] == '*') segments.pop();
+		for (i in 0...segments.length) {
+			if (i >= 2) break;
+			if (declaresType(segments[segments.length - 1 - i])) return true;
+		}
+		return false;
+	}
+
+	/** The resolved index, valid after `build`. */
+	private function index(): SymbolIndex {
+		final built: Null<SymbolIndex> = _index;
+		if (built == null) throw new Exception('fold-adjacent-string-literals: the macro index was read before it was built');
+		return built;
+	}
+
+	/** Resolve the index on first demand and project both maps out of it. */
+	private function build(): Void {
+		if (_macros != null) return;
+		final index: SymbolIndex = RefactorSupport.resolutionIndexOf(_plugin) ?? SymbolIndex.build(_files, _plugin);
+		_index = index;
+		final macros: Map<String, Array<String>> = [];
+		for (info in index.allFiles()) for (type in info.types) for (member in type.members) if (member.isMacro) {
+			final scoped: String = '${type.name}.${member.name}';
+			final paths: Array<String> = macros[member.name] ?? [];
+			paths.push(info.pkg == '' ? scoped : '${info.pkg}.$scoped');
+			macros[member.name] = paths;
+		}
+		_macros = macros;
+	}
+
+	/** `path`'s last dot-separated segment. */
+	private static function lastSegment(path: String): String {
+		final dot: Int = path.lastIndexOf('.');
+		return dot == -1 ? path : path.substr(dot + 1);
+	}
+
+}
+
+/**
+ * One enclosing call as the macro gate reads it: the target member's simple name, plus
+ * the immediate RECEIVER's when the call is written qualified — the last segment of a
+ * dotted path (`pkg.Lang.t(…)` gives `Lang`), null for a bare `f(…)`.
+ *
+ * The receiver is carried because it is the caller's own statement of which TYPE it
+ * means, and the gate's second refusal asks whether the index carries that type.
+ */
+private typedef CallRef = {
+	final name: String;
+	final receiver: Null<String>;
+	final qualified: Bool;
+};
 
 /** The seam kinds `FoldStringLiterals` resolves once per run and reads in both passes. */
 private typedef Seams = {
@@ -789,6 +1257,30 @@ private typedef Seams = {
 	final callKind: Null<String>;
 	final fieldAccessKind: Null<String>;
 	final identKind: String;
+
+	/** The `case` PATTERN host kind — a position where a concatenation is not legal syntax. */
+	final patternKind: Null<String>;
+
+	/** The parameter kinds, whose default value must be a compile-time constant. */
+	final paramKinds: Array<String>;
+
+	/** The enum-abstract declaration kind, whose VALUE members are read by their expression shape. */
+	final enumAbstractDeclKind: Null<String>;
+
+	/** The annotation NAME that makes an ordinary abstract an enum abstract — the deprecated spelling a kind test cannot see. */
+	final enumAbstractMetaName: Null<String>;
+
+	/** The conditional-compilation member host, which INHERITS the value region it sits in. */
+	final conditionalKind: Null<String>;
+
+	/** The `inline` modifier sibling — an inlined field's value is a compile-time constant at every use site. */
+	final inlineKind: Null<String>;
+
+	/** Every kind that projects as a leading MODIFIER — what a declaration's modifier RUN is made of. */
+	final modifierKinds: Array<String>;
+
+	/** The function-member kinds — what an enum-abstract declares that IS ordinary code. */
+	final functionKinds: Array<String>;
 
 	/** `concatKind` plus the literal kinds — the node kinds `fix` re-finds a violation's span among. */
 	final candidateKinds: Array<String>;
@@ -814,6 +1306,9 @@ private typedef Decomposition = {
 private typedef PlannedFold = {
 	final span: Span;
 	final text: String;
+
+	/** How many `+` operands the plan renders as — 1 means a single literal, the shape no gate refuses. */
+	final groups: Int;
 	final message: String;
 };
 
@@ -825,6 +1320,12 @@ private typedef Chain = {
 	final operands: Array<QueryNode>;
 	final from: Int;
 	final firstLiteral: Int;
+};
+
+/** A proposed partition and the budget it was filled against — what the writer verification re-fills from. */
+private typedef Plan = {
+	final groups: Array<Int>;
+	final budget: Int;
 };
 
 /**

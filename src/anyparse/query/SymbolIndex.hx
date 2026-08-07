@@ -94,6 +94,16 @@ typedef MemberInfo = {
 	var isInline: Bool;
 
 	/**
+	 * True when the member's modifier run carries the grammar's MACRO modifier
+	 * (`RefShape.macroModifierKind`) — the member runs at COMPILE time and receives its
+	 * arguments as unevaluated syntax. A consumer rewriting an argument expression must
+	 * bail on such a call: a macro that pattern-matches the argument's SHAPE (a string
+	 * constant, an identifier) sees the rewrite, and no structural check can tell whether
+	 * it tolerates one. False for a grammar declaring no macro modifier.
+	 */
+	var isMacro: Bool;
+
+	/**
 	 * True when the member's DECLARATION sits under a `conditionalMemberKind` host — the
 	 * member is written inside a `#if` region rather than at plain type-body level.
 	 * Mirrors `ImportInfo.guarded`: the declaration genuinely exists, but its presence is

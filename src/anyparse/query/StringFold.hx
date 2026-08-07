@@ -22,6 +22,9 @@ typedef StringLiteral = {
  * verbatim), so two same-`quote` texts concatenate by plain string append. A
  * lone `$` is normalised to the escaped `$$` form on the way in — otherwise
  * appending a text starting with a letter would silently create an interpolation.
+ * A grammar may also cut text at its own line-break ESCAPE, which is what gives a
+ * literal carrying no interpolation any seam at all; the pieces still append, so the
+ * round trip is unchanged.
  *
  * `SegIdent` is the `$name` shorthand: a bare identifier operand, or an `Ident`
  * fragment of an interpolated literal.
