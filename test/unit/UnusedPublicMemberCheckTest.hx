@@ -358,4 +358,55 @@ import utest.Test;
 		return Linter.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin(), [new UnusedPublicMember()], resolver, applyEnablement);
 	}
 
+
+	/**
+	 * A public method written inside a member-position `#if` is a method of the class like any other,
+	 * and just as unreachable when nothing names it. The region is ONE child of the container holding
+	 * every branch's members flattened, so scanning the container's direct children alone silently
+	 * exempted it.
+	 */
+	public function testConditionalMemberFlagged(): Void {
+		Assert.equals(
+			1, violations('class C {\n\t#if cpp\n\tpublic function gone():Void {}\n\tpublic var keeper:Int = 0;\n\t#end\n}').length
+		);
+	}
+
+
+	/**
+	 * A call written in ANY branch is a reference: the token scan reads the whole file, so a method
+	 * declared under `#if cpp` and called under the same guard is reachable and stays unreported.
+	 */
+	public function testConditionalCallInAnotherBranchCounts(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\t#if cpp\n\tpublic function used():Void {}\n\t#end\n\t#if cpp\n\tpublic function go():Void {\n\t\tused();\n\t}\n\t#end\n}'
+			).filter(v -> v.message.indexOf('public used') >= 0).length
+		);
+	}
+
+
+	/**
+	 * The deletion carries the method's doc comment and modifier run, both of which live INSIDE the
+	 * region — a group span computed against the container would leave them behind as debris that
+	 * does not parse. The region's other member is untouched and the directives stay.
+	 */
+	public function testConditionalMemberDeletedInsideItsBranch(): Void {
+		final src: String =
+			'class C {\n\t#if cpp\n\t/** Doc. */\n\tpublic function gone():Void {}\n\tpublic var keeper:Int = 0;\n\t#end\n}';
+		Assert.equals('class C {\n\t#if cpp\n\tpublic var keeper:Int = 0;\n\t#end\n}', applyFix(src));
+	}
+
+
+	/**
+	 * Deleting the SOLE member of a region would leave a bare `#if … #end`, a shape the grammar does
+	 * not model (an empty BRANCH parses, an empty REGION does not) — the finding stays, its deletion
+	 * does not.
+	 */
+	public function testConditionalSoleMemberReportedButNotDeleted(): Void {
+		final src: String = 'class C {\n\t#if cpp\n\tpublic function gone():Void {}\n\t#end\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
 }

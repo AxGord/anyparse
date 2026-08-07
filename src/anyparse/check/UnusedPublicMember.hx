@@ -4,6 +4,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberBranchScan;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingSupport;
@@ -251,7 +252,8 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 			final scope: SymbolIndex = wide.fileInfo(entry.file) == null ? index : wide;
 			final info: Null<FileInfo> = scope.fileInfo(entry.file);
 			if (info == null) continue;
-			for (cls in CheckScan.classBodies(tree)) considerClass(out, cls, entry.source, index, scope, info, ctx);
+			final branch: MemberBranchSeams = MemberBranchScan.seamsOf(plugin.refShape(), entry.source);
+			for (cls in CheckScan.classBodies(tree)) considerClass(out, cls, entry.source, index, scope, info, ctx, branch);
 		}
 		return out;
 	}
@@ -276,11 +278,16 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final edits: Array<{ span: Span, text: String }> = [];
-		for (cls in CheckScan.classBodies(tree)) for (child in cls.children) {
-			final span: Null<Span> = child.span;
-			if (span != null && CheckScan.METHOD_KINDS.contains(child.kind) && wanted.contains('${span.from}:${span.to}'))
-				edits.push(CheckScan.docDeletionEdit(source, child, cls, span));
-		}
+		// Every member host, and each method's OWN host as the group parent: a guarded method's
+		// modifier / doc run lives inside the `#if` region, and a group span computed against the
+		// container would leave it behind as unparseable debris.
+		for (cls in CheckScan.classBodies(tree)) RefactorSupport.eachMemberHost(cls, host -> {
+			for (child in host.children) {
+				final span: Null<Span> = child.span;
+				if (span != null && CheckScan.METHOD_KINDS.contains(child.kind) && wanted.contains('${span.from}:${span.to}'))
+					edits.push(CheckScan.docDeletionEdit(source, child, host, span));
+			}
+		});
 		return edits;
 	}
 
@@ -295,7 +302,8 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 	 * the reference test, so paying for them per class would dominate the run.
 	 */
 	private function considerClass(
-		out: Array<Violation>, cls: QueryNode, source: String, index: SymbolIndex, scope: SymbolIndex, host: FileInfo, ctx: Ctx
+		out: Array<Violation>, cls: QueryNode, source: String, index: SymbolIndex, scope: SymbolIndex, host: FileInfo, ctx: Ctx,
+		branch: MemberBranchSeams
 	): Void {
 		final owner: Null<String> = cls.name;
 		if (owner == null) return;
@@ -303,7 +311,7 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 		// A `@:build` macro can generate the call the scan cannot see; a `@:keep` class is reached
 		// by machinery no scan models; an `extern class` declares members of a foreign object.
 		if (declared == null || declared.hasKeep || declared.hasBuild || declared.isExtern) return;
-		final candidates: Array<Candidate> = unreferencedCandidates(cls, source, host.file, index, ctx);
+		final candidates: Array<Candidate> = unreferencedCandidates(cls, source, host.file, index, ctx, branch);
 		if (candidates.length == 0) return;
 		if (scope.transitivelyCarriesRtti(owner)) return;
 		final chain: Chain = { unresolved: false, generated: false };
@@ -319,7 +327,12 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 				severity: Severity.Warning,
 				message: 'unused public $name: no reference to it anywhere in scope'
 			});
-			if (noRuntimeNameFragment(ctx, name)) _deletable.push(CheckScan.spanKey(host.file, candidate.span));
+			// Deleting the sole member of a `#if` region leaves a bare `#if … #end`, which the grammar
+			// does not model — the finding stays, its deletion does not.
+			if (noRuntimeNameFragment(ctx, name) && !MemberBranchScan.isSoleRegionMember(
+				branch, cls, candidate.node, c -> RefactorSupport.isMemberDeclKind(c.kind)
+			))
+				_deletable.push(CheckScan.spanKey(host.file, candidate.span));
 		}
 	}
 
@@ -329,41 +342,39 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 	 * span its own declaration occupies.
 	 */
 	private static function unreferencedCandidates(
-		cls: QueryNode, source: String, file: String, index: SymbolIndex, ctx: Ctx
+		cls: QueryNode, source: String, file: String, index: SymbolIndex, ctx: Ctx, branch: MemberBranchSeams
 	): Array<Candidate> {
 		final out: Array<Candidate> = [];
-		var mods: Array<String> = [];
-		var annotations: Int = 0;
-		for (child in cls.children) {
-			final isMethod: Bool = CheckScan.METHOD_KINDS.contains(child.kind);
-			// The run resets at EVERY member, not only at a method: a `public` or a `@:keep`
-			// written on a preceding FIELD would otherwise carry onto the next method and answer
-			// for it — inventing a finding in one direction and hiding one in the other.
-			if (!isMethod && !RefactorSupport.isMemberDeclKind(child.kind)) {
-				// A `#if` region in the run WRAPS whatever it holds, so `#if js @:keep #end` is a
-				// `Conditional`, not a `Meta`. Counting the wrapper itself as an annotation is the
-				// conservative reading: at worst a `#if`-guarded MODIFIER silences a finding.
-				if (RefactorSupport.META_KINDS.contains(child.kind) || child.kind == CONDITIONAL_KIND)
-					annotations++;
-				else
-					mods.push(child.kind);
-				continue;
-			}
+		// The run resets at EVERY member, not only at a method: a `public` or a `@:keep` written on a
+		// preceding FIELD would otherwise carry onto the next method and answer for it — inventing a
+		// finding in one direction and hiding one in the other. A member written inside a
+		// member-position `#if` region is visited too, with the run of its own branch.
+		MemberBranchScan.eachMember(branch, cls, child -> RefactorSupport.isMemberDeclKind(child.kind), (child, run) -> {
+			if (!CheckScan.METHOD_KINDS.contains(child.kind)) return;
 			final name: Null<String> = child.name;
 			final span: Null<Span> = child.span;
-			final isPublic: Bool = mods.contains(PUBLIC_MODIFIER);
-			final isOverride: Bool = mods.contains(OVERRIDE_MODIFIER);
-			final annotated: Bool = annotations > 0;
-			mods = [];
-			annotations = 0;
-			if (!isMethod || name == null || span == null) continue;
-			if (!isPublic || isOverride || annotated || !reportableName(name)) continue;
+			if (name == null || span == null) return;
+			var isPublic: Bool = false;
+			var isOverride: Bool = false;
+			var annotated: Bool = false;
+			for (mod in run) {
+				if (mod.kind == PUBLIC_MODIFIER) isPublic = true;
+				// A `#if` region the branch splitter REFUSED still projects as one wrapper node in the
+				// run, so `#if js @:keep #end` written as a modifier reads as an annotation. Counting
+				// the wrapper itself is the conservative reading: at worst a guarded MODIFIER silences
+				// a finding.
+				if (RefactorSupport.META_KINDS.contains(mod.kind) || mod.kind == CONDITIONAL_KIND) annotated = true;
+				if (mod.kind == OVERRIDE_MODIFIER) isOverride = true;
+			}
+			if (!isPublic || isOverride || annotated || !reportableName(name)) return;
 			// Re-bound: a null-safety narrowing does not reach inside an anonymous structure literal.
 			final memberName: String = name;
 			final memberSpan: Span = span;
-			final region: Span = RefactorSupport.docExtendedSpan(source, RefactorSupport.declGroupSpan(child, cls, memberSpan));
-			if (provablyUnreferenced(memberName, file, source, region, index, ctx)) out.push({ name: memberName, span: memberSpan });
-		}
+			final host: QueryNode = RefactorSupport.memberHostOf(cls, child);
+			final region: Span = RefactorSupport.docExtendedSpan(source, RefactorSupport.declGroupSpan(child, host, memberSpan));
+			if (provablyUnreferenced(memberName, file, source, region, index, ctx))
+				out.push({ name: memberName, span: memberSpan, node: child });
+		});
 		return out;
 	}
 
@@ -552,6 +563,9 @@ private typedef Candidate = {
 
 	/** The method declaration's own span, which the finding reports and `fix` looks up. */
 	final span: Span;
+
+	/** The declaration node — read to tell whether deleting it would empty a `#if` region. */
+	final node: QueryNode;
 
 };
 
