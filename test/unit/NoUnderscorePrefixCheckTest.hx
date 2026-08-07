@@ -685,4 +685,54 @@ class NoUnderscorePrefixCheckTest extends Test {
 		assertFixed(src, ['inline function a(n:Int):Int', 'inline function b(n:String):String'], ['_n']);
 	}
 
+	/**
+	 * A local FUNCTION in one method must not veto an UNRELATED same-named local's strip in another.
+	 * `otherBindingSpans` attributes every other occurrence of the name to its own binding by asking
+	 * for that binding's container; a local function IS a scope node, so without the declaration's
+	 * own span excluded the container resolves to the function ITSELF, its call sites in the
+	 * enclosing body fall outside and stay unattributed, and the completeness gate refuses the
+	 * other method's rename. Here `a`'s `_run` is legitimately refused (the enclosing `run` local
+	 * is a real collision) while `b`'s must strip.
+	 */
+	public function testLocalFunctionDoesNotBlockAnUnrelatedLocalsStrip(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function a():Void {\n\t\tvar run:Int = 0;\n'
+			+ '\t\tfunction _run():Void {\n\t\t\ttrace(run);\n\t\t}\n\t\t_run();\n\t}\n\n'
+			+ '\tpublic function b():Void {\n\t\tvar _run:Int = 1;\n\t\ttrace(_run);\n\t}\n}';
+		Assert.equals(2, violations(src).length);
+		Assert.equals(2, edits(src).length);
+		assertFixed(src, ['var run:Int = 1;', 'trace(run);', 'function _run():Void', '\t\t_run();'], ['var _run']);
+	}
+
+
+	/**
+	 * Attributing a local function's occurrences must start AT its declaration, not at the enclosing
+	 * block: Haxe does not hoist one, so a read BEFORE it binds to whatever it shadows - here the
+	 * parameter being renamed. Counting that read as the local function's would EXCLUDE it from the
+	 * completeness gate and emit `trace(_x)` against a parameter that no longer exists. `locals: false`
+	 * keeps the local function out of the candidate set, so the refusal must come from the attribution
+	 * window rather than from the two candidates claiming one target.
+	 */
+	public function testReadBeforeALocalFunctionStillBlocksAParameterStrip(): Void {
+		final src: String = 'package pkg;\n'
+			+ 'class C {\n\tpublic function m(_x:Int):Void {\n\t\ttrace(_x);\n\t\tfunction _x():Void {}\n\t\t_x();\n\t}\n}';
+		final config: String = '{"rules":{"no-underscore-prefix":{"enabled":true,"params":true,"locals":false}}}';
+		Assert.equals(1, violations(src, config).length);
+		Assert.equals(0, edits(src, config).length);
+	}
+
+
+	/**
+	 * The `inline function` spelling of `testLocalFunctionDoesNotBlockAnUnrelatedLocalsStrip`. The two
+	 * local-function kinds are unioned wherever scope is decided and the grammar's own comment says they
+	 * must never diverge, so the attribution window is pinned for both spellings rather than one.
+	 */
+	public function testLocalInlineFunctionDoesNotBlockAnUnrelatedLocalsStrip(): Void {
+		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function a():Void {\n\t\tvar run:Int = 0;\n'
+			+ '\t\tinline function _run():Void {\n\t\t\ttrace(run);\n\t\t}\n\t\t_run();\n\t}\n\n'
+			+ '\tpublic function b():Void {\n\t\tvar _run:Int = 1;\n\t\ttrace(_run);\n\t}\n}';
+		Assert.equals(2, violations(src).length);
+		Assert.equals(2, edits(src).length);
+		assertFixed(src, ['var run:Int = 1;', 'trace(run);', 'inline function _run():Void', '\t\t_run();'], ['var _run']);
+	}
+
 }

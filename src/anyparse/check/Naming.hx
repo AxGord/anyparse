@@ -631,9 +631,7 @@ final class Naming implements Check implements CrossFileFix {
 		// the same distinctive name can name an UNRELATED binding elsewhere in the file, and a comment about
 		// THAT one must not be rewritten (nor block this rename). A field's container is its type, so its
 		// comment-along still spans the whole class.
-		final container: Null<Span> = innermostSpanOfKinds(
-			tree, shape.scopeKinds.concat(['CaseBranch', 'DefaultBranch']), declFrom, localFunctionDeclSpan(tree, declFrom, shape)
-		);
+		final container: Null<Span> = enclosingScopeSpan(tree, shape.scopeKinds.concat(['CaseBranch', 'DefaultBranch']), declFrom, shape);
 		for (occ in classified) switch occ.kind {
 			case OccurrenceClass.CommentTrivia if (distinctive):
 				if (container != null && occ.span.from >= container.from && occ.span.from < container.to) spans.push(occ.span);
@@ -920,7 +918,7 @@ final class Naming implements Check implements CrossFileFix {
 			// local past its branch (a `case` opens no scope frame), mis-binding a bare field use to it; such
 			// a use lies OUTSIDE the binding's container, so it is left uncovered and the completeness gate
 			// blocks the whole rename rather than silently excluding - and orphaning - a real reference.
-			final container: Null<Span> = innermostSpanOfKinds(tree, containerKinds, boundFrom);
+			final container: Null<Span> = visibleRegion(tree, containerKinds, boundFrom, shape);
 			if (container == null || off < container.from || off >= container.to) continue;
 			RefactorSupport.pushUniqueSpan(out, seen, off, name.length);
 		}
@@ -988,7 +986,7 @@ final class Naming implements Check implements CrossFileFix {
 		// a function node, and the scope it binds into is the enclosing body. Reading its own span as
 		// the scope would make every SIBLING local function look disjoint - and a sibling already
 		// holding `newName` is a real collision.
-		final enclosing: Null<Span> = innermostSpanOfKinds(tree, funcKinds, span.from, localFunctionDeclSpan(tree, span.from, shape));
+		final enclosing: Null<Span> = enclosingScopeSpan(tree, funcKinds, span.from, shape);
 		final excluded: Array<Span> = RefactorSupport.structureFieldNameSpans(tree, source, shape);
 		if (enclosing != null) collectDisjointFunctionSpans(tree, funcKinds, enclosing, excluded);
 		return RefactorSupport.nameBoundInRange(source, newName, 0, source.length, excluded, plugin);
@@ -1011,12 +1009,58 @@ final class Naming implements Check implements CrossFileFix {
 	}
 
 	/**
-	 * The tightest enclosing node span (whose kind is in `kinds`) containing `pos`, or null when none
-	 * does. `exclude` drops the node occupying exactly that span from consideration - what a DECLARATION
-	 * that is itself a scope opener needs (a local `function` statement), since the scope it binds INTO
-	 * is the enclosing one, never its own.
+	 * The tightest enclosing scope span (whose kind is in `kinds`) containing `pos`, with the local
+	 * FUNCTION declared AT `pos` excluded from the answer - the form every lookup made FROM a
+	 * declaration position needs, and the reason `innermostSpanOfKinds` should not be called with one
+	 * directly.
+	 *
+	 * A local `function` / `inline function` declaration is BOTH a binding and a `scopeKinds` node, so
+	 * the raw walk answers with the declaration's OWN span while the scope its name binds into is the
+	 * ENCLOSING one. Five sites need that pairing; three wrote it out by hand, `otherBindingSpans` and
+	 * `NoUnderscorePrefix.isUnreferenced` did not. In `otherBindingSpans` the omission made a local
+	 * function's call sites fall outside its "container", stay unattributed, and the completeness gate
+	 * refuse an UNRELATED same-named binding's rename.
+	 *
+	 * NOT the only such kind: a method (`FnMember`) and a type declaration are `scopeKinds` nodes and
+	 * decl hosts too, and `localFunctionDeclSpan` deliberately does not match them - widening it would
+	 * change the comment-along container for members, which is a separate decision. The same
+	 * unattributed-call-site refusal therefore still holds for a bare call to a same-named METHOD; it
+	 * is fail-closed (a lost rename, never a wrong one) and is left standing.
 	 */
-	private static function innermostSpanOfKinds(node: QueryNode, kinds: Array<String>, pos: Int, ?exclude: Span): Null<Span> {
+	private static function enclosingScopeSpan(tree: QueryNode, kinds: Array<String>, pos: Int, shape: RefShape): Null<Span> {
+		return innermostSpanOfKinds(tree, kinds, pos, localFunctionDeclSpan(tree, pos, shape));
+	}
+
+	/**
+	 * The region in which the binding declared at `declFrom` is VISIBLE: its enclosing scope, but
+	 * starting AT the declaration when the declaration is itself a scope opener (a local `function`).
+	 *
+	 * A STRICTER contract than `enclosingScopeSpan`, and the two must not be conflated. The four
+	 * callers of that one read its answer as "the region I must SCAN", where a wider span means more
+	 * vetoes - fail-closed. `otherBindingSpans` reads this one as "the region inside which I may
+	 * EXCLUDE an occurrence from the completeness gate", where a wider span means FEWER vetoes and a
+	 * rename that ships with a real reference unrewritten. Haxe does not hoist a local function, so a
+	 * read before its declaration binds to whatever it shadows - a parameter, a member - and must stay
+	 * uncovered. Clamping the lower bound is what keeps that read blocking while the call sites AFTER
+	 * the declaration are still attributed. `declaringFileRenameSpans` applies the same rule to the
+	 * binding being renamed (`bodyScoped`); this is its counterpart for the OTHER bindings.
+	 */
+	private static function visibleRegion(tree: QueryNode, kinds: Array<String>, declFrom: Int, shape: RefShape): Null<Span> {
+		final own: Null<Span> = localFunctionDeclSpan(tree, declFrom, shape);
+		final scope: Null<Span> = innermostSpanOfKinds(tree, kinds, declFrom, own);
+		if (scope == null) return null;
+		return own == null ? scope : new Span(declFrom, scope.to);
+	}
+
+	/**
+	 * The tightest enclosing node span (whose kind is in `kinds`) containing `pos`, or null when none
+	 * does. `exclude` drops the node occupying exactly that span from consideration.
+	 *
+	 * The raw walk, with `exclude` REQUIRED rather than optional so a caller has to decide: the two that
+	 * exist (`enclosingScopeSpan`, `visibleRegion`) both derive it from `localFunctionDeclSpan`. Reach it
+	 * through one of them, never directly from a declaration position.
+	 */
+	private static function innermostSpanOfKinds(node: QueryNode, kinds: Array<String>, pos: Int, exclude: Null<Span>): Null<Span> {
 		// Re-bound as Ints: strict null-safety does not narrow a captured parameter inside the
 		// nested walker. A null `exclude` becomes an impossible span, matching nothing.
 		final excludeFrom: Int = exclude == null ? -1 : exclude.from;
@@ -1074,10 +1118,11 @@ final class Naming implements Check implements CrossFileFix {
 	/**
 	 * The span of the local FUNCTION declared at `declFrom`, or null when the declaration there is
 	 * anything else. A local `function` is the one declaration kind that opens a scope its own NAME
-	 * does not bind into - the name belongs to the enclosing body - so every scope lookup made FROM
-	 * such a declaration must exclude the declaration's own node. A self-scoped binding (a loop
-	 * iterator, a catch variable) is the opposite case and is deliberately not matched: its own node
-	 * IS the scope its name lives in.
+	 * does not bind into - the name belongs to the enclosing body - so a scope lookup made FROM such a
+	 * declaration must exclude the declaration's own node. `enclosingScopeSpan` is the one place that
+	 * pairs this with the walk; nothing else needs it. A self-scoped binding (a loop iterator, a catch
+	 * variable) is the opposite case and is deliberately not matched: its own node IS the scope its
+	 * name lives in.
 	 */
 	private static function localFunctionDeclSpan(tree: QueryNode, declFrom: Int, shape: RefShape): Null<Span> {
 		final kinds: Array<String> = (shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
