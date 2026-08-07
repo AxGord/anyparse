@@ -7,6 +7,8 @@ import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.NamingPolicy.NamingRule;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
+import anyparse.query.TypeResolver;
+import anyparse.query.Uses;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -46,8 +48,15 @@ import anyparse.query.TypeInfoProvider;
  * ## No naming support → no-op
  *
  * A grammar without a naming convention (a binary format) returns null from
- * `namingSupport`; the check skips it. Report-only for now — `fix` returns no
- * edits (a rename-based autofix is a later slice).
+ * `namingSupport`; the check skips it.
+ *
+ * ## Not every odd name is a finding
+ *
+ * A declaration the grammar marks `contractName` — a field of an anonymous structure / typedef,
+ * whose identifier is part of the structural type and of whatever wire format it mirrors — is not
+ * reported at all: the project does not own that name, so there is nothing to correct. Distinct
+ * from `renameUnsafe` (an accessor-backed property, an `@:rtti` member), which IS the project's
+ * own name and stays reported — only the autofix keeps away from it.
  */
 @:nullSafety(Strict)
 final class Naming implements Check implements CrossFileFix {
@@ -84,7 +93,9 @@ final class Naming implements Check implements CrossFileFix {
 	 * the rename is provably complete in this one file. A function-body-scoped
 	 * binding (Local / Param / CatchVar) is a candidate; a private FIELD is one
 	 * only when the cross-file `index` proves it confined (no subtype, no
-	 * `@:access`, no `@:allow`, no skip-parse file that could hide one). Every
+	 * `@:access`, no `@:allow`, no skip-parse file that could hide one) and no
+	 * OTHER indexed file names it through a reflection call
+	 * (`reflectionNamesInOtherFiles` — an AST verdict, not a text scan). Every
 	 * candidate is then held to two in-file guards: every textual occurrence of
 	 * the old name must be covered by the resolved rename spans (an uncovered one
 	 * — a bare `$name` interpolation the resolver misses, a reflection string —
@@ -112,23 +123,31 @@ final class Naming implements Check implements CrossFileFix {
 			if (s != null) flaggedFroms.push(s.from);
 		}
 
-		// Hoisted ONCE per fix() call (not per finding): every OTHER indexed file's
-		// source, for the cross-file reflection-string rename guard, plus a per-owner
-		// confinement memo so a type with many flagged private members runs the
-		// project-wide confinement scan a single time.
-		final otherSources: Array<String> = index == null ? [] : otherIndexedSources(index, violations[0].file);
+		// Hoisted ONCE per fix() call (not per finding): the flagged names any OTHER indexed
+		// file reaches through a reflection call's string argument (the cross-file reflection
+		// rename guard), plus a per-owner confinement memo so a type with many flagged private
+		// members runs the project-wide confinement scan a single time.
+		final decls: Array<NamedDecl> = support.project(tree);
+		final flaggedNames: Array<String> = [];
+		for (decl in decls) {
+			final s: Null<Span> = decl.span;
+			if (s != null && flaggedFroms.contains(s.from) && !flaggedNames.contains(decl.name)) flaggedNames.push(decl.name);
+		}
+		final reflectionNames: Array<String> = index == null
+			? []
+			: reflectionNamesInOtherFiles(index, violations[0].file, flaggedNames, plugin, support);
 		final confinedMemo: Map<String, Bool> = [];
 		// The inherited-member proof of a `_`-prefix field rename walks the FULL supertype
 		// closure, so it resolves through the plugin's resolution scope (report files UNION the
 		// configured libraries) when present — a field of an `openfl` / `lime` subclass is then
 		// provable rather than blocked as unresolvable. The report-scope `index` still backs the
-		// confinement / reflection-string proofs (they reason about report-file reachability).
+		// confinement / reflection proofs (they reason about report-file reachability).
 		final resolutionIndex: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
 
 		final edits: Array<{ span: Span, text: String }> = [];
-		for (decl in support.project(tree)) {
+		for (decl in decls) {
 			final rename: Null<Array<{ span: Span, text: String }>> = renameEditsFor(
-				decl, source, tree, policy, shape, plugin, flaggedFroms, otherSources, confinedMemo, resolutionIndex, index,
+				decl, source, tree, policy, shape, plugin, flaggedFroms, reflectionNames, confinedMemo, resolutionIndex, index,
 				violations[0].file
 			);
 			// Two flagged declarations can want the SAME token: the qualification arm rewrites a bare
@@ -184,7 +203,7 @@ final class Naming implements Check implements CrossFileFix {
 		final out: Array<Violation> = [];
 		for (decl in decls) {
 			final span: Null<Span> = decl.span;
-			if (span == null || decl.reservedName == true) continue;
+			if (span == null || decl.reservedName == true || decl.contractName == true) continue;
 			final rule: Null<NamingRule> = applicableRule(decl, policy);
 			if (rule == null) continue;
 			final artifact: Null<String> = artifactCorrection(decl.name, rule);
@@ -268,7 +287,7 @@ final class Naming implements Check implements CrossFileFix {
 	 * Every other category (types, public members) is not.
 	 */
 	private static function isRenameSafe(
-		decl: NamedDecl, source: String, index: Null<SymbolIndex>, otherSources: Array<String>, confinedMemo: Map<String, Bool>
+		decl: NamedDecl, source: String, index: Null<SymbolIndex>, reflectionNames: Array<String>, confinedMemo: Map<String, Bool>
 	): Bool {
 		// A declaration the grammar marked rename-unsafe (a typedef / anon-structure
 		// field whose name is a wire contract, or a property backed by physical
@@ -286,13 +305,14 @@ final class Naming implements Check implements CrossFileFix {
 		if (category == NamingCategory.Method && (decl.mods.contains('override') || decl.implicitlyReachable == true)) return false;
 		final owner: Null<String> = decl.enclosingType;
 		if (owner == null) return false;
-		// Cross-file reflection guard: a private member reached from ANOTHER file
-		// by a reflection string (`Reflect.field(x, 'name')`, a string-keyed field
-		// map, `Type.createInstance` field names) breaks silently after a rename —
-		// the identifier-level confinement proof cannot see it. Refuse when the old
-		// name occurs as a quoted string literal in any other indexed file (the
-		// declaring file is already covered by the in-file completeness check).
-		if (referencedAsStringLiteral(decl.name, otherSources)) return false;
+		// Cross-file reflection guard: a private member reached from ANOTHER file by a
+		// reflection call naming it (`Reflect.field(x, 'name')`) breaks silently after a
+		// rename — the identifier-level confinement proof cannot see it. The names come from
+		// the grammar's own AST projection (`NamingSupport.reflectionMemberNames`), NOT from a
+		// text scan: a string that merely SPELLS the member (a menu-action id, an asset key,
+		// a `case 'name':`) is not a reference to it and must not veto the rename. The
+		// declaring file is already covered by the in-file completeness check.
+		if (reflectionNames.contains(decl.name)) return false;
 		// Memoize confinement per owner-type within this fix() call: a type with
 		// many flagged private constants would otherwise redo the identical
 		// project-wide subtype / access-grant / `@:allow` scan once per finding.
@@ -323,11 +343,11 @@ final class Naming implements Check implements CrossFileFix {
 	 */
 	private static function renameEditsFor(
 		decl: NamedDecl, source: String, tree: QueryNode, policy: NamingPolicy, shape: RefShape, plugin: GrammarPlugin,
-		flaggedFroms: Array<Int>, otherSources: Array<String>, confinedMemo: Map<String, Bool>, resolutionIndex: Null<SymbolIndex>,
+		flaggedFroms: Array<Int>, reflectionNames: Array<String>, confinedMemo: Map<String, Bool>, resolutionIndex: Null<SymbolIndex>,
 		index: Null<SymbolIndex>, file: String
 	): Null<Array<{ span: Span, text: String }>> {
 		final span: Null<Span> = decl.span;
-		if (span == null || !flaggedFroms.contains(span.from) || !isRenameSafe(decl, source, index, otherSources, confinedMemo))
+		if (span == null || !flaggedFroms.contains(span.from) || !isRenameSafe(decl, source, index, reflectionNames, confinedMemo))
 			return null;
 		final rule: Null<NamingRule> = applicableRule(decl, policy);
 		if (rule == null) return null;
@@ -352,7 +372,7 @@ final class Naming implements Check implements CrossFileFix {
 			final owner: Null<String> = decl.enclosingType;
 			if (owner == null || resolutionIndex == null) return null;
 			final idx: SymbolIndex = resolutionIndex;
-			if (!idx.typeProvablyLacksMember(owner, newName) || idx.transitivelyCarriesRtti(owner)) return null;
+			if (!idx.typeProvablyLacksMember(owner, newName, file) || idx.transitivelyCarriesRtti(owner)) return null;
 		}
 		// Collision: a `newName` already bound where the rename lands would be duplicated or shadowed
 		// (the re-parse gate accepts it but it does not type-check). Scope-aware for a local /
@@ -362,11 +382,22 @@ final class Naming implements Check implements CrossFileFix {
 		// everything else is refused here, before the expensive occurrence resolution below.
 		final collides: Bool = collidesInScope(decl, source, tree, newName, shape, resolutionIndex, plugin);
 		if (collides && !qualifiableBinding(decl)) return null;
-		// Completeness + comment-along: the SAME scope-correct occurrence resolution + classifyOccurrences
-		// gate the cross-file path applies to its declaring file — a `#if` / string / `noqa` / resolver-missed
-		// active-code occurrence bails, a distinctive comment mention renames along (see `declaringFileRenameSpans`).
+		// Completeness + comment-along: the SAME scope-correct occurrence resolution +
+		// `classifyOccurrences` gate the cross-file path applies to its declaring file — a `#if` /
+		// name-shaped string / `noqa` / resolver-missed active-code occurrence bails, a distinctive
+		// comment mention renames along, and anything else non-code is IGNORED (see
+		// `declaringFileRenameSpans`). A member declaration also passes its owner, so an access on a
+		// receiver of a PROVABLY unrelated type stops counting as an uncovered occurrence.
+		final bodyScoped: Bool = isBodyScopedCategory(decl.category);
+		final ownerName: Null<String> = decl.enclosingType;
+		// The owner half applies to members only; the index + file half applies to every declaration.
+		final ctx: Null<RenameContext> = resolutionIndex == null ? null : {
+			index: resolutionIndex,
+			file: file,
+			ownerName: bodyScoped ? null : ownerName
+		};
 		final renameSpans: Null<Array<Span>> = declaringFileRenameSpans(
-			source, tree, span.from, decl.name, shape, plugin, isDistinctiveName(decl.name), isBodyScopedCategory(decl.category)
+			source, tree, span.from, decl.name, shape, plugin, isDistinctiveName(decl.name), bodyScoped, ctx
 		);
 		if (renameSpans == null) return null;
 		final spans: Array<Span> = renameSpans;
@@ -514,7 +545,7 @@ final class Naming implements Check implements CrossFileFix {
 		// Unresolvable hierarchy: a skip-parse file could hide a subtype / grant we never see; an
 		// `@:allow` grants an unenumerable type; a non-unique owner makes the subtype match ambiguous.
 		if (index.skippedFiles().length > 0 || source.indexOf('@:allow') >= 0 || index.declaringFiles(ownerName).length != 1) return null;
-		final targetName: Null<String> = correctedFieldName(decl, support.policyFor(declFile), ownerName, resolutionIndex);
+		final targetName: Null<String> = correctedFieldName(decl, support.policyFor(declFile), ownerName, resolutionIndex, declFile);
 		if (targetName == null) return null;
 		return {
 			declFile: declFile,
@@ -536,13 +567,14 @@ final class Naming implements Check implements CrossFileFix {
 	 * drive the inheritance + rtti guards through the resolution scope.
 	 */
 	private static function correctedFieldName(
-		decl: NamedDecl, policy: NamingPolicy, ownerName: String, resolutionIndex: SymbolIndex
+		decl: NamedDecl, policy: NamingPolicy, ownerName: String, resolutionIndex: SymbolIndex, declFile: String
 	): Null<String> {
 		final rule: Null<NamingRule> = applicableRule(decl, policy);
 		if (rule == null) return null;
 		final newName: Null<String> = correctedName(decl.name, rule);
 		if (newName == null) return null;
-		if (!resolutionIndex.typeProvablyLacksMember(ownerName, newName) || resolutionIndex.transitivelyCarriesRtti(ownerName)) return null;
+		if (!resolutionIndex.typeProvablyLacksMember(ownerName, newName, declFile) || resolutionIndex.transitivelyCarriesRtti(ownerName))
+			return null;
 		return newName;
 	}
 
@@ -567,8 +599,11 @@ final class Naming implements Check implements CrossFileFix {
 			final fileTree: Null<QueryNode> = file == c.declFile ? c.tree : CheckScan.parseOrNull(plugin, fsrc);
 			if (fileTree == null) return null;
 			final spans: Null<Array<Span>> = file == c.declFile
-				? declaringFileRenameSpans(fsrc, c.tree, c.declFrom, c.oldName, shape, plugin, c.distinctive)
-				: otherFileRenameSpans(fsrc, c.oldName, plugin, c.distinctive, c.ownerName, shape, resolutionIndex);
+				? declaringFileRenameSpans(
+					fsrc, c.tree, c.declFrom, c.oldName, shape, plugin, c.distinctive, false,
+					{ index: resolutionIndex, file: c.declFile, ownerName: c.ownerName }
+				)
+				: otherFileRenameSpans(fsrc, c.oldName, plugin, c.distinctive, c.ownerName, shape, resolutionIndex, file);
 			if (spans == null) return null;
 			// A `targetName` already bound where the rename lands would collide once it does - scanned
 			// across the OWNER's own hierarchy in this file only, since a sibling hierarchy's same-named
@@ -581,17 +616,28 @@ final class Naming implements Check implements CrossFileFix {
 	}
 
 	/**
-	 * The occurrence spans to rewrite in the DECLARING file — the T29 single-file model: the
-	 * scope-correct resolved reference set (decl + reads / writes + `this.<name>`), gated for
-	 * completeness. Any resolved-outside occurrence that is `ActiveCode` (a reference the
-	 * resolver missed) or a `ConditionalRaw` / `StringLiteral` / `DirectiveComment` bails
-	 * (null); a distinctive-name `CommentTrivia` mention renames along. Null on a parse failure
-	 * when the fail-closed raw scan finds an uncovered mention.
+	 * The declaring file's rename spans for the binding at `declFrom`, or null when the rename cannot
+	 * be proven complete there. The spans are the scope-correct resolved reference set (decl + reads /
+	 * writes + `this.<name>`), gated for completeness. A resolved-outside occurrence that is
+	 * `ActiveCode` (a reference the resolver missed), `ConditionalRaw`, a name-shaped `StringLiteral`
+	 * or a `DirectiveComment` bails (null); a distinctive-name `CommentTrivia` mention renames along;
+	 * a non-distinctive comment mention and a `StringWord` are ignored. Null on a parse failure when
+	 * the fail-closed raw scan finds an uncovered mention.
 	 *
 	 * `bodyScoped` marks a binding visible only from its declaration on (a local, a parameter, a
 	 * catch variable); an occurrence resolved BEFORE the declaration is then the resolver
 	 * over-reaching past a shadowed member and the whole rename is refused. A MEMBER's references
 	 * legitimately precede it, so the flag defaults off.
+	 *
+	  * `ctx` supplies the discounts that need the index (see `RenameContext`). With `ownerName` — a
+	 * member declaration — every same-name access is attributed through its RECEIVER's declared type
+	 * (`inheritedFieldRefSpans`, the attribution the cross-file path also runs): one on a provably
+	 * unrelated type stops counting as an uncovered occurrence, and one on the owner or a subtype is
+	 * RENAMED along, since `renameOccurrences` emits only bare and `this.`-qualified reads. With the
+	 * index and file alone, an occurrence where the name denotes a TYPE rather than a value
+	 * (`typeReferenceSpans`). A receiver whose type does not resolve is in neither set and still
+	 * blocks. Module-path declarations are excluded unconditionally
+	 * (`RefactorSupport.modulePathSpans`) — a dotted path references nothing in any language.
 	 *
 	 * A simple `$name` string-interpolation read needs no caller-side help: `Refs` indexes it as
 	 * an ordinary read, so it is already in the resolved set and renames along instead of
@@ -599,7 +645,7 @@ final class Naming implements Check implements CrossFileFix {
 	 */
 	private static function declaringFileRenameSpans(
 		source: String, tree: QueryNode, declFrom: Int, name: String, shape: RefShape, plugin: GrammarPlugin, distinctive: Bool,
-		bodyScoped: Bool = false
+		bodyScoped: Bool = false, ?ctx: RenameContext
 	): Null<Array<Span>> {
 		final covered: Array<Span> = Rename.renameOccurrences(source, tree, declFrom, shape);
 		if (covered.length == 0) return null;
@@ -621,12 +667,50 @@ final class Naming implements Check implements CrossFileFix {
 		// binding (a param / loop var / sibling local sharing the name) is neither a rename target nor a
 		// blocker for THIS binding, so it joins the resolved set as an excluded span. An occurrence whose
 		// binding is unresolved is left uncovered so the completeness gate below blocks (fail-closed).
-		final excluded: Array<Span> = covered.concat(otherBindingSpans(source, tree, name, declFrom, shape));
+		// A same-named member on ANOTHER type (`rect.bottom` beside a field `bottom`,
+		// `event.bytesLoaded`) is not a reference to this declaration — but neither
+		// `renameOccurrences` nor `otherBindingSpans` says so, and an uncovered occurrence blocks
+		// the whole rename. The cross-file path already resolves such an access through the
+		// RECEIVER's declared type (`inheritedFieldRefSpans`); a member declaration gets the same
+		// treatment here. A receiver whose type does not RESOLVE stays out of both halves and keeps
+		// blocking — fail-closed.
+		final ownerName: Null<String> = ctx == null ? null : ctx.ownerName;
+		final attributed: {
+			bareBound: Array<Span>,
+			typedBound: Array<Span>,
+			ignore: Array<Span>
+		} = ctx == null || ownerName == null
+			? { bareBound: [], typedBound: [], ignore: [] }
+			: inheritedFieldRefSpans(source, tree, name, ownerName, plugin, shape, ctx.index);
+		final foreign: Array<Span> = attributed.ignore;
+		// The `typedBound` half is a set of EDITS, not exclusions. `renameOccurrences` emits bare and
+		// `this.`-qualified reads only, so an access through a RECEIVER typed to the owner or a subtype
+		// (`printer.output`, reaching a sibling sub-module's private) is invisible to it — yet it is a
+		// genuine reference, and renaming the declaration without it strands the access on a name that
+		// no longer exists. The `bareBound` half is deliberately NOT merged: it is class-attributed, so
+		// it also holds reads bound to a local of the same name (see `inheritedFieldRefSpans`), and here
+		// `renameOccurrences` is the authority on which bare reads are references. Deduped by offset
+		// against `covered` anyway — two edits over one span leave `applyEdits` no defined winner.
+		final ownerBound: Array<Span> = [for (s in attributed.typedBound) if (!RefactorSupport.offsetWithinAny(s.from, covered)) s];
+		// A receiver that is a TYPE, not a value: `Event.ACTIVATE` beside a parameter named `Event`
+		// projects the same `IdentExpr` as a read of that parameter, so the resolver leaves it
+		// unattributed and the gate refuses. Discount it when BOTH hold — the identifier binds to no
+		// value visible there, and the index resolves the name to a type in this file's scope.
+		final typeRefs: Array<Span> = ctx == null ? [] : typeReferenceSpans(source, tree, name, shape, plugin, ctx);
+		// A `package` / `import` path is a dotted module path, not a reference — a field named after
+		// its own package (`package touches;` beside `var touches`) or after a package some import
+		// traverses would otherwise leave an unattributable occurrence and veto the rename.
+		final excluded: Array<Span> = covered.concat(otherBindingSpans(source, tree, name, declFrom, shape))
+			.concat(ownerBound)
+			.concat(foreign)
+			.concat(typeRefs)
+			.concat(RefactorSupport.modulePathSpans(tree, shape));
 		final classified: Null<Array<ClassifiedOccurrence>> = RefactorSupport.classifyOccurrences(
 			source, name, plugin, 0, source.length, excluded
 		);
-		if (classified == null) return RefactorSupport.referencedInRange(source, name, 0, source.length, excluded) ? null : covered;
-		final spans: Array<Span> = covered.copy();
+		if (classified == null)
+			return RefactorSupport.referencedInRange(source, name, 0, source.length, excluded) ? null : covered.concat(ownerBound);
+		final spans: Array<Span> = covered.concat(ownerBound);
 		// A distinctive comment mention renames along, but only within the binding's own lexical container:
 		// the same distinctive name can name an UNRELATED binding elsewhere in the file, and a comment about
 		// THAT one must not be rewritten (nor block this rename). A field's container is its type, so its
@@ -635,6 +719,13 @@ final class Naming implements Check implements CrossFileFix {
 		for (occ in classified) switch occ.kind {
 			case OccurrenceClass.CommentTrivia if (distinctive):
 				if (container != null && occ.span.from >= container.from && occ.span.from < container.to) spans.push(occ.span);
+			// Neither renamed nor a blocker. A word inside a longer literal (`t('Can edit')` beside a
+			// field `edit`) is prose; a literal that NAMES the member stays `StringLiteral` and still
+			// refuses (see `OccurrenceClass`). A NON-distinctive comment mention lands here too: a
+			// comment does not execute, so no form of it can make a rename unsafe — the worst case is
+			// a stale sentence, which is not worth refusing a correct rename over. The distinctive arm
+			// above still rewrites the mention; `DirectiveComment` (a `noqa`) still refuses.
+			case OccurrenceClass.StringWord | OccurrenceClass.CommentTrivia:
 			case _:
 				return null;
 		}
@@ -655,25 +746,36 @@ final class Naming implements Check implements CrossFileFix {
 	 */
 	private static function otherFileRenameSpans(
 		source: String, name: String, plugin: GrammarPlugin, distinctive: Bool, ownerName: String, shape: RefShape,
-		resolutionIndex: SymbolIndex
+		resolutionIndex: SymbolIndex, file: String
 	): Null<Array<Span>> {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return null;
-		final refs: { ownerBound: Array<Span>, ignore: Array<Span> } = inheritedFieldRefSpans(
-			source, tree, name, ownerName, plugin, shape, resolutionIndex
-		);
+		final refs: {
+			bareBound: Array<Span>,
+			typedBound: Array<Span>,
+			ignore: Array<Span>
+		} = inheritedFieldRefSpans(source, tree, name, ownerName, plugin, shape, resolutionIndex);
+		// No scope-correct reference set exists for a file that does not declare the binding, so BOTH
+		// owner-bound halves are the rename targets here.
+		final ownerBound: Array<Span> = refs.bareBound.concat(refs.typedBound);
 		// Both the owner-bound targets AND the provably-different-owner occurrences are excluded from
 		// the completeness scan: the former are renamed, the latter left as-is; only an occurrence that
 		// is NEITHER (unprovable) stays uncovered and blocks the whole rename below.
-		final excluded: Array<Span> = refs.ownerBound.concat(refs.ignore);
+		// Module paths and type references are inert here too — see `declaringFileRenameSpans`. A
+		// subtype file naming a type after the member being renamed is the same shape, one file over.
+		final excluded: Array<Span> = ownerBound.concat(refs.ignore)
+			.concat(RefactorSupport.modulePathSpans(tree, shape))
+			.concat(typeReferenceSpans(source, tree, name, shape, plugin, { index: resolutionIndex, file: file }));
 		final classified: Null<Array<ClassifiedOccurrence>> = RefactorSupport.classifyOccurrences(
 			source, name, plugin, 0, source.length, excluded
 		);
 		if (classified == null) return null;
-		final spans: Array<Span> = refs.ownerBound.copy();
+		final spans: Array<Span> = ownerBound.copy();
 		for (occ in classified) switch occ.kind {
 			case OccurrenceClass.CommentTrivia if (distinctive):
 				spans.push(occ.span);
+			// Neither renamed nor a blocker — same reading as the declaring file's.
+			case OccurrenceClass.StringWord | OccurrenceClass.CommentTrivia:
 			case _:
 				return null;
 		}
@@ -693,8 +795,9 @@ final class Naming implements Check implements CrossFileFix {
 	private static function inheritedFieldRefSpans(
 		source: String, tree: QueryNode, name: String, ownerName: String, plugin: GrammarPlugin, shape: RefShape,
 		resolutionIndex: SymbolIndex
-	): { ownerBound: Array<Span>, ignore: Array<Span> } {
-		final ownerBound: Array<Span> = [];
+	): { bareBound: Array<Span>, typedBound: Array<Span>, ignore: Array<Span> } {
+		final bareBound: Array<Span> = [];
+		final typedBound: Array<Span> = [];
 		final ignore: Array<Span> = [];
 		final seenOwner: Array<Int> = [];
 		final seenIgnore: Array<Int> = [];
@@ -702,6 +805,12 @@ final class Naming implements Check implements CrossFileFix {
 		final typed: Array<{ recv: QueryNode, fa: QueryNode }> = [];
 		final recvNames: Array<String> = [];
 		collectAttributedRefs(tree, name, source, null, bare, typed, recvNames);
+		// The two owner-bound halves are kept apart because their trustworthiness differs. `typedBound`
+		// is attributed through a RECEIVER's declared type, which no scope resolver reproduces, so it is
+		// safe to RENAME anywhere. `bareBound` is attributed by the enclosing CLASS alone — every bare
+		// `name` read in the class lands there, including one bound to a local or parameter of that name
+		// — so in a file where the scope-correct set is already known (the declaring file) it must not be
+		// treated as edits; there it is `renameOccurrences` that says which bare reads are references.
 		// Bare `IdentExpr` / `this.` / `super.` occurrences: attributed by their enclosing class — the
 		// owner or a subtype of it binds to the inherited field (owner-bound); a class PROVABLY unrelated
 		// to the owner that inherits `name` from elsewhere binds to that different owner (ignored). Any
@@ -717,15 +826,15 @@ final class Naming implements Check implements CrossFileFix {
 			if (cls == null) continue;
 			final c: String = cls;
 			if (c == ownerName || resolutionIndex.isSubtype(c, ownerName))
-				RefactorSupport.pushUniqueSpan(ownerBound, seenOwner, occ.off, name.length);
+				RefactorSupport.pushUniqueSpan(bareBound, seenOwner, occ.off, name.length);
 			else if (resolutionIndex.provablyNotSubtype(c, ownerName) && resolutionIndex.supertypeDeclaresMember(c, name))
 				RefactorSupport.pushUniqueSpan(ignore, seenIgnore, occ.off, name.length);
 		}
 		if (typed.length > 0)
 			attributeTypedRefs(
-				typed, recvNames, tree, source, name, ownerName, plugin, shape, resolutionIndex, ownerBound, ignore, seenOwner, seenIgnore
+				typed, recvNames, tree, source, name, ownerName, plugin, shape, resolutionIndex, typedBound, ignore, seenOwner, seenIgnore
 			);
-		return { ownerBound: ownerBound, ignore: ignore };
+		return { bareBound: bareBound, typedBound: typedBound, ignore: ignore };
 	}
 
 	/**
@@ -781,38 +890,47 @@ final class Naming implements Check implements CrossFileFix {
 	}
 
 	/**
-	 * Every OTHER indexed file's source (the current file excluded — it is covered
-	 * by the in-file completeness check). Read from disk via the paths the index
-	 * holds, since `SymbolIndex` retains no sources; a file that cannot be read is
-	 * skipped. Used ONLY for the cross-file reflection-string guard. WANT: a
-	 * `SymbolIndex.sourceOf(file)` accessor would reuse the already-parsed sources
-	 * and drop this disk read entirely.
+	 * Which of `candidates` any OTHER indexed file reaches BY NAME through a reflection call
+	 * (the current file is excluded — it is covered by the in-file completeness check). The
+	 * verdict comes from the grammar's AST projection, `NamingSupport.reflectionMemberNames`:
+	 * a name only counts when its string literal stands in an argument of a reflection call,
+	 * so a menu-action id or an asset key that happens to spell a member does NOT veto its
+	 * rename. The literal's own text is checked FIRST (`quotedMention`) purely as a
+	 * pre-filter, so the overwhelming majority of files are dismissed at today's cost and
+	 * only a handful are parsed.
+	 *
+	 * Sources are read from disk via the paths the index holds, since `SymbolIndex` retains
+	 * none; an unreadable or unparseable file is skipped. WANT: a `SymbolIndex.sourceOf(file)`
+	 * accessor would reuse the already-parsed sources and drop the disk read entirely — it
+	 * would also make this guard reachable from an in-memory unit test, which today it is not.
 	 */
-	private static function otherIndexedSources(index: SymbolIndex, currentFile: String): Array<String> {
+	private static function reflectionNamesInOtherFiles(
+		index: SymbolIndex, currentFile: String, candidates: Array<String>, plugin: GrammarPlugin, support: NamingSupport
+	): Array<String> {
 		final out: Array<String> = [];
+		if (candidates.length == 0) return out;
 		for (fi in index.allFiles()) if (fi.file != currentFile) {
 			#if (sys || nodejs)
-			try
-				out.push(sys.io.File.getContent(fi.file))
-			catch (exception: Exception)
-				continue;
+			final source: Null<String> = try sys.io.File.getContent(fi.file) catch (exception: Exception) null;
+			if (source == null || !quotedMention(source, candidates)) continue;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+			if (tree == null) continue;
+			for (name in support.reflectionMemberNames(tree, source)) if (candidates.contains(name) && !out.contains(name)) out.push(name);
 			#end
 		}
 		return out;
 	}
 
 	/**
-	 * Whether `name` occurs as a quoted string literal (`'name'` or `"name"`, the
-	 * quotes hugging the exact name) in any of `sources`. A reflection reference
-	 * (`Reflect.field`, a string-keyed field map) writes the field name as its own
-	 * whole string, so this whole-content match catches it while a substring of a
-	 * longer string or a bare identifier does not falsely trip it. Refuse-on-doubt:
-	 * a comment mention counts too, which is acceptably conservative.
+	 * Whether any of `names` occurs in `source` as a quoted token (`'name'` / `"name"`, the
+	 * quotes hugging the exact name). The cheap pre-filter of
+	 * `reflectionNamesInOtherFiles`: a file with no such text cannot hold a reflection call
+	 * naming one of them, so it needs no parse. Deliberately NOT a verdict of its own — the
+	 * same text also matches a comment, a `case 'name':` and an asset key, which is exactly
+	 * the over-refusal the AST projection exists to end.
 	 */
-	private static function referencedAsStringLiteral(name: String, sources: Array<String>): Bool {
-		final single: String = '\'$name\'';
-		final double: String = '"$name"';
-		return sources.exists(src -> src.indexOf(single) >= 0 || src.indexOf(double) >= 0);
+	private static function quotedMention(source: String, names: Array<String>): Bool {
+		return names.exists(name -> source.indexOf('\'$name\'') >= 0 || source.indexOf('"$name"') >= 0);
 	}
 
 
@@ -893,16 +1011,59 @@ final class Naming implements Check implements CrossFileFix {
 
 
 	/**
-	 * Every same-name occurrence in the DECLARING file that provably binds to a DIFFERENT binding than
-	 * the one at `declFrom` - a param / loop var / sibling local sharing the name. Attributed via the
-	 * scope resolver's per-hit binding (a Decl self-binds, a Read / Write follows its `bindingSpan`) AND
-	 * verified to sit inside that binding's own lexical container: the resolver can leak a case-branch
-	 * local past its branch and mis-bind a bare field use to it, so an occurrence OUTSIDE the attributed
-	 * binding's container is NOT excluded. Excluded occurrences drop out of the completeness scan
-	 * (neither renamed with `declFrom`'s binding nor a blocker). An occurrence whose binding is
-	 * unresolved, or resolves outside its container, is NOT returned - it stays uncovered so the
-	 * completeness gate blocks the rename (fail-closed).
+	 * The spans where `name` names a TYPE rather than a value. Gated on the index first: unless the name
+	 * resolves to a type in this file's scope (`SymbolIndex.declaresTypeInScope`), nothing is discounted.
+	 *
+	 * Two forms, because a type name reaches source through two projections:
+	 *
+	 *  - an ANNOTATION (`(e:Event)`, a `:Event` return, a type parameter) exists only in the parallel
+	 *    type-ref tree — `parseFile` drops those positions, so neither `renameOccurrences` nor an
+	 *    expression walk sees them, yet the raw completeness scan matches their text;
+	 *  - a STATIC ACCESS's receiver root (`Event.ACTIVATE`), which projects the same `IdentExpr` as a
+	 *    read of a same-named value and is told apart by binding to nothing visible there
+	 *    (`TypeResolver.receiverRootIsUnboundType`).
+	 *
+	 * The index gate is what makes the second form safe. The unbound-root test alone also passes for a
+	 * genuine reference the resolver failed to attribute — an inherited member read without `this.`,
+	 * say — and discounting THAT would orphan a real use. `tabledStaticCall` gets its second opinion
+	 * from a return-type table; here it comes from the file's imports and package.
 	 */
+	private static function typeReferenceSpans(
+		source: String, tree: QueryNode, name: String, shape: RefShape, plugin: GrammarPlugin, ctx: RenameContext
+	): Array<Span> {
+		if (!ctx.index.declaresTypeInScope(name, ctx.file)) return [];
+		final out: Array<Span> = [];
+		final seen: Array<Int> = [];
+		// Annotation positions (`(e:Event)`, `:Event` returns, type parameters) live only in the
+		// PARALLEL type-ref projection — `parseFile` drops them, so neither `renameOccurrences` nor
+		// the expression walk below can see them, yet the raw completeness scan matches their text.
+		final typeTree: Null<QueryNode> = try plugin.parseFileTypeRefs(source) catch (exception: Exception) null;
+		if (typeTree != null) for (hit in Uses.find(name, typeTree, plugin.typeRefShape())) {
+			final off: Int = RefactorSupport.identTokenOffset(source, hit.span, name);
+			if (off >= 0) RefactorSupport.pushUniqueSpan(out, seen, off, name.length);
+		}
+		collectTypeReferenceSpans(source, tree, tree, name, shape, out, seen);
+		return out;
+	}
+
+	private static function collectTypeReferenceSpans(
+		source: String, node: QueryNode, tree: QueryNode, name: String, shape: RefShape, out: Array<Span>, seen: Array<Int>
+	): Void {
+		final fieldKind: Null<String> = shape.fieldAccessKind;
+		if (fieldKind != null && node.kind == fieldKind && node.children.length == 1) {
+			final receiver: QueryNode = node.children[0];
+			final rspan: Null<Span> = receiver.span;
+			if (
+				receiver.kind == shape.identKind && receiver.name == name && rspan != null
+				&& TypeResolver.receiverRootIsUnboundType(receiver, tree, shape)
+			) {
+				final off: Int = RefactorSupport.identTokenOffset(source, rspan, name);
+				if (off >= 0) RefactorSupport.pushUniqueSpan(out, seen, off, name.length);
+			}
+		}
+		for (child in node.children) collectTypeReferenceSpans(source, child, tree, name, shape, out, seen);
+	}
+
 	private static function otherBindingSpans(source: String, tree: QueryNode, name: String, declFrom: Int, shape: RefShape): Array<Span> {
 		final out: Array<Span> = [];
 		final seen: Array<Int> = [];
@@ -914,10 +1075,11 @@ final class Naming implements Check implements CrossFileFix {
 			final off: Int = RefactorSupport.identTokenOffset(source, h.span, name);
 			if (off < 0) continue;
 			// Fail-closed attribution: exclude this occurrence as belonging to a DIFFERENT binding only when
-			// it sits inside that binding's own lexical container. A scope resolver can leak a case-branch
-			// local past its branch (a `case` opens no scope frame), mis-binding a bare field use to it; such
-			// a use lies OUTSIDE the binding's container, so it is left uncovered and the completeness gate
-			// blocks the whole rename rather than silently excluding - and orphaning - a real reference.
+			// it sits inside that binding's own lexical container. The guard outlives the leak it was written
+			// for (a `case` arm now opens its own frame, `RefShape.branchScopeKinds`, so an arm local no
+			// longer captures a bare field use): any resolver over-reach puts the occurrence OUTSIDE the
+			// binding's container, where it stays uncovered and the completeness gate blocks the whole rename
+			// rather than silently excluding - and orphaning - a real reference.
 			final container: Null<Span> = visibleRegion(tree, containerKinds, boundFrom, shape);
 			if (container == null || off < container.from || off >= container.to) continue;
 			RefactorSupport.pushUniqueSpan(out, seen, off, name.length);
@@ -1148,6 +1310,23 @@ final class Naming implements Check implements CrossFileFix {
 	}
 
 }
+
+/**
+ * What `declaringFileRenameSpans` needs from outside the file to discount an occurrence it cannot
+ * attribute: the index and the file's own path, plus the owning type's name when the declaration is
+ * a MEMBER.
+ *
+ * Two independent uses. `ownerName` drives the foreign-receiver attribution — an access on a
+ * receiver of a provably unrelated type is not this member (absent for a body-scoped binding, which
+ * owns no members). `index` + `file` alone drive the type-reference discount, which applies to ANY
+ * declaration: a parameter named after an imported type (`Event` beside `Event.ACTIVATE`) needs it
+ * just as much as a field does.
+ */
+private typedef RenameContext = {
+	final index: SymbolIndex;
+	final file: String;
+	@:optional final ownerName: String;
+};
 
 /**
  * A resolved cross-file rename candidate: the parsed declaring file, the flagged binding's cursor

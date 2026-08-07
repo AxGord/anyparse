@@ -296,6 +296,26 @@ class PreferInlineCheckTest extends Test {
 		Assert.equals(0, new PreferInline().run(files, new HaxeQueryPlugin()).length);
 	}
 
+	/**
+	 * The implemented interface's SIMPLE name is shared by another package, and the class's own
+	 * imports say which one it means: the interface gate resolves instead of blocking on
+	 * ambiguity, so a method that fills NO interface slot is still a candidate.
+	 */
+	public function testAmbiguousInterfaceNameResolvesFromFileImports(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'a/I.hx', source: 'package a;\ninterface I {\n\tfunction f():Int;\n}' },
+			{ file: 'b/I.hx', source: 'package b;\ninterface I {\n\tfunction other():Int;\n}' },
+			{
+				file: 'C.hx',
+				source: 'import b.I;\n\nclass C implements I {\n\tfunction other():Int return 1;\n\tfunction g():Int return 2;\n}'
+			}
+		];
+		final vs: Array<Violation> = new PreferInline().run(files, new HaxeQueryPlugin());
+		// `other` fills b.I's slot and stays physical; `g` fills nothing and is flagged.
+		Assert.equals(1, vs.length);
+		if (vs.length == 1) Assert.isTrue(vs[0].message.indexOf("'g'") >= 0, vs[0].message);
+	}
+
 	public function testInterfaceImplSkips(): Void {
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'I.hx', source: 'interface I {\n\tfunction f():Int;\n}' },

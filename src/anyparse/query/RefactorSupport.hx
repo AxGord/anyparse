@@ -78,23 +78,17 @@ typedef ChainTypeContext = {
 }
 
 /**
- * Cursor-resolution and identifier/span primitives shared by the
- * scope-correct refactoring operations (`Rename`, `Inline`). Every
- * member is `public static` and behaviour-preserving: the bodies were
- * lifted verbatim out of `Rename` once a second consumer (`Inline`)
- * needed the same cursor-to-binding resolution and word-boundary
- * identifier-token logic. Keeping them here means the two operations
- * cannot drift apart.
+ * Lexical classification of one word-boundary occurrence of an identifier. Drives the naming
+ * completeness gate: `ActiveCode`, `ConditionalRaw`, `StringLiteral` and `DirectiveComment` block
+ * the rename; `StringWord` is ignored; `CommentTrivia` renames along when the name is distinctive
+ * enough to be worth rewriting in prose, and is otherwise ignored too.
  *
- * Coordinate convention: callers feed `cursor` as a raw UTF-16 offset
- * (the operations invert the `apq refs` printed column before calling).
- * The helpers never re-implement scope analysis — they ride on top of
- * the `Refs.find` resolver and operate on `QueryNode` spans only.
- */
-/**
- * Lexical classification of one word-boundary occurrence of an identifier.
- * Drives the naming completeness gate: only `CommentTrivia` occurrences are
- * renamed along with the code, every other class blocks the rename.
+ * Only a class that can carry a REFERENCE blocks. `StringLiteral` vs `StringWord` draws that line
+ * inside a string: a literal that NAMES the identifier can be a by-name lookup
+ * (`Reflect.field(o, 'edit')`), a literal that merely contains the word cannot (`t('Can edit')`).
+ * A comment is on the far side of the same line — it does not execute at all, so no form of it can
+ * make a rename unsafe; the worst case is a sentence that ages. A `noqa` is the exception, and it
+ * is not `CommentTrivia` but `DirectiveComment`: it addresses the TOOL, and the tool must obey.
  */
 enum abstract OccurrenceClass(Int) {
 
@@ -103,6 +97,7 @@ enum abstract OccurrenceClass(Int) {
 	final CommentTrivia = 2;
 	final StringLiteral = 3;
 	final DirectiveComment = 4;
+	final StringWord = 5;
 
 }
 
@@ -178,6 +173,17 @@ private typedef GuardedCtorInit = {
 	final param: String;
 	final terminator: String;
 };
+/**
+ * Cursor-resolution and identifier/span primitives shared by the scope-correct refactoring
+ * operations (`Rename`, `Inline`). Every member is `public static` and behaviour-preserving: the
+ * bodies were lifted verbatim out of `Rename` once a second consumer (`Inline`) needed the same
+ * cursor-to-binding resolution and word-boundary identifier-token logic. Keeping them here means
+ * the two operations cannot drift apart.
+ *
+ * Coordinate convention: callers feed `cursor` as a raw UTF-16 offset (the operations invert the
+ * `apq refs` printed column before calling). The helpers never re-implement scope analysis — they
+ * ride on top of the `Refs.find` resolver and operate on `QueryNode` spans only.
+ */
 @:nullSafety(Strict)
 final class RefactorSupport {
 
@@ -1383,6 +1389,30 @@ final class RefactorSupport {
 	 */
 	public static function collectCommentRegions(source: String): Array<Span> {
 		return [for (token in collectCommentTokens(source)) new Span(token.from, token.to)];
+	}
+
+	/**
+	 * The spans of every MODULE-PATH declaration in `tree` (`RefShape.modulePathKinds` — Haxe's
+	 * `package` / `import`). Their text is a dotted path, so a word-boundary identifier match
+	 * inside one is a package segment or a type name, never a use of a local or a member: a
+	 * completeness scan excludes these the way it excludes an occurrence already attributed
+	 * elsewhere. Empty for a grammar that declares no such kinds.
+	 */
+	public static function modulePathSpans(tree: QueryNode, shape: RefShape): Array<Span> {
+		final kinds: Null<Array<String>> = shape.modulePathKinds;
+		if (kinds == null || kinds.length == 0) return [];
+		final out: Array<Span> = [];
+		collectModulePathSpans(tree, kinds, out);
+		return out;
+	}
+
+	private static function collectModulePathSpans(node: QueryNode, kinds: Array<String>, out: Array<Span>): Void {
+		final span: Null<Span> = node.span;
+		if (kinds.contains(node.kind) && span != null) {
+			out.push(span);
+			return;
+		}
+		for (child in node.children) collectModulePathSpans(child, kinds, out);
 	}
 
 	/**
@@ -3311,7 +3341,7 @@ final class RefactorSupport {
 			final beforeOk: Bool = at == 0 || !isIdentChar(StringTools.fastCodeAt(source, at - 1));
 			final afterOk: Bool = afterIdx >= source.length || !isIdentChar(StringTools.fastCodeAt(source, afterIdx));
 			if (beforeOk && afterOk && !offsetWithinAny(at, excluded))
-				out.push({ span: new Span(at, afterIdx), kind: classifyAt(source, at, condSpans, regions) });
+				out.push({ span: new Span(at, afterIdx), kind: classifyAt(source, at, len, condSpans, regions) });
 		}
 		return out;
 	}
@@ -3406,14 +3436,40 @@ final class RefactorSupport {
 	 * `#if` block every rename of that name in the whole FILE (the class scans `0...length`),
 	 * including bindings whose scope lay nowhere near the region.
 	 */
-	private static function classifyAt(source: String, at: Int, condSpans: Array<Span>, regions: Array<LexRegion>): OccurrenceClass {
+	private static function classifyAt(
+		source: String, at: Int, len: Int, condSpans: Array<Span>, regions: Array<LexRegion>
+	): OccurrenceClass {
 		for (region in regions) if (at >= region.from && at < region.to) return switch region.kind {
-			// A regex body is inert literal text like a string's, and
-			// `OccurrenceClass` has no finer class - both block the rename.
-			case StringLit | RegexLit: StringLiteral;
+			case StringLit:
+				literalNamesIdentifier(source, at, len, region) ? StringLiteral : StringWord;
+			// A regex body is inert literal text, and no by-name lookup reads one, but nothing needs
+			// the relaxation - the conservative reading stays.
+			case RegexLit: StringLiteral;
 			case LineComment | BlockComment: isNoqaComment(source, region) ? DirectiveComment : CommentTrivia;
 		};
 		return offsetWithinAny(at, condSpans) ? ConditionalRaw : ActiveCode;
+	}
+
+	/**
+	 * Whether the occurrence at `[at, at + len)` inside the string `region` NAMES the identifier
+	 * rather than merely containing the word. Two shapes qualify:
+	 *
+	 *  - the occurrence is the literal's ENTIRE content — the form every by-name lookup takes
+	 *    (`Reflect.field(o, 'edit')`, a string-keyed field map, a serialized field name);
+	 *  - the occurrence is an interpolation READ — preceded by `$` or by `{` that a `$` precedes.
+	 *    Checked whatever the quote character is: this scanner is language-neutral and a spurious
+	 *    block is the safe direction.
+	 *
+	 * Everything else — a word inside a sentence, a fragment of a path or a compound key — cannot
+	 * address the member and must not veto its rename.
+	 */
+	private static function literalNamesIdentifier(source: String, at: Int, len: Int, region: LexRegion): Bool {
+		if (at == region.from + 1 && at + len == region.to - 1) return true;
+		final prev: Int = at - 1;
+		if (prev <= region.from) return false;
+		final prevCode: Int = StringTools.fastCodeAt(source, prev);
+		if (prevCode == '$'.code) return true;
+		return prevCode == '{'.code && prev - 1 > region.from && StringTools.fastCodeAt(source, prev - 1) == '$'.code;
 	}
 
 	/**
@@ -3559,7 +3615,8 @@ final class RefactorSupport {
 		if (classified == null) return referencedInRange(source, name, from, end, excluded);
 		final regions: Array<LexRegion> = scanLexicalRegions(source);
 		for (occ in classified) switch occ.kind {
-			case CommentTrivia | DirectiveComment:
+			// A word inside a longer literal binds nothing, whatever the literal interpolates.
+			case CommentTrivia | DirectiveComment | StringWord:
 			case StringLiteral if (!interpolatingLiteralAt(source, occ.span.from, regions)):
 			case _:
 				if (!isMemberNamePosition(source, occ.span.from)) return true;

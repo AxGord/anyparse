@@ -93,6 +93,33 @@ class PreferStaticExtensionCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * A supertype whose SIMPLE name is shared by another package resolves through the referring
+	 * file's imports, so the receiver's closure is provable and the rewrite lands — the same
+	 * collision used to degrade every such site to report-only.
+	 */
+	public function testAmbiguousSimpleSupertypeNameStillFixable(): Void {
+		final files: Array<{ file: String, source: String }> =
+			fileSet(user('using Ext;\n\n', 'Ext.deco(w, 1);'), 'import a.Base;\n\nclass Widget extends Base {}\n', [
+				{ file: 'a/Base.hx', source: 'package a;\nclass Base {}\n' },
+				{ file: 'b/Base.hx', source: 'package b;\nclass Base {}\n' }
+			]);
+		final out: String = fixResultOf(files);
+		Assert.isTrue(out.indexOf('w.deco(1);') != -1, out);
+		Assert.isTrue(out.indexOf('Ext.deco(') == -1, out);
+	}
+
+	/**
+	 * A `Reflect.field` receiver is `Dynamic`, and an extension dispatches no method on a
+	 * `Dynamic` value at runtime — so the site is DROPPED, not reported as unresolvable. Without
+	 * the `Reflect.field` entry in `staticMethodReturns` the receiver read as untyped and the
+	 * check emitted a report-only "verify the receiver type" advisory instead.
+	 */
+	public function testDynamicReflectFieldReceiverNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = fileSet(user('using Ext;\n\n', 'Ext.deco(Reflect.field(o, name), 1);'));
+		Assert.equals(0, violationsOf(files).length);
+	}
+
 	public function testUnresolvableClosureReportedOnly(): Void {
 		final files: Array<{ file: String, source: String }> = fileSet(
 			user('using Ext;\n\n', 'Ext.deco(w, 1);'), 'class Widget extends Unknown {}\n'
@@ -123,6 +150,26 @@ class PreferStaticExtensionCheckTest extends Test {
 			0,
 			violationsOf(fileSet(user('using Ext;\nusing Other;\n\n', 'Ext.deco(w, 1);'), WIDGET_SOURCE, [
 				{ file: 'Other.hx', source: 'class Other {\n\tpublic static function deco(w: Widget, n: Int): Widget return w;\n}\n' }
+			])).length
+		);
+	}
+
+	/**
+	 * A `using` whose module's SIMPLE name another package reuses no longer reads as an
+	 * unresolvable conflict: the scan forwards the full module path, which pins one decl. `p.Other`
+	 * declares no `deco`, so the rewrite lands despite `q.Other` existing.
+	 */
+	public function testUsingWithAmbiguousSimpleModuleNameStillFlagged(): Void {
+		Assert.equals(
+			1, violationsOf(fileSet(user('using Ext;\nusing p.Other;\n\n', 'Ext.deco(w, 1);'), WIDGET_SOURCE, [
+				{
+					file: 'p/Other.hx',
+					source: 'package p;\n\nclass Other {\n\tpublic static function tag(w: Widget): Widget return w;\n}\n'
+				},
+				{
+					file: 'q/Other.hx',
+					source: 'package q;\n\nclass Other {\n\tpublic static function deco(w: Widget, n: Int): Widget return w;\n}\n'
+				}
 			])).length
 		);
 	}

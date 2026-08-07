@@ -106,6 +106,24 @@ final class HaxeNamingSupport implements NamingSupport {
 		'Abstract' => 'abstract'
 	];
 
+	/**
+	 * The `Reflect` statics that address a member BY NAME through a string argument — the
+	 * whole field-reflection API. A POSITIVE list on purpose: "any call taking a string"
+	 * would veto every rename in a project, and the benefit side here is finite.
+	 */
+	private static final REFLECTION_FIELD_METHODS: Array<String> = [
+		'field',
+		'setField',
+		'getProperty',
+		'setProperty',
+		'hasField',
+		'deleteField',
+		'callMethod'
+	];
+
+	/** Reads a plain string literal's content — the grammar's own lexer rules, not a second parser. */
+	private static final STRING_FOLD: HaxeStringFoldSupport = new HaxeStringFoldSupport();
+
 	public function new() {}
 
 	public function project(tree: QueryNode): Array<NamedDecl> {
@@ -123,6 +141,12 @@ final class HaxeNamingSupport implements NamingSupport {
 		if (decl.category != NamingCategory.Method) return false;
 		final owner: Null<String> = decl.enclosingType;
 		return owner != null && isUtestMethodName(decl.name) && transitivelyExtendsTest(owner, index);
+	}
+
+	public function reflectionMemberNames(tree: QueryNode, source: String): Array<String> {
+		final out: Array<String> = [];
+		collectReflectionNames(tree, source, out);
+		return out;
 	}
 
 	/**
@@ -249,6 +273,7 @@ final class HaxeNamingSupport implements NamingSupport {
 				implicitlyReachable: isImplicitlyReachable(categoryValue, declName, node, parent, mods),
 				renameUnsafe: structural || hasPhysicalAccessors(node, parent, declName)
 				|| (enclosingRtti && isMemberCategory(categoryValue)),
+				contractName: structural,
 				reservedName: isReservedName(declName)
 			});
 		}
@@ -558,6 +583,31 @@ final class HaxeNamingSupport implements NamingSupport {
 	 */
 	private static function isReservedName(name: String): Bool {
 		return DISCARD_NAME_PATTERN.match(name) || DUNDER_NAME_PATTERN.match(name);
+	}
+
+	/**
+	 * Every plain string literal standing in an argument of a reflection call reachable from
+	 * `node`, deduplicated into `out`. Recurses through the whole subtree, so a call nested
+	 * in another expression counts.
+	 */
+	private static function collectReflectionNames(node: QueryNode, source: String, out: Array<String>): Void {
+		final children: Array<QueryNode> = node.children;
+		if (node.kind == 'Call' && children.length > 0 && isReflectionCallee(children[0])) for (i in 1...children.length) {
+			final content: Null<String> = STRING_FOLD.literalOf(children[i], source)?.content;
+			if (content != null && !out.contains(content)) out.push(content);
+		}
+		for (child in children) collectReflectionNames(child, source, out);
+	}
+
+	/**
+	 * Whether `callee` addresses a member by name: a `FieldAccess` naming one of
+	 * `REFLECTION_FIELD_METHODS` over the bare `Reflect` identifier. The receiver is matched
+	 * because `field` / `setProperty` are ordinary method names any type may carry.
+	 */
+	private static function isReflectionCallee(callee: QueryNode): Bool {
+		if (callee.kind != 'FieldAccess' || !REFLECTION_FIELD_METHODS.contains(callee.name ?? '')) return false;
+		final receiver: Array<QueryNode> = callee.children;
+		return receiver.length > 0 && receiver[0].kind == 'IdentExpr' && receiver[0].name == 'Reflect';
 	}
 
 }

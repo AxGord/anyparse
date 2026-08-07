@@ -330,6 +330,22 @@ typedef RefShape = {
 	var selfScopeDeclKinds: Array<String>;
 
 	/**
+	 * Kinds that open a scope frame for their OWN body while hosting no declaration of their own — a
+	 * `switch` arm (Haxe `CaseBranch` / `DefaultBranch`). A local declared inside one dies at the arm's
+	 * end, so the arm needs a frame of its own AND must stop the enclosing frame from adopting its
+	 * declarations; without both, the first arm's local shadows the field it was named after and every
+	 * sibling arm's same-named binding. (An enum-pattern binding such as `case Some(x)` is NOT affected:
+	 * it projects as a plain identifier read, not a declaration.)
+	 *
+	 * Deliberately separate from `scopeKinds`: that vocabulary is read by a dozen checks as "lexical
+	 * container of a declaration", which an arm is not. It is also NOT the same as the branch-aware
+	 * `CondBranch`, whose declarations stay visible past `#end` — an arm's do not, and `Refs` treats the
+	 * two asymmetrically for exactly that reason. Optional; unset leaves arm bodies in their enclosing
+	 * frame, as before this field existed.
+	 */
+	@:optional var branchScopeKinds: Array<String>;
+
+	/**
 	 * Run-scoped reference-resolution cache. A caching plugin wrapper attaches its
 	 * per-run `RefsCache` here so `Refs.find` resolves against a memoized full-file
 	 * index instead of walking the tree per query. Optional — a bare grammar shape
@@ -347,6 +363,17 @@ typedef RefShape = {
 	 * with no reification leaves it unset (treated as empty).
 	 */
 	@:optional var opaqueKinds: Array<String>;
+
+	/**
+	 * Node kinds whose text is a MODULE PATH rather than a reference to any binding — Haxe's
+	 * `PackageDecl` and `ImportDecl`. A word-boundary occurrence of an identifier inside one names
+	 * a package segment or a type in a dotted path; it cannot be a use of a local or a member, and
+	 * no rename of one can affect it. A completeness gate that counts such an occurrence as an
+	 * unattributed reference refuses correct renames outright — a field named after its own package
+	 * (`package touches;` beside `var touches`) or after a package another import traverses.
+	 * Optional; unset leaves those spans in the scan, as before this field existed.
+	 */
+	@:optional var modulePathKinds: Array<String>;
 
 	/** Kinds that each add one decision point to a function's cyclomatic complexity. */
 	@:optional var branchKinds: Array<String>;

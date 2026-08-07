@@ -115,6 +115,18 @@ typedef NamedDecl = {
 	 * written. Absent (false) for ordinary declarations.
 	 */
 	@:optional var reservedName: Bool;
+
+	/**
+	 * True when the identifier is part of an EXTERNAL contract rather than a name the project
+	 * chooses: a field of an anonymous structure / typedef, which participates in structural
+	 * typing and mirrors whatever wire format the structure describes (a server's JSON keys, a
+	 * file format). Renaming it is not a style improvement, it changes the type — so like
+	 * `reservedName` this suppresses the WARNING, not just the fix. Distinct from
+	 * `renameUnsafe`, which marks a name that IS the project's to choose but that the autofix
+	 * cannot rewrite safely (an accessor-backed property, an `@:rtti` member) and therefore
+	 * still deserves a report. Absent (false) for ordinary declarations.
+	 */
+	@:optional var contractName: Bool;
 }
 /**
  * A grammar plugins projection for the `naming` check: `project` lists the name-checkable declarations of a tree, and the policy lookup resolves each file to its effective `NamingPolicy` (discovered project config or built-in default). Keeps the check free of grammar-specific node types.
@@ -139,5 +151,19 @@ interface NamingSupport {
 	 * index-free `NamedDecl.implicitlyReachable`.
 	 */
 	public function frameworkReachable(decl: NamedDecl, index: SymbolIndex): Bool;
+
+	/**
+	 * The member names `tree` reaches BY NAME through a reflection API — every string
+	 * literal standing in an argument of a call the grammar recognises as reflection
+	 * (`Reflect.getProperty(o, 'x')` and friends for Haxe). Such a reference is invisible
+	 * to any identifier-level resolution, and renaming the member breaks it SILENTLY, so
+	 * `Naming`'s autofix refuses a member whose name appears here.
+	 *
+	 * A call whose name argument is NOT a plain literal (`Reflect.field(o, key)`) is
+	 * outside this projection on purpose: the name is unknowable, and treating any dynamic
+	 * reflection as a project-wide veto would refuse every rename in a project that has
+	 * one. A grammar with no reflection API returns an empty array.
+	 */
+	public function reflectionMemberNames(tree: QueryNode, source: String): Array<String>;
 
 }

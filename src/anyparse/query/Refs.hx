@@ -197,10 +197,14 @@ final class Refs {
 
 	/**
 	 * The scope frame `node` opens, primed with the declarations it binds, or null when it opens none.
-	 * Two kinds open one:
+	 * Three kinds open one:
 	 *
 	 * - a grammar `scopeKinds` node — a real lexical scope, which also binds its OWN name when it is a
 	 *   `selfScopeDeclKinds` host (a `for` iterator, a catch-clause exception);
+	 * - a grammar `branchScopeKinds` node — a `switch` arm. A real lexical scope too, but not a
+	 *   declaration container any check reasons about, hence its own vocabulary; `collectIntoMulti`
+	 *   stops there as well, so the enclosing frame does not adopt the arm's locals. Contrast the
+	 *   `CondBranch` case below: an arm's local genuinely dies at the arm's end;
 	 * - the branch-aware projection's synthetic `CondBranch`. That one is NOT a lexical scope — a
 	 *   declaration written inside `#if` stays visible after `#end`, and the enclosing frame's
 	 *   pre-collect already holds it — but a resolution PREFERENCE: a reference inside a branch binds
@@ -220,7 +224,13 @@ final class Refs {
 	private static function frameFor(node: QueryNode, shape: RefShape, macroEmit: Bool, out: Map<String, Array<RefHit>>): Null<ScopeFrame> {
 		if (macroEmit) return null;
 		final isScope: Bool = shape.scopeKinds.contains(node.kind);
-		if (!isScope && node.kind != CondBranchProjection.COND_BRANCH_KIND) return null;
+		// A switch ARM frames its own body (`branchScopeKinds`): a local declared there dies at the
+		// arm's end. `collectIntoMulti` stops at the same kinds so the enclosing frame does not adopt
+		// it — the two halves together are what confine an arm's binding. (An enum-PATTERN binding is
+		// not a declaration to this walker at all; it projects as a plain identifier read.)
+		final branchKinds: Null<Array<String>> = shape.branchScopeKinds;
+		final isBranchScope: Bool = branchKinds != null && branchKinds.contains(node.kind);
+		if (!isScope && !isBranchScope && node.kind != CondBranchProjection.COND_BRANCH_KIND) return null;
 		final frame: ScopeFrame = new ScopeFrame(node);
 		collectDeclsMulti(node, shape, frame, out);
 		final selfSpan: Null<Span> = node.span;
@@ -238,7 +248,11 @@ final class Refs {
 
 	private static function collectIntoMulti(node: QueryNode, shape: RefShape, frame: ScopeFrame, out: Map<String, Array<RefHit>>): Void {
 		final name: Null<String> = node.name;
-		if (shape.scopeKinds.contains(node.kind)) {
+		// A switch arm's declarations belong to ITS frame, not this one — stop, exactly as at a
+		// nested scope. `CondBranch` is deliberately absent: a `#if` branch's declaration stays
+		// visible past `#end`, so the enclosing frame must still adopt it.
+		final branchKinds: Null<Array<String>> = shape.branchScopeKinds;
+		if (shape.scopeKinds.contains(node.kind) || (branchKinds != null && branchKinds.contains(node.kind))) {
 			if (name != null && out.exists(name) && shape.declHostKinds.contains(node.kind)) {
 				final span: Null<Span> = node.span;
 				if (span != null) frame.declare(name, span);

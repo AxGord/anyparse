@@ -255,7 +255,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			// must stay physical. An unresolvable supertype stays optimistic, like
 			// the extends chain always was for this rule.
 			if (index.supertypeDeclaresMember(owner, name)) return;
-			if (interfaceRequires(index, ifaces, name)) return;
+			if (interfaceRequires(index, ifaces, name, file)) return;
 			final span: Null<Span> = fn.span;
 			if (span == null) return;
 			out.push({
@@ -529,8 +529,8 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * required. `typeProvablyLacksMember` returns false for an unresolvable interface, so an
 	 * unreachable interface conservatively blocks the candidate.
 	 */
-	private static function interfaceRequires(index: SymbolIndex, ifaces: Array<String>, name: String): Bool {
-		for (iface in ifaces) if (!index.typeProvablyLacksMember(iface, name)) return true;
+	private static function interfaceRequires(index: SymbolIndex, ifaces: Array<String>, name: String, file: String): Bool {
+		for (iface in ifaces) if (!index.typeProvablyLacksMember(iface, name, file)) return true;
 		return false;
 	}
 

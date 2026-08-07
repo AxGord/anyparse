@@ -36,6 +36,55 @@ using Lambda;
  */
 class ApqRefsTest extends Test {
 
+	/**
+	 * Each `switch` arm frames its own body: two arms declaring the SAME name are two distinct
+	 * bindings, and each arm's read binds to its own. Before arms framed, the first arm's local
+	 * swallowed the second arm's reads as well.
+	 */
+	public function testCaseArmLocalsAreDistinctBindings(): Void {
+		final src: String = 'class X { static function f(v:Int) { switch v { case 0: var n:Int = 1; trace(n); '
+			+ 'case _: var n:Int = 2; trace(n); } } }';
+		final hits: Array<RefHit> = findIn(src, 'n');
+		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		Assert.equals(2, decls.length);
+		for (h in hits) if (h.kind == RefKind.Read) {
+			final binding: Null<Span> = h.bindingSpan;
+			Assert.notNull(binding);
+			// Each read binds to the decl in its OWN arm — the nearer one, textually before it.
+			if (binding != null) Assert.isTrue(decls.exists(d -> d.span.from == binding.from && d.span.from < h.span.from));
+		}
+		final boundTo: Array<Int> = [for (h in hits) if (h.kind == RefKind.Read && h.bindingSpan != null) h.bindingSpan.from];
+		Assert.equals(2, boundTo.length);
+		Assert.notEquals(boundTo[0], boundTo[1]);
+	}
+
+	/** A member read OUTSIDE the switch is not captured by an arm's same-named local. */
+	public function testCaseArmLocalDoesNotCaptureFieldReadAfterSwitch(): Void {
+		final src: String = 'class X { var n:Int = 0; function f(v:Int) { switch v { case 0: var n:Int = 1; trace(n); '
+			+ 'case _: } trace(n); } }';
+		final hits: Array<RefHit> = findIn(src, 'n');
+		final armDecl: Null<RefHit> = hits.find(h -> h.kind == RefKind.Decl && h.span.from > src.indexOf('switch'));
+		Assert.notNull(armDecl);
+		final trailing: Null<RefHit> = hits.find(h -> h.kind == RefKind.Read && h.span.from > src.lastIndexOf('} trace'));
+		Assert.notNull(trailing);
+		if (armDecl != null && trailing != null && trailing.bindingSpan != null)
+			Assert.notEquals(armDecl.span.from, trailing.bindingSpan.from);
+	}
+
+	/**
+	 * An enum-pattern binding is NOT a declaration to this resolver: `case Some(x)` projects `x` as a
+	 * plain `IdentExpr` inside the pattern, so it is collected as a READ like the body's own `x` and
+	 * binds to nothing. Arm framing therefore does not touch these — worth pinning, because the shape
+	 * LOOKS like a per-arm declaration and assuming so costs a wrong blast-radius estimate.
+	 */
+	public function testEnumPatternBindingIsNotADeclaration(): Void {
+		final src: String = 'class X { static function f(v:Opt) { switch v { case Some(x): trace(x); ' + 'case Other(x): trace(x); } } }';
+		final hits: Array<RefHit> = findIn(src, 'x');
+		Assert.equals(4, hits.length);
+		Assert.equals(0, hits.filter(h -> h.kind == RefKind.Decl).length);
+		Assert.equals(0, hits.filter(h -> h.bindingSpan != null).length);
+	}
+
 	public function testVarReadAndDeclCollected(): Void {
 		final hits: Array<RefHit> = findIn('class X { static function a() { var n:Int = 0; var m:Int = n; } }', 'n');
 		Assert.equals(2, hits.length, 'one decl + one read expected, got ${describe(hits)}');

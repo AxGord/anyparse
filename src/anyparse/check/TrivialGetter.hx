@@ -171,12 +171,14 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
+		// No findings, nothing to fix — and every finding names the ONE file this call is about, so
+		// the early return is what lets `violations[0].file` below be read unconditionally.
+		if (violations.length == 0) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
-		final maxBypass: Int = violations.length == 0
-			? DEFAULT_MAX_BYPASS_WRITES
-			: LintConfig.resolveWith(_resolveConfig, violations[0].file)
-				.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
+		final file: String = violations[0].file;
+		final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, file)
+			.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
 		final wanted: Array<String> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
@@ -184,7 +186,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
 		final branch: MemberBranchSeams = MemberBranchScan.seamsOf(plugin.refShape(), source);
-		for (cls in CheckScan.classBodies(tree)) collectClassFixEdits(cls, source, wanted, index, edits, maxBypass, branch);
+		for (cls in CheckScan.classBodies(tree)) collectClassFixEdits(cls, source, file, wanted, index, edits, maxBypass, branch);
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
@@ -242,7 +244,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			final t = memberTables(cls, src, branch);
 			for (prop in t.properties) if (prop.span.from == span.from) {
 				if (subtypeBlocks(subtypeIndex, className, prop.name)) return null;
-				final c = classifyProperty(cls, src, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
+				final c = classifyProperty(cls, src, v.file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
 				if (c == null || c.inlineGetter != null) return null;
 				if (!subtypeIndex.subtypeReferencesField(owner, c.field)) return null;
 				final ownerEdits: Null<Array<{ span: Span, text: String }>> = buildFix(cls, src, prop.span, prop.name, prop.isStatic, c);
@@ -276,7 +278,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		final t = memberTables(cls, source, branch);
 		for (prop in t.properties) {
 			if (subtypeBlocks(subtypeIndex, className, prop.name)) continue;
-			final c = classifyProperty(cls, source, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
+			final c = classifyProperty(cls, source, file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
 			if (c == null) continue;
 			// Every node the collapse touches: the inline arm rewrites only the getter, the collapse
 			// arm deletes the backing field and the accessors and rewrites the property head.
@@ -411,15 +413,15 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 * gates, and skipping a property a subtype overrides (a subclass override).
 	 */
 	private static function collectClassFixEdits(
-		cls: QueryNode, source: String, wanted: Array<String>, index: Null<SymbolIndex>, out: Array<{ span: Span, text: String }>,
-		maxBypass: Int, branch: MemberBranchSeams
+		cls: QueryNode, source: String, file: String, wanted: Array<String>, index: Null<SymbolIndex>,
+		out: Array<{ span: Span, text: String }>, maxBypass: Int, branch: MemberBranchSeams
 	): Void {
 		final className: Null<String> = cls.name;
 		if (className == null) return;
 		final t = memberTables(cls, source, branch);
 		for (prop in t.properties) if (wanted.contains('${prop.span.from}:${prop.span.to}')) {
 			if (subtypeBlocks(index, className, prop.name)) continue;
-			final c = classifyProperty(cls, source, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
+			final c = classifyProperty(cls, source, file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
 			if (c == null) continue;
 			if (subtypeFieldBlocks(index, className, c.field, c.inlineGetter)) continue;
 			final e: Null<Array<{ span: Span, text: String }>> = buildFix(cls, source, prop.span, prop.name, prop.isStatic, c);
@@ -687,12 +689,15 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 * (`typeProvablyLacksMember`). A null `index` cannot prove absence, so any implemented
 	 * interface blocks. A private property is never exposed through an interface, so never blocks.
 	 */
-	private static function interfaceRequiresGetter(cls: QueryNode, propName: String, isPublic: Bool, index: Null<SymbolIndex>): Bool {
+	private static function interfaceRequiresGetter(
+		cls: QueryNode, propName: String, isPublic: Bool, index: Null<SymbolIndex>, file: String
+	): Bool {
 		if (!isPublic) return false;
 		final ifaces: Array<String> = implementedInterfaces(cls);
 		if (ifaces.length == 0) return false;
 		if (index == null) return true;
-		for (iface in ifaces) if (!index.typeProvablyLacksMember(iface, propName)) return true;
+		// The clause's SIMPLE names resolve against this file's own imports / package.
+		for (iface in ifaces) if (!index.typeProvablyLacksMember(iface, propName, file)) return true;
 		return false;
 	}
 
@@ -886,7 +891,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 * `get_x`, so an interface-required accessor is never dropped and that gate does not block it.
 	 */
 	private static function classifyProperty(
-		cls: QueryNode, source: String, index: Null<SymbolIndex>, prop: {
+		cls: QueryNode, source: String, file: String, index: Null<SymbolIndex>, prop: {
 			name: String,
 			node: QueryNode,
 			span: Span,
@@ -958,7 +963,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		if (raw.inlineGetter == null && !declaredTypesMatch(source, prop.node, fieldNode)) return null;
 		// The interface-conformance gate applies only to a COLLAPSING shape (the getter is dropped);
 		// the inline arm keeps the getter, so a required interface accessor is never removed.
-		if (raw.inlineGetter == null && interfaceRequiresGetter(cls, prop.name, prop.isPublic, index)) return null;
+		if (raw.inlineGetter == null && interfaceRequiresGetter(cls, prop.name, prop.isPublic, index, file)) return null;
 		final clauseSpan: Null<Span> = raw.clauseText == '' && raw.inlineGetter == null
 			? clauseRemovalSpan(source, prop.span)
 			: accessorParenSpan(source, prop.span);
@@ -1597,6 +1602,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			if (refs == null) return null;
 			final excluded: Array<Span> = [for (e in refs.renameEdits) e.span];
 			for (s in refs.excludeSpans) excluded.push(s);
+			// A `package` / `import` path is a dotted module path, not a reference to the field —
+			// same reading as `Naming`'s collectors.
+			for (s in RefactorSupport.modulePathSpans(tree, plugin.refShape())) excluded.push(s);
 			final classified: Null<Array<ClassifiedOccurrence>> = RefactorSupport.classifyOccurrences(
 				src, field, plugin, 0, src.length, excluded
 			);
@@ -1607,6 +1615,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 				for (occ in classified) switch occ.kind {
 					case OccurrenceClass.CommentTrivia if (distinctive):
 						edits.push({ span: occ.span, text: propName });
+					// Neither renamed nor a blocker: a word inside a longer literal is prose, and a
+					// non-distinctive comment mention cannot make the collapse unsafe.
+					case OccurrenceClass.StringWord | OccurrenceClass.CommentTrivia:
 					case _:
 						return null;
 				}

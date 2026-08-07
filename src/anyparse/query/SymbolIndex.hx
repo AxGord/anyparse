@@ -351,6 +351,21 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * Whether `name` denotes a TYPE reachable from `fromFile` — same package, root package, or
+	 * brought in by one of that file's imports (`resolveTypeRef` -> `simpleRefInScope`). Distinct
+	 * from `declaringFiles`, which asks only whether the simple name is declared ANYWHERE.
+	 *
+	 * The question a reference resolver cannot answer on its own: the projection gives a type
+	 * reference and a value read the same `IdentExpr` shape (`Event.ACTIVATE` and `trace(Event)`
+	 * differ only in the parent node), so telling them apart needs the index. False when
+	 * `fromFile` is not indexed, or the name resolves to no type or to several.
+	 */
+	public function declaresTypeInScope(name: String, fromFile: String): Bool {
+		final host: Null<FileInfo> = _files.find(f -> f.file == fromFile);
+		return host != null && resolveTypeRef(name, host) != null;
+	}
+
+	/**
 	 * The import path that names `typeName`, when EXACTLY ONE file
 	 * declares it: the file's `module` when the type is the module's
 	 * main type, else `module + '.' + typeName` (a sub-type). Null when
@@ -850,15 +865,20 @@ final class SymbolIndex {
 	}
 
 	/**
-	 * Whether `a` and `b` are provably UNRELATED classes — both resolve to a unique
-	 * indexed CLASS decl, are distinct, and neither is a transitive supertype of the
-	 * other with BOTH supertype closures fully resolved inside the index. Sound for the
-	 * always-false `is` check: two unrelated classes share no common subtype under Haxe
-	 * single inheritance, so a value of one can never be an instance of the other. Names
-	 * are SIMPLE; an ambiguous simple name (0 or >1 indexed decls) → false. Resolution is by SIMPLE name (the index models no packages), so a simple-name collision with an external supertype is the residual soundness boundary.
+	 * Whether `a` and `b` are provably UNRELATED classes — both resolve to a unique indexed CLASS
+	 * decl, are distinct, and neither is a transitive supertype of the other with BOTH supertype
+	 * closures fully resolved inside the index. Sound for the always-false `is` check: two unrelated
+	 * classes share no common subtype under Haxe single inheritance, so a value of one can never be an
+	 * instance of the other.
+	 *
+	 * The two STARTING names are simple and must each be globally unique (`isUniqueClass`); the
+	 * supertype EDGES inside each closure resolve by written path against the referring type's own file
+	 * (`closureExcludesFrom`), so an ancestor whose simple name another package reuses no longer fails
+	 * the proof. An edge that resolves to zero or several decls still does — the closure is then not
+	 * fully enumerated, and unrelatedness is not proven.
 	 */
 	public function unrelatedClasses(a: String, b: String): Bool {
-		return a != b && isUniqueClass(a) && isUniqueClass(b) && closureExcludes(a, b, [a]) && closureExcludes(b, a, [b]);
+		return a != b && isUniqueClass(a) && isUniqueClass(b) && closureExcludes(a, b) && closureExcludes(b, a);
 	}
 
 	/**
@@ -876,27 +896,38 @@ final class SymbolIndex {
 	/**
 	 * Whether `sub` is provably NOT a (transitive) subtype of `sup` — the POSITIVE proof of the
 	 * negative, which a false `isSubtype` does NOT supply: `isSubtype` ends a branch on any
-	 * unindexed or AMBIGUOUS supertype link (a simple name with 0 or >1 indexed decls), so its
-	 * `false` unions "provably unrelated" with "unprovable". True only when `sub` resolves to a
-	 * single decl, its ENTIRE supertype closure likewise resolves, and `sup` appears nowhere in
-	 * it. Reflexivity is not unrelatedness (`sub == sup` → false). For a caller that must act on
-	 * "different owner" rather than merely skip on "not proven the same" — attributing an
-	 * occurrence away from a rename on an unprovable negative drops a real reference and
+	 * unresolvable supertype link, so its `false` unions "provably unrelated" with "unprovable". True
+	 * only when `sub` resolves to a single decl, its ENTIRE supertype closure likewise resolves, and
+	 * `sup` appears nowhere in it. Reflexivity is not unrelatedness (`sub == sup` → false). For a
+	 * caller that must act on "different owner" rather than merely skip on "not proven the same" —
+	 * attributing an occurrence away from a rename on an unprovable negative drops a real reference and
 	 * half-applies the edit.
+	 *
+	 * `sub` is a simple name and must be globally unique; every supertype EDGE resolves by written path
+	 * against its referring type's file, so an ancestor sharing a simple name with another package's
+	 * type is reached correctly instead of failing the proof (`closureExcludesFrom`).
 	 */
 	public function provablyNotSubtype(sub: String, sup: String): Bool {
-		return sub != sup && closureExcludes(sub, sup, [sub]);
+		return sub != sup && closureExcludes(sub, sup);
 	}
 
 	/**
-		 * Whether the type `typeName` — together with its ENTIRE supertype closure —
-		 * provably declares no member named `member`. True only when `typeName` resolves
-		 * to exactly one indexed decl, every transitive supertype likewise resolves, and
-		 * none of them declares `member`. Any unresolved / ambiguous type anywhere in the
-		 * closure yields false — the member could be declared out of the lint scope, so its
-		 * absence is not provable. The green-light companion of `supertypeDeclaresMember`,
-		  * used by `trivial-getter` to prove an implemented interface does not require the
-	 * property's `get_` accessor before collapsing it to `(default, null)`.
+	 * Whether the type `typeName` — together with its ENTIRE supertype closure — provably
+	 * declares no member named `member`. True only when `typeName` resolves to exactly one
+	 * indexed decl, every transitive supertype likewise resolves, and none of them declares
+	 * `member`. Any unresolved / ambiguous type anywhere in the closure yields false — the
+	 * member could be declared out of the lint scope, so its absence is not provable. The
+	 * green-light companion of `supertypeDeclaresMember`, used by `trivial-getter` to prove an
+	 * implemented interface does not require the property's `get_` accessor before collapsing
+	 * it to `(default, null)`.
+	 *
+	 * Both the STARTING type and every supertype EDGE resolve by written path, not by globally
+	 * unique simple name: an edge against its own referring type's file, the start against
+	 * `fromFile` when the caller supplies one or against its own dotted path when it is
+	 * qualified (`resolveStartType`). A caller holding neither — no file, unqualified name —
+	 * still needs the name to be unique among indexed decls. Pass `fromFile` whenever the name
+	 * came out of a specific file's `implements` clause or receiver expression; pass the full
+	 * module path when you have it.
 	 *
 	 * The walk FOLLOWS a plain `typedef A = C` alias to `C` and refuses a `@:forward` abstract,
 	 * whose underlying's members reach it through a link `supertypes` does not carry — the
@@ -904,8 +935,38 @@ final class SymbolIndex {
 	 * needing the shadow answer on an aliased nominal must read a false here as "unprovable"
 	 * rather than as "declared".
 	 */
-	public function typeProvablyLacksMember(typeName: String, member: String): Bool {
-		return lacksMemberClosure(typeName, member, []);
+	public function typeProvablyLacksMember(typeName: String, member: String, ?fromFile: String): Bool {
+		// A caller may pass `Dynamic` itself — it reaches an `interfaces` list from an
+		// `implements Dynamic<T>` clause — and it declares no named member (see `dynamicSupertypeRef`).
+		if (dynamicSupertypeRef(typeName)) return true;
+		final start: Null<ResolvedType> = resolveStartType(typeName, fromFile);
+		return start != null && lacksMemberClosure(start, member, []);
+	}
+
+	/**
+	 * The single decl `typeName` names, or null when it cannot be pinned to one. Three arms, in
+	 * order of how much the caller knows:
+	 *
+	 *  - `fromFile` names an indexed file: resolve against THAT file's package + imports, so a
+	 *    simple name several packages share means what the analysed file says it means. This is
+	 *    the `implements` / receiver-type case. A name the file's scope does not reach is a
+	 *    refusal, not a fall-through — the caller supplied the context, so it decides.
+	 *  - `typeName` is a dotted path: `resolveQualifiedRefAll` matches it on import path, needing
+	 *    no referring file. This is the `using`-conflict case, which holds a full module path.
+	 *  - neither: the name must be globally unique among indexed decls — the original rule, kept
+	 *    as the fallback so an out-of-index `fromFile` degrades to it instead of refusing.
+	 */
+	private function resolveStartType(typeName: String, fromFile: Null<String>): Null<ResolvedType> {
+		if (fromFile != null) {
+			final host: Null<FileInfo> = _files.find(f -> f.file == fromFile);
+			if (host != null) return resolveTypeRef(typeName, host);
+		}
+		if (typeName.indexOf('.') >= 0) {
+			final qualified: Array<ResolvedType> = resolveQualifiedRefAll(typeName);
+			return qualified.length == 1 ? qualified[0] : null;
+		}
+		final ds: Array<ResolvedType> = resolvedDeclsNamed(typeName);
+		return ds.length == 1 ? ds[0] : null;
 	}
 
 	/**
@@ -939,9 +1000,9 @@ final class SymbolIndex {
 	 * interfaces can pin a field's access here.
 	 */
 	public function implementsInterfaceDeclaringMember(typeName: String, field: String): Bool {
-		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (iface in t.interfaces) if (!typeProvablyLacksMember(
-			iface, field
-		))
+		// The `interfaces` entries are SIMPLE names lifted from the owner's own `implements`
+		// clause, so they resolve against the OWNER's file — not globally.
+		for (r in resolvedDeclsNamed(typeName)) for (iface in r.type.interfaces) if (!typeProvablyLacksMember(iface, field, r.file.file))
 			return true;
 		return false;
 	}
@@ -1176,20 +1237,17 @@ final class SymbolIndex {
 	}
 
 	/**
-	 * Recursive closure walk for `typeProvablyLacksMember`, cycle-guarded by `seen`.
-	 * A `Dynamic` supertype is skipped, not treated as an unresolvable dead end:
-	 * `implements Dynamic<T>` marks dynamic FIELD ACCESS, it declares no NAMED member,
-	 * so it can never be the inherited `_x` a rename would redefine. It reaches
-	 * `supertypes` from a clause like openfl `DisplayObject`'s `#if (…) implements
-	 * Dynamic<DisplayObject> #end`; counting it as unresolvable (`ds.length != 1`)
-	 * would wrongly block every `openfl` display subclass's field rename.
+	 * Recursive closure walk for `typeProvablyLacksMember`, cycle-guarded by `seen` through
+	 * `markSeen` — keyed by declaring file, so two same-named types are distinct nodes.
+	 * Each supertype edge resolves from its VERBATIM reference against `cur`'s own file
+	 * (`resolveTypeRef`); a `Dynamic` one is skipped rather than counted as unresolvable
+	 * (`dynamicSupertypeRef`).
 	 */
-	private function lacksMemberClosure(typeName: String, member: String, seen: Array<String>): Bool {
-		if (typeName == 'Dynamic' || seen.contains(typeName)) return true;
-		seen.push(typeName);
-		final ds: Array<TypeDeclInfo> = declsNamed(typeName);
-		if (ds.length != 1) return false;
-		final t: TypeDeclInfo = ds[0];
+	private function lacksMemberClosure(cur: ResolvedType, member: String, seen: Array<String>): Bool {
+		// A supertype CYCLE still enumerates the whole closure, so re-entering a type proves
+		// nothing new and nothing is lost by stopping — unlike the alias cycle below.
+		if (!markSeen(cur, seen)) return true;
+		final t: TypeDeclInfo = cur.type;
 		if (t.members.exists(m -> m.name == member)) return false;
 		// An ALIASING_DECL_KINDS decl reaches members through a link `supertypes` never records, so
 		// its own empty member list proves NOTHING — the same hole `closureExcludes` refuses outright,
@@ -1198,13 +1256,45 @@ final class SymbolIndex {
 		// name the index cannot enumerate here) are not provable at all.
 		if (t.kind == TYPEDEF_DECL_KIND && !t.isAnonStruct) {
 			final target: Null<String> = t.aliasTargetNominal;
+			if (target == null) return false;
+			final next: Null<ResolvedType> = resolveTypeRef(target, cur.file);
 			// An alias CYCLE proves nothing — unlike a supertype cycle, whose closure is still
 			// fully enumerated, a chain that re-enters itself never reaches a member host at all.
-			return target == null || seen.contains(target) ? false : lacksMemberClosure(target, member, seen);
+			return next == null || seen.contains(seenKey(next)) ? false : lacksMemberClosure(next, member, seen);
 		}
 		if (t.abstractForwardUnderlying != null) return false;
-		for (sup in t.supertypes) if (!lacksMemberClosure(sup, member, seen)) return false;
+		// Each supertype is resolved from its VERBATIM written reference against THIS type's own
+		// file (`resolveTypeRef` -> `simpleRefInScope`), so a simple name shared by several
+		// packages picks the one actually in scope instead of failing the whole proof. A
+		// reference resolving to zero OR to several decls is refused identically: unresolved.
+		for (raw in t.supertypesRaw) if (!dynamicSupertypeRef(raw)) {
+			final anc: Null<ResolvedType> = resolveTypeRef(raw, cur.file);
+			if (anc == null || !lacksMemberClosure(anc, member, seen)) return false;
+		}
 		return true;
+	}
+
+	/** The `seen`-set identity of a resolved type: its declaring file plus its name — see `markSeen`. */
+	private inline function seenKey(cur: ResolvedType): String {
+		return '${cur.file.file}#${cur.type.name}';
+	}
+
+	/**
+	 * Whether a supertype reference is `Dynamic`. `implements Dynamic<T>` marks dynamic FIELD
+	 * ACCESS and declares no NAMED member, so it can never be the inherited `_x` a rename would
+	 * redefine — it must be SKIPPED rather than counted as an unresolvable dead end, which would
+	 * wrongly block every `openfl` display subclass (`DisplayObject` carries such a clause under
+	 * `#if`). Matched on the last path segment, so a qualified spelling is skipped too.
+	 */
+	private static inline function dynamicSupertypeRef(raw: String): Bool {
+		final dot: Int = raw.lastIndexOf('.');
+		return (dot < 0 ? raw : raw.substr(dot + 1)) == 'Dynamic';
+	}
+
+	/** Every indexed decl named `typeName` (simple name), each paired with its declaring file. */
+
+	private function resolvedDeclsNamed(typeName: String): Array<ResolvedType> {
+		return [for (fi in _files) for (t in fi.types) if (t.name == typeName) { file: fi, type: t }];
 	}
 
 	/** Recursive supertype walk for `supertypeDeclaresMember`, cycle-guarded by `seen`. */
@@ -1234,7 +1324,7 @@ final class SymbolIndex {
 	 * the caller ends that branch with its own not-found value.
 	 */
 	private inline function markSeen(cur: ResolvedType, seen: Array<String>): Bool {
-		final key: String = '${cur.file.file}#${cur.type.name}';
+		final key: String = seenKey(cur);
 		if (seen.contains(key)) return false;
 		seen.push(key);
 		return true;
@@ -1384,13 +1474,31 @@ final class SymbolIndex {
 	/** Every in-scope declaration `raw` resolves to from `fromFile` (see `resolveTypeRef`), deduped by declaring file. */
 	private function resolveTypeRefAll(raw: String, fromFile: FileInfo): Array<ResolvedType> {
 		final dot: Int = raw.lastIndexOf('.');
-		final simple: String = dot < 0 ? raw : raw.substr(dot + 1);
+		if (dot >= 0) return resolveQualifiedRefAll(raw);
 		final matches: Array<ResolvedType> = [];
 		final seen: Array<String> = [];
-		for (fi in _files) for (t in fi.types) if (t.name == simple) {
-			final inScope: Bool = dot < 0 ? simpleRefInScope(fromFile, fi, t) : importPathFor(fi, t) == raw;
+		for (fi in _files) for (t in fi.types) if (t.name == raw && simpleRefInScope(fromFile, fi, t)) {
 			final key: String = '${fi.file}#${t.name}';
-			if (inScope && !seen.contains(key)) {
+			if (!seen.contains(key)) {
+				seen.push(key);
+				matches.push({ file: fi, type: t });
+			}
+		}
+		return matches;
+	}
+
+	/**
+	 * Every decl a QUALIFIED type reference names, matched on import path. Needs no referring
+	 * file: a dotted path means the same thing from everywhere, which is what lets a caller
+	 * holding a full module path (the `using`-conflict scan) resolve with no context at all.
+	 */
+	private function resolveQualifiedRefAll(raw: String): Array<ResolvedType> {
+		final simple: String = raw.substr(raw.lastIndexOf('.') + 1);
+		final matches: Array<ResolvedType> = [];
+		final seen: Array<String> = [];
+		for (fi in _files) for (t in fi.types) if (t.name == simple && importPathFor(fi, t) == raw) {
+			final key: String = '${fi.file}#${t.name}';
+			if (!seen.contains(key)) {
 				seen.push(key);
 				matches.push({ file: fi, type: t });
 			}
@@ -1509,8 +1617,7 @@ final class SymbolIndex {
 
 	/** Every indexed type decl whose simple name is `name`, across all files. */
 	private function declsNamed(name: String): Array<TypeDeclInfo> {
-		final out: Array<TypeDeclInfo> = [for (fi in _files) for (t in fi.types) if (t.name == name) t];
-		return out;
+		return [for (r in resolvedDeclsNamed(name)) r.type];
 	}
 
 	/**
@@ -1551,15 +1658,41 @@ final class SymbolIndex {
 	 * no `extends` / `implements` clause can name one, so it is not an inheritance edge.
 	 * `seen` guards cycles. Read only as a NEGATIVE proof: every doubt yields false.
 	 */
-	private function closureExcludes(name: String, target: String, seen: Array<String>): Bool {
-		final ds: Array<TypeDeclInfo> = declsNamed(name);
-		if (ds.length != 1 || ALIASING_DECL_KINDS.contains(ds[0].kind)) return false;
-		for (sup in ds[0].supertypes) {
-			if (sup == target) return false;
-			if (seen.contains(sup)) continue;
-			seen.push(sup);
-			if (supertypeLinkIsAbstract(sup)) continue;
-			if (!closureExcludes(sup, target, seen)) return false;
+	private function closureExcludes(name: String, target: String): Bool {
+		final ds: Array<ResolvedType> = resolvedDeclsNamed(name);
+		return ds.length == 1 && closureExcludesFrom(ds[0], target, []);
+	}
+
+	/**
+	 * `closureExcludes` over a RESOLVED start: every supertype edge is taken from its VERBATIM
+	 * written reference and resolved against `cur`'s own file (`resolveTypeRef`), so a supertype
+	 * whose simple name another package reuses reaches the type actually in scope instead of
+	 * failing the proof. An edge resolving to zero OR several decls is refused identically — the
+	 * closure is then not fully enumerated and `target`'s absence is not proven.
+	 */
+	private function closureExcludesFrom(cur: ResolvedType, target: String, seen: Array<String>): Bool {
+		if (!markSeen(cur, seen)) return true;
+		// An ALIAS (`typedef A = C`, a `@:forward` abstract) reaches other types through `@:from` /
+		// `@:to` edges the closure cannot follow, so its own supertype list proves nothing. An
+		// ANONYMOUS STRUCTURE has no such edges — its only inheritance links are the `> Base`
+		// structural extensions already in `supertypesRaw`, and a structure can never be a subtype
+		// of a class — so the closure over it IS complete and the refusal does not apply.
+		if (ALIASING_DECL_KINDS.contains(cur.type.kind) && !cur.type.isAnonStruct) return false;
+		for (raw in cur.type.supertypesRaw) {
+			final anc: Null<ResolvedType> = resolveTypeRef(raw, cur.file);
+			if (anc == null) return false;
+			final ancestor: ResolvedType = anc;
+			if (ancestor.type.name == target) return false;
+			// An ABSTRACT reached through a supertype link is stepped over rather than doubted:
+			// Haxe refuses an abstract in `extends` / `implements`, so the only way one lands in
+			// `supertypesRaw` is an `implements Dynamic<T>` field-access directive (openfl's
+			// `DisplayObject` carries one inside a dead `#if` branch, which the branch-blind
+			// supertype scan records like any other). Nothing is reachable through such a link.
+			// Only the LINK is stepped over — an abstract at the walk's ROOT keeps the
+			// `ALIASING_DECL_KINDS` refusal above, whose `@:forward` / `@:to` edges a caller
+			// attributing member occurrences must not lose.
+			if (ancestor.type.kind == ABSTRACT_DECL_KIND) continue;
+			if (!closureExcludesFrom(ancestor, target, seen)) return false;
 		}
 		return true;
 	}
@@ -1577,20 +1710,6 @@ final class SymbolIndex {
 		return false;
 	}
 
-	/**
-	 * Whether the supertype link `name` resolves to an abstract — NOT an inheritance edge. Haxe
-	 * refuses an abstract in an `extends` clause ("Should extend by using a class") and in an
-	 * `implements` clause, so the only way one reaches `supertypes` is the `implements Dynamic<T>`
-	 * field-access directive (openfl's `DisplayObject` carries one inside a dead `#if` branch, which
-	 * the branch-blind supertype scan records like any other). Nothing is reachable through such a
-	 * link, so `closureExcludes` steps over it instead of doubting the whole closure. Only the LINK is
-	 * stepped over — an abstract at the walk's ROOT keeps the `ALIASING_DECL_KINDS` refusal, whose
-	 * `@:forward` / `@:to` edges a caller attributing member occurrences must not lose.
-	 */
-	private function supertypeLinkIsAbstract(name: String): Bool {
-		final ds: Array<TypeDeclInfo> = declsNamed(name);
-		return ds.length == 1 && ds[0].kind == ABSTRACT_DECL_KIND;
-	}
 
 	/**
 	 * The nearest ancestor of `start` declaring any of `names` — the type whose member an `override`

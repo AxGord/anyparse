@@ -475,7 +475,13 @@ final class CheckScan {
 				continue;
 			}
 			final index: Null<SymbolIndex> = symbols();
-			if (index == null || !index.typeProvablyLacksMember(simpleModuleName(path), method)) return true;
+			// The FULL module path, not its last segment: `typeProvablyLacksMember` resolves a
+			// dotted name by import path, so a module whose simple name another package reuses
+			// no longer reads as ambiguous-and-therefore-conflicting.
+			// The FULL module path, not its last segment: `typeProvablyLacksMember` resolves a
+			// dotted name by import path, so a module whose simple name another package reuses
+			// no longer reads as ambiguous-and-therefore-conflicting.
+			if (index == null || !index.typeProvablyLacksMember(path, method)) return true;
 		}
 		return false;
 	}

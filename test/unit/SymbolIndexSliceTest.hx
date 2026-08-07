@@ -812,6 +812,43 @@ class SymbolIndexSliceTest extends Test {
 		return new HaxeQueryPlugin();
 	}
 
+	/**
+	 * TM's real collision: two `IResizable` interfaces in different packages, and a class whose
+	 * base implements the SAME-PACKAGE one with no import. Each carries a distinctly named member
+	 * so a fixture can tell which one the closure actually reached.
+	 */
+	/**
+	 * The same collision seen from the STARTING side: nothing extends anything, the caller names
+	 * `IResizable` directly, and `Holder` imports the `rightmenu` one while `other/Away.hx`
+	 * imports neither.
+	 */
+	private static function ambiguousStartFiles(): Array<{ file: String, source: String }> {
+		return [
+			{ file: 'src/common/IResizable.hx', source: 'package common;\ninterface IResizable { function inCommon():Void; }' },
+			{
+				file: 'src/rightmenu/IResizable.hx',
+				source: 'package rightmenu;\ninterface IResizable { function inRightmenu():Void; }'
+			},
+			{ file: 'src/Holder.hx', source: 'import rightmenu.IResizable;\n\nclass Holder {}' },
+			{ file: 'src/other/Away.hx', source: 'package other;\n\nclass Away {}' }
+		];
+	}
+
+	private static function ambiguousInterfaceFiles(): Array<{ file: String, source: String }> {
+		return [
+			{ file: 'src/common/IResizable.hx', source: 'package common;\ninterface IResizable { function inCommon():Void; }' },
+			{
+				file: 'src/rightmenu/IResizable.hx',
+				source: 'package rightmenu;\ninterface IResizable { function inRightmenu():Void; }'
+			},
+			{
+				file: 'src/common/Resizable.hx',
+				source: 'package common;\nclass Resizable implements IResizable { public function inCommon():Void {} }'
+			},
+			{ file: 'src/Sub.hx', source: 'import common.Resizable;\nclass Sub extends Resizable { private var _own:Int; }' }
+		];
+	}
+
 
 	public function testSubtypeOverridesProperty(): Void {
 		final files = [
@@ -892,6 +929,85 @@ class SymbolIndexSliceTest extends Test {
 
 
 	/**
+	 * A supertype reference resolves through the REFERRING file's package / imports, not by a
+	 * globally-unique simple name: two interfaces sharing one simple name in different
+	 * packages no longer make the closure unprovable. This is TM's real shape —
+	 * `common.IResizable` beside `rightmenu.IResizable`, with `common.Resizable` implementing
+	 * the same-package one — and it used to block the `_`-prefix rename of every private
+	 * field under `Resizable`.
+	 */
+	public function testProvablyLacksMemberResolvesAmbiguousSimpleSupertypeName(): Void {
+		final index: SymbolIndex = SymbolIndex.build(ambiguousInterfaceFiles(), plugin());
+		Assert.isTrue(index.typeProvablyLacksMember('Sub', '_absent'));
+	}
+
+	/** The member the IN-SCOPE same-named interface declares is still found — the proof stays sound. */
+	public function testProvablyLacksMemberFindsMemberOfInScopeSameNamedSupertype(): Void {
+		final index: SymbolIndex = SymbolIndex.build(ambiguousInterfaceFiles(), plugin());
+		Assert.isFalse(index.typeProvablyLacksMember('Sub', 'inCommon'));
+	}
+
+	/**
+	 * A member declared ONLY by the same-named interface that is OUT of scope is not inherited,
+	 * so the closure still proves absence — the union-over-same-simple-name reading would not.
+	 */
+	public function testProvablyLacksMemberIgnoresMemberOfOutOfScopeSameNamedSupertype(): Void {
+		final index: SymbolIndex = SymbolIndex.build(ambiguousInterfaceFiles(), plugin());
+		Assert.isTrue(index.typeProvablyLacksMember('Sub', 'inRightmenu'));
+	}
+
+	/** An inline-qualified supertype reference resolves to the type its path names, not to the same-package one. */
+	public function testProvablyLacksMemberResolvesQualifiedSupertypeReference(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/common/IResizable.hx', source: 'package common;\ninterface IResizable { function inCommon():Void; }' },
+			{
+				file: 'src/rightmenu/IResizable.hx',
+				source: 'package rightmenu;\ninterface IResizable { function inRightmenu():Void; }'
+			},
+			{
+				file: 'src/common/Q.hx',
+				source: 'package common;\nclass Q implements rightmenu.IResizable { private var _own:Int; }'
+			}
+		], plugin());
+		// The qualified clause names the `rightmenu` one, so ITS member is inherited and the
+		// same-package `common.IResizable`'s is not.
+		Assert.isFalse(index.typeProvablyLacksMember('Q', 'inRightmenu'));
+		Assert.isTrue(index.typeProvablyLacksMember('Q', 'inCommon'));
+	}
+
+	/** A supertype outside the index stays unprovable — the conservative side is unchanged. */
+	public function testProvablyLacksMemberRefusesUnindexedSupertype(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/Lone.hx', source: 'class Lone extends SomethingExternal { private var _own:Int; }' }
+		], plugin());
+		Assert.isFalse(index.typeProvablyLacksMember('Lone', '_absent'));
+	}
+
+	/**
+	 * A supertype whose simple name is ambiguous AND whose referring file brings neither into
+	 * scope stays unprovable: resolution returning several candidates is refused exactly like
+	 * resolution returning none.
+	 */
+	public function testProvablyLacksMemberRefusesUnresolvableAmbiguousSupertype(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/a/I.hx', source: 'package a;\ninterface I { function m():Void; }' },
+			{ file: 'src/b/I.hx', source: 'package b;\ninterface I { function m():Void; }' },
+			{ file: 'src/c/Q.hx', source: 'package c;\nclass Q implements I { private var _own:Int; }' }
+		], plugin());
+		Assert.isFalse(index.typeProvablyLacksMember('Q', '_absent'));
+	}
+
+	/** An inheritance cycle between two SAME-NAMED types terminates without a false proof. */
+	public function testProvablyLacksMemberTerminatesOnSameNamedCycle(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/a/C.hx', source: 'package a;\nimport b.C;\nclass C extends b.C { private var _fromA:Int; }' },
+			{ file: 'src/b/C.hx', source: 'package b;\nclass C extends a.C { private var _fromB:Int; }' }
+		], plugin());
+		Assert.isFalse(index.typeProvablyLacksMember('C', '_absent'));
+		Assert.isFalse(index.typeProvablyLacksMember('C', '_fromA'));
+	}
+
+	/**
 	 * `typeProvablyLacksMember` walks the full supertype closure, but a `Dynamic` supertype
 	 * — `implements Dynamic<T>` marks dynamic field ACCESS and declares no NAMED member, and
 	 * reaches `supertypes` from a `#if`-guarded openfl `DisplayObject`-style `implements
@@ -899,6 +1015,129 @@ class SymbolIndexSliceTest extends Test {
 	 * subclass field is still provably absent (the openfl display-subclass rename case),
 	 * while a genuinely inherited member is still found.
 	 */
+	/**
+	 * `Dynamic` passed as the STARTING type — which happens when a caller feeds an
+	 * `implements` clause's entry straight in (`implementsInterfaceDeclaringMember`) — declares
+	 * no named member either, so it must not read as an unindexed, unprovable type.
+	 */
+	/**
+	 * An ambiguous SIMPLE starting name resolves against the file the caller names — the shape
+	 * every `implements`-clause consumer passes (`prefer-inline`, `trivial-getter`). `Holder`
+	 * imports the `rightmenu` one, so ITS member is the inherited one.
+	 */
+	public function testProvablyLacksMemberResolvesAmbiguousStartFromFile(): Void {
+		final index: SymbolIndex = SymbolIndex.build(ambiguousStartFiles(), plugin());
+		Assert.isFalse(index.typeProvablyLacksMember('IResizable', 'inRightmenu', 'src/Holder.hx'));
+		Assert.isTrue(index.typeProvablyLacksMember('IResizable', 'inCommon', 'src/Holder.hx'));
+	}
+
+	/** A file whose scope brings NEITHER same-named type in cannot pin the start — still refused. */
+	public function testProvablyLacksMemberRefusesAmbiguousStartFromUnrelatedFile(): Void {
+		final index: SymbolIndex = SymbolIndex.build(ambiguousStartFiles(), plugin());
+		Assert.isFalse(index.typeProvablyLacksMember('IResizable', '_absent', 'src/other/Away.hx'));
+	}
+
+	/** With no context at all the original rule stands: an ambiguous simple name is unprovable. */
+	public function testProvablyLacksMemberRefusesAmbiguousStartWithoutContext(): Void {
+		final index: SymbolIndex = SymbolIndex.build(ambiguousStartFiles(), plugin());
+		Assert.isFalse(index.typeProvablyLacksMember('IResizable', '_absent'));
+	}
+
+	/**
+	 * A QUALIFIED starting name needs no file — the import-path arm pins it. This is what the
+	 * `using`-conflict scan passes now that it forwards the whole module path.
+	 */
+	public function testProvablyLacksMemberResolvesQualifiedStartWithoutContext(): Void {
+		final index: SymbolIndex = SymbolIndex.build(ambiguousStartFiles(), plugin());
+		Assert.isFalse(index.typeProvablyLacksMember('rightmenu.IResizable', 'inRightmenu'));
+		Assert.isTrue(index.typeProvablyLacksMember('rightmenu.IResizable', 'inCommon'));
+	}
+
+	/** A qualified name no indexed file declares is unprovable, not silently reduced to its tail. */
+	public function testProvablyLacksMemberRefusesUnknownQualifiedStart(): Void {
+		final index: SymbolIndex = SymbolIndex.build(ambiguousStartFiles(), plugin());
+		Assert.isFalse(index.typeProvablyLacksMember('nowhere.IResizable', '_absent'));
+	}
+
+	/** A `fromFile` the index does not hold degrades to the unique-simple-name rule, not to a refusal. */
+	public function testProvablyLacksMemberFallsBackForUnindexedFromFile(): Void {
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/Only.hx', source: 'class Only { private var _taken:Int; }' }], plugin());
+		Assert.isTrue(index.typeProvablyLacksMember('Only', '_absent', 'src/NotIndexed.hx'));
+		Assert.isFalse(index.typeProvablyLacksMember('Only', '_taken', 'src/NotIndexed.hx'));
+	}
+
+	/** `Dynamic` short-circuits before any resolution, with or without a context. */
+	public function testProvablyLacksMemberAcceptsDynamicWithFileContext(): Void {
+		final index: SymbolIndex = SymbolIndex.build(ambiguousStartFiles(), plugin());
+		Assert.isTrue(index.typeProvablyLacksMember('Dynamic', '_absent', 'src/Holder.hx'));
+	}
+
+	/**
+	 * `provablyNotSubtype` resolves each supertype edge by written path, so an ancestor whose simple
+	 * name another package reuses reaches the one actually in scope. Before that, the ambiguity
+	 * failed the whole proof and every occurrence attributed through it stayed unattributed.
+	 */
+	public function testProvablyNotSubtypeResolvesAmbiguousAncestorName(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/a/Base.hx', source: 'package a;\nclass Base {}' },
+			{ file: 'src/b/Base.hx', source: 'package b;\nclass Base {}' },
+			{ file: 'src/Owner.hx', source: 'import a.Base;\n\nclass Owner extends Base {}' },
+			{ file: 'src/Other.hx', source: 'import b.Base;\n\nclass Other extends Base {}' }
+		], plugin());
+		// `Other`'s closure is {b.Base}; `Owner` is nowhere in it, and both ends resolve.
+		Assert.isTrue(index.provablyNotSubtype('Other', 'Owner'));
+	}
+
+	/** A real ancestor is still found — the proof does not go blind by getting more precise. */
+	public function testProvablyNotSubtypeFindsRealAncestorThroughAmbiguousName(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/a/Base.hx', source: 'package a;\nclass Base {}' },
+			{ file: 'src/b/Base.hx', source: 'package b;\nclass Base {}' },
+			{ file: 'src/Mid.hx', source: 'import a.Base;\n\nclass Mid extends Base {}' },
+			{ file: 'src/Leaf.hx', source: 'class Leaf extends Mid {}' }
+		], plugin());
+		Assert.isFalse(index.provablyNotSubtype('Leaf', 'Mid'));
+		Assert.isTrue(index.provablyNotSubtype('Leaf', 'Unrelated'));
+	}
+
+	/** An unresolvable supertype leaves the closure unenumerated — refused, as before. */
+	public function testProvablyNotSubtypeRefusesUnresolvableAncestor(): Void {
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/Sub.hx', source: 'class Sub extends SomethingExternal {}' }], plugin());
+		Assert.isFalse(index.provablyNotSubtype('Sub', 'Whatever'));
+	}
+
+	/**
+	 * An ANONYMOUS STRUCTURE reaches other types only through the `> Base` extensions the closure walk
+	 * already follows, and can never be a subtype of a class — so its closure IS complete. An ALIAS
+	 * (`typedef A = C`) or a `@:forward` abstract reaches types through `@:from` / `@:to` edges the walk
+	 * cannot see, and stays refused.
+	 */
+	public function testProvablyNotSubtypeEnumeratesAnonStructClosure(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/Shape.hx', source: 'typedef Shape = { name:String, size:Int }' },
+			{ file: 'src/Alias.hx', source: 'typedef Alias = Owner' },
+			{ file: 'src/Fwd.hx', source: '@:forward\nabstract Fwd(Owner) from Owner {}' },
+			{ file: 'src/Owner.hx', source: 'class Owner {}' }
+		], plugin());
+		Assert.isTrue(index.provablyNotSubtype('Shape', 'Owner'));
+		Assert.isFalse(index.provablyNotSubtype('Alias', 'Owner'));
+		Assert.isFalse(index.provablyNotSubtype('Fwd', 'Owner'));
+	}
+
+	/** A structure EXTENDING the target is a subtype — the walk follows `> Base` and refuses. */
+	public function testProvablyNotSubtypeFollowsStructuralExtension(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/Base.hx', source: 'typedef Base = { name:String }' },
+			{ file: 'src/Ext.hx', source: 'typedef Ext = { > Base, size:Int }' }
+		], plugin());
+		Assert.isFalse(index.provablyNotSubtype('Ext', 'Base'));
+	}
+
+	public function testProvablyLacksMemberAcceptsDynamicAsStartingType(): Void {
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/Sub.hx', source: 'class Sub {}' }], plugin());
+		Assert.isTrue(index.typeProvablyLacksMember('Dynamic', '_absent'));
+	}
+
 	public function testProvablyLacksMemberSkipsDynamicSupertype(): Void {
 		final index: SymbolIndex = SymbolIndex.build([
 			{ file: 'src/Base.hx', source: 'class Base extends EventDispatcher implements Dynamic<Base> { private var _taken:Int; }' },

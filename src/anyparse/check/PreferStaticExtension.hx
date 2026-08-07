@@ -346,7 +346,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final nominal: Null<String> = receiverNominal(recv, root, s, declaredTypes, chain, symbols, file);
 		// A `Dynamic` receiver dispatches no extension at RUNTIME while the rewrite still compiles.
 		if (nominal != null && nominal == s.dynamicTypeName) return null;
-		final verdict: Null<Verdict> = verdictFor(nominal, method, symbols);
+		final verdict: Null<Verdict> = verdictFor(nominal, method, symbols, file);
 		if (verdict == null) return null;
 		final suggestion: Null<String> = suggestionOf(call, recv, method, source);
 		return suggestion == null ? null : {
@@ -365,13 +365,15 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	 * DROPPED because the receiver type — or a supertype — declares `method` itself: Haxe picks
 	 * that instance member over the extension, so the rewrite would silently retarget.
 	 */
-	private static function verdictFor(nominal: Null<String>, method: String, symbols: () -> Null<SymbolIndex>): Null<Verdict> {
+	private static function verdictFor(
+		nominal: Null<String>, method: String, symbols: () -> Null<SymbolIndex>, file: String
+	): Null<Verdict> {
 		final resolved: Null<SymbolIndex> = symbols();
 		if (nominal == null || resolved == null) return Verdict.UnresolvedReceiver;
 		final receiverType: String = nominal;
 		final index: SymbolIndex = resolved;
 		if (index.typeDeclaresMember(receiverType, method) || index.supertypeDeclaresMember(receiverType, method)) return null;
-		return index.typeProvablyLacksMember(receiverType, method) ? Verdict.Fixable : Verdict.UnresolvedClosure;
+		return index.typeProvablyLacksMember(receiverType, method, file) ? Verdict.Fixable : Verdict.UnresolvedClosure;
 	}
 
 	/**

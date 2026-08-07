@@ -235,6 +235,35 @@ class TrivialGetterCheckTest extends Test {
 		Assert.equals(0, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
 	}
 
+	/**
+	 * Two interfaces share the simple name `Named`; the class's import picks the one that does NOT
+	 * declare `active`, so the collapse stays safe. The gate used to refuse on ambiguity alone.
+	 */
+	public function testAmbiguousInterfaceNameResolvesFromFileImports(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'a/Named.hx', source: 'package a;\ninterface Named {\n\tpublic var active(get, never):Bool;\n}' },
+			{ file: 'b/Named.hx', source: 'package b;\ninterface Named {\n\tpublic var label(get, never):String;\n}' },
+			{
+				file: 'C.hx',
+				source: 'import b.Named;\n\nclass C implements Named {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}'
+			}
+		];
+		Assert.equals(1, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	/** The mirror: the imported interface DOES declare `active`, so the getter must stay. */
+	public function testAmbiguousInterfaceNameResolvesToTheRequiringOne(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'a/Named.hx', source: 'package a;\ninterface Named {\n\tpublic var active(get, never):Bool;\n}' },
+			{ file: 'b/Named.hx', source: 'package b;\ninterface Named {\n\tpublic var label(get, never):String;\n}' },
+			{
+				file: 'C.hx',
+				source: 'import a.Named;\n\nclass C implements Named {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}'
+			}
+		];
+		Assert.equals(0, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+	}
+
 	public function testInterfaceLackingPropStillFlagged(): Void {
 		// The interface is resolvable and provably LACKS `active`, so the collapse is safe.
 		final files: Array<{ file: String, source: String }> = [

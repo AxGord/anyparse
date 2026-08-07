@@ -444,6 +444,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			superReferenceText: 'super',
 			underlyingThisTypeKinds: ['AbstractDecl', 'EnumAbstractDecl'],
 			declHostKinds: DECL_HOST_KINDS,
+			// A `switch` arm confines the locals declared in it — see `RefShape.branchScopeKinds`.
+			branchScopeKinds: ['CaseBranch', 'DefaultBranch'],
+			// `package a.b;` / `import c.d.E;` are dotted module paths, not references.
+			modulePathKinds: ['PackageDecl', 'ImportDecl'],
 			// `CatchClause` is surfaced by `appendNodes` from the
 			// `@:spanned('CatchClause')` paired struct; it opens a scope
 			// (the clause body) and self-binds the exception name into
@@ -723,6 +727,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'Context.currentPos' => 'haxe.macro.Expr.Position',
 				'Date.now' => 'Date',
 				'File.append' => 'sys.io.FileOutput',
+				// `Dynamic` is the ANSWER here, not a missing one: a rule that must know the receiver
+				// type reads an untabled call as "unresolved" and degrades to report-only, while
+				// `Dynamic` lets it apply its own `Dynamic` policy (`prefer-static-extension` drops the
+				// site — an extension dispatches no method on a `Dynamic` value at runtime).
+				'Reflect.field' => 'Dynamic',
 				// Reflection statics whose return is a plain `Array<String>` on every target — the
 				// shapes real code iterates (`for (key in Reflect.fields(o))`), where the binder
 				// carries no annotation and the element type is only readable from this return.
