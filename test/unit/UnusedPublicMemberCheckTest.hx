@@ -317,6 +317,75 @@ import utest.Test;
 		Assert.equals(1, runGated('class C {\n\tpublic function orphaned():Void {}\n}', '{}', false).length);
 	}
 
+	/**
+	 * A public method written inside a member-position `#if` is a method of the class like any other,
+	 * and just as unreachable when nothing names it. The region is ONE child of the container holding
+	 * every branch's members flattened, so scanning the container's direct children alone silently
+	 * exempted it.
+	 */
+	public function testConditionalMemberFlagged(): Void {
+		Assert.equals(
+			1, violations('class C {\n\t#if cpp\n\tpublic function gone():Void {}\n\tpublic var keeper:Int = 0;\n\t#end\n}').length
+		);
+	}
+
+	/**
+	 * A call written in ANY branch is a reference: the token scan reads the whole file, so a method
+	 * declared under `#if cpp` and called under the same guard is reachable and stays unreported.
+	 */
+	public function testConditionalCallInAnotherBranchCounts(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\t#if cpp\n\tpublic function used():Void {}\n\t#end\n\t#if cpp\n\tpublic function go():Void {\n\t\tused();\n\t}\n\t#end\n}'
+			).filter(v -> v.message.indexOf('public used') >= 0).length
+		);
+	}
+
+	/**
+	 * The deletion carries the method's doc comment and modifier run, both of which live INSIDE the
+	 * region — a group span computed against the container would leave them behind as debris that
+	 * does not parse. The region's other member is untouched and the directives stay.
+	 */
+	public function testConditionalMemberDeletedInsideItsBranch(): Void {
+		final src: String =
+			'class C {\n\t#if cpp\n\t/** Doc. */\n\tpublic function gone():Void {}\n\tpublic var keeper:Int = 0;\n\t#end\n}';
+		Assert.equals('class C {\n\t#if cpp\n\tpublic var keeper:Int = 0;\n\t#end\n}', applyFix(src));
+	}
+
+	/**
+	 * Deleting the SOLE member of a region would leave a bare `#if … #end`, a shape the grammar does
+	 * not model (an empty BRANCH parses, an empty REGION does not) — the finding stays, its deletion
+	 * does not.
+	 */
+	public function testConditionalSoleMemberReportedButNotDeleted(): Void {
+		final src: String = 'class C {\n\t#if cpp\n\tpublic function gone():Void {}\n\t#end\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/**
+	 * A `public` carried out of a `#if` region makes the method public in one build only, and this
+	 * rule reads `public` as the gate that admits a candidate at all. A run the branches disagree on
+	 * refuses the member — the conservatism the old wrapper-counts-as-annotation reading provided.
+	 */
+	public function testConditionalCarriedVisibilityRefusesTheMethod(): Void {
+		Assert.equals(
+			0, violations('class C {\n\t#if js\n\tpublic\n\t#end\n\tfunction zqxwvOnly():Void {}\n\tpublic var keeper:Int = 0;\n}').length
+		);
+	}
+
+	/**
+	 * Emptying a region is a property of the whole edit SET: two unused methods that are together all
+	 * of a region's members each look non-sole on their own, and deleting both leaves a bare
+	 * `#if … #end` whose rejected splice would drop every other edit the pass had for the file.
+	 */
+	public function testConditionalAllRegionMembersReportedButNotDeleted(): Void {
+		final src: String = 'class C {\n\t#if cpp\n\tpublic function zqxwvA():Void {}\n\tpublic function zqxwvB():Void {}\n\t#end\n}';
+		Assert.equals(2, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
 	/** Findings over `C.hx` plus a second file whose `main` (implicitly reachable, never flagged) carries `body`. */
 	private function withUser(body: String): Array<Violation> {
 		final owner: String = 'class C {\n\tpublic function orphaned():Void {}\n}';

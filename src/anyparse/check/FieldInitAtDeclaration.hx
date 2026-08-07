@@ -179,9 +179,13 @@ import haxe.Exception;
  * construction). A property (`var x(get, set)`) and a function-type field are
  * skipped (a `(` in the declaration head — a conservative over-skip). A
  * multiple-constructor (macro-generated) class is skipped: only a plain single `new`
- * qualifies, so the init timing stays unambiguous. A `#if` member REGION anywhere in
- * the container refuses every chained candidate: the projection keeps its interior as
- * trivia, so an initializer inside it cannot be inspected. A field whose write count
+ * qualifies, so the init timing stays unambiguous. A `#if`-guarded field IS a candidate —
+ * the container walk descends into the region — but only through the SOLE-write path: a
+ * region among the container's members still refuses every CHAINED candidate, because the
+ * chain's order proof needs one build's member sequence and a region's branches are several.
+ * A field name declared in two mutually exclusive branches is refused outright (its rival
+ * declarations share one constructor statement, and the move deletes that statement for
+ * both). A field whose write count
  * differs from one qualifies only through the chain; an UNRESOLVED write to the field
  * NAME disqualifies it on either path.
  */
@@ -307,15 +311,20 @@ final class FieldInitAtDeclaration implements Check {
 		if (ctor == null) return;
 		final statics: Array<Int> = RefactorSupport.staticMemberFroms(container, shape);
 		final byStmt: Map<Int, Candidate> = [];
+		final rivalled: Array<String> = rivalDeclaredNames(container, shape);
 		var coMoversOrderSafe: Bool = true;
-		for (member in container.children) {
-			final cand: Null<Candidate> = candidateFor(member, container, ctor, owner, source, statics, shape, writeIndex);
-			if (cand == null) {
-				if (coMoverOrderUnsafe(member, container, statics, source, shape)) coMoversOrderSafe = false;
-				continue;
+		// Every member host, not just the container's direct children: a field written inside a
+		// member-position `#if` sits one level down and was silently exempt.
+		RefactorSupport.eachMemberHost(container, host -> {
+			for (member in host.children) {
+				final cand: Null<Candidate> = candidateFor(member, container, ctor, owner, source, statics, shape, writeIndex);
+				if (cand == null) {
+					if (coMoverOrderUnsafe(member, container, statics, source, shape)) coMoversOrderSafe = false;
+					continue;
+				}
+				if (!rivalled.contains(cand.name)) byStmt[cand.stmtFrom] = cand;
 			}
-			byStmt[cand.stmtFrom] = cand;
-		}
+		});
 		for (cand in byStmt) if (cand.sole && !cand.orderSafe) coMoversOrderSafe = false;
 		var chainOk: Bool = true;
 		for (stmt in ctorStatements(ctor, shape)) {
@@ -617,6 +626,31 @@ final class FieldInitAtDeclaration implements Check {
 			orderSafe: contextFreeRhs(init.rhs, container, statics, shape, false),
 			sole: writeIndex.writeCount(owner, mv.name) == 1
 		};
+	}
+
+
+	/**
+	 * The member names `container` declares MORE THAN ONCE — only reachable across mutually
+	 * exclusive `#if` branches, since one container cannot declare a name twice in one build.
+	 *
+	 * Such a field is refused outright. Its rival declarations share ONE constructor statement, and
+	 * only one of them is the binding the statement resolves to: the move would land the initializer
+	 * on that declaration and delete the statement for BOTH branches, leaving the other branch's
+	 * field never initialised. Choosing a branch is not the fix's to make.
+	 */
+	private static function rivalDeclaredNames(container: QueryNode, shape: RefShape): Array<String> {
+		final members: Array<String> = shape.memberDeclKinds ?? [];
+		final seen: Array<String> = [];
+		final duplicated: Array<String> = [];
+		RefactorSupport.eachMemberHost(container, host -> {
+			for (child in host.children) if (members.contains(child.kind)) {
+				final name: Null<String> = child.name;
+				if (name == null) continue;
+				if (seen.contains(name) && !duplicated.contains(name)) duplicated.push(name);
+				seen.push(name);
+			}
+		});
+		return duplicated;
 	}
 
 }

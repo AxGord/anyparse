@@ -8,6 +8,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import anyparse.check.PreferFinalField;
 
 using Lambda;
 
@@ -900,6 +901,55 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	public function testCtorConditionalDefaultCommentInsideAssignNotFlagged(): Void {
 		Assert.equals(
 			0, violations('class C { public var n:Int = 1; public function new(?p:Int) { if (p != null) n = /* why */ p; } }').length
+		);
+	}
+
+	/**
+	 * A public field written inside a member-position `#if` is a field of the class like any other.
+	 * The region is ONE child of the container holding every branch's members flattened, so scanning
+	 * the container's direct children alone silently exempted it.
+	 */
+	public function testConditionalMemberFlaggedAndFixedInPlace(): Void {
+		final src: String = 'class C {\n\t#if cpp\n\tpublic var x:Int = 0;\n\t#end\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals('class C {\n\t#if cpp\n\tpublic final x:Int = 0;\n\t#end\n}', fixedSource(src));
+	}
+
+	/**
+	 * The `never reassigned` proof reads every branch AT ONCE. The field is declared under `#if cpp`
+	 * and the write index has to attribute the method's `x = 5` to it anyway — resolving the write to
+	 * a guarded declaration and then DROPPING it would prove a written field never reassigned, and
+	 * `final` there is a compile error.
+	 */
+	public function testConditionalMemberWithWriteNotFlagged(): Void {
+		final src: String = 'class C {\n\t#if cpp\n\tpublic var x:Int = 0;\n\t#end\n\tpublic function bump():Void {\n\t\tx = 5;\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * A region holding nothing but a visibility keyword modifies the member AFTER `#end` — differently
+	 * per build. The exported flag the branches carry out is merged with OR, the fail-closed reading:
+	 * the field is treated as public everywhere, so this public rule claims it rather than handing it
+	 * to `prefer-final-field`, whose proof is only sound for a file-confined private field. The two
+	 * branches disagree, which is what makes the merge direction observable — with AND this rule reports
+	 * nothing and `prefer-final-field` reports the field instead.
+	 */
+	public function testConditionalCarriedVisibilityTreatsFieldAsPublic(): Void {
+		Assert.equals(1, violations('class C {\n\t#if cpp\n\tpublic\n\t#else\n\tprivate\n\t#end\n\tvar x:Int = 0;\n}').length);
+	}
+
+	/**
+	 * The other half of the OR merge, on the rule that must NOT claim the field: `prefer-final-field`
+	 * proves single assignment with a file-confined private scan, which is unsound for a field some
+	 * build makes public. The AND reading would hand it exactly that field.
+	 */
+	public function testConditionalCarriedVisibilityKeepsPrivateRuleOut(): Void {
+		Assert.equals(
+			0,
+			new PreferFinalField().run([
+				{ file: 'C.hx', source: 'class C {\n\t#if cpp\n\tpublic\n\t#else\n\tprivate\n\t#end\n\tvar x:Int = 0;\n}' }
+			], new HaxeQueryPlugin())
+				.length
 		);
 	}
 

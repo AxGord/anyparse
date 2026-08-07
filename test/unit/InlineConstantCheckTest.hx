@@ -126,11 +126,17 @@ class InlineConstantCheckTest extends Test {
 		Assert.equals(0, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
 	}
 
-	/** A `#if`-guarded member is nested in a `Conditional` (not a direct container child) — never scanned; its plain sibling still is. */
-	public function testConditionalMemberExcluded(): Void {
+	/**
+	 * A `#if`-guarded member is nested in a `Conditional` rather than being a direct container child;
+	 * the scan descends into the region, so it is judged exactly like its plain sibling. Adding
+	 * `inline` to a scalar constant is behaviour-preserving in whichever build compiles the branch,
+	 * which is why the branch that does NOT typecheck here costs nothing.
+	 */
+	public function testConditionalMemberScannedAlongsideItsPlainSibling(): Void {
 		final vs: Array<Violation> = violations('class C { static final A:Int = 5; #if debug static final B:Int = 6; #end }');
-		Assert.equals(1, vs.length);
+		Assert.equals(2, vs.length);
 		Assert.isTrue(vs[0].message.indexOf("'A'") >= 0);
+		Assert.isTrue(vs[1].message.indexOf("'B'") >= 0);
 	}
 
 	/** An enum-abstract value lives under `EnumAbstractDecl` (not a visibility container) — handled by prefer-enum-abstract. */
@@ -164,21 +170,6 @@ class InlineConstantCheckTest extends Test {
 	public function testNoFixForString(): Void {
 		final fixed: String = fixedSource('class C { static final A:String = "x"; }');
 		Assert.equals(-1, fixed.indexOf('inline'));
-	}
-
-	private function violations(src: String): Array<Violation> {
-		return new InlineConstant().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
-	private function fixedSource(src: String): String {
-		final check: InlineConstant = new InlineConstant();
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
-		final sorted: Array<{ span: Span, text: String }> = edits.copy();
-		sorted.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
 	}
 
 	public function testInlineVarIntFlagged(): Void {
@@ -413,6 +404,32 @@ class InlineConstantCheckTest extends Test {
 				'class C { static inline final A:Int = 1; static final MYCONST:Int = A; function f():Void { Reflect.field(C, "MYCONST"); } }'
 			).length
 		);
+	}
+
+	/**
+	 * A `static final` written inside a member-position `#if` is a constant of the class like any
+	 * other. The region is ONE child of the container holding every branch's members flattened, so
+	 * scanning the container's direct children alone silently exempted it.
+	 */
+	public function testConditionalMemberFlaggedAndFixedInPlace(): Void {
+		final src: String = 'class C {\n\t#if cpp\n\tstatic final A:Int = 1;\n\t#end\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals('class C {\n\t#if cpp\n\tstatic inline final A:Int = 1;\n\t#end\n}', fixedSource(src));
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new InlineConstant().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	private function fixedSource(src: String): String {
+		final check: InlineConstant = new InlineConstant();
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+		final sorted: Array<{ span: Span, text: String }> = edits.copy();
+		sorted.sort((a, b) -> b.span.from - a.span.from);
+		var out: String = src;
+		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
+		return out;
 	}
 
 }

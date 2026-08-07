@@ -231,7 +231,6 @@ class PreferInlineCheckTest extends Test {
 		);
 	}
 
-
 	public function testEmptyBodyFlagged(): Void {
 		Assert.equals(1, violations(cls('function noop():Void {}')).length, 'inlining an empty method compiles the call away');
 	}
@@ -318,26 +317,6 @@ class PreferInlineCheckTest extends Test {
 		}
 	}
 
-	private function cls(members: String): String {
-		return 'class C {\n\t$members\n}';
-	}
-
-	private function violations(source: String): Array<Violation> {
-		return new PreferInline().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
-	}
-
-	private function relaxedViolations(source: String): Array<Violation> {
-		final check: PreferInline = new PreferInline();
-		check.setOracleRelaxed(true);
-		return check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
-	}
-
-	private function hasMethod(vs: Array<Violation>, name: String): Bool {
-		for (v in vs) if (v.message.indexOf('\'$name\'') >= 0) return true;
-		return false;
-	}
-
-
 	public function testNullLiteralArgBodySkipped(): Void {
 		Assert.equals(
 			0, violations(cls('public function clear():Void down(null);\n\tfunction down(p:Int):Void { keep(p); log(p); }')).length,
@@ -365,7 +344,6 @@ class PreferInlineCheckTest extends Test {
 			'a lambda argument is not a simple operand — the forward is not thin'
 		);
 	}
-
 
 	public function testArrowLambdaArgNotFlagged(): Void {
 		Assert.equals(
@@ -443,6 +421,64 @@ class PreferInlineCheckTest extends Test {
 		final vs: Array<Violation> = violations(cls('function noop():Void {}'));
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('empty body') >= 0, vs[0].message);
+	}
+
+	/**
+	 * A method written inside a member-position `#if` is a method of the class like any other. The
+	 * region is ONE child of the container holding every branch's members flattened, so scanning the
+	 * container's direct children alone silently exempted it.
+	 */
+	public function testConditionalMemberFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\t#if cpp\n\tpublic function get():Int return 1;\n\t#end\n}').length);
+	}
+
+	/**
+	 * A modifier written BEFORE the `#if` modifies whichever branch compiles, so it reaches into EVERY
+	 * branch: both guarded methods are overrides and neither is a candidate. This is the fixture that
+	 * discriminates the per-branch restart — a flat read of the region's flattened children consumes
+	 * the `override` on the first member and hands the second one out bare.
+	 */
+	public function testConditionalOverrideBindsToItsOwnBranch(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C extends B {\n\toverride\n\t#if cpp\n\tpublic function get():Int return 1;\n\t#else\n\tpublic function calc():Int return 2;\n\t#end\n}'
+			).length
+		);
+	}
+
+	/**
+	 * A `@:native` binding's Haxe body is a placeholder the backend discards — the generated call
+	 * goes to the foreign symbol. Inlining substitutes the placeholder at the call site instead, so
+	 * `nativeThing(x) == 0` silently becomes `0 == 0`. Found on a real tree: the method was inside
+	 * `#if cpp` and only became reachable once the region was scanned.
+	 */
+	public function testNativeMetaMethodNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\t@:native(\'nativeThing\')\n\tprivate static function nativeThing(a:Int):Int return 0;\n\tpublic static function use(a:Int):Bool return nativeThing(a) == 0;\n}'
+			).length
+		);
+	}
+
+	private function cls(members: String): String {
+		return 'class C {\n\t$members\n}';
+	}
+
+	private function violations(source: String): Array<Violation> {
+		return new PreferInline().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+	}
+
+	private function relaxedViolations(source: String): Array<Violation> {
+		final check: PreferInline = new PreferInline();
+		check.setOracleRelaxed(true);
+		return check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+	}
+
+	private function hasMethod(vs: Array<Violation>, name: String): Bool {
+		for (v in vs) if (v.message.indexOf('\'$name\'') >= 0) return true;
+		return false;
 	}
 
 }

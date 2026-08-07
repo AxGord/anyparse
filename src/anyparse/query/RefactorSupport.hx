@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.format.comment.CommentLossException;
+import anyparse.query.MemberBranchScan;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.ParseError;
@@ -1642,6 +1643,15 @@ final class RefactorSupport {
 	 * (`prefer-final-field` private path, `prefer-final-public-field`,
 	 * `prefer-read-only-field`) — each filters by `exported` and applies its own proof.
 	 * Skip-parse tolerant; a grammar lacking the visibility kind-sets yields nothing.
+	 *
+	 * A field written inside a member-position `#if` region is visited too: the region is ONE
+	 * child of the container holding every branch's fields flattened, so scanning the container's
+	 * direct children alone silently exempted every guarded field. `MemberBranchScan.fold` descends
+	 * into it branch by branch, and merges the exported flag a branch carries out with OR — the
+	 * fail-closed direction here. A field the merge calls exported when some build makes it private
+	 * is at worst reported by the public-field rules instead of the private one; the AND reading
+	 * would hand `prefer-final-field`'s file-confined write proof a field that is PUBLIC in another
+	 * build, where an out-of-file writer it never scans can exist.
 	 */
 	public static function eachFieldMember(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin,
@@ -1655,10 +1665,21 @@ final class RefactorSupport {
 		final defaultVis: Null<String> = shape.defaultVisibilityModifierText;
 		if (containers.length == 0 || members.length == 0 || mutableFields.length == 0 || visibility.length == 0 || defaultVis == null)
 			return;
+		// Re-bound to a non-null local: a narrowing does not reach into an anonymous struct literal.
+		final vis: String = defaultVis;
 		for (entry in files) {
 			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (_: Exception) null;
-			if (tree != null)
-				walkFieldContainers(tree, entry.source, entry.file, containers, members, mutableFields, visibility, defaultVis, visit);
+			if (tree != null) walkFieldContainers(tree, {
+				source: entry.source,
+				file: entry.file,
+				containers: containers,
+				members: members,
+				mutableFields: mutableFields,
+				visibility: visibility,
+				defaultVis: vis,
+				branch: MemberBranchScan.seamsOf(shape, entry.source),
+				visit: visit
+			});
 		}
 	}
 
@@ -1700,11 +1721,17 @@ final class RefactorSupport {
 		final members: Array<String> = shape.memberDeclKinds ?? [];
 		if (ctorName == null) return null;
 		var found: Null<QueryNode> = null;
-		for (child in container.children) if (members.contains(child.kind) && child.name == ctorName) {
-			if (found != null) return null;
-			found = child;
-		}
-		return found;
+		var several: Bool = false;
+		// Every member host, not just the container's direct children: a constructor written inside a
+		// member-position `#if` is one level down, and reading it as absent let a caller treat a
+		// SECOND, guarded constructor's assignments as if they did not exist.
+		eachMemberHost(container, host -> {
+			for (child in host.children) if (members.contains(child.kind) && child.name == ctorName) {
+				if (found != null) several = true;
+				found = child;
+			}
+		});
+		return several ? null : found;
 	}
 
 	/**
@@ -2112,29 +2139,20 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * Span starts of `container`'s member declarations that carry a `static`
-	 * modifier (the modifier projects as a separate preceding sibling node).
-	 * Shared by field-init-at-declaration and prefer-final-field: both must
-	 * exempt statics from ctor-assignment reasoning (a static initializes at
-	 * class-load, and `static final` requires a declaration initializer).
+	 * Span starts of the member declarations of `container` that carry a `static` modifier.
+	 *
+	 * Member-position `#if` regions are descended into: a guarded `static var` read as an instance
+	 * field is the unsafe direction (its constructor assignment does not mean what a declaration
+	 * initializer means). Branches are read as ONE flat run, and a `static` reaching a region from
+	 * before it, or carried out of one, marks the members on both sides — over-marking is the safe
+	 * direction here, since a member the reading calls static is one no caller will move.
 	 */
 	public static function staticMemberFroms(container: QueryNode, shape: RefShape): Array<Int> {
 		final staticKind: Null<String> = shape.staticModifierKind;
 		final members: Array<String> = shape.memberDeclKinds ?? [];
 		final out: Array<Int> = [];
 		if (staticKind == null) return out;
-		var pending: Bool = false;
-		for (child in container.children) {
-			if (child.kind == staticKind)
-				pending = true;
-			else if (members.contains(child.kind)) {
-				if (pending) {
-					final sp: Null<Span> = child.span;
-					if (sp != null) out.push(sp.from);
-				}
-				pending = false;
-			}
-		}
+		collectStaticFroms(container, staticKind, members, false, out);
 		return out;
 	}
 
@@ -2852,9 +2870,19 @@ final class RefactorSupport {
 	private static function findFieldContainer(
 		node: QueryNode, fieldFrom: Int, classLike: Array<String>, fields: Array<String>
 	): Null<{ container: QueryNode, field: QueryNode }> {
-		if (classLike.contains(node.kind)) for (child in node.children) if (fields.contains(child.kind)) {
-			final sp: Null<Span> = child.span;
-			if (sp != null && sp.from == fieldFrom) return { container: node, field: child };
+		// Every member host of the container, not just its direct children: a field written inside a
+		// member-position `#if` sits one level down, and reading it as absent left the fix side unable
+		// to re-find a field its own detection had flagged.
+		if (classLike.contains(node.kind)) {
+			var found: Null<QueryNode> = null;
+			eachMemberHost(node, host -> {
+				for (child in host.children) if (fields.contains(child.kind)) {
+					final sp: Null<Span> = child.span;
+					if (sp != null && sp.from == fieldFrom) found = child;
+				}
+			});
+			final field: Null<QueryNode> = found;
+			if (field != null) return { container: node, field: field };
 		}
 		for (child in node.children) {
 			final hit: Null<{ container: QueryNode, field: QueryNode }> = findFieldContainer(child, fieldFrom, classLike, fields);
@@ -3030,28 +3058,24 @@ final class RefactorSupport {
 	}
 
 	/** Recursive worker for `eachFieldMember`: visit a container's mutable fields, tracking exported state. */
-	private static function walkFieldContainers(
-		node: QueryNode, source: String, file: String, containers: Array<String>, members: Array<String>, mutableFields: Array<String>,
-		visibility: Array<String>, defaultVis: String,
-		visit: (owner:String, field:QueryNode, source:String, file:String, exported:Bool) -> Void
-	): Void {
-		if (containers.contains(node.kind)) {
-			final owner: Null<String> = node.name;
-			if (owner != null) {
-				var exported: Bool = false;
-				for (child in node.children) {
-					if (visibility.contains(child.kind)) {
+	private static function walkFieldContainers(node: QueryNode, ctx: FieldMemberCtx): Void {
+		if (ctx.containers.contains(node.kind)) {
+			final name: Null<String> = node.name;
+			// Re-bound to a non-null local: a narrowing does not survive into the closure below.
+			if (name != null) {
+				final owner: String = name;
+				MemberBranchScan.fold(ctx.branch, node.children, false, (exported, child) -> {
+					if (ctx.visibility.contains(child.kind)) {
 						final span: Null<Span> = child.span;
-						if (span != null && StringTools.trim(source.substring(span.from, span.to)) != defaultVis) exported = true;
-					} else if (members.contains(child.kind)) {
-						if (mutableFields.contains(child.kind)) visit(owner, child, source, file, exported);
-						exported = false;
+						return exported || span != null && StringTools.trim(ctx.source.substring(span.from, span.to)) != ctx.defaultVis;
 					}
-				}
+					if (!ctx.members.contains(child.kind)) return exported;
+					if (ctx.mutableFields.contains(child.kind)) ctx.visit(owner, child, ctx.source, ctx.file, exported);
+					return false;
+				}, (a, b) -> a || b);
 			}
 		}
-		for (child in node.children)
-			walkFieldContainers(child, source, file, containers, members, mutableFields, visibility, defaultVis, visit);
+		for (child in node.children) walkFieldContainers(child, ctx);
 	}
 
 	/** Walk back from `from` over own-line line-comments and block-comments (and the whitespace between) to the first code. */
@@ -4009,4 +4033,71 @@ final class RefactorSupport {
 		return best;
 	}
 
+	/**
+	 * Collect the `from` of every static member under `host` into `out`, returning the modifier-run
+	 * state the host's children leave behind. Descends into every nested member host — a
+	 * member-position `#if` region above all — carrying `incoming` in, because a `static` written
+	 * before the `#if` modifies the first member of whichever branch compiles, and carrying the
+	 * region's own leftover out, because a region ending on `static` modifies the member after
+	 * `#end`. Branches are read as one flat run: the question is only WHICH members are static, and
+	 * a member the flat reading calls static is one no caller will move.
+	 */
+	private static function collectStaticFroms(
+		host: QueryNode, staticKind: String, members: Array<String>, incoming: Bool, out: Array<Int>
+	): Bool {
+		var pending: Bool = incoming;
+		for (child in host.children) {
+			if (child.kind == staticKind)
+				pending = true;
+			else if (members.contains(child.kind)) {
+				if (pending) {
+					final sp: Null<Span> = child.span;
+					if (sp != null) out.push(sp.from);
+				}
+				pending = false;
+			} else if (descendsToMemberHost(host.kind, child.kind))
+				// OR, not assignment: a `#if A static #end` region leaves `static` pending for the
+				// member after `#end` in the A build, and a region that consumed it leaves nothing —
+				// but `incoming` still reaches that member in the build where A is false. Over-marking
+				// is the safe direction for this function (a member the flat reading calls static is
+				// one no caller will move); dropping `incoming` was the unsafe one.
+				pending = collectStaticFroms(child, staticKind, members, pending, out) || pending;
+		}
+		return pending;
+	}
+
+
+	/**
+	 * The member host whose DIRECT children hold `member` — `container` itself, or the
+	 * member-position conditional region one level down that actually declares it.
+	 *
+	 * Every sibling-run walk needs the real parent. Handed the container for a guarded member,
+	 * `declGroupSpan` finds no sibling index and degrades to the bare node span, so a deletion built
+	 * from it leaves the member's `private` / `@:meta` run behind — dangling text that does not parse.
+	 * Falls back to `container` when `member` is not found under it at all, which keeps every
+	 * pre-existing caller's behaviour byte for byte.
+	 */
+	public static function memberHostOf(container: QueryNode, member: QueryNode): QueryNode {
+		var found: QueryNode = container;
+		eachMemberHost(container, host -> if (host.children.contains(member)) found = host);
+		return found;
+	}
+
 }
+
+/**
+ * What `RefactorSupport.eachFieldMember`'s container walk threads through every frame — the
+ * kind-sets it matches on, the branch seams its member fold descends `#if` regions with, and the
+ * visitor. Resolved once per file.
+ */
+private typedef FieldMemberCtx = {
+	final source: String;
+	final file: String;
+	final containers: Array<String>;
+	final members: Array<String>;
+	final mutableFields: Array<String>;
+	final visibility: Array<String>;
+	final defaultVis: String;
+	final branch: MemberBranchSeams;
+	final visit: (owner:String, field:QueryNode, source:String, file:String, exported:Bool) -> Void;
+};
