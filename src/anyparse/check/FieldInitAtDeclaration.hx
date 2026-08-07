@@ -454,24 +454,20 @@ final class FieldInitAtDeclaration implements Check {
 		final identKind: String = shape.identKind;
 		final selfText: Null<String> = shape.selfReferenceText;
 		// `$p` inside a single-quoted string projects as the interp `Ident` kind, not
-		// `IdentExpr` - it is a reference all the same (`${p}` blocks carry a regular
+		// `IdentExpr` - it is a reference all the same, and the resolver binds it by the
+		// same scope rules, so the two share one arm (`${p}` blocks carry a regular
 		// IdentExpr child and were already reached by the child walk).
-		final isInterpIdent: Bool = shape.stringInterpIdentKind != null && node.kind == shape.stringInterpIdentKind;
-		if (node.kind == identKind || isInterpIdent) {
+		if (node.kind == identKind || node.kind == shape.stringInterpIdentKind) {
 			final name: Null<String> = node.name;
 			final span: Null<Span> = node.span;
 			if (name == null || span == null) return false;
 			if (selfText != null && name == selfText) return false;
 			final bf: Null<Int> = TypeResolver.resolveBindingFrom(name, span, container, shape);
-			// A bare `$name` interp ident does not register as a binding read, so an
-			// unresolved one is NOT provably global - in practice it is almost always
-			// a local/param; fail closed. A regular unresolved IdentExpr stays the
-			// provably-global case (imports/statics) - UNLESS the container has a
-			// supertype clause: an INHERITED member is invisible to the single-file
-			// resolver and indistinguishable from a global, so under `extends` /
-			// `implements` an unresolved lowercase ident fails closed too (type
-			// refs like `Colors.WHITE` keep their uppercase root and stay movable).
-			if (isInterpIdent) return allowStatics && bf != null && statics.contains(bf);
+			// An unresolved ident is the provably-global case (imports/statics) - UNLESS the
+			// container has a supertype clause: an INHERITED member is invisible to the
+			// single-file resolver and indistinguishable from a global, so under `extends` /
+			// `implements` an unresolved lowercase ident fails closed too (type refs like
+			// `Colors.WHITE` keep their uppercase root and stay movable).
 			if (bf != null) return allowStatics && statics.contains(bf);
 			if (!hasSupertype(container, shape)) return true;
 			final c0: Int = StringTools.fastCodeAt(name, 0);
