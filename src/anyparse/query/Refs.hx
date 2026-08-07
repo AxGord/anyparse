@@ -14,6 +14,13 @@ import anyparse.runtime.Span;
  *
  *  - `kind ∈ shape.declHostKinds` → `RefKind.Decl` (binding site).
  *  - `kind == shape.identKind`    → `RefKind.Read` (reference).
+ *  - `kind == shape.stringInterpIdentKind` → `RefKind.Read` — a braceless
+ *    `$name` inside an interpolating string literal, which binds to the
+ *    enclosing scope by the same rules a bare identifier there would. Its
+ *    span covers the `$` too, so the hit is marked `RefHit.interpolated`
+ *    and a splicing consumer must locate the identifier token inside it —
+ *    which an escape-spelled `$` or name denies, the one shape `rename`
+ *    still refuses.
  *
  * Phase 3.2 scope: lexical scope tracking. The walker maintains a
  * `ScopeStack` and pushes a frame on every `kind ∈ shape.scopeKinds`
@@ -113,6 +120,20 @@ final class Refs {
 		return kind == shape.fieldAccessKind || kind == shape.nullSafeAccessKind || kind == shape.forceFieldAccessKind;
 	}
 
+	/**
+	 * The reference class of a node of `kind`, or null when the node is not one.
+	 *
+	 * `stringInterpIdentKind` classifies as a READ, never as a Write: the braceless
+	 * `$name` shorthand inside an interpolating string literal binds to the enclosing
+	 * scope exactly like a bare identifier at that position, and no assignment ctor can
+	 * own it (its parent is always the string literal). Its span covers the bytes that
+	 * SPELL the read — the `$` included — which is the same wide-span convention the
+	 * self-scoped decl hosts already use, so a consumer splicing at a hit must locate the
+	 * identifier token inside the span (`RefactorSupport.identTokenOffset`) rather than
+	 * assume the span IS the name. A `${ … }` hole needs nothing here: the parser gives
+	 * its interior a real expression subtree, whose identifiers are ordinary `identKind`
+	 * reads already.
+	 */
 	private static inline function classify(kind: String, shape: RefShape, isWriteTarget: Bool): Null<RefKind> {
 		// Decl-host takes precedence over identKind: a single grammar
 		// would normally place the decl name on a different ctor than
@@ -121,7 +142,18 @@ final class Refs {
 			? RefKind.Decl
 			: shape.selfScopeDeclKinds.contains(kind)
 				? RefKind.Decl
-				: kind == shape.identKind ? isWriteTarget ? RefKind.Write : RefKind.Read : null;
+				: kind == shape.identKind ? isWriteTarget ? RefKind.Write : RefKind.Read : isInterpRead(kind, shape) ? RefKind.Read : null;
+	}
+
+	/**
+	 * Whether a node of `kind` is a braceless string-interpolation read. Stated ONCE
+	 * because two places ask: `classify`, and the emission site that stamps
+	 * `RefHit.interpolated`. The `identKind` exclusion keeps them from disagreeing in a
+	 * grammar that declares the two seams equal — `classify` would take the identifier
+	 * arm there, so the flag must not be set.
+	 */
+	private static inline function isInterpRead(kind: String, shape: RefShape): Bool {
+		return kind == shape.stringInterpIdentKind && kind != shape.identKind;
 	}
 
 	private static function walkMulti(
@@ -147,7 +179,7 @@ final class Refs {
 						final kind: Null<RefKind> = classify(node.kind, shape, isWriteTarget);
 						if (kind != null) {
 							final bindingSpan: Null<Span> = (kind == RefKind.Decl) ? span : scopes.resolveInnermost(nname);
-							hits.push(new RefHit(kind, nname, span, bindingSpan));
+							hits.push(new RefHit(kind, nname, span, bindingSpan, isInterpRead(node.kind, shape)));
 						} else if (skipped != null && isMemberAccess(node.kind, shape))
 							skipped[nname] = (skipped[nname] ?? 0) + 1;
 					}
@@ -243,11 +275,27 @@ final class RefHit {
 	public final span: Span;
 	public final bindingSpan: Null<Span>;
 
-	public function new(kind: RefKind, name: String, span: Span, ?bindingSpan: Span) {
+	/**
+	 * Whether the occurrence is a braceless `$name` inside an interpolating string literal
+	 * rather than an ordinary identifier.
+	 *
+	 * A rename-class rewrite needs no special case for the ORDINARY spelling — the identifier
+	 * token sits inside the span and `RefactorSupport.identTokenOffset` finds it. An
+	 * escape-spelled `$` or name (`'\x24p'`) puts no locatable token there, and that one is
+	 * refused (`Rename.uncoveredInterpRead`).
+	 *
+	 * A rewrite substituting a NON-identifier — an inlined expression, an `obj.` qualification,
+	 * an accessor call — must refuse or brace every one of them: `$` binds to a bare identifier
+	 * only, so `$obj.p` reads `obj` and then the literal text `.p`.
+	 */
+	public final interpolated: Bool;
+
+	public function new(kind: RefKind, name: String, span: Span, ?bindingSpan: Span, interpolated: Bool = false) {
 		this.kind = kind;
 		this.name = name;
 		this.span = span;
 		this.bindingSpan = bindingSpan;
+		this.interpolated = interpolated;
 	}
 
 }

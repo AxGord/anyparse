@@ -169,9 +169,13 @@ final class CallSites {
 		tree: QueryNode, source: String, name: String, binding: Int, shape: RefShape
 	): CollectResult {
 		final hits: Array<RefHit> = Refs.find(name, tree, shape);
+		// A braceless `$name` interpolation read is excluded: it can only STRINGIFY the
+		// function, never call through it, so it is not a first-class-value capture and no
+		// signature change can break it. Left in, it refuses every method whose name merely
+		// appears in an interpolated string.
 		final boundReads: Array<RefHit> = [
 			for (h in hits)
-				if (h.kind == RefKind.Read && h.bindingSpan != null && bindingFrom(h) == binding) h
+				if (h.kind == RefKind.Read && !h.interpolated && h.bindingSpan != null && bindingFrom(h) == binding) h
 		];
 		final boundReadFroms: Array<Int> = [for (h in boundReads) h.span.from];
 

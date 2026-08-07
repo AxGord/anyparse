@@ -1291,10 +1291,14 @@ typedef RefShape = {
 	@:optional var loopJumpNames: Array<String>;
 
 	/**
-	 * The string-interpolation identifier kind (Haxe `Ident` — a simple `$name`
-	 * inside a single-quoted string projects as this, not as `identKind`) — the
-	 * `dead-store` check counts one as a read so an interpolated-only use keeps its
-	 * variable's stores live. Optional.
+	 * The string-interpolation identifier kind (Haxe `Ident` — a simple `$name` inside a
+	 * single-quoted string projects as this, not as `identKind`). `Refs` classifies it as a
+	 * READ, so the resolution index — and with it `rename`, `safe-delete`, `inline` and every
+	 * other index consumer — sees an interpolated-only use. A check that answers the same
+	 * question by its OWN scan does NOT inherit that and still reads this seam to recognise the
+	 * node: a tree walk (e.g. `dead-store`'s liveness pass, `collapse-nested-switch`'s
+	 * binder-isolation count) or, for the `unused-*` family, a raw scope-bounded text scan that
+	 * never consults the index at all. Optional.
 	 */
 	@:optional var stringInterpIdentKind: String;
 

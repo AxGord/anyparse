@@ -60,13 +60,13 @@ final class HxInterpProjection {
 	private static inline final BLOCK_KIND: String = 'Block';
 
 	/**
-	 * Rewrite every `SingleStringExpr` in `tree` that hides escape-spelled
-	 * interpolation. Mutates in place — `QueryNode.children` is the array the walker
-	 * just built, so the common file pays one tree walk and no allocation.
+	 * Rewrite every `SingleStringExpr` in `tree` that hides escape-spelled interpolation.
+	 * Mutates in place — `QueryNode.children` is the array the walker just built, so the common
+	 * file pays one tree walk and no allocation.
 	 *
-	 * The whole pass is skipped for a source carrying neither `\x` nor `\u`, the two
-	 * spellings from which a decoded `$` can arrive: a raw `$` is already lexed as
-	 * interpolation, and no other escape decodes to one.
+	 * The whole pass is skipped for a source carrying neither `\x` nor `\u`, the two spellings
+	 * from which a decoded `$` — or a decoded identifier character — can arrive: a raw `$` is
+	 * already lexed as interpolation, and no other escape decodes to either.
 	 */
 	public static function reproject(tree: QueryNode, source: String): Void {
 		if (source.indexOf('\\x') < 0 && source.indexOf('\\u') < 0) return;
@@ -82,24 +82,30 @@ final class HxInterpProjection {
 	/**
 	 * Re-project `node`'s WHOLE inner text, not fragment by fragment.
 	 *
-	 * The compiler decodes the entire literal and only then scans it, so the two
-	 * models differ at a seam the parser itself creates: `HxStringLitSegment` cuts a
-	 * fragment at every RAW `$`, which is exactly where a decoded `$` can meet one.
-	 * `'\x24$a'` is the TEXT `$a` — the two dollars pair into one escaped dollar and
-	 * the `a` is literal — but a per-fragment reading sees a lone `$` and, separately,
-	 * the parser's `Ident(a)`, i.e. a READ of `a`. Folding that literal printed the
-	 * value of `a`, which is the very class this module exists to close.
+	 * The compiler decodes the entire literal and only then scans it, so the two models differ
+	 * at a seam the parser itself creates: `HxStringLitSegment` cuts a fragment at every RAW
+	 * `$`, which is exactly where a decoded `$` can meet one. `'\x24$a'` is the TEXT `$a` — the
+	 * two dollars pair into one escaped dollar and the `a` is literal — but a per-fragment
+	 * reading sees a lone `$` and, separately, the parser's `Ident(a)`, i.e. a READ of `a`.
+	 * Folding that literal printed the value of `a`, which is the very class this module exists
+	 * to close.
 	 *
-	 * So the scan starts from the literal's own inner span. Any `${ … }` the rescan
-	 * lands on at the SAME span keeps the parser's node — with its parsed expression
-	 * subtree — and only a block the rescan discovers for itself is childless.
+	 * The gate is NOT just the escape-spelled dollar. An escape decoding to an identifier
+	 * character extends a `$name` run the parser already cut short: `'$n\x6d'` reads `nm`, while
+	 * the parser emits `Ident(n)` plus a literal — a TRUNCATED name, which a consumer trusting
+	 * the tree renames as if it were the whole thing. So any escape decoding to `$` or to an
+	 * ident-continue character triggers the rescan.
+	 *
+	 * So the scan starts from the literal's own inner span. Any `${ … }` the rescan lands on at
+	 * the SAME span keeps the parser's node — with its parsed expression subtree — and only a
+	 * block the rescan discovers for itself is childless.
 	 */
 	private static function expand(node: QueryNode, source: String): Void {
 		final span: Null<Span> = node.span;
 		if (span == null || span.to - span.from < 2) return;
 		final inner: String = source.substring(span.from + 1, span.to - 1);
 		final decoded: Array<HxDecodedChar> = HxStringEscape.decode(inner);
-		if (!decoded.exists(c -> c.code == HxStringEscape.DOLLAR && c.to - c.from > 1)) return;
+		if (!decoded.exists(c -> c.to - c.from > 1 && (c.code == HxStringEscape.DOLLAR || HxStringEscape.isIdentContinue(c.code)))) return;
 		final parsed: Map<String, QueryNode> = [];
 		for (c in node.children) {
 			final childSpan: Null<Span> = c.span;

@@ -236,4 +236,20 @@ class ChangeSigSliceTest extends Test {
 		return ChangeSig.changeSig(source, line, col, perm, plugin, shape);
 	}
 
+
+	/**
+	 * A braceless `$g` interpolation names the method but cannot CALL through it — it only
+	 * stringifies the value — so it is not the first-class-value capture the completeness
+	 * scan refuses on. The index reports it as a read like any other, so the scan has to
+	 * exclude it explicitly or every method mentioned in an interpolated string becomes
+	 * unreorderable.
+	 */
+	public function testInterpolatedMentionIsNotAValueCapture(): Void {
+		final source: String = 'class C {\n\tpublic function g(a:Int, b:Int):Void {\n\t\ttrace(a + b);\n\t}\n'
+			+ '\tpublic function caller():Void {\n\t\ttrace(\'fn is $$g\');\n\t\tg(1, 2);\n\t}\n}';
+		final expected: String = 'class C {\n\tpublic function g(b:Int, a:Int):Void {\n\t\ttrace(a + b);\n\t}\n'
+			+ '\tpublic function caller():Void {\n\t\ttrace(\'fn is $$g\');\n\t\tg(2, 1);\n\t}\n}';
+		assertChangeSig(source, 2, 18, '1,0', expected, true);
+	}
+
 }

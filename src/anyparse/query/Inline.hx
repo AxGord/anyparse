@@ -253,6 +253,28 @@ final class Inline {
 		// Every free identifier the initializer reads must be a stable
 		// local (not reassigned anywhere, not a field / property).
 		final freeIdentErr: Null<String> = checkFreeIdents(name, initializer, tree, shape);
+		if (freeIdentErr != null) return PErr(freeIdentErr);
+
+		// The two interpolation refusals come LAST: both ask the author to go edit the source
+		// and retry, which is wasted advice when an unconditional gate above would reject the
+		// inline anyway.
+		//
+		// A braceless `$name` read is a position only a bare IDENTIFIER may occupy:
+		// substituting an expression there yields literal text (`'$name'` becomes
+		// `'$(a + b)'`), and the re-parse gate cannot catch it because the rewrite is a
+		// perfectly valid string. A `${ … }` hole IS an ordinary expression position this op
+		// handles — unless the rescan synthesized it from an escape-spelled `$`, in which case
+		// it carries no parsed expression and the read inside it is invisible: deleting the
+		// declaration would strand it.
+		if (reads.exists(h -> h.interpolated))
+			return PErr('"$name" is read through a braceless string interpolation ($$$name) - rebrace it as $${$name} first');
+		final blockKind: Null<String> = shape.stringInterpBlockKind;
+		final scope: QueryNode = RefactorSupport.enclosingFunctionSubtree(tree, binding, shape);
+		if (blockKind != null && RefactorSupport.unreadableInterpBlock(scope, blockKind) != null)
+			return PErr(
+				'"$name" shares its scope with an escape-spelled string interpolation carrying no parsed expression -'
+				+ ' a read of the name inside it cannot be seen; respell that interpolation first'
+			);
 		return freeIdentErr != null
 			? PErr(freeIdentErr)
 			: POk({

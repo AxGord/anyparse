@@ -148,7 +148,7 @@ final class IntroduceParameterObject {
 		for (p in params) if (p.name == obj && !paramNames.contains(p.name))
 			return Refused('object name "$obj" collides with an existing parameter — pass --name');
 
-		final interpErr: Null<String> = interpolationRefusal(source, declSpanNN, fields);
+		final interpErr: Null<String> = interpolationRefusal(tree, fields, shape);
 		return interpErr != null
 			? Refused(interpErr)
 			: Ready({
@@ -211,24 +211,25 @@ final class IntroduceParameterObject {
 	}
 
 	/**
-	 * Refuse when a folded parameter appears as a SHORT string
-	 * interpolation `$param` inside the function body — it would need
-	 * `${obj.param}`, which this op does not synthesise (a braced `${param}`
-	 * IS handled by the body-reference rewrite).
+	 * Refuse when a folded parameter is read through a braceless `$param` interpolation — that
+	 * position takes a bare identifier only, so it would need `${obj.param}`, which this op does
+	 * not synthesise (a braced `${param}` IS handled by the body-reference rewrite).
+	 *
+	 * Asked of the resolution index, which classifies the read and binds it to this parameter.
+	 * The predecessor scanned the declaration's raw text for `$<name>`, which also matched the
+	 * name in a comment, in a non-interpolating double-quoted literal, and after an escaped `$$`
+	 * — every one of those a refusal with no read behind it.
 	 */
-	private static function interpolationRefusal(source: String, declSpan: Span, fields: Array<Field>): Null<String> {
-		final body: String = source.substring(declSpan.from, declSpan.to);
+	private static function interpolationRefusal(tree: QueryNode, fields: Array<Field>, shape: RefShape): Null<String> {
 		for (f in fields) {
-			var from: Int = 0;
-			while (true) {
-				final at: Int = body.indexOf('$$${f.name}', from);
-				if (at < 0) break;
-				final after: Int = at + 1 + f.name.length;
-				final nextOk: Bool = after >= body.length || !RefactorSupport.isIdentChar(StringTools.fastCodeAt(body, after));
-				if (nextOk)
-					return 'parameter "${f.name}" is used in a short string interpolation ($${f.name}) — '
+			final fSpan: Null<Span> = f.node.span;
+			if (fSpan == null) continue;
+			final binding: Int = fSpan.from;
+			for (hit in Refs.find(f.name, tree, shape)) {
+				final b: Null<Span> = hit.bindingSpan;
+				if (hit.interpolated && b != null && b.from == binding)
+					return 'parameter "${f.name}" is used in a short string interpolation ($$${f.name}) — '
 						+ 'rewrite that interpolation with { } braces first, then retry';
-				from = at + 1;
 			}
 		}
 		return null;

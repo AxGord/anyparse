@@ -588,18 +588,20 @@ final class Naming implements Check implements CrossFileFix {
 	 * (null); a distinctive-name `CommentTrivia` mention renames along. Null on a parse failure
 	 * when the fail-closed raw scan finds an uncovered mention.
 	 *
-	 * `extraSpans` carries occurrences of the SAME binding that the reference walker does not
-	 * index and the CALLER resolved instead - a simple `$name` string-interpolation read, which
-	 * `no-underscore-prefix` collects through the grammar's `stringInterpIdentKind`. They join
-	 * the rewritten set and stop blocking the gate; absent, the behaviour is unchanged.
+	 * A simple `$name` string-interpolation read needs no caller-side help: `Refs` indexes it as
+	 * an ordinary read, so it is already in the resolved set and renames along instead of
+	 * blocking the gate.
 	 */
 	private static function declaringFileRenameSpans(
-		source: String, tree: QueryNode, declFrom: Int, name: String, shape: RefShape, plugin: GrammarPlugin, distinctive: Bool,
-		?extraSpans: Array<Span>
+		source: String, tree: QueryNode, declFrom: Int, name: String, shape: RefShape, plugin: GrammarPlugin, distinctive: Bool
 	): Null<Array<Span>> {
-		final resolved: Array<Span> = Rename.renameOccurrences(source, tree, declFrom, shape);
-		if (resolved.length == 0) return null;
-		final covered: Array<Span> = extraSpans == null ? resolved : resolved.concat(extraSpans);
+		final covered: Array<Span> = Rename.renameOccurrences(source, tree, declFrom, shape);
+		if (covered.length == 0) return null;
+		// A `$name` read whose identifier token is not in the raw bytes — an escape-spelled `$`
+		// or name — is DROPPED by `renameOccurrences`, not rewritten, so the rename would strand
+		// it on a name the fix has removed. `rename` refuses the same shape; the completeness
+		// scan below cannot see it, since the occurrence sits inside a string literal.
+		if (RefactorSupport.unrewrittenInterpRead(Refs.find(name, tree, shape), declFrom, covered) != null) return null;
 		// Attribute every OTHER same-name occurrence to its binding: one provably bound to a DIFFERENT
 		// binding (a param / loop var / sibling local sharing the name) is neither a rename target nor a
 		// blocker for THIS binding, so it joins the resolved set as an excluded span. An occurrence whose

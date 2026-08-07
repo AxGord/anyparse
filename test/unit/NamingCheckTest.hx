@@ -242,15 +242,12 @@ class NamingCheckTest extends Test {
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin(), index).length);
 	}
 
-	public function testFixSkipsLocalWithSimpleInterpolation(): Void {
-		// A local read only through a bare `$name` interpolation is missed by the
-		// resolver (the braced `${name}` form is not) — the rename would leave the
-		// interpolation dangling, so bail to report-only.
+	public function testFixRenamesLocalWithSimpleInterpolation(): Void {
+		// A bare `$name` interpolation read IS in the resolver index (as is the braced
+		// `${name}` form), so the rename rewrites it along with the declaration instead
+		// of bailing to report-only.
 		final src: String = "class C {\n\tpublic function f():String {\n\t\tvar BadLocal = 3;\n\t\treturn 'value is $BadLocal';\n\t}\n}";
-		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+		assertFixCanonical(src, "$badLocal", 'BadLocal');
 	}
 
 	public function testFixRenamesLocalWithBracedInterpolation(): Void {

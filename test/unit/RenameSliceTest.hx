@@ -67,18 +67,50 @@ class RenameSliceTest extends Test {
 		assertRename(FIXTURE, 4, 3, 'sum', expected);
 	}
 
-	public function testInterpolationReadRefused(): Void {
-		// The resolution index does not yet track `$name` interpolation reads —
-		// renaming the binding would silently re-bind them to an outer name (or
-		// leave them dangling), so the rename must REFUSE, not partially apply.
-		final src: String =
-			"class C {\n\tfunction f():String {\n\t\tvar path = \"a\";\n\t\tpath = \"b\" + path;\n\t\treturn 'x/$path';\n\t}\n}";
-		switch renameOf(src, 3, 7, 'relPath') {
-			case Ok(text):
-				Assert.fail('expected Err, got Ok: $text');
-			case Err(message):
-				Assert.isTrue(message.indexOf('interpolation') != -1, message);
-		}
+	public function testInterpolationReadRenamesAlongToLongerName(): Void {
+		// `Refs` indexes a braceless `$name` read, so the rename rewrites it in place — the
+		// identifier token inside the `$name` span, never the `$`. `$$path` beside it is an
+		// ESCAPED dollar (literal text `$path`), and stays verbatim.
+		final src: String = "class C {\n\tfunction f():String {\n\t\tvar path = \"a\";\n\t\tpath = \"b\" + path;\n"
+			+ "\t\treturn 'x/$path and $$path';\n\t}\n}";
+		final expected: String = "class C {\n\tfunction f():String {\n\t\tvar relPath = \"a\";\n\t\trelPath = \"b\" + relPath;\n"
+			+ "\t\treturn 'x/$relPath and $$path';\n\t}\n}";
+		assertRename(src, 3, 7, 'relPath', expected);
+	}
+
+	public function testInterpolationReadRenamesAlongToShorterName(): Void {
+		// The same splice with a SHORTER new name: the interpolation occurrence is one more
+		// span in the edit list, so the running offset shift must stay right across it.
+		final src: String = "class C {\n\tfunction f():String {\n\t\tvar path = \"a\";\n\t\tpath = \"b\" + path;\n"
+			+ "\t\treturn 'x/$path and $$path';\n\t}\n}";
+		final expected: String = "class C {\n\tfunction f():String {\n\t\tvar p = \"a\";\n\t\tp = \"b\" + p;\n"
+			+ "\t\treturn 'x/$p and $$path';\n\t}\n}";
+		assertRename(src, 3, 7, 'p', expected);
+	}
+
+	public function testDoubleQuotedDollarNameNotRenamed(): Void {
+		// A double-quoted literal never interpolates, so `"$path"` is plain text with no read
+		// in it — the rename must leave the literal alone.
+		final src: String = "class C {\n\tfunction f():String {\n\t\tvar path = \"a\";\n\t\ttrace(path);\n"
+			+ "\t\treturn \"x/$path\";\n\t}\n}";
+		final expected: String = "class C {\n\tfunction f():String {\n\t\tvar p = \"a\";\n\t\ttrace(p);\n"
+			+ "\t\treturn \"x/$path\";\n\t}\n}";
+		assertRename(src, 3, 7, 'p', expected);
+	}
+
+	public function testEscapeSpelledInterpolationReadRefused(): Void {
+		// `\x24nm` decodes to `$nm`, so the projection reports a read — but the raw bytes do
+		// not spell `nm` as a token, so no occurrence covers it and the splice would leave the
+		// read behind. The one interpolation shape that still refuses.
+		final src: String = "class C {\n\tfunction f():String {\n\t\tvar nm = \"a\";\n\t\ttrace(nm);\n" + "\t\treturn 'v \\x24nm';\n\t}\n}";
+		assertRenameErr(src, 3, 7, 'q', 'no locatable identifier token');
+	}
+
+	public function testEscapeSpelledInterpolationBlockRefused(): Void {
+		// An escape-spelled `${ … }` hole is re-projected WITHOUT a parsed expression, so the
+		// read of `nm` inside it is invisible to every scan — renaming would part-apply.
+		final src: String = "class C {\n\tfunction f():String {\n\t\tvar nm = \"a\";\n\t\ttrace(nm);\n" + "\t\treturn 'v \\x24{nm}';\n\t}\n}";
+		assertRenameErr(src, 3, 7, 'q', 'no parsed expression');
 	}
 
 	public function testSameBlockRedeclarationRefused(): Void {
@@ -457,6 +489,40 @@ class RenameSliceTest extends Test {
 		final expected: String =
 			'class C {\n\tvar width:Int = 0;\n\tfunction f():Void {\n\t\tfinal width:Int = 1;\n\t\ttrace(this.width + width);\n\t}\n}';
 		assertQualified(source, 4, 9, 'width', expected);
+	}
+
+
+	/**
+	 * An escape can also extend a `$name` run the PARSER already cut short: `'$n\x6d'` is a
+	 * read of `nm`, not of `n`. Renaming `n` must therefore leave the literal alone — the
+	 * projection re-reads the decoded text, so the tree names the read `nm`.
+	 */
+	public function testEscapeExtendedInterpolationNameBindsToTheLongerName(): Void {
+		final src: String = 'class C {\n\tfunction f():String {\n\t\tvar n = "N";\n\t\tvar nm = "NM";\n'
+			+ '\t\treturn \'v $$n\\x6d\' + nm;\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction f():String {\n\t\tvar q = "N";\n\t\tvar nm = "NM";\n'
+			+ '\t\treturn \'v $$n\\x6d\' + nm;\n\t}\n}';
+		assertRename(src, 3, 7, 'q', expected);
+	}
+
+	/** The same literal blocks a rename of the name it REALLY reads: its token is not in the raw bytes. */
+	public function testEscapeExtendedInterpolationRefusesTheNameItReads(): Void {
+		final src: String = 'class C {\n\tfunction f():String {\n\t\tvar n = "N";\n\t\tvar nm = "NM";\n'
+			+ '\t\treturn \'v $$n\\x6d\' + nm;\n\t}\n}';
+		assertRenameErr(src, 4, 7, 'q', 'no locatable identifier token');
+	}
+
+	/**
+	 * A `$count` read bound to a SHADOWING inner binding is none of the outer rename's
+	 * business. Matching interpolation reads by NAME refused this; matching them by their
+	 * resolved binding does not.
+	 */
+	public function testInterpolationReadOfShadowingBindingDoesNotRefuse(): Void {
+		final src: String = 'class C {\n\tfunction f():String {\n\t\tvar count = 1;\n\t\tvar g = function():String {\n'
+			+ '\t\t\tvar count = 2;\n\t\t\treturn \'v $$count\';\n\t\t};\n\t\treturn g() + count;\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction f():String {\n\t\tvar total = 1;\n\t\tvar g = function():String {\n'
+			+ '\t\t\tvar count = 2;\n\t\t\treturn \'v $$count\';\n\t\t};\n\t\treturn g() + total;\n\t}\n}';
+		assertRename(src, 3, 7, 'total', expected);
 	}
 
 }

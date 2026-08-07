@@ -783,4 +783,24 @@ class MoveMemberSliceTest extends Test {
 		return new HaxeQueryPlugin().typeRefShape();
 	}
 
+
+	/**
+	 * A bare caller spelled as a braceless `$TAG` interpolation cannot take the `B.`
+	 * prefix an ordinary one takes — `$` binds to a bare identifier, so the prefix would
+	 * emit the literal text `B.` plus an interpolation of a name A no longer declares.
+	 * The whole `$TAG` span becomes `${B.TAG}` instead. The braced `${TAG}` beside it goes
+	 * through the ordinary path, and the escaped `$$TAG` is literal text and stays put.
+	 */
+	public function testBareInterpolationCallerBraced(): Void {
+		final a: String = 'package pkg;\n\nclass A {\n\tpublic static final TAG:String = "t";\n'
+			+ '\tpublic static function label():String return \'[$$TAG] $${TAG}b $$$$TAG\';\n}';
+		final b: String = 'package pkg;\n\nclass B {}';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'TAG', 'B', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
+		]);
+		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
+		Assert.isTrue(StringTools.contains(newA, '\'[$${B.TAG}] $${B.TAG}b $$$$TAG\''), 'braced qualification expected:\n$newA');
+	}
+
 }

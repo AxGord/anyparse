@@ -125,4 +125,21 @@ class IntroduceParameterObjectSliceTest extends Test {
 		return new HaxeQueryPlugin().refShape();
 	}
 
+
+	/**
+	 * Every `$a` occurrence the predecessor's raw-text scan matched but that is NOT a read
+	 * of the parameter: one in a comment, one in a non-interpolating double-quoted literal,
+	 * and one after an escaped `$$`. The index sees none of them as a read, so the fold
+	 * proceeds — and each stays verbatim while the braced `${a}` becomes `${t.a}`.
+	 */
+	public function testNonReadDollarMentionsDoNotRefuse(): Void {
+		final src: String = 'package pkg;\n\nclass C {\n\tpublic function new() {}\n\t// mentions $$a in a comment\n'
+			+ '\tpublic function f(a:Int, b:Int):String {\n\t\ttrace("plain $$a text");\n\t\treturn \'$$$$a and $${a} and $$b\';\n'
+			+ '\t}\n\tpublic function g():String return f(1, 2);\n}';
+		final text: String = okFold(src, 'f', ['a'], 'T', 't');
+		Assert.isTrue(StringTools.contains(text, '// mentions $$a in a comment'), 'comment mention untouched:\n$text');
+		Assert.isTrue(StringTools.contains(text, 'trace("plain $$a text")'), 'double-quoted mention untouched:\n$text');
+		Assert.isTrue(StringTools.contains(text, '\'$$$$a and $${t.a} and $$b\''), 'escaped dollar kept, braced read folded:\n$text');
+	}
+
 }
