@@ -273,7 +273,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	private static function isBaseCandidateMethod(name: String, fn: QueryNode, mods: Array<String>, metas: Array<String>): Bool {
 		if (name == 'new') return false;
 		if (mods.contains('Inline') || mods.contains('Dynamic') || mods.contains('Macro') || mods.contains('Override')) return false;
-		if (metas.contains('@:keep')) return false;
+		if (metas.contains('@:keep') || metas.exists(m -> BODY_NOT_IMPLEMENTATION_METAS.contains(m))) return false;
 		if (referencesSelf(fn, name)) return false;
 		if (isEmptyBody(fn)) return true;
 		final root: Null<QueryNode> = bodyRootExpr(fn);
@@ -530,5 +530,16 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 
 	/** The class-body member kinds that END a modifier run — a method and the three field forms. */
 	private static final MEMBER_KINDS: Array<String> = ['FnMember', 'VarMember', 'FinalMember', 'FinalModifiedMember'];
+
+
+	/**
+	 * Metadata that makes the written body NOT the implementation — the generated call is redirected
+	 * to a foreign symbol or replaced by injected target code, and the Haxe body is a placeholder the
+	 * backend discards. Inlining substitutes the placeholder AT the call site and the redirect never
+	 * happens: a `@:native` binding whose stub is `return 0` turns `native(x) == 0` into `0 == 0`,
+	 * silently always-true. Distinct from `@:keep`, which is about reachability, not about what the
+	 * body means.
+	 */
+	private static final BODY_NOT_IMPLEMENTATION_METAS: Array<String> = ['@:native', '@:functionCode', '@:extern'];
 
 }

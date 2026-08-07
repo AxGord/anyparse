@@ -469,4 +469,20 @@ class PreferInlineCheckTest extends Test {
 		Assert.isTrue(vs[0].message.indexOf('calc') >= 0, vs[0].message);
 	}
 
+
+	/**
+	 * A `@:native` binding's Haxe body is a placeholder the backend discards — the generated call
+	 * goes to the foreign symbol. Inlining substitutes the placeholder at the call site instead, so
+	 * `nativeThing(x) == 0` silently becomes `0 == 0`. Found on a real tree: the method was inside
+	 * `#if cpp` and only became reachable once the region was scanned.
+	 */
+	public function testNativeMetaMethodNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\t@:native(\'nativeThing\')\n\tprivate static function nativeThing(a:Int):Int return 0;\n\tpublic static function use(a:Int):Bool return nativeThing(a) == 0;\n}'
+			).length
+		);
+	}
+
 }
