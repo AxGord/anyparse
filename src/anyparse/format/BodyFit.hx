@@ -274,8 +274,43 @@ final class BodyFit {
 	 */
 	public static function continuationRescuesBody(cols: Int, body: Doc, glued: Doc, flatWidth: Int, lineWidth: Int): Doc {
 		return Doc.IfArrowContinuationFits(
-			cols, flatWidth, lineWidth + 1, glueLayout(cols, body, pinParenGlued(glued), lineWidth), breakLayout(cols, body)
+			cols, flatWidth, lineWidth + 1, glueLayout(cols, body, pinParenGlued(glued) ?? glued, lineWidth), breakLayout(cols, body)
 		);
+	}
+
+	/**
+	 * The BREAK-side answer for an ARROW-LAMBDA body (ω-fitline-body-glue,
+	 * arrow arm): the sister of `continuationRescuesBody` for the one other
+	 * placement that puts a body after a header token rather than under it.
+	 *
+	 * The arrow's own probe has already found that the line carrying
+	 * `params -> body` overflows; this decides what that costs. The body fits
+	 * one level deeper — it takes the next line, as it always did. It does not
+	 * — the next line rescues nothing, so the body stays glued after the `->`
+	 * and breaks inside itself, saving a line and an indent level.
+	 *
+	 * SCOPED to a body that IS an expression paren (`m -> ({ … })`), i.e. one
+	 * `pinParenGlued` recognises. Widening it to every arrow body was measured
+	 * over a real tree and read WORSE: an `if`-expression body glues its head
+	 * and then explodes its own condition at the deeper column, and a chain
+	 * body trades one shape for another with no line saved. The paren body is
+	 * the population where the glue provably pays — it breaks at its own `{`
+	 * either way, so the delimiter costs nothing beside the arrow while a whole
+	 * line and indent level below it do.
+	 *
+	 * No `glueLayout` width gate here, unlike the construct-body sister: the
+	 * separator before an arrow body is a real emitted token rather than the
+	 * `OptSpace` that gate does arithmetic on, and the arrow's own
+	 * `IfResidualLineExceeds` has already asked the width question for this
+	 * line. A glued body whose first line still overflows would overflow on
+	 * the next line too — that is what `flatWidth` not fitting MEANS — so the
+	 * glue is never the worse of the two.
+	 */
+	public static function continuationRescuesArrowBody(cols: Int, body: Doc, flatWidth: Int, lineWidth: Int): Doc {
+		final pinned: Null<Doc> = pinParenGlued(body);
+		return pinned == null
+			? breakLayout(cols, body)
+			: Doc.IfArrowContinuationFits(cols, flatWidth, lineWidth + 1, pinned, breakLayout(cols, body));
 	}
 
 	/**
@@ -306,16 +341,22 @@ final class BodyFit {
 	 * `Nest`, `Group`) are rebuilt around the pinned inner rather than
 	 * descended past, so no indentation is lost.
 	 */
-	private static function pinParenGlued(d: Doc): Doc {
-		return switch d {
-			case Doc.IfFullLineExceeds(_, brk, fl) if (carriesCollapseProbe(brk)): fl;
-			case Doc.Nest(n, inner): Doc.Nest(n, pinParenGlued(inner));
-			case Doc.Group(inner): Doc.Group(pinParenGlued(inner));
-			case Doc.Concat(items) if (items.length > 0): Doc.Concat(
-				items.slice(0, items.length - 1).concat([pinParenGlued(items[items.length - 1])])
-			);
-			case _: d;
-		};
+	private static function pinParenGlued(d: Doc): Null<Doc> {
+		switch d {
+			case Doc.IfFullLineExceeds(_, brk, fl) if (carriesCollapseProbe(brk)):
+				return fl;
+			case Doc.Nest(n, inner):
+				final pinned: Null<Doc> = pinParenGlued(inner);
+				return pinned == null ? null : Doc.Nest(n, pinned);
+			case Doc.Group(inner):
+				final pinned: Null<Doc> = pinParenGlued(inner);
+				return pinned == null ? null : Doc.Group(pinned);
+			case Doc.Concat(items) if (items.length > 0):
+				final pinned: Null<Doc> = pinParenGlued(items[items.length - 1]);
+				return pinned == null ? null : Doc.Concat(items.slice(0, items.length - 1).concat([pinned]));
+			case _:
+				return null;
+		}
 	}
 
 	/** Does `d` hold a `CollapseProbe` — the marker the expression-paren emitter puts in its OPEN shape? */

@@ -909,31 +909,40 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	elseIfCommentReflow: Bool,
 
 	/**
-	 * ω-fitline-body-glue: when a `FitLine` construct body (`if` / `for` /
-	 * `while`) does not fit on the header line, may it stay GLUED to that line
-	 * and break inside itself, instead of always moving one line down and one
-	 * indent deeper?
-	 *
-	 * Only bodies the next line would NOT rescue are affected: the probe asks
-	 * whether the body's flat width fits at the continuation indent, and when it
-	 * does the body still takes its own line exactly as before. When it does not,
-	 * moving it buys nothing — it breaks internally either way — so the glue saves
-	 * a line and an indent level:
-	 *
-	 * ```
-	 * if (c)                 →   if (c) ({
-	 *     ({                          field: value, …
-	 *         field: value, …    })
-	 *     })
-	 * ```
-	 *
-	 * The glue itself stays width-gated by `BodyFit.glueLayout`, so the header
-	 * line can never run past `maxLineLength` because of it.
+		 * ω-fitline-body-glue: when a `FitLine` construct body (`if` / `for` /
+		 * `while`) does not fit on the header line, may it stay GLUED to that line
+		 * and break inside itself, instead of always moving one line down and one
+		 * indent deeper?
+		 *
+		 * Only bodies the next line would NOT rescue are affected: the probe asks
+		 * whether the body's flat width fits at the continuation indent, and when it
+		 * does the body still takes its own line exactly as before. When it does not,
+		 * moving it buys nothing — it breaks internally either way — so the glue saves
+		 * a line and an indent level:
+		 *
+		 * ```
+		 * if (c)                 →   if (c) ({
+		 *     ({                          field: value, …
+		 *         field: value, …    })
+		 *     })
+		 * ```
+		 *
+		 * The glue itself stays width-gated by `BodyFit.glueLayout`, so the header
+		 * line can never run past `maxLineLength` because of it.
+		 *
+		   * The ARROW-LAMBDA body (`xs.map(m -> ({ … }))`) takes the same answer through
+	 * `BodyFit.continuationRescuesArrowBody`: it is the other placement that puts
+	 * a body after a header token instead of under it, and it asked the same
+	 * question with only one of the two answers available. There the glue is
+	 * additionally scoped to a body that IS an expression paren — every other
+	 * arrow body measured WORSE glued (an `if` body explodes its own condition at
+	 * the deeper column), so only the shape that provably pays is accepted.
 	 *
 	 * Default `false` is the haxe-formatter layout the corpus pins. Fed by
 	 * `sameLine.fitLineBodyGlue`; consumed by `WriterLowering.buildBodyFitExpr`'s
-	 * construct-group arm, so it reaches exactly the bodies whose placement that
-	 * arm owns — a `Keep` / `Same` / `Next` body policy never sees it.
+	 * construct-group arm and by the two `@:fmt(arrowBodyLineWrap)` emit sites, so
+	 * it reaches exactly the bodies whose placement those own — a `Keep` / `Same` /
+	 * `Next` body policy never sees it.
 	 */
 	fitLineBodyGlue: Bool,
 	ifElseSemicolonNextLine: Bool,

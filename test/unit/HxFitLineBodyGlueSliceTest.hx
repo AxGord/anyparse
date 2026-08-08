@@ -64,6 +64,31 @@ final class HxFitLineBodyGlueSliceTest extends Test {
 		+ '\t\t\tdefaultPreviewSurface, \'$$count items\', StyleTokens.SECONDARY_MARK_COLOR, Metrics.GRID_SECOND_LABEL_X_OFFSET\n'
 		+ '\t\t);\n' + '\t}\n' + '}';
 
+	/** An arrow-lambda body the next line cannot rescue either, written below its `->`. */
+	private static final ARROW_BODY_BELOW: String = 'class C {\n' + '\tfunction test() {\n'
+		+ '\t\t_entryList.dataSource = sourceModel.entryViewModels.map(model ->\n' + '\t\t\t({\n'
+		+ '\t\t\t\tlabel: model.entryData != null ? model.entryData.name : throw new Exception(\'Entry data not set\'),\n'
+		+ '\t\t\t\tpath: model.path,\n' + '\t\t\t\treadonly: model.readonly\n' + '\t\t\t})\n' + '\t\t);\n' + '\t}\n' + '}';
+
+	/** The same lambda with its body glued after the `->` — two lines and one indent level cheaper. */
+	private static final ARROW_BODY_GLUED: String = 'class C {\n' + '\tfunction test() {\n'
+		+ '\t\t_entryList.dataSource = sourceModel.entryViewModels.map(model -> ({\n'
+		+ '\t\t\tlabel: model.entryData != null ? model.entryData.name : throw new Exception(\'Entry data not set\'),\n'
+		+ '\t\t\tpath: model.path,\n' + '\t\t\treadonly: model.readonly\n' + '\t\t}));\n' + '\t}\n' + '}';
+
+	/** A short arrow body that fits on the header line — the knob must not touch it. */
+	private static final ARROW_BODY_FLAT: String = 'class C {\n' + '\tfunction test() {\n'
+		+ '\t\t_entryList.dataSource = models.map(model -> ({ label: model.name, path: model.path, readonly: model.readonly }));\n'
+		+ '\t}\n' + '}';
+
+	/**
+	 * An arrow body that is NOT an expression paren — an `if` expression the continuation does not rescue either. The
+	 * arrow glue is scoped to paren bodies, so this one keeps its own line.
+	 */
+	private static final ARROW_IF_BODY: String = 'class C {\n' + '\tfunction test() {\n' + '\t\titemData.forEachChild(\n'
+		+ '\t\t\tchild -> if (updateFlags(dfs, child, itemOldPath + child.nodePath.substr(child.nodePath.lastIndexOf(\'/\')))) updated = true\n'
+		+ '\t\t);\n' + '\t}\n' + '}';
+
 	/**
 	 * An expression paren in OPERAND position — third operand of an `||` chain, too wide to stay on the chain's
 	 * continuation line. It OPENS, and must keep opening under the knob.
@@ -107,6 +132,34 @@ final class HxFitLineBodyGlueSliceTest extends Test {
 	public function testCallBodyCuddlesItsOpenParen(): Void {
 		Assert.equals(CALL_BODY_GLUED, triviaWrite(CALL_BODY_BELOW, GLUE_ON));
 		Assert.equals(CALL_BODY_BELOW, triviaWrite(CALL_BODY_BELOW, GLUE_OFF));
+	}
+
+	/** The arrow-lambda body takes the same answer as a construct body — it is the other after-the-header placement. */
+	public function testArrowLambdaBodyGluesAfterTheArrow(): Void {
+		Assert.equals(ARROW_BODY_GLUED, triviaWrite(ARROW_BODY_BELOW, GLUE_ON));
+		Assert.equals(ARROW_BODY_GLUED, triviaWrite(ARROW_BODY_GLUED, GLUE_ON));
+	}
+
+	/** Knob OFF keeps the arrow body below its `->`, and normalises the glued input back down. */
+	public function testKnobOffKeepsTheArrowBodyBelow(): Void {
+		Assert.equals(ARROW_BODY_BELOW, triviaWrite(ARROW_BODY_BELOW, GLUE_OFF));
+		Assert.equals(ARROW_BODY_BELOW, triviaWrite(ARROW_BODY_GLUED, GLUE_OFF));
+	}
+
+	/**
+	 * The arrow glue is KIND-scoped, not just width-scoped: an `if`-expression body the continuation cannot rescue
+	 * either still takes its own line. Widened to every arrow body, this fixture glues the `if` head and then explodes
+	 * its own condition at the deeper column — which is what the real-tree measurement showed and what this pins.
+	 */
+	public function testNonParenArrowBodyKeepsItsOwnLine(): Void {
+		Assert.equals(ARROW_IF_BODY, triviaWrite(ARROW_IF_BODY, GLUE_ON));
+		Assert.equals(ARROW_IF_BODY, triviaWrite(ARROW_IF_BODY, GLUE_OFF));
+	}
+
+	/** A lambda body that already fits beside its `->` is untouched by either knob state. */
+	public function testShortArrowBodyIsUntouched(): Void {
+		Assert.equals(ARROW_BODY_FLAT, triviaWrite(ARROW_BODY_FLAT, GLUE_ON));
+		Assert.equals(ARROW_BODY_FLAT, triviaWrite(ARROW_BODY_FLAT, GLUE_OFF));
 	}
 
 	/**
