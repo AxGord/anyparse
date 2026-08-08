@@ -12176,7 +12176,7 @@ class WriterLowering {
 		// tail consumes. Extracted to `triviaSepCheckExprs` so the orchestrator
 		// stays under the complexity gate; behaviour byte-identical.
 		final _checks: SepStarChecks = triviaSepCheckExprs(
-			wrapRulesField, ignoreSourceNewlinesForWrap, reflowInExprPosition, leftCurlyKnob, rightCurlyKnob
+			wrapRulesField, ignoreSourceNewlinesForWrap, reflowInExprPosition, leftCurlyKnob, rightCurlyKnob, forceMultiInTypedef
 		);
 		final keepCheckExpr: Expr = _checks.keepCheckExpr;
 		final ignoreCheckExpr: Expr = _checks.ignoreCheckExpr;
@@ -15739,7 +15739,7 @@ class WriterLowering {
 	 */
 	private static function triviaSepCheckExprs(
 		wrapRulesField: Null<String>, ignoreSourceNewlinesForWrap: Bool, reflowInExprPosition: Bool, leftCurlyKnob: Null<String>,
-		rightCurlyKnob: Null<String>
+		rightCurlyKnob: Null<String>, forceMultiInTypedef: Bool
 	): SepStarChecks {
 		final keepCheckExpr: Expr = wrapRulesField != null ? {
 			final rulesAccess: Expr = optFieldAccess(wrapRulesField);
@@ -15781,9 +15781,22 @@ class WriterLowering {
 		// the legacy force-multi shape is kept; it also sidesteps the
 		// enclosing-chain BodyGroup under-measure that exploded the arrow
 		// (`u ->` newline `{…}`) non-idempotently.
-		final ignoreCheckExpr: Expr = reflowInExprPosition
+		final ignoreResolved: Expr = reflowInExprPosition
 			? macro ($ignoreBase) || opt._inValueIfBranch || (opt._inArrowLambdaBody && opt.objectLiteralArrowBodyReflow)
 			: ignoreBase;
+		// ω-anontype-reflow-typedef-guard: a typedef RHS anon is NOT governed by
+		// `wrapping.anonType` in the fork at all — its brace classifies as
+		// `BrOpenType.TypedefDecl` and routes to `MarkWrapping.typedefWrapping`,
+		// which keeps the source line structure verbatim (collapse only when the
+		// body was already same-line). anyparse models both positions with the
+		// single `HxType.Anon` Star, so an `anonType.defaultWrap: "ignore"` config
+		// — meant to re-flow INLINE anon type hints by width — would also drop the
+		// source newlines of every multi-line typedef body and collapse it. Gate
+		// the Ignore drop off inside the typedef RHS on the Star that opted into
+		// `@:fmt(forceMultiInTypedef)` (only `HxType.Anon`); `opt._inTypedefBody`
+		// is set by `HxTypedefDecl.type`'s `propagateTypedefContext` and cleared
+		// per-element, so a NESTED anon inside a typedef body still re-flows.
+		final ignoreCheckExpr: Expr = forceMultiInTypedef ? macro ($ignoreResolved) && !opt._inTypedefBody : ignoreResolved;
 		// ω-nowrap-flat: pure-`noWrap` runtime check, sister to
 		// `keepCheckExpr` / `ignoreCheckExpr`. Fires only when the
 		// wrap-rules JSON config selects `"defaultWrap": "noWrap"` with an

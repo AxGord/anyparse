@@ -586,6 +586,7 @@ import unit.HxDeclInitMultilineStringCuddleTest;
 import unit.RedundantTrailingCommaCheckTest;
 import unit.SplitVarDeclarationCheckTest;
 import unit.JoinSingleUseLocalCheckTest;
+import unit.HxAnonTypeIgnoreReflowTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -768,6 +769,7 @@ class RunTests {
 		addCase(new HxTypedefAssignOptionsTest());
 		addCase(new HxTypedefSemiSliceTest());
 		addCase(new HxTypedefAnonForceMultiTest());
+		addCase(new HxAnonTypeIgnoreReflowTest());
 		addCase(new HxVarTypeHintAnonIndentTest());
 		addCase(new HxTypedefBetweenBlankTest());
 		addCase(new HxArrowFnTypeSliceTest());

@@ -208,6 +208,15 @@ enum HxType {
 	 * insert blank lines after the opening `{` and between adjacent fields
 	 * in the `@:sep`-Star force-multi branch — without touching inline
 	 * anon-type uses (`var x:{a:Int}`), which never carry the flag.
+	 *
+	 * `@:fmt(forceMultiInTypedef)` doubles as the typedef-awareness marker
+	 * for the source-newline policy: `wrapping.anonType.defaultWrap:
+	 * "ignore"` re-flows an INLINE anon type hint by width (fits → one
+	 * line, exceeds → one field per line), but the drop is gated off while
+	 * `opt._inTypedefBody` holds, so a typedef RHS body keeps its source
+	 * line structure. The fork needs no such gate — it classifies the
+	 * typedef brace as `BrOpenType.TypedefDecl` and routes it to
+	 * `MarkWrapping.typedefWrapping`, which never reads `wrapping.anonType`.
 	 */
 	@:trivia @:lead('{') @:trail('}') @:sep(',') @:sepAlt(';') @:fmt(anonTypeBracesOpen, anonTypeBracesClose, wrapRules('anonTypeWrap'),
 		leftCurly('anonTypeLeftCurly'), rightCurly('anonTypeRightCurly'), beforeDocCommentEmptyLines, forceMultiInTypedef,
