@@ -478,8 +478,19 @@ class WrapList {
 	// ternary `?`/`:` and NO `+`/`-`/`||`/`&&` appears at that level. Mirrors
 	// isTopLevelChain's depth-1 walk; routes a ternary-inner expr-paren to the
 	// keep-`(`-glued shape instead of the IfFullLineExceeds open when expressionWrapping is at its universal default; a fillLine-family mode opens the paren (fork parity).
+	// BOTH separators are required: a real ternary always emits `?` AND `:` at the
+	// same wrap level, while an OBJECT LITERAL emits only `:` (its field separator)
+	// and used to be misread as a ternary here. That misread is what made
+	// `({field: v, ...})` explode into `(\n\t{...}\n)` under a fillLine-family
+	// expressionWrapping while the universal default glued it. A `:`-only inner now
+	// falls through to the generic `IfFullLineExceeds(open, glued)` arm, where
+	// `Renderer.collapseParenCommitsOpen` keeps the paren GLUED when the inner
+	// cannot be made a single fitting line - the `({` shape the fork's own golds
+	// expect (`comprehension_struct_in_expr_parens_fits`), and the shape the
+	// sibling array-literal inner (no depth-1 `:`) already had on every config.
 	public static function isTopLevelTernary(d: Doc): Bool {
-		var ternary: Bool = false;
+		var question: Bool = false;
+		var colon: Bool = false;
 		var other: Bool = false;
 		function w(n: Doc, depth: Int): Void {
 			if (depth > 1) return;
@@ -503,8 +514,10 @@ class WrapList {
 					for (it in items) w(it, depth);
 				case Text(t):
 					if (depth == 1) switch StringTools.trim(t) {
-						case '?' | ':':
-							ternary = true;
+						case '?':
+							question = true;
+						case ':':
+							colon = true;
 						case '+' | '-' | '||' | '&&':
 							other = true;
 						case _:
@@ -513,7 +526,7 @@ class WrapList {
 			}
 		}
 		w(d, 0);
-		return ternary && !other;
+		return question && colon && !other;
 	}
 
 	/**
