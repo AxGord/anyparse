@@ -991,7 +991,12 @@ final class HaxeFormatConfigLoader {
 			// `triviaSepStarExpr` consumes it via the `_ignoreEmit`
 			// gate; chain emitters route `Ignore → shapeNoWrap` as a
 			// defensive fallback.
-			case 'ignore' | 'Ignore': WrapMode.Ignore;
+			case 'ignore' | 'Ignore':
+				WrapMode.Ignore;
+			// ω-packed-or-oneperline: anyparse extension with no fork
+			// counterpart — leading break, then the items share one
+			// continuation line if they fit at that indent, else one per line.
+			case 'packedOrOnePerLine' | 'PackedOrOnePerLine': WrapMode.PackedOrOnePerLine;
 			case _: null;
 		};
 	}

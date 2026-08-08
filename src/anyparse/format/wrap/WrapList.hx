@@ -2014,6 +2014,8 @@ class WrapList {
 			);
 			case FillLineWithLeadingBreak:
 				shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma);
+			case PackedOrOnePerLine:
+				shapePackedOrOnePerLine(open, close, sep, items, cols, appendTrailingComma, sepBeforeFlags);
 			// ω-keep-objectlit: Keep cascade hits are pre-empted by the
 			// writer's trivia branch (`triviaSepStarExpr`) — at the engine
 			// level, Keep collapses to NoWrap so any leakage produces a
@@ -2486,6 +2488,50 @@ class WrapList {
 		// `RightCurlyPlacement.Inline` glues close to the last body
 		// token. See `emit` docstring for the full rationale.
 		return Concat([Text(open), Nest(cols, Concat(inner)), trailBreak, Text(close)]);
+	}
+
+	/**
+	 * `PackedOrOnePerLine`: leading break, then all-or-nothing packing.
+	 *
+	 * The open delim breaks unconditionally, so the `Group` inside the `Nest`
+	 * measures its flat body from the CONTINUATION column — which is exactly
+	 * the question the cascade cannot ask (`ExceedsMaxLineLength` and
+	 * `LineLengthLargerThan` both probe the column where the OPEN delim sits).
+	 * Fits there → every item on that one line; does not → one item per line.
+	 *
+	 * No `openInside` / `closeInside`: both breaks are forced, so a
+	 * delim-padding Doc would land on the wrong side of one — the same defect
+	 * `shapeFillLineWithLeadingBreak` carried.
+	 */
+	private static function shapePackedOrOnePerLine(
+		open: String, close: String, sep: String, items: Array<Doc>, cols: Int, appendTrailingComma: Bool, ?sepBeforeFlags: Array<Bool>
+	): Doc {
+		final flat: Array<Doc> = [];
+		final broken: Array<Doc> = [];
+		for (i in 0...items.length) {
+			if (i > 0) {
+				// A source-elided separator (`sepBeforeFlags[i]`) drops the
+				// `,` but still needs the gap, in both layouts.
+				if (!skipSepBefore(sepBeforeFlags, i)) {
+					flat.push(Text(sep));
+					broken.push(Text(sep));
+				}
+				flat.push(Text(' '));
+				broken.push(Line('\n'));
+			}
+			flat.push(items[i]);
+			broken.push(items[i]);
+		}
+		if (appendTrailingComma) {
+			flat.push(Text(sep));
+			broken.push(Text(sep));
+		}
+		return Concat([
+			Text(open),
+			Nest(cols, Concat([Line('\n'), Group(IfBreak(Concat(broken), Concat(flat)))])),
+			Line('\n'),
+			Text(close),
+		]);
 	}
 
 	private static function shapeOnePerLineAfterFirst(

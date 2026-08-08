@@ -74,4 +74,24 @@ enum abstract WrapMode(Int) from Int to Int {
 	 */
 	final Ignore = 6;
 
+	/**
+	 * Leading break, then ALL-OR-NOTHING packing: the open delim always
+	 * breaks, the items then share ONE continuation line when they fit at
+	 * that indent, and otherwise take one line each. No partial packing —
+	 * which is the whole point, since a half-filled continuation line puts
+	 * the breaks at arbitrary places and the reader can no longer scan the
+	 * list by eye.
+	 *
+	 * Wadler's plain group semantics for a delimited list, and the missing
+	 * middle between the two neighbours: `FillLine*` packs greedily and
+	 * will happily leave a ragged `a, b, c,` / `d` pair of lines, while
+	 * `OnePerLine` never uses the continuation line even when everything
+	 * fits on it.
+	 *
+	 * anyparse extension — the fork has no `WrappingType` counterpart, so
+	 * no corpus fixture can select it; it reaches the engine only from a
+	 * JSON config that names it (`"packedOrOnePerLine"`).
+	 */
+	final PackedOrOnePerLine = 7;
+
 }
