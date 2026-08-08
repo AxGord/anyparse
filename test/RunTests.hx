@@ -595,6 +595,7 @@ import unit.HxFillLeadingCommentTest;
 import unit.HxFormatterOffTest;
 import unit.HxBlankAroundMultilineMembersTest;
 import unit.HxExprParenObjectLitGlueTest;
+import unit.HxFitLineBodyGlueSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -817,6 +818,7 @@ class RunTests {
 		addCase(new HxComprehensionCuddledOpenTest());
 		addCase(new HxComprehensionDeclRhsBracketWrapTest());
 		addCase(new HxExprParenObjectLitGlueTest());
+		addCase(new HxFitLineBodyGlueSliceTest());
 		addCase(new HxMethodChainCuddledLinkTest());
 		addCase(new HxMethodChainAllOrNothingSliceTest());
 		addCase(new HxTypeParamFieldNoWrapSliceTest());

@@ -187,6 +187,8 @@ package anyparse.grammar.haxe.format;
 
 	@:optional var fitLineIfWithElse: Bool;
 
+	@:optional var fitLineBodyGlue: Bool;
+
 	@:optional var ifElseSemicolonNextLine: Bool;
 
 	@:optional var expressionTry: HxFormatSameLinePolicy;

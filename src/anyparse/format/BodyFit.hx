@@ -248,4 +248,91 @@ final class BodyFit {
 		return lineWidth <= 0 ? glued : Doc.IfGluedFirstLineExceeds(lineWidth, cols, breakLayout(cols, body), glued);
 	}
 
+	/**
+	 * The BREAK-side answer for a construct-group `FitLine` body that CAN render
+	 * flat (`flatLength >= 0`) but did not fit on the header line
+	 * (ω-fitline-body-glue).
+	 *
+	 * Until this seam the answer was unconditional: the body went to the next
+	 * line one indent deeper, and a body too wide for THAT line broke again
+	 * inside itself — paying a line and an indent level for nothing, since the
+	 * shape that finally rendered opened with a delimiter that would have fitted
+	 * beside the header (`if (c)\n\t({\n\t\tfield…` where `if (c) ({\n\tfield…`
+	 * says the same thing two columns and one line cheaper).
+	 *
+	 * The discriminator is whether the next line would have RESCUED the body:
+	 * `flatWidth` measured at the continuation indent (`cols` deeper than the
+	 * header's own indent, which only the renderer knows). It fits there — the
+	 * body earns its own line, exactly as before. It does not — no line saves
+	 * it, so glue and let the body break inside itself, still width-gated by
+	 * `glueLayout` so the header line itself cannot run over.
+	 *
+	 * `Doc.IfArrowContinuationFits` is the continuation-indent probe; its name
+	 * records its first consumer (an arrow signature), its semantic is the
+	 * general "does this flat width fit one level deeper" question this seam
+	 * asks. `n` is `lineWidth + 1` because the probe tests strict `<`.
+	 */
+	public static function continuationRescuesBody(cols: Int, body: Doc, glued: Doc, flatWidth: Int, lineWidth: Int): Doc {
+		return Doc.IfArrowContinuationFits(
+			cols, flatWidth, lineWidth + 1, glueLayout(cols, body, pinParenGlued(glued), lineWidth), breakLayout(cols, body)
+		);
+	}
+
+	/**
+	 * Pin a body that IS an expression paren to its GLUED delimiters
+	 * (ω-fitline-body-glue): `({` on the header line, `})` closing the body,
+	 * never the opened `(` / newline / `{` shape.
+	 *
+	 * The paren's own emitter offers both through an `IfFullLineExceeds` whose
+	 * width question — "can the inner be ONE fitting line if I open?" — is asked
+	 * at the paren's frame indent. Glued to a header line, that frame sits one
+	 * level shallower than where the open shape would actually land the inner,
+	 * so the paren answers yes for an inner that then breaks anyway, and the
+	 * body renders as `if (…) (` + `{` + fields + `}` + `)`: two delimiter
+	 * lines bought for nothing.
+	 *
+	 * Correcting the paren's own measure would be the same edit for every
+	 * expression paren in the language, and the shape it changes is one the
+	 * corpus pins in operand position (`a || (b && c)` opens its paren there,
+	 * and should). So the answer is not a stricter shared gate but a pin at the
+	 * ONE position that knows the paren is already committed to the header
+	 * line — this one. Everything else keeps the emitter's own verdict.
+	 *
+	 * Only the collapse-CANDIDATE cascade is pinned (an `IfFullLineExceeds`
+	 * whose break shape carries a `CollapseProbe` — what the expression-paren
+	 * emitter builds); any other Doc is returned untouched, so a body that is
+	 * not a paren, or a paren emitted through the condition / chain arms, is
+	 * unaffected. Wrappers the glue shape adds around the body (`Concat` head,
+	 * `Nest`, `Group`) are rebuilt around the pinned inner rather than
+	 * descended past, so no indentation is lost.
+	 */
+	private static function pinParenGlued(d: Doc): Doc {
+		return switch d {
+			case Doc.IfFullLineExceeds(_, brk, fl) if (carriesCollapseProbe(brk)): fl;
+			case Doc.Nest(n, inner): Doc.Nest(n, pinParenGlued(inner));
+			case Doc.Group(inner): Doc.Group(pinParenGlued(inner));
+			case Doc.Concat(items) if (items.length > 0): Doc.Concat(
+				items.slice(0, items.length - 1).concat([pinParenGlued(items[items.length - 1])])
+			);
+			case _: d;
+		};
+	}
+
+	/** Does `d` hold a `CollapseProbe` — the marker the expression-paren emitter puts in its OPEN shape? */
+	private static function carriesCollapseProbe(d: Doc): Bool {
+		switch d {
+			case Doc.CollapseProbe(_):
+				return true;
+			case Doc.Concat(items):
+				for (it in items) if (carriesCollapseProbe(it)) return true;
+				return false;
+			case Doc.Nest(_, inner) | Doc.Group(inner) | Doc.BodyGroup(inner) | Doc.GroupWithRestProbe(inner) | Doc.Flatten(inner) | Doc.HardFlatten(
+				inner
+			) | Doc.WrapBoundary(inner):
+				return carriesCollapseProbe(inner);
+			case _:
+				return false;
+		}
+	}
+
 }

@@ -6577,7 +6577,16 @@ class WriterLowering {
 		// forces the body onto the next line. Multiline non-block bodies keep
 		// the glue branch (the group is already broken; OptSpace flushes).
 		final fitInnerExpr: Expr = if (opts.condFitGroup == true)
-			macro anyparse.format.wrap.WrapList.flatLength(_body) == -1 ? $multilineGlue : _dn(_cols, _dc([_dl(), _body]));
+			macro anyparse.format.wrap.WrapList.flatLength(_body) == -1
+				? $multilineGlue
+				: opt.fitLineBodyGlue
+					? _dib(
+						anyparse.format.BodyFit.continuationRescuesBody(
+							_cols, _body, _dc([_dop(' '), $gluedBody]), anyparse.format.wrap.WrapList.flatLength(_body), opt.lineWidth
+						),
+						_dn(_cols, _dc([_dl(), _body]))
+					)
+					: _dn(_cols, _dc([_dl(), _body]));
 		else if (singleLineFlagName != null)
 			macro anyparse.format.wrap.WrapList.flatLength(_body) == -1
 				? $multilineGlue

@@ -620,6 +620,7 @@ final class HaxeFormatConfigLoader {
 			fitLineIfWithElse: base.fitLineIfWithElse,
 			expressionIfArrowBodyReflow: base.expressionIfArrowBodyReflow,
 			elseIfCommentReflow: base.elseIfCommentReflow,
+			fitLineBodyGlue: base.fitLineBodyGlue,
 			ifElseSemicolonNextLine: base.ifElseSemicolonNextLine,
 			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
 			existingBetweenFields: base.existingBetweenFields,
@@ -1039,6 +1040,10 @@ final class HaxeFormatConfigLoader {
 		// glue path - it changes no body policy, it decides whether ONE interposed
 		// line comment may move to the nested if's head line.
 		if (section.elseIfCommentReflow != null) opt.elseIfCommentReflow = section.elseIfCommentReflow;
+		// omega-fitline-body-glue: an independent Bool knob on the construct-group
+		// FitLine body placement - it changes no body policy, it decides whether a
+		// body the next line would not rescue glues to the header line instead.
+		if (section.fitLineBodyGlue != null) opt.fitLineBodyGlue = section.fitLineBodyGlue;
 		if (section.ifElseSemicolonNextLine != null) opt.ifElseSemicolonNextLine = section.ifElseSemicolonNextLine;
 		if (section.expressionTry != null) opt.expressionTry = sameLineToRuntime(section.expressionTry);
 		if (section.expressionIfWithBlocks != null) opt.expressionIfWithBlocks = section.expressionIfWithBlocks;

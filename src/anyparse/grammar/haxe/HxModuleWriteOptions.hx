@@ -907,6 +907,35 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * twin `HxIfExpr` is out of scope. Fed by `sameLine.elseIfCommentReflow`.
 	 */
 	elseIfCommentReflow: Bool,
+
+	/**
+	 * ω-fitline-body-glue: when a `FitLine` construct body (`if` / `for` /
+	 * `while`) does not fit on the header line, may it stay GLUED to that line
+	 * and break inside itself, instead of always moving one line down and one
+	 * indent deeper?
+	 *
+	 * Only bodies the next line would NOT rescue are affected: the probe asks
+	 * whether the body's flat width fits at the continuation indent, and when it
+	 * does the body still takes its own line exactly as before. When it does not,
+	 * moving it buys nothing — it breaks internally either way — so the glue saves
+	 * a line and an indent level:
+	 *
+	 * ```
+	 * if (c)                 →   if (c) ({
+	 *     ({                          field: value, …
+	 *         field: value, …    })
+	 *     })
+	 * ```
+	 *
+	 * The glue itself stays width-gated by `BodyFit.glueLayout`, so the header
+	 * line can never run past `maxLineLength` because of it.
+	 *
+	 * Default `false` is the haxe-formatter layout the corpus pins. Fed by
+	 * `sameLine.fitLineBodyGlue`; consumed by `WriterLowering.buildBodyFitExpr`'s
+	 * construct-group arm, so it reaches exactly the bodies whose placement that
+	 * arm owns — a `Keep` / `Same` / `Next` body policy never sees it.
+	 */
+	fitLineBodyGlue: Bool,
 	ifElseSemicolonNextLine: Bool,
 	afterFieldsWithDocComments: CommentEmptyLinesPolicy,
 	existingBetweenFields: KeepEmptyLinesPolicy,

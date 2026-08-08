@@ -1246,13 +1246,22 @@ class Renderer {
 					return { add: 0, aborted: false };
 				}
 				return { add: 0, aborted: true };
-			case Group(innerDoc) | GroupWithRestProbe(innerDoc) | IfBreak(_, innerDoc) | IfWidthExceeds(_, _, innerDoc) | IfFirstLineExceeds(
+			case IfBreak(brDoc, flDoc):
+				// ω-fitline-body-glue: `IfBreak` is the ONE conditional this walk can
+				// resolve — its selector IS the enclosing group's mode, which the
+				// frame already carries. Descending the FLAT side inside a BROKEN
+				// frame measures content the renderer will not put on this line: the
+				// FitLine body-placement `IfBreak` (`buildBodyFitExpr`) hides a glue
+				// probe on its break side, and a flat descend counted the body's
+				// whole flat width as trailing width for the condition's own wrap
+				// probe — which then wrapped a condition that fits.
+				inner.push({ doc: node.mode == MBreak ? brDoc : flDoc, mode: node.mode });
+				return { add: 0, aborted: false };
+			case Group(innerDoc) | GroupWithRestProbe(innerDoc) | IfWidthExceeds(_, _, innerDoc) | IfFirstLineExceeds(_, _, innerDoc) | IfLineExceeds(
 				_, _, innerDoc
-			) | IfLineExceeds(_, _, innerDoc) | IfResidualLineExceeds(_, _, innerDoc) | IfFullLineExceeds(_, _, innerDoc) | IfNaturalFirstLineFitsOpenDelim(
-				_, _, innerDoc
-			) | IfArrowContinuationFits(_, _, _, _, innerDoc) | IfIndentWidthExceeds(_, _, _, innerDoc) | IfGluedFirstLineExceeds(
-				_, _, _, innerDoc
-			):
+			) | IfResidualLineExceeds(_, _, innerDoc) | IfFullLineExceeds(_, _, innerDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, innerDoc) | IfArrowContinuationFits(
+				_, _, _, _, innerDoc
+			) | IfIndentWidthExceeds(_, _, _, innerDoc) | IfGluedFirstLineExceeds(_, _, _, innerDoc):
 				// Static walk: descend in MFlat. Runtime Group decision is
 				// unknowable here; flat-side measurement matches the cascade
 				// rule semantic. The natural-first-line / rest-of-stack probes
