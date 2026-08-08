@@ -589,6 +589,7 @@ import unit.JoinSingleUseLocalCheckTest;
 import unit.HxAnonTypeIgnoreReflowTest;
 import unit.HxObjectLitRestProbeTest;
 import unit.HxPackedOrOnePerLineTest;
+import unit.HxReturnValueBreaksInsideTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -774,6 +775,7 @@ class RunTests {
 		addCase(new HxAnonTypeIgnoreReflowTest());
 		addCase(new HxObjectLitRestProbeTest());
 		addCase(new HxPackedOrOnePerLineTest());
+		addCase(new HxReturnValueBreaksInsideTest());
 		addCase(new HxVarTypeHintAnonIndentTest());
 		addCase(new HxTypedefBetweenBlankTest());
 		addCase(new HxArrowFnTypeSliceTest());

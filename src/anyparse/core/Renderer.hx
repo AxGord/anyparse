@@ -721,7 +721,16 @@ class Renderer {
 	 *
 	 * Used exclusively by the `IfNaturalFirstLineExceeds` render arm.
 	 */
-	private static function naturalFirstLineWidth(d: Doc, startCol: Int, indent: Int, width: Int, resolveOpenDelim: Bool = false): Int {
+	/**
+	 * `trailWidth` — flat width of the content that will ride the SAME rendered
+	 * line after `d` (the statement's own `;`, a closing `)`, …). It lives in the
+	 * enclosing render stack, so this walk cannot discover it; the caller reads it
+	 * off that stack and passes it in. Only the rest-aware `GroupWithRestProbe`
+	 * arm consumes it, so `0` (the default) keeps every other caller byte-inert.
+	 */
+	private static function naturalFirstLineWidth(
+		d: Doc, startCol: Int, indent: Int, width: Int, resolveOpenDelim: Bool = false, trailWidth: Int = 0
+	): Int {
 		var col: Int = startCol;
 		var aborted: Bool = false;
 		// Work items carry their own indent + mode + forceFlat — a faithful
@@ -751,7 +760,7 @@ class Renderer {
 				mode: Mode,
 				forceFlat: Bool
 			} = stack.pop();
-			final step: { add: Int, aborted: Bool } = naturalWidthStep(node, stack, width, col, resolveOpenDelim);
+			final step: { add: Int, aborted: Bool } = naturalWidthStep(node, stack, width, col, resolveOpenDelim, trailWidth);
 			col += step.add;
 			aborted = step.aborted;
 		}
@@ -1369,7 +1378,7 @@ class Renderer {
 			mode: Mode,
 			forceFlat: Bool
 		},
-		inner: Doc, width: Int, col: Int
+		inner: Doc, width: Int, col: Int, restWidth: Int
 	): Void {
 		if (node.forceFlat) {
 			stack.push({
@@ -1378,7 +1387,7 @@ class Renderer {
 				mode: MFlat,
 				forceFlat: true
 			});
-		} else if (fitsFlat(width - col, node.indent, inner)) {
+		} else if (fitsFlat(width - col - restWidth, node.indent, inner)) {
 			stack.push({
 				doc: inner,
 				indent: node.indent,
@@ -1434,7 +1443,7 @@ class Renderer {
 					forceFlat: node.forceFlat
 				});
 			case Group(inner) | GroupWithRestProbe(inner) | BodyGroup(inner):
-				pushNaturalGroup(stack, node, inner, width, col);
+				pushNaturalGroup(stack, node, inner, width, col, 0);
 			case IfBreak(breakDoc, flatDoc):
 				final picked: Doc = (node.forceFlat || node.mode == MFlat) ? flatDoc : breakDoc;
 				stack.push({
@@ -1578,7 +1587,7 @@ class Renderer {
 			mode: Mode,
 			forceFlat: Bool
 		}>,
-		width: Int, col: Int, resolveOpenDelim: Bool = false
+		width: Int, col: Int, resolveOpenDelim: Bool = false, trailWidth: Int = 0
 	): { add: Int, aborted: Bool } {
 		switch node.doc {
 			case Empty:
@@ -1620,7 +1629,7 @@ class Renderer {
 			case _:
 				// Structural / descend arms contribute no width of their own —
 				// they only push the next natural frame(s).
-				naturalWidthStructural(node, stack, width, col, resolveOpenDelim);
+				naturalWidthStructural(node, stack, width, col, resolveOpenDelim, trailWidth);
 				return { add: 0, aborted: false };
 		}
 	}
@@ -1646,7 +1655,7 @@ class Renderer {
 			mode: Mode,
 			forceFlat: Bool
 		}>,
-		width: Int, col: Int, resolveOpenDelim: Bool = false
+		width: Int, col: Int, resolveOpenDelim: Bool = false, trailWidth: Int = 0
 	): Void {
 		switch node.doc {
 			case Nest(n, inner):
@@ -1667,14 +1676,30 @@ class Renderer {
 					mode: node.mode,
 					forceFlat: node.forceFlat
 				});
-			case Group(inner) | GroupWithRestProbe(inner) | BodyGroup(inner):
+			case Group(inner) | BodyGroup(inner):
 				// THE natural decision: resolve THIS Group by its own fit at the
 				// running column (`pushNaturalGroup`). BodyGroup is handled HERE
 				// (same as render), NOT deferred — deferring it would under-
 				// measure a RHS whose own body breaks, hiding the overflow from
-				// the parent =-probe. (GroupWithRestProbe's rest-stack bias needs
-				// the live render stack the probe lacks; treat as plain Group.)
-				pushNaturalGroup(stack, node, inner, width, col);
+				// the parent =-probe.
+				pushNaturalGroup(stack, node, inner, width, col, 0);
+			case GroupWithRestProbe(inner):
+				// ω-natural-trailwidth: the rest-aware Group keeps its bias inside
+				// the probe. Two sources feed it: `naturalRestStackWidth` for the
+				// pending items of THIS walk, and `trailWidth` for what rides the
+				// same rendered line AFTER the whole probed doc — content the walk
+				// cannot see because it lives in the ENCLOSING render stack.
+				//
+				// The statement terminator is exactly that. `return [ … ];` puts
+				// the `;` outside the probed value (`@:trailOpt(';')` on the ctor),
+				// so a collection whose flat width equals the remaining budget
+				// EXACTLY resolves flat here, the natural first line comes out as
+				// the whole value, and the enclosing probe breaks after the keyword
+				// — stranding a bare `return` while the value then fits the
+				// continuation. Counting the terminator makes the collection break
+				// instead: the natural first line is `return [`, the keyword stays
+				// glued, and the value wraps inside its own brackets.
+				pushNaturalGroup(stack, node, inner, width, col, naturalRestStackWidth(stack) + trailWidth);
 			case IfBreak(breakDoc, flatDoc):
 				// Pick by mode (mirrors render IfBreak): forceFlat or MFlat
 				// -> flat side; MBreak -> break side. Propagate forceFlat.
@@ -1715,7 +1740,8 @@ class Renderer {
 				// Self-reference: resolve recursively at the running col
 				// over a strictly smaller subtree (bounded by finite tree).
 				pushNaturalExceeds(
-					stack, node, breakDoc, flatDoc, naturalFirstLineWidth(flatDoc, col, node.indent, width, resolveOpenDelim) >= nn
+					stack, node, breakDoc, flatDoc,
+					naturalFirstLineWidth(flatDoc, col, node.indent, width, resolveOpenDelim, trailWidth) >= nn
 				);
 			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
 				// Flat interleave tagged with node.mode (so a broken sep's
@@ -2934,7 +2960,12 @@ class Renderer {
 				if (f.forceFlat) {
 					stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
 				} else {
-					final naturalCrosses: Bool = (naturalFirstLineWidth(flatDoc, col, f.indent, width, true) >= n);
+					// ω-natural-trailwidth: hand the walk what rides the same line
+					// after this probe's own doc — the statement terminator the
+					// value's Doc does not contain.
+					final naturalCrosses: Bool = (
+						naturalFirstLineWidth(flatDoc, col, f.indent, width, true, flatTokenWidthOfRestStack(stack)) >= n
+					);
 					final pushMode: Mode = naturalCrosses ? MBreak : f.mode;
 					stack.push(new Frame(f.indent, pushMode, naturalCrosses ? breakDoc : flatDoc));
 				}

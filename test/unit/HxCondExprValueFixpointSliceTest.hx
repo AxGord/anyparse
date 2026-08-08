@@ -42,9 +42,18 @@ final class HxCondExprValueFixpointSliceTest extends Test {
 	private static final FLAT_ASSIGN: String =
 		'class Min {\n\tstatic function assignArm():Void {\n\t\tv = #if ios DEVICETYPE_IPAD #elseif android ChromebookUtils.isChromebook() ? DEVICETYPE_WINDOWSPC : DEVICETYPE_TABLET #elseif macos DEVICETYPE_MACOSXPC #elseif (windows || linux) DEVICETYPE_WINDOWSPC #else DEVICETYPE_WEB #end;\n\t}\n}';
 
-	/** `FLAT_RETURN`'s one-pass layout: every `#elseif` seam glued, the over-wide ternary broken. */
+	/**
+	 * `FLAT_RETURN`'s one-pass layout: every `#elseif` seam glued, the
+	 * over-wide ternary broken — and the `return` keyword glued to the value.
+	 *
+	 * ω-natural-trailwidth moved the break off the keyword: the probe that
+	 * used to strand a bare `return` on its own line measured the value
+	 * WITHOUT the statement's `;`, so the value resolved flat and its natural
+	 * first line came out as the whole width. Counting the terminator lets the
+	 * value break inside itself instead, which is where the break belongs.
+	 */
 	private static final BROKEN_RETURN: String =
-		'class Min {\n\tstatic function retArm():RegisteredDeviceTypeId {\n\t\treturn\n\t\t\t#if ios DEVICETYPE_IPAD #elseif android ChromebookUtils.isChromebook()\n\t\t\t\t? DEVICETYPE_WINDOWSPC\n\t\t\t\t: DEVICETYPE_TABLET #elseif macos DEVICETYPE_MACOSXPC #elseif (windows || linux) DEVICETYPE_WINDOWSPC #else DEVICETYPE_WEB #end;\n\t}\n}';
+		'class Min {\n\tstatic function retArm():RegisteredDeviceTypeId {\n\t\treturn #if ios DEVICETYPE_IPAD #elseif android ChromebookUtils.isChromebook()\n\t\t\t? DEVICETYPE_WINDOWSPC\n\t\t\t: DEVICETYPE_TABLET #elseif macos DEVICETYPE_MACOSXPC #elseif (windows || linux) DEVICETYPE_WINDOWSPC #else DEVICETYPE_WEB #end;\n\t}\n}';
 
 	/** `#elseif c` is glued to the branch before it; only the interior gaps carry a newline. */
 	private static final SEAM_GLUED: String =
