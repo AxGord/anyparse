@@ -1821,9 +1821,7 @@ class WrapList {
 			final arrowFlatWidth: Int = DocMeasure.flatTokenWidth(items[0]);
 			if (arrowFlatWidth >= 0 && body != null && !isTopLevelChain(body)) {
 				final glueShape: Doc = arrowBodyCloseParenShape(open, close, openInside, closeInside, items[0]);
-				final openShape: Doc = shapeFillLineWithLeadingBreak(
-					open, close, sep, items, openInside, closeInside, cols, appendTrailingComma
-				);
+				final openShape: Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma);
 				return IfArrowContinuationFits(cols, arrowFlatWidth, lineWidth, glueShape, openShape);
 			}
 		}
@@ -1846,7 +1844,7 @@ class WrapList {
 	): Null<Doc> {
 		if (mode == FillLineWithLeadingBreak && items.length == 1 && !isArrowBodyMarker(items[0]) && !isMethodChainItem(items[0])) {
 			final glued: Doc = Concat([Text(open), openInside, items[0], closeInside, Text(close)]);
-			final broken: Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
+			final broken: Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma);
 			// ω-callparam-single-objectlit: a sole OBJECT-LITERAL arg (`f({...})`)
 			// leading-breaks with the object kept FLAT on its own indented line iff
 			// the object fits there (fork keeps the object flat); if it exceeds its
@@ -1925,9 +1923,7 @@ class WrapList {
 		}
 		if (mode == FillLineWithLeadingBreak && items.length > 1 && hasBlockLambda) {
 			final glueShape: Doc = multiArgBlockLambdaGlueShape(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
-			final openShape: Doc = shapeFillLineWithLeadingBreak(
-				open, close, sep, items, openInside, closeInside, cols, appendTrailingComma
-			);
+			final openShape: Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma);
 			return IfFirstLineExceeds(lineWidth, openShape, glueShape);
 		}
 		return null;
@@ -1985,7 +1981,7 @@ class WrapList {
 		if ((mode == FillLine || mode == FillLineWithLeadingBreak) && items.length > 1 && soleMultilineCollectionArg(items) >= 0) {
 			final glueShape: Doc = multiArgBlockLambdaGlueShape(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
 			final openShape: Doc = mode == FillLineWithLeadingBreak
-				? shapeFillLineWithLeadingBreak(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma)
+				? shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma)
 				: shapeFillLine(
 					open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags,
 					keepCloseGlued
@@ -2017,7 +2013,7 @@ class WrapList {
 				open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags, keepCloseGlued
 			);
 			case FillLineWithLeadingBreak:
-				shapeFillLineWithLeadingBreak(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
+				shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma);
 			// ω-keep-objectlit: Keep cascade hits are pre-empted by the
 			// writer's trivia branch (`triviaSepStarExpr`) — at the engine
 			// level, Keep collapses to NoWrap so any leakage produces a
@@ -2912,8 +2908,7 @@ class WrapList {
 	 * matching fork's `calcIndent + additionalIndent`.
 	 */
 	private static function shapeFillLineWithLeadingBreak(
-		open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
-		appendTrailingComma: Bool
+		open: String, close: String, sep: String, items: Array<Doc>, cols: Int, appendTrailingComma: Bool
 	): Doc {
 		final softSep: Doc = Concat([Text(sep), Line(' ')]);
 		// Tail reserve identical in structure to `shapeFillLine` but
@@ -2937,12 +2932,19 @@ class WrapList {
 		// (those stay FAIL only on a separate opAddSub-internal indent defect).
 		final inner: Doc = items.length == 1 ? items[0] : FillBreakAfterWrap(items, softSep, tailReserve);
 		final tail: Doc = appendTrailingComma ? Text(sep) : Empty;
+		// No `openInside` / `closeInside` padding: this shape ALWAYS breaks
+		// after the open delim and before the close, so an inside-of-delimiter
+		// space Doc (`{ x }` policy — `anonTypeBracesOpen`, `objectLiteral
+		// BracesOpen`, `typeParamOpen`) would land on the wrong side of a
+		// forced `Line('\n')` — trailing whitespace after `{` and a stray
+		// ` }` at the close indent. The break absorbs the padding, exactly as
+		// `shapeOnePerLine` does (it never receives the two Docs at all).
+		// Byte-inert for every Star without a delim-padding policy: there
+		// both Docs are `Empty`.
 		return Concat([
 			Text(open),
-			openInside,
 			Nest(cols, Concat([Line('\n'), inner, tail])),
 			Line('\n'),
-			closeInside,
 			Text(close),
 		]);
 	}
