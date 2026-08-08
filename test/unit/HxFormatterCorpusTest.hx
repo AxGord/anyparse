@@ -7,6 +7,7 @@ import unit.HxFormatterCorpusHelpers.HxTestCase;
 #if (sys || nodejs)
 import sys.FileSystem;
 #end
+import anyparse.format.comment.FormatterOff;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
@@ -213,11 +214,16 @@ class HxFormatterCorpusTest extends Test {
 				sweepFixtures.push({ path: relPath, status: 'SKIP_PARSE' });
 				continue;
 			};
-			final actualRaw: String = try HaxeModuleTriviaWriter.write(module, opts) catch (exception: Exception) {
+			final emitted: String = try HaxeModuleTriviaWriter.write(module, opts) catch (exception: Exception) {
 				skipWrite++;
 				sweepFixtures.push({ path: relPath, status: 'SKIP_WRITE' });
 				continue;
 			};
+			// The harness drives the writer directly rather than through
+			// `HaxeQueryPlugin.writeRoundTrip`, so the `@formatter:off`
+			// restore has to be repeated here — without it the fork's
+			// `other/formatter_off*` cases could never pass.
+			final actualRaw: String = FormatterOff.restore(tc.input, emitted);
 			final actual: String = stripTrailingNewline(actualRaw);
 			if (actual == tc.expected) {
 				pass++;

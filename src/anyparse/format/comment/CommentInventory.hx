@@ -97,11 +97,23 @@ final class CommentInventory {
 	 * any other. `$$` is the escaped dollar and opens nothing.
 	 */
 	public static function collect(src: String): Array<String> {
+		final out: Array<String> = [];
+		scan(src, (start: Int, end: Int) -> out.push(src.substring(start, end)));
+		return out;
+	}
+
+	/**
+	 * `collect`'s lexer, reporting each comment as a `[start, end)` span
+	 * instead of its text. Split out so a caller that needs WHERE a comment
+	 * sits — `FormatterOff` locating its region markers — reuses this scan
+	 * rather than growing a second Haxe lexer beside it. The literal and
+	 * interpolation handling documented on `collect` is this function's.
+	 */
+	public static function scan(src: String, onComment: (start:Int, end:Int) -> Void): Void {
 		// noqa: complexity
 		// One cohesive lexer state machine — every branch mutates the shared
 		// `quote` / interpolation-frame state, so splitting it would thread
 		// that state back out through a per-character return value.
-		final out: Array<String> = [];
 		final len: Int = src.length;
 		// One entry per open `${` interpolation, holding the `{` nesting depth
 		// reached inside it; the frame closes on the `}` that meets depth 0.
@@ -134,14 +146,14 @@ final class CommentInventory {
 			if (c == '/'.code && next == '/'.code) {
 				final start: Int = i;
 				while (i < len && StringTools.fastCodeAt(src, i) != '\n'.code) i++;
-				out.push(src.substring(start, i));
+				onComment(start, i);
 				continue;
 			}
 			if (c == '/'.code && next == '*'.code) {
 				final start: Int = i;
 				final close: Int = src.indexOf('*/', i + 2);
 				i = close < 0 ? len : close + 2;
-				out.push(src.substring(start, i));
+				onComment(start, i);
 				continue;
 			}
 			if (c == '"'.code || c == SINGLE_QUOTE) {
@@ -170,7 +182,6 @@ final class CommentInventory {
 			}
 			i++;
 		}
-		return out;
 	}
 
 	/** Index just past a `~/…/` regex literal opened at `from` (its body start). */

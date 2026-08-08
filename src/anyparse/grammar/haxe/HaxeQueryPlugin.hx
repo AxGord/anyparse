@@ -2,6 +2,7 @@ package anyparse.grammar.haxe;
 
 import anyparse.format.comment.CommentInventory;
 import anyparse.format.comment.CommentLossException;
+import anyparse.format.comment.FormatterOff;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.Pattern;
 import anyparse.query.Pattern.KindEquivalence;
@@ -322,8 +323,13 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 */
 	public function writeRoundTrip(source: String, ?optsJson: String): Null<String> {
 		final tree: Dynamic = HaxeModuleTriviaParser.parse(source);
-		final written: Null<String> = HaxeModuleTriviaWriter.write(tree, writeOptionsOf(optsJson));
-		if (written == null || written == source || CommentInventory.guardDeclined()) return written;
+		final emitted: Null<String> = HaxeModuleTriviaWriter.write(tree, writeOptionsOf(optsJson));
+		if (emitted == null) return null;
+		// Before the guard, not after: restoring an `@formatter:off` region
+		// puts the source bytes back, so a comment living only inside one is
+		// present again by the time the inventory compares the two sides.
+		final written: String = FormatterOff.restore(source, emitted);
+		if (written == source || CommentInventory.guardDeclined()) return written;
 		final lost: Null<String> = CommentInventory.firstMissing(source, written);
 		if (lost != null) throw new CommentLossException(lost);
 		return written;
