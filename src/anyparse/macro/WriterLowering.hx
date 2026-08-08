@@ -12258,6 +12258,7 @@ class WriterLowering {
 			noTriviaBranch: noTriviaBranch,
 			reflowSourceMultiline: reflowSourceMultiline,
 			matrixWrap: matrixWrap,
+			uniformStmtBlanks: uniformStmtBlanks,
 		}
 		final _predicateScan: Expr = triviaSepPredicateScanExpr(reflowSourceMultiline, uniformStmtBlanks, triviaElemCall);
 		final _matrixSucc: Expr = triviaSepMatrixSucceedsExpr(
@@ -15631,6 +15632,7 @@ class WriterLowering {
 		final triviaElemCall: Expr = c.triviaElemCall;
 		final leadBreakExpr: Expr = triviaSepForceMultiLeadExpr();
 		final lineExpr: Expr = triviaSepForceMultiLineExpr(c.appendTrailingCommaExpr, c.sepText);
+		final balcEmitExpr: Expr = triviaBalcEmitExpr(c.uniformStmtBlanks);
 		return macro {
 			final _inner: Array<anyparse.core.Doc> = [];
 			$initCurrDocCommentExpr;
@@ -15659,7 +15661,7 @@ class WriterLowering {
 					_inner.push(_glueLead ? _dt(' ') : _dhl());
 					_ci++;
 				}
-				if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0) _inner.push(_dhl());
+				$balcEmitExpr;
 				final _elem: anyparse.core.Doc = $triviaElemCall;
 				$lineExpr;
 				_si++;
@@ -17004,11 +17006,18 @@ class WriterLowering {
 	 * declaring `_uniformCollapse` over the captured element array — shared by
 	 * the block-Star (statement list) and sep-Star (array literal) emitters.
 	 * `true` when the runtime knob is `Collapse` AND every interior gap between
-	 * adjacent elements is blank AND no element carries a leading comment (a
-	 * comment can be a group header, so the grouping intent is unclear and
-	 * collapse bails). Uniformity is measured over INTERIOR gaps only, so the
-	 * edge blank right after the open delimiter never participates. Declared as
-	 * a bare `EVars` so the var lands in the enclosing emit scope the
+	 * adjacent elements is blank AND no INTERIOR element carries a leading
+	 * comment. Uniformity is measured over INTERIOR gaps only, so the edge blank
+	 * right after the open delimiter never participates.
+	 *
+	 * A leading comment bails from an INTERIOR element only, because only there
+	 * can a blank line detach it from the element above and make it a group
+	 * header — and under uniformity that blank is always present. Element 0 has
+	 * nothing above it but the open delimiter, so its comment annotates its own
+	 * element and carries no grouping intent; the blank it may hold
+	 * (`blankAfterLeadingComments`) is stripped by `triviaBalcEmitExpr`.
+	 *
+	 * Declared as a bare `EVars` so the var lands in the enclosing emit scope the
 	 * per-element blank guard reads. `macro {}` (no declaration) for every
 	 * non-opted Star, keeping the pre-slice emit byte-identical.
 	 */
@@ -17018,7 +17027,7 @@ class WriterLowering {
 			var _ok: Bool = true;
 			var _uci: Int = 0;
 			while (_uci < _arr.length) {
-				if (_arr[_uci].leadingComments.length > 0 || (_uci > 0 && !_arr[_uci].blankBefore)) {
+				if (_uci > 0 && (!_arr[_uci].blankBefore || _arr[_uci].leadingComments.length > 0)) {
 					_ok = false;
 					break;
 				}
@@ -17026,6 +17035,20 @@ class WriterLowering {
 			}
 			_ok;
 		};
+	}
+
+	/**
+	 * ω-uniform-statement-blanks / ω-uniform-element-blanks: the
+	 * `blankAfterLeadingComments` emit, shared by the block-Star and sep-Star
+	 * force-multi loops. A collapsed element list must also drop the blank a
+	 * leading comment holds before its own element — the pre-pass only lets a
+	 * comment through at element 0, so this reaches exactly the "note glued to
+	 * the open delimiter, then a stray blank" shape and never an interior group
+	 * header. The pre-slice expression for every non-opted Star.
+	 */
+	private static function triviaBalcEmitExpr(uniformStmtBlanks: Bool): Expr {
+		return uniformStmtBlanks ? macro if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0 && !_uniformCollapse)
+			_inner.push(_dhl()) : macro if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0) _inner.push(_dhl());
 	}
 
 	/**
@@ -17399,6 +17422,7 @@ class WriterLowering {
 		final trackDocCommentExpr: Expr = c.trackDocCommentExpr;
 		final triviaElemCall: Expr = c.triviaElemCall;
 		final trackPrevKindExpr: Expr = c.trackPrevKindExpr;
+		final balcEmitExpr: Expr = triviaBalcEmitExpr(c.uniformStmtBlanks);
 		return macro {
 			while (_si < _arr.length) {
 				final _t = _arr[_si];
@@ -17415,7 +17439,7 @@ class WriterLowering {
 					$blockLeadingBetweenExpr;
 					_ci++;
 				}
-				if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0) _inner.push(_dhl());
+				$balcEmitExpr;
 				$trackDocCommentExpr;
 				final _elem: anyparse.core.Doc = $triviaElemCall;
 				final _tc: Null<String> = _t.trailingComment;
@@ -18746,6 +18770,7 @@ typedef SepStarCtx = {
 	final noTriviaBranch: Expr;
 	final reflowSourceMultiline: Bool;
 	final matrixWrap: Bool;
+	final uniformStmtBlanks: Bool;
 };
 /**
  * Output bundle of `triviaSepTypedefBlanksExprs` — the seven spliced Expr

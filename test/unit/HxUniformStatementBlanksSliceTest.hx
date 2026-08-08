@@ -49,6 +49,16 @@ class HxUniformStatementBlanksSliceTest extends Test {
 	private static final IF_BODY: String =
 		'class C {\n\tfunction f() {\n\t\tif (m != null) {\n\t\t\tm.cleanup();\n\n\t\t\tm = null;\n\t\t}\n\t}\n}\n';
 
+	// //note; blank; a() — the comment is glued to the open delimiter, so it
+	// annotates the statement instead of heading a group.
+	private static final LEAD_NOTE: String = 'class C {\n\tfunction f() {\n\t\t// note\n\n\t\ta();\n\t}\n}\n';
+
+	// Same glued note over a uniform two-statement body.
+	private static final LEAD_NOTE_UNIFORM: String = 'class C {\n\tfunction f() {\n\t\t// note\n\n\t\ta();\n\n\t\tb();\n\t}\n}\n';
+
+	// Same glued note over a selective body (a; b share no blank).
+	private static final LEAD_NOTE_SELECTIVE: String = 'class C {\n\tfunction f() {\n\t\t// note\n\n\t\ta();\n\t\tb();\n\t}\n}\n';
+
 	public function testDefaultOptionKeepsUniformBlanks(): Void {
 		Assert.equals(UniformStatementBlanksPolicy.Keep, HaxeFormat.instance.defaultWriteOptions.uniformStatementBlanks);
 	}
@@ -101,6 +111,21 @@ class HxUniformStatementBlanksSliceTest extends Test {
 	public function testIfBodyUniformCollapses(): Void {
 		final expected: String = 'class C {\n\tfunction f() {\n\t\tif (m != null) {\n\t\t\tm.cleanup();\n\t\t\tm = null;\n\t\t}\n\t}\n}\n';
 		Assert.equals(expected, collapse(IF_BODY));
+	}
+
+	public function testGluedLeadingNoteCollapses(): Void {
+		final expected: String = 'class C {\n\tfunction f() {\n\t\t// note\n\t\ta();\n\t}\n}\n';
+		Assert.equals(expected, collapse(LEAD_NOTE));
+	}
+
+	public function testGluedLeadingNoteOverUniformBodyCollapses(): Void {
+		final expected: String = 'class C {\n\tfunction f() {\n\t\t// note\n\t\ta();\n\t\tb();\n\t}\n}\n';
+		Assert.equals(expected, collapse(LEAD_NOTE_UNIFORM));
+	}
+
+	public function testGluedLeadingNoteOverSelectiveBodyBails(): Void {
+		Assert.equals(keep(LEAD_NOTE_SELECTIVE), collapse(LEAD_NOTE_SELECTIVE));
+		Assert.isTrue(collapse(LEAD_NOTE_SELECTIVE).indexOf('// note\n\n\t\ta();\n\t\tb();') >= 0);
 	}
 
 	public function testKnobOffLeavesUniformBlanksIntact(): Void {

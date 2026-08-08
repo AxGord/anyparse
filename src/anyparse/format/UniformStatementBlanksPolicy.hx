@@ -21,9 +21,13 @@ package anyparse.format;
  * Uniformity is measured over INTERIOR gaps only — the head/tail blanks
  * adjacent to the delimiters are owned by `afterLeftCurly` /
  * `beforeRightCurly` and are already resolved before this policy runs. A
- * list with a leading comment on any element is left untouched: a comment
- * can be a group header, so the grouping intent is unclear and `Collapse`
- * bails.
+ * leading comment on an INTERIOR element leaves the list untouched: under
+ * uniformity a blank always detaches it from the element above, which is
+ * what a group header looks like, so the grouping intent is unclear and
+ * `Collapse` bails. The FIRST element is different — nothing but the open
+ * delimiter sits above it, so its comment cannot be heading a group. It
+ * annotates its own element, and the blank it may hold between itself and
+ * that element collapses with the rest.
  *
  * Which lists opt in is a GRAMMAR decision, not a policy one — a field or
  * enum branch carries `@:fmt(uniformStmtBlanks)`. In the Haxe grammar that

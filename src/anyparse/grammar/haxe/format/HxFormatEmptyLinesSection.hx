@@ -130,7 +130,7 @@ package anyparse.grammar.haxe.format;
  * when every interior gap between adjacent elements is blank the blanks
  * carry no grouping information and all get stripped, but a SELECTIVE
  * mix of blank / adjacent gaps expresses grouping and is kept byte-exact
- * (a leading comment on any element also keeps the list untouched).
+ * (a leading comment on an INTERIOR element also keeps the list untouched).
  * Object literals, anon types and argument lists deliberately stay out.
  * See `UniformStatementBlanksPolicy` for the full contract.
  */
