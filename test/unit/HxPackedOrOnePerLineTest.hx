@@ -56,12 +56,28 @@ class HxPackedOrOnePerLineTest extends Test {
 		Assert.isTrue(out.indexOf(ONE_PER_LINE) != -1, 'expected one field per line at maxLineLength 33 in:\n<$out>');
 	}
 
-	private static function write(maxLineLength: Int): String {
+	public function testItemWithAForcedHardlineNeverPacks(): Void {
+		// A field whose value is itself multi-line makes the packed line
+		// impossible — the "one continuation line" it promises would already
+		// be several. The shape must not delegate that to the renderer's fit
+		// probe, which walks the nested list's own Group and re-flattens it.
+		final src: String =
+			'class C {\n\tfunction f():Dynamic {\n\t\treturn {\n\t\t\taa: [\n\t\t\t\t1,\n\t\t\t\t2\n\t\t\t],\n\t\t\tbb: 3\n\t\t};\n\t}\n}';
+		final out: String = writeSrc(src, 140);
+		Assert.isTrue(out.indexOf('], bb: 3') == -1, 'expected no packing past a multi-line field in:\n<$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\tbb: 3\n') != -1, 'expected `bb` on its own line in:\n<$out>');
+	}
+
+	private static inline function write(maxLineLength: Int): String {
+		return writeSrc(SRC, maxLineLength);
+	}
+
+	private static function writeSrc(src: String, maxLineLength: Int): String {
 		final config: String = '{"wrapping": {"maxLineLength": $maxLineLength, "objectLiteral": {"defaultWrap": "ignore", "rules": ['
 			+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, '
 			+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "packedOrOnePerLine"}]}}}';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(config);
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(SRC), opts);
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 
 }

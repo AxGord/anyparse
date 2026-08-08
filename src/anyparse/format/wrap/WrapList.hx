@@ -2526,9 +2526,19 @@ class WrapList {
 			flat.push(Text(sep));
 			broken.push(Text(sep));
 		}
+		// An item that renders with its own forced hardline (a multi-line
+		// nested list, a block body, …) makes the packed line impossible — the
+		// ONE continuation line it promises would already be several. The
+		// renderer's `fitsFlat` does not settle this for us: it walks into the
+		// nested list's own `Group` and re-flattens it, so the outer literal
+		// came out as `], bb: 3` — flat separators around content that had
+		// already broken. `flatLength(item) < 0` is the same "carries a forced
+		// hardline" signal `HasMultilineItems` reads.
+		final anyMultiline: Bool = items.exists(item -> flatLength(item) < 0);
+		final body: Doc = anyMultiline ? Concat(broken) : Group(IfBreak(Concat(broken), Concat(flat)));
 		return Concat([
 			Text(open),
-			Nest(cols, Concat([Line('\n'), Group(IfBreak(Concat(broken), Concat(flat)))])),
+			Nest(cols, Concat([Line('\n'), body])),
 			Line('\n'),
 			Text(close),
 		]);
