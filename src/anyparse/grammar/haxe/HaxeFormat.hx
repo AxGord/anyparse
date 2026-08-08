@@ -818,6 +818,7 @@ final class HaxeFormat implements TextFormat {
 		afterFileHeaderComment: 1,
 		betweenMultilineComments: 0,
 		betweenSingleLineTypes: 0,
+		aroundMultilineFields: 0,
 		formatStringInterpolation: true,
 		metadataFunctionLineEnd: MetadataLineEndPolicy.None,
 		_inExprPosition: false,

@@ -728,6 +728,7 @@ final class HaxeFormatConfigLoader {
 			afterFileHeaderComment: base.afterFileHeaderComment,
 			betweenMultilineComments: base.betweenMultilineComments,
 			betweenSingleLineTypes: base.betweenSingleLineTypes,
+			aroundMultilineFields: base.aroundMultilineFields,
 			formatStringInterpolation: base.formatStringInterpolation,
 			metadataFunctionLineEnd: base.metadataFunctionLineEnd,
 			_inExprPosition: base._inExprPosition,
@@ -1154,6 +1155,7 @@ final class HaxeFormatConfigLoader {
 		if (section.afterFileHeaderComment != null) opt.afterFileHeaderComment = section.afterFileHeaderComment;
 		if (section.betweenMultilineComments != null) opt.betweenMultilineComments = section.betweenMultilineComments;
 		if (section.betweenSingleLineTypes != null) opt.betweenSingleLineTypes = section.betweenSingleLineTypes;
+		if (section.aroundMultilineFields != null) opt.aroundMultilineFields = section.aroundMultilineFields;
 		// ω-max-anywhere-in-file: feed the JSON `emptyLines.maxAnywhereInFile`
 		// knob into the generic `Renderer.render` cap parameter via
 		// `WriteOptions.maxConsecutiveBlanks`. Fork's `@:default(1)` matches

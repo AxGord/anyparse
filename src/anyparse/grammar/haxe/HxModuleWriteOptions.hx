@@ -1083,6 +1083,16 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	afterFileHeaderComment: Int,
 	betweenMultilineComments: Int,
 	betweenSingleLineTypes: Int,
+	// ω-blank-around-multiline-members — blank lines forced into the gap
+	// between two adjacent TYPE MEMBERS when either of them renders across
+	// more than one line. `betweenSingleLineTypes` above is its module-level
+	// sibling, but that one resolves multi-line-ness STRUCTURALLY at macro
+	// time (a class is multi-line iff it declares members). A field cannot be
+	// classified that way — `final a = ['x'];` fits and `final a = [… 20 …];`
+	// does not, from the same shape — so this knob is answered by measuring
+	// the built Doc instead. `0` (the default) leaves every gap to the
+	// source-driven `existingBetweenFields` path.
+	aroundMultilineFields: Int,
 	formatStringInterpolation: Bool,
 	metadataFunctionLineEnd: MetadataLineEndPolicy,
 	_inExprPosition: Bool,

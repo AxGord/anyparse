@@ -40,5 +40,5 @@ typedef HxMacroClass = {
 	var head: HxMacroClassHead;
 	@:fmt(interMemberBlankLines(
 		'member', 'VarMember|FinalMember', 'FnMember'
-	)) @:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
+	), blankAroundMultilineMembers('aroundMultilineFields')) @:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
 }

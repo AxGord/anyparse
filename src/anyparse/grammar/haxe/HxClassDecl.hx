@@ -59,5 +59,6 @@ typedef HxClassDecl = {
 	@:fmt(leftCurly, emptyCurlyBreak, beginEndType, afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines,
 		beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail,
 		interMemberBlankLines('member', 'VarMember|FinalMember', 'FnMember|FinalModifiedMember'),
-		interMemberCondLookThrough('member', 'Conditional', 'body'), staticVarSubdivision, betweenMultilineCommentsBlanks) @:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
+		interMemberCondLookThrough('member', 'Conditional', 'body'), staticVarSubdivision, betweenMultilineCommentsBlanks,
+		blankAroundMultilineMembers('aroundMultilineFields')) @:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
 }

@@ -1644,6 +1644,16 @@ class WriterLowering {
 		final staticVarSubdivInfo: Null<StaticVarSubdivisionInfo> = infos.staticVarSubdivInfo;
 		final condLeadingDocInfo: Null<CondLeadingDocLookThroughInfo> = infos.condLeadingDocInfo;
 		final betweenMultilineCommentsBlanks: Bool = starNode.fmtHasFlag('betweenMultilineCommentsBlanks');
+		// ω-blank-around-multiline-members: `@:fmt(blankAroundMultilineMembers('<optField>'))`
+		// names the `WriteOptions` Int knob holding the blank count. Absent → the
+		// three splice points are `macro {}` and the loop generates byte-identical.
+		final blankAroundArgs: Null<Array<String>> = starNode.fmtReadStringArgs('blankAroundMultilineMembers');
+		if (blankAroundArgs != null && blankAroundArgs.length != 1)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankAroundMultilineMembers) expects exactly 1 string arg (optField), got ${blankAroundArgs.length}',
+				Context.currentPos()
+			);
+		final blankAroundOptField: Null<String> = blankAroundArgs != null ? blankAroundArgs[0] : null;
 		final uniformBetweenArgs: Null<Array<String>> = starNode.fmtReadStringArgs('uniformBetween');
 		if (uniformBetweenArgs != null && uniformBetweenArgs.length != 1)
 			Context.fatalError(
@@ -1704,7 +1714,8 @@ class WriterLowering {
 			uniformBetweenOptField, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, blockEndedFlag ? sepText : null,
 			blockEndedFlag, blockEndedFlag ? (starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE): Null<String>) : null,
 			blockEndedFlag ? _formatInfo.schemaTypePath : null, condLeadingDocInfo, clearExprPositionNonTail, beginTypeKnob, endTypeKnob,
-			uniformStmtBlanks, emptyBlockBreak, caseSymArgs, caseSiblingUnitsFn, caseSiblingStructuralFn, caseSiblingControlFlowFn
+			uniformStmtBlanks, emptyBlockBreak, caseSymArgs, caseSiblingUnitsFn, caseSiblingStructuralFn, caseSiblingControlFlowFn,
+			blankAroundOptField
 		);
 		final blockStarNested: Expr = macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
@@ -11855,7 +11866,12 @@ class WriterLowering {
 		// expanded unit holds a single control-flow body statement. Same
 		// nullability contract as the two above — null alongside null knobs, a
 		// macro-time error with knobs.
-		?caseSiblingControlFlowFn: Expr
+		?caseSiblingControlFlowFn: Expr,
+		// ω-blank-around-multiline-members: the `WriteOptions` Int knob naming
+		// the blank count, or null when the Star does not carry the flag — the
+		// three splice points then lower to `macro {}` and the generated loop is
+		// byte-identical to the pre-slice one.
+		?blankAroundOptField: String
 	): Expr {
 		// ω-condcomp-stray-semi (Stage A): the schema-instance predicate-call build
 		// moved to `triviaBlockPredCallExpr` (consumed by `triviaBlockSepExprs`).
@@ -11979,6 +11995,7 @@ class WriterLowering {
 			afterFieldsWithDocComments, beforeDocCommentEmptyLines, existingBetweenFields, interMember, indentCaseLabelsGate,
 			lineCommentTrailBlank
 		);
+		final blankAround = blankAroundMultilineExprs(blankAroundOptField);
 		final ctx: BlockStarCtx = {
 			fieldAccess: fieldAccess,
 			openText: openText,
@@ -12023,6 +12040,9 @@ class WriterLowering {
 			anyEmptyLinesFlag: anyEmptyLinesFlag,
 			uniformStmtBlanks: uniformStmtBlanks,
 			caseSiblingWidthExpr: caseSiblingWidthExpr,
+			blankAroundMarkExpr: blankAround.markExpr,
+			blankAroundSeenExpr: blankAround.seenExpr,
+			blankAroundApplyExpr: blankAround.applyExpr,
 		};
 		return triviaBlockMainExpr(ctx);
 	}
@@ -17250,6 +17270,67 @@ class WriterLowering {
 	}
 
 	/**
+	 * ω-blank-around-multiline-members — the three fragments that force a blank
+	 * line into the gap between two adjacent members when either of them renders
+	 * across more than one line.
+	 *
+	 * Why it cannot reuse the `multiline` predicate the module level already
+	 * has: that one is resolved STRUCTURALLY at macro time from
+	 * `@:fmt(multilineWhen…)` on the payload type, and a member has no such
+	 * shape — `final a = ['x'];` and `final a = [… twenty …];` are the same
+	 * node and differ only by width. So the question is asked of the built Doc
+	 * instead, which forces the split into three splice points: the gap's
+	 * position is known BEFORE the element is written, the answer only AFTER.
+	 *
+	 * `mark` records the insert index (ahead of the element's leading comments,
+	 * so a doc-comment stays attached to its member); `seen` notes whether the
+	 * source-driven rules already filled the gap, so the pass tops up to the
+	 * knob rather than adding to it; `apply` measures both neighbours and
+	 * splices the hardlines in at the recorded index.
+	 *
+	 * The width side compares against ONE indent level. That is exact for a
+	 * top-level type and under-counts for a nested one, which can only cost a
+	 * blank that a stricter measure would have added — never a spurious one.
+	 */
+	private static function blankAroundMultilineExprs(optField: Null<String>): {
+		final markExpr: Expr;
+		final seenExpr: Expr;
+		final applyExpr: Expr;
+	} {
+		if (optField == null) return { markExpr: macro {}, seenExpr: macro {}, applyExpr: macro {} };
+		final knob: Expr = { expr: EField(macro opt, optField), pos: Context.currentPos() };
+		return {
+			// ONE `EVars` node, not `macro { var …; var …; }` — a reified block
+			// is an `EBlock`, i.e. its own scope, and the two sibling splices
+			// below would not see the vars.
+			markExpr: {
+				expr: EVars([
+					{ name: '_bamAt', type: macro :Int, expr: macro _inner.length },
+					{ name: '_bamHad', type: macro :Bool, expr: macro false }
+				]),
+				pos: Context.currentPos(),
+			},
+			seenExpr: macro _bamHad = _inner.length > _bamAt,
+			applyExpr: macro {
+				if (_si > 0 && !_bamHad && $knob > 0) {
+					final _bamCols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+					inline function _bamMulti(_d: anyparse.core.Doc): Bool {
+						return anyparse.core.DocMeasure.hasForcedBreak(_d)
+							|| _bamCols + anyparse.core.DocMeasure.flatTokenWidth(_d) > opt.lineWidth;
+					}
+					if (_bamMulti(_elem) || (_priorElemDoc != null && _bamMulti(_priorElemDoc))) {
+						var _bami: Int = 0;
+						while (_bami < $knob) {
+							_inner.insert(_bamAt, _dhl());
+							_bami++;
+						}
+					}
+				}
+			},
+		};
+	}
+
+	/**
 	 * Block-Star leading-comment between-blank inserts. Builds the
 	 * `leadingSplitGateExpr` (ω-block-final-doc-leading-blank — single blank
 	 * between the last `//` and a trailing `/**` in a member's leading cluster)
@@ -17446,6 +17527,9 @@ class WriterLowering {
 		final triviaElemCall: Expr = c.triviaElemCall;
 		final trackPrevKindExpr: Expr = c.trackPrevKindExpr;
 		final balcEmitExpr: Expr = triviaBalcEmitExpr(c.uniformStmtBlanks);
+		final blankAroundMarkExpr: Expr = c.blankAroundMarkExpr;
+		final blankAroundSeenExpr: Expr = c.blankAroundSeenExpr;
+		final blankAroundApplyExpr: Expr = c.blankAroundApplyExpr;
 		return macro {
 			while (_si < _arr.length) {
 				final _t = _arr[_si];
@@ -17453,7 +17537,9 @@ class WriterLowering {
 				$blockSepBeforeHardlineExpr;
 				_inner.push(_dhl());
 				if (_si == 0) $beginTypeExpr;
+				$blankAroundMarkExpr;
 				$blankBeforeExpr;
+				$blankAroundSeenExpr;
 				var _ci: Int = 0;
 				while (_ci < _t.leadingComments.length) {
 					$leadingSplitGateExpr;
@@ -17465,6 +17551,7 @@ class WriterLowering {
 				$balcEmitExpr;
 				$trackDocCommentExpr;
 				final _elem: anyparse.core.Doc = $triviaElemCall;
+				$blankAroundApplyExpr;
 				final _tc: Null<String> = _t.trailingComment;
 				_inner.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDocVerbatim(_tc, opt)) : _elem);
 				_priorElemDoc = _elem;
@@ -18755,6 +18842,15 @@ typedef BlockStarCtx = {
 
 	/** ω-case-sibling-symmetry: `final _csW: Int = …;` widest-sibling pre-pass, or `macro -1` when the Star has no `caseSiblingSymmetry` meta. */
 	final caseSiblingWidthExpr: Expr;
+
+	/** ω-blank-around-multiline-members: records where this gap's blank would go; `macro {}` without the flag. */
+	final blankAroundMarkExpr: Expr;
+
+	/** ω-blank-around-multiline-members: notes whether the source-driven rules already filled the gap. */
+	final blankAroundSeenExpr: Expr;
+
+	/** ω-blank-around-multiline-members: inserts the blank once both neighbours' Docs are known; `macro {}` without the flag. */
+	final blankAroundApplyExpr: Expr;
 };
 typedef EofStarCtx = {
 	final fieldAccess: Expr;

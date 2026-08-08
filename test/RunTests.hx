@@ -593,6 +593,7 @@ import unit.HxReturnValueBreaksInsideTest;
 import unit.HxFillAfterCollectionTest;
 import unit.HxFillLeadingCommentTest;
 import unit.HxFormatterOffTest;
+import unit.HxBlankAroundMultilineMembersTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -782,6 +783,7 @@ class RunTests {
 		addCase(new HxFillAfterCollectionTest());
 		addCase(new HxFillLeadingCommentTest());
 		addCase(new HxFormatterOffTest());
+		addCase(new HxBlankAroundMultilineMembersTest());
 		addCase(new HxVarTypeHintAnonIndentTest());
 		addCase(new HxTypedefBetweenBlankTest());
 		addCase(new HxArrowFnTypeSliceTest());

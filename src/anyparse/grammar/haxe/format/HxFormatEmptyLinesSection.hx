@@ -168,6 +168,8 @@ package anyparse.grammar.haxe.format;
 
 	@:optional var betweenSingleLineTypes: Int;
 
+	@:optional var aroundMultilineFields: Int;
+
 	@:optional var uniformStatementBlanks: HxFormatUniformStatementBlanksPolicy;
 
 	@:optional var maxAnywhereInFile: Int;

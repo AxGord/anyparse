@@ -52,5 +52,5 @@ typedef HxInterfaceDecl = {
 		beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail,
 		interMemberBlankLines(
 			'member', 'VarMember|FinalMember', 'FnMember', 'interfaceBetweenVars', 'interfaceBetweenFunctions', 'interfaceAfterVars'
-		), betweenMultilineCommentsBlanks) @:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
+		), betweenMultilineCommentsBlanks, blankAroundMultilineMembers('aroundMultilineFields')) @:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
 }
