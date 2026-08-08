@@ -14,7 +14,7 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  * `WrapList.isTopLevelTernary` used to accept a depth-1 `?` OR `:`, so an object literal - whose field separator IS `:` -
  * was misread as a ternary and routed to the ternary arm of the expr-paren cascade. That arm opens the paren as soon as
  * `expressionWrapping` carries a fillLine-family mode, so the very same literal rendered glued on the universal default
- * and exploded under a TM-shaped config. Requiring BOTH separators sends a `:`-only inner to the generic
+ * and exploded under a project-shaped config. Requiring BOTH separators sends a `:`-only inner to the generic
  * `IfFullLineExceeds(open, glued)` arm, where `Renderer.collapseParenCommitsOpen` keeps the paren glued because the
  * literal cannot be made a single fitting line.
  *
@@ -25,7 +25,7 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 final class HxExprParenObjectLitGlueTest extends Test {
 
-	/** TM-shaped config: tab indent, `maxLineLength` 140, packed-or-one-per-line collections, fillLine `expressionWrapping`. */
+	/** project-shaped config: tab indent, `maxLineLength` 140, packed-or-one-per-line collections, fillLine `expressionWrapping`. */
 	private static final FILL_LINE: String = '{"indentation": {"character": "tab", "tabWidth": 4},'
 		+ ' "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true,'
 		+ ' "objectLiteral": {"defaultWrap": "ignore", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "packedOrOnePerLine"}]},'
@@ -67,22 +67,22 @@ final class HxExprParenObjectLitGlueTest extends Test {
 		+ '\t\t\tidentityValue: elementValue.identityValue,\n' + '\t\t\taddressValue: elementValue.addressValue,\n'
 		+ '\t\t\taccessValue: VIEWVALUE,\n' + '\t\t\tpictureValue: elementValue.pictureValue\n' + '\t\t});\n' + '\t}\n' + '}';
 
-	/** The reported TM shape: a comprehension filter body wrapping its object literal in parens, exploded. */
-	private static final COMPREHENSION_EXPLODED: String = 'class SharePanelStore {\n'
-		+ '\tpublic function getNotAddedItems(addedItems:SharePanelUserList):SharePanelUserList {\n' + '\t\treturn {\n'
-		+ '\t\t\tfirst: [ for (user in _store.ActiveUnits)\n'
-		+ '\t\t\t\tif (!addedItems.first.exists((u:SharePanelCoachEntries) -> u.email == user.Email))\n' + '\t\t\t\t\t(\n'
-		+ '\t\t\t\t\t\t{\n' + '\t\t\t\t\t\t\tfirstname: user.Firstname,\n' + '\t\t\t\t\t\t\tlastname: user.Lastname,\n'
-		+ '\t\t\t\t\t\t\tid: user.UserId,\n' + '\t\t\t\t\t\t\temail: user.Email,\n' + '\t\t\t\t\t\t\taccess: VIEW,\n'
-		+ '\t\t\t\t\t\t\timage: user.Image\n' + '\t\t\t\t\t\t}\n' + '\t\t\t\t\t)\n' + '\t\t\t]\n' + '\t\t};\n' + '\t}\n' + '}';
+	/** The reported real-world shape: a comprehension filter body wrapping its object literal in parens, exploded. */
+	private static final COMPREHENSION_EXPLODED: String = 'class SampleContainer {\n'
+		+ '\tpublic function collectRemaining(knownItems:SampleEntryBundles):SampleEntryBundles {\n' + '\t\treturn {\n'
+		+ '\t\t\tfirst: [ for (item in _owner.PrimaryList)\n'
+		+ '\t\t\t\tif (!knownItems.first.exists((u:SamplePrimaryEntryKind) -> u.email == item.Email))\n' + '\t\t\t\t\t(\n'
+		+ '\t\t\t\t\t\t{\n' + '\t\t\t\t\t\t\talphaName: item.AlphaName,\n' + '\t\t\t\t\t\t\tbetaName: item.BetaName,\n'
+		+ '\t\t\t\t\t\t\tid: item.ItemId,\n' + '\t\t\t\t\t\t\temail: item.Email,\n' + '\t\t\t\t\t\t\taccess: VIEW,\n'
+		+ '\t\t\t\t\t\t\timage: item.Image\n' + '\t\t\t\t\t\t}\n' + '\t\t\t\t\t)\n' + '\t\t\t]\n' + '\t\t};\n' + '\t}\n' + '}';
 
 	/** The same comprehension with the filter body's paren glued. */
-	private static final COMPREHENSION_GLUED: String = 'class SharePanelStore {\n'
-		+ '\tpublic function getNotAddedItems(addedItems:SharePanelUserList):SharePanelUserList {\n' + '\t\treturn {\n'
-		+ '\t\t\tfirst: [ for (user in _store.ActiveUnits)\n'
-		+ '\t\t\t\tif (!addedItems.first.exists((u:SharePanelCoachEntries) -> u.email == user.Email))\n' + '\t\t\t\t\t({\n'
-		+ '\t\t\t\t\t\tfirstname: user.Firstname,\n' + '\t\t\t\t\t\tlastname: user.Lastname,\n' + '\t\t\t\t\t\tid: user.UserId,\n'
-		+ '\t\t\t\t\t\temail: user.Email,\n' + '\t\t\t\t\t\taccess: VIEW,\n' + '\t\t\t\t\t\timage: user.Image\n' + '\t\t\t\t\t})\n'
+	private static final COMPREHENSION_GLUED: String = 'class SampleContainer {\n'
+		+ '\tpublic function collectRemaining(knownItems:SampleEntryBundles):SampleEntryBundles {\n' + '\t\treturn {\n'
+		+ '\t\t\tfirst: [ for (item in _owner.PrimaryList)\n'
+		+ '\t\t\t\tif (!knownItems.first.exists((u:SamplePrimaryEntryKind) -> u.email == item.Email))\n' + '\t\t\t\t\t({\n'
+		+ '\t\t\t\t\t\talphaName: item.AlphaName,\n' + '\t\t\t\t\t\tbetaName: item.BetaName,\n' + '\t\t\t\t\t\tid: item.ItemId,\n'
+		+ '\t\t\t\t\t\temail: item.Email,\n' + '\t\t\t\t\t\taccess: VIEW,\n' + '\t\t\t\t\t\timage: item.Image\n' + '\t\t\t\t\t})\n'
 		+ '\t\t\t]\n' + '\t\t};\n' + '\t}\n' + '}';
 
 	/** A real ternary inner, written flat past `maxLineLength`. */
