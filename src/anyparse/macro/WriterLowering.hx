@@ -6570,7 +6570,7 @@ class WriterLowering {
 		else if (singleLineFlagName != null)
 			macro anyparse.format.wrap.WrapList.flatLength(_body) == -1
 				? $multilineGlue
-				: _dinfle(opt.lineWidth, _dn(_cols, _dc([_dhl(), _body])), _dc([_dop(' '), $gluedBody]));
+				: _dinfler(opt.lineWidth, _dn(_cols, _dc([_dhl(), _body])), _dc([_dop(' '), $gluedBody]));
 		else
 			// ω-case-body-fitline-shared: the plain FitLine shape now has ONE
 			// owner (`anyparse.format.BodyFit`), shared with the case-body Star
@@ -11295,8 +11295,8 @@ class WriterLowering {
 		return flagName == null
 			? null
 			: buildPolicySwitch(
-				['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName),
-				[{ values: ['Before', 'Both'], expr: macro _dt(' ') }], macro _de()
+				['anyparse', 'format', 'WhitespacePolicy'],
+				optFieldAccess(flagName), [{ values: ['Before', 'Both'], expr: macro _dt(' ') }], macro _de()
 			);
 	}
 
@@ -11334,8 +11334,8 @@ class WriterLowering {
 		return flagName == null
 			? null
 			: buildPolicySwitch(
-				['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName),
-				[{ values: ['After', 'Both'], expr: macro _dt(' ') }], macro _de()
+				['anyparse', 'format', 'WhitespacePolicy'],
+				optFieldAccess(flagName), [{ values: ['After', 'Both'], expr: macro _dt(' ') }], macro _de()
 			);
 	}
 
@@ -11363,8 +11363,8 @@ class WriterLowering {
 		return flagName == null
 			? null
 			: buildPolicySwitch(
-				['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName),
-				[{ values: ['Before', 'Both'], expr: macro _dt(' ') }], macro _de()
+				['anyparse', 'format', 'WhitespacePolicy'],
+				optFieldAccess(flagName), [{ values: ['Before', 'Both'], expr: macro _dt(' ') }], macro _de()
 			);
 	}
 
@@ -11675,8 +11675,8 @@ class WriterLowering {
 		return flagName == null
 			? macro _dt($v{trailText})
 			: buildPolicySwitch(
-				['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName),
-				[{ values: ['Before', 'Both'], expr: macro _dt($v{' ' + trailText}) }], macro _dt($v{trailText})
+				['anyparse', 'format', 'WhitespacePolicy'],
+				optFieldAccess(flagName), [{ values: ['Before', 'Both'], expr: macro _dt($v{' ' + trailText}) }], macro _dt($v{trailText})
 			);
 	}
 
@@ -16066,10 +16066,20 @@ class WriterLowering {
 			// so every other sep-Star consumer is byte-identical (`macro {}`).
 			final matrixComputeExpr: Expr = c.matrixWrap
 				? macro {
-					if (
-						opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap && _hasSourceNewlines && !_requiresHardline
-						&& !_keepEmit && !_ignoreEmit
-					) {
+					// ω-matrix-survives-ignore: the probe reads `newlineBefore` off the
+					// elements itself, so `_hasSourceNewlines` was only ever a fast path —
+					// and under `Ignore` that signal is deliberately DROPPED, which took
+					// the grid with it. A 16-per-row lookup table then reflowed to one
+					// element per line, because a matrix has no representation other than
+					// the source rows: `Ignore` means "re-flow by width", and a grid is
+					// exactly the thing width cannot reconstruct. So the grid wins over
+					// Ignore, the same precedence the noWrap-flatten path already gives it.
+					//
+					// Nothing else needs a guard: `MatrixWrap.tryLayout` returns null
+					// unless the rows form a uniform grid of at least TWO columns, so a
+					// flat array (no `newlineBefore` anywhere) and a one-per-line array
+					// both fall straight through to the cascade.
+					if (opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap && !_requiresHardline && !_keepEmit) {
 						final _rowStart: Array<Bool> = [for (_mi in 0..._arr.length) _mi == 0 || _arr[_mi].newlineBefore];
 						final _mcols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 						_matrixDoc = anyparse.format.wrap.MatrixWrap.tryLayout(

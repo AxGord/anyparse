@@ -387,6 +387,26 @@ enum Doc {
 	IfNaturalFirstLineExceeds(n: Int, breakDoc: Doc, flatDoc: Doc);
 
 	/**
+	 * `IfNaturalFirstLineExceeds` that also counts what rides the SAME rendered
+	 * line AFTER `flatDoc` — content living in the enclosing render stack, which
+	 * the probe's own walk cannot reach. Rest-aware sibling of the plain ctor in
+	 * exactly the sense `GroupWithRestProbe` is of `Group`, and every static Doc
+	 * walker treats the two identically; the difference is rendering-time only.
+	 *
+	 * The consumer is the `return`-body probe. Its statement terminator comes
+	 * from the ctor's `@:trailOpt(';')`, so it is not part of the value's Doc: a
+	 * value whose flat width equals the remaining budget EXACTLY resolved flat,
+	 * the natural first line came out as the whole value, and the probe broke
+	 * after the keyword — a bare `return` above a value that then fitted the
+	 * continuation. Counting the terminator makes the value break inside itself.
+	 *
+	 * The assignment probe deliberately stays on the plain ctor: there the extra
+	 * column buys an opened delimiter (`= try f(\n\t…\n) catch …`) in place of a
+	 * two-line break after `=`, which is the worse shape.
+	 */
+	IfNaturalFirstLineExceedsWithRest(n: Int, breakDoc: Doc, flatDoc: Doc);
+
+	/**
 	 * Condition-paren-glue decision (ω-cond-paren-glued, increment-4).
 	 * Renders `flatDoc` (the GLUED `(cond)` shape) iff the cond's NATURAL
 	 * first line both (a) fits within `n` AND (b) ENDS at an open delimiter

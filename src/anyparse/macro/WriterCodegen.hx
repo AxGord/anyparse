@@ -372,6 +372,14 @@ class WriterCodegen {
 				{ name: 'br', type: macro :anyparse.core.Doc },
 				{ name: 'fl', type: macro :anyparse.core.Doc }
 			], macro anyparse.core.Doc.IfNaturalFirstLineExceeds(n, br, fl)),
+			// ω-natural-trailwidth: rest-aware sibling of `_dinfle`. The probe additionally
+			// counts what rides the same rendered line AFTER `fl` — for the `return` body,
+			// the statement terminator its `@:trailOpt(';')` emits outside the value's Doc.
+			docHelper('_dinfler', [
+				{ name: 'n', type: macro :Int },
+				{ name: 'br', type: macro :anyparse.core.Doc },
+				{ name: 'fl', type: macro :anyparse.core.Doc }
+			], macro anyparse.core.Doc.IfNaturalFirstLineExceedsWithRest(n, br, fl)),
 			// ω-abstract-clauses-linewrap: column-threshold probe consuming
 			// rest-of-stack flat width. Fires `br` when
 			// `col + flatTokenWidth(fl) + flatTokenWidthOfRestStack(stack) >= n`.

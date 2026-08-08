@@ -2082,8 +2082,9 @@ class TriviaTypeSynth {
 	}
 
 	private static inline function wrapOptional(node: ShapeNode, base: ComplexType): ComplexType {
-		return
-			node.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true ? TPath({ pack: [], name: 'Null', params: [TPType(base)] }) : base;
+		return node.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true
+			? TPath({ pack: [], name: 'Null', params: [TPType(base)] })
+			: base;
 	}
 
 	private static function refIsBearing(refName: String): Bool {

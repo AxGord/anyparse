@@ -527,8 +527,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		final nowPattern: Bool = inPattern || node.kind == 'Plain';
 		if (!renameFieldRef(node, span, source, field, propName, shadowsProp, classQualified, className, nowPattern, out)) return false;
 		final childShadows: Bool = shadowsProp || (isFnScope(node) && functionBindsName(node, propName));
-		return
-			renameChildren(node, source, field, skipSpans, fieldNode, propName, nowPattern, childShadows, className, classQualified, out);
+		return renameChildren(
+			node, source, field, skipSpans, fieldNode, propName, nowPattern, childShadows, className, classQualified, out
+		);
 	}
 
 	/**

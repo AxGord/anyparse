@@ -49,8 +49,9 @@ final class HxCondExprValueFixpointSliceTest extends Test {
 	 * ω-natural-trailwidth moved the break off the keyword: the probe that
 	 * used to strand a bare `return` on its own line measured the value
 	 * WITHOUT the statement's `;`, so the value resolved flat and its natural
-	 * first line came out as the whole width. Counting the terminator lets the
-	 * value break inside itself instead, which is where the break belongs.
+	 * first line came out as the whole width. The `return` body now emits the
+	 * rest-aware probe ctor, which counts that terminator, and the value
+	 * breaks inside itself instead.
 	 */
 	private static final BROKEN_RETURN: String =
 		'class Min {\n\tstatic function retArm():RegisteredDeviceTypeId {\n\t\treturn #if ios DEVICETYPE_IPAD #elseif android ChromebookUtils.isChromebook()\n\t\t\t? DEVICETYPE_WINDOWSPC\n\t\t\t: DEVICETYPE_TABLET #elseif macos DEVICETYPE_MACOSXPC #elseif (windows || linux) DEVICETYPE_WINDOWSPC #else DEVICETYPE_WEB #end;\n\t}\n}';

@@ -96,8 +96,9 @@ final class PreferSwitchExpression implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final config: Null<Config> = configOf(plugin);
-		return
-			config == null ? [] : SwitchChain.violationsOf(files, plugin, config.seams, hostAccepts.bind(config.hosts), id(), messageFor);
+		return config == null
+			? []
+			: SwitchChain.violationsOf(files, plugin, config.seams, hostAccepts.bind(config.hosts), id(), messageFor);
 	}
 
 	public function fix(

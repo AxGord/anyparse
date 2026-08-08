@@ -433,9 +433,9 @@ final class BinaryChainEmit {
 				leadingOperandOpensDelim(i, parenOnly);
 			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfResidualLineExceeds(
 				_, _, flat
-			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
-				_, _, _, _, flat
-			) | IfIndentWidthExceeds(_, _, _, flat) | IfGluedFirstLineExceeds(_, _, _, flat):
+			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineExceedsWithRest(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(
+				_, _, flat
+			) | IfArrowContinuationFits(_, _, _, _, flat) | IfIndentWidthExceeds(_, _, _, flat) | IfGluedFirstLineExceeds(_, _, _, flat):
 				// PROBE FAMILY (Doc.hx header table), flat side for all three:
 				//  - `IfArrowContinuationFits` is a two-SHAPE probe like the natural
 				//    siblings above, and its two shapes always share a leading token —

@@ -1980,8 +1980,8 @@ class NamingCheckTest extends Test {
 		final cSrc: String = 'package pkg;\nclass C extends Base {\n\tpublic function f():Void {\n'
 			+ '\t\tfinal wIDTH:Int = 1;\n\t\ttrace(width + wIDTH);\n\t}\n}';
 		assertLocalRenamed(
-			[{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }], 'pkg/C.hx', cSrc, 'trace(this.width + width)',
-			'wIDTH'
+			[{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }],
+			'pkg/C.hx', cSrc, 'trace(this.width + width)', 'wIDTH'
 		);
 	}
 
@@ -2092,8 +2092,8 @@ class NamingCheckTest extends Test {
 		final cSrc: String = 'package pkg;\nclass C extends Base {\n\tpublic function f():Void {\n'
 			+ '\t\tfinal _width:Int = 1;\n\t\ttrace(width + _width);\n\t}\n}';
 		assertLocalRenamed(
-			[{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }], 'pkg/C.hx', cSrc, 'trace(this.width + width)',
-			'_width'
+			[{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }],
+			'pkg/C.hx', cSrc, 'trace(this.width + width)', '_width'
 		);
 	}
 

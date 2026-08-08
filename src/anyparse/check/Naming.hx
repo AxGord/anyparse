@@ -402,8 +402,9 @@ final class Naming implements Check implements CrossFileFix {
 		if (renameSpans == null) return null;
 		final spans: Array<Span> = renameSpans;
 		final edits: Array<{ span: Span, text: String }> = [for (occ in spans) { span: occ, text: newName }];
-		return
-			collides ? qualifyCapturedEdits(source, tree, span.from, spans, newName, shape, plugin, edits, resolutionIndex, file) : edits;
+		return collides
+			? qualifyCapturedEdits(source, tree, span.from, spans, newName, shape, plugin, edits, resolutionIndex, file)
+			: edits;
 	}
 
 	/**

@@ -320,9 +320,9 @@ class Renderer {
 					pushStructural(f, stack, ctx.col, pendingSpaceWidth(ctx), width);
 				case IfBreak(_, _) | IfWidthExceeds(_, _, _) | IfFirstLineExceeds(_, _, _) | IfLineExceeds(_, _, _) | IfResidualLineExceeds(
 					_, _, _
-				) | IfFullLineExceeds(_, _, _) | IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineFitsOpenDelim(_, _, _) | IfArrowContinuationFits(
-					_, _, _, _, _
-				) | IfIndentWidthExceeds(_, _, _, _) | IfGluedFirstLineExceeds(_, _, _, _):
+				) | IfFullLineExceeds(_, _, _) | IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineExceedsWithRest(_, _, _) | IfNaturalFirstLineFitsOpenDelim(
+					_, _, _
+				) | IfArrowContinuationFits(_, _, _, _, _) | IfIndentWidthExceeds(_, _, _, _) | IfGluedFirstLineExceeds(_, _, _, _):
 					pushExceedsBranch(f, stack, ctx.col, pendingSpaceWidth(ctx), width, decisions);
 				case Fill(_, _, _) | FillWithRestProbe(_, _, _) | FillBreakAfterWrap(_, _, _):
 					// Fill family — per-item / all-flat layout, no scalar layout
@@ -474,9 +474,9 @@ class Renderer {
 					stack.push(fl);
 				case IfBreak(brk, fl) | IfWidthExceeds(_, brk, fl) | IfFirstLineExceeds(_, brk, fl) | IfLineExceeds(_, brk, fl) | IfResidualLineExceeds(
 					_, brk, fl
-				) | IfFullLineExceeds(_, brk, fl) | IfNaturalFirstLineExceeds(_, brk, fl) | IfNaturalFirstLineFitsOpenDelim(_, brk, fl) | IfArrowContinuationFits(
-					_, _, _, brk, fl
-				):
+				) | IfFullLineExceeds(_, brk, fl) | IfNaturalFirstLineExceeds(_, brk, fl) | IfNaturalFirstLineExceedsWithRest(_, brk, fl) | IfNaturalFirstLineFitsOpenDelim(
+					_, brk, fl
+				) | IfArrowContinuationFits(_, _, _, brk, fl):
 					stack.push(brk);
 					stack.push(fl);
 				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
@@ -967,9 +967,9 @@ class Renderer {
 				return null;
 			case IfBreak(_, fl) | IfWidthExceeds(_, _, fl) | IfFirstLineExceeds(_, _, fl) | IfLineExceeds(_, _, fl) | IfResidualLineExceeds(
 				_, _, fl
-			) | IfFullLineExceeds(_, _, fl) | IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineFitsOpenDelim(_, _, fl) | IfArrowContinuationFits(
-				_, _, _, _, fl
-			) | IfIndentWidthExceeds(_, _, _, fl) | IfGluedFirstLineExceeds(_, _, _, fl):
+			) | IfFullLineExceeds(_, _, fl) | IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineExceedsWithRest(_, _, fl) | IfNaturalFirstLineFitsOpenDelim(
+				_, _, fl
+			) | IfArrowContinuationFits(_, _, _, _, fl) | IfIndentWidthExceeds(_, _, _, fl) | IfGluedFirstLineExceeds(_, _, _, fl):
 				inner.push({ doc: fl, mode: MFlat });
 				return null;
 			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
@@ -1051,11 +1051,13 @@ class Renderer {
 				_, _, inner
 			) | IfLineExceeds(_, _, inner) | IfResidualLineExceeds(_, _, inner) | IfFullLineExceeds(_, _, inner) | IfNaturalFirstLineExceeds(
 				_, _, inner
-			) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(_, _, _, _, inner) | IfIndentWidthExceeds(
-				_, _, _, inner
-			) | IfGluedFirstLineExceeds(_, _, _, inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(
+			) | IfNaturalFirstLineExceedsWithRest(_, _, inner) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(
+				_, _, _, _, inner
+			) | IfIndentWidthExceeds(_, _, _, inner) | IfGluedFirstLineExceeds(_, _, _, inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
 				inner
-			) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
+			) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
+				inner
+			) | ConditionalMarkerDecrease(inner):
 				// Single-child transparent descend: structural wrappers (Nest /
 				// Group), the flat side of every render-time `If*` probe, the
 				// force-flat markers, and the cond-indent markers all contribute
@@ -1146,11 +1148,13 @@ class Renderer {
 				_, _, inner
 			) | IfLineExceeds(_, _, inner) | IfResidualLineExceeds(_, _, inner) | IfFullLineExceeds(_, _, inner) | IfNaturalFirstLineExceeds(
 				_, _, inner
-			) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(_, _, _, _, inner) | IfIndentWidthExceeds(
-				_, _, _, inner
-			) | IfGluedFirstLineExceeds(_, _, _, inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(
+			) | IfNaturalFirstLineExceedsWithRest(_, _, inner) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(
+				_, _, _, _, inner
+			) | IfIndentWidthExceeds(_, _, _, inner) | IfGluedFirstLineExceeds(_, _, _, inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
 				inner
-			) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
+			) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
+				inner
+			) | ConditionalMarkerDecrease(inner):
 				// Single-child transparent descend at the same indent in MFlat.
 				// A `Group`'s nested flat content; the flat side of every
 				// render-time `If*` probe (the column/first-line/rest-of-stack/
@@ -1223,7 +1227,7 @@ class Renderer {
 					if (k > 0) inner.push({ doc: sep, mode: MFlat });
 				}
 				return { add: 0, aborted: false };
-			case IfNaturalFirstLineExceeds(_, _, innerDoc):
+			case IfNaturalFirstLineExceeds(_, _, innerDoc) | IfNaturalFirstLineExceedsWithRest(_, _, innerDoc):
 				// An `IfNaturalFirstLineExceeds` relocates its content to its own
 				// line when that content's natural first line overflows `lineWidth`
 				// (the typed var-init `=`-break emitted by
@@ -1462,7 +1466,7 @@ class Renderer {
 				// decision. Resolve flat unless forced — these probes never
 				// sit at the head of a cond's flatShape spine.
 				pushNaturalExceeds(stack, node, breakDoc, flatDoc, col + DocMeasure.flatTokenWidth(flatDoc) >= nn);
-			case IfNaturalFirstLineExceeds(nn, breakDoc, flatDoc):
+			case IfNaturalFirstLineExceeds(nn, breakDoc, flatDoc) | IfNaturalFirstLineExceedsWithRest(nn, breakDoc, flatDoc):
 				// Self-class sibling: resolve recursively at the running col
 				// over a strictly smaller subtree (mirror the width probe's
 				// own arm; bounded by the finite tree).
@@ -1699,7 +1703,11 @@ class Renderer {
 				// continuation. Counting the terminator makes the collection break
 				// instead: the natural first line is `return [`, the keyword stays
 				// glued, and the value wraps inside its own brackets.
-				pushNaturalGroup(stack, node, inner, width, col, naturalRestStackWidth(stack) + trailWidth);
+				// The whole mechanism is opt-in per probe: `trailWidth == 0` means
+				// the caller did not ask for it, and the arm then measures exactly
+				// as the plain `Group` one does — byte-parity for every consumer
+				// that stayed on the legacy measure.
+				pushNaturalGroup(stack, node, inner, width, col, trailWidth == 0 ? 0 : naturalRestStackWidth(stack) + trailWidth);
 			case IfBreak(breakDoc, flatDoc):
 				// Pick by mode (mirrors render IfBreak): forceFlat or MFlat
 				// -> flat side; MBreak -> break side. Propagate forceFlat.
@@ -1736,7 +1744,7 @@ class Renderer {
 				// FIRST instead of the arrow's break-point pre-empting it (fork's
 				// LATE-pass `applyArrowWrapping` — the arrow is last-resort).
 				pushNaturalExceeds(stack, node, breakDoc, flatDoc, col + DocMeasure.flatTokenWidth(flatDoc) >= nn);
-			case IfNaturalFirstLineExceeds(nn, breakDoc, flatDoc):
+			case IfNaturalFirstLineExceeds(nn, breakDoc, flatDoc) | IfNaturalFirstLineExceedsWithRest(nn, breakDoc, flatDoc):
 				// Self-reference: resolve recursively at the running col
 				// over a strictly smaller subtree (bounded by finite tree).
 				pushNaturalExceeds(
@@ -1947,9 +1955,9 @@ class Renderer {
 					final pushMode: Mode = commits ? MBreak : f.mode;
 					stack.push(new Frame(f.indent, pushMode, commits ? breakDoc : flatDoc));
 				}
-			case IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineFitsOpenDelim(_, _, _) | IfArrowContinuationFits(_, _, _, _, _) | IfIndentWidthExceeds(
-				_, _, _, _
-			) | IfGluedFirstLineExceeds(_, _, _, _):
+			case IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineExceedsWithRest(_, _, _) | IfNaturalFirstLineFitsOpenDelim(_, _, _) | IfArrowContinuationFits(
+				_, _, _, _, _
+			) | IfIndentWidthExceeds(_, _, _, _) | IfGluedFirstLineExceeds(_, _, _, _):
 				// Natural-shape family — inner Groups resolve by their own
 				// `fitsFlat` (or a precomputed arrow width). Delegated to the
 				// static `pushNaturalBranch`.
@@ -2687,6 +2695,17 @@ class Renderer {
 			// on `fillLineStart >= 0` so non-opting / force-flat Fills
 			// stay byte-identical via the legacy `fits` probe alone.
 			final prevWrapped: Bool = f.fillLineStart >= 0 && ctx.lineCount > f.fillLineStart;
+			// ω-fill-after-collection: a collection item dominates the line it
+			// lands on, and its brackets are a structural boundary a reader
+			// navigates by. Packing only SOME of the followers onto its tail puts
+			// the break at an arbitrary width point instead — `[…], 155,` / `null`
+			// rather than `[…],` / `155, null`. So once the previous item was a
+			// collection, the rest either ALL fits on its line or ALL moves to the
+			// next one.
+			//
+			// Scoped to the leading-break fill (`fillLineStart >= 0`, the
+			// `FillBreakAfterWrap` ctor — the call-argument shape); a plain `Fill`
+			// keeps its greedy packing byte-for-byte.
 			// The LAST item of a leading-break fill (FillBreakAfterWrap;
 			// `fillLineStart >= 0`) has no following item on its line -- the close
 			// sits on its own line -- so the per-line trailing-comma component of
@@ -2704,8 +2723,13 @@ class Renderer {
 			// its FIRST line against the remaining column so the head packs onto the
 			// current line (fork re-flows a splice operand this way) and the verbatim
 			// newline breaks the rest; `-1` = no embedded break → the standard probe.
+			// ω-fill-after-collection: the whole tail is measured against the
+			// LAST item's reserve — the post-Fill content lands after it, not
+			// after the item being probed now.
+			final afterCollection: Bool = f.fillLineStart >= 0 && startsCollection(fillRest[idx - 1])
+				&& !fitsFlat(width - ctx.col - flatTokenWidthOfRestStack(stack) - 1, f.indent, remainingFlat(fillRest, fillSep, idx));
 			final embW: Int = embeddedFirstLineWidth(Concat([fillSep, fillRest[idx]]));
-			final fits: Bool = !prevWrapped && (
+			final fits: Bool = !prevWrapped && !afterCollection && (
 				embW >= 0
 					? embW <= width - ctx.col
 					: fitsFlat(width - ctx.col - effTailReserve - restW, f.indent, Concat([fillSep, fillRest[idx]]))
@@ -2935,7 +2959,7 @@ class Renderer {
 	 */
 	private static function pushNaturalBranch(f: Frame, stack: Array<Frame>, col: Int, width: Int): Void {
 		switch (f.doc) {
-			case IfNaturalFirstLineExceeds(n, breakDoc, flatDoc):
+			case IfNaturalFirstLineExceeds(n, breakDoc, flatDoc) | IfNaturalFirstLineExceedsWithRest(n, breakDoc, flatDoc):
 				// Natural-shape first-line probe: render `flatDoc`
 				// speculatively at the current pen, resolving each inner
 				// Group/BodyGroup/GroupWithRestProbe by its OWN `fitsFlat`
@@ -2962,10 +2986,15 @@ class Renderer {
 				} else {
 					// ω-natural-trailwidth: hand the walk what rides the same line
 					// after this probe's own doc — the statement terminator the
-					// value's Doc does not contain.
-					final naturalCrosses: Bool = (
-						naturalFirstLineWidth(flatDoc, col, f.indent, width, true, flatTokenWidthOfRestStack(stack)) >= n
-					);
+					// value's Doc does not contain. The rest-aware ctor is the
+					// opt-in; which CONSUMER emitted it is the whole distinction
+					// (the `return` body does, the assignment RHS does not), and
+					// that cannot be read off the value, so it travels in the node.
+					final trailWidth: Int = switch f.doc {
+						case IfNaturalFirstLineExceedsWithRest(_, _, _): flatTokenWidthOfRestStack(stack);
+						case _: 0;
+					};
+					final naturalCrosses: Bool = (naturalFirstLineWidth(flatDoc, col, f.indent, width, true, trailWidth) >= n);
 					final pushMode: Mode = naturalCrosses ? MBreak : f.mode;
 					stack.push(new Frame(f.indent, pushMode, naturalCrosses ? breakDoc : flatDoc));
 				}
@@ -3200,13 +3229,13 @@ class Renderer {
 					_, _, inner
 				) | IfLineExceeds(_, _, inner) | IfResidualLineExceeds(_, _, inner) | IfFullLineExceeds(_, _, inner) | IfNaturalFirstLineExceeds(
 					_, _, inner
-				) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(_, _, _, _, inner) | IfIndentWidthExceeds(
-					_, _, _, inner
-				) | IfGluedFirstLineExceeds(_, _, _, inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(
+				) | IfNaturalFirstLineExceedsWithRest(_, _, inner) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(
+					_, _, _, _, inner
+				) | IfIndentWidthExceeds(_, _, _, inner) | IfGluedFirstLineExceeds(_, _, _, inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
 					inner
-				) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(
+				) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
 					inner
-				):
+				) | ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 			}
 		}
@@ -3257,6 +3286,45 @@ class Renderer {
 	private static inline function selfBreakingBraceBody(flatDoc: Doc): Bool {
 		return DocMeasure.firstVisibleTextStartsWith(flatDoc, '{'.code) && DocMeasure.hasForcedBreak(flatDoc)
 			&& flatTokenWidthFirstLine(flatDoc) <= 1;
+	}
+
+
+	/**
+	 * ω-fill-after-collection: does this fill item open with a collection
+	 * delimiter (`[` array / comprehension, `{` object literal / anon type)?
+	 *
+	 * Structural, not width-based: the brackets are the boundary a reader
+	 * navigates by, so the followers belong on one side of them or the other —
+	 * never split across. `DocMeasure.firstVisibleTextStartsWith` walks to the
+	 * first emitted byte, so a leading `Group` / `Nest` / wrap marker is
+	 * transparent here.
+	 */
+	private static function startsCollection(item: Doc): Bool {
+		final head: Null<String> = DocMeasure.firstVisibleText(item);
+		if (head == null || head.length == 0) return false;
+		final open: Int = StringTools.fastCodeAt(head, 0);
+		if (open != '['.code && open != '{'.code) return false;
+		// An EMPTY collection is not a boundary — `f({}, cb -> …)` has nothing
+		// for the reader to navigate around, and pushing `cb` off its line only
+		// strands a two-character `{},`. The writer emits an empty pair as ONE
+		// `Text` carrying both delimiters, so it is exactly the token this walk
+		// returns.
+		final trimmed: String = StringTools.trim(head);
+		return trimmed != '[]' && trimmed != '{}';
+	}
+
+
+	/**
+	 * ω-fill-after-collection: `fillRest[idx…]` joined by `sep`, for the
+	 * "does the WHOLE tail still fit on this line" probe.
+	 */
+	private static function remainingFlat(fillRest: Array<Doc>, sep: Doc, idx: Int): Doc {
+		final parts: Array<Doc> = [];
+		for (i in idx ... fillRest.length) {
+			parts.push(sep);
+			parts.push(fillRest[i]);
+		}
+		return Concat(parts);
 	}
 
 }

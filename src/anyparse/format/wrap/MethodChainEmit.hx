@@ -331,8 +331,9 @@ class MethodChainEmit {
 				endsWithLineComment(inner);
 			case IfBreak(breakDoc, _), IfWidthExceeds(_, breakDoc, _), IfFirstLineExceeds(_, breakDoc, _), IfLineExceeds(_, breakDoc, _),
 				IfResidualLineExceeds(_, breakDoc, _), IfFullLineExceeds(_, breakDoc, _), IfNaturalFirstLineExceeds(_, breakDoc, _),
-				IfNaturalFirstLineFitsOpenDelim(_, breakDoc, _), IfArrowContinuationFits(_, _, _, breakDoc, _),
-				IfIndentWidthExceeds(_, _, breakDoc, _), IfGluedFirstLineExceeds(_, _, breakDoc, _):
+				IfNaturalFirstLineExceedsWithRest(_, breakDoc, _), IfNaturalFirstLineFitsOpenDelim(_, breakDoc, _),
+				IfArrowContinuationFits(_, _, _, breakDoc, _), IfIndentWidthExceeds(_, _, breakDoc, _),
+				IfGluedFirstLineExceeds(_, _, breakDoc, _):
 				// PROBE FAMILY (Doc.hx header table). The stanza's own rule — both
 				// branches end with the same trailing comment token by construction —
 				// holds for all three additions, so the break side stays this walker's

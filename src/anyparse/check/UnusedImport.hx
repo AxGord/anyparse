@@ -220,8 +220,9 @@ final class UnusedImport implements Check {
 	 * a reference.
 	 */
 	private static function referenced(scan: FileScan, name: String): Bool {
-		return
-			RefactorSupport.referencedUnqualifiedInRange(scan.source, name, 0, scan.source.length, scan.importSpans, scan.commentRegions);
+		return RefactorSupport.referencedUnqualifiedInRange(
+			scan.source, name, 0, scan.source.length, scan.importSpans, scan.commentRegions
+		);
 	}
 
 	private static function make(file: String, imp: ImportInfo, severity: Severity, message: String): Violation {

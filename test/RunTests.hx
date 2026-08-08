@@ -590,6 +590,8 @@ import unit.HxAnonTypeIgnoreReflowTest;
 import unit.HxObjectLitRestProbeTest;
 import unit.HxPackedOrOnePerLineTest;
 import unit.HxReturnValueBreaksInsideTest;
+import unit.HxFillAfterCollectionTest;
+import unit.HxFillLeadingCommentTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -776,6 +778,8 @@ class RunTests {
 		addCase(new HxObjectLitRestProbeTest());
 		addCase(new HxPackedOrOnePerLineTest());
 		addCase(new HxReturnValueBreaksInsideTest());
+		addCase(new HxFillAfterCollectionTest());
+		addCase(new HxFillLeadingCommentTest());
 		addCase(new HxVarTypeHintAnonIndentTest());
 		addCase(new HxTypedefBetweenBlankTest());
 		addCase(new HxArrowFnTypeSliceTest());

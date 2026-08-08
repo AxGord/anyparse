@@ -130,8 +130,8 @@ final class HxCasePredLowering extends AstPredLowering {
 		final inner: Expr = sw(ident('_e'), [caseOf(HX_EXPR, ['And', 'Or'], macro true)], macro false);
 		final body: Expr = nullSwitch(ident('s'), macro false, [caseBind(HX_STATEMENT, 'ExprStmt', [0 => '_e'], inner)], macro false);
 		return predField(
-			'caseBodyRefusesFlat', [valueArg('s', HX_STATEMENT)], macro :Bool, body,
-			'True iff an `ExprStmt` case body has an outermost `&&` / `||` and must refuse inline emission.'
+			'caseBodyRefusesFlat', [valueArg('s', HX_STATEMENT)],
+			macro :Bool, body, 'True iff an `ExprStmt` case body has an outermost `&&` / `||` and must refuse inline emission.'
 		);
 	}
 
@@ -167,8 +167,8 @@ final class HxCasePredLowering extends AstPredLowering {
 			caseBind(HX_STATEMENT, 'ExprStmt', [0 => '_e'], exprCall),
 		], macro false);
 		return predField(
-			'caseBodyControlFlowRoot', [valueArg('s', HX_STATEMENT)], macro :Bool, body,
-			'True iff a case body statement is a keyword-led control-flow statement (refuses to glue onto the label).'
+			'caseBodyControlFlowRoot', [valueArg('s', HX_STATEMENT)],
+			macro :Bool, body, 'True iff a case body statement is a keyword-led control-flow statement (refuses to glue onto the label).'
 		);
 	}
 
@@ -198,8 +198,8 @@ final class HxCasePredLowering extends AstPredLowering {
 			caseBind(HX_EXPR, 'MetaExpr', [0 => '_mv'], recurse),
 		], macro false);
 		return predField(
-			'caseBodyControlFlowExpr', [valueArg('e', HX_EXPR)], macro :Bool, body,
-			'True iff a case body expression is the expression form of a keyword-led control-flow construct.'
+			'caseBodyControlFlowExpr', [valueArg('e', HX_EXPR)],
+			macro :Bool, body, 'True iff a case body expression is the expression form of a keyword-led control-flow construct.'
 		);
 	}
 
@@ -337,8 +337,8 @@ final class HxCasePredLowering extends AstPredLowering {
 			_caseSiblingUnitsInto(_c, out);
 		};
 		return predField(
-			'_addCaseSiblingUnit', [bareArg('n', HX_SWITCH_CASE), { name: 'out', type: ruleArrayCT(HX_SWITCH_CASE) }], macro :Void, body,
-			'Appends one switch-case element to `out`, flattening a nested `#if` region into its own units.'
+			'_addCaseSiblingUnit', [bareArg('n', HX_SWITCH_CASE), { name: 'out', type: ruleArrayCT(HX_SWITCH_CASE) }],
+			macro :Void, body, 'Appends one switch-case element to `out`, flattening a nested `#if` region into its own units.'
 		);
 	}
 
@@ -422,7 +422,8 @@ final class HxCasePredLowering extends AstPredLowering {
 			caseOf(HX_SWITCH_CASE, ['CondSpliceCase'], macro true),
 		], macro false);
 		return predField(
-			'caseUnitStructuralBreak_${AstPredLowering.simpleName(HX_SWITCH_CASE)}', [valueArg('c', HX_SWITCH_CASE)], macro :Bool, body,
+			'caseUnitStructuralBreak_${AstPredLowering.simpleName(HX_SWITCH_CASE)}', [valueArg('c', HX_SWITCH_CASE)],
+			macro :Bool, body,
 			'True iff a case unit\'s body sits below its label at any budget (multi-statement, one refused statement, '
 			+ 'or a label-splice region).'
 		);
@@ -462,8 +463,8 @@ final class HxCasePredLowering extends AstPredLowering {
 			caseBind(HX_SWITCH_CASE, 'DefaultBranch', [0 => '_d'], verdict(HX_DEFAULT_BRANCH, 'stmts', '_d')),
 		], macro false);
 		return predField(
-			'caseUnitControlFlowBody_${AstPredLowering.simpleName(HX_SWITCH_CASE)}', [valueArg('c', HX_SWITCH_CASE)], macro :Bool, body,
-			'True iff a case unit holds exactly one body statement and that statement is control-flow.'
+			'caseUnitControlFlowBody_${AstPredLowering.simpleName(HX_SWITCH_CASE)}', [valueArg('c', HX_SWITCH_CASE)],
+			macro :Bool, body, 'True iff a case unit holds exactly one body statement and that statement is control-flow.'
 		);
 	}
 
@@ -512,8 +513,8 @@ final class HxCasePredLowering extends AstPredLowering {
 			hit;
 		};
 		return predField(
-			'condSpliceRawWrapsCases', [{ name: 'raw', type: macro :String }], macro :Bool, body,
-			'True iff a token-splice raw fragment has a line starting with the `case` / `default` keyword.'
+			'condSpliceRawWrapsCases', [{ name: 'raw', type: macro :String }],
+			macro :Bool, body, 'True iff a token-splice raw fragment has a line starting with the `case` / `default` keyword.'
 		);
 	}
 

@@ -128,9 +128,9 @@ class D {
 			case ConditionalMarkerDecrease(inner): flatten(inner);
 			case IfBreak(_, _) | IfWidthExceeds(_, _, _) | IfFirstLineExceeds(_, _, _) | IfLineExceeds(_, _, _) | IfResidualLineExceeds(
 				_, _, _
-			) | IfFullLineExceeds(_, _, _) | IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineFitsOpenDelim(_, _, _) | IfArrowContinuationFits(
-				_, _, _, _, _
-			) | IfIndentWidthExceeds(_, _, _, _) | IfGluedFirstLineExceeds(_, _, _, _):
+			) | IfFullLineExceeds(_, _, _) | IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineExceedsWithRest(_, _, _) | IfNaturalFirstLineFitsOpenDelim(
+				_, _, _
+			) | IfArrowContinuationFits(_, _, _, _, _) | IfIndentWidthExceeds(_, _, _, _) | IfGluedFirstLineExceeds(_, _, _, _):
 				// Handled above by `flattenConditional`; unreachable here, kept
 				// only for switch exhaustiveness.
 				Empty;
@@ -151,7 +151,7 @@ class D {
 			case IfLineExceeds(_, _, fl): flatten(fl);
 			case IfResidualLineExceeds(_, _, fl): flatten(fl);
 			case IfFullLineExceeds(_, _, fl): flatten(fl);
-			case IfNaturalFirstLineExceeds(_, _, fl): flatten(fl);
+			case IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineExceedsWithRest(_, _, fl): flatten(fl);
 			case IfNaturalFirstLineFitsOpenDelim(_, _, fl): flatten(fl);
 			case IfArrowContinuationFits(_, _, _, _, fl) | IfIndentWidthExceeds(_, _, _, fl) | IfGluedFirstLineExceeds(_, _, _, fl): flatten(
 				fl

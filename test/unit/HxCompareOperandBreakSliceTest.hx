@@ -86,16 +86,10 @@ final class HxCompareOperandBreakSliceTest extends Test {
 		// op -- the fork breaks the ternary (`?`/`:`), not the compare. The
 		// `_inTernaryCond` flag suppresses the operand-overflow break so
 		// `cond == true ? ...` stays glued.
-		//
-		// ω-natural-trailwidth: the RHS now keeps the `=` glued and carries the
-		// break on its own `?`/`:` instead. The probe that used to break after
-		// `=` measured the value WITHOUT the statement's `;`, so a nested
-		// rest-aware Group resolved flat and the value's natural first line came
-		// out as its whole width; counting the terminator lets that Group break,
-		// which is what the fork does too (the compare still stays glued — this
-		// test's actual subject).
+		// (anyparse wraps the RHS after `=`; ω-natural-trailwidth deliberately
+		// leaves a non-collection value on that legacy measure.)
 		final src: String =
-			"class C {\n\tfunction f() {\n\t\tfinal trailOptText:Null<String> = child.annotations.get('lit.trailOptional') == true\n\t\t\t? child.annotations.get('lit.trailText')\n\t\t\t: null;\n\t}\n}";
+			"class C {\n\tfunction f() {\n\t\tfinal trailOptText:Null<String> =\n\t\t\tchild.annotations.get('lit.trailOptional') == true ? child.annotations.get('lit.trailText') : null;\n\t}\n}";
 		Assert.equals(src, triviaWrite(src));
 	}
 

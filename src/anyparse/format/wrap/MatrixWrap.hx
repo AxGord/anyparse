@@ -125,9 +125,9 @@ final class MatrixWrap {
 					stack.push(flat);
 				case IfBreak(brk, flat) | IfWidthExceeds(_, brk, flat) | IfFirstLineExceeds(_, brk, flat) | IfLineExceeds(_, brk, flat) | IfResidualLineExceeds(
 					_, brk, flat
-				) | IfFullLineExceeds(_, brk, flat) | IfNaturalFirstLineExceeds(_, brk, flat) | IfNaturalFirstLineFitsOpenDelim(
+				) | IfFullLineExceeds(_, brk, flat) | IfNaturalFirstLineExceeds(_, brk, flat) | IfNaturalFirstLineExceedsWithRest(
 					_, brk, flat
-				) | IfArrowContinuationFits(_, _, _, brk, flat):
+				) | IfNaturalFirstLineFitsOpenDelim(_, brk, flat) | IfArrowContinuationFits(_, _, _, brk, flat):
 					stack.push(brk);
 					stack.push(flat);
 			}

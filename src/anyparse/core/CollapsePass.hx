@@ -1032,9 +1032,9 @@ fitems.length > 1
 					stack.push(fl);
 				case IfBreak(brk, fl) | IfWidthExceeds(_, brk, fl) | IfFirstLineExceeds(_, brk, fl) | IfLineExceeds(_, brk, fl) | IfResidualLineExceeds(
 					_, brk, fl
-				) | IfFullLineExceeds(_, brk, fl) | IfNaturalFirstLineExceeds(_, brk, fl) | IfNaturalFirstLineFitsOpenDelim(_, brk, fl) | IfArrowContinuationFits(
-					_, _, _, brk, fl
-				):
+				) | IfFullLineExceeds(_, brk, fl) | IfNaturalFirstLineExceeds(_, brk, fl) | IfNaturalFirstLineExceedsWithRest(_, brk, fl) | IfNaturalFirstLineFitsOpenDelim(
+					_, brk, fl
+				) | IfArrowContinuationFits(_, _, _, brk, fl):
 					stack.push(brk);
 					stack.push(fl);
 				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
@@ -1092,7 +1092,11 @@ fitems.length > 1
 			case IfLineExceeds(n, brk, fl): IfLineExceeds(n, f(brk), f(fl));
 			case IfResidualLineExceeds(n, brk, fl): IfResidualLineExceeds(n, f(brk), f(fl));
 			case IfFullLineExceeds(n, brk, fl): IfFullLineExceeds(n, f(brk), f(fl));
-			case IfNaturalFirstLineExceeds(n, brk, fl): IfNaturalFirstLineExceeds(n, f(brk), f(fl));
+			case IfNaturalFirstLineExceeds(n, brk, fl):
+				IfNaturalFirstLineExceeds(n, f(brk), f(fl));
+			// Rebuilt as ITSELF — a merged arm here would silently downgrade the
+			// rest-aware node to the plain one.
+			case IfNaturalFirstLineExceedsWithRest(n, brk, fl): IfNaturalFirstLineExceedsWithRest(n, f(brk), f(fl));
 			case IfNaturalFirstLineFitsOpenDelim(n, brk, fl): IfNaturalFirstLineFitsOpenDelim(n, f(brk), f(fl));
 			case IfArrowContinuationFits(ei, fw, n, brk, fl): IfArrowContinuationFits(ei, fw, n, f(brk), f(fl));
 			case IfIndentWidthExceeds(fw, n, brk, fl): IfIndentWidthExceeds(fw, n, f(brk), f(fl));
