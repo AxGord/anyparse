@@ -131,6 +131,31 @@ class PatchSliceTest extends Test {
 		assertManyRefused(source, pairs);
 	}
 
+	/**
+	 * `--all` — the opt-in for a fan-out the caller means. Without it a repeated
+	 * fragment is refused (the default discipline: an edit whose extent the
+	 * caller cannot see is the one that lands somewhere unintended); with it
+	 * every occurrence in the resolved node is rewritten.
+	 */
+	public function testAllRewritesEveryOccurrence(): Void {
+		final source: String = 'class C {\n\tfunction a():Int {\n\t\treturn 1;\n\t}\n\n\tfunction b():Int {\n\t\treturn 1;\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction a():Int {\n\t\treturn 2;\n\t}\n\n\tfunction b():Int {\n\t\treturn 2;\n\t}\n}\n';
+		switch Patch.patchNode(source, BySelector('ClassDecl:C'), 'return 1;', 'return 2;', false, new HaxeQueryPlugin(), null, true) {
+			case Ok(text):
+				Assert.equals(expected, text);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+		// The same call without `--all` must still refuse — the flag is the only
+		// thing that lifts the uniqueness gate.
+		switch Patch.patchNode(source, BySelector('ClassDecl:C'), 'return 1;', 'return 2;', false, new HaxeQueryPlugin()) {
+			case Ok(_):
+				Assert.fail('expected Err for a repeated fragment without --all');
+			case Err(message):
+				Assert.isTrue(message.indexOf('--all') != -1, 'the refusal should point at --all, got: $message');
+		}
+	}
+
 	private function assertManyRefused(source: String, pairs: Array<{ oldText: String, newText: String }>): Void {
 		switch Patch.patchNodeMany(source, BySelector('FnMember:f'), pairs, false, new HaxeQueryPlugin()) {
 			case Ok(text):

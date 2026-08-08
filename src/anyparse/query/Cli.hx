@@ -2570,7 +2570,7 @@ final class Cli {
 		if (target == null) return EXIT_RUNTIME;
 
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
-		return finishEdit('patch', filePath, o.write, Patch.patchNodeMany(source, target, pairs, o.reformat, plugin, optsJson));
+		return finishEdit('patch', filePath, o.write, Patch.patchNodeMany(source, target, pairs, o.reformat, plugin, optsJson, o.all));
 	}
 
 	/**
@@ -10598,6 +10598,7 @@ final class Cli {
 		var nth: Null<Int> = null;
 		var kind: Null<String> = null;
 		var sep: String = '====';
+		var all: Bool = false;
 		var file: Null<String> = null;
 		var payload: Null<String> = null;
 		var fromFile: Null<String> = null;
@@ -10626,6 +10627,8 @@ final class Cli {
 					write = true;
 				case '--reformat':
 					reformat = true;
+				case '--all':
+					all = true;
 				case '-h', '--help':
 					printPatchUsage();
 					return patchParseExit(EXIT_OK);
@@ -10655,6 +10658,7 @@ final class Cli {
 			nth: nth,
 			kind: kind,
 			sep: sep,
+			all: all,
 			file: file,
 			payload: payload,
 			fromFile: fromFile,
@@ -10673,6 +10677,7 @@ final class Cli {
 			nth: null,
 			kind: null,
 			sep: '====',
+			all: false,
 			file: null,
 			payload: null,
 			fromFile: null,
@@ -10682,12 +10687,13 @@ final class Cli {
 
 	private static function printPatchUsage(): Void {
 		sysPrint(
-			"Usage: apq patch <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) (- | --from-file <path>) [--sep <marker>] [--reformat] [--write]\n"
+			"Usage: apq patch <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) (- | --from-file <path>) [--sep <marker>] [--all] [--reformat] [--write]\n"
 		);
 		printSelectorAddressingOptions();
 		sysPrint('  --kind <Kind>       With --at: narrow; with --select / --match: LIFT\n');
 		sysPrint('  --sep <marker>      Separator line between the fragments (default: ====)\n');
 		sysPrint('  --from-file <path>  Read the payload from a file instead of stdin\n');
+		sysPrint('  --all               Rewrite EVERY occurrence of each old fragment, not just a unique one\n');
 		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
 		printWriteLangHelp();
 		sysPrint('Replace ONE unique fragment inside the addressed node without resending\n');
@@ -10701,7 +10707,9 @@ final class Cli {
 		sysPrint('  EOF\n');
 		sysPrint('\n');
 		sysPrint('Copy the old fragment VERBATIM from `apq source --select` — it must occur\n');
-		sysPrint('exactly once within the resolved node (widen it until unique); a multi-line\n');
+		sysPrint('exactly once within the resolved node (widen it until unique, or pass --all\n');
+		sysPrint('to rewrite every occurrence — for a fan-out you mean, such as the same arm\n');
+		sysPrint('added to every switch that lists a sister enum ctor); a multi-line\n');
 		sysPrint('fragment is matched with per-line indentation ignored, so the dedented\n');
 		sysPrint('`apq source --select` output works as-is. SEVERAL pairs may be applied in\n');
 		sysPrint('one call: alternate old / new sections (an even count) — old1 ==== new1\n');
@@ -15370,6 +15378,9 @@ typedef PatchOpts = {
 	var nth: Null<Int>;
 	var kind: Null<String>;
 	var sep: String;
+
+	/** Rewrite EVERY occurrence of each old fragment instead of demanding a unique one. */
+	var all: Bool;
 	var file: Null<String>;
 	var payload: Null<String>;
 	var fromFile: Null<String>;
