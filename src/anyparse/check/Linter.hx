@@ -126,6 +126,12 @@ final class Linter {
 			// The ADD half of the same brace policy: `prefer-lambda-expression-body` refuses exactly
 			// the branching bodies this one re-braces, so the pair reaches a fixpoint.
 			new LambdaBranchingBodyBlock(),
+			// Disjoint from both arrow rules above: they own a literal that is a DIRECT call argument,
+			// this one owns a literal bound to a local — an assignment / declaration node always sits
+			// between. Registered after `join-declaration-assignment`, which claims the adjacent
+			// `var f; f = function(){};` pair first; this rule's overlapping edits are then deferred one
+			// fixed-point pass and land on the joined `var f = function(){};` form.
+			new PreferLocalFunction(),
 			new RedundantMapIterKey(),
 			new UnusedParameter(),
 			new SwallowedException(),

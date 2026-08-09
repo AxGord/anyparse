@@ -523,6 +523,7 @@ import unit.HxDeclHeaderEqBreakOverflowTest;
 import unit.ResolutionLibraryCacheTest;
 import unit.PreferSafeNavComparisonCheckTest;
 import unit.PreferArrowCallbackCheckTest;
+import unit.PreferLocalFunctionCheckTest;
 import unit.GuardReturnCheckTest;
 import unit.NoUnderscorePrefixCheckTest;
 import unit.ImportBlockOrderCheckTest;
@@ -1132,6 +1133,7 @@ class RunTests {
 		addCase(new PreferIndexAccessCheckTest());
 		addCase(new PreferArrayLiteralCheckTest());
 		addCase(new PreferArrowCallbackCheckTest());
+		addCase(new PreferLocalFunctionCheckTest());
 		addCase(new NoUnderscorePrefixCheckTest());
 		addCase(new ImportBlockOrderCheckTest());
 		addCase(new RedundantImportCheckTest());

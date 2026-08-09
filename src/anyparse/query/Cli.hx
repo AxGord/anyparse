@@ -1221,14 +1221,14 @@ final class Cli {
 		// writer-emit ops discover; a single-config project resolves the same config
 		// for every file, so behaviour there is unchanged.
 		final configByDir: Map<String, LintConfig> = [];
-		final resolveConfig: (String) -> LintConfig = function(file: String): LintConfig {
+		function resolveConfig(file: String): LintConfig {
 			final dir: String = haxe.io.Path.directory(file);
 			final cached: Null<LintConfig> = configByDir[dir];
 			if (cached != null) return cached;
 			final discovered: LintConfig = LintConfig.discover(file);
 			configByDir[dir] = discovered;
 			return discovered;
-		};
+		}
 		// An explicit --rule selection bypasses `enabled:false` (existing semantics);
 		// otherwise a check runs when it is enabled for at least one file, and
 		// `Linter.run` drops its findings on the files that disable it.

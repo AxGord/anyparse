@@ -387,7 +387,7 @@ class ExplicitLocalTypeCheckTest extends Test {
 		Assert.notNull(Linter.byId('explicit-local-type'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.isTrue(ids.contains('explicit-local-type'));
-		Assert.equals(149, Linter.builtins().length);
+		Assert.equals(150, Linter.builtins().length);
 	}
 
 	public function testSkipParseNoCrash(): Void {
@@ -491,7 +491,7 @@ class ExplicitLocalTypeCheckTest extends Test {
 	}
 
 	private function runGated(source: String, json: String, applyEnablement: Bool): Array<Violation> {
-		final resolver: (String) -> LintConfig = function(file: String): LintConfig return LintConfig.parse(json);
+		function resolver(file: String): LintConfig return LintConfig.parse(json);
 		return Linter.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin(), [new ExplicitLocalType()], resolver, applyEnablement);
 	}
 

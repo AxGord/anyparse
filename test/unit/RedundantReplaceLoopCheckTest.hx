@@ -639,7 +639,7 @@ class RedundantReplaceLoopCheckTest extends Test {
 	}
 
 	private function runGated(source: String, json: String, applyEnablement: Bool): Array<Violation> {
-		final resolver: (String) -> LintConfig = function(file: String): LintConfig return LintConfig.parse(json);
+		function resolver(file: String): LintConfig return LintConfig.parse(json);
 		return Linter.run(
 			[{ file: 'C.hx', source: source }], new HaxeQueryPlugin(), [new RedundantReplaceLoop()], resolver, applyEnablement
 		);
