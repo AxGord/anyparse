@@ -307,6 +307,58 @@ class AddElementSliceTest extends Test {
 		}
 	}
 
+	/**
+	 * A brace-less `if` body GAINS braces and the new statement lands INSIDE it. Without the
+	 * wrap the splice puts the statement after the whole `if`, where it runs unconditionally —
+	 * source that parses and compiles, so nothing downstream catches it.
+	 */
+	public function testBraceLessIfBodyGainsBraces(): Void {
+		final source: String = 'class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c) a();\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c) {\n\t\t\ta();\n\t\t\tb();\n\t\t}\n\t}\n}\n';
+		assertAdd(source, 3, 10, After, 'b();', false, expected);
+	}
+
+	/** The same slot from the other side — the new statement goes first, inside the new braces. */
+	public function testBraceLessIfBodyGainsBracesBefore(): Void {
+		final source: String = 'class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c) a();\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c) {\n\t\t\tb();\n\t\t\ta();\n\t\t}\n\t}\n}\n';
+		assertAdd(source, 3, 10, Before, 'b();', false, expected);
+	}
+
+	/** A brace-less `else` body gains braces the same way — the `if` branch is untouched. */
+	public function testBraceLessElseBodyGainsBraces(): Void {
+		final source: String = 'class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c) a();\n\t\telse b();\n\t}\n}\n';
+		final expected: String =
+			'class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c) a();\n\t\telse {\n\t\t\tb();\n\t\t\td();\n\t\t}\n\t}\n}\n';
+		assertAdd(source, 4, 8, After, 'd();', false, expected);
+	}
+
+	/** A brace-less loop body gains braces — the condition/subject child is never the target. */
+	public function testBraceLessLoopBodyGainsBraces(): Void {
+		final source: String = 'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\tfor (x in xs) a(x);\n\t}\n}\n';
+		final expected: String =
+			'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\tfor (x in xs) {\n\t\t\ta(x);\n\t\t\tb(x);\n\t\t}\n\t}\n}\n';
+		assertAdd(source, 3, 17, After, 'b(x);', false, expected);
+	}
+
+	/**
+	 * An arrow lambda's EXPRESSION body gains braces, and the held expression gains the `;` a
+	 * block needs (`terminated`). Note the value move this implies: the block's value is now
+	 * `b()`, where the expression body's was `a()` — `--before` is the value-preserving side.
+	 */
+	public function testLambdaExpressionBodyGainsBraces(): Void {
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\trun(() -> a());\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\trun(() -> {\n\t\t\ta();\n\t\t\tb();\n\t\t});\n\t}\n}\n';
+		assertAdd(source, 3, 13, After, 'b();', false, expected);
+	}
+
+	/** GUARD: a body that ALREADY has braces takes the ordinary sibling path, unchanged. */
+	public function testBracedIfBodyKeepsOneBlock(): Void {
+		final source: String = 'class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c) {\n\t\t\ta();\n\t\t}\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c) {\n\t\t\ta();\n\t\t\tb();\n\t\t}\n\t}\n}\n';
+		assertAdd(source, 4, 4, After, 'b();', false, expected);
+	}
+
 	private function assertAdd(
 		source: String, line: Int, col: Int, side: InsertSide, code: String, reformat: Bool, expected: String
 	): Void {

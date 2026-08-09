@@ -25,7 +25,7 @@ package anyparse.format;
  * SAFETY GATES (a wrong drop changes semantics — every gate fails
  * CLOSED, i.e. keeps the braces):
  *  1. Exactly one statement in the block.
- *  2. No comment in a brace-owned slot the bare statement cannot carry: block `openTrailing` / `closeTrailing` / `trailingLeading` slots, element `leadingComments`. A same-line element `trailingComment` is the exception - it travels with the de-braced statement (hoisted by the writer via `hoistTrailingComment`), so it no longer keeps the braces.
+ *  2. No comment in a brace-owned slot the bare statement cannot carry: block `closeTrailing` / `trailingLeading` slots, element `leadingComments`. TWO slots are exceptions, and both travel with the de-braced statement through `hoistTrailingComment`: a same-line element `trailingComment`, and the block's `openTrailing` comment - the one written on the `{` line (`} else { // Call error handlers`), which folds after the bare statement's `;` (`else\n\ttokenError(); // Call error handlers`). The fold site is ONE slot, so the two exceptions are mutually exclusive: a block carrying both keeps its braces. Folding after the statement rather than onto the header line is deliberate - a de-braced body may GLUE to its header (`if (c) f();`), and a comment placed there would comment the statement out.
  *  3. The inner statement must self-terminate when written standalone:
  *     `ReturnStmt` / `ExprStmt` (and the other `@:trailOpt(';')`
  *     kinds) qualify only when their own `trailPresent` is true —
@@ -226,7 +226,9 @@ class SingleStmtBraces {
 		body: Dynamic, drop: Bool, suppress: Bool, elseFollows: Bool, hasTrailingSemi: Bool, siblingKeepsBraces: Bool, isIfThenBody: Bool
 	): Null<String> {
 		final elem: Null<Dynamic> = deBracedElem(body, drop, suppress, elseFollows, hasTrailingSemi, siblingKeepsBraces, isIfThenBody);
-		return elem == null ? null : elem.trailingComment;
+		if (elem == null) return null;
+		final own: Null<String> = elem.trailingComment;
+		return own != null ? own : openTrailingOf(body);
 	}
 
 	/**
@@ -490,7 +492,6 @@ class SingleStmtBraces {
 		final stmts: Null<Array<Dynamic>> = ps[0];
 		if (stmts == null || stmts.length != 1) return null;
 		if (ps[1] != null) return null; // closeTrailing comment before `}`
-		if (ps[2] != null) return null; // openTrailing comment after `{`
 		final trailingLeading: Null<Array<Dynamic>> = ps[4];
 		if (trailingLeading != null && trailingLeading.length > 0) return null; // own-line comments before `}`
 		if (ps[5] == true) return null; // stray trailing `;` owned by the Star
@@ -499,6 +500,10 @@ class SingleStmtBraces {
 		final leading: Null<Array<Dynamic>> = elem.leadingComments;
 		if (leading != null && leading.length > 0) return null;
 		if (!allowTrailingComment && elem.trailingComment != null) return null;
+		// openTrailing (a comment on the `{` line) travels with the statement the same way a
+		// same-line trailing comment does — but only into an EMPTY trailing slot: the fold
+		// site is one slot, so two comments cannot both land there.
+		if (ps[2] != null && !(allowTrailingComment && elem.trailingComment == null)) return null;
 		return elem;
 	}
 
@@ -575,6 +580,22 @@ class SingleStmtBraces {
 	 * `unwrapStmt` (reads `.node`) and `hoistTrailingComment` (reads
 	 * `.trailingComment`) so the two never disagree on whether de-bracing happened.
 	 */
+	/**
+	 * The block's `openTrailing` comment — the one written on the `{` line
+	 * (`} else { // Call error handlers`) — or null when the slot is empty.
+	 *
+	 * Only ever read AFTER `deBracedElem` returned an element, i.e. after
+	 * `singleCleanElem` already accepted this slot, so the shape is known to be a
+	 * `BlockStmt` in trivia mode. The slot index is the one `singleCleanElem`
+	 * documents; keeping the read here rather than threading a second return value
+	 * out of `deBracedElem` keeps every other caller's signature untouched.
+	 */
+	private static function openTrailingOf(body: Dynamic): Null<String> {
+		if (body == null || !Reflect.isEnumValue(body)) return null;
+		final ps: Array<Dynamic> = Type.enumParameters(cast body);
+		return ps.length < 6 ? null : ps[2];
+	}
+
 	private static function deBracedElem(
 		body: Dynamic, drop: Bool, suppress: Bool, elseFollows: Bool, hasTrailingSemi: Bool, siblingKeepsBraces: Bool, isIfThenBody: Bool
 	): Null<Dynamic> {

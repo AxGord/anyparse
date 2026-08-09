@@ -1200,6 +1200,17 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// operand, nested arrow body), so it never leaves its own chain. Default
 	// `false`.
 	_arrowValueIfBlocked: Bool,
+	// omega-arrow-value-if-reflow - set on the write of a list ELEMENT that
+	// carries a captured trailing comment (`@:fmt(arrowValueIfElemTrail)` on
+	// the element's Star), so an arrow-body value-`if` chain inside that
+	// element refuses the reflow. The comment sits after the chain's LAST
+	// branch value, which is the one position no field of the `HxIfExpr` owns
+	// - the slot belongs to the enclosing list element, out of reach of both
+	// the `else`-spine walk and `_arrowValueIfBlocked`. Deliberately NOT
+	// cleared by `_setExprPosition`: the signal has to cross the call-arg
+	// frame AND the arrow-lambda body frame to reach the chain, and it is set
+	// per element, so it never spans a sibling. Default `false`.
+	_arrowValueIfElemTrailComment: Bool,
 	_classExtern: Bool,
 	_inAnonFnBody: Bool,
 	_inTypedefBody: Bool,

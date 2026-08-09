@@ -738,6 +738,7 @@ final class HaxeFormatConfigLoader {
 			_inValueIfBranch: base._inValueIfBranch,
 			_inArrowLambdaBody: base._inArrowLambdaBody,
 			_arrowValueIfBlocked: base._arrowValueIfBlocked,
+			_arrowValueIfElemTrailComment: base._arrowValueIfElemTrailComment,
 			_classExtern: base._classExtern,
 			_inAnonFnBody: base._inAnonFnBody,
 			_inTypedefBody: base._inTypedefBody,

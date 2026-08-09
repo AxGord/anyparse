@@ -196,11 +196,16 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 	 * before `else` is legal Haxe, so `if (c) f(); else g()` is the verbatim slice minus its
 	 * own terminator, not a re-assembled text.
 	 */
-	public function testIfElseKeepsTheInteriorSemicolon(): Void {
-		final es: Array<{ span: Span, text: String }> =
-			edits('class C {\n\tfunction f():Void {\n\t\tg(() -> { if (c) f(); else g2(); });\n\t}\n}');
-		Assert.equals(1, es.length);
-		Assert.equals('if (c) f(); else g2()', es[0].text);
+	public function testIfElseBodyRefusedOffTheTrailingSlot(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tg(() -> { if (c) f(); else g2(); }, onError);\n\t}\n}').length);
+	}
+
+	/**
+	 * … and accepted IN the trailing argument slot, where nothing follows the body but `)`, so
+	 * the `;`/`else`/comma run the braces separate elsewhere cannot form.
+	 */
+	public function testIfElseBodyAcceptedInTheTrailingSlot(): Void {
+		Assert.equals(1, violations('class C {\n\tfunction f():Void {\n\t\tg(() -> { if (c) f(); else g2(); });\n\t}\n}').length);
 	}
 
 	/**
@@ -216,11 +221,10 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 	}
 
 	/** A bare `switch` ends on its own `}`, which is NOT a droppable terminator — the full span is kept. */
-	public function testSwitchBodyKeepsItsClosingBrace(): Void {
-		final es: Array<{ span: Span, text: String }> =
-			edits('class C {\n\tfunction f():Void {\n\t\tg(() -> { switch v { case 1: f(); } });\n\t}\n}');
-		Assert.equals(1, es.length);
-		Assert.equals('switch v { case 1: f(); }', es[0].text);
+	public function testSwitchBodyRefused(): Void {
+		Assert.equals(
+			0, violations('class C {\n\tfunction f():Void {\n\t\tg(() -> { switch v { case 1: f(); } }, onError);\n\t}\n}').length
+		);
 	}
 
 	/** Both loop forms whose body is their LAST child end on their body's `;`, which the strip drops. */
@@ -259,11 +263,11 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 	}
 
 	/** An `else if` chain is ONE `if` statement, so it collapses whole — every link rides along in the verbatim slice. */
-	public function testIfExpressionChainPreserved(): Void {
-		final es: Array<{ span: Span, text: String }> =
-			edits('class C {\n\tfunction f():Void {\n\t\tg(() -> { if (a) x() else if (b) y() else z(); });\n\t}\n}');
-		Assert.equals(1, es.length);
-		Assert.equals('if (a) x() else if (b) y() else z()', es[0].text);
+	public function testIfElseIfChainBodyRefused(): Void {
+		Assert.equals(
+			0,
+			violations('class C {\n\tfunction f():Void {\n\t\tg(() -> { if (a) x() else if (b) y() else z(); }, onError);\n\t}\n}').length
+		);
 	}
 
 	/**
@@ -286,8 +290,7 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 	 */
 	public function testUnshieldedPositionWithoutElseLessConditionalFlagged(): Void {
 		Assert.equals(
-			1,
-			violations('class C {\n\tfunction f():Void {\n\t\tif (x) cb = () -> { switch v { case 1: g(); } }; else h();\n\t}\n}').length
+			1, violations('class C {\n\tfunction f():Void {\n\t\tif (x) cb = () -> { for (i in xs) g(i); }; else h();\n\t}\n}').length
 		);
 	}
 
@@ -408,27 +411,27 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 	}
 
 	/**
-	 * SYMPTOM (b), ORPHAN ARROW. The body is too wide for the head line, so the writer wraps
-	 * right after the `->`: the head loses its `{`, the body stays one line down and the closing
-	 * `});` degrades to a bare `);`. Nothing is gained — line-neutral at 9 lines either way, head
-	 * two characters shorter (40 -> 38) — and clause 1 refuses it. This is the shape that makes
-	 * clause 1 strictly-shrink rather than shrink-or-hold.
+	 * DE-BRACE IN PLACE. The body is too wide for the head line, so it stays one line down and
+	 * the collapse removes exactly the braces: the head loses its ` {`, the closing `});`
+	 * becomes `);`, and no interior line moves — line-neutral at 9 lines either way, head two
+	 * characters shorter (40 -> 38). Clause 2 accepts it: a one-statement body carries no
+	 * braces under the brace policy, and saving a line was never the point. Recorded here as
+	 * the shape that used to be refused for being line-neutral.
 	 */
-	public function testOrphanArrowRefused(): Void {
+	public function testOrphanArrowDeBracesInPlace(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\titemData.forEachChild(childItemData -> {\n'
 			+ '\t\t\tcollectedEntries.push(new EntryDescriptor(childItemData.identifier, childItemData.displayName,'
 			+ ' childItemData.sortIndex));\n\t\t});\n\t}\n}';
-		Assert.equals(0, violations(src).length);
+		Assert.equals(1, violations(src).length);
 	}
 
 	/**
-	 * THE CLAUSE-2 PIN. Structurally the orphan arrow above, with a blank line on each side of
-	 * the statement inside the block. The braces take those blanks with them, so the collapse
-	 * SHRINKS the file — 11 rendered lines to 9 — on the author's blank lines alone, and clause 1
-	 * is satisfied. The head still degrades exactly as the plain orphan arrow's does (40 -> 38
-	 * trimmed), so clause 2 is the only thing that refuses this site. Every OTHER refusal fixture
-	 * here is line-neutral, which short-circuits clause 1 before clause 2 can run — delete clause
-	 * 2 and this is the one test that flips.
+	 * THE BLANK-LINE CASE, refused. Structurally the de-brace above, with a blank line on each
+	 * side of the statement inside the block. The braces take those blanks with them, so the
+	 * collapse shrinks the file (11 rendered lines to 9) on the author's blank lines alone — and
+	 * `interiorSurvives` refuses exactly that: the region changed by more than the two brace
+	 * tokens. It was accepted while the check only looked at the head line, which is the residual
+	 * the interior test closes.
 	 */
 	public function testOrphanArrowWithBlankLinesRefused(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\titemData.forEachChild(childItemData -> {\n\n'
@@ -438,17 +441,19 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 	}
 
 	/**
-	 * SYMPTOM (c), MULTI-LINE CONDITION HOISTED INTO THE ARROW HEAD. The collapsed `if`'s
-	 * condition is itself wrapped, so the head line grows — clause 2 is HAPPY here — but the
-	 * construct as a whole gains nothing: the wrapped condition now lives inside the lambda
-	 * head. Line-neutral, so clause 1 is what refuses it. The pair of clauses is what separates
-	 * this from a real win; neither alone does.
+	 * THE CONSTRUCT BODY. A block-bodied `if` whose condition is itself too wide for one line.
+	 * This used to be refused for two reasons at once: the collapse was line-neutral, and the
+	 * writer hoisted the wrapped condition into the arrow head. The writer no longer does that
+	 * (`BodyFit.arrowConstructHeadWidth` moves the body to the continuation line), so what is
+	 * left is a plain de-brace — 11 lines either way, head shortened by its ` {` and nothing
+	 * else — and clause 2 accepts it. The real-tree site this fixture was drawn from is the one
+	 * the whole slice exists for.
 	 */
-	public function testWrappedConditionHoistedIntoTheHeadRefused(): Void {
+	public function testWrappedConditionConstructBodyDeBracesInPlace(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tsession.forEachShare(sessionUser -> {\n'
 			+ '\t\t\tif (sessionUser.isActive && !collectedResults.exists(candidate -> candidate.identifier == sessionUser.identifier)) {\n'
 			+ '\t\t\t\tcollectedResults.push(sessionUser);\n\t\t\t}\n\t\t});\n\t}\n}';
-		Assert.equals(0, violations(src).length);
+		Assert.equals(1, violations(src).length);
 	}
 
 	/**
@@ -468,6 +473,52 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 		final src: String =
 			'class C {\n\tfunction f():Void {\n\t\tmoves.sort((a, b) -> {\n\t\t\treturn a.path < b.path ? -1 : 1;\n\t\t});\n\t}\n}';
 		Assert.equals(1, violations(src).length);
+	}
+
+	/**
+	 * A comment TRAILING the single statement is appended after the emitted body instead of
+	 * refusing the site — the gap between them is the statement's own terminator, which
+	 * `emittedEnd` strips because a `;` before the enclosing `)` does not parse.
+	 */
+	public function testTrailingCommentIsAppendedNotDropped(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class C {\n\tfunction f():Void {\n\t\twaitToken(success -> {\n\t\t\tif (success) doRequest(); // handlers\n\t\t});\n\t}\n}'
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('if (success) doRequest() // handlers\n', es[0].text);
+	}
+
+	/**
+	 * GUARD: the appended comment carries a NEWLINE. Without it the enclosing `)` would follow a
+	 * `//` comment on one line and the collapsed source would not parse — `renderedLines` would
+	 * fold to null and the site would be refused with no diagnostic, which is how this was found.
+	 */
+	public function testAppendedTrailingCommentEndsWithABreak(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class C {\n\tfunction f():Void {\n\t\twaitToken(success -> {\n\t\t\tif (success) doRequest(); // handlers\n\t\t});\n\t}\n}'
+		);
+		Assert.equals(1, es.length);
+		Assert.isTrue(StringTools.endsWith(es[0].text, '\n'));
+	}
+
+	/** GUARD: a comment BETWEEN two statements is not a trailing one — the site still refuses. */
+	public function testInteriorCommentStillRefuses(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tg(() -> {\n\t\t\t// why\n\t\t\tf();\n\t\t});\n\t}\n}').length);
+	}
+
+	/**
+	 * The de-brace strips the emitted body's own `;`, and a trailing comment rides along with
+	 * it - the last interior line reads `tokenError(); // handlers` before and
+	 * `tokenError() // handlers` after. Comparing that line modulo a `;` at the LINE end
+	 * instead of at the CODE end refused every multi-line body documented this way.
+	 */
+	public function testTrailingCommentOnTheLastInteriorLineStillCollapses(): Void {
+		Assert.equals(
+			1,
+			violations(
+				'class C {\n\tfunction f():Void {\n\t\twaitToken(success -> {\n\t\t\tif (success)\n\t\t\t\tdoRequest();\n\t\t\telse\n\t\t\t\ttokenError(); // handlers\n\t\t});\n\t}\n}'
+			).length
+		);
 	}
 
 	private function violations(src: String): Array<Violation> {

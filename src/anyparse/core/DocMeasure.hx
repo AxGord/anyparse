@@ -51,6 +51,78 @@ final class DocMeasure {
 	}
 
 	/**
+	 * The width of `d`'s first line if every SOFT break in it stayed flat, counting through a
+	 * `BodyGroup` (ω-arrowif-blockbody-width).
+	 *
+	 * A third measure is needed because the two that exist answer different questions, and a
+	 * construct whose body is a `{}`-block falls between them:
+	 *
+	 * - `flatTokenWidth` / `Renderer.flatTokenWidthFirstLine` DEFER a `BodyGroup` to width 0,
+	 *   so a plain `if` (no `else`) reports 4 columns — `if (` and nothing more — because its
+	 *   condition and body live inside the construct-level `BodyGroup` that
+	 *   `WriterLowering`'s cond-fit group emits. Measured on a real site: 4, against 93 for
+	 *   the same shape written as a `for`, whose header is not grouped that way.
+	 * - `Renderer.naturalFirstLineWidth` walks INTO a `BodyGroup`, but it resolves each soft
+	 *   break by the renderer's own decision at the running column — so for an over-wide
+	 *   condition it reports the width up to the break the renderer will take (measured: 46
+	 *   for a 110-column head that wraps at its `&&`). That is the right answer to "will the
+	 *   glued line overflow" and the wrong one to "would gluing force this construct's own
+	 *   head to wrap", which is what the arrow-body glue needs to know.
+	 *
+	 * So: descend everything (including `BodyGroup`), take each probe's FLAT side, count soft
+	 * separators at their flat width, and stop at the first FORCED break — which for a
+	 * construct with a block body is the hardline right after its `{`. The result is the
+	 * construct's own head width, independent of the column it lands on, hence computable at
+	 * emit time.
+	 *
+	 * Not a copy of `Renderer.flatFirstLineStep` with a flag: that walk is a
+	 * `{ add, aborted }` step shared by two other Renderer walks whose contract keeps the
+	 * `BodyGroup` deferral, and this question is a different one rather than a mode of theirs.
+	 */
+	public static function flatFirstLineWidthThroughBodyGroup(d: Doc): Int {
+		final stack: Array<Doc> = [d];
+		var total: Int = 0;
+		while (stack.length > 0) {
+			final node: Doc = stack.pop();
+			switch (node) {
+				case Text(s) | OptSpace(s):
+					total += s.length;
+				case OptSpaceSkipAfterHardline:
+					total++;
+				case Line(flat):
+					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return total;
+					total += flat.length;
+				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+					return total;
+				case Empty:
+				case Concat(items):
+					var i: Int = items.length;
+					while (--i >= 0) stack.push(items[i]);
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
+					var k: Int = items.length;
+					while (k > 0) {
+						k--;
+						stack.push(items[k]);
+						if (k > 0) stack.push(sep);
+					}
+				case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner) | IfBreak(_, inner) | IfWidthExceeds(
+					_, _, inner
+				) | IfFirstLineExceeds(_, _, inner) | IfLineExceeds(_, _, inner) | IfResidualLineExceeds(_, _, inner) | IfFullLineExceeds(
+					_, _, inner
+				) | IfNaturalFirstLineExceeds(_, _, inner) | IfNaturalFirstLineExceedsWithRest(_, _, inner) | IfNaturalFirstLineFitsOpenDelim(
+					_, _, inner
+				) | IfArrowContinuationFits(_, _, _, _, inner) | IfIndentWidthExceeds(_, _, _, inner) | IfGluedFirstLineExceeds(
+					_, _, _, inner
+				) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(
+					inner
+				) | CollapseChainProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
+					stack.push(inner);
+			}
+		}
+		return total;
+	}
+
+	/**
 	 * The leading token run that precedes `d`'s FIRST break opportunity —
 	 * what the renderer keeps on the CURRENT line once `d`'s own outermost
 	 * wrap fires (`new Foo(` for a call whose arguments leading-break).

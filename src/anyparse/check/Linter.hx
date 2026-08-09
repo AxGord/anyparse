@@ -123,6 +123,9 @@ final class Linter {
 			// After `prefer-arrow-callback`, which normalises a `function` literal into the
 			// arrow form this check then collapses — composed across fixed-point passes.
 			new PreferLambdaExpressionBody(),
+			// The ADD half of the same brace policy: `prefer-lambda-expression-body` refuses exactly
+			// the branching bodies this one re-braces, so the pair reaches a fixpoint.
+			new LambdaBranchingBodyBlock(),
 			new RedundantMapIterKey(),
 			new UnusedParameter(),
 			new SwallowedException(),

@@ -1,5 +1,9 @@
 package anyparse.query;
 
+import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.GrammarPlugin;
+import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -56,6 +60,17 @@ enum InsertSide {
  * for any multi-element list). A single-element list of an unenumerated
  * comma kind can't be told from a block and falls back to the newline
  * form — the re-parse gate then refuses it rather than corrupt the file.
+ *
+ * ## The brace-less body slot
+ *
+ * One slot is not a list at all: the sole statement of an `if` / `else` / loop body or an
+ * arrow lambda's expression body, written without `{ }`. It holds exactly ONE statement by
+ * construction, so there is no sibling position in it, and the separator logic above would
+ * splice the new element AFTER the whole construct — where it runs unconditionally, in source
+ * that parses and compiles. `braceLessBodySlot` detects that case and the slot gains braces
+ * instead, with both statements inside. The addressing carries the intent with no flag needed:
+ * pointing at the STATEMENT means inside the body, pointing at the enclosing `if` means after
+ * the `if`.
  *
  * The op is deliberately CONTAINER-AGNOSTIC beyond the separator: it does
  * not validate that the supplied text is a valid element for the slot —
@@ -137,6 +152,17 @@ final class AddElement {
 				+ '`apq replace-node --match \'<the call>\' --kind ExprStmt` replacing the one statement with two'
 			);
 
+		// A BRACE-LESS body slot holds exactly one statement, so there is no sibling
+		// position inside it to splice into — see `braceLessBodySlot`.
+		if (!isComma && braceLessBodySlot(parent, element, plugin)) {
+			final held: String = terminated(source.substring(span.from, span.to));
+			final block: String = switch side {
+				case After: '{\n$held\n$trimmed\n}';
+				case Before: '{\n$trimmed\n$held\n}';
+			};
+			return RefactorSupport.canonicalize(source, [{ span: span, text: block }], reformat, plugin, optsJson);
+		}
+
 		final edit: { span: Span, text: String } = switch side {
 			case After:
 				{ span: new Span(span.to, span.to), text: isComma ? ', $trimmed' : '\n$trimmed' };
@@ -202,6 +228,71 @@ final class AddElement {
 		return containerSpan == null
 			? Err('the container at $line:$col has no source span')
 			: computeAppendEdit(source, line, col, containerSpan, container.kind, trimmed, reformat, plugin, optsJson);
+	}
+
+	/**
+	 * Does `element` sit in a BRACE-LESS body slot of `parent` — the sole statement of an
+	 * `if` / `else` / loop body or an arrow lambda's expression body, written without `{ }`?
+	 *
+	 * Such a slot holds exactly ONE statement by construction, so it has no sibling position
+	 * to splice into. Splicing anyway is the reason this path exists: `\n<new>` after the
+	 * element lands the new statement OUTSIDE the construct, where it runs unconditionally —
+	 * source that PARSES and compiles, so neither the re-parse gate nor a build catches it.
+	 * (On an arrow body it usually fails to parse instead, which is the same defect surfacing
+	 * loudly rather than quietly.) The slot has to gain braces first, which is what the
+	 * caller does when this returns true.
+	 *
+	 * The addressing already carries the intent and needs no flag: pointing at the STATEMENT
+	 * means "next to this statement", i.e. inside the body; pointing at the enclosing `if`
+	 * means "next to the if". Only the first reaches here.
+	 *
+	 * WHICH child is the body is answered per family, because the two disagree:
+	 *
+	 * - a LAMBDA's body is its last child, whatever its parameters are, so the test is
+	 *   last-child. `() -> doThing()` has the body at index 0 and still qualifies.
+	 * - a CONTROL-FLOW construct puts its condition / subject FIRST, so the test is
+	 *   index > 0. That also refuses `do body while (c)`, whose body IS at index 0 — a
+	 *   fail-closed miss (the caller gets the old sibling splice) rather than a wrap that
+	 *   might land around a condition.
+	 *
+	 * An element that is ALREADY a block is not in a brace-less slot, so it takes the
+	 * ordinary sibling path — as does every element whose parent is a block, a comma
+	 * container, or any kind the grammar's seams do not describe. Every seam is optional:
+	 * a grammar that declares none makes this function constantly false and the op behaves
+	 * exactly as it did before.
+	 */
+	/**
+	 * The held body text as a STATEMENT, for splicing into the block that is about to wrap it.
+	 *
+	 * An arrow lambda's expression body carries no terminator of its own (`() -> doOne()`), and
+	 * a block wants one; a statement body already has its `;`, and a body that is itself a
+	 * braced construct (`if (c) { … }` as an `else` body) ends on `}` and needs none.
+	 *
+	 * HAZARD this does not fix, and cannot: a block's value is its LAST expression, so wrapping
+	 * an expression body and appending after it moves the lambda's value to the NEW statement.
+	 * `() -> compute()` returns `compute()`; `() -> { compute(); log(); }` returns `log()`.
+	 * Inserting BEFORE keeps the value where it was. Nothing here can tell whether the value is
+	 * used — no types at this layer — so the caller's chosen side decides, and `--before` is the
+	 * value-preserving one.
+	 */
+	private static inline function terminated(held: String): String {
+		final trimmedHeld: String = StringTools.trim(held);
+		return StringTools.endsWith(trimmedHeld, ';') || StringTools.endsWith(trimmedHeld, '}') ? held : '$held;';
+	}
+
+	private static function braceLessBodySlot(parent: Null<QueryNode>, element: QueryNode, plugin: GrammarPlugin): Bool {
+		if (parent == null) return false;
+		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
+		if (support == null || support.blockKinds().contains(element.kind)) return false;
+		final shape: RefShape = plugin.refShape();
+		final children: Array<QueryNode> = parent.children;
+		final at: Int = children.indexOf(element);
+		if (at < 0) return false;
+		if ((shape.lambdaKinds ?? []).contains(parent.kind)) return at == children.length - 1;
+		final constructKinds: Array<String> = (
+			shape.ifStatementKinds ?? []
+		).concat(shape.ifExpressionKinds ?? []).concat(shape.loopStatementKinds ?? []);
+		return constructKinds.contains(parent.kind) && at > 0;
 	}
 
 	/**

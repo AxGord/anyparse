@@ -143,7 +143,9 @@ package anyparse.grammar.haxe.format;
  * flat-fitting chain still explodes. Wired via
  * `@:fmt(arrowValueIfReflow('expressionIfArrowBodyReflow'))` on the
  * `HxIfExpr` typedef plus `@:fmt(arrowValueIfReflowSite)` on both
- * branches. A chain carrying a comment anywhere on its `else`-spine
+ * branches. A chain carrying a comment anywhere on its `else`-spine -
+ * including one trailing its LAST branch value, whose slot belongs to
+ * that value or to the enclosing list element rather than to the `if` -
  * refuses the reflow as a WHOLE and keeps the policy-driven shape; the
  * reach is `_inArrowLambdaBody`, which also covers a `cast` operand, an
  * `untyped` / `@:meta` prefix and an enclosing value-`if`'s condition.

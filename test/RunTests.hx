@@ -596,6 +596,8 @@ import unit.HxFormatterOffTest;
 import unit.HxBlankAroundMultilineMembersTest;
 import unit.HxExprParenObjectLitGlueTest;
 import unit.HxFitLineBodyGlueSliceTest;
+import unit.HxArrowBlockIfOverflowSliceTest;
+import unit.LambdaBranchingBodyBlockCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -806,6 +808,7 @@ class RunTests {
 		addCase(new HxThinArrowTrailingLambdaSliceTest());
 		addCase(new HxThinArrowIfElseBreakSliceTest());
 		addCase(new HxArrowPlainIfOpenSliceTest());
+		addCase(new HxArrowBlockIfOverflowSliceTest());
 		addCase(new HxArrowResidualLineWrapSliceTest());
 		addCase(new HxArrowBlockBodyOpenSliceTest());
 		addCase(new DocMeasureFirstVisibleTextTest());
@@ -1152,6 +1155,7 @@ class RunTests {
 		addCase(new PreferTernaryExpressionCheckTest());
 		addCase(new PreferIfExpressionChainCheckTest());
 		addCase(new PreferLambdaExpressionBodyCheckTest());
+		addCase(new LambdaBranchingBodyBlockCheckTest());
 		addCase(new PreferTryExpressionAssignmentCheckTest());
 		addCase(new PreferTryExpressionReturnCheckTest());
 		addCase(new TryCatchNullGuardCheckTest());

@@ -1,6 +1,7 @@
 package anyparse.format;
 
 import anyparse.core.Doc;
+import anyparse.core.DocMeasure;
 import anyparse.format.wrap.WrapList;
 
 /**
@@ -102,6 +103,9 @@ final class BodyFit {
 	 * are both enumerated in `WriterLowering.caseSiblingWidthProbeExpr`'s doc.
 	 */
 	public static inline final SIBLING_FORCE_BREAK: Int = 0x0FFFFFF0;
+
+	/** `arrowConstructHeadWidth`'s answer for a body with no construct head of its own. */
+	private static inline final NO_CONSTRUCT_HEAD: Int = -1;
 
 	/**
 	 * Build the `FitLine` placement Doc for `body` under a header rendered at
@@ -246,6 +250,74 @@ final class BodyFit {
 	 */
 	public static function glueLayout(cols: Int, body: Doc, glued: Doc, lineWidth: Int): Doc {
 		return lineWidth <= 0 ? glued : Doc.IfGluedFirstLineExceeds(lineWidth, cols, breakLayout(cols, body), glued);
+	}
+
+	/**
+	 * The width of the construct head an arrow-lambda body leads with, or `NO_CONSTRUCT_HEAD`
+	 * when it has none (omega-arrowif-blockbody-width).
+	 *
+	 * The `@:fmt(arrowBodyLineWrap)` marker already carries a break-after-`->` layout and a
+	 * render-time probe to reach it, but that probe measures FLAT WIDTH, and one construct shape
+	 * is invisible to every flat measure: a plain `if` (no `else`) whose body is a `{}`-block.
+	 * Its condition and body sit inside the construct-level `BodyGroup` that `WriterLowering`s
+	 * cond-fit group emits, and `DocMeasure.flatTokenWidthStep` defers a `BodyGroup` to width
+	 * 0 — measured, the whole `if (…) { … }` reports 4 columns (`if (`) where the same shape
+	 * written as a `for` reports 93. So the probe can never fire for it: the body glues to the
+	 * header line however wide its own head is, and the `if`s condition then breaks INSIDE the
+	 * arrow head, leaving a first line that ends on a bare `if (`.
+	 *
+	 * `HxArrowPlainIfOpenSliceTest`s re-tag closes the same blindness for a HARDLINE-FREE body
+	 * by re-tagging its `BodyGroup` as a `Group`; a block body carries hardlines, so re-tagging
+	 * it would change the render, not just the measure. Making the width visible to the CALL
+	 * cascade instead is the other wrong answer: the call then opens and the body moves twice,
+	 * which relocates the overflow rather than removing it. What is left is to hand the markers
+	 * own probe an honest width — see `arrowGlueThreshold`.
+	 *
+	 * THREE refusals, each one measured:
+	 *
+	 * - a body that CAN render flat (`flatLength != -1`) has no forced break, so its first line
+	 *   IS its whole width and the existing probe already measures it correctly;
+	 * - a `{}`-BLOCK body ends the header line by itself, so moving it down strands its brace
+	 *   and buys nothing. That population belongs to `Renderer.selfBreakingBraceBody`, which
+	 *   reads the markers FLAT side and must keep seeing exactly what it saw before — hence the
+	 *   refusal here rather than a probe the renderer would resolve;
+	 * - a body whose transparent first line is no WIDER than its flat width hides nothing behind
+	 *   a deferral, so there is no correction to make. This is what keeps the measure off
+	 *   call-bodied arrows: a call whose argument is a `{`-lambda also cannot render flat and
+	 *   also hides content behind a `BodyGroup`, but its transparent first line stops at that
+	 *   lambdas `{` and comes out SHORTER than the flat width, which counts the arguments past
+	 *   it. Without this test two such arrows in a real 800-file tree re-glued shapes that had
+	 *   been correctly broken (an `API…post(…).success(…)` chain and a
+	 *   `haxe.Timer.delay(() -> { … }, …)`); with it, neither file moves.
+	 */
+	public static function arrowConstructHeadWidth(body: Doc): Int {
+		if (WrapList.flatLength(body) != -1) return NO_CONSTRUCT_HEAD;
+		if (DocMeasure.firstVisibleTextStartsWith(body, '{'.code) && DocMeasure.hasForcedBreak(body)) return NO_CONSTRUCT_HEAD;
+		final head: Int = DocMeasure.flatFirstLineWidthThroughBodyGroup(body);
+		return head > DocMeasure.flatTokenWidth(body) ? head : NO_CONSTRUCT_HEAD;
+	}
+
+	/**
+	 * The `n` the arrow-body markers `IfResidualLineExceeds` must be given so that its
+	 * `col + flatTokenWidth(body) + rest >= n` test measures the bodys CONSTRUCT HEAD instead of
+	 * the width the `BodyGroup` deferral hid from it.
+	 *
+	 * The probes own arithmetic is right — it is the only place that knows the pen column the
+	 * body would glue to, and its rest-of-stack term is load-bearing. Only the width is wrong.
+	 * Both the honest head width and the width the probe WILL measure are static, column-
+	 * independent quantities, so their difference folds into the threshold at emit time:
+	 * `col + flat + rest >= lineWidth - (head - flat)` is exactly `col + head + rest >=
+	 * lineWidth`.
+	 *
+	 * The correction is one-directional by construction: `arrowConstructHeadWidth` returns a
+	 * head only when it EXCEEDS the flat width, so the threshold can only come DOWN, and the
+	 * probe can only start firing where it was blind — never stop firing where it already
+	 * worked. Without a head there is nothing to correct and `lineWidth` comes back unchanged,
+	 * which keeps every other arrow bodys probe byte-identical.
+	 */
+	public static function arrowGlueThreshold(body: Doc, lineWidth: Int): Int {
+		final head: Int = arrowConstructHeadWidth(body);
+		return head == NO_CONSTRUCT_HEAD ? lineWidth : lineWidth - (head - DocMeasure.flatTokenWidth(body));
 	}
 
 	/**

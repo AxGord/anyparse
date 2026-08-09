@@ -40,12 +40,15 @@ import haxe.Exception;
  *   from the set, so it never matches: `(…) -> return;` is not an expression body; or
  * - a single expression statement (`exprStatementKind`) with exactly one child — the
  *   expression becomes the body; or
- * - a CONTROL-FLOW statement (`controlFlowKinds`: `if` with or without `else`, `switch`,
- *   `for`, `while`, `throw`) — the statement itself becomes the body, minus its own
- *   terminator. Each of these is an EXPRESSION in Haxe, so the collapse preserves the
- *   block's value exactly as the two arms above do (see below). This arm is checked FIRST:
- *   an `if` / `for` / `while` node carries two or more children and would otherwise be
- *   rejected by the single-child arity guard the other two arms share.
+ * - a SINGLE-ARM control-flow statement (`controlFlowKinds` minus what
+ *   `branchesInternally` refuses: an else-less `if`, a `for`, a `while`, a `throw`) — the
+ *   statement itself becomes the body, minus its own terminator. Each of these is an
+ *   EXPRESSION in Haxe, so the collapse preserves the block's value exactly as the two arms
+ *   above do (see below). This arm is checked FIRST: an `if` / `for` / `while` node carries
+ *   two or more children and would otherwise be rejected by the single-child arity guard the
+ *   other two arms share. A body that branches INTERNALLY — an `if` with an `else`, a
+ *   `switch` — keeps its braces; `branchesInternally` states why, and
+ *   `LambdaBranchingBodyBlock` puts them back when they are missing.
  *
  * Anything else — a local declaration, a `do … while`, a value-less `return;`, a `break`,
  * a `continue`, two statements, an empty body — is left alone. A `#if` region does NOT
@@ -89,8 +92,11 @@ import haxe.Exception;
  * So the collapse never needs to know the enclosing expected type — the same reason the
  * two original arms do not.
  *
- * A comment anywhere inside the block but outside the copied expression is dropped by the
- * rebuild (the braces, the `return` keyword and the `;` all go away), so the finding is
+ * A comment TRAILING the single statement rides along — `trailingComment` appends it after the
+ * emitted body, since the gap between the two is the terminator `emittedEnd` strips. Its
+ * position relative to that terminator therefore changes: `tokenError(); // handlers` becomes
+ * `tokenError() // handlers`. Any OTHER comment anywhere inside the block but outside the copied
+ * expression is dropped by the rebuild (the braces, the `return` keyword and the `;` all go away), so the finding is
  * skipped rather than silently losing it — the family's fail-closed comment guard. A
  * comment INSIDE the expression rides along and the site still fires. That holds on the
  * control-flow arm unchanged: a comment trailing the statement is outside the kept span
@@ -213,52 +219,61 @@ import haxe.Exception;
  *
  * Structural collapsibility is not enough. The collapse changes how the ENCLOSING construct
  * wraps, and nothing in the tree says whether the result reads better. Applied to a real
- * 800-file tree 29 sites matched structurally and 17 of them came out no better or materially
- * WORSE, in three distinct shapes — all layout, none visible to any gate above:
+ * 800-file tree, two shapes came out materially WORSE — all layout, none visible to any gate
+ * above:
  *
  * - ARG-LIST EXPLOSION. The collapsed head line stops fitting, so the writer breaks the
  *   enclosing CALL apart: `Api.login(email, password, cb -> { … }, false);` becomes
- *   `Api.login(` alone on its line with the arguments re-flowed under it.
- * - ORPHAN ARROW. The body is too wide for the head line, so the writer wraps right after the
- *   `->`: the head loses its `{`, the body stays one line down, and the closing `});`
- *   degrades to a bare `);`. Nothing is gained.
- * - MULTI-LINE CONDITION HOISTED INTO THE ARROW HEAD. The collapsed `if`'s own condition is
- *   itself wrapped, so that wrap now lives inside the lambda head.
+ *   `Api.login(` alone on its line with the arguments re-flowed under it. This clause is
+ *   load-bearing on real code, not just on its suite witness: an attempt to exempt the
+ *   trailing-argument population from this whole probe (on the theory that its canonicality is
+ *   structural) re-flowed three sites in the 800-file tree — two `_thumbnailMethod(path, cb ->
+ *   …)` calls opened their argument lists and a `getFolderContentAPI().loadContent(…)` split its
+ *   method chain as well. The exemption was reverted; a site the layout probe refuses stays
+ *   braced, and the add half leaves the trailing slot alone, so the braced form is simply what
+ *   both halves agree on there.
+ * - MULTI-LINE CONDITION HOISTED INTO THE ARROW HEAD. The collapsed `if`s own condition is
+ *   itself wrapped, so that wrap lives inside the lambda head. This one is now the WRITERs
+ *   answer rather than this checks: `BodyFit.arrowConstructHeadWidth` moves such a body to
+ *   the continuation line instead of gluing it, so the shape no longer occurs and the
+ *   collapse of a construct body is a plain de-brace.
  *
- * So a site fires only when the collapse PAYS FOR ITSELF in the writer's own rendering. The
- * file goes through `writeRoundTrip` twice — as it is, and with THIS candidate's edit and
- * nothing else — and the site is accepted iff BOTH:
+ * So a site fires only when the collapse leaves the file NO LONGER than it was and changes
+ * the head line in exactly one of two ways:
  *
- * 1. the after-rendering has STRICTLY FEWER lines than the before-rendering; and
- * 2. at the FIRST line where the two diverge, the after line is LONGER once trimmed.
+ * 1. it pulls content UP onto the head line (the collapsed head is longer than the original
+ *    one) — the value arms payoff, a `return expr;` or a bare expression joining the `->`; or
+ * 2. the head loses its body brace and NOTHING else (`headOnlyLostItsBrace`) — the
+ *    de-brace-in-place shape, which is what the projects brace policy asks for whenever a
+ *    body holds a single statement: braces are a function of the statement COUNT, so a
+ *    one-statement body carries none and a body that grows past one gets them back.
  *
- * Clause 1 says the collapse must remove at least one line; clause 2 says it must pull content
- * UP onto the head line rather than push it off — exactly "the head line gains a wrap it did
- * not have", measured instead of guessed. Neither clause alone separates the sites, and each
- * has its own witness in `PreferLambdaExpressionBodyCheckTest` — every figure below measured
- * through that suite, under this project's own `hxformat.json`:
+ * Clause 2 is why this check no longer requires the collapse to SAVE a line. A construct body
+ * de-braces line-neutrally by construction — the `{` leaves the head line and the `}` leaves
+ * the closing one, and the statements in between do not move — so a strictly-shrink test
+ * refused the whole population on a criterion that says nothing about how the result reads.
+ * What it must still refuse is a collapse that reflows some OTHER construct, and that is a
+ * different measurement: the arg-list explosion also SHORTENS the head, by 46 columns
+ * (measured on `testArgListExplosionRefused`: 63 to 17) where losing a brace shortens it by
+ * exactly the two characters of ` {`. An exact string identity separates the two with no
+ * threshold to calibrate.
  *
- * - CLAUSE 1 owns all three shapes as the SUITE spells them, because all three come out
- *   line-NEUTRAL there: `testOrphanArrowRefused` renders 9 lines either way with a head two
- *   characters SHORTER (40 -> 38), `testWrappedConditionHoistedIntoTheHeadRefused` 11 either
- *   way with a head 64 characters LONGER (37 -> 101), and `testArgListExplosionRefused` 9
- *   either way with a head 46 characters shorter (63 -> 17). That is what makes clause 1
- *   strictly-shrink rather than shrink-or-hold — and on a line-neutral site it short-circuits,
- *   so clause 2 never runs at all.
- * - CLAUSE 2 owns `testOrphanArrowWithBlankLinesRefused`, the orphan arrow with a blank line on
- *   each side of the statement inside the block. The braces take those blanks with them, so the
- *   collapse SHRINKS the file (11 -> 9) on the author's blank lines alone and clause 1 is
- *   satisfied, while the head degrades exactly as the plain orphan arrow's does (40 -> 38).
- *   Nothing but clause 2 refuses it.
+ * Measured on the same 800-file tree: 3 sites fired under the strictly-shrink rule and 8
+ * under this one, and the 5 added sites are all pure de-braces — `{` off the head, `}` off
+ * the closing line, no interior line touched.
  *
- * The shape that BOUGHT clause 2 was a real-tree one, not a suite one: an arg-list explosion in
- * `fs/FileSystemBase.hx` of that 800-file tree, which shrank the file by two lines while the
- * head lost 73 characters. That observation does not reproduce — the tree is now at this rule's
- * fixpoint and holds no structural candidate — so the suite pin above is the standing witness
- * and the file-name figure is recorded here as history.
+ * The de-brace clause carries a THIRD requirement the head test cannot express:
+ * `interiorSurvives`. Removing the braces moves the body from statement position into
+ * EXPRESSION position, where this project's config glues an `if`/`else`'s branches to their
+ * conditions instead of keeping them on their own lines — so a site could pass "only a brace
+ * left the head" while four interior lines silently became two. The interior must now match
+ * line for line, modulo the one `;` the emitted body drops.
  *
- * RESIDUAL: clause 2 inspects only the FIRST divergent line, so a collapse that lengthens the
- * head while degrading a LATER line passes both clauses unmeasured.
+ * RESIDUAL: the interior test compares TRIMMED lines, so a pure re-indent inside the body is
+ * invisible to it — which is intended (the body does shift one level when its braces go). And a body whose block held
+ * blank lines around its single statement loses them with the block (measured: 11 lines to
+ * 9) — a content change the head test cannot see; the comment guard above covers comments,
+ * blank lines are accepted as part of what de-bracing means here.
  *
  * Why the WHOLE FILE rather than a spliced-out statement: the collapse is the only edit, so
  * the file-level line delta IS the enclosing statement's line delta, and the first divergent
@@ -337,6 +352,20 @@ final class PreferLambdaExpressionBody implements Check {
 	/** A collapsible body block holds exactly one statement. */
 	private static inline final SINGLE_STATEMENT: Int = 1;
 
+	/**
+	 * What the block body contributes to the lambda's head line, and therefore the ONLY
+	 * difference the collapse may make to it — see `paysForItself`.
+	 */
+	private static inline final BODY_BRACE_TAIL: String = ' {';
+
+	/** The closing brace the de-brace deletes from the block's last line — see `interiorSurvives`. */
+	private static inline final BLOCK_CLOSE: String = '}';
+
+	private static inline final LINE_COMMENT: String = '//';
+
+	/** An `if` node with this many children carries an else-branch — see `branchesInternally`. */
+	private static inline final IF_ELSE_CHILD_COUNT: Int = 3;
+
 	/** A collapsible statement carries exactly one child — the value the body becomes. */
 	private static inline final SINGLE_VALUE_CHILD: Int = 1;
 
@@ -402,7 +431,7 @@ final class PreferLambdaExpressionBody implements Check {
 		final found: Array<Match> = [];
 		// The module root is shielded: nothing follows a top-level declaration but another
 		// one, so no `else` can reach a lambda that inherits its exposure from there.
-		walk(tree, source, RefactorSupport.collectCommentTokens(source), s, found, true);
+		walk(tree, source, RefactorSupport.collectCommentTokens(source), s, found, true, false);
 		if (found.length == 0) return found;
 		// No writer, or a writer that declines this file: fail closed. A grammar with no
 		// writer makes the check inert rather than leaving every collapse unmeasured.
@@ -431,21 +460,117 @@ final class PreferLambdaExpressionBody implements Check {
 	): Bool {
 		final collapsed: String = source.substring(0, m.span.from) + m.text + source.substring(m.span.to);
 		final after: Null<Array<String>> = renderedLines(plugin, collapsed, optsJson);
-		if (after == null || after.length >= before.length) return false;
+		if (after == null) return false;
+		if (after.length > before.length) return false;
 		final divergence: Int = firstDivergence(before, after);
-		return trimmedAt(after, divergence).length > trimmedAt(before, divergence).length;
+		final head: String = trimmedAt(before, divergence);
+		final collapsedHead: String = trimmedAt(after, divergence);
+		if (collapsedHead.length > head.length) return true;
+		return headOnlyLostItsBrace(head, collapsedHead) && interiorSurvives(before, after, divergence);
 	}
 
-	/** `text` as the writer would emit it, split into lines; null when the writer throws or the grammar has none. */
+	/**
+	 * Does the de-brace leave every line BETWEEN the head and the closing line untouched?
+	 *
+	 * The head test says the brace left the first line; it says nothing about the rest, and that
+	 * was this check's documented residual until a real site walked into it. Removing a lambda's
+	 * block braces moves its body from STATEMENT position into EXPRESSION position, where a
+	 * different body policy applies — under this project's `hxformat.json`
+	 * (`sameLine.ifBody: fitLine` for statements, `expressionIfArrowBodyReflow: true` for an
+	 * arrow body) an `if`/`else` that had its branches on their own lines glues them to their
+	 * conditions instead. Four lines became two, the head test still said "only a brace left",
+	 * and a shape the author wrote deliberately was reflowed.
+	 *
+	 * So the de-brace path additionally requires the interior to SURVIVE: the changed region's
+	 * lines, trimmed, must be the same sequence before and after, except for the two lines the
+	 * braces themselves live on — the head (already checked) and the closing line, where a `}`
+	 * disappears — plus the one `;` the emitted body drops.
+	 *
+	 * The value arms are exempt by construction: they return earlier, because their whole point
+	 * is to pull content UP onto the head line.
+	 */
+	private static function interiorSurvives(before: Array<String>, after: Array<String>, divergence: Int): Bool {
+		// A pure de-brace deletes two TOKENS, not lines: the `{` leaves the head line and the `}`
+		// leaves the closing one, and nothing in between moves. So it preserves the line count,
+		// and a different count is already proof that something else re-flowed. (The caller has
+		// only refused GROWTH by this point — a shrink is what the blank-line case does.)
+		if (before.length != after.length) return false;
+		final tail: Int = commonTail(before, after, divergence);
+		final beforeEnd: Int = before.length - tail;
+		final afterEnd: Int = after.length - tail;
+		// The LAST interior line is where the emitted body's own terminator was stripped (`f();`
+		// becomes `f()`), so it is compared modulo that one `;`. Every other line must match
+		// exactly — those are lines the collapse has no business touching.
+		final lastInterior: Int = beforeEnd - 2;
+		for (i in divergence + 1...beforeEnd - 1) {
+			final was: String = trimmedAt(before, i);
+			final now: String = trimmedAt(after, i);
+			if (now == was) continue;
+			if (i != lastInterior || now != withoutTerminator(was)) return false;
+		}
+		final closer: String = trimmedAt(before, beforeEnd - 1);
+		final brace: Int = closer.indexOf(BLOCK_CLOSE);
+		// No closing brace on the region's last line means it is not the block's closing line and
+		// this walk has not understood the shape — refuse rather than compare a line to itself.
+		return brace >= 0 && trimmedAt(after, afterEnd - 1) == closer.substr(brace + 1);
+	}
+
+	/**
+	 * `line` with the one trailing `;` the emitted body drops — see `interiorSurvives`. A line
+	 * that does not end on `;` comes back unchanged, so the comparison there stays exact.
+	 */
+	private static function withoutTerminator(line: String): String {
+		final comment: Int = line.indexOf(LINE_COMMENT);
+		if (comment < 0) return StringTools.endsWith(line, ';') ? line.substr(0, line.length - 1) : line;
+		// A trailing comment rides ALONG with the statement (`f(); // why` re-emits as
+		// `f() // why`), so the `;` to drop is the one closing the CODE, not the one closing
+		// the line. A `//` inside a string literal only ever costs a refusal: the code part
+		// then does not end in `;` and the line comes back unchanged.
+		final code: String = StringTools.rtrim(line.substring(0, comment));
+		return StringTools.endsWith(code, ';') ? code.substr(0, code.length - 1) + ' ' + line.substr(comment) : line;
+	}
+
+	/**
+	 * How many lines at the END of the two renderings are identical — the boundary that turns
+	 * "the first line that differs" into a bounded REGION. Never counts back past `divergence`,
+	 * so the region is always well-formed even when the two renderings share a suffix that
+	 * reaches into it.
+	 */
+	private static function commonTail(before: Array<String>, after: Array<String>, divergence: Int): Int {
+		var tail: Int = 0;
+		while (before.length - tail > divergence + 1 && after.length - tail > divergence + 1) {
+			if (before[before.length - tail - 1] != after[after.length - tail - 1]) break;
+			tail++;
+		}
+		return tail;
+	}
+
+	/**
+	 * Is the collapsed head the original head with its body brace removed and NOTHING else
+	 * changed?
+	 *
+	 * The de-brace-in-place shape: the statement stays exactly where it was and the block's `{` —
+	 * the only thing the block contributed to that line — goes away. It is the shape the
+	 * project's brace policy asks for whenever a body holds one statement, so it counts as
+	 * paying for itself even though it pulls no content up and saves no line.
+	 *
+	 * The test is an EXACT string identity rather than a width threshold, and that is what
+	 * separates it from the shape it must keep refusing: an arg-list explosion also shortens the
+	 * head, by a lot (measured on the suite's witness: 63 columns to 17, because the enclosing
+	 * call opened), and a threshold would have to guess where "lost a brace" ends and "reflowed
+	 * the enclosing construct" begins.
+	 */
+	private static function headOnlyLostItsBrace(head: String, collapsedHead: String): Bool {
+		return head.length > BODY_BRACE_TAIL.length && head.substr(head.length - BODY_BRACE_TAIL.length) == BODY_BRACE_TAIL
+			&& collapsedHead == head.substr(0, head.length - BODY_BRACE_TAIL.length);
+	}
+
+	/** `text` as the writer would emit it, split into lines; null when the writer throws. */
 	private static function renderedLines(plugin: GrammarPlugin, text: String, optsJson: Null<String>): Null<Array<String>> {
 		final written: Null<String> = try plugin.writeRoundTrip(text, optsJson) catch (exception: Exception) null;
 		return written?.split('\n');
 	}
 
-	/**
-	 * The index of the first line at which the two renderings differ — the shorter one's
-	 * length when it is a strict prefix of the other, and -1 when they are identical.
-	 */
 	private static function firstDivergence(before: Array<String>, after: Array<String>): Int {
 		final shared: Int = before.length < after.length ? before.length : after.length;
 		for (i in 0...shared) if (before[i] != after[i]) return i;
@@ -462,7 +587,20 @@ final class PreferLambdaExpressionBody implements Check {
 	 * match: no anonymous-function-literal kind (see the body — without it the exclusion that
 	 * keeps this check off `prefer-arrow-callback`'s node cannot be made), no arrow lambda
 	 * kind, no block kind, or neither collapsible statement kind.
+	 * The invocation kinds a TRAILING lambda argument can sit in — `callKind` and
+	 * `newExprKind`. Both project the callee as their first child and the arguments after
+	 * it, so "is the last child" answers "is the trailing argument". Either seam unset just
+	 * narrows the relaxation `branchesInternally` grants.
 	 */
+	private static function callKindsOf(shape: RefShape): Array<String> {
+		final kinds: Array<String> = [];
+		final callKind: Null<String> = shape.callKind;
+		if (callKind != null) kinds.push(callKind);
+		final newExprKind: Null<String> = shape.newExprKind;
+		if (newExprKind != null) kinds.push(newExprKind);
+		return kinds;
+	}
+
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
@@ -501,6 +639,8 @@ final class PreferLambdaExpressionBody implements Check {
 			controlFlowKinds: shield.conditionalKinds.concat(shape.switchKinds ?? [])
 				.concat(shape.loopStatementKinds ?? [])
 				.concat(throwKinds),
+			branchingKinds: shape.switchKinds ?? [],
+			callKinds: callKindsOf(shape),
 			shield: shield,
 			terminatedKinds: terminatedKinds
 		};
@@ -512,15 +652,32 @@ final class PreferLambdaExpressionBody implements Check {
 	 * false only in the one position that can absorb one — and is re-derived per child.
 	 */
 	private static function walk(
-		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, out: Array<Match>, shielded: Bool
+		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, out: Array<Match>,
+		shielded: Bool, tailArg: Bool
 	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		if (s.arrowKinds.contains(node.kind)) {
-			final m: Null<Match> = match(node, source, comments, s, shielded);
+			final m: Null<Match> = match(node, source, comments, s, shielded, tailArg);
 			if (m != null) out.push(m);
 		}
 		for (i => child in node.children)
-			walk(child, source, comments, s, out, IfExpressionChain.childShielded(node, i, s.shield, shielded));
+			walk(
+				child, source, comments, s, out, IfExpressionChain.childShielded(node, i, s.shield, shielded),
+				isTrailingCallArg(node, i, s)
+			);
+	}
+
+	/**
+	 * Is child `index` of `parent` the TRAILING argument of an invocation — the position where
+	 * nothing follows the argument but the closing `)`?
+	 *
+	 * Computed per child on the way down, exactly like `shielded`, because it is a property of
+	 * the SLOT rather than of the node: the same lambda reads differently as `f(cb)` and as
+	 * `f(cb, onError)`. Every other position answers false, which is the conservative side —
+	 * `branchesInternally` only ever RELAXES on a true.
+	 */
+	private static function isTrailingCallArg(parent: QueryNode, index: Int, s: Seams): Bool {
+		return s.callKinds.contains(parent.kind) && index == parent.children.length - 1;
 	}
 
 	/**
@@ -530,7 +687,7 @@ final class PreferLambdaExpressionBody implements Check {
 	 * parameters.
 	 */
 	private static function match(
-		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, shielded: Bool
+		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, shielded: Bool, tailArg: Bool
 	): Null<Match> {
 		if (node.children.length == 0) return null;
 		final body: QueryNode = node.children[node.children.length - 1];
@@ -540,15 +697,56 @@ final class PreferLambdaExpressionBody implements Check {
 		// the block is a grandchild. That greediness is what spares this check the slot
 		// analysis `prefer-ternary-expression` needs — nothing outside can bind INTO an
 		// emitted body that the braces were not already shielding.
-		final picked: Null<Collapsible> = collapsible(body.children[0], s, shielded);
+		final picked: Null<Collapsible> = collapsible(body.children[0], s, shielded, tailArg);
 		if (picked == null) return null;
 		final bodySpan: Null<Span> = body.span;
 		final pickedSpan: Null<Span> = picked.node.span;
 		if (bodySpan == null || pickedSpan == null) return null;
 		final valueSpan: Null<Span> = picked.terminated ? emittedSpan(picked.node, pickedSpan, source, comments, s) : pickedSpan;
 		if (valueSpan == null || valueSpan.to <= valueSpan.from) return null;
-		if (IfExpressionChain.droppedComment(bodySpan, [valueSpan], comments)) return null;
-		return { span: bodySpan, text: source.substring(valueSpan.from, valueSpan.to) };
+		final trailing: Null<{ span: Span, text: String }> = trailingComment(bodySpan, valueSpan, source, comments);
+		final kept: Array<Span> = trailing == null ? [valueSpan] : [valueSpan, trailing.span];
+		if (IfExpressionChain.droppedComment(bodySpan, kept, comments)) return null;
+		final emitted: String = source.substring(valueSpan.from, valueSpan.to);
+		return { span: bodySpan, text: trailing == null ? emitted : '$emitted ${trailing.text}\n' };
+	}
+
+	/**
+	 * Does `stmt` branch INTERNALLY — an `if` with an `else`, or a `switch`?
+	 *
+	 * Such a body keeps its braces UNLESS the lambda is the TRAILING argument of its call
+	 * (`isTrailingCallArg`) — USER decision, 2026-08-09, refined the same day. The braces are
+	 * not noise in the non-trailing slot:
+	 * they delimit a construct that already has more than one arm, and the collapsed shape puts
+	 * that construct own branch keywords into the lambda argument position — measured on a real
+	 * site, `success -> if (success) API.login(…); else LoadView.hideAsyncMask(),`, where a `;`,
+	 * an `else` and the argument comma end up on one line and the reader has to separate the
+	 * lambda body from the call argument list by eye. In the TRAILING slot nothing follows the
+	 * body but `)`, so that run of punctuation cannot form and the same code reads fine — the
+	 * shape existed hand-written in the target tree (`forEachChild(item -> if (item.folder)
+	 * checkSessions(item); else addNewFile(item))`) before any rule touched it. A body with ONE
+	 * arm — an else-less `if`, a `for`, a `while`, a `throw` — carries no ambiguity in either
+	 * slot and always collapses.
+	 *
+	 * Anything that is not a trailing invocation argument (an assignment, a `return` value, a
+	 * non-last argument) answers false and keeps the braces: fail-closed, since only the
+	 * trailing slot was measured.
+	 *
+	 * The `else` test is the child COUNT, the same discriminator
+	 * `IfExpressionChain.isElseLessConditional` uses from the other side, so an `else if` chain
+	 * is caught by its outer `if`, whose else-branch child is the nested one.
+	 *
+	 * The refusal is deliberately confined to the CONTROL-FLOW arm. A value arm
+	 * `return if (c) a else b;` collapses to an if-EXPRESSION in value position, which reads as
+	 * one expression rather than as branching statements — a different shape from this one.
+	 *
+	 * `LambdaBranchingBodyBlock` is the other half of the same policy: it puts braces BACK on a
+	 * body of this shape that has none, so the two directions agree on where the boundary sits
+	 * and a `--fix` fixpoint cannot oscillate across it.
+	 */
+	private static function branchesInternally(stmt: QueryNode, s: Seams): Bool {
+		if (s.branchingKinds.contains(stmt.kind)) return true;
+		return s.shield.conditionalKinds.contains(stmt.kind) && stmt.children.length >= IF_ELSE_CHILD_COUNT;
 	}
 
 	/**
@@ -561,11 +759,12 @@ final class PreferLambdaExpressionBody implements Check {
 	 * The control-flow arm comes FIRST because an `if` / `for` / `while` carries two or more
 	 * children and the arity guard below would reject it.
 	 */
-	private static function collapsible(stmt: QueryNode, s: Seams, shielded: Bool): Null<Collapsible> {
+	private static function collapsible(stmt: QueryNode, s: Seams, shielded: Bool, tailArg: Bool): Null<Collapsible> {
 		if (s.controlFlowKinds.contains(stmt.kind)) {
 			// Unshielded, an emitted else-less `if` anywhere in the subtree would swallow the
 			// `else` that follows the lambda. See the dangling-else section of the class doc.
 			if (!shielded && IfExpressionChain.holdsElseLessConditional(stmt, s.shield.conditionalKinds)) return null;
+			if (!tailArg && branchesInternally(stmt, s)) return null;
 			return { node: stmt, terminated: true };
 		}
 		if (stmt.children.length != SINGLE_VALUE_CHILD) return null;
@@ -594,7 +793,82 @@ final class PreferLambdaExpressionBody implements Check {
 	 * `emittedEnd`, then the family's shared trivia normaliser applied on top for a grammar
 	 * whose spans run past that token — a measured no-op on the Haxe grammar, see the class
 	 * doc. Null when the terminator is not recoverable structurally and the site is refused.
+	 * The comment that TRAILS the kept span inside the block — the last content before the `}`
+	 * — as the text to append after the emitted statement, or null when there is none to take.
+	 *
+	 * Without this the comment falls outside the kept span and the family's fail-closed guard
+	 * refuses the site, which left a real shape that neither half of the brace policy would
+	 * fix: `waitToken(success -> { if (c) doRequest(); else tokenError(); // handlers })` kept
+	 * its braces although the trailing slot says it should not have them.
+	 *
+	 * The comment is APPENDED rather than covered by widening the span, because the gap between
+	 * the two is the statement's own TERMINATOR — the `;` that `emittedEnd` strips on purpose,
+	 * since a `;` before the enclosing `)` does not parse. Widening the span would put it back.
+	 *
+	 * The appended text ends with a NEWLINE, and that is load-bearing rather than cosmetic: the
+	 * splice puts the emitted body where the block was, so without it the enclosing construct's
+	 * closing delimiter would follow a `//` comment ON THE SAME LINE and the collapsed source
+	 * would not parse — measured, `renderedLines` returned null and the site was refused with no
+	 * diagnostic. The writer normalises the break away for a block comment and keeps it for a
+	 * line comment, which is exactly the difference between the two.
+	 *
+	 * Safe for both comment forms, and for a reason the WRITER supplies rather than this check:
+	 * a `//` comment carries a forced break, so the enclosing construct's closing delimiter
+	 * lands on the next line (measured: the collapsed body renders as
+	 * `else tokenError() // handlers` with `)` below it) and cannot be commented out; a block
+	 * comment closes itself. The `--fix` re-parse gate is the backstop either way — a swallowed
+	 * delimiter does not parse, so it fails loudly rather than corrupting the file.
+	 *
+	 * Only a comment with nothing but whitespace and at most the one stripped terminator
+	 * between it and the statement, and nothing but whitespace between it and the `}`,
+	 * qualifies. A comment between two statements, a leading comment, or several comments leave
+	 * this null and the caller refuses as before.
 	 */
+	private static function trailingComment(
+		bodySpan: Span, kept: Span, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>
+	): Null<{ span: Span, text: String }> {
+		var found: Null<{ span: Span, text: String }> = null;
+		for (tok in comments) {
+			if (tok.from < kept.to || tok.to > bodySpan.to) continue;
+			if (!gapIsTerminatorOnly(source, kept.to, tok.from) || !blankBetween(source, tok.to, closeBraceOf(bodySpan, source))) continue;
+			if (found != null) return null; // several trailing comments — one append slot only
+			found = { span: new Span(tok.from, tok.to), text: source.substring(tok.from, tok.to) };
+		}
+		return found;
+	}
+
+	/** The offset of the block's closing `}` — its span may run past it over trailing trivia. */
+	private static function closeBraceOf(bodySpan: Span, source: String): Int {
+		var i: Int = bodySpan.to - 1;
+		while (i > bodySpan.from && StringTools.fastCodeAt(source, i) != '}'.code) i--;
+		return i;
+	}
+
+	/** Is `[from, to)` whitespace plus at most the one terminator `emittedEnd` stripped? */
+	private static function gapIsTerminatorOnly(source: String, from: Int, to: Int): Bool {
+		var semicolons: Int = 0;
+		if (to < from) return false;
+		for (i in from ... to) {
+			final c: Int = StringTools.fastCodeAt(source, i);
+			if (c == ';'.code) {
+				semicolons++;
+				if (semicolons > 1) return false;
+			} else if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code)
+				return false;
+		}
+		return true;
+	}
+
+	/** Is `[from, to)` whitespace only? */
+	private static function blankBetween(source: String, from: Int, to: Int): Bool {
+		if (to < from) return false;
+		for (i in from ... to) {
+			final c: Int = StringTools.fastCodeAt(source, i);
+			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code) return false;
+		}
+		return true;
+	}
+
 	private static function emittedSpan(
 		stmt: QueryNode, span: Span, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams
 	): Null<Span> {
@@ -643,6 +917,15 @@ private typedef Seams = {
 
 	/** The control-flow statements a body may hold whole — `if` / `switch` / loop / `throw`. Empty leaves that arm inert. */
 	var controlFlowKinds: Array<String>;
+
+	/** The kinds whose body branches internally and therefore keeps its braces — `switch`. */
+	var branchingKinds: Array<String>;
+
+	/**
+	 * The invocation kinds whose LAST child is the trailing argument — a lambda there is
+	 * followed by `)` and nothing else. See `branchesInternally`.
+	 */
+	var callKinds: Array<String>;
 
 	/**
 	 * The dangling-`else` gate's inputs: the parents that close every child with a delimiter,

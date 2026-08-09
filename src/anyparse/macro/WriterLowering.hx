@@ -533,6 +533,17 @@ class WriterLowering {
 		// for every non-call sep-list Star (type-params, function sigs, arrays, object
 		// lits). Mirrors the case-pattern / `??` / chain-operand guards.
 		if (wrapRulesField == 'callParameterWrap') elemOptArg = macro _setSuppressCallRestProbe($elemOptArg, true);
+		// omega-arrow-value-if-reflow: ctor-level `@:fmt(arrowValueIfElemTrail)`
+		// stamps `_arrowValueIfElemTrailComment` on the element that CARRIES a
+		// captured trailing comment. The comment after an arrow-body value-`if`
+		// chain's LAST branch value belongs to this element, not to any field of
+		// the `HxIfExpr` - so neither the chain's `else`-spine walk nor its
+		// `_arrowValueIfBlocked` descent can see it, and the chain re-flowed with
+		// the comment dangling off the glued line. Runtime-gated on the slot, so
+		// every comment-free element keeps the pre-slice opt and stays byte-inert;
+		// compile-time gated on the trivia Star, since the slot only exists there.
+		if (isTriviaStar && branch.fmtHasFlag('arrowValueIfElemTrail'))
+			elemOptArg = macro _args[_i].trailingComment != null ? _setArrowValueIfElemTrailComment($elemOptArg) : $elemOptArg;
 		final elemCallArgs: Array<Expr> = [elemRead, elemOptArg];
 		if (isSelfRef && hasPratt) elemCallArgs.push(macro -1);
 		final elemCall: Expr = {
@@ -7237,7 +7248,7 @@ class WriterLowering {
 				final _doc: anyparse.core.Doc = $rightCall;
 				final _flat: Int = anyparse.format.wrap.WrapList.flatLength(_doc);
 				_dwb(_dilr(
-					opt.lineWidth,
+					anyparse.format.BodyFit.arrowGlueThreshold(_doc, opt.lineWidth),
 					opt.fitLineBodyGlue && _flat >= 0
 						? anyparse.format.BodyFit.continuationRescuesArrowBody(_cols, _doc, _flat, opt.lineWidth)
 						: _dn(_cols, _dc([_dhl(), _doc])),
@@ -8535,7 +8546,13 @@ class WriterLowering {
 		final spineCleanExpr: Expr = arrowValueIfSpineCleanExpr(node, args[1], args[2]);
 		return macro {
 			final _aifGate: Bool = $knobAccess && opt._inArrowLambdaBody;
-			final _aifReflow: Bool = _aifGate && !opt._arrowValueIfBlocked && $spineCleanExpr;
+			final _aifReflow: Bool = _aifGate && !opt._arrowValueIfBlocked && !opt._arrowValueIfElemTrailComment && $spineCleanExpr;
+			// Two comment positions live outside the node: one on the branch
+			// VALUE's own slot (a call's `closeTrailing`), which the spine walk
+			// now asks for, and one on the enclosing list element, which arrives
+			// as `_arrowValueIfElemTrailComment`. Both sit after the chain's LAST
+			// value, where the node has no field of its own left to carry them.
+			//
 			// The refusal is chain-wide in BOTH directions: the spine walk above
 			// covers a comment on this member or any member below it, and
 			// `_aifBlocked` (read by `arrowValueIfBlockOpt` on the branch
@@ -8652,8 +8669,73 @@ class WriterLowering {
 				final access: Expr = { expr: EField(rootExpr, fieldName + slot.suffix), pos: pos };
 				pred = slot.isList ? macro $pred && $access.length == 0 : macro $pred && $access == null;
 			}
+			final valueClean: Expr = arrowValueIfValueTrailCleanExpr(child, rootExpr);
+			pred = macro $pred && $valueClean;
 		}
 		return pred;
+	}
+
+	/**
+	 * omega-arrow-value-if-reflow - the comment position the slot fold above
+	 * cannot reach: one captured on the branch VALUE itself
+	 * (`else tokenError() // handlers`).
+	 *
+	 * A trailing comment lands on the LAST node that can hold it, so which
+	 * slot owns it depends on what the branch value is. A literal owns none,
+	 * and the comment travels up to the enclosing list element - that half is
+	 * `_arrowValueIfElemTrailComment`'s. A call owns one: the `closeTrailing`
+	 * synth param every trivia-collecting postfix Star gets, which its own
+	 * writer re-emits through `trailingCommentDocGuarded`. The `if` node holds
+	 * only the branch's Ref, so this half asks the VALUE.
+	 *
+	 * Emitted as a switch over the branch type's Alt, one case per ctor that
+	 * owns the slot (`Call` alone, for `HxExpr`) - the ctor arity comes from
+	 * the shape, so a synth-param change is a compile error here rather than a
+	 * silent wrong-slot read. Degrades to `true` for a non-Alt / non-trivia
+	 * branch and for plain mode, which synthesises no slots at all.
+	 */
+	@:access(anyparse.macro.TriviaTypeSynth)
+	private function arrowValueIfValueTrailCleanExpr(child: ShapeNode, rootExpr: Expr): Expr {
+		final fieldName: Null<String> = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
+		final refPath: Null<String> = child.kind == Ref ? child.annotations.get(AnnotationKeys.BASE_REF) : null;
+		if (fieldName == null || refPath == null || !isTriviaBearing(refPath)) return macro true;
+		final rule: Null<ShapeNode> = _shape.rules.get(refPath);
+		if (rule == null || rule.kind != Alt) return macro true;
+		final pos: Position = Context.currentPos();
+		final cases: Array<Case> = [];
+		for (branch in rule.children) {
+			final trailIndex: Int = altCloseTrailingParamIndex(branch);
+			if (trailIndex < 0) continue;
+			final ctorRef: Expr = MacroStringTools.toFieldExpr(ruleCtorPath(refPath, branch.annotations.get(AnnotationKeys.BASE_CTOR)));
+			final arity: Int = branch.children.length + TriviaTypeSynth.countAltExtras(branch);
+			final args: Array<Expr> = [for (i in 0...arity) i == trailIndex ? macro _aifValueTrail : macro _];
+			cases.push({
+				values: [{ expr: ECall(ctorRef, args), pos: pos }],
+				expr: macro _aifValueTrail == null,
+				guard: null,
+			});
+		}
+		if (cases.length == 0) return macro true;
+		final access: Expr = { expr: EField(rootExpr, fieldName), pos: pos };
+		final switchExpr: Expr = { expr: ESwitch(access, cases, macro true), pos: pos };
+		// An optional branch is `Null<T>`, and a `case _` default does NOT catch
+		// null - the guard is what keeps the switch off a null subject.
+		return macro $access == null ? true : $switchExpr;
+	}
+
+	/**
+	 * omega-arrow-value-if-reflow - index of the `closeTrailing:Null<String>`
+	 * synth param on an Alt branch, or `-1` when the branch owns none. The slot
+	 * exists exactly for a postfix Star that collects trivia (the gate
+	 * `lowerPostfixTailExpr` reads it under), and the synth params follow the
+	 * declared ones, so the first of them sits at the child count.
+	 */
+	private function altCloseTrailingParamIndex(branch: ShapeNode): Int {
+		final postfixOp: Null<String> = branch.annotations.get(AnnotationKeys.POSTFIX_OP);
+		if (postfixOp == null || branch.children.length == 0) return -1;
+		final star: ShapeNode = branch.children[branch.children.length - 1];
+		if (star.kind != Star || star.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) != true) return -1;
+		return branch.children.length;
 	}
 
 	/**
@@ -10084,7 +10166,7 @@ class WriterLowering {
 				final _doc: anyparse.core.Doc = $writeCall;
 				final _flat: Int = anyparse.format.wrap.WrapList.flatLength(_doc);
 				_dwb(_dilr(
-					opt.lineWidth,
+					anyparse.format.BodyFit.arrowGlueThreshold(_doc, opt.lineWidth),
 					opt.fitLineBodyGlue && _flat >= 0
 						? anyparse.format.BodyFit.continuationRescuesArrowBody(_cols, _doc, _flat, opt.lineWidth)
 						: _dn(_cols, _dc([_dhl(), _doc])),

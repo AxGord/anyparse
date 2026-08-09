@@ -643,6 +643,35 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	/**
+	 * The block's `openTrailing` comment — written on the `{` line — travels with the
+	 * de-braced statement and folds after its `;`, exactly as a same-line trailing comment
+	 * does. Gate 2 used to fail closed on that slot, which (through the symmetry gate) kept
+	 * the braces on BOTH branches of a real site whose branches were single statements.
+	 */
+	public function testOpenTrailingCommentTravelsWithTheStatement(): Void {
+		assertFmt(
+			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tp();\n\t\t} else { // handlers\n\t\t\tq();\n\t\t}\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a)\n\t\t\tp();\n\t\telse\n\t\t\tq(); // handlers\n\t}\n}'
+		);
+	}
+
+	/** The de-braced result is a fixed point — re-running the writer keeps the folded comment put. */
+	public function testOpenTrailingCommentDeBraceIdempotent(): Void {
+		assertInert(
+			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a)\n\t\t\tp();\n\t\telse\n\t\t\tq(); // handlers\n\t}\n}', removeConfig
+		);
+	}
+
+	/**
+	 * GUARD: the fold site is ONE slot. A block carrying an `openTrailing` comment AND a
+	 * same-line trailing comment on its statement keeps its braces — merging the two into one
+	 * position would reorder a reader's text.
+	 */
+	public function testOpenTrailingPlusOwnTrailingKeepsBraces(): Void {
+		assertInert('class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) { // outer\n\t\t\tp(); // inner\n\t\t}\n\t}\n}', removeConfig);
+	}
+
 	public function testTrailingCommentDeBraceIdempotent(): Void {
 		final source: String = 'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tx(); // trailing\n\t\t}\n\t}\n}';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);

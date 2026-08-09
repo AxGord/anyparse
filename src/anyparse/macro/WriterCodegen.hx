@@ -662,6 +662,36 @@ class WriterCodegen {
 	 * Idempotent, and cleared by `_setExprPosition` on any fresh
 	 * expression-position frame, so it never leaves the chain that set it.
 	 */
+	/**
+	 * omega-arrow-value-if-reflow - opt-fanout setter for the ELEMENT-trailing
+	 * refusal signal, set by a list Star on the element whose captured trailing
+	 * comment sits right after it (`@:fmt(arrowValueIfElemTrail)`).
+	 *
+	 * Unlike `_setArrowValueIfBlocked`, this one is NOT cleared by
+	 * `_setExprPosition`: the comment's owner is the element, and the chain it
+	 * has to reach lives two expression-position frames deeper (the call
+	 * argument, then the arrow-lambda body). A clear on either frame would
+	 * throw the signal away before it arrives. It stays confined anyway - it is
+	 * stamped per element, so a sibling element never sees it.
+	 */
+	private static function setArrowValueIfElemTrailCommentField(optionsCT: ComplexType): Field {
+		return {
+			name: '_setArrowValueIfElemTrailComment',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{ name: 'o', type: optionsCT }],
+				ret: optionsCT,
+				expr: macro {
+					if (o._arrowValueIfElemTrailComment) return o;
+					final _c: $optionsCT = _copyOpt(o);
+					_c._arrowValueIfElemTrailComment = true;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
 	private static function setArrowValueIfBlockedField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setArrowValueIfBlocked',
@@ -2222,6 +2252,7 @@ class WriterCodegen {
 			fields.push(clearExprPositionField(optionsCT));
 		}
 		if (hasArrowValueIfBlocked) fields.push(setArrowValueIfBlockedField(optionsCT));
+		if (optionsHasField(optionsTypePath, '_arrowValueIfElemTrailComment')) fields.push(setArrowValueIfElemTrailCommentField(optionsCT));
 		// ω-elseif-body-break: opt-fanout helper pair for `propagateElseIfBranch`
 		// (HxIfStmt.elseBody set-site) and `clearElseIfBranch` (inner if's
 		// then-body one-level clear). Gated on `_inElseIfBranch:Bool` presence.

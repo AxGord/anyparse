@@ -88,6 +88,18 @@ final class HxArrowValueIfReflowSliceTest extends Test {
 	private static final COMMENT_TAIL_SRC: String =
 		'class C {\n\tfunction test() {\n\t\titems.rank((p:Item, q:Item) -> if (p.orderKeyVal < q.orderKeyVal)\n\t\t\t-1\n\t\telse if (p.orderKeyVal > q.orderKeyVal)\n\t\t\t1\n\t\telse\n\t\t\t// equal\n\t\t\t0);\n\t}\n}';
 
+	/**
+	 * The trailing comment sits after the chain's LAST value, which is the one
+	 * position no field of the `if` node owns - the slot belongs to the
+	 * enclosing call's argument element.
+	 */
+	private static final TRAIL_ON_TAIL_VALUE_SRC: String =
+		'class C {\n\tfunction test() {\n\t\titems.rank((p:Item, q:Item) -> if (p.orderKeyVal < q.orderKeyVal)\n\t\t\t-1\n\t\telse if (p.orderKeyVal > q.orderKeyVal)\n\t\t\t1\n\t\telse\n\t\t\t0 // equal\n\t\t);\n\t}\n}';
+
+	/** Same slot, two-arm chain - the reported `APIRequest2` shape. */
+	private static final TRAIL_ON_ELSE_VALUE_SRC: String =
+		'class C {\n\tfunction test() {\n\t\tAPIToken.instance.waitToken(success ->\n\t\t\tif (success)\n\t\t\t\tdoRequest();\n\t\t\telse\n\t\t\t\ttokenError() // Call error handlers\n\t\t);\n\t}\n}';
+
 	private static final BLOCK_SRC: String =
 		'class C {\n\tfunction test() {\n\t\titems.rank((p:Item, q:Item) -> if (p.ok) { first(); } else { second(); });\n\t}\n}';
 
@@ -196,6 +208,24 @@ final class HxArrowValueIfReflowSliceTest extends Test {
 	public function testCommentOnFinalElseRefusesWholeChain(): Void {
 		Assert.equals(COMMENT_TAIL_SRC, reflow(COMMENT_TAIL_SRC));
 		Assert.equals(COMMENT_TAIL_SRC, keep(COMMENT_TAIL_SRC));
+	}
+
+	/**
+	 * Trailing comment on the chain's LAST value - the only comment position
+	 * outside the `if` node's own trivia slots, since nothing of the node
+	 * follows the final value. The slot belongs to the enclosing call's
+	 * argument element, so neither the spine walk nor the `_arrowValueIfBlocked`
+	 * descent can see it, and the chain used to re-flow with the comment
+	 * dangling off the glued line.
+	 */
+	public function testTrailingCommentOnFinalValueRefusesWholeChain(): Void {
+		Assert.equals(TRAIL_ON_TAIL_VALUE_SRC, reflow(TRAIL_ON_TAIL_VALUE_SRC));
+		Assert.equals(TRAIL_ON_TAIL_VALUE_SRC, keep(TRAIL_ON_TAIL_VALUE_SRC));
+	}
+
+	public function testTrailingCommentOnElseValueRefusesTwoArmChain(): Void {
+		Assert.equals(TRAIL_ON_ELSE_VALUE_SRC, reflow(TRAIL_ON_ELSE_VALUE_SRC));
+		Assert.equals(TRAIL_ON_ELSE_VALUE_SRC, keep(TRAIL_ON_ELSE_VALUE_SRC));
 	}
 
 	/**

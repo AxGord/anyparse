@@ -5284,6 +5284,11 @@ final class Cli {
 		sysPrint('automatically; the element is writer-formatted + re-parse-validated. The element\n');
 		sysPrint('text may be inline, from --from-file, or stdin when it is the literal `-`.\n');
 		sysPrint('\n');
+		sysPrint('A BRACE-LESS body slot — the sole statement of an if / else / loop body or an arrow\n');
+		sysPrint('lambda expression body — holds one statement and has no sibling position, so it GAINS\n');
+		sysPrint('braces and the element lands inside it. Address the statement for that; address the\n');
+		sysPrint('enclosing if to insert after the whole construct.\n');
+		sysPrint('\n');
 		sysPrint('Addressing (the mode flag takes an inline position, or combine it with --select / --match):\n');
 		sysPrint("  <l>[:<c>]           1-based position; column omitted = the line's first\n");
 		sysPrint('                      non-whitespace character\n');
