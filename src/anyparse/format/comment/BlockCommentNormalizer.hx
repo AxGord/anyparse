@@ -5,6 +5,8 @@ import anyparse.format.CommentStyle;
 import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
 
+using StringTools;
+
 /**
  * Engine-level adapter for captured C-family block-comment bodies.
  *
@@ -50,16 +52,19 @@ class BlockCommentNormalizer {
 		// `<content>\n*/` close-on-own-line shape and append a synthetic
 		// empty line so normalize's `body == '' last line` branch routes
 		// to the canonical ` */` close pad.
-		if (StringTools.endsWith(content, '\n*/') && parsed.lines.length > 0) {
+		if (content.endsWith('\n*/') && parsed.lines.length > 0) {
 			final lastBody: String = parsed.lines[parsed.lines.length - 1].body;
 			if (lastBody.length > 0) parsed.lines.push({ ws: '', body: '' });
 		}
 		final lines: Array<BlockCommentLine> = parsed.lines;
-		return lines.length <= 1
-			? Text(content)
-			: isJavadocStyle(lines)
-				? javadocBytePreserveDoc(content, parsed)
-				: isFirstInlineNested(lines) ? firstInlineRebuildDoc(parsed, opt) : BlockCommentWriter.writeDoc(parsed, opt);
+		return if (lines.length <= 1)
+			Text(content)
+		else if (isJavadocStyle(lines))
+			javadocBytePreserveDoc(content, parsed)
+		else if (isFirstInlineNested(lines))
+			firstInlineRebuildDoc(parsed, opt)
+		else
+			BlockCommentWriter.writeDoc(parsed, opt);
 	}
 
 	/**
@@ -89,8 +94,11 @@ class BlockCommentNormalizer {
 	 *  - Last line empty body (`\n*\/` close on own line): `' '`
 	 *    canonical pad before `*\/`. Surrounding nest is applied by
 	 *    the renderer via `Line('\n')`.
-	 *  - Last line non-empty body (`}*\/` style): structural close
-	 *    ws preserved (caller authored the close column).
+	 *  - Last line non-empty body (`}*\/` / `text*\/` style): never
+	 *    the source ws verbatim — the renderer adds the nest per
+	 *    line, so an absolute close ws re-absorbed it every round
+	 *    trip and drifted one level deeper per write. See
+	 *    `closeLineWs` for the wrap-column / interior-formula split.
 	 *  - Interior content: `(shouldBake ? indentUnit : '') + relWs`.
 	 *  - Interior blank: `''`.
 	 */
@@ -115,7 +123,6 @@ class BlockCommentNormalizer {
 		final commonLen: Int = (commonPrefix ?? '').length;
 		final closingWs: String = lines[last].ws;
 		final closeStructLen: Int = structuralCloseLen(closingWs);
-		final structuralClose: String = closingWs.substr(0, closeStructLen);
 		final shouldBake: Bool = commonLen > closeStructLen;
 		final indentUnit: String = indentUnitOf(opt);
 
@@ -132,7 +139,7 @@ class BlockCommentNormalizer {
 				else if (body.length == 0)
 					' '
 				else
-					structuralClose;
+					closeLineWs(body, ws, commonPrefix, shouldBake, indentUnit);
 			} else if (body.length == 0) {
 				newWs = '';
 			} else {
@@ -172,7 +179,7 @@ class BlockCommentNormalizer {
 	 * whose byte behaviour is identical to `commentStyle: Verbatim`.
 	 */
 	private static function canonicalizable(content: String): Bool {
-		return content.indexOf('\n') >= 0 && StringTools.startsWith(content, DOC_OPEN);
+		return content.indexOf('\n') >= 0 && content.startsWith(DOC_OPEN);
 	}
 
 	/**
@@ -216,7 +223,7 @@ class BlockCommentNormalizer {
 		final docs: Array<Doc> = [Text(segments[0])];
 		for (i in 1...segments.length) {
 			final raw: String = segments[i];
-			final stripped: String = closeStructLen > 0 && StringTools.startsWith(raw, closeStruct) ? raw.substr(closeStructLen) : raw;
+			final stripped: String = closeStructLen > 0 && raw.startsWith(closeStruct) ? raw.substr(closeStructLen) : raw;
 			docs.push(Line('\n'));
 			docs.push(Text(stripped));
 		}
@@ -272,12 +279,12 @@ class BlockCommentNormalizer {
 		final lines: Array<BlockCommentLine> = comment.lines;
 		final last: Int = lines.length - 1;
 		final lastBody: String = lines[last].body;
-		final lastIsClosingBrace: Bool = lastBody.length > 0 && StringTools.fastCodeAt(lastBody, 0) == '}'.code;
+		final lastIsClosingBrace: Bool = lastBody.length > 0 && lastBody.fastCodeAt(0) == '}'.code;
 		final lastIsDecoOrEmpty: Bool = lastBody.length == 0 || isAllStars(lastBody);
 		final includeLastInPrefix: Bool = !lastIsClosingBrace && !lastIsDecoOrEmpty;
 
 		var commonPrefix: Null<String> = null;
-		for (i in 1...lines.length) if (!(i == last && !includeLastInPrefix)) {
+		for (i in 1...lines.length) if (i != last || includeLastInPrefix) {
 			final body: String = lines[i].body;
 			if (body.length == 0) continue;
 			final ws: String = lines[i].ws;
@@ -299,18 +306,33 @@ class BlockCommentNormalizer {
 				continue;
 			}
 
-			final stripWs: String = cpLen > 0 && StringTools.startsWith(ws, cp) ? ws.substr(cpLen) : ws;
+			// The close is excluded from `cp` for deco/empty/`}` bodies, so its ws
+			// may not extend the interior frame — and an absolute fallback there
+			// re-absorbs the renderer's nest and never reaches a fixed point (a
+			// period-3 oscillation on a `**/`-closed firstInline comment, observed
+			// live). A mismatched CLOSE lands at the wrap column instead. Interior
+			// lines keep the absolute fallback: their ws joins `cp` on the next
+			// parse, which is what makes them self-healing.
+			// The close is excluded from `cp` for deco/empty/`}` bodies, so its ws
+			// may not extend the interior frame — and an absolute fallback there
+			// re-absorbs the renderer's nest and never reaches a fixed point (a
+			// period-3 oscillation on a `**/`-closed firstInline comment, observed
+			// live). A mismatched CLOSE lands at the wrap column instead. Interior
+			// lines keep the absolute fallback: their ws joins `cp` on the next
+			// parse, which is what makes them self-healing.
+			final matchesCp: Bool = ws.startsWith(cp);
+			final stripWs: String = cpLen > 0 && matchesCp ? ws.substr(cpLen) : i == last && !matchesCp ? '' : ws;
 
 			if (i == last) {
 				if (lastIsClosingBrace) {
 					docs.push(Line('\n'));
 					docs.push(Text(StringTools.trim(stripWs + body)));
-				} else if (StringTools.fastCodeAt(body, 0) == '*'.code) {
+				} else if (body.fastCodeAt(0) == '*'.code) {
 					docs.push(Line('\n'));
 					docs.push(Text(stripWs + body));
 				} else {
 					var line: String = StringTools.rtrim(indentUnit + stripWs + body);
-					if (!StringTools.endsWith(line, '*')) line += ' ';
+					if (!line.endsWith('*')) line += ' ';
 					docs.push(Line('\n'));
 					docs.push(Text(line));
 				}
@@ -325,13 +347,13 @@ class BlockCommentNormalizer {
 	}
 
 	private static inline function indentUnitOf(opt: WriteOptions): String {
-		return opt.indentChar == IndentChar.Tab ? '\t' : StringTools.rpad('', ' ', opt.indentSize);
+		return opt.indentChar == IndentChar.Tab ? '\t' : ''.rpad(' ', opt.indentSize);
 	}
 
 	private static function commonPrefixOf(a: String, b: String): String {
 		final lim: Int = a.length < b.length ? a.length : b.length;
 		var j: Int = 0;
-		while (j < lim && StringTools.fastCodeAt(a, j) == StringTools.fastCodeAt(b, j)) j++;
+		while (j < lim && a.fastCodeAt(j) == b.fastCodeAt(j)) j++;
 		return a.substr(0, j);
 	}
 
@@ -343,7 +365,7 @@ class BlockCommentNormalizer {
 	 */
 	private static function structuralCloseLen(ws: String): Int {
 		final len: Int = ws.length;
-		return len > 0 && StringTools.fastCodeAt(ws, len - 1) == ' '.code ? len - 1 : len;
+		return len > 0 && ws.fastCodeAt(len - 1) == ' '.code ? len - 1 : len;
 	}
 
 	/**
@@ -361,7 +383,7 @@ class BlockCommentNormalizer {
 			final body: String = lines[i].body;
 			if (body.length == 0) continue;
 			contentCount++;
-			if (StringTools.fastCodeAt(body, 0) == '*'.code) starredCount++;
+			if (body.fastCodeAt(0) == '*'.code) starredCount++;
 		}
 		return contentCount > 0 && starredCount == contentCount;
 	}
@@ -369,7 +391,7 @@ class BlockCommentNormalizer {
 	private static function isAllStars(s: String): Bool {
 		if (s.length == 0) return false;
 		for (i in 0...s.length) {
-			if (StringTools.fastCodeAt(s, i) != '*'.code) return false;
+			if (s.fastCodeAt(i) != '*'.code) return false;
 		}
 		return true;
 	}
@@ -476,12 +498,12 @@ class BlockCommentNormalizer {
 			// classified the marker as content and emitted a spurious ` * *` row.
 			// `isAllStars` already returned for a body of pure stars, so the run is
 			// always shorter than the body here.
-			final marker: Bool = run > 0 && isSpace(StringTools.fastCodeAt(body, run));
+			final marker: Bool = run > 0 && isSpace(body.fastCodeAt(run));
 			final rest: String = marker ? body.substr(run + 1) : body;
 			// Trailing stars are the AUTHOR'S — `**bold**`, a backticked `/**`, a
 			// prose `the unused-*` all end in one. Only the all-stars decoration
 			// above is delimiter, and it never reaches here.
-			out.push({ ws: ln.ws, content: StringTools.rtrim(rest), marker: marker });
+			out.push({ ws: ln.ws, content: rest.rtrim(), marker: marker });
 		}
 		return out;
 	}
@@ -494,7 +516,7 @@ class BlockCommentNormalizer {
 	/** The length of `body`'s leading run of `*`. */
 	private static function leadingStarRun(body: String): Int {
 		var i: Int = 0;
-		while (i < body.length && StringTools.fastCodeAt(body, i) == '*'.code) i++;
+		while (i < body.length && body.fastCodeAt(i) == '*'.code) i++;
 		return i;
 	}
 
@@ -514,6 +536,30 @@ class BlockCommentNormalizer {
 			commonPrefix = commonPrefix == null ? line.ws : commonPrefixOf(commonPrefix, line.ws);
 		}
 		return (commonPrefix ?? '').length;
+	}
+
+
+	/**
+	 * The rewritten ws for a CONTENT-BEARING close line. Never the source ws
+	 * verbatim: the renderer's hardline adds the surrounding nest to every line,
+	 * so an absolute ws re-absorbed the nest on each round trip and the close
+	 * column drifted one indent level deeper per write, without bound.
+	 *
+	 * A `}`-led close re-emits at the wrap column (ws `''` + renderer nest — the
+	 * convention `firstInlineRebuildDoc` case (a) uses). Other content is placed
+	 * RELATIVE to the interior common prefix — stable because the interiors
+	 * re-absorb the nest into that prefix on the next parse. When there is no
+	 * frame to be relative to (a two-line comment has NO interior content lines,
+	 * `commonPrefix` null) or the close's ws does not extend it (mixed
+	 * whitespace kinds), the wrap column is the only stable target: the
+	 * relative formula would degrade to the absolute ws and drift again.
+	 */
+	private static function closeLineWs(
+		body: String, ws: String, commonPrefix: Null<String>, shouldBake: Bool, indentUnit: String
+	): String {
+		if (body.fastCodeAt(0) == '}'.code) return '';
+		if (commonPrefix == null || !ws.startsWith(commonPrefix)) return '';
+		return (shouldBake ? indentUnit : '') + ws.substr(commonPrefix.length);
 	}
 
 }

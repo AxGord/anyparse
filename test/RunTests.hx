@@ -600,6 +600,7 @@ import unit.HxFitLineBodyGlueSliceTest;
 import unit.HxArrowBlockIfOverflowSliceTest;
 import unit.LambdaBranchingBodyBlockCheckTest;
 import unit.EmptyCaseArmCheckTest;
+import unit.HxBlockCommentCloseWriteTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -917,6 +918,7 @@ class RunTests {
 		addCase(new HxRhsCommentWriteTest());
 		addCase(new HxTernaryCommentWriteTest());
 		addCase(new HxInlineBlockCommentWriteTest());
+		addCase(new HxBlockCommentCloseWriteTest());
 		addCase(new HxInlineBlockCommentGapTest());
 		addCase(new CommentInventoryTest());
 		addCase(new HxCondCommentWriteTest());
