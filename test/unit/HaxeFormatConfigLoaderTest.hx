@@ -704,8 +704,8 @@ class HaxeFormatConfigLoaderTest extends Test {
 		// catch / switch / do-while keyword→`(` gap previously stacked the
 		// gap space with the inner-pad knob's before-`(` space, emitting a
 		// double `catch  (` / `switch  (` / `} while  (`. Expect single.
-		final src: String =
-			'class M {\n\tfunction f(x:Int):Void {\n\t\tswitch (x) {\n\t\t\tcase _:\n\t\t}\n\t\tdo {\n\t\t\tg(x);\n\t\t} while (x > 0);\n\t\ttry {\n\t\t\tg(x);\n\t\t} catch (e:E) {\n\t\t\th(x);\n\t\t}\n\t}\n}';
+		final src: String = 'class M {\n\tfunction f(x:Int):Void {\n\t\tswitch (x) {\n\t\t\tcase _:\n\t\t}\n\t\tdo {\n\t\t\tg(x);\n'
+			+ '\t\t} while (x > 0);\n\t\ttry {\n\t\t\tg(x);\n\t\t} catch (e:E) {\n\t\t\th(x);\n\t\t}\n\t}\n}';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"whitespace": {"parenConfig": {"conditionParens": {"openingPolicy": "before"}}}}'
 		);
@@ -760,6 +760,32 @@ class HaxeFormatConfigLoaderTest extends Test {
 	public function testCommentsBlockCommentStyleUnknownKeepsDefault(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"comments": {"blockCommentStyle": "gutter"}}');
 		Assert.equals(CommentStyle.Verbatim, opts.commentStyle);
+	}
+
+	/** A literal run of spaces is the reference schema's space form — its LENGTH is the indent size. */
+	public function testIndentationCharacterSpacesRun(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"indentation": {"character": "  "}}');
+		Assert.equals(IndentChar.Space, opts.indentChar);
+		Assert.equals(2, opts.indentSize);
+	}
+
+	public function testIndentationCharacterTab(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"indentation": {"character": "tab"}}');
+		Assert.equals(IndentChar.Tab, opts.indentChar);
+		Assert.equals(1, opts.indentSize);
+	}
+
+	/**
+	 * The common misspelling `"space"` is invalid in the reference haxe-formatter
+	 * schema too (the space form is a literal RUN whose length carries the size):
+	 * the loader keeps the default and reports the value on stderr once per
+	 * process, instead of silently formatting with tabs.
+	 */
+	public function testIndentationCharacterUnrecognizedKeepsDefault(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"indentation": {"character": "space"}}');
+		final defaults: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+		Assert.equals(defaults.indentChar, opts.indentChar);
+		Assert.equals(defaults.indentSize, opts.indentSize);
 	}
 
 	private function assertWriteContains(src: String, opts: HxModuleWriteOptions, needle: String, message: String): Void {
