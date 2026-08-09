@@ -8,6 +8,7 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
 using Lambda;
 
 import anyparse.query.GrammarPlugin.RefShape;
@@ -187,28 +188,6 @@ private typedef GuardedCtorInit = {
 @:nullSafety(Strict)
 final class RefactorSupport {
 
-	/**
-	 * Class-member declaration kinds (fields / methods). A binding whose
-	 * decl node carries one of these kinds is a class member, not a local
-	 * — used to gate `this.<name>` augmentation in `Rename` and to refuse
-	 * inlining a free identifier that may be a property getter in
-	 * `Inline`. `FinalModifiedMember` is the `final` METHOD form
-	 * (`final function f()`); the query projection surfaces its name off
-	 * the inner `HxFinalModifierMember.fn`, so it is a member like
-	 * `FnMember` for `this.<name>` purposes.
-	 */
-	/** The doc-comment opener — what distinguishes documentation from a plain `/* … *\/` banner. */
-	private static final DOC_OPEN: String = '/**';
-
-	/** The grammar kind a `typedef` projects as — the only member host whose members sit under an `Anon`. */
-	private static final TYPEDEF_DECL_KIND: String = 'TypedefDecl';
-
-	/** The grammar kind an anonymous structure projects as, in BOTH a typedef body and a type expression. */
-	private static final ANON_KIND: String = 'Anon';
-
-	/** The numeric escapes that spell the interpolation trigger `$` (see `interpolationEscapeBefore`). */
-	private static final DOLLAR_ESCAPES: Array<String> = ['\\x24', '\\u0024'];
-
 	public static final FIELD_MEMBER_KINDS: Array<String> = [
 		'VarMember',
 		'FinalMember',
@@ -273,6 +252,28 @@ final class RefactorSupport {
 	 * run (e.g. MoveMember's visibility promotion).
 	 */
 	public static final META_KINDS: Array<String> = ['Meta', 'MetaCall', 'PlainMeta'];
+
+	/**
+	 * Class-member declaration kinds (fields / methods). A binding whose
+	 * decl node carries one of these kinds is a class member, not a local
+	 * — used to gate `this.<name>` augmentation in `Rename` and to refuse
+	 * inlining a free identifier that may be a property getter in
+	 * `Inline`. `FinalModifiedMember` is the `final` METHOD form
+	 * (`final function f()`); the query projection surfaces its name off
+	 * the inner `HxFinalModifierMember.fn`, so it is a member like
+	 * `FnMember` for `this.<name>` purposes.
+	 * The doc-comment opener — what distinguishes documentation from a plain `/* … *\/` banner.
+	 */
+	private static final DOC_OPEN: String = '/**';
+
+	/** The grammar kind a `typedef` projects as — the only member host whose members sit under an `Anon`. */
+	private static final TYPEDEF_DECL_KIND: String = 'TypedefDecl';
+
+	/** The grammar kind an anonymous structure projects as, in BOTH a typedef body and a type expression. */
+	private static final ANON_KIND: String = 'Anon';
+
+	/** The numeric escapes that spell the interpolation trigger `$` (see `interpolationEscapeBefore`). */
+	private static final DOLLAR_ESCAPES: Array<String> = ['\\x24', '\\u0024'];
 
 	/**
 	 * Sibling node kinds a declaration's modifiers and metadata project to —
@@ -455,17 +456,15 @@ final class RefactorSupport {
 		if (hit != null) {
 			if (hit.kind == RefKind.Decl) return hit.span.from;
 			final boundTo: Null<Span> = hit.bindingSpan;
-			return boundTo == null ? null : boundTo.from;
+			return boundTo?.from;
 		}
 
 		// Cursor is on a node that the resolver does not emit as a ref
 		// hit — the `this.<field>` field-access case. Bind it to the sole
 		// member decl of the same name.
-		if (node.kind == 'FieldAccess') {
-			final memberDecl: Null<RefHit> = hits.find(h -> h.kind == RefKind.Decl);
-			return memberDecl == null ? null : memberDecl.span.from;
-		}
-		return null;
+		if (node.kind != 'FieldAccess') return null;
+		final memberDecl: Null<RefHit> = hits.find(h -> h.kind == RefKind.Decl);
+		return memberDecl?.span.from;
 	}
 
 	/**
@@ -628,7 +627,7 @@ final class RefactorSupport {
 	public static function baseNameOf(file: String): String {
 		final slash: Int = file.lastIndexOf('/');
 		final tail: String = slash < 0 ? file : file.substr(slash + 1);
-		return StringTools.endsWith(tail, '.hx') ? tail.substr(0, tail.length - '.hx'.length) : tail;
+		return tail.endsWith('.hx') ? tail.substr(0, tail.length - '.hx'.length) : tail;
 	}
 
 	/**
@@ -660,9 +659,9 @@ final class RefactorSupport {
 		while (i + name.length <= to) {
 			final at: Int = source.indexOf(name, i);
 			if (at < 0 || at + name.length > to) return -1;
-			final beforeOk: Bool = at == 0 || !isIdentChar(StringTools.fastCodeAt(source, at - 1));
+			final beforeOk: Bool = at == 0 || !isIdentChar(source.fastCodeAt(at - 1));
 			final afterIdx: Int = at + name.length;
-			final afterOk: Bool = afterIdx >= source.length || !isIdentChar(StringTools.fastCodeAt(source, afterIdx));
+			final afterOk: Bool = afterIdx >= source.length || !isIdentChar(source.fastCodeAt(afterIdx));
 			if (beforeOk && afterOk) return at;
 			i = at + 1;
 		}
@@ -712,23 +711,10 @@ final class RefactorSupport {
 		while (at < stop) {
 			final hit: Int = identTokenOffset(source, new Span(at, stop), name);
 			if (hit < 0) return null;
-			if (hit == 0 || StringTools.fastCodeAt(source, hit - 1) != '$'.code) return new Span(hit, hit + name.length);
+			if (hit == 0 || source.fastCodeAt(hit - 1) != '$'.code) return new Span(hit, hit + name.length);
 			at = hit + 1;
 		}
 		return null;
-	}
-
-	/**
-	 * Is `offset` inside a COMMENT region? The first lexical region that
-	 * contains it decides; a string literal is not a comment, so code
-	 * interpolated inside one stays eligible.
-	 */
-	private static function offsetWithinComment(offset: Int, regions: Array<LexRegion>): Bool {
-		for (region in regions) if (offset >= region.from && offset < region.to) return switch region.kind {
-			case LineComment | BlockComment: true;
-			case StringLit | RegexLit: false;
-		};
-		return false;
 	}
 
 	/**
@@ -850,9 +836,9 @@ final class RefactorSupport {
 	/** Whole-string check: a non-empty identifier (`[A-Za-z_][A-Za-z0-9_]*`). */
 	public static function isIdentifier(s: String): Bool {
 		if (s.length == 0) return false;
-		final first: Int = StringTools.fastCodeAt(s, 0);
+		final first: Int = s.fastCodeAt(0);
 		if (!isIdentStartChar(first)) return false;
-		for (i in 1...s.length) if (!isIdentChar(StringTools.fastCodeAt(s, i))) return false;
+		for (i in 1...s.length) if (!isIdentChar(s.fastCodeAt(i))) return false;
 		return true;
 	}
 
@@ -862,7 +848,7 @@ final class RefactorSupport {
 
 	/** Does `s` begin with an upper-case ASCII letter — the Haxe convention a type name follows, distinguishing a type reference from a lower-case value / package segment? */
 	public static inline function isUpperInitial(s: String): Bool {
-		final c: Int = StringTools.fastCodeAt(s, 0);
+		final c: Int = s.fastCodeAt(0);
 		return c >= 'A'.code && c <= 'Z'.code;
 	}
 
@@ -885,7 +871,7 @@ final class RefactorSupport {
 	 */
 	public static function skipSpaces(source: String, from: Int, stop: Int): Int {
 		var i: Int = from;
-		while (i < stop && isSpace(StringTools.fastCodeAt(source, i))) i++;
+		while (i < stop && isSpace(source.fastCodeAt(i))) i++;
 		return i;
 	}
 
@@ -899,7 +885,7 @@ final class RefactorSupport {
 	public static function parseStrictInt(s: String): Null<Int> {
 		if (s.length == 0) return null;
 		for (j in 0...s.length) {
-			final c: Int = StringTools.fastCodeAt(s, j);
+			final c: Int = s.fastCodeAt(j);
 			if (c < '0'.code || c > '9'.code) return null;
 		}
 		return Std.parseInt(s);
@@ -913,10 +899,9 @@ final class RefactorSupport {
 	 * surfaced by more than one walker).
 	 */
 	public static function pushUniqueSpan(out: Array<Span>, seen: Array<Int>, from: Int, length: Int): Void {
-		if (from >= 0 && !seen.contains(from)) {
-			seen.push(from);
-			out.push(new Span(from, from + length));
-		}
+		if (from < 0 || seen.contains(from)) return;
+		seen.push(from);
+		out.push(new Span(from, from + length));
 	}
 
 	/**
@@ -1030,7 +1015,7 @@ final class RefactorSupport {
 		var first: Bool = true;
 		while (true) {
 			var i: Int = from - 1;
-			while (i >= 0 && isSpace(StringTools.fastCodeAt(source, i))) i--;
+			while (i >= 0 && isSpace(source.fastCodeAt(i))) i--;
 			if (i < 0) break;
 			// The preceding token must be a BLOCK comment ending exactly here. Asking the
 			// lexer which token that is (rather than scanning back for a `/*`) is what keeps
@@ -1040,7 +1025,7 @@ final class RefactorSupport {
 			// First comment (the decl's own doc) is absorbed unconditionally; any
 			// further comment back is absorbed only if it too is a `/**` doc, so a
 			// plain `/*` license / section block above the doc survives.
-			if (!first && !(open + 2 < source.length && StringTools.fastCodeAt(source, open + 2) == '*'.code)) break;
+			if (!first && !(open + 2 < source.length && source.fastCodeAt(open + 2) == '*'.code)) break;
 			from = open;
 			first = false;
 		}
@@ -1062,23 +1047,23 @@ final class RefactorSupport {
 	public static function lineExtendedSpan(source: String, span: Span): Span {
 		var from: Int = span.from;
 		while (from > 0) {
-			final c: Int = StringTools.fastCodeAt(source, from - 1);
+			final c: Int = source.fastCodeAt(from - 1);
 			if (c == ' '.code || c == '\t'.code)
 				from--
 			else
 				break;
 		}
-		final startsLine: Bool = from == 0 || StringTools.fastCodeAt(source, from - 1) == '\n'.code;
+		final startsLine: Bool = from == 0 || source.fastCodeAt(from - 1) == '\n'.code;
 
 		var to: Int = span.to;
 		while (to < source.length) {
-			final c: Int = StringTools.fastCodeAt(source, to);
+			final c: Int = source.fastCodeAt(to);
 			if (c == ' '.code || c == '\t'.code || c == '\r'.code)
 				to++
 			else
 				break;
 		}
-		final endsLine: Bool = to >= source.length || StringTools.fastCodeAt(source, to) == '\n'.code;
+		final endsLine: Bool = to >= source.length || source.fastCodeAt(to) == '\n'.code;
 		if (endsLine && to < source.length) to++;
 
 		return startsLine && endsLine ? new Span(from, to) : span;
@@ -1100,13 +1085,13 @@ final class RefactorSupport {
 	public static function lineDeletionSpan(source: String, span: Span): Span {
 		var from: Int = span.from;
 		while (from > 0) {
-			final c: Int = StringTools.fastCodeAt(source, from - 1);
+			final c: Int = source.fastCodeAt(from - 1);
 			if (c != ' '.code && c != '\t'.code) break;
 			from--;
 		}
-		if (from > 0 && StringTools.fastCodeAt(source, from - 1) == '\n'.code) {
+		if (from > 0 && source.fastCodeAt(from - 1) == '\n'.code) {
 			from--;
-			if (from > 0 && StringTools.fastCodeAt(source, from - 1) == '\r'.code) from--;
+			if (from > 0 && source.fastCodeAt(from - 1) == '\r'.code) from--;
 		}
 		return new Span(from, span.to);
 	}
@@ -1120,12 +1105,12 @@ final class RefactorSupport {
 	 */
 	public static function adjacentToComma(source: String, span: Span): Bool {
 		var i: Int = span.to;
-		while (i < source.length && isSpace(StringTools.fastCodeAt(source, i))) i++;
-		if (i < source.length && StringTools.fastCodeAt(source, i) == ','.code) return true;
+		while (i < source.length && isSpace(source.fastCodeAt(i))) i++;
+		if (i < source.length && source.fastCodeAt(i) == ','.code) return true;
 
 		var j: Int = span.from - 1;
-		while (j >= 0 && isSpace(StringTools.fastCodeAt(source, j))) j--;
-		return j >= 0 && StringTools.fastCodeAt(source, j) == ','.code;
+		while (j >= 0 && isSpace(source.fastCodeAt(j))) j--;
+		return j >= 0 && source.fastCodeAt(j) == ','.code;
 	}
 
 	/**
@@ -1162,7 +1147,7 @@ final class RefactorSupport {
 	 */
 	public static function isBlankSpan(span: Span, source: String): Bool {
 		final inner: String = source.substring(span.from + 1, span.to - 1);
-		return StringTools.trim(inner) == '';
+		return inner.trim() == '';
 	}
 
 	/**
@@ -1187,7 +1172,7 @@ final class RefactorSupport {
 	 * hex digit, so a plain word-boundary test reads `'\x24name'` as one long
 	 * token and misses a real read (see `interpolationEscapeBefore`).
 	 */
-	public static function referencedInRange(source: String, name: String, from: Int, end: Int, excluded: Array<Span>): Bool {
+	public static inline function referencedInRange(source: String, name: String, from: Int, end: Int, excluded: Array<Span>): Bool {
 		return scanReference(source, name, from, end, excluded, null);
 	}
 
@@ -1220,76 +1205,10 @@ final class RefactorSupport {
 	 * comment closes with its own delimiter — but the mask is exact for all of
 	 * them and costs one scan per file.
 	 */
-	public static function referencedUnqualifiedInRange(
+	public static inline function referencedUnqualifiedInRange(
 		source: String, name: String, from: Int, end: Int, excluded: Array<Span>, commentRegions: Array<Span>
 	): Bool {
 		return scanReference(source, name, from, end, excluded, commentRegions);
-	}
-
-	/** The scan behind `referencedInRange` / `referencedUnqualifiedInRange`; a non-null `commentRegions` drops dot-qualified occurrences. */
-	private static function scanReference(
-		source: String, name: String, from: Int, end: Int, excluded: Array<Span>, commentRegions: Null<Array<Span>>
-	): Bool {
-		final len: Int = name.length;
-		if (len == 0) return false;
-		final stop: Int = end <= source.length ? end : source.length;
-		var i: Int = from;
-		while (i + len <= stop) {
-			final at: Int = source.indexOf(name, i);
-			if (at < 0 || at + len > stop) return false;
-			final beforeOk: Bool = at == 0 || !isIdentChar(StringTools.fastCodeAt(source, at - 1)) || interpolationEscapeBefore(source, at);
-			final afterIdx: Int = at + len;
-			final afterOk: Bool = afterIdx >= source.length || !isIdentChar(StringTools.fastCodeAt(source, afterIdx));
-			if (beforeOk && afterOk && !offsetWithinAny(at, excluded) && !qualifiedBefore(source, at, commentRegions)) return true;
-			i = at + 1;
-		}
-		return false;
-	}
-
-	/**
-	 * Is the token starting at `at` the TAIL of a dotted path — its preceding
-	 * non-whitespace character a qualification `.`? Whitespace is skipped
-	 * backwards, since a path may be broken across lines (`haxe.macro\n\t.Context`).
-	 * A null `commentRegions` disables the test entirely (the plain
-	 * `referencedInRange` scan, which counts every occurrence).
-	 *
-	 * Two dots are NOT one: a dot preceded by another belongs to `...` (range /
-	 * rest), never to a field access, so `0...Limit.MAX` reads `Limit` as the bare
-	 * reference it is. And a dot inside a COMMENT qualifies nothing — the period
-	 * ending `// … before the process dies.` sits directly before the next line's
-	 * first token and would otherwise mark a live call as a qualified tail. Only a
-	 * LINE comment can end in a bare `.` that way — every other inert construct
-	 * closes with its own delimiter — but the mask is exact for all of them.
-	 *
-	 * WHITESPACE only, not trivia: a comment spliced between the dot and the name
-	 * stops the walk short, so that occurrence reads as unqualified and COUNTS.
-	 * The over-counting direction — an import kept, never one deleted.
-	 */
-	private static function qualifiedBefore(source: String, at: Int, commentRegions: Null<Array<Span>>): Bool {
-		if (commentRegions == null) return false;
-		var j: Int = at - 1;
-		while (j >= 0 && isSpace(StringTools.fastCodeAt(source, j))) j--;
-		if (j < 0 || StringTools.fastCodeAt(source, j) != '.'.code) return false;
-		if (j > 0 && StringTools.fastCodeAt(source, j - 1) == '.'.code) return false;
-		return !offsetWithinAny(j, commentRegions);
-	}
-
-	/**
-	 * Whether the text directly before `at` is a numeric escape spelling the
-	 * interpolation trigger `$` — `\x24` or `$`. A string literal's escapes are
-	 * DECODED before the interpolation scan runs over the result, so `'\x24name'` is a
-	 * read of `name` exactly as `'$name'` is; but the escape ends in a hex digit, which
-	 * the word-boundary test above reads as "still the same token" and would report as
-	 * NO reference — the one direction that costs a wrongly deleted binding.
-	 *
-	 * Deliberately spelling-based, not decode-based: this scan runs over raw source
-	 * with no idea which regions are string literals, so `'\\x24name'` (a literal
-	 * backslash, decoding to no `$` at all) also answers yes. That is the harmless
-	 * direction — an extra KEPT binding, the same over-counting the textual scan
-	 * already accepts for names inside comments.
-	 */
-	private static function interpolationEscapeBefore(source: String, at: Int): Bool {
-		return DOLLAR_ESCAPES.exists(e -> at >= e.length && source.substr(at - e.length, e.length) == e);
 	}
 
 	/**
@@ -1435,15 +1354,6 @@ final class RefactorSupport {
 		return out;
 	}
 
-	private static function collectModulePathSpans(node: QueryNode, kinds: Array<String>, out: Array<Span>): Void {
-		final span: Null<Span> = node.span;
-		if (kinds.contains(node.kind) && span != null) {
-			out.push(span);
-			return;
-		}
-		for (child in node.children) collectModulePathSpans(child, kinds, out);
-	}
-
 	/**
 	 * Whether `tok` is a DOC block — opened with the doc marker and carrying a
 	 * non-blank body. A line comment, a plain `/* … *\/` banner (a license header, a
@@ -1462,11 +1372,11 @@ final class RefactorSupport {
 	 */
 	public static function blockCommentIsBlank(source: String, tok: { from: Int, to: Int, isLine: Bool }): Bool {
 		if (tok.isLine) return false;
-		final closed: Bool = tok.from + 2 <= tok.to - 2 && StringTools.fastCodeAt(source, tok.to - 2) == '*'.code // noqa: magic-number
-			&& StringTools.fastCodeAt(source, tok.to - 1) == '/'.code;
+		final closed: Bool = tok.from + 2 <= tok.to - 2 && source.fastCodeAt(tok.to - 2) == '*'.code // noqa: magic-number
+			&& source.fastCodeAt(tok.to - 1) == '/'.code;
 		if (!closed) return false;
 		for (i in tok.from + 2...tok.to - 2) { // noqa: magic-number
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (!isSpace(c) && c != '*'.code) return false;
 		}
 		return true;
@@ -1475,7 +1385,7 @@ final class RefactorSupport {
 	/** The offset of the start of the line `at` sits on. */
 	public static function startOfLine(source: String, at: Int): Int {
 		var from: Int = at;
-		while (from > 0 && StringTools.fastCodeAt(source, from - 1) != '\n'.code) from--;
+		while (from > 0 && source.fastCodeAt(from - 1) != '\n'.code) from--;
 		return from;
 	}
 
@@ -1487,7 +1397,7 @@ final class RefactorSupport {
 	 */
 	public static function commentBody(source: String, tok: { from: Int, to: Int, isLine: Bool }): Span {
 		final closed: Bool = !tok.isLine && tok.to >= tok.from + 4 && StringTools.fastCodeAt(source, tok.to - 2) == '*'.code // noqa
-			&& StringTools.fastCodeAt(source, tok.to - 1) == '/'.code;
+			&& source.fastCodeAt(tok.to - 1) == '/'.code;
 		final bodyEnd: Int = closed ? tok.to - 2 : tok.to;
 		return new Span(tok.from + 2, bodyEnd);
 	}
@@ -1525,8 +1435,7 @@ final class RefactorSupport {
 	public static function sameSource(a: QueryNode, b: QueryNode, source: String): Bool {
 		final sa: Null<Span> = a.span;
 		final sb: Null<Span> = b.span;
-		return sa != null && sb != null
-			&& StringTools.trim(source.substring(sa.from, sa.to)) == StringTools.trim(source.substring(sb.from, sb.to));
+		return sa != null && sb != null && source.substring(sa.from, sa.to).trim() == source.substring(sb.from, sb.to).trim();
 	}
 
 	/** Whether the subtree rooted at `node` contains any node of kind `kind`. */
@@ -1612,9 +1521,9 @@ final class RefactorSupport {
 			final at: Int = source.indexOf(name, i);
 			if (at < 0) return false;
 			i = at + 1;
-			if (at == 0 || StringTools.fastCodeAt(source, at - 1) != '.'.code) continue;
+			if (at == 0 || source.fastCodeAt(at - 1) != '.'.code) continue;
 			final afterIdx: Int = at + len;
-			if (afterIdx >= source.length || !isIdentChar(StringTools.fastCodeAt(source, afterIdx))) return true;
+			if (afterIdx >= source.length || !isIdentChar(source.fastCodeAt(afterIdx))) return true;
 		}
 	}
 
@@ -1633,8 +1542,8 @@ final class RefactorSupport {
 		final n: Int = body.length;
 		var i: Int = 0;
 		while (i < n) {
-			final c: Int = StringTools.fastCodeAt(body, i);
-			final crlf: Bool = c == '\r'.code && i + 1 < n && StringTools.fastCodeAt(body, i + 1) == '\n'.code;
+			final c: Int = body.fastCodeAt(i);
+			final crlf: Bool = c == '\r'.code && i + 1 < n && body.fastCodeAt(i + 1) == '\n'.code;
 			if (c == '\n'.code || crlf) {
 				final runStart: Int = i;
 				i = skipContinuation(body, (crlf ? i + 1 : i) + 1, n);
@@ -1706,7 +1615,7 @@ final class RefactorSupport {
 		stmt: QueryNode, localDeclKinds: Array<String>, localDeclExprKinds: Array<String>, metaKinds: Array<String>
 	): Null<String> {
 		final decl: Null<QueryNode> = topLevelDeclaredNode(stmt, localDeclKinds, localDeclExprKinds, metaKinds);
-		return decl == null ? null : decl.name;
+		return decl?.name;
 	}
 
 	/**
@@ -1987,27 +1896,6 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * Whether a top-level constructor statement of `kind` ALWAYS COMPLETES NORMALLY — control
-	 * reaches the statement after it, whatever the statement does internally. Membership only:
-	 * the KIND is what is decided here, never the subtree, which is `ctorPrefixUnconditional`'s
-	 * scan's job. A LOOP is deliberately absent; that entry documents why.
-	 *
-	 * Each set is read straight off its `RefShape` seam and tested in place rather than folded
-	 * into one array: the seams never change during a run, and this is asked once per prefix
-	 * statement per candidate FIELD, so building the union per call would allocate for nothing.
-	 */
-	private static function completesNormally(kind: String, shape: RefShape): Bool {
-		return kind == shape.exprStatementKind || isConditionalKind(kind) || kindIn(shape.localDeclKinds, kind)
-			|| kindIn(shape.staticLocalDeclKinds, kind) || kindIn(shape.ifStatementKinds, kind) || kindIn(shape.switchKinds, kind)
-			|| kindIn(shape.tryStatementKinds, kind) || kindIn(shape.localFunctionKinds, kind) || kindIn(shape.inlineFunctionKinds, kind);
-	}
-
-	/** Whether `kinds` is set and holds `kind` — an unset seam contributes nothing. */
-	private static inline function kindIn(kinds: Null<Array<String>>, kind: String): Bool {
-		return kinds != null && kinds.contains(kind);
-	}
-
-	/**
 	 * The class-like container and the field member declared at `fieldFrom`, found by
 	 * re-walking `tree` — the fix-side re-derivation from a violation's span (a
 	 * violation carries only its file and span, so the container and field are
@@ -2059,14 +1947,14 @@ final class RefactorSupport {
 	public static function fieldDeclInitInsertPos(source: String, fieldSpan: Span): Int {
 		var i: Int = fieldSpan.to - 1;
 		while (i > fieldSpan.from) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c == ' '.code || c == '\t'.code || c == '\r'.code || c == '\n'.code) {
 				i--;
 				continue;
 			}
 			break;
 		}
-		return (i > fieldSpan.from && StringTools.fastCodeAt(source, i) == ';'.code) ? i : fieldSpan.to;
+		return i > fieldSpan.from && source.fastCodeAt(i) == ';'.code ? i : fieldSpan.to;
 	}
 
 	/**
@@ -2116,7 +2004,7 @@ final class RefactorSupport {
 	): Bool {
 		if (declType == null || !methodCalledOn(source, name, exclude)) return false;
 		final idx: Null<SymbolIndex> = index();
-		final resolvedRebind: Null<Bool> = idx == null ? null : idx.abstractRebindsThis(declType, abstractKinds);
+		final resolvedRebind: Null<Bool> = idx?.abstractRebindsThis(declType, abstractKinds);
 		return resolvedRebind ?? !finalSafeStdlibTypes.contains(declType);
 	}
 
@@ -2125,24 +2013,21 @@ final class RefactorSupport {
 		final n: Int = source.length;
 		var i: Int = pos;
 		while (i < n) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (isSpace(c)) {
 				i++;
 				continue;
 			}
 			if (c == '/'.code && i + 1 < n) {
-				final c1: Int = StringTools.fastCodeAt(source, i + 1);
+				final c1: Int = source.fastCodeAt(i + 1);
 				if (c1 == '/'.code) {
 					i += 2;
-					while (i < n && StringTools.fastCodeAt(source, i) != '\n'.code) i++;
+					while (i < n && source.fastCodeAt(i) != '\n'.code) i++;
 					continue;
 				}
 				if (c1 == '*'.code) {
 					i += 2;
-					while (
-						i + 1 < n && !(StringTools.fastCodeAt(source, i) == '*'.code && StringTools.fastCodeAt(source, i + 1) == '/'.code)
-					)
-						i++;
+					while (i + 1 < n && (source.fastCodeAt(i) != '*'.code || source.fastCodeAt(i + 1) != '/'.code)) i++;
 					i += 2;
 					continue;
 				}
@@ -2157,7 +2042,7 @@ final class RefactorSupport {
 		final from: Int = absorbLeadingComments(source, comments, span.from);
 		var to: Int = span.to;
 		final t: Null<{ from: Int, to: Int, isLine: Bool }> = firstCommentStartingAfter(comments, to);
-		if (t != null && StringTools.trim(source.substring(to, t.from)) == '' && source.substring(to, t.from).indexOf('\n') < 0) to = t.to;
+		if (t != null && source.substring(to, t.from).trim() == '' && source.substring(to, t.from).indexOf('\n') < 0) to = t.to;
 		return new Span(from, to);
 	}
 
@@ -2179,9 +2064,9 @@ final class RefactorSupport {
 	 */
 	public static function firstTokenEnd(source: String, from: Int): Int {
 		if (from < 0 || from >= source.length) return from;
-		if (!isIdentChar(StringTools.fastCodeAt(source, from))) return from + 1;
+		if (!isIdentChar(source.fastCodeAt(from))) return from + 1;
 		var i: Int = from + 1;
-		while (i < source.length && isIdentChar(StringTools.fastCodeAt(source, i))) i++;
+		while (i < source.length && isIdentChar(source.fastCodeAt(i))) i++;
 		return i;
 	}
 
@@ -2213,7 +2098,6 @@ final class RefactorSupport {
 		return result;
 	}
 
-
 	/**
 	 * Every name a case PATTERN binds in `node`'s subtree: each name inside a
 	 * `casePatternKind` subtree (a capture projects as a bare identifier there, so the
@@ -2227,23 +2111,11 @@ final class RefactorSupport {
 		return out;
 	}
 
-	/** Recursive worker of `casePatternNames`; `inPattern` marks a subtree already inside a pattern. */
-	private static function collectCasePatternNames(
-		node: QueryNode, inPattern: Bool, casePatternKind: Null<String>, binderKinds: Array<String>, out: Array<String>
-	): Void {
-		final within: Bool = inPattern || (casePatternKind != null && node.kind == casePatternKind);
-		final name: Null<String> = node.name;
-		if (name != null && (within || binderKinds.contains(node.kind)) && !out.contains(name)) out.push(name);
-		for (child in node.children) collectCasePatternNames(child, within, casePatternKind, binderKinds, out);
-	}
-
 	/**
 	 * Whether `text` contains a comma outside any `()`/`[]`/`{}` nesting and outside a
 	 * string literal — the multi-declaration separator of `var i, j = n`. `<>` is
 	 * deliberately not tracked (a generic type-parameter comma reads as top-level,
 	 * which consumers treat conservatively).
-	 */
-	/**
 	 * Whether `decl` is a MULTI-declarator list (`var a = 1, b = 2` / `var a, b`) rather than a
 	 * single binding — every binding after the first projects as a continuation node, so the
 	 * question the grammar already answers is asked of the TREE. `continuationKinds` is the
@@ -2256,7 +2128,6 @@ final class RefactorSupport {
 		for (child in decl.children) if (continuationKinds.contains(child.kind)) return true;
 		return false;
 	}
-
 
 	/**
 	 * `lines` without its leading / trailing whitespace-only entries — the shared
@@ -2341,7 +2212,7 @@ final class RefactorSupport {
 		var start: Int = 0;
 		var prev: Int = 0;
 		for (i in 0...text.length) {
-			final ch: Int = StringTools.fastCodeAt(text, i);
+			final ch: Int = text.fastCodeAt(i);
 			if (ch == '<'.code || ch == '('.code || ch == '{'.code || ch == '['.code)
 				depth++;
 			else if (ch == ')'.code || ch == '}'.code || ch == ']'.code)
@@ -2349,12 +2220,12 @@ final class RefactorSupport {
 			else if (ch == '>'.code && prev != '-'.code)
 				depth--;
 			else if (ch == ','.code && depth == 0) {
-				out.push(StringTools.trim(text.substring(start, i)));
+				out.push(text.substring(start, i).trim());
 				start = i + 1;
 			}
 			prev = ch;
 		}
-		out.push(StringTools.trim(text.substring(start)));
+		out.push(text.substring(start).trim());
 		return out;
 	}
 
@@ -2369,13 +2240,13 @@ final class RefactorSupport {
 	 * application of `(Int) -> Array` carrying the argument `Int`.
 	 */
 	public static function typeArgumentSourcesOf(typeSource: String): Null<Array<String>> {
-		final t: String = StringTools.trim(typeSource);
+		final t: String = typeSource.trim();
 		final lt: Int = t.indexOf('<');
 		if (lt <= 0 || outerNominalOf(t) == null) return null;
 		var depth: Int = 0;
 		var prev: Int = 0;
 		for (i in lt ... t.length) {
-			final ch: Int = StringTools.fastCodeAt(t, i);
+			final ch: Int = t.fastCodeAt(i);
 			if (ch == '<'.code)
 				depth++;
 			else if (ch == '>'.code && prev != '-'.code) {
@@ -2401,32 +2272,6 @@ final class RefactorSupport {
 		if (resolved == null) return null;
 		final bindingFrom: Null<Int> = resolved.bindingFrom;
 		return bindingFrom == null ? resolved.selfTypeName : declaredTypes[bindingFrom];
-	}
-
-	/**
-	 * A receiver path's ROOT reduced to whichever of the two things a root can BE: the enclosing
-	 * type declaration (the self reference) or a value BINDING. Null when the path's root is not
-	 * a bare identifier at all, or the one thing it is cannot be resolved.
-	 *
-	 * Extracted because `pathRootTypeName` and its deep-mode twin `pathRootTypeSourceDeep` differ
-	 * ONLY in what they do with a resolved binding — one reads a nominal off `declaredTypes`, the
-	 * other prefers the written source and falls through to the for-binding arm. Everything before
-	 * that (walking down single-child wrappers to the root identifier, and the self-reference
-	 * branch) is one question with one answer, and had no business being written twice.
-	 */
-	private static function pathRootBinding(recv: QueryNode, root: QueryNode, shape: RefShape): Null<PathRoot> {
-		final identKind: Null<String> = shape.identKind;
-		if (identKind == null) return null;
-		var node: QueryNode = recv;
-		while (node.kind != identKind && node.children.length == 1) node = node.children[0];
-		if (node.kind != identKind) return null;
-		if (node.name == shape.selfReferenceText) {
-			final span: Null<Span> = recv.span ?? node.span;
-			final enclosing: Null<String> = span == null ? null : TypeResolver.enclosingTypeName(root, span);
-			return enclosing == null ? null : { selfTypeName: enclosing, bindingFrom: null };
-		}
-		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(node, root, shape);
-		return bindingFrom == null ? null : { selfTypeName: null, bindingFrom: bindingFrom };
 	}
 
 	/**
@@ -2560,6 +2405,740 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * The `Type.method` a call node names TOGETHER with that method's written RETURN type source,
+	 * when the flattened `Type.method` names a `RefShape.staticMethodReturns` entry
+	 * (`Reflect.fields` → `Array<String>`, `Date.now` → `Date`, …) and the receiver is a genuine
+	 * TYPE reference — its ROOT identifier binds to no value (`TypeResolver.receiverRootIsUnboundType`),
+	 * so a local / parameter / field named after the module makes the access an INSTANCE call and is
+	 * refused. Null for every other node. The table's values are written import-safe (fully qualified
+	 * where the simple name would not resolve), so a caller may carry the source forward or copy it
+	 * verbatim.
+	 *
+	 * What it deliberately does NOT decide is whether an indexed type SHADOWS the tabled one — the
+	 * two callers need opposite answers there and each applies its own policy to `typeName`:
+	 * `ExplicitLocalType` refuses a name declared AT ALL (it copies the source into the user's file,
+	 * so an indexed name means the oracle can do better), while `tabledStaticCallTypeSource` refuses
+	 * only a name declared by a NON-std file (it produces a nominal for internal lookups, where the
+	 * normally-indexed std is not a shadow). Keeping the shape match here and the policy at the call
+	 * sites is what puts those two policies side by side instead of in two near-identical copies.
+	 */
+	public static function tabledStaticCall(
+		node: QueryNode, root: QueryNode, shape: RefShape
+	): Null<{ typeName: String, returnSource: String }> {
+		final table: Null<Map<String, String>> = shape.staticMethodReturns;
+		final callKind: Null<String> = shape.callKind;
+		final fieldKind: Null<String> = shape.fieldAccessKind;
+		if (table == null || callKind == null || fieldKind == null) return null;
+		if (node.kind != callKind || node.children.length == 0) return null;
+		final callee: QueryNode = node.children[0];
+		if (callee.kind != fieldKind || callee.children.length != 1) return null;
+		final method: Null<String> = callee.name;
+		final receiver: QueryNode = callee.children[0];
+		final typeName: Null<String> = receiver.name;
+		if (method == null || typeName == null) return null;
+		final ret: Null<String> = table['$typeName.$method'];
+		return ret == null || !TypeResolver.receiverRootIsUnboundType(receiver, root, shape)
+			? null
+			: { typeName: typeName, returnSource: ret };
+	}
+
+	/** Whether any indexed file OUTSIDE the auto-discovered Haxe std declares a top-level type named `typeName`. */
+	public static function shadowedByNonStdType(index: Null<SymbolIndex>, typeName: String): Bool {
+		return index != null && index.declaringFiles(typeName).exists(fi -> !StdResolver.isStdFile(fi.file));
+	}
+
+	/**
+	 * The verbatim declared type SOURCE a BARE identifier carries when it names no value binding at
+	 * all but IS a member — declared directly or INHERITED — of the enclosing type declaration: the
+	 * implicit-`this` read Haxe resolves without the qualifier. `SymbolIndex`'s import-aware walk
+	 * supplies it (`resolvePathFinalMemberTypeSource` over a one-segment member path), so the
+	 * extends chain is followed to the SPECIFIC supertype each clause names rather than to any
+	 * same-simple-named type elsewhere in the scope.
+	 *
+	 * Null — the caller keeps its conservative branch — whenever: `ident` is not an identifier node;
+	 * it DOES resolve to a value binding; no enclosing type declaration covers it; or the member is
+	 * unresolved / ambiguous anywhere along the chain.
+	 *
+	 * `invisibleBinders` is the gate that is not about resolution but about VISIBILITY, and it is
+	 * load-bearing: a binder the scope resolver cannot see looks EXACTLY like an unbound name, so
+	 * without it this arm answers the enclosing type's member for a local the author actually wrote
+	 * — and a rewrite built on that answer breaks the build. Build the list with
+	 * `resolverInvisibleBinderNames`, which is per-file while this is per-site. A NULL list — the
+	 * grammar exposes no seam for one of the binder classes — is refused outright: an EMPTY list
+	 * means "this file binds nothing invisibly", a null one means the question cannot be asked.
+	 */
+	public static function implicitThisMemberTypeSource(
+		ident: QueryNode, root: QueryNode, shape: RefShape, index: SymbolIndex, file: String, invisibleBinders: Null<Array<String>>
+	): Null<String> {
+		final identKind: Null<String> = shape.identKind;
+		final name: Null<String> = ident.name;
+		final span: Null<Span> = ident.span;
+		if (identKind == null || ident.kind != identKind || name == null || span == null) return null;
+		if (name == shape.selfReferenceText) return null;
+		if (invisibleBinders == null || invisibleBinders.contains(name)) return null;
+		if (TypeResolver.resolveBindingFrom(name, span, root, shape) != null) return null;
+		final enclosing: Null<String> = TypeResolver.enclosingTypeName(root, span);
+		return enclosing == null ? null : index.resolvePathFinalMemberTypeSource(file, enclosing, [name]);
+	}
+
+	/**
+	 * Every name bound in `root` by a construct the SCOPE RESOLVER cannot see — the shadow set a
+	 * consumer must subtract before reading an unbound identifier as anything but a local. Null when
+	 * the grammar exposes no seam for one of the classes, which a consumer must read as "the shadow
+	 * cannot be ruled out" rather than as an empty set.
+	 *
+	 * Two classes, each confirmed against the Haxe grammar rather than assumed (the parenthesized
+	 * lambda param, the `catch` binder and a local function's own parameters all DO resolve, and are
+	 * deliberately absent):
+	 *
+	 *  - CASE PATTERNS (`case Leaf(m):`) — the binder lives inside the pattern subtree.
+	 *  - the BARE single-parameter arrow lambda (`m -> m.f()`), whose parameter the grammar projects
+	 *    as a plain identifier expression indistinguishable from a read — the model carries no binder
+	 *    node to resolve, so the resolver has nothing to bind. Recovering that distinction in the
+	 *    projection would close this for every consumer at once and delete this arm; until then the
+	 *    name is vetoed wherever it appears in the file.
+	 */
+	public static function resolverInvisibleBinderNames(root: QueryNode, shape: RefShape): Null<Array<String>> {
+		final identKind: Null<String> = shape.identKind;
+		final lambdaKinds: Null<Array<String>> = shape.lambdaKinds;
+		final binderKinds: Array<String> = shape.casePatternBinderKinds ?? [];
+		if (identKind == null || lambdaKinds == null || (shape.plainCasePatternKind == null && binderKinds.length == 0)) return null;
+		final names: Array<String> = casePatternNames(root, shape.plainCasePatternKind, binderKinds);
+		collectBareLambdaParamNames(root, identKind, lambdaKinds, names);
+		return names;
+	}
+
+	/**
+	 * The VALUE binder an iteration node carries, or null for a single-binder loop — the `v` node
+	 * of `for (k => v in m)`, whose kinds the grammar publishes as
+	 * `RefShape.iterationValueBinderKinds`.
+	 *
+	 * Public, with its three siblings below, because the binder is an EXTRA child ahead of the
+	 * iterable, so every consumer reading a loop's operands positionally faces the same question.
+	 * Four of them answered it with a private copy in the commit that introduced the binder — one
+	 * question, four implementations, which is the drift the binder node exists to end.
+	 *
+	 * The kinds still arrive as a parameter, so a caller passing `[]` gets the pre-binder
+	 * `children[0]` behaviour back with no compile error. Read them from
+	 * `RefShape.iterationValueBinderKinds`.
+	 */
+	public static function iterationValueBinder(loop: QueryNode, valueBinderKinds: Array<String>): Null<QueryNode> {
+		return loop.children.find(c -> valueBinderKinds.contains(c.kind));
+	}
+
+	/** Whether `loop` carries a key-value VALUE binder — i.e. it binds a key AND a value. */
+	public static inline function hasIterationValueBinder(loop: QueryNode, valueBinderKinds: Array<String>): Bool {
+		return iterationValueBinder(loop, valueBinderKinds) != null;
+	}
+
+	/**
+	 * The OPERAND children of an iteration node — its iterable and its body — with the VALUE binder
+	 * of a key-value iteration filtered out. A consumer indexing `children[0]` for the iterable, or
+	 * comparing `children.length` against a fixed operand count, reads the binder instead on every
+	 * key-value loop.
+	 */
+	public static function loopOperands(loop: QueryNode, valueBinderKinds: Array<String>): Array<QueryNode> {
+		return [for (c in loop.children) if (!valueBinderKinds.contains(c.kind)) c];
+	}
+
+	/**
+	 * The ITERABLE child of an iteration node — its first child that is not a value binder — or null
+	 * for a node with no operands at all.
+	 */
+	public static function iterationIterable(loop: QueryNode, valueBinderKinds: Array<String>): Null<QueryNode> {
+		return loop.children.find(child -> !valueBinderKinds.contains(child.kind));
+	}
+
+	/**
+	 * The report + resolution-scope `SymbolIndex` the plugin host carries — a subtype declared in a
+	 * configured resolution library, or in the implicitly-scoped Haxe std, is indexed there too — or
+	 * null when the plugin is not a resolution host or no scope reached it at all (the caller falls
+	 * back to the report index). The eager counterpart of `lazySymbolIndex`, for a check that already
+	 * holds a report index and only needs to know whether a WIDER one exists:
+	 * `resolutionIndexOf(plugin) ?? index`.
+	 *
+	 * The null return is now the RARE case rather than the default. A `Cli` run reaches it only when
+	 * the project declares no resolution key AND no Haxe std is discoverable — a machine without Haxe,
+	 * or one that declined the std via `APQ_NO_STD` / `"resolutionStd": false`. It is still the plain
+	 * answer for a direct `check.run` with a bare plugin, which is what the unit tests that pin the
+	 * report-only behaviour use.
+	 */
+	public static inline function resolutionIndexOf(plugin: GrammarPlugin): Null<SymbolIndex> {
+		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
+		return host != null && host.hasAnyResolutionScope() ? host.resolutionIndex() : null;
+	}
+
+	/**
+	 * The resolution scope's RAW sources (report UNION the library roots) when `plugin` hosts one, else
+	 * null. The text counterpart of `resolutionIndexOf`, for a scan that needs no parse: the index drops
+	 * a skip-parsed file from both `allFiles` and `sourceOf`, so a whole-scope TEXT proof read off the
+	 * index would treat that file as holding nothing at all.
+	 */
+	public static inline function resolutionSourcesOf(plugin: GrammarPlugin): Null<Array<{ file: String, source: String }>> {
+		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
+		return host != null && host.hasAnyResolutionScope() ? host.resolutionFiles() : null;
+	}
+
+	/**
+	 * A memoized `SymbolIndex` builder — built at most once, on first call, over `files`. Shared by
+	 * checks whose path-receiver type gate needs cross-file resolution only after cheaper structural
+	 * gates pass, so most runs never trigger the build. When `plugin` is a `SymbolIndexHost` carrying
+	 * ANY resolution scope — a declared one (report files UNION the configured library roots) or the
+	 * implicit std-only one — that host's memoised resolution index is preferred, so the check resolves
+	 * against libraries and std too.
+	 *
+	 * The report-only fallback below it is therefore no longer the ordinary path: on a Haxe-equipped
+	 * machine a `Cli` run always takes the host branch, and the fallback answers only for a direct
+	 * `check.run` with a bare plugin (every unit test that pins report-scope behaviour) or a machine
+	 * with no discoverable std. `prebuilt`, when supplied, is an already-built report-scope index that
+	 * fallback returns as-is instead of building a second one — `prefer-final-field` passes the eager
+	 * index it already holds. It is ignored when a resolution scope is present, since the wider index
+	 * must win; that is not a lost optimisation, because the host's index is a DIFFERENT (wider) index
+	 * than `prebuilt`, so there is no duplicate build to avoid on that path.
+	 */
+	public static function lazySymbolIndex(
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?prebuilt: SymbolIndex
+	): () -> Null<SymbolIndex> {
+		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
+		if (host != null && host.hasAnyResolutionScope()) {
+			final resolver: SymbolIndexHost = host;
+			return () -> resolver.resolutionIndex();
+		}
+		if (prebuilt != null) {
+			final ready: SymbolIndex = prebuilt;
+			return () -> ready;
+		}
+		var index: Null<SymbolIndex> = null;
+		var built: Bool = false;
+		return () -> {
+			if (!built) {
+				built = true;
+				index = SymbolIndex.build(files, plugin);
+			}
+			return index;
+		};
+	}
+
+	/**
+	 * A node kind that contributes no side effect on its own: an enumerated
+	 * `SAFE_KINDS` member, or any leaf whose kind ends with `Lit` / `StringExpr`
+	 * (a literal payload not separately enumerated).
+	 */
+	public static inline function isSafeKind(kind: String): Bool {
+		return SAFE_KINDS.contains(kind) || kind.endsWith('Lit') || kind.endsWith('StringExpr');
+	}
+
+	/** Is `offset` inside any of `spans` (`from`-inclusive, `to`-exclusive)? */
+	public static function offsetWithinAny(offset: Int, spans: Array<Span>): Bool {
+		for (s in spans) if (offset >= s.from && offset < s.to) return true;
+		return false;
+	}
+
+	/**
+	 * The offset at which an `extends` / `implements` clause can be spliced into
+	 * the header of `decl` (named `typeName`): just past its last header token,
+	 * before the body `{`. AST-anchored - each header child node (a type-parameter
+	 * constraint, an `extends` / `implements` clause, a conditional block) bounds
+	 * the search, and the search itself steps over comments and string literals,
+	 * so a `{` written inside a header comment or inside a structural type
+	 * constraint is never mistaken for the body brace. Null when no body brace can
+	 * be verified before the first body member; a caller that gets null must
+	 * refuse the whole operation rather than splice at an unverified offset.
+	 *
+	 * The name token is located with `activeCodeIdentTokenOffset`, not the raw
+	 * scan: a leading block comment that repeats the type name would otherwise
+	 * win the race for it, and the whole header search would then run inside that
+	 * comment - splicing the clause into comment text. The result still PARSES, so
+	 * no downstream reparse gate catches it, while the caller has already staged
+	 * the member cut: the members move out and nothing inherits them.
+	 */
+	public static function typeHeaderInsertOffset(source: String, decl: TypeDeclMatch, typeName: String): Null<Int> {
+		final nameSpan: Span = decl.nameNode.span ?? decl.fullSpan;
+		final nameAt: Int = activeCodeIdentTokenOffset(source, nameSpan, typeName);
+		final headerFrom: Int = nameAt < 0 ? nameSpan.from : nameAt + typeName.length;
+		final limit: Int = nameSpan.to <= source.length ? nameSpan.to : source.length;
+		var from: Int = headerFrom;
+		var brace: Int = -1;
+		// Children are in document order: the first one that starts after a located
+		// brace belongs to the body, every earlier one is part of the header.
+		for (child in decl.nameNode.children) {
+			final s: Null<Span> = child.span;
+			if (s == null) continue;
+			brace = headerScan(source, from, s.from < limit ? s.from : limit).brace;
+			if (brace >= 0) break;
+			if (s.to > from) from = s.to;
+		}
+		if (brace < 0) brace = headerScan(source, from, limit).brace;
+		return brace < 0 || source.fastCodeAt(brace) != '{'.code ? null : headerScan(source, headerFrom, brace).tokenEnd;
+	}
+
+	/**
+	 * Classify every word-boundary occurrence of `name` in `source[from...end)`
+	 * (offsets inside `excluded` skipped) by lexical context, built on top of the
+	 * parse so `#if...#end` regions and trivia are exact. Returns null when
+	 * `source` does not parse — the caller then falls back to the raw scan
+	 * (fail-closed). See `OccurrenceClass` for what each class means.
+	 */
+	public static function classifyOccurrences(
+		source: String, name: String, plugin: GrammarPlugin, from: Int, end: Int, excluded: Array<Span>
+	): Null<Array<ClassifiedOccurrence>> {
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return null catch (exception: Exception) return null;
+		final out: Array<ClassifiedOccurrence> = [];
+		final len: Int = name.length;
+		if (len == 0) return out;
+		final condSpans: Array<Span> = [];
+		collectConditionalSpans(tree, condSpans);
+		final regions: Array<LexRegion> = scanLexicalRegions(source);
+		final stop: Int = end <= source.length ? end : source.length;
+		var i: Int = from;
+		while (i + len <= stop) {
+			final at: Int = source.indexOf(name, i);
+			if (at < 0 || at + len > stop) break;
+			i = at + 1;
+			final afterIdx: Int = at + len;
+			final beforeOk: Bool = at == 0 || !isIdentChar(source.fastCodeAt(at - 1));
+			final afterOk: Bool = afterIdx >= source.length || !isIdentChar(source.fastCodeAt(afterIdx));
+			if (beforeOk && afterOk && !offsetWithinAny(at, excluded))
+				out.push({ span: new Span(at, afterIdx), kind: classifyAt(source, at, len, condSpans, regions) });
+		}
+		return out;
+	}
+
+	/**
+	 * Whether a projected node kind denotes a `#if...#end` region — a block
+	 * `Conditional`, an expression `ConditionalExpr`, or any `CondSplice*`
+	 * mid-expression / statement splice. An unrecognised conditional kind
+	 * degrades to `ActiveCode`, which still blocks — fail-closed.
+	 */
+	public static inline function isConditionalKind(kind: String): Bool {
+		return kind == 'Conditional' || kind == 'ConditionalExpr' || kind.startsWith('CondSplice');
+	}
+
+	/**
+	 * Whether the field declared by `field` can become `final` off its CONSTRUCTOR
+	 * assignment: it has no declaration initializer (a `final` with one cannot be
+	 * reassigned in the constructor) and no `(` in its declaration head (which covers
+	 * properties and parenthesised function types), its sole write is exactly one
+	 * unconditional top-level constructor statement (`x = expr` / `this.x = expr` via
+	 * `constructorFieldInitAt` — a shadowing local or parameter that owns the
+	 * assignment leaves it a `var`), it is not static (`static final` requires a
+	 * declaration initializer), and no other write to its name appears anywhere in
+	 * `source` — a conservative text scan (`MemberWriteScan.writtenInRange`) that also
+	 * sees `#if` bodies the structural walkers cannot. A `@:build` macro injecting a
+	 * writer is the residual blind spot, shared with every other arm of the three
+	 * consumers and surfacing as a loud compile error at the injected write.
+	 *
+	 * The shared core of the constructor arms of `prefer-final-field` /
+	 * `prefer-final-public-field` AND of `prefer-read-only-field`'s cession of the same
+	 * candidates — all three MUST agree on it, or a ctor-assigned field either gets two
+	 * conflicting fixes or none. A new single-file soundness gate for the arm therefore
+	 * belongs INSIDE this predicate, never in one consumer — and mind its cost:
+	 * predicate-false routes the field to `prefer-read-only-field`'s `(default, null)`.
+	 * Each check wraps it in its own cross-file write gates; this predicate is
+	 * single-file only.
+	 */
+	public static function ctorSoleAssignmentFinalizable(source: String, field: QueryNode, plugin: GrammarPlugin): Bool {
+		final name: Null<String> = field.name;
+		final span: Null<Span> = field.span;
+		if (name == null || span == null) return false;
+		if (field.children.length >= 1) return false;
+		if (source.substring(span.from, span.to).indexOf('(') >= 0) return false;
+		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
+		if (tree == null) return false;
+		final loc: Null<{
+			container: QueryNode,
+			field: QueryNode,
+			stmt: QueryNode,
+			rhs: QueryNode,
+			target: Span
+		}> = constructorFieldInitAt(tree, span.from, plugin.refShape());
+		return loc != null && !staticMemberFroms(loc.container, plugin.refShape()).contains(span.from)
+			&& !MemberWriteScan.writtenInRange(source, name, loc.target, 0, source.length);
+	}
+
+	/**
+	 * Whether `name` is BOUND as an identifier anywhere in `source[from...end)`
+	 * outside `excluded` - the precise form of the question a COLLISION gate asks:
+	 * "is the target name already taken where this rename lands?". Answered from
+	 * the parse (`classifyOccurrences`) instead of raw text, so a comment mention,
+	 * an inert string literal and the member-name slot of a dotted access
+	 * (`o.name`) are correctly none of them bindings.
+	 *
+	 * NOT a replacement for `referencedInRange`, whose imprecision is
+	 * LOAD-BEARING for its other callers: the `unused-*` family reads a `false`
+	 * as "nothing uses this, delete it", and the occurrences skipped here - a
+	 * dotted `obj.member` above all - are exactly its real uses. The conservative
+	 * direction of the question belongs to the CALL SITE, so the two queries
+	 * coexist and only a veto-side caller may use this one.
+	 *
+	 * Deliberately conservative wherever a precise answer would cost another
+	 * scan: CODE inside a `#if` body counts (it hosts real declarations), a
+	 * single-quoted literal that can interpolate counts wholesale rather than
+	 * resolving which of its parts are code, a comment between the dot and the name
+	 * leaves the dotted test false, and a parse failure falls back to
+	 * `referencedInRange`. Each of those over-reports, which for a veto gate is a
+	 * missed fix - never a wrong one.
+	 *
+	 * A STRUCTURE-FIELD name is not excluded here: it needs the parse tree, which
+	 * this signature does not carry, and its safety is caller-dependent (a
+	 * `@:structInit` object literal DOES name the class's own fields). The caller
+	 * that can cede it passes `structureFieldNameSpans` in `excluded`.
+	 */
+	public static function nameBoundInRange(
+		source: String, name: String, from: Int, end: Int, excluded: Array<Span>, plugin: GrammarPlugin
+	): Bool {
+		final classified: Null<Array<ClassifiedOccurrence>> = classifyOccurrences(source, name, plugin, from, end, excluded);
+		if (classified == null) return referencedInRange(source, name, from, end, excluded);
+		final regions: Array<LexRegion> = scanLexicalRegions(source);
+		for (occ in classified) switch occ.kind {
+			// A word inside a longer literal binds nothing, whatever the literal interpolates.
+			case CommentTrivia | DirectiveComment | StringWord:
+			case StringLiteral if (!interpolatingLiteralAt(source, occ.span.from, regions)):
+			case _:
+				if (!isMemberNamePosition(source, occ.span.from)) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * The identifier-token span of every STRUCTURE-FIELD name in `tree` — a member of an
+	 * anonymous-structure type (`{ x:Float }`), of an object literal (`{ x: 1 }`) or of a
+	 * structure PATTERN (`case { x: n }`), per `shape.structureFieldHostKinds`. Such a name
+	 * is reachable only through a receiver, so it binds nothing in the surrounding scope and
+	 * a collision gate over a LOCAL / PARAMETER rename may subtract it: a module-level
+	 * `typedef Zoom = { x:Float }` otherwise vetoes every `_x -> x` in the file.
+	 *
+	 * Only the NAME token is returned, never the whole field node — an object literal's VALUE
+	 * is ordinary code that may well bind the name. Empty for a grammar leaving the slot unset.
+	 *
+	 * Not for a FIELD rename: under `@:structInit` an object literal's keys ARE the class's
+	 * own field names, so subtracting them would silently break the construction site.
+	 */
+	public static function structureFieldNameSpans(tree: QueryNode, source: String, shape: RefShape): Array<Span> {
+		final out: Array<Span> = [];
+		final hosts: Array<String> = shape.structureFieldHostKinds ?? [];
+		if (hosts.length > 0) collectStructureFieldNames(tree, source, hosts, out);
+		return out;
+	}
+
+	/**
+	 * The two-edit fold of a NULL-GUARDED constructor default: a field declared WITH a
+	 * default (`var x:T = D;`, plain or `(default, null)`) whose only write beyond that
+	 * initializer is exactly one top-level constructor statement of the shape
+	 * `if (p != null) x = p;` (`this.x = p` alike) becomes `final x:T;` plus
+	 * `x = p ?? D;`. Returns the edits when the fold applies, `null` otherwise — the
+	 * non-null result IS the fix, so a rule's `run` and `fix` can never disagree about a
+	 * candidate, and the two edits are one unit that lands together or not at all.
+	 *
+	 * Fails closed on every doubt. All single-file gates live HERE, never in one
+	 * consumer, so the rules claiming these candidates (`prefer-final-field`,
+	 * `prefer-final-public-field`) and the one ceding them (`prefer-read-only-field`)
+	 * cannot drift apart:
+	 *
+	 *  - the declaration carries an initializer, is not `static`, and its head is either
+	 *    plain or exactly the `(default, null)` accessor pair — `final` reproduces that
+	 *    access exactly (readable anywhere, writable nowhere outside the declaration),
+	 *    while any other pair (`get, set`, `default, never`, …) it does not;
+	 *  - the default expression is MOVE-SAFE (`moveSafeDefault`): a numeric / boolean /
+	 *    non-interpolated string literal, a negated numeric literal, or a dotted access
+	 *    rooted at a capitalised identifier (a type-qualified constant or enum value).
+	 *    An allocation (`new T()`, `[]`), a call, `this`, and a bare identifier — which
+	 *    could be another instance field, not yet initialized at constructor position —
+	 *    are rejected: moving them would change allocation identity or evaluation order;
+	 *  - the enclosing type has exactly one constructor, holding exactly one top-level
+	 *    guarded statement of the shape above, whose parameter is optional, `Null<…>`
+	 *    wrapped, or `= null`-defaulted (a non-nullable parameter cannot be
+	 *    `??`-defaulted);
+	 *  - no other write to the field name appears ANYWHERE in the file — the same
+	 *    conservative raw-text scan `ctorSoleAssignmentFinalizable` uses, which sees
+	 *    `#if` bodies — with the declaration and that one constructor target excluded.
+	 *
+	 * Cross-file soundness (an external, subtype, or unresolved write; an `@:access`
+	 * grantee) stays the CONSUMER's job, exactly as for `ctorSoleAssignmentFinalizable`.
+	 * Residual: a mutable static read by the default and written from ANOTHER file could
+	 * still differ between declaration and constructor position; the in-file leg of that
+	 * check lives in `moveSafeDefault`.
+	 */
+	public static function ctorConditionalDefaultFinalEdits(
+		source: String, declSpan: Span, plugin: GrammarPlugin
+	): Null<Array<{ span: Span, text: String }>> {
+		final shape: RefShape = plugin.refShape();
+		final coalesce: Null<String> = shape.nullCoalesceOperatorText;
+		if (coalesce == null || source.substring(declSpan.from, declSpan.to).indexOf('=') < 0) return null;
+		final spans: Array<Null<Span>> = [declSpan];
+		final edits: Array<{ span: Span, text: String }> = varKeywordToFinalEdits(source, spans);
+		if (edits.length != 1) return null;
+		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
+		if (tree == null) return null;
+		final loc: Null<{ container: QueryNode, field: QueryNode }> = classLikeFieldAt(tree, declSpan.from, shape);
+		if (loc == null) return null;
+		final decl: Null<FoldableDecl> = foldableDeclaration(source, loc, declSpan, shape);
+		final ctor: Null<QueryNode> = soleConstructor(loc.container, shape);
+		if (decl == null || ctor == null) return null;
+		final guarded: Null<GuardedCtorInit> = soleGuardedCtorFieldInit(source, loc.container, ctor, loc.field, shape);
+		if (guarded == null || !ctorParamIsNullable(source, ctor, guarded.param, shape)) return null;
+		if (!guardReachedIntact(source, ctor, decl.name, guarded.stmt.from, shape)) return null;
+		if (
+			MemberWriteScan.writtenInRange(source, decl.name, guarded.target, 0, decl.span.from)
+			|| MemberWriteScan.writtenInRange(source, decl.name, guarded.target, decl.span.to, source.length)
+		)
+			return null;
+		final dropped: Null<Span> = decl.dropped;
+		if (dropped != null) edits.push({ span: dropped, text: '' });
+		edits.push({ span: decl.initDrop, text: '' });
+		final targetText: String = source.substring(guarded.target.from, guarded.target.to);
+		final defaultText: String = source.substring(decl.initSpan.from, decl.initSpan.to);
+		edits.push({ span: guarded.stmt, text: '$targetText = ${guarded.param} $coalesce $defaultText${guarded.terminator}' });
+		return edits;
+	}
+
+	/**
+	 * The edits finalizing a set of flagged field declarations: the two-edit
+	 * conditional-default fold (`ctorConditionalDefaultFinalEdits`) where it applies, a
+	 * bare `var` -> `final` keyword swap everywhere else. The shared back end of
+	 * `prefer-final-field` / `prefer-final-public-field`'s `fix`, so both rules emit the
+	 * same shape for the same candidate, and each fold's edits travel as one unit through
+	 * the caller's single per-file canonicalize (all of them apply, or the file reverts).
+	 */
+	public static function finalizeFieldEdits(
+		source: String, spans: Array<Null<Span>>, plugin: GrammarPlugin
+	): Array<{ span: Span, text: String }> {
+		final edits: Array<{ span: Span, text: String }> = [];
+		final plain: Array<Null<Span>> = [];
+		for (span in spans) if (span != null) {
+			final fold: Null<Array<{ span: Span, text: String }>> = ctorConditionalDefaultFinalEdits(source, span, plugin);
+			if (fold == null)
+				plain.push(span);
+			else
+				for (edit in fold) edits.push(edit);
+		}
+		for (edit in varKeywordToFinalEdits(source, plain)) edits.push(edit);
+		return edits;
+	}
+
+	/**
+	 * The span of a braceless `$name` interpolation read of the binding at `binding` that
+	 * `occurrences` does NOT rewrite, or null when every one of them is covered.
+	 *
+	 * Asked over the resolved hits, not by walking the tree for the name: a read bound to a
+	 * SHADOWING binding of the same name is none of this rename's business, and matching on
+	 * the name alone refuses it as if it were. The read's node span covers the bytes that
+	 * SPELL it (the `$` included), so a rewritten one CONTAINS its occurrence. One is
+	 * missing exactly when `identTokenOffset` could not locate the identifier token in the
+	 * raw source — an escape-spelled `$` or name — and splicing the rest would leave that
+	 * read bound to a name the rewrite has removed.
+	 */
+	public static function unrewrittenInterpRead(hits: Array<RefHit>, binding: Int, occurrences: Array<Span>): Null<Span> {
+		for (h in hits) if (h.interpolated) {
+			final bound: Null<Span> = h.bindingSpan;
+			if (bound == null || bound.from != binding) continue;
+			if (!occurrences.exists(o -> h.span.from <= o.from && o.to <= h.span.to)) return h.span;
+		}
+		return null;
+	}
+
+	/**
+	 * The span of a `${ … }` interpolation in `node`'s subtree that carries NO parsed
+	 * expression, or null. Only the rescan of an escape-spelled `$` synthesizes one
+	 * (`HxInterpProjection`): its interior does not exist contiguously in the source, so no
+	 * subtree is built and any identifier read inside it is invisible to every reference
+	 * scan — a rewrite touching such a name would silently part-apply. Reported
+	 * unconditionally rather than by scanning the interior for a name: the interior may
+	 * spell that name with escapes too, so a text scan cannot prove absence.
+	 */
+	public static function unreadableInterpBlock(node: QueryNode, blockKind: String): Null<Span> {
+		if (node.kind == blockKind && node.children.length == 0) return node.span;
+		for (c in node.children) {
+			final found: Null<Span> = unreadableInterpBlock(c, blockKind);
+			if (found != null) return found;
+		}
+		return null;
+	}
+
+	/**
+	 * The deepest function / lambda subtree containing `cursor`, or the whole tree when none
+	 * does — the region a local binding can be referenced from, and therefore the scope a
+	 * name-agnostic net (an unreadable interpolation hole, a same-block re-declaration) has
+	 * to sweep.
+	 *
+	 * No containment pruning: the parse root (and other synthesized wrappers) carries NO
+	 * span, so a prune at a null-span node would stop at the root and silently widen the
+	 * scope to the whole file (false refusals for a same-named local in a SIBLING function).
+	 * Gate only the match.
+	 */
+	public static function enclosingFunctionSubtree(tree: QueryNode, cursor: Int, shape: RefShape): QueryNode {
+		final fnKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []).concat(shape.localFunctionKinds ?? []);
+		var best: QueryNode = tree;
+		function walk(node: QueryNode): Void {
+			final span: Null<Span> = node.span;
+			if (span != null && cursor >= span.from && cursor < span.to && fnKinds.contains(node.kind)) best = node;
+			for (c in node.children) walk(c);
+		}
+		walk(tree);
+		return best;
+	}
+
+	/**
+	 * The member host whose DIRECT children hold `member` — `container` itself, or the
+	 * member-position conditional region one level down that actually declares it.
+	 *
+	 * Every sibling-run walk needs the real parent. Handed the container for a guarded member,
+	 * `declGroupSpan` finds no sibling index and degrades to the bare node span, so a deletion built
+	 * from it leaves the member's `private` / `@:meta` run behind — dangling text that does not parse.
+	 * Falls back to `container` when `member` is not found under it at all, which keeps every
+	 * pre-existing caller's behaviour byte for byte.
+	 */
+	public static function memberHostOf(container: QueryNode, member: QueryNode): QueryNode {
+		var found: QueryNode = container;
+		eachMemberHost(container, host -> if (host.children.contains(member)) found = host);
+		return found;
+	}
+
+	/**
+	 * Is `offset` inside a COMMENT region? The first lexical region that
+	 * contains it decides; a string literal is not a comment, so code
+	 * interpolated inside one stays eligible.
+	 */
+	private static function offsetWithinComment(offset: Int, regions: Array<LexRegion>): Bool {
+		for (region in regions) if (offset >= region.from && offset < region.to) return switch region.kind {
+			case LineComment | BlockComment: true;
+			case StringLit | RegexLit: false;
+		};
+		return false;
+	}
+
+	/** The scan behind `referencedInRange` / `referencedUnqualifiedInRange`; a non-null `commentRegions` drops dot-qualified occurrences. */
+	private static function scanReference(
+		source: String, name: String, from: Int, end: Int, excluded: Array<Span>, commentRegions: Null<Array<Span>>
+	): Bool {
+		final len: Int = name.length;
+		if (len == 0) return false;
+		final stop: Int = end <= source.length ? end : source.length;
+		var i: Int = from;
+		while (i + len <= stop) {
+			final at: Int = source.indexOf(name, i);
+			if (at < 0 || at + len > stop) return false;
+			final beforeOk: Bool = at == 0 || !isIdentChar(source.fastCodeAt(at - 1)) || interpolationEscapeBefore(source, at);
+			final afterIdx: Int = at + len;
+			final afterOk: Bool = afterIdx >= source.length || !isIdentChar(source.fastCodeAt(afterIdx));
+			if (beforeOk && afterOk && !offsetWithinAny(at, excluded) && !qualifiedBefore(source, at, commentRegions)) return true;
+			i = at + 1;
+		}
+		return false;
+	}
+
+	/**
+	 * Is the token starting at `at` the TAIL of a dotted path — its preceding
+	 * non-whitespace character a qualification `.`? Whitespace is skipped
+	 * backwards, since a path may be broken across lines (`haxe.macro\n\t.Context`).
+	 * A null `commentRegions` disables the test entirely (the plain
+	 * `referencedInRange` scan, which counts every occurrence).
+	 *
+	 * Two dots are NOT one: a dot preceded by another belongs to `...` (range /
+	 * rest), never to a field access, so `0...Limit.MAX` reads `Limit` as the bare
+	 * reference it is. And a dot inside a COMMENT qualifies nothing — the period
+	 * ending `// … before the process dies.` sits directly before the next line's
+	 * first token and would otherwise mark a live call as a qualified tail. Only a
+	 * LINE comment can end in a bare `.` that way — every other inert construct
+	 * closes with its own delimiter — but the mask is exact for all of them.
+	 *
+	 * WHITESPACE only, not trivia: a comment spliced between the dot and the name
+	 * stops the walk short, so that occurrence reads as unqualified and COUNTS.
+	 * The over-counting direction — an import kept, never one deleted.
+	 */
+	private static function qualifiedBefore(source: String, at: Int, commentRegions: Null<Array<Span>>): Bool {
+		if (commentRegions == null) return false;
+		var j: Int = at - 1;
+		while (j >= 0 && isSpace(source.fastCodeAt(j))) j--;
+		return j >= 0 && source.fastCodeAt(j) == '.'.code && (j <= 0 || source.fastCodeAt(j - 1) != '.'.code)
+			&& !offsetWithinAny(j, commentRegions);
+	}
+
+	/**
+	 * Whether the text directly before `at` is a numeric escape spelling the
+	 * interpolation trigger `$` — `\x24` or `$`. A string literal's escapes are
+	 * DECODED before the interpolation scan runs over the result, so `'\x24name'` is a
+	 * read of `name` exactly as `'$name'` is; but the escape ends in a hex digit, which
+	 * the word-boundary test above reads as "still the same token" and would report as
+	 * NO reference — the one direction that costs a wrongly deleted binding.
+	 *
+	 * Deliberately spelling-based, not decode-based: this scan runs over raw source
+	 * with no idea which regions are string literals, so `'\\x24name'` (a literal
+	 * backslash, decoding to no `$` at all) also answers yes. That is the harmless
+	 * direction — an extra KEPT binding, the same over-counting the textual scan
+	 * already accepts for names inside comments.
+	 */
+	private static function interpolationEscapeBefore(source: String, at: Int): Bool {
+		return DOLLAR_ESCAPES.exists(e -> at >= e.length && source.substr(at - e.length, e.length) == e);
+	}
+
+	private static function collectModulePathSpans(node: QueryNode, kinds: Array<String>, out: Array<Span>): Void {
+		final span: Null<Span> = node.span;
+		if (kinds.contains(node.kind) && span != null) {
+			out.push(span);
+			return;
+		}
+		for (child in node.children) collectModulePathSpans(child, kinds, out);
+	}
+
+	/**
+	 * Whether a top-level constructor statement of `kind` ALWAYS COMPLETES NORMALLY — control
+	 * reaches the statement after it, whatever the statement does internally. Membership only:
+	 * the KIND is what is decided here, never the subtree, which is `ctorPrefixUnconditional`'s
+	 * scan's job. A LOOP is deliberately absent; that entry documents why.
+	 *
+	 * Each set is read straight off its `RefShape` seam and tested in place rather than folded
+	 * into one array: the seams never change during a run, and this is asked once per prefix
+	 * statement per candidate FIELD, so building the union per call would allocate for nothing.
+	 */
+	private static function completesNormally(kind: String, shape: RefShape): Bool {
+		return kind == shape.exprStatementKind || isConditionalKind(kind) || kindIn(shape.localDeclKinds, kind)
+			|| kindIn(shape.staticLocalDeclKinds, kind) || kindIn(shape.ifStatementKinds, kind) || kindIn(shape.switchKinds, kind)
+			|| kindIn(shape.tryStatementKinds, kind) || kindIn(shape.localFunctionKinds, kind) || kindIn(shape.inlineFunctionKinds, kind);
+	}
+
+	/** Whether `kinds` is set and holds `kind` — an unset seam contributes nothing. */
+	private static inline function kindIn(kinds: Null<Array<String>>, kind: String): Bool {
+		return kinds != null && kinds.contains(kind);
+	}
+
+	/** Recursive worker of `casePatternNames`; `inPattern` marks a subtree already inside a pattern. */
+	private static function collectCasePatternNames(
+		node: QueryNode, inPattern: Bool, casePatternKind: Null<String>, binderKinds: Array<String>, out: Array<String>
+	): Void {
+		final within: Bool = inPattern || (casePatternKind != null && node.kind == casePatternKind);
+		final name: Null<String> = node.name;
+		if (name != null && (within || binderKinds.contains(node.kind)) && !out.contains(name)) out.push(name);
+		for (child in node.children) collectCasePatternNames(child, within, casePatternKind, binderKinds, out);
+	}
+
+	/**
+	 * A receiver path's ROOT reduced to whichever of the two things a root can BE: the enclosing
+	 * type declaration (the self reference) or a value BINDING. Null when the path's root is not
+	 * a bare identifier at all, or the one thing it is cannot be resolved.
+	 *
+	 * Extracted because `pathRootTypeName` and its deep-mode twin `pathRootTypeSourceDeep` differ
+	 * ONLY in what they do with a resolved binding — one reads a nominal off `declaredTypes`, the
+	 * other prefers the written source and falls through to the for-binding arm. Everything before
+	 * that (walking down single-child wrappers to the root identifier, and the self-reference
+	 * branch) is one question with one answer, and had no business being written twice.
+	 */
+	private static function pathRootBinding(recv: QueryNode, root: QueryNode, shape: RefShape): Null<PathRoot> {
+		final identKind: Null<String> = shape.identKind;
+		if (identKind == null) return null;
+		var node: QueryNode = recv;
+		while (node.kind != identKind && node.children.length == 1) node = node.children[0];
+		if (node.kind != identKind) return null;
+		if (node.name == shape.selfReferenceText) {
+			final span: Null<Span> = recv.span ?? node.span;
+			final enclosing: Null<String> = span == null ? null : TypeResolver.enclosingTypeName(root, span);
+			return enclosing == null ? null : { selfTypeName: enclosing, bindingFrom: null };
+		}
+		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(node, root, shape);
+		return bindingFrom == null ? null : { selfTypeName: null, bindingFrom: bindingFrom };
+	}
+
+	/**
 	 * `expressionTypeNominal`'s body, threading the `chain` opt-in and the for-binding recursion
 	 * guard `seen` that the public signature does not expose. The method-call tail recurses through
 	 * THIS function rather than the public entry so that a `a.b().c()` walk stays in deep mode
@@ -2632,46 +3211,12 @@ final class RefactorSupport {
 		final path: Null<Array<String>> = pathOf(node, identKind, fieldKind);
 		if (path == null) return null;
 		final rootSource: Null<String> = pathRootTypeSourceDeep(node, root, shape, declaredTypes, chain, index, file, seen);
-		if (path.length == 1) return rootSource;
-		if (index == null) return null;
-		return pathReceiverMemberTypeSource(path, rootSource, index, file, true);
-	}
-
-	/**
-	 * The `Type.method` a call node names TOGETHER with that method's written RETURN type source,
-	 * when the flattened `Type.method` names a `RefShape.staticMethodReturns` entry
-	 * (`Reflect.fields` → `Array<String>`, `Date.now` → `Date`, …) and the receiver is a genuine
-	 * TYPE reference — its ROOT identifier binds to no value (`TypeResolver.receiverRootIsUnboundType`),
-	 * so a local / parameter / field named after the module makes the access an INSTANCE call and is
-	 * refused. Null for every other node. The table's values are written import-safe (fully qualified
-	 * where the simple name would not resolve), so a caller may carry the source forward or copy it
-	 * verbatim.
-	 *
-	 * What it deliberately does NOT decide is whether an indexed type SHADOWS the tabled one — the
-	 * two callers need opposite answers there and each applies its own policy to `typeName`:
-	 * `ExplicitLocalType` refuses a name declared AT ALL (it copies the source into the user's file,
-	 * so an indexed name means the oracle can do better), while `tabledStaticCallTypeSource` refuses
-	 * only a name declared by a NON-std file (it produces a nominal for internal lookups, where the
-	 * normally-indexed std is not a shadow). Keeping the shape match here and the policy at the call
-	 * sites is what puts those two policies side by side instead of in two near-identical copies.
-	 */
-	public static function tabledStaticCall(
-		node: QueryNode, root: QueryNode, shape: RefShape
-	): Null<{ typeName: String, returnSource: String }> {
-		final table: Null<Map<String, String>> = shape.staticMethodReturns;
-		final callKind: Null<String> = shape.callKind;
-		final fieldKind: Null<String> = shape.fieldAccessKind;
-		if (table == null || callKind == null || fieldKind == null) return null;
-		if (node.kind != callKind || node.children.length == 0) return null;
-		final callee: QueryNode = node.children[0];
-		if (callee.kind != fieldKind || callee.children.length != 1) return null;
-		final method: Null<String> = callee.name;
-		final receiver: QueryNode = callee.children[0];
-		final typeName: Null<String> = receiver.name;
-		if (method == null || typeName == null) return null;
-		final ret: Null<String> = table['$typeName.$method'];
-		if (ret == null || !TypeResolver.receiverRootIsUnboundType(receiver, root, shape)) return null;
-		return { typeName: typeName, returnSource: ret };
+		return if (path.length == 1)
+			rootSource
+		else if (index == null)
+			null
+		else
+			pathReceiverMemberTypeSource(path, rootSource, index, file, true);
 	}
 
 	/**
@@ -2686,74 +3231,12 @@ final class RefactorSupport {
 		node: QueryNode, root: QueryNode, shape: RefShape, index: Null<SymbolIndex>
 	): Null<String> {
 		final hit: Null<{ typeName: String, returnSource: String }> = tabledStaticCall(node, root, shape);
-		if (hit == null) return null;
-		return shadowedByNonStdType(index, hit.typeName) ? null : hit.returnSource;
-	}
-
-	/** Whether any indexed file OUTSIDE the auto-discovered Haxe std declares a top-level type named `typeName`. */
-	public static function shadowedByNonStdType(index: Null<SymbolIndex>, typeName: String): Bool {
-		return index != null && index.declaringFiles(typeName).exists(fi -> !StdResolver.isStdFile(fi.file));
-	}
-
-	/**
-	 * The verbatim declared type SOURCE a BARE identifier carries when it names no value binding at
-	 * all but IS a member — declared directly or INHERITED — of the enclosing type declaration: the
-	 * implicit-`this` read Haxe resolves without the qualifier. `SymbolIndex`'s import-aware walk
-	 * supplies it (`resolvePathFinalMemberTypeSource` over a one-segment member path), so the
-	 * extends chain is followed to the SPECIFIC supertype each clause names rather than to any
-	 * same-simple-named type elsewhere in the scope.
-	 *
-	 * Null — the caller keeps its conservative branch — whenever: `ident` is not an identifier node;
-	 * it DOES resolve to a value binding; no enclosing type declaration covers it; or the member is
-	 * unresolved / ambiguous anywhere along the chain.
-	 *
-	 * `invisibleBinders` is the gate that is not about resolution but about VISIBILITY, and it is
-	 * load-bearing: a binder the scope resolver cannot see looks EXACTLY like an unbound name, so
-	 * without it this arm answers the enclosing type's member for a local the author actually wrote
-	 * — and a rewrite built on that answer breaks the build. Build the list with
-	 * `resolverInvisibleBinderNames`, which is per-file while this is per-site. A NULL list — the
-	 * grammar exposes no seam for one of the binder classes — is refused outright: an EMPTY list
-	 * means "this file binds nothing invisibly", a null one means the question cannot be asked.
-	 */
-	public static function implicitThisMemberTypeSource(
-		ident: QueryNode, root: QueryNode, shape: RefShape, index: SymbolIndex, file: String, invisibleBinders: Null<Array<String>>
-	): Null<String> {
-		final identKind: Null<String> = shape.identKind;
-		final name: Null<String> = ident.name;
-		final span: Null<Span> = ident.span;
-		if (identKind == null || ident.kind != identKind || name == null || span == null) return null;
-		if (name == shape.selfReferenceText) return null;
-		if (invisibleBinders == null || invisibleBinders.contains(name)) return null;
-		if (TypeResolver.resolveBindingFrom(name, span, root, shape) != null) return null;
-		final enclosing: Null<String> = TypeResolver.enclosingTypeName(root, span);
-		return enclosing == null ? null : index.resolvePathFinalMemberTypeSource(file, enclosing, [name]);
-	}
-
-	/**
-	 * Every name bound in `root` by a construct the SCOPE RESOLVER cannot see — the shadow set a
-	 * consumer must subtract before reading an unbound identifier as anything but a local. Null when
-	 * the grammar exposes no seam for one of the classes, which a consumer must read as "the shadow
-	 * cannot be ruled out" rather than as an empty set.
-	 *
-	 * Two classes, each confirmed against the Haxe grammar rather than assumed (the parenthesized
-	 * lambda param, the `catch` binder and a local function's own parameters all DO resolve, and are
-	 * deliberately absent):
-	 *
-	 *  - CASE PATTERNS (`case Leaf(m):`) — the binder lives inside the pattern subtree.
-	 *  - the BARE single-parameter arrow lambda (`m -> m.f()`), whose parameter the grammar projects
-	 *    as a plain identifier expression indistinguishable from a read — the model carries no binder
-	 *    node to resolve, so the resolver has nothing to bind. Recovering that distinction in the
-	 *    projection would close this for every consumer at once and delete this arm; until then the
-	 *    name is vetoed wherever it appears in the file.
-	 */
-	public static function resolverInvisibleBinderNames(root: QueryNode, shape: RefShape): Null<Array<String>> {
-		final identKind: Null<String> = shape.identKind;
-		final lambdaKinds: Null<Array<String>> = shape.lambdaKinds;
-		final binderKinds: Array<String> = shape.casePatternBinderKinds ?? [];
-		if (identKind == null || lambdaKinds == null || (shape.plainCasePatternKind == null && binderKinds.length == 0)) return null;
-		final names: Array<String> = casePatternNames(root, shape.plainCasePatternKind, binderKinds);
-		collectBareLambdaParamNames(root, identKind, lambdaKinds, names);
-		return names;
+		return if (hit == null)
+			null
+		else if (shadowedByNonStdType(index, hit.typeName))
+			null
+		else
+			hit.returnSource;
 	}
 
 	/** Append every bare (unparenthesized) arrow-lambda parameter name in `node`'s subtree to `out`. */
@@ -2832,8 +3315,12 @@ final class RefactorSupport {
 		final args: Null<Array<String>> = typeArgumentSourcesOf(iterableSource);
 		if (nominal == null || args == null) return null;
 		final at: Null<Int> = elementParams[nominal];
-		if (at == null) return null;
-		return at < args.length ? args[at] : null;
+		return if (at == null)
+			null
+		else if (at < args.length)
+			args[at]
+		else
+			null;
 	}
 
 	/**
@@ -2868,117 +3355,6 @@ final class RefactorSupport {
 		return null;
 	}
 
-	/**
-	 * The VALUE binder an iteration node carries, or null for a single-binder loop — the `v` node
-	 * of `for (k => v in m)`, whose kinds the grammar publishes as
-	 * `RefShape.iterationValueBinderKinds`.
-	 *
-	 * Public, with its three siblings below, because the binder is an EXTRA child ahead of the
-	 * iterable, so every consumer reading a loop's operands positionally faces the same question.
-	 * Four of them answered it with a private copy in the commit that introduced the binder — one
-	 * question, four implementations, which is the drift the binder node exists to end.
-	 *
-	 * The kinds still arrive as a parameter, so a caller passing `[]` gets the pre-binder
-	 * `children[0]` behaviour back with no compile error. Read them from
-	 * `RefShape.iterationValueBinderKinds`.
-	 */
-	public static function iterationValueBinder(loop: QueryNode, valueBinderKinds: Array<String>): Null<QueryNode> {
-		return loop.children.find(c -> valueBinderKinds.contains(c.kind));
-	}
-
-	/** Whether `loop` carries a key-value VALUE binder — i.e. it binds a key AND a value. */
-	public static inline function hasIterationValueBinder(loop: QueryNode, valueBinderKinds: Array<String>): Bool {
-		return iterationValueBinder(loop, valueBinderKinds) != null;
-	}
-
-	/**
-	 * The OPERAND children of an iteration node — its iterable and its body — with the VALUE binder
-	 * of a key-value iteration filtered out. A consumer indexing `children[0]` for the iterable, or
-	 * comparing `children.length` against a fixed operand count, reads the binder instead on every
-	 * key-value loop.
-	 */
-	public static function loopOperands(loop: QueryNode, valueBinderKinds: Array<String>): Array<QueryNode> {
-		return [for (c in loop.children) if (!valueBinderKinds.contains(c.kind)) c];
-	}
-
-	/**
-	 * The ITERABLE child of an iteration node — its first child that is not a value binder — or null
-	 * for a node with no operands at all.
-	 */
-	public static function iterationIterable(loop: QueryNode, valueBinderKinds: Array<String>): Null<QueryNode> {
-		return loop.children.find(child -> !valueBinderKinds.contains(child.kind));
-	}
-
-	/**
-	 * The report + resolution-scope `SymbolIndex` the plugin host carries — a subtype declared in a
-	 * configured resolution library, or in the implicitly-scoped Haxe std, is indexed there too — or
-	 * null when the plugin is not a resolution host or no scope reached it at all (the caller falls
-	 * back to the report index). The eager counterpart of `lazySymbolIndex`, for a check that already
-	 * holds a report index and only needs to know whether a WIDER one exists:
-	 * `resolutionIndexOf(plugin) ?? index`.
-	 *
-	 * The null return is now the RARE case rather than the default. A `Cli` run reaches it only when
-	 * the project declares no resolution key AND no Haxe std is discoverable — a machine without Haxe,
-	 * or one that declined the std via `APQ_NO_STD` / `"resolutionStd": false`. It is still the plain
-	 * answer for a direct `check.run` with a bare plugin, which is what the unit tests that pin the
-	 * report-only behaviour use.
-	 */
-	public static inline function resolutionIndexOf(plugin: GrammarPlugin): Null<SymbolIndex> {
-		final host: Null<SymbolIndexHost> = (plugin is SymbolIndexHost) ? cast plugin : null;
-		return (host != null && host.hasAnyResolutionScope()) ? host.resolutionIndex() : null;
-	}
-
-	/**
-	 * The resolution scope's RAW sources (report UNION the library roots) when `plugin` hosts one, else
-	 * null. The text counterpart of `resolutionIndexOf`, for a scan that needs no parse: the index drops
-	 * a skip-parsed file from both `allFiles` and `sourceOf`, so a whole-scope TEXT proof read off the
-	 * index would treat that file as holding nothing at all.
-	 */
-	public static inline function resolutionSourcesOf(plugin: GrammarPlugin): Null<Array<{ file: String, source: String }>> {
-		final host: Null<SymbolIndexHost> = (plugin is SymbolIndexHost) ? cast plugin : null;
-		return (host != null && host.hasAnyResolutionScope()) ? host.resolutionFiles() : null;
-	}
-
-	/**
-	 * A memoized `SymbolIndex` builder — built at most once, on first call, over `files`. Shared by
-	 * checks whose path-receiver type gate needs cross-file resolution only after cheaper structural
-	 * gates pass, so most runs never trigger the build. When `plugin` is a `SymbolIndexHost` carrying
-	 * ANY resolution scope — a declared one (report files UNION the configured library roots) or the
-	 * implicit std-only one — that host's memoised resolution index is preferred, so the check resolves
-	 * against libraries and std too.
-	 *
-	 * The report-only fallback below it is therefore no longer the ordinary path: on a Haxe-equipped
-	 * machine a `Cli` run always takes the host branch, and the fallback answers only for a direct
-	 * `check.run` with a bare plugin (every unit test that pins report-scope behaviour) or a machine
-	 * with no discoverable std. `prebuilt`, when supplied, is an already-built report-scope index that
-	 * fallback returns as-is instead of building a second one — `prefer-final-field` passes the eager
-	 * index it already holds. It is ignored when a resolution scope is present, since the wider index
-	 * must win; that is not a lost optimisation, because the host's index is a DIFFERENT (wider) index
-	 * than `prebuilt`, so there is no duplicate build to avoid on that path.
-	 */
-	public static function lazySymbolIndex(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?prebuilt: SymbolIndex
-	): () -> Null<SymbolIndex> {
-		final host: Null<SymbolIndexHost> = (plugin is SymbolIndexHost) ? cast plugin : null;
-		if (host != null && host.hasAnyResolutionScope()) {
-			final resolver: SymbolIndexHost = host;
-			return () -> resolver.resolutionIndex();
-		}
-		if (prebuilt != null) {
-			final ready: SymbolIndex = prebuilt;
-			return () -> ready;
-		}
-		var index: Null<SymbolIndex> = null;
-		var built: Bool = false;
-		return () -> {
-			if (!built) {
-				built = true;
-				index = SymbolIndex.build(files, plugin);
-			}
-			return index;
-		};
-	}
-
 	/** Whether `target` (a constructor assignment's left-hand side) writes the field at `fieldFrom`. */
 	private static function ctorTargetIsField(
 		target: QueryNode, fieldFrom: Int, fieldName: String, container: QueryNode, shape: RefShape
@@ -2990,12 +3366,10 @@ final class RefactorSupport {
 			final recv: Null<QueryNode> = target.children.length > 0 ? target.children[0] : null;
 			return target.name == fieldName && recv != null && recv.kind == identKind && selfText != null && recv.name == selfText;
 		}
-		if (target.kind == identKind) {
-			final name: Null<String> = target.name;
-			final span: Null<Span> = target.span;
-			return name != null && span != null && TypeResolver.resolveBindingFrom(name, span, container, shape) == fieldFrom;
-		}
-		return false;
+		if (target.kind != identKind) return false;
+		final name: Null<String> = target.name;
+		final span: Null<Span> = target.span;
+		return name != null && span != null && TypeResolver.resolveBindingFrom(name, span, container, shape) == fieldFrom;
 	}
 
 	/** Recursively find the class-like container whose direct field member starts at `fieldFrom`. */
@@ -3040,8 +3414,8 @@ final class RefactorSupport {
 			final idx: Int = source.indexOf(name, from);
 			if (idx < 0) return false;
 			from = idx + len;
-			final boundedBefore: Bool = idx == 0 || !isIdentChar(StringTools.fastCodeAt(source, idx - 1));
-			final boundedAfter: Bool = from >= n || !isIdentChar(StringTools.fastCodeAt(source, from));
+			final boundedBefore: Bool = idx == 0 || !isIdentChar(source.fastCodeAt(idx - 1));
+			final boundedAfter: Bool = from >= n || !isIdentChar(source.fastCodeAt(from));
 			if (boundedBefore && boundedAfter && (idx < exclude.from || idx >= exclude.to) && callFollows(source, from)) return true;
 		}
 	}
@@ -3050,12 +3424,12 @@ final class RefactorSupport {
 	private static function callFollows(source: String, pos: Int): Bool {
 		final n: Int = source.length;
 		var i: Int = skipForwardTrivia(source, pos);
-		if (i >= n || StringTools.fastCodeAt(source, i) != '.'.code) return false;
+		if (i >= n || source.fastCodeAt(i) != '.'.code) return false;
 		i = skipForwardTrivia(source, i + 1);
-		if (i >= n || !isIdentStartChar(StringTools.fastCodeAt(source, i))) return false;
-		while (i < n && isIdentChar(StringTools.fastCodeAt(source, i))) i++;
+		if (i >= n || !isIdentStartChar(source.fastCodeAt(i))) return false;
+		while (i < n && isIdentChar(source.fastCodeAt(i))) i++;
 		i = skipForwardTrivia(source, i);
-		return i < n && StringTools.fastCodeAt(source, i) == '('.code;
+		return i < n && source.fastCodeAt(i) == '('.code;
 	}
 
 	/**
@@ -3068,34 +3442,19 @@ final class RefactorSupport {
 	 */
 	private static function commaExtendedSpan(source: String, span: Span): Span {
 		var i: Int = span.to;
-		while (i < source.length && isSpace(StringTools.fastCodeAt(source, i))) i++;
-		if (i < source.length && StringTools.fastCodeAt(source, i) == ','.code) return new Span(span.from, i + 1);
+		while (i < source.length && isSpace(source.fastCodeAt(i))) i++;
+		if (i < source.length && source.fastCodeAt(i) == ','.code) return new Span(span.from, i + 1);
 
 		var j: Int = span.from - 1;
-		while (j >= 0 && isSpace(StringTools.fastCodeAt(source, j))) j--;
-		return j >= 0 && StringTools.fastCodeAt(source, j) == ','.code ? new Span(j, span.to) : span;
-	}
-
-	/**
-	 * A node kind that contributes no side effect on its own: an enumerated
-	 * `SAFE_KINDS` member, or any leaf whose kind ends with `Lit` / `StringExpr`
-	 * (a literal payload not separately enumerated).
-	 */
-	public static inline function isSafeKind(kind: String): Bool {
-		return SAFE_KINDS.contains(kind) || StringTools.endsWith(kind, 'Lit') || StringTools.endsWith(kind, 'StringExpr');
-	}
-
-	/** Is `offset` inside any of `spans` (`from`-inclusive, `to`-exclusive)? */
-	public static function offsetWithinAny(offset: Int, spans: Array<Span>): Bool {
-		for (s in spans) if (offset >= s.from && offset < s.to) return true;
-		return false;
+		while (j >= 0 && isSpace(source.fastCodeAt(j))) j--;
+		return j >= 0 && source.fastCodeAt(j) == ','.code ? new Span(j, span.to) : span;
 	}
 
 	/** True if only whitespace precedes the byte at `from` on its line. */
 	private static function isFullLineComment(source: String, from: Int): Bool {
 		var i: Int = from - 1;
-		while (i >= 0 && StringTools.fastCodeAt(source, i) != '\n'.code) {
-			if (!isSpace(StringTools.fastCodeAt(source, i))) return false;
+		while (i >= 0 && source.fastCodeAt(i) != '\n'.code) {
+			if (!isSpace(source.fastCodeAt(i))) return false;
 			i--;
 		}
 		return true;
@@ -3113,7 +3472,7 @@ final class RefactorSupport {
 		if (!isFullLineComment(source, a.from) || !isFullLineComment(source, b.from)) return false;
 		var newlines: Int = 0;
 		for (k in a.to ... b.from) {
-			final c: Int = StringTools.fastCodeAt(source, k);
+			final c: Int = source.fastCodeAt(k);
 			if (c == '\n'.code)
 				newlines++;
 			else if (!isSpace(c))
@@ -3125,6 +3484,24 @@ final class RefactorSupport {
 	/** True when `edits[i]` is contained in another edit (the outer one is kept). */
 	private static function isContainedEdit(edits: Array<{ span: Span, text: String }>, i: Int): Bool {
 		final e: Span = edits[i].span;
+		// A zero-length edit is an INSERT, not a rewrite of existing bytes. The ONE
+		// geometry that composes safely through `applyEdits`' right-to-left splice —
+		// verified on neko/js/interp — is an insert AT another edit's `.to` (right
+		// after a deleted region: the observed prefer-static-extension `using` insert
+		// at the boundary of unused-import's delete, which the old unconditional
+		// containment test dropped, breaking the check's atomic edit set). The unsafe
+		// geometries keep the old drop: strictly INSIDE a span (the splice corrupts —
+		// the insert text vanishes and trailing deleted bytes leak back), AT a span's
+		// `.from` (splice order diverges across targets), and a same-point tie with an
+		// earlier insert (relative order is sort-stability-dependent).
+		if (e.from == e.to) {
+			for (j in 0...edits.length) if (j != i) {
+				final o: Span = edits[j].span;
+				if (o.from < o.to && o.from <= e.from && e.from < o.to) return true;
+				if (o.from == o.to && o.from == e.from && j < i) return true;
+			}
+			return false;
+		}
 		for (j in 0...edits.length) if (j != i) {
 			final o: Span = edits[j].span;
 			final contains: Bool = o.from <= e.from && e.to <= o.to;
@@ -3143,7 +3520,7 @@ final class RefactorSupport {
 		var i: Int = from;
 		var markerSeen: Bool = false;
 		while (i < n) {
-			final c: Int = StringTools.fastCodeAt(body, i);
+			final c: Int = body.fastCodeAt(i);
 			if (c == ' '.code || c == '\t'.code || c == '\r'.code) {
 				i++;
 			} else if (c == '\n'.code) {
@@ -3186,7 +3563,12 @@ final class RefactorSupport {
 		if (node.children.length != 2) return null;
 		final a: QueryNode = node.children[0];
 		final b: QueryNode = node.children[1];
-		return a.kind == identKind && b.kind == nullKind ? a.name : b.kind == identKind && a.kind == nullKind ? b.name : null;
+		return if (a.kind == identKind && b.kind == nullKind)
+			a.name
+		else if (b.kind == identKind && a.kind == nullKind)
+			b.name
+		else
+			null;
 	}
 
 	/** Recursive worker for `eachFieldMember`: visit a container's mutable fields, tracking exported state. */
@@ -3239,50 +3621,12 @@ final class RefactorSupport {
 		var result: Int = from;
 		while (true) {
 			final c: Null<{ from: Int, to: Int, isLine: Bool }> = lastCommentEndingBefore(comments, result);
-			if (c == null || StringTools.trim(source.substring(c.to, result)) != '') break;
+			if (c == null || source.substring(c.to, result).trim() != '') break;
 			final ls: Int = lineStartOf(source, c.from);
-			if (StringTools.trim(source.substring(ls, c.from)) != '') break;
+			if (source.substring(ls, c.from).trim() != '') break;
 			result = ls;
 		}
 		return result;
-	}
-
-	/**
-	 * The offset at which an `extends` / `implements` clause can be spliced into
-	 * the header of `decl` (named `typeName`): just past its last header token,
-	 * before the body `{`. AST-anchored - each header child node (a type-parameter
-	 * constraint, an `extends` / `implements` clause, a conditional block) bounds
-	 * the search, and the search itself steps over comments and string literals,
-	 * so a `{` written inside a header comment or inside a structural type
-	 * constraint is never mistaken for the body brace. Null when no body brace can
-	 * be verified before the first body member; a caller that gets null must
-	 * refuse the whole operation rather than splice at an unverified offset.
-	 *
-	 * The name token is located with `activeCodeIdentTokenOffset`, not the raw
-	 * scan: a leading block comment that repeats the type name would otherwise
-	 * win the race for it, and the whole header search would then run inside that
-	 * comment - splicing the clause into comment text. The result still PARSES, so
-	 * no downstream reparse gate catches it, while the caller has already staged
-	 * the member cut: the members move out and nothing inherits them.
-	 */
-	public static function typeHeaderInsertOffset(source: String, decl: TypeDeclMatch, typeName: String): Null<Int> {
-		final nameSpan: Span = decl.nameNode.span ?? decl.fullSpan;
-		final nameAt: Int = activeCodeIdentTokenOffset(source, nameSpan, typeName);
-		final headerFrom: Int = nameAt < 0 ? nameSpan.from : nameAt + typeName.length;
-		final limit: Int = nameSpan.to <= source.length ? nameSpan.to : source.length;
-		var from: Int = headerFrom;
-		var brace: Int = -1;
-		// Children are in document order: the first one that starts after a located
-		// brace belongs to the body, every earlier one is part of the header.
-		for (child in decl.nameNode.children) {
-			final s: Null<Span> = child.span;
-			if (s == null) continue;
-			brace = headerScan(source, from, s.from < limit ? s.from : limit).brace;
-			if (brace >= 0) break;
-			if (s.to > from) from = s.to;
-		}
-		if (brace < 0) brace = headerScan(source, from, limit).brace;
-		return brace < 0 || StringTools.fastCodeAt(source, brace) != '{'.code ? null : headerScan(source, headerFrom, brace).tokenEnd;
 	}
 
 	/**
@@ -3297,9 +3641,9 @@ final class RefactorSupport {
 		var tokenEnd: Int = from;
 		var i: Int = from;
 		while (i < end) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c == '/'.code && i + 1 < end) {
-				final next: Int = StringTools.fastCodeAt(source, i + 1);
+				final next: Int = source.fastCodeAt(i + 1);
 				if (next == '/'.code) {
 					final nl: Int = source.indexOf('\n', i + 2);
 					i = nl < 0 ? end : nl + 1;
@@ -3332,7 +3676,7 @@ final class RefactorSupport {
 		final n: Int = text.length;
 		var i: Int = open + 1;
 		while (i < n) {
-			final c: Int = StringTools.fastCodeAt(text, i);
+			final c: Int = text.fastCodeAt(i);
 			if (c == '\\'.code) {
 				i += 2;
 				continue;
@@ -3341,38 +3685,6 @@ final class RefactorSupport {
 			i++;
 		}
 		return n - 1;
-	}
-
-	/**
-	 * Classify every word-boundary occurrence of `name` in `source[from...end)`
-	 * (offsets inside `excluded` skipped) by lexical context, built on top of the
-	 * parse so `#if...#end` regions and trivia are exact. Returns null when
-	 * `source` does not parse — the caller then falls back to the raw scan
-	 * (fail-closed). See `OccurrenceClass` for what each class means.
-	 */
-	public static function classifyOccurrences(
-		source: String, name: String, plugin: GrammarPlugin, from: Int, end: Int, excluded: Array<Span>
-	): Null<Array<ClassifiedOccurrence>> {
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return null catch (exception: Exception) return null;
-		final out: Array<ClassifiedOccurrence> = [];
-		final len: Int = name.length;
-		if (len == 0) return out;
-		final condSpans: Array<Span> = [];
-		collectConditionalSpans(tree, condSpans);
-		final regions: Array<LexRegion> = scanLexicalRegions(source);
-		final stop: Int = end <= source.length ? end : source.length;
-		var i: Int = from;
-		while (i + len <= stop) {
-			final at: Int = source.indexOf(name, i);
-			if (at < 0 || at + len > stop) break;
-			i = at + 1;
-			final afterIdx: Int = at + len;
-			final beforeOk: Bool = at == 0 || !isIdentChar(StringTools.fastCodeAt(source, at - 1));
-			final afterOk: Bool = afterIdx >= source.length || !isIdentChar(StringTools.fastCodeAt(source, afterIdx));
-			if (beforeOk && afterOk && !offsetWithinAny(at, excluded))
-				out.push({ span: new Span(at, afterIdx), kind: classifyAt(source, at, len, condSpans, regions) });
-		}
-		return out;
 	}
 
 	/**
@@ -3390,14 +3702,14 @@ final class RefactorSupport {
 		final n: Int = source.length;
 		var i: Int = 0;
 		while (i < n) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c == '"'.code || c == "'".code) {
 				final start: Int = i;
 				i = skipStringLiteral(source, i, c) + 1;
 				out.push({ from: start, to: i, kind: StringLit });
 				continue;
 			}
-			if (c == '~'.code && i + 1 < n && StringTools.fastCodeAt(source, i + 1) == '/'.code) {
+			if (c == '~'.code && i + 1 < n && source.fastCodeAt(i + 1) == '/'.code) {
 				final regexEnd: Int = scanRegexLiteral(source, i, n);
 				if (regexEnd >= 0) {
 					out.push({ from: i, to: regexEnd, kind: RegexLit });
@@ -3406,11 +3718,11 @@ final class RefactorSupport {
 				}
 			}
 			if (c == '/'.code && i + 1 < n) {
-				final next: Int = StringTools.fastCodeAt(source, i + 1);
+				final next: Int = source.fastCodeAt(i + 1);
 				if (next == '/'.code) {
 					final start: Int = i;
 					i += 2;
-					while (i < n && StringTools.fastCodeAt(source, i) != '\n'.code) i++;
+					while (i < n && source.fastCodeAt(i) != '\n'.code) i++;
 					out.push({ from: start, to: i, kind: LineComment });
 					continue;
 				}
@@ -3419,7 +3731,7 @@ final class RefactorSupport {
 					i += 2;
 					var closed: Bool = false;
 					while (i + 1 < n) {
-						if (StringTools.fastCodeAt(source, i) == '*'.code && StringTools.fastCodeAt(source, i + 1) == '/'.code) {
+						if (source.fastCodeAt(i) == '*'.code && source.fastCodeAt(i + 1) == '/'.code) {
 							i += 2;
 							closed = true;
 							break;
@@ -3443,16 +3755,6 @@ final class RefactorSupport {
 			if (s != null) out.push(s);
 		}
 		for (child in node.children) collectConditionalSpans(child, out);
-	}
-
-	/**
-	 * Whether a projected node kind denotes a `#if...#end` region — a block
-	 * `Conditional`, an expression `ConditionalExpr`, or any `CondSplice*`
-	 * mid-expression / statement splice. An unrecognised conditional kind
-	 * degrades to `ActiveCode`, which still blocks — fail-closed.
-	 */
-	public static inline function isConditionalKind(kind: String): Bool {
-		return kind == 'Conditional' || kind == 'ConditionalExpr' || StringTools.startsWith(kind, 'CondSplice');
 	}
 
 	/**
@@ -3496,9 +3798,8 @@ final class RefactorSupport {
 		if (at == region.from + 1 && at + len == region.to - 1) return true;
 		final prev: Int = at - 1;
 		if (prev <= region.from) return false;
-		final prevCode: Int = StringTools.fastCodeAt(source, prev);
-		if (prevCode == '$'.code) return true;
-		return prevCode == '{'.code && prev - 1 > region.from && StringTools.fastCodeAt(source, prev - 1) == '$'.code;
+		final prevCode: Int = source.fastCodeAt(prev);
+		return prevCode == '$'.code || prevCode == '{'.code && prev - 1 > region.from && source.fastCodeAt(prev - 1) == '$'.code;
 	}
 
 	/**
@@ -3510,53 +3811,11 @@ final class RefactorSupport {
 	private static function isNoqaComment(source: String, region: LexRegion): Bool {
 		for (raw in source.substring(region.from, region.to).split('\n')) {
 			var line: String = StringTools.trim(raw);
-			if (StringTools.startsWith(line, '//') || StringTools.startsWith(line, '/*')) line = StringTools.trim(line.substr(2));
+			if (line.startsWith('//') || line.startsWith('/*')) line = line.substr(2).trim();
 			final lower: String = line.toLowerCase();
-			if (lower == 'noqa' || StringTools.startsWith(lower, 'noqa:')) return true;
+			if (lower == 'noqa' || lower.startsWith('noqa:')) return true;
 		}
 		return false;
-	}
-
-	/**
-	 * Whether the field declared by `field` can become `final` off its CONSTRUCTOR
-	 * assignment: it has no declaration initializer (a `final` with one cannot be
-	 * reassigned in the constructor) and no `(` in its declaration head (which covers
-	 * properties and parenthesised function types), its sole write is exactly one
-	 * unconditional top-level constructor statement (`x = expr` / `this.x = expr` via
-	 * `constructorFieldInitAt` — a shadowing local or parameter that owns the
-	 * assignment leaves it a `var`), it is not static (`static final` requires a
-	 * declaration initializer), and no other write to its name appears anywhere in
-	 * `source` — a conservative text scan (`MemberWriteScan.writtenInRange`) that also
-	 * sees `#if` bodies the structural walkers cannot. A `@:build` macro injecting a
-	 * writer is the residual blind spot, shared with every other arm of the three
-	 * consumers and surfacing as a loud compile error at the injected write.
-	 *
-	 * The shared core of the constructor arms of `prefer-final-field` /
-	 * `prefer-final-public-field` AND of `prefer-read-only-field`'s cession of the same
-	 * candidates — all three MUST agree on it, or a ctor-assigned field either gets two
-	 * conflicting fixes or none. A new single-file soundness gate for the arm therefore
-	 * belongs INSIDE this predicate, never in one consumer — and mind its cost:
-	 * predicate-false routes the field to `prefer-read-only-field`'s `(default, null)`.
-	 * Each check wraps it in its own cross-file write gates; this predicate is
-	 * single-file only.
-	 */
-	public static function ctorSoleAssignmentFinalizable(source: String, field: QueryNode, plugin: GrammarPlugin): Bool {
-		final name: Null<String> = field.name;
-		final span: Null<Span> = field.span;
-		if (name == null || span == null) return false;
-		if (field.children.length >= 1) return false;
-		if (source.substring(span.from, span.to).indexOf('(') >= 0) return false;
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
-		if (tree == null) return false;
-		final loc: Null<{
-			container: QueryNode,
-			field: QueryNode,
-			stmt: QueryNode,
-			rhs: QueryNode,
-			target: Span
-		}> = constructorFieldInitAt(tree, span.from, plugin.refShape());
-		return loc != null && !staticMemberFroms(loc.container, plugin.refShape()).contains(span.from)
-			&& !MemberWriteScan.writtenInRange(source, name, loc.target, 0, source.length);
 	}
 
 	/**
@@ -3589,14 +3848,14 @@ final class RefactorSupport {
 		final lineEnd: Int = nl < 0 ? n : nl;
 		var i: Int = open + 2;
 		while (i < lineEnd) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c == '\\'.code) {
 				i += 2;
 				continue;
 			}
 			if (c == '/'.code) {
 				i++;
-				while (i < lineEnd && isRegexFlag(StringTools.fastCodeAt(source, i))) i++;
+				while (i < lineEnd && isRegexFlag(source.fastCodeAt(i))) i++;
 				return i;
 			}
 			i++;
@@ -3607,71 +3866,6 @@ final class RefactorSupport {
 	/** One of the flag letters Haxe accepts after a regex literal's closing `/`. */
 	private static inline function isRegexFlag(c: Int): Bool {
 		return c == 'g'.code || c == 'i'.code || c == 'm'.code || c == 's'.code || c == 'u'.code;
-	}
-
-	/**
-	 * Whether `name` is BOUND as an identifier anywhere in `source[from...end)`
-	 * outside `excluded` - the precise form of the question a COLLISION gate asks:
-	 * "is the target name already taken where this rename lands?". Answered from
-	 * the parse (`classifyOccurrences`) instead of raw text, so a comment mention,
-	 * an inert string literal and the member-name slot of a dotted access
-	 * (`o.name`) are correctly none of them bindings.
-	 *
-	 * NOT a replacement for `referencedInRange`, whose imprecision is
-	 * LOAD-BEARING for its other callers: the `unused-*` family reads a `false`
-	 * as "nothing uses this, delete it", and the occurrences skipped here - a
-	 * dotted `obj.member` above all - are exactly its real uses. The conservative
-	 * direction of the question belongs to the CALL SITE, so the two queries
-	 * coexist and only a veto-side caller may use this one.
-	 *
-	 * Deliberately conservative wherever a precise answer would cost another
-	 * scan: CODE inside a `#if` body counts (it hosts real declarations), a
-	 * single-quoted literal that can interpolate counts wholesale rather than
-	 * resolving which of its parts are code, a comment between the dot and the name
-	 * leaves the dotted test false, and a parse failure falls back to
-	 * `referencedInRange`. Each of those over-reports, which for a veto gate is a
-	 * missed fix - never a wrong one.
-	 *
-	 * A STRUCTURE-FIELD name is not excluded here: it needs the parse tree, which
-	 * this signature does not carry, and its safety is caller-dependent (a
-	 * `@:structInit` object literal DOES name the class's own fields). The caller
-	 * that can cede it passes `structureFieldNameSpans` in `excluded`.
-	 */
-	public static function nameBoundInRange(
-		source: String, name: String, from: Int, end: Int, excluded: Array<Span>, plugin: GrammarPlugin
-	): Bool {
-		final classified: Null<Array<ClassifiedOccurrence>> = classifyOccurrences(source, name, plugin, from, end, excluded);
-		if (classified == null) return referencedInRange(source, name, from, end, excluded);
-		final regions: Array<LexRegion> = scanLexicalRegions(source);
-		for (occ in classified) switch occ.kind {
-			// A word inside a longer literal binds nothing, whatever the literal interpolates.
-			case CommentTrivia | DirectiveComment | StringWord:
-			case StringLiteral if (!interpolatingLiteralAt(source, occ.span.from, regions)):
-			case _:
-				if (!isMemberNamePosition(source, occ.span.from)) return true;
-		}
-		return false;
-	}
-
-	/**
-	 * The identifier-token span of every STRUCTURE-FIELD name in `tree` — a member of an
-	 * anonymous-structure type (`{ x:Float }`), of an object literal (`{ x: 1 }`) or of a
-	 * structure PATTERN (`case { x: n }`), per `shape.structureFieldHostKinds`. Such a name
-	 * is reachable only through a receiver, so it binds nothing in the surrounding scope and
-	 * a collision gate over a LOCAL / PARAMETER rename may subtract it: a module-level
-	 * `typedef Zoom = { x:Float }` otherwise vetoes every `_x -> x` in the file.
-	 *
-	 * Only the NAME token is returned, never the whole field node — an object literal's VALUE
-	 * is ordinary code that may well bind the name. Empty for a grammar leaving the slot unset.
-	 *
-	 * Not for a FIELD rename: under `@:structInit` an object literal's keys ARE the class's
-	 * own field names, so subtracting them would silently break the construction site.
-	 */
-	public static function structureFieldNameSpans(tree: QueryNode, source: String, shape: RefShape): Array<Span> {
-		final out: Array<Span> = [];
-		final hosts: Array<String> = shape.structureFieldHostKinds ?? [];
-		if (hosts.length > 0) collectStructureFieldNames(tree, source, hosts, out);
-		return out;
 	}
 
 	/** Walk `node`, appending the name-token span of every direct child of a `hosts` node. */
@@ -3696,14 +3890,14 @@ final class RefactorSupport {
 	private static function interpolatingLiteralAt(source: String, at: Int, regions: Array<LexRegion>): Bool {
 		for (region in regions) {
 			if (region.kind != StringLit || at < region.from || at >= region.to) continue;
-			if (StringTools.fastCodeAt(source, region.from) != "'".code) return false;
+			if (source.fastCodeAt(region.from) != "'".code) return false;
 			var i: Int = region.from + 1;
 			while (i < region.to) {
-				if (StringTools.fastCodeAt(source, i) != '$'.code) {
+				if (source.fastCodeAt(i) != '$'.code) {
 					i++;
 					continue;
 				}
-				if (i + 1 >= region.to || StringTools.fastCodeAt(source, i + 1) != '$'.code) return true;
+				if (i + 1 >= region.to || source.fastCodeAt(i + 1) != '$'.code) return true;
 				i += 2;
 			}
 			return false;
@@ -3720,10 +3914,8 @@ final class RefactorSupport {
 	 */
 	private static function isMemberNamePosition(source: String, at: Int): Bool {
 		var i: Int = at - 1;
-		while (i >= 0 && isSpace(StringTools.fastCodeAt(source, i))) i--;
-		if (i < 0 || StringTools.fastCodeAt(source, i) != '.'.code) return false;
-		if (i > 0 && StringTools.fastCodeAt(source, i - 1) == '.'.code) return false;
-		return !onImportLine(source, at);
+		while (i >= 0 && isSpace(source.fastCodeAt(i))) i--;
+		return i >= 0 && source.fastCodeAt(i) == '.'.code && (i <= 0 || source.fastCodeAt(i - 1) != '.'.code) && !onImportLine(source, at);
 	}
 
 	/**
@@ -3735,79 +3927,8 @@ final class RefactorSupport {
 	 * shares its line with other code.
 	 */
 	private static function onImportLine(source: String, at: Int): Bool {
-		final head: String = StringTools.ltrim(source.substring(lineStartOf(source, at), at));
-		return StringTools.startsWith(head, 'import ') || StringTools.startsWith(head, 'using ');
-	}
-
-	/**
-	 * The two-edit fold of a NULL-GUARDED constructor default: a field declared WITH a
-	 * default (`var x:T = D;`, plain or `(default, null)`) whose only write beyond that
-	 * initializer is exactly one top-level constructor statement of the shape
-	 * `if (p != null) x = p;` (`this.x = p` alike) becomes `final x:T;` plus
-	 * `x = p ?? D;`. Returns the edits when the fold applies, `null` otherwise — the
-	 * non-null result IS the fix, so a rule's `run` and `fix` can never disagree about a
-	 * candidate, and the two edits are one unit that lands together or not at all.
-	 *
-	 * Fails closed on every doubt. All single-file gates live HERE, never in one
-	 * consumer, so the rules claiming these candidates (`prefer-final-field`,
-	 * `prefer-final-public-field`) and the one ceding them (`prefer-read-only-field`)
-	 * cannot drift apart:
-	 *
-	 *  - the declaration carries an initializer, is not `static`, and its head is either
-	 *    plain or exactly the `(default, null)` accessor pair — `final` reproduces that
-	 *    access exactly (readable anywhere, writable nowhere outside the declaration),
-	 *    while any other pair (`get, set`, `default, never`, …) it does not;
-	 *  - the default expression is MOVE-SAFE (`moveSafeDefault`): a numeric / boolean /
-	 *    non-interpolated string literal, a negated numeric literal, or a dotted access
-	 *    rooted at a capitalised identifier (a type-qualified constant or enum value).
-	 *    An allocation (`new T()`, `[]`), a call, `this`, and a bare identifier — which
-	 *    could be another instance field, not yet initialized at constructor position —
-	 *    are rejected: moving them would change allocation identity or evaluation order;
-	 *  - the enclosing type has exactly one constructor, holding exactly one top-level
-	 *    guarded statement of the shape above, whose parameter is optional, `Null<…>`
-	 *    wrapped, or `= null`-defaulted (a non-nullable parameter cannot be
-	 *    `??`-defaulted);
-	 *  - no other write to the field name appears ANYWHERE in the file — the same
-	 *    conservative raw-text scan `ctorSoleAssignmentFinalizable` uses, which sees
-	 *    `#if` bodies — with the declaration and that one constructor target excluded.
-	 *
-	 * Cross-file soundness (an external, subtype, or unresolved write; an `@:access`
-	 * grantee) stays the CONSUMER's job, exactly as for `ctorSoleAssignmentFinalizable`.
-	 * Residual: a mutable static read by the default and written from ANOTHER file could
-	 * still differ between declaration and constructor position; the in-file leg of that
-	 * check lives in `moveSafeDefault`.
-	 */
-	public static function ctorConditionalDefaultFinalEdits(
-		source: String, declSpan: Span, plugin: GrammarPlugin
-	): Null<Array<{ span: Span, text: String }>> {
-		final shape: RefShape = plugin.refShape();
-		final coalesce: Null<String> = shape.nullCoalesceOperatorText;
-		if (coalesce == null || source.substring(declSpan.from, declSpan.to).indexOf('=') < 0) return null;
-		final spans: Array<Null<Span>> = [declSpan];
-		final edits: Array<{ span: Span, text: String }> = varKeywordToFinalEdits(source, spans);
-		if (edits.length != 1) return null;
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
-		if (tree == null) return null;
-		final loc: Null<{ container: QueryNode, field: QueryNode }> = classLikeFieldAt(tree, declSpan.from, shape);
-		if (loc == null) return null;
-		final decl: Null<FoldableDecl> = foldableDeclaration(source, loc, declSpan, shape);
-		final ctor: Null<QueryNode> = soleConstructor(loc.container, shape);
-		if (decl == null || ctor == null) return null;
-		final guarded: Null<GuardedCtorInit> = soleGuardedCtorFieldInit(source, loc.container, ctor, loc.field, shape);
-		if (guarded == null || !ctorParamIsNullable(source, ctor, guarded.param, shape)) return null;
-		if (!guardReachedIntact(source, ctor, decl.name, guarded.stmt.from, shape)) return null;
-		if (
-			MemberWriteScan.writtenInRange(source, decl.name, guarded.target, 0, decl.span.from)
-			|| MemberWriteScan.writtenInRange(source, decl.name, guarded.target, decl.span.to, source.length)
-		)
-			return null;
-		final dropped: Null<Span> = decl.dropped;
-		if (dropped != null) edits.push({ span: dropped, text: '' });
-		edits.push({ span: decl.initDrop, text: '' });
-		final targetText: String = source.substring(guarded.target.from, guarded.target.to);
-		final defaultText: String = source.substring(decl.initSpan.from, decl.initSpan.to);
-		edits.push({ span: guarded.stmt, text: '$targetText = ${guarded.param} $coalesce $defaultText${guarded.terminator}' });
-		return edits;
+		final head: String = source.substring(lineStartOf(source, at), at).ltrim();
+		return head.startsWith('import ') || head.startsWith('using ');
 	}
 
 	/**
@@ -3819,13 +3940,13 @@ final class RefactorSupport {
 	private static function declHeadAfterName(source: String, declSpan: Span): Null<{ dropped: Null<Span>, end: Int }> {
 		final limit: Int = declSpan.to;
 		var i: Int = declSpan.from + 'var'.length;
-		while (i < limit && isSpace(StringTools.fastCodeAt(source, i))) i++;
+		while (i < limit && isSpace(source.fastCodeAt(i))) i++;
 		final nameStart: Int = i;
-		while (i < limit && isIdentChar(StringTools.fastCodeAt(source, i))) i++;
+		while (i < limit && isIdentChar(source.fastCodeAt(i))) i++;
 		if (i == nameStart) return null;
 		final nameEnd: Int = i;
-		while (i < limit && isSpace(StringTools.fastCodeAt(source, i))) i++;
-		if (i >= limit || StringTools.fastCodeAt(source, i) != '('.code) return { dropped: null, end: nameEnd };
+		while (i < limit && isSpace(source.fastCodeAt(i))) i++;
+		if (i >= limit || source.fastCodeAt(i) != '('.code) return { dropped: null, end: nameEnd };
 		final close: Int = source.indexOf(')', i);
 		if (close < 0 || close >= limit) return null;
 		final accessors: Array<String> = [for (a in source.substring(i + 1, close).split(',')) StringTools.trim(a)];
@@ -3856,13 +3977,13 @@ final class RefactorSupport {
 	 * terminator follows the default.
 	 */
 	private static function initializerDropSpan(source: String, declSpan: Span, initSpan: Span, headEnd: Int): Null<Span> {
-		final tail: String = StringTools.trim(source.substring(initSpan.to, declSpan.to));
+		final tail: String = source.substring(initSpan.to, declSpan.to).trim();
 		if (tail != ';' && tail != '') return null;
 		var i: Int = initSpan.from - 1;
-		while (i >= headEnd && isSpace(StringTools.fastCodeAt(source, i))) i--;
-		if (i < headEnd || StringTools.fastCodeAt(source, i) != '='.code) return null;
+		while (i >= headEnd && isSpace(source.fastCodeAt(i))) i--;
+		if (i < headEnd || source.fastCodeAt(i) != '='.code) return null;
 		var start: Int = i - 1;
-		while (start >= headEnd && isSpace(StringTools.fastCodeAt(source, start))) start--;
+		while (start >= headEnd && isSpace(source.fastCodeAt(start))) start--;
 		return start < headEnd ? null : new Span(start + 1, initSpan.to);
 	}
 
@@ -3880,11 +4001,12 @@ final class RefactorSupport {
 		final numeric: Array<String> = shape.numericLiteralKinds ?? [];
 		if (numeric.contains(node.kind)) return true;
 		if (node.kind == shape.boolLitKind) return true;
-		return (shape.stringLiteralKinds ?? []).contains(node.kind)
-			? !containsInterpolation(node, shape) && node.children.foreach(c -> c.children.length == 0)
-			: node.kind == shape.negationKind
-				? node.children.length == 1 && numeric.contains(node.children[0].kind)
-				: node.kind == shape.fieldAccessKind && constantChain(source, node, shape);
+		return if ((shape.stringLiteralKinds ?? []).contains(node.kind))
+			!containsInterpolation(node, shape) && node.children.foreach(c -> c.children.length == 0)
+		else if (node.kind == shape.negationKind)
+			node.children.length == 1 && numeric.contains(node.children[0].kind)
+		else
+			node.kind == shape.fieldAccessKind && constantChain(source, node, shape);
 	}
 
 	/** Whether `node`'s subtree carries a string-interpolation hole, which reads surrounding bindings. */
@@ -3964,15 +4086,19 @@ final class RefactorSupport {
 		final target: QueryNode = assign.children[0];
 		final targetSpan: Null<Span> = target.span;
 		final value: QueryNode = assign.children[1];
-		if (targetSpan == null || value.kind != shape.identKind || value.name != param) return null;
-		if (!statementCommentFree(source, stmtSpan, targetSpan)) return null;
-		if (!ctorTargetIsField(target, fieldFrom, fieldName, container, shape)) return null;
-		return {
-			stmt: stmtSpan,
-			target: targetSpan,
-			param: param,
-			terminator: source.substring(assignSpan.to, branchSpan.to)
-		};
+		return if (targetSpan == null || value.kind != shape.identKind || value.name != param)
+			null
+		else if (!statementCommentFree(source, stmtSpan, targetSpan))
+			null
+		else if (!ctorTargetIsField(target, fieldFrom, fieldName, container, shape))
+			null
+		else
+			{
+				stmt: stmtSpan,
+				target: targetSpan,
+				param: param,
+				terminator: source.substring(assignSpan.to, branchSpan.to)
+			};
 	}
 
 	/**
@@ -3992,35 +4118,11 @@ final class RefactorSupport {
 			final text: String = source.substring(span.from, span.to);
 			final colon: Int = text.indexOf(':');
 			if (colon < 0) return false;
-			final declared: String = StringTools.trim(text.substring(colon + 1));
-			for (wrapper in wrappers) if (declared == wrapper || StringTools.startsWith(declared, '$wrapper<')) return true;
+			final declared: String = text.substring(colon + 1).trim();
+			for (wrapper in wrappers) if (declared == wrapper || declared.startsWith('$wrapper<')) return true;
 			return false;
 		}
 		return false;
-	}
-
-	/**
-	 * The edits finalizing a set of flagged field declarations: the two-edit
-	 * conditional-default fold (`ctorConditionalDefaultFinalEdits`) where it applies, a
-	 * bare `var` -> `final` keyword swap everywhere else. The shared back end of
-	 * `prefer-final-field` / `prefer-final-public-field`'s `fix`, so both rules emit the
-	 * same shape for the same candidate, and each fold's edits travel as one unit through
-	 * the caller's single per-file canonicalize (all of them apply, or the file reverts).
-	 */
-	public static function finalizeFieldEdits(
-		source: String, spans: Array<Null<Span>>, plugin: GrammarPlugin
-	): Array<{ span: Span, text: String }> {
-		final edits: Array<{ span: Span, text: String }> = [];
-		final plain: Array<Null<Span>> = [];
-		for (span in spans) if (span != null) {
-			final fold: Null<Array<{ span: Span, text: String }>> = ctorConditionalDefaultFinalEdits(source, span, plugin);
-			if (fold == null)
-				plain.push(span);
-			else
-				for (edit in fold) edits.push(edit);
-		}
-		for (edit in varKeywordToFinalEdits(source, plain)) edits.push(edit);
-		return edits;
 	}
 
 	/**
@@ -4042,7 +4144,7 @@ final class RefactorSupport {
 		if (staticMemberFroms(loc.container, shape).contains(fieldSpan.from)) return null;
 		final head: Null<{ dropped: Null<Span>, end: Int }> = declHeadAfterName(source, fieldSpan);
 		final init: Null<QueryNode> = declInitializer(field, shape);
-		final initSpan: Null<Span> = init == null ? null : init.span;
+		final initSpan: Null<Span> = init?.span;
 		if (head == null || init == null || initSpan == null) return null;
 		if (initSpan.from < head.end || !defaultIsMoveSafe(source, init, shape)) return null;
 		final initDrop: Null<Span> = initializerDropSpan(source, fieldSpan, initSpan, head.end);
@@ -4072,12 +4174,12 @@ final class RefactorSupport {
 	 */
 	private static function guardReachedIntact(source: String, ctor: QueryNode, name: String, guardFrom: Int, shape: RefShape): Bool {
 		final body: Null<QueryNode> = ctor.children.find(c -> c.kind == shape.blockBodyKind);
-		final bodySpan: Null<Span> = body == null ? null : body.span;
+		final bodySpan: Null<Span> = body?.span;
 		final exitKinds: Array<String> = shape.controlExitKinds ?? [];
 		// An unset exit-kind set would turn the scan below into a no-op and silently accept
 		// every early return, so its completeness is load-bearing here — refuse without it.
-		if (body == null || bodySpan == null || exitKinds.length == 0) return false;
-		return !referencedInRange(source, name, bodySpan.from, guardFrom, []) && !kindStartsBefore(body, exitKinds, guardFrom);
+		return body != null && bodySpan != null && exitKinds.length != 0 && !referencedInRange(source, name, bodySpan.from, guardFrom, [])
+			&& !kindStartsBefore(body, exitKinds, guardFrom);
 	}
 
 	/** Whether `node`'s subtree holds a node of one of `kinds` that STARTS before `boundary`. */
@@ -4124,72 +4226,12 @@ final class RefactorSupport {
 	private static function guardedSoleStatement(stmt: QueryNode, shape: RefShape): Null<QueryNode> {
 		if (stmt.children.length != 2) return null;
 		final branch: QueryNode = stmt.children[1];
-		return branch.kind != shape.blockStmtKind ? branch : branch.children.length == 1 ? branch.children[0] : null;
-	}
-
-
-	/**
-	 * The span of a braceless `$name` interpolation read of the binding at `binding` that
-	 * `occurrences` does NOT rewrite, or null when every one of them is covered.
-	 *
-	 * Asked over the resolved hits, not by walking the tree for the name: a read bound to a
-	 * SHADOWING binding of the same name is none of this rename's business, and matching on
-	 * the name alone refuses it as if it were. The read's node span covers the bytes that
-	 * SPELL it (the `$` included), so a rewritten one CONTAINS its occurrence. One is
-	 * missing exactly when `identTokenOffset` could not locate the identifier token in the
-	 * raw source — an escape-spelled `$` or name — and splicing the rest would leave that
-	 * read bound to a name the rewrite has removed.
-	 */
-	public static function unrewrittenInterpRead(hits: Array<RefHit>, binding: Int, occurrences: Array<Span>): Null<Span> {
-		for (h in hits) {
-			if (!h.interpolated) continue;
-			final bound: Null<Span> = h.bindingSpan;
-			if (bound == null || bound.from != binding) continue;
-			if (!occurrences.exists(o -> h.span.from <= o.from && o.to <= h.span.to)) return h.span;
-		}
-		return null;
-	}
-
-	/**
-	 * The span of a `${ … }` interpolation in `node`'s subtree that carries NO parsed
-	 * expression, or null. Only the rescan of an escape-spelled `$` synthesizes one
-	 * (`HxInterpProjection`): its interior does not exist contiguously in the source, so no
-	 * subtree is built and any identifier read inside it is invisible to every reference
-	 * scan — a rewrite touching such a name would silently part-apply. Reported
-	 * unconditionally rather than by scanning the interior for a name: the interior may
-	 * spell that name with escapes too, so a text scan cannot prove absence.
-	 */
-	public static function unreadableInterpBlock(node: QueryNode, blockKind: String): Null<Span> {
-		if (node.kind == blockKind && node.children.length == 0) return node.span;
-		for (c in node.children) {
-			final found: Null<Span> = unreadableInterpBlock(c, blockKind);
-			if (found != null) return found;
-		}
-		return null;
-	}
-
-
-	/**
-	 * The deepest function / lambda subtree containing `cursor`, or the whole tree when none
-	 * does — the region a local binding can be referenced from, and therefore the scope a
-	 * name-agnostic net (an unreadable interpolation hole, a same-block re-declaration) has
-	 * to sweep.
-	 *
-	 * No containment pruning: the parse root (and other synthesized wrappers) carries NO
-	 * span, so a prune at a null-span node would stop at the root and silently widen the
-	 * scope to the whole file (false refusals for a same-named local in a SIBLING function).
-	 * Gate only the match.
-	 */
-	public static function enclosingFunctionSubtree(tree: QueryNode, cursor: Int, shape: RefShape): QueryNode {
-		final fnKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []).concat(shape.localFunctionKinds ?? []);
-		var best: QueryNode = tree;
-		function walk(node: QueryNode): Void {
-			final span: Null<Span> = node.span;
-			if (span != null && cursor >= span.from && cursor < span.to && fnKinds.contains(node.kind)) best = node;
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return best;
+		return if (branch.kind != shape.blockStmtKind)
+			branch
+		else if (branch.children.length == 1)
+			branch.children[0]
+		else
+			null;
 	}
 
 	/**
@@ -4223,23 +4265,6 @@ final class RefactorSupport {
 				pending = collectStaticFroms(child, staticKind, members, pending, out) || pending;
 		}
 		return pending;
-	}
-
-
-	/**
-	 * The member host whose DIRECT children hold `member` — `container` itself, or the
-	 * member-position conditional region one level down that actually declares it.
-	 *
-	 * Every sibling-run walk needs the real parent. Handed the container for a guarded member,
-	 * `declGroupSpan` finds no sibling index and degrades to the bare node span, so a deletion built
-	 * from it leaves the member's `private` / `@:meta` run behind — dangling text that does not parse.
-	 * Falls back to `container` when `member` is not found under it at all, which keeps every
-	 * pre-existing caller's behaviour byte for byte.
-	 */
-	public static function memberHostOf(container: QueryNode, member: QueryNode): QueryNode {
-		var found: QueryNode = container;
-		eachMemberHost(container, host -> if (host.children.contains(member)) found = host);
-		return found;
 	}
 
 }

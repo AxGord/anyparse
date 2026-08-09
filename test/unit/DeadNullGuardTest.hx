@@ -2,12 +2,12 @@ package unit;
 
 import utest.Assert;
 import utest.Test;
-import anyparse.check.Check.Violation;
 import anyparse.check.DeadNullGuard;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
+import anyparse.check.Check;
 
 /**
  * The `dead-null-guard` check: a null comparison whose operand is already
@@ -682,10 +682,23 @@ class DeadNullGuardTest extends Test {
 		);
 	}
 
+	/**
+	 * Registered, and a `RiskyFix`: a FLOW-dead guard can still be COMPILER-load-bearing —
+	 * `@:nullSafety(Strict)` narrowing cannot see a fact laundered through a Bool local
+	 * (`final ok = x != null && flag; if (ok && x != null) x.f` — removing the second
+	 * check broke the build live), so the removal goes through the oracle's
+	 * typecheck-and-revert pipeline and stays report-only where no oracle is configured.
+	 */
+	public function testRegisteredAsARiskyFix(): Void {
+		final check: Null<Check> = Linter.byId('dead-null-guard');
+		Assert.notNull(check);
+		Assert.isTrue(Std.isOfType(check, RiskyFix), 'dead-null-guard removals are oracle-verified');
+	}
+
 	/** A self-contained module: a non-null `Foo` local `x`, plus a `cond()` helper, wrapping `body`. */
 	private function wrapFoo(body: String): String {
-		return
-			'class Foo {\n\tpublic function new() {}\n\tpublic function g():Void {}\n}\n\n@:nullSafety(Strict)\nclass C {\n\tfunction cond():Bool\n\t\treturn true;\n\n\tfunction f():Void {\n\t\tvar x = new Foo();\n\t\t$body\n\t}\n}\n';
+		return 'class Foo {\n\tpublic function new() {}\n\tpublic function g():Void {}\n}\n\n@:nullSafety(Strict)\nclass C {\n'
+			+ '\tfunction cond():Bool\n\t\treturn true;\n\n\tfunction f():Void {\n\t\tvar x = new Foo();\n\t\t$body\n\t}\n}\n';
 	}
 
 	/** Run + fix + canonicalise (whole-file reformat) `src`, returning the emitted text. */

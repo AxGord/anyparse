@@ -10,7 +10,6 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.query.format.Text;
 import anyparse.runtime.Span;
-import anyparse.runtime.Span.Position;
 
 using StringTools;
 
@@ -51,10 +50,9 @@ class LintSliceTest extends Test {
 
 		final span: Null<Span> = v.span;
 		Assert.notNull(span);
-		if (span != null) {
-			final pos: Position = span.lineCol(src);
-			Assert.equals(3, pos.line);
-		}
+		if (span == null) return;
+		final pos: Position = span.lineCol(src);
+		Assert.equals(3, pos.line);
 	}
 
 	/** A value reference (`Foo.bar()`) counts as usage; the sibling unused import is flagged. */
@@ -211,10 +209,9 @@ class LintSliceTest extends Test {
 
 		final span: Null<Span> = v.span;
 		Assert.notNull(span);
-		if (span != null) {
-			final pos: Position = span.lineCol(src);
-			Assert.equals(3, pos.line);
-		}
+		if (span == null) return;
+		final pos: Position = span.lineCol(src);
+		Assert.equals(3, pos.line);
 	}
 
 	/** A local that is read by a later statement is not flagged. */
@@ -472,6 +469,39 @@ class LintSliceTest extends Test {
 		Assert.isTrue(froms.contains(10));
 		Assert.isTrue(froms.contains(60));
 		Assert.isFalse(froms.contains(20));
+	}
+
+	/**
+	 * A zero-length edit is an INSERT. The one geometry that composes safely through
+	 * `applyEdits`' splice is an insert AT another edit's `.to` (right after a deleted
+	 * region — prefer-static-extension's `using` line at the boundary of unused-import's
+	 * delete): the old unconditional containment test dropped it alone, silently breaking
+	 * the check's atomic edit set (call rewrites landed, the `using` vanished, the file
+	 * stopped compiling). The unsafe geometries keep the drop: strictly INSIDE a span
+	 * (the splice corrupts — insert text vanishes, trailing deleted bytes leak back),
+	 * at a span's `.from` (splice order diverges across targets), and a same-point tie
+	 * with an earlier insert.
+	 */
+	public function testDropContainedEditsKeepsZeroLengthInserts(): Void {
+		final source: String = '0123456789012345678901234567890123456789012345678901234567890';
+		final delete: { span: Span, text: String } = { span: new Span(10, 50), text: '' };
+		final boundary: { span: Span, text: String } = { span: new Span(50, 50), text: 'using Lambda;\n' };
+		final interior: { span: Span, text: String } = { span: new Span(30, 30), text: 'x' };
+		final atFrom: { span: Span, text: String } = { span: new Span(10, 10), text: 'y' };
+		final kept: Array<{ span: Span, text: String }> = RefactorSupport.dropContainedEdits([delete, boundary, interior, atFrom]);
+		Assert.equals(2, kept.length);
+		Assert.isTrue(kept.contains(delete));
+		Assert.isTrue(kept.contains(boundary));
+		// The surviving pair splices correctly: the deleted range is gone, the insert
+		// lands right after it, no deleted byte leaks back.
+		Assert.equals('0123456789using Lambda;\n01234567890', RefactorSupport.applyEdits(source, kept));
+		// A same-point tie keeps the EARLIER insert only (splice order between ties is
+		// sort-stability-dependent — one survivor makes it deterministic).
+		final a: { span: Span, text: String } = { span: new Span(5, 5), text: 'a' };
+		final b: { span: Span, text: String } = { span: new Span(5, 5), text: 'b' };
+		final ties: Array<{ span: Span, text: String }> = RefactorSupport.dropContainedEdits([a, b]);
+		Assert.equals(1, ties.length);
+		Assert.isTrue(ties.contains(a));
 	}
 
 	public function testCrossCheckOverlapKeepsOuterDeletion(): Void {

@@ -269,7 +269,6 @@ class FoldStringLiteralsCheckTest extends Test {
 		Assert.equals(0, violations("@:native('a' + 'b') class C { function f() {} }").length);
 	}
 
-
 	/** A merge whose rendered line lands EXACTLY on `maxLineLength` is accepted (the fits-probe boundary). */
 	public function testWidthBoundaryAtLimitMerges(): Void {
 		final vs: Array<Violation> = violations(widthSource(FIXTURE_BUDGET));
@@ -300,17 +299,17 @@ class FoldStringLiteralsCheckTest extends Test {
 	 */
 	public function testLiteralSplitOnlyWhenOverLong(): Void {
 		final seams: String = "${a.b()}y${c.d()}";
-		Assert.equals(0, violations("class C { function f() { g('x" + seams + "z'); } }").length);
-		Assert.equals(1, violations("class C {\n\tfunction f() {\n\t\tg('" + ''.rpad('x', 130) + seams + "');\n\t}\n}").length);
+		Assert.equals(0, violations('class C { function f() { g(\'x${seams}z\'); } }').length);
+		Assert.equals(1, violations('class C {\n\tfunction f() {\n\t\tg(\'${''.rpad('x', 130)}$seams\');\n\t}\n}').length);
 	}
 
 	/** An over-long literal is cut at a `${ … }` seam until the lines fit. */
 	public function testOverLongLiteralSplitAtSeam(): Void {
 		final head: String = ''.rpad('h', 100);
 		final tail: String = ''.rpad('t', 60);
-		final src: String = "class C {\n\tfunction f() {\n\t\tg('" + head + "${a.b()}" + tail + "');\n\t}\n}";
+		final src: String = 'class C {\n\tfunction f() {\n\t\tg(\'$head$${a.b()}$tail\');\n\t}\n}';
 		Assert.equals(1, violations(src).length);
-		Assert.equals("'" + head + "${a.b()}' + '" + tail + "'", foldOf(src));
+		Assert.equals('\'$head$${a.b()}\' + \'$tail\'', foldOf(src));
 	}
 
 	/**
@@ -322,8 +321,8 @@ class FoldStringLiteralsCheckTest extends Test {
 	public function testSplitNeverEmitsTwoLeadingBareOperands(): Void {
 		final one: String = ''.rpad('n', 130);
 		final two: String = ''.rpad('m', 130);
-		final src: String = "class C {\n\tfunction f() {\n\t\tg('${" + one + "}${" + two + "} items');\n\t}\n}";
-		Assert.equals("'$" + one + "$" + two + "' + ' items'", foldOf(src));
+		final src: String = 'class C {\n\tfunction f() {\n\t\tg(\'$${$one}$${$two} items\');\n\t}\n}';
+		Assert.equals('\'$$$one$$$two\' + \' items\'', foldOf(src));
 	}
 
 	/** MERGE fixture, shaped after a real query builder: a literal / ternary / literal / call / literal chain at three tabs. */
@@ -540,8 +539,8 @@ class FoldStringLiteralsCheckTest extends Test {
 	 */
 	public function testInterpolatedHeadNeverBecomesBareOperand(): Void {
 		final tail: String = ''.rpad('B', 5);
-		Assert.equals("'${a + b}" + ''.rpad('A', 117) + "' + '" + tail + "'", foldOf(bareHeadSource("'${a + b}'", 117, 5)));
-		Assert.equals("'${nnn}" + ''.rpad('A', 119) + "' + '" + tail + "'", foldOf(bareHeadSource("'$nnn'", 119, 5)));
+		Assert.equals('\'$${a + b}${''.rpad('A', 117)}\' + \'$tail\'', foldOf(bareHeadSource("'${a + b}'", 117, 5)));
+		Assert.equals('\'$${nnn}${''.rpad('A', 119)}\' + \'$tail\'', foldOf(bareHeadSource("'$nnn'", 119, 5)));
 	}
 
 	/**
@@ -552,12 +551,12 @@ class FoldStringLiteralsCheckTest extends Test {
 	 */
 	public function testSplitsAtNewlineEscape(): Void {
 		Assert.equals(1, violations(newlineSource("'", 100, 60)).length);
-		Assert.equals("'" + ''.rpad('A', 100) + "\\n' + '" + ''.rpad('B', 60) + "'", foldOf(newlineSource("'", 100, 60)));
+		Assert.equals('\'${''.rpad('A', 100)}\\n\' + \'${''.rpad('B', 60)}\'', foldOf(newlineSource("'", 100, 60)));
 	}
 
 	/** A DOUBLE-quoted literal interpolates nothing, so every `\n` in it is a seam — and the split stays double-quoted. */
 	public function testSplitsDoubleQuotedAtNewlineEscape(): Void {
-		Assert.equals('"' + ''.rpad('A', 100) + '\\n" + "' + ''.rpad('B', 60) + '"', foldOf(newlineSource('"', 100, 60)));
+		Assert.equals('"${''.rpad('A', 100)}\\n" + "${''.rpad('B', 60)}"', foldOf(newlineSource('"', 100, 60)));
 	}
 
 	/** The split's own output re-decomposes to the same segment list, so re-linting it finds nothing. */
@@ -572,7 +571,7 @@ class FoldStringLiteralsCheckTest extends Test {
 
 	/** `\\n` is an escaped BACKSLASH followed by an `n`, not a line break — no seam, so the literal is not a candidate. */
 	public function testEscapedBackslashIsNotASeam(): Void {
-		Assert.equals(0, violations(rawSource("'" + ''.rpad('A', 100) + "\\\\n" + ''.rpad('B', 60) + "'")).length);
+		Assert.equals(0, violations(rawSource('\'${''.rpad('A', 100)}\\\\n${''.rpad('B', 60)}\'')).length);
 	}
 
 	/**
@@ -586,7 +585,7 @@ class FoldStringLiteralsCheckTest extends Test {
 	 */
 	public function testSeamPastLimitStillSplitsBestEffort(): Void {
 		Assert.equals(1, violations(newlineSource("'", 150, 20)).length);
-		Assert.equals("'" + ''.rpad('A', 150) + "\\n' + '" + ''.rpad('B', 20) + "'", foldOf(newlineSource("'", 150, 20)));
+		Assert.equals('\'${''.rpad('A', 150)}\\n\' + \'${''.rpad('B', 20)}\'', foldOf(newlineSource("'", 150, 20)));
 	}
 
 	/**
@@ -595,7 +594,7 @@ class FoldStringLiteralsCheckTest extends Test {
 	 * intact.
 	 */
 	public function testNewlineInsideInterpolationBlockIsNotASeam(): Void {
-		final src: String = rawSource("'" + ''.rpad('A', 100) + "${g(\"p\\nq\")}" + ''.rpad('B', 60) + "'");
+		final src: String = rawSource('\'${''.rpad('A', 100)}$${g("p\\nq")}${''.rpad('B', 60)}\'');
 		Assert.isTrue(foldOf(src).indexOf('"p\\nq"') != -1);
 	}
 
@@ -659,7 +658,7 @@ class FoldStringLiteralsCheckTest extends Test {
 	 * for a member KIND folded it.
 	 */
 	public function testModuleLevelInlineValueIsNotACandidate(): Void {
-		final literal: String = "'" + ''.rpad('A', 100) + '\\n' + ''.rpad('B', 60) + "'";
+		final literal: String = '\'${''.rpad('A', 100)}\\n${''.rpad('B', 60)}\'';
 		Assert.equals(0, violations('inline final S:String = $literal;\n').length);
 		Assert.equals(1, violations('final S:String = $literal;\n').length);
 	}
@@ -671,8 +670,8 @@ class FoldStringLiteralsCheckTest extends Test {
 	 * values were silently exempt.
 	 */
 	public function testEnumAbstractRunEndsAtItsOwnDeclaration(): Void {
-		final literal: String = "'" + ''.rpad('A', 100) + '\\n' + ''.rpad('B', 60) + "'";
-		Assert.equals(1, violations(deprecatedEnumAbstractSource(4, 4) + '\nclass C {\n\tstatic final S:String = $literal;\n}').length);
+		final literal: String = '\'${''.rpad('A', 100)}\\n${''.rpad('B', 60)}\'';
+		Assert.equals(1, violations('${deprecatedEnumAbstractSource(4, 4)}\nclass C {\n\tstatic final S:String = $literal;\n}').length);
 	}
 
 	/**
@@ -698,14 +697,13 @@ class FoldStringLiteralsCheckTest extends Test {
 		Assert.equals(1, vs.length);
 		final edits: Array<{ span: Span, text: String }> = check.fix(files[1].source, vs, new HaxeQueryPlugin());
 		Assert.equals(1, edits.length);
-		Assert.equals("'" + ''.rpad('A', 100) + "\\n' + '" + ''.rpad('B', 60) + "'", edits[0].text);
+		Assert.equals('\'${''.rpad('A', 100)}\\n\' + \'${''.rpad('B', 60)}\'', edits[0].text);
 	}
 
 	/** A call the file imports nothing for cannot be routed to an unseen macro, so its arguments fold as usual. */
 	public function testPlainCallArgumentIsFixed(): Void {
 		Assert.equals(
-			"'" + ''.rpad('A', 100) + "\\n' + '" + ''.rpad('B', 60) + "'",
-			foldOf(rawSource("'" + ''.rpad('A', 100) + "\\n" + ''.rpad('B', 60) + "'"))
+			'\'${''.rpad('A', 100)}\\n\' + \'${''.rpad('B', 60)}\'', foldOf(rawSource('\'${''.rpad('A', 100)}\\n${''.rpad('B', 60)}\''))
 		);
 	}
 
@@ -802,7 +800,58 @@ class FoldStringLiteralsCheckTest extends Test {
 	public function testConstructTheWriterCannotWrapIsRepricedAtItsOwnColumn(): Void {
 		final src: String = objectFieldSource(60, 40);
 		Assert.equals(1, violations(src).length);
-		Assert.equals("'" + ''.rpad('A', 60) + "\\n' + '" + ''.rpad('B', 40) + "'", foldOf(src));
+		Assert.equals('\'${''.rpad('A', 60)}\\n\' + \'${''.rpad('B', 40)}\'', foldOf(src));
+	}
+
+	/**
+	 * Fixpoint guard, refusal side. The merged `while` head FITS the line width; only
+	 * the untouchable reification segment exceeds it. The old gate compared candidates
+	 * against the REGION's max width — vacuously permissive under that segment — so the
+	 * planner proposed a split of the already-fitting head, and from the split state the
+	 * merge back: `--fix` ping-ponged to the pass cap with a byte-identical file. A
+	 * split is licensed by the lines it TOUCHES being over-wide, so this plans NOTHING.
+	 *
+	 * Measured geometry (tab 4): head 139, reification line 142, limit 140 — the
+	 * one-column margin is DELIBERATE (140 vs 141 flips this into the progress
+	 * fixture's shape). The reification line alone must stay finding-free too: its
+	 * single `\n` is terminal, so there is no seam and nothing to plan — if the seam
+	 * model ever changes, this guard keeps the fixture honest.
+	 */
+	public function testIrreducibleOverwideSegmentNoResegmentOfFittingLines(): Void {
+		final head: String =
+			"\t\tfinal expected: String = 'class C {\\n\\tfunction test() {\\n\\t\\tfinal resultList = [\\n\\t\\t\\twhile (iteratorValue.hasNextElement())\\n'";
+		Assert.equals(0, violations(cycleFixture(head)).length);
+		final reificationAlone: String = 'class C {\n\tfunction f() {\n'
+			+ "\t\tfinal expected: String = \"\\t\\t\\tmacro if ($p{['sourceObject', fieldEntry.slot]} != null) $p{[fieldEntry.slot]} = $p{['sourceObject', fieldEntry.slot]}\\n\";\n"
+			+ '\t}\n}';
+		Assert.equals(0, violations(reificationAlone).length);
+	}
+
+	/**
+	 * Fixpoint guard, progress side — same region, but the merged `for` head genuinely
+	 * exceeds the width (141 at tab 4): the split IS licensed, and its result is a
+	 * FIXPOINT — re-running the check on the fixed text proposes nothing, where the old
+	 * planner reported the merge back and `--fix` cycled.
+	 */
+	public function testOverwideHeadSplitsOnceAndConverges(): Void {
+		final head: String =
+			"\t\tfinal expected: String = 'class C {\\n\\tfunction test() {\\n\\t\\tfinal resultList = [\\n\\t\\t\\tfor (fieldEntry in fieldEntryCollection)\\n'";
+		final src: String = cycleFixture(head);
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		final check: FoldStringLiterals = new FoldStringLiterals();
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
+		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				// Pin the EDIT, not just its stability: the head must split into the
+				// two seam segments (the `[\n'`-terminated literal + the `for` line) —
+				// a future planner proposing a different self-consistent edit fails here.
+				Assert.isTrue(text.contains("final resultList = [\\n'"));
+				Assert.isTrue(text.contains("+ '\\t\\t\\tfor (fieldEntry in fieldEntryCollection)\\n'"));
+				Assert.equals(0, violations(text).length);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
 	}
 
 	/**
@@ -817,8 +866,8 @@ class FoldStringLiteralsCheckTest extends Test {
 			'class C {',
 			'\tfunction f(x:String) {',
 			'\t\tg(',
-			"\t\t\t'" + ''.rpad('a', 40) + "'",
-			"\t\t\t+ '" + ''.rpad('b', 40) + "${x}" + ''.rpad('c', tailLen) + "'",
+			'\t\t\t\'${''.rpad('a', 40)}\'',
+			'\t\t\t+ \'${''.rpad('b', 40)}$${x}${''.rpad('c', tailLen)}\'',
 			'\t\t);',
 			'\t}',
 			'}'
@@ -836,9 +885,9 @@ class FoldStringLiteralsCheckTest extends Test {
 			'class C {',
 			'\tfunction f(a:Int, b:Int, nnn:String) {',
 			'\t\tg(',
-			'\t\t\t' + head,
-			"\t\t\t+ '" + ''.rpad('A', aLen) + "'",
-			"\t\t\t+ '" + ''.rpad('B', bLen) + "'",
+			'\t\t\t$head',
+			'\t\t\t+ \'${''.rpad('A', aLen)}\'',
+			'\t\t\t+ \'${''.rpad('B', bLen)}\'',
 			'\t\t);',
 			'\t}',
 			'}'
@@ -853,8 +902,8 @@ class FoldStringLiteralsCheckTest extends Test {
 	private function trailingCommentSource(): String {
 		return [
 			'class C {',
-			"\tvar xxxxx = '" + ''.rpad('A', 60) + "' + name",
-			"\t\t+ '" + ''.rpad('B', 60) + "'; // " + ''.rpad('z', 36),
+			'\tvar xxxxx = \'${''.rpad('A', 60)}\' + name',
+			'\t\t+ \'${''.rpad('B', 60)}\'; // ${''.rpad('z', 36)}',
 			'}'
 		].join('\n');
 	}
@@ -868,8 +917,8 @@ class FoldStringLiteralsCheckTest extends Test {
 		return [
 			'class C {',
 			'\tfunction f() {',
-			"\t\tvar x = '" + ''.rpad('A', 30) + "' + '" + ''.rpad('B', 30) + "' // one",
-			"\t\t\t+ '" + ''.rpad('C', 30) + "';",
+			'\t\tvar x = \'${''.rpad('A', 30)}\' + \'${''.rpad('B', 30)}\' // one',
+			'\t\t\t+ \'${''.rpad('C', 30)}\';',
 			'\t}',
 			'}'
 		].join('\n');
@@ -925,7 +974,7 @@ class FoldStringLiteralsCheckTest extends Test {
 	 * merge this pair at all.
 	 */
 	private function widthSource(mergedLen: Int): String {
-		return "class C {\n\tfunction f() {\n\t\tg('" + ''.rpad('a', mergedLen - 4) + "' + b);\n\t}\n}";
+		return 'class C {\n\tfunction f() {\n\t\tg(\'${''.rpad('a', mergedLen - 4)}\' + b);\n\t}\n}';
 	}
 
 	private function wrap(expr: String): String {
@@ -944,42 +993,42 @@ class FoldStringLiteralsCheckTest extends Test {
 	 * budget for the split fixtures, past it for `testSeamPastLimitStillSplitsBestEffort`.
 	 */
 	private function newlineSource(quote: String, aLen: Int, bLen: Int): String {
-		return rawSource(quote + ''.rpad('A', aLen) + '\\n' + ''.rpad('B', bLen) + quote);
+		return rawSource('${quote + ''.rpad('A', aLen)}\\n${''.rpad('B', bLen)}$quote');
 	}
 
 	/** The same over-long literal in `case` PATTERN position, where a concatenation is not legal syntax. */
 	private function casePatternSource(aLen: Int, bLen: Int): String {
-		final literal: String = "'" + ''.rpad('A', aLen) + '\\n' + ''.rpad('B', bLen) + "'";
+		final literal: String = '\'${''.rpad('A', aLen)}\\n${''.rpad('B', bLen)}\'';
 		return 'class C {\n\tfunction f(s:String) {\n\t\tswitch (s) {\n\t\t\tcase $literal: g(1);\n\t\t\tcase _: g(2);\n\t\t}\n\t}\n}';
 	}
 
 	/** The same over-long literal as a parameter DEFAULT, where the compiler requires a constant. */
 	private function defaultParamSource(aLen: Int, bLen: Int): String {
-		final literal: String = "'" + ''.rpad('A', aLen) + '\\n' + ''.rpad('B', bLen) + "'";
+		final literal: String = '\'${''.rpad('A', aLen)}\\n${''.rpad('B', bLen)}\'';
 		return 'class C {\n\tfunction f(s:String = $literal) {\n\t\tg(s);\n\t}\n}';
 	}
 
 	/** The same over-long literal as an enum-abstract VALUE, which its `case` consumers read as a shape. */
 	private function enumAbstractSource(aLen: Int, bLen: Int): String {
-		final literal: String = "'" + ''.rpad('A', aLen) + '\\n' + ''.rpad('B', bLen) + "'";
+		final literal: String = '\'${''.rpad('A', aLen)}\\n${''.rpad('B', bLen)}\'';
 		return 'enum abstract E(String) {\n\tvar A = $literal;\n\tvar B = \'b\';\n}';
 	}
 
 	/** The same declaration in Haxe's deprecated spelling: a PLAIN abstract carrying an `@:enum` annotation sibling. */
 	private function deprecatedEnumAbstractSource(aLen: Int, bLen: Int): String {
-		final literal: String = "'" + ''.rpad('A', aLen) + '\\n' + ''.rpad('B', bLen) + "'";
+		final literal: String = '\'${''.rpad('A', aLen)}\\n${''.rpad('B', bLen)}\'';
 		return '@:enum abstract E(String) {\n\tvar A = $literal;\n\tvar B = \'b\';\n}';
 	}
 
 	/** The same value one level down, inside a `#if` region — the declaration is no longer its immediate parent. */
 	private function guardedEnumAbstractSource(aLen: Int, bLen: Int): String {
-		final literal: String = "'" + ''.rpad('A', aLen) + '\\n' + ''.rpad('B', bLen) + "'";
+		final literal: String = '\'${''.rpad('A', aLen)}\\n${''.rpad('B', bLen)}\'';
 		return 'enum abstract E(String) {\n\t#if js\n\tvar A = $literal;\n\t#end\n\tvar B = \'b\';\n}';
 	}
 
 	/** The same over-long literal as an `inline` field's value — a compile-time constant at every use site. */
 	private function inlineFieldSource(aLen: Int, bLen: Int): String {
-		final literal: String = "'" + ''.rpad('A', aLen) + '\\n' + ''.rpad('B', bLen) + "'";
+		final literal: String = '\'${''.rpad('A', aLen)}\\n${''.rpad('B', bLen)}\'';
 		return 'class C {\n\tstatic inline final S:String = $literal;\n}';
 	}
 
@@ -989,7 +1038,7 @@ class FoldStringLiteralsCheckTest extends Test {
 	 * estimate is refuted by the source itself — `unwrapped`'s shape.
 	 */
 	private function objectFieldSource(aLen: Int, bLen: Int): String {
-		final literal: String = "'" + ''.rpad('A', aLen) + '\\n' + ''.rpad('B', bLen) + "'";
+		final literal: String = '\'${''.rpad('A', aLen)}\\n${''.rpad('B', bLen)}\'';
 		return 'class C {\n\tfunction f() {\n\t\tg({\n\t\t\tsomeVeryLongFieldNameIndeed: $literal\n\t\t});\n\t}\n}';
 	}
 
@@ -999,7 +1048,7 @@ class FoldStringLiteralsCheckTest extends Test {
 	 * through the symbol index built over BOTH.
 	 */
 	private function macroArgFiles(aLen: Int, bLen: Int): Array<{ file: String, source: String }> {
-		final literal: String = "'" + ''.rpad('A', aLen) + '\\n' + ''.rpad('B', bLen) + "'";
+		final literal: String = '\'${''.rpad('A', aLen)}\\n${''.rpad('B', bLen)}\'';
 		return [
 			{
 				file: 'm/Lang.hx',
@@ -1015,7 +1064,7 @@ class FoldStringLiteralsCheckTest extends Test {
 	 * `head` doubles as a place to DECLARE a resolvable type, for the negative control.
 	 */
 	private function outOfScopeCallSource(head: String, call: String): String {
-		final literal: String = "'" + ''.rpad('A', 100) + '\\n' + ''.rpad('B', 60) + "'";
+		final literal: String = '\'${''.rpad('A', 100)}\\n${''.rpad('B', 60)}\'';
 		return '$head\nclass C {\n\tfunction f() {\n\t\th($call($literal));\n\t}\n}';
 	}
 
@@ -1043,6 +1092,23 @@ class FoldStringLiteralsCheckTest extends Test {
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
 		);
 		return edits.length > 0 ? edits[0].text : '';
+	}
+
+	/**
+	 * The real-world flip-flop geometry: a chain whose region carries an IRREDUCIBLE
+	 * over-wide segment — the double-quoted reification line has no seam to split at.
+	 * `head` is the chain's first source line (statement indent, two tabs).
+	 */
+	private function cycleFixture(head: String): String {
+		return [
+			'class C {',
+			'\tfunction f() {',
+			head,
+			"\t\t\t+ \"\\t\\t\\tmacro if ($p{['sourceObject', fieldEntry.slot]} != null) $p{[fieldEntry.slot]} = $p{['sourceObject', fieldEntry.slot]}\\n\"",
+			"\t\t\t+ '\\t\\t];\\n\\t}\\n}';",
+			'\t}',
+			'}'
+		].join('\n');
 	}
 
 	/** `text`'s widest line in columns, a tab counting as `TAB_WIDTH`. */

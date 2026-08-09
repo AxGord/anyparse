@@ -8,14 +8,11 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.ConcatSegment;
 import anyparse.query.FormatConfigDiscovery;
-import anyparse.query.GrammarPlugin.LayoutMetrics;
-import anyparse.query.GrammarPlugin.RefShape;
 import haxe.Exception;
 import anyparse.query.SymbolIndex;
-import anyparse.query.SymbolIndex.FileInfo;
-import anyparse.query.SymbolIndex.ImportInfo;
-import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Canonicalises a string concatenation to the MINIMAL number of `+` segments that
@@ -498,15 +495,36 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		if (sameBoundaries(settled.groups, decomposition.current)) return null;
 		final groups: Int = settled.groups.length;
 		if (groups >= current && !overLong(ctx, decomposition.editSpan)) return null;
-		final width: Null<Int> = settled.width;
-		if (width != null && width > ctx.metrics.lineWidth && width >= sourceMaxWidth(ctx, decomposition.editSpan)) return null;
-		return {
-			span: decomposition.span,
-			editSpan: decomposition.editSpan,
-			text: settled.text,
-			groups: groups,
-			message: messageFor(groups, current)
-		};
+		final width: Null<{ written: Int, original: Int }> = settled.width;
+		// Strict LOCAL monotonicity — the fixpoint guard. Comparing against the whole
+		// edit region's max width is vacuous when the region carries an IRREDUCIBLE
+		// over-wide segment (no seam to split at): every candidate measures under that
+		// ceiling, the split and merge preferences disagree, and `--fix` ping-pongs
+		// A<->B until the pass cap. Comparing the written window's MAX against the
+		// SAME window's ORIGINAL max admits only plans that strictly improve their
+		// window (an untouched over-wide line INSIDE the window enters both maxima
+		// equally, which can only tighten the gate toward refusal — never a wrong
+		// accept), so plan(fix(x)) can never propose the reverse edit. `width ==
+		// null` (the writer declined to render) falls through to ACCEPT — the old
+		// gate's fail-open shape, kept deliberately: the arithmetic planner is then
+		// the only measure, and refusing would silence the merge direction wholesale.
+		// Second clause: a SPLIT (or re-cut) is licensed by the LINES IT TOUCHES being
+		// over-wide — not by `overLong(region)`, which an untouchable irreducible segment
+		// keeps permanently true. Without it the split and merge preferences flip-flop
+		// (budgetBase shifts with the edit span between the two states): from the merged
+		// state fill proposes a split of a line that already fits, from the split state
+		// it proposes the merge back — both "legal", cycling forever.
+		return width != null
+			&& ((width.written > ctx.metrics.lineWidth && width.written >= width.original)
+				|| (groups >= current && width.original <= ctx.metrics.lineWidth))
+			? null
+			: {
+				span: decomposition.span,
+				editSpan: decomposition.editSpan,
+				text: settled.text,
+				groups: groups,
+				message: messageFor(groups, current)
+			};
 	}
 
 	/**
@@ -555,17 +573,17 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		var budget: Int = startBudget;
 		var groups: Array<Int> = filled;
 		var rendered: Rendered = first;
-		var width: Null<Int> = renderedWidth(ctx, span, rendered.text);
+		var width: Null<{ written: Int, original: Int }> = renderedWidth(ctx, span, rendered.text);
 		var pass: Int = 0;
-		while (pass < MAX_BACKOFF_PASSES && width != null && width > ctx.metrics.lineWidth) {
-			final reduced: Int = Std.int(Math.min(budget - (width - ctx.metrics.lineWidth), rendered.widest - 1));
+		while (pass < MAX_BACKOFF_PASSES && width != null && width.written > ctx.metrics.lineWidth) {
+			final reduced: Int = Std.int(Math.min(budget - (width.written - ctx.metrics.lineWidth), rendered.widest - 1));
 			if (reduced <= 0) break;
 			final next: Null<Array<Int>> = fill(ctx, decomposition, reduced);
 			if (next == null || sameBoundaries(next, groups)) break;
 			final nextRendered: Null<Rendered> = joinGroups(ctx, decomposition, next);
 			if (nextRendered == null) break;
-			final nextWidth: Null<Int> = renderedWidth(ctx, span, nextRendered.text);
-			if (nextWidth == null || nextWidth >= width) break;
+			final nextWidth: Null<{ written: Int, original: Int }> = renderedWidth(ctx, span, nextRendered.text);
+			if (nextWidth == null || nextWidth.written >= width.written) break;
 			budget = reduced;
 			groups = next;
 			rendered = nextRendered;
@@ -578,8 +596,12 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	/** The flat segment list plus the SOURCE's own group boundaries, or null when `node` is not a candidate. */
 	private static function decompose(ctx: PlanContext, node: QueryNode): Null<Decomposition> {
 		final span: Null<Span> = node.span;
-		if (span == null) return null;
-		return node.kind == ctx.seams.concatKind ? chainDecomposition(ctx, node, span) : literalDecomposition(ctx, node, span);
+		return if (span == null)
+			null
+		else if (node.kind == ctx.seams.concatKind)
+			chainDecomposition(ctx, node, span)
+		else
+			literalDecomposition(ctx, node, span);
 	}
 
 	/**
@@ -591,8 +613,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	private static function literalDecomposition(ctx: PlanContext, node: QueryNode, span: Span): Null<Decomposition> {
 		if (!ctx.seams.stringLiteralKinds.contains(node.kind)) return null;
 		final segments: Null<Array<ConcatSegment>> = ctx.seams.support.segmentsOf(node, ctx.source);
-		if (segments == null || segments.length < 2) return null;
-		return {
+		return segments == null || segments.length < 2 ? null : {
 			segments: segments,
 			current: [segments.length],
 			span: span,
@@ -884,7 +905,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	private static function budgetBase(ctx: PlanContext, span: Span): Int {
 		final lineStart: Int = lineStartOf(ctx.source, span.from);
 		var indent: Int = lineStart;
-		while (indent < ctx.source.length && isBlank(StringTools.fastCodeAt(ctx.source, indent))) indent++;
+		while (indent < ctx.source.length && isBlank(ctx.source.fastCodeAt(indent))) indent++;
 		final continuation: Int = columnWidth(ctx, lineStart, indent) + ctx.metrics.indentWidth;
 		final own: Int = columnWidth(ctx, lineStart, span.from);
 		return own < continuation ? own : continuation;
@@ -957,7 +978,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	 * candidate. A member the scope cannot reproduce falls back to splicing the whole
 	 * file, which is always correct and always slower.
 	 */
-	private static function renderedWidth(ctx: PlanContext, span: Span, candidate: String): Null<Int> {
+	private static function renderedWidth(ctx: PlanContext, span: Span, candidate: String): Null<{ written: Int, original: Int }> {
 		final scope: Null<MemberScope> = ctx.scopeFor(span);
 
 		if (scope != null) {
@@ -967,18 +988,25 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			return widestDiffering(scope.baseline, ctx.write(spliced), ctx.metrics.indentWidth);
 		}
 		final original: Null<Array<String>> = ctx.originalLines();
-		if (original == null) return null;
-		return widestDiffering(
-			original, ctx.write(ctx.source.substring(0, span.from) + candidate + ctx.source.substring(span.to)), ctx.metrics.indentWidth
-		);
+		return original == null
+			? null
+			: widestDiffering(
+				original, ctx.write(ctx.source.substring(0, span.from) + candidate + ctx.source.substring(span.to)),
+				ctx.metrics.indentWidth
+			);
 	}
 
 	/**
 	 * The widest line of `written` once the leading and trailing lines it SHARES with
-	 * `original` are dropped — the region the splice actually changed. Null when the
-	 * writer declined to render the candidate.
+	 * `original` are dropped — the region the splice actually changed — PAIRED with the
+	 * widest ORIGINAL line over that same window: the baseline the plan gate's
+	 * strict-improvement (fixpoint) test measures against. The window is one contiguous
+	 * index range, so an untouched line BETWEEN two changed lines stays in it and enters
+	 * both maxima equally. Null when the writer declined to render the candidate.
 	 */
-	private static function widestDiffering(original: Array<String>, written: Null<String>, indentWidth: Int): Null<Int> {
+	private static function widestDiffering(
+		original: Array<String>, written: Null<String>, indentWidth: Int
+	): Null<{ written: Int, original: Int }> {
 		if (written == null) return null;
 		final lines: Array<String> = written.split('\n');
 		var prefix: Int = 0;
@@ -994,7 +1022,12 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			final width: Int = displayWidth(lines[i], indentWidth);
 			if (width > widest) widest = width;
 		}
-		return widest;
+		var originalWidest: Int = 0;
+		for (i in prefix ... original.length - suffix) {
+			final width: Int = displayWidth(original[i], indentWidth);
+			if (width > originalWidest) originalWidest = width;
+		}
+		return { written: widest, original: originalWidest };
 	}
 
 	/** `line`'s width in columns, counting a tab as `indentWidth`. */
@@ -1004,10 +1037,12 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 
 	/** The finding text, naming the direction the segmentation moves in. */
 	private static function messageFor(planned: Int, current: Int): String {
-		if (planned < current) return 'these string concatenation segments can be merged';
-		return planned > current
-			? 'this string literal can be split at its seams to fit the line width'
-			: 'these string concatenation segments can be re-cut to fit the line width';
+		return if (planned < current)
+			'these string concatenation segments can be merged'
+		else if (planned > current)
+			'this string literal can be split at its seams to fit the line width'
+		else
+			'these string concatenation segments can be re-cut to fit the line width';
 	}
 
 	/**
@@ -1020,11 +1055,11 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	private static function chainHasComment(source: String, from: Int, to: Int): Bool {
 		var i: Int = from;
 		while (i < to) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c == "'".code || c == '"'.code) {
 				i++;
 				while (i < to) {
-					final d: Int = StringTools.fastCodeAt(source, i);
+					final d: Int = source.fastCodeAt(i);
 					if (d == '\\'.code) {
 						i += 2;
 					} else if (d == c) {
@@ -1035,7 +1070,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 					}
 				}
 			} else if (c == '/'.code && i + 1 < to) {
-				final n: Int = StringTools.fastCodeAt(source, i + 1);
+				final n: Int = source.fastCodeAt(i + 1);
 				if (n == '/'.code || n == '*'.code) return true;
 				i++;
 			} else {
@@ -1169,11 +1204,10 @@ private class MacroGate {
 		final receiver: Null<String> = call.receiver;
 		if (receiver != null && (_macros.declaresType(receiver) || whitelisted('$receiver.${call.name}'))) return false;
 		final binding: Null<String> = _macros.unresolvedBinding(_file, receiver ?? call.name);
-		if (binding != null) return !whitelisted('$binding.${call.name}');
 		// A WRITTEN qualified receiver names a type path directly, so it refuses on its own
 		// evidence: `pkg.Lang.t(…)` needs no import at all, and nothing else in the file
 		// says where `Lang` lives.
-		return call.qualified;
+		return binding != null ? !whitelisted('$binding.${call.name}') : call.qualified;
 	}
 
 	/**
@@ -1185,8 +1219,7 @@ private class MacroGate {
 	 * meant the entry that worked depended on the invocation's scope.
 	 */
 	private function whitelisted(path: String): Bool {
-		for (entry in _whitelist) if (entry == path || StringTools.endsWith(entry, '.$path') || StringTools.endsWith(path, '.$entry'))
-			return true;
+		for (entry in _whitelist) if (entry == path || entry.endsWith('.$path') || path.endsWith('.$entry')) return true;
 		return false;
 	}
 
@@ -1444,7 +1477,7 @@ private typedef Rendered = {
 private typedef Settled = {
 	final groups: Array<Int>;
 	final text: String;
-	final width: Null<Int>;
+	final width: Null<{ written: Int, original: Int }>;
 };
 
 /**
@@ -1625,7 +1658,7 @@ private class PlanContext {
 	private function memberLineStart(pos: Int): Int {
 		final lineStart: Int = FoldStringLiterals.lineStartOf(source, pos);
 		var indent: Int = lineStart;
-		while (indent < source.length && FoldStringLiterals.isBlank(StringTools.fastCodeAt(source, indent))) indent++;
+		while (indent < source.length && FoldStringLiterals.isBlank(source.fastCodeAt(indent))) indent++;
 		return FoldStringLiterals.columnWidth(this, lineStart, indent) == metrics.indentWidth ? indent : -1;
 	}
 
