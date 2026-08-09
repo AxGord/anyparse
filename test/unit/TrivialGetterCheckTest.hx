@@ -1185,8 +1185,9 @@ class TrivialGetterCheckTest extends Test {
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final byFile: Map<String, Array<{ span: Span, text: String }>> = [];
 		for (rename in check.crossFileFix(files, vs, plugin, index)) for (slice in rename) {
-			if (!byFile.exists(slice.file)) byFile[slice.file] = [];
-			for (e in slice.edits) byFile[slice.file].push(e);
+			final fileEdits: Array<{ span: Span, text: String }> = byFile[slice.file] ?? [];
+			for (e in slice.edits) fileEdits.push(e);
+			byFile[slice.file] = fileEdits;
 		}
 		final out: Map<String, String> = [];
 		for (f in files) {

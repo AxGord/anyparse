@@ -271,15 +271,12 @@ final class Inline {
 			return PErr('"$name" is read through a braceless string interpolation ($$$name) - rebrace it as $${$name} first');
 		final blockKind: Null<String> = shape.stringInterpBlockKind;
 		final scope: QueryNode = RefactorSupport.enclosingFunctionSubtree(tree, binding, shape);
-		return if (blockKind != null && RefactorSupport.unreadableInterpBlock(scope, blockKind) != null)
-			PErr(
+		return blockKind != null && RefactorSupport.unreadableInterpBlock(scope, blockKind) != null
+			? PErr(
 				'"$name" shares its scope with an escape-spelled string interpolation carrying no parsed expression -'
 				+ ' a read of the name inside it cannot be seen; respell that interpolation first'
 			)
-		else if (freeIdentErr != null)
-			PErr(freeIdentErr)
-		else
-			POk({
+			: POk({
 				name: name,
 				decl: decl,
 				initializer: initializer,
