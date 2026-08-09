@@ -193,13 +193,13 @@ final class RedundantCaseBody implements Check {
 			// The deletion discards the arm, everything trailing it up to the next arm's first
 			// token (a `// …` there is TRIVIA the span excludes, and the writer would re-attach it
 			// to a node it never described), and whatever precedes it back to the arm before —
-			// text `deletionSpan` sweeps away or strands on an arm it does not document.
+			// text `CheckScan.lineDeletionSpan` sweeps away or strands on an arm it does not document.
 			if (prev == null || nextSpan == null) return null;
 			if (CheckScan.hasCommentMarker(source, prev.to, nextSpan.from)) return null;
 			return {
 				span: firstSpan,
 				subsume: true,
-				editSpan: deletionSpan(source, firstSpan),
+				editSpan: CheckScan.lineDeletionSpan(source, firstSpan),
 				editText: ''
 			};
 		}
@@ -221,19 +221,15 @@ final class RedundantCaseBody implements Check {
 
 	/**
 	 * Whether `arm` holds none of the shapes either rewrite cannot reason about: a
-	 * conditional-compilation region, a macro reification, an extractor pattern (which RUNS
-	 * code while matching), or a `null` literal (which `case _` does not match).
+	 * conditional-compilation region or a macro reification, plus the pattern shapes
+	 * `CasePatternScan.patternsModellable` refuses — an extractor (which RUNS code while matching)
+	 * and a `null` literal (which `case _` does not match).
 	 */
 	private static function armClean(seams: CaseSeams, arm: QueryNode): Bool {
 		final conditional: Null<String> = seams.conditionalKind;
 		if (conditional != null && CasePatternScan.containsAnyKind(arm, [conditional])) return false;
 		if (CasePatternScan.containsAnyKind(arm, seams.opaqueKinds)) return false;
-		for (pattern in CasePatternScan.patternRun(seams, arm)) {
-			if (CasePatternScan.containsAnyKind(pattern, seams.extractorKinds)) return false;
-			final nullKind: Null<String> = seams.nullLiteralKind;
-			if (nullKind != null && CasePatternScan.containsAnyKind(pattern, [nullKind])) return false;
-		}
-		return true;
+		return CasePatternScan.patternsModellable(seams, arm);
 	}
 
 	/** How many leading children of `arm` are its label — its pattern run plus a guard, when it has one. */
@@ -263,27 +259,6 @@ final class RedundantCaseBody implements Check {
 		return CheckScan.normalizeSpan(source, a.from, a.to).norm == CheckScan.normalizeSpan(source, b.from, b.to).norm;
 	}
 
-	/**
-	 * The deleted arm's span extended backward over its own line's leading indentation and
-	 * the newline before it, so the deletion removes the whole line rather than leaving a
-	 * blank one. It stops at the first non-whitespace, which is why `candidateFor` refuses
-	 * outright when a comment stands anywhere between the previous arm and the next one:
-	 * a comment BEFORE the arm would survive to document the catch-all instead, and one
-	 * TRAILING it is trivia outside the span that the writer would re-attach elsewhere.
-	 */
-	private static function deletionSpan(source: String, span: Span): Span {
-		var from: Int = span.from;
-		while (from > 0) {
-			final ch: String = source.charAt(from - 1);
-			if (ch != ' ' && ch != '\t') break;
-			from--;
-		}
-		if (from > 0 && source.charAt(from - 1) == '\n') {
-			from--;
-			if (from > 0 && source.charAt(from - 1) == '\r') from--;
-		}
-		return new Span(from, span.to);
-	}
 
 	/** `edits` with every span that overlaps an earlier one dropped — the loser refires next pass. */
 	private static function disjoint(edits: Array<{ span: Span, text: String }>): Array<{ span: Span, text: String }> {

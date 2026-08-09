@@ -53,7 +53,7 @@ final class DuplicateCase implements Check {
 		return caseBranchKind == null
 			? []
 			: CheckScan.applyBySpan(
-				plugin, source, violations, [caseBranchKind], (_, span) -> ({ span: deletionSpan(source, span), text: '' })
+				plugin, source, violations, [caseBranchKind], (_, span) -> ({ span: CheckScan.lineDeletionSpan(source, span), text: '' })
 			);
 	}
 
@@ -98,27 +98,6 @@ final class DuplicateCase implements Check {
 			if (nextSpan != null && GUARD.match(source.substring(patternSpan.to, nextSpan.from))) return null;
 		}
 		return StringTools.trim(source.substring(patternSpan.from, patternSpan.to));
-	}
-
-
-	/**
-	 * The dead arm's span extended backward over its own line's leading indentation and
-	 * the newline before it, so deleting it removes the whole line rather than leaving a
-	 * blank one. Stops at the first non-whitespace (a comment on the line above is kept);
-	 * the writer round-trip re-canonicalises what remains.
-	 */
-	private static function deletionSpan(source: String, span: Span): Span {
-		var from: Int = span.from;
-		while (from > 0) {
-			final ch: String = source.charAt(from - 1);
-			if (ch != ' ' && ch != '\t') break;
-			from--;
-		}
-		if (from > 0 && source.charAt(from - 1) == '\n') {
-			from--;
-			if (from > 0 && source.charAt(from - 1) == '\r') from--;
-		}
-		return new Span(from, span.to);
 	}
 
 }

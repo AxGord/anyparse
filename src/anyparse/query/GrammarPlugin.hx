@@ -1123,6 +1123,11 @@ typedef RefShape = {
 	 * into it to collect a guarded member with the condition it is declared under,
 	 * and the reorder autofix re-wraps the sorted members in `#if`/`#end`. Optional;
 	 * unset means the grammar has no conditional members (no descent).
+	 *
+	 * The kind is NOT member-only despite the name: the same node projects a statement- or
+	 * case-arm-level `#if` region, as a SIBLING of the statements or arms it guards. `empty-case-arm`
+	 * relies on that, refusing a switch whose arm list holds one — the region may hide a catch-all,
+	 * and the arms outside it may be the only ones a given build keeps.
 	 */
 	@:optional var conditionalMemberKind: String;
 
@@ -1602,6 +1607,18 @@ typedef RefShape = {
 	 * leave a value unmatched. Optional; unset makes that check a no-op.
 	 */
 	@:optional var switchStatementKinds: Array<String>;
+
+	/**
+	  * Subject TYPE names whose statement `switch` the compiler never
+	 * exhaustiveness-checks (Haxe `Int` / `UInt` / `Float` / `Single` / `String`) — the whitelist
+	 * `empty-case-arm` proves its deletion against. Every `enum` / `enum abstract` /
+	 * `Bool` subject IS checked: its arm list is part of the compile, so deleting an
+	 * arm there can turn a compiling switch into a non-compiling one, and those names
+	 * must stay OUT of this list. A whitelist rather than a blacklist on purpose — a
+	 * type nobody has thought of fails closed. Optional; unset makes `empty-case-arm` a
+	 * no-op.
+	 */
+	@:optional var openSwitchSubjectTypes: Array<String>;
 
 	/**
 	 * The unary-negation node kind (`Neg`) — a `-1` initializer parses as a negation

@@ -198,6 +198,16 @@ final class Linter {
 			new NullableSwitchMissingNull(),
 			new UnusedCaseBinder(),
 			new RedundantCaseBody(),
+			// Deletes a whole case arm, as `redundant-case-body`'s subsume does, and the two CAN
+			// collide: `case 1: t(); case 2: case 3:` has that rule MERGE arms 2 and 3 while this
+			// one deletes arm 3, and its subsume edit can land adjacent to this one's deletion
+			// (`case 1: t(); case 2: case _:`). This rule's own finding is always the switch's LAST
+			// child, which that rule never flags — but its merge EDIT reaches the last arm, so
+			// disjointness is a property of the EDITS, not of the findings, and it does not hold.
+			// Registry order is free anyway: `Cli.computeFileLintEdits` walks this list in order
+			// and defers a check whose edits overlap an accepted one, and both shapes converge
+			// across `--fix` passes whichever went first.
+			new EmptyCaseArm(),
 			new DuplicateCode(),
 			new ListenerSymmetry(),
 			new StringLiteralDup(),

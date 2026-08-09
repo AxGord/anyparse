@@ -516,6 +516,17 @@ final class CheckScan {
 	}
 
 	/**
+	 * The check layer's entry point to `RefactorSupport.lineDeletionSpan`, which owns the scan:
+	 * `span` extended BACKWARD over its own line's leading indentation and the newline before it, so
+	 * deleting the result removes the whole line instead of leaving a blank one. Every caller pairs it
+	 * with a comment gate over the region its deletion disturbs — the scan stops at the first
+	 * non-whitespace, so a comment there would survive to document whatever follows.
+	 */
+	public static inline function lineDeletionSpan(source: String, span: Span): Span {
+		return RefactorSupport.lineDeletionSpan(source, span);
+	}
+
+	/**
 	 * The node kinds whose presence in a subtree makes a once-vs-twice evaluation
 	 * rewrite unsafe: every binding-write (`writeParentKinds`), plus `callKind` and
 	 * `newExprKind` when the grammar exposes them. Shared by the checks that collapse a

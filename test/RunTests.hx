@@ -599,6 +599,7 @@ import unit.HxExprParenObjectLitGlueTest;
 import unit.HxFitLineBodyGlueSliceTest;
 import unit.HxArrowBlockIfOverflowSliceTest;
 import unit.LambdaBranchingBodyBlockCheckTest;
+import unit.EmptyCaseArmCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1125,6 +1126,7 @@ class RunTests {
 		addCase(new CollapseNestedSwitchCheckTest());
 		addCase(new UnusedCaseBinderCheckTest());
 		addCase(new RedundantCaseBodyCheckTest());
+		addCase(new EmptyCaseArmCheckTest());
 		addCase(new CollapsibleIfCheckTest());
 		addCase(new CollapsibleElseIfCheckTest());
 		addCase(new DoubleNegationCheckTest());

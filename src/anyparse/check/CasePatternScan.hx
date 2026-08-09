@@ -157,6 +157,26 @@ final class CasePatternScan {
 	}
 
 	/**
+	 * Whether every pattern of `arm`'s run is one a REWRITE may reason about: no EXTRACTOR (which
+	 * RUNS code while matching, so deleting the arm — or moving when its label is evaluated — is
+	 * observable) and no `null` LITERAL (whether a wildcard reaches `null` is the target-dependent
+	 * question `nullable-switch-missing-null` exists for, and refusing the literal keeps a caller out
+	 * of that argument entirely).
+	 *
+	 * The shared half of `redundant-case-body`'s and `empty-case-arm`'s arm gates, which differ only
+	 * in what each adds around this loop. A grammar leaving both kinds unset makes it vacuously true —
+	 * the callers' other gates still decide.
+	 */
+	public static function patternsModellable(seams: CaseSeams, arm: QueryNode): Bool {
+		final nullKind: Null<String> = seams.nullLiteralKind;
+		for (pattern in patternRun(seams, arm)) {
+			if (containsAnyKind(pattern, seams.extractorKinds)) return false;
+			if (nullKind != null && containsAnyKind(pattern, [nullKind])) return false;
+		}
+		return true;
+	}
+
+	/**
 	 * Whether `branch` matches EVERY subject its position still reaches — a `default:` arm,
 	 * or one unguarded `_` pattern. A guarded arm never qualifies: its guard may reject.
 	 */

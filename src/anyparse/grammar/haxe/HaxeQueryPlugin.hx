@@ -535,6 +535,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// parenthesised one. Their arms need not be exhaustive, which is what a case
 			// guard's fall-through to the next pattern requires.
 			switchStatementKinds: ['SwitchStmt', 'SwitchStmtBare'],
+			// The subject types Haxe never exhaustiveness-checks a statement switch over, so
+			// an arm may be deleted without the compiler noticing the arm list shrank. Every
+			// enum / enum abstract / Bool is deliberately absent: those ARE checked.
+			openSwitchSubjectTypes: ['Int', 'UInt', 'Float', 'Single', 'String'],
 			parenKind: 'ParenExpr',
 			macroModifierKind: 'Macro',
 			boolLitKind: 'BoolLit',

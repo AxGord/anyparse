@@ -1056,6 +1056,8 @@ final class RefactorSupport {
 	 * shares its line with other content (it does not start AND end the line)
 	 * the span is returned unchanged, so a sibling on the same line is not
 	 * touched — the writer re-emit then tidies the residual spacing.
+	 *
+	 * See `lineDeletionSpan` below for the BACKWARD-only variant, which the case-arm deletions use.
 	 */
 	public static function lineExtendedSpan(source: String, span: Span): Span {
 		var from: Int = span.from;
@@ -1080,6 +1082,33 @@ final class RefactorSupport {
 		if (endsLine && to < source.length) to++;
 
 		return startsLine && endsLine ? new Span(from, to) : span;
+	}
+
+	/**
+	 * Extend `span` BACKWARD over its own line's leading indentation and the newline before it, so
+	 * deleting the result removes the whole line rather than leaving a blank one. The backward-only
+	 * twin of `lineExtendedSpan`, which sweeps in BOTH directions and refuses when the element shares
+	 * its line: this one takes the leading blanks unconditionally and never touches what follows, so a
+	 * deletion whose caller has already proved the region behind the element is its own can hand the
+	 * trailing text to the writer to re-canonicalise.
+	 *
+	 * It stops at the first non-whitespace, which is why each caller refuses outright when a comment
+	 * stands anywhere in the region its deletion disturbs: a comment BEFORE the deleted node would
+	 * survive to document whatever follows it, and one TRAILING it is trivia outside the span that the
+	 * writer would re-attach elsewhere.
+	 */
+	public static function lineDeletionSpan(source: String, span: Span): Span {
+		var from: Int = span.from;
+		while (from > 0) {
+			final c: Int = StringTools.fastCodeAt(source, from - 1);
+			if (c != ' '.code && c != '\t'.code) break;
+			from--;
+		}
+		if (from > 0 && StringTools.fastCodeAt(source, from - 1) == '\n'.code) {
+			from--;
+			if (from > 0 && StringTools.fastCodeAt(source, from - 1) == '\r'.code) from--;
+		}
+		return new Span(from, span.to);
 	}
 
 	/**
