@@ -9,13 +9,15 @@ import anyparse.runtime.Span;
 /**
  * Flags a function parameter written `name:Null<T> = null` or `name:T = null` — a
  * nullable-or-plain type with a `null` default — that the `?` optional-parameter
- * shorthand `?name:T` replaces. The user's rule: for an optional nullable parameter
+ * shorthand `?name:T` replaces, and an already-optional parameter carrying a redundant
+ * `null` default (`?name:T = null`). The user's rule: for an optional nullable parameter
  * prefer `?style:ScrollBarStyle` over `style:Null<ScrollBarStyle> = null`; and, since a
  * `null`-defaulted plain-type parameter types identically, `?position:Point` over
  * `position:Point = null` too. `Severity.Info` (a style cleanup), with an autofix that
  * rewrites the parameter to `?name:T` — unwrapping one `Null<>` layer when present (else
- * keeping the type as-is), dropping the ` = null`, and prepending `?`. Grammar-agnostic
- * over `RefShape.paramKinds` (unset -> no-op).
+ * keeping the type as-is), dropping the ` = null`, and prepending `?`; for an
+ * already-optional parameter the type is kept verbatim and only the ` = null` is
+ * dropped. Grammar-agnostic over `RefShape.paramKinds` (unset -> no-op).
  *
  * ## Equivalence — why the rewrite is safe
  *
@@ -26,25 +28,30 @@ import anyparse.runtime.Span;
  * probe additionally confirmed `x:T = null` types identically: `$type` gives
  * `(?p:Null<T>) -> Void` for BOTH `p:Int = null` and `?p:Int`, and the `haxe.PosInfos`
  * call-site auto-fill magic fires in both forms — so the bare-type arm needs no extra
- * gates.
+ * gates. For the already-optional arm the equivalence is immediate: an omitted `?x:T`
+ * argument already yields `null`, so an explicit `= null` default changes nothing.
  *
  * ## What is flagged
  *
- * A `paramKinds` node whose source does NOT start with `?` (a plain required parameter),
- * whose last child (the default value) is the `null` literal, and whose type text —
- * between the name's `:` and the default's `=` — is either a single balanced `Null<...>`
- * (the outer `Null<>` balanced to its matching `>` at the type's end, inner `T`
- * source-spliced with nested `<>` and a function-type `->` balanced correctly) or any
- * other non-empty type text (`name:T = null`) that does not itself open as a `Null<`
- * wrapper.
+ * A `paramKinds` node whose last child (the default value) is the `null` literal and
+ * which is either: a plain required parameter (source does not start with `?`) whose
+ * type text — between the name's `:` and the default's `=` — is a single balanced
+ * `Null<...>` (the outer `Null<>` balanced to its matching `>` at the type's end, inner
+ * `T` source-spliced with nested `<>` and a function-type `->` balanced correctly) or
+ * any other non-empty type text (`name:T = null`) that does not itself open as a `Null<`
+ * wrapper; or an already-optional parameter (`?name:T = null`) with any non-empty type
+ * text — the `?` sigil already makes it optional, so the `= null` is redundant and the
+ * fix drops it, keeping the type verbatim (`?name:Null<T> = null` fixes to
+ * `?name:Null<T>`, no unwrap).
  *
  * ## Deliberate misses
  *
  * - `name:Null<T> = <non-null default>` — a different default semantics, left alone.
- * - `?name:T` and `?name:Null<T>` — already optional (source starts with `?`); the
+ * - `?name:T` and `?name:Null<T>` without a default — nothing redundant to drop; the
  *   nested `Null<Null<T>>` fix produces `?name:Null<T>`, which this convention leaves
  *   as-is (unwrapping only ONE layer, per the rule).
- * - `name = null` (no type annotation) — nothing to move the `?` onto, skipped.
+ * - `name = null` and `?name = null` (no type annotation) — skipped: no type text to
+ *   carry the rewrite.
  * - A `Null<`-prefixed type text that `unwrapNull` rejects — decorated (e.g. a comment
  *   between the type and the `=`) or malformed; coercing it into the bare-type arm
  *   would prepend `?` without unwrapping, so it stays a safe miss.
@@ -59,7 +66,8 @@ final class OptionalParamShorthand implements Check {
 	}
 
 	public function description(): String {
-		return 'a nullable-defaulted parameter (name:Null<T> = null or name:T = null) the ? shorthand (?name:T) replaces';
+		return
+			'a nullable-defaulted parameter (name:Null<T> = null or name:T = null) the ? shorthand (?name:T) replaces, or a redundant = null default on an already-optional ?name:T';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -88,7 +96,7 @@ final class OptionalParamShorthand implements Check {
 			? []
 			: CheckScan.applyBySpan(plugin, source, violations, params, (node, span) -> {
 				final name: Null<String> = node.name;
-				final shape: Null<{ inner: String, raw: String }> = nullableDefaultInner(node, source);
+				final shape: Null<{ inner: String, raw: String, opt: Bool }> = nullableDefaultInner(node, source);
 				return name == null || shape == null ? null : { span: span, text: '?$name:${shape.inner}' };
 			});
 	}
@@ -102,14 +110,14 @@ final class OptionalParamShorthand implements Check {
 	private static function walk(out: Array<Violation>, file: String, source: String, node: QueryNode, params: Array<String>): Void {
 		if (params.contains(node.kind)) {
 			final name: Null<String> = node.name;
-			final shape: Null<{ inner: String, raw: String }> = nullableDefaultInner(node, source);
+			final shape: Null<{ inner: String, raw: String, opt: Bool }> = nullableDefaultInner(node, source);
 			final span: Null<Span> = node.span;
 			if (name != null && shape != null && span != null) out.push({
 				file: file,
 				span: span,
 				rule: 'optional-param-shorthand',
 				severity: Severity.Info,
-				message: 'prefer ?$name:${shape.inner} over $name:${shape.raw} = null'
+				message: 'prefer ?$name:${shape.inner} over ${shape.opt ? '?' : ''}$name:${shape.raw} = null'
 			});
 		}
 		for (c in node.children) walk(out, file, source, c, params);
@@ -117,23 +125,24 @@ final class OptionalParamShorthand implements Check {
 
 
 	/**
-	 * The nullable-defaulted parameter shape of a parameter that reads `name:Null<T> = null`
-	 * or `name:T = null`, else null. The parameter must be required (its span does not open
-	 * with `?`), and its last child (the default value) must be exactly the `null` literal.
-	 * When the type text between the name's `:` and the default's `=` unwraps as a single
-	 * `Null<T>`, `inner` is `T` (the wrapped arm); otherwise the type text stands as its own
-	 * `inner` (the bare-type arm) — a live compiler probe confirmed `p:T = null` and `?p:T`
-	 * type identically to `(?p:Null<T>)`, so the rewrite is safe without unwrapping. A
-	 * `Null<`-prefixed text that `unwrapNull` rejected (decorated or malformed) is refused
-	 * rather than claimed by the bare arm. `raw` is always the trimmed type text, used to
-	 * compose the violation message.
+	 * The nullable-defaulted parameter shape of a parameter that reads `name:Null<T> = null`,
+	 * `name:T = null`, or `?name:T = null`, else null. The parameter's last child (the
+	 * default value) must be exactly the `null` literal. For a required parameter (no
+	 * leading `?`), when the type text between the name's `:` and the default's `=` unwraps
+	 * as a single `Null<T>`, `inner` is `T` (the wrapped arm); otherwise the type text
+	 * stands as its own `inner` (the bare-type arm) — a live compiler probe confirmed
+	 * `p:T = null` and `?p:T` type identically to `(?p:Null<T>)`, so the rewrite is safe
+	 * without unwrapping. A `Null<`-prefixed text that `unwrapNull` rejected (decorated or
+	 * malformed) is refused rather than claimed by the bare arm. For an already-optional
+	 * parameter (`opt` true) the `= null` default is redundant — `inner` is the type text
+	 * verbatim (no unwrap, so `?x:Null<T> = null` keeps `Null<T>`), and the fix only drops
+	 * the ` = null`. `raw` is always the trimmed type text, used to compose the violation
+	 * message.
 	 */
-	private static function nullableDefaultInner(node: QueryNode, source: String): Null<{ inner: String, raw: String }> {
+	private static function nullableDefaultInner(node: QueryNode, source: String): Null<{ inner: String, raw: String, opt: Bool }> {
 		final span: Null<Span> = node.span;
 		if (span == null) return null;
-		// A leading `?` marks an already-optional parameter — including `?x:Null<T> = null`,
-		// which this convention leaves alone (one-layer unwrap only).
-		if (StringTools.fastCodeAt(source, span.from) == '?'.code) return null;
+		final opt: Bool = StringTools.fastCodeAt(source, span.from) == '?'.code;
 		final kids: Array<QueryNode> = node.children;
 		if (kids.length == 0) return null;
 		final defSpan: Null<Span> = kids[kids.length - 1].span;
@@ -144,9 +153,10 @@ final class OptionalParamShorthand implements Check {
 		if (eq <= colon) return null;
 		final typeText: String = source.substring(colon + 1, eq);
 		final raw: String = StringTools.trim(typeText);
+		if (opt) return raw.length > 0 ? { inner: raw, raw: raw, opt: true } : null;
 		final unwrapped: Null<String> = unwrapNull(typeText);
-		if (unwrapped != null) return { inner: unwrapped, raw: raw };
-		return raw.length > 0 && !nullWrapperPrefixed(raw) ? { inner: raw, raw: raw } : null;
+		if (unwrapped != null) return { inner: unwrapped, raw: raw, opt: false };
+		return raw.length > 0 && !nullWrapperPrefixed(raw) ? { inner: raw, raw: raw, opt: false } : null;
 	}
 
 	/**

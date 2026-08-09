@@ -13,11 +13,13 @@ import anyparse.runtime.Span;
  * The `optional-param-shorthand` check: a parameter written `name:Null<T> = null` or
  * `name:T = null` is flagged `Info` and rewritten to the `?name:T` shorthand — one
  * `Null<>` layer unwrapped when present (else the type text kept as-is), the ` = null`
- * dropped, and a `?` prepended. A non-null default, an already-`?` parameter, an
- * untyped `a = null` (no type annotation), and a decorated `Null<T>` the unwrapper
- * rejects (a comment between the type and the `=`) are safe misses. Covers class
- * methods, constructors, and local functions; generic, nested `Null<Null<T>>` (one
- * layer only), and function-type inner types unwrap correctly for both the
+ * dropped, and a `?` prepended. An already-`?` parameter with a redundant `= null`
+ * default is flagged too — its type stays verbatim (no unwrap) and only the ` = null`
+ * goes. A non-null default, an already-`?` parameter without a `null` default, an
+ * untyped `a = null` / `?a = null` (no type annotation), and a decorated `Null<T>` the
+ * unwrapper rejects (a comment between the type and the `=`) are safe misses. Covers
+ * class methods, constructors, and local functions; generic, nested `Null<Null<T>>`
+ * (one layer only), and function-type inner types unwrap correctly for both the
  * `Null<T>`-wrapped and bare-type forms. Note: parameter metadata is not representable
  * — the grammar does not parse `@:m` on a parameter — so there is no
  * metadata-preservation case to assert here.
@@ -74,10 +76,32 @@ class OptionalParamShorthandCheckTest extends Test {
 		Assert.equals(fn('?a:String, ?b:Int, c:Int = 5'), applyFix(source));
 	}
 
-	public function testAlreadyOptionalNotFlagged(): Void {
+	public function testAlreadyOptionalNoDefaultNotFlagged(): Void {
 		Assert.equals(0, violations(fn('?a:String')).length);
-		// `?name:Null<T> = null` is a distinct, already-optional shape — left alone in v1.
-		Assert.equals(0, violations(fn('?a:Null<String> = null')).length);
+		Assert.equals(0, violations(fn('?a:Null<String>')).length);
+	}
+
+	public function testAlreadyOptionalNonNullDefaultNotFlagged(): Void {
+		Assert.equals(0, violations(fn('?a:Int = 5')).length);
+	}
+
+	public function testAlreadyOptionalUntypedNotFlagged(): Void {
+		Assert.equals(0, violations(fn('?a = null')).length);
+	}
+
+	public function testAlreadyOptionalRedundantNullDefaultFlagged(): Void {
+		final source: String = fn('?a:Float = null');
+		final vs: Array<Violation> = violations(source);
+		Assert.equals(1, vs.length);
+		Assert.equals('prefer ?a:Float over ?a:Float = null', vs[0].message);
+		Assert.equals(fn('?a:Float'), applyFix(source));
+	}
+
+	public function testAlreadyOptionalNullWrappedDropsDefaultKeepsType(): Void {
+		// No unwrap on an already-optional parameter — only the redundant default goes.
+		final source: String = fn('?a:Null<String> = null');
+		Assert.equals(1, violations(source).length);
+		Assert.equals(fn('?a:Null<String>'), applyFix(source));
 	}
 
 	public function testNoDefaultNotFlagged(): Void {
