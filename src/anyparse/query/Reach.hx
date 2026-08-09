@@ -62,7 +62,10 @@ final class Reach {
 		buf.add('  ${CallChains.nodeLabel(graph, path[0].from, sourceOf)}\n');
 		for (edge in path) {
 			final viaText: String = edge.via != null ? ' via ${edge.via}' : '';
-			buf.add('  -> [${edge.kind.label()}$viaText] ${CallChains.nodeLabel(graph, edge.to, sourceOf)}${CallChains.siteOf(edge, sourceOf)}\n');
+			buf.add(
+				'  -> [${edge.kind.label()}$viaText] ${CallChains.nodeLabel(graph, edge.to, sourceOf)}'
+				+ '${CallChains.siteOf(edge, sourceOf)}\n'
+			);
 		}
 		return buf.toString();
 	}

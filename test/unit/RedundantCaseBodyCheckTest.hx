@@ -11,6 +11,8 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * The `redundant-case-body` check: an arm whose body its IMMEDIATE neighbour repeats
  * folds two ways — DELETED when that neighbour is a catch-all, MERGED into one
@@ -41,14 +43,14 @@ class RedundantCaseBodyCheckTest extends Test {
 	/** The subsumed arm is deleted outright; the catch-all keeps the shared body. */
 	public function testSubsumeDeletesArm(): Void {
 		final out: String = applyFixOnce(sw('case "User": t(k);\n\t\t\tcase _: t(k);'));
-		Assert.isFalse(StringTools.contains(out, '"User"'), 'the redundant arm is gone');
+		Assert.isFalse(out.contains('"User"'), 'the redundant arm is gone');
 		Assert.stringContains('case _:', out);
 	}
 
 	/** A `default:` neighbour is a catch-all too. */
 	public function testSubsumeUnderDefault(): Void {
 		final out: String = applyFixOnce(sw('case "User": t(k);\n\t\t\tdefault: t(k);'));
-		Assert.isFalse(StringTools.contains(out, '"User"'), 'the redundant arm is gone');
+		Assert.isFalse(out.contains('"User"'), 'the redundant arm is gone');
 	}
 
 	public function testMergeFlagged(): Void {
@@ -133,13 +135,14 @@ class RedundantCaseBodyCheckTest extends Test {
 	 * second pass deletes it.
 	 */
 	public function testComposesWithUnusedCaseBinder(): Void {
-		final src: String = 'class C {\n\tfunction f(data: Dynamic): String {\n\t\treturn switch data.role {\n\t\t\tcase "Owner": t("Owner", 10149);'
-			+ '\n\t\t\tcase "User": t("User", 10150);\n\t\t\tcase _data: t("User", 10150);\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(data: Dynamic): String {\n\t\treturn switch data.role {\n'
+			+ '\t\t\tcase "Owner": t("Owner", 10149);\n\t\t\tcase "User": t("User", 10150);\n'
+			+ '\t\t\tcase _data: t("User", 10150);\n\t\t}\n\t}\n}';
 		final once: String = applyBinderFix(src);
 		Assert.stringContains('case _:', once);
 		final twice: String = applyFixOnce(once);
 		Assert.stringContains('case "Owner":', twice);
-		Assert.isFalse(StringTools.contains(twice, 'case "User"'), 'the duplicated arm is gone');
+		Assert.isFalse(twice.contains('case "User"'), 'the duplicated arm is gone');
 		Assert.equals(0, violations(twice).length);
 	}
 
@@ -147,6 +150,49 @@ class RedundantCaseBodyCheckTest extends Test {
 		Assert.notNull(Linter.byId('redundant-case-body'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.isTrue(ids.contains('redundant-case-body'));
+	}
+
+	/**
+	 * A trailing `// …` is TRIVIA outside the arm's span, so the deletion would leave it
+	 * orphaned and the writer would re-attach it to the enclosing node — a comment
+	 * silently migrating onto code it never described. The gate scans past the arm.
+	 */
+	public function testTrailingCommentOnDeletedArmRefused(): Void {
+		Assert.equals(0, violations(sw('case A: r(); // keep me\n\t\t\tcase _: r();')).length);
+	}
+
+	/**
+	 * A comment on the line ABOVE the deleted arm survives the deletion and then documents
+	 * the catch-all instead — the same defect from the other side, so the gate scans back
+	 * to the previous arm too.
+	 */
+	public function testPrecedingCommentOnDeletedArmRefused(): Void {
+		Assert.equals(0, violations(sw('case Z: q();\n\t\t\t// why A is special\n\t\t\tcase A: r();\n\t\t\tcase _: r();')).length);
+	}
+
+	/**
+	 * The NORMALISED-SOURCE half of the body-identity gate, isolated: a comment inside the
+	 * KEPT arm's body leaves the statement lists structurally equal and the comment gate
+	 * untouched (it sits in no discarded region), so only normalised-source inequality can
+	 * refuse this pair.
+	 */
+	public function testCommentInsideKeptBodyKeepsBodiesDistinct(): Void {
+		Assert.equals(0, violations(sw('case A: r();\n\t\t\t\ts();\n\t\t\tcase _: r();\n\t\t\t\t/* x */ s();')).length);
+	}
+
+	/**
+	 * The conditional-compilation gate, isolated: the SAME `#if` region in both arms leaves
+	 * the bodies structurally and textually equal, so nothing but that gate can refuse the
+	 * pair. (A region in only ONE arm is refused by body identity, and would prove nothing.)
+	 */
+	public function testMatchingConditionalCompilationArmsRefused(): Void {
+		final arm: String = '\n\t\t\t\t#if debug\n\t\t\t\tr();\n\t\t\t\t#end';
+		Assert.equals(0, violations(sw('case A:$arm\n\t\t\tcase _:$arm')).length);
+	}
+
+	/** A GUARDED catch-all is not a catch-all: it routes to the merge path, which its own guard gate refuses. */
+	public function testGuardedCatchAllPartnerRefused(): Void {
+		Assert.equals(0, violations(sw('case A: r();\n\t\t\tcase _ if (c): r();\n\t\t\tcase _: z();')).length);
 	}
 
 	/** A statement switch over `v` holding `branches`. */
@@ -182,54 +228,6 @@ class RedundantCaseBodyCheckTest extends Test {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};
-	}
-
-
-	/**
-	 * A trailing `// …` is TRIVIA outside the arm's span, so the deletion would leave it
-	 * orphaned and the writer would re-attach it to the enclosing node — a comment
-	 * silently migrating onto code it never described. The gate scans past the arm.
-	 */
-	public function testTrailingCommentOnDeletedArmRefused(): Void {
-		Assert.equals(0, violations(sw('case A: r(); // keep me\n\t\t\tcase _: r();')).length);
-	}
-
-
-	/**
-	 * A comment on the line ABOVE the deleted arm survives the deletion and then documents
-	 * the catch-all instead — the same defect from the other side, so the gate scans back
-	 * to the previous arm too.
-	 */
-	public function testPrecedingCommentOnDeletedArmRefused(): Void {
-		Assert.equals(0, violations(sw('case Z: q();\n\t\t\t// why A is special\n\t\t\tcase A: r();\n\t\t\tcase _: r();')).length);
-	}
-
-
-	/**
-	 * The NORMALISED-SOURCE half of the body-identity gate, isolated: a comment inside the
-	 * KEPT arm's body leaves the statement lists structurally equal and the comment gate
-	 * untouched (it sits in no discarded region), so only normalised-source inequality can
-	 * refuse this pair.
-	 */
-	public function testCommentInsideKeptBodyKeepsBodiesDistinct(): Void {
-		Assert.equals(0, violations(sw('case A: r();\n\t\t\t\ts();\n\t\t\tcase _: r();\n\t\t\t\t/* x */ s();')).length);
-	}
-
-
-	/**
-	 * The conditional-compilation gate, isolated: the SAME `#if` region in both arms leaves
-	 * the bodies structurally and textually equal, so nothing but that gate can refuse the
-	 * pair. (A region in only ONE arm is refused by body identity, and would prove nothing.)
-	 */
-	public function testMatchingConditionalCompilationArmsRefused(): Void {
-		final arm: String = '\n\t\t\t\t#if debug\n\t\t\t\tr();\n\t\t\t\t#end';
-		Assert.equals(0, violations(sw('case A:$arm\n\t\t\tcase _:$arm')).length);
-	}
-
-
-	/** A GUARDED catch-all is not a catch-all: it routes to the merge path, which its own guard gate refuses. */
-	public function testGuardedCatchAllPartnerRefused(): Void {
-		Assert.equals(0, violations(sw('case A: r();\n\t\t\tcase _ if (c): r();\n\t\t\tcase _: z();')).length);
 	}
 
 }

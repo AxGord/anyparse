@@ -85,8 +85,8 @@ class Build {
 		final rules: Array<GeneratedRule> = lowering.generate();
 
 		final rootSimple: String = simpleName(shape.root);
-		final rootNode: anyparse.core.ShapeTree.ShapeNode = shape.rules.get(shape.root);
-		final rootTriviaBearing: Bool = ctx.trivia && rootNode != null && rootNode.annotations.get(AnnotationKeys.TRIVIA_BEARING) == true;
+		final rootNode: anyparse.core.ShapeTree.ShapeNode = shape.rules[shape.root];
+		final rootTriviaBearing: Bool = ctx.trivia && rootNode != null && rootNode.annotations[AnnotationKeys.TRIVIA_BEARING] == true;
 		final rootSpansBearing: Bool = ctx.spans && rootNode != null && rootNode.kind != Terminal;
 		final rootReturnCT: ComplexType = if (rootSpansBearing)
 			TPath({
@@ -202,8 +202,7 @@ class Build {
 		final optionsTypePath: Null<String> = extractTypePath(options);
 		if (optionsTypePath == null && !formatInfo.isBinary)
 			Context.fatalError(
-				'Build.buildWriter: text writer requires an options typedef — '
-				+ 'use @:build(Build.buildWriter($targetTypePath, <OptionsT>))',
+				'Build.buildWriter: text writer requires an options typedef — use @:build(Build.buildWriter($targetTypePath, <OptionsT>))',
 				Context.currentPos()
 			);
 		if (optionsTypePath != null && formatInfo.isBinary)
@@ -221,14 +220,13 @@ class Build {
 
 		registerStrategies(shape, ctx);
 
-		final rules: Array<WriterLowering.WriterRule> = if (formatInfo.isBinary)
-			new BinaryWriterLowering(shape).generate()
-		else
-			new WriterLowering(shape, formatInfo, ctx).generate();
+		final rules: Array<WriterLowering.WriterRule> = formatInfo.isBinary
+			? new BinaryWriterLowering(shape).generate()
+			: new WriterLowering(shape, formatInfo, ctx).generate();
 
 		final rootSimple: String = simpleName(shape.root);
-		final rootNode: anyparse.core.ShapeTree.ShapeNode = shape.rules.get(shape.root);
-		final rootBearing: Bool = ctx.trivia && rootNode != null && rootNode.annotations.get(AnnotationKeys.TRIVIA_BEARING) == true;
+		final rootNode: anyparse.core.ShapeTree.ShapeNode = shape.rules[shape.root];
+		final rootBearing: Bool = ctx.trivia && rootNode != null && rootNode.annotations[AnnotationKeys.TRIVIA_BEARING] == true;
 		final rootReturnCT: ComplexType = rootBearing
 			? TPath({
 				pack: packOf(shape.root).concat(['trivia']),
@@ -243,6 +241,62 @@ class Build {
 		#if anyparse_dump
 		final printer: haxe.macro.Printer = new haxe.macro.Printer();
 		for (f in fields) Sys.println('// writer field: ${printer.printField(f)}');
+		#end
+
+		return fields;
+	}
+
+	/**
+	 * `@:build` entry point for the query walker - the translation from the
+	 * span-paired typed AST into the engine's `QueryNode` tree. Applied to a
+	 * marker class with the grammar root as its single argument:
+	 *
+	 * ```haxe
+	 * @:build(anyparse.macro.Build.buildQueryWalker(anyparse.grammar.haxe.HxModule))
+	 * class HaxeQueryWalker {}
+	 * ```
+	 *
+	 * Like `buildTransform` it needs only the BASE shape (`Alt` / `Seq` / `Star`
+	 * / `Ref` / `Terminal` with `base.*` annotations), so the strategy-annotate
+	 * and trivia passes the parser and writer run are skipped. It does arm
+	 * `SpanTypeSynth`, because the walker is typed against the paired `*S` types
+	 * that pass defines - arming is guarded by name, so doing it here as well as
+	 * in `buildParser` defines nothing twice.
+	 *
+	 * `QueryWalkerLowering` then emits, per non-Terminal rule, the `_walk` /
+	 * `_nameOf` / `_typeRefs` trio plus the public `walk` entry, and
+	 * `QueryWalkerCodegen` turns them into fields.
+	 */
+	public static macro function buildQueryWalker(target: Expr, parser: Expr): Array<Field> {
+		final targetTypePath: String = ExprTools.toString(target);
+		final rootType: Type = Context.getType(targetTypePath);
+
+		final rootMeta: Metadata = switch rootType {
+			case TEnum(ref, _): ref.get().meta.get();
+			case TType(ref, _): ref.get().meta.get();
+			case TAbstract(ref, _): ref.get().meta.get();
+			case TInst(ref, _): ref.get().meta.get();
+			case _:
+				Context.fatalError('Build.buildQueryWalker: unsupported target type $targetTypePath', Context.currentPos());
+				throw 'unreachable';
+		};
+
+		final schemaTypePath: String = readSchemaMeta(rootMeta, targetTypePath);
+		final formatInfo: FormatReader.FormatInfo = FormatReader.resolve(schemaTypePath);
+
+		final shapeBuilder: ShapeBuilder = new ShapeBuilder(formatInfo);
+		final shape: ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
+		SpanTypeSynth.arm(shape);
+
+		final result: QueryWalkerLowering.QueryWalkerResult = new QueryWalkerLowering(shape).generate();
+		final fields: Array<Field> = QueryWalkerCodegen.emit(result, ExprTools.toString(parser));
+		// Both passes emit onto the SAME marker class on purpose: the span-info
+		// walk reuses the walker's generated `_nameOf` helpers.
+		for (f in SpanInfoCodegen.emit(new SpanInfoLowering(shape).generate())) fields.push(f);
+
+		#if anyparse_dump
+		final printer: haxe.macro.Printer = new haxe.macro.Printer();
+		for (f in fields) Sys.println('// query-walker field: ${printer.printField(f)}');
 		#end
 
 		return fields;
@@ -309,7 +363,6 @@ class Build {
 		return idx == -1 ? [] : typePath.substring(0, idx).split('.');
 	}
 
-
 	private static function buildShapeWithTrivia(
 		formatInfo: FormatReader.FormatInfo, rootType: Type, ctx: LoweringCtx
 	): ShapeBuilder.ShapeResult {
@@ -333,63 +386,6 @@ class Build {
 		registry.register(new Skip());
 		registry.prepare();
 		registry.runAnnotate(shape, ctx);
-	}
-
-
-	/**
-	 * `@:build` entry point for the query walker - the translation from the
-	 * span-paired typed AST into the engine's `QueryNode` tree. Applied to a
-	 * marker class with the grammar root as its single argument:
-	 *
-	 * ```haxe
-	 * @:build(anyparse.macro.Build.buildQueryWalker(anyparse.grammar.haxe.HxModule))
-	 * class HaxeQueryWalker {}
-	 * ```
-	 *
-	 * Like `buildTransform` it needs only the BASE shape (`Alt` / `Seq` / `Star`
-	 * / `Ref` / `Terminal` with `base.*` annotations), so the strategy-annotate
-	 * and trivia passes the parser and writer run are skipped. It does arm
-	 * `SpanTypeSynth`, because the walker is typed against the paired `*S` types
-	 * that pass defines - arming is guarded by name, so doing it here as well as
-	 * in `buildParser` defines nothing twice.
-	 *
-	 * `QueryWalkerLowering` then emits, per non-Terminal rule, the `_walk` /
-	 * `_nameOf` / `_typeRefs` trio plus the public `walk` entry, and
-	 * `QueryWalkerCodegen` turns them into fields.
-	 */
-	public static macro function buildQueryWalker(target: Expr, parser: Expr): Array<Field> {
-		final targetTypePath: String = ExprTools.toString(target);
-		final rootType: Type = Context.getType(targetTypePath);
-
-		final rootMeta: Metadata = switch rootType {
-			case TEnum(ref, _): ref.get().meta.get();
-			case TType(ref, _): ref.get().meta.get();
-			case TAbstract(ref, _): ref.get().meta.get();
-			case TInst(ref, _): ref.get().meta.get();
-			case _:
-				Context.fatalError('Build.buildQueryWalker: unsupported target type $targetTypePath', Context.currentPos());
-				throw 'unreachable';
-		};
-
-		final schemaTypePath: String = readSchemaMeta(rootMeta, targetTypePath);
-		final formatInfo: FormatReader.FormatInfo = FormatReader.resolve(schemaTypePath);
-
-		final shapeBuilder: ShapeBuilder = new ShapeBuilder(formatInfo);
-		final shape: ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
-		SpanTypeSynth.arm(shape);
-
-		final result: QueryWalkerLowering.QueryWalkerResult = new QueryWalkerLowering(shape).generate();
-		final fields: Array<Field> = QueryWalkerCodegen.emit(result, ExprTools.toString(parser));
-		// Both passes emit onto the SAME marker class on purpose: the span-info
-		// walk reuses the walker's generated `_nameOf` helpers.
-		for (f in SpanInfoCodegen.emit(new SpanInfoLowering(shape).generate())) fields.push(f);
-
-		#if anyparse_dump
-		final printer: haxe.macro.Printer = new haxe.macro.Printer();
-		for (f in fields) Sys.println('// query-walker field: ${printer.printField(f)}');
-		#end
-
-		return fields;
 	}
 
 }

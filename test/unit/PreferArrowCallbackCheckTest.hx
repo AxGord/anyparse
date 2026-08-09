@@ -92,15 +92,15 @@ class PreferArrowCallbackCheckTest extends Test {
 
 	/** A local `function helper(cb:Void->Void)` callee resolves through its in-tree declaration. */
 	public function testLocalFnCalleeResolvedFixed(): Void {
-		final src: String = 'class C {\n' + '\tfunction m():Void {\n' + '\t\tfunction helper(cb:Void->Void):Void {}\n'
-			+ '\t\thelper(function() { fire(); });\n' + '\t}\n' + '\tfunction fire():Void {}\n' + '}';
+		final src: String = 'class C {\n\tfunction m():Void {\n\t\tfunction helper(cb:Void->Void):Void {}\n'
+			+ '\t\thelper(function() { fire(); });\n\t}\n\tfunction fire():Void {}\n}';
 		Assert.equals('() -> fire()', fixText(src));
 	}
 
 	/** A callee that is a VALUE of function type (`run:(Void->Void)->Void`) resolves through its annotation. */
 	public function testValueCalleeResolvedFixed(): Void {
-		final src: String = 'class C {\n' + '\tfunction m(run:(Void->Void)->Void):Void {\n' + '\t\trun(function() { fire(); });\n'
-			+ '\t}\n' + '\tfunction fire():Void {}\n' + '}';
+		final src: String =
+			'class C {\n\tfunction m(run:(Void->Void)->Void):Void {\n\t\trun(function() { fire(); });\n\t}\n\tfunction fire():Void {}\n}';
 		Assert.equals('() -> fire()', fixText(src));
 	}
 
@@ -111,8 +111,8 @@ class PreferArrowCallbackCheckTest extends Test {
 			{ file: 'Sub.hx', source: 'class Sub extends Disp {}' },
 			{
 				file: 'UseC.hx',
-				source: 'class UseC {\n' + '\tvar d:Sub;\n' + '\tfunction m():Void {\n' + '\t\td.on(function(i) { go(i); });\n' + '\t}\n'
-					+ '\tfunction go(i:Int):Void {}\n' + '}'
+				source: 'class UseC {\n\tvar d:Sub;\n\tfunction m():Void {\n\t\td.on(function(i) { go(i); });\n\t}\n'
+					+ '\tfunction go(i:Int):Void {}\n}'
 			}
 		];
 		Assert.equals('i -> go(i)', fixTextIndexed(files, 'UseC.hx'));
@@ -124,8 +124,8 @@ class PreferArrowCallbackCheckTest extends Test {
 			timerFixture(),
 			{
 				file: 'UseT.hx',
-				source: 'class UseT {\n' + '\tfunction m():Void {\n' + '\t\tpkg.MyTimer.delayX(function() { go(); }, 5);\n' + '\t}\n'
-					+ '\tfunction go():Void {}\n' + '}'
+				source: 'class UseT {\n\tfunction m():Void {\n\t\tpkg.MyTimer.delayX(function() { go(); }, 5);\n\t}\n'
+					+ '\tfunction go():Void {}\n}'
 			}
 		];
 		Assert.equals('() -> go()', fixTextIndexed(files, 'UseT.hx'));
@@ -137,8 +137,8 @@ class PreferArrowCallbackCheckTest extends Test {
 			timerFixture(),
 			{
 				file: 'UseI.hx',
-				source: 'import pkg.MyTimer;\n\n' + 'class UseI {\n' + '\tfunction m():Void {\n'
-					+ '\t\tMyTimer.delayX(function() { go(); }, 5);\n' + '\t}\n' + '\tfunction go():Void {}\n' + '}'
+				source: 'import pkg.MyTimer;\n\nclass UseI {\n\tfunction m():Void {\n\t\tMyTimer.delayX(function() { go(); }, 5);\n\t}\n'
+					+ '\tfunction go():Void {}\n}'
 			}
 		];
 		Assert.equals('() -> go()', fixTextIndexed(files, 'UseI.hx'));
@@ -150,8 +150,7 @@ class PreferArrowCallbackCheckTest extends Test {
 			{ file: 'Took.hx', source: 'class Took {\n\tpublic function new(cb:Void->Void) {}\n}' },
 			{
 				file: 'UseN.hx',
-				source: 'class UseN {\n' + '\tfunction m():Void {\n' + '\t\tnew Took(function() { go(); });\n' + '\t}\n'
-					+ '\tfunction go():Void {}\n' + '}'
+				source: 'class UseN {\n\tfunction m():Void {\n\t\tnew Took(function() { go(); });\n\t}\n\tfunction go():Void {}\n}'
 			}
 		];
 		Assert.equals('() -> go()', fixTextIndexed(files, 'UseN.hx'));
@@ -162,12 +161,11 @@ class PreferArrowCallbackCheckTest extends Test {
 		final files: Array<{ file: String, source: String }> = [
 			{
 				file: 'TU.hx',
-				source: 'typedef Cb = Void->Void;\n\n' + 'class TU {\n\tpublic static function go2(cb:Cb):Void {}\n}'
+				source: 'typedef Cb = Void->Void;\n\nclass TU {\n\tpublic static function go2(cb:Cb):Void {}\n}'
 			},
 			{
 				file: 'UseTd.hx',
-				source: 'class UseTd {\n' + '\tfunction m():Void {\n' + '\t\tTU.go2(function() { fire(); });\n' + '\t}\n'
-					+ '\tfunction fire():Void {}\n' + '}'
+				source: 'class UseTd {\n\tfunction m():Void {\n\t\tTU.go2(function() { fire(); });\n\t}\n\tfunction fire():Void {}\n}'
 			}
 		];
 		Assert.equals('() -> fire()', fixTextIndexed(files, 'UseTd.hx'));
@@ -182,8 +180,8 @@ class PreferArrowCallbackCheckTest extends Test {
 			},
 			{
 				file: 'UseC2.hx',
-				source: 'class UseC2 {\n' + '\tvar d:Disp2;\n' + '\tfunction m():Void {\n' + '\t\td.on(function(i) { go(i); });\n'
-					+ '\t}\n' + '\tfunction go(i:Int):Void {}\n' + '}'
+				source: 'class UseC2 {\n\tvar d:Disp2;\n\tfunction m():Void {\n\t\td.on(function(i) { go(i); });\n\t}\n'
+					+ '\tfunction go(i:Int):Void {}\n}'
 			}
 		];
 		Assert.equals('i -> go(i)', fixTextIndexed(files, 'UseC2.hx'));
@@ -202,8 +200,8 @@ class PreferArrowCallbackCheckTest extends Test {
 			},
 			{
 				file: 'UseA.hx',
-				source: 'class UseA {\n' + '\tfunction m():Void {\n' + '\t\thaxe.TimerA.delay(function() { go(); }, 5);\n' + '\t}\n'
-					+ '\tfunction go():Void {}\n' + '}'
+				source: 'class UseA {\n\tfunction m():Void {\n\t\thaxe.TimerA.delay(function() { go(); }, 5);\n\t}\n'
+					+ '\tfunction go():Void {}\n}'
 			}
 		];
 		Assert.equals('() -> go()', fixTextIndexed(files, 'UseA.hx'));
@@ -222,8 +220,8 @@ class PreferArrowCallbackCheckTest extends Test {
 			},
 			{
 				file: 'UseB.hx',
-				source: 'class UseB {\n' + '\tfunction m():Void {\n' + '\t\thaxe.TimerB.delay(function() { go(); }, 5);\n' + '\t}\n'
-					+ '\tfunction go():Void {}\n' + '}'
+				source: 'class UseB {\n\tfunction m():Void {\n\t\thaxe.TimerB.delay(function() { go(); }, 5);\n\t}\n'
+					+ '\tfunction go():Void {}\n}'
 			}
 		];
 		Assert.equals(1, violationsMulti(files, 'UseB.hx').length);
@@ -236,8 +234,7 @@ class PreferArrowCallbackCheckTest extends Test {
 			{ file: 'TookF.hx', source: 'final class TookF {\n\tpublic function new(cb:()->Void) {}\n}' },
 			{
 				file: 'UseF.hx',
-				source: 'class UseF {\n' + '\tfunction m():Void {\n' + '\t\tnew TookF(function():Void { go(); });\n' + '\t}\n'
-					+ '\tfunction go():Void {}\n' + '}'
+				source: 'class UseF {\n\tfunction m():Void {\n\t\tnew TookF(function():Void { go(); });\n\t}\n\tfunction go():Void {}\n}'
 			}
 		];
 		Assert.equals('() -> go()', fixTextIndexed(files, 'UseF.hx'));
@@ -270,8 +267,8 @@ class PreferArrowCallbackCheckTest extends Test {
 
 	/** A `macro { … }` reification subtree is opaque — its code splices into a different context, never flagged. */
 	public function testMacroReificationSkipped(): Void {
-		final src: String = 'class C {\n' + '\tstatic function build():Dynamic {\n' + '\t\treturn macro { cb(function() { fire(); }); };\n'
-			+ '\t}\n' + '\tstatic function cb(f:Void->Void):Void {}\n' + '\tstatic function fire():Void {}\n' + '}';
+		final src: String = 'class C {\n\tstatic function build():Dynamic {\n\t\treturn macro { cb(function() { fire(); }); };\n\t}\n'
+			+ '\tstatic function cb(f:Void->Void):Void {}\n\tstatic function fire():Void {}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -281,8 +278,7 @@ class PreferArrowCallbackCheckTest extends Test {
 			{ file: 'G.hx', source: 'class G {\n\tpublic static function n<S>(f:Void->S):Void {}\n}' },
 			{
 				file: 'UseGS.hx',
-				source: 'class UseGS {\n' + '\tfunction m():Void {\n' + '\t\tG.n(function() { go(); });\n' + '\t}\n'
-					+ '\tfunction go():Void {}\n' + '}'
+				source: 'class UseGS {\n\tfunction m():Void {\n\t\tG.n(function() { go(); });\n\t}\n\tfunction go():Void {}\n}'
 			}
 		];
 		Assert.equals(0, violationsMulti(files, 'UseGS.hx').length);
@@ -290,8 +286,8 @@ class PreferArrowCallbackCheckTest extends Test {
 
 	/** A callback in a LATER argument slot resolves to the right parameter. */
 	public function testSecondArgResolvedFixed(): Void {
-		final src: String = 'class C {\n' + '\tfunction m():Void {\n' + '\t\tcb2(1, function(x:Int) { go(x); });\n' + '\t}\n'
-			+ '\tfunction cb2(a:Int, f:Int->Void):Void {}\n' + '\tfunction go(i:Int):Void {}\n' + '}';
+		final src: String = 'class C {\n\tfunction m():Void {\n\t\tcb2(1, function(x:Int) { go(x); });\n\t}\n'
+			+ '\tfunction cb2(a:Int, f:Int->Void):Void {}\n\tfunction go(i:Int):Void {}\n}';
 		Assert.equals('(x:Int) -> go(x)', fixText(src));
 	}
 
@@ -301,8 +297,8 @@ class PreferArrowCallbackCheckTest extends Test {
 			{ file: 'DispS.hx', source: 'class DispS {\n\tpublic function on(f:Int->Void):Void {}\n}' },
 			{
 				file: 'UseS.hx',
-				source: 'class UseS {\n' + '\tvar d:Null<DispS>;\n' + '\tfunction m():Void {\n' + '\t\td?.on(function(i) { go(i); });\n'
-					+ '\t}\n' + '\tfunction go(i:Int):Void {}\n' + '}'
+				source: 'class UseS {\n\tvar d:Null<DispS>;\n\tfunction m():Void {\n\t\td?.on(function(i) { go(i); });\n\t}\n'
+					+ '\tfunction go(i:Int):Void {}\n}'
 			}
 		];
 		Assert.equals('i -> go(i)', fixTextIndexed(files, 'UseS.hx'));
@@ -321,8 +317,8 @@ class PreferArrowCallbackCheckTest extends Test {
 			{ file: 'BoxG.hx', source: 'class BoxG<T> {\n\tpublic function each<S>(f:T->S):Void {}\n}' },
 			{
 				file: 'UseG.hx',
-				source: 'class UseG {\n' + '\tvar b:BoxG<Int>;\n' + '\tfunction m():Void {\n' + '\t\tb.each(function(x) { fire(); });\n'
-					+ '\t}\n' + '\tfunction fire():Void {}\n' + '}'
+				source: 'class UseG {\n\tvar b:BoxG<Int>;\n\tfunction m():Void {\n\t\tb.each(function(x) { fire(); });\n\t}\n'
+					+ '\tfunction fire():Void {}\n}'
 			}
 		];
 		Assert.equals(0, violationsMulti(files, 'UseG.hx').length);
@@ -334,8 +330,7 @@ class PreferArrowCallbackCheckTest extends Test {
 			{ file: 'BoxH.hx', source: 'class BoxH<T> {\n\tpublic function each<S>(f:T->S):Void {}\n}' },
 			{
 				file: 'UseH.hx',
-				source: 'class UseH {\n' + '\tvar b:BoxH<Int>;\n' + '\tfunction m():Void {\n'
-					+ '\t\tb.each(function(x) { return x + 1; });\n' + '\t}\n' + '}'
+				source: 'class UseH {\n\tvar b:BoxH<Int>;\n\tfunction m():Void {\n\t\tb.each(function(x) { return x + 1; });\n\t}\n}'
 			}
 		];
 		Assert.equals('x -> x + 1', fixTextIndexed(files, 'UseH.hx'));
@@ -349,8 +344,7 @@ class PreferArrowCallbackCheckTest extends Test {
 			{ file: 'OptT.hx', source: 'class OptT {\n\tpublic static function go3(a:Int, ?b:Bool, cb:Void->Void):Void {}\n}' },
 			{
 				file: 'UseO.hx',
-				source: 'class UseO {\n' + '\tfunction m():Void {\n' + '\t\tOptT.go3(1, function() { fire(); });\n' + '\t}\n'
-					+ '\tfunction fire():Void {}\n' + '}'
+				source: 'class UseO {\n\tfunction m():Void {\n\t\tOptT.go3(1, function() { fire(); });\n\t}\n\tfunction fire():Void {}\n}'
 			}
 		];
 		Assert.equals(1, violationsMulti(files, 'UseO.hx').length);
@@ -415,8 +409,7 @@ class PreferArrowCallbackCheckTest extends Test {
 
 	/** A host class declaring `cb(f:Void->Void)` so bare / `this.` callees resolve to a `Void` return. */
 	private function hostClass(stmt: String): String {
-		return 'class C {\n' + '\tfunction m():Void {\n' + '\t\t$stmt\n' + '\t}\n' + '\tfunction cb(f:Void->Void):Void {}\n'
-			+ '\tfunction go(i:Int):Void {}\n' + '}';
+		return 'class C {\n\tfunction m():Void {\n\t\t$stmt\n\t}\n\tfunction cb(f:Void->Void):Void {}\n\tfunction go(i:Int):Void {}\n}';
 	}
 
 	/** A generic-arity ctor fixture: `TookG<T>` whose ctor takes a `Void`-returning callback. */

@@ -34,11 +34,10 @@ class ApqSpanFlowTest extends Test {
 		final firstDecl: QueryNode = tree.children[0];
 		Assert.notNull(firstDecl.span, 'top-level decl must carry a span');
 		final span = firstDecl.span;
-		if (span != null) {
-			Assert.isTrue(span.from >= 0);
-			Assert.isTrue(span.to <= source.length);
-			Assert.isTrue(span.from <= span.to);
-		}
+		if (span == null) return;
+		Assert.isTrue(span.from >= 0);
+		Assert.isTrue(span.to <= source.length);
+		Assert.isTrue(span.from <= span.to);
 	}
 
 	public function testMultipleTopLevelDeclsHaveOrderedSpans(): Void {

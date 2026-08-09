@@ -39,12 +39,15 @@ final class HxDeclHeaderEqBreakOverflowTest extends Test {
 
 	/** Header line is 145 columns even with the call args wrapped -> break after `=`. */
 	public function testOverflowingHeaderBreaksAfterEq(): Void {
-		final wrapped: String =
-			'class M {\n\n\tprivate static final recordsIncrementalRemoteRefreshCachePrime:RecordIncrementalRemoteRefreshCache = new RecordIncrementalRemoteRefreshCache(\n\t\t\'Primes\'\n\t);\n\n}';
-		final glued: String =
-			'class M {\n\n\tprivate static final recordsIncrementalRemoteRefreshCachePrime:RecordIncrementalRemoteRefreshCache = new RecordIncrementalRemoteRefreshCache(\'Primes\');\n\n}';
-		final broken: String =
-			'class M {\n\n\tprivate static final recordsIncrementalRemoteRefreshCachePrime:RecordIncrementalRemoteRefreshCache =\n\t\tnew RecordIncrementalRemoteRefreshCache(\'Primes\');\n\n}';
+		final wrapped: String = 'class M {\n\n'
+			+ '\tprivate static final recordsIncrementalRemoteRefreshCachePrime:RecordIncrementalRemoteRefreshCache = new RecordIncrementalRemoteRefreshCache(\n'
+			+ '\t\t\'Primes\'\n\t);\n\n}';
+		final glued: String = 'class M {\n\n'
+			+ '\tprivate static final recordsIncrementalRemoteRefreshCachePrime:RecordIncrementalRemoteRefreshCache = new RecordIncrementalRemoteRefreshCache(\'Primes\');\n'
+			+ '\n}';
+		final broken: String = 'class M {\n\n'
+			+ '\tprivate static final recordsIncrementalRemoteRefreshCachePrime:RecordIncrementalRemoteRefreshCache =\n'
+			+ '\t\tnew RecordIncrementalRemoteRefreshCache(\'Primes\');\n\n}';
 		Assert.equals(broken, triviaWrite(wrapped));
 		Assert.equals(broken, triviaWrite(glued));
 		Assert.equals(broken, triviaWrite(broken));
@@ -52,22 +55,24 @@ final class HxDeclHeaderEqBreakOverflowTest extends Test {
 
 	/** GUARD: header EXACTLY 140 columns -> stays glued, only the call args wrap. */
 	public function testHeaderAtLimitStaysGlued(): Void {
-		final src: String =
-			'class M {\n\n\tprivate static final recordsIncrementalRemoteRefreshPrime:RecordIncrementalRemoteRefreshCache = new RecordIncrementalRemoteRefreshCache(\n\t\t\'Primes\'\n\t);\n\n}';
+		final src: String = 'class M {\n\n'
+			+ '\tprivate static final recordsIncrementalRemoteRefreshPrime:RecordIncrementalRemoteRefreshCache = new RecordIncrementalRemoteRefreshCache(\n'
+			+ '\t\t\'Primes\'\n\t);\n\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	/** GUARD: 51-column header, 144-column flat line -> the call args wrap, `=` stays glued. */
 	public function testShortHeaderKeepsEqGlued(): Void {
-		final src: String =
-			'class M {\n\n\tprivate final _badge:BadgeView = new BadgeView(\n\t\tlabel(\'TransparencyLevel\', 207), Typography.getFormatBadgeText(), 64, 20, Colors.PANEL_GREY\n\t);\n\n}';
+		final src: String = 'class M {\n\n\tprivate final _badge:BadgeView = new BadgeView(\n'
+			+ '\t\tlabel(\'TransparencyLevel\', 207), Typography.getFormatBadgeText(), 64, 20, Colors.PANEL_GREY\n\t);\n\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	/** GUARD: a `+` chain's head ends at an OPERAND, not an open delimiter — the chain wraps its own later lines, `=` stays glued. */
 	public function testOperatorChainHeadKeepsEqGlued(): Void {
-		final src: String =
-			'class C {\n\n\tfunction f() {\n\t\tfinal request:String = \'SELECT filepath, folder, cloud_id, folder_cloud_id, action, filepath_movedfrom, filepath_movedfromorigin, tstamp \'\n\t\t\t+ \'FROM files WHERE SUBSTR(filepath, 0, 12) = quoted ORDER by filepath\';\n\t}\n\n}';
+		final src: String = 'class C {\n\n\tfunction f() {\n'
+			+ '\t\tfinal request:String = \'SELECT filepath, folder, cloud_id, folder_cloud_id, action, filepath_movedfrom, filepath_movedfromorigin, tstamp \'\n'
+			+ '\t\t\t+ \'FROM files WHERE SUBSTR(filepath, 0, 12) = quoted ORDER by filepath\';\n\t}\n\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -78,10 +83,13 @@ final class HxDeclHeaderEqBreakOverflowTest extends Test {
 	 * together pin what `endsAtOpenDelim` does and does not exclude.
 	 */
 	public function testCallLedChainHeadBreaksAfterEq(): Void {
-		final src: String =
-			'class C {\n\n\tfunction f() {\n\t\tfinal request:String = buildIncrementalCloudUpdatesRequestForMovedFromPrefixWithQuotedSeparatorAndOrderedFilepathTailSegmentForCloudSync(\'SELECT filepath, folder, cloud_id, action, tstamp \')\n\t\t\t+ \'FROM files WHERE prefix ORDER by filepath\';\n\t}\n\n}';
-		final broken: String =
-			'class C {\n\n\tfunction f() {\n\t\tfinal request:String =\n\t\t\tbuildIncrementalCloudUpdatesRequestForMovedFromPrefixWithQuotedSeparatorAndOrderedFilepathTailSegmentForCloudSync(\n\t\t\t\t\t\'SELECT filepath, folder, cloud_id, action, tstamp \'\n\t\t\t\t) + \'FROM files WHERE prefix ORDER by filepath\';\n\t}\n\n}';
+		final src: String = 'class C {\n\n\tfunction f() {\n'
+			+ '\t\tfinal request:String = buildIncrementalCloudUpdatesRequestForMovedFromPrefixWithQuotedSeparatorAndOrderedFilepathTailSegmentForCloudSync(\'SELECT filepath, folder, cloud_id, action, tstamp \')\n'
+			+ '\t\t\t+ \'FROM files WHERE prefix ORDER by filepath\';\n\t}\n\n}';
+		final broken: String = 'class C {\n\n\tfunction f() {\n\t\tfinal request:String =\n'
+			+ '\t\t\tbuildIncrementalCloudUpdatesRequestForMovedFromPrefixWithQuotedSeparatorAndOrderedFilepathTailSegmentForCloudSync(\n'
+			+ '\t\t\t\t\t\'SELECT filepath, folder, cloud_id, action, tstamp \'\n'
+			+ '\t\t\t\t) + \'FROM files WHERE prefix ORDER by filepath\';\n\t}\n\n}';
 		Assert.equals(broken, triviaWrite(src));
 		Assert.equals(broken, triviaWrite(broken));
 	}

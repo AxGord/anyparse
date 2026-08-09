@@ -30,10 +30,12 @@ final class HxFnSigSingleParamWrapIndentTest extends Test {
 
 	/** A single-param signature that leading-breaks puts the lone param at signature-indent + 1 (2 tabs for a 1-tab method), not + 2. */
 	public function testSingleParamLeadingBreakIndentsOneLevel(): Void {
-		final src: String =
-			'class M {\n\tpublic function createOperationz(?sessionLoader:(cb:(handlerArg:GenericBaseKindType<PrimaryObserverKindXy>, finishCb:()->Void)->Void)->Void):ResultCarrierValue<A, A2> {\n\t\treturn null;\n\t}\n}';
-		final expected: String =
-			'class M {\n\tpublic function createOperationz(\n\t\t?sessionLoader:(cb:(handlerArg:GenericBaseKindType<PrimaryObserverKindXy>, finishCb:()->Void)->Void)->Void\n\t):ResultCarrierValue<A, A2> {\n\t\treturn null;\n\t}\n}';
+		final src: String = 'class M {\n'
+			+ '\tpublic function createOperationz(?sessionLoader:(cb:(handlerArg:GenericBaseKindType<PrimaryObserverKindXy>, finishCb:()->Void)->Void)->Void):ResultCarrierValue<A, A2> {\n'
+			+ '\t\treturn null;\n\t}\n}';
+		final expected: String = 'class M {\n\tpublic function createOperationz(\n'
+			+ '\t\t?sessionLoader:(cb:(handlerArg:GenericBaseKindType<PrimaryObserverKindXy>, finishCb:()->Void)->Void)->Void\n'
+			+ '\t):ResultCarrierValue<A, A2> {\n\t\treturn null;\n\t}\n}';
 		Assert.equals(expected, triviaWrite(src));
 	}
 

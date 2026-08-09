@@ -36,30 +36,30 @@ final class HxThinArrowIfElseBreakSliceTest extends Test {
 	// --- POSITIVE: if/else body breaks after `->` ---
 
 	public function testIfElseArrowBodyBreaksAfterArrow(): Void {
-		final src: String =
-			'class C {\n\tfunction test() {\n\t\tgate.waitToken(success ->\n\t\t\tif (success) {\n\t\t\t\tdoRequest();\n\t\t\t} else {\n\t\t\t\tonError();\n\t\t\t}\n\t\t);\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n\t\tgate.waitToken(success ->\n\t\t\tif (success) {\n\t\t\t\tdoRequest();\n'
+			+ '\t\t\t} else {\n\t\t\t\tonError();\n\t\t\t}\n\t\t);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testElseIfChainArrowBodyBreaksAfterArrow(): Void {
-		final src: String =
-			'class C {\n\tfunction test() {\n\t\tgate.waitToken(success ->\n\t\t\tif (success) {\n\t\t\t\tdoRequest();\n\t\t\t} else if (other) {\n\t\t\t\tmiddle();\n\t\t\t} else {\n\t\t\t\tonError();\n\t\t\t}\n\t\t);\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n\t\tgate.waitToken(success ->\n\t\t\tif (success) {\n\t\t\t\tdoRequest();\n'
+			+ '\t\t\t} else if (other) {\n\t\t\t\tmiddle();\n\t\t\t} else {\n\t\t\t\tonError();\n\t\t\t}\n\t\t);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testNewExprIfElseArrowBodyBreaksAfterArrow(): Void {
-		final src: String =
-			'class C {\n\tfunction test() {\n\t\tfinal x = new Wrapper(success ->\n\t\t\tif (success) {\n\t\t\t\tdoRequest();\n\t\t\t} else {\n\t\t\t\tonError();\n\t\t\t}\n\t\t);\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal x = new Wrapper(success ->\n\t\t\tif (success) {\n'
+			+ '\t\t\t\tdoRequest();\n\t\t\t} else {\n\t\t\t\tonError();\n\t\t\t}\n\t\t);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	// --- POSITIVE: a hugged if/else source is REFLOWED to break after `->` ---
 
 	public function testHuggedIfElseIsReflowedToLeadingBreak(): Void {
-		final src: String =
-			'class C {\n\tfunction test() {\n\t\tgate.waitToken(success -> if (success) {\n\t\t\tdoRequest();\n\t\t} else {\n\t\t\tonError();\n\t\t});\n\t}\n}';
-		final want: String =
-			'class C {\n\tfunction test() {\n\t\tgate.waitToken(success ->\n\t\t\tif (success) {\n\t\t\t\tdoRequest();\n\t\t\t} else {\n\t\t\t\tonError();\n\t\t\t}\n\t\t);\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n\t\tgate.waitToken(success -> if (success) {\n\t\t\tdoRequest();\n'
+			+ '\t\t} else {\n\t\t\tonError();\n\t\t});\n\t}\n}';
+		final want: String = 'class C {\n\tfunction test() {\n\t\tgate.waitToken(success ->\n\t\t\tif (success) {\n\t\t\t\tdoRequest();\n'
+			+ '\t\t\t} else {\n\t\t\t\tonError();\n\t\t\t}\n\t\t);\n\t}\n}';
 		Assert.equals(want, triviaWrite(src));
 	}
 
@@ -72,8 +72,8 @@ final class HxThinArrowIfElseBreakSliceTest extends Test {
 	}
 
 	public function testSwitchBodyArrowStaysHugged(): Void {
-		final src: String =
-			'class C {\n\tfunction test() {\n\t\tgate.waitToken(success -> switch (success) {\n\t\t\tcase TRUE: doRequest();\n\t\t\tcase FALSE: onError();\n\t\t});\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n\t\tgate.waitToken(success -> switch (success) {\n'
+			+ '\t\t\tcase TRUE: doRequest();\n\t\t\tcase FALSE: onError();\n\t\t});\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -90,14 +90,14 @@ final class HxThinArrowIfElseBreakSliceTest extends Test {
 	}
 
 	public function testPlainIfNoElseArrowStaysHugged(): Void {
-		final src: String =
-			'class C {\n\tfunction test() {\n\t\tgate.waitToken(success -> if (success) {\n\t\t\tdoRequest();\n\t\t\tonError();\n\t\t});\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n\t\tgate.waitToken(success -> if (success) {\n\t\t\tdoRequest();\n'
+			+ '\t\t\tonError();\n\t\t});\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testNestedElseUnderOuterNoElseStaysHugged(): Void {
-		final src: String =
-			'class C {\n\tfunction test() {\n\t\tgate.waitToken(success -> if (success) {\n\t\t\tif (other) {\n\t\t\t\tdoRequest();\n\t\t\t} else {\n\t\t\t\tonError();\n\t\t\t}\n\t\t});\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n\t\tgate.waitToken(success -> if (success) {\n\t\t\tif (other) {\n'
+			+ '\t\t\t\tdoRequest();\n\t\t\t} else {\n\t\t\t\tonError();\n\t\t\t}\n\t\t});\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

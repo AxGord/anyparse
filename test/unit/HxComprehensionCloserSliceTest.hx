@@ -57,16 +57,16 @@ final class HxComprehensionCloserSliceTest extends Test {
 		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "same"}}';
 
 	/** The reported shape (anonymised from a macro-generating build macro): reified body, curly tail, `];` glued to the body line. */
-	private static final REIFIED_GLUED: String = "class C {\n" + "\tfunction test() {\n"
-		+ "\t\tfinal resultList = [ for (fieldEntry in fieldEntryCollection)\n"
+	private static final REIFIED_GLUED: String = 'class C {\n\tfunction test() {\n'
+		+ '\t\tfinal resultList = [ for (fieldEntry in fieldEntryCollection)\n'
 		+ "\t\t\tmacro if ($p{['sourceObject', fieldEntry.slot]} != null) $p{[fieldEntry.slot]} = $p{['sourceObject', fieldEntry.slot]} ];\n"
-		+ "\t}\n" + "}";
+		+ '\t}\n' + '}';
 
 	/** Same comprehension with the closer on its own line at the declaration's indent — head-glue kept. */
-	private static final REIFIED_OWN_LINE: String = "class C {\n" + "\tfunction test() {\n"
-		+ "\t\tfinal resultList = [ for (fieldEntry in fieldEntryCollection)\n"
+	private static final REIFIED_OWN_LINE: String = 'class C {\n\tfunction test() {\n'
+		+ '\t\tfinal resultList = [ for (fieldEntry in fieldEntryCollection)\n'
 		+ "\t\t\tmacro if ($p{['sourceObject', fieldEntry.slot]} != null) $p{[fieldEntry.slot]} = $p{['sourceObject', fieldEntry.slot]}\n"
-		+ "\t\t];\n" + "\t}\n" + "}";
+		+ '\t\t];\n' + '\t}\n' + '}';
 
 	public function new(): Void {
 		super();
@@ -90,14 +90,12 @@ final class HxComprehensionCloserSliceTest extends Test {
 	 * expression body, so it gets the same closer.
 	 */
 	public function testPlainExprBraceTailComprehensionDropsCloser(): Void {
-		final src: String = "class C {\n" + "\tfunction test() {\n"
-			+ "\t\tfinal resultList = [ for (elementValue in sourceCollectionValue)\n"
-			+ "\t\t\tresolveCaption(elementValue) == null ? fallbackDescriptor : {caption: elementValue.caption, detail: elementValue.detail} ];\n"
-			+ "\t}\n" + "}";
-		final expected: String = "class C {\n" + "\tfunction test() {\n"
-			+ "\t\tfinal resultList = [ for (elementValue in sourceCollectionValue)\n"
-			+ "\t\t\tresolveCaption(elementValue) == null ? fallbackDescriptor : {caption: elementValue.caption, detail: elementValue.detail}\n"
-			+ "\t\t];\n" + "\t}\n" + "}";
+		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [ for (elementValue in sourceCollectionValue)\n'
+			+ '\t\t\tresolveCaption(elementValue) == null ? fallbackDescriptor : {caption: elementValue.caption, detail: elementValue.detail} ];\n'
+			+ '\t}\n}';
+		final expected: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [ for (elementValue in sourceCollectionValue)\n'
+			+ '\t\t\tresolveCaption(elementValue) == null ? fallbackDescriptor : {caption: elementValue.caption, detail: elementValue.detail}\n'
+			+ '\t\t];\n\t}\n}';
 		Assert.equals(expected, triviaWrite(src, ON));
 	}
 
@@ -106,28 +104,27 @@ final class HxComprehensionCloserSliceTest extends Test {
 	 * like the one-line body above — so the fix must move this one too, not just the single-line case.
 	 */
 	public function testTwoLineReifiedBodyAlsoDropsCloser(): Void {
-		final src: String = "class C {\n" + "\tfunction test() {\n" + "\t\tfinal resultList = [ for (fieldEntry in fieldEntryCollection)\n"
+		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [ for (fieldEntry in fieldEntryCollection)\n'
 			+ "\t\t\tmacro if (checkEntryIsAssignable(sourceObject, fieldEntry.slot, fallbackDescriptorValue, comparisonStrategyValue)) $p{[fieldEntry.slot]} = $p{['sourceObject', fieldEntry.slot]} ];\n"
-			+ "\t}\n" + "}";
-		final expected: String = "class C {\n" + "\tfunction test() {\n"
-			+ "\t\tfinal resultList = [ for (fieldEntry in fieldEntryCollection)\n"
-			+ "\t\t\tmacro if (checkEntryIsAssignable(sourceObject, fieldEntry.slot, fallbackDescriptorValue, comparisonStrategyValue))\n"
-			+ "\t\t\t\t$p{[fieldEntry.slot]} = $p{['sourceObject', fieldEntry.slot]}\n" + "\t\t];\n" + "\t}\n" + "}";
+			+ '\t}\n}';
+		final expected: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [ for (fieldEntry in fieldEntryCollection)\n'
+			+ '\t\t\tmacro if (checkEntryIsAssignable(sourceObject, fieldEntry.slot, fallbackDescriptorValue, comparisonStrategyValue))\n'
+			+ "\t\t\t\t$p{[fieldEntry.slot]} = $p{['sourceObject', fieldEntry.slot]}\n\t\t];\n\t}\n}";
 		Assert.equals(expected, triviaWrite(src, ON));
 	}
 
 	/** The precedent this slice converges on: a body ending in `)` already dropped its closer and must stay byte-identical. */
 	public function testNonBraceTailBodyCloserUnchanged(): Void {
-		final src: String = "class C {\n" + "\tfunction test() {\n" + "\t\tfinal resultList = [ for (fieldEntry in fieldEntryCollection)\n"
+		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [ for (fieldEntry in fieldEntryCollection)\n'
 			+ "\t\t\tmacro o.put($v{fieldEntry.tag}, resolveEntryValue(sourceObject, fieldEntry.slot, fallbackDescriptorValue, strategyValue))\n"
-			+ "\t\t];\n" + "\t}\n" + "}";
+			+ '\t\t];\n\t}\n}';
 		Assert.equals(src, triviaWrite(src, ON));
 	}
 
 	/** A curly-tailed comprehension that FITS one line never reaches either shape (no hardline) — byte-identical. */
 	public function testFittingBraceTailComprehensionStaysFlat(): Void {
-		final src: String = "class C {\n" + "\tfunction test() {\n"
-			+ "\t\tfinal resultList = [ for (fieldEntry in fieldEntryCollection) macro $p{[fieldEntry.slot]} ];\n" + "\t}\n" + "}";
+		final src: String = 'class C {\n\tfunction test() {\n'
+			+ "\t\tfinal resultList = [ for (fieldEntry in fieldEntryCollection) macro $p{[fieldEntry.slot]} ];\n\t}\n}";
 		Assert.equals(src, triviaWrite(src, ON));
 	}
 
@@ -136,10 +133,10 @@ final class HxComprehensionCloserSliceTest extends Test {
 	 * body. It now leading-breaks like every one of them.
 	 */
 	public function testKnobOffBraceTailLeadingBreaks(): Void {
-		final expected: String = "class C {\n" + "\tfunction test() {\n" + "\t\tfinal resultList = [\n"
-			+ "\t\t\tfor (fieldEntry in fieldEntryCollection)\n"
+		final expected: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [\n'
+			+ '\t\t\tfor (fieldEntry in fieldEntryCollection)\n'
 			+ "\t\t\t\tmacro if ($p{['sourceObject', fieldEntry.slot]} != null) $p{[fieldEntry.slot]} = $p{['sourceObject', fieldEntry.slot]}\n"
-			+ "\t\t];\n" + "\t}\n" + "}";
+			+ '\t\t];\n\t}\n}';
 		Assert.equals(expected, triviaWrite(REIFIED_GLUED, OFF));
 	}
 
@@ -150,33 +147,33 @@ final class HxComprehensionCloserSliceTest extends Test {
 	 * than the pre-slice output. `firstBreakIsDelimChar` skips comment atoms, so this is byte-identical to base.
 	 */
 	public function testBlockBodyWithTrailingLineCommentKeepsBlockHug(): Void {
-		final src: String = 'class C {\n' + '\tfunction test() {\n'
+		final src: String = 'class C {\n\tfunction test() {\n'
 			+ '\t\tfinal resultList = [ for (typeKey => colorList in folderColorsMapValueHere) { // note\n'
-			+ '\t\t\tfinal bitmapValue = makeBitmapFromColors(colorList);\n' + '\t\t\tbitmapValue;\n' + '\t\t} ];\n' + '\t}\n' + '}';
+			+ '\t\t\tfinal bitmapValue = makeBitmapFromColors(colorList);\n\t\t\tbitmapValue;\n\t\t} ];\n\t}\n}';
 		Assert.equals(src, triviaWrite(src, ON));
 	}
 
 	/** Same hazard with a trailing BLOCK comment — a second atom shape the head-glue probe must see through. */
 	public function testBlockBodyWithTrailingBlockCommentKeepsBlockHug(): Void {
-		final src: String = 'class C {\n' + '\tfunction test() {\n'
+		final src: String = 'class C {\n\tfunction test() {\n'
 			+ '\t\tfinal resultList = [ for (typeKey => colorList in folderColorsMapValueHere) { /* note */\n'
-			+ '\t\t\tfinal bitmapValue = makeBitmapFromColors(colorList);\n' + '\t\t\tbitmapValue;\n' + '\t\t} ];\n' + '\t}\n' + '}';
+			+ '\t\t\tfinal bitmapValue = makeBitmapFromColors(colorList);\n\t\t\tbitmapValue;\n\t\t} ];\n\t}\n}';
 		Assert.equals(src, triviaWrite(src, ON));
 	}
 
 	/** The comment-free control for the two above — the shape they must stay byte-identical to. */
 	public function testBlockBodyWithoutCommentKeepsBlockHug(): Void {
-		final src: String = 'class C {\n' + '\tfunction test() {\n'
+		final src: String = 'class C {\n\tfunction test() {\n'
 			+ '\t\tfinal resultList = [ for (typeKey => colorList in folderColorsMapValueHere) {\n'
-			+ '\t\t\tfinal bitmapValue = makeBitmapFromColors(colorList);\n' + '\t\t\tbitmapValue;\n' + '\t\t} ];\n' + '\t}\n' + '}';
+			+ '\t\t\tfinal bitmapValue = makeBitmapFromColors(colorList);\n\t\t\tbitmapValue;\n\t\t} ];\n\t}\n}';
 		Assert.equals(src, triviaWrite(src, ON));
 	}
 
 	/** A `switch` body that OPENS on the head line is head-glued, so its `}` is already at container indent and `} ]` stays. */
 	public function testHeadGluedSwitchBodyKeepsBlockHug(): Void {
-		final src: String = 'class C {\n' + '\tfunction test() {\n'
+		final src: String = 'class C {\n\tfunction test() {\n'
 			+ '\t\tfinal resultList = [ for (elementValue in sourceCollectionValue) switch elementValue.kindValue {\n'
-			+ '\t\t\tcase KAlpha: alphaDescriptor;\n' + '\t\t\tcase _: betaDescriptor;\n' + '\t\t} ];\n' + '\t}\n' + '}';
+			+ '\t\t\tcase KAlpha: alphaDescriptor;\n\t\t\tcase _: betaDescriptor;\n\t\t} ];\n\t}\n}';
 		Assert.equals(src, triviaWrite(src, ON));
 	}
 
@@ -185,15 +182,12 @@ final class HxComprehensionCloserSliceTest extends Test {
 	 * the closer now drops to the declaration's indent.
 	 */
 	public function testTernarySwitchBodyDropsCloser(): Void {
-		final src: String = 'class C {\n' + '\tfunction test() {\n'
-			+ '\t\tfinal resultList = [ for (elementValue in sourceCollectionValue)\n' + '\t\t\tresolveCaption(elementValue) == null\n'
-			+ '\t\t\t\t? fallbackDescriptorValue\n' + '\t\t\t\t: switch elementValue.kindValue {\n'
-			+ '\t\t\t\t\tcase KAlpha: alphaDescriptor;\n' + '\t\t\t\t\tcase _: betaDescriptor;\n' + '\t\t\t\t} ];\n' + '\t}\n' + '}';
-		final expected: String = 'class C {\n' + '\tfunction test() {\n'
-			+ '\t\tfinal resultList = [ for (elementValue in sourceCollectionValue)\n' + '\t\t\tresolveCaption(elementValue) == null\n'
-			+ '\t\t\t\t? fallbackDescriptorValue\n' + '\t\t\t\t: switch elementValue.kindValue {\n'
-			+ '\t\t\t\t\tcase KAlpha: alphaDescriptor;\n' + '\t\t\t\t\tcase _: betaDescriptor;\n' + '\t\t\t\t}\n' + '\t\t];\n' + '\t}\n'
-			+ '}';
+		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [ for (elementValue in sourceCollectionValue)\n'
+			+ '\t\t\tresolveCaption(elementValue) == null\n\t\t\t\t? fallbackDescriptorValue\n\t\t\t\t: switch elementValue.kindValue {\n'
+			+ '\t\t\t\t\tcase KAlpha: alphaDescriptor;\n\t\t\t\t\tcase _: betaDescriptor;\n\t\t\t\t} ];\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [ for (elementValue in sourceCollectionValue)\n'
+			+ '\t\t\tresolveCaption(elementValue) == null\n\t\t\t\t? fallbackDescriptorValue\n\t\t\t\t: switch elementValue.kindValue {\n'
+			+ '\t\t\t\t\tcase KAlpha: alphaDescriptor;\n\t\t\t\t\tcase _: betaDescriptor;\n\t\t\t\t}\n\t\t];\n\t}\n}';
 		Assert.equals(expected, triviaWrite(src, ON));
 	}
 
@@ -203,26 +197,25 @@ final class HxComprehensionCloserSliceTest extends Test {
 	 * (`} ];`) with the body dedented BELOW the declaration, which the `HxWhileExpr`-has-no-body-policy exclusion exists to avoid.
 	 */
 	public function testWhileComprehensionBraceTailLeadingBreaks(): Void {
-		final src: String = "class C {\n" + "\tfunction test() {\n" + "\t\tfinal resultList = [ while (iteratorValue.hasNextElement())\n"
+		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [ while (iteratorValue.hasNextElement())\n'
 			+ "\t\t\tmacro if ($p{['sourceObject', fieldEntry.slot]} != null) $p{[fieldEntry.slot]} = $p{['sourceObject', fieldEntry.slot]} ];\n"
-			+ "\t}\n" + "}";
-		final expected: String = "class C {\n" + "\tfunction test() {\n" + "\t\tfinal resultList = [\n"
-			+ "\t\t\twhile (iteratorValue.hasNextElement())\n"
+			+ '\t}\n}';
+		final expected: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [\n\t\t\twhile (iteratorValue.hasNextElement())\n'
 			+ "\t\t\tmacro if ($p{['sourceObject', fieldEntry.slot]} != null) $p{[fieldEntry.slot]} = $p{['sourceObject', fieldEntry.slot]}\n"
-			+ "\t\t];\n" + "\t}\n" + "}";
+			+ '\t\t];\n\t}\n}';
 		Assert.equals(expected, triviaWrite(src, ON));
 	}
 
 	/** A NESTED-generator comprehension is the second neither-predicate shape: base head-glued the curly tail, it now leading-breaks. */
 	public function testNestedGeneratorBraceTailLeadingBreaks(): Void {
-		final src: String = "class C {\n" + "\tfunction test() {\n"
-			+ "\t\tfinal resultList = [ for (outerElement in outerCollectionValue) for (innerElement in innerCollectionValue)\n"
+		final src: String = 'class C {\n\tfunction test() {\n'
+			+ '\t\tfinal resultList = [ for (outerElement in outerCollectionValue) for (innerElement in innerCollectionValue)\n'
 			+ "\t\t\tmacro if ($p{['sourceObject', innerElement.slot]} != null) $p{[outerElement.slot]} = $p{['sourceObject', innerElement.slot]} ];\n"
-			+ "\t}\n" + "}";
-		final expected: String = "class C {\n" + "\tfunction test() {\n" + "\t\tfinal resultList = [\n"
-			+ "\t\t\tfor (outerElement in outerCollectionValue) for (innerElement in innerCollectionValue)\n"
+			+ '\t}\n}';
+		final expected: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [\n'
+			+ '\t\t\tfor (outerElement in outerCollectionValue) for (innerElement in innerCollectionValue)\n'
 			+ "\t\t\t\tmacro if ($p{['sourceObject', innerElement.slot]} != null) $p{[outerElement.slot]} = $p{['sourceObject', innerElement.slot]}\n"
-			+ "\t\t];\n" + "\t}\n" + "}";
+			+ '\t\t];\n\t}\n}';
 		Assert.equals(expected, triviaWrite(src, ON));
 	}
 
@@ -231,14 +224,12 @@ final class HxComprehensionCloserSliceTest extends Test {
 	 * the generic cascade and leading-break the `[`. It now cuddles like every other expression body under the knob.
 	 */
 	public function testTightBracketBraceTailCuddles(): Void {
-		final src: String = "class C {\n" + "\tfunction test() {\n" + "\t\tfinal resultList = [\n"
-			+ "\t\t\tfor (fieldEntry in fieldEntryCollection)\n"
+		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [\n\t\t\tfor (fieldEntry in fieldEntryCollection)\n'
 			+ "\t\t\t\tmacro if ($p{['sourceObject', fieldEntry.slot]} != null) $p{[fieldEntry.slot]} = $p{['sourceObject', fieldEntry.slot]}\n"
-			+ "\t\t];\n" + "\t}\n" + "}";
-		final expected: String = "class C {\n" + "\tfunction test() {\n"
-			+ "\t\tfinal resultList = [for (fieldEntry in fieldEntryCollection)\n"
+			+ '\t\t];\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [for (fieldEntry in fieldEntryCollection)\n'
 			+ "\t\t\tmacro if ($p{['sourceObject', fieldEntry.slot]} != null) $p{[fieldEntry.slot]} = $p{['sourceObject', fieldEntry.slot]}\n"
-			+ "\t\t];\n" + "\t}\n" + "}";
+			+ '\t\t];\n\t}\n}';
 		Assert.equals(expected, triviaWrite(src, TIGHT_ON));
 	}
 

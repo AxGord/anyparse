@@ -27,14 +27,16 @@ final class HxCallParamObjectLiteralSliceTest extends Test {
 	}
 
 	public function testSingleObjectArgFlatFitsLeadingBreaks(): Void {
-		final src: String =
-			'class C {\n\tfunction test() {\n\t\tlist.push(\n\t\t\t{Key: \'134\', Value: \'Are you sure you want to permanently delete your account and all content in cloud?\', Description: \'\'}\n\t\t);\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n\t\tlist.push(\n'
+			+ '\t\t\t{Key: \'134\', Value: \'Are you sure you want to permanently delete your account and all content in cloud?\', Description: \'\'}\n'
+			+ '\t\t);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testSingleObjectArgExceedsOwnLineHugsExplodes(): Void {
-		final src: String =
-			'class C {\n\tfunction test() {\n\t\tlist.push({\n\t\t\talpha: source.alphaFieldValue,\n\t\t\tbetaKey: source.betaFieldValue,\n\t\t\tgamma: source.gammaFieldValue,\n\t\t\tdeltaItem: source.deltaFieldValue,\n\t\t\tepsilonKey: source.epsField\n\t\t});\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n\t\tlist.push({\n\t\t\talpha: source.alphaFieldValue,\n'
+			+ '\t\t\tbetaKey: source.betaFieldValue,\n\t\t\tgamma: source.gammaFieldValue,\n\t\t\tdeltaItem: source.deltaFieldValue,\n'
+			+ '\t\t\tepsilonKey: source.epsField\n\t\t});\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -44,8 +46,8 @@ final class HxCallParamObjectLiteralSliceTest extends Test {
 	}
 
 	public function testBlockLambdaArgStillHugs(): Void {
-		final src: String =
-			'class C {\n\tfunction test() {\n\t\tlist.registerHandlerCallbackHereWithName((resultParameterValueHere) -> {\n\t\t\tprocess(resultParameterValueHere);\n\t\t});\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n\t\tlist.registerHandlerCallbackHereWithName((resultParameterValueHere) -> {\n'
+			+ '\t\t\tprocess(resultParameterValueHere);\n\t\t});\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

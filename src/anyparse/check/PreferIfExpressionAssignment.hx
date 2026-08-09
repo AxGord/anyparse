@@ -3,7 +3,6 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.IfExpressionChain.IfChain;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;

@@ -46,58 +46,58 @@ final class HxMethodChainAllOrNothingSliceTest extends Test {
 		'{"indentation":{"character":"tab","tabWidth":4,"trailingWhitespace":false,"alignInlineSwitchCaseBody":true},"emptyLines":{"maxAnywhereInFile":1,"afterBlocks":"remove","afterLeftCurly":"remove","beforeRightCurly":"remove","classEmptyLines":{"beginType":1,"endType":1},"interfaceEmptyLines":{"beginType":1,"endType":1},"abstractEmptyLines":{"beginType":1,"endType":1},"uniformStatementBlanks":"collapse"},"wrapping":{"comprehensionCuddledOpen":true,"methodChainCuddledLinks":true,"functionSignature":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"totalItemLength <= n","value":100},{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"itemCount <= n","value":1}],"type":"noWrap"}]},"maxLineLength":140,"callParameter":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"itemCount <= n","value":1},{"cond":"totalItemLength <= n","value":100}],"type":"noWrap"}]},"opBoolChain":{"defaultWrap":"noWrap","rules":[{"conditions":[{"cond":"itemCount <= n","value":3},{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"totalItemLength <= n","value":120},{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine","location":"beforeLast"}]},"expressionWrapping":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"}]},"opAddSubChain":{"defaultWrap":"noWrap","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine","location":"beforeLast"}]},"conditionWrapping":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"}]}},"whitespace":{"addLineCommentSpace":false,"normalizeLineCommentIndent":true,"commaPolicy":"after","ifPolicy":"around","forPolicy":"around","whilePolicy":"around","switchPolicy":"around","catchPolicy":"around","arrowFunctionsPolicy":"around","functionTypeHaxe3Policy":"none","functionTypeHaxe4Policy":"none","binopPolicy":"around","intervalPolicy":"around","openingBracketPolicy":"none","closingBracketPolicy":"none","bracesConfig":{"objectLiteralBraces":{"openingPolicy":"after","closingPolicy":"before","arrowBodyOpenPad":true,"arrowBodyReflow":true},"anonTypeBraces":{"openingPolicy":"after","closingPolicy":"before"},"typedefBraces":{"openingPolicy":"after","closingPolicy":"before"},"blockBraces":{"openingPolicy":"around","closingPolicy":"before"},"unknownBraces":{"openingPolicy":"after","closingPolicy":"before"},"singleStatementBraces":"remove"},"parenConfig":{"callParens":{"openingPolicy":"none","closingPolicy":"none"},"funcParamParens":{"openingPolicy":"none","closingPolicy":"none"},"conditionParens":{"openingPolicy":"before","closingPolicy":"after"},"anonFuncParamParens":{"openingPolicy":"none","closingPolicy":"none"},"forLoopParens":{"openingPolicy":"before","closingPolicy":"after"},"expressionParens":{"openingPolicy":"none","closingPolicy":"none"},"switchSubjectParens":"remove"}},"lineEnds":{"emptyCurly":"noBreak"},"comments":{"blockCommentStyle":"javadoc"},"sameLine":{"caseBody":"fitLine","expressionCase":"fitLine","ifBody":"fitLine","forBody":"fitLine","whileBody":"fitLine","functionBody":"fitLine","expressionIf":"next","expressionIfArrowBodyReflow":true,"elseIfCommentReflow":true,"comprehensionFor":"fitLine"}}';
 
 	/** A chain riding the closing paren of a head whose own arguments wrapped; the tail has 88 free columns. */
-	private static final MULTILINE_HEAD_SRC: String = 'class HintNoticeAlertPopup {\n' + '\n' + '\tprivate function buildBody():Void {\n'
+	private static final MULTILINE_HEAD_SRC: String = 'class HintNoticeAlertPopup {\n\n\tprivate function buildBody():Void {\n'
 		+ '\t\tfinal lines:Array<String> = t(\n'
 		+ '\t\t\t\'<b>Reference Mark</b> have not been supplied with this schedule.<br><br>Press the Reference Mark badge <b>illuminate</b> on the top toolbar.\',\n'
-		+ '\t\t\t205\n' + '\t\t).split(\'<br>\')\n' + '\t\t\t.filter(s -> s.trim() != \'\');\n' + '\t}\n' + '\n' + '}';
+		+ '\t\t\t205\n\t\t).split(\'<br>\')\n\t\t\t.filter(s -> s.trim() != \'\');\n\t}\n\n}';
 
 	/** Same chain, all-or-nothing: the whole tail glues onto the head's closing line. */
-	private static final MULTILINE_HEAD_EXP: String = 'class HintNoticeAlertPopup {\n' + '\n' + '\tprivate function buildBody():Void {\n'
+	private static final MULTILINE_HEAD_EXP: String = 'class HintNoticeAlertPopup {\n\n\tprivate function buildBody():Void {\n'
 		+ '\t\tfinal lines:Array<String> = t(\n'
 		+ '\t\t\t\'<b>Reference Mark</b> have not been supplied with this schedule.<br><br>Press the Reference Mark badge <b>illuminate</b> on the top toolbar.\',\n'
-		+ '\t\t\t205\n' + '\t\t).split(\'<br>\').filter(s -> s.trim() != \'\');\n' + '\t}\n' + '\n' + '}';
+		+ '\t\t\t205\n\t\t).split(\'<br>\').filter(s -> s.trim() != \'\');\n\t}\n\n}';
 
 	/** The 151-column regression: the link stayed glued to a 130-column head and only its ARGUMENT wrapped. */
-	private static final OVERWIDE_HEAD_SRC: String = 'class RemoveItemAlert extends StopAlert {\n' + '\n'
-		+ '\tpublic function new(removeEvent:CatalogBlockEvent) {\n' + '\t\tsuper(\n' + '\t\t\tt(\'Remove\', 31),\n'
+	private static final OVERWIDE_HEAD_SRC: String = 'class RemoveItemAlert extends StopAlert {\n\n'
+		+ '\tpublic function new(removeEvent:CatalogBlockEvent) {\n\t\tsuper(\n\t\t\tt(\'Remove\', 31),\n'
 		+ '\t\t\tt(\'Are you sure you want to remove item <b>{value}</b>? This will cause a problem with catalog listing for this ite.\').findAndReplaceValue(\n'
-		+ '\t\t\t\tremoveEvent.userEmail\n' + '\t\t\t)\n' + '\t\t);\n' + '\t}\n' + '\n' + '}';
+		+ '\t\t\t\tremoveEvent.userEmail\n\t\t\t)\n\t\t);\n\t}\n\n}';
 
 	/** Same call, all-or-nothing: head line 130 columns, the single link on its own continuation line. */
-	private static final OVERWIDE_HEAD_EXP: String = 'class RemoveItemAlert extends StopAlert {\n' + '\n'
-		+ '\tpublic function new(removeEvent:CatalogBlockEvent) {\n' + '\t\tsuper(\n' + '\t\t\tt(\'Remove\', 31),\n'
+	private static final OVERWIDE_HEAD_EXP: String = 'class RemoveItemAlert extends StopAlert {\n\n'
+		+ '\tpublic function new(removeEvent:CatalogBlockEvent) {\n\t\tsuper(\n\t\t\tt(\'Remove\', 31),\n'
 		+ '\t\t\tt(\'Are you sure you want to remove item <b>{value}</b>? This will cause a problem with catalog listing for this ite.\')\n'
-		+ '\t\t\t\t.findAndReplaceValue(removeEvent.userEmail)\n' + '\t\t);\n' + '\t}\n' + '\n' + '}';
+		+ '\t\t\t\t.findAndReplaceValue(removeEvent.userEmail)\n\t\t);\n\t}\n\n}';
 
 	/** A three-link chain 152 columns wide flat. */
-	private static final LONG_CHAIN_SRC: String = 'class LongChainSample {\n' + '\n' + '\tprivate function run():Void {\n'
+	private static final LONG_CHAIN_SRC: String = 'class LongChainSample {\n\n\tprivate function run():Void {\n'
 		+ '\t\tfinal outcome:String = fetchRecords(sourceHandle).mapEachEntry(entryMapperFn).filterOutEmpty(predicateHandle).joinWithComma(separatorValueName);\n'
-		+ '\t}\n' + '\n' + '}';
+		+ '\t}\n\n}';
 
 	/** Same chain broken: the head line ends at the receiver, every link on its own continuation line. */
-	private static final LONG_CHAIN_EXP: String = 'class LongChainSample {\n' + '\n' + '\tprivate function run():Void {\n'
-		+ '\t\tfinal outcome:String = fetchRecords(sourceHandle)\n' + '\t\t\t.mapEachEntry(entryMapperFn)\n'
-		+ '\t\t\t.filterOutEmpty(predicateHandle)\n' + '\t\t\t.joinWithComma(separatorValueName);\n' + '\t}\n' + '\n' + '}';
+	private static final LONG_CHAIN_EXP: String = 'class LongChainSample {\n\n\tprivate function run():Void {\n'
+		+ '\t\tfinal outcome:String = fetchRecords(sourceHandle)\n\t\t\t.mapEachEntry(entryMapperFn)\n'
+		+ '\t\t\t.filterOutEmpty(predicateHandle)\n\t\t\t.joinWithComma(separatorValueName);\n\t}\n\n}';
 
 	/** CONTROL: a two-link chain that fits (104 columns) -- byte-inert under the policy. */
-	private static final SHORT_CHAIN: String = 'class ShortChainSample {\n' + '\n' + '\tprivate function run():Void {\n'
-		+ '\t\tfinal joined:String = fetchRecords(sourceHandle).mapEachEntry(entryMapperFn).joinWithComma(sep);\n' + '\t}\n' + '\n' + '}';
+	private static final SHORT_CHAIN: String = 'class ShortChainSample {\n\n\tprivate function run():Void {\n'
+		+ '\t\tfinal joined:String = fetchRecords(sourceHandle).mapEachEntry(entryMapperFn).joinWithComma(sep);\n\t}\n\n}';
 
 	/** A broken chain whose last link follows a multi-line lambda argument's closing brace. */
-	private static final CUDDLE_SRC: String = 'class CuddleSample {\n' + '\n' + '\tprivate function run():Void {\n'
+	private static final CUDDLE_SRC: String = 'class CuddleSample {\n\n\tprivate function run():Void {\n'
 		+ '\t\tremoteClient.second(plainArgumentValueName).third(anotherPlainArgumentValueName).fourth((r:ResponsePayload) -> {\n'
-		+ '\t\t\thandleResult(r);\n' + '\t\t}).fifth(yetAnotherPlainArgumentValue);\n' + '\t}\n' + '\n' + '}';
+		+ '\t\t\thandleResult(r);\n\t\t}).fifth(yetAnotherPlainArgumentValue);\n\t}\n\n}';
 
 
 	/** A chain whose head is a bare IDENT, wide enough (161 columns flat) that the tail cannot fit after it. */
-	private static final IDENT_HEAD_SRC: String = 'class TweenSample {\n' + '\n' + '\tprivate function run():Void {\n'
+	private static final IDENT_HEAD_SRC: String = 'class TweenSample {\n\n\tprivate function run():Void {\n'
 		+ '\t\tActuate.tween(_progressBarShape, TRANSITION_DURATION, { x: 0, alpha: 1 }).ease(Quad.easeInOut).onUpdate(progressUpdateHandler).onComplete(finishHandler);\n'
-		+ '\t}\n' + '\n' + '}';
+		+ '\t}\n\n}';
 
 	/** Same chain: `.tween(...)`'s dot follows `Actuate`, not a `)`, so it is not a chain item and stays with the head. */
-	private static final IDENT_HEAD_EXP: String = 'class TweenSample {\n' + '\n' + '\tprivate function run():Void {\n'
-		+ '\t\tActuate.tween(_progressBarShape, TRANSITION_DURATION, { x: 0, alpha: 1 })\n' + '\t\t\t.ease(Quad.easeInOut)\n'
-		+ '\t\t\t.onUpdate(progressUpdateHandler)\n' + '\t\t\t.onComplete(finishHandler);\n' + '\t}\n' + '\n' + '}';
+	private static final IDENT_HEAD_EXP: String = 'class TweenSample {\n\n\tprivate function run():Void {\n'
+		+ '\t\tActuate.tween(_progressBarShape, TRANSITION_DURATION, { x: 0, alpha: 1 })\n\t\t\t.ease(Quad.easeInOut)\n'
+		+ '\t\t\t.onUpdate(progressUpdateHandler)\n\t\t\t.onComplete(finishHandler);\n\t}\n\n}';
 
 	public function new(): Void {
 		super();

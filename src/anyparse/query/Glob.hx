@@ -1,5 +1,7 @@
 package anyparse.query;
 
+using StringTools;
+
 #if (sys || nodejs)
 import sys.FileSystem;
 #end
@@ -152,7 +154,7 @@ final class Glob {
 					} else {
 						buf.add('[');
 						final body: String = spec.substr(i + 1, end - i - 1);
-						buf.add(StringTools.startsWith(body, '!') ? '^${body.substr(1)}' : body);
+						buf.add(body.startsWith('!') ? '^${body.substr(1)}' : body);
 						buf.add(']');
 						i = end + 1;
 					}

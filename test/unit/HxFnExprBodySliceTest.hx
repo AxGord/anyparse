@@ -108,15 +108,15 @@ class HxFnExprBodySliceTest extends HxTestHelpers {
 
 	// ======== Round-trip ========
 
-	public function testRoundTripExprBodyClass(): Void {
+	public inline function testRoundTripExprBodyClass(): Void {
 		roundTrip('class Main {\n\tstatic function main() trace("foo");\n}');
 	}
 
-	public function testRoundTripExprBodyToplevel(): Void {
+	public inline function testRoundTripExprBodyToplevel(): Void {
 		roundTrip('function f() trace("hi");');
 	}
 
-	public function testRoundTripBlockBodyUnaffected(): Void {
+	public inline function testRoundTripBlockBodyUnaffected(): Void {
 		// Sanity: BlockBody round-trip is preserved by the writer's gate
 		// extension — `lcSep` still emitted for the brace-bearing ctor.
 		roundTrip('class C {\n\tfunction f() {\n\t\ttrace("x");\n\t}\n}');
@@ -148,8 +148,8 @@ class HxFnExprBodySliceTest extends HxTestHelpers {
 	public function testClassMemberExprBodyNoSemiMixed(): Void {
 		// The exact issue_83 input: a `{}`-bodied member followed by a
 		// no-`;` expr-bodied member as the last member before `}`.
-		final src: String =
-			'class Main {\n\tpublic static function main() {\n\t\t[1, 2, 3].map(function() trace(i));\n\t}\n\tpublic static function main2() [1, 2, 3].map(function() trace(i))\n}';
+		final src: String = 'class Main {\n\tpublic static function main() {\n\t\t[1, 2, 3].map(function() trace(i));\n\t}\n'
+			+ '\tpublic static function main2() [1, 2, 3].map(function() trace(i))\n}';
 		final ast: HxModule = HaxeModuleParser.parse(src);
 		Assert.equals(1, ast.decls.length);
 		final cls: HxClassDecl = expectClassDecl(ast.decls[0]);

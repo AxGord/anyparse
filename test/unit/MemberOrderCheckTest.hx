@@ -11,6 +11,9 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 import anyparse.query.RefactorSupport;
 
+using Lambda;
+using StringTools;
+
 /**
  * The `member-order` check: a type whose members are not in canonical order
  * (constants, fields, constructor, methods; public before private) is flagged
@@ -93,8 +96,8 @@ class MemberOrderCheckTest extends Test {
 
 	/** A side-effecting static const reorders past INSTANCE fields — independent init phase (the ParseError.backtrack case). */
 	public function testCrossPhaseStaticReorders(): Void {
-		final src: String =
-			'class C {\n\tpublic var x:Int = 0;\n\n\tpublic function m():Void {}\n\n\tpublic static final K:Int = make();\n\n\tstatic function make():Int {\n\t\treturn 1;\n\t}\n}';
+		final src: String = 'class C {\n\tpublic var x:Int = 0;\n\n\tpublic function m():Void {}\n\n\tpublic static final K:Int = make();\n'
+			+ '\n\tstatic function make():Int {\n\t\treturn 1;\n\t}\n}';
 		final fixed: String = fixedSource(src);
 		Assert.isTrue(fixed.indexOf('static final K') < fixed.indexOf('var x'), 'static const moved before instance field: $fixed');
 	}
@@ -111,7 +114,8 @@ class MemberOrderCheckTest extends Test {
 	/** A `#if X` nested in another `#if X` (the Cli shape) collapses to one block — the members stay together. */
 	public function testNestedSameConditionCoalesces(): Void {
 		final fixed: String = fixedSource(
-			'class C {\n\t#if SYS\n\tpublic function a():Void {}\n\n\t#if SYS\n\tpublic function b():Void {}\n\t#end\n\t#end\n\n\tpublic var x:Int = 0;\n}'
+			'class C {\n\t#if SYS\n\tpublic function a():Void {}\n\n\t#if SYS\n\tpublic function b():Void {}\n\t#end\n\t#end\n\n'
+			+ '\tpublic var x:Int = 0;\n}'
 		);
 		final between: String = fixed.substring(fixed.indexOf('function a'), fixed.indexOf('function b'));
 		Assert.isTrue(between.indexOf('#if') < 0 && between.indexOf('#end') < 0, 'a and b share one coalesced #if SYS block: $fixed');
@@ -122,7 +126,8 @@ class MemberOrderCheckTest extends Test {
 	/** Differently-guarded nesting flattens to a parenthesised conjunction the grammar's `#if` accepts. */
 	public function testNestedDifferentConditionConjunction(): Void {
 		final fixed: String = fixedSource(
-			'class C {\n\t#if A\n\tpublic function a():Void {}\n\n\t#if B\n\tpublic function b():Void {}\n\t#end\n\t#end\n\n\tpublic var x:Int = 0;\n}'
+			'class C {\n\t#if A\n\tpublic function a():Void {}\n\n\t#if B\n\tpublic function b():Void {}\n\t#end\n\t#end\n\n'
+			+ '\tpublic var x:Int = 0;\n}'
 		);
 		Assert.isTrue(fixed.indexOf('#if ((A) && (B))') >= 0, 'nested different conds become a parenthesised conjunction: $fixed');
 		Assert.isTrue(fixed.indexOf('((A) && (B))') < fixed.indexOf('function b'), 'b is under the conjunction: $fixed');
@@ -131,8 +136,8 @@ class MemberOrderCheckTest extends Test {
 
 	/** A branched conditional travels to its section end as ONE unit - the `#else` is regenerated, not flattened away. */
 	public function testConditionalElseBlockMovesToSectionEnd(): Void {
-		final src: String =
-			'class C {\n\t#if X\n\tpublic function a():Void {}\n\t#else\n\tpublic function b():Void {}\n\t#end\n\n\tpublic var x:Int = 0;\n}';
+		final src: String = 'class C {\n\t#if X\n\tpublic function a():Void {}\n\t#else\n\tpublic function b():Void {}\n\t#end\n\n'
+			+ '\tpublic var x:Int = 0;\n}';
 		Assert.isTrue(violations(src).length > 0);
 		final fixed: String = fixedSource(src);
 		Assert.isTrue(fixed.indexOf('var x') < fixed.indexOf('#if X'), 'the field moved ahead of the whole guarded block: $fixed');
@@ -167,15 +172,14 @@ class MemberOrderCheckTest extends Test {
 	 */
 	public function testElseBranchResetsOrder(): Void {
 		final src: String = 'class C {\n\t#if (sys || nodejs)\n\tpublic function real():Void {}\n\n'
-			+ '\tprivate static function fixture():Int { return 1; }\n' + '\t#else\n' + '\tpublic function stub():Void {}\n' + '\t#end\n'
-			+ '}';
+			+ '\tprivate static function fixture():Int { return 1; }\n\t#else\n\tpublic function stub():Void {}\n\t#end\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
 	/** Disorder WITHIN one conditional branch is still flagged. */
 	public function testDisorderInsideBranchStillFlagged(): Void {
 		final src: String = 'class C {\n\t#if (sys || nodejs)\n\tprivate static function fixture():Int { return 1; }\n'
-			+ '\tpublic function real():Void {}\n' + '\t#end\n' + '}';
+			+ '\tpublic function real():Void {}\n\t#end\n}';
 		Assert.equals(1, violations(src).length);
 	}
 
@@ -189,9 +193,7 @@ class MemberOrderCheckTest extends Test {
 		final mLine: Null<String> = memberLine(fixed, 'function m');
 		Assert.isTrue(areaLine != null && areaLine.indexOf('abstract') >= 0, 'abstract stays attached to area: $fixed');
 		Assert.isTrue(mLine != null && mLine.indexOf('abstract') < 0, 'm never gains a stray abstract: $fixed');
-		Assert.isFalse(
-			Lambda.exists(fixed.split('\n'), line -> StringTools.trim(line) == 'abstract'), 'no orphaned bare abstract line: $fixed'
-		);
+		Assert.isFalse(fixed.split('\n').exists(line -> StringTools.trim(line) == 'abstract'), 'no orphaned bare abstract line: $fixed');
 	}
 
 	/** (b) A `@:access` / `@:meta` on its own line above a member must MOVE WITH that member during reorder, staying immediately before it. */
@@ -208,9 +210,8 @@ class MemberOrderCheckTest extends Test {
 
 	/** (c) Fixer output must be checker-canonical: a class with abstract accessors + a public abstract method must be flag-free after ONE fix pass. */
 	public function testAbstractAccessorFixConverges(): Void {
-		final src: String = 'abstract class C {\n\tpublic var x:Int;\n\tpublic function new() {}\n'
-			+ '\tabstract function get_x():Int;\n\tabstract function set_x(v:Int):Int;\n'
-			+ '\tfunction handler():Void {}\n\tabstract public function process():Void;\n}';
+		final src: String = 'abstract class C {\n\tpublic var x:Int;\n\tpublic function new() {}\n\tabstract function get_x():Int;\n'
+			+ '\tabstract function set_x(v:Int):Int;\n\tfunction handler():Void {}\n\tabstract public function process():Void;\n}';
 		Assert.isTrue(violations(src).length > 0, 'initial disorder flagged');
 		final fixed: String = fixedSource(src);
 		Assert.isTrue(parses(fixed), 'reordered output parses: $fixed');
@@ -235,8 +236,8 @@ class MemberOrderCheckTest extends Test {
 
 	/** Property fields sort before `final`, which sorts before plain `var`. */
 	public function testPropertiesBeforeFinalBeforeVar(): Void {
-		final src: String =
-			'class C {\n\tpublic var v:Int;\n\tpublic final f:Int = 0;\n\tpublic var g(get, never):Int;\n\tpublic var ro(default, null):Int;\n}';
+		final src: String = 'class C {\n\tpublic var v:Int;\n\tpublic final f:Int = 0;\n\tpublic var g(get, never):Int;\n'
+			+ '\tpublic var ro(default, null):Int;\n}';
 		Assert.equals(
 			'class C {\n\tpublic var ro(default, null):Int;\n\npublic var g(get, never):Int;\n\npublic final f:Int = 0;\n\npublic var v:Int;\n}',
 			fixedSource(src)
@@ -305,8 +306,8 @@ class MemberOrderCheckTest extends Test {
 
 	/** A reorder involving a doc-commented member converges through the PRODUCTION canonicalization: the writer re-inserts the blank after the doc-commented slot, and the check must accept it. */
 	public function testDocPredecessorFixConvergesCanonical(): Void {
-		final src: String =
-			'class C {\n\tpublic function m():Void {}\n\n\t/** doc */\n\tpublic static final A:Int = 0;\n\n\tpublic static final B:Int = 0;\n}';
+		final src: String = 'class C {\n\tpublic function m():Void {}\n\n\t/** doc */\n\tpublic static final A:Int = 0;\n\n'
+			+ '\tpublic static final B:Int = 0;\n}';
 		Assert.isTrue(violations(src).length > 0, 'order violation flagged');
 		final fixed: String = canonicalizedFix(src);
 		Assert.equals(0, violations(fixed).length, 'converges through writeRoundTrip: $fixed');
@@ -322,8 +323,8 @@ class MemberOrderCheckTest extends Test {
 
 	/** Two `#if X` field blocks (a final and a var, split by plain fields) merge into ONE block at the field-section end, final before var, blank-separated. */
 	public function testConditionalFieldBlockMergesFinalThenVar(): Void {
-		final src: String =
-			'class C {\n\tpublic final a:Int = 0;\n\n\t#if X\n\tprivate final g1:Int = 0;\n\t#end\n\n\tprivate var b:Int = 0;\n\n\t#if X\n\tprivate var g2:Int = 0;\n\t#end\n\n\tpublic function new() {}\n}';
+		final src: String = 'class C {\n\tpublic final a:Int = 0;\n\n\t#if X\n\tprivate final g1:Int = 0;\n\t#end\n\n'
+			+ '\tprivate var b:Int = 0;\n\n\t#if X\n\tprivate var g2:Int = 0;\n\t#end\n\n\tpublic function new() {}\n}';
 		Assert.isTrue(violations(src).length > 0, 'unmerged conditional blocks flagged');
 		final fixed: String = fixedSource(src);
 		final between: String = fixed.substring(fixed.indexOf('g1'), fixed.indexOf('g2'));
@@ -337,8 +338,8 @@ class MemberOrderCheckTest extends Test {
 
 	/** Two distinct conditions form two SEPARATE `#if` blocks at the section end, ordered by first occurrence, each blank-separated. */
 	public function testTwoDistinctConditionBlocks(): Void {
-		final src: String =
-			'class C {\n\t#if A\n\tpublic function fa():Void {}\n\t#end\n\n\t#if B\n\tpublic function fb():Void {}\n\t#end\n\n\tpublic var x:Int = 0;\n}';
+		final src: String = 'class C {\n\t#if A\n\tpublic function fa():Void {}\n\t#end\n\n\t#if B\n\tpublic function fb():Void {}\n'
+			+ '\t#end\n\n\tpublic var x:Int = 0;\n}';
 		Assert.isTrue(violations(src).length > 0, 'field-after-methods flagged');
 		final fixed: String = fixedSource(src);
 		Assert.isTrue(fixed.indexOf('x:Int') < fixed.indexOf('#if A'), 'field before the conditional method blocks: $fixed');
@@ -350,11 +351,13 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges: $fixed');
 	}
 
-	/** A conditional block with an `#else` between member slots is exempt from the new grouping - the whole container bails, the block never moves. */
-	/** A guarded method mixed among plain methods moves to the END of the methods section (unconditional methods first). */
+	/**
+	 * A conditional block with an `#else` between member slots is exempt from the new grouping - the whole container bails, the block never moves.
+	 * A guarded method mixed among plain methods moves to the END of the methods section (unconditional methods first).
+	 */
 	public function testGuardedMethodsGoToMethodsSectionEnd(): Void {
-		final src: String =
-			'class C {\n\tpublic var x:Int = 0;\n\n\t#if DEBUG\n\tpublic function dbg():Void {}\n\t#end\n\n\tpublic function a():Void {}\n\n\tpublic function b():Void {}\n}';
+		final src: String = 'class C {\n\tpublic var x:Int = 0;\n\n\t#if DEBUG\n\tpublic function dbg():Void {}\n\t#end\n\n'
+			+ '\tpublic function a():Void {}\n\n\tpublic function b():Void {}\n}';
 		Assert.isTrue(violations(src).length > 0, 'conditional method before plain methods flagged');
 		final fixed: String = fixedSource(src);
 		Assert.isTrue(fixed.indexOf('function a') < fixed.indexOf('#if DEBUG'), 'plain methods before the conditional block: $fixed');
@@ -389,8 +392,8 @@ class MemberOrderCheckTest extends Test {
 	 * report-only advisory.
 	 */
 	public function testUnsafeReorderDegradesToSpacingOnly(): Void {
-		final src: String =
-			'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
+		final src: String = 'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n'
+			+ '\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
 		assertOrderAdvisoryOnly(violations(src));
 		Assert.equals(
 			'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}',
@@ -407,8 +410,8 @@ class MemberOrderCheckTest extends Test {
 	 * spacing policy apply over the original member order.
 	 */
 	public function testUnsafeReorderCollapsesStrayBlankWithinGroup(): Void {
-		final src: String =
-			'class C {\n\tpublic var a:Int;\n\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
+		final src: String = 'class C {\n\tpublic var a:Int;\n\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n'
+			+ '\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
 		assertOrderAdvisoryOnly(violations(src));
 		Assert.equals(
 			'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}',
@@ -423,8 +426,8 @@ class MemberOrderCheckTest extends Test {
 	 * is disabled there too, so such an edit could never converge.
 	 */
 	public function testUnsafeReorderStrayGapEmitsNoSpacingEdits(): Void {
-		final src: String =
-			'class C {\n\tpublic var a:Int;\n\t;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
+		final src: String = 'class C {\n\tpublic var a:Int;\n\t;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n'
+			+ '\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
 		assertOrderAdvisoryOnly(violations(src));
 		Assert.equals(0, edits(src).length);
 	}
@@ -456,8 +459,8 @@ class MemberOrderCheckTest extends Test {
 	 * and converges through the production canonicalization.
 	 */
 	public function testMovableArglessNewReordersUnderOption(): Void {
-		final src: String =
-			'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
+		final src: String = 'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n'
+			+ '\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
 		final fixed: String = fixedSource(src, movableArglessNewResolver());
 		Assert.isTrue(fixed.indexOf('final t') < fixed.indexOf('var a'), 'argless-new final moved before the vars: $fixed');
 		Assert.isTrue(parses(fixed), 'reordered output parses: $fixed');
@@ -470,8 +473,8 @@ class MemberOrderCheckTest extends Test {
 	 * `final t = new T()` container degrades to spacing-only edits, its order untouched.
 	 */
 	public function testMovableArglessNewOffByteIdentical(): Void {
-		final src: String =
-			'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
+		final src: String = 'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n'
+			+ '\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
 		Assert.equals(
 			'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}',
 			fixedSource(src)
@@ -562,78 +565,6 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges through writeRoundTrip');
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new MemberOrder().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
-	private function edits(src: String, ?resolve: (String) -> LintConfig): Array<{ span: Span, text: String }> {
-		final check: MemberOrder = new MemberOrder();
-		if (resolve != null) check.setConfigResolver(resolve);
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
-	}
-
-	private function fixedSource(src: String, ?resolve: (String) -> LintConfig): String {
-		final sorted: Array<{ span: Span, text: String }> = edits(src, resolve).copy();
-		sorted.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
-	}
-
-	/** A config resolver that enables the opt-in `movableArglessNew` member-order option for every file. */
-	private function movableArglessNewResolver(): (String) -> LintConfig {
-		final cfg: LintConfig = LintConfig.parse('{"rules": {"member-order": {"movableArglessNew": true}}}');
-		return _ -> cfg;
-	}
-
-	/** Whether `src` parses — used to assert a conditional-reorder rebuild round-trips through the parse gate `canonicalize` applies (which `fixedSource`'s raw splice skips). */
-	private function parses(src: String): Bool {
-		return try {
-			new HaxeQueryPlugin().parseFile(src);
-			true;
-		} catch (exception: haxe.Exception) false;
-	}
-
-	/**
-	 * The single member line containing `needle`, or null - lets an assertion
-	 * inspect one member's own modifiers without the class header's `abstract`
-	 * keyword or a sibling member polluting a naive whole-source substring scan.
-	 */
-	private function memberLine(src: String, needle: String): Null<String>
-		return Lambda.find(src.split('\n'), line -> line.indexOf(needle) >= 0);
-
-	/**
-	 * Apply the check's fix edits and run the result through the production
-	 * canonicalization (splice + `writeRoundTrip`) - the seam `fixedSource`'s raw
-	 * splice skips, which is exactly where a writer-reinserted blank line can undo
-	 * a naive spacing fix.
-	 */
-	private function canonicalizedFix(src: String, ?resolve: (String) -> LintConfig): String {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final check: MemberOrder = new MemberOrder();
-		if (resolve != null) check.setConfigResolver(resolve);
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
-		return switch RefactorSupport.canonicalize(src, check.fix(src, vs, plugin), true, plugin) {
-			case Ok(text): text;
-			case Err(message):
-				Assert.fail(message);
-				src;
-		};
-	}
-
-	/**
-	 * Asserts `vs` is exactly the one canonical-order Info (the advisory the
-	 * spacing-only fallback leaves report-only), with no spacing finding alongside.
-	 */
-	private function assertOrderAdvisoryOnly(vs: Array<Violation>): Void {
-		Assert.equals(1, vs.length);
-		Assert.equals(
-			'type members are not in canonical order (constants, fields, constructor, methods; public before private)', vs[0].message
-		);
-	}
-
-
 	/**
 	 * A conditional with an `#else` reorders like any other guarded block: the whole
 	 * `#if`/`#else`/`#end` travels to its section end with each branch keeping its own
@@ -650,7 +581,6 @@ class MemberOrderCheckTest extends Test {
 		Assert.isTrue(fixed.indexOf('#else') < fixed.indexOf('var b'), 'else-branch member stays in the else branch: $fixed');
 		Assert.isTrue(parses(fixed), 'parses: $fixed');
 	}
-
 
 	/**
 	 * The `APIRequest2` shape: one `#else` mid-class must not degrade the whole container to
@@ -669,7 +599,6 @@ class MemberOrderCheckTest extends Test {
 		Assert.isTrue(parses(fixed), 'parses: $fixed');
 	}
 
-
 	/** Three branches (`#if` / `#elseif` / `#else`, the IAPStore shape) all survive the move, each directive regenerated in order. */
 	public function testElseIfBranchesReorder(): Void {
 		final src: String = 'class C {\n\tpublic function m():Void {}\n\n\t#if ios\n\tstatic final K:String = "a";\n'
@@ -687,8 +616,8 @@ class MemberOrderCheckTest extends Test {
 
 	/** A conditional NESTED inside a branch is not modelled - the construct is refused and the container keeps its order. */
 	public function testNestedConditionalInsideBranchBails(): Void {
-		final src: String =
-			'class C {\n\tpublic function m():Void {}\n\n\t#if X\n\t#if Y\n\tpublic var a:Int = 0;\n\t#end\n\t#else\n\tpublic var b:Int = 0;\n\t#end\n}';
+		final src: String = 'class C {\n\tpublic function m():Void {}\n\n\t#if X\n\t#if Y\n\tpublic var a:Int = 0;\n\t#end\n\t#else\n'
+			+ '\tpublic var b:Int = 0;\n\t#end\n}';
 		Assert.isTrue(violations(src).length > 0, 'field-after-method still flagged');
 		Assert.equals(0, edits(src).length, 'nested conditional inside a branch bails');
 	}
@@ -698,8 +627,8 @@ class MemberOrderCheckTest extends Test {
 	 * split one `#if` into two, or emit a branch with no members. Both stay out of scope.
 	 */
 	public function testElseSpanningTwoSectionsSplits(): Void {
-		final src: String =
-			'class C {\n\tpublic function m():Void {}\n\n\t#if X\n\tpublic var a:Int = 0;\n\t#else\n\tpublic function b():Void {}\n\t#end\n}';
+		final src: String = 'class C {\n\tpublic function m():Void {}\n\n\t#if X\n\tpublic var a:Int = 0;\n\t#else\n'
+			+ '\tpublic function b():Void {}\n\t#end\n}';
 		final fixed: String = fixedSource(src);
 		Assert.isTrue(fixed.indexOf('var a') < fixed.indexOf('function m'), 'the guarded FIELD leads, in its own block: $fixed');
 		Assert.isTrue(fixed.indexOf('function m') < fixed.indexOf('function b'), 'the guarded METHOD trails the plain one: $fixed');
@@ -740,7 +669,6 @@ class MemberOrderCheckTest extends Test {
 		Assert.isTrue(outerElse < fixed.indexOf('function b'), 'b stays in the else branch: $fixed');
 		Assert.isTrue(parses(fixed), 'parses - counting the body directives as branches breaks the rebuild: $fixed');
 	}
-
 
 	/**
 	 * A doc written above a BRANCHED `#if` describes the whole construct - every branch declares
@@ -849,7 +777,6 @@ class MemberOrderCheckTest extends Test {
 		);
 	}
 
-
 	/**
 	 * A note on the `#end` line pins the block and bails the reorder. The conditional region
 	 * ends right after `#end`, so that comment sits OUTSIDE it: moving the block would leave
@@ -870,8 +797,8 @@ class MemberOrderCheckTest extends Test {
 	 * `hasOrphanComment` even with the gate reverted.
 	 */
 	public function testDirectiveLineCommentPinsBlock(): Void {
-		final src: String = 'class C {\n\tpublic final a:S;\n\n\tprivate var p:Int = 0;\n'
-			+ '\n\t#if X // why\n\tpublic var g:Int = 0;\n\t#end\n}';
+		final src: String =
+			'class C {\n\tpublic final a:S;\n\n\tprivate var p:Int = 0;\n\n\t#if X // why\n\tpublic var g:Int = 0;\n\t#end\n}';
 		Assert.equals(0, violations(src).length, 'the pinned block leaves the container canonical: $src');
 		Assert.equals(0, edits(src).length, 'no edit can drop the note');
 	}
@@ -908,6 +835,75 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, edits(src).length, 'no edit can reverse the read');
 	}
 
+	private function violations(src: String): Array<Violation> {
+		return new MemberOrder().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	private function edits(src: String, ?resolve: (String) -> LintConfig): Array<{ span: Span, text: String }> {
+		final check: MemberOrder = new MemberOrder();
+		if (resolve != null) check.setConfigResolver(resolve);
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		return check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+	}
+
+	private function fixedSource(src: String, ?resolve: (String) -> LintConfig): String {
+		final sorted: Array<{ span: Span, text: String }> = edits(src, resolve).copy();
+		sorted.sort((a, b) -> b.span.from - a.span.from);
+		var out: String = src;
+		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
+		return out;
+	}
+
+	/** A config resolver that enables the opt-in `movableArglessNew` member-order option for every file. */
+	private function movableArglessNewResolver(): (String) -> LintConfig {
+		final cfg: LintConfig = LintConfig.parse('{"rules": {"member-order": {"movableArglessNew": true}}}');
+		return _ -> cfg;
+	}
+
+	/** Whether `src` parses — used to assert a conditional-reorder rebuild round-trips through the parse gate `canonicalize` applies (which `fixedSource`'s raw splice skips). */
+	private function parses(src: String): Bool {
+		return try {
+			new HaxeQueryPlugin().parseFile(src);
+			true;
+		} catch (exception: haxe.Exception) false;
+	}
+
+	/**
+	 * The single member line containing `needle`, or null - lets an assertion
+	 * inspect one member's own modifiers without the class header's `abstract`
+	 * keyword or a sibling member polluting a naive whole-source substring scan.
+	 */
+	private function memberLine(src: String, needle: String): Null<String> return src.split('\n').find(line -> line.indexOf(needle) >= 0);
+
+	/**
+	 * Apply the check's fix edits and run the result through the production
+	 * canonicalization (splice + `writeRoundTrip`) - the seam `fixedSource`'s raw
+	 * splice skips, which is exactly where a writer-reinserted blank line can undo
+	 * a naive spacing fix.
+	 */
+	private function canonicalizedFix(src: String, ?resolve: (String) -> LintConfig): String {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: MemberOrder = new MemberOrder();
+		if (resolve != null) check.setConfigResolver(resolve);
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
+		return switch RefactorSupport.canonicalize(src, check.fix(src, vs, plugin), true, plugin) {
+			case Ok(text): text;
+			case Err(message):
+				Assert.fail(message);
+				src;
+		};
+	}
+
+	/**
+	 * Asserts `vs` is exactly the one canonical-order Info (the advisory the
+	 * spacing-only fallback leaves report-only), with no spacing finding alongside.
+	 */
+	private function assertOrderAdvisoryOnly(vs: Array<Violation>): Void {
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'type members are not in canonical order (constants, fields, constructor, methods; public before private)', vs[0].message
+		);
+	}
 
 	/** The `Main.iapStore` shape: a single-rank guarded `public var` written behind the private instance field it outranks. */
 	private inline function contentRankedBlockSource(): String {

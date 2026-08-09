@@ -74,22 +74,6 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		collectTypeRefRules();
 	}
 
-	/** Generated walk-function name for a rule type path (`anyparse.grammar.haxe.HxExpr` to `_walkHxExprS`). */
-	public static inline function walkFnName(typePath: String): String {
-		return '_walk${PairedShapeLowering.simpleName(typePath)}S';
-	}
-
-	/** Generated name-resolution function name for a rule type path. */
-	public static inline function nameFnName(typePath: String): String {
-		return '_nameOf${PairedShapeLowering.simpleName(typePath)}S';
-	}
-
-	/** Generated type-ref projection function name for a rule type path. */
-	public static inline function typeRefsFnName(typePath: String): String {
-		return '_typeRefs${PairedShapeLowering.simpleName(typePath)}S';
-	}
-
-
 	/**
 	 * Build every generated function: one `_walk` and one `_nameOf` per
 	 * non-Terminal rule, one `_typeRefs` per rule reachable from a `type` field,
@@ -145,7 +129,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 */
 	private function collectTypeRefRules(): Void {
 		final seeds: Array<String> = [];
-		for (_ => node in _shape.rules) for (child in node.children) {
+		for (node in _shape.rules) for (child in node.children) {
 			// An Alt's children are ctors, whose own children are the args.
 			final args: Array<ShapeNode> = node.kind == Alt ? child.children : [child];
 			for (arg in args) if (fieldNameOf(arg) == 'type') {
@@ -191,7 +175,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 * whose span is the ctor's own trailing `_span` arg.
 	 */
 	private function walkCase(rule: String, branch: ShapeNode): Case {
-		final ctor: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
+		final ctor: String = branch.annotations[AnnotationKeys.BASE_CTOR];
 		final argNames: Array<String> = [for (i in 0...branch.children.length) '_a$i'];
 		final pattern: Expr = ctorPattern(rule, ctor, argNames);
 
@@ -298,7 +282,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	private inline function descendCore(child: ShapeNode, access: Expr, intoName: String, depth: Int): Array<Expr> {
 		return switch child.kind {
 			case Ref:
-				final ref: String = child.annotations.get(AnnotationKeys.BASE_REF);
+				final ref: String = child.annotations[AnnotationKeys.BASE_REF];
 				isTerminalRule(ref) ? [] : [call(walkFnName(ref), [access, ident(intoName), ident('withTypeRefs')])];
 			case Star:
 				final loopVar: String = '_e$depth';
@@ -321,9 +305,14 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 */
 	private function nameOfValue(child: ShapeNode, access: Expr): Null<Expr> {
 		final ref: Null<String> = refOf(child);
-		if (ref == null) return null;
-		if (isStringTerminal(ref)) return macro ($access: String);
-		return isTerminalRule(ref) ? null : call(nameFnName(ref), [access]);
+		return if (ref == null)
+			null
+		else if (isStringTerminal(ref))
+			macro ($access: String)
+		else if (isTerminalRule(ref))
+			null
+		else
+			call(nameFnName(ref), [access]);
 	}
 
 	/** Fold candidate name expressions into `a ?? b ?? ... ?? null`, dropping the ones that can never yield a name. */
@@ -397,7 +386,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 
 	/** `case Ctor(...): return <first non-null arg name>;` for a wrapper ctor, `case Ctor(...):` (fall to null) otherwise. */
 	private function nameCase(rule: String, branch: ShapeNode): Case {
-		final ctor: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
+		final ctor: String = branch.annotations[AnnotationKeys.BASE_CTOR];
 		final argNames: Array<String> = [for (i in 0...branch.children.length) '_a$i'];
 		final pattern: Expr = ctorPattern(rule, ctor, NAME_UNWRAP_CTORS.contains(ctor) ? argNames : [for (_ in argNames) '_']);
 		if (!NAME_UNWRAP_CTORS.contains(ctor)) return { values: [pattern], expr: macro {} };
@@ -448,7 +437,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 * `_span` is the node position, replacing the caller's `fallbackSpan`.
 	 */
 	private function typeRefsCase(rule: String, branch: ShapeNode): Case {
-		final ctor: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
+		final ctor: String = branch.annotations[AnnotationKeys.BASE_CTOR];
 		final argNames: Array<String> = [for (i in 0...branch.children.length) '_a$i'];
 
 		if (ctor == ANON_CTOR) return { values: [ctorPattern(rule, ctor, [for (_ in argNames) '_'])], expr: macro {} };
@@ -499,7 +488,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	private inline function typeRefsDescendCore(child: ShapeNode, access: Expr, depth: Int): Array<Expr> {
 		return switch child.kind {
 			case Ref:
-				final ref: String = child.annotations.get(AnnotationKeys.BASE_REF);
+				final ref: String = child.annotations[AnnotationKeys.BASE_REF];
 				_typeRefRules.contains(ref) ? [call(typeRefsFnName(ref), [access, ident('into'), ident('_s')])] : [];
 			case Star:
 				final loopVar: String = '_r$depth';
@@ -522,6 +511,21 @@ class QueryWalkerLowering extends PairedShapeLowering {
 			for (arg in child.children) visit(arg);
 		}
 		return out;
+	}
+
+	/** Generated walk-function name for a rule type path (`anyparse.grammar.haxe.HxExpr` to `_walkHxExprS`). */
+	public static inline function walkFnName(typePath: String): String {
+		return '_walk${PairedShapeLowering.simpleName(typePath)}S';
+	}
+
+	/** Generated name-resolution function name for a rule type path. */
+	public static inline function nameFnName(typePath: String): String {
+		return '_nameOf${PairedShapeLowering.simpleName(typePath)}S';
+	}
+
+	/** Generated type-ref projection function name for a rule type path. */
+	public static inline function typeRefsFnName(typePath: String): String {
+		return '_typeRefs${PairedShapeLowering.simpleName(typePath)}S';
 	}
 
 }

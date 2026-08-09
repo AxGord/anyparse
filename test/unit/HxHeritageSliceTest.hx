@@ -124,8 +124,7 @@ class HxHeritageSliceTest extends HxTestHelpers {
 	private function isExtends(clause: HxHeritageClause): Bool {
 		return switch clause {
 			case ExtendsClause(_): true;
-			case ImplementsClause(_): false;
-			case Conditional(_): false;
+			case ImplementsClause(_), Conditional(_): false;
 		};
 	}
 

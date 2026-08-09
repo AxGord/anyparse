@@ -69,7 +69,8 @@ class HxConditionalTypeSliceTest extends HxTestHelpers {
 
 	public function testConditionalTypedefCorpusForm(): Void {
 		final module: HxModule = HaxeModuleParser.parse(
-			'typedef ChildProcessExecCallback = #if (haxe_ver >= 4) (error : Null<ChildProcessExecError>, stdout : EitherType<Buffer, String>, \nstderr : EitherType<Buffer, String>) -> Void; #else Null<ChildProcessExecError>->EitherType<Buffer, String>->EitherType<Buffer, String>->Void; #end'
+			'typedef ChildProcessExecCallback = #if (haxe_ver >= 4) (error : Null<ChildProcessExecError>, stdout : EitherType<Buffer, String>, \n'
+			+ 'stderr : EitherType<Buffer, String>) -> Void; #else Null<ChildProcessExecError>->EitherType<Buffer, String>->EitherType<Buffer, String>->Void; #end'
 		);
 		Assert.equals(1, module.decls.length);
 		final td: HxTypedefDecl = expectTypedefDecl(module.decls[0]);
@@ -80,9 +81,10 @@ class HxConditionalTypeSliceTest extends HxTestHelpers {
 
 	// -- Idempotency on the corpus form --
 
-	public function testConditionalTypedefRoundTrip(): Void {
+	public inline function testConditionalTypedefRoundTrip(): Void {
 		roundTrip(
-			'typedef ChildProcessExecCallback = #if (haxe_ver >= 4) (error : Null<ChildProcessExecError>, stdout : EitherType<Buffer, String>, \nstderr : EitherType<Buffer, String>) -> Void; #else Null<ChildProcessExecError>->EitherType<Buffer, String>->EitherType<Buffer, String>->Void; #end'
+			'typedef ChildProcessExecCallback = #if (haxe_ver >= 4) (error : Null<ChildProcessExecError>, stdout : EitherType<Buffer, String>, \n'
+			+ 'stderr : EitherType<Buffer, String>) -> Void; #else Null<ChildProcessExecError>->EitherType<Buffer, String>->EitherType<Buffer, String>->Void; #end'
 		);
 	}
 

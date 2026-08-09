@@ -211,7 +211,7 @@ class HxFinalUntypedSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testUntypedAtomRoundTrip(): Void {
+	public inline function testUntypedAtomRoundTrip(): Void {
 		roundTrip('class C { function m():Void { return untyped; } }', 'return untyped;');
 	}
 
@@ -235,7 +235,7 @@ class HxFinalUntypedSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testUntypedBlockStmtRoundTrip(): Void {
+	public inline function testUntypedBlockStmtRoundTrip(): Void {
 		roundTrip('class C { function m():Void { untyped { foo(); } } }', 'untyped { foo(); }');
 	}
 
@@ -253,7 +253,7 @@ class HxFinalUntypedSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testUntypedBlockBodyRoundTrip(): Void {
+	public inline function testUntypedBlockBodyRoundTrip(): Void {
 		roundTrip('class C { function f():Int untyped { return 1; } }', 'untyped fn body');
 	}
 

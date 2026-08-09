@@ -71,10 +71,9 @@ final class Parser {
 	 * success path untouched).
 	 */
 	public function recordFail(failPos: Int, expected: String): Void {
-		if (failPos > maxFailPos) {
-			maxFailPos = failPos;
-			maxFailExpected = expected;
-		}
+		if (failPos <= maxFailPos) return;
+		maxFailPos = failPos;
+		maxFailExpected = expected;
 	}
 
 	private static function alwaysFalse(): Bool {

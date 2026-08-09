@@ -6,7 +6,6 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.Uses;
-import anyparse.query.Uses.UsesHit;
 
 using Lambda;
 

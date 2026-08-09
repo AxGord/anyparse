@@ -4,7 +4,6 @@ import anyparse.check.Check.Violation;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -193,9 +192,12 @@ final class SimplifyBooleanReturnChain implements Check {
 	 * other statement carries an evaluation that flattening the chain would drop.
 	 */
 	private static function boolReturnOf(node: QueryNode, c: Ctx): Null<QueryNode> {
-		return isBoolReturn(node, c)
-			? node
-			: c.blockKinds.contains(node.kind) && node.children.length == 1 && isBoolReturn(node.children[0], c) ? node.children[0] : null;
+		return if (isBoolReturn(node, c))
+			node
+		else if (c.blockKinds.contains(node.kind) && node.children.length == 1 && isBoolReturn(node.children[0], c))
+			node.children[0]
+		else
+			null;
 	}
 
 }

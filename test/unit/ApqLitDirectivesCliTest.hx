@@ -23,8 +23,8 @@ import sys.FileSystem;
 class ApqLitDirectivesCliTest extends Test {
 
 	/** A region per shape: a single flag, a compound condition, an `#elseif` chain and an `#end`. */
-	private static final SRC: String =
-		'class C {\n\tfunction f():Void {\n\t\t#if (sys)\n\t\tg();\n\t\t#elseif (cpp && debug)\n\t\th();\n\t\t#else\n\t\ti();\n\t\t#end\n\t}\n}';
+	private static final SRC: String = 'class C {\n\tfunction f():Void {\n\t\t#if (sys)\n\t\tg();\n\t\t#elseif (cpp && debug)\n\t\th();\n'
+		+ '\t\t#else\n\t\ti();\n\t\t#end\n\t}\n}';
 
 	public function testIncludeDirectivesFindsIfCondition(): Void {
 		#if (sys || nodejs)

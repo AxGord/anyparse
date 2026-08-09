@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -133,7 +132,12 @@ final class ListenerSymmetry implements Check {
 	 * plurality is preserved.
 	 */
 	private static function twinOf(name: String, cfg: ListenerCfg): Null<String> {
-		return cfg.addRe.match(name) ? 'remove${cfg.addRe.matched(1)}' : cfg.removeRe.match(name) ? 'add${cfg.removeRe.matched(1)}' : null;
+		return if (cfg.addRe.match(name))
+			'remove${cfg.addRe.matched(1)}'
+		else if (cfg.removeRe.match(name))
+			'add${cfg.removeRe.matched(1)}'
+		else
+			null;
 	}
 
 	/**

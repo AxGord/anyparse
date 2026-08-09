@@ -28,38 +28,41 @@ final class HxThinArrowTrailingLambdaSliceTest extends Test {
 	}
 
 	public function testMultiArgTrailingThinBlockLambdaGluesHead(): Void {
-		final src: String =
-			'class C {\n\tfunction test() {\n\t\tmanager.registerHandler(HandlerKind.PRIMARY, HandlerScope.GLOBAL, result -> {\n\t\t\tprocess(result);\n\t\t});\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n'
+			+ '\t\tmanager.registerHandler(HandlerKind.PRIMARY, HandlerScope.GLOBAL, result -> {\n\t\t\tprocess(result);\n'
+			+ '\t\t});\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testMultiArgTrailingParenBlockLambdaStaysGlued(): Void {
-		final src: String =
-			'class C {\n\tfunction test() {\n\t\tmanager.registerHandler(HandlerKind.PRIMARY, HandlerScope.GLOBAL, (result) -> {\n\t\t\tprocess(result);\n\t\t});\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n'
+			+ '\t\tmanager.registerHandler(HandlerKind.PRIMARY, HandlerScope.GLOBAL, (result) -> {\n\t\t\tprocess(result);\n'
+			+ '\t\t});\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testMultiArgLambdaFirstThenArgGluesHead(): Void {
-		final src: String =
-			'class C {\n\tfunction test() {\n\t\tmanager.invokeHandlerCallback((resultValue) -> {\n\t\t\tprocess(resultValue);\n\t\t}, secondCallbackArg);\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n\t\tmanager.invokeHandlerCallback((resultValue) -> {\n'
+			+ '\t\t\tprocess(resultValue);\n\t\t}, secondCallbackArg);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testMultiArgLambdaInMiddleGluesHead(): Void {
-		final src: String =
-			'class C {\n\tfunction test() {\n\t\tmanager.invokeHandlerCallback(leadingArgValue, (resultValue) -> {\n\t\t\tprocess(resultValue);\n\t\t}, trailingArgValue);\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n\t\tmanager.invokeHandlerCallback(leadingArgValue, (resultValue) -> {\n'
+			+ '\t\t\tprocess(resultValue);\n\t\t}, trailingArgValue);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testMultiArgTwoBlockLambdasGlueHead(): Void {
-		final src: String =
-			'class C {\n\tfunction test() {\n\t\tmanager.invokeHandlerCallback((alphaValue) -> {\n\t\t\tstepAlpha(alphaValue);\n\t\t}, (bravoValue) -> {\n\t\t\tstepBravo(bravoValue);\n\t\t});\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n\t\tmanager.invokeHandlerCallback((alphaValue) -> {\n'
+			+ '\t\t\tstepAlpha(alphaValue);\n\t\t}, (bravoValue) -> {\n\t\t\tstepBravo(bravoValue);\n\t\t});\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testMultiArgNoLambdaStillLeadingBreaks(): Void {
-		final src: String =
-			'class C {\n\tfunction test() {\n\t\tmanager.invokeHandlerCallback(\n\t\t\targumentAlphaLongValueHere, argumentBravoLongValueHere, argumentCharlieLongValueHere, argDeltaEpsilonZetaValue\n\t\t);\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n\t\tmanager.invokeHandlerCallback(\n'
+			+ '\t\t\targumentAlphaLongValueHere, argumentBravoLongValueHere, argumentCharlieLongValueHere, argDeltaEpsilonZetaValue\n'
+			+ '\t\t);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

@@ -2,12 +2,12 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -452,11 +452,11 @@ final class PreferSafeNavComparison implements Check {
 		if (node.kind == s.identKind) return node.name;
 		final span: Null<Span> = node.span;
 		if (span == null) return null;
-		final text: String = StringTools.trim(source.substring(span.from, span.to));
+		final text: String = source.substring(span.from, span.to).trim();
 		final self: Null<String> = s.selfText;
 		if (self == null) return text;
 		final prefix: String = '$self.';
-		return StringTools.startsWith(text, prefix) ? StringTools.trim(text.substr(prefix.length)) : text;
+		return text.startsWith(prefix) ? text.substr(prefix.length).trim() : text;
 	}
 
 	/**

@@ -6,6 +6,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * A `new`-expression's written type: the verbatim text and whether it carries
  * explicit `<...>` type parameters — `writtenNewType`'s result.
@@ -118,7 +120,7 @@ final class LiteralInfer {
 		final eq: Int = prefix.lastIndexOf('=');
 		if (eq < 0) return -1;
 		var pos: Int = span.from + eq;
-		while (pos > span.from && StringTools.isSpace(source, pos - 1)) pos--;
+		while (pos > span.from && source.isSpace(pos - 1)) pos--;
 		return pos;
 	}
 
@@ -134,17 +136,17 @@ final class LiteralInfer {
 		if (span == null) return null;
 		final full: String = source.substring(span.from, span.to);
 		var i: Int = 3;
-		while (i < full.length && StringTools.isSpace(full, i)) i++;
+		while (i < full.length && full.isSpace(i)) i++;
 		final typeStart: Int = i;
 		var depth: Int = 0;
 		while (i < full.length) {
-			switch StringTools.fastCodeAt(full, i) {
+			switch full.fastCodeAt(i) {
 				case '('.code if (depth == 0):
-					final bare: String = StringTools.rtrim(full.substring(typeStart, i));
+					final bare: String = full.substring(typeStart, i).rtrim();
 					return bare == '' ? null : { written: bare, generic: false };
 				case '<'.code:
 					depth++;
-				case '>'.code if (StringTools.fastCodeAt(full, i - 1) != '-'.code):
+				case '>'.code if (full.fastCodeAt(i - 1) != '-'.code):
 					depth--;
 					if (depth == 0) return { written: full.substring(typeStart, i + 1), generic: true };
 				case _:

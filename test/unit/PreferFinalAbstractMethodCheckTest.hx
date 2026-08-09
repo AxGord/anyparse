@@ -7,7 +7,6 @@ import anyparse.check.PreferFinal;
 import anyparse.check.PreferFinalField;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.query.CachingGrammarPlugin.LibrarySources;
 
 /**
  * A `var` of an `abstract` type mutated through a method that reassigns `this`

@@ -27,10 +27,11 @@ final class HxCallGroupRestProbeNestedArgTest extends Test {
 	}
 
 	public function testInnerArgCallStaysFlat(): Void {
-		final glued: String =
-			"class C {\n\tprivate final _widget:Widget = new Widget(w('SampleCaption', 207), StyleFactory.buildDefaultTextFormat(), 64, 20, Palette.PANEL_BG_GREY);\n}";
-		final wrapped: String =
-			"class C {\n\tprivate final _widget:Widget = new Widget(\n\t\tw('SampleCaption', 207), StyleFactory.buildDefaultTextFormat(), 64, 20, Palette.PANEL_BG_GREY\n\t);\n}";
+		final glued: String = 'class C {\n'
+			+ "\tprivate final _widget:Widget = new Widget(w('SampleCaption', 207), StyleFactory.buildDefaultTextFormat(), 64, 20, Palette.PANEL_BG_GREY);\n"
+			+ '}';
+		final wrapped: String = 'class C {\n\tprivate final _widget:Widget = new Widget(\n'
+			+ "\t\tw('SampleCaption', 207), StyleFactory.buildDefaultTextFormat(), 64, 20, Palette.PANEL_BG_GREY\n\t);\n}";
 		final out: String = triviaWrite(glued);
 		Assert.equals(wrapped, out);
 		Assert.equals(wrapped, triviaWrite(wrapped));

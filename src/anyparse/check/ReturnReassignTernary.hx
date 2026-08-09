@@ -4,12 +4,9 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
-import anyparse.query.Refs.RefHit;
-import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
@@ -151,16 +148,16 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) for (m in matchesIn(entry.source, plugin, seams)) violations.push({
-			file: entry.file,
-			span: m.ifSpan,
-			rule: RULE_ID,
-			severity: Severity.Info,
-			message: m.text == null ? MSG_COMMENT : MSG_FIXABLE
-		});
-		return violations;
+		return seams == null ? [] : [
+			for (entry in files) for (m in matchesIn(entry.source, plugin, seams))
+				{
+					file: entry.file,
+					span: m.ifSpan,
+					rule: RULE_ID,
+					severity: Severity.Info,
+					message: m.text == null ? MSG_COMMENT : MSG_FIXABLE
+				}
+		];
 	}
 
 	public function fix(
@@ -379,7 +376,7 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 
 	/** Whether `span` is nested inside any lambda span in `lambdaSpans` -- i.e. a captured reference. */
 	private static function capturedByNestedFn(span: Span, binding: Span, fnSpans: Array<Span>): Bool {
-		for (fs in fnSpans) if (fs.from <= span.from && span.to <= fs.to && !(fs.from <= binding.from && binding.to <= fs.to)) return true;
+		for (fs in fnSpans) if (fs.from <= span.from && span.to <= fs.to && (fs.from > binding.from || binding.to > fs.to)) return true;
 		return false;
 	}
 

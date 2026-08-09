@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -145,7 +144,7 @@ final class PreferBind implements Check {
 			if (argSpan == null) return null;
 			args.push(source.substring(argSpan.from, argSpan.to));
 		}
-		return '$callee.bind(' + args.join(', ') + ')';
+		return '$callee.bind(${args.join(', ')})';
 	}
 
 

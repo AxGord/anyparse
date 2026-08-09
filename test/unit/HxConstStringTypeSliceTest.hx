@@ -47,17 +47,17 @@ class HxConstStringTypeSliceTest extends HxTestHelpers {
 		Assert.equals('Int', (expectNamedType(inner.params[0].type).name: String));
 	}
 
-	public function testRoundTripIssue39(): Void {
+	public inline function testRoundTripIssue39(): Void {
 		// Exact issue_39 fixture body — full corpus driver.
 		roundTrip('abstract Tls<T>(hl.Abstract<"hl_tls">) {}', 'issue_39-string-typeparam');
 	}
 
-	public function testRoundTripEscapeSequence(): Void {
+	public inline function testRoundTripEscapeSequence(): Void {
 		// `@:rawString` keeps escape sequences verbatim, no decode/re-encode.
 		roundTrip('abstract Tls<T>(hl.Abstract<"a\\nb">) {}', 'const-string-with-escape');
 	}
 
-	public function testRoundTripMultipleParams(): Void {
+	public inline function testRoundTripMultipleParams(): Void {
 		// Const-string alongside a regular named type-param.
 		roundTrip('class Foo { var x:Map<"key", Int>; }', 'const-string-with-named-sibling');
 	}

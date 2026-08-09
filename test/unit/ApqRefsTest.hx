@@ -6,10 +6,9 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
-import anyparse.query.Refs.RefHit;
-import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -42,8 +41,8 @@ class ApqRefsTest extends Test {
 	 * swallowed the second arm's reads as well.
 	 */
 	public function testCaseArmLocalsAreDistinctBindings(): Void {
-		final src: String = 'class X { static function f(v:Int) { switch v { case 0: var n:Int = 1; trace(n); '
-			+ 'case _: var n:Int = 2; trace(n); } } }';
+		final src: String =
+			'class X { static function f(v:Int) { switch v { case 0: var n:Int = 1; trace(n); case _: var n:Int = 2; trace(n); } } }';
 		final hits: Array<RefHit> = findIn(src, 'n');
 		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
 		Assert.equals(2, decls.length);
@@ -60,8 +59,8 @@ class ApqRefsTest extends Test {
 
 	/** A member read OUTSIDE the switch is not captured by an arm's same-named local. */
 	public function testCaseArmLocalDoesNotCaptureFieldReadAfterSwitch(): Void {
-		final src: String = 'class X { var n:Int = 0; function f(v:Int) { switch v { case 0: var n:Int = 1; trace(n); '
-			+ 'case _: } trace(n); } }';
+		final src: String =
+			'class X { var n:Int = 0; function f(v:Int) { switch v { case 0: var n:Int = 1; trace(n); case _: } trace(n); } }';
 		final hits: Array<RefHit> = findIn(src, 'n');
 		final armDecl: Null<RefHit> = hits.find(h -> h.kind == RefKind.Decl && h.span.from > src.indexOf('switch'));
 		Assert.notNull(armDecl);
@@ -78,7 +77,7 @@ class ApqRefsTest extends Test {
 	 * LOOKS like a per-arm declaration and assuming so costs a wrong blast-radius estimate.
 	 */
 	public function testEnumPatternBindingIsNotADeclaration(): Void {
-		final src: String = 'class X { static function f(v:Opt) { switch v { case Some(x): trace(x); ' + 'case Other(x): trace(x); } } }';
+		final src: String = 'class X { static function f(v:Opt) { switch v { case Some(x): trace(x); case Other(x): trace(x); } } }';
 		final hits: Array<RefHit> = findIn(src, 'x');
 		Assert.equals(4, hits.length);
 		Assert.equals(0, hits.filter(h -> h.kind == RefKind.Decl).length);
@@ -242,10 +241,9 @@ class ApqRefsTest extends Test {
 		final iterDecl: RefHit = decls[1];
 		final boundTo: Null<Span> = reads[0].bindingSpan;
 		Assert.notNull(boundTo);
-		if (boundTo != null) {
-			Assert.equals(iterDecl.span.from, boundTo.from, 'inner read binds to the iterator, not the outer var');
-			Assert.notEquals(outerDecl.span.from, boundTo.from, 'inner read must NOT bind to the shadowed outer var');
-		}
+		if (boundTo == null) return;
+		Assert.equals(iterDecl.span.from, boundTo.from, 'inner read binds to the iterator, not the outer var');
+		Assert.notEquals(outerDecl.span.from, boundTo.from, 'inner read must NOT bind to the shadowed outer var');
 	}
 
 	public function testForComprehensionIterBinds(): Void {
@@ -294,10 +292,9 @@ class ApqRefsTest extends Test {
 		final clauseDecl: RefHit = decls[1];
 		final boundTo: Null<Span> = reads[0].bindingSpan;
 		Assert.notNull(boundTo);
-		if (boundTo != null) {
-			Assert.equals(clauseDecl.span.from, boundTo.from, 'inner read binds to the exception, not the outer var');
-			Assert.notEquals(outerDecl.span.from, boundTo.from, 'inner read must NOT bind to the shadowed outer var');
-		}
+		if (boundTo == null) return;
+		Assert.equals(clauseDecl.span.from, boundTo.from, 'inner read binds to the exception, not the outer var');
+		Assert.notEquals(outerDecl.span.from, boundTo.from, 'inner read must NOT bind to the shadowed outer var');
 	}
 
 	public function testCatchExceptionFallsThroughAfter(): Void {
@@ -364,10 +361,9 @@ class ApqRefsTest extends Test {
 		final paramDecl: RefHit = decls[1];
 		final boundTo: Null<Span> = reads[0].bindingSpan;
 		Assert.notNull(boundTo);
-		if (boundTo != null) {
-			Assert.equals(paramDecl.span.from, boundTo.from, 'inner read binds to the lambda parameter, not the outer var');
-			Assert.notEquals(outerDecl.span.from, boundTo.from, 'inner read must NOT bind to the shadowed outer var');
-		}
+		if (boundTo == null) return;
+		Assert.equals(paramDecl.span.from, boundTo.from, 'inner read binds to the lambda parameter, not the outer var');
+		Assert.notEquals(outerDecl.span.from, boundTo.from, 'inner read must NOT bind to the shadowed outer var');
 	}
 
 	public function testClassFieldResolvedFromMethodBody(): Void {
@@ -507,7 +503,7 @@ class ApqRefsTest extends Test {
 	 * bound to the FIRST one's param before `LocalFnStmt` joined
 	 * `scopeKinds` / `declHostKinds`.
 	 */
-	public function testSiblingLocalFnParamsDoNotCrossBind(): Void {
+	public inline function testSiblingLocalFnParamsDoNotCrossBind(): Void {
 		assertSiblingParamsDoNotCrossBind('function');
 	}
 
@@ -518,17 +514,17 @@ class ApqRefsTest extends Test {
 	 * sibling inline helpers collected into the ENCLOSING function's single frame, so the second
 	 * one's read of `p` bound to the FIRST one's declaration.
 	 */
-	public function testSiblingLocalInlineFnParamsDoNotCrossBind(): Void {
+	public inline function testSiblingLocalInlineFnParamsDoNotCrossBind(): Void {
 		assertSiblingParamsDoNotCrossBind('inline function');
 	}
 
 	/** A local fn's name is a Decl visible from the enclosing body (calls bind to it). */
-	public function testLocalFnNameIsDecl(): Void {
+	public inline function testLocalFnNameIsDecl(): Void {
 		assertLocalFnNameIsDecl('function');
 	}
 
 	/** A local `inline function`'s name is a Decl visible from the enclosing body, exactly as the plain form's is. */
-	public function testLocalInlineFnNameIsDecl(): Void {
+	public inline function testLocalInlineFnNameIsDecl(): Void {
 		assertLocalFnNameIsDecl('inline function');
 	}
 
@@ -608,83 +604,6 @@ class ApqRefsTest extends Test {
 		Assert.equals(0, skippedIn('class B {\n\tfunction g():Void {\n\t\tfinal v:Int = 1;\n\t\ttrace(v);\n\t}\n}\n', 'v'));
 	}
 
-	private static function findIn(source: String, name: String): Array<RefHit> {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final tree: QueryNode = plugin.parseFile(source);
-		final shape: RefShape = plugin.refShape();
-		return Refs.find(name, tree, shape);
-	}
-
-	private static function findWithSkippedIn(source: String, name: String): { hits: Array<RefHit>, skipped: Int } {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return Refs.findWithSkipped(name, plugin.parseFile(source), plugin.refShape());
-	}
-
-	private static function skippedIn(source: String, name: String): Int {
-		return findWithSkippedIn(source, name).skipped;
-	}
-
-	private static function describe(hits: Array<RefHit>): String {
-		return '[' + hits.map(h -> {
-			final base: String = '${h.kind.toString()}${h.interpolated ? '(interp)' : ''}:${h.name}@${h.span.from}-${h.span.to}';
-			final b: Null<Span> = h.bindingSpan;
-			return b == null ? base : '$base->bind@${b.from}-${b.to}';
-		}).join(', ') + ']';
-	}
-
-	/** 0-based-agnostic line index of a byte offset in `s` — fixture-local helper. */
-	private static function lineOf(s: String, from: Int): Int {
-		var line: Int = 0;
-		for (i in 0...from) if (StringTools.fastCodeAt(s, i) == '\n'.code) line++;
-		return line;
-	}
-
-
-	/**
-	 * Two sibling local functions declared with `keyword` bind their same-named parameters
-	 * separately. Shared by the plain and the `inline` form: the grammar gives them different
-	 * ctors (`LocalFnStmt` / `LocalInlineFnStmt`) but identical binding semantics, and every
-	 * `RefShape` seam that lists one must list the other.
-	 */
-	private function assertSiblingParamsDoNotCrossBind(keyword: String): Void {
-		final source: String = 'class X { static function outer() {\n\t$keyword a(p:Int):Int { return p; }\n'
-			+ '\t$keyword b(p:String):String { return p; }\n' + '} }';
-		final hits: Array<RefHit> = findIn(source, 'p');
-		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
-		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
-		Assert.equals(2, decls.length, 'two param decls expected, got ${describe(hits)}');
-		Assert.equals(2, reads.length, 'two reads expected, got ${describe(hits)}');
-		for (r in reads) {
-			final binding: Null<Span> = r.bindingSpan;
-			Assert.notNull(binding, 'read must resolve to a binding');
-			// Each read binds to the decl of ITS OWN function: the read's span
-			// sits on the same fixture line as its binding (fixture is one
-			// local fn per line).
-			if (binding == null) continue;
-			final sameLine: Bool = lineOf(source, r.span.from) == lineOf(source, binding.from);
-			Assert.isTrue(sameLine, 'read at ${r.span.from} bound across sibling $keyword decls (binding ${binding.from})');
-		}
-	}
-
-	/** A local function declared with `keyword` binds its own name into the ENCLOSING body, so the call site resolves to it. */
-	private function assertLocalFnNameIsDecl(keyword: String): Void {
-		final source: String = 'class X { static function outer() {\n\t$keyword helper():Void {}\n\thelper();\n} }';
-		final hits: Array<RefHit> = findIn(source, 'helper');
-		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
-		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
-		Assert.equals(1, decls.length, '$keyword decl expected, got ${describe(hits)}');
-		Assert.equals(1, reads.length, 'call-site read expected, got ${describe(hits)}');
-		if (decls.length != 1 || reads.length != 1) return;
-		// The call sits OUTSIDE the declaration's span, so it resolves only if the name binds into the
-		// ENCLOSING frame. Counting the two hits is not enough: moving the kind from `declHostKinds` to
-		// `selfScopeDeclKinds` - the swap `RefShape`'s contract forbids - still emits a Decl and a Read,
-		// and only this assertion fails (measured: it is the sole failing mark of this test under that
-		// mutation). Adding the kind to `selfScopeDeclKinds` while it STAYS a decl host is a no-op, since
-		// the parent frame's decl-host collection binds the name there either way.
-		Assert.equals(decls[0].span.from, reads[0].bindingSpan?.from, 'the call must bind to the $keyword declaration');
-	}
-
-
 	/**
 	 * The VALUE binder of a key-value `for (k => v in m)` is its own decl. The loop node
 	 * names only the KEY, so `v` used to have no declaration node at all: the body read
@@ -705,10 +624,9 @@ class ApqRefsTest extends Test {
 		Assert.notNull(outerRead);
 		Assert.notNull(bodyRead);
 		if (outerRead != null) Assert.equals(outerDecl.span.from, outerRead.from, 'the pre-loop read keeps the outer binding');
-		if (bodyRead != null) {
-			Assert.equals(binderDecl.span.from, bodyRead.from, 'the body read binds to the value binder');
-			Assert.notEquals(outerDecl.span.from, bodyRead.from, 'the body read must NOT bind to the shadowed outer var');
-		}
+		if (bodyRead == null) return;
+		Assert.equals(binderDecl.span.from, bodyRead.from, 'the body read binds to the value binder');
+		Assert.notEquals(outerDecl.span.from, bodyRead.from, 'the body read must NOT bind to the shadowed outer var');
 	}
 
 	/**
@@ -727,7 +645,6 @@ class ApqRefsTest extends Test {
 		Assert.notNull(boundTo);
 		if (boundTo != null) Assert.equals(decls[0].span.from, boundTo.from, 'comprehension read binds to the value binder');
 	}
-
 
 	/**
 	 * A braceless `$name` inside a single-quoted string is a READ bound to the enclosing
@@ -821,6 +738,81 @@ class ApqRefsTest extends Test {
 		final reads: Array<RefHit> = findIn(source, 'n').filter(h -> h.kind == RefKind.Read);
 		Assert.equals(1, reads.length, 'the rescanned `\\x24n` is a read');
 		Assert.isTrue(reads[0].interpolated);
+	}
+
+	/**
+	 * Two sibling local functions declared with `keyword` bind their same-named parameters
+	 * separately. Shared by the plain and the `inline` form: the grammar gives them different
+	 * ctors (`LocalFnStmt` / `LocalInlineFnStmt`) but identical binding semantics, and every
+	 * `RefShape` seam that lists one must list the other.
+	 */
+	private function assertSiblingParamsDoNotCrossBind(keyword: String): Void {
+		final source: String =
+			'class X { static function outer() {\n\t$keyword a(p:Int):Int { return p; }\n\t$keyword b(p:String):String { return p; }\n} }';
+		final hits: Array<RefHit> = findIn(source, 'p');
+		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(2, decls.length, 'two param decls expected, got ${describe(hits)}');
+		Assert.equals(2, reads.length, 'two reads expected, got ${describe(hits)}');
+		for (r in reads) {
+			final binding: Null<Span> = r.bindingSpan;
+			Assert.notNull(binding, 'read must resolve to a binding');
+			// Each read binds to the decl of ITS OWN function: the read's span
+			// sits on the same fixture line as its binding (fixture is one
+			// local fn per line).
+			if (binding == null) continue;
+			final sameLine: Bool = lineOf(source, r.span.from) == lineOf(source, binding.from);
+			Assert.isTrue(sameLine, 'read at ${r.span.from} bound across sibling $keyword decls (binding ${binding.from})');
+		}
+	}
+
+	/** A local function declared with `keyword` binds its own name into the ENCLOSING body, so the call site resolves to it. */
+	private function assertLocalFnNameIsDecl(keyword: String): Void {
+		final source: String = 'class X { static function outer() {\n\t$keyword helper():Void {}\n\thelper();\n} }';
+		final hits: Array<RefHit> = findIn(source, 'helper');
+		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(1, decls.length, '$keyword decl expected, got ${describe(hits)}');
+		Assert.equals(1, reads.length, 'call-site read expected, got ${describe(hits)}');
+		if (decls.length != 1 || reads.length != 1) return;
+		// The call sits OUTSIDE the declaration's span, so it resolves only if the name binds into the
+		// ENCLOSING frame. Counting the two hits is not enough: moving the kind from `declHostKinds` to
+		// `selfScopeDeclKinds` - the swap `RefShape`'s contract forbids - still emits a Decl and a Read,
+		// and only this assertion fails (measured: it is the sole failing mark of this test under that
+		// mutation). Adding the kind to `selfScopeDeclKinds` while it STAYS a decl host is a no-op, since
+		// the parent frame's decl-host collection binds the name there either way.
+		Assert.equals(decls[0].span.from, reads[0].bindingSpan?.from, 'the call must bind to the $keyword declaration');
+	}
+
+	private static function findIn(source: String, name: String): Array<RefHit> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(source);
+		final shape: RefShape = plugin.refShape();
+		return Refs.find(name, tree, shape);
+	}
+
+	private static function findWithSkippedIn(source: String, name: String): { hits: Array<RefHit>, skipped: Int } {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		return Refs.findWithSkipped(name, plugin.parseFile(source), plugin.refShape());
+	}
+
+	private static function skippedIn(source: String, name: String): Int {
+		return findWithSkippedIn(source, name).skipped;
+	}
+
+	private static function describe(hits: Array<RefHit>): String {
+		return '[' + hits.map(h -> {
+			final base: String = '${h.kind.toString()}${h.interpolated ? '(interp)' : ''}:${h.name}@${h.span.from}-${h.span.to}';
+			final b: Null<Span> = h.bindingSpan;
+			return b == null ? base : '$base->bind@${b.from}-${b.to}';
+		}).join(', ') + ']';
+	}
+
+	/** 0-based-agnostic line index of a byte offset in `s` — fixture-local helper. */
+	private static function lineOf(s: String, from: Int): Int {
+		var line: Int = 0;
+		for (i in 0...from) if (s.fastCodeAt(i) == '\n'.code) line++;
+		return line;
 	}
 
 }

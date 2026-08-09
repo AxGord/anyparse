@@ -127,7 +127,8 @@ final class RemoveParam {
 
 		final isMethod: Bool = decl.kind != 'LocalFnStmt';
 		final advisory: Null<String> = isMethod
-			? 'removed the parameter and updated ${result.callSites} in-file call site(s); if "$name" is called from other files, update those call sites too — cross-file resolution is out of scope'
+			? 'removed the parameter and updated ${result.callSites} in-file call site(s); if "$name'
+				+ '" is called from other files, update those call sites too — cross-file resolution is out of scope'
 			: null;
 		return Ok(rewritten, advisory);
 	}
@@ -172,14 +173,13 @@ final class RemoveParam {
 
 		for (call in callSites) {
 			final argc: Int = call.children.length - 1;
-			if (argc != n) {
-				final at: String = CallSites.posOf(source, call.span);
-				return {
-					edits: [],
-					error: 'call at $at has $argc args, expected $n — remove-param cannot update calls with omitted optional arguments',
-					callSites: 0
-				};
-			}
+			if (argc == n) continue;
+			final at: String = CallSites.posOf(source, call.span);
+			return {
+				edits: [],
+				error: 'call at $at has $argc args, expected $n — remove-param cannot update calls with omitted optional arguments',
+				callSites: 0
+			};
 		}
 
 		final edits: Array<{ span: Span, text: String }> = [];

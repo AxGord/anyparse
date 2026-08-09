@@ -2,6 +2,8 @@ package anyparse.query;
 
 import anyparse.query.Pattern.KindEquivalence;
 
+using StringTools;
+
 /**
  * Parsed `--select` path expression.
  *
@@ -44,9 +46,9 @@ final class Selector {
 			segments.push(parseSegment(trimmed, descendant));
 		}
 		while (i < source.length) {
-			if (StringTools.fastCodeAt(source, i) == '>'.code) {
+			if (source.fastCodeAt(i) == '>'.code) {
 				pushSegment(i);
-				final double: Bool = i + 1 < source.length && StringTools.fastCodeAt(source, i + 1) == '>'.code;
+				final double: Bool = i + 1 < source.length && source.fastCodeAt(i + 1) == '>'.code;
 				descendant = double;
 				i += double ? 2 : 1;
 				start = i;
@@ -79,15 +81,15 @@ final class Selector {
 	}
 
 	private static function firstWs(s: String): Int {
-		for (i in 0...s.length) if (isWs(StringTools.fastCodeAt(s, i))) return i;
+		for (i in 0...s.length) if (isWs(s.fastCodeAt(i))) return i;
 		return -1;
 	}
 
 	private static function trim(s: String): String {
 		var start: Int = 0;
 		var end: Int = s.length;
-		while (start < end && isWs(StringTools.fastCodeAt(s, start))) start++;
-		while (end > start && isWs(StringTools.fastCodeAt(s, end - 1))) end--;
+		while (start < end && isWs(s.fastCodeAt(start))) start++;
+		while (end > start && isWs(s.fastCodeAt(end - 1))) end--;
 		return s.substring(start, end);
 	}
 

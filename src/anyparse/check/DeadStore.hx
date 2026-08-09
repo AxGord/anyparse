@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -10,6 +9,7 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -189,7 +189,7 @@ final class DeadStore implements Check {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final root: QueryNode = tree;
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final ctx: FixCtx = {
 			source: source,
 			root: root,
@@ -216,7 +216,7 @@ final class DeadStore implements Check {
 		final kind: String = node.kind;
 		if (ctx.mutableDeclKinds.contains(kind) && isFlagged(ctx, node)) {
 			final init: Null<QueryNode> = NullFlow.declInit(node, ctx.declTypeChildKinds);
-			final initSpan: Null<Span> = init != null ? init.span : null;
+			final initSpan: Null<Span> = init?.span;
 			if (
 				init != null && initSpan != null
 				&& rhsSafeToDelete(init, ctx.root, ctx.shape, ctx.declaredTypes, ctx.index, ctx.fieldAccessKind)
@@ -570,10 +570,10 @@ final class DeadStore implements Check {
 	 */
 	private static function initializerStripSpan(source: String, initSpan: Span): Null<Span> {
 		var cut: Int = initSpan.from;
-		while (cut > 0 && isHSpace(StringTools.fastCodeAt(source, cut - 1))) cut--;
-		if (cut == 0 || StringTools.fastCodeAt(source, cut - 1) != '='.code) return null;
+		while (cut > 0 && isHSpace(source.fastCodeAt(cut - 1))) cut--;
+		if (cut == 0 || source.fastCodeAt(cut - 1) != '='.code) return null;
 		cut--;
-		while (cut > 0 && isHSpace(StringTools.fastCodeAt(source, cut - 1))) cut--;
+		while (cut > 0 && isHSpace(source.fastCodeAt(cut - 1))) cut--;
 		return new Span(cut, initSpan.to);
 	}
 

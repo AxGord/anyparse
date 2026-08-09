@@ -5,7 +5,6 @@ import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RemoveParam;
-import anyparse.query.RemoveParam.RemoveParamResult;
 import haxe.Exception;
 
 /**
@@ -41,9 +40,9 @@ class RemoveParamSliceTest extends Test {
 	 */
 	public function testRemoveMiddleMethodWithBareAndThisCalls(): Void {
 		final source: String = 'class C {\n\tpublic function f(a:Int, b:String, c:Int):Void {\n\t\ttrace(a);\n\t}\n'
-			+ '\tpublic function caller():Void {\n' + '\t\tf(1, "x", 3);\n' + '\t\tthis.f(7, "y", 9);\n' + '\t}\n' + '}';
+			+ '\tpublic function caller():Void {\n\t\tf(1, "x", 3);\n\t\tthis.f(7, "y", 9);\n\t}\n}';
 		final expected: String = 'class C {\n\tpublic function f(a:Int, c:Int):Void {\n\t\ttrace(a);\n\t}\n'
-			+ '\tpublic function caller():Void {\n' + '\t\tf(1, 3);\n' + '\t\tthis.f(7, 9);\n' + '\t}\n' + '}';
+			+ '\tpublic function caller():Void {\n\t\tf(1, 3);\n\t\tthis.f(7, 9);\n\t}\n}';
 		// Line 2 col 9 — the method `f` decl, as `apq refs --decls` prints.
 		assertRemove(source, 2, 9, 1, expected, true);
 	}
@@ -54,10 +53,10 @@ class RemoveParamSliceTest extends Test {
 	 * flush against the open paren.
 	 */
 	public function testRemoveFirstParam(): Void {
-		final source: String = 'class C {\n\tpublic function f(a:Int, b:String, c:Int):Void {}\n\tpublic function caller():Void {\n'
-			+ '\t\tf(1, "x", 3);\n' + '\t}\n' + '}';
-		final expected: String = 'class C {\n\tpublic function f(b:String, c:Int):Void {}\n\tpublic function caller():Void {\n'
-			+ '\t\tf("x", 3);\n' + '\t}\n' + '}';
+		final source: String =
+			'class C {\n\tpublic function f(a:Int, b:String, c:Int):Void {}\n\tpublic function caller():Void {\n\t\tf(1, "x", 3);\n\t}\n}';
+		final expected: String =
+			'class C {\n\tpublic function f(b:String, c:Int):Void {}\n\tpublic function caller():Void {\n\t\tf("x", 3);\n\t}\n}';
 		assertRemove(source, 2, 9, 0, expected, true);
 	}
 
@@ -67,10 +66,10 @@ class RemoveParamSliceTest extends Test {
 	 * arguments untouched.
 	 */
 	public function testRemoveLastParam(): Void {
-		final source: String = 'class C {\n\tpublic function f(a:Int, b:String, c:Int):Void {}\n\tpublic function caller():Void {\n'
-			+ '\t\tf(1, "x", 3);\n' + '\t}\n' + '}';
-		final expected: String = 'class C {\n\tpublic function f(a:Int, b:String):Void {}\n\tpublic function caller():Void {\n'
-			+ '\t\tf(1, "x");\n' + '\t}\n' + '}';
+		final source: String =
+			'class C {\n\tpublic function f(a:Int, b:String, c:Int):Void {}\n\tpublic function caller():Void {\n\t\tf(1, "x", 3);\n\t}\n}';
+		final expected: String =
+			'class C {\n\tpublic function f(a:Int, b:String):Void {}\n\tpublic function caller():Void {\n\t\tf(1, "x");\n\t}\n}';
 		assertRemove(source, 2, 9, 2, expected, true);
 	}
 
@@ -79,10 +78,10 @@ class RemoveParamSliceTest extends Test {
 	 * local function cannot escape its file, so the advisory is null.
 	 */
 	public function testRemoveLocalFunctionParam(): Void {
-		final source: String = 'class C {\n\tpublic function run():Void {\n\t\tfunction add(x:Int, y:Int):Int {\n\t\t\treturn x;\n'
-			+ '\t\t}\n' + '\t\tvar r = add(1, 2);\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n\tpublic function run():Void {\n\t\tfunction add(x:Int, y:Int):Int {\n\t\t\treturn x;\n\t\t}\n'
+			+ '\t\tvar r = add(1, 2);\n\t}\n}';
 		final expected: String = 'class C {\n\tpublic function run():Void {\n\t\tfunction add(x:Int):Int {\n\t\t\treturn x;\n\t\t}\n'
-			+ '\t\tvar r = add(1);\n' + '\t}\n' + '}';
+			+ '\t\tvar r = add(1);\n\t}\n}';
 		// Line 3 col 12 — the local function `add` name token; remove `y`.
 		assertRemove(source, 3, 12, 1, expected, false);
 	}
@@ -96,9 +95,9 @@ class RemoveParamSliceTest extends Test {
 	 */
 	public function testRemoveFinalMethodParam(): Void {
 		final source: String = 'class C {\n\tfinal function d(a:Int, b:String, c:Int):Void {\n\t\ttrace(a);\n\t}\n'
-			+ '\tpublic function caller():Void {\n' + '\t\td(1, "x", 3);\n' + '\t\tthis.d(7, "y", 9);\n' + '\t}\n' + '}';
+			+ '\tpublic function caller():Void {\n\t\td(1, "x", 3);\n\t\tthis.d(7, "y", 9);\n\t}\n}';
 		final expected: String = 'class C {\n\tfinal function d(a:Int, c:Int):Void {\n\t\ttrace(a);\n\t}\n'
-			+ '\tpublic function caller():Void {\n' + '\t\td(1, 3);\n' + '\t\tthis.d(7, 9);\n' + '\t}\n' + '}';
+			+ '\tpublic function caller():Void {\n\t\td(1, 3);\n\t\tthis.d(7, 9);\n\t}\n}';
 		// Line 2 col 2 — the `final` method decl, as `apq refs --decls` prints.
 		assertRemove(source, 2, 2, 1, expected, true);
 	}
@@ -165,8 +164,8 @@ class RemoveParamSliceTest extends Test {
 	 * is refused rather than silently leaving its arguments stale.
 	 */
 	public function testRefuseNonThisReceiverCall(): Void {
-		final source: String = 'class C {\n\tpublic function f(a:Int, b:Int):Void {}\n\tpublic function caller(o:C):Void {\n'
-			+ '\t\tf(1, 2);\n' + '\t\to.f(3, 4);\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n\tpublic function f(a:Int, b:Int):Void {}\n\tpublic function caller(o:C):Void {\n\t\tf(1, 2);\n'
+			+ '\t\to.f(3, 4);\n\t}\n}';
 		assertRefused(source, 2, 9, 1);
 	}
 
@@ -179,8 +178,7 @@ class RemoveParamSliceTest extends Test {
 	 */
 	public function testRefuseAmbiguousLocalFunctionName(): Void {
 		final source: String = 'class C {\n\tpublic function run():Void {\n\t\tfunction add(x:Int, y:Int):Int return x;\n'
-			+ '\t\tvar r = add(1, 2);\n' + '\t\t{\n' + '\t\t\tfunction add(p:Int, q:Int):Int return p;\n' + '\t\t\tvar z = add(3, 4);\n'
-			+ '\t\t}\n' + '\t}\n' + '}';
+			+ '\t\tvar r = add(1, 2);\n\t\t{\n\t\t\tfunction add(p:Int, q:Int):Int return p;\n\t\t\tvar z = add(3, 4);\n' + '\t\t}\n\t}\n}';
 		assertRefused(source, 3, 12, 1);
 	}
 
@@ -190,8 +188,8 @@ class RemoveParamSliceTest extends Test {
 	 * removal is refused.
 	 */
 	public function testRefuseArityMismatchCall(): Void {
-		final source: String = 'class C {\n\tpublic function f(a:Int, ?b:Int):Void {}\n\tpublic function caller():Void {\n'
-			+ '\t\tf(1, 2);\n' + '\t\tf(7);\n' + '\t}\n' + '}';
+		final source: String =
+			'class C {\n\tpublic function f(a:Int, ?b:Int):Void {}\n\tpublic function caller():Void {\n\t\tf(1, 2);\n\t\tf(7);\n\t}\n}';
 		assertRefused(source, 2, 9, 0);
 	}
 
@@ -208,8 +206,8 @@ class RemoveParamSliceTest extends Test {
 	 * removal is refused.
 	 */
 	public function testRefuseMethodReferencedAsValue(): Void {
-		final source: String = 'class C {\n\tpublic function f(a:Int, b:Int):Void {}\n\tpublic function caller():Void {\n'
-			+ '\t\tf(1, 2);\n' + '\t\tvar fn = f;\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n\tpublic function f(a:Int, b:Int):Void {}\n\tpublic function caller():Void {\n\t\tf(1, 2);\n'
+			+ '\t\tvar fn = f;\n\t}\n}';
 		assertRefused(source, 2, 9, 1);
 	}
 
@@ -223,7 +221,7 @@ class RemoveParamSliceTest extends Test {
 	 * literal is double-quoted so `$a` is not interpolated at test-compile.
 	 */
 	public function testRefuseParamUsedOnlyInInterpolation(): Void {
-		final source: String = 'class C {\n\tpublic function f(a:Int):Void {\n' + "\t\ttrace('value: $a');\n" + '\t}\n' + '}';
+		final source: String = 'class C {\n\tpublic function f(a:Int):Void {\n\t\ttrace(\'value: $$a\');\n\t}\n}';
 		assertRefused(source, 2, 9, 0);
 	}
 

@@ -30,16 +30,19 @@ final class HxIfExprCondWrapSliceTest extends Test {
 
 	private static final CONFIG: String =
 		'{"wrapping": {"maxLineLength": 140, "opBoolChain": {"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": "itemCount <= n", "value": 3}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "totalItemLength <= n", "value": 120}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"}]}, "conditionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "sameLine": {"ifBody": "fitLine", "expressionIf": "next"}}';
-	private static final EXPLODED: String =
-		'class C {\n\tfunction f() {\n\t\trunWith((alphaArg:AlphaType, betaArg:BetaType) ->\n\t\t\tif (\n\t\t\t\tfoundId == -1 && (excludeId == -1 || betaArg.id != excludeId)\n\t\t\t\t&& (betaArg.title == nameNoExt || alphaArg.file + alphaArg.ext == fileName)\n\t\t\t) {\n\t\t\t\tfoundId = betaArg.id;\n\t\t\t}\n\t\t);\n\t}\n}';
+	private static final EXPLODED: String = 'class C {\n\tfunction f() {\n\t\trunWith((alphaArg:AlphaType, betaArg:BetaType) ->\n'
+		+ '\t\t\tif (\n\t\t\t\tfoundId == -1 && (excludeId == -1 || betaArg.id != excludeId)\n'
+		+ '\t\t\t\t&& (betaArg.title == nameNoExt || alphaArg.file + alphaArg.ext == fileName)\n'
+		+ '\t\t\t) {\n\t\t\t\tfoundId = betaArg.id;\n\t\t\t}\n\t\t);\n\t}\n}';
 
 	public function new(): Void {
 		super();
 	}
 
 	public function testArrowBodyIfOverflowChainExplodesCond(): Void {
-		final flat: String =
-			'class C {\n\tfunction f() {\n\t\trunWith((alphaArg:AlphaType, betaArg:BetaType) -> if (foundId == -1 && (excludeId == -1 || betaArg.id != excludeId) && (betaArg.title == nameNoExt || alphaArg.file + alphaArg.ext == fileName)) {\n\t\t\tfoundId = betaArg.id;\n\t\t});\n\t}\n}';
+		final flat: String = 'class C {\n\tfunction f() {\n'
+			+ '\t\trunWith((alphaArg:AlphaType, betaArg:BetaType) -> if (foundId == -1 && (excludeId == -1 || betaArg.id != excludeId) && (betaArg.title == nameNoExt || alphaArg.file + alphaArg.ext == fileName)) {\n'
+			+ '\t\t\tfoundId = betaArg.id;\n\t\t});\n\t}\n}';
 		Assert.equals(EXPLODED, triviaWrite(flat));
 	}
 

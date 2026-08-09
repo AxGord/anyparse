@@ -277,11 +277,14 @@ final class CrossRenameMember {
 			declCount += n;
 			if (n > 0 && entry.file == cursorFile) declInCursorFile = true;
 		}
-		return declCount == 0
-			? 'no type "$typeName" declared under scope'
-			: declCount > 1
-				? 'type "$typeName" is declared in $declCount files under scope — ambiguous, refusing'
-				: !declInCursorFile ? 'the type "$typeName" at the cursor is not the one declared under scope — refusing' : null;
+		return if (declCount == 0)
+			'no type "$typeName" declared under scope'
+		else if (declCount > 1)
+			'type "$typeName" is declared in $declCount files under scope — ambiguous, refusing'
+		else if (!declInCursorFile)
+			'the type "$typeName" at the cursor is not the one declared under scope — refusing'
+		else
+			null;
 	}
 
 	/**
@@ -415,7 +418,7 @@ final class CrossRenameMember {
 	private static function instanceMemberOffsets(
 		source: String, tree: QueryNode, typeName: String, memberName: String, plugin: GrammarPlugin, refShape: RefShape
 	): LocatedOffsets {
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final declared: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
 		final candidates: Array<{ recv: QueryNode, fa: QueryNode }> = memberAccessCandidates(tree, memberName);
 		if (candidates.length == 0) return { offsets: [], error: null };
@@ -445,7 +448,7 @@ final class CrossRenameMember {
 	private static function receiverBinding(hits: Array<RefHit>, recvFrom: Int): Null<Int> {
 		for (h in hits) if ((h.kind == RefKind.Read || h.kind == RefKind.Write) && h.span.from == recvFrom) {
 			final b: Null<Span> = h.bindingSpan;
-			return b == null ? null : b.from;
+			return b?.from;
 		}
 		return null;
 	}

@@ -64,14 +64,14 @@ class Prefix implements Strategy {
 	public function new() {}
 
 	public function appliesTo(node: ShapeNode): Bool {
-		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
+		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == ':prefix') return true;
 		return false;
 	}
 
 	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {
-		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
+		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return;
 		for (entry in meta) if (entry.name == ':prefix') {
 			if (entry.params.length != 1) {
@@ -83,7 +83,7 @@ class Prefix implements Strategy {
 					Context.fatalError('@:prefix argument must be a string literal', entry.params[0].pos);
 					throw 'unreachable';
 			};
-			node.annotations.set(AnnotationKeys.PREFIX_OP, opText);
+			node.annotations[AnnotationKeys.PREFIX_OP] = opText;
 		}
 	}
 

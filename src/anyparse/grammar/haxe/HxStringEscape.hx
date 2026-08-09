@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+using StringTools;
+
 /**
  * One character a string literal's RAW inner source spells: the `code` Haxe's
  * lexer decodes it to, and the `[from, to)` raw offsets of the spelling that
@@ -109,6 +111,21 @@ final class HxStringEscape {
 		return out;
 	}
 
+	/**
+	 * Whether `code` starts a Haxe identifier (a letter or an underscore) — the test that
+	 * decides whether a `$` begins the `$name` shorthand. Shared with the `$name`
+	 * lookahead in `HaxeStringFoldSupport`: the two ends of one feature must not drift
+	 * apart on what a name is.
+	 */
+	public static function isIdentStart(code: Int): Bool {
+		return code >= 'a'.code && code <= 'z'.code || code >= 'A'.code && code <= 'Z'.code || code == '_'.code;
+	}
+
+	/** Whether `code` continues a Haxe identifier (a letter, a digit, or an underscore). */
+	public static function isIdentContinue(code: Int): Bool {
+		return isIdentStart(code) || code >= '0'.code && code <= '9'.code;
+	}
+
 	/** Whether any decoded character of `raw` is a `$`, counting only escape-spelled ones when `escapedOnly`. */
 	private static function carries(raw: String, escapedOnly: Bool): Bool {
 		var i: Int = 0;
@@ -128,19 +145,22 @@ final class HxStringEscape {
 	 * escape (`\X24`, rejected by the compiler) harmlessly falls back to.
 	 */
 	private static function charAt(raw: String, i: Int): HxDecodedChar {
-		final c: Int = StringTools.fastCodeAt(raw, i);
+		final c: Int = raw.fastCodeAt(i);
 		if (c != BACKSLASH || i + 1 >= raw.length) return { code: c, from: i, to: i + 1 };
 		final body: Int = i + TAG_LENGTH;
-		final tag: Int = StringTools.fastCodeAt(raw, i + 1);
-		if (tag == 'x'.code) return hexEscape(raw, i, body, HEX_DIGITS);
-		if (tag == 'u'.code)
-			return body < raw.length && StringTools.fastCodeAt(raw, body) == '{'.code
-				? bracedEscape(raw, i)
-				: hexEscape(raw, i, body, UNICODE_DIGITS);
-		if (tag == 'n'.code) return { code: '\n'.code, from: i, to: body };
-		if (tag == 'r'.code) return { code: '\r'.code, from: i, to: body };
-		if (tag == 't'.code) return { code: '\t'.code, from: i, to: body };
-		return { code: tag, from: i, to: body };
+		final tag: Int = raw.fastCodeAt(i + 1);
+		return if (tag == 'x'.code)
+			hexEscape(raw, i, body, HEX_DIGITS)
+		else if (tag == 'u'.code)
+			body < raw.length && raw.fastCodeAt(body) == '{'.code ? bracedEscape(raw, i) : hexEscape(raw, i, body, UNICODE_DIGITS)
+		else if (tag == 'n'.code)
+			{ code: '\n'.code, from: i, to: body }
+		else if (tag == 'r'.code)
+			{ code: '\r'.code, from: i, to: body }
+		else if (tag == 't'.code)
+			{ code: '\t'.code, from: i, to: body }
+		else
+			{ code: tag, from: i, to: body };
 	}
 
 	/**
@@ -152,7 +172,7 @@ final class HxStringEscape {
 		if (at + count > raw.length) return tagOnly(raw, from);
 		var code: Int = 0;
 		for (k in at ... at + count) {
-			final digit: Int = hexDigit(StringTools.fastCodeAt(raw, k));
+			final digit: Int = hexDigit(raw.fastCodeAt(k));
 			if (digit < 0) return tagOnly(raw, from);
 			code = code * HEX_BASE + digit;
 		}
@@ -176,7 +196,7 @@ final class HxStringEscape {
 		var digits: Int = 0;
 		var k: Int = from + BRACED_BODY_OFFSET;
 		while (k < raw.length) {
-			final c: Int = StringTools.fastCodeAt(raw, k);
+			final c: Int = raw.fastCodeAt(k);
 			if (c == '}'.code) return digits == 0 ? tagOnly(raw, from) : { code: code, from: from, to: k + 1 };
 			final digit: Int = hexDigit(c);
 			if (digit < 0) break;
@@ -189,30 +209,19 @@ final class HxStringEscape {
 
 	/** The fallback reading of a malformed escape at `from`: its two characters, decoding to the tag itself. */
 	private static function tagOnly(raw: String, from: Int): HxDecodedChar {
-		return { code: StringTools.fastCodeAt(raw, from + 1), from: from, to: from + TAG_LENGTH };
-	}
-
-	/**
-	 * Whether `code` starts a Haxe identifier (a letter or an underscore) — the test that
-	 * decides whether a `$` begins the `$name` shorthand. Shared with the `$name`
-	 * lookahead in `HaxeStringFoldSupport`: the two ends of one feature must not drift
-	 * apart on what a name is.
-	 */
-	public static function isIdentStart(code: Int): Bool {
-		return code >= 'a'.code && code <= 'z'.code || code >= 'A'.code && code <= 'Z'.code || code == '_'.code;
-	}
-
-	/** Whether `code` continues a Haxe identifier (a letter, a digit, or an underscore). */
-	public static function isIdentContinue(code: Int): Bool {
-		return isIdentStart(code) || code >= '0'.code && code <= '9'.code;
+		return { code: raw.fastCodeAt(from + 1), from: from, to: from + TAG_LENGTH };
 	}
 
 	/** `code`'s value as a hexadecimal digit, or -1 when it is not one. */
 	private static function hexDigit(code: Int): Int {
-		if (code >= '0'.code && code <= '9'.code) return code - '0'.code;
-		if (code >= 'a'.code && code <= 'f'.code) return code - 'a'.code + HEX_LETTER_BASE;
-		if (code >= 'A'.code && code <= 'F'.code) return code - 'A'.code + HEX_LETTER_BASE;
-		return -1;
+		return if (code >= '0'.code && code <= '9'.code)
+			code - '0'.code
+		else if (code >= 'a'.code && code <= 'f'.code)
+			code - 'a'.code + HEX_LETTER_BASE
+		else if (code >= 'A'.code && code <= 'F'.code)
+			code - 'A'.code + HEX_LETTER_BASE
+		else
+			-1;
 	}
 
 }

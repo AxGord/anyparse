@@ -4,7 +4,6 @@ import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.ReplaceNode;
-import anyparse.query.ReplaceNode.ReplaceTarget;
 import anyparse.query.RefactorSupport.EditResult;
 import haxe.Exception;
 
@@ -140,8 +139,7 @@ class ReplaceNodeSliceTest extends Test {
 	 * `set-modifier` exists for).
 	 */
 	public function testBareModifierNewSourceRefused(): Void {
-		final source: String = 'class C {\n\tprivate static function walk():Void {\n\t\ttrace(1);\n\t}\n\n\tfunction next():Void {}\n'
-			+ '}\n';
+		final source: String = 'class C {\n\tprivate static function walk():Void {\n\t\ttrace(1);\n\t}\n\n\tfunction next():Void {}\n}\n';
 		assertRefused(source, BySelector('FnMember:walk'), 'public');
 		assertRefused(source, ByPosition(2, 2), ' final ');
 	}

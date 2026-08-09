@@ -1,10 +1,11 @@
 import haxe.Exception;
 import sys.FileSystem;
 import unit.HxFormatterCorpusHelpers;
-import unit.HxFormatterCorpusHelpers.HxTestCase;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span.Position;
+
+using StringTools;
 
 /**
  * Throwaway recon for the Phase 3 skip-parse drill campaign (plan
@@ -67,7 +68,7 @@ final class _ReconSkipParse { // noqa: naming
 					case '--all':
 						topN = 999999;
 					case _:
-						if (!StringTools.startsWith(a, '--') && probePath == null) probePath = a;
+						if (!a.startsWith('--') && probePath == null) probePath = a;
 				}
 				i++;
 			}
@@ -92,7 +93,7 @@ final class _ReconSkipParse { // noqa: naming
 			if (!FileSystem.exists(dir) || !FileSystem.isDirectory(dir)) continue;
 			final names: Array<String> = FileSystem.readDirectory(dir);
 			names.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
-			for (name in names) if (StringTools.endsWith(name, HXTEST_EXT)) {
+			for (name in names) if (name.endsWith(HXTEST_EXT)) {
 				final tc: Null<HxTestCase> = HxFormatterCorpusHelpers.readHxTest('$dir/$name');
 				if (tc == null) continue;
 				try {
@@ -173,12 +174,12 @@ final class _ReconSkipParse { // noqa: naming
 		final buf: StringBuf = new StringBuf();
 		var i: Int = 0;
 		while (i < raw.length) {
-			final c: Int = StringTools.fastCodeAt(raw, i);
+			final c: Int = raw.fastCodeAt(i);
 			final isIdStart: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code;
 			if (isIdStart) {
 				var j: Int = i + 1;
 				while (j < raw.length) {
-					final cj: Int = StringTools.fastCodeAt(raw, j);
+					final cj: Int = raw.fastCodeAt(j);
 					final isIdCont: Bool = (cj >= 'a'.code && cj <= 'z'.code) || (cj >= 'A'.code && cj <= 'Z'.code)
 						|| (cj >= '0'.code && cj <= '9'.code) || cj == '_'.code;
 					if (!isIdCont) break;
@@ -188,7 +189,7 @@ final class _ReconSkipParse { // noqa: naming
 				if (identLen > 4)
 					buf.add('_');
 				else
-					for (k in i ... j) buf.addChar(StringTools.fastCodeAt(raw, k));
+					for (k in i ... j) buf.addChar(raw.fastCodeAt(k));
 				i = j;
 			} else {
 				buf.addChar(c);
@@ -199,7 +200,7 @@ final class _ReconSkipParse { // noqa: naming
 	}
 
 	private static function probeFile(path: String): Void {
-		final src: String = StringTools.endsWith(path, HXTEST_EXT) ? {
+		final src: String = path.endsWith(HXTEST_EXT) ? {
 			final tc: Null<HxTestCase> = HxFormatterCorpusHelpers.readHxTest(path);
 			tc == null ? '' : tc.input;
 		} : sys.io.File.getContent(path);
@@ -208,7 +209,10 @@ final class _ReconSkipParse { // noqa: naming
 			Sys.println('PARSE OK');
 		} catch (exception: ParseError) {
 			final pos: Position = exception.span.lineCol(src);
-			Sys.println('PARSE FAIL :: ${pos.line}:${pos.col} expected="${normalize(exception.expected)}" :: src="${normalize(snippet(src, exception.span.from))}"');
+			Sys.println(
+				'PARSE FAIL :: ${pos.line}:${pos.col} expected="${normalize(exception.expected)}" :: src="'
+				+ '${normalize(snippet(src, exception.span.from))}"'
+			);
 		} catch (exception: Exception) {
 			Sys.println('PARSE FAIL :: <non-ParseError> ${normalize(exception.message)}');
 		}
@@ -227,13 +231,14 @@ final class _ReconSkipParse { // noqa: naming
 	}
 
 	private static function normalize(message: Null<String>): String {
-		if (message == null || message == '') return '<no message>';
-		return StringTools.replace(StringTools.replace(message, '\n', '\\n'), '\t', '\\t');
+		return message == null || message == ''
+			? '<no message>'
+			: StringTools.replace(StringTools.replace(message, '\n', '\\n'), '\t', '\\t');
 	}
 
 	private static function head(input: String): String {
 		final cut: String = input.length > HEAD_LEN ? input.substr(0, HEAD_LEN) : input;
-		return StringTools.replace(StringTools.replace(cut, '\n', '\\n'), '\t', '\\t');
+		return StringTools.replace(cut.replace('\n', '\\n'), '\t', '\\t');
 	}
 
 }

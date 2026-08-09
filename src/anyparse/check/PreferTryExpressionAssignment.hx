@@ -6,11 +6,9 @@ import anyparse.check.TryExpressionShape.TryParts;
 import anyparse.check.TryExpressionShape.TrySeams;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
-import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -138,8 +136,7 @@ final class PreferTryExpressionAssignment implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		return [
+		return seams == null ? [] : [
 			for (entry in files) for (m in collect(plugin, entry.source, seams))
 				{
 					file: entry.file,

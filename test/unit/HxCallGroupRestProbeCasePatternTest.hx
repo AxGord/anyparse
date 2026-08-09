@@ -44,10 +44,12 @@ final class HxCallGroupRestProbeCasePatternTest extends Test {
 		// The drawRect line at 3-tab indent (tab=4) is exactly 141 columns --
 		// the close `)` sits at 140 and the `;` at 141. The rest-probe counts
 		// the `;`, so the call opens its args (fork parity).
-		final glued: String =
-			'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tcolorSprite.graphics.drawRect(1 * scaleFactor, 1 * scaleFactor, (CELL_WIDTH - 2) * scaleFactor, (CELL_HEIGHT - 2) * scaleFactor);\n\t\t}\n\t}\n}';
-		final wrapped: String =
-			'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tcolorSprite.graphics.drawRect(\n\t\t\t\t1 * scaleFactor, 1 * scaleFactor, (CELL_WIDTH - 2) * scaleFactor, (CELL_HEIGHT - 2) * scaleFactor\n\t\t\t);\n\t\t}\n\t}\n}';
+		final glued: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n'
+			+ '\t\t\tcolorSprite.graphics.drawRect(1 * scaleFactor, 1 * scaleFactor, (CELL_WIDTH - 2) * scaleFactor, (CELL_HEIGHT - 2) * scaleFactor);\n'
+			+ '\t\t}\n\t}\n}';
+		final wrapped: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tcolorSprite.graphics.drawRect(\n'
+			+ '\t\t\t\t1 * scaleFactor, 1 * scaleFactor, (CELL_WIDTH - 2) * scaleFactor, (CELL_HEIGHT - 2) * scaleFactor\n\t\t\t);\n\t\t}\n'
+			+ '\t}\n}';
 		Assert.equals(wrapped, triviaWrite(glued));
 		Assert.equals(wrapped, triviaWrite(wrapped));
 	}
@@ -55,8 +57,9 @@ final class HxCallGroupRestProbeCasePatternTest extends Test {
 	public function testStatementCallExactlyOnLimitStaysGlued(): Void {
 		// One char shorter callee (`drawRec`) puts the `;` at exactly 140 --
 		// the strict limit+1 boundary keeps the whole call flat.
-		final src: String =
-			'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tcolorSprite.graphics.drawRec(1 * scaleFactor, 1 * scaleFactor, (CELL_WIDTH - 2) * scaleFactor, (CELL_HEIGHT - 2) * scaleFactor);\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n'
+			+ '\t\t\tcolorSprite.graphics.drawRec(1 * scaleFactor, 1 * scaleFactor, (CELL_WIDTH - 2) * scaleFactor, (CELL_HEIGHT - 2) * scaleFactor);\n'
+			+ '\t\t}\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -68,8 +71,9 @@ final class HxCallGroupRestProbeCasePatternTest extends Test {
 		// glued, only the boundary ctor's arg dropping to its own line (a
 		// pre-existing anyparse-vs-fork gap the
 		// guard neither introduces nor worsens).
-		final src: String =
-			'class C {\n\tfunction f() {\n\t\tswitch (x) {\n\t\t\tcase Nest(_, _) | Concat(_) | Group(_) | BodyGroup(_) | GroupProbe(_) | Flatten(_) | WrapBoundary(_) | HardFlatten(_) | CollapseProbe(\n\t\t\t\t_\n\t\t\t):\n\t\t\t\tg();\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n\t\tswitch (x) {\n'
+			+ '\t\t\tcase Nest(_, _) | Concat(_) | Group(_) | BodyGroup(_) | GroupProbe(_) | Flatten(_) | WrapBoundary(_) | HardFlatten(_) | CollapseProbe(\n'
+			+ '\t\t\t\t_\n\t\t\t):\n\t\t\t\tg();\n\t\t}\n\t}\n}';
 		final out: String = triviaWrite(src);
 		Assert.equals(src, out);
 		// Explicit glued invariant: the leading multi-arg ctor never splits.
@@ -84,10 +88,13 @@ final class HxCallGroupRestProbeCasePatternTest extends Test {
 		// chain), wrapping args the fork keeps glued; `_suppressCallRestProbe`
 		// reverts `??` operands to pristine plain-Group (wrap-on-own-overflow), so
 		// only the operand that itself overflows (`returnCallSource`) opens.
-		final src: String =
-			'class C {\n\tfunction f() {\n\t\treturn mapIndexSource(receiver, root, declaredTypes, cfg) ?? instanceCallSource(receiver, root, declaredTypes, cfg) ?? returnCallSource(receiver, root, returnTypes, cfg) ?? crossFileReturnCallSource(receiver, root, declaredTypes, cfg, index);\n\t}\n}';
-		final wrapped: String =
-			'class C {\n\tfunction f() {\n\t\treturn\n\t\t\tmapIndexSource(receiver, root, declaredTypes, cfg) ?? instanceCallSource(receiver, root, declaredTypes, cfg) ?? returnCallSource(\n\t\t\t\treceiver, root, returnTypes, cfg\n\t\t\t) ?? crossFileReturnCallSource(receiver, root, declaredTypes, cfg, index);\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n'
+			+ '\t\treturn mapIndexSource(receiver, root, declaredTypes, cfg) ?? instanceCallSource(receiver, root, declaredTypes, cfg) ?? returnCallSource(receiver, root, returnTypes, cfg) ?? crossFileReturnCallSource(receiver, root, declaredTypes, cfg, index);\n'
+			+ '\t}\n}';
+		final wrapped: String = 'class C {\n\tfunction f() {\n\t\treturn\n'
+			+ '\t\t\tmapIndexSource(receiver, root, declaredTypes, cfg) ?? instanceCallSource(receiver, root, declaredTypes, cfg) ?? returnCallSource(\n'
+			+ '\t\t\t\treceiver, root, returnTypes, cfg\n'
+			+ '\t\t\t) ?? crossFileReturnCallSource(receiver, root, declaredTypes, cfg, index);\n\t}\n}';
 		final out: String = triviaWrite(src);
 		Assert.equals(wrapped, out);
 		Assert.equals(wrapped, triviaWrite(wrapped));

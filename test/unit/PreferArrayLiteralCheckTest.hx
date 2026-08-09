@@ -52,24 +52,24 @@ class PreferArrayLiteralCheckTest extends Test {
 	}
 
 	/** An unannotated local is NOT pinned — reported but left a finding, no edit (the gate is conservative). */
-	public function testGateRefusesUntypedLocal(): Void {
+	public inline function testGateRefusesUntypedLocal(): Void {
 		assertGateRefuses('class C { function f():Void { var xs = new Array(); } }');
 	}
 
 	/** An unannotated local whose only type source is the constructor `<Int>` is NOT pinned — `[]` would drop `<Int>`. */
-	public function testGateRefusesUntypedTypeParam(): Void {
+	public inline function testGateRefusesUntypedTypeParam(): Void {
 		assertGateRefuses('class C { function f():Void { var xs = new Array<Int>(); } }');
 	}
 
 	/** An argument-position `new Array()` is pinned by the callee, not the typed local — no edit. */
-	public function testGateRefusesArgPosition(): Void {
+	public inline function testGateRefusesArgPosition(): Void {
 		assertGateRefuses(
 			'class C { function f():Void { var xs:Array<Int> = take(new Array()); } function take(a:Array<Int>):Array<Int> { return a; } }'
 		);
 	}
 
 	/** A return-position `new Array()` is not a declaration initializer — no edit. */
-	public function testGateRefusesReturnPosition(): Void {
+	public inline function testGateRefusesReturnPosition(): Void {
 		assertGateRefuses('class C { function f():Array<Int> { return new Array(); } }');
 	}
 
@@ -104,12 +104,12 @@ class PreferArrayLiteralCheckTest extends Test {
 	}
 
 	/** An assignment whose lvalue does not resolve to any known binding is NOT pinned — reported, no edit. */
-	public function testGateRefusesUnresolvedAssignment(): Void {
+	public inline function testGateRefusesUnresolvedAssignment(): Void {
 		assertGateRefuses('class C { function f():Void { unknownVar = new Array(); } }');
 	}
 
 	/** A `this.<field>` assignment with no SymbolIndex threaded stays report-only (the cross-file resolver cannot reach the member). */
-	public function testThisFieldAssignmentNeedsIndex(): Void {
+	public inline function testThisFieldAssignmentNeedsIndex(): Void {
 		assertGateRefuses('class C { var xs:Array<Int>; function f():Void { this.xs = new Array(); } }');
 	}
 

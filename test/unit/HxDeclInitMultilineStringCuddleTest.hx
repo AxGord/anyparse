@@ -39,12 +39,12 @@ final class HxDeclInitMultilineStringCuddleTest extends Test {
 	 * The cuddled form is a writer fixed point. Summed flat width here is
 	 * ~153 columns while no single physical line passes 80.
 	 */
-	private static final CUDDLED: String = "class C {\n\tstatic final FRAG:String = 'varying vec2 v_uv;\n" + 'uniform sampler2D u_tex;\n'
+	private static final CUDDLED: String = 'class C {\n\tstatic final FRAG:String = \'varying vec2 v_uv;\nuniform sampler2D u_tex;\n'
 		+ "void main() { gl_FragColor = texture2D(u_tex, vec2(v_uv.x, 1.0 - v_uv.y)); }';\n}";
 
 	/** The break-after-`=` shape the un-fixed writer produced. */
-	private static final BROKEN: String = "class C {\n\tstatic final FRAG:String =\n\t\t'varying vec2 v_uv;\n"
-		+ 'uniform sampler2D u_tex;\n' + "void main() { gl_FragColor = texture2D(u_tex, vec2(v_uv.x, 1.0 - v_uv.y)); }';\n}";
+	private static final BROKEN: String = 'class C {\n\tstatic final FRAG:String =\n\t\t\'varying vec2 v_uv;\nuniform sampler2D u_tex;\n'
+		+ "void main() { gl_FragColor = texture2D(u_tex, vec2(v_uv.x, 1.0 - v_uv.y)); }';\n}";
 
 	public function new(): Void {
 		super();

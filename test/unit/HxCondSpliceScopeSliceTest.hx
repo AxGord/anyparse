@@ -38,8 +38,8 @@ class HxCondSpliceScopeSliceTest extends HxTestHelpers {
 	 */
 	public function testCondElseSlotRoundTrips(): Void {
 		final src: String = 'class C {\n\tfunction tryAgain() {\n\t\tclose();\n\t\tif (reconnectDelay == 0) {\n\t\t\treopen();\n\t\t}\n'
-			+ '\t\t#if ((!dox && HUGS) || nodejs || flash)\n\t\telse if (reconnectDelay > 0) {\n\t\t\tTimer.delay(reopen, reconnectDelay);\n'
-			+ '\t\t}\n\t\t#end\n\t}\n}';
+			+ '\t\t#if ((!dox && HUGS) || nodejs || flash)\n\t\telse if (reconnectDelay > 0) {\n'
+			+ '\t\t\tTimer.delay(reopen, reconnectDelay);\n\t\t}\n\t\t#end\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -97,7 +97,8 @@ class HxCondSpliceScopeSliceTest extends HxTestHelpers {
 	public function testCaseLabelSpliceSharedBodyRoundTrips(): Void {
 		final src: String = 'class C {\n\tfunction texture(asset:String):Tile {\n\t\treturn switch ext(asset) {\n\t\t\t#if hxbitmini\n'
 			+ '\t\t\tcase ATLAS, BINATLAS:\n\t\t\t#else\n\t\t\tcase ATLAS:\n\t\t\t#end\n\t\t\tif (name == null) throw ERROR;\n'
-			+ '\t\t\tvar p:Atlas = atlases[asset];\n\t\t\tp.get(name);\n\t\t\tcase PNG: tiles[asset];\n\t\t\tcase _: throw ERROR;\n\t\t};\n\t}\n}';
+			+ '\t\t\tvar p:Atlas = atlases[asset];\n\t\t\tp.get(name);\n\t\t\tcase PNG: tiles[asset];\n\t\t\tcase _: throw ERROR;\n\t\t};\n'
+			+ '\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

@@ -8,6 +8,7 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -192,8 +193,8 @@ final class ExtractInterface {
 			if (cSpan != null && (c.kind == 'BlockBody' || c.kind == 'ExprBody' || c.kind == 'NoBody') && cSpan.from < bodyFrom)
 				bodyFrom = cSpan.from;
 		}
-		var sig: String = StringTools.trim(source.substring(span.from, bodyFrom));
-		if (StringTools.endsWith(sig, ';')) sig = StringTools.trim(sig.substr(0, sig.length - 1));
+		var sig: String = source.substring(span.from, bodyFrom).trim();
+		if (sig.endsWith(';')) sig = sig.substr(0, sig.length - 1).trim();
 		return sig == '' ? null : sig;
 	}
 

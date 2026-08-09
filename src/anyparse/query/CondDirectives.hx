@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -63,9 +64,7 @@ final class CondDirectives {
 				i = regions[region].to;
 				continue;
 			}
-			final keyword: Null<String> = keywords.markers.contains(StringTools.fastCodeAt(source, i))
-				? keywordAt(source, i, keywords.all)
-				: null;
+			final keyword: Null<String> = keywords.markers.contains(source.fastCodeAt(i)) ? keywordAt(source, i, keywords.all) : null;
 			if (keyword == null) {
 				i++;
 				continue;
@@ -98,7 +97,7 @@ final class CondDirectives {
 	 * identifier spliced next to it. Out of range answers false: nothing there to weld with.
 	 */
 	public static inline function isIdentCharAt(source: String, at: Int): Bool {
-		return at >= 0 && at < source.length && isIdentChar(StringTools.fastCodeAt(source, at));
+		return at >= 0 && at < source.length && isIdentChar(source.fastCodeAt(at));
 	}
 
 	/**
@@ -114,7 +113,7 @@ final class CondDirectives {
 		all.sort((a, b) -> b.length - a.length);
 		return {
 			all: all,
-			markers: [for (keyword in all) StringTools.fastCodeAt(keyword, 0)],
+			markers: [for (keyword in all) keyword.fastCodeAt(0)],
 			opener: ifKeyword,
 			closer: closer
 		};
@@ -129,7 +128,7 @@ final class CondDirectives {
 		for (keyword in keywords) {
 			final end: Int = at + keyword.length;
 			if (end > source.length || source.substring(at, end) != keyword) continue;
-			if (end == source.length || !isIdentChar(StringTools.fastCodeAt(source, end))) return keyword;
+			if (end == source.length || !isIdentChar(source.fastCodeAt(end))) return keyword;
 		}
 		return null;
 	}
@@ -157,7 +156,7 @@ final class CondDirectives {
 	 * branch keyword is spelled otherwise loses its condition span, never its directive.
 	 */
 	private static function takesCondition(keyword: String, ifKeyword: String, endKeyword: Null<String>): Bool {
-		return keyword != endKeyword && (keyword == ifKeyword || StringTools.endsWith(keyword, ifKeyword.substring(1)));
+		return keyword != endKeyword && (keyword == ifKeyword || keyword.endsWith(ifKeyword.substring(1)));
 	}
 
 	/**
@@ -185,8 +184,7 @@ final class CondDirectives {
 		var end: Int = at;
 		while (true) {
 			var operand: Int = i;
-			while (operand < source.length && StringTools.fastCodeAt(source, operand) == '!'.code)
-				operand = skipInlineSpace(source, operand + 1);
+			while (operand < source.length && source.fastCodeAt(operand) == '!'.code) operand = skipInlineSpace(source, operand + 1);
 			final operandEnd: Int = scanOperand(source, operand);
 			if (operandEnd <= operand) return end;
 			end = operandEnd;
@@ -200,14 +198,14 @@ final class CondDirectives {
 	/** The end of the single operand at `at` — a parenthesised group, a quoted string, an identifier or a number — or `at` when none. */
 	private static function scanOperand(source: String, at: Int): Int {
 		if (at >= source.length) return at;
-		final c: Int = StringTools.fastCodeAt(source, at);
+		final c: Int = source.fastCodeAt(at);
 		if (c == '('.code) return scanParens(source, at);
 		if (isQuote(c)) return scanQuoted(source, at);
 		if (isIdentStart(c)) return scanFlagName(source, at + 1);
 		if (!isDigit(c)) return at;
 		var i: Int = at + 1;
 		while (i < source.length) {
-			final digit: Int = StringTools.fastCodeAt(source, i);
+			final digit: Int = source.fastCodeAt(i);
 			if (!isDigit(digit) && digit != '.'.code) break;
 			i++;
 		}
@@ -219,7 +217,7 @@ final class CondDirectives {
 		var depth: Int = 0;
 		var i: Int = at;
 		while (i < source.length) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (isLineBreak(c)) return at;
 			if (isQuote(c)) {
 				final quoted: Int = scanQuoted(source, i);
@@ -240,16 +238,16 @@ final class CondDirectives {
 
 	/** The index just past the string literal opening at `at`, or `at` when it is unterminated on its line. */
 	private static function scanQuoted(source: String, at: Int): Int {
-		final quote: Int = StringTools.fastCodeAt(source, at);
+		final quote: Int = source.fastCodeAt(at);
 		var i: Int = at + 1;
 		while (i < source.length) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (isLineBreak(c)) return at;
 			if (c == '\\'.code) {
 				// The escape must not step OVER a line break: the condition is a single-line tail,
 				// and a trailing backslash in text the grammar never accepted would otherwise carry
 				// the scan into the next line.
-				if (i + 1 >= source.length || isLineBreak(StringTools.fastCodeAt(source, i + 1))) return at;
+				if (i + 1 >= source.length || isLineBreak(source.fastCodeAt(i + 1))) return at;
 				i += 2;
 				continue;
 			}
@@ -268,7 +266,7 @@ final class CondDirectives {
 	private static function skipInlineSpace(source: String, at: Int): Int {
 		var i: Int = at;
 		while (i < source.length) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c != ' '.code && c != '\t'.code) return i;
 			i++;
 		}
@@ -299,9 +297,9 @@ final class CondDirectives {
 	private static function scanFlagName(source: String, from: Int): Int {
 		var i: Int = from;
 		while (true) {
-			while (i < source.length && isIdentChar(StringTools.fastCodeAt(source, i))) i++;
-			if (i + 1 >= source.length || StringTools.fastCodeAt(source, i) != '.'.code) return i;
-			if (!isIdentStart(StringTools.fastCodeAt(source, i + 1))) return i;
+			while (i < source.length && isIdentChar(source.fastCodeAt(i))) i++;
+			if (i + 1 >= source.length || source.fastCodeAt(i) != '.'.code) return i;
+			if (!isIdentStart(source.fastCodeAt(i + 1))) return i;
 			i += 2;
 		}
 	}

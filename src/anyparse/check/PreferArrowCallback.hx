@@ -2,14 +2,13 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.query.SymbolIndex.FileInfo;
-import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Flags an anonymous `function` literal in CALL-ARGUMENT position — `f(function() { … })`,
@@ -179,14 +178,13 @@ final class PreferArrowCallback implements Check {
 	}
 
 	/** Whether `node` hosts call arguments — a call or a `new` construction. */
-	private static function isArgHost(ctx: Ctx, node: QueryNode): Bool {
+	private static inline function isArgHost(ctx: Ctx, node: QueryNode): Bool {
 		return node.kind == ctx.callKind || node.kind == ctx.shape.newExprKind;
 	}
 
 	/** The argument expressions of a call / construction (callee and type-argument children excluded). */
 	private static function argsOf(ctx: Ctx, node: QueryNode): Array<QueryNode> {
-		if (node.kind == ctx.callKind) return node.children.slice(1);
-		return node.children.filter(c -> !isTypeAnnotationKind(ctx, c.kind));
+		return node.kind == ctx.callKind ? node.children.slice(1) : node.children.filter(c -> !isTypeAnnotationKind(ctx, c.kind));
 	}
 
 	/** Whether `kind` is a type-annotation child (a `new T<…>` type argument, a return-type hint), never an argument. */
@@ -200,12 +198,13 @@ final class PreferArrowCallback implements Check {
 		final tail: Tail = tailOf(ctx, parts.body);
 		if (parts.hint == null && tail != Open) return Fixable;
 		final hint: Null<QueryNode> = parts.hint;
-		if (hint != null && hintIsVoid(ctx, hint) && tail != Open) return Fixable;
-		return switch expectedReturnIsVoid(ctx, call, fnArg) {
-			case true: Fixable;
-			case false: Silent;
-			case null: ReportOnly;
-		};
+		return hint != null && hintIsVoid(ctx, hint) && tail != Open
+			? Fixable
+			: switch expectedReturnIsVoid(ctx, call, fnArg) {
+				case true: Fixable;
+				case false: Silent;
+				case null: ReportOnly;
+			};
 	}
 
 	/** Split a function literal's children into params / return-type hint / body; null when the shape is not convertible. */
@@ -229,8 +228,7 @@ final class PreferArrowCallback implements Check {
 				return null;
 		}
 		final b: Null<QueryNode> = body;
-		if (b == null || b.kind == shape.noBodyKind) return null;
-		return { params: params, hint: hint, body: b };
+		return b == null || b.kind == shape.noBodyKind ? null : { params: params, hint: hint, body: b };
 	}
 
 	/** Whether the return-type hint's written source is exactly `Void`. */
@@ -264,8 +262,7 @@ final class PreferArrowCallback implements Check {
 
 	/** Statement kinds that are `Void`-typed by construction when they close a block body. */
 	private static function voidTailKinds(shape: RefShape): Array<String> {
-		final out: Array<String> = [];
-		for (k in shape.loopStatementKinds ?? []) out.push(k);
+		final out: Array<String> = [for (k in shape.loopStatementKinds ?? []) k];
 		for (k in shape.doWhileLoopKinds ?? []) out.push(k);
 		for (k in shape.localDeclKinds ?? []) out.push(k);
 		for (k in shape.localFunctionKinds ?? []) out.push(k);
@@ -298,7 +295,7 @@ final class PreferArrowCallback implements Check {
 		if (bodyText == null) return null;
 		if (gapHasComment(ctx, fnSpan, kept)) return null;
 		final single: Null<QueryNode> = parts.params.length == 1 ? parts.params[0] : null;
-		final head: String = single != null && paramTexts[0] == single.name ? paramTexts[0] : '(' + paramTexts.join(', ') + ')';
+		final head: String = single != null && paramTexts[0] == single.name ? paramTexts[0] : '(${paramTexts.join(', ')})';
 		return '$head -> $bodyText';
 	}
 
@@ -313,13 +310,12 @@ final class PreferArrowCallback implements Check {
 		if (bodySpan == null) return null;
 		if (body.kind != ctx.shape.blockBodyKind) {
 			final ret: Null<QueryNode> = body.children[0];
-			final expr: Null<QueryNode> = ret == null ? null : ret.children[0];
-			final es: Null<Span> = expr == null ? null : expr.span;
+			final expr: Null<QueryNode> = ret?.children[0];
+			final es: Null<Span> = expr?.span;
 			if (es == null) return null;
 			kept.push(bodySpan);
 			final gap: String = ctx.source.substring(bodySpan.from, es.from) + ctx.source.substring(es.to, bodySpan.to);
-			if (RefactorSupport.textHasCommentMarker(gap)) return null;
-			return ctx.source.substring(es.from, es.to);
+			return RefactorSupport.textHasCommentMarker(gap) ? null : ctx.source.substring(es.from, es.to);
 		}
 		kept.push(bodySpan);
 		final lone: Null<QueryNode> = body.children.length == 1 ? body.children[0] : null;
@@ -363,17 +359,21 @@ final class PreferArrowCallback implements Check {
 		final argCount: Int = args.length;
 		if (call.kind == ctx.shape.newExprKind) {
 			final typeName: Null<String> = call.name;
-			if (typeName == null) return null;
-			return chainLookup(
-				ctx, idx, idx.resolveTypeRefsFrom(typeName, ctx.file), ctx.shape.constructorName ?? 'new', argIndex, argCount, [], 0
-			);
+			return typeName == null
+				? null
+				: chainLookup(
+					ctx, idx, idx.resolveTypeRefsFrom(typeName, ctx.file), ctx.shape.constructorName ?? 'new', argIndex, argCount, [], 0
+				);
 		}
 		final callee: Null<QueryNode> = call.children[0];
-		if (callee == null) return null;
-		if (callee.kind == ctx.shape.identKind) return bareCalleeExpected(ctx, idx, call, callee, argIndex, argCount);
-		if (callee.kind == ctx.shape.fieldAccessKind || callee.kind == ctx.shape.nullSafeAccessKind)
-			return memberCalleeExpected(ctx, idx, call, callee, argIndex, argCount);
-		return null;
+		return if (callee == null)
+			null
+		else if (callee.kind == ctx.shape.identKind)
+			bareCalleeExpected(ctx, idx, call, callee, argIndex, argCount)
+		else if (callee.kind == ctx.shape.fieldAccessKind || callee.kind == ctx.shape.nullSafeAccessKind)
+			memberCalleeExpected(ctx, idx, call, callee, argIndex, argCount)
+		else
+			null;
 	}
 
 	/** Expected-type resolution for a bare-identifier callee: a local binding first, else an enclosing-type member. */
@@ -393,14 +393,14 @@ final class PreferArrowCallback implements Check {
 			final typeSrc: Null<String> = ctx.typeSources()[bindingFrom];
 			if (typeSrc == null) return null;
 			final paramType: Null<String> = paramOfFnTypeSource(typeSrc, argIndex, argCount);
-			if (paramType == null) return null;
-			return fnTypeReturnVoid(ctx, idx, paramType, ctx.file, typeParamsAround(ctx, ctx.tree, span), 0);
+			return paramType == null ? null : fnTypeReturnVoid(ctx, idx, paramType, ctx.file, typeParamsAround(ctx, ctx.tree, span), 0);
 		}
 		final callSpan: Null<Span> = call.span;
 		if (callSpan == null) return null;
 		final enclosing: Null<String> = TypeResolver.enclosingTypeName(ctx.tree, callSpan);
-		if (enclosing == null) return null;
-		return chainLookup(ctx, idx, idx.resolveTypeRefsFrom(enclosing, ctx.file), name, argIndex, argCount, [], 0);
+		return enclosing == null
+			? null
+			: chainLookup(ctx, idx, idx.resolveTypeRefsFrom(enclosing, ctx.file), name, argIndex, argCount, [], 0);
 	}
 
 	/** Expected-type resolution for a `recv.member(…)` callee: `this`, a typed value receiver, a static / dotted type path. */
@@ -415,28 +415,32 @@ final class PreferArrowCallback implements Check {
 				final callSpan: Null<Span> = call.span;
 				if (callSpan == null) return null;
 				final enclosing: Null<String> = TypeResolver.enclosingTypeName(ctx.tree, callSpan);
-				if (enclosing == null) return null;
-				return chainLookup(ctx, idx, idx.resolveTypeRefsFrom(enclosing, ctx.file), member, argIndex, argCount, [], 0);
+				return enclosing == null
+					? null
+					: chainLookup(ctx, idx, idx.resolveTypeRefsFrom(enclosing, ctx.file), member, argIndex, argCount, [], 0);
 			}
 			final typeSrc: Null<String> = TypeResolver.identDeclaredTypeSource(recv, ctx.shape, ctx.tree, ctx.typeSources, false);
 			if (typeSrc != null) {
 				final nominal: Null<String> = receiverNominal(typeSrc);
-				if (nominal == null) return null;
-				return chainLookup(ctx, idx, idx.resolveTypeRefsFrom(nominal, ctx.file), member, argIndex, argCount, [], 0);
+				return nominal == null
+					? null
+					: chainLookup(ctx, idx, idx.resolveTypeRefsFrom(nominal, ctx.file), member, argIndex, argCount, [], 0);
 			}
 			final recvName: Null<String> = recv.name;
 			final recvSpan: Null<Span> = recv.span;
-			if (recvName == null || recvSpan == null) return null;
 			// A static-callee lookup is sound only when the receiver is demonstrably NOT a
 			// value binding: identDeclaredTypeSource's null also covers a binding whose
 			// type it deliberately refused to trust (shadowed re-declaration), and that
 			// conservative null must not be read as "this is a type name".
-			if (TypeResolver.resolveBindingFrom(recvName, recvSpan, ctx.tree, ctx.shape) != null) return null;
-			return chainLookup(ctx, idx, idx.resolveTypeRefsFrom(recvName, ctx.file), member, argIndex, argCount, [], 0);
+			return if (recvName == null || recvSpan == null)
+				null
+			else if (TypeResolver.resolveBindingFrom(recvName, recvSpan, ctx.tree, ctx.shape) != null)
+				null
+			else
+				chainLookup(ctx, idx, idx.resolveTypeRefsFrom(recvName, ctx.file), member, argIndex, argCount, [], 0);
 		}
 		final path: Null<String> = dottedPathOf(ctx, recv);
-		if (path == null) return null;
-		return chainLookup(ctx, idx, idx.resolveTypeRefsFrom(path, ctx.file), member, argIndex, argCount, [], 0);
+		return path == null ? null : chainLookup(ctx, idx, idx.resolveTypeRefsFrom(path, ctx.file), member, argIndex, argCount, [], 0);
 	}
 
 	/** The `a.b.C` text of a pure ident / field-access chain, or null when any link is another expression. */
@@ -452,11 +456,15 @@ final class PreferArrowCallback implements Check {
 
 	/** The head nominal of a receiver's declared type source (`Null<Signal<Int>>` -> `Signal`). */
 	private static function receiverNominal(typeSrc: String): Null<String> {
-		final s: String = StringTools.trim(typeSrc);
+		final s: String = typeSrc.trim();
 		final lt: Int = s.indexOf('<');
-		final head: String = lt < 0 ? s : StringTools.trim(s.substr(0, lt));
-		if (head == 'Null' && lt >= 0 && StringTools.endsWith(s, '>')) return receiverNominal(s.substring(lt + 1, s.length - 1));
-		return TypeResolver.simpleNominalName(head) == null ? null : head;
+		final head: String = lt < 0 ? s : s.substr(0, lt).trim();
+		return if (head == 'Null' && lt >= 0 && s.endsWith('>'))
+			receiverNominal(s.substring(lt + 1, s.length - 1))
+		else if (TypeResolver.simpleNominalName(head) == null)
+			null
+		else
+			head;
 	}
 
 	/**
@@ -502,12 +510,9 @@ final class PreferArrowCallback implements Check {
 		if (declared > 1) return null;
 		if (declared == 1) {
 			final valueTypeSrc: Null<String> = declaredTypeSrc;
-			if (valueTypeSrc != null) {
-				final paramType: Null<String> = paramOfFnTypeSource(valueTypeSrc, argIndex, argCount);
-				if (paramType == null) return null;
-				return fnTypeReturnVoid(ctx, idx, paramType, rt.file.file, typeHeaderParams(ctx, idx, rt), 0);
-			}
-			return memberParamReturnVoid(ctx, idx, rt, member, argIndex, argCount);
+			if (valueTypeSrc == null) return memberParamReturnVoid(ctx, idx, rt, member, argIndex, argCount);
+			final paramType: Null<String> = paramOfFnTypeSource(valueTypeSrc, argIndex, argCount);
+			return paramType == null ? null : fnTypeReturnVoid(ctx, idx, paramType, rt.file.file, typeHeaderParams(ctx, idx, rt), 0);
 		}
 		for (raw in rt.type.supertypesRaw) {
 			final v: Null<Bool> = chainLookup(
@@ -547,10 +552,9 @@ final class PreferArrowCallback implements Check {
 	private static function findNamedDecl(tree: QueryNode, name: String): Null<QueryNode> {
 		for (c in tree.children) {
 			if (c.name == name && c.children.length > 0) return c;
-			if (c.name == null && c.children.length > 0) {
-				final nested: Null<QueryNode> = findNamedDecl(c, name);
-				if (nested != null) return nested;
-			}
+			if (c.name != null || c.children.length <= 0) continue;
+			final nested: Null<QueryNode> = findNamedDecl(c, name);
+			if (nested != null) return nested;
 		}
 		return null;
 	}
@@ -614,8 +618,7 @@ final class PreferArrowCallback implements Check {
 		final ps: Null<Span> = params[argIndex].span;
 		if (ps == null) return null;
 		final typeSrc: Null<String> = typeSources()[ps.from];
-		if (typeSrc == null) return null;
-		return fnTypeReturnVoid(ctx, idx, typeSrc, declFile, typeParams, 0);
+		return typeSrc == null ? null : fnTypeReturnVoid(ctx, idx, typeSrc, declFile, typeParams, 0);
 	}
 
 	/**
@@ -626,7 +629,7 @@ final class PreferArrowCallback implements Check {
 		ctx: Ctx, idx: SymbolIndex, typeSrc: String, fromFile: String, typeParams: Array<String>, depth: Int
 	): Null<Bool> {
 		if (depth > MAX_ALIAS_DEPTH) return null;
-		final s: String = stripOuterParens(StringTools.trim(typeSrc));
+		final s: String = stripOuterParens(typeSrc.trim());
 		final segs: Array<String> = splitTopArrows(s);
 		if (segs.length >= 2) return returnSegmentIsVoid(ctx, idx, StringTools.trim(segs[segs.length - 1]), fromFile, typeParams, depth);
 		final rhs: Null<String> = typedefAlias(ctx, idx, s, fromFile);
@@ -640,11 +643,9 @@ final class PreferArrowCallback implements Check {
 		if (segment == 'Void') return true;
 		if (depth > MAX_ALIAS_DEPTH) return null;
 		if (typeParams.contains(segment)) return false;
-		if (splitTopArrows(segment).length >= 2 || StringTools.startsWith(segment, '(') || StringTools.startsWith(segment, '{'))
-			return false;
+		if (splitTopArrows(segment).length >= 2 || segment.startsWith('(') || segment.startsWith('{')) return false;
 		final rhs: Null<String> = typedefAlias(ctx, idx, segment, fromFile);
-		if (rhs == null) return null;
-		return returnSegmentIsVoid(ctx, idx, stripOuterParens(StringTools.trim(rhs)), fromFile, typeParams, depth + 1);
+		return rhs == null ? null : returnSegmentIsVoid(ctx, idx, stripOuterParens(StringTools.trim(rhs)), fromFile, typeParams, depth + 1);
 	}
 
 	/** The right-hand side of a nominal's `typedef` declaration, or null when it is not a resolvable typedef. */
@@ -660,30 +661,28 @@ final class PreferArrowCallback implements Check {
 		final declText: String = declSource.substring(rt.type.span.from, rt.type.span.to);
 		final eq: Int = topLevelIndexOf(declText, '=');
 		if (eq < 0) return null;
-		var rhs: String = StringTools.trim(declText.substr(eq + 1));
-		if (StringTools.endsWith(rhs, ';')) rhs = StringTools.trim(rhs.substr(0, rhs.length - 1));
+		var rhs: String = declText.substr(eq + 1).trim();
+		if (rhs.endsWith(';')) rhs = rhs.substr(0, rhs.length - 1).trim();
 		return rhs;
 	}
 
 	/** The parameter segment at `argIndex` of a function-type SOURCE (`(a:Int, b:X)->Void` / `A->B->Void`), or null. */
 	private static function paramOfFnTypeSource(typeSrc: String, argIndex: Int, argCount: Int): Null<String> {
-		final s: String = stripOuterParens(StringTools.trim(typeSrc));
+		final s: String = stripOuterParens(typeSrc.trim());
 		final segs: Array<String> = splitTopArrows(s);
 		if (segs.length < 2) return null;
-		if (segs.length == 2 && StringTools.startsWith(StringTools.trim(segs[0]), '(')) {
-			final interior: String = stripOuterParens(StringTools.trim(segs[0]));
-			// An empty interior is a zero-parameter list — splitTopCommas('') would report
-			// arity 1 (a single empty element) and defeat the alignment gate below.
-			if (StringTools.trim(interior) == '') return null;
-			final parts: Array<String> = splitTopCommas(interior);
-			if (parts.length != argCount || argIndex >= parts.length) return null;
-			var part: String = StringTools.trim(parts[argIndex]);
-			final colon: Int = topLevelIndexOf(part, ':');
-			if (colon >= 0) part = StringTools.trim(part.substr(colon + 1));
-			return part;
-		}
-		if (segs.length - 1 != argCount || argIndex >= segs.length - 1) return null;
-		return StringTools.trim(segs[argIndex]);
+		if (segs.length != 2 || !StringTools.startsWith(StringTools.trim(segs[0]), '('))
+			return segs.length - 1 != argCount || argIndex >= segs.length - 1 ? null : StringTools.trim(segs[argIndex]);
+		final interior: String = stripOuterParens(StringTools.trim(segs[0]));
+		// An empty interior is a zero-parameter list — splitTopCommas('') would report
+		// arity 1 (a single empty element) and defeat the alignment gate below.
+		if (interior.trim() == '') return null;
+		final parts: Array<String> = splitTopCommas(interior);
+		if (parts.length != argCount || argIndex >= parts.length) return null;
+		var part: String = StringTools.trim(parts[argIndex]);
+		final colon: Int = topLevelIndexOf(part, ':');
+		if (colon >= 0) part = part.substr(colon + 1).trim();
+		return part;
 	}
 
 	/** Type-parameter names in scope at `span` — the enclosing member's and type declaration's header params. */
@@ -735,7 +734,7 @@ final class PreferArrowCallback implements Check {
 		final nameAt: Int = wholeWordIndexOf(head, name);
 		if (nameAt < 0) return [];
 		var i: Int = nameAt + name.length;
-		while (i < head.length && StringTools.isSpace(head, i)) i++;
+		while (i < head.length && head.isSpace(i)) i++;
 		if (i >= head.length || head.charAt(i) != '<') return [];
 		var d: Int = 0;
 		var j: Int = i;
@@ -753,7 +752,7 @@ final class PreferArrowCallback implements Check {
 		for (part in splitTopCommas(head.substring(i + 1, j))) {
 			var p: String = StringTools.trim(part);
 			final colon: Int = topLevelIndexOf(p, ':');
-			if (colon >= 0) p = StringTools.trim(p.substr(0, colon));
+			if (colon >= 0) p = p.substr(0, colon).trim();
 			if (p.length > 0) out.push(p);
 		}
 		return out;
@@ -781,22 +780,21 @@ final class PreferArrowCallback implements Check {
 	/** Strip one balanced pair of parentheses wrapping the WHOLE string, repeatedly. */
 	private static function stripOuterParens(s: String): String {
 		var out: String = s;
-		while (StringTools.startsWith(out, '(') && StringTools.endsWith(out, ')')) {
+		while (out.startsWith('(') && out.endsWith(')')) {
 			var d: Int = 0;
 			var wraps: Bool = true;
 			for (i in 0...out.length) {
 				final c: String = out.charAt(i);
 				if (c == '(') d++;
-				if (c == ')') {
-					d--;
-					if (d == 0 && i < out.length - 1) {
-						wraps = false;
-						break;
-					}
+				if (c != ')') continue;
+				d--;
+				if (d == 0 && i < out.length - 1) {
+					wraps = false;
+					break;
 				}
 			}
 			if (!wraps) return out;
-			out = StringTools.trim(out.substring(1, out.length - 1));
+			out = out.substring(1, out.length - 1).trim();
 		}
 		return out;
 	}

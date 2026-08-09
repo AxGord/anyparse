@@ -225,7 +225,7 @@ class HxFinalMemberSliceTest extends HxTestHelpers {
 
 	// ======== FinalModifiedMember: single-space emit regression ========
 
-	public function testFinalFunctionEmitsSingleSpace(): Void {
+	public inline function testFinalFunctionEmitsSingleSpace(): Void {
 		// Regression (double space `final  function`): the `@:kw('final')` slot on
 		// FinalModifiedMember emits `final ` and the inner `@:kw('function')` field
 		// leaked its own leading separator even when the `modifiers` Star between
@@ -237,14 +237,14 @@ class HxFinalMemberSliceTest extends HxTestHelpers {
 		);
 	}
 
-	public function testPublicFinalFunctionEmitsSingleSpace(): Void {
+	public inline function testPublicFinalFunctionEmitsSingleSpace(): Void {
 		writerEquals(
 			'class C {\n\tpublic final function f():Void {}\n}', 'class C {\n\tpublic final function f():Void {}\n}\n',
 			'public final method emits single spaces'
 		);
 	}
 
-	public function testFullModifierRunFinalFunctionEmitsSingleSpace(): Void {
+	public inline function testFullModifierRunFinalFunctionEmitsSingleSpace(): Void {
 		writerEquals(
 			'class C {\n\toverride public static inline final function f():Void {}\n}',
 			'class C {\n\toverride public static inline final function f():Void {}\n}\n',

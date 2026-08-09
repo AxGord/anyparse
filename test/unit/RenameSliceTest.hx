@@ -5,7 +5,6 @@ import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Rename;
-import anyparse.query.Rename.RenameResult;
 
 /**
  * `Rename.rename` — scope-correct, format-preserving symbol rename.
@@ -27,11 +26,11 @@ import anyparse.query.Rename.RenameResult;
 class RenameSliceTest extends Test {
 
 	private static final FIXTURE: String = 'class C {\n\tvar count:Int = 0;\n\tfunction f(count:Int):Int {\n\t\tvar total = count;\n'
-		+ '\t\tfor (count in 0...10) total += count;\n' + '\t\treturn total + this.count;\n' + '\t}\n' + '}';
+		+ '\t\tfor (count in 0...10) total += count;\n\t\treturn total + this.count;\n\t}\n}';
 
 	/** A local `v` shadowed by the VALUE binder of a key-value loop — the two are separate bindings. */
-	private static final KV_FIXTURE: String = 'class C {\n\tfunction f(m:Map<String, Int>):Void {\n\t\tvar v:Int = 0;\n\t\tg(v);\n'
-		+ '\t\tfor (k => v in m) g(k + v);\n' + '\t}\n' + '}';
+	private static final KV_FIXTURE: String =
+		'class C {\n\tfunction f(m:Map<String, Int>):Void {\n\t\tvar v:Int = 0;\n\t\tg(v);\n\t\tfor (k => v in m) g(k + v);\n\t}\n}';
 
 	/**
 	 * Param `count` (decl `3:13`) → `n`: only the param decl and its sole
@@ -41,7 +40,7 @@ class RenameSliceTest extends Test {
 	 */
 	public function testRenameParamTouchesOnlyParamBinding(): Void {
 		final expected: String = 'class C {\n\tvar count:Int = 0;\n\tfunction f(n:Int):Int {\n\t\tvar total = n;\n'
-			+ '\t\tfor (count in 0...10) total += count;\n' + '\t\treturn total + this.count;\n' + '\t}\n' + '}';
+			+ '\t\tfor (count in 0...10) total += count;\n\t\treturn total + this.count;\n\t}\n}';
 		assertRename(FIXTURE, 3, 13, 'n', expected);
 	}
 
@@ -52,7 +51,7 @@ class RenameSliceTest extends Test {
 	 */
 	public function testRenameLoopVarTouchesOnlyLoopBinding(): Void {
 		final expected: String = 'class C {\n\tvar count:Int = 0;\n\tfunction f(count:Int):Int {\n\t\tvar total = count;\n'
-			+ '\t\tfor (j in 0...10) total += j;\n' + '\t\treturn total + this.count;\n' + '\t}\n' + '}';
+			+ '\t\tfor (j in 0...10) total += j;\n\t\treturn total + this.count;\n\t}\n}';
 		assertRename(FIXTURE, 5, 3, 'j', expected);
 	}
 
@@ -63,7 +62,7 @@ class RenameSliceTest extends Test {
 	 */
 	public function testRenameSingleBindingTouchesAllOccurrences(): Void {
 		final expected: String = 'class C {\n\tvar count:Int = 0;\n\tfunction f(count:Int):Int {\n\t\tvar sum = count;\n'
-			+ '\t\tfor (count in 0...10) sum += count;\n' + '\t\treturn sum + this.count;\n' + '\t}\n' + '}';
+			+ '\t\tfor (count in 0...10) sum += count;\n\t\treturn sum + this.count;\n\t}\n}';
 		assertRename(FIXTURE, 4, 3, 'sum', expected);
 	}
 
@@ -71,9 +70,9 @@ class RenameSliceTest extends Test {
 		// `Refs` indexes a braceless `$name` read, so the rename rewrites it in place — the
 		// identifier token inside the `$name` span, never the `$`. `$$path` beside it is an
 		// ESCAPED dollar (literal text `$path`), and stays verbatim.
-		final src: String = "class C {\n\tfunction f():String {\n\t\tvar path = \"a\";\n\t\tpath = \"b\" + path;\n"
+		final src: String = 'class C {\n\tfunction f():String {\n\t\tvar path = \"a\";\n\t\tpath = \"b\" + path;\n'
 			+ "\t\treturn 'x/$path and $$path';\n\t}\n}";
-		final expected: String = "class C {\n\tfunction f():String {\n\t\tvar relPath = \"a\";\n\t\trelPath = \"b\" + relPath;\n"
+		final expected: String = 'class C {\n\tfunction f():String {\n\t\tvar relPath = \"a\";\n\t\trelPath = \"b\" + relPath;\n'
 			+ "\t\treturn 'x/$relPath and $$path';\n\t}\n}";
 		assertRename(src, 3, 7, 'relPath', expected);
 	}
@@ -81,20 +80,18 @@ class RenameSliceTest extends Test {
 	public function testInterpolationReadRenamesAlongToShorterName(): Void {
 		// The same splice with a SHORTER new name: the interpolation occurrence is one more
 		// span in the edit list, so the running offset shift must stay right across it.
-		final src: String = "class C {\n\tfunction f():String {\n\t\tvar path = \"a\";\n\t\tpath = \"b\" + path;\n"
+		final src: String = 'class C {\n\tfunction f():String {\n\t\tvar path = \"a\";\n\t\tpath = \"b\" + path;\n'
 			+ "\t\treturn 'x/$path and $$path';\n\t}\n}";
-		final expected: String = "class C {\n\tfunction f():String {\n\t\tvar p = \"a\";\n\t\tp = \"b\" + p;\n"
-			+ "\t\treturn 'x/$p and $$path';\n\t}\n}";
+		final expected: String =
+			"class C {\n\tfunction f():String {\n\t\tvar p = \"a\";\n\t\tp = \"b\" + p;\n\t\treturn 'x/$p and $$path';\n\t}\n}";
 		assertRename(src, 3, 7, 'p', expected);
 	}
 
 	public function testDoubleQuotedDollarNameNotRenamed(): Void {
 		// A double-quoted literal never interpolates, so `"$path"` is plain text with no read
 		// in it — the rename must leave the literal alone.
-		final src: String = "class C {\n\tfunction f():String {\n\t\tvar path = \"a\";\n\t\ttrace(path);\n"
-			+ "\t\treturn \"x/$path\";\n\t}\n}";
-		final expected: String = "class C {\n\tfunction f():String {\n\t\tvar p = \"a\";\n\t\ttrace(p);\n"
-			+ "\t\treturn \"x/$path\";\n\t}\n}";
+		final src: String = "class C {\n\tfunction f():String {\n\t\tvar path = \"a\";\n\t\ttrace(path);\n\t\treturn \"x/$path\";\n\t}\n}";
+		final expected: String = "class C {\n\tfunction f():String {\n\t\tvar p = \"a\";\n\t\ttrace(p);\n\t\treturn \"x/$path\";\n\t}\n}";
 		assertRename(src, 3, 7, 'p', expected);
 	}
 
@@ -102,14 +99,14 @@ class RenameSliceTest extends Test {
 		// `\x24nm` decodes to `$nm`, so the projection reports a read — but the raw bytes do
 		// not spell `nm` as a token, so no occurrence covers it and the splice would leave the
 		// read behind. The one interpolation shape that still refuses.
-		final src: String = "class C {\n\tfunction f():String {\n\t\tvar nm = \"a\";\n\t\ttrace(nm);\n" + "\t\treturn 'v \\x24nm';\n\t}\n}";
+		final src: String = "class C {\n\tfunction f():String {\n\t\tvar nm = \"a\";\n\t\ttrace(nm);\n\t\treturn 'v \\x24nm';\n\t}\n}";
 		assertRenameErr(src, 3, 7, 'q', 'no locatable identifier token');
 	}
 
 	public function testEscapeSpelledInterpolationBlockRefused(): Void {
 		// An escape-spelled `${ … }` hole is re-projected WITHOUT a parsed expression, so the
 		// read of `nm` inside it is invisible to every scan — renaming would part-apply.
-		final src: String = "class C {\n\tfunction f():String {\n\t\tvar nm = \"a\";\n\t\ttrace(nm);\n" + "\t\treturn 'v \\x24{nm}';\n\t}\n}";
+		final src: String = "class C {\n\tfunction f():String {\n\t\tvar nm = \"a\";\n\t\ttrace(nm);\n\t\treturn 'v \\x24{nm}';\n\t}\n}";
 		assertRenameErr(src, 3, 7, 'q', 'no parsed expression');
 	}
 
@@ -130,19 +127,19 @@ class RenameSliceTest extends Test {
 	public function testSiblingFunctionInterpReadDoesNotRefuse(): Void {
 		// A `$name` read in ANOTHER function is a different binding — the net is
 		// scoped to the enclosing function and must not refuse this rename.
-		final src: String =
-			"class C {\n\tfunction g():String {\n\t\tvar y = 'a';\n\t\treturn 'y/$y';\n\t}\n\tfunction h():Int {\n\t\tvar y = 2;\n\t\treturn y;\n\t}\n}";
-		final expected: String =
-			"class C {\n\tfunction g():String {\n\t\tvar y = 'a';\n\t\treturn 'y/$y';\n\t}\n\tfunction h():Int {\n\t\tvar z = 2;\n\t\treturn z;\n\t}\n}";
+		final src: String = "class C {\n\tfunction g():String {\n\t\tvar y = 'a';\n\t\treturn 'y/$y';\n\t}\n\tfunction h():Int {\n"
+			+ '\t\tvar y = 2;\n\t\treturn y;\n\t}\n}';
+		final expected: String = "class C {\n\tfunction g():String {\n\t\tvar y = 'a';\n\t\treturn 'y/$y';\n\t}\n\tfunction h():Int {\n"
+			+ '\t\tvar z = 2;\n\t\treturn z;\n\t}\n}';
 		assertRename(src, 7, 7, 'z', expected);
 	}
 
 	public function testSiblingFunctionSameNameDeclDoesNotRefuse(): Void {
 		// One declaration per block, in two different functions — no redeclaration.
-		final src: String =
-			'class C {\n\tfunction g():Int {\n\t\tvar y = 1;\n\t\treturn y;\n\t}\n\tfunction h():Int {\n\t\tvar y = 2;\n\t\treturn y;\n\t}\n}';
-		final expected: String =
-			'class C {\n\tfunction g():Int {\n\t\tvar y = 1;\n\t\treturn y;\n\t}\n\tfunction h():Int {\n\t\tvar z = 2;\n\t\treturn z;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction g():Int {\n\t\tvar y = 1;\n\t\treturn y;\n\t}\n\tfunction h():Int {\n\t\tvar y = 2;\n'
+			+ '\t\treturn y;\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction g():Int {\n\t\tvar y = 1;\n\t\treturn y;\n\t}\n\tfunction h():Int {\n'
+			+ '\t\tvar z = 2;\n\t\treturn z;\n\t}\n}';
 		assertRename(src, 7, 7, 'z', expected);
 	}
 
@@ -154,7 +151,7 @@ class RenameSliceTest extends Test {
 	 */
 	public function testRenameFieldTouchesDeclAndThisAccess(): Void {
 		final expected: String = 'class C {\n\tvar n:Int = 0;\n\tfunction f(count:Int):Int {\n\t\tvar total = count;\n'
-			+ '\t\tfor (count in 0...10) total += count;\n' + '\t\treturn total + this.n;\n' + '\t}\n' + '}';
+			+ '\t\tfor (count in 0...10) total += count;\n\t\treturn total + this.n;\n\t}\n}';
 		assertRename(FIXTURE, 2, 2, 'n', expected);
 	}
 
@@ -209,10 +206,10 @@ class RenameSliceTest extends Test {
 	 * exactly like a plain `FnMember`.
 	 */
 	public function testRenameFinalMethod(): Void {
-		final source: String = 'class C {\n\tfinal function d(a:Int):Void {}\n\tfunction caller():Void {\n\t\td(1);\n\t\tthis.d(2);\n'
-			+ '\t}\n' + '}';
-		final expected: String = 'class C {\n\tfinal function ren(a:Int):Void {}\n\tfunction caller():Void {\n\t\tren(1);\n'
-			+ '\t\tthis.ren(2);\n' + '\t}\n' + '}';
+		final source: String =
+			'class C {\n\tfinal function d(a:Int):Void {}\n\tfunction caller():Void {\n\t\td(1);\n\t\tthis.d(2);\n\t}\n}';
+		final expected: String =
+			'class C {\n\tfinal function ren(a:Int):Void {}\n\tfunction caller():Void {\n\t\tren(1);\n\t\tthis.ren(2);\n\t}\n}';
 		// Line 2 col 2 — the `final` method decl, as `apq refs --decls` prints.
 		assertRename(source, 2, 2, 'ren', expected);
 	}
@@ -225,10 +222,10 @@ class RenameSliceTest extends Test {
 	 * `KindEquivalence.canonOf` build break the field-rename autofix surfaced).
 	 */
 	public function testRenameFieldInFinalClassTouchesBareRefs(): Void {
-		final source: String = 'final class C {\n\tfinal v:Int;\n\tpublic function new() {\n\t\tv = 1;\n\t}\n'
-			+ '\tpublic function g():Int {\n' + '\t\treturn v;\n' + '\t}\n' + '}';
+		final source: String = 'final class C {\n\tfinal v:Int;\n\tpublic function new() {\n\t\tv = 1;\n\t}\n\tpublic function g():Int {\n'
+			+ '\t\treturn v;\n\t}\n}';
 		final expected: String = 'final class C {\n\tfinal _v:Int;\n\tpublic function new() {\n\t\t_v = 1;\n\t}\n'
-			+ '\tpublic function g():Int {\n' + '\t\treturn _v;\n' + '\t}\n' + '}';
+			+ '\tpublic function g():Int {\n\t\treturn _v;\n\t}\n}';
 		// Line 2 col 2 — the `final v` field decl, as `apq refs --decls` prints.
 		assertRename(source, 2, 2, '_v', expected);
 	}
@@ -324,57 +321,17 @@ class RenameSliceTest extends Test {
 	 * producing `for (k => v in m) g(k + w)`: valid-looking, unparseable-by-meaning, silent.
 	 */
 	public function testRenameOuterLocalLeavesKeyValueBinderVerbatim(): Void {
-		final expected: String = 'class C {\n\tfunction f(m:Map<String, Int>):Void {\n\t\tvar w:Int = 0;\n\t\tg(w);\n'
-			+ '\t\tfor (k => v in m) g(k + v);\n' + '\t}\n' + '}';
+		final expected: String =
+			'class C {\n\tfunction f(m:Map<String, Int>):Void {\n\t\tvar w:Int = 0;\n\t\tg(w);\n\t\tfor (k => v in m) g(k + v);\n\t}\n}';
 		assertRename(KV_FIXTURE, 3, 3, 'w', expected);
 	}
 
 	/** The value binder is addressable in its own right: renaming it rewrites the binder and its body reads only. */
 	public function testRenameKeyValueBinderTouchesOnlyItsBinding(): Void {
-		final expected: String = 'class C {\n\tfunction f(m:Map<String, Int>):Void {\n\t\tvar v:Int = 0;\n\t\tg(v);\n'
-			+ '\t\tfor (k => w in m) g(k + w);\n' + '\t}\n' + '}';
+		final expected: String =
+			'class C {\n\tfunction f(m:Map<String, Int>):Void {\n\t\tvar v:Int = 0;\n\t\tg(v);\n\t\tfor (k => w in m) g(k + w);\n\t}\n}';
 		assertRename(KV_FIXTURE, 5, 13, 'w', expected);
 	}
-
-	private function assertRename(source: String, line: Int, col: Int, newName: String, expected: String): Void {
-		final result: RenameResult = renameOf(source, line, col, newName);
-		switch result {
-			case Ok(text):
-				Assert.equals(expected, text);
-			case Err(message):
-				Assert.fail('expected Ok, got Err: $message');
-		}
-	}
-
-	private function assertRenameErr(source: String, line: Int, col: Int, newName: String, fragment: String): Void {
-		switch renameOf(source, line, col, newName) {
-			case Ok(text):
-				Assert.fail('expected Err, got Ok:\n$text');
-			case Err(message):
-				Assert.isTrue(message.indexOf(fragment) >= 0, 'message lacks "$fragment": $message');
-		}
-	}
-
-	private function assertQualified(source: String, line: Int, col: Int, newName: String, expected: String): Void {
-		switch renameQualified(source, line, col, newName) {
-			case Ok(text):
-				Assert.equals(expected, text);
-			case Err(message):
-				Assert.fail('expected Ok, got Err: $message');
-		}
-	}
-
-	private static function renameOf(source: String, line: Int, col: Int, newName: String): RenameResult {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final shape: RefShape = plugin.refShape();
-		return Rename.rename(source, line, col, newName, plugin, shape);
-	}
-
-	private static function renameQualified(source: String, line: Int, col: Int, newName: String): RenameResult {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return Rename.rename(source, line, col, newName, plugin, plugin.refShape(), true);
-	}
-
 
 	/**
 	 * In a Haxe `abstract`, `this` IS the underlying value, so `this.<member>` looks the name up
@@ -403,17 +360,6 @@ class RenameSliceTest extends Test {
 		final source: String =
 			'class C {\n\tstatic function m_run():Int return 1;\n\tpublic function f(run:Int):Int {\n\t\treturn m_run() + run;\n\t}\n}';
 		switch renameQualified(source, 2, 18, 'run') {
-			case Ok(text):
-				Assert.fail('expected Err, got Ok:\n$text');
-			case Err(message):
-				Assert.isTrue(message.indexOf('capture') >= 0, 'message lacks "capture": $message');
-		}
-	}
-
-
-	/** Assert that the qualifying rename at `line:col` is REFUSED with a capture diagnostic. */
-	private function assertQualifyRefused(source: String, line: Int, col: Int, newName: String): Void {
-		switch renameQualified(source, line, col, newName) {
 			case Ok(text):
 				Assert.fail('expected Err, got Ok:\n$text');
 			case Err(message):
@@ -465,7 +411,6 @@ class RenameSliceTest extends Test {
 		assertQualifyRefused(source, 3, 9, 'width');
 	}
 
-
 	/**
 	 * A member of the target name that a PARAMETER already shadows was never what the captured
 	 * occurrence read - qualifying it would rebind a param read to the field, which compiles and
@@ -473,8 +418,8 @@ class RenameSliceTest extends Test {
 	 * binding is.
 	 */
 	public function testQualifyShadowedRefusesMemberShadowedByParam(): Void {
-		final source: String = 'class C {\n\tvar width:Int = 7;\n\tfunction f(width:Int):Void {\n'
-			+ '\t\tfinal wIDTH:Int = 1;\n\t\ttrace(width + wIDTH);\n\t}\n}';
+		final source: String =
+			'class C {\n\tvar width:Int = 7;\n\tfunction f(width:Int):Void {\n\t\tfinal wIDTH:Int = 1;\n\t\ttrace(width + wIDTH);\n\t}\n}';
 		assertQualifyRefused(source, 4, 9, 'width');
 	}
 
@@ -491,24 +436,23 @@ class RenameSliceTest extends Test {
 		assertQualified(source, 4, 9, 'width', expected);
 	}
 
-
 	/**
 	 * An escape can also extend a `$name` run the PARSER already cut short: `'$n\x6d'` is a
 	 * read of `nm`, not of `n`. Renaming `n` must therefore leave the literal alone — the
 	 * projection re-reads the decoded text, so the tree names the read `nm`.
 	 */
 	public function testEscapeExtendedInterpolationNameBindsToTheLongerName(): Void {
-		final src: String = 'class C {\n\tfunction f():String {\n\t\tvar n = "N";\n\t\tvar nm = "NM";\n'
-			+ '\t\treturn \'v $$n\\x6d\' + nm;\n\t}\n}';
-		final expected: String = 'class C {\n\tfunction f():String {\n\t\tvar q = "N";\n\t\tvar nm = "NM";\n'
-			+ '\t\treturn \'v $$n\\x6d\' + nm;\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction f():String {\n\t\tvar n = "N";\n\t\tvar nm = "NM";\n\t\treturn \'v $$n\\x6d\' + nm;\n\t}\n}';
+		final expected: String =
+			'class C {\n\tfunction f():String {\n\t\tvar q = "N";\n\t\tvar nm = "NM";\n\t\treturn \'v $$n\\x6d\' + nm;\n\t}\n}';
 		assertRename(src, 3, 7, 'q', expected);
 	}
 
 	/** The same literal blocks a rename of the name it REALLY reads: its token is not in the raw bytes. */
 	public function testEscapeExtendedInterpolationRefusesTheNameItReads(): Void {
-		final src: String = 'class C {\n\tfunction f():String {\n\t\tvar n = "N";\n\t\tvar nm = "NM";\n'
-			+ '\t\treturn \'v $$n\\x6d\' + nm;\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction f():String {\n\t\tvar n = "N";\n\t\tvar nm = "NM";\n\t\treturn \'v $$n\\x6d\' + nm;\n\t}\n}';
 		assertRenameErr(src, 4, 7, 'q', 'no locatable identifier token');
 	}
 
@@ -523,6 +467,55 @@ class RenameSliceTest extends Test {
 		final expected: String = 'class C {\n\tfunction f():String {\n\t\tvar total = 1;\n\t\tvar g = function():String {\n'
 			+ '\t\t\tvar count = 2;\n\t\t\treturn \'v $$count\';\n\t\t};\n\t\treturn g() + total;\n\t}\n}';
 		assertRename(src, 3, 7, 'total', expected);
+	}
+
+	private function assertRename(source: String, line: Int, col: Int, newName: String, expected: String): Void {
+		final result: RenameResult = renameOf(source, line, col, newName);
+		switch result {
+			case Ok(text):
+				Assert.equals(expected, text);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	private function assertRenameErr(source: String, line: Int, col: Int, newName: String, fragment: String): Void {
+		switch renameOf(source, line, col, newName) {
+			case Ok(text):
+				Assert.fail('expected Err, got Ok:\n$text');
+			case Err(message):
+				Assert.isTrue(message.indexOf(fragment) >= 0, 'message lacks "$fragment": $message');
+		}
+	}
+
+	private function assertQualified(source: String, line: Int, col: Int, newName: String, expected: String): Void {
+		switch renameQualified(source, line, col, newName) {
+			case Ok(text):
+				Assert.equals(expected, text);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	/** Assert that the qualifying rename at `line:col` is REFUSED with a capture diagnostic. */
+	private function assertQualifyRefused(source: String, line: Int, col: Int, newName: String): Void {
+		switch renameQualified(source, line, col, newName) {
+			case Ok(text):
+				Assert.fail('expected Err, got Ok:\n$text');
+			case Err(message):
+				Assert.isTrue(message.indexOf('capture') >= 0, 'message lacks "capture": $message');
+		}
+	}
+
+	private static function renameOf(source: String, line: Int, col: Int, newName: String): RenameResult {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final shape: RefShape = plugin.refShape();
+		return Rename.rename(source, line, col, newName, plugin, shape);
+	}
+
+	private static function renameQualified(source: String, line: Int, col: Int, newName: String): RenameResult {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		return Rename.rename(source, line, col, newName, plugin, plugin.refShape(), true);
 	}
 
 }

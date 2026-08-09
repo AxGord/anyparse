@@ -62,7 +62,12 @@ class HxPredBuild {
 		TriviaAnalysis.run(shape);
 		if (trivia) TriviaTypeSynth.arm(shape);
 		if (spans) SpanTypeSynth.arm(shape);
-		final mode: AstPredMode = spans ? PredSpans : trivia ? PredTrivia : PredPlain;
+		final mode: AstPredMode = if (spans)
+			PredSpans
+		else if (trivia)
+			PredTrivia
+		else
+			PredPlain;
 		return new HxAstPredLowering(shape, mode).generate();
 	}
 

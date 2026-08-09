@@ -84,7 +84,8 @@ final class RedundantImport implements Check implements RiskyFix {
 				span: imp.span,
 				rule: 'redundant-import',
 				severity: Severity.Warning,
-				message: 'redundant import \'${imp.raw}\': \'$module\' is imported here and already binds \'${RefactorSupport.lastSegment(imp.raw)}\''
+				message: 'redundant import \'${imp.raw}\': \'$module\' is imported here and already binds \''
+				+ '${RefactorSupport.lastSegment(imp.raw)}\''
 			});
 		}
 		return violations;
@@ -119,10 +120,16 @@ final class RedundantImport implements Check implements RiskyFix {
 		// parent segment is a package — neither shape is a module's sub-type.
 		if (!RefactorSupport.isUpperInitial(simple)) return null;
 		final module: String = imp.raw.substring(0, dot);
-		if (!RefactorSupport.isUpperInitial(RefactorSupport.lastSegment(module))) return null;
-		if (!info.imports.exists(o -> providesModule(o, module))) return null;
-		if (!moduleDeclaresType(index, module, simple)) return null;
-		return bindsElsewhere(info, imp, module, simple, index) ? null : module;
+		return if (!RefactorSupport.isUpperInitial(RefactorSupport.lastSegment(module)))
+			null
+		else if (!info.imports.exists(o -> providesModule(o, module)))
+			null
+		else if (!moduleDeclaresType(index, module, simple))
+			null
+		else if (bindsElsewhere(info, imp, module, simple, index))
+			null
+		else
+			module;
 	}
 
 	/**
@@ -131,7 +138,7 @@ final class RedundantImport implements Check implements RiskyFix {
 	 * `Alias` binds only its alias, a `Wild` binds statics or main types, and a GUARDED statement
 	 * exists in some builds only — none of the three qualifies.
 	 */
-	private static function providesModule(o: ImportInfo, module: String): Bool {
+	private static inline function providesModule(o: ImportInfo, module: String): Bool {
 		return !o.guarded && (o.kind == ImportKind.Import || o.kind == ImportKind.Using) && o.raw == module;
 	}
 

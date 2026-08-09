@@ -17,8 +17,8 @@ import anyparse.query.RefactorSupport;
 class TrivialGetterStaticShadowTest extends Test {
 
 	public function testStaticShadowedParamUsesClassName(): Void {
-		final src: String =
-			'class C {\n\tpublic static var level(get, null):Int;\n\tstatic var _level:Int = 0;\n\tstatic function get_level():Int return _level;\n\tpublic static function configure(level:Int):Void { _level = level; }\n}';
+		final src: String = 'class C {\n\tpublic static var level(get, null):Int;\n\tstatic var _level:Int = 0;\n'
+			+ '\tstatic function get_level():Int return _level;\n\tpublic static function configure(level:Int):Void { _level = level; }\n}';
 		assertFixContains(src, 'C.level = level', 'this.level');
 	}
 

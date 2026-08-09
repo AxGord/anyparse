@@ -3,8 +3,6 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.check.Check;
-import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.RedundantTrailingComma;
 import anyparse.check.Severity;

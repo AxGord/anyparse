@@ -22,10 +22,14 @@ using Lambda;
 class SpanTypeInfoPinTest extends Test {
 
 	private static final sources: Array<String> = [
-		'class C {\n\tvar field: Ctx;\n\tfunction f(a: Foo, b: Bar): Array<Int> {\n\t\tvar x: Ctx = null;\n\t\tfinal y: Foo = a;\n\t\treturn null;\n\t}\n}',
-		'class P {\n\tpublic var p(get, never): Int;\n\tpublic var q(default, null): String;\n\tvar plain: Int;\n\tfunction get_p(): Int return 1;\n}',
-		'class K {\n\tfunction g(): Void {\n\t\tvar z = cast(w, Array<Int>);\n\t\tvar t: Int = (q : String);\n\t\tvar u: Map<String, Int> = null;\n\t}\n}',
-		'typedef Ctx = { var f: Int; };\nclass M {\n\tstatic function mk(): Ctx return null;\n\tstatic function m(c: Ctx): Void {\n\t\tfinal d = c.f;\n\t}\n}',
+		'class C {\n\tvar field: Ctx;\n\tfunction f(a: Foo, b: Bar): Array<Int> {\n\t\tvar x: Ctx = null;\n\t\tfinal y: Foo = a;\n'
+			+ '\t\treturn null;\n\t}\n}',
+		'class P {\n\tpublic var p(get, never): Int;\n\tpublic var q(default, null): String;\n\tvar plain: Int;\n'
+			+ '\tfunction get_p(): Int return 1;\n}',
+		'class K {\n\tfunction g(): Void {\n\t\tvar z = cast(w, Array<Int>);\n\t\tvar t: Int = (q : String);\n'
+			+ '\t\tvar u: Map<String, Int> = null;\n\t}\n}',
+		'typedef Ctx = { var f: Int; };\nclass M {\n\tstatic function mk(): Ctx return null;\n\tstatic function m(c: Ctx): Void {\n'
+			+ '\t\tfinal d = c.f;\n\t}\n}',
 		'enum E {\n\tA(x: Int);\n\tB(y: String);\n}\nabstract Ab(Int) from Int to Int {\n\tpublic function new(v: Int) this = v;\n}'
 	];
 
@@ -64,31 +68,6 @@ class SpanTypeInfoPinTest extends Test {
 			);
 		}
 	}
-
-	private static function assertBundleMatches(
-		bundle: SpanTypeInfo, declaredTypes: Map<Int, String>, returnTypes: Map<Int, String>, propertyAccessors: Map<Int, Bool>,
-		propertyWriteAccessors: Map<Int, Bool>, declaredTypeSources: Map<Int, String>, castTargetSources: Map<Int, String>, src: String
-	): Void {
-		eqStr(bundle.declaredTypes, declaredTypes, 'declaredTypes', src);
-		eqStr(bundle.returnTypes, returnTypes, 'returnTypes', src);
-		eqBool(bundle.propertyAccessors, propertyAccessors, 'propertyAccessors', src);
-		eqBool(bundle.propertyWriteAccessors, propertyWriteAccessors, 'propertyWriteAccessors', src);
-		eqStr(bundle.declaredTypeSources, declaredTypeSources, 'declaredTypeSources', src);
-		eqStr(bundle.castTargetSources, castTargetSources, 'castTargetSources', src);
-	}
-
-	private static function eqStr(a: Map<Int, String>, b: Map<Int, String>, label: String, src: String): Void {
-		Assert.equals(a.count(), b.count(), '$label size for <$src>');
-		for (k => value in a) Assert.equals(b[k], value, '$label key $k for <$src>');
-		for (k in b.keys()) Assert.isTrue(a.exists(k), '$label missing key $k for <$src>');
-	}
-
-	private static function eqBool(a: Map<Int, Bool>, b: Map<Int, Bool>, label: String, src: String): Void {
-		Assert.equals(a.count(), b.count(), '$label size for <$src>');
-		for (k => value in a) Assert.equals(b[k], value, '$label key $k for <$src>');
-		for (k in b.keys()) Assert.isTrue(a.exists(k), '$label missing key $k for <$src>');
-	}
-
 
 	/**
 	 * The bundle CONTENTS, fixture by fixture. Captured from the reflective walk the
@@ -152,11 +131,35 @@ class SpanTypeInfoPinTest extends Test {
 		}
 	}
 
+	private static function assertBundleMatches(
+		bundle: SpanTypeInfo, declaredTypes: Map<Int, String>, returnTypes: Map<Int, String>, propertyAccessors: Map<Int, Bool>,
+		propertyWriteAccessors: Map<Int, Bool>, declaredTypeSources: Map<Int, String>, castTargetSources: Map<Int, String>, src: String
+	): Void {
+		eqStr(bundle.declaredTypes, declaredTypes, 'declaredTypes', src);
+		eqStr(bundle.returnTypes, returnTypes, 'returnTypes', src);
+		eqBool(bundle.propertyAccessors, propertyAccessors, 'propertyAccessors', src);
+		eqBool(bundle.propertyWriteAccessors, propertyWriteAccessors, 'propertyWriteAccessors', src);
+		eqStr(bundle.declaredTypeSources, declaredTypeSources, 'declaredTypeSources', src);
+		eqStr(bundle.castTargetSources, castTargetSources, 'castTargetSources', src);
+	}
+
+	private static function eqStr(a: Map<Int, String>, b: Map<Int, String>, label: String, src: String): Void {
+		Assert.equals(a.count(), b.count(), '$label size for <$src>');
+		for (k => value in a) Assert.equals(b[k], value, '$label key $k for <$src>');
+		for (k in b.keys()) Assert.isTrue(a.exists(k), '$label missing key $k for <$src>');
+	}
+
+	private static function eqBool(a: Map<Int, Bool>, b: Map<Int, Bool>, label: String, src: String): Void {
+		Assert.equals(a.count(), b.count(), '$label size for <$src>');
+		for (k => value in a) Assert.equals(b[k], value, '$label key $k for <$src>');
+		for (k in b.keys()) Assert.isTrue(a.exists(k), '$label missing key $k for <$src>');
+	}
+
 	/** A span map as a key-ordered `[from=>value, ...]` string, so a mismatch reads as a diff rather than a count. */
 	private static function render<V>(m: Map<Int, V>): String {
 		final keys: Array<Int> = [for (k in m.keys()) k];
 		keys.sort((a, b) -> a - b);
-		return '[' + keys.map(k -> '$k=>' + Std.string(m[k])).join(', ') + ']';
+		return '[' + keys.map(k -> '$k=>${m[k]}').join(', ') + ']';
 	}
 
 }

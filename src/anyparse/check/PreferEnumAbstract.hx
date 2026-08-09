@@ -2,10 +2,11 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Suggests grouping a set of related `static final` integer constants into an
@@ -125,7 +126,7 @@ final class PreferEnumAbstract implements Check {
 			final name: Null<String> = node.name;
 			final span: Null<Span> = node.span;
 			final prefix: Null<String> = name != null ? prefixOf(name) : null;
-			if (!(prefix != null && span != null && name != null)) continue;
+			if (prefix == null || span == null || name == null) continue;
 			final prefixValue: String = prefix;
 			final spanValue: Span = span;
 			final nameValue: String = name;
@@ -194,7 +195,8 @@ final class PreferEnumAbstract implements Check {
 			span: g.span,
 			rule: 'prefer-enum-abstract',
 			severity: Severity.Info,
-			message: '${g.members.length} \'${g.prefix}_*\' static-final constants read as a closed enumeration — consider an enum abstract for a distinct type'
+			message: '${g.members.length} \'${g.prefix}'
+			+ '_*\' static-final constants read as a closed enumeration — consider an enum abstract for a distinct type'
 		});
 	}
 
@@ -271,7 +273,7 @@ final class PreferEnumAbstract implements Check {
 	/** Verbatim source of `node`, or empty when unspanned. */
 	private static function spanText(node: QueryNode, source: String): String {
 		final s: Null<Span> = node.span;
-		return s == null ? '' : StringTools.trim(source.substring(s.from, s.to));
+		return s == null ? '' : source.substring(s.from, s.to).trim();
 	}
 
 	/** Whether two or more of `members` feed a single sink — the interchangeable-use signal. */

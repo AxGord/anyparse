@@ -6,6 +6,8 @@ import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * Flags a function parameter written `name:Null<T> = null` or `name:T = null` — a
  * nullable-or-plain type with a `null` default — that the `?` optional-parameter
@@ -142,7 +144,7 @@ final class OptionalParamShorthand implements Check {
 	private static function nullableDefaultInner(node: QueryNode, source: String): Null<{ inner: String, raw: String, opt: Bool }> {
 		final span: Null<Span> = node.span;
 		if (span == null) return null;
-		final opt: Bool = StringTools.fastCodeAt(source, span.from) == '?'.code;
+		final opt: Bool = source.fastCodeAt(span.from) == '?'.code;
 		final kids: Array<QueryNode> = node.children;
 		if (kids.length == 0) return null;
 		final defSpan: Null<Span> = kids[kids.length - 1].span;
@@ -152,11 +154,15 @@ final class OptionalParamShorthand implements Check {
 		final eq: Int = source.lastIndexOf('=', defSpan.from - 1);
 		if (eq <= colon) return null;
 		final typeText: String = source.substring(colon + 1, eq);
-		final raw: String = StringTools.trim(typeText);
+		final raw: String = typeText.trim();
 		if (opt) return raw.length > 0 ? { inner: raw, raw: raw, opt: true } : null;
 		final unwrapped: Null<String> = unwrapNull(typeText);
-		if (unwrapped != null) return { inner: unwrapped, raw: raw, opt: false };
-		return raw.length > 0 && !nullWrapperPrefixed(raw) ? { inner: raw, raw: raw, opt: false } : null;
+		return if (unwrapped != null)
+			{ inner: unwrapped, raw: raw, opt: false }
+		else if (raw.length > 0 && !nullWrapperPrefixed(raw))
+			{ inner: raw, raw: raw, opt: false }
+		else
+			null;
 	}
 
 	/**
@@ -167,19 +173,19 @@ final class OptionalParamShorthand implements Check {
 	 * the depth.
 	 */
 	private static function unwrapNull(typeText: String): Null<String> {
-		final t: String = StringTools.trim(typeText);
-		if (!StringTools.startsWith(t, 'Null')) return null;
+		final t: String = typeText.trim();
+		if (!t.startsWith('Null')) return null;
 		var i: Int = 4;
-		while (i < t.length && StringTools.isSpace(t, i)) i++;
-		if (i >= t.length || StringTools.fastCodeAt(t, i) != '<'.code) return null;
+		while (i < t.length && t.isSpace(i)) i++;
+		if (i >= t.length || t.fastCodeAt(i) != '<'.code) return null;
 		final open: Int = i;
 		var depth: Int = 0;
 		var close: Int = -1;
 		while (i < t.length) {
-			switch StringTools.fastCodeAt(t, i) {
+			switch t.fastCodeAt(i) {
 				case '<'.code:
 					depth++;
-				case '>'.code if (StringTools.fastCodeAt(t, i - 1) != '-'.code):
+				case '>'.code if (t.fastCodeAt(i - 1) != '-'.code):
 					depth--;
 					if (depth == 0) {
 						close = i;
@@ -193,9 +199,9 @@ final class OptionalParamShorthand implements Check {
 		// The matching `>` must be the last non-space character, else the text is not a
 		// clean single `Null<...>` (e.g. `Null<Int>Foo`).
 		var j: Int = t.length - 1;
-		while (j > close && StringTools.isSpace(t, j)) j--;
+		while (j > close && t.isSpace(j)) j--;
 		if (j != close) return null;
-		final inner: String = StringTools.trim(t.substring(open + 1, close));
+		final inner: String = t.substring(open + 1, close).trim();
 		return inner.length > 0 ? inner : null;
 	}
 
@@ -208,10 +214,10 @@ final class OptionalParamShorthand implements Check {
 	 * violating the one-layer-unwrap contract.
 	 */
 	private static function nullWrapperPrefixed(t: String): Bool {
-		if (!StringTools.startsWith(t, 'Null')) return false;
+		if (!t.startsWith('Null')) return false;
 		var i: Int = 4;
-		while (i < t.length && StringTools.isSpace(t, i)) i++;
-		return i < t.length && StringTools.fastCodeAt(t, i) == '<'.code;
+		while (i < t.length && t.isSpace(i)) i++;
+		return i < t.length && t.fastCodeAt(i) == '<'.code;
 	}
 
 }

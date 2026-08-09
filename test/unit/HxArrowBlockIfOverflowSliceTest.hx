@@ -44,8 +44,9 @@ final class HxArrowBlockIfOverflowSliceTest extends Test {
 	 * columns, broken head 119).
 	 */
 	public function testOverflowingBlockIfBreaksAfterArrow(): Void {
-		final src: String =
-			'class M {\n\tfunction f() {\n\t\towner?.forEachEntry(entryUser -> if (checkEntryForPending(entryUser, lostBatch) && !bucket.exists((u:EntryUserType) -> u.id == entryUser.id)) {\n\t\t\tfillMissingTag(entryUser);\n\t\t\tbucket.push(entryUser);\n\t\t});\n\t}\n}';
+		final src: String = 'class M {\n\tfunction f() {\n'
+			+ '\t\towner?.forEachEntry(entryUser -> if (checkEntryForPending(entryUser, lostBatch) && !bucket.exists((u:EntryUserType) -> u.id == entryUser.id)) {\n'
+			+ '\t\t\tfillMissingTag(entryUser);\n\t\t\tbucket.push(entryUser);\n\t\t});\n\t}\n}';
 		Assert.equals(
 			'class M {\n\tfunction f() {\n\t\towner?.forEachEntry(entryUser ->\n\t\t\tif (checkEntryForPending(entryUser, lostBatch) && !bucket.exists((u:EntryUserType) -> u.id == entryUser.id)) {\n\t\t\t\tfillMissingTag(entryUser);\n\t\t\t\tbucket.push(entryUser);\n\t\t\t}\n\t\t);\n\t}\n}',
 			triviaWrite(src)
@@ -54,8 +55,8 @@ final class HxArrowBlockIfOverflowSliceTest extends Test {
 
 	/** GUARD: a block-bodied `if` whose head FITS on the arrow line stays glued. */
 	public function testFittingBlockIfStaysGlued(): Void {
-		final src: String =
-			'class M {\n\tfunction f() {\n\t\towner?.forEachEntry(entryUser -> if (entryUser.id != 0) {\n\t\t\tfillMissingTag(entryUser);\n\t\t\tbucket.push(entryUser);\n\t\t});\n\t}\n}';
+		final src: String = 'class M {\n\tfunction f() {\n\t\towner?.forEachEntry(entryUser -> if (entryUser.id != 0) {\n'
+			+ '\t\t\tfillMissingTag(entryUser);\n\t\t\tbucket.push(entryUser);\n\t\t});\n\t}\n}';
 		Assert.equals(
 			'class M {\n\tfunction f() {\n\t\towner?.forEachEntry(entryUser -> if (entryUser.id != 0) {\n\t\t\tfillMissingTag(entryUser);\n\t\t\tbucket.push(entryUser);\n\t\t});\n\t}\n}',
 			triviaWrite(src)
@@ -68,8 +69,9 @@ final class HxArrowBlockIfOverflowSliceTest extends Test {
 	 * nothing (the population `Renderer.selfBreakingBraceBody` already owns).
 	 */
 	public function testOverflowingBraceBodyStaysGlued(): Void {
-		final src: String =
-			'class M {\n\tfunction f() {\n\t\towner?.forEachEntryWithPendingBatchAndLostShareBucket(entryUserRecordValue -> {\n\t\t\tfillMissingTag(entryUserRecordValue);\n\t\t\tbucket.push(entryUserRecordValue);\n\t\t});\n\t}\n}';
+		final src: String = 'class M {\n\tfunction f() {\n'
+			+ '\t\towner?.forEachEntryWithPendingBatchAndLostShareBucket(entryUserRecordValue -> {\n'
+			+ '\t\t\tfillMissingTag(entryUserRecordValue);\n\t\t\tbucket.push(entryUserRecordValue);\n\t\t});\n\t}\n}';
 		Assert.equals(
 			'class M {\n\tfunction f() {\n\t\towner?.forEachEntryWithPendingBatchAndLostShareBucket(entryUserRecordValue -> {\n\t\t\tfillMissingTag(entryUserRecordValue);\n\t\t\tbucket.push(entryUserRecordValue);\n\t\t});\n\t}\n}',
 			triviaWrite(src)

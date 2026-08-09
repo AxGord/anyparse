@@ -26,7 +26,7 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 final class HxChainOuterOperatorWrapSliceTest extends Test {
 
-	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4},' + ' "wrapping": {"maxLineLength": 140,'
+	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140,'
 		+ ' "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": ['
 		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"},'
 		+ '{"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]},'
@@ -35,9 +35,8 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 		+ ' "opAddSubChain": {"defaultWrap": "noWrap", "rules": ['
 		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"},'
 		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"}]}}}';
-
-	private static final HEAD: String = "class Sample {\n" + "\tprivate function query():Void {\n" + "\t\ttry {\n";
-	private static final TAIL: String = "\t\t} catch (exception:Exception) {\n" + "\t\t\tlog('boom');\n" + "\t\t}\n" + "\t}\n" + "}";
+	private static final HEAD: String = 'class Sample {\n\tprivate function query():Void {\n\t\ttry {\n';
+	private static final TAIL: String = "\t\t} catch (exception:Exception) {\n\t\t\tlog('boom');\n\t\t}\n\t}\n}";
 	private static final TERNARY: String = "(bucket ? '1 AND bucket_entry_id = $entryId' : '0 AND entry_id = $entryId')";
 
 	public function new(): Void {
@@ -55,10 +54,9 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 	public function testOverflowingSoleArgWrapsAtItsTopLevelOperator(): Void {
 		final src: String = HEAD
 			+ "\t\t\tfinal queryRows:RowCursor = _datasource.execute('SELECT itempath_movedfromsource FROM items WHERE bucket = ' + "
-			+ TERNARY + ");\n" + TAIL;
-		final expected: String = HEAD + "\t\t\tfinal queryRows:RowCursor = _datasource.execute(\n"
-			+ "\t\t\t\t'SELECT itempath_movedfromsource FROM items WHERE bucket = '\n" + "\t\t\t\t+ " + TERNARY + "\n" + "\t\t\t);\n"
-			+ TAIL;
+			+ '$TERNARY);\n$TAIL';
+		final expected: String = '$HEAD\t\t\tfinal queryRows:RowCursor = _datasource.execute(\n'
+			+ '\t\t\t\t\'SELECT itempath_movedfromsource FROM items WHERE bucket = \'\n\t\t\t\t+ $TERNARY\n\t\t\t);\n$TAIL';
 		assertWrite(expected, src);
 	}
 
@@ -70,10 +68,9 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 	public function testGluedSourceConvertsToTheOperatorWrap(): Void {
 		final src: String = HEAD
 			+ "\t\t\tfinal queryRows:RowCursor = _datasource.execute('SELECT itempath_movedfromsource FROM items WHERE bucket = ' + (\n"
-			+ "\t\t\t\tbucket ? '1 AND bucket_entry_id = $entryId' : '0 AND entry_id = $entryId'\n" + "\t\t\t));\n" + TAIL;
-		final expected: String = HEAD + "\t\t\tfinal queryRows:RowCursor = _datasource.execute(\n"
-			+ "\t\t\t\t'SELECT itempath_movedfromsource FROM items WHERE bucket = '\n" + "\t\t\t\t+ " + TERNARY + "\n" + "\t\t\t);\n"
-			+ TAIL;
+			+ '\t\t\t\tbucket ? \'1 AND bucket_entry_id = $$entryId\' : \'0 AND entry_id = $$entryId\'\n\t\t\t));\n$TAIL';
+		final expected: String = '$HEAD\t\t\tfinal queryRows:RowCursor = _datasource.execute(\n'
+			+ '\t\t\t\t\'SELECT itempath_movedfromsource FROM items WHERE bucket = \'\n\t\t\t\t+ $TERNARY\n\t\t\t);\n$TAIL';
 		assertWrite(expected, src);
 	}
 
@@ -86,10 +83,10 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 	 * shapes.
 	 */
 	public function testSoleArgFittingItsContinuationKeepsTheFlatArgument(): Void {
-		final src: String = HEAD + "\t\t\tfinal queryRows:RowCursor = _datasource.execute('SELECT itempath FROM items WHERE bucket = ' + "
-			+ TERNARY + ");\n" + TAIL;
-		final expected: String = HEAD + "\t\t\tfinal queryRows:RowCursor = _datasource.execute(\n"
-			+ "\t\t\t\t'SELECT itempath FROM items WHERE bucket = ' + " + TERNARY + "\n" + "\t\t\t);\n" + TAIL;
+		final src: String = '$HEAD\t\t\tfinal queryRows:RowCursor = _datasource.execute(\'SELECT itempath FROM items WHERE bucket = \' + '
+			+ '$TERNARY);\n$TAIL';
+		final expected: String = '$HEAD\t\t\tfinal queryRows:RowCursor = _datasource.execute(\n'
+			+ '\t\t\t\t\'SELECT itempath FROM items WHERE bucket = \' + $TERNARY\n\t\t\t);\n$TAIL';
 		assertWrite(expected, src);
 	}
 
@@ -106,12 +103,12 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 	 * `HxOpAddParenInnerBreakTest.testOpAddSubInnerParenBreaksBeforeLast`.
 	 */
 	public function testOpAddSubTailExactlyAtLineLimitKeepsTheFlatArgument(): Void {
-		final src: String = "class Sample {\n" + "\tprivate function query():Void {\n"
+		final src: String = 'class Sample {\n\tprivate function query():Void {\n'
 			+ "\t\tfinal row:RowCursor = store.select('SELECT itempath FROM items WHERE bucket = xxxxxxxxxxxxxxxxxx'"
-			+ " + (slidePointerTrackingHorizontalX - originTrackingPointerBaseXx));\n" + "\t}\n" + "}";
-		final expected: String = "class Sample {\n" + "\tprivate function query():Void {\n" + "\t\tfinal row:RowCursor = store.select(\n"
+			+ ' + (slidePointerTrackingHorizontalX - originTrackingPointerBaseXx));\n\t}\n}';
+		final expected: String = 'class Sample {\n\tprivate function query():Void {\n\t\tfinal row:RowCursor = store.select(\n'
 			+ "\t\t\t'SELECT itempath FROM items WHERE bucket = xxxxxxxxxxxxxxxxxx'"
-			+ " + (slidePointerTrackingHorizontalX - originTrackingPointerBaseXx)\n" + "\t\t);\n" + "\t}\n" + "}";
+			+ ' + (slidePointerTrackingHorizontalX - originTrackingPointerBaseXx)\n\t\t);\n\t}\n}';
 		assertWrite(expected, src);
 	}
 
@@ -124,12 +121,12 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 	 * shape, and only the at-limit sibling proves which side moved.
 	 */
 	public function testOpAddSubTailOneColumnPastLineLimitWrapsAtTheOperator(): Void {
-		final src: String = "class Sample {\n" + "\tprivate function query():Void {\n"
+		final src: String = 'class Sample {\n\tprivate function query():Void {\n'
 			+ "\t\tfinal row:RowCursor = store.select('SELECT itempath FROM items WHERE bucket = xxxxxxxxxxxxxxxxxxx'"
-			+ " + (slidePointerTrackingHorizontalX - originTrackingPointerBaseXx));\n" + "\t}\n" + "}";
-		final expected: String = "class Sample {\n" + "\tprivate function query():Void {\n" + "\t\tfinal row:RowCursor = store.select(\n"
+			+ ' + (slidePointerTrackingHorizontalX - originTrackingPointerBaseXx));\n\t}\n}';
+		final expected: String = 'class Sample {\n\tprivate function query():Void {\n\t\tfinal row:RowCursor = store.select(\n'
 			+ "\t\t\t'SELECT itempath FROM items WHERE bucket = xxxxxxxxxxxxxxxxxxx'\n"
-			+ "\t\t\t+ (slidePointerTrackingHorizontalX - originTrackingPointerBaseXx)\n" + "\t\t);\n" + "\t}\n" + "}";
+			+ '\t\t\t+ (slidePointerTrackingHorizontalX - originTrackingPointerBaseXx)\n\t\t);\n\t}\n}';
 		assertWrite(expected, src);
 	}
 
@@ -144,13 +141,13 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 	public function testTailTooWideForAnyContinuationKeepsTheGlue(): Void {
 		final wide: String = "(bucket ? '1 AND bucket_entry_id = ' : '0 AND "
 			+ "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy')";
-		final src: String = HEAD + "\t\t\tfinal queryRows:RowCursor = _datasource.execute('SELECT itempath FROM items WHERE bucket = ' + "
-			+ wide + ");\n" + TAIL;
+		final src: String =
+			'$HEAD\t\t\tfinal queryRows:RowCursor = _datasource.execute(\'SELECT itempath FROM items WHERE bucket = \' + $wide);\n$TAIL';
 		final expected: String = HEAD
 			+ "\t\t\tfinal queryRows:RowCursor = _datasource.execute('SELECT itempath FROM items WHERE bucket = ' + (\n"
-			+ "\t\t\t\tbucket\n" + "\t\t\t\t\t? '1 AND bucket_entry_id = '\n"
+			+ "\t\t\t\tbucket\n\t\t\t\t\t? '1 AND bucket_entry_id = '\n"
 			+ "\t\t\t\t\t: '0 AND yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy'\n"
-			+ "\t\t\t));\n" + TAIL;
+			+ '\t\t\t));\n' + TAIL;
 		assertWrite(expected, src);
 	}
 
@@ -162,11 +159,11 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 	 */
 	public function testThreeOperandChainKeepsTheGlue(): Void {
 		final src: String = HEAD
-			+ "\t\t\tfinal queryRows:RowCursor = _datasource.execute('SELECT itempath ' + 'FROM items WHERE bucket = ' + " + TERNARY
-			+ ");\n" + TAIL;
+			+ "\t\t\tfinal queryRows:RowCursor = _datasource.execute('SELECT itempath ' + 'FROM items WHERE bucket = ' + "
+			+ '$TERNARY);\n$TAIL';
 		final expected: String = HEAD
 			+ "\t\t\tfinal queryRows:RowCursor = _datasource.execute('SELECT itempath ' + 'FROM items WHERE bucket = ' + (\n"
-			+ "\t\t\t\tbucket ? '1 AND bucket_entry_id = $entryId' : '0 AND entry_id = $entryId'\n" + "\t\t\t));\n" + TAIL;
+			+ '\t\t\t\tbucket ? \'1 AND bucket_entry_id = $$entryId\' : \'0 AND entry_id = $$entryId\'\n\t\t\t));\n$TAIL';
 		assertWrite(expected, src);
 	}
 
@@ -188,13 +185,12 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 	public function testTailOverflowingThisContinuationGluesButOpensTheCall(): Void {
 		final tail: String = "(bucket ? '1 AND bucket_entry_id = ' : '0 AND "
 			+ "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy')";
-		final src: String = HEAD + "\t\t\tfinal queryRows:RowCursor = _datasource.execute('SELECT itempath FROM items WHERE bucket = ' + "
-			+ tail + ");\n" + TAIL;
-		final expected: String = HEAD + "\t\t\tfinal queryRows:RowCursor = _datasource.execute(\n"
-			+ "\t\t\t\t'SELECT itempath FROM items WHERE bucket = ' + (\n" + "\t\t\t\t\tbucket\n"
-			+ "\t\t\t\t\t\t? '1 AND bucket_entry_id = '\n"
+		final src: String =
+			'$HEAD\t\t\tfinal queryRows:RowCursor = _datasource.execute(\'SELECT itempath FROM items WHERE bucket = \' + $tail);\n$TAIL';
+		final expected: String = '$HEAD\t\t\tfinal queryRows:RowCursor = _datasource.execute(\n'
+			+ "\t\t\t\t'SELECT itempath FROM items WHERE bucket = ' + (\n\t\t\t\t\tbucket\n" + "\t\t\t\t\t\t? '1 AND bucket_entry_id = '\n"
 			+ "\t\t\t\t\t\t: '0 AND yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy'\n"
-			+ "\t\t\t\t)\n" + "\t\t\t);\n" + TAIL;
+			+ '\t\t\t\t)\n\t\t\t);\n$TAIL';
 		assertWrite(expected, src);
 	}
 

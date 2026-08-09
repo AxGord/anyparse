@@ -10,6 +10,7 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -456,10 +457,9 @@ final class MoveSymbol {
 	 * comment severs the comment from the move.
 	 */
 	private static function isContiguousTriviaLine(line: String): Bool {
-		final trimmed: String = StringTools.trim(line);
+		final trimmed: String = line.trim();
 		return trimmed.length != 0
-			&& (StringTools.startsWith(trimmed, '//') || StringTools.startsWith(trimmed, '/*') || StringTools.startsWith(trimmed, '*')
-				|| StringTools.startsWith(trimmed, '@'));
+			&& (trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*') || trimmed.startsWith('@'));
 	}
 
 	/** Offset just past the last non-newline character of `source`. */
@@ -627,9 +627,9 @@ final class MoveSymbol {
 				final at: Int = source.indexOf(path, from);
 				if (at < 0) break;
 				from = at + 1;
-				final beforeOk: Bool = at == 0 || !RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, at - 1));
+				final beforeOk: Bool = at == 0 || !RefactorSupport.isIdentChar(source.fastCodeAt(at - 1));
 				final afterIdx: Int = at + path.length;
-				final afterOk: Bool = afterIdx >= source.length || !RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, afterIdx));
+				final afterOk: Bool = afterIdx >= source.length || !RefactorSupport.isIdentChar(source.fastCodeAt(afterIdx));
 				if (!beforeOk || !afterOk) continue;
 				var inImport: Bool = false;
 				for (imp in infoNN.imports) if (imp.raw == path && at >= imp.span.from && at < imp.span.to) inImport = true;

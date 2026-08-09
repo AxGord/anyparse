@@ -18,7 +18,7 @@ import utest.Assert;
 class ArParserTest extends utest.Test {
 
 	/** File mode for a regular file with 0644 permissions (octal 100644). */
-	private static final MODE_REGULAR_FILE: Int = 33188;
+	private static inline final MODE_REGULAR_FILE: Int = 33188;
 
 	public function testParseMinimalAr(): Void {
 		final ar: ArArchive = ArArchiveParser.parse(buildMinimalAr());

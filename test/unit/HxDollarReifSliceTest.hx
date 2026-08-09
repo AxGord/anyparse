@@ -112,13 +112,13 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testDollarReifRoundTrip(): Void {
+	public inline function testDollarReifRoundTrip(): Void {
 		roundTrip(
 			"class C { static function f() { var a = macro $i{name}; var b = macro ${x + 1}; var c = macro $foo; } }", 'L-dollar-reif'
 		);
 	}
 
-	public function testDollarFieldAccessRoundTrip(): Void {
+	public inline function testDollarFieldAccessRoundTrip(): Void {
 		// `obj.$name` / `$struct.$name` — the `$`-prefixed field rides
 		// verbatim in the HxFieldNameLit slice, so the writer's
 		// `'.' + field` emission round-trips byte-for-byte with no
@@ -163,7 +163,7 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testDollarTypeRoundTrip(): Void {
+	public inline function testDollarTypeRoundTrip(): Void {
 		// Writer ripple net: `$ct` in type position flows the generic
 		// single-Ref `@:lead("$")` writer path (DollarIdentExpr twin).
 		roundTrip("class C {\n\tvar x:$ct = 1;\n}\n", 'dollar-type');
@@ -214,7 +214,7 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testMacroVarFinalExprRoundTrip(): Void {
+	public inline function testMacroVarFinalExprRoundTrip(): Void {
 		// Writer ripple net: VarExpr/FinalExpr emit via the generic
 		// HxVarDecl path (HxStatement.VarStmt minus the trailOpt/fmt).
 		roundTrip('class C { static function f() { var a = macro var y = 1; var b = macro final _z:Int = p; } }', 'macro-var-final');
@@ -257,7 +257,7 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testMacroThrowRoundTrip(): Void {
+	public inline function testMacroThrowRoundTrip(): Void {
 		// Writer ripple net: ThrowExpr emits via the generic single-Ref
 		// value:HxExpr path (ReturnExpr/CastExpr/MacroExpr precedent).
 		roundTrip('class C { static function f() { var a = macro throw e; var b = macro throw new E("x"); } }', 'macro-throw');
@@ -298,7 +298,7 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 		Assert.equals('x', (decl.name: String));
 	}
 
-	public function testDollarVarNameRoundTrip(): Void {
+	public inline function testDollarVarNameRoundTrip(): Void {
 		// Writer net: the `@:rawString` name terminal emits the matched
 		// slice (with the `$`) verbatim via the generic terminal path.
 		roundTrip("class C { static function f() { var $x = 1; } }", 'dollar-var-name');

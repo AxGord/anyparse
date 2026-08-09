@@ -3,11 +3,12 @@ package anyparse.check;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Flags redundant parentheses in three shapes. A parenthesized expression wrapped
@@ -595,7 +596,7 @@ final class RedundantParens implements Check implements ConfigAware {
 
 	/** Whether `[from, to)` of `source` is empty or whitespace only. */
 	private static function isBlank(source: String, from: Int, to: Int): Bool {
-		return StringTools.trim(source.substring(from, to)) == '';
+		return source.substring(from, to).trim() == '';
 	}
 
 	/**
@@ -662,18 +663,26 @@ final class RedundantParens implements Check implements ConfigAware {
 
 	/** How `parent`'s child at `i` is bounded — see `SlotKind`. */
 	private static function slotOf(parent: QueryNode, i: Int, slots: ParenSlots): SlotKind {
-		if (slots.requiredHost.contains(parent.kind)) return SlotKind.Required;
-		if (parent.kind == slots.ternaryKind && i == 0) return SlotKind.TernaryCondition;
 		// `i == 0` is defensive, in the manner of the `children.length == 1` guards
 		// below: the symmetry veto in `sameFamilyLeftOperand` already refuses a
 		// parenthesized child 1, and a child that is not a paren never reaches
 		// `dropsParens`. It pins the slot as the LEFT operand's for a reader.
-		if (i == 0 && sameFamilyLeftOperand(parent, slots)) return SlotKind.SameFamilyLeft;
-		if (tighterTierOperand(parent, i, slots.comparisonHost, slots.comparisonUnwrap, slots)) return SlotKind.ComparisonOperand;
-		if (tighterTierOperand(parent, i, slots.additiveHost, slots.additiveUnwrap, slots)) return SlotKind.AdditiveOperand;
-		return !childDelimited(parent, i, slots)
-			? SlotKind.Plain
-			: slots.spliceHost.contains(parent.kind) ? SlotKind.DelimitedSplice : SlotKind.Delimited;
+		return if (slots.requiredHost.contains(parent.kind))
+			SlotKind.Required
+		else if (parent.kind == slots.ternaryKind && i == 0)
+			SlotKind.TernaryCondition
+		else if (i == 0 && sameFamilyLeftOperand(parent, slots))
+			SlotKind.SameFamilyLeft
+		else if (tighterTierOperand(parent, i, slots.comparisonHost, slots.comparisonUnwrap, slots))
+			SlotKind.ComparisonOperand
+		else if (tighterTierOperand(parent, i, slots.additiveHost, slots.additiveUnwrap, slots))
+			SlotKind.AdditiveOperand
+		else if (!childDelimited(parent, i, slots))
+			SlotKind.Plain
+		else if (slots.spliceHost.contains(parent.kind))
+			SlotKind.DelimitedSplice
+		else
+			SlotKind.Delimited;
 	}
 
 	/**
@@ -738,11 +747,12 @@ final class RedundantParens implements Check implements ConfigAware {
 	 */
 	private static function childDelimited(parent: QueryNode, i: Int, slots: ParenSlots): Bool {
 		if (slots.allChild.contains(parent.kind)) return true;
-		return slots.tailChild.contains(parent.kind)
-			? i > 0
-			: slots.condFirstChild.contains(parent.kind)
-				? i == 0
-				: slots.condLastChild.contains(parent.kind) && i == parent.children.length - 1;
+		return if (slots.tailChild.contains(parent.kind))
+			i > 0
+		else if (slots.condFirstChild.contains(parent.kind))
+			i == 0
+		else
+			slots.condLastChild.contains(parent.kind) && i == parent.children.length - 1;
 	}
 
 	/** Index every paren node by its `from:to` span key, recording whether its own pair can be dropped entirely. */

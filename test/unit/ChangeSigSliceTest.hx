@@ -5,7 +5,6 @@ import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ChangeSig;
-import anyparse.query.ChangeSig.ChangeSigResult;
 import haxe.Exception;
 
 /**
@@ -36,9 +35,9 @@ class ChangeSigSliceTest extends Test {
 	 */
 	public function testReorderMethodWithBareAndThisCalls(): Void {
 		final source: String = 'class C {\n\tpublic function g(a:Int, ?b:String, c:Int = 5):Void {\n\t\ttrace(a);\n\t}\n'
-			+ '\tpublic function caller():Void {\n' + '\t\tg(1, "x", 3);\n' + '\t\tthis.g(7, "y", 9);\n' + '\t}\n' + '}';
+			+ '\tpublic function caller():Void {\n\t\tg(1, "x", 3);\n\t\tthis.g(7, "y", 9);\n\t}\n}';
 		final expected: String = 'class C {\n\tpublic function g(c:Int = 5, a:Int, ?b:String):Void {\n\t\ttrace(a);\n\t}\n'
-			+ '\tpublic function caller():Void {\n' + '\t\tg(3, 1, "x");\n' + '\t\tthis.g(9, 7, "y");\n' + '\t}\n' + '}';
+			+ '\tpublic function caller():Void {\n\t\tg(3, 1, "x");\n\t\tthis.g(9, 7, "y");\n\t}\n}';
 		// Line 2 col 9 — the method `g` decl, as `apq refs --decls` prints.
 		assertChangeSig(source, 2, 9, '2,0,1', expected, true);
 	}
@@ -49,10 +48,10 @@ class ChangeSigSliceTest extends Test {
 	 * function cannot escape its file, so the advisory is null.
 	 */
 	public function testReorderLocalFunction(): Void {
-		final source: String = 'class C {\n\tpublic function run():Void {\n\t\tfunction add(x:Int, y:Int):Int {\n'
-			+ '\t\t\treturn x + y;\n' + '\t\t}\n' + '\t\tvar r = add(1, 2);\n' + '\t}\n' + '}';
-		final expected: String = 'class C {\n\tpublic function run():Void {\n\t\tfunction add(y:Int, x:Int):Int {\n'
-			+ '\t\t\treturn x + y;\n' + '\t\t}\n' + '\t\tvar r = add(2, 1);\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n\tpublic function run():Void {\n\t\tfunction add(x:Int, y:Int):Int {\n\t\t\treturn x + y;\n'
+			+ '\t\t}\n\t\tvar r = add(1, 2);\n\t}\n}';
+		final expected: String = 'class C {\n\tpublic function run():Void {\n\t\tfunction add(y:Int, x:Int):Int {\n\t\t\treturn x + y;\n'
+			+ '\t\t}\n\t\tvar r = add(2, 1);\n\t}\n}';
 		// Line 3 col 12 — the local function `add` name token.
 		assertChangeSig(source, 3, 12, '1,0', expected, false);
 	}
@@ -64,10 +63,10 @@ class ChangeSigSliceTest extends Test {
 	 * preserved.
 	 */
 	public function testFormatPreservationOddSpacing(): Void {
-		final source: String = 'class C {\n\tpublic function g(a:Int,   b:String,   c:Float):Void {}\n'
-			+ '\tpublic function caller():Void {\n' + '\t\tg(1,   "x",   2.5);\n' + '\t}\n' + '}';
-		final expected: String = 'class C {\n\tpublic function g(c:Float,   a:Int,   b:String):Void {}\n'
-			+ '\tpublic function caller():Void {\n' + '\t\tg(2.5,   1,   "x");\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n\tpublic function g(a:Int,   b:String,   c:Float):Void {}\n\tpublic function caller():Void {\n'
+			+ '\t\tg(1,   "x",   2.5);\n\t}\n}';
+		final expected: String = 'class C {\n\tpublic function g(c:Float,   a:Int,   b:String):Void {}\n\tpublic function caller():Void {\n'
+			+ '\t\tg(2.5,   1,   "x");\n\t}\n}';
 		assertChangeSig(source, 2, 9, '2,0,1', expected, true);
 	}
 
@@ -77,8 +76,8 @@ class ChangeSigSliceTest extends Test {
 	 * is refused rather than silently leaving its argument order stale.
 	 */
 	public function testRefuseNonThisReceiverCall(): Void {
-		final source: String = 'class C {\n\tpublic function g(a:Int, b:Int):Void {}\n\tpublic function caller(o:C):Void {\n'
-			+ '\t\tg(1, 2);\n' + '\t\to.g(3, 4);\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n\tpublic function g(a:Int, b:Int):Void {}\n\tpublic function caller(o:C):Void {\n\t\tg(1, 2);\n'
+			+ '\t\to.g(3, 4);\n\t}\n}';
 		assertRefused(source, 2, 9, '1,0');
 	}
 
@@ -87,8 +86,8 @@ class ChangeSigSliceTest extends Test {
 	 * defaulted argument cannot be slot-swapped, so the reorder is refused.
 	 */
 	public function testRefuseArityMismatchCall(): Void {
-		final source: String = 'class C {\n\tpublic function g(a:Int, ?b:Int):Void {}\n\tpublic function caller():Void {\n'
-			+ '\t\tg(1, 2);\n' + '\t\tg(7);\n' + '\t}\n' + '}';
+		final source: String =
+			'class C {\n\tpublic function g(a:Int, ?b:Int):Void {}\n\tpublic function caller():Void {\n\t\tg(1, 2);\n\t\tg(7);\n\t}\n}';
 		assertRefused(source, 2, 9, '1,0');
 	}
 
@@ -137,8 +136,8 @@ class ChangeSigSliceTest extends Test {
 	 */
 	public function testRefuseAmbiguousLocalFunctionName(): Void {
 		final source: String = 'class C {\n\tpublic function run():Void {\n\t\tfunction add(x:Int, y:Int):Int return x + y;\n'
-			+ '\t\tvar r = add(1, 2);\n' + '\t\t{\n' + '\t\t\tfunction add(p:Int, q:Int):Int return p - q;\n'
-			+ '\t\t\tvar z = add(3, 4);\n' + '\t\t}\n' + '\t}\n' + '}';
+			+ '\t\tvar r = add(1, 2);\n\t\t{\n\t\t\tfunction add(p:Int, q:Int):Int return p - q;\n'
+			+ '\t\t\tvar z = add(3, 4);\n\t\t}\n\t}\n}';
 		assertRefused(source, 3, 12, '1,0');
 	}
 
@@ -149,8 +148,8 @@ class ChangeSigSliceTest extends Test {
 	 * reorder is refused rather than silently misordering the captured call.
 	 */
 	public function testRefuseMethodReferencedAsValue(): Void {
-		final source: String = 'class C {\n\tpublic function g(a:Int, b:Int):Void {}\n\tpublic function caller():Void {\n'
-			+ '\t\tg(1, 2);\n' + '\t\tvar fn = g;\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n\tpublic function g(a:Int, b:Int):Void {}\n\tpublic function caller():Void {\n\t\tg(1, 2);\n'
+			+ '\t\tvar fn = g;\n\t}\n}';
 		assertRefused(source, 2, 9, '1,0');
 	}
 
@@ -161,7 +160,7 @@ class ChangeSigSliceTest extends Test {
 	 */
 	public function testRefuseLocalFunctionReferencedAsValue(): Void {
 		final source: String = 'class C {\n\tpublic function run():Void {\n\t\tfunction add(x:Int, y:Int):Int return x + y;\n'
-			+ '\t\tvar r = add(1, 2);\n' + '\t\tvar fn = add;\n' + '\t}\n' + '}';
+			+ '\t\tvar r = add(1, 2);\n\t\tvar fn = add;\n\t}\n}';
 		assertRefused(source, 3, 12, '1,0');
 	}
 
@@ -173,7 +172,7 @@ class ChangeSigSliceTest extends Test {
 	 */
 	public function testRefuseMethodCapturedViaThis(): Void {
 		final source: String = 'class C {\n\tpublic function g(a:Int, b:Int):Void {}\n\tpublic function caller():Void {\n'
-			+ '\t\tthis.g(1, 2);\n' + '\t\tvar f = this.g;\n' + '\t}\n' + '}';
+			+ '\t\tthis.g(1, 2);\n\t\tvar f = this.g;\n\t}\n}';
 		assertRefused(source, 2, 9, '1,0');
 	}
 
@@ -187,11 +186,26 @@ class ChangeSigSliceTest extends Test {
 	 */
 	public function testReorderFinalMethod(): Void {
 		final source: String = 'class C {\n\tfinal function d(a:Int, b:String, c:Int):Void {\n\t\ttrace(a);\n\t}\n'
-			+ '\tpublic function caller():Void {\n' + '\t\td(1, "x", 3);\n' + '\t\tthis.d(7, "y", 9);\n' + '\t}\n' + '}';
+			+ '\tpublic function caller():Void {\n\t\td(1, "x", 3);\n\t\tthis.d(7, "y", 9);\n\t}\n}';
 		final expected: String = 'class C {\n\tfinal function d(c:Int, a:Int, b:String):Void {\n\t\ttrace(a);\n\t}\n'
-			+ '\tpublic function caller():Void {\n' + '\t\td(3, 1, "x");\n' + '\t\tthis.d(9, 7, "y");\n' + '\t}\n' + '}';
+			+ '\tpublic function caller():Void {\n\t\td(3, 1, "x");\n\t\tthis.d(9, 7, "y");\n\t}\n}';
 		// Line 2 col 2 — the `final` method decl, as `apq refs --decls` prints.
 		assertChangeSig(source, 2, 2, '2,0,1', expected, true);
+	}
+
+	/**
+	 * A braceless `$g` interpolation names the method but cannot CALL through it — it only
+	 * stringifies the value — so it is not the first-class-value capture the completeness
+	 * scan refuses on. The index reports it as a read like any other, so the scan has to
+	 * exclude it explicitly or every method mentioned in an interpolated string becomes
+	 * unreorderable.
+	 */
+	public function testInterpolatedMentionIsNotAValueCapture(): Void {
+		final source: String = 'class C {\n\tpublic function g(a:Int, b:Int):Void {\n\t\ttrace(a + b);\n\t}\n'
+			+ '\tpublic function caller():Void {\n\t\ttrace(\'fn is $$g\');\n\t\tg(1, 2);\n\t}\n}';
+		final expected: String = 'class C {\n\tpublic function g(b:Int, a:Int):Void {\n\t\ttrace(a + b);\n\t}\n'
+			+ '\tpublic function caller():Void {\n\t\ttrace(\'fn is $$g\');\n\t\tg(2, 1);\n\t}\n}';
+		assertChangeSig(source, 2, 18, '1,0', expected, true);
 	}
 
 	private function assertChangeSig(source: String, line: Int, col: Int, perm: String, expected: String, advisoryNonNull: Bool): Void {
@@ -234,22 +248,6 @@ class ChangeSigSliceTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final shape: RefShape = plugin.refShape();
 		return ChangeSig.changeSig(source, line, col, perm, plugin, shape);
-	}
-
-
-	/**
-	 * A braceless `$g` interpolation names the method but cannot CALL through it — it only
-	 * stringifies the value — so it is not the first-class-value capture the completeness
-	 * scan refuses on. The index reports it as a read like any other, so the scan has to
-	 * exclude it explicitly or every method mentioned in an interpolated string becomes
-	 * unreorderable.
-	 */
-	public function testInterpolatedMentionIsNotAValueCapture(): Void {
-		final source: String = 'class C {\n\tpublic function g(a:Int, b:Int):Void {\n\t\ttrace(a + b);\n\t}\n'
-			+ '\tpublic function caller():Void {\n\t\ttrace(\'fn is $$g\');\n\t\tg(1, 2);\n\t}\n}';
-		final expected: String = 'class C {\n\tpublic function g(b:Int, a:Int):Void {\n\t\ttrace(a + b);\n\t}\n'
-			+ '\tpublic function caller():Void {\n\t\ttrace(\'fn is $$g\');\n\t\tg(2, 1);\n\t}\n}';
-		assertChangeSig(source, 2, 18, '1,0', expected, true);
 	}
 
 }

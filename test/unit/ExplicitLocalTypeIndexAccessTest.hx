@@ -19,28 +19,28 @@ import anyparse.query.SymbolIndex;
  */
 class ExplicitLocalTypeIndexAccessTest extends Test {
 
-	public function testFixMapIndexAccessIsNullableValue(): Void {
+	public inline function testFixMapIndexAccessIsNullableValue(): Void {
 		// The TM macro-context shape: `final foundKeys = strings[key];` on a
 		// `Map<String, Array<String>>` — the VALUE parameter, wrapped `Null<…>` as Haxe types it.
 		assertFixContains('final m:Map<String, Array<String>> = [];\n\t\tfinal v = m["a"];', 'v:Null<Array<String>>');
 	}
 
-	public function testFixArrayIndexAccessIsElement(): Void {
+	public inline function testFixArrayIndexAccessIsElement(): Void {
 		// An `Array<T>` subscript is `T`, NOT `Null<T>` — only the map family is nullable-indexed.
 		assertFixContains('final a:Array<Int> = [];\n\t\tfinal v = a[0];', 'v:Int');
 	}
 
-	public function testFixNullWrappedMapIndexAccess(): Void {
+	public inline function testFixNullWrappedMapIndexAccess(): Void {
 		// One `Null<…>` wrapper is peeled off the container before the element lookup.
 		assertFixContains('final m:Null<Map<String, Int>> = null;\n\t\tfinal v = m["a"];', 'v:Null<Int>');
 	}
 
-	public function testSkipIndexAccessUnresolvedContainer(): Void {
+	public inline function testSkipIndexAccessUnresolvedContainer(): Void {
 		// The container carries no written type — the element parameter cannot be read.
 		assertNoFix('final m = makeMap();\n\t\tfinal v = m["a"];');
 	}
 
-	public function testSkipIndexAccessUnknownContainerType(): Void {
+	public inline function testSkipIndexAccessUnknownContainerType(): Void {
 		// A container whose nominal names no `indexedElementTypeParams` entry (a user abstract with
 		// its own `@:arrayAccess`) yields nothing — the element type is not derivable from the
 		// written type. GENERIC on purpose, so the walk reaches the table lookup instead of dying at
@@ -55,23 +55,24 @@ class ExplicitLocalTypeIndexAccessTest extends Test {
 		assertNoFixIdx(wrap('final v:Vector<Int> = null;\n\t\tfinal e = v[0];'), [
 			{
 				file: 'mypkg/Vector.hx',
-				source: 'package mypkg;\nabstract Vector<T>(Array<T>) {\n\t@:arrayAccess public inline function get(i:Int):Null<T> return this[i];\n}'
+				source: 'package mypkg;\nabstract Vector<T>(Array<T>) {\n'
+				+ '\t@:arrayAccess public inline function get(i:Int):Null<T> return this[i];\n}'
 			}
 		]);
 	}
 
-	public function testSkipIndexAccessDynamicElement(): Void {
+	public inline function testSkipIndexAccessDynamicElement(): Void {
 		// `Array<Dynamic>[0]` does NOT infer `Dynamic` — the compiler leaves the local an unbound
 		// monomorph that unifies with its first real use, so writing `:Dynamic` would SILENCE errors
 		// it would otherwise raise.
 		assertNoFix('final a:Array<Dynamic> = [];\n\t\tfinal e = a[0];');
 	}
 
-	public function testSkipIndexAccessDynamicMapValue(): Void {
+	public inline function testSkipIndexAccessDynamicMapValue(): Void {
 		assertNoFix('final m:Map<String, Dynamic> = [];\n\t\tfinal e = m["a"];');
 	}
 
-	public function testSkipIndexAccessContainerWithoutTypeArguments(): Void {
+	public inline function testSkipIndexAccessContainerWithoutTypeArguments(): Void {
 		// The defensive no-arguments guard. `Map` with no parameters is not legal Haxe, so this pins
 		// the guard rather than a shape real source produces — the reachable case is a written type
 		// `typeArgumentSourcesOf` cannot split (a function type whose result is generic).
@@ -87,12 +88,12 @@ class ExplicitLocalTypeIndexAccessTest extends Test {
 		);
 	}
 
-	public function testFixIndexAccessSmallAnonElement(): Void {
+	public inline function testFixIndexAccessSmallAnonElement(): Void {
 		// Under the cap, an anon-struct element still annotates — the gate is length, not shape.
 		assertFixContains('final rows:Array<{a:Int}> = [];\n\t\tfinal r = rows[0];', 'r:{a:Int}');
 	}
 
-	public function testSkipIndexAccessRestParamContainer(): Void {
+	public inline function testSkipIndexAccessRestParamContainer(): Void {
 		// A rest parameter's BODY type is `haxe.Rest<Array<Int>>` while its written source is the
 		// bare `Array<Int>`, so `xs[0]` is an `Array<Int>` — copying the source would say `Int`.
 		assertNoFixSrc('class C {\n\tfunction f(...xs:Array<Int>):Void {\n\t\tfinal v = xs[0];\n\t}\n}');

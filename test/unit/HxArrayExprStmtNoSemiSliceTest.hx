@@ -74,16 +74,22 @@ class HxArrayExprStmtNoSemiSliceTest extends HxTestHelpers {
 
 	public function testCorpusIssue365ArrayComprehension(): Void {
 		final cls: HxClassDecl = HaxeParser.parse(
-			'class Main {\n\tstatic function main() {\n\t\treturn [\n\t\t\tfor (meta in node.metadata) {\n\t\t\t\tvar child = node.children[meta - 1];\n\t\t\t\tif (child == null) 0 else value(child);\n\t\t\t}\n\t\t].sum();\n\t}\n\n\tstatic function main() {\n\t\t[\n\t\t\tif (foo) bar else foo,\n\t\t\tif (foo) bar else foo,\n\t\t\tif (foo) bar else foo,\n\t\t\tif (foo) bar else foo,\n\t\t\tif (foo) bar else foo\n\t\t]\n\t}\n}'
+			'class Main {\n\tstatic function main() {\n\t\treturn [\n\t\t\tfor (meta in node.metadata) {\n'
+			+ '\t\t\t\tvar child = node.children[meta - 1];\n\t\t\t\tif (child == null) 0 else value(child);\n\t\t\t}\n\t\t].sum();\n\t}\n'
+			+ '\n\tstatic function main() {\n\t\t[\n\t\t\tif (foo) bar else foo,\n\t\t\tif (foo) bar else foo,\n'
+			+ '\t\t\tif (foo) bar else foo,\n\t\t\tif (foo) bar else foo,\n\t\t\tif (foo) bar else foo\n\t\t]\n\t}\n}'
 		);
 		Assert.equals(2, cls.members.length);
 	}
 
 	// -- Idempotency: issue_365 round-trip via the module pipeline --
 
-	public function testCorpusIssue365RoundTrip(): Void {
+	public inline function testCorpusIssue365RoundTrip(): Void {
 		roundTrip(
-			'class Main {\n\tstatic function main() {\n\t\treturn [\n\t\t\tfor (meta in node.metadata) {\n\t\t\t\tvar child = node.children[meta - 1];\n\t\t\t\tif (child == null) 0 else value(child);\n\t\t\t}\n\t\t].sum();\n\t}\n\n\tstatic function main() {\n\t\t[\n\t\t\tif (foo) bar else foo,\n\t\t\tif (foo) bar else foo,\n\t\t\tif (foo) bar else foo,\n\t\t\tif (foo) bar else foo,\n\t\t\tif (foo) bar else foo\n\t\t]\n\t}\n}',
+			'class Main {\n\tstatic function main() {\n\t\treturn [\n\t\t\tfor (meta in node.metadata) {\n'
+			+ '\t\t\t\tvar child = node.children[meta - 1];\n\t\t\t\tif (child == null) 0 else value(child);\n\t\t\t}\n\t\t].sum();\n\t}\n'
+			+ '\n\tstatic function main() {\n\t\t[\n\t\t\tif (foo) bar else foo,\n\t\t\tif (foo) bar else foo,\n'
+			+ '\t\t\tif (foo) bar else foo,\n\t\t\tif (foo) bar else foo,\n\t\t\tif (foo) bar else foo\n\t\t]\n\t}\n}',
 			'issue_365_array_comprehension'
 		);
 	}

@@ -58,7 +58,7 @@ class HxFnExprSliceTest extends HxTestHelpers {
 		roundTrip(source, 'anon fn typed params + expr body');
 	}
 
-	public function testAnonFnExprBodyRoundTrip(): Void {
+	public inline function testAnonFnExprBodyRoundTrip(): Void {
 		roundTrip('class C {\n\tfunction m() {\n\t\thandle(function (res) trace(res));\n\t}\n}', 'expr body');
 	}
 

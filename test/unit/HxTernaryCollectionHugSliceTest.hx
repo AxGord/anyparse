@@ -31,44 +31,46 @@ final class HxTernaryCollectionHugSliceTest extends Test {
 	}
 
 	public function testElseObjectHeadFitsHugs(): Void {
-		final src: String =
-			'class C {\n\tfunction f() {\n\t\tresult = flag ? {name: \'alpha\', ok: true} : {\n\t\t\tname: \'bravo\',\n\t\t\tok: false\n\t\t};\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n\t\tresult = flag ? {name: \'alpha\', ok: true} : {\n\t\t\tname: \'bravo\',\n'
+			+ '\t\t\tok: false\n\t\t};\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testThenObjectHugs(): Void {
-		final src: String =
-			'class C {\n\tfunction f() {\n\t\tresult = flag ? {\n\t\t\tname: \'alpha\',\n\t\t\tok: true\n\t\t} : {name: \'bravo\', ok: false};\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n\t\tresult = flag ? {\n\t\t\tname: \'alpha\',\n\t\t\tok: true\n'
+			+ '\t\t} : {name: \'bravo\', ok: false};\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testElseArrayHugs(): Void {
-		final src: String =
-			'class C {\n\tfunction f() {\n\t\tresult = flag ? shortValue : [\n\t\t\talphaVeryLongItemNameHereToForceBreak,\n\t\t\tbravoVeryLongItemNameHereToForceBreak,\n\t\t\tcharlieVeryLongItemNameHereToForceBreak,\n\t\t\tdeltaVeryLongItemNameHereToForceBreak\n\t\t];\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n\t\tresult = flag ? shortValue : [\n'
+			+ '\t\t\talphaVeryLongItemNameHereToForceBreak,\n\t\t\tbravoVeryLongItemNameHereToForceBreak,\n'
+			+ '\t\t\tcharlieVeryLongItemNameHereToForceBreak,\n\t\t\tdeltaVeryLongItemNameHereToForceBreak\n\t\t];\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testElseBlockExprHugs(): Void {
-		final src: String =
-			'class C {\n\tfunction f() {\n\t\tvar present = gateCond ? matchLit(ctx, trailText) : {\n\t\t\texpectLit(ctx, trailText);\n\t\t\ttrue;\n\t\t};\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n\t\tvar present = gateCond ? matchLit(ctx, trailText) : {\n'
+			+ '\t\t\texpectLit(ctx, trailText);\n\t\t\ttrue;\n\t\t};\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testHeadExceedsLeadingBreaks(): Void {
-		final src: String =
-			'class C {\n\tfunction f() {\n\t\tresultVariableWithAnExtremelyLongDescriptiveName = someConditionFlagWithAnEquallyLongDescriptiveIdentifierNameHere\n\t\t\t? scalarThenBranchValue\n\t\t\t: {\n\t\t\t\tname: \'bravo\',\n\t\t\t\tok: false\n\t\t\t};\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n'
+			+ '\t\tresultVariableWithAnExtremelyLongDescriptiveName = someConditionFlagWithAnEquallyLongDescriptiveIdentifierNameHere\n'
+			+ '\t\t\t? scalarThenBranchValue\n\t\t\t: {\n\t\t\t\tname: \'bravo\',\n\t\t\t\tok: false\n\t\t\t};\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testBothBranchesMultilineLeadingBreak(): Void {
-		final src: String =
-			'class C {\n\tfunction f() {\n\t\tresult = flag\n\t\t\t? {\n\t\t\t\talpha: \'one\',\n\t\t\t\tbeta: \'two\'\n\t\t\t}\n\t\t\t: {\n\t\t\t\tname: \'bravo\',\n\t\t\t\tok: false\n\t\t\t};\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n\t\tresult = flag\n\t\t\t? {\n\t\t\t\talpha: \'one\',\n\t\t\t\tbeta: \'two\'\n'
+			+ '\t\t\t}\n\t\t\t: {\n\t\t\t\tname: \'bravo\',\n\t\t\t\tok: false\n\t\t\t};\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testOpAddChainBranchLeadingBreaks(): Void {
-		final src: String =
-			'class C {\n\tfunction f() {\n\t\tresult = flag\n\t\t\t? shortValue\n\t\t\t: {\n\t\t\t\tname: \'bravo\',\n\t\t\t\tok: false\n\t\t\t}\n\t\t\t\t+ tail;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n\t\tresult = flag\n\t\t\t? shortValue\n\t\t\t: {\n\t\t\t\tname: \'bravo\',\n'
+			+ '\t\t\t\tok: false\n\t\t\t}\n\t\t\t\t+ tail;\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

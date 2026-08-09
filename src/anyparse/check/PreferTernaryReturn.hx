@@ -3,11 +3,12 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Flags an `if (cond) return a;` whose immediately-following sibling is a
@@ -279,7 +280,7 @@ final class PreferTernaryReturn implements Check {
 				break;
 			}
 			if (insideKept) continue;
-			final text: String = StringTools.trim(source.substring(tok.from, tok.to));
+			final text: String = source.substring(tok.from, tok.to).trim();
 			final onGuardLine: Bool = tok.from >= thenSpan.to && source.substring(thenSpan.to, tok.from).indexOf('\n') < 0;
 			if (branchTrailing == null && onGuardLine && text.indexOf('\n') < 0) {
 				branchTrailing = text;

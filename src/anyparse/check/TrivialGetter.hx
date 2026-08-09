@@ -7,6 +7,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 import anyparse.query.RefactorSupport;
@@ -14,8 +15,6 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.LintConfig;
 import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.CrossFileEdits;
-import anyparse.query.RefactorSupport.ClassifiedOccurrence;
-import anyparse.query.RefactorSupport.OccurrenceClass;
 
 /**
  * Flags a property that only bridges a private same-class backing field through trivial
@@ -276,8 +275,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		if (className == null) return;
 		final owner: String = className;
 		final t = memberTables(cls, source, branch);
-		for (prop in t.properties) {
-			if (subtypeBlocks(subtypeIndex, className, prop.name)) continue;
+		for (prop in t.properties) if (!subtypeBlocks(subtypeIndex, className, prop.name)) {
 			final c = classifyProperty(cls, source, file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
 			if (c == null) continue;
 			// Every node the collapse touches: the inline arm rewrites only the getter, the collapse
@@ -343,12 +341,13 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 */
 	private static function trivialReturnField(getter: QueryNode): Null<String> {
 		final body: Null<QueryNode> = bodyOf(getter);
-		if (body == null || body.children.length != 1) return null;
-		return switch body.kind {
-			case 'BlockBody': returnedField(body.children[0], 'ReturnStmt');
-			case 'ExprBody': returnedField(body.children[0], 'ReturnExpr');
-			case _: null;
-		}
+		return body == null || body.children.length != 1
+			? null
+			: switch body.kind {
+				case 'BlockBody': returnedField(body.children[0], 'ReturnStmt');
+				case 'ExprBody': returnedField(body.children[0], 'ReturnExpr');
+				case _: null;
+			};
 	}
 
 	/** The getter's body node (`BlockBody` / `ExprBody`), or null. */
@@ -377,7 +376,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		final read: Null<{ id: String, next: Int }> = identAt(source, skipSpace(source, open + 1, n), n);
 		if (read == null) return null;
 		final i: Int = skipSpace(source, read.next, n);
-		if (i >= n || StringTools.fastCodeAt(source, i) != ','.code) return null;
+		if (i >= n || source.fastCodeAt(i) != ','.code) return null;
 		final write: Null<{ id: String, next: Int }> = identAt(source, skipSpace(source, i + 1, n), n);
 		return write == null ? null : { read: read.id, write: write.id };
 	}
@@ -386,14 +385,14 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	private static function identAt(source: String, i: Int, n: Int): Null<{ id: String, next: Int }> {
 		final start: Int = i;
 		var j: Int = i;
-		while (j < n && isIdentChar(StringTools.fastCodeAt(source, j))) j++;
+		while (j < n && isIdentChar(source.fastCodeAt(j))) j++;
 		return j > start ? { id: source.substring(start, j), next: j } : null;
 	}
 
 	/** Advance past a whitespace run starting at `i`. */
 	private static function skipSpace(source: String, i: Int, n: Int): Int {
 		var j: Int = i;
-		while (j < n && isSpace(StringTools.fastCodeAt(source, j))) j++;
+		while (j < n && isSpace(source.fastCodeAt(j))) j++;
 		return j;
 	}
 
@@ -419,8 +418,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		final className: Null<String> = cls.name;
 		if (className == null) return;
 		final t = memberTables(cls, source, branch);
-		for (prop in t.properties) if (wanted.contains('${prop.span.from}:${prop.span.to}')) {
-			if (subtypeBlocks(index, className, prop.name)) continue;
+		for (prop in t.properties) if (
+			wanted.contains('${prop.span.from}:${prop.span.to}') && !subtypeBlocks(index, className, prop.name)
+		) {
 			final c = classifyProperty(cls, source, file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
 			if (c == null) continue;
 			if (subtypeFieldBlocks(index, className, c.field, c.inlineGetter)) continue;
@@ -465,7 +465,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			: (c.fieldNode.children.length >= 1 ? c.fieldNode.children[0].span : null);
 		if (initSpan != null) {
 			final semi: Int = propSpan.to - 1;
-			if (semi < 0 || semi >= source.length || StringTools.fastCodeAt(source, semi) != ';'.code) return null;
+			if (semi < 0 || semi >= source.length || source.fastCodeAt(semi) != ';'.code) return null;
 			edits.push({ span: new Span(semi, semi), text: ' = ${source.substring(initSpan.from, initSpan.to)}' });
 		}
 		final deleted: Array<{ node: QueryNode, span: Span }> = [];
@@ -485,9 +485,12 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		);
 		if (renames == null) return null;
 		for (e in renames) edits.push(e);
-		return !appendRemovalEdits(edits, source, cls, deleted, c.fieldNode, c.ctorInit)
-			? null
-			: applyBypassMarks(c.bypassStmts, edits) ? edits : null;
+		return if (!appendRemovalEdits(edits, source, cls, deleted, c.fieldNode, c.ctorInit))
+			null
+		else if (applyBypassMarks(c.bypassStmts, edits))
+			edits
+		else
+			null;
 	}
 
 	/**
@@ -667,7 +670,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		final open: Int = accessorParenOpen(source, propSpan);
 		if (open < 0) return null;
 		var i: Int = open + 1;
-		while (i < source.length && StringTools.fastCodeAt(source, i) != ')'.code) i++;
+		while (i < source.length && source.fastCodeAt(i) != ')'.code) i++;
 		return i >= source.length ? null : new Span(open, i + 1);
 	}
 
@@ -678,7 +681,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		if (span.from + kw.length > n || source.substring(span.from, span.from + kw.length) != kw) return -1;
 		var i: Int = skipSpace(source, span.from + kw.length, n);
 		final nameStart: Int = i;
-		while (i < n && isIdentChar(StringTools.fastCodeAt(source, i))) i++;
+		while (i < n && isIdentChar(source.fastCodeAt(i))) i++;
 		return i == nameStart ? -1 : i;
 	}
 
@@ -831,7 +834,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		final afterName: Int = nameEndAfterVar(source, span);
 		if (afterName < 0) return -1;
 		final open: Int = skipSpace(source, afterName, source.length);
-		return open < source.length && StringTools.fastCodeAt(source, open) == '('.code ? open : -1;
+		return open < source.length && source.fastCodeAt(open) == '('.code ? open : -1;
 	}
 
 	/**
@@ -989,12 +992,18 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 */
 	private static function messageFor(shape: String, propName: String, field: String, count: Int = 0): String {
 		return switch shape {
-			case 'setA': 'property \'$propName\' has a trivial getter over backing field \'$field\'; use \'var $propName(default, set)\' and remove get_$propName';
-			case 'setABypass': 'property \'$propName\' has a trivial getter over backing field \'$field\'; use \'var $propName(default, set)\', remove get_$propName and mark $count external write(s) with @:bypassAccessor';
-			case 'setAInline': 'property \'$propName\' has a trivial getter over backing field \'$field\', but $count external write(s) block a (default, set) collapse; mark get_$propName inline';
-			case 'setB': 'property \'$propName\' has a trivial getter and setter over backing field \'$field\'; use a plain field \'var $propName\' and remove get_$propName/set_$propName';
-			case 'setC': 'property \'$propName\' has a trivial setter over backing field \'$field\'; use \'var $propName(get, default)\' and remove set_$propName';
-			case _: 'property \'$propName\' has a trivial getter returning backing field \'$field\'; use \'var $propName(default, null)\' and remove get_$propName';
+			case 'setA': 'property \'$propName\' has a trivial getter over backing field \'$field\'; use \'var $propName'
+				+ '(default, set)\' and remove get_$propName';
+			case 'setABypass': 'property \'$propName\' has a trivial getter over backing field \'$field\'; use \'var $propName'
+				+ '(default, set)\', remove get_$propName and mark $count external write(s) with @:bypassAccessor';
+			case 'setAInline': 'property \'$propName\' has a trivial getter over backing field \'$field\', but $count'
+				+ ' external write(s) block a (default, set) collapse; mark get_$propName inline';
+			case 'setB': 'property \'$propName\' has a trivial getter and setter over backing field \'$field\'; use a plain field \'var '
+				+ '$propName\' and remove get_$propName/set_$propName';
+			case 'setC': 'property \'$propName\' has a trivial setter over backing field \'$field\'; use \'var $propName'
+				+ '(get, default)\' and remove set_$propName';
+			case _: 'property \'$propName\' has a trivial getter returning backing field \'$field\'; use \'var $propName'
+				+ '(default, null)\' and remove get_$propName';
 		}
 	}
 
@@ -1024,7 +1033,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	/** The name of a setter's single value parameter (its first `Required` / `Optional` child), or null. */
 	private static function setterParamName(setter: QueryNode): Null<String> {
 		final param: Null<QueryNode> = setter.children.find(c -> c.kind == 'Required' || c.kind == 'Optional');
-		return param == null ? null : param.name;
+		return param?.name;
 	}
 
 	/**
@@ -1032,8 +1041,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 */
 	private static function fieldRefName(node: QueryNode): Null<String> {
 		return switch node.kind {
-			case 'IdentExpr': node.name;
-			case 'Ident': node.name;
+			case 'IdentExpr', 'Ident': node.name;
 			case 'FieldAccess':
 				node.children.length == 1 && node.children[0].kind == 'IdentExpr' && node.children[0].name == 'this' ? node.name : null;
 			case _: null;
@@ -1179,22 +1187,23 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 				inlineGetter: null
 			};
 		}
-		if (trivGet == null && trivSet != null) {
-			if (!privateFieldNodes.exists(trivSet)) return null;
-			final getterSpan: Null<Span> = getterNode.span;
-			return getterSpan == null
-				? null
-				: hasExternalRead(cls, trivSet, getterSpan) ? null : {
-					field: trivSet,
-					clauseText: '(get, default)',
-					deleted: [setter.node],
-					ctorInit: null,
-					message: messageFor('setC', prop.name, trivSet),
-					bypassStmts: [],
-					inlineGetter: null
-				};
-		}
-		return null;
+		if (trivGet != null || trivSet == null) return null;
+		if (!privateFieldNodes.exists(trivSet)) return null;
+		final getterSpan: Null<Span> = getterNode.span;
+		return if (getterSpan == null)
+			null
+		else if (hasExternalRead(cls, trivSet, getterSpan))
+			null
+		else
+			{
+				field: trivSet,
+				clauseText: '(get, default)',
+				deleted: [setter.node],
+				ctorInit: null,
+				message: messageFor('setC', prop.name, trivSet),
+				bypassStmts: [],
+				inlineGetter: null
+			};
 	}
 
 	/**
@@ -1340,31 +1349,35 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		final ci: Null<{ stmt: QueryNode, assign: QueryNode, rhsSpan: Span }> = fieldNode.children.length == 0
 			? findMovableCtorInit(cls, trivGet)
 			: null;
-		final allowStmt: Null<QueryNode> = ci == null ? null : ci.stmt;
+		final allowStmt: Null<QueryNode> = ci?.stmt;
 		final writes: Null<Array<QueryNode>> = collectExternalWrites(cls, trivGet, setterSpan, allowStmt);
-		if (writes != null && writes.length <= maxBypass) return {
-			field: trivGet,
-			clauseText: '(default, set)',
-			deleted: [getterNode],
-			ctorInit: ci == null ? null : { stmt: ci.stmt, rhsSpan: ci.rhsSpan },
-			message: writes.length == 0
-				? messageFor('setA', prop.name, trivGet)
-				: messageFor('setABypass', prop.name, trivGet, writes.length),
-			bypassStmts: writes,
-			inlineGetter: null
-		};
 		// Too many writes, or a write nested inside a larger expression (unmarkable): keep the
 		// property and just inline the getter. Skip when the getter is already inline or overrides
 		// — inline + override do not mix, and an overriding accessor must stay overridable.
-		return getterInline || getterOverride ? null : {
-			field: trivGet,
-			clauseText: '',
-			deleted: [],
-			ctorInit: null,
-			message: messageFor('setAInline', prop.name, trivGet, countExternalWrites(cls, trivGet, setterSpan, allowStmt)),
-			bypassStmts: [],
-			inlineGetter: getterNode
-		};
+		return if (writes != null && writes.length <= maxBypass)
+			{
+				field: trivGet,
+				clauseText: '(default, set)',
+				deleted: [getterNode],
+				ctorInit: ci == null ? null : { stmt: ci.stmt, rhsSpan: ci.rhsSpan },
+				message: writes.length == 0
+					? messageFor('setA', prop.name, trivGet)
+					: messageFor('setABypass', prop.name, trivGet, writes.length),
+				bypassStmts: writes,
+				inlineGetter: null
+			}
+		else if (getterInline || getterOverride)
+			null
+		else
+			{
+				field: trivGet,
+				clauseText: '',
+				deleted: [],
+				ctorInit: null,
+				message: messageFor('setAInline', prop.name, trivGet, countExternalWrites(cls, trivGet, setterSpan, allowStmt)),
+				bypassStmts: [],
+				inlineGetter: getterNode
+			};
 	}
 
 	/**
@@ -1410,7 +1423,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 */
 	private static function isDistinctiveName(name: String): Bool {
 		for (i in 0...name.length) {
-			final code: Int = StringTools.fastCodeAt(name, i);
+			final code: Int = name.fastCodeAt(i);
 			if (code == '_'.code || (code >= 'A'.code && code <= 'Z'.code)) return true;
 		}
 		return false;
@@ -1652,12 +1665,12 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		var colon: Int = -1;
 		var i: Int = span.from;
 		while (i < span.to) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c == '('.code || c == '<'.code || c == '{'.code || c == '['.code)
 				depth++;
 			else if (c == ')'.code || c == '}'.code || c == ']'.code)
 				depth--;
-			else if (c == '>'.code && (i == span.from || StringTools.fastCodeAt(source, i - 1) != '-'.code))
+			else if (c == '>'.code && (i == span.from || source.fastCodeAt(i - 1) != '-'.code))
 				depth--;
 			else if (c == ':'.code && depth == 0 && colon < 0)
 				colon = i;
@@ -1672,7 +1685,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	private static function normalizedSlice(source: String, from: Int, to: Int): String {
 		final out: StringBuf = new StringBuf();
 		for (i in from ... to) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code || c == ';'.code) continue;
 			out.addChar(c);
 		}

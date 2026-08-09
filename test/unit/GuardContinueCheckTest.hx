@@ -8,7 +8,6 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
-import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.Span;
 
 /**
@@ -136,8 +135,8 @@ class GuardContinueCheckTest extends Test {
 		// true where `s >= k` is false and the flip is unsound; `negationIsClean` therefore
 		// declines and the site is not flagged. The `x < 10` twin below, over the `Int` loop
 		// binder, is the same shape with a licensed nominal and IS flagged.
-		final str: String =
-			'class C {\n\tfunction f(ss:Array<String>, k:String):Void {\n\t\tfor (s in ss) {\n\t\t\tpre();\n\t\t\tif (s < k) {\n\t\t\t\tbody();\n\t\t\t}\n\t\t}\n\t}\n}\n';
+		final str: String = 'class C {\n\tfunction f(ss:Array<String>, k:String):Void {\n\t\tfor (s in ss) {\n\t\t\tpre();\n'
+			+ '\t\t\tif (s < k) {\n\t\t\t\tbody();\n\t\t\t}\n\t\t}\n\t}\n}\n';
 		Assert.equals(0, new GuardContinue().run([{ file: 'C.hx', source: str }], new HaxeQueryPlugin()).length);
 		Assert.equals(1, v(cond('x < 10')).length);
 	}
@@ -518,8 +517,8 @@ class GuardContinueCheckTest extends Test {
 	public function testMetaWrappedDeclCollisionAutoRenamed(): Void {
 		// `@:meta var b` parses as an expression-position declaration under a metadata
 		// wrapper — the rename reaches its binder token through the wrapper.
-		final code: String =
-			'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (cond) {\n\t\t\t\t@:nullSafety(Off) var b:String = other();\n\t\t\t\tuse(b);\n\t\t\t}\n\t\t}';
+		final code: String = 'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (cond) {\n'
+			+ '\t\t\t\t@:nullSafety(Off) var b:String = other();\n\t\t\t\tuse(b);\n\t\t\t}\n\t\t}';
 		Assert.equals(1, v(code).length);
 		Assert.equals(
 			canon(wrap(
@@ -531,8 +530,8 @@ class GuardContinueCheckTest extends Test {
 
 	public function testMetaWrappedSiblingCollisionAutoRenamed(): Void {
 		// The preceding-sibling scan reaches through the metadata wrapper too.
-		final code: String =
-			'for (x in xs) {\n\t\t\t@:nullSafety(Off) var b:String = pre();\n\t\t\tif (cond) {\n\t\t\t\tfinal b = other();\n\t\t\t\tuse(b);\n\t\t\t}\n\t\t}';
+		final code: String = 'for (x in xs) {\n\t\t\t@:nullSafety(Off) var b:String = pre();\n\t\t\tif (cond) {\n'
+			+ '\t\t\t\tfinal b = other();\n\t\t\t\tuse(b);\n\t\t\t}\n\t\t}';
 		Assert.equals(1, v(code).length);
 		Assert.equals(
 			canon(wrap(

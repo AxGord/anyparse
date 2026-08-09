@@ -2,6 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.TypeOracle;
 
+using StringTools;
+
 /**
  * A `TypeOracle` backed by the Haxe DISPLAY protocol against a warm compilation
  * server — the compiler-oracle TAIL for a resolver-unreachable autofix (the
@@ -53,25 +55,59 @@ final class CompilerDisplayOracle implements TypeOracle {
 	private final _cwd: Null<String>;
 	private final _port: Int;
 
+	#if nodejs
+	private final _child: Dynamic;
+	#end
+
 	/** Cached winning display-path form index (see `pathForms`); -1 until the first successful query probes it. */
 	private var _pathForm: Int = -1;
 
 	#if nodejs
-	private final _child: Dynamic;
-
-	function new(hxml: String, cwd: Null<String>, port: Int, child: Dynamic) {
+	private function new(hxml: String, cwd: Null<String>, port: Int, child: Dynamic) {
 		_hxml = hxml;
 		_cwd = cwd;
 		_port = port;
 		_child = child;
 	}
 	#else
-	function new(hxml: String, cwd: Null<String>, port: Int) {
+	private function new(hxml: String, cwd: Null<String>, port: Int) {
 		_hxml = hxml;
 		_cwd = cwd;
 		_port = port;
 	}
 	#end
+
+	public function typeAt(file: String, bytePos: Int): Null<String> {
+		invocations++;
+		#if nodejs
+		// The server matches the display path against the module path AS THE COMPILER RECORDED
+		// IT, which mirrors the `-cp` form: a relative classpath (`-cp .`) records cwd-relative,
+		// an absolute one (`-cp /abs/src`) records that absolute string (NOT symlink-resolved).
+		// We cannot parse the hxml, so try both forms and cache the one that resolves — every
+		// file in a run shares a classpath convention, so this probes once.
+		final forms: Array<String> = pathForms(file);
+		if (_pathForm >= 0 && _pathForm < forms.length) {
+			final cached: Null<String> = queryType(forms[_pathForm], bytePos);
+			if (cached != null) return cached;
+		}
+		for (i in 0...forms.length) {
+			final out: Null<String> = queryType(forms[i], bytePos);
+			if (out == null) continue;
+			_pathForm = i;
+			return out;
+		}
+		return null;
+		#else
+		return null;
+		#end
+	}
+
+	/** Reap the background server. Idempotent and exception-safe. */
+	public function stop(): Void {
+		#if nodejs
+		killChild(_child);
+		#end
+	}
 
 	/**
 	 * Start a warm display server for `hxml` (run from `cwd`) and return a handle, or
@@ -96,39 +132,6 @@ final class CompilerDisplayOracle implements TypeOracle {
 		#end
 	}
 
-	public function typeAt(file: String, bytePos: Int): Null<String> {
-		invocations++;
-		#if nodejs
-		// The server matches the display path against the module path AS THE COMPILER RECORDED
-		// IT, which mirrors the `-cp` form: a relative classpath (`-cp .`) records cwd-relative,
-		// an absolute one (`-cp /abs/src`) records that absolute string (NOT symlink-resolved).
-		// We cannot parse the hxml, so try both forms and cache the one that resolves — every
-		// file in a run shares a classpath convention, so this probes once.
-		final forms: Array<String> = pathForms(file);
-		if (_pathForm >= 0 && _pathForm < forms.length) {
-			final cached: Null<String> = queryType(forms[_pathForm], bytePos);
-			if (cached != null) return cached;
-		}
-		for (i in 0...forms.length) {
-			final out: Null<String> = queryType(forms[i], bytePos);
-			if (out != null) {
-				_pathForm = i;
-				return out;
-			}
-		}
-		return null;
-		#else
-		return null;
-		#end
-	}
-
-	/** Reap the background server. Idempotent and exception-safe. */
-	public function stop(): Void {
-		#if nodejs
-		killChild(_child);
-		#end
-	}
-
 	/**
 	 * The type text of a `--display …@type` reply — the content of the first
 	 * `<type …>…</type>` element, XML-decoded and trimmed — or null when the reply
@@ -142,87 +145,19 @@ final class CompilerDisplayOracle implements TypeOracle {
 		if (gt < 0) return null;
 		final close: Int = raw.indexOf('</type>', gt);
 		if (close < 0) return null;
-		final body: String = StringTools.htmlUnescape(raw.substring(gt + 1, close));
-		final trimmed: String = StringTools.trim(body);
+		final body: String = raw.substring(gt + 1, close).htmlUnescape();
+		final trimmed: String = body.trim();
 		return trimmed == '' ? null : trimmed;
 	}
 
 	#if nodejs
-	static function spawnServer(port: Int): Dynamic {
-		try {
-			final opts: Dynamic = { detached: false, stdio: 'ignore' };
-			return js.node.ChildProcess.spawn('haxe', ['--wait', Std.string(port)], opts);
-		} catch (e: haxe.Exception) {
-			return null;
-		}
-	}
-
-	static function killChild(child: Dynamic): Void {
-		// child.kill() does not throw for an already-dead process (it returns false) — no guard needed.
-		if (child != null) child.kill();
-	}
-
-	/**
-	 * Poll `--connect` until the server answers (its first real connect drives the
-	 * initial full compile and blocks until done) or the boot budget is spent. A
-	 * `Could not connect` reply means the port is not listening yet — sleep and retry.
-	 */
-	static function warm(port: Int, hxml: String, cwd: Null<String>): Bool {
-		var attempt: Int = 0;
-		while (attempt < MAX_WARM_ATTEMPTS) {
-			attempt++;
-			final res: Null<Dynamic> = connect(port, hxml, cwd, ['--no-output']);
-			if (res == null) {
-				sleep();
-				continue;
-			}
-			final combined: String = oracleText(res.stdout) + oracleText(res.stderr);
-			if (combined.indexOf('Could not connect') != -1) {
-				sleep();
-				continue;
-			}
-			return true;
-		}
-		return false;
-	}
-
-	function connectRun(extra: Array<String>): Null<String> {
+	private function connectRun(extra: Array<String>): Null<String> {
 		final res: Null<Dynamic> = connect(_port, _hxml, _cwd, extra);
-		if (res == null) return null;
-		return oracleText(res.stdout) + oracleText(res.stderr);
-	}
-
-	static function connect(port: Int, hxml: String, cwd: Null<String>, extra: Array<String>): Null<Dynamic> {
-		try {
-			final args: Array<String> = ['--connect', Std.string(port), hxml].concat(extra);
-			final opts: Dynamic = { encoding: 'utf8' };
-			if (cwd != null) Reflect.setField(opts, 'cwd', cwd);
-			final res: Dynamic = js.node.ChildProcess.spawnSync('haxe', args, opts);
-			final err: Null<Dynamic> = (res.error: Dynamic);
-			return err != null ? null : res;
-		} catch (e: haxe.Exception) {
-			return null;
-		}
-	}
-
-	static function sleep(): Void {
-		// spawnSync reports a missing/failed `sleep` via its result, never a throw — a tighter poll is harmless.
-		js.node.ChildProcess.spawnSync('sleep', ['0.3']);
-	}
-
-	static function oracleText(value: Dynamic): String {
-		return value == null ? '' : Std.string(value);
-	}
-
-	/** `file` made relative to `cwd` (the compile-server client cwd) so the display path matches the module the compiler registered; unchanged when `cwd` is null or not a prefix. */
-	static function relativeToCwd(file: String, cwd: Null<String>): String {
-		if (cwd == null) return file;
-		final prefix: String = StringTools.endsWith(cwd, '/') ? cwd : cwd + '/';
-		return StringTools.startsWith(file, prefix) ? file.substring(prefix.length) : file;
+		return res == null ? null : oracleText(res.stdout) + oracleText(res.stderr);
 	}
 
 	/** Run one `@type` display query for `path`, or null when it yields no `<type>`. */
-	function queryType(path: String, bytePos: Int): Null<String> {
+	private function queryType(path: String, bytePos: Int): Null<String> {
 		final out: Null<String> = connectRun(['--display', '$path@$bytePos@type']);
 		return out == null ? null : parseTypeResponse(out);
 	}
@@ -233,7 +168,7 @@ final class CompilerDisplayOracle implements TypeOracle {
 	 * `file`: the oracleDir-joined absolute, the process-cwd absolute (`absPath`, when oracleDir
 	 * differs from the process cwd), the cwd-relative, and the raw path. Deduped, order = likeliest first.
 	 */
-	function pathForms(file: String): Array<String> {
+	private function pathForms(file: String): Array<String> {
 		final out: Array<String> = [];
 		if (haxe.io.Path.isAbsolute(file)) {
 			addForm(out, file);
@@ -246,17 +181,82 @@ final class CompilerDisplayOracle implements TypeOracle {
 		return out;
 	}
 
-	static function addForm(out: Array<String>, p: String): Void {
+	private static function spawnServer(port: Int): Dynamic {
+		try {
+			final opts: Dynamic = { detached: false, stdio: 'ignore' };
+			return js.node.ChildProcess.spawn('haxe', ['--wait', '$port'], opts);
+		} catch (e: haxe.Exception) {
+			return null;
+		}
+	}
+
+	private static inline function killChild(child: Dynamic): Void {
+		// child.kill() does not throw for an already-dead process (it returns false) — no guard needed.
+		child?.kill();
+	}
+
+	/**
+	 * Poll `--connect` until the server answers (its first real connect drives the
+	 * initial full compile and blocks until done) or the boot budget is spent. A
+	 * `Could not connect` reply means the port is not listening yet — sleep and retry.
+	 */
+	private static function warm(port: Int, hxml: String, cwd: Null<String>): Bool {
+		var attempt: Int = 0;
+		while (attempt < MAX_WARM_ATTEMPTS) {
+			attempt++;
+			final res: Null<Dynamic> = connect(port, hxml, cwd, ['--no-output']);
+			if (res == null) {
+				sleep();
+				continue;
+			}
+			final combined: String = oracleText(res.stdout) + oracleText(res.stderr);
+			if (combined.indexOf('Could not connect') == -1) return true;
+			sleep();
+			continue;
+		}
+		return false;
+	}
+
+	private static function connect(port: Int, hxml: String, cwd: Null<String>, extra: Array<String>): Null<Dynamic> {
+		try {
+			final args: Array<String> = ['--connect', '$port', hxml].concat(extra);
+			final opts: Dynamic = { encoding: 'utf8' };
+			if (cwd != null) Reflect.setField(opts, 'cwd', cwd);
+			final res: Dynamic = js.node.ChildProcess.spawnSync('haxe', args, opts);
+			final err: Null<Dynamic> = (res.error: Dynamic);
+			return err != null ? null : res;
+		} catch (e: haxe.Exception) {
+			return null;
+		}
+	}
+
+	private static function sleep(): Void {
+		// spawnSync reports a missing/failed `sleep` via its result, never a throw — a tighter poll is harmless.
+		js.node.ChildProcess.spawnSync('sleep', ['0.3']);
+	}
+
+	private static function oracleText(value: Dynamic): String {
+		return value == null ? '' : Std.string(value);
+	}
+
+	/** `file` made relative to `cwd` (the compile-server client cwd) so the display path matches the module the compiler registered; unchanged when `cwd` is null or not a prefix. */
+	private static function relativeToCwd(file: String, cwd: Null<String>): String {
+		if (cwd == null) return file;
+		final prefix: String = StringTools.endsWith(cwd, '/') ? cwd : '$cwd/';
+		return file.startsWith(prefix) ? file.substring(prefix.length) : file;
+	}
+
+	private static function addForm(out: Array<String>, p: String): Void {
 		if (!out.contains(p)) out.push(p);
 	}
 
 	/** `file` resolved against the process cwd (node-normalised, NOT symlink-followed), or `file` on failure. */
-	static function absPath(file: String): String {
+	private static function absPath(file: String): String {
 		return try sys.FileSystem.absolutePath(file) catch (e: haxe.Exception) file;
 	}
 
 	/** `cwd`/`file` joined (single slash), or `file` when `cwd` is null. */
-	static function joinCwd(cwd: Null<String>, file: String): String {
+	private static function joinCwd(cwd: Null<String>, file: String): String {
 		if (cwd == null) return file;
 		final base: String = StringTools.endsWith(cwd, '/') ? cwd.substring(0, cwd.length - 1) : cwd;
 		return '$base/$file';

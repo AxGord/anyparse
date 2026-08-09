@@ -4,12 +4,13 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Flags a run of >= 2 ADJACENT statements that all append to the same bare-identifier
@@ -295,10 +296,14 @@ final class JoinStringAppend implements Check implements DefaultOff {
 		final binary: QueryNode = stmt.children[0];
 		if (binary.children.length != BINARY_CHILD_COUNT) return null;
 		final target: QueryNode = binary.children[0];
-		if (target.kind != s.identKind || target.name == null) return null;
-		if (binary.kind == s.addAssignKind) return { target: target, rhs: binary.children[1], isBonus: false };
-		if (s.assignKind != null && binary.kind == s.assignKind) return { target: target, rhs: binary.children[1], isBonus: true };
-		return null;
+		return if (target.kind != s.identKind || target.name == null)
+			null
+		else if (binary.kind == s.addAssignKind)
+			{ target: target, rhs: binary.children[1], isBonus: false }
+		else if (s.assignKind != null && binary.kind == s.assignKind)
+			{ target: target, rhs: binary.children[1], isBonus: true }
+		else
+			null;
 	}
 
 	/** The right-hand side of `stmt` when it is `name += e;` on the SAME bare identifier, else null. */
@@ -334,8 +339,7 @@ final class JoinStringAppend implements Check implements DefaultOff {
 	): Bool {
 		for (t in terms) if (s.stringLiteralKinds.contains(t.kind)) return true;
 		final declared: Null<String> = resolvedTargetType(target, tree, s, declaredTypeSources);
-		if (declared == 'Float') return false;
-		return declared != null && ACCEPTED_TARGET_TYPES.contains(declared);
+		return declared != 'Float' && declared != null && ACCEPTED_TARGET_TYPES.contains(declared);
 	}
 
 	/** The target's explicit declared type source, one `Null<…>` wrapper unwrapped, or null when unresolved. */
@@ -349,7 +353,7 @@ final class JoinStringAppend implements Check implements DefaultOff {
 	/** `T` from a single `Null<T>` wrapper application (`shape.nullableWrapperTypeNames`), else the input unchanged. */
 	private static function unwrapNullableType(t: String, shape: RefShape): String {
 		final lt: Int = t.indexOf('<');
-		if (lt <= 0 || !StringTools.endsWith(t, '>')) return t;
+		if (lt <= 0 || !t.endsWith('>')) return t;
 		final outer: String = t.substring(0, lt);
 		final wrappers: Array<String> = shape.nullableWrapperTypeNames ?? [];
 		return wrappers.contains(outer) ? t.substring(lt + 1, t.length - 1) : t;
@@ -376,10 +380,9 @@ final class JoinStringAppend implements Check implements DefaultOff {
 			var inTerm: Bool = false;
 			for (t in terms) {
 				final ts: Null<Span> = t.span;
-				if (ts != null && tok.from >= ts.from && tok.to <= ts.to) {
-					inTerm = true;
-					break;
-				}
+				if (!(ts != null && tok.from >= ts.from && tok.to <= ts.to)) continue;
+				inTerm = true;
+				break;
 			}
 			if (!inTerm) return true;
 		}

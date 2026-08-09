@@ -7,6 +7,8 @@ import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportKind;
 
+using StringTools;
+
 /**
  * One resolved field write: `owner`.`field` written at `(file, span)`. The owner
  * is the SIMPLE type name the receiver resolves to — `this`, a typed local /
@@ -325,7 +327,7 @@ final class FieldWriteIndex {
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): FieldWriteIndex {
 		final shape: RefShape = plugin.refShape();
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final symbols: SymbolIndex = index ?? SymbolIndex.build(files, plugin);
 		final literalTypes: Map<String, String> = shape.literalTypeNames ?? [];
 		final builtinNames: Array<String> = [];
@@ -439,28 +441,27 @@ final class FieldWriteIndex {
 				markUnresolved(c, fieldName, rhs);
 			return;
 		}
-		if (target.kind == c.identKind) {
-			final id: Null<String> = target.name;
-			if (id == null) return;
-			final idName: String = id;
-			if (inOpaque) {
-				markUnresolved(c, idName, null);
-				return;
-			}
-			final bf: Null<Int> = TypeResolver.resolveBindingFrom(idName, span, c.tree, c.shape);
-			final rhs: Null<String> = rhsTypeOf(write, c);
-			if (bf == null) {
-				final owners: Array<String> = inheritedOwnersOf(idName, typeCtx, c);
-				if (owners.length > 0)
-					for (o in owners) record(c, o, idName, span, rhs);
-				else
-					markUnresolved(c, idName, rhs);
-				return;
-			}
-			final t: Null<WriteTypeCtx> = typeCtx;
-			if (t != null && t.memberFroms.contains(bf)) record(c, t.name, idName, span, rhs);
-			// else binds to a local / parameter — not a field write, ignored.
+		if (target.kind != c.identKind) return;
+		final id: Null<String> = target.name;
+		if (id == null) return;
+		final idName: String = id;
+		if (inOpaque) {
+			markUnresolved(c, idName, null);
+			return;
 		}
+		final bf: Null<Int> = TypeResolver.resolveBindingFrom(idName, span, c.tree, c.shape);
+		final rhs: Null<String> = rhsTypeOf(write, c);
+		if (bf == null) {
+			final owners: Array<String> = inheritedOwnersOf(idName, typeCtx, c);
+			if (owners.length > 0)
+				for (o in owners) record(c, o, idName, span, rhs);
+			else
+				markUnresolved(c, idName, rhs);
+			return;
+		}
+		final t: Null<WriteTypeCtx> = typeCtx;
+		if (t != null && t.memberFroms.contains(bf)) record(c, t.name, idName, span, rhs);
+		// else binds to a local / parameter — not a field write, ignored.
 		// Other target shapes (a call result, a bare index access) are not field writes.
 	}
 
@@ -541,12 +542,10 @@ final class FieldWriteIndex {
 			final recvName: Null<String> = nominalSimpleName(recvTs, c.unwrapNames, c.rejectNames);
 			return recvName == null ? null : memberTypeSourceInChain(c.index, recvName, member, []);
 		}
-		if (c.indexKind != null && node.kind == c.indexKind) {
-			if (node.children.length == 0) return null;
-			final containerTs: Null<String> = resolveReceiverTypeSource(node.children[0], typeCtx, c);
-			return containerTs == null ? null : elementTypeSource(containerTs, c);
-		}
-		return null;
+		if (c.indexKind == null || node.kind != c.indexKind) return null;
+		if (node.children.length == 0) return null;
+		final containerTs: Null<String> = resolveReceiverTypeSource(node.children[0], typeCtx, c);
+		return containerTs == null ? null : elementTypeSource(containerTs, c);
 	}
 
 	/**
@@ -598,10 +597,9 @@ final class FieldWriteIndex {
 		var found: Null<String> = null;
 		for (sup in decls[0].supertypes) {
 			final ts: Null<String> = memberTypeSourceInChain(index, sup, member, seen);
-			if (ts != null) {
-				if (found != null && found != ts) return null;
-				found = ts;
-			}
+			if (ts == null) continue;
+			if (found != null && found != ts) return null;
+			found = ts;
 		}
 		return found;
 	}
@@ -652,14 +650,14 @@ final class FieldWriteIndex {
 	 * the head validated as a dotted identifier path. Null for any other shape.
 	 */
 	private static function nominalParse(source: String, unwrapNames: Array<String>): Null<NominalParts> {
-		var t: String = StringTools.trim(source);
+		var t: String = source.trim();
 		var unwrapped: Bool = true;
 		while (unwrapped) {
 			unwrapped = false;
-			for (w in unwrapNames) if (StringTools.startsWith(t, w)) {
-				final rest: String = StringTools.trim(t.substring(w.length));
-				if (StringTools.startsWith(rest, '<') && StringTools.endsWith(rest, '>')) {
-					t = StringTools.trim(rest.substring(1, rest.length - 1));
+			for (w in unwrapNames) if (t.startsWith(w)) {
+				final rest: String = t.substring(w.length).trim();
+				if (rest.startsWith('<') && rest.endsWith('>')) {
+					t = rest.substring(1, rest.length - 1).trim();
 					unwrapped = true;
 					break;
 				}
@@ -667,8 +665,8 @@ final class FieldWriteIndex {
 		}
 		final lt: Int = t.indexOf('<');
 		if (lt < 0) return isDottedIdentPath(t) ? { name: RefactorSupport.lastSegment(t), params: null } : null;
-		if (!StringTools.endsWith(t, '>')) return null;
-		final head: String = StringTools.trim(t.substring(0, lt));
+		if (!t.endsWith('>')) return null;
+		final head: String = t.substring(0, lt).trim();
 		return isDottedIdentPath(head) ? { name: RefactorSupport.lastSegment(head), params: t.substring(lt + 1, t.length - 1) } : null;
 	}
 
@@ -693,7 +691,7 @@ final class FieldWriteIndex {
 		if (s.length == 0) return false;
 		var expectStart: Bool = true;
 		for (i in 0...s.length) {
-			final ch: Int = StringTools.fastCodeAt(s, i);
+			final ch: Int = s.fastCodeAt(i);
 			if (expectStart) {
 				if (!RefactorSupport.isIdentStartChar(ch)) return false;
 				expectStart = false;
@@ -764,14 +762,14 @@ final class FieldWriteIndex {
 		final nameAt: Int = source.indexOf(name, from);
 		if (nameAt < 0 || (bodyAt >= 0 && nameAt > bodyAt)) return [];
 		var i: Int = nameAt + name.length;
-		while (i < source.length && RefactorSupport.isSpace(StringTools.fastCodeAt(source, i))) i++;
-		if (i >= source.length || StringTools.fastCodeAt(source, i) != '<'.code) return [];
+		while (i < source.length && RefactorSupport.isSpace(source.fastCodeAt(i))) i++;
+		if (i >= source.length || source.fastCodeAt(i) != '<'.code) return [];
 		var depth: Int = 1;
 		final start: Int = i + 1;
 		var j: Int = start;
 		var prev: Int = 0;
 		while (j < source.length && depth > 0) {
-			final ch: Int = StringTools.fastCodeAt(source, j);
+			final ch: Int = source.fastCodeAt(j);
 			if (ch == '<'.code)
 				depth++;
 			else if (ch == '>'.code && prev != '-'.code)

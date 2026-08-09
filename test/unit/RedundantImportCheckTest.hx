@@ -1,7 +1,6 @@
 package unit;
 
 import anyparse.check.Check;
-import anyparse.check.Check.RiskyFix;
 import anyparse.check.Linter;
 import anyparse.check.RedundantImport;
 import anyparse.check.Severity;
@@ -94,7 +93,8 @@ class RedundantImportCheckTest extends Test {
 			{ file: 'app/C.hx', source: src },
 			{
 				file: 'pkg/deep/Mod.hx',
-				source: 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n\nclass SubTools {\n\n\tpublic static function twice(v:Int):Int {\n\t\treturn v * 2;\n\t}\n\n}\n'
+				source: 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n\nclass SubTools {\n\n'
+					+ '\tpublic static function twice(v:Int):Int {\n\t\treturn v * 2;\n\t}\n\n}\n'
 			}
 		];
 		Assert.equals(0, new RedundantImport().run(files, new HaxeQueryPlugin()).length);
@@ -204,9 +204,10 @@ class RedundantImportCheckTest extends Test {
 	 * fresh run below the file's `using`.
 	 */
 	public function testTwoRunFileWithBothSubTypeImportsRedundant(): Void {
-		final src: String = 'package tests.unit;\n\nimport fs.FileSystemInterface;\nimport fs.cloud.CloudDatabase;\n'
-			+ '\nusing tink.CoreApi;\n\nimport fs.FileSystemInterface.FileSystemCloudAction;\n'
-			+ 'import fs.cloud.CloudDatabase.CloudDatabaseFilePath;\n\nclass T {\n\n\tvar a:FileSystemCloudAction;\n\n\tvar b:CloudDatabaseFilePath;\n\n}\n';
+		final src: String = 'package tests.unit;\n\nimport fs.FileSystemInterface;\nimport fs.cloud.CloudDatabase;\n\n'
+			+ 'using tink.CoreApi;\n\nimport fs.FileSystemInterface.FileSystemCloudAction;\n'
+			+ 'import fs.cloud.CloudDatabase.CloudDatabaseFilePath;\n\nclass T {\n\n\tvar a:FileSystemCloudAction;\n\n'
+			+ '\tvar b:CloudDatabaseFilePath;\n\n}\n';
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'tests/unit/T.hx', source: src },
 			{

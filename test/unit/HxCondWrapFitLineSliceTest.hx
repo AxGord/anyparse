@@ -27,20 +27,23 @@ final class HxCondWrapFitLineSliceTest extends Test {
 	}
 
 	public function testWrappedCondForcesBodyNextLine(): Void {
-		final src: String =
-			'class C {\n\tfunction f() {\n\t\tif (\n\t\t\tcounterLocalDeleted > counterLocalUpdated && counterLocalDeleted > counterCloudDeleted\n\t\t\t&& counterLocalDeleted > counterCloudUpdatedNotSynced\n\t\t)\n\t\t\treturn ACTION_ONE;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n\t\tif (\n'
+			+ '\t\t\tcounterLocalDeleted > counterLocalUpdated && counterLocalDeleted > counterCloudDeleted\n'
+			+ '\t\t\t&& counterLocalDeleted > counterCloudUpdatedNotSynced\n\t\t)\n\t\t\treturn ACTION_ONE;\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testFlatCondWithFittingBodyStaysSameLine(): Void {
-		final src: String =
-			'class C {\n\tfunction f() {\n\t\tif (counterPathValue == Config.READONLY_SEGMENT || counterPathValue.startsWith(Config.READONLY_SEGMENT_SLASH)) return null;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n'
+			+ '\t\tif (counterPathValue == Config.READONLY_SEGMENT || counterPathValue.startsWith(Config.READONLY_SEGMENT_SLASH)) return null;\n'
+			+ '\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testTrailingCommentCountsIntoFit(): Void {
-		final src: String =
-			'class C {\n\tfunction f() {\n\t\tif (counterPathValue == Config.READONLY_SEGMENT || counterPathValue.startsWith(Config.READONLY_SEGMENT_SLASH))\n\t\t\treturn null; // operation not available on this resource\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n'
+			+ '\t\tif (counterPathValue == Config.READONLY_SEGMENT || counterPathValue.startsWith(Config.READONLY_SEGMENT_SLASH))\n'
+			+ '\t\t\treturn null; // operation not available on this resource\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

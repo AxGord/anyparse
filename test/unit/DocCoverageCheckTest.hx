@@ -186,7 +186,7 @@ class DocCoverageCheckTest extends Test {
 	}
 
 	/** Run with member coverage opted in and the type requirement off (isolates member findings). */
-	private function memberVs(src: String): Array<Violation> {
+	private inline function memberVs(src: String): Array<Violation> {
 		return run('{"rules":{"doc-coverage":{"requireMemberDoc":true,"requireTypeDoc":false}}}', src);
 	}
 

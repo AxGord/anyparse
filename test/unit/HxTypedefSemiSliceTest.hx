@@ -30,37 +30,37 @@ final class HxTypedefSemiSliceTest extends Test {
 
 	// ---- Parser accepts typedefs without trailing `;` ----
 
-	public function testTypedefIntNoSemiParses(): Void {
+	public inline function testTypedefIntNoSemiParses(): Void {
 		assertParses('typedef Foo = Int');
 	}
 
-	public function testTypedefAnonNoSemiParses(): Void {
+	public inline function testTypedefAnonNoSemiParses(): Void {
 		assertParses('typedef Foo = { x:Int }');
 	}
 
-	public function testTypedefArrowNoSemiParses(): Void {
+	public inline function testTypedefArrowNoSemiParses(): Void {
 		assertParses('typedef Cb = Int->Void');
 	}
 
-	public function testTwoTypedefsNoSemi(): Void {
+	public inline function testTwoTypedefsNoSemi(): Void {
 		assertParses('typedef A = Int\ntypedef B = String');
 	}
 
-	public function testTypedefAnonFollowedByClass(): Void {
+	public inline function testTypedefAnonFollowedByClass(): Void {
 		assertParses('typedef Bar = { x:Int }\nclass C {}');
 	}
 
 	// ---- Regression — `;` form still parses ----
 
-	public function testTypedefIntWithSemiStillParses(): Void {
+	public inline function testTypedefIntWithSemiStillParses(): Void {
 		assertParses('typedef Foo = Int;');
 	}
 
-	public function testTypedefAnonWithSemiStillParses(): Void {
+	public inline function testTypedefAnonWithSemiStillParses(): Void {
 		assertParses('typedef Foo = { x:Int };');
 	}
 
-	public function testMixedSemiAndNoSemiParse(): Void {
+	public inline function testMixedSemiAndNoSemiParse(): Void {
 		assertParses('typedef A = Int;\ntypedef B = String\ntypedef C = Float;');
 	}
 

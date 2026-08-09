@@ -28,7 +28,8 @@ class ComplexityCheckTest extends Test {
 	public function testOverThresholdFlagged(): Void {
 		// 20 `&&` -> 20 decision points -> score 21 > 20.
 		final vs: Array<Violation> = violations(
-			'class C {\n\tfunction big(a:Bool):Bool {\n\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t}\n}'
+			'class C {\n\tfunction big(a:Bool):Bool {\n'
+			+ '\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t}\n}'
 		);
 		Assert.equals(1, vs.length);
 		Assert.equals('complexity', vs[0].rule);
@@ -51,12 +52,12 @@ class ComplexityCheckTest extends Test {
 		// if/while/for/switch/catch/ternary/?? plus a long && chain — over the threshold
 		// (score 21: the switch counts once now, not once per case).
 		final src: String = 'class C {\n\tfunction mixed(a:Int):Int {\n\t\tif (a > 0) return 1;\n\t\tif (a > 1) return 2;\n'
-			+ '\t\twhile (a > 2) a--;\n' + '\t\tfor (i in 0...a) trace(i);\n'
+			+ '\t\twhile (a > 2) a--;\n\t\tfor (i in 0...a) trace(i);\n'
 			+ '\t\tswitch a { case 1: trace(1); case 2: trace(2); case 3: trace(3); case _: trace(0); }\n'
-			+ '\t\ttry { throw "x"; } catch (e:String) {} catch (e:Int) {}\n' + '\t\tfinal t = a > 0 ? 1 : 2;\n'
+			+ '\t\ttry { throw "x"; } catch (e:String) {} catch (e:Int) {}\n\t\tfinal t = a > 0 ? 1 : 2;\n'
 			+ '\t\tfinal n = (null : Null<Int>) ?? 0;\n'
 			+ '\t\tfinal b = a < 0 && a < 1 && a < 2 && a < 3 && a < 4 && a < 5 && a < 6 && a < 7 && a < 8 && a < 9 && a < 10;\n'
-			+ '\t\treturn b ? t + n : 0;\n' + '\t}\n' + '}';
+			+ '\t\treturn b ? t + n : 0;\n\t}\n}';
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains("'mixed'"));
@@ -67,7 +68,9 @@ class ComplexityCheckTest extends Test {
 		// `outer` (score 21), so a block cannot be hidden from the metric by being
 		// wrapped in a local function. `inner` is not reported on its own.
 		final vs: Array<Violation> = violations(
-			'class C {\n\tfunction outer():Void {\n\t\tfunction inner(a:Bool):Bool {\n\t\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t\t}\n\t\tinner(true);\n\t}\n}'
+			'class C {\n\tfunction outer():Void {\n\t\tfunction inner(a:Bool):Bool {\n'
+			+ '\t\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t\t}\n'
+			+ '\t\tinner(true);\n\t}\n}'
 		);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains("'outer'"));
@@ -76,15 +79,17 @@ class ComplexityCheckTest extends Test {
 	public function testLambdaFoldsIntoEnclosing(): Void {
 		// The lambda's 20 `&&` count toward `withLambda` (lambdas are not function units).
 		final vs: Array<Violation> = violations(
-			'class C {\n\tfunction withLambda():Bool {\n\t\tfinal g = (a:Bool) -> a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t\treturn g(true);\n\t}\n}'
+			'class C {\n\tfunction withLambda():Bool {\n'
+			+ '\t\tfinal g = (a:Bool) -> a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n'
+			+ '\t\treturn g(true);\n\t}\n}'
 		);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains("'withLambda'"));
 	}
 
 	public function testFixReturnsEmpty(): Void {
-		final src: String =
-			'class C {\n\tfunction big(a:Bool):Bool {\n\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction big(a:Bool):Bool {\n'
+			+ '\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t}\n}';
 		final check: Complexity = new Complexity();
 		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
 	}
@@ -141,7 +146,7 @@ class ComplexityCheckTest extends Test {
 		// End-to-end: a checkstyle.json discovered by walking up from the file lowers
 		// the threshold so a function the default (20) ignores is flagged.
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
-		final base: String = (tmp != null && tmp.length > 0) ? tmp : '/tmp';
+		final base: String = tmp != null && tmp.length > 0 ? tmp : '/tmp';
 		final dir: String = '$base/anyparse_cx_cfg_${Sys.time()}';
 		sys.FileSystem.createDirectory(dir);
 		sys.io.File.saveContent(
@@ -173,8 +178,8 @@ class ComplexityCheckTest extends Test {
 		// switch whose arm carries a 20-`&&` chain scores 22 and stays flagged, so the
 		// exemption removes only case-count inflation, never real branching.
 		final chain: String = [for (_ in 0...21) 'a'].join(' && ');
-		final src: String =
-			'class C {\n\tfunction f(a:Bool):Bool {\n\t\tswitch a {\n\t\t\tcase true: return $chain;\n\t\t\tcase _: return false;\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(a:Bool):Bool {\n\t\tswitch a {\n\t\t\tcase true: return $chain;\n'
+			+ '\t\t\tcase _: return false;\n\t\t}\n\t}\n}';
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains("'f'"));
@@ -187,8 +192,8 @@ class ComplexityCheckTest extends Test {
 		// switch. 18 `&&` + this switch scores exactly 20 (not flagged); the old wrapper
 		// double-count would have tipped it to 21 (flagged).
 		final chain: String = [for (_ in 0...19) 'a'].join(' && ');
-		final src: String =
-			'class C {\n\tfunction f(a:Bool, x:Int):Void {\n\t\tfinal b = $chain;\n\t\tswitch x {\n\t\t\t#if debug\n\t\t\tcase 1: p();\n\t\t\tcase 4: r();\n\t\t\t#end\n\t\t\tcase 2: q();\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(a:Bool, x:Int):Void {\n\t\tfinal b = $chain;\n\t\tswitch x {\n\t\t\t#if debug\n'
+			+ '\t\t\tcase 1: p();\n\t\t\tcase 4: r();\n\t\t\t#end\n\t\t\tcase 2: q();\n\t\t}\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 

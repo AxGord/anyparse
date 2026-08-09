@@ -96,23 +96,23 @@ class HxFnReturnBodySliceTest extends HxTestHelpers {
 
 	// ======== Round-trip ========
 
-	public function testRoundTripReturnBodyClass(): Void {
+	public inline function testRoundTripReturnBodyClass(): Void {
 		roundTrip('class Main {\n\tstatic function f():Int return 1;\n}');
 	}
 
-	public function testRoundTripReturnBodyNoType(): Void {
+	public inline function testRoundTripReturnBodyNoType(): Void {
 		roundTrip('class C {\n\tfunction f() return 1;\n}');
 	}
 
-	public function testRoundTripReturnBodyComplex(): Void {
+	public inline function testRoundTripReturnBodyComplex(): Void {
 		roundTrip('class C {\n\tstatic function f(x:Int):Int return x + 1;\n}');
 	}
 
-	public function testRoundTripReturnBodyToplevel(): Void {
+	public inline function testRoundTripReturnBodyToplevel(): Void {
 		roundTrip('function f():Int return 42;');
 	}
 
-	public function testRoundTripStatementReturnUnchanged(): Void {
+	public inline function testRoundTripStatementReturnUnchanged(): Void {
 		roundTrip('class C {\n\tfunction f() {\n\t\treturn 1;\n\t}\n}');
 	}
 

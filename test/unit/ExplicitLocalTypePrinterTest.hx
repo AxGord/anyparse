@@ -21,8 +21,8 @@ class ExplicitLocalTypePrinterTest extends Test {
 	public function testImportedSecondaryTypePrintsShortName(): Void {
 		// The compiler names the sub-type `pkg.model.ContentEntity` — the hybrid. The file's
 		// `import pkg.model.Content.ContentEntity;` IS that type, so the short name is correct.
-		final src: String =
-			'package app;\n\nimport pkg.model.Content.ContentEntity;\n\nclass C {\n\n\tpublic function f():Void {\n\t\tvar result = load();\n\t}\n\n}\n';
+		final src: String = 'package app;\n\nimport pkg.model.Content.ContentEntity;\n\nclass C {\n\n\tpublic function f():Void {\n'
+			+ '\t\tvar result = load();\n\t}\n\n}\n';
 		final out: String = annotate(src, 'pkg.model.ContentEntity');
 		Assert.isTrue(out.indexOf('var result:ContentEntity = load();') != -1, 'short name used, got: $out');
 		Assert.equals(1, occurrences(out, 'import '), 'no import added, got: $out');
@@ -97,6 +97,8 @@ class ExplicitLocalTypePrinterTest extends Test {
 /** A `TypeOracle` that answers every position with one canned type — the compiler-free stand-in for the display server. */
 private class CannedTypeOracle implements TypeOracle {
 
+	private final _type: String;
+
 	public function new(type: String) {
 		_type = type;
 	}
@@ -104,7 +106,5 @@ private class CannedTypeOracle implements TypeOracle {
 	public function typeAt(file: String, bytePos: Int): Null<String> {
 		return _type;
 	}
-
-	private final _type: String;
 
 }

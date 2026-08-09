@@ -5,10 +5,11 @@ import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * One concrete-map reference the rule found: the span to report, the message that carries the
@@ -310,15 +311,16 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final violations: Array<Violation> = [];
-		for (entry in files) for (candidate in candidatesOf(entry.source, plugin)) violations.push({
-			file: entry.file,
-			span: candidate.span,
-			rule: RULE_ID,
-			severity: Severity.Info,
-			message: candidate.message
-		});
-		return violations;
+		return [
+			for (entry in files) for (candidate in candidatesOf(entry.source, plugin))
+				{
+					file: entry.file,
+					span: candidate.span,
+					rule: RULE_ID,
+					severity: Severity.Info,
+					message: candidate.message
+				}
+		];
 	}
 
 	/**
@@ -427,10 +429,14 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	private static function typePositionAccepted(
 		child: QueryNode, parent: QueryNode, isReturnSlot: Bool, parentAccepted: Bool, seams: Seams
 	): Bool {
-		if (parent.kind == seams.newExprKind) return child.kind == CLAUSE_TYPE_KIND;
-		if (parent.kind == FIELD_PAIR_KIND || seams.typeRefKinds.contains(parent.kind)) return parentAccepted;
-		if (child.kind == CLAUSE_TYPE_KIND) return isReturnSlot;
-		return seams.declHostKinds.contains(parent.kind);
+		return if (parent.kind == seams.newExprKind)
+			child.kind == CLAUSE_TYPE_KIND
+		else if (parent.kind == FIELD_PAIR_KIND || seams.typeRefKinds.contains(parent.kind))
+			parentAccepted
+		else if (child.kind == CLAUSE_TYPE_KIND)
+			isReturnSlot
+		else
+			seams.declHostKinds.contains(parent.kind);
 	}
 
 	/**
@@ -448,8 +454,12 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 			if (i == 0) return -1;
 			final candidate: Null<Span> = node.children[i - 1].span;
 			final body: Null<Span> = node.children[i].span;
-			if (candidate == null || body == null) return -1;
-			return seams.source.substring(candidate.to, body.from).indexOf('(') == -1 ? i - 1 : -1;
+			return if (candidate == null || body == null)
+				-1
+			else if (seams.source.substring(candidate.to, body.from).indexOf('(') == -1)
+				i - 1
+			else
+				-1;
 		}
 		return -1;
 	}
@@ -507,7 +517,7 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 		}
 		// A bare construction carries no type arguments of its own, so everything `new Map()` needs to
 		// resolve has to come off the declaration it initializes.
-		final host: Null<Span> = parent == null ? null : parent.span;
+		final host: Null<Span> = parent?.span;
 		final pin: Null<String> = host == null ? null : pinningAnnotation(seams.source, host.from, site.span.from);
 		if (pin == null || !pinDeterminesMapType(pin, site.concrete, seams.scope)) {
 			out.push({ span: site.span, message: MSG_UNPINNED_NEW, edits: [] });
@@ -538,7 +548,7 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 				i = commentEnd;
 				continue;
 			}
-			if (isNominalChar(StringTools.fastCodeAt(text, i))) {
+			if (isNominalChar(text.fastCodeAt(i))) {
 				if (tokenStart == -1) tokenStart = i;
 			} else {
 				if (tokenStart > 0 && text.substring(tokenStart, i) == name) return tokenStart;
@@ -551,8 +561,8 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 
 	/** The offset just past the comment starting at `at`, or -1 when no comment starts there. */
 	private static function commentRegionEnd(text: String, at: Int): Int {
-		if (StringTools.fastCodeAt(text, at) != '/'.code || at + 1 >= text.length) return -1;
-		final next: Int = StringTools.fastCodeAt(text, at + 1);
+		if (text.fastCodeAt(at) != '/'.code || at + 1 >= text.length) return -1;
+		final next: Int = text.fastCodeAt(at + 1);
 		if (next == '*'.code) {
 			final close: Int = text.indexOf('*/', at + 2);
 			return close == -1 ? text.length : close + 2;
@@ -570,17 +580,17 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	 */
 	private static function pinningAnnotation(source: String, declStart: Int, newStart: Int): Null<String> {
 		if (!NewLiteral.pinnedByTypeHint(source, declStart, newStart)) return null;
-		final head: String = StringTools.rtrim(source.substring(declStart, newStart));
+		final head: String = source.substring(declStart, newStart).rtrim();
 		var depth: Int = 0;
 		for (i in 0...head.length - 1) {
-			final c: Int = StringTools.fastCodeAt(head, i);
+			final c: Int = head.fastCodeAt(i);
 			if (c == '<'.code || c == '('.code || c == '['.code || c == '{'.code)
 				depth++;
 			else if (c == '>'.code || c == ')'.code || c == ']'.code || c == '}'.code) {
 				if (depth > 0) depth--;
-			} else if (c == ':'.code && depth == 0 && (i == 0 || StringTools.fastCodeAt(head, i - 1) != '@'.code))
+			} else if (c == ':'.code && depth == 0 && (i == 0 || head.fastCodeAt(i - 1) != '@'.code))
 				// The head ends in the initializer's `=`, which `pinnedByTypeHint` proved is its last char.
-				return StringTools.trim(head.substring(i + 1, head.length - 1));
+				return head.substring(i + 1, head.length - 1).trim();
 		}
 		return null;
 	}
@@ -606,16 +616,18 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	 */
 	private static function pinDeterminesMapType(annotation: String, concrete: String, scope: Scope): Bool {
 		final open: Int = annotation.indexOf('<');
-		if (open == -1 || !StringTools.endsWith(annotation, '>')) return false;
+		if (open == -1 || !annotation.endsWith('>')) return false;
 		final split: { first: String, more: Bool } = typeArgumentSplit(annotation, open);
 		if (split.first == '') return false;
 		final impliedKey: Null<String> = CONCRETE_MAP_KEY_TYPES[concrete];
 		final writesOwnKey: Bool = impliedKey == null || impliedKey == '';
-		final nominal: String = StringTools.trim(annotation.substring(0, open));
-		if (nominal == UNIFIED_MAP || nominal == QUALIFIED_PREFIX + UNIFIED_MAP)
-			return split.more && (writesOwnKey ? keyProven(split.first, scope) : split.first == impliedKey);
-		if (resolveConcreteMap(nominal, scope) != concrete) return false;
-		return writesOwnKey ? split.more && keyProven(split.first, scope) : true;
+		final nominal: String = annotation.substring(0, open).trim();
+		return if (nominal == UNIFIED_MAP || nominal == QUALIFIED_PREFIX + UNIFIED_MAP)
+			split.more && (writesOwnKey ? keyProven(split.first, scope) : split.first == impliedKey)
+		else if (resolveConcreteMap(nominal, scope) != concrete)
+			false
+		else
+			!writesOwnKey || split.more && keyProven(split.first, scope);
 	}
 
 	/** Whether `concrete` writes its key as the first type parameter (`ObjectMap` / `EnumValueMap`) rather than implying it. */
@@ -658,11 +670,9 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	 */
 	private static function keyProven(key: String, scope: Scope): Bool {
 		if (key == '') return false;
-		for (i in 0...key.length) if (!isNominalChar(StringTools.fastCodeAt(key, i))) return false;
-		if (KEY_TYPES_ROUTED_ELSEWHERE.contains(CheckScan.simpleModuleName(key))) return false;
-		if (key.indexOf('.') != -1) return true;
-		if (!scope.imports.exists(key) && !scope.declared.contains(key)) return false;
-		return !aliasesToAClaimedKey(key, scope);
+		for (i in 0...key.length) if (!isNominalChar(key.fastCodeAt(i))) return false;
+		return !KEY_TYPES_ROUTED_ELSEWHERE.contains(CheckScan.simpleModuleName(key))
+			&& (key.indexOf('.') != -1 || (scope.imports.exists(key) || scope.declared.contains(key)) && !aliasesToAClaimedKey(key, scope));
 	}
 
 	/** Whether `name`'s module-declared alias chain reaches a type name an earlier `Map` selector claims. */
@@ -692,16 +702,16 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	private static function typeArgumentSplit(text: String, open: Int): { first: String, more: Bool } {
 		var depth: Int = 0;
 		for (i in open ... text.length) {
-			final c: Int = StringTools.fastCodeAt(text, i);
+			final c: Int = text.fastCodeAt(i);
 			if (c == '<'.code || c == '('.code || c == '{'.code || c == '['.code)
 				depth++;
 			else if (c == ')'.code || c == '}'.code || c == ']'.code)
 				depth--;
-			else if (c == '>'.code && StringTools.fastCodeAt(text, i - 1) != '-'.code) {
+			else if (c == '>'.code && text.fastCodeAt(i - 1) != '-'.code) {
 				depth--;
-				if (depth == 0) return { first: StringTools.trim(text.substring(open + 1, i)), more: false };
+				if (depth == 0) return { first: text.substring(open + 1, i).trim(), more: false };
 			} else if (c == ','.code && depth == 1)
-				return { first: StringTools.trim(text.substring(open + 1, i)), more: true };
+				return { first: text.substring(open + 1, i).trim(), more: true };
 		}
 		return { first: '', more: false };
 	}
@@ -750,8 +760,8 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	/** The offset of the type-parameter list's `<` at or after `from` in `text`, or -1 when the reference carries none. */
 	private static function typeParameterOpen(text: String, from: Int): Int {
 		var i: Int = from;
-		while (i < text.length && StringTools.isSpace(text, i)) i++;
-		return i < text.length && StringTools.fastCodeAt(text, i) == '<'.code ? i : -1;
+		while (i < text.length && text.isSpace(i)) i++;
+		return i < text.length && text.fastCodeAt(i) == '<'.code ? i : -1;
 	}
 
 	/**
@@ -760,14 +770,18 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	 * outright when the module declares that name or an alias binds it (see the class doc).
 	 */
 	private static function resolveConcreteMap(name: String, scope: Scope): Null<String> {
-		if (StringTools.startsWith(name, QUALIFIED_PREFIX)) {
+		if (name.startsWith(QUALIFIED_PREFIX)) {
 			final simple: String = name.substr(QUALIFIED_PREFIX.length);
 			return CONCRETE_MAP_KEY_TYPES.exists(simple) ? simple : null;
 		}
 		if (!CONCRETE_MAP_KEY_TYPES.exists(name) || scope.declared.contains(name) || scope.aliases.contains(name)) return null;
 		final imported: Null<String> = scope.imports[name];
-		if (imported != null) return imported == QUALIFIED_PREFIX + name ? name : null;
-		return scope.wildcards.contains(MAP_MODULE_PACKAGE) ? name : null;
+		return if (imported != null)
+			imported == QUALIFIED_PREFIX + name ? name : null
+		else if (scope.wildcards.contains(MAP_MODULE_PACKAGE))
+			name
+		else
+			null;
 	}
 
 	/** What `tree`'s file binds — the header imports plus every type the module declares — with the `Map` answer precomputed. */
@@ -839,10 +853,10 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 			if (child.kind != ANNOTATION_TYPE_KIND && child.kind != CLAUSE_TYPE_KIND) break;
 			final span: Null<Span> = child.span;
 			if (span == null) break;
-			final current: Null<Span> = head == null ? null : head.span;
+			final current: Null<Span> = head?.span;
 			if (current == null || span.from >= current.to || span.to <= current.from) head = child;
 		}
-		final name: Null<String> = head == null ? null : head.name;
+		final name: Null<String> = head?.name;
 		return name == null ? null : CheckScan.simpleModuleName(name);
 	}
 

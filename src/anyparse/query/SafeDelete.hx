@@ -68,12 +68,9 @@ final class SafeDelete {
 		final memberSpanNN: Span = memberSpan;
 
 		final refs: Array<{ file: String, count: Int }> = collectReferences(parsed, srcFile, memberName, memberSpanNN, refShape);
-		if (refs.length > 0) {
-			final where: String = [for (r in refs) '${r.file} (${r.count})'].join(', ');
-			return Err('"$memberName" is still referenced — refusing to delete: $where');
-		}
-
-		return RemoveMember.removeMember(src.source, srcTypeName, memberName, reformat, plugin, true);
+		if (refs.length <= 0) return RemoveMember.removeMember(src.source, srcTypeName, memberName, reformat, plugin, true);
+		final where: String = [for (r in refs) '${r.file} (${r.count})'].join(', ');
+		return Err('"$memberName" is still referenced — refusing to delete: $where');
 	}
 
 	/**

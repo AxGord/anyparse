@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+using StringTools;
+
 /**
  * Floating-point literal terminal for the Haxe grammar.
  *
@@ -57,9 +59,9 @@ abstract HxFloatLit(String) from String to String {
 
 	@:to public inline function toFloat(): Float {
 		var s: String = StringTools.replace(this, '_', '');
-		if (StringTools.endsWith(s, 'f32'))
+		if (s.endsWith('f32'))
 			s = s.substr(0, s.length - 3);
-		else if (StringTools.endsWith(s, 'f64'))
+		else if (s.endsWith('f64'))
 			s = s.substr(0, s.length - 3);
 		return Std.parseFloat(s);
 	}

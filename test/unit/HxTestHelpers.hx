@@ -244,7 +244,7 @@ class HxTestHelpers extends Test {
 	 * leading metadata Star alongside the constructor. Use this when a
 	 * test inspects `@:meta` prefixes — analog of `expectAnonMembers`.
 	 */
-	private function enumMembers(ed: HxEnumDecl): Array<HxEnumMember> {
+	private inline function enumMembers(ed: HxEnumDecl): Array<HxEnumMember> {
 		return ed.ctors;
 	}
 

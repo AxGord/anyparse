@@ -110,7 +110,9 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 	 */
 	public function testOwnLineCommentInBracedBranchCarried(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(wrap(
-			'if (isFirstGroup) {\n\t\t\tx = new AlphaEntry(info);\n\t\t} else if (isOtherGroup) {\n\t\t\t// TODO: handle info later when it arrives from an open item\n\t\t\tx = new BetaEntry(info, true, true);\n\t\t} else {\n\t\t\tx = new BetaEntry(info, true, false);\n\t\t}'
+			'if (isFirstGroup) {\n\t\t\tx = new AlphaEntry(info);\n\t\t} else if (isOtherGroup) {\n'
+			+ '\t\t\t// TODO: handle info later when it arrives from an open item\n\t\t\tx = new BetaEntry(info, true, true);\n'
+			+ '\t\t} else {\n\t\t\tx = new BetaEntry(info, true, false);\n\t\t}'
 		));
 		Assert.equals(1, es.length);
 		Assert.equals(

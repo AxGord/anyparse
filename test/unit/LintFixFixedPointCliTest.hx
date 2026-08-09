@@ -30,8 +30,8 @@ class LintFixFixedPointCliTest extends Test {
 
 	public function testElseIfChainConverges(): Void {
 		#if (sys || nodejs)
-		final src: String =
-			'package p;\n\nclass C {\n\tpublic function f():Int {\n\t\tif (a) return 1;\n\t\telse if (b) return 2;\n\t\telse return 3;\n\t}\n}\n';
+		final src: String = 'package p;\n\nclass C {\n\tpublic function f():Int {\n\t\tif (a) return 1;\n\t\telse if (b) return 2;\n'
+			+ '\t\telse return 3;\n\t}\n}\n';
 		final dir: String = CliFixture.writeDir('fixfp', [{ name: 'Foo.hx', source: src }]);
 		final path: String = '$dir/Foo.hx';
 		Assert.equals(0, Cli.run(['lint', '--fix', path]), 'lint --fix exits ok');
@@ -68,8 +68,8 @@ class LintFixFixedPointCliTest extends Test {
 		// subset {A} the cross-file index still includes B and `m`'s parameter stays
 		// `Info`. Were the check active-scope, pass 2 would re-lint {A} alone,
 		// wrongly conclude `m` confined, and silently break B's override.
-		final a: String =
-			'package p;\n\nclass A {\n\tprivate function m(a:Int, unused:Int):Int {\n\t\treturn a;\n\t}\n\n\tpublic function u():Int {\n\t\tif (c) return 1;\n\t\telse return m(1, 2);\n\t}\n}\n';
+		final a: String = 'package p;\n\nclass A {\n\tprivate function m(a:Int, unused:Int):Int {\n\t\treturn a;\n\t}\n\n'
+			+ '\tpublic function u():Int {\n\t\tif (c) return 1;\n\t\telse return m(1, 2);\n\t}\n}\n';
 		final b: String =
 			'package p;\n\nclass B extends A {\n\toverride private function m(a:Int, unused:Int):Int {\n\t\treturn a;\n\t}\n}\n';
 		final dir: String = CliFixture.writeDir('fixconfine', [{ name: 'A.hx', source: a }, { name: 'B.hx', source: b }]);
@@ -116,11 +116,11 @@ class LintFixFixedPointCliTest extends Test {
 	 */
 	public function testMapKeysLookupFullScopeAcrossPasses(): Void {
 		#if (sys || nodejs)
-		final reg: String =
-			'package p;\n\nclass Reg {\n\tpublic function keys():Iterator<String> {\n\t\treturn null;\n\t}\n\n\tpublic function get(k:String):Int {\n\t\treturn 0;\n\t}\n}\n';
+		final reg: String = 'package p;\n\nclass Reg {\n\tpublic function keys():Iterator<String> {\n\t\treturn null;\n\t}\n\n'
+			+ '\tpublic function get(k:String):Int {\n\t\treturn 0;\n\t}\n}\n';
 		final svc: String = 'package p;\n\nclass Svc {\n\tpublic var reg:Reg;\n}\n';
-		final a: String =
-			'package p;\n\nclass A {\n\tpublic function u():Int {\n\t\tif (c) return 1;\n\t\telse return 2;\n\t}\n\n\tpublic function f(s:Svc):Void {\n\t\tfor (k in s.reg.keys()) trace(s.reg.get(k));\n\t}\n}\n';
+		final a: String = 'package p;\n\nclass A {\n\tpublic function u():Int {\n\t\tif (c) return 1;\n\t\telse return 2;\n\t}\n\n'
+			+ '\tpublic function f(s:Svc):Void {\n\t\tfor (k in s.reg.keys()) trace(s.reg.get(k));\n\t}\n}\n';
 		final dir: String = CliFixture.writeDir('fixmkl', [
 			{ name: 'Reg.hx', source: reg },
 			{ name: 'Svc.hx', source: svc },
@@ -145,8 +145,9 @@ class LintFixFixedPointCliTest extends Test {
 		// was dropped from the signature but the call kept all three args
 		// (`Too many arguments`). The --fix loop must converge to an arity-consistent
 		// (compiling) result.
-		final src: String =
-			'package p;\n\nclass C {\n\tpublic static function caller(flag:Bool):Int {\n\t\tif (flag) return helper(1, 10, 20);\n\t\treturn helper(2, 30, 40);\n\t}\n\n\tstatic function helper(unused:Int, b:Int, c:Int):Int {\n\t\treturn b + c;\n\t}\n}\n';
+		final src: String = 'package p;\n\nclass C {\n\tpublic static function caller(flag:Bool):Int {\n'
+			+ '\t\tif (flag) return helper(1, 10, 20);\n\t\treturn helper(2, 30, 40);\n\t}\n\n'
+			+ '\tstatic function helper(unused:Int, b:Int, c:Int):Int {\n\t\treturn b + c;\n\t}\n}\n';
 		final dir: String = CliFixture.writeDir('fixfp', [{ name: 'Foo.hx', source: src }]);
 		final path: String = '$dir/Foo.hx';
 		Assert.equals(0, Cli.run(['lint', '--fix', path]), 'lint --fix exits ok');
@@ -170,8 +171,8 @@ class LintFixFixedPointCliTest extends Test {
 	 * imported under the file's `#if (sys || nodejs)` and every test target satisfies it.
 	 */
 	public function testPreferFinalPublicFieldFullScopeAcrossPasses(): Void {
-		final a: String =
-			'package p;\n\nclass A {\n\tpublic var ext:Int = 0;\n\n\tpublic function u():Int {\n\t\tif (c) return 1;\n\t\telse return 2;\n\t}\n}\n';
+		final a: String = 'package p;\n\nclass A {\n\tpublic var ext:Int = 0;\n\n\tpublic function u():Int {\n\t\tif (c) return 1;\n'
+			+ '\t\telse return 2;\n\t}\n}\n';
 		final b: String = 'package p;\n\nclass B {\n\tpublic function poke(a:A):Void {\n\t\ta.ext = 9;\n\t}\n}\n';
 		final dir: String = CliFixture.writeDir('fixfpf', [{ name: 'A.hx', source: a }, { name: 'B.hx', source: b }]);
 		Assert.equals(0, Cli.run(['lint', '--fix', dir]), 'lint --fix exits ok');

@@ -6,6 +6,8 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.EncapsulateField;
 import anyparse.query.RefactorSupport.EditResult;
 
+using StringTools;
+
 /**
  * `EncapsulateField.encapsulate` — turn a stored var field into an
  * `@:isVar` property with get / set accessors. Each test drives the PURE
@@ -18,19 +20,19 @@ class EncapsulateFieldSliceTest extends Test {
 	public function testBasicEncapsulate(): Void {
 		final src: String = 'package pkg;\n\nclass Model {\n\tpublic var count:Int = 0;\n\tpublic function new() {}\n}';
 		final text: String = okEncap(src, 'Model', 'count');
-		Assert.isTrue(StringTools.contains(text, '@:isVar public var count(get, set):Int'), 'field becomes a property');
-		Assert.isTrue(StringTools.contains(text, 'function get_count():Int'), 'getter added');
-		Assert.isTrue(StringTools.contains(text, 'function set_count(value:Int):Int'), 'setter added');
-		Assert.isTrue(StringTools.contains(text, 'return count = value'), 'setter assigns the field');
+		Assert.isTrue(text.contains('@:isVar public var count(get, set):Int'), 'field becomes a property');
+		Assert.isTrue(text.contains('function get_count():Int'), 'getter added');
+		Assert.isTrue(text.contains('function set_count(value:Int):Int'), 'setter added');
+		Assert.isTrue(text.contains('return count = value'), 'setter assigns the field');
 	}
 
 	/** A field literally named `value` gets a non-colliding setter parameter. */
 	public function testParamNoCollision(): Void {
 		final src: String = 'package pkg;\n\nclass Model {\n\tpublic var value:Int = 0;\n\tpublic function new() {}\n}';
 		final text: String = okEncap(src, 'Model', 'value');
-		Assert.isTrue(StringTools.contains(text, 'function set_value(newValue:Int):Int'), 'param renamed to avoid shadowing');
-		Assert.isTrue(StringTools.contains(text, 'return value = newValue'), 'setter assigns field from the renamed param');
-		Assert.isFalse(StringTools.contains(text, 'return value = value'), 'no self-assign');
+		Assert.isTrue(text.contains('function set_value(newValue:Int):Int'), 'param renamed to avoid shadowing');
+		Assert.isTrue(text.contains('return value = newValue'), 'setter assigns field from the renamed param');
+		Assert.isFalse(text.contains('return value = value'), 'no self-assign');
 	}
 
 	/** A `final` field is refused (no setter). */
@@ -53,15 +55,15 @@ class EncapsulateFieldSliceTest extends Test {
 
 	/** An existing accessor blocks encapsulation. */
 	public function testAccessorExistsRefused(): Void {
-		final src: String =
-			'package pkg;\n\nclass Model {\n\tpublic var count:Int = 0;\n\tpublic function new() {}\n\tfunction get_count():Int return count;\n}';
+		final src: String = 'package pkg;\n\nclass Model {\n\tpublic var count:Int = 0;\n\tpublic function new() {}\n'
+			+ '\tfunction get_count():Int return count;\n}';
 		assertErr(EncapsulateField.encapsulate(src, 'Model', 'count', true, plugin()));
 	}
 
 	/** A field already declared as a property is refused. */
 	public function testAlreadyPropertyRefused(): Void {
-		final src: String =
-			'package pkg;\n\nclass Model {\n\t@:isVar public var count(get, set):Int = 0;\n\tpublic function new() {}\n\tfunction get_count():Int return count;\n\tfunction set_count(v:Int):Int return count = v;\n}';
+		final src: String = 'package pkg;\n\nclass Model {\n\t@:isVar public var count(get, set):Int = 0;\n\tpublic function new() {}\n'
+			+ '\tfunction get_count():Int return count;\n\tfunction set_count(v:Int):Int return count = v;\n}';
 		assertErr(EncapsulateField.encapsulate(src, 'Model', 'count', true, plugin()));
 	}
 

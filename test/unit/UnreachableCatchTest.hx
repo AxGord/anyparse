@@ -79,19 +79,19 @@ class UnreachableCatchTest extends Test {
 		Assert.equals(Severity.Warning, vs[0].severity);
 	}
 
-	public function testFixDeletesDuplicateClause(): Void {
+	public inline function testFixDeletesDuplicateClause(): Void {
 		// The later duplicate clause (its `dead()` body) is removed; the earlier one is kept.
 		assertFix('class E {} class C { function f() { try { g(); } catch (e:E) { keep(); } catch (e:E) { dead(); } } }', 'keep', 'dead');
 	}
 
-	public function testFixCatchAllDeletesLater(): Void {
+	public inline function testFixCatchAllDeletesLater(): Void {
 		// A catch-all first makes the later typed clause dead — it is deleted.
 		assertFix(
 			'class E {} class C { function f() { try { g(); } catch (e:Dynamic) { keep(); } catch (e:E) { dead(); } } }', 'keep', 'dead'
 		);
 	}
 
-	public function testFixNestedOverlapKeepsOuterOnly(): Void {
+	public inline function testFixNestedOverlapKeepsOuterOnly(): Void {
 		// The outer dead clause nests an inner dead clause; deleting the outer removes both — the
 		// contained inner edit is dropped, so `inner`/`b` vanish with the outer and only `ok` stays.
 		assertFix(

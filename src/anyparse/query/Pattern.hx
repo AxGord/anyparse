@@ -1,5 +1,7 @@
 package anyparse.query;
 
+using StringTools;
+
 /**
  * Parsed `apq search` pattern — a `QueryNode` tree augmented with
  * metavariable identification.
@@ -138,13 +140,13 @@ final class Metavar {
 			return end;
 		}
 		while (i < len) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c == '\''.code || c == '"'.code) {
 				i = copyRun(i, scanStringEnd(source, i, c));
 				continue;
 			}
 			if (c == '/'.code && i + 1 < len) {
-				final c2: Int = StringTools.fastCodeAt(source, i + 1);
+				final c2: Int = source.fastCodeAt(i + 1);
 				if (c2 == '/'.code) {
 					i = copyRun(i, scanLineCommentEnd(source, i));
 					continue;
@@ -155,10 +157,10 @@ final class Metavar {
 				}
 			}
 			if (c == '$'.code && i + 1 < len) {
-				final next: Int = StringTools.fastCodeAt(source, i + 1);
+				final next: Int = source.fastCodeAt(i + 1);
 				if (isIdentStart(next)) {
 					var j: Int = i + 1;
-					while (j < len && isIdentCont(StringTools.fastCodeAt(source, j))) j++;
+					while (j < len && isIdentCont(source.fastCodeAt(j))) j++;
 					final bare: String = source.substring(i + 1, j);
 					buf.add(PLACEHOLDER_PREFIX);
 					buf.add(bare);
@@ -179,11 +181,12 @@ final class Metavar {
 	 * the input is not a placeholder.
 	 */
 	public static function decodePlaceholderName(ident: String): Null<String> {
-		return !StringTools.startsWith(ident, PLACEHOLDER_PREFIX)
-			? null
-			: !StringTools.endsWith(ident, PLACEHOLDER_SUFFIX)
-				? null
-				: ident.substring(PLACEHOLDER_PREFIX.length, ident.length - PLACEHOLDER_SUFFIX.length);
+		return if (!ident.startsWith(PLACEHOLDER_PREFIX))
+			null
+		else if (!ident.endsWith(PLACEHOLDER_SUFFIX))
+			null
+		else
+			ident.substring(PLACEHOLDER_PREFIX.length, ident.length - PLACEHOLDER_SUFFIX.length);
 	}
 
 	/**
@@ -221,7 +224,7 @@ final class Metavar {
 		var i: Int = start + 1;
 		final len: Int = source.length;
 		while (i < len) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c == '\\'.code) {
 				i += 2;
 				continue;
@@ -235,7 +238,7 @@ final class Metavar {
 	private static function scanLineCommentEnd(source: String, start: Int): Int {
 		var i: Int = start + 2;
 		final len: Int = source.length;
-		while (i < len && StringTools.fastCodeAt(source, i) != '\n'.code) i++;
+		while (i < len && source.fastCodeAt(i) != '\n'.code) i++;
 		return i;
 	}
 
@@ -243,7 +246,7 @@ final class Metavar {
 		var i: Int = start + 2;
 		final len: Int = source.length;
 		while (i + 1 < len) {
-			if (StringTools.fastCodeAt(source, i) == '*'.code && StringTools.fastCodeAt(source, i + 1) == '/'.code) return i + 2;
+			if (source.fastCodeAt(i) == '*'.code && source.fastCodeAt(i + 1) == '/'.code) return i + 2;
 			i++;
 		}
 		return len;

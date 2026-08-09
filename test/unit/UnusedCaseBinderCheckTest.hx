@@ -10,6 +10,8 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * The `unused-case-binder` check: a case-pattern binder that neither the arm's guard
  * nor its body reads is flagged `Warning`, and the fix spells it `_`.
@@ -39,7 +41,7 @@ class UnusedCaseBinderCheckTest extends Test {
 	public function testCanaryFixed(): Void {
 		final out: String = applyFixOnce(canary());
 		Assert.stringContains('case _:', out);
-		Assert.isFalse(StringTools.contains(out, '_data'), 'the binder is gone');
+		Assert.isFalse(out.contains('_data'), 'the binder is gone');
 		Assert.stringContains('t("User", 10150)', out);
 	}
 
@@ -64,14 +66,14 @@ class UnusedCaseBinderCheckTest extends Test {
 	public function testAssignCaptureHeadDropped(): Void {
 		final out: String = applyFixOnce(sw('case c = Foo(1): use(1);'));
 		Assert.stringContains('case Foo(1):', out);
-		Assert.isFalse(StringTools.contains(out, '='), 'the capture head is dropped, not wildcarded');
+		Assert.isFalse(out.contains('='), 'the capture head is dropped, not wildcarded');
 	}
 
 	/** A `case var q:` capture is a binder by SYNTAX, so it needs no position gate to become `_`. */
 	public function testVarCaptureUnbound(): Void {
 		final out: String = applyFixOnce(sw('case A: p();\n\t\t\tcase var q: r();'));
 		Assert.stringContains('case _:', out);
-		Assert.isFalse(StringTools.contains(out, 'var q'), 'the capture is gone');
+		Assert.isFalse(out.contains('var q'), 'the capture is gone');
 	}
 
 	/** A GUARD read is a read: the binder stays. */
@@ -153,8 +155,47 @@ class UnusedCaseBinderCheckTest extends Test {
 		Assert.isTrue(ids.contains('unused-case-binder'));
 	}
 
+	/**
+	 * A LEGACY `@:enum abstract` projects as a plain abstract with no marker the scan can
+	 * read, so the constant set has to reach EVERY abstract member, not only the modern
+	 * `enum abstract` kind. Without that, `case Ace(hearts):` reads as a binder and the
+	 * rewrite silently shadows the arm below it.
+	 */
+	public function testLegacyEnumAbstractValueRefused(): Void {
+		final decl: String = '@:enum abstract Suit(Int) { var hearts = 1; var spades = 2; }\n';
+		Assert.equals(0, violations(decl + sw('case Ace(hearts): r();\n\t\t\tcase Ace(spades): p();')).length);
+	}
+
+	/**
+	 * A `static inline` field resolves unqualified in a pattern exactly as an enum value
+	 * does, and it is declared by an ORDINARY class — the shape that made the first
+	 * version of gate 1 emit code that compiled and behaved differently.
+	 */
+	public function testStaticInlineConstantRefused(): Void {
+		final src: String = 'class C {\n\tstatic inline final one: String = "x";\n\n\tfunction f(v: String): Void {\n\t\tswitch v {'
+			+ '\n\t\t\tcase "q": p();\n\t\t\tcase one: r();\n\t\t}\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * `case A | B:` is Haxe's OTHER or-pattern spelling and projects as a bitwise-or node
+	 * the pattern whitelist does not model, so `binders` refuses the arm. That refusal is
+	 * the load-bearing property of the whitelist design — pinned here rather than left to
+	 * hold by accident.
+	 */
+	public function testUnmodelledOrPatternRefused(): Void {
+		Assert.equals(0, violations(sw('case A(x) | B(x): r();')).length);
+	}
+
+	/** A reification subtree may splice in a read no source scan resolves, so an arm inside one is skipped. */
+	public function testReificationArmSkipped(): Void {
+		final src: String =
+			'class C {\n\tmacro function f(): Expr {\n\t\treturn macro switch v {\n\t\t\tcase Node(x, y): use(y);\n\t\t};\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
 	/** The canary: the trailing arm binds `_data` and never reads it. */
-	private function canary(): String {
+	private inline function canary(): String {
 		return 'class C {\n\tfunction f(data: Dynamic): String {\n\t\treturn switch data.role {\n\t\t\tcase "Owner": t("Owner", 10149);'
 			+ '\n\t\t\tcase "User": t("User", 10150);\n\t\t\tcase _data: t("User", 10150);\n\t\t}\n\t}\n}';
 	}
@@ -179,49 +220,6 @@ class UnusedCaseBinderCheckTest extends Test {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};
-	}
-
-
-	/**
-	 * A LEGACY `@:enum abstract` projects as a plain abstract with no marker the scan can
-	 * read, so the constant set has to reach EVERY abstract member, not only the modern
-	 * `enum abstract` kind. Without that, `case Ace(hearts):` reads as a binder and the
-	 * rewrite silently shadows the arm below it.
-	 */
-	public function testLegacyEnumAbstractValueRefused(): Void {
-		final decl: String = '@:enum abstract Suit(Int) { var hearts = 1; var spades = 2; }\n';
-		Assert.equals(0, violations(decl + sw('case Ace(hearts): r();\n\t\t\tcase Ace(spades): p();')).length);
-	}
-
-
-	/**
-	 * A `static inline` field resolves unqualified in a pattern exactly as an enum value
-	 * does, and it is declared by an ORDINARY class — the shape that made the first
-	 * version of gate 1 emit code that compiled and behaved differently.
-	 */
-	public function testStaticInlineConstantRefused(): Void {
-		final src: String = 'class C {\n\tstatic inline final one: String = "x";\n\n\tfunction f(v: String): Void {\n\t\tswitch v {'
-			+ '\n\t\t\tcase "q": p();\n\t\t\tcase one: r();\n\t\t}\n\t}\n}';
-		Assert.equals(0, violations(src).length);
-	}
-
-
-	/**
-	 * `case A | B:` is Haxe's OTHER or-pattern spelling and projects as a bitwise-or node
-	 * the pattern whitelist does not model, so `binders` refuses the arm. That refusal is
-	 * the load-bearing property of the whitelist design — pinned here rather than left to
-	 * hold by accident.
-	 */
-	public function testUnmodelledOrPatternRefused(): Void {
-		Assert.equals(0, violations(sw('case A(x) | B(x): r();')).length);
-	}
-
-
-	/** A reification subtree may splice in a read no source scan resolves, so an arm inside one is skipped. */
-	public function testReificationArmSkipped(): Void {
-		final src: String =
-			'class C {\n\tmacro function f(): Expr {\n\t\treturn macro switch v {\n\t\t\tcase Node(x, y): use(y);\n\t\t};\n\t}\n}';
-		Assert.equals(0, violations(src).length);
 	}
 
 }

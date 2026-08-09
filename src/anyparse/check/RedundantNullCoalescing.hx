@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -41,7 +40,7 @@ final class RedundantNullCoalescing implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		if (provider == null) return [];
 		final typed: TypeInfoProvider = provider;
 		final coalKind: String = seams.coalKind;

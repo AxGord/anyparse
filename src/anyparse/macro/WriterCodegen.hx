@@ -210,7 +210,7 @@ class WriterCodegen {
 	 * resolves to the alias before unification. `TLazy` is followed
 	 * eagerly to handle forward-referenced typedefs.
 	 */
-	private static function optionsHasInExprPosition(optionsTypePath: String): Bool {
+	private static inline function optionsHasInExprPosition(optionsTypePath: String): Bool {
 		return optionsHasField(optionsTypePath, '_inExprPosition');
 	}
 
@@ -564,8 +564,6 @@ class WriterCodegen {
 	 * (`@:fmt(reflowInExprPosition)`) to collapse a source-multiline object
 	 * literal that is the direct branch value. Emitted only when the opt
 	 * typedef carries `_inValueIfBranch:Bool`.
-	 */
-	/**
 	 * ω-case-sibling-symmetry — opt-fanout shim for the
 	 * `caseSiblingSymmetry` meta on a case-list Star. Stamps the switch's
 	 * widest-sibling flat width onto the element opt so every sibling body
@@ -661,8 +659,6 @@ class WriterCodegen {
 	 *
 	 * Idempotent, and cleared by `_setExprPosition` on any fresh
 	 * expression-position frame, so it never leaves the chain that set it.
-	 */
-	/**
 	 * omega-arrow-value-if-reflow - opt-fanout setter for the ELEMENT-trailing
 	 * refusal signal, set by a list Star on the element whose captured trailing
 	 * comment sits right after it (`@:fmt(arrowValueIfElemTrail)`).
@@ -2417,10 +2413,9 @@ class WriterCodegen {
 		// marks the inner opt so a `WrapMode.Keep` chain suppresses its headBreak
 		// + Nest; `_clearKeepChainInParen` resets it at the chain emit so nested
 		// chains / leaf operands don't re-trigger. Gated on `_keepChainInParen:Bool`.
-		if (optionsHasField(optionsTypePath, '_keepChainInParen')) {
-			fields.push(setKeepChainInParenField(optionsCT));
-			fields.push(clearKeepChainInParenField(optionsCT));
-		}
+		if (!optionsHasField(optionsTypePath, '_keepChainInParen')) return;
+		fields.push(setKeepChainInParenField(optionsCT));
+		fields.push(clearKeepChainInParenField(optionsCT));
 	}
 
 	/**

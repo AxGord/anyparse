@@ -88,8 +88,8 @@ final class HxParenWrapSourceNewlineSliceTest extends Test {
 		// Under onePerLine the chain spans multiple lines; the leading
 		// `\n` after `(` must be preserved AND the close `)` lands on its
 		// own line at the outer indent.
-		final src: String =
-			'class M {\n\tfunction f():Bool {\n\t\treturn !(\n\t\t\ta.y + b.h <= c.y || d.y >= e.y + f.h ||\n\t\t\tg.x + h.w <= i.x || j.x >= k.x + l.w\n\t\t);\n\t}\n}';
+		final src: String = 'class M {\n\tfunction f():Bool {\n\t\treturn !(\n\t\t\ta.y + b.h <= c.y || d.y >= e.y + f.h ||\n'
+			+ '\t\t\tg.x + h.w <= i.x || j.x >= k.x + l.w\n\t\t);\n\t}\n}';
 		final out: String = formatOnePerLine(src);
 		Assert.isTrue(out.indexOf('!(\n') != -1, 'expected open paren followed by newline (case 1 shape): <$out>');
 		Assert.isTrue(out.indexOf('\n\t\t);') != -1, 'expected close paren on its own line at outer indent: <$out>');

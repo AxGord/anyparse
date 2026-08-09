@@ -13,8 +13,6 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
-import anyparse.query.SymbolIndex.FileInfo;
-import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 import haxe.Exception;
 

@@ -4,12 +4,10 @@ import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CondBranchProjection;
-import anyparse.query.CondBranchProjection.CondBranchRun;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 import anyparse.query.Refs;
-import anyparse.query.Refs.RefKind;
 
 /**
  * `CondBranchProjection`'s conditional-region splitter (`conditionalBranchRuns`) and the
@@ -193,8 +191,8 @@ class CondBranchSplitTest extends Test {
 	public function testUntouchedSiblingIsSharedByIdentity(): Void {
 		// The first class IS rewritten, so the root is a copy — but the second class was not
 		// touched and must come back as the same node instance.
-		final src: String =
-			'class A {\n\tfunction f():Void {\n\t\t#if X\n\t\ta();\n\t\t#else\n\t\tb();\n\t\t#end\n\t}\n}\n\nclass B {\n\tfunction g():Void {\n\t\tc();\n\t}\n}';
+		final src: String = 'class A {\n\tfunction f():Void {\n\t\t#if X\n\t\ta();\n\t\t#else\n\t\tb();\n\t\t#end\n\t}\n}\n\nclass B {\n'
+			+ '\tfunction g():Void {\n\t\tc();\n\t}\n}';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final plain: QueryNode = plugin.parseFile(src);
 		final projected: QueryNode = plugin.projectBranchAware(plain, src);

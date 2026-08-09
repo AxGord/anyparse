@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -183,10 +182,7 @@ final class PreferTernaryAssignment implements Check {
 	 * assignment (a compound `+=` / `??=`, or an increment / decrement, is excluded).
 	 */
 	private static function assignmentIn(branch: QueryNode, s: Seams): Null<QueryNode> {
-		final stmt: QueryNode = if (branch.kind == s.blockStmtKind && branch.children.length == 1)
-			branch.children[0]
-		else
-			branch;
+		final stmt: QueryNode = branch.kind == s.blockStmtKind && branch.children.length == 1 ? branch.children[0] : branch;
 		if (stmt.kind != s.exprStmtKind || stmt.children.length != 1) return null;
 		final assign: QueryNode = stmt.children[0];
 		return assign.kind == s.assignKind && assign.children.length == ASSIGN_CHILD_COUNT ? assign : null;

@@ -80,18 +80,18 @@ final class Rewrite {
 		final n: Int = template.length;
 		var i: Int = 0;
 		while (i < n) {
-			final c: Int = StringTools.fastCodeAt(template, i);
+			final c: Int = template.fastCodeAt(i);
 			if (c != '$'.code) {
 				buf.addChar(c);
 				i++;
 				continue;
 			}
-			if (i + 1 < n && StringTools.fastCodeAt(template, i + 1) == '$'.code) {
+			if (i + 1 < n && template.fastCodeAt(i + 1) == '$'.code) {
 				buf.addChar('$'.code);
 				i += 2;
 				continue;
 			}
-			if (i + 1 < n && StringTools.fastCodeAt(template, i + 1) == '{'.code) {
+			if (i + 1 < n && template.fastCodeAt(i + 1) == '{'.code) {
 				final close: Int = template.indexOf('}', i + 2);
 				if (close < 0) return null;
 				final braced: Null<String> = expandSpec(template.substring(i + 2, close), source, bindings);
@@ -101,7 +101,7 @@ final class Rewrite {
 				continue;
 			}
 			var j: Int = i + 1;
-			while (j < n && isIdentChar(StringTools.fastCodeAt(template, j))) j++;
+			while (j < n && isIdentChar(template.fastCodeAt(j))) j++;
 			if (j == i + 1) {
 				buf.addChar('$'.code);
 				i++;

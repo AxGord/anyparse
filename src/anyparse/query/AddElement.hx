@@ -2,12 +2,13 @@ package anyparse.query;
 
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
+
+using StringTools;
 
 /**
  * Which side of the cursor's element the new element is inserted on.
@@ -112,7 +113,7 @@ final class AddElement {
 	public static function addElement(
 		source: String, line: Int, col: Int, side: InsertSide, code: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
 	): EditResult {
-		final trimmed: String = StringTools.trim(code);
+		final trimmed: String = code.trim();
 		if (trimmed.length == 0) return Err('add-element requires a non-empty element text');
 
 		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
@@ -126,7 +127,8 @@ final class AddElement {
 		final hit: Null<{ node: QueryNode, parent: Null<QueryNode> }> = RefactorSupport.elementAtFrom(tree, source, cursor);
 		if (hit == null)
 			return Err(
-				'position $line:$col is not on the first token of an element — point at the first token of an existing statement / case / list element'
+				'position $line:$col'
+				+ ' is not on the first token of an element — point at the first token of an existing statement / case / list element'
 			);
 		final element: QueryNode = hit.node;
 		final elemSpan: Null<Span> = element.span;
@@ -145,7 +147,7 @@ final class AddElement {
 		// the cursor resolved to a call-argument / array / object slot while the
 		// caller almost certainly meant a sibling STATEMENT. Refuse with the
 		// recipe instead of the cryptic parse error the splice would produce.
-		if (isComma && StringTools.endsWith(trimmed, ';'))
+		if (isComma && trimmed.endsWith(';'))
 			return Err(
 				'the element ends with ";" but the target is a comma-separated list (call arguments / array / object) — '
 				+ 'to add a sibling STATEMENT next to a bare-call statement, use '
@@ -208,7 +210,7 @@ final class AddElement {
 	public static function appendElement(
 		source: String, line: Int, col: Int, code: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
 	): EditResult {
-		final trimmed: String = StringTools.trim(code);
+		final trimmed: String = code.trim();
 		if (trimmed.length == 0) return Err('add-element requires a non-empty element text');
 
 		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
@@ -222,7 +224,8 @@ final class AddElement {
 		final container: Null<QueryNode> = findContainerAt(tree, source, cursor);
 		if (container == null)
 			return Err(
-				'position $line:$col is not on the first token of a container — point at the first token of a block / array / object / call / class / switch'
+				'position $line:$col'
+				+ ' is not on the first token of a container — point at the first token of a block / array / object / call / class / switch'
 			);
 		final containerSpan: Null<Span> = container.span;
 		return containerSpan == null
@@ -260,8 +263,6 @@ final class AddElement {
 	 * container, or any kind the grammar's seams do not describe. Every seam is optional:
 	 * a grammar that declares none makes this function constantly false and the op behaves
 	 * exactly as it did before.
-	 */
-	/**
 	 * The held body text as a STATEMENT, for splicing into the block that is about to wrap it.
 	 *
 	 * An arrow lambda's expression body carries no terminator of its own (`() -> doOne()`), and
@@ -276,8 +277,8 @@ final class AddElement {
 	 * value-preserving one.
 	 */
 	private static inline function terminated(held: String): String {
-		final trimmedHeld: String = StringTools.trim(held);
-		return StringTools.endsWith(trimmedHeld, ';') || StringTools.endsWith(trimmedHeld, '}') ? held : '$held;';
+		final trimmedHeld: String = held.trim();
+		return trimmedHeld.endsWith(';') || trimmedHeld.endsWith('}') ? held : '$held;';
 	}
 
 	private static function braceLessBodySlot(parent: Null<QueryNode>, element: QueryNode, plugin: GrammarPlugin): Bool {
@@ -354,7 +355,7 @@ final class AddElement {
 		var at: Int = hi - 1;
 		var afterComments: Int = -1;
 		while (at >= lo) {
-			if (isSpace(StringTools.fastCodeAt(source, at))) {
+			if (isSpace(source.fastCodeAt(at))) {
 				at--;
 				continue;
 			}
@@ -389,9 +390,9 @@ final class AddElement {
 	): EditResult {
 		var close: Int = containerSpan.to - 1;
 		if (close >= source.length) close = source.length - 1;
-		while (close >= containerSpan.from && isSpace(StringTools.fastCodeAt(source, close))) close--;
+		while (close >= containerSpan.from && isSpace(source.fastCodeAt(close))) close--;
 		if (close < containerSpan.from) return Err('the container at $line:$col has no closing delimiter');
-		final closeCode: Int = StringTools.fastCodeAt(source, close);
+		final closeCode: Int = source.fastCodeAt(close);
 		if (closeCode != '}'.code && closeCode != ']'.code && closeCode != ')'.code)
 			return Err('the node at $line:$col is not a brace / bracket / parenthesis container');
 
@@ -402,13 +403,13 @@ final class AddElement {
 		final scan: { lastContent: Int, afterComments: Int } = scanBackOverTrivia(source, containerSpan.from, close);
 		final lastContent: Int = scan.lastContent;
 		final afterComments: Int = scan.afterComments;
-		final lastCode: Int = lastContent >= containerSpan.from ? StringTools.fastCodeAt(source, lastContent) : -1;
+		final lastCode: Int = lastContent >= containerSpan.from ? source.fastCodeAt(lastContent) : -1;
 		final empty: Bool = lastCode == '{'.code || lastCode == '['.code || lastCode == '('.code || lastContent < containerSpan.from;
 
 		final isComma: Bool = RefactorSupport.COMMA_CONTAINER_KINDS.contains(containerKind);
 		// Same statement-into-comma-list refusal as the sibling insert path: a
 		// `;`-terminated element never belongs in call arguments / array / object.
-		if (isComma && StringTools.endsWith(trimmed, ';'))
+		if (isComma && trimmed.endsWith(';'))
 			return Err(
 				'the element ends with ";" but the container is a comma-separated list (call arguments / array / object) — '
 				+ 'to append a STATEMENT to the enclosing block, point --append at the block, not the call'

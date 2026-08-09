@@ -7,6 +7,8 @@ import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 
+using StringTools;
+
 /**
  * omega-arrow-block-body-open: an arrow lambda's `{` never lands alone on a
  * line after `->`. The `@:fmt(arrowBodyLineWrap)` marker
@@ -43,8 +45,10 @@ final class HxArrowBlockBodyOpenSliceTest extends Test {
 	 * `methodChainCuddledLinks` on). The whole point of that pair is that both
 	 * configs see the SAME input, so it is written once.
 	 */
-	private static final PANEL_FOLD_SRC: String =
-		'class Sample {\n\n\tfunction set_foldedNow(state:Bool):Bool {\n\t\tfoldedNow = state;\n\t\tMotions.blend(_sectionPanel, 0.3, { shade: state ? 0.0 : 1, shiftY: state ? 0.0 : 1 }).onFinished(() -> {\n\t\t\t_sectionPanel.enabled = !state;\n\t\t\tdispatchAlert(new Alert(Alert.FINISHED));\n\t\t}).onTicked(() -> dispatchAlert(new Alert(Alert.MUTATE)));\n\t\treturn state;\n\t}\n\n}';
+	private static final PANEL_FOLD_SRC: String = 'class Sample {\n\n\tfunction set_foldedNow(state:Bool):Bool {\n\t\tfoldedNow = state;\n'
+		+ '\t\tMotions.blend(_sectionPanel, 0.3, { shade: state ? 0.0 : 1, shiftY: state ? 0.0 : 1 }).onFinished(() -> {\n'
+		+ '\t\t\t_sectionPanel.enabled = !state;\n\t\t\tdispatchAlert(new Alert(Alert.FINISHED));\n'
+		+ '\t\t}).onTicked(() -> dispatchAlert(new Alert(Alert.MUTATE)));\n\t\treturn state;\n\t}\n\n}';
 
 	public function new(): Void {
 		super();
@@ -52,36 +56,45 @@ final class HxArrowBlockBodyOpenSliceTest extends Test {
 
 	/** DISCRIMINATES: a chain whose LAST link carries a wide expression-bodied arrow keeps the block-bodied `.onFinished` link cuddled (`-> {`); without the gate the rest-of-stack lookahead strands the `{` on its own line. */
 	public function testChainWideTrailingLinkKeepsArrowCuddled(): Void {
-		final src: String =
-			'class Sample {\n\n\tfunction run() {\n\t\tMotions.blend(_sectionPanel, 0.3, { shade: state ? 0.0 : 1, shiftY: state ? 0.0 : 1 }).onFinished(() -> {\n\t\t\t_sectionPanel.enabled = !state;\n\t\t\tdispatchAlert(new Alert(Alert.FINISHED));\n\t\t}).onTicked(() -> dispatchAlert(new Alert(Alert.MUTATE)));\n\t}\n\n}';
+		final src: String = 'class Sample {\n\n\tfunction run() {\n'
+			+ '\t\tMotions.blend(_sectionPanel, 0.3, { shade: state ? 0.0 : 1, shiftY: state ? 0.0 : 1 }).onFinished(() -> {\n'
+			+ '\t\t\t_sectionPanel.enabled = !state;\n\t\t\tdispatchAlert(new Alert(Alert.FINISHED));\n'
+			+ '\t\t}).onTicked(() -> dispatchAlert(new Alert(Alert.MUTATE)));\n\t}\n\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	/** CONTROL: the same chain with a NARROW trailing-link argument -- the rest-of-stack sum stays under `maxLineLength`, so the arrow was already cuddled before the gate. */
 	public function testChainNarrowTrailingLinkStaysCuddled(): Void {
-		final src: String =
-			'class Sample {\n\n\tfunction run() {\n\t\tMotions.blend(_sectionPanel, 0.3, { shade: state ? 0.0 : 1, shiftY: state ? 0.0 : 1 }).onFinished(() -> {\n\t\t\t_sectionPanel.enabled = !state;\n\t\t\tdispatchAlert(new Alert(Alert.FINISHED));\n\t\t}).onTicked(() -> d(1));\n\t}\n\n}';
+		final src: String = 'class Sample {\n\n\tfunction run() {\n'
+			+ '\t\tMotions.blend(_sectionPanel, 0.3, { shade: state ? 0.0 : 1, shiftY: state ? 0.0 : 1 }).onFinished(() -> {\n'
+			+ '\t\t\t_sectionPanel.enabled = !state;\n\t\t\tdispatchAlert(new Alert(Alert.FINISHED));\n\t\t}).onTicked(() -> d(1));\n\t}\n'
+			+ '\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	/** CONTROL (boundary, fits side): trailing-link argument one char SHORTER than the sibling below -- the chain cascade breaks the chain one link per line first, so the arrow marker never surfaces and the rendering is byte-identical with the gate reverted. */
 	public function testBoundaryFitsChainBreaksArrowStillCuddled(): Void {
-		final src: String =
-			'class Sample {\n\n\tfunction run() {\n\t\tObjName.tweenValue(_groupField, 0.3, { alpha: 1 })\n\t\t\t.onComplete(() -> {\n\t\t\t\t_groupField.visible = true;\n\t\t\t})\n\t\t\t.onUpdate(() -> handlerName(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa));\n\t}\n\n}';
+		final src: String = 'class Sample {\n\n\tfunction run() {\n\t\tObjName.tweenValue(_groupField, 0.3, { alpha: 1 })\n'
+			+ '\t\t\t.onComplete(() -> {\n\t\t\t\t_groupField.visible = true;\n\t\t\t})\n'
+			+ '\t\t\t.onUpdate(() -> handlerName(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa));\n\t}\n\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	/** DISCRIMINATES (boundary, fits+1 side): ONE more char in the trailing-link argument re-glues the chain and hands the decision to the arrow marker -- without the gate that is exactly where `-> \n {` appears. */
 	public function testBoundaryFitsPlusOneKeepsArrowCuddled(): Void {
-		final src: String =
-			'class Sample {\n\n\tfunction run() {\n\t\tObjName.tweenValue(_groupField, 0.3, { alpha: 1 }).onComplete(() -> {\n\t\t\t_groupField.visible = true;\n\t\t}).onUpdate(() -> handlerName(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa));\n\t}\n\n}';
+		final src: String = 'class Sample {\n\n\tfunction run() {\n'
+			+ '\t\tObjName.tweenValue(_groupField, 0.3, { alpha: 1 }).onComplete(() -> {\n'
+			+ '\t\t\t_groupField.visible = true;\n\t\t}).onUpdate(() -> handlerName(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa));\n' + '\t}\n\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	/** DISCRIMINATES: real-tree shape A (anonymized) -- a `put(...).success(block arrow).error(expression arrow)` crash-report chain whose last link was collapsed to an expression body. */
 	public function testCrashReportChainExpressionBodyLastLink(): Void {
-		final src: String =
-			'class Sample {\n\n\tfunction run() {\n\t\tSVC.data.recordEvent.put(null, {\n\t\t\t"MainAlias": alias,\n\t\t\t"TagIndex": 4,\n\t\t\t"TagPayload": [ov, issue, hexa.LineStack.toSource(hexa.LineStack.fullStack())].join(\', \'),\n\t\t\t"Timestamp": Date.now().toString(),\n\t\t}).success((outVal:net.proto.ResultantData) -> {\n\t\t\tif (!outVal.Allowed) trace(\': recordEvent: \', SVC.readFailMessages2(outVal));\n\t\t}).error((faultVal:net.proto.FaultOutcomes) -> trace(\': recordEvent: \', SVC.readFailMessages(faultVal)));\n\t}\n\n}';
+		final src: String = 'class Sample {\n\n\tfunction run() {\n\t\tSVC.data.recordEvent.put(null, {\n\t\t\t"MainAlias": alias,\n'
+			+ '\t\t\t"TagIndex": 4,\n\t\t\t"TagPayload": [ov, issue, hexa.LineStack.toSource(hexa.LineStack.fullStack())].join(\', \'),\n'
+			+ '\t\t\t"Timestamp": Date.now().toString(),\n\t\t}).success((outVal:net.proto.ResultantData) -> {\n'
+			+ '\t\t\tif (!outVal.Allowed) trace(\': recordEvent: \', SVC.readFailMessages2(outVal));\n'
+			+ '\t\t}).error((faultVal:net.proto.FaultOutcomes) -> trace(\': recordEvent: \', SVC.readFailMessages(faultVal)));\n\t}\n\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -92,23 +105,31 @@ final class HxArrowBlockBodyOpenSliceTest extends Test {
 
 	/** DISCRIMINATES: shape B again with `wrapping.methodChainCuddledLinks` ON -- the gate composes with the cuddled-links knob, same cuddled rendering. */
 	public function testCuddledLinksKnobKeepsArrowCuddled(): Void {
-		final cuddledCfg: String = StringTools.replace(
-			CFG, '"wrapping":{"functionSignature"', '"wrapping":{"methodChainCuddledLinks":true,"functionSignature"'
+		final cuddledCfg: String = CFG.replace(
+			'"wrapping":{"functionSignature"', '"wrapping":{"methodChainCuddledLinks":true,"functionSignature"'
 		);
 		Assert.equals(PANEL_FOLD_SRC, triviaWrite(PANEL_FOLD_SRC, cuddledCfg));
 	}
 
 	/** CONTROL (narrowness pin): an EXPRESSION-bodied sole arrow arg still breaks after `->` with its close `)` on its own line -- the gate keys on a `{`-leading body only and did not disable the marker wholesale. */
 	public function testSoleArrowArgStillBreaksWithCloseOnOwnLine(): Void {
-		final src: String =
-			'class Sample {\n\n\tfunction run() {\n\t\tfinal picked:Null<WrapperResultType> = elementCollectionValue.find((element:MemberEntryType) ->\n\t\t\tScoringHelperName.computeRankValueFor(element) == 1\n\t\t);\n\t}\n\n}';
+		final src: String = 'class Sample {\n\n\tfunction run() {\n'
+			+ '\t\tfinal picked:Null<WrapperResultType> = elementCollectionValue.find((element:MemberEntryType) ->\n'
+			+ '\t\t\tScoringHelperName.computeRankValueFor(element) == 1\n\t\t);\n\t}\n\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	/** CONTROL: block-bodied arrows in NON-chain over-wide contexts (`+` operand, `==`/`||` operand, `&&` condition, `??` operand) keep `{` cuddled either way -- measured byte-identical with the gate reverted. The two-indent-level body of the first two is a SEPARATE known nest-depth quirk, pinned here so a later fix is visible. */
 	public function testNonChainBlockBodiedArrowsUnchanged(): Void {
-		final src: String =
-			'class Sample {\n\n\tfunction c1() {\n\t\tfinal resultValue:Int = receiverObjectName.methodNameHere(() -> {\n\t\t\t\t_groupField.visible = true;\n\t\t\t}) + someOtherRatherLongExpressionName + yetAnotherLongExpressionValue + finalTailVal;\n\t}\n\n\tfunction c2() {\n\t\tfinal resultValue:Bool = receiverName.methodName(idValue, () -> {\n\t\t\t\t_groupField.visible = true;\n\t\t\t}) == someRatherLongComparisonValueName || fallbackFlagValueName || tailFlagValue;\n\t}\n\n\tfunction c3() {\n\t\tif (\n\t\t\tflagValueName && registerHandlerName(() -> {\n\t\t\t\t_groupField.visible = true;\n\t\t\t}) && anotherRatherLongConditionValue && yetAnotherLongConditionName\n\t\t)\n\t\t\tinvokeTask();\n\t}\n\n\tfunction c4() {\n\t\treturn receiverName.methodName(idValue, () -> {\n\t\t\t_groupField.visible = true;\n\t\t}) ?? someRatherLongFallbackValueName ?? anotherFallbackValueName ?? tailValue;\n\t}\n\n}';
+		final src: String = 'class Sample {\n\n\tfunction c1() {\n\t\tfinal resultValue:Int = receiverObjectName.methodNameHere(() -> {\n'
+			+ '\t\t\t\t_groupField.visible = true;\n'
+			+ '\t\t\t}) + someOtherRatherLongExpressionName + yetAnotherLongExpressionValue + finalTailVal;\n\t}\n\n\tfunction c2() {\n'
+			+ '\t\tfinal resultValue:Bool = receiverName.methodName(idValue, () -> {\n\t\t\t\t_groupField.visible = true;\n'
+			+ '\t\t\t}) == someRatherLongComparisonValueName || fallbackFlagValueName || tailFlagValue;\n\t}\n\n\tfunction c3() {\n'
+			+ '\t\tif (\n\t\t\tflagValueName && registerHandlerName(() -> {\n\t\t\t\t_groupField.visible = true;\n'
+			+ '\t\t\t}) && anotherRatherLongConditionValue && yetAnotherLongConditionName\n\t\t)\n\t\t\tinvokeTask();\n\t}\n\n'
+			+ '\tfunction c4() {\n\t\treturn receiverName.methodName(idValue, () -> {\n\t\t\t_groupField.visible = true;\n'
+			+ '\t\t}) ?? someRatherLongFallbackValueName ?? anotherFallbackValueName ?? tailValue;\n\t}\n\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -116,8 +137,10 @@ final class HxArrowBlockBodyOpenSliceTest extends Test {
 	 * DISCRIMINATES the guard's SECOND conjunct (`hasForcedBreak`): a FLAT object-literal arrow body also starts with `{`, but it rides the head line in full, so breaking after `->` genuinely shortens that line and must still happen. A `{`-only guard suppressed the break and pushed this fixture from 127 to 141 columns against the 140 budget. Reverting the whole arm leaves this test PASSING -- it pins the guard's width, not its existence.
 	 */
 	public function testFlatObjectLiteralArrowBodyStillBreaks(): Void {
-		final src: String =
-			'class Sample {\n\n\tfunction run() {\n\t\tfinal resultName = collectionNameValue.mapEntriesHere(\n\t\t\tentryValueName ->\n\t\t\t\t{primaryKeyFieldNamexxxxxxxxxx: entryValueName.identifierName, secondaryLabelName: entryValueName.captionName }\n\t\t);\n\t}\n\n}';
+		final src: String = 'class Sample {\n\n\tfunction run() {\n\t\tfinal resultName = collectionNameValue.mapEntriesHere(\n'
+			+ '\t\t\tentryValueName ->\n'
+			+ '\t\t\t\t{primaryKeyFieldNamexxxxxxxxxx: entryValueName.identifierName, secondaryLabelName: entryValueName.captionName }\n'
+			+ '\t\t);\n\t}\n\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -125,8 +148,10 @@ final class HxArrowBlockBodyOpenSliceTest extends Test {
 	 * CONTROL (outcome pin, byte-identical with the arm reverted AND with its second conjunct removed): an object literal whose OWN wrap cascade already committed to breaking hardlines right after `{`, so it terminates the head line itself and keeps `{` cuddled -- exactly as a statement block does. It pins the slice OUTCOME for the second, non-block half of the gated population, not the gate.
 	 */
 	public function testSelfBreakingObjectLiteralArrowBodyStaysCuddled(): Void {
-		final src: String =
-			'class Sample {\n\n\tfunction run() {\n\t\tfinal resultName = collectionNameValue.mapEntriesHere(entryValueName -> {\n\t\t\tprimaryKeyFieldNamexxxxxxxxxx: entryValueName.identifierName,\n\t\t\tsecondaryLabelName: entryValueName.captionName,\n\t\t});\n\t}\n\n}';
+		final src: String = 'class Sample {\n\n\tfunction run() {\n'
+			+ '\t\tfinal resultName = collectionNameValue.mapEntriesHere(entryValueName -> {\n'
+			+ '\t\t\tprimaryKeyFieldNamexxxxxxxxxx: entryValueName.identifierName,\n'
+			+ '\t\t\tsecondaryLabelName: entryValueName.captionName,\n\t\t});\n\t}\n\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -139,8 +164,10 @@ final class HxArrowBlockBodyOpenSliceTest extends Test {
 	 * columns against a 140 budget. Reverting the whole arm leaves this PASSING.
 	 */
 	public function testKeepModeLiteralBreakingLaterStillBreaks(): Void {
-		final src: String =
-			'class Sample {\n\n\tfunction run() {\n\t\tfinal resultValueName = receiverObjectNameHereLongerStill.methodNameGoesHereTooNow(entryValueName ->\n\t\t\t{onDoneCallbackNameValueLong: () -> {\n\t\t\t\tperformActionNow(entryValueName);\n\t\t\t}, tagLabelValue: 1 }\n\t\t);\n\t}\n\n}';
+		final src: String = 'class Sample {\n\n\tfunction run() {\n'
+			+ '\t\tfinal resultValueName = receiverObjectNameHereLongerStill.methodNameGoesHereTooNow(entryValueName ->\n'
+			+ '\t\t\t{onDoneCallbackNameValueLong: () -> {\n\t\t\t\tperformActionNow(entryValueName);\n\t\t\t}, tagLabelValue: 1 }\n'
+			+ '\t\t);\n\t}\n\n}';
 		Assert.equals(src, triviaWrite(src, keepModeCfg()));
 	}
 
@@ -157,8 +184,8 @@ final class HxArrowBlockBodyOpenSliceTest extends Test {
 	 * hardline somewhere" from "breaks before any other token".
 	 */
 	private static inline function keepModeCfg(): String {
-		return StringTools.replace(
-			CFG, '"wrapping":{"functionSignature"', '"wrapping":{"objectLiteral":{"defaultWrap":"keep","rules":[]},"functionSignature"'
+		return CFG.replace(
+			'"wrapping":{"functionSignature"', '"wrapping":{"objectLiteral":{"defaultWrap":"keep","rules":[]},"functionSignature"'
 		)
 			.split('"functionBody":"fitLine"')
 			.join('"functionBody":"keep"');

@@ -198,8 +198,6 @@ final class HxCaseBodyControlFlowGlueTest extends Test {
 	 * case gets no coordination at all. Its placement can only come from the
 	 * per-construct decision inside `BodyFit.fitLineLayout` — which is the
 	 * half of this slice the symmetry channel cannot stand in for.
-	 */
-	/**
 	 * Braces have nothing to do with it. `whileBody: next` gives a brace-less
 	 * `while` body its hardline, the case body then cannot render flat, and the
 	 * same refusal applies — head below the label, sibling spread with it.

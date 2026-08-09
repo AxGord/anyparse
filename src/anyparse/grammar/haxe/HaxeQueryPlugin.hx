@@ -5,7 +5,6 @@ import anyparse.format.comment.CommentLossException;
 import anyparse.format.comment.FormatterOff;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.Pattern;
-import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.QueryNode;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -14,8 +13,6 @@ import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
-import anyparse.query.GrammarPlugin.CheckOverrides;
-import anyparse.query.GrammarPlugin.LayoutMetrics;
 import anyparse.format.IndentChar;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.SpanTypeInfoProvider;
@@ -257,7 +254,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	];
 
 	/** Per-module-path cache of the std extension-method extraction; a cached null (a non-std / missing module) is retained via `exists`, not recomputed. */
-	private static final _extMethodsCache: Map<String, Null<Array<String>>> = new Map();
+	private static final extMethodsCache: Map<String, Null<Array<String>>> = [];
 
 	/** Member-modifier node kinds — a `Static` among these marks the following `FnMember` static; any other is a non-`Static` modifier that preserves the accumulated flag (used by `collectStaticMethodsWithParam`). */
 	private static final MODIFIER_KINDS: Array<String> = [
@@ -1274,9 +1271,9 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 
 	/** Lazily extract + cache the `using`-eligible method names of `modulePath` from the std source, or null when std / the module file is absent. */
 	private function extensionMethodsFromStd(modulePath: String): Null<Array<String>> {
-		if (_extMethodsCache.exists(modulePath)) return _extMethodsCache[modulePath];
+		if (extMethodsCache.exists(modulePath)) return extMethodsCache[modulePath];
 		final computed: Null<Array<String>> = computeExtensionMethodsFromStd(modulePath);
-		_extMethodsCache[modulePath] = computed;
+		extMethodsCache[modulePath] = computed;
 		return computed;
 	}
 
@@ -1329,9 +1326,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	/** Read `<dir>/<modulePath-as-path>.hx`, or null when it does not exist / is unreadable (a non-std module then falls back to the table). */
 	private static function readStdModule(dir: String, modulePath: String): Null<String> {
 		#if (sys || nodejs)
-		final file: String = haxe.io.Path.join([dir, modulePath.split('.').join('/') + '.hx']);
-		if (!sys.FileSystem.exists(file)) return null;
-		return try sys.io.File.getContent(file) catch (exception: Exception) null;
+		final file: String = haxe.io.Path.join([dir, '${modulePath.split('.').join('/')}.hx']);
+		return !sys.FileSystem.exists(file) ? null : try sys.io.File.getContent(file) catch (exception: Exception) null;
 		#else
 		return null;
 		#end
@@ -1387,17 +1383,5 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return false;
 	}
 
-
 	/** The all-empty bundle returned when the source does not parse - the six maps are simply unpopulated, never null. */
-	private static function emptySpanTypeInfo(): SpanTypeInfo {
-		return {
-			declaredTypes: [],
-			returnTypes: [],
-			propertyAccessors: [],
-			propertyWriteAccessors: [],
-			declaredTypeSources: [],
-			castTargetSources: []
-		};
-	}
-
 }

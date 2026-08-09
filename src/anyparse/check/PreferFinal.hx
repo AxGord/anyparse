@@ -2,11 +2,9 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
-import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
@@ -85,14 +83,14 @@ final class PreferFinal implements Check {
 		final scopeKinds: Array<String> = shape.scopeKinds;
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
 		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final abstractKinds: Array<String> = shape.underlyingThisTypeKinds ?? [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null)
 				checkTree(
 					violations, entry.file, entry.source, tree, shape, scopeKinds, opaqueKinds, mutableKinds, index,
-					provider == null ? null : provider.declaredTypes(entry.source), abstractKinds
+					provider?.declaredTypes(entry.source), abstractKinds
 				);
 		}
 		return violations;
@@ -196,8 +194,7 @@ final class PreferFinal implements Check {
 	 * within its scope (see `reassignedInScope`).
 	 */
 	private static function writeSpans(name: String, tree: QueryNode, shape: RefShape): Array<Span> {
-		final spans: Array<Span> = [for (h in Refs.find(name, tree, shape)) if (h.kind == RefKind.Write) h.span];
-		return spans;
+		return [for (h in Refs.find(name, tree, shape)) if (h.kind == RefKind.Write) h.span];
 	}
 
 	/** Whether any reassignment position in `writes` falls within `scope`. */

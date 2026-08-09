@@ -123,7 +123,7 @@ class HxParamBodyUntypedSliceTest extends HxTestHelpers {
 	}
 
 	/** Untyped params survive the write -> reparse -> write idempotency. */
-	public function testUntypedParamRoundTrip(): Void {
+	public inline function testUntypedParamRoundTrip(): Void {
 		roundTrip('class C { function f(x) return x; function g(a, b:Int):Int { return b; } }');
 	}
 

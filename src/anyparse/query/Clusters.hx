@@ -169,9 +169,7 @@ final class Clusters {
 			? 'no call sites'
 			: 'coverage ${Math.round(report.resolvedSites * PERCENT / totalSites)}% '
 				+ '(${report.resolvedSites} resolved / ${report.unresolvedSites} unresolved call sites)';
-		out.add(
-			'clusters for ${report.typeName} — ${report.memberCount} members, ' + '${report.intraEdgeSites} intra-edge sites; $coverage\n'
-		);
+		out.add('clusters for ${report.typeName} — ${report.memberCount} members, ${report.intraEdgeSites} intra-edge sites; $coverage\n');
 
 		if (report.hubs.length > 0) {
 			final mode: String = report.autoHubs ? 'auto' : 'explicit';

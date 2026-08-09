@@ -3,6 +3,9 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.query.Cli;
+
+using StringTools;
+
 #if sys
 import sys.FileSystem;
 import sys.io.File;
@@ -783,14 +786,14 @@ class ApqReconCliTest extends Test {
 	private static function mkTempDir(prefix: String): String {
 		counter++;
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
-		final base: String = (tmp != null && tmp.length > 0) ? stripTrailingSlash((tmp: String)) : '/tmp';
+		final base: String = tmp != null && tmp.length > 0 ? stripTrailingSlash((tmp: String)) : '/tmp';
 		final dir: String = '$base/${prefix}_${Sys.time()}_$counter';
 		FileSystem.createDirectory(dir);
 		return dir;
 	}
 
 	private static inline function stripTrailingSlash(p: String): String {
-		return StringTools.endsWith(p, '/') ? p.substring(0, p.length - 1) : p;
+		return p.endsWith('/') ? p.substring(0, p.length - 1) : p;
 	}
 
 	private static inline function goodHxtest(): String {

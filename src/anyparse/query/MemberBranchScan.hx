@@ -85,6 +85,77 @@ final class MemberBranchScan {
 	}
 
 	/**
+	 * Visit every member declaration of `container` in source order — descending into every
+	 * member-position conditional-compilation region branch by branch — with the modifier and
+	 * annotation siblings that precede it in its OWN run. `isMember` names what counts as a
+	 * declaration; everything else accumulates into the run and is handed to `visit` with the
+	 * member it modifies.
+	 *
+	 * The ergonomic form of `fold` for the many checks whose state is exactly "the modifier siblings
+	 * since the last member". Its join is concatenation — the run a member sees is the union of what
+	 * every branch carried out, which is the fail-closed reading for a modifier: a gate that any
+	 * build's modifiers would trip, trips.
+	 */
+	public static function eachMember(
+		seams: MemberBranchSeams, container: QueryNode, isMember: QueryNode -> Bool,
+		visit: (member:QueryNode, run:Array<QueryNode>, runIsCertain:Bool) -> Void
+	): Void {
+		fold(seams, container.children, freshRun(), (run, child) -> {
+			if (!isMember(child)) return { nodes: run.nodes.concat([child]), certain: run.certain };
+			visit(child, run.nodes, run.certain);
+			return freshRun();
+		}, joinRuns);
+	}
+
+	/**
+	 * The span of the conditional BRANCH that declares `member`, or null when no region under
+	 * `container` holds it — either because it is a direct child (so it compiles in every build) or
+	 * because it is not under `container` at all. A caller that reads null as "unguarded, safe" must
+	 * therefore pass a `member` it knows belongs to `container`.
+	 *
+	 * The unit a multi-member rewrite has to stay inside. Two members of the same region but of
+	 * DIFFERENT branches never compile together, so an edit reaching from one to the other is as wrong
+	 * as one reaching out of the region entirely — a collapse that renames a backing field declared in
+	 * `#if cpp` cannot rewrite a reader written in `#else`. A region whose boundaries the splitter
+	 * refuses answers with the whole region's span, the tightest bound still available.
+	 */
+	public static function branchSpanOf(seams: MemberBranchSeams, container: QueryNode, member: QueryNode): Null<Span> {
+		for (child in container.children) if (isRegion(seams, child)) {
+			final hit: Null<Span> = branchSpanIn(seams, child, member);
+			if (hit != null) return hit;
+		}
+		return null;
+	}
+
+	/**
+	 * The subset of `deleting` a fix may actually remove: every member whose deletion would leave a
+	 * conditional REGION with no member declaration at all is dropped, together with the rest of that
+	 * region's members.
+	 *
+	 * The grammar models an empty BRANCH (`#if cpp #else var b; #end` parses) but not a region emptied
+	 * of members, so such a splice is rejected by the re-parse gate — and with it EVERY other edit the
+	 * same `--fix` pass had for that file. Withholding these edits keeps the findings and lets the rest
+	 * of the file's fixes land.
+	 *
+	 * The question is per EDIT SET, not per member: two orphan members that are together all of a
+	 * region's members each look non-sole on their own. A member of a NESTED region counts toward its
+	 * outer region too, so emptying the inner one empties the outer with it.
+	 */
+	public static function survivingDeletions(
+		seams: MemberBranchSeams, container: QueryNode, deleting: Array<QueryNode>, isMember: QueryNode -> Bool
+	): Array<QueryNode> {
+		final refused: Array<QueryNode> = [];
+		eachRegion(seams, container, region -> {
+			final members: Array<QueryNode> = [];
+			RefactorSupport.eachMemberHost(region, host -> for (c in host.children) if (isMember(c)) members.push(c));
+			if (members.length == 0 || members.exists(m -> !deleting.contains(m))) return;
+			for (m in members) if (!refused.contains(m))
+				refused.push(m);
+		});
+		return deleting.filter(m -> !refused.contains(m));
+	}
+
+	/**
 	 * Fold one conditional region branch by branch and merge the outgoing states with `join`.
 	 * Every branch is scanned — not `exists`-style short-circuited — because each holds its own
 	 * members and each must reach `step`.
@@ -114,52 +185,6 @@ final class MemberBranchScan {
 		return seams.condKind != null && node.kind == seams.condKind;
 	}
 
-
-	/**
-	 * Visit every member declaration of `container` in source order — descending into every
-	 * member-position conditional-compilation region branch by branch — with the modifier and
-	 * annotation siblings that precede it in its OWN run. `isMember` names what counts as a
-	 * declaration; everything else accumulates into the run and is handed to `visit` with the
-	 * member it modifies.
-	 *
-	 * The ergonomic form of `fold` for the many checks whose state is exactly "the modifier siblings
-	 * since the last member". Its join is concatenation — the run a member sees is the union of what
-	 * every branch carried out, which is the fail-closed reading for a modifier: a gate that any
-	 * build's modifiers would trip, trips.
-	 */
-	public static function eachMember(
-		seams: MemberBranchSeams, container: QueryNode, isMember: QueryNode -> Bool,
-		visit: (member:QueryNode, run:Array<QueryNode>, runIsCertain:Bool) -> Void
-	): Void {
-		fold(seams, container.children, freshRun(), (run, child) -> {
-			if (!isMember(child)) return { nodes: run.nodes.concat([child]), certain: run.certain };
-			visit(child, run.nodes, run.certain);
-			return freshRun();
-		}, joinRuns);
-	}
-
-
-	/**
-	 * The span of the conditional BRANCH that declares `member`, or null when no region under
-	 * `container` holds it — either because it is a direct child (so it compiles in every build) or
-	 * because it is not under `container` at all. A caller that reads null as "unguarded, safe" must
-	 * therefore pass a `member` it knows belongs to `container`.
-	 *
-	 * The unit a multi-member rewrite has to stay inside. Two members of the same region but of
-	 * DIFFERENT branches never compile together, so an edit reaching from one to the other is as wrong
-	 * as one reaching out of the region entirely — a collapse that renames a backing field declared in
-	 * `#if cpp` cannot rewrite a reader written in `#else`. A region whose boundaries the splitter
-	 * refuses answers with the whole region's span, the tightest bound still available.
-	 */
-	public static function branchSpanOf(seams: MemberBranchSeams, container: QueryNode, member: QueryNode): Null<Span> {
-		for (child in container.children) if (isRegion(seams, child)) {
-			final hit: Null<Span> = branchSpanIn(seams, child, member);
-			if (hit != null) return hit;
-		}
-		return null;
-	}
-
-
 	/**
 	 * The branch span of `member` inside `region`, or null when the region does not hold it. A region
 	 * nested in a branch answers with its OWN branch span — tighter, and still inside the outer one.
@@ -178,7 +203,6 @@ final class MemberBranchScan {
 		return null;
 	}
 
-
 	/** The branch span of `member` inside any region among `nodes` — the nested-region arm of `branchSpanIn`. */
 	private static function nestedSpan(seams: MemberBranchSeams, nodes: Array<QueryNode>, member: QueryNode): Null<Span> {
 		for (node in nodes) if (isRegion(seams, node)) {
@@ -188,44 +212,10 @@ final class MemberBranchScan {
 		return null;
 	}
 
-
-	/**
-	 * The subset of `deleting` a fix may actually remove: every member whose deletion would leave a
-	 * conditional REGION with no member declaration at all is dropped, together with the rest of that
-	 * region's members.
-	 *
-	 * The grammar models an empty BRANCH (`#if cpp #else var b; #end` parses) but not a region emptied
-	 * of members, so such a splice is rejected by the re-parse gate — and with it EVERY other edit the
-	 * same `--fix` pass had for that file. Withholding these edits keeps the findings and lets the rest
-	 * of the file's fixes land.
-	 *
-	 * The question is per EDIT SET, not per member: two orphan members that are together all of a
-	 * region's members each look non-sole on their own. A member of a NESTED region counts toward its
-	 * outer region too, so emptying the inner one empties the outer with it.
-	 */
-	public static function survivingDeletions(
-		seams: MemberBranchSeams, container: QueryNode, deleting: Array<QueryNode>, isMember: QueryNode -> Bool
-	): Array<QueryNode> {
-		final refused: Array<QueryNode> = [];
-		eachRegion(seams, container, region -> {
-			final members: Array<QueryNode> = [];
-			RefactorSupport.eachMemberHost(region, host -> {
-				for (c in host.children) if (isMember(c))
-					members.push(c);
-			});
-			if (members.length == 0 || members.exists(m -> !deleting.contains(m))) return;
-			for (m in members) if (!refused.contains(m))
-				refused.push(m);
-		});
-		return deleting.filter(m -> !refused.contains(m));
-	}
-
-
 	/** A member run that has seen nothing yet — every modifier it goes on to collect is certain. */
 	private static inline function freshRun(): MemberRun {
 		return { nodes: [], certain: true };
 	}
-
 
 	/**
 	 * Merge two branches' leftover modifier runs. The node set is the UNION — a gate that any build's
@@ -245,7 +235,6 @@ final class MemberBranchScan {
 			certain: a.certain && b.certain && a.nodes.length == b.nodes.length && !a.nodes.exists(n -> !b.nodes.contains(n))
 		};
 	}
-
 
 	/** Visit every conditional region under `container`, nested ones included, outermost first. */
 	private static function eachRegion(seams: MemberBranchSeams, container: QueryNode, visit: QueryNode -> Void): Void {

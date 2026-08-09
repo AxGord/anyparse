@@ -1,8 +1,6 @@
 package unit;
 
 import anyparse.check.Check;
-import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.Violation;
 import anyparse.check.ImportBlockOrder;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;

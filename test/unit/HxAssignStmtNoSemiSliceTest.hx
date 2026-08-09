@@ -100,16 +100,20 @@ class HxAssignStmtNoSemiSliceTest extends HxTestHelpers {
 
 	public function testCorpusExpressionIfBody(): Void {
 		final cls: HxClassDecl = HaxeParser.parse(
-			'class Main\n{\n\tpublic function new()\n\t{\n\t\tfun.expr = if (fun.ret == null || switch (fun.ret)\n\t\t{\n\t\t\tcase TPath (p): true;\n\t\t\tdefault: false;\n\t\t})\n\t\t{\n\t\t\tmacro throw "abstract method, must override";\n\t\t}\n\t\telse\n\t\t{\n\t\t\tmacro return throw "abstract method, must override";\n\t\t}\n\t}\n}'
+			'class Main\n{\n\tpublic function new()\n\t{\n\t\tfun.expr = if (fun.ret == null || switch (fun.ret)\n\t\t{\n'
+			+ '\t\t\tcase TPath (p): true;\n\t\t\tdefault: false;\n\t\t})\n\t\t{\n\t\t\tmacro throw "abstract method, must override";\n'
+			+ '\t\t}\n\t\telse\n\t\t{\n\t\t\tmacro return throw "abstract method, must override";\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, cls.members.length);
 	}
 
 	// -- Idempotency: verbatim corpus source --
 
-	public function testCorpusExpressionIfRoundTrip(): Void {
+	public inline function testCorpusExpressionIfRoundTrip(): Void {
 		roundTrip(
-			'class Main\n{\n\tpublic function new()\n\t{\n\t\tfun.expr = if (fun.ret == null || switch (fun.ret)\n\t\t{\n\t\t\tcase TPath (p): true;\n\t\t\tdefault: false;\n\t\t})\n\t\t{\n\t\t\tmacro throw "abstract method, must override";\n\t\t}\n\t\telse\n\t\t{\n\t\t\tmacro return throw "abstract method, must override";\n\t\t}\n\t}\n}'
+			'class Main\n{\n\tpublic function new()\n\t{\n\t\tfun.expr = if (fun.ret == null || switch (fun.ret)\n\t\t{\n'
+			+ '\t\t\tcase TPath (p): true;\n\t\t\tdefault: false;\n\t\t})\n\t\t{\n\t\t\tmacro throw "abstract method, must override";\n'
+			+ '\t\t}\n\t\telse\n\t\t{\n\t\t\tmacro return throw "abstract method, must override";\n\t\t}\n\t}\n}'
 		);
 	}
 

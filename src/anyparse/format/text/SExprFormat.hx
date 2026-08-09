@@ -8,6 +8,8 @@ import anyparse.format.text.TextFormat.BlockCommentDelims;
 import anyparse.format.text.TextFormat.BoolLiterals;
 import anyparse.format.text.TextFormat.UnescapeResult;
 
+using StringTools;
+
 /**
  * Reference `TextFormat` for S-expressions.
  *
@@ -96,7 +98,7 @@ final class SExprFormat implements TextFormat {
 			case '\t'.code: '\\t';
 			case _:
 				if (c < ' '.code)
-					'\\u${StringTools.hex(c, 4)}';
+					'\\u${c.hex(4)}';
 				else
 					String.fromCharCode(c);
 		};

@@ -7,6 +7,8 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.IntroduceParameterObject;
 import anyparse.query.RefactorSupport.EditResult;
 
+using StringTools;
+
 /**
  * `IntroduceParameterObject.introduce` — fold a contiguous run of a
  * function's parameters into one object parameter of a generated typedef,
@@ -18,22 +20,23 @@ class IntroduceParameterObjectSliceTest extends Test {
 
 	/** The signature, body, call sites, and generated typedef are all rewritten. */
 	public function testBasicFold(): Void {
-		final src: String =
-			'package pkg;\n\nclass Mover {\n\tpublic function new() {}\n\tpublic function move(x:Int, y:Int, dur:Float):Int return x + y + Std.int(dur);\n\tpublic function run():Int return move(1, 2, 0.5);\n}';
+		final src: String = 'package pkg;\n\nclass Mover {\n\tpublic function new() {}\n'
+			+ '\tpublic function move(x:Int, y:Int, dur:Float):Int return x + y + Std.int(dur);\n'
+			+ '\tpublic function run():Int return move(1, 2, 0.5);\n}';
 		final text: String = okFold(src, 'move', ['x', 'y'], 'Point', null);
-		Assert.isTrue(StringTools.contains(text, 'move(point:Point, dur:Float)'), 'signature folded');
-		Assert.isTrue(StringTools.contains(text, 'point.x + point.y'), 'body references rewritten');
-		Assert.isTrue(StringTools.contains(text, 'move({ x: 1, y: 2 }, 0.5)'), 'call site folded to an object literal');
-		Assert.isTrue(StringTools.contains(text, 'typedef Point = { x:Int, y:Int }'), 'typedef generated');
+		Assert.isTrue(text.contains('move(point:Point, dur:Float)'), 'signature folded');
+		Assert.isTrue(text.contains('point.x + point.y'), 'body references rewritten');
+		Assert.isTrue(text.contains('move({ x: 1, y: 2 }, 0.5)'), 'call site folded to an object literal');
+		Assert.isTrue(text.contains('typedef Point = { x:Int, y:Int }'), 'typedef generated');
 	}
 
 	/** `--name` overrides the object parameter name. */
 	public function testCustomName(): Void {
-		final src: String =
-			'package pkg;\n\nclass C {\n\tpublic function new() {}\n\tpublic function f(a:Int, b:Int):Int return a + b;\n\tpublic function g():Int return f(1, 2);\n}';
+		final src: String = 'package pkg;\n\nclass C {\n\tpublic function new() {}\n\tpublic function f(a:Int, b:Int):Int return a + b;\n'
+			+ '\tpublic function g():Int return f(1, 2);\n}';
 		final text: String = okFold(src, 'f', ['a', 'b'], 'Pair', 'p');
-		Assert.isTrue(StringTools.contains(text, 'f(p:Pair)'), 'custom object name used');
-		Assert.isTrue(StringTools.contains(text, 'p.a + p.b'), 'body uses the custom name');
+		Assert.isTrue(text.contains('f(p:Pair)'), 'custom object name used');
+		Assert.isTrue(text.contains('p.a + p.b'), 'body uses the custom name');
 	}
 
 	/** Non-contiguous parameters are refused. */
@@ -58,16 +61,32 @@ class IntroduceParameterObjectSliceTest extends Test {
 
 	/** A braced interpolation is folded, not refused. */
 	public function testBracedInterpFolded(): Void {
-		final src: String =
-			'package pkg;\n\nclass C {\n\tpublic function new() {}\n\tpublic function f(a:Int, b:Int):String return \'$${a}-$${b}\';\n\tpublic function g():String return f(1, 2);\n}';
+		final src: String = 'package pkg;\n\nclass C {\n\tpublic function new() {}\n'
+			+ '\tpublic function f(a:Int, b:Int):String return \'$${a}-$${b}\';\n\tpublic function g():String return f(1, 2);\n}';
 		final text: String = okFold(src, 'f', ['a', 'b'], 'T', 't');
-		Assert.isTrue(StringTools.contains(text, '$${t.a}-$${t.b}'), 'braced interpolation rewritten through the object');
+		Assert.isTrue(text.contains('$${t.a}-$${t.b}'), 'braced interpolation rewritten through the object');
 	}
 
 	/** An unknown parameter is refused. */
 	public function testNoSuchParamRefused(): Void {
 		final src: String = 'package pkg;\n\nclass C {\n\tpublic function new() {}\n\tpublic function f(a:Int):Int return a;\n}';
 		assertErr(introduce(src, 'f', ['nope'], 'T', null));
+	}
+
+	/**
+	 * Every `$a` occurrence the predecessor's raw-text scan matched but that is NOT a read
+	 * of the parameter: one in a comment, one in a non-interpolating double-quoted literal,
+	 * and one after an escaped `$$`. The index sees none of them as a read, so the fold
+	 * proceeds — and each stays verbatim while the braced `${a}` becomes `${t.a}`.
+	 */
+	public function testNonReadDollarMentionsDoNotRefuse(): Void {
+		final src: String = 'package pkg;\n\nclass C {\n\tpublic function new() {}\n\t// mentions $$a in a comment\n'
+			+ '\tpublic function f(a:Int, b:Int):String {\n\t\ttrace("plain $$a text");\n\t\treturn \'$$$$a and $${a} and $$b\';\n'
+			+ '\t}\n\tpublic function g():String return f(1, 2);\n}';
+		final text: String = okFold(src, 'f', ['a'], 'T', 't');
+		Assert.isTrue(text.contains('// mentions $$a in a comment'), 'comment mention untouched:\n$text');
+		Assert.isTrue(text.contains('trace("plain $$a text")'), 'double-quoted mention untouched:\n$text');
+		Assert.isTrue(text.contains('\'$$$$a and $${t.a} and $$b\''), 'escaped dollar kept, braced read folded:\n$text');
 	}
 
 	private function okFold(src: String, fnName: String, params: Array<String>, typeName: String, objName: Null<String>): String {
@@ -107,7 +126,7 @@ class IntroduceParameterObjectSliceTest extends Test {
 		var line: Int = 1;
 		var col: Int = 1;
 		for (i in 0...idx) {
-			if (StringTools.fastCodeAt(src, i) == '\n'.code) {
+			if (src.fastCodeAt(i) == '\n'.code) {
 				line++;
 				col = 1;
 			} else {
@@ -123,23 +142,6 @@ class IntroduceParameterObjectSliceTest extends Test {
 
 	private static function refShape(): RefShape {
 		return new HaxeQueryPlugin().refShape();
-	}
-
-
-	/**
-	 * Every `$a` occurrence the predecessor's raw-text scan matched but that is NOT a read
-	 * of the parameter: one in a comment, one in a non-interpolating double-quoted literal,
-	 * and one after an escaped `$$`. The index sees none of them as a read, so the fold
-	 * proceeds — and each stays verbatim while the braced `${a}` becomes `${t.a}`.
-	 */
-	public function testNonReadDollarMentionsDoNotRefuse(): Void {
-		final src: String = 'package pkg;\n\nclass C {\n\tpublic function new() {}\n\t// mentions $$a in a comment\n'
-			+ '\tpublic function f(a:Int, b:Int):String {\n\t\ttrace("plain $$a text");\n\t\treturn \'$$$$a and $${a} and $$b\';\n'
-			+ '\t}\n\tpublic function g():String return f(1, 2);\n}';
-		final text: String = okFold(src, 'f', ['a'], 'T', 't');
-		Assert.isTrue(StringTools.contains(text, '// mentions $$a in a comment'), 'comment mention untouched:\n$text');
-		Assert.isTrue(StringTools.contains(text, 'trace("plain $$a text")'), 'double-quoted mention untouched:\n$text');
-		Assert.isTrue(StringTools.contains(text, '\'$$$$a and $${t.a} and $$b\''), 'escaped dollar kept, braced read folded:\n$text');
 	}
 
 }

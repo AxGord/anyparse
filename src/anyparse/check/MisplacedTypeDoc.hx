@@ -3,11 +3,12 @@ package anyparse.check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Flags a `/**`-opened doc block written between the `package` statement and the
@@ -107,7 +108,8 @@ final class MisplacedTypeDoc implements Check implements DefaultOff {
 				span: new Span(found.doc.from, found.doc.to),
 				rule: RULE_ID,
 				severity: Severity.Warning,
-				message: 'this doc comment is separated from \'${found.name}\' by the imports, so it documents nothing; move it to the declaration'
+				message: 'this doc comment is separated from \'${found.name}'
+				+ '\' by the imports, so it documents nothing; move it to the declaration'
 			});
 		}
 		return violations;
@@ -158,9 +160,12 @@ final class MisplacedTypeDoc implements Check implements DefaultOff {
 			for (tok in comments)
 				if (RefactorSupport.isDocBlock(source, tok) && tok.from >= gapFrom.to && tok.to <= gapTo.from) tok
 		];
-		if (docs.length != 1) return null;
-		if (CheckScan.hasDocBefore(source, CheckScan.docBlockEnds(source), header.anchor)) return null;
-		return { doc: docs[0], anchor: header.anchor, name: header.name };
+		return if (docs.length != 1)
+			null
+		else if (CheckScan.hasDocBefore(source, CheckScan.docBlockEnds(source), header.anchor))
+			null
+		else
+			{ doc: docs[0], anchor: header.anchor, name: header.name };
 	}
 
 	/**
@@ -205,19 +210,22 @@ final class MisplacedTypeDoc implements Check implements DefaultOff {
 	 */
 	private static function wholeLineSpan(source: String, tok: CommentTok): Null<Span> {
 		final lineStart: Int = RefactorSupport.startOfLine(source, tok.from);
-		if (StringTools.trim(source.substring(lineStart, tok.from)) != '') return null;
+		if (source.substring(lineStart, tok.from).trim() != '') return null;
 		final newline: Int = source.indexOf('\n', tok.to);
-		if (newline < 0) return null;
-		if (StringTools.trim(source.substring(tok.to, newline)) != '') return null;
-		return new Span(lineStart, newline + 1);
+		return if (newline < 0)
+			null
+		else if (source.substring(tok.to, newline).trim() != '')
+			null
+		else
+			new Span(lineStart, newline + 1);
 	}
 
 	/** Whether a blank line already separates `pos` from the code above it. */
 	private static function blankLineBefore(source: String, pos: Int): Bool {
 		var newlines: Int = 0;
 		var i: Int = pos - 1;
-		while (i >= 0 && RefactorSupport.isSpace(StringTools.fastCodeAt(source, i))) {
-			if (StringTools.fastCodeAt(source, i) == '\n'.code) newlines++;
+		while (i >= 0 && RefactorSupport.isSpace(source.fastCodeAt(i))) {
+			if (source.fastCodeAt(i) == '\n'.code) newlines++;
 			i--;
 		}
 		return i < 0 || newlines > 1;

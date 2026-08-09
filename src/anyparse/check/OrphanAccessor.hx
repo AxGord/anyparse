@@ -3,15 +3,12 @@ package anyparse.check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
-import anyparse.query.SymbolIndex.FileInfo;
-import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -233,7 +230,8 @@ final class OrphanAccessor implements Check implements DefaultOff {
 			if (!found.declared && found.unresolved) {
 				out.push(violation(
 					file, span, Severity.Info,
-					'$name may have no property to serve: no $prop is declared in $owner or in the supertypes that resolved, and an unresolvable supertype leaves it unproven'
+					'$name may have no property to serve: no $prop is declared in $owner'
+					+ ' or in the supertypes that resolved, and an unresolvable supertype leaves it unproven'
 				));
 				return;
 			}
@@ -262,12 +260,11 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	 * breakage is SILENT at runtime rather than a compile error.
 	 */
 	private static function deletable(ctx: Ctx, kept: Bool, name: String): Bool {
-		if (!ctx.scanComplete || kept || ctx.referenced.contains(name)) return false;
-		if (ctx.reflected.exists(content -> content.indexOf(name) >= 0)) return false;
 		// A LITERAL FRAGMENT of an interpolated string (`Reflect.field(o, 'get_$suffix')`) is only
 		// ever part of the runtime name, so containment is asked the other way round. Fragments
 		// shorter than an accessor prefix carry no intent and would block every deletion in scope.
-		return !ctx.fragments.exists(f -> f.length >= CheckScan.GET_PREFIX.length && name.indexOf(f) >= 0);
+		return ctx.scanComplete && !kept && !ctx.referenced.contains(name) && !ctx.reflected.exists(content -> content.indexOf(name) >= 0)
+			&& !ctx.fragments.exists(f -> f.length >= CheckScan.GET_PREFIX.length && name.indexOf(f) >= 0);
 	}
 
 	/**

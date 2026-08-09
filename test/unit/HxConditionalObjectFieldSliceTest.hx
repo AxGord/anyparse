@@ -111,10 +111,9 @@ class HxConditionalObjectFieldSliceTest extends HxTestHelpers {
 		Assert.equals('a', (expectObjectFieldBody(cond.body[0]).name: String));
 		final elseBody: Null<Array<HxObjectField>> = cond.elseBody;
 		Assert.notNull(elseBody);
-		if (elseBody != null) {
-			Assert.equals(1, elseBody.length);
-			Assert.equals('a', (expectObjectFieldBody(elseBody[0]).name: String));
-		}
+		if (elseBody == null) return;
+		Assert.equals(1, elseBody.length);
+		Assert.equals('a', (expectObjectFieldBody(elseBody[0]).name: String));
 	}
 
 	// -- `#elseif` chained clause, body single-field (matches elseifs' new branch) --

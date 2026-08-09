@@ -8,6 +8,8 @@ import anyparse.format.text.TextFormat.BlockCommentDelims;
 import anyparse.format.text.TextFormat.BoolLiterals;
 import anyparse.format.text.TextFormat.UnescapeResult;
 
+using StringTools;
+
 /**
  * Reference `TextFormat` for JSON.
  *
@@ -131,7 +133,7 @@ final class JsonFormat implements TextFormat {
 			case FORM_FEED: '\\f';
 			case _:
 				if (c < ' '.code)
-					'\\u${StringTools.hex(c, 4)}';
+					'\\u${c.hex(4)}';
 				else
 					String.fromCharCode(c);
 		};

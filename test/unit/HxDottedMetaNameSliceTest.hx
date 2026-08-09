@@ -80,7 +80,6 @@ class HxDottedMetaNameSliceTest extends HxTestHelpers {
 		Assert.equals(1, ast.decls.length);
 	}
 
-
 	private function expectClassMembers(ast: HxModule): Array<HxMemberDecl> {
 		return switch ast.decls[0].decl {
 			case ClassDecl(c): c.members;

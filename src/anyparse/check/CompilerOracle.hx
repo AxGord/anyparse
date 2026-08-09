@@ -1,5 +1,7 @@
 package anyparse.check;
 
+using StringTools;
+
 /**
  * The verdict of one compiler-oracle typecheck run — `apq lint`'s bridge to
  * treating the Haxe compiler as ground truth. A project opts in through the
@@ -61,14 +63,16 @@ final class CompilerOracle {
 			// errors) rather than unavailability. Any other spawn error means haxe never
 			// ran (missing binary, permission) -> Unavailable.
 			final code: Null<Dynamic> = Reflect.field(launchError, 'code');
-			if (code != null && Std.string(code) == 'ENOBUFS')
-				return Rejected(StringTools.trim(oracleText(res.stderr) + oracleText(res.stdout)));
-			return Unavailable('could not launch haxe (${Reflect.field(launchError, 'message')})');
+			return code != null && Std.string(code) == 'ENOBUFS'
+				? Rejected(StringTools.trim(oracleText(res.stderr) + oracleText(res.stdout)))
+				: Unavailable('could not launch haxe (${Reflect.field(launchError, 'message')})');
 		}
 		final status: Null<Int> = (res.status: Null<Int>);
-		if (status == null) return Unavailable('haxe exited without a status code');
-		if (status == 0) return Confirmed;
-		return Rejected(StringTools.trim(oracleText(res.stderr) + oracleText(res.stdout)));
+		return switch (status) {
+			case null: Unavailable('haxe exited without a status code');
+			case 0: Confirmed;
+			case _: Rejected(StringTools.trim(oracleText(res.stderr) + oracleText(res.stdout)));
+		};
 		#elseif sys
 		try {
 			final process: sys.io.Process = new sys.io.Process('haxe', [hxml, '--no-output']);
@@ -78,8 +82,11 @@ final class CompilerOracle {
 			final code: Null<Int> = process.exitCode();
 			final errText: String = StringTools.trim(process.stderr.readAll().toString() + process.stdout.readAll().toString());
 			process.close();
-			if (code == null) return Unavailable('haxe exited without a status code');
-			return code == 0 ? Confirmed : Rejected(errText);
+			return switch (code) {
+				case null: Unavailable('haxe exited without a status code');
+				case 0: Confirmed;
+				case _: Rejected(errText);
+			};
 		} catch (exception: haxe.Exception) {
 			return Unavailable('could not launch haxe (${exception.message})');
 		}
@@ -90,7 +97,7 @@ final class CompilerOracle {
 
 	#if nodejs
 	/** Coerce a possibly-null spawn stream field (Buffer|String under utf8) to a String. */
-	static function oracleText(value: Dynamic): String {
+	private static function oracleText(value: Dynamic): String {
 		return value == null ? '' : Std.string(value);
 	}
 	#end

@@ -33,31 +33,31 @@ class HxCaseBodySameLineSliceTest extends Test {
 	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
-	public function testDefaultOptionsKeepCaseBody(): Void {
+	public inline function testDefaultOptionsKeepCaseBody(): Void {
 		Assert.equals(BodyPolicy.Keep, HaxeFormat.instance.defaultWriteOptions.caseBody);
 	}
 
-	public function testDefaultOptionsKeepExpressionCase(): Void {
+	public inline function testDefaultOptionsKeepExpressionCase(): Void {
 		Assert.equals(BodyPolicy.Keep, HaxeFormat.instance.defaultWriteOptions.expressionCase);
 	}
 
-	public function testSingleStmtCaseBodyStaysInline(): Void {
+	public inline function testSingleStmtCaseBodyStaysInline(): Void {
 		roundTrip('class F {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase A: doA();\n\t\t\tcase B: doB();\n\t\t}\n\t}\n}');
 	}
 
-	public function testCtorPatternCaseBodyStaysInline(): Void {
+	public inline function testCtorPatternCaseBodyStaysInline(): Void {
 		roundTrip('class F {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase Foo(v): use(v);\n\t\t\tcase _: fail();\n\t\t}\n\t}\n}');
 	}
 
-	public function testEmptyArmStaysEmpty(): Void {
+	public inline function testEmptyArmStaysEmpty(): Void {
 		roundTrip('class F {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase A:\n\t\t\tcase _: fail();\n\t\t}\n\t}\n}');
 	}
 
-	public function testMultiStmtCaseBodyStillBreaks(): Void {
+	public inline function testMultiStmtCaseBodyStillBreaks(): Void {
 		roundTrip('class F {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase A:\n\t\t\t\tfirst();\n\t\t\t\tsecond();\n\t\t}\n\t}\n}');
 	}
 
-	public function testSourceBrokenStaysBroken(): Void {
+	public inline function testSourceBrokenStaysBroken(): Void {
 		// Keep policy preserves source shape: if the source has the body
 		// on the next line, the writer keeps it there.
 		roundTrip('class F {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase A:\n\t\t\t\tdoA();\n\t\t}\n\t}\n}');

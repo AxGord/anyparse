@@ -2,12 +2,12 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import anyparse.check.Check.ConfigAware;
-import anyparse.query.RefactorSupport;
+
+using Lambda;
 
 /**
  * Flags a public API declaration — a top-level type or a public member of one —
@@ -201,7 +201,7 @@ final class DocCoverage implements Check implements ConfigAware {
 	private static function memberContainerOf(typeNode: QueryNode, seams: Seams): Null<QueryNode> {
 		return seams.containers.contains(typeNode.kind) || seams.interfaceDecls.contains(typeNode.kind)
 			? typeNode
-			: Lambda.find(typeNode.children, c -> seams.containers.contains(c.kind) || seams.interfaceDecls.contains(c.kind));
+			: typeNode.children.find(c -> seams.containers.contains(c.kind) || seams.interfaceDecls.contains(c.kind));
 	}
 
 	/** The declared name of a type node — its own, or its container child's for a `final class` (whose name sits on the inner `ClassForm`). */

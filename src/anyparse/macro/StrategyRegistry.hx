@@ -26,7 +26,7 @@ class StrategyRegistry {
 
 	public function new() {}
 
-	public function register(s: Strategy): Void {
+	public inline function register(s: Strategy): Void {
 		_strategies.push(s);
 	}
 

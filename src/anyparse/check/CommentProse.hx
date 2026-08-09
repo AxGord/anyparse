@@ -1,5 +1,6 @@
 package anyparse.check;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -100,7 +101,7 @@ final class CommentProse {
 		if (!lines.exists(line -> line != '')) return true;
 		if (lines.length != 1) return false;
 		final text: String = StringTools.trim(lines[0]);
-		return text.length > 0 && isRuleChar(StringTools.fastCodeAt(text, 0)) && isRuleChar(StringTools.fastCodeAt(text, text.length - 1))
+		return text.length > 0 && isRuleChar(text.fastCodeAt(0)) && isRuleChar(text.fastCodeAt(text.length - 1))
 			&& wordCount(stripRuleChars(text)) <= DECORATED_LABEL_WORDS;
 	}
 
@@ -110,7 +111,7 @@ final class CommentProse {
 	 */
 	public static function declines(text: String): Bool {
 		final lower: String = text.toLowerCase();
-		for (marker in DIRECTIVE_MARKERS) if (StringTools.startsWith(lower, marker)) return true;
+		for (marker in DIRECTIVE_MARKERS) if (lower.startsWith(marker)) return true;
 		for (marker in TASK_MARKERS) if (lower.indexOf(marker) >= 0) return true;
 		return !readsAsProse(text);
 	}
@@ -118,7 +119,7 @@ final class CommentProse {
 	/** Whether every line is drawn only from rule characters and whitespace. */
 	private static function ruleCharsOnly(lines: Array<String>): Bool {
 		for (line in lines) for (i in 0...line.length) {
-			final c: Int = StringTools.fastCodeAt(line, i);
+			final c: Int = line.fastCodeAt(i);
 			if (c != ' '.code && c != '\t'.code && !isRuleChar(c)) return false;
 		}
 		return true;
@@ -133,7 +134,7 @@ final class CommentProse {
 	private static function stripRuleChars(text: String): String {
 		final buf: StringBuf = new StringBuf();
 		for (i in 0...text.length) {
-			final c: Int = StringTools.fastCodeAt(text, i);
+			final c: Int = text.fastCodeAt(i);
 			buf.addChar(isRuleChar(c) ? ' '.code : c);
 		}
 		return buf.toString();
@@ -142,7 +143,7 @@ final class CommentProse {
 	/** The number of whitespace-separated words in `text`. */
 	private static function wordCount(text: String): Int {
 		var words: Int = 0;
-		for (part in StringTools.trim(text).split(' ')) if (StringTools.trim(part) != '') words++;
+		for (part in text.trim().split(' ')) if (StringTools.trim(part) != '') words++;
 		return words;
 	}
 
@@ -208,13 +209,13 @@ final class CommentProse {
 		final buf: StringBuf = new StringBuf();
 		var i: Int = 0;
 		while (i < text.length) {
-			final c: Int = StringTools.fastCodeAt(text, i);
+			final c: Int = text.fastCodeAt(i);
 			final closeAt: Int = c == '"'.code || c == '`'.code ? text.indexOf(String.fromCharCode(c), i + 1) : -1;
 			if (closeAt < 0) {
 				buf.addChar(c);
 				i++;
 			} else {
-				buf.add(StringTools.rpad('', ' ', closeAt + 1 - i));
+				buf.add(''.rpad(' ', closeAt + 1 - i));
 				i = closeAt + 1;
 			}
 		}
@@ -224,16 +225,16 @@ final class CommentProse {
 	/** `text`'s leading run of identifier characters. */
 	private static function firstWord(text: String): String {
 		var i: Int = 0;
-		while (i < text.length && isIdentChar(StringTools.fastCodeAt(text, i))) i++;
+		while (i < text.length && isIdentChar(text.fastCodeAt(i))) i++;
 		return text.substr(0, i);
 	}
 
 	/** Whether `rest`, past any spaces, opens a `(` or `{` — the head of a control construct. */
 	private static function opensBracket(rest: String): Bool {
 		var i: Int = 0;
-		while (i < rest.length && StringTools.fastCodeAt(rest, i) == ' '.code) i++;
+		while (i < rest.length && rest.fastCodeAt(i) == ' '.code) i++;
 		if (i >= rest.length) return false;
-		final c: Int = StringTools.fastCodeAt(rest, i);
+		final c: Int = rest.fastCodeAt(i);
 		return c == '('.code || c == '{'.code;
 	}
 
@@ -262,15 +263,16 @@ final class CommentProse {
 	 */
 	private static function hasCodePunctuation(bare: String, raw: String): Bool {
 		for (i in 0...bare.length) {
-			final c: Int = StringTools.fastCodeAt(bare, i);
+			final c: Int = bare.fastCodeAt(i);
 			if (c == '='.code || c == '@'.code) return true;
 			if (c == ';'.code && terminatesLine(raw, i + 1)) return true;
 			if (c == '{'.code && terminatesLine(raw, i + 1)) return true;
-			if (c == '}'.code && (terminatesLine(raw, i + 1) || StringTools.trim(raw.substring(0, i)) == '')) return true;
-			if (c == '('.code && i > 0 && isIdentChar(StringTools.fastCodeAt(bare, i - 1))) return true;
+			if (c == '}'.code && (terminatesLine(raw, i + 1) || raw.substring(0, i).trim() == '')) return true;
+			if (c == '('.code && i > 0 && isIdentChar(bare.fastCodeAt(i - 1))) return true;
 			if (
-				c == ':'.code && i > 0 && i + 1 < bare.length && isIdentChar(StringTools.fastCodeAt(bare, i - 1))
-				&& isIdentStart(StringTools.fastCodeAt(bare, i + 1))
+				c == ':'.code && i > 0 && i + 1 < bare.length && isIdentChar(bare.fastCodeAt(i - 1)) && isIdentStart(
+					bare.fastCodeAt(i + 1)
+				)
 			)
 				return true;
 		}
@@ -279,8 +281,8 @@ final class CommentProse {
 
 	/** Whether nothing but whitespace, or a trailing `//` comment, follows `from` — the line-terminator position. */
 	private static function terminatesLine(text: String, from: Int): Bool {
-		final rest: String = StringTools.trim(text.substr(from));
-		return rest.length == 0 || StringTools.startsWith(rest, LINE_MARKER);
+		final rest: String = text.substr(from).trim();
+		return rest.length == 0 || rest.startsWith(LINE_MARKER);
 	}
 
 	/** Whether `c` may appear inside a Haxe identifier. */

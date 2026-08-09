@@ -5,6 +5,7 @@ import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
 using Lambda;
 
 /** One scope file parsed once. */
@@ -142,7 +143,7 @@ final class MakeFinal {
 		final out: Array<Int> = [];
 		function walk(node: QueryNode): Void {
 			final children: Array<QueryNode> = node.children;
-			if ((StringTools.endsWith(node.kind, 'Assign') || INCR_KINDS.contains(node.kind)) && children.length > 0) {
+			if ((node.kind.endsWith('Assign') || INCR_KINDS.contains(node.kind)) && children.length > 0) {
 				final target: QueryNode = children[0];
 				final span: Null<Span> = target.span;
 				final isWrite: Bool = target.name == fieldName && (target.kind == 'FieldAccess' || (inSrc && target.kind == 'IdentExpr'));

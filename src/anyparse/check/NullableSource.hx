@@ -21,8 +21,6 @@ import anyparse.query.SymbolIndex;
 @:nullSafety(Strict)
 final class NullableSource {
 
-	private function new() {}
-
 	/**
 	 * Resolve the recognition config from a grammar's `RefShape`, or null when the
 	 * grammar has no identifier kind or declares no nullable source at all (index

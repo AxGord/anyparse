@@ -62,8 +62,8 @@ class HxTypedefAnonForceMultiTest extends Test {
 		// what shape we produce. Used to identify whether force-multi
 		// fires AND whether the residual diff is body-shape or
 		// inter-typedef blank line.
-		final src: String =
-			'typedef Point2D = {\n\tx:Int,\n\ty:Int\n\t};\ntypedef Point3D = {x:Int, y:Int, z:Int};\n\nclass A {\n\tvar a:{x:Int, y:Int, z:Int};\n\tvar a:{\n\t\tx:Int,\n\t\ty:Int,\n\t\tz:Int\n\t};\n}';
+		final src: String = 'typedef Point2D = {\n\tx:Int,\n\ty:Int\n\t};\ntypedef Point3D = {x:Int, y:Int, z:Int};\n\nclass A {\n'
+			+ '\tvar a:{x:Int, y:Int, z:Int};\n\tvar a:{\n\t\tx:Int,\n\t\ty:Int,\n\t\tz:Int\n\t};\n}';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"leftCurly": "both"}}');
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		// Probe: Point3D body should be multi-line (force-multi fires).

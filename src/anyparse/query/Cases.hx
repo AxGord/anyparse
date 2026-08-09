@@ -1,7 +1,6 @@
 package anyparse.query;
 
 import anyparse.runtime.Span;
-import anyparse.runtime.Span.Position;
 
 /**
  * `apq cases <Ctor> <file-or-dir>...` — match all switch case-patterns
@@ -54,10 +53,9 @@ final class Cases {
 			final patternCount: Int = kids.length > 0 ? kids.length - 1 : 0;
 			for (i in 0...patternCount) {
 				final pat: QueryNode = kids[i];
-				if (matchPattern(target, pat)) {
-					out.push(new CasesHit(node, (pat.span: Null<Span>), pat.kind));
-					break;
-				}
+				if (!matchPattern(target, pat)) continue;
+				out.push(new CasesHit(node, (pat.span: Null<Span>), pat.kind));
+				break;
 			}
 		}
 		for (c in node.children) walk(target, c, out);

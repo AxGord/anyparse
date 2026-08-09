@@ -70,7 +70,7 @@ class BinaryWriterLowering {
 		final steps: Array<Expr> = [];
 
 		// @:magic prefix
-		final magic: Null<String> = node.annotations.get('bin.magic');
+		final magic: Null<String> = node.annotations['bin.magic'];
 		if (magic != null) steps.push(macro output.writeString($v{magic}));
 
 		for (child in node.children) {
@@ -105,7 +105,7 @@ class BinaryWriterLowering {
 		}
 
 		// @:align padding
-		final align: Null<Int> = node.annotations.get('bin.align');
+		final align: Null<Int> = node.annotations['bin.align'];
 		if (align != null) {
 			steps.push(macro {
 				final _rem: Int = output.length % $v{align};
@@ -117,10 +117,10 @@ class BinaryWriterLowering {
 	}
 
 	private static function emitTerminalField(child: ShapeNode, fieldName: String, fieldAccess: Expr, steps: Array<Expr>): Void {
-		final binFixedLen: Null<Int> = child.annotations.get('bin.fixedLen');
-		final binEncoding: Null<String> = child.annotations.get('bin.encoding');
-		final binDataRef: Null<String> = child.annotations.get('bin.dataRef');
-		final lenPrefix: Null<{ width: Int, encoding: String }> = child.annotations.get('bin.lengthPrefix');
+		final binFixedLen: Null<Int> = child.annotations['bin.fixedLen'];
+		final binEncoding: Null<String> = child.annotations['bin.encoding'];
+		final binDataRef: Null<String> = child.annotations['bin.dataRef'];
+		final lenPrefix: Null<{ width: Int, encoding: String }> = child.annotations['bin.lengthPrefix'];
 		if (lenPrefix != null) {
 			steps.push(macro output.write($fieldAccess));
 		} else if (binFixedLen != null && binEncoding != null) {
@@ -194,7 +194,7 @@ class BinaryWriterLowering {
 	private static function emitStarField(child: ShapeNode, fieldAccess: Expr, steps: Array<Expr>): Void {
 		final inner: ShapeNode = child.children[0];
 		if (inner.kind != Ref) Context.fatalError('BinaryWriterLowering: Star field must contain a Ref', Context.currentPos());
-		final elemRefName: String = inner.annotations.get(AnnotationKeys.BASE_REF);
+		final elemRefName: String = inner.annotations[AnnotationKeys.BASE_REF];
 		final elemFn: String = 'write${simpleName(elemRefName)}';
 		final elemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _arr[_i], macro output]),

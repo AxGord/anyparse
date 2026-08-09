@@ -6,6 +6,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -95,7 +96,7 @@ final class EnglishComments implements Check {
 
 	/** The index of the first UTF-16 code unit in `[from, to)` that is a non-Latin letter, or -1. */
 	private static function firstNonLatinLetter(source: String, from: Int, to: Int): Int {
-		for (i in from ... to) if (isNonLatinLetter(StringTools.fastCodeAt(source, i))) return i;
+		for (i in from ... to) if (isNonLatinLetter(source.fastCodeAt(i))) return i;
 		return -1;
 	}
 
@@ -110,10 +111,10 @@ final class EnglishComments implements Check {
 		final end: Int = at + EXCERPT_LEN < to ? at + EXCERPT_LEN : to;
 		final buf: StringBuf = new StringBuf();
 		for (i in at ... end) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			buf.addChar(c == '\n'.code || c == '\r'.code || c == '\t'.code ? ' '.code : c);
 		}
-		return StringTools.trim(buf.toString());
+		return buf.toString().trim();
 	}
 
 }

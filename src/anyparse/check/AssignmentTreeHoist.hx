@@ -61,8 +61,7 @@ final class AssignmentTreeHoist {
 		final wildcardPatternName: Null<String> = shape.wildcardPatternName;
 		if (wildcardPatternName == null) return null;
 		final parenKind: Null<String> = shape.parenKind;
-		if (parenKind == null) return null;
-		return {
+		return parenKind == null ? null : {
 			identKind: shape.identKind,
 			exprStmtKind: exprStmtKind,
 			blockStmtKind: blockStmtKind,
@@ -115,8 +114,7 @@ final class AssignmentTreeHoist {
 		final switchKinds: Null<Array<String>> = s.switchKinds;
 		if (switchKinds != null && switchKinds.contains(stmt.kind)) return switchValue(stmt, ref, source, s, carried);
 		final ifKinds: Null<Array<String>> = s.ifKinds;
-		if (ifKinds != null && ifKinds.contains(stmt.kind)) return ifValue(stmt, ref, source, s, carried);
-		return null;
+		return ifKinds != null && ifKinds.contains(stmt.kind) ? ifValue(stmt, ref, source, s, carried) : null;
 	}
 
 	/**
@@ -268,59 +266,10 @@ final class AssignmentTreeHoist {
 		};
 	}
 
-	/**
-	 * The comment slots of a chain's branches: one seat per branch whose value is ONE copied span
-	 * (a plain-assign leaf), running from that branch's condition end to where the NEXT copied
-	 * piece starts — the following branch's condition, or the terminal statement. A branch whose
-	 * value is a nested construct opens no seat: its text is several pieces, so there is no single
-	 * slot a comment could ride, and the site keeps failing closed. The TERMINAL branch opens none
-	 * either — the gap in front of it is the previous branch's trailing gap, and the region behind
-	 * it belongs to whatever the enclosing rule welds on (a `;` a line comment would swallow).
-	 */
-	private static function seatGaps(parts: Array<{ cond: Null<Span>, atom: Null<Span> }>, terminal: QueryNode): Array<CarryGap> {
-		final terminalSpan: Null<Span> = terminal.span;
-		if (terminalSpan == null) return [];
-		final seats: Array<CarrySeat> = [];
-		for (i in 0...parts.length) {
-			final cond: Null<Span> = parts[i].cond;
-			final atom: Null<Span> = parts[i].atom;
-			final next: Null<Span> = i + 1 < parts.length ? parts[i + 1].cond : terminalSpan;
-			if (cond == null || atom == null || next == null) continue;
-			// Re-bind: a narrowed Null<T> does not carry its narrowing into a struct literal.
-			final value: Span = atom;
-			seats.push({ condEnd: cond.to, value: value, nextStart: next.from });
-		}
-		return IfExpressionChain.carryGaps(seats);
-	}
-
 	/** Whether any branch / terminal of `chain` is a nested switch / if construct (not a plain-assign leaf) -- the if-rule's 2-branch disjointness gate. */
 	public static function chainHasConstruct(chain: IfChain, s: TreeSeams): Bool {
 		for (b in chain.branches) if (isConstruct(b.stmt, s)) return true;
 		return isConstruct(chain.terminal, s);
-	}
-
-	/** Whether `node` (after a single-statement block unwrap) is a switch / if construct. */
-	private static function isConstruct(node: QueryNode, s: TreeSeams): Bool {
-		final stmt: QueryNode = node.kind == s.blockStmtKind && node.children.length == 1 ? node.children[0] : node;
-		final switchKinds: Null<Array<String>> = s.switchKinds;
-		if (switchKinds != null && switchKinds.contains(stmt.kind)) return true;
-		final ifKinds: Null<Array<String>> = s.ifKinds;
-		return ifKinds != null && ifKinds.contains(stmt.kind);
-	}
-
-	/** Establish the common l-value from the first leaf, or textually match a later leaf against it. */
-	private static function establishOrMatch(ref: LvalueRef, lhs: QueryNode, source: String): Bool {
-		final cur: Null<QueryNode> = ref.lvalue;
-		if (cur == null) {
-			ref.lvalue = lhs;
-			return true;
-		}
-		return IfExpressionChain.sameSource(cur, lhs, source);
-	}
-
-	/** All switch-machinery kinds present -- the recursion recognises a switch only when they are. */
-	private static function switchReady(s: TreeSeams): Bool {
-		return s.switchKinds != null;
 	}
 
 	/**
@@ -393,17 +342,64 @@ final class AssignmentTreeHoist {
 		return endSpan == null ? null : new Span(span.from, endSpan.to);
 	}
 
+	/** The source text of `node`'s span, or null when it has none. */
+	public static function slice(source: String, node: QueryNode): Null<String> {
+		final span: Null<Span> = node.span;
+		return span == null ? null : source.substring(span.from, span.to);
+	}
+
+	/**
+	 * The comment slots of a chain's branches: one seat per branch whose value is ONE copied span
+	 * (a plain-assign leaf), running from that branch's condition end to where the NEXT copied
+	 * piece starts — the following branch's condition, or the terminal statement. A branch whose
+	 * value is a nested construct opens no seat: its text is several pieces, so there is no single
+	 * slot a comment could ride, and the site keeps failing closed. The TERMINAL branch opens none
+	 * either — the gap in front of it is the previous branch's trailing gap, and the region behind
+	 * it belongs to whatever the enclosing rule welds on (a `;` a line comment would swallow).
+	 */
+	private static function seatGaps(parts: Array<{ cond: Null<Span>, atom: Null<Span> }>, terminal: QueryNode): Array<CarryGap> {
+		final terminalSpan: Null<Span> = terminal.span;
+		if (terminalSpan == null) return [];
+		final seats: Array<CarrySeat> = [];
+		for (i in 0...parts.length) {
+			final cond: Null<Span> = parts[i].cond;
+			final atom: Null<Span> = parts[i].atom;
+			final next: Null<Span> = i + 1 < parts.length ? parts[i + 1].cond : terminalSpan;
+			if (cond == null || atom == null || next == null) continue;
+			// Re-bind: a narrowed Null<T> does not carry its narrowing into a struct literal.
+			final value: Span = atom;
+			seats.push({ condEnd: cond.to, value: value, nextStart: next.from });
+		}
+		return IfExpressionChain.carryGaps(seats);
+	}
+
+	/** Whether `node` (after a single-statement block unwrap) is a switch / if construct. */
+	private static function isConstruct(node: QueryNode, s: TreeSeams): Bool {
+		final stmt: QueryNode = node.kind == s.blockStmtKind && node.children.length == 1 ? node.children[0] : node;
+		final switchKinds: Null<Array<String>> = s.switchKinds;
+		if (switchKinds != null && switchKinds.contains(stmt.kind)) return true;
+		final ifKinds: Null<Array<String>> = s.ifKinds;
+		return ifKinds != null && ifKinds.contains(stmt.kind);
+	}
+
+	/** Establish the common l-value from the first leaf, or textually match a later leaf against it. */
+	private static function establishOrMatch(ref: LvalueRef, lhs: QueryNode, source: String): Bool {
+		final cur: Null<QueryNode> = ref.lvalue;
+		if (cur != null) return IfExpressionChain.sameSource(cur, lhs, source);
+		ref.lvalue = lhs;
+		return true;
+	}
+
+	/** All switch-machinery kinds present -- the recursion recognises a switch only when they are. */
+	private static inline function switchReady(s: TreeSeams): Bool {
+		return s.switchKinds != null;
+	}
+
 	/** The last pattern wrapper child of a case branch (the tail of a comma-alternative list). */
 	private static function lastPattern(branch: QueryNode, s: TreeSeams): Null<QueryNode> {
 		var last: Null<QueryNode> = null;
 		for (c in branch.children) if (c.kind == s.plainCasePatternKind) last = c;
 		return last;
-	}
-
-	/** The source text of `node`'s span, or null when it has none. */
-	public static function slice(source: String, node: QueryNode): Null<String> {
-		final span: Null<Span> = node.span;
-		return span == null ? null : source.substring(span.from, span.to);
 	}
 
 }

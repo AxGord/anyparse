@@ -16,234 +16,234 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  */
 class HaxeWriterRoundTripTest extends HxTestHelpers {
 
-	private function testEmptyModule(): Void {
+	private inline function testEmptyModule(): Void {
 		roundTrip('', 'empty');
 	}
 
-	private function testEmptyClass(): Void {
+	private inline function testEmptyClass(): Void {
 		roundTrip('class Foo {}');
 	}
 
-	private function testClassWithVar(): Void {
+	private inline function testClassWithVar(): Void {
 		roundTrip('class Foo { var x:Int; }');
 	}
 
-	private function testClassWithVarInit(): Void {
+	private inline function testClassWithVarInit(): Void {
 		roundTrip('class Foo { var x:Int = 42; }');
 	}
 
-	private function testClassWithFunction(): Void {
+	private inline function testClassWithFunction(): Void {
 		roundTrip('class Foo { function bar():Void {} }');
 	}
 
-	private function testFunctionWithParams(): Void {
+	private inline function testFunctionWithParams(): Void {
 		roundTrip('class Foo { function bar(x:Int, y:Float):Void {} }');
 	}
 
-	private function testFunctionWithBody(): Void {
+	private inline function testFunctionWithBody(): Void {
 		roundTrip('class Foo { function f():Void { var x:Int = 1; return x; } }');
 	}
 
-	private function testModifiers(): Void {
+	private inline function testModifiers(): Void {
 		roundTrip('class Foo { public static var x:Int; }');
 	}
 
-	private function testMultiDecl(): Void {
+	private inline function testMultiDecl(): Void {
 		roundTrip('class A {} class B {}');
 	}
 
-	private function testExprAtoms(): Void {
+	private inline function testExprAtoms(): Void {
 		roundTrip('class F { var x:Int = 42; var y:Float = 3.14; var b:Bool = true; }');
 	}
 
-	private function testExprArithmetic(): Void {
+	private inline function testExprArithmetic(): Void {
 		roundTrip('class F { var x:Int = 1 + 2 * 3; }');
 	}
 
-	private function testExprPrefix(): Void {
+	private inline function testExprPrefix(): Void {
 		roundTrip('class F { var x:Int = -1; var y:Bool = !true; }');
 	}
 
-	private function testExprPostfix(): Void {
+	private inline function testExprPostfix(): Void {
 		roundTrip('class F { function f():Void { var x:Int = a.b; var y:Int = a[0]; var z:Int = f(1, 2); } }');
 	}
 
-	private function testExprAssignment(): Void {
+	private inline function testExprAssignment(): Void {
 		roundTrip('class F { function f():Void { var x:Int = a = b = 1; } }');
 	}
 
-	private function testExprComparison(): Void {
+	private inline function testExprComparison(): Void {
 		roundTrip('class F { var x:Bool = a == b; }');
 	}
 
-	private function testExprLogical(): Void {
+	private inline function testExprLogical(): Void {
 		roundTrip('class F { var x:Bool = a && b || c; }');
 	}
 
-	private function testExprBitwise(): Void {
+	private inline function testExprBitwise(): Void {
 		roundTrip('class F { var x:Int = a | b & c; }');
 	}
 
-	private function testExprShift(): Void {
+	private inline function testExprShift(): Void {
 		roundTrip('class F { var x:Int = a << 2; }');
 	}
 
-	private function testExprTernary(): Void {
+	private inline function testExprTernary(): Void {
 		roundTrip('class F { var x:Int = a ? b : c; }');
 	}
 
-	private function testExprNullCoal(): Void {
+	private inline function testExprNullCoal(): Void {
 		roundTrip('class F { var x:Int = a ?? b; }');
 	}
 
-	private function testExprParens(): Void {
+	private inline function testExprParens(): Void {
 		roundTrip('class F { var x:Int = (a + b) * c; }');
 	}
 
-	private function testExprNew(): Void {
+	private inline function testExprNew(): Void {
 		roundTrip('class F { function f():Void { var x:Int = new Foo(1, 2); } }');
 	}
 
-	private function testExprArray(): Void {
+	private inline function testExprArray(): Void {
 		roundTrip('class F { function f():Void { var x:Int = [1, 2, 3]; } }');
 	}
 
-	private function testExprArrow(): Void {
+	private inline function testExprArrow(): Void {
 		roundTrip('class F { var x:Int = a => b; }');
 	}
 
-	private function testFnDeclNoReturnType(): Void {
+	private inline function testFnDeclNoReturnType(): Void {
 		roundTrip('class F { function main() {} }');
 	}
 
-	private function testFnDeclNoReturnTypeWithBody(): Void {
+	private inline function testFnDeclNoReturnTypeWithBody(): Void {
 		roundTrip('class F { function main() { return 1; } }');
 	}
 
-	private function testObjectLitEmpty(): Void {
+	private inline function testObjectLitEmpty(): Void {
 		roundTrip('class F { var x:Dynamic = {}; }');
 	}
 
-	private function testObjectLitSingle(): Void {
+	private inline function testObjectLitSingle(): Void {
 		roundTrip('class F { var x:Dynamic = {a: 1}; }');
 	}
 
-	private function testObjectLitMultiple(): Void {
+	private inline function testObjectLitMultiple(): Void {
 		roundTrip('class F { var x:Dynamic = {a: 1, b: 2}; }');
 	}
 
-	private function testObjectLitNested(): Void {
+	private inline function testObjectLitNested(): Void {
 		roundTrip('class F { var x:Dynamic = {outer: {inner: 1}}; }');
 	}
 
-	private function testExprParenLambda(): Void {
+	private inline function testExprParenLambda(): Void {
 		roundTrip('class F { function f():Void { var x:Int = (a:Int) => a + 1; } }');
 	}
 
-	private function testIfStmt(): Void {
+	private inline function testIfStmt(): Void {
 		roundTrip('class F { function f():Void { if (x) return 1; } }');
 	}
 
-	private function testIfElseStmt(): Void {
+	private inline function testIfElseStmt(): Void {
 		roundTrip('class F { function f():Void { if (x) return 1; else return 2; } }');
 	}
 
-	private function testIfExprInInit(): Void {
+	private inline function testIfExprInInit(): Void {
 		roundTrip('class F { function f():Void { var y:Int = if (c) 1 else 2; } }', 'if-expr as var init');
 	}
 
-	private function testIfExprInCall(): Void {
+	private inline function testIfExprInCall(): Void {
 		roundTrip('class F { function f():Void { trace(if (c) 1 else 2); } }', 'if-expr as call arg');
 	}
 
-	private function testIfExprInObjectField(): Void {
+	private inline function testIfExprInObjectField(): Void {
 		roundTrip('class F { function f():Void { var o:Dynamic = {label: if (c) 1 else 2}; } }', 'if-expr as object-literal value');
 	}
 
-	private function testIfExprNoElse(): Void {
+	private inline function testIfExprNoElse(): Void {
 		roundTrip('class F { function f():Void { var y:Int = if (c) 1; } }', 'if-expr without else');
 	}
 
-	private function testIfExprElseIfChain(): Void {
+	private inline function testIfExprElseIfChain(): Void {
 		roundTrip('class F { function f():Void { var y:Int = if (a) 1 else if (b) 2 else 3; } }', 'if-expr else-if chain');
 	}
 
-	private function testIfExprInReturn(): Void {
+	private inline function testIfExprInReturn(): Void {
 		roundTrip('class F { function f():Int { return if (c) 1 else 2; } }', 'if-expr as return value');
 	}
 
-	private function testSwitchExprInReturn(): Void {
+	private inline function testSwitchExprInReturn(): Void {
 		roundTrip('class F { function f():String { return switch (x) { case 1: "a"; case _: "b"; }; } }', 'switch-expr as return value');
 	}
 
-	private function testSwitchExprInInit(): Void {
+	private inline function testSwitchExprInInit(): Void {
 		roundTrip('class F { function f():Void { var y:String = switch (x) { case 1: "a"; case _: "b"; }; } }', 'switch-expr as var init');
 	}
 
-	private function testSwitchExprInCall(): Void {
+	private inline function testSwitchExprInCall(): Void {
 		roundTrip('class F { function f():Void { trace(switch (x) { case 1: "a"; case _: "b"; }); } }', 'switch-expr as call arg');
 	}
 
-	private function testSwitchExprInObjectField(): Void {
+	private inline function testSwitchExprInObjectField(): Void {
 		roundTrip(
 			'class F { function f():Void { var o:Dynamic = {label: switch (x) { case 1: "a"; case _: "b"; }}; } }',
 			'switch-expr as object-literal value'
 		);
 	}
 
-	private function testWhileStmt(): Void {
+	private inline function testWhileStmt(): Void {
 		roundTrip('class F { function f():Void { while (x) return 1; } }');
 	}
 
-	private function testForStmt(): Void {
+	private inline function testForStmt(): Void {
 		roundTrip('class F { function f():Void { for (i in items) return i; } }');
 	}
 
-	private function testBlockStmt(): Void {
+	private inline function testBlockStmt(): Void {
 		roundTrip('class F { function f():Void { { var x:Int = 1; } } }');
 	}
 
-	private function testVoidReturn(): Void {
+	private inline function testVoidReturn(): Void {
 		roundTrip('class F { function f():Void { return; } }');
 	}
 
-	private function testThrowStmt(): Void {
+	private inline function testThrowStmt(): Void {
 		roundTrip('class F { function f():Void { throw x; } }');
 	}
 
-	private function testDoWhileStmt(): Void {
+	private inline function testDoWhileStmt(): Void {
 		roundTrip('class F { function f():Void { do return 1; while (x); } }');
 	}
 
-	private function testTryCatch(): Void {
+	private inline function testTryCatch(): Void {
 		roundTrip('class F { function f():Void { try return 1; catch (e:Error) return 2; } }');
 	}
 
-	private function testSwitchStmt(): Void {
+	private inline function testSwitchStmt(): Void {
 		roundTrip('class F { function f():Void { switch (x) { case 1: return 1; default: return 2; } } }');
 	}
 
-	private function testTypedef(): Void {
+	private inline function testTypedef(): Void {
 		roundTrip('typedef Foo = Bar;');
 	}
 
-	private function testEnum(): Void {
+	private inline function testEnum(): Void {
 		roundTrip('enum Foo { A; B; }');
 	}
 
-	private function testEnumParamCtor(): Void {
+	private inline function testEnumParamCtor(): Void {
 		roundTrip('enum Foo { A(x:Int, y:Float); B; }');
 	}
 
-	private function testInterface(): Void {
+	private inline function testInterface(): Void {
 		roundTrip('interface Foo { function bar():Void {} }');
 	}
 
-	private function testAbstract(): Void {
+	private inline function testAbstract(): Void {
 		roundTrip('abstract Foo(Int) from Int to Int { function bar():Void {} }');
 	}
 
-	private function testDoubleString(): Void {
+	private inline function testDoubleString(): Void {
 		roundTrip('class F { var x:String = "hello"; }');
 	}
 
@@ -260,19 +260,19 @@ class HaxeWriterRoundTripTest extends HxTestHelpers {
 		Assert.isTrue(out.indexOf('\\n') == -1, 'did not expect re-escaped \\n in: <$out>');
 	}
 
-	private function testSingleString(): Void {
+	private inline function testSingleString(): Void {
 		roundTrip("class F { var x:String = 'hello'; }");
 	}
 
-	private function testSingleStringInterp(): Void {
+	private inline function testSingleStringInterp(): Void {
 		roundTrip("class F { var x:String = 'hello $name'; }");
 	}
 
-	private function testSingleStringBlock(): Void {
+	private inline function testSingleStringBlock(): Void {
 		roundTrip("class F { var x:String = 'val=${a + b}'; }");
 	}
 
-	private function testSingleStringDollar(): Void {
+	private inline function testSingleStringDollar(): Void {
 		roundTrip("class F { var x:String = 'costs $$5'; }");
 	}
 
@@ -300,23 +300,23 @@ class HaxeWriterRoundTripTest extends HxTestHelpers {
 		Assert.isTrue(out.indexOf('"a \\"b\\" c"') != -1, 'expected `\\"` inside double-quoted string in: <$out>');
 	}
 
-	private function testMixedDecls(): Void {
+	private inline function testMixedDecls(): Void {
 		roundTrip('class A {} typedef B = C; enum D { X; } interface E {} abstract F(Int) {}');
 	}
 
-	private function testParamDefault(): Void {
+	private inline function testParamDefault(): Void {
 		roundTrip('class F { function f(x:Int = 0):Void {} }');
 	}
 
-	private function testNestedExpr(): Void {
+	private inline function testNestedExpr(): Void {
 		roundTrip('class F { var x:Int = (a + b) * (c - d); }');
 	}
 
-	private function testCompoundAssign(): Void {
+	private inline function testCompoundAssign(): Void {
 		roundTrip('class F { function f():Void { var x:Int = a += b *= 2; } }');
 	}
 
-	private function testIfBlock(): Void {
+	private inline function testIfBlock(): Void {
 		roundTrip('class F { function f():Void { if (x) { return 1; } } }');
 	}
 

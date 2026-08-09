@@ -3,9 +3,6 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.query.Cli;
-import anyparse.query.Cli.TestSummaryFailureKind;
-import anyparse.query.Cli.TestSummaryFailureLocus;
-import anyparse.query.Cli.TestSummaryResult;
 #if sys
 import sys.FileSystem;
 import sys.io.File;
@@ -177,13 +174,12 @@ class ApqDxTier3CliTest extends Test {
 		Assert.equals(0, r.errors);
 		final ff: Null<TestSummaryFailureLocus> = r.firstFailure;
 		Assert.notNull(ff);
-		if (ff != null) {
-			Assert.equals('FailProbe', ff.className);
-			Assert.equals('testIntentionalFail', ff.testName);
-			Assert.equals(9, ff.line);
-			Assert.equals('intentional', ff.message);
-			Assert.isTrue(ff.kind == TestSummaryFailureKind.Fail);
-		}
+		if (ff == null) return;
+		Assert.equals('FailProbe', ff.className);
+		Assert.equals('testIntentionalFail', ff.testName);
+		Assert.equals(9, ff.line);
+		Assert.equals('intentional', ff.message);
+		Assert.isTrue(ff.kind == TestSummaryFailureKind.Fail);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -200,11 +196,10 @@ class ApqDxTier3CliTest extends Test {
 		Assert.equals(0, r.failures);
 		final ff: Null<TestSummaryFailureLocus> = r.firstFailure;
 		Assert.notNull(ff);
-		if (ff != null) {
-			Assert.isTrue(ff.kind == TestSummaryFailureKind.Error);
-			Assert.equals(-1, ff.line);
-			Assert.equals('intentional error', ff.message);
-		}
+		if (ff == null) return;
+		Assert.isTrue(ff.kind == TestSummaryFailureKind.Error);
+		Assert.equals(-1, ff.line);
+		Assert.equals('intentional error', ff.message);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -221,11 +216,10 @@ class ApqDxTier3CliTest extends Test {
 		Assert.equals(1, r.errors);
 		final ff: Null<TestSummaryFailureLocus> = r.firstFailure;
 		Assert.notNull(ff);
-		if (ff != null) {
-			Assert.equals('testOne', ff.testName);
-			Assert.isTrue(ff.kind == TestSummaryFailureKind.Fail);
-			Assert.equals(5, ff.line);
-		}
+		if (ff == null) return;
+		Assert.equals('testOne', ff.testName);
+		Assert.isTrue(ff.kind == TestSummaryFailureKind.Fail);
+		Assert.equals(5, ff.line);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -253,12 +247,11 @@ class ApqDxTier3CliTest extends Test {
 		Assert.equals(2, r.failures);
 		final ff: Null<TestSummaryFailureLocus> = r.firstFailure;
 		Assert.notNull(ff);
-		if (ff != null) {
-			Assert.equals('testOne', ff.testName);
-			// No detail row followed testOne — line / message stay empty.
-			Assert.equals(-1, ff.line);
-			Assert.equals('', ff.message);
-		}
+		if (ff == null) return;
+		Assert.equals('testOne', ff.testName);
+		// No detail row followed testOne — line / message stay empty.
+		Assert.equals(-1, ff.line);
+		Assert.equals('', ff.message);
 		#else
 		Assert.pass('non-sys target');
 		#end

@@ -8,6 +8,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * Flags a property whose BOTH accessors are `default` — `var x(default, default):T` — and
  * deletes the clause. `default` on either side IS the plain stored slot, so the parenthesised
@@ -91,7 +93,8 @@ final class RedundantPropertyAccess implements Check implements DefaultOff {
 				span: clause,
 				rule: 'redundant-property-access',
 				severity: Severity.Info,
-				message: 'property \'$name\' declares (default, default) — the plain stored accessors; drop the clause and write \'var $name\''
+				message: 'property \'$name\' declares (default, default) — the plain stored accessors; drop the clause and write \'var '
+				+ '$name\''
 			});
 		});
 		return violations;
@@ -144,28 +147,28 @@ final class RedundantPropertyAccess implements Check implements DefaultOff {
 	 * `limit` bounds the scan to the declaration.
 	 */
 	private static function plainStoredClause(source: String, open: Int, limit: Int): Null<Span> {
-		if (open >= limit || StringTools.fastCodeAt(source, open) != '('.code) return null;
+		if (open >= limit || source.fastCodeAt(open) != '('.code) return null;
 		final read: Int = plainAccessorEnd(source, RefactorSupport.skipSpaces(source, open + 1, limit), limit);
 		if (read < 0) return null;
 		final comma: Int = RefactorSupport.skipSpaces(source, read, limit);
-		if (comma >= limit || StringTools.fastCodeAt(source, comma) != ','.code) return null;
+		if (comma >= limit || source.fastCodeAt(comma) != ','.code) return null;
 		final write: Int = plainAccessorEnd(source, RefactorSupport.skipSpaces(source, comma + 1, limit), limit);
 		if (write < 0) return null;
 		final close: Int = RefactorSupport.skipSpaces(source, write, limit);
-		return close < limit && StringTools.fastCodeAt(source, close) == ')'.code ? new Span(open, close + 1) : null;
+		return close < limit && source.fastCodeAt(close) == ')'.code ? new Span(open, close + 1) : null;
 	}
 
 	/** The offset just past a `default` identifier at `i`, or -1 when the token there is anything else. */
 	private static function plainAccessorEnd(source: String, i: Int, limit: Int): Int {
 		var j: Int = i;
-		while (j < limit && RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, j))) j++;
+		while (j < limit && RefactorSupport.isIdentChar(source.fastCodeAt(j))) j++;
 		return j > i && source.substring(i, j) == PLAIN_ACCESSOR ? j : -1;
 	}
 
 	/** The offset where the field name ends — `clauseFrom` walked back over the whitespace before the clause. */
 	private static function nameEndBefore(source: String, clauseFrom: Int): Int {
 		var i: Int = clauseFrom;
-		while (i > 0 && RefactorSupport.isSpace(StringTools.fastCodeAt(source, i - 1))) i--;
+		while (i > 0 && RefactorSupport.isSpace(source.fastCodeAt(i - 1))) i--;
 		return i;
 	}
 

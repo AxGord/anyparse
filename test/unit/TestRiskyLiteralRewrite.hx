@@ -1,8 +1,6 @@
 package unit;
 
 import anyparse.check.Check;
-import anyparse.check.Check.RiskyFix;
-import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan;
 import anyparse.check.Severity;
 import anyparse.query.GrammarPlugin;

@@ -2,11 +2,12 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Flags a stray empty statement — a lone `;` with no expression (SonarLint
@@ -103,11 +104,10 @@ final class EmptyStatement implements Check {
 	 */
 	private static function deletionSpan(source: String, span: Span): Span {
 		var lineStart: Int = span.from;
-		while (lineStart > 0 && StringTools.fastCodeAt(source, lineStart - 1) != '\n'.code) lineStart--;
+		while (lineStart > 0 && source.fastCodeAt(lineStart - 1) != '\n'.code) lineStart--;
 		var lineEnd: Int = span.to;
-		while (lineEnd < source.length && StringTools.fastCodeAt(source, lineEnd) != '\n'.code) lineEnd++;
-		final alone: Bool = StringTools.trim(source.substring(lineStart, span.from)) == ''
-			&& StringTools.trim(source.substring(span.to, lineEnd)) == '';
+		while (lineEnd < source.length && source.fastCodeAt(lineEnd) != '\n'.code) lineEnd++;
+		final alone: Bool = source.substring(lineStart, span.from).trim() == '' && source.substring(span.to, lineEnd).trim() == '';
 		return alone ? RefactorSupport.lineExtendedSpan(source, span) : span;
 	}
 
@@ -136,13 +136,13 @@ final class EmptyStatement implements Check {
 		final childEnd: Int = lastSpan.to;
 		if (childEnd >= span.to) return null;
 		final tail: String = source.substring(childEnd, span.to);
-		if (StringTools.trim(tail) != ';') return null;
+		if (tail.trim() != ';') return null;
 		final at: Int = childEnd + tail.indexOf(';');
 		// A `}` must be what already terminated the statement. A CatchClause with a
 		// SINGLE-STATEMENT body (`catch (e) log(x);`) also ends before the `;`, but there
 		// the terminator is mandatory - the char before it is `)`, not `}`.
 		var before: Int = at - 1;
-		while (before >= 0 && StringTools.isSpace(source, before)) before--;
+		while (before >= 0 && source.isSpace(before)) before--;
 		return before >= 0 && source.charAt(before) == '}' ? new Span(at, at + 1) : null;
 	}
 

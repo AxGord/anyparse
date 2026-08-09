@@ -50,14 +50,14 @@ final class HxExprIdentGuardSliceTest extends Test {
 	}
 
 	public function testBreakContinueStillLegalAsExpressionAtoms(): Void {
-		final src: String =
-			'class C {\n\tfunction f() {\n\t\tfinal source:String = try readSource(path) catch (_:Exception) continue;\n\t\tfinal other:String = try readSource(path) catch (_:Exception) break;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal source:String = try readSource(path) catch (_:Exception) continue;\n'
+			+ '\t\tfinal other:String = try readSource(path) catch (_:Exception) break;\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testVoidReturnStillLegalAsExpressionAtom(): Void {
-		final src: String =
-			'class C {\n\tfunction f() {\n\t\tfinal target:Float = if (a > b) computeOne(); else if (a < c) computeTwo(); else return;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n'
+			+ '\t\tfinal target:Float = if (a > b) computeOne(); else if (a < c) computeTwo(); else return;\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

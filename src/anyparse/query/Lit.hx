@@ -1,7 +1,6 @@
 package anyparse.query;
 
 import anyparse.runtime.Span;
-import anyparse.runtime.Span.Position;
 
 /**
  * String-literal / leaf-name walker for `apq lit` — finds verbatim
@@ -58,7 +57,7 @@ final class Lit {
 	 */
 	public static function find(target: String, tree: QueryNode, exact: Bool, ?kindFilter: Array<String>): Array<LitHit> {
 		final out: Array<LitHit> = [];
-		final filter: Null<Array<String>> = (kindFilter == null || kindFilter.length == 0) ? null : kindFilter;
+		final filter: Null<Array<String>> = kindFilter == null || kindFilter.length == 0 ? null : kindFilter;
 		walk(target, tree, exact, filter, out);
 		return out;
 	}
@@ -102,7 +101,7 @@ final class Lit {
 		final tail: String = trailingLines > 0 ? ' … +$trailingLines lines' : '';
 		if (firstLine.length <= DISPLAY_MAX) return firstLine + tail;
 		final dropChars: Int = firstLine.length - DISPLAY_MAX;
-		return firstLine.substring(0, DISPLAY_MAX) + ' … +$dropChars chars' + tail;
+		return '${firstLine.substring(0, DISPLAY_MAX)} … +$dropChars chars$tail';
 	}
 
 }

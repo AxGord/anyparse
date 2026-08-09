@@ -2,7 +2,6 @@ package anyparse.query;
 
 import anyparse.check.Check;
 import anyparse.format.comment.CommentInventory;
-import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
@@ -10,44 +9,33 @@ import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.Diff;
-import anyparse.query.Diff.DiffHit;
 import anyparse.query.Cases.CasesHit;
 import anyparse.query.Lit.LitHit;
 import anyparse.query.Matcher.Match;
 import anyparse.query.Meta.MetaHit;
 import anyparse.query.Inline;
-import anyparse.query.Inline.InlineResult;
 import anyparse.query.InlineMethod;
 import anyparse.query.ExtractVar;
-import anyparse.query.ExtractVar.ExtractResult;
 import anyparse.query.ExtractMethod;
 import anyparse.query.AddParam;
-import anyparse.query.AddParam.AddParamResult;
 import anyparse.query.ChangeSig;
-import anyparse.query.ChangeSig.ChangeSigResult;
 import anyparse.query.RemoveParam;
-import anyparse.query.RemoveParam.RemoveParamResult;
 import anyparse.query.AddMember;
 import anyparse.query.AddImport;
 import anyparse.query.AddElement;
 import anyparse.query.ReplaceNode;
-import anyparse.query.ReplaceNode.ReplaceTarget;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.CrossRename;
-import anyparse.query.CrossRename.CrossRenameResult;
 import anyparse.query.MoveSymbol;
-import anyparse.query.MoveSymbol.MoveResult;
 import anyparse.query.SymbolQuery;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.query.Rename;
-import anyparse.query.Rename.RenameResult;
 import anyparse.query.Uses.UsesHit;
 import anyparse.query.format.Json;
 import anyparse.query.format.Text;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import anyparse.runtime.Span.Position;
 import haxe.Exception;
 import anyparse.query.NewFile.NewFileSpec;
 import anyparse.query.NewFile.NewFileResult;
@@ -58,25 +46,19 @@ import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.Clusters.ClusterReport;
 import anyparse.query.ExitCode.*;
-import anyparse.check.Check.RiskyFix;
 import anyparse.check.CompilerOracle;
-import anyparse.check.CompilerOracle.OracleOutcome;
 import anyparse.check.FixVerifier;
-import anyparse.check.FixVerifier.FixVerifyResult;
-import anyparse.check.FixVerifier.FixVerifyPartial;
-import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.OracleAssisted;
-import anyparse.check.Check.ConfigAware;
 import anyparse.check.CompilerDisplayOracle;
-import anyparse.check.Check.OracleRelaxable;
-import anyparse.check.Check.CrossFileFix;
-import anyparse.check.Check.CrossFileEdits;
 import anyparse.query.CachingGrammarPlugin.ResolutionSources;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.format.json.SweepSnapshot;
 import anyparse.query.format.json.SweepSnapshotParser;
 import anyparse.query.format.json.SweepFixture;
+
+using StringTools;
+using Lambda;
+
 #if (sys || nodejs)
 import sys.io.File;
 import sys.FileSystem;
@@ -400,8 +382,8 @@ typedef StripResult = {
 @:nullSafety(Strict)
 final class Cli {
 
-	private static final SKIP_PATHS_SHOWN: Int = 5;
-	private static final FUZZY_MAX_DIST: Int = 3;
+	private static inline final SKIP_PATHS_SHOWN: Int = 5;
+	private static inline final FUZZY_MAX_DIST: Int = 3;
 
 	/** The maximum 32-bit signed integer — a null-span sort sentinel and the unbounded `--top` / `--all` count. */
 	private static inline final MAX_INT: Int = 0x7FFFFFFF;
@@ -416,18 +398,18 @@ final class Cli {
 	 * `--limit N` (explicit cap) gives the verify-each affordance without
 	 * the flood. Precise `uses` / `refs` sections above stay uncapped.
 	 */
-	private static final HEUR_DEFAULT_CAP: Int = 20;
+	private static inline final HEUR_DEFAULT_CAP: Int = 20;
 
 	/** Cap on the cluster-key suggestion preview (top keys by frequency) shown when `--cluster` / `--from-cluster` finds no exact match. */
-	private static final CLUSTER_PREVIEW_LIMIT: Int = 10;
+	private static inline final CLUSTER_PREVIEW_LIMIT: Int = 10;
 
 	/** Below this length a literal is short/generic enough to risk coupling unrelated occurrences in `extract-constant --into`. */
-	private static final SHORT_LITERAL_LEN: Int = 4;
+	private static inline final SHORT_LITERAL_LEN: Int = 4;
 
-	private static final RECON_TOP_N_DEFAULT: Int = 30;
-	private static final RECON_EXAMPLES_PER_CLUSTER: Int = 2;
-	private static final RECON_HEAD_LEN: Int = 70;
-	private static final RECON_LOCUS_LEN: Int = 20;
+	private static inline final RECON_TOP_N_DEFAULT: Int = 30;
+	private static inline final RECON_EXAMPLES_PER_CLUSTER: Int = 2;
+	private static inline final RECON_HEAD_LEN: Int = 70;
+	private static inline final RECON_LOCUS_LEN: Int = 20;
 
 	/**
 	 * `recon --cluster <key> --source` drill: lines printed either side
@@ -435,22 +417,22 @@ final class Cli {
 	 * (decl line + open brace + the failing body line) without flooding
 	 * the drill output when a cluster has dozens of paths.
 	 */
-	private static final RECON_SOURCE_WINDOW_RADIUS: Int = 3;
+	private static inline final RECON_SOURCE_WINDOW_RADIUS: Int = 3;
 
-	private static final FUZZY_TOP_K: Int = 3;
+	private static inline final FUZZY_TOP_K: Int = 3;
 
 	/**
 	 * Substring "did you mean" — `query` ≥ this length OR the substring
 	 * pre-filter is skipped (avoids `Hx` matching every grammar type).
 	 */
-	private static final FUZZY_SUBSTRING_MIN_QUERY: Int = 4;
+	private static inline final FUZZY_SUBSTRING_MIN_QUERY: Int = 4;
 
 	/**
 	 * Substring "did you mean" — candidate's extra char count over
 	 * `query.length` must not exceed this (avoids `Foo` matching a huge
 	 * `FooSomeReallyLongName` and crowding out true neighbours).
 	 */
-	private static final FUZZY_SUBSTRING_MAX_EXTRA: Int = 8;
+	private static inline final FUZZY_SUBSTRING_MAX_EXTRA: Int = 8;
 
 	/**
 	 * Single-line byte-diff describing where `actual` first diverges from
@@ -459,9 +441,9 @@ final class Cli {
 	 * iteration via `apq writer-equals` reads identical to the corpus
 	 * fail line.
 	 */
-	private static final BYTE_DIFF_WINDOW: Int = 40;
+	private static inline final BYTE_DIFF_WINDOW: Int = 40;
 
-	private static final BYTE_DIFF_LEAD: Int = 4;
+	private static inline final BYTE_DIFF_LEAD: Int = 4;
 	private static inline final STAGE_PROBE_PATH: String = '/tmp/anyparse-last-probe.hx';
 
 	/**
@@ -492,15 +474,6 @@ final class Cli {
 	 */
 	private static inline final PROGRESS_INTERVAL: Int = 25;
 
-	/**
-	 * Map a `--fail-on` level name to its `Severity`, or null if unknown.
-	 * `--exit-on-empty` / `--require-match`, stripped from the argv in `run` and
-	 * reset there on every invocation (single CLI call chain, never concurrent).
-	 * When set, a find-walker that produced no hits exits non-zero instead of 0, so
-	 * a script can reliably detect "no match" (e.g. confirm a symbol was removed).
-	 */
-	private static var _requireMatch: Bool = false;
-
 	private static inline final DEFAULT_CHAIN_LINES: Int = 200;
 	private static inline final DEFAULT_REACH_PATHS: Int = 10;
 
@@ -512,6 +485,15 @@ final class Cli {
 	 */
 	private static inline final NO_TARGET_TOP_N: Int = 10;
 	#end
+
+	/**
+	 * Map a `--fail-on` level name to its `Severity`, or null if unknown.
+	 * `--exit-on-empty` / `--require-match`, stripped from the argv in `run` and
+	 * reset there on every invocation (single CLI call chain, never concurrent).
+	 * When set, a find-walker that produced no hits exits non-zero instead of 0, so
+	 * a script can reliably detect "no match" (e.g. confirm a symbol was removed).
+	 */
+	private static var _requireMatch: Bool = false;
 
 	public static function main(): Void {
 		#if nodejs
@@ -813,7 +795,7 @@ final class Cli {
 					printRenameUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq rename: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -1003,7 +985,7 @@ final class Cli {
 					printSymbolsUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq symbols: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -1025,14 +1007,16 @@ final class Cli {
 		}
 		final plugin: GrammarPlugin = io.plugin;
 
-		final files: Array<{ file: String, source: String }> = [];
-		for (path in paths) {
-			final fileSource: String = try readSourceForParse(path) catch (exception: Exception) {
-				stderr('apq symbols: $path: ${exception.message}\n');
-				return EXIT_RUNTIME;
-			};
-			files.push({ file: path, source: fileSource });
-		}
+		final files: Array<{ file: String, source: String }> = [
+			for (path in paths)
+				{
+					file: path,
+					source: (try readSourceForParse(path) catch (exception: Exception) {
+						stderr('apq symbols: $path: ${exception.message}\n');
+						return EXIT_RUNTIME;
+					}: String)
+				}
+		];
 
 		final rows: Array<SymbolQuery.SymbolRow> = SymbolQuery.symbols(files, plugin, kindFilter);
 		for (row in rows) sysPrint('${SymbolQuery.formatSymbolRow(row)}\n');
@@ -1062,7 +1046,7 @@ final class Cli {
 					printImportersUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq importers: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -1088,14 +1072,16 @@ final class Cli {
 		}
 		final plugin: GrammarPlugin = io.plugin;
 
-		final files: Array<{ file: String, source: String }> = [];
-		for (path in paths) {
-			final fileSource: String = try readSourceForParse(path) catch (exception: Exception) {
-				stderr('apq importers: $path: ${exception.message}\n');
-				return EXIT_RUNTIME;
-			};
-			files.push({ file: path, source: fileSource });
-		}
+		final files: Array<{ file: String, source: String }> = [
+			for (path in paths)
+				{
+					file: path,
+					source: (try readSourceForParse(path) catch (exception: Exception) {
+						stderr('apq importers: $path: ${exception.message}\n');
+						return EXIT_RUNTIME;
+					}: String)
+				}
+		];
 
 		final hits: Array<String> = SymbolQuery.importers(files, plugin, modulePath);
 		for (path in hits) sysPrint('$path\n');
@@ -1127,7 +1113,7 @@ final class Cli {
 					printDeclaresUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq declares: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -1153,14 +1139,16 @@ final class Cli {
 		}
 		final plugin: GrammarPlugin = io.plugin;
 
-		final files: Array<{ file: String, source: String }> = [];
-		for (path in paths) {
-			final fileSource: String = try readSourceForParse(path) catch (exception: Exception) {
-				stderr('apq declares: $path: ${exception.message}\n');
-				return EXIT_RUNTIME;
-			};
-			files.push({ file: path, source: fileSource });
-		}
+		final files: Array<{ file: String, source: String }> = [
+			for (path in paths)
+				{
+					file: path,
+					source: (try readSourceForParse(path) catch (exception: Exception) {
+						stderr('apq declares: $path: ${exception.message}\n');
+						return EXIT_RUNTIME;
+					}: String)
+				}
+		];
 
 		final rows: Array<SymbolQuery.SymbolRow> = SymbolQuery.declares(files, plugin, name);
 		if (rows.length == 0)
@@ -1234,7 +1222,7 @@ final class Cli {
 		// `Linter.run` drops its findings on the files that disable it.
 		final applyEnablement: Bool = o.ruleFilters.length == 0;
 		final activeChecks: Array<Check> = applyEnablement ? [
-			for (c in checks) if (Lambda.exists(files, f -> resolveConfig(f.file).enabledFor(c.id(), !(c is DefaultOff)))) c
+			for (c in checks) if (files.exists(f -> resolveConfig(f.file).enabledFor(c.id(), !(c is DefaultOff)))) c
 		] : checks;
 
 		// Resolution scope: the UNION of `resolutionRoots` (explicit dirs) and `resolutionLibs`
@@ -1252,14 +1240,14 @@ final class Cli {
 		final resolutionRoots: Array<String> = unionConfigStrings(paths, resolveConfig, c -> c.resolutionRoots());
 		final resolutionLibs: Array<String> = unionConfigStrings(paths, resolveConfig, c -> c.resolutionLibs());
 		final resolution: Null<ResolutionScope> = resolutionThunk(
-			files, resolutionRoots, resolutionLibs, Lambda.foreach(paths, p -> resolveConfig(p).resolutionStd())
+			files, resolutionRoots, resolutionLibs, paths.foreach(p -> resolveConfig(p).resolutionStd())
 		);
 		// Compiler oracle (opt-in via apqlint.json `compilerOracle`): a project-level
 		// setting, so the config resolved for the first linted file carries it for the
 		// whole run — its hxml is typechecked as ground truth below.
 		final oracleConfig: Null<LintConfig> = paths.length > 0 ? resolveConfig(paths[0]) : null;
-		final oracleHxml: Null<String> = oracleConfig == null ? null : oracleConfig.compilerOracle();
-		final oracleDir: Null<String> = oracleConfig == null ? null : oracleConfig.compilerOracleDir();
+		final oracleHxml: Null<String> = oracleConfig?.compilerOracle();
+		final oracleDir: Null<String> = oracleConfig?.compilerOracleDir();
 
 		if (o.fix) {
 			warnCommentGuardDeclined();
@@ -1307,9 +1295,7 @@ final class Cli {
 	 * a later-pass refusal (a writer-idempotency wrinkle on our own output)
 	 * just stops that file quietly. The pass count is capped as a runaway guard.
 	 * Exit is always success — `--fix` is best-effort.
-	 */
-	/** The UNION of `resolutionRoots` across the configs discovered for `paths` — the library dirs whose sources join the resolution scope. */
-	/**
+	 * The UNION of `resolutionRoots` across the configs discovered for `paths` — the library dirs whose sources join the resolution scope.
 	 * The deduped union of a per-config string list across every linted path — the
 	 * shared shape of the `resolutionRoots` / `resolutionLibs` gathering, differing
 	 * only in which `LintConfig` accessor supplies each config's values.
@@ -1576,7 +1562,8 @@ final class Cli {
 		final skipTail: String = noted.length > 0 ? ', ${noted.length} file(s) skipped' : '';
 		final capTail: String = hitCap ? ' (stopped at $maxPasses passes — re-run if more remain)' : '';
 		stderr(
-			'apq lint --fix: fixed $fixedCount issue(s) in ${changedFiles.length} file(s) over $passes pass(es)$skipTail$capTail$riskyTail$oracleTail\n'
+			'apq lint --fix: fixed $fixedCount issue(s) in ${changedFiles.length} file(s) over $passes pass(es)$skipTail$capTail'
+			+ '$riskyTail$oracleTail\n'
 		);
 		return EXIT_OK;
 	}
@@ -1628,7 +1615,7 @@ final class Cli {
 					printInlineUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq inline: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -1719,7 +1706,7 @@ final class Cli {
 					printInlineMethodUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq inline-method: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -1806,7 +1793,7 @@ final class Cli {
 					printExtractVarUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq extract-var: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -1959,7 +1946,7 @@ final class Cli {
 					printAddParamUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq add-param: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -2088,7 +2075,7 @@ final class Cli {
 					printAddImportUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq add-import: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -2199,10 +2186,9 @@ final class Cli {
 		final pos: Null<Position> = resolveAddressPos('add-element', source, plugin, atSpec, o.selectExpr, o.matchExpr, o.nth);
 		if (pos == null) return EXIT_RUNTIME;
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
-		final result: EditResult = if (appendSpec != null)
-			AddElement.appendElement(source, pos.line, pos.col, codeStr, o.reformat, plugin, optsJson);
-		else
-			AddElement.addElement(source, pos.line, pos.col, afterSpec != null ? After : Before, codeStr, o.reformat, plugin, optsJson);
+		final result: EditResult = appendSpec != null
+			? AddElement.appendElement(source, pos.line, pos.col, codeStr, o.reformat, plugin, optsJson)
+			: AddElement.addElement(source, pos.line, pos.col, afterSpec != null ? After : Before, codeStr, o.reformat, plugin, optsJson);
 		return emitEditResult('add-element', filePath, result, o.write);
 	}
 
@@ -2263,7 +2249,7 @@ final class Cli {
 					printRemoveElementUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq remove-element: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -2325,7 +2311,7 @@ final class Cli {
 					printRemoveImportUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq remove-import: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -2391,7 +2377,7 @@ final class Cli {
 					printRemoveMemberUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq remove-member: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -2494,7 +2480,12 @@ final class Cli {
 		if (atSpec != null) {
 			// `--kind` with `--at` narrows to the innermost node of that kind at the cursor.
 			final pos: Null<Position> = resolveAddressPos(opName, source, plugin, atSpec, null, null, null);
-			return pos == null ? null : kind != null ? ByKindPosition(pos.line, pos.col, kind) : ByPosition(pos.line, pos.col);
+			return if (pos == null)
+				null
+			else if (kind != null)
+				ByKindPosition(pos.line, pos.col, kind)
+			else
+				ByPosition(pos.line, pos.col);
 		}
 		// --select / --match resolve through the shared address layer (exactly-one
 		// discipline, --nth pick, candidate-listing errors); the caching plugin
@@ -2503,11 +2494,7 @@ final class Cli {
 		// kind — a pattern matches the expression (`addCase(x)` = the Call),
 		// while a statement edit wants the ExprStmt.
 		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
-		if (tree == null) {
-			stderr('apq $opName: $filePath does not parse\n');
-			return null;
-		}
-		return switch Address.resolve(tree, source, plugin, { select: selectExpr, match: matchExpr, nth: nth }) {
+		if (tree != null) return switch Address.resolve(tree, source, plugin, { select: selectExpr, match: matchExpr, nth: nth }) {
 			case Ok(_, node):
 				if (node == null) {
 					null;
@@ -2524,6 +2511,8 @@ final class Cli {
 				stderr('apq $opName: $message\n');
 				null;
 		};
+		stderr('apq $opName: $filePath does not parse\n');
+		return null;
 	}
 
 	/**
@@ -2553,7 +2542,8 @@ final class Cli {
 		final pairs: Null<Array<{ oldText: String, newText: String }>> = splitPatchPayload(payload, o.sep);
 		if (pairs == null) {
 			stderr(
-				'apq patch: the payload must alternate old / new fragments separated by "${o.sep}" lines — an EVEN number of sections (2 = one pair, 4 = two pairs, …)\n'
+				'apq patch: the payload must alternate old / new fragments separated by "${o.sep}'
+				+ '" lines — an EVEN number of sections (2 = one pair, 4 = two pairs, …)\n'
 			);
 			return EXIT_USAGE;
 		}
@@ -2584,7 +2574,7 @@ final class Cli {
 	private static function splitPatchPayload(payload: String, sep: String): Null<Array<{ oldText: String, newText: String }>> {
 		final lines: Array<String> = payload.split('\n');
 		final sections: Array<Array<String>> = [[]];
-		for (l in lines) if (StringTools.trim(l) == sep)
+		for (l in lines) if (l.trim() == sep)
 			sections.push([]);
 		else
 			sections[sections.length - 1].push(l);
@@ -2639,7 +2629,7 @@ final class Cli {
 					printChangeSigUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq change-sig: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -2740,7 +2730,7 @@ final class Cli {
 					printRemoveParamUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq remove-param: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -2966,7 +2956,7 @@ final class Cli {
 					printDiffUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq diff: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -3104,20 +3094,19 @@ final class Cli {
 			return EXIT_USAGE;
 		}
 		final plugin: GrammarPlugin = pickPlugin(o.lang);
-		if (o.perPattern) {
-			if (o.files.length != 1) {
-				stderr('apq strip: --per-pattern takes exactly one file (got ${o.files.length})\n');
-				return EXIT_USAGE;
-			}
-			if (o.patterns.length < 2) {
-				stderr(
-					'apq strip: --per-pattern requires ≥2 patterns (got ${o.patterns.length}) — isolation diagnostic only useful when patterns can be tested independently\n'
-				);
-				return EXIT_USAGE;
-			}
-			return runStripPerPattern(plugin, o.files[0], o.patterns, o.replacements, compiledRegex);
+		if (!o.perPattern) return executeStrip(plugin, o, compiledRegex);
+		if (o.files.length != 1) {
+			stderr('apq strip: --per-pattern takes exactly one file (got ${o.files.length})\n');
+			return EXIT_USAGE;
 		}
-		return executeStrip(plugin, o, compiledRegex);
+		if (o.patterns.length < 2) {
+			stderr(
+				'apq strip: --per-pattern requires ≥2 patterns (got ${o.patterns.length}'
+				+ ') — isolation diagnostic only useful when patterns can be tested independently\n'
+			);
+			return EXIT_USAGE;
+		}
+		return runStripPerPattern(plugin, o.files[0], o.patterns, o.replacements, compiledRegex);
 	}
 
 	/**
@@ -3150,7 +3139,7 @@ final class Cli {
 			final hits: Int = regexMode ? countRegexHits(regexes[idx], source) : countOccurrences(source, patterns[idx]);
 			final isolated: String = regexMode
 				? regexes[idx].replace(source, replacements[idx])
-				: StringTools.replace(source, patterns[idx], replacements[idx]);
+				: source.replace(patterns[idx], replacements[idx]);
 			final r: { ok: Bool, msg: String } = stripTryParse(plugin, isolated);
 			isolatedResults.push({ ok: r.ok, hits: hits });
 			final pat: String = patterns[idx];
@@ -3160,7 +3149,7 @@ final class Cli {
 		for (idx in 0...patterns.length)
 			combinedStripped = regexMode
 				? regexes[idx].replace(combinedStripped, replacements[idx])
-				: StringTools.replace(combinedStripped, patterns[idx], replacements[idx]);
+				: combinedStripped.replace(patterns[idx], replacements[idx]);
 		final combined: { ok: Bool, msg: String } = stripTryParse(plugin, combinedStripped);
 		sysPrint('combined (all patterns): ${combined.ok ? 'PARSE OK' : 'PARSE FAIL: ' + combined.msg}\n');
 		reportStripVerdict(baseline.ok, combined.ok, isolatedResults, patterns.length);
@@ -3358,7 +3347,7 @@ final class Cli {
 					printWriterEqualsUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq writer-equals: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -3412,7 +3401,7 @@ final class Cli {
 	private static function describeByteDiff(actual: String, expected: String): String {
 		final maxLen: Int = expected.length < actual.length ? expected.length : actual.length;
 		var diffAt: Int = -1;
-		for (idx in 0...maxLen) if (StringTools.fastCodeAt(expected, idx) != StringTools.fastCodeAt(actual, idx)) {
+		for (idx in 0...maxLen) if (expected.fastCodeAt(idx) != actual.fastCodeAt(idx)) {
 			diffAt = idx;
 			break;
 		}
@@ -3420,14 +3409,14 @@ final class Cli {
 		final start: Int = diffAt - BYTE_DIFF_LEAD < 0 ? 0 : diffAt - BYTE_DIFF_LEAD;
 		final expWin: String = escapeWindow(expected.substr(start, BYTE_DIFF_WINDOW));
 		final actWin: String = escapeWindow(actual.substr(start, BYTE_DIFF_WINDOW));
-		return 'apq writer-equals: byte-diff @ $diffAt' + '  exp=<$expWin>' + '  act=<$actWin>'
-			+ '  (exp.len=${expected.length}, act.len=${actual.length})';
+		return
+			'apq writer-equals: byte-diff @ $diffAt  exp=<$expWin>  act=<$actWin>  (exp.len=${expected.length}, act.len=${actual.length})';
 	}
 
 	private static function escapeWindow(s: String): String {
 		final buf: StringBuf = new StringBuf();
 		for (idx in 0...s.length) {
-			final c: Int = StringTools.fastCodeAt(s, idx);
+			final c: Int = s.fastCodeAt(idx);
 			switch c {
 				case '\n'.code:
 					buf.add('\\n');
@@ -3552,14 +3541,16 @@ final class Cli {
 			final regexLabel: Null<String> = looksLikeRegex(targetStr);
 			if (regexLabel != null)
 				stderr(
-					'apq lit: NOTE "$targetStr" looks like a regex (contains $regexLabel) — lit is substring-only. Run separate lit calls per alternative, or use apq refs / apq uses / apq search for shape-aware lookup.\n'
+					'apq lit: NOTE "$targetStr" looks like a regex (contains $regexLabel'
+					+ ') — lit is substring-only. Run separate lit calls per alternative, or use apq refs / apq uses / apq search for shape-aware lookup.\n'
 				);
 			else
 				stderr('${emptyWalkerNudge('lit', targetStr, paths.length, paths.length - skipEntries.length, skipEntries, null)}\n');
 		} else if (collected.autoWidened) {
 			final tried: String = effectiveKindFilter.join(',');
 			stderr(
-				'apq lit: NOTE auto-widened to --any-kind (default kind=$tried returned 0 hits). Pass `--any-kind` explicitly to silence this notice.\n'
+				'apq lit: NOTE auto-widened to --any-kind (default kind=$tried'
+				+ ' returned 0 hits). Pass `--any-kind` explicitly to silence this notice.\n'
 			);
 		}
 
@@ -3662,7 +3653,7 @@ final class Cli {
 					printCasesUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq cases: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -3935,12 +3926,12 @@ final class Cli {
 	 * walker independent of the format/wrap plugin types.
 	 */
 	private static function extractGate(arg: String): Null<GateExtract> {
-		final trimmed: String = StringTools.trim(arg);
+		final trimmed: String = arg.trim();
 		final markers: Array<String> = ['trailOptParseGate', 'trailOptShapeGate'];
-		for (m in markers) if (StringTools.startsWith(trimmed, m)) {
-			final after: String = StringTools.trim(trimmed.substr(m.length));
-			if (!StringTools.startsWith(after, '(')) continue;
-			final inner: String = StringTools.trim(after.substring(1, after.lastIndexOf(')')));
+		for (m in markers) if (trimmed.startsWith(m)) {
+			final after: String = trimmed.substr(m.length).trim();
+			if (!after.startsWith('(')) continue;
+			final inner: String = after.substring(1, after.lastIndexOf(')')).trim();
 			// `trailOptShapeGate` takes multiple args (`'endsWithCloseBrace', 'init'`);
 			// extract just the FIRST quoted string — that's the predicate
 			// method name on the schema instance. Subsequent args are
@@ -3964,19 +3955,19 @@ final class Cli {
 		var inSingle: Bool = false;
 		var inDouble: Bool = false;
 		for (i in 0...inner.length) {
-			final c: Int = StringTools.fastCodeAt(inner, i);
+			final c: Int = inner.fastCodeAt(i);
 			if (!inDouble && c == "'".code)
 				inSingle = !inSingle;
 			else if (!inSingle && c == '"'.code)
 				inDouble = !inDouble;
 			else if (!inSingle && !inDouble && c == ','.code)
-				return StringTools.trim(inner.substring(0, i));
+				return inner.substring(0, i).trim();
 		}
-		return StringTools.trim(inner);
+		return inner.trim();
 	}
 
 	private static inline function stripQuotes(s: String): String {
-		final t: String = StringTools.trim(s);
+		final t: String = s.trim();
 		if (t.length < 2) return t;
 		final first: String = t.charAt(0);
 		final last: String = t.charAt(t.length - 1);
@@ -4173,7 +4164,7 @@ final class Cli {
 	 * are skipped so meta identifiers don't pollute the member set.
 	 */
 	private static function collectTypeDecl(node: QueryNode, typeName: String, names: Array<String>, declSpans: Array<Span>): Void {
-		if (StringTools.endsWith(node.kind, 'Decl') && node.name == typeName) {
+		if (node.kind.endsWith('Decl') && node.name == typeName) {
 			if (node.span != null) declSpans.push(node.span);
 			collectMemberNames(node, typeName, names);
 			return;
@@ -4242,7 +4233,7 @@ final class Cli {
 		if (parenIdx < 0) return null;
 		final closeIdx: Int = annotation.lastIndexOf(')');
 		final raw: String = closeIdx > parenIdx ? annotation.substring(parenIdx + 1, closeIdx) : '';
-		final trimmed: String = StringTools.trim(raw);
+		final trimmed: String = raw.trim();
 		return trimmed.length == 0 ? null : trimmed;
 	}
 
@@ -4258,9 +4249,9 @@ final class Cli {
 		if (filter == null) return true;
 		final needle: String = filter;
 		for (a in args) {
-			final arg: String = StringTools.trim(a);
+			final arg: String = a.trim();
 			if (arg == needle) return true;
-			if (StringTools.startsWith(arg, '$needle(')) return true;
+			if (arg.startsWith('$needle(')) return true;
 		}
 		return false;
 	}
@@ -4299,7 +4290,8 @@ final class Cli {
 		final reif: Null<String> = detectMacroReification(patternStr);
 		if (reif != null) {
 			stderr(
-				'apq search: pattern "$patternStr" contains macro reification ($reif) which is a macro-time construct, not an AST shape pattern. For literal-string lookup use: apq lit \'<text>\' <files>. For identifier shape patterns use a metavar `$$x` (lowercase).\n'
+				'apq search: pattern "$patternStr" contains macro reification ($reif'
+				+ ') which is a macro-time construct, not an AST shape pattern. For literal-string lookup use: apq lit \'<text>\' <files>. For identifier shape patterns use a metavar `$$x` (lowercase).\n'
 			);
 			return EXIT_USAGE;
 		}
@@ -4372,7 +4364,7 @@ final class Cli {
 		final rendered: String = Json.renderSearchMatches(file, source, [m]);
 		// Strip the `{"matches":[` prefix and `]}\n` suffix to get the
 		// bare match object for inclusion in the multi-file array.
-		final inner: String = StringTools.trim(rendered);
+		final inner: String = rendered.trim();
 		final openIdx: Int = inner.indexOf('[');
 		final closeIdx: Int = inner.lastIndexOf(']');
 		return openIdx < 0 || closeIdx <= openIdx ? rendered : inner.substring(openIdx + 1, closeIdx);
@@ -4529,7 +4521,7 @@ final class Cli {
 				i++;
 				continue;
 			}
-			if (StringTools.startsWith(a, '--')) {
+			if (a.startsWith('--')) {
 				forwarded.push(a);
 				// Forward the option's value too. Boolean flags like
 				// `--json` / `--stdin` / `--writer-output` consume no
@@ -4570,7 +4562,7 @@ final class Cli {
 			// downstream error message format consistent.
 			final triviaOk: Bool = emitOneWriterProbe(plugin, source, '<probe>', lang, false, null);
 			final plainOk: Bool = emitOneWriterProbe(plugin, source, '<probe>', lang, true, null);
-			return (triviaOk && plainOk) ? EXIT_OK : EXIT_RUNTIME;
+			return triviaOk && plainOk ? EXIT_OK : EXIT_RUNTIME;
 		}
 		// When stdin was staged, prefer --code over --stdin so runAst
 		// loads the bytes we just persisted (avoids a double stdin read
@@ -4612,7 +4604,8 @@ final class Cli {
 		try {
 			sys.io.File.saveContent(STAGE_PROBE_PATH, source);
 			stderr(
-				'apq probe: staged source -> $STAGE_PROBE_PATH (use it with `apq strip $STAGE_PROBE_PATH …` or `apq recon --probe $STAGE_PROBE_PATH`).\n'
+				'apq probe: staged source -> $STAGE_PROBE_PATH (use it with `apq strip $STAGE_PROBE_PATH …` or `apq recon --probe '
+				+ '$STAGE_PROBE_PATH`).\n'
 			);
 		} catch (_: Exception) {
 			// Write failed (read-only /tmp, disk full, permission). Skip
@@ -4663,7 +4656,7 @@ final class Cli {
 					printWriterProbeUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq writer-probe: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -4689,7 +4682,7 @@ final class Cli {
 		final optsJson: Null<String> = readWriteOptionsJsonOrNull(fileFinal);
 		final triviaOk: Bool = emitOneWriterProbe(plugin, source, fileFinal, lang, false, optsJson);
 		final plainOk: Bool = emitOneWriterProbe(plugin, source, fileFinal, lang, true, optsJson);
-		return (triviaOk && plainOk) ? EXIT_OK : EXIT_RUNTIME;
+		return triviaOk && plainOk ? EXIT_OK : EXIT_RUNTIME;
 	}
 
 	private static function emitOneWriterProbe(
@@ -4728,7 +4721,7 @@ final class Cli {
 		if (source == emitted) return;
 		final minLen: Int = source.length < emitted.length ? source.length : emitted.length;
 		var diffAt: Int = minLen;
-		for (i in 0...minLen) if (StringTools.fastCodeAt(source, i) != StringTools.fastCodeAt(emitted, i)) {
+		for (i in 0...minLen) if (source.fastCodeAt(i) != emitted.fastCodeAt(i)) {
 			diffAt = i;
 			break;
 		}
@@ -4747,7 +4740,7 @@ final class Cli {
 	private static function escapeProbeWindow(s: String): String {
 		final buf: StringBuf = new StringBuf();
 		for (i in 0...s.length) {
-			final c: Int = StringTools.fastCodeAt(s, i);
+			final c: Int = s.fastCodeAt(i);
 			switch c {
 				case '\n'.code:
 					buf.add('\\n');
@@ -4951,9 +4944,12 @@ final class Cli {
 	 * leave it: there the writer already normalises the trailing newline away.
 	 */
 	private static function withoutTrailingNewline(s: String): String {
-		return StringTools.endsWith(s, '\r\n')
-			? s.substring(0, s.length - 2)
-			: StringTools.endsWith(s, '\n') ? s.substring(0, s.length - 1) : s;
+		return if (s.endsWith('\r\n'))
+			s.substring(0, s.length - 2)
+		else if (s.endsWith('\n'))
+			s.substring(0, s.length - 1)
+		else
+			s;
 	}
 
 	/**
@@ -4970,7 +4966,7 @@ final class Cli {
 	 * through unchanged so the parser sees the raw bytes and the user
 	 * gets a normal parse-error trace, not a silent transformation.
 	 */
-	private static function readSourceForParse(path: String): String {
+	private static inline function readSourceForParse(path: String): String {
 		return readHxtestSectionOrRaw(path, 1);
 	}
 
@@ -4983,7 +4979,7 @@ final class Cli {
 	 * fixture serve as its own expected-bytes file in one command instead
 	 * of pre-extracting via `awk` / scratch file.
 	 */
-	private static function readExpectedForCompare(path: String): String {
+	private static inline function readExpectedForCompare(path: String): String {
 		return readHxtestSectionOrRaw(path, 2);
 	}
 
@@ -4996,7 +4992,7 @@ final class Cli {
 	 */
 	private static function readHxtestSectionOrRaw(path: String, sectionIdx: Int): String {
 		final content: String = readFile(path);
-		if (!StringTools.endsWith(path, '.hxtest')) return content;
+		if (!path.endsWith('.hxtest')) return content;
 		final parts: Array<String> = content.split('\n---\n');
 		if (parts.length != 3) return content;
 		var section: String = parts[sectionIdx];
@@ -5017,7 +5013,7 @@ final class Cli {
 	 * `plugin.writeRoundTrip(source, optsJson)`.
 	 */
 	private static function readWriteOptionsJsonOrNull(path: String): Null<String> {
-		if (!StringTools.endsWith(path, '.hxtest')) return discoverFormatConfig(path);
+		if (!path.endsWith('.hxtest')) return discoverFormatConfig(path);
 		final content: String = readFile(path);
 		final parts: Array<String> = content.split('\n---\n');
 		if (parts.length != 3) return null;
@@ -5943,7 +5939,7 @@ final class Cli {
 	 */
 	private static function looksLikeTypeName(s: String): Bool {
 		if (s.length == 0) return false;
-		final c: Int = StringTools.fastCodeAt(s, 0);
+		final c: Int = s.fastCodeAt(0);
 		return c >= 'A'.code && c <= 'Z'.code && s.indexOf('/') < 0 && s.indexOf('.') < 0;
 	}
 
@@ -5971,7 +5967,7 @@ final class Cli {
 		var mixedTransition: Bool = false;
 		var prevLower: Bool = false;
 		for (idx in 0...s.length) {
-			final c: Int = StringTools.fastCodeAt(s, idx);
+			final c: Int = s.fastCodeAt(idx);
 			final isLower: Bool = c >= 'a'.code && c <= 'z'.code;
 			final isUpper: Bool = c >= 'A'.code && c <= 'Z'.code;
 			final isDigit: Bool = c >= '0'.code && c <= '9'.code;
@@ -6009,17 +6005,17 @@ final class Cli {
 	 */
 	private static function looksLikeLeadingDotField(s: String): Null<String> {
 		if (s.length < 2) return null;
-		if (StringTools.fastCodeAt(s, 0) != '.'.code) return null;
+		if (s.fastCodeAt(0) != '.'.code) return null;
 		final tail: String = s.substr(1);
 		// Tail must be a single identifier — multi-segment chains like
 		// `.obj.field` are not the intended shape (they would also
 		// produce false positives on the `obj.field` SOURCE form).
 		if (tail.indexOf('.') >= 0) return null;
-		final first: Int = StringTools.fastCodeAt(tail, 0);
+		final first: Int = tail.fastCodeAt(0);
 		final firstOk: Bool = (first >= 'a'.code && first <= 'z'.code) || (first >= 'A'.code && first <= 'Z'.code) || first == '_'.code;
 		if (!firstOk) return null;
 		for (idx in 1...tail.length) {
-			final c: Int = StringTools.fastCodeAt(tail, idx);
+			final c: Int = tail.fastCodeAt(idx);
 			final ok: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code)
 				|| c == '_'.code;
 			if (!ok) return null;
@@ -6049,13 +6045,18 @@ final class Cli {
 	 * alone — only the genuinely regex-only forms.
 	 */
 	private static function looksLikeRegex(s: String): Null<String> {
-		return s.indexOf('\\|') >= 0
-			? '`\\|` (regex alternation)'
-			: s.indexOf('[^') >= 0
-				? '`[^...]` (negated character class)'
-				: s.indexOf('(?:') >= 0
-					? '`(?:...)` (non-capturing group)'
-					: s.indexOf('(?=') >= 0 ? '`(?=...)` (lookahead)' : s.indexOf('(?!') >= 0 ? '`(?!...)` (negative lookahead)' : null;
+		return if (s.indexOf('\\|') >= 0)
+			'`\\|` (regex alternation)'
+		else if (s.indexOf('[^') >= 0)
+			'`[^...]` (negated character class)'
+		else if (s.indexOf('(?:') >= 0)
+			'`(?:...)` (non-capturing group)'
+		else if (s.indexOf('(?=') >= 0)
+			'`(?=...)` (lookahead)'
+		else if (s.indexOf('(?!') >= 0)
+			'`(?!...)` (negative lookahead)'
+		else
+			null;
 	}
 
 	/**
@@ -6082,11 +6083,11 @@ final class Cli {
 		if (parts.length < 2) return null;
 		for (p in parts) {
 			if (p.length == 0) return null;
-			final first: Int = StringTools.fastCodeAt(p, 0);
+			final first: Int = p.fastCodeAt(0);
 			final firstOk: Bool = (first >= 'a'.code && first <= 'z'.code) || (first >= 'A'.code && first <= 'Z'.code) || first == '_'.code;
 			if (!firstOk) return null;
 			for (idx in 1...p.length) {
-				final c: Int = StringTools.fastCodeAt(p, idx);
+				final c: Int = p.fastCodeAt(idx);
 				final ok: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code)
 					|| c == '_'.code;
 				if (!ok) return null;
@@ -6102,7 +6103,7 @@ final class Cli {
 	 */
 	private static function looksLikePath(s: String): Bool {
 		if (s.indexOf('/') >= 0) return true;
-		if (StringTools.endsWith(s, '.hx')) return true;
+		if (s.endsWith('.hx')) return true;
 		#if (sys || nodejs)
 		return sys.FileSystem.exists(s);
 		#else
@@ -6123,13 +6124,13 @@ final class Cli {
 			case 'Metavar':
 				'${prefix}is a lone metavar — matches every node. Narrow with structural context (e.g. "$$x.field", "func($$x)"), or look up by name: apq refs <name> --decls / apq uses <Type>. Searching anyway.';
 			case 'Literal' | 'StringLit' | 'BoolLit' | 'IntLit' | 'FloatLit' | 'SingleStringExpr' | 'DoubleStringExpr' | 'RawString':
-				prefix + 'is a bare literal — for literal-content lookup use: apq lit \'$patternStr\' <files>. Searching anyway.';
+				'${prefix}is a bare literal — for literal-content lookup use: apq lit \'$patternStr\' <files>. Searching anyway.';
 			case _:
 				// Bare identifier (IdentExpr) and anything else that
 				// parses to a single leaf.
-				'${prefix}has no code structure — search matches shape, not bare names. '
-					+ 'Try one of: apq refs $patternStr --decls (value binding), ' + 'apq uses $patternStr (type position), '
-					+ 'apq lit \'$patternStr\' (string-literal content), ' + 'apq ast --select. Searching anyway.';
+				'${prefix}has no code structure — search matches shape, not bare names. Try one of: apq refs $patternStr'
+					+ ' --decls (value binding), apq uses $patternStr (type position), apq lit \'$patternStr\' (string-literal content), '
+					+ 'apq ast --select. Searching anyway.';
 		}
 	}
 
@@ -6210,8 +6211,8 @@ final class Cli {
 			for (entry in FileSystem.readDirectory(macroDir)) if (StringTools.endsWith(entry, '.hx')) {
 				final src: String = sys.io.File.getContent('$macroDir/$entry');
 				if (src.indexOf(marker) < 0) continue;
-				return
-					' If "$name" is a macro-emitted parser runtime helper, the emit site lives in src/anyparse/macro/$entry — try apq lit \'$name\' src/anyparse/macro/ --any-kind to see the FFun name slot.';
+				return ' If "$name" is a macro-emitted parser runtime helper, the emit site lives in src/anyparse/macro/$entry'
+					+ ' — try apq lit \'$name\' src/anyparse/macro/ --any-kind to see the FFun name slot.';
 			}
 		} catch (_: Exception) {
 			// best-effort: return '' if building the hint text fails
@@ -6286,9 +6287,9 @@ final class Cli {
 		var cur: Array<Int> = [for (j in 0...lb + 1) 0];
 		for (i in 1...la + 1) {
 			cur[0] = i;
-			final ai: Int = StringTools.fastCodeAt(a, i - 1);
+			final ai: Int = a.fastCodeAt(i - 1);
 			for (j in 1...lb + 1) {
-				final cost: Int = ai == StringTools.fastCodeAt(b, j - 1) ? 0 : 1;
+				final cost: Int = ai == b.fastCodeAt(j - 1) ? 0 : 1;
 				final del: Int = prev[j] + 1;
 				final ins: Int = cur[j - 1] + 1;
 				final sub: Int = prev[j - 1] + cost;
@@ -6310,17 +6311,16 @@ final class Cli {
 	 * the first non-empty segment. Empty result → no suggestion line.
 	 */
 	private static function extractFirstKindToken(selectExpr: String): String {
-		final trimmed: String = StringTools.trim(selectExpr);
+		final trimmed: String = selectExpr.trim();
 		if (trimmed.length == 0) return '';
 		var end: Int = trimmed.length;
 		for (i in 0...trimmed.length) {
-			final c: Int = StringTools.fastCodeAt(trimmed, i);
-			if (c == '>'.code || c == ':'.code || c == '['.code || c == ' '.code || c == '\t'.code) {
-				end = i;
-				break;
-			}
+			final c: Int = trimmed.fastCodeAt(i);
+			if (c != '>'.code && c != ':'.code && c != '['.code && c != ' '.code && c != '\t'.code) continue;
+			end = i;
+			break;
 		}
-		return StringTools.trim(trimmed.substr(0, end));
+		return trimmed.substr(0, end).trim();
 	}
 
 	/** Distinct node-constructor kinds present in a tree, sorted — the
@@ -6353,11 +6353,10 @@ final class Cli {
 		var common: Null<String> = null;
 		for (n in from ... to + 1) {
 			final line: String = lines[n - 1];
-			if (StringTools.trim(line).length != 0) {
-				final lead: String = leadingWhitespace(line);
-				common = common == null ? lead : sharedPrefix(common, lead);
-				if (common.length == 0) return 0;
-			}
+			if (line.trim().length == 0) continue;
+			final lead: String = leadingWhitespace(line);
+			common = common == null ? lead : sharedPrefix(common, lead);
+			if (common.length == 0) return 0;
 		}
 		return common == null ? 0 : common.length;
 	}
@@ -6366,7 +6365,7 @@ final class Cli {
 	private static function leadingWhitespace(s: String): String {
 		var i: Int = 0;
 		while (i < s.length) {
-			final c: Int = StringTools.fastCodeAt(s, i);
+			final c: Int = s.fastCodeAt(i);
 			if (c != ' '.code && c != '\t'.code) break;
 			i++;
 		}
@@ -6377,7 +6376,7 @@ final class Cli {
 	private static function sharedPrefix(a: String, b: String): String {
 		final limit: Int = a.length < b.length ? a.length : b.length;
 		var i: Int = 0;
-		while (i < limit && StringTools.fastCodeAt(a, i) == StringTools.fastCodeAt(b, i)) i++;
+		while (i < limit && a.fastCodeAt(i) == b.fastCodeAt(i)) i++;
 		return a.substr(0, i);
 	}
 
@@ -6387,7 +6386,7 @@ final class Cli {
 	 * trailing indent.
 	 */
 	private static function dedentLine(line: String, strip: Int): String {
-		return StringTools.trim(line).length == 0 ? '' : line.substr(strip);
+		return line.trim().length == 0 ? '' : line.substr(strip);
 	}
 
 	/**
@@ -6493,7 +6492,7 @@ final class Cli {
 	 */
 	private static function newFileClassName(path: String): String {
 		final base: String = haxe.io.Path.withoutDirectory(path);
-		return StringTools.endsWith(base, '.hx') ? base.substr(0, base.length - 3) : base;
+		return base.endsWith('.hx') ? base.substr(0, base.length - 3) : base;
 	}
 
 	/**
@@ -6506,11 +6505,10 @@ final class Cli {
 		final dir: String = '${haxe.io.Path.directory(FileSystem.absolutePath(path))}/';
 		for (root in ['/src/', '/test/']) {
 			final at: Int = dir.lastIndexOf(root);
-			if (at >= 0) {
-				var tail: String = dir.substr(at + root.length);
-				if (StringTools.endsWith(tail, '/')) tail = tail.substr(0, tail.length - 1);
-				return tail == '' ? '' : tail.split('/').join('.');
-			}
+			if (at < 0) continue;
+			var tail: String = dir.substr(at + root.length);
+			if (tail.endsWith('/')) tail = tail.substr(0, tail.length - 1);
+			return tail == '' ? '' : tail.split('/').join('.');
 		}
 		return '';
 	}
@@ -6540,10 +6538,9 @@ final class Cli {
 			var srcRoot: Null<String> = null;
 			for (root in ['/src/', '/test/']) {
 				final at: Int = dir.lastIndexOf(root);
-				if (at >= 0) {
-					srcRoot = dir.substr(0, at + root.length);
-					break;
-				}
+				if (at < 0) continue;
+				srcRoot = dir.substr(0, at + root.length);
+				break;
 			}
 			if (srcRoot == null) return null;
 			final file: String = '${srcRoot + iface.split('.').join('/')}.hx';
@@ -6686,7 +6683,7 @@ final class Cli {
 					printSetModifierUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq set-modifier: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -6920,7 +6917,7 @@ final class Cli {
 					printRewriteUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq rewrite: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -7208,7 +7205,7 @@ final class Cli {
 					printStripUsage();
 					return stripParseExit(EXIT_OK);
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq strip: unknown option "$a"\n');
 						return stripParseExit(EXIT_USAGE);
 					}
@@ -7220,12 +7217,7 @@ final class Cli {
 			stderr('apq strip: --replace "$pendingReplace" needs a --with\n');
 			return stripParseExit(EXIT_USAGE);
 		}
-		if (patterns.length == 0) {
-			stderr('apq strip: missing at least one --replace/--with or --delete\n');
-			printStripUsage();
-			return stripParseExit(EXIT_USAGE);
-		}
-		return {
+		if (patterns.length != 0) return {
 			lang: lang,
 			showSource: showSource,
 			dryRun: dryRun,
@@ -7237,6 +7229,9 @@ final class Cli {
 			replacements: replacements,
 			errExit: null
 		};
+		stderr('apq strip: missing at least one --replace/--with or --delete\n');
+		printStripUsage();
+		return stripParseExit(EXIT_USAGE);
 	}
 
 	/**
@@ -7262,11 +7257,9 @@ final class Cli {
 			stderr('apq strip: --dry-run: WARNING: no pattern matched in any file (typo? pattern bytes vs. file bytes mismatch?)\n');
 			return EXIT_RUNTIME;
 		}
-		if (anyZero) {
-			stderr('apq strip: --dry-run: WARNING: one or more patterns matched 0 occurrences — see per-pattern totals above\n');
-			return EXIT_RUNTIME;
-		}
-		return EXIT_OK;
+		if (!anyZero) return EXIT_OK;
+		stderr('apq strip: --dry-run: WARNING: one or more patterns matched 0 occurrences — see per-pattern totals above\n');
+		return EXIT_RUNTIME;
 	}
 
 	/**
@@ -7337,7 +7330,7 @@ final class Cli {
 			}
 			stripped = o.regexMode
 				? regexes[idx].replace(stripped, o.replacements[idx])
-				: StringTools.replace(stripped, o.patterns[idx], o.replacements[idx]);
+				: stripped.replace(o.patterns[idx], o.replacements[idx]);
 		}
 		final changed: Bool = stripped != source;
 		if (o.showSource) {
@@ -7427,15 +7420,14 @@ final class Cli {
 			}
 		}
 		if (
-			o.candidatesRegex != null
-			&& (o.probePath != null || o.predictStrip || o.clusterFilter != null || o.regressionProbe || o.predictRelax)
-		) {
-			stderr(
-				'apq recon: --candidates is mutually exclusive with --probe / --predict-strip / --cluster / --regression-probe / --predict-relax\n'
-			);
-			return EXIT_USAGE;
-		}
-		return null;
+			o.candidatesRegex == null || o.probePath == null && !o.predictStrip && o.clusterFilter == null && !o.regressionProbe
+			&& !o.predictRelax
+		)
+			return null;
+		stderr(
+			'apq recon: --candidates is mutually exclusive with --probe / --predict-strip / --cluster / --regression-probe / --predict-relax\n'
+		);
+		return EXIT_USAGE;
 	}
 
 	/**
@@ -7524,11 +7516,9 @@ final class Cli {
 				return EXIT_USAGE;
 			}
 		}
-		if (o.expectedPath != null && !o.writerEqualsAfter) {
-			stderr('apq recon: --expected requires --writer-equals\n');
-			return EXIT_USAGE;
-		}
-		return null;
+		if (o.expectedPath == null || o.writerEqualsAfter) return null;
+		stderr('apq recon: --expected requires --writer-equals\n');
+		return EXIT_USAGE;
 	}
 
 	/**
@@ -7695,7 +7685,7 @@ final class Cli {
 					printReconUsage();
 					return reconParseExit(EXIT_OK);
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq recon: unknown option "$a"\n');
 						return reconParseExit(EXIT_USAGE);
 					}
@@ -7808,14 +7798,14 @@ final class Cli {
 		final maybeDirArg: String = a;
 		if (looksLikeTypeName(maybeTypeArg) && looksLikePath(maybeDirArg))
 			stderr(
-				'apq ast: only one file argument supported (got "$maybeTypeArg" and "$maybeDirArg").\n'
-				+ '         "$maybeTypeArg" looks like a TypeName and "$maybeDirArg" like a path — `ast` is single-file.\n'
-				+ '         For type lookup across a directory:\n'
-				+ '           apq refs $maybeTypeArg $maybeDirArg --decls    # value bindings + decl site\n'
-				+ '           apq uses $maybeTypeArg $maybeDirArg            # type-position consumers\n'
-				+ '           apq blast $maybeTypeArg $maybeDirArg           # full change-impact (uses + refs + field-access)\n'
-				+ '           apq meta @:peg $maybeDirArg                    # all PEG decls in scope\n'
-				+ '         For a subtree of one file:\n' + '           apq ast <path-to-file.hx> --select Kind:$maybeTypeArg\n'
+				'apq ast: only one file argument supported (got "$maybeTypeArg" and "$maybeDirArg").\n         "$maybeTypeArg'
+				+ '" looks like a TypeName and "$maybeDirArg" like a path — `ast` is single-file.\n'
+				+ '         For type lookup across a directory:\n           apq refs $maybeTypeArg $maybeDirArg'
+				+ ' --decls    # value bindings + decl site\n           apq uses $maybeTypeArg $maybeDirArg'
+				+ '            # type-position consumers\n           apq blast $maybeTypeArg $maybeDirArg'
+				+ '           # full change-impact (uses + refs + field-access)\n           apq meta @:peg $maybeDirArg'
+				+ '                    # all PEG decls in scope\n         For a subtree of one file:\n'
+				+ '           apq ast <path-to-file.hx> --select Kind:$maybeTypeArg\n'
 			);
 		else
 			stderr('apq ast: only one file argument supported (got "$file" and "$a")\n');
@@ -7948,7 +7938,7 @@ final class Cli {
 					printAstUsage();
 					return astParseExit(EXIT_OK);
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq ast: unknown option "$a"\n');
 						return astParseExit(EXIT_USAGE);
 					}
@@ -8118,14 +8108,14 @@ final class Cli {
 		// single-file by design; point them at the multi-file walkers
 		// (`refs --decls` / `uses` / `blast`) that DO recurse a dir.
 		// Silent when the token is lowercase (field-shaped) or empty.
-		final crossProjectHint: String = firstKind.length > 0 && StringTools.fastCodeAt(firstKind, 0) >= 'A'.code
-			&& StringTools.fastCodeAt(firstKind, 0) <= 'Z'.code
-			? ' If "$firstKind" is a TypeName declared elsewhere, ast is single-file; try apq refs $firstKind src/ --decls (declaration sites), apq uses $firstKind src/ (type positions), or apq blast $firstKind src/ (full change-impact).'
+		final crossProjectHint: String = firstKind.length > 0 && firstKind.fastCodeAt(0) >= 'A'.code && firstKind.fastCodeAt(0) <= 'Z'.code
+			? ' If "$firstKind" is a TypeName declared elsewhere, ast is single-file; try apq refs $firstKind'
+				+ ' src/ --decls (declaration sites), apq uses $firstKind src/ (type positions), or apq blast $firstKind'
+				+ ' src/ (full change-impact).'
 			: '';
 		stderr(
-			'apq ast: --select "$selectExpr"$filterNote matched no nodes in $fileLabel. '
-			+ 'Kinds present here: ${present.join(', ')}.$fuzzyLine$crossProjectHint '
-			+ 'Kinds are exact node-constructor names — run `apq ast $fileLabel` to see the tree.\n'
+			'apq ast: --select "$selectExpr"$filterNote matched no nodes in $fileLabel. Kinds present here: ${present.join(', ')}.'
+			+ '$fuzzyLine$crossProjectHint Kinds are exact node-constructor names — run `apq ast $fileLabel` to see the tree.\n'
 		);
 	}
 
@@ -8148,7 +8138,7 @@ final class Cli {
 		// grammar (`Kind` / `Kind:name` / `Kind > Child`) is deliberately
 		// minimal and stays that way — arity is a numeric predicate, not
 		// a structural one, and lives on the CLI instead of the path.
-		final raw: Array<QueryNode> = (o.minChildren < 0 && o.maxChildren < 0) ? preFilter : [
+		final raw: Array<QueryNode> = o.minChildren < 0 && o.maxChildren < 0 ? preFilter : [
 			for (m in preFilter)
 				if ((o.minChildren < 0 || m.children.length >= o.minChildren) && (o.maxChildren < 0 || m.children.length <= o.maxChildren))
 					m
@@ -8212,7 +8202,7 @@ final class Cli {
 					printMetaUsage();
 					return metaParseExit(EXIT_OK);
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq meta: unknown option "$a"\n');
 						return metaParseExit(EXIT_USAGE);
 					}
@@ -8302,7 +8292,7 @@ final class Cli {
 					printBlastUsage();
 					return blastParseExit(EXIT_OK);
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq blast: unknown option "$a"\n');
 						return blastParseExit(EXIT_USAGE);
 					}
@@ -8382,12 +8372,10 @@ final class Cli {
 		// are name-bound and rarely flood.
 		final defaultCap: Int = showAll ? -1 : HEUR_DEFAULT_CAP;
 		final effectiveLimit: Int = limit >= 0 ? limit : defaultCap;
-		final capped: Array<{ loc: String, line: String }> = (effectiveLimit >= 0 && heur.length > effectiveLimit)
+		final capped: Array<{ loc: String, line: String }> = effectiveLimit >= 0 && heur.length > effectiveLimit
 			? heur.slice(0, effectiveLimit)
 			: heur;
-		final hint: String = (capped.length < heur.length)
-			? (limit >= 0 ? '' : ' — pass --all to show all, --limit N for explicit cap')
-			: '';
+		final hint: String = capped.length < heur.length ? (limit >= 0 ? '' : ' — pass --all to show all, --limit N for explicit cap') : '';
 		sysPrint(
 			'# heuristic field-access (member-name superset of "$typeName" — VERIFY each; '
 			+ 'name-based, over-matches; ${capped.length}/${heur.length} shown$hint)\n'
@@ -8449,7 +8437,7 @@ final class Cli {
 					printLitUsage();
 					return litParseExit(EXIT_OK);
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq lit: unknown option "$a"\n');
 						return litParseExit(EXIT_USAGE);
 					}
@@ -8606,7 +8594,7 @@ final class Cli {
 					printNewUsage();
 					return newParseExit(EXIT_OK);
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq new: unknown option "$a"\n');
 						return newParseExit(EXIT_USAGE);
 					}
@@ -8748,7 +8736,7 @@ final class Cli {
 					case '--':
 						optsEnded = true;
 					case _:
-						if (StringTools.startsWith(a, '--')) {
+						if (a.startsWith('--')) {
 							stderr('apq search: unknown option "$a"\n');
 							return searchParseExit(EXIT_USAGE);
 						}
@@ -8806,9 +8794,10 @@ final class Cli {
 			final marker: String = e.k == patternKind ? ' ← matches pattern root' : '';
 			stderr('  ${e.k} (${e.n})$marker\n');
 		}
-		if (!Lambda.exists(entries, e -> e.k == patternKind))
+		if (!entries.exists(e -> e.k == patternKind))
 			stderr(
-				'  (pattern root kind "$patternKind" NOT present in any scanned file — likely the wrong kind for this construct; check `apq ast <file>` to see the actual node shape)\n'
+				'  (pattern root kind "$patternKind'
+				+ '" NOT present in any scanned file — likely the wrong kind for this construct; check `apq ast <file>` to see the actual node shape)\n'
 			);
 	}
 
@@ -8891,7 +8880,7 @@ final class Cli {
 					printLintRules();
 					return lintParseExit(EXIT_OK);
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq lint: unknown option "$a"\n');
 						return lintParseExit(EXIT_USAGE);
 					}
@@ -9052,7 +9041,8 @@ final class Cli {
 			}
 		}
 		sysPrint(
-			'--- relax: $unblockCount unblock, $stillFailCount still fail, $noTargetCount no target (of ${records.length} skip-parse files) ---\n'
+			'--- relax: $unblockCount unblock, $stillFailCount still fail, $noTargetCount no target (of ${records.length}'
+			+ ' skip-parse files) ---\n'
 		);
 		if (!keepNoTargetPerFile && noTargetReasons.length > 0) {
 			noTargetReasons.sort((a, b) -> b.count - a.count);
@@ -9086,7 +9076,7 @@ final class Cli {
 					stack.push(path);
 					continue;
 				}
-				if (!StringTools.endsWith(name, '.hxtest')) continue;
+				if (!name.endsWith('.hxtest')) continue;
 				final relPath: String = stripRootPrefix(path, root);
 				final priorStatus: Null<String> = prior[relPath];
 				if (priorStatus == null) continue; // present locally but absent from snapshot — silent
@@ -9196,11 +9186,13 @@ final class Cli {
 				var soleCount: Int = 0;
 				for (r in isolatedResults) if (r.ok) soleCount++;
 				sysPrint(
-					'VERDICT $soleCount of $patternCount pattern${plural(patternCount)} unblock alone — the rest are redundant (or compose into a tighter slice).\n'
+					'VERDICT $soleCount of $patternCount pattern${plural(patternCount)}'
+					+ ' unblock alone — the rest are redundant (or compose into a tighter slice).\n'
 				);
 			} else {
 				sysPrint(
-					'VERDICT interlocking blockers — every pattern alone still fails; the combination is required. Slice scope likely needs $patternCount separate code mechanisms.\n'
+					'VERDICT interlocking blockers — every pattern alone still fails; the combination is required. Slice scope likely needs '
+					+ '$patternCount separate code mechanisms.\n'
 				);
 			}
 		} else if (!combinedOk && baselineOk) {
@@ -9246,8 +9238,7 @@ final class Cli {
 			for (rename in (cast check: CrossFileFix).crossFileFix(files, own, cached, index)) crossRenames.push(rename);
 		}
 		fixedDelta += applyCrossFileRenames(crossRenames, files, optsByFile, cached, touchedThisPass, changedFiles, nextActive);
-		for (entry in active) {
-			if (touchedThisPass.contains(entry.file)) continue;
+		for (entry in active) if (!touchedThisPass.contains(entry.file)) {
 			final fileViolations: Array<Violation> = violations.filter(v -> v.file == entry.file);
 			if (fileViolations.length == 0) continue;
 			final disjoint: Array<{ span: Span, text: String }> = computeFileLintEdits(entry.source, fileViolations, checks, cached, index);
@@ -9422,7 +9413,7 @@ final class Cli {
 				case '--source':
 					opts.showSource = true;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq self-status: unknown option "$a"\n');
 						opts.errExit = EXIT_USAGE;
 						return opts;
@@ -9460,7 +9451,7 @@ final class Cli {
 					stack.push(path);
 					continue;
 				}
-				if (!StringTools.endsWith(name, '.hx')) continue;
+				if (!name.endsWith('.hx')) continue;
 				final source: String = try readSourceForParse(path) catch (_: Exception) continue;
 				try {
 					plugin.parseFile(source);
@@ -9499,7 +9490,7 @@ final class Cli {
 		if (leadStr == '$') return null;
 		final first: MetaHit = metas[0];
 		final fspan: Null<Span> = first.declSpan;
-		final pos: Null<Position> = fspan != null ? fspan.lineCol(source) : null;
+		final pos: Null<Position> = fspan?.lineCol(source);
 		return {
 			file: path,
 			line: pos != null ? pos.line : 0,
@@ -9576,7 +9567,7 @@ final class Cli {
 					opts.errExit = EXIT_OK;
 					return opts;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq source: unknown option "$a"\n');
 						opts.errExit = EXIT_USAGE;
 						return opts;
@@ -9682,25 +9673,26 @@ final class Cli {
 	 * (refs/uses/blast/lit) suggests the right walker for the name's case.
 	 */
 	private static function nudgeNameHint(cmd: String, n: String): String {
-		final first: Int = n.length > 0 ? StringTools.fastCodeAt(n, 0) : 0;
+		final first: Int = n.length > 0 ? n.fastCodeAt(0) : 0;
 		final isUpper: Bool = first >= 'A'.code && first <= 'Z'.code;
 		final isLower: Bool = first >= 'a'.code && first <= 'z'.code;
 		final leadingDot: Null<String> = looksLikeLeadingDotField(n);
 		final dotted: Null<Array<String>> = looksLikeDottedAccess(n);
-		if (leadingDot != null && (cmd == 'lit' || cmd == 'refs' || cmd == 'uses')) {
-			// Leading-dot query (`.expr`, `.body`) — user is hunting a
-			// field-access shape but typed the SLOT name only. lit
-			// won't capture the leading `.` (FieldAccess leaves are
-			// the identifier after `.`, the `.` is a postfix
-			// operator); refs/uses don't know about field positions.
-			// The structural answer is `apq search '$x.<tail>'`.
-			final t: String = leadingDot;
-			return
-				' — "$n" is a leading-dot field-name slot. $cmd matches leaf names / single bindings / type positions, never `expr.field` shape. Try: apq search \'$$x.$t\' <dir> (field-access shape), apq lit \'$t\' <dir> --any-kind (every leaf — field-name slots included), or apq refs $t <dir> --decls (where the field is declared).';
-		}
-		return dotted != null && (cmd == 'lit' || cmd == 'refs' || cmd == 'uses')
-			? nudgeDottedHint(cmd, n, dotted)
-			: nudgeCommandHint(cmd, n, isUpper, isLower);
+		if (leadingDot == null || cmd != 'lit' && cmd != 'refs' && cmd != 'uses')
+			return dotted != null && (cmd == 'lit' || cmd == 'refs' || cmd == 'uses')
+				? nudgeDottedHint(cmd, n, dotted)
+				: nudgeCommandHint(cmd, n, isUpper, isLower);
+		// Leading-dot query (`.expr`, `.body`) — user is hunting a
+		// field-access shape but typed the SLOT name only. lit
+		// won't capture the leading `.` (FieldAccess leaves are
+		// the identifier after `.`, the `.` is a postfix
+		// operator); refs/uses don't know about field positions.
+		// The structural answer is `apq search '$x.<tail>'`.
+		final t: String = leadingDot;
+		return ' — "$n" is a leading-dot field-name slot. $cmd'
+			+ ' matches leaf names / single bindings / type positions, never `expr.field` shape. Try: apq search \'$$x.$t'
+			+ '\' <dir> (field-access shape), apq lit \'$t\' <dir> --any-kind (every leaf — field-name slots included), or apq refs $t'
+			+ ' <dir> --decls (where the field is declared).';
 	}
 
 	/**
@@ -9711,11 +9703,17 @@ final class Cli {
 	private static function nudgeDottedHint(cmd: String, n: String, dotted: Array<String>): String {
 		final lhs: String = dotted[0];
 		final rhs: String = dotted[dotted.length - 1];
-		final lhsFirst: Int = StringTools.fastCodeAt(lhs, 0);
+		final lhsFirst: Int = lhs.fastCodeAt(0);
 		final lhsIsUpper: Bool = lhsFirst >= 'A'.code && lhsFirst <= 'Z'.code;
 		return lhsIsUpper
-			? ' — "$n" is a dotted access (Type.method / pkg.Module). $cmd matches leaf names / single bindings / type positions, never `Type.method` shape. Try: apq search \'$n($$_)\' <dir> (call shape), apq search \'$lhs.$rhs\' <dir> (field-access shape), or apq refs $rhs <dir> --decls (where the method is declared).'
-			: ' — "$n" is a dotted access (obj.field). $cmd matches leaf names / single bindings, never `obj.field` shape. Try: apq search \'$$x.$rhs\' <dir> (field-access shape), apq search \'$n\' <dir> (literal access), or apq refs $rhs <dir> --decls (where the field is declared).';
+			? ' — "$n" is a dotted access (Type.method / pkg.Module). $cmd'
+				+ ' matches leaf names / single bindings / type positions, never `Type.method` shape. Try: apq search \'$n'
+				+ '($$_)\' <dir> (call shape), apq search \'$lhs.$rhs\' <dir> (field-access shape), or apq refs $rhs'
+				+ ' <dir> --decls (where the method is declared).'
+			: ' — "$n" is a dotted access (obj.field). $cmd'
+				+ ' matches leaf names / single bindings, never `obj.field` shape. Try: apq search \'$$x.$rhs'
+				+ '\' <dir> (field-access shape), apq search \'$n\' <dir> (literal access), or apq refs $rhs'
+				+ ' <dir> --decls (where the field is declared).';
 	}
 
 	/**
@@ -9726,21 +9724,32 @@ final class Cli {
 		return switch cmd {
 			case 'refs':
 				if (isUpper)
-					' — "$n" starts uppercase, looks like a TypeName. Try: apq uses $n <dir> (type positions), apq blast $n <dir> (full change-impact incl. field-access), or apq lit \'$n\' <dir> --any-kind (every leaf — case-patterns / imports / new exprs).';
+					' — "$n" starts uppercase, looks like a TypeName. Try: apq uses $n <dir> (type positions), apq blast $n'
+						+ ' <dir> (full change-impact incl. field-access), or apq lit \'$n'
+						+ '\' <dir> --any-kind (every leaf — case-patterns / imports / new exprs).';
 				else
-					' — "$n" has no value-binding here. Locals/params are NOT indexed. Try: apq lit \'$n\' <dir> --any-kind (every leaf — strings/idents/field-names) or apq search \'$$x.$n\' <dir> (field-access shape).${macroEmitHint(n)}';
+					' — "$n" has no value-binding here. Locals/params are NOT indexed. Try: apq lit \'$n'
+						+ '\' <dir> --any-kind (every leaf — strings/idents/field-names) or apq search \'$$x.$n'
+						+ '\' <dir> (field-access shape).${macroEmitHint(n)}';
 			case 'uses':
 				if (isLower)
-					' — "$n" starts lowercase, not a TypeName. Try: apq refs $n <dir> (value bindings) or apq lit \'$n\' <dir> --any-kind (every leaf).${macroEmitHint(n)}';
+					' — "$n" starts lowercase, not a TypeName. Try: apq refs $n <dir> (value bindings) or apq lit \'$n'
+						+ '\' <dir> --any-kind (every leaf).${macroEmitHint(n)}';
 				else
-					' — no type-position references. For full change-impact incl. `.field` access try: apq blast $n <dir>, or apq lit \'$n\' <dir> --any-kind (every leaf — incl. case-patterns).';
+					' — no type-position references. For full change-impact incl. `.field` access try: apq blast $n <dir>, or apq lit \''
+						+ '$n\' <dir> --any-kind (every leaf — incl. case-patterns).';
 			case 'blast':
-				' — no declaration of "$n" in the scanned set (the heuristic section needs it). Either widen the scan, or use apq uses $n <dir> + apq refs $n <dir> directly.';
+				' — no declaration of "$n" in the scanned set (the heuristic section needs it). Either widen the scan, or use apq uses $n'
+					+ ' <dir> + apq refs $n <dir> directly.';
 			case 'lit':
 				if (looksLikeMixedIdentifier(n))
-					' — no Literal/IdentExpr leaf matches "$n" (camelCase/snake_case query → default kind widened to Literal+IdentExpr; --exact for full equality). Try --any-kind (every leaf — incl. field-name slots), apq refs $n <dir> --decls, or apq search \'$$x.$n\' <dir> (field-access shape).';
+					' — no Literal/IdentExpr leaf matches "$n'
+						+ '" (camelCase/snake_case query → default kind widened to Literal+IdentExpr; --exact for full equality). Try --any-kind (every leaf — incl. field-name slots), apq refs '
+						+ '$n <dir> --decls, or apq search \'$$x.$n\' <dir> (field-access shape).';
 				else
-					' — no string-literal content matches "$n" (default: substring on Literal leaves; --exact for full equality). Widen the kind set with --kind Literal,IdentExpr or --any-kind (catches every leaf — incl. field-name slots), or try: apq refs $n <dir> --decls.';
+					' — no string-literal content matches "$n'
+						+ '" (default: substring on Literal leaves; --exact for full equality). Widen the kind set with --kind Literal,IdentExpr or --any-kind (catches every leaf — incl. field-name slots), or try: apq refs '
+						+ '$n <dir> --decls.';
 			case 'meta':
 				''; // meta has no <name> arg (annotation is its own thing) — leave silent.
 			case _:
@@ -9759,7 +9768,8 @@ final class Cli {
 		final tail: StringBuf = new StringBuf();
 		final n: Int = skipEntries.length;
 		tail.add(
-			'\napq $cmd: WARNING: $n file(s) skip-parse — answer may be hiding in unparsed files. Locus shows the parse-failure position; if it is far past the construct you searched for, the warning can be ignored.'
+			'\napq $cmd: WARNING: $n'
+			+ ' file(s) skip-parse — answer may be hiding in unparsed files. Locus shows the parse-failure position; if it is far past the construct you searched for, the warning can be ignored.'
 		);
 		final shown: Int = n < SKIP_PATHS_SHOWN ? n : SKIP_PATHS_SHOWN;
 		for (i in 0...shown) {
@@ -9824,7 +9834,7 @@ final class Cli {
 					printUsesUsage();
 					return usesParseExit(EXIT_OK);
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq uses: unknown option "$a"\n');
 						return usesParseExit(EXIT_USAGE);
 					}
@@ -9926,7 +9936,7 @@ final class Cli {
 					printExtractMethodUsage();
 					return extractMethodParseExit(EXIT_OK);
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq extract-method: unknown option "$a"\n');
 						return extractMethodParseExit(EXIT_USAGE);
 					}
@@ -9956,11 +9966,7 @@ final class Cli {
 			return extractMethodParseExit(EXIT_USAGE);
 		}
 		final endPos: Null<Position> = parseLineCol(endSpec);
-		if (endPos == null) {
-			stderr('apq extract-method: malformed end position "$endSpec" — expected <line>:<col>\n');
-			return extractMethodParseExit(EXIT_USAGE);
-		}
-		return {
+		if (endPos != null) return {
 			lang: lang,
 			write: write,
 			reformat: reformat,
@@ -9970,6 +9976,8 @@ final class Cli {
 			name: name,
 			errExit: null
 		};
+		stderr('apq extract-method: malformed end position "$endSpec" — expected <line>:<col>\n');
+		return extractMethodParseExit(EXIT_USAGE);
 	}
 
 	private static inline function addMemberParseExit(code: Int): AddMemberOpts {
@@ -10012,7 +10020,7 @@ final class Cli {
 					printAddMemberUsage();
 					return addMemberParseExit(EXIT_OK);
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq add-member: unknown option "$a"\n');
 						return addMemberParseExit(EXIT_USAGE);
 					}
@@ -10089,7 +10097,7 @@ final class Cli {
 					printSetDocUsage();
 					return setDocParseExit(EXIT_OK);
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq set-doc: unknown option "$a"\n');
 						return setDocParseExit(EXIT_USAGE);
 					}
@@ -10151,7 +10159,7 @@ final class Cli {
 					printFmtUsage();
 					return fmtParseExit(EXIT_OK);
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq fmt: unknown option "$a"\n');
 						return fmtParseExit(EXIT_USAGE);
 					}
@@ -10244,7 +10252,7 @@ final class Cli {
 					printMoveUsage();
 					return moveParseExit(EXIT_OK);
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq move: unknown option "$a"\n');
 						return moveParseExit(EXIT_USAGE);
 					}
@@ -10266,12 +10274,7 @@ final class Cli {
 			printMoveUsage();
 			return moveParseExit(EXIT_USAGE);
 		}
-		if (scope == null) {
-			stderr('apq move: --scope <dir> is required (imports are fixed across the scope)\n');
-			printMoveUsage();
-			return moveParseExit(EXIT_USAGE);
-		}
-		return {
+		if (scope != null) return {
 			lang: lang,
 			write: write,
 			scope: scope,
@@ -10283,6 +10286,9 @@ final class Cli {
 			destFile: destFileArg,
 			errExit: null
 		};
+		stderr('apq move: --scope <dir> is required (imports are fixed across the scope)\n');
+		printMoveUsage();
+		return moveParseExit(EXIT_USAGE);
 	}
 
 	private static function emitMoveResult(cmd: String, result: MoveResult, cursorFile: String, destFile: String, write: Bool): Int {
@@ -10365,7 +10371,7 @@ final class Cli {
 					printRefsUsage();
 					return refsParseExit(EXIT_OK);
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq refs: unknown option "$a"\n');
 						return refsParseExit(EXIT_USAGE);
 					}
@@ -10472,7 +10478,7 @@ final class Cli {
 					printSetCommentUsage();
 					return setCommentParseExit(EXIT_OK);
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq set-comment: unknown option "$a"\n');
 						return setCommentParseExit(EXIT_USAGE);
 					}
@@ -10561,7 +10567,7 @@ final class Cli {
 					printReplaceNodeUsage();
 					return replaceNodeParseExit(EXIT_OK);
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq replace-node: unknown option "$a"\n');
 						return replaceNodeParseExit(EXIT_USAGE);
 					}
@@ -10638,7 +10644,7 @@ final class Cli {
 					printPatchUsage();
 					return patchParseExit(EXIT_OK);
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq patch: unknown option "$a"\n');
 						return patchParseExit(EXIT_USAGE);
 					}
@@ -10758,7 +10764,7 @@ final class Cli {
 					printMentionsUsage();
 					return mentionsParseExit(EXIT_OK);
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq mentions: unknown option "$a"\n');
 						return mentionsParseExit(EXIT_USAGE);
 					}
@@ -10931,7 +10937,7 @@ final class Cli {
 					printGatesUsage();
 					return gatesParseExit(EXIT_OK);
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq gates: unknown option "$a"\n');
 						return gatesParseExit(EXIT_USAGE);
 					}
@@ -11026,7 +11032,7 @@ final class Cli {
 					printCommentRewriteUsage();
 					return commentRewriteParseExit(EXIT_OK);
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq comment-rewrite: unknown option "$a"\n');
 						return commentRewriteParseExit(EXIT_USAGE);
 					}
@@ -11151,7 +11157,7 @@ final class Cli {
 					printAddElementUsage();
 					return addElementParseExit(EXIT_OK);
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq add-element: unknown option "$a"\n');
 						return addElementParseExit(EXIT_USAGE);
 					}
@@ -11234,14 +11240,14 @@ final class Cli {
 		if (i + 1 >= args.length) return false;
 		final next: String = args[i + 1];
 		if (next.length == 0) return false;
-		final c: Int = StringTools.fastCodeAt(next, 0);
+		final c: Int = next.fastCodeAt(0);
 		return c >= '0'.code && c <= '9'.code;
 	}
 
 	/** Whether a bare argument is a position spec (`<line>[:<col>]` — starts with a digit) rather than another positional. */
 	private static function isPosSpec(s: String): Bool {
 		if (s.length == 0) return false;
-		final c: Int = StringTools.fastCodeAt(s, 0);
+		final c: Int = s.fastCodeAt(0);
 		return c >= '0'.code && c <= '9'.code;
 	}
 
@@ -11304,11 +11310,11 @@ final class Cli {
 		return result;
 	}
 
-	private static function runCallees(args: Array<String>): Int {
+	private static inline function runCallees(args: Array<String>): Int {
 		return runCallChains('callees', true, args);
 	}
 
-	private static function runCallers(args: Array<String>): Int {
+	private static inline function runCallers(args: Array<String>): Int {
 		return runCallChains('callers', false, args);
 	}
 
@@ -11346,7 +11352,7 @@ final class Cli {
 					printCallChainsUsage(cmd, outward);
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq $cmd: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -11384,10 +11390,9 @@ final class Cli {
 		for (m in matches) {
 			final rendered: String = CallChains.render(graph, m.id, depth, outward, kinds, f -> sources[f], budget);
 			sysPrint(rendered);
-			if (limit != 0) {
-				budget -= rendered.split('\n').length - 1;
-				if (budget <= 0) break;
-			}
+			if (limit == 0) continue;
+			budget -= rendered.split('\n').length - 1;
+			if (budget <= 0) break;
 		}
 		if (graph.unresolved.length > 0)
 			stderr('apq $cmd: note — ${graph.unresolved.length} call site(s) unresolved; the graph is approximate\n');
@@ -11427,7 +11432,7 @@ final class Cli {
 					printReachUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq reach: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -11520,7 +11525,7 @@ final class Cli {
 					printClustersUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq clusters: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -11605,7 +11610,7 @@ final class Cli {
 					printMoveMemberUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq move-member: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -11671,15 +11676,16 @@ final class Cli {
 		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs([scopeDir], '.hx');
 		final paths: Array<String> = expanded.paths;
 		for (extra in extraFiles) if (!paths.contains(extra)) paths.push(extra);
-		final scopeFiles: Array<{ file: String, source: String }> = [];
-		for (path in paths) {
-			final fileSource: String = try readSourceForParse(path) catch (exception: Exception) {
-				stderr('apq $cmd: $path: ${exception.message}\n');
-				return null;
-			};
-			scopeFiles.push({ file: path, source: fileSource });
-		}
-		return scopeFiles;
+		return ([
+			for (path in paths)
+				{
+					file: path,
+					source: (try readSourceForParse(path) catch (exception: Exception) {
+						stderr('apq $cmd: $path: ${exception.message}\n');
+						return null;
+					}: String)
+				}
+		]: Array<{ file: String, source: String }>);
 	}
 
 	private static function runExtractInterface(args: Array<String>): Int {
@@ -11709,7 +11715,7 @@ final class Cli {
 					printExtractInterfaceUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq extract-interface: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -11732,7 +11738,7 @@ final class Cli {
 		final srcFileNN: String = srcFile;
 		final ifaceNameNN: String = ifaceName;
 		final srcTypeName: String = srcType ?? RefactorSupport.baseNameOf(srcFileNN);
-		final memberNames: Null<Array<String>> = members == null ? null : members.split(',').map(StringTools.trim).filter(n -> n != '');
+		final memberNames: Null<Array<String>> = members?.split(',').map(StringTools.trim).filter(n -> n != '');
 		final slash: Int = srcFileNN.lastIndexOf('/');
 		final dir: String = slash < 0 ? '' : srcFileNN.substring(0, slash + 1);
 		final ifaceFile: String = out ?? '$dir$ifaceNameNN.hx';
@@ -11803,7 +11809,7 @@ final class Cli {
 					printInheritanceMoveUsage(up);
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq $cmd: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -11885,7 +11891,7 @@ final class Cli {
 					printExtractSuperclassUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq extract-superclass: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -11978,7 +11984,7 @@ final class Cli {
 					printSafeDeleteUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq safe-delete: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -12060,7 +12066,7 @@ final class Cli {
 					printEncapsulateFieldUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq encapsulate-field: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -12142,7 +12148,7 @@ final class Cli {
 					printMakeFinalUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq make-final: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -12244,7 +12250,7 @@ final class Cli {
 					printIntroduceParameterObjectUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq introduce-parameter-object: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -12319,7 +12325,7 @@ final class Cli {
 		final checks: Array<Check> = Linter.builtins();
 		var width: Int = 0;
 		for (c in checks) if (c.id().length > width) width = c.id().length;
-		for (c in checks) sysPrint('${StringTools.rpad(c.id(), ' ', width)}  ${c.description()}\n');
+		for (c in checks) sysPrint('${c.id().rpad(' ', width)}  ${c.description()}\n');
 	}
 
 	private static function printWriteLangHelp(): Void {
@@ -12508,7 +12514,7 @@ final class Cli {
 					printExtractConstantUsage();
 					return EXIT_OK;
 				case _:
-					if (StringTools.startsWith(a, '--')) {
+					if (a.startsWith('--')) {
 						stderr('apq extract-constant: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
@@ -12586,14 +12592,15 @@ final class Cli {
 		// not both rewritten-as-consumer and written-as-module (the second write would
 		// clobber the first, silently dropping the in-module occurrence).
 		final intoAbs: String = FileSystem.absolutePath(intoPath);
-		final scopeFiles: Array<{ file: String, source: String }> = [];
-		for (path in paths) if (FileSystem.absolutePath(path) != intoAbs) {
-			final fileSource: String = try readSourceForParse(path) catch (exception: Exception) {
-				stderr('apq extract-constant: $path: ${exception.message}\n');
-				return EXIT_RUNTIME;
-			};
-			scopeFiles.push({ file: path, source: fileSource });
-		}
+		final scopeFiles: Array<{ file: String, source: String }> = [
+			for (path in paths) if (FileSystem.absolutePath(path) != intoAbs) {
+				file: path,
+				source: (try readSourceForParse(path) catch (exception: Exception) {
+					stderr('apq extract-constant: $path: ${exception.message}\n');
+					return EXIT_RUNTIME;
+				}: String)
+			}
+		];
 
 		final moduleExists: Bool = FileSystem.exists(intoPath);
 		final moduleSource: Null<String> = if (!moduleExists)
@@ -12610,7 +12617,8 @@ final class Cli {
 		// A short / generic literal risks coupling unrelated occurrences — warn but proceed.
 		if (literal.length < SHORT_LITERAL_LEN)
 			stderr(
-				'apq extract-constant: warning: literal \'$literal\' is short (<$SHORT_LITERAL_LEN chars) — eyeball the preview, unrelated occurrences may be coupled\n'
+				'apq extract-constant: warning: literal \'$literal\' is short (<$SHORT_LITERAL_LEN'
+				+ ' chars) — eyeball the preview, unrelated occurrences may be coupled\n'
 			);
 
 		switch ExtractConstant.extractInto(
@@ -12659,175 +12667,145 @@ final class Cli {
 		sysPrint('that does not occur exits non-zero with nothing written. Rewrites re-parse.\n');
 	}
 
-	#if (sys || nodejs)
 	/**
-	 * Strips ANSI SGR color escapes (`ESC [ <params> m`) from `s`. Both
-	 * transcript formats this parser reads (utest, tink_testrunner) are
-	 * commonly captured with color on (tink's `AnsiFormatter` wraps every
-	 * status token — `[OK]`/`[FAIL]`, positions, the summary line — in
-	 * `ESC[<n>m ... ESC[39m`); stripping first keeps every downstream
-	 * regex a plain-text match instead of threading ANSI-tolerant
-	 * patterns through both parsers. Built from `String.fromCharCode(27)`
-	 * rather than a `\x1b` literal so the escape byte is unambiguous
-	 * across targets.
+	 * The OracleAssisted tail of `--fix`: for each oracle-assisted check (only
+	 * `explicit-local-type` today), ask a warm Haxe display server for the compiler's
+	 * inferred type of every finding the structural arm left, annotate it, then WRITE
+	 * the edited files and VERIFY the project still typechecks with a FRESH
+	 * `CompilerOracle.typecheck` — reverting any file the compiler rejects (the
+	 * report-only fallback). Runs ONLY when a `compilerOracle` is configured and the
+	 * baseline typechecks (so a failure is attributable to our annotation); otherwise a
+	 * note and zero edits, byte-identical to a run without the key. The display server is
+	 * queried READ-ONLY (files unchanged since the warm) — verification is a fresh
+	 * process because the server's mtime cache is stale within the same second (see
+	 * `CompilerDisplayOracle`). Split from `applyLintFixes` for the complexity budget.
 	 */
-	private static function stripAnsi(s: String): String {
-		final esc: String = String.fromCharCode(27); // noqa: magic-number
-		final re: EReg = new EReg(esc + '\\[[0-9;]*m', 'g');
-		return re.replace(s, '');
-	}
-
-	/**
-	 * Format sniff for `parseTestSummary`: does `lines` look like a
-	 * tink_testrunner transcript rather than utest? Checked via either of
-	 * tink's two unambiguous, ANSI-independent markers — an assertion row
-	 * (`- [OK] [...]` / `- [FAIL] [...]`) or the final summary block
-	 * (`N Assertions   N Success   N Failure   N Error`). Neither shape
-	 * occurs in a utest transcript (utest's own summary line and
-	 * per-test rows use `testName: OK/FAIL/ERROR`, no `[OK]`/`[FAIL]`
-	 * bracket token and no `Assertions   ... Success` block).
-	 */
-	private static function looksLikeTinkTranscript(lines: Array<String>): Bool {
-		final assertRe: EReg = ~/^\s*-\s*\[(OK|FAIL)\]\s*\[[^\]]+\]/;
-		final summaryRe: EReg = ~/^\d+\s+Assertions?\s+\d+\s+Success\s+\d+\s+Failures?\s+\d+\s+Errors?\s*$/;
-		for (line in lines) if (assertRe.match(line) || summaryRe.match(line)) return true;
-		return false;
-	}
-
-	/**
-	 * Pure parser over a tink_testrunner (tink_unittest) stdout
-	 * transcript — the reporter TM's `openfl test macos -DUNIT_TESTS`
-	 * suite uses (haxelib tink_testrunner, `BasicReporter`). Dispatched
-	 * from `parseTestSummary` once `looksLikeTinkTranscript` flags the
-	 * shape; `lines` is already ANSI-stripped.
-	 *
-	 * Line shape recognition (tink_testrunner 0.9.x `BasicReporter`):
-	 *  - `SuiteName: [file:line]` (0-indent) — suite header; tracked for
-	 *    `firstFailure.className`.
-	 *  - `  case description: [file:line] ` (2-indent) — case header;
-	 *    tracked for `firstFailure.testName`. A case with no failed/
-	 *    thrown assertion counts toward `tests` (the passing-case tally)
-	 *    once the NEXT header or the summary line closes it.
-	 *  - `    - [OK] [file:line] desc` / `    - [FAIL] [file:line] desc`
-	 *    (4-indent, dashed) — one assertion; `desc` is the caller-supplied
-	 *    assertion label (same for pass/fail, NOT the failure reason).
-	 *  - `        <message>` (8-indent, no dash) following a `[FAIL]` row
-	 *    — that assertion's actual failure detail (`Failure(msg)`'s
-	 *    `msg`); captured as `firstFailure.message` when it's the first.
-	 *  - `    - <message>` (4-indent, dashed, NO `[...]` brackets) — a
-	 *    case-level throw with no assertion row at all
-	 *    (`CaseResultType.Failed(e)`). Buckets as an ERROR, matching
-	 *    `BatchResult.summary()`'s own classification (`AssertionFailed`
-	 *    -> failures, everything else, incl. `CaseFailed`/`SuiteFailed`
-	 *    -> errors).
-	 *  - `N Assertions   N Success   N Failure   N Error` (0-indent) —
-	 *    final summary; authoritative when present (overrides the
-	 *    per-row tally, which is otherwise a decent estimate for a
-	 *    transcript truncated before the summary block was written).
-	 *
-	 * Only the FIRST failing/thrown row sets `firstFailure` — subsequent
-	 * ones only bump counters (same contract as the utest path).
-	 */
-	private static function parseTinkTestSummary(lines: Array<String>): TestSummaryResult {
-		final assertRe: EReg = ~/^\s*-\s*\[(OK|FAIL)\]\s*\[([^\]]+)\]\s*(.*)$/;
-		final suiteRe: EReg = ~/^([A-Za-z_]\w*(?:\.\w+)*):\s*\[([^\]]+)\]\s*$/;
-		final caseRe: EReg = ~/^  ([^\s\[][^\[]*?):\s*\[([^\]]+)\]\s*.*$/;
-		final caseFailRe: EReg = ~/^ {4}-\s+(.+)$/; // noqa: magic-number
-		final summaryRe: EReg = ~/^(\d+)\s+Assertions?\s+(\d+)\s+Success\s+(\d+)\s+Failures?\s+(\d+)\s+Errors?\s*$/;
-		final locRe: EReg = ~/^(.*):(\d+)$/;
-		// The FAILED-assertion detail row: `println(indent(failure, 8))`
-		// in BasicReporter — 8-space indent, no leading dash, no
-		// `[...]` brackets (that shape is the assertion row itself,
-		// already consumed by `assertRe` before this ever runs). The
-		// 8-space floor is exact enough to stay clear of the 4-indent
-		// assertion/case-throw rows and the 2-indent case header.
-		final detailRe: EReg = ~/^\s{8,}(\S.*)$/; // noqa: magic-number
-		var assertions: Int = 0;
-		var failures: Int = 0;
-		var errors: Int = 0;
-		var currentClass: String = '';
-		var currentCase: String = '';
-		var caseFailed: Bool = false;
-		var caseHasAssertion: Bool = false;
-		var passingCases: Int = 0;
-		var firstFailure: Null<TestSummaryFailureLocus> = null;
-		var awaitingDetail: Bool = false;
-		inline function closeCase(): Void {
-			if (caseHasAssertion && !caseFailed) passingCases++;
-			caseFailed = false;
-			caseHasAssertion = false;
+	private static function applyOracleAssistedFixes(
+		files: Array<{ file: String, source: String }>, oracleChecks: Array<Check>, plugin: GrammarPlugin, oracleHxml: Null<String>,
+		oracleDir: Null<String>, optsByFile: Map<String, Null<String>>, changedFiles: Array<String>, resolveConfig: (String) -> LintConfig
+	): { tail: String, appliedCount: Int } {
+		if (oracleChecks.length == 0) return { tail: '', appliedCount: 0 };
+		if (oracleHxml == null) return {
+			tail: ', ${oracleChecks.length} oracle-assisted rule(s) left report-only (no compilerOracle configured)',
+			appliedCount: 0
+		};
+		switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
+			case Confirmed:
+			case Unavailable(reason):
+				return { tail: ', oracle-assisted skipped (oracle unavailable: $reason)', appliedCount: 0 };
+			case Rejected(_):
+				return { tail: ', oracle-assisted skipped (oracle baseline does not typecheck)', appliedCount: 0 };
 		}
-		for (line in lines) {
-			if (awaitingDetail) {
-				awaitingDetail = false;
-				final locus: Null<TestSummaryFailureLocus> = firstFailure;
-				if (locus != null && detailRe.match(line)) {
-					locus.message = StringTools.trim(detailRe.matched(1));
-					continue;
-				}
-				// Not a detail row (assertion held with no failure detail
-				// printed, or the next row arrived immediately) — fall
-				// through and classify this line normally.
+		final display: Null<CompilerDisplayOracle> = CompilerDisplayOracle.start(oracleHxml, oracleDir);
+		if (display == null) return { tail: ', oracle-assisted skipped (display server unavailable)', appliedCount: 0 };
+		for (check in oracleChecks) if (check is ConfigAware) (cast check: ConfigAware).setConfigResolver(resolveConfig);
+		final candidates: Array<{ file: String, before: String, after: String }> = [];
+		// One WHOLE-SET run per check, findings grouped per file — the same scope contract
+		// as `FixVerifier.verify` and the safe loop's `fullScopeIds`: a per-file run
+		// starves any cross-file resolution the check's gates or classifiers lean on.
+		final findingsByCheck: Array<{ check: Check, all: Array<Violation> }> = [
+			for (check in oracleChecks) { check: check, all: check.run(files, plugin).filter(v -> v.rule == check.id()) }
+		];
+		for (entry in files) {
+			final allEdits: Array<{ span: Span, text: String }> = [];
+			for (byCheck in findingsByCheck) {
+				final own: Array<Violation> = byCheck.all.filter(v -> v.file == entry.file);
+				if (own.length == 0) continue;
+				for (e in (cast byCheck.check: OracleAssisted).fixWithOracle(entry.source, own, plugin, display)) allEdits.push(e);
 			}
-			if (assertRe.match(line)) {
-				caseHasAssertion = true;
-				assertions++;
-				final failed: Bool = assertRe.matched(1) == 'FAIL';
-				final locRaw: String = assertRe.matched(2);
-				final locLine: Int = locRe.match(locRaw) ? parsePositiveInt(locRe.matched(2)) : -1;
-				if (failed) {
-					failures++;
-					caseFailed = true;
-					if (firstFailure == null) {
-						firstFailure = {
-							className: currentClass,
-							testName: currentCase,
-							line: locLine,
-							message: StringTools.trim(assertRe.matched(3)),
-							kind: TestSummaryFailureKind.Fail
-						};
-						awaitingDetail = true;
-					}
-				}
-			} else if (summaryRe.match(line)) {
-				closeCase();
-				currentClass = '';
-				currentCase = '';
-				assertions = parsePositiveInt(summaryRe.matched(1));
-				failures = parsePositiveInt(summaryRe.matched(3));
-				errors = parsePositiveInt(summaryRe.matched(4));
-			} else if (suiteRe.match(line)) {
-				closeCase();
-				currentClass = suiteRe.matched(1);
-				currentCase = '';
-			} else if (caseRe.match(line)) {
-				closeCase();
-				currentCase = StringTools.trim(caseRe.matched(1));
-			} else if (caseFailRe.match(line)) {
-				errors++;
-				caseFailed = true;
-				if (firstFailure == null) firstFailure = {
-					className: currentClass,
-					testName: currentCase,
-					line: -1,
-					message: StringTools.trim(caseFailRe.matched(1)),
-					kind: TestSummaryFailureKind.Error
-				};
+			if (allEdits.length == 0) continue;
+			switch RefactorSupport.canonicalize(entry.source, allEdits, false, plugin, optsByFile[entry.file]) {
+				case Ok(text) if (text != entry.source):
+					candidates.push({ file: entry.file, before: entry.source, after: text });
+				case _:
 			}
-			// Anything else (compile noise, plain trace() lines, blank
-			// separators) is not part of the reporter's own output shape
-			// — ignored, same as utest's fallthrough.
 		}
-		closeCase();
+		display.stop();
+		if (candidates.length == 0) return { tail: ', oracle-assisted: 0 applied', appliedCount: 0 };
+		final result: { applied: Array<String>, reverted: Array<String> } = verifyOracleBatch(candidates, oracleHxml, oracleDir);
+		for (f in result.applied) if (!changedFiles.contains(f)) changedFiles.push(f);
 		return {
-			tests: passingCases,
-			assertions: assertions,
-			failures: failures,
-			errors: errors,
-			firstFailure: firstFailure
+			tail: ', oracle-assisted: ${result.applied.length} applied, ${result.reverted.length} reverted to report-only',
+			appliedCount: result.applied.length
 		};
 	}
 
+	/**
+	 * Write every candidate's annotated source, then typecheck FRESH and REVERT any file
+	 * the compiler blames — retrying until the build is clean, unattributable, or a pass
+	 * budget is spent. A file whose annotation breaks the build is restored to `before`
+	 * (report-only); the rest are kept. Batch-then-error-guided-revert keeps the verify
+	 * to a FEW full compiles instead of one per file — the throughput the per-file spec
+	 * degrades to at scale (a local's annotation errors in its OWN file, so the compiler
+	 * names the culprits precisely). A pass-budget or unverifiable outcome reverts ALL
+	 * remaining, never keeping an unverified edit.
+	 */
+	private static function verifyOracleBatch(
+		candidates: Array<{ file: String, before: String, after: String }>, oracleHxml: String, oracleDir: Null<String>
+	): { applied: Array<String>, reverted: Array<String> } {
+		for (c in candidates) writeFile(c.file, c.after);
+		final reverted: Array<String> = [];
+		var confirmed: Bool = false;
+		var pass: Int = 0;
+		final maxPasses: Int = 6;
+		while (pass < maxPasses && !confirmed) {
+			pass++;
+			switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
+				case Confirmed:
+					confirmed = true;
+				case Unavailable(_):
+					revertRemaining(candidates, reverted);
+					break;
+				case Rejected(errors):
+					final culprits: Array<String> = oracleErrorFiles(errors, candidates, reverted);
+					if (culprits.length == 0) {
+						revertRemaining(candidates, reverted);
+						break;
+					}
+					for (f in culprits) {
+						for (c in candidates) if (c.file == f) writeFile(c.file, c.before);
+						reverted.push(f);
+					}
+			}
+		}
+		if (!confirmed) revertRemaining(candidates, reverted);
+		final applied: Array<String> = [for (c in candidates) if (!reverted.contains(c.file)) c.file];
+		return { applied: applied, reverted: reverted };
+	}
+
+	/** Candidate files (not already reverted) the compiler error text blames — a local's bad annotation errors in its own file, so the error's `path:` names the culprit. */
+	private static function oracleErrorFiles(
+		errors: String, candidates: Array<{ file: String, before: String, after: String }>, reverted: Array<String>
+	): Array<String> {
+		final out: Array<String> = [];
+		for (c in candidates) if (!reverted.contains(c.file) && !out.contains(c.file) && errorMentionsFile(errors, c.file))
+			out.push(c.file);
+		return out;
+	}
+
+	/** Whether any error line's leading `path:` token equals `full`, IS its basename, or ends with `/<basename>`. */
+	private static function errorMentionsFile(errors: String, full: String): Bool {
+		final base: String = haxe.io.Path.withoutDirectory(full);
+		for (line in errors.split('\n')) {
+			final colon: Int = line.indexOf(':');
+			if (colon <= 0) continue;
+			final path: String = StringTools.trim(line.substring(0, colon));
+			if (path == full || path == base || path.endsWith('/$base')) return true;
+		}
+		return false;
+	}
+
+	/** Restore every not-yet-reverted candidate to its pre-annotation bytes and mark it reverted. */
+	private static function revertRemaining(
+		candidates: Array<{ file: String, before: String, after: String }>, reverted: Array<String>
+	): Void {
+		for (c in candidates) if (!reverted.contains(c.file)) {
+			writeFile(c.file, c.before);
+			reverted.push(c.file);
+		}
+	}
+
+	#if (sys || nodejs)
 	/**
 	 * Pure parser over a utest OR tink_testrunner stdout transcript.
 	 * Exposed for unit tests so the structured result (counts +
@@ -12927,6 +12905,174 @@ final class Cli {
 	}
 
 	/**
+	 * Strips ANSI SGR color escapes (`ESC [ <params> m`) from `s`. Both
+	 * transcript formats this parser reads (utest, tink_testrunner) are
+	 * commonly captured with color on (tink's `AnsiFormatter` wraps every
+	 * status token — `[OK]`/`[FAIL]`, positions, the summary line — in
+	 * `ESC[<n>m ... ESC[39m`); stripping first keeps every downstream
+	 * regex a plain-text match instead of threading ANSI-tolerant
+	 * patterns through both parsers. Built from `String.fromCharCode(27)`
+	 * rather than a `\x1b` literal so the escape byte is unambiguous
+	 * across targets.
+	 */
+	private static function stripAnsi(s: String): String {
+		final esc: String = String.fromCharCode(27); // noqa: magic-number
+		final re: EReg = new EReg('$esc\\[[0-9;]*m', 'g');
+		return re.replace(s, '');
+	}
+
+	/**
+	 * Format sniff for `parseTestSummary`: does `lines` look like a
+	 * tink_testrunner transcript rather than utest? Checked via either of
+	 * tink's two unambiguous, ANSI-independent markers — an assertion row
+	 * (`- [OK] [...]` / `- [FAIL] [...]`) or the final summary block
+	 * (`N Assertions   N Success   N Failure   N Error`). Neither shape
+	 * occurs in a utest transcript (utest's own summary line and
+	 * per-test rows use `testName: OK/FAIL/ERROR`, no `[OK]`/`[FAIL]`
+	 * bracket token and no `Assertions   ... Success` block).
+	 */
+	private static function looksLikeTinkTranscript(lines: Array<String>): Bool {
+		final assertRe: EReg = ~/^\s*-\s*\[(OK|FAIL)\]\s*\[[^\]]+\]/;
+		final summaryRe: EReg = ~/^\d+\s+Assertions?\s+\d+\s+Success\s+\d+\s+Failures?\s+\d+\s+Errors?\s*$/;
+		for (line in lines) if (assertRe.match(line) || summaryRe.match(line)) return true;
+		return false;
+	}
+
+	/**
+	 * Pure parser over a tink_testrunner (tink_unittest) stdout
+	 * transcript — the reporter TM's `openfl test macos -DUNIT_TESTS`
+	 * suite uses (haxelib tink_testrunner, `BasicReporter`). Dispatched
+	 * from `parseTestSummary` once `looksLikeTinkTranscript` flags the
+	 * shape; `lines` is already ANSI-stripped.
+	 *
+	 * Line shape recognition (tink_testrunner 0.9.x `BasicReporter`):
+	 *  - `SuiteName: [file:line]` (0-indent) — suite header; tracked for
+	 *    `firstFailure.className`.
+	 *  - `  case description: [file:line] ` (2-indent) — case header;
+	 *    tracked for `firstFailure.testName`. A case with no failed/
+	 *    thrown assertion counts toward `tests` (the passing-case tally)
+	 *    once the NEXT header or the summary line closes it.
+	 *  - `    - [OK] [file:line] desc` / `    - [FAIL] [file:line] desc`
+	 *    (4-indent, dashed) — one assertion; `desc` is the caller-supplied
+	 *    assertion label (same for pass/fail, NOT the failure reason).
+	 *  - `        <message>` (8-indent, no dash) following a `[FAIL]` row
+	 *    — that assertion's actual failure detail (`Failure(msg)`'s
+	 *    `msg`); captured as `firstFailure.message` when it's the first.
+	 *  - `    - <message>` (4-indent, dashed, NO `[...]` brackets) — a
+	 *    case-level throw with no assertion row at all
+	 *    (`CaseResultType.Failed(e)`). Buckets as an ERROR, matching
+	 *    `BatchResult.summary()`'s own classification (`AssertionFailed`
+	 *    -> failures, everything else, incl. `CaseFailed`/`SuiteFailed`
+	 *    -> errors).
+	 *  - `N Assertions   N Success   N Failure   N Error` (0-indent) —
+	 *    final summary; authoritative when present (overrides the
+	 *    per-row tally, which is otherwise a decent estimate for a
+	 *    transcript truncated before the summary block was written).
+	 *
+	 * Only the FIRST failing/thrown row sets `firstFailure` — subsequent
+	 * ones only bump counters (same contract as the utest path).
+	 */
+	private static function parseTinkTestSummary(lines: Array<String>): TestSummaryResult {
+		final assertRe: EReg = ~/^\s*-\s*\[(OK|FAIL)\]\s*\[([^\]]+)\]\s*(.*)$/;
+		final suiteRe: EReg = ~/^([A-Za-z_]\w*(?:\.\w+)*):\s*\[([^\]]+)\]\s*$/;
+		final caseRe: EReg = ~/^  ([^\s\[][^\[]*?):\s*\[([^\]]+)\]\s*.*$/;
+		final caseFailRe: EReg = ~/^ {4}-\s+(.+)$/; // noqa: magic-number
+		final summaryRe: EReg = ~/^(\d+)\s+Assertions?\s+(\d+)\s+Success\s+(\d+)\s+Failures?\s+(\d+)\s+Errors?\s*$/;
+		final locRe: EReg = ~/^(.*):(\d+)$/;
+		// The FAILED-assertion detail row: `println(indent(failure, 8))`
+		// in BasicReporter — 8-space indent, no leading dash, no
+		// `[...]` brackets (that shape is the assertion row itself,
+		// already consumed by `assertRe` before this ever runs). The
+		// 8-space floor is exact enough to stay clear of the 4-indent
+		// assertion/case-throw rows and the 2-indent case header.
+		final detailRe: EReg = ~/^\s{8,}(\S.*)$/; // noqa: magic-number
+		var assertions: Int = 0;
+		var failures: Int = 0;
+		var errors: Int = 0;
+		var currentClass: String = '';
+		var currentCase: String = '';
+		var caseFailed: Bool = false;
+		var caseHasAssertion: Bool = false;
+		var passingCases: Int = 0;
+		var firstFailure: Null<TestSummaryFailureLocus> = null;
+		var awaitingDetail: Bool = false;
+		inline function closeCase(): Void {
+			if (caseHasAssertion && !caseFailed) passingCases++;
+			caseFailed = false;
+			caseHasAssertion = false;
+		}
+		for (line in lines) {
+			if (awaitingDetail) {
+				awaitingDetail = false;
+				final locus: Null<TestSummaryFailureLocus> = firstFailure;
+				if (locus != null && detailRe.match(line)) {
+					locus.message = detailRe.matched(1).trim();
+					continue;
+				}
+				// Not a detail row (assertion held with no failure detail
+				// printed, or the next row arrived immediately) — fall
+				// through and classify this line normally.
+			}
+			if (assertRe.match(line)) {
+				caseHasAssertion = true;
+				assertions++;
+				final failed: Bool = assertRe.matched(1) == 'FAIL';
+				final locRaw: String = assertRe.matched(2);
+				final locLine: Int = locRe.match(locRaw) ? parsePositiveInt(locRe.matched(2)) : -1;
+				if (failed) {
+					failures++;
+					caseFailed = true;
+					if (firstFailure == null) {
+						firstFailure = {
+							className: currentClass,
+							testName: currentCase,
+							line: locLine,
+							message: assertRe.matched(3).trim(),
+							kind: TestSummaryFailureKind.Fail
+						};
+						awaitingDetail = true;
+					}
+				}
+			} else if (summaryRe.match(line)) {
+				closeCase();
+				currentClass = '';
+				currentCase = '';
+				assertions = parsePositiveInt(summaryRe.matched(1));
+				failures = parsePositiveInt(summaryRe.matched(3));
+				errors = parsePositiveInt(summaryRe.matched(4));
+			} else if (suiteRe.match(line)) {
+				closeCase();
+				currentClass = suiteRe.matched(1);
+				currentCase = '';
+			} else if (caseRe.match(line)) {
+				closeCase();
+				currentCase = caseRe.matched(1).trim();
+			} else if (caseFailRe.match(line)) {
+				errors++;
+				caseFailed = true;
+				if (firstFailure == null) firstFailure = {
+					className: currentClass,
+					testName: currentCase,
+					line: -1,
+					message: caseFailRe.matched(1).trim(),
+					kind: TestSummaryFailureKind.Error
+				};
+			}
+			// Anything else (compile noise, plain trace() lines, blank
+			// separators) is not part of the reporter's own output shape
+			// — ignored, same as utest's fallthrough.
+		}
+		closeCase();
+		return {
+			tests: passingCases,
+			assertions: assertions,
+			failures: failures,
+			errors: errors,
+			firstFailure: firstFailure
+		};
+	}
+
+	/**
 	 * `apq recon` — corpus skip-parse drill harness. Walks a directory
 	 * looking for source files (`.hxtest` fixtures auto-extract section
 	 * 2), tries each via the plugin's trivia parser, and clusters the
@@ -12973,18 +13119,18 @@ final class Cli {
 			return EXIT_RUNTIME;
 		}
 		final candidatesRegex: Null<String> = o.candidatesRegex;
-		return o.regressionProbe
-			? runReconRegressionProbe(plugin, rootFinal)
-			: candidatesRegex != null
-				? runReconCandidates(plugin, rootFinal, candidatesRegex)
-				: o.permissiveConstruct
-					? runReconPermissive(plugin, rootFinal, o.lang)
-					: o.predictRelax
-						? runReconSweepRelax(plugin, rootFinal, o.clusterFilter, o.noTargetClusterFilter, o.showSource)
-						: runReconSweep(
-							plugin, rootFinal, o.topN, o.clusterFilter, o.predictStrip, o.patterns, o.replacements, o.compiledRegex,
-							o.showSource
-						);
+		return if (o.regressionProbe)
+			runReconRegressionProbe(plugin, rootFinal)
+		else if (candidatesRegex != null)
+			runReconCandidates(plugin, rootFinal, candidatesRegex)
+		else if (o.permissiveConstruct)
+			runReconPermissive(plugin, rootFinal, o.lang)
+		else if (o.predictRelax)
+			runReconSweepRelax(plugin, rootFinal, o.clusterFilter, o.noTargetClusterFilter, o.showSource)
+		else
+			runReconSweep(
+				plugin, rootFinal, o.topN, o.clusterFilter, o.predictStrip, o.patterns, o.replacements, o.compiledRegex, o.showSource
+			);
 	}
 
 	/**
@@ -13193,7 +13339,8 @@ final class Cli {
 			case StillFail:
 				final movedHint: String = movedLocusHint(res.origLine, res.origCol, res.newLine, res.newCol);
 				sysPrint(
-					'PREDICT RELAX STILL FAIL $path :: ${res.newLine}:${res.newCol}${movedHint} after inserting "${res.injected}" — ${res.message}\n'
+					'PREDICT RELAX STILL FAIL $path :: ${res.newLine}:${res.newCol}$movedHint after inserting "${res.injected}" — '
+					+ '${res.message}\n'
 				);
 				if (showSource && res.newLine > 0) printReconSourceWindow(res.patched, res.newLine);
 				return EXIT_RUNTIME;
@@ -13218,7 +13365,7 @@ final class Cli {
 	 * caller's parse retry will surface bogus-injection as STILL FAIL.
 	 */
 	private static function stripExpectedHint(hint: String): String {
-		final t: String = StringTools.trim(hint);
+		final t: String = hint.trim();
 		if (t.length == 0) return t;
 		// `"<x>"` or `'<x>'` form.
 		if (t.length >= 2) {
@@ -13264,14 +13411,15 @@ final class Cli {
 		var totalHits: Int = 0;
 		for (r in walk.records) {
 			final n: Int = countRegexHits(re, r.source);
-			if (!(n > 0)) continue;
+			if (n <= 0) continue;
 			hits.push({ path: r.path, count: n });
 			totalHits += n;
 		}
 		hits.sort((a, b) -> b.count - a.count);
 		for (h in hits) sysPrint('${h.path} :: ${h.count} match${h.count == 1 ? '' : 'es'}\n');
 		sysPrint(
-			'--- candidates: ${hits.length} file${plural(hits.length)} matched ($totalHits total hit${plural(totalHits)} across ${walk.records.length} skip-parse file${plural(walk.records.length)}) ---\n'
+			'--- candidates: ${hits.length} file${plural(hits.length)} matched ($totalHits total hit${plural(totalHits)} across '
+			+ '${walk.records.length} skip-parse file${plural(walk.records.length)}) ---\n'
 		);
 		return hits.length == 0 ? EXIT_RUNTIME : EXIT_OK;
 	}
@@ -13314,12 +13462,14 @@ final class Cli {
 		final candidates: Array<PermissiveCandidate> = collectPermissiveCandidates(plugin, lang);
 		if (candidates.length == 0) {
 			stderr(
-				'apq recon: --permissive-construct: no mandatory-ref-lead-trail candidates found in src/anyparse/grammar/$lang/ (cross-check with `apq gates --mechanism mandatory-ref-lead-trail`)\n'
+				'apq recon: --permissive-construct: no mandatory-ref-lead-trail candidates found in src/anyparse/grammar/$lang'
+				+ '/ (cross-check with `apq gates --mechanism mandatory-ref-lead-trail`)\n'
 			);
 			return EXIT_RUNTIME;
 		}
 		sysPrint(
-			'=== permissive-construct: ${candidates.length} candidate${plural(candidates.length)} from gates --mechanism mandatory-ref-lead-trail, ${records.length} skip-parse fixture${plural(records.length)} ===\n'
+			'=== permissive-construct: ${candidates.length} candidate${plural(candidates.length)}'
+			+ ' from gates --mechanism mandatory-ref-lead-trail, ${records.length} skip-parse fixture${plural(records.length)} ===\n'
 		);
 		var totalUnblocks: Int = 0;
 		var candidatesWithSignal: Int = 0;
@@ -13355,7 +13505,9 @@ final class Cli {
 			for (p in stillFails) sysPrint('    STILL FAIL: $p\n');
 		}
 		sysPrint(
-			'\n--- permissive-construct summary: $candidatesWithSignal of ${candidates.length} candidate${plural(candidates.length)} have ≥1 UNBLOCK or STILL FAIL ($totalUnblocks UNBLOCK${plural(totalUnblocks)} total) across ${records.length} skip-parse files ---\n'
+			'\n--- permissive-construct summary: $candidatesWithSignal of ${candidates.length} candidate${plural(candidates.length)}'
+			+ ' have ≥1 UNBLOCK or STILL FAIL ($totalUnblocks UNBLOCK${plural(totalUnblocks)} total) across ${records.length}'
+			+ ' skip-parse files ---\n'
 		);
 		if (noSignalLabels.length > 0) {
 			sysPrint('--- NO MATCH only (${noSignalLabels.length} candidate${plural(noSignalLabels.length)} with no fixture match) ---\n');
@@ -13415,8 +13567,8 @@ final class Cli {
 	 */
 	private static function stripBalancedPairs(source: String, lead: String, trail: String): StripResult {
 		if (lead.length != 1 || trail.length != 1) return { out: source, count: 0 };
-		final leadCode: Int = StringTools.fastCodeAt(lead, 0);
-		final trailCode: Int = StringTools.fastCodeAt(trail, 0);
+		final leadCode: Int = lead.fastCodeAt(0);
+		final trailCode: Int = trail.fastCodeAt(0);
 		final isSymmetric: Bool = isBracketOpener(leadCode);
 		final buf: StringBuf = new StringBuf();
 		var i: Int = 0;
@@ -13428,7 +13580,7 @@ final class Cli {
 				i = triviaEnd;
 				continue;
 			}
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c == leadCode) {
 				final endIdx: Int = findPairEnd(source, i + 1, leadCode, trailCode, isSymmetric);
 				if (endIdx >= 0) {
@@ -13461,7 +13613,7 @@ final class Cli {
 				i = triviaEnd;
 				continue;
 			}
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (isSymmetric) {
 				if (c == leadCode) {
 					depth++;
@@ -13511,37 +13663,35 @@ final class Cli {
 	 */
 	private static function skipStringOrComment(source: String, i: Int): Int {
 		if (i >= source.length) return i;
-		final c: Int = StringTools.fastCodeAt(source, i);
+		final c: Int = source.fastCodeAt(i);
 		if (c == '/'.code && i + 1 < source.length) {
-			final c2: Int = StringTools.fastCodeAt(source, i + 1);
+			final c2: Int = source.fastCodeAt(i + 1);
 			if (c2 == '/'.code) {
 				var j: Int = i + 2;
-				while (j < source.length && StringTools.fastCodeAt(source, j) != '\n'.code) j++;
+				while (j < source.length && source.fastCodeAt(j) != '\n'.code) j++;
 				return j;
 			}
 			if (c2 == '*'.code) {
 				var j: Int = i + 2;
 				while (j + 1 < source.length) {
-					if (StringTools.fastCodeAt(source, j) == '*'.code && StringTools.fastCodeAt(source, j + 1) == '/'.code) return j + 2;
+					if (source.fastCodeAt(j) == '*'.code && source.fastCodeAt(j + 1) == '/'.code) return j + 2;
 					j++;
 				}
 				return source.length;
 			}
 		}
-		if (c == '"'.code || c == "'".code) {
-			var j: Int = i + 1;
-			while (j < source.length) {
-				final cj: Int = StringTools.fastCodeAt(source, j);
-				if (cj == '\\'.code) {
-					j += 2;
-					continue;
-				}
-				if (cj == c) return j + 1;
-				j++;
+		if (c != '"'.code && c != "'".code) return i;
+		var j: Int = i + 1;
+		while (j < source.length) {
+			final cj: Int = source.fastCodeAt(j);
+			if (cj == '\\'.code) {
+				j += 2;
+				continue;
 			}
-			return source.length;
+			if (cj == c) return j + 1;
+			j++;
 		}
-		return i;
+		return source.length;
 	}
 
 	/**
@@ -13573,14 +13723,16 @@ final class Cli {
 		final snapshotPath: String = 'bin/.last-sweep.json';
 		if (!FileSystem.exists(snapshotPath)) {
 			sysPrint(
-				'apq recon: no prior sweep snapshot at $snapshotPath — run `node bin/test.js` under $$ANYPARSE_HXFORMAT_FORK first to seed the baseline\n'
+				'apq recon: no prior sweep snapshot at $snapshotPath'
+				+ ' — run `node bin/test.js` under $$ANYPARSE_HXFORMAT_FORK first to seed the baseline\n'
 			);
 			return EXIT_OK;
 		}
 		final prior: Map<String, String> = loadSweepFixtureStatus(snapshotPath);
 		if (prior.iterator().hasNext() == false) {
 			sysPrint(
-				'apq recon: snapshot at $snapshotPath has no `fixtures` array — older format, re-run `node bin/test.js` to refresh the baseline\n'
+				'apq recon: snapshot at $snapshotPath'
+				+ ' has no `fixtures` array — older format, re-run `node bin/test.js` to refresh the baseline\n'
 			);
 			return EXIT_OK;
 		}
@@ -13708,7 +13860,7 @@ final class Cli {
 		// to `WRITER PASS` via the probe, not a spurious off-by-newline
 		// mismatch. Raw `.hx` inputs skip the strip — the user supplied
 		// expected bytes verbatim.
-		final hxtestMode: Bool = expectedPathOpt == null && StringTools.endsWith(inputPath, '.hxtest');
+		final hxtestMode: Bool = expectedPathOpt == null && inputPath.endsWith('.hxtest');
 		final expectedSource: String = if (expectedPathOpt != null) {
 			readExpectedForCompare((expectedPathOpt: String));
 		} else if (hxtestMode) {
@@ -13732,8 +13884,7 @@ final class Cli {
 			return EXIT_USAGE;
 		}
 		final emitted: String = (emittedRaw: String);
-		final emittedNormalised: String = hxtestMode && emitted.length > 0
-			&& StringTools.fastCodeAt(emitted, emitted.length - 1) == '\n'.code
+		final emittedNormalised: String = hxtestMode && emitted.length > 0 && emitted.fastCodeAt(emitted.length - 1) == '\n'.code
 			? emitted.substr(0, emitted.length - 1)
 			: emitted;
 		if (emittedNormalised == expectedSource) {
@@ -13770,9 +13921,7 @@ final class Cli {
 			final hits: Int = regexMode ? countRegexHits(regexes[idx], stripped) : countOccurrences(stripped, patterns[idx]);
 			patternHits[idx] = hits;
 			fileHits += hits;
-			stripped = regexMode
-				? regexes[idx].replace(stripped, replacements[idx])
-				: StringTools.replace(stripped, patterns[idx], replacements[idx]);
+			stripped = regexMode ? regexes[idx].replace(stripped, replacements[idx]) : stripped.replace(patterns[idx], replacements[idx]);
 		}
 		var exitCode: Int = EXIT_OK;
 		if (fileHits == 0) {
@@ -13803,11 +13952,9 @@ final class Cli {
 		}
 		var anyZero: Bool = false;
 		for (h in patternHits) if (h == 0) anyZero = true;
-		if (anyZero) {
-			stderr('apq recon: --predict-strip --probe: WARNING: one or more patterns matched 0 occurrences — see per-pattern totals\n');
-			return EXIT_RUNTIME;
-		}
-		return exitCode;
+		if (!anyZero) return exitCode;
+		stderr('apq recon: --predict-strip --probe: WARNING: one or more patterns matched 0 occurrences — see per-pattern totals\n');
+		return EXIT_RUNTIME;
 	}
 
 	private static function runReconSweep(
@@ -13886,7 +14033,7 @@ final class Cli {
 					stack.push(path);
 					continue;
 				}
-				if (!StringTools.endsWith(name, '.hxtest')) continue;
+				if (!name.endsWith('.hxtest')) continue;
 				final source: String = readSourceForParse(path);
 				try {
 					if (!plugin.reconParse(source)) {
@@ -13975,7 +14122,8 @@ final class Cli {
 		final byPath: Map<String, ReconRecord> = [for (r in records) r.path => r];
 		sysPrint('\n');
 		sysPrint(
-			'--- cluster drill for "$needle" (${entries.length} cluster${plural(entries.length)}, $matched of $totalAcrossSweep skip-parse paths) ---\n'
+			'--- cluster drill for "$needle" (${entries.length} cluster${plural(entries.length)}, $matched of $totalAcrossSweep'
+			+ ' skip-parse paths) ---\n'
 		);
 		for (entry in entries) {
 			final c: ReconCluster = entry.cluster;
@@ -14058,11 +14206,13 @@ final class Cli {
 		if (newLine == origLine && newCol == origCol) return '';
 		final forward: Bool = newLine > origLine || (newLine == origLine && newCol > origCol);
 		final backward: Bool = newLine < origLine || (newLine == origLine && newCol < origCol);
-		return forward && newLine != origLine
-			? ' (was $origLine:$origCol, advanced)'
-			: backward
-				? ' (was $origLine:$origCol, moved BACKWARD — strip may have damaged earlier syntax or modelled the wrong mechanism; verify with `apq probe`)'
-				: ' (was $origLine:$origCol)';
+		return if (forward && newLine != origLine)
+			' (was $origLine:$origCol, advanced)'
+		else if (backward)
+			' (was $origLine:$origCol'
+				+ ', moved BACKWARD — strip may have damaged earlier syntax or modelled the wrong mechanism; verify with `apq probe`)'
+		else
+			' (was $origLine:$origCol)';
 	}
 
 	/**
@@ -14104,7 +14254,7 @@ final class Cli {
 				fileHits += hits;
 				stripped = regexMode
 					? regexes[idx].replace(stripped, replacements[idx])
-					: StringTools.replace(stripped, patterns[idx], replacements[idx]);
+					: stripped.replace(patterns[idx], replacements[idx]);
 			}
 			if (fileHits == 0) {
 				sysPrint('PREDICT NO MATCH  ${r.path}\n');
@@ -14155,13 +14305,11 @@ final class Cli {
 		// 0 case is the guard.
 		var anyZero: Bool = false;
 		for (h in patternHits) if (h == 0) anyZero = true;
-		if (anyZero) {
-			stderr(
-				'apq recon: --predict-strip: WARNING: one or more patterns matched 0 occurrences anywhere in the filtered set — see per-pattern totals\n'
-			);
-			return EXIT_RUNTIME;
-		}
-		return EXIT_OK;
+		if (!anyZero) return EXIT_OK;
+		stderr(
+			'apq recon: --predict-strip: WARNING: one or more patterns matched 0 occurrences anywhere in the filtered set — see per-pattern totals\n'
+		);
+		return EXIT_RUNTIME;
 	}
 
 	private static function defaultReconRoot(): String {
@@ -14222,7 +14370,8 @@ final class Cli {
 			final binTime: Float = FileSystem.stat(binPath).mtime.getTime();
 			if (anyHxNewerThan('src', binTime) || anyHxNewerThan('test', binTime)) {
 				stderr(
-					'apq $cmd: WARNING: src/ or test/ is newer than bin/test.js — re-run `haxe test-js.hxml && node bin/test.js` before trusting these totals\n'
+					'apq $cmd'
+					+ ': WARNING: src/ or test/ is newer than bin/test.js — re-run `haxe test-js.hxml && node bin/test.js` before trusting these totals\n'
 				);
 			}
 		} catch (_: Exception) {
@@ -14264,7 +14413,7 @@ final class Cli {
 		if (path == null || !FileSystem.exists(path)) return null;
 		try {
 			final raw: String = sys.io.File.getContent(path);
-			final trimmed: String = StringTools.trim(raw);
+			final trimmed: String = raw.trim();
 			return trimmed.length > 0 ? trimmed : null;
 		} catch (_: Exception) {
 			return null;
@@ -14296,7 +14445,12 @@ final class Cli {
 	}
 
 	private static function stripRootPrefix(path: String, root: String): String {
-		return StringTools.startsWith(path, '$root/') ? path.substr(root.length + 1) : path == root ? '.' : path;
+		return if (path.startsWith('$root/'))
+			path.substr(root.length + 1)
+		else if (path == root)
+			'.'
+		else
+			path;
 	}
 
 	private static function addReconCluster(map: Map<String, ReconCluster>, key: String, file: String, rawLocus: String): Void {
@@ -14338,12 +14492,12 @@ final class Cli {
 		final buf: StringBuf = new StringBuf();
 		var i: Int = 0;
 		while (i < raw.length) {
-			final c: Int = StringTools.fastCodeAt(raw, i);
+			final c: Int = raw.fastCodeAt(i);
 			final isIdStart: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code;
 			if (isIdStart) {
 				var j: Int = i + 1;
 				while (j < raw.length) {
-					final cj: Int = StringTools.fastCodeAt(raw, j);
+					final cj: Int = raw.fastCodeAt(j);
 					final isIdCont: Bool = (cj >= 'a'.code && cj <= 'z'.code) || (cj >= 'A'.code && cj <= 'Z'.code)
 						|| (cj >= '0'.code && cj <= '9'.code) || cj == '_'.code;
 					if (!isIdCont) break;
@@ -14353,7 +14507,7 @@ final class Cli {
 				if (identLen > 4) // noqa: magic-number
 					buf.add('_');
 				else
-					for (k in i ... j) buf.addChar(StringTools.fastCodeAt(raw, k));
+					for (k in i ... j) buf.addChar(raw.fastCodeAt(k));
 				i = j;
 			} else {
 				buf.addChar(c);
@@ -14448,7 +14602,8 @@ final class Cli {
 		warnIfTestJsStale('sweep');
 		final total: Int = cur.pass + cur.fail + cur.skipParse + cur.skipWrite + cur.skipConfig + cur.skipMalformed;
 		sysPrint(
-			'${cur.pass} pass / ${cur.fail} fail / ${cur.skipParse} skip-parse / ${cur.skipWrite} skip-write / ${cur.skipConfig} skip-config / ${cur.skipMalformed} malformed (total $total)\n'
+			'${cur.pass} pass / ${cur.fail} fail / ${cur.skipParse} skip-parse / ${cur.skipWrite} skip-write / ${cur.skipConfig}'
+			+ ' skip-config / ${cur.skipMalformed} malformed (total $total)\n'
 		);
 		if (prevPath != null) {
 			final prev: Null<SweepTotals> = loadSweepJson(prevPath);
@@ -14457,7 +14612,8 @@ final class Cli {
 				return EXIT_RUNTIME;
 			}
 			sysPrint(
-				'  Δpass ${sweepSigned(cur.pass - prev.pass)} / Δfail ${sweepSigned(cur.fail - prev.fail)} / Δskip-parse ${sweepSigned(cur.skipParse - prev.skipParse)}  vs $prevPath (${prev.pass} / ${prev.fail} / ${prev.skipParse})\n'
+				'  Δpass ${sweepSigned(cur.pass - prev.pass)} / Δfail ${sweepSigned(cur.fail - prev.fail)} / Δskip-parse '
+				+ '${sweepSigned(cur.skipParse - prev.skipParse)}  vs $prevPath (${prev.pass} / ${prev.fail} / ${prev.skipParse})\n'
 			);
 		}
 		if (savePath != null) {
@@ -14488,7 +14644,8 @@ final class Cli {
 		final prev: Map<String, String> = loadSweepFixtureStatus(prevPath);
 		if (!cur.iterator().hasNext()) {
 			stderr(
-				'apq sweep: --diff: $curPath has no `fixtures` array — re-run `node bin/test.js` under $$ANYPARSE_HXFORMAT_FORK to seed it\n'
+				'apq sweep: --diff: $curPath'
+				+ ' has no `fixtures` array — re-run `node bin/test.js` under $$ANYPARSE_HXFORMAT_FORK to seed it\n'
 			);
 			return EXIT_RUNTIME;
 		}
@@ -14624,20 +14781,14 @@ final class Cli {
 		}
 		final raw: String = try {
 			switch (sourcePath) {
-				case null: {
-					if (sys.FileSystem.exists('/tmp/test.out'))
-						sys.io.File.getContent('/tmp/test.out');
-					else {
-						stderr('apq test-summary: no source given and /tmp/test.out missing — pass <path> or `-` for stdin\n');
-						return EXIT_USAGE;
-					}
+				case null: if (sys.FileSystem.exists('/tmp/test.out'))
+					sys.io.File.getContent('/tmp/test.out');
+				else {
+					stderr('apq test-summary: no source given and /tmp/test.out missing — pass <path> or `-` for stdin\n');
+					return EXIT_USAGE;
 				}
-				case '-': {
-					readStdin();
-				}
-				case _: {
-					sys.io.File.getContent((sourcePath: String));
-				}
+				case '-': readStdin();
+				case _: sys.io.File.getContent((sourcePath: String));
 			}
 		} catch (e: Exception) {
 			stderr('apq test-summary: read failed: ${e.message}\n');
@@ -14689,7 +14840,7 @@ final class Cli {
 		for (line in walk.skipLines) sysPrint('$line\n');
 		final total: Int = walk.parseable + walk.skipParse;
 		sysPrint('--- self-status: ${walk.parseable} parseable, ${walk.skipParse} skip-parse (total $total) ---\n');
-		return (opts.strict && walk.skipParse > 0) ? EXIT_RUNTIME : EXIT_OK;
+		return opts.strict && walk.skipParse > 0 ? EXIT_RUNTIME : EXIT_OK;
 	}
 
 	private static function printSelfStatusUsage(): Void {
@@ -14760,10 +14911,9 @@ final class Cli {
 		// `--select` / `--at` resolve a NODE's span to its line range (these
 		// parse the file — unlike the raw, parse-free `--range` / whole-file
 		// path, which still works on a skip-parse file).
-		final bounds: Null<{ from: Int, to: Int }> = if (opts.selectExpr != null || opts.atSpec != null)
-			resolveNodeLineBounds(path, content, opts.lang, opts.selectExpr, opts.atSpec);
-		else
-			parseRangeSpec(opts.range, lines.length);
+		final bounds: Null<{ from: Int, to: Int }> = opts.selectExpr != null || opts.atSpec != null
+			? resolveNodeLineBounds(path, content, opts.lang, opts.selectExpr, opts.atSpec)
+			: parseRangeSpec(opts.range, lines.length);
 		if (bounds == null) {
 			if (opts.selectExpr != null || opts.atSpec != null) return EXIT_RUNTIME;
 			stderr('apq source: bad --range "${opts.range}" (use L, L:L2, L:, or :L2 — 1-based)\n');
@@ -14838,19 +14988,17 @@ final class Cli {
 		// NOT look like an indented test row (contain `: OK|FAIL|ERR`).
 		if (full.match(line)) {
 			locus.line = parsePositiveInt(full.matched(2));
-			locus.message = StringTools.trim(full.matched(3)); // noqa: magic-number
+			locus.message = full.matched(3).trim(); // noqa: magic-number
 			return true;
 		}
 		if (lineOnly.match(line)) {
 			locus.line = parsePositiveInt(lineOnly.matched(1));
-			locus.message = StringTools.trim(lineOnly.matched(2));
+			locus.message = lineOnly.matched(2).trim();
 			return true;
 		}
-		if (bare.match(line) && !~/:\s+(OK|FAIL|ERR)/.match(line)) {
-			locus.message = StringTools.trim(bare.matched(1));
-			return true;
-		}
-		return false;
+		if (!bare.match(line) || ~/:\s+(OK|FAIL|ERR)/.match(line)) return false;
+		locus.message = bare.matched(1).trim();
+		return true;
 	}
 
 	private static inline function parsePositiveInt(s: String): Int {
@@ -14876,147 +15024,6 @@ final class Cli {
 		sysPrint('the authoritative pass/fail signal.\n');
 	}
 	#end
-
-
-	/**
-	 * The OracleAssisted tail of `--fix`: for each oracle-assisted check (only
-	 * `explicit-local-type` today), ask a warm Haxe display server for the compiler's
-	 * inferred type of every finding the structural arm left, annotate it, then WRITE
-	 * the edited files and VERIFY the project still typechecks with a FRESH
-	 * `CompilerOracle.typecheck` — reverting any file the compiler rejects (the
-	 * report-only fallback). Runs ONLY when a `compilerOracle` is configured and the
-	 * baseline typechecks (so a failure is attributable to our annotation); otherwise a
-	 * note and zero edits, byte-identical to a run without the key. The display server is
-	 * queried READ-ONLY (files unchanged since the warm) — verification is a fresh
-	 * process because the server's mtime cache is stale within the same second (see
-	 * `CompilerDisplayOracle`). Split from `applyLintFixes` for the complexity budget.
-	 */
-	private static function applyOracleAssistedFixes(
-		files: Array<{ file: String, source: String }>, oracleChecks: Array<Check>, plugin: GrammarPlugin, oracleHxml: Null<String>,
-		oracleDir: Null<String>, optsByFile: Map<String, Null<String>>, changedFiles: Array<String>, resolveConfig: (String) -> LintConfig
-	): { tail: String, appliedCount: Int } {
-		if (oracleChecks.length == 0) return { tail: '', appliedCount: 0 };
-		if (oracleHxml == null) return {
-			tail: ', ${oracleChecks.length} oracle-assisted rule(s) left report-only (no compilerOracle configured)',
-			appliedCount: 0
-		};
-		switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
-			case Confirmed:
-			case Unavailable(reason):
-				return { tail: ', oracle-assisted skipped (oracle unavailable: $reason)', appliedCount: 0 };
-			case Rejected(_):
-				return { tail: ', oracle-assisted skipped (oracle baseline does not typecheck)', appliedCount: 0 };
-		}
-		final display: Null<CompilerDisplayOracle> = CompilerDisplayOracle.start(oracleHxml, oracleDir);
-		if (display == null) return { tail: ', oracle-assisted skipped (display server unavailable)', appliedCount: 0 };
-		for (check in oracleChecks) if (check is ConfigAware) (cast check: ConfigAware).setConfigResolver(resolveConfig);
-		final candidates: Array<{ file: String, before: String, after: String }> = [];
-		// One WHOLE-SET run per check, findings grouped per file — the same scope contract
-		// as `FixVerifier.verify` and the safe loop's `fullScopeIds`: a per-file run
-		// starves any cross-file resolution the check's gates or classifiers lean on.
-		final findingsByCheck: Array<{ check: Check, all: Array<Violation> }> = [
-			for (check in oracleChecks) { check: check, all: check.run(files, plugin).filter(v -> v.rule == check.id()) }
-		];
-		for (entry in files) {
-			final allEdits: Array<{ span: Span, text: String }> = [];
-			for (byCheck in findingsByCheck) {
-				final own: Array<Violation> = byCheck.all.filter(v -> v.file == entry.file);
-				if (own.length == 0) continue;
-				for (e in (cast byCheck.check: OracleAssisted).fixWithOracle(entry.source, own, plugin, display)) allEdits.push(e);
-			}
-			if (allEdits.length == 0) continue;
-			switch RefactorSupport.canonicalize(entry.source, allEdits, false, plugin, optsByFile[entry.file]) {
-				case Ok(text) if (text != entry.source):
-					candidates.push({ file: entry.file, before: entry.source, after: text });
-				case _:
-			}
-		}
-		display.stop();
-		if (candidates.length == 0) return { tail: ', oracle-assisted: 0 applied', appliedCount: 0 };
-		final result: { applied: Array<String>, reverted: Array<String> } = verifyOracleBatch(candidates, oracleHxml, oracleDir);
-		for (f in result.applied) if (!changedFiles.contains(f)) changedFiles.push(f);
-		return {
-			tail: ', oracle-assisted: ${result.applied.length} applied, ${result.reverted.length} reverted to report-only',
-			appliedCount: result.applied.length
-		};
-	}
-
-	/**
-	 * Write every candidate's annotated source, then typecheck FRESH and REVERT any file
-	 * the compiler blames — retrying until the build is clean, unattributable, or a pass
-	 * budget is spent. A file whose annotation breaks the build is restored to `before`
-	 * (report-only); the rest are kept. Batch-then-error-guided-revert keeps the verify
-	 * to a FEW full compiles instead of one per file — the throughput the per-file spec
-	 * degrades to at scale (a local's annotation errors in its OWN file, so the compiler
-	 * names the culprits precisely). A pass-budget or unverifiable outcome reverts ALL
-	 * remaining, never keeping an unverified edit.
-	 */
-	private static function verifyOracleBatch(
-		candidates: Array<{ file: String, before: String, after: String }>, oracleHxml: String, oracleDir: Null<String>
-	): { applied: Array<String>, reverted: Array<String> } {
-		for (c in candidates) writeFile(c.file, c.after);
-		final reverted: Array<String> = [];
-		var confirmed: Bool = false;
-		var pass: Int = 0;
-		final maxPasses: Int = 6;
-		while (pass < maxPasses && !confirmed) {
-			pass++;
-			switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
-				case Confirmed:
-					confirmed = true;
-				case Unavailable(_):
-					revertRemaining(candidates, reverted);
-					break;
-				case Rejected(errors):
-					final culprits: Array<String> = oracleErrorFiles(errors, candidates, reverted);
-					if (culprits.length == 0) {
-						revertRemaining(candidates, reverted);
-						break;
-					}
-					for (f in culprits) {
-						for (c in candidates) if (c.file == f) writeFile(c.file, c.before);
-						reverted.push(f);
-					}
-			}
-		}
-		if (!confirmed) revertRemaining(candidates, reverted);
-		final applied: Array<String> = [for (c in candidates) if (!reverted.contains(c.file)) c.file];
-		return { applied: applied, reverted: reverted };
-	}
-
-	/** Candidate files (not already reverted) the compiler error text blames — a local's bad annotation errors in its own file, so the error's `path:` names the culprit. */
-	private static function oracleErrorFiles(
-		errors: String, candidates: Array<{ file: String, before: String, after: String }>, reverted: Array<String>
-	): Array<String> {
-		final out: Array<String> = [];
-		for (c in candidates) {
-			if (reverted.contains(c.file) || out.contains(c.file)) continue;
-			if (errorMentionsFile(errors, c.file)) out.push(c.file);
-		}
-		return out;
-	}
-
-	/** Whether any error line's leading `path:` token equals `full`, IS its basename, or ends with `/<basename>`. */
-	private static function errorMentionsFile(errors: String, full: String): Bool {
-		final base: String = haxe.io.Path.withoutDirectory(full);
-		for (line in errors.split('\n')) {
-			final colon: Int = line.indexOf(':');
-			if (colon <= 0) continue;
-			final path: String = StringTools.trim(line.substring(0, colon));
-			if (path == full || path == base || StringTools.endsWith(path, '/$base')) return true;
-		}
-		return false;
-	}
-
-	/** Restore every not-yet-reverted candidate to its pre-annotation bytes and mark it reverted. */
-	private static function revertRemaining(
-		candidates: Array<{ file: String, before: String, after: String }>, reverted: Array<String>
-	): Void {
-		for (c in candidates) if (!reverted.contains(c.file)) {
-			writeFile(c.file, c.before);
-			reverted.push(c.file);
-		}
-	}
 
 }
 

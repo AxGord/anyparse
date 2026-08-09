@@ -5,6 +5,8 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
+
 /**
  * Outcome of a `ChangeSig.changeSig` call. `Ok` carries the
  * format-preserving rewritten source plus an optional advisory (a
@@ -136,10 +138,9 @@ final class ChangeSig {
 		// silent misorder.
 		for (call in callSites) {
 			final argc: Int = call.children.length - 1;
-			if (argc != n) {
-				final at: String = CallSites.posOf(source, call.span);
-				return Err('call at $at has $argc args, expected $n — change-sig cannot reorder calls with omitted optional arguments');
-			}
+			if (argc == n) continue;
+			final at: String = CallSites.posOf(source, call.span);
+			return Err('call at $at has $argc args, expected $n — change-sig cannot reorder calls with omitted optional arguments');
 		}
 
 		// Build the slot-swap edits. Each new slot `i` is overwritten with
@@ -163,7 +164,8 @@ final class ChangeSig {
 			return Err('rewritten source does not parse: ${exception.message}');
 
 		final advisory: Null<String> = isMethod
-			? 'updated the declaration and ${callSites.length} in-file call site(s); if "$name" is called from other files, update those call sites too — cross-file resolution is out of scope'
+			? 'updated the declaration and ${callSites.length} in-file call site(s); if "$name'
+				+ '" is called from other files, update those call sites too — cross-file resolution is out of scope'
 			: null;
 		return Ok(rewritten, advisory);
 	}
@@ -200,7 +202,7 @@ final class ChangeSig {
 		final order: Array<Int> = [];
 		final seen: Array<Int> = [];
 		for (part in parts) {
-			final trimmed: String = StringTools.trim(part);
+			final trimmed: String = part.trim();
 			final idx: Null<Int> = RefactorSupport.parseStrictInt(trimmed);
 			if (idx == null) return PErr('permutation "$perm" contains a non-integer index "$trimmed"');
 			final value: Int = idx;

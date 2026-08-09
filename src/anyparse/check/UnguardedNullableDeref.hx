@@ -3,7 +3,6 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.NullableSource.NullableSourceCfg;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -70,7 +69,7 @@ final class UnguardedNullableDeref implements Check {
 		if (soleChildKinds.length == 0 && firstChildKinds.length == 0) return [];
 		final cfg: Null<NullableSourceCfg> = NullableSource.build(shape, shape.nullableFlowExcludedCalls ?? []);
 		if (cfg == null) return [];
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		if (provider == null) return [];
 		final typed: TypeInfoProvider = provider;
 		final cfgValue: NullableSourceCfg = cfg;

@@ -88,8 +88,8 @@ class PreferNullCoalescingCheckTest extends Test {
 		// A for-loop iterator over a custom hasNext/next iterator is an unbound monomorph
 		// (inference-open); under an active @:nullSafety the ?? rewrite would flip the
 		// fallback field's inferred constraint to Null<…> and break later uses — skipped.
-		final src: String = '@:nullSafety class C {\n\tfunction f(it:Iter):Void {\n\t\tfinal m:Map<String, Int> = [];\n\t\tfor (row in it) {\n'
-			+ '\t\t\tvar v = m.get(row.a != null ? row.a : row.b);\n\t\t}\n\t}\n}';
+		final src: String = '@:nullSafety class C {\n\tfunction f(it:Iter):Void {\n\t\tfinal m:Map<String, Int> = [];\n'
+			+ '\t\tfor (row in it) {\n\t\t\tvar v = m.get(row.a != null ? row.a : row.b);\n\t\t}\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 

@@ -113,12 +113,12 @@ class RemoveMemberSliceTest extends Test {
 	}
 
 	/** An unknown type is refused. */
-	public function testTypeNotFound(): Void {
+	public inline function testTypeNotFound(): Void {
 		assertErr('class C {\n\tvar x:Int;\n}\n', 'Nope', 'x');
 	}
 
 	/** An unknown member is refused. */
-	public function testMemberNotFound(): Void {
+	public inline function testMemberNotFound(): Void {
 		assertErr('class C {\n\tvar x:Int;\n}\n', 'C', 'nope');
 	}
 
@@ -127,7 +127,7 @@ class RemoveMemberSliceTest extends Test {
 	 * enclosing class. Matching it deleted the field out of the annotation and left
 	 * `cfg:{}` — a silent Ok that no longer type-checks.
 	 */
-	public function testAnonStructureFieldInMemberTypeIsRefused(): Void {
+	public inline function testAnonStructureFieldInMemberTypeIsRefused(): Void {
 		assertErr('class C {\n\tvar cfg:{ var inner:Int; } = { inner: 1 };\n}\n', 'C', 'inner');
 	}
 
@@ -141,9 +141,9 @@ class RemoveMemberSliceTest extends Test {
 
 	/** The round-2 repro: a doc'd `victim` whose text carries `marker`, followed by a doc'd `neighbor`. */
 	private function docFixture(marker: String): String {
-		return 'class A {\n\n\t/**\n\t * Whether the gap holds $marker comment opener.\n\t */\n'
-			+ '\tprivate function victim():Bool {\n\t\treturn true;\n\t}\n\n' + "\t/**\n\t * The next member's own doc.\n\t */\n"
-			+ '\tprivate function neighbor():Bool {\n\t\treturn false;\n\t}\n\n}\n';
+		return 'class A {\n\n\t/**\n\t * Whether the gap holds $marker comment opener.\n\t */\n\tprivate function victim():Bool {\n'
+			+ '\t\treturn true;\n\t}\n\n\t/**\n\t * The next member\'s own doc.\n\t */\n\tprivate function neighbor():Bool {\n'
+			+ '\t\treturn false;\n\t}\n\n}\n';
 	}
 
 	/** Every block-comment opener in `text` is matched by a closer — the orphan-doc signature. */

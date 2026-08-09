@@ -244,7 +244,7 @@ class HxStringSliceTest extends HxTestHelpers {
 	 * Round-trip the real-world shape that blocked self-parse:
 	 * `'$'` alone and `'$'.code` (Pattern.hx:97 / Matcher.hx:83).
 	 */
-	public function testSingleLoneDollarRoundTrip(): Void {
+	public inline function testSingleLoneDollarRoundTrip(): Void {
 		roundTrip("class C { var x:String = '$'; var y:Int = '$'.code; }");
 	}
 

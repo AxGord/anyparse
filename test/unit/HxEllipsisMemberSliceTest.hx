@@ -39,11 +39,11 @@ class HxEllipsisMemberSliceTest extends HxTestHelpers {
 		Assert.equals(2, module.decls.length);
 	}
 
-	public function testEllipsisMemberWriterEquals(): Void {
+	public inline function testEllipsisMemberWriterEquals(): Void {
 		writerEquals('class A {\n\t...\n}\n\nclass B {\n\t...\n}', 'class A {\n\t...\n}\n\nclass B {\n\t...\n}\n');
 	}
 
-	public function testEllipsisMemberRoundTrip(): Void {
+	public inline function testEllipsisMemberRoundTrip(): Void {
 		roundTrip('class A {\n\t...\n}\n\nclass B {\n\t...\n}');
 	}
 

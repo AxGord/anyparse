@@ -4,10 +4,8 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
-import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -121,6 +119,34 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 
 	private static inline final RULE_ID: String = 'avoid-dynamic';
 
+	// ---- DynamicAccess bag arm (D4) ----
+
+	/**
+	 * Reflect operations that form a string-keyed BAG, each mapping to a `DynamicAccess`
+	 * map operation: `setField` -> `bag[k] = v`, `field` -> `bag[k]`, `hasField` ->
+	 * `bag.exists(k)`, `deleteField` -> `bag.remove(k)`, `fields` -> `bag.keys()`. Any
+	 * OTHER reflect call (`getProperty` / `callMethod` / …) is not plain string-keyed
+	 * storage, so it is NOT a bag op and DISQUALIFIES the declaration.
+	 */
+	private static final BAG_METHODS: Array<String> = ['setField', 'field', 'hasField', 'deleteField', 'fields'];
+
+	/** Max inferred-type text length before an oracle-named anon struct is rejected as over-verbose (mirrors explicit-local-type). */
+	private static inline final BAG_MAX_ANON: Int = 80;
+
+	/**
+	 * Child index of the stored VALUE in a `setField` call: child 3 in a direct
+	 * `Reflect.setField(bag, key, value)` (callee, bag, key, value), child 2 in a `using`
+	 * extension `bag.setField(key, value)` (callee, key, value).
+	 */
+	private static inline final DIRECT_VALUE_INDEX: Int = 3;
+
+	private static inline final USING_VALUE_INDEX: Int = 2;
+
+	/** Child index of the KEY: child 2 (direct `Reflect.<m>(bag, key)`) / child 1 (`using` extension `bag.<m>(key)`). */
+	private static inline final DIRECT_KEY_INDEX: Int = 2;
+
+	private static inline final USING_KEY_INDEX: Int = 1;
+
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
@@ -154,7 +180,7 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 			final boundaryCalls: Array<String> = cfg.stringListOption(RULE_ID, 'boundaryCalls') ?? DEFAULT_BOUNDARY_CALLS;
 			final found: Array<Violation> = [];
 			walk(found, entry.file, entry.source, tree, null, false, ctx, excludeMeta, boundaryCalls);
-			final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+			final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 			final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(entry.source) : [];
 			final imports: Map<String, String> = provider != null ? provider.importMap(entry.source) : [];
 			annotateBags(found, entry.source, tree, shape, ctx, dynName, declaredTypes, imports, hasUsingReflect(tree));
@@ -176,7 +202,7 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		final dynName: Null<String> = shape.rawDynamicTypeName;
 		final tree: Null<QueryNode> = dynName == null ? null : CheckScan.parseOrNull(plugin, source);
 		if (dynName == null || tree == null) return [];
-		final declaredTypes: Map<Int, String> = (plugin is TypeInfoProvider) ? (cast plugin: TypeInfoProvider).declaredTypes(source) : [];
+		final declaredTypes: Map<Int, String> = plugin is TypeInfoProvider ? (cast plugin: TypeInfoProvider).declaredTypes(source) : [];
 		// The inferred type must resolve to a provably plain nominal — resolved against the
 		// caller's cross-file index (FixVerifier), or this file alone when invoked directly.
 		final symbols: SymbolIndex = index ?? SymbolIndex.build([{ file: '', source: source }], plugin);
@@ -190,6 +216,24 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 			if (narrowed != null) edits.push({ span: span, text: narrowed });
 		}
 		return edits;
+	}
+
+	/**
+	 * The DynamicAccess bag rewrites for the whole-type `Dynamic` LOCAL / private plain
+	 * FIELD violations among `violations` whose EVERY use is a string-keyed reflect op and
+	 * whose written values unify to a single real type `T`: the declaration `Dynamic` ->
+	 * `DynamicAccess<T>` (+ an `import haxe.DynamicAccess;`), and every reflect op -> map
+	 * syntax. `OracleAssisted`: a value whose type the structural pass cannot pin is asked of
+	 * `oracle` (the display server), so the inference TAIL (`g.value` field reads, `.map()`
+	 * results) is reachable; without an oracle only the structural values resolve. A verdict
+	 * of `Typeless` (values are themselves `Dynamic`), `Heterogeneous` (mixed real types), or
+	 * `Undetermined` (an unresolved value) yields NO edit — report-only. Public fields /
+	 * properties / params / returns / type-arguments are never edited (the blast-radius gate).
+	 */
+	public function fixWithOracle(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, oracle: TypeOracle
+	): Array<{ span: Span, text: String }> {
+		return bagEdits(source, violations, plugin, oracle);
 	}
 
 	/**
@@ -423,11 +467,9 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 			final ty: Null<String> = TypeResolver.identTypeName(expr, root, shape, declaredTypes);
 			return ty != null && acceptableType(ty, dynName) ? ty : null;
 		}
-		if (shape.newExprKind != null && expr.kind == shape.newExprKind) {
-			final nm: Null<String> = TypeResolver.simpleNominalName(expr.name);
-			return nm != null && acceptableType(nm, dynName) ? nm : null;
-		}
-		return null;
+		if (shape.newExprKind == null || expr.kind != shape.newExprKind) return null;
+		final nm: Null<String> = TypeResolver.simpleNominalName(expr.name);
+		return nm != null && acceptableType(nm, dynName) ? nm : null;
 	}
 
 	/**
@@ -699,11 +741,9 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 			if (nm != null) base.push(nm);
 			return base;
 		}
-		if (callee.kind == ctx.identKind) {
-			final nm: Null<String> = callee.name;
-			return nm != null ? [nm] : [];
-		}
-		return [];
+		if (callee.kind != ctx.identKind) return [];
+		final nm: Null<String> = callee.name;
+		return nm != null ? [nm] : [];
 	}
 
 	/** Whether `file`'s path contains any of the configured exclusion substrings. */
@@ -718,7 +758,7 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		for (v in found) {
 			final span: Null<Span> = v.span;
 			final key: String = span == null ? '' : '${span.from}:${span.to}';
-			if (!(span == null || !seen.exists(key))) continue;
+			if (span != null && seen.exists(key)) continue;
 			seen[key] = true;
 			into.push(v);
 		}
@@ -746,39 +786,6 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		};
 	}
 
-
-	// ---- DynamicAccess bag arm (D4) ----
-
-	/**
-	 * Reflect operations that form a string-keyed BAG, each mapping to a `DynamicAccess`
-	 * map operation: `setField` -> `bag[k] = v`, `field` -> `bag[k]`, `hasField` ->
-	 * `bag.exists(k)`, `deleteField` -> `bag.remove(k)`, `fields` -> `bag.keys()`. Any
-	 * OTHER reflect call (`getProperty` / `callMethod` / …) is not plain string-keyed
-	 * storage, so it is NOT a bag op and DISQUALIFIES the declaration.
-	 */
-	private static final BAG_METHODS: Array<String> = ['setField', 'field', 'hasField', 'deleteField', 'fields'];
-
-	/** Max inferred-type text length before an oracle-named anon struct is rejected as over-verbose (mirrors explicit-local-type). */
-	private static inline final BAG_MAX_ANON: Int = 80;
-
-	/**
-	 * The DynamicAccess bag rewrites for the whole-type `Dynamic` LOCAL / private plain
-	 * FIELD violations among `violations` whose EVERY use is a string-keyed reflect op and
-	 * whose written values unify to a single real type `T`: the declaration `Dynamic` ->
-	 * `DynamicAccess<T>` (+ an `import haxe.DynamicAccess;`), and every reflect op -> map
-	 * syntax. `OracleAssisted`: a value whose type the structural pass cannot pin is asked of
-	 * `oracle` (the display server), so the inference TAIL (`g.value` field reads, `.map()`
-	 * results) is reachable; without an oracle only the structural values resolve. A verdict
-	 * of `Typeless` (values are themselves `Dynamic`), `Heterogeneous` (mixed real types), or
-	 * `Undetermined` (an unresolved value) yields NO edit — report-only. Public fields /
-	 * properties / params / returns / type-arguments are never edited (the blast-radius gate).
-	 */
-	public function fixWithOracle(
-		source: String, violations: Array<Violation>, plugin: GrammarPlugin, oracle: TypeOracle
-	): Array<{ span: Span, text: String }> {
-		return bagEdits(source, violations, plugin, oracle);
-	}
-
 	/** The DynamicAccess bag edits for `violations`; `oracle` (optional) resolves the value-type inference tail. */
 	private static function bagEdits(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?oracle: TypeOracle
@@ -788,7 +795,7 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		final tree: Null<QueryNode> = dynName == null ? null : CheckScan.parseOrNull(plugin, source);
 		if (dynName == null || tree == null) return [];
 		final ctx: DynCtx = buildCtx(shape, dynName);
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
 		final imports: Map<String, String> = provider != null ? provider.importMap(source) : [];
 		final usingReflect: Bool = hasUsingReflect(tree);
@@ -833,8 +840,7 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		final field: Null<QueryNode> = wholeDynamicDecl(tree, source, span, shape, dynName, ctx.fieldKinds);
 		if (field == null) return null;
 		final fs: Null<Span> = field.span;
-		if (fs == null || isProperty(source, fs, span) || isPublicMember(tree, field, ctx)) return null;
-		return field;
+		return fs == null || isProperty(source, fs, span) || isPublicMember(tree, field, ctx) ? null : field;
 	}
 
 	/** Whether the member `field` (span `fs`, Dynamic token at `dynSpan`) is a property — a `(` accessor clause between the name and the type `:`. */
@@ -1073,10 +1079,16 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 			}
 			if (!types.contains(ty)) types.push(ty);
 		}
-		if (hasDynamic) return Typeless;
-		if (types.length >= 2) return Heterogeneous;
-		if (hasUnresolved) return Undetermined;
-		return types.length == 1 ? Real(types[0]) : Undetermined;
+		return if (hasDynamic)
+			Typeless
+		else if (types.length >= 2)
+			Heterogeneous
+		else if (hasUnresolved)
+			Undetermined
+		else if (types.length == 1)
+			Real(types[0])
+		else
+			Undetermined;
 	}
 
 	/** The structural named type of a written bag value: a literal, a typed identifier, or a `new T(…)`; null when unresolved. */
@@ -1084,10 +1096,14 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		w: QueryNode, tree: QueryNode, shape: RefShape, dynName: String, declaredTypes: Map<Int, String>
 	): Null<String> {
 		final literalTypes: Map<String, String> = shape.literalTypeNames ?? [];
-		if (literalTypes.exists(w.kind)) return literalTypes[w.kind];
-		if (w.kind == shape.identKind) return TypeResolver.identTypeName(w, tree, shape, declaredTypes);
-		if (shape.newExprKind != null && w.kind == shape.newExprKind) return TypeResolver.simpleNominalName(w.name);
-		return null;
+		return if (literalTypes.exists(w.kind))
+			literalTypes[w.kind]
+		else if (w.kind == shape.identKind)
+			TypeResolver.identTypeName(w, tree, shape, declaredTypes)
+		else if (shape.newExprKind != null && w.kind == shape.newExprKind)
+			TypeResolver.simpleNominalName(w.name)
+		else
+			null;
 	}
 
 	/** The `import haxe.DynamicAccess;` insertion edit, or null when already imported. Mirrors `AddImport`'s site selection. */
@@ -1105,9 +1121,12 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 			case _:
 		}
 		final stmt: String = 'import haxe.DynamicAccess;';
-		if (lastImportTo >= 0) return { span: new Span(lastImportTo, lastImportTo), text: '\n$stmt' };
-		if (packageTo >= 0) return { span: new Span(packageTo, packageTo), text: '\n$stmt' };
-		return { span: new Span(0, 0), text: '$stmt\n' };
+		return if (lastImportTo >= 0)
+			{ span: new Span(lastImportTo, lastImportTo), text: '\n$stmt' }
+		else if (packageTo >= 0)
+			{ span: new Span(packageTo, packageTo), text: '\n$stmt' }
+		else
+			{ span: new Span(0, 0), text: '$stmt\n' };
 	}
 
 	/**
@@ -1145,7 +1164,6 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		};
 	}
 
-
 	/**
 	 * The innermost declaration of one of `kinds` whose OWN whole-type annotation is EXACTLY
 	 * the `Dynamic` token at `span` — the char before it (skipping whitespace) is a `:` and
@@ -1174,7 +1192,6 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		return decl;
 	}
 
-
 	/** Whether the innermost function containing `declFrom` has an explicit `Dynamic` return type — a bag returned there flows out as Dynamic (safe). */
 	private static function enclosingFnReturnsDynamic(
 		tree: QueryNode, declFrom: Int, shape: RefShape, ctx: DynCtx, source: String, dynName: String
@@ -1198,24 +1215,9 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		final fn: Null<QueryNode> = best;
 		if (fn == null) return false;
 		final ret: Null<QueryNode> = returnTypeNode(fn, ctx);
-		final rs: Null<Span> = ret == null ? null : ret.span;
-		return rs != null && StringTools.trim(source.substring(rs.from, rs.to)) == dynName;
+		final rs: Null<Span> = ret?.span;
+		return rs != null && source.substring(rs.from, rs.to).trim() == dynName;
 	}
-
-
-	/**
-	 * Child index of the stored VALUE in a `setField` call: child 3 in a direct
-	 * `Reflect.setField(bag, key, value)` (callee, bag, key, value), child 2 in a `using`
-	 * extension `bag.setField(key, value)` (callee, key, value).
-	 */
-	private static inline final DIRECT_VALUE_INDEX: Int = 3;
-
-	private static inline final USING_VALUE_INDEX: Int = 2;
-
-	/** Child index of the KEY: child 2 (direct `Reflect.<m>(bag, key)`) / child 1 (`using` extension `bag.<m>(key)`). */
-	private static inline final DIRECT_KEY_INDEX: Int = 2;
-
-	private static inline final USING_KEY_INDEX: Int = 1;
 
 	/**
 	 * The bag op when `parent` is a direct `Reflect.<m>(bag, …)` call and `occ` (its arg 1)
@@ -1263,7 +1265,6 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		}
 		return null;
 	}
-
 
 	/** Record `op` and, when it is a `setField`, its stored value (child `valueIndex`) into `acc`. */
 	private static function recordBagOp(op: BagOp, valueIndex: Int, acc: BagUses): Void {

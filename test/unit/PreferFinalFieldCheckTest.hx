@@ -396,8 +396,8 @@ class PreferFinalFieldCheckTest extends Test {
 	 * source both builds see, so a write in ANY branch has to block it.
 	 */
 	public function testConditionalWriteInAnotherBranchBlocks(): Void {
-		final src: String =
-			'class C {\n\t#if cpp\n\tprivate var _x:Int = 0;\n\t#end\n\tpublic function new() {\n\t\t#if !cpp\n\t\t_x = 2;\n\t\t#end\n\t}\n}';
+		final src: String = 'class C {\n\t#if cpp\n\tprivate var _x:Int = 0;\n\t#end\n\tpublic function new() {\n\t\t#if !cpp\n'
+			+ '\t\t_x = 2;\n\t\t#end\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -417,8 +417,9 @@ class PreferFinalFieldCheckTest extends Test {
 	 * still be left alone — the write is not the declaration's and not a sole constructor statement.
 	 */
 	public function testConditionalStaticVarsWrittenInMethodNotFlagged(): Void {
-		final src: String =
-			'class Lang {\n\t#if collectLang\n\tstatic var b_file:Output;\n\tstatic var k_file:Output;\n\t#end\n\n\tpublic static function t():Void {\n\t\t#if collectLang\n\t\tif (b_file == null) b_file = open();\n\t\tif (k_file == null) k_file = open();\n\t\t#end\n\t}\n}';
+		final src: String = 'class Lang {\n\t#if collectLang\n\tstatic var b_file:Output;\n\tstatic var k_file:Output;\n\t#end\n\n'
+			+ '\tpublic static function t():Void {\n\t\t#if collectLang\n\t\tif (b_file == null) b_file = open();\n'
+			+ '\t\tif (k_file == null) k_file = open();\n\t\t#end\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 

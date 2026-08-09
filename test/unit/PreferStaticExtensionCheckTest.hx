@@ -13,7 +13,6 @@ import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.query.CachingGrammarPlugin.LibrarySources;
 
 /**
  * The `prefer-static-extension` check: a static utility call on a configured
@@ -131,8 +130,8 @@ class PreferStaticExtensionCheckTest extends Test {
 	}
 
 	public function testUnresolvedReceiverReportedOnly(): Void {
-		final source: String =
-			'using Ext;\n\nclass C {\n\tfunction make():Widget\n\t\treturn null;\n\n\tfunction f():Void {\n\t\tExt.deco(make(), 1);\n\t}\n}\n';
+		final source: String = 'using Ext;\n\nclass C {\n\tfunction make():Widget\n\t\treturn null;\n\n\tfunction f():Void {\n'
+			+ '\t\tExt.deco(make(), 1);\n\t}\n}\n';
 		final files: Array<{ file: String, source: String }> = fileSet(source);
 		final vs: Array<Violation> = violationsOf(files);
 		Assert.equals(1, vs.length);

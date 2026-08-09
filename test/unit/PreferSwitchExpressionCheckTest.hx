@@ -25,13 +25,12 @@ import anyparse.runtime.Span;
 class PreferSwitchExpressionCheckTest extends Test {
 
 	/** The anonymized constants module the cross-file fixtures resolve against. */
-	private static final CONSTANTS: String = 'class NodeMeta {\n' + "\tpublic static inline final KIND_RECTANGLE_SOLID:String = 'rs';\n"
-		+ "\tpublic static inline final KIND_RECTANGLE_STROKE:String = 'rk';\n"
-		+ "\tpublic static inline final KIND_OVAL_SOLID:String = 'os';\n"
+	private static final CONSTANTS: String = 'class NodeMeta {\n\tpublic static inline final KIND_RECTANGLE_SOLID:String = \'rs\';\n'
+		+ "\tpublic static inline final KIND_RECTANGLE_STROKE:String = 'rk';\n\tpublic static inline final KIND_OVAL_SOLID:String = 'os';\n"
 		+ "\tpublic static inline final KIND_OVAL_STROKE:String = 'ok';\n"
 		+ "\tpublic static inline final KIND_TEXT_NODE_BUBBLE:String = 'tb';\n"
 		+ "\tpublic static inline final KIND_TEXT_NODE_BUBBLE_STROKE:String = 'tk';\n"
-		+ "\tpublic static inline final KIND_TEXT_NODE_BUBBLE_FILL_SHADE:String = 'tf';\n" + '}';
+		+ '\tpublic static inline final KIND_TEXT_NODE_BUBBLE_FILL_SHADE:String = \'tf\';\n}';
 
 	/**
 	 * The cross-file fixture, anonymized from a real ternary chain: two discriminants,
@@ -39,7 +38,7 @@ class PreferSwitchExpressionCheckTest extends Test {
 	 * and a trailing else value.
 	 */
 	private static final TUPLE_CHAIN: String = 'class BoardView {\n\tprivate static function resolveShadeProp(\n'
-		+ '\t\tobj:BoardObject<RecordData>, targetType:String, readCurrent:Bool, newShade:Int = 0\n' + '\t):MoveProperty {\n'
+		+ '\t\tobj:BoardObject<RecordData>, targetType:String, readCurrent:Bool, newShade:Int = 0\n\t):MoveProperty {\n'
 		+ '\t\treturn obj.boardNodeRecord.kind == NodeMeta.KIND_RECTANGLE_SOLID && targetType == NodeMeta.KIND_RECTANGLE_STROKE\n'
 		+ '\t\t\t? EdgeShade(readCurrent ? cast(obj, RectangleNode).edgeShade : newShade)\n'
 		+ '\t\t\t: obj.boardNodeRecord.kind == NodeMeta.KIND_OVAL_SOLID && targetType == NodeMeta.KIND_OVAL_STROKE\n'
@@ -49,7 +48,7 @@ class PreferSwitchExpressionCheckTest extends Test {
 		+ '\t\t\t\t\t: obj.boardNodeRecord.kind == NodeMeta.KIND_TEXT_NODE_BUBBLE\n'
 		+ '\t\t\t\t\t\t&& targetType == NodeMeta.KIND_TEXT_NODE_BUBBLE_FILL_SHADE\n'
 		+ '\t\t\t\t\t\t? AreaShade(readCurrent ? cast(obj, TextNodeBubble).areaShade : newShade)\n'
-		+ '\t\t\t\t\t\t: Shade(readCurrent ? obj.shade : newShade);\n' + '\t}\n' + '}';
+		+ '\t\t\t\t\t\t: Shade(readCurrent ? obj.shade : newShade);\n\t}\n}';
 
 	public function testTernaryChainInReturnFlagged(): Void {
 		final vs: Array<Violation> = violations(wrap('return x == 1 ? a() : x == 2 ? b() : c();'));
@@ -211,8 +210,8 @@ class PreferSwitchExpressionCheckTest extends Test {
 
 	/** A constant declared inside `#if` is branch-dependent while the index is branch-blind. */
 	public function testGuardedConstantNotFlagged(): Void {
-		final consts: String = 'class NodeMeta {\n\t#if js\n' + "\tpublic static inline final ALPHA:String = 'a';\n"
-			+ "\tpublic static inline final BETA:String = 'b';\n" + '\t#end\n' + '}';
+		final consts: String = 'class NodeMeta {\n\t#if js\n\tpublic static inline final ALPHA:String = \'a\';\n'
+			+ '\tpublic static inline final BETA:String = \'b\';\n\t#end\n}';
 		Assert.equals(0, violations(wrap('return k == NodeMeta.ALPHA ? p : k == NodeMeta.BETA ? q : r;'), consts).length);
 	}
 
@@ -244,8 +243,8 @@ class PreferSwitchExpressionCheckTest extends Test {
 	 * it a negative case would pass even if the qualified-static arm never fired at all.
 	 */
 	public function testStaticInlineFinalConstantFlagged(): Void {
-		final consts: String = 'class NodeMeta {\n' + "\tpublic static inline final ALPHA:String = 'a';\n"
-			+ "\tpublic static inline final BETA:String = 'b';\n" + '}';
+		final consts: String =
+			'class NodeMeta {\n\tpublic static inline final ALPHA:String = \'a\';\n\tpublic static inline final BETA:String = \'b\';\n}';
 		Assert.equals(1, violations(wrap('return k == NodeMeta.ALPHA ? p : k == NodeMeta.BETA ? q : r;'), consts).length);
 	}
 

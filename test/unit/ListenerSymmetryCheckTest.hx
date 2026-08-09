@@ -60,7 +60,8 @@ class ListenerSymmetryCheckTest extends Test {
 	public function testNotAdjacentFlaggedOnce(): Void {
 		// A method between the pair -> not adjacent; reported once, on the `add`.
 		final vs: Array<Violation> = violations(
-			'class C {\n\tpublic function addQuxListener():Void {}\n\tpublic function mid():Void {}\n\tpublic function removeQuxListener():Void {}\n}'
+			'class C {\n\tpublic function addQuxListener():Void {}\n\tpublic function mid():Void {}\n'
+			+ '\tpublic function removeQuxListener():Void {}\n}'
 		);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains('next to each other'));

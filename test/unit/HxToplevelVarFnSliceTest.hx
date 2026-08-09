@@ -142,11 +142,11 @@ class HxToplevelVarFnSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testRoundTripFinal(): Void {
+	public inline function testRoundTripFinal(): Void {
 		roundTrip('final FOO:Int = 1;');
 	}
 
-	public function testRoundTripFinalClass(): Void {
+	public inline function testRoundTripFinalClass(): Void {
 		roundTrip('final class Foo {}');
 	}
 
@@ -204,11 +204,11 @@ class HxToplevelVarFnSliceTest extends HxTestHelpers {
 
 	// ======== Round-trip ========
 
-	public function testRoundTripVar(): Void {
+	public inline function testRoundTripVar(): Void {
 		roundTrip('var x:Int = 42;');
 	}
 
-	public function testRoundTripFn(): Void {
+	public inline function testRoundTripFn(): Void {
 		roundTrip('function main() {}');
 	}
 

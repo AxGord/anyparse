@@ -110,8 +110,8 @@ class PreferSwitchCheckTest extends Test {
 	 * `SwitchChain` carries the reproduced miscompiles a structural guard leaked.
 	 */
 	public function testNoTrailingElseNotFlagged(): Void {
-		final consts: String = 'class NodeMeta {\n\tpublic static inline final ALPHA:Int = 0;\n'
-			+ '\tpublic static inline final BETA:Int = 1;\n' + '\tpublic static inline final GAMMA:Int = 2;\n' + '}';
+		final consts: String = 'class NodeMeta {\n\tpublic static inline final ALPHA:Int = 0;\n\tpublic static inline final BETA:Int = 1;\n'
+			+ '\tpublic static inline final GAMMA:Int = 2;\n}';
 		final params: String = wrapWithParams(
 			'stripes:Int',
 			'if (stripes == NodeMeta.ALPHA) p(); else if (stripes == NodeMeta.BETA) q(); else if (stripes == NodeMeta.GAMMA) r();'
@@ -193,8 +193,8 @@ class PreferSwitchCheckTest extends Test {
 	 * module is a valid case pattern, so the chain converts to a switch over it.
 	 */
 	public function testCrossFileConstantChainFlaggedAndFixed(): Void {
-		final consts: String = 'class NodeMeta {\n' + "\tpublic static inline final ALPHA:String = 'a';\n"
-			+ "\tpublic static inline final BETA:String = 'b';\n" + '}';
+		final consts: String =
+			'class NodeMeta {\n\tpublic static inline final ALPHA:String = \'a\';\n\tpublic static inline final BETA:String = \'b\';\n}';
 		final src: String = wrap('if (k == NodeMeta.ALPHA) p(); else if (k == NodeMeta.BETA) q(); else r();');
 		Assert.equals(1, violations(src, consts).length);
 		final fixed: String = fixedSource(src, consts);
@@ -211,8 +211,8 @@ class PreferSwitchCheckTest extends Test {
 
 	/** A constant declared inside `#if` is branch-dependent while the index is branch-blind. */
 	public function testCrossFileGuardedConstantNotFlagged(): Void {
-		final consts: String = 'class NodeMeta {\n\t#if js\n' + "\tpublic static inline final ALPHA:String = 'a';\n"
-			+ "\tpublic static inline final BETA:String = 'b';\n" + '\t#end\n}';
+		final consts: String = 'class NodeMeta {\n\t#if js\n\tpublic static inline final ALPHA:String = \'a\';\n'
+			+ '\tpublic static inline final BETA:String = \'b\';\n\t#end\n}';
 		Assert.equals(0, violations(wrap('if (k == NodeMeta.ALPHA) p(); else if (k == NodeMeta.BETA) q(); else r();'), consts).length);
 	}
 

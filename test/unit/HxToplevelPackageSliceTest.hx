@@ -118,19 +118,19 @@ class HxToplevelPackageSliceTest extends HxTestHelpers {
 		Assert.equals('package foo.bar;\n', out);
 	}
 
-	public function testRoundTripPackageEmpty(): Void {
+	public inline function testRoundTripPackageEmpty(): Void {
 		roundTrip('package;');
 	}
 
-	public function testRoundTripPackageSingleSegment(): Void {
+	public inline function testRoundTripPackageSingleSegment(): Void {
 		roundTrip('package foo;');
 	}
 
-	public function testRoundTripPackageDottedPath(): Void {
+	public inline function testRoundTripPackageDottedPath(): Void {
 		roundTrip('package haxe.io.bytes;');
 	}
 
-	public function testRoundTripPackageThenClass(): Void {
+	public inline function testRoundTripPackageThenClass(): Void {
 		roundTrip('package foo.bar;\nclass C {}');
 	}
 

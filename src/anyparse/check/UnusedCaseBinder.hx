@@ -118,15 +118,16 @@ final class UnusedCaseBinder implements Check {
 			if (tree != null) parsed.push({ file: entry.file, source: entry.source, tree: tree });
 		}
 		final constants: Array<String> = CasePatternScan.declaredConstantNames(resolved, [for (p in parsed) p.tree]);
-		final violations: Array<Violation> = [];
-		for (entry in parsed) for (candidate in collect(resolved, entry.tree, entry.source, constants)) violations.push({
-			file: entry.file,
-			span: candidate.span,
-			rule: RULE_ID,
-			severity: Severity.Warning,
-			message: 'case binder \'${candidate.name}\' is never read; replace it with _'
-		});
-		return violations;
+		return [
+			for (entry in parsed) for (candidate in collect(resolved, entry.tree, entry.source, constants))
+				{
+					file: entry.file,
+					span: candidate.span,
+					rule: RULE_ID,
+					severity: Severity.Warning,
+					message: 'case binder \'${candidate.name}\' is never read; replace it with _'
+				}
+		];
 	}
 
 	/**
@@ -221,8 +222,7 @@ final class UnusedCaseBinder implements Check {
 	 * the strength of its least constrained alternative.
 	 */
 	private static function admissible(group: Array<PatternBinder>, constants: Array<String>, last: Bool, single: Bool): Bool {
-		for (binder in group) {
-			if (!binder.bare) continue;
+		for (binder in group) if (binder.bare) {
 			if (constants.contains(binder.name)) return false;
 			if (binder.whole && !(last && single)) return false;
 		}

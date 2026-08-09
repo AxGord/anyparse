@@ -109,7 +109,9 @@ class HxMetaExprStmtNoSemiSliceTest extends HxTestHelpers {
 
 	public function testCorpusIssue602ReturnMetadata(): Void {
 		final cls: HxClassDecl = HaxeParser.parse(
-			'class Main {\n\tstatic function foobar() {\n\t\tfunction foo() {\n\t\t\treturn bar;\n\t\t}\n\t\t@:nullSafety(Off) return switch thing {\n\t\t\tcase something: null;\n\t\t};\n\t\t@:nullSafety(Off) return switch thing {\n\t\t\tcase something: null;\n\t\t}\n\t}\n}'
+			'class Main {\n\tstatic function foobar() {\n\t\tfunction foo() {\n\t\t\treturn bar;\n\t\t}\n'
+			+ '\t\t@:nullSafety(Off) return switch thing {\n\t\t\tcase something: null;\n\t\t};\n'
+			+ '\t\t@:nullSafety(Off) return switch thing {\n\t\t\tcase something: null;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, cls.members.length);
 	}
@@ -120,7 +122,8 @@ class HxMetaExprStmtNoSemiSliceTest extends HxTestHelpers {
 
 	public function testCorpusIssue567MetadataIfExpression(): Void {
 		final cls: HxClassDecl = HaxeParser.parse(
-			'class Main {\n\tstatic function main() {\n\t\t@:nullSafety(Off) if (foo) {\n\t\t\treturn;\n\t}\n\t\t@:nullSafety(Off)\n\t\tif (foo) {\n\t\t\treturn;\n\t\t}\n\t}\n}'
+			'class Main {\n\tstatic function main() {\n\t\t@:nullSafety(Off) if (foo) {\n\t\t\treturn;\n\t}\n\t\t@:nullSafety(Off)\n'
+			+ '\t\tif (foo) {\n\t\t\treturn;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, cls.members.length);
 	}
@@ -130,16 +133,19 @@ class HxMetaExprStmtNoSemiSliceTest extends HxTestHelpers {
 	// mode emits `;` after the brace; the second write must agree
 	// with the first.
 
-	public function testCorpusIssue602RoundTrip(): Void {
+	public inline function testCorpusIssue602RoundTrip(): Void {
 		roundTrip(
-			'class Main {\n\tstatic function foobar() {\n\t\tfunction foo() {\n\t\t\treturn bar;\n\t\t}\n\t\t@:nullSafety(Off) return switch thing {\n\t\t\tcase something: null;\n\t\t};\n\t\t@:nullSafety(Off) return switch thing {\n\t\t\tcase something: null;\n\t\t}\n\t}\n}',
+			'class Main {\n\tstatic function foobar() {\n\t\tfunction foo() {\n\t\t\treturn bar;\n\t\t}\n'
+			+ '\t\t@:nullSafety(Off) return switch thing {\n\t\t\tcase something: null;\n\t\t};\n'
+			+ '\t\t@:nullSafety(Off) return switch thing {\n\t\t\tcase something: null;\n\t\t}\n\t}\n}',
 			'issue_602_return_metadata'
 		);
 	}
 
-	public function testCorpusIssue567RoundTrip(): Void {
+	public inline function testCorpusIssue567RoundTrip(): Void {
 		roundTrip(
-			'class Main {\n\tstatic function main() {\n\t\t@:nullSafety(Off) if (foo) {\n\t\t\treturn;\n\t}\n\t\t@:nullSafety(Off)\n\t\tif (foo) {\n\t\t\treturn;\n\t\t}\n\t}\n}',
+			'class Main {\n\tstatic function main() {\n\t\t@:nullSafety(Off) if (foo) {\n\t\t\treturn;\n\t}\n\t\t@:nullSafety(Off)\n'
+			+ '\t\tif (foo) {\n\t\t\treturn;\n\t\t}\n\t}\n}',
 			'issue_567_metadata_if_expression'
 		);
 	}

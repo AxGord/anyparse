@@ -7,6 +7,8 @@ import anyparse.query.ExtractSuperclass;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
 
+using StringTools;
+
 /**
  * `ExtractSuperclass.extract` — generate a superclass, pull a chosen set
  * of instance members up into it, and make the class extend it. Each test
@@ -18,39 +20,39 @@ class ExtractSuperclassSliceTest extends Test {
 
 	/** The chosen members land on the new superclass and leave the source; the source extends it. */
 	public function testExtractBasic(): Void {
-		final src: String =
-			'package pkg;\n\nclass Widget {\n\tpublic var id:Int = 0;\n\tpublic function new() {}\n\tpublic function bump():Void { id = id + 1; }\n\tpublic function render():String return \'w\';\n}';
+		final src: String = 'package pkg;\n\nclass Widget {\n\tpublic var id:Int = 0;\n\tpublic function new() {}\n'
+			+ '\tpublic function bump():Void { id = id + 1; }\n\tpublic function render():String return \'w\';\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/Widget.hx', 'Widget', 'Base', 'pkg/Base.hx', ['id', 'bump'], src);
 		Assert.equals(2, changes.length);
 		final base: String = changeFor(changes, 'pkg/Base.hx').newSource;
-		Assert.isTrue(StringTools.contains(base, 'class Base'), 'declares the superclass');
-		Assert.isTrue(StringTools.contains(base, 'var id'), 'field lands on Base');
-		Assert.isTrue(StringTools.contains(base, 'function bump'), 'method lands on Base');
+		Assert.isTrue(base.contains('class Base'), 'declares the superclass');
+		Assert.isTrue(base.contains('var id'), 'field lands on Base');
+		Assert.isTrue(base.contains('function bump'), 'method lands on Base');
 		final newSrc: String = changeFor(changes, 'pkg/Widget.hx').newSource;
-		Assert.isTrue(StringTools.contains(newSrc, 'class Widget extends Base {'), 'class extends Base');
-		Assert.isFalse(StringTools.contains(newSrc, 'function bump'), 'bump left the source');
-		Assert.isTrue(StringTools.contains(newSrc, 'function render'), 'render stays in the source');
+		Assert.isTrue(newSrc.contains('class Widget extends Base {'), 'class extends Base');
+		Assert.isFalse(newSrc.contains('function bump'), 'bump left the source');
+		Assert.isTrue(newSrc.contains('function render'), 'render stays in the source');
 	}
 
 	/** Imports the moved bodies reference are carried into the superclass. */
 	public function testImportCarry(): Void {
-		final src: String =
-			'package pkg;\n\nimport haxe.ds.Option;\n\nclass S {\n\tpublic function new() {}\n\tpublic function pick():Option<Int> return None;\n\tpublic function keep():Void {}\n}';
+		final src: String = 'package pkg;\n\nimport haxe.ds.Option;\n\nclass S {\n\tpublic function new() {}\n'
+			+ '\tpublic function pick():Option<Int> return None;\n\tpublic function keep():Void {}\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/S.hx', 'S', 'B', 'pkg/B.hx', ['pick'], src);
 		Assert.isTrue(StringTools.contains(changeFor(changes, 'pkg/B.hx').newSource, 'import haxe.ds.Option;'), 'carries the import');
 	}
 
 	/** A moved member referencing a staying member is refused (stranding). */
 	public function testStrandedRefused(): Void {
-		final src: String =
-			'package pkg;\n\nclass S {\n\tpublic function new() {}\n\tpublic function helper():Int return 1;\n\tpublic function calc():Int return helper();\n}';
+		final src: String = 'package pkg;\n\nclass S {\n\tpublic function new() {}\n\tpublic function helper():Int return 1;\n'
+			+ '\tpublic function calc():Int return helper();\n}';
 		assertErr(ExtractSuperclass.extract('pkg/S.hx', 'S', 'B', 'pkg/B.hx', ['calc'], src, plugin()));
 	}
 
 	/** `extends` is inserted before an existing `implements` clause. */
 	public function testExtendsBeforeImplements(): Void {
-		final src: String =
-			'package pkg;\n\nclass S implements IThing {\n\tpublic function new() {}\n\tpublic function a():Void {}\n\tpublic function thing():Void {}\n}';
+		final src: String = 'package pkg;\n\nclass S implements IThing {\n\tpublic function new() {}\n\tpublic function a():Void {}\n'
+			+ '\tpublic function thing():Void {}\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/S.hx', 'S', 'B', 'pkg/B.hx', ['a'], src);
 		Assert.isTrue(
 			StringTools.contains(changeFor(changes, 'pkg/S.hx').newSource, 'class S extends B implements IThing {'),
@@ -67,11 +69,9 @@ class ExtractSuperclassSliceTest extends Test {
 			'package pkg;\n\nclass Holder /* body { starts */ {\n\tpublic function new() {}\n\n\tpublic function ping():Void {}\n}\n';
 		final changes: Array<MoveChange> = okChanges('pkg/Holder.hx', 'Holder', 'BaseHolder', 'pkg/BaseHolder.hx', ['ping'], src);
 		final newSrc: String = changeFor(changes, 'pkg/Holder.hx').newSource;
-		Assert.isTrue(
-			StringTools.contains(newSrc, 'class Holder extends BaseHolder /* body { starts */ {'), 'extends lands outside the comment'
-		);
-		Assert.isFalse(StringTools.contains(newSrc, 'body extends'), 'nothing spliced inside the comment');
-		Assert.isFalse(StringTools.contains(newSrc, 'function ping'), 'the pulled member left the source');
+		Assert.isTrue(newSrc.contains('class Holder extends BaseHolder /* body { starts */ {'), 'extends lands outside the comment');
+		Assert.isFalse(newSrc.contains('body extends'), 'nothing spliced inside the comment');
+		Assert.isFalse(newSrc.contains('function ping'), 'the pulled member left the source');
 		Assert.isTrue(
 			StringTools.contains(changeFor(changes, 'pkg/BaseHolder.hx').newSource, 'function ping'), 'and landed on the superclass'
 		);
@@ -83,7 +83,7 @@ class ExtractSuperclassSliceTest extends Test {
 			'package pkg;\n\nclass Holder // note {\n{\n\tpublic function new() {}\n\n\tpublic function ping():Void {}\n}\n';
 		final changes: Array<MoveChange> = okChanges('pkg/Holder.hx', 'Holder', 'BaseHolder', 'pkg/BaseHolder.hx', ['ping'], src);
 		final newSrc: String = changeFor(changes, 'pkg/Holder.hx').newSource;
-		Assert.isTrue(StringTools.contains(newSrc, 'class Holder extends BaseHolder // note {'), 'extends lands before the line comment');
+		Assert.isTrue(newSrc.contains('class Holder extends BaseHolder // note {'), 'extends lands before the line comment');
 	}
 
 	/** A structural type-parameter constraint brace is not the body brace. */
@@ -92,9 +92,7 @@ class ExtractSuperclassSliceTest extends Test {
 			'package pkg;\n\nclass Holder<T:{ x:Int }> {\n\tpublic function new() {}\n\n\tpublic function ping():Void {}\n}\n';
 		final changes: Array<MoveChange> = okChanges('pkg/Holder.hx', 'Holder', 'BaseHolder', 'pkg/BaseHolder.hx', ['ping'], src);
 		final newSrc: String = changeFor(changes, 'pkg/Holder.hx').newSource;
-		Assert.isTrue(
-			StringTools.contains(newSrc, 'class Holder<T:{ x:Int }> extends BaseHolder {'), 'extends lands after the type params'
-		);
+		Assert.isTrue(newSrc.contains('class Holder<T:{ x:Int }> extends BaseHolder {'), 'extends lands after the type params');
 	}
 
 	/** A class that already extends a class is refused (single inheritance). */
@@ -135,6 +133,22 @@ class ExtractSuperclassSliceTest extends Test {
 		assertErr(ExtractSuperclass.extract('pkg/S.hx', 'S', 'B', 'pkg/B.hx', [], src, plugin()));
 	}
 
+	/**
+	 * A leading header comment repeating the type name must not win the race for
+	 * the name token: the `extends` clause has to land on real code. It did land
+	 * inside the comment before the anchor moved to
+	 * `RefactorSupport.activeCodeIdentTokenOffset` - and because the result
+	 * still PARSED, nothing downstream caught it while the members had already
+	 * left the source.
+	 */
+	public function testExtendsSkipsNameRepeatingHeaderComment(): Void {
+		final src: String = 'package pkg;\n\nclass /* Holder { */ Holder {\n\tpublic function new() {}\n\tpublic function m():Void {}\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/Holder.hx', 'Holder', 'Base', 'pkg/Base.hx', ['m'], src);
+		final newSrc: String = changeFor(changes, 'pkg/Holder.hx').newSource;
+		Assert.isTrue(newSrc.contains('Holder extends Base {'), 'extends lands after the real name: <$newSrc>');
+		Assert.isTrue(newSrc.contains('/* Holder { */'), 'the comment is left verbatim: <$newSrc>');
+	}
+
 	private function okChanges(
 		srcFile: String, srcType: String, superName: String, superFile: String, memberNames: Array<String>, srcSource: String
 	): Array<MoveChange> {
@@ -173,23 +187,6 @@ class ExtractSuperclassSliceTest extends Test {
 
 	private static function plugin(): HaxeQueryPlugin {
 		return new HaxeQueryPlugin();
-	}
-
-
-	/**
-	 * A leading header comment repeating the type name must not win the race for
-	 * the name token: the `extends` clause has to land on real code. It did land
-	 * inside the comment before the anchor moved to
-	 * `RefactorSupport.activeCodeIdentTokenOffset` - and because the result
-	 * still PARSED, nothing downstream caught it while the members had already
-	 * left the source.
-	 */
-	public function testExtendsSkipsNameRepeatingHeaderComment(): Void {
-		final src: String = 'package pkg;\n\nclass /* Holder { */ Holder {\n\tpublic function new() {}\n\tpublic function m():Void {}\n}';
-		final changes: Array<MoveChange> = okChanges('pkg/Holder.hx', 'Holder', 'Base', 'pkg/Base.hx', ['m'], src);
-		final newSrc: String = changeFor(changes, 'pkg/Holder.hx').newSource;
-		Assert.isTrue(StringTools.contains(newSrc, 'Holder extends Base {'), 'extends lands after the real name: <$newSrc>');
-		Assert.isTrue(StringTools.contains(newSrc, '/* Holder { */'), 'the comment is left verbatim: <$newSrc>');
 	}
 
 }

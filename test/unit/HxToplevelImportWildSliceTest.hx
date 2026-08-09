@@ -145,19 +145,19 @@ class HxToplevelImportWildSliceTest extends HxTestHelpers {
 		Assert.equals('using foo.bar.*;\n', out);
 	}
 
-	public function testRoundTripImportWild(): Void {
+	public inline function testRoundTripImportWild(): Void {
 		roundTrip('import haxe.*;');
 	}
 
-	public function testRoundTripUsingWild(): Void {
+	public inline function testRoundTripUsingWild(): Void {
 		roundTrip('using tink.core.*;');
 	}
 
-	public function testRoundTripImportWildThenUsingWild(): Void {
+	public inline function testRoundTripImportWildThenUsingWild(): Void {
 		roundTrip('import haxe.*;\nusing haxe.*;');
 	}
 
-	public function testRoundTripWildAndPlainMix(): Void {
+	public inline function testRoundTripWildAndPlainMix(): Void {
 		roundTrip('import haxe.*;\nimport foo.Bar;');
 	}
 

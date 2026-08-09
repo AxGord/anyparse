@@ -78,7 +78,7 @@ class HxLocalVarMetaSliceTest extends HxTestHelpers {
 
 	// -- Round-trip the fork fixture body --
 
-	public function testForkFixtureRoundTrip(): Void {
+	public inline function testForkFixtureRoundTrip(): Void {
 		roundTrip("class Main {\n\tfunction main() {\n\t\tvar @:name name = 'Foo';\n\t}\n}", 'fork var_meta_data fixture');
 	}
 

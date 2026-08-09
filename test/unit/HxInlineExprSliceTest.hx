@@ -89,7 +89,7 @@ class HxInlineExprSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testInlineCallRoundTrip(): Void {
+	public inline function testInlineCallRoundTrip(): Void {
 		// Writer ripple: InlineExpr emits via the generic single-Ref
 		// value:HxExpr path (ThrowExpr/CastExpr/ReturnExpr precedent).
 		roundTrip(

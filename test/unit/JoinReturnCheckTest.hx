@@ -178,34 +178,6 @@ class JoinReturnCheckTest extends Test {
 		Assert.isTrue(ids.contains('join-return'));
 	}
 
-	/** Wrap a statement body in a minimal parseable class + method with an inferred return type. */
-	private function wrap(body: String): String {
-		return 'class C {\n\tfunction f() {\n\t\t$body\n\t}\n}';
-	}
-
-	/** Wrap a statement body in a method with an explicit return type. */
-	private function wrapRet(retType: String, body: String): String {
-		return 'class C {\n\tfunction f():$retType {\n\t\t$body\n\t}\n}';
-	}
-
-	private function violations(src: String): Array<Violation> {
-		return new JoinReturn().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
-	private function edits(src: String): Array<{ span: Span, text: String }> {
-		final check: JoinReturn = new JoinReturn();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
-	}
-
-	/** Run `fix` and re-emit through the canonical writer -- the `lint --fix` path in one pass. */
-	private function applyFixOnce(src: String): String {
-		return switch RefactorSupport.canonicalize(src, edits(src), true, new HaxeQueryPlugin(), null) {
-			case Ok(text): text;
-			case Err(message): throw message;
-		};
-	}
-
-
 	// --- assignment arm: `x = e; return x;` where `x` is a pre-existing param / local ---
 
 	/** The assignment arm: `str = e;` before `return str;` (param `str`) is flagged Info with the assignment message. */
@@ -325,8 +297,8 @@ class JoinReturnCheckTest extends Test {
 
 	/** Exclusivity is per branch, not two-way: a third `#elseif` branch reusing the name joins as well. */
 	public function testThreeSiblingBranchesSameNameAllFlagged(): Void {
-		final body: String =
-			'#if A\n\t\tvar x:Int = g();\n\t\treturn x;\n\t\t#elseif B\n\t\tvar x:Int = h();\n\t\treturn x;\n\t\t#else\n\t\tvar x:Int = k();\n\t\treturn x;\n\t\t#end';
+		final body: String = '#if A\n\t\tvar x:Int = g();\n\t\treturn x;\n\t\t#elseif B\n\t\tvar x:Int = h();\n\t\treturn x;\n\t\t#else\n'
+			+ '\t\tvar x:Int = k();\n\t\treturn x;\n\t\t#end';
 		Assert.equals(3, violations(wrapRet('Int', body)).length);
 	}
 
@@ -409,6 +381,33 @@ class JoinReturnCheckTest extends Test {
 		final es: Array<{ span: Span, text: String }> = edits(wrap('var b:Bytes = cast x;\n\t\treturn b;'));
 		Assert.equals(1, es.length);
 		Assert.equals('return (cast x : Bytes);', es[0].text);
+	}
+
+	/** Wrap a statement body in a minimal parseable class + method with an inferred return type. */
+	private function wrap(body: String): String {
+		return 'class C {\n\tfunction f() {\n\t\t$body\n\t}\n}';
+	}
+
+	/** Wrap a statement body in a method with an explicit return type. */
+	private function wrapRet(retType: String, body: String): String {
+		return 'class C {\n\tfunction f():$retType {\n\t\t$body\n\t}\n}';
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new JoinReturn().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	private function edits(src: String): Array<{ span: Span, text: String }> {
+		final check: JoinReturn = new JoinReturn();
+		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+	}
+
+	/** Run `fix` and re-emit through the canonical writer -- the `lint --fix` path in one pass. */
+	private function applyFixOnce(src: String): String {
+		return switch RefactorSupport.canonicalize(src, edits(src), true, new HaxeQueryPlugin(), null) {
+			case Ok(text): text;
+			case Err(message): throw message;
+		};
 	}
 
 	/** Two sibling `#if` branches declaring the same name, each returning it. */

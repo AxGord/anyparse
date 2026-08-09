@@ -129,8 +129,8 @@ class PreferSafeNavCheckTest extends Test {
 	}
 
 	public function testQualifiedFieldPathFlaggedAndFixed(): Void {
-		final source: String =
-			'class C {\n\tvar fld:P;\n\tfunction f():Void {\n\t\tif (fld.next != null) fld.next.command("z");\n\t}\n}\n\nclass P {\n\tpublic var next:Sys;\n}';
+		final source: String = 'class C {\n\tvar fld:P;\n\tfunction f():Void {\n\t\tif (fld.next != null) fld.next.command("z");\n\t}\n}\n'
+			+ '\nclass P {\n\tpublic var next:Sys;\n}';
 		final expected: String =
 			'class C {\n\tvar fld:P;\n\tfunction f():Void {\n\t\tfld.next?.command("z");\n\t}\n}\n\nclass P {\n\tpublic var next:Sys;\n}';
 		Assert.equals(1, violations(source).length);
@@ -138,8 +138,8 @@ class PreferSafeNavCheckTest extends Test {
 	}
 
 	public function testQualifiedGetterStepNotFlagged(): Void {
-		final source: String =
-			'class C {\n\tvar fld:P;\n\tfunction f():Void {\n\t\tif (fld.next != null) fld.next.command("z");\n\t}\n}\n\nclass P {\n\tpublic var next(get, never):Sys;\n\n\tfunction get_next():Sys {\n\t\treturn null;\n\t}\n}';
+		final source: String = 'class C {\n\tvar fld:P;\n\tfunction f():Void {\n\t\tif (fld.next != null) fld.next.command("z");\n\t}\n}\n'
+			+ '\nclass P {\n\tpublic var next(get, never):Sys;\n\n\tfunction get_next():Sys {\n\t\treturn null;\n\t}\n}';
 		Assert.equals(0, violations(source).length);
 	}
 
@@ -151,20 +151,20 @@ class PreferSafeNavCheckTest extends Test {
 	}
 
 	public function testDeepQualifiedPathNotFlagged(): Void {
-		final source: String =
-			'class C {\n\tvar fld:P;\n\tfunction f():Void {\n\t\tif (fld.mid.next != null) fld.mid.next.command("z");\n\t}\n}\n\nclass P {\n\tpublic var mid:Q;\n}\n\nclass Q {\n\tpublic var next:Sys;\n}';
+		final source: String = 'class C {\n\tvar fld:P;\n\tfunction f():Void {\n\t\tif (fld.mid.next != null) fld.mid.next.command("z");\n'
+			+ '\t}\n}\n\nclass P {\n\tpublic var mid:Q;\n}\n\nclass Q {\n\tpublic var next:Sys;\n}';
 		Assert.equals(0, violations(source).length);
 	}
 
 	public function testQualifiedSubjectInArgumentsNotFlagged(): Void {
-		final source: String =
-			'class C {\n\tvar fld:P;\n\tfunction f():Void {\n\t\tif (fld.next != null) fld.next.command(fld.next);\n\t}\n}\n\nclass P {\n\tpublic var next:Sys;\n}';
+		final source: String = 'class C {\n\tvar fld:P;\n\tfunction f():Void {\n\t\tif (fld.next != null) fld.next.command(fld.next);\n'
+			+ '\t}\n}\n\nclass P {\n\tpublic var next:Sys;\n}';
 		Assert.equals(0, violations(source).length);
 	}
 
 	public function testQualifiedTernaryFlaggedAndFixed(): Void {
-		final source: String =
-			'class C {\n\tvar fld:P;\n\tfunction f():Int {\n\t\treturn fld.next == null ? null : fld.next.command("z");\n\t}\n}\n\nclass P {\n\tpublic var next:Sys;\n}';
+		final source: String = 'class C {\n\tvar fld:P;\n\tfunction f():Int {\n'
+			+ '\t\treturn fld.next == null ? null : fld.next.command("z");\n\t}\n}\n\nclass P {\n\tpublic var next:Sys;\n}';
 		Assert.equals(1, violations(source).length);
 		Assert.isTrue(applyFix(source).indexOf('return fld.next?.command("z");') != -1);
 	}
@@ -184,16 +184,16 @@ class PreferSafeNavCheckTest extends Test {
 	public function testAssignmentArmQualifiedSubjectFixed(): Void {
 		// The self-reference gate compares the subject's ROOT, so a step whose name merely
 		// coincides with the declared local (`next` / `next`) still folds.
-		final source: String =
-			'class C {\n\tvar fld:P;\n\tfunction f():Void {\n\t\tvar next:Null<Int> = null;\n\t\tif (fld.next != null) next = fld.next.count();\n\t}\n}\n\nclass P {\n\tpublic var next:Sys;\n}';
+		final source: String = 'class C {\n\tvar fld:P;\n\tfunction f():Void {\n\t\tvar next:Null<Int> = null;\n'
+			+ '\t\tif (fld.next != null) next = fld.next.count();\n\t}\n}\n\nclass P {\n\tpublic var next:Sys;\n}';
 		Assert.equals(1, violations(source).length);
 		Assert.isTrue(fixCanonical(source).indexOf('var next:Null<Int> = fld.next?.count();') != -1);
 	}
 
 	public function testAssignmentArmQualifiedSubjectRootIsTargetNotFlagged(): Void {
 		// Folding would make the declaration reference itself through the guard's root.
-		final source: String =
-			'class C {\n\tfunction f():Void {\n\t\tvar r:Null<P> = null;\n\t\tif (r.next != null) r = r.next.self();\n\t}\n}\n\nclass P {\n\tpublic var next:P;\n}';
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar r:Null<P> = null;\n\t\tif (r.next != null) r = r.next.self();\n'
+			+ '\t}\n}\n\nclass P {\n\tpublic var next:P;\n}';
 		Assert.equals(0, violations(source).length);
 	}
 
@@ -400,13 +400,13 @@ class PreferSafeNavCheckTest extends Test {
 		// Byte-exact: the deleted `if` must take its whole line with it, leaving no blank one.
 		final source: String = local('var r:Null<Int> = null;\n\t\tif (x != null) r = x.count();');
 		Assert.equals(1, violations(source).length);
-		Assert.equals(local('var r:Null<Int> = x?.count();') + '\n', fixCanonical(source));
+		Assert.equals('${local('var r:Null<Int> = x?.count();')}\n', fixCanonical(source));
 	}
 
 	public function testAssignmentArmChainFixed(): Void {
 		final source: String = local('var r:Null<Int> = null;\n\t\tif (x != null) r = x.a.b("c");');
 		Assert.equals(1, violations(source).length);
-		Assert.equals(local('var r:Null<Int> = x?.a.b("c");') + '\n', fixCanonical(source));
+		Assert.equals('${local('var r:Null<Int> = x?.a.b("c");')}\n', fixCanonical(source));
 	}
 
 	public function testAssignmentArmMultiDeclaratorNotFlagged(): Void {

@@ -1,8 +1,6 @@
 package unit;
 
 import anyparse.check.Check;
-import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.Violation;
 import anyparse.check.DeadBinderCounterLoop;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
@@ -65,8 +63,8 @@ class DeadBinderCounterLoopCheckTest extends Test {
 	}
 
 	public function testCounterReadAfterNotFlagged(): Void {
-		final src: String =
-			'class C {\n\tfunction f(items:Array<Item>):Int {\n\t\tvar i = 0;\n\t\tfor (x in items) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}\n\t\treturn i;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(items:Array<Item>):Int {\n\t\tvar i = 0;\n\t\tfor (x in items) {\n\t\t\twork(i);\n'
+			+ '\t\t\ti++;\n\t\t}\n\t\treturn i;\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -108,15 +106,15 @@ class DeadBinderCounterLoopCheckTest extends Test {
 
 	public function testUnresolvedCollectionNotFlagged(): Void {
 		// The replacement text depends on the container, so an unresolved one is not reported at all.
-		final src: String =
-			'class C {\n\tfunction f():Void {\n\t\tfinal items = fetch();\n\t\tvar i = 0;\n\t\tfor (x in items) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfinal items = fetch();\n\t\tvar i = 0;\n\t\tfor (x in items) {\n'
+			+ '\t\t\twork(i);\n\t\t\ti++;\n\t\t}\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
 	public function testIteratorCollectionNotFlagged(): Void {
 		// Lambda.count would CONSUME an Iterator, leaving the rewritten loop with nothing to run.
-		final src: String =
-			'class C {\n\tfunction f(cursor:Iterator<Item>):Void {\n\t\tvar i = 0;\n\t\tfor (x in cursor) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(cursor:Iterator<Item>):Void {\n\t\tvar i = 0;\n\t\tfor (x in cursor) {\n'
+			+ '\t\t\twork(i);\n\t\t\ti++;\n\t\t}\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -135,8 +133,8 @@ class DeadBinderCounterLoopCheckTest extends Test {
 	}
 
 	public function testFixReusesExistingUsing(): Void {
-		final src: String =
-			'package p;\n\nusing Lambda;\n\nclass C {\n\tfunction f(table:Map<Int, Item>):Void {\n\t\tvar i = 0;\n\t\tfor (x in table) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}\n\t}\n}';
+		final src: String = 'package p;\n\nusing Lambda;\n\nclass C {\n\tfunction f(table:Map<Int, Item>):Void {\n\t\tvar i = 0;\n'
+			+ '\t\tfor (x in table) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}\n\t}\n}';
 		final r = runAndExpectOne(src);
 		switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
@@ -216,11 +214,11 @@ class DeadBinderCounterLoopCheckTest extends Test {
 		Assert.equals(0, violations(wrapArray(body)).length);
 	}
 
-	private function wrapArray(body: String): String {
+	private inline function wrapArray(body: String): String {
 		return wrapParam('items:Array<Item>', body);
 	}
 
-	private function wrapMap(body: String): String {
+	private inline function wrapMap(body: String): String {
 		return wrapParam('table:Map<Int, Item>', body);
 	}
 

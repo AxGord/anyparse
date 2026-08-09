@@ -240,8 +240,8 @@ class SplitVarDeclarationCheckTest extends Test {
 	 */
 	public function testComposesWithPreferFinalAtCliFixedPoint(): Void {
 		#if (sys || nodejs)
-		final src: String =
-			'package p;\n\nclass C {\n\tpublic function f():String {\n\t\tvar uid:StringBuf = new StringBuf(), a:Int = 8;\n\t\tuid.add(a);\n\t\ta++;\n\t\treturn uid.toString();\n\t}\n}\n';
+		final src: String = 'package p;\n\nclass C {\n\tpublic function f():String {\n\t\tvar uid:StringBuf = new StringBuf(), a:Int = 8;\n'
+			+ '\t\tuid.add(a);\n\t\ta++;\n\t\treturn uid.toString();\n\t}\n}\n';
 		final dir: String = CliFixture.writeDir('fixsplitvar', [{ name: 'Foo.hx', source: src }]);
 		final path: String = '$dir/Foo.hx';
 		Assert.equals(0, Cli.run([

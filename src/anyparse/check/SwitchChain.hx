@@ -2,14 +2,13 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.query.SymbolIndex.MemberInfo;
-import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * The shared scanner / renderer behind BOTH switch checks: `prefer-switch` (an `if` /
@@ -185,8 +184,7 @@ final class SwitchChain {
 		final shape: RefShape = plugin.refShape();
 		final eqKind: Null<String> = shape.eqKind;
 		final litKinds: Array<String> = shape.caseLiteralKinds ?? [];
-		if (chainKinds.length == 0 || eqKind == null || litKinds.length == 0) return null;
-		return {
+		return chainKinds.length == 0 || eqKind == null || litKinds.length == 0 ? null : {
 			chainKinds: chainKinds,
 			bodyTerminator: bodyTerminator,
 			eqKind: eqKind,
@@ -325,7 +323,7 @@ final class SwitchChain {
 	 * chain node's else-slot (so an inner rung is never re-reported as its own head)
 	 * and whose PARENT kind `hostAccepts`. The parent kind is null at the root only.
 	 */
-	private static function eachHead(
+	private static inline function eachHead(
 		node: QueryNode, seams: ChainSeams, hostAccepts: Null<String> -> Bool, visit: QueryNode -> Void
 	): Void {
 		walkHeads(node, null, false, seams, hostAccepts, visit);
@@ -438,8 +436,7 @@ final class SwitchChain {
 	 * on every `ChainScan` and `render` emits `case _` unconditionally.
 	 */
 	private static function completeScan(discTexts: Null<Array<String>>, rungs: Array<ChainRung>, elseBody: Null<Span>): Null<ChainScan> {
-		if (discTexts == null || rungs.length < 2 || elseBody == null) return null;
-		return {
+		return discTexts == null || rungs.length < 2 || elseBody == null ? null : {
 			discTexts: discTexts,
 			rungs: rungs,
 			elseBody: elseBody
@@ -454,7 +451,7 @@ final class SwitchChain {
 
 	/** The trimmed source text of `span`. */
 	private static inline function spanText(source: String, span: Span): String {
-		return StringTools.trim(source.substring(span.from, span.to));
+		return source.substring(span.from, span.to).trim();
 	}
 
 	/**
@@ -524,9 +521,9 @@ final class SwitchChain {
 	private static function flattenConjunction(node: QueryNode, seams: ChainSeams): Array<QueryNode> {
 		final n: QueryNode = unwrapParens(node, seams.parenKind);
 		final andKind: Null<String> = seams.andKind;
-		if (andKind != null && n.kind == andKind && n.children.length == BINARY_CHILD_COUNT)
-			return flattenConjunction(n.children[0], seams).concat(flattenConjunction(n.children[1], seams));
-		return [n];
+		return andKind != null && n.kind == andKind && n.children.length == BINARY_CHILD_COUNT
+			? flattenConjunction(n.children[0], seams).concat(flattenConjunction(n.children[1], seams))
+			: [n];
 	}
 
 	/** `node` with every `parenKind` wrapper stripped. */
@@ -549,9 +546,12 @@ final class SwitchChain {
 		final b: QueryNode = node.children[1];
 		final aPattern: Null<String> = patternTextOf(a, seams, resolveIndex, source);
 		final bPattern: Null<String> = patternTextOf(b, seams, resolveIndex, source);
-		if (aPattern != null && bPattern == null) return { pattern: aPattern, disc: b };
-		if (bPattern != null && aPattern == null) return { pattern: bPattern, disc: a };
-		return null;
+		return if (aPattern != null && bPattern == null)
+			{ pattern: aPattern, disc: b }
+		else if (bPattern != null && aPattern == null)
+			{ pattern: bPattern, disc: a }
+		else
+			null;
 	}
 
 	/**
@@ -562,9 +562,14 @@ final class SwitchChain {
 		node: QueryNode, seams: ChainSeams, resolveIndex: () -> Null<SymbolIndex>, source: String
 	): Null<String> {
 		final span: Null<Span> = node.span;
-		if (span == null) return null;
-		if (seams.stringFold?.literalOf(node, source) != null || seams.litKinds.contains(node.kind)) return spanText(source, span);
-		return provesConstantReference(node, seams, resolveIndex) ? spanText(source, span) : null;
+		return if (span == null)
+			null
+		else if (seams.stringFold?.literalOf(node, source) != null || seams.litKinds.contains(node.kind))
+			spanText(source, span)
+		else if (provesConstantReference(node, seams, resolveIndex))
+			spanText(source, span)
+		else
+			null;
 	}
 
 	/**

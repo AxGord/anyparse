@@ -41,6 +41,9 @@ typedef RuleConfig = {
 @:nullSafety(Strict)
 final class LintConfig {
 
+	/** Config paths already reported by `discover`'s reject diagnostic — one line per file per process. */
+	private static final warnedConfigs: Array<String> = [];
+
 	private final _rules: Map<String, RuleConfig>;
 
 	/** The `compilerOracle` hxml path verbatim from the config root, or null when unset. */
@@ -134,7 +137,7 @@ final class LintConfig {
 	/** The configured severity override for `id`, or null when unset. */
 	public function severityFor(id: String): Null<Severity> {
 		final rc: Null<RuleConfig> = _rules[id];
-		return rc == null ? null : rc.severity;
+		return rc?.severity;
 	}
 
 	/** A rule-specific integer option (e.g. complexity `max`), or null when unset or non-numeric. A fractional value truncates, as it always has. */
@@ -196,7 +199,7 @@ final class LintConfig {
 	/** The raw prop `key` of rule `id`, or null when the rule is unconfigured or lacks the key — the base for the typed option accessors. */
 	private function propOf(id: String, key: String): Null<JValue> {
 		final rc: Null<RuleConfig> = _rules[id];
-		return rc == null ? null : rc.props[key];
+		return rc?.props[key];
 	}
 
 	/** The raw array prop `key` of rule `id`, or null when it is unset or not an array — the array base for the list accessors. */
@@ -215,30 +218,18 @@ final class LintConfig {
 		final found: Null<{ content: String, path: String }> = ConfigFinder.findUpFile(path, 'apqlint.json');
 		if (found == null) return new LintConfig([]);
 		final config: Null<LintConfig> = parseOrNull(found.content, haxe.io.Path.directory(found.path));
-		if (config == null) {
-			// A REAL config file that the schema rejects must not degrade
-			// silently — the wholesale fallback quietly collapses the
-			// resolution scope and every rule toggle. Once per file per
-			// process: `discover` re-runs for every linted directory
-			// (the CLI memoises per directory, not per config), so an
-			// unde-duplicated line would repeat N times per run.
-			if (!_warnedConfigs.contains(found.path)) {
-				_warnedConfigs.push(found.path);
-				stderr('apq: ${found.path} failed to parse — using defaults\n');
-			}
-			return new LintConfig([]);
+		if (config != null) return config;
+		// A REAL config file that the schema rejects must not degrade
+		// silently — the wholesale fallback quietly collapses the
+		// resolution scope and every rule toggle. Once per file per
+		// process: `discover` re-runs for every linted directory
+		// (the CLI memoises per directory, not per config), so an
+		// unde-duplicated line would repeat N times per run.
+		if (!warnedConfigs.contains(found.path)) {
+			warnedConfigs.push(found.path);
+			stderr('apq: ${found.path} failed to parse — using defaults\n');
 		}
-		return config;
-	}
-
-	/** Config paths already reported by `discover`'s reject diagnostic — one line per file per process. */
-	private static final _warnedConfigs: Array<String> = [];
-
-	/** Guarded stderr write — mirrors `Cli.stderr` (`#if sys` alone is false on hxnodejs). */
-	private static function stderr(s: String): Void {
-		#if (sys || nodejs)
-		Sys.stderr().writeString(s);
-		#end
+		return new LintConfig([]);
 	}
 
 	/**
@@ -263,6 +254,13 @@ final class LintConfig {
 	 */
 	public static function parse(content: String, ?baseDir: String): LintConfig {
 		return parseOrNull(content, baseDir) ?? new LintConfig([]);
+	}
+
+	/** Guarded stderr write — mirrors `Cli.stderr` (`#if sys` alone is false on hxnodejs). */
+	private static function stderr(s: String): Void {
+		#if (sys || nodejs)
+		Sys.stderr().writeString(s);
+		#end
 	}
 
 	/**

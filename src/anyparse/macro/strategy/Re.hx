@@ -38,14 +38,14 @@ class Re implements Strategy {
 	public function new() {}
 
 	public function appliesTo(node: ShapeNode): Bool {
-		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
+		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == ':re') return true;
 		return false;
 	}
 
 	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {
-		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
+		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return;
 		for (entry in meta) if (entry.name == ':re') {
 			if (entry.params.length != 1) {
@@ -57,7 +57,7 @@ class Re implements Strategy {
 					Context.fatalError('@:re argument must be a string literal', entry.params[0].pos);
 					throw 'unreachable';
 			};
-			node.annotations.set('re.pattern', pattern);
+			node.annotations['re.pattern'] = pattern;
 		}
 		for (entry in meta) if (entry.name == ':captureGroup') {
 			if (entry.params.length != 1) {
@@ -72,7 +72,7 @@ class Re implements Strategy {
 			if (group < 1) {
 				Context.fatalError('@:captureGroup must be >= 1 (group 0 is the default whole match)', entry.pos);
 			}
-			node.annotations.set('re.captureGroup', group);
+			node.annotations['re.captureGroup'] = group;
 		}
 	}
 

@@ -20,7 +20,6 @@ class QueryWalkerCodegen {
 		params: [TPType(TPath({ pack: ['anyparse', 'query'], name: 'QueryNode', params: [] }))]
 	});
 	private static final BOOL_CT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-
 	private static final STRING_CT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
 	private static final VOID_CT: ComplexType = TPath({ pack: [], name: 'Void', params: [] });
 	private static final NULL_STRING_CT: ComplexType = TPath({

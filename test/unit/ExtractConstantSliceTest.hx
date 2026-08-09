@@ -6,7 +6,8 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.ExtractConstant;
 import anyparse.query.RefactorSupport.EditResult;
 import haxe.Exception;
-import anyparse.query.ExtractConstant.ExtractIntoResult;
+
+using StringTools;
 
 /**
  * `ExtractConstant.extractConstant` — replace a repeated plain
@@ -19,13 +20,13 @@ class ExtractConstantSliceTest extends Test {
 
 	/** Every occurrence is replaced and one constant is spliced in. */
 	public function testBasicExtract(): Void {
-		final src: String =
-			"package pkg;\n\nclass K {\n\tstatic function f(k:String, j:String):Bool {\n\t\treturn k == 'base.ref' || j == 'base.ref';\n\t}\n}";
+		final src: String = 'package pkg;\n\nclass K {\n\tstatic function f(k:String, j:String):Bool {\n'
+			+ "\t\treturn k == 'base.ref' || j == 'base.ref';\n\t}\n}";
 		final text: String = okExtract(src, 'K', 'BASE_REF', 'base.ref');
-		Assert.isTrue(StringTools.contains(text, "private static final BASE_REF:String = 'base.ref'"), 'constant declared');
-		Assert.isTrue(StringTools.contains(text, 'k == BASE_REF'), 'first occurrence replaced');
-		Assert.isTrue(StringTools.contains(text, 'j == BASE_REF'), 'second occurrence replaced');
-		Assert.isFalse(StringTools.contains(text, "== 'base.ref'"), 'no literal left at a use site');
+		Assert.isTrue(text.contains("private static final BASE_REF:String = 'base.ref'"), 'constant declared');
+		Assert.isTrue(text.contains('k == BASE_REF'), 'first occurrence replaced');
+		Assert.isTrue(text.contains('j == BASE_REF'), 'second occurrence replaced');
+		Assert.isFalse(text.contains("== 'base.ref'"), 'no literal left at a use site');
 	}
 
 	/** The constant becomes the type's first member. */
@@ -41,13 +42,13 @@ class ExtractConstantSliceTest extends Test {
 	public function testSingleOccurrence(): Void {
 		final src: String = "package pkg;\n\nclass K {\n\tstatic function f(k:String):Bool {\n\t\treturn k == 'solo';\n\t}\n}";
 		final text: String = okExtract(src, 'K', 'SOLO', 'solo');
-		Assert.isTrue(StringTools.contains(text, 'k == SOLO'), 'occurrence replaced');
+		Assert.isTrue(text.contains('k == SOLO'), 'occurrence replaced');
 	}
 
 	/** A name colliding with an existing member is refused. */
 	public function testNameCollisionRefused(): Void {
-		final src: String =
-			"package pkg;\n\nclass K {\n\tstatic function f(k:String):Bool {\n\t\treturn k == 'dup';\n\t}\n\tstatic function DUP():Void {}\n}";
+		final src: String = "package pkg;\n\nclass K {\n\tstatic function f(k:String):Bool {\n\t\treturn k == 'dup';\n\t}\n"
+			+ '\tstatic function DUP():Void {}\n}';
 		assertErr(ExtractConstant.extractConstant(src, 'K', 'DUP', 'dup', true, plugin()));
 	}
 
@@ -93,14 +94,14 @@ class ExtractConstantSliceTest extends Test {
 		final src: String =
 			"package pkg;\n\nclass K {\n\t@:native('base.ref')\n\tstatic function f(k:String):Bool {\n\t\treturn k == 'base.ref';\n\t}\n}";
 		final text: String = okExtract(src, 'K', 'BASE_REF', 'base.ref');
-		Assert.isTrue(StringTools.contains(text, "@:native('base.ref')"), 'metadata literal untouched');
-		Assert.isTrue(StringTools.contains(text, 'k == BASE_REF'), 'body occurrence replaced');
+		Assert.isTrue(text.contains("@:native('base.ref')"), 'metadata literal untouched');
+		Assert.isTrue(text.contains('k == BASE_REF'), 'body occurrence replaced');
 	}
 
 	/** A non-unique type name is refused. */
 	public function testNonUniqueTypeRefused(): Void {
-		final src: String =
-			"package pkg;\n\nclass K {\n\tstatic function f(k:String):Bool {\n\t\treturn k == 'x';\n\t}\n}\n\nclass K {\n\tstatic function g():Void {}\n}";
+		final src: String = "package pkg;\n\nclass K {\n\tstatic function f(k:String):Bool {\n\t\treturn k == 'x';\n\t}\n}\n\nclass K {\n"
+			+ '\tstatic function g():Void {}\n}';
 		assertErr(ExtractConstant.extractConstant(src, 'K', 'X', 'x', true, plugin()));
 	}
 
@@ -109,7 +110,7 @@ class ExtractConstantSliceTest extends Test {
 		final src: String =
 			"package pkg;\n\nclass K {\n\tstatic function f(k:String):Bool {\n\t\treturn k == 'a\"b' && k == 'a\"b';\n\t}\n}";
 		final text: String = okExtract(src, 'K', 'AB', 'a"b');
-		Assert.isTrue(StringTools.contains(text, "private static final AB:String = 'a\"b'"), 'verbatim token preserved');
+		Assert.isTrue(text.contains("private static final AB:String = 'a\"b'"), 'verbatim token preserved');
 	}
 
 	/** Two same-package files sharing a literal both change; the module is created; neither file gets an import. */
@@ -121,10 +122,8 @@ class ExtractConstantSliceTest extends Test {
 		);
 		Assert.equals(2, res.changes.length);
 		Assert.isTrue(res.created, 'module created');
-		Assert.isTrue(
-			StringTools.contains(res.moduleSource, "public static final BASE_REF:String = 'base.ref'"), 'const declared on module'
-		);
-		Assert.isTrue(StringTools.contains(res.moduleSource, 'private function new()'), 'module has a private constructor');
+		Assert.isTrue(res.moduleSource.contains("public static final BASE_REF:String = 'base.ref'"), 'const declared on module');
+		Assert.isTrue(res.moduleSource.contains('private function new()'), 'module has a private constructor');
 		for (c in res.changes) {
 			Assert.isTrue(StringTools.contains(c.newSource, 'k == Keys.BASE_REF'), 'occurrence replaced with module ref');
 			Assert.isFalse(StringTools.contains(c.newSource, 'import '), 'same-package file gets no import');
@@ -136,8 +135,8 @@ class ExtractConstantSliceTest extends Test {
 		final a: String = "package one;\n\nclass A {\n\tstatic function f(k: String): Bool {\n\t\treturn k == 'base.ref';\n\t}\n}";
 		final res: IntoOk = okInto([{ file: 'A.hx', source: a }], 'keys', 'Keys', false, null, 'BASE_REF', 'base.ref');
 		final changed: String = res.changes[0].newSource;
-		Assert.isTrue(StringTools.contains(changed, 'import keys.Keys;'), 'cross-package file gets the module import');
-		Assert.isTrue(StringTools.contains(changed, 'k == Keys.BASE_REF'), 'occurrence replaced');
+		Assert.isTrue(changed.contains('import keys.Keys;'), 'cross-package file gets the module import');
+		Assert.isTrue(changed.contains('k == Keys.BASE_REF'), 'occurrence replaced');
 	}
 
 	/** An existing module is extended with the new constant, keeping its members. */
@@ -147,8 +146,8 @@ class ExtractConstantSliceTest extends Test {
 			"package pkg;\n\nfinal class Keys {\n\tpublic static final OLD:String = 'old';\n\n\tprivate function new() {}\n}";
 		final res: IntoOk = okInto([{ file: 'A.hx', source: a }], 'pkg', 'Keys', true, module, 'NEW_KEY', 'new.key');
 		Assert.isFalse(res.created, 'module extended, not created');
-		Assert.isTrue(StringTools.contains(res.moduleSource, "public static final NEW_KEY:String = 'new.key'"), 'new constant added');
-		Assert.isTrue(StringTools.contains(res.moduleSource, "public static final OLD:String = 'old'"), 'existing constant kept');
+		Assert.isTrue(res.moduleSource.contains("public static final NEW_KEY:String = 'new.key'"), 'new constant added');
+		Assert.isTrue(res.moduleSource.contains("public static final OLD:String = 'old'"), 'existing constant kept');
 		Assert.isTrue(StringTools.contains(res.changes[0].newSource, 'k == Keys.NEW_KEY'), 'occurrence replaced');
 		Assert.isTrue(
 			res.moduleSource.indexOf('NEW_KEY') < res.moduleSource.indexOf('function new('),
@@ -182,12 +181,12 @@ class ExtractConstantSliceTest extends Test {
 
 	/** A metadata literal is left untouched; only the body occurrence is counted and replaced. */
 	public function testCrossFileMetadataLiteralUntouched(): Void {
-		final a: String =
-			"package pkg;\n\nclass A {\n\t@:native('base.ref')\n\tstatic function f(k: String): Bool {\n\t\treturn k == 'base.ref';\n\t}\n}";
+		final a: String = "package pkg;\n\nclass A {\n\t@:native('base.ref')\n\tstatic function f(k: String): Bool {\n"
+			+ "\t\treturn k == 'base.ref';\n\t}\n}";
 		final res: IntoOk = okInto([{ file: 'A.hx', source: a }], 'pkg', 'Keys', false, null, 'BASE_REF', 'base.ref');
 		final changed: String = res.changes[0].newSource;
-		Assert.isTrue(StringTools.contains(changed, "@:native('base.ref')"), 'metadata literal untouched');
-		Assert.isTrue(StringTools.contains(changed, 'k == Keys.BASE_REF'), 'body occurrence replaced');
+		Assert.isTrue(changed.contains("@:native('base.ref')"), 'metadata literal untouched');
+		Assert.isTrue(changed.contains('k == Keys.BASE_REF'), 'body occurrence replaced');
 		Assert.equals(1, res.changes[0].count, 'only the body occurrence is counted');
 	}
 
@@ -203,15 +202,13 @@ class ExtractConstantSliceTest extends Test {
 
 	/** A plain double-quoted literal is matched and extracted, keeping the double-quoted form. */
 	public function testDoubleQuotedMatched(): Void {
-		final src: String =
-			'package pkg;\n\nclass K {\n\tstatic function f(k:String, j:String):Bool {\n\t\treturn k == "base.ref" || j == "base.ref";\n\t}\n}';
+		final src: String = 'package pkg;\n\nclass K {\n\tstatic function f(k:String, j:String):Bool {\n'
+			+ '\t\treturn k == "base.ref" || j == "base.ref";\n\t}\n}';
 		final text: String = okExtract(src, 'K', 'BASE_REF', 'base.ref');
-		Assert.isTrue(
-			StringTools.contains(text, 'private static final BASE_REF:String = "base.ref"'), 'constant keeps the double-quoted form'
-		);
-		Assert.isTrue(StringTools.contains(text, 'k == BASE_REF'), 'first occurrence replaced');
-		Assert.isTrue(StringTools.contains(text, 'j == BASE_REF'), 'second occurrence replaced');
-		Assert.isFalse(StringTools.contains(text, '== "base.ref"'), 'no literal left at a use site');
+		Assert.isTrue(text.contains('private static final BASE_REF:String = "base.ref"'), 'constant keeps the double-quoted form');
+		Assert.isTrue(text.contains('k == BASE_REF'), 'first occurrence replaced');
+		Assert.isTrue(text.contains('j == BASE_REF'), 'second occurrence replaced');
+		Assert.isFalse(text.contains('== "base.ref"'), 'no literal left at a use site');
 	}
 
 	/** The same content in both quote styles is matched and unified into one constant. */
@@ -219,8 +216,8 @@ class ExtractConstantSliceTest extends Test {
 		final src: String =
 			'package pkg;\n\nclass K {\n\tstatic function f(k:String, j:String):Bool {\n\t\treturn k == \'x.y\' || j == "x.y";\n\t}\n}';
 		final text: String = okExtract(src, 'K', 'X_Y', 'x.y');
-		Assert.isTrue(StringTools.contains(text, 'k == X_Y'), 'single-quoted occurrence replaced');
-		Assert.isTrue(StringTools.contains(text, 'j == X_Y'), 'double-quoted occurrence replaced');
+		Assert.isTrue(text.contains('k == X_Y'), 'single-quoted occurrence replaced');
+		Assert.isTrue(text.contains('j == X_Y'), 'double-quoted occurrence replaced');
 		final consts: Int = text.split('static final X_Y').length - 1;
 		Assert.equals(1, consts, 'exactly one constant for both quote styles');
 	}
@@ -230,8 +227,7 @@ class ExtractConstantSliceTest extends Test {
 		final a: String = 'package pkg;\n\nclass A {\n\tstatic function f(k:String):Bool {\n\t\treturn k == "shared.key";\n\t}\n}';
 		final res: IntoOk = okInto([{ file: 'A.hx', source: a }], 'pkg', 'Keys', false, null, 'SHARED_KEY', 'shared.key');
 		Assert.isTrue(
-			StringTools.contains(res.moduleSource, 'public static final SHARED_KEY:String = "shared.key"'),
-			'module constant keeps double-quoted form'
+			res.moduleSource.contains('public static final SHARED_KEY:String = "shared.key"'), 'module constant keeps double-quoted form'
 		);
 		Assert.isTrue(StringTools.contains(res.changes[0].newSource, 'k == Keys.SHARED_KEY'), 'occurrence replaced');
 	}

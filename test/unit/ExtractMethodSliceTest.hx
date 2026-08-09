@@ -32,10 +32,10 @@ class ExtractMethodSliceTest extends Test {
 	 * local (`a`) is captured, needing no parameter.
 	 */
 	public function testExtractWithReturnValue(): Void {
-		final source: String = 'class C {\n\tfunction f():Int {\n\t\tvar a = 1;\n\t\tvar b = a + 2;\n\t\ttrace(b);\n\t\treturn b;\n'
-			+ '\t}\n' + '}\n';
+		final source: String =
+			'class C {\n\tfunction f():Int {\n\t\tvar a = 1;\n\t\tvar b = a + 2;\n\t\ttrace(b);\n\t\treturn b;\n\t}\n}\n';
 		final expected: String = 'class C {\n\tfunction f():Int {\n\t\tvar a = 1;\n\t\tfunction helper() {\n\t\t\tvar b = a + 2;\n'
-			+ '\t\t\ttrace(b);\n' + '\t\t\treturn b;\n' + '\t\t}\n' + '\t\tfinal b = helper();\n' + '\t\treturn b;\n' + '\t}\n' + '}\n';
+			+ '\t\t\ttrace(b);\n\t\t\treturn b;\n\t\t}\n\t\tfinal b = helper();\n\t\treturn b;\n\t}\n}\n';
 		assertExtract(source, 4, 3, 5, 3, 'helper', true, expected);
 	}
 
@@ -44,10 +44,9 @@ class ExtractMethodSliceTest extends Test {
 	 * return value; both referenced locals (`a`, `b`) are captured.
 	 */
 	public function testExtractNoReturnValue(): Void {
-		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = 1;\n\t\tvar b = 2;\n\t\ttrace(a);\n\t\ttrace(b);\n\t}\n'
-			+ '}\n';
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = 1;\n\t\tvar b = 2;\n\t\ttrace(a);\n\t\ttrace(b);\n\t}\n}\n';
 		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = 1;\n\t\tvar b = 2;\n\t\tfunction helper() {\n'
-			+ '\t\t\ttrace(a);\n' + '\t\t\ttrace(b);\n' + '\t\t}\n' + '\t\thelper();\n' + '\t}\n' + '}\n';
+			+ '\t\t\ttrace(a);\n\t\t\ttrace(b);\n\t\t}\n\t\thelper();\n\t}\n}\n';
 		assertExtract(source, 5, 3, 6, 3, 'helper', true, expected);
 	}
 
@@ -56,18 +55,18 @@ class ExtractMethodSliceTest extends Test {
 	 * `reformat`, and the result equals the `reformat` output.
 	 */
 	public function testCanonicalGatePassesWithoutReformat(): Void {
-		final source: String = 'class C {\n\tfunction f():Int {\n\t\tvar a = 1;\n\t\tvar b = a + 2;\n\t\ttrace(b);\n\t\treturn b;\n'
-			+ '\t}\n' + '}\n';
+		final source: String =
+			'class C {\n\tfunction f():Int {\n\t\tvar a = 1;\n\t\tvar b = a + 2;\n\t\ttrace(b);\n\t\treturn b;\n\t}\n}\n';
 		final expected: String = 'class C {\n\tfunction f():Int {\n\t\tvar a = 1;\n\t\tfunction helper() {\n\t\t\tvar b = a + 2;\n'
-			+ '\t\t\ttrace(b);\n' + '\t\t\treturn b;\n' + '\t\t}\n' + '\t\tfinal b = helper();\n' + '\t\treturn b;\n' + '\t}\n' + '}\n';
+			+ '\t\t\ttrace(b);\n\t\t\treturn b;\n\t\t}\n\t\tfinal b = helper();\n\t\treturn b;\n\t}\n}\n';
 		assertExtract(source, 4, 3, 5, 3, 'helper', false, expected);
 	}
 
 	/** `reformat` canonicalises a non-canonical (4-space) source as it extracts. */
 	public function testReformatProceedsOnNonCanonical(): Void {
 		final source: String = 'class C {\n    function f():Void {\n        var a = 1;\n        trace(a);\n    }\n}\n';
-		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = 1;\n\t\tfunction helper() {\n\t\t\ttrace(a);\n\t\t}\n'
-			+ '\t\thelper();\n' + '\t}\n' + '}\n';
+		final expected: String =
+			'class C {\n\tfunction f():Void {\n\t\tvar a = 1;\n\t\tfunction helper() {\n\t\t\ttrace(a);\n\t\t}\n\t\thelper();\n\t}\n}\n';
 		assertExtract(source, 4, 9, 4, 9, 'helper', true, expected);
 	}
 
@@ -98,8 +97,8 @@ class ExtractMethodSliceTest extends Test {
 	public function testExtractTwoValueStructReturn(): Void {
 		final source: String = 'class C {\n\tfunction f():Int {\n\t\tvar a = 1;\n\t\tvar b = 2;\n\t\treturn a + b;\n\t}\n}\n';
 		final expected: String = 'class C {\n\tfunction f():Int {\n\t\tfunction helper() {\n\t\t\tvar a = 1;\n\t\t\tvar b = 2;\n'
-			+ '\t\t\treturn {a: a, b: b};\n' + '\t\t}\n' + '\t\tfinal _helperResult = helper();\n' + '\t\tfinal a = _helperResult.a;\n'
-			+ '\t\tfinal b = _helperResult.b;\n' + '\t\treturn a + b;\n' + '\t}\n' + '}\n';
+			+ '\t\t\treturn {a: a, b: b};\n\t\t}\n\t\tfinal _helperResult = helper();\n\t\tfinal a = _helperResult.a;\n'
+			+ '\t\tfinal b = _helperResult.b;\n\t\treturn a + b;\n\t}\n}\n';
 		assertExtract(source, 3, 3, 4, 3, 'helper', true, expected);
 	}
 
@@ -109,11 +108,11 @@ class ExtractMethodSliceTest extends Test {
 	 * stays `final` — the per-variable binding choice.
 	 */
 	public function testExtractStructReturnWrittenAfter(): Void {
-		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = 1;\n\t\tvar b = 2;\n\t\ta = 5;\n\t\ttrace(a);\n'
-			+ '\t\ttrace(b);\n' + '\t}\n' + '}\n';
+		final source: String =
+			'class C {\n\tfunction f():Void {\n\t\tvar a = 1;\n\t\tvar b = 2;\n\t\ta = 5;\n\t\ttrace(a);\n\t\ttrace(b);\n\t}\n}\n';
 		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tfunction helper() {\n\t\t\tvar a = 1;\n\t\t\tvar b = 2;\n'
-			+ '\t\t\treturn {a: a, b: b};\n' + '\t\t}\n' + '\t\tfinal _helperResult = helper();\n' + '\t\tvar a = _helperResult.a;\n'
-			+ '\t\tfinal b = _helperResult.b;\n' + '\t\ta = 5;\n' + '\t\ttrace(a);\n' + '\t\ttrace(b);\n' + '\t}\n' + '}\n';
+			+ '\t\t\treturn {a: a, b: b};\n\t\t}\n\t\tfinal _helperResult = helper();\n\t\tvar a = _helperResult.a;\n'
+			+ '\t\tfinal b = _helperResult.b;\n\t\ta = 5;\n\t\ttrace(a);\n\t\ttrace(b);\n\t}\n}\n';
 		assertExtract(source, 3, 3, 4, 3, 'helper', true, expected);
 	}
 
@@ -131,10 +130,9 @@ class ExtractMethodSliceTest extends Test {
 	 */
 	public function testReturnDetectionBindsToDeclaration(): Void {
 		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar b = 1;\n\t\ttrace(b);\n\t}\n\n\tfunction g():Void {\n'
-			+ '\t\tvar b = 2;\n' + '\t\ttrace(b);\n' + '\t}\n' + '}\n';
-		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tfunction helper() {\n\t\t\tvar b = 1;\n\t\t\ttrace(b);\n'
-			+ '\t\t}\n' + '\t\thelper();\n' + '\t}\n' + '\n' + '\tfunction g():Void {\n' + '\t\tvar b = 2;\n' + '\t\ttrace(b);\n' + '\t}\n'
-			+ '}\n';
+			+ '\t\tvar b = 2;\n\t\ttrace(b);\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tfunction helper() {\n\t\t\tvar b = 1;\n\t\t\ttrace(b);\n\t\t}\n'
+			+ '\t\thelper();\n\t}\n\n\tfunction g():Void {\n\t\tvar b = 2;\n\t\ttrace(b);\n\t}\n}\n';
 		assertExtract(source, 3, 3, 4, 3, 'helper', true, expected);
 	}
 

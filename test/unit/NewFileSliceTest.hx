@@ -5,8 +5,6 @@ import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.query.NewFile;
-import anyparse.query.NewFile.NewFileResult;
-import anyparse.query.NewFile.NewFileSpec;
 #if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;

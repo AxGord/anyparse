@@ -1,9 +1,10 @@
 package anyparse.check;
 
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * The case-PATTERN scan the two case-arm rules share — `unused-case-binder` (a
@@ -49,8 +50,6 @@ final class CasePatternScan {
 
 	/** A structure-pattern field carries exactly its value pattern. */
 	private static inline final OBJECT_FIELD_CHILD_COUNT: Int = 1;
-
-	private function new() {}
 
 	/** The seam kinds both case-arm rules read, or null when the grammar leaves a required one unset. */
 	public static function seamsOf(plugin: GrammarPlugin): Null<CaseSeams> {
@@ -213,7 +212,7 @@ final class CasePatternScan {
 	 * Whether `name` opens with an uppercase ASCII letter — the family spelling of a constructor reference. Public because `collapse-nested-switch` makes the same assumption and reads it from here rather than keeping its own copy.
 	 */
 	public static inline function startsUpper(name: String): Bool {
-		final code: Int = StringTools.fastCodeAt(name, 0);
+		final code: Int = name.fastCodeAt(0);
 		return code >= 'A'.code && code <= 'Z'.code;
 	}
 
@@ -320,13 +319,16 @@ final class CasePatternScan {
 			}
 			return true;
 		}
-		if (kind == seams.parenKind) return node.children.length == 1 && scanPattern(seams, node.children[0], whole, out);
-		if (seams.extractorKinds.contains(kind))
-			return node.children.length == EXTRACTOR_CHILD_COUNT && scanPattern(seams, node.children[1], false, out);
 		// A leading minus reaches only a numeric literal in practice — Haxe rejects `case -c:`
 		// for any constant `c` — so this arm exists to accept `case -1:`, not to find binders.
-		if (kind == seams.negationKind) return node.children.length == 1 && scanPattern(seams, node.children[0], false, out);
-		return seams.constantLeafKinds.contains(kind);
+		return if (kind == seams.parenKind)
+			node.children.length == 1 && scanPattern(seams, node.children[0], whole, out)
+		else if (seams.extractorKinds.contains(kind))
+			node.children.length == EXTRACTOR_CHILD_COUNT && scanPattern(seams, node.children[1], false, out)
+		else if (kind == seams.negationKind)
+			node.children.length == 1 && scanPattern(seams, node.children[0], false, out)
+		else
+			seams.constantLeafKinds.contains(kind);
 	}
 
 }

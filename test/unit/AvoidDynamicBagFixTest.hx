@@ -54,14 +54,14 @@ class AvoidDynamicBagFixTest extends Test {
 	// ---- blast-radius ----
 
 	public function testPublicFieldNoEdits(): Void {
-		final src: String = 'using Reflect;\nclass C {\n\tpublic var bag:Dynamic;\n\tfunction f():Void {\n\t\t'
-			+ 'this.bag.setField("a", "x");\n\t}\n}';
+		final src: String =
+			'using Reflect;\nclass C {\n\tpublic var bag:Dynamic;\n\tfunction f():Void {\n\t\tthis.bag.setField("a", "x");\n\t}\n}';
 		Assert.equals(0, edits(src, new FakeTypeOracle(null)).length);
 	}
 
 	public function testPrivateFieldRewrites(): Void {
-		final src: String = 'using Reflect;\nclass C {\n\tvar bag:Dynamic = {};\n\tfunction f():Void {\n\t\t'
-			+ 'this.bag.setField("a", "x");\n\t}\n}';
+		final src: String =
+			'using Reflect;\nclass C {\n\tvar bag:Dynamic = {};\n\tfunction f():Void {\n\t\tthis.bag.setField("a", "x");\n\t}\n}';
 		final out: String = apply(src, edits(src, new FakeTypeOracle(null)));
 		Assert.isTrue(out.indexOf('var bag:DynamicAccess<String> = {}') != -1, out);
 		Assert.isTrue(out.indexOf('this.bag["a"] = "x"') != -1, out);
@@ -69,8 +69,8 @@ class AvoidDynamicBagFixTest extends Test {
 
 	public function testPropertyNoEdits(): Void {
 		// A property (get/set accessors) is not a plain field — rewriting its type would need accessor changes.
-		final src: String = 'using Reflect;\nclass C {\n\tvar bag(get, set):Dynamic;\n\tfunction f():Void {\n\t\t'
-			+ 'this.bag.setField("a", "x");\n\t}\n}';
+		final src: String =
+			'using Reflect;\nclass C {\n\tvar bag(get, set):Dynamic;\n\tfunction f():Void {\n\t\tthis.bag.setField("a", "x");\n\t}\n}';
 		Assert.equals(0, edits(src, new FakeTypeOracle(null)).length);
 	}
 
@@ -97,8 +97,8 @@ class AvoidDynamicBagFixTest extends Test {
 	// ---- import handling / idempotency ----
 
 	public function testExistingImportNotDuplicated(): Void {
-		final src: String = 'using Reflect;\nimport haxe.DynamicAccess;\nclass C {\n\tfunction f():Dynamic {\n\t\tfinal bag:Dynamic = {};\n\t\t'
-			+ 'bag.setField("a", "x");\n\t\treturn bag;\n\t}\n}';
+		final src: String = 'using Reflect;\nimport haxe.DynamicAccess;\nclass C {\n\tfunction f():Dynamic {\n'
+			+ '\t\tfinal bag:Dynamic = {};\n\t\tbag.setField("a", "x");\n\t\treturn bag;\n\t}\n}';
 		final e: Array<{ span: Span, text: String }> = edits(src, new FakeTypeOracle(null));
 		var importEdits: Int = 0;
 		for (ed in e) if (ed.text.indexOf('import haxe.DynamicAccess;') != -1) importEdits++;
@@ -121,7 +121,7 @@ class AvoidDynamicBagFixTest extends Test {
 		return 'using Reflect;\nclass C {\n\tfunction f():Dynamic {\n\t\tfinal bag:Dynamic = {};\n\t\t$body\n\t\treturn bag;\n\t}\n}';
 	}
 
-	private function fieldValueSrc(): String {
+	private inline function fieldValueSrc(): String {
 		return 'using Reflect;\nclass C {\n\tfunction f(g:G):Dynamic {\n\t\tfinal bag:Dynamic = {};\n\t\t'
 			+ 'bag.setField("k", g.value);\n\t\treturn bag;\n\t}\n}\nclass G {\n\tpublic var value:String = "";\n}';
 	}

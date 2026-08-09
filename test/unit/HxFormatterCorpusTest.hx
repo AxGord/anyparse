@@ -14,6 +14,8 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.runtime.ParseError;
 
+using StringTools;
+
 /**
  * υ₁ — corpus harness validating the macro-generated Haxe writer plus
  * the σ + τ₁ … τ₄ WriteOptions stack against the AxGord/haxe-formatter
@@ -66,6 +68,16 @@ class HxFormatterCorpusTest extends Test {
 	private static inline final SWEEP_JSON_PATH: String = 'bin/.last-sweep.json';
 	private static inline final SWEEP_PREV_PATH: String = 'bin/.prev-sweep.json';
 
+	// ω-sweep-fixture-status: per-fixture status map for `apq recon
+	// --regression-probe`. Each runCategory iteration appends one entry
+	// per `.hxtest` it inspects. Path format is `<subdir>/<name>` (e.g.
+	// `whitespace/issue_195_macro_do_while.hxtest`), matching what
+	// `Cli.collectReconSkipRecords` reports — so the diff machinery can
+	// look up "what was this fixture's status last sweep?" by path alone.
+	// Status enum is restricted to the six categories runCategory emits:
+	// PASS / FAIL / SKIP_PARSE / SKIP_WRITE / SKIP_CONFIG / MALFORMED.
+	private static final sweepFixtures: Array<{ path: String, status: String }> = [];
+
 	// ω-sweep-delta — process-wide accumulator across every per-category
 	// `runCategory` invocation. The per-category prints stay (legacy
 	// behavior), and a single end-of-process aggregate prints the totals
@@ -84,57 +96,47 @@ class HxFormatterCorpusTest extends Test {
 	private static var sweepSkipConfig: Int = 0;
 	private static var sweepSkipMalformed: Int = 0;
 
-	// ω-sweep-fixture-status: per-fixture status map for `apq recon
-	// --regression-probe`. Each runCategory iteration appends one entry
-	// per `.hxtest` it inspects. Path format is `<subdir>/<name>` (e.g.
-	// `whitespace/issue_195_macro_do_while.hxtest`), matching what
-	// `Cli.collectReconSkipRecords` reports — so the diff machinery can
-	// look up "what was this fixture's status last sweep?" by path alone.
-	// Status enum is restricted to the six categories runCategory emits:
-	// PASS / FAIL / SKIP_PARSE / SKIP_WRITE / SKIP_CONFIG / MALFORMED.
-	private static final sweepFixtures: Array<{ path: String, status: String }> = [];
-
 	public function new(): Void {
 		super();
 	}
 
-	public function testSameLine(): Void {
+	public inline function testSameLine(): Void {
 		runCategory(SAMELINE_SUBDIR, 'sameline');
 	}
 
-	public function testWhitespace(): Void {
+	public inline function testWhitespace(): Void {
 		runCategory(WHITESPACE_SUBDIR, 'whitespace');
 	}
 
-	public function testIndentation(): Void {
+	public inline function testIndentation(): Void {
 		runCategory(INDENTATION_SUBDIR, 'indentation');
 	}
 
-	public function testWrapping(): Void {
+	public inline function testWrapping(): Void {
 		runCategory(WRAPPING_SUBDIR, 'wrapping');
 	}
 
-	public function testEmptyLines(): Void {
+	public inline function testEmptyLines(): Void {
 		runCategory(EMPTYLINES_SUBDIR, 'emptylines');
 	}
 
-	public function testLineEnds(): Void {
+	public inline function testLineEnds(): Void {
 		runCategory(LINEENDS_SUBDIR, 'lineends');
 	}
 
-	public function testOther(): Void {
+	public inline function testOther(): Void {
 		runCategory(OTHER_SUBDIR, 'other');
 	}
 
-	public function testFormatRange(): Void {
+	public inline function testFormatRange(): Void {
 		runCategory(FORMATRANGE_SUBDIR, 'formatrange');
 	}
 
-	public function testExpressionLevel(): Void {
+	public inline function testExpressionLevel(): Void {
 		runCategory(EXPRESSIONLEVEL_SUBDIR, 'expressionlevel');
 	}
 
-	public function testMissing(): Void {
+	public inline function testMissing(): Void {
 		runCategory(MISSING_SUBDIR, 'missing');
 	}
 
@@ -163,7 +165,7 @@ class HxFormatterCorpusTest extends Test {
 		final names: Array<String> = FileSystem.readDirectory(dir);
 		names.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
 
-		for (name in names) if (StringTools.endsWith(name, HXTEST_EXT)) {
+		for (name in names) if (name.endsWith(HXTEST_EXT)) {
 			final path: String = '$dir/$name';
 			// Subdir-relative path for the sweep snapshot; matches what
 			// `apq recon` reports per-fixture, so `--regression-probe`
@@ -187,7 +189,7 @@ class HxFormatterCorpusTest extends Test {
 					sweepFixtures.push({ path: relPath, status: 'PASS' });
 				} else {
 					fail++;
-					failLines.push('  [$name] disable/excludes meta but expected non-empty: ' + describeDiff(tc.expected, ''));
+					failLines.push('  [$name] disable/excludes meta but expected non-empty: ${describeDiff(tc.expected, '')}');
 					sweepFixtures.push({ path: relPath, status: 'FAIL' });
 				}
 				continue;
@@ -230,14 +232,15 @@ class HxFormatterCorpusTest extends Test {
 				sweepFixtures.push({ path: relPath, status: 'PASS' });
 			} else {
 				fail++;
-				failLines.push('  [$name] ' + describeDiff(tc.expected, actual));
+				failLines.push('  [$name] ${describeDiff(tc.expected, actual)}');
 				sweepFixtures.push({ path: relPath, status: 'FAIL' });
 			}
 		}
 
 		final total: Int = pass + fail + skipMalformed + skipParse + skipWrite + skipConfig;
 		Sys.println(
-			'$label corpus: $pass pass / $fail fail / $skipParse skip-parse / $skipWrite skip-write / $skipConfig skip-config / $skipMalformed malformed (total $total)'
+			'$label corpus: $pass pass / $fail fail / $skipParse skip-parse / $skipWrite skip-write / $skipConfig skip-config / '
+			+ '$skipMalformed malformed (total $total)'
 		);
 		if (fail > 0) Sys.println('$label fails:');
 		for (line in failLines) Sys.println(line);
@@ -296,12 +299,14 @@ class HxFormatterCorpusTest extends Test {
 			final dPass: Int = sweepPass - (prevPass: Int);
 			final dFail: Int = sweepFail - (prevFail: Int);
 			final dSkipParse: Int = sweepSkipParse - (prevSkipParse: Int);
-			'  Δpass ${signed(dPass)} / Δfail ${signed(dFail)} / Δskip-parse ${signed(dSkipParse)}  vs last sweep ($prevPass / $prevFail / $prevSkipParse)';
+			'  Δpass ${signed(dPass)} / Δfail ${signed(dFail)} / Δskip-parse ${signed(dSkipParse)}  vs last sweep ($prevPass / $prevFail'
+				+ ' / $prevSkipParse)';
 		} else
 			'  (no previous sweep recorded)';
 		Sys.println('');
 		Sys.println(
-			'===== sweep totals: $sweepPass pass / $sweepFail fail / $sweepSkipParse skip-parse / $sweepSkipWrite skip-write / $sweepSkipConfig skip-config / $sweepSkipMalformed malformed (total $total) ====='
+			'===== sweep totals: $sweepPass pass / $sweepFail fail / $sweepSkipParse skip-parse / $sweepSkipWrite skip-write / '
+			+ '$sweepSkipConfig skip-config / $sweepSkipMalformed malformed (total $total) ====='
 		);
 		Sys.println(deltaStr);
 		try {
@@ -376,8 +381,12 @@ class HxFormatterCorpusTest extends Test {
 	}
 
 	private static function truncate(s: Null<String>): String {
-		if (s == null || s == '') return '<no message>';
-		return s.length > MAX_REASON_LEN ? '${s.substr(0, MAX_REASON_LEN)}...' : s;
+		return if (s == null || s == '')
+			'<no message>'
+		else if (s.length > MAX_REASON_LEN)
+			'${s.substr(0, MAX_REASON_LEN)}...'
+		else
+			s;
 	}
 
 	private static function slice(s: String, from: Int, maxLen: Int): String {
@@ -413,7 +422,7 @@ class HxFormatterCorpusTest extends Test {
 	private static function escape(s: String): String {
 		final buf: StringBuf = new StringBuf();
 		for (i in 0...s.length) {
-			final c: Int = StringTools.fastCodeAt(s, i);
+			final c: Int = s.fastCodeAt(i);
 			switch c {
 				case '\n'.code:
 					buf.add('\\n');
@@ -434,7 +443,7 @@ class HxFormatterCorpusTest extends Test {
 	 * under the cyclomatic-complexity budget.
 	 */
 	private static function stripTrailingNewline(s: String): String {
-		return s.length > 0 && StringTools.fastCodeAt(s, s.length - 1) == '\n'.code ? s.substr(0, s.length - 1) : s;
+		return s.length > 0 && s.fastCodeAt(s.length - 1) == '\n'.code ? s.substr(0, s.length - 1) : s;
 	}
 
 }

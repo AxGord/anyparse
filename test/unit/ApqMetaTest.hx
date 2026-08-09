@@ -5,7 +5,6 @@ import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.Meta;
-import anyparse.query.Meta.MetaHit;
 import anyparse.query.QueryNode;
 import anyparse.query.format.Json;
 
@@ -76,10 +75,9 @@ class ApqMetaTest extends Test {
 			Assert.equals('VarMember', a.declKind);
 			Assert.equals('n', a.declName);
 		}
-		if (b != null) {
-			Assert.equals('FnMember', b.declKind);
-			Assert.equals('y', b.declName);
-		}
+		if (b == null) return;
+		Assert.equals('FnMember', b.declKind);
+		Assert.equals('y', b.declName);
 	}
 
 	public function testNonAnnotatedDeclProducesNoHits(): Void {

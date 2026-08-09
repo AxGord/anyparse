@@ -5,6 +5,8 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
+
 /**
  * Replace the comment at a cursor — the comment counterpart of `set-doc`
  * (which is declaration-doc-only and block-comment-only). Inline line
@@ -41,9 +43,9 @@ final class SetComment {
 		catch (exception: Exception)
 			return Err('source does not parse: ${exception.message}');
 
-		final trimmed: String = StringTools.trim(commentText);
+		final trimmed: String = commentText.trim();
 		if (trimmed.length == 0) return Err('set-comment requires a non-empty comment text');
-		if (!StringTools.startsWith(trimmed, '//') && !StringTools.startsWith(trimmed, '/*'))
+		if (!trimmed.startsWith('//') && !trimmed.startsWith('/*'))
 			return Err('set-comment replacement must be a comment (start with // or /*)');
 
 		final cursor: Int = Span.offsetOf(source, line, col);

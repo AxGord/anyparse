@@ -133,8 +133,8 @@ class IfFalseDeadCodeCheckTest extends Test {
 		// `c();` (non-trivial) is reported but left untouched — the
 		// fix-count must reflect exactly the one edit actually produced,
 		// not the two violations reported.
-		final src: String =
-			'class C {\n\tfunction f() {\n\t\ta();\n\t\t#if false\n\t\t;\n\t\t#end\n\t\tb();\n\t\t#if false\n\t\tc();\n\t\t#end\n\t\td();\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n\t\ta();\n\t\t#if false\n\t\t;\n\t\t#end\n\t\tb();\n\t\t#if false\n\t\tc();\n'
+			+ '\t\t#end\n\t\td();\n\t}\n}';
 		final check: IfFalseDeadCode = new IfFalseDeadCode();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 		Assert.equals(2, vs.length);
@@ -257,8 +257,8 @@ class IfFalseDeadCodeCheckTest extends Test {
 		// Two `#if true` regions in one file: an elseless region always
 		// unwraps (nothing eliminated); one with a non-trivial `#else`
 		// branch is reported but left untouched.
-		final src: String =
-			'class C {\n\tfunction f() {\n\t\ta();\n\t\t#if true\n\t\tlive();\n\t\t#end\n\t\tb();\n\t\t#if true\n\t\tc();\n\t\t#else\n\t\tdead();\n\t\t#end\n\t\td();\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n\t\ta();\n\t\t#if true\n\t\tlive();\n\t\t#end\n\t\tb();\n\t\t#if true\n\t\tc();\n'
+			+ '\t\t#else\n\t\tdead();\n\t\t#end\n\t\td();\n\t}\n}';
 		final check: IfFalseDeadCode = new IfFalseDeadCode();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 		Assert.equals(2, vs.length);

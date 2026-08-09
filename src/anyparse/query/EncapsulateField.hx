@@ -6,6 +6,8 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
+
 /**
  * `encapsulate-field` — turn a stored `var` field into a property with
  * `get` / `set` accessors, so reads and writes route through methods that
@@ -172,8 +174,8 @@ final class EncapsulateField {
 	 */
 	private static function alreadyProperty(source: String, nameEnd: Int, groupTo: Int): Bool {
 		var i: Int = nameEnd;
-		while (i < groupTo && RefactorSupport.isSpace(StringTools.fastCodeAt(source, i))) i++;
-		return i < groupTo && StringTools.fastCodeAt(source, i) == '('.code;
+		while (i < groupTo && RefactorSupport.isSpace(source.fastCodeAt(i))) i++;
+		return i < groupTo && source.fastCodeAt(i) == '('.code;
 	}
 
 	/**
@@ -182,8 +184,8 @@ final class EncapsulateField {
 	 * not expose type info or the field has no explicit annotation.
 	 */
 	private static function declaredTypeSource(plugin: GrammarPlugin, source: String, fieldFrom: Int): Null<String> {
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
-		return provider == null ? null : provider.declaredTypeSources(source)[fieldFrom];
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		return provider?.declaredTypeSources(source)[fieldFrom];
 	}
 
 }

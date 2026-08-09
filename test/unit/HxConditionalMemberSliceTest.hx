@@ -63,10 +63,9 @@ class HxConditionalMemberSliceTest extends HxTestHelpers {
 		Assert.equals('a', (expectFnMember(cond.body[0].member).name: String));
 		final elseBody: Null<Array<HxMemberDecl>> = cond.elseBody;
 		Assert.notNull(elseBody);
-		if (elseBody != null) {
-			Assert.equals(1, elseBody.length);
-			Assert.equals('b', (expectFnMember(elseBody[0].member).name: String));
-		}
+		if (elseBody == null) return;
+		Assert.equals(1, elseBody.length);
+		Assert.equals('b', (expectFnMember(elseBody[0].member).name: String));
 	}
 
 	// -- `#elseif` chained clause --

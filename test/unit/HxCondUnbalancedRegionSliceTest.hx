@@ -77,8 +77,7 @@ class HxCondUnbalancedRegionSliceTest extends HxTestHelpers {
 	 */
 	public function testDeclHeaderSplitAbstractRoundTrips(): Void {
 		final src: String = '#if !lime_webgl\n@:forward(id, refs) abstract G(GLObject) from GLObject to GLObject {\n#else\n'
-			+ '@:forward() abstract G(js.html.webgl.Program) from js.html.webgl.Program {\n#end\n'
-			+ '\tpublic static function f():Void {}\n}';
+			+ '@:forward() abstract G(js.html.webgl.Program) from js.html.webgl.Program {\n#end\n\tpublic static function f():Void {}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

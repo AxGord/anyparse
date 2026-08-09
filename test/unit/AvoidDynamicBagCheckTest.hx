@@ -3,7 +3,6 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.check.AvoidDynamic;
-import anyparse.check.Check.Violation;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 
 /**
@@ -76,8 +75,8 @@ class AvoidDynamicBagCheckTest extends Test {
 
 	public function testWithoutUsingReflectExtensionDisqualifies(): Void {
 		// No `using Reflect` → `bag.setField(...)` is a dynamic method call, not a reflect op.
-		final src: String = 'class C {\n\tfunction f():Dynamic {\n\t\tfinal bag:Dynamic = {};\n\t\tbag.setField("a", "x");\n\t\t'
-			+ 'return bag;\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction f():Dynamic {\n\t\tfinal bag:Dynamic = {};\n\t\tbag.setField("a", "x");\n\t\treturn bag;\n\t}\n}';
 		Assert.equals(-1, bagMsg(src).indexOf('string-keyed bag'));
 	}
 
@@ -98,15 +97,15 @@ class AvoidDynamicBagCheckTest extends Test {
 	// ---- fields ----
 
 	public function testPrivateFieldBag(): Void {
-		final src: String = 'using Reflect;\nclass C {\n\tvar bag:Dynamic = {};\n\tfunction f():Void {\n\t\t'
-			+ 'this.bag.setField("a", "x");\n\t}\n}';
+		final src: String =
+			'using Reflect;\nclass C {\n\tvar bag:Dynamic = {};\n\tfunction f():Void {\n\t\tthis.bag.setField("a", "x");\n\t}\n}';
 		Assert.isTrue(bagMsg(src).indexOf('DynamicAccess<String>') != -1);
 	}
 
 	public function testPublicFieldBagReportedToo(): Void {
 		// The report flags a public field bag as well (the blast-radius gate only restricts the FIX).
-		final src: String = 'using Reflect;\nclass C {\n\tpublic var bag:Dynamic;\n\tfunction f():Void {\n\t\t'
-			+ 'this.bag.setField("a", "x");\n\t}\n}';
+		final src: String =
+			'using Reflect;\nclass C {\n\tpublic var bag:Dynamic;\n\tfunction f():Void {\n\t\tthis.bag.setField("a", "x");\n\t}\n}';
 		Assert.isTrue(bagMsg(src).indexOf('DynamicAccess<String>') != -1);
 	}
 

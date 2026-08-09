@@ -353,14 +353,14 @@ import utest.Test;
 	}
 
 	public function testFixDeletesMethodWithModifierRun(): Void {
-		final src: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tpublic inline function get_data():Int {\n'
-			+ '\t\treturn data;\n\t}\n}';
+		final src: String =
+			'class C {\n\tpublic var data(default, set):Int = 0;\n\tpublic inline function get_data():Int {\n\t\treturn data;\n\t}\n}';
 		Assert.equals('class C {\n\tpublic var data(default, set):Int = 0;\n}', applyFix(src));
 	}
 
 	public function testFixDeletesLeadingDocComment(): Void {
-		final src: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\n\t/** The data. */\n'
-			+ '\tpublic function get_data():Int return data;\n}';
+		final src: String =
+			'class C {\n\tpublic var data(default, set):Int = 0;\n\n\t/** The data. */\n\tpublic function get_data():Int return data;\n}';
 		Assert.equals('class C {\n\tpublic var data(default, set):Int = 0;\n\n}', applyFix(src));
 	}
 

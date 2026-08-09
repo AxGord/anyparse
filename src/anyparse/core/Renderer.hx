@@ -2,6 +2,8 @@ package anyparse.core;
 
 import anyparse.format.IndentChar;
 
+using StringTools;
+
 /**
 	Render-local mutable carrier for the `render` layout loop's scalar
 	accumulators plus the immutable run config. A fresh instance is built
@@ -367,7 +369,7 @@ class Renderer {
 
 		final raw: String = ctx.buf.toString();
 		final capped: String = maxConsecutiveBlanks >= 0 ? capConsecutiveBlanks(raw, lineEnd, maxConsecutiveBlanks) : raw;
-		return finalNewline && !StringTools.endsWith(capped, lineEnd) ? capped + lineEnd : capped;
+		return finalNewline && !capped.endsWith(lineEnd) ? capped + lineEnd : capped;
 	}
 
 	/**
@@ -397,11 +399,12 @@ class Renderer {
 		breakDoc: Doc, fullLineCrosses: Bool, indent: Int, n: Int, restStack: Array<Frame>
 	): Bool {
 		final probe: Null<{ inner: Doc, hard: Bool }> = findCollapseProbe(breakDoc);
-		return probe == null
-			? fullLineCrosses
-			: probe.hard
-				? fullLineCrosses && restStackHasTrailingContent(restStack)
-				: fullLineCrosses && indent + DocMeasure.flatTokenWidth(probe.inner) < n;
+		return if (probe == null)
+			fullLineCrosses
+		else if (probe.hard)
+			fullLineCrosses && restStackHasTrailingContent(restStack)
+		else
+			fullLineCrosses && indent + DocMeasure.flatTokenWidth(probe.inner) < n;
 	}
 
 	/**
@@ -538,7 +541,7 @@ class Renderer {
 	private static function startsWithAt(s: String, at: Int, needle: String): Bool {
 		final needleLen: Int = needle.length;
 		if (at + needleLen > s.length) return false;
-		for (k in 0...needleLen) if (StringTools.fastCodeAt(s, at + k) != StringTools.fastCodeAt(needle, k)) return false;
+		for (k in 0...needleLen) if (s.fastCodeAt(at + k) != needle.fastCodeAt(k)) return false;
 		return true;
 	}
 
@@ -720,8 +723,6 @@ class Renderer {
 	 * locals, reads only its args, mutates no render state (invariant #1).
 	 *
 	 * Used exclusively by the `IfNaturalFirstLineExceeds` render arm.
-	 */
-	/**
 	 * `trailWidth` — flat width of the content that will ride the SAME rendered
 	 * line after `d` (the statement's own `;`, a closing `)`, …). It lives in the
 	 * enclosing render stack, so this walk cannot discover it; the caller reads it
@@ -952,7 +953,7 @@ class Renderer {
 				// fork's `collapseChainBreaksAfter` asks: "is there a binary
 				// continuation after the close `)` at all". So descend PAST a
 				// soft Line and keep scanning for a real token.
-				return (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) ? false : null;
+				return flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code ? false : null;
 			case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
 				return false;
 			case Nest(_, innerDoc):
@@ -1005,7 +1006,7 @@ class Renderer {
 	 */
 	private static function textHasTrailingContent(s: String): Bool {
 		for (ci in 0...s.length) {
-			final c: Int = StringTools.fastCodeAt(s, ci);
+			final c: Int = s.fastCodeAt(ci);
 			if (c == ' '.code || c == '\t'.code) continue;
 			if (c == ')'.code || c == ']'.code || c == '}'.code || c == ';'.code || c == ','.code) continue;
 			return true;
@@ -1458,7 +1459,7 @@ class Renderer {
 			case Group(inner) | GroupWithRestProbe(inner) | BodyGroup(inner):
 				pushNaturalGroup(stack, node, inner, width, col, 0);
 			case IfBreak(breakDoc, flatDoc):
-				final picked: Doc = (node.forceFlat || node.mode == MFlat) ? flatDoc : breakDoc;
+				final picked: Doc = node.forceFlat || node.mode == MFlat ? flatDoc : breakDoc;
 				stack.push({
 					doc: picked,
 					indent: node.indent,
@@ -1720,7 +1721,7 @@ class Renderer {
 			case IfBreak(breakDoc, flatDoc):
 				// Pick by mode (mirrors render IfBreak): forceFlat or MFlat
 				// -> flat side; MBreak -> break side. Propagate forceFlat.
-				final picked: Doc = (node.forceFlat || node.mode == MFlat) ? flatDoc : breakDoc;
+				final picked: Doc = node.forceFlat || node.mode == MFlat ? flatDoc : breakDoc;
 				stack.push({
 					doc: picked,
 					indent: node.indent,
@@ -1818,18 +1819,18 @@ class Renderer {
 				// render emits — so the enclosing `IfNaturalFirstLineExceeds` keeps
 				// the `return`/`=` glued and opens the call paren (fork parity)
 				// rather than mis-measuring the value's full flat width and breaking
-				// the operator. The `_fitsD` sub-measure stays legacy (no resolve),
+				// the operator. The `fitsD` sub-measure stays legacy (no resolve),
 				// mirroring render's own glue probe. OUTSIDE a RHS probe
 				// (`resolveOpenDelim == false`, e.g. a nested open-delim inside a
 				// sibling expr-paren-open decision) the arm below keeps the flat
 				// descend — byte-inert.
-				final _fitsD: Bool = naturalFirstLineWidth(flatDoc, col, node.indent, width) < nn;
-				final _gluableD: Bool = naturalFirstLineGluable(flatDoc, col, node.indent, width);
-				final _glueD: Bool = _fitsD && _gluableD;
+				final fitsD: Bool = naturalFirstLineWidth(flatDoc, col, node.indent, width) < nn;
+				final gluableD: Bool = naturalFirstLineGluable(flatDoc, col, node.indent, width);
+				final glueD: Bool = fitsD && gluableD;
 				stack.push({
-					doc: _glueD ? flatDoc : breakDoc,
+					doc: glueD ? flatDoc : breakDoc,
 					indent: node.indent,
-					mode: _glueD ? node.mode : MBreak,
+					mode: glueD ? node.mode : MBreak,
 					forceFlat: node.forceFlat
 				});
 			case IfFirstLineExceeds(_, _, inner) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(_, _, _, _, inner) | IfIndentWidthExceeds(
@@ -1920,9 +1921,8 @@ class Renderer {
 					// calibrated to the un-flushed column and would over-fire (wrap
 					// a chain that fits) if the pending space were added.
 					final effPending: Int = n > width ? pendingSpace : 0;
-					final fullLineCrosses: Bool = (
-						col + effPending + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStackFull(stack) >= n
-					);
+					final fullLineCrosses: Bool = col + effPending + DocMeasure.flatTokenWidth(flatDoc)
+						+ flatTokenWidthOfRestStackFull(stack) >= n;
 					// ω-collapse-commit: record the open/glued decision at
 					// this node's true render column for the Doc→Doc pass.
 					// Keyed by node identity (enum `==` is reference equality
@@ -2208,7 +2208,7 @@ class Renderer {
 					if (items.length > 1)
 						stack.push(Frame.fillCont(
 							f.indent, items, 1, sep, tailReserve, f.forceFlat, restProbe, f.hardFlat,
-							(breakAfterWrap && !f.forceFlat) ? lineCount : -1
+							breakAfterWrap && !f.forceFlat ? lineCount : -1
 						));
 					stack.push(new Frame(f.indent, MBreak, items[0], f.forceFlat, f.hardFlat));
 				}
@@ -2318,7 +2318,7 @@ class Renderer {
 	 */
 	private static inline function endsWithOpenDelim(s: String): Bool {
 		if (s.length == 0) return false;
-		final c: Int = StringTools.fastCodeAt(s, s.length - 1);
+		final c: Int = s.fastCodeAt(s.length - 1);
 		return c == '('.code || c == '['.code || c == '{'.code;
 	}
 
@@ -2344,16 +2344,15 @@ class Renderer {
 	 * flushing any pending indent. A no-op when nothing is pending.
 	 */
 	private static function flushOptSpace(ctx: RenderCtx): Void {
-		if (ctx.pendingOptSpace != null) {
-			if (ctx.pendingIndent >= 0) {
-				writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
-				ctx.pendingIndent = -1;
-			}
-			ctx.buf.add(ctx.pendingOptSpace);
-			ctx.col += ctx.pendingOptSpace.length;
-			ctx.pendingOptSpace = null;
-			ctx.lastEmit = Other;
+		if (ctx.pendingOptSpace == null) return;
+		if (ctx.pendingIndent >= 0) {
+			writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
+			ctx.pendingIndent = -1;
 		}
+		ctx.buf.add(ctx.pendingOptSpace);
+		ctx.col += ctx.pendingOptSpace.length;
+		ctx.pendingOptSpace = null;
+		ctx.lastEmit = Other;
 	}
 
 	/**
@@ -2387,39 +2386,38 @@ class Renderer {
 	 * Mutates `ctx` (invariant #1: render-local carrier, no static state).
 	 */
 	private static function emitText(ctx: RenderCtx, s: String): Void {
-		if (s.length > 0) {
-			// ω-cond-indent-policy FixedZero: inside a
-			// `ConditionalMarkerZero` scope, a fresh-line token that
-			// starts with `#` is a preprocessor marker
-			// (`#if`/`#elseif`/`#else`/`#end`) — flush it at column 0
-			// regardless of the frame indent. Body lines (any other
-			// first byte) keep their pending frame indent.
-			final freshLine: Bool = ctx.lastEmit == Hardline && ctx.pendingOptSpace == null && ctx.pendingHardline < 0;
-			if (ctx.markerZeroDepth > 0 && freshLine && ctx.pendingIndent > 0 && StringTools.fastCodeAt(s, 0) == '#'.code) {
-				ctx.pendingIndent = 0;
-			}
-			// ω-cond-indent-policy AlignedDecrease: inside a
-			// `ConditionalMarkerDecrease` scope, EVERY fresh-line token —
-			// both `#`-markers and guarded body — is re-indented one
-			// indent level shallower (clamped at column 0), shifting the
-			// whole increase-style layout `-1` uniformly. Applied once
-			// per physical line (gated on the fresh-line flag), so a
-			// nested conditional's marker/body lines each get the single
-			// uniform shift rather than per-depth.
-			if (ctx.markerDecreaseDepth > 0 && freshLine && ctx.pendingIndent > 0) {
-				final shifted: Int = ctx.pendingIndent - ctx.markerDecreaseUnit;
-				ctx.pendingIndent = shifted > 0 ? shifted : 0;
-			}
-			flushPendingHardline(ctx);
-			flushOptSpace(ctx);
-			if (ctx.pendingIndent >= 0) {
-				writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
-				ctx.pendingIndent = -1;
-			}
-			ctx.buf.add(s);
-			ctx.col += s.length;
-			ctx.lastEmit = lastEmitFromText(s);
+		if (s.length <= 0) return;
+		// ω-cond-indent-policy FixedZero: inside a
+		// `ConditionalMarkerZero` scope, a fresh-line token that
+		// starts with `#` is a preprocessor marker
+		// (`#if`/`#elseif`/`#else`/`#end`) — flush it at column 0
+		// regardless of the frame indent. Body lines (any other
+		// first byte) keep their pending frame indent.
+		final freshLine: Bool = ctx.lastEmit == Hardline && ctx.pendingOptSpace == null && ctx.pendingHardline < 0;
+		if (ctx.markerZeroDepth > 0 && freshLine && ctx.pendingIndent > 0 && s.fastCodeAt(0) == '#'.code) {
+			ctx.pendingIndent = 0;
 		}
+		// ω-cond-indent-policy AlignedDecrease: inside a
+		// `ConditionalMarkerDecrease` scope, EVERY fresh-line token —
+		// both `#`-markers and guarded body — is re-indented one
+		// indent level shallower (clamped at column 0), shifting the
+		// whole increase-style layout `-1` uniformly. Applied once
+		// per physical line (gated on the fresh-line flag), so a
+		// nested conditional's marker/body lines each get the single
+		// uniform shift rather than per-depth.
+		if (ctx.markerDecreaseDepth > 0 && freshLine && ctx.pendingIndent > 0) {
+			final shifted: Int = ctx.pendingIndent - ctx.markerDecreaseUnit;
+			ctx.pendingIndent = shifted > 0 ? shifted : 0;
+		}
+		flushPendingHardline(ctx);
+		flushOptSpace(ctx);
+		if (ctx.pendingIndent >= 0) {
+			writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
+			ctx.pendingIndent = -1;
+		}
+		ctx.buf.add(s);
+		ctx.col += s.length;
+		ctx.lastEmit = lastEmitFromText(s);
 	}
 
 	/**
@@ -2589,9 +2587,12 @@ class Renderer {
 				// `Hardline` lastEmit can only carry over from OUTSIDE
 				// the region. Force the space unconditionally — the
 				// drop-on-state semantic is moot inside force-flat.
-				ctx.pendingOptSpace = !f.forceFlat && ctx.lastEmit == Hardline
-					? null
-					: ctx.pendingOptSpace == null ? ' ' : '${ctx.pendingOptSpace} ';
+				ctx.pendingOptSpace = if (!f.forceFlat && ctx.lastEmit == Hardline)
+					null
+				else if (ctx.pendingOptSpace == null)
+					' '
+				else
+					'${ctx.pendingOptSpace} ';
 			case OptHardlineSkipBeforeHardline:
 				// Forward-looking opt-hardline (ω-opthardlineskipbeforehardline):
 				// defer the `\n+indent` emit to the first content-bearing
@@ -2692,7 +2693,7 @@ class Renderer {
 			// Default `restW=0` preserves byte-equivalent legacy
 			// behavior; sister to `GroupWithRestProbe` at the Group
 			// decision layer.
-			final restW: Int = (f.fillRestProbe && idx == fillRest.length - 1) ? flatTokenWidthOfRestStack(stack) : 0;
+			final restW: Int = f.fillRestProbe && idx == fillRest.length - 1 ? flatTokenWidthOfRestStack(stack) : 0;
 			// ω-fill-break-after-wrap: the just-drained previous item
 			// (`fillRest[idx - 1]`) self-wrapped when the render's
 			// physical-line count advanced past the snapshot taken when
@@ -2773,7 +2774,7 @@ class Renderer {
 				// Force-flat (slice B): always pick `flatDoc`, propagate
 				// `forceFlat=true` so the chosen branch keeps the region
 				// semantic for its own descendants. `hardFlat` rides along.
-				final picked: Doc = (f.forceFlat || f.mode == MFlat) ? flatDoc : breakDoc;
+				final picked: Doc = f.forceFlat || f.mode == MFlat ? flatDoc : breakDoc;
 				stack.push(new Frame(f.indent, f.mode, picked, f.forceFlat, f.hardFlat));
 			case IfWidthExceeds(n, breakDoc, flatDoc):
 				// Column-aware probe: rule fires when `col +
@@ -2810,7 +2811,7 @@ class Renderer {
 				if (f.forceFlat) {
 					stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
 				} else {
-					final crosses: Bool = (col + DocMeasure.flatTokenWidth(flatDoc) >= n);
+					final crosses: Bool = col + DocMeasure.flatTokenWidth(flatDoc) >= n;
 					final pushMode: Mode = crosses ? MBreak : f.mode;
 					stack.push(new Frame(f.indent, pushMode, crosses ? breakDoc : flatDoc));
 				}
@@ -2835,7 +2836,7 @@ class Renderer {
 				if (f.forceFlat) {
 					stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
 				} else {
-					final firstLineCrosses: Bool = (col + flatTokenWidthFirstLine(flatDoc) >= n);
+					final firstLineCrosses: Bool = col + flatTokenWidthFirstLine(flatDoc) >= n;
 					final pushMode: Mode = firstLineCrosses ? MBreak : f.mode;
 					stack.push(new Frame(f.indent, pushMode, firstLineCrosses ? breakDoc : flatDoc));
 				}
@@ -2941,7 +2942,7 @@ class Renderer {
 				if (f.forceFlat) {
 					stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
 				} else {
-					final lineCrosses: Bool = (col + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStack(stack) >= n);
+					final lineCrosses: Bool = col + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStack(stack) >= n;
 					final pushMode: Mode = lineCrosses ? MBreak : f.mode;
 					stack.push(new Frame(f.indent, pushMode, lineCrosses ? breakDoc : flatDoc));
 				}
@@ -3003,7 +3004,7 @@ class Renderer {
 						case IfNaturalFirstLineExceedsWithRest(_, _, _): flatTokenWidthOfRestStack(stack);
 						case _: 0;
 					};
-					final naturalCrosses: Bool = (naturalFirstLineWidth(flatDoc, col, f.indent, width, true, trailWidth) >= n);
+					final naturalCrosses: Bool = naturalFirstLineWidth(flatDoc, col, f.indent, width, true, trailWidth) >= n;
 					final pushMode: Mode = naturalCrosses ? MBreak : f.mode;
 					stack.push(new Frame(f.indent, pushMode, naturalCrosses ? breakDoc : flatDoc));
 				}
@@ -3045,7 +3046,7 @@ class Renderer {
 				if (f.forceFlat) {
 					stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
 				} else {
-					final contFits: Bool = (f.indent + extraIndent + flatWidth < n);
+					final contFits: Bool = f.indent + extraIndent + flatWidth < n;
 					final pushMode: Mode = contFits ? f.mode : MBreak;
 					stack.push(new Frame(f.indent, pushMode, contFits ? flatDoc : breakDoc));
 				}
@@ -3092,7 +3093,7 @@ class Renderer {
 				if (f.forceFlat) {
 					stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
 				} else {
-					final exceeds: Bool = (f.indent + flatWidth > n);
+					final exceeds: Bool = f.indent + flatWidth > n;
 					stack.push(new Frame(f.indent, exceeds ? MBreak : f.mode, exceeds ? breakDoc : flatDoc));
 				}
 			case _:

@@ -184,7 +184,7 @@ class TypeRefPrinterTest extends Test {
 
 	// --- route 2: free short name -> import + short name ---
 
-	public function testFreeNameGetsImportAndShortName(): Void {
+	public inline function testFreeNameGetsImportAndShortName(): Void {
 		assertImported('package pkg;\n\nclass C {}\n');
 	}
 
@@ -281,7 +281,7 @@ class TypeRefPrinterTest extends Test {
 
 	// --- route 3: taken short name -> correct fully-qualified form ---
 
-	public function testImportedOtherPathStaysQualified(): Void {
+	public inline function testImportedOtherPathStaysQualified(): Void {
 		assertNotImported('package pkg;\n\nimport other.Widget;\n\nclass C {}\n');
 	}
 
@@ -452,8 +452,8 @@ class TypeRefPrinterTest extends Test {
 		// ASCII). Reading the block as unsorted appended the fresh import LAST, past every
 		// existing one, which is what put a `components.editor.*` import at the bottom of an
 		// otherwise ordered block in the wild.
-		final src: String =
-			'package app;\n\nimport app.base.Host;\nimport pkg.mid.events.Alpha;\nimport pkg.mid.SetBeta;\nimport util.Valid;\n\nclass C {}\n';
+		final src: String = 'package app;\n\nimport app.base.Host;\nimport pkg.mid.events.Alpha;\nimport pkg.mid.SetBeta;\n'
+			+ 'import util.Valid;\n\nclass C {}\n';
 		final p: TypeRefPrinter = printer(src);
 		p.print('app.deep.Mod.Widget');
 		Assert.equals(
@@ -476,8 +476,8 @@ class TypeRefPrinterTest extends Test {
 	public function testBlankSeparatedGroupsKeepTheirSort(): Void {
 		// Blank lines split an import block into visual groups. The order across the whole block
 		// still holds, so the insert lands in the group it sorts into and the blank lines survive.
-		final src: String =
-			'package app;\n\nimport app.base.Host;\nimport app.mid.events.Alpha;\nimport app.mid.SetBeta;\n\nimport z.Zeta;\n\nclass C {}\n';
+		final src: String = 'package app;\n\nimport app.base.Host;\nimport app.mid.events.Alpha;\nimport app.mid.SetBeta;\n\n'
+			+ 'import z.Zeta;\n\nclass C {}\n';
 		final p: TypeRefPrinter = printer(src);
 		p.print('app.deep.Mod.Widget');
 		Assert.equals(

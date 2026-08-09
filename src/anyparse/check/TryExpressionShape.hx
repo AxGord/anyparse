@@ -3,6 +3,8 @@ package anyparse.check;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * One `try` statement decomposed for the two try-expression collapse rules: the try body's
  * VALUE and, per catch clause, the verbatim `catch (…)` header plus that clause's value.
@@ -69,8 +71,6 @@ final class TryExpressionShape {
 	/** A `try` node's children are [body, catch, catch, …] -- the body plus at least one clause. */
 	private static inline final MIN_TRY_CHILD_COUNT: Int = 2;
 
-	private function new() {}
-
 	/**
 	 * The ONE node a try / catch body holds: the sole child of a `{ … }` wrapping exactly one,
 	 * or the bare statement / expression itself. Null when the body is a block of zero or
@@ -79,8 +79,7 @@ final class TryExpressionShape {
 	 * initializer would stay live on that path).
 	 */
 	public static function singleBody(body: QueryNode, blockStmtKind: Null<String>): Null<QueryNode> {
-		if (blockStmtKind != null && body.kind == blockStmtKind) return body.children.length == 1 ? body.children[0] : null;
-		return body;
+		return blockStmtKind != null && body.kind == blockStmtKind ? body.children.length == 1 ? body.children[0] : null : body;
 	}
 
 	/**
@@ -117,7 +116,7 @@ final class TryExpressionShape {
 			if (clauseValue == null) return null;
 			// Re-bound to a non-null local: narrowing does not reach the struct literal below.
 			final resolved: QueryNode = clauseValue;
-			final header: String = StringTools.rtrim(source.substring(clauseSpan.from, bodySpan.from));
+			final header: String = source.substring(clauseSpan.from, bodySpan.from).rtrim();
 			// The header is emitted RTRIMMED, so its effective end is where the copy stops —
 			// testing against `bodySpan.from` would see the newline the rtrim just removed.
 			final headerSpan: Span = new Span(clauseSpan.from, clauseSpan.from + header.length);
@@ -183,7 +182,7 @@ final class TryExpressionShape {
 			if (declSpan.to <= declSpan.from || source.charAt(declSpan.to - 1) != ';') return null;
 			declSpan.to - 1;
 		}
-		return { text: StringTools.rtrim(source.substring(declSpan.from, prefixEnd)), keptTo: prefixEnd };
+		return { text: source.substring(declSpan.from, prefixEnd).rtrim(), keptTo: prefixEnd };
 	}
 
 	/** `node`'s verbatim source slice, or null when it carries no span. */
@@ -231,7 +230,7 @@ final class TryExpressionShape {
 			if (kinds.contains(current.kind)) return true;
 			final span: Null<Span> = current.span;
 			final last: Null<QueryNode> = current.children.length == 0 ? null : current.children[current.children.length - 1];
-			final lastSpan: Null<Span> = last == null ? null : last.span;
+			final lastSpan: Null<Span> = last?.span;
 			// Split, not `||`-chained: strict null-safety carries a narrowing fact into a later
 			// `||` operand from the FIRST operand only.
 			if (last == null || span == null || lastSpan == null) return false;

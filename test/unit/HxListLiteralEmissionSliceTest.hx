@@ -43,7 +43,6 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 class HxListLiteralEmissionSliceTest extends Test {
 
 	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
-
 	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
 	/** TM's load-bearing formatting keys, with all three policies off. */
@@ -111,22 +110,16 @@ class HxListLiteralEmissionSliceTest extends Test {
 	// --- item (b): multiline trailing comma ---
 
 	private static final ARR_TRAIL: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talpha,\n\t\t\tbeta,\n\t\t];\n\t}\n}\n';
-
 	private static final OBJ_TRAIL: String =
 		'class C {\n\tfunction f() {\n\t\tvar o = {\n\t\t\talpha: 1,\n\t\t\tbeta: 2,\n\t\t};\n\t}\n}\n';
-
 	private static final NEW_TRAIL: String = 'class C {\n\tfunction f() {\n\t\tvar n = new T(\n\t\t\talphaAlphaAlphaAlphaAlpha,\n'
 		+ '\t\t\tbetaBetaBetaBetaBetaBeta,\n\t\t\tgammaGammaGammaGammaGamma,\n\t\t\tdeltaDeltaDeltaDeltaDelta,\n'
 		+ '\t\t\tepsilonEpsilonEpsilonEps,\n\t\t);\n\t}\n}\n';
-
 	private static final ARR_FLAT_TRAIL: String = 'class C {\n\tfunction f() {\n\t\tvar a = [alpha, beta,];\n\t}\n}\n';
-
 	private static final ANON_EXTENSION: String = 'typedef E = {\n\t> Base,\n}\n';
-
 	private static final PARAMS_TRAIL: String = 'class C {\n\tfunction f(\n\t\talphaAlphaAlphaAlphaAlpha: Int,\n'
 		+ '\t\tbetaBetaBetaBetaBetaBeta: Int,\n\t\tgammaGammaGammaGammaGamma: Int,\n\t\tdeltaDeltaDeltaDeltaDelta: Int,\n'
 		+ '\t\tepsilonEpsilonEpsilonEps: Int,\n\t): Void {}\n}\n';
-
 	private static final CALL_TRAIL: String = 'class C {\n\tfunction f() {\n\t\tg(\n\t\t\talphaAlphaAlphaAlphaAlpha,\n'
 		+ '\t\t\tbetaBetaBetaBetaBetaBeta,\n\t\t\tgammaGammaGammaGammaGamma,\n\t\t\tdeltaDeltaDeltaDeltaDelta,\n'
 		+ '\t\t\tepsilonEpsilonEpsilonEps,\n\t\t);\n\t}\n}\n';
@@ -136,8 +129,13 @@ class HxListLiteralEmissionSliceTest extends Test {
 		'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talpha,\n\n\t\t\tbeta,\n\n\t\t\tgamma\n\t\t];\n\t}\n}\n';
 
 	/** No source trailing comma anywhere — the ADD-knob path. */
-	private static final ARR_NO_TRAIL: String =
-		'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talphaAlphaAlphaAlpha,\n\t\t\tbetaBetaBetaBetaBeta,\n\t\t\tgamma\n\t\t];\n\t}\n}\n';
+	private static final ARR_NO_TRAIL: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talphaAlphaAlphaAlpha,\n'
+		+ '\t\t\tbetaBetaBetaBetaBeta,\n\t\t\tgamma\n\t\t];\n\t}\n}\n';
+
+	// --- item (c): matrix rows ---
+	// TM `PitchArea.mouseDownLinePen` shape: 3 rows of 2, ragged cell widths.
+	private static final MATRIX: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\tSTRAIGHT_LINE, STRAIGHT_LINE_DASHED,\n'
+		+ '\t\t\tARC_LINE, ARC_LINE_DASHED,\n\t\t\tWAVE_LINE, WAVE_LINE_DASHED\n\t\t];\n\t}\n}\n';
 
 	public function testRemoveDropsMultilineCallArgTrailingComma(): Void {
 		// A plain call has no source-trailing-comma slot, so the ADD knob is
@@ -178,14 +176,9 @@ class HxListLiteralEmissionSliceTest extends Test {
 		Assert.equals(write(ARR_NOWRAP, COLLAPSE_NOWRAP_JSON), write(write(ARR_NOWRAP, COLLAPSE_NOWRAP_JSON), COLLAPSE_NOWRAP_JSON));
 	}
 
-	// --- item (c): matrix rows ---
-	// TM `PitchArea.mouseDownLinePen` shape: 3 rows of 2, ragged cell widths.
-	private static final MATRIX: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\tSTRAIGHT_LINE, STRAIGHT_LINE_DASHED,\n'
-		+ '\t\t\tARC_LINE, ARC_LINE_DASHED,\n\t\t\tWAVE_LINE, WAVE_LINE_DASHED\n\t\t];\n\t}\n}\n';
-
 	// --- config plumbing ---
 
-	public function testTrailingCommaDefaultsToKeep(): Void {
+	public inline function testTrailingCommaDefaultsToKeep(): Void {
 		Assert.equals(TrailingCommaPolicy.Keep, HaxeFormat.instance.defaultWriteOptions.trailingComma);
 	}
 
@@ -306,7 +299,7 @@ class HxListLiteralEmissionSliceTest extends Test {
 		return write(source, BASE_JSON);
 	}
 
-	private static function collapse(source: String): String {
+	private static inline function collapse(source: String): String {
 		return write(source, COLLAPSE_JSON);
 	}
 
@@ -314,15 +307,15 @@ class HxListLiteralEmissionSliceTest extends Test {
 		return write(source, REMOVE_JSON);
 	}
 
-	private static function noAlign(source: String): String {
+	private static inline function noAlign(source: String): String {
 		return write(source, NO_ALIGN_JSON);
 	}
 
-	private static function addKnob(source: String): String {
+	private static inline function addKnob(source: String): String {
 		return write(source, ADD_JSON);
 	}
 
-	private static function removeOverAdd(source: String): String {
+	private static inline function removeOverAdd(source: String): String {
 		return write(source, REMOVE_OVER_ADD_JSON);
 	}
 

@@ -19,25 +19,19 @@ class SpanInfoCodegen {
 		sub: 'SpanTypeInfo',
 		params: []
 	});
-
 	private static final NULL_SPAN_CT: ComplexType = TPath({
 		pack: [],
 		name: 'Null',
 		params: [TPType(TPath({ pack: ['anyparse', 'runtime'], name: 'Span', params: [] }))]
 	});
-
 	private static final NULL_STRING_CT: ComplexType = TPath({
 		pack: [],
 		name: 'Null',
 		params: [TPType(TPath({ pack: [], name: 'String', params: [] }))]
 	});
-
 	private static final STRING_CT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
-
 	private static final INT_CT: ComplexType = TPath({ pack: [], name: 'Int', params: [] });
-
 	private static final BOOL_CT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-
 	private static final VOID_CT: ComplexType = TPath({ pack: [], name: 'Void', params: [] });
 
 	public static function emit(result: SpanInfoLowering.SpanInfoResult): Array<Field> {

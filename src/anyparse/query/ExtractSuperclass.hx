@@ -8,6 +8,7 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
 using Lambda;
 
 /** One member selected to pull up: its name, node, and cut span. */
@@ -123,8 +124,8 @@ final class ExtractSuperclass {
 		catch (exception: Exception)
 			return Err('rewritten $srcFile does not parse: ${exception.message}');
 
-		final advisory: String = 'pulled ${moved.length} member(s) up into new superclass "$superName" — subclass access preserved by inheritance; '
-			+ 'the superclass has no constructor (the source constructor is unchanged).';
+		final advisory: String = 'pulled ${moved.length} member(s) up into new superclass "$superName'
+			+ '" — subclass access preserved by inheritance; ' + 'the superclass has no constructor (the source constructor is unchanged).';
 		final changes: Array<MoveChange> = [
 			{ file: superFile, newSource: superSource },
 			{ file: srcFile, newSource: newSrc },
@@ -303,8 +304,8 @@ final class ExtractSuperclass {
 	/** The cut span of a member group: decl + leading doc + whole line(s). */
 	private static function cutSpanOf(source: String, groupSpan: Span): Span {
 		final lineCut: Span = RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, groupSpan));
-		final blankBefore: Bool = lineCut.from >= 2 && StringTools.fastCodeAt(source, lineCut.from - 2) == '\n'.code;
-		final blankAfter: Bool = lineCut.to < source.length && StringTools.fastCodeAt(source, lineCut.to) == '\n'.code;
+		final blankBefore: Bool = lineCut.from >= 2 && source.fastCodeAt(lineCut.from - 2) == '\n'.code;
+		final blankAfter: Bool = lineCut.to < source.length && source.fastCodeAt(lineCut.to) == '\n'.code;
 		return blankBefore && blankAfter ? new Span(lineCut.from, lineCut.to + 1) : lineCut;
 	}
 
@@ -312,7 +313,7 @@ final class ExtractSuperclass {
 	private static function trimNewlineEdges(block: String): String {
 		var from: Int = 0;
 		while (from < block.length) {
-			final c: Int = StringTools.fastCodeAt(block, from);
+			final c: Int = block.fastCodeAt(from);
 			if (c == '\n'.code || c == '\r'.code)
 				from++
 			else
@@ -320,7 +321,7 @@ final class ExtractSuperclass {
 		}
 		var to: Int = block.length;
 		while (to > from) {
-			final c: Int = StringTools.fastCodeAt(block, to - 1);
+			final c: Int = block.fastCodeAt(to - 1);
 			if (c == '\n'.code || c == '\r'.code)
 				to--
 			else
@@ -339,7 +340,7 @@ final class ExtractSuperclass {
 		final buf: StringBuf = new StringBuf();
 		var newlines: Int = 0;
 		for (i in 0...source.length) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c == '\n'.code) {
 				newlines++;
 				if (newlines <= 2) buf.addChar(c);

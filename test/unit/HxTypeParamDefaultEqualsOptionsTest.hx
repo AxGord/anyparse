@@ -91,15 +91,15 @@ final class HxTypeParamDefaultEqualsOptionsTest extends Test {
 		Assert.isTrue(out.indexOf('function f<T=Int>():Void') != -1, 'expected `function f<T=Int>():Void` in: <$out>');
 	}
 
-	public function testVarInitAssignStaysSpacedRegardlessOfPolicy(): Void {
+	public inline function testVarInitAssignStaysSpacedRegardlessOfPolicy(): Void {
 		assertSpacedUnderAllPolicies('class C<T = Int> { var x:Int = 0; }', 'var x:Int = 0;', 'var init');
 	}
 
-	public function testFunctionParamDefaultStaysSpacedRegardlessOfPolicy(): Void {
+	public inline function testFunctionParamDefaultStaysSpacedRegardlessOfPolicy(): Void {
 		assertSpacedUnderAllPolicies('class C<T = Int> { function f(x:Int = 0):Void {} }', 'x:Int = 0', 'param default');
 	}
 
-	public function testTypedefAssignStaysSpacedRegardlessOfTypeParamPolicy(): Void {
+	public inline function testTypedefAssignStaysSpacedRegardlessOfTypeParamPolicy(): Void {
 		assertSpacedUnderAllPolicies('typedef Foo<T = Int> = Bar;', '= Bar;', 'typedef-rhs');
 	}
 

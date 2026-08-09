@@ -192,7 +192,7 @@ class SetDocSliceTest extends Test {
 	}
 
 	/** A doc'd member whose doc text carries a backticked block-comment opener. */
-	private function openerDocSource(): String {
+	private inline function openerDocSource(): String {
 		return 'package p;\nclass C {\n\t/**\n\t * Whether the gap holds a `//` or `/*` opener.\n\t */\n'
 			+ '\tpublic function f(): Int return 1;\n}';
 	}

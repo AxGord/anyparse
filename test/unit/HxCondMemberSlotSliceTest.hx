@@ -162,16 +162,18 @@ class HxCondMemberSlotSliceTest extends HxTestHelpers {
 	 * this parsing.
 	 */
 	public function testMetaPrefixedStatementRegionStaysSpliced(): Void {
-		final src: String =
-			'class C {\n\tfunction g():Void {\n\t\t@:privateAccess\n\t\t#if cpp\n\t\tvar r:Int = 1;\n\t\t#else\n\t\tvar r = 2;\n\t\t#end\n\t\tuse(r);\n\t}\n}';
+		final src: String = 'class C {\n\tfunction g():Void {\n\t\t@:privateAccess\n\t\t#if cpp\n\t\tvar r:Int = 1;\n\t\t#else\n'
+			+ '\t\tvar r = 2;\n\t\t#end\n\t\tuse(r);\n\t}\n}';
 		Assert.equals(1, HaxeModuleParser.parse(src).decls.length);
 		roundTrip(src, 'meta-prefixed statement region');
 	}
 
 	public function testCondSharedBodyMemberKeepsTailAndBothSignatures(): Void {
 		// Pony/pony/Tools.hx:492 - two signatures guarded, one shared body.
-		final src: String =
-			'class C {\n#if (haxe_ver >= 3.300)\npublic static inline function sget<A, B:Constructible<Void -> Void>>(m:Map<A, B>, key:A):B\n#else\npublic static inline function sget<A, B: { function new():Void; }>(m:Map<A, B>, key:A):B\n#end\n\treturn m.exists(key) ? m[key] : m[key] = new B();\n}';
+		final src: String = 'class C {\n#if (haxe_ver >= 3.300)\n'
+			+ 'public static inline function sget<A, B:Constructible<Void -> Void>>(m:Map<A, B>, key:A):B\n#else\n'
+			+ 'public static inline function sget<A, B: { function new():Void; }>(m:Map<A, B>, key:A):B\n#end\n'
+			+ '\treturn m.exists(key) ? m[key] : m[key] = new B();\n}';
 		final written: String = writeModule(src);
 		Assert.isTrue(written.indexOf('Constructible<Void -> Void>') != -1, 'then-branch signature survives');
 		Assert.isTrue(written.indexOf('{ function new():Void; }') != -1, 'else-branch signature survives');

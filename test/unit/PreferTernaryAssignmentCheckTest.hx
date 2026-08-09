@@ -43,7 +43,8 @@ class PreferTernaryAssignmentCheckTest extends Test {
 
 	public function testFieldLvalueReproFixed(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
-			'class C {\n\tfunction f() {\n\t\tif (value) _text.defaultTextFormat = _selectedTextFormat;\n\t\telse _text.defaultTextFormat = _blackTextFormat;\n\t}\n}'
+			'class C {\n\tfunction f() {\n\t\tif (value) _text.defaultTextFormat = _selectedTextFormat;\n'
+			+ '\t\telse _text.defaultTextFormat = _blackTextFormat;\n\t}\n}'
 		);
 		Assert.equals(1, es.length);
 		Assert.equals('_text.defaultTextFormat = value ? _selectedTextFormat : _blackTextFormat;', es[0].text);

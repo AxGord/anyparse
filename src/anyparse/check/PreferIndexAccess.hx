@@ -2,13 +2,14 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Flags a `Map` read / write spelled as a method call where index access is idiomatic —
@@ -162,7 +163,7 @@ final class PreferIndexAccess implements Check {
 		final exprStmtKind: Null<String> = shape.exprStatementKind;
 		final mapTypes: Array<String> = shape.mapAbstractTypeNames ?? [];
 		if (identKind == null || callKind == null || fieldKind == null || exprStmtKind == null || mapTypes.length == 0) return null;
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		if (provider == null) return null;
 		final typed: TypeInfoProvider = provider;
 		return {
@@ -291,9 +292,9 @@ final class PreferIndexAccess implements Check {
 
 	/** Whether the verbatim type `source` is `wrapper<Nominal…>` whose inner nominal is a `mapTypes` name. */
 	private static function nullWrapsMap(source: String, wrapper: String, mapTypes: Array<String>): Bool {
-		final s: String = StringTools.trim(source);
+		final s: String = source.trim();
 		final prefix: String = '$wrapper<';
-		if (!StringTools.startsWith(s, prefix) || !StringTools.endsWith(s, '>')) return false;
+		if (!s.startsWith(prefix) || !s.endsWith('>')) return false;
 		final inner: String = s.substring(prefix.length, s.length - 1);
 		final lt: Int = inner.indexOf('<');
 		final head: String = lt == -1 ? inner : inner.substring(0, lt);

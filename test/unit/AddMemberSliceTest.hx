@@ -138,8 +138,8 @@ class AddMemberSliceTest extends Test {
 	 */
 	public function testAppendToNonLastFinalClass(): Void {
 		final source: String = 'final class C {\n\tvar x:Int;\n}\n\n/**\n * Doc.\n */\ntypedef T = {\n\tvar y:Int;\n}\n';
-		final expected: String = 'final class C {\n\tvar x:Int;\n\n\tpublic function g():Void {}\n}\n\n/**\n * Doc.\n */\n'
-			+ 'typedef T = {\n' + '\tvar y:Int;\n' + '}\n';
+		final expected: String =
+			'final class C {\n\tvar x:Int;\n\n\tpublic function g():Void {}\n}\n\n/**\n * Doc.\n */\ntypedef T = {\n\tvar y:Int;\n}\n';
 		assertAdd(source, 'C', 'public function g():Void {}', expected);
 	}
 

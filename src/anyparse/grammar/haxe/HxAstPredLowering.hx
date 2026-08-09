@@ -18,28 +18,17 @@ import anyparse.macro.AstPredLowering;
 final class HxAstPredLowering extends AstPredLowering {
 
 	public static inline final HX_EXPR: String = 'anyparse.grammar.haxe.HxExpr';
-
 	public static inline final HX_STATEMENT: String = 'anyparse.grammar.haxe.HxStatement';
-
-	private static inline final HX_TOP_LEVEL_DECL: String = 'anyparse.grammar.haxe.HxTopLevelDecl';
-
-	private static inline final HX_DECL: String = 'anyparse.grammar.haxe.HxDecl';
-
 	public static inline final HX_SWITCH_CASE: String = 'anyparse.grammar.haxe.HxSwitchCase';
 
-
+	private static inline final HX_TOP_LEVEL_DECL: String = 'anyparse.grammar.haxe.HxTopLevelDecl';
+	private static inline final HX_DECL: String = 'anyparse.grammar.haxe.HxDecl';
 	private static inline final HX_OBJECT_FIELD: String = 'anyparse.grammar.haxe.HxObjectField';
-
 	private static inline final HX_MEMBER_DECL: String = 'anyparse.grammar.haxe.HxMemberDecl';
-
 	private static inline final HX_FN_EXPR_BODY: String = 'anyparse.grammar.haxe.HxFnExprBody';
-
 	private static inline final HX_TRY_CATCH_EXPR: String = 'anyparse.grammar.haxe.HxTryCatchExpr';
-
 	private static inline final HX_COND_DECL: String = 'anyparse.grammar.haxe.HxConditionalDecl';
-
 	private static inline final HX_ELSEIF_DECL: String = 'anyparse.grammar.haxe.HxElseifDecl';
-
 
 	/**
 	 * `HxExpr` `*Assign` ctor names — every right-associative `=` infix
@@ -218,7 +207,6 @@ final class HxAstPredLowering extends AstPredLowering {
 		'FinalDecl',
 	];
 
-
 	/**
 	 * All generated predicate fields for this lowering's mode — this file's
 	 * own, followed by the switch-case family `HxCasePredLowering` owns. The
@@ -339,7 +327,6 @@ final class HxAstPredLowering extends AstPredLowering {
 		);
 	}
 
-
 	/**
 	 * `tailStmtReadsExprPosition(s) → Bool` — true iff a block-body /
 	 * case-body TAIL statement is a NO-ELSE `if` whose body placement
@@ -418,7 +405,6 @@ final class HxAstPredLowering extends AstPredLowering {
 			'elementIsConditional_${AstPredLowering.simpleName(rule)}', [valueArg(argName, rule)], macro :Bool, macro false, doc
 		);
 	}
-
 
 	/**
 	 * `stmtExprNoSemi(e) → Bool` — true iff `e`, standing as a
@@ -746,7 +732,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		return predField(
 			name, [valueArg('p', HX_COND_DECL)],
 			macro :Null<{ ctorName: String, path: String }>, body,
-			(tail ? 'Tail' : 'Head') + '-leaf classification of a module-level conditional for the between/after cascades.'
+			'${tail ? 'Tail' : 'Head'}-leaf classification of a module-level conditional for the between/after cascades.'
 		);
 	}
 
@@ -798,7 +784,6 @@ final class HxAstPredLowering extends AstPredLowering {
 			'Keep-blank leaf classification of one conditional body element (non-null = fork keeps a blank).'
 		);
 	}
-
 
 	/**
 	 * Classify a `HxExpr.ArrayExpr` by its first element so the writer

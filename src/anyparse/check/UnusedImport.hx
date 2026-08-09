@@ -4,10 +4,9 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.query.SymbolIndex.ImportInfo;
-import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -55,8 +54,6 @@ using Lambda;
  *    it provides is called as `.method(`. Verified-unused when the module's
  *    methods are known (`knownExtensionMethods`, a `Warning` that `--fix`
  *    deletes); an unknown module stays an `Info`. See `addUsingViolation`.
- */
-/**
  * One file's text plus the two masks every reference test takes: its import
  * statements (an occurrence inside one is not a use) and its comment regions
  * (a `.` inside a comment qualifies nothing). Hoisted once per file.
@@ -261,7 +258,7 @@ final class UnusedImport implements Check {
 	}
 
 	/** Whether `imp`'s full module path is in a checkstyle `ignoreModules` list. */
-	private static function moduleIgnored(imp: ImportInfo, ignore: Array<String>): Bool {
+	private static inline function moduleIgnored(imp: ImportInfo, ignore: Array<String>): Bool {
 		return ignore.contains(imp.raw);
 	}
 
@@ -295,7 +292,7 @@ final class UnusedImport implements Check {
 
 	/** `pkg.Type.*` -> `pkg.Type` (the path whose members the static wildcard imports); unchanged when it has no trailing `.*`. */
 	private static function stripWildStar(raw: String): String {
-		return StringTools.endsWith(raw, '.*') ? raw.substr(0, raw.length - 2) : raw;
+		return raw.endsWith('.*') ? raw.substr(0, raw.length - 2) : raw;
 	}
 
 

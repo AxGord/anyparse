@@ -90,10 +90,12 @@ class HxMultiVarDeclSliceTest extends HxTestHelpers {
 	 * one continuation indent. Drives the `wrapping/issue_355_var_wrapping`
 	 * default cascade through the `multiVarWrap` `WrapRules`.
 	 */
-	public function testWideMultiVarBreaksOnePerLineAfterFirst(): Void {
+	public inline function testWideMultiVarBreaksOnePerLineAfterFirst(): Void {
 		writerEquals(
-			'class Main {\n\tstatic function main() {\n\t\tvar rawRead:ArrayList = getRaw(read), rawWrite:ArrayList = getRaw(write), rawOthers:ArrayList = getRaw(others);\n\t}\n}',
-			'class Main {\n\tstatic function main() {\n\t\tvar rawRead:ArrayList = getRaw(read),\n\t\t\trawWrite:ArrayList = getRaw(write),\n\t\t\trawOthers:ArrayList = getRaw(others);\n\t}\n}\n'
+			'class Main {\n\tstatic function main() {\n'
+			+ '\t\tvar rawRead:ArrayList = getRaw(read), rawWrite:ArrayList = getRaw(write), rawOthers:ArrayList = getRaw(others);\n\t}\n}',
+			'class Main {\n\tstatic function main() {\n\t\tvar rawRead:ArrayList = getRaw(read),\n'
+			+ '\t\t\trawWrite:ArrayList = getRaw(write),\n\t\t\trawOthers:ArrayList = getRaw(others);\n\t}\n}\n'
 		);
 	}
 
@@ -103,7 +105,7 @@ class HxMultiVarDeclSliceTest extends HxTestHelpers {
 	 * so the cascade leaves it untouched — the override must not break
 	 * narrow lists.
 	 */
-	public function testShortMultiVarStaysOneLine(): Void {
+	public inline function testShortMultiVarStaysOneLine(): Void {
 		writerEquals(
 			'class Main {\n\tstatic function main() {\n\t\tvar a = 1, b = 2;\n\t}\n}',
 			'class Main {\n\tstatic function main() {\n\t\tvar a = 1, b = 2;\n\t}\n}\n'
@@ -117,10 +119,12 @@ class HxMultiVarDeclSliceTest extends HxTestHelpers {
 	 * nested-init writes, so the inner `var inX = 1, inY = 2;` stays a
 	 * single (short, FillLine) line and the outer breaks one-per-line.
 	 */
-	public function testNestedInitKeepsOwnList(): Void {
+	public inline function testNestedInitKeepsOwnList(): Void {
 		writerEquals(
-			'class Main {\n\tstatic function main() {\n\t\tvar longNameAAAAAAAAAAAAAAAA = function() { var inX = 1, inY = 2; return inX; }, longNameBBBBBBBBBBBBBBBB = 3;\n\t}\n}',
-			'class Main {\n\tstatic function main() {\n\t\tvar longNameAAAAAAAAAAAAAAAA = function() {\n\t\t\tvar inX = 1, inY = 2;\n\t\t\treturn inX;\n\t\t},\n\t\t\tlongNameBBBBBBBBBBBBBBBB = 3\n\t}\n}\n'
+			'class Main {\n\tstatic function main() {\n'
+			+ '\t\tvar longNameAAAAAAAAAAAAAAAA = function() { var inX = 1, inY = 2; return inX; }, longNameBBBBBBBBBBBBBBBB = 3;\n\t}\n}',
+			'class Main {\n\tstatic function main() {\n\t\tvar longNameAAAAAAAAAAAAAAAA = function() {\n\t\t\tvar inX = 1, inY = 2;\n'
+			+ '\t\t\treturn inX;\n\t\t},\n\t\t\tlongNameBBBBBBBBBBBBBBBB = 3\n\t}\n}\n'
 		);
 	}
 

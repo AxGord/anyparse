@@ -141,7 +141,7 @@ class ApqDottedAccessNudgeTest extends Test {
 	}
 
 	#if sys
-	private static function writeFixture(source: String): String {
+	private static inline function writeFixture(source: String): String {
 		return CliFixture.write('apq_dotted_access_nudge', source);
 	}
 	#end

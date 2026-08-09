@@ -33,7 +33,7 @@ class Codegen {
 
 	public static function emit(
 		rules: Array<GeneratedRule>, rootTypePath: String, rootReturnCT: ComplexType, formatInfo: FormatReader.FormatInfo,
-		?trivia: Bool = false, ?rootFnName: Null<String> = null
+		?trivia: Bool = false, ?rootFnName: Null<String>
 	): Array<Field> {
 		final fields: Array<Field> = [];
 		fields.push(

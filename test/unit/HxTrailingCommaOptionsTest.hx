@@ -166,7 +166,7 @@ class HxTrailingCommaOptionsTest extends Test {
 		return '';
 	}
 
-	private function writeWithBreak(src: String, arrays: Bool, args: Bool, params: Bool): String {
+	private inline function writeWithBreak(src: String, arrays: Bool, args: Bool, params: Bool): String {
 		return writeWith(src, 10, arrays, args, params);
 	}
 

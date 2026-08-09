@@ -6,6 +6,8 @@ import anyparse.format.comment.CommentInventory;
 import anyparse.format.comment.CommentLossException;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 
+using StringTools;
+
 /**
  * The inline-block-comment seam inventory: which expression positions the
  * Trivia parser CAPTURES, and which ones have no slot and therefore fall to
@@ -111,7 +113,7 @@ class HxInlineBlockCommentGapTest extends Test {
 		Sys.putEnv(CommentInventory.DECLINE_ENV, '');
 	}
 
-	public function teardown(): Void Sys.putEnv(CommentInventory.DECLINE_ENV, _savedDecline);
+	public inline function teardown(): Void Sys.putEnv(CommentInventory.DECLINE_ENV, _savedDecline);
 
 	public function testCapturedSeamsRoundTripWithTheirComment(): Void {
 		for (entry in CAPTURED) {
@@ -152,7 +154,7 @@ class HxInlineBlockCommentGapTest extends Test {
 	private function commentBody(fixture: String): String {
 		final open: Int = fixture.indexOf('/*');
 		final close: Int = fixture.indexOf('*/', open);
-		return StringTools.trim(fixture.substring(open + 2, close));
+		return fixture.substring(open + 2, close).trim();
 	}
 
 }

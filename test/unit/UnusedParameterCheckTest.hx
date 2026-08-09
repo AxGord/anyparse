@@ -133,15 +133,15 @@ class UnusedParameterCheckTest extends Test {
 	public function testMethodPassedAsCallbackNotFlagged(): Void {
 		// The `addEventListener` shape: a private method registered as a listener. Its
 		// signature is fixed by the dispatcher, so an unread parameter is not actionable.
-		final src: String =
-			'class C {\n\tpublic function m():Void {\n\t\taddEventListener(E, onFoo);\n\t}\n\n\tprivate function onFoo(event:Int):Void {\n\t\tg();\n\t}\n}';
+		final src: String = 'class C {\n\tpublic function m():Void {\n\t\taddEventListener(E, onFoo);\n\t}\n\n'
+			+ '\tprivate function onFoo(event:Int):Void {\n\t\tg();\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
 	public function testMethodCapturedViaThisNotFlagged(): Void {
 		// `this.cb` assigned to a local is the same capture through a field access.
-		final src: String =
-			'class C {\n\tpublic function m():Void {\n\t\tvar f = this.cb;\n\t}\n\n\tpublic function cb(value:Int):Void {\n\t\tg();\n\t}\n}';
+		final src: String = 'class C {\n\tpublic function m():Void {\n\t\tvar f = this.cb;\n\t}\n\n\tpublic function cb(value:Int):Void {\n'
+			+ '\t\tg();\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -176,8 +176,8 @@ class UnusedParameterCheckTest extends Test {
 		// A callee the call site COMPUTES rather than names hands both functions to an
 		// expression that selects between them as VALUES — a capture, so neither is
 		// flagged.
-		final src: String =
-			'class C {\n\tpublic function m(cond:Bool):Void {\n\t\t(cond ? cb : alt)(1);\n\t}\n\n\tpublic function cb(value:Int):Void {\n\t\tg();\n\t}\n\n\tpublic function alt(other:Int):Void {\n\t\tg();\n\t}\n}';
+		final src: String = 'class C {\n\tpublic function m(cond:Bool):Void {\n\t\t(cond ? cb : alt)(1);\n\t}\n\n'
+			+ '\tpublic function cb(value:Int):Void {\n\t\tg();\n\t}\n\n\tpublic function alt(other:Int):Void {\n\t\tg();\n' + '\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -185,8 +185,8 @@ class UnusedParameterCheckTest extends Test {
 		// `dynamic` marks a reassignable callback slot — an assigner elsewhere relies
 		// on the signature, so an unreferenced param in the default body is by
 		// design, not dead code. The whole function is skipped, never autofixed.
-		final src: String =
-			'class C {\n\tpublic static dynamic function cb(value:Bool):Void {}\n\n\tpublic static function assign():Void {\n\t\tcb = v -> trace(v);\n\t}\n}';
+		final src: String = 'class C {\n\tpublic static dynamic function cb(value:Bool):Void {}\n\n'
+			+ '\tpublic static function assign():Void {\n\t\tcb = v -> trace(v);\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 		Assert.equals(src, applyFix(src));
 	}

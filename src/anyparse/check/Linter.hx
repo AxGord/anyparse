@@ -290,7 +290,7 @@ final class Linter {
 		final kept: Array<Violation> = [];
 		for (violation in out) {
 			final config: LintConfig = resolveConfig(violation.file);
-			if (!(!applyEnablement || config.enabledFor(violation.rule, !defaultOffIds.contains(violation.rule)))) continue;
+			if (applyEnablement && !config.enabledFor(violation.rule, !defaultOffIds.contains(violation.rule))) continue;
 			final sev: Null<Severity> = config.severityFor(violation.rule);
 			if (sev != null) violation.severity = sev;
 			kept.push(violation);

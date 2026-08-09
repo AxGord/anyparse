@@ -150,19 +150,19 @@ class HxToplevelImportUsingSliceTest extends HxTestHelpers {
 		Assert.equals('using StringTools;\n', out);
 	}
 
-	public function testRoundTripImport(): Void {
+	public inline function testRoundTripImport(): Void {
 		roundTrip('import haxe.io.Bytes;');
 	}
 
-	public function testRoundTripUsing(): Void {
+	public inline function testRoundTripUsing(): Void {
 		roundTrip('using tink.CoreApi;');
 	}
 
-	public function testRoundTripPackageImportClass(): Void {
+	public inline function testRoundTripPackageImportClass(): Void {
 		roundTrip('package foo.bar;\nimport baz.Qux;\nclass C {}');
 	}
 
-	public function testRoundTripImportUsingSequence(): Void {
+	public inline function testRoundTripImportUsingSequence(): Void {
 		roundTrip('import tink.state.Observable;\nusing tink.CoreApi;');
 	}
 

@@ -6,11 +6,8 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Meta;
-import anyparse.query.Meta.MetaHit;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
-import anyparse.query.Refs.RefHit;
-import anyparse.query.Refs.RefKind;
 
 using Lambda;
 
@@ -40,20 +37,18 @@ class ApqMetaAnonFieldSliceTest extends Test {
 		final hits: Array<MetaHit> = metaIn('typedef T = { @:m1 var f:Int; };');
 		final m: Null<MetaHit> = hits.find(h -> h.annotation == '@:m1');
 		Assert.notNull(m, '@:m1 on anon var field must surface — got ${describe(hits)}');
-		if (m != null) {
-			Assert.equals('VarField', m.declKind, 'attributes to the anon var field — got ${describe(hits)}');
-			Assert.equals('f', m.declName);
-		}
+		if (m == null) return;
+		Assert.equals('VarField', m.declKind, 'attributes to the anon var field — got ${describe(hits)}');
+		Assert.equals('f', m.declName);
 	}
 
 	public function testTypedefAnonFnFieldMetaSurfaces(): Void {
 		final hits: Array<MetaHit> = metaIn('typedef T = { @:fn function g():Void; };');
 		final m: Null<MetaHit> = hits.find(h -> h.annotation == '@:fn');
 		Assert.notNull(m, '@:fn on anon function field must surface — got ${describe(hits)}');
-		if (m != null) {
-			Assert.equals('FnField', m.declKind, 'attributes to the anon fn field — got ${describe(hits)}');
-			Assert.equals('g', m.declName);
-		}
+		if (m == null) return;
+		Assert.equals('FnField', m.declKind, 'attributes to the anon fn field — got ${describe(hits)}');
+		Assert.equals('g', m.declName);
 	}
 
 	public function testBareAnonFieldMetaReusesRequiredHost(): Void {

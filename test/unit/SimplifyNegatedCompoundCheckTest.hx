@@ -8,7 +8,6 @@ import anyparse.check.Severity;
 import anyparse.check.SimplifyNegatedCompound;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -36,7 +35,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 	private static final MODEL_STR: String = 'class Str {\n\tpublic function indexOf(s:Str):Int return 0;\n}';
 
 	/** `MODEL_STR` plus the one-field carrier the chain fixtures walk THROUGH to reach it. */
-	private static final MODEL_STR_ITEM: String = MODEL_STR + '\nclass Item {\n\tpublic var text:Str;\n}';
+	private static final MODEL_STR_ITEM: String = '$MODEL_STR\nclass Item {\n\tpublic var text:Str;\n}';
 
 	/** The generic carrier whose member is declared as its own type parameter — the substitution fixtures' subject. */
 	private static final MODEL_BOX: String = 'class Box<T:Item> {\n\tpublic var payload:T;\n}';
@@ -313,7 +312,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		// never consulted; what the shallow walk cannot do is turn `Box.payload : T` into `Item`
 		// using the receiver's written argument. Without the substitution the chain stops at the
 		// verbatim `T`, which names no type.
-		final model: String = MODEL_STR_ITEM + '\n' + MODEL_BOX;
+		final model: String = '$MODEL_STR_ITEM\n$MODEL_BOX';
 		final params: String = 'q:Bool, box:Box<Item>, k:Str';
 		final source: String = wrapTyped('var b = !(!q || box.payload.text.indexOf(k) < 0);', params);
 		final fixed: String = wrapTyped('var b = q && box.payload.text.indexOf(k) >= 0;', params);
@@ -325,7 +324,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		// type is itself a generic application (`Array<Box<Item>>` yields `Box<Item>`), and that
 		// application's argument is what resolves the member `payload`. Either arm alone leaves
 		// this site wrapped.
-		final model: String = MODEL_STR_ITEM + '\n' + MODEL_BOX;
+		final model: String = '$MODEL_STR_ITEM\n$MODEL_BOX';
 		final params: String = 'q:Bool, items:Array<Box<Item>>, k:Str';
 		final source: String = wrapTyped('for (it in items) {\n\t\t\tvar b = !(!q || it.payload.text.indexOf(k) < 0);\n\t\t}', params);
 		final fixed: String = wrapTyped('for (it in items) {\n\t\t\tvar b = q && it.payload.text.indexOf(k) >= 0;\n\t\t}', params);
@@ -342,7 +341,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		// fails if that refusal is dropped along with the old header `=>` scan. It pins the MAP
 		// half of the refusal only; the array-index half the arm doc also names is not
 		// expressible as a fixture (a wrongly-typed `Int` index reads the same as a right one).
-		final model: String = 'class Fl {\n\tpublic var v:Float;\n}\n' + 'class Cnt {\n\tpublic var v:Int;\n}';
+		final model: String = 'class Fl {\n\tpublic var v:Float;\n}\nclass Cnt {\n\tpublic var v:Int;\n}';
 		final params: String = 'q:Bool, m:Map<Fl, Cnt>';
 		final source: String = wrapTyped('for (kk => vv in m) {\n\t\t\tvar b = !(!q || kk.v < 0);\n\t\t}', params);
 		final fixed: String = wrapTyped('for (kk => vv in m) {\n\t\t\tvar b = q && !(kk.v < 0);\n\t\t}', params);
@@ -355,7 +354,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		// `v` is an `Int`, where the flip is sound. The arm refused this whole shape while the
 		// binder existed only in the header text; the sibling fixture above pins that flipping the
 		// refusal did NOT also license the key.
-		final model: String = 'class Fl {\n\tpublic var v:Float;\n}\n' + 'class Cnt {\n\tpublic var v:Int;\n}';
+		final model: String = 'class Fl {\n\tpublic var v:Float;\n}\nclass Cnt {\n\tpublic var v:Int;\n}';
 		final params: String = 'q:Bool, m:Map<Fl, Cnt>';
 		final source: String = wrapTyped('for (kk => vv in m) {\n\t\t\tvar b = !(!q || vv.v < 0);\n\t\t}', params);
 		final fixed: String = wrapTyped('for (kk => vv in m) {\n\t\t\tvar b = q && vv.v >= 0;\n\t\t}', params);
@@ -382,7 +381,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		// This one does NOT discriminate the direct-member gate: the parameter names differ, so the
 		// index-lookup gate (`U` is not among `Der`'s parameters) rejects it first. The fixture that
 		// does is `testSupertypeParamNameCollisionKeepsWrap` below.
-		final model: String = MODEL_STR_ITEM + '\nclass Base<U> {\n\tpublic var u:U;\n}\nclass Der<T:Item> extends Base<T> {}';
+		final model: String = '$MODEL_STR_ITEM\nclass Base<U> {\n\tpublic var u:U;\n}\nclass Der<T:Item> extends Base<T> {}';
 		final params: String = 'q:Bool, d:Der<Item>, k:Str';
 		final source: String = wrapTyped('var b = !(!q || d.u.text.indexOf(k) < 0);', params);
 		final fixed: String = wrapTyped('var b = q && !(d.u.text.indexOf(k) < 0);', params);
@@ -399,7 +398,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		// against `Der`'s OWN parameter list, and substitute `Der`'s argument `Item` — after which
 		// `Item.text` resolves, `Str.indexOf` returns `Int`, and the comparison flips. Every later
 		// gate passes; only the direct-member test rejects this.
-		final model: String = MODEL_STR_ITEM + '\nclass Base<T> {\n\tpublic var u:T;\n}\nclass Der<T:Item> extends Base<Str> {}';
+		final model: String = '$MODEL_STR_ITEM\nclass Base<T> {\n\tpublic var u:T;\n}\nclass Der<T:Item> extends Base<Str> {}';
 		final params: String = 'q:Bool, d:Der<Item>, k:Str';
 		final source: String = wrapTyped('var b = !(!q || d.u.text.indexOf(k) < 0);', params);
 		final fixed: String = wrapTyped('var b = q && !(d.u.text.indexOf(k) < 0);', params);
@@ -426,6 +425,19 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
+	}
+
+	/**
+	 * The comprehension form of the same pair. `iterationBindingKinds` lists BOTH loop kinds and the
+	 * grammar carries the binder slot on both, so a fixture on the statement form alone would pass
+	 * over a model that surfaced only one of them.
+	 */
+	public function testKeyValueComprehensionValueBinderProvesFlip(): Void {
+		final model: String = 'class Fl {\n\tpublic var v:Float;\n}\nclass Cnt {\n\tpublic var v:Int;\n}';
+		final params: String = 'q:Bool, m:Map<Fl, Cnt>';
+		final source: String = wrapTyped('var xs = [for (kk => vv in m) !(!q || vv.v < 0)];', params);
+		final fixed: String = wrapTyped('var xs = [for (kk => vv in m) q && vv.v >= 0];', params);
+		Assert.equals(fixed, fixedWith(source, model));
 	}
 
 	private function violations(src: String): Array<Violation> {
@@ -480,20 +492,6 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};
-	}
-
-
-	/**
-	 * The comprehension form of the same pair. `iterationBindingKinds` lists BOTH loop kinds and the
-	 * grammar carries the binder slot on both, so a fixture on the statement form alone would pass
-	 * over a model that surfaced only one of them.
-	 */
-	public function testKeyValueComprehensionValueBinderProvesFlip(): Void {
-		final model: String = 'class Fl {\n\tpublic var v:Float;\n}\n' + 'class Cnt {\n\tpublic var v:Int;\n}';
-		final params: String = 'q:Bool, m:Map<Fl, Cnt>';
-		final source: String = wrapTyped('var xs = [for (kk => vv in m) !(!q || vv.v < 0)];', params);
-		final fixed: String = wrapTyped('var xs = [for (kk => vv in m) q && vv.v >= 0];', params);
-		Assert.equals(fixed, fixedWith(source, model));
 	}
 
 }

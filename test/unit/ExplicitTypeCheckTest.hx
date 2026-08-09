@@ -18,6 +18,11 @@ import anyparse.query.SymbolIndex;
  */
 class ExplicitTypeCheckTest extends Test {
 
+	// --- parameter types copied from an implemented / overridden signature ---
+
+	private static inline final IFACE: String =
+		'interface I {\n\tpublic function grab(str:String):Int;\n\tpublic function opt(?flag:Bool):Void;\n}';
+
 	public function testTypedFieldNotFlagged(): Void {
 		Assert.equals(0, violations('class C { public var a:Int; }').length);
 	}
@@ -93,7 +98,7 @@ class ExplicitTypeCheckTest extends Test {
 		// checkstyle Type.ignoreEnumAbstractValues=false turns off the exemption,
 		// so an untyped enum-abstract value is flagged.
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
-		final base: String = (tmp != null && tmp.length > 0) ? tmp : '/tmp';
+		final base: String = tmp != null && tmp.length > 0 ? tmp : '/tmp';
 		final dir: String = '$base/anyparse_et_cs_${Sys.time()}';
 		sys.FileSystem.createDirectory(dir);
 		sys.io.File.saveContent('$dir/checkstyle.json', '{"checks":[{"type":"Type","props":{"ignoreEnumAbstractValues":false}}]}');
@@ -108,7 +113,6 @@ class ExplicitTypeCheckTest extends Test {
 		final out: String = applyFix('class C { public var a = new Map<Int, String>(); }');
 		Assert.isTrue(out.indexOf('a:Map<Int, String> =') != -1, 'expected carried type params, got: $out');
 	}
-
 
 	public function testFixBareNewSkipped(): Void {
 		// A bare `new Foo()` could be a generic used without params — annotating `:Foo` risks a broken build.
@@ -349,11 +353,6 @@ class ExplicitTypeCheckTest extends Test {
 		Assert.equals(0, fixCount('class C { public var a = (new Foo()); }'));
 	}
 
-	// --- parameter types copied from an implemented / overridden signature ---
-
-	private static inline final IFACE: String =
-		'interface I {\n\tpublic function grab(str:String):Int;\n\tpublic function opt(?flag:Bool):Void;\n}';
-
 	/** The implemented interface states the parameter type, so the implementation copies it verbatim. */
 	public function testFixParamFromInterface(): Void {
 		final out: String = scopedFix('class Impl implements I { public function grab(str):Int return 0; }');
@@ -505,7 +504,8 @@ class ExplicitTypeCheckTest extends Test {
 		final out: String = scopedFix('class Impl extends Lb { override public function f(v):Void {} }', [
 			{
 				file: 'Lb.hx',
-				source: 'class Lb {\n\tpublic function new() {}\n\tpublic function a():Void { function f(v:String) { trace(v); } f("x"); }\n\tpublic function f(v:Float):Void {}\n}'
+				source: 'class Lb {\n\tpublic function new() {}\n'
+				+ '\tpublic function a():Void { function f(v:String) { trace(v); } f("x"); }\n\tpublic function f(v:Float):Void {}\n}'
 			}
 		]);
 		Assert.isTrue(out.indexOf('f(v:Float)') != -1, 'got: $out');

@@ -45,7 +45,7 @@ class ApqSearchCliTest extends Test {
 		try {
 			Cli.run(['search', '--lang', 'pyx', 'x', fixture]);
 			Assert.pass('cli returned cleanly for unknown lang');
-		} catch (_) {
+		} catch (_: haxe.Exception) {
 			Assert.pass('cli surfaced unknown-lang failure');
 		}
 		if (FileSystem.exists(fixture)) FileSystem.deleteFile(fixture);
@@ -126,7 +126,7 @@ class ApqSearchCliTest extends Test {
 	}
 
 	#if sys
-	private static function writeFixture(source: String): String {
+	private static inline function writeFixture(source: String): String {
 		return CliFixture.write('apq_search', source);
 	}
 	#end

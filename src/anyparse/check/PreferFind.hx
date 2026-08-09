@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.ParseError;
@@ -10,6 +9,7 @@ import anyparse.runtime.Span;
 import haxe.Exception;
 import anyparse.query.RefactorSupport;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -302,8 +302,7 @@ final class PreferFind implements Check {
 			cond: QueryNode,
 			then: QueryNode
 		}> = forIfHead(loop, s);
-		if (head == null || !isAssignBreakBody(head.then, declName, head.loopVar, s)) return null;
-		return {
+		return head == null || !isAssignBreakBody(head.then, declName, head.loopVar, s) ? null : {
 			forNode: loop,
 			declName: declName,
 			loopVar: head.loopVar,
@@ -405,7 +404,7 @@ final class PreferFind implements Check {
 		final buf: StringBuf = new StringBuf();
 		var prevSpace: Bool = false;
 		for (i in 0...text.length) {
-			final c: Int = StringTools.fastCodeAt(text, i);
+			final c: Int = text.fastCodeAt(i);
 			final isSpace: Bool = c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 			if (isSpace) {
 				if (!prevSpace) buf.addChar(' '.code);
@@ -415,7 +414,7 @@ final class PreferFind implements Check {
 				prevSpace = false;
 			}
 		}
-		return StringTools.trim(buf.toString());
+		return buf.toString().trim();
 	}
 
 	/** The normalized source, truncated with an ellipsis beyond the excerpt cap. */
@@ -562,7 +561,7 @@ final class PreferFind implements Check {
 			final fbSpan: Null<Span> = fallback.span;
 			if (fbSpan == null) return null;
 			// `??` binds TIGHTER than the ternary `?:` (and assignment), so a looser fallback needs parens.
-			final looser: Bool = fallback.kind == s.ternaryKind || StringTools.endsWith(fallback.kind, 'Assign');
+			final looser: Bool = fallback.kind == s.ternaryKind || fallback.kind.endsWith('Assign');
 			tail = ' ?? ${parenthesizeUnless(source.substring(fbSpan.from, fbSpan.to), !looser)}';
 		}
 		return [{ span: new Span(forSpan.from, retSpan.to), text: 'return $findExpr$tail;' }];
@@ -575,7 +574,7 @@ final class PreferFind implements Check {
 	 */
 	private static function condIsPure(node: QueryNode, s: Seams): Bool {
 		final k: String = node.kind;
-		if (StringTools.endsWith(k, 'Assign') || k.indexOf('Incr') != -1 || k.indexOf('Decr') != -1) return false;
+		if (k.endsWith('Assign') || k.indexOf('Incr') != -1 || k.indexOf('Decr') != -1) return false;
 		if (k == s.newExprKind) return false;
 		if (k == s.callKind && !calleeIsAccessor(node, s)) return false;
 		for (c in node.children) if (!condIsPure(c, s)) return false;
@@ -604,7 +603,7 @@ final class PreferFind implements Check {
 		final colon: Int = prefix.indexOf(':');
 		if (colon == -1) return true;
 		final eq: Int = prefix.lastIndexOf('=');
-		return StringTools.startsWith(StringTools.trim(prefix.substring(colon + 1, eq == -1 ? prefix.length : eq)), 'Null');
+		return StringTools.startsWith(prefix.substring(colon + 1, eq == -1 ? prefix.length : eq).trim(), 'Null');
 	}
 
 

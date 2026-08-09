@@ -98,8 +98,8 @@ class RedundantElseCheckTest extends Test {
 	public function testFixScopeUnsafeSkipped(): Void {
 		// The enclosing block already declares `n` (a sibling of the `if`), so de-nesting the
 		// else-body `var n` would redeclare `n` in the same scope — a real collision, skipped.
-		final src: String =
-			'class C {\n\tfunction f():Int {\n\t\tvar n = 0;\n\t\tif (a) {\n\t\t\treturn n;\n\t\t} else {\n\t\t\tvar n = 1;\n\t\t\tb(n);\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f():Int {\n\t\tvar n = 0;\n\t\tif (a) {\n\t\t\treturn n;\n\t\t} else {\n'
+			+ '\t\t\tvar n = 1;\n\t\t\tb(n);\n\t\t}\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
 	}
@@ -107,8 +107,8 @@ class RedundantElseCheckTest extends Test {
 	public function testFixParamCollisionSkipped(): Void {
 		// The else-body `var n` collides with the function parameter `n` — de-nesting it into the
 		// function-body block would redeclare a parameter name in the same scope, so it is skipped.
-		final src: String =
-			'class C {\n\tfunction f(n:Int):Int {\n\t\tif (a) {\n\t\t\treturn n;\n\t\t} else {\n\t\t\tvar n = 1;\n\t\t\tb(n);\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(n:Int):Int {\n\t\tif (a) {\n\t\t\treturn n;\n\t\t} else {\n\t\t\tvar n = 1;\n'
+			+ '\t\t\tb(n);\n\t\t}\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
 	}
@@ -116,8 +116,8 @@ class RedundantElseCheckTest extends Test {
 	public function testFixLocalNoCollisionDeNested(): Void {
 		// The else declares `n`, but nothing named `n` exists in the enclosing scope — de-nesting
 		// is safe (no widening collision), so the redundant else IS removed.
-		final src: String =
-			'class C {\n\tfunction f():Int {\n\t\tif (a) {\n\t\t\treturn 1;\n\t\t} else {\n\t\t\tvar n = 1;\n\t\t\treturn b(n);\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f():Int {\n\t\tif (a) {\n\t\t\treturn 1;\n\t\t} else {\n\t\t\tvar n = 1;\n'
+			+ '\t\t\treturn b(n);\n\t\t}\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		final es: Array<{ span: Span, text: String }> = edits(src);
 		Assert.equals(1, es.length);
@@ -148,24 +148,24 @@ class RedundantElseCheckTest extends Test {
 
 	/** The gate must also see the enclosing block's own locals, declared BEFORE the `#if`. */
 	public function testConditionalBranchSeesBlockLocalBeforeTheRegion(): Void {
-		final src: String =
-			'class C {\n\tfunction f():Int {\n\t\tvar n = 0;\n\t\t#if A\n\t\tif (c) return n;\n\t\telse { var n = 1; b(n); }\n\t\t#end\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f():Int {\n\t\tvar n = 0;\n\t\t#if A\n\t\tif (c) return n;\n'
+			+ '\t\telse { var n = 1; b(n); }\n\t\t#end\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
 	}
 
 	/** … and the ones declared AFTER the `#end`, which are siblings of the region all the same. */
 	public function testConditionalBranchSeesBlockLocalAfterTheRegion(): Void {
-		final src: String =
-			'class C {\n\tfunction f():Int {\n\t\t#if A\n\t\tif (c) return 1;\n\t\telse { var n = 1; b(n); }\n\t\t#end\n\t\tvar n = 0;\n\t\treturn n;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f():Int {\n\t\t#if A\n\t\tif (c) return 1;\n\t\telse { var n = 1; b(n); }\n\t\t#end\n'
+			+ '\t\tvar n = 0;\n\t\treturn n;\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
 	}
 
 	/** An INTERMEDIATE real block between the function and the region contributes its locals too. */
 	public function testConditionalBranchSeesIntermediateBlockLocal(): Void {
-		final src: String =
-			'class C {\n\tfunction f():Int {\n\t\t{\n\t\t\tvar n = 0;\n\t\t\t#if A\n\t\t\tif (c) return n;\n\t\t\telse { var n = 1; b(n); }\n\t\t\t#end\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f():Int {\n\t\t{\n\t\t\tvar n = 0;\n\t\t\t#if A\n\t\t\tif (c) return n;\n'
+			+ '\t\t\telse { var n = 1; b(n); }\n\t\t\t#end\n\t\t}\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
 	}
@@ -175,8 +175,8 @@ class RedundantElseCheckTest extends Test {
 	 * configurations and never coexist, so the de-nest goes ahead.
 	 */
 	public function testSiblingBranchLocalIsNotACollision(): Void {
-		final src: String =
-			'class C {\n\tfunction f():Int {\n\t\t#if A\n\t\tvar n = 0;\n\t\t#else\n\t\tif (c) return 1;\n\t\telse { var n = 1; b(n); }\n\t\t#end\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f():Int {\n\t\t#if A\n\t\tvar n = 0;\n\t\t#else\n\t\tif (c) return 1;\n'
+			+ '\t\telse { var n = 1; b(n); }\n\t\t#end\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(1, edits(src).length);
 	}
@@ -198,16 +198,16 @@ class RedundantElseCheckTest extends Test {
 	 * `-D A -D B` together changes the returned value.
 	 */
 	public function testSiblingRegionLocalIsACollision(): Void {
-		final src: String =
-			'class C {\n\tfunction f(c:Bool):Int {\n\t\t#if A\n\t\tvar n = 0;\n\t\t#end\n\t\t#if B\n\t\tif (c) return 1;\n\t\telse {\n\t\t\tvar n = 1;\n\t\t\tb(n);\n\t\t}\n\t\t#end\n\t\t#if A\n\t\treturn n;\n\t\t#end\n\t\treturn 0;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(c:Bool):Int {\n\t\t#if A\n\t\tvar n = 0;\n\t\t#end\n\t\t#if B\n\t\tif (c) return 1;\n'
+			+ '\t\telse {\n\t\t\tvar n = 1;\n\t\t\tb(n);\n\t\t}\n\t\t#end\n\t\t#if A\n\t\treturn n;\n\t\t#end\n\t\treturn 0;\n' + '\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
 	}
 
 	/** The same collision with no `#if` around the flagged `if` at all — the region-local still binds to the block. */
 	public function testRegionLocalCollidesWithAPlainElseBody(): Void {
-		final src: String =
-			'class C {\n\tfunction f(c:Bool):Int {\n\t\t#if A\n\t\tvar n = 0;\n\t\t#end\n\t\tif (c) return 1;\n\t\telse {\n\t\t\tvar n = 1;\n\t\t\tb(n);\n\t\t}\n\t\treturn 0;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(c:Bool):Int {\n\t\t#if A\n\t\tvar n = 0;\n\t\t#end\n\t\tif (c) return 1;\n\t\telse {\n'
+			+ '\t\t\tvar n = 1;\n\t\t\tb(n);\n\t\t}\n\t\treturn 0;\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
 	}
@@ -218,8 +218,8 @@ class RedundantElseCheckTest extends Test {
 	 * reset in `collectDeNests`: without it `n` reads as a collision and the fix is withheld.
 	 */
 	public function testNestedBlockResetsInheritedScope(): Void {
-		final src: String =
-			'class C {\n\tfunction f(n:Int):Int {\n\t\t{\n\t\t\tif (c) return 1;\n\t\t\telse {\n\t\t\t\tvar n = 1;\n\t\t\t\treturn b(n);\n\t\t\t}\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(n:Int):Int {\n\t\t{\n\t\t\tif (c) return 1;\n\t\t\telse {\n\t\t\t\tvar n = 1;\n'
+			+ '\t\t\t\treturn b(n);\n\t\t\t}\n\t\t}\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(1, edits(src).length);
 	}
@@ -248,8 +248,8 @@ class RedundantElseCheckTest extends Test {
 
 	/** A comment BETWEEN two de-nested statements is inside the verbatim run, so it survives and the fix still applies. */
 	public function testCommentBetweenDeNestedStatementsIsKept(): Void {
-		final src: String =
-			'class C {\n\tfunction f():Int {\n\t\tif (a) {\n\t\t\treturn 1;\n\t\t} else {\n\t\t\tb();\n\t\t\t// still here\n\t\t\tc();\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f():Int {\n\t\tif (a) {\n\t\t\treturn 1;\n\t\t} else {\n\t\t\tb();\n'
+			+ '\t\t\t// still here\n\t\t\tc();\n\t\t}\n\t}\n}';
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.isFalse(vs[0].message.indexOf('comment in the else body') != -1);

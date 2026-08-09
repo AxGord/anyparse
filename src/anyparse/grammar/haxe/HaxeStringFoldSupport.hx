@@ -5,6 +5,7 @@ import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 import anyparse.query.StringFold.ConcatSegment;
@@ -83,15 +84,16 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 
 	public function literalOf(node: QueryNode, source: String): Null<StringLiteral> {
 		final span: Null<Span> = node.span;
-		if (span == null || span.to - span.from < 2) return null;
-		return switch node.kind {
-			case 'DoubleStringExpr': { quote: '"', content: inner(source, span) };
-			case 'SingleStringExpr': node.children.foreach(c -> c.kind == 'Literal' || c.kind == 'Dollar') ? {
-				quote: "'",
-				content: inner(source, span)
-			} : null;
-			case _: null;
-		}
+		return span == null || span.to - span.from < 2
+			? null
+			: switch node.kind {
+				case 'DoubleStringExpr': { quote: '"', content: inner(source, span) };
+				case 'SingleStringExpr': node.children.foreach(c -> c.kind == 'Literal' || c.kind == 'Dollar') ? {
+					quote: "'",
+					content: inner(source, span)
+				} : null;
+				case _: null;
+			};
 	}
 
 	/**
@@ -111,9 +113,12 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	 * escape stays valid there too.
 	 */
 	public function requoteVerbatim(literal: StringLiteral, quote: String): Null<String> {
-		if (quote != "'" || literal.quote != '"') return null;
-		if (unescapedQuote(literal.content) || HxStringEscape.carriesDollar(literal.content)) return null;
-		return "'" + literal.content + "'";
+		return if (quote != "'" || literal.quote != '"')
+			null
+		else if (unescapedQuote(literal.content) || HxStringEscape.carriesDollar(literal.content))
+			null
+		else
+			'\'${literal.content}\'';
 	}
 
 	/**
@@ -169,8 +174,9 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 		final span: Null<Span> = node.span;
 		if (span == null) return null;
 		final name: Null<String> = node.name;
-		if (node.kind == 'IdentExpr' && name != null && name != 'this') return SegIdent(name);
-		return SegExpr(source.substring(span.from, span.to), PRIMARY_KINDS.contains(node.kind));
+		return node.kind == 'IdentExpr' && name != null && name != 'this'
+			? SegIdent(name)
+			: SegExpr(source.substring(span.from, span.to), PRIMARY_KINDS.contains(node.kind));
 	}
 
 	public function renderGroup(segments: Array<ConcatSegment>): Null<String> {
@@ -319,9 +325,9 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 		var from: Int = 0;
 		var i: Int = 0;
 		while (i < raw.length) {
-			if (StringTools.fastCodeAt(raw, i) != '\\'.code) {
+			if (raw.fastCodeAt(i) != '\\'.code) {
 				i++;
-			} else if (i + 1 < raw.length && StringTools.fastCodeAt(raw, i + 1) == 'n'.code) {
+			} else if (i + 1 < raw.length && raw.fastCodeAt(i + 1) == 'n'.code) {
 				pieces.push(raw.substring(from, i + 2));
 				i += 2;
 				from = i;
@@ -375,7 +381,7 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	private static function interpolationBlockSafe(src: String): Bool {
 		var depth: Int = 0;
 		for (i in 0...src.length) {
-			final c: Int = StringTools.fastCodeAt(src, i);
+			final c: Int = src.fastCodeAt(i);
 			if (c == "$".code || c == '\n'.code || c == '\r'.code || c == '\\'.code) return false;
 			if (c == '{'.code) {
 				depth++;
@@ -404,15 +410,19 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	 * out of the `Literal` fragment before this seam ever sees the tree.
 	 */
 	private static function escapeLiteral(quote: String, raw: String): Null<String> {
-		if (quote == "'") return normalizeSingleDollars(raw);
-		return HxStringEscape.carriesEscapedDollar(raw) ? null : escapeDoubleToSingle(raw);
+		return if (quote == "'")
+			normalizeSingleDollars(raw)
+		else if (HxStringEscape.carriesEscapedDollar(raw))
+			null
+		else
+			escapeDoubleToSingle(raw);
 	}
 
 	/** Whether `content` holds a `'` that is not part of an escape — the one character that ends a single-quoted literal. */
 	private static function unescapedQuote(content: String): Bool {
 		var i: Int = 0;
 		while (i < content.length) {
-			final c: Int = StringTools.fastCodeAt(content, i);
+			final c: Int = content.fastCodeAt(i);
 			if (c == "'".code) return true;
 			i += c == '\\'.code ? 2 : 1;
 		}
@@ -432,10 +442,10 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 		final buf: StringBuf = new StringBuf();
 		var i: Int = 0;
 		while (i < s.length) {
-			final c: Int = StringTools.fastCodeAt(s, i);
+			final c: Int = s.fastCodeAt(i);
 			if (c == "$".code) {
 				buf.add(ESCAPED_DOLLAR);
-				i += i + 1 < s.length && StringTools.fastCodeAt(s, i + 1) == "$".code ? 2 : 1;
+				i += i + 1 < s.length && s.fastCodeAt(i + 1) == "$".code ? 2 : 1;
 			} else {
 				buf.addChar(c);
 				i++;
@@ -456,9 +466,9 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 		final buf: StringBuf = new StringBuf();
 		var i: Int = 0;
 		while (i < raw.length) {
-			final c: Int = StringTools.fastCodeAt(raw, i);
+			final c: Int = raw.fastCodeAt(i);
 			if (c == '\\'.code && i + 1 < raw.length) {
-				final n: Int = StringTools.fastCodeAt(raw, i + 1);
+				final n: Int = raw.fastCodeAt(i + 1);
 				if (n == '"'.code) {
 					buf.addChar('"'.code);
 				} else {

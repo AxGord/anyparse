@@ -4,7 +4,6 @@ import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan.NegationSeams;
 import anyparse.check.IfExpressionChain.ShieldSeams;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -207,8 +206,7 @@ final class LoopGuard implements Check {
 		final ifKinds: Null<Array<String>> = shape.ifStatementKinds;
 		if (ifKinds == null || ifKinds.length == 0) return null;
 		final blockStmtKind: Null<String> = shape.blockStmtKind;
-		if (blockStmtKind == null) return null;
-		return {
+		return blockStmtKind == null ? null : {
 			loopKinds: loopKinds,
 			continueKind: continueKind,
 			ifKinds: ifKinds,

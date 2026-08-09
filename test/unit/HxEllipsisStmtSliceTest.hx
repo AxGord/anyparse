@@ -37,11 +37,11 @@ class HxEllipsisStmtSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testEllipsisStmtWriterEquals(): Void {
+	public inline function testEllipsisStmtWriterEquals(): Void {
 		writerEquals('class A {\n\tfunction f():Void {\n\t\t....\n\t}\n}', 'class A {\n\tfunction f():Void {\n\t\t....\n\t}\n}\n');
 	}
 
-	public function testEllipsisStmtRoundTrip(): Void {
+	public inline function testEllipsisStmtRoundTrip(): Void {
 		roundTrip('class A {\n\tfunction f():Void {\n\t\t....\n\t}\n}');
 	}
 

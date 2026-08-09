@@ -48,21 +48,21 @@ class JoinStringAppendCheckTest extends Test {
 	}
 
 	public function testSingleStatementNotFlagged(): Void {
-		Assert.equals(0, violations(wrap("str += line;")).length);
+		Assert.equals(0, violations(wrap('str += line;')).length);
 	}
 
 	public function testDifferentTargetsNotFlagged(): Void {
-		Assert.equals(0, violations(wrap("x += a;\n\t\ty += b;")).length);
+		Assert.equals(0, violations(wrap('x += a;\n\t\ty += b;')).length);
 	}
 
 	/** A statement between the two `+=` blocks the join (evaluation would reorder). */
 	public function testNonAdjacentNotFlagged(): Void {
-		Assert.equals(0, violations(wrap("str += a;\n\t\tg();\n\t\tstr += b;")).length);
+		Assert.equals(0, violations(wrap('str += a;\n\t\tg();\n\t\tstr += b;')).length);
 	}
 
 	/** `str += str;` reads the run's own accumulating target — the fused form loses the intermediate value. */
 	public function testSelfReferenceBlocksTwoStatementRun(): Void {
-		Assert.equals(0, violations(wrap("str += a;\n\t\tstr += str;")).length);
+		Assert.equals(0, violations(wrap('str += a;\n\t\tstr += str;')).length);
 	}
 
 	/**

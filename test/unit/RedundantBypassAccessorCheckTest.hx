@@ -20,8 +20,8 @@ import anyparse.runtime.Span;
 class RedundantBypassAccessorCheckTest extends Test {
 
 	public function testNullWriteSlotFlagged(): Void {
-		final src: String =
-			'class C {\n\tpublic var align(default, null):String;\n\tpublic function new(align:String) {\n\t\t@:bypassAccessor this.align = align;\n\t}\n}';
+		final src: String = 'class C {\n\tpublic var align(default, null):String;\n\tpublic function new(align:String) {\n'
+			+ '\t\t@:bypassAccessor this.align = align;\n\t}\n}';
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.equals('redundant-bypass-accessor', vs[0].rule);
@@ -41,8 +41,8 @@ class RedundantBypassAccessorCheckTest extends Test {
 	}
 
 	public function testGetDefaultWriteSlotFlagged(): Void {
-		final src: String =
-			'class C {\n\tpublic var align(get, default):Int;\n\tfunction get_align():Int return 1;\n\tfunction f():Void {\n\t\t@:bypassAccessor this.align = 1;\n\t}\n}';
+		final src: String = 'class C {\n\tpublic var align(get, default):Int;\n\tfunction get_align():Int return 1;\n'
+			+ '\tfunction f():Void {\n\t\t@:bypassAccessor this.align = 1;\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 	}
 
@@ -54,14 +54,14 @@ class RedundantBypassAccessorCheckTest extends Test {
 
 	public function testSetterNotFlagged(): Void {
 		// `(default, set)` has a real setter, so bypassing it is meaningful.
-		final src: String =
-			'class C {\n\tpublic var align(default, set):Int;\n\tfunction set_align(v:Int):Int return v;\n\tfunction f():Void {\n\t\t@:bypassAccessor this.align = 1;\n\t}\n}';
+		final src: String = 'class C {\n\tpublic var align(default, set):Int;\n\tfunction set_align(v:Int):Int return v;\n'
+			+ '\tfunction f():Void {\n\t\t@:bypassAccessor this.align = 1;\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
 	public function testGetSetNotFlagged(): Void {
-		final src: String =
-			'class C {\n\tpublic var align(get, set):Int;\n\tfunction get_align():Int return 1;\n\tfunction set_align(v:Int):Int return v;\n\tfunction f():Void {\n\t\t@:bypassAccessor this.align = 1;\n\t}\n}';
+		final src: String = 'class C {\n\tpublic var align(get, set):Int;\n\tfunction get_align():Int return 1;\n'
+			+ '\tfunction set_align(v:Int):Int return v;\n\tfunction f():Void {\n\t\t@:bypassAccessor this.align = 1;\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -89,8 +89,8 @@ class RedundantBypassAccessorCheckTest extends Test {
 	}
 
 	public function testFixRemovesMeta(): Void {
-		final src: String =
-			'class C {\n\tpublic var align(default, null):String;\n\tpublic function new(align:String) {\n\t\t@:bypassAccessor this.align = align;\n\t}\n}';
+		final src: String = 'class C {\n\tpublic var align(default, null):String;\n\tpublic function new(align:String) {\n'
+			+ '\t\t@:bypassAccessor this.align = align;\n\t}\n}';
 		final want: String =
 			'class C {\n\tpublic var align(default, null):String;\n\tpublic function new(align:String) {\n\t\tthis.align = align;\n\t}\n}';
 		Assert.equals(want, applyFix(src));

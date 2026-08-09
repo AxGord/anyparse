@@ -83,19 +83,19 @@ class HxVarNoTypeSliceTest extends HxTestHelpers {
 		Assert.notNull(decl.init);
 	}
 
-	public function testWriterRoundTripInitOnly(): Void {
+	public inline function testWriterRoundTripInitOnly(): Void {
 		roundTrip('class Foo { var x = 1; }');
 	}
 
-	public function testWriterRoundTripBareName(): Void {
+	public inline function testWriterRoundTripBareName(): Void {
 		roundTrip('class Foo { var x; }');
 	}
 
-	public function testWriterRoundTripMetadataNoType(): Void {
+	public inline function testWriterRoundTripMetadataNoType(): Void {
 		roundTrip('class Foo { @in var someVar = 123; }');
 	}
 
-	public function testWriterRoundTripMixedShapes(): Void {
+	public inline function testWriterRoundTripMixedShapes(): Void {
 		roundTrip('class F { var a; var b:Int; var c = 1; var d:Int = 2; }');
 	}
 

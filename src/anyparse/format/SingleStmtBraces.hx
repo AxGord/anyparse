@@ -1,5 +1,7 @@
 package anyparse.format;
 
+using StringTools;
+
 /**
  * Runtime support for the `dropSingleStmtBraces` writer knob (slice
  * ω-single-stmt-braces; JSON key
@@ -228,7 +230,7 @@ class SingleStmtBraces {
 		final elem: Null<Dynamic> = deBracedElem(body, drop, suppress, elseFollows, hasTrailingSemi, siblingKeepsBraces, isIfThenBody);
 		if (elem == null) return null;
 		final own: Null<String> = elem.trailingComment;
-		return own != null ? own : openTrailingOf(body);
+		return own ?? openTrailingOf(body);
 	}
 
 	/**
@@ -307,7 +309,7 @@ class SingleStmtBraces {
 		if (!Reflect.isEnumValue(v)) return containsIf(v);
 		final e: EnumValue = cast v;
 		final ctor: String = Type.enumConstructor(e);
-		if (StringTools.startsWith(ctor, 'Cond')) return true;
+		if (ctor.startsWith('Cond')) return true;
 		if (tailSealed(ctor)) return false;
 		final operand: Int = tailOperandIndex(ctor);
 		if (operand >= 0) return tailDanglingIf(paramAt(e, operand));
@@ -459,7 +461,7 @@ class SingleStmtBraces {
 		if (Reflect.isEnumValue(v)) {
 			final e: EnumValue = cast v;
 			final ctor: String = Type.enumConstructor(e);
-			if (ctor == 'IfStmt' || ctor == 'IfExpr' || StringTools.startsWith(ctor, 'Cond')) return true;
+			if (ctor == 'IfStmt' || ctor == 'IfExpr' || ctor.startsWith('Cond')) return true;
 			for (p in Type.enumParameters(e)) if (containsIf(p)) return true;
 			return false;
 		}
@@ -468,10 +470,8 @@ class SingleStmtBraces {
 			for (x in arr) if (containsIf(x)) return true;
 			return false;
 		}
-		if (Reflect.isObject(v)) {
-			for (f in Reflect.fields(v)) if (containsIf(Reflect.field(v, f))) return true;
-			return false;
-		}
+		if (!Reflect.isObject(v)) return false;
+		for (f in Reflect.fields(v)) if (containsIf(Reflect.field(v, f))) return true;
 		return false;
 	}
 
@@ -498,13 +498,17 @@ class SingleStmtBraces {
 		final elem: Dynamic = stmts[0];
 		if (elem == null) return null;
 		final leading: Null<Array<Dynamic>> = elem.leadingComments;
-		if (leading != null && leading.length > 0) return null;
-		if (!allowTrailingComment && elem.trailingComment != null) return null;
 		// openTrailing (a comment on the `{` line) travels with the statement the same way a
 		// same-line trailing comment does — but only into an EMPTY trailing slot: the fold
 		// site is one slot, so two comments cannot both land there.
-		if (ps[2] != null && !(allowTrailingComment && elem.trailingComment == null)) return null;
-		return elem;
+		return if (leading != null && leading.length > 0)
+			null
+		else if (!allowTrailingComment && elem.trailingComment != null)
+			null
+		else if (ps[2] != null && !(allowTrailingComment && elem.trailingComment == null))
+			null
+		else
+			elem;
 	}
 
 	/**
@@ -516,8 +520,7 @@ class SingleStmtBraces {
 		final elem: Null<Dynamic> = singleCleanElem(ps, false);
 		if (elem == null) return null;
 		final inner: Dynamic = elem.node;
-		if (inner == null || !Reflect.isEnumValue(inner)) return null;
-		return inner;
+		return inner == null || !Reflect.isEnumValue(inner) ? null : inner;
 	}
 
 
@@ -579,8 +582,6 @@ class SingleStmtBraces {
 	 * keep / wrap / do-body / non-BlockStmt case returns `null`. Shared by
 	 * `unwrapStmt` (reads `.node`) and `hoistTrailingComment` (reads
 	 * `.trailingComment`) so the two never disagree on whether de-bracing happened.
-	 */
-	/**
 	 * The block's `openTrailing` comment — the one written on the `{` line
 	 * (`} else { // Call error handlers`) — or null when the slot is empty.
 	 *
@@ -609,16 +610,21 @@ class SingleStmtBraces {
 		final elem: Null<Dynamic> = singleCleanElem(Type.enumParameters(block), true);
 		if (elem == null) return null; // gates 1-2
 		final inner: Dynamic = elem.node;
-		if (inner == null || !Reflect.isEnumValue(inner)) return null;
-		if (isIfThenBody && Type.enumConstructor(cast inner) == 'IfStmt') return null; // gate 8 keep
-		if (!innerSelfTerminates(cast inner)) return null; // gate 3 terminator
 		// Gates 4 + 5 share ONE test. `elseFollows` means an `else` is written directly
 		// after this body; `suppress` means one is written after the enclosing then-body,
 		// with this candidate's position inside it over-approximated to "on the spine".
 		// Either way the question is the same: would that `else` bind inside the de-braced
 		// statement instead of to its own `if`?
-		if ((elseFollows || suppress) && tailDanglingIf(inner)) return null;
-		return elem;
+		return if (inner == null || !Reflect.isEnumValue(inner))
+			null
+		else if (isIfThenBody && Type.enumConstructor(cast inner) == 'IfStmt')
+			null // gate 8 keep
+		else if (!innerSelfTerminates(cast inner))
+			null // gate 3 terminator
+		else if ((elseFollows || suppress) && tailDanglingIf(inner))
+			null
+		else
+			elem;
 	}
 
 }

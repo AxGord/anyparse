@@ -138,11 +138,16 @@ final class Refs {
 		// Decl-host takes precedence over identKind: a single grammar
 		// would normally place the decl name on a different ctor than
 		// the reference ctor, but the contract leaves the option open.
-		return shape.declHostKinds.contains(kind)
-			? RefKind.Decl
-			: shape.selfScopeDeclKinds.contains(kind)
-				? RefKind.Decl
-				: kind == shape.identKind ? isWriteTarget ? RefKind.Write : RefKind.Read : isInterpRead(kind, shape) ? RefKind.Read : null;
+		return if (shape.declHostKinds.contains(kind))
+			RefKind.Decl
+		else if (shape.selfScopeDeclKinds.contains(kind))
+			RefKind.Decl
+		else if (kind == shape.identKind)
+			isWriteTarget ? RefKind.Write : RefKind.Read
+		else if (isInterpRead(kind, shape))
+			RefKind.Read
+		else
+			null;
 	}
 
 	/**
@@ -178,7 +183,7 @@ final class Refs {
 					if (span != null) {
 						final kind: Null<RefKind> = classify(node.kind, shape, isWriteTarget);
 						if (kind != null) {
-							final bindingSpan: Null<Span> = (kind == RefKind.Decl) ? span : scopes.resolveInnermost(nname);
+							final bindingSpan: Null<Span> = kind == RefKind.Decl ? span : scopes.resolveInnermost(nname);
 							hits.push(new RefHit(kind, nname, span, bindingSpan, isInterpRead(node.kind, shape)));
 						} else if (skipped != null && isMemberAccess(node.kind, shape))
 							skipped[nname] = (skipped[nname] ?? 0) + 1;

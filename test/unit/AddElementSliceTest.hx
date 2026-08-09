@@ -4,7 +4,6 @@ import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.AddElement;
-import anyparse.query.AddElement.InsertSide;
 import anyparse.query.RefactorSupport.EditResult;
 import haxe.Exception;
 
@@ -42,8 +41,8 @@ class AddElementSliceTest extends Test {
 	public function testInsertSwitchCaseAfter(): Void {
 		final source: String =
 			'class C {\n\tfunction f(x:Int):Void {\n\t\tswitch x {\n\t\t\tcase 0: a();\n\t\t\tcase 1: b();\n\t\t}\n\t}\n}\n';
-		final expected: String =
-			'class C {\n\tfunction f(x:Int):Void {\n\t\tswitch x {\n\t\t\tcase 0: a();\n\t\t\tcase 2: c();\n\t\t\tcase 1: b();\n\t\t}\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f(x:Int):Void {\n\t\tswitch x {\n\t\t\tcase 0: a();\n\t\t\tcase 2: c();\n'
+			+ '\t\t\tcase 1: b();\n\t\t}\n\t}\n}\n';
 		assertAdd(source, 4, 4, After, 'case 2: c();', true, expected);
 	}
 
@@ -286,27 +285,6 @@ class AddElementSliceTest extends Test {
 		assertAppend(source, 3, 11, '~/b/', false, expected);
 	}
 
-	private function assertAppend(source: String, line: Int, col: Int, code: String, reformat: Bool, expected: String): Void {
-		final result: EditResult = appendOf(source, line, col, code, reformat);
-		switch result {
-			case Ok(text):
-				Assert.equals(expected, text);
-				assertReparses(text);
-			case Err(message):
-				Assert.fail('expected Ok, got Err: $message');
-		}
-	}
-
-	private function assertAppendRefused(source: String, line: Int, col: Int, code: String, reformat: Bool): Void {
-		final result: EditResult = appendOf(source, line, col, code, reformat);
-		switch result {
-			case Ok(text):
-				Assert.fail('expected Err (refusal), got Ok:\n$text');
-			case Err(_):
-				Assert.pass();
-		}
-	}
-
 	/**
 	 * A brace-less `if` body GAINS braces and the new statement lands INSIDE it. Without the
 	 * wrap the splice puts the statement after the whole `if`, where it runs unconditionally —
@@ -357,6 +335,27 @@ class AddElementSliceTest extends Test {
 		final source: String = 'class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c) {\n\t\t\ta();\n\t\t}\n\t}\n}\n';
 		final expected: String = 'class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c) {\n\t\t\ta();\n\t\t\tb();\n\t\t}\n\t}\n}\n';
 		assertAdd(source, 4, 4, After, 'b();', false, expected);
+	}
+
+	private function assertAppend(source: String, line: Int, col: Int, code: String, reformat: Bool, expected: String): Void {
+		final result: EditResult = appendOf(source, line, col, code, reformat);
+		switch result {
+			case Ok(text):
+				Assert.equals(expected, text);
+				assertReparses(text);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	private function assertAppendRefused(source: String, line: Int, col: Int, code: String, reformat: Bool): Void {
+		final result: EditResult = appendOf(source, line, col, code, reformat);
+		switch result {
+			case Ok(text):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			case Err(_):
+				Assert.pass();
+		}
 	}
 
 	private function assertAdd(

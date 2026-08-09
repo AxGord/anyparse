@@ -44,14 +44,14 @@ class HxTransformSliceTest extends Test {
 		// operators, so the identity walk touches the recursive
 		// HxExpr/HxStatement/HxType cycle end-to-end.
 		final src: String = 'class C {\n\tvar n:Int = 21;\n\tpublic function run(items:Array<Int>):Int {\n\t\tvar total = 0;\n'
-			+ '\t\tfor (i in items) {\n' + '\t\t\tif (i > 0) total += i;\n' + '\t\t\telse total -= i;\n' + '\t\t}\n'
-			+ '\t\twhile (total > 100) total = total - 10;\n' + '\t\tvar label = switch (total) {\n' + '\t\t\tcase 0: "zero";\n'
-			+ '\t\t\tcase _: "many";\n' + '\t\t}\n' + '\t\ttry {\n' + '\t\t\treturn total;\n' + '\t\t} catch (e:Dynamic) {\n'
-			+ '\t\t\treturn -1;\n' + '\t\t}\n' + '\t}\n' + '}';
+			+ '\t\tfor (i in items) {\n\t\t\tif (i > 0) total += i;\n\t\t\telse total -= i;\n\t\t}\n'
+			+ '\t\twhile (total > 100) total = total - 10;\n\t\tvar label = switch (total) {\n\t\t\tcase 0: "zero";\n'
+			+ '\t\t\tcase _: "many";\n\t\t}\n\t\ttry {\n\t\t\treturn total;\n\t\t} catch (e:Dynamic) {\n\t\t\treturn -1;\n'
+			+ '\t\t}\n\t}\n}';
 		assertIdentity(src);
 	}
 
-	public function testIdentityEmptyModule(): Void {
+	public inline function testIdentityEmptyModule(): Void {
 		assertIdentity('');
 	}
 
@@ -133,7 +133,7 @@ class HxTransformSliceTest extends Test {
 	/** Double an integer literal's numeric value (verbatim string form). */
 	private static function doubleInt(lit: HxIntLit): HxIntLit {
 		final n: Null<Int> = Std.parseInt((lit: String));
-		return n == null ? lit : (('${(n * 2)}'): HxIntLit);
+		return n == null ? lit : (('${n * 2}'): HxIntLit);
 	}
 
 }

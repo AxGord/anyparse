@@ -64,7 +64,7 @@ class HxBracketExprListTypeSliceTest extends HxTestHelpers {
 		Assert.equals('Int', (expectNamedType(ref.params[0].type).name: String));
 	}
 
-	public function testRoundTripIssue622(): Void {
+	public inline function testRoundTripIssue622(): Void {
 		// Exact issue_622_bracket fixture body — full corpus driver.
 		roundTrip('private typedef Init = haxe.macro.MacroType<[cdb.Module.build("data.cdb")]>;', 'issue_622-bracket-typeparam');
 	}

@@ -160,15 +160,15 @@ class HxSwitchBareSliceTest extends HxTestHelpers {
 
 	// ---- Round-trip ----
 
-	public function testSwitchStmtBareRoundTrip(): Void {
+	public inline function testSwitchStmtBareRoundTrip(): Void {
 		roundTrip('class C { function f():Void { switch x { case 1: a; case 2: b; } } }', 'switch-stmt-bare');
 	}
 
-	public function testSwitchExprBareRoundTrip(): Void {
+	public inline function testSwitchExprBareRoundTrip(): Void {
 		roundTrip('class C { function f():String { return switch x { case 1: "a"; case _: "b"; }; } }', 'switch-expr-bare');
 	}
 
-	public function testSwitchBareNestedRoundTrip(): Void {
+	public inline function testSwitchBareNestedRoundTrip(): Void {
 		roundTrip('class C { function f():Void { switch x { case 1: switch y { case 2: a; } } } }', 'switch-stmt-bare-nested');
 	}
 

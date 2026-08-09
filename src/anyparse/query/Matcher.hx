@@ -71,11 +71,9 @@ final class Matcher {
 			if (n == null) return false;
 			if (n == Metavar.WILDCARD_NAME) return true;
 			final prior: Null<QueryNode> = bindings[n];
-			if (prior == null) {
-				bindings[n] = input;
-				return true;
-			}
-			return RefactorSupport.structurallyEqual(prior, input);
+			if (prior != null) return RefactorSupport.structurallyEqual(prior, input);
+			bindings[n] = input;
+			return true;
 		}
 		// Kind must match for non-metavar patterns. A plugin may supply
 		// a search-only equivalence so position-variant kinds of one
@@ -102,9 +100,8 @@ final class Matcher {
 					return false;
 				}
 			}
-		} else {
-			if (pname != iname) return false;
-		}
+		} else if (pname != iname)
+			return false;
 		// Children: ordered + adjacent. Length must match exactly.
 		final pChildren: Array<QueryNode> = pattern.children;
 		final iChildren: Array<QueryNode> = input.children;

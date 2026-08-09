@@ -5,6 +5,8 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
+
 /**
  * Text search-and-replace scoped to COMMENT bodies — the write-twin of `lit`
  * (which finds text in comments), as `rewrite` is the write-twin of `search`.
@@ -82,18 +84,18 @@ final class CommentRewrite {
 		final n: Int = template.length;
 		var i: Int = 0;
 		while (i < n) {
-			final c: Int = StringTools.fastCodeAt(template, i);
+			final c: Int = template.fastCodeAt(i);
 			if (c != '$'.code) {
 				buf.addChar(c);
 				i++;
 				continue;
 			}
-			if (i + 1 < n && StringTools.fastCodeAt(template, i + 1) == '$'.code) {
+			if (i + 1 < n && template.fastCodeAt(i + 1) == '$'.code) {
 				buf.addChar('$'.code);
 				i += 2;
 				continue;
 			}
-			if (i + 1 < n && StringTools.fastCodeAt(template, i + 1) == '{'.code) {
+			if (i + 1 < n && template.fastCodeAt(i + 1) == '{'.code) {
 				final close: Int = template.indexOf('}', i + 2);
 				if (close < 0) throw new Exception('unterminated brace in replacement template');
 				buf.add(expandSpec(template.substring(i + 2, close), m));
@@ -101,7 +103,7 @@ final class CommentRewrite {
 				continue;
 			}
 			var j: Int = i + 1;
-			while (j < n && isDigit(StringTools.fastCodeAt(template, j))) j++;
+			while (j < n && isDigit(template.fastCodeAt(j))) j++;
 			if (j == i + 1) {
 				buf.addChar('$'.code);
 				i++;
@@ -123,7 +125,7 @@ final class CommentRewrite {
 		if (num == null) throw new Exception('bad shift in template spec "$spec"');
 		final shift: Int = plus >= 0 ? num : -num;
 		final raw: String = groupValue(Std.parseInt(spec.substring(0, opAt)), m);
-		final value: Null<Int> = Std.parseInt(StringTools.trim(raw));
+		final value: Null<Int> = Std.parseInt(raw.trim());
 		if (value == null) throw new Exception('template group is not an integer: "$raw"');
 		return '${value + shift}';
 	}

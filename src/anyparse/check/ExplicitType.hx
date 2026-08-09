@@ -2,18 +2,14 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import anyparse.query.RefactorSupport;
 import anyparse.query.TypeInfoProvider;
 
+using StringTools;
 using Lambda;
-
-import anyparse.query.SymbolIndex.FileInfo;
-import anyparse.query.SymbolIndex.TypeDeclInfo;
-import anyparse.query.SymbolIndex.ImportKind;
 
 /**
  * Flags a class / abstract / interface member that omits an explicit type — a
@@ -259,8 +255,8 @@ final class ExplicitType implements Check {
 		final bodySpan: Null<Span> = body.span;
 		if (bodySpan == null) return -1;
 		var pos: Int = bodySpan.from;
-		while (pos > lo && isInlineSpace(StringTools.fastCodeAt(source, pos - 1))) pos--;
-		return pos > lo && StringTools.fastCodeAt(source, pos - 1) == ')'.code ? pos : -1;
+		while (pos > lo && isInlineSpace(source.fastCodeAt(pos - 1))) pos--;
+		return pos > lo && source.fastCodeAt(pos - 1) == ')'.code ? pos : -1;
 	}
 
 	/** Whether `c` is a space or tab — horizontal whitespace, excluding line breaks. */
@@ -411,7 +407,7 @@ final class ExplicitType implements Check {
 	private static function declaredParamType(
 		s: InheritedSeams, src: String, typeSpan: Span, method: String, paramIndex: Int, paramKind: String
 	): Null<String> {
-		final provider: Null<TypeInfoProvider> = (s.plugin is TypeInfoProvider) ? cast s.plugin : null;
+		final provider: Null<TypeInfoProvider> = s.plugin is TypeInfoProvider ? cast s.plugin : null;
 		if (provider == null) return null;
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(s.plugin, src);
 		if (tree == null) return null;
@@ -464,8 +460,7 @@ final class ExplicitType implements Check {
 		final here: Null<FileInfo> = s.idx.fileInfo(s.file);
 		final there: Null<FileInfo> = s.idx.fileInfo(declFile);
 		if (here == null || there == null) return false;
-		for (n in nominalsOf(typeText)) {
-			if (AMBIENT_TYPES.contains(n)) continue;
+		for (n in nominalsOf(typeText)) if (!AMBIENT_TYPES.contains(n)) {
 			if (guardedImportOf(here, n) || guardedImportOf(there, n)) return false;
 			final mine: Array<{ file: FileInfo, type: TypeDeclInfo }> = s.idx.resolveTypeRefsFrom(n, s.file);
 			final theirs: Array<{ file: FileInfo, type: TypeDeclInfo }> = s.idx.resolveTypeRefsFrom(n, declFile);
@@ -526,16 +521,16 @@ final class ExplicitType implements Check {
 		final out: Array<String> = [];
 		var i: Int = 0;
 		while (i < typeText.length) {
-			if (!isNominalPart(StringTools.fastCodeAt(typeText, i))) {
+			if (!isNominalPart(typeText.fastCodeAt(i))) {
 				i++;
 				continue;
 			}
 			final start: Int = i;
-			while (i < typeText.length && isNominalPart(StringTools.fastCodeAt(typeText, i))) i++;
+			while (i < typeText.length && isNominalPart(typeText.fastCodeAt(i))) i++;
 			final token: String = typeText.substring(start, i);
 			final dot: Int = token.lastIndexOf('.');
 			final simple: String = dot < 0 ? token : token.substr(dot + 1);
-			final head: Int = StringTools.fastCodeAt(simple, 0);
+			final head: Int = simple.fastCodeAt(0);
 			if (head >= 'A'.code && head <= 'Z'.code && !out.contains(simple)) out.push(simple);
 		}
 		return out;
@@ -563,7 +558,7 @@ final class ExplicitType implements Check {
 		// A cast target lookup costs a SECOND full parse of the file (`castTargetSources`),
 		// so compute it lazily and cache it — a fix whose violations key nothing into `byKey`,
 		// or whose initializers are never casts, never pays for it.
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		var castTargetsCache: Null<Map<Int, String>> = null;
 		function castTargets(): Map<Int, String> {
 			final existing: Null<Map<Int, String>> = castTargetsCache;

@@ -4,6 +4,8 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * Haxe `BooleanLogicSupport`: reduces a ternary with a boolean-literal branch to
  * an equivalent boolean expression. The four mixed forms collapse via
@@ -114,9 +116,12 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 		final thenBool: Null<Bool> = boolValue(thenNode, source);
 		final elseBool: Null<Bool> = boolValue(elseNode, source);
 		if (thenBool == null && elseBool == null) return null;
-		if (thenBool != null && elseBool != null)
-			return thenBool && !elseBool ? plain(cond, source)
-				.src : !thenBool && elseBool ? negate(cond, source, typeNominalOf).src : null;
+		if (thenBool != null && elseBool != null) return if (thenBool && !elseBool)
+			plain(cond, source).src
+		else if (!thenBool && elseBool)
+			negate(cond, source, typeNominalOf).src
+		else
+			null;
 		// Exactly one branch is a boolean literal; the other becomes an operand of
 		// `&&` / `||`. That reduction is sound only when the non-literal branch is a
 		// non-null `Bool` — a boolean-operator result. A `null` literal, a bare
@@ -124,15 +129,16 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 		// change meaning AND fail `@:nullSafety(Strict)` (`cond || null`), so the
 		// ternary is left alone — mirroring `ComparisonToBoolean`'s `provablyBool` gate.
 		final other: QueryNode = thenBool != null ? elseNode : thenNode;
-		return !provablyBool(other)
-			? null
-			: thenBool != null
-				? thenBool
-					? joinOr(plain(cond, source), plain(elseNode, source))
-					: joinAnd(negate(cond, source, typeNominalOf), plain(elseNode, source))
-				: elseBool == true
-					? joinOr(negate(cond, source, typeNominalOf), plain(thenNode, source))
-					: joinAnd(plain(cond, source), plain(thenNode, source));
+		return if (!provablyBool(other))
+			null
+		else if (thenBool != null)
+			thenBool
+				? joinOr(plain(cond, source), plain(elseNode, source))
+				: joinAnd(negate(cond, source, typeNominalOf), plain(elseNode, source))
+		else if (elseBool == true)
+			joinOr(negate(cond, source, typeNominalOf), plain(thenNode, source))
+		else
+			joinAnd(plain(cond, source), plain(thenNode, source));
 	}
 
 	public function reduceBooleanGuardChain(
@@ -455,8 +461,8 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	 * to refuse: unproven means keep the wrap.
 	 */
 	private static function totallyOrdered(node: QueryNode, types: Null<(QueryNode) -> Null<String>>): Bool {
-		if (node.children.length != 2) return false;
-		return totallyOrderedOperand(node.children[0], types) && totallyOrderedOperand(node.children[1], types);
+		return
+			node.children.length == 2 && totallyOrderedOperand(node.children[0], types) && totallyOrderedOperand(node.children[1], types);
 	}
 
 	/**
@@ -495,7 +501,7 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	/** Verbatim source of `node` (empty when unspanned — the re-parse gate then rejects the fix). */
 	private static inline function src(node: QueryNode, source: String): String {
 		final span: Null<Span> = node.span;
-		return span == null ? '' : StringTools.trim(source.substring(span.from, span.to));
+		return span == null ? '' : source.substring(span.from, span.to).trim();
 	}
 
 	/**

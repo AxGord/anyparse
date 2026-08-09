@@ -2,11 +2,12 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Flags an empty-array local declaration immediately followed by a `for` loop
@@ -427,7 +428,7 @@ final class PreferComprehension implements Check {
 	private static function stripWhitespace(source: String): String {
 		final buf: StringBuf = new StringBuf();
 		for (i in 0...source.length) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code) buf.addChar(c);
 		}
 		return buf.toString();
@@ -452,11 +453,11 @@ final class PreferComprehension implements Check {
 	 * arguments; null means NOTHING is restated, so the link keeps its annotation.
 	 */
 	private static function elementTypeOf(annotation: String, params: Map<String, Int>): Null<String> {
-		final trimmed: String = StringTools.trim(annotation);
+		final trimmed: String = annotation.trim();
 		final open: Int = trimmed.indexOf('<');
 		final close: Int = trimmed.lastIndexOf('>');
 		if (open < 0 || close != trimmed.length - 1) return null;
-		final at: Null<Int> = params[StringTools.trim(trimmed.substring(0, open))];
+		final at: Null<Int> = params[trimmed.substring(0, open).trim()];
 		if (at == null) return null;
 		final args: Array<String> = splitTypeArguments(trimmed.substring(open + 1, close));
 		return at < args.length ? args[at] : null;
@@ -472,19 +473,19 @@ final class PreferComprehension implements Check {
 		var depth: Int = 0;
 		var at: Int = 0;
 		for (i in 0...list.length) {
-			final c: Int = StringTools.fastCodeAt(list, i);
+			final c: Int = list.fastCodeAt(i);
 			if (c == '<'.code || c == '('.code || c == '['.code || c == '{'.code)
 				depth++;
 			else if (c == ')'.code || c == ']'.code || c == '}'.code)
 				depth--;
-			else if (c == '>'.code && (i == 0 || StringTools.fastCodeAt(list, i - 1) != '-'.code))
+			else if (c == '>'.code && (i == 0 || list.fastCodeAt(i - 1) != '-'.code))
 				depth--;
 			else if (c == ','.code && depth == 0) {
-				out.push(StringTools.trim(list.substring(at, i)));
+				out.push(list.substring(at, i).trim());
 				at = i + 1;
 			}
 		}
-		out.push(StringTools.trim(list.substring(at)));
+		out.push(list.substring(at).trim());
 		return out;
 	}
 
@@ -525,10 +526,9 @@ final class PreferComprehension implements Check {
 		var at: Int = blockSpan.from;
 		for (kid in kids) {
 			final kidSpan: Null<Span> = kid.span;
-			if (kidSpan != null) {
-				hoistCommentsIn(new Span(at, kidSpan.from), ctx, acc);
-				at = kidSpan.to;
-			}
+			if (kidSpan == null) continue;
+			hoistCommentsIn(new Span(at, kidSpan.from), ctx, acc);
+			at = kidSpan.to;
 		}
 		hoistCommentsIn(new Span(at, blockSpan.to), ctx, acc);
 	}
@@ -737,7 +737,7 @@ final class PreferComprehension implements Check {
 		if (at < 0) return null;
 		final colon: Int = head.indexOf(':', at);
 		if (colon < 0) return null;
-		final text: String = StringTools.trim(head.substring(colon + 1));
+		final text: String = head.substring(colon + 1).trim();
 		return text == '' ? null : text;
 	}
 
@@ -746,8 +746,8 @@ final class PreferComprehension implements Check {
 		var at: Int = head.lastIndexOf(name);
 		while (at >= 0) {
 			final after: Int = at + name.length;
-			final openLeft: Bool = at == 0 || !isIdentChar(StringTools.fastCodeAt(head, at - 1));
-			final openRight: Bool = after >= head.length || !isIdentChar(StringTools.fastCodeAt(head, after));
+			final openLeft: Bool = at == 0 || !isIdentChar(head.fastCodeAt(at - 1));
+			final openRight: Bool = after >= head.length || !isIdentChar(head.fastCodeAt(after));
 			if (openLeft && openRight) return at;
 			if (at == 0) return -1;
 			at = head.lastIndexOf(name, at - 1);
@@ -933,7 +933,7 @@ final class PreferComprehension implements Check {
 		if (acc.hoisted.length == 0) return '';
 		final lineStart: Int = RefactorSupport.startOfLine(ctx.source, declSpan.from);
 		final indent: String = ctx.source.substring(lineStart, declSpan.from);
-		if (StringTools.trim(indent) != '') return null;
+		if (indent.trim() != '') return null;
 		acc.hoisted.sort((a, b) -> a.from - b.from);
 		final buf: StringBuf = new StringBuf();
 		for (comment in acc.hoisted) {

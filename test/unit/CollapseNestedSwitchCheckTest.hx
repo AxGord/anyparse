@@ -3,14 +3,14 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.check.Check;
-import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.Violation;
 import anyparse.check.CollapseNestedSwitch;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * The `collapse-nested-switch` check: an outer `case P(b):` whose body is EXACTLY one
@@ -52,7 +52,7 @@ class CollapseNestedSwitchCheckTest extends Test {
 		final out: String = applyFixOnce(canary());
 		Assert.stringContains('case EConst(CString(s, kind)): tKey = s;', out);
 		Assert.stringContains('case EConst(CInt(i)): tKey = i;', out);
-		Assert.isFalse(StringTools.contains(out, 'switch c'), 'the nested switch is gone');
+		Assert.isFalse(out.contains('switch c'), 'the nested switch is gone');
 		Assert.equals(1, occurrences(out, 'case _:'), 'the inner wildcard merged into the outer one');
 	}
 
@@ -148,13 +148,13 @@ class CollapseNestedSwitchCheckTest extends Test {
 
 	/** A `'$b'` read is a string-interpolation identifier, not an ordinary one — missing it would strand the read. */
 	public function testBinderReadThroughInterpolationNotFlagged(): Void {
-		final arms: String = "case Q: t = '$b';" + INNER_LABEL + 'case _:';
+		final arms: String = 'case Q: t = \'$$b\';${INNER_LABEL}case _:';
 		Assert.equals(0, violations(sw(nest('P(b)', 'b', arms) + EMPTY_TAIL)).length);
 	}
 
 	/** A `case var b:` deeper in the arm re-binds the name, so the two mentions the isolation gate demands are three. */
 	public function testBinderReboundByCaptureNotFlagged(): Void {
-		final arms: String = 'case Q: switch y { case var b: g(); }' + INNER_LABEL + 'case _:';
+		final arms: String = 'case Q: switch y { case var b: g(); }${INNER_LABEL}case _:';
 		Assert.equals(0, violations(sw(nest('P(b)', 'b', arms) + EMPTY_TAIL)).length);
 	}
 
@@ -278,7 +278,7 @@ class CollapseNestedSwitchCheckTest extends Test {
 	 * matches for this rule were of exactly this shape.
 	 */
 	public function testArmInsideReificationNotFlagged(): Void {
-		final src: String = "class C {\n\tfunction f() {\n\t\treturn macro {\n\t\t\tswitch v {\n\t\t\t\tcase P(b):\n"
+		final src: String = 'class C {\n\tfunction f() {\n\t\treturn macro {\n\t\t\tswitch v {\n\t\t\t\tcase P(b):\n'
 			+ "\t\t\t\t\tswitch b {\n\t\t\t\t\t\tcase Q: $e;\n\t\t\t\t\t\tcase _:\n\t\t\t\t\t}\n\t\t\t\tcase _:\n\t\t\t}\n\t\t};\n\t}\n}";
 		Assert.equals(0, violations(src).length);
 	}

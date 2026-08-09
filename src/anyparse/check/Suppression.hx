@@ -71,10 +71,9 @@ final class Suppression {
 	private static function suppressedInRange(entries: Array<Entry>, fromLine: Int, toLine: Int, rule: String): Bool {
 		for (e in entries) {
 			final hit: Bool = e.region ? fromLine >= e.lineFrom && fromLine <= e.lineTo : e.lineFrom <= toLine && fromLine <= e.lineTo;
-			if (hit) {
-				final rules: Null<Array<String>> = e.rules;
-				if (rules == null || rules.contains(rule)) return true;
-			}
+			if (!hit) continue;
+			final rules: Null<Array<String>> = e.rules;
+			if (rules == null || rules.contains(rule)) return true;
 		}
 		return false;
 	}

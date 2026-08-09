@@ -2,11 +2,12 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import anyparse.check.Check.ConfigAware;
+
+using StringTools;
 
 /**
  * Flags a type declaration that has grown past a member-count or line-extent
@@ -145,7 +146,7 @@ final class OversizedType implements Check implements ConfigAware {
 	/** The number of source lines `span` covers — newlines in the slice + 1. */
 	private static function lineExtent(source: String, span: Span): Int {
 		var lines: Int = 1;
-		for (i in span.from ... span.to) if (StringTools.fastCodeAt(source, i) == '\n'.code) lines++;
+		for (i in span.from ... span.to) if (source.fastCodeAt(i) == '\n'.code) lines++;
 		return lines;
 	}
 

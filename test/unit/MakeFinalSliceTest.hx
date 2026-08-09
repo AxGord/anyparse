@@ -6,6 +6,8 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.MakeFinal;
 import anyparse.query.RefactorSupport.EditResult;
 
+using StringTools;
+
 /**
  * `MakeFinal.makeFinal` — turn a never-reassigned `var` field into
  * `final`, so the `move-member` instance path (final-fields contract) can
@@ -20,14 +22,14 @@ class MakeFinalSliceTest extends Test {
 		final src: String =
 			'package pkg;\n\nclass Cfg {\n\tpublic var x:Int = 5;\n\tpublic function new() {}\n\tpublic function read():Int return x;\n}';
 		final text: String = okFinal('pkg/Cfg.hx', 'Cfg', 'x', [{ file: 'pkg/Cfg.hx', source: src },]);
-		Assert.isTrue(StringTools.contains(text, 'public final x:Int = 5'), 'var became final');
+		Assert.isTrue(text.contains('public final x:Int = 5'), 'var became final');
 	}
 
 	/** A field assigned only in the constructor becomes final. */
 	public function testCtorInitToFinal(): Void {
 		final src: String = 'package pkg;\n\nclass Cfg {\n\tpublic var name:String;\n\tpublic function new(n:String) { name = n; }\n}';
 		final text: String = okFinal('pkg/Cfg.hx', 'Cfg', 'name', [{ file: 'pkg/Cfg.hx', source: src },]);
-		Assert.isTrue(StringTools.contains(text, 'public final name:String;'), 'ctor-assigned var became final');
+		Assert.isTrue(text.contains('public final name:String;'), 'ctor-assigned var became final');
 	}
 
 	/** A field reassigned in a method is refused. */

@@ -2,13 +2,14 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Flags a `static final` constant of a basic scalar type whose initializer is a compile-time
@@ -285,7 +286,7 @@ final class InlineConstant implements Check {
 	/** Whether `child` (a visibility modifier) is a non-default (exported) keyword — `public` rather than the private default. */
 	private static function isExportedVisibility(source: String, child: QueryNode, defaultVis: String): Bool {
 		final span: Null<Span> = child.span;
-		return span != null && StringTools.trim(source.substring(span.from, span.to)) != defaultVis;
+		return span != null && source.substring(span.from, span.to).trim() != defaultVis;
 	}
 
 	/**
@@ -475,8 +476,7 @@ final class InlineConstant implements Check {
 		)
 			return null;
 		final finalFieldKinds: Array<String> = [for (k in fieldKinds) if (!mutable.contains(k)) k];
-		if (finalFieldKinds.length == 0) return null;
-		return {
+		return finalFieldKinds.length == 0 ? null : {
 			containers: containers,
 			members: members,
 			finalFieldKinds: finalFieldKinds,
@@ -604,13 +604,13 @@ final class InlineConstant implements Check {
 		final n: Int = source.length;
 		var i: Int = 0;
 		while (i < n) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (isIdentStart(c)) {
 				final start: Int = i;
 				i++;
-				while (i < n && isIdentPart(StringTools.fastCodeAt(source, i))) i++;
+				while (i < n && isIdentPart(source.fastCodeAt(i))) i++;
 				final token: String = source.substring(start, i);
-				if (isUpper(StringTools.fastCodeAt(token, 0)) && !out.contains(token)) out.push(token);
+				if (isUpper(token.fastCodeAt(0)) && !out.contains(token)) out.push(token);
 			} else
 				i++;
 		}

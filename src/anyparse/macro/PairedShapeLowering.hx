@@ -45,41 +45,29 @@ class PairedShapeLowering {
 		_shape = shape;
 	}
 
-	/** Simple (unqualified) name of a type path. */
-	public static function simpleName(typePath: String): String {
-		final idx: Int = typePath.lastIndexOf('.');
-		return idx == -1 ? typePath : typePath.substring(idx + 1);
-	}
-
-	/** Package parts of a type path, empty for a root-package type. */
-	public static function packOf(typePath: String): Array<String> {
-		final idx: Int = typePath.lastIndexOf('.');
-		return idx == -1 ? [] : typePath.substring(0, idx).split('.');
-	}
-
 	/** A `Seq` field's / `Alt` ctor arg's declared name. */
 	private inline function fieldNameOf(child: ShapeNode): String {
-		return child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
+		return child.annotations[AnnotationKeys.BASE_FIELD_NAME];
 	}
 
 	/** Whether a field node is `Null<...>` and so needs a null guard before descent. */
 	private inline function isOptional(child: ShapeNode): Bool {
-		return child.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
+		return child.annotations[AnnotationKeys.BASE_OPTIONAL] == true;
 	}
 
 	/** The rule a field node references, or null when it is not a `Ref` to a named rule. */
 	private function refOf(child: ShapeNode): Null<String> {
 		return switch child.kind {
-			case Ref: child.annotations.get(AnnotationKeys.BASE_REF);
+			case Ref: child.annotations[AnnotationKeys.BASE_REF];
 			case _: null;
 		};
 	}
 
 	/** Whether an inline (unnamed) Terminal node's primitive is `String`. */
 	private function isStringShape(node: ShapeNode): Bool {
-		final under: Null<String> = node.annotations.get('base.underlying');
+		final under: Null<String> = node.annotations['base.underlying'];
 		if (under == 'String') return true;
-		final tp: Null<String> = node.annotations.get(AnnotationKeys.BASE_TYPE_PATH);
+		final tp: Null<String> = node.annotations[AnnotationKeys.BASE_TYPE_PATH];
 		return tp != null && simpleName(tp) == 'String';
 	}
 
@@ -108,37 +96,38 @@ class PairedShapeLowering {
 
 	/** The paired `*S` type of a rule, or its raw type when the rule is a Terminal (Terminals are not paired). */
 	private function pairedComplexType(rule: String): ComplexType {
-		if (!isTerminalRule(rule)) return TPath({
-			pack: packOf(_shape.root).concat([SYNTH_SUBPACK]),
-			name: SYNTH_MODULE,
-			sub: simpleName(rule) + PAIRED_SUFFIX,
-			params: []
-		});
-		return TPath({ pack: packOf(rule), name: simpleName(rule), params: [] });
+		return !isTerminalRule(rule)
+			? TPath({
+				pack: packOf(_shape.root).concat([SYNTH_SUBPACK]),
+				name: SYNTH_MODULE,
+				sub: simpleName(rule) + PAIRED_SUFFIX,
+				params: []
+			})
+			: TPath({ pack: packOf(rule), name: simpleName(rule), params: [] });
 	}
 
 	/** Whether a rule name resolves to a Terminal - a primitive leaf with no paired type and no generated functions. */
 	private function isTerminalRule(rule: String): Bool {
-		final node: Null<ShapeNode> = _shape.rules.get(rule);
+		final node: Null<ShapeNode> = _shape.rules[rule];
 		return node == null || node.kind == Terminal;
 	}
 
 	/** Whether a Terminal RULE's underlying primitive is `String` - the only shape a name can be read from directly. */
 	private function isStringTerminal(rule: String): Bool {
-		final node: Null<ShapeNode> = _shape.rules.get(rule);
+		final node: Null<ShapeNode> = _shape.rules[rule];
 		return node != null && node.kind == Terminal && isStringShape(node);
 	}
 
 	/** Whether an `Alt` rule declares a ctor of this name. */
 	private function altHasCtor(rule: String, ctor: String): Bool {
-		final node: Null<ShapeNode> = _shape.rules.get(rule);
+		final node: Null<ShapeNode> = _shape.rules[rule];
 		if (node == null || node.kind != Alt) return false;
 		return node.children.exists(b -> (b.annotations.get(AnnotationKeys.BASE_CTOR): String) == ctor);
 	}
 
 	/** Declared arg count of an `Alt` ctor, excluding the synthesised trailing `_span`. */
 	private function ctorArity(rule: String, ctor: String): Int {
-		final node: Null<ShapeNode> = _shape.rules.get(rule);
+		final node: Null<ShapeNode> = _shape.rules[rule];
 		if (node == null || node.kind != Alt) return 0;
 		final branch: Null<ShapeNode> = node.children.find(b -> (b.annotations.get(AnnotationKeys.BASE_CTOR): String) == ctor);
 		return branch == null ? 0 : branch.children.length;
@@ -146,8 +135,7 @@ class PairedShapeLowering {
 
 	/** The declared field of a `Seq` rule with this name, or null. */
 	private function seqField(node: ShapeNode, name: String): Null<ShapeNode> {
-		if (node.kind != Seq) return null;
-		return node.children.find(c -> fieldNameOf(c) == name);
+		return node.kind != Seq ? null : node.children.find(c -> fieldNameOf(c) == name);
 	}
 
 	/** Whether a `Seq` rule opted out of transparency with `@:spanned('<Kind>')`, gaining `_kind` + `_span`. */
@@ -171,6 +159,18 @@ class PairedShapeLowering {
 		final args: Array<Expr> = [for (n in argNames) ident(n)];
 		args.push(ident(SPAN_FIELD));
 		return { expr: ECall(haxe.macro.MacroStringTools.toFieldExpr(path), args), pos: Context.currentPos() };
+	}
+
+	/** Simple (unqualified) name of a type path. */
+	public static function simpleName(typePath: String): String {
+		final idx: Int = typePath.lastIndexOf('.');
+		return idx == -1 ? typePath : typePath.substring(idx + 1);
+	}
+
+	/** Package parts of a type path, empty for a root-package type. */
+	public static function packOf(typePath: String): Array<String> {
+		final idx: Int = typePath.lastIndexOf('.');
+		return idx == -1 ? [] : typePath.substring(0, idx).split('.');
 	}
 
 }

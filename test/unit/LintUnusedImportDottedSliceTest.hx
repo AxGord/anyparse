@@ -70,8 +70,8 @@ class LintUnusedImportDottedSliceTest extends Test {
 	 * below sat under a `// … before the process dies.` comment).
 	 */
 	public function testCommentPeriodIsNotQualification(): Void {
-		final use: String =
-			'package pkg;\n\nimport a.b.Limit;\n\nclass C {\n\tpublic function f(): Void {\n\t\t// Flush the queue first.\n\t\tLimit.drain();\n\t}\n}';
+		final use: String = 'package pkg;\n\nimport a.b.Limit;\n\nclass C {\n\tpublic function f(): Void {\n\t\t// Flush the queue first.\n'
+			+ '\t\tLimit.drain();\n\t}\n}';
 
 		Assert.equals(0, run(use).length);
 	}
@@ -82,8 +82,8 @@ class LintUnusedImportDottedSliceTest extends Test {
 	 * lexical scan, not a same-line `//` search.
 	 */
 	public function testSlashesInsideStringDoNotMaskTheQualifier(): Void {
-		final use: String =
-			'package pkg;\n\nimport a.b.Ctx;\n\nclass C {\n\tpublic function f(): Int {\n\t\tfinal u: String = \'http://x\';\n\t\treturn a.b.Ctx.currentPos() + u.length;\n\t}\n}';
+		final use: String = 'package pkg;\n\nimport a.b.Ctx;\n\nclass C {\n\tpublic function f(): Int {\n'
+			+ '\t\tfinal u: String = \'http://x\';\n\t\treturn a.b.Ctx.currentPos() + u.length;\n\t}\n}';
 		final vs: Array<Violation> = run(use);
 
 		Assert.equals(1, vs.length);

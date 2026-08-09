@@ -4,10 +4,6 @@ import utest.Assert;
 import utest.Test;
 import anyparse.query.CallGraph;
 import anyparse.query.Clusters;
-import anyparse.query.Clusters.ClusterReport;
-import anyparse.query.CallGraph.FnNode;
-import anyparse.query.CallGraph.EdgeKind;
-import anyparse.query.Clusters.HubUse;
 
 /**
  * Partition analytics behind `apq clusters`: connected components over

@@ -17,7 +17,6 @@ import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxHeritageClause;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxParamBody;
-import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxVarDecl;
 
 /**
@@ -269,7 +268,9 @@ class HxCondTypeSlotSliceTest extends HxTestHelpers {
 		);
 		triviaRoundTrip('package p;\n\nclass C {\n\t#if (a || (b || (c || d)))\n\tvar x:Int;\n\t#end\n}');
 		triviaRoundTrip(
-			'package p;\n\nclass S {\n\tfunction f(getPositions:#if (js && html5) Void->Array<Float>, wordKey:String = null #else TextLayout #end):Int {\n\t\treturn 1;\n\t}\n}'
+			'package p;\n\nclass S {\n'
+			+ '\tfunction f(getPositions:#if (js && html5) Void->Array<Float>, wordKey:String = null #else TextLayout #end):Int {\n'
+			+ '\t\treturn 1;\n\t}\n}'
 		);
 	}
 

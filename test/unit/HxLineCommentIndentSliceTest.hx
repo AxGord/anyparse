@@ -94,8 +94,8 @@ class HxLineCommentIndentSliceTest extends Test {
 	 * original indent would make every commented-out block ragged.
 	 */
 	public function testClosingBraceLineRidesTheRunShift(): Void {
-		final source: String =
-			'class Roster {\n\tfunction sweep() {\n\t\t//    for (i in items) {\n\t\t//        step(i);\n\t\t//    }\n\t\trender();\n\t}\n}';
+		final source: String = 'class Roster {\n\tfunction sweep() {\n\t\t//    for (i in items) {\n\t\t//        step(i);\n\t\t//    }\n'
+			+ '\t\trender();\n\t}\n}';
 		Assert.equals(
 			'class Roster {\n\tfunction sweep() {\n\t\t// for (i in items) {\n\t\t//     step(i);\n\t\t// }\n\t\trender();\n\t}\n}\n',
 			formatted(source, KNOB_ON)

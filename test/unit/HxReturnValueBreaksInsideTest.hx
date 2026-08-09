@@ -25,8 +25,10 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 class HxReturnValueBreaksInsideTest extends Test {
 
 	/** Flat, the statement is 141 columns — one past the limit, and only because of the `;`. */
-	private static final SRC: String = "class C {\n\tprivate inline function files(fileName:String, sessionXML:String):Array<APIFileUploadBase> {\n"
-		+ "\t\treturn [new APIFileUploadBase('sessionxml', fileName, Mime.ApplicationOctetStream, ByteArray.fromBytes(Bytes.ofString(sessionXML)))];\n\t}\n}";
+	private static final SRC: String = 'class C {\n'
+		+ '\tprivate inline function files(fileName:String, sessionXML:String):Array<APIFileUploadBase> {\n'
+		+ "\t\treturn [new APIFileUploadBase('sessionxml', fileName, Mime.ApplicationOctetStream, ByteArray.fromBytes(Bytes.ofString(sessionXML)))];\n"
+		+ '\t}\n}';
 
 	public function new(): Void {
 		super();
@@ -53,7 +55,7 @@ class HxReturnValueBreaksInsideTest extends Test {
 
 	private static inline function write(): String {
 		final config: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "arrayWrap": '
-			+ '{"defaultWrap": "ignore", "rules": [' + '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, '
+			+ '{"defaultWrap": "ignore", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, '
 			+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "packedOrOnePerLine"}]}}}';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(config);
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(SRC), opts);

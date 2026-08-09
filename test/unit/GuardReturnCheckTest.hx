@@ -11,7 +11,6 @@ import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 import anyparse.query.SymbolIndex;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.query.CachingGrammarPlugin.LibrarySources;
 
 /**
  * The `guard-return` check: a block whose LAST TWO statements are a bare
@@ -109,8 +108,8 @@ class GuardReturnCheckTest extends Test {
 	}
 
 	public function testOrderedFloatOperandNotFlagged(): Void {
-		final source: String =
-			'class C {\n\tfunction f(a:Float):Bool {\n\t\tif (a > 0) {\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t}\n}\n';
+		final source: String = 'class C {\n\tfunction f(a:Float):Bool {\n\t\tif (a > 0) {\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t}\n'
+			+ '\t\treturn false;\n\t}\n}\n';
 		Assert.equals(0, new GuardReturn().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
 	}
 
@@ -126,8 +125,8 @@ class GuardReturnCheckTest extends Test {
 		// branch it replaces. `testOrderedFlippedWhenBothOperandsInt` is the same GUARD shape over a
 		// licensed nominal and still fires; it compares against a LITERAL, so this fixture is also the
 		// only one in the file that asks the resolver to prove BOTH operands from declarations.
-		final source: String =
-			'class C {\n\tfunction f(s:String, k:String):Bool {\n\t\tif (s < k) {\n\t\t\tlog(s);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t}\n}\n';
+		final source: String = 'class C {\n\tfunction f(s:String, k:String):Bool {\n\t\tif (s < k) {\n\t\t\tlog(s);\n\t\t\treturn true;\n'
+			+ '\t\t}\n\t\treturn false;\n\t}\n}\n';
 		Assert.equals(0, new GuardReturn().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
 	}
 
@@ -354,10 +353,10 @@ class GuardReturnCheckTest extends Test {
 	 * reject it, and the implicit-tail arm deliberately does not.
 	 */
 	public function testImplicitVoidTailFlaggedAndFixed(): Void {
-		final source: String =
-			'class C {\n\tpublic function disable():Void {\n\t\tif (_handle != null) {\n\t\t\tlog(_handle);\n\t\t\tdetach(_handle);\n\t\t}\n\t}\n}\n';
-		final expected: String =
-			'class C {\n\tpublic function disable():Void {\n\t\tif (_handle == null) return;\n\t\tlog(_handle);\n\t\tdetach(_handle);\n\t}\n}\n';
+		final source: String = 'class C {\n\tpublic function disable():Void {\n\t\tif (_handle != null) {\n\t\t\tlog(_handle);\n'
+			+ '\t\t\tdetach(_handle);\n\t\t}\n\t}\n}\n';
+		final expected: String = 'class C {\n\tpublic function disable():Void {\n\t\tif (_handle == null) return;\n\t\tlog(_handle);\n'
+			+ '\t\tdetach(_handle);\n\t}\n}\n';
 		Assert.equals(1, vSource(source).length);
 		Assert.equals(canon(expected), fxSource(source));
 	}
@@ -496,6 +495,66 @@ class GuardReturnCheckTest extends Test {
 		);
 	}
 
+	/** A trailing `if` + `return` inside a `#if` branch inverts like any other, directives intact. */
+	public function testConditionalBranchTrailingIfFlaggedAndFixed(): Void {
+		final code: String =
+			'#if debug\n\t\tif (ok) {\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t\t#end\n\t\treturn true;';
+		Assert.equals(1, v(code).length);
+		Assert.equals(
+			canon(wrap('#if debug\n\t\tif (!ok) return false;\n\t\tlog(a);\n\t\treturn true;\n\t\t#end\n\t\treturn true;')), fx(code)
+		);
+	}
+
+	/** A SIBLING branch's local never refuses — the two configurations are mutually exclusive. */
+	public function testSiblingBranchLocalDoesNotRefuse(): Void {
+		final code: String = '#if x\n\t\tfinal n = pre();\n\t\treturn n > 0;\n\t\t#elseif y\n\t\tif (ok) {\n\t\t\tfinal n = other();'
+			+ '\n\t\t\tlog(n);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t\t#end\n\t\treturn true;';
+		Assert.equals(1, v(code).length);
+		Assert.equals(
+			canon(wrap(
+				'#if x\n\t\tfinal n = pre();\n\t\treturn n > 0;\n\t\t#elseif y\n\t\tif (!ok) return false;\n\t\tfinal n = other();'
+				+ '\n\t\tlog(n);\n\t\treturn true;\n\t\t#end\n\t\treturn true;'
+			)),
+			fx(code)
+		);
+	}
+
+	/**
+	 * A local in a DIFFERENT `#if` region of the same block IS visible to the collision gate:
+	 * it is not a sibling of the flagged `if`, but under `-D x -D y` both regions are live and
+	 * the de-nest would re-declare the name — and re-bind the `return n` that follows it.
+	 */
+	public function testOtherConditionalRegionLocalRefuses(): Void {
+		Assert.equals(
+			0,
+			v(
+				'#if x\n\t\tfinal n = pre();\n\t\t#end\n\t\t#if y\n\t\tif (ok) {\n\t\t\tfinal n = other();\n\t\t\tlog(n);'
+				+ '\n\t\t\treturn true;\n\t\t}\n\t\treturn n > 1;\n\t\t#end\n\t\treturn true;'
+			).length
+		);
+	}
+
+	/** The enclosing function's parameters are part of the collision set (`ScopeFrames.ownParamNames`). */
+	public function testParamCollisionNotFlagged(): Void {
+		Assert.equals(0, v('if (ok) {\n\t\t\tfinal a = other();\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;').length);
+	}
+
+	/** The control for `testParamCollisionNotFlagged`: the same shape with a free name IS flagged. */
+	public function testNonParamNameFlagged(): Void {
+		Assert.equals(1, v('if (ok) {\n\t\t\tfinal z = other();\n\t\t\tlog(z);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;').length);
+	}
+
+	/** A `#if` branch still sees the enclosing function's parameters — it is not a scope boundary. */
+	public function testParamCollisionInsideBranchNotFlagged(): Void {
+		Assert.equals(
+			0,
+			v(
+				'#if x\n\t\tif (ok) {\n\t\t\tfinal a = other();\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;'
+				+ '\n\t\t#end\n\t\treturn true;'
+			).length
+		);
+	}
+
 	// --- helpers --------------------------------------------------------------------------
 
 	private function wrap(bodyCode: String): String {
@@ -560,9 +619,9 @@ class GuardReturnCheckTest extends Test {
 	}
 
 	/** The member-path fixture the resolution tests share: `res.count > 0` wrapping a two-statement branch. */
-	private function memberPathSource(): String {
-		return
-			'class C {\n\tfunction f(res:Res):Bool {\n\t\tif (res.count > 0) {\n\t\t\tlog(res);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t}\n}\n';
+	private inline function memberPathSource(): String {
+		return 'class C {\n\tfunction f(res:Res):Bool {\n\t\tif (res.count > 0) {\n\t\t\tlog(res);\n\t\t\treturn true;\n\t\t}\n'
+			+ '\t\treturn false;\n\t}\n}\n';
 	}
 
 	/**
@@ -614,72 +673,6 @@ class GuardReturnCheckTest extends Test {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};
-	}
-
-
-	/** A trailing `if` + `return` inside a `#if` branch inverts like any other, directives intact. */
-	public function testConditionalBranchTrailingIfFlaggedAndFixed(): Void {
-		final code: String =
-			'#if debug\n\t\tif (ok) {\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t\t#end\n\t\treturn true;';
-		Assert.equals(1, v(code).length);
-		Assert.equals(
-			canon(wrap('#if debug\n\t\tif (!ok) return false;\n\t\tlog(a);\n\t\treturn true;\n\t\t#end\n\t\treturn true;')), fx(code)
-		);
-	}
-
-
-	/** A SIBLING branch's local never refuses — the two configurations are mutually exclusive. */
-	public function testSiblingBranchLocalDoesNotRefuse(): Void {
-		final code: String = '#if x\n\t\tfinal n = pre();\n\t\treturn n > 0;\n\t\t#elseif y\n\t\tif (ok) {\n\t\t\tfinal n = other();'
-			+ '\n\t\t\tlog(n);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t\t#end\n\t\treturn true;';
-		Assert.equals(1, v(code).length);
-		Assert.equals(
-			canon(wrap(
-				'#if x\n\t\tfinal n = pre();\n\t\treturn n > 0;\n\t\t#elseif y\n\t\tif (!ok) return false;\n\t\tfinal n = other();'
-				+ '\n\t\tlog(n);\n\t\treturn true;\n\t\t#end\n\t\treturn true;'
-			)),
-			fx(code)
-		);
-	}
-
-
-	/**
-	 * A local in a DIFFERENT `#if` region of the same block IS visible to the collision gate:
-	 * it is not a sibling of the flagged `if`, but under `-D x -D y` both regions are live and
-	 * the de-nest would re-declare the name — and re-bind the `return n` that follows it.
-	 */
-	public function testOtherConditionalRegionLocalRefuses(): Void {
-		Assert.equals(
-			0,
-			v(
-				'#if x\n\t\tfinal n = pre();\n\t\t#end\n\t\t#if y\n\t\tif (ok) {\n\t\t\tfinal n = other();\n\t\t\tlog(n);'
-				+ '\n\t\t\treturn true;\n\t\t}\n\t\treturn n > 1;\n\t\t#end\n\t\treturn true;'
-			).length
-		);
-	}
-
-
-	/** The enclosing function's parameters are part of the collision set (`ScopeFrames.ownParamNames`). */
-	public function testParamCollisionNotFlagged(): Void {
-		Assert.equals(0, v('if (ok) {\n\t\t\tfinal a = other();\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;').length);
-	}
-
-
-	/** The control for `testParamCollisionNotFlagged`: the same shape with a free name IS flagged. */
-	public function testNonParamNameFlagged(): Void {
-		Assert.equals(1, v('if (ok) {\n\t\t\tfinal z = other();\n\t\t\tlog(z);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;').length);
-	}
-
-
-	/** A `#if` branch still sees the enclosing function's parameters — it is not a scope boundary. */
-	public function testParamCollisionInsideBranchNotFlagged(): Void {
-		Assert.equals(
-			0,
-			v(
-				'#if x\n\t\tif (ok) {\n\t\t\tfinal a = other();\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;'
-				+ '\n\t\t#end\n\t\treturn true;'
-			).length
-		);
 	}
 
 }

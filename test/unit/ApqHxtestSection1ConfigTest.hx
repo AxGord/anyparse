@@ -3,6 +3,9 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.query.Cli;
+
+using StringTools;
+
 #if sys
 import sys.FileSystem;
 import sys.io.File;
@@ -91,12 +94,11 @@ class ApqHxtestSection1ConfigTest extends Test {
 
 	private static function tempDir(): String {
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
-		if (tmp != null && tmp.length > 0) return stripTrailingSlash((tmp: String));
-		return '/tmp';
+		return tmp != null && tmp.length > 0 ? stripTrailingSlash((tmp: String)) : '/tmp';
 	}
 
 	private static inline function stripTrailingSlash(p: String): String {
-		return StringTools.endsWith(p, '/') ? p.substring(0, p.length - 1) : p;
+		return p.endsWith('/') ? p.substring(0, p.length - 1) : p;
 	}
 	#end
 

@@ -6,6 +6,8 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
+
 /**
  * Add a member declaration to a type body — a structural INSERT
  * operation built on the query engine.
@@ -43,7 +45,7 @@ final class AddMember {
 		)
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
-		final trimmed: String = StringTools.trim(memberText);
+		final trimmed: String = memberText.trim();
 		if (trimmed.length == 0) return Err('add-member requires a non-empty member text');
 
 		final matches: Array<TypeDeclMatch> = [];
@@ -68,8 +70,8 @@ final class AddMember {
 		final bodySpan: Span = matches[0].nameNode.span ?? matches[0].fullSpan;
 		var bodyClose: Int = bodySpan.to - 1;
 		if (bodyClose >= source.length) bodyClose = source.length - 1;
-		while (bodyClose >= bodySpan.from && RefactorSupport.isSpace(StringTools.fastCodeAt(source, bodyClose))) bodyClose--;
-		if (bodyClose < bodySpan.from || StringTools.fastCodeAt(source, bodyClose) != '}'.code)
+		while (bodyClose >= bodySpan.from && RefactorSupport.isSpace(source.fastCodeAt(bodyClose))) bodyClose--;
+		if (bodyClose < bodySpan.from || source.fastCodeAt(bodyClose) != '}'.code)
 			return Err('"$typeName" has no brace body to add a member to');
 
 		final edit: { span: Span, text: String } = { span: new Span(bodyClose, bodyClose), text: '\n$trimmed\n' };

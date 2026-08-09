@@ -4,7 +4,6 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingPolicy;
@@ -15,6 +14,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.Rename;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Flags a function PARAMETER or a LOCAL binding (a `var` / `final` local, a loop
@@ -319,13 +320,17 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 		resolutionIndex: Null<SymbolIndex>, allowInheritedShadow: Bool
 	): Null<Array<Span>> {
 		final span: Null<Span> = decl.span;
-		if (span == null) return null;
-		if (Naming.collidesInScope(decl, source, tree, target, shape, resolutionIndex, plugin)) return null;
-		if (collidesWithProjectSymbol(decl, target, resolutionIndex, allowInheritedShadow)) return null;
-		return Naming.declaringFileRenameSpans(
-			source, tree, span.from, decl.name, shape, plugin, Naming.isDistinctiveName(decl.name),
-			Naming.isBodyScopedCategory(decl.category)
-		);
+		return if (span == null)
+			null
+		else if (Naming.collidesInScope(decl, source, tree, target, shape, resolutionIndex, plugin))
+			null
+		else if (collidesWithProjectSymbol(decl, target, resolutionIndex, allowInheritedShadow))
+			null
+		else
+			Naming.declaringFileRenameSpans(
+				source, tree, span.from, decl.name, shape, plugin, Naming.isDistinctiveName(decl.name),
+				Naming.isBodyScopedCategory(decl.category)
+			);
 	}
 
 	/**
@@ -334,7 +339,7 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 	private static function strippedName(decl: NamedDecl, policy: NamingPolicy, shape: RefShape): Null<String> {
 		final name: String = decl.name;
 		var i: Int = 0;
-		while (i < name.length && StringTools.fastCodeAt(name, i) == '_'.code) i++;
+		while (i < name.length && name.fastCodeAt(i) == '_'.code) i++;
 		if (i == 0) return null;
 		final stripped: String = name.substr(i);
 		if (!RefactorSupport.isIdentifier(stripped)) return null;
@@ -345,8 +350,12 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 		final reserved: Array<String> = shape.reservedWords ?? [];
 		if (reserved.contains(stripped)) return null;
 		final rule: Null<NamingRule> = Naming.applicableRule(decl, policy);
-		if (rule == null) return stripped;
-		return rule.format.match(stripped) ? stripped : null;
+		return if (rule == null)
+			stripped
+		else if (rule.format.match(stripped))
+			stripped
+		else
+			null;
 	}
 
 	/**

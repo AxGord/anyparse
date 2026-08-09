@@ -192,7 +192,7 @@ class HxGroupTrailCommentWriteTest extends Test {
 	// learned to skip the marker for a guard-bearing body.
 
 	/** The named defect under a sole-argument `noWrap` rule. */
-	public function testSoleCallArgUnderNoWrap(): Void {
+	public inline function testSoleCallArgUnderNoWrap(): Void {
 		assertSurvivesNoWrap('class C {\n\tfunction f(a:Int) {\n\t\tg(\n\t\t\ta // trailing\n\t\t);\n\t}\n}', '// trailing');
 	}
 
@@ -215,59 +215,59 @@ class HxGroupTrailCommentWriteTest extends Test {
 	}
 
 	/** A nested sole call: the inner closer AND the outer one are both at risk. */
-	public function testNestedSoleCallUnderNoWrap(): Void {
+	public inline function testNestedSoleCallUnderNoWrap(): Void {
 		assertSurvivesNoWrap('class C {\n\tfunction f(a:Int) {\n\t\th(g(\n\t\t\ta // trailing\n\t\t));\n\t}\n}', '// trailing');
 	}
 
 	/** `return g(sole)`. */
-	public function testReturnSoleCallUnderNoWrap(): Void {
+	public inline function testReturnSoleCallUnderNoWrap(): Void {
 		assertSurvivesNoWrap('class C {\n\tfunction f():Int {\n\t\treturn g(\n\t\t\t1 // trailing\n\t\t);\n\t}\n}', '// trailing');
 	}
 
 	/** `super(sole)`. */
-	public function testSuperSoleCallUnderNoWrap(): Void {
+	public inline function testSuperSoleCallUnderNoWrap(): Void {
 		assertSurvivesNoWrap('class C extends B {\n\tfunction new() {\n\t\tsuper(\n\t\t\t1 // trailing\n\t\t);\n\t}\n}', '// trailing');
 	}
 
 	/** A method-chain segment's sole argument. */
-	public function testChainSegmentSoleArgUnderNoWrap(): Void {
+	public inline function testChainSegmentSoleArgUnderNoWrap(): Void {
 		assertSurvivesNoWrap('class C {\n\tfunction f() {\n\t\tobj.m(\n\t\t\t1 // trailing\n\t\t).n();\n\t}\n}', '// trailing');
 	}
 
 	/** An arrow body as the sole argument. */
-	public function testArrowArgBodyUnderNoWrap(): Void {
+	public inline function testArrowArgBodyUnderNoWrap(): Void {
 		assertSurvivesNoWrap('class C {\n\tfunction f() {\n\t\tg(\n\t\t\tx -> x // trailing\n\t\t);\n\t}\n}', '// trailing');
 	}
 
 	/** A call nested inside metadata arguments. */
-	public function testMetadataNestedSoleArgUnderNoWrap(): Void {
+	public inline function testMetadataNestedSoleArgUnderNoWrap(): Void {
 		assertSurvivesNoWrap('class C {\n\t@:build(Macro.run(\n\t\t"x" // trailing\n\t))\n\tfunction f() {}\n}', '// trailing');
 	}
 
 	/** `var x = g(sole)`. */
-	public function testVarInitSoleCallUnderNoWrap(): Void {
+	public inline function testVarInitSoleCallUnderNoWrap(): Void {
 		assertSurvivesNoWrap('class C {\n\tfunction f() {\n\t\tvar v = g(\n\t\t\t1 // trailing\n\t\t);\n\t}\n}', '// trailing');
 	}
 
 	/** A qualified static call `T.m(sole)`. */
-	public function testStaticSoleCallUnderNoWrap(): Void {
+	public inline function testStaticSoleCallUnderNoWrap(): Void {
 		assertSurvivesNoWrap('class C {\n\tfunction f() {\n\t\tT.m(\n\t\t\t1 // trailing\n\t\t);\n\t}\n}', '// trailing');
 	}
 
 	/** `untyped g(sole)`. */
-	public function testUntypedSoleCallUnderNoWrap(): Void {
+	public inline function testUntypedSoleCallUnderNoWrap(): Void {
 		assertSurvivesNoWrap('class C {\n\tfunction f() {\n\t\tuntyped g(\n\t\t\t1 // trailing\n\t\t);\n\t}\n}', '// trailing');
 	}
 
 	/** `macro g(sole)` - a reification whose payload is a call. */
-	public function testMacroSoleCallUnderNoWrap(): Void {
+	public inline function testMacroSoleCallUnderNoWrap(): Void {
 		assertSurvivesNoWrap(
 			'class C {\n\tmacro static function f() {\n\t\treturn macro g(\n\t\t\t1 // trailing\n\t\t);\n\t}\n}', '// trailing'
 		);
 	}
 
 	/** A sole call inside an array comprehension. */
-	public function testComprehensionSoleCallUnderNoWrap(): Void {
+	public inline function testComprehensionSoleCallUnderNoWrap(): Void {
 		assertSurvivesNoWrap(
 			'class C {\n\tfunction f() {\n\t\treturn [\n\t\t\tfor (i in a) g(\n\t\t\t\ti // trailing\n\t\t\t)\n\t\t];\n\t}\n}',
 			'// trailing'
@@ -275,7 +275,7 @@ class HxGroupTrailCommentWriteTest extends Test {
 	}
 
 	/** A sole call in condition position - `if (g(sole))`. */
-	public function testConditionSoleCallUnderNoWrap(): Void {
+	public inline function testConditionSoleCallUnderNoWrap(): Void {
 		assertSurvivesNoWrap('class C {\n\tfunction f() {\n\t\tif (g(\n\t\t\t1 // trailing\n\t\t)) act();\n\t}\n}', '// trailing');
 	}
 

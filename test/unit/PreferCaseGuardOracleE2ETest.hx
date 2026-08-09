@@ -4,7 +4,6 @@ import utest.Assert;
 import utest.Test;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
-import anyparse.check.FixVerifier.FixVerifyResult;
 import anyparse.check.PreferCaseGuard;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
@@ -38,7 +37,8 @@ final class PreferCaseGuardOracleE2ETest extends Test {
 	// A statement switch over a plain constant class: the guard conversion typechecks, so
 	// the oracle applies it. Writer-canonical under HXFORMAT, which is what lets the
 	// production fix path run with `reformat` OFF.
-	private static final APPLIES: String = 'class Codes {\n\tpublic static inline final DOWN:Int = 1;\n\tpublic static inline final UP:Int = 2;\n'
+	private static final APPLIES: String = 'class Codes {\n\tpublic static inline final DOWN:Int = 1;\n'
+		+ '\tpublic static inline final UP:Int = 2;\n'
 		+ '\n\tprivate function new() {}\n}\n\nclass Good {\n\tpublic static var hit:Int = 0;\n\n\tpublic static function main():Void {\n'
 		+ '\t\trun(Codes.DOWN);\n\t}\n\n\tprivate static function run(code:Int):Void {\n\t\tswitch code {\n\t\t\tcase Codes.DOWN:\n'
 		+ '\t\t\t\tif (hit == 0) {\n\t\t\t\t\thit = 1;\n\t\t\t\t\ttrace(hit);\n\t\t\t\t}\n\t\t\tcase Codes.UP:\n\t\t\t\ttrace(hit);\n'

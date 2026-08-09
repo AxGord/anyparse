@@ -6,6 +6,8 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * Flags the parentheses around a conditional-compilation condition that is one bare flag —
  * `#if (sys)`, `#elseif (mobile)` — and drops them (`#if sys`, `#elseif mobile`). A single
@@ -134,12 +136,12 @@ final class RedundantCondCompParens implements Check {
 	 */
 	private static function soleFlag(source: String, condition: Span): Null<String> {
 		final close: Int = condition.to - 1;
-		if (StringTools.fastCodeAt(source, condition.from) != '('.code || StringTools.fastCodeAt(source, close) != ')'.code) return null;
+		if (source.fastCodeAt(condition.from) != '('.code || source.fastCodeAt(close) != ')'.code) return null;
 		var from: Int = condition.from + 1;
 		while (from < close && isSpaceAt(source, from)) from++;
-		if (from >= close || !CondDirectives.isIdentStart(StringTools.fastCodeAt(source, from))) return null;
+		if (from >= close || !CondDirectives.isIdentStart(source.fastCodeAt(from))) return null;
 		var to: Int = from;
-		while (to < close && CondDirectives.isIdentChar(StringTools.fastCodeAt(source, to))) to++;
+		while (to < close && CondDirectives.isIdentChar(source.fastCodeAt(to))) to++;
 		final flag: String = source.substring(from, to);
 		while (to < close && isSpaceAt(source, to)) to++;
 		return to == close ? flag : null;
@@ -147,7 +149,7 @@ final class RedundantCondCompParens implements Check {
 
 	/** Whether `source` holds a space or a tab at `at`. */
 	private static inline function isSpaceAt(source: String, at: Int): Bool {
-		final c: Int = StringTools.fastCodeAt(source, at);
+		final c: Int = source.fastCodeAt(at);
 		return c == ' '.code || c == '\t'.code;
 	}
 

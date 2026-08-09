@@ -6,6 +6,8 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
+
 /**
  * Patch a fragment INSIDE one addressed node — the surgical counterpart of
  * `ReplaceNode` for small edits: instead of resending a whole declaration to
@@ -97,9 +99,12 @@ final class Patch {
 		}
 		if (exact.length > 0) return !all && exact.length > 1 ? fail(repeated(label, exact.length, kind)) : { ranges: exact, error: null };
 		final dedented: Array<{ from: Int, to: Int }> = findDedented(slice, oldText);
-		return dedented.length == 0
-			? fail('${label}the old fragment does not occur in the resolved $kind node — copy it verbatim from `apq source --select`')
-			: !all && dedented.length > 1 ? fail(repeated(label, dedented.length, kind)) : { ranges: dedented, error: null };
+		return if (dedented.length == 0)
+			fail('${label}the old fragment does not occur in the resolved $kind node — copy it verbatim from `apq source --select`')
+		else if (!all && dedented.length > 1)
+			fail(repeated(label, dedented.length, kind))
+		else
+			{ ranges: dedented, error: null };
 	}
 
 	/** The repeated-fragment refusal, shared by the byte-exact and dedented arms. */
@@ -145,8 +150,8 @@ final class Patch {
 			final firstLine: String = lines[start];
 			final lastLine: String = lines[start + wanted.length - 1];
 			found.push({
-				from: offsets[start] + (firstLine.length - StringTools.ltrim(firstLine).length),
-				to: offsets[start + wanted.length - 1] + StringTools.rtrim(lastLine).length
+				from: offsets[start] + (firstLine.length - firstLine.ltrim().length),
+				to: offsets[start + wanted.length - 1] + lastLine.rtrim().length
 			});
 			// Matches cannot overlap — resume past this one so `--all` never
 			// produces two edits over the same lines.

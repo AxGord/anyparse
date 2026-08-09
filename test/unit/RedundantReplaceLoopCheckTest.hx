@@ -126,14 +126,14 @@ class RedundantReplaceLoopCheckTest extends Test {
 
 	public function testFieldAccessReceiverNotFlagged(): Void {
 		// `this.now` is not a bare identifier binding — never a plain local/param.
-		final src: String =
-			'class C {\n\tpublic var now:String;\n\tfunction f():Void {\n\t\twhile (this.now.indexOf(\' \') != -1) this.now = this.now.replace(\' \', \'_\');\n\t}\n}';
+		final src: String = 'class C {\n\tpublic var now:String;\n\tfunction f():Void {\n'
+			+ '\t\twhile (this.now.indexOf(\' \') != -1) this.now = this.now.replace(\' \', \'_\');\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
 	public function testNonStringReceiverNotFlagged(): Void {
-		final src: String =
-			'class C {\n\tfunction f(now:Array<String>):Void {\n\t\twhile (now.indexOf(\' \') != -1) now = now.replace(\' \', \'_\');\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(now:Array<String>):Void {\n'
+			+ '\t\twhile (now.indexOf(\' \') != -1) now = now.replace(\' \', \'_\');\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -148,8 +148,8 @@ class RedundantReplaceLoopCheckTest extends Test {
 
 	public function testDifferentBindingNotFlagged(): Void {
 		// The assignment target is a DIFFERENT local (`other`), not the guarded receiver.
-		final src: String =
-			'class C {\n\tfunction f(now:String):Void {\n\t\tvar other:String = now;\n\t\twhile (now.indexOf(\' \') != -1) other = other.replace(\' \', \'_\');\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(now:String):Void {\n\t\tvar other:String = now;\n'
+			+ '\t\twhile (now.indexOf(\' \') != -1) other = other.replace(\' \', \'_\');\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -345,7 +345,7 @@ class RedundantReplaceLoopCheckTest extends Test {
 		// Dominance is rooted at the INNERMOST function, so the guard is never read — the opposite
 		// direction from the parameter test, which walks every enclosing scope.
 		final src: String = 'class C {\n\tpublic static function f(word:String, replace:String):String {\n'
-			+ '\t\tif (replace.indexOf(word) != -1) return word;\n' + '\t\tfinal strip = function(line:String):String {\n'
+			+ '\t\tif (replace.indexOf(word) != -1) return word;\n\t\tfinal strip = function(line:String):String {\n'
 			+ '\t\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);\n\t\t\treturn line;\n\t\t};\n'
 			+ '\t\treturn strip(\'x\');\n\t}\n}';
 		Assert.equals(1, violations(src).length);
@@ -355,7 +355,7 @@ class RedundantReplaceLoopCheckTest extends Test {
 		// The same guard MOVED into the lambda does dominate the loop — the discriminating half of
 		// the pair above, so neither test can pass for the other's reason.
 		final src: String = 'class C {\n\tpublic static function f(word:String, replace:String):String {\n'
-			+ '\t\tfinal strip = function(line:String):String {\n' + '\t\t\tif (replace.indexOf(word) != -1) return line;\n'
+			+ '\t\tfinal strip = function(line:String):String {\n\t\t\tif (replace.indexOf(word) != -1) return line;\n'
 			+ '\t\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);\n\t\t\treturn line;\n\t\t};\n'
 			+ '\t\treturn strip(\'x\');\n\t}\n}';
 		Assert.equals(0, violations(src).length);
@@ -433,10 +433,9 @@ class RedundantReplaceLoopCheckTest extends Test {
 		// `word` is a parameter of the SIBLING local function `helper`, which does NOT enclose the
 		// loop — the outward walk climbs the loop's own chain of enclosing scopes and stops there.
 		// The receiver type gate passes (`line:String`), so this pins the operand OUTCOME.
-		final src: String = 'class C {\n\tpublic static function outer():String {\n'
-			+ '\t\tfunction helper(word:String):String return word;\n' + '\t\tfunction inner(line:String):String {\n'
-			+ '\t\t\twhile (line.indexOf(word) != -1) line = line.replace(word, \'_\');\n\t\t\treturn line;\n\t\t}\n'
-			+ '\t\treturn helper(\'y\') + inner(\'x\');\n\t}\n}';
+		final src: String = 'class C {\n\tpublic static function outer():String {\n\t\tfunction helper(word:String):String return word;\n'
+			+ '\t\tfunction inner(line:String):String {\n\t\t\twhile (line.indexOf(word) != -1) line = line.replace(word, \'_\');\n'
+			+ '\t\t\treturn line;\n\t\t}\n\t\treturn helper(\'y\') + inner(\'x\');\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -606,7 +605,7 @@ class RedundantReplaceLoopCheckTest extends Test {
 	}
 
 	/** The verbatim `stripWord` canary shape: a parameter `S` and a literal `B`. */
-	private function stripWordSource(): String {
+	private inline function stripWordSource(): String {
 		return 'class C {\n\tpublic static function stripWord(line:String, word:String):String {\n'
 			+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, \'\');\n\t\treturn line;\n\t}\n}';
 	}

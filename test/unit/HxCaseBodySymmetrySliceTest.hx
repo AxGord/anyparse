@@ -150,8 +150,8 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 		+ '\t\t\tcase 1: aa(bb);\n\t\t\tcase 2:\n\t\t\t\tfinal t:Int = k();\n\t\t\t\tt;\n\t\t};\n\t}\n}\n';
 
 	/** A single-statement body the flat-refusal gate rejects (outermost `&&`) beside a body that would have fit. */
-	private static final REFUSED_FLAT_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n'
-		+ '\t\t\tcase 1: a && b;\n\t\t\tcase 2: cc(d);\n\t\t};\n\t}\n}\n';
+	private static final REFUSED_FLAT_SRC: String =
+		'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n\t\t\tcase 1: a && b;\n\t\t\tcase 2: cc(d);\n\t\t};\n\t}\n}\n';
 
 	/** `MULTI_STMT_SRC` with the multi-statement branch as `default:` — the other body-carrying ctor and field. */
 	private static final DEFAULT_MULTI_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n'
@@ -167,8 +167,8 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 		+ '\t\t\tcase 1: aa(bb);\n#if js\n\t\t\tcase 2:\n\t\t\t\tfinal t:Int = k();\n\t\t\t\tt;\n#end\n\t\t};\n\t}\n}\n';
 
 	/** An EMPTY case body beside a one-line one — no body to place, so nothing to spread. */
-	private static final EMPTY_BODY_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n'
-		+ '\t\t\tcase 1:\n\t\t\tcase _: ee(ff);\n\t\t};\n\t}\n}\n';
+	private static final EMPTY_BODY_SRC: String =
+		'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n\t\t\tcase 1:\n\t\t\tcase _: ee(ff);\n\t\t};\n\t}\n}\n';
 
 	public function new(): Void {
 		super();
@@ -218,9 +218,8 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 	public function testAGluedSiblingFollowsAWidthTrigger(): Void {
 		// The symmetry is "does the body start on the label line", so once
 		// something spreads, a glued body moves down too.
-		final src: String = 'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n'
-			+ '\t\t\tcase 1: (a, b) -> {\n\t\t\t\tfinal t:Int = k(a, b);\n\t\t\t\tt;\n\t\t\t}\n\t\t\tcase 2: cc(ddddddddddddddd);\n'
-			+ '\t\t};\n\t}\n}\n';
+		final src: String = 'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n\t\t\tcase 1: (a, b) -> {\n'
+			+ '\t\t\t\tfinal t:Int = k(a, b);\n\t\t\t\tt;\n\t\t\t}\n\t\t\tcase 2: cc(ddddddddddddddd);\n\t\t};\n\t}\n}\n';
 		final out: String = write(src, json(39));
 		Assert.isTrue(out.indexOf('case 1:\n\t\t\t\t(a, b) -> {') != -1, 'a glued body must follow a width trigger down: <$out>');
 	}
@@ -321,9 +320,8 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 		// The inner switch's own widest sibling decides for the inner
 		// cases; the outer verdict must not leak in (the element opt is
 		// always written, never inherited).
-		final src: String = 'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n'
-			+ '\t\t\tcase 1: switch (y) {\n\t\t\t\tcase 3: pp(q);\n\t\t\t\tcase _: rr(s);\n\t\t\t}\n\t\t\tcase 2: cc(ddddddddddddddd);\n'
-			+ '\t\t};\n\t}\n}\n';
+		final src: String = 'class M {\n\tfunction f():Void {\n\t\tvar v = switch (x) {\n\t\t\tcase 1: switch (y) {\n'
+			+ '\t\t\t\tcase 3: pp(q);\n\t\t\t\tcase _: rr(s);\n\t\t\t}\n\t\t\tcase 2: cc(ddddddddddddddd);\n\t\t};\n\t}\n}\n';
 		final out: String = write(src, json(39));
 		Assert.isTrue(out.indexOf('case 3: pp(q);') != -1, 'the inner switch fits on its own and stays inline: <$out>');
 		Assert.isTrue(out.indexOf('case _: rr(s);') != -1, '<$out>');

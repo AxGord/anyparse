@@ -2,13 +2,15 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeInfoProvider;
+
+using Lambda;
+using StringTools;
 
 /**
  * Per-file scan seams for `UnusedLocal`: the grammar-derived kind sets the walk and
@@ -172,7 +174,7 @@ final class UnusedLocal implements Check {
 		// index it falls back to the conservative base predicate. A side-effecting
 		// or unprovable initializer is reported but left in place for the author.
 		final treeRoot: QueryNode = tree;
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
 
 		for (v in violations) if (v.severity == Severity.Warning) {
@@ -292,7 +294,7 @@ final class UnusedLocal implements Check {
 	 * the header, which holds both names.
 	 */
 	private static function bindsShadowingName(ctx: ScanCtx, node: QueryNode, name: String): Bool {
-		return node.name == name || Lambda.exists(node.children, c -> ctx.valueBinderKinds.contains(c.kind) && c.name == name);
+		return node.name == name || node.children.exists(c -> ctx.valueBinderKinds.contains(c.kind) && c.name == name);
 	}
 
 	/**
@@ -313,7 +315,7 @@ final class UnusedLocal implements Check {
 				at = next;
 				continue;
 			}
-			if (StringTools.fastCodeAt(source, at) != ';'.code) return false;
+			if (source.fastCodeAt(at) != ';'.code) return false;
 			at++;
 		}
 		return true;

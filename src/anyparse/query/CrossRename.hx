@@ -161,7 +161,7 @@ final class CrossRename {
 	 */
 	private static function resolveTypeDeclAtCursor(tree: QueryNode, cursor: Int, source: String): Null<QueryNode> {
 		final m: Null<TypeDeclMatch> = RefactorSupport.resolveTypeDeclAtCursor(tree, cursor, source);
-		return m == null ? null : m.nameNode;
+		return m?.nameNode;
 	}
 
 	/**
@@ -308,11 +308,14 @@ final class CrossRename {
 			declCount += n;
 			if (n > 0 && entry.file == cursorFile) declInCursorFile = true;
 		}
-		return declCount == 0
-			? 'no type "$typeName" declared under scope'
-			: declCount > 1
-				? 'type "$typeName" is declared in $declCount files under scope — ambiguous, refusing'
-				: !declInCursorFile ? 'the type "$typeName" at the cursor is not the one declared under scope — refusing' : null;
+		return if (declCount == 0)
+			'no type "$typeName" declared under scope'
+		else if (declCount > 1)
+			'type "$typeName" is declared in $declCount files under scope — ambiguous, refusing'
+		else if (!declInCursorFile)
+			'the type "$typeName" at the cursor is not the one declared under scope — refusing'
+		else
+			null;
 	}
 
 	/**

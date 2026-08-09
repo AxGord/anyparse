@@ -1,5 +1,7 @@
 package anyparse.core;
 
+using StringTools;
+
 /**
  * Static `Doc` measurement utilities that don't depend on render-time
  * stack/mode state. Live in `core` so both `core.Renderer` and the
@@ -190,12 +192,12 @@ final class DocMeasure {
 	public static function lastCharIsOpenDelim(s: String): Null<Bool> {
 		var i: Int = s.length - 1;
 		while (i >= 0) {
-			final c: Int = StringTools.fastCodeAt(s, i);
+			final c: Int = s.fastCodeAt(i);
 			if (c == ' '.code || c == '\t'.code) {
 				i--;
 				continue;
 			}
-			final arrow: Bool = c == '>'.code && i > 0 && StringTools.fastCodeAt(s, i - 1) == '-'.code;
+			final arrow: Bool = c == '>'.code && i > 0 && s.fastCodeAt(i - 1) == '-'.code;
 			return c == '('.code || c == '['.code || c == '{'.code || arrow;
 		}
 		return null;
@@ -358,7 +360,7 @@ final class DocMeasure {
 		final s: String = flatText(d);
 		var prevNonWs: Int = -1;
 		for (i in 0...s.length) {
-			final c: Int = StringTools.fastCodeAt(s, i);
+			final c: Int = s.fastCodeAt(i);
 			if (c == ' '.code || c == '\t'.code) continue;
 			if (prevNonWs == -1 && !isIdentStart(c)) return false;
 			if (c == '('.code && prevNonWs != -1 && isCallPrefixChar(prevNonWs)) return true;
@@ -390,7 +392,7 @@ final class DocMeasure {
 				case Empty | OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline | OptSpaceSkipAfterHardline:
 				case Text(s) | OptSpace(s) | Line(s):
 					final t: String = StringTools.rtrim(s);
-					if (t.length > 0) return StringTools.fastCodeAt(t, t.length - 1) == '}'.code;
+					if (t.length > 0) return t.fastCodeAt(t.length - 1) == '}'.code;
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
 					inner
 				) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
@@ -523,7 +525,7 @@ final class DocMeasure {
 				case Text(s) | OptSpace(s) | Line(s):
 					final t: String = StringTools.rtrim(s);
 					if (t.length > 0) {
-						final c: Int = StringTools.fastCodeAt(t, t.length - 1);
+						final c: Int = t.fastCodeAt(t.length - 1);
 						return c == '}'.code || c == ';'.code;
 					}
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
@@ -571,7 +573,7 @@ final class DocMeasure {
 				case Text(s) | OptSpace(s) | Line(s):
 					final t: String = StringTools.rtrim(s);
 					if (t.length > 0) {
-						final c: Int = StringTools.fastCodeAt(t, t.length - 1);
+						final c: Int = t.fastCodeAt(t.length - 1);
 						return c == ';'.code;
 					}
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
@@ -702,9 +704,9 @@ final class DocMeasure {
 
 	/** True iff `s` holds nothing but close delimiters (`)` / `}` / `]`) and whitespace. */
 	private static function closesOnly(s: String): Bool {
-		final t: String = StringTools.rtrim(s);
+		final t: String = s.rtrim();
 		for (i in 0...t.length) {
-			final c: Int = StringTools.fastCodeAt(t, i);
+			final c: Int = t.fastCodeAt(i);
 			if (c == ' '.code || c == '\t'.code) continue;
 			if (c != ')'.code && c != '}'.code && c != ']'.code) return false;
 		}

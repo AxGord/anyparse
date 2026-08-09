@@ -179,19 +179,20 @@ final class BinaryChainEmit {
 		// keep `cond ? A : {` on the head line and let the collection self-
 		// break — WHEN that head fits (`IfFirstLineExceeds` picks the flat
 		// `shapeNoWrap` hug), else fall through to the leading-break-all shape.
-		return forceKeep
-			? WrapBoundary(shapeAt({ mode: WrapMode.Keep, location: forceKeepLocation ?? evalAt(true, []).location }))
-			: anyHardline
-				? WrapBoundary(
-					extraThresholds.length == 0 && ternaryHugCollectionBranchIndex(items, ops) >= 0
-						? IfFirstLineExceeds(opt.lineWidth, shapeAt(evalAt(true, [])), shapeNoWrap(items, ops))
-						: buildBinaryThresholdTree(extraThresholds, [], true, evalAt, shapeAt)
-				)
-				: extraThresholds.length == 0
-					? emitNoThreshold(items, ops, opt, nestSuppress, condWrapForced, ternaryRestAware, evalAt, shapeAt, shapeNoWrapAt)
-					: extraThresholds.length == 1
-						? emitSingleThreshold(extraThresholds[0], opt, evalAt, shapeAt)
-						: WrapBoundary(buildBinaryThresholdTree(extraThresholds, [], null, evalAt, shapeAt));
+		return if (forceKeep)
+			WrapBoundary(shapeAt({ mode: WrapMode.Keep, location: forceKeepLocation ?? evalAt(true, []).location }))
+		else if (anyHardline)
+			WrapBoundary(
+				extraThresholds.length == 0 && ternaryHugCollectionBranchIndex(items, ops) >= 0
+					? IfFirstLineExceeds(opt.lineWidth, shapeAt(evalAt(true, [])), shapeNoWrap(items, ops))
+					: buildBinaryThresholdTree(extraThresholds, [], true, evalAt, shapeAt)
+			)
+		else if (extraThresholds.length == 0)
+			emitNoThreshold(items, ops, opt, nestSuppress, condWrapForced, ternaryRestAware, evalAt, shapeAt, shapeNoWrapAt)
+		else if (extraThresholds.length == 1)
+			emitSingleThreshold(extraThresholds[0], opt, evalAt, shapeAt)
+		else
+			WrapBoundary(buildBinaryThresholdTree(extraThresholds, [], null, evalAt, shapeAt));
 	}
 
 	/**
@@ -535,7 +536,7 @@ final class BinaryChainEmit {
 		// ω-keep-infix-postop-comment: a per-op comment trailing the operator
 		// (`a || // c\n b`) — emit `OP // c` on the current line and force a
 		// break before the next operand, regardless of the chain's location.
-		inline function _afterOf(i: Int): Null<Doc> return (afterComments != null && i < afterComments.length) ? afterComments[i] : null;
+		inline function afterOf(i: Int): Null<Doc> return afterComments != null && i < afterComments.length ? afterComments[i] : null;
 		// First operand stays at the call-site column (unless `headBreak`);
 		// only the continuation tail is nested at the chain's one-tab indent,
 		// so a broken gap lands its line at `base + cols` while a glued gap
@@ -544,10 +545,10 @@ final class BinaryChainEmit {
 		switch location {
 			case BeforeLast:
 				for (i in 0...ops.length) {
-					final _ac: Null<Doc> = _afterOf(i);
-					if (_ac != null) {
+					final ac: Null<Doc> = afterOf(i);
+					if (ac != null) {
 						tail.push(Text(' ${ops[i]}'));
-						tail.push(_ac);
+						tail.push(ac);
 						tail.push(Line('\n'));
 					} else if (i < breaks.length && breaks[i]) {
 						tail.push(Line('\n'));
@@ -559,10 +560,10 @@ final class BinaryChainEmit {
 				}
 			case AfterLast:
 				for (i in 0...ops.length) {
-					final _ac: Null<Doc> = _afterOf(i);
-					if (_ac != null) {
+					final ac: Null<Doc> = afterOf(i);
+					if (ac != null) {
 						tail.push(Text(' ${ops[i]}'));
-						tail.push(_ac);
+						tail.push(ac);
 						tail.push(Line('\n'));
 					} else if (i < breaks.length && breaks[i]) {
 						tail.push(Text(' ${ops[i]}'));
@@ -972,7 +973,7 @@ final class BinaryChainEmit {
 			// would measure `maxLen=39` and miss rule 1's
 			// `anyItemLength >= 40` predicate, while upstream
 			// measures `maxLen=42` (`|| ` + 39) and the rule fires.
-			final renderedW: Int = (i == 0) ? w : (ops[i - 1].length + 1 + w);
+			final renderedW: Int = i == 0 ? w : (ops[i - 1].length + 1 + w);
 			if (renderedW > maxLen) maxLen = renderedW;
 		}
 		// Add ` op ` width per gap so the cascade's `totalLength` /
@@ -1017,7 +1018,7 @@ final class BinaryChainEmit {
 		final branch: Doc = items[idx];
 		if (!WrapList.startsWithCollectionDelim(branch)) return -1;
 		final last: Null<String> = WrapList.lastVisibleText(branch);
-		return (last == '}' || last == ']') ? idx : -1;
+		return last == '}' || last == ']' ? idx : -1;
 	}
 
 }

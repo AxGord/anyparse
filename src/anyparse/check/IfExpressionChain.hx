@@ -5,6 +5,8 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * A recognised `if / else if / … / else` CHAIN of single-statement branches: the
  * per-branch `(condition, statement)` pairs and the terminal `else`'s statement. The
@@ -168,20 +170,14 @@ final class IfExpressionChain {
 				current = elseBranch; // `else if` -> continue the chain
 			} else {
 				final terminal: Null<QueryNode> = singleStmt(elseBranch, blockStmtKind);
-				if (terminal == null) return null;
-				return branches.length >= min ? { branches: branches, terminal: terminal } : null;
+				return if (terminal == null)
+					null
+				else if (branches.length >= min)
+					{ branches: branches, terminal: terminal }
+				else
+					null;
 			}
 		}
-	}
-
-	/**
-	 * The one statement a branch holds — a bare statement, or the sole child of a
-	 * `{ … }` wrapping EXACTLY one. Null when the branch is a block of zero or several
-	 * statements (a deliberately grouped body is never collapsed).
-	 */
-	private static function singleStmt(branch: QueryNode, blockStmtKind: String): Null<QueryNode> {
-		if (branch.kind == blockStmtKind) return branch.children.length == 1 ? branch.children[0] : null;
-		return branch;
 	}
 
 	/**
@@ -200,11 +196,6 @@ final class IfExpressionChain {
 		final bSpan: Null<Span> = b.span;
 		return aSpan != null && bSpan != null
 			&& normalize(source.substring(aSpan.from, aSpan.to)) == normalize(source.substring(bSpan.from, bSpan.to));
-	}
-
-	/** Collapse whitespace runs to a single space and trim. */
-	private static function normalize(s: String): String {
-		return StringTools.trim((~/\s+/g).replace(s, ' '));
 	}
 
 	/**
@@ -236,8 +227,7 @@ final class IfExpressionChain {
 		// value ending in a `//` comment must be followed by the next piece on a new line, and a
 		// value whose leading comment kept its own line must not be pulled back onto the `if (…)`
 		// one. Without a carry every boundary takes the space, so the text is byte-unchanged.
-		for (i in 1...parts.length)
-			out += StringTools.endsWith(out, '\n') || StringTools.startsWith(parts[i], '\n') ? parts[i] : ' ${parts[i]}';
+		for (i in 1...parts.length) out += out.endsWith('\n') || StringTools.startsWith(parts[i], '\n') ? parts[i] : ' ${parts[i]}';
 		return out;
 	}
 
@@ -250,12 +240,6 @@ final class IfExpressionChain {
 	 */
 	public static function droppedComment(headSpan: Span, kept: Array<Span>, comments: Array<{ from: Int, to: Int, isLine: Bool }>): Bool {
 		for (tok in comments) if (tok.from >= headSpan.from && tok.to <= headSpan.to && !contained(tok, kept)) return true;
-		return false;
-	}
-
-	/** Whether some span in `spans` fully holds `tok` — the "already inside verbatim-copied text" test both comment guards run. */
-	private static function contained(tok: { from: Int, to: Int }, spans: Array<Span>): Bool {
-		for (s in spans) if (tok.from >= s.from && tok.to <= s.to) return true;
 		return false;
 	}
 
@@ -325,13 +309,13 @@ final class IfExpressionChain {
 			final gap: Null<CarryGap> = carrier(tok, gaps, source);
 			if (gap == null) return null;
 			final map: Map<String, String> = gap.before ? carried.before : carried.after;
-			final text: String = StringTools.trim(source.substring(tok.from, tok.to));
+			final text: String = source.substring(tok.from, tok.to).trim();
 			final prev: String = map[gap.key] ?? '';
 			// A comment the author put on its OWN line keeps one — pulled up it would re-read as
 			// being about the CONDITION (leading slot) or as trailing the value (trailing slot), both
 			// different statements from the one it makes where it stands. Otherwise the single space
 			// `buildValue` does not supply goes on the side the slot needs it.
-			final own: Bool = crossesLine(source, gap.from, tok.from) && !StringTools.endsWith(prev, '\n');
+			final own: Bool = crossesLine(source, gap.from, tok.from) && !prev.endsWith('\n');
 			final head: String = own ? '\n' : (gap.before ? '' : ' ');
 			// A LINE comment runs to the end of its line, so whatever the rebuild welds after it has
 			// to start on the next one — that newline is the only legal layout, and the writer
@@ -341,50 +325,6 @@ final class IfExpressionChain {
 		}
 		return carried;
 	}
-
-	/**
-	 * The gap that carries `tok`, or null when none does and the site must fail closed.
-	 *
-	 * A LEADING gap takes the comment whatever its layout: it sits between a branch's condition
-	 * and that branch's value, a region holding nothing but the closing `)`, an opening `{` and
-	 * the dropped `return ` / l-value — no keyword that could make it belong to a NEIGHBOUR.
-	 *
-	 * A TRAILING gap is narrower, because its region spans the `else` that opens the next branch
-	 * and the parser projects no node for that keyword: a comment written AFTER it describes the
-	 * branch that follows, and emitting it in front of the rebuilt ` else ` would re-read it as
-	 * being about the branch before. Only the unambiguous shape is taken — the comment starts on
-	 * the value's own line and the next copied piece starts on a later one, so the `else` cannot
-	 * have preceded it.
-	 */
-	private static function carrier(tok: { from: Int, to: Int }, gaps: Array<CarryGap>, source: String): Null<CarryGap> {
-		for (gap in gaps) if (tok.from >= gap.from && tok.to <= gap.to)
-			return gap.before || unseparated(source, gap.from, tok.from) ? gap : null;
-		return null;
-	}
-
-	/**
-	 * Whether `source[from…to)` holds nothing but a statement's own punctuation — whitespace, the
-	 * `;` that ended it, the `}` that closed its block. This IS the trailing slot's gate. The
-	 * region it scans runs on past those, through the `else` / `:` that opens the NEXT branch, and
-	 * the parser projects no node for either keyword; a comment written AFTER one describes the
-	 * branch that FOLLOWS, so emitting it in front of the rebuilt ` else ` would re-read it as
-	 * being about the branch before. Every character beyond the three IS that separator (or
-	 * something else the rebuild does not model), and the site fails closed.
-	 */
-	private static function unseparated(source: String, from: Int, to: Int): Bool {
-		for (i in from ... to) {
-			final c: Int = StringTools.fastCodeAt(source, i);
-			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code && c != ';'.code && c != '}'.code) return false;
-		}
-		return true;
-	}
-
-
-	/** Whether `source[from…to)` breaks a line — the one line-boundary question the carry asks. */
-	private static inline function crossesLine(source: String, from: Int, to: Int): Bool {
-		return source.substring(from, to).indexOf('\n') >= 0;
-	}
-
 
 	/**
 	 * Every `if` form the grammar has — the expression kinds and the statement kinds together.
@@ -488,9 +428,12 @@ final class IfExpressionChain {
 		// A `#if` region projects EVERY branch's nodes as FLAT siblings, so a following sibling
 		// may belong to a different branch and separate nothing at all: under the defines that
 		// select this child's branch, whatever follows the region follows the child. Inherit.
-		if (RefactorSupport.isConditionalKind(parent.kind)) return shielded;
-		if (index < parent.children.length - 1) return !(index == THEN_BRANCH_INDEX && seams.conditionalKinds.contains(parent.kind));
-		return shielded;
+		return if (RefactorSupport.isConditionalKind(parent.kind))
+			shielded
+		else if (index < parent.children.length - 1)
+			!(index == THEN_BRANCH_INDEX && seams.conditionalKinds.contains(parent.kind))
+		else
+			shielded;
 	}
 
 	/**
@@ -523,9 +466,71 @@ final class IfExpressionChain {
 		return new Span(span.from, end);
 	}
 
+	/**
+	 * The one statement a branch holds — a bare statement, or the sole child of a
+	 * `{ … }` wrapping EXACTLY one. Null when the branch is a block of zero or several
+	 * statements (a deliberately grouped body is never collapsed).
+	 */
+	private static function singleStmt(branch: QueryNode, blockStmtKind: String): Null<QueryNode> {
+		return branch.kind == blockStmtKind ? branch.children.length == 1 ? branch.children[0] : null : branch;
+	}
+
+	/** Collapse whitespace runs to a single space and trim. */
+	private static function normalize(s: String): String {
+		return StringTools.trim((~/\s+/g).replace(s, ' '));
+	}
+
+	/** Whether some span in `spans` fully holds `tok` — the "already inside verbatim-copied text" test both comment guards run. */
+	private static function contained(tok: { from: Int, to: Int }, spans: Array<Span>): Bool {
+		for (s in spans) if (tok.from >= s.from && tok.to <= s.to) return true;
+		return false;
+	}
+
+	/**
+	 * The gap that carries `tok`, or null when none does and the site must fail closed.
+	 *
+	 * A LEADING gap takes the comment whatever its layout: it sits between a branch's condition
+	 * and that branch's value, a region holding nothing but the closing `)`, an opening `{` and
+	 * the dropped `return ` / l-value — no keyword that could make it belong to a NEIGHBOUR.
+	 *
+	 * A TRAILING gap is narrower, because its region spans the `else` that opens the next branch
+	 * and the parser projects no node for that keyword: a comment written AFTER it describes the
+	 * branch that follows, and emitting it in front of the rebuilt ` else ` would re-read it as
+	 * being about the branch before. Only the unambiguous shape is taken — the comment starts on
+	 * the value's own line and the next copied piece starts on a later one, so the `else` cannot
+	 * have preceded it.
+	 */
+	private static function carrier(tok: { from: Int, to: Int }, gaps: Array<CarryGap>, source: String): Null<CarryGap> {
+		for (gap in gaps) if (tok.from >= gap.from && tok.to <= gap.to)
+			return gap.before || unseparated(source, gap.from, tok.from) ? gap : null;
+		return null;
+	}
+
+	/**
+	 * Whether `source[from…to)` holds nothing but a statement's own punctuation — whitespace, the
+	 * `;` that ended it, the `}` that closed its block. This IS the trailing slot's gate. The
+	 * region it scans runs on past those, through the `else` / `:` that opens the NEXT branch, and
+	 * the parser projects no node for either keyword; a comment written AFTER one describes the
+	 * branch that FOLLOWS, so emitting it in front of the rebuilt ` else ` would re-read it as
+	 * being about the branch before. Every character beyond the three IS that separator (or
+	 * something else the rebuild does not model), and the site fails closed.
+	 */
+	private static function unseparated(source: String, from: Int, to: Int): Bool {
+		for (i in from ... to) {
+			final c: Int = source.fastCodeAt(i);
+			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code && c != ';'.code && c != '}'.code) return false;
+		}
+		return true;
+	}
+
+	/** Whether `source[from…to)` breaks a line — the one line-boundary question the carry asks. */
+	private static inline function crossesLine(source: String, from: Int, to: Int): Bool {
+		return source.substring(from, to).indexOf('\n') >= 0;
+	}
+
 	/** Whether `source[at]` is whitespace — the trivia `tokenSpan` walks back over. */
 	private static inline function isTrailingSpace(source: String, at: Int): Bool {
-		final c: Int = StringTools.fastCodeAt(source, at);
+		final c: Int = source.fastCodeAt(at);
 		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 	}
 

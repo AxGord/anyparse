@@ -1,7 +1,9 @@
 package anyparse.query;
 
 import anyparse.core.EnvFlag;
-import haxe.Exception;
+
+using StringTools;
+
 #if (sys || nodejs)
 import sys.FileSystem;
 #end
@@ -90,16 +92,6 @@ final class StdResolver {
 	}
 
 	/**
-	 * Whether `APQ_NO_STD` DECLINES the auto-discovered std: set to anything other than the
-	 * empty string or `0`. The env twin of the `apqlint.json` `resolutionStd: false` key, and
-	 * the only way to refuse the std on a machine where `KNOWN_LOCATIONS` finds one whatever
-	 * `HAXE_STD_PATH` and `PATH` say. It cuts the WHOLE channel — the implicit resolution
-	 * scope and the std-derived tables alike — so `Cli.resolutionThunk`'s null branch and the
-	 * table-only fallbacks stay reachable on a Haxe-equipped box instead of being dead in CI.
-	 */
-	private static function declined(): Bool return EnvFlag.isSet('APQ_NO_STD');
-
-	/**
 	 * PURE priority resolution: the first of `env`, `whichSiblingStd`, then each `known`
 	 * location that `exists` as a directory — normalised — or null when none does. No
 	 * I/O (the `exists` predicate is injected), so the fallback order is unit-testable
@@ -150,6 +142,29 @@ final class StdResolver {
 	}
 
 	/**
+	 * PURE containment test: whether `path` lies strictly inside directory `dir`, both
+	 * normalised (backslashes folded, `.` / `..` resolved). The separator after `dir` is
+	 * required, so a sibling whose name merely starts with it (`/a/std-old/x.hx` against
+	 * `/a/std`) is outside. A RELATIVE `path` can never be inside an absolute `dir` and answers
+	 * false — which is what report files, spelled the way the CLI received them, get, and the
+	 * direction that keeps them inside a std-excluding consumer's scan.
+	 */
+	public static function isUnder(dir: String, path: String): Bool {
+		final root: String = haxe.io.Path.removeTrailingSlashes(haxe.io.Path.normalize(dir));
+		return root != '' && StringTools.startsWith(haxe.io.Path.normalize(path), '$root/');
+	}
+
+	/**
+	 * Whether `APQ_NO_STD` DECLINES the auto-discovered std: set to anything other than the
+	 * empty string or `0`. The env twin of the `apqlint.json` `resolutionStd: false` key, and
+	 * the only way to refuse the std on a machine where `KNOWN_LOCATIONS` finds one whatever
+	 * `HAXE_STD_PATH` and `PATH` say. It cuts the WHOLE channel — the implicit resolution
+	 * scope and the std-derived tables alike — so `Cli.resolutionThunk`'s null branch and the
+	 * table-only fallbacks stay reachable on a Haxe-equipped box instead of being dead in CI.
+	 */
+	private static function declined(): Bool return EnvFlag.isSet('APQ_NO_STD');
+
+	/**
 	 * Whether `dir` really IS a Haxe std — it carries the toplevel `Std.hx` every std ships —
 	 * rather than merely whatever `HAXE_STD_PATH` happened to name. Memoised per root, so the
 	 * existence check runs once per process for the one root `stdDir` ever returns.
@@ -171,19 +186,6 @@ final class StdResolver {
 		_markerVerdict = false;
 		#end
 		return _markerVerdict;
-	}
-
-	/**
-	 * PURE containment test: whether `path` lies strictly inside directory `dir`, both
-	 * normalised (backslashes folded, `.` / `..` resolved). The separator after `dir` is
-	 * required, so a sibling whose name merely starts with it (`/a/std-old/x.hx` against
-	 * `/a/std`) is outside. A RELATIVE `path` can never be inside an absolute `dir` and answers
-	 * false — which is what report files, spelled the way the CLI received them, get, and the
-	 * direction that keeps them inside a std-excluding consumer's scan.
-	 */
-	public static function isUnder(dir: String, path: String): Bool {
-		final root: String = haxe.io.Path.removeTrailingSlashes(haxe.io.Path.normalize(dir));
-		return root != '' && StringTools.startsWith(haxe.io.Path.normalize(path), '$root/');
 	}
 
 	/** The `HAXE_STD_PATH` environment variable, trimmed, or null when unset/blank. */
@@ -232,7 +234,7 @@ final class StdResolver {
 			// the nodejs branch's `status == null` arm.
 			final code: Null<Int> = process.exitCode();
 			process.close();
-			final s: String = StringTools.trim(out);
+			final s: String = out.trim();
 			return code == 0 && s != '' ? s : null;
 		} catch (exception: haxe.Exception) {
 			return null;

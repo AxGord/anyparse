@@ -26,16 +26,12 @@ class AvoidDynamicBagOracleE2ETest extends Test {
 	private static final POSITIVE: String = 'using Reflect;\n\nclass Main {\n\n\tstatic function main() {\n\t\ttrace(build());\n\t}\n\n\t'
 		+ 'static function build():Dynamic {\n\t\tfinal bag:Dynamic = {};\n\t\tbag.setField("a", "x");\n\t\tbag.setField("b", "y");\n\t\t'
 		+ 'return bag;\n\t}\n\n}\n';
-
 	private static final POSITIVE_HXML: String = '-cp .\n-main Main\n';
-
 	private static final FORM: String = 'using Reflect;\n\nclass Form {\n\n\tfinal _groups:Map<String, FormGroup> = new Map();\n\n\t'
 		+ 'public function new() {}\n\n\tpublic function get_data():Dynamic {\n\t\tfinal result:Dynamic = {};\n\t\t'
 		+ 'for (g in _groups) result.setField(g.field, g.value);\n\t\treturn result;\n\t}\n\n}\n\nclass FormGroup {\n\n\t'
 		+ 'public var field:String = "";\n\n\tpublic var value:Dynamic;\n\n\tpublic function new() {}\n\n}\n';
-
 	private static final FORM_HXML: String = '-cp .\nForm\n';
-
 	private static final APQLINT: String = '{"compilerOracle":"check.hxml","rules":{"avoid-dynamic":{"enabled":true}}}';
 	#end
 

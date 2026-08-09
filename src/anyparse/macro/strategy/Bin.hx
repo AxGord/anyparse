@@ -45,7 +45,7 @@ class Bin implements Strategy {
 	public function new() {}
 
 	public function appliesTo(node: ShapeNode): Bool {
-		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
+		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return false;
 		for (entry in meta) switch entry.name {
 			case ':bin' | ':magic' | ':align' | ':length':
@@ -56,36 +56,36 @@ class Bin implements Strategy {
 	}
 
 	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {
-		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
+		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return;
 		for (entry in meta) switch entry.name {
 			case ':bin':
 				switch entry.params.length {
 					case 1:
 						switch entry.params[0].expr {
-							case EConst(CInt(v)): node.annotations.set('bin.fixedLen', Std.parseInt(v));
-							case EConst(CString(s, _)): node.annotations.set('bin.dataRef', s);
+							case EConst(CInt(v)): node.annotations['bin.fixedLen'] = Std.parseInt(v);
+							case EConst(CString(s, _)): node.annotations['bin.dataRef'] = s;
 							case _:
 								Context.fatalError('@:bin argument must be an Int literal or a String literal', entry.pos);
 						}
 					case 2:
-						node.annotations.set('bin.fixedLen', intOrFail(entry.params[0], ':bin'));
-						node.annotations.set('bin.encoding', readEncodingIdent(entry.params[1], 'bin'));
+						node.annotations['bin.fixedLen'] = intOrFail(entry.params[0], ':bin');
+						node.annotations['bin.encoding'] = readEncodingIdent(entry.params[1], 'bin');
 					case _:
 						Context.fatalError('@:bin expects 1 argument (Int or String) or 2 arguments (Int, Dec|Oct)', entry.pos);
 				}
 			case ':length':
 				if (entry.params.length != 2) Context.fatalError('@:length expects two arguments (Int, Dec|Oct)', entry.pos);
-				node.annotations.set('bin.lengthPrefix', {
+				node.annotations['bin.lengthPrefix'] = {
 					width: intOrFail(entry.params[0], ':length'),
 					encoding: readEncodingIdent(entry.params[1], 'length'),
-				});
+				};
 			case ':magic':
 				if (entry.params.length != 1) Context.fatalError('@:magic expects exactly one string argument', entry.pos);
-				node.annotations.set('bin.magic', stringOrFail(entry.params[0], ':magic'));
+				node.annotations['bin.magic'] = stringOrFail(entry.params[0], ':magic');
 			case ':align':
 				if (entry.params.length != 1) Context.fatalError('@:align expects exactly one int argument', entry.pos);
-				node.annotations.set('bin.align', intOrFail(entry.params[0], ':align'));
+				node.annotations['bin.align'] = intOrFail(entry.params[0], ':align');
 			case _:
 		}
 	}

@@ -5,6 +5,8 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
+
 /**
  * How the node to replace is addressed. Modelled as a sum type so the
  * CLI passes one value and the operation resolves uniformly:
@@ -91,7 +93,7 @@ final class ReplaceNode {
 		// resolved target is the co-starting wrapper spanning the ENTIRE
 		// declaration, so `'public'` would silently drop the declaration body
 		// (the orphan keyword attaches to the next decl and may still parse).
-		final trimmedNew: String = StringTools.trim(newSource);
+		final trimmedNew: String = newSource.trim();
 		if (MODIFIER_KEYWORDS.contains(trimmedNew))
 			return Err(
 				'newSource is the bare modifier keyword "$trimmedNew" — this would replace the WHOLE resolved node with it, '
@@ -172,7 +174,7 @@ final class ReplaceNode {
 
 	/** Whether `source`, ignoring leading whitespace, opens with a block comment (`/*`, including the `/**` doc form). */
 	private static function startsWithBlockComment(source: String): Bool {
-		return StringTools.startsWith(StringTools.ltrim(source), '/*');
+		return StringTools.startsWith(source.ltrim(), '/*');
 	}
 
 }

@@ -8,6 +8,8 @@ import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.runtime.ParseError;
 
+using StringTools;
+
 /**
  * Slice ω-enum-abstract: the modern `enum abstract Name(T) { ... }`
  * form, recognised at the `HxDecl` level via the `EnumAbstractDecl`
@@ -78,8 +80,7 @@ class HxEnumAbstractSliceTest extends HxTestHelpers {
 		final src: String = 'enum abstract Mode(Int) { final Fast = 0; final Tolerant = 1; }';
 		final written: String = HxModuleWriter.write(HaxeModuleParser.parse(src));
 		Assert.isTrue(
-			StringTools.startsWith(StringTools.ltrim(written), 'enum abstract '),
-			'expected output to start with "enum abstract ", got <$written>'
+			StringTools.startsWith(written.ltrim(), 'enum abstract '), 'expected output to start with "enum abstract ", got <$written>'
 		);
 		// Reparse must still classify as EnumAbstractDecl (keyword not lost).
 		final reparsed: HxModule = HaxeModuleParser.parse(written);

@@ -4,7 +4,6 @@ import utest.Assert;
 import utest.Test;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
-import anyparse.check.FixVerifier.FixVerifyResult;
 import anyparse.check.PreferInline;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 #if (sys || nodejs)
@@ -39,8 +38,8 @@ final class FixVerifierScopeE2ETest extends Test {
 	 * The oracle's entry point references `Base` but never `Sub`, so the compiled set is
 	 * BLIND to the override — only the check's own subtype gate can refuse the inline.
 	 */
-	private static final MAIN: String =
-		'class Main {\n\n\tstatic function main() {\n\t\tfinal b:Base = new Base();\n\t\ttrace(b.hook());\n\t\ttrace(b.hook());\n\t}\n\n}\n';
+	private static final MAIN: String = 'class Main {\n\n\tstatic function main() {\n\t\tfinal b:Base = new Base();\n\t\ttrace(b.hook());\n'
+		+ '\t\ttrace(b.hook());\n\t}\n\n}\n';
 
 	/** A candidate-free entry point for the grouping fixture. */
 	private static final GROUP_MAIN: String =

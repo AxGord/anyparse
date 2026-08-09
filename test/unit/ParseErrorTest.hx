@@ -51,9 +51,7 @@ class ParseErrorTest extends Test {
 	}
 
 	private function testIsThrowable(): Void {
-		Assert.raises(() -> {
-			throw new ParseError(new Span(0, 0), 'boom');
-		}, ParseError);
+		Assert.raises(() -> throw new ParseError(new Span(0, 0), 'boom'), ParseError);
 	}
 
 	// -- `source` decoration: when attached, `toString` renders 1-indexed
@@ -101,9 +99,7 @@ class ParseErrorTest extends Test {
 		Assert.equals(-2, ParseError.backtrack.span.to);
 		Assert.isNull(ParseError.backtrack.source);
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		Assert.raises(() -> {
-			plugin.reconParse('class C { var x = ) ; }');
-		}, ParseError);
+		Assert.raises(plugin.reconParse.bind('class C { var x = ) ; }'), ParseError);
 		Assert.isNull(ParseError.backtrack.source);
 	}
 

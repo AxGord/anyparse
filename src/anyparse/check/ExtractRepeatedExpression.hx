@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -110,7 +109,7 @@ final class ExtractRepeatedExpression implements Check {
 		final functionUnitKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []);
 		final exclusiveConditionalKinds: Array<String> = (shape.branchConditionKinds ?? []).concat(shape.switchKinds ?? []);
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
@@ -172,8 +171,7 @@ final class ExtractRepeatedExpression implements Check {
 				bucket.push(c);
 		}
 		final kept: Array<Group> = [];
-		for (norm => occ in groups) {
-			if (occ.length < MIN_OCCURRENCES) continue;
+		for (norm => occ in groups) if (occ.length >= MIN_OCCURRENCES) {
 			final rep: QueryNode = occ[0].node;
 			if (!isNonTrivial(rep, ctx)) continue;
 			if (!isPureExpr(rep, ctx)) continue;
@@ -214,11 +212,12 @@ final class ExtractRepeatedExpression implements Check {
 				path: path.copy()
 			});
 		}
-		final isConditional: Bool = span != null && ctx.exclusiveConditionalKinds.contains(node.kind);
+		final condKey: Null<String> = span != null && ctx.exclusiveConditionalKinds.contains(node.kind) ? '${span.from}:${span.to}' : null;
 		for (i in 0...node.children.length) {
 			final child: QueryNode = node.children[i];
-			if (isConditional && i >= 1 && span != null) {
-				path.push({ key: '${span.from}:${span.to}', idx: i });
+			if (condKey != null && i >= 1) {
+				final k: String = condKey;
+				path.push({ key: k, idx: i });
 				collect(child, source, ctx, path, out, false);
 				path.pop();
 			} else {
@@ -236,7 +235,7 @@ final class ExtractRepeatedExpression implements Check {
 	private static function maxFieldChainDepth(node: QueryNode, faKind: String): Int {
 		var best: Int = 0;
 		function chainLen(n: QueryNode): Int {
-			return (n.kind == faKind && n.children.length >= 1) ? 1 + chainLen(n.children[0]) : 0;
+			return n.kind == faKind && n.children.length >= 1 ? 1 + chainLen(n.children[0]) : 0;
 		}
 		function walk(n: QueryNode): Void {
 			if (n.kind == faKind) {
@@ -258,13 +257,14 @@ final class ExtractRepeatedExpression implements Check {
 	private static function isPureExpr(node: QueryNode, ctx: Ctx): Bool {
 		final k: String = node.kind;
 		if (RefactorSupport.isSafeKind(k)) return node.children.foreach(c -> isPureExpr(c, ctx));
-		if (k == ctx.fieldAccessKind) {
-			if (isSideEffectingGetter(node, ctx)) return false;
-			return node.children.foreach(c -> isPureExpr(c, ctx));
-		}
-		if (ctx.indexAccessKind != null && k == ctx.indexAccessKind) return node.children.foreach(c -> isPureExpr(c, ctx));
-		if (k == ctx.callKind) return isPureCall(node, ctx) && node.children.foreach(c -> isPureExpr(c, ctx));
-		return false;
+		if (k != ctx.fieldAccessKind) return if (ctx.indexAccessKind != null && k == ctx.indexAccessKind)
+			node.children.foreach(c -> isPureExpr(c, ctx))
+		else if (k == ctx.callKind)
+			isPureCall(node, ctx) && node.children.foreach(c -> isPureExpr(c, ctx))
+		else
+			false;
+		if (isSideEffectingGetter(node, ctx)) return false;
+		return node.children.foreach(c -> isPureExpr(c, ctx));
 	}
 
 	/**
@@ -333,13 +333,13 @@ final class ExtractRepeatedExpression implements Check {
 	}
 
 	/** Whether `outer` strictly contains `inner` (covers it and is not the identical span). */
-	private static function strictlyContains(outer: Span, inner: Span): Bool {
+	private static inline function strictlyContains(outer: Span, inner: Span): Bool {
 		return outer.from <= inner.from && inner.to <= outer.to && (outer.from < inner.from || inner.to < outer.to);
 	}
 
 	/** The finding message: occurrence count plus the truncated normalized expression. */
 	private static function buildMessage(g: Group): String {
-		final text: String = g.norm.length > MAX_MSG_EXPR ? g.norm.substr(0, MAX_MSG_EXPR) + '...' : g.norm;
+		final text: String = g.norm.length > MAX_MSG_EXPR ? '${g.norm.substr(0, MAX_MSG_EXPR)}...' : g.norm;
 		return
 			'the expression `${text}` is repeated ${g.occ.length} times in one function body — extract into a `final` local (report-only)';
 	}

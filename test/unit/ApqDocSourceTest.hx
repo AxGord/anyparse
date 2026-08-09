@@ -5,8 +5,6 @@ import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
-import anyparse.query.Refs.RefHit;
-import anyparse.query.Refs.RefKind;
 import anyparse.query.SourceSlice;
 import anyparse.query.format.Json;
 import anyparse.query.format.Text;

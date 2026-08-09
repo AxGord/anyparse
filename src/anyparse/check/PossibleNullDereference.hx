@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -62,7 +61,7 @@ final class PossibleNullDereference implements Check {
 		final derefKinds: Array<String> = [for (k in [shape.fieldAccessKind, shape.forceFieldAccessKind]) if (k != null) k];
 		final cfg: Null<NullableSourceCfg> = NullableSource.build(shape);
 		if (identKind == null || derefKinds.length == 0 || cfg == null) return [];
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		if (provider == null) return [];
 		final typed: TypeInfoProvider = provider;
 		final cfgValue: NullableSourceCfg = cfg;

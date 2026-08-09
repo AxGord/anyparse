@@ -54,10 +54,9 @@ class TypeResolverSliceTest extends Test {
 		var bindingFrom: Int = -1;
 		for (hit in Refs.find('c', tree, shape)) {
 			final b: Null<Span> = hit.bindingSpan;
-			if (b != null) {
-				bindingFrom = b.from;
-				break;
-			}
+			if (b == null) continue;
+			bindingFrom = b.from;
+			break;
 		}
 		Assert.notEquals(-1, bindingFrom, 'the receiver `c` binding should resolve');
 		Assert.equals('Ctx', declTypes[bindingFrom], 'declaredTypes should map the binding span to Ctx');
@@ -200,51 +199,6 @@ class TypeResolverSliceTest extends Test {
 		);
 	}
 
-	private function wrap(param: String, body: String): String {
-		return 'typedef Ctx = { var f:Int; }; class C { static function m($param):Void { $body } }';
-	}
-
-	private function fixEdits(src: String): Array<{ span: Span, text: String }> {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
-		final check: UnusedLocal = new UnusedLocal();
-		final violations: Array<Violation> = check.run(files, plugin);
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		return check.fix(src, violations, plugin, index);
-	}
-
-	private function nonNull(src: String): Bool {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final tree: QueryNode = plugin.parseFile(src);
-		final shape: RefShape = plugin.refShape();
-		final declaredTypes: Map<Int, String> = plugin.declaredTypes(src);
-		final operand: Null<QueryNode> = nullCheckOperand(tree, shape);
-		Assert.notNull(operand, 'fixture must contain a `… != null` comparison');
-		return operand != null && TypeResolver.isProvablyNonNull(operand, tree, shape, declaredTypes);
-	}
-
-	private function nullCheckOperand(tree: QueryNode, shape: RefShape): Null<QueryNode> {
-		final equalityKinds: Array<String> = shape.equalityKinds ?? [];
-		final nullLit: Null<String> = shape.nullLiteralKind;
-		if (nullLit == null) return null;
-		var found: Null<QueryNode> = null;
-		function walk(n: QueryNode): Void {
-			if (found != null) return;
-			if (n.children.length == 2 && equalityKinds.contains(n.kind)) {
-				final leftIsNull: Bool = n.children[0].kind == nullLit;
-				final rightIsNull: Bool = n.children[1].kind == nullLit;
-				if (leftIsNull != rightIsNull) {
-					found = leftIsNull ? n.children[1] : n.children[0];
-					return;
-				}
-			}
-			for (c in n.children) walk(c);
-		}
-		walk(tree);
-		return found;
-	}
-
-
 	public function testReshadowedNullableParamNotAffirmed(): Void {
 		// A later same-name non-null local (`final n:String = n;`) must NOT poison the
 		// proof for the EARLIER `n == null` guard on the nullable param: the first-wins
@@ -330,6 +284,50 @@ class TypeResolverSliceTest extends Test {
 	public function testThisInheritedPlainFieldDeleted(): Void {
 		final src: String = 'class Base { public var f:Int; } class C extends Base { function m():Int { final dead = this.f; return 1; } }';
 		Assert.equals(1, fixEdits(src).length, 'this.f on an inherited plain field is side-effect-free — deletable');
+	}
+
+	private function wrap(param: String, body: String): String {
+		return 'typedef Ctx = { var f:Int; }; class C { static function m($param):Void { $body } }';
+	}
+
+	private function fixEdits(src: String): Array<{ span: Span, text: String }> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
+		final check: UnusedLocal = new UnusedLocal();
+		final violations: Array<Violation> = check.run(files, plugin);
+		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		return check.fix(src, violations, plugin, index);
+	}
+
+	private function nonNull(src: String): Bool {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(src);
+		final shape: RefShape = plugin.refShape();
+		final declaredTypes: Map<Int, String> = plugin.declaredTypes(src);
+		final operand: Null<QueryNode> = nullCheckOperand(tree, shape);
+		Assert.notNull(operand, 'fixture must contain a `… != null` comparison');
+		return operand != null && TypeResolver.isProvablyNonNull(operand, tree, shape, declaredTypes);
+	}
+
+	private function nullCheckOperand(tree: QueryNode, shape: RefShape): Null<QueryNode> {
+		final equalityKinds: Array<String> = shape.equalityKinds ?? [];
+		final nullLit: Null<String> = shape.nullLiteralKind;
+		if (nullLit == null) return null;
+		var found: Null<QueryNode> = null;
+		function walk(n: QueryNode): Void {
+			if (found != null) return;
+			if (n.children.length == 2 && equalityKinds.contains(n.kind)) {
+				final leftIsNull: Bool = n.children[0].kind == nullLit;
+				final rightIsNull: Bool = n.children[1].kind == nullLit;
+				if (leftIsNull != rightIsNull) {
+					found = leftIsNull ? n.children[1] : n.children[0];
+					return;
+				}
+			}
+			for (c in n.children) walk(c);
+		}
+		walk(tree);
+		return found;
 	}
 
 }

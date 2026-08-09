@@ -3,9 +3,7 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.check.CompilerOracle;
-import anyparse.check.CompilerOracle.OracleOutcome;
 import anyparse.check.FixVerifier;
-import anyparse.check.FixVerifier.FixVerifyResult;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 #if (sys || nodejs)

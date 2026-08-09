@@ -80,15 +80,15 @@ class HxImportAliasSliceTest extends HxTestHelpers {
 		Assert.equals('import Std.is as isOfType;\n', out);
 	}
 
-	public function testRoundTripImportAliasSimple(): Void {
+	public inline function testRoundTripImportAliasSimple(): Void {
 		roundTrip('import Std.is as isOfType;');
 	}
 
-	public function testRoundTripImportAliasMixedWithPlain(): Void {
+	public inline function testRoundTripImportAliasMixedWithPlain(): Void {
 		roundTrip('import Std.is as isOfType;\nimport haxe.io.Bytes;\n');
 	}
 
-	public function testRoundTripImportAliasInCondComp(): Void {
+	public inline function testRoundTripImportAliasInCondComp(): Void {
 		// Matches issue_634 — the alias form inside a `#if … #else … #end`
 		// guard. The cond-comp body re-enters `HxDecl` so the new
 		// ImportAliasDecl ctor is reachable here too.

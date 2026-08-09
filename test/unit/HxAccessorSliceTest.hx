@@ -97,14 +97,14 @@ class HxAccessorSliceTest extends HxTestHelpers {
 	// -- the inter-field separator and the post-lead `_dop(' ')` for this
 	// -- single grammar site. Pre-slice bytes: `name ( default, null)`.
 
-	public function testWriterTightOpenParenClassMember(): Void {
+	public inline function testWriterTightOpenParenClassMember(): Void {
 		writerEquals(
 			'class C {\n\tpublic var x(default, null):Int;\n}', 'class C {\n\tpublic var x(default, null):Int;\n}\n',
 			'tight `(` on class member accessor'
 		);
 	}
 
-	public function testWriterTightOpenParenAnonStruct(): Void {
+	public inline function testWriterTightOpenParenAnonStruct(): Void {
 		// Plain `HxModuleWriter` flattens the anon struct (no trivia
 		// preservation) and re-emits a trailing `;`. The slice 26
 		// invariant under check is just the tight `(default, null)` —
@@ -115,7 +115,7 @@ class HxAccessorSliceTest extends HxTestHelpers {
 		);
 	}
 
-	public function testWriterTightOpenParenGetSet(): Void {
+	public inline function testWriterTightOpenParenGetSet(): Void {
 		writerEquals('class C {\n\tvar x(get, set):Int;\n}', 'class C {\n\tvar x(get, set):Int;\n}\n', 'tight `(` on `(get, set)`');
 	}
 

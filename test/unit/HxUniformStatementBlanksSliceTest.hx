@@ -26,7 +26,6 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 class HxUniformStatementBlanksSliceTest extends Test {
 
 	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
-
 	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
 	// onNextMonthClick shape: guard; blank; A; blank; B (uniform, 2/2 gaps blank).
@@ -59,7 +58,7 @@ class HxUniformStatementBlanksSliceTest extends Test {
 	// Same glued note over a selective body (a; b share no blank).
 	private static final LEAD_NOTE_SELECTIVE: String = 'class C {\n\tfunction f() {\n\t\t// note\n\n\t\ta();\n\t\tb();\n\t}\n}\n';
 
-	public function testDefaultOptionKeepsUniformBlanks(): Void {
+	public inline function testDefaultOptionKeepsUniformBlanks(): Void {
 		Assert.equals(UniformStatementBlanksPolicy.Keep, HaxeFormat.instance.defaultWriteOptions.uniformStatementBlanks);
 	}
 

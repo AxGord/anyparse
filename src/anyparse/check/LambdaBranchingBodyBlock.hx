@@ -3,13 +3,14 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
+
+using StringTools;
 
 /**
  * Flags an ARROW lambda whose body BRANCHES INTERNALLY — an `if` with an `else`, or a
@@ -107,8 +108,7 @@ final class LambdaBranchingBodyBlock implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		return [
+		return seams == null ? [] : [
 			for (entry in files) for (span in collect(plugin, entry.source, seams))
 				{
 					file: entry.file,
@@ -143,8 +143,8 @@ final class LambdaBranchingBodyBlock implements Check {
 	 * needs none.
 	 */
 	private static inline function terminated(body: String): String {
-		final trimmed: String = StringTools.trim(body);
-		return StringTools.endsWith(trimmed, ';') || StringTools.endsWith(trimmed, '}') ? body : '$body;';
+		final trimmed: String = body.trim();
+		return trimmed.endsWith(';') || trimmed.endsWith('}') ? body : '$body;';
 	}
 
 	/** Every brace-less branching lambda body in `source`, as the span the wrap replaces. */
@@ -180,8 +180,7 @@ final class LambdaBranchingBodyBlock implements Check {
 
 	/** The SAME boundary `PreferLambdaExpressionBody.branchesInternally` refuses on. */
 	private static function branchesInternally(body: QueryNode, s: Seams): Bool {
-		if (s.switchKinds.contains(body.kind)) return true;
-		return s.conditionalKinds.contains(body.kind) && body.children.length >= IF_ELSE_CHILD_COUNT;
+		return s.switchKinds.contains(body.kind) || s.conditionalKinds.contains(body.kind) && body.children.length >= IF_ELSE_CHILD_COUNT;
 	}
 
 	/** `callKind` + `newExprKind` — the invocation kinds whose last child is the trailing argument. */
@@ -203,8 +202,7 @@ final class LambdaBranchingBodyBlock implements Check {
 		final arrowKinds: Array<String> = (shape.lambdaKinds ?? []).filter(k -> k != fnExprKind);
 		final conditionalKinds: Array<String> = (shape.ifStatementKinds ?? []).concat(shape.ifExpressionKinds ?? []);
 		final switchKinds: Array<String> = shape.switchKinds ?? [];
-		if (arrowKinds.length == 0 || (conditionalKinds.length == 0 && switchKinds.length == 0)) return null;
-		return {
+		return arrowKinds.length == 0 || (conditionalKinds.length == 0 && switchKinds.length == 0) ? null : {
 			arrowKinds: arrowKinds,
 			blockKinds: support.blockKinds(),
 			conditionalKinds: conditionalKinds,

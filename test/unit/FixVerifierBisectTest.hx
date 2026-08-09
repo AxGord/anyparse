@@ -92,16 +92,6 @@ class FixVerifierBisectTest extends Test {
 		Assert.equals(4, FixVerifier.ceilLog2(9));
 	}
 
-	/** A subset typechecks unless it holds a member of `failers` (independent failers). */
-	private static inline function independentProbe(failers: Array<Int>): Array<Int> -> Bool {
-		return subset -> !subset.exists(i -> failers.contains(i));
-	}
-
-	/** A subset typechecks unless it holds BOTH `a` and `b` (a failing pair). */
-	private static inline function pairProbe(a: Int, b: Int): Array<Int> -> Bool {
-		return subset -> !(subset.contains(a) && subset.contains(b));
-	}
-
 	private function assertComplementSafe(count: Int, failers: Null<Array<Int>>, probe: Array<Int> -> Bool): Void {
 		Assert.notNull(failers);
 		if (failers == null) return;
@@ -115,6 +105,16 @@ class FixVerifierBisectTest extends Test {
 		if (failers == null) return;
 		final safeFailers: Array<Int> = failers;
 		Assert.isTrue(safeFailers.contains(a) || safeFailers.contains(b), 'at least one member of the failing pair must be reverted');
+	}
+
+	/** A subset typechecks unless it holds a member of `failers` (independent failers). */
+	private static inline function independentProbe(failers: Array<Int>): Array<Int> -> Bool {
+		return subset -> !subset.exists(i -> failers.contains(i));
+	}
+
+	/** A subset typechecks unless it holds BOTH `a` and `b` (a failing pair). */
+	private static inline function pairProbe(a: Int, b: Int): Array<Int> -> Bool {
+		return subset -> !(subset.contains(a) && subset.contains(b));
 	}
 
 }

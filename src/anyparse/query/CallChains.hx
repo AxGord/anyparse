@@ -4,7 +4,8 @@ import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.runtime.Span;
-import anyparse.runtime.Span.Position;
+
+using StringTools;
 
 /**
  * Rendered transitive call tree for `apq callees` / `apq callers` — the two
@@ -35,13 +36,13 @@ final class CallChains {
 		function walk(id: String, level: Int, ancestors: Array<String>): Void {
 			if (truncated || level > depth) return;
 			final edgeList: Array<CallEdge> = outward ? graph.outEdges(id) : graph.inEdges(id);
-			for (edge in edgeList) if (!(kindFilter.length > 0 && !kindFilter.contains(edge.kind))) {
+			for (edge in edgeList) if (kindFilter.length <= 0 || kindFilter.contains(edge.kind)) {
 				if (maxLines > 0 && lines >= maxLines) {
 					truncated = true;
 					return;
 				}
 				final next: String = outward ? edge.to : edge.from;
-				final indent: String = StringTools.rpad('', ' ', level * 2);
+				final indent: String = ''.rpad(' ', level * 2);
 				final viaText: String = edge.via != null ? ' via ${edge.via}' : '';
 				final cycle: Bool = ancestors.contains(next);
 				final cycleText: String = cycle ? ' (cycle)' : '';

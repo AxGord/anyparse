@@ -208,23 +208,23 @@ class HxTryExprSliceTest extends HxTestHelpers {
 
 	// ======== Round-trip ========
 
-	public function testRoundTripSimple(): Void {
+	public inline function testRoundTripSimple(): Void {
 		roundTrip('class C { var x:Dynamic = try foo() catch (e:Any) null; }', 'try-expr simple');
 	}
 
-	public function testRoundTripFieldAccess(): Void {
+	public inline function testRoundTripFieldAccess(): Void {
 		roundTrip('class C { var x:Dynamic = try Xml.parse(data).firstElement() catch (_:Any) null; }', 'try-expr field-access');
 	}
 
-	public function testRoundTripBlockBody(): Void {
+	public inline function testRoundTripBlockBody(): Void {
 		roundTrip('class C { var x:Dynamic = try { foo(); } catch (e:Any) { bar; }; }', 'try-expr block bodies');
 	}
 
-	public function testRoundTripReturn(): Void {
+	public inline function testRoundTripReturn(): Void {
 		roundTrip('class C { function m():Dynamic { return try foo() catch (e:Any) null; } }', 'try-expr return');
 	}
 
-	public function testRoundTripStatementForm(): Void {
+	public inline function testRoundTripStatementForm(): Void {
 		roundTrip('class C { function m():Void { try { foo(); } catch (e:Any) { bar; } } }', 'try-stmt regression');
 	}
 
@@ -234,7 +234,7 @@ class HxTryExprSliceTest extends HxTestHelpers {
 	 * the second write must match the first — byte-preservation of the
 	 * source `;` vs the haxe-formatter reference is a deferred follow-up.
 	 */
-	public function testRoundTripSemicolonBeforeCatch(): Void {
+	public inline function testRoundTripSemicolonBeforeCatch(): Void {
 		roundTrip('class C { var x:Dynamic = try foo(); catch (e:Any) null; }', 'try-expr semicolon-before-catch');
 	}
 

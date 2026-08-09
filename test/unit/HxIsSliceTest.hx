@@ -90,17 +90,17 @@ class HxIsSliceTest extends HxTestHelpers {
 	}
 
 	/** Round-trip simple form. */
-	public function testRoundTripSimple(): Void {
+	public inline function testRoundTripSimple(): Void {
 		roundTrip('class C { var f:Bool = x is Bool; }');
 	}
 
 	/** Round-trip chained form. */
-	public function testRoundTripChain(): Void {
+	public inline function testRoundTripChain(): Void {
 		roundTrip('class C { var f:Bool = x is Int is String; }');
 	}
 
 	/** Round-trip `is` as identifier — must not become operator on reparse. */
-	public function testRoundTripIsAsIdent(): Void {
+	public inline function testRoundTripIsAsIdent(): Void {
 		roundTrip('class C { var f:Bool = is(""); }');
 	}
 

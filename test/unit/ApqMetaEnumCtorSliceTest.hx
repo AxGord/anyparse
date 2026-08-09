@@ -5,7 +5,6 @@ import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.Meta;
-import anyparse.query.Meta.MetaHit;
 import anyparse.query.QueryNode;
 
 using Lambda;
@@ -32,22 +31,20 @@ class ApqMetaEnumCtorSliceTest extends Test {
 		final hits: Array<MetaHit> = findIn('enum E { @:kw("var") A; B(x:Int); }');
 		final kw: Null<MetaHit> = hits.find(h -> h.annotation == '@:kw');
 		Assert.notNull(kw, '@:kw on enum ctor must surface — got ${describe(hits)}');
-		if (kw != null) {
-			Assert.equals('SimpleCtor', kw.declKind, 'attributes to the zero-arg ctor — got ${describe(hits)}');
-			Assert.equals('A', kw.declName);
-			Assert.equals(1, kw.args.length, 'one arg expected — got ${describe(hits)}');
-			Assert.isTrue(kw.args[0].indexOf('var') >= 0, 'arg slices the source string — got ${describe(hits)}');
-		}
+		if (kw == null) return;
+		Assert.equals('SimpleCtor', kw.declKind, 'attributes to the zero-arg ctor — got ${describe(hits)}');
+		Assert.equals('A', kw.declName);
+		Assert.equals(1, kw.args.length, 'one arg expected — got ${describe(hits)}');
+		Assert.isTrue(kw.args[0].indexOf('var') >= 0, 'arg slices the source string — got ${describe(hits)}');
 	}
 
 	public function testParamCtorAnnotationAttributesToParamCtor(): Void {
 		final hits: Array<MetaHit> = findIn('enum E { @:foo B(x:Int); }');
 		final foo: Null<MetaHit> = hits.find(h -> h.annotation == '@:foo');
 		Assert.notNull(foo, '@:foo on a param-bearing ctor must surface — got ${describe(hits)}');
-		if (foo != null) {
-			Assert.equals('ParamCtor', foo.declKind, 'attributes to the param ctor — got ${describe(hits)}');
-			Assert.equals('B', foo.declName);
-		}
+		if (foo == null) return;
+		Assert.equals('ParamCtor', foo.declKind, 'attributes to the param ctor — got ${describe(hits)}');
+		Assert.equals('B', foo.declName);
 	}
 
 	public function testMultipleEnumCtorAnnotationsEachResolve(): Void {

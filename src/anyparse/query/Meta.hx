@@ -3,6 +3,8 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * Metadata-on-declaration walker for `apq meta`.
  *
@@ -85,7 +87,7 @@ final class Meta {
 		} else if (parenIdx >= 0) {
 			final closeIdx: Int = rawName.lastIndexOf(')');
 			final raw: String = closeIdx > parenIdx ? rawName.substring(parenIdx + 1, closeIdx) : '';
-			final trimmed: String = StringTools.trim(raw);
+			final trimmed: String = raw.trim();
 			trimmed.length == 0 ? [] : [trimmed];
 		} else {
 			[];

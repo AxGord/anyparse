@@ -4,6 +4,10 @@ import anyparse.query.StdResolver;
 import anyparse.query.Glob;
 import utest.Assert;
 import utest.Test;
+
+using Lambda;
+using StringTools;
+
 #if (sys || nodejs)
 import sys.FileSystem;
 #end
@@ -184,9 +188,9 @@ class StdResolverTest extends Test {
 		}
 		final toplevel: Array<String> = Glob.expand(StdResolver.resolutionSpecs(dir)[0], '.hx');
 		Assert.isTrue(toplevel.length > 0, 'the toplevel glob matched at least one core type');
-		final hasStd: Bool = Lambda.exists(toplevel, p -> StringTools.endsWith(p, '/Std.hx'));
+		final hasStd: Bool = toplevel.exists(p -> StringTools.endsWith(p, '/Std.hx'));
 		Assert.isTrue(hasStd, 'the toplevel glob includes Std.hx');
-		final hasTargetSubtree: Bool = Lambda.exists(toplevel, p -> p.indexOf('/js/') >= 0 || p.indexOf('/cpp/') >= 0);
+		final hasTargetSubtree: Bool = toplevel.exists(p -> p.indexOf('/js/') >= 0 || p.indexOf('/cpp/') >= 0);
 		Assert.isFalse(hasTargetSubtree, 'the toplevel glob excludes target-specific subtrees');
 		#else
 		Assert.pass('non-sys target');

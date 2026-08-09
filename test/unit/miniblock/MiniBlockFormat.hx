@@ -94,7 +94,7 @@ final class MiniBlockFormat {
 	 * which forces this method to exist. Plain `String.fromCharCode`
 	 * is sufficient.
 	 */
-	public function escapeChar(c: Int): String {
+	public inline function escapeChar(c: Int): String {
 		return String.fromCharCode(c);
 	}
 

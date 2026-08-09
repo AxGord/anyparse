@@ -6,16 +6,14 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Matcher;
-import anyparse.query.Matcher.Match;
 import anyparse.query.Meta;
-import anyparse.query.Meta.MetaHit;
 import anyparse.query.Pattern;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
-import anyparse.query.Refs.RefHit;
 import anyparse.query.format.Text;
 import anyparse.runtime.Span;
-import anyparse.runtime.Span.Position;
+
+using StringTools;
 
 /**
  * Regression-locks the declarative line-diagnostic renderers
@@ -150,8 +148,8 @@ class ApqTextRenderTest extends Test {
 		final to: Int = span.to > source.length ? source.length : span.to;
 		if (from >= to) return '';
 		final slice: String = source.substring(from, to);
-		final flat: String = StringTools.replace(StringTools.replace(slice, '\n', ' '), '\r', '');
-		return StringTools.trim(flat);
+		final flat: String = StringTools.replace(slice.replace('\n', ' '), '\r', '');
+		return flat.trim();
 	}
 
 	private static function refsOf(source: String, name: String): Array<RefHit> {

@@ -103,8 +103,8 @@ class MapKeysLookupCheckTest extends Test {
 	}
 
 	public function testThisPathReceiverFlagged(): Void {
-		final src: String =
-			'class C {\n\tvar files:Map<String,Int>;\n\tfunction f():Void {\n\t\tfor (k in this.files.keys()) trace(this.files[k]);\n\t}\n}';
+		final src: String = 'class C {\n\tvar files:Map<String,Int>;\n\tfunction f():Void {\n'
+			+ '\t\tfor (k in this.files.keys()) trace(this.files[k]);\n\t}\n}';
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.equals('iterate key-value instead of keys()-then-lookup — for (k => value in this.files)', vs[0].message);

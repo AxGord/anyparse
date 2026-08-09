@@ -10,8 +10,6 @@ import anyparse.query.CachingGrammarPlugin;
 
 using StringTools;
 
-import anyparse.query.CachingGrammarPlugin.LibrarySources;
-
 /**
  * `unused-import` widened via the RESOLUTION SCOPE. When the plugin carries a
  * resolution scope (report files UNION configured library roots — openfl / lime),

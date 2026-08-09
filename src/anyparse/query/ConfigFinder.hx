@@ -17,7 +17,7 @@ final class ConfigFinder {
 	 */
 	public static function findUp(path: String, filename: String): Null<String> {
 		final found: Null<{ content: String, path: String }> = findUpFile(path, filename);
-		return found == null ? null : found.content;
+		return found?.content;
 	}
 
 	/**

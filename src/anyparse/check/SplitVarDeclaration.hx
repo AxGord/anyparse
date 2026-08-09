@@ -4,11 +4,12 @@ import anyparse.check.Check.Violation;
 import anyparse.query.CondDirectives;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Flags a local declaration that binds several variables in one statement and rebuilds it as
@@ -280,9 +281,9 @@ final class SplitVarDeclaration implements Check {
 	 * continuation (or to the statement's `;`). Null when any slice trims to nothing.
 	 */
 	private static function declaratorSlices(source: String, stmtSpan: Span, chain: Array<Span>): Null<Array<String>> {
-		final out: Array<String> = [StringTools.trim(source.substring(stmtSpan.from, chain[0].from))];
+		final out: Array<String> = [source.substring(stmtSpan.from, chain[0].from).trim()];
 		for (i in 0...chain.length)
-			out.push(StringTools.trim(source.substring(chain[i].from + 1, i + 1 < chain.length ? chain[i + 1].from : stmtSpan.to - 1)));
+			out.push(source.substring(chain[i].from + 1, i + 1 < chain.length ? chain[i + 1].from : stmtSpan.to - 1).trim());
 		for (slice in out) if (slice == '') return null;
 		return out;
 	}
@@ -295,7 +296,7 @@ final class SplitVarDeclaration implements Check {
 	private static function leadingKeyword(source: String, from: Int): Null<String> {
 		var i: Int = from;
 		while (i < source.length && KEYWORD_LETTERS.indexOf(source.charAt(i)) != -1) i++;
-		return i == from || i >= source.length || !StringTools.isSpace(source, i) ? null : source.substring(from, i);
+		return i == from || i >= source.length || !source.isSpace(i) ? null : source.substring(from, i);
 	}
 
 	/**
@@ -305,7 +306,7 @@ final class SplitVarDeclaration implements Check {
 	 */
 	private static function indentOf(source: String, from: Int): String {
 		final prefix: String = source.substring(source.lastIndexOf('\n', from) + 1, from);
-		return StringTools.trim(prefix) == '' ? prefix : '';
+		return prefix.trim() == '' ? prefix : '';
 	}
 
 }

@@ -242,28 +242,28 @@ class HxCastSliceTest extends HxTestHelpers {
 
 	// ======== Slice 46 writer: tight `cast(` on paren-form operand ========
 
-	public function testWriterCastParenTight(): Void {
+	public inline function testWriterCastParenTight(): Void {
 		// Slice 46 (writer half): `cast (x)` round-trips as tight
 		// `cast(x)` because operand=ParenExpr is in the
 		// `tightOnParenOperand` list. Bare `cast x` keeps the space.
 		writerEquals('class C { var f:Int = cast (x); }', 'class C {\n\tvar f:Int = cast(x);\n}\n', 'tight `cast(x)` on ParenExpr operand');
 	}
 
-	public function testWriterCastECheckTypeTight(): Void {
+	public inline function testWriterCastECheckTypeTight(): Void {
 		writerEquals(
 			'class C { var f:Int = cast (x:Int); }', 'class C {\n\tvar f:Int = cast(x : Int);\n}\n',
 			'tight `cast(x : Int)` on ECheckTypeExpr operand'
 		);
 	}
 
-	public function testWriterCastIdentSpaced(): Void {
+	public inline function testWriterCastIdentSpaced(): Void {
 		writerEquals(
 			'class C { var f:Int = cast x; }', 'class C {\n\tvar f:Int = cast x;\n}\n',
 			'spaced `cast x` on bare IdentExpr operand (knob does not fire)'
 		);
 	}
 
-	public function testWriterCastIsBoolTight(): Void {
+	public inline function testWriterCastIsBoolTight(): Void {
 		// The pre-Slice-46 fixture-failing case: `cast (x) is Bool`
 		// round-trips as `cast(x) is Bool` with tight cast paren.
 		writerEquals(

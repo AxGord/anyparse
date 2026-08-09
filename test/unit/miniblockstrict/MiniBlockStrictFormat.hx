@@ -67,15 +67,14 @@ final class MiniBlockStrictFormat {
 
 	private function new() {}
 
-	public function escapeChar(c: Int): String {
+	public inline function escapeChar(c: Int): String {
 		return String.fromCharCode(c);
 	}
 
 	public function endsImplicitly(item: Null<MiniBlockStrict>): Bool {
 		return switch item {
 			case null: false;
-			case Block(_): true;
-			case EmptyAtom: true;
+			case Block(_), EmptyAtom: true;
 			case Atom(s) if ((s: String) == 'end'): true;
 			case _: false;
 		};

@@ -3,10 +3,11 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Flags a bare `{ … }` statement block — one written directly in a statement-list
@@ -89,7 +90,7 @@ final class UnnecessaryBlock implements Check {
 			: CheckScan.applyBySpan(
 				plugin, source, violations, [seams.blockStmtKind], (node, span) -> declaresBinding(node, seams.bindingKinds) ? null : {
 					span: span,
-					text: StringTools.trim(source.substring(span.from + 1, span.to - 1))
+					text: source.substring(span.from + 1, span.to - 1).trim()
 				}
 			);
 	}

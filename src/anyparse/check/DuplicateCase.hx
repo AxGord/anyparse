@@ -6,6 +6,8 @@ import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * Flags a duplicated switch case — a second branch whose pattern repeats an
  * earlier branch's in the same switch, making it dead. Purely structural.
@@ -97,7 +99,7 @@ final class DuplicateCase implements Check {
 			final nextSpan: Null<Span> = kids[1].span;
 			if (nextSpan != null && GUARD.match(source.substring(patternSpan.to, nextSpan.from))) return null;
 		}
-		return StringTools.trim(source.substring(patternSpan.from, patternSpan.to));
+		return source.substring(patternSpan.from, patternSpan.to).trim();
 	}
 
 }

@@ -5,12 +5,12 @@ import anyparse.check.CheckScan.NegationSeams;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -285,8 +285,7 @@ final class GuardReturn implements Check {
 			voidReturnKind
 		]) if (k != null && !returnKinds.contains(k)) returnKinds.push(k);
 		for (k in valueReturnKinds) if (!returnKinds.contains(k)) returnKinds.push(k);
-		if (returnKinds.length == 0) return null;
-		return {
+		return returnKinds.length == 0 ? null : {
 			ifKinds: ifKinds,
 			returnKinds: returnKinds,
 			blockKinds: flow.blockKinds(),
@@ -352,10 +351,16 @@ final class GuardReturn implements Check {
 	 * happened to be a nested `{ … }` block would let the inserted `return` skip its siblings.
 	 */
 	private static function childTailFn(node: QueryNode, child: QueryNode, index: Int, s: Seams, tailFn: Null<QueryNode>): Null<QueryNode> {
-		if (s.functionKinds.contains(node.kind)) return child.kind == s.blockBodyKind ? node : null;
-		if (tailFn == null) return null;
-		if (node.kind == s.condKind) return node.children.foreach(c -> s.blockKinds.contains(c.kind)) ? tailFn : null;
-		return s.blockKinds.contains(node.kind) && index == node.children.length - 1 && child.kind == s.condKind ? tailFn : null;
+		return if (s.functionKinds.contains(node.kind))
+			child.kind == s.blockBodyKind ? node : null
+		else if (tailFn == null)
+			null
+		else if (node.kind == s.condKind)
+			node.children.foreach(c -> s.blockKinds.contains(c.kind)) ? tailFn : null
+		else if (s.blockKinds.contains(node.kind) && index == node.children.length - 1 && child.kind == s.condKind)
+			tailFn
+		else
+			null;
 	}
 
 	/**
@@ -458,8 +463,9 @@ final class GuardReturn implements Check {
 		final body: Null<QueryNode> = fn.children.find(c -> c.kind == s.blockBodyKind);
 		if (body == null) return false;
 		final declared: Null<String> = CheckScan.returnAnnotationText(fn, s.shape, source);
-		if (declared == null) return !RefactorSupport.subtreeContainsKindStopping(body, s.valueReturnKinds, s.returnScopeStop);
-		return declared == s.voidTypeName;
+		return declared == null
+			? !RefactorSupport.subtreeContainsKindStopping(body, s.valueReturnKinds, s.returnScopeStop)
+			: declared == s.voidTypeName;
 	}
 
 	/** Whether `node`'s subtree holds a `#if … #end` region, whose raw-preserved interior the re-indenting de-nest must not move. */
@@ -533,7 +539,7 @@ final class GuardReturn implements Check {
 	}
 
 	/** The local declaration node a top-level statement holds, or null — see `RefactorSupport.topLevelDeclaredNode`. */
-	private static function declaredNode(stmt: QueryNode, s: Seams): Null<QueryNode> {
+	private static inline function declaredNode(stmt: QueryNode, s: Seams): Null<QueryNode> {
 		return RefactorSupport.topLevelDeclaredNode(stmt, s.localDeclKinds, s.localDeclExprKinds, s.metaKinds);
 	}
 
@@ -552,7 +558,7 @@ final class GuardReturn implements Check {
 		final thenSpan: Null<Span> = m.thenBlock.span;
 		if (ifSpan == null || thenSpan == null) return null;
 		final neg: String = CheckScan.negateConditionText(m.cond, source, s.negation, s.logic, types);
-		final inner: String = StringTools.rtrim(source.substring(thenSpan.from + 1, thenSpan.to - 1));
+		final inner: String = source.substring(thenSpan.from + 1, thenSpan.to - 1).rtrim();
 		final tail: Null<QueryNode> = m.tail;
 		if (tail == null) return { span: new Span(ifSpan.from, ifSpan.to), text: 'if ($neg) return;$inner' };
 		final tailSpan: Null<Span> = tail.span;

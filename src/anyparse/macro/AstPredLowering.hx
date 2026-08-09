@@ -68,7 +68,6 @@ class AstPredLowering {
 	public static inline final CLASS_BASE_NAME: String = 'AstPreds';
 
 	private final _shape: ShapeBuilder.ShapeResult;
-
 	private final _mode: AstPredMode;
 
 	public function new(shape: ShapeBuilder.ShapeResult, mode: AstPredMode) {
@@ -76,57 +75,10 @@ class AstPredLowering {
 		_mode = mode;
 	}
 
-	/**
-	 * Fully-qualified path parts of the predicate marker class serving
-	 * the pipeline described by (`trivia`, `spans`) for the grammar
-	 * rooted at `rootTypePath`. Emission sites feed their own build
-	 * flags: a trivia build's values are the `*T` family even for
-	 * non-bearing rules (whose predicates the `T` class still carries,
-	 * typed plain), so the choice depends only on the build mode.
-	 */
-	public static function predClassParts(rootTypePath: String, trivia: Bool, spans: Bool): Array<String> {
-		// The two flags describe mutually exclusive pipelines; a caller
-		// passing both has confused its build context — fail at macro
-		// time instead of silently preferring one family.
-		if (trivia && spans) Context.fatalError('AstPredLowering: a build cannot be both trivia and spans', Context.currentPos());
-		final suffix: String = spans ? 'S' : trivia ? 'T' : '';
-		return packOf(rootTypePath).concat(['$CLASS_BASE_NAME$suffix']);
-	}
-
-	/**
-	 * `<PredClass>.<name>(<args>)` call expression for an emission site
-	 * in `Lowering` / `WriterLowering` — the typed replacement for
-	 * `opt.<adapter>(raw)` / `schema.instance.<pred>(raw)`.
-	 */
-	public static function predCallExpr(rootTypePath: String, trivia: Bool, spans: Bool, name: String, args: Array<Expr>): Expr {
-		final callee: Expr = predFnExpr(rootTypePath, trivia, spans, name);
-		return { expr: ECall(callee, args), pos: Context.currentPos() };
-	}
-
-	/**
-	 * `<PredClass>.<name>` function-reference expression — for emission
-	 * sites that must apply the predicate to receivers only they know
-	 * (built where the Star's element rule is in scope, applied deeper
-	 * in the static emit pipeline).
-	 */
-	public static function predFnExpr(rootTypePath: String, trivia: Bool, spans: Bool, name: String): Expr {
-		return MacroStringTools.toFieldExpr(predClassParts(rootTypePath, trivia, spans).concat([name]));
-	}
-
-	/** Simple (unqualified) name of a type path. */
-	public static inline function simpleName(typePath: String): String {
-		return PairedShapeLowering.simpleName(typePath);
-	}
-
-	/** Package parts of a type path, empty for a root-package type. */
-	public static inline function packOf(typePath: String): Array<String> {
-		return PairedShapeLowering.packOf(typePath);
-	}
-
 	/** Whether `rule` is trivia-bearing AND this lowering targets the trivia family. */
 	private function isTriviaBearing(rule: String): Bool {
 		if (_mode != PredTrivia) return false;
-		final node: Null<ShapeNode> = _shape.rules.get(rule);
+		final node: Null<ShapeNode> = _shape.rules[rule];
 		return node != null && node.annotations.get(AnnotationKeys.TRIVIA_BEARING) == true;
 	}
 
@@ -164,23 +116,21 @@ class AstPredLowering {
 
 	/** Whether a rule name resolves to a Terminal (primitive leaf — never paired by the synth passes). */
 	private function isTerminalRule(rule: String): Bool {
-		final node: Null<ShapeNode> = _shape.rules.get(rule);
+		final node: Null<ShapeNode> = _shape.rules[rule];
 		return node == null || node.kind == Terminal;
 	}
 
 	/** The `Alt` branch node of `rule`'s ctor `ctor`; fatal when the table names a ctor the grammar lacks. */
 	private function branchOf(rule: String, ctor: String): ShapeNode {
-		final node: Null<ShapeNode> = _shape.rules.get(rule);
+		final node: Null<ShapeNode> = _shape.rules[rule];
 		if (node == null || node.kind != Alt) {
 			Context.fatalError('AstPredLowering: $rule is not an Alt rule', Context.currentPos());
 			throw 'unreachable';
 		}
 		final branch: Null<ShapeNode> = node.children.find(b -> (b.annotations.get(AnnotationKeys.BASE_CTOR): String) == ctor);
-		if (branch == null) {
-			Context.fatalError('AstPredLowering: $rule has no ctor $ctor', Context.currentPos());
-			throw 'unreachable';
-		}
-		return branch;
+		if (branch != null) return branch;
+		Context.fatalError('AstPredLowering: $rule has no ctor $ctor', Context.currentPos());
+		throw 'unreachable';
 	}
 
 	/**
@@ -298,17 +248,15 @@ class AstPredLowering {
 		if (_mode != PredTrivia) return false;
 		// Unknown rule / field would silently disable the `.node` unwrap
 		// — an author error in the predicate table, not a mode question.
-		final node: Null<ShapeNode> = _shape.rules.get(ownerRule);
+		final node: Null<ShapeNode> = _shape.rules[ownerRule];
 		if (node == null || node.kind != Seq) {
 			Context.fatalError('AstPredLowering: $ownerRule is not a Seq rule', Context.currentPos());
 			throw 'unreachable';
 		}
 		final child: Null<ShapeNode> = node.children.find(c -> (c.annotations.get(AnnotationKeys.BASE_FIELD_NAME): String) == fieldName);
-		if (child == null) {
-			Context.fatalError('AstPredLowering: $ownerRule has no field $fieldName', Context.currentPos());
-			throw 'unreachable';
-		}
-		return isTriviaBearing(ownerRule) && child.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true;
+		if (child != null) return isTriviaBearing(ownerRule) && child.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true;
+		Context.fatalError('AstPredLowering: $ownerRule has no field $fieldName', Context.currentPos());
+		throw 'unreachable';
 	}
 
 	/** `<elemExpr>.node` when this family wraps the Star's elements in `Trivial<…>`, else the element unchanged. */
@@ -322,6 +270,58 @@ class AstPredLowering {
 
 	private function field(target: Expr, name: String): Expr {
 		return { expr: EField(target, name), pos: Context.currentPos() };
+	}
+
+	/**
+	 * Fully-qualified path parts of the predicate marker class serving
+	 * the pipeline described by (`trivia`, `spans`) for the grammar
+	 * rooted at `rootTypePath`. Emission sites feed their own build
+	 * flags: a trivia build's values are the `*T` family even for
+	 * non-bearing rules (whose predicates the `T` class still carries,
+	 * typed plain), so the choice depends only on the build mode.
+	 */
+	public static function predClassParts(rootTypePath: String, trivia: Bool, spans: Bool): Array<String> {
+		// The two flags describe mutually exclusive pipelines; a caller
+		// passing both has confused its build context — fail at macro
+		// time instead of silently preferring one family.
+		if (trivia && spans) Context.fatalError('AstPredLowering: a build cannot be both trivia and spans', Context.currentPos());
+		final suffix: String = if (spans)
+			'S'
+		else if (trivia)
+			'T'
+		else
+			'';
+		return packOf(rootTypePath).concat(['$CLASS_BASE_NAME$suffix']);
+	}
+
+	/**
+	 * `<PredClass>.<name>(<args>)` call expression for an emission site
+	 * in `Lowering` / `WriterLowering` — the typed replacement for
+	 * `opt.<adapter>(raw)` / `schema.instance.<pred>(raw)`.
+	 */
+	public static function predCallExpr(rootTypePath: String, trivia: Bool, spans: Bool, name: String, args: Array<Expr>): Expr {
+		final callee: Expr = predFnExpr(rootTypePath, trivia, spans, name);
+		return { expr: ECall(callee, args), pos: Context.currentPos() };
+	}
+
+	/**
+	 * `<PredClass>.<name>` function-reference expression — for emission
+	 * sites that must apply the predicate to receivers only they know
+	 * (built where the Star's element rule is in scope, applied deeper
+	 * in the static emit pipeline).
+	 */
+	public static function predFnExpr(rootTypePath: String, trivia: Bool, spans: Bool, name: String): Expr {
+		return MacroStringTools.toFieldExpr(predClassParts(rootTypePath, trivia, spans).concat([name]));
+	}
+
+	/** Simple (unqualified) name of a type path. */
+	public static inline function simpleName(typePath: String): String {
+		return PairedShapeLowering.simpleName(typePath);
+	}
+
+	/** Package parts of a type path, empty for a root-package type. */
+	public static inline function packOf(typePath: String): Array<String> {
+		return PairedShapeLowering.packOf(typePath);
 	}
 
 }

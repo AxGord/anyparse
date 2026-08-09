@@ -165,19 +165,19 @@ class HxBinopStmtNoSemiSliceTest extends HxTestHelpers {
 	// nested-operand relaxation must not apply.
 
 	public function testStmtPositionIfMissingSemiStillFatal(): Void {
-		Assert.raises(() -> HaxeParser.parse('class C {\n\tfunction f() {\n\t\tif (c) g() h();\n\t}\n}'));
+		Assert.raises(HaxeParser.parse.bind('class C {\n\tfunction f() {\n\t\tif (c) g() h();\n\t}\n}'));
 	}
 
 	public function testStmtPositionForMissingSemiStillFatal(): Void {
-		Assert.raises(() -> HaxeParser.parse('class C {\n\tfunction f() {\n\t\tfor (i in e) g() h();\n\t}\n}'));
+		Assert.raises(HaxeParser.parse.bind('class C {\n\tfunction f() {\n\t\tfor (i in e) g() h();\n\t}\n}'));
 	}
 
 	public function testStmtPositionAnonFnMissingSemiStillFatal(): Void {
-		Assert.raises(() -> HaxeParser.parse('class C {\n\tfunction f() {\n\t\tfunction() g() h();\n\t}\n}'));
+		Assert.raises(HaxeParser.parse.bind('class C {\n\tfunction f() {\n\t\tfunction() g() h();\n\t}\n}'));
 	}
 
 	public function testBareCallMissingSemiStillFatal(): Void {
-		Assert.raises(() -> HaxeParser.parse('class C {\n\tfunction f() {\n\t\tf() g();\n\t}\n}'));
+		Assert.raises(HaxeParser.parse.bind('class C {\n\tfunction f() {\n\t\tf() g();\n\t}\n}'));
 	}
 
 	// -- `while` has no body trail slot, so its `;` always reached the
@@ -194,15 +194,15 @@ class HxBinopStmtNoSemiSliceTest extends HxTestHelpers {
 	// byte-identically, and the newly-parseable no-`;` forms must be
 	// idempotent.
 
-	public function testIfExprSwallowedSemiRoundTrip(): Void {
+	public inline function testIfExprSwallowedSemiRoundTrip(): Void {
 		roundTrip('class C {\n\tfunction f() {\n\t\ta << if (e) f(m);\n\t\tx();\n\t}\n}', 'shl-if-explicit-semi');
 	}
 
-	public function testBinopBraceTailRoundTrip(): Void {
+	public inline function testBinopBraceTailRoundTrip(): Void {
 		roundTrip('class C {\n\tfunction f() {\n\t\ta << function() {\n\t\t\tb();\n\t\t}\n\t\tx();\n\t}\n}', 'shl-fn-no-semi');
 	}
 
-	public function testVarInitLambdaRoundTrip(): Void {
+	public inline function testVarInitLambdaRoundTrip(): Void {
 		roundTrip('class C {\n\tfunction f() {\n\t\tvar a = () -> {\n\t\t\tg();\n\t\t}\n\t\tb();\n\t}\n}', 'var-lambda-no-semi');
 	}
 

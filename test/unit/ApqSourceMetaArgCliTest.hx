@@ -3,6 +3,9 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.query.Cli;
+
+using StringTools;
+
 #if (sys || nodejs)
 import sys.io.File;
 import sys.FileSystem;
@@ -192,8 +195,7 @@ class ApqSourceMetaArgCliTest extends Test {
 	#if (sys || nodejs)
 	private static function tempDir(): String {
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
-		if (tmp != null && tmp.length > 0) return StringTools.endsWith(tmp, '/') ? tmp.substring(0, tmp.length - 1) : tmp;
-		return '/tmp';
+		return tmp != null && tmp.length > 0 ? StringTools.endsWith(tmp, '/') ? tmp.substring(0, tmp.length - 1) : tmp : '/tmp';
 	}
 
 	private static function writeFile(source: String): String {

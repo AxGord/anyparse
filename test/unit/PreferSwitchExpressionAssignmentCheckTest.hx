@@ -245,7 +245,8 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 	/** The driving case: a field-access l-value assigned in every arm hoists out of the switch. */
 	public function testLvalueFieldFlagged(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(wrap(
-			'switch x {\n\t\t\tcase A: controlsHolder.y = 1;\n\t\t\tcase B: controlsHolder.y = 2;\n\t\t\tcase _: controlsHolder.y = 0;\n\t\t}'
+			'switch x {\n\t\t\tcase A: controlsHolder.y = 1;\n\t\t\tcase B: controlsHolder.y = 2;\n\t\t\tcase _: controlsHolder.y = 0;\n'
+			+ '\t\t}'
 		));
 		Assert.equals(1, es.length);
 		Assert.equals('controlsHolder.y = switch x { case A: 1; case B: 2; case _: 0; };', es[0].text);
@@ -372,7 +373,8 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 	 */
 	public function testNestedSwitchInIfInSwitchFixed(): Void {
 		final src: String = wrap(
-			'switch outer {\n\t\t\tcase A:\n\t\t\t\tif (c) x = 1;\n\t\t\t\telse switch inner {\n\t\t\t\t\tcase P: x = 2;\n\t\t\t\t\tcase _: x = 3;\n\t\t\t\t}\n\t\t\tcase _: x = 0;\n\t\t}'
+			'switch outer {\n\t\t\tcase A:\n\t\t\t\tif (c) x = 1;\n\t\t\t\telse switch inner {\n\t\t\t\t\tcase P: x = 2;\n'
+			+ '\t\t\t\t\tcase _: x = 3;\n\t\t\t\t}\n\t\t\tcase _: x = 0;\n\t\t}'
 		);
 		Assert.equals(1, violations(src).length);
 		final es: Array<{ span: Span, text: String }> = edits(src);

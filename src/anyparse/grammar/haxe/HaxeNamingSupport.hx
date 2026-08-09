@@ -8,6 +8,7 @@ import anyparse.query.QueryNode;
 import haxe.Exception;
 import anyparse.query.SymbolIndex;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -347,7 +348,7 @@ final class HaxeNamingSupport implements NamingSupport {
 	 */
 	private static function underscoreCamel(name: String): Null<String> {
 		var start: Int = 0;
-		while (start < name.length && StringTools.fastCodeAt(name, start) == '_'.code) start++;
+		while (start < name.length && name.fastCodeAt(start) == '_'.code) start++;
 		final core: String = name.substr(start);
 		if (core.length == 0) return null;
 		final camel: String = smartSegment(core);
@@ -367,7 +368,7 @@ final class HaxeNamingSupport implements NamingSupport {
 	 */
 	private static function stripUnderscorePrefix(name: String): Null<String> {
 		var i: Int = 0;
-		while (i < name.length && StringTools.fastCodeAt(name, i) == '_'.code) i++;
+		while (i < name.length && name.fastCodeAt(i) == '_'.code) i++;
 		if (i == 0) return null;
 		final stripped: String = name.substr(i);
 		return new EReg("^[a-zA-Z][a-zA-Z0-9_]*$", '').match(stripped) && !KEYWORDS.contains(stripped) ? stripped : null;
@@ -386,9 +387,8 @@ final class HaxeNamingSupport implements NamingSupport {
 		category: NamingCategory, name: String, node: QueryNode, parent: Null<QueryNode>, mods: Array<String>
 	): Bool {
 		return (category == NamingCategory.Field || category == NamingCategory.Method || category == NamingCategory.Constant)
-			&& (name == 'new' || DUNDER_NAME_PATTERN.match(name) || StringTools.startsWith(name, 'get_')
-				|| StringTools.startsWith(name, 'set_') || metaPrecedes(node, parent) || node.kind == 'FinalMember'
-				&& mods.contains('static') && isTypeReferenceInit(node));
+			&& (name == 'new' || DUNDER_NAME_PATTERN.match(name) || name.startsWith('get_') || name.startsWith('set_')
+				|| metaPrecedes(node, parent) || node.kind == 'FinalMember' && mods.contains('static') && isTypeReferenceInit(node));
 	}
 
 	/**
@@ -400,7 +400,7 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * inline anon types in signatures / type params, and structure-extension
 	 * bodies alike - all descend through an `Anon` node.
 	 */
-	private static function isStructuralField(parent: Null<QueryNode>): Bool {
+	private static inline function isStructuralField(parent: Null<QueryNode>): Bool {
 		return parent != null && parent.kind == 'Anon';
 	}
 
@@ -438,8 +438,7 @@ final class HaxeNamingSupport implements NamingSupport {
 
 	/** A method name utest's `@:autoBuild` collects: a `test*` / `spec*` test or a `setup*` / `teardown*` fixture. */
 	private static function isUtestMethodName(name: String): Bool {
-		return StringTools.startsWith(name, 'test') || StringTools.startsWith(name, 'spec') || StringTools.startsWith(name, 'setup')
-			|| StringTools.startsWith(name, 'teardown');
+		return name.startsWith('test') || name.startsWith('spec') || name.startsWith('setup') || name.startsWith('teardown');
 	}
 
 	/** Whether `member`'s initializer is a bare PascalCase type reference (`= SomeType`) — the macro-force anchor shape. */
@@ -475,7 +474,7 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 	/** Whether `kind` is a metadata sibling — a bare `@:tag` (`Meta`) or an argumented `@:tag(...)` (`MetaCall`, e.g. `@:op(A < B)`). */
-	private static function isMetaKind(kind: String): Bool {
+	private static inline function isMetaKind(kind: String): Bool {
 		return kind == 'Meta' || kind == 'MetaCall';
 	}
 
@@ -506,14 +505,14 @@ final class HaxeNamingSupport implements NamingSupport {
 	private static function leadingAcronymRun(segment: String): Int {
 		var i: Int = 0;
 		while (i < segment.length) {
-			final c: Int = StringTools.fastCodeAt(segment, i);
+			final c: Int = segment.fastCodeAt(i);
 			final upper: Bool = c >= 'A'.code && c <= 'Z'.code;
 			final digit: Bool = i > 0 && c >= '0'.code && c <= '9'.code;
 			if (!upper && !digit) break;
 			i++;
 		}
 		if (i == 0 || i >= segment.length) return 0;
-		final next: Int = StringTools.fastCodeAt(segment, i);
+		final next: Int = segment.fastCodeAt(i);
 		return next >= 'a'.code && next <= 'z'.code ? i : 0;
 	}
 
@@ -533,7 +532,7 @@ final class HaxeNamingSupport implements NamingSupport {
 	 */
 	private static function snakeToCamel(name: String): Null<String> {
 		var start: Int = 0;
-		while (start < name.length && StringTools.fastCodeAt(name, start) == '_'.code) start++;
+		while (start < name.length && name.fastCodeAt(start) == '_'.code) start++;
 		final segments: Array<String> = [for (s in name.substr(start).split('_')) if (s.length > 0) smartSegment(s)];
 		if (segments.length == 0) return null;
 		final buf: StringBuf = new StringBuf();

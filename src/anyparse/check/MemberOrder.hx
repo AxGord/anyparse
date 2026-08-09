@@ -2,13 +2,14 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import anyparse.query.TypeInfoProvider;
 import anyparse.check.Check.ConfigAware;
+
+using StringTools;
 
 /**
  * One type-member paired with its canonical-order rank and its full source slot
@@ -109,7 +110,7 @@ final class MemberOrder implements Check implements ConfigAware {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
 		if (!applicable(shape)) return [];
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
@@ -135,7 +136,7 @@ final class MemberOrder implements Check implements ConfigAware {
 		if (!applicable(shape)) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(source) : [];
 		final movableArglessNew: Bool = violations.length > 0
 			&& LintConfig.resolveWith(_resolveConfig, violations[0].file).boolOption('member-order', 'movableArglessNew') == true;
@@ -279,27 +280,29 @@ final class MemberOrder implements Check implements ConfigAware {
 					? (isPublic ? StaticPublicImmutableField : StaticPrivateImmutableField)
 					: (isPublic ? StaticPublicMutableField : StaticPrivateMutableField);
 			final span: Null<Span> = node.span;
-			if (span != null && accessors.exists(span.from)) {
-				final getter: Bool = accessors[span.from] == true;
-				return isPublic
-					? (getter ? PublicGetterProperty : PublicReadOnlyProperty)
-					: (getter ? PrivateGetterProperty : PrivateReadOnlyProperty);
-			}
-			return !mutable
-				? (isPublic ? PublicImmutableField : PrivateImmutableField)
-				: (isPublic ? PublicMutableField : PrivateMutableField);
+			if (span == null || !accessors.exists(span.from))
+				return !mutable
+					? (isPublic ? PublicImmutableField : PrivateImmutableField)
+					: (isPublic ? PublicMutableField : PrivateMutableField);
+			final getter: Bool = accessors[span.from] == true;
+			return isPublic
+				? (getter ? PublicGetterProperty : PublicReadOnlyProperty)
+				: (getter ? PrivateGetterProperty : PrivateReadOnlyProperty);
 		}
 		final name: String = node.name ?? '';
-		return shape.constructorName != null && name == shape.constructorName
-			? Constructor
-			: isAccessor(name, shape)
-				? Accessor
-				: isStatic ? (isPublic ? StaticPublicMethod : StaticPrivateMethod) : (isPublic ? PublicMethod : PrivateMethod);
+		return if (shape.constructorName != null && name == shape.constructorName)
+			Constructor
+		else if (isAccessor(name, shape))
+			Accessor
+		else if (isStatic)
+			(isPublic ? StaticPublicMethod : StaticPrivateMethod)
+		else
+			(isPublic ? PublicMethod : PrivateMethod);
 	}
 
 	/** Whether `name` begins with a property-accessor prefix (`get_` / `set_`). */
 	private static function isAccessor(name: String, shape: RefShape): Bool {
-		for (prefix in shape.accessorMethodPrefixes ?? []) if (StringTools.startsWith(name, prefix)) return true;
+		for (prefix in shape.accessorMethodPrefixes ?? []) if (name.startsWith(prefix)) return true;
 		return false;
 	}
 
@@ -374,9 +377,8 @@ final class MemberOrder implements Check implements ConfigAware {
 		m: OrderedMember, unsafe: Array<String>, shape: RefShape, source: String, movableArglessNew: Bool
 	): Bool {
 		final init: Null<QueryNode> = m.initNode;
-		if (!m.isField || init == null) return false;
-		if (!subtreeContainsAny(init, unsafe)) return false;
-		return !(movableArglessNew && isMovableAllocation(init, shape, source));
+		return m.isField && init != null && subtreeContainsAny(init, unsafe)
+			&& !(movableArglessNew && isMovableAllocation(init, shape, source));
 	}
 
 	/**
@@ -393,7 +395,7 @@ final class MemberOrder implements Check implements ConfigAware {
 		final newExprKind: Null<String> = shape.newExprKind;
 		if (newExprKind == null || init.kind != newExprKind) return false;
 		final span: Null<Span> = init.span;
-		return span != null && StringTools.endsWith(StringTools.rtrim(source.substring(span.from, span.to)), '()');
+		return span != null && StringTools.endsWith(source.substring(span.from, span.to).rtrim(), '()');
 	}
 
 	/** Index of `node` (by identity) in `members`, or -1. */
@@ -451,7 +453,7 @@ final class MemberOrder implements Check implements ConfigAware {
 				if (staticKind != null && child.kind == staticKind) isStatic = true;
 				if (visibility.contains(child.kind)) {
 					final s: Null<Span> = child.span;
-					if (s != null && StringTools.trim(source.substring(s.from, s.to)) != defaultVis) isPublic = true;
+					if (s != null && source.substring(s.from, s.to).trim() != defaultVis) isPublic = true;
 				}
 			}
 		}
@@ -471,13 +473,13 @@ final class MemberOrder implements Check implements ConfigAware {
 		if (ifIdx < 0) return null;
 		final condStart: Int = ifIdx + ifKw.length;
 		final firstChild: Null<QueryNode> = node.children.length > 0 ? node.children[0] : null;
-		final childSpan: Null<Span> = firstChild != null ? firstChild.span : null;
+		final childSpan: Null<Span> = firstChild?.span;
 		final childFrom: Int = childSpan != null ? childSpan.from : span.to;
 		final nl: Int = source.indexOf('\n', condStart);
 		final lineEnd: Int = nl < 0 ? span.to : nl;
 		final condEnd: Int = childFrom < lineEnd ? childFrom : lineEnd;
 		if (condEnd <= condStart) return null;
-		final raw: String = StringTools.trim(source.substring(condStart, condEnd));
+		final raw: String = source.substring(condStart, condEnd).trim();
 		return raw == '' ? null : normalizeCondition(raw);
 	}
 
@@ -503,7 +505,7 @@ final class MemberOrder implements Check implements ConfigAware {
 
 	/** Whether `cond` is wrapped in one outer pair of balanced parentheses spanning the whole string. */
 	private static function isBalancedParenWrapped(cond: String): Bool {
-		if (!StringTools.startsWith(cond, '(') || !StringTools.endsWith(cond, ')')) return false;
+		if (!cond.startsWith('(') || !cond.endsWith(')')) return false;
 		var depth: Int = 0;
 		for (i in 0...cond.length) {
 			switch cond.charAt(i) {
@@ -590,14 +592,14 @@ final class MemberOrder implements Check implements ConfigAware {
 		var branch: Int = 0;
 		var si: Int = 0;
 		for (p in parts) {
-			final t: String = StringTools.trim(p);
+			final t: String = p.trim();
 			if (t == '#end') {
 				current = null;
 				branch = 0;
-			} else if (StringTools.startsWith(t, ifPrefix)) {
-				current = StringTools.trim(t.substring(ifPrefix.length));
+			} else if (t.startsWith(ifPrefix)) {
+				current = t.substring(ifPrefix.length).trim();
 				branch = 0;
-			} else if (StringTools.startsWith(t, '#else'))
+			} else if (t.startsWith('#else'))
 				branch++;
 			else if (isTriviaOnly(t))
 				continue;
@@ -611,7 +613,7 @@ final class MemberOrder implements Check implements ConfigAware {
 	}
 
 	/** Whether two optional `#if` conditions are equal (both null = unconditional). */
-	private static function sameCondition(a: Null<String>, b: Null<String>): Bool {
+	private static inline function sameCondition(a: Null<String>, b: Null<String>): Bool {
 		return a == b;
 	}
 
@@ -719,7 +721,7 @@ final class MemberOrder implements Check implements ConfigAware {
 	private static function hasBranchDirective(source: String, from: Int, to: Int): Bool {
 		for (line in source.substring(from, to).split('\n')) {
 			final t: String = StringTools.ltrim(line);
-			if (StringTools.startsWith(t, '#else')) return true;
+			if (t.startsWith('#else')) return true;
 		}
 		return false;
 	}
@@ -772,11 +774,14 @@ final class MemberOrder implements Check implements ConfigAware {
 	private static function spacingViolation(a: OrderedMember, b: OrderedMember, source: String): Null<Int> {
 		if (a.condition != b.condition) return null;
 		final gap: String = source.substring(a.span.to, b.span.from);
-		if (gap.indexOf('\n') < 0 || StringTools.trim(gap) != '') return null;
+		if (gap.indexOf('\n') < 0 || gap.trim() != '') return null;
 		final blanks: Int = blankLineCount(gap);
-		return a.rank != b.rank
-			? blanks != 1 ? 1 : null
-			: b.isField && blanks != 0 && !slotStartsWithComment(a, source) && !slotStartsWithComment(b, source) ? 0 : null;
+		return if (a.rank != b.rank)
+			blanks != 1 ? 1 : null
+		else if (b.isField && blanks != 0 && !slotStartsWithComment(a, source) && !slotStartsWithComment(b, source))
+			0
+		else
+			null;
 	}
 
 	/**
@@ -799,8 +804,8 @@ final class MemberOrder implements Check implements ConfigAware {
 
 	/** Whether `m`'s slot text begins (after trimming) with a comment - a doc/line comment the spacing rule never strips or demands a blank against. */
 	private static function slotStartsWithComment(m: OrderedMember, source: String): Bool {
-		final t: String = StringTools.trim(source.substring(m.span.from, m.span.to));
-		return StringTools.startsWith(t, '/*') || StringTools.startsWith(t, '//');
+		final t: String = source.substring(m.span.from, m.span.to).trim();
+		return t.startsWith('/*') || t.startsWith('//');
 	}
 
 	/**
@@ -816,8 +821,7 @@ final class MemberOrder implements Check implements ConfigAware {
 
 	/** Whether any inter-member gap in the region holds non-whitespace (a stray `;`, a trailing comment) a rebuild would silently drop - the guard that falls the reorder back to per-slot swaps. */
 	private static function hasNonWhitespaceGap(members: Array<OrderedMember>, source: String): Bool {
-		for (i in 0...members.length - 1) if (StringTools.trim(source.substring(members[i].span.to, members[i + 1].span.from)) != '')
-			return true;
+		for (i in 0...members.length - 1) if (source.substring(members[i].span.to, members[i + 1].span.from).trim() != '') return true;
 		return false;
 	}
 
@@ -847,7 +851,12 @@ final class MemberOrder implements Check implements ConfigAware {
 
 	/** The section a rank belongs to: 0 = fields, 1 = constructor, 2 = methods. A conditional member sorts to the END of its own section, never across one. */
 	private static inline function sectionOf(rank: MemberRank): Int {
-		return rank < Constructor ? 0 : rank == Constructor ? 1 : 2;
+		return if (rank < Constructor)
+			0
+		else if (rank == Constructor)
+			1
+		else
+			2;
 	}
 
 	/**
@@ -955,7 +964,7 @@ final class MemberOrder implements Check implements ConfigAware {
 		for (line in text.split('\n')) {
 			final trimmed: String = StringTools.ltrim(line);
 			if (trimmed == '') continue;
-			if (!StringTools.startsWith(trimmed, '#')) return false;
+			if (!trimmed.startsWith('#')) return false;
 			if (RefactorSupport.textHasCommentMarker(trimmed)) return false;
 		}
 		return true;
@@ -1041,7 +1050,12 @@ final class MemberOrder implements Check implements ConfigAware {
 		final gb: Int = pinnedOrdinal(b, groupFirst, section);
 		if (ga != gb) return ga - gb;
 		final branch: Int = compareBranch(a, b);
-		return branch != 0 ? branch : a.rank != b.rank ? a.rank - b.rank : a.index - b.index;
+		return if (branch != 0)
+			branch
+		else if (a.rank != b.rank)
+			a.rank - b.rank
+		else
+			a.index - b.index;
 	}
 
 	/**
@@ -1141,7 +1155,7 @@ final class MemberOrder implements Check implements ConfigAware {
 		var cursor: Int = gapFrom;
 		for (seg in source.substring(gapFrom, gapTo).split('\n')) {
 			final t: String = StringTools.trim(seg);
-			if (firstIfStart < 0 && StringTools.startsWith(t, '#if')) firstIfStart = cursor;
+			if (firstIfStart < 0 && t.startsWith('#if')) firstIfStart = cursor;
 			if (t == '#end') lastEndTo = cursor + seg.length;
 			cursor += seg.length + 1;
 		}
@@ -1206,8 +1220,8 @@ final class MemberOrder implements Check implements ConfigAware {
 		while (pos < constructSpan.to) {
 			final nl: Int = source.indexOf('\n', pos);
 			final end: Int = nl < 0 || nl > constructSpan.to ? constructSpan.to : nl;
-			final line: String = StringTools.trim(source.substring(pos, end));
-			for (k in keywords) if (StringTools.startsWith(line, k)) {
+			final line: String = source.substring(pos, end).trim();
+			for (k in keywords) if (line.startsWith(k)) {
 				out.push({ at: pos, text: line });
 				break;
 			}
@@ -1299,7 +1313,7 @@ final class MemberOrder implements Check implements ConfigAware {
 	 */
 	private static function tailOfLineBlank(source: String, at: Int): Bool {
 		final nl: Int = source.indexOf('\n', at);
-		return StringTools.trim(source.substring(at, nl < 0 ? source.length : nl)) == '';
+		return source.substring(at, nl < 0 ? source.length : nl).trim() == '';
 	}
 
 

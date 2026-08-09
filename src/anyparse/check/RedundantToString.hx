@@ -3,11 +3,9 @@ package anyparse.check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
@@ -164,7 +162,7 @@ final class RedundantToString implements Check implements DefaultOff {
 	private static function contextFor(plugin: GrammarPlugin, source: String, seams: Seams, index: SymbolIndex): Null<Ctx> {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return null;
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		return {
 			root: tree,
 			source: source,
@@ -365,8 +363,12 @@ final class RedundantToString implements Check implements DefaultOff {
 		if (newExprKind != null && receiver.kind == newExprKind)
 			return { typeName: TypeResolver.simpleNominalName(receiver.name), nonNull: true };
 		final literalType: Null<String> = seams.literalTypeNames[receiver.kind];
-		if (literalType != null) return { typeName: literalType, nonNull: true };
-		return receiver.kind == seams.callKind ? callReceiver(receiver, callSpan, ctx) : unresolved;
+		return if (literalType != null)
+			{ typeName: literalType, nonNull: true }
+		else if (receiver.kind == seams.callKind)
+			callReceiver(receiver, callSpan, ctx)
+		else
+			unresolved;
 	}
 
 	/**
@@ -443,8 +445,12 @@ final class RedundantToString implements Check implements DefaultOff {
 		final span: Span = blockSpan;
 		if (span.from != callSpan.from - 2 || span.to != callSpan.to + 1) return null;
 		final literalSource: String = source.substring(literalSpan.from, literalSpan.to);
-		if (literalSource.indexOf('\\x') != -1 || literalSource.indexOf('\\u') != -1) return null;
-		return span.to < source.length && isIdentContinue(source.fastCodeAt(span.to)) ? null : { span: span, text: '$$$name' };
+		return if (literalSource.indexOf('\\x') != -1 || literalSource.indexOf('\\u') != -1)
+			null
+		else if (span.to < source.length && isIdentContinue(source.fastCodeAt(span.to)))
+			null
+		else
+			{ span: span, text: '$$$name' };
 	}
 
 	/**

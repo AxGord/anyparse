@@ -4,12 +4,13 @@ import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan.NegationSeams;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
+
+using Lambda;
 
 /**
  * Flags a loop (`for` / `while` / `do … while`) whose braced body's LAST statement is
@@ -170,8 +171,7 @@ final class GuardContinue implements Check {
 		if (support == null) return null;
 		final loopKinds: Array<String> = shape.loopStatementKinds ?? [];
 		final doWhileKinds: Array<String> = shape.doWhileLoopKinds ?? [];
-		if (loopKinds.length == 0 && doWhileKinds.length == 0) return null;
-		return {
+		return loopKinds.length == 0 && doWhileKinds.length == 0 ? null : {
 			loopKinds: loopKinds,
 			doWhileKinds: doWhileKinds,
 			ifKinds: ifKinds,
@@ -410,7 +410,12 @@ final class GuardContinue implements Check {
 	/** The loop's body block: the LAST child for a body-last loop (`for` / `while`), the FIRST for a body-first `do … while`. */
 	private static function loopBody(loop: QueryNode, s: Seams): Null<QueryNode> {
 		final kids: Array<QueryNode> = loop.children;
-		return kids.length == 0 ? null : s.doWhileKinds.contains(loop.kind) ? kids[0] : kids[kids.length - 1];
+		return if (kids.length == 0)
+			null
+		else if (s.doWhileKinds.contains(loop.kind))
+			kids[0]
+		else
+			kids[kids.length - 1];
 	}
 
 
@@ -499,7 +504,7 @@ final class GuardContinue implements Check {
 	private static function freshName(name: String, root: QueryNode, done: Array<LocalRename>): Null<String> {
 		for (k in FRESH_NAME_FIRST ... FRESH_NAME_LIMIT) {
 			final candidate: String = '$name$k';
-			if (!namedAnywhere(root, candidate) && !Lambda.exists(done, r -> r.newName == candidate)) return candidate;
+			if (!namedAnywhere(root, candidate) && !done.exists(r -> r.newName == candidate)) return candidate;
 		}
 		return null;
 	}
@@ -595,7 +600,7 @@ final class GuardContinue implements Check {
 	}
 
 	/** The local declaration node a top-level statement holds, or null — see `RefactorSupport.topLevelDeclaredNode`. */
-	private static function declaredNode(stmt: QueryNode, s: Seams): Null<QueryNode> {
+	private static inline function declaredNode(stmt: QueryNode, s: Seams): Null<QueryNode> {
 		return RefactorSupport.topLevelDeclaredNode(stmt, s.localDeclKinds, s.localDeclExprKinds, s.metaKinds);
 	}
 

@@ -2,6 +2,7 @@ package anyparse.core;
 
 import anyparse.format.IndentChar;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -412,7 +413,7 @@ fitems.length > 1
 	 */
 	private static function capturedIndent(marker: Doc, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>): Null<Int> {
 		final entry: Null<{ node: Doc, crosses: Bool, ?indent: Int }> = decisions.find(e -> e.node == marker && e.crosses);
-		return entry == null ? null : entry.indent;
+		return entry?.indent;
 	}
 
 	/**
@@ -681,7 +682,7 @@ fitems.length > 1
 	 */
 	private static function capturedNestBase(marker: Doc, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>): Null<Int> {
 		final entry: Null<{ node: Doc, crosses: Bool, ?indent: Int }> = decisions.find(e -> e.node == marker && !e.crosses);
-		return entry == null ? null : entry.indent;
+		return entry?.indent;
 	}
 
 	/**
@@ -734,7 +735,7 @@ fitems.length > 1
 	private static function flatPrefixToOpenDelim(seg: Doc): Null<Int> {
 		final flat: String = DocMeasure.flatText(seg);
 		for (i in 0...flat.length) {
-			final c: Int = StringTools.fastCodeAt(flat, i);
+			final c: Int = flat.fastCodeAt(i);
 			if (c == '('.code || c == '['.code || c == '{'.code) return i + 1;
 		}
 		return null;
@@ -812,9 +813,12 @@ fitems.length > 1
 	 * a `WrapBoundary` whose force-flat a plain `Flatten` would not survive.
 	 */
 	private static function flattenIfFittingCall(operand: Doc, contColUpper: Int, width: Int): Doc {
-		return !DocMeasure.operandIsCall(operand)
-			? operand
-			: contColUpper + DocMeasure.flatTokenWidth(operand) <= width ? HardFlatten(operand) : operand;
+		return if (!DocMeasure.operandIsCall(operand))
+			operand
+		else if (contColUpper + DocMeasure.flatTokenWidth(operand) <= width)
+			HardFlatten(operand)
+		else
+			operand;
 	}
 
 	/** True iff `d`'s subtree contains any `CollapseAddProbe` marker. */
@@ -921,7 +925,12 @@ fitems.length > 1
 			case WrapBoundary(Group(IfFullLineExceeds(_, _, fl))): fl;
 			case _: null;
 		};
-		return flat == null ? null : subtreeOpens(flat, decisions) ? flat : null;
+		return if (flat == null)
+			null
+		else if (subtreeOpens(flat, decisions))
+			flat
+		else
+			null;
 	}
 
 	/**
@@ -969,18 +978,14 @@ fitems.length > 1
 	/** True iff `d`'s subtree contains a candidate paren that opens. */
 	private static function subtreeOpens(d: Doc, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>): Bool {
 		var found: Bool = false;
-		walk(d, node -> {
-			if (!found && isCandidate(node) && opens(node, decisions)) found = true;
-		});
+		walk(d, node -> if (!found && isCandidate(node) && opens(node, decisions)) found = true);
 		return found;
 	}
 
 	/** True iff `d`'s subtree contains any collapse-candidate paren. */
 	private static function hasCandidate(d: Doc): Bool {
 		var found: Bool = false;
-		walk(d, node -> {
-			if (!found && isCandidate(node)) found = true;
-		});
+		walk(d, node -> if (!found && isCandidate(node)) found = true);
 		return found;
 	}
 

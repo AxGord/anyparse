@@ -4,9 +4,7 @@ import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Address;
-import anyparse.query.Address.AddressResult;
 import anyparse.query.QueryNode;
-import anyparse.query.Address.AddressSpec;
 
 /**
  * Unit tests for the shared target-address resolver (`Address.resolve`) — the
@@ -230,8 +228,8 @@ class AddressTest extends Test {
 	public function testDescribePrefixesNamedAncestor(): Void {
 		// Two same-named locals in different functions — the enclosing FnMember
 		// segment disambiguates without an ordinal.
-		final src: String =
-			'class C {\n\tfunction f():Void {\n\t\tvar v = 1;\n\t\ttrace(v);\n\t}\n\tfunction g():Void {\n\t\tvar v = 2;\n\t\ttrace(v);\n\t}\n}\n';
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar v = 1;\n\t\ttrace(v);\n\t}\n\tfunction g():Void {\n\t\tvar v = 2;\n'
+			+ '\t\ttrace(v);\n\t}\n}\n';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: QueryNode = plugin.parseFile(src);
 		switch Address.resolve(tree, src, plugin, { select: 'FnMember:g >> VarStmt:v' }) {

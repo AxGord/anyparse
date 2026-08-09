@@ -4,8 +4,6 @@ import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.LayoutMetrics;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
@@ -13,6 +11,8 @@ import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
+
+using StringTools;
 
 /**
  * Flags a switch-case branch whose body is EXACTLY one else-less `if` wrapping the
@@ -314,12 +314,16 @@ final class PreferCaseGuard implements Check implements RiskyFix {
 	private static function patternClass(scan: Scan, pattern: QueryNode): PatternClass {
 		if (pattern.children.length != 1) return Refused;
 		final node: QueryNode = pattern.children[0];
-		if (scan.seams.stringLiteralKinds.contains(node.kind))
-			return scan.seams.stringFold.literalOf(node, scan.source) == null ? Refused : LiteralPattern;
-		if (numericLiteral(scan, node)) return LiteralPattern;
-		if (node.kind == scan.seams.negationKind && node.children.length == 1 && numericLiteral(scan, node.children[0]))
-			return LiteralPattern;
-		return node.kind == scan.seams.fieldAccessKind && !mayNameExhaustiveType(scan, node) ? DottedPattern : Refused;
+		return if (scan.seams.stringLiteralKinds.contains(node.kind))
+			scan.seams.stringFold.literalOf(node, scan.source) == null ? Refused : LiteralPattern
+		else if (numericLiteral(scan, node))
+			LiteralPattern
+		else if (node.kind == scan.seams.negationKind && node.children.length == 1 && numericLiteral(scan, node.children[0]))
+			LiteralPattern
+		else if (node.kind == scan.seams.fieldAccessKind && !mayNameExhaustiveType(scan, node))
+			DottedPattern
+		else
+			Refused;
 	}
 
 	/**
@@ -440,13 +444,14 @@ final class PreferCaseGuard implements Check implements RiskyFix {
 		final patternSpan: Null<Span> = own.patterns[own.patterns.length - 1].span;
 		if (branchSpan == null || ifSpan == null || condSpan == null || patternSpan == null) return null;
 		if (repeatedLater(keys, at)) return null;
-		if (StringTools.trim(source.substring(patternSpan.to, ifSpan.from)) != LABEL_TERMINATOR) return null;
+		if (source.substring(patternSpan.to, ifSpan.from).trim() != LABEL_TERMINATOR) return null;
 		final body: Null<String> = bodyText(scan, ifNode.children[1]);
 		if (body == null) return null;
 		final guard: String = ' if (${source.substring(condSpan.from, condSpan.to)}):';
 		final label: String = source.substring(branchSpan.from, patternSpan.to) + guard;
-		if (columnOf(scan, branchSpan.from) + collapsedWidth(label) > scan.metrics.lineWidth) return null;
-		return { branch: branchSpan, edit: new Span(patternSpan.to, ifSpan.to), text: '$guard $body' };
+		return columnOf(scan, branchSpan.from) + collapsedWidth(label) > scan.metrics.lineWidth
+			? null
+			: { branch: branchSpan, edit: new Span(patternSpan.to, ifSpan.to), text: '$guard $body' };
 	}
 
 	/**
@@ -497,7 +502,7 @@ final class PreferCaseGuard implements Check implements RiskyFix {
 		var cols: Int = 0;
 		var pending: Bool = false;
 		for (i in 0...text.length) {
-			final c: Int = StringTools.fastCodeAt(text, i);
+			final c: Int = text.fastCodeAt(i);
 			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code) {
 				pending = cols > 0;
 			} else {

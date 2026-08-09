@@ -3,7 +3,6 @@ package anyparse.check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -134,7 +133,7 @@ final class RedundantCastType implements Check implements DefaultOff {
 		final checkedCastKind: Null<String> = shape.checkedCastKind;
 		if (checkedCastKind == null) return [];
 		final castKind: String = checkedCastKind;
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		if (provider == null) return [];
 		final typed: TypeInfoProvider = provider;
 		// Built on the FIRST (c) candidate only — the argument slot is the sole position needing it,
@@ -201,9 +200,12 @@ final class RedundantCastType implements Check implements DefaultOff {
 			node: QueryNode, parent: Null<QueryNode>, enclosingFn: Null<QueryNode>, enclosingContainer: Null<QueryNode>
 		): Void {
 			if (opaqueKinds.contains(node.kind)) return;
-			final nextFn: Null<QueryNode> = lambdaKinds.contains(node.kind)
-				? null
-				: ownsFunctionBody(node, functionKinds, bodyKinds) ? node : enclosingFn;
+			final nextFn: Null<QueryNode> = if (lambdaKinds.contains(node.kind))
+				null
+			else if (ownsFunctionBody(node, functionKinds, bodyKinds))
+				node
+			else
+				enclosingFn;
 			final nextContainer: Null<QueryNode> = containerKinds.contains(node.kind) ? node : enclosingContainer;
 			final span: Null<Span> = node.span;
 			if (node.kind == castKind && span != null && parent != null) {
@@ -260,12 +262,16 @@ final class RedundantCastType implements Check implements DefaultOff {
 		final shape: RefShape = types.shape;
 		final declKinds: Array<String> = (shape.localDeclKinds ?? []).concat(shape.fieldDeclKinds ?? []);
 		final isFirstChild: Bool = parent.children.length > 0 && parent.children[0] == castNode;
-		if (declKinds.contains(parent.kind) && isFirstChild) return declAnnotation(parent, castNode, types.declaredTypeSources);
-		if ((shape.valueReturnKinds ?? []).contains(parent.kind) && isFirstChild)
-			return enclosingFn == null ? null : CheckScan.returnAnnotationText(enclosingFn, shape, types.source);
-		if (parent.kind == shape.assignKind && parent.children.length == 2 && parent.children[1] == castNode)
-			return assignTargetAnnotation(parent.children[0], enclosingContainer, root, types);
-		return parent.kind == shape.callKind ? paramAnnotation(castNode, parent, root, types, resolutionIndex) : null;
+		return if (declKinds.contains(parent.kind) && isFirstChild)
+			declAnnotation(parent, castNode, types.declaredTypeSources)
+		else if ((shape.valueReturnKinds ?? []).contains(parent.kind) && isFirstChild)
+			enclosingFn == null ? null : CheckScan.returnAnnotationText(enclosingFn, shape, types.source)
+		else if (parent.kind == shape.assignKind && parent.children.length == 2 && parent.children[1] == castNode)
+			assignTargetAnnotation(parent.children[0], enclosingContainer, root, types)
+		else if (parent.kind == shape.callKind)
+			paramAnnotation(castNode, parent, root, types, resolutionIndex)
+		else
+			null;
 	}
 
 	/**

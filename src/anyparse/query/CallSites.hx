@@ -4,7 +4,6 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
-import anyparse.runtime.Span.Position;
 
 using Lambda;
 
@@ -192,7 +191,8 @@ final class CallSites {
 		if (error == null) {
 			final dangling: Null<RefHit> = boundReads.find(h -> !classified.consumedFroms.contains(h.span.from));
 			if (dangling != null)
-				error = '"$name" is referenced as a value (not called) at ${posOf(source, dangling.span)} — indirect calls through a captured reference cannot be tracked';
+				error = '"$name" is referenced as a value (not called) at ${posOf(source, dangling.span)}'
+					+ ' — indirect calls through a captured reference cannot be tracked';
 		}
 		if (error == null) error = fieldAccessValueCapture(tree, source, name, classified.thisSiteCount);
 		return error != null ? CErr(error) : COk(sites);
@@ -218,14 +218,16 @@ final class CallSites {
 				if (recv.kind == 'IdentExpr' && recv.name == 'this')
 					thisAccess++;
 				else
-					error = '"$name" is referenced as a value (not called) at ${posOf(source, node.span)} — indirect calls through a captured reference cannot be tracked';
+					error = '"$name" is referenced as a value (not called) at ${posOf(source, node.span)}'
+						+ ' — indirect calls through a captured reference cannot be tracked';
 			}
 			for (c in node.children) scan(c);
 		}
 		scan(tree);
 		return error ?? (
 			thisAccess > thisSiteCount
-				? '"$name" is referenced as a value (not called) via `this.$name` — indirect calls through a captured reference cannot be tracked'
+				? '"$name" is referenced as a value (not called) via `this.$name'
+					+ '` — indirect calls through a captured reference cannot be tracked'
 				: null
 		);
 	}
@@ -243,7 +245,8 @@ final class CallSites {
 		final clashes: Int = countNameDecls(tree, name);
 		if (clashes > 1)
 			return CErr(
-				'cannot prove all call sites target the local function "$name": another declaration named "$name" exists — refused when a local-function name is ambiguous'
+				'cannot prove all call sites target the local function "$name": another declaration named "$name'
+				+ '" exists — refused when a local-function name is ambiguous'
 			);
 
 		final sites: Array<QueryNode> = [];
@@ -256,9 +259,11 @@ final class CallSites {
 					case CalleeBare(_):
 						sites.push(node);
 					case CalleeThis:
-						error = 'cannot resolve `this.$name(...)` at ${posOf(source, node.span)} — `$name` is a local function, not a method';
+						error = 'cannot resolve `this.$name(...)` at ${posOf(source, node.span)} — `$name'
+							+ '` is a local function, not a method';
 					case CalleeOtherReceiver(recv):
-						error = 'cannot resolve receiver-qualified call `$recv.$name(...)` at ${posOf(source, node.span)} — `$name` is a local function and cannot be called through a receiver';
+						error = 'cannot resolve receiver-qualified call `$recv.$name(...)` at ${posOf(source, node.span)} — `$name'
+							+ '` is a local function and cannot be called through a receiver';
 					case CalleeNone:
 				}
 			}
@@ -273,7 +278,8 @@ final class CallSites {
 		// exactly one such ident (its callee); a surplus is a non-call
 		// value reference whose indirect calls cannot be tracked.
 		if (error == null && countIdentExprNamed(tree, name) > sites.length)
-			error = 'the local function "$name" is referenced as a value (not called) — indirect calls through a captured reference cannot be tracked';
+			error = 'the local function "$name'
+				+ '" is referenced as a value (not called) — indirect calls through a captured reference cannot be tracked';
 		return error != null ? CErr(error) : COk(sites);
 	}
 
@@ -289,13 +295,11 @@ final class CallSites {
 			final span: Null<Span> = callee.span;
 			return span == null ? CalleeNone : CalleeBare(span);
 		}
-		if (callee.kind == 'FieldAccess' && callee.name == name && callee.children.length > 0) {
-			final recv: QueryNode = callee.children[0];
-			if (recv.kind == 'IdentExpr' && recv.name == 'this') return CalleeThis;
-			final recvName: String = recv.name ?? recv.kind;
-			return CalleeOtherReceiver(recvName);
-		}
-		return CalleeNone;
+		if (!(callee.kind == 'FieldAccess' && callee.name == name && callee.children.length > 0)) return CalleeNone;
+		final recv: QueryNode = callee.children[0];
+		if (recv.kind == 'IdentExpr' && recv.name == 'this') return CalleeThis;
+		final recvName: String = recv.name ?? recv.kind;
+		return CalleeOtherReceiver(recvName);
 	}
 
 	/**
@@ -369,12 +373,15 @@ final class CallSites {
 							sites.push(node);
 							consumedFroms.push(identSpan.from);
 						} else if (!bareBindsElsewhere(identSpan, hits))
-							error = 'cannot prove all call sites target "$name": unresolved call at ${posOf(source, node.span)} — every call site must be resolvable';
+							error = 'cannot prove all call sites target "$name": unresolved call at ${posOf(source, node.span)}'
+								+ ' — every call site must be resolvable';
 					case CalleeThis:
 						sites.push(node);
 						thisSiteCount++;
 					case CalleeOtherReceiver(recv):
-						error = 'cannot resolve receiver-qualified call `$recv.$name(...)` at ${posOf(source, node.span)} — every call site must be resolvable (supported for local functions and methods called only via bare `$name(...)` / `this.$name(...)`)';
+						error = 'cannot resolve receiver-qualified call `$recv.$name(...)` at ${posOf(source, node.span)}'
+							+ ' — every call site must be resolvable (supported for local functions and methods called only via bare `$name'
+							+ '(...)` / `this.$name(...)`)';
 					case CalleeNone:
 				}
 			}

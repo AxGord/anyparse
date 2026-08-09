@@ -2,7 +2,6 @@ package anyparse.query.format;
 
 import anyparse.check.Check.Violation;
 import anyparse.runtime.Span;
-import anyparse.runtime.Span.Position;
 import haxe.Json;
 
 /**
@@ -86,8 +85,8 @@ final class LintFormat {
 		final pos: Null<Position> = posOf(v, sourceOf[v.file] ?? '');
 		return {
 			file: v.file,
-			line: pos != null ? pos.line : null,
-			col: pos != null ? pos.col : null,
+			line: pos?.line,
+			col: pos?.col,
 			severity: v.severity.label(),
 			rule: v.rule,
 			message: v.message
@@ -97,7 +96,7 @@ final class LintFormat {
 	/** Resolve a violation's 1-indexed position, or null when it has no span. */
 	private static function posOf(v: Violation, source: String): Null<Position> {
 		final span: Null<Span> = v.span;
-		return span != null ? span.lineCol(source) : null;
+		return span?.lineCol(source);
 	}
 
 	/** XML-escape an attribute value. */

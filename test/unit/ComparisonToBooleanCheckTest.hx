@@ -29,6 +29,9 @@ import anyparse.runtime.Span;
  */
 class ComparisonToBooleanCheckTest extends Test {
 
+	/** The Bool-returning method every call-arm fixture reads through `o.has(k)`. */
+	private static final BOOL_METHOD: String = 'public function has(k:String):Bool return true;';
+
 	public function testEqTrueFlagged(): Void {
 		final vs: Array<Violation> = violations('class C {\n\tfunction f(x:Bool):Void {\n\t\tvar b = x == true;\n\t}\n}');
 		Assert.equals(1, vs.length);
@@ -215,7 +218,6 @@ class ComparisonToBooleanCheckTest extends Test {
 		// fixture would also trip the written-type-disagreement clause and prove nothing here.
 		Assert.equals(0, violations(typed('#if js\n\tpublic var flag:Bool;\n\t#end', 'var b = o.flag == true;')).length);
 	}
-
 
 	/**
 	 * A receiver type whose SIMPLE NAME is declared in two files is refused CONSERVATIVELY: the
@@ -471,8 +473,22 @@ class ComparisonToBooleanCheckTest extends Test {
 		Assert.equals(1, violationsAcross(files).length);
 	}
 
-	/** The Bool-returning method every call-arm fixture reads through `o.has(k)`. */
-	private static final BOOL_METHOD: String = 'public function has(k:String):Bool return true;';
+	/** The motivating TM shape: `while (true == true) {}` folds to `while (true) {}`. */
+	public function testFixFoldsConstantEqTrueTrue(): Void {
+		Assert.equals(wrap('while (true) {}'), applyFix(wrap('while (true == true) {}')));
+	}
+
+	public function testFixFoldsConstantNeqTrueTrue(): Void {
+		Assert.equals(wrap('var b = false;'), applyFix(wrap('var b = true != true;')));
+	}
+
+	public function testFixFoldsConstantEqFalseTrue(): Void {
+		Assert.equals(wrap('var b = false;'), applyFix(wrap('var b = false == true;')));
+	}
+
+	public function testFixFoldsConstantNeqFalseTrue(): Void {
+		Assert.equals(wrap('var b = true;'), applyFix(wrap('var b = false != true;')));
+	}
 
 	/** A stdlib-`Map` fixture: a `C.f(m:Map<String, String>, k:String)` whose body reads `expr`. */
 	private function mapFixture(expr: String): String {
@@ -522,23 +538,6 @@ class ComparisonToBooleanCheckTest extends Test {
 		var out: String = src;
 		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
 		return out;
-	}
-
-	/** The motivating TM shape: `while (true == true) {}` folds to `while (true) {}`. */
-	public function testFixFoldsConstantEqTrueTrue(): Void {
-		Assert.equals(wrap('while (true) {}'), applyFix(wrap('while (true == true) {}')));
-	}
-
-	public function testFixFoldsConstantNeqTrueTrue(): Void {
-		Assert.equals(wrap('var b = false;'), applyFix(wrap('var b = true != true;')));
-	}
-
-	public function testFixFoldsConstantEqFalseTrue(): Void {
-		Assert.equals(wrap('var b = false;'), applyFix(wrap('var b = false == true;')));
-	}
-
-	public function testFixFoldsConstantNeqFalseTrue(): Void {
-		Assert.equals(wrap('var b = true;'), applyFix(wrap('var b = false != true;')));
 	}
 
 }

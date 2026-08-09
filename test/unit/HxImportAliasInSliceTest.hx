@@ -109,11 +109,11 @@ class HxImportAliasInSliceTest extends HxTestHelpers {
 		Assert.isFalse(out.indexOf(' as isOfType;') >= 0);
 	}
 
-	public function testRoundTripImportAliasInSimple(): Void {
+	public inline function testRoundTripImportAliasInSimple(): Void {
 		roundTrip('import Std.is in isOfType;');
 	}
 
-	public function testRoundTripImportAliasInCondComp(): Void {
+	public inline function testRoundTripImportAliasInCondComp(): Void {
 		roundTrip('import Std.is in isOfType;\n#if (haxe_ver >= 4.2)\nimport Std.isOfType;\n#else\nimport Std.is in isOfType;\n#end\n');
 	}
 
@@ -138,7 +138,7 @@ class HxImportAliasInSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testMixedAsAndInRoundTrip(): Void {
+	public inline function testMixedAsAndInRoundTrip(): Void {
 		roundTrip('import python.lib.socket.Socket as PSocket;\nimport python.lib.Socket in PSocketModule;\n');
 	}
 

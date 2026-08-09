@@ -7,6 +7,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 import anyparse.check.Check.RiskyFix;
@@ -571,7 +572,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * the one context-sensitive construct a benefit-class body can still carry: a `null` argument /
 	 * operand re-typechecks in the CALLER's null-safety mode once inlined.
 	 */
-	private static function isRiskyHere(node: QueryNode, parentKind: String): Bool {
+	private static inline function isRiskyHere(node: QueryNode, parentKind: String): Bool {
 		return node.kind == 'NullLit' && parentKind != 'Eq' && parentKind != 'NotEq' && parentKind != 'NullCoal';
 	}
 
@@ -594,7 +595,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * measurably costs real findings (`@:beta`, `@SuppressWarnings`, `@ignore` on openfl / lime).
 	 */
 	private static inline function inlineNeutralMeta(meta: String): Bool {
-		return !StringTools.startsWith(meta, '@:') || INLINE_NEUTRAL_METAS.contains(meta);
+		return !meta.startsWith('@:') || INLINE_NEUTRAL_METAS.contains(meta);
 	}
 
 }

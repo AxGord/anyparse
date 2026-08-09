@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -10,6 +9,8 @@ import anyparse.runtime.Span;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeInfoProvider;
 import haxe.Exception;
+
+using StringTools;
 
 /**
  * Flags a comparison against a boolean literal — `x == true`, `x != false` and the like —
@@ -126,7 +127,7 @@ final class ComparisonToBoolean implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		// Lazy: the resolution scope reads the configured libraries, and only the two RESOLVED
 		// proofs demand it — after every cheaper arm on every candidate has failed.
 		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
@@ -170,7 +171,7 @@ final class ComparisonToBoolean implements Check {
 		if (maybeEqKind == null || maybeRoot == null) return [];
 		final eqKind: String = maybeEqKind;
 		final root: QueryNode = maybeRoot;
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final file: String = violations[0].file;
 		for (violation in violations) if (violation.file != file)
 			throw new Exception('$RULE_ID: fix() takes ONE file\'s violations, got $file and ${violation.file}');
@@ -332,8 +333,7 @@ final class ComparisonToBoolean implements Check {
 		if (index == null) return null;
 		final resolved: SymbolIndex = index;
 		final recvType: Null<String> = receiverTypeNominal(recv, shape, proof, resolved);
-		if (recvType == null || !memberLookupIsPinned(recvType, member, resolved)) return null;
-		return { index: resolved, recvType: recvType };
+		return recvType == null || !memberLookupIsPinned(recvType, member, resolved) ? null : { index: resolved, recvType: recvType };
 	}
 
 	/**
@@ -577,7 +577,7 @@ final class ComparisonToBoolean implements Check {
 
 	/** The trimmed source text under `span`. */
 	private static inline function spanText(span: Span, source: String): String {
-		return StringTools.trim(source.substring(span.from, span.to));
+		return source.substring(span.from, span.to).trim();
 	}
 
 }

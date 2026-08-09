@@ -1,5 +1,7 @@
 package unit;
 
+using StringTools;
+
 #if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;
@@ -72,12 +74,11 @@ final class CliFixture {
 		final tmpdir: Null<String> = Sys.getEnv('TMPDIR');
 		if (tmpdir != null && tmpdir.length > 0) return stripTrailingSlash(tmpdir);
 		final temp: Null<String> = Sys.getEnv('TEMP');
-		if (temp != null && temp.length > 0) return stripTrailingSlash(temp);
-		return '/tmp';
+		return temp != null && temp.length > 0 ? stripTrailingSlash(temp) : '/tmp';
 	}
 
 	private static inline function stripTrailingSlash(p: String): String {
-		return StringTools.endsWith(p, '/') ? p.substring(0, p.length - 1) : p;
+		return p.endsWith('/') ? p.substring(0, p.length - 1) : p;
 	}
 
 }

@@ -79,8 +79,8 @@ class LoopGuardCheckTest extends Test {
 		// licensed (a null operand makes the two disagree) and `negationIsClean` refuses. The `Int`
 		// twin in the second assertion is the same fixture shape over a licensed nominal and IS
 		// flagged, so what refuses the first is the type gate and not the loop shape.
-		final str: String =
-			'class C {\n\tfunction f(ss:Array<String>, k:String):Void {\n\t\tfor (s in ss) {\n\t\t\tif (s < k) continue;\n\t\t\ttrace(s);\n\t\t}\n\t}\n}';
+		final str: String = 'class C {\n\tfunction f(ss:Array<String>, k:String):Void {\n\t\tfor (s in ss) {\n\t\t\tif (s < k) continue;\n'
+			+ '\t\t\ttrace(s);\n\t\t}\n\t}\n}';
 		Assert.equals(0, violations(str).length);
 		Assert.equals(1, violations(wrap('for (x in xs) {\n\t\t\tif (x < 0) continue;\n\t\t\ttrace(x);\n\t\t}')).length);
 	}
@@ -187,8 +187,8 @@ class LoopGuardCheckTest extends Test {
 	}
 
 	public function testApplyFixByteExact(): Void {
-		final input: String =
-			'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\tfor (x in xs) {\n\t\t\tif (x == 0) continue;\n\t\t\ttrace(x);\n\t\t}\n\t}\n}';
+		final input: String = 'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\tfor (x in xs) {\n\t\t\tif (x == 0) continue;\n'
+			+ '\t\t\ttrace(x);\n\t\t}\n\t}\n}';
 		final expected: String =
 			'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\tfor (x in xs) if (x != 0) {\n\t\t\ttrace(x);\n\t\t}\n\t}\n}';
 		Assert.equals(expected, applyFix(input));
@@ -332,8 +332,8 @@ class LoopGuardCheckTest extends Test {
 
 	public function testHeaderIfCanaryShapeMerged(): Void {
 		final sig: String = 'os:Array<Obj>, allowedType:Bool, name:String';
-		final input: String =
-			'for (o in os) if (!o.locked) {\n\t\t\tif (o is PlayerBase && !(allowedType && name == o.type)) continue;\n\t\t\ttrace(o);\n\t\t}';
+		final input: String = 'for (o in os) if (!o.locked) {\n\t\t\tif (o is PlayerBase && !(allowedType && name == o.type)) continue;\n'
+			+ '\t\t\ttrace(o);\n\t\t}';
 		final merged: String =
 			'for (o in os) if (!o.locked && (!(o is PlayerBase) || allowedType && name == o.type)) {\n\t\t\ttrace(o);\n\t\t}';
 		Assert.equals(wrapIn(sig, merged), applyFix(wrapIn(sig, input)));

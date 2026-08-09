@@ -23,8 +23,9 @@ import anyparse.runtime.Span;
 class TailMergeCheckTest extends Test {
 
 	/** The reference shape: two inner branches whose tails repeat the run after the outer `if`. */
-	private static final REFERENCE_SHAPE: String =
-		'class C {\n\tfunction set_p(v:String):String {\n\t\tif (cond1) {\n\t\t\tif (c2) {\n\t\t\t\twork();\n\t\t\t\thelper(v);\n\t\t\t\treturn v;\n\t\t\t} else if (c3) {\n\t\t\t\twork2();\n\t\t\t\thelper(v);\n\t\t\t\treturn v;\n\t\t\t}\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}';
+	private static final REFERENCE_SHAPE: String = 'class C {\n\tfunction set_p(v:String):String {\n\t\tif (cond1) {\n\t\t\tif (c2) {\n'
+		+ '\t\t\t\twork();\n\t\t\t\thelper(v);\n\t\t\t\treturn v;\n\t\t\t} else if (c3) {\n'
+		+ '\t\t\t\twork2();\n\t\t\t\thelper(v);\n\t\t\t\treturn v;\n\t\t\t}\n\t\t}\n\t\thelper(v);\n' + '\t\treturn v;\n\t}\n}';
 
 	public function testReferenceShapeFlagsBothBranches(): Void {
 		final vs: Array<Violation> = violations(REFERENCE_SHAPE);
@@ -49,8 +50,8 @@ class TailMergeCheckTest extends Test {
 	}
 
 	public function testSingleBranchIfFlagged(): Void {
-		final src: String =
-			'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\thelper(v);\n\t\t\treturn v;\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\thelper(v);\n\t\t\treturn v;\n'
+			+ '\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(1, edits(src).length);
 	}
@@ -212,8 +213,8 @@ class TailMergeCheckTest extends Test {
 	public function testBraceLessOuterBranchFlagged(): Void {
 		// The inner `if` is the un-braced body of the outer one, so it forwards the outer's
 		// fall unchanged — falling out of the inner branch does reach the shared run.
-		final src: String =
-			'class C {\n\tfunction f(v:String):String {\n\t\tif (a)\n\t\t\tif (b) {\n\t\t\t\twork();\n\t\t\t\thelper(v);\n\t\t\t\treturn v;\n\t\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(v:String):String {\n\t\tif (a)\n\t\t\tif (b) {\n\t\t\t\twork();\n\t\t\t\thelper(v);\n'
+			+ '\t\t\t\treturn v;\n\t\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(
 			'class C {\n\tfunction f(v:String):String {\n\t\tif (a)\n\t\t\tif (b) {\n\t\t\t\twork();\n\t\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}',
@@ -224,8 +225,8 @@ class TailMergeCheckTest extends Test {
 	public function testTwoLevelInheritedFallBothFixed(): Void {
 		// The inner branch's fall is the outer block's own trailing run; the outer branch's
 		// fall is inherited from the function body. Both edits apply in ONE pass.
-		final src: String =
-			'class C {\n\tfunction f(v:String):String {\n\t\tif (a) {\n\t\t\tif (b) {\n\t\t\t\tp();\n\t\t\t\thelper(v);\n\t\t\t\treturn v;\n\t\t\t}\n\t\t\thelper(v);\n\t\t\treturn v;\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(v:String):String {\n\t\tif (a) {\n\t\t\tif (b) {\n\t\t\t\tp();\n\t\t\t\thelper(v);\n'
+			+ '\t\t\t\treturn v;\n\t\t\t}\n\t\t\thelper(v);\n\t\t\treturn v;\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}';
 		Assert.equals(2, violations(src).length);
 		Assert.equals(
 			'class C {\n\tfunction f(v:String):String {\n\t\tif (a) {\n\t\t\tif (b) {\n\t\t\t\tp();\n\t\t\t}\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}',
@@ -357,29 +358,29 @@ class TailMergeCheckTest extends Test {
 	}
 
 	public function testUnmatchedCommentReportOnlyNoFix(): Void {
-		final src: String =
-			'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\t// cleanup\n\t\t\thelper(v);\n\t\t\treturn v;\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\t// cleanup\n\t\t\thelper(v);\n'
+			+ '\t\t\treturn v;\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
 	}
 
 	public function testMatchedCommentFixApplies(): Void {
-		final src: String =
-			'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\t// cleanup\n\t\t\thelper(v);\n\t\t\treturn v;\n\t\t}\n\t\t// cleanup\n\t\thelper(v);\n\t\treturn v;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\t// cleanup\n\t\t\thelper(v);\n'
+			+ '\t\t\treturn v;\n\t\t}\n\t\t// cleanup\n\t\thelper(v);\n\t\treturn v;\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(1, edits(src).length);
 	}
 
 	public function testTrailingCommentAfterTailReportOnly(): Void {
-		final src: String =
-			'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\thelper(v);\n\t\t\treturn v; // done\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\thelper(v);\n'
+			+ '\t\t\treturn v; // done\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
 	}
 
 	public function testLongestSuffixMatched(): Void {
-		final src: String =
-			'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\tp();\n\t\t\tq();\n\t\t\tr();\n\t\t\treturn v;\n\t\t}\n\t\tq();\n\t\tr();\n\t\treturn v;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\tp();\n\t\t\tq();\n\t\t\tr();\n'
+			+ '\t\t\treturn v;\n\t\t}\n\t\tq();\n\t\tr();\n\t\treturn v;\n\t}\n}';
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.equals('these 3 statements repeat the tail that follows the if — drop them and fall through', vs[0].message);

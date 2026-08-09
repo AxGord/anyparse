@@ -109,8 +109,8 @@ class HxCondVarInitSliceTest extends HxTestHelpers {
 	 * blocks and drops the blank regardless of this field's position.
 	 */
 	public function testBlankLineAfterTryCatchInitializerSurvives(): Void {
-		final src: String =
-			'class C {\n\tfunction f():Void {\n\t\tfinal a:Int = try {\n\t\t\tg();\n\t\t} catch (e:Exception) {\n\t\t\th();\n\t\t}\n\n\t\tk();\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfinal a:Int = try {\n\t\t\tg();\n\t\t} catch (e:Exception) {\n'
+			+ '\t\t\th();\n\t\t}\n\n\t\tk();\n\t}\n}';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(TRIVIA_CONFIG);
 		opts.finalNewline = false;
 		Assert.equals(src, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts));

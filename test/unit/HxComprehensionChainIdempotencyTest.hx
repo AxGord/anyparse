@@ -29,8 +29,8 @@ final class HxComprehensionChainIdempotencyTest extends Test {
 
 	/** A `[for...].concat([for...]).join('\n')` method chain formats to a fixed point (write(write(x)) == write(x)). */
 	public function testConcatJoinComprehensionChainIsIdempotent(): Void {
-		final src: String =
-			'class M {\n\tfunction f() {\n\t\t_row.firstValue = [ for (a in coll.items)\n\t\t\tif (n++ < LIMIT) a.name\n\t\t].concat(\n\t\t\t[ for (b in other.items) if (n++ < LIMIT) b.name ]\n\t\t).join(\'\\n\');\n\t}\n}';
+		final src: String = 'class M {\n\tfunction f() {\n\t\t_row.firstValue = [ for (a in coll.items)\n\t\t\tif (n++ < LIMIT) a.name\n'
+			+ '\t\t].concat(\n\t\t\t[ for (b in other.items) if (n++ < LIMIT) b.name ]\n\t\t).join(\'\\n\');\n\t}\n}';
 		final once: String = triviaWrite(src);
 		Assert.equals(once, triviaWrite(once));
 	}

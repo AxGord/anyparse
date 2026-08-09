@@ -97,28 +97,28 @@ class HxNumericSeparatorSliceTest extends HxTestHelpers {
 
 	// ======== Writer normalisation: strip `_` before typed suffix ========
 
-	public function testWriterStripsIntSuffixUnderscore(): Void {
+	public inline function testWriterStripsIntSuffixUnderscore(): Void {
 		writerEquals(
 			'class C { var f:Int = 1_2_0_i32; }', 'class C {\n\tvar f:Int = 1_2_0i32;\n}\n',
 			'`1_2_0_i32` → `1_2_0i32` (strip underscore before int suffix)'
 		);
 	}
 
-	public function testWriterStripsFloatSuffixUnderscore(): Void {
+	public inline function testWriterStripsFloatSuffixUnderscore(): Void {
 		writerEquals(
 			'class C { var f:Float = 1_2.3_4_f64; }', 'class C {\n\tvar f:Float = 1_2.3_4f64;\n}\n',
 			'`1_2.3_4_f64` → `1_2.3_4f64` (strip underscore before float suffix)'
 		);
 	}
 
-	public function testWriterStripsHexSuffixUnderscore(): Void {
+	public inline function testWriterStripsHexSuffixUnderscore(): Void {
 		writerEquals(
 			'class C { var f:Int = 0xFF_FF_i32; }', 'class C {\n\tvar f:Int = 0xFF_FFi32;\n}\n',
 			'`0xFF_FF_i32` → `0xFF_FFi32` (strip underscore before hex suffix)'
 		);
 	}
 
-	public function testWriterPreservesInteriorUnderscores(): Void {
+	public inline function testWriterPreservesInteriorUnderscores(): Void {
 		// The strip only targets the `_` IMMEDIATELY before the suffix —
 		// interior digit separators stay intact.
 		writerEquals(
@@ -126,7 +126,7 @@ class HxNumericSeparatorSliceTest extends HxTestHelpers {
 		);
 	}
 
-	public function testWriterPreservesBareSuffix(): Void {
+	public inline function testWriterPreservesBareSuffix(): Void {
 		// `12i32` has no underscore to strip — emit verbatim.
 		writerEquals('class C { var f:Int = 12i32; }', 'class C {\n\tvar f:Int = 12i32;\n}\n', 'bare-suffix `12i32` unchanged');
 	}

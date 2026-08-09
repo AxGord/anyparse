@@ -103,7 +103,7 @@ class MagicNumberCheckTest extends Test {
 		// End-to-end: an apqlint.json discovered by walking up adds 5000 to the
 		// exempt set, so a literal the check would otherwise flag is left alone.
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
-		final base: String = (tmp != null && tmp.length > 0) ? tmp : '/tmp';
+		final base: String = tmp != null && tmp.length > 0 ? tmp : '/tmp';
 		final dir: String = '$base/anyparse_mn_cfg_${Sys.time()}';
 		sys.FileSystem.createDirectory(dir);
 		sys.io.File.saveContent('$dir/apqlint.json', '{"rules":{"magic-number":{"ignore":[5000]}}}');
@@ -165,7 +165,7 @@ class MagicNumberCheckTest extends Test {
 	public function testRespectsCheckstyleIgnoreFromDisk(): Void {
 		// A checkstyle.json MagicNumber.ignoreNumbers exempts 5000 the check would otherwise flag.
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
-		final base: String = (tmp != null && tmp.length > 0) ? tmp : '/tmp';
+		final base: String = tmp != null && tmp.length > 0 ? tmp : '/tmp';
 		final dir: String = '$base/anyparse_mn_cs_${Sys.time()}';
 		sys.FileSystem.createDirectory(dir);
 		sys.io.File.saveContent('$dir/checkstyle.json', '{"checks":[{"type":"MagicNumber","props":{"ignoreNumbers":[-1,0,1,2,5000]}}]}');

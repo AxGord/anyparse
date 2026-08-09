@@ -84,7 +84,7 @@ class TransformCodegen {
 			name: fn.fnName,
 			access: [APrivate, AStatic],
 			doc: 'Deep transform of `${fn.typePath}`: recurse each grammar-typed '
-				+ 'child via its own `_transform`, rebuild this node, then apply ' + 'the matching `visit` hook if set.',
+				+ 'child via its own `_transform`, rebuild this node, then apply the matching `visit` hook if set.',
 			kind: FFun({ args: args, ret: fn.paramCT, expr: fn.body }),
 			pos: Context.currentPos(),
 		};

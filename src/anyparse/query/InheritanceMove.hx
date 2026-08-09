@@ -7,6 +7,7 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
 using Lambda;
 
 /** Move direction along the inheritance axis. */
@@ -76,7 +77,7 @@ final class InheritanceMove {
 	];
 
 	/** Move `member` from the subclass `subType` up to its superclass `superType`. */
-	public static function pullUp(
+	public static inline function pullUp(
 		srcFile: String, subType: String, member: String, superType: String, scopeFiles: Array<{ file: String, source: String }>,
 		plugin: GrammarPlugin
 	): MoveResult {
@@ -84,7 +85,7 @@ final class InheritanceMove {
 	}
 
 	/** Move `member` from the superclass `superType` down to a subclass `subType`. */
-	public static function pushDown(
+	public static inline function pushDown(
 		srcFile: String, superType: String, member: String, subType: String, scopeFiles: Array<{ file: String, source: String }>,
 		plugin: GrammarPlugin
 	): MoveResult {
@@ -164,15 +165,16 @@ final class InheritanceMove {
 	private static function memberRefusal(
 		m: Resolved, memberName: String, targetType: String, targetDecl: TypeDeclMatch, targetSource: String
 	): Null<String> {
-		return memberName == 'new'
-			? 'cannot move a constructor'
-			: m.isStatic
-				? '"$memberName" is static — inheritance moves cover instance members only'
-				: m.isOverride
-					? '"$memberName" is an override — move the base declaration instead'
-					: resolveMember(targetDecl, memberName, targetSource) != null
-						? 'type "$targetType" already declares a member "$memberName"'
-						: null;
+		return if (memberName == 'new')
+			'cannot move a constructor'
+		else if (m.isStatic)
+			'"$memberName" is static — inheritance moves cover instance members only'
+		else if (m.isOverride)
+			'"$memberName" is an override — move the base declaration instead'
+		else if (resolveMember(targetDecl, memberName, targetSource) != null)
+			'type "$targetType" already declares a member "$memberName"'
+		else
+			null;
 	}
 
 	/**
@@ -221,8 +223,10 @@ final class InheritanceMove {
 		}
 
 		final advisory: String = dir == Up
-			? 'pulled "$memberName" up to "$targetType" — subclass access is preserved by inheritance; verify no subclass override collides.'
-			: 'pushed "$memberName" down to "$targetType" — callers holding a superclass-typed receiver no longer compile (loud); verify none remain.';
+			? 'pulled "$memberName" up to "$targetType'
+				+ '" — subclass access is preserved by inheritance; verify no subclass override collides.'
+			: 'pushed "$memberName" down to "$targetType'
+				+ '" — callers holding a superclass-typed receiver no longer compile (loud); verify none remain.';
 		return Ok(changes, advisory);
 	}
 
@@ -329,8 +333,8 @@ final class InheritanceMove {
 	 */
 	private static function cutSpanOf(source: String, groupSpan: Span): Span {
 		final lineCut: Span = RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, groupSpan));
-		final blankBefore: Bool = lineCut.from >= 2 && StringTools.fastCodeAt(source, lineCut.from - 2) == '\n'.code;
-		final blankAfter: Bool = lineCut.to < source.length && StringTools.fastCodeAt(source, lineCut.to) == '\n'.code;
+		final blankBefore: Bool = lineCut.from >= 2 && source.fastCodeAt(lineCut.from - 2) == '\n'.code;
+		final blankAfter: Bool = lineCut.to < source.length && source.fastCodeAt(lineCut.to) == '\n'.code;
 		return blankBefore && blankAfter ? new Span(lineCut.from, lineCut.to + 1) : lineCut;
 	}
 
@@ -339,15 +343,15 @@ final class InheritanceMove {
 		final bodySpan: Span = decl.nameNode.span ?? decl.fullSpan;
 		var bodyClose: Int = bodySpan.to - 1;
 		if (bodyClose >= source.length) bodyClose = source.length - 1;
-		while (bodyClose >= bodySpan.from && RefactorSupport.isSpace(StringTools.fastCodeAt(source, bodyClose))) bodyClose--;
-		return bodyClose < bodySpan.from || StringTools.fastCodeAt(source, bodyClose) != '}'.code ? null : bodyClose;
+		while (bodyClose >= bodySpan.from && RefactorSupport.isSpace(source.fastCodeAt(bodyClose))) bodyClose--;
+		return bodyClose < bodySpan.from || source.fastCodeAt(bodyClose) != '}'.code ? null : bodyClose;
 	}
 
 	/** Strip leading / trailing newlines from a cut block. Mirrors `MoveMember`. */
 	private static function trimBlankEdges(block: String): String {
 		var from: Int = 0;
 		while (from < block.length) {
-			final c: Int = StringTools.fastCodeAt(block, from);
+			final c: Int = block.fastCodeAt(from);
 			if (c == '\n'.code || c == '\r'.code)
 				from++
 			else
@@ -355,7 +359,7 @@ final class InheritanceMove {
 		}
 		var to: Int = block.length;
 		while (to > from) {
-			final c: Int = StringTools.fastCodeAt(block, to - 1);
+			final c: Int = block.fastCodeAt(to - 1);
 			if (c == '\n'.code || c == '\r'.code)
 				to--
 			else

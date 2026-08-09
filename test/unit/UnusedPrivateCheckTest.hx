@@ -376,8 +376,8 @@ class UnusedPrivateCheckTest extends Test {
 	 * hand-removed) and asserts the rule deletes exactly that constructor.
 	 */
 	public function testEmptyCtorOfUtilityClassDeleted(): Void {
-		final src: String =
-			'class DashLineUtil {\n\tpublic static var gap:Float = 4;\n\tprivate static var thickness:Float = 2;\n\tpublic static function draw() { thickness += gap; }\n\tprivate function new() {}\n}';
+		final src: String = 'class DashLineUtil {\n\tpublic static var gap:Float = 4;\n\tprivate static var thickness:Float = 2;\n'
+			+ '\tpublic static function draw() { thickness += gap; }\n\tprivate function new() {}\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
 		final vs: Array<Violation> = check.run([{ file: 'DashLineUtil.hx', source: src }], new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
@@ -408,8 +408,8 @@ class UnusedPrivateCheckTest extends Test {
 	 * a referenced member so the only candidate edit is the constructor itself.
 	 */
 	public function testEmptyCtorKeptWhenFileHasConditional(): Void {
-		final src: String =
-			'class U {\n\tpublic static function draw() { dbg(); }\n\tprivate function new() {}\n\t#if debug\n\tstatic function dbg() { trace(1); }\n\t#end\n}';
+		final src: String = 'class U {\n\tpublic static function draw() { dbg(); }\n\tprivate function new() {}\n\t#if debug\n'
+			+ '\tstatic function dbg() { trace(1); }\n\t#end\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
 		final vs: Array<Violation> = check.run([{ file: 'U.hx', source: src }], new HaxeQueryPlugin());
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
@@ -485,20 +485,6 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.equals(0, check.fix(cSrc, cViol, new HaxeQueryPlugin(), index).length);
 	}
 
-	private function one(source: String): Array<Violation> {
-		return violations([{ file: 'C.hx', source: source }]);
-	}
-
-	private function violations(files: Array<{ file: String, source: String }>): Array<Violation> {
-		return new UnusedPrivate().run(files, new HaxeQueryPlugin());
-	}
-
-	private function fixEdits(source: String): Array<{ span: Span, text: String }> {
-		final check: UnusedPrivate = new UnusedPrivate();
-		return check.fix(source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
-	}
-
-
 	public function testModuleInitMagicMethodNotFlagged(): Void {
 		Assert.equals(0, one('class C {\n\tprivate static function __init__():Void {\n\t\ttrace(1);\n\t}\n}').length);
 	}
@@ -530,11 +516,23 @@ class UnusedPrivateCheckTest extends Test {
 		);
 	}
 
-
 	public function testFixSkipsBodylessDeclaration(): Void {
 		// A body-less declaration is reported (extern privates are not exempt) but
 		// never deleted — its implementation lives outside the scanned source.
 		Assert.equals(0, fixEdits('class C {\n\tprivate extern function ext():Void;\n}').length);
+	}
+
+	private function one(source: String): Array<Violation> {
+		return violations([{ file: 'C.hx', source: source }]);
+	}
+
+	private function violations(files: Array<{ file: String, source: String }>): Array<Violation> {
+		return new UnusedPrivate().run(files, new HaxeQueryPlugin());
+	}
+
+	private function fixEdits(source: String): Array<{ span: Span, text: String }> {
+		final check: UnusedPrivate = new UnusedPrivate();
+		return check.fix(source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
 	}
 
 }

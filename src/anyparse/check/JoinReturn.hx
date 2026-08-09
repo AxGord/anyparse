@@ -3,15 +3,12 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
-import anyparse.query.Refs.RefHit;
-import anyparse.query.Refs.RefKind;
 
 /**
  * Flags a value that is IMMEDIATELY returned right after it is produced, collapsing the pair
@@ -282,13 +279,12 @@ final class JoinReturn implements Check {
 		final initSource: String = source.substring(initSpan.from, initSpan.to);
 		// Re-bind to a non-null local: narrowing does not reach the struct literal below.
 		final keySpan: Span = declSpan;
-		final m: Match = {
+		return ({
 			declSpan: keySpan,
 			editSpan: new Span(keySpan.from, retSpan.to),
 			text: buildReturn(initSource, annotation, retType, init, s.newExprKind),
 			message: 'this declaration and its next-line return can be joined into a single return'
-		};
-		return m;
+		}: Match);
 	}
 
 	/**
@@ -301,9 +297,12 @@ final class JoinReturn implements Check {
 	): String {
 		if (annotation == null) return 'return $initSource;';
 		final ann: String = annotation;
-		if (retType != null && TypeResolver.stripWs(retType) == TypeResolver.stripWs(ann)) return 'return $initSource;';
-		if (isRedundantNewAscription(initNode, ann, newExprKind)) return 'return $initSource;';
-		return 'return ($initSource : $ann);';
+		return if (retType != null && TypeResolver.stripWs(retType) == TypeResolver.stripWs(ann))
+			'return $initSource;'
+		else if (isRedundantNewAscription(initNode, ann, newExprKind))
+			'return $initSource;'
+		else
+			'return ($initSource : $ann);';
 	}
 
 	/**
@@ -327,9 +326,8 @@ final class JoinReturn implements Check {
 	private static function isRedundantNewAscription(initNode: QueryNode, ann: String, newExprKind: Null<String>): Bool {
 		if (newExprKind == null || initNode.kind != newExprKind) return false;
 		final ctorName: Null<String> = initNode.name;
-		if (ctorName == null) return false;
-		if (TypeResolver.stripWs(ann).indexOf('<') != -1) return false;
-		return TypeResolver.stripWs(ctorName) == TypeResolver.stripWs(ann);
+		return ctorName != null && TypeResolver.stripWs(ann).indexOf('<') == -1
+			&& TypeResolver.stripWs(ctorName) == TypeResolver.stripWs(ann);
 	}
 
 
@@ -405,13 +403,11 @@ final class JoinReturn implements Check {
 			final bs: Null<Span> = h.bindingSpan;
 			if (bs == null || bs.from != b.from || bs.to != b.to) continue;
 			if (h.kind != RefKind.Decl && inAnyLambda(h.span, lambdaSpans)) return null;
-			if (h.kind == RefKind.Read) {
-				final isReturn: Bool = h.span.from == retIdentSpan.from && h.span.to == retIdentSpan.to;
-				if (!isReturn) {
-					if (h.span.from >= assignSpan.to) return null;
-					survivingRead = true;
-				}
-			}
+			if (h.kind != RefKind.Read) continue;
+			final isReturn: Bool = h.span.from == retIdentSpan.from && h.span.to == retIdentSpan.to;
+			if (isReturn) continue;
+			if (h.span.from >= assignSpan.to) return null;
+			survivingRead = true;
 		}
 		if (!survivingRead) return null;
 
@@ -420,13 +416,12 @@ final class JoinReturn implements Check {
 		final annotation: Null<String> = declTypeSources()[b.from];
 		final initSource: String = source.substring(rhsSpan.from, rhsSpan.to);
 		final keySpan: Span = assignSpan;
-		final m: Match = {
+		return ({
 			declSpan: keySpan,
 			editSpan: new Span(keySpan.from, retSpan.to),
 			text: buildReturn(initSource, annotation, retType, rhs, s.newExprKind),
 			message: 'this assignment and its next-line return can be joined into a single return'
-		};
-		return m;
+		}: Match);
 	}
 
 

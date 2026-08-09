@@ -7,6 +7,8 @@ import anyparse.query.ExtractInterface;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
 
+using StringTools;
+
 /**
  * `ExtractInterface.extract` — generate an interface from a class's
  * public instance methods and make the class implement it. Each test
@@ -22,29 +24,30 @@ class ExtractInterfaceSliceTest extends Test {
 	 * `implements`.
 	 */
 	public function testBasicExtract(): Void {
-		final src: String =
-			'package pkg;\n\nclass Service {\n\tvar count:Int = 0;\n\tpublic function new() {}\n\tpublic function fetch(id:Int):String return \'x\';\n\tpublic function reset():Void {}\n\tfunction helper():Int return count;\n\tpublic static function make():Service return null;\n}';
+		final src: String = 'package pkg;\n\nclass Service {\n\tvar count:Int = 0;\n\tpublic function new() {}\n'
+			+ '\tpublic function fetch(id:Int):String return \'x\';\n\tpublic function reset():Void {}\n'
+			+ '\tfunction helper():Int return count;\n\tpublic static function make():Service return null;\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/Service.hx', 'Service', 'IService', 'pkg/IService.hx', null, src);
 		Assert.equals(2, changes.length);
 		final iface: String = changeFor(changes, 'pkg/IService.hx').newSource;
-		Assert.isTrue(StringTools.contains(iface, 'interface IService'), 'declares the interface');
-		Assert.isTrue(StringTools.contains(iface, 'function fetch(id:Int):String;'), 'carries fetch signature');
-		Assert.isTrue(StringTools.contains(iface, 'function reset():Void;'), 'carries reset signature');
-		Assert.isFalse(StringTools.contains(iface, 'helper'), 'excludes the private method');
-		Assert.isFalse(StringTools.contains(iface, 'make'), 'excludes the static method');
-		Assert.isFalse(StringTools.contains(iface, 'function new'), 'excludes the constructor');
+		Assert.isTrue(iface.contains('interface IService'), 'declares the interface');
+		Assert.isTrue(iface.contains('function fetch(id:Int):String;'), 'carries fetch signature');
+		Assert.isTrue(iface.contains('function reset():Void;'), 'carries reset signature');
+		Assert.isFalse(iface.contains('helper'), 'excludes the private method');
+		Assert.isFalse(iface.contains('make'), 'excludes the static method');
+		Assert.isFalse(iface.contains('function new'), 'excludes the constructor');
 		final newSrc: String = changeFor(changes, 'pkg/Service.hx').newSource;
-		Assert.isTrue(StringTools.contains(newSrc, 'class Service implements IService {'), 'class implements the interface');
+		Assert.isTrue(newSrc.contains('class Service implements IService {'), 'class implements the interface');
 	}
 
 	/** Only the imports the signatures reference are carried into the interface. */
 	public function testImportCarry(): Void {
-		final src: String =
-			'package pkg;\n\nimport haxe.ds.Option;\nimport haxe.ds.StringMap;\n\nclass S {\n\tpublic function new() {}\n\tpublic function f():Option<Int> return null;\n\tpublic function g(x:Int):Void {}\n}';
+		final src: String = 'package pkg;\n\nimport haxe.ds.Option;\nimport haxe.ds.StringMap;\n\nclass S {\n\tpublic function new() {}\n'
+			+ '\tpublic function f():Option<Int> return null;\n\tpublic function g(x:Int):Void {}\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/S.hx', 'S', 'IS', 'pkg/IS.hx', null, src);
 		final iface: String = changeFor(changes, 'pkg/IS.hx').newSource;
-		Assert.isTrue(StringTools.contains(iface, 'import haxe.ds.Option;'), 'carries the referenced import');
-		Assert.isFalse(StringTools.contains(iface, 'StringMap'), 'drops the unreferenced import');
+		Assert.isTrue(iface.contains('import haxe.ds.Option;'), 'carries the referenced import');
+		Assert.isFalse(iface.contains('StringMap'), 'drops the unreferenced import');
 	}
 
 	/** `--members` selects a subset; the others are not in the interface. */
@@ -53,8 +56,8 @@ class ExtractInterfaceSliceTest extends Test {
 			'package pkg;\n\nclass S {\n\tpublic function new() {}\n\tpublic function a():Void {}\n\tpublic function b():Void {}\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/S.hx', 'S', 'IS', 'pkg/IS.hx', ['a'], src);
 		final iface: String = changeFor(changes, 'pkg/IS.hx').newSource;
-		Assert.isTrue(StringTools.contains(iface, 'function a():Void;'), 'includes the selected method');
-		Assert.isFalse(StringTools.contains(iface, 'function b'), 'excludes the unselected method');
+		Assert.isTrue(iface.contains('function a():Void;'), 'includes the selected method');
+		Assert.isFalse(iface.contains('function b'), 'excludes the unselected method');
 	}
 
 	/** An existing `extends` clause is preserved; `implements` is appended. */
@@ -63,7 +66,7 @@ class ExtractInterfaceSliceTest extends Test {
 			'package pkg;\n\nclass S extends Base {\n\tpublic function new() { super(); }\n\tpublic function a():Void {}\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/S.hx', 'S', 'IS', 'pkg/IS.hx', null, src);
 		final newSrc: String = changeFor(changes, 'pkg/S.hx').newSource;
-		Assert.isTrue(StringTools.contains(newSrc, 'class S extends Base implements IS {'), 'extends preserved, implements added');
+		Assert.isTrue(newSrc.contains('class S extends Base implements IS {'), 'extends preserved, implements added');
 	}
 
 	/**
@@ -75,10 +78,8 @@ class ExtractInterfaceSliceTest extends Test {
 			'package pkg;\n\nclass Holder /* body { starts */ {\n\tpublic function new() {}\n\n\tpublic function ping():Void {}\n}\n';
 		final changes: Array<MoveChange> = okChanges('pkg/Holder.hx', 'Holder', 'IHolder', 'pkg/IHolder.hx', null, src);
 		final newSrc: String = changeFor(changes, 'pkg/Holder.hx').newSource;
-		Assert.isTrue(
-			StringTools.contains(newSrc, 'class Holder implements IHolder /* body { starts */ {'), 'implements lands outside the comment'
-		);
-		Assert.isFalse(StringTools.contains(newSrc, 'body implements'), 'nothing spliced inside the comment');
+		Assert.isTrue(newSrc.contains('class Holder implements IHolder /* body { starts */ {'), 'implements lands outside the comment');
+		Assert.isFalse(newSrc.contains('body implements'), 'nothing spliced inside the comment');
 	}
 
 	/** A `{` inside a header LINE comment is not the body brace either. */
@@ -87,9 +88,7 @@ class ExtractInterfaceSliceTest extends Test {
 			'package pkg;\n\nclass Holder // note {\n{\n\tpublic function new() {}\n\n\tpublic function ping():Void {}\n}\n';
 		final changes: Array<MoveChange> = okChanges('pkg/Holder.hx', 'Holder', 'IHolder', 'pkg/IHolder.hx', null, src);
 		final newSrc: String = changeFor(changes, 'pkg/Holder.hx').newSource;
-		Assert.isTrue(
-			StringTools.contains(newSrc, 'class Holder implements IHolder // note {'), 'implements lands before the line comment'
-		);
+		Assert.isTrue(newSrc.contains('class Holder implements IHolder // note {'), 'implements lands before the line comment');
 	}
 
 	/** A structural type-parameter constraint brace is not the body brace. */
@@ -98,9 +97,7 @@ class ExtractInterfaceSliceTest extends Test {
 			'package pkg;\n\nclass Holder<T:{ x:Int }> {\n\tpublic function new() {}\n\n\tpublic function ping():Void {}\n}\n';
 		final changes: Array<MoveChange> = okChanges('pkg/Holder.hx', 'Holder', 'IHolder', 'pkg/IHolder.hx', null, src);
 		final newSrc: String = changeFor(changes, 'pkg/Holder.hx').newSource;
-		Assert.isTrue(
-			StringTools.contains(newSrc, 'class Holder<T:{ x:Int }> implements IHolder {'), 'implements lands after the type params'
-		);
+		Assert.isTrue(newSrc.contains('class Holder<T:{ x:Int }> implements IHolder {'), 'implements lands after the type params');
 	}
 
 	/** An existing `implements` clause is preserved; the new one is appended after it. */
@@ -108,7 +105,7 @@ class ExtractInterfaceSliceTest extends Test {
 		final src: String = 'package pkg;\n\nclass S implements IThing {\n\tpublic function new() {}\n\tpublic function a():Void {}\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/S.hx', 'S', 'IS', 'pkg/IS.hx', null, src);
 		final newSrc: String = changeFor(changes, 'pkg/S.hx').newSource;
-		Assert.isTrue(StringTools.contains(newSrc, 'class S implements IThing implements IS {'), 'both implements clauses present');
+		Assert.isTrue(newSrc.contains('class S implements IThing implements IS {'), 'both implements clauses present');
 	}
 
 	/** A `final class` gets the `implements` clause too. */
@@ -116,7 +113,7 @@ class ExtractInterfaceSliceTest extends Test {
 		final src: String = 'package pkg;\n\nfinal class S {\n\tpublic function new() {}\n\tpublic function a():Void {}\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/S.hx', 'S', 'IS', 'pkg/IS.hx', null, src);
 		final newSrc: String = changeFor(changes, 'pkg/S.hx').newSource;
-		Assert.isTrue(StringTools.contains(newSrc, 'final class S implements IS {'), 'final class implements the interface');
+		Assert.isTrue(newSrc.contains('final class S implements IS {'), 'final class implements the interface');
 	}
 
 	/** A class with no public instance method is refused. */

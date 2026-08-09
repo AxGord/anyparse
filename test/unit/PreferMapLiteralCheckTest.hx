@@ -48,12 +48,12 @@ class PreferMapLiteralCheckTest extends Test {
 	}
 
 	/** The critical case: an unannotated `var m = new Map()` is NOT pinned — `[]` infers `Array`, not `Map`, so rewriting it would miscompile. Reported, not fixed. */
-	public function testGateRefusesUntypedLocal(): Void {
+	public inline function testGateRefusesUntypedLocal(): Void {
 		assertGateRefuses('class C { function f():Void { var m = new Map(); } }');
 	}
 
 	/** An unannotated local whose only type source is the constructor `<Int, Int>` is NOT pinned — `[]` drops the key/value types and infers Array. */
-	public function testGateRefusesUntypedTypeParam(): Void {
+	public inline function testGateRefusesUntypedTypeParam(): Void {
 		assertGateRefuses('class C { function f():Void { var m = new Map<Int, Int>(); } }');
 	}
 
@@ -78,7 +78,7 @@ class PreferMapLiteralCheckTest extends Test {
 	}
 
 	/** SOUNDNESS: a `new Map()` assigned to a `Dynamic`-typed target must NOT become `[]` (which would infer Array). Reported, no edit. */
-	public function testGateRefusesDynamicTargetAssignment(): Void {
+	public inline function testGateRefusesDynamicTargetAssignment(): Void {
 		assertGateRefuses('class C { var d:Dynamic; function f():Void { d = new Map(); } }');
 	}
 

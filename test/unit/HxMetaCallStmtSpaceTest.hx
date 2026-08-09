@@ -17,7 +17,7 @@ import anyparse.grammar.haxe.HxModuleWriter;
  */
 class HxMetaCallStmtSpaceTest extends HxTestHelpers {
 
-	public function testMetaCallBeforeUnbracedIfKeepsSpace(): Void {
+	public inline function testMetaCallBeforeUnbracedIfKeepsSpace(): Void {
 		writerEquals(
 			'class C {\n\tfunction f():Void {\n\t\t@:nullSafety(Off) if (value != null) target.field = value;\n\t\tnext = 1;\n\t}\n}\n',
 			'class C {\n\tfunction f():Void {\n\t\t@:nullSafety(Off) if (value != null) target.field = value;\n\t\tnext = 1;\n\t}\n}\n',
@@ -25,7 +25,7 @@ class HxMetaCallStmtSpaceTest extends HxTestHelpers {
 		);
 	}
 
-	public function testBareMetaBeforeUnbracedIfKeepsSpace(): Void {
+	public inline function testBareMetaBeforeUnbracedIfKeepsSpace(): Void {
 		writerEquals(
 			'class C {\n\tfunction f():Void {\n\t\t@:unreflective if (value != null) target.field = value;\n\t\tnext = 1;\n\t}\n}\n',
 			'class C {\n\tfunction f():Void {\n\t\t@:unreflective if (value != null) target.field = value;\n\t\tnext = 1;\n\t}\n}\n',

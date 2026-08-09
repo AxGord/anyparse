@@ -4,6 +4,8 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
+
 /**
  * Outcome of an `ExtractVar.extractVar` call. `Ok` carries the
  * format-preserving rewritten source; `Err` carries a human-readable
@@ -147,7 +149,7 @@ final class ExtractVar {
 		// A PEG span can swallow trailing trivia — trim it so neither the hoisted
 		// text nor the replaced range carries a dangling space.
 		var effTo: Int = targetSpan.to;
-		while (effTo > targetSpan.from && isWsCode(StringTools.fastCodeAt(source, effTo - 1))) effTo--;
+		while (effTo > targetSpan.from && isWsCode(source.fastCodeAt(effTo - 1))) effTo--;
 
 		final enclosingStmt: Null<QueryNode> = findEnclosingBlockStmt(tree, expr);
 		if (enclosingStmt == null) return Err('"$name": cannot extract — the enclosing statement is not inside a { } block');
@@ -229,7 +231,7 @@ final class ExtractVar {
 			final span: Null<Span> = node.span;
 			if (span != null && span.from == cursor && !isStructural(node.kind) && (exactTo == null || span.to == exactTo)) {
 				final current: Null<QueryNode> = best;
-				final bestSpan: Null<Span> = current == null ? null : current.span;
+				final bestSpan: Null<Span> = current?.span;
 				if (bestSpan == null || span.to > bestSpan.to) best = node;
 			}
 			for (c in node.children) walk(c);
@@ -272,7 +274,7 @@ final class ExtractVar {
 
 	/** Is `kind` a statement node (its kind ends with `Stmt`)? */
 	private static inline function isStatement(kind: String): Bool {
-		return StringTools.endsWith(kind, 'Stmt');
+		return kind.endsWith('Stmt');
 	}
 
 	/**
@@ -282,7 +284,7 @@ final class ExtractVar {
 	 */
 	private static function isStructural(kind: String): Bool {
 		if (STRUCTURAL_KINDS.contains(kind)) return true;
-		for (suffix in STRUCTURAL_SUFFIXES) if (StringTools.endsWith(kind, suffix)) return true;
+		for (suffix in STRUCTURAL_SUFFIXES) if (kind.endsWith(suffix)) return true;
 		return false;
 	}
 
@@ -296,7 +298,7 @@ final class ExtractVar {
 	/** Is every character of `s` an ASCII space / tab / carriage return? */
 	private static function isAllWhitespace(s: String): Bool {
 		for (i in 0...s.length) {
-			final c: Int = StringTools.fastCodeAt(s, i);
+			final c: Int = s.fastCodeAt(i);
 			if (c != ' '.code && c != '\t'.code && c != '\r'.code) return false;
 		}
 		return true;

@@ -4,11 +4,13 @@ import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan.NormalizedSpan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+
+using Lambda;
+using StringTools;
 
 /**
  * Flags a branch of an `if` chain that ENDS with the very statements that follow the
@@ -290,19 +292,23 @@ final class TailMerge implements Check {
 		final tailLast: Null<Span> = tail[tail.length - 1].span;
 		final fallLast: Null<Span> = fallLastStmt.span;
 		final blockSpan: Null<Span> = branchBlock.span;
-		if (prevSpan == null || tailFirst == null || tailLast == null || fallLast == null || blockSpan == null) return null;
-
-		if (hasConditionalCompilation(source, prevSpan.to, tailLast.to)) return null;
-		if (hasConditionalCompilation(source, fall.prevEnd, fallLast.to)) return null;
-		if (fall.opaqueDecl || hasOpaqueDecl(kept, source, seams)) return null;
-		if (referencesAny(tail, fall.shadow.concat(localDeclNames(kept, seams)), seams.identKinds)) return null;
-
-		return {
-			tailSpan: new Span(tailFirst.from, tailLast.to),
-			removeSpan: new Span(prevSpan.to, tailLast.to),
-			count: count,
-			fixable: commentsAllowFix(source, tail, fallStmts, prevSpan.to, fall.prevEnd, blockSpan.to)
-		};
+		return if (prevSpan == null || tailFirst == null || tailLast == null || fallLast == null || blockSpan == null)
+			null
+		else if (hasConditionalCompilation(source, prevSpan.to, tailLast.to))
+			null
+		else if (hasConditionalCompilation(source, fall.prevEnd, fallLast.to))
+			null
+		else if (fall.opaqueDecl || hasOpaqueDecl(kept, source, seams))
+			null
+		else if (referencesAny(tail, fall.shadow.concat(localDeclNames(kept, seams)), seams.identKinds))
+			null
+		else
+			{
+				tailSpan: new Span(tailFirst.from, tailLast.to),
+				removeSpan: new Span(prevSpan.to, tailLast.to),
+				count: count,
+				fixable: commentsAllowFix(source, tail, fallStmts, prevSpan.to, fall.prevEnd, blockSpan.to)
+			};
 	}
 
 	/** The reported wording; `count` is at least 1. */
@@ -360,7 +366,7 @@ final class TailMerge implements Check {
 				final node: QueryNode = decl;
 				final nm: Null<String> = node.name;
 				if (nm != null) names.push(nm);
-				decl = Lambda.find(node.children, k -> seams.localDeclContinuationKinds.contains(k.kind));
+				decl = node.children.find(k -> seams.localDeclContinuationKinds.contains(k.kind));
 			}
 		}
 		return names;
@@ -410,7 +416,7 @@ final class TailMerge implements Check {
 		var depth: Int = 0;
 		var i: Int = from;
 		while (i < to) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c == '"'.code || c == "'".code)
 				i = stringLiteralEnd(source, i, to)
 			else {
@@ -427,10 +433,10 @@ final class TailMerge implements Check {
 
 	/** The offset just past the string literal opening at `start`, or `to` when it is unterminated. */
 	private static function stringLiteralEnd(source: String, start: Int, to: Int): Int {
-		final quote: Int = StringTools.fastCodeAt(source, start);
+		final quote: Int = source.fastCodeAt(start);
 		var i: Int = start + 1;
 		while (i < to) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c == '\\'.code)
 				i += 2
 			else if (c == quote)
@@ -508,13 +514,13 @@ final class TailMerge implements Check {
 		while (i < to - 1) switch source.substr(i, 2) {
 			case '//':
 				var end: Int = i + 2;
-				while (end < to && StringTools.fastCodeAt(source, end) != '\n'.code) end++;
-				out.push(StringTools.trim(source.substring(i, end)));
+				while (end < to && source.fastCodeAt(end) != '\n'.code) end++;
+				out.push(source.substring(i, end).trim());
 				i = end;
 			case '/*':
 				final close: Int = source.indexOf('*/', i + 2);
 				final end: Int = close == -1 || close + 2 > to ? to : close + 2;
-				out.push(StringTools.trim(source.substring(i, end)));
+				out.push(source.substring(i, end).trim());
 				i = end;
 			case _:
 				i++;

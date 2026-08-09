@@ -5,7 +5,6 @@ import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -13,9 +12,9 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
 import anyparse.runtime.Span;
 import anyparse.check.Check.RiskyFix;
-import anyparse.query.TypeRefPrinter.PrintedTypeRef;
 import anyparse.query.TypeResolver;
-import anyparse.query.TypeRefPrinter.PendingImportEdit;
+
+using StringTools;
 
 /**
  * One written occurrence of a qualified type path: the exact byte range of the path ITSELF
@@ -379,7 +378,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 
 	/** A printer over `source` with the file's plain-import map and the run's resolution index. */
 	private static function printerFor(source: String, tree: QueryNode, plugin: GrammarPlugin, index: Null<SymbolIndex>): TypeRefPrinter {
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		return TypeRefPrinter.forFile(source, tree, provider != null ? provider.importMap(source) : [], index);
 	}
 
@@ -445,14 +444,14 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		if (node.kind != context.shape.fieldAccessKind || underUpperField || !RefactorSupport.isUpperInitial(name)) return null;
 		final path: Null<String> = staticChainPath(node, context);
 		final span: Null<Span> = node.span;
-		if (path == null || span == null) return null;
 		// The chain's own span must BE the path verbatim. A chain broken by a comment or a newline
 		// is refused rather than sliced: the rewrite replaces the whole span with the short name.
-		return context.source.substring(span.from, span.to) == path ? {
-			path: path,
-			span: span,
-			conditional: conditional
-		} : null;
+		return if (path == null || span == null)
+			null
+		else if (context.source.substring(span.from, span.to) == path)
+			{ path: path, span: span, conditional: conditional }
+		else
+			null;
 	}
 
 	/**
@@ -491,8 +490,9 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 			segments.unshift(name);
 			if (child.kind == identKind) {
 				final span: Null<Span> = child.span;
-				if (span == null || TypeResolver.resolveBindingFrom(name, span, context.tree, context.shape) != null) return null;
-				return segments.join('.');
+				return span == null || TypeResolver.resolveBindingFrom(name, span, context.tree, context.shape) != null
+					? null
+					: segments.join('.');
 			}
 			if (child.kind != context.shape.fieldAccessKind) return null;
 			cursor = child;
@@ -519,8 +519,8 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 			final at: Int = source.indexOf(token, i);
 			if (at < 0 || at + token.length > to) return -1;
 			final after: Int = at + token.length;
-			final boundedLeft: Bool = at == 0 || !isPathChar(StringTools.fastCodeAt(source, at - 1));
-			final boundedRight: Bool = after >= source.length || !isPathChar(StringTools.fastCodeAt(source, after));
+			final boundedLeft: Bool = at == 0 || !isPathChar(source.fastCodeAt(at - 1));
+			final boundedRight: Bool = after >= source.length || !isPathChar(source.fastCodeAt(after));
 			if (boundedLeft && boundedRight && !RefactorSupport.offsetWithinAny(at, context.comments)) return at;
 			i = at + 1;
 		}

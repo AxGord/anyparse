@@ -65,7 +65,8 @@ class DuplicateCaseCheckTest extends Test {
 
 	public function testFixDeletesAllDuplicates(): Void {
 		final out: String = applyFix(
-			'class C {\n\tfunction f():Void {\n\t\tswitch k {\n\t\t\tcase 1: a();\n\t\t\tcase 1: b();\n\t\t\tcase 1: d();\n\t\t\tcase 2: c();\n\t\t}\n\t}\n}'
+			'class C {\n\tfunction f():Void {\n\t\tswitch k {\n\t\t\tcase 1: a();\n\t\t\tcase 1: b();\n\t\t\tcase 1: d();\n'
+			+ '\t\t\tcase 2: c();\n\t\t}\n\t}\n}'
 		);
 		Assert.isTrue(out.indexOf('b()') == -1 && out.indexOf('d()') == -1, 'both duplicates gone, got: $out');
 		Assert.isTrue(out.indexOf('a()') != -1 && out.indexOf('c()') != -1, 'distinct arms remain, got: $out');

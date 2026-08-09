@@ -4,6 +4,9 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
+using Lambda;
+
 /**
  * Outcome of an `AddParam.addParam` call. `Ok` carries the
  * format-preserving rewritten source; `Err` carries a human-readable
@@ -97,9 +100,9 @@ final class AddParam {
 		// top-level `=`) is intentionally simple — the re-parse-validate is
 		// the backstop. A `=` buried inside the parameter's type is
 		// acceptable; it still satisfies "has a default" textually.
-		final trimmed: String = StringTools.trim(paramText);
+		final trimmed: String = paramText.trim();
 		if (trimmed.length == 0) return Err('add-param requires a non-empty parameter text');
-		if (!StringTools.startsWith(trimmed, '?') && trimmed.indexOf('=') < 0)
+		if (!trimmed.startsWith('?') && trimmed.indexOf('=') < 0)
 			return Err(
 				'add-param requires a default value (`name:T = v`) or optional `?name:T` — a required parameter would break existing call sites'
 			);
@@ -109,12 +112,11 @@ final class AddParam {
 		final newName: String = paramName;
 
 		final params: Array<QueryNode> = [for (c in fnNode.children) if (PARAM_KINDS.contains(c.kind)) c];
-		if (Lambda.exists(params, p -> p.name == newName)) return Err('"$newName" is already a parameter');
+		if (params.exists(p -> p.name == newName)) return Err('"$newName" is already a parameter');
 
-		final insertOffset: Int = if (params.length > 0)
-			tailInsertOffset(source, params[params.length - 1])
-		else
-			emptyParenInsertOffset(source, declSpan);
+		final insertOffset: Int = params.length > 0
+			? tailInsertOffset(source, params[params.length - 1])
+			: emptyParenInsertOffset(source, declSpan);
 		if (insertOffset < 0) return Err('could not locate the parameter list of the function at $line:$col');
 
 		final insertText: String = params.length > 0 ? ', $trimmed' : trimmed;
@@ -144,13 +146,13 @@ final class AddParam {
 	 */
 	private static function parseParamName(paramText: String): Null<String> {
 		var i: Int = 0;
-		while (i < paramText.length && RefactorSupport.isSpace(StringTools.fastCodeAt(paramText, i))) i++;
-		if (i < paramText.length && StringTools.fastCodeAt(paramText, i) == '?'.code) i++;
-		while (i < paramText.length && RefactorSupport.isSpace(StringTools.fastCodeAt(paramText, i))) i++;
+		while (i < paramText.length && RefactorSupport.isSpace(paramText.fastCodeAt(i))) i++;
+		if (i < paramText.length && paramText.fastCodeAt(i) == '?'.code) i++;
+		while (i < paramText.length && RefactorSupport.isSpace(paramText.fastCodeAt(i))) i++;
 		final start: Int = i;
-		if (i >= paramText.length || !RefactorSupport.isIdentStartChar(StringTools.fastCodeAt(paramText, i))) return null;
+		if (i >= paramText.length || !RefactorSupport.isIdentStartChar(paramText.fastCodeAt(i))) return null;
 		i++;
-		while (i < paramText.length && RefactorSupport.isIdentChar(StringTools.fastCodeAt(paramText, i))) i++;
+		while (i < paramText.length && RefactorSupport.isIdentChar(paramText.fastCodeAt(i))) i++;
 		return paramText.substring(start, i);
 	}
 
@@ -173,18 +175,18 @@ final class AddParam {
 		// trailing comma. Anything else means the resolved node is not the
 		// final parameter and the insertion would be unsafe.
 		var j: Int = spanTo;
-		while (j < source.length && RefactorSupport.isSpace(StringTools.fastCodeAt(source, j))) j++;
-		if (j < source.length && StringTools.fastCodeAt(source, j) == ','.code) {
+		while (j < source.length && RefactorSupport.isSpace(source.fastCodeAt(j))) j++;
+		if (j < source.length && source.fastCodeAt(j) == ','.code) {
 			j++;
-			while (j < source.length && RefactorSupport.isSpace(StringTools.fastCodeAt(source, j))) j++;
+			while (j < source.length && RefactorSupport.isSpace(source.fastCodeAt(j))) j++;
 		}
-		if (j >= source.length || StringTools.fastCodeAt(source, j) != ')'.code) return -1;
+		if (j >= source.length || source.fastCodeAt(j) != ')'.code) return -1;
 
 		// Insert right after the parameter content: trim trailing
 		// whitespace included in the span (multi-line parameter lists carry
 		// the newline / indentation up to the next token in the span).
 		var k: Int = spanTo;
-		while (k > span.from && RefactorSupport.isSpace(StringTools.fastCodeAt(source, k - 1))) k--;
+		while (k > span.from && RefactorSupport.isSpace(source.fastCodeAt(k - 1))) k--;
 		return k;
 	}
 
@@ -199,7 +201,7 @@ final class AddParam {
 	private static function emptyParenInsertOffset(source: String, declSpan: Span): Int {
 		final to: Int = declSpan.to <= source.length ? declSpan.to : source.length;
 		final from: Int = declSpan.from < 0 ? 0 : declSpan.from;
-		for (i in from ... to) if (StringTools.fastCodeAt(source, i) == '('.code) return i + 1;
+		for (i in from ... to) if (source.fastCodeAt(i) == '('.code) return i + 1;
 		return -1;
 	}
 

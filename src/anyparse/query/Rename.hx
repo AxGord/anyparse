@@ -6,7 +6,6 @@ import anyparse.query.Refs.RefKind;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import anyparse.runtime.Span.Position;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 
 using Lambda;
@@ -305,12 +304,10 @@ final class Rename {
 			}
 		}
 		final dup: Null<Span> = sameBlockRedeclaration(scope, oldName, plugin, shape);
-		if (dup != null) {
-			final at: Position = dup.lineCol(source);
-			return 'rename of "$oldName" is unsafe: the name is declared more than once in the block at ${at.line}:${at.col},'
-				+ ' where reference resolution mis-binds - split the scopes or rename the other declaration first';
-		}
-		return null;
+		if (dup == null) return null;
+		final at: Position = dup.lineCol(source);
+		return 'rename of "$oldName" is unsafe: the name is declared more than once in the block at ${at.line}:${at.col},'
+			+ ' where reference resolution mis-binds - split the scopes or rename the other declaration first';
 	}
 
 
@@ -383,7 +380,7 @@ final class Rename {
 				case RefKind.Decl: h.span.from;
 				case _:
 					final b: Null<Span> = h.bindingSpan;
-					b == null ? null : b.from;
+					b?.from;
 			};
 			if (boundFrom == binding) add(RefactorSupport.identTokenOffset(source, h.span, targetName));
 		}

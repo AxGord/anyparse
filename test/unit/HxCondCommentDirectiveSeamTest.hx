@@ -57,7 +57,6 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 class HxCondCommentDirectiveSeamTest extends Test {
 
 	private static final forceBuild: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
-
 	private static final EMPTY_IF_MEMBER: String = 'class Foo {\n\t#if a\n\t// only\n\t#end\n\tvar v:Int;\n}';
 	private static final EMPTY_ELSE_MEMBER: String = 'class Foo {\n\t#if a\n\tvar w:Int;\n\t#else\n\t// only else\n\t#end\n}';
 	private static final EMPTY_IF_BEFORE_ELSEIF: String = 'class Foo {\n\t#if a\n\t// only if\n\t#elseif b\n\tvar w:Int;\n\t#end\n}';

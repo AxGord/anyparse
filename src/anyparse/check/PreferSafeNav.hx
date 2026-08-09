@@ -2,15 +2,14 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
-import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -234,7 +233,7 @@ final class PreferSafeNav implements Check {
 			final rest: Null<QueryNode> = m.restCond;
 			final restSpan: Null<Span> = rest?.span;
 			if (rest != null && restSpan == null) return null;
-			final text: String = restSpan != null ? 'if (${StringTools.trim(source.substring(restSpan.from, restSpan.to))}) $body' : body;
+			final text: String = restSpan != null ? 'if (${source.substring(restSpan.from, restSpan.to).trim()}) $body' : body;
 			return { span: span, text: text };
 		})) edits.push(e);
 		return RefactorSupport.dropContainedEdits(edits);
@@ -431,14 +430,19 @@ final class PreferSafeNav implements Check {
 	 */
 	private static function safeNavText(source: String, rootSpan: Span, region: Span): Null<String> {
 		final dotPos: Int = source.indexOf('.', rootSpan.to);
-		if (dotPos < 0 || dotPos >= region.to || CheckScan.hasCommentMarker(source, rootSpan.to, dotPos)) return null;
-		return '${source.substring(region.from, dotPos)}?.${source.substring(dotPos + 1, region.to)}';
+		return dotPos < 0 || dotPos >= region.to || CheckScan.hasCommentMarker(source, rootSpan.to, dotPos)
+			? null
+			: '${source.substring(region.from, dotPos)}?.${source.substring(dotPos + 1, region.to)}';
 	}
 
 	/** The candidate `node` yields — the `if`-statement guard or the ternary guard, whichever arm its kind selects. */
 	private static function candidate(node: QueryNode, source: String, s: Seams): Null<Candidate> {
-		if (s.ifKinds.contains(node.kind)) return match(node, source, s);
-		return node.kind == s.ternaryKind ? matchTernary(node, source, s) : null;
+		return if (s.ifKinds.contains(node.kind))
+			match(node, source, s)
+		else if (node.kind == s.ternaryKind)
+			matchTernary(node, source, s)
+		else
+			null;
 	}
 
 	/**
@@ -482,8 +486,12 @@ final class PreferSafeNav implements Check {
 	private static function subjectOperand(cond: QueryNode, s: Seams): Null<QueryNode> {
 		final a: QueryNode = cond.children[0];
 		final b: QueryNode = cond.children[1];
-		if (a.kind == s.nullKind) return subjectOf(b, s);
-		return b.kind == s.nullKind ? subjectOf(a, s) : null;
+		return if (a.kind == s.nullKind)
+			subjectOf(b, s)
+		else if (b.kind == s.nullKind)
+			subjectOf(a, s)
+		else
+			null;
 	}
 
 	/**
@@ -493,8 +501,12 @@ final class PreferSafeNav implements Check {
 	 * second is the dead- / unnecessary-safe-nav checks' territory.
 	 */
 	private static function subjectOf(node: QueryNode, s: Seams): Null<QueryNode> {
-		if (node.kind == s.identKind) return node;
-		return node.kind == s.fieldAccessKind && node.children.length == 1 && node.children[0].kind == s.identKind ? node : null;
+		return if (node.kind == s.identKind)
+			node
+		else if (node.kind == s.fieldAccessKind && node.children.length == 1 && node.children[0].kind == s.identKind)
+			node
+		else
+			null;
 	}
 
 	/**
@@ -538,12 +550,12 @@ final class PreferSafeNav implements Check {
 		final ifSpan: Null<Span> = ifNode.span;
 		final stmtSpan: Null<Span> = stmt.span;
 		if (ifSpan == null || stmtSpan == null) return null;
-		final restSpan: Null<Span> = rest != null ? rest.span : null;
+		final restSpan: Null<Span> = rest?.span;
 		if (rest != null && restSpan == null) return null;
-		final headHasComment: Bool = if (restSpan != null)
-			CheckScan.hasCommentMarker(source, ifSpan.from, restSpan.from) || CheckScan.hasCommentMarker(source, restSpan.to, stmtSpan.from);
-		else
-			CheckScan.hasCommentMarker(source, ifSpan.from, stmtSpan.from);
+		final headHasComment: Bool = restSpan != null
+			? CheckScan.hasCommentMarker(source, ifSpan.from, restSpan.from)
+				|| CheckScan.hasCommentMarker(source, restSpan.to, stmtSpan.from)
+			: CheckScan.hasCommentMarker(source, ifSpan.from, stmtSpan.from);
 		final hasComment: Bool = headHasComment || CheckScan.hasCommentMarker(source, stmtSpan.to, ifSpan.to);
 		return hasComment ? null : {
 			condIdent: condIdent,
@@ -677,7 +689,7 @@ final class PreferSafeNav implements Check {
 		if (s.localDeclKinds.contains(node.kind) || s.paramKinds.contains(node.kind)) {
 			final name: Null<String> = node.name;
 			final declSpan: Null<Span> = node.span;
-			final scope: Null<Span> = enclosingScope != null ? enclosingScope.span : null;
+			final scope: Null<Span> = enclosingScope?.span;
 			if (name != null && declSpan != null && scope != null) out.push({ name: name, scope: scope, declEnd: declSpan.to });
 		}
 		final childScope: Null<QueryNode> = s.scopeKinds.contains(node.kind) ? node : enclosingScope;
@@ -726,8 +738,7 @@ final class PreferSafeNav implements Check {
 		final an: Null<String> = a.name;
 		final bn: Null<String> = b.name;
 		if (a.kind != b.kind || an == null || bn == null || an != bn) return false;
-		if (a.kind == s.identKind) return true;
-		return a.kind == s.fieldAccessKind && a.children.length == 1 && b.children.length == 1
+		return a.kind == s.identKind || a.kind == s.fieldAccessKind && a.children.length == 1 && b.children.length == 1
 			&& sameSubject(a.children[0], b.children[0], s);
 	}
 
@@ -791,11 +802,15 @@ final class PreferSafeNav implements Check {
 
 	/** The member name `node` reads off the enclosing object — a bare identifier, or the field of a `this.<field>` path — else null. */
 	private static function selfMemberName(node: QueryNode, s: Seams): Null<String> {
-		if (node.kind == s.identKind) return node.name == s.selfText ? null : node.name;
-		return node.kind == s.fieldAccessKind && node.children.length == 1 && node.children[0].kind == s.identKind
+		return if (node.kind == s.identKind)
+			node.name == s.selfText ? null : node.name
+		else if (
+			node.kind == s.fieldAccessKind && node.children.length == 1 && node.children[0].kind == s.identKind
 			&& node.children[0].name == s.selfText
-			? node.name
-			: null;
+		)
+			node.name
+		else
+			null;
 	}
 
 }

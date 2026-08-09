@@ -53,7 +53,8 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 	/** The multi-line TM shape this check was written for (`FileSystemBase` move comparator, anonymized). */
 	public function testFixTmComparatorFixture(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
-			'class C {\n\tfunction f():Void {\n\t\titems.sort((a:SortedPairEntryDetail, b:SortedPairEntryDetail) -> {\n\t\t\treturn a.nodeName < b.nodeName ? -1 : a.nodeName > b.nodeName ? 1 : 0;\n\t\t});\n\t}\n}'
+			'class C {\n\tfunction f():Void {\n\t\titems.sort((a:SortedPairEntryDetail, b:SortedPairEntryDetail) -> {\n'
+			+ '\t\t\treturn a.nodeName < b.nodeName ? -1 : a.nodeName > b.nodeName ? 1 : 0;\n\t\t});\n\t}\n}'
 		);
 		Assert.equals(1, es.length);
 		Assert.equals('a.nodeName < b.nodeName ? -1 : a.nodeName > b.nodeName ? 1 : 0', es[0].text);

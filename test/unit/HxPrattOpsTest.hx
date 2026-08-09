@@ -585,7 +585,7 @@ class HxPrattOpsTest extends HxTestHelpers {
 		}
 	}
 
-	public function testInRoundTrip(): Void {
+	public inline function testInRoundTrip(): Void {
 		// Writer ripple net: `in` flows the generic symmetric-infix
 		// writer path (no `@:fmt` knob), idempotency must hold.
 		roundTrip('class Foo {\n\tvar x:Bool = a in b;\n}\n', 'in operator');

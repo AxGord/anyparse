@@ -204,8 +204,8 @@ class HxTypeAnonSliceTest extends HxTestHelpers {
 	// Direct parse of issue_140_assignment_in_anon_type input (whitespace
 	// corpus). Pre-slice this skipped at parse on `?` in the anon type.
 	public function testIssue140RoundTrip(): Void {
-		final src =
-			'class Main {\n\tpublic static function main() {\n\t\tvar content:{?name:String} = Json.parse(File.getContent(haxelibFile));\n\t}\n}';
+		final src = 'class Main {\n\tpublic static function main() {\n'
+			+ '\t\tvar content:{?name:String} = Json.parse(File.getContent(haxelibFile));\n\t}\n}';
 		roundTrip(src, 'issue_140');
 	}
 

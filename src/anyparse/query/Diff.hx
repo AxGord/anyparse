@@ -1,7 +1,6 @@
 package anyparse.query;
 
 import anyparse.runtime.Span;
-import anyparse.runtime.Span.Position;
 
 /**
  * Structural AST diff for `apq diff <a> <b>` — paired walk over two

@@ -3,7 +3,6 @@ package anyparse.check;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -252,9 +251,8 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final callKind: Null<String> = shape.callKind;
 		final fieldKind: Null<String> = shape.fieldAccessKind;
 		if (callKind == null || fieldKind == null) return null;
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
-		if (provider == null) return null;
-		return {
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		return provider == null ? null : {
 			shape: shape,
 			typed: provider,
 			identKind: shape.identKind,
@@ -372,8 +370,12 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		if (nominal == null || resolved == null) return Verdict.UnresolvedReceiver;
 		final receiverType: String = nominal;
 		final index: SymbolIndex = resolved;
-		if (index.typeDeclaresMember(receiverType, method) || index.supertypeDeclaresMember(receiverType, method)) return null;
-		return index.typeProvablyLacksMember(receiverType, method, file) ? Verdict.Fixable : Verdict.UnresolvedClosure;
+		return if (index.typeDeclaresMember(receiverType, method) || index.supertypeDeclaresMember(receiverType, method))
+			null
+		else if (index.typeProvablyLacksMember(receiverType, method, file))
+			Verdict.Fixable
+		else
+			Verdict.UnresolvedClosure;
 	}
 
 	/**
@@ -423,8 +425,12 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		if (recv.kind == s.identKind && recv.name == s.shape.selfReferenceText) return null;
 		if (recv.kind != s.identKind && recv.kind != s.fieldKind && recv.kind != s.callKind) return null;
 		final nominal: Null<String> = RefactorSupport.expressionTypeNominal(recv, root, s.shape, declaredTypes, symbols(), file, chain);
-		if (nominal == null || nominal == s.dynamicTypeName) return nominal;
-		return s.nullableWrappers.contains(nominal) ? null : nominal;
+		return if (nominal == null || nominal == s.dynamicTypeName)
+			nominal
+		else if (s.nullableWrappers.contains(nominal))
+			null
+		else
+			nominal;
 	}
 
 	/** The `recv.method(rest)` form the message shows, excerpt-normalized, or null when a span is unavailable. */
@@ -444,7 +450,8 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 			case Verdict.Fixable:
 				'this static utility call can be the extension call $suggestion';
 			case Verdict.UnresolvedReceiver:
-				'this static utility call may be the extension call $suggestion (receiver type unresolved: verify the receiver type declares no same-name member)';
+				'this static utility call may be the extension call $suggestion'
+					+ ' (receiver type unresolved: verify the receiver type declares no same-name member)';
 			case _:
 				'this static utility call may be the extension call $suggestion (verify the receiver type declares no same-name member)';
 		}
@@ -467,12 +474,12 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		if (children.length > REST_INDEX && restSpan == null) return null;
 		final tailTo: Int = restSpan != null ? restSpan.from : callSpan.to;
 		final tailText: String = restSpan != null ? '.${candidate.method}(' : '.${candidate.method}()';
-		if (CheckScan.hasCommentMarker(source, callSpan.from, recvSpan.from) || CheckScan.hasCommentMarker(source, recvSpan.to, tailTo))
-			return null;
-		return [
-			{ span: new Span(callSpan.from, recvSpan.from), text: '' },
-			{ span: new Span(recvSpan.to, tailTo), text: tailText }
-		];
+		return CheckScan.hasCommentMarker(source, callSpan.from, recvSpan.from) || CheckScan.hasCommentMarker(source, recvSpan.to, tailTo)
+			? null
+			: [
+				{ span: new Span(callSpan.from, recvSpan.from), text: '' },
+				{ span: new Span(recvSpan.to, tailTo), text: tailText }
+			];
 	}
 
 	/**

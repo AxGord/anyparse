@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -289,8 +290,10 @@ final class SymbolIndex {
 	/** The grammar kind an `abstract` declaration projects as. */
 	private static final ABSTRACT_DECL_KIND: String = 'AbstractDecl';
 
-	/** The grammar kind an anonymous structure projects as, in BOTH a typedef body and a type expression. */
-	/** The decl kinds free of implicit-conversion / aliasing semantics — see `resolvesToPlainNominal`. */
+	/**
+	 * The grammar kind an anonymous structure projects as, in BOTH a typedef body and a type expression.
+	 * The decl kinds free of implicit-conversion / aliasing semantics — see `resolvesToPlainNominal`.
+	 */
 	private static final PLAIN_NOMINAL_KINDS: Array<String> = [CLASS_DECL_KIND, 'InterfaceDecl', 'EnumDecl'];
 
 	/**
@@ -332,7 +335,7 @@ final class SymbolIndex {
 	}
 
 	/** Every indexed file's `FileInfo`, in input order. */
-	public function allFiles(): Array<FileInfo> {
+	public inline function allFiles(): Array<FileInfo> {
 		return _files.copy();
 	}
 
@@ -377,7 +380,12 @@ final class SymbolIndex {
 		if (declarers.length != 1) return null;
 		final file: FileInfo = declarers[0];
 		final type: Null<TypeDeclInfo> = file.types.find(t -> t.name == typeName);
-		return type == null ? null : type.isMain ? file.module : '${file.module}.$typeName';
+		return if (type == null)
+			null
+		else if (type.isMain)
+			file.module
+		else
+			'${file.module}.$typeName';
 	}
 
 	/**
@@ -724,98 +732,6 @@ final class SymbolIndex {
 	}
 
 	/**
-	 * The shared body of the two path walks. With `substitute == false` it is the plain
-	 * import-aware walk, byte for byte what `resolvePathFinalMemberTypeSource` always did; with
-	 * `substitute == true` it additionally carries the receiver's written type ARGUMENTS alongside
-	 * the current type and rewrites a parameter-typed member through them.
-	 *
-	 * `args` is re-seeded at every step from the effective member source, so the substitution
-	 * follows a chain of generic containers (`Array<Box<Item>>` → `Box<Item>` → `Item`). The
-	 * fail-closed rule that ends the walk when a parameter name survives substitution is what keeps
-	 * that sound: without it an unsubstituted `T` would travel forward as if it were a concrete
-	 * argument and could collide with the NEXT type's parameter of the same name, or with a project
-	 * type literally called `T` / `K` / `V`.
-	 */
-	private function pathFinalMemberWalk(fromFile: String, startSource: String, memberPath: Array<String>, substitute: Bool): Null<String> {
-		if (memberPath.length == 0) return null;
-		final origin: Null<FileInfo> = _files.find(f -> f.file == fromFile);
-		if (origin == null) return null;
-		var args: Array<String> = [];
-		var startName: String = startSource;
-		if (substitute) {
-			final startArgs: Null<Array<String>> = RefactorSupport.typeArgumentSourcesOf(startSource);
-			if (startArgs != null) {
-				final head: Null<String> = RefactorSupport.outerNominalOf(startSource);
-				if (head == null) return null;
-				args = startArgs;
-				startName = head;
-			}
-		}
-		var current: Null<ResolvedType> = resolveTypeRef(startName, origin);
-		for (i in 0...memberPath.length - 1) {
-			if (current == null) return null;
-			final cur: ResolvedType = current;
-			final memberSource: Null<String> = memberTypeSourceWalk(cur, memberPath[i], []);
-			if (memberSource == null) return null;
-			final effective: Null<String> = substitute ? substitutedMemberSource(cur, memberPath[i], memberSource, args) : memberSource;
-			if (effective == null) return null;
-			if (substitute) args = RefactorSupport.typeArgumentSourcesOf(effective) ?? [];
-			final nominal: String = StringTools.trim(effective.split('<')[0]);
-			current = resolveTypeRef(nominal, cur.file);
-		}
-		if (current == null) return null;
-		final last: ResolvedType = current;
-		final member: String = memberPath[memberPath.length - 1];
-		final finalSource: Null<String> = memberTypeSourceWalk(last, member, []);
-		if (finalSource == null || !substitute) return finalSource;
-		return substitutedMemberSource(last, member, finalSource, args);
-	}
-
-	/**
-	 * `memberSource` with `cur`'s type parameters resolved through `args`, or null when the result
-	 * would still name one of them.
-	 *
-	 * Substitution fires only when ALL three hold: the member is declared DIRECTLY on `cur.type`
-	 * (an inherited one's parameter name belongs to the supertype's header, a mapping this index
-	 * does not model); its trimmed source is EXACTLY one parameter name (a source that merely
-	 * CONTAINS one, `Array<T>`, would need a rewrite, not a lookup); and that name's position is
-	 * covered by the arguments actually written on the receiver. Otherwise the verbatim source
-	 * stands — and is then rejected by the parameter-mention gate if it names a parameter, so an
-	 * unsubstitutable parameter can never leave this function as if it were a concrete type.
-	 *
-	 * The DIRECT-member gate is the one that stops a wrong CONCRETE type, not merely an
-	 * unresolvable one: a subtype whose header parameter happens to share the supertype's name but
-	 * passes something else up (`class Der<T:Item> extends Base<Str>`, `Base<T> { var u:T; }`)
-	 * would otherwise substitute `Der`'s argument into `Base`'s parameter and resolve `u` to the
-	 * wrong type entirely. `SimplifyNegatedCompoundCheckTest.testSupertypeParamNameCollisionKeepsWrap`
-	 * is the fixture that fails if it is removed.
-	 */
-	private function substitutedMemberSource(cur: ResolvedType, member: String, memberSource: String, args: Array<String>): Null<String> {
-		final params: Array<String> = cur.type.typeParamNames;
-		final at: Int = params.indexOf(StringTools.trim(memberSource));
-		final declaredHere: Bool = cur.type.members.exists(m -> m.name == member);
-		final effective: String = declaredHere && at >= 0 && at < args.length ? args[at] : memberSource;
-		return mentionsTypeParam(effective, params) ? null : effective;
-	}
-
-	/** Whether `text` names any of `params` as a WHOLE identifier token — `Item` does not mention `T`, `Array<T>` does. */
-	private static function mentionsTypeParam(text: String, params: Array<String>): Bool {
-		if (params.length == 0) return false;
-		var i: Int = 0;
-		while (i < text.length) {
-			if (!RefactorSupport.isIdentStartChar(StringTools.fastCodeAt(text, i))) {
-				i++;
-				continue;
-			}
-			var end: Int = i + 1;
-			while (end < text.length && RefactorSupport.isIdentChar(StringTools.fastCodeAt(text, end))) end++;
-			if (params.contains(text.substring(i, end))) return true;
-			i = end;
-		}
-		return false;
-	}
-
-	/**
 	 * Whether a (transitive) supertype of `typeName` declares a member named `field`.
 	 * Such a field's property access is fixed by the supertype, so a check must not
 	 * tighten it (`var` → `final` / `(default, null)`) — Haxe rejects an override /
@@ -826,7 +742,6 @@ final class SymbolIndex {
 	public function supertypeDeclaresMember(typeName: String, field: String): Bool {
 		return supertypeDeclares(typeName, field, []);
 	}
-
 
 	/**
 	 * Whether the type named `typeName` DECLARED IN `file` provably inherits a member
@@ -944,32 +859,6 @@ final class SymbolIndex {
 	}
 
 	/**
-	 * The single decl `typeName` names, or null when it cannot be pinned to one. Three arms, in
-	 * order of how much the caller knows:
-	 *
-	 *  - `fromFile` names an indexed file: resolve against THAT file's package + imports, so a
-	 *    simple name several packages share means what the analysed file says it means. This is
-	 *    the `implements` / receiver-type case. A name the file's scope does not reach is a
-	 *    refusal, not a fall-through — the caller supplied the context, so it decides.
-	 *  - `typeName` is a dotted path: `resolveQualifiedRefAll` matches it on import path, needing
-	 *    no referring file. This is the `using`-conflict case, which holds a full module path.
-	 *  - neither: the name must be globally unique among indexed decls — the original rule, kept
-	 *    as the fallback so an out-of-index `fromFile` degrades to it instead of refusing.
-	 */
-	private function resolveStartType(typeName: String, fromFile: Null<String>): Null<ResolvedType> {
-		if (fromFile != null) {
-			final host: Null<FileInfo> = _files.find(f -> f.file == fromFile);
-			if (host != null) return resolveTypeRef(typeName, host);
-		}
-		if (typeName.indexOf('.') >= 0) {
-			final qualified: Array<ResolvedType> = resolveQualifiedRefAll(typeName);
-			return qualified.length == 1 ? qualified[0] : null;
-		}
-		final ds: Array<ResolvedType> = resolvedDeclsNamed(typeName);
-		return ds.length == 1 ? ds[0] : null;
-	}
-
-	/**
 	 * Whether ANY indexed type named `typeName` DIRECTLY declares a member named
 	 * `member` — methods included, supertypes NOT consulted. The SHADOW companion of
 	 * `typeProvablyLacksMember` (which proves absence across the whole closure) and of
@@ -1054,32 +943,6 @@ final class SymbolIndex {
 			m.name == member
 		) && declMayBeSubtype(t, typeName, [t.name]))
 			return true;
-		return false;
-	}
-
-	/**
-	 * Whether `t` MAY be a transitive subtype of `target`. Deliberately NOT `isSubtype`: that one
-	 * re-resolves a link by SIMPLE NAME and answers `false` when several types share it, which is
-	 * the safe default only for a caller that acts on `true` (`redundant-upcast` rewrites a cast,
-	 * `naming` rebinds an occurrence). Every caller of `subtypeDeclaresMember` reads `true` as
-	 * "bail out" instead, so it needs the opposite default: an AMBIGUOUS link is a MAY. Two other
-	 * differences follow from starting at the declaration rather than its name — the root type is
-	 * never ambiguous (we hold it), and only a genuinely ambiguous ANCESTOR link goes conservative.
-	 * A link naming no indexed type is skipped, as in `isSubtype`: it cannot be `target`, which is
-	 * indexed by construction.
-	 */
-	private function declMayBeSubtype(t: TypeDeclInfo, target: String, seen: Array<String>): Bool {
-		for (sup in t.supertypes) {
-			if (sup == target) return true;
-			if (seen.contains(sup)) continue;
-			seen.push(sup);
-			final ds: Array<TypeDeclInfo> = declsNamed(sup);
-			if (ds.length != 1) {
-				if (ds.length > 1) return true;
-				continue;
-			}
-			if (declMayBeSubtype(ds[0], target, seen)) return true;
-		}
 		return false;
 	}
 
@@ -1204,6 +1067,132 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * The shared body of the two path walks. With `substitute == false` it is the plain
+	 * import-aware walk, byte for byte what `resolvePathFinalMemberTypeSource` always did; with
+	 * `substitute == true` it additionally carries the receiver's written type ARGUMENTS alongside
+	 * the current type and rewrites a parameter-typed member through them.
+	 *
+	 * `args` is re-seeded at every step from the effective member source, so the substitution
+	 * follows a chain of generic containers (`Array<Box<Item>>` → `Box<Item>` → `Item`). The
+	 * fail-closed rule that ends the walk when a parameter name survives substitution is what keeps
+	 * that sound: without it an unsubstituted `T` would travel forward as if it were a concrete
+	 * argument and could collide with the NEXT type's parameter of the same name, or with a project
+	 * type literally called `T` / `K` / `V`.
+	 */
+	private function pathFinalMemberWalk(fromFile: String, startSource: String, memberPath: Array<String>, substitute: Bool): Null<String> {
+		if (memberPath.length == 0) return null;
+		final origin: Null<FileInfo> = _files.find(f -> f.file == fromFile);
+		if (origin == null) return null;
+		var args: Array<String> = [];
+		var startName: String = startSource;
+		if (substitute) {
+			final startArgs: Null<Array<String>> = RefactorSupport.typeArgumentSourcesOf(startSource);
+			if (startArgs != null) {
+				final head: Null<String> = RefactorSupport.outerNominalOf(startSource);
+				if (head == null) return null;
+				args = startArgs;
+				startName = head;
+			}
+		}
+		var current: Null<ResolvedType> = resolveTypeRef(startName, origin);
+		for (i in 0...memberPath.length - 1) {
+			if (current == null) return null;
+			final cur: ResolvedType = current;
+			final memberSource: Null<String> = memberTypeSourceWalk(cur, memberPath[i], []);
+			if (memberSource == null) return null;
+			final effective: Null<String> = substitute ? substitutedMemberSource(cur, memberPath[i], memberSource, args) : memberSource;
+			if (effective == null) return null;
+			if (substitute) args = RefactorSupport.typeArgumentSourcesOf(effective) ?? [];
+			final nominal: String = StringTools.trim(effective.split('<')[0]);
+			current = resolveTypeRef(nominal, cur.file);
+		}
+		if (current == null) return null;
+		final last: ResolvedType = current;
+		final member: String = memberPath[memberPath.length - 1];
+		final finalSource: Null<String> = memberTypeSourceWalk(last, member, []);
+		return finalSource == null || !substitute ? finalSource : substitutedMemberSource(last, member, finalSource, args);
+	}
+
+	/**
+	 * `memberSource` with `cur`'s type parameters resolved through `args`, or null when the result
+	 * would still name one of them.
+	 *
+	 * Substitution fires only when ALL three hold: the member is declared DIRECTLY on `cur.type`
+	 * (an inherited one's parameter name belongs to the supertype's header, a mapping this index
+	 * does not model); its trimmed source is EXACTLY one parameter name (a source that merely
+	 * CONTAINS one, `Array<T>`, would need a rewrite, not a lookup); and that name's position is
+	 * covered by the arguments actually written on the receiver. Otherwise the verbatim source
+	 * stands — and is then rejected by the parameter-mention gate if it names a parameter, so an
+	 * unsubstitutable parameter can never leave this function as if it were a concrete type.
+	 *
+	 * The DIRECT-member gate is the one that stops a wrong CONCRETE type, not merely an
+	 * unresolvable one: a subtype whose header parameter happens to share the supertype's name but
+	 * passes something else up (`class Der<T:Item> extends Base<Str>`, `Base<T> { var u:T; }`)
+	 * would otherwise substitute `Der`'s argument into `Base`'s parameter and resolve `u` to the
+	 * wrong type entirely. `SimplifyNegatedCompoundCheckTest.testSupertypeParamNameCollisionKeepsWrap`
+	 * is the fixture that fails if it is removed.
+	 */
+	private function substitutedMemberSource(cur: ResolvedType, member: String, memberSource: String, args: Array<String>): Null<String> {
+		final params: Array<String> = cur.type.typeParamNames;
+		final at: Int = params.indexOf(memberSource.trim());
+		final declaredHere: Bool = cur.type.members.exists(m -> m.name == member);
+		final effective: String = declaredHere && at >= 0 && at < args.length ? args[at] : memberSource;
+		return mentionsTypeParam(effective, params) ? null : effective;
+	}
+
+	/**
+	 * The single decl `typeName` names, or null when it cannot be pinned to one. Three arms, in
+	 * order of how much the caller knows:
+	 *
+	 *  - `fromFile` names an indexed file: resolve against THAT file's package + imports, so a
+	 *    simple name several packages share means what the analysed file says it means. This is
+	 *    the `implements` / receiver-type case. A name the file's scope does not reach is a
+	 *    refusal, not a fall-through — the caller supplied the context, so it decides.
+	 *  - `typeName` is a dotted path: `resolveQualifiedRefAll` matches it on import path, needing
+	 *    no referring file. This is the `using`-conflict case, which holds a full module path.
+	 *  - neither: the name must be globally unique among indexed decls — the original rule, kept
+	 *    as the fallback so an out-of-index `fromFile` degrades to it instead of refusing.
+	 */
+	private function resolveStartType(typeName: String, fromFile: Null<String>): Null<ResolvedType> {
+		if (fromFile != null) {
+			final host: Null<FileInfo> = _files.find(f -> f.file == fromFile);
+			if (host != null) return resolveTypeRef(typeName, host);
+		}
+		if (typeName.indexOf('.') >= 0) {
+			final qualified: Array<ResolvedType> = resolveQualifiedRefAll(typeName);
+			return qualified.length == 1 ? qualified[0] : null;
+		}
+		final ds: Array<ResolvedType> = resolvedDeclsNamed(typeName);
+		return ds.length == 1 ? ds[0] : null;
+	}
+
+	/**
+	 * Whether `t` MAY be a transitive subtype of `target`. Deliberately NOT `isSubtype`: that one
+	 * re-resolves a link by SIMPLE NAME and answers `false` when several types share it, which is
+	 * the safe default only for a caller that acts on `true` (`redundant-upcast` rewrites a cast,
+	 * `naming` rebinds an occurrence). Every caller of `subtypeDeclaresMember` reads `true` as
+	 * "bail out" instead, so it needs the opposite default: an AMBIGUOUS link is a MAY. Two other
+	 * differences follow from starting at the declaration rather than its name — the root type is
+	 * never ambiguous (we hold it), and only a genuinely ambiguous ANCESTOR link goes conservative.
+	 * A link naming no indexed type is skipped, as in `isSubtype`: it cannot be `target`, which is
+	 * indexed by construction.
+	 */
+	private function declMayBeSubtype(t: TypeDeclInfo, target: String, seen: Array<String>): Bool {
+		for (sup in t.supertypes) {
+			if (sup == target) return true;
+			if (seen.contains(sup)) continue;
+			seen.push(sup);
+			final ds: Array<TypeDeclInfo> = declsNamed(sup);
+			if (ds.length != 1) {
+				if (ds.length > 1) return true;
+				continue;
+			}
+			if (declMayBeSubtype(ds[0], target, seen)) return true;
+		}
+		return false;
+	}
+
+	/**
 	 * `abstractRebindsThis`'s recursion, cycle-guarded by `seen` (a cycle is treated as
 	 * possibly-rebinding — conservative). A non-abstract match contributes "found" without rebinding; an
 	 * abstract with `abstractSelfRebind` rebinds; a `@:forward` abstract defers to its underlying (an
@@ -1279,18 +1268,6 @@ final class SymbolIndex {
 		return '${cur.file.file}#${cur.type.name}';
 	}
 
-	/**
-	 * Whether a supertype reference is `Dynamic`. `implements Dynamic<T>` marks dynamic FIELD
-	 * ACCESS and declares no NAMED member, so it can never be the inherited `_x` a rename would
-	 * redefine — it must be SKIPPED rather than counted as an unresolvable dead end, which would
-	 * wrongly block every `openfl` display subclass (`DisplayObject` carries such a clause under
-	 * `#if`). Matched on the last path segment, so a qualified spelling is skipped too.
-	 */
-	private static inline function dynamicSupertypeRef(raw: String): Bool {
-		final dot: Int = raw.lastIndexOf('.');
-		return (dot < 0 ? raw : raw.substr(dot + 1)) == 'Dynamic';
-	}
-
 	/** Every indexed decl named `typeName` (simple name), each paired with its declaring file. */
 
 	private function resolvedDeclsNamed(typeName: String): Array<ResolvedType> {
@@ -1307,7 +1284,6 @@ final class SymbolIndex {
 			return true;
 		return false;
 	}
-
 
 	/** The `{file, type}` for the type named `typeName` declared in `file`, or null. */
 	private function findDeclaredType(file: String, typeName: String): Null<ResolvedType> {
@@ -1358,20 +1334,6 @@ final class SymbolIndex {
 			if (inherited != null) return inherited;
 		}
 		return null;
-	}
-
-	/**
-	 * Whether `type` itself declares `member` as an INSTANCE member: `true` when it declares it
-	 * non-statically, `false` when ANY declaration of that name is `static`, null when the type
-	 * declares no member of that name at all.
-	 */
-	private static function declaredInstanceMember(type: TypeDeclInfo, member: String): Null<Bool> {
-		var found: Null<Bool> = null;
-		for (m in type.members) if (m.name == member) {
-			if (m.isStatic) return false;
-			found = true;
-		}
-		return found;
 	}
 
 	/**
@@ -1560,13 +1522,12 @@ final class SymbolIndex {
 		var supers: Int = 0;
 		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (sup in t.supertypes) {
 			final rn: Null<String> = returnNominalWalk(sup, memberName, seen);
-			if (rn != null) {
-				if (supers == 0)
-					inherited = rn;
-				else if (rn != inherited)
-					return null;
-				supers++;
-			}
+			if (rn == null) continue;
+			if (supers == 0)
+				inherited = rn;
+			else if (rn != inherited)
+				return null;
+			supers++;
 		}
 		return inherited;
 	}
@@ -1600,11 +1561,10 @@ final class SymbolIndex {
 		var supers: Int = 0;
 		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (sup in t.supertypes) {
 			final v: Null<String> = memberVisibilityWalk(sup, memberName, seen);
-			if (v != null) {
-				if (supers > 0 && v != inherited) return null;
-				inherited = v;
-				supers++;
-			}
+			if (v == null) continue;
+			if (supers > 0 && v != inherited) return null;
+			inherited = v;
+			supers++;
 		}
 		return inherited;
 	}
@@ -1710,7 +1670,6 @@ final class SymbolIndex {
 		return false;
 	}
 
-
 	/**
 	 * The nearest ancestor of `start` declaring any of `names` — the type whose member an `override`
 	 * on `start` actually overrides — or null when no ancestor declares one (an ancestor outside the
@@ -1773,6 +1732,49 @@ final class SymbolIndex {
 			if (segment.length > 0 && RefactorSupport.isUpperInitial(segment)) return out.join('.');
 		}
 		return path;
+	}
+
+	/** Whether `text` names any of `params` as a WHOLE identifier token — `Item` does not mention `T`, `Array<T>` does. */
+	private static function mentionsTypeParam(text: String, params: Array<String>): Bool {
+		if (params.length == 0) return false;
+		var i: Int = 0;
+		while (i < text.length) {
+			if (!RefactorSupport.isIdentStartChar(text.fastCodeAt(i))) {
+				i++;
+				continue;
+			}
+			var end: Int = i + 1;
+			while (end < text.length && RefactorSupport.isIdentChar(text.fastCodeAt(end))) end++;
+			if (params.contains(text.substring(i, end))) return true;
+			i = end;
+		}
+		return false;
+	}
+
+	/**
+	 * Whether a supertype reference is `Dynamic`. `implements Dynamic<T>` marks dynamic FIELD
+	 * ACCESS and declares no NAMED member, so it can never be the inherited `_x` a rename would
+	 * redefine — it must be SKIPPED rather than counted as an unresolvable dead end, which would
+	 * wrongly block every `openfl` display subclass (`DisplayObject` carries such a clause under
+	 * `#if`). Matched on the last path segment, so a qualified spelling is skipped too.
+	 */
+	private static inline function dynamicSupertypeRef(raw: String): Bool {
+		final dot: Int = raw.lastIndexOf('.');
+		return (dot < 0 ? raw : raw.substr(dot + 1)) == 'Dynamic';
+	}
+
+	/**
+	 * Whether `type` itself declares `member` as an INSTANCE member: `true` when it declares it
+	 * non-statically, `false` when ANY declaration of that name is `static`, null when the type
+	 * declares no member of that name at all.
+	 */
+	private static function declaredInstanceMember(type: TypeDeclInfo, member: String): Null<Bool> {
+		var found: Null<Bool> = null;
+		for (m in type.members) if (m.name == member) {
+			if (m.isStatic) return false;
+			found = true;
+		}
+		return found;
 	}
 
 }

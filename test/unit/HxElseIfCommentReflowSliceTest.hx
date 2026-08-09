@@ -52,31 +52,33 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	private static final CONFIG_OFF: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, '
 		+ '"whitespace": {"addLineCommentSpace": false, "bracesConfig": {"singleStatementBraces": "remove"}}, '
 		+ '"sameLine": {"ifBody": "fitLine"}}';
-	private static final BRACED_SRC: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n\t\t\t// dispose the bitmap when the object is a bitmap\n\t\tif (b) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
-	private static final BRACED_REFLOWED: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else if (b) { // dispose the bitmap when the object is a bitmap\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
-	private static final BARE_SRC: String =
-		'class C {\n\tfunction g() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// pick the second branch\n\t\tif (b)\n\t\t\ttwo();\n\t}\n}';
+	private static final BRACED_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n'
+		+ '\t\t\t// dispose the bitmap when the object is a bitmap\n\t\tif (b) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
+	private static final BRACED_REFLOWED: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
+		+ '\t\t} else if (b) { // dispose the bitmap when the object is a bitmap\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
+	private static final BARE_SRC: String = 'class C {\n\tfunction g() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n'
+		+ '\t\t\t// pick the second branch\n\t\tif (b)\n\t\t\ttwo();\n\t}\n}';
 	private static final BARE_REFLOWED: String =
 		'class C {\n\tfunction g() {\n\t\tif (a)\n\t\t\tone();\n\t\telse if (b) // pick the second branch\n\t\t\ttwo();\n\t}\n}';
-	private static final CHAIN_SRC: String =
-		'class C {\n\tfunction h() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n\t\t\t// second branch\n\t\tif (b) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t} else\n\t\t\t// third branch\n\t\tif (c) {\n\t\t\tthree();\n\t\t\tthreeMore();\n\t\t}\n\t}\n}';
-	private static final CHAIN_REFLOWED: String =
-		'class C {\n\tfunction h() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else if (b) { // second branch\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t} else if (c) { // third branch\n\t\t\tthree();\n\t\t\tthreeMore();\n\t\t}\n\t}\n}';
-	private static final BLOCK_COMMENT_SRC: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n\t\t\t/* dispose the bitmap */\n\t\tif (b) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
-	private static final TWO_COMMENTS_SRC: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n\t\t\t// first note\n\t\t\t// second note\n\t\tif (b) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
-	private static final NON_IF_ELSE_SRC: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n\t\t\t// plain else block\n\t\t{\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
+	private static final CHAIN_SRC: String = 'class C {\n\tfunction h() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n'
+		+ '\t\t\t// second branch\n\t\tif (b) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t} else\n'
+		+ '\t\t\t// third branch\n\t\tif (c) {\n\t\t\tthree();\n\t\t\tthreeMore();\n\t\t}\n\t}\n}';
+	private static final CHAIN_REFLOWED: String = 'class C {\n\tfunction h() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
+		+ '\t\t} else if (b) { // second branch\n\t\t\ttwo();\n\t\t\ttwoMore();\n'
+		+ '\t\t} else if (c) { // third branch\n\t\t\tthree();\n\t\t\tthreeMore();\n\t\t}\n\t}\n}';
+	private static final BLOCK_COMMENT_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
+		+ '\t\t} else\n' + '\t\t\t/* dispose the bitmap */\n\t\tif (b) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
+	private static final TWO_COMMENTS_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
+		+ '\t\t} else\n' + '\t\t\t// first note\n\t\t\t// second note\n\t\tif (b) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
+	private static final NON_IF_ELSE_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n'
+		+ '\t\t\t// plain else block\n\t\t{\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
 
 	/** Source braces that `singleStatementBraces: remove` drops in the same pass as the reflow. */
-	private static final SSB_SRC: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t} else\n\t\t\t// single statement branch\n\t\tif (b) {\n\t\t\ttwo();\n\t\t}\n\t}\n}';
+	private static final SSB_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t} else\n'
+		+ '\t\t\t// single statement branch\n\t\tif (b) {\n\t\t\ttwo();\n\t\t}\n\t}\n}';
 
-	private static final SSB_KEPT: String =
-		'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// single statement branch\n\t\tif (b)\n\t\t\ttwo();\n\t}\n}';
+	private static final SSB_KEPT: String = 'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n'
+		+ '\t\t\t// single statement branch\n\t\tif (b)\n\t\t\ttwo();\n\t}\n}';
 	private static final SSB_REFLOWED: String =
 		'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse if (b) // single statement branch\n\t\t\ttwo();\n\t}\n}';
 
@@ -90,12 +92,17 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 		+ '"whitespace": {"addLineCommentSpace": false, "bracesConfig": {"singleStatementBraces": "remove"}}, '
 		+ '"sameLine": {"ifBody": "fitLine", "elseIfCommentReflow": true}}';
 
-	private static final WIDE_SRC: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n\t\t\t// a fairly long trailing note that pushes the glued head line past the configured limit\n\t\tif (subject is Bitmap && subject.parent != null && somethingElseEntirely.isReady) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
-	private static final WIDE_GLUED: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else if (subject is Bitmap && subject.parent != null && somethingElseEntirely.isReady) { // a fairly long trailing note that pushes the glued head line past the configured limit\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
-	private static final WIDE_COND_OPENED: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else if (\n\t\t\tsubject is Bitmap && subject.parent != null && somethingElseEntirely.isReady\n\t\t) { // a fairly long trailing note that pushes the glued head line past the configured limit\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
+	private static final WIDE_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n'
+		+ '\t\t\t// a fairly long trailing note that pushes the glued head line past the configured limit\n'
+		+ '\t\tif (subject is Bitmap && subject.parent != null && somethingElseEntirely.isReady) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n'
+		+ '\t}\n}';
+	private static final WIDE_GLUED: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
+		+ '\t\t} else if (subject is Bitmap && subject.parent != null && somethingElseEntirely.isReady) { // a fairly long trailing note that pushes the glued head line past the configured limit\n'
+		+ '\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
+	private static final WIDE_COND_OPENED: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
+		+ '\t\t} else if (\n' + '\t\t\tsubject is Bitmap && subject.parent != null && somethingElseEntirely.isReady\n'
+		+ '\t\t) { // a fairly long trailing note that pushes the glued head line past the configured limit\n'
+		+ '\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
 
 	/** A condition wrap policy that breaks EVERY operand, so the head line spans several lines. */
 	private static final CONFIG_ONE_PER_LINE: String = '{"indentation": {"character": "tab", "tabWidth": 4}, '
@@ -118,55 +125,70 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 		+ '"whitespace": {"addLineCommentSpace": false}, '
 		+ '"sameLine": {"ifBody": "fitLine", "fitLineIfWithElse": true, "elseIfCommentReflow": true}}';
 
-	private static final WRAPPED_COND_SRC: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n\t\t\t// see foo(alphaBetaGamma\n\t\tif (alphaBetaGamma && deltaEpsilonZeta && etaThetaIota) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
-	private static final WRAPPED_COND_REFLOWED: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else if (alphaBetaGamma\n\t\t\t&& deltaEpsilonZeta\n\t\t\t&& etaThetaIota) { // see foo(alphaBetaGamma\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
+	private static final WRAPPED_COND_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
+		+ '\t\t} else\n\t\t\t// see foo(alphaBetaGamma\n' + '\t\tif (alphaBetaGamma && deltaEpsilonZeta && etaThetaIota) {\n\t\t\ttwo();\n'
+		+ '\t\t\ttwoMore();\n\t\t}\n\t}\n}';
+	private static final WRAPPED_COND_REFLOWED: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
+		+ '\t\t} else if (alphaBetaGamma\n\t\t\t&& deltaEpsilonZeta\n'
+		+ '\t\t\t&& etaThetaIota) { // see foo(alphaBetaGamma\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
 
 	/** Knob off: the condition wraps and the fork three-line layout stays. */
-	private static final WRAPPED_COND_KEPT: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n\t\t\t// see foo(alphaBetaGamma\n\t\tif (alphaBetaGamma\n\t\t\t&& deltaEpsilonZeta\n\t\t\t&& etaThetaIota) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
+	private static final WRAPPED_COND_KEPT: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
+		+ '\t\t} else\n\t\t\t// see foo(alphaBetaGamma\n\t\tif (alphaBetaGamma\n'
+		+ '\t\t\t&& deltaEpsilonZeta\n\t\t\t&& etaThetaIota) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n' + '\t\t}\n\t}\n}';
 
-	private static final HEAD_TRAIL_SRC: String =
-		'class C {\n\tfunction braceTrail() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n\t\t\t// outer note\n\t\tif (b) { // inner note\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n\n\tfunction condTrail() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n\t\t\t// outer note\n\t\tif (b) // inner note\n\t\t{\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
-	private static final OPEN_DELIM_SRC: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n\t\t\t// open delims (  [  {\n\t\tif (b) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
-	private static final OPEN_DELIM_REFLOWED: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else if (b) { // open delims (  [  {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
-	private static final KEEP_ELSE_SRC: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n\t\t\t// note\n\t\tif (b) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
-	private static final KEEP_ELSE_CANON: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n\t\t\t// note\n\t\t\tif (b) {\n\t\t\t\ttwo();\n\t\t\t\ttwoMore();\n\t\t\t}\n\t}\n}';
-	private static final GLUED_BODY_SRC: String =
-		'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n\t\tif (b)\n\t\t\tcallWithSeveralArgs(alphaValue, betaValue, gammaValue, deltaValue);\n\t}\n}';
-	private static final GLUED_BODY_CANON: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) one();\n\t\telse\n\t\t\t// note\n\t\tif (b)\n\t\t\tcallWithSeveralArgs(alphaValue, betaValue,\n\t\t\t\tgammaValue, deltaValue);\n\t}\n}';
+	private static final HEAD_TRAIL_SRC: String = 'class C {\n\tfunction braceTrail() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
+		+ '\t\t} else\n\t\t\t// outer note\n\t\tif (b) { // inner note\n\t\t\ttwo();\n'
+		+ '\t\t\ttwoMore();\n\t\t}\n\t}\n\n\tfunction condTrail() {\n\t\tif (a) {\n\t\t\tone();\n'
+		+ '\t\t\toneMore();\n\t\t} else\n\t\t\t// outer note\n\t\tif (b) // inner note\n\t\t{\n'
+		+ '\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
+	private static final OPEN_DELIM_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n'
+		+ '\t\t\t// open delims (  [  {\n\t\tif (b) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
+	private static final OPEN_DELIM_REFLOWED: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
+		+ '\t\t} else if (b) { // open delims (  [  {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
+	private static final KEEP_ELSE_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n'
+		+ '\t\t\t// note\n\t\tif (b) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
+	private static final KEEP_ELSE_CANON: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n'
+		+ '\t\t\t// note\n\t\t\tif (b) {\n\t\t\t\ttwo();\n\t\t\t\ttwoMore();\n\t\t\t}\n\t}\n}';
+	private static final GLUED_BODY_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n'
+		+ '\t\tif (b)\n\t\t\tcallWithSeveralArgs(alphaValue, betaValue, gammaValue, deltaValue);\n' + '\t}\n}';
+	private static final GLUED_BODY_CANON: String = 'class C {\n\tfunction f() {\n\t\tif (a) one();\n\t\telse\n\t\t\t// note\n\t\tif (b)\n'
+		+ '\t\t\tcallWithSeveralArgs(alphaValue, betaValue,\n\t\t\t\tgammaValue, deltaValue);\n\t}\n}';
 
 	/** The probe body followed by an `else`, so a walk that stepped OVER the probe would anchor there. */
-	private static final GLUED_BODY_ELSE_SRC: String =
-		'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n\t\tif (b)\n\t\t\tcallWithSeveralArgs(alphaValue, betaValue, gammaValue, deltaValue);\n\t\telse\n\t\t\tfallbackStep();\n\t}\n}';
+	private static final GLUED_BODY_ELSE_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n'
+		+ '\t\tif (b)\n\t\t\tcallWithSeveralArgs(alphaValue, betaValue, gammaValue, deltaValue);\n'
+		+ '\t\telse\n\t\t\tfallbackStep();\n\t}\n}';
 
-	private static final GLUED_BODY_ELSE_CANON: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) one();\n\t\telse\n\t\t\t// note\n\t\tif (b)\n\t\t\tcallWithSeveralArgs(alphaValue, betaValue,\n\t\t\t\tgammaValue, deltaValue);\n\t\telse\n\t\t\tfallbackStep();\n\t}\n}';
+	private static final GLUED_BODY_ELSE_CANON: String = 'class C {\n\tfunction f() {\n\t\tif (a) one();\n\t\telse\n\t\t\t// note\n'
+		+ '\t\tif (b)\n\t\t\tcallWithSeveralArgs(alphaValue, betaValue,\n'
+		+ '\t\t\t\tgammaValue, deltaValue);\n\t\telse\n\t\t\tfallbackStep();\n\t}\n}';
 
 	/**
 	 * An EMPTY then-body renders as one closed `{}` token with no interior break,
 	 * so the head line the walk is measuring has already ended. All three shapes:
 	 * a following `else`, a following `else if`, and the empty body alone.
 	 */
-	private static final EMPTY_THEN_SRC: String =
-		'class C {\n\tfunction elseAfterEmpty() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n\t\t\t// note\n\t\tif (b) {\n\t\t} else {\n\t\t\tthree();\n\t\t}\n\t}\n\n\tfunction chainAfterEmpty() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n\t\t\t// note\n\t\tif (b) {\n\t\t} else if (c) {\n\t\t\tthree();\n\t\t\tthreeMore();\n\t\t}\n\t}\n\n\tfunction emptyAlone() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n\t\t\t// note\n\t\tif (b) {\n\t\t}\n\t}\n}';
+	private static final EMPTY_THEN_SRC: String = 'class C {\n\tfunction elseAfterEmpty() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
+		+ '\t\t} else\n\t\t\t// note\n\t\tif (b) {\n\t\t} else {\n\t\t\tthree();\n\t\t}\n\t}\n\n'
+		+ '\tfunction chainAfterEmpty() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
+		+ '\t\t} else\n\t\t\t// note\n\t\tif (b) {\n\t\t} else if (c) {\n\t\t\tthree();\n'
+		+ '\t\t\tthreeMore();\n\t\t}\n\t}\n\n\tfunction emptyAlone() {\n\t\tif (a) {\n\t\t\tone();\n'
+		+ '\t\t\toneMore();\n\t\t} else\n\t\t\t// note\n\t\tif (b) {\n\t\t}\n\t}\n}';
 
 	/** Only the empty-curly collapse moves; the comment stays where the source put it. */
-	private static final EMPTY_THEN_CANON: String =
-		'class C {\n\tfunction elseAfterEmpty() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n\t\t\t// note\n\t\tif (b) {} else {\n\t\t\tthree();\n\t\t}\n\t}\n\n\tfunction chainAfterEmpty() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n\t\t\t// note\n\t\tif (b) {} else if (c) {\n\t\t\tthree();\n\t\t\tthreeMore();\n\t\t}\n\t}\n\n\tfunction emptyAlone() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n\t\t\t// note\n\t\tif (b) {}\n\t}\n}';
+	private static final EMPTY_THEN_CANON: String = 'class C {\n\tfunction elseAfterEmpty() {\n\t\tif (a) {\n\t\t\tone();\n'
+		+ '\t\t\toneMore();\n' + '\t\t} else\n\t\t\t// note\n\t\tif (b) {} else {\n\t\t\tthree();\n\t\t}\n\t}\n\n'
+		+ '\tfunction chainAfterEmpty() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n'
+		+ '\t\t\t// note\n\t\tif (b) {} else if (c) {\n\t\t\tthree();\n\t\t\tthreeMore();\n\t\t}\n\t}\n\n'
+		+ '\tfunction emptyAlone() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n' + '\t\t\t// note\n\t\tif (b) {}\n\t}\n}';
 
 	/** A bare body that already carries hardlines: the writer wraps it in a glue PROBE. */
-	private static final PROBE_BODY_SRC: String =
-		'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n\t\tif (b)\n\t\t\tfor (item in collection) {\n\t\t\t\thandle(item);\n\t\t\t}\n\t\telse\n\t\t\tfallbackStep();\n\t}\n}';
+	private static final PROBE_BODY_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n'
+		+ '\t\tif (b)\n\t\t\tfor (item in collection) {\n\t\t\t\thandle(item);\n\t\t\t}\n\t\telse\n' + '\t\t\tfallbackStep();\n\t}\n}';
 
-	private static final PROBE_BODY_CANON: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) one();\n\t\telse\n\t\t\t// note\n\t\tif (b) for (item in collection) {\n\t\t\thandle(item);\n\t\t}\n\t\telse\n\t\t\tfallbackStep();\n\t}\n}';
+	private static final PROBE_BODY_CANON: String = 'class C {\n\tfunction f() {\n\t\tif (a) one();\n\t\telse\n\t\t\t// note\n'
+		+ '\t\tif (b) for (item in collection) {\n\t\t\thandle(item);\n\t\t}\n\t\telse\n\t\t\tfallbackStep();\n' + '\t}\n}';
 
 	/** `ifBody`/`elseBody: same` - the one policy pair that leaves a bare body with no hardline. */
 	private static final CONFIG_INLINE_BODY: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, '
@@ -176,16 +198,20 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 		'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n\t\tif (b)\n\t\t\ttwo();\n\t}\n}';
 	private static final NO_ANCHOR_CANON: String =
 		'class C {\n\tfunction f() {\n\t\tif (a) one();\n\t\telse\n\t\t\t// note\n\t\tif (b) two();\n\t}\n}';
-	private static final INLINE_ELSE_SRC: String =
-		'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n\t\tif (b)\n\t\t\ttwo();\n\t\telse\n\t\t\tthree();\n\t}\n}';
+	private static final INLINE_ELSE_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n'
+		+ '\t\tif (b)\n\t\t\ttwo();\n\t\telse\n\t\t\tthree();\n\t}\n}';
 	private static final INLINE_ELSE_CANON: String =
 		'class C {\n\tfunction f() {\n\t\tif (a) one();\n\t\telse\n\t\t\t// note\n\t\tif (b) two();\n\t\telse three();\n\t}\n}';
-	private static final AFTER_KW_SRC: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else // cuddled to else\n\t\t\t// interposed\n\t\tif (b) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
-	private static final DEFAULT_SRC: String =
-		'class C {\n\tfunction braced() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n\t\t\t// dispose the bitmap when the object is a bitmap\n\t\tif (b) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n\n\tfunction bare() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// pick the second branch\n\t\tif (b)\n\t\t\ttwo();\n\t}\n}';
-	private static final DEFAULT_CANON: String =
-		'class C {\n\tfunction braced() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n\t\t\t// dispose the bitmap when the object is a bitmap\n\t\t\tif (b) {\n\t\t\t\ttwo();\n\t\t\t\ttwoMore();\n\t\t\t}\n\t}\n\n\tfunction bare() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// pick the second branch\n\t\t\tif (b)\n\t\t\t\ttwo();\n\t}\n}\n';
+	private static final AFTER_KW_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
+		+ '\t\t} else // cuddled to else\n\t\t\t// interposed\n\t\tif (b) {\n\t\t\ttwo();\n' + '\t\t\ttwoMore();\n\t\t}\n\t}\n}';
+	private static final DEFAULT_SRC: String = 'class C {\n\tfunction braced() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
+		+ '\t\t} else\n\t\t\t// dispose the bitmap when the object is a bitmap\n\t\tif (b) {\n'
+		+ '\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n\n\tfunction bare() {\n\t\tif (a)\n'
+		+ '\t\t\tone();\n\t\telse\n\t\t\t// pick the second branch\n\t\tif (b)\n\t\t\ttwo();\n\t}\n}';
+	private static final DEFAULT_CANON: String = 'class C {\n\tfunction braced() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
+		+ '\t\t} else\n\t\t\t// dispose the bitmap when the object is a bitmap\n\t\t\tif (b) {\n'
+		+ '\t\t\t\ttwo();\n\t\t\t\ttwoMore();\n\t\t\t}\n\t}\n\n\tfunction bare() {\n\t\tif (a)\n'
+		+ '\t\t\tone();\n\t\telse\n\t\t\t// pick the second branch\n\t\t\tif (b)\n\t\t\t\ttwo();\n' + '\t}\n}\n';
 
 	public function new(): Void {
 		super();

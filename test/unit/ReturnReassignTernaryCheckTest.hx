@@ -39,7 +39,8 @@ class ReturnReassignTernaryCheckTest extends Test {
 	/** The TM reference shape (`src/api/API.hx`): the tail guard on an accumulator string. */
 	public function testReferenceShapeFixed(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(fn(
-			'var errorMessages = g();\n\t\tif (errorMessages.length == 0) errorMessages = unknownErrorMessage(localize);\n\t\treturn errorMessages;'
+			'var errorMessages = g();\n\t\tif (errorMessages.length == 0) errorMessages = unknownErrorMessage(localize);\n'
+			+ '\t\treturn errorMessages;'
 		));
 		Assert.equals(1, es.length);
 		Assert.equals('return errorMessages.length == 0 ? unknownErrorMessage(localize) : errorMessages;', es[0].text);

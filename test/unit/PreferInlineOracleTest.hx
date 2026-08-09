@@ -5,8 +5,6 @@ import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
-import anyparse.check.FixVerifier.FixVerifyResult;
-import anyparse.check.FixVerifier.FixVerifyPartial;
 import anyparse.check.PreferInline;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
@@ -30,7 +28,8 @@ class PreferInlineOracleTest extends Test {
 		+ '\tpublic static function one():Int\n\t\treturn 1;\n\n\tpublic static function two():Int\n\t\treturn 2;\n\n}\n';
 
 	private static final PARTIAL_MAIN: String = '@:nullSafety(Strict)\nclass Main {\n\n\tstatic function main() {\n\t\t'
-		+ 'final n:Null<Int> = Std.random(2) == 0 ? 1 : null;\n\t\ttrace(Lib.box(n));\n\t\ttrace(Lib.one());\n\t\ttrace(Lib.two());\n\t}\n\n}\n';
+		+ 'final n:Null<Int> = Std.random(2) == 0 ? 1 : null;\n\t\ttrace(Lib.box(n));\n'
+		+ '\t\ttrace(Lib.one());\n\t\ttrace(Lib.two());\n\t}\n\n}\n';
 	#end
 
 	public function testObjectLiteralBodyNeverCandidate(): Void {
@@ -66,8 +65,8 @@ class PreferInlineOracleTest extends Test {
 		// writer-emit canonical gate measures against the compiled defaults, not the project style).
 		// `main` has a two-statement body so it never becomes an inline candidate itself; `cb` (a thin
 		// trace forward) is a candidate and gets inlined alongside `fire` — the assertion targets `fire`.
-		final src: String =
-			'class Main {\n\n\tstatic function main() {\n\t\tfire();\n\t\tfire();\n\t}\n\n\tstatic function cb(i:Null<Int>):Void\n\t\ttrace(i);\n\n\tstatic function fire():Void\n\t\tcb(null);\n\n}\n';
+		final src: String = 'class Main {\n\n\tstatic function main() {\n\t\tfire();\n\t\tfire();\n\t}\n\n'
+			+ '\tstatic function cb(i:Null<Int>):Void\n\t\ttrace(i);\n\n\tstatic function fire():Void\n\t\tcb(null);\n\n}\n';
 		final dir: String = CliFixture.writeDir('preferinlineoracle', [
 			{ name: 'Main.hx', source: src },
 			{ name: 'check.hxml', source: '-cp .\n-main Main\n' },
@@ -92,8 +91,8 @@ class PreferInlineOracleTest extends Test {
 		// null-safety mode, but re-checked in Main's `Strict` mode once inlined, so the compiler
 		// rejects the inline and the pipeline reverts `Lib.hx` to report-only.
 		final lib: String = 'class Lib {\n\n\tpublic static function box(x:Null<Int>):Int\n\t\treturn x;\n\n}\n';
-		final main: String =
-			'@:nullSafety(Strict)\nclass Main {\n\n\tstatic function main() {\n\t\tfinal n:Null<Int> = Std.random(2) == 0 ? 1 : null;\n\t\ttrace(Lib.box(n));\n\t}\n\n}\n';
+		final main: String = '@:nullSafety(Strict)\nclass Main {\n\n\tstatic function main() {\n'
+			+ '\t\tfinal n:Null<Int> = Std.random(2) == 0 ? 1 : null;\n\t\ttrace(Lib.box(n));\n\t}\n\n}\n';
 		final dir: String = CliFixture.writeDir('preferinlineoracle', [
 			{ name: 'Lib.hx', source: lib },
 			{ name: 'Main.hx', source: main },

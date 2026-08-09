@@ -72,7 +72,7 @@ class HxMacroModHexSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testHexRoundTrip(): Void {
+	public inline function testHexRoundTrip(): Void {
 		roundTrip('class C { var x = 0x20; var y = 0XFF; var z = 0xDeadBeef; }', 'P5-hex-lit');
 	}
 

@@ -31,31 +31,32 @@ class HxCondCompStmtTrailOptSliceTest extends Test {
 	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
-	public function testVarStmtCallRhsInsideIfEndKeepsSemiTight(): Void {
+	public inline function testVarStmtCallRhsInsideIfEndKeepsSemiTight(): Void {
 		roundTrip(
 			'class T {\n\tstatic function f():Void {\n\t\t#if sys\n\t\tfinal fixture:String = writeFixture(\'class X\');\n\t\t#end\n\t}\n}'
 		);
 	}
 
-	public function testTwoVarStmtsInsideIfEndKeepSemiTight(): Void {
+	public inline function testTwoVarStmtsInsideIfEndKeepSemiTight(): Void {
 		roundTrip('class T {\n\tstatic function f():Void {\n\t\t#if sys\n\t\tfinal a = 1;\n\t\tfinal b = 2;\n\t\t#end\n\t}\n}');
 	}
 
-	public function testElseifBodyKeepsSemiTight(): Void {
+	public inline function testElseifBodyKeepsSemiTight(): Void {
 		roundTrip(
 			'class T {\n\tstatic function f():Void {\n\t\t#if sys\n\t\tfinal a = 1;\n\t\t#elseif js\n\t\tfinal b = 2;\n\t\t#end\n\t}\n}'
 		);
 	}
 
 	// Slice D4 — single-stmt elseBody.
-	public function testElseBodyKeepsSemiTight(): Void {
+	public inline function testElseBodyKeepsSemiTight(): Void {
 		roundTrip('class T {\n\tstatic function f():Void {\n\t\t#if sys\n\t\tfinal a = 1;\n\t\t#else\n\t\tfinal b = 2;\n\t\t#end\n\t}\n}');
 	}
 
 	// Slice D4 — multi-stmt elseBody, both inter-element and trailing sep.
-	public function testElseBodyMultiStmtKeepsSemiTight(): Void {
+	public inline function testElseBodyMultiStmtKeepsSemiTight(): Void {
 		roundTrip(
-			'class T {\n\tstatic function f():Void {\n\t\t#if sys\n\t\tfinal a = 1;\n\t\t#else\n\t\tfinal b = 2;\n\t\tfinal c = 3;\n\t\t#end\n\t}\n}'
+			'class T {\n\tstatic function f():Void {\n\t\t#if sys\n\t\tfinal a = 1;\n\t\t#else\n\t\tfinal b = 2;\n\t\tfinal c = 3;\n'
+			+ '\t\t#end\n\t}\n}'
 		);
 	}
 

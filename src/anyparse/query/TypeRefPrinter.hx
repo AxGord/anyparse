@@ -6,6 +6,7 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -175,25 +176,64 @@ final class TypeRefPrinter {
 	/** The BULK import kinds — the two statements that bind names they do not spell out (`shadowedByBulkImport`). */
 	private static final BULK_IMPORT_KINDS: Array<String> = [WILDCARD_IMPORT_KIND, 'UsingDecl'];
 
-	/**
-	 * A printer over a file's FULL scope: its parsed `root` (top-level decls and import
-	 * statements), raw `source` (the alias-target recovery and the short-name freeness scan),
-	 * the plain-import map, and optionally the cross-file `index` for same-package /
-	 * root-package / canonical-path resolution. This is the form that can ADD imports.
-	 */
-	public static function forFile(source: String, root: QueryNode, importMap: Map<String, String>, ?index: SymbolIndex): TypeRefPrinter {
-		return new TypeRefPrinter(source, root, importMap, index);
-	}
+	/** The file's `package` declaration payload (`''` for the root package), or null when the printer has no tree. */
+	private final _pkg: Null<String>;
 
-	/**
-	 * The degenerate printer with NO file scope — only the plain-import map. It shortens an
-	 * already-imported or always-in-scope path and leaves everything else fully qualified; it
-	 * never inserts an import (there is no tree to anchor one against and no source to prove
-	 * the short name free). The form a caller with no parsed file can still use soundly, and
-	 * the one `ExplicitLocalType.normalizeInferredType`'s public pure signature keeps.
-	 */
-	public static function importsOnly(importMap: Map<String, String>): TypeRefPrinter {
-		return new TypeRefPrinter(null, null, importMap, null);
+	/** The file's main (first) top-level type name, for same-module sub-type resolution; null with no tree. */
+	private final _module: Null<String>;
+
+	/** Alias -> aliased path for every `import … as …` in the file; the keys double as bound-name collisions. */
+	private final _aliasTargets: Map<String, String>;
+
+	/** Simple name -> fully-qualified path for every plain `import`, from the grammar's `TypeInfoProvider`. */
+	private final _importMap: Map<String, String>;
+
+	/** The file's raw source, for the alias decode and the short-name freeness scan; null in the `importsOnly` form. */
+	private final _source: Null<String>;
+
+	/** The file's parsed top level; null in the `importsOnly` form. */
+	private final _root: Null<QueryNode>;
+
+	/** The cross-file index for same-package / root-package / canonical-path resolution, or null when the run has none. */
+	private final _index: Null<SymbolIndex>;
+
+	/** Whether a fresh import has a legal splice point in this file (see the constructor). */
+	private final _canAnchorImports: Bool;
+
+	/** Paths `print` promised an import for, in first-promised order. */
+	private final _pendingImports: Array<String> = [];
+
+	/** Every `#if`-guarded import-ish declaration of the file, at any directive nesting depth; empty with no tree. */
+	private final _guardedImports: Array<QueryNode>;
+
+	/** The file's BULK import statements, guarded ones included — the `shadowedByBulkImport` input; empty with no tree. */
+	private final _bulkImports: Array<QueryNode>;
+
+	/** Module paths of the file's UNGUARDED top-level `using` statements — a `moduleImportBinds` provider; empty with no tree. */
+	private final _usingModules: Array<String>;
+
+	/** The file's inert (comment + literal-text) regions, computed on FIRST use and cached — see `inertRegions`. */
+	private var _inertRegions: Null<Array<Span>> = null;
+
+	private function new(
+		source: Null<String>, root: Null<QueryNode>, importMap: Map<String, String>, index: Null<SymbolIndex>
+	) {
+		_source = source;
+		_root = root;
+		_importMap = importMap;
+		_index = index;
+		_pkg = root == null ? null : packageOf(root);
+		_module = root == null ? null : mainTypeNameOf(root);
+		_aliasTargets = source == null || root == null ? [] : aliasTargetsOf(source, root);
+		// Ctor-hoisted like every sibling scan: both `shadowedByGuardedImport` and
+		// `shadowedByBulkImport` ask for these, once per printed reference.
+		_guardedImports = root == null ? [] : guardedImportDecls(root);
+		_bulkImports = root == null ? [] : bulkImportDecls(root, _guardedImports);
+		_usingModules = root == null ? [] : usingModulesOf(root);
+		// A `package` declaration with no recoverable span leaves no legal anchor: the file-start
+		// fallback would splice the import AHEAD of `package`, which does not parse. Refuse to
+		// import at all rather than emit that.
+		_canAnchorImports = root == null || !hasSpanlessPackage(root);
 	}
 
 	/**
@@ -209,7 +249,7 @@ final class TypeRefPrinter {
 	 * whole-source freeness scan.
 	 */
 	public function print(fqn: String, ?owned: Array<Span>): PrintedTypeRef {
-		final trimmed: String = StringTools.trim(fqn);
+		final trimmed: String = fqn.trim();
 		// A dotless run carries no derivable module path, and a lower-initial final segment is a
 		// package path or a structural field name, never a type — both pass through untouched.
 		if (trimmed.indexOf('.') == -1 || !RefactorSupport.isUpperInitial(RefactorSupport.lastSegment(trimmed))) return {
@@ -246,7 +286,7 @@ final class TypeRefPrinter {
 		final n: Int = t.length;
 		var i: Int = 0;
 		while (i < n) {
-			final c: Int = StringTools.fastCodeAt(t, i);
+			final c: Int = t.fastCodeAt(i);
 			if (!RefactorSupport.isIdentChar(c) && c != '.'.code) {
 				buf.addChar(c);
 				i++;
@@ -254,7 +294,7 @@ final class TypeRefPrinter {
 			}
 			final start: Int = i;
 			while (i < n) {
-				final cc: Int = StringTools.fastCodeAt(t, i);
+				final cc: Int = t.fastCodeAt(i);
 				if (!RefactorSupport.isIdentChar(cc) && cc != '.'.code) break;
 				i++;
 			}
@@ -285,7 +325,7 @@ final class TypeRefPrinter {
 	 * typecheck-and-revert verification pass (`RiskyFix`), not in front of it.
 	 */
 	public function resolvePath(ref: String): Null<String> {
-		final trimmed: String = StringTools.trim(ref);
+		final trimmed: String = ref.trim();
 		// The same two rejections `print` opens with, so both entry points read one input class:
 		// a dotless run carries no derivable module path, and a lower-initial final segment is a
 		// package path or a structural field name, never a type.
@@ -340,29 +380,8 @@ final class TypeRefPrinter {
 	}
 
 	/** Whether `print` has promised at least one import that `pendingImportEdits` will materialise. */
-	public function hasPendingImports(): Bool {
+	public inline function hasPendingImports(): Bool {
 		return _pendingImports.length > 0;
-	}
-
-	private function new(
-		source: Null<String>, root: Null<QueryNode>, importMap: Map<String, String>, index: Null<SymbolIndex>
-	) {
-		_source = source;
-		_root = root;
-		_importMap = importMap;
-		_index = index;
-		_pkg = root == null ? null : packageOf(root);
-		_module = root == null ? null : mainTypeNameOf(root);
-		_aliasTargets = source == null || root == null ? [] : aliasTargetsOf(source, root);
-		// Ctor-hoisted like every sibling scan: both `shadowedByGuardedImport` and
-		// `shadowedByBulkImport` ask for these, once per printed reference.
-		_guardedImports = root == null ? [] : guardedImportDecls(root);
-		_bulkImports = root == null ? [] : bulkImportDecls(root, _guardedImports);
-		_usingModules = root == null ? [] : usingModulesOf(root);
-		// A `package` declaration with no recoverable span leaves no legal anchor: the file-start
-		// fallback would splice the import AHEAD of `package`, which does not parse. Refuse to
-		// import at all rather than emit that.
-		_canAnchorImports = root == null || !hasSpanlessPackage(root);
 	}
 
 	/**
@@ -378,12 +397,6 @@ final class TypeRefPrinter {
 		final regions: Array<Span> = InertRegions.of(source, _root);
 		_inertRegions = regions;
 		return regions;
-	}
-
-	/** Whether the file carries a `package` declaration whose span the grammar did not record. */
-	private static function hasSpanlessPackage(root: QueryNode): Bool {
-		for (c in root.children) if (c.kind == 'PackageDecl' && c.span == null) return true;
-		return false;
 	}
 
 	/**
@@ -408,8 +421,7 @@ final class TypeRefPrinter {
 		final root: Null<QueryNode> = _root;
 		if (root != null && declaresTypeNamed(root, simple) && canonical == moduleLocalPathOf(simple)) return simple;
 		final pkg: Null<String> = _pkg;
-		if (pkg != null && canonical == (pkg == '' ? simple : '$pkg.$simple')) return simple;
-		return null;
+		return pkg != null && canonical == (pkg == '' ? simple : '$pkg.$simple') ? simple : null;
 	}
 
 	/**
@@ -553,21 +565,6 @@ final class TypeRefPrinter {
 	}
 
 	/**
-	 * `pack.Module.SubType` reduced to the `pack.SubType` hybrid a compiler prints for a
-	 * secondary type — the MODULE segment dropped when the path has one (a second-to-last
-	 * upper-initial segment that is not the type's own name). A main-type path (`pack.Module`)
-	 * and a simple name come back unchanged, so a reduction never invents a hybrid where none
-	 * exists.
-	 */
-	private static function dropModuleSegment(path: String): String {
-		final parts: Array<String> = path.split('.');
-		if (parts.length < 3) return path;
-		final module: String = parts[parts.length - 2];
-		if (!RefactorSupport.isUpperInitial(module) || module == parts[parts.length - 1]) return path;
-		return parts.slice(0, parts.length - 2).concat([parts[parts.length - 1]]).join('.');
-	}
-
-	/**
 	 * Whether the bare `simple` denotes `canonical` with no import anywhere: the builtin whose
 	 * OWN path is `canonical`, or — with an index — a type declared in a ROOT-package file,
 	 * which Haxe makes globally visible. The caller (`visibleNameFor`) has already ruled out a
@@ -601,8 +598,7 @@ final class TypeRefPrinter {
 		if (shadowedByModuleImport(canonical, simple)) return true;
 		final root: Null<QueryNode> = _root;
 		if (root != null && declaresTypeNamed(root, simple) && moduleLocalPathOf(simple) != canonical) return true;
-		final pkg: Null<String> = _pkg;
-		if (pkg != null && packageDeclaresOtherType(canonical, simple)) return true;
+		if (_pkg != null && packageDeclaresOtherType(canonical, simple)) return true;
 		final index: Null<SymbolIndex> = _index;
 		if (index != null && index.declaringFiles(simple).exists(f -> f.pkg == '' && pathOfTypeIn(f, simple) != canonical)) return true;
 		// An EXPLICIT import or a module-local declaration that binds `simple` to `canonical`
@@ -675,8 +671,7 @@ final class TypeRefPrinter {
 	 * short form and falls back to the fully-qualified path, which always resolves.
 	 */
 	private function shadowedByBulkImport(canonical: String, simple: String): Bool {
-		final root: Null<QueryNode> = _root;
-		if (root == null) return false;
+		if (_root == null) return false;
 		final index: Null<SymbolIndex> = _index;
 		// One index scan per question, not one per bulk statement: `declaringFiles` filters EVERY
 		// indexed file (the std is in the default resolution scope), and the argument is loop-invariant.
@@ -697,6 +692,123 @@ final class TypeRefPrinter {
 				return true;
 		}
 		return false;
+	}
+
+	/**
+	 * Whether a `#if`-GUARDED plain or aliased import binds `simple` to something OTHER than
+	 * `canonical`. Such a file spells one simple name two ways depending on the build — the shape
+	 * observed in the wild is an unconditional `import openfl.system.Capabilities;` beside a
+	 * `#if flash import flash.system.Capabilities; #end`, with both types then written fully
+	 * qualified in disjoint `#elseif` branches, deliberately. `_importMap` is a TOP-LEVEL scan, so
+	 * it sees only the unconditional one and would answer that the short name is free for it;
+	 * under the guarded build that same short name means the other type.
+	 *
+	 * The arm therefore runs ABOVE the explicit-import short-circuit in `shadowedLocally`, not
+	 * with the bulk imports at the bottom: an unconditional import outranks a wildcard, but it does
+	 * NOT outrank a second explicit import of the same simple name — Haxe lets the last one win,
+	 * and which one is last depends on the directive.
+	 *
+	 * A guarded import binding `simple` to `canonical` ITSELF is not a shadow, and it still cannot
+	 * enable the short form: it is absent from `_importMap`, so route 1 never fires, and its own
+	 * statement text carries the simple name, so route 2's freeness scan refuses. An alias whose
+	 * target does not decode counts as a shadow — the alias occupies the name whatever it names.
+	 */
+	private function shadowedByGuardedImport(canonical: String, simple: String): Bool {
+		final root: Null<QueryNode> = _root;
+		final source: Null<String> = _source;
+		if (root == null || source == null) return false;
+		for (c in _guardedImports) {
+			final raw: Null<String> = c.name;
+			if (raw == null) continue;
+			final span: Null<Span> = c.span;
+			switch c.kind {
+				case 'ImportDecl':
+					if (RefactorSupport.lastSegment(raw) == simple && raw != canonical) return true;
+				// The grammar's name slot for an alias declaration IS the alias, never the aliased path.
+				case 'ImportAliasDecl' | 'ImportAliasInDecl':
+					if (raw == simple && (span == null || aliasTargetOf(source.substring(span.from, span.to)) != canonical)) return true;
+				case _:
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Whether the index knows a type named `simple` in THIS file's package that is NOT
+	 * `canonical` — such a type shadows the bare name. The type being printed is excluded on
+	 * purpose: a same-package SUB-module type (`pkg.Mod.Sub`, printed from inside `pkg`) is
+	 * declared in this package yet still needs an import, so vetoing on its own declaration
+	 * would make route 2 unreachable for it.
+	 */
+	private function packageDeclaresOtherType(canonical: String, simple: String): Bool {
+		final index: Null<SymbolIndex> = _index;
+		final pkg: Null<String> = _pkg;
+		return index != null && pkg != null && index.declaringFiles(simple)
+			.exists(f -> f.pkg == pkg && pathOfTypeIn(f, simple) != canonical);
+	}
+
+	/**
+	 * Whether THIS module's own top level declares `simple` AND that declaration is `canonical` — the
+	 * MODULE-LOCAL binding, which outranks every import in Haxe's resolution order. Asked at two
+	 * priorities (`shadowedByModuleImport` exempts it, `shadowedLocally` short-circuits on it), so it
+	 * lives here rather than being spelled twice: the two sites must never drift apart about what
+	 * "the file declares this type itself" means.
+	 */
+	private inline function moduleLocalBinds(canonical: String, simple: String): Bool {
+		final root: Null<QueryNode> = _root;
+		return root != null && declaresTypeNamed(root, simple) && moduleLocalPathOf(simple) == canonical;
+	}
+
+	/** The dotted path a type named `simple` declared in THIS module carries: `pkg.Module.simple`, reduced to `pkg.Module` when it IS the main type. */
+	private function moduleLocalPathOf(simple: String): Null<String> {
+		final module: Null<String> = _module;
+		if (module == null) return null;
+		final pkg: Null<String> = _pkg;
+		final modulePath: String = pkg == null || pkg == '' ? module : '$pkg.$module';
+		return module == simple ? modulePath : '$modulePath.$simple';
+	}
+
+	/**
+	 * A printer over a file's FULL scope: its parsed `root` (top-level decls and import
+	 * statements), raw `source` (the alias-target recovery and the short-name freeness scan),
+	 * the plain-import map, and optionally the cross-file `index` for same-package /
+	 * root-package / canonical-path resolution. This is the form that can ADD imports.
+	 */
+	public static function forFile(source: String, root: QueryNode, importMap: Map<String, String>, ?index: SymbolIndex): TypeRefPrinter {
+		return new TypeRefPrinter(source, root, importMap, index);
+	}
+
+	/**
+	 * The degenerate printer with NO file scope — only the plain-import map. It shortens an
+	 * already-imported or always-in-scope path and leaves everything else fully qualified; it
+	 * never inserts an import (there is no tree to anchor one against and no source to prove
+	 * the short name free). The form a caller with no parsed file can still use soundly, and
+	 * the one `ExplicitLocalType.normalizeInferredType`'s public pure signature keeps.
+	 */
+	public static function importsOnly(importMap: Map<String, String>): TypeRefPrinter {
+		return new TypeRefPrinter(null, null, importMap, null);
+	}
+
+	/** Whether the file carries a `package` declaration whose span the grammar did not record. */
+	private static function hasSpanlessPackage(root: QueryNode): Bool {
+		for (c in root.children) if (c.kind == 'PackageDecl' && c.span == null) return true;
+		return false;
+	}
+
+	/**
+	 * `pack.Module.SubType` reduced to the `pack.SubType` hybrid a compiler prints for a
+	 * secondary type — the MODULE segment dropped when the path has one (a second-to-last
+	 * upper-initial segment that is not the type's own name). A main-type path (`pack.Module`)
+	 * and a simple name come back unchanged, so a reduction never invents a hybrid where none
+	 * exists.
+	 */
+	private static function dropModuleSegment(path: String): String {
+		final parts: Array<String> = path.split('.');
+		if (parts.length < 3) return path;
+		final module: String = parts[parts.length - 2];
+		return !RefactorSupport.isUpperInitial(module) || module == parts[parts.length - 1]
+			? path
+			: parts.slice(0, parts.length - 2).concat([parts[parts.length - 1]]).join('.');
 	}
 
 	/**
@@ -755,45 +867,6 @@ final class TypeRefPrinter {
 			out.push(c);
 	}
 
-	/**
-	 * Whether a `#if`-GUARDED plain or aliased import binds `simple` to something OTHER than
-	 * `canonical`. Such a file spells one simple name two ways depending on the build — the shape
-	 * observed in the wild is an unconditional `import openfl.system.Capabilities;` beside a
-	 * `#if flash import flash.system.Capabilities; #end`, with both types then written fully
-	 * qualified in disjoint `#elseif` branches, deliberately. `_importMap` is a TOP-LEVEL scan, so
-	 * it sees only the unconditional one and would answer that the short name is free for it;
-	 * under the guarded build that same short name means the other type.
-	 *
-	 * The arm therefore runs ABOVE the explicit-import short-circuit in `shadowedLocally`, not
-	 * with the bulk imports at the bottom: an unconditional import outranks a wildcard, but it does
-	 * NOT outrank a second explicit import of the same simple name — Haxe lets the last one win,
-	 * and which one is last depends on the directive.
-	 *
-	 * A guarded import binding `simple` to `canonical` ITSELF is not a shadow, and it still cannot
-	 * enable the short form: it is absent from `_importMap`, so route 1 never fires, and its own
-	 * statement text carries the simple name, so route 2's freeness scan refuses. An alias whose
-	 * target does not decode counts as a shadow — the alias occupies the name whatever it names.
-	 */
-	private function shadowedByGuardedImport(canonical: String, simple: String): Bool {
-		final root: Null<QueryNode> = _root;
-		final source: Null<String> = _source;
-		if (root == null || source == null) return false;
-		for (c in _guardedImports) {
-			final raw: Null<String> = c.name;
-			if (raw == null) continue;
-			final span: Null<Span> = c.span;
-			switch c.kind {
-				case 'ImportDecl':
-					if (RefactorSupport.lastSegment(raw) == simple && raw != canonical) return true;
-				// The grammar's name slot for an alias declaration IS the alias, never the aliased path.
-				case 'ImportAliasDecl' | 'ImportAliasInDecl':
-					if (raw == simple && (span == null || aliasTargetOf(source.substring(span.from, span.to)) != canonical)) return true;
-				case _:
-			}
-		}
-		return false;
-	}
-
 	/** Whether the type named `name` in `file` is that module's MAIN type — the only kind a package wildcard binds. */
 	private static function isMainTypeIn(file: FileInfo, name: String): Bool {
 		final decl: Null<TypeDeclInfo> = file.types.find(t -> t.name == name);
@@ -813,41 +886,6 @@ final class TypeRefPrinter {
 			if (decl != null && decl.name == name) return true;
 		}
 		return false;
-	}
-
-	/**
-	 * Whether the index knows a type named `simple` in THIS file's package that is NOT
-	 * `canonical` — such a type shadows the bare name. The type being printed is excluded on
-	 * purpose: a same-package SUB-module type (`pkg.Mod.Sub`, printed from inside `pkg`) is
-	 * declared in this package yet still needs an import, so vetoing on its own declaration
-	 * would make route 2 unreachable for it.
-	 */
-	private function packageDeclaresOtherType(canonical: String, simple: String): Bool {
-		final index: Null<SymbolIndex> = _index;
-		final pkg: Null<String> = _pkg;
-		return index != null && pkg != null && index.declaringFiles(simple)
-			.exists(f -> f.pkg == pkg && pathOfTypeIn(f, simple) != canonical);
-	}
-
-	/**
-	 * Whether THIS module's own top level declares `simple` AND that declaration is `canonical` — the
-	 * MODULE-LOCAL binding, which outranks every import in Haxe's resolution order. Asked at two
-	 * priorities (`shadowedByModuleImport` exempts it, `shadowedLocally` short-circuits on it), so it
-	 * lives here rather than being spelled twice: the two sites must never drift apart about what
-	 * "the file declares this type itself" means.
-	 */
-	private inline function moduleLocalBinds(canonical: String, simple: String): Bool {
-		final root: Null<QueryNode> = _root;
-		return root != null && declaresTypeNamed(root, simple) && moduleLocalPathOf(simple) == canonical;
-	}
-
-	/** The dotted path a type named `simple` declared in THIS module carries: `pkg.Module.simple`, reduced to `pkg.Module` when it IS the main type. */
-	private function moduleLocalPathOf(simple: String): Null<String> {
-		final module: Null<String> = _module;
-		if (module == null) return null;
-		final pkg: Null<String> = _pkg;
-		final modulePath: String = pkg == null || pkg == '' ? module : '$pkg.$module';
-		return module == simple ? modulePath : '$modulePath.$simple';
 	}
 
 	/**
@@ -880,14 +918,14 @@ final class TypeRefPrinter {
 		final n: Int = bare.length;
 		var i: Int = 0;
 		while (i < n) {
-			final c: Int = StringTools.fastCodeAt(bare, i);
+			final c: Int = bare.fastCodeAt(i);
 			if (!RefactorSupport.isIdentChar(c) && c != '.'.code) {
 				i++;
 				continue;
 			}
 			final start: Int = i;
 			while (i < n) {
-				final cc: Int = StringTools.fastCodeAt(bare, i);
+				final cc: Int = bare.fastCodeAt(i);
 				if (!RefactorSupport.isIdentChar(cc) && cc != '.'.code) break;
 				i++;
 			}
@@ -904,16 +942,16 @@ final class TypeRefPrinter {
 		final n: Int = text.length;
 		var i: Int = 0;
 		while (i < n) {
-			final c: Int = StringTools.fastCodeAt(text, i);
-			final next: Int = i + 1 < n ? StringTools.fastCodeAt(text, i + 1) : 0;
+			final c: Int = text.fastCodeAt(i);
+			final next: Int = i + 1 < n ? text.fastCodeAt(i + 1) : 0;
 			if (c == '/'.code && next == '/'.code) {
-				while (i < n && StringTools.fastCodeAt(text, i) != '\n'.code) i++;
+				while (i < n && text.fastCodeAt(i) != '\n'.code) i++;
 				buf.addChar(' '.code);
 				continue;
 			}
 			if (c == '/'.code && next == '*'.code) {
 				i += 2;
-				while (i + 1 < n && !(StringTools.fastCodeAt(text, i) == '*'.code && StringTools.fastCodeAt(text, i + 1) == '/'.code)) i++;
+				while (i + 1 < n && (text.fastCodeAt(i) != '*'.code || text.fastCodeAt(i + 1) != '/'.code)) i++;
 				i = i + 2 < n ? i + 2 : n;
 				buf.addChar(' '.code);
 				continue;
@@ -938,44 +976,5 @@ final class TypeRefPrinter {
 		for (c in root.children) if (c.kind == 'PackageDecl') return c.name ?? '';
 		return '';
 	}
-
-	/** The file's `package` declaration payload (`''` for the root package), or null when the printer has no tree. */
-	private final _pkg: Null<String>;
-
-	/** The file's main (first) top-level type name, for same-module sub-type resolution; null with no tree. */
-	private final _module: Null<String>;
-
-	/** Alias -> aliased path for every `import … as …` in the file; the keys double as bound-name collisions. */
-	private final _aliasTargets: Map<String, String>;
-
-	/** Simple name -> fully-qualified path for every plain `import`, from the grammar's `TypeInfoProvider`. */
-	private final _importMap: Map<String, String>;
-
-	/** The file's raw source, for the alias decode and the short-name freeness scan; null in the `importsOnly` form. */
-	private final _source: Null<String>;
-
-	/** The file's parsed top level; null in the `importsOnly` form. */
-	private final _root: Null<QueryNode>;
-
-	/** The cross-file index for same-package / root-package / canonical-path resolution, or null when the run has none. */
-	private final _index: Null<SymbolIndex>;
-
-	/** Whether a fresh import has a legal splice point in this file (see the constructor). */
-	private final _canAnchorImports: Bool;
-
-	/** Paths `print` promised an import for, in first-promised order. */
-	private final _pendingImports: Array<String> = [];
-
-	/** Every `#if`-guarded import-ish declaration of the file, at any directive nesting depth; empty with no tree. */
-	private final _guardedImports: Array<QueryNode>;
-
-	/** The file's BULK import statements, guarded ones included — the `shadowedByBulkImport` input; empty with no tree. */
-	private final _bulkImports: Array<QueryNode>;
-
-	/** Module paths of the file's UNGUARDED top-level `using` statements — a `moduleImportBinds` provider; empty with no tree. */
-	private final _usingModules: Array<String>;
-
-	/** The file's inert (comment + literal-text) regions, computed on FIRST use and cached — see `inertRegions`. */
-	private var _inertRegions: Null<Array<Span>> = null;
 
 }

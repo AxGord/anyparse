@@ -3,12 +3,13 @@ package anyparse.check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
+
+using StringTools;
 
 /**
  * Flags an outer `case P(b):` whose body is EXACTLY one `switch b { … }` on that
@@ -280,17 +281,18 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 		if (CasePatternScan.containsAnyKind(arm, seams.opaqueKinds)) return null;
 		final innerArms: Array<QueryNode> = inner.children.slice(1);
 		for (innerArm in innerArms) if (innerArm.kind != seams.caseBranchKind) return null;
-		if (bindersCollide(seams, pat, binderNode, innerArms)) return null;
-		return emit(scan, {
-			switchNode: switchNode,
-			at: at,
-			arm: arm,
-			plain: plain,
-			pat: pat,
-			binderNode: binderNode,
-			inner: inner,
-			innerArms: innerArms
-		});
+		return bindersCollide(seams, pat, binderNode, innerArms)
+			? null
+			: emit(scan, {
+				switchNode: switchNode,
+				at: at,
+				arm: arm,
+				plain: plain,
+				pat: pat,
+				binderNode: binderNode,
+				inner: inner,
+				innerArms: innerArms
+			});
 	}
 
 	/**
@@ -310,7 +312,7 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 		if (CheckScan.hasCommentMarker(source, armSpan.from, plainSpan.from)) return null;
 		if (CheckScan.hasCommentMarker(source, patSpan.from, binderSpan.from)) return null;
 		if (CheckScan.hasCommentMarker(source, binderSpan.to, patSpan.to)) return null;
-		final terminator: String = StringTools.trim(source.substring(patSpan.to, innerSpan.from));
+		final terminator: String = source.substring(patSpan.to, innerSpan.from).trim();
 		if (terminator != LABEL_TERMINATOR || !innerGapsClean(scan, frame, innerSpan, armSpan)) return null;
 		final label: Label = {
 			lead: source.substring(armSpan.from, plainSpan.from),
@@ -329,8 +331,7 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 		final merge: Bool = trailing.catchAll && trailing.body == '' && harmless;
 		if (!trailing.catchAll && !harmless) return null;
 		final kept: Array<InnerArm> = merge ? parts.slice(0, parts.length - 1) : parts;
-		if (kept.length == 0) return null;
-		return { span: armSpan, text: [for (part in kept) render(label, part)].join('\n') };
+		return kept.length == 0 ? null : { span: armSpan, text: [for (part in kept) render(label, part)].join('\n') };
 	}
 
 	/**
@@ -346,12 +347,12 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 		if (first == null || last == null) return false;
 		if (CheckScan.hasCommentMarker(source, innerSpan.from, first.from)) return false;
 		if (CheckScan.hasCommentMarker(source, last.to, innerSpan.to)) return false;
-		if (StringTools.trim(source.substring(innerSpan.to, armSpan.to)) != '') return false;
+		if (source.substring(innerSpan.to, armSpan.to).trim() != '') return false;
 		for (i in 1...arms.length) {
 			final prev: Null<Span> = arms[i - 1].span;
 			final next: Null<Span> = arms[i].span;
 			if (prev == null || next == null) return false;
-			if (StringTools.trim(source.substring(prev.to, next.from)) != '') return false;
+			if (source.substring(prev.to, next.from).trim() != '') return false;
 		}
 		return true;
 	}
@@ -406,7 +407,7 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 			patterns: [for (span in spans) source.substring(span.from, span.to)],
 			separators: separators,
 			guard: guard,
-			body: StringTools.trim(rest.substring(at + terminator.length)),
+			body: rest.substring(at + terminator.length).trim(),
 			catchAll: wildcard
 		};
 	}
@@ -550,7 +551,7 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 	/** The index of `text`'s first non-whitespace character, or -1 when it has none. */
 	private static function firstNonSpace(text: String): Int {
 		for (i in 0...text.length) {
-			final code: Int = StringTools.fastCodeAt(text, i);
+			final code: Int = text.fastCodeAt(i);
 			if (code != ' '.code && code != '\t'.code && code != '\n'.code && code != '\r'.code) return i;
 		}
 		return -1;

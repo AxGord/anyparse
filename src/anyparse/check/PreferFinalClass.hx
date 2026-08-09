@@ -2,10 +2,11 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Flags a class declaration carrying the `@:final` metadata tag — the user's rule: use
@@ -108,9 +109,10 @@ final class PreferFinalClass implements Check {
 	private static function editsFor(c: Candidate, source: String): Array<{ span: Span, text: String }> {
 		final metaFrom: Int = c.metaSpan.from;
 		final cutTo: Int = firstNonWs(source, c.metaSpan.to);
-		return c.redundant
-			? [{ span: new Span(metaFrom, cutTo), text: '' }]
-			: cutTo == c.declFrom ? [{ span: new Span(metaFrom, c.declFrom), text: MODIFIER }] : [
+		return if (c.redundant)
+			[{ span: new Span(metaFrom, cutTo), text: '' }] else if (cutTo == c.declFrom)
+			[{ span: new Span(metaFrom, c.declFrom), text: MODIFIER }] else
+			[
 				{ span: new Span(metaFrom, cutTo), text: '' },
 				{ span: new Span(c.declFrom, c.declFrom), text: MODIFIER }
 			];
@@ -175,7 +177,7 @@ final class PreferFinalClass implements Check {
 	/** The first index at or after `from` whose character is not whitespace (clamped to length). */
 	private static function firstNonWs(source: String, from: Int): Int {
 		var i: Int = from;
-		while (i < source.length && StringTools.isSpace(source, i)) i++;
+		while (i < source.length && source.isSpace(i)) i++;
 		return i;
 	}
 

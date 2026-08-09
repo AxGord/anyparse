@@ -4,11 +4,12 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.check.FragmentedDocComment.CommentTok;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Flags a `//` comment that documents a TYPE or MEMBER declaration — prose in the one
@@ -236,7 +237,7 @@ final class PreferDocComment implements Check implements DefaultOff {
 		final anchor: Null<Anchor> = byDeclLine[lineStart];
 		if (anchor == null || anchor.count > 1) return null;
 		final codeEnd: Int = trimmedEnd(source, lineStart, tok.from);
-		final closer: Int = StringTools.fastCodeAt(source, codeEnd - 1);
+		final closer: Int = source.fastCodeAt(codeEnd - 1);
 		if (closer != ';'.code && closer != '{'.code) return null;
 		if (CheckScan.hasDocBefore(source, docEnds, anchor.from)) return null;
 		for (run in owned) if (run.to + 1 == lineStart) return null;
@@ -259,7 +260,7 @@ final class PreferDocComment implements Check implements DefaultOff {
 	private static function trimmedEnd(source: String, from: Int, to: Int): Int {
 		var at: Int = to;
 		while (at > from) {
-			final c: Int = StringTools.fastCodeAt(source, at - 1);
+			final c: Int = source.fastCodeAt(at - 1);
 			if (c != ' '.code && c != '\t'.code) break;
 			at--;
 		}
@@ -427,10 +428,8 @@ final class PreferDocComment implements Check implements DefaultOff {
 		source: String, anchors: Map<Int, Anchor>, stops: Array<CommentTok>, self: Anchor, indent: String
 	): Bool {
 		final stop: Int = sectionStop(source, stops, self, indent);
-		for (other in anchors) {
-			if (other.from <= self.to || other.from >= stop) continue;
-			if (other.owner == self.owner && other.kind == self.kind) return false;
-		}
+		for (other in anchors) if (other.from > self.to && other.from < stop && other.owner == self.owner && other.kind == self.kind)
+			return false;
 		return true;
 	}
 
@@ -451,7 +450,7 @@ final class PreferDocComment implements Check implements DefaultOff {
 		var at: Int = lineStart;
 		while (at > 0) {
 			final previous: Int = RefactorSupport.startOfLine(source, at - 1);
-			if (StringTools.trim(source.substring(previous, at - 1)) == '') break;
+			if (source.substring(previous, at - 1).trim() == '') break;
 			at = previous;
 		}
 		return at;
@@ -463,7 +462,7 @@ final class PreferDocComment implements Check implements DefaultOff {
 		while (at < source.length) {
 			final newline: Int = source.indexOf('\n', at);
 			final end: Int = newline < 0 ? source.length : newline;
-			if (StringTools.trim(source.substring(at, end)) == '') break;
+			if (source.substring(at, end).trim() == '') break;
 			if (newline < 0) return source.length;
 			at = newline + 1;
 		}
@@ -480,7 +479,7 @@ final class PreferDocComment implements Check implements DefaultOff {
 	private static function gatedText(source: String, tok: CommentTok): Null<String> {
 		if (source.substring(tok.from, tok.from + LABEL_MARKER.length) == LABEL_MARKER) return null;
 		final text: String = commentText(source, tok);
-		return text.indexOf(BLOCK_CLOSE) >= 0 || CommentProse.declines(StringTools.trim(text)) ? null : text;
+		return text.indexOf(BLOCK_CLOSE) >= 0 || CommentProse.declines(text.trim()) ? null : text;
 	}
 
 	/**
@@ -490,7 +489,7 @@ final class PreferDocComment implements Check implements DefaultOff {
 	 * silently downgrade that one line ending.
 	 */
 	private static inline function editEndOf(source: String, last: CommentTok): Int {
-		return last.to > last.from && StringTools.fastCodeAt(source, last.to - 1) == '\r'.code ? last.to - 1 : last.to;
+		return last.to > last.from && source.fastCodeAt(last.to - 1) == '\r'.code ? last.to - 1 : last.to;
 	}
 
 	/**
@@ -507,8 +506,8 @@ final class PreferDocComment implements Check implements DefaultOff {
 
 	/** A line comment's text: the body past `//`, right-trimmed, with ONE following space removed. */
 	private static function commentText(source: String, tok: CommentTok): String {
-		final body: String = StringTools.rtrim(source.substring(tok.from + CommentProse.LINE_MARKER.length, tok.to));
-		return body.length > 0 && StringTools.fastCodeAt(body, 0) == ' '.code ? body.substr(1) : body;
+		final body: String = source.substring(tok.from + CommentProse.LINE_MARKER.length, tok.to).rtrim();
+		return body.length > 0 && body.fastCodeAt(0) == ' '.code ? body.substr(1) : body;
 	}
 
 	/** The whitespace between `at`'s line start and `at`. */

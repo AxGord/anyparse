@@ -128,7 +128,8 @@ class PreferTernaryReturnCheckTest extends Test {
 		// A VALUE ternary keeps the if-condition narrowing (`cond ? a : b` types like
 		// if/else), so a null-narrowing guard refuses only bool-literal collapses.
 		final es: Array<{ span: Span, text: String }> = edits(
-			'class C {\n\tfunction f(res:Null<R>):String {\n\t\tif (res != null && res.d != null) return t(res.d);\n\t\treturn t("x");\n\t}\n}'
+			'class C {\n\tfunction f(res:Null<R>):String {\n\t\tif (res != null && res.d != null) return t(res.d);\n\t\treturn t("x");\n'
+			+ '\t}\n}'
 		);
 		Assert.equals(1, es.length);
 		Assert.equals('return res != null && res.d != null ? t(res.d) : t("x");', es[0].text);

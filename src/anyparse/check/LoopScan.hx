@@ -27,8 +27,6 @@ final class LoopScan {
 	/** The one numeric literal a counter / range may start from. */
 	private static inline final ZERO_LITERAL: String = '0';
 
-	private function new() {}
-
 	/**
 	 * Bundle the `RefShape` kinds both loop rules read, or null when one the scans cannot work
 	 * without is unset (the calling check is then a no-op). `identKind` is required by `RefShape`
@@ -124,12 +122,11 @@ final class LoopScan {
 	/** Whether `node` is the numeric literal `0` — the only lower bound either rewrite can transcribe. */
 	public static function isZeroLiteral(node: QueryNode, source: String, s: LoopSeams): Bool {
 		final span: Null<Span> = node.span;
-		if (span == null || !s.numericLiteralKinds.contains(node.kind)) return false;
-		return source.substring(span.from, span.to) == ZERO_LITERAL;
+		return span != null && s.numericLiteralKinds.contains(node.kind) && source.substring(span.from, span.to) == ZERO_LITERAL;
 	}
 
 	/** The name `node` carries when it is a bare identifier, else null. */
-	public static function bareIdentName(node: QueryNode, s: LoopSeams): Null<String> {
+	public static inline function bareIdentName(node: QueryNode, s: LoopSeams): Null<String> {
 		return node.kind == s.identKind ? node.name : null;
 	}
 
@@ -139,8 +136,12 @@ final class LoopScan {
 	 * they move. Null when it is not; the declared name otherwise.
 	 */
 	public static function singleLocalDeclName(decl: QueryNode, kinds: Array<String>, s: LoopSeams): Null<String> {
-		if (!kinds.contains(decl.kind) || decl.children.length != 1) return null;
-		return RefactorSupport.isMultiDeclarator(decl, s.localDeclContinuationKinds) ? null : decl.name;
+		return if (!kinds.contains(decl.kind) || decl.children.length != 1)
+			null
+		else if (RefactorSupport.isMultiDeclarator(decl, s.localDeclContinuationKinds))
+			null
+		else
+			decl.name;
 	}
 
 	/**
@@ -162,7 +163,7 @@ final class LoopScan {
 	 *
 	 * The scan is BODY-LOCAL, which is its documented limit: an alias handed out before the loop, or a call that reaches the same collection through a field the callee owns, is invisible to it. Closing that would need whole-program alias analysis; each rule's type doc repeats the caveat.
 	 */
-	public static function usedOnlyAsStableCollection(node: QueryNode, name: String, sizeMember: String, s: LoopSeams): Bool {
+	public static inline function usedOnlyAsStableCollection(node: QueryNode, name: String, sizeMember: String, s: LoopSeams): Bool {
 		return stableUseScan(node, null, null, name, sizeMember, s);
 	}
 
@@ -187,8 +188,9 @@ final class LoopScan {
 
 	/** The receiver name of a plain `<ident>.<member>` read, or null when `node` is not one. */
 	public static function memberReadReceiver(node: QueryNode, member: String, s: LoopSeams): Null<String> {
-		if (node.kind != s.fieldAccessKind || node.name != member || node.children.length != FIELD_ACCESS_CHILD_COUNT) return null;
-		return bareIdentName(node.children[0], s);
+		return node.kind != s.fieldAccessKind || node.name != member || node.children.length != FIELD_ACCESS_CHILD_COUNT
+			? null
+			: bareIdentName(node.children[0], s);
 	}
 
 	/** Recursive body of `usedOnlyAsStableCollection`, carrying the two ancestors a position verdict needs. */
@@ -213,9 +215,9 @@ final class LoopScan {
 		ident: QueryNode, parent: Null<QueryNode>, grandParent: Null<QueryNode>, sizeMember: String, s: LoopSeams
 	): Bool {
 		if (parent == null || isWriteTarget(parent, grandParent, s)) return false;
-		if (s.accessKinds.contains(parent.kind))
-			return parent.name == sizeMember && parent.children.length == FIELD_ACCESS_CHILD_COUNT && parent.children[0] == ident;
-		return parent.kind == s.indexAccessKind && parent.children.length == INDEX_ACCESS_CHILD_COUNT && parent.children[0] == ident;
+		return s.accessKinds.contains(parent.kind)
+			? parent.name == sizeMember && parent.children.length == FIELD_ACCESS_CHILD_COUNT && parent.children[0] == ident
+			: parent.kind == s.indexAccessKind && parent.children.length == INDEX_ACCESS_CHILD_COUNT && parent.children[0] == ident;
 	}
 
 	/** Whether `node` is the l-value of an assignment / increment — the first child of a `writeParentKinds` parent. */

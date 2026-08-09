@@ -6,7 +6,6 @@ import anyparse.check.NoUnderscorePrefix;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -48,8 +47,7 @@ class NoUnderscorePrefixCheckTest extends Test {
 	}
 
 	public function testConstructorParameterRenamed(): Void {
-		final src: String = 'package pkg;\n'
-			+ 'class SidePanel {\n\tprivate var _width:Float;\n\tpublic function new(_contentWidth:Float) {\n'
+		final src: String = 'package pkg;\nclass SidePanel {\n\tprivate var _width:Float;\n\tpublic function new(_contentWidth:Float) {\n'
 			+ '\t\t_width = _contentWidth;\n\t}\n}';
 		assertFixed(src, ['new(contentWidth:Float)', '_width = contentWidth;'], ['_contentWidth']);
 	}
@@ -82,32 +80,30 @@ class NoUnderscorePrefixCheckTest extends Test {
 	}
 
 	public function testOverlappingLocalCollisionSkipped(): Void {
-		final src: String = 'package pkg;\n'
-			+ 'class C {\n\tpublic function f():Void {\n\t\tfinal _value:Int = 1;\n\t\tfinal value:Int = 2;\n\t\ttrace(_value + value);\n\t}\n}';
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f():Void {\n\t\tfinal _value:Int = 1;\n\t\tfinal value:Int = 2;\n'
+			+ '\t\ttrace(_value + value);\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
 	}
 
 	public function testCatchVariableNeverFlagged(): Void {
 		// A `_`-prefixed catch variable is `swallowed-exception`'s intentional-discard marker.
-		final src: String = 'package pkg;\n'
-			+ 'class C {\n\tpublic function f():Void {\n\t\ttry doThing() catch (_exception:Exception) {}\n\t}\n}';
+		final src: String =
+			'package pkg;\nclass C {\n\tpublic function f():Void {\n\t\ttry doThing() catch (_exception:Exception) {}\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
 	public function testDiscardAndDunderNamesNeverFlagged(): Void {
 		// `_` / `__` fail the prefix regex on their own; a DUNDER matches it and is stopped only
 		// by the projection's `reservedName` — renaming `__init__` silently disables the runtime hook.
-		final src: String = 'package pkg;\n'
-			+ 'class C {\n\tpublic function f(xs:Array<Int>):Void {\n\t\tfor (_ in xs) trace(1);\n\t\tfor (__ in xs) trace(2);\n'
-			+ '\t\tfinal __init__:Int = 1;\n\t\ttrace(__init__);\n\t}\n}';
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f(xs:Array<Int>):Void {\n\t\tfor (_ in xs) trace(1);\n'
+			+ '\t\tfor (__ in xs) trace(2);\n\t\tfinal __init__:Int = 1;\n\t\ttrace(__init__);\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
 	public function testLoopAndComprehensionVariablesFlagged(): Void {
-		final src: String = 'package pkg;\n'
-			+ 'class C {\n\tpublic function f(xs:Array<Int>):Void {\n\t\tfinal ys:Array<Int> = [for (_i in xs) _i];\n'
-			+ '\t\tfor (_item in xs) trace(_item + ys.length);\n\t}\n}';
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f(xs:Array<Int>):Void {\n'
+			+ '\t\tfinal ys:Array<Int> = [for (_i in xs) _i];\n\t\tfor (_item in xs) trace(_item + ys.length);\n\t}\n}';
 		Assert.equals(2, violations(src).length);
 		assertFixed(src, ['[for (i in xs) i]', 'for (item in xs) trace(item + ys.length)'], ['_i', '_item']);
 	}
@@ -160,8 +156,8 @@ class NoUnderscorePrefixCheckTest extends Test {
 	public function testDoubleQuotedDollarBlocksFix(): Void {
 		// `"$_name"` in a DOUBLE-quoted string is literal text, not a read: it stays uncovered
 		// and the completeness gate refuses the whole rename.
-		final src: String = 'package pkg;\n'
-			+ "class C {\n\tpublic function f(_name:String):Void {\n\t\ttrace(_name);\n\t\ttrace(\"hi $_name\");\n\t}\n}";
+		final src: String =
+			'package pkg;\nclass C {\n\tpublic function f(_name:String):Void {\n\t\ttrace(_name);\n\t\ttrace("hi $$_name");\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
 	}
@@ -201,25 +197,24 @@ class NoUnderscorePrefixCheckTest extends Test {
 		// `_a` and `__a` both strip to `a`, and neither is visible to the other's collision proof
 		// (that scans the PRE-fix source, where each still carries its own prefix). Renaming both
 		// would merge two bindings into one — and Haxe permits the shadowing, so it would compile.
-		final src: String = 'package pkg;\n'
-			+ 'class C {\n\tpublic function f(_a:Int):Void {\n\t\tfinal __a:Int = 2;\n\t\ttrace(_a + __a);\n\t}\n}';
+		final src: String =
+			'package pkg;\nclass C {\n\tpublic function f(_a:Int):Void {\n\t\tfinal __a:Int = 2;\n\t\ttrace(_a + __a);\n\t}\n}';
 		Assert.equals(2, violations(src).length);
 		Assert.equals(0, edits(src).length);
 	}
 
 	public function testSameTargetInDisjointFunctionsStillRenames(): Void {
 		// The conflict is scope-bounded: two bodies that cannot see each other both rename.
-		final src: String = 'package pkg;\n'
-			+ 'class C {\n\tpublic function f(_a:Int):Void {\n\t\ttrace(_a);\n\t}\n\n\tpublic function g(__a:Int):Void {\n\t\ttrace(__a);\n\t}\n}';
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f(_a:Int):Void {\n\t\ttrace(_a);\n\t}\n\n'
+			+ '\tpublic function g(__a:Int):Void {\n\t\ttrace(__a);\n\t}\n}';
 		Assert.equals(2, violations(src).length);
 		assertFixed(src, ['f(a:Int)', 'g(a:Int)'], ['_a', '__a']);
 	}
 
 	public function testNestedClosureClaimingTheSameTargetSkipped(): Void {
 		// The closure's scope lies INSIDE the enclosing function's, so the two conflict.
-		final src: String = 'package pkg;\n'
-			+ 'class C {\n\tpublic function f(_x:Int):Void {\n\t\tfinal g:Int -> Int = function(__x:Int) return __x + _x;\n'
-			+ '\t\ttrace(g(1));\n\t}\n}';
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f(_x:Int):Void {\n'
+			+ '\t\tfinal g:Int -> Int = function(__x:Int) return __x + _x;\n\t\ttrace(g(1));\n\t}\n}';
 		Assert.equals(2, violations(src).length);
 		Assert.equals(0, edits(src).length);
 	}
@@ -273,99 +268,6 @@ class NoUnderscorePrefixCheckTest extends Test {
 		Assert.equals(0, check.fix(src, vs, plugin, SymbolIndex.build(files, plugin)).length);
 	}
 
-	/** A handler whose event parameter carries the private-field `_` prefix and IS referenced. */
-	private function handlerSource(): String {
-		return 'package pkg;\n' + 'class ViewPanel {\n\tprivate function selectHandler(_event:Event):Void {\n\t\ttrace(_event.type);\n\t}\n}';
-	}
-
-	/** Two underscore-prefixed locals in a class declaring neither name as a member. */
-	private function localsSource(): String {
-		return 'package pkg;\n' + 'class ListView {\n\tpublic function refresh():Void {\n\t\tvar __selectedIndex:Int = 0;\n'
-			+ '\t\tfinal _items:Array<String> = [];\n\t\ttrace(__selectedIndex + _items.length);\n\t}\n}';
-	}
-
-	/** One underscore-prefixed parameter and one underscore-prefixed local, for the option toggles. */
-	private function mixedSource(): String {
-		return 'package pkg;\n'
-			+ 'class C {\n\tpublic function f(_count:Int):Void {\n\t\tfinal _total:Int = _count + 1;\n\t\ttrace(_total);\n\t}\n}';
-	}
-
-	/** A parameter that is never referenced in its function — the cross-rule loop-guard fixture. */
-	private function unusedParamSource(): String {
-		return 'package pkg;\nclass C {\n\tpublic function f(_event:Int):Void {\n\t\ttrace(1);\n\t}\n}';
-	}
-
-	/** The check's findings for `src`, with `config` (raw `apqlint.json` text) in effect when given. */
-	private function violations(src: String, ?config: String): Array<Violation> {
-		final check: NoUnderscorePrefix = configured(config);
-		return check.run([{ file: 'pkg/C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
-	/** The check's autofix edits for `src`, resolved against a single-file index. */
-	private function edits(src: String, ?config: String): Array<{ span: Span, text: String }> {
-		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final check: NoUnderscorePrefix = configured(config);
-		return check.fix(src, check.run(files, plugin), plugin, SymbolIndex.build(files, plugin));
-	}
-
-	/**
-	 * The check's autofix edits for `src` under a NAMING policy adapted from `checkstyle` content, discovered the way a real run discovers it - a `checkstyle.json` written next to the linted file. That is the shape whose rules carry no `normalize`, so the reserved-word veto cannot lean on the policy.
-	 */
-	private function editsUnderPolicy(src: String, checkstyle: String): Array<{ span: Span, text: String }> {
-		final tmp: Null<String> = Sys.getEnv('TMPDIR');
-		final base: String = (tmp != null && tmp.length > 0) ? tmp : '/tmp';
-		final dir: String = '$base/anyparse_nup_cfg_${Sys.time()}';
-		sys.FileSystem.createDirectory(dir);
-		sys.io.File.saveContent('$dir/checkstyle.json', checkstyle);
-		final path: String = '$dir/C.hx';
-		sys.io.File.saveContent(path, src);
-		final files: Array<{ file: String, source: String }> = [{ file: path, source: src }];
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final check: NoUnderscorePrefix = new NoUnderscorePrefix();
-		final out: Array<{ span: Span, text: String }> = check.fix(src, check.run(files, plugin), plugin, SymbolIndex.build(files, plugin));
-		sys.FileSystem.deleteFile(path);
-		sys.FileSystem.deleteFile('$dir/checkstyle.json');
-		sys.FileSystem.deleteDirectory(dir);
-		return out;
-	}
-
-	/** A check carrying `config` (raw `apqlint.json` text) as its per-file resolver, or the default one. */
-	private function configured(config: Null<String>): NoUnderscorePrefix {
-		final check: NoUnderscorePrefix = new NoUnderscorePrefix();
-		if (config != null) {
-			final parsed: LintConfig = LintConfig.parse(config);
-			check.setConfigResolver(file -> parsed);
-		}
-		return check;
-	}
-
-	/** Canonicalize the check's edits for `src` and assert every `present` fragment appears and every `absent` one does not. */
-	private function assertFixed(src: String, present: Array<String>, absent: Array<String>): Void {
-		final applied: Array<{ span: Span, text: String }> = edits(src);
-		Assert.isTrue(applied.length > 0);
-		switch RefactorSupport.canonicalize(src, applied, true, new HaxeQueryPlugin()) {
-			case Ok(text):
-				for (fragment in present) Assert.isTrue(text.indexOf(fragment) >= 0, 'missing "$fragment" in:\n$text');
-				for (fragment in absent) Assert.isTrue(text.indexOf(fragment) == -1, 'still present "$fragment" in:\n$text');
-			case Err(message):
-				Assert.fail('fix canonicalize Err: $message');
-		}
-	}
-
-	/** The check's edits for `subSrc` with `libSrc` joined as a RESOLUTION-scope library (never reported, never edited). */
-	private function fixWithResolutionScope(subSrc: String, libSrc: String, ?config: String): Array<{ span: Span, text: String }> {
-		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/Sub.hx', source: subSrc }];
-		final lib: Array<{ file: String, source: String }> = [{ file: 'ext/Base.hx', source: libSrc }];
-		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, library: new LibrarySources(lib) } });
-		final check: NoUnderscorePrefix = configured(config);
-		final vs: Array<Violation> = check.run(report, scoped);
-		Assert.equals(1, vs.length);
-		return check.fix(subSrc, vs, scoped, SymbolIndex.build(report, new HaxeQueryPlugin()));
-	}
-
-
 	/**
 	 * A STRING LITERAL that happens to spell the target name is not a binding, so it
 	 * must not veto the rename. `collidesInScope` asked a raw word-boundary text scan,
@@ -402,8 +304,8 @@ class NoUnderscorePrefixCheckTest extends Test {
 
 	/** GUARD: an occurrence inside a `#if` body is real code and still vetoes it. */
 	public function testConditionalBodyStillBlocksRename(): Void {
-		final src: String =
-			'class C {\n\tpublic function f():Void {\n\t\tvar _items:Int = 1;\n\t\t#if debug\n\t\tvar items:Int = 2;\n\t\ttrace(items);\n\t\t#end\n\t\ttrace(_items);\n\t}\n}';
+		final src: String = 'class C {\n\tpublic function f():Void {\n\t\tvar _items:Int = 1;\n\t\t#if debug\n\t\tvar items:Int = 2;\n'
+			+ '\t\ttrace(items);\n\t\t#end\n\t\ttrace(_items);\n\t}\n}';
 		Assert.equals(0, edits(src).length);
 	}
 
@@ -413,7 +315,6 @@ class NoUnderscorePrefixCheckTest extends Test {
 			'class C {\n\tpublic function f(items:Int):Void {\n\t\tvar _items:Int = 1;\n\t\ttrace(\'$$items\', _items);\n\t}\n}';
 		Assert.equals(0, edits(src).length);
 	}
-
 
 	/**
 	 * `allowInheritedShadow` cedes the supertype veto for a local / parameter: shadowing an
@@ -426,7 +327,6 @@ class NoUnderscorePrefixCheckTest extends Test {
 		Assert.equals(2, fixWithResolutionScope(subSrc, libSrc, ALLOW_SHADOW).length);
 	}
 
-
 	/**
 	 * The option cedes only the STYLE stance, never the correctness gate: a bare read of the
 	 * inherited member inside the same function would be silently recaptured by the renamed
@@ -438,7 +338,6 @@ class NoUnderscorePrefixCheckTest extends Test {
 		final libSrc: String = 'package ext;\nclass Base {\n\tpublic var value:Int;\n}';
 		Assert.equals(0, fixWithResolutionScope(subSrc, libSrc, ALLOW_SHADOW).length);
 	}
-
 
 	/**
 	 * A COMMENT mention inside a `#if` region is inert text, not a reference the resolver
@@ -505,15 +404,14 @@ class NoUnderscorePrefixCheckTest extends Test {
 		Assert.isTrue(vs[0].message.contains("'_c'"));
 	}
 
-
 	/**
 	 * An escape-spelled `$` puts no locatable identifier token in the raw bytes, so the
 	 * occurrence set silently DROPS that read. Renaming the declaration anyway would strand
 	 * it — the fix must stay report-only, as `rename` refuses the same shape.
 	 */
 	public function testEscapeSpelledInterpolationReadBlocksTheFix(): Void {
-		final src: String = 'package pkg;\nclass C {\n\tpublic function f(_name:String):String {\n'
-			+ '\t\treturn \'hi \\x24_name\' + _name;\n\t}\n}';
+		final src: String =
+			'package pkg;\nclass C {\n\tpublic function f(_name:String):String {\n\t\treturn \'hi \\x24_name\' + _name;\n\t}\n}';
 		Assert.equals(0, edits(src).length);
 	}
 
@@ -538,8 +436,8 @@ class NoUnderscorePrefixCheckTest extends Test {
 	 * hoist it - a call BEFORE the declaration is a different binding, covered by the next test.
 	 */
 	public function testLocalFunctionReferencedRecursivelyAndAfterDeclarationRenamed(): Void {
-		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
-			+ '\t\tfunction __finish(n:Int):Void {\n\t\t\tif (n > 0) __finish(n - 1);\n\t\t}\n\t\t__finish(2);\n\t}\n}';
+		final src: String = 'package pkg;\nclass C {\n\tpublic function draw():Void {\n\t\tfunction __finish(n:Int):Void {\n'
+			+ '\t\t\tif (n > 0) __finish(n - 1);\n\t\t}\n\t\t__finish(2);\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(3, edits(src).length);
 		assertFixed(src, ['function finish(n:Int):Void', 'finish(2);'], ['__finish']);
@@ -552,7 +450,7 @@ class NoUnderscorePrefixCheckTest extends Test {
 	 * occurrence resolved before the declaration refuses the whole rename.
 	 */
 	public function testOccurrenceBeforeLocalFunctionDeclarationSkipped(): Void {
-		final src: String = 'package pkg;\n' + 'class C {\n\tprivate function __finish():Void {\n\t\ttrace(1);\n\t}\n\n'
+		final src: String = 'package pkg;\nclass C {\n\tprivate function __finish():Void {\n\t\ttrace(1);\n\t}\n\n'
 			+ '\tpublic function draw():Void {\n\t\t__finish();\n\t\tfunction __finish():Void {\n\t\t\ttrace(2);\n\t\t}\n'
 			+ '\t\t__finish();\n\t}\n}';
 		Assert.isTrue(violations(src).length >= 1);
@@ -571,9 +469,8 @@ class NoUnderscorePrefixCheckTest extends Test {
 	 * ARE siblings in one block, and renaming either alone puts two `step` bindings there.
 	 */
 	public function testInlineFunctionAndLocalStrippingToTheSameNameBothSkipped(): Void {
-		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
-			+ '\t\tinline function __step():Void {\n\t\t\ttrace(1);\n\t\t}\n\t\tvar _step:Int = 1;\n\t\t__step();\n'
-			+ '\t\ttrace(_step);\n\t}\n}';
+		final src: String = 'package pkg;\nclass C {\n\tpublic function draw():Void {\n\t\tinline function __step():Void {\n'
+			+ '\t\t\ttrace(1);\n\t\t}\n\t\tvar _step:Int = 1;\n\t\t__step();\n\t\ttrace(_step);\n\t}\n}';
 		Assert.equals(2, violations(src).length);
 		Assert.equals(0, edits(src).length);
 	}
@@ -586,9 +483,8 @@ class NoUnderscorePrefixCheckTest extends Test {
 	 * that gate is known (see the comment on the gate).
 	 */
 	public function testMacroDeclaredBindingNeitherFlaggedNorClaiming(): Void {
-		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
-			+ '\t\tvar e = macro {\n\t\t\tvar __step:Int = 1;\n\t\t\ttrace(__step);\n\t\t};\n'
-			+ '\t\tvar _step:Int = 1;\n\t\ttrace(_step);\n\t\ttrace(e);\n\t}\n}';
+		final src: String = 'package pkg;\nclass C {\n\tpublic function draw():Void {\n\t\tvar e = macro {\n\t\t\tvar __step:Int = 1;\n'
+			+ '\t\t\ttrace(__step);\n\t\t};\n\t\tvar _step:Int = 1;\n\t\ttrace(_step);\n\t\ttrace(e);\n\t}\n}';
 		// ONE finding: the reification's `__step` is not projected at all, so it is neither reported
 		// nor a candidate. The sibling `_step` therefore strips with nothing to conflict with.
 		Assert.equals(1, violations(src).length);
@@ -598,7 +494,7 @@ class NoUnderscorePrefixCheckTest extends Test {
 
 	/** A local of the target name in the ENCLOSING body is in scope for the local function, so the strip is refused. */
 	public function testLocalFunctionCollidingWithEnclosingLocalSkipped(): Void {
-		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n\t\tfinal finish:Int = 1;\n'
+		final src: String = 'package pkg;\nclass C {\n\tpublic function draw():Void {\n\t\tfinal finish:Int = 1;\n'
 			+ '\t\tfunction __finish():Void {\n\t\t\ttrace(finish);\n\t\t}\n\t\t__finish();\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
@@ -613,18 +509,16 @@ class NoUnderscorePrefixCheckTest extends Test {
 	 * catches whatever it takes for the scope.
 	 */
 	public function testSiblingLocalFunctionHoldingTheTargetNameSkipped(): Void {
-		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
-			+ '\t\tfunction finish(n:Int):Void {\n\t\t\tif (n > 0) finish(n - 1);\n\t\t}\n'
-			+ '\t\tfunction __finish():Void {\n\t\t\ttrace(1);\n\t\t}\n\t\t__finish();\n\t}\n}';
+		final src: String = 'package pkg;\nclass C {\n\tpublic function draw():Void {\n\t\tfunction finish(n:Int):Void {\n'
+			+ '\t\t\tif (n > 0) finish(n - 1);\n\t\t}\n\t\tfunction __finish():Void {\n\t\t\ttrace(1);\n\t\t}\n\t\t__finish();\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
 	}
 
 	/** Two sibling local functions differing only in underscore count strip to the SAME name, so neither renames. */
 	public function testTwoLocalFunctionsStrippingToTheSameNameBothSkipped(): Void {
-		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
-			+ '\t\tfunction _run():Void {\n\t\t\ttrace(1);\n\t\t}\n\t\tfunction __run():Void {\n\t\t\ttrace(2);\n\t\t}\n'
-			+ '\t\t_run();\n\t\t__run();\n\t}\n}';
+		final src: String = 'package pkg;\nclass C {\n\tpublic function draw():Void {\n\t\tfunction _run():Void {\n\t\t\ttrace(1);\n\t\t}\n'
+			+ '\t\tfunction __run():Void {\n\t\t\ttrace(2);\n\t\t}\n\t\t_run();\n\t\t__run();\n\t}\n}';
 		Assert.equals(2, violations(src).length);
 		Assert.equals(0, edits(src).length);
 	}
@@ -661,9 +555,8 @@ class NoUnderscorePrefixCheckTest extends Test {
 		// The sibling is referenced ONLY from inside itself: any other shape leaves an occurrence of
 		// the target in the ENCLOSING body, which the occurrence scan catches whatever the scope
 		// lookup returns - and the fixture would then pass with the exclusion reverted.
-		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
-			+ '\t\tinline function finish(n:Int):Void {\n\t\t\tif (n > 0) trace(n);\n\t\t}\n'
-			+ '\t\tinline function __finish():Void {\n\t\t\ttrace(1);\n\t\t}\n\t\t__finish();\n\t}\n}';
+		final src: String = 'package pkg;\nclass C {\n\tpublic function draw():Void {\n\t\tinline function finish(n:Int):Void {\n'
+			+ '\t\t\tif (n > 0) trace(n);\n\t\t}\n\t\tinline function __finish():Void {\n\t\t\ttrace(1);\n\t\t}\n\t\t__finish();\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
 	}
@@ -678,9 +571,9 @@ class NoUnderscorePrefixCheckTest extends Test {
 	 * test green.)
 	 */
 	public function testSiblingInlineFunctionParametersRenameIndependently(): Void {
-		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function draw():Void {\n'
-			+ '\t\tinline function a(_n:Int):Int {\n\t\t\treturn _n;\n\t\t}\n'
-			+ '\t\tinline function b(n:String):String {\n\t\t\treturn n;\n\t\t}\n\t\ttrace(a(1) + b("x"));\n\t}\n}';
+		final src: String = 'package pkg;\nclass C {\n\tpublic function draw():Void {\n\t\tinline function a(_n:Int):Int {\n'
+			+ '\t\t\treturn _n;\n\t\t}\n\t\tinline function b(n:String):String {\n\t\t\treturn n;\n\t\t}\n'
+			+ '\t\ttrace(a(1) + b("x"));\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		assertFixed(src, ['inline function a(n:Int):Int', 'inline function b(n:String):String'], ['_n']);
 	}
@@ -695,14 +588,13 @@ class NoUnderscorePrefixCheckTest extends Test {
 	 * is a real collision) while `b`'s must strip.
 	 */
 	public function testLocalFunctionDoesNotBlockAnUnrelatedLocalsStrip(): Void {
-		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function a():Void {\n\t\tvar run:Int = 0;\n'
-			+ '\t\tfunction _run():Void {\n\t\t\ttrace(run);\n\t\t}\n\t\t_run();\n\t}\n\n'
-			+ '\tpublic function b():Void {\n\t\tvar _run:Int = 1;\n\t\ttrace(_run);\n\t}\n}';
+		final src: String = 'package pkg;\nclass C {\n\tpublic function a():Void {\n\t\tvar run:Int = 0;\n\t\tfunction _run():Void {\n'
+			+ '\t\t\ttrace(run);\n\t\t}\n\t\t_run();\n\t}\n\n\tpublic function b():Void {\n\t\tvar _run:Int = 1;\n'
+			+ '\t\ttrace(_run);\n\t}\n}';
 		Assert.equals(2, violations(src).length);
 		Assert.equals(2, edits(src).length);
 		assertFixed(src, ['var run:Int = 1;', 'trace(run);', 'function _run():Void', '\t\t_run();'], ['var _run']);
 	}
-
 
 	/**
 	 * Attributing a local function's occurrences must start AT its declaration, not at the enclosing
@@ -713,13 +605,12 @@ class NoUnderscorePrefixCheckTest extends Test {
 	 * window rather than from the two candidates claiming one target.
 	 */
 	public function testReadBeforeALocalFunctionStillBlocksAParameterStrip(): Void {
-		final src: String = 'package pkg;\n'
-			+ 'class C {\n\tpublic function m(_x:Int):Void {\n\t\ttrace(_x);\n\t\tfunction _x():Void {}\n\t\t_x();\n\t}\n}';
+		final src: String =
+			'package pkg;\nclass C {\n\tpublic function m(_x:Int):Void {\n\t\ttrace(_x);\n\t\tfunction _x():Void {}\n\t\t_x();\n\t}\n}';
 		final config: String = '{"rules":{"no-underscore-prefix":{"enabled":true,"params":true,"locals":false}}}';
 		Assert.equals(1, violations(src, config).length);
 		Assert.equals(0, edits(src, config).length);
 	}
-
 
 	/**
 	 * The `inline function` spelling of `testLocalFunctionDoesNotBlockAnUnrelatedLocalsStrip`. The two
@@ -727,12 +618,104 @@ class NoUnderscorePrefixCheckTest extends Test {
 	 * must never diverge, so the attribution window is pinned for both spellings rather than one.
 	 */
 	public function testLocalInlineFunctionDoesNotBlockAnUnrelatedLocalsStrip(): Void {
-		final src: String = 'package pkg;\n' + 'class C {\n\tpublic function a():Void {\n\t\tvar run:Int = 0;\n'
+		final src: String = 'package pkg;\nclass C {\n\tpublic function a():Void {\n\t\tvar run:Int = 0;\n'
 			+ '\t\tinline function _run():Void {\n\t\t\ttrace(run);\n\t\t}\n\t\t_run();\n\t}\n\n'
 			+ '\tpublic function b():Void {\n\t\tvar _run:Int = 1;\n\t\ttrace(_run);\n\t}\n}';
 		Assert.equals(2, violations(src).length);
 		Assert.equals(2, edits(src).length);
 		assertFixed(src, ['var run:Int = 1;', 'trace(run);', 'inline function _run():Void', '\t\t_run();'], ['var _run']);
+	}
+
+	/** A handler whose event parameter carries the private-field `_` prefix and IS referenced. */
+	private inline function handlerSource(): String {
+		return 'package pkg;\nclass ViewPanel {\n\tprivate function selectHandler(_event:Event):Void {\n\t\ttrace(_event.type);\n\t}\n}';
+	}
+
+	/** Two underscore-prefixed locals in a class declaring neither name as a member. */
+	private inline function localsSource(): String {
+		return 'package pkg;\nclass ListView {\n\tpublic function refresh():Void {\n\t\tvar __selectedIndex:Int = 0;\n'
+			+ '\t\tfinal _items:Array<String> = [];\n\t\ttrace(__selectedIndex + _items.length);\n\t}\n}';
+	}
+
+	/** One underscore-prefixed parameter and one underscore-prefixed local, for the option toggles. */
+	private inline function mixedSource(): String {
+		return 'package pkg;\n'
+			+ 'class C {\n\tpublic function f(_count:Int):Void {\n\t\tfinal _total:Int = _count + 1;\n\t\ttrace(_total);\n\t}\n}';
+	}
+
+	/** A parameter that is never referenced in its function — the cross-rule loop-guard fixture. */
+	private inline function unusedParamSource(): String {
+		return 'package pkg;\nclass C {\n\tpublic function f(_event:Int):Void {\n\t\ttrace(1);\n\t}\n}';
+	}
+
+	/** The check's findings for `src`, with `config` (raw `apqlint.json` text) in effect when given. */
+	private function violations(src: String, ?config: String): Array<Violation> {
+		final check: NoUnderscorePrefix = configured(config);
+		return check.run([{ file: 'pkg/C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	/** The check's autofix edits for `src`, resolved against a single-file index. */
+	private function edits(src: String, ?config: String): Array<{ span: Span, text: String }> {
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: NoUnderscorePrefix = configured(config);
+		return check.fix(src, check.run(files, plugin), plugin, SymbolIndex.build(files, plugin));
+	}
+
+	/**
+	 * The check's autofix edits for `src` under a NAMING policy adapted from `checkstyle` content, discovered the way a real run discovers it - a `checkstyle.json` written next to the linted file. That is the shape whose rules carry no `normalize`, so the reserved-word veto cannot lean on the policy.
+	 */
+	private function editsUnderPolicy(src: String, checkstyle: String): Array<{ span: Span, text: String }> {
+		final tmp: Null<String> = Sys.getEnv('TMPDIR');
+		final base: String = tmp != null && tmp.length > 0 ? tmp : '/tmp';
+		final dir: String = '$base/anyparse_nup_cfg_${Sys.time()}';
+		sys.FileSystem.createDirectory(dir);
+		sys.io.File.saveContent('$dir/checkstyle.json', checkstyle);
+		final path: String = '$dir/C.hx';
+		sys.io.File.saveContent(path, src);
+		final files: Array<{ file: String, source: String }> = [{ file: path, source: src }];
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: NoUnderscorePrefix = new NoUnderscorePrefix();
+		final out: Array<{ span: Span, text: String }> = check.fix(src, check.run(files, plugin), plugin, SymbolIndex.build(files, plugin));
+		sys.FileSystem.deleteFile(path);
+		sys.FileSystem.deleteFile('$dir/checkstyle.json');
+		sys.FileSystem.deleteDirectory(dir);
+		return out;
+	}
+
+	/** A check carrying `config` (raw `apqlint.json` text) as its per-file resolver, or the default one. */
+	private function configured(config: Null<String>): NoUnderscorePrefix {
+		final check: NoUnderscorePrefix = new NoUnderscorePrefix();
+		if (config != null) {
+			final parsed: LintConfig = LintConfig.parse(config);
+			check.setConfigResolver(file -> parsed);
+		}
+		return check;
+	}
+
+	/** Canonicalize the check's edits for `src` and assert every `present` fragment appears and every `absent` one does not. */
+	private function assertFixed(src: String, present: Array<String>, absent: Array<String>): Void {
+		final applied: Array<{ span: Span, text: String }> = edits(src);
+		Assert.isTrue(applied.length > 0);
+		switch RefactorSupport.canonicalize(src, applied, true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				for (fragment in present) Assert.isTrue(text.indexOf(fragment) >= 0, 'missing "$fragment" in:\n$text');
+				for (fragment in absent) Assert.isTrue(text.indexOf(fragment) == -1, 'still present "$fragment" in:\n$text');
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+	}
+
+	/** The check's edits for `subSrc` with `libSrc` joined as a RESOLUTION-scope library (never reported, never edited). */
+	private function fixWithResolutionScope(subSrc: String, libSrc: String, ?config: String): Array<{ span: Span, text: String }> {
+		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/Sub.hx', source: subSrc }];
+		final lib: Array<{ file: String, source: String }> = [{ file: 'ext/Base.hx', source: libSrc }];
+		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, library: new LibrarySources(lib) } });
+		final check: NoUnderscorePrefix = configured(config);
+		final vs: Array<Violation> = check.run(report, scoped);
+		Assert.equals(1, vs.length);
+		return check.fix(subSrc, vs, scoped, SymbolIndex.build(report, new HaxeQueryPlugin()));
 	}
 
 }

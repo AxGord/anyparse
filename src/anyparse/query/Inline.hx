@@ -7,6 +7,7 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -136,7 +137,7 @@ final class Inline {
 				return '"$name" initializer depends on reassigned variable "$nm" — cannot inline';
 
 			final readHit: Null<RefHit> = nmHits.find(h -> h.span.from == idSpan.from);
-			final boundSpan: Null<Span> = readHit == null ? null : readHit.bindingSpan;
+			final boundSpan: Null<Span> = readHit?.bindingSpan;
 			if (boundSpan == null) return '"$name" initializer reads non-local "$nm" — cannot inline (may be a property)';
 
 			final boundDecl: Null<QueryNode> = RefactorSupport.nodeAtFrom(tree, boundSpan.from);
@@ -180,12 +181,12 @@ final class Inline {
 		var lineStart: Int = from;
 		while (lineStart > 0 && source.charAt(lineStart - 1) != '\n') lineStart--;
 		// Everything in [lineStart, from) must be whitespace.
-		for (i in lineStart ... from) if (!isSpace(StringTools.fastCodeAt(source, i))) return null;
+		for (i in lineStart ... from) if (!isSpace(source.fastCodeAt(i))) return null;
 
 		var lineEnd: Int = to;
 		while (lineEnd < source.length && source.charAt(lineEnd) != '\n') lineEnd++;
 		// Everything in [to, lineEnd) must be whitespace.
-		for (i in to ... lineEnd) if (!isSpace(StringTools.fastCodeAt(source, i))) return null;
+		for (i in to ... lineEnd) if (!isSpace(source.fastCodeAt(i))) return null;
 		// Consume the trailing line break itself so no blank line is left.
 		if (lineEnd < source.length && source.charAt(lineEnd) == '\n') lineEnd++;
 
@@ -233,7 +234,7 @@ final class Inline {
 
 		// The initializer is the decl's first child.
 		final init: Null<QueryNode> = decl.children.length > 0 ? decl.children[0] : null;
-		final initSpan: Null<Span> = init == null ? null : init.span;
+		final initSpan: Null<Span> = init?.span;
 		if (init == null || initSpan == null) return PErr('"$name" has no initializer to inline');
 		final initializer: QueryNode = init;
 		final initRange: Span = initSpan;
@@ -270,14 +271,15 @@ final class Inline {
 			return PErr('"$name" is read through a braceless string interpolation ($$$name) - rebrace it as $${$name} first');
 		final blockKind: Null<String> = shape.stringInterpBlockKind;
 		final scope: QueryNode = RefactorSupport.enclosingFunctionSubtree(tree, binding, shape);
-		if (blockKind != null && RefactorSupport.unreadableInterpBlock(scope, blockKind) != null)
-			return PErr(
+		return if (blockKind != null && RefactorSupport.unreadableInterpBlock(scope, blockKind) != null)
+			PErr(
 				'"$name" shares its scope with an escape-spelled string interpolation carrying no parsed expression -'
 				+ ' a read of the name inside it cannot be seen; respell that interpolation first'
-			);
-		return freeIdentErr != null
-			? PErr(freeIdentErr)
-			: POk({
+			)
+		else if (freeIdentErr != null)
+			PErr(freeIdentErr)
+		else
+			POk({
 				name: name,
 				decl: decl,
 				initializer: initializer,

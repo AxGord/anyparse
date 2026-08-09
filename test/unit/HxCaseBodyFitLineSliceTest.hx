@@ -264,8 +264,8 @@ final class HxCaseBodyFitLineSliceTest extends Test {
 		// The body must be a `{`-opening VALUE: since
 		// omega-case-body-controlflow-glue a keyword-led statement body is
 		// refused the glue outright and never reaches `nestGluedBody`.
-		final src: String = 'class M {\n\tfunction f():Void {\n\t\tswitch (x) {\n\t\t\tcase 1: (p, q) -> {\n\t\t\t\tfoo(p, q);\n'
-			+ '\t\t\t}\n\t\t}\n\t}\n}\n';
+		final src: String =
+			'class M {\n\tfunction f():Void {\n\t\tswitch (x) {\n\t\t\tcase 1: (p, q) -> {\n\t\t\t\tfoo(p, q);\n\t\t\t}\n\t\t}\n\t}\n}\n';
 		final off: String = write(src, caseFitJson(false));
 		Assert.isTrue(
 			off.indexOf('case 1: (p, q) -> {\n\t\t\t\t\tfoo(p, q);') != -1, 'knob off must keep the +1 continuation indent: <$off>'

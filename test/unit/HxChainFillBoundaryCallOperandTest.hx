@@ -30,10 +30,12 @@ final class HxChainFillBoundaryCallOperandTest extends Test {
 	}
 
 	public function testCallOperandEndingAtLimitKeepsChainBreak(): Void {
-		final flat: String =
-			"class C {\n\tfunction f() {\n\t\treturn 'DiagReport' + line() + '{' + line() + '  aa : ' + hostId + line() + '  mem: ' + memoryValue + ' KB (' + toUnits(memoryValue) + ' GB)' + line() + '  cpu: ' + coreTag + '}';\n\t}\n}";
-		final wrapped: String =
-			"class C {\n\tfunction f() {\n\t\treturn 'DiagReport' + line() + '{' + line() + '  aa : ' + hostId + line() + '  mem: ' + memoryValue + ' KB ('\n\t\t\t+ toUnits(memoryValue) + ' GB)' + line() + '  cpu: ' + coreTag + '}';\n\t}\n}";
+		final flat: String = 'class C {\n\tfunction f() {\n'
+			+ "\t\treturn 'DiagReport' + line() + '{' + line() + '  aa : ' + hostId + line() + '  mem: ' + memoryValue + ' KB (' + toUnits(memoryValue) + ' GB)' + line() + '  cpu: ' + coreTag + '}';\n"
+			+ '\t}\n}';
+		final wrapped: String = 'class C {\n\tfunction f() {\n'
+			+ "\t\treturn 'DiagReport' + line() + '{' + line() + '  aa : ' + hostId + line() + '  mem: ' + memoryValue + ' KB ('\n"
+			+ "\t\t\t+ toUnits(memoryValue) + ' GB)' + line() + '  cpu: ' + coreTag + '}';\n\t}\n}";
 		final out: String = triviaWrite(flat);
 		Assert.equals(wrapped, out);
 		Assert.equals(wrapped, triviaWrite(wrapped));

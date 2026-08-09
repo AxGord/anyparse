@@ -105,16 +105,17 @@ class HxAbstractClassSliceTest extends HxTestHelpers {
 
 	// -- Round-trip / corpus drivers --
 
-	public function testCorpusAbstractClassRoundTrip(): Void {
+	public inline function testCorpusAbstractClassRoundTrip(): Void {
 		roundTripModule(
 			'abstract class Foo {\n\tabstract function foo();\n\tpublic abstract function foo2();\n\tpublic function foo3();\n}\n',
 			'abstract_class'
 		);
 	}
 
-	public function testCorpusIssue626RoundTrip(): Void {
+	public inline function testCorpusIssue626RoundTrip(): Void {
 		roundTripModule(
-			'abstract class Foo {\n\tstatic\n\toverload extern inline function foo() {}\n\n\toverload\n\tstatic extern inline function foo(i:Int) {}\n}\n\n\toverload\n\tstatic inline function foo(i:Int) {}\n',
+			'abstract class Foo {\n\tstatic\n\toverload extern inline function foo() {}\n\n\toverload\n'
+			+ '\tstatic extern inline function foo(i:Int) {}\n}\n\n\toverload\n\tstatic inline function foo(i:Int) {}\n',
 			'issue_626_overload_modifier'
 		);
 	}

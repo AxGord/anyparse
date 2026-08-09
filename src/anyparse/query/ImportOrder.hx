@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -175,10 +176,9 @@ final class ImportOrder {
 		var fewest: Int = inversions(paths, 0);
 		for (order in 1...ORDER_NAMES.length) {
 			final count: Int = inversions(paths, order);
-			if (count < fewest) {
-				best = order;
-				fewest = count;
-			}
+			if (count >= fewest) continue;
+			best = order;
+			fewest = count;
 		}
 		return best;
 	}
@@ -200,7 +200,12 @@ final class ImportOrder {
 			final fb: String = b.toLowerCase();
 			if (fa != fb) return fa < fb ? -1 : 1;
 		}
-		return a < b ? -1 : a > b ? 1 : 0;
+		return if (a < b)
+			-1
+		else if (a > b)
+			1
+		else
+			0;
 	}
 
 	/**
@@ -350,10 +355,13 @@ final class ImportOrder {
 	}
 
 	/** Whether `candidate` outranks `incumbent` under the class doc's ordered / affinity / slot-inside criteria. */
-	private static function beats(candidate: RunChoice, incumbent: RunChoice): Bool {
-		if (candidate.ordered != incumbent.ordered) return candidate.ordered;
-		if (candidate.affinity != incumbent.affinity) return candidate.affinity > incumbent.affinity;
-		return candidate.slot >= 0 && incumbent.slot < 0;
+	private static inline function beats(candidate: RunChoice, incumbent: RunChoice): Bool {
+		return if (candidate.ordered != incumbent.ordered)
+			candidate.ordered
+		else if (candidate.affinity != incumbent.affinity)
+			candidate.affinity > incumbent.affinity
+		else
+			candidate.slot >= 0 && incumbent.slot < 0;
 	}
 
 	/** The index in `run` of the first import that sorts AFTER `path` under `order`, or -1 when `path` sorts past them all. */
@@ -394,21 +402,24 @@ final class ImportOrder {
 	private static function lineOf(source: String, slot: ImportSlot): Null<ImportLine> {
 		if (slot.from < 0 || slot.to < 0) return null;
 		final lineStart: Int = RefactorSupport.startOfLine(source, slot.from);
-		if (StringTools.trim(source.substring(lineStart, slot.from)) != '') return null;
+		if (source.substring(lineStart, slot.from).trim() != '') return null;
 		final newline: Int = source.indexOf('\n', slot.to);
-		if (newline < 0) return null;
-		if (!isPureTail(StringTools.trim(source.substring(slot.to, newline)))) return null;
-		return {
-			path: slot.path,
-			declFrom: slot.from,
-			chunkFrom: withLeadingComments(source, lineStart),
-			chunkTo: newline + 1
-		};
+		return if (newline < 0)
+			null
+		else if (!isPureTail(source.substring(slot.to, newline).trim()))
+			null
+		else
+			{
+				path: slot.path,
+				declFrom: slot.from,
+				chunkFrom: withLeadingComments(source, lineStart),
+				chunkTo: newline + 1
+			};
 	}
 
 	/** Whether what follows the statement on its own line is nothing, or a `//` comment — the only two shapes a whole-line move may carry. */
 	private static inline function isPureTail(tail: String): Bool {
-		return tail == '' || StringTools.startsWith(tail, '//');
+		return tail == '' || tail.startsWith('//');
 	}
 
 	/**
@@ -420,8 +431,8 @@ final class ImportOrder {
 		var from: Int = lineStart;
 		while (from > 0) {
 			final previousStart: Int = RefactorSupport.startOfLine(source, from - 1);
-			final previous: String = StringTools.trim(source.substring(previousStart, from - 1));
-			if (!StringTools.startsWith(previous, '//')) break;
+			final previous: String = source.substring(previousStart, from - 1).trim();
+			if (!previous.startsWith('//')) break;
 			if (previous.indexOf('/*') >= 0 || previous.indexOf('*/') >= 0) break;
 			from = previousStart;
 		}

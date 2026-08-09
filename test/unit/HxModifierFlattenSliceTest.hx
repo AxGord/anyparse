@@ -33,32 +33,32 @@ class HxModifierFlattenSliceTest extends Test {
 
 	// -- Trivia pipeline: multi-line modifier list FLATTENS to single line --
 
-	public function testTriviaMemberStaticOverloadFlatten(): Void {
+	public inline function testTriviaMemberStaticOverloadFlatten(): Void {
 		flattenTrivia(
 			'abstract class Foo {\n\tstatic\n\toverload extern inline function foo() {}\n}',
 			'abstract class Foo {\n\tstatic overload extern inline function foo() {}\n}\n'
 		);
 	}
 
-	public function testTriviaMemberOverloadStaticFlatten(): Void {
+	public inline function testTriviaMemberOverloadStaticFlatten(): Void {
 		flattenTrivia(
 			'abstract class Foo {\n\toverload\n\tstatic extern inline function foo(i:Int) {}\n}',
 			'abstract class Foo {\n\toverload static extern inline function foo(i:Int) {}\n}\n'
 		);
 	}
 
-	public function testTriviaTopLevelOverloadStaticFlatten(): Void {
+	public inline function testTriviaTopLevelOverloadStaticFlatten(): Void {
 		flattenTrivia('overload\n\tstatic inline function foo(i:Int) {}', 'overload static inline function foo(i:Int) {}\n');
 	}
 
 	// -- Trivia pipeline: single modifier untouched (smoke-test empty-Star and
 	// -- single-element paths — the new branch only fires at _si > 0). --
 
-	public function testTriviaSingleModifierUntouched(): Void {
+	public inline function testTriviaSingleModifierUntouched(): Void {
 		roundTripTrivia('class C {\n\tstatic function foo() {}\n}');
 	}
 
-	public function testTriviaInlineModifierListUntouched(): Void {
+	public inline function testTriviaInlineModifierListUntouched(): Void {
 		roundTripTrivia('class C {\n\tstatic overload extern inline function foo() {}\n}');
 	}
 
@@ -66,7 +66,7 @@ class HxModifierFlattenSliceTest extends Test {
 	// -- Mirrors CondModProbe.testIssue332V1 — the `forceInlineSep` flag must
 	// -- NOT collapse the `#end\n\tpublic` boundary (ParamCtor gate). --
 
-	public function testTriviaConditionalBoundaryNewlinePreserved(): Void {
+	public inline function testTriviaConditionalBoundaryNewlinePreserved(): Void {
 		roundTripTrivia('class Main {\n\t#if (neko_v21 || (cpp && !cppia) || flash) inline #end\n\tpublic static function main() {}\n}');
 	}
 

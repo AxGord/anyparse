@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -58,12 +57,12 @@ final class PreferNullCoalescing implements Check {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
 		final shape: RefShape = plugin.refShape();
-		final typed: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final typed: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			final declaredTypes: Null<Map<Int, String>> = typed == null ? null : typed.declaredTypes(entry.source);
+			final declaredTypes: Null<Map<Int, String>> = typed?.declaredTypes(entry.source);
 			walk(violations, entry.file, entry.source, tree, tree, shape, declaredTypes, seams);
 		}
 		return violations;
@@ -76,11 +75,11 @@ final class PreferNullCoalescing implements Check {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
 		final shape: RefShape = plugin.refShape();
-		final typed: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final typed: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final root: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (root == null) return [];
 		final rootNode: QueryNode = root;
-		final declaredTypes: Null<Map<Int, String>> = typed == null ? null : typed.declaredTypes(source);
+		final declaredTypes: Null<Map<Int, String>> = typed?.declaredTypes(source);
 		return CheckScan.applyBySpan(plugin, source, violations, [seams.ternaryKind], (node, span) -> {
 			final m: Null<{ guarded: QueryNode, fallback: QueryNode }> = match(node, source, rootNode, shape, declaredTypes, seams);
 			if (m == null) return null;
@@ -93,7 +92,6 @@ final class PreferNullCoalescing implements Check {
 			return { span: span, text: '$guardedSrc ?? $fallbackText' };
 		});
 	}
-
 
 	/**
 	 * Walk `node`; flag the outermost null-guard ternary and STOP — a nested one inside it
@@ -157,12 +155,10 @@ final class PreferNullCoalescing implements Check {
 			null;
 		if (res == null) return null;
 		final span: Null<Span> = ternary.span;
-		if (
-			declaredTypes != null && span != null
+		return declaredTypes != null && span != null
 			&& TypeResolver.isInferenceFragileNullGuard(res.fallback, span, root, shape, declaredTypes)
-		)
-			return null;
-		return res;
+			? null
+			: res;
 	}
 
 	/** Whether `node`'s subtree contains any of `unsafeKinds` (a binding-write or a call). */

@@ -4,7 +4,6 @@ import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.ExtractVar;
-import anyparse.query.ExtractVar.ExtractResult;
 import haxe.Exception;
 
 /**
@@ -34,8 +33,8 @@ class ExtractVarSliceTest extends Test {
 	 */
 	public function testExtractBinaryRhsGrabsOutermost(): Void {
 		final source: String = 'class C {\n\tfunction f(a:Int, b:Int):Int {\n\t\tvar y = a + b * 2;\n\t\treturn y;\n\t}\n}';
-		final expected: String = 'class C {\n\tfunction f(a:Int, b:Int):Int {\n\t\tfinal t = a + b * 2;\n\t\tvar y = t;\n'
-			+ '\t\treturn y;\n' + '\t}\n' + '}';
+		final expected: String =
+			'class C {\n\tfunction f(a:Int, b:Int):Int {\n\t\tfinal t = a + b * 2;\n\t\tvar y = t;\n\t\treturn y;\n\t}\n}';
 		// Line 3 col 11 — the `a` in `a + b * 2`.
 		assertExtract(source, 3, 11, 't', expected);
 	}
@@ -58,8 +57,8 @@ class ExtractVarSliceTest extends Test {
 	 */
 	public function testExtractWholeCall(): Void {
 		final source: String = 'class C {\n\tfunction f(a:Int, b:Int):Void {\n\t\tvar r = g(a + b);\n\t\ttrace(r);\n\t}\n}';
-		final expected: String = 'class C {\n\tfunction f(a:Int, b:Int):Void {\n\t\tfinal t = g(a + b);\n\t\tvar r = t;\n'
-			+ '\t\ttrace(r);\n' + '\t}\n' + '}';
+		final expected: String =
+			'class C {\n\tfunction f(a:Int, b:Int):Void {\n\t\tfinal t = g(a + b);\n\t\tvar r = t;\n\t\ttrace(r);\n\t}\n}';
 		// Line 3 col 11 — the `g` callee of `g(a + b)`.
 		assertExtract(source, 3, 11, 't', expected);
 	}
@@ -71,8 +70,8 @@ class ExtractVarSliceTest extends Test {
 	 */
 	public function testExtractIfCondition(): Void {
 		final source: String = 'class C {\n\tfunction f(a:Int):Int {\n\t\tif (a > 0) {\n\t\t\treturn 1;\n\t\t}\n\t\treturn 0;\n\t}\n}';
-		final expected: String = 'class C {\n\tfunction f(a:Int):Int {\n\t\tfinal c = a > 0;\n\t\tif (c) {\n\t\t\treturn 1;\n\t\t}\n'
-			+ '\t\treturn 0;\n' + '\t}\n' + '}';
+		final expected: String =
+			'class C {\n\tfunction f(a:Int):Int {\n\t\tfinal c = a > 0;\n\t\tif (c) {\n\t\t\treturn 1;\n\t\t}\n\t\treturn 0;\n\t}\n}';
 		// Line 3 col 7 — the `a` in `if (a > 0)`.
 		assertExtract(source, 3, 7, 'c', expected);
 	}
@@ -83,8 +82,8 @@ class ExtractVarSliceTest extends Test {
 	 */
 	public function testIndentationPreservedInNestedBlock(): Void {
 		final source: String = 'class C {\n\tfunction f(a:Int, b:Int):Void {\n\t\twhile (a > 0) {\n\t\t\tg(a + b);\n\t\t}\n\t}\n}';
-		final expected: String = 'class C {\n\tfunction f(a:Int, b:Int):Void {\n\t\twhile (a > 0) {\n\t\t\tfinal t = a + b;\n'
-			+ '\t\t\tg(t);\n' + '\t\t}\n' + '\t}\n' + '}';
+		final expected: String =
+			'class C {\n\tfunction f(a:Int, b:Int):Void {\n\t\twhile (a > 0) {\n\t\t\tfinal t = a + b;\n\t\t\tg(t);\n\t\t}\n\t}\n}';
 		// Line 4 col 6 — the `a` inside the braced while body's `g(a + b)`.
 		assertExtract(source, 4, 6, 't', expected);
 	}
@@ -139,8 +138,8 @@ class ExtractVarSliceTest extends Test {
 	 */
 	public function testExtractInsideFinalMethod(): Void {
 		final source: String = 'class C {\n\tfinal function d(a:Int, b:Int):Int {\n\t\tvar y = a + b * 2;\n\t\treturn y;\n\t}\n}';
-		final expected: String = 'class C {\n\tfinal function d(a:Int, b:Int):Int {\n\t\tfinal t = a + b * 2;\n\t\tvar y = t;\n'
-			+ '\t\treturn y;\n' + '\t}\n' + '}';
+		final expected: String =
+			'class C {\n\tfinal function d(a:Int, b:Int):Int {\n\t\tfinal t = a + b * 2;\n\t\tvar y = t;\n\t\treturn y;\n\t}\n}';
 		// Line 3 col 11 — the `a` in `a + b * 2`.
 		assertExtract(source, 3, 11, 't', expected);
 	}
@@ -165,8 +164,8 @@ class ExtractVarSliceTest extends Test {
 	 * hoisted `final v = …` silently captured every `v` the loop body meant to read.
 	 */
 	public function testRefuseCollidesKeyValueLoopValueBinder(): Void {
-		final source: String = 'class C {\n\tfunction f(a:Int, b:Int, m:Map<Int, Int>):Int {\n\t\tfor (k => v in m) trace(k + v);\n'
-			+ '\t\treturn a + b;\n' + '\t}\n' + '}';
+		final source: String =
+			'class C {\n\tfunction f(a:Int, b:Int, m:Map<Int, Int>):Int {\n\t\tfor (k => v in m) trace(k + v);\n\t\treturn a + b;\n\t}\n}';
 		// Line 4 col 10 — the `a`; name `v` already names the loop's value binder.
 		assertRefused(source, 4, 10, 'v');
 	}

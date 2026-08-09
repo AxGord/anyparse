@@ -5,6 +5,8 @@ import anyparse.core.DocMeasure;
 import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
 
+using StringTools;
+
 /**
  * Runtime helper that emits a `Doc` for a method-chain construct
  * (`a.b().c().d()` — left-assoc nested `Call(FieldAccess(Call(...)))` /
@@ -307,7 +309,7 @@ class MethodChainEmit {
 		return switch doc {
 			case Text(s):
 				final t: String = StringTools.trim(s);
-				StringTools.startsWith(t, '//');
+				t.startsWith('//');
 			case Concat(items):
 				var i: Int = items.length - 1;
 				var found: Bool = false;
@@ -386,7 +388,7 @@ class MethodChainEmit {
 	 * `Concat(segments)`) because `CollapsePass.rewriteChainProbe` destructures
 	 * this exact `Concat` to re-measure a re-glued chain's first line.
 	 */
-	private static function shapeNoWrapTail(segments: Array<Doc>): Doc {
+	private static inline function shapeNoWrapTail(segments: Array<Doc>): Doc {
 		return Concat(segments);
 	}
 
@@ -461,7 +463,7 @@ class MethodChainEmit {
 	private static function segmentOpensCall(seg: Doc): Bool {
 		final flat: String = DocMeasure.flatText(seg);
 		for (i in 0...flat.length) {
-			final c: Int = StringTools.fastCodeAt(flat, i);
+			final c: Int = flat.fastCodeAt(i);
 			if (c == '('.code || c == '['.code || c == '{'.code) return true;
 		}
 		return false;
@@ -495,15 +497,13 @@ class MethodChainEmit {
 			for (i in 1...segs.length)
 				endsWithMultilineClose(i == 1 ? Concat([receiver, segs[0]]) : segs[i - 1])
 		] : [];
-		if (cuddle.indexOf(true) == -1) {
-			final tail: Array<Doc> = [];
-			for (i in 1...segs.length) {
-				tail.push(Line('\n'));
-				tail.push(segs[i]);
-			}
-			return Concat([segs[0], Nest(cols, Concat(tail))]);
+		if (cuddle.indexOf(true) != -1) return Concat(cuddledRuns([segs[0]], segs, 1, cuddle, cols));
+		final tail: Array<Doc> = [];
+		for (i in 1...segs.length) {
+			tail.push(Line('\n'));
+			tail.push(segs[i]);
 		}
-		return Concat(cuddledRuns([segs[0]], segs, 1, cuddle, cols));
+		return Concat([segs[0], Nest(cols, Concat(tail))]);
 	}
 
 	/**
@@ -610,18 +610,16 @@ class MethodChainEmit {
 			for (i in 0...segs.length)
 				endsWithMultilineClose(i == 0 ? receiver : segs[i - 1])
 		] : [];
-		if (cuddle.indexOf(true) == -1) {
-			final tail: Array<Doc> = [];
-			for (s in segs) {
-				tail.push(Line('\n'));
-				tail.push(s);
-			}
-			// Single-element `Concat` (rather than a bare `Nest`) so
-			// `CollapsePass.topLevelNestCols` and `WrapList.isOPLShape` keep
-			// reading this shape through their `Concat`-child scans.
-			return Concat([Nest(cols, Concat(tail))]);
+		if (cuddle.indexOf(true) != -1) return Concat(cuddledRuns([], segs, 0, cuddle, cols));
+		final tail: Array<Doc> = [];
+		for (s in segs) {
+			tail.push(Line('\n'));
+			tail.push(s);
 		}
-		return Concat(cuddledRuns([], segs, 0, cuddle, cols));
+		// Single-element `Concat` (rather than a bare `Nest`) so
+		// `CollapsePass.topLevelNestCols` and `WrapList.isOPLShape` keep
+		// reading this shape through their `Concat`-child scans.
+		return Concat([Nest(cols, Concat(tail))]);
 	}
 
 	/**
@@ -645,7 +643,7 @@ class MethodChainEmit {
 			final modeYN: WrapMode = evalAt(false, [t]);
 			final modeYY: WrapMode = evalAt(true, [t]);
 			if (modeNN == modeYN && modeYN == modeYY) return shapeAt(modeNN);
-			final brk: Doc = (modeYY == modeYN) ? shapeAt(modeYY) : IfFullLineExceeds(opt.lineWidth, shapeAt(modeYY), shapeAt(modeYN));
+			final brk: Doc = modeYY == modeYN ? shapeAt(modeYY) : IfFullLineExceeds(opt.lineWidth, shapeAt(modeYY), shapeAt(modeYN));
 			return Group(IfWidthExceeds(t, brk, shapeAt(modeNN)));
 		}
 		// t > lineWidth: 3 valid states (col+w>=t implies col+w>=lineWidth):
@@ -656,7 +654,7 @@ class MethodChainEmit {
 		final modeNY: WrapMode = evalAt(true, []);
 		final modeYY: WrapMode = evalAt(true, [t]);
 		if (modeNN == modeNY && modeNY == modeYY) return shapeAt(modeNN);
-		final brk: Doc = (modeNY == modeYY) ? shapeAt(modeYY) : Group(IfWidthExceeds(t, shapeAt(modeYY), shapeAt(modeNY)));
+		final brk: Doc = modeNY == modeYY ? shapeAt(modeYY) : Group(IfWidthExceeds(t, shapeAt(modeYY), shapeAt(modeNY)));
 		final ifFLE: Doc = IfFullLineExceeds(opt.lineWidth, brk, shapeAt(modeNN));
 		// ω-methodchain-reeval-after-callparam: re-glue tag also for the
 		// `t > lineWidth` extra-threshold case (the default cascade's

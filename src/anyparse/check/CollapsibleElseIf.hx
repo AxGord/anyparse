@@ -2,12 +2,13 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+
+using StringTools;
 
 /**
  * Flags an `else` whose body is a block holding exactly one statement, and that
@@ -156,8 +157,8 @@ final class CollapsibleElseIf implements Check {
 	 * `{`, so a non-canonical `else{ … }` cannot fuse into `elseif`.
 	 */
 	private static function interiorText(source: String, block: Span): String {
-		final inner: String = StringTools.trim(source.substring(block.from + 1, block.to - 1));
-		return StringTools.isSpace(source.charAt(block.from - 1), 0) ? inner : ' $inner';
+		final inner: String = source.substring(block.from + 1, block.to - 1).trim();
+		return source.charAt(block.from - 1).isSpace(0) ? inner : ' $inner';
 	}
 
 	/**
@@ -210,8 +211,8 @@ final class CollapsibleElseIf implements Check {
 		if (node.kind != seams.blockStmtKind || node.children.length != 1) return false;
 		final inner: QueryNode = node.children[0];
 		final innerSpan: Null<Span> = inner.span;
-		return innerSpan != null && seams.ifKinds.contains(inner.kind)
-			&& StringTools.trim(source.substring(blockSpan.from + 1, innerSpan.from)) == '';
+		return innerSpan != null && seams.ifKinds.contains(inner.kind) && source.substring(blockSpan.from + 1, innerSpan.from)
+			.trim() == '';
 	}
 
 	/**

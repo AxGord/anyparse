@@ -35,19 +35,19 @@ class Skip implements Strategy {
 	public function new() {}
 
 	public function appliesTo(node: ShapeNode): Bool {
-		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
+		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == ':ws' || entry.name == ':skip') return true;
 		return false;
 	}
 
 	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {
-		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
+		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return;
 		for (entry in meta) if (entry.name == ':ws') {
 			// The active format carries the actual whitespace string; the
 			// root rule annotation just records "skip is active".
-			node.annotations.set('skip.active', true);
+			node.annotations['skip.active'] = true;
 		}
 	}
 

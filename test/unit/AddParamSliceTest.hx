@@ -4,7 +4,6 @@ import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.AddParam;
-import anyparse.query.AddParam.AddParamResult;
 import haxe.Exception;
 
 /**

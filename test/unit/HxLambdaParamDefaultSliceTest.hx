@@ -154,10 +154,12 @@ class HxLambdaParamDefaultSliceTest extends HxTestHelpers {
 	}
 
 	public function testLongAnonFnSignatureWraps(): Void {
-		final src: String =
-			'class D {\n\tfunction f() {\n\t\tvar g = function(alphaChannel:Int = 1, betaChannel:Int = 2, gammaChannel:Int = 3, deltaChannel:Int = 4, epsilonChannel:Int = 5) {};\n\t}\n}';
-		final expected: String =
-			'class D {\n\tfunction f() {\n\t\tvar g = function(alphaChannel:Int = 1, betaChannel:Int = 2, gammaChannel:Int = 3, deltaChannel:Int = 4,\n\t\t\tepsilonChannel:Int = 5) {};\n\t}\n}';
+		final src: String = 'class D {\n\tfunction f() {\n'
+			+ '\t\tvar g = function(alphaChannel:Int = 1, betaChannel:Int = 2, gammaChannel:Int = 3, deltaChannel:Int = 4, epsilonChannel:Int = 5) {};\n'
+			+ '\t}\n}';
+		final expected: String = 'class D {\n\tfunction f() {\n'
+			+ '\t\tvar g = function(alphaChannel:Int = 1, betaChannel:Int = 2, gammaChannel:Int = 3, deltaChannel:Int = 4,\n'
+			+ '\t\t\tepsilonChannel:Int = 5) {};\n\t}\n}';
 		Assert.equals(expected, triviaWrite(src));
 	}
 
@@ -168,10 +170,12 @@ class HxLambdaParamDefaultSliceTest extends HxTestHelpers {
 		// general rather than only for the new slot. It carries a sixth
 		// param because dropping the five ` = N` fragments would
 		// otherwise leave the line under the limit.
-		final src: String =
-			'class D {\n\tfunction f() {\n\t\tvar g = function(alphaChannel:Int, betaChannel:Int, gammaChannel:Int, deltaChannel:Int, epsilonChannel:Int, zetaCh:Int) {};\n\t}\n}';
-		final expected: String =
-			'class D {\n\tfunction f() {\n\t\tvar g = function(alphaChannel:Int, betaChannel:Int, gammaChannel:Int, deltaChannel:Int, epsilonChannel:Int,\n\t\t\tzetaCh:Int) {};\n\t}\n}';
+		final src: String = 'class D {\n\tfunction f() {\n'
+			+ '\t\tvar g = function(alphaChannel:Int, betaChannel:Int, gammaChannel:Int, deltaChannel:Int, epsilonChannel:Int, zetaCh:Int) {};\n'
+			+ '\t}\n}';
+		final expected: String = 'class D {\n\tfunction f() {\n'
+			+ '\t\tvar g = function(alphaChannel:Int, betaChannel:Int, gammaChannel:Int, deltaChannel:Int, epsilonChannel:Int,\n'
+			+ '\t\t\tzetaCh:Int) {};\n\t}\n}';
 		Assert.equals(expected, triviaWrite(src));
 	}
 

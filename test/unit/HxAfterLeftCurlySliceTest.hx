@@ -32,35 +32,35 @@ class HxAfterLeftCurlySliceTest extends Test {
 	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
-	public function testDefaultOptionsKeepAfterLeftCurly(): Void {
+	public inline function testDefaultOptionsKeepAfterLeftCurly(): Void {
 		Assert.equals(KeepEmptyLinesPolicy.Keep, HaxeFormat.instance.defaultWriteOptions.afterLeftCurly);
 	}
 
-	public function testDefaultOptionsKeepBeforeRightCurly(): Void {
+	public inline function testDefaultOptionsKeepBeforeRightCurly(): Void {
 		Assert.equals(KeepEmptyLinesPolicy.Keep, HaxeFormat.instance.defaultWriteOptions.beforeRightCurly);
 	}
 
-	public function testClassBlankAfterLeftCurlyPreserved(): Void {
+	public inline function testClassBlankAfterLeftCurlyPreserved(): Void {
 		roundTrip('class C {\n\n\tvar x:Int;\n}');
 	}
 
-	public function testClassBlankBeforeRightCurlyPreserved(): Void {
+	public inline function testClassBlankBeforeRightCurlyPreserved(): Void {
 		roundTrip('class C {\n\tvar x:Int;\n\n}');
 	}
 
-	public function testInterfaceBlankAfterLeftCurlyPreserved(): Void {
+	public inline function testInterfaceBlankAfterLeftCurlyPreserved(): Void {
 		roundTrip('interface I {\n\n\tfunction f():Void;\n}');
 	}
 
-	public function testAbstractBlankAfterLeftCurlyPreserved(): Void {
+	public inline function testAbstractBlankAfterLeftCurlyPreserved(): Void {
 		roundTrip('abstract A(Int) {\n\n\tpublic var x:Int;\n}');
 	}
 
-	public function testEnumBlankAfterLeftCurlyPreserved(): Void {
+	public inline function testEnumBlankAfterLeftCurlyPreserved(): Void {
 		roundTrip('enum E {\n\n\tA;\n}');
 	}
 
-	public function testNoBlankAfterLeftCurlyStaysTight(): Void {
+	public inline function testNoBlankAfterLeftCurlyStaysTight(): Void {
 		roundTrip('class C {\n\tvar x:Int;\n}');
 	}
 

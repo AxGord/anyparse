@@ -54,7 +54,7 @@ class HxRegexLitSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testRegexRoundTrip(): Void {
+	public inline function testRegexRoundTrip(): Void {
 		roundTrip('class C { var x = ~/^-?(?:0|[1-9][0-9]*)/; var y = ~/a\\/b/gi; }', 'L2-regex-lit');
 	}
 

@@ -37,6 +37,4 @@ final class AnnotationKeys {
 	public static final BASE_CTOR: String = 'base.ctor';
 	public static final BASE_REF: String = 'base.ref';
 
-	private function new() {}
-
 }

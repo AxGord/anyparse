@@ -36,13 +36,13 @@ class HxInlineBlockCommentWriteTest extends Test {
 		Sys.putEnv(CommentInventory.DECLINE_ENV, '');
 	}
 
-	public function teardown(): Void Sys.putEnv(CommentInventory.DECLINE_ENV, _savedDecline);
+	public inline function teardown(): Void Sys.putEnv(CommentInventory.DECLINE_ENV, _savedDecline);
 
-	public function testIfConditionLeadingBlockComment(): Void {
+	public inline function testIfConditionLeadingBlockComment(): Void {
 		assertRefusesLoss('class Foo {\n\tfunction bar() {\n\t\tif (/* c */ x) {\n\t\t\trun();\n\t\t}\n\t}\n}\n', '/* c */');
 	}
 
-	public function testReturnLeadingBlockComment(): Void {
+	public inline function testReturnLeadingBlockComment(): Void {
 		assertRefusesLoss('class Foo {\n\tfunction bar() {\n\t\treturn /* r */ x;\n\t}\n}\n', '/* r */');
 	}
 

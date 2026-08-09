@@ -51,7 +51,8 @@ final class RemoveElement {
 		final hit: Null<{ node: QueryNode, parent: Null<QueryNode> }> = RefactorSupport.elementAtFrom(tree, source, cursor);
 		return hit == null
 			? Err(
-				'position $line:$col is not on the first token of an element — point at the first token of a statement / case / list element / member'
+				'position $line:$col'
+				+ ' is not on the first token of an element — point at the first token of a statement / case / list element / member'
 			)
 			: RefactorSupport.deleteNode(source, hit.node, hit.parent, reformat, plugin, withDoc, optsJson);
 	}

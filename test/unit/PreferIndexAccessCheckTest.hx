@@ -187,15 +187,15 @@ class PreferIndexAccessCheckTest extends Test {
 		// The key is a null-guard ternary whose fallback is a field access on a for-loop
 		// iterator (an unbound monomorph); under active @:nullSafety, `m[k]` types the key in
 		// VALUE mode and would flip the fallback's inferred constraint to Null<…> — skipped.
-		final source: String = '@:nullSafety class C {\n\tfunction f(it:Iter):Void {\n\t\tfinal m:Map<String, Int> = [];\n\t\tfor (row in it) {\n'
-			+ '\t\t\tvar v = m.get(row.a != null ? row.a : row.b);\n\t\t}\n\t}\n}';
+		final source: String = '@:nullSafety class C {\n\tfunction f(it:Iter):Void {\n\t\tfinal m:Map<String, Int> = [];\n'
+			+ '\t\tfor (row in it) {\n\t\t\tvar v = m.get(row.a != null ? row.a : row.b);\n\t\t}\n\t}\n}';
 		Assert.equals(0, violations(source).length);
 	}
 
 	public function testFragileCoalesceKeyNotFlagged(): Void {
 		// Same fragility with the null guard already spelled `??` in the key.
-		final source: String = '@:nullSafety class C {\n\tfunction f(it:Iter):Void {\n\t\tfinal m:Map<String, Int> = [];\n\t\tfor (row in it) {\n'
-			+ '\t\t\tvar v = m.get(row.a ?? row.b);\n\t\t}\n\t}\n}';
+		final source: String = '@:nullSafety class C {\n\tfunction f(it:Iter):Void {\n\t\tfinal m:Map<String, Int> = [];\n'
+			+ '\t\tfor (row in it) {\n\t\t\tvar v = m.get(row.a ?? row.b);\n\t\t}\n\t}\n}';
 		Assert.equals(0, violations(source).length);
 	}
 
@@ -458,7 +458,7 @@ class PreferIndexAccessCheckTest extends Test {
 	}
 
 	/** `holderUserField` with the default `m:Map<String, Int>` field. */
-	private function holderUser(body: String): String {
+	private inline function holderUser(body: String): String {
 		return holderUserField('m:Map<String, Int>', body);
 	}
 

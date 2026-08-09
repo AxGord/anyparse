@@ -11,6 +11,7 @@ import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -89,7 +90,7 @@ final class SymbolIndexBuilder {
 		final infos: Array<FileInfo> = [];
 		final skipped: Array<String> = [];
 		final sources: Map<String, String> = [];
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final shape: RefShape = plugin.refShape();
 		final abstractKinds: Array<String> = shape.underlyingThisTypeKinds ?? [];
 		final memberSeams: MemberSeams = memberSeamsOf(shape);
@@ -121,8 +122,6 @@ final class SymbolIndexBuilder {
 	 * `pkg.sub.Foo` → `pkg.sub.Foo`. A path with no upper-case segment
 	 * (all lower-case) is returned verbatim — there is no module segment
 	 * to anchor on.
-	 */
-	/**
 	 * Build a `FileInfo` from a parsed `parseFile` tree: walk the
 	 * module's declarations for the `PackageDecl`, the import /
 	 * using statements, and the type declarations. The basename
@@ -324,16 +323,14 @@ final class SymbolIndexBuilder {
 	 * heritage type argument). An `{ var x:Int; }` there projects the very kinds a member
 	 * does (`VarField` / `FinalField`), so descending would report its fields as members of
 	 * the enclosing type.
-	 */
-	/**
 	 * Whether `kind` declares a member — the same test `collectMembers` records on. Beyond
 	 * the shared `FIELD_MEMBER_KINDS` it names the enum constructors and the three
 	 * conditional member forms `HxClassMember` dispatches BEFORE their plain twins
 	 * (`var x … #if … ;`, `function #if a f #else g #end`, a `#if` splice at member scope).
 	 * Each carries a signature and a body like any member, so the walk must stop at them
 	 * too — else the anonymous structures written there leak back in as members.
+	 * The last `.`-separated segment of `path` (its simple name).
 	 */
-	/** The last `.`-separated segment of `path` (its simple name). */
 	private static function simpleName(path: String): String {
 		final segments: Array<String> = path.split('.');
 		final last: Null<String> = segments[segments.length - 1];
@@ -496,15 +493,15 @@ final class SymbolIndexBuilder {
 		final nameAt: Int = source.indexOf(decl.name, from);
 		if (nameAt < 0 || (bodyAt >= 0 && nameAt > bodyAt)) return null;
 		var i: Int = nameAt + decl.name.length;
-		while (i < source.length && StringTools.isSpace(source, i)) i++;
-		if (i >= source.length || StringTools.fastCodeAt(source, i) != '<'.code) return null;
+		while (i < source.length && source.isSpace(i)) i++;
+		if (i >= source.length || source.fastCodeAt(i) != '<'.code) return null;
 		final start: Int = i + 1;
 		var depth: Int = 0;
 		while (i < source.length) {
-			switch StringTools.fastCodeAt(source, i) {
+			switch source.fastCodeAt(i) {
 				case '<'.code:
 					depth++;
-				case '>'.code if (StringTools.fastCodeAt(source, i - 1) != '-'.code):
+				case '>'.code if (source.fastCodeAt(i - 1) != '-'.code):
 					depth--;
 					if (depth == 0) return source.substring(start, i);
 				case _:
@@ -525,10 +522,10 @@ final class SymbolIndexBuilder {
 	 * the whole header - which is the fail-closed direction anyway.
 	 */
 	private static function typeParamNameOf(segment: String): Null<String> {
-		final text: String = StringTools.trim(segment);
+		final text: String = segment.trim();
 		var end: Int = 0;
 		while (end < text.length) {
-			final ch: Int = StringTools.fastCodeAt(text, end);
+			final ch: Int = text.fastCodeAt(end);
 			if (ch == ':'.code || ch == '='.code || RefactorSupport.isSpace(ch)) break;
 			end++;
 		}
@@ -723,14 +720,15 @@ final class SymbolIndexBuilder {
 	 */
 	private static function importDedupKey(node: QueryNode): Null<String> {
 		final raw: Null<String> = node.name;
-		if (raw == null) return null;
-		return switch node.kind {
-			case 'ImportDecl': 'import|$raw';
-			case 'ImportAliasDecl' | 'ImportAliasInDecl': 'alias|$raw';
-			case 'ImportWildDecl': 'wild|$raw';
-			case 'UsingDecl': 'using|$raw';
-			case _: null;
-		};
+		return raw == null
+			? null
+			: switch node.kind {
+				case 'ImportDecl': 'import|$raw';
+				case 'ImportAliasDecl' | 'ImportAliasInDecl': 'alias|$raw';
+				case 'ImportWildDecl': 'wild|$raw';
+				case 'UsingDecl': 'using|$raw';
+				case _: null;
+			};
 	}
 
 
@@ -773,11 +771,11 @@ final class SymbolIndexBuilder {
 		final text: String = source.substring(decl.fullSpan.from, decl.fullSpan.to);
 		final eq: Int = text.indexOf('=');
 		if (eq == -1) return null;
-		final tail: String = StringTools.trim(text.substring(eq + 1));
-		final body: String = StringTools.endsWith(tail, ';') ? tail.substring(0, tail.length - 1) : tail;
+		final tail: String = text.substring(eq + 1).trim();
+		final body: String = tail.endsWith(';') ? tail.substring(0, tail.length - 1) : tail;
 		// A `->` anywhere makes the alias a function type: its head is not the type the alias
 		// denotes. Over-refusing a `Holder<Int -> Void>` argument the same way is harmless.
-		return body.indexOf('->') != -1 ? null : RefactorSupport.outerNominalOf(StringTools.trim(body));
+		return body.indexOf('->') != -1 ? null : RefactorSupport.outerNominalOf(body.trim());
 	}
 
 }

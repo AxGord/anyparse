@@ -33,7 +33,7 @@ class HxCondParamElseSepSliceTest extends HxTestHelpers {
 
 	public function testOpenflStageSignature(): Void {
 		final params: String = '#if commonjs width:Dynamic = 0, height:Dynamic = 0, color:Null<Int> = null, '
-			+ 'documentClass:Class<Dynamic> = null, windowAttributes:Dynamic = null ' + '#else window:Window, color:Null<Int> = null #end';
+			+ 'documentClass:Class<Dynamic> = null, windowAttributes:Dynamic = null #else window:Window, color:Null<Int> = null #end';
 		assertSignatureRoundTrips(params);
 	}
 

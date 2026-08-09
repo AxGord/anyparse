@@ -2,6 +2,8 @@ package anyparse.format.comment;
 
 import anyparse.format.WriteOptions;
 
+using StringTools;
+
 /**
  * Engine-level adapter for captured C-family line comments (`//…`).
  *
@@ -76,7 +78,7 @@ class LineCommentNormalizer {
 
 	public static function normalizeLineComment(run: Array<String>, index: Int, opt: WriteOptions): String {
 		final verbatim: String = run[index];
-		if (!StringTools.startsWith(verbatim, '//')) return verbatim;
+		if (!verbatim.startsWith('//')) return verbatim;
 		final body: String = verbatim.substr(2);
 		if (body.length == 0) return '//';
 		if (opt.normalizeLineCommentIndent) {
@@ -90,20 +92,20 @@ class LineCommentNormalizer {
 			// member sits flush against the slashes, or members disagree on
 			// tab-vs-space): only a flush alnum body then picks up the
 			// separating space, so the pass never GAINS a column.
-			final rebase: Bool = common.length > 0 ? StringTools.startsWith(body, common) : isAlnum(StringTools.fastCodeAt(body, 0));
+			final rebase: Bool = common.length > 0 ? body.startsWith(common) : isAlnum(body.fastCodeAt(0));
 			if (rebase) {
-				final rest: String = StringTools.rtrim(body.substr(common.length));
+				final rest: String = body.substr(common.length).rtrim();
 				return rest.length == 0 ? '//' : '// $rest';
 			}
 		}
-		if (isDecorationPrefix(body)) return '//${StringTools.rtrim(body)}';
-		final trimmed: String = StringTools.trim(body);
+		if (isDecorationPrefix(body)) return '//${body.rtrim()}';
+		final trimmed: String = body.trim();
 		return opt.addLineCommentSpace ? '// $trimmed' : '//$trimmed';
 	}
 
 	private static function isDecorationPrefix(body: String): Bool {
 		if (body.length == 0) return false;
-		final c: Int = StringTools.fastCodeAt(body, 0);
+		final c: Int = body.fastCodeAt(0);
 		return c == '/'.code || c == '*'.code || c == '-'.code || c == ' '.code || c == '\t'.code || c == '\r'.code;
 	}
 
@@ -115,14 +117,14 @@ class LineCommentNormalizer {
 	 */
 	private static function isNormalizable(body: String): Bool {
 		final i: Int = firstNonWhitespaceIndex(body);
-		return i < body.length && isAlnum(StringTools.fastCodeAt(body, i));
+		return i < body.length && isAlnum(body.fastCodeAt(i));
 	}
 
 	/** Index of the first character of `body` that is not ` `, `\t` or `\r`; `body.length` when there is none. */
 	private static function firstNonWhitespaceIndex(body: String): Int {
 		var i: Int = 0;
 		while (i < body.length) {
-			final c: Int = StringTools.fastCodeAt(body, i);
+			final c: Int = body.fastCodeAt(i);
 			if (c != ' '.code && c != '\t'.code && c != '\r'.code) break;
 			i++;
 		}
@@ -166,7 +168,7 @@ class LineCommentNormalizer {
 	private static function commonPrefix(a: String, b: String): String {
 		final max: Int = a.length < b.length ? a.length : b.length;
 		var i: Int = 0;
-		while (i < max && StringTools.fastCodeAt(a, i) == StringTools.fastCodeAt(b, i)) i++;
+		while (i < max && a.fastCodeAt(i) == b.fastCodeAt(i)) i++;
 		return a.substr(0, i);
 	}
 

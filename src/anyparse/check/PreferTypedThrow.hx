@@ -3,7 +3,6 @@ package anyparse.check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.StdResolver;
@@ -12,6 +11,8 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Flags `throw '<string>'` — a raw string thrown as an exception. The value carries no
@@ -158,13 +159,12 @@ final class PreferTypedThrow implements Check implements DefaultOff {
 		var anyFixable: Bool = false;
 		for (v in violations) {
 			final span: Null<Span> = v.span;
-			if (span != null && v.message == MSG_FIXABLE) {
-				wanted['${span.from}:${span.to}'] = true;
-				anyFixable = true;
-			}
+			if (span == null || v.message != MSG_FIXABLE) continue;
+			wanted['${span.from}:${span.to}'] = true;
+			anyFixable = true;
 		}
 		if (!anyFixable) return [];
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
 		final printer: TypeRefPrinter = TypeRefPrinter.forFile(source, tree, importMap, index ?? RefactorSupport.resolutionIndexOf(plugin));
 		final edits: Array<{ span: Span, text: String }> = [];
@@ -232,11 +232,11 @@ final class PreferTypedThrow implements Check implements DefaultOff {
 			final at: Int = source.indexOf(CATCH_KEYWORD, i);
 			if (at < 0) return false;
 			i = at + CATCH_KEYWORD.length;
-			if (at > 0 && RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, at - 1))) continue;
-			if (i < n && RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, i))) continue;
+			if (at > 0 && RefactorSupport.isIdentChar(source.fastCodeAt(at - 1))) continue;
+			if (i < n && RefactorSupport.isIdentChar(source.fastCodeAt(i))) continue;
 			var open: Int = i;
-			while (open < n && StringTools.isSpace(source, open)) open++;
-			if (open >= n || StringTools.fastCodeAt(source, open) != '('.code) continue;
+			while (open < n && source.isSpace(open)) open++;
+			if (open >= n || source.fastCodeAt(open) != '('.code) continue;
 			final close: Int = source.indexOf(')', open);
 			if (close < 0) return false;
 			final inner: String = source.substring(open + 1, close);

@@ -56,7 +56,8 @@ class UnusedLocalShadowTest extends Test {
 	 */
 	public function testCatchClauseShadowFlagged(): Void {
 		final vs: Array<Violation> = violations(
-			'class C {\n\tfunction f() {\n\t\tvar error:String;\n\t\ttry {\n\t\t\tg();\n\t\t} catch (error:String) {\n\t\t\ttrace(error);\n\t\t}\n\t}\n}'
+			'class C {\n\tfunction f() {\n\t\tvar error:String;\n\t\ttry {\n\t\t\tg();\n\t\t} catch (error:String) {\n'
+			+ '\t\t\ttrace(error);\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains("'error'"));
@@ -65,7 +66,8 @@ class UnusedLocalShadowTest extends Test {
 	/** Nesting does not matter: the inner loop owns both of its occurrences. */
 	public function testNestedLoopShadowFlagged(): Void {
 		final vs: Array<Violation> = violations(
-			'class C {\n\tfunction f(rows:Array<Array<String>>) {\n\t\tvar item:String;\n\t\tfor (row in rows) for (item in row) trace(item);\n\t}\n}'
+			'class C {\n\tfunction f(rows:Array<Array<String>>) {\n\t\tvar item:String;\n'
+			+ '\t\tfor (row in rows) for (item in row) trace(item);\n\t}\n}'
 		);
 		Assert.equals(1, vs.length);
 	}
@@ -233,8 +235,8 @@ class UnusedLocalShadowTest extends Test {
 	 * the shadow path.
 	 */
 	public function testMultiVarShadowedTailReportedNotFixed(): Void {
-		final src: String =
-			'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar used:String = "u", item:String = "v";\n\t\tfor (item in xs) used += item;\n\t\ttrace(used);\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar used:String = "u", item:String = "v";\n'
+			+ '\t\tfor (item in xs) used += item;\n\t\ttrace(used);\n\t}\n}';
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains("'item'"));

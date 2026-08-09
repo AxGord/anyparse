@@ -3,7 +3,6 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -132,7 +131,7 @@ final class SelfAssignment implements Check {
 		if (localDeclKinds.contains(node.kind)) {
 			final name: Null<String> = node.name;
 			final declSpan: Null<Span> = node.span;
-			final scope: Null<Span> = enclosingScope != null ? enclosingScope.span : null;
+			final scope: Null<Span> = enclosingScope?.span;
 			if (name != null && declSpan != null && scope != null) locals.push({ name: name, scope: scope, declEnd: declSpan.to });
 		}
 		final span: Null<Span> = node.span;

@@ -139,7 +139,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	 * and indexed only on the first `resolutionFiles()` / `resolutionIndex()` demand, keeping a
 	 * resolution-free run off the library.
 	 */
-	public function setResolutionScope(scope: ResolutionScope): Void {
+	public inline function setResolutionScope(scope: ResolutionScope): Void {
 		_resolutionScope = scope;
 	}
 
@@ -334,7 +334,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 			return shared;
 		}
 		innerSpanParses++;
-		final batched: Null<SpanTypeInfoProvider> = (_inner is SpanTypeInfoProvider) ? cast _inner : null;
+		final batched: Null<SpanTypeInfoProvider> = _inner is SpanTypeInfoProvider ? cast _inner : null;
 		final result: SpanTypeInfo = batched != null ? batched.spanTypeInfo(source) : fallbackSpanInfo(source);
 		_spanInfoCache[source] = result;
 		return result;
@@ -360,7 +360,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	public function importMap(source: String): Map<String, String> {
 		final cached: Null<Map<String, String>> = _importMapCache[source];
 		if (cached != null) return cached;
-		final inner: Null<TypeInfoProvider> = (_inner is TypeInfoProvider) ? cast _inner : null;
+		final inner: Null<TypeInfoProvider> = _inner is TypeInfoProvider ? cast _inner : null;
 		final result: Map<String, String> = inner != null ? inner.importMap(source) : [];
 		_importMapCache[source] = result;
 		return result;
@@ -373,7 +373,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	 * the pre-batching behaviour (each map is `inner.X(source)` or empty).
 	 */
 	private function fallbackSpanInfo(source: String): SpanTypeInfo {
-		final inner: Null<TypeInfoProvider> = (_inner is TypeInfoProvider) ? cast _inner : null;
+		final inner: Null<TypeInfoProvider> = _inner is TypeInfoProvider ? cast _inner : null;
 		return {
 			declaredTypes: inner != null ? inner.declaredTypes(source) : [],
 			returnTypes: inner != null ? inner.returnTypes(source) : [],

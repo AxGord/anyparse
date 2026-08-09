@@ -6,6 +6,7 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -190,7 +191,12 @@ final class InlineMethod {
 		if (body.kind == 'BlockBody') {
 			if (body.children.length != 1) return null;
 			final stmt: QueryNode = body.children[0];
-			return stmt.kind != 'ReturnStmt' ? null : stmt.children.length > 0 ? stmt.children[0] : null;
+			return if (stmt.kind != 'ReturnStmt')
+				null
+			else if (stmt.children.length > 0)
+				stmt.children[0]
+			else
+				null;
 		}
 
 		// ExprBody: a single expression, possibly a `ReturnExpr` wrapper.
@@ -344,7 +350,7 @@ final class InlineMethod {
 	}
 
 	private static inline function isPureKind(kind: String): Bool {
-		return PURE_ARG_KINDS.contains(kind) || StringTools.endsWith(kind, 'Lit') || StringTools.endsWith(kind, 'StringExpr');
+		return PURE_ARG_KINDS.contains(kind) || kind.endsWith('Lit') || kind.endsWith('StringExpr');
 	}
 
 	/**
@@ -365,11 +371,11 @@ final class InlineMethod {
 
 		var lineStart: Int = from;
 		while (lineStart > 0 && source.charAt(lineStart - 1) != '\n') lineStart--;
-		for (i in lineStart ... from) if (!isSpace(StringTools.fastCodeAt(source, i))) return null;
+		for (i in lineStart ... from) if (!isSpace(source.fastCodeAt(i))) return null;
 
 		var lineEnd: Int = to;
 		while (lineEnd < source.length && source.charAt(lineEnd) != '\n') lineEnd++;
-		for (i in to ... lineEnd) if (!isSpace(StringTools.fastCodeAt(source, i))) return null;
+		for (i in to ... lineEnd) if (!isSpace(source.fastCodeAt(i))) return null;
 		if (lineEnd < source.length && source.charAt(lineEnd) == '\n') lineEnd++;
 
 		return new Span(lineStart, lineEnd);
@@ -477,7 +483,8 @@ final class InlineMethod {
 			if (args.length != params.length) {
 				final at: String = CallSites.posOf(source, call.span);
 				return Err(
-					'call at $at passes ${args.length} args, expected ${params.length} — inline-method cannot fill omitted optional arguments'
+					'call at $at passes ${args.length} args, expected ${params.length}'
+					+ ' — inline-method cannot fill omitted optional arguments'
 				);
 			}
 			// A dropped (0-use) or duplicated (2+-use) argument must be pure.

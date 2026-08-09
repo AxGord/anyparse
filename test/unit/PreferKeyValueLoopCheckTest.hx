@@ -1,8 +1,6 @@
 package unit;
 
 import anyparse.check.Check;
-import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.PreferKeyValueLoop;
 import anyparse.check.Severity;
@@ -43,8 +41,8 @@ class PreferKeyValueLoopCheckTest extends Test {
 
 	public function testInnerLoopReadingIndexFlagged(): Void {
 		// The index stays bound by the key-value form, so an inner range over it is untouched.
-		final body: String =
-			'for (i in 0...items.length) {\n\t\t\tfinal outer = items[i];\n\t\t\tfor (j in i + 1...items.length) use(items[j], outer);\n\t\t}';
+		final body: String = 'for (i in 0...items.length) {\n\t\t\tfinal outer = items[i];\n'
+			+ '\t\t\tfor (j in i + 1...items.length) use(items[j], outer);\n\t\t}';
 		Assert.equals(1, violations(wrapFn(body)).length);
 	}
 
@@ -129,24 +127,24 @@ class PreferKeyValueLoopCheckTest extends Test {
 
 	public function testFixRefusesUnresolvedCollection(): Void {
 		// No annotation on the binding, so the element type the dropped declaration carried is unprovable.
-		final src: String =
-			'class C {\n\tfunction f():Void {\n\t\tfinal items = fetch();\n\t\tfor (i in 0...items.length) {\n\t\t\tfinal it = items[i];\n\t\t\tuse(it);\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfinal items = fetch();\n\t\tfor (i in 0...items.length) {\n'
+			+ '\t\t\tfinal it = items[i];\n\t\t\tuse(it);\n\t\t}\n\t}\n}';
 		assertFixRefused(src);
 	}
 
 	public function testProvablyNonArrayNotFlagged(): Void {
 		// A resolved non-Array container has no key-value iteration, so the suggestion would not
 		// compile — the report-only tolerance is for an UNRESOLVED container, not a wrong one.
-		final src: String =
-			'class C {\n\tfunction f(items:Vector<Item>):Void {\n\t\tfor (i in 0...items.length) {\n\t\t\tfinal it = items[i];\n\t\t\tuse(it);\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(items:Vector<Item>):Void {\n\t\tfor (i in 0...items.length) {\n'
+			+ '\t\t\tfinal it = items[i];\n\t\t\tuse(it);\n\t\t}\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
 	public function testFieldCollectionFlagged(): Void {
 		// A bare identifier that binds to a FIELD resolves through declaredTypes exactly as a
 		// parameter does; only a PATH receiver (this.items) is out of reach.
-		final src: String =
-			'class C {\n\tvar items:Array<Item> = [];\n\n\tfunction f():Void {\n\t\tfor (i in 0...items.length) {\n\t\t\tfinal it:Item = items[i];\n\t\t\tuse(it, i);\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tvar items:Array<Item> = [];\n\n\tfunction f():Void {\n\t\tfor (i in 0...items.length) {\n'
+			+ '\t\t\tfinal it:Item = items[i];\n\t\t\tuse(it, i);\n\t\t}\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 	}
 

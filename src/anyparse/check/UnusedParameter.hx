@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -10,6 +9,8 @@ import anyparse.runtime.Span;
 import anyparse.query.CallSites;
 import anyparse.query.RemoveParam;
 import anyparse.check.Check.ConfigAware;
+
+using StringTools;
 
 /**
  * Flags a function parameter whose name is never referenced in the function —
@@ -377,7 +378,7 @@ final class UnusedParameter implements Check implements ConfigAware {
 			final sib: QueryNode = sibs[i];
 			if (!visibilityKinds.contains(sib.kind) && !modifierKinds.contains(sib.kind)) break;
 			final sspan: Null<Span> = sib.span;
-			if (visibilityKinds.contains(sib.kind) && sspan != null && StringTools.trim(source.substring(sspan.from, sspan.to)) == 'public')
+			if (visibilityKinds.contains(sib.kind) && sspan != null && source.substring(sspan.from, sspan.to).trim() == 'public')
 				return true;
 			i--;
 		}
@@ -428,18 +429,17 @@ final class UnusedParameter implements Check implements ConfigAware {
 				final params: Array<QueryNode> = CallSites.leadingParams(node);
 				for (pi in 0...params.length) {
 					final pspan: Null<Span> = params[pi].span;
-					if (pspan != null && flagged.contains('${pspan.from}:${pspan.to}')) {
-						final result: {
-							edits: Array<{ span: Span, text: String }>,
-							error: Null<String>,
-							callSites: Int
-						} = RemoveParam.paramSlotEdits(source, root, node, pi, fnName, fnSpan.from, shape);
-						if (result.error == null) {
-							for (e in result.edits) edits.push(e);
-							handled.push(fnSpan.from);
-						}
-						break;
+					if (pspan == null || !flagged.contains('${pspan.from}:${pspan.to}')) continue;
+					final result: {
+						edits: Array<{ span: Span, text: String }>,
+						error: Null<String>,
+						callSites: Int
+					} = RemoveParam.paramSlotEdits(source, root, node, pi, fnName, fnSpan.from, shape);
+					if (result.error == null) {
+						for (e in result.edits) edits.push(e);
+						handled.push(fnSpan.from);
 					}
+					break;
 				}
 			}
 		}
@@ -500,11 +500,16 @@ final class UnusedParameter implements Check implements ConfigAware {
 		final name: Null<String> = param.name;
 		if (name == null) return -1;
 		final pspan: Null<Span> = param.span;
-		if (pspan == null) return -1;
-		if (StringTools.startsWith(name, '_')) return -1;
-		if (RefactorSupport.referencedInRange(source, '_$name', fnSpan.from, fnSpan.to, [])) return -1;
-		if (RefactorSupport.referencedInRange(source, name, fnSpan.from, fnSpan.to, [pspan])) return -1;
-		return firstIdentOccurrence(source, name, pspan.from, pspan.to);
+		return if (pspan == null)
+			-1
+		else if (StringTools.startsWith(name, '_'))
+			-1
+		else if (RefactorSupport.referencedInRange(source, '_$name', fnSpan.from, fnSpan.to, []))
+			-1
+		else if (RefactorSupport.referencedInRange(source, name, fnSpan.from, fnSpan.to, [pspan]))
+			-1
+		else
+			firstIdentOccurrence(source, name, pspan.from, pspan.to);
 	}
 
 
@@ -522,9 +527,9 @@ final class UnusedParameter implements Check implements ConfigAware {
 		while (i + len <= stop) {
 			final at: Int = source.indexOf(name, i);
 			if (at < 0 || at + len > stop) return -1;
-			final beforeOk: Bool = at == 0 || !RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, at - 1));
+			final beforeOk: Bool = at == 0 || !RefactorSupport.isIdentChar(source.fastCodeAt(at - 1));
 			final afterIdx: Int = at + len;
-			final afterOk: Bool = afterIdx >= source.length || !RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, afterIdx));
+			final afterOk: Bool = afterIdx >= source.length || !RefactorSupport.isIdentChar(source.fastCodeAt(afterIdx));
 			if (beforeOk && afterOk) return at;
 			i = at + 1;
 		}

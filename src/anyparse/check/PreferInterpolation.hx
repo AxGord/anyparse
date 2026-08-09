@@ -2,13 +2,14 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Flags `Std.string(x)` and rewrites it to string interpolation — `'$x'` for a simple
@@ -70,7 +71,7 @@ final class PreferInterpolation implements Check {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
 		final shape: RefShape = plugin.refShape();
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
@@ -248,7 +249,7 @@ final class PreferInterpolation implements Check {
 	 */
 	private static function interpolationSafe(src: String): Bool {
 		for (i in 0...src.length) {
-			final c: Int = StringTools.fastCodeAt(src, i);
+			final c: Int = src.fastCodeAt(i);
 			if (c == "'".code || c == '"'.code || c == "$".code || c == '\n'.code || c == '\r'.code || c == '\\'.code) return false;
 		}
 		return true;
@@ -268,7 +269,7 @@ final class PreferInterpolation implements Check {
 			callKind: callKind,
 			fieldAccessKind: fieldAccessKind,
 			identKind: identKind,
-			concatKind: stringFold == null ? null : stringFold.concatKind(),
+			concatKind: stringFold?.concatKind(),
 			metaKinds: plugin.metaShape().metaKinds
 		};
 	}

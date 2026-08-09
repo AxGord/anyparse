@@ -144,17 +144,19 @@ class HxArrowParamOptionalNamedSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testWriterEmitsTightQuestionMarkAndColon(): Void {
+	public inline function testWriterEmitsTightQuestionMarkAndColon(): Void {
 		writerEquals(
 			'class Foo {\n\tvar f:(?b:Int)->Void;\n}', 'class Foo {\n\tvar f:(?b:Int) -> Void;\n}\n', 'tight source spaces arrow only'
 		);
 	}
 
 	public function testLongArrowTypeSignatureWraps(): Void {
-		final src: String =
-			'class D {\n\tvar handler:(firstArgument:String, ?secondArgument:Int, ?thirdArgument:Float, ?fourthArgument:Bool, ?fifthArg:String) -> Void;\n}';
-		final expected: String =
-			'class D {\n\tvar handler:(firstArgument:String, ?secondArgument:Int, ?thirdArgument:Float, ?fourthArgument:Bool,\n\t\t\t?fifthArg:String) -> Void;\n}';
+		final src: String = 'class D {\n'
+			+ '\tvar handler:(firstArgument:String, ?secondArgument:Int, ?thirdArgument:Float, ?fourthArgument:Bool, ?fifthArg:String) -> Void;\n'
+			+ '}';
+		final expected: String = 'class D {\n'
+			+ '\tvar handler:(firstArgument:String, ?secondArgument:Int, ?thirdArgument:Float, ?fourthArgument:Bool,\n'
+			+ '\t\t\t?fifthArg:String) -> Void;\n}';
 		Assert.equals(expected, triviaWrite(src));
 	}
 
@@ -165,10 +167,12 @@ class HxArrowParamOptionalNamedSliceTest extends HxTestHelpers {
 		// general rather than only for the new branch. (The last name is
 		// two characters longer to keep the overflow point comparable
 		// once the four `?` characters are gone.)
-		final src: String =
-			'class D {\n\tvar handler:(firstArgument:String, secondArgument:Int, thirdArgument:Float, fourthArgument:Bool, fifthArgum:String) -> Void;\n}';
-		final expected: String =
-			'class D {\n\tvar handler:(firstArgument:String, secondArgument:Int, thirdArgument:Float, fourthArgument:Bool,\n\t\t\tfifthArgum:String) -> Void;\n}';
+		final src: String = 'class D {\n'
+			+ '\tvar handler:(firstArgument:String, secondArgument:Int, thirdArgument:Float, fourthArgument:Bool, fifthArgum:String) -> Void;\n'
+			+ '}';
+		final expected: String = 'class D {\n'
+			+ '\tvar handler:(firstArgument:String, secondArgument:Int, thirdArgument:Float, fourthArgument:Bool,\n'
+			+ '\t\t\tfifthArgum:String) -> Void;\n}';
 		Assert.equals(expected, triviaWrite(src));
 	}
 

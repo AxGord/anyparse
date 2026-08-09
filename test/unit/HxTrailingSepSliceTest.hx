@@ -109,7 +109,7 @@ class HxTrailingSepSliceTest extends HxTestHelpers {
 
 	// idempotency round-trip
 
-	public function testTrailingCommaRoundTrip(): Void {
+	public inline function testTrailingCommaRoundTrip(): Void {
 		roundTrip('class C { var a = [1, 2, 3,]; var o:Dynamic = {p: 1, q: 2,}; function f() { g(1, 2,); } }', 'L1-trailing-sep');
 	}
 

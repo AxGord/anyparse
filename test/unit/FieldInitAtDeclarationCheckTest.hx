@@ -122,8 +122,7 @@ class FieldInitAtDeclarationCheckTest extends Test {
 
 	/** A leading call statement is not a candidate init, so the chain breaks — left alone. */
 	public function testWriterCallBeforeInitNotMoved(): Void {
-		final src: String = 'class C { private var _x:Int; public function new() { setup(); _x = 1; }'
-			+ ' function setup():Void { _x = 2; } }';
+		final src: String = 'class C { private var _x:Int; public function new() { setup(); _x = 1; } function setup():Void { _x = 2; } }';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -135,8 +134,8 @@ class FieldInitAtDeclarationCheckTest extends Test {
 	 * is reached.
 	 */
 	public function testSuperBeforeInitNotMoved(): Void {
-		final src: String = 'class C extends B { private var _x:Int; public function new() { super(); _x = 1; }'
-			+ ' function s():Void { _x = 2; } }';
+		final src: String =
+			'class C extends B { private var _x:Int; public function new() { super(); _x = 1; } function s():Void { _x = 2; } }';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -156,15 +155,15 @@ class FieldInitAtDeclarationCheckTest extends Test {
 	 * field, possibly a property) is not a candidate init — the chain breaks; left alone.
 	 */
 	public function testUnresolvedTargetBeforeInitNotMoved(): Void {
-		final src: String = 'class C extends B { private var _x:Int; public function new() { w = 5; _x = 1; }'
-			+ ' function s():Void { _x = 2; } }';
+		final src: String =
+			'class C extends B { private var _x:Int; public function new() { w = 5; _x = 1; } function s():Void { _x = 2; } }';
 		Assert.equals(0, violations(src).length);
 	}
 
 	/** A leading local declaration is not a candidate init, so the chain breaks — left alone. */
 	public function testLocalDeclBeforeInitNotMoved(): Void {
-		final src: String = 'class C { private var _x:Int; public function new() { var t:Int = 1; _x = 1; }'
-			+ ' function s():Void { _x = 2; } }';
+		final src: String =
+			'class C { private var _x:Int; public function new() { var t:Int = 1; _x = 1; } function s():Void { _x = 2; } }';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -201,9 +200,8 @@ class FieldInitAtDeclarationCheckTest extends Test {
 	 * their declarations.
 	 */
 	public function testDeclOrderMismatchMoved(): Void {
-		final src: String = 'class C {\n\tvar _a:Array<Int>;\n\tvar _b:Array<Int>;\n'
-			+ '\tpublic function new() {\n\t\t_b = new Array<Int>();\n\t\t_a = new Array<Int>();\n\t}\n'
-			+ '\tpublic function dispose():Void {\n\t\t_a = null;\n\t\t_b = null;\n\t}\n}';
+		final src: String = 'class C {\n\tvar _a:Array<Int>;\n\tvar _b:Array<Int>;\n\tpublic function new() {\n\t\t_b = new Array<Int>();\n'
+			+ '\t\t_a = new Array<Int>();\n\t}\n\tpublic function dispose():Void {\n\t\t_a = null;\n\t\t_b = null;\n\t}\n}';
 		Assert.equals(2, violations(src).length);
 		final fixed: String = fixedSource(src);
 		Assert.isTrue(fixed.indexOf('var _a:Array<Int> = new Array<Int>();') >= 0);
@@ -232,7 +230,7 @@ class FieldInitAtDeclarationCheckTest extends Test {
 	 */
 	public function testInClassReadRhsChainPartial(): Void {
 		final src: String = 'class C { static var n:Int = 0; private var _a:Array<Int>; private var _b:Int;'
-			+ ' public function new() { _a = new Array<Int>(); _b = n; }' + ' public function dispose():Void { _a = null; _b = 0; } }';
+			+ ' public function new() { _a = new Array<Int>(); _b = n; } public function dispose():Void { _a = null; _b = 0; } }';
 		assertSoleViolationOn(src, '_a');
 	}
 
@@ -291,7 +289,7 @@ class FieldInitAtDeclarationCheckTest extends Test {
 	/** A leading reassignment of an already decl-initialized field is not a candidate init — chain breaks; left alone. */
 	public function testDeclInitializedLeadingReassignNotMoved(): Void {
 		final src: String = 'class C { private var _y:Int = 0; private var _x:Array<Int>;'
-			+ ' public function new() { _y = 5; _x = new Array<Int>(); }' + ' public function dispose():Void { _x = null; } }';
+			+ ' public function new() { _y = 5; _x = new Array<Int>(); } public function dispose():Void { _x = null; } }';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -486,8 +484,8 @@ class FieldInitAtDeclarationCheckTest extends Test {
 	 * the whitelist is narrowed to expression statements and local declarations again.
 	 */
 	public function testUnexitingIfBeforeInitStillMoved(): Void {
-		final src: String = 'class C { var _a:Array<Int>; public function new(verbose:Bool) { if (verbose) trace("x");'
-			+ ' _a = new Array<Int>(); } }';
+		final src: String =
+			'class C { var _a:Array<Int>; public function new(verbose:Bool) { if (verbose) trace("x"); _a = new Array<Int>(); } }';
 		Assert.equals(1, violations(src).length);
 	}
 
@@ -496,8 +494,8 @@ class FieldInitAtDeclarationCheckTest extends Test {
 	 * and a `#if` region complete just as the `if` above does.
 	 */
 	public function testUnexitingSwitchAndConditionalBeforeInitStillMoved(): Void {
-		final sw: String = 'class C { var _a:Array<Int>; public function new(k:Int) { switch k { case 1: trace(1); case _: }'
-			+ ' _a = new Array<Int>(); } }';
+		final sw: String =
+			'class C { var _a:Array<Int>; public function new(k:Int) { switch k { case 1: trace(1); case _: } _a = new Array<Int>(); } }';
 		Assert.equals(1, violations(sw).length);
 		final cond: String = 'class C { var _a:Array<Int>; public function new() { #if debug trace(1); #end _a = new Array<Int>(); } }';
 		Assert.equals(1, violations(cond).length);
@@ -510,8 +508,8 @@ class FieldInitAtDeclarationCheckTest extends Test {
 	 * loop while accepting this one.
 	 */
 	public function testLoopNestedInIfBeforeInitNotMoved(): Void {
-		final src: String = 'class C { var _a:Array<Int>; public function new(c:Bool) { if (c) { while (true) { } }'
-			+ ' _a = new Array<Int>(); } }';
+		final src: String =
+			'class C { var _a:Array<Int>; public function new(c:Bool) { if (c) { while (true) { } } _a = new Array<Int>(); } }';
 		Assert.equals(0, violations(src).length);
 	}
 

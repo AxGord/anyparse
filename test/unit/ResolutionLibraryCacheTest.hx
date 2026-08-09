@@ -31,8 +31,8 @@ class ResolutionLibraryCacheTest extends Test {
 	/** The same module WITHOUT `foo` — what the recreated library path holds on the second run. */
 	private static final BASE_NO_FOO: String = 'package lib;\nclass Base {\n\tpublic function new() {}\n}';
 
-	private static final DERIVED: String =
-		'package proj;\n\nimport lib.Base;\n\nclass Derived extends Base {\n\n\tpublic function new() {\n\t\tsuper();\n\t}\n\n\tpublic function bar():Void {\n\t\tthis.foo();\n\t}\n\n}\n';
+	private static final DERIVED: String = 'package proj;\n\nimport lib.Base;\n\nclass Derived extends Base {\n\n'
+		+ '\tpublic function new() {\n\t\tsuper();\n\t}\n\n\tpublic function bar():Void {\n' + '\t\tthis.foo();\n\t}\n\n}\n';
 
 	/**
 	 * A library base whose CONTENT is unique to the serve-path test below. The tier is keyed by
@@ -42,8 +42,8 @@ class ResolutionLibraryCacheTest extends Test {
 	private static final SERVE_BASE: String =
 		'package servelib;\nclass ServeBase {\n\tpublic function new() {}\n\tpublic function ping(): Void {}\n}';
 
-	private static final SERVE_DERIVED: String =
-		'package proj;\n\nimport servelib.ServeBase;\n\nclass ServeDerived extends ServeBase {\n\n\tpublic function new() {\n\t\tsuper();\n\t}\n\n\tpublic function bar():Void {\n\t\tthis.ping();\n\t}\n\n}\n';
+	private static final SERVE_DERIVED: String = 'package proj;\n\nimport servelib.ServeBase;\n\nclass ServeDerived extends ServeBase {\n\n'
+		+ '\tpublic function new() {\n\t\tsuper();\n\t}\n\n\tpublic function bar():Void {\n\t\tthis.ping();\n' + '\t}\n\n}\n';
 	#end
 
 	/**

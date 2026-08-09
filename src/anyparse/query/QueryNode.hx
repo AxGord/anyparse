@@ -33,7 +33,7 @@ final class QueryNode {
 	public final children: Array<QueryNode>;
 	public final span: Null<Span>;
 
-	public function new(kind: String, name: Null<String>, children: Array<QueryNode>, ?span: Null<Span> = null) {
+	public function new(kind: String, name: Null<String>, children: Array<QueryNode>, ?span: Null<Span>) {
 		this.kind = kind;
 		this.name = name;
 		this.children = children;

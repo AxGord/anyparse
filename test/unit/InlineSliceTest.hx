@@ -5,7 +5,6 @@ import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Inline;
-import anyparse.query.Inline.InlineResult;
 import haxe.Exception;
 
 /**
@@ -92,8 +91,7 @@ class InlineSliceTest extends Test {
 	 * across N reads would invoke it N times.
 	 */
 	public function testRefuseInitializerWithCall(): Void {
-		final source: String = 'class C {\n\tfunction g():Int return 1;\n\tfunction f():Int {\n\t\tvar x = g();\n\t\treturn x + x;\n'
-			+ '\t}\n' + '}';
+		final source: String = 'class C {\n\tfunction g():Int return 1;\n\tfunction f():Int {\n\t\tvar x = g();\n\t\treturn x + x;\n\t}\n}';
 		assertRefused(source, 4, 3);
 	}
 
@@ -135,6 +133,35 @@ class InlineSliceTest extends Test {
 		assertRefused(source, 3, 3);
 	}
 
+	/**
+	 * A read spelled as a braceless `$x` interpolation is refused: only a bare identifier
+	 * can follow `$`, so substituting the initializer would produce the LITERAL text
+	 * `$(a + b)` — a valid string, so the re-parse gate would pass a silent miscompile.
+	 */
+	public inline function testRefusesBracelessInterpolationRead(): Void {
+		assertRefused("class C {\n\tfunction f(a:Int, b:Int):String {\n\t\tvar x = a + b;\n\t\treturn 'v $x';\n\t}\n}", 3, 3);
+	}
+
+	/**
+	 * The braced `${x}` form IS an ordinary expression position, so the same initializer
+	 * inlines into it — the refusal above is about the braceless spelling only.
+	 */
+	public inline function testInlinesIntoBracedInterpolationRead(): Void {
+		assertInline(
+			"class C {\n\tfunction f(a:Int, b:Int):String {\n\t\tvar x = a + b;\n\t\treturn 'v ${x}';\n\t}\n}", 3, 3,
+			"class C {\n\tfunction f(a:Int, b:Int):String {\n\t\treturn 'v ${(a + b)}';\n\t}\n}"
+		);
+	}
+
+	/**
+	 * An escape-spelled `${ … }` hole carries no parsed expression, so the read of `x`
+	 * inside it is invisible — and `inline` DELETES the declaration, which would strand it.
+	 * `rename` refuses the same shape.
+	 */
+	public inline function testRefusesUnreadableInterpolationBlockInScope(): Void {
+		assertRefused("class C {\n\tfunction f(a:Int, b:Int):String {\n\t\tvar x = a + b;\n\t\treturn 'v \\x24{x}' + x;\n\t}\n}", 3, 3);
+	}
+
 	private function assertInline(source: String, line: Int, col: Int, expected: String): Void {
 		final result: InlineResult = inlineOf(source, line, col);
 		switch result {
@@ -171,37 +198,6 @@ class InlineSliceTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final shape: RefShape = plugin.refShape();
 		return Inline.inlineVar(source, line, col, plugin, shape);
-	}
-
-
-	/**
-	 * A read spelled as a braceless `$x` interpolation is refused: only a bare identifier
-	 * can follow `$`, so substituting the initializer would produce the LITERAL text
-	 * `$(a + b)` — a valid string, so the re-parse gate would pass a silent miscompile.
-	 */
-	public function testRefusesBracelessInterpolationRead(): Void {
-		assertRefused("class C {\n\tfunction f(a:Int, b:Int):String {\n\t\tvar x = a + b;\n\t\treturn 'v $x';\n\t}\n}", 3, 3);
-	}
-
-	/**
-	 * The braced `${x}` form IS an ordinary expression position, so the same initializer
-	 * inlines into it — the refusal above is about the braceless spelling only.
-	 */
-	public function testInlinesIntoBracedInterpolationRead(): Void {
-		assertInline(
-			"class C {\n\tfunction f(a:Int, b:Int):String {\n\t\tvar x = a + b;\n\t\treturn 'v ${x}';\n\t}\n}", 3, 3,
-			"class C {\n\tfunction f(a:Int, b:Int):String {\n\t\treturn 'v ${(a + b)}';\n\t}\n}"
-		);
-	}
-
-
-	/**
-	 * An escape-spelled `${ … }` hole carries no parsed expression, so the read of `x`
-	 * inside it is invisible — and `inline` DELETES the declaration, which would strand it.
-	 * `rename` refuses the same shape.
-	 */
-	public function testRefusesUnreadableInterpolationBlockInScope(): Void {
-		assertRefused("class C {\n\tfunction f(a:Int, b:Int):String {\n\t\tvar x = a + b;\n\t\treturn 'v \\x24{x}' + x;\n\t}\n}", 3, 3);
 	}
 
 }

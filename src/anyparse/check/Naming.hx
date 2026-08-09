@@ -12,20 +12,16 @@ import anyparse.query.Uses;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
 using Lambda;
 
 import anyparse.query.Rename;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.SymbolIndex;
 import anyparse.query.RefactorSupport;
-import anyparse.query.RefactorSupport.ClassifiedOccurrence;
-import anyparse.query.RefactorSupport.OccurrenceClass;
 import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.CrossFileEdits;
 import anyparse.query.Refs;
-import anyparse.query.Refs.RefHit;
-import anyparse.query.Refs.RefKind;
 import anyparse.query.TypeInfoProvider;
 
 /**
@@ -537,7 +533,7 @@ final class Naming implements Check implements CrossFileFix {
 		// Candidate: a NON-confined private field / constant the single-file `fix` skips.
 		if (decl.renameUnsafe == true) return null;
 		final cat: NamingCategory = decl.category;
-		if (!((cat == NamingCategory.Field || cat == NamingCategory.Constant) && !decl.mods.contains('public'))) return null;
+		if (cat != NamingCategory.Field && cat != NamingCategory.Constant || decl.mods.contains('public')) return null;
 		final owner: Null<String> = decl.enclosingType;
 		if (owner == null) return null;
 		final ownerName: String = owner;
@@ -547,8 +543,7 @@ final class Naming implements Check implements CrossFileFix {
 		// `@:allow` grants an unenumerable type; a non-unique owner makes the subtype match ambiguous.
 		if (index.skippedFiles().length > 0 || source.indexOf('@:allow') >= 0 || index.declaringFiles(ownerName).length != 1) return null;
 		final targetName: Null<String> = correctedFieldName(decl, support.policyFor(declFile), ownerName, resolutionIndex, declFile);
-		if (targetName == null) return null;
-		return {
+		return targetName == null ? null : {
 			declFile: declFile,
 			source: source,
 			tree: tree,
@@ -573,10 +568,14 @@ final class Naming implements Check implements CrossFileFix {
 		final rule: Null<NamingRule> = applicableRule(decl, policy);
 		if (rule == null) return null;
 		final newName: Null<String> = correctedName(decl.name, rule);
-		if (newName == null) return null;
-		if (!resolutionIndex.typeProvablyLacksMember(ownerName, newName, declFile) || resolutionIndex.transitivelyCarriesRtti(ownerName))
-			return null;
-		return newName;
+		return if (newName == null)
+			null
+		else if (
+			!resolutionIndex.typeProvablyLacksMember(ownerName, newName, declFile) || resolutionIndex.transitivelyCarriesRtti(ownerName)
+		)
+			null
+		else
+			newName;
 	}
 
 	/**
@@ -675,7 +674,7 @@ final class Naming implements Check implements CrossFileFix {
 		// RECEIVER's declared type (`inheritedFieldRefSpans`); a member declaration gets the same
 		// treatment here. A receiver whose type does not RESOLVE stays out of both halves and keeps
 		// blocking — fail-closed.
-		final ownerName: Null<String> = ctx == null ? null : ctx.ownerName;
+		final ownerName: Null<String> = ctx?.ownerName;
 		final attributed: {
 			bareBound: Array<Span>,
 			typedBound: Array<Span>,
@@ -849,7 +848,7 @@ final class Naming implements Check implements CrossFileFix {
 		typed: Array<{ recv: QueryNode, fa: QueryNode }>, recvNames: Array<String>
 	): Void {
 		if (RefactorSupport.isConditionalKind(node.kind)) return;
-		final cls: Null<String> = (CheckScan.isClassBodyKind(node.kind) && node.name != null) ? node.name : currentClass;
+		final cls: Null<String> = CheckScan.isClassBodyKind(node.kind) && node.name != null ? node.name : currentClass;
 		if (node.kind == 'IdentExpr' && node.name == name) {
 			final s: Null<Span> = node.span;
 			final off: Int = s == null ? -1 : RefactorSupport.identTokenOffset(source, s, name);
@@ -864,7 +863,7 @@ final class Naming implements Check implements CrossFileFix {
 	private static function receiverBindingOffset(hits: Array<RefHit>, recvFrom: Int): Null<Int> {
 		for (h in hits) if ((h.kind == RefKind.Read || h.kind == RefKind.Write) && h.span.from == recvFrom) {
 			final b: Null<Span> = h.bindingSpan;
-			return b == null ? null : b.from;
+			return b?.from;
 		}
 		return null;
 	}
@@ -944,7 +943,7 @@ final class Naming implements Check implements CrossFileFix {
 	 */
 	private static function isDistinctiveName(name: String): Bool {
 		for (i in 0...name.length) {
-			final c: Int = StringTools.fastCodeAt(name, i);
+			final c: Int = name.fastCodeAt(i);
 			if (c == '_'.code || (c >= 'A'.code && c <= 'Z'.code)) return true;
 		}
 		return false;
@@ -989,7 +988,7 @@ final class Naming implements Check implements CrossFileFix {
 		ownerName: String, plugin: GrammarPlugin, shape: RefShape, resolutionIndex: SymbolIndex, ownerBound: Array<Span>,
 		ignore: Array<Span>, seenOwner: Array<Int>, seenIgnore: Array<Int>
 	): Void {
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final declared: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
 		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti(recvNames, tree, shape);
 		for (cand in typed) {
@@ -1071,7 +1070,7 @@ final class Naming implements Check implements CrossFileFix {
 		final containerKinds: Array<String> = shape.scopeKinds.concat(['CaseBranch', 'DefaultBranch']);
 		for (h in Refs.find(name, tree, shape)) {
 			final bindingSpan: Null<Span> = h.bindingSpan;
-			final boundFrom: Null<Int> = h.kind == RefKind.Decl ? h.span.from : (bindingSpan == null ? null : bindingSpan.from);
+			final boundFrom: Null<Int> = h.kind == RefKind.Decl ? h.span.from : (bindingSpan?.from);
 			if (boundFrom == null || boundFrom == declFrom) continue;
 			final off: Int = RefactorSupport.identTokenOffset(source, h.span, name);
 			if (off < 0) continue;
@@ -1115,7 +1114,7 @@ final class Naming implements Check implements CrossFileFix {
 			// Whole-file EXCEPT the sibling hierarchies sharing the module: a same-named member of an
 			// UNRELATED class is not reachable from this one, so it is no collision (see `unrelatedTypeSpans`).
 			final owner: Null<String> = decl.enclosingType;
-			final unrelated: Array<Span> = (owner == null || resolutionIndex == null)
+			final unrelated: Array<Span> = owner == null || resolutionIndex == null
 				? []
 				: unrelatedTypeSpans(tree, owner, shape, resolutionIndex);
 			return RefactorSupport.nameBoundInRange(source, newName, 0, source.length, unrelated, plugin);
@@ -1211,8 +1210,12 @@ final class Naming implements Check implements CrossFileFix {
 	private static function visibleRegion(tree: QueryNode, kinds: Array<String>, declFrom: Int, shape: RefShape): Null<Span> {
 		final own: Null<Span> = localFunctionDeclSpan(tree, declFrom, shape);
 		final scope: Null<Span> = innermostSpanOfKinds(tree, kinds, declFrom, own);
-		if (scope == null) return null;
-		return own == null ? scope : new Span(declFrom, scope.to);
+		return if (scope == null)
+			null
+		else if (own == null)
+			scope
+		else
+			new Span(declFrom, scope.to);
 	}
 
 	/**

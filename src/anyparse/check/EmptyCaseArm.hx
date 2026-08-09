@@ -4,13 +4,14 @@ import anyparse.check.CasePatternScan.CaseSeams;
 import anyparse.check.CasePatternScan.PatternBinder;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
 import haxe.Exception;
+
+using StringTools;
 
 /**
  * Flags — and DELETES — a TRAILING EMPTY case arm of a STATEMENT switch that has no
@@ -175,7 +176,7 @@ final class EmptyCaseArm implements Check {
 		final statementKinds: Array<String> = shape.switchStatementKinds ?? [];
 		final openTypes: Array<String> = shape.openSwitchSubjectTypes ?? [];
 		if (statementKinds.length == 0 || openTypes.length == 0) return null;
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		return provider == null ? null : {
 			seams: seams,
 			shape: shape,
@@ -239,8 +240,12 @@ final class EmptyCaseArm implements Check {
 		// arms share a line there is no such newline and the wider bound stands.
 		final lineBreak: Int = source.indexOf('\n', prevSpan.to);
 		final scanFrom: Int = lineBreak < 0 || lineBreak > armSpan.from ? prevSpan.to : lineBreak;
-		if (CheckScan.hasCommentMarker(source, scanFrom, switchSpan.to)) return null;
-		return subjectOpen(ctx, kids[0]) ? armSpan : null;
+		return if (CheckScan.hasCommentMarker(source, scanFrom, switchSpan.to))
+			null
+		else if (subjectOpen(ctx, kids[0]))
+			armSpan
+		else
+			null;
 	}
 
 	/**
@@ -260,10 +265,9 @@ final class EmptyCaseArm implements Check {
 		if (run.length == 0 || CasePatternScan.guardOf(seams, arm, run.length) != null) return false;
 		final bound: Null<Array<PatternBinder>> = CasePatternScan.binders(seams, arm);
 		if (bound == null || bound.length != 0) return false;
-		if (!CasePatternScan.patternsModellable(seams, arm)) return false;
 		// No guard was accepted above, so the pattern run IS the whole label and anything past it is a
 		// body statement.
-		return arm.children.length == run.length;
+		return CasePatternScan.patternsModellable(seams, arm) && arm.children.length == run.length;
 	}
 
 	/**
@@ -322,7 +326,7 @@ final class EmptyCaseArm implements Check {
 	private static function armDeletionSpan(source: String, arm: Span): Span {
 		var to: Int = arm.to;
 		while (to > arm.from) {
-			final c: Int = StringTools.fastCodeAt(source, to - 1);
+			final c: Int = source.fastCodeAt(to - 1);
 			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code) break;
 			to--;
 		}

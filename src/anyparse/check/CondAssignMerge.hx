@@ -4,11 +4,12 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Flags a statement-scope conditional-compilation region whose EVERY branch is a single
@@ -249,16 +250,20 @@ final class CondAssignMerge implements Check implements DefaultOff {
 		final assignKind: Null<String> = shape.assignKind;
 		final localDeclKinds: Null<Array<String>> = shape.localDeclKinds;
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		if (ifKeyword == null || exprStmtKind == null || assignKind == null || support == null) return null;
-		return localDeclKinds == null || localDeclKinds.length == 0 ? null : {
-			ifKeyword: ifKeyword,
-			exprStmtKind: exprStmtKind,
-			assignKind: assignKind,
-			localDeclKinds: localDeclKinds,
-			returnKind: shape.returnStatementKind,
-			throwKinds: shape.throwKinds ?? [],
-			blockKinds: support.blockKinds()
-		};
+		return if (ifKeyword == null || exprStmtKind == null || assignKind == null || support == null)
+			null
+		else if (localDeclKinds == null || localDeclKinds.length == 0)
+			null
+		else
+			{
+				ifKeyword: ifKeyword,
+				exprStmtKind: exprStmtKind,
+				assignKind: assignKind,
+				localDeclKinds: localDeclKinds,
+				returnKind: shape.returnStatementKind,
+				throwKinds: shape.throwKinds ?? [],
+				blockKinds: support.blockKinds()
+			};
 	}
 
 	/** Every mergeable region reachable under `root`, in document order — the candidate set `run` and `fix` share. */
@@ -376,7 +381,7 @@ final class CondAssignMerge implements Check implements DefaultOff {
 			}
 		}
 		if (endAt == -1) return null;
-		if (StringTools.trim(source.substring(endAt, region.to)) != END_KEYWORD) return null;
+		if (source.substring(endAt, region.to).trim() != END_KEYWORD) return null;
 		if (children.length != markers.length + 1) return null;
 
 		final bounds: Array<Int> = [region.from].concat(markers);
@@ -442,7 +447,7 @@ final class CondAssignMerge implements Check implements DefaultOff {
 				at = token.to;
 			}
 			buf.add(source.substring(at, arm.stmtSpan.from));
-			final header: String = StringTools.trim(buf.toString());
+			final header: String = buf.toString().trim();
 			if (header == '' || header.indexOf('\n') != -1 || header.indexOf('\r') != -1) return null;
 			out.push(header);
 		}
@@ -469,10 +474,16 @@ final class CondAssignMerge implements Check implements DefaultOff {
 	 */
 	private static function armParts(source: String, arm: Arm, seams: Seams): Null<Parts> {
 		final stmt: QueryNode = arm.stmt;
-		if (source.substring(arm.stmtSpan.from, arm.stmtSpan.to).indexOf('#') != -1) return null;
-		if (stmt.kind == seams.exprStmtKind) return assignParts(source, stmt, seams);
-		if (stmt.kind == seams.returnKind || seams.throwKinds.contains(stmt.kind)) return exitParts(source, stmt, arm.stmtSpan);
-		return seams.localDeclKinds.contains(stmt.kind) ? declParts(source, stmt, arm.stmtSpan, seams) : null;
+		return if (source.substring(arm.stmtSpan.from, arm.stmtSpan.to).indexOf('#') != -1)
+			null
+		else if (stmt.kind == seams.exprStmtKind)
+			assignParts(source, stmt, seams)
+		else if (stmt.kind == seams.returnKind || seams.throwKinds.contains(stmt.kind))
+			exitParts(source, stmt, arm.stmtSpan)
+		else if (seams.localDeclKinds.contains(stmt.kind))
+			declParts(source, stmt, arm.stmtSpan, seams)
+		else
+			null;
 	}
 
 	/**
@@ -487,7 +498,7 @@ final class CondAssignMerge implements Check implements DefaultOff {
 		if (stmt.children.length != 1) return null;
 		final valueSpan: Null<Span> = stmt.children[0].span;
 		if (valueSpan == null) return null;
-		final prefix: String = StringTools.trim(source.substring(stmtSpan.from, valueSpan.from));
+		final prefix: String = source.substring(stmtSpan.from, valueSpan.from).trim();
 		return prefix == '' ? null : { prefix: prefix, value: source.substring(valueSpan.from, valueSpan.to), exit: true };
 	}
 
@@ -519,8 +530,8 @@ final class CondAssignMerge implements Check implements DefaultOff {
 		if (seams.localDeclKinds.contains(init.kind)) return null;
 		final initSpan: Null<Span> = init.span;
 		if (initSpan == null) return null;
-		final prefix: String = StringTools.trim(source.substring(stmtSpan.from, initSpan.from));
-		return StringTools.endsWith(prefix, '=') ? {
+		final prefix: String = source.substring(stmtSpan.from, initSpan.from).trim();
+		return prefix.endsWith('=') ? {
 			prefix: prefix,
 			value: source.substring(initSpan.from, initSpan.to),
 			exit: false

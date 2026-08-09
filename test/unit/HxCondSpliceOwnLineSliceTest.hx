@@ -43,8 +43,7 @@ final class HxCondSpliceOwnLineSliceTest extends HxTestHelpers {
 	 */
 	public function testOwnLineInfixSpliceTailParsesAsSpliceTail(): Void {
 		final body: Array<HxStatement> = parseBody(
-			'class C { function get_idleThreads():Int {\n\t\treturn __idleThreads\n'
-			+ '\t\t#if lime_threads - __queuedExitEvents #end;\n\t} }'
+			'class C { function get_idleThreads():Int {\n\t\treturn __idleThreads\n\t\t#if lime_threads - __queuedExitEvents #end;\n\t} }'
 		);
 		Assert.equals(1, body.length);
 		switch body[0] {
@@ -69,7 +68,7 @@ final class HxCondSpliceOwnLineSliceTest extends HxTestHelpers {
 	 */
 	public function testOwnLineInfixSpliceTailInConditionOperandParses(): Void {
 		final body: Array<HxStatement> = parseBody(
-			'class C { function f(cc, cl) {\n\t\tif (intf != null\n' + '\t\t\t// ES6 classes inherit statics\n'
+			'class C { function f(cc, cl) {\n\t\tif (intf != null\n\t\t\t// ES6 classes inherit statics\n'
 			+ '\t\t\t#if (js_es >= 6) && (cc.__super__ == null) #end\n\t\t) {\n\t\t\tg();\n\t\t}\n\t} }'
 		);
 		Assert.equals(1, body.length);
@@ -129,7 +128,7 @@ final class HxCondSpliceOwnLineSliceTest extends HxTestHelpers {
 	 * The fragment opens with the list separator `,`.
 	 */
 	public function testOwnLineParamListConditionalStaysParamScoped(): Void {
-		final src: String = 'extern class TouchEvent extends Event {\n' + '\tpublic function new(isTouchPointCanceled:Bool = false\n'
+		final src: String = 'extern class TouchEvent extends Event {\n\tpublic function new(isTouchPointCanceled:Bool = false\n'
 			+ '\t\t#if air, commandKey:Bool = false, ?timestamp:Float #end);\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
@@ -141,9 +140,8 @@ final class HxCondSpliceOwnLineSliceTest extends HxTestHelpers {
 	 */
 	public function testOwnLineArrayElementConditionalStaysElementScoped(): Void {
 		final src: String = 'class Main {\n\tpublic static function main() {\n\t\tvar argHandler = hxargs.Args.generate([\n'
-			+ '\t\t\t@doc("check")\n\t\t\t["--check"] => function() mode = Check,\n\n'
-			+ '\t\t\t#if debug\n\t\t\t@doc("stability")\n\t\t\t["--check-stability"] => function() mode = CheckStability,\n'
-			+ '\t\t\t#end\n\n'
+			+ '\t\t\t@doc("check")\n\t\t\t["--check"] => function() mode = Check,\n\n\t\t\t#if debug\n\t\t\t@doc("stability")\n'
+			+ '\t\t\t["--check-stability"] => function() mode = CheckStability,\n\t\t\t#end\n\n'
 			+ '\t\t\t#if debug\n\t\t\t@doc("stability")\n\t\t\t["--check-stability"] => function() mode = CheckStability,\n'
 			+ '\t\t\t#end\n\t\t]);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));

@@ -336,7 +336,8 @@ class PreferFindCheckTest extends Test {
 	public function testFixGuardedBreakFormCommentInLoopNotRewritten(): Void {
 		// The whole loop node is replaced, so a comment anywhere inside it would be lost.
 		final out: String = fixResult(file(
-			'var r:Null<Int> = null;\n\t\tif (ok) for (x in xs) if (x > 2) {\n\t\t\t// first hit wins\n\t\t\tr = x;\n\t\t\tbreak;\n\t\t}\n\t\treturn r;',
+			'var r:Null<Int> = null;\n\t\tif (ok) for (x in xs) if (x > 2) {\n\t\t\t// first hit wins\n\t\t\tr = x;\n\t\t\tbreak;\n'
+			+ '\t\t}\n\t\treturn r;',
 			'Null<Int>', true
 		));
 		Assert.isTrue(out.indexOf('.find(') == -1, out);
@@ -365,9 +366,11 @@ class PreferFindCheckTest extends Test {
 	}
 
 	/** A guarded capture-and-break loop over a nullable local — the cascade fixture. */
-	private function compositionSource(): String {
-		return
-			'package p;\n\nusing Lambda;\n\nclass C {\n\tfunction f(xml:Xml):Void {\n\t\tfinal frame1Xml:Null<Xml> = xml.find(c -> c.nodeName == \'f\');\n\t\tvar oXml:Null<Xml> = null;\n\t\tif (frame1Xml != null) for (child in frame1Xml) if (child.nodeName == \'o\') {\n\t\t\toXml = child;\n\t\t\tbreak;\n\t\t}\n\t\ttrace(oXml);\n\t}\n}';
+	private inline function compositionSource(): String {
+		return 'package p;\n\nusing Lambda;\n\nclass C {\n\tfunction f(xml:Xml):Void {\n'
+			+ '\t\tfinal frame1Xml:Null<Xml> = xml.find(c -> c.nodeName == \'f\');\n\t\tvar oXml:Null<Xml> = null;\n'
+			+ '\t\tif (frame1Xml != null) for (child in frame1Xml) if (child.nodeName == \'o\') {\n\t\t\toXml = child;\n\t\t\tbreak;\n'
+			+ '\t\t}\n\t\ttrace(oXml);\n\t}\n}';
 	}
 
 	/** `source` run through `prefer-find`, then `prefer-safe-nav`, then `prefer-final`, canonicalized after each. */
@@ -390,9 +393,9 @@ class PreferFindCheckTest extends Test {
 	}
 
 	/** A `p.C` with a `using Other;` and one Form-A first-match loop — the conflicting-`using` fixture. */
-	private function usingOtherSource(): String {
-		return
-			'package p;\n\nusing Other;\n\nclass C {\n\tfunction f(xs:Array<Int>):Null<Int> {\n\t\tfor (x in xs) if (x > 2) return x;\n\t\treturn null;\n\t}\n}';
+	private inline function usingOtherSource(): String {
+		return 'package p;\n\nusing Other;\n\nclass C {\n\tfunction f(xs:Array<Int>):Null<Int> {\n\t\tfor (x in xs) if (x > 2) return x;\n'
+			+ '\t\treturn null;\n\t}\n}';
 	}
 
 	/** `source` fixed with `other` (an `Other.hx` module) in the index the conflict gate consults. */

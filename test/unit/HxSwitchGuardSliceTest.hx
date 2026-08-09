@@ -110,7 +110,7 @@ class HxSwitchGuardSliceTest extends HxTestHelpers {
 		Assert.isNull(ps[1].guard);
 	}
 
-	public function testGuardRoundTrip(): Void {
+	public inline function testGuardRoundTrip(): Void {
 		roundTrip(
 			'class C { function f(x:E):Void { switch (x) { case A if (b): y(); case C, D if (e): z(); case _: w(); } } }', 'switch-guard'
 		);

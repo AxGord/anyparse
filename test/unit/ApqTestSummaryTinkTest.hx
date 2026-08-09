@@ -3,9 +3,6 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.query.Cli;
-import anyparse.query.Cli.TestSummaryFailureKind;
-import anyparse.query.Cli.TestSummaryFailureLocus;
-import anyparse.query.Cli.TestSummaryResult;
 #if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;
@@ -40,41 +37,7 @@ import sys.io.File;
 @:nullSafety(Strict)
 class ApqTestSummaryTinkTest extends Test {
 
-	static inline final ESC: String = "\x1b";
-
-	private static function ansi(code: String, text: String): String {
-		return '${ESC}[${code}m$text${ESC}[39m';
-	}
-
-	private static function suiteHeader(name: String, path: String, line: Int): String {
-		return '${ansi('33', name)}: ${ansi('36', '[$path:$line]')}';
-	}
-
-	private static function caseHeader(desc: String, path: String, line: Int): String {
-		return '${ansi('33', '  $desc')}: ${ansi('36', '[$path:$line] ')}';
-	}
-
-	private static function assertRow(ok: Bool, path: String, line: Int, desc: String): String {
-		final tag: String = ok ? ansi('32', '[OK]') : ansi('31', '[FAIL]');
-		return '    - $tag ${ansi('36', '[$path:$line]')} $desc';
-	}
-
-	private static function failDetail(msg: String): String {
-		return ansi('31', '        $msg');
-	}
-
-	private static function caseThrow(msg: String): String {
-		return ansi('31', '    - $msg');
-	}
-
-	private static function summaryLine(total: Int, success: Int, failures: Int, errors: Int): String {
-		final ok: Bool = failures == 0 && errors == 0;
-		final assertWord: String = total > 1 ? 'Assertions' : 'Assertion';
-		final failWord: String = failures > 1 ? 'Failures' : 'Failure';
-		final errWord: String = errors > 1 ? 'Errors' : 'Error';
-		final text: String = '$total $assertWord   $success Success   $failures $failWord   $errors $errWord   ';
-		return ansi(ok ? '32' : '31', text);
-	}
+	private static inline final ESC: String = '\x1b';
 
 	// --- All-passing transcript, ANSI-colored (the real TM shape) ---
 
@@ -138,9 +101,9 @@ class ApqTestSummaryTinkTest extends Test {
 
 	public function testTinkPlainNonAnsiTranscriptDetected(): Void {
 		#if (sys || nodejs)
-		final transcript: String = 'SampleTest: [src/tests/unit/SampleTest.hx:5]\n'
-			+ '  does the thing: [src/tests/unit/SampleTest.hx:9] \n' + '    - [OK] [src/tests/unit/SampleTest.hx:11] ok\n'
-			+ '    - [OK] [src/tests/unit/SampleTest.hx:12] ok\n' + '2 Assertions   2 Success   0 Failure   0 Error   \n';
+		final transcript: String = 'SampleTest: [src/tests/unit/SampleTest.hx:5]\n  does the thing: [src/tests/unit/SampleTest.hx:9] \n'
+			+ '    - [OK] [src/tests/unit/SampleTest.hx:11] ok\n    - [OK] [src/tests/unit/SampleTest.hx:12] ok\n'
+			+ '2 Assertions   2 Success   0 Failure   0 Error   \n';
 		final r: TestSummaryResult = Cli.parseTestSummary(transcript);
 		Assert.equals(2, r.assertions);
 		Assert.equals(0, r.failures);
@@ -172,13 +135,12 @@ class ApqTestSummaryTinkTest extends Test {
 		Assert.equals(0, r.tests);
 		final ff: Null<TestSummaryFailureLocus> = r.firstFailure;
 		Assert.notNull(ff);
-		if (ff != null) {
-			Assert.equals('SampleGateTest', ff.className);
-			Assert.equals('rejects an out-of-range value', ff.testName);
-			Assert.equals(16, ff.line);
-			Assert.equals('expected false but got true', ff.message);
-			Assert.isTrue(ff.kind == TestSummaryFailureKind.Fail);
-		}
+		if (ff == null) return;
+		Assert.equals('SampleGateTest', ff.className);
+		Assert.equals('rejects an out-of-range value', ff.testName);
+		Assert.equals(16, ff.line);
+		Assert.equals('expected false but got true', ff.message);
+		Assert.isTrue(ff.kind == TestSummaryFailureKind.Fail);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -203,10 +165,9 @@ class ApqTestSummaryTinkTest extends Test {
 		Assert.equals(2, r.failures);
 		final ff: Null<TestSummaryFailureLocus> = r.firstFailure;
 		Assert.notNull(ff);
-		if (ff != null) {
-			Assert.equals('case one', ff.testName);
-			Assert.equals('boom one', ff.message);
-		}
+		if (ff == null) return;
+		Assert.equals('case one', ff.testName);
+		Assert.equals('boom one', ff.message);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -231,11 +192,10 @@ class ApqTestSummaryTinkTest extends Test {
 		Assert.equals(0, r.tests);
 		final ff: Null<TestSummaryFailureLocus> = r.firstFailure;
 		Assert.notNull(ff);
-		if (ff != null) {
-			Assert.equals('throws before any assertion', ff.testName);
-			Assert.equals('Null Object Reference', ff.message);
-			Assert.isTrue(ff.kind == TestSummaryFailureKind.Error);
-		}
+		if (ff == null) return;
+		Assert.equals('throws before any assertion', ff.testName);
+		Assert.equals('Null Object Reference', ff.message);
+		Assert.isTrue(ff.kind == TestSummaryFailureKind.Error);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -249,11 +209,11 @@ class ApqTestSummaryTinkTest extends Test {
 	public function testTinkRealSummaryLineShapePinned(): Void {
 		#if (sys || nodejs)
 		final real: String = ansi('32', '1111 Assertions   1111 Success   0 Failure   0 Error   ');
-		final transcript: String = suiteHeader('SampleFinalTest', 'src/tests/unit/SampleFinalTest.hx', 1) + '\n'
-			+ caseHeader('trivial', 'src/tests/unit/SampleFinalTest.hx', 2) + '\n'
-			+ assertRow(true, 'src/tests/unit/SampleFinalTest.hx', 3, 'ok') + '\n' + real + '\n'
-			+ 'Tests completed - watchdog thread will exit gracefully\n' + 'Stopping FileSystem background threads...\n'
-			+ 'FileSystem stopped\n' + 'EXIT=0\n';
+		final transcript: String = '${suiteHeader('SampleFinalTest', 'src/tests/unit/SampleFinalTest.hx', 1)}\n'
+			+ '${caseHeader('trivial', 'src/tests/unit/SampleFinalTest.hx', 2)}\n'
+			+ '${assertRow(true, 'src/tests/unit/SampleFinalTest.hx', 3, 'ok')}\n$real\n'
+			+ 'Tests completed - watchdog thread will exit gracefully\nStopping FileSystem background threads...\nFileSystem stopped\n'
+			+ 'EXIT=0\n';
 		final r: TestSummaryResult = Cli.parseTestSummary(transcript);
 		Assert.equals(1111, r.assertions);
 		Assert.equals(1111, r.assertions); // Success mirrors assertions in an all-green run
@@ -298,6 +258,40 @@ class ApqTestSummaryTinkTest extends Test {
 		#else
 		Assert.pass('non-sys target');
 		#end
+	}
+
+	private static function ansi(code: String, text: String): String {
+		return '${ESC}[${code}m$text${ESC}[39m';
+	}
+
+	private static function suiteHeader(name: String, path: String, line: Int): String {
+		return '${ansi('33', name)}: ${ansi('36', '[$path:$line]')}';
+	}
+
+	private static function caseHeader(desc: String, path: String, line: Int): String {
+		return '${ansi('33', '  $desc')}: ${ansi('36', '[$path:$line] ')}';
+	}
+
+	private static function assertRow(ok: Bool, path: String, line: Int, desc: String): String {
+		final tag: String = ok ? ansi('32', '[OK]') : ansi('31', '[FAIL]');
+		return '    - $tag ${ansi('36', '[$path:$line]')} $desc';
+	}
+
+	private static function failDetail(msg: String): String {
+		return ansi('31', '        $msg');
+	}
+
+	private static function caseThrow(msg: String): String {
+		return ansi('31', '    - $msg');
+	}
+
+	private static function summaryLine(total: Int, success: Int, failures: Int, errors: Int): String {
+		final ok: Bool = failures == 0 && errors == 0;
+		final assertWord: String = total > 1 ? 'Assertions' : 'Assertion';
+		final failWord: String = failures > 1 ? 'Failures' : 'Failure';
+		final errWord: String = errors > 1 ? 'Errors' : 'Error';
+		final text: String = '$total $assertWord   $success Success   $failures $failWord   $errors $errWord   ';
+		return ansi(ok ? '32' : '31', text);
 	}
 
 }

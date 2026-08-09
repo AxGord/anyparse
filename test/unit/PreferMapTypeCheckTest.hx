@@ -224,11 +224,11 @@ class PreferMapTypeCheckTest extends Test {
 
 	// --- report-only: the site is a haxe.ds map, the rewrite is not available ---
 
-	public function testImportedForeignMapIsReportOnly(): Void {
+	public inline function testImportedForeignMapIsReportOnly(): Void {
 		assertReportOnly('import haxe.ds.IntMap;\nimport foo.Map;\nclass C { var m:IntMap<Int>; }');
 	}
 
-	public function testLocallyDeclaredMapIsReportOnly(): Void {
+	public inline function testLocallyDeclaredMapIsReportOnly(): Void {
 		assertReportOnly('import haxe.ds.IntMap;\nclass Map {}\nclass C { var m:IntMap<Int>; }');
 	}
 
@@ -336,7 +336,7 @@ class PreferMapTypeCheckTest extends Test {
 	 * annotation is not a `haxe.ds` map at all, so the self-proving qualified construction beside it
 	 * has nothing that determines `Map`'s parameters.
 	 */
-	public function testPinNominalIsResolvedNotNameMatched(): Void {
+	public inline function testPinNominalIsResolvedNotNameMatched(): Void {
 		assertReportOnly('class IntMap<T> {}\nclass C { var m:IntMap<Int> = new haxe.ds.IntMap(); }');
 	}
 
@@ -366,18 +366,18 @@ class PreferMapTypeCheckTest extends Test {
 	}
 
 	/** A module-declared abstract over `String` follows to the `K:String` selector — the key is not proven. */
-	public function testModuleDeclaredAbstractOverStringKeyIsReportOnly(): Void {
+	public inline function testModuleDeclaredAbstractOverStringKeyIsReportOnly(): Void {
 		assertReportOnly(
 			'import haxe.ds.ObjectMap;\nabstract LocalKey(String) from String to String {}\nclass C { var m:ObjectMap<LocalKey, Int>; }'
 		);
 	}
 
-	public function testModuleDeclaredTypedefAliasOfStringKeyIsReportOnly(): Void {
+	public inline function testModuleDeclaredTypedefAliasOfStringKeyIsReportOnly(): Void {
 		assertReportOnly('import haxe.ds.ObjectMap;\ntypedef LocalKey = String;\nclass C { var m:ObjectMap<LocalKey, Int>; }');
 	}
 
 	/** The chain is followed transitively within the file. */
-	public function testTransitiveModuleAliasToStringKeyIsReportOnly(): Void {
+	public inline function testTransitiveModuleAliasToStringKeyIsReportOnly(): Void {
 		assertReportOnly(
 			'import haxe.ds.ObjectMap;\nabstract Inner(String) {}\ntypedef LocalKey = Inner;\nclass C { var m:ObjectMap<LocalKey, Int>; }'
 		);
@@ -392,7 +392,7 @@ class PreferMapTypeCheckTest extends Test {
 	}
 
 	/** A `using` binds the same simple name an `import` would — a foreign `Map` shadows just as hard. */
-	public function testUsingBoundForeignMapIsReportOnly(): Void {
+	public inline function testUsingBoundForeignMapIsReportOnly(): Void {
 		assertReportOnly('import haxe.ds.IntMap;\nusing foo.Map;\nclass C { var m:IntMap<Int>; }');
 	}
 

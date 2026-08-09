@@ -48,8 +48,8 @@ final class HxSwitchAfterParenSpaceSliceTest extends Test {
 	// `switchPolicy: around` → a `switch` as the sole call argument spaces `(`.
 	public function testCallArgSwitchSpacesOpenParen(): Void {
 		final input: String = 'class C {\n\tfunction f() {\n\t\tfinal a = pick(switch mode { case One: alpha; case _: beta; });\n\t}\n}';
-		final expected: String =
-			'class C {\n\tfunction f() {\n\t\tfinal a = pick( switch mode {\n\t\t\tcase One: alpha;\n\t\t\tcase _: beta;\n\t\t});\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f() {\n\t\tfinal a = pick( switch mode {\n\t\t\tcase One: alpha;\n'
+			+ '\t\t\tcase _: beta;\n\t\t});\n\t}\n}\n';
 		Assert.equals(expected, triviaWriteAround(input));
 	}
 
@@ -72,10 +72,11 @@ final class HxSwitchAfterParenSpaceSliceTest extends Test {
 	// Guard: the DEFAULT policy (no leading space) keeps `(` tight for both the
 	// call-arg and paren switch — the space is policy-gated, not on by default.
 	public function testDefaultPolicyStaysTight(): Void {
-		final input: String =
-			'class C {\n\tfunction f() {\n\t\tfinal a = pick(switch mode { case One: alpha; case _: beta; });\n\t\tfinal b = (switch mode { case One: alpha; case _: beta; });\n\t}\n}';
-		final expected: String =
-			'class C {\n\tfunction f() {\n\t\tfinal a = pick(switch mode {\n\t\t\tcase One: alpha;\n\t\t\tcase _: beta;\n\t\t});\n\t\tfinal b = (switch mode {\n\t\t\tcase One: alpha;\n\t\t\tcase _: beta;\n\t\t});\n\t}\n}\n';
+		final input: String = 'class C {\n\tfunction f() {\n\t\tfinal a = pick(switch mode { case One: alpha; case _: beta; });\n'
+			+ '\t\tfinal b = (switch mode { case One: alpha; case _: beta; });\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction f() {\n\t\tfinal a = pick(switch mode {\n\t\t\tcase One: alpha;\n'
+			+ '\t\t\tcase _: beta;\n\t\t});\n\t\tfinal b = (switch mode {\n\t\t\tcase One: alpha;\n\t\t\tcase _: beta;\n'
+			+ '\t\t});\n\t}\n}\n';
 		Assert.equals(expected, triviaWriteDefault(input));
 	}
 
@@ -89,8 +90,8 @@ final class HxSwitchAfterParenSpaceSliceTest extends Test {
 		final cfg: String =
 			'{"whitespace": {"switchPolicy": "around"}, "wrapping": {"callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}}';
 		final input: String = 'class C {\n\tfunction m() {\n\t\tcaller(switch mode { case One: alpha; case Two: beta; }, other);\n\t}\n}';
-		final expected: String =
-			'class C {\n\tfunction m() {\n\t\tcaller(\n\t\t\tswitch mode {\n\t\t\t\tcase One: alpha;\n\t\t\t\tcase Two: beta;\n\t\t\t},\n\t\t\tother\n\t\t);\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction m() {\n\t\tcaller(\n\t\t\tswitch mode {\n\t\t\t\tcase One: alpha;\n'
+			+ '\t\t\t\tcase Two: beta;\n\t\t\t},\n\t\t\tother\n\t\t);\n\t}\n}\n';
 		Assert.equals(expected, triviaWriteWith(cfg, input));
 	}
 

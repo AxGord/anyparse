@@ -3,6 +3,8 @@ package anyparse.query;
 import anyparse.runtime.Span;
 import anyparse.query.GrammarPlugin;
 
+using StringTools;
+
 /**
  * Conservative text scan for "is this member NAME written here", and the two cross-file
  * questions built on it: does a SUBTYPE write an inherited member, does an `@:access`
@@ -37,26 +39,6 @@ import anyparse.query.GrammarPlugin;
 @:nullSafety(Strict)
 final class MemberWriteScan {
 
-	/**
-	 * Whether any (transitive) subtype of `owner` may write the inherited member `name`.
-	 * True when the hierarchy cannot be resolved (`SymbolIndex.subtypeDeclMatches` reports
-	 * an unretained source or a simple-name collision) and when a subtype REDECLARES the
-	 * name — an ambiguously-named member is exactly what a write scan cannot rule out.
-	 */
-	/**
-	 * The index the SUBTYPE questions run against: the resolution scope when one is
-	 * configured (`resolutionLibs` / `resolutionRoots` — a subtype declared in a library
-	 * root counts), else the report index. Resolved HERE rather than by each check so a
-	 * check never holds a resolution index: handing one to `skippedFiles` would silence the
-	 * rule on every project with libraries (they routinely contain skip-parsing files), and
-	 * that mistake is now unrepresentable. Resolving at the point of use also keeps the
-	 * build LAZY — `resolutionIndex()` memoises on the plugin, and a run whose candidates
-	 * all bail before the subtype question never pays for it.
-	 */
-	private static inline function scopeOf(index: SymbolIndex, plugin: GrammarPlugin): SymbolIndex {
-		return RefactorSupport.resolutionIndexOf(plugin) ?? index;
-	}
-
 	public static inline function subtypeMayWrite(owner: String, name: String, index: SymbolIndex, plugin: GrammarPlugin): Bool {
 		return scopeOf(
 			index, plugin
@@ -65,19 +47,6 @@ final class MemberWriteScan {
 				owner, name,
 				(subtype, src, span, redeclares) -> redeclares || subtypeReach(scopeOf(index, plugin), subtype, name, src, span)
 			);
-	}
-
-	/**
-	 * The ways a write to `owner`'s member `name` can arrive through the SUBTYPE `subtype`
-	 * without the write index attributing it to `owner`: inside the subtype's own body, or
-	 * from a file granting itself `@:access(subtype)`. The second is not theoretical even
-	 * for a PRIVATE member — `@:access(Sub)` in a third file makes `s.p = 5` on `s:Sub`
-	 * compile against a `p` declared in `Sub`'s SUPERtype, while a grant scan keyed on the
-	 * owner sees nothing (that file's grant list names the subtype, not the owner).
-	 */
-	private static function subtypeReach(scope: SymbolIndex, subtype: String, name: String, src: String, span: Span): Bool {
-		return mayWrite(src, name, span.from, span.to)
-			|| scope.accessGrantMatches(subtype, granted -> mayWrite(granted, name, 0, granted.length));
 	}
 
 	/**
@@ -113,14 +82,6 @@ final class MemberWriteScan {
 	}
 
 	/**
-	 * Whether the offsets `from ... to` of `src` may write `name`: either a build macro can
-	 * inject a member the text scan cannot see, or the scan finds a write outright.
-	 */
-	private static inline function mayWrite(src: String, name: String, from: Int, to: Int): Bool {
-		return carriesBuildMacro(src) || writtenInRange(src, name, null, from, to);
-	}
-
-	/**
 	 * Whether `name` is written anywhere in `source` outside `exclude` (typically its own
 	 * declaration), over the offsets `from ... to` only. A candidate name must lie WHOLLY
 	 * inside the range; the operator scan that follows it may run past `to`, and the
@@ -135,12 +96,51 @@ final class MemberWriteScan {
 			final idx: Int = source.indexOf(name, at);
 			if (idx < 0 || idx + len > to) return false;
 			at = idx + len;
-			final boundedBefore: Bool = idx == 0 || !RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, idx - 1));
-			final boundedAfter: Bool = at >= n || !RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, at));
+			final boundedBefore: Bool = idx == 0 || !RefactorSupport.isIdentChar(source.fastCodeAt(idx - 1));
+			final boundedAfter: Bool = at >= n || !RefactorSupport.isIdentChar(source.fastCodeAt(at));
 			if (!boundedBefore || !boundedAfter) continue;
 			if (exclude != null && idx >= exclude.from && idx < exclude.to) continue;
 			if (precededByIncrDecr(source, idx) || followedByAssign(source, at)) return true;
 		}
+	}
+
+	/**
+	 * Whether any (transitive) subtype of `owner` may write the inherited member `name`.
+	 * True when the hierarchy cannot be resolved (`SymbolIndex.subtypeDeclMatches` reports
+	 * an unretained source or a simple-name collision) and when a subtype REDECLARES the
+	 * name — an ambiguously-named member is exactly what a write scan cannot rule out.
+	 * The index the SUBTYPE questions run against: the resolution scope when one is
+	 * configured (`resolutionLibs` / `resolutionRoots` — a subtype declared in a library
+	 * root counts), else the report index. Resolved HERE rather than by each check so a
+	 * check never holds a resolution index: handing one to `skippedFiles` would silence the
+	 * rule on every project with libraries (they routinely contain skip-parsing files), and
+	 * that mistake is now unrepresentable. Resolving at the point of use also keeps the
+	 * build LAZY — `resolutionIndex()` memoises on the plugin, and a run whose candidates
+	 * all bail before the subtype question never pays for it.
+	 */
+	private static inline function scopeOf(index: SymbolIndex, plugin: GrammarPlugin): SymbolIndex {
+		return RefactorSupport.resolutionIndexOf(plugin) ?? index;
+	}
+
+	/**
+	 * The ways a write to `owner`'s member `name` can arrive through the SUBTYPE `subtype`
+	 * without the write index attributing it to `owner`: inside the subtype's own body, or
+	 * from a file granting itself `@:access(subtype)`. The second is not theoretical even
+	 * for a PRIVATE member — `@:access(Sub)` in a third file makes `s.p = 5` on `s:Sub`
+	 * compile against a `p` declared in `Sub`'s SUPERtype, while a grant scan keyed on the
+	 * owner sees nothing (that file's grant list names the subtype, not the owner).
+	 */
+	private static function subtypeReach(scope: SymbolIndex, subtype: String, name: String, src: String, span: Span): Bool {
+		return mayWrite(src, name, span.from, span.to)
+			|| scope.accessGrantMatches(subtype, granted -> mayWrite(granted, name, 0, granted.length));
+	}
+
+	/**
+	 * Whether the offsets `from ... to` of `src` may write `name`: either a build macro can
+	 * inject a member the text scan cannot see, or the scan finds a write outright.
+	 */
+	private static inline function mayWrite(src: String, name: String, from: Int, to: Int): Bool {
+		return carriesBuildMacro(src) || writtenInRange(src, name, null, from, to);
 	}
 
 	/**
@@ -163,22 +163,22 @@ final class MemberWriteScan {
 	private static function precededByIncrDecr(source: String, idx: Int): Bool {
 		var i: Int = idx - 1;
 		while (i >= 0) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (RefactorSupport.isSpace(c)) {
 				i--;
 				continue;
 			}
-			if (c == '/'.code && i >= 1 && StringTools.fastCodeAt(source, i - 1) == '*'.code) {
+			if (c == '/'.code && i >= 1 && source.fastCodeAt(i - 1) == '*'.code) {
 				i -= 2;
-				while (i >= 1 && !(StringTools.fastCodeAt(source, i - 1) == '/'.code && StringTools.fastCodeAt(source, i) == '*'.code)) i--;
+				while (i >= 1 && (source.fastCodeAt(i - 1) != '/'.code || source.fastCodeAt(i) != '*'.code)) i--;
 				i -= 2;
 				continue;
 			}
 			break;
 		}
 		if (i < 1) return false;
-		final c0: Int = StringTools.fastCodeAt(source, i - 1);
-		final c1: Int = StringTools.fastCodeAt(source, i);
+		final c0: Int = source.fastCodeAt(i - 1);
+		final c1: Int = source.fastCodeAt(i);
 		return (c0 == '+'.code && c1 == '+'.code) || (c0 == '-'.code && c1 == '-'.code);
 	}
 
@@ -191,11 +191,11 @@ final class MemberWriteScan {
 		final n: Int = source.length;
 		var i: Int = RefactorSupport.skipForwardTrivia(source, pos);
 		final start: Int = i;
-		while (i < n && isOperatorChar(StringTools.fastCodeAt(source, i))) i++;
+		while (i < n && isOperatorChar(source.fastCodeAt(i))) i++;
 		final token: String = source.substring(start, i);
 		return token == '++' || token == '--'
-			|| (token.length != 0 && StringTools.fastCodeAt(token, token.length - 1) == '='.code && token != '==' && token != '<='
-				&& token != '>=' && token != '!=' && token != '=>');
+			|| (token.length != 0 && token.fastCodeAt(token.length - 1) == '='.code && token != '==' && token != '<=' && token != '>='
+				&& token != '!=' && token != '=>');
 	}
 
 	/** Whether `c` is an operator character that can form an assignment token. */

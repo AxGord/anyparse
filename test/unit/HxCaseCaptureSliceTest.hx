@@ -122,11 +122,12 @@ class HxCaseCaptureSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testCorpusIssue27RoundTrip(): Void {
+	public inline function testCorpusIssue27RoundTrip(): Void {
 		// Fork corpus shape — section-2 input, byte-identical to the
 		// section-3 expected output after trivia round-trip.
 		roundTrip(
-			'class Main {\n\tstatic function main() {\n\t\tswitch (foo) {\n\t\t\tcase var bar:\n\t\t\t\ttrace("");\n\t\t\tcase Pattern(var foo, var bar):\n\t\t\t\ttrace("");\n\t\t}\n\t}\n}',
+			'class Main {\n\tstatic function main() {\n\t\tswitch (foo) {\n\t\t\tcase var bar:\n\t\t\t\ttrace("");\n'
+			+ '\t\t\tcase Pattern(var foo, var bar):\n\t\t\t\ttrace("");\n\t\t}\n\t}\n}',
 			'issue_27_case_var_line_end'
 		);
 	}

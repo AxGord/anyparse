@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -11,6 +10,8 @@ import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 import anyparse.query.TypeInfoProvider;
 import anyparse.check.Check.ConfigAware;
+
+using StringTools;
 
 /**
  * Flags a `catch` clause whose declared exception type is `Dynamic` (or `Any`) — a raw
@@ -69,6 +70,10 @@ import anyparse.check.Check.ConfigAware;
 @:nullSafety(Strict)
 final class CatchDynamic implements Check implements ConfigAware {
 
+	/** The message for a bare, untyped `catch (e)` (arm (c)) — shared by `run` and any diagnostics. */
+	private static final UNTYPED_MESSAGE: String =
+		'untyped catch clause is implicitly Exception (Haxe 4.1+) — prefer catch (exception:Exception)';
+
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
@@ -124,7 +129,7 @@ final class CatchDynamic implements Check implements ConfigAware {
 		}
 		final file: String = violations.length > 0 ? violations[0].file : '';
 		final fixLogging: Bool = LintConfig.resolveWith(_resolveConfig, file).boolOption('catch-dynamic', 'fixLoggingUses') ?? false;
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
 		// The shared printer owns the short-name / add-import / fully-qualified decision (imports,
 		// aliases, module-local and same-package bindings, sorted insert) — this rule used to
@@ -156,10 +161,6 @@ final class CatchDynamic implements Check implements ConfigAware {
 		if (rewroteNonConditional) for (importEdit in printer.pendingImportEdits()) edits.push(importEdit);
 		return edits;
 	}
-
-	/** The message for a bare, untyped `catch (e)` (arm (c)) — shared by `run` and any diagnostics. */
-	private static final UNTYPED_MESSAGE: String =
-		'untyped catch clause is implicitly Exception (Haxe 4.1+) — prefer catch (exception:Exception)';
 
 	/** Walk `node`, flagging every catch clause whose declared type is a catch-all name, plus every bare untyped catch. */
 	private static function walk(
@@ -201,7 +202,6 @@ final class CatchDynamic implements Check implements ConfigAware {
 		});
 	}
 
-
 	/**
 	 * The `(var:Type)` parameter region of a catch clause, decoded from the header
 	 * source `[span.from, body.from)`: its `from:to` span, the bound variable name, the
@@ -232,7 +232,7 @@ final class CatchDynamic implements Check implements ConfigAware {
 		return typeName == null ? null : {
 			from: start + open,
 			to: start + close + 1,
-			varName: StringTools.trim(header.substring(open + 1, colon)),
+			varName: header.substring(open + 1, colon).trim(),
 			typeName: typeName,
 			body: bodyNode
 		};
@@ -257,7 +257,7 @@ final class CatchDynamic implements Check implements ConfigAware {
 		final colon: Int = header.indexOf(':');
 		final close: Int = header.lastIndexOf(')');
 		if (open == -1 || close == -1 || close <= open || colon != -1) return null;
-		final varName: String = StringTools.trim(header.substring(open + 1, close));
+		final varName: String = header.substring(open + 1, close).trim();
 		return varName.length == 0 ? null : { from: start + open, to: start + close + 1, varName: varName };
 	}
 
@@ -288,8 +288,7 @@ final class CatchDynamic implements Check implements ConfigAware {
 		text: String
 	}> {
 		final b = catchBareRegion(catchNode, source);
-		if (b == null || !flagged.exists('${b.from}:${b.to}')) return null;
-		return { span: new Span(b.from, b.to), text: '(${b.varName}:$exText)' };
+		return b == null || !flagged.exists('${b.from}:${b.to}') ? null : { span: new Span(b.from, b.to), text: '(${b.varName}:$exText)' };
 	}
 
 	/** Whether any node in `node`'s subtree carries `name` — catches plain identifiers, field-access names, and string-interpolation idents alike (a conservative reference test). */
@@ -381,11 +380,9 @@ final class CatchDynamic implements Check implements ConfigAware {
 	/** Whether `callee` is a `trace(…)` or `Std.string(…)` callee — the recognised pure-stringify calls. */
 	private static function isLoggingCallee(callee: QueryNode, fieldKind: String, identKind: String): Bool {
 		if (callee.kind == identKind) return callee.name == 'trace';
-		if (callee.kind == fieldKind && callee.name == 'string') {
-			final recv: Null<QueryNode> = callee.children.length > 0 ? callee.children[0] : null;
-			return recv != null && recv.kind == identKind && recv.name == 'Std';
-		}
-		return false;
+		if (callee.kind != fieldKind || callee.name != 'string') return false;
+		final recv: Null<QueryNode> = callee.children.length > 0 ? callee.children[0] : null;
+		return recv != null && recv.kind == identKind && recv.name == 'Std';
 	}
 
 	/**
@@ -403,8 +400,11 @@ final class CatchDynamic implements Check implements ConfigAware {
 		final bareEdit: Null<{ span: Span, text: String }> = bareSwapEdit(node, source, exText, flagged);
 		if (bareEdit != null) return [bareEdit];
 		final unusedEdit: Null<{ span: Span, text: String }> = swapEdit(node, source, catchAll, exText, flagged);
-		if (unusedEdit != null) return [unusedEdit];
-		return fixLogging ? loggingSwapEdits(node, source, catchAll, exText, flagged, callKind, fieldKind, identKind) : [];
+		return if (unusedEdit != null)
+			[unusedEdit] else if (fixLogging)
+			loggingSwapEdits(node, source, catchAll, exText, flagged, callKind, fieldKind, identKind)
+		else
+			[];
 	}
 
 }

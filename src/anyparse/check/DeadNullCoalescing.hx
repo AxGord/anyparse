@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -46,7 +45,7 @@ final class DeadNullCoalescing implements Check {
 		if (nullCoalesceKind == null || identKind == null) return [];
 		final coalKind: String = nullCoalesceKind;
 		final ident: String = identKind;
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		if (provider == null) return [];
 		final typed: TypeInfoProvider = provider;
 		final violations: Array<Violation> = [];

@@ -94,8 +94,8 @@ class MisplacedTypeDocCheckTest extends Test {
 
 	/** The doc anchors ABOVE the `@:meta` / modifier run, where the compiler reads a type's doc. */
 	public function testDocLandsAboveTheMetadataRun(): Void {
-		final src: String = 'package p;\n\n/**\n * doc.\n */\nimport a.B;\n\n@:nullSafety(Strict)\nfinal class C {\n\n'
-			+ '\tpublic function new() {}\n\n}\n';
+		final src: String =
+			'package p;\n\n/**\n * doc.\n */\nimport a.B;\n\n@:nullSafety(Strict)\nfinal class C {\n\n\tpublic function new() {}\n\n}\n';
 		Assert.isTrue(fixed(src).indexOf(' */\n@:nullSafety(Strict)\nfinal class C') >= 0, fixed(src));
 	}
 

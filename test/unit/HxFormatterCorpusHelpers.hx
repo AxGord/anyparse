@@ -44,9 +44,12 @@ final class HxFormatterCorpusHelpers {
 	public static function forkRoot(): Null<String> {
 		#if (sys || nodejs)
 		final root: Null<String> = Sys.getEnv(ENV_KEY);
-		if (root == null || root == '') return null;
-		if (!FileSystem.exists(root) || !FileSystem.isDirectory(root)) return null;
-		return root;
+		return if (root == null || root == '')
+			null
+		else if (!FileSystem.exists(root) || !FileSystem.isDirectory(root))
+			null
+		else
+			root;
 		#else
 		return null;
 		#end
@@ -65,8 +68,7 @@ final class HxFormatterCorpusHelpers {
 		#if (sys || nodejs)
 		final content: String = File.getContent(path);
 		final parts: Array<String> = content.split(SECTION_SEP);
-		if (parts.length != EXPECTED_SECTIONS) return null;
-		return {
+		return parts.length != EXPECTED_SECTIONS ? null : {
 			config: StringTools.trim(parts[0]),
 			input: stripPadNewlines(parts[1]),
 			expected: stripPadNewlines(parts[2]),

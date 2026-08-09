@@ -47,7 +47,8 @@ class PreferTernaryExpressionCheckTest extends Test {
 	/** The multi-line TM shape this check was written for (`ReadyMadeFileSystem.getFileName`, anonymized). */
 	public function testFixMultiLineFixture(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
-			'class C {\n\tfunction f(pathText:String):Int {\n\t\tfinal start:Int = if (lastSepIndex > 1 || !pathText.startsWith(\':\'))\n\t\t\tlastSepIndex\n\t\telse\n\t\t\t1;\n\t\treturn start;\n\t}\n}'
+			'class C {\n\tfunction f(pathText:String):Int {\n\t\tfinal start:Int = if (lastSepIndex > 1 || !pathText.startsWith(\':\'))\n'
+			+ '\t\t\tlastSepIndex\n\t\telse\n\t\t\t1;\n\t\treturn start;\n\t}\n}'
 		);
 		Assert.equals(1, es.length);
 		Assert.equals('lastSepIndex > 1 || !pathText.startsWith(\':\') ? lastSepIndex : 1', es[0].text);

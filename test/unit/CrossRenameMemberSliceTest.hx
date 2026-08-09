@@ -8,6 +8,7 @@ import anyparse.query.CrossRenameMember;
 import anyparse.query.CrossRename.CrossRenameResult;
 import anyparse.query.CrossRename.FileChange;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -39,11 +40,11 @@ class CrossRenameMemberSliceTest extends Test {
 	 * file all rename; a sibling method's name is untouched.
 	 */
 	public function testStaticMethodAcrossScope(): Void {
-		final a: String =
-			'class Foo {\n\tpublic static function util(x:Int):Int return x + 1;\n\tstatic function other():Int return Foo.util(2) + util(3);\n}';
+		final a: String = 'class Foo {\n\tpublic static function util(x:Int):Int return x + 1;\n'
+			+ '\tstatic function other():Int return Foo.util(2) + util(3);\n}';
 		final b: String = 'class C {\n\tfunction m():Int return Foo.util(4);\n}';
-		final expectedA: String =
-			'class Foo {\n\tpublic static function calc(x:Int):Int return x + 1;\n\tstatic function other():Int return Foo.calc(2) + calc(3);\n}';
+		final expectedA: String = 'class Foo {\n\tpublic static function calc(x:Int):Int return x + 1;\n'
+			+ '\tstatic function other():Int return Foo.calc(2) + calc(3);\n}';
 		final expectedB: String = 'class C {\n\tfunction m():Int return Foo.calc(4);\n}';
 		final changes: Array<FileChange> = okChanges('a.hx', a, 'util', 'calc', [
 			{ file: 'a.hx', source: a },
@@ -62,11 +63,11 @@ class CrossRenameMemberSliceTest extends Test {
 	 * the source file, plus a `f.member` (f typed `Foo`) in another file.
 	 */
 	public function testInstanceMethodAcrossScope(): Void {
-		final a: String =
-			'class Foo {\n\tpublic function new() {}\n\tpublic function greet():String return \'hi\';\n\tpublic function talk(o:Foo):String return greet() + this.greet() + o.greet();\n}';
+		final a: String = 'class Foo {\n\tpublic function new() {}\n\tpublic function greet():String return \'hi\';\n'
+			+ '\tpublic function talk(o:Foo):String return greet() + this.greet() + o.greet();\n}';
 		final b: String = 'class C {\n\tfunction m() {\n\t\tvar f:Foo = new Foo();\n\t\tf.greet();\n\t}\n}';
-		final expectedA: String =
-			'class Foo {\n\tpublic function new() {}\n\tpublic function hail():String return \'hi\';\n\tpublic function talk(o:Foo):String return hail() + this.hail() + o.hail();\n}';
+		final expectedA: String = 'class Foo {\n\tpublic function new() {}\n\tpublic function hail():String return \'hi\';\n'
+			+ '\tpublic function talk(o:Foo):String return hail() + this.hail() + o.hail();\n}';
 		final expectedB: String = 'class C {\n\tfunction m() {\n\t\tvar f:Foo = new Foo();\n\t\tf.hail();\n\t}\n}';
 		final changes: Array<FileChange> = okChanges('a.hx', a, 'greet', 'hail', [
 			{ file: 'a.hx', source: a },
@@ -158,10 +159,10 @@ class CrossRenameMemberSliceTest extends Test {
 	 * plain method — decl plus a bare in-file caller.
 	 */
 	public function testFinalMethod(): Void {
-		final a: String =
-			'final class Foo {\n\tpublic function new() {}\n\tpublic final function seal():Void {}\n\tpublic function use():Void seal();\n}';
-		final expectedA: String =
-			'final class Foo {\n\tpublic function new() {}\n\tpublic final function lock():Void {}\n\tpublic function use():Void lock();\n}';
+		final a: String = 'final class Foo {\n\tpublic function new() {}\n\tpublic final function seal():Void {}\n'
+			+ '\tpublic function use():Void seal();\n}';
+		final expectedA: String = 'final class Foo {\n\tpublic function new() {}\n\tpublic final function lock():Void {}\n'
+			+ '\tpublic function use():Void lock();\n}';
 		final changes: Array<FileChange> = okChanges('a.hx', a, 'seal', 'lock', [{ file: 'a.hx', source: a },]);
 		Assert.equals(1, changes.length);
 		Assert.equals(expectedA, changeFor(changes, 'a.hx').newSource);
@@ -200,8 +201,8 @@ class CrossRenameMemberSliceTest extends Test {
 	 * one scope frame, so a bare reference could be mis-attributed).
 	 */
 	public function testCaseCaptureCollisionRefused(): Void {
-		final a: String =
-			'class Foo {\n\tpublic function tag():Void {}\n\tpublic function pick(v:Any):Void {\n\t\tswitch v {\n\t\t\tcase tag: trace(0);\n\t\t\tcase _:\n\t\t}\n\t}\n}';
+		final a: String = 'class Foo {\n\tpublic function tag():Void {}\n\tpublic function pick(v:Any):Void {\n\t\tswitch v {\n'
+			+ '\t\t\tcase tag: trace(0);\n\t\t\tcase _:\n\t\t}\n\t}\n}';
 		assertErr(run('a.hx', a, 'tag', 'label', [{ file: 'a.hx', source: a },]));
 	}
 
@@ -237,10 +238,10 @@ class CrossRenameMemberSliceTest extends Test {
 	 */
 	public function testInteriorCommentNotMistakenForMemberToken(): Void {
 		final a: String = 'class Src {\n\tpublic var value:Int = 0;\n}';
-		final b: String =
-			'class Use {\n\tpublic function new() {}\n\tpublic function go(s:Src):Void {\n\t\ts\n\t\t\t// reset value\n\t\t\t.value = 1;\n\t\ttrace(s.value);\n\t\ttrace(\'value\');\n\t}\n}';
-		final expectedB: String =
-			'class Use {\n\tpublic function new() {}\n\tpublic function go(s:Src):Void {\n\t\ts\n\t\t\t// reset value\n\t\t\t.total = 1;\n\t\ttrace(s.total);\n\t\ttrace(\'value\');\n\t}\n}';
+		final b: String = 'class Use {\n\tpublic function new() {}\n\tpublic function go(s:Src):Void {\n\t\ts\n\t\t\t// reset value\n'
+			+ '\t\t\t.value = 1;\n\t\ttrace(s.value);\n\t\ttrace(\'value\');\n\t}\n}';
+		final expectedB: String = 'class Use {\n\tpublic function new() {}\n\tpublic function go(s:Src):Void {\n\t\ts\n'
+			+ '\t\t\t// reset value\n\t\t\t.total = 1;\n\t\ttrace(s.total);\n\t\ttrace(\'value\');\n\t}\n}';
 		final changes: Array<FileChange> = okChanges('a.hx', a, 'value', 'total', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
@@ -314,6 +315,25 @@ class CrossRenameMemberSliceTest extends Test {
 	}
 
 	/**
+	 * A regex literal whose body legally contains a comment opener used to open
+	 * a phantom block comment running to EOF, so every access after it looked
+	 * like comment trivia and `activeCodeIdentTokenOffset` reported NOT FOUND -
+	 * refusing the whole scope. Fail-safe, but the rename was impossible in any
+	 * file holding such a literal.
+	 */
+	public function testRegexCommentOpenerDoesNotRefuseScope(): Void {
+		final a: String = 'class Foo {\n\tpublic static var name:Int = 1;\n}';
+		final b: String = 'class Bar {\n\tpublic function f():Void {\n\t\tvar re = ~/[\\/*]/;\n\t\tFoo.name = 2;\n\t\ttrace(re);\n\t}\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'name', 'title', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		final newB: String = changeFor(changes, 'b.hx').newSource;
+		Assert.isTrue(newB.contains('Foo.title = 2;'), 'the access is renamed: <$newB>');
+		Assert.isTrue(newB.contains('~/[\\/*]/'), 'the regex is left verbatim: <$newB>');
+	}
+
+	/**
 	 * Drive a successful rename: assert `Ok`, the advisory is present, and
 	 * every rewrite re-parses. `needle` locates the cursor at the first
 	 * occurrence of the member name (each source declares the member
@@ -372,7 +392,7 @@ class CrossRenameMemberSliceTest extends Test {
 		var line: Int = 1;
 		var col: Int = 1;
 		for (i in 0...idx) {
-			if (StringTools.fastCodeAt(src, i) == '\n'.code) {
+			if (src.fastCodeAt(i) == '\n'.code) {
 				line++;
 				col = 1;
 			} else {
@@ -388,26 +408,6 @@ class CrossRenameMemberSliceTest extends Test {
 
 	private static function refShape(): RefShape {
 		return new HaxeQueryPlugin().refShape();
-	}
-
-
-	/**
-	 * A regex literal whose body legally contains a comment opener used to open
-	 * a phantom block comment running to EOF, so every access after it looked
-	 * like comment trivia and `activeCodeIdentTokenOffset` reported NOT FOUND -
-	 * refusing the whole scope. Fail-safe, but the rename was impossible in any
-	 * file holding such a literal.
-	 */
-	public function testRegexCommentOpenerDoesNotRefuseScope(): Void {
-		final a: String = 'class Foo {\n\tpublic static var name:Int = 1;\n}';
-		final b: String = 'class Bar {\n\tpublic function f():Void {\n\t\tvar re = ~/[\\/*]/;\n\t\tFoo.name = 2;\n\t\ttrace(re);\n\t}\n}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 'name', 'title', [
-			{ file: 'a.hx', source: a },
-			{ file: 'b.hx', source: b },
-		]);
-		final newB: String = changeFor(changes, 'b.hx').newSource;
-		Assert.isTrue(StringTools.contains(newB, 'Foo.title = 2;'), 'the access is renamed: <$newB>');
-		Assert.isTrue(StringTools.contains(newB, '~/[\\/*]/'), 'the regex is left verbatim: <$newB>');
 	}
 
 }

@@ -4,8 +4,6 @@ import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
-import anyparse.query.RefactorSupport.ClassifiedOccurrence;
-import anyparse.query.RefactorSupport.OccurrenceClass;
 import anyparse.runtime.Span;
 
 /**
@@ -116,21 +114,6 @@ class ClassifyOccurrencesTest extends Test {
 		Assert.equals(-1, RefactorSupport.activeCodeIdentTokenOffset(src, new Span(0, src.length), 'value'));
 	}
 
-	private function classify(src: String, name: String, ?excluded: Array<Span>): Null<Array<ClassifiedOccurrence>> {
-		return RefactorSupport.classifyOccurrences(src, name, new HaxeQueryPlugin(), 0, src.length, excluded == null ? [] : excluded);
-	}
-
-	private function soleClass(src: String, name: String): OccurrenceClass {
-		final list: Null<Array<ClassifiedOccurrence>> = classify(src, name);
-		if (list == null) {
-			Assert.fail('classifyOccurrences returned null');
-			return OccurrenceClass.ActiveCode;
-		}
-		Assert.equals(1, list.length);
-		return list[0].kind;
-	}
-
-
 	/**
 	 * A regex literal is its own lexical region, so a comment OPENER legally
 	 * living in its body no longer starts a phantom block comment that runs to
@@ -165,7 +148,6 @@ class ClassifyOccurrencesTest extends Test {
 	public function testUnterminatedRegexFallsThrough(): Void {
 		Assert.equals(OccurrenceClass.CommentTrivia, soleClass('class C {\n\tfunction m() {\n\t\t// ~/ foo\n\t}\n}', 'foo'));
 	}
-
 
 	/**
 	 * `nameBoundInRange` is the COLLISION-gate query: it asks whether the name is
@@ -229,6 +211,19 @@ class ClassifyOccurrencesTest extends Test {
 		Assert.isTrue(nameBound('class C { function m() { // items', 'items'), 'raw fallback counts even a comment');
 	}
 
+	private function classify(src: String, name: String, ?excluded: Array<Span>): Null<Array<ClassifiedOccurrence>> {
+		return RefactorSupport.classifyOccurrences(src, name, new HaxeQueryPlugin(), 0, src.length, excluded ?? []);
+	}
+
+	private function soleClass(src: String, name: String): OccurrenceClass {
+		final list: Null<Array<ClassifiedOccurrence>> = classify(src, name);
+		if (list == null) {
+			Assert.fail('classifyOccurrences returned null');
+			return OccurrenceClass.ActiveCode;
+		}
+		Assert.equals(1, list.length);
+		return list[0].kind;
+	}
 
 	private function nameBound(src: String, name: String): Bool {
 		return RefactorSupport.nameBoundInRange(src, name, 0, src.length, [], new HaxeQueryPlugin());

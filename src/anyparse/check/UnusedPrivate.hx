@@ -13,6 +13,8 @@ import anyparse.runtime.Span;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 
+using StringTools;
+
 /**
  * Flags `private` class members (fields / methods) that are never referenced —
  * dead members the formatter cannot remove. The completion of the unused-*
@@ -216,7 +218,7 @@ final class UnusedPrivate implements Check {
 	 * does not lint can legitimately be where the reference lives.
 	 */
 	private static function widestScopeIndex(plugin: GrammarPlugin, index: Null<SymbolIndex>): Null<SymbolIndex> {
-		final host: Null<SymbolIndexHost> = (plugin is SymbolIndexHost) ? cast plugin : null;
+		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
 		if (host != null && host.hasDeclaredResolutionScope()) {
 			final res: Null<SymbolIndex> = host.resolutionIndex();
 			if (res != null) return res;
@@ -237,8 +239,9 @@ final class UnusedPrivate implements Check {
 		name: Null<String>, file: String, span: Span, scopeIndex: Null<SymbolIndex>, source: String
 	): Bool {
 		if (name == null) return true;
-		if (scopeIndex != null) return scopeIndex.nameOccursOutside(name, file, span);
-		return RefactorSupport.referencedInRange(source, name, 0, source.length, [span]);
+		return scopeIndex != null
+			? scopeIndex.nameOccursOutside(name, file, span)
+			: RefactorSupport.referencedInRange(source, name, 0, source.length, [span]);
 	}
 
 	/**
@@ -308,10 +311,8 @@ final class UnusedPrivate implements Check {
 	private static function provablyDeadProjectWide(
 		name: String, file: String, source: String, span: Span, index: SymbolIndex, scopeIndex: SymbolIndex
 	): Bool {
-		if (index.skippedFiles().length != 0) return false;
-		if (RefactorSupport.referencedInRange(source, name, 0, source.length, [span])) return false;
-		if (index.nameOccursOutside(name, file, span)) return false;
-		return scopeIndex == index || !scopeIndex.nameOccursOutside(name, file, span);
+		return index.skippedFiles().length == 0 && !RefactorSupport.referencedInRange(source, name, 0, source.length, [span])
+			&& !index.nameOccursOutside(name, file, span) && (scopeIndex == index || !scopeIndex.nameOccursOutside(name, file, span));
 	}
 
 	/**
@@ -326,11 +327,9 @@ final class UnusedPrivate implements Check {
 		// lives elsewhere (an `extern`'s in native code; an `abstract`'s in
 		// subclasses, though those are already exempt in `violationFor`).
 		for (c in member.children) if (c.kind == 'NoBody') return false;
-		if (member.kind == 'VarMember' || member.kind == 'FinalMember') {
-			final init: Null<QueryNode> = member.children.length > 0 ? member.children[0] : null;
-			return init == null || RefactorSupport.isSideEffectFree(init);
-		}
-		return true;
+		if (member.kind != 'VarMember' && member.kind != 'FinalMember') return true;
+		final init: Null<QueryNode> = member.children.length > 0 ? member.children[0] : null;
+		return init == null || RefactorSupport.isSideEffectFree(init);
 	}
 
 	/**
@@ -532,7 +531,7 @@ final class UnusedPrivate implements Check {
 			if (classNode.kind == 'AbstractClassDecl') return;
 			if (metaPrecedesClass(siblings, index, '@:build')) return;
 			final ctor: Null<QueryNode> = privateEmptyCtorOf(classNode);
-			final cspan: Null<Span> = ctor == null ? null : ctor.span;
+			final cspan: Null<Span> = ctor?.span;
 			if (ctor != null && cspan != null && hasStaticMember(classNode)) out.push({ file: file, className: name, span: cspan });
 		});
 	}
@@ -590,8 +589,8 @@ final class UnusedPrivate implements Check {
 			final at: Int = source.indexOf(className, i);
 			if (at < 0) return false;
 			final afterIdx: Int = at + len;
-			final beforeOk: Bool = at == 0 || !RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, at - 1));
-			final afterOk: Bool = afterIdx >= source.length || !RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, afterIdx));
+			final beforeOk: Bool = at == 0 || !RefactorSupport.isIdentChar(source.fastCodeAt(at - 1));
+			final afterOk: Bool = afterIdx >= source.length || !RefactorSupport.isIdentChar(source.fastCodeAt(afterIdx));
 			if (beforeOk && afterOk && precededByNew(source, at)) return true;
 			i = at + 1;
 		}
@@ -602,11 +601,11 @@ final class UnusedPrivate implements Check {
 	private static function precededByNew(source: String, pos: Int): Bool {
 		final kw: String = 'new';
 		var j: Int = pos - 1;
-		while (j >= 0 && isWhitespace(StringTools.fastCodeAt(source, j))) j--;
+		while (j >= 0 && isWhitespace(source.fastCodeAt(j))) j--;
 		final start: Int = j + 1 - kw.length;
 		if (start < 0) return false;
-		for (k in 0...kw.length) if (StringTools.fastCodeAt(source, start + k) != StringTools.fastCodeAt(kw, k)) return false;
-		return start == 0 || !RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, start - 1));
+		for (k in 0...kw.length) if (source.fastCodeAt(start + k) != kw.fastCodeAt(k)) return false;
+		return start == 0 || !RefactorSupport.isIdentChar(source.fastCodeAt(start - 1));
 	}
 
 	/** Space / tab / newline / carriage-return. */
@@ -648,7 +647,7 @@ final class UnusedPrivate implements Check {
 		for (i in 0...kids.length) {
 			final child: QueryNode = kids[i];
 			final classNode: Null<QueryNode> = classFormOf(child);
-			final name: Null<String> = classNode == null ? null : classNode.name;
+			final name: Null<String> = classNode?.name;
 			if (classNode != null && name != null) {
 				visit(classNode, name, kids, i);
 				forEachClassDecl(classNode, visit);

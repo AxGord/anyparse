@@ -6,6 +6,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /** One comment token as `RefactorSupport.collectCommentTokens` yields it: its span, and whether it is a `//` line comment. */
 private typedef CommentToken = {
 	var from: Int;
@@ -130,16 +132,16 @@ final class EmptyComment implements Check {
 		final tok: CommentToken = toks[i];
 		final prev: CommentToken = toks[i - 1];
 		final next: CommentToken = toks[i + 1];
-		if (!tok.isLine || !prev.isLine || !next.isLine || isEmpty(source, prev)) return false;
-		return aloneOnLine(source, tok.from) && aloneOnLine(source, prev.from) && aloneOnLine(source, next.from)
-			&& oneLineApart(source, prev.to, tok.from) && oneLineApart(source, tok.to, next.from);
+		return tok.isLine && prev.isLine && next.isLine && !isEmpty(source, prev) && aloneOnLine(source, tok.from)
+			&& aloneOnLine(source, prev.from) && aloneOnLine(source, next.from) && oneLineApart(source, prev.to, tok.from)
+			&& oneLineApart(source, tok.to, next.from);
 	}
 
 	/** Whether only whitespace separates `from` from the start of its line — the comment opens the line. */
 	private static function aloneOnLine(source: String, from: Int): Bool {
 		var i: Int = from;
 		while (i > 0) {
-			final c: Int = StringTools.fastCodeAt(source, i - 1);
+			final c: Int = source.fastCodeAt(i - 1);
 			if (c == '\n'.code) return true;
 			if (c != ' '.code && c != '\t'.code && c != '\r'.code) return false;
 			i--;
@@ -151,7 +153,7 @@ final class EmptyComment implements Check {
 	private static function oneLineApart(source: String, gapStart: Int, gapEnd: Int): Bool {
 		var newlines: Int = 0;
 		for (i in gapStart ... gapEnd) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c == '\n'.code)
 				newlines++
 			else if (!isWs(c))
@@ -168,7 +170,7 @@ final class EmptyComment implements Check {
 	 */
 	private static function isEmpty(source: String, tok: CommentToken): Bool {
 		if (!tok.isLine) return RefactorSupport.blockCommentIsBlank(source, tok);
-		for (i in tok.from + 2...tok.to) if (!isWs(StringTools.fastCodeAt(source, i))) return false;
+		for (i in tok.from + 2...tok.to) if (!isWs(source.fastCodeAt(i))) return false;
 		return true;
 	}
 
@@ -181,16 +183,16 @@ final class EmptyComment implements Check {
 	 */
 	private static function deletionSpan(source: String, span: Span): Span {
 		var lineStart: Int = span.from;
-		while (lineStart > 0 && StringTools.fastCodeAt(source, lineStart - 1) != '\n'.code) lineStart--;
+		while (lineStart > 0 && source.fastCodeAt(lineStart - 1) != '\n'.code) lineStart--;
 		var lineEnd: Int = span.to;
-		while (lineEnd < source.length && StringTools.fastCodeAt(source, lineEnd) != '\n'.code) lineEnd++;
-		final codeBefore: Bool = StringTools.trim(source.substring(lineStart, span.from)) != '';
-		final codeAfter: Bool = StringTools.trim(source.substring(span.to, lineEnd)) != '';
+		while (lineEnd < source.length && source.fastCodeAt(lineEnd) != '\n'.code) lineEnd++;
+		final codeBefore: Bool = source.substring(lineStart, span.from).trim() != '';
+		final codeAfter: Bool = source.substring(span.to, lineEnd).trim() != '';
 		if (!codeBefore && !codeAfter) return RefactorSupport.lineExtendedSpan(source, span);
 		if (codeAfter) return span;
 		var from: Int = span.from;
 		while (from > lineStart) {
-			final c: Int = StringTools.fastCodeAt(source, from - 1);
+			final c: Int = source.fastCodeAt(from - 1);
 			if (c == ' '.code || c == '\t'.code)
 				from--
 			else

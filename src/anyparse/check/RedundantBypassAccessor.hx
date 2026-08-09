@@ -2,13 +2,9 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.query.SymbolIndex.FileInfo;
-import anyparse.query.SymbolIndex.MemberInfo;
-import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -140,7 +136,7 @@ final class RedundantBypassAccessor implements Check {
 		if (meta != null) {
 			final metaSpan: Null<Span> = meta.span;
 			final wrapped: Null<QueryNode> = node.children.find(c -> !RefactorSupport.META_KINDS.contains(c.kind));
-			final wrapSpan: Null<Span> = wrapped == null ? null : wrapped.span;
+			final wrapSpan: Null<Span> = wrapped?.span;
 			if (metaSpan != null && wrapSpan != null && flagged.contains('${metaSpan.from}:${metaSpan.to}'))
 				edits.push({ span: new Span(metaSpan.from, wrapSpan.from), text: '' });
 		}
@@ -168,12 +164,15 @@ final class RedundantBypassAccessor implements Check {
 	private static function lvalueName(assign: QueryNode, ctx: Ctx): Null<String> {
 		if (assign.children.length < 1) return null;
 		final lhs: QueryNode = assign.children[0];
-		return lhs.kind == ctx.identKind
-			? lhs.name
-			: ctx.fieldAccessKind != null && ctx.self != null && lhs.kind == ctx.fieldAccessKind && lhs.children.length == 1
-				&& lhs.children[0].kind == ctx.identKind && lhs.children[0].name == ctx.self
-				? lhs.name
-				: null;
+		return if (lhs.kind == ctx.identKind)
+			lhs.name
+		else if (
+			ctx.fieldAccessKind != null && ctx.self != null && lhs.kind == ctx.fieldAccessKind && lhs.children.length == 1
+			&& lhs.children[0].kind == ctx.identKind && lhs.children[0].name == ctx.self
+		)
+			lhs.name
+		else
+			null;
 	}
 
 	/**

@@ -5,7 +5,6 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ImportOrder;
-import anyparse.query.ImportOrder.ImportLine;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;

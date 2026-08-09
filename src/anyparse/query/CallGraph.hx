@@ -7,6 +7,7 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -160,11 +161,9 @@ final class CallGraph {
 	 * included), or a bare `method`. Missing types / members yield [].
 	 */
 	public function matchIds(pattern: String): Array<String> {
-		if (StringTools.endsWith(pattern, '.*')) {
-			final typeName: String = lastSegments(pattern.substring(0, pattern.length - 2), 1);
-			return [for (id => n in nodes) if (n.typeName == typeName && n.name != null) id];
-		}
-		return [for (n in resolveTarget(pattern)) n.id];
+		if (!pattern.endsWith('.*')) return [for (n in resolveTarget(pattern)) n.id];
+		final typeName: String = lastSegments(pattern.substring(0, pattern.length - 2), 1);
+		return [for (id => n in nodes) if (n.typeName == typeName && n.name != null) id];
 	}
 
 	private function collectNodes(entry: ParsedEntry, shape: RefShape): Void {
@@ -220,11 +219,10 @@ final class CallGraph {
 			isExternal: false
 		};
 		entry.fnBySpanFrom[span.from] = id;
-		if (name != null) {
-			final ids: Array<String> = _byMember[name] ?? [];
-			if (!ids.contains(id)) ids.push(id);
-			_byMember[name] = ids;
-		}
+		if (name == null) return;
+		final ids: Array<String> = _byMember[name] ?? [];
+		if (!ids.contains(id)) ids.push(id);
+		_byMember[name] = ids;
 	}
 
 	private function registerMember(typeName: String, member: String, id: String): Void {
@@ -389,9 +387,14 @@ final class CallGraph {
 			final bindingFrom: Null<Int> = bindFor(name)[span.from];
 			if (bindingFrom == null || bindingFrom < 0) return null;
 			final typeName: Null<String> = declaredTypes[bindingFrom];
-			return typeName == null
-				? null
-				: typeName == 'Null' ? unwrapNullable(typeSources[bindingFrom]) : nullableWrappers.contains(typeName) ? null : typeName;
+			return if (typeName == null)
+				null
+			else if (typeName == 'Null')
+				unwrapNullable(typeSources[bindingFrom])
+			else if (nullableWrappers.contains(typeName))
+				null
+			else
+				typeName;
 		}
 
 		/**
@@ -402,26 +405,23 @@ final class CallGraph {
 		function receiverType(recvRaw: QueryNode, currentType: Null<String>): Null<Receiver> {
 			final recv: QueryNode = unwrap(recvRaw);
 			final name: Null<String> = recv.name;
-			if (recv.kind == identKind && name != null) {
-				final span: Null<Span> = recv.span;
-				if (name == selfText) return currentType == null ? null : { typeName: currentType, isValue: true };
-				if (name == 'super') {
-					final supers: Array<String> = currentType == null ? [] : (_supers[currentType] ?? []);
-					return supers.length > 0 ? { typeName: supers[0], isValue: false } : null;
-				}
-				if (span != null) {
-					final declared: Null<String> = identDeclaredType(name, span);
-					if (declared != null) return { typeName: declared, isValue: true };
-					final bound: Null<Int> = bindFor(name)[span.from];
-					if ((bound == null || bound < 0) && isTypeLike(name)) return { typeName: name, isValue: false };
-				}
-				return null;
+			if (recv.kind != identKind || name == null)
+				return (recv.kind == fieldAccessKind || (safeAccessKind != null && recv.kind == safeAccessKind)) && name != null
+					&& isTypeLike(name)
+					? { typeName: name, isValue: false }
+					: null;
+			final span: Null<Span> = recv.span;
+			if (name == selfText) return currentType == null ? null : { typeName: currentType, isValue: true };
+			if (name == 'super') {
+				final supers: Array<String> = currentType == null ? [] : (_supers[currentType] ?? []);
+				return supers.length > 0 ? { typeName: supers[0], isValue: false } : null;
 			}
-			if (
-				(recv.kind == fieldAccessKind || (safeAccessKind != null && recv.kind == safeAccessKind)) && name != null
-				&& isTypeLike(name)
-			)
-				return { typeName: name, isValue: false };
+			if (span != null) {
+				final declared: Null<String> = identDeclaredType(name, span);
+				if (declared != null) return { typeName: declared, isValue: true };
+				final bound: Null<Int> = bindFor(name)[span.from];
+				if ((bound == null || bound < 0) && isTypeLike(name)) return { typeName: name, isValue: false };
+			}
 			return null;
 		}
 
@@ -436,14 +436,16 @@ final class CallGraph {
 				final local: Null<String> = localFn(name);
 				if (local != null) return local;
 				final bound: Null<Int> = bindFor(name)[span.from];
-				if (bound != null && bound >= 0) return entry.fnBySpanFrom[bound];
-				return currentType == null ? null : memberOnChain(currentType, name);
+				return if (bound != null && bound >= 0)
+					entry.fnBySpanFrom[bound]
+				else if (currentType == null)
+					null
+				else
+					memberOnChain(currentType, name);
 			}
-			if (arg.kind == fieldAccessKind && arg.children.length > 0) {
-				final recv: Null<Receiver> = receiverType(arg.children[0], currentType);
-				return recv == null ? null : memberOnChain(recv.typeName, name);
-			}
-			return null;
+			if (arg.kind != fieldAccessKind || arg.children.length <= 0) return null;
+			final recv: Null<Receiver> = receiverType(arg.children[0], currentType);
+			return recv == null ? null : memberOnChain(recv.typeName, name);
 		}
 
 		function resolveBareCallee(name: String, span: Null<Span>, currentType: Null<String>): Null<String> {
@@ -504,11 +506,10 @@ final class CallGraph {
 					}
 					return;
 				}
-				if (arg.kind == identKind || arg.kind == fieldAccessKind) {
-					final target: Null<String> = methodValue(arg, currentType);
-					final node: Null<FnNode> = target == null ? null : nodes[target];
-					if (target != null && node != null && !node.isExternal) addEdge(from, target, Ref, calleeId, file, argSpan);
-				}
+				if (arg.kind != identKind && arg.kind != fieldAccessKind) return;
+				final target: Null<String> = methodValue(arg, currentType);
+				final node: Null<FnNode> = target == null ? null : nodes[target];
+				if (target != null && node != null && !node.isExternal) addEdge(from, target, Ref, calleeId, file, argSpan);
 			}
 			for (i in 1...call.children.length) refArg(call.children[i]);
 		}
@@ -638,7 +639,7 @@ final class CallGraph {
 	 */
 	public static function build(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?index: SymbolIndex): CallGraph {
 		final graph: CallGraph = new CallGraph();
-		final cached: GrammarPlugin = (plugin is CachingGrammarPlugin) ? plugin : new CachingGrammarPlugin(plugin);
+		final cached: GrammarPlugin = plugin is CachingGrammarPlugin ? plugin : new CachingGrammarPlugin(plugin);
 		final shape: RefShape = cached.refShape();
 		if (shape.callKind == null || shape.fieldAccessKind == null) return graph;
 
@@ -652,7 +653,7 @@ final class CallGraph {
 			}
 		}
 
-		final provider: Null<TypeInfoProvider> = (cached is TypeInfoProvider) ? cast cached : null;
+		final provider: Null<TypeInfoProvider> = cached is TypeInfoProvider ? cast cached : null;
 		final parsed: Array<ParsedEntry> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> =
@@ -681,7 +682,7 @@ final class CallGraph {
 	}
 
 	private static function isTypeLike(name: String): Bool {
-		final c: Int = StringTools.fastCodeAt(name, 0);
+		final c: Int = name.fastCodeAt(0);
 		return c >= 'A'.code && c <= 'Z'.code;
 	}
 
@@ -690,13 +691,13 @@ final class CallGraph {
 		if (typeSource == null) return null;
 		final trimmed: String = StringTools.trim(typeSource);
 		final prefix: String = 'Null<';
-		if (!StringTools.startsWith(trimmed, prefix) || !StringTools.endsWith(trimmed, '>')) return null;
-		var inner: String = StringTools.trim(trimmed.substring(prefix.length, trimmed.length - 1));
+		if (!trimmed.startsWith(prefix) || !trimmed.endsWith('>')) return null;
+		var inner: String = trimmed.substring(prefix.length, trimmed.length - 1).trim();
 		final lt: Int = inner.indexOf('<');
 		if (lt != -1) inner = inner.substring(0, lt);
 		final dot: Int = inner.lastIndexOf('.');
 		if (dot != -1) inner = inner.substring(dot + 1);
-		inner = StringTools.trim(inner);
+		inner = inner.trim();
 		return inner.length > 0 && isTypeLike(inner) ? inner : null;
 	}
 

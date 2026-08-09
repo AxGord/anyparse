@@ -46,9 +46,8 @@ class ImplicitStdScopeTest extends Test {
 	 * style fails the `--fix` canonical gate — the file is skipped and both arms below pass
 	 * vacuously. That is exactly what happened on the first draft.
 	 */
-	private static final COND: String = 'package proj;\n\nclass Cond {\n\n\tpublic function new() {}\n\n'
-		+ '\tpublic function run():Void {\n\t\t#if debug\n\t\ttrace(1);\n\t\t#end\n\t}\n\n'
-		+ '\tprivate function writeByte():Void {}\n\n}\n';
+	private static final COND: String = 'package proj;\n\nclass Cond {\n\n\tpublic function new() {}\n\n\tpublic function run():Void {\n'
+		+ '\t\t#if debug\n\t\ttrace(1);\n\t\t#end\n\t}\n\n\tprivate function writeByte():Void {}\n\n}\n';
 	#end
 
 	/**

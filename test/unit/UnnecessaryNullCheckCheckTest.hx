@@ -131,6 +131,21 @@ class UnnecessaryNullCheckCheckTest extends Test {
 		Assert.isTrue(ids.contains('unnecessary-null-check'));
 	}
 
+	public function testReshadowedNullableParamGuardNotFlagged(): Void {
+		// Exact TM `renameItem` shape: a nullable param whose guard has a SIDE EFFECT
+		// before `return`, followed by a later same-name non-null capture
+		// (`final p:String = p;`). The first-wins scope resolver binds the guard's `p`
+		// to the LATER non-null shadow, so `isProvablyNonNull` wrongly affirms and the
+		// load-bearing guard is deleted (dropping the side effect and leaving a
+		// nullable-into-non-null assignment). The re-shadowed name must not be proven.
+		Assert.equals(
+			0,
+			violations(
+				'@:nullSafety(Strict) class C { function f(p:Null<String>) { if (p == null) { g(); return; } final p:String = p; trace(p); } function g():Void {} }'
+			).length
+		);
+	}
+
 	/** A module whose `f` takes a provably-non-null `x:Int`, wrapping `body`. */
 	private function wrap(body: String): String {
 		return
@@ -166,22 +181,6 @@ class UnnecessaryNullCheckCheckTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return new UnnecessaryNullCheck().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
-
-	public function testReshadowedNullableParamGuardNotFlagged(): Void {
-		// Exact TM `renameItem` shape: a nullable param whose guard has a SIDE EFFECT
-		// before `return`, followed by a later same-name non-null capture
-		// (`final p:String = p;`). The first-wins scope resolver binds the guard's `p`
-		// to the LATER non-null shadow, so `isProvablyNonNull` wrongly affirms and the
-		// load-bearing guard is deleted (dropping the side effect and leaving a
-		// nullable-into-non-null assignment). The re-shadowed name must not be proven.
-		Assert.equals(
-			0,
-			violations(
-				'@:nullSafety(Strict) class C { function f(p:Null<String>) { if (p == null) { g(); return; } final p:String = p; trace(p); } function g():Void {} }'
-			).length
-		);
 	}
 
 }

@@ -12,7 +12,8 @@ import anyparse.query.Refs.RefHit;
 import anyparse.query.SourceSlice;
 import anyparse.query.Uses.UsesHit;
 import anyparse.runtime.Span;
-import anyparse.runtime.Span.Position;
+
+using StringTools;
 
 /**
  * S-expression renderer for `apq ast` output.
@@ -102,12 +103,10 @@ final class Text {
 					buf.add('$file:${pos.line}:${pos.col}: ');
 				else
 					buf.add('  ${pos.line}:${pos.col}: ');
-			} else {
-				if (flat)
-					buf.add('$file: ');
-				else
-					buf.add('  (no-span): ');
-			}
+			} else if (flat)
+				buf.add('$file: ');
+			else
+				buf.add('  (no-span): ');
 			buf.add(h.annotation);
 			if (h.args.length > 0) {
 				buf.add('(');
@@ -142,12 +141,10 @@ final class Text {
 					buf.add('$file:${pos.line}:${pos.col}: ');
 				else
 					buf.add('  ${pos.line}:${pos.col}: ');
-			} else {
-				if (flat)
-					buf.add('$file: ');
-				else
-					buf.add('  (no-span): ');
-			}
+			} else if (flat)
+				buf.add('$file: ');
+			else
+				buf.add('  (no-span): ');
 			final severity: Severity = v.severity;
 			buf.add('[${severity.label()}] ${v.message} (${v.rule})\n');
 		}
@@ -196,13 +193,11 @@ final class Text {
 				buf.add('\n');
 			}
 		}
-		if (src) {
-			final s: String = SourceSlice.slice(source, span);
-			if (s.length > 0) {
-				buf.add(indentBlock(s));
-				buf.add('\n');
-			}
-		}
+		if (!src) return;
+		final s: String = SourceSlice.slice(source, span);
+		if (s.length <= 0) return;
+		buf.add(indentBlock(s));
+		buf.add('\n');
 	}
 
 	private static inline function indentBlock(text: String): String {
@@ -231,8 +226,8 @@ final class Text {
 		final to: Int = span.to > source.length ? source.length : span.to;
 		if (from >= to) return '';
 		final slice: String = source.substring(from, to);
-		final flat: String = StringTools.replace(StringTools.replace(slice, '\n', ' '), '\r', '');
-		return StringTools.trim(flat);
+		final flat: String = StringTools.replace(slice.replace('\n', ' '), '\r', '');
+		return flat.trim();
 	}
 
 	private static function toSValue(node: QueryNode, spans: Bool = false): SValue {
@@ -259,7 +254,7 @@ final class Text {
 	private static function isSafeAtom(s: String): Bool {
 		if (s.length == 0) return false;
 		for (i in 0...s.length) {
-			final c: Int = StringTools.fastCodeAt(s, i);
+			final c: Int = s.fastCodeAt(i);
 			if (c <= ' '.code) return false;
 			if (c == '('.code || c == ')'.code || c == '"'.code) return false;
 		}

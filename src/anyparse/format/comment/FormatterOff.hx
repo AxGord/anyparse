@@ -1,5 +1,7 @@
 package anyparse.format.comment;
 
+using StringTools;
+
 /**
  * `// @formatter:off` … `// @formatter:on` — the author's opt-out from
  * formatting, restored over the writer's output.
@@ -46,8 +48,6 @@ final class FormatterOff {
 
 	private static inline final OFF: String = '// @formatter:off';
 	private static inline final ON: String = '// @formatter:on';
-
-	private function new() {}
 
 	/**
 	 * `written` with every `@formatter:off` region replaced by the bytes it
@@ -144,20 +144,20 @@ final class FormatterOff {
 		var pos: Int = 0;
 		for (mark in marks) {
 			while (pos < mark.offset) {
-				if (StringTools.fastCodeAt(text, pos) == '\n'.code) {
+				if (text.fastCodeAt(pos) == '\n'.code) {
 					line++;
 					lineStart = pos + 1;
 				}
 				pos++;
 			}
 			mark.line = line;
-			mark.code = StringTools.trim(text.substring(lineStart, mark.offset));
+			mark.code = text.substring(lineStart, mark.offset).trim();
 		}
 	}
 
 	private static function countLines(text: String): Int {
 		var lines: Int = 1;
-		for (i in 0...text.length) if (StringTools.fastCodeAt(text, i) == '\n'.code) lines++;
+		for (i in 0...text.length) if (text.fastCodeAt(i) == '\n'.code) lines++;
 		return lines;
 	}
 

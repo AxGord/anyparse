@@ -4,14 +4,8 @@ import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
-import anyparse.query.SymbolIndex.FileInfo;
-import anyparse.query.SymbolIndex.ImportInfo;
-import anyparse.query.SymbolIndex.ImportKind;
-import anyparse.query.SymbolIndex.TypeDeclInfo;
 
 using Lambda;
-
-import anyparse.query.SymbolIndex.MemberInfo;
 
 /**
  * `SymbolIndex` — the pure cross-file symbol resolver that underpins a
@@ -49,8 +43,8 @@ class SymbolIndexSliceTest extends Test {
 	 * kinds, and the type declarations with the correct `isMain` flag.
 	 */
 	public function testFileInfoExtraction(): Void {
-		final source: String =
-			'package pkg.sub;\nimport other.Thing;\nimport other.Mod.Sub as Aliased;\nimport other.deep.*;\nusing other.Ext;\nclass A {}\ntypedef Helper = {};\n';
+		final source: String = 'package pkg.sub;\nimport other.Thing;\nimport other.Mod.Sub as Aliased;\nimport other.deep.*;\n'
+			+ 'using other.Ext;\nclass A {}\ntypedef Helper = {};\n';
 		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/sub/A.hx', source: source }], plugin());
 
 		final info: Null<FileInfo> = index.fileInfo('src/pkg/sub/A.hx');
@@ -423,8 +417,8 @@ class SymbolIndexSliceTest extends Test {
 
 	/** Two SIBLING regions declaring the same type collapse to one entry too. */
 	public function testSiblingConditionalRegionsDedupeByName(): Void {
-		final source: String =
-			'package pkg;\n#if js\nclass Twin {\n\tpublic var jsOnly:Int;\n}\n#end\n#if !js\nclass Twin {\n\tpublic var nativeOnly:Int;\n}\n#end\n';
+		final source: String = 'package pkg;\n#if js\nclass Twin {\n\tpublic var jsOnly:Int;\n}\n#end\n#if !js\nclass Twin {\n'
+			+ '\tpublic var nativeOnly:Int;\n}\n#end\n';
 		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Twin.hx', source: source }], plugin());
 		final fi: FileInfo = fileInfoOf(index, 'src/pkg/Twin.hx');
 
@@ -491,8 +485,8 @@ class SymbolIndexSliceTest extends Test {
 
 	/** The `abstract` split-header form, with its type-parameter arity read off the head. */
 	public function testSplitHeaderAbstractTypeParamArity(): Void {
-		final source: String =
-			'package pkg;\n#if js\nabstract Gen<T>(Array<T>) from Array<T> {\n#else\nabstract Gen<T>(List<T>) from List<T> {\n#end\n\tpublic var g:Int;\n}\n';
+		final source: String = 'package pkg;\n#if js\nabstract Gen<T>(Array<T>) from Array<T> {\n#else\n'
+			+ 'abstract Gen<T>(List<T>) from List<T> {\n#end\n\tpublic var g:Int;\n}\n';
 		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Gen.hx', source: source }], plugin());
 		final fi: FileInfo = fileInfoOf(index, 'src/pkg/Gen.hx');
 
@@ -526,14 +520,6 @@ class SymbolIndexSliceTest extends Test {
 		assertHeaderParams('class Struct<T:{a:Int, b:Int}> {}', 1, ['T']);
 		assertHeaderParams('class Nested<T:Array<Int>, K> {}', 2, ['T', 'K']);
 		assertHeaderParams('class Fn<T:Int->Void> {}', 1, ['T']);
-	}
-
-	/** Build a one-type index from `source` and assert its single declaration's type-parameter arity and names. */
-	private function assertHeaderParams(source: String, arity: Int, names: Array<String>): Void {
-		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/H.hx', source: source }], plugin());
-		final decl: TypeDeclInfo = fileInfoOf(index, 'src/H.hx').types[0];
-		Assert.equals(arity, decl.typeParamArity, 'arity of $source');
-		Assert.equals(names.join(','), decl.typeParamNames.join(','), 'names of $source');
 	}
 
 	/**
@@ -710,9 +696,9 @@ class SymbolIndexSliceTest extends Test {
 	 * field from a `var` or from a method without re-walking the tree.
 	 */
 	public function testMemberModifierFlags(): Void {
-		final source: String = 'package pkg;\nclass M {\n' + "\tpublic static inline final A:String = 'a';\n"
-			+ "\tpublic static final B:String = 'b';\n" + "\tpublic static inline var C:String = 'c';\n"
-			+ "\tpublic static var D:String = 'd';\n" + "\tprivate final e:String = 'e';\n" + '\tpublic function f():Void {}\n' + '}\n';
+		final source: String = 'package pkg;\nclass M {\n\tpublic static inline final A:String = \'a\';\n'
+			+ "\tpublic static final B:String = 'b';\n\tpublic static inline var C:String = 'c';\n"
+			+ '\tpublic static var D:String = \'d\';\n\tprivate final e:String = \'e\';\n\tpublic function f():Void {}\n}\n';
 		final m: TypeDeclInfo = fileInfoOf(
 			SymbolIndex.build([{ file: 'src/pkg/M.hx', source: source }], plugin()), 'src/pkg/M.hx'
 		).types[0];
@@ -733,8 +719,8 @@ class SymbolIndexSliceTest extends Test {
 	 * and the modifier siblings sit inside it.
 	 */
 	public function testGuardedMemberFlag(): Void {
-		final source: String = 'package pkg;\nclass G {\n' + "\tpublic static inline final PLAIN:String = 'p';\n" + '\t#if js\n'
-			+ "\tpublic static inline final GUARDED:String = 'g';\n" + '\t#end\n' + '}\n';
+		final source: String = 'package pkg;\nclass G {\n\tpublic static inline final PLAIN:String = \'p\';\n\t#if js\n'
+			+ '\tpublic static inline final GUARDED:String = \'g\';\n\t#end\n}\n';
 		final g: TypeDeclInfo = fileInfoOf(
 			SymbolIndex.build([{ file: 'src/pkg/G.hx', source: source }], plugin()), 'src/pkg/G.hx'
 		).types[0];
@@ -779,77 +765,6 @@ class SymbolIndexSliceTest extends Test {
 		Assert.equals(0, index.memberDeclarationsOf('Missing', 'K').length);
 	}
 
-	/** The named member of `type` — the fixtures all declare each name exactly once. */
-	private function memberOf(type: TypeDeclInfo, name: String): MemberInfo {
-		final found: Null<MemberInfo> = type.members.find(m -> m.name == name);
-		Assert.notNull(found);
-		return (found: MemberInfo);
-	}
-
-	/** Assert a member's kind and its three modifier-derived flags in one line per member. */
-	private function assertFlags(member: MemberInfo, kind: String, isStatic: Bool, isInline: Bool, guarded: Bool): Void {
-		Assert.equals(kind, member.kind, 'kind of ${member.name}');
-		Assert.equals(isStatic, member.isStatic, 'isStatic of ${member.name}');
-		Assert.equals(isInline, member.isInline, 'isInline of ${member.name}');
-		Assert.equals(guarded, member.guarded, 'guarded of ${member.name}');
-	}
-
-	/** The `FileInfo` `index` holds for `file`, asserted present. */
-	private function fileInfoOf(index: SymbolIndex, file: String): FileInfo {
-		final info: Null<FileInfo> = index.fileInfo(file);
-		Assert.notNull(info);
-		return (info: FileInfo);
-	}
-
-	private function assertImport(imp: ImportInfo, raw: String, kind: ImportKind, alias: Null<String>): Void {
-		Assert.equals(raw, imp.raw);
-		Assert.isTrue(imp.kind == kind);
-		Assert.equals(alias, imp.alias);
-		Assert.notNull(imp.span);
-	}
-
-	private static function plugin(): HaxeQueryPlugin {
-		return new HaxeQueryPlugin();
-	}
-
-	/**
-	 * TM's real collision: two `IResizable` interfaces in different packages, and a class whose
-	 * base implements the SAME-PACKAGE one with no import. Each carries a distinctly named member
-	 * so a fixture can tell which one the closure actually reached.
-	 */
-	/**
-	 * The same collision seen from the STARTING side: nothing extends anything, the caller names
-	 * `IResizable` directly, and `Holder` imports the `rightmenu` one while `other/Away.hx`
-	 * imports neither.
-	 */
-	private static function ambiguousStartFiles(): Array<{ file: String, source: String }> {
-		return [
-			{ file: 'src/common/IResizable.hx', source: 'package common;\ninterface IResizable { function inCommon():Void; }' },
-			{
-				file: 'src/rightmenu/IResizable.hx',
-				source: 'package rightmenu;\ninterface IResizable { function inRightmenu():Void; }'
-			},
-			{ file: 'src/Holder.hx', source: 'import rightmenu.IResizable;\n\nclass Holder {}' },
-			{ file: 'src/other/Away.hx', source: 'package other;\n\nclass Away {}' }
-		];
-	}
-
-	private static function ambiguousInterfaceFiles(): Array<{ file: String, source: String }> {
-		return [
-			{ file: 'src/common/IResizable.hx', source: 'package common;\ninterface IResizable { function inCommon():Void; }' },
-			{
-				file: 'src/rightmenu/IResizable.hx',
-				source: 'package rightmenu;\ninterface IResizable { function inRightmenu():Void; }'
-			},
-			{
-				file: 'src/common/Resizable.hx',
-				source: 'package common;\nclass Resizable implements IResizable { public function inCommon():Void {} }'
-			},
-			{ file: 'src/Sub.hx', source: 'import common.Resizable;\nclass Sub extends Resizable { private var _own:Int; }' }
-		];
-	}
-
-
 	public function testSubtypeOverridesProperty(): Void {
 		final files = [
 			{
@@ -878,7 +793,6 @@ class SymbolIndexSliceTest extends Test {
 		Assert.isFalse(index.subtypeOverridesProperty('Over', 'data'));
 	}
 
-
 	public function testSubtypeOverridesPropertyUnresolvable(): Void {
 		// Loose OVERRIDES get_tag but reaches through Ext, which is NOT indexed -> its position
 		// relative to Root is unresolvable, so it conservatively blocks Root's collapse.
@@ -905,7 +819,6 @@ class SymbolIndexSliceTest extends Test {
 		Assert.isFalse(SymbolIndex.build(safe, new HaxeQueryPlugin()).subtypeOverridesProperty('Root', 'tag'));
 	}
 
-
 	public function testSubtypeReferencesField(): Void {
 		final files = [
 			{ file: 'pkg/Base.hx', source: 'package pkg;\nclass Base {\n\tprivate var _x:Int = 0;\n}' },
@@ -926,7 +839,6 @@ class SymbolIndexSliceTest extends Test {
 		// Peer is NOT a subtype of Owner2 and references its OWN _x (which it declares) -> Owner2's _x is safe.
 		Assert.isFalse(index.subtypeReferencesField('Owner2', '_x'));
 	}
-
 
 	/**
 	 * A supertype reference resolves through the REFERRING file's package / imports, not by a
@@ -1014,13 +926,9 @@ class SymbolIndexSliceTest extends Test {
 	 * Dynamic<..>` clause — is SKIPPED, not treated as an unresolvable dead end. So a
 	 * subclass field is still provably absent (the openfl display-subclass rename case),
 	 * while a genuinely inherited member is still found.
-	 */
-	/**
 	 * `Dynamic` passed as the STARTING type — which happens when a caller feeds an
 	 * `implements` clause's entry straight in (`implementsInterfaceDeclaringMember`) — declares
 	 * no named member either, so it must not read as an unindexed, unprovable type.
-	 */
-	/**
 	 * An ambiguous SIMPLE starting name resolves against the file the caller names — the shape
 	 * every `implements`-clause consumer passes (`prefer-inline`, `trivial-getter`). `Holder`
 	 * imports the `rightmenu` one, so ITS member is the inherited one.
@@ -1189,7 +1097,6 @@ class SymbolIndexSliceTest extends Test {
 		Assert.equals('Int', index.resolvePathFinalMemberTypeSource('src/app/Use.hx', 'Sub', ['items', 'length']));
 	}
 
-
 	/**
 	 * `Leaf` overrides `set_tag`, but the member it overrides is declared by `Mid`, NOT by the
 	 * owner `Root` — two unrelated hierarchies that merely share a property name. `Mid`'s own
@@ -1201,11 +1108,13 @@ class SymbolIndexSliceTest extends Test {
 		final files: Array<{ file: String, source: String }> = [
 			{
 				file: 'pkg/Root.hx',
-				source: 'package pkg;\nclass Root {\n\tpublic var tag(get, set):Int;\n\tfunction get_tag():Int return 0;\n\tfunction set_tag(v:Int):Int return v;\n}'
+				source: 'package pkg;\nclass Root {\n\tpublic var tag(get, set):Int;\n\tfunction get_tag():Int return 0;\n'
+					+ '\tfunction set_tag(v:Int):Int return v;\n}'
 			},
 			{
 				file: 'pkg/Mid.hx',
-				source: 'package pkg;\nclass Mid extends Ext {\n\tpublic var tag(get, set):Int;\n\tfunction get_tag():Int return 1;\n\tfunction set_tag(v:Int):Int return v;\n}'
+				source: 'package pkg;\nclass Mid extends Ext {\n\tpublic var tag(get, set):Int;\n\tfunction get_tag():Int return 1;\n'
+					+ '\tfunction set_tag(v:Int):Int return v;\n}'
 			},
 			{
 				file: 'pkg/Leaf.hx',
@@ -1224,7 +1133,8 @@ class SymbolIndexSliceTest extends Test {
 		final files: Array<{ file: String, source: String }> = [
 			{
 				file: 'pkg/Root.hx',
-				source: 'package pkg;\nclass Root {\n\tpublic var tag(get, set):Int;\n\tfunction get_tag():Int return 0;\n\tfunction set_tag(v:Int):Int return v;\n}'
+				source: 'package pkg;\nclass Root {\n\tpublic var tag(get, set):Int;\n\tfunction get_tag():Int return 0;\n'
+					+ '\tfunction set_tag(v:Int):Int return v;\n}'
 			},
 			{ file: 'pkg/Mid.hx', source: 'package pkg;\nclass Mid extends Root {\n\tpublic function ping():Void {}\n}' },
 			{
@@ -1253,7 +1163,6 @@ class SymbolIndexSliceTest extends Test {
 		Assert.isTrue(SymbolIndex.build(files, new HaxeQueryPlugin()).provablyNotSubtype('Leaf', 'Root'));
 	}
 
-
 	/**
 	 * `Leaf`'s superclass is UNINDEXED and the only resolvable link is an interface that happens to
 	 * name `tag`. Haxe grants `override` against a superclass member, never an interface's, so the
@@ -1264,7 +1173,8 @@ class SymbolIndexSliceTest extends Test {
 		final files: Array<{ file: String, source: String }> = [
 			{
 				file: 'pkg/Root.hx',
-				source: 'package pkg;\nclass Root {\n\tpublic var tag(get, set):Int;\n\tfunction get_tag():Int return 0;\n\tfunction set_tag(v:Int):Int return v;\n}'
+				source: 'package pkg;\nclass Root {\n\tpublic var tag(get, set):Int;\n\tfunction get_tag():Int return 0;\n'
+					+ '\tfunction set_tag(v:Int):Int return v;\n}'
 			},
 			{ file: 'pkg/ITagged.hx', source: 'package pkg;\ninterface ITagged {\n\tpublic var tag(get, set):Int;\n}' },
 			{
@@ -1451,7 +1361,6 @@ class SymbolIndexSliceTest extends Test {
 		Assert.equals(true, getter.memberGetter('Leaf', 'f'), 'the instance getter above the static still answers');
 	}
 
-
 	/**
 	 * The `@:autoBuild` carrier IS in the index but is not import-visible from the type that
 	 * declares the field (`o.Marker` from `p.Base`), so `resolveTypeRef` ends that link — while the
@@ -1487,6 +1396,82 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/p/Sub.hx', source: 'package p;\nclass Sub extends Base {}' }
 		], plugin());
 		Assert.equals(false, ambiguous.memberGetter('Sub', 'f'), 'an ambiguous simple name resolves to neither');
+	}
+
+	/** Build a one-type index from `source` and assert its single declaration's type-parameter arity and names. */
+	private function assertHeaderParams(source: String, arity: Int, names: Array<String>): Void {
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/H.hx', source: source }], plugin());
+		final decl: TypeDeclInfo = fileInfoOf(index, 'src/H.hx').types[0];
+		Assert.equals(arity, decl.typeParamArity, 'arity of $source');
+		Assert.equals(names.join(','), decl.typeParamNames.join(','), 'names of $source');
+	}
+
+	/** The named member of `type` — the fixtures all declare each name exactly once. */
+	private function memberOf(type: TypeDeclInfo, name: String): MemberInfo {
+		final found: Null<MemberInfo> = type.members.find(m -> m.name == name);
+		Assert.notNull(found);
+		return (found: MemberInfo);
+	}
+
+	/** Assert a member's kind and its three modifier-derived flags in one line per member. */
+	private function assertFlags(member: MemberInfo, kind: String, isStatic: Bool, isInline: Bool, guarded: Bool): Void {
+		Assert.equals(kind, member.kind, 'kind of ${member.name}');
+		Assert.equals(isStatic, member.isStatic, 'isStatic of ${member.name}');
+		Assert.equals(isInline, member.isInline, 'isInline of ${member.name}');
+		Assert.equals(guarded, member.guarded, 'guarded of ${member.name}');
+	}
+
+	/** The `FileInfo` `index` holds for `file`, asserted present. */
+	private function fileInfoOf(index: SymbolIndex, file: String): FileInfo {
+		final info: Null<FileInfo> = index.fileInfo(file);
+		Assert.notNull(info);
+		return (info: FileInfo);
+	}
+
+	private function assertImport(imp: ImportInfo, raw: String, kind: ImportKind, alias: Null<String>): Void {
+		Assert.equals(raw, imp.raw);
+		Assert.isTrue(imp.kind == kind);
+		Assert.equals(alias, imp.alias);
+		Assert.notNull(imp.span);
+	}
+
+	private static function plugin(): HaxeQueryPlugin {
+		return new HaxeQueryPlugin();
+	}
+
+	/**
+	 * TM's real collision: two `IResizable` interfaces in different packages, and a class whose
+	 * base implements the SAME-PACKAGE one with no import. Each carries a distinctly named member
+	 * so a fixture can tell which one the closure actually reached.
+	 * The same collision seen from the STARTING side: nothing extends anything, the caller names
+	 * `IResizable` directly, and `Holder` imports the `rightmenu` one while `other/Away.hx`
+	 * imports neither.
+	 */
+	private static function ambiguousStartFiles(): Array<{ file: String, source: String }> {
+		return [
+			{ file: 'src/common/IResizable.hx', source: 'package common;\ninterface IResizable { function inCommon():Void; }' },
+			{
+				file: 'src/rightmenu/IResizable.hx',
+				source: 'package rightmenu;\ninterface IResizable { function inRightmenu():Void; }'
+			},
+			{ file: 'src/Holder.hx', source: 'import rightmenu.IResizable;\n\nclass Holder {}' },
+			{ file: 'src/other/Away.hx', source: 'package other;\n\nclass Away {}' }
+		];
+	}
+
+	private static function ambiguousInterfaceFiles(): Array<{ file: String, source: String }> {
+		return [
+			{ file: 'src/common/IResizable.hx', source: 'package common;\ninterface IResizable { function inCommon():Void; }' },
+			{
+				file: 'src/rightmenu/IResizable.hx',
+				source: 'package rightmenu;\ninterface IResizable { function inRightmenu():Void; }'
+			},
+			{
+				file: 'src/common/Resizable.hx',
+				source: 'package common;\nclass Resizable implements IResizable { public function inCommon():Void {} }'
+			},
+			{ file: 'src/Sub.hx', source: 'import common.Resizable;\nclass Sub extends Resizable { private var _own:Int; }' }
+		];
 	}
 
 }

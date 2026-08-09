@@ -71,16 +71,18 @@ class HxDollarBlockExprStmtNoSemiSliceTest extends HxTestHelpers {
 
 	public function testCorpusIssue215MacroDollarBlock(): Void {
 		final cls: HxClassDecl = HaxeParser.parse(
-			"class Main {\n\tpublic static function main() {\n\t\tmacro { $e0; ${loop(el)}};\n\t\tmacro {\n\t\t\t$e0;\n\t\t\t${loop(el)}};\n\t}\n}"
+			"class Main {\n\tpublic static function main() {\n\t\tmacro { $e0; ${loop(el)}};\n\t\tmacro {\n\t\t\t$e0;\n"
+			+ "\t\t\t${loop(el)}};\n\t}\n}"
 		);
 		Assert.equals(1, cls.members.length);
 	}
 
 	// -- Idempotency: issue_215 round-trip via the module pipeline --
 
-	public function testCorpusIssue215RoundTrip(): Void {
+	public inline function testCorpusIssue215RoundTrip(): Void {
 		roundTrip(
-			"class Main {\n\tpublic static function main() {\n\t\tmacro { $e0; ${loop(el)}};\n\t\tmacro {\n\t\t\t$e0;\n\t\t\t${loop(el)}};\n\t}\n}",
+			"class Main {\n\tpublic static function main() {\n\t\tmacro { $e0; ${loop(el)}};\n\t\tmacro {\n\t\t\t$e0;\n"
+			+ "\t\t\t${loop(el)}};\n\t}\n}",
 			'issue_215_macro_with_dollar_block'
 		);
 	}

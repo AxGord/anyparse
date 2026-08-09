@@ -12,6 +12,7 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
 using Lambda;
 
 import anyparse.query.Refs.RefHit;
@@ -340,10 +341,9 @@ final class MoveMember {
 			if (tree == null) continue;
 			final matches: Array<TypeDeclMatch> = typeDeclsNamed(tree, typeName);
 			if (matches.length > 1) return FErr('type "$typeName" is declared ${matches.length} times in ${entry.file}');
-			if (matches.length == 1) {
-				if (found != null) return FErr('type "$typeName" is declared in both ${found.file} and ${entry.file} — ambiguous');
-				found = { file: entry.file, decl: matches[0] };
-			}
+			if (matches.length != 1) continue;
+			if (found != null) return FErr('type "$typeName" is declared in both ${found.file} and ${entry.file} — ambiguous');
+			found = { file: entry.file, decl: matches[0] };
 		}
 		return FOk(found);
 	}
@@ -355,8 +355,8 @@ final class MoveMember {
 		final bodySpan: Span = decl.nameNode.span ?? decl.fullSpan;
 		var bodyClose: Int = bodySpan.to - 1;
 		if (bodyClose >= source.length) bodyClose = source.length - 1;
-		while (bodyClose >= bodySpan.from && RefactorSupport.isSpace(StringTools.fastCodeAt(source, bodyClose))) bodyClose--;
-		return bodyClose < bodySpan.from || StringTools.fastCodeAt(source, bodyClose) != '}'.code ? null : bodyClose;
+		while (bodyClose >= bodySpan.from && RefactorSupport.isSpace(source.fastCodeAt(bodyClose))) bodyClose--;
+		return bodyClose < bodySpan.from || source.fastCodeAt(bodyClose) != '}'.code ? null : bodyClose;
 	}
 
 	private static function editsFor(
@@ -371,7 +371,7 @@ final class MoveMember {
 
 	private static function lineStartOf(source: String, offset: Int): Int {
 		var i: Int = offset;
-		while (i > 0 && StringTools.fastCodeAt(source, i - 1) != '\n'.code) i--;
+		while (i > 0 && source.fastCodeAt(i - 1) != '\n'.code) i--;
 		return i;
 	}
 
@@ -382,7 +382,7 @@ final class MoveMember {
 	private static function trimBlankEdges(block: String): String {
 		var from: Int = 0;
 		while (from < block.length) {
-			final c: Int = StringTools.fastCodeAt(block, from);
+			final c: Int = block.fastCodeAt(from);
 			if (c == '\n'.code || c == '\r'.code)
 				from++
 			else
@@ -390,7 +390,7 @@ final class MoveMember {
 		}
 		var to: Int = block.length;
 		while (to > from) {
-			final c: Int = StringTools.fastCodeAt(block, to - 1);
+			final c: Int = block.fastCodeAt(to - 1);
 			if (c == '\n'.code || c == '\r'.code)
 				to--
 			else
@@ -504,8 +504,8 @@ final class MoveMember {
 	 */
 	private static function cutSpanOf(srcSource: String, group: MemberGroup): Span {
 		final lineCut: Span = RefactorSupport.lineExtendedSpan(srcSource, RefactorSupport.docExtendedSpan(srcSource, group.groupSpan));
-		final blankBefore: Bool = lineCut.from >= 2 && StringTools.fastCodeAt(srcSource, lineCut.from - 2) == '\n'.code;
-		final blankAfter: Bool = lineCut.to < srcSource.length && StringTools.fastCodeAt(srcSource, lineCut.to) == '\n'.code;
+		final blankBefore: Bool = lineCut.from >= 2 && srcSource.fastCodeAt(lineCut.from - 2) == '\n'.code;
+		final blankAfter: Bool = lineCut.to < srcSource.length && srcSource.fastCodeAt(lineCut.to) == '\n'.code;
 		return blankBefore && blankAfter ? new Span(lineCut.from, lineCut.to + 1) : lineCut;
 	}
 
@@ -580,7 +580,7 @@ final class MoveMember {
 			}
 			: {
 				span: interp,
-				text: '$${' + qualifier + hit.m.name + '}'
+				text: '$${$qualifier${hit.m.name}}'
 			};
 	}
 
@@ -788,7 +788,7 @@ final class MoveMember {
 	}
 
 	private static function isAllWhitespace(text: String): Bool {
-		for (i in 0...text.length) if (!RefactorSupport.isSpace(StringTools.fastCodeAt(text, i))) return false;
+		for (i in 0...text.length) if (!RefactorSupport.isSpace(text.fastCodeAt(i))) return false;
 		return true;
 	}
 
@@ -879,7 +879,7 @@ final class MoveMember {
 	 * `viaField` is validated, otherwise the unique candidate is picked.
 	 */
 	private static function resolveViaField(prep: MovePrep, viaField: Null<String>, scaffold: Bool, plugin: GrammarPlugin): ViaResult {
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final declared: Map<Int, String> = provider != null ? provider.declaredTypes(prep.srcSource) : [];
 		final fields: Array<MemberGroup> = [
 			for (g in membersOf(prep.srcDecl))
@@ -893,9 +893,9 @@ final class MoveMember {
 					: VErr('"${prep.srcTypeName}" has no instance field "$viaField" (--via)');
 			final gSpan: Null<Span> = g.member.span;
 			final declaredType: Null<String> = gSpan != null ? declared[gSpan.from] : null;
-			if (declaredType != null && declaredType != prep.destTypeName)
-				return VErr('--via field "$viaField" is declared as "$declaredType", not "${prep.destTypeName}"');
-			return VOk(viaField);
+			return declaredType != null && declaredType != prep.destTypeName
+				? VErr('--via field "$viaField" is declared as "$declaredType", not "${prep.destTypeName}"')
+				: VOk(viaField);
 		}
 		final candidates: Array<String> = [
 			for (g in fields) {
@@ -914,7 +914,7 @@ final class MoveMember {
 					+ '(e.g. `private final _x: ${prep.destTypeName}`), wire it in the constructor, pass --via <field>, or --scaffold'
 				);
 			case many: VErr(
-				'multiple fields of type "${prep.destTypeName}" on "${prep.srcTypeName}" (${many.join(', ')}) ' + '— pass --via <field>'
+				'multiple fields of type "${prep.destTypeName}" on "${prep.srcTypeName}" (${many.join(', ')}) — pass --via <field>'
 			);
 		};
 	}
@@ -957,7 +957,7 @@ final class MoveMember {
 		};
 		if (via.scaffold) {
 			final srcCtor: Null<MemberGroup> = constructorGroupOf(prep.srcDecl);
-			final ctorSpan: Null<Span> = srcCtor != null ? srcCtor.member.span : null;
+			final ctorSpan: Null<Span> = srcCtor?.member.span;
 			if (ctorSpan != null && instanceHits.exists(h -> h.offset >= ctorSpan.from && h.offset < ctorSpan.to))
 				return 'a moved instance member is called inside the "${prep.srcTypeName}" constructor — the scaffolded via '
 					+ 'field would be read before it is initialized; move the call out of the constructor or wire the via field manually';
@@ -1165,7 +1165,7 @@ final class MoveMember {
 	}
 
 	private static inline function paramNameOf(fieldName: String): String {
-		return StringTools.startsWith(fieldName, '_') ? fieldName.substr(1) : fieldName;
+		return fieldName.startsWith('_') ? fieldName.substr(1) : fieldName;
 	}
 
 	private static inline function constructorGroupOf(decl: TypeDeclMatch): Null<MemberGroup> {
@@ -1194,8 +1194,8 @@ final class MoveMember {
 		if (span == null) return null;
 		var close: Int = span.to - 1;
 		if (close >= source.length) close = source.length - 1;
-		while (close >= span.from && RefactorSupport.isSpace(StringTools.fastCodeAt(source, close))) close--;
-		return close < span.from || StringTools.fastCodeAt(source, close) != '}'.code ? null : close;
+		while (close >= span.from && RefactorSupport.isSpace(source.fastCodeAt(close))) close--;
+		return close < span.from || source.fastCodeAt(close) != '}'.code ? null : close;
 	}
 
 	/**
@@ -1222,14 +1222,14 @@ final class MoveMember {
 	private static function resolveScaffoldFields(
 		prep: MovePrep, names: Array<String>, plugin: GrammarPlugin
 	): { error: Null<String>, fields: Array<ScaffoldField> } {
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		if (provider == null) return { error: 'cannot --scaffold: the grammar does not expose declared field types', fields: [] };
 		final typeSources: Map<Int, String> = provider.declaredTypeSources(prep.srcSource);
 		final members: Array<MemberGroup> = membersOf(prep.srcDecl);
 		final fields: Array<ScaffoldField> = [];
 		for (name in names) {
 			final g: Null<MemberGroup> = members.find(mm -> mm.member.name == name);
-			final gSpan: Null<Span> = g != null ? g.member.span : null;
+			final gSpan: Null<Span> = g?.member.span;
 			final type: Null<String> = gSpan != null ? typeSources[gSpan.from] : null;
 			if (type == null) return {
 				error: 'cannot --scaffold field "$name": its type on "${prep.srcTypeName}" is not an explicit nominal annotation',
@@ -1383,13 +1383,12 @@ final class MoveMember {
 			final edit: Null<{ span: Span, text: String }> = MoveSymbol.addImportEdit(prep.srcSource, prep.srcInfo, destPath);
 			if (edit != null) editsFor(editsByFile, prep.srcFile).push(edit);
 		}
-		if (movedTextEdits.exists(e -> StringTools.contains(e.text, '${prep.srcTypeName}.'))) {
-			final srcPath: String = prep.srcTypeName == RefactorSupport.baseNameOf(prep.srcFile)
-				? prep.srcInfo.module
-				: '${prep.srcInfo.module}.${prep.srcTypeName}';
-			final edit: Null<{ span: Span, text: String }> = MoveSymbol.addImportEdit(prep.destSource, prep.destInfo, srcPath);
-			if (edit != null) editsFor(editsByFile, prep.destFile).push(edit);
-		}
+		if (!movedTextEdits.exists(e -> StringTools.contains(e.text, '${prep.srcTypeName}.'))) return;
+		final srcPath: String = prep.srcTypeName == RefactorSupport.baseNameOf(prep.srcFile)
+			? prep.srcInfo.module
+			: '${prep.srcInfo.module}.${prep.srcTypeName}';
+		final edit: Null<{ span: Span, text: String }> = MoveSymbol.addImportEdit(prep.destSource, prep.destInfo, srcPath);
+		if (edit != null) editsFor(editsByFile, prep.destFile).push(edit);
 	}
 
 

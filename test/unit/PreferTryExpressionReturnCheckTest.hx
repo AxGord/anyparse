@@ -30,7 +30,8 @@ class PreferTryExpressionReturnCheckTest extends Test {
 	 */
 	public function testNestedTryValueParenthesised(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
-			'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn try parse(text) catch (e1:String) boom();\n\t\t} catch (e2:Int) {\n\t\t\treturn 2;\n\t\t}\n\t}\n}'
+			'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn try parse(text) catch (e1:String) boom();\n\t\t} catch (e2:Int) {\n'
+			+ '\t\t\treturn 2;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, es.length);
 		Assert.equals('return try (try parse(text) catch (e1:String) boom()) catch (e2:Int) 2;', es[0].text);
@@ -65,7 +66,8 @@ class PreferTryExpressionReturnCheckTest extends Test {
 	/** A `try` sealed behind a closing bracket cannot absorb the following `catch`, so it needs no parentheses. */
 	public function testSealedNestedTryNotParenthesised(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
-			'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn g(1, try parse(text) catch (e1:String) 4);\n\t\t} catch (e2:Int) {\n\t\t\treturn 5;\n\t\t}\n\t}\n}'
+			'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn g(1, try parse(text) catch (e1:String) 4);\n'
+			+ '\t\t} catch (e2:Int) {\n\t\t\treturn 5;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, es.length);
 		Assert.equals('return try g(1, try parse(text) catch (e1:String) 4) catch (e2:Int) 5;', es[0].text);
@@ -74,7 +76,8 @@ class PreferTryExpressionReturnCheckTest extends Test {
 	/** A `try` at the value's right EDGE does absorb it, so it is parenthesised even under an enclosing operator. */
 	public function testTailNestedTryParenthesised(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
-			'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn 1 + try parse(text) catch (e1:String) 4;\n\t\t} catch (e2:Int) {\n\t\t\treturn 5;\n\t\t}\n\t}\n}'
+			'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn 1 + try parse(text) catch (e1:String) 4;\n\t\t} catch (e2:Int) {\n'
+			+ '\t\t\treturn 5;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, es.length);
 		Assert.equals('return try (1 + try parse(text) catch (e1:String) 4) catch (e2:Int) 5;', es[0].text);
@@ -106,7 +109,8 @@ class PreferTryExpressionReturnCheckTest extends Test {
 	/** The catch header is sliced VERBATIM, so the variable's `:Type` (trivia in the projection) survives every clause. */
 	public function testFixTwoCatches(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
-			'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn parse(text);\n\t\t} catch (e:String) {\n\t\t\treturn 0;\n\t\t} catch (e:Exception) {\n\t\t\treturn -1;\n\t\t}\n\t}\n}'
+			'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn parse(text);\n\t\t} catch (e:String) {\n\t\t\treturn 0;\n'
+			+ '\t\t} catch (e:Exception) {\n\t\t\treturn -1;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, es.length);
 		Assert.equals('return try parse(text) catch (e:String) 0 catch (e:Exception) -1;', es[0].text);
@@ -198,7 +202,8 @@ class PreferTryExpressionReturnCheckTest extends Test {
 	/** The TM shape this check was written for (`ScrollAxis.maxScroll`, anonymized). */
 	public function testFixTmFixture(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
-			'class C {\n\tfunction f(node:Node, size:Float):Float {\n\t\ttry {\n\t\t\treturn Math.max(0, measure(node) - size);\n\t\t} catch (exception:Exception) {\n\t\t\treturn 0;\n\t\t}\n\t}\n}'
+			'class C {\n\tfunction f(node:Node, size:Float):Float {\n\t\ttry {\n\t\t\treturn Math.max(0, measure(node) - size);\n'
+			+ '\t\t} catch (exception:Exception) {\n\t\t\treturn 0;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, es.length);
 		Assert.equals('return try Math.max(0, measure(node) - size) catch (exception:Exception) 0;', es[0].text);

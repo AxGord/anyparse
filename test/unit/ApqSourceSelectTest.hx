@@ -24,20 +24,18 @@ class ApqSourceSelectTest extends Test {
 	public function testSelectByNameSpansFunction(): Void {
 		final b: Null<{ from: Int, to: Int }> = Cli.resolveNodeLineBounds('t.hx', SRC, 'haxe', 'FnMember:foo', null);
 		Assert.notNull(b);
-		if (b != null) {
-			Assert.equals(3, b.from);
-			Assert.equals(5, b.to);
-		}
+		if (b == null) return;
+		Assert.equals(3, b.from);
+		Assert.equals(5, b.to);
 	}
 
 	/** A single-line function resolves to one line. */
 	public function testSelectSingleLineFunction(): Void {
 		final b: Null<{ from: Int, to: Int }> = Cli.resolveNodeLineBounds('t.hx', SRC, 'haxe', 'FnMember:a', null);
 		Assert.notNull(b);
-		if (b != null) {
-			Assert.equals(2, b.from);
-			Assert.equals(2, b.to);
-		}
+		if (b == null) return;
+		Assert.equals(2, b.from);
+		Assert.equals(2, b.to);
 	}
 
 	/** No match → null (the CLI maps this to a non-zero exit). */

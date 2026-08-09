@@ -41,8 +41,8 @@ class SelfAssignmentCheckTest extends Test {
 
 	public function testPropertySetterSelfAssignNotFlagged(): Void {
 		// `p = p` on a `(default, set)` property forces `set_p` — a real side effect.
-		final src: String =
-			'class C {\n\tpublic var p(default, set):Int;\n\tfunction set_p(v:Int):Int { return v; }\n\tfunction f():Void {\n\t\tp = p;\n\t}\n}';
+		final src: String = 'class C {\n\tpublic var p(default, set):Int;\n\tfunction set_p(v:Int):Int { return v; }\n'
+			+ '\tfunction f():Void {\n\t\tp = p;\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -84,8 +84,8 @@ class SelfAssignmentCheckTest extends Test {
 	public function testUseBeforeDeclNotFlagged(): Void {
 		// `x = x` precedes the `var x` declaration, so the name still binds to the
 		// property field (forcing `set_x`), not the later local — must NOT be flagged.
-		final src: String =
-			'class C {\n\tpublic var x(default, set):Int;\n\tfunction set_x(v:Int):Int return v;\n\tfunction f():Void {\n\t\tx = x;\n\t\tvar x = 1;\n\t}\n}';
+		final src: String = 'class C {\n\tpublic var x(default, set):Int;\n\tfunction set_x(v:Int):Int return v;\n\tfunction f():Void {\n'
+			+ '\t\tx = x;\n\t\tvar x = 1;\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 

@@ -5,10 +5,9 @@ import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.MoveSymbol;
-import anyparse.query.MoveSymbol.MoveResult;
-import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.SymbolIndex;
-import anyparse.query.SymbolIndex.FileInfo;
+
+using StringTools;
 
 /**
  * `MoveSymbol.moveType` — scope-correct, format-preserving move of a
@@ -58,15 +57,15 @@ class MoveSymbolSliceTest extends Test {
 		final newUser: String = changeFor(changes, 'pkg/User.hx').newSource;
 
 		// Foo gone from A, present in B.
-		Assert.isFalse(StringTools.contains(newA, 'class Foo'), 'Foo should be gone from A');
-		Assert.isTrue(StringTools.contains(newB, 'class Foo'), 'Foo should land in B');
-		Assert.isTrue(StringTools.contains(newB, 'public var x:Int = 1;'), 'Foo body should land in B');
+		Assert.isFalse(newA.contains('class Foo'), 'Foo should be gone from A');
+		Assert.isTrue(newB.contains('class Foo'), 'Foo should land in B');
+		Assert.isTrue(newB.contains('public var x:Int = 1;'), 'Foo body should land in B');
 
 		// User's import repointed to the new module path.
-		Assert.isTrue(StringTools.contains(newUser, 'import pkg.B.Foo;'), 'User import should repoint to pkg.B.Foo');
-		Assert.isFalse(StringTools.contains(newUser, 'import pkg.A.Foo;'), 'old import should be gone from User');
+		Assert.isTrue(newUser.contains('import pkg.B.Foo;'), 'User import should repoint to pkg.B.Foo');
+		Assert.isFalse(newUser.contains('import pkg.A.Foo;'), 'old import should be gone from User');
 		// User's type position is untouched (still `:Foo`).
-		Assert.isTrue(StringTools.contains(newUser, 'var f:Foo;'), 'User type position stays');
+		Assert.isTrue(newUser.contains('var f:Foo;'), 'User type position stays');
 	}
 
 	/**
@@ -93,14 +92,14 @@ class MoveSymbolSliceTest extends Test {
 		final newUser: String = changeFor(changes, 'pkg/User.hx').newSource;
 
 		// The whole final class — keyword included — left A and landed in B.
-		Assert.isFalse(StringTools.contains(newA, 'final class Foo'), 'final class gone from A');
-		Assert.isFalse(StringTools.contains(newA, 'final'), 'no orphaned final keyword in A');
-		Assert.isTrue(StringTools.contains(newB, 'final class Foo'), 'final class Foo lands in B');
-		Assert.isTrue(StringTools.contains(newB, 'public var x:Int = 1;'), 'final class body lands in B');
+		Assert.isFalse(newA.contains('final class Foo'), 'final class gone from A');
+		Assert.isFalse(newA.contains('final'), 'no orphaned final keyword in A');
+		Assert.isTrue(newB.contains('final class Foo'), 'final class Foo lands in B');
+		Assert.isTrue(newB.contains('public var x:Int = 1;'), 'final class body lands in B');
 
 		// Importer repointed exactly as for a plain class.
-		Assert.isTrue(StringTools.contains(newUser, 'import pkg.B.Foo;'), 'User import repointed');
-		Assert.isFalse(StringTools.contains(newUser, 'import pkg.A.Foo;'), 'old import gone from User');
+		Assert.isTrue(newUser.contains('import pkg.B.Foo;'), 'User import repointed');
+		Assert.isFalse(newUser.contains('import pkg.A.Foo;'), 'old import gone from User');
 	}
 
 	/**
@@ -116,9 +115,9 @@ class MoveSymbolSliceTest extends Test {
 			{ file: 'pkg/B.hx', source: b },
 		]);
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
-		Assert.isTrue(StringTools.contains(newB, 'import ext.Ext;'), 'B should gain the carried dependency import');
-		Assert.isTrue(StringTools.contains(newB, 'class Foo'), 'Foo should land in B');
-		Assert.isTrue(StringTools.contains(newB, 'var e:Ext;'), 'Foo body should land in B');
+		Assert.isTrue(newB.contains('import ext.Ext;'), 'B should gain the carried dependency import');
+		Assert.isTrue(newB.contains('class Foo'), 'Foo should land in B');
+		Assert.isTrue(newB.contains('var e:Ext;'), 'Foo body should land in B');
 	}
 
 	/**
@@ -136,10 +135,10 @@ class MoveSymbolSliceTest extends Test {
 		]);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
-		Assert.isTrue(StringTools.contains(newB, '/** the foo */'), 'doc-comment should move to B');
-		Assert.isTrue(StringTools.contains(newB, 'class Foo'), 'Foo should land in B');
+		Assert.isTrue(newB.contains('/** the foo */'), 'doc-comment should move to B');
+		Assert.isTrue(newB.contains('class Foo'), 'Foo should land in B');
 		// The doc-comment is gone from A too.
-		Assert.isFalse(StringTools.contains(newA, '/** the foo */'), 'doc-comment should be gone from A');
+		Assert.isFalse(newA.contains('/** the foo */'), 'doc-comment should be gone from A');
 	}
 
 	/**
@@ -156,8 +155,8 @@ class MoveSymbolSliceTest extends Test {
 		]);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
-		Assert.isTrue(StringTools.contains(newB, '@:keep'), 'meta should move to B');
-		Assert.isFalse(StringTools.contains(newA, '@:keep'), 'meta should be gone from A');
+		Assert.isTrue(newB.contains('@:keep'), 'meta should move to B');
+		Assert.isFalse(newA.contains('@:keep'), 'meta should be gone from A');
 	}
 
 	/** Refusal: the cursor is not on a type declaration (a field). */
@@ -189,8 +188,8 @@ class MoveSymbolSliceTest extends Test {
 		Assert.isFalse(StringTools.contains(changeFor(changes, 'pkg/A.hx').newSource, 'class Foo'), 'Foo left A');
 		Assert.isTrue(StringTools.contains(changeFor(changes, 'other/B.hx').newSource, 'class Foo'), 'Foo landed in B');
 		final newUser: String = changeFor(changes, 'pkg/User.hx').newSource;
-		Assert.isTrue(StringTools.contains(newUser, 'import other.B.Foo;'), 'importer repointed cross-package');
-		Assert.isTrue(StringTools.contains(newUser, 'var f:Foo;'), 'bare type position stays');
+		Assert.isTrue(newUser.contains('import other.B.Foo;'), 'importer repointed cross-package');
+		Assert.isTrue(newUser.contains('var f:Foo;'), 'bare type position stays');
 	}
 
 	public function testCrossPackageFqnRefused(): Void {

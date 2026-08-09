@@ -5,6 +5,7 @@ import anyparse.core.DocMeasure;
 import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -311,16 +312,17 @@ class WrapList {
 		// `groupRestProbe` consumers for the zero-threshold call — its bracket
 		// shares its line with the statement's `;` (or a call's `);`), and the
 		// plain-`Group` fit is blind to that tail. See the param doc above.
-		return anyHardline || forceExceeds
-			? WrapBoundary(buildThresholdTree(extraThresholds, [], true, leadFlat, leadBreak, evalAt, shapeAt, leadFor))
-			: extraThresholds.length == 0
-				? emitZeroThreshold(
-					rules, items, opt, cols, open, close, openInside, closeInside, forceMode, groupRestProbe || comprehensionFitMeasure,
-					leadFlat, leadBreak, evalAt, shapeAt, leadFor
-				)
-				: extraThresholds.length == 1
-					? emitOneThreshold(extraThresholds[0], opt, evalAt, shapeAt, leadFor)
-					: WrapBoundary(buildThresholdTree(extraThresholds, [], null, leadFlat, leadBreak, evalAt, shapeAt, leadFor));
+		return if (anyHardline || forceExceeds)
+			WrapBoundary(buildThresholdTree(extraThresholds, [], true, leadFlat, leadBreak, evalAt, shapeAt, leadFor))
+		else if (extraThresholds.length == 0)
+			emitZeroThreshold(
+				rules, items, opt, cols, open, close, openInside, closeInside, forceMode, groupRestProbe || comprehensionFitMeasure,
+				leadFlat, leadBreak, evalAt, shapeAt, leadFor
+			)
+		else if (extraThresholds.length == 1)
+			emitOneThreshold(extraThresholds[0], opt, evalAt, shapeAt, leadFor)
+		else
+			WrapBoundary(buildThresholdTree(extraThresholds, [], null, leadFlat, leadBreak, evalAt, shapeAt, leadFor));
 	}
 
 	/**
@@ -453,11 +455,12 @@ class WrapList {
 		// `lineWidth + 1`: the probe fires on `>= n` while the fork opens on
 		// a strict `> maxLineLength` — a line landing exactly ON the limit
 		// stays glued.
-		return flatBrk == breakBrk
-			? WrapBoundary(shapeFor(modeFlat))
-			: isTopLevelChain(condDoc) && !chainKeepFlatCandidate(condDoc)
-				? WrapBoundary(IfLineExceeds(opt.lineWidth + 1, shapeFor(modeBreak), shapeFor(modeFlat)))
-				: WrapBoundary(IfNaturalFirstLineFitsOpenDelim(opt.lineWidth + 1, shapeFor(modeBreak), shapeFor(modeFlat)));
+		return if (flatBrk == breakBrk)
+			WrapBoundary(shapeFor(modeFlat))
+		else if (isTopLevelChain(condDoc) && !chainKeepFlatCandidate(condDoc))
+			WrapBoundary(IfLineExceeds(opt.lineWidth + 1, shapeFor(modeBreak), shapeFor(modeFlat)))
+		else
+			WrapBoundary(IfNaturalFirstLineFitsOpenDelim(opt.lineWidth + 1, shapeFor(modeBreak), shapeFor(modeFlat)));
 	}
 
 	/**
@@ -775,7 +778,7 @@ class WrapList {
 		inline function isFill(m: WrapMode): Bool return m == FillLine || m == FillLineWithLeadingBreak;
 		if (isFill(rules.defaultMode)) return rules.defaultMode;
 		final fillRule: Null<WrapRule> = rules.rules.find(r -> isFill(r.mode));
-		return fillRule != null ? fillRule.mode : null;
+		return fillRule?.mode;
 	}
 
 	/**
@@ -945,9 +948,8 @@ class WrapList {
 		function record(isAdd: Bool, depth: Int): Void {
 			if (isAdd) {
 				if (addSubDepth < 0 || depth < addSubDepth) addSubDepth = depth;
-			} else {
-				if (otherDepth < 0 || depth < otherDepth) otherDepth = depth;
-			}
+			} else if (otherDepth < 0 || depth < otherDepth)
+				otherDepth = depth;
 		}
 		function w(n: Doc, depth: Int): Void {
 			switch n {
@@ -1212,45 +1214,43 @@ class WrapList {
 		final dm: WrapMode = rules.defaultMode;
 		final dmBreak: Bool = dm == OnePerLine || dm == OnePerLineAfterFirst || dm == FillLine || dm == FillLineWithLeadingBreak;
 		final soleArrow: Bool = items.length == 1 && isArrowBodyMarker(items[0]);
-		if (modeFlat == NoWrap && dmBreak && forceMode == null && !soleArrow) {
-			// ω-thinarrow-break leg-3: a sole bare-ident infix arrow
-			// (`call(item -> body)`) whose body chain BREAKS (leg-2
-			// `bareArrowBodyBreaks` — e.g. an `||` opBoolChain configured to
-			// fillLine on overflow) glues the arrow HEAD to the open paren
-			// and breaks AFTER `->`, instead of the generic open-paren shape
-			// (`call(\n\titem -> body\n)`). The INVERSE of `isArrowBodyMarker`
-			// (paren-param) handling above — paren-param arrows are excluded
-			// (`isArrowBodyMarker(items[0])` ⇒ `soleArrow`), so only the
-			// bare-ident infix path reaches here. Mirrors fork
-			// `applyArrowWrapping` (MarkWrapping.hx:2336-2378) + the single-
-			// arg call `hasInnerBreak` gate.
-			//
-			// Block-body bare arrows are excluded (body's first visible Text is
-			// `{`): the block owns its own multi-line layout, matching fork's
-			// BrOpen skip in `applyArrowWrapping`'s collapse loop.
-			//
-			// Two nested render-time first-line probes (both O(1)
-			// `flatTokenWidthFirstLine`, no recursive spine probe across the
-			// chain — PERF safe):
-			//  - OUTER `IfFirstLineExceeds(lineWidth, brk, flat)`: break iff
-			//    the whole-flat `call(item -> body)` first line overflows.
-			//  - INNER `IfFirstLineExceeds(lineWidth, openShape, glueShape)`:
-			//    within the break branch, fall back to the generic open-paren
-			//    shape iff the GLUED head line `call(item ->` itself overflows
-			//    (fork `firstLineLen > maxLen → continue`); else GLUE.
-			if (items.length == 1) {
-				final split: Null<{ head: Doc, body: Doc }> = bareArrowSplit(items[0]);
-				if (split != null && !DocMeasure.firstVisibleTextStartsWith(split.body, '{'.code) && bareArrowBodyBreaks(split.body)) {
-					final openShape: Doc = shapeAt(dm, leadBreak);
-					final flatShape: Doc = shapeAt(NoWrap, leadFlat);
-					final glueShape: Doc = bareArrowGlueShape(open, close, openInside, closeInside, split.head, split.body, cols);
-					final brk: Doc = IfFirstLineExceeds(opt.lineWidth, openShape, glueShape);
-					return WrapBoundary(IfFirstLineExceeds(opt.lineWidth, brk, flatShape));
-				}
+		if (modeFlat != NoWrap || !dmBreak || forceMode != null || soleArrow) return WrapBoundary(shapeAt(modeFlat, leadFor(modeFlat)));
+		// ω-thinarrow-break leg-3: a sole bare-ident infix arrow
+		// (`call(item -> body)`) whose body chain BREAKS (leg-2
+		// `bareArrowBodyBreaks` — e.g. an `||` opBoolChain configured to
+		// fillLine on overflow) glues the arrow HEAD to the open paren
+		// and breaks AFTER `->`, instead of the generic open-paren shape
+		// (`call(\n\titem -> body\n)`). The INVERSE of `isArrowBodyMarker`
+		// (paren-param) handling above — paren-param arrows are excluded
+		// (`isArrowBodyMarker(items[0])` ⇒ `soleArrow`), so only the
+		// bare-ident infix path reaches here. Mirrors fork
+		// `applyArrowWrapping` (MarkWrapping.hx:2336-2378) + the single-
+		// arg call `hasInnerBreak` gate.
+		//
+		// Block-body bare arrows are excluded (body's first visible Text is
+		// `{`): the block owns its own multi-line layout, matching fork's
+		// BrOpen skip in `applyArrowWrapping`'s collapse loop.
+		//
+		// Two nested render-time first-line probes (both O(1)
+		// `flatTokenWidthFirstLine`, no recursive spine probe across the
+		// chain — PERF safe):
+		//  - OUTER `IfFirstLineExceeds(lineWidth, brk, flat)`: break iff
+		//    the whole-flat `call(item -> body)` first line overflows.
+		//  - INNER `IfFirstLineExceeds(lineWidth, openShape, glueShape)`:
+		//    within the break branch, fall back to the generic open-paren
+		//    shape iff the GLUED head line `call(item ->` itself overflows
+		//    (fork `firstLineLen > maxLen → continue`); else GLUE.
+		if (items.length == 1) {
+			final split: Null<{ head: Doc, body: Doc }> = bareArrowSplit(items[0]);
+			if (split != null && !DocMeasure.firstVisibleTextStartsWith(split.body, '{'.code) && bareArrowBodyBreaks(split.body)) {
+				final openShape: Doc = shapeAt(dm, leadBreak);
+				final flatShape: Doc = shapeAt(NoWrap, leadFlat);
+				final glueShape: Doc = bareArrowGlueShape(open, close, openInside, closeInside, split.head, split.body, cols);
+				final brk: Doc = IfFirstLineExceeds(opt.lineWidth, openShape, glueShape);
+				return WrapBoundary(IfFirstLineExceeds(opt.lineWidth, brk, flatShape));
 			}
-			return WrapBoundary(IfFirstLineExceeds(opt.lineWidth, shapeAt(dm, leadBreak), shapeAt(NoWrap, leadFlat)));
 		}
-		return WrapBoundary(shapeAt(modeFlat, leadFor(modeFlat)));
+		return WrapBoundary(IfFirstLineExceeds(opt.lineWidth, shapeAt(dm, leadBreak), shapeAt(NoWrap, leadFlat)));
 	}
 
 	/**
@@ -1282,7 +1282,7 @@ class WrapList {
 			// IfWidthExceeds picks the column-vs-t answer first; the
 			// flat side bypasses the IfBreak entirely (only one
 			// valid state below `t`).
-			final brk: Doc = (modeYY == modeYN) ? shapeYY : Group(IfBreak(shapeYY, shapeYN));
+			final brk: Doc = modeYY == modeYN ? shapeYY : Group(IfBreak(shapeYY, shapeYN));
 			return WrapBoundary(Group(IfWidthExceeds(t, brk, shapeNN)));
 		}
 		// t > lineWidth: 3 valid states (col+w>=t implies col+w>=lineWidth):
@@ -1298,7 +1298,7 @@ class WrapList {
 		if (modeNN == modeNY && modeNY == modeYY) return WrapBoundary(shapeNN);
 		// Outer IfBreak picks exceeds=no/yes; inner IfWidthExceeds
 		// further partitions the exceeds=yes side around `t`.
-		final brk: Doc = (modeNY == modeYY) ? shapeYY : Group(IfWidthExceeds(t, shapeYY, shapeNY));
+		final brk: Doc = modeNY == modeYY ? shapeYY : Group(IfWidthExceeds(t, shapeYY, shapeNY));
 		return WrapBoundary(Group(IfBreak(brk, shapeNN)));
 	}
 
@@ -1859,50 +1859,49 @@ class WrapList {
 		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
 		appendTrailingComma: Bool, lineWidth: Int
 	): Null<Doc> {
-		if (mode == FillLineWithLeadingBreak && items.length == 1 && !isArrowBodyMarker(items[0]) && !isMethodChainItem(items[0])) {
-			final glued: Doc = Concat([Text(open), openInside, items[0], closeInside, Text(close)]);
-			final broken: Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma);
-			// ω-callparam-single-objectlit: a sole OBJECT-LITERAL arg (`f({...})`)
-			// leading-breaks with the object kept FLAT on its own indented line iff
-			// the object fits there (fork keeps the object flat); if it exceeds its
-			// own line it stays brace-hugged and its fields wrap (fork `({`-glued +
-			// explode). Arrays / nested calls keep the open-delim-glue path below.
-			if (DocMeasure.firstVisibleTextStartsWith(items[0], '{'.code))
-				return IfArrowContinuationFits(cols, DocMeasure.flatTokenWidth(items[0]), lineWidth, glued, broken);
-			// ω-outer-first-wrap (T20) SCOPE: a `[`-leading sole arg — array literal
-			// or `for`/`while`/map comprehension — is excluded. A bracket-delimited
-			// collection owns its own multi-line layout: its `[` IS its wrap point,
-			// so the call hugs it and only the bracket opens
-			// (`dispatch([\n\t…\n]);`). That policy predates this slice and is
-			// pinned by `HxComprehensionDeclRhsBracketWrapTest`; the outer-first
-			// priority governs where a CALL-level wrap competes with a nested
-			// PAREN group, not collection literals.
-			if (DocMeasure.firstVisibleTextStartsWith(items[0], '['.code)) return IfNaturalFirstLineFitsOpenDelim(lineWidth, broken, glued);
-			// ω-outer-first-wrap (T20): OUTER boundaries win over inner ones. When
-			// breaking at THIS list's own delimiters already yields an argument that
-			// renders as one flat line at its continuation indent, take that shape —
-			// no inner group needs to break at all. Only when the argument still
-			// overflows its own continuation line does the decision fall through to
-			// the open-delim glue probe, which keeps the prefix hugged and lets the
-			// inner construct leading-break (`f(g(\n\t…\n))`).
-			// MEASURE: `flatLength` (NOT `DocMeasure.flatTokenWidth`) is load-
-			// bearing — it DESCENDS `BodyGroup` and answers `-1` for any forced
-			// hardline, so an argument that cannot be one line (a block body, a
-			// multi-line string, an already-exploded collection) is never mistaken
-			// for a fitting one. A `-1` argument skips the probe entirely and keeps
-			// the legacy glue decision.
-			// THRESHOLD: `lineWidth + 1` with the arm's strict `<` — the produced line is
-			// `indent + cols + argWidth` columns wide and fits when it lands ON the
-			// limit, so the threshold must be one past it (the width+1 off-by-one
-			// class this land is prone to — both edges are pinned in
-			// `HxCallParamOuterFirstWrapSliceTest`).
-			final argFlat: Int = flatLength(items[0]);
-			final innerGlue: Doc = IfNaturalFirstLineFitsOpenDelim(lineWidth, broken, glued);
-			return argFlat < 0
-				? innerGlue
-				: IfArrowContinuationFits(cols, argFlat + (appendTrailingComma ? sep.length : 0), lineWidth + 1, innerGlue, broken);
-		}
-		return null;
+		if (!(mode == FillLineWithLeadingBreak && items.length == 1 && !isArrowBodyMarker(items[0]) && !isMethodChainItem(items[0])))
+			return null;
+		final glued: Doc = Concat([Text(open), openInside, items[0], closeInside, Text(close)]);
+		final broken: Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma);
+		// ω-callparam-single-objectlit: a sole OBJECT-LITERAL arg (`f({...})`)
+		// leading-breaks with the object kept FLAT on its own indented line iff
+		// the object fits there (fork keeps the object flat); if it exceeds its
+		// own line it stays brace-hugged and its fields wrap (fork `({`-glued +
+		// explode). Arrays / nested calls keep the open-delim-glue path below.
+		if (DocMeasure.firstVisibleTextStartsWith(items[0], '{'.code))
+			return IfArrowContinuationFits(cols, DocMeasure.flatTokenWidth(items[0]), lineWidth, glued, broken);
+		// ω-outer-first-wrap (T20) SCOPE: a `[`-leading sole arg — array literal
+		// or `for`/`while`/map comprehension — is excluded. A bracket-delimited
+		// collection owns its own multi-line layout: its `[` IS its wrap point,
+		// so the call hugs it and only the bracket opens
+		// (`dispatch([\n\t…\n]);`). That policy predates this slice and is
+		// pinned by `HxComprehensionDeclRhsBracketWrapTest`; the outer-first
+		// priority governs where a CALL-level wrap competes with a nested
+		// PAREN group, not collection literals.
+		if (DocMeasure.firstVisibleTextStartsWith(items[0], '['.code)) return IfNaturalFirstLineFitsOpenDelim(lineWidth, broken, glued);
+		// ω-outer-first-wrap (T20): OUTER boundaries win over inner ones. When
+		// breaking at THIS list's own delimiters already yields an argument that
+		// renders as one flat line at its continuation indent, take that shape —
+		// no inner group needs to break at all. Only when the argument still
+		// overflows its own continuation line does the decision fall through to
+		// the open-delim glue probe, which keeps the prefix hugged and lets the
+		// inner construct leading-break (`f(g(\n\t…\n))`).
+		// MEASURE: `flatLength` (NOT `DocMeasure.flatTokenWidth`) is load-
+		// bearing — it DESCENDS `BodyGroup` and answers `-1` for any forced
+		// hardline, so an argument that cannot be one line (a block body, a
+		// multi-line string, an already-exploded collection) is never mistaken
+		// for a fitting one. A `-1` argument skips the probe entirely and keeps
+		// the legacy glue decision.
+		// THRESHOLD: `lineWidth + 1` with the arm's strict `<` — the produced line is
+		// `indent + cols + argWidth` columns wide and fits when it lands ON the
+		// limit, so the threshold must be one past it (the width+1 off-by-one
+		// class this land is prone to — both edges are pinned in
+		// `HxCallParamOuterFirstWrapSliceTest`).
+		final argFlat: Int = flatLength(items[0]);
+		final innerGlue: Doc = IfNaturalFirstLineFitsOpenDelim(lineWidth, broken, glued);
+		return argFlat < 0
+			? innerGlue
+			: IfArrowContinuationFits(cols, argFlat + (appendTrailingComma ? sep.length : 0), lineWidth + 1, innerGlue, broken);
 	}
 
 	/**
@@ -1938,12 +1937,10 @@ class WrapList {
 			hasBlockLambda = true;
 			break;
 		}
-		if (mode == FillLineWithLeadingBreak && items.length > 1 && hasBlockLambda) {
-			final glueShape: Doc = multiArgBlockLambdaGlueShape(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
-			final openShape: Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma);
-			return IfFirstLineExceeds(lineWidth, openShape, glueShape);
-		}
-		return null;
+		if (mode != FillLineWithLeadingBreak || items.length <= 1 || !hasBlockLambda) return null;
+		final glueShape: Doc = multiArgBlockLambdaGlueShape(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
+		final openShape: Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma);
+		return IfFirstLineExceeds(lineWidth, openShape, glueShape);
 	}
 
 	/**
@@ -1995,17 +1992,15 @@ class WrapList {
 		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
 		appendTrailingComma: Bool, groupRestProbe: Bool, sepBeforeFlags: Null<Array<Bool>>, keepCloseGlued: Bool, lineWidth: Int
 	): Null<Doc> {
-		if ((mode == FillLine || mode == FillLineWithLeadingBreak) && items.length > 1 && soleMultilineCollectionArg(items) >= 0) {
-			final glueShape: Doc = multiArgBlockLambdaGlueShape(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
-			final openShape: Doc = mode == FillLineWithLeadingBreak
-				? shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma)
-				: shapeFillLine(
-					open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags,
-					keepCloseGlued
-				);
-			return IfFirstLineExceeds(lineWidth, openShape, glueShape);
-		}
-		return null;
+		if (!((mode == FillLine || mode == FillLineWithLeadingBreak) && items.length > 1 && soleMultilineCollectionArg(items) >= 0))
+			return null;
+		final glueShape: Doc = multiArgBlockLambdaGlueShape(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
+		final openShape: Doc = mode == FillLineWithLeadingBreak
+			? shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma)
+			: shapeFillLine(
+				open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags, keepCloseGlued
+			);
+		return IfFirstLineExceeds(lineWidth, openShape, glueShape);
 	}
 
 	/**
@@ -2728,19 +2723,17 @@ arr.length
 			// whose source DID break before the close has `keepCloseGlued == false`
 			// (the parser captured a newline) and falls through to the OPL break,
 			// reproducing the author's own-line close.
-			if (!keepCloseGlued && isChainOPLBreak(items[0])) {
-				final brkShape: Doc = Concat([
-					Text(open),
-					openInside,
-					items[0],
-					tail0,
-					closeInside,
-					Line('\n'),
-					Text(close),
-				]);
-				return groupOrRestProbe(IfBreak(brkShape, gluedShape), groupRestProbe);
-			}
-			return groupOrRestProbe(gluedShape, groupRestProbe);
+			if (keepCloseGlued || !isChainOPLBreak(items[0])) return groupOrRestProbe(gluedShape, groupRestProbe);
+			final brkShape: Doc = Concat([
+				Text(open),
+				openInside,
+				items[0],
+				tail0,
+				closeInside,
+				Line('\n'),
+				Text(close),
+			]);
+			return groupOrRestProbe(IfBreak(brkShape, gluedShape), groupRestProbe);
 		}
 		// Chunk loop. Walk items[1..N]; at every leading-hardline-bearing
 		// item OR the end of the list, emit (a) the comma + forced
@@ -3088,12 +3081,7 @@ arr.length
 			case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline: true;
 			case Line(flat):
 				flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code;
-			case Text(_): false;
-			case OptSpace(_): false;
-			case OptSpaceSkipAfterHardline: false;
-			case IfBreak(_, _): false;
-			case IfWidthExceeds(_, _, _): false;
-			case IfFirstLineExceeds(_, _, _): false;
+			case Text(_), OptSpace(_), OptSpaceSkipAfterHardline, IfBreak(_, _), IfWidthExceeds(_, _, _), IfFirstLineExceeds(_, _, _): false;
 			case IfLineExceeds(_, _, _) | IfResidualLineExceeds(_, _, _): false;
 			case IfFullLineExceeds(_, _, _): false;
 			case IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineExceedsWithRest(_, _, _): false;
@@ -3105,8 +3093,7 @@ arr.length
 
 	private static inline function isLeadingTransparent(d: Doc): Bool {
 		return switch d {
-			case Empty: true;
-			case Concat([]): true;
+			case Empty, Concat([]): true;
 			case _: false;
 		};
 	}
@@ -3367,8 +3354,8 @@ arr.length
 	 * keyword — covers a standalone `else` token and a glued `else if` head.
 	 */
 	private static function isElseKeyword(s: String): Bool {
-		final t: String = StringTools.trim(s);
-		return t == 'else' || StringTools.startsWith(t, 'else ') || StringTools.startsWith(t, 'else\t');
+		final t: String = s.trim();
+		return t == 'else' || t.startsWith('else ') || t.startsWith('else\t');
 	}
 
 	/**
@@ -3580,8 +3567,8 @@ arr.length
 	 * that token.
 	 */
 	private static function isCommentTextAtom(s: String): Bool {
-		final t: String = StringTools.trim(s);
-		return StringTools.startsWith(t, '//') || StringTools.startsWith(t, '/*');
+		final t: String = s.trim();
+		return t.startsWith('//') || t.startsWith('/*');
 	}
 
 	/**

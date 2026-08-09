@@ -58,21 +58,6 @@ class SpanInfoLowering extends PairedShapeLowering {
 		collectNominalRules();
 	}
 
-	/** Generated span-info walk name for a rule type path. */
-	public static inline function spanInfoFnName(typePath: String): String {
-		return '_spanInfo${PairedShapeLowering.simpleName(typePath)}S';
-	}
-
-	/** Generated nominal-name helper name for a rule type path. */
-	public static inline function nominalFnName(typePath: String): String {
-		return '_nominalName${PairedShapeLowering.simpleName(typePath)}S';
-	}
-
-	/** Generated own-span helper name for a rule type path. */
-	public static inline function spanOfFnName(typePath: String): String {
-		return '_spanOf${PairedShapeLowering.simpleName(typePath)}S';
-	}
-
 	/**
 	 * Build every generated function: one `_spanInfo` per non-Terminal rule, and
 	 * the `_nominalName` / `_spanOf` pair for each enum rule a `type` or
@@ -92,20 +77,19 @@ class SpanInfoLowering extends PairedShapeLowering {
 				paramCT: ct,
 				body: lowerSpanInfo(rule, node)
 			});
-			if (_nominalRules.contains(rule)) {
-				nominals.push({
-					typePath: rule,
-					fnName: nominalFnName(rule),
-					paramCT: ct,
-					body: lowerNominalName(rule, node)
-				});
-				spanOfs.push({
-					typePath: rule,
-					fnName: spanOfFnName(rule),
-					paramCT: ct,
-					body: lowerSpanOf(rule, node)
-				});
-			}
+			if (!_nominalRules.contains(rule)) continue;
+			nominals.push({
+				typePath: rule,
+				fnName: nominalFnName(rule),
+				paramCT: ct,
+				body: lowerNominalName(rule, node)
+			});
+			spanOfs.push({
+				typePath: rule,
+				fnName: spanOfFnName(rule),
+				paramCT: ct,
+				body: lowerSpanOf(rule, node)
+			});
 		}
 		return {
 			rootTypePath: _shape.root,
@@ -126,7 +110,7 @@ class SpanInfoLowering extends PairedShapeLowering {
 	 * a rule with no helper and no write site.
 	 */
 	private function collectNominalRules(): Void {
-		for (_ => node in _shape.rules) for (child in node.children) {
+		for (node in _shape.rules) for (child in node.children) {
 			final args: Array<ShapeNode> = node.kind == Alt ? child.children : [child];
 			for (arg in args) if (fieldNameOf(arg) == TYPE_FIELD || fieldNameOf(arg) == RETURN_TYPE_FIELD) {
 				final ref: Null<String> = refOf(arg);
@@ -155,10 +139,12 @@ class SpanInfoLowering extends PairedShapeLowering {
 	/** `case Ctor(_a0, ..., _span):` - the ctor's span becomes the threaded span for everything below it. */
 	private function spanInfoCase(rule: String, branch: ShapeNode): Case {
 		final argNames: Array<String> = [for (i in 0...branch.children.length) '_a$i'];
-		final pattern: Expr = ctorPattern(rule, branch.annotations.get(AnnotationKeys.BASE_CTOR), argNames);
-		final body: Array<Expr> = [];
-		for (i in 0...branch.children.length)
-			for (e in recurse(branch.children[i], ident(argNames[i]), ident(PairedShapeLowering.SPAN_FIELD), 0)) body.push(e);
+		final pattern: Expr = ctorPattern(rule, branch.annotations[AnnotationKeys.BASE_CTOR], argNames);
+		final body: Array<Expr> = [
+			for (i in 0...branch.children.length) for (e in recurse(
+				branch.children[i], ident(argNames[i]), ident(PairedShapeLowering.SPAN_FIELD), 0
+			)) e
+		];
 		return { values: [pattern], expr: body.length == 0 ? macro {} : block(body) };
 	}
 
@@ -289,7 +275,7 @@ class SpanInfoLowering extends PairedShapeLowering {
 	private inline function recurseCore(child: ShapeNode, access: Expr, spanExpr: Expr, depth: Int): Array<Expr> {
 		return switch child.kind {
 			case Ref:
-				final ref: String = child.annotations.get(AnnotationKeys.BASE_REF);
+				final ref: String = child.annotations[AnnotationKeys.BASE_REF];
 				isTerminalRule(ref) ? [] : [
 					call(spanInfoFnName(ref), [access, spanExpr, ident('b'), ident('source'), ident('tp')])
 				];
@@ -356,11 +342,14 @@ class SpanInfoLowering extends PairedShapeLowering {
 	/** The walker's `_nameOf` for one `Named` operand, or null when the operand can carry no name. */
 	private function nominalOperandName(child: ShapeNode, access: Expr): Null<Expr> {
 		final ref: Null<String> = refOf(child);
-		return ref == null
-			? null
-			: isStringTerminal(ref)
-				? macro ($access: String)
-				: isTerminalRule(ref) ? null : call(QueryWalkerLowering.nameFnName(ref), [access]);
+		return if (ref == null)
+			null
+		else if (isStringTerminal(ref))
+			macro ($access: String)
+		else if (isTerminalRule(ref))
+			null
+		else
+			call(QueryWalkerLowering.nameFnName(ref), [access]);
 	}
 
 	/** Body of `_spanOf<Leaf>S`: a paired ctor always carries its own `_span`, so every arm returns it. */
@@ -385,6 +374,21 @@ class SpanInfoLowering extends PairedShapeLowering {
 		if (ids.kind != Star || ids.children.length == 0) return null;
 		final ref: Null<String> = refOf(ids.children[0]);
 		return ref == null ? null : pairedComplexType(ref);
+	}
+
+	/** Generated span-info walk name for a rule type path. */
+	public static inline function spanInfoFnName(typePath: String): String {
+		return '_spanInfo${PairedShapeLowering.simpleName(typePath)}S';
+	}
+
+	/** Generated nominal-name helper name for a rule type path. */
+	public static inline function nominalFnName(typePath: String): String {
+		return '_nominalName${PairedShapeLowering.simpleName(typePath)}S';
+	}
+
+	/** Generated own-span helper name for a rule type path. */
+	public static inline function spanOfFnName(typePath: String): String {
+		return '_spanOf${PairedShapeLowering.simpleName(typePath)}S';
 	}
 
 	/** The accessor ids that denote a plain stored slot, as an array-literal expression for the emitted test. */

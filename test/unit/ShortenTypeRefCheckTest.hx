@@ -9,7 +9,6 @@ import anyparse.check.ShortenTypeRef;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.runtime.Span;
 
 /**
@@ -21,6 +20,23 @@ import anyparse.runtime.Span;
  * the index proof degrading a run to report-only, and idempotency.
  */
 class ShortenTypeRefCheckTest extends Test {
+
+	// --- helpers -------------------------------------------------------------------
+
+	/** The library module carrying a MAIN type `Mod` and a SECONDARY type `Sub` — the hybrid's subject. */
+	private static inline final MOD_SOURCE: String = 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n';
+
+	/** A second library module whose main type `Foo` is the plain over-qualification subject. */
+	private static inline final FOO_SOURCE: String = 'package pkg.deep;\n\nclass Foo {}\n';
+
+	/** A third library module, so an add-import test can prove two paths each get their own line. */
+	private static inline final BAR_SOURCE: String = 'package pkg.deep;\n\nclass Bar {}\n';
+
+	/** A same-simple-name type in ANOTHER package — the shadow that keeps a qualified path qualified. */
+	private static inline final OTHER_FOO_SOURCE: String = 'package other;\n\nclass Foo {}\n';
+
+	/** A type one package deep, for the `pkg.Holder` chain whose receiver a parameter can shadow. */
+	private static inline final HOLDER_SOURCE: String = 'package pkg;\n\nclass Holder {}\n';
 
 	// --- ARM 1: the pack.SubType hybrid ---
 
@@ -128,8 +144,8 @@ class ShortenTypeRefCheckTest extends Test {
 	 * as a node with an exact span, so every host shape is now the same code.
 	 */
 	public function testFieldParameterAndReturnAnnotationsShorten(): Void {
-		final src: String =
-			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic var field:pkg.deep.Foo;\n\n\tpublic function f(p:pkg.deep.Foo):pkg.deep.Foo {\n\t\treturn p;\n\t}\n\n}\n';
+		final src: String = 'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic var field:pkg.deep.Foo;\n\n'
+			+ '\tpublic function f(p:pkg.deep.Foo):pkg.deep.Foo {\n\t\treturn p;\n\t}\n\n}\n';
 		Assert.equals(3, violations(src).length);
 		final out: String = applyFix(src);
 		Assert.isTrue(out.indexOf('public var field:Foo;') != -1, 'field, got: $out');
@@ -228,8 +244,8 @@ class ShortenTypeRefCheckTest extends Test {
 	// --- conditional compilation ---
 
 	public function testConditionalRegionIsNotRewritten(): Void {
-		final src: String =
-			'package app;\n\nimport pkg.deep.Mod.Sub;\n\nclass C {\n\n\tpublic function f():Void {\n\t\t#if debug\n\t\tfinal v:pkg.deep.Sub = g();\n\t\t#end\n\t}\n\n}\n';
+		final src: String = 'package app;\n\nimport pkg.deep.Mod.Sub;\n\nclass C {\n\n\tpublic function f():Void {\n\t\t#if debug\n'
+			+ '\t\tfinal v:pkg.deep.Sub = g();\n\t\t#end\n\t}\n\n}\n';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -239,8 +255,8 @@ class ShortenTypeRefCheckTest extends Test {
 	 * rather than a kind.
 	 */
 	public function testConditionalExpressionRegionIsNotRewritten(): Void {
-		final src: String =
-			'package app;\n\nimport pkg.deep.Mod.Sub;\n\nclass C {\n\n\tpublic function f():Void {\n\t\tfinal x = #if debug { final v:pkg.deep.Sub = g(); v; } #else 0 #end;\n\t}\n\n}\n';
+		final src: String = 'package app;\n\nimport pkg.deep.Mod.Sub;\n\nclass C {\n\n\tpublic function f():Void {\n'
+			+ '\t\tfinal x = #if debug { final v:pkg.deep.Sub = g(); v; } #else 0 #end;\n\t}\n\n}\n';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -291,8 +307,8 @@ class ShortenTypeRefCheckTest extends Test {
 	 * one, so without `TypeRefPrinter.shadowedByGuardedImport` arm 2 would shorten both uses.
 	 */
 	public function testGuardedImportOfTheSameNameRefusesTheShortForm(): Void {
-		final src: String =
-			'package app;\n\nimport pkg.deep.Foo;\n#if flash\nimport other.Foo;\n#end\n\nclass C {\n\n\tpublic function f():Void {\n\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n\t}\n\n}\n';
+		final src: String = 'package app;\n\nimport pkg.deep.Foo;\n#if flash\nimport other.Foo;\n#end\n\nclass C {\n\n'
+			+ '\tpublic function f():Void {\n\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n\t}\n\n}\n';
 		Assert.equals(0, violations(src).length);
 		Assert.equals(src, applyFix(src));
 	}
@@ -305,8 +321,8 @@ class ShortenTypeRefCheckTest extends Test {
 	 * `flash && legacy`. The one-level sibling above is the control.
 	 */
 	public function testNestedGuardedImportOfTheSameNameRefusesTheShortForm(): Void {
-		final src: String =
-			'package app;\n\nimport pkg.deep.Foo;\n#if flash\n#if legacy\nimport other.Foo;\n#end\n#end\n\nclass C {\n\n\tpublic function f():Void {\n\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n\t}\n\n}\n';
+		final src: String = 'package app;\n\nimport pkg.deep.Foo;\n#if flash\n#if legacy\nimport other.Foo;\n#end\n#end\n\nclass C {\n\n'
+			+ '\tpublic function f():Void {\n\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n\t}\n\n}\n';
 		Assert.equals(0, violations(src).length);
 		Assert.equals(src, applyFix(src));
 	}
@@ -345,8 +361,8 @@ class ShortenTypeRefCheckTest extends Test {
 
 	/** Gate 5 — a PARAMETER holding the simple name; an import would collide with it. */
 	public function testShortNameBoundByAParameterRefusesTheImport(): Void {
-		final src: String =
-			'package app;\n\nclass C {\n\n\tpublic function f(Foo:Int):Void {\n\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n\t}\n\n}\n';
+		final src: String = 'package app;\n\nclass C {\n\n\tpublic function f(Foo:Int):Void {\n\t\tg(pkg.deep.Foo.a());\n'
+			+ '\t\tg(pkg.deep.Foo.b());\n\t}\n\n}\n';
 		Assert.equals(0, violations(src).length);
 		Assert.equals(src, applyFix(src));
 	}
@@ -363,8 +379,8 @@ class ShortenTypeRefCheckTest extends Test {
 	 * module-local type IS a same-package type to the index.
 	 */
 	public function testModuleLocalTypeOfTheSameNameRefusesTheShortForm(): Void {
-		final src: String =
-			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic function f():Void {\n\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n\t}\n\n}\n\nclass Foo {}\n';
+		final src: String = 'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic function f():Void {\n\t\tg(pkg.deep.Foo.a());\n'
+			+ '\t\tg(pkg.deep.Foo.b());\n\t}\n\n}\n\nclass Foo {}\n';
 		Assert.equals(0, violations(src).length);
 		Assert.equals(src, applyFix(src));
 	}
@@ -394,8 +410,8 @@ class ShortenTypeRefCheckTest extends Test {
 	}
 
 	public function testMacroReificationIsSkipped(): Void {
-		final src: String =
-			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tmacro static function m() {\n\t\treturn macro { final v:pkg.deep.Foo = g(); };\n\t}\n\n}\n';
+		final src: String = 'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tmacro static function m() {\n'
+			+ '\t\treturn macro { final v:pkg.deep.Foo = g(); };\n\t}\n\n}\n';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -456,8 +472,8 @@ class ShortenTypeRefCheckTest extends Test {
 	public function testCommentInsideTheAnnotationNoLongerMatters(): Void {
 		// The region slice carried the comment into the reprint, so it refused the whole
 		// annotation; the projection hands out the nominal's own span and the comment is trivia.
-		final src: String =
-			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic function f():Void {\n\t\tfinal v:/* c */ pkg.deep.Foo = g();\n\t}\n\n}\n';
+		final src: String = 'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic function f():Void {\n'
+			+ '\t\tfinal v:/* c */ pkg.deep.Foo = g();\n\t}\n\n}\n';
 		Assert.equals(1, violations(src).length);
 		Assert.isTrue(applyFix(src).indexOf('final v:/* c */ Foo = g();') != -1, 'shortened, got: ${applyFix(src)}');
 	}
@@ -465,16 +481,16 @@ class ShortenTypeRefCheckTest extends Test {
 	public function testMultiDeclaratorStatementShortens(): Void {
 		// The region slice spanned both declarators of the one grammar node and refused on the
 		// depth-0 comma; the projection addresses the annotation itself.
-		final src: String =
-			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic function f():Void {\n\t\tvar a:pkg.deep.Foo, b = null;\n\t}\n\n}\n';
+		final src: String = 'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic function f():Void {\n'
+			+ '\t\tvar a:pkg.deep.Foo, b = null;\n\t}\n\n}\n';
 		Assert.isTrue(applyFix(src).indexOf('var a:Foo, b = null;') != -1, 'shortened, got: ${applyFix(src)}');
 	}
 
 	public function testTopLevelAnonymousStructureAnnotationShortens(): Void {
 		// The region slice needed an `=` after the `:` and the grammar makes the `Anon` child 0,
 		// so the region came out empty; the projection carries a node per anon FIELD type.
-		final src: String =
-			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic function f():Void {\n\t\tfinal u:{x:pkg.deep.Foo} = g();\n\t}\n\n}\n';
+		final src: String = 'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic function f():Void {\n'
+			+ '\t\tfinal u:{x:pkg.deep.Foo} = g();\n\t}\n\n}\n';
 		Assert.isTrue(applyFix(src).indexOf('final u:{x:Foo} = g();') != -1, 'shortened, got: ${applyFix(src)}');
 	}
 
@@ -532,23 +548,6 @@ class ShortenTypeRefCheckTest extends Test {
 			0, new ShortenTypeRef().run([{ file: 'C.hx', source: 'class Bad { function f() { final v:' }], new HaxeQueryPlugin()).length
 		);
 	}
-
-	// --- helpers -------------------------------------------------------------------
-
-	/** The library module carrying a MAIN type `Mod` and a SECONDARY type `Sub` — the hybrid's subject. */
-	private static inline final MOD_SOURCE: String = 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n';
-
-	/** A second library module whose main type `Foo` is the plain over-qualification subject. */
-	private static inline final FOO_SOURCE: String = 'package pkg.deep;\n\nclass Foo {}\n';
-
-	/** A third library module, so an add-import test can prove two paths each get their own line. */
-	private static inline final BAR_SOURCE: String = 'package pkg.deep;\n\nclass Bar {}\n';
-
-	/** A same-simple-name type in ANOTHER package — the shadow that keeps a qualified path qualified. */
-	private static inline final OTHER_FOO_SOURCE: String = 'package other;\n\nclass Foo {}\n';
-
-	/** A type one package deep, for the `pkg.Holder` chain whose receiver a parameter can shadow. */
-	private static inline final HOLDER_SOURCE: String = 'package pkg;\n\nclass Holder {}\n';
 
 	/** A consumer in `package app;` carrying `imports` verbatim and one local annotated `annotation`. */
 	private function consumer(imports: String, annotation: String): String {

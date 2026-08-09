@@ -7,7 +7,6 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
-import anyparse.query.Refs.RefHit;
 import anyparse.query.RefsCache;
 
 /**

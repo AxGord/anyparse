@@ -104,7 +104,7 @@ class HxMacroTypeExprSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testMacroTypeRoundTrip(): Void {
+	public inline function testMacroTypeRoundTrip(): Void {
 		roundTrip(
 			'class C { static function f() { var a = macro : Int; var b = macro : Array<String>; var c = macro : Int -> Void; var d = macro foo; } }',
 			'L-macro-type'

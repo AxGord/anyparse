@@ -18,9 +18,6 @@ import anyparse.format.text.FieldLookup;
 import anyparse.format.text.KeySyntax;
 import anyparse.format.text.MissingPolicy;
 import anyparse.format.text.TextFormat;
-import anyparse.format.text.TextFormat.BlockCommentDelims;
-import anyparse.format.text.TextFormat.BoolLiterals;
-import anyparse.format.text.TextFormat.UnescapeResult;
 import anyparse.format.text.TrailingSepPolicy;
 import anyparse.format.text.UnknownPolicy;
 import anyparse.format.wrap.WrapConditionType;
@@ -30,6 +27,8 @@ import anyparse.format.wrap.WrappingLocation;
 import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
 import anyparse.format.UniformStatementBlanksPolicy;
 import anyparse.format.TrailingCommaPolicy;
+
+using StringTools;
 
 /**
  * Text-format descriptor for the Haxe programming language.
@@ -863,7 +862,7 @@ final class HaxeFormat implements TextFormat {
 			case '\t'.code: '\\t';
 			case _:
 				if (c < ' '.code)
-					'\\x${StringTools.hex(c, 2)}';
+					'\\x${c.hex(2)}';
 				else
 					String.fromCharCode(c);
 		};
@@ -898,7 +897,7 @@ final class HaxeFormat implements TextFormat {
 			case '\t'.code: '\\t';
 			case _:
 				if (c < ' '.code)
-					'\\x${StringTools.hex(c, 2)}';
+					'\\x${c.hex(2)}';
 				else
 					String.fromCharCode(c);
 		};

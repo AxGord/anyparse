@@ -96,7 +96,7 @@ class OversizedTypeCheckTest extends Test {
 		// both thresholds; a 3-member, 5-line type exceeds both, and the one finding
 		// names both in a single message.
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
-		final base: String = (tmp != null && tmp.length > 0) ? tmp : '/tmp';
+		final base: String = tmp != null && tmp.length > 0 ? tmp : '/tmp';
 		final dir: String = '$base/anyparse_ot_cfg_${Sys.time()}';
 		sys.FileSystem.createDirectory(dir);
 		sys.io.File.saveContent('$dir/apqlint.json', '{"rules": {"oversized-type": {"maxMembers": 2, "maxLines": 3}}}');

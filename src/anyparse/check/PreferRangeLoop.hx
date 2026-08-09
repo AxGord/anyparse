@@ -2,13 +2,14 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
+
+using StringTools;
 
 /**
  * Flags a manual counter loop — a `var i = A;` declaration immediately followed
@@ -104,12 +105,12 @@ final class PreferRangeLoop implements Check {
 		final seams: Null<Seams> = readSeams(plugin.refShape());
 		if (seams == null) return [];
 		final s: Seams = seams;
-		final typed: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final typed: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			final dt: Null<Map<Int, String>> = typed == null ? null : typed.declaredTypes(entry.source);
+			final dt: Null<Map<Int, String>> = typed?.declaredTypes(entry.source);
 			walk(tree, tree, entry.file, entry.source, dt, s, violations);
 		}
 		return violations;
@@ -131,8 +132,8 @@ final class PreferRangeLoop implements Check {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (seams == null || tree == null) return [];
 		final s: Seams = seams;
-		final typed: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
-		final dt: Null<Map<Int, String>> = typed == null ? null : typed.declaredTypes(source);
+		final typed: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final dt: Null<Map<Int, String>> = typed?.declaredTypes(source);
 		final wanted: Array<String> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
@@ -281,7 +282,7 @@ final class PreferRangeLoop implements Check {
 		final buf: StringBuf = new StringBuf();
 		var prevSpace: Bool = false;
 		for (i in 0...text.length) {
-			final c: Int = StringTools.fastCodeAt(text, i);
+			final c: Int = text.fastCodeAt(i);
 			final isSpace: Bool = c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 			if (isSpace) {
 				if (!prevSpace) buf.addChar(' '.code);
@@ -291,7 +292,7 @@ final class PreferRangeLoop implements Check {
 				prevSpace = false;
 			}
 		}
-		return StringTools.trim(buf.toString());
+		return buf.toString().trim();
 	}
 
 	/** The normalized source, truncated with an ellipsis beyond the excerpt cap. */
@@ -301,7 +302,7 @@ final class PreferRangeLoop implements Check {
 	}
 
 	/** The bound's identifier name when `B` is a bare identifier, else null (a literal bound has no name to track). */
-	private static function boundIdentName(bound: QueryNode, s: Seams): Null<String> {
+	private static inline function boundIdentName(bound: QueryNode, s: Seams): Null<String> {
 		return bound.kind == s.identKind ? bound.name : null;
 	}
 
@@ -310,8 +311,12 @@ final class PreferRangeLoop implements Check {
 		if (!s.mutableKinds.contains(decl.kind) || decl.children.length != 1) return null;
 		final name: Null<String> = decl.name;
 		final span: Null<Span> = decl.span;
-		if (name == null || span == null) return null;
-		return RefactorSupport.isMultiDeclarator(decl, s.shape.localDeclContinuationKinds ?? []) ? null : name;
+		return if (name == null || span == null)
+			null
+		else if (RefactorSupport.isMultiDeclarator(decl, s.shape.localDeclContinuationKinds ?? []))
+			null
+		else
+			name;
 	}
 
 	/**
@@ -393,21 +398,27 @@ final class PreferRangeLoop implements Check {
 		final initSpan: Null<Span> = decl.children[0].span;
 		final whileSpan: Null<Span> = whileNode.span;
 		final scopeSpan: Null<Span> = scope.span;
-		if (declSpan == null || initSpan == null || whileSpan == null || scopeSpan == null || bound.span == null) return null;
-		if (declaredNonInt(declSpan.from, dt)) return null;
-		if (provablyNonInt(decl.children[0], root, source, dt, s)) return null;
-		if (provablyNonInt(bound, root, source, dt, s)) return null;
-		if (RefactorSupport.referencedInRange(source, loopVar, whileSpan.to, scopeSpan.to, [])) return null;
-		if (capturedByClosure(scope, source, loopVar, s)) return null;
-		final result = {
-			declSpan: declSpan,
-			loopVar: loopVar,
-			initNode: decl.children[0],
-			boundNode: bound,
-			whileNode: whileNode,
-			body: body
-		};
-		return result;
+		return if (declSpan == null || initSpan == null || whileSpan == null || scopeSpan == null || bound.span == null)
+			null
+		else if (declaredNonInt(declSpan.from, dt))
+			null
+		else if (provablyNonInt(decl.children[0], root, source, dt, s))
+			null
+		else if (provablyNonInt(bound, root, source, dt, s))
+			null
+		else if (RefactorSupport.referencedInRange(source, loopVar, whileSpan.to, scopeSpan.to, []))
+			null
+		else if (capturedByClosure(scope, source, loopVar, s))
+			null
+		else
+			{
+				declSpan: declSpan,
+				loopVar: loopVar,
+				initNode: decl.children[0],
+				boundNode: bound,
+				whileNode: whileNode,
+				body: body
+			};
 	}
 
 	/** Mirror of `walk` for the fix path: emit the range-loop rewrite for each wanted, convertible loop. */
@@ -460,7 +471,7 @@ final class PreferRangeLoop implements Check {
 		final rawStart: String = source.substring(initSpan.from, initSpan.to);
 		final start: String = s.atomicKinds.contains(m.initNode.kind) ? rawStart : '($rawStart)';
 		final boundText: String = source.substring(boundSpan.from, boundSpan.to);
-		final text: String = 'for (${m.loopVar} in $start...$boundText) {' + interior + '}';
+		final text: String = 'for (${m.loopVar} in $start...$boundText) {$interior}';
 		return { span: new Span(m.declSpan.from, whileSpan.to), text: text };
 	}
 
@@ -488,7 +499,7 @@ final class PreferRangeLoop implements Check {
 
 	/** Whether a numeric literal's source is float syntax — a `.` or a decimal exponent (hex literals are `Int`). */
 	private static function isFloatSyntax(text: String): Bool {
-		return !StringTools.startsWith(text, '0x') && !StringTools.startsWith(text, '0X')
+		return !text.startsWith('0x') && !text.startsWith('0X')
 			&& (text.indexOf('.') != -1 || text.indexOf('e') != -1 || text.indexOf('E') != -1);
 	}
 

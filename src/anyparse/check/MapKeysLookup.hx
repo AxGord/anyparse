@@ -2,12 +2,13 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
 import anyparse.query.RefactorSupport;
+
+using StringTools;
 
 /**
  * Flags a `for (k in m.keys())` loop whose body reads the SAME map by the SAME key
@@ -127,7 +128,7 @@ final class MapKeysLookup implements Check {
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			final declaredTypes: Null<Map<Int, String>> = c.typed == null ? null : c.typed.declaredTypes(entry.source);
+			final declaredTypes: Null<Map<Int, String>> = c.typed?.declaredTypes(entry.source);
 			walk(tree, tree, entry.file, declaredTypes, c, resolveSymbols, violations);
 		}
 		return violations;
@@ -165,7 +166,7 @@ final class MapKeysLookup implements Check {
 		final fieldKind: Null<String> = shape.fieldAccessKind;
 		final indexKind: Null<String> = shape.indexAccessKind;
 		if (forKind == null || identKind == null || callKind == null || fieldKind == null || indexKind == null) return null;
-		final typed: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final typed: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		return {
 			shape: shape,
 			forKind: forKind,
@@ -275,15 +276,13 @@ final class MapKeysLookup implements Check {
 		final recv: Null<QueryNode> = keysReceiver(iterable, cfg);
 		if (recv == null) return null;
 		final path: Null<Array<String>> = RefactorSupport.pathOf(recv, cfg.identKind, cfg.fieldKind);
-		if (path == null) return null;
-		final parts = {
+		return path == null ? null : {
 			keyName: keyName,
 			iterable: iterable,
 			body: body,
 			recv: recv,
 			path: path
 		};
-		return parts;
 	}
 
 	/** The receiver node of a `<path>.keys()` no-argument call, else null. */
@@ -477,11 +476,11 @@ final class MapKeysLookup implements Check {
 	}
 
 
-	private static function isIdentNamed(node: QueryNode, name: String, cfg: Cfg): Bool {
+	private static inline function isIdentNamed(node: QueryNode, name: String, cfg: Cfg): Bool {
 		return node.kind == cfg.identKind && node.name == name;
 	}
 
-	private static function isWriteMethod(name: Null<String>): Bool {
+	private static inline function isWriteMethod(name: Null<String>): Bool {
 		return name == SET_METHOD || name == REMOVE_METHOD || name == CLEAR_METHOD;
 	}
 
@@ -496,7 +495,7 @@ final class MapKeysLookup implements Check {
 			// A positional `children[0]` here reads a key-value loop's binder instead, so the two
 			// walks disagree on the key and `--fix` silently declines a violation `lint` reported.
 			final iterable: Null<QueryNode> = RefactorSupport.iterationIterable(node, cfg.valueBinderKinds);
-			final iterSpan: Null<Span> = iterable == null ? null : iterable.span;
+			final iterSpan: Null<Span> = iterable?.span;
 			if (iterSpan != null && wanted.contains('${iterSpan.from}:${iterSpan.to}')) {
 				final e: Null<Array<{ span: Span, text: String }>> = buildMapEdits(node, source, cfg);
 				if (e != null) for (edit in e) out.push(edit);
@@ -576,7 +575,7 @@ final class MapKeysLookup implements Check {
 		if (colon < 0 || colon >= to) return null;
 		final start: Int = skipSpace(source, colon + 1, to);
 		var i: Int = start;
-		while (i < to && RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, i))) i++;
+		while (i < to && RefactorSupport.isIdentChar(source.fastCodeAt(i))) i++;
 		return i == start ? null : source.substring(start, i);
 	}
 
@@ -612,7 +611,7 @@ final class MapKeysLookup implements Check {
 	private static function skipSpace(source: String, from: Int, stop: Int): Int {
 		var i: Int = from;
 		while (i < stop) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code) break;
 			i++;
 		}

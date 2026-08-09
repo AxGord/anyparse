@@ -4,13 +4,14 @@ import anyparse.check.Check.Violation;
 import anyparse.check.NullFlow.NullFacts;
 import anyparse.check.NullableSource.NullableSourceCfg;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Flags a `switch` over a **provably-nullable subject** whose branches include a
@@ -80,7 +81,7 @@ final class NullableSwitchMissingNull implements Check {
 		final seams: Null<Seams> = readSeams(shape);
 		if (seams == null) return [];
 		final s: Seams = seams;
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		if (provider == null) return [];
 		final typed: TypeInfoProvider = provider;
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
@@ -365,7 +366,7 @@ final class NullableSwitchMissingNull implements Check {
 		if (bs == null) return null;
 		var end: Int = bs.from;
 		while (end < source.length) {
-			final c: Int = StringTools.fastCodeAt(source, end);
+			final c: Int = source.fastCodeAt(end);
 			if (c < 'a'.code || c > 'z'.code) break;
 			end++;
 		}
@@ -384,8 +385,7 @@ final class NullableSwitchMissingNull implements Check {
 	private static function relationalAssertOperand(arg: QueryNode, s: Seams, asTrue: Bool): Null<QueryNode> {
 		final e: QueryNode = RefactorSupport.unwrapParens(arg, s.parenKind);
 		final wantKind: Null<String> = asTrue ? s.shape.notEqKind : s.shape.eqKind;
-		if (wantKind == null || e.kind != wantKind) return null;
-		return NullFlow.nullComparisonOperand(e, s.identKind, s.nullLitKind);
+		return wantKind == null || e.kind != wantKind ? null : NullFlow.nullComparisonOperand(e, s.identKind, s.nullLitKind);
 	}
 
 }

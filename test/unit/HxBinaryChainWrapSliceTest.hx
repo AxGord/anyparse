@@ -199,8 +199,8 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 		// `WrapList.startsWithHardline` so the default OPLAfterFirst
 		// cascade (no leading hardline, items[0] glued to `((`) keeps the
 		// close glued to the last item.
-		final src: String =
-			'class Main {\n\tpublic static function main() {\n\t\treturn !(\n\t\t\ta.y + b.h <= c.y || d.y >= e.y + f.h ||\n\t\t\tg.x + h.w <= i.x || j.x >= k.x + l.w\n\t\t);\n\t}\n}';
+		final src: String = 'class Main {\n\tpublic static function main() {\n\t\treturn !(\n'
+			+ '\t\t\ta.y + b.h <= c.y || d.y >= e.y + f.h ||\n\t\t\tg.x + h.w <= i.x || j.x >= k.x + l.w\n\t\t);\n\t}\n}';
 		final cfg: String = '{ "wrapping": { "opBoolChain": { "defaultWrap": "onePerLine", "rules": [] } } }';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
 		opts.lineWidth = 80;

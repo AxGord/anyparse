@@ -5,12 +5,13 @@ import anyparse.check.IfExpressionChain.ShieldSeams;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
+
+using StringTools;
 
 /**
  * Flags an ARROW lambda whose `{ … }` body holds exactly one statement, and collapses the
@@ -382,8 +383,7 @@ final class PreferLambdaExpressionBody implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		return [
+		return seams == null ? [] : [
 			for (entry in files) for (m in collect(plugin, entry.source, seams, FormatConfigDiscovery.discover(entry.file)))
 				{
 					file: entry.file,
@@ -465,8 +465,9 @@ final class PreferLambdaExpressionBody implements Check {
 		final divergence: Int = firstDivergence(before, after);
 		final head: String = trimmedAt(before, divergence);
 		final collapsedHead: String = trimmedAt(after, divergence);
-		if (collapsedHead.length > head.length) return true;
-		return headOnlyLostItsBrace(head, collapsedHead) && interiorSurvives(before, after, divergence);
+		return collapsedHead.length > head.length || headOnlyLostItsBrace(head, collapsedHead) && interiorSurvives(
+			before, after, divergence
+		);
 	}
 
 	/**
@@ -521,13 +522,13 @@ final class PreferLambdaExpressionBody implements Check {
 	 */
 	private static function withoutTerminator(line: String): String {
 		final comment: Int = line.indexOf(LINE_COMMENT);
-		if (comment < 0) return StringTools.endsWith(line, ';') ? line.substr(0, line.length - 1) : line;
+		if (comment < 0) return line.endsWith(';') ? line.substr(0, line.length - 1) : line;
 		// A trailing comment rides ALONG with the statement (`f(); // why` re-emits as
 		// `f() // why`), so the `;` to drop is the one closing the CODE, not the one closing
 		// the line. A `//` inside a string literal only ever costs a refusal: the code part
 		// then does not end in `;` and the line comes back unchanged.
-		final code: String = StringTools.rtrim(line.substring(0, comment));
-		return StringTools.endsWith(code, ';') ? code.substr(0, code.length - 1) + ' ' + line.substr(comment) : line;
+		final code: String = line.substring(0, comment).rtrim();
+		return code.endsWith(';') ? '${code.substr(0, code.length - 1)} ${line.substr(comment)}' : line;
 	}
 
 	/**
@@ -745,8 +746,8 @@ final class PreferLambdaExpressionBody implements Check {
 	 * and a `--fix` fixpoint cannot oscillate across it.
 	 */
 	private static function branchesInternally(stmt: QueryNode, s: Seams): Bool {
-		if (s.branchingKinds.contains(stmt.kind)) return true;
-		return s.shield.conditionalKinds.contains(stmt.kind) && stmt.children.length >= IF_ELSE_CHILD_COUNT;
+		return s.branchingKinds.contains(stmt.kind) || s.shield.conditionalKinds.contains(stmt.kind)
+			&& stmt.children.length >= IF_ELSE_CHILD_COUNT;
 	}
 
 	/**
@@ -763,9 +764,12 @@ final class PreferLambdaExpressionBody implements Check {
 		if (s.controlFlowKinds.contains(stmt.kind)) {
 			// Unshielded, an emitted else-less `if` anywhere in the subtree would swallow the
 			// `else` that follows the lambda. See the dangling-else section of the class doc.
-			if (!shielded && IfExpressionChain.holdsElseLessConditional(stmt, s.shield.conditionalKinds)) return null;
-			if (!tailArg && branchesInternally(stmt, s)) return null;
-			return { node: stmt, terminated: true };
+			return if (!shielded && IfExpressionChain.holdsElseLessConditional(stmt, s.shield.conditionalKinds))
+				null
+			else if (!tailArg && branchesInternally(stmt, s))
+				null
+			else
+				{ node: stmt, terminated: true };
 		}
 		if (stmt.children.length != SINGLE_VALUE_CHILD) return null;
 		final valueCarrying: Bool = s.valueReturnKinds.contains(stmt.kind) || stmt.kind == s.exprStatementKind;
@@ -783,9 +787,12 @@ final class PreferLambdaExpressionBody implements Check {
 		// re-parse gate is no net here, since this parser accepts the shape `haxe` rejects.
 		final stmtSpan: Null<Span> = stmt.span;
 		final valueSpan: Null<Span> = value.span;
-		if (stmtSpan == null || valueSpan == null) return null;
-		if (s.terminatedKinds.contains(stmt.kind) && stmtSpan.to == valueSpan.to) return null;
-		return { node: value, terminated: false };
+		return if (stmtSpan == null || valueSpan == null)
+			null
+		else if (s.terminatedKinds.contains(stmt.kind) && stmtSpan.to == valueSpan.to)
+			null
+		else
+			{ node: value, terminated: false };
 	}
 
 	/**
@@ -840,7 +847,7 @@ final class PreferLambdaExpressionBody implements Check {
 	/** The offset of the block's closing `}` — its span may run past it over trailing trivia. */
 	private static function closeBraceOf(bodySpan: Span, source: String): Int {
 		var i: Int = bodySpan.to - 1;
-		while (i > bodySpan.from && StringTools.fastCodeAt(source, i) != '}'.code) i--;
+		while (i > bodySpan.from && source.fastCodeAt(i) != '}'.code) i--;
 		return i;
 	}
 
@@ -849,7 +856,7 @@ final class PreferLambdaExpressionBody implements Check {
 		var semicolons: Int = 0;
 		if (to < from) return false;
 		for (i in from ... to) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c == ';'.code) {
 				semicolons++;
 				if (semicolons > 1) return false;
@@ -863,7 +870,7 @@ final class PreferLambdaExpressionBody implements Check {
 	private static function blankBetween(source: String, from: Int, to: Int): Bool {
 		if (to < from) return false;
 		for (i in from ... to) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code) return false;
 		}
 		return true;
@@ -873,8 +880,7 @@ final class PreferLambdaExpressionBody implements Check {
 		stmt: QueryNode, span: Span, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams
 	): Null<Span> {
 		final end: Null<Int> = emittedEnd(stmt, s);
-		if (end == null) return null;
-		return IfExpressionChain.tokenSpan(new Span(span.from, end), source, comments);
+		return end == null ? null : IfExpressionChain.tokenSpan(new Span(span.from, end), source, comments);
 	}
 
 	/**
@@ -900,9 +906,14 @@ final class PreferLambdaExpressionBody implements Check {
 		if (node.children.length == 0) return terminated ? null : span.to;
 		final last: QueryNode = node.children[node.children.length - 1];
 		final lastSpan: Null<Span> = last.span;
-		if (lastSpan == null) return terminated ? null : span.to;
-		if (span.to == lastSpan.to) return emittedEnd(last, s);
-		return terminated ? lastSpan.to : span.to;
+		return if (lastSpan == null)
+			terminated ? null : span.to
+		else if (span.to == lastSpan.to)
+			emittedEnd(last, s)
+		else if (terminated)
+			lastSpan.to
+		else
+			span.to;
 	}
 
 }

@@ -164,8 +164,8 @@ class PreferSafeNavComparisonCheckTest extends Test {
 	}
 
 	public function testBareRunSelfQualifiedMentionNotFlagged(): Void {
-		final source: String = 'class C {\n\tvar fld:Sys;\n\tfunction f():Void {\n'
-			+ '\t\tif (fld == null || fld.b == null) return;\n\t\tthis.fld.b.c();\n\t}\n}';
+		final source: String =
+			'class C {\n\tvar fld:Sys;\n\tfunction f():Void {\n\t\tif (fld == null || fld.b == null) return;\n\t\tthis.fld.b.c();\n\t}\n}';
 		Assert.equals(0, violations(source).length);
 	}
 
@@ -203,15 +203,15 @@ class PreferSafeNavComparisonCheckTest extends Test {
 	 * `if (!check(item)) return;`. The rewrite drops that narrowing at each site.
 	 */
 	public function testInlineMemberFunctionNotFlagged(): Void {
-		final source: String = 'class C {\n\tprivate inline function check(item:Null<D>):Bool {\n'
-			+ '\t\treturn item != null && item.cloudId != null;\n\t}\n}';
+		final source: String =
+			'class C {\n\tprivate inline function check(item:Null<D>):Bool {\n\t\treturn item != null && item.cloudId != null;\n\t}\n}';
 		Assert.equals(0, violations(source).length);
 	}
 
 	/** The `inline` keyword is the ONLY difference from `testInlineMemberFunctionNotFlagged`. */
 	public function testNonInlineMemberFunctionFlagged(): Void {
-		final source: String = 'class C {\n\tprivate function check(item:Null<D>):Bool {\n'
-			+ '\t\treturn item != null && item.cloudId != null;\n\t}\n}';
+		final source: String =
+			'class C {\n\tprivate function check(item:Null<D>):Bool {\n\t\treturn item != null && item.cloudId != null;\n\t}\n}';
 		Assert.equals(1, violations(source).length);
 	}
 
@@ -225,8 +225,8 @@ class PreferSafeNavComparisonCheckTest extends Test {
 	 * only the inline body's own statements do, and this run is not one of them.
 	 */
 	public function testLambdaInsideInlineFunctionFlagged(): Void {
-		final source: String = 'class C {\n\tprivate inline function f():Bool {\n'
-			+ '\t\treturn xs.exists(e -> e != null && e.b != null);\n\t}\n}';
+		final source: String =
+			'class C {\n\tprivate inline function f():Bool {\n\t\treturn xs.exists(e -> e != null && e.b != null);\n\t}\n}';
 		Assert.equals(1, violations(source).length);
 	}
 

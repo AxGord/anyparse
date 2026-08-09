@@ -95,7 +95,7 @@ final class PreferFinalField implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final lazyIndex: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin, index);
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final abstractKinds: Array<String> = plugin.refShape().underlyingThisTypeKinds ?? [];
 		final declaredTypesByFile: Map<String, Map<Int, String>> = [];
 		if (provider != null) for (entry in files) declaredTypesByFile[entry.file] = provider.declaredTypes(entry.source);

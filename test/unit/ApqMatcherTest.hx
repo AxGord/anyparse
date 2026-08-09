@@ -4,9 +4,10 @@ import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Matcher;
-import anyparse.query.Matcher.Match;
 import anyparse.query.Pattern;
 import anyparse.query.QueryNode;
+
+using StringTools;
 
 /**
  * Slice 2D probe — verifies the structural matcher against patterns
@@ -141,14 +142,14 @@ class ApqMatcherTest extends Test {
 		final matches: Array<Match> = Matcher.search(pattern, tree);
 		Assert.equals(1, matches.length, 'pattern must match exactly once');
 		final m: Match = matches[0];
-		final bound: Null<QueryNode> = m.bindings.get('x');
+		final bound: Null<QueryNode> = m.bindings['x'];
 		Assert.notNull(bound, '$$x binding must be present');
 		if (bound == null) return;
 		final span = bound.span;
 		Assert.notNull(span, '$$x binding must carry a span');
 		if (span == null) return;
 		final slice: String = source.substring(span.from, span.to);
-		Assert.equals('n', StringTools.trim(slice), 'source slice for $$x must be "n", got "$slice"');
+		Assert.equals('n', slice.trim(), 'source slice for $$x must be "n", got "$slice"');
 	}
 
 	public function testKindFilterRestrictsByKind(): Void {
@@ -242,7 +243,7 @@ class ApqMatcherTest extends Test {
 	public function testSingleBinderForPatternSkipsKeyValueLoop(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final source: String = 'class X {\n\tstatic function f(m:Map<Int,Int>, xs:Array<Int>) {\n\t\tfor (a in xs) trace(a);\n'
-			+ '\t\tfor (k => b in m) trace(b);\n' + '\t}\n' + '}';
+			+ '\t\tfor (k => b in m) trace(b);\n\t}\n}';
 		final tree: QueryNode = plugin.parseFile(source);
 		final plain: Array<Match> = Matcher.search(plugin.parsePattern("for ($v in $m) $body"), tree);
 		Assert.equals(1, plain.length, 'only the single-binder loop matches — got ${plain.length}');

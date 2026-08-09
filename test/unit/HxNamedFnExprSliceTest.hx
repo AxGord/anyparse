@@ -84,14 +84,14 @@ class HxNamedFnExprSliceTest extends HxTestHelpers {
 
 	// --- writer round-trip ---
 
-	public function testWriterRoundTripNamedFnExpr(): Void {
+	public inline function testWriterRoundTripNamedFnExpr(): Void {
 		writerEquals(
 			'class C { static function main() { var g = function compute(x:Int):Int { return x; } } }',
 			'class C {\n\tstatic function main() {\n\t\tvar g = function compute(x:Int):Int {\n\t\t\treturn x;\n\t\t};\n\t}\n}\n'
 		);
 	}
 
-	public function testWriterRoundTripIssue557(): Void {
+	public inline function testWriterRoundTripIssue557(): Void {
 		// Idempotency over the exact fixture shape — guards that the
 		// trivia pipeline (corpus harness path) keeps the named-fn
 		// expression byte-stable across reparse.

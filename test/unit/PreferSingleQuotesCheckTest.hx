@@ -50,10 +50,10 @@ class PreferSingleQuotesCheckTest extends Test {
 	 * rewrite until the judgement moved to `StringFoldSupport.requoteVerbatim`.
 	 */
 	public function testEscapedDollarKept(): Void {
-		Assert.equals(0, violations("class C { function f() { final a = \"\\x24a\"; } }").length);
-		Assert.equals(0, violations("class C { function f() { final a = \"\\u0024a\"; } }").length);
-		Assert.equals(0, violations("class C { function f() { final a = \"\\u{24}a\"; } }").length);
-		Assert.equals(0, violations("class C { function f() { final a = \"\\x24{a}\"; } }").length);
+		Assert.equals(0, violations('class C { function f() { final a = \"\\x24a\"; } }').length);
+		Assert.equals(0, violations('class C { function f() { final a = \"\\u0024a\"; } }').length);
+		Assert.equals(0, violations('class C { function f() { final a = \"\\u{24}a\"; } }').length);
+		Assert.equals(0, violations('class C { function f() { final a = \"\\x24{a}\"; } }').length);
 	}
 
 	/** Only the TRIGGER is refused: `\x41` is an `A` and the swap keeps it verbatim. */
@@ -122,7 +122,7 @@ class PreferSingleQuotesCheckTest extends Test {
 	public function testCheckstyleDoublePolicyDisables(): Void {
 		// A checkstyle.json StringLiteral policy of double quotes disables "prefer single".
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
-		final base: String = (tmp != null && tmp.length > 0) ? tmp : '/tmp';
+		final base: String = tmp != null && tmp.length > 0 ? tmp : '/tmp';
 		final dir: String = '$base/anyparse_psq_cs_${Sys.time()}';
 		sys.FileSystem.createDirectory(dir);
 		sys.io.File.saveContent('$dir/checkstyle.json', '{"checks":[{"type":"StringLiteral","props":{"policy":"onlyDouble"}}]}');

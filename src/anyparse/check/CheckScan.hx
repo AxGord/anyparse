@@ -7,15 +7,13 @@ import anyparse.query.RefactorSupport;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import haxe.ds.ObjectMap;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
-import anyparse.query.RefactorSupport.ChainTypeContext;
 import anyparse.query.Refs;
-import anyparse.query.Refs.RefKind;
+
+using StringTools;
 
 /**
  * Shared scan helpers for the `run` / `fix` paths of the analysis checks.
@@ -27,15 +25,6 @@ import anyparse.query.Refs.RefKind;
  */
 @:nullSafety(Strict)
 final class CheckScan {
-
-	/** A binary logical node has exactly [left, right] children. */
-	private static inline final BINARY_CHILD_COUNT: Int = 2;
-
-	/** The shortest disjunction that can strand a narrowing: with two operands the first operand's fact always reaches the second. */
-	private static inline final STRANDABLE_CHAIN_LENGTH: Int = 3;
-
-	/** A sole-referenced declaration has exactly one non-declaration reference resolving to it. */
-	private static inline final SOLE_REFERENCE_COUNT: Int = 1;
 
 	/** The grammar's `using` declaration kind, spelled literally (see `hasUsingModule`). */
 	public static inline final USING_DECL_KIND: String = 'UsingDecl';
@@ -54,6 +43,15 @@ final class CheckScan {
 
 	/** The static-text child kind inside an interpolated string expression. */
 	public static inline final STRING_FRAGMENT_KIND: String = 'Literal';
+
+	/** A binary logical node has exactly [left, right] children. */
+	private static inline final BINARY_CHILD_COUNT: Int = 2;
+
+	/** The shortest disjunction that can strand a narrowing: with two operands the first operand's fact always reaches the second. */
+	private static inline final STRANDABLE_CHAIN_LENGTH: Int = 3;
+
+	/** A sole-referenced declaration has exactly one non-declaration reference resolving to it. */
+	private static inline final SOLE_REFERENCE_COUNT: Int = 1;
 
 	/** The top-level declaration kinds a `using` insert anchors after — the file's package / import / using header. */
 	private static final USING_ANCHOR_KINDS: Array<String> = [
@@ -174,7 +172,7 @@ final class CheckScan {
 			parenKind: shape.parenKind ?? '',
 			blockKinds: support != null ? support.blockKinds() : []
 		};
-		final parents: ObjectMap<QueryNode, QueryNode> = new ObjectMap();
+		final parents: Map<QueryNode, QueryNode> = [];
 		fillParents(root, parents);
 		final byKey: Map<String, QueryNode> = [];
 		RefactorSupport.indexNodesByKind(root, flaggedKinds, byKey);
@@ -258,11 +256,11 @@ final class CheckScan {
 		cond: QueryNode, source: String, seams: NegationSeams, ?support: BooleanLogicSupport, ?typeNominalOf: (QueryNode) -> Null<String>
 	): Bool {
 		final cs: Null<Span> = cond.span;
-		if (cs == null) return false;
 		// Only the De Morgan tier can decline anything — the text fallback has no flip to refuse,
 		// so its verbatim wrap is the shape it always emitted and the site still inverts.
-		return support == null || hasCommentMarker(source, cs.from, cs.to) || narrowingStranded(cond, seams)
-			|| !support.negateConditionDeclinesFlip(cond, source, typeNominalOf);
+		return cs != null
+			&& (support == null || hasCommentMarker(source, cs.from, cs.to) || narrowingStranded(cond, seams)
+				|| !support.negateConditionDeclinesFlip(cond, source, typeNominalOf));
 	}
 
 	/**
@@ -300,7 +298,7 @@ final class CheckScan {
 	public static function typeNominalResolver(
 		source: String, plugin: GrammarPlugin, tree: QueryNode, file: String, ?index: SymbolIndex
 	): Null<(QueryNode) -> Null<String>> {
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		if (provider == null) return null;
 		final declaredTypes: Map<Int, String> = provider.declaredTypes(source);
 		final shape: RefShape = plugin.refShape();
@@ -422,10 +420,9 @@ final class CheckScan {
 				final first: Null<Span> = child.span;
 				if (first != null) return { span: new Span(first.from, first.from), text: 'using $module;\n' };
 			}
-			if (USING_ANCHOR_KINDS.contains(child.kind)) {
-				final span: Null<Span> = child.span;
-				if (span != null) anchor = span;
-			}
+			if (!USING_ANCHOR_KINDS.contains(child.kind)) continue;
+			final span: Null<Span> = child.span;
+			if (span != null) anchor = span;
 		}
 		final at: Null<Span> = anchor;
 		return at == null ? { span: new Span(0, 0), text: 'using $module;\n\n' } : {
@@ -461,29 +458,6 @@ final class CheckScan {
 		final verdict: Bool = conflictScan(usings, module, method, plugin, symbols);
 		memo[key] = verdict;
 		return verdict;
-	}
-
-	/** The unmemoised body of `conflictingUsing` — one pass over the file's other `using` declarations. */
-	private static function conflictScan(
-		usings: Array<String>, module: String, method: String, plugin: GrammarPlugin, symbols: () -> Null<SymbolIndex>
-	): Bool {
-		final simple: String = simpleModuleName(module);
-		for (path in usings) if (path != module && simpleModuleName(path) != simple) {
-			final known: Null<Array<String>> = plugin.knownExtensionMethods(path);
-			if (known != null) {
-				if (known.contains(method)) return true;
-				continue;
-			}
-			final index: Null<SymbolIndex> = symbols();
-			// The FULL module path, not its last segment: `typeProvablyLacksMember` resolves a
-			// dotted name by import path, so a module whose simple name another package reuses
-			// no longer reads as ambiguous-and-therefore-conflicting.
-			// The FULL module path, not its last segment: `typeProvablyLacksMember` resolves a
-			// dotted name by import path, so a module whose simple name another package reuses
-			// no longer reads as ambiguous-and-therefore-conflicting.
-			if (index == null || !index.typeProvablyLacksMember(path, method)) return true;
-		}
-		return false;
 	}
 
 	/** The last dot-segment of a module path — the name a call site spells (`utils.TextUtil` -> `TextUtil`); `RefactorSupport.lastSegment` under a name that says which question the check layer is asking. */
@@ -580,7 +554,7 @@ final class CheckScan {
 		var nonWs: Int = 0;
 		var pendingSpace: Bool = false;
 		for (i in from ... to) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code) {
 				pendingSpace = true;
 			} else {
@@ -591,6 +565,305 @@ final class CheckScan {
 			}
 		}
 		return { norm: buf.toString(), nonWs: nonWs };
+	}
+
+	/**
+	 * The end offsets of every doc block in `source` — the lookup a doc-anchor test needs,
+	 * built ONCE per file. Comment boundaries come from the parser's own tokenizer, so a
+	 * `/*` sequence inside a doc body (an escaped example) never fools the anchor — the trap
+	 * a naive `lastIndexOf('/*')` hits.
+	 */
+	public static function docBlockEnds(source: String): Map<Int, Bool> {
+		return [for (tok in RefactorSupport.collectCommentTokens(source)) if (RefactorSupport.isDocBlock(source, tok)) tok.to => true];
+	}
+
+	/**
+	 * Whether a doc block's close sits at the last non-whitespace byte before `pos` — one
+	 * immediately precedes the declaration anchored there. `docEnds` comes from
+	 * `docBlockEnds`; a line comment or a plain `/* … *\/` block is absent from it, so
+	 * neither reads as documentation.
+	 */
+	public static function hasDocBefore(source: String, docEnds: Map<Int, Bool>, pos: Int): Bool {
+		var i: Int = pos - 1;
+		while (i >= 0 && RefactorSupport.isSpace(source.fastCodeAt(i))) i--;
+		return i >= 0 && docEnds.exists(i + 1);
+	}
+
+	/**
+	 * Whether `node` is a leading modifier / `@:meta` annotation — part of the sibling run
+	 * that PRECEDES a declaration in the projection, rather than a declaration itself. The
+	 * run's start is where a doc comment sits in source, so every doc-anchor walk needs it.
+	 * `modifierKinds` is the grammar's modifier-kind set; a metadata node is recognised by
+	 * its `@`-prefixed name, which no grammar spells differently.
+	 */
+	public static function isLeadingAnnotation(node: QueryNode, modifierKinds: Array<String>): Bool {
+		final nm: Null<String> = node.name;
+		if (nm != null && nm.length > 0 && StringTools.fastCodeAt(nm, 0) == '@'.code) return true;
+		return modifierKinds.contains(node.kind);
+	}
+
+	/**
+	 * The declared name of a type node — its own, or the name of the `containerKinds` child
+	 * that carries it for a wrapped shape (a Haxe `final class`, whose name sits on the inner
+	 * `ClassForm`). `'<anonymous>'` when neither has one.
+	 */
+	public static function typeDeclName(node: QueryNode, containerKinds: Array<String>): String {
+		final own: Null<String> = node.name;
+		if (own != null) return own;
+		for (c in node.children) {
+			final nm: Null<String> = c.name;
+			if (nm != null && containerKinds.contains(c.kind)) return nm;
+		}
+		return '<anonymous>';
+	}
+
+	/**
+	 * Every node kind that projects as a leading MODIFIER sibling before a declaration —
+	 * the set `isLeadingAnnotation` tests a decl's preceding run against, so a check can
+	 * find where a declaration's doc anchor starts.
+	 *
+	 * Assembled from `modifierOrderKinds` (the ordered core) plus the seams that sit
+	 * outside it: the visibility pair and the four standalone modifier kinds. Deduped, so
+	 * a grammar that already lists one in `modifierOrderKinds` contributes it once.
+	 */
+	public static function modifierKinds(shape: RefShape): Array<String> {
+		final out: Array<String> = [for (m in shape.modifierOrderKinds ?? []) m];
+		for (m in shape.visibilityModifierKinds ?? []) if (!out.contains(m)) out.push(m);
+		for (kind in [
+			shape.externModifierKind,
+			shape.dynamicModifierKind,
+			shape.macroModifierKind,
+			shape.overrideModifierKind
+		]) if (kind != null && !out.contains(kind)) out.push(kind);
+		return out;
+	}
+
+	/**
+	 * Whether `node`'s source STARTS with the grammar's `#if` directive — i.e. it is a
+	 * conditional-compilation region, whatever kind the grammar happens to project it as.
+	 *
+	 * A kind test cannot do this job. The Haxe grammar carries a dozen conditional ctors, one per
+	 * host position (`Conditional` for members and statements, `ConditionalExpr` in expression
+	 * position, `ConditionalArgs` in an argument list, five `CondSplice*` forms for a region that
+	 * straddles a block or switch boundary, ...), and `RefShape` names only the member one. An
+	 * enumerated list would go stale the next time a position is added; the DIRECTIVE cannot,
+	 * because every region opens with it by definition. The `#` first-char test keeps it to one
+	 * comparison per node before any substring is taken.
+	 */
+	public static function opensConditionalRegion(node: QueryNode, source: String, condIf: Null<String>): Bool {
+		final span: Null<Span> = node.span;
+		if (condIf == null || span == null) return false;
+		// The null checks stay in their own guard: strict null-safety carries a narrowing fact into
+		// a later `||` operand only from the chain's FIRST operand.
+		final from: Int = span.from;
+		return from < source.length && source.fastCodeAt(from) == '#'.code && source.substring(from, from + condIf.length) == condIf;
+	}
+
+	/**
+	 * A function's declared RETURN annotation as written, or null when it declares none — the SOLE `typeAnnotationKinds`
+	 * direct child that starts AFTER the parameter list's closing `)`. Position is the whole gate:
+	 * a type-parameter CONSTRAINT (`function f<T:Foo>()`) projects the very same `Named` node in
+	 * the very same child slot, always BEFORE the parameter list, so trusting "exactly one
+	 * annotation child" made a constrained function with NO return type read as annotated `Foo`.
+	 * The `)` is searched from the last parameter's end (or the function's start when it declares
+	 * none), which puts a default value's parentheses behind the cursor; metadata projects as a
+	 * sibling node outside the function span. A parameter's own annotation nests UNDER the
+	 * parameter node, never as a direct child of the function, so it is never a candidate.
+	 */
+	public static function returnAnnotationText(fn: QueryNode, shape: RefShape, source: String): Null<String> {
+		final fnSpan: Null<Span> = fn.span;
+		if (fnSpan == null) return null;
+		final paramsEnd: Int = lastParamEnd(fn, shape.paramKinds ?? []);
+		final annotationKinds: Array<String> = shape.typeAnnotationKinds ?? [];
+		var found: Null<Span> = null;
+		var prevEnd: Int = fnSpan.from;
+		for (child in fn.children) {
+			final childSpan: Null<Span> = child.span;
+			if (childSpan == null) return null;
+			if (annotationKinds.contains(child.kind) && afterParamList(childSpan, prevEnd, paramsEnd, source)) {
+				if (found != null) return null;
+				found = childSpan;
+			}
+			prevEnd = childSpan.to;
+		}
+		return found == null ? null : source.substring(found.from, found.to);
+	}
+
+	/**
+	 * The display width of `source[from, to)` with tabs expanded to `indentWidth` -- the
+	 * column arithmetic every width-aware check needs. Pass a line's own `[lineStart, pos)`
+	 * for the column `pos` sits at, or `[0, line.length)` for a whole line's width.
+	 * Shared so `fold-adjacent-string-literals` and `prefer-case-guard` cannot drift on
+	 * what a tab is worth.
+	 */
+	public static function displayColumn(source: String, from: Int, to: Int, indentWidth: Int): Int {
+		var cols: Int = 0;
+		for (i in from ... to) cols += source.fastCodeAt(i) == '\t'.code ? indentWidth : 1;
+		return cols;
+	}
+
+	/**
+	 * The delete-the-whole-member edit for `node`: its modifier / metadata run (`declGroupSpan`,
+	 * which needs the declaring `parent` for the sibling run) folded in, then the whole line
+	 * (`lineExtendedSpan`), so no blank modifier line is left behind. The member's LEADING DOC
+	 * COMMENT is kept — `unused-private`'s shape. Use `docDeletionEdit` to take the doc with it.
+	 */
+	public static inline function deletionEdit(
+		source: String, node: QueryNode, parent: QueryNode, span: Span
+	): { span: Span, text: String } {
+		return { span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.declGroupSpan(node, parent, span)), text: '' };
+	}
+
+	/**
+	 * `deletionEdit` widened to swallow the member's leading DOC COMMENT (`docExtendedSpan`) as
+	 * well, so deleting a documented method strands nothing — the shape `orphan-accessor` and
+	 * `unused-public-member` delete with.
+	 */
+	public static inline function docDeletionEdit(
+		source: String, node: QueryNode, parent: QueryNode, span: Span
+	): { span: Span, text: String } {
+		final group: Span = RefactorSupport.declGroupSpan(node, parent, span);
+		return { span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, group)), text: '' };
+	}
+
+	/** The `<file>#<from>:<to>` key one declaration is memoised under between a check's `run` and its `fix`. */
+	public static inline function spanKey(file: String, span: Span): String {
+		return '$file#${span.from}:${span.to}';
+	}
+
+	/**
+	 * Whether `branch` (an `if`'s then-branch, or any statement in branch position)
+	 * unconditionally exits: a terminal statement directly, or a block whose LAST direct child
+	 * is terminal. The shared reading of "this branch never falls through" — `redundant-else`
+	 * de-nests on it, `redundant-replace-loop` reads a pre-loop guard with it.
+	 */
+	public static function branchAlwaysExits(branch: QueryNode, support: ControlFlowSupport): Bool {
+		if (support.isTerminal(branch)) return true;
+		if (!support.blockKinds().contains(branch.kind)) return false;
+		final kids: Array<QueryNode> = branch.children;
+		return kids.length > 0 && support.isTerminal(kids[kids.length - 1]);
+	}
+
+	/**
+	 * The whole `fix` of a member-DELETING check: for every violation whose span is in `deletable`,
+	 * one edit removing that method with its modifier / metadata run and its leading doc comment.
+	 *
+	 * Shared verbatim by `orphan-accessor` and `unused-public-member`, which differ only in how `run`
+	 * proved the method dead. Each method's group span is computed against its OWN host, not the
+	 * container: a method written inside a member-position `#if` region has its run one level down,
+	 * and a span computed against the container would leave it behind as debris that does not parse.
+	 */
+	public static function deleteMethodsFix(
+		plugin: GrammarPlugin, source: String, violations: Array<Violation>, deletable: Array<String>
+	): Array<{ span: Span, text: String }> {
+		final wanted: Array<String> = [];
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span != null && deletable.contains(spanKey(v.file, span))) wanted.push('${span.from}:${span.to}');
+		}
+		if (wanted.length == 0) return [];
+		final tree: Null<QueryNode> = parseOrNull(plugin, source);
+		if (tree == null) return [];
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (cls in classBodies(tree)) RefactorSupport.eachMemberHost(cls, host -> {
+			for (child in host.children) {
+				final span: Null<Span> = child.span;
+				if (span != null && METHOD_KINDS.contains(child.kind) && wanted.contains('${span.from}:${span.to}'))
+					edits.push(docDeletionEdit(source, child, host, span));
+			}
+		});
+		return edits;
+	}
+
+	/**
+	 * The `from` of the declaration's own name token when the local `name` bound at `declSpan`
+	 * has EXACTLY one non-declaration reference resolving to it, or null otherwise. Reads the
+	 * name token (a self-binding hit inside `declSpan`) and counts every other hit whose
+	 * binding falls inside `declSpan`.
+	 *
+	 * Shared by the joins that collapse a single-use local away (`join-return`,
+	 * `join-single-use-local`): both must prove the declaration has exactly ONE consumer before
+	 * they may delete it.
+	 */
+	public static function soleReferenceNameFrom(name: String, declSpan: Span, tree: QueryNode, shape: RefShape): Null<Int> {
+		var declNameFrom: Null<Int> = null;
+		var otherRefs: Int = 0;
+		for (h in Refs.find(name, tree, shape)) {
+			final hs: Span = h.span;
+			final bs: Null<Span> = h.bindingSpan;
+			final selfBind: Bool = bs != null && bs.from == hs.from && bs.to == hs.to;
+			if (selfBind && hs.from >= declSpan.from && hs.to <= declSpan.to) {
+				declNameFrom = hs.from;
+				continue;
+			}
+			if (bs != null && bs.from >= declSpan.from && bs.to <= declSpan.to) otherRefs++;
+		}
+		return otherRefs == SOLE_REFERENCE_COUNT ? declNameFrom : null;
+	}
+
+	/**
+	 * Whether a reference OUTSIDE the conditional-compilation region holding `declSpan` binds to a
+	 * same-name declaration INSIDE it — in which case the declaration is not sole-referenced and
+	 * whatever collapse `soleReferenceNameFrom` cleared must not happen.
+	 *
+	 * Branch-aware resolution (`Refs`' `CondBranch` preference frame) is exact only INSIDE a
+	 * region: past `#end` the enclosing block's first-wins rule points such a read at the FIRST
+	 * branch's declaration, while the compiler points it at whichever branch the configuration
+	 * activates. A post-region read is therefore a reference to EVERY branch's declaration at
+	 * once, and collapsing any one of them away would leave that read unbound in that branch's
+	 * configuration — a `--fix` that does not compile. Counting the read against every declaration
+	 * in the region restores the pre-branch-frame verdict for exactly this shape and nothing else:
+	 * when the region declares the name only once, the read already binds inside `declSpan` and
+	 * the sole-reference count has it.
+	 *
+	 * A null `conditionalMemberKind` (a grammar with no conditional compilation) makes this a
+	 * no-op, as does a declaration outside any region.
+	 */
+	public static function escapesConditionalRegion(name: String, declSpan: Span, tree: QueryNode, shape: RefShape): Bool {
+		final region: Null<Span> = enclosingConditionalRegion(tree, declSpan, shape.conditionalMemberKind);
+		if (region == null) return false;
+		final r: Span = region;
+		for (h in Refs.find(name, tree, shape)) if (h.kind != RefKind.Decl) {
+			final bs: Null<Span> = h.bindingSpan;
+			if (bs == null || bs.from < r.from || bs.to > r.to) continue;
+			if (h.span.from < r.from || h.span.to > r.to) return true;
+		}
+		return false;
+	}
+
+	/** The span of the innermost conditional-compilation region (`conditionalMemberKind`) containing `inner`, or null. */
+	public static function enclosingConditionalRegion(node: QueryNode, inner: Span, condKind: Null<String>): Null<Span> {
+		if (condKind == null) return null;
+		final span: Null<Span> = node.span;
+		if (span != null && (span.from > inner.from || span.to < inner.to)) return null;
+		for (c in node.children) {
+			final hit: Null<Span> = enclosingConditionalRegion(c, inner, condKind);
+			if (hit != null) return hit;
+		}
+		return node.kind == condKind ? span : null;
+	}
+
+	/** The unmemoised body of `conflictingUsing` — one pass over the file's other `using` declarations. */
+	private static function conflictScan(
+		usings: Array<String>, module: String, method: String, plugin: GrammarPlugin, symbols: () -> Null<SymbolIndex>
+	): Bool {
+		final simple: String = simpleModuleName(module);
+		for (path in usings) if (path != module && simpleModuleName(path) != simple) {
+			final known: Null<Array<String>> = plugin.knownExtensionMethods(path);
+			if (known != null) {
+				if (known.contains(method)) return true;
+				continue;
+			}
+			final index: Null<SymbolIndex> = symbols();
+			// The FULL module path, not its last segment: `typeProvablyLacksMember` resolves a
+			// dotted name by import path, so a module whose simple name another package reuses
+			// no longer reads as ambiguous-and-therefore-conflicting.
+			// The FULL module path, not its last segment: `typeProvablyLacksMember` resolves a
+			// dotted name by import path, so a module whose simple name another package reuses
+			// no longer reads as ambiguous-and-therefore-conflicting.
+			if (index == null || !index.typeProvablyLacksMember(path, method)) return true;
+		}
+		return false;
 	}
 
 	/**
@@ -621,9 +894,9 @@ final class CheckScan {
 	 * `||` for always-false); refuse otherwise.
 	 */
 	private static function conditionEdit(
-		node: QueryNode, alwaysTrue: Bool, parents: ObjectMap<QueryNode, QueryNode>, source: String, seams: CondSimplifySeams
+		node: QueryNode, alwaysTrue: Bool, parents: Map<QueryNode, QueryNode>, source: String, seams: CondSimplifySeams
 	): Null<{ span: Span, text: String }> {
-		final parent: Null<QueryNode> = parents.get(node);
+		final parent: Null<QueryNode> = parents[node];
 		if (parent == null) return null;
 		if (seams.ifKinds.contains(parent.kind) && parent.children.length == 2 && parent.children[0] == node)
 			return ifShapeEdit(parent, alwaysTrue, parents, source, seams);
@@ -641,7 +914,7 @@ final class CheckScan {
 	 * branch is not orphaned). Refuses when a comment sits in any removed region.
 	 */
 	private static function ifShapeEdit(
-		ifNode: QueryNode, alwaysTrue: Bool, parents: ObjectMap<QueryNode, QueryNode>, source: String, seams: CondSimplifySeams
+		ifNode: QueryNode, alwaysTrue: Bool, parents: Map<QueryNode, QueryNode>, source: String, seams: CondSimplifySeams
 	): Null<{ span: Span, text: String }> {
 		final ns: Null<Span> = ifNode.span;
 		final body: QueryNode = ifNode.children[1];
@@ -654,7 +927,7 @@ final class CheckScan {
 			text: source.substring(bs.from, bs.to)
 		};
 		if (hasCommentMarker(source, ns.from, ns.to)) return null;
-		final ifParent: Null<QueryNode> = parents.get(ifNode);
+		final ifParent: Null<QueryNode> = parents[ifNode];
 		final inBlock: Bool = ifParent != null && seams.blockKinds.contains(ifParent.kind);
 		return inBlock ? { span: RefactorSupport.lineExtendedSpan(source, ns), text: '' } : { span: ns, text: '{}' };
 	}
@@ -675,7 +948,12 @@ final class CheckScan {
 		if (ls == null || rs == null) return null;
 		// Drop the operand together with its adjacent operator: the right operand deletes
 		// `[left.to, right.to)` (` && x`), the left `[left.from, right.from)` (`x && `).
-		final drop: Null<Span> = operand == right ? new Span(ls.to, rs.to) : operand == left ? new Span(ls.from, rs.from) : null;
+		final drop: Null<Span> = if (operand == right)
+			new Span(ls.to, rs.to)
+		else if (operand == left)
+			new Span(ls.from, rs.from)
+		else
+			null;
 		return drop == null || hasCommentMarker(source, drop.from, drop.to) ? null : { span: drop, text: '' };
 	}
 
@@ -686,11 +964,11 @@ final class CheckScan {
 	 * conservative drop fires only inside a homogeneous chain.
 	 */
 	private static function homogeneousChain(
-		node: QueryNode, wantKind: String, parents: ObjectMap<QueryNode, QueryNode>, seams: CondSimplifySeams
+		node: QueryNode, wantKind: String, parents: Map<QueryNode, QueryNode>, seams: CondSimplifySeams
 	): Bool {
 		var cur: QueryNode = node;
 		while (true) {
-			final p: Null<QueryNode> = parents.get(cur);
+			final p: Null<QueryNode> = parents[cur];
 			if (p == null) return true;
 			if (p.kind == seams.andKind || p.kind == seams.orKind) {
 				if (p.kind != wantKind) return false;
@@ -701,9 +979,9 @@ final class CheckScan {
 	}
 
 	/** Record each node's parent, so a flagged node can be classified by its enclosing context. */
-	private static function fillParents(node: QueryNode, out: ObjectMap<QueryNode, QueryNode>): Void {
+	private static function fillParents(node: QueryNode, out: Map<QueryNode, QueryNode>): Void {
 		for (c in node.children) {
-			out.set(c, node);
+			out[c] = node;
 			fillParents(c, out);
 		}
 	}
@@ -740,7 +1018,6 @@ final class CheckScan {
 		return parenKind != null && inner.kind == parenKind && inner.children.length == 1 ? inner.children[0] : inner;
 	}
 
-
 	/**
 	 * The `==` / `!=` FLIP arm of `negateConditionText`: rewrites a binary (in)equality
 	 * to its complement operator (NaN-safe; see the caller's doc for the non-complementary
@@ -754,11 +1031,9 @@ final class CheckScan {
 		if ((cond.kind != eqKind && cond.kind != notEqKind) || cond.children.length != 2) return null;
 		final l: Null<Span> = cond.children[0].span;
 		final r: Null<Span> = cond.children[1].span;
-		if (l != null && r != null && !hasCommentMarker(source, l.to, r.from)) {
-			final op: String = cond.kind == eqKind ? ' != ' : ' == ';
-			return source.substring(l.from, l.to) + op + source.substring(r.from, r.to);
-		}
-		return null;
+		if (!(l != null && r != null && !hasCommentMarker(source, l.to, r.from))) return null;
+		final op: String = cond.kind == eqKind ? ' != ' : ' == ';
+		return source.substring(l.from, l.to) + op + source.substring(r.from, r.to);
 	}
 
 	/**
@@ -808,131 +1083,6 @@ final class CheckScan {
 	}
 
 	/**
-	 * The end offsets of every doc block in `source` — the lookup a doc-anchor test needs,
-	 * built ONCE per file. Comment boundaries come from the parser's own tokenizer, so a
-	 * `/*` sequence inside a doc body (an escaped example) never fools the anchor — the trap
-	 * a naive `lastIndexOf('/*')` hits.
-	 */
-	public static function docBlockEnds(source: String): Map<Int, Bool> {
-		return [for (tok in RefactorSupport.collectCommentTokens(source)) if (RefactorSupport.isDocBlock(source, tok)) tok.to => true];
-	}
-
-	/**
-	 * Whether a doc block's close sits at the last non-whitespace byte before `pos` — one
-	 * immediately precedes the declaration anchored there. `docEnds` comes from
-	 * `docBlockEnds`; a line comment or a plain `/* … *\/` block is absent from it, so
-	 * neither reads as documentation.
-	 */
-	public static function hasDocBefore(source: String, docEnds: Map<Int, Bool>, pos: Int): Bool {
-		var i: Int = pos - 1;
-		while (i >= 0 && RefactorSupport.isSpace(StringTools.fastCodeAt(source, i))) i--;
-		return i >= 0 && docEnds.exists(i + 1);
-	}
-
-	/**
-	 * Whether `node` is a leading modifier / `@:meta` annotation — part of the sibling run
-	 * that PRECEDES a declaration in the projection, rather than a declaration itself. The
-	 * run's start is where a doc comment sits in source, so every doc-anchor walk needs it.
-	 * `modifierKinds` is the grammar's modifier-kind set; a metadata node is recognised by
-	 * its `@`-prefixed name, which no grammar spells differently.
-	 */
-	public static function isLeadingAnnotation(node: QueryNode, modifierKinds: Array<String>): Bool {
-		final nm: Null<String> = node.name;
-		if (nm != null && nm.length > 0 && StringTools.fastCodeAt(nm, 0) == '@'.code) return true;
-		return modifierKinds.contains(node.kind);
-	}
-
-	/**
-	 * The declared name of a type node — its own, or the name of the `containerKinds` child
-	 * that carries it for a wrapped shape (a Haxe `final class`, whose name sits on the inner
-	 * `ClassForm`). `'<anonymous>'` when neither has one.
-	 */
-	public static function typeDeclName(node: QueryNode, containerKinds: Array<String>): String {
-		final own: Null<String> = node.name;
-		if (own != null) return own;
-		for (c in node.children) {
-			final nm: Null<String> = c.name;
-			if (nm != null && containerKinds.contains(c.kind)) return nm;
-		}
-		return '<anonymous>';
-	}
-
-
-	/**
-	 * Every node kind that projects as a leading MODIFIER sibling before a declaration —
-	 * the set `isLeadingAnnotation` tests a decl's preceding run against, so a check can
-	 * find where a declaration's doc anchor starts.
-	 *
-	 * Assembled from `modifierOrderKinds` (the ordered core) plus the seams that sit
-	 * outside it: the visibility pair and the four standalone modifier kinds. Deduped, so
-	 * a grammar that already lists one in `modifierOrderKinds` contributes it once.
-	 */
-	public static function modifierKinds(shape: RefShape): Array<String> {
-		final out: Array<String> = [for (m in shape.modifierOrderKinds ?? []) m];
-		for (m in shape.visibilityModifierKinds ?? []) if (!out.contains(m)) out.push(m);
-		for (kind in [
-			shape.externModifierKind,
-			shape.dynamicModifierKind,
-			shape.macroModifierKind,
-			shape.overrideModifierKind
-		]) if (kind != null && !out.contains(kind)) out.push(kind);
-		return out;
-	}
-
-
-	/**
-	 * Whether `node`'s source STARTS with the grammar's `#if` directive — i.e. it is a
-	 * conditional-compilation region, whatever kind the grammar happens to project it as.
-	 *
-	 * A kind test cannot do this job. The Haxe grammar carries a dozen conditional ctors, one per
-	 * host position (`Conditional` for members and statements, `ConditionalExpr` in expression
-	 * position, `ConditionalArgs` in an argument list, five `CondSplice*` forms for a region that
-	 * straddles a block or switch boundary, ...), and `RefShape` names only the member one. An
-	 * enumerated list would go stale the next time a position is added; the DIRECTIVE cannot,
-	 * because every region opens with it by definition. The `#` first-char test keeps it to one
-	 * comparison per node before any substring is taken.
-	 */
-	public static function opensConditionalRegion(node: QueryNode, source: String, condIf: Null<String>): Bool {
-		final span: Null<Span> = node.span;
-		if (condIf == null || span == null) return false;
-		// The null checks stay in their own guard: strict null-safety carries a narrowing fact into
-		// a later `||` operand only from the chain's FIRST operand.
-		final from: Int = span.from;
-		if (from >= source.length || StringTools.fastCodeAt(source, from) != '#'.code) return false;
-		return source.substring(from, from + condIf.length) == condIf;
-	}
-
-	/**
-	 * A function's declared RETURN annotation as written, or null when it declares none — the SOLE `typeAnnotationKinds`
-	 * direct child that starts AFTER the parameter list's closing `)`. Position is the whole gate:
-	 * a type-parameter CONSTRAINT (`function f<T:Foo>()`) projects the very same `Named` node in
-	 * the very same child slot, always BEFORE the parameter list, so trusting "exactly one
-	 * annotation child" made a constrained function with NO return type read as annotated `Foo`.
-	 * The `)` is searched from the last parameter's end (or the function's start when it declares
-	 * none), which puts a default value's parentheses behind the cursor; metadata projects as a
-	 * sibling node outside the function span. A parameter's own annotation nests UNDER the
-	 * parameter node, never as a direct child of the function, so it is never a candidate.
-	 */
-	public static function returnAnnotationText(fn: QueryNode, shape: RefShape, source: String): Null<String> {
-		final fnSpan: Null<Span> = fn.span;
-		if (fnSpan == null) return null;
-		final paramsEnd: Int = lastParamEnd(fn, shape.paramKinds ?? []);
-		final annotationKinds: Array<String> = shape.typeAnnotationKinds ?? [];
-		var found: Null<Span> = null;
-		var prevEnd: Int = fnSpan.from;
-		for (child in fn.children) {
-			final childSpan: Null<Span> = child.span;
-			if (childSpan == null) return null;
-			if (annotationKinds.contains(child.kind) && afterParamList(childSpan, prevEnd, paramsEnd, source)) {
-				if (found != null) return null;
-				found = childSpan;
-			}
-			prevEnd = childSpan.to;
-		}
-		return found == null ? null : source.substring(found.from, found.to);
-	}
-
-	/**
 	 * The end offset of `fn`'s LAST declared parameter, or -1 when it declares none.
 	 */
 	private static function lastParamEnd(fn: QueryNode, paramKinds: Array<String>): Int {
@@ -962,166 +1112,6 @@ final class CheckScan {
 		if (CheckScan.hasCommentMarker(source, prevEnd, annotationSpan.from)) return false;
 		final close: Int = source.indexOf(')', prevEnd);
 		return close != -1 && close < annotationSpan.from;
-	}
-
-
-	/**
-	 * The display width of `source[from, to)` with tabs expanded to `indentWidth` -- the
-	 * column arithmetic every width-aware check needs. Pass a line's own `[lineStart, pos)`
-	 * for the column `pos` sits at, or `[0, line.length)` for a whole line's width.
-	 * Shared so `fold-adjacent-string-literals` and `prefer-case-guard` cannot drift on
-	 * what a tab is worth.
-	 */
-	public static function displayColumn(source: String, from: Int, to: Int, indentWidth: Int): Int {
-		var cols: Int = 0;
-		for (i in from ... to) cols += StringTools.fastCodeAt(source, i) == '\t'.code ? indentWidth : 1;
-		return cols;
-	}
-
-	/**
-	 * The delete-the-whole-member edit for `node`: its modifier / metadata run (`declGroupSpan`,
-	 * which needs the declaring `parent` for the sibling run) folded in, then the whole line
-	 * (`lineExtendedSpan`), so no blank modifier line is left behind. The member's LEADING DOC
-	 * COMMENT is kept — `unused-private`'s shape. Use `docDeletionEdit` to take the doc with it.
-	 */
-	public static inline function deletionEdit(
-		source: String, node: QueryNode, parent: QueryNode, span: Span
-	): { span: Span, text: String } {
-		return { span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.declGroupSpan(node, parent, span)), text: '' };
-	}
-
-	/**
-	 * `deletionEdit` widened to swallow the member's leading DOC COMMENT (`docExtendedSpan`) as
-	 * well, so deleting a documented method strands nothing — the shape `orphan-accessor` and
-	 * `unused-public-member` delete with.
-	 */
-	public static inline function docDeletionEdit(
-		source: String, node: QueryNode, parent: QueryNode, span: Span
-	): { span: Span, text: String } {
-		final group: Span = RefactorSupport.declGroupSpan(node, parent, span);
-		return { span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, group)), text: '' };
-	}
-
-	/** The `<file>#<from>:<to>` key one declaration is memoised under between a check's `run` and its `fix`. */
-	public static inline function spanKey(file: String, span: Span): String {
-		return '$file#${span.from}:${span.to}';
-	}
-
-	/**
-	 * Whether `branch` (an `if`'s then-branch, or any statement in branch position)
-	 * unconditionally exits: a terminal statement directly, or a block whose LAST direct child
-	 * is terminal. The shared reading of "this branch never falls through" — `redundant-else`
-	 * de-nests on it, `redundant-replace-loop` reads a pre-loop guard with it.
-	 */
-	public static function branchAlwaysExits(branch: QueryNode, support: ControlFlowSupport): Bool {
-		if (support.isTerminal(branch)) return true;
-		if (!support.blockKinds().contains(branch.kind)) return false;
-		final kids: Array<QueryNode> = branch.children;
-		return kids.length > 0 && support.isTerminal(kids[kids.length - 1]);
-	}
-
-
-	/**
-	 * The whole `fix` of a member-DELETING check: for every violation whose span is in `deletable`,
-	 * one edit removing that method with its modifier / metadata run and its leading doc comment.
-	 *
-	 * Shared verbatim by `orphan-accessor` and `unused-public-member`, which differ only in how `run`
-	 * proved the method dead. Each method's group span is computed against its OWN host, not the
-	 * container: a method written inside a member-position `#if` region has its run one level down,
-	 * and a span computed against the container would leave it behind as debris that does not parse.
-	 */
-	public static function deleteMethodsFix(
-		plugin: GrammarPlugin, source: String, violations: Array<Violation>, deletable: Array<String>
-	): Array<{ span: Span, text: String }> {
-		final wanted: Array<String> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null && deletable.contains(spanKey(v.file, span))) wanted.push('${span.from}:${span.to}');
-		}
-		if (wanted.length == 0) return [];
-		final tree: Null<QueryNode> = parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (cls in classBodies(tree)) RefactorSupport.eachMemberHost(cls, host -> {
-			for (child in host.children) {
-				final span: Null<Span> = child.span;
-				if (span != null && METHOD_KINDS.contains(child.kind) && wanted.contains('${span.from}:${span.to}'))
-					edits.push(docDeletionEdit(source, child, host, span));
-			}
-		});
-		return edits;
-	}
-
-
-	/**
-	 * The `from` of the declaration's own name token when the local `name` bound at `declSpan`
-	 * has EXACTLY one non-declaration reference resolving to it, or null otherwise. Reads the
-	 * name token (a self-binding hit inside `declSpan`) and counts every other hit whose
-	 * binding falls inside `declSpan`.
-	 *
-	 * Shared by the joins that collapse a single-use local away (`join-return`,
-	 * `join-single-use-local`): both must prove the declaration has exactly ONE consumer before
-	 * they may delete it.
-	 */
-	public static function soleReferenceNameFrom(name: String, declSpan: Span, tree: QueryNode, shape: RefShape): Null<Int> {
-		var declNameFrom: Null<Int> = null;
-		var otherRefs: Int = 0;
-		for (h in Refs.find(name, tree, shape)) {
-			final hs: Span = h.span;
-			final bs: Null<Span> = h.bindingSpan;
-			final selfBind: Bool = bs != null && bs.from == hs.from && bs.to == hs.to;
-			if (selfBind && hs.from >= declSpan.from && hs.to <= declSpan.to) {
-				declNameFrom = hs.from;
-				continue;
-			}
-			if (bs != null && bs.from >= declSpan.from && bs.to <= declSpan.to) otherRefs++;
-		}
-		return otherRefs == SOLE_REFERENCE_COUNT ? declNameFrom : null;
-	}
-
-
-	/**
-	 * Whether a reference OUTSIDE the conditional-compilation region holding `declSpan` binds to a
-	 * same-name declaration INSIDE it — in which case the declaration is not sole-referenced and
-	 * whatever collapse `soleReferenceNameFrom` cleared must not happen.
-	 *
-	 * Branch-aware resolution (`Refs`' `CondBranch` preference frame) is exact only INSIDE a
-	 * region: past `#end` the enclosing block's first-wins rule points such a read at the FIRST
-	 * branch's declaration, while the compiler points it at whichever branch the configuration
-	 * activates. A post-region read is therefore a reference to EVERY branch's declaration at
-	 * once, and collapsing any one of them away would leave that read unbound in that branch's
-	 * configuration — a `--fix` that does not compile. Counting the read against every declaration
-	 * in the region restores the pre-branch-frame verdict for exactly this shape and nothing else:
-	 * when the region declares the name only once, the read already binds inside `declSpan` and
-	 * the sole-reference count has it.
-	 *
-	 * A null `conditionalMemberKind` (a grammar with no conditional compilation) makes this a
-	 * no-op, as does a declaration outside any region.
-	 */
-	public static function escapesConditionalRegion(name: String, declSpan: Span, tree: QueryNode, shape: RefShape): Bool {
-		final region: Null<Span> = enclosingConditionalRegion(tree, declSpan, shape.conditionalMemberKind);
-		if (region == null) return false;
-		final r: Span = region;
-		for (h in Refs.find(name, tree, shape)) {
-			if (h.kind == RefKind.Decl) continue;
-			final bs: Null<Span> = h.bindingSpan;
-			if (bs == null || bs.from < r.from || bs.to > r.to) continue;
-			if (h.span.from < r.from || h.span.to > r.to) return true;
-		}
-		return false;
-	}
-
-
-	/** The span of the innermost conditional-compilation region (`conditionalMemberKind`) containing `inner`, or null. */
-	public static function enclosingConditionalRegion(node: QueryNode, inner: Span, condKind: Null<String>): Null<Span> {
-		if (condKind == null) return null;
-		final span: Null<Span> = node.span;
-		if (span != null && (span.from > inner.from || span.to < inner.to)) return null;
-		for (c in node.children) {
-			final hit: Null<Span> = enclosingConditionalRegion(c, inner, condKind);
-			if (hit != null) return hit;
-		}
-		return node.kind == condKind ? span : null;
 	}
 
 }

@@ -3,7 +3,6 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.Check.DefaultOff;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -15,6 +14,8 @@ import anyparse.check.Check.OracleAssisted;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.LintConfig;
+
+using StringTools;
 
 /**
  * Flags a local `var` / `final` declared WITHOUT an explicit `:Type` annotation —
@@ -201,6 +202,12 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		'Path'
 	];
 
+	/** Default `maxInferredTypeLength`: an anonymous-structure annotation longer than this stays report-only. */
+	private static inline final DEFAULT_MAX_ANON_LEN: Int = 80;
+
+	/** The per-file config resolver injected by the linter (`ConfigAware`), or null to fall back to `LintConfig.discover`. */
+	private var _configResolver: Null<(String) -> LintConfig> = null;
+
 	public function new() {}
 
 	public function id(): String {
@@ -240,7 +247,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		RefactorSupport.indexNodesByKind(tree, locals, byKey);
 		// A cast target lookup costs a second full parse (`castTargetSources`), so compute
 		// it lazily and cache it — a run whose locals are never casts never pays for it.
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		var castTargetsCache: Null<Map<Int, String>> = null;
 		function castTargets(): Map<Int, String> {
 			final existing: Null<Map<Int, String>> = castTargetsCache;
@@ -272,6 +279,100 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			if (at >= 0) edits.push({ span: new Span(at, at), text: ':$typeSource' });
 		}
 		return edits;
+	}
+
+	/**
+	 * The compiler-oracle TAIL of the autofix: for each finding the structural arm left
+	 * report-only, ask the `TypeOracle` for the compiler's OWN inferred type at the
+	 * local's name token, reject the ones no sound annotation can restate
+	 * (`normalizeInferredType`), and emit `:Type` for the rest. Entered only when the
+	 * project configures a `compilerOracle` — `Cli.applyLintFixes` verifies each edited
+	 * file still typechecks and reverts it otherwise, so an over-eager annotation is
+	 * caught rather than shipped. The query byte position is `insertPoint - 1` (the name
+	 * token's last char, a position the display protocol resolves; the char AFTER the
+	 * name is not a completion point); the SAME `insertPoint` is the edit anchor.
+	 */
+	public function fixWithOracle(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, oracle: TypeOracle
+	): Array<{ span: Span, text: String }> {
+		final shape: RefShape = plugin.refShape();
+		final locals: Array<String> = shape.localDeclKinds ?? [];
+		final tree: Null<QueryNode> = locals.length == 0 ? null : CheckScan.parseOrNull(plugin, source);
+		if (tree == null) return [];
+		final byKey: Map<String, QueryNode> = [];
+		RefactorSupport.indexNodesByKind(tree, locals, byKey);
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
+		// The printer owns the short-name / add-import / fully-qualified decision for every
+		// nominal the oracle names, and accumulates the imports its short forms rely on.
+		final printer: TypeRefPrinter = TypeRefPrinter.forFile(source, tree, importMap, RefactorSupport.resolutionIndexOf(plugin));
+		final maxAnon: Int = maxAnonLen(violations);
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span == null) continue;
+			final node: Null<QueryNode> = byKey['${span.from}:${span.to}'];
+			if (node == null || node.children.length == 0) continue;
+			final at: Int = LiteralInfer.insertPoint(node, node.children[0], source);
+			if (at <= 0) continue;
+			final raw: Null<String> = oracle.typeAt(v.file, at - 1);
+			if (raw == null) continue;
+			final norm: Null<String> = normalizeWith(raw, printer, maxAnon);
+			if (norm != null) edits.push({ span: new Span(at, at), text: ':$norm' });
+		}
+		if (edits.length > 0) for (importEdit in printer.pendingImportEdits()) edits.push(importEdit);
+		return edits;
+	}
+
+	/** Inject the linter's per-file config resolver (for `maxInferredTypeLength`), or null to fall back to `discover`. */
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_configResolver = resolve;
+	}
+
+	/**
+	 * The `maxInferredTypeLength` cap (chars) for an anonymous-structure annotation,
+	 * read from the file's `apqlint.json` via the injected resolver (or discovered), or
+	 * `DEFAULT_MAX_ANON_LEN` when unset. Resolved off the first violation's file — the
+	 * oracle pass groups a `fixWithOracle` call per file.
+	 */
+	private function maxAnonLen(violations: Array<Violation>): Int {
+		if (violations.length == 0) return DEFAULT_MAX_ANON_LEN;
+		final cfg: LintConfig = LintConfig.resolveWith(_configResolver, violations[0].file);
+		return cfg.intOption(RULE_ID, 'maxInferredTypeLength') ?? DEFAULT_MAX_ANON_LEN;
+	}
+
+	/**
+	 * `normalizeWith` against an IMPORT-MAP-ONLY printer: the compiler-free entry point for a
+	 * caller holding nothing but a file's plain imports. It shortens what that map (or the
+	 * builtin top-level set) already puts in scope and leaves everything else fully qualified;
+	 * it never adds an import, having no file to anchor one in. PURE and unit-testable.
+	 */
+	public static function normalizeInferredType(raw: String, importMap: Map<String, String>, maxAnonLen: Int): Null<String> {
+		return normalizeWith(raw, TypeRefPrinter.importsOnly(importMap), maxAnonLen);
+	}
+
+	/**
+	 * Normalise a compiler-inferred type text to a sound annotation, or null when no
+	 * annotation should be written. REJECTS: a monomorph / inference hole (`Unknown<` — the
+	 * compiler could not pin it either), an anonymous structure longer than `maxAnonLen`
+	 * (annotatable but noisy), and a bare `_` type-param placeholder (not a nameable type; a
+	 * clean function type or a small anon struct is kept). Otherwise every nominal run is
+	 * spelled by `printer` — short where already visible, short WITH a recorded import where
+	 * the name is free, else the correct fully-qualified (module-qualified for a sub-type)
+	 * form, which always resolves.
+	 */
+	public static function normalizeWith(raw: String, printer: TypeRefPrinter, maxAnonLen: Int): Null<String> {
+		final t: String = raw.trim();
+		return if (t == '')
+			null
+		else if (t.indexOf('Unknown<') != -1)
+			null
+		else if (t.indexOf('{') != -1 && t.length > maxAnonLen)
+			null
+		else if (hasBareUnderscore(t))
+			null
+		else
+			printer.printTypeExpr(t);
 	}
 
 	/**
@@ -414,15 +515,18 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		final written: Null<String> = LiteralInfer.bareNewTypeName(init, source);
 		if (written == null) return null;
 		final simple: String = written.substring(written.lastIndexOf('.') + 1);
-		if (index != null && index.declaringFiles(simple).length > 0)
-			// Declared in the index: provably non-generic ONLY when every declaration agrees on zero type
-			// parameters. A unanimous non-zero arity, or an ambiguous one (declarations disagree, so
-			// typeParamArityOf returns null), both fail `== 0` and stay report-only — ambiguity must never
-			// prove non-genericity.
-			return index.typeParamArityOf(simple) == 0 ? written : null;
+		// Declared in the index: provably non-generic ONLY when every declaration agrees on zero type
+		// parameters. A unanimous non-zero arity, or an ambiguous one (declarations disagree, so
+		// typeParamArityOf returns null), both fail `== 0` and stay report-only — ambiguity must never
+		// prove non-genericity.
 		// Undeclared anywhere in the index: the whitelist of always-in-scope non-generic stdlib
 		// constructors is the only remaining signal.
-		return NON_GENERIC_NEW_TYPES.contains(simple) ? written : null;
+		return if (index != null && index.declaringFiles(simple).length > 0)
+			index.typeParamArityOf(simple) == 0 ? written : null
+		else if (NON_GENERIC_NEW_TYPES.contains(simple))
+			written
+		else
+			null;
 	}
 
 	/**
@@ -477,12 +581,12 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		final n: Int = typeSrc.length;
 		var i: Int = 0;
 		while (i < n) {
-			if (!RefactorSupport.isIdentStartChar(StringTools.fastCodeAt(typeSrc, i))) {
+			if (!RefactorSupport.isIdentStartChar(typeSrc.fastCodeAt(i))) {
 				i++;
 				continue;
 			}
 			final start: Int = i;
-			while (i < n && RefactorSupport.isIdentChar(StringTools.fastCodeAt(typeSrc, i))) i++;
+			while (i < n && RefactorSupport.isIdentChar(typeSrc.fastCodeAt(i))) i++;
 			if (!COPYABLE_BUILTINS.contains(typeSrc.substring(start, i))) return false;
 		}
 		return true;
@@ -510,7 +614,12 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		final method: Null<String> = callee.name;
 		if (method == null) return null;
 		final ret: Null<String> = table[method];
-		return ret == null ? null : receiverIsString(callee.children[0], shape, tree, declaredTypeSources) ? ret : null;
+		return if (ret == null)
+			null
+		else if (receiverIsString(callee.children[0], shape, tree, declaredTypeSources))
+			ret
+		else
+			null;
 	}
 
 	/**
@@ -536,7 +645,6 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		return typeSrc != null && unwrapNullable(typeSrc, shape) == stringType;
 	}
 
-
 	/**
 	 * The grammar's string type name (`String`) — the type a string literal denotes,
 	 * read off `literalTypeNames` via a `stringLiteralKinds` kind rather than hardcoded.
@@ -558,7 +666,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 */
 	private static function unwrapNullable(t: String, shape: RefShape): String {
 		final lt: Int = t.indexOf('<');
-		if (lt <= 0 || !StringTools.endsWith(t, '>')) return t;
+		if (lt <= 0 || !t.endsWith('>')) return t;
 		final outer: String = t.substring(0, lt);
 		final wrappers: Array<String> = shape.nullableWrapperTypeNames ?? [];
 		return wrappers.contains(outer) ? t.substring(lt + 1, t.length - 1) : t;
@@ -603,7 +711,6 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		init: QueryNode, shape: RefShape, tree: QueryNode, index: Null<SymbolIndex>
 	): Null<String> {
 		final hit: Null<{ typeName: String, returnSource: String }> = RefactorSupport.tabledStaticCall(init, tree, shape);
-		if (hit == null) return null;
 		// The table is the FALLBACK for a type absent from the resolution index (a config-less
 		// run): its values are deliberately import-safe (`sys.io.FileOutput` fully qualified).
 		// When the type IS indexed (std joined via `StdResolver`, or a same-named project type),
@@ -613,97 +720,12 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		// structural annotation. That is a STRICTER policy than the deep resolver's
 		// `shadowedByNonStdType`, and deliberately so: this arm copies the source into the user's
 		// file, where an oracle-named type is always the better answer.
-		return index != null && index.declaringFiles(hit.typeName).length > 0 ? null : hit.returnSource;
-	}
-
-
-	/**
-	 * The compiler-oracle TAIL of the autofix: for each finding the structural arm left
-	 * report-only, ask the `TypeOracle` for the compiler's OWN inferred type at the
-	 * local's name token, reject the ones no sound annotation can restate
-	 * (`normalizeInferredType`), and emit `:Type` for the rest. Entered only when the
-	 * project configures a `compilerOracle` — `Cli.applyLintFixes` verifies each edited
-	 * file still typechecks and reverts it otherwise, so an over-eager annotation is
-	 * caught rather than shipped. The query byte position is `insertPoint - 1` (the name
-	 * token's last char, a position the display protocol resolves; the char AFTER the
-	 * name is not a completion point); the SAME `insertPoint` is the edit anchor.
-	 */
-	public function fixWithOracle(
-		source: String, violations: Array<Violation>, plugin: GrammarPlugin, oracle: TypeOracle
-	): Array<{ span: Span, text: String }> {
-		final shape: RefShape = plugin.refShape();
-		final locals: Array<String> = shape.localDeclKinds ?? [];
-		final tree: Null<QueryNode> = locals.length == 0 ? null : CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final byKey: Map<String, QueryNode> = [];
-		RefactorSupport.indexNodesByKind(tree, locals, byKey);
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
-		final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
-		// The printer owns the short-name / add-import / fully-qualified decision for every
-		// nominal the oracle names, and accumulates the imports its short forms rely on.
-		final printer: TypeRefPrinter = TypeRefPrinter.forFile(source, tree, importMap, RefactorSupport.resolutionIndexOf(plugin));
-		final maxAnon: Int = maxAnonLen(violations);
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final node: Null<QueryNode> = byKey['${span.from}:${span.to}'];
-			if (node == null || node.children.length == 0) continue;
-			final at: Int = LiteralInfer.insertPoint(node, node.children[0], source);
-			if (at <= 0) continue;
-			final raw: Null<String> = oracle.typeAt(v.file, at - 1);
-			if (raw == null) continue;
-			final norm: Null<String> = normalizeWith(raw, printer, maxAnon);
-			if (norm != null) edits.push({ span: new Span(at, at), text: ':$norm' });
-		}
-		if (edits.length > 0) for (importEdit in printer.pendingImportEdits()) edits.push(importEdit);
-		return edits;
-	}
-
-	/** Inject the linter's per-file config resolver (for `maxInferredTypeLength`), or null to fall back to `discover`. */
-	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
-		_configResolver = resolve;
-	}
-
-	/**
-	 * The `maxInferredTypeLength` cap (chars) for an anonymous-structure annotation,
-	 * read from the file's `apqlint.json` via the injected resolver (or discovered), or
-	 * `DEFAULT_MAX_ANON_LEN` when unset. Resolved off the first violation's file — the
-	 * oracle pass groups a `fixWithOracle` call per file.
-	 */
-	private function maxAnonLen(violations: Array<Violation>): Int {
-		if (violations.length == 0) return DEFAULT_MAX_ANON_LEN;
-		final cfg: LintConfig = LintConfig.resolveWith(_configResolver, violations[0].file);
-		return cfg.intOption(RULE_ID, 'maxInferredTypeLength') ?? DEFAULT_MAX_ANON_LEN;
-	}
-
-	/**
-	 * `normalizeWith` against an IMPORT-MAP-ONLY printer: the compiler-free entry point for a
-	 * caller holding nothing but a file's plain imports. It shortens what that map (or the
-	 * builtin top-level set) already puts in scope and leaves everything else fully qualified;
-	 * it never adds an import, having no file to anchor one in. PURE and unit-testable.
-	 */
-	public static function normalizeInferredType(raw: String, importMap: Map<String, String>, maxAnonLen: Int): Null<String> {
-		return normalizeWith(raw, TypeRefPrinter.importsOnly(importMap), maxAnonLen);
-	}
-
-	/**
-	 * Normalise a compiler-inferred type text to a sound annotation, or null when no
-	 * annotation should be written. REJECTS: a monomorph / inference hole (`Unknown<` — the
-	 * compiler could not pin it either), an anonymous structure longer than `maxAnonLen`
-	 * (annotatable but noisy), and a bare `_` type-param placeholder (not a nameable type; a
-	 * clean function type or a small anon struct is kept). Otherwise every nominal run is
-	 * spelled by `printer` — short where already visible, short WITH a recorded import where
-	 * the name is free, else the correct fully-qualified (module-qualified for a sub-type)
-	 * form, which always resolves.
-	 */
-	public static function normalizeWith(raw: String, printer: TypeRefPrinter, maxAnonLen: Int): Null<String> {
-		final t: String = StringTools.trim(raw);
-		if (t == '') return null;
-		if (t.indexOf('Unknown<') != -1) return null;
-		if (t.indexOf('{') != -1 && t.length > maxAnonLen) return null;
-		if (hasBareUnderscore(t)) return null;
-		return printer.printTypeExpr(t);
+		return if (hit == null)
+			null
+		else if (index != null && index.declaringFiles(hit.typeName).length > 0)
+			null
+		else
+			hit.returnSource;
 	}
 
 	/** Whether `t` contains a standalone `_` identifier run — an unnameable type-param placeholder. */
@@ -711,21 +733,15 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		final n: Int = t.length;
 		var i: Int = 0;
 		while (i < n) {
-			if (!RefactorSupport.isIdentChar(StringTools.fastCodeAt(t, i))) {
+			if (!RefactorSupport.isIdentChar(t.fastCodeAt(i))) {
 				i++;
 				continue;
 			}
 			final start: Int = i;
-			while (i < n && RefactorSupport.isIdentChar(StringTools.fastCodeAt(t, i))) i++;
+			while (i < n && RefactorSupport.isIdentChar(t.fastCodeAt(i))) i++;
 			if (t.substring(start, i) == '_') return true;
 		}
 		return false;
 	}
-
-	/** The per-file config resolver injected by the linter (`ConfigAware`), or null to fall back to `LintConfig.discover`. */
-	private var _configResolver: Null<(String) -> LintConfig> = null;
-
-	/** Default `maxInferredTypeLength`: an anonymous-structure annotation longer than this stays report-only. */
-	private static inline final DEFAULT_MAX_ANON_LEN: Int = 80;
 
 }

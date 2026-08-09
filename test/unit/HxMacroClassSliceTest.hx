@@ -95,7 +95,8 @@ class HxMacroClassSliceTest extends HxTestHelpers {
 
 	public function testMacroClassCorpusIssue377(): Void {
 		final cls: HxClassDecl = HaxeParser.parse(
-			'class Main {\n\tstatic function main() {\n\t\tmacro class {\n\t\t\tvar foo:Int;\n\t\t\tfunction bar() {\n\t\t\t\ttrace("bar");\n\t\t\t}\n\t\t\tfunction foobar() {\n\t\t\t\ttrace("foobar");\n\t\t\t}\n\t\t}\n\t}\n}'
+			'class Main {\n\tstatic function main() {\n\t\tmacro class {\n\t\t\tvar foo:Int;\n\t\t\tfunction bar() {\n'
+			+ '\t\t\t\ttrace("bar");\n\t\t\t}\n\t\t\tfunction foobar() {\n\t\t\t\ttrace("foobar");\n\t\t\t}\n\t\t}\n\t}\n}'
 		);
 		final mc: HxMacroClass = expectMacroClassExpr(expectExprStmt(fnBodyStmts(expectFnMember(cls.members[0].member))[0]));
 		Assert.isTrue(mc.head.match(AnonHead));
@@ -107,15 +108,16 @@ class HxMacroClassSliceTest extends HxTestHelpers {
 
 	// -- Idempotency: verbatim `other/issue_33` source --
 
-	public function testMacroClassCorpusIssue33RoundTrip(): Void {
+	public inline function testMacroClassCorpusIssue33RoundTrip(): Void {
 		roundTrip('class Macro {\n\tstatic function foo() {\n\t\tmacro class {\n\t\t\tpublic function new() {}\n\t\t}\n\t}\n}');
 	}
 
 	// -- Idempotency: verbatim `emptylines/issue_377` source --
 
-	public function testMacroClassCorpusIssue377RoundTrip(): Void {
+	public inline function testMacroClassCorpusIssue377RoundTrip(): Void {
 		roundTrip(
-			'class Main {\n\tstatic function main() {\n\t\tmacro class {\n\t\t\tvar foo:Int;\n\t\t\tfunction bar() {\n\t\t\t\ttrace("bar");\n\t\t\t}\n\t\t\tfunction foobar() {\n\t\t\t\ttrace("foobar");\n\t\t\t}\n\t\t}\n\t}\n}'
+			'class Main {\n\tstatic function main() {\n\t\tmacro class {\n\t\t\tvar foo:Int;\n\t\t\tfunction bar() {\n'
+			+ '\t\t\t\ttrace("bar");\n\t\t\t}\n\t\t\tfunction foobar() {\n\t\t\t\ttrace("foobar");\n\t\t\t}\n\t\t}\n\t}\n}'
 		);
 	}
 

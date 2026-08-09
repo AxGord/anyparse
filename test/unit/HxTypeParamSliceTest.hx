@@ -137,27 +137,27 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		Assert.equals(0, params.length);
 	}
 
-	public function testRoundTripBare(): Void {
+	public inline function testRoundTripBare(): Void {
 		roundTrip('class F { var x:Int; }');
 	}
 
-	public function testRoundTripSingleParam(): Void {
+	public inline function testRoundTripSingleParam(): Void {
 		roundTrip('class F { var xs:Array<Int>; }');
 	}
 
-	public function testRoundTripTwoParams(): Void {
+	public inline function testRoundTripTwoParams(): Void {
 		roundTrip('class F { var m:Map<String, Int>; }');
 	}
 
-	public function testRoundTripNested(): Void {
+	public inline function testRoundTripNested(): Void {
 		roundTrip('class F { var x:Array<Array<Int>> = []; }');
 	}
 
-	public function testRoundTripFnReturnType(): Void {
+	public inline function testRoundTripFnReturnType(): Void {
 		roundTrip('class F { function get():Array<Int> {} }');
 	}
 
-	public function testRoundTripFnArgType(): Void {
+	public inline function testRoundTripFnArgType(): Void {
 		roundTrip('class F { function take(xs:Array<Int>):Void {} }');
 	}
 
@@ -192,11 +192,11 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		Assert.equals('U', (tps[1].name: String));
 	}
 
-	public function testRoundTripDeclareSiteSingle(): Void {
+	public inline function testRoundTripDeclareSiteSingle(): Void {
 		roundTrip('class F { function get<T>():T {} }');
 	}
 
-	public function testRoundTripDeclareSiteMulti(): Void {
+	public inline function testRoundTripDeclareSiteMulti(): Void {
 		roundTrip('class F { function pair<T, U>():Map<T, U> {} }');
 	}
 
@@ -252,19 +252,19 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		Assert.equals('T', (tps[0].name: String));
 	}
 
-	public function testRoundTripClassDeclareSite(): Void {
+	public inline function testRoundTripClassDeclareSite(): Void {
 		roundTrip('class Box<T> { var v:T; }');
 	}
 
-	public function testRoundTripTypedefDeclareSite(): Void {
+	public inline function testRoundTripTypedefDeclareSite(): Void {
 		roundTrip('typedef List<T> = Array<T>;');
 	}
 
-	public function testRoundTripEnumDeclareSite(): Void {
+	public inline function testRoundTripEnumDeclareSite(): Void {
 		roundTrip('enum Option<T> { None; Some; }');
 	}
 
-	public function testRoundTripAbstractDeclareSite(): Void {
+	public inline function testRoundTripAbstractDeclareSite(): Void {
 		roundTrip('abstract MyInt<T>(Int) { }');
 	}
 
@@ -278,7 +278,7 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		Assert.equals('T', (tps[0].name: String));
 	}
 
-	public function testRoundTripInterfaceDeclareSite(): Void {
+	public inline function testRoundTripInterfaceDeclareSite(): Void {
 		roundTrip('interface Iterable<T> { }');
 	}
 
@@ -348,15 +348,15 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		Assert.equals('Iterable', (expectNamedType(tps[0].constraint).name: String));
 	}
 
-	public function testRoundTripConstraintSimple(): Void {
+	public inline function testRoundTripConstraintSimple(): Void {
 		roundTrip('class F { function get<T:Iterable>():T {} }');
 	}
 
-	public function testRoundTripConstraintAnonType(): Void {
+	public inline function testRoundTripConstraintAnonType(): Void {
 		roundTrip('class F { function get<T:{bar:T}>():Void {} }');
 	}
 
-	public function testRoundTripConstraintOnClass(): Void {
+	public inline function testRoundTripConstraintOnClass(): Void {
 		roundTrip('class Box<T:Iterable> { var v:T; }');
 	}
 
@@ -449,11 +449,11 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		Assert.equals('Bar', (expectNamedType(tps[0].constraintMore[0].type).name: String));
 	}
 
-	public function testRoundTripMultiBoundConstraint(): Void {
+	public inline function testRoundTripMultiBoundConstraint(): Void {
 		roundTrip('class F { function get<T:Foo & Bar>():T {} }');
 	}
 
-	public function testRoundTripMultiBoundConstraintOnClass(): Void {
+	public inline function testRoundTripMultiBoundConstraintOnClass(): Void {
 		roundTrip('class Box<T:Foo & Bar & Baz> { var v:T; }');
 	}
 
@@ -487,11 +487,11 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		Assert.equals('haxe.io.Bytes', (expectNamedType(params[0].type).name: String));
 	}
 
-	public function testRoundTripModuleQualified(): Void {
+	public inline function testRoundTripModuleQualified(): Void {
 		roundTrip('class F { var x:haxe.io.Bytes; }');
 	}
 
-	public function testRoundTripModuleQualifiedWithParams(): Void {
+	public inline function testRoundTripModuleQualifiedWithParams(): Void {
 		roundTrip('class F { var m:haxe.ds.Map<String, Int>; }');
 	}
 
@@ -579,19 +579,19 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		Assert.equals('Int', (expectNamedType(tps[0].defaultValue).name: String));
 	}
 
-	public function testRoundTripDefaultSimple(): Void {
+	public inline function testRoundTripDefaultSimple(): Void {
 		roundTrip('class Box<T = Int> { var v:T; }');
 	}
 
-	public function testRoundTripDefaultModuleQualified(): Void {
+	public inline function testRoundTripDefaultModuleQualified(): Void {
 		roundTrip('class Box<T = haxe.io.Bytes> { var v:T; }');
 	}
 
-	public function testRoundTripDefaultWithConstraint(): Void {
+	public inline function testRoundTripDefaultWithConstraint(): Void {
 		roundTrip('class Box<T:Iterable = Array<Int>> { var v:T; }');
 	}
 
-	public function testRoundTripDefaultMixed(): Void {
+	public inline function testRoundTripDefaultMixed(): Void {
 		roundTrip('class Pair<S = Int, T = String> { var s:S; var t:T; }');
 	}
 
@@ -647,16 +647,16 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		Assert.equals('None', (expectSimpleCtor(ctors[0]): String));
 	}
 
-	public function testRoundTripEnumCtorTypeParam(): Void {
+	public inline function testRoundTripEnumCtorTypeParam(): Void {
 		// The issue_659 input verbatim (declare-site + ctor-site type params).
 		roundTrip('enum Foo<Child> {\n\tBar<T>(options : Array<T>);\n}');
 	}
 
-	public function testRoundTripEnumCtorTypeParamMulti(): Void {
+	public inline function testRoundTripEnumCtorTypeParamMulti(): Void {
 		roundTrip('enum Foo { Baz<A, B>(a:A, b:B); }');
 	}
 
-	public function testRoundTripEnumPlainCtorByteIdentical(): Void {
+	public inline function testRoundTripEnumPlainCtorByteIdentical(): Void {
 		// Optional Star absent ⇒ existing ctor round-trip unchanged.
 		roundTrip('enum Foo { Bar(x:Int); None; }');
 	}

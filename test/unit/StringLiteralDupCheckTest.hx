@@ -149,7 +149,7 @@ class StringLiteralDupCheckTest extends Test {
 
 	private function tmpDir(tag: String): String {
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
-		final base: String = (tmp != null && tmp.length > 0) ? tmp : '/tmp';
+		final base: String = tmp != null && tmp.length > 0 ? tmp : '/tmp';
 		final dir: String = '$base/anyparse_${tag}_${Sys.time()}';
 		sys.FileSystem.createDirectory(dir);
 		return dir;

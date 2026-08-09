@@ -4,6 +4,8 @@ import haxe.Exception;
 import anyparse.query.format.json.HaxelibJson;
 import anyparse.query.format.json.HaxelibJsonParser;
 
+using StringTools;
+
 /**
  * Resolves a haxelib library NAME to its on-disk source directory, so an
  * `apqlint.json` can declare a resolution-scope library by name
@@ -66,7 +68,7 @@ final class HaxelibResolver {
 
 	/** The library root: the trimmed `haxelib libpath` output, or null when it is empty (lib not installed / no path printed). */
 	public static function rootFrom(libpathOutput: String): Null<String> {
-		final root: String = StringTools.trim(libpathOutput);
+		final root: String = libpathOutput.trim();
 		return root == '' ? null : root;
 	}
 

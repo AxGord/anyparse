@@ -4,11 +4,12 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.check.FragmentedDocComment.CommentTok;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * One convertible block comment: the span to REPORT (the comment token), the span to
@@ -155,11 +156,11 @@ final class PreferLineComment implements Check implements DefaultOff {
 	private static function rewriteOf(source: String, tok: CommentTok): Null<LineCommentRewrite> {
 		if (tok.to - tok.from < 4 || source.substring(tok.to - 2, tok.to) != '*/') return null; // noqa: magic-number
 		final lineEnd: Int = lineEndOf(source, tok.to);
-		if (StringTools.trim(source.substring(tok.to, lineEnd)) != '') return null;
+		if (source.substring(tok.to, lineEnd).trim() != '') return null;
 		final indent: String = source.substring(lineStartOf(source, tok.from), tok.from);
 		final raw: String = source.substring(tok.from, tok.to);
 		final multiline: Bool = raw.indexOf('\n') >= 0;
-		if (multiline && StringTools.trim(indent) != '') return null;
+		if (multiline && indent.trim() != '') return null;
 		final lines: Array<String> = bodyLines(source.substring(bodyStartOf(source, tok), bodyEndOf(source, tok)));
 		if (lines.length == 0 || contentFree(lines)) return null;
 		final newline: String = raw.indexOf('\r\n') >= 0 ? '\r\n' : '\n';
@@ -204,7 +205,7 @@ final class PreferLineComment implements Check implements DefaultOff {
 			final trimmed: String = StringTools.ltrim(lines[i]);
 			if (trimmed == '') continue;
 			content++;
-			if (StringTools.startsWith(trimmed, '*')) starred++;
+			if (trimmed.startsWith('*')) starred++;
 		}
 		return content > 0 && starred == content;
 	}
@@ -212,7 +213,7 @@ final class PreferLineComment implements Check implements DefaultOff {
 	/** Whether every body line is whitespace and stars — `empty-comment`'s shape, not this rule's. */
 	private static function contentFree(lines: Array<String>): Bool {
 		for (line in lines) for (i in 0...line.length) {
-			final c: Int = StringTools.fastCodeAt(line, i);
+			final c: Int = line.fastCodeAt(i);
 			if (c != '*'.code && c != ' '.code && c != '\t'.code && c != '\r'.code) return false;
 		}
 		return true;
@@ -240,7 +241,7 @@ final class PreferLineComment implements Check implements DefaultOff {
 	private static function bodyStartOf(source: String, tok: CommentTok): Int {
 		final end: Int = tok.to - 2; // noqa: magic-number
 		var i: Int = tok.from + 2; // noqa: magic-number
-		while (i < end && StringTools.fastCodeAt(source, i) == '*'.code) i++;
+		while (i < end && source.fastCodeAt(i) == '*'.code) i++;
 		return i;
 	}
 
@@ -248,14 +249,14 @@ final class PreferLineComment implements Check implements DefaultOff {
 	private static function bodyEndOf(source: String, tok: CommentTok): Int {
 		final start: Int = bodyStartOf(source, tok);
 		var i: Int = tok.to - 2; // noqa: magic-number
-		while (i > start && StringTools.fastCodeAt(source, i - 1) == '*'.code) i--;
+		while (i > start && source.fastCodeAt(i - 1) == '*'.code) i--;
 		return i;
 	}
 
 	/** The longest leading-whitespace prefix shared by every non-blank line of `lines`. */
 	private static function commonIndent(lines: Array<String>): String {
 		var common: Null<String> = null;
-		for (line in lines) if (StringTools.rtrim(line) != '') {
+		for (line in lines) if (line.rtrim() != '') {
 			final seen: Null<String> = common;
 			final lead: String = leadingWhitespace(line);
 			common = seen == null ? lead : sharedPrefix(seen, lead);
@@ -265,21 +266,24 @@ final class PreferLineComment implements Check implements DefaultOff {
 
 	/** `line` with `dedent` removed from its front; a line that does not carry it (a blank one) is unchanged. */
 	private static inline function dedented(line: String, dedent: String): String {
-		return StringTools.startsWith(line, dedent) ? line.substr(dedent.length) : line;
+		return line.startsWith(dedent) ? line.substr(dedent.length) : line;
 	}
 
 	/** A gutter block's ` * ` line marker stripped; elsewhere a leading star is content and stays. */
 	private static inline function stripGutter(line: String, gutter: Bool): String {
-		return !gutter || !StringTools.startsWith(line, '*')
-			? line
-			: StringTools.startsWith(line, '* ') ? line.substr(2) : line.substr(1); // noqa: magic-number
+		return if (!gutter || !line.startsWith('*'))
+			line
+		else if (line.startsWith('* '))
+			line.substr(2)
+		else
+			line.substr(1); // noqa: magic-number
 	}
 
 	/** `line`'s leading spaces and tabs. */
 	private static function leadingWhitespace(line: String): String {
 		var i: Int = 0;
 		while (i < line.length) {
-			final c: Int = StringTools.fastCodeAt(line, i);
+			final c: Int = line.fastCodeAt(i);
 			if (c != ' '.code && c != '\t'.code) break;
 			i++;
 		}
@@ -290,7 +294,7 @@ final class PreferLineComment implements Check implements DefaultOff {
 	private static function sharedPrefix(a: String, b: String): String {
 		final limit: Int = a.length < b.length ? a.length : b.length;
 		var i: Int = 0;
-		while (i < limit && StringTools.fastCodeAt(a, i) == StringTools.fastCodeAt(b, i)) i++;
+		while (i < limit && a.fastCodeAt(i) == b.fastCodeAt(i)) i++;
 		return a.substr(0, i);
 	}
 
@@ -314,15 +318,15 @@ final class PreferLineComment implements Check implements DefaultOff {
 	/** The offset just after the newline preceding `at` (the start of its physical line). */
 	private static function lineStartOf(source: String, at: Int): Int {
 		var i: Int = at;
-		while (i > 0 && StringTools.fastCodeAt(source, i - 1) != '\n'.code) i--;
+		while (i > 0 && source.fastCodeAt(i - 1) != '\n'.code) i--;
 		return i;
 	}
 
 	/** The offset of the line terminator ending `at`'s physical line (before a `\r\n` CR), or the source end. */
 	private static function lineEndOf(source: String, at: Int): Int {
 		var i: Int = at;
-		while (i < source.length && StringTools.fastCodeAt(source, i) != '\n'.code) i++;
-		return i > at && StringTools.fastCodeAt(source, i - 1) == '\r'.code ? i - 1 : i;
+		while (i < source.length && source.fastCodeAt(i) != '\n'.code) i++;
+		return i > at && source.fastCodeAt(i - 1) == '\r'.code ? i - 1 : i;
 	}
 
 }

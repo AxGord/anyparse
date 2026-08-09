@@ -4,9 +4,7 @@ import utest.Assert;
 import utest.Test;
 import anyparse.check.AvoidDynamic;
 import anyparse.check.CompilerOracle;
-import anyparse.check.CompilerOracle.OracleOutcome;
 import anyparse.check.FixVerifier;
-import anyparse.check.FixVerifier.FixVerifyResult;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 #if (sys || nodejs)
@@ -32,17 +30,17 @@ final class AvoidDynamicRiskyFixE2ETest extends Test {
 	// A local `Dynamic` provably holding a `Good` (typed init) with a corroborating typed
 	// sink — the narrowing to `Good` typechecks and is applied.
 	// Trivia-writer-canonical (blank line between members) so RefactorSupport.canonicalize accepts it.
-	private static final APPLIES: String = 'class Good {\n\tpublic function new() {}\n\n\tstatic function main() {\n\t\tfinal a:Good = new Good();\n\t\t'
-		+ 'var x:Dynamic = a;\n\t\tvar y:Good = x;\n\t\ttrace(y);\n\t}\n}\n';
+	private static final APPLIES: String = 'class Good {\n\tpublic function new() {}\n\n\tstatic function main() {\n'
+		+ '\t\tfinal a:Good = new Good();\n\t\tvar x:Dynamic = a;\n\t\tvar y:Good = x;\n\t\ttrace(y);\n' + '\t}\n}\n';
 
 	// The optional-param nullability blind spot: `?b:Good` records nominal `Good` in
 	// `declaredTypes` (its `Null<…>` is the projection's known lossy gap), so the classifier
 	// proposes `x:Good` — but under `@:nullSafety(Strict)` the narrowed `x = b` is a
 	// `Null<Good> -> Good` compile error the ORIGINAL `Dynamic` local tolerated. The oracle
 	// rejects and reverts: precisely the residual the RiskyFix belt exists to catch.
-	private static final REVERTS: String = '@:nullSafety(Strict)\nclass Good {\n\tpublic function new() {}\n\n\tstatic function main() {\n\t\t'
-		+ 'run(new Good());\n\t}\n\n\tstatic function run(a:Good, ?b:Good):Void {\n\t\tvar x:Dynamic = a;\n\t\tx = b;\n\t\t'
-		+ 'var y:Good = x;\n\t\ttrace(y);\n\t}\n}\n';
+	private static final REVERTS: String = '@:nullSafety(Strict)\nclass Good {\n\tpublic function new() {}\n\n\tstatic function main() {\n'
+		+ '\t\trun(new Good());\n\t}\n\n\tstatic function run(a:Good, ?b:Good):Void {\n'
+		+ '\t\tvar x:Dynamic = a;\n\t\tx = b;\n\t\tvar y:Good = x;\n\t\ttrace(y);\n\t}\n}\n';
 
 	private static final HXML: String = '-cp .\n-main Good\n';
 	#end

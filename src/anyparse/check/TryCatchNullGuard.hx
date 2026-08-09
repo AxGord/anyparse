@@ -6,13 +6,13 @@ import anyparse.check.TryExpressionShape.TryParts;
 import anyparse.check.TryExpressionShape.TrySeams;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -148,8 +148,7 @@ final class TryCatchNullGuard implements Check implements DefaultOff {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		return [
+		return seams == null ? [] : [
 			for (entry in files) for (m in collect(plugin, entry.source, seams))
 				{
 					file: entry.file,
@@ -415,9 +414,8 @@ final class TryCatchNullGuard implements Check implements DefaultOff {
 	 * unexpected shape the rebuild has no reading for.
 	 */
 	private static function terminatorText(source: String, span: Span): Null<String> {
-		final trimmed: String = StringTools.rtrim(source.substring(span.from, span.to));
-		if (!StringTools.endsWith(trimmed, ';')) return null;
-		return StringTools.rtrim(trimmed.substring(0, trimmed.length - 1));
+		final trimmed: String = source.substring(span.from, span.to).rtrim();
+		return !trimmed.endsWith(';') ? null : trimmed.substring(0, trimmed.length - 1).rtrim();
 	}
 
 	/** Assemble `<prefix> = try <value> catch (…) <term> …;` — every clause takes the SAME terminator. */

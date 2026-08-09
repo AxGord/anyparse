@@ -111,9 +111,9 @@ final class Address {
 		while (i + name.length <= stop) {
 			final at: Int = source.indexOf(name, i);
 			if (at < 0 || at + name.length > stop) return null;
-			final beforeOk: Bool = at == 0 || !isIdentChar(StringTools.fastCodeAt(source, at - 1));
+			final beforeOk: Bool = at == 0 || !isIdentChar(source.fastCodeAt(at - 1));
 			final afterIdx: Int = at + name.length;
-			final afterOk: Bool = afterIdx >= source.length || !isIdentChar(StringTools.fastCodeAt(source, afterIdx));
+			final afterOk: Bool = afterIdx >= source.length || !isIdentChar(source.fastCodeAt(afterIdx));
 			if (beforeOk && afterOk) return at;
 			i = at + 1;
 		}
@@ -172,7 +172,7 @@ final class Address {
 		}
 		var offset: Int = Span.offsetOf(source, line, 1);
 		while (offset < source.length) {
-			final c: Int = StringTools.fastCodeAt(source, offset);
+			final c: Int = source.fastCodeAt(offset);
 			if (c == '\n'.code) return Err('line $line is blank — no element starts on it');
 			if (c != ' '.code && c != '\t'.code && c != '\r'.code) break;
 			offset++;
@@ -216,13 +216,11 @@ final class Address {
 				? Err('--nth $nth out of range — $what matched ${nodes.length} node(s)')
 				: toResult(nodes[nth - 1], what);
 		}
-		if (nodes.length > 1) {
-			final shown: Int = nodes.length < CANDIDATE_LIMIT ? nodes.length : CANDIDATE_LIMIT;
-			final lines: Array<String> = [for (i in 0...shown) '  #${i + 1} ${labels[i]}'];
-			final more: String = nodes.length > shown ? '\n  … ${nodes.length - shown} more' : '';
-			return Err('$what matched ${nodes.length} nodes — narrow it or pick one with --nth <k>:\n' + lines.join('\n') + more);
-		}
-		return toResult(nodes[0], what);
+		if (nodes.length <= 1) return toResult(nodes[0], what);
+		final shown: Int = nodes.length < CANDIDATE_LIMIT ? nodes.length : CANDIDATE_LIMIT;
+		final lines: Array<String> = [for (i in 0...shown) '  #${i + 1} ${labels[i]}'];
+		final more: String = nodes.length > shown ? '\n  … ${nodes.length - shown} more' : '';
+		return Err('$what matched ${nodes.length} nodes — narrow it or pick one with --nth <k>:\n' + lines.join('\n') + more);
 	}
 
 	/** The chosen node as a result — its span start is the offset the ops consume. */
@@ -256,10 +254,9 @@ final class Address {
 		if (tree == node) return [tree];
 		for (c in tree.children) {
 			final sub: Null<Array<QueryNode>> = pathTo(c, node);
-			if (sub != null) {
-				sub.unshift(tree);
-				return sub;
-			}
+			if (sub == null) continue;
+			sub.unshift(tree);
+			return sub;
 		}
 		return null;
 	}

@@ -18,8 +18,9 @@ import anyparse.check.Linter;
  */
 class PreferTryExpressionAssignmentCheckTest extends Test {
 
-	private static final DECL_PAIR: String =
-		'class C {\n\tfunction f(nameText:String, argList:Array<String>):Void {\n\t\tvar p:Runner = null;\n\t\ttry {\n\t\t\tp = new Runner(nameText, argList);\n\t\t} catch (msg:String) {\n\t\t\tp = null;\n\t\t}\n\t}\n}';
+	private static final DECL_PAIR: String = 'class C {\n\tfunction f(nameText:String, argList:Array<String>):Void {\n'
+		+ '\t\tvar p:Runner = null;\n'
+		+ '\t\ttry {\n\t\t\tp = new Runner(nameText, argList);\n\t\t} catch (msg:String) {\n\t\t\tp = null;\n\t\t}\n' + '\t}\n}';
 	private static final STANDALONE: String =
 		'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tp = build();\n\t\t} catch (msg:String) {\n\t\t\tp = null;\n\t\t}\n\t}\n}';
 
@@ -46,7 +47,8 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 	 */
 	public function testNestedWriteInTryFallsBackToLvalueArm(): Void {
 		final vs: Array<Violation> = violations(
-			'class C {\n\tfunction f():Void {\n\t\tvar p:Int = 0;\n\t\ttry {\n\t\t\tp = go(() -> p = 5);\n\t\t} catch (e:String) {\n\t\t\tp = 1;\n\t\t}\n\t}\n}'
+			'class C {\n\tfunction f():Void {\n\t\tvar p:Int = 0;\n\t\ttry {\n\t\t\tp = go(() -> p = 5);\n\t\t} catch (e:String) {\n'
+			+ '\t\t\tp = 1;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, vs.length);
 		Assert.equals('this try/catch that assigns the same target in every path can be a single try-expression assignment', vs[0].message);
@@ -65,7 +67,8 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 	/** A nested try-expression r-value is parenthesised, or the following `catch` re-parents onto it. */
 	public function testNestedTryValueParenthesised(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
-			'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tp = try build() catch (e1:String) 7;\n\t\t} catch (e2:Int) {\n\t\t\tp = 9;\n\t\t}\n\t}\n}'
+			'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tp = try build() catch (e1:String) 7;\n\t\t} catch (e2:Int) {\n'
+			+ '\t\t\tp = 9;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, es.length);
 		Assert.equals('p = try (try build() catch (e1:String) 7) catch (e2:Int) 9;', es[0].text);
@@ -74,7 +77,8 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 	/** Every clause is kept, in source order, with its header verbatim. */
 	public function testMultiCatchFixed(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
-			'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tp = build();\n\t\t} catch (msg:String) {\n\t\t\tp = 1;\n\t\t} catch (other:Exception) {\n\t\t\tp = 2;\n\t\t}\n\t}\n}'
+			'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tp = build();\n\t\t} catch (msg:String) {\n\t\t\tp = 1;\n'
+			+ '\t\t} catch (other:Exception) {\n\t\t\tp = 2;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, es.length);
 		Assert.equals('p = try build() catch (msg:String) 1 catch (other:Exception) 2;', es[0].text);
@@ -98,7 +102,8 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 	 */
 	public function testMultiDeclaratorFallsBackToLvalueArm(): Void {
 		final vs: Array<Violation> = violations(
-			'class C {\n\tfunction f():Void {\n\t\tvar a:Int = 0, p:Int = 0;\n\t\ttry {\n\t\t\tp = build();\n\t\t} catch (msg:String) {\n\t\t\tp = 1;\n\t\t}\n\t}\n}'
+			'class C {\n\tfunction f():Void {\n\t\tvar a:Int = 0, p:Int = 0;\n\t\ttry {\n\t\t\tp = build();\n\t\t} catch (msg:String) {\n'
+			+ '\t\t\tp = 1;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, vs.length);
 		Assert.equals('this try/catch that assigns the same target in every path can be a single try-expression assignment', vs[0].message);
@@ -134,7 +139,8 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 	 */
 	public function testDeclPairInsideConditionalFixed(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
-			'class C {\n\tfunction f(nameText:String, argList:Array<String>):Void {\n\t\t#if sys\n\t\tvar p:Runner = null;\n\t\ttry {\n\t\t\tp = new Runner(nameText, argList);\n\t\t} catch (msg:String) {\n\t\t\tp = null;\n\t\t}\n\t\t#end\n\t}\n}'
+			'class C {\n\tfunction f(nameText:String, argList:Array<String>):Void {\n\t\t#if sys\n\t\tvar p:Runner = null;\n\t\ttry {\n'
+			+ '\t\t\tp = new Runner(nameText, argList);\n\t\t} catch (msg:String) {\n\t\t\tp = null;\n\t\t}\n\t\t#end\n\t}\n}'
 		);
 		Assert.equals(1, es.length);
 		Assert.equals('var p:Runner = try new Runner(nameText, argList) catch (msg:String) null;', es[0].text);
@@ -142,7 +148,8 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 
 	public function testBareDeclarationPairFixed(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
-			'class C {\n\tfunction f():Void {\n\t\tvar p:Runner;\n\t\ttry {\n\t\t\tp = build();\n\t\t} catch (msg:String) {\n\t\t\tp = null;\n\t\t}\n\t}\n}'
+			'class C {\n\tfunction f():Void {\n\t\tvar p:Runner;\n\t\ttry {\n\t\t\tp = build();\n\t\t} catch (msg:String) {\n'
+			+ '\t\t\tp = null;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, es.length);
 		Assert.equals('var p:Runner = try build() catch (msg:String) null;', es[0].text);
@@ -163,7 +170,8 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 
 	public function testFieldAccessTargetFixed(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
-			'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tthis.runner = build();\n\t\t} catch (msg:String) {\n\t\t\tthis.runner = null;\n\t\t}\n\t}\n}'
+			'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tthis.runner = build();\n\t\t} catch (msg:String) {\n'
+			+ '\t\t\tthis.runner = null;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, es.length);
 		Assert.equals('this.runner = try build() catch (msg:String) null;', es[0].text);
@@ -185,7 +193,8 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 	 */
 	public function testStatementBetweenFallsBackToLvalueArm(): Void {
 		final vs: Array<Violation> = violations(
-			'class C {\n\tfunction f():Void {\n\t\tvar p:Runner = null;\n\t\tprepare();\n\t\ttry {\n\t\t\tp = build();\n\t\t} catch (msg:String) {\n\t\t\tp = null;\n\t\t}\n\t}\n}'
+			'class C {\n\tfunction f():Void {\n\t\tvar p:Runner = null;\n\t\tprepare();\n\t\ttry {\n\t\t\tp = build();\n'
+			+ '\t\t} catch (msg:String) {\n\t\t\tp = null;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, vs.length);
 		Assert.equals('this try/catch that assigns the same target in every path can be a single try-expression assignment', vs[0].message);
@@ -194,7 +203,8 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 	/** Dropping an impure initializer would change what runs, so the decl arm declines. */
 	public function testImpureInitializerFallsBackToLvalueArm(): Void {
 		final vs: Array<Violation> = violations(
-			'class C {\n\tfunction f():Void {\n\t\tvar p:Runner = spawn();\n\t\ttry {\n\t\t\tp = build();\n\t\t} catch (msg:String) {\n\t\t\tp = null;\n\t\t}\n\t}\n}'
+			'class C {\n\tfunction f():Void {\n\t\tvar p:Runner = spawn();\n\t\ttry {\n\t\t\tp = build();\n\t\t} catch (msg:String) {\n'
+			+ '\t\t\tp = null;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, vs.length);
 		Assert.equals('this try/catch that assigns the same target in every path can be a single try-expression assignment', vs[0].message);
@@ -203,7 +213,8 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 	/** After the fold `p` would reference itself in its own initializer, which the compiler rejects. */
 	public function testTargetReadInsideTryFallsBackToLvalueArm(): Void {
 		final vs: Array<Violation> = violations(
-			'class C {\n\tfunction f():Void {\n\t\tvar p:Int = 0;\n\t\ttry {\n\t\t\tp = build();\n\t\t} catch (msg:String) {\n\t\t\tp = p + 1;\n\t\t}\n\t}\n}'
+			'class C {\n\tfunction f():Void {\n\t\tvar p:Int = 0;\n\t\ttry {\n\t\t\tp = build();\n\t\t} catch (msg:String) {\n'
+			+ '\t\t\tp = p + 1;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, vs.length);
 		Assert.equals('this try/catch that assigns the same target in every path can be a single try-expression assignment', vs[0].message);
@@ -216,7 +227,8 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 	 */
 	public function testInsideEnclosingTryFallsBackToLvalueArm(): Void {
 		final vs: Array<Violation> = violations(
-			'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tvar p:Runner = null;\n\t\t\ttry {\n\t\t\t\tp = build();\n\t\t\t} catch (msg:String) {\n\t\t\t\tp = null;\n\t\t\t}\n\t\t} catch (outer:Exception) {\n\t\t\tlog(outer);\n\t\t}\n\t}\n}'
+			'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tvar p:Runner = null;\n\t\t\ttry {\n\t\t\t\tp = build();\n'
+			+ '\t\t\t} catch (msg:String) {\n\t\t\t\tp = null;\n\t\t\t}\n\t\t} catch (outer:Exception) {\n\t\t\tlog(outer);\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, vs.length);
 		Assert.equals('this try/catch that assigns the same target in every path can be a single try-expression assignment', vs[0].message);

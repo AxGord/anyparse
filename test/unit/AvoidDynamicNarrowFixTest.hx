@@ -188,7 +188,7 @@ class AvoidDynamicNarrowFixTest extends Test {
 	public function testTypedefTypeSkipped(): Void {
 		// A typedef may alias an abstract or Dynamic — not provably plain → skip.
 		Assert.isNull(narrow(
-			'class C {\n\tfunction f(a:Alias):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Alias = x;\n\t}\n}' + '\ntypedef Alias = Dynamic;'
+			'class C {\n\tfunction f(a:Alias):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Alias = x;\n\t}\n}\ntypedef Alias = Dynamic;'
 		));
 	}
 

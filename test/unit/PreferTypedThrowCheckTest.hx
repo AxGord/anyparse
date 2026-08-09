@@ -9,7 +9,6 @@ import anyparse.check.PreferTypedThrow;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.StdResolver;
 import anyparse.runtime.Span;
 
@@ -22,6 +21,15 @@ import anyparse.runtime.Span;
  * the catch-clause gate (a std-only catch does not degrade, a project one still does).
  */
 class PreferTypedThrowCheckTest extends Test {
+
+	// --- helpers -------------------------------------------------------------------
+
+	/** The thrower every scoped test reports on. */
+	private static inline final THROWER: String = 'class C {\n\n\tpublic function f():Void {\n\t\tthrow \'boom\';\n\t}\n\n}\n';
+
+	/** A source carrying one blocking `catch (e:String)` clause — the gate's trigger shape. */
+	private static inline final STRING_CATCH: String =
+		'class H {\n\n\tpublic function g():Void {\n\t\ttry h() catch (e:String) {}\n\t}\n\n}\n';
 
 	// --- what is flagged ---
 
@@ -138,8 +146,8 @@ class PreferTypedThrowCheckTest extends Test {
 	}
 
 	public function testTwoThrowsShareOneImport(): Void {
-		final src: String =
-			'class C {\n\n\tpublic function f():Void {\n\t\tthrow \'a\';\n\t}\n\n\tpublic function g():Void {\n\t\tthrow \'b\';\n\t}\n\n}\n';
+		final src: String = 'class C {\n\n\tpublic function f():Void {\n\t\tthrow \'a\';\n\t}\n\n\tpublic function g():Void {\n'
+			+ '\t\tthrow \'b\';\n\t}\n\n}\n';
 		final out: String = applyFix(src);
 		Assert.isTrue(out.indexOf('throw new Exception(\'a\');') != -1, 'first boxed, got: $out');
 		Assert.isTrue(out.indexOf('throw new Exception(\'b\');') != -1, 'second boxed, got: $out');
@@ -313,15 +321,6 @@ class PreferTypedThrowCheckTest extends Test {
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(0, violations('class Bad { function f() { throw').length);
 	}
-
-	// --- helpers -------------------------------------------------------------------
-
-	/** The thrower every scoped test reports on. */
-	private static inline final THROWER: String = 'class C {\n\n\tpublic function f():Void {\n\t\tthrow \'boom\';\n\t}\n\n}\n';
-
-	/** A source carrying one blocking `catch (e:String)` clause — the gate's trigger shape. */
-	private static inline final STRING_CATCH: String =
-		'class H {\n\n\tpublic function g():Void {\n\t\ttry h() catch (e:String) {}\n\t}\n\n}\n';
 
 	private function scopedPlugin(
 		report: Array<{ file: String, source: String }>, library: Array<{ file: String, source: String }>

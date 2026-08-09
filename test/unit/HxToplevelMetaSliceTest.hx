@@ -142,23 +142,23 @@ class HxToplevelMetaSliceTest extends HxTestHelpers {
 		Assert.equals('@:keep private class M {}\n', out);
 	}
 
-	public function testRoundTripMetaClass(): Void {
+	public inline function testRoundTripMetaClass(): Void {
 		roundTrip('@:enum class M {}');
 	}
 
-	public function testRoundTripMetaTypedef(): Void {
+	public inline function testRoundTripMetaTypedef(): Void {
 		roundTrip('@:keep typedef T = Int;');
 	}
 
-	public function testRoundTripMetasOnClass(): Void {
+	public inline function testRoundTripMetasOnClass(): Void {
 		roundTrip('@:allow(pack.Base) @test("foo") class Main {}');
 	}
 
-	public function testRoundTripMetaWithModifier(): Void {
+	public inline function testRoundTripMetaWithModifier(): Void {
 		roundTrip('@:keep private class M {}');
 	}
 
-	public function testRoundTripPackageImportMetaClass(): Void {
+	public inline function testRoundTripPackageImportMetaClass(): Void {
 		roundTrip('package foo;\nimport bar.Baz;\n@:enum class M {}');
 	}
 

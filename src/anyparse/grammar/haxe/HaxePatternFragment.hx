@@ -3,6 +3,8 @@ package anyparse.grammar.haxe;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * Pattern-fragment wrap/extract support behind `HaxeQueryPlugin.parsePattern`'s
  * category cascade: wraps a fragment into a synthetic parseable module
@@ -18,7 +20,7 @@ final class HaxePatternFragment {
 	 */
 	public static function consumesVariant(extracted: QueryNode, variant: String): Bool {
 		final span: Null<Span> = extracted.span;
-		return span == null || span.to - span.from >= StringTools.trim(variant).length - 1;
+		return span == null || span.to - span.from >= variant.trim().length - 1;
 	}
 
 	public static function wrapAsStmt(src: String): String {
@@ -66,7 +68,12 @@ final class HaxePatternFragment {
 		final cls: Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
 		if (cls == null) return null;
 		final varStmt: Null<QueryNode> = findFirstByKind(cls, 'VarStmt');
-		return varStmt == null ? null : varStmt.children.length == 0 ? null : varStmt.children[varStmt.children.length - 1];
+		return if (varStmt == null)
+			null
+		else if (varStmt.children.length == 0)
+			null
+		else
+			varStmt.children[varStmt.children.length - 1];
 	}
 
 	public static function extractFirstMeta(module: QueryNode): Null<QueryNode> {
@@ -88,7 +95,7 @@ final class HaxePatternFragment {
 	private static function trimTrailingSemicolons(src: String): String {
 		var end: Int = src.length;
 		while (end > 0) {
-			final c: Int = StringTools.fastCodeAt(src, end - 1);
+			final c: Int = src.fastCodeAt(end - 1);
 			if (c == ';'.code || c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code)
 				end--;
 			else
@@ -107,7 +114,7 @@ final class HaxePatternFragment {
 	}
 
 	private static function findFirstByKindPrefix(node: QueryNode, prefix: String): Null<QueryNode> {
-		if (StringTools.startsWith(node.kind, prefix)) return node;
+		if (node.kind.startsWith(prefix)) return node;
 		for (c in node.children) {
 			final found: Null<QueryNode> = findFirstByKindPrefix(c, prefix);
 			if (found != null) return found;

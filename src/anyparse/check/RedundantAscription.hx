@@ -3,7 +3,6 @@ package anyparse.check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -81,7 +80,7 @@ final class RedundantAscription implements Check implements DefaultOff {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		if (provider == null) return [];
 		final typed: TypeInfoProvider = provider;
 		final violations: Array<Violation> = [];
@@ -145,10 +144,14 @@ final class RedundantAscription implements Check implements DefaultOff {
 		final ctorName: Null<String> = operand.name;
 		if (ctorName == null) return null;
 		final targetSource: Null<String> = TypeResolver.castTargetWithin(span, castTargets);
-		if (targetSource == null || targetSource.indexOf('<') != -1) return null;
-		if (TypeResolver.stripWs(targetSource) != TypeResolver.stripWs(ctorName)) return null;
-		if (deletedRegionHasComment(source, span, operandSpan)) return null;
-		return targetSource;
+		return if (targetSource == null || targetSource.indexOf('<') != -1)
+			null
+		else if (TypeResolver.stripWs(targetSource) != TypeResolver.stripWs(ctorName))
+			null
+		else if (deletedRegionHasComment(source, span, operandSpan))
+			null
+		else
+			targetSource;
 	}
 
 	/**
@@ -166,8 +169,9 @@ final class RedundantAscription implements Check implements DefaultOff {
 		final shape: RefShape = plugin.refShape();
 		final checkTypeKind: Null<String> = shape.checkTypeKind;
 		final newExprKind: Null<String> = shape.newExprKind;
-		if (checkTypeKind == null || newExprKind == null) return null;
-		return { checkTypeKind: checkTypeKind, newExprKind: newExprKind, opaqueKinds: shape.opaqueKinds ?? [] };
+		return checkTypeKind == null || newExprKind == null
+			? null
+			: { checkTypeKind: checkTypeKind, newExprKind: newExprKind, opaqueKinds: shape.opaqueKinds ?? [] };
 	}
 
 }

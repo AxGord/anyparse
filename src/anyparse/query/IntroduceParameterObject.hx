@@ -8,6 +8,7 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
 using Lambda;
 
 /** A resolved parameter to fold into the object: its name, type source, and node. */
@@ -184,7 +185,7 @@ final class IntroduceParameterObject {
 	private static function resolveFields(
 		params: Array<QueryNode>, rng: { start: Int, end: Int }, source: String, plugin: GrammarPlugin, out: Array<Field>
 	): Null<String> {
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final types: Map<Int, String> = provider != null ? provider.declaredTypeSources(source) : [];
 		for (i in rng.start ... rng.end + 1) {
 			final p: QueryNode = params[i];
@@ -283,7 +284,7 @@ final class IntroduceParameterObject {
 		final buf: StringBuf = new StringBuf();
 		var newlines: Int = 0;
 		for (i in 0...source.length) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c == '\n'.code) {
 				newlines++;
 				if (newlines <= 2) buf.addChar(c);

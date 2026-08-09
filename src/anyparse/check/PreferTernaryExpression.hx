@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -105,8 +104,7 @@ final class PreferTernaryExpression implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		return [
+		return seams == null ? [] : [
 			for (entry in files) for (m in collect(plugin, entry.source, seams))
 				{
 					file: entry.file,
@@ -205,8 +203,8 @@ final class PreferTernaryExpression implements Check {
 	 * is the head `if`-expression, which is no host's delimited slot.
 	 */
 	private static function slotAcceptsTernary(parent: Null<QueryNode>, childIndex: Int, s: Seams): Bool {
-		if (parent == null) return false;
-		return s.delimitedAllKinds.contains(parent.kind) || (childIndex > 0 && s.delimitedTailKinds.contains(parent.kind));
+		return parent != null
+			&& (s.delimitedAllKinds.contains(parent.kind) || (childIndex > 0 && s.delimitedTailKinds.contains(parent.kind)));
 	}
 
 	/**

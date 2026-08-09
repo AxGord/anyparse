@@ -3,11 +3,12 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Flags a bare local declaration immediately followed by its first assignment, joining the
@@ -163,7 +164,7 @@ final class JoinDeclarationAssignment implements Check {
 		if (name == null || declSpan == null) return null;
 		// The decl span includes its trailing `;`; a bare single-var decl ends in one.
 		if (declSpan.to <= declSpan.from || source.charAt(declSpan.to - 1) != ';') return null;
-		final declText: String = StringTools.rtrim(source.substring(declSpan.from, declSpan.to - 1));
+		final declText: String = source.substring(declSpan.from, declSpan.to - 1).rtrim();
 		if (RefactorSupport.isMultiDeclarator(decl, s.localDeclContinuationKinds)) return null; // never joined
 
 		if (assign.kind != s.exprStmtKind || assign.children.length != 1) return null;

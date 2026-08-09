@@ -94,7 +94,7 @@ class HxIsStmtNoSemiSliceTest extends HxTestHelpers {
 	// -- Idempotency: issue_605 brace-block round-trip via the module
 	// pipeline --
 
-	public function testCorpusIssue605RoundTrip(): Void {
+	public inline function testCorpusIssue605RoundTrip(): Void {
 		roundTrip('class C {\n\tfunction f() {\n\t\t{x is String}\n\t}\n}', 'issue_605_operator_is');
 	}
 

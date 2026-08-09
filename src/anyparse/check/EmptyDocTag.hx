@@ -7,6 +7,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * One tag section of a doc comment: the tag's `name`, the byte span reported as the
  * violation (`from` at the `@`, `to` at the end of the section's last line), and the
@@ -148,7 +150,7 @@ final class EmptyDocTag implements Check {
 		final to: Int = tok.to - DOC_CLOSE.length;
 		final lines: Array<Span> = [];
 		var start: Int = from;
-		for (i in from ... to) if (StringTools.fastCodeAt(source, i) == '\n'.code) {
+		for (i in from ... to) if (source.fastCodeAt(i) == '\n'.code) {
 			lines.push(new Span(start, i));
 			start = i + 1;
 		}
@@ -191,7 +193,7 @@ final class EmptyDocTag implements Check {
 	 * Everything else carries information a signature does not and is kept.
 	 */
 	private static function isEmptyTag(source: String, name: String, from: Int, to: Int): Bool {
-		final rest: String = StringTools.trim(source.substring(from, to));
+		final rest: String = source.substring(from, to).trim();
 		return switch name {
 			case 'param': !hasSpace(rest);
 			case 'return' | 'returns' | 'throws' | 'exception' | 'see': rest == '';
@@ -246,7 +248,7 @@ final class EmptyDocTag implements Check {
 	/** Whether the line holds nothing but whitespace and gutter stars. */
 	private static function isBlankLine(source: String, line: Span): Bool {
 		for (i in line.from ... line.to) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (!RefactorSupport.isSpace(c) && c != '*'.code) return false;
 		}
 		return true;
@@ -263,25 +265,25 @@ final class EmptyDocTag implements Check {
 	 * `@param2` from reading as `@param` with a `2` argument.
 	 */
 	private static function tagName(source: String, bare: Int, to: Int): Null<String> {
-		if (bare >= to || StringTools.fastCodeAt(source, bare) != '@'.code) return null;
+		if (bare >= to || source.fastCodeAt(bare) != '@'.code) return null;
 		var i: Int = bare + 1;
-		while (i < to && isLetter(StringTools.fastCodeAt(source, i))) i++;
-		final terminated: Bool = i >= to || RefactorSupport.isSpace(StringTools.fastCodeAt(source, i));
+		while (i < to && isLetter(source.fastCodeAt(i))) i++;
+		final terminated: Bool = i >= to || RefactorSupport.isSpace(source.fastCodeAt(i));
 		return i > bare + 1 && terminated ? source.substring(bare + 1, i) : null;
 	}
 
 	/** The offset of a line's bare content: past its leading whitespace, gutter star run, and the whitespace after it. */
 	private static function bareFrom(source: String, line: Span): Int {
 		var i: Int = line.from;
-		while (i < line.to && RefactorSupport.isSpace(StringTools.fastCodeAt(source, i))) i++;
-		while (i < line.to && StringTools.fastCodeAt(source, i) == '*'.code) i++;
-		while (i < line.to && RefactorSupport.isSpace(StringTools.fastCodeAt(source, i))) i++;
+		while (i < line.to && RefactorSupport.isSpace(source.fastCodeAt(i))) i++;
+		while (i < line.to && source.fastCodeAt(i) == '*'.code) i++;
+		while (i < line.to && RefactorSupport.isSpace(source.fastCodeAt(i))) i++;
 		return i;
 	}
 
 	/** Whether `text` holds whitespace - i.e. more than one whitespace-delimited token. */
 	private static function hasSpace(text: String): Bool {
-		for (i in 0...text.length) if (RefactorSupport.isSpace(StringTools.fastCodeAt(text, i))) return true;
+		for (i in 0...text.length) if (RefactorSupport.isSpace(text.fastCodeAt(i))) return true;
 		return false;
 	}
 
@@ -298,9 +300,9 @@ final class EmptyDocTag implements Check {
 	 */
 	private static function isGutterLine(source: String, line: Span): Bool {
 		var i: Int = line.from;
-		while (i < line.to && RefactorSupport.isSpace(StringTools.fastCodeAt(source, i))) i++;
-		if (i < line.to && StringTools.fastCodeAt(source, i) == '*'.code) i++;
-		while (i < line.to && RefactorSupport.isSpace(StringTools.fastCodeAt(source, i))) i++;
+		while (i < line.to && RefactorSupport.isSpace(source.fastCodeAt(i))) i++;
+		if (i < line.to && source.fastCodeAt(i) == '*'.code) i++;
+		while (i < line.to && RefactorSupport.isSpace(source.fastCodeAt(i))) i++;
 		return i == line.to;
 	}
 
@@ -329,13 +331,13 @@ final class EmptyDocTag implements Check {
 		if (from > 0) return new Span(lines[from].from - 1, lines[to].to);
 		final start: Int = lines[0].from;
 		final end: Int = lines[to].to;
-		return new Span(start, end > start && StringTools.fastCodeAt(source, end - 1) == '\r'.code ? end - 1 : end);
+		return new Span(start, end > start && source.fastCodeAt(end - 1) == '\r'.code ? end - 1 : end);
 	}
 
 	/** The offset of the line's first non-space byte - its gutter star when it carries one. */
 	private static function contentFrom(source: String, line: Span): Int {
 		var i: Int = line.from;
-		while (i < line.to && RefactorSupport.isSpace(StringTools.fastCodeAt(source, i))) i++;
+		while (i < line.to && RefactorSupport.isSpace(source.fastCodeAt(i))) i++;
 		return i;
 	}
 

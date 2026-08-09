@@ -74,23 +74,24 @@ class HxStaticLocalStmtSliceTest extends HxTestHelpers {
 	// human-canonical form is out of scope for this slice. The
 	// `roundTrip` helper covers the multi-var path via AST-level parity.
 
-	public function testStaticVarWriterEquals(): Void {
+	public inline function testStaticVarWriterEquals(): Void {
 		writerEquals(
 			'class M {\n\tstatic function m() {\n\t\tstatic var x = 1;\n\t}\n}',
 			'class M {\n\tstatic function m() {\n\t\tstatic var x = 1;\n\t}\n}\n'
 		);
 	}
 
-	public function testStaticFinalWriterEquals(): Void {
+	public inline function testStaticFinalWriterEquals(): Void {
 		writerEquals(
 			'class M {\n\tstatic function m() {\n\t\tstatic final y = 2;\n\t}\n}',
 			'class M {\n\tstatic function m() {\n\t\tstatic final y = 2;\n\t}\n}\n'
 		);
 	}
 
-	public function testStaticLocalsRoundTrip(): Void {
+	public inline function testStaticLocalsRoundTrip(): Void {
 		roundTrip(
-			'class Main {\n\tstatic function main() {\n\t\tstatic final @Test a = 1, b = 2;\n\t\tstatic var c, d;\n\t\tfinal e = 2;\n\t\tvar f;\n\t}\n}'
+			'class Main {\n\tstatic function main() {\n\t\tstatic final @Test a = 1, b = 2;\n\t\tstatic var c, d;\n\t\tfinal e = 2;\n'
+			+ '\t\tvar f;\n\t}\n}'
 		);
 	}
 

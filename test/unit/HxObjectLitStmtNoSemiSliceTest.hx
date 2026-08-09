@@ -122,7 +122,8 @@ class HxObjectLitStmtNoSemiSliceTest extends HxTestHelpers {
 
 	public function testCorpusObjectLitAfterSwitch(): Void {
 		final cls: HxClassDecl = HaxeParser.parse(
-			"class Main {\n\tstatic function main() {\n\t\tswitch (foo) {\n\t\t\tcase {kind: TkIdent, text: \"error\"}:\n\t\t\t\tdoSomething();\n\t\t}\n\t\t{f: macro ${a},}\n\t}\n}"
+			'class Main {\n\tstatic function main() {\n\t\tswitch (foo) {\n\t\t\tcase {kind: TkIdent, text: \"error\"}:\n'
+			+ "\t\t\t\tdoSomething();\n\t\t}\n\t\t{f: macro ${a},}\n\t}\n}"
 		);
 		Assert.equals(1, cls.members.length);
 	}
@@ -132,7 +133,8 @@ class HxObjectLitStmtNoSemiSliceTest extends HxTestHelpers {
 
 	public function testCorpusIssue161IfBodyInObjectLiteral(): Void {
 		final cls: HxClassDecl = HaxeParser.parse(
-			'class Main {\n\tpublic static function main() {\n\t\t{\n\t\t\tfoo: {\n\t\t\t\tif (foo)\n\t\t\t\t\tbar;\n\t\t\t\t"";\n\t\t\t}\n\t\t}\n\t}\n}'
+			'class Main {\n\tpublic static function main() {\n\t\t{\n\t\t\tfoo: {\n\t\t\t\tif (foo)\n\t\t\t\t\tbar;\n\t\t\t\t"";\n'
+			+ '\t\t\t}\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, cls.members.length);
 	}
@@ -140,16 +142,18 @@ class HxObjectLitStmtNoSemiSliceTest extends HxTestHelpers {
 	// -- Idempotency: corpus issue_161 round-trip via the module
 	// pipeline (parse + write + parse + write must converge).
 
-	public function testCorpusIssue161RoundTrip(): Void {
+	public inline function testCorpusIssue161RoundTrip(): Void {
 		roundTrip(
-			'class Main {\n\tpublic static function main() {\n\t\t{\n\t\t\tfoo: {\n\t\t\t\tif (foo)\n\t\t\t\t\tbar;\n\t\t\t\t"";\n\t\t\t}\n\t\t}\n\t}\n}',
+			'class Main {\n\tpublic static function main() {\n\t\t{\n\t\t\tfoo: {\n\t\t\t\tif (foo)\n\t\t\t\t\tbar;\n\t\t\t\t"";\n'
+			+ '\t\t\t}\n\t\t}\n\t}\n}',
 			'issue_161_if_body_in_object_literal'
 		);
 	}
 
-	public function testCorpusWhitespaceAfterObjectLiteralRoundTrip(): Void {
+	public inline function testCorpusWhitespaceAfterObjectLiteralRoundTrip(): Void {
 		roundTrip(
-			"class Main {\n\tstatic function main() {\n\t\tswitch (foo) {\n\t\t\tcase {kind: TkIdent, text: \"error\"}:\n\t\t\t\tdoSomething();\n\t\t}\n\t\t{f: macro ${a},}\n\t}\n}",
+			'class Main {\n\tstatic function main() {\n\t\tswitch (foo) {\n\t\t\tcase {kind: TkIdent, text: \"error\"}:\n'
+			+ "\t\t\t\tdoSomething();\n\t\t}\n\t\t{f: macro ${a},}\n\t}\n}",
 			'whitespace_after_object_literal'
 		);
 	}

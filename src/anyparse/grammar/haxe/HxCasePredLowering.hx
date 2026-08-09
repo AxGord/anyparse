@@ -33,34 +33,12 @@ import anyparse.macro.AstPredLowering;
 final class HxCasePredLowering extends AstPredLowering {
 
 	private static inline final HX_EXPR: String = HxAstPredLowering.HX_EXPR;
-
 	private static inline final HX_STATEMENT: String = HxAstPredLowering.HX_STATEMENT;
-
 	private static inline final HX_SWITCH_CASE: String = HxAstPredLowering.HX_SWITCH_CASE;
-
 	private static inline final HX_CASE_BRANCH: String = 'anyparse.grammar.haxe.HxCaseBranch';
-
 	private static inline final HX_DEFAULT_BRANCH: String = 'anyparse.grammar.haxe.HxDefaultBranch';
-
 	private static inline final HX_CONDITIONAL_CASE: String = 'anyparse.grammar.haxe.HxConditionalCase';
-
 	private static inline final HX_ELSEIF_CASE: String = 'anyparse.grammar.haxe.HxElseifCase';
-
-
-	/** The case-family predicate fields, appended to `HxAstPredLowering.generate()`'s own. */
-	public function generate(): Array<Field> {
-		return [
-			caseBodyRefusesFlatField(),
-			caseBodyControlFlowRootField(),
-			caseBodyControlFlowExprField(),
-			caseSiblingUnitsField(),
-			caseSiblingUnitsIntoField(),
-			addCaseSiblingUnitField(),
-			caseUnitStructuralBreakField(),
-			caseUnitControlFlowBodyField(),
-			condSpliceRawWrapsCasesField(),
-		];
-	}
 
 	/**
 		 * `HxStatement` ctors that are keyword-led CONTROL-FLOW statements —
@@ -114,6 +92,21 @@ final class HxCasePredLowering extends AstPredLowering {
 		'SwitchExprBare',
 		'TryExpr',
 	];
+
+	/** The case-family predicate fields, appended to `HxAstPredLowering.generate()`'s own. */
+	public function generate(): Array<Field> {
+		return [
+			caseBodyRefusesFlatField(),
+			caseBodyControlFlowRootField(),
+			caseBodyControlFlowExprField(),
+			caseSiblingUnitsField(),
+			caseSiblingUnitsIntoField(),
+			addCaseSiblingUnitField(),
+			caseUnitStructuralBreakField(),
+			caseUnitControlFlowBodyField(),
+			condSpliceRawWrapsCasesField(),
+		];
+	}
 
 	/**
 	 * `caseBodyRefusesFlat(s) → Bool` — true when a single-statement

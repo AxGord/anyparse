@@ -109,7 +109,7 @@ class HxSharpErrorSliceTest extends HxTestHelpers {
 
 	// -- Idempotency on the corpus module form --
 
-	public function testSharpErrorRoundTrip(): Void {
+	public inline function testSharpErrorRoundTrip(): Void {
 		roundTrip('#if java\n#error "please implement"\n#end\nclass Main {\n\tpublic function new() {}\n}');
 	}
 

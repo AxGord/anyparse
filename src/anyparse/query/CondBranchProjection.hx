@@ -4,6 +4,8 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * The conditional-compilation branch projection: the pure `(tree, source, seams) -> tree` rewrite
  * that regroups every statement-position `#if` region into one synthetic `CondBranch` statement
@@ -199,7 +201,7 @@ final class CondBranchProjection {
 		if (from >= to) return false;
 		for (line in maskComments(source, from, to, comments).split('\n')) {
 			final trimmed: String = StringTools.ltrim(line);
-			for (kw in elseKeywords) if (StringTools.startsWith(trimmed, kw)) return true;
+			for (kw in elseKeywords) if (trimmed.startsWith(kw)) return true;
 		}
 		return false;
 	}
@@ -216,7 +218,7 @@ final class CondBranchProjection {
 		if (hits.length == 0) return source.substring(from, to);
 		final buf: StringBuf = new StringBuf();
 		for (i in from ... to) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			buf.addChar(c == '\n'.code || !inAnyToken(i, hits) ? c : ' '.code);
 		}
 		return buf.toString();

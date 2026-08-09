@@ -6,8 +6,6 @@ import anyparse.query.RefactorSupport;
 
 using Lambda;
 
-import anyparse.runtime.Span;
-
 /**
  * The null facts holding at one visited node's entry, queried by a consumer.
  * `nonNull(name)` answers whether `name` is provably non-null by flow there;
@@ -225,8 +223,6 @@ final class NullFlow {
 	 * The short-circuit boolean-or node kind — its right side is a conditional path, and else-arm narrowing combines over its disjuncts.
 	 */
 	private static final BOOL_OR_KIND: String = 'Or';
-
-	private function new() {}
 
 	/**
 	 * Walk every function unit in `root` (`RefShape.functionKinds`) in flow
@@ -859,7 +855,7 @@ final class NullFlow {
 	}
 
 	/** Whether `rhs` is the null literal — a syntactically definite-null assignment value. */
-	private static function isNullLitRhs(rhs: Null<QueryNode>, ctx: FlowCtx): Bool {
+	private static inline function isNullLitRhs(rhs: Null<QueryNode>, ctx: FlowCtx): Bool {
 		return rhs != null && ctx.nullLitKind != null && rhs.kind == ctx.nullLitKind;
 	}
 
@@ -1070,7 +1066,6 @@ final class NullFlow {
 		for (e in next.present) state.present.push(e);
 	}
 
-
 	/** A fresh all-`Unknown` flow state — every fact set empty. */
 	private static inline function emptyState(): FlowState {
 		return {
@@ -1126,13 +1121,11 @@ final class NullFlow {
 			establishCompoundPredicates(state, ctx, name, r);
 			return;
 		}
-		if (rk == ctx.identKind) {
-			final other: Null<String> = r.name;
-			if (other != null && other != name && ctx.ownNames.contains(other) && !ctx.captured.contains(other)) {
-				final copy: String = other;
-				state.aliases.push({ a: name, b: copy });
-			}
-		}
+		if (rk != ctx.identKind) return;
+		final other: Null<String> = r.name;
+		if (!(other != null && other != name && ctx.ownNames.contains(other) && !ctx.captured.contains(other))) return;
+		final copy: String = other;
+		state.aliases.push({ a: name, b: copy });
 	}
 
 	/**
@@ -1217,9 +1210,12 @@ final class NullFlow {
 		final key: QueryNode = cond.children[1];
 		final mapName: Null<String> = recv.name;
 		final keyName: Null<String> = key.name;
-		return recv.kind != ctx.identKind || key.kind != ctx.identKind || mapName == null || keyName == null
-			? null
-			: ctx.captured.contains(mapName) || ctx.captured.contains(keyName) ? null : { map: mapName, key: keyName };
+		return if (recv.kind != ctx.identKind || key.kind != ctx.identKind || mapName == null || keyName == null)
+			null
+		else if (ctx.captured.contains(mapName) || ctx.captured.contains(keyName))
+			null
+		else
+			{ map: mapName, key: keyName };
 	}
 
 	/**
@@ -1238,7 +1234,6 @@ final class NullFlow {
 		if (recv.kind != ctx.identKind || key.kind != ctx.identKind || mapName == null || keyName == null) return false;
 		return state.present.exists(e -> e.map == mapName && e.key == keyName);
 	}
-
 
 	/**
 	 * Feature 2: seed one-way (`compound`) predicates from a conjunctive Bool RHS
@@ -1284,7 +1279,6 @@ final class NullFlow {
 		return false;
 	}
 
-
 	/**
 	 * A relational assertion call (`Assert.isTrue(u != null)` / `Assert.isFalse(u == null)`):
 	 * its boolean-expression first argument is asserted TRUE (`assertTrueCalls`) or FALSE
@@ -1316,7 +1310,6 @@ final class NullFlow {
 			collectNarrow(arg, names, ctx, ctx.eqKind, BOOL_OR_KIND);
 		for (n in names) state.maybe.remove(n);
 	}
-
 
 	/**
 	 * For a `Recv.method(arg, …)` call whose receiver is a plain identifier and which carries at

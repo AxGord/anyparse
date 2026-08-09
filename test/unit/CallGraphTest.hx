@@ -3,9 +3,6 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.query.CallGraph;
-import anyparse.query.CallGraph.CallEdge;
-import anyparse.query.CallGraph.EdgeKind;
-import anyparse.query.CallGraph.FnNode;
 import anyparse.query.Reach;
 
 /**
@@ -186,7 +183,7 @@ class CallGraphTest extends Test {
 		Assert.equals(0, edges(g, 'A.m', 'A.work', Call).length);
 	}
 
-	private function graphOf(sources: Array<String>): CallGraph {
+	private inline function graphOf(sources: Array<String>): CallGraph {
 		return QueryTestHelpers.graphOf(sources);
 	}
 

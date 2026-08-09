@@ -4,9 +4,10 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
+
+using StringTools;
 
 /**
  * Shared engine for the collection-literal checks (`prefer-array-literal`,
@@ -91,50 +92,6 @@ final class NewLiteral {
 		return edits;
 	}
 
-	private static function walk(
-		out: Array<Violation>, file: String, source: String, node: QueryNode, newExprKind: String, typeName: String, rule: String,
-		message: String
-	): Void {
-		if (matches(node, source, newExprKind, typeName)) {
-			final span: Null<Span> = node.span;
-			if (span != null) {
-				out.push({
-					file: file,
-					span: span,
-					rule: rule,
-					severity: Severity.Info,
-					message: message
-				});
-				return;
-			}
-		}
-		for (c in node.children) walk(out, file, source, c, newExprKind, typeName, rule, message);
-	}
-
-	/** Whether `node` is a `new <typeName>()` with an empty argument list (source ends in `()`). */
-	private static function matches(node: QueryNode, source: String, newExprKind: String, typeName: String): Bool {
-		if (node.kind != newExprKind || node.name != typeName) return false;
-		final span: Null<Span> = node.span;
-		return span != null && StringTools.endsWith(StringTools.rtrim(source.substring(span.from, span.to)), '()');
-	}
-
-	/** Index every `new` node by its `from:to` span key and record its parent (for `fix` to re-find a flagged node and gate on its enclosing declaration). */
-	private static function index(
-		node: QueryNode, parent: Null<QueryNode>, newExprKind: String, nodeByKey: Map<String, QueryNode>,
-		parentByKey: Map<String, QueryNode>
-	): Void {
-		if (node.kind == newExprKind) {
-			final span: Null<Span> = node.span;
-			if (span != null) {
-				final key: String = '${span.from}:${span.to}';
-				nodeByKey[key] = node;
-				if (parent != null) parentByKey[key] = parent;
-			}
-		}
-		for (c in node.children) index(c, node, newExprKind, nodeByKey, parentByKey);
-	}
-
-
 	/**
 	 * Whether the `new` node starting at `newStart` is the direct initializer of a
 	 * declaration whose target type is PINNED by an explicit annotation — the only context
@@ -159,20 +116,20 @@ final class NewLiteral {
 	 * over unchanged; only the caller's use of the answer differs.
 	 */
 	public static function pinnedByTypeHint(source: String, declStart: Int, newStart: Int): Bool {
-		final head: String = StringTools.rtrim(source.substring(declStart, newStart));
+		final head: String = source.substring(declStart, newStart).rtrim();
 		final len: Int = head.length;
-		if (len == 0 || StringTools.fastCodeAt(head, len - 1) != '='.code) return false;
+		if (len == 0 || head.fastCodeAt(len - 1) != '='.code) return false;
 		var depth: Int = 0;
 		var sawColon: Bool = false;
 		for (i in 0...len - 1) {
-			final c: Int = StringTools.fastCodeAt(head, i);
+			final c: Int = head.fastCodeAt(i);
 			switch c {
 				case '<'.code | '('.code | '['.code | '{'.code:
 					depth++;
 				case '>'.code | ')'.code | ']'.code | '}'.code:
 					if (depth > 0) depth--;
 				case ':'.code:
-					if (depth == 0 && (i == 0 || StringTools.fastCodeAt(head, i - 1) != '@'.code)) sawColon = true;
+					if (depth == 0 && (i == 0 || head.fastCodeAt(i - 1) != '@'.code)) sawColon = true;
 				case ','.code:
 					if (depth == 0) return false;
 				case _:
@@ -181,6 +138,48 @@ final class NewLiteral {
 		return sawColon;
 	}
 
+	private static function walk(
+		out: Array<Violation>, file: String, source: String, node: QueryNode, newExprKind: String, typeName: String, rule: String,
+		message: String
+	): Void {
+		if (matches(node, source, newExprKind, typeName)) {
+			final span: Null<Span> = node.span;
+			if (span != null) {
+				out.push({
+					file: file,
+					span: span,
+					rule: rule,
+					severity: Severity.Info,
+					message: message
+				});
+				return;
+			}
+		}
+		for (c in node.children) walk(out, file, source, c, newExprKind, typeName, rule, message);
+	}
+
+	/** Whether `node` is a `new <typeName>()` with an empty argument list (source ends in `()`). */
+	private static function matches(node: QueryNode, source: String, newExprKind: String, typeName: String): Bool {
+		if (node.kind != newExprKind || node.name != typeName) return false;
+		final span: Null<Span> = node.span;
+		return span != null && StringTools.endsWith(source.substring(span.from, span.to).rtrim(), '()');
+	}
+
+	/** Index every `new` node by its `from:to` span key and record its parent (for `fix` to re-find a flagged node and gate on its enclosing declaration). */
+	private static function index(
+		node: QueryNode, parent: Null<QueryNode>, newExprKind: String, nodeByKey: Map<String, QueryNode>,
+		parentByKey: Map<String, QueryNode>
+	): Void {
+		if (node.kind == newExprKind) {
+			final span: Null<Span> = node.span;
+			if (span != null) {
+				final key: String = '${span.from}:${span.to}';
+				nodeByKey[key] = node;
+				if (parent != null) parentByKey[key] = parent;
+			}
+		}
+		for (c in node.children) index(c, node, newExprKind, nodeByKey, parentByKey);
+	}
 
 	/**
 	 * Whether the flagged `new` node is the RHS of a plain assignment (`assignKind`) whose

@@ -3,6 +3,8 @@ package anyparse.format.comment;
 import anyparse.core.EnvFlag;
 import haxe.Exception;
 
+using StringTools;
+
 /**
  * Comment-preservation audit over a writer round trip.
  *
@@ -58,8 +60,6 @@ final class CommentInventory {
 
 	/** Shortest block comment that carries BOTH delimiters (`/**\/`). */
 	private static inline final MIN_CLOSED_BLOCK: Int = 4;
-
-	private function new() {}
 
 	/** Whether `DECLINE_ENV` declines the comment guard in this process. */
 	public static inline function guardDeclined(): Bool return EnvFlag.isSet(DECLINE_ENV);
@@ -122,8 +122,8 @@ final class CommentInventory {
 		var quote: Int = 0;
 		var i: Int = 0;
 		while (i < len) {
-			final c: Int = StringTools.fastCodeAt(src, i);
-			final next: Int = i + 1 < len ? StringTools.fastCodeAt(src, i + 1) : 0;
+			final c: Int = src.fastCodeAt(i);
+			final next: Int = i + 1 < len ? src.fastCodeAt(i + 1) : 0;
 			if (quote != 0) {
 				if (c == '\\'.code) {
 					i += 2;
@@ -145,7 +145,7 @@ final class CommentInventory {
 			}
 			if (c == '/'.code && next == '/'.code) {
 				final start: Int = i;
-				while (i < len && StringTools.fastCodeAt(src, i) != '\n'.code) i++;
+				while (i < len && src.fastCodeAt(i) != '\n'.code) i++;
 				onComment(start, i);
 				continue;
 			}
@@ -189,7 +189,7 @@ final class CommentInventory {
 		final len: Int = src.length;
 		var i: Int = from;
 		while (i < len) {
-			final c: Int = StringTools.fastCodeAt(src, i);
+			final c: Int = src.fastCodeAt(i);
 			if (c == '\\'.code) {
 				i += 2;
 				continue;
@@ -215,16 +215,16 @@ final class CommentInventory {
 	 * never drift apart on a normalisation rule.
 	 */
 	private static function normalize(comment: String): String {
-		if (StringTools.startsWith(comment, '//')) return normalizeBody(comment.substring(2));
+		if (comment.startsWith('//')) return normalizeBody(comment.substring(2));
 		// `collect` emits nothing else, so a third shape means the scanner and
 		// this function disagree about what a comment token is.
-		if (!StringTools.startsWith(comment, '/*')) throw new Exception('not a comment token: `$comment`');
+		if (!comment.startsWith('/*')) throw new Exception('not a comment token: `$comment`');
 		var end: Int = comment.length;
 		// A trailing `*/` (and the `*` of a `**/` close) carries no text. An
 		// unterminated `/*/` is shorter than both delimiters together — leave
 		// it whole rather than cut past the open.
-		if (end >= MIN_CLOSED_BLOCK && StringTools.endsWith(comment, '*/')) end -= 2;
-		while (end > 2 && StringTools.fastCodeAt(comment, end - 1) == '*'.code) end--;
+		if (end >= MIN_CLOSED_BLOCK && comment.endsWith('*/')) end -= 2;
+		while (end > 2 && comment.fastCodeAt(end - 1) == '*'.code) end--;
 		return normalizeBody(comment.substring(2, end));
 	}
 
@@ -238,7 +238,7 @@ final class CommentInventory {
 		var i: Int = 0;
 		var atLineStart: Bool = true;
 		while (i < len) {
-			final c: Int = StringTools.fastCodeAt(body, i);
+			final c: Int = body.fastCodeAt(i);
 			i++;
 			if (c == '\n'.code) {
 				atLineStart = true;

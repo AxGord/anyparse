@@ -194,14 +194,17 @@ final class RedundantCaseBody implements Check {
 			// token (a `// …` there is TRIVIA the span excludes, and the writer would re-attach it
 			// to a node it never described), and whatever precedes it back to the arm before —
 			// text `CheckScan.lineDeletionSpan` sweeps away or strands on an arm it does not document.
-			if (prev == null || nextSpan == null) return null;
-			if (CheckScan.hasCommentMarker(source, prev.to, nextSpan.from)) return null;
-			return {
-				span: firstSpan,
-				subsume: true,
-				editSpan: CheckScan.lineDeletionSpan(source, firstSpan),
-				editText: ''
-			};
+			return if (prev == null || nextSpan == null)
+				null
+			else if (CheckScan.hasCommentMarker(source, prev.to, nextSpan.from))
+				null
+			else
+				{
+					span: firstSpan,
+					subsume: true,
+					editSpan: CheckScan.lineDeletionSpan(source, firstSpan),
+					editText: ''
+				};
 		}
 		final nextRun: Array<QueryNode> = CasePatternScan.patternRun(seams, next);
 		if (nextRun.length == 0 || CasePatternScan.guardOf(seams, next, nextRun.length) != null) return null;
@@ -209,14 +212,17 @@ final class RedundantCaseBody implements Check {
 		if (nextBinders == null || nextBinders.length != 0) return null;
 		final lastPattern: Null<Span> = firstRun[firstRun.length - 1].span;
 		final firstOfNext: Null<Span> = nextRun[0].span;
-		if (lastPattern == null || firstOfNext == null) return null;
-		if (CheckScan.hasCommentMarker(source, lastPattern.to, firstOfNext.from)) return null;
-		return {
-			span: firstSpan,
-			subsume: false,
-			editSpan: new Span(lastPattern.to, firstOfNext.from),
-			editText: ALTERNATIVE_SEPARATOR
-		};
+		return if (lastPattern == null || firstOfNext == null)
+			null
+		else if (CheckScan.hasCommentMarker(source, lastPattern.to, firstOfNext.from))
+			null
+		else
+			{
+				span: firstSpan,
+				subsume: false,
+				editSpan: new Span(lastPattern.to, firstOfNext.from),
+				editText: ALTERNATIVE_SEPARATOR
+			};
 	}
 
 	/**

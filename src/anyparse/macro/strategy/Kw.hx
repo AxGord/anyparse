@@ -46,14 +46,14 @@ class Kw implements Strategy {
 	public function new() {}
 
 	public function appliesTo(node: ShapeNode): Bool {
-		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
+		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == ':kw') return true;
 		return false;
 	}
 
 	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {
-		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
+		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return;
 		for (entry in meta) if (entry.name == ':kw') {
 			if (entry.params.length != 1) {
@@ -65,7 +65,7 @@ class Kw implements Strategy {
 					Context.fatalError('@:kw argument must be a string literal', entry.params[0].pos);
 					throw 'unreachable';
 			};
-			node.annotations.set(AnnotationKeys.KW_LEAD_TEXT, text);
+			node.annotations[AnnotationKeys.KW_LEAD_TEXT] = text;
 		}
 	}
 

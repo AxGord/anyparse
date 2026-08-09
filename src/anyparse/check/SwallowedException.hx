@@ -2,11 +2,12 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Flags a statement-context `catch` clause that silently swallows the exception
@@ -110,7 +111,7 @@ final class SwallowedException implements Check {
 		if (body.kind != blockKind) return;
 		final bodySpan: Null<Span> = body.span;
 		if (bodySpan == null) return;
-		if (StringTools.trim(source.substring(bodySpan.from + 1, bodySpan.to - 1)) == '') return;
+		if (source.substring(bodySpan.from + 1, bodySpan.to - 1).trim() == '') return;
 		final varName: Null<String> = catchNode.name;
 		if (varName == null || StringTools.startsWith(varName, '_')) return;
 		if (RefactorSupport.referencedInRange(source, varName, bodySpan.from, bodySpan.to, [])) return;

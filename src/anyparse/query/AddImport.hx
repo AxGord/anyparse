@@ -5,6 +5,8 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
+
 /**
  * Add an `import` (or `using`) statement to a module — a structural
  * INSERT operation built on the query engine.
@@ -38,7 +40,7 @@ final class AddImport {
 		)
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
-		final trimmed: String = StringTools.trim(path);
+		final trimmed: String = path.trim();
 		if (trimmed.length == 0) return Err('add-import requires a non-empty module path');
 
 		final targetKind: String = isUsing ? 'UsingDecl' : 'ImportDecl';

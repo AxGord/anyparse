@@ -3,16 +3,16 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
-import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import anyparse.check.AssignmentTreeHoist.TreeSeams;
 import anyparse.check.AssignmentTreeHoist.LvalueRef;
 import anyparse.check.AssignmentTreeHoist.SwitchArms;
+
+using StringTools;
 
 /**
  * Flags two shapes that collapse a statement-position `switch` assigning in every arm into a single
@@ -214,10 +214,9 @@ final class PreferSwitchExpressionAssignment implements Check {
 					final m: Null<Match> = matchPair(kids[i], kids[i + 1], root, source, comments, s);
 					if (m != null) out.push(m);
 				}
-				if (s.switchKinds.contains(kids[i].kind)) {
-					final lm: Null<Match> = matchLvalueSwitch(kids[i], i > 0 ? kids[i - 1] : null, source, comments, s);
-					if (lm != null) out.push(lm);
-				}
+				if (!s.switchKinds.contains(kids[i].kind)) continue;
+				final lm: Null<Match> = matchLvalueSwitch(kids[i], i > 0 ? kids[i - 1] : null, source, comments, s);
+				if (lm != null) out.push(lm);
 			}
 		}
 		for (c in node.children) collectMatches(c, root, source, comments, s, out);
@@ -250,10 +249,13 @@ final class PreferSwitchExpressionAssignment implements Check {
 		final sa: Null<SwitchArms> = AssignmentTreeHoist.switchArms(switchStmt, ref, source, s.tree);
 		if (sa == null) return null;
 		final lvalue: Null<QueryNode> = ref.lvalue;
-		if (lvalue == null || !assignsFinalLocal(name, lvalue, root, switchStmt, switchSpan, sa.leafCount, s)) return null;
 		// No source default arm and no initializer to synthesize one from — cannot make it exhaustive.
-		if (!sa.hasDefault && init == null) return null;
-		return buildDeclMatch(decl, declSpan, switchSpan, init, subject, sa, source, comments, s);
+		return if (lvalue == null || !assignsFinalLocal(name, lvalue, root, switchStmt, switchSpan, sa.leafCount, s))
+			null
+		else if (!sa.hasDefault && init == null)
+			null
+		else
+			buildDeclMatch(decl, declSpan, switchSpan, init, subject, sa, source, comments, s);
 	}
 
 
@@ -369,7 +371,7 @@ final class PreferSwitchExpressionAssignment implements Check {
 			if (declSpan.to <= declSpan.from || source.charAt(declSpan.to - 1) != ';') return null;
 			declSpan.to - 1;
 		}
-		final raw: String = StringTools.rtrim(source.substring(declSpan.from, prefixEnd));
+		final raw: String = source.substring(declSpan.from, prefixEnd).rtrim();
 		return { text: (~/^var\b/).replace(raw, 'final'), keptTo: prefixEnd };
 	}
 

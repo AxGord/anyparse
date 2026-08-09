@@ -4,7 +4,6 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
@@ -202,7 +201,7 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
 		final s: Seams = seams;
-		final typed: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final typed: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		if (typed == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
@@ -221,7 +220,7 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
 		final s: Seams = seams;
-		final typed: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final typed: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		if (typed == null) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
@@ -345,8 +344,7 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 		if (body == null) return null;
 		final replacement: Operand = body.replacement;
 		final classified: Null<Classification> = classifyArm(search, replacement, fns, whileNode, root, source, s);
-		if (classified == null) return null;
-		return {
+		return classified == null ? null : {
 			whileSpan: whileSpan,
 			stmtSpan: body.stmtSpan,
 			arm: classified.arm,
@@ -441,8 +439,9 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 			final leftCall: Null<MethodCall> = indexOfCallParts(left, s);
 			if (leftCall != null && isNegativeOneLiteral(right, source, s)) return { receiver: leftCall.recv, search: left.children[1] };
 			final rightCall: Null<MethodCall> = indexOfCallParts(right, s);
-			if (rightCall != null && isNegativeOneLiteral(left, source, s)) return { receiver: rightCall.recv, search: right.children[1] };
-			return null;
+			return rightCall != null && isNegativeOneLiteral(left, source, s)
+				? { receiver: rightCall.recv, search: right.children[1] }
+				: null;
 		}
 		final call: Null<MethodCall> = methodCallParts(cond, s);
 		return call != null && call.method == CONTAINS_METHOD && cond.children.length == ONE_ARG_CALL_CHILD_COUNT ? {
@@ -467,8 +466,9 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 		if (literal != null) return { literal: literal.content, paramBindingFrom: null, src: src };
 		if (node.kind != s.identKind || fns.length == 0) return null;
 		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(node, root, s.shape);
-		if (bindingFrom == null || !isParameterOfAny(fns, bindingFrom, s)) return null;
-		return { literal: null, paramBindingFrom: bindingFrom, src: src };
+		return bindingFrom == null || !isParameterOfAny(fns, bindingFrom, s)
+			? null
+			: { literal: null, paramBindingFrom: bindingFrom, src: src };
 	}
 
 	/**
@@ -630,8 +630,9 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 		if (node.kind != s.callKind || node.children.length < 1) return null;
 		final callee: QueryNode = node.children[0];
 		final method: Null<String> = callee.name;
-		if (callee.kind != s.fieldAccessKind || method == null || callee.children.length != 1) return null;
-		return { recv: callee.children[0], method: method };
+		return callee.kind != s.fieldAccessKind || method == null || callee.children.length != 1
+			? null
+			: { recv: callee.children[0], method: method };
 	}
 
 	/** `x.indexOf(S)` destructured into its receiver, or null when `node` is not exactly that one-argument call. */
@@ -651,9 +652,12 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 
 	/** The loop body's single statement (a plain assignment expression statement), or null when the body is not exactly one. */
 	private static function singleStatementOf(body: QueryNode, s: Seams): Null<QueryNode> {
-		if (body.kind == s.exprStmtKind) return body;
-		if (body.kind == s.blockStmtKind && body.children.length == 1 && body.children[0].kind == s.exprStmtKind) return body.children[0];
-		return null;
+		return if (body.kind == s.exprStmtKind)
+			body
+		else if (body.kind == s.blockStmtKind && body.children.length == 1 && body.children[0].kind == s.exprStmtKind)
+			body.children[0]
+		else
+			null;
 	}
 
 	/**
@@ -671,9 +675,12 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 		};
 		final message: String = switch m.arm {
 			case Arm.A:
-				'this while (${m.receiverName}.indexOf($search) != -1) loop runs at most once — replace() already replaces every occurrence; collapses to ${m.receiverName} = ${m.receiverName}.replace($search, $replacement);';
+				'this while (${m.receiverName}.indexOf($search'
+					+ ') != -1) loop runs at most once — replace() already replaces every occurrence; collapses to ${m.receiverName} = '
+					+ '${m.receiverName}.replace($search, $replacement);';
 			case Arm.B:
-				'this loop never terminates for any ${m.receiverName} containing $search — replace($search, $replacement) reintroduces it every time, since $replacement itself contains $search';
+				'this loop never terminates for any ${m.receiverName} containing $search — replace($search, $replacement'
+					+ ') reintroduces it every time, since $replacement itself contains $search';
 			case Arm.C: armCMessage(m, search, replacement);
 			case Arm.CEmptyB: emptyReplacementMessage(m, search, replacement);
 			case Arm.CLiteralB: literalReplacementMessage(m, search, replacement);
@@ -693,10 +700,11 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 	 * so the guard reads like protection while covering only the degenerate case.
 	 */
 	private static function armCMessage(m: Match, search: String, replacement: String): String {
-		final head: String =
-			'potential infinite loop when $replacement contains $search — replace($search, $replacement) reinserts $search on every pass, so the guard never goes false';
+		final head: String = 'potential infinite loop when $replacement contains $search — replace($search, $replacement) reinserts $search'
+			+ ' on every pass, so the guard never goes false';
 		return m.eqGuarded
-			? '$head; the $search == $replacement guard does not cover containment — a $replacement that merely CONTAINS $search still loops forever'
+			? '$head; the $search == $replacement guard does not cover containment — a $replacement that merely CONTAINS $search'
+				+ ' still loops forever'
 			: head;
 	}
 
@@ -709,8 +717,10 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 	 * form returns, and no rewrite may silently trade a hang for a return.
 	 */
 	private static function emptyReplacementMessage(m: Match, search: String, replacement: String): String {
-		return
-			'this while (${m.receiverName}.indexOf($search) != -1) loop is redundant for any non-empty $search — replace($search, $replacement) REMOVES every occurrence in one call, so one ${m.receiverName} = ${m.receiverName}.replace($search, $replacement); does the same work; not autofixed: the ORIGINAL loop spins forever on a degenerate $search == $replacement (indexOf($replacement) == 0), and collapsing it would silently turn that hang into a return';
+		return 'this while (${m.receiverName}.indexOf($search) != -1) loop is redundant for any non-empty $search — replace($search, '
+			+ '$replacement) REMOVES every occurrence in one call, so one ${m.receiverName} = ${m.receiverName}.replace($search, '
+			+ '$replacement); does the same work; not autofixed: the ORIGINAL loop spins forever on a degenerate $search == $replacement'
+			+ ' (indexOf($replacement) == 0), and collapsing it would silently turn that hang into a return';
 	}
 
 	/**
@@ -721,10 +731,12 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 	 * sharper here for the same reason: the guard removes exactly one of those `S`.
 	 */
 	private static function literalReplacementMessage(m: Match, search: String, replacement: String): String {
-		final head: String =
-			'potential infinite loop when $search occurs in $replacement — replace($search, $replacement) writes $replacement back into ${m.receiverName} on every pass, so the loop runs forever for exactly those $search that are a substring of $replacement (the equal $search == $replacement included)';
+		final head: String = 'potential infinite loop when $search occurs in $replacement — replace($search, $replacement) writes '
+			+ '$replacement back into ${m.receiverName} on every pass, so the loop runs forever for exactly those $search'
+			+ ' that are a substring of $replacement (the equal $search == $replacement included)';
 		return m.eqGuarded
-			? '$head; the $search == $replacement guard rules out only the equal case — a shorter $search that still occurs in $replacement loops forever'
+			? '$head; the $search == $replacement guard rules out only the equal case — a shorter $search that still occurs in '
+				+ '$replacement loops forever'
 			: head;
 	}
 
@@ -734,7 +746,7 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 	 * finding message.
 	 */
 	private static function excerpt(text: String): String {
-		return text.length <= EXCERPT_MAX ? text : text.substring(0, EXCERPT_MAX) + '…';
+		return text.length <= EXCERPT_MAX ? text : '${text.substring(0, EXCERPT_MAX)}…';
 	}
 
 }

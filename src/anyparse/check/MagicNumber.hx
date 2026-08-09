@@ -2,11 +2,12 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import anyparse.check.Check.ConfigAware;
+
+using StringTools;
 
 /**
  * Flags a numeric literal used in executable code whose value is not a small
@@ -141,8 +142,8 @@ final class MagicNumber implements Check implements ConfigAware {
 	 * everything else (`3.14`, `1e5`, `.5`) parses as a float.
 	 */
 	private static function literalValue(text: String): Null<Float> {
-		final clean: String = StringTools.replace(text, '_', '');
-		if (StringTools.startsWith(clean, '0x') || StringTools.startsWith(clean, '0X')) {
+		final clean: String = text.replace('_', '');
+		if (clean.startsWith('0x') || clean.startsWith('0X')) {
 			final i: Null<Int> = Std.parseInt(clean);
 			return i ?? null;
 		}
@@ -156,7 +157,7 @@ final class MagicNumber implements Check implements ConfigAware {
 	 * reader. A computed index (`args[i + 3]`) keeps the literal under the
 	 * operator node, so it stays flagged.
 	 */
-	private static function isArrayIndex(parent: Null<QueryNode>, cfg: MagicNumberCfg): Bool {
+	private static inline function isArrayIndex(parent: Null<QueryNode>, cfg: MagicNumberCfg): Bool {
 		return parent != null && cfg.indexAccessKind != '' && parent.kind == cfg.indexAccessKind;
 	}
 

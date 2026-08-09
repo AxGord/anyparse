@@ -6,6 +6,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * A comment token from `RefactorSupport.collectCommentTokens`.
  */
@@ -41,7 +43,7 @@ final class FragmentedDocComment implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final violations: Array<Violation> = [
+		return [
 			for (entry in files) for (run in adjacentBlockRuns(entry.source))
 				{
 					file: entry.file,
@@ -51,7 +53,6 @@ final class FragmentedDocComment implements Check {
 					message: 'this declaration is documented by ${run.length} adjacent comment blocks; merge them into one'
 				}
 		];
-		return violations;
 	}
 
 	/** Merge each flagged run of adjacent block comments into a single doc comment. */
@@ -104,9 +105,9 @@ final class FragmentedDocComment implements Check {
 	/** Whether only whitespace with at most one newline separates `a` and `b` (consecutive lines, no blank line). */
 	private static function tightlyAdjacent(source: String, a: CommentTok, b: CommentTok): Bool {
 		final gap: String = source.substring(a.to, b.from);
-		if (StringTools.trim(gap) != '') return false;
+		if (gap.trim() != '') return false;
 		var newlines: Int = 0;
-		for (k in 0...gap.length) if (StringTools.fastCodeAt(gap, k) == '\n'.code) newlines++;
+		for (k in 0...gap.length) if (gap.fastCodeAt(k) == '\n'.code) newlines++;
 		return newlines <= 1;
 	}
 
@@ -118,14 +119,14 @@ final class FragmentedDocComment implements Check {
 
 	/** Strip a line's leading whitespace and a single leading doc marker, plus trailing whitespace. */
 	private static function stripMarker(line: String): String {
-		var s: String = StringTools.ltrim(line);
-		if (StringTools.startsWith(s, '* '))
+		var s: String = line.ltrim();
+		if (s.startsWith('* '))
 			s = s.substr(2);
 		else if (s == '*')
 			s = '';
-		else if (StringTools.startsWith(s, '*'))
+		else if (s.startsWith('*'))
 			s = s.substr(1);
-		return StringTools.rtrim(s);
+		return s.rtrim();
 	}
 
 }

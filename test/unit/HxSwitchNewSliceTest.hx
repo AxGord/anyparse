@@ -502,7 +502,7 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testNewQualifiedRoundTrip(): Void {
+	public inline function testNewQualifiedRoundTrip(): Void {
 		roundTrip('class C { function f():Void { var e = new haxe.Exception("x"); throw new haxe.ds.StringMap(); } }');
 	}
 
@@ -560,7 +560,7 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testNewTypeParamsRoundTrip(): Void {
+	public inline function testNewTypeParamsRoundTrip(): Void {
 		roundTrip(
 			'class C { function f():Void { var h = new Holder<RecordItem1, RecordItem1, Void>("a", true, "b"); var m = new Map<String, Int>(); } }'
 		);
@@ -602,7 +602,7 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testNewDollarRoundTrip(): Void {
+	public inline function testNewDollarRoundTrip(): Void {
 		roundTrip("class C { function f():Void { cases.push(macro {name: $v{tp.name}, exec: new $tp()}); } }");
 	}
 

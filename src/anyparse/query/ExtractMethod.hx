@@ -8,6 +8,7 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -137,7 +138,8 @@ final class ExtractMethod {
 		final range: Null<StmtRange> = selectStmtRange(tree, startOffset, endOffset);
 		if (range == null)
 			return Err(
-				'no statement range at $startLine:$startCol..$endLine:$endCol — point START at the first token of a statement and END within the last, both direct children of one { } block'
+				'no statement range at $startLine:$startCol..$endLine:$endCol'
+				+ ' — point START at the first token of a statement and END within the last, both direct children of one { } block'
 			);
 		final sel: StmtRange = range;
 
@@ -170,7 +172,8 @@ final class ExtractMethod {
 		final outerWrite: Null<String> = outerLocalMutatedAndUsedAfter(sel, declNames, tree, shape);
 		if (outerWrite != null)
 			return Err(
-				'local "$outerWrite" is modified inside the range and read after it — cannot extract (closure capture of a mutated local is out of scope)'
+				'local "$outerWrite'
+				+ '" is modified inside the range and read after it — cannot extract (closure capture of a mutated local is out of scope)'
 			);
 
 		// Build the local-function scaffold + the replacing call. The
@@ -370,7 +373,7 @@ final class ExtractMethod {
 
 	/** Is `kind` a statement node (its kind ends with `Stmt`)? */
 	private static inline function isStatement(kind: String): Bool {
-		return StringTools.endsWith(kind, 'Stmt');
+		return kind.endsWith('Stmt');
 	}
 
 	/**

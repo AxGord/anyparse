@@ -82,8 +82,8 @@ class PreferInterpolationCheckTest extends Test {
 	}
 
 	public function testFieldAccessInNullCheckedBranchNotFlagged(): Void {
-		final src: String =
-			'class C {\n\tfunction f(obj: Holder):Void {\n\t\tif (obj.field != null) {\n\t\t\tvar s: String = Std.string(obj.field);\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(obj: Holder):Void {\n\t\tif (obj.field != null) {\n'
+			+ '\t\t\tvar s: String = Std.string(obj.field);\n\t\t}\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 

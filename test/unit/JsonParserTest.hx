@@ -25,7 +25,7 @@ class JsonParserTest extends Test {
 		super();
 	}
 
-	public function testNull(): Void {
+	public inline function testNull(): Void {
 		parseEq('null', JNull);
 	}
 

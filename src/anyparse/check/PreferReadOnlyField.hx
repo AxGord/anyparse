@@ -9,6 +9,8 @@ import anyparse.query.FieldWriteIndex;
 import anyparse.query.MemberWriteScan;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * Flags a PUBLIC `var` field written ONLY inside its declaring class — never from
  * another file — and rewrites it to `public var X(default, null)`, making it
@@ -159,9 +161,9 @@ final class PreferReadOnlyField implements Check {
 		final n: Int = source.length;
 		if (span.from + keyword.length > n || source.substring(span.from, span.from + keyword.length) != keyword) return -1;
 		var i: Int = span.from + keyword.length;
-		while (i < n && RefactorSupport.isSpace(StringTools.fastCodeAt(source, i))) i++;
+		while (i < n && RefactorSupport.isSpace(source.fastCodeAt(i))) i++;
 		final start: Int = i;
-		while (i < n && RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, i))) i++;
+		while (i < n && RefactorSupport.isIdentChar(source.fastCodeAt(i))) i++;
 		return i > start ? i : -1;
 	}
 
@@ -169,8 +171,8 @@ final class PreferReadOnlyField implements Check {
 	private static function isProperty(source: String, nameEnd: Int): Bool {
 		final n: Int = source.length;
 		var i: Int = nameEnd;
-		while (i < n && RefactorSupport.isSpace(StringTools.fastCodeAt(source, i))) i++;
-		return i < n && StringTools.fastCodeAt(source, i) == '('.code;
+		while (i < n && RefactorSupport.isSpace(source.fastCodeAt(i))) i++;
+		return i < n && source.fastCodeAt(i) == '('.code;
 	}
 
 	/** Whether `c` is an identifier character. */

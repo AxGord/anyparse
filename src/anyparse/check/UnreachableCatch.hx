@@ -2,13 +2,14 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 import anyparse.query.RefactorSupport;
+
+using StringTools;
 
 /**
  * Flags a `catch` clause that can never run because an EARLIER clause in the same `try`
@@ -55,7 +56,7 @@ final class UnreachableCatch implements Check {
 		final kind: String = catchClauseKind;
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
 		final catchAll: Array<String> = shape.catchAllTypeNames ?? [];
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		if (provider == null) return [];
 		final typed: TypeInfoProvider = provider;
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
@@ -124,10 +125,9 @@ final class UnreachableCatch implements Check {
 				final earlierSimple: Null<String> = simples[j];
 				final duplicate: Bool = TypeResolver.sameTypeSource(laterRaw, earlierRaw, importMap);
 				final subtype: Bool = laterSimple != null && earlierSimple != null && index.isSubtype(laterSimple, earlierSimple);
-				if (duplicate || subtype) {
-					covered = earlierRaw;
-					break;
-				}
+				if (!duplicate && !subtype) continue;
+				covered = earlierRaw;
+				break;
 			}
 			final coveredBy: Null<String> = covered;
 			final span: Null<Span> = clauses[i].span;
@@ -155,7 +155,7 @@ final class UnreachableCatch implements Check {
 		final colon: Int = header.indexOf(':');
 		final close: Int = header.lastIndexOf(')');
 		if (colon == -1 || close == -1 || close <= colon) return null;
-		final t: String = StringTools.trim(header.substring(colon + 1, close));
+		final t: String = header.substring(colon + 1, close).trim();
 		return t == '' ? null : t;
 	}
 

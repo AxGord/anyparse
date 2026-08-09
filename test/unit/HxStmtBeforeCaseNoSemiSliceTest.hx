@@ -46,7 +46,9 @@ class HxStmtBeforeCaseNoSemiSliceTest extends HxTestHelpers {
 
 	public function testTryExprCatchBeforeCase(): Void {
 		final cls: HxClassDecl = HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase "--limit":\n\t\t\t\ttry limit = parseLimit(args, ++i) catch (e:Exception) {\n\t\t\t\t\tstderr("msg");\n\t\t\t\t\treturn 1;\n\t\t\t\t}\n\t\t\tcase "-h":\n\t\t\t\treturn 0;\n\t\t}\n\t}\n}'
+			'class C {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase "--limit":\n'
+			+ '\t\t\t\ttry limit = parseLimit(args, ++i) catch (e:Exception) {\n\t\t\t\t\tstderr("msg");\n\t\t\t\t\treturn 1;\n\t\t\t\t}\n'
+			+ '\t\t\tcase "-h":\n\t\t\t\treturn 0;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, cls.members.length);
 	}

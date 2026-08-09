@@ -4,6 +4,8 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 
+using StringTools;
+
 /**
  * Minimal type-aware purity resolution for the analysis layer. Recovers a
  * `recv.field` receiver's declared type — via a `TypeInfoProvider`'s
@@ -93,8 +95,6 @@ final class TypeResolver {
 		'Path.removeTrailingSlash',
 		'Path.isAbsolute',
 	];
-
-	private function new() {}
 
 	/**
 	 * True when `faNode` (a field-access node) is a provably side-effect-free read.
@@ -205,10 +205,9 @@ final class TypeResolver {
 	public static function resolveBindingFrom(name: String, recvSpan: Span, tree: QueryNode, shape: RefShape): Null<Int> {
 		for (hit in Refs.find(name, tree, shape)) {
 			final hs: Null<Span> = hit.span;
-			if (hs != null && hs.from == recvSpan.from && hs.to == recvSpan.to) {
-				final b: Null<Span> = hit.bindingSpan;
-				return b == null ? null : b.from;
-			}
+			if (!(hs != null && hs.from == recvSpan.from && hs.to == recvSpan.to)) continue;
+			final b: Null<Span> = hit.bindingSpan;
+			return b?.from;
 		}
 		return null;
 	}
@@ -229,8 +228,8 @@ final class TypeResolver {
 		while (root.kind == fieldAccessKind && root.children.length == 1) root = root.children[0];
 		final rootName: Null<String> = root.name;
 		final rootSpan: Null<Span> = root.span;
-		if (root.kind != identKind || rootName == null || rootSpan == null) return false;
-		return resolveBindingFrom(rootName, rootSpan, tree, shape) == null;
+		return
+			root.kind == identKind && rootName != null && rootSpan != null && resolveBindingFrom(rootName, rootSpan, tree, shape) == null;
 	}
 
 	/**
@@ -270,7 +269,7 @@ final class TypeResolver {
 	 */
 	public static function canonicalTypeName(typeSrc: String, importMap: Map<String, String>): Null<String> {
 		for (i in 0...typeSrc.length) {
-			if (!isNominalChar(StringTools.fastCodeAt(typeSrc, i))) return null;
+			if (!isNominalChar(typeSrc.fastCodeAt(i))) return null;
 		}
 		return typeSrc.indexOf('.') != -1 ? typeSrc : importMap[typeSrc];
 	}
@@ -329,8 +328,6 @@ final class TypeResolver {
 	 * node) or a PARAMETER (a `paramKinds` node) — as opposed to a field or other decl.
 	 * Lets a check restrict a declared-type nullable source to locals / params, since a
 	 * bare field never narrows and is out of the flow engine's scope.
-	 */
-	/**
 	 * The verbatim source of `fn`'s EXPLICIT return type, or null when it declares none (an
 	 * inferred return type, or a node that is not a function at all). The return type is the
 	 * child immediately before the body (`bodyKinds`) when that child is not a parameter
@@ -491,7 +488,7 @@ final class TypeResolver {
 		final src: String = typeSrc;
 		final buf: StringBuf = new StringBuf();
 		for (i in 0...src.length) {
-			final c: Int = StringTools.fastCodeAt(src, i);
+			final c: Int = src.fastCodeAt(i);
 			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code) continue;
 			if (!isNominalChar(c)) return null;
 			buf.addChar(c);
@@ -597,7 +594,7 @@ final class TypeResolver {
 	public static function stripWs(s: String): String {
 		final buf: StringBuf = new StringBuf();
 		for (i in 0...s.length) {
-			final c: Int = StringTools.fastCodeAt(s, i);
+			final c: Int = s.fastCodeAt(i);
 			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code) buf.addChar(c);
 		}
 		return buf.toString();
@@ -606,7 +603,7 @@ final class TypeResolver {
 	/** The simple name of the innermost type declaration whose span contains `faSpan`, or null. */
 	public static function enclosingTypeName(tree: QueryNode, faSpan: Span): Null<String> {
 		final td: Null<TypeDeclMatch> = innermostTypeDecl(tree, faSpan);
-		return td == null ? null : td.name;
+		return td?.name;
 	}
 
 	/**
@@ -654,7 +651,7 @@ final class TypeResolver {
 	 * `declaredTypeSources` into `identDeclaredTypeSource`.
 	 */
 	public static function memoizedDeclaredTypeSources(plugin: GrammarPlugin, source: String): () -> Map<Int, String> {
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		var cache: Null<Map<Int, String>> = null;
 		return function(): Map<Int, String> {
 			final existing: Null<Map<Int, String>> = cache;
@@ -828,7 +825,7 @@ final class TypeResolver {
 					}
 				}
 			}
-			final scopeSpan: Null<Span> = (s != null && scopeKinds.contains(n.kind)) ? s : null;
+			final scopeSpan: Null<Span> = s != null && scopeKinds.contains(n.kind) ? s : null;
 			if (scopeSpan != null) scopeStack.push(scopeSpan);
 			for (c in n.children) walk(c);
 			if (scopeSpan != null) scopeStack.pop();
@@ -854,7 +851,7 @@ final class TypeResolver {
 				final enc: Span = scopeStack[scopeStack.length - 1];
 				if (enc.from <= useSpan.from && useSpan.to <= enc.to) count++;
 			}
-			final scopeSpan: Null<Span> = (s != null && scopeKinds.contains(node.kind)) ? s : null;
+			final scopeSpan: Null<Span> = s != null && scopeKinds.contains(node.kind) ? s : null;
 			if (scopeSpan != null) scopeStack.push(scopeSpan);
 			for (c in node.children) walk(c);
 			if (scopeSpan != null) scopeStack.pop();

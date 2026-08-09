@@ -70,7 +70,7 @@ final class SourceSlice {
 		// call merges a contiguous run of full-line line comments into one block, which
 		// is what the hand-rolled `//` walk did.
 		var cursor: Int = lineEnd[i] - 1;
-		while (cursor > lineStart[i] && isBlank(StringTools.fastCodeAt(source, cursor))) cursor--;
+		while (cursor > lineStart[i] && isBlank(source.fastCodeAt(cursor))) cursor--;
 		final block: Null<Span> = RefactorSupport.commentBlockAt(source, cursor);
 		return block == null ? null : source.substring(lineStart[lineOfOffset(lineStart, lineEnd, block.from)], lineEnd[i]);
 	}
@@ -83,7 +83,7 @@ final class SourceSlice {
 	 */
 	private static function computeLines(source: String, starts: Array<Int>, ends: Array<Int>): Void {
 		var lineStart: Int = 0;
-		for (idx in 0...source.length) if (StringTools.fastCodeAt(source, idx) == '\n'.code) {
+		for (idx in 0...source.length) if (source.fastCodeAt(idx) == '\n'.code) {
 			starts.push(lineStart);
 			ends.push(idx);
 			lineStart = idx + 1;

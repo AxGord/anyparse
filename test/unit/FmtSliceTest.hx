@@ -98,7 +98,7 @@ class FmtSliceTest extends Test {
 		return path;
 	}
 	#else
-	public function testNonSysTarget(): Void {
+	public inline function testNonSysTarget(): Void {
 		Assert.pass('apq fmt requires a sys / nodejs target');
 	}
 	#end

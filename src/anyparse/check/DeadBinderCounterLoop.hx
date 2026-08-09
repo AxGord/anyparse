@@ -5,12 +5,13 @@ import anyparse.check.Check.Violation;
 import anyparse.check.LoopScan.LoopSeams;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
+
+using StringTools;
 
 /**
  * Flags a `for`-in loop that iterates a collection ONLY to count it — `var i = 0;` immediately followed by `for (x in coll) { … i++; }` where nothing reads the binder `x` — which a range `for` says directly: `for (i in 0...coll.length)`, with the declaration and the trailing increment gone. `Severity.Info`, paired with an autofix. DEFAULT OFF (`DefaultOff`): the input compiles and behaves correctly, so replacing it is a style choice — opt in with `"dead-binder-counter-loop": { "enabled": true }`.
@@ -100,12 +101,12 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
 		final s: Seams = seams;
-		final typed: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final typed: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			final types: Null<Map<Int, String>> = typed == null ? null : typed.declaredTypeSources(entry.source);
+			final types: Null<Map<Int, String>> = typed?.declaredTypeSources(entry.source);
 			walk(tree, tree, entry.file, entry.source, types, s, violations);
 		}
 		return violations;
@@ -126,8 +127,8 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (seams == null || tree == null) return [];
 		final s: Seams = seams;
-		final typed: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
-		final types: Null<Map<Int, String>> = typed == null ? null : typed.declaredTypeSources(source);
+		final typed: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final types: Null<Map<Int, String>> = typed?.declaredTypeSources(source);
 		final symbols: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
 		final lambdaBlocked: Bool = CheckScan.conflictingUsing(
 			CheckScan.usingModules(tree), LAMBDA_MODULE, COUNT_METHOD, plugin, () -> symbols, []
@@ -256,8 +257,7 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		if (RefactorSupport.referencedInRange(source, sh.counter, forSpan.to, scopeSpan.to, [])) return null;
 		if (LoopScan.capturedByClosure(scope, source, sh.counter, core)) return null;
 		final bound: Null<Bound> = boundOf(sh.collection, LoopScan.identTypeSource(sh.iterable, root, types, core));
-		if (bound == null) return null;
-		return {
+		return bound == null ? null : {
 			declSpan: declSpan,
 			forSpan: forSpan,
 			bodySpan: bodySpan,
@@ -293,8 +293,7 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		final body: QueryNode = forNode.children[1];
 		if (body.kind != core.blockStmtKind || body.children.length < MIN_BODY_STATEMENTS) return null;
 		final incr: QueryNode = body.children[body.children.length - 1];
-		if (!isPostIncrementOf(incr, counter, s)) return null;
-		return {
+		return !isPostIncrementOf(incr, counter, s) ? null : {
 			counter: counter,
 			binder: binder,
 			collection: collection,
@@ -321,17 +320,21 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 	private static function isPostIncrementOf(stmt: QueryNode, counter: String, s: Seams): Bool {
 		if (stmt.kind != s.exprStmtKind || stmt.children.length != 1) return false;
 		final incr: QueryNode = stmt.children[0];
-		if (incr.kind != s.postIncrKind || incr.children.length < 1) return false;
-		return LoopScan.bareIdentName(incr.children[0], s.core) == counter;
+		return incr.kind == s.postIncrKind && incr.children.length >= 1 && LoopScan.bareIdentName(incr.children[0], s.core) == counter;
 	}
 
 	/** The bound expression counting `collection`, or null when its declared container is not one this rewrite can spell. */
 	private static function boundOf(collection: String, typeSource: Null<String>): Null<Bound> {
 		if (typeSource == null || !stdlibSpelling(typeSource)) return null;
 		final nominal: Null<String> = RefactorSupport.outerNominalOf(typeSource);
-		if (nominal == null) return null;
-		if (LENGTH_TYPES.contains(nominal)) return { expr: '${collection}.$LENGTH_MEMBER', lambda: false };
-		return COUNT_TYPES.contains(nominal) ? { expr: '${collection}.$COUNT_METHOD()', lambda: true } : null;
+		return if (nominal == null)
+			null
+		else if (LENGTH_TYPES.contains(nominal))
+			{ expr: '${collection}.$LENGTH_MEMBER', lambda: false }
+		else if (COUNT_TYPES.contains(nominal))
+			{ expr: '${collection}.$COUNT_METHOD()', lambda: true }
+		else
+			null;
 	}
 
 	/**
@@ -344,7 +347,7 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 	private static function stdlibSpelling(typeSource: String): Bool {
 		final lt: Int = typeSource.indexOf('<');
 		final head: String = StringTools.trim(lt < 0 ? typeSource : typeSource.substring(0, lt));
-		return head.lastIndexOf('.') < 0 || StringTools.startsWith(head, STD_PACKAGE_PREFIX);
+		return head.lastIndexOf('.') < 0 || head.startsWith(STD_PACKAGE_PREFIX);
 	}
 
 	/** Whether the declaration binding at `from` carries an explicit non-`Int` annotation. */

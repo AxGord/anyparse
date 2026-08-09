@@ -2,12 +2,12 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -111,7 +111,7 @@ final class RedundantMapIterKey implements Check {
 	private static function keyPrefixSpan(node: QueryNode, source: String, valueBinderKinds: Array<String>): Null<Span> {
 		final forSpan: Null<Span> = node.span;
 		final binder: Null<QueryNode> = RefactorSupport.iterationValueBinder(node, valueBinderKinds);
-		final valueSpan: Null<Span> = binder == null ? null : binder.span;
+		final valueSpan: Null<Span> = binder?.span;
 		if (forSpan == null || valueSpan == null) return null;
 		final open: Int = source.indexOf('(', forSpan.from);
 		if (open < 0 || open >= valueSpan.from) return null;
@@ -122,16 +122,19 @@ final class RedundantMapIterKey implements Check {
 		// the discarded key `_`. If the located `(` was a decoy (e.g. one inside a comment
 		// between `for` and the real header), this slice is not `_`, so bail — no bogus
 		// finding, no corrupt fix.
-		return StringTools.trim(source.substring(keyStart, arrow)) != '_'
-			? null
-			: keyStart < valueSpan.from ? new Span(keyStart, valueSpan.from) : null;
+		return if (source.substring(keyStart, arrow).trim() != '_')
+			null
+		else if (keyStart < valueSpan.from)
+			new Span(keyStart, valueSpan.from)
+		else
+			null;
 	}
 
 	/** First index at or after `from` (bounded by `stop`) that is not ASCII whitespace. */
 	private static function skipSpace(source: String, from: Int, stop: Int): Int {
 		var i: Int = from;
 		while (i < stop) {
-			final c: Int = StringTools.fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code) break;
 			i++;
 		}

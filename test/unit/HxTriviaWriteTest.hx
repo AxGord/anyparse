@@ -85,7 +85,7 @@ class HxTriviaWriteTest extends Test {
 	 */
 	public function testOrphanCommentInsideBlockBodyRoundTrip(): Void {
 		final source: String = 'class Foo {\n\tfunction bar() {\n\t\ttry {\n\t\t\t// inside try\n\t\t} catch (e:Err) {\n'
-			+ '\t\t\t// inside catch\n' + '\t\t}\n' + '\t\t{\n' + '\t\t\t// inside plain block\n' + '\t\t}\n' + '\t}\n' + '}';
+			+ '\t\t\t// inside catch\n\t\t}\n\t\t{\n\t\t\t// inside plain block\n\t\t}\n\t}\n}';
 		assertRoundtrip(source);
 	}
 
@@ -112,8 +112,8 @@ class HxTriviaWriteTest extends Test {
 	 * inside the block.
 	 */
 	public function testSameLineCommentAfterElseRoundTrip(): Void {
-		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tif (cond) {\n\t\t\ta;\n\t\t} else // after else\n\t\t{\n'
-			+ '\t\t\tb;\n' + '\t\t}\n' + '\t}\n' + '}';
+		final source: String =
+			'class Foo {\n\tfunction bar() {\n\t\tif (cond) {\n\t\t\ta;\n\t\t} else // after else\n\t\t{\n\t\t\tb;\n\t\t}\n\t}\n}';
 		assertRoundtrip(source);
 	}
 
@@ -127,8 +127,8 @@ class HxTriviaWriteTest extends Test {
 	 * the source's `;-trailing-comment+else` shape.
 	 */
 	public function testSameLineCommentBeforeElseAfterStmtRoundTrip(): Void {
-		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tif (cond)\n\t\t\ta(); // first\n\t\telse\n\t\t\tb(); // second\n'
-			+ '\t}\n' + '}';
+		final source: String =
+			'class Foo {\n\tfunction bar() {\n\t\tif (cond)\n\t\t\ta(); // first\n\t\telse\n\t\t\tb(); // second\n\t}\n}';
 		assertRoundtrip(source);
 	}
 
@@ -167,8 +167,8 @@ class HxTriviaWriteTest extends Test {
 	 * the `{` drops back to the outer (body's exterior) indent.
 	 */
 	public function testOwnLineCommentBetweenElseAndBlockRoundTrip(): Void {
-		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tif (cond) {\n\t\t\ta;\n\t\t} else\n'
-			+ '\t\t\t// between else and block\n' + '\t\t{\n' + '\t\t\tb;\n' + '\t\t}\n' + '\t}\n' + '}';
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tif (cond) {\n\t\t\ta;\n\t\t} else\n\t\t\t// between else and block\n'
+			+ '\t\t{\n\t\t\tb;\n\t\t}\n\t}\n}';
 		assertRoundtrip(source);
 	}
 
@@ -233,9 +233,9 @@ class HxTriviaWriteTest extends Test {
 	 */
 	public function testMultiLineBlockCommentDefaultVerbatim(): Void {
 		final source: String = 'class Main {\n    /**\n        Description\n         - point A\n         - point B\n    **/\n'
-			+ '    static public function main() {}\n' + '}';
-		final expected: String = 'class Main {\n\t/**\n\t\tDescription\n\t\t - point A\n\t\t - point B\n\t**/\n'
-			+ '\tstatic public function main() {}\n' + '}\n';
+			+ '    static public function main() {}\n}';
+		final expected: String =
+			'class Main {\n\t/**\n\t\tDescription\n\t\t - point A\n\t\t - point B\n\t**/\n\tstatic public function main() {}\n}\n';
 		assertRoundtrip(source, expected);
 	}
 
@@ -283,7 +283,7 @@ class HxTriviaWriteTest extends Test {
 	 * pad space so its `*` sits in the same column as the interior
 	 * markers. Exercises the non-default path.
 	 */
-	public function testMultiLineBlockCommentJavadocStarsExplicit(): Void {
+	public inline function testMultiLineBlockCommentJavadocStarsExplicit(): Void {
 		assertStyled(
 			'class Main {\n\t/**\n\t first\n\t second\n\t**/\n\tvar x:Int;\n}',
 			'class Main {\n\t/**\n\t * first\n\t * second\n\t */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc
@@ -310,7 +310,7 @@ class HxTriviaWriteTest extends Test {
 	 * in `HaxeFormatConfigLoaderTest`. Pinned so the enum value's
 	 * behaviour cannot drift silently.
 	 */
-	public function testMultiLineBlockCommentPlainStyleDemotesDoc(): Void {
+	public inline function testMultiLineBlockCommentPlainStyleDemotesDoc(): Void {
 		assertStyled(
 			'class Main {\n\t/** first\n\t    second */\n\tvar x:Int;\n}',
 			'class Main {\n\t/*\n\t\tfirst\n\t\tsecond\n\t*/\n\tvar x:Int;\n}\n', CommentStyle.Plain
@@ -322,7 +322,7 @@ class HxTriviaWriteTest extends Test {
 	 * body out with one indent unit per line, and closes with the bare
 	 * `*\/` (no pad — there is no marker column to align with).
 	 */
-	public function testMultiLineDocCommentJavadocNoStars(): Void {
+	public inline function testMultiLineDocCommentJavadocNoStars(): Void {
 		assertStyled(
 			'class Main {\n\t/**\n\t first\n\t second\n\t**/\n\tvar x:Int;\n}',
 			'class Main {\n\t/**\n\t\tfirst\n\t\tsecond\n\t*/\n\tvar x:Int;\n}\n', CommentStyle.JavadocNoStars
@@ -335,7 +335,7 @@ class HxTriviaWriteTest extends Test {
 	 * of the wrap shape the author used (`**\/` here). Two content lines, so
 	 * the one-line collapse does not apply.
 	 */
-	public function testMultiLineDocCommentJavadocTabIndent(): Void {
+	public inline function testMultiLineDocCommentJavadocTabIndent(): Void {
 		assertStyled(
 			'class Main {\n\t/**\n\t\tText line\n\t\tSecond line\n\t**/\n\tvar x:Int;\n}',
 			'class Main {\n\t/**\n\t * Text line\n\t * Second line\n\t */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc
@@ -360,7 +360,7 @@ class HxTriviaWriteTest extends Test {
 	 * would wrongly decline it. Gating on the source newline canonicalizes
 	 * it.
 	 */
-	public function testTwoPhysicalLineDocCanonicalizes(): Void {
+	public inline function testTwoPhysicalLineDocCanonicalizes(): Void {
 		assertStyled(
 			'class Main {\n\t/** doc\n\t*/\n\tvar x:Int;\n}', 'class Main {\n\t/** doc */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc
 		);
@@ -370,7 +370,7 @@ class HxTriviaWriteTest extends Test {
 	 * ω-doc-collapse — a doc whose interior reduces to ONE content line takes the
 	 * one-line form. The user-facing shape of the feature.
 	 */
-	public function testSingleContentLineCollapses(): Void {
+	public inline function testSingleContentLineCollapses(): Void {
 		assertStyled(
 			'class Main {\n\t/**\n\t * Add an error handler\n\t */\n\tvar x:Int;\n}',
 			'class Main {\n\t/** Add an error handler */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc
@@ -378,7 +378,7 @@ class HxTriviaWriteTest extends Test {
 	}
 
 	/** ω-doc-collapse — TWO content lines never join into one. */
-	public function testTwoContentLinesNeverCollapse(): Void {
+	public inline function testTwoContentLinesNeverCollapse(): Void {
 		assertStyled(
 			'class Main {\n\t/**\n\t * First line.\n\t * Second line.\n\t */\n\tvar x:Int;\n}',
 			'class Main {\n\t/**\n\t * First line.\n\t * Second line.\n\t */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc
@@ -386,7 +386,7 @@ class HxTriviaWriteTest extends Test {
 	}
 
 	/** ω-doc-collapse — empty edge lines are dropped, so a padded single line still collapses. */
-	public function testEmptyEdgeLinesCollapse(): Void {
+	public inline function testEmptyEdgeLinesCollapse(): Void {
 		assertStyled(
 			'class Main {\n\t/**\n\t *\n\t * Padded by empty edges\n\t *\n\t */\n\tvar x:Int;\n}',
 			'class Main {\n\t/** Padded by empty edges */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc
@@ -394,7 +394,7 @@ class HxTriviaWriteTest extends Test {
 	}
 
 	/** ω-doc-collapse — a lone javadoc TAG line collapses like any other single line. */
-	public function testSingleTagLineCollapses(): Void {
+	public inline function testSingleTagLineCollapses(): Void {
 		assertStyled(
 			'class Main {\n\t/**\n\t * @param x the thing\n\t */\n\tvar x:Int;\n}',
 			'class Main {\n\t/** @param x the thing */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc
@@ -402,7 +402,7 @@ class HxTriviaWriteTest extends Test {
 	}
 
 	/** ω-doc-collapse — `JavadocNoStars` collapses to the same `/** … *\/` one-line form. */
-	public function testSingleContentLineCollapsesUnderNoStars(): Void {
+	public inline function testSingleContentLineCollapsesUnderNoStars(): Void {
 		assertStyled(
 			'class Main {\n\t/**\n\t first\n\t**/\n\tvar x:Int;\n}', 'class Main {\n\t/** first */\n\tvar x:Int;\n}\n',
 			CommentStyle.JavadocNoStars
@@ -430,7 +430,7 @@ class HxTriviaWriteTest extends Test {
 	 * which is the doc demotion the style already gets refused a config token for; the
 	 * collapse is scoped to the two doc styles.
 	 */
-	public function testPlainStyleDoesNotCollapse(): Void {
+	public inline function testPlainStyleDoesNotCollapse(): Void {
 		assertStyled(
 			'class Main {\n\t/**\n\t * only line\n\t */\n\tvar x:Int;\n}', 'class Main {\n\t/*\n\t\tonly line\n\t*/\n\tvar x:Int;\n}\n',
 			CommentStyle.Plain
@@ -449,7 +449,7 @@ class HxTriviaWriteTest extends Test {
 	 * them corrupted 8 of anyparse's own doc blocks badly enough to fail
 	 * the writer's round-trip guard.
 	 */
-	public function testContentStarsSurviveJavadoc(): Void {
+	public inline function testContentStarsSurviveJavadoc(): Void {
 		assertStyled(
 			'class Main {\n\t/**\n\t * makes it **bold**\n\t * and the unused-*\n\t */\n\tvar x:Int;\n}',
 			'class Main {\n\t/**\n\t * makes it **bold**\n\t * and the unused-*\n\t */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc
@@ -462,7 +462,7 @@ class HxTriviaWriteTest extends Test {
 	 * close ends `*\r`, and testing for `' '` classified that marker as content:
 	 * the canonical pass then emitted a spurious ` * *` row after the open.
 	 */
-	public function testCrlfGutterMarkerNotEmittedAsContent(): Void {
+	public inline function testCrlfGutterMarkerNotEmittedAsContent(): Void {
 		assertStyled(
 			'class Main {\r\n\t/**\r\n\t * alpha\r\n\t * beta\r\n\t */\r\n\tvar x:Int;\r\n}',
 			'class Main {\n\t/**\n\t * alpha\n\t * beta\n\t */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc
@@ -470,7 +470,7 @@ class HxTriviaWriteTest extends Test {
 	}
 
 	/** ω-doc-only-canonical — a TAB after the gutter star is a marker separator too. */
-	public function testTabAfterGutterStarIsMarker(): Void {
+	public inline function testTabAfterGutterStarIsMarker(): Void {
 		assertStyled(
 			'class Main {\n\t/**\n\t *\ttext\n\t *\tmore\n\t */\n\tvar x:Int;\n}',
 			'class Main {\n\t/**\n\t * text\n\t * more\n\t */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc
@@ -484,7 +484,7 @@ class HxTriviaWriteTest extends Test {
 	 * whitespace as soon as one sibling was aligned differently; here the
 	 * second line's tab must not leak into the first line's output.
 	 */
-	public function testMixedMarkerColumnsCanonicalizeUniformly(): Void {
+	public inline function testMixedMarkerColumnsCanonicalizeUniformly(): Void {
 		assertStyled(
 			'class Main {\n\t/**\n\t * Flags a thing.\n\t\t * A second arm.\n\t */\n\tvar x:Int;\n}',
 			'class Main {\n\t/**\n\t * Flags a thing.\n\t * A second arm.\n\t */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc
@@ -497,7 +497,7 @@ class HxTriviaWriteTest extends Test {
 	 * default `trailingWhitespace: false` would otherwise disagree with
 	 * what the style wrote).
 	 */
-	public function testJavadocNoStarsBlankLineHasNoTrailingWhitespace(): Void {
+	public inline function testJavadocNoStarsBlankLineHasNoTrailingWhitespace(): Void {
 		assertStyled(
 			'class Main {\n\t/**\n\t first\n\n\t second\n\t**/\n\tvar x:Int;\n}',
 			'class Main {\n\t/**\n\t\tfirst\n\n\t\tsecond\n\t*/\n\tvar x:Int;\n}\n', CommentStyle.JavadocNoStars
@@ -539,8 +539,8 @@ class HxTriviaWriteTest extends Test {
 	 * comment is dropped and the writer emits `} else { b; }` only.
 	 */
 	public function testOwnLineCommentBetweenBraceAndElseRoundTrip(): Void {
-		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tif (cond) {\n\t\t\ta;\n\t\t}\n\t\t// before else\n\t\telse {\n'
-			+ '\t\t\tb;\n' + '\t\t}\n' + '\t}\n' + '}';
+		final source: String =
+			'class Foo {\n\tfunction bar() {\n\t\tif (cond) {\n\t\t\ta;\n\t\t}\n\t\t// before else\n\t\telse {\n\t\t\tb;\n\t\t}\n\t}\n}';
 		assertRoundtrip(source);
 	}
 
@@ -550,7 +550,7 @@ class HxTriviaWriteTest extends Test {
 	 */
 	public function testMultipleOwnLineCommentsBetweenBraceAndElseRoundTrip(): Void {
 		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tif (cond) {\n\t\t\ta;\n\t\t}\n\t\t// first\n\t\t// second\n'
-			+ '\t\telse {\n' + '\t\t\tb;\n' + '\t\t}\n' + '\t}\n' + '}';
+			+ '\t\telse {\n\t\t\tb;\n\t\t}\n\t}\n}';
 		assertRoundtrip(source);
 	}
 
@@ -689,8 +689,8 @@ class HxTriviaWriteTest extends Test {
 	 * `case B:` round-trips with the gap intact.
 	 */
 	public function testCaseBodyEmptyTrailWithBlankAfter(): Void {
-		final source: String =
-			'class Main {\n\tstatic function main():Void {\n\t\tswitch v {\n\t\t\tcase A:\n\t\t\t\t// Case A\n\n\t\t\tcase B:\n\t\t\t\ttrace(\'b\');\n\t\t}\n\t}\n}';
+		final source: String = 'class Main {\n\tstatic function main():Void {\n\t\tswitch v {\n\t\t\tcase A:\n\t\t\t\t// Case A\n\n'
+			+ '\t\t\tcase B:\n\t\t\t\ttrace(\'b\');\n\t\t}\n\t}\n}';
 		assertRoundtrip(source);
 	}
 

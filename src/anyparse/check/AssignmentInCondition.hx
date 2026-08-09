@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -84,11 +83,14 @@ final class AssignmentInCondition implements Check {
 
 	/** The condition child of `node`, or null when `node` is not a condition holder. */
 	private static function conditionOf(node: QueryNode, firstKinds: Array<String>, lastKinds: Array<String>): Null<QueryNode> {
-		return node.children.length == 0
-			? null
-			: firstKinds.contains(node.kind)
-				? node.children[0]
-				: lastKinds.contains(node.kind) ? node.children[node.children.length - 1] : null;
+		return if (node.children.length == 0)
+			null
+		else if (firstKinds.contains(node.kind))
+			node.children[0]
+		else if (lastKinds.contains(node.kind))
+			node.children[node.children.length - 1]
+		else
+			null;
 	}
 
 	/** `cond` itself (or its single parenthesized inner) when it is an assignment; else null. */

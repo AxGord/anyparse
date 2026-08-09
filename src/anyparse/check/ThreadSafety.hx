@@ -2,11 +2,12 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.CallGraph;
-import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import anyparse.check.Check.ConfigAware;
+
+using StringTools;
 
 /**
  * Config-driven thread-context analysis over the approximate `CallGraph` —
@@ -325,11 +326,11 @@ final class ThreadSafety implements Check implements ConfigAware {
 
 	/** True when `file` contains one of `patterns` as a '/'-bounded path-segment run. */
 	private static function pathExcluded(file: String, patterns: Array<String>): Bool {
-		final wrapped: String = '/' + StringTools.replace(file, '\\', '/') + '/';
+		final wrapped: String = '/' + file.replace('\\', '/') + '/';
 		for (p in patterns) {
 			var trimmed: String = p;
-			while (StringTools.startsWith(trimmed, '/')) trimmed = trimmed.substring(1);
-			while (StringTools.endsWith(trimmed, '/')) trimmed = trimmed.substring(0, trimmed.length - 1);
+			while (trimmed.startsWith('/')) trimmed = trimmed.substring(1);
+			while (trimmed.endsWith('/')) trimmed = trimmed.substring(0, trimmed.length - 1);
 			if (trimmed.length > 0 && wrapped.indexOf('/$trimmed/') != -1) return true;
 		}
 		return false;

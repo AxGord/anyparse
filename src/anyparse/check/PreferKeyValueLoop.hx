@@ -4,7 +4,6 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.check.LoopScan.LoopSeams;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -79,12 +78,12 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 		final seams: Null<Seams> = readSeams(plugin.refShape());
 		if (seams == null) return [];
 		final s: Seams = seams;
-		final typed: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final typed: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			final types: Null<Map<Int, String>> = typed == null ? null : typed.declaredTypeSources(entry.source);
+			final types: Null<Map<Int, String>> = typed?.declaredTypeSources(entry.source);
 			walk(tree, tree, entry.file, entry.source, types, s, violations);
 		}
 		return violations;
@@ -103,8 +102,8 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (seams == null || tree == null) return [];
 		final s: Seams = seams;
-		final typed: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
-		final types: Null<Map<Int, String>> = typed == null ? null : typed.declaredTypeSources(source);
+		final typed: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final types: Null<Map<Int, String>> = typed?.declaredTypeSources(source);
 		final wanted: Array<String> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
@@ -179,8 +178,7 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 		// A container that RESOLVES to something other than `Array` has no key-value iteration to
 		// offer, so the message would be advice that does not compile; only an UNRESOLVED one keeps
 		// the report-only tolerance, where the suggestion is a lead rather than a claim.
-		if (collectionTypeSource != null && RefactorSupport.outerNominalOf(collectionTypeSource) != ARRAY_TYPE) return null;
-		return {
+		return collectionTypeSource != null && RefactorSupport.outerNominalOf(collectionTypeSource) != ARRAY_TYPE ? null : {
 			forSpan: forSpan,
 			declSpan: declSpan,
 			keyVar: h.keyVar,
@@ -215,8 +213,7 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 		final collection: Null<String> = LoopScan.memberReadReceiver(upper, LENGTH_MEMBER, core);
 		if (collection == null || collection == keyVar) return null;
 		final body: QueryNode = forNode.children[1];
-		if (body.kind != core.blockStmtKind || body.children.length < MIN_BODY_STATEMENTS) return null;
-		return {
+		return body.kind != core.blockStmtKind || body.children.length < MIN_BODY_STATEMENTS ? null : {
 			keyVar: keyVar,
 			collection: collection,
 			lengthReceiver: upper.children[0],
@@ -249,12 +246,15 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 
 	/** The single `{span, text}` replacing `[for, declaration end)` with the key-value header, or null when the rewrite is refused. */
 	private static function buildEdit(m: Match, source: String): Null<{ span: Span, text: String }> {
-		if (!provablyArrayElement(m)) return null;
 		// Reaching to the end of the declaration's LINE, not just its `;`: a trailing comment there
 		// documents the statement the rewrite deletes, and the splice would silently re-attach it to
 		// the loop header.
-		if (CheckScan.hasCommentMarker(source, m.forSpan.from, lineEndAfter(source, m.declSpan.to))) return null;
-		return { span: new Span(m.forSpan.from, m.declSpan.to), text: 'for (${m.keyVar} => ${m.valueVar} in ${m.collection}) {' };
+		return if (!provablyArrayElement(m))
+			null
+		else if (CheckScan.hasCommentMarker(source, m.forSpan.from, lineEndAfter(source, m.declSpan.to)))
+			null
+		else
+			{ span: new Span(m.forSpan.from, m.declSpan.to), text: 'for (${m.keyVar} => ${m.valueVar} in ${m.collection}) {' };
 	}
 
 	/** The offset of the newline ending the line `from` sits on, or the source end — how far a trailing comment can reach. */
