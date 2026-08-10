@@ -99,8 +99,9 @@ final class UnusedImport implements Check {
 		final sourceOf: Map<String, String> = [];
 		for (entry in files) sourceOf[entry.file] = entry.source;
 
-		// The report-scoped index drives the per-file violation loop and the static-
-		// wildcard member set (kept report-scoped so a wildcard verdict never widens).
+		// The report-scoped index drives the per-file violation loop and the
+		// report-scoped member set (kept report-scoped so a wildcard / `using`
+		// verdict never widens).
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		// The resolution index — report files UNION configured library roots (openfl /
 		// lime) — when the plugin carries a resolution scope, else the report index.
@@ -126,10 +127,12 @@ final class UnusedImport implements Check {
 		// named-import existence gate (a module resolvable in the report set OR the
 		// library is verifiable).
 		final membersByPath: Map<String, Array<String>> = membersByImportPath(resolveIndex);
-		// Report-scoped members for the STATIC WILDCARD path only: a wildcard verdict
-		// must NOT widen to the library, so `import lib.Type.*;` on an out-of-report
-		// type stays an unverifiable Info. Reuse the resolution map when no scope.
-		final wildMembersByPath: Map<String, Array<String>> = resolveIndex == index ? membersByPath : membersByImportPath(index);
+		// Report-scoped members, for the two arms whose SYMBOL SET must be known in
+		// full before they may warn: a static wildcard (`import pkg.Type.*;`) and a
+		// `using` the std probe does not recognise. Neither verdict may widen to the
+		// library, so on an out-of-report type both stay unverifiable Infos. Reuse
+		// the resolution map when no scope.
+		final reportMembersByPath: Map<String, Array<String>> = resolveIndex == index ? membersByPath : membersByImportPath(index);
 		final violations: Array<Violation> = [];
 		for (info in index.allFiles()) {
 			final source: String = sourceOf[info.file] ?? '';
@@ -140,7 +143,7 @@ final class UnusedImport implements Check {
 			};
 			final ignoreModules: Array<String> = plugin.checkOverrides(info.file)?.unusedImportIgnoreModules ?? [];
 			for (imp in info.imports) if (!moduleIgnored(imp, ignoreModules))
-				addViolation(violations, info.file, imp, scan, plugin, moduleTypes, enumCtorsByPath, membersByPath, wildMembersByPath);
+				addViolation(violations, info.file, imp, scan, plugin, moduleTypes, enumCtorsByPath, membersByPath, reportMembersByPath);
 		}
 		return violations;
 	}
@@ -164,38 +167,32 @@ final class UnusedImport implements Check {
 	}
 
 	/**
-	 * Append the verdict for one import. A `#if`-guarded import is an
-	 * unverifiable `Info` (its usage is conditional while the reference scan is
-	 * branch-blind, and deleting it would touch code inside a conditional
-	 * region); a wildcard (`import pkg.*;`) is an unverifiable `Info`; a `using`
-	 * is delegated to `addUsingViolation`; every other form is a `Warning` when
-	 * its bound name is not referenced outside the import statements AND (for a
-	 * plain resolvable module import — report set or resolution scope) no
-	 * secondary top-level type of the module is referenced either.
+	 * Append the verdict for one import. A wildcard (`import pkg.*;`) is an
+	 * unverifiable `Info`; a `using` is delegated to `addUsingViolation`; every
+	 * other form is a `Warning` when its bound name is not referenced outside
+	 * the import statements AND (for a plain resolvable module import — report
+	 * set or resolution scope) no secondary top-level type of the module is
+	 * referenced either.
+	 *
+	 * A `#if`-guarded import takes exactly the same arms. `referenced` scans the
+	 * raw text of EVERY branch, so a bound name absent from the whole file is
+	 * unused whichever branch compiles — guardedness is a property of the DELETE
+	 * mechanics, not of the verdict, and `make` caps it there. Short-circuiting it
+	 * into a blanket "cannot verify unused" `Info` discarded the secondary-type,
+	 * enum-ctor, `using` and scope-existence evidence, and reported every guarded
+	 * import of a macro-heavy tree as an unactionable advisory: 50 of them here,
+	 * of which 44 were live and 6 were provably dead.
 	 */
 	private static function addViolation(
 		out: Array<Violation>, file: String, imp: ImportInfo, scan: FileScan, plugin: GrammarPlugin,
 		moduleTypes: Map<String, Array<String>>, enumCtorsByPath: Map<String, Array<String>>, membersByPath: Map<String, Array<String>>,
-		wildMembersByPath: Map<String, Array<String>>
+		reportMembersByPath: Map<String, Array<String>>
 	): Void {
-		if (imp.guarded) {
-			// Only report a guarded import as possibly-unused when its bound name
-			// appears nowhere in the file text at all — otherwise the branch-blind
-			// scan cannot tell used-here from used-in-another-branch. Never a
-			// Warning: the fix must not delete a line inside a `#if` region.
-			final bound: String = imp.alias ?? RefactorSupport.lastSegment(imp.raw);
-			if (!referenced(scan, bound))
-				out.push(make(
-					file, imp, Severity.Info,
-					'guarded import \'${imp.raw}\': bound name not referenced, but usage is `#if`-conditional — cannot verify unused'
-				));
-			return;
-		}
 		switch imp.kind {
 			case ImportKind.Wild:
-				addWildViolation(out, file, imp, scan, wildMembersByPath);
+				addWildViolation(out, file, imp, scan, reportMembersByPath);
 			case ImportKind.Using:
-				addUsingViolation(out, file, imp, scan, plugin);
+				addUsingViolation(out, file, imp, scan, plugin, reportMembersByPath);
 			case _:
 				final bound: String = imp.alias ?? RefactorSupport.lastSegment(imp.raw);
 				if (referenced(scan, bound)) return;
@@ -244,13 +241,27 @@ final class UnusedImport implements Check {
 		);
 	}
 
+	/**
+	 * Build one violation, capping a `#if`-guarded import's verdict at `Info`.
+	 *
+	 * Guardedness does not change what is TRUE — `referenced` reads the raw text of
+	 * every branch, so a bound name absent from the whole file is unused in every
+	 * configuration, and the arms above resolve a guarded import exactly like a
+	 * top-level one. It changes what the FIX may do. Deleting a span inside a `#if`
+	 * region is safe but not clean: the canonicaliser normalises the module-level
+	 * import block only, so the emptied line survives as a second blank, and
+	 * deleting the region's last member leaves an empty `#if`/`#end` pair welded to
+	 * the next declaration. Until the writer normalises inside a conditional, a
+	 * guarded verdict is reported with its real reason and left to a human.
+	 */
 	private static function make(file: String, imp: ImportInfo, severity: Severity, message: String): Violation {
+		final guarded: Bool = imp.guarded && severity == Severity.Warning;
 		return {
 			file: file,
 			span: imp.span,
 			rule: 'unused-import',
-			severity: severity,
-			message: message
+			severity: guarded ? Severity.Info : severity,
+			message: guarded ? '$message — `#if`-guarded, so advisory only: delete it by hand' : message
 		};
 	}
 
@@ -258,24 +269,33 @@ final class UnusedImport implements Check {
 	 * Append the verdict for a `using` import. It is in use when its bound name is
 	 * referenced outside the imports — a static / type reference such as
 	 * `MetaInspect.foo()` or `StringTools.fastCodeAt()` — OR when one of its
-	 * extension methods is invoked as a `.method(` call. When neither holds:
+	 * extension methods is invoked as a `.method` call. When neither holds:
 	 *
-	 *  - the module's extension methods are KNOWN (a stdlib `using`) → a verified
-	 *    `unused using` `Warning`, deletable like any other unused import;
-	 *  - the module is UNKNOWN (`knownExtensionMethods` returns null) → it stays an
-	 *    `Info` advisory, since an extension call cannot be ruled out.
+	 *  - the module's extension methods are KNOWN — a stdlib `using` the std probe
+	 *    reads, or a module the REPORT set declares, whose members the index
+	 *    carries in full — → a verified `unused using` `Warning`, deletable like
+	 *    any other unused import;
+	 *  - the module is declared NOWHERE the run can read → it stays an `Info`
+	 *    advisory, since an extension call cannot be ruled out.
+	 *
+	 * The report-set fallback is the `using` twin of `addWildViolation`: both need
+	 * the module's COMPLETE symbol set before they may warn, and both get it from
+	 * the same report-scoped map so the verdict never widens to a library the run
+	 * only partially indexed. Without it every project-local `using` — the whole
+	 * `using pkg.MetaInspect` family of a macro-heavy tree — was unverifiable.
 	 */
 	private static function addUsingViolation(
-		out: Array<Violation>, file: String, imp: ImportInfo, scan: FileScan, plugin: GrammarPlugin
+		out: Array<Violation>, file: String, imp: ImportInfo, scan: FileScan, plugin: GrammarPlugin,
+		reportMembersByPath: Map<String, Array<String>>
 	): Void {
 		final bound: String = RefactorSupport.lastSegment(imp.raw);
 		if (referenced(scan, bound)) return;
-		final methods: Null<Array<String>> = plugin.knownExtensionMethods(imp.raw);
+		final methods: Null<Array<String>> = plugin.knownExtensionMethods(imp.raw) ?? reportMembersByPath[imp.raw];
 		if (methods == null) {
 			out.push(make(file, imp, Severity.Info, 'using import \'${imp.raw}\': extension use not tracked'));
 			return;
 		}
-		if (methods.exists(m -> RefactorSupport.methodCalledInSource(scan.source, m))) return;
+		if (methods.exists(m -> RefactorSupport.methodCalledInSource(scan.source, m, bound))) return;
 		out.push(make(file, imp, Severity.Warning, 'unused using \'${imp.raw}\''));
 	}
 

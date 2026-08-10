@@ -138,13 +138,14 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 	}
 
 	/**
-	 * A `#if`-guarded unused import is NEVER a `Warning` — its usage is
-	 * `#if`-conditional and the reference scan is branch-blind, so it cannot be
-	 * verified unused, and the fix must not delete a line inside a `#if` region.
-	 * The unreferenced case is reported `Info` only (advisory, unfixed). The
-	 * module is IN the lint set, so absent the guard downgrade this identical
-	 * import would be a deletable `Warning` (cf. `testWhollyUnusedModuleImport…`)
-	 * — the guard alone drops it to `Info`.
+	 * A `#if`-guarded unused import is NEVER a `Warning`. Not because the verdict
+	 * is in doubt — the reference scan reads the raw text of every branch, so an
+	 * absent bound name is unused in every configuration, and this import IS
+	 * resolved through the same arms as a top-level one (cf.
+	 * `testWhollyUnusedModuleImport…`, the identical import unguarded). The cap is
+	 * about the FIX: deleting a span inside a `#if` region is the one place the
+	 * canonicaliser does not re-normalise what the deletion leaves behind. So the
+	 * verdict is reported `Info` — advisory, unfixed, delete by hand.
 	 */
 	public function testGuardedUnusedImportIsInfoNotWarning(): Void {
 		final mod: String = 'package a.b;\n\nclass Mod {}';

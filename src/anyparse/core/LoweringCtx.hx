@@ -1,8 +1,6 @@
 package anyparse.core;
 
 #if macro
-import anyparse.format.Format;
-
 /**
  * Context threaded through the lowering pass. Carries cross-cutting
  * state that several strategies need to read or push/pop:
@@ -13,10 +11,6 @@ import anyparse.format.Format;
  *                    stack before every terminal.
  * - `captures`     — names of active capture slots for the current
  *                    scope, used by `Capture`/`Backref`.
- * - `indentMode`   — active indent policy string for the current
- *                    scope, consulted by `Indent`.
- * - `activeFormat` — format currently in effect; determines literal
- *                    vocabulary for `Lit` lowerings.
  * - `mode`         — Fast vs Tolerant; drives whether span tracking,
  *                    error recovery and cache lookups are emitted.
  * - `trivia`       — when true, the macro synthesizes paired `*T` AST

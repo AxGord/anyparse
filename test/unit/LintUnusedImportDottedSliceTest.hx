@@ -144,17 +144,21 @@ class LintUnusedImportDottedSliceTest extends Test {
 	}
 
 	/**
-	 * The `using` arm asks the same question of its bound name: a fully-qualified
-	 * call goes through no import, so the `using` drops to the unverifiable
-	 * advisory (its extension methods are unknown) instead of reading as live.
+	 * The `using` arm asks the same question of its bound name, and its member scan
+	 * asks it a second time: `a.b.Limit.MAX` reaches the type through no import at
+	 * all, so neither the bound name NOR the `.MAX` occurrence is a use the `using`
+	 * enables. With `a.b.Limit` in the lint set its members are known, which makes
+	 * this a verified `unused using` — without the receiver exclusion in
+	 * `methodCalledInSource` the same `.MAX` would read as an extension call and
+	 * silence the finding entirely.
 	 */
 	public function testUsingBoundNameQualifiedTailIsNotAUse(): Void {
 		final use: String = 'package pkg;\n\nusing a.b.Limit;\n\nclass C {\n\tpublic var x: Int = a.b.Limit.MAX;\n}';
 		final vs: Array<Violation> = run(use);
 
 		Assert.equals(1, vs.length);
-		Assert.equals(Severity.Info, vs[0].severity);
-		Assert.isTrue(vs[0].message.contains('using import'));
+		Assert.equals(Severity.Warning, vs[0].severity);
+		Assert.isTrue(vs[0].message.contains('unused using'));
 	}
 
 	/** The static-wildcard arm too: a member reached as `Type.MEMBER` never came through the wildcard. */

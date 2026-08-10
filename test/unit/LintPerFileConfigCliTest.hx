@@ -7,7 +7,6 @@ import anyparse.check.Complexity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.check.Check.Violation;
 #if (sys || nodejs)
-import sys.FileSystem;
 import sys.io.File;
 #end
 

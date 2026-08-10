@@ -663,6 +663,97 @@ class LintSliceTest extends Test {
 		Assert.equals(0, vs.length);
 	}
 
+	/**
+	 * A `#if`-guarded import is RESOLVED exactly like a top-level one — the
+	 * liveness scan reads the raw text of every branch, so a bound name that
+	 * appears nowhere is unused whichever branch compiles — and then capped at
+	 * `Info`, because the fix must not delete a span inside a `#if` region. Both
+	 * imports here are guarded: the referenced one stays silent, the unreferenced
+	 * one carries the real verdict ("unused import") at advisory severity and is
+	 * left unfixed. Before, both the verdict and the reason were a blanket
+	 * "cannot verify unused".
+	 */
+	public function testGuardedUnusedImportIsVerifiedAdvisory(): Void {
+		final src: String = 'package pkg;\n\n#if macro\nimport a.b.Used;\nimport a.b.Unused;\n#end\n\nclass C {\n\tvar x:Used;\n}';
+		final check: UnusedImport = new UnusedImport();
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }].concat(declaringStubs());
+		final vs: Array<Violation> = check.run(files, plugin());
+
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.isTrue(vs[0].message.contains('unused import \'a.b.Unused\' — `#if`-guarded'));
+		Assert.equals(0, check.fix(src, vs, plugin()).length);
+	}
+
+	/**
+	 * The module-secondary-type arm applies to a guarded import too: `a.b.Pair`
+	 * is never named, but its sibling top-level `Half` is — deleting the import
+	 * would break the build. The guarded short-circuit reported this as an
+	 * advisory because it never reached the arm.
+	 */
+	public function testGuardedImportKeptByModuleSecondaryType(): Void {
+		final src: String = 'package pkg;\n\n#if macro\nimport a.b.Pair;\n#end\n\nclass C {\n\tvar x:Half;\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: src },
+			{ file: 'a/b/Pair.hx', source: 'package a.b;\nclass Pair {}\ntypedef Half = Int;' }
+		];
+		final vs: Array<Violation> = new UnusedImport().run(files, plugin());
+
+		Assert.equals(0, vs.length);
+	}
+
+	/**
+	 * A guarded `using` lands in the `using` arm and gets that arm's verdict — an
+	 * untracked extension module stays an `Info`, but carrying the reason that
+	 * actually applies to it instead of the blanket guarded message.
+	 */
+	public function testGuardedUsingReachesTheUsingArm(): Void {
+		final src: String = 'package pkg;\n\n#if macro\nusing a.b.Helper;\n#end\n\nclass C {}';
+		final vs: Array<Violation> = new UnusedImport().run([{ file: 'pkg/C.hx', source: src }], plugin());
+
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.isTrue(vs[0].message.contains('extension use not tracked'));
+	}
+
+	/**
+	 * A `using` on a module the lint set DECLARES is verifiable exactly like a
+	 * static wildcard: its member names are known, so "no member called as
+	 * `.name`" is proof the extension contributes nothing. Every project-local
+	 * `using` was an unverifiable `Info` before, because only a std module had a
+	 * known method set.
+	 */
+	public function testUsingOnInSetModuleWithNoExtensionCallIsWarning(): Void {
+		final src: String = 'package pkg;\n\nusing a.b.Helper;\n\nclass C {\n\tfunction f(): Int return 5;\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: src },
+			{ file: 'a/b/Helper.hx', source: 'package a.b;\nclass Helper {\n\tpublic static function pad(s:String):String return s;\n}' }
+		];
+		final vs: Array<Violation> = new UnusedImport().run(files, plugin());
+
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Warning, vs[0].severity);
+		Assert.isTrue(vs[0].message.contains('unused using'));
+	}
+
+	/**
+	 * The same in-set `using`, guarded and actually applied: `.pad(` is the
+	 * extension call, so the import is live and nothing is reported. The
+	 * negative control that keeps the Warning above attributable to the member
+	 * scan rather than to "a project-local `using` is now deletable".
+	 */
+	public function testGuardedUsingOnInSetModuleKeptByExtensionCall(): Void {
+		final src: String =
+			'package pkg;\n\n#if macro\nusing a.b.Helper;\n#end\n\nclass C {\n\tfunction f(s:String):String return s.pad();\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: src },
+			{ file: 'a/b/Helper.hx', source: 'package a.b;\nclass Helper {\n\tpublic static function pad(s:String):String return s;\n}' }
+		];
+		final vs: Array<Violation> = new UnusedImport().run(files, plugin());
+
+		Assert.equals(0, vs.length);
+	}
+
 	private static function plugin(): HaxeQueryPlugin {
 		return new HaxeQueryPlugin();
 	}

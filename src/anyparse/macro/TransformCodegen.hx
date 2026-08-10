@@ -4,8 +4,6 @@ package anyparse.macro;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 
-using Lambda;
-
 /**
  * Pass 4T of the macro pipeline — transform codegen.
  *

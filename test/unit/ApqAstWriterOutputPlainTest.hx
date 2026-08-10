@@ -5,7 +5,6 @@ import utest.Test;
 import anyparse.query.Cli;
 #if sys
 import sys.FileSystem;
-import sys.io.File;
 #end
 
 /**

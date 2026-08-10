@@ -1512,10 +1512,22 @@ final class RefactorSupport {
 	 * it is a textual scan that also counts the form inside a comment / string —
 	 * which only ever keeps a `using`, never wrongly deletes one (the safe
 	 * direction for an autofix).
+	 *
+	 * `skipReceiver`, when given, excludes an occurrence whose receiver is exactly
+	 * that simple name. Its caller has already established that the name is not
+	 * referenced bare, so every occurrence of it is dot-qualified — which makes
+	 * `Limit.MAX` on a `using a.b.Limit` a fully-qualified STATIC access reaching
+	 * the type through no import at all, not the extension call the `using` enables.
 	 */
-	public static function methodCalledInSource(source: String, name: String): Bool {
+	public static function methodCalledInSource(source: String, name: String, ?skipReceiver: String): Bool {
 		final len: Int = name.length;
 		if (len == 0) return false;
+		final skip: String = skipReceiver ?? '';
+		inline function qualifiedBySkip(dotAt: Int): Bool {
+			final start: Int = dotAt - skip.length;
+			return skip.length > 0 && start >= 0 && source.substr(start, skip.length) == skip
+				&& (start == 0 || !isIdentChar(source.fastCodeAt(start - 1)));
+		}
 		var i: Int = 0;
 		while (true) {
 			final at: Int = source.indexOf(name, i);
@@ -1523,7 +1535,8 @@ final class RefactorSupport {
 			i = at + 1;
 			if (at == 0 || source.fastCodeAt(at - 1) != '.'.code) continue;
 			final afterIdx: Int = at + len;
-			if (afterIdx >= source.length || !isIdentChar(source.fastCodeAt(afterIdx))) return true;
+			if (afterIdx < source.length && isIdentChar(source.fastCodeAt(afterIdx))) continue;
+			if (!qualifiedBySkip(at - 1)) return true;
 		}
 	}
 

@@ -6,7 +6,6 @@ import haxe.macro.Expr;
 import anyparse.core.ShapeTree;
 
 using Lambda;
-using anyparse.macro.MetaInspect;
 
 /**
  * Pass 3Q of the macro pipeline - query-walker lowering.
