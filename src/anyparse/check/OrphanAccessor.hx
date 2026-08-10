@@ -12,6 +12,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 using Lambda;
+using StringTools;
 
 /**
  * Flags a `get_X` / `set_X` method that no property slot ever reaches — the accessor half of a
@@ -207,10 +208,10 @@ final class OrphanAccessor implements Check implements DefaultOff {
 			if (!certain || !isMethod || name == null || span == null) return;
 			final memberKept: Bool = runCarries(run, KEEP_META, true);
 			final isStatic: Bool = runCarries(run, 'Static', false);
-			final wantGetter: Bool = StringTools.startsWith(name, CheckScan.GET_PREFIX);
-			if (!wantGetter && !StringTools.startsWith(name, CheckScan.SET_PREFIX)) return;
-			final prop: String = name.substr(CheckScan.GET_PREFIX.length);
-			if (prop == '') return;
+			final target: Null<{ prop: String, getter: Bool }> = accessorTargetOf(name);
+			if (target == null) return;
+			final prop: String = target.prop;
+			final wantGetter: Bool = target.getter;
 			final found: Resolution = {
 				declared: false,
 				withSlot: false,
@@ -226,21 +227,7 @@ final class OrphanAccessor implements Check implements DefaultOff {
 			// needs the check: a declaration found at or above this class forbids a subtype
 			// redeclaring the same field, so arm 1 cannot be reached this way.
 			if (!found.declared && scope.subtypeDeclaresMember(owner, prop)) return;
-			final slot: String = wantGetter ? 'get' : 'set';
-			if (!found.declared && found.unresolved) {
-				out.push(violation(
-					file, span, Severity.Info,
-					'$name may have no property to serve: no $prop is declared in $owner'
-					+ ' or in the supertypes that resolved, and an unresolvable supertype leaves it unproven'
-				));
-				return;
-			}
-			out.push(violation(
-				file, span, Severity.Warning,
-				found.declared
-					? '$name has no property to serve: $prop declares no $slot accessor'
-					: '$name has no property to serve: neither $owner nor its supertypes declare $prop'
-			));
+			if (!reportOrphan(out, file, span, name, prop, owner, wantGetter, found)) return;
 			if (deletable(ctx, decl.hasKeep || memberKept, name)) deleting.push(child);
 		});
 		// Emptying a `#if` region of members leaves a shape the grammar does not model, and the
@@ -430,6 +417,43 @@ final class OrphanAccessor implements Check implements DefaultOff {
 			if (meta == isMeta && (isMeta ? mod.name == wanted : mod.kind == wanted)) return true;
 		}
 		return false;
+	}
+
+	/**
+	 * The property an accessor method name serves — `get_x` / `set_x` → `x`, plus which slot it
+	 * fills — or null when the name carries no accessor prefix or names an empty property.
+	 */
+	private static function accessorTargetOf(name: String): Null<{ prop: String, getter: Bool }> {
+		final wantGetter: Bool = name.startsWith(CheckScan.GET_PREFIX);
+		if (!wantGetter && !name.startsWith(CheckScan.SET_PREFIX)) return null;
+		final prop: String = name.substr(CheckScan.GET_PREFIX.length);
+		return prop == '' ? null : { prop: prop, getter: wantGetter };
+	}
+
+	/**
+	 * Push the finding for an accessor no property serves and report whether the verdict was PROVEN:
+	 * an unresolvable supertype leaves it unproven, which is `Info` and never deletable, while a
+	 * fully resolved chain is a `Warning` whose method the deletion gate may then consider.
+	 */
+	private static function reportOrphan(
+		out: Array<Violation>, file: String, span: Span, name: String, prop: String, owner: String, wantGetter: Bool, found: Resolution
+	): Bool {
+		if (!found.declared && found.unresolved) {
+			out.push(violation(
+				file, span, Severity.Info,
+				'$name may have no property to serve: no $prop is declared in $owner'
+				+ ' or in the supertypes that resolved, and an unresolvable supertype leaves it unproven'
+			));
+			return false;
+		}
+		final slot: String = wantGetter ? 'get' : 'set';
+		out.push(violation(
+			file, span, Severity.Warning,
+			found.declared
+				? '$name has no property to serve: $prop declares no $slot accessor'
+				: '$name has no property to serve: neither $owner nor its supertypes declare $prop'
+		));
+		return true;
 	}
 
 }

@@ -273,22 +273,7 @@ final class MemberOrder implements Check implements ConfigAware {
 	private static function rankOf(
 		node: QueryNode, isStatic: Bool, isPublic: Bool, isField: Bool, accessors: Map<Int, Bool>, shape: RefShape
 	): MemberRank {
-		if (isField) {
-			final mutable: Bool = (shape.mutableFieldDeclKinds ?? []).contains(node.kind);
-			if (isStatic)
-				return !mutable
-					? (isPublic ? StaticPublicImmutableField : StaticPrivateImmutableField)
-					: (isPublic ? StaticPublicMutableField : StaticPrivateMutableField);
-			final span: Null<Span> = node.span;
-			if (span == null || !accessors.exists(span.from))
-				return !mutable
-					? (isPublic ? PublicImmutableField : PrivateImmutableField)
-					: (isPublic ? PublicMutableField : PrivateMutableField);
-			final getter: Bool = accessors[span.from] == true;
-			return isPublic
-				? (getter ? PublicGetterProperty : PublicReadOnlyProperty)
-				: (getter ? PrivateGetterProperty : PrivateReadOnlyProperty);
-		}
+		if (isField) return fieldRankOf(node, isStatic, isPublic, accessors, shape);
 		final name: String = node.name ?? '';
 		return if (shape.constructorName != null && name == shape.constructorName)
 			Constructor
@@ -298,6 +283,29 @@ final class MemberOrder implements Check implements ConfigAware {
 			(isPublic ? StaticPublicMethod : StaticPrivateMethod)
 		else
 			(isPublic ? PublicMethod : PrivateMethod);
+	}
+
+	/**
+	 * The canonical-order rank of a FIELD: mutability splits stored fields, and a span present in
+	 * the accessor map marks the declaration as a property slot ranked by its getter/read-only form.
+	 */
+	private static function fieldRankOf(
+		node: QueryNode, isStatic: Bool, isPublic: Bool, accessors: Map<Int, Bool>, shape: RefShape
+	): MemberRank {
+		final mutable: Bool = (shape.mutableFieldDeclKinds ?? []).contains(node.kind);
+		if (isStatic)
+			return !mutable
+				? (isPublic ? StaticPublicImmutableField : StaticPrivateImmutableField)
+				: (isPublic ? StaticPublicMutableField : StaticPrivateMutableField);
+		final span: Null<Span> = node.span;
+		if (span == null || !accessors.exists(span.from))
+			return !mutable
+				? (isPublic ? PublicImmutableField : PrivateImmutableField)
+				: (isPublic ? PublicMutableField : PrivateMutableField);
+		final getter: Bool = accessors[span.from] == true;
+		return isPublic
+			? (getter ? PublicGetterProperty : PublicReadOnlyProperty)
+			: (getter ? PrivateGetterProperty : PrivateReadOnlyProperty);
 	}
 
 	/** Whether `name` begins with a property-accessor prefix (`get_` / `set_`). */

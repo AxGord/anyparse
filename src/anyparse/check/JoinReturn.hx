@@ -361,12 +361,8 @@ final class JoinReturn implements Check {
 		assign: QueryNode, ret: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, retType: Null<String>,
 		s: Seams, tree: QueryNode, declTypeSources: () -> Map<Int, String>, lambdaSpans: Array<Span>
 	): Null<Match> {
-		final exprStmtKind: Null<String> = s.exprStmtKind;
-		final assignKind: Null<String> = s.assignKind;
-		if (exprStmtKind == null || assignKind == null) return null;
-		if (assign.kind != exprStmtKind || assign.children.length != EXPR_STMT_CHILD_COUNT) return null;
-		final binary: QueryNode = assign.children[0];
-		if (binary.kind != assignKind || binary.children.length != ASSIGN_CHILD_COUNT) return null;
+		final binary: Null<QueryNode> = assignBinaryOf(assign, s);
+		if (binary == null) return null;
 		final lhs: QueryNode = binary.children[0];
 		final name: Null<String> = lhs.name;
 		if (lhs.kind != s.identKind || name == null) return null;
@@ -386,30 +382,11 @@ final class JoinReturn implements Check {
 		// `x` must resolve to a local or param -- a bare field write (`this.x = e` spelled `x = e`)
 		// would silently drop the store the collapse removes.
 		final hits: Array<RefHit> = Refs.find(name, tree, s.shape);
-		var binding: Null<Span> = null;
-		for (h in hits) if (h.kind == RefKind.Write && h.span.from == lhsSpan.from && h.span.to == lhsSpan.to) {
-			binding = h.bindingSpan;
-			break;
-		}
+		final binding: Null<Span> = writeBindingOf(hits, lhsSpan);
 		if (binding == null) return null;
 		final b: Span = binding;
 		if (!TypeResolver.bindingIsLocalOrParam(tree, b.from, s.localDeclKinds, s.paramKinds)) return null;
-
-		// Gate on every reference resolving to THIS binding (a shadowing inner `x` is skipped): no
-		// capturing lambda, no read after the assignment other than the return, and at least one
-		// surviving read so the collapse does not orphan the binding.
-		var survivingRead: Bool = false;
-		for (h in hits) {
-			final bs: Null<Span> = h.bindingSpan;
-			if (bs == null || bs.from != b.from || bs.to != b.to) continue;
-			if (h.kind != RefKind.Decl && inAnyLambda(h.span, lambdaSpans)) return null;
-			if (h.kind != RefKind.Read) continue;
-			final isReturn: Bool = h.span.from == retIdentSpan.from && h.span.to == retIdentSpan.to;
-			if (isReturn) continue;
-			if (h.span.from >= assignSpan.to) return null;
-			survivingRead = true;
-		}
-		if (!survivingRead) return null;
+		if (!referencesPermitCollapse(hits, b, retIdentSpan, assignSpan, lambdaSpans)) return null;
 
 		if (droppedComment(assignSpan, rhsSpan, retSpan.to, comments)) return null;
 
@@ -422,6 +399,47 @@ final class JoinReturn implements Check {
 			text: buildReturn(initSource, annotation, retType, rhs, s.newExprKind),
 			message: 'this assignment and its next-line return can be joined into a single return'
 		}: Match);
+	}
+
+	/**
+	 * The `x = e` binary the statement wraps, or null when the statement is not an
+	 * expression-statement holding exactly one assignment (or the grammar declares neither seam).
+	 */
+	private static function assignBinaryOf(assign: QueryNode, s: Seams): Null<QueryNode> {
+		final exprStmtKind: Null<String> = s.exprStmtKind;
+		final assignKind: Null<String> = s.assignKind;
+		if (exprStmtKind == null || assignKind == null) return null;
+		if (assign.kind != exprStmtKind || assign.children.length != EXPR_STMT_CHILD_COUNT) return null;
+		final binary: QueryNode = assign.children[0];
+		return binary.kind == assignKind && binary.children.length == ASSIGN_CHILD_COUNT ? binary : null;
+	}
+
+	/** The binding the write at `lhsSpan` resolves to; null when no write hit covers exactly that span. */
+	private static function writeBindingOf(hits: Array<RefHit>, lhsSpan: Span): Null<Span> {
+		for (h in hits) if (h.kind == RefKind.Write && h.span.from == lhsSpan.from && h.span.to == lhsSpan.to) return h.bindingSpan;
+		return null;
+	}
+
+	/**
+	 * Whether every reference resolving to binding `b` allows the collapse (a shadowing inner `x` is
+	 * skipped): no capturing lambda holds one, no read follows the assignment other than the return,
+	 * and at least one read survives so the collapse does not orphan the binding.
+	 */
+	private static function referencesPermitCollapse(
+		hits: Array<RefHit>, b: Span, retIdentSpan: Span, assignSpan: Span, lambdaSpans: Array<Span>
+	): Bool {
+		var survivingRead: Bool = false;
+		for (h in hits) {
+			final bs: Null<Span> = h.bindingSpan;
+			if (bs == null || bs.from != b.from || bs.to != b.to) continue;
+			if (h.kind != RefKind.Decl && inAnyLambda(h.span, lambdaSpans)) return false;
+			if (h.kind != RefKind.Read) continue;
+			final isReturn: Bool = h.span.from == retIdentSpan.from && h.span.to == retIdentSpan.to;
+			if (isReturn) continue;
+			if (h.span.from >= assignSpan.to) return false;
+			survivingRead = true;
+		}
+		return survivingRead;
 	}
 
 

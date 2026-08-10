@@ -186,26 +186,48 @@ final class RedundantCaseBody implements Check {
 		if (firstBody == null || nextBody == null) return null;
 		if (!sameBody(source, firstBody, nextBody)) return null;
 		final firstSpan: Null<Span> = first.span;
-		if (firstSpan == null) return null;
-		if (CasePatternScan.isCatchAll(seams, next)) {
-			final prev: Null<Span> = switchNode.children[at - 1].span;
-			final nextSpan: Null<Span> = next.span;
-			// The deletion discards the arm, everything trailing it up to the next arm's first
-			// token (a `// …` there is TRIVIA the span excludes, and the writer would re-attach it
-			// to a node it never described), and whatever precedes it back to the arm before —
-			// text `CheckScan.lineDeletionSpan` sweeps away or strands on an arm it does not document.
-			return if (prev == null || nextSpan == null)
-				null
-			else if (CheckScan.hasCommentMarker(source, prev.to, nextSpan.from))
-				null
-			else
-				{
-					span: firstSpan,
-					subsume: true,
-					editSpan: CheckScan.lineDeletionSpan(source, firstSpan),
-					editText: ''
-				};
-		}
+		return if (firstSpan == null)
+			null
+		else if (CasePatternScan.isCatchAll(seams, next))
+			subsumedCandidate(switchNode, at, next, source, firstSpan)
+		else
+			alternativeCandidate(seams, next, source, firstSpan, firstRun);
+	}
+
+	/**
+	 * The candidate for an arm a following CATCH-ALL already covers: the arm goes away whole. The
+	 * deletion discards the arm, everything trailing it up to the next arm's first token (a `// …`
+	 * there is TRIVIA the span excludes, and the writer would re-attach it to a node it never
+	 * described), and whatever precedes it back to the arm before — text
+	 * `CheckScan.lineDeletionSpan` sweeps away or strands on an arm it does not document, so any
+	 * comment marker in that window refuses the candidate.
+	 */
+	private static function subsumedCandidate(
+		switchNode: QueryNode, at: Int, next: QueryNode, source: String, firstSpan: Span
+	): Null<Candidate> {
+		final prev: Null<Span> = switchNode.children[at - 1].span;
+		final nextSpan: Null<Span> = next.span;
+		return if (prev == null || nextSpan == null)
+			null
+		else if (CheckScan.hasCommentMarker(source, prev.to, nextSpan.from))
+			null
+		else
+			{
+				span: firstSpan,
+				subsume: true,
+				editSpan: CheckScan.lineDeletionSpan(source, firstSpan),
+				editText: ''
+			};
+	}
+
+	/**
+	 * The candidate for two arms that merge into ONE alternative pattern list: the text between the
+	 * first arm's last pattern and the next arm's first is replaced by the separator, so the next
+	 * arm must itself be binder-free and unguarded, and a comment in that window refuses the merge.
+	 */
+	private static function alternativeCandidate(
+		seams: CaseSeams, next: QueryNode, source: String, firstSpan: Span, firstRun: Array<QueryNode>
+	): Null<Candidate> {
 		final nextRun: Array<QueryNode> = CasePatternScan.patternRun(seams, next);
 		if (nextRun.length == 0 || CasePatternScan.guardOf(seams, next, nextRun.length) != null) return null;
 		final nextBinders: Null<Array<PatternBinder>> = CasePatternScan.binders(seams, next);

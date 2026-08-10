@@ -67,13 +67,7 @@ final class CasePatternScan {
 			|| assignKind == null || callKind == null || fieldAccessKind == null
 		)
 			return null;
-		final leaves: Array<String> = [fieldAccessKind];
-		for (kind in shape.stringLiteralKinds ?? []) leaves.push(kind);
-		for (kind in shape.numericLiteralKinds ?? []) leaves.push(kind);
-		final boolKind: Null<String> = shape.boolLitKind;
-		if (boolKind != null) leaves.push(boolKind);
-		final nullKind: Null<String> = shape.nullLiteralKind;
-		if (nullKind != null) leaves.push(nullKind);
+		final leaves: Array<String> = constantLeafKindsOf(shape, fieldAccessKind);
 		return {
 			switchKinds: switchKinds,
 			caseBranchKind: caseBranchKind,
@@ -89,7 +83,7 @@ final class CasePatternScan {
 			objectLiteralKind: shape.objectLiteralKind,
 			objectFieldKind: shape.objectFieldKind,
 			negationKind: shape.negationKind,
-			nullLiteralKind: nullKind,
+			nullLiteralKind: shape.nullLiteralKind,
 			stringInterpIdentKind: shape.stringInterpIdentKind,
 			binderKinds: shape.casePatternBinderKinds ?? [],
 			extractorKinds: shape.casePatternExtractorKinds ?? [],
@@ -253,82 +247,127 @@ final class CasePatternScan {
 		final span: Null<Span> = node.span;
 		if (span == null) return false;
 		final at: Span = span;
-		if (kind == seams.identKind) {
-			final ident: Null<String> = node.name;
-			if (ident == null || ident.length == 0) return false;
-			final name: String = ident;
-			if (name == seams.wildcardPatternName || startsUpper(name)) return true;
-			out.push({
-				node: node,
-				name: name,
-				bare: true,
-				whole: whole,
-				editSpan: at,
-				editText: seams.wildcardPatternName
-			});
-			return true;
-		}
-		if (seams.binderKinds.contains(kind)) {
-			final captured: Null<String> = node.name;
-			if (captured == null || node.children.length != 0) return false;
-			final name: String = captured;
-			out.push({
-				node: node,
-				name: name,
-				bare: false,
-				whole: whole,
-				editSpan: at,
-				editText: seams.wildcardPatternName
-			});
-			return true;
-		}
-		if (kind == seams.assignKind) {
-			if (node.children.length != ASSIGN_CHILD_COUNT) return false;
-			final lhs: QueryNode = node.children[0];
-			final rhs: QueryNode = node.children[1];
-			final head: Null<String> = lhs.name;
-			final lhsSpan: Null<Span> = lhs.span;
-			final rhsSpan: Null<Span> = rhs.span;
-			if (lhs.kind != seams.identKind || head == null || lhsSpan == null || rhsSpan == null) return false;
-			final name: String = head;
-			if (name != seams.wildcardPatternName) out.push({
-				node: lhs,
-				name: name,
-				bare: false,
-				whole: false,
-				editSpan: new Span(lhsSpan.from, rhsSpan.from),
-				editText: ''
-			});
-			return scanPattern(seams, rhs, false, out);
-		}
-		if (kind == seams.callKind) {
-			if (node.children.length == 0) return false;
-			final callee: QueryNode = node.children[0];
-			if (callee.kind != seams.identKind && callee.kind != seams.fieldAccessKind) return false;
-			for (i in 1...node.children.length) if (!scanPattern(seams, node.children[i], false, out)) return false;
-			return true;
-		}
-		if (kind == seams.arrayLiteralKind) {
-			for (child in node.children) if (!scanPattern(seams, child, false, out)) return false;
-			return true;
-		}
-		if (kind == seams.objectLiteralKind) {
-			for (child in node.children) {
-				if (child.kind != seams.objectFieldKind || child.children.length != OBJECT_FIELD_CHILD_COUNT) return false;
-				if (!scanPattern(seams, child.children[0], false, out)) return false;
-			}
-			return true;
-		}
-		// A leading minus reaches only a numeric literal in practice — Haxe rejects `case -c:`
-		// for any constant `c` — so this arm exists to accept `case -1:`, not to find binders.
-		return if (kind == seams.parenKind)
+		return if (kind == seams.identKind)
+			scanIdentPattern(seams, node, at, whole, out)
+		else if (seams.binderKinds.contains(kind))
+			scanBinderPattern(seams, node, at, whole, out)
+		else if (kind == seams.assignKind)
+			scanAssignPattern(seams, node, out)
+		else if (kind == seams.callKind)
+			scanCallPattern(seams, node, out)
+		else if (kind == seams.arrayLiteralKind)
+			scanArrayPattern(seams, node, out)
+		else if (kind == seams.objectLiteralKind)
+			scanObjectPattern(seams, node, out)
+		else if (kind == seams.parenKind)
 			node.children.length == 1 && scanPattern(seams, node.children[0], whole, out)
 		else if (seams.extractorKinds.contains(kind))
 			node.children.length == EXTRACTOR_CHILD_COUNT && scanPattern(seams, node.children[1], false, out)
+		// A leading minus reaches only a numeric literal in practice — Haxe rejects `case -c:`
+		// for any constant `c` — so this arm exists to accept `case -1:`, not to find binders.
 		else if (kind == seams.negationKind)
 			node.children.length == 1 && scanPattern(seams, node.children[0], false, out)
 		else
 			seams.constantLeafKinds.contains(kind);
+	}
+
+	/**
+	 * A bare identifier pattern: the wildcard and an upper-case name (a constructor / constant
+	 * spelled bare) introduce no binder, anything else binds and is replaceable by the wildcard.
+	 */
+	private static function scanIdentPattern(seams: CaseSeams, node: QueryNode, at: Span, whole: Bool, out: Array<PatternBinder>): Bool {
+		final ident: Null<String> = node.name;
+		if (ident == null || ident.length == 0) return false;
+		final name: String = ident;
+		if (name == seams.wildcardPatternName || startsUpper(name)) return true;
+		out.push({
+			node: node,
+			name: name,
+			bare: true,
+			whole: whole,
+			editSpan: at,
+			editText: seams.wildcardPatternName
+		});
+		return true;
+	}
+
+	/** A grammar-declared binder node — a leaf carrying the bound name and no children of its own. */
+	private static function scanBinderPattern(seams: CaseSeams, node: QueryNode, at: Span, whole: Bool, out: Array<PatternBinder>): Bool {
+		final captured: Null<String> = node.name;
+		if (captured == null || node.children.length != 0) return false;
+		final name: String = captured;
+		out.push({
+			node: node,
+			name: name,
+			bare: false,
+			whole: whole,
+			editSpan: at,
+			editText: seams.wildcardPatternName
+		});
+		return true;
+	}
+
+	/**
+	 * A `name = subpattern` capture: the name binds (its edit span reaches up to the subpattern, so
+	 * dropping the binder drops the `=` with it) and the subpattern is scanned on its own.
+	 */
+	private static function scanAssignPattern(seams: CaseSeams, node: QueryNode, out: Array<PatternBinder>): Bool {
+		if (node.children.length != ASSIGN_CHILD_COUNT) return false;
+		final lhs: QueryNode = node.children[0];
+		final rhs: QueryNode = node.children[1];
+		final head: Null<String> = lhs.name;
+		final lhsSpan: Null<Span> = lhs.span;
+		final rhsSpan: Null<Span> = rhs.span;
+		if (lhs.kind != seams.identKind || head == null || lhsSpan == null || rhsSpan == null) return false;
+		final name: String = head;
+		if (name != seams.wildcardPatternName) out.push({
+			node: lhs,
+			name: name,
+			bare: false,
+			whole: false,
+			editSpan: new Span(lhsSpan.from, rhsSpan.from),
+			editText: ''
+		});
+		return scanPattern(seams, rhs, false, out);
+	}
+
+	/** A constructor-extraction pattern: an identifier or field-access callee over scanned arguments. */
+	private static function scanCallPattern(seams: CaseSeams, node: QueryNode, out: Array<PatternBinder>): Bool {
+		if (node.children.length == 0) return false;
+		final callee: QueryNode = node.children[0];
+		if (callee.kind != seams.identKind && callee.kind != seams.fieldAccessKind) return false;
+		for (i in 1...node.children.length) if (!scanPattern(seams, node.children[i], false, out)) return false;
+		return true;
+	}
+
+	/** An array pattern: every element subpattern must scan clean. */
+	private static function scanArrayPattern(seams: CaseSeams, node: QueryNode, out: Array<PatternBinder>): Bool {
+		for (child in node.children) if (!scanPattern(seams, child, false, out)) return false;
+		return true;
+	}
+
+	/** A structure pattern: every child must be a field whose value subpattern scans clean. */
+	private static function scanObjectPattern(seams: CaseSeams, node: QueryNode, out: Array<PatternBinder>): Bool {
+		for (child in node.children) {
+			if (child.kind != seams.objectFieldKind || child.children.length != OBJECT_FIELD_CHILD_COUNT) return false;
+			if (!scanPattern(seams, child.children[0], false, out)) return false;
+		}
+		return true;
+	}
+
+	/**
+	 * The node kinds a case pattern may bottom out at as a constant: the field access that spells a
+	 * qualified constructor, plus every literal kind the grammar declares.
+	 */
+	private static function constantLeafKindsOf(shape: RefShape, fieldAccessKind: String): Array<String> {
+		final leaves: Array<String> = [fieldAccessKind];
+		for (kind in shape.stringLiteralKinds ?? []) leaves.push(kind);
+		for (kind in shape.numericLiteralKinds ?? []) leaves.push(kind);
+		final boolKind: Null<String> = shape.boolLitKind;
+		if (boolKind != null) leaves.push(boolKind);
+		final nullKind: Null<String> = shape.nullLiteralKind;
+		if (nullKind != null) leaves.push(nullKind);
+		return leaves;
 	}
 
 }

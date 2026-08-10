@@ -254,6 +254,15 @@ typedef LintPassResult = {
 	var fixedDelta: Int;
 };
 /**
+ * The `lint --fix` check sets, split by how each is applied: `risky` is verified against the compiler oracle, `safe` runs in the unverified fixpoint loop, and `safe` in turn splits into `activeScope` (re-linted only over the files a prior pass changed) and `fullScope` (re-linted over the whole file set every pass).
+ */
+typedef CheckPartition = {
+	var risky: Array<Check>;
+	var safe: Array<Check>;
+	var activeScope: Array<Check>;
+	var fullScope: Array<Check>;
+};
+/**
  * A single-construct current-parse probe for `apq recon`: whether the construct is `unwired`, whether it parses `ok`, and the `line` / `col` / `msg` of the failure when it does not.
  */
 typedef ReconCurrentParse = {
@@ -1420,20 +1429,9 @@ final class Cli {
 		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, resolveConfig: (String) -> LintConfig,
 		applyEnablement: Bool, ?resolution: ResolutionScope, ?oracleHxml: String, ?oracleDir: String
 	): Int {
-		// A RiskyFix check is verified against the compiler oracle (below) and is EXCLUDED
-		// from the unverified safe loop. prefer-inline is the exception: as an
-		// `OracleRelaxable` check it has a byte-identical safe subset, so WITHOUT an oracle
-		// it runs in the safe loop (null-safety gate on) instead of being left report-only,
-		// and WITH an oracle it joins the verified risky set with its candidate set widened
-		// (`setOracleRelaxed`). Every OTHER RiskyFix check (avoid-dynamic) keeps the contract:
-		// verified when an oracle is configured, report-only via `verifyRiskyFixes` otherwise —
-		// its risky fix is NEVER applied unverified. So a RiskyFix check only leaves the risky
-		// set for the safe loop when it is OracleRelaxable AND no oracle is configured.
 		final oracleConfigured: Bool = oracleHxml != null;
-		final relaxableNoOracle: (Check) -> Bool = c -> !oracleConfigured && c is OracleRelaxable;
-		final riskyChecks: Array<Check> = [for (c in checks) if (c is RiskyFix && !relaxableNoOracle(c)) c];
-		final safeChecks: Array<Check> = [for (c in checks) if (!(c is RiskyFix) || relaxableNoOracle(c)) c];
-		for (c in riskyChecks) if (c is OracleRelaxable) (cast c: OracleRelaxable).setOracleRelaxed(true);
+		final split: CheckPartition = partitionChecks(checks, oracleConfigured);
+		for (c in split.risky) if (c is OracleRelaxable) (cast c: OracleRelaxable).setOracleRelaxed(true);
 		final maxPasses: Int = 10;
 		// Parse each file once and reuse the tree across the SymbolIndex build, every
 		// check, and every fix — keyed by source content, so an unchanged file is
@@ -1452,10 +1450,74 @@ final class Cli {
 		var fixedCount: Int = 0;
 		var passes: Int = 0;
 		var hitCap: Bool = false;
-		// Per-file checks decide a file's findings from that file alone, so later passes
-		// re-lint only the files a prior pass changed. A cross-file check (confinement)
-		// must see every file or it mis-resolves on the active subset — run those over
-		// the full set each pass.
+
+		while (active.length > 0) {
+			if (passes >= maxPasses) {
+				hitCap = true;
+				break;
+			}
+			passes++;
+			final pass: LintPassResult = applyLintPass(
+				active, files, cached, split.activeScope, split.fullScope, split.safe, resolveConfig, applyEnablement, optsByFile, passes,
+				noted, changedFiles
+			);
+			fixedCount += pass.fixedDelta;
+			active = pass.nextActive;
+		}
+
+		for (entry in files) if (changedFiles.contains(entry.file)) writeFile(entry.file, entry.source);
+
+		// RiskyFix checks: applied ONLY when a compiler oracle is configured — each
+		// candidate is typechecked and reverted if it breaks the build (FixVerifier);
+		// otherwise left report-only. With no risky check present this block is a
+		// no-op, so a real run (no risky builtin) is byte-identical to before the key.
+		final risky: { tail: String, appliedCount: Int } = verifyRiskyFixes(
+			files, split.risky, cached, oracleHxml, oracleDir, optsByFile, changedFiles
+		);
+		fixedCount += risky.appliedCount;
+		final riskyTail: String = risky.tail;
+
+		// OracleAssisted checks (explicit-local-type's generics/inference tail): applied
+		// ONLY with a compilerOracle — each finding's type is asked of a warm display
+		// server, the edited files are re-typechecked, and any that break the build are
+		// reverted to report-only (verifyOracleBatch). No oracle / no such check → inert.
+		final oracleAssisted: Array<Check> = [for (c in checks) if (c is OracleAssisted) c];
+		final oa: { tail: String, appliedCount: Int } = applyOracleAssistedFixes(
+			files, oracleAssisted, cached, oracleHxml, oracleDir, optsByFile, changedFiles, resolveConfig
+		);
+		fixedCount += oa.appliedCount;
+		final oracleTail: String = oa.tail;
+
+		final skipTail: String = noted.length > 0 ? ', ${noted.length} file(s) skipped' : '';
+		final capTail: String = hitCap ? ' (stopped at $maxPasses passes — re-run if more remain)' : '';
+		stderr(
+			'apq lint --fix: fixed $fixedCount issue(s) in ${changedFiles.length} file(s) over $passes pass(es)$skipTail$capTail'
+			+ '$riskyTail$oracleTail\n'
+		);
+		return EXIT_OK;
+	}
+
+	/**
+	 * Split `checks` into the sets `lint --fix` applies differently.
+	 *
+	 * A RiskyFix check is verified against the compiler oracle and is EXCLUDED from the
+	 * unverified safe loop. prefer-inline is the exception: as an `OracleRelaxable` check it
+	 * has a byte-identical safe subset, so WITHOUT an oracle it runs in the safe loop
+	 * (null-safety gate on) instead of being left report-only, and WITH an oracle it joins the
+	 * verified risky set with its candidate set widened (`setOracleRelaxed`, applied by the
+	 * caller). Every OTHER RiskyFix check (avoid-dynamic) keeps the contract: verified when an
+	 * oracle is configured, report-only via `verifyRiskyFixes` otherwise — its risky fix is
+	 * NEVER applied unverified. So a RiskyFix check only leaves the risky set for the safe loop
+	 * when it is OracleRelaxable AND no oracle is configured.
+	 *
+	 * The safe set then splits by lint SCOPE: a per-file check decides a file's findings from
+	 * that file alone, so later passes re-lint only the files a prior pass changed. A cross-file
+	 * check must see every file or it mis-resolves on the active subset — those run over the
+	 * full set each pass.
+	 */
+	private static function partitionChecks(checks: Array<Check>, oracleConfigured: Bool): CheckPartition {
+		final relaxableNoOracle: (Check) -> Bool = c -> !oracleConfigured && c is OracleRelaxable;
+		final safeChecks: Array<Check> = [for (c in checks) if (!(c is RiskyFix) || relaxableNoOracle(c)) c];
 		final fullScopeIds: Array<String> = [
 			'unused-private',
 			'prefer-final-field',
@@ -1519,53 +1581,12 @@ final class Cli {
 			// the fixes again if the rule ever stopped being risky.
 			'unused-public-member'
 		];
-		final activeScopeChecks: Array<Check> = [for (c in safeChecks) if (!fullScopeIds.contains(c.id())) c];
-		final fullScopeChecks: Array<Check> = [for (c in safeChecks) if (fullScopeIds.contains(c.id())) c];
-
-		while (active.length > 0) {
-			if (passes >= maxPasses) {
-				hitCap = true;
-				break;
-			}
-			passes++;
-			final pass: LintPassResult = applyLintPass(
-				active, files, cached, activeScopeChecks, fullScopeChecks, safeChecks, resolveConfig, applyEnablement, optsByFile, passes,
-				noted, changedFiles
-			);
-			fixedCount += pass.fixedDelta;
-			active = pass.nextActive;
-		}
-
-		for (entry in files) if (changedFiles.contains(entry.file)) writeFile(entry.file, entry.source);
-
-		// RiskyFix checks: applied ONLY when a compiler oracle is configured — each
-		// candidate is typechecked and reverted if it breaks the build (FixVerifier);
-		// otherwise left report-only. With no risky check present this block is a
-		// no-op, so a real run (no risky builtin) is byte-identical to before the key.
-		final risky: { tail: String, appliedCount: Int } = verifyRiskyFixes(
-			files, riskyChecks, cached, oracleHxml, oracleDir, optsByFile, changedFiles
-		);
-		fixedCount += risky.appliedCount;
-		final riskyTail: String = risky.tail;
-
-		// OracleAssisted checks (explicit-local-type's generics/inference tail): applied
-		// ONLY with a compilerOracle — each finding's type is asked of a warm display
-		// server, the edited files are re-typechecked, and any that break the build are
-		// reverted to report-only (verifyOracleBatch). No oracle / no such check → inert.
-		final oracleAssisted: Array<Check> = [for (c in checks) if (c is OracleAssisted) c];
-		final oa: { tail: String, appliedCount: Int } = applyOracleAssistedFixes(
-			files, oracleAssisted, cached, oracleHxml, oracleDir, optsByFile, changedFiles, resolveConfig
-		);
-		fixedCount += oa.appliedCount;
-		final oracleTail: String = oa.tail;
-
-		final skipTail: String = noted.length > 0 ? ', ${noted.length} file(s) skipped' : '';
-		final capTail: String = hitCap ? ' (stopped at $maxPasses passes — re-run if more remain)' : '';
-		stderr(
-			'apq lint --fix: fixed $fixedCount issue(s) in ${changedFiles.length} file(s) over $passes pass(es)$skipTail$capTail'
-			+ '$riskyTail$oracleTail\n'
-		);
-		return EXIT_OK;
+		return {
+			risky: [for (c in checks) if (c is RiskyFix && !relaxableNoOracle(c)) c],
+			safe: safeChecks,
+			activeScope: [for (c in safeChecks) if (!fullScopeIds.contains(c.id())) c],
+			fullScope: [for (c in safeChecks) if (fullScopeIds.contains(c.id())) c]
+		};
 	}
 
 	/**
