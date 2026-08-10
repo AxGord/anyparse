@@ -9,6 +9,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.check.CompilerServer;
 #if (sys || nodejs)
+import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 #end
@@ -32,14 +33,19 @@ final class CompilerOracleE2ETest extends Test {
 	private static final BROKEN: String = 'class Good {\n\tstatic function main() {\n\t\tvar x:Int = "no";\n\t\ttrace(x);\n\t}\n}\n';
 	private static final HXML: String = '-cp .\n-main Good\n';
 
-	/** The nested project's main, in `src/`: it names a type reachable ONLY through the hxml's `-cp lib`, which the default cwd classpath cannot stand in for. */
+	/** The convention fixtures' main, in `src/`: it names a type reachable ONLY through the hxml's `-cp lib`, which the default cwd classpath cannot stand in for. */
 	private static final NESTED_MAIN: String =
 		'class Good {\n\tstatic function main() {\n\t\tvar x:Int = 1;\n\t\ttrace(x + Helper.bump());\n\t}\n}\n';
 
-	/** The nested project's library type, in `lib/` — off the default cwd classpath of every candidate compile directory. */
+	/** The convention fixtures' library type, in `lib/` — off the default cwd classpath of every candidate compile directory. */
 	private static final NESTED_HELPER: String = 'class Helper {\n\tpublic static function bump():Int {\n\t\treturn 2;\n\t}\n}\n';
 
-	/** The nested project's hxml: its `-cp` entries are written relative to the HXML's own directory, so only a compile run from there resolves them. */
+	/**
+	 * The convention fixtures' hxml: its `-cp` entries are cwd-relative, so each fixture's
+	 * LAYOUT decides which compile dir resolves them — the hxml's own directory when it sits
+	 * at the root next to `lib`/`src` (`writeNestedProject`), the project root when the same
+	 * hxml is generated under `dist/haxe/` (`writeLimeShapedProject`).
+	 */
 	private static final NESTED_HXML: String = '-cp lib\n-cp src\n-main Good\n';
 
 	/** The nested project's `apqlint.json`, living in `src/` and naming the hxml one level up. */
@@ -196,6 +202,29 @@ final class CompilerOracleE2ETest extends Test {
 	}
 
 	/**
+	 * The OPPOSITE convention: a lime/openfl-generated hxml lives NESTED
+	 * (`dist/haxe/build.hxml`) but writes its `-cp` entries relative to the PROJECT
+	 * root the build is invoked from — the config's directory. Compiling from the
+	 * hxml's own directory resolves `src` as `dist/haxe/src` and every type goes
+	 * missing, so the oracle spuriously rejected every such project (TM's layout).
+	 * The compile dir is probed from the hxml's own relative classpaths: the
+	 * candidate that resolves strictly more of them wins.
+	 */
+	public function testLimeShapedConfigCompilesFromConfigDir(): Void {
+		#if (sys || nodejs)
+		final dir: String = writeLimeShapedProject();
+		final cfg: LintConfig = LintConfig.discover('$dir/src/Good.hx');
+		Assert.equals(
+			Path.normalize(dir), Path.normalize(cfg.compilerOracleDir() ?? ''), 'a root-relative hxml compiles from the config dir'
+		);
+		if (oracleWorks()) Assert.equals(0, Cli.run(['lint', '$dir/src/Good.hx']), 'a lime-shaped project typechecks through its oracle');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
 	 * The same layout on the FIX side: a rejected baseline makes `FixVerifier` bail before it
 	 * touches anything, so every `RiskyFix` under a nested config was silently left report-only.
 	 * The oracle is threaded through the real `LintConfig` rather than a hand-built pair — it is
@@ -342,12 +371,31 @@ final class CompilerOracleE2ETest extends Test {
 	/** A miniature of this project's own layout: `build.hxml` at the root, the sources and their `apqlint.json` in `src/`. */
 	private function writeNestedProject(): String {
 		final dir: String = CliFixture.writeDir('oracle_nested', [{ name: 'build.hxml', source: NESTED_HXML }]);
+		writeSharedSources(dir);
+		File.saveContent('$dir/src/apqlint.json', NESTED_CONFIG);
+		return dir;
+	}
+
+	/**
+	 * A miniature of a lime/openfl project: the config at the root, the generated hxml
+	 * nested under `dist/haxe/` with its `-cp` entries written relative to the ROOT.
+	 */
+	private function writeLimeShapedProject(): String {
+		final dir: String = CliFixture.writeDir(
+			'oracle_lime', [{ name: 'apqlint.json', source: '{"compilerOracle":"dist/haxe/build.hxml"}' }]
+		);
+		writeSharedSources(dir);
+		FileSystem.createDirectory('$dir/dist/haxe');
+		File.saveContent('$dir/dist/haxe/build.hxml', NESTED_HXML);
+		return dir;
+	}
+
+	/** The `lib/Helper.hx` + `src/Good.hx` pair both convention fixtures share. */
+	private function writeSharedSources(dir: String): Void {
 		FileSystem.createDirectory('$dir/lib');
 		File.saveContent('$dir/lib/Helper.hx', NESTED_HELPER);
 		FileSystem.createDirectory('$dir/src');
 		File.saveContent('$dir/src/Good.hx', NESTED_MAIN);
-		File.saveContent('$dir/src/apqlint.json', NESTED_CONFIG);
-		return dir;
 	}
 
 	private function writeOracleDir(main: String): String {

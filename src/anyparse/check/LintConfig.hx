@@ -7,6 +7,8 @@ import anyparse.query.ConfigFinder;
 import haxe.Exception;
 import haxe.io.Path;
 
+using StringTools;
+
 /**
  * Config for a single rule: an optional `enabled` toggle, an optional
  * `severity` override, and `props` carrying every other key verbatim for
@@ -50,7 +52,7 @@ final class LintConfig {
 	/** The `compilerOracle` hxml path, resolved against the declaring config's directory (verbatim when parsed without a base), or null when unset. */
 	private final _compilerOracle: Null<String>;
 
-	/** The directory of that hxml — the compile CWD — or null when unset or parsed without a base. */
+	/** The compile CWD probed for that hxml (`hxmlCompileDir`), or null when unset or parsed without a base. */
 	private final _compilerOracleDir: Null<String>;
 
 	/** Whether the project opted the oracle into the shared warm compilation server (`compilerOracleServer`); false unless the key asks for it. */
@@ -90,13 +92,14 @@ final class LintConfig {
 	}
 
 	/**
-	 * The working directory for the compiler-oracle run — the HXML's OWN directory,
-	 * which is where its `-cp` entries are written relative to. It differs from the
-	 * config's directory whenever the declared path carries a directory component:
-	 * `"../build.hxml"` (compiling from the config dir would resolve every classpath
-	 * one level too deep) or `"build/compile.hxml"` (one level too shallow). Null when
-	 * no oracle is configured, or when the config was parsed without a base directory
-	 * — there is then nothing to resolve the declared path against.
+	 * The working directory for the compiler-oracle run — the candidate under which the
+	 * HXML's own relative `-cp` entries actually resolve (`hxmlCompileDir`): its own
+	 * directory for an hxml whose classpaths are written relative to itself (a nested
+	 * config naming `"../build.hxml"`), the CONFIG's directory for a lime/openfl-style
+	 * `dist/<target>/haxe/debug.hxml` whose classpaths are written relative to the
+	 * project root the build is invoked from. Null when no oracle is configured, or
+	 * when the config was parsed without a base directory — there is then nothing to
+	 * resolve the declared path against.
 	 */
 	public function compilerOracleDir(): Null<String> {
 		return _compilerOracleDir;
@@ -306,14 +309,17 @@ final class LintConfig {
 			final rule: Null<RuleConfig> = parseRule(raw);
 			if (rule != null) rules[id] = rule;
 		}
-		// The oracle hxml resolves against the CONFIG dir, but the compile runs from the HXML's
-		// OWN dir: an `.hxml`'s `-cp` entries are written relative to where the hxml lives, and
-		// `haxe <path>` does not chdir to it — a config in a subdirectory naming a parent hxml
-		// (`"../build.hxml"`) compiled from the config dir resolves every classpath one level
-		// too deep. With no base dir there is nothing to resolve against and nothing to claim.
+		// The oracle hxml resolves against the CONFIG dir, but the compile-dir question has
+		// no single answer: `haxe <path>` does not chdir to the hxml, and real projects write
+		// hxml-relative `-cp` entries against TWO conventions — a config in a subdirectory
+		// naming a parent hxml (`"../build.hxml"`) needs the HXML's own dir (the config dir
+		// resolves every classpath one level too deep), a lime-generated
+		// `dist/<target>/haxe/debug.hxml` needs the CONFIG/project dir (its classpaths are
+		// written relative to where the build is invoked from). `hxmlCompileDir` probes which.
+		// With no base dir there is nothing to resolve against and nothing to claim.
 		final declaredOracle: Null<String> = config.compilerOracle;
 		final oracle: Null<String> = declaredOracle == null ? null : resolveAgainstConfigDir(baseDir, declaredOracle);
-		final oracleDir: Null<String> = oracle == null || baseDir == null ? null : hxmlCompileDir(oracle);
+		final oracleDir: Null<String> = oracle == null || baseDir == null ? null : hxmlCompileDir(oracle, baseDir);
 		final roots: Array<String> = (config.resolutionRoots ?? []).map(resolveAgainstConfigDir.bind(baseDir));
 		return new LintConfig(rules, oracle, oracleDir, roots, config.resolutionLibs, config.resolutionStd, config.compilerOracleServer);
 	}
@@ -355,13 +361,76 @@ final class LintConfig {
 	}
 
 	/**
-	 * The directory a compile of `hxml` must run from — its own directory, or `/` when it sits
-	 * directly under the filesystem root, where `Path.directory` yields `""` and an empty cwd
-	 * would fail the spawn instead of compiling at the root.
+	 * The directory a compile of `hxml` must run from. `haxe <path>` resolves the hxml's
+	 * relative `-cp` entries against the PROCESS cwd, and real projects write them against
+	 * two different conventions: relative to the hxml's own directory (a root-level
+	 * `build.hxml` named by a nested config as `"../build.hxml"`), or relative to the
+	 * project root the build is invoked from — the config's directory (a lime-generated
+	 * `dist/<target>/haxe/debug.hxml`, whose `-cp src` from the hxml's own dir resolves as
+	 * `dist/<target>/haxe/src` and rejects the whole build with `Type not found`). Neither
+	 * wins by fiat: the hxml's relative classpaths are PROBED under both candidates and the
+	 * one resolving strictly more of them wins; a tie — no relative entries, an unreadable
+	 * hxml, equal hit counts — keeps the hxml's own directory. `/` replaces an empty
+	 * directory for an hxml directly under the filesystem root, where an empty cwd would
+	 * fail the spawn instead of compiling at the root.
 	 */
-	private static function hxmlCompileDir(hxml: String): String {
-		final dir: String = Path.directory(hxml);
+	private static function hxmlCompileDir(hxml: String, baseDir: String): String {
+		final own: String = dirOrRoot(Path.directory(hxml));
+		final config: String = dirOrRoot(baseDir);
+		if (config == own) return own;
+		var ownHits: Int = 0;
+		var configHits: Int = 0;
+		for (rel in relativeClasspaths(hxml)) {
+			if (pathExists(Path.normalize(Path.join([own, rel])))) ownHits++;
+			if (pathExists(Path.normalize(Path.join([config, rel])))) configHits++;
+		}
+		return configHits > ownHits ? config : own;
+	}
+
+	/** `dir`, or `/` for the empty string `Path.directory` yields at the filesystem root. */
+	private static inline function dirOrRoot(dir: String): String {
 		return dir == '' ? '/' : dir;
+	}
+
+	/**
+	 * The relative classpath entries (`-cp` / `-p` / `--class-path`) declared inside `hxml` —
+	 * the probe set `hxmlCompileDir` resolves under each candidate directory. Only INPUT
+	 * paths qualify: they must already exist, where an output path (`-cpp`, `-js`) may not
+	 * yet. Absolute entries prove nothing about the compile dir and are dropped; an
+	 * unreadable hxml (or a non-sys target) yields the empty set — the tie.
+	 */
+	private static function relativeClasspaths(hxml: String): Array<String> {
+		#if (sys || nodejs)
+		final content: Null<String> = try sys.io.File.getContent(hxml) catch (exception: Exception) null;
+		if (content == null) return [];
+		final out: Array<String> = [];
+		for (line in content.split('\n')) {
+			final trimmed: String = line.trim();
+			final path: Null<String> = if (trimmed.startsWith('-cp '))
+				trimmed.substr(4)
+			else if (trimmed.startsWith('-p '))
+				trimmed.substr(3)
+			else if (trimmed.startsWith('--class-path '))
+				trimmed.substr(13)
+			else
+				null;
+			if (path == null) continue;
+			final cleaned: String = path.trim();
+			if (cleaned != '' && !Path.isAbsolute(cleaned)) out.push(cleaned);
+		}
+		return out;
+		#else
+		return [];
+		#end
+	}
+
+	/** Whether `path` exists on disk — false wholesale on a non-sys target, keeping the probe a tie there. */
+	private static function pathExists(path: String): Bool {
+		#if (sys || nodejs)
+		return sys.FileSystem.exists(path);
+		#else
+		return false;
+		#end
 	}
 
 }

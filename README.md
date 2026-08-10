@@ -331,11 +331,17 @@ ground truth: `apq` runs `haxe <hxml> --no-output` and folds the verdict back
 in — report mode prints a `compiler-confirmed` note on a clean build and FAILS
 the run with the compiler's errors on a broken one, while `--fix` uses it to
 verify each risky autofix and revert the ones that stop the project
-typechecking. Without the key the compiler is never spawned. The compile runs
-from the HXML's OWN directory, not the config's: an `.hxml` writes its `-cp`
-entries relative to where the hxml lives, so a config in a subdirectory naming
-a parent build file (`"../build.hxml"`) still compiles with the classpaths its
-author meant.
+typechecking. Without the key the compiler is never spawned. The compile
+directory is PROBED, because `haxe <path>` resolves an hxml's relative `-cp`
+entries against the process cwd and real projects write them against two
+different conventions: the hxml's relative classpaths are checked for existence
+under the hxml's own directory and under the config's, and the candidate
+resolving strictly more of them wins (a tie keeps the hxml's own directory). So
+a config in a subdirectory naming a parent build file (`"../build.hxml"`, whose
+`-cp src` lives next to the hxml) and a root config naming a lime-generated
+`dist/<target>/haxe/debug.hxml` (whose `-cp src` is relative to the project
+root the build is invoked from) both compile with the classpaths their authors
+meant.
 
 A top-level `"compilerOracleServer"` (boolean, default `false`) moves the
 REPORT-mode oracle onto a WARM Haxe compilation server shared by every `apq`
