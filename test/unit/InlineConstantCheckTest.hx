@@ -7,7 +7,6 @@ import anyparse.check.InlineConstant;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
 
 /**
  * The `inline-constant` check: a `static final` constant of a basic scalar type (Int /
@@ -422,14 +421,7 @@ class InlineConstantCheckTest extends Test {
 	}
 
 	private function fixedSource(src: String): String {
-		final check: InlineConstant = new InlineConstant();
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
-		final sorted: Array<{ span: Span, text: String }> = edits.copy();
-		sorted.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
+		return CheckFixture.fixedSource(new InlineConstant(), src);
 	}
 
 }

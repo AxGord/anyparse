@@ -67,9 +67,7 @@ final class HxCondForContainerGlueSliceTest extends Test {
 	}
 
 	private inline function triviaWrite(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONFIG);
-		opts.finalNewline = false;
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		return HxWriteFixture.triviaWrite(src, CONFIG);
 	}
 
 }

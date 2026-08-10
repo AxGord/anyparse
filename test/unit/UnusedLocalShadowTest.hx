@@ -5,7 +5,6 @@ import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.UnusedLocal;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
 
 using StringTools;
 
@@ -354,14 +353,7 @@ class UnusedLocalShadowTest extends Test {
 	}
 
 	private function applyFix(src: String): String {
-		final check: UnusedLocal = new UnusedLocal();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
+		return CheckFixture.fixedSource(new UnusedLocal(), src);
 	}
 
 }

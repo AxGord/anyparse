@@ -2,10 +2,6 @@ package unit;
 
 import utest.Assert;
 import utest.Test;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
-import anyparse.grammar.haxe.HaxeModuleTriviaParser;
-import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
-import anyparse.grammar.haxe.HxModuleWriteOptions;
 
 /**
  * ω-methodchain-reeval-after-callparam scope: the chain re-glue (strip the
@@ -75,15 +71,11 @@ final class HxMethodChainDotBreakOverReglueSliceTest extends Test {
 	}
 
 	private inline function triviaWrite(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONFIG);
-		opts.finalNewline = false;
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		return HxWriteFixture.triviaWrite(src, CONFIG);
 	}
 
 	private inline function triviaWrite2(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONFIG_PAD);
-		opts.finalNewline = false;
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		return HxWriteFixture.triviaWrite(src, CONFIG_PAD);
 	}
 
 }

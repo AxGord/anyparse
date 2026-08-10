@@ -580,19 +580,20 @@ final class CheckScan {
 	}
 
 	/**
-	 * Iterate `violations`, recover each flagged node from `byKey` by its `from:to`
+	 * Iterate `violations`, recover each flagged entry from `byKey` by its `from:to`
 	 * span, and collect the non-null edits `produce` builds — the span-lookup loop
-	 * shared by `applyBySpan` and `simplifyConditionFixes`.
+	 * every `fix()` runs over its own match index. `T` is whatever the caller indexed:
+	 * a `QueryNode` (`applyBySpan`, `simplifyConditionFixes`), a bare `Span`, or a
+	 * check's own match record.
 	 */
-	private static function collectSpanEdits(
-		violations: Array<Violation>, byKey: Map<String, QueryNode>,
-		produce: (node:QueryNode, span:Span) -> Null<{ span: Span, text: String }>
+	public static function collectSpanEdits<T>(
+		violations: Array<Violation>, byKey: Map<String, T>, produce: (node:T, span:Span) -> Null<{ span: Span, text: String }>
 	): Array<{ span: Span, text: String }> {
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
-			final node: Null<QueryNode> = byKey['${span.from}:${span.to}'];
+			final node: Null<T> = byKey['${span.from}:${span.to}'];
 			if (node == null) continue;
 			final edit: Null<{ span: Span, text: String }> = produce(node, span);
 			if (edit != null) edits.push(edit);

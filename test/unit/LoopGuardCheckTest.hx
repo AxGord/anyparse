@@ -7,7 +7,6 @@ import anyparse.check.LoopGuard;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
 
 /**
  * The `loop-guard` check in both arms. LIFT: a `for` / `while` whose braced body opens with a
@@ -421,14 +420,7 @@ class LoopGuardCheckTest extends Test {
 	}
 
 	private function applyFix(source: String): String {
-		final check: LoopGuard = new LoopGuard();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = source;
-		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
+		return CheckFixture.fixedSource(new LoopGuard(), source);
 	}
 
 

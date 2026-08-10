@@ -138,14 +138,9 @@ final class CollapsibleElseIf implements Check {
 		final byKey: Map<String, Span> = [];
 		for (span in collectElseBlockSpans(tree, source, seams)) byKey['${span.from}:${span.to}'] = span;
 
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final vspan: Null<Span> = v.span;
-			if (vspan == null) continue;
-			final block: Null<Span> = byKey['${vspan.from}:${vspan.to}'];
-			if (block != null) edits.push({ span: block, text: interiorText(source, block) });
-		}
-		return RefactorSupport.dropContainedEdits(edits);
+		return RefactorSupport.dropContainedEdits(
+			CheckScan.collectSpanEdits(violations, byKey, (block, _) -> ({ span: block, text: interiorText(source, block) }))
+		);
 	}
 
 	/**

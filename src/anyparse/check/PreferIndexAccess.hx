@@ -142,16 +142,10 @@ final class PreferIndexAccess implements Check {
 			tree, null, cfg, (call, parentKind) -> structuralMatch(call, parentKind, cfg),
 			m -> byKey['${m.callSpan.from}:${m.callSpan.to}'] = m
 		);
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final m: Null<Match> = byKey['${span.from}:${span.to}'];
-			if (m == null) continue;
+		return RefactorSupport.dropContainedEdits(CheckScan.collectSpanEdits(violations, byKey, (m, _) -> {
 			final text: Null<String> = editText(m, source);
-			if (text != null) edits.push({ span: m.callSpan, text: text });
-		}
-		return RefactorSupport.dropContainedEdits(edits);
+			return text == null ? null : { span: m.callSpan, text: text };
+		}));
 	}
 
 	/** Resolve the per-grammar seams + type provider, or null when the grammar lacks a needed kind / type info. */

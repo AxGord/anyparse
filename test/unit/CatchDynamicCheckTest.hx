@@ -7,7 +7,6 @@ import anyparse.check.CatchDynamic;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
 import anyparse.check.LintConfig;
 
 /**
@@ -331,14 +330,7 @@ class CatchDynamicCheckTest extends Test {
 	}
 
 	private function applyFix(src: String): String {
-		final check: CatchDynamic = new CatchDynamic();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
+		return CheckFixture.fixedSource(new CatchDynamic(), src);
 	}
 
 	private function violations(src: String): Array<Violation> {
@@ -348,13 +340,7 @@ class CatchDynamicCheckTest extends Test {
 	private function applyFixLogging(src: String): String {
 		final check: CatchDynamic = new CatchDynamic();
 		check.setConfigResolver(_ -> LintConfig.parse('{"rules": {"catch-dynamic": {"fixLoggingUses": true}}}'));
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
+		return CheckFixture.fixedSource(check, src);
 	}
 
 	private function editCountLogging(src: String): Int {

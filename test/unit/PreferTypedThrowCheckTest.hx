@@ -10,7 +10,6 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.StdResolver;
-import anyparse.runtime.Span;
 
 /**
  * The `prefer-typed-throw` check: `throw '<string>'` is flagged `Info` and — when the
@@ -335,14 +334,7 @@ class PreferTypedThrowCheckTest extends Test {
 	}
 
 	private function applyFix(src: String): String {
-		final check: PreferTypedThrow = new PreferTypedThrow();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
+		return CheckFixture.fixedSource(new PreferTypedThrow(), src);
 	}
 
 	private function occurrences(haystack: String, needle: String): Int {

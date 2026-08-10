@@ -8,7 +8,6 @@ import anyparse.check.Linter;
 import anyparse.check.RedundantAscription;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
 
 /**
  * The `redundant-ascription` check: a parenthesised ascription `(new T(...) : T)` whose
@@ -141,14 +140,7 @@ class RedundantAscriptionTest extends Test {
 	}
 
 	private function applyFix(src: String): String {
-		final check: RedundantAscription = new RedundantAscription();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
+		return CheckFixture.fixedSource(new RedundantAscription(), src);
 	}
 
 	private function violations(src: String): Array<Violation> {

@@ -7,7 +7,6 @@ import anyparse.check.PreferFinalClass;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
 
 /**
  * The `prefer-final-class` check: a class declaration carrying the `@:final` meta is flagged
@@ -146,14 +145,7 @@ class PreferFinalClassCheckTest extends Test {
 	}
 
 	private function applyFix(source: String): String {
-		final check: PreferFinalClass = new PreferFinalClass();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = source;
-		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
+		return CheckFixture.fixedSource(new PreferFinalClass(), source);
 	}
 
 }

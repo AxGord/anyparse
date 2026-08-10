@@ -9,7 +9,6 @@ import anyparse.check.ShortenTypeRef;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.runtime.Span;
 
 /**
  * The `shorten-type-ref` check: a DOTTED type reference the file itself spells differently.
@@ -598,11 +597,7 @@ class ShortenTypeRefCheckTest extends Test {
 
 	private function applyFixWith(src: String, plugin: CachingGrammarPlugin, report: Array<{ file: String, source: String }>): String {
 		final check: ShortenTypeRef = new ShortenTypeRef();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run(report, plugin), plugin);
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
+		return CheckFixture.applyEdits(src, check.fix(src, check.run(report, plugin), plugin));
 	}
 
 }

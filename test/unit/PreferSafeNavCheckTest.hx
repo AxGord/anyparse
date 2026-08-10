@@ -499,14 +499,7 @@ class PreferSafeNavCheckTest extends Test {
 	}
 
 	private function applyFix(source: String): String {
-		final check: PreferSafeNav = new PreferSafeNav();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = source;
-		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
+		return CheckFixture.fixedSource(new PreferSafeNav(), source);
 	}
 
 }

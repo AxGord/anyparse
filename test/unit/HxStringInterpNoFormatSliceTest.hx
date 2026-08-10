@@ -127,15 +127,11 @@ final class HxStringInterpNoFormatSliceTest extends Test {
 	}
 
 	private inline function formatDefault(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		opts.finalNewline = false;
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		return HxWriteFixture.triviaWrite(src, '{}');
 	}
 
 	private inline function formatNoFormat(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"formatStringInterpolation": false}}');
-		opts.finalNewline = false;
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		return HxWriteFixture.triviaWrite(src, '{"whitespace": {"formatStringInterpolation": false}}');
 	}
 
 }

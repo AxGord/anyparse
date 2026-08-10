@@ -10,7 +10,6 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
-import anyparse.runtime.Span;
 
 /**
  * The `prefer-doc-comment` check: a run of whole-line `//` comments directly above a
@@ -611,14 +610,7 @@ class PreferDocCommentCheckTest extends Test {
 	}
 
 	private function applyFix(src: String): String {
-		final check: PreferDocComment = new PreferDocComment();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
+		return CheckFixture.fixedSource(new PreferDocComment(), src);
 	}
 
 }

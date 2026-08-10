@@ -2,10 +2,6 @@ package unit;
 
 import utest.Assert;
 import utest.Test;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
-import anyparse.grammar.haxe.HaxeModuleTriviaParser;
-import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
-import anyparse.grammar.haxe.HxModuleWriteOptions;
 
 /**
  * ω-condwrap-fitline-construct-group: `sameLine.ifBody: fitLine` decides
@@ -53,9 +49,7 @@ final class HxCondWrapFitLineSliceTest extends Test {
 	}
 
 	private inline function triviaWrite(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONFIG);
-		opts.finalNewline = false;
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		return HxWriteFixture.triviaWrite(src, CONFIG);
 	}
 
 }

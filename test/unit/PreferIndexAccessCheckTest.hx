@@ -7,7 +7,6 @@ import anyparse.check.PreferIndexAccess;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
 
 /**
  * The `prefer-index-access` check: a `Map`-abstract `m.get(k)` / `m.set(k, v)` call is
@@ -442,14 +441,7 @@ class PreferIndexAccessCheckTest extends Test {
 	}
 
 	private function applyFix(source: String): String {
-		final check: PreferIndexAccess = new PreferIndexAccess();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = source;
-		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
+		return CheckFixture.fixedSource(new PreferIndexAccess(), source);
 	}
 
 	/** A two-class same-file source: a `Holder` with field `<field>` and a `C.f(h:Holder)` body `<body>;`. */

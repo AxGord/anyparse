@@ -6,7 +6,6 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnusedPublicMember;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
 
@@ -413,13 +412,7 @@ import utest.Test;
 
 	private function applyFix(src: String): String {
 		final check: Null<Check> = Linter.byId(RULE);
-		if (check == null) return src;
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
+		return check == null ? src : CheckFixture.fixedSource(check, src);
 	}
 
 	private function runGated(source: String, json: String, applyEnablement: Bool): Array<Violation> {

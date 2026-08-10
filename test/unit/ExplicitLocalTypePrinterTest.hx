@@ -6,7 +6,6 @@ import anyparse.check.Check.TypeOracle;
 import anyparse.check.Check.Violation;
 import anyparse.check.ExplicitLocalType;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
 
 /**
  * The `explicit-local-type` oracle autofix riding on the shared `TypeRefPrinter`: a compiler
@@ -75,11 +74,7 @@ class ExplicitLocalTypePrinterTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ExplicitLocalType = new ExplicitLocalType();
 		final violations: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
-		final edits: Array<{ span: Span, text: String }> = check.fixWithOracle(src, violations, plugin, new CannedTypeOracle(inferred));
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
+		return CheckFixture.applyEdits(src, check.fixWithOracle(src, violations, plugin, new CannedTypeOracle(inferred)));
 	}
 
 	private function occurrences(haystack: String, needle: String): Int {

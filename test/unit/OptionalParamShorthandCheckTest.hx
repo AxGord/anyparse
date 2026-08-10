@@ -7,7 +7,6 @@ import anyparse.check.OptionalParamShorthand;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
 
 /**
  * The `optional-param-shorthand` check: a parameter written `name:Null<T> = null` or
@@ -161,14 +160,7 @@ class OptionalParamShorthandCheckTest extends Test {
 	}
 
 	private function applyFix(source: String): String {
-		final check: OptionalParamShorthand = new OptionalParamShorthand();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = source;
-		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
+		return CheckFixture.fixedSource(new OptionalParamShorthand(), source);
 	}
 
 }

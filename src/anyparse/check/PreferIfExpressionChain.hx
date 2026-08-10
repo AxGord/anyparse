@@ -179,14 +179,9 @@ final class PreferIfExpressionChain implements Check {
 		final resolveIndex: () -> Null<SymbolIndex> = SwitchChain.lazyIndexOf([{ file: '', source: source }], plugin, index);
 		final byKey: Map<String, Match> = [];
 		for (m in collect(plugin, source, seams, resolveIndex)) byKey['${m.span.from}:${m.span.to}'] = m;
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final vspan: Null<Span> = v.span;
-			if (vspan == null) continue;
-			final m: Null<Match> = byKey['${vspan.from}:${vspan.to}'];
-			if (m != null) edits.push({ span: m.editSpan, text: m.text });
-		}
-		return RefactorSupport.dropContainedEdits(edits);
+		return RefactorSupport.dropContainedEdits(
+			CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: m.text }))
+		);
 	}
 
 	/**

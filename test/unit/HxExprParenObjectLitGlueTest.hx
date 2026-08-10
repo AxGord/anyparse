@@ -2,10 +2,6 @@ package unit;
 
 import utest.Assert;
 import utest.Test;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
-import anyparse.grammar.haxe.HaxeModuleTriviaParser;
-import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
-import anyparse.grammar.haxe.HxModuleWriteOptions;
 
 /**
  * omega-ternary-paren-glue follow-up: an expression paren whose inner is an OBJECT LITERAL keeps its delimiters GLUED
@@ -152,9 +148,7 @@ final class HxExprParenObjectLitGlueTest extends Test {
 	}
 
 	private inline function triviaWrite(src: String, config: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(config);
-		opts.finalNewline = false;
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		return HxWriteFixture.triviaWrite(src, config);
 	}
 
 }

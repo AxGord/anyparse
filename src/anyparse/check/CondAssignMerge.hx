@@ -217,16 +217,10 @@ final class CondAssignMerge implements Check implements DefaultOff {
 		final byKey: Map<String, Match> = [];
 		for (m in collectMatches(tree, source, seams)) byKey['${m.span.from}:${m.span.to}'] = m;
 
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final vspan: Null<Span> = v.span;
-			if (vspan == null) continue;
-			final m: Null<Match> = byKey['${vspan.from}:${vspan.to}'];
-			if (m == null) continue;
+		return RefactorSupport.dropContainedEdits(CheckScan.collectSpanEdits(violations, byKey, (m, _) -> {
 			final text: Null<String> = m.text;
-			if (text != null) edits.push({ span: m.span, text: text });
-		}
-		return RefactorSupport.dropContainedEdits(edits);
+			return text == null ? null : { span: m.span, text: text };
+		}));
 	}
 
 	/**

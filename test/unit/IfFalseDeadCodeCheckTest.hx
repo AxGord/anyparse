@@ -286,11 +286,8 @@ class IfFalseDeadCodeCheckTest extends Test {
 		return applyEdits(src, edits);
 	}
 
-	private function applyEdits(src: String, edits: Array<{ span: Span, text: String }>): String {
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
+	private inline function applyEdits(src: String, edits: Array<{ span: Span, text: String }>): String {
+		return CheckFixture.applyEdits(src, edits);
 	}
 
 }

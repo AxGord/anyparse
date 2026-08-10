@@ -7,7 +7,6 @@ import anyparse.check.UnnecessaryBlock;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
 
 /**
  * The `unnecessary-block` check: a bare `{ … }` statement block, declaring no
@@ -95,14 +94,7 @@ class UnnecessaryBlockCheckTest extends Test {
 	}
 
 	private function fixedSource(src: String): String {
-		final check: UnnecessaryBlock = new UnnecessaryBlock();
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
-		final sorted: Array<{ span: Span, text: String }> = edits.copy();
-		sorted.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
+		return CheckFixture.fixedSource(new UnnecessaryBlock(), src);
 	}
 
 }

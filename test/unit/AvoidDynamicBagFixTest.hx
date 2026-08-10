@@ -133,12 +133,8 @@ class AvoidDynamicBagFixTest extends Test {
 		return check.fixWithOracle(src, vs, plugin, oracle);
 	}
 
-	private function apply(src: String, e: Array<{ span: Span, text: String }>): String {
-		final sorted: Array<{ span: Span, text: String }> = e.copy();
-		sorted.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (ed in sorted) out = out.substring(0, ed.span.from) + ed.text + out.substring(ed.span.to);
-		return out;
+	private inline function apply(src: String, e: Array<{ span: Span, text: String }>): String {
+		return CheckFixture.applyEdits(src, e);
 	}
 
 }

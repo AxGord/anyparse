@@ -849,11 +849,7 @@ class MemberOrderCheckTest extends Test {
 	}
 
 	private function fixedSource(src: String, ?resolve: (String) -> LintConfig): String {
-		final sorted: Array<{ span: Span, text: String }> = edits(src, resolve).copy();
-		sorted.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
+		return CheckFixture.applyEdits(src, edits(src, resolve));
 	}
 
 	/** A config resolver that enables the opt-in `movableArglessNew` member-order option for every file. */

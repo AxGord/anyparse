@@ -168,17 +168,11 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 		final byKey: Map<String, Match> = [];
 		for (m in matchesIn(source, plugin, seams)) byKey['${m.ifSpan.from}:${m.ifSpan.to}'] = m;
 
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final vspan: Null<Span> = v.span;
-			if (vspan == null) continue;
-			final m: Null<Match> = byKey['${vspan.from}:${vspan.to}'];
-			if (m == null) continue;
+		return RefactorSupport.dropContainedEdits(CheckScan.collectSpanEdits(violations, byKey, (m, _) -> {
 			final text: Null<String> = m.text;
 			// A dropped comment leaves the finding report-only: no edit for this site.
-			if (text != null) edits.push({ span: m.editSpan, text: text });
-		}
-		return RefactorSupport.dropContainedEdits(edits);
+			return text == null ? null : { span: m.editSpan, text: text };
+		}));
 	}
 
 	/** Every collapsible pair in `source` -- the one traversal `run` and `fix` share. */

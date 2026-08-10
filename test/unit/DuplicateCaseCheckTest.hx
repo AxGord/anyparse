@@ -7,7 +7,6 @@ import anyparse.check.DuplicateCase;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
 
 /**
  * The `duplicate-case` check: a switch branch whose pattern repeats an earlier
@@ -83,14 +82,7 @@ class DuplicateCaseCheckTest extends Test {
 	}
 
 	private function applyFix(src: String): String {
-		final check: DuplicateCase = new DuplicateCase();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
+		return CheckFixture.fixedSource(new DuplicateCase(), src);
 	}
 
 	private function violations(src: String): Array<Violation> {

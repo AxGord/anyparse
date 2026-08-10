@@ -277,11 +277,7 @@ class PreferSwitchCheckTest extends Test {
 		final files: Array<{ file: String, source: String }> = entries(src, constants);
 		final own: Array<Violation> = check.run(files, plugin).filter(v -> v.file == 'C.hx');
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, own, plugin, SymbolIndex.build(files, plugin));
-		final sorted: Array<{ span: Span, text: String }> = edits.copy();
-		sorted.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
+		return CheckFixture.applyEdits(src, edits);
 	}
 
 }

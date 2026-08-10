@@ -429,12 +429,8 @@ class MissingVisibilityCheckTest extends Test {
 		return applyEdits(src, edits);
 	}
 
-	private static function applyEdits(src: String, edits: Array<{ span: Span, text: String }>): String {
-		final sorted: Array<{ span: Span, text: String }> = edits.copy();
-		sorted.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
+	private static inline function applyEdits(src: String, edits: Array<{ span: Span, text: String }>): String {
+		return CheckFixture.applyEdits(src, edits);
 	}
 
 }
