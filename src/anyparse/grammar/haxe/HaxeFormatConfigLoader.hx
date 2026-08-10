@@ -1757,35 +1757,9 @@ final class HaxeFormatConfigLoader {
 	}
 
 	private static function applyWhitespaceScalars(section: HxFormatWhitespaceSection, opt: HxModuleWriteOptions): Void {
-		if (section.objectFieldColonPolicy != null) opt.objectFieldColon = whitespaceToRuntime(section.objectFieldColonPolicy);
-		if (section.typeHintColonPolicy != null) opt.typeHintColon = whitespaceToRuntime(section.typeHintColonPolicy);
-		if (section.typeCheckColonPolicy != null) opt.typeCheckColon = whitespaceToRuntime(section.typeCheckColonPolicy);
-		if (section.typeParamOpenPolicy != null) opt.typeParamOpen = whitespaceToRuntime(section.typeParamOpenPolicy);
-		if (section.typeParamClosePolicy != null) opt.typeParamClose = whitespaceToRuntime(section.typeParamClosePolicy);
-		if (section.binopPolicy != null) opt.typeParamDefaultEquals = whitespaceToRuntime(section.binopPolicy);
-		if (section.intervalPolicy != null) opt.intervalPolicy = whitespaceToRuntime(section.intervalPolicy);
-		if (section.functionTypeHaxe4Policy != null) opt.functionTypeHaxe4 = whitespaceToRuntime(section.functionTypeHaxe4Policy);
-		if (section.functionTypeHaxe3Policy != null) opt.functionTypeHaxe3 = whitespaceToRuntime(section.functionTypeHaxe3Policy);
-		if (section.arrowFunctionsPolicy != null) opt.arrowFunctions = whitespaceToRuntime(section.arrowFunctionsPolicy);
-		if (section.ifPolicy != null) opt.ifPolicy = whitespaceToRuntime(section.ifPolicy);
-		if (section.forPolicy != null) opt.forPolicy = whitespaceToRuntime(section.forPolicy);
-		if (section.whilePolicy != null) opt.whilePolicy = whitespaceToRuntime(section.whilePolicy);
-		final switchPolicyRaw: Null<HxFormatWhitespacePolicy> = section.switchPolicy;
-		if (switchPolicyRaw != null) {
-			final swp: WhitespacePolicy = whitespaceToRuntime(switchPolicyRaw);
-			opt.switchPolicy = swp;
-			// ω-switch-after-paren: preserve the switch keyword's LEADING-space
-			// intent separately — `opt.switchPolicy` is later overwritten by the
-			// `conditionParens` catch-all (kw→cond gap), which would erase the
-			// `before` / `around` leading component the fork keys the
-			// `( switch …` / `f( switch …` space on.
-			opt.switchKwLeadingSpace = swp == WhitespacePolicy.Before || swp == WhitespacePolicy.Both;
-		}
-		if (section.tryPolicy != null) opt.tryPolicy = whitespaceToRuntime(section.tryPolicy);
-		if (section.addLineCommentSpace != null) opt.addLineCommentSpace = section.addLineCommentSpace;
-		if (section.normalizeLineCommentIndent != null) opt.normalizeLineCommentIndent = section.normalizeLineCommentIndent;
-		if (section.compressSuccessiveParenthesis != null) opt.compressSuccessiveParenthesis = section.compressSuccessiveParenthesis;
-		if (section.formatStringInterpolation != null) opt.formatStringInterpolation = section.formatStringInterpolation;
+		applyWhitespaceOperatorPolicies(section, opt);
+		applyWhitespaceKeywordPolicies(section, opt);
+		applyWhitespaceToggles(section, opt);
 	}
 
 	private static function applyParenConfig(section: HxFormatWhitespaceSection, opt: HxModuleWriteOptions): Void {
@@ -1936,6 +1910,56 @@ final class HaxeFormatConfigLoader {
 			+ '\' is not recognized — use "tab" or a literal run of spaces (e.g. "    "); keeping the default\n'
 		);
 		#end
+	}
+
+	/**
+	 * The operator / punctuation whitespace policies of the `whitespace` section —
+	 * the colon, type-parameter, binop, interval, function-type and arrow slots.
+	 */
+	private static function applyWhitespaceOperatorPolicies(section: HxFormatWhitespaceSection, opt: HxModuleWriteOptions): Void {
+		if (section.objectFieldColonPolicy != null) opt.objectFieldColon = whitespaceToRuntime(section.objectFieldColonPolicy);
+		if (section.typeHintColonPolicy != null) opt.typeHintColon = whitespaceToRuntime(section.typeHintColonPolicy);
+		if (section.typeCheckColonPolicy != null) opt.typeCheckColon = whitespaceToRuntime(section.typeCheckColonPolicy);
+		if (section.typeParamOpenPolicy != null) opt.typeParamOpen = whitespaceToRuntime(section.typeParamOpenPolicy);
+		if (section.typeParamClosePolicy != null) opt.typeParamClose = whitespaceToRuntime(section.typeParamClosePolicy);
+		if (section.binopPolicy != null) opt.typeParamDefaultEquals = whitespaceToRuntime(section.binopPolicy);
+		if (section.intervalPolicy != null) opt.intervalPolicy = whitespaceToRuntime(section.intervalPolicy);
+		if (section.functionTypeHaxe4Policy != null) opt.functionTypeHaxe4 = whitespaceToRuntime(section.functionTypeHaxe4Policy);
+		if (section.functionTypeHaxe3Policy != null) opt.functionTypeHaxe3 = whitespaceToRuntime(section.functionTypeHaxe3Policy);
+		if (section.arrowFunctionsPolicy != null) opt.arrowFunctions = whitespaceToRuntime(section.arrowFunctionsPolicy);
+	}
+
+	/**
+	 * The keyword whitespace policies of the `whitespace` section — the `if` /
+	 * `for` / `while` / `switch` / `try` keyword-to-parenthesis slots.
+	 */
+	private static function applyWhitespaceKeywordPolicies(section: HxFormatWhitespaceSection, opt: HxModuleWriteOptions): Void {
+		if (section.ifPolicy != null) opt.ifPolicy = whitespaceToRuntime(section.ifPolicy);
+		if (section.forPolicy != null) opt.forPolicy = whitespaceToRuntime(section.forPolicy);
+		if (section.whilePolicy != null) opt.whilePolicy = whitespaceToRuntime(section.whilePolicy);
+		final switchPolicyRaw: Null<HxFormatWhitespacePolicy> = section.switchPolicy;
+		if (switchPolicyRaw != null) {
+			final swp: WhitespacePolicy = whitespaceToRuntime(switchPolicyRaw);
+			opt.switchPolicy = swp;
+			// ω-switch-after-paren: preserve the switch keyword's LEADING-space
+			// intent separately — `opt.switchPolicy` is later overwritten by the
+			// `conditionParens` catch-all (kw→cond gap), which would erase the
+			// `before` / `around` leading component the fork keys the
+			// `( switch …` / `f( switch …` space on.
+			opt.switchKwLeadingSpace = swp == WhitespacePolicy.Before || swp == WhitespacePolicy.Both;
+		}
+		if (section.tryPolicy != null) opt.tryPolicy = whitespaceToRuntime(section.tryPolicy);
+	}
+
+	/**
+	 * The plain boolean toggles of the `whitespace` section — copied straight
+	 * across with no policy-to-runtime conversion.
+	 */
+	private static function applyWhitespaceToggles(section: HxFormatWhitespaceSection, opt: HxModuleWriteOptions): Void {
+		if (section.addLineCommentSpace != null) opt.addLineCommentSpace = section.addLineCommentSpace;
+		if (section.normalizeLineCommentIndent != null) opt.normalizeLineCommentIndent = section.normalizeLineCommentIndent;
+		if (section.compressSuccessiveParenthesis != null) opt.compressSuccessiveParenthesis = section.compressSuccessiveParenthesis;
+		if (section.formatStringInterpolation != null) opt.formatStringInterpolation = section.formatStringInterpolation;
 	}
 
 }

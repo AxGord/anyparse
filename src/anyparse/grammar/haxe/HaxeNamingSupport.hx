@@ -258,27 +258,8 @@ final class HaxeNamingSupport implements NamingSupport {
 		if (parent != null && parent.kind == 'EnumAbstractDecl' && (node.kind == 'FinalMember' || node.kind == 'VarMember'))
 			category = NamingCategory.EnumValue;
 		final name: Null<String> = node.name;
-		if (category != null && name != null) {
-			// Re-bind to non-null finals: strict null-safety does not narrow a
-			// guarded local inside an anonymous struct literal.
-			final categoryValue: NamingCategory = category;
-			final declName: String = name;
-			// Interface members carry no visibility modifier but are public.
-			final inInterface: Bool = parent != null && parent.kind == 'InterfaceDecl';
-			final declMods: Array<String> = inInterface && !mods.contains('public') ? mods.concat(['public']) : mods;
-			out.push({
-				span: node.span,
-				name: declName,
-				category: categoryValue,
-				mods: declMods,
-				enclosingType: enclosingType,
-				implicitlyReachable: isImplicitlyReachable(categoryValue, declName, node, parent, mods),
-				renameUnsafe: structural || hasPhysicalAccessors(node, parent, declName)
-				|| (enclosingRtti && isMemberCategory(categoryValue)),
-				contractName: structural,
-				reservedName: isReservedName(declName)
-			});
-		}
+		if (category != null && name != null)
+			out.push(namedDeclOf(node, parent, category, name, mods, structural, enclosingType, enclosingRtti));
 		// A type decl becomes the enclosing type of its descendants — its name is
 		// on the node carrying category Type (the inner ClassForm for a final
 		// class, the flattened AbstractClassDecl for an abstract class).
@@ -608,6 +589,31 @@ final class HaxeNamingSupport implements NamingSupport {
 		if (callee.kind != 'FieldAccess' || !REFLECTION_FIELD_METHODS.contains(callee.name ?? '')) return false;
 		final receiver: Array<QueryNode> = callee.children;
 		return receiver.length > 0 && receiver[0].kind == 'IdentExpr' && receiver[0].name == 'Reflect';
+	}
+
+	/**
+	 * The `NamedDecl` for a declaration node already resolved to a `category` and a
+	 * `name` — the record-building half of `walk`, split out so the walk itself
+	 * stays a plain context-threading recursion.
+	 */
+	private static function namedDeclOf(
+		node: QueryNode, parent: Null<QueryNode>, category: NamingCategory, name: String, mods: Array<String>, structural: Bool,
+		enclosingType: Null<String>, enclosingRtti: Bool
+	): NamedDecl {
+		// Interface members carry no visibility modifier but are public.
+		final inInterface: Bool = parent != null && parent.kind == 'InterfaceDecl';
+		final declMods: Array<String> = inInterface && !mods.contains('public') ? mods.concat(['public']) : mods;
+		return {
+			span: node.span,
+			name: name,
+			category: category,
+			mods: declMods,
+			enclosingType: enclosingType,
+			implicitlyReachable: isImplicitlyReachable(category, name, node, parent, mods),
+			renameUnsafe: structural || hasPhysicalAccessors(node, parent, name) || (enclosingRtti && isMemberCategory(category)),
+			contractName: structural,
+			reservedName: isReservedName(name)
+		};
 	}
 
 }

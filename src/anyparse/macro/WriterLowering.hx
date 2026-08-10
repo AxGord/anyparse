@@ -1627,8 +1627,7 @@ class WriterLowering {
 		// names a per-construct EmptyCurly opt field. The bare form
 		// returns null and falls back to `_inAnonFnBody` dispatch
 		// inside `triviaBlockStarExpr`.
-		final emptyCurlyKnobArgs: Null<Array<String>> = starNode.fmtReadStringArgs('emptyCurlyBreak');
-		final emptyCurlyKnob: Null<String> = emptyCurlyKnobArgs != null && emptyCurlyKnobArgs.length >= 1 ? emptyCurlyKnobArgs[0] : null;
+		final emptyCurlyKnob: Null<String> = fmtFirstStringArg(starNode, 'emptyCurlyBreak');
 		final beginEndType: Bool = starNode.fmtHasFlag('beginEndType');
 		// ω-enum-begin-end: `@:fmt(beginEndType('a', 'b'))` names the begin/end
 		// opt knobs to read (default class-scoped `beginType` / `endType`), so
@@ -1648,28 +1647,15 @@ class WriterLowering {
 		// ω-blank-around-multiline-members: `@:fmt(blankAroundMultilineMembers('<optField>'))`
 		// names the `WriteOptions` Int knob holding the blank count. Absent → the
 		// three splice points are `macro {}` and the loop generates byte-identical.
-		final blankAroundArgs: Null<Array<String>> = starNode.fmtReadStringArgs('blankAroundMultilineMembers');
-		if (blankAroundArgs != null && blankAroundArgs.length != 1)
-			Context.fatalError(
-				'WriterLowering: @:fmt(blankAroundMultilineMembers) expects exactly 1 string arg (optField), got ${blankAroundArgs.length}',
-				Context.currentPos()
-			);
-		final blankAroundOptField: Null<String> = blankAroundArgs != null ? blankAroundArgs[0] : null;
-		final uniformBetweenArgs: Null<Array<String>> = starNode.fmtReadStringArgs('uniformBetween');
-		if (uniformBetweenArgs != null && uniformBetweenArgs.length != 1)
-			Context.fatalError(
-				'WriterLowering: @:fmt(uniformBetween) expects exactly 1 string arg (optField), got ${uniformBetweenArgs.length}',
-				Context.currentPos()
-			);
-		final uniformBetweenOptField: Null<String> = uniformBetweenArgs != null ? uniformBetweenArgs[0] : null;
+		final blankAroundOptField: Null<String> = fmtSingleStringArg(starNode, 'blankAroundMultilineMembers');
+		final uniformBetweenOptField: Null<String> = fmtSingleStringArg(starNode, 'uniformBetween');
 		final anonFnClear: Bool = starNode.fmtHasFlag('leftCurlyAnonFnOverride');
 		// ω-blockright-curly: call-form `@:fmt(rightCurly('<knob>'))`
 		// on a Seq-struct Star names a per-construct
 		// RightCurlyPlacement opt field. Sister to `emptyCurlyKnob`
 		// — when null, dispatch falls back to unconditional
 		// `_dhl()` before close inside `triviaBlockStarExpr`.
-		final rightCurlyKnobArgs: Null<Array<String>> = starNode.fmtReadStringArgs('rightCurly');
-		final rightCurlyKnob: Null<String> = rightCurlyKnobArgs != null && rightCurlyKnobArgs.length >= 1 ? rightCurlyKnobArgs[0] : null;
+		final rightCurlyKnob: Null<String> = fmtFirstStringArg(starNode, 'rightCurly');
 		// ω-anonfunction-right-curly: call-form
 		// `@:fmt(rightCurlyAnonFnOverride('<knob>'))` on a Seq-struct
 		// Star names a RightCurlyPlacement opt field read only when
@@ -1678,10 +1664,7 @@ class WriterLowering {
 		// while keeping `HxFnDecl.body` / `HxUntypedFnBody.block`
 		// (same `HxFnBlock` Star, `_inAnonFnBody=false`) on the
 		// pre-slice `_dhl()` path.
-		final rightCurlyAnonFnArgs: Null<Array<String>> = starNode.fmtReadStringArgs('rightCurlyAnonFnOverride');
-		final rightCurlyAnonFnKnob: Null<String> = rightCurlyAnonFnArgs != null && rightCurlyAnonFnArgs.length >= 1
-			? rightCurlyAnonFnArgs[0]
-			: null;
+		final rightCurlyAnonFnKnob: Null<String> = fmtFirstStringArg(starNode, 'rightCurlyAnonFnOverride');
 		// ω-anon-fn-body-stmt-position: HxFnExpr / HxFnDecl / HxUntypedFnBody
 		// bodies share HxFnBlock.stmts; when it carries
 		// @:fmt(clearExprPositionNonTail) (mirroring HxExpr.BlockExpr) the block
@@ -7212,16 +7195,7 @@ class WriterLowering {
 		final rightChild: ShapeNode = children[1];
 		final rightRef: Null<String> = rightChild.kind == Ref ? rightChild.annotations[AnnotationKeys.BASE_REF] : null;
 		final isAsymmetric: Bool = rightRef != null && simpleName(rightRef) != simpleName(typePath);
-		final rightOptBase: Null<Expr> = branch.fmtHasFlag('propagateExprPosition') ? macro _setExprPosition(opt) : null;
-		// ω-arrow-body-objlit-pad: `@:fmt(propagateArrowLambdaBody)` on the
-		// infix `->` branch (HxExpr.ThinArrow) flags the RIGHT operand write.
-		// Composed outside `_setExprPosition` so its descent clear does not
-		// wipe the just-set flag. Left operand passes `opt` unchanged, so the
-		// flag survives leftmost descents — replicating the fork's
-		// token-adjacency (`{` directly after `->`) for free.
-		final rightOptExpr: Null<Expr> = branch.fmtHasFlag('propagateArrowLambdaBody')
-			? macro _setArrowLambdaBody(${rightOptBase ?? macro opt})
-			: rightOptBase;
+		final rightOptExpr: Null<Expr> = rightOperandOptExpr(branch);
 		final leftCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, leftCtx);
 		final rightCall: Expr = isAsymmetric
 			? makeWriteCall(writeFnFor(rightRef), macro $i{argNames[1]}, false, -1, rightOptExpr)
@@ -7240,26 +7214,13 @@ class WriterLowering {
 		// ω-thin-arrow-body-marker: the infix `->` lambda (`arg -> body`,
 		// Pratt path — no typedef field to carry `@:fmt(arrowBodyLineWrap)`
 		// the way `HxThinParenLambda.body` does) opts into the same
-		// `_dwb(_dile(...))` arrow-body wrap marker via a ctor-level
+		// `_dwb(_dilr(...))` arrow-body wrap marker via a ctor-level
 		// `@:fmt(arrowBodyLineWrap)`. Besides the line-wrap itself, the
 		// marker is what `WrapList.isArrowBodyMarker` detects — without it
 		// a trailing `arg -> { … }` call arg never reaches the sole-arrow /
 		// multi-arg block-lambda glue shapes and the enclosing call opens
 		// every arg one indent deeper instead of keeping the head glued.
-		final rightEmit: Expr = branch.fmtHasFlag('arrowBodyLineWrap')
-			? macro {
-				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-				final _doc: anyparse.core.Doc = $rightCall;
-				final _flat: Int = anyparse.format.wrap.WrapList.flatLength(_doc);
-				_dwb(_dilr(
-					anyparse.format.BodyFit.arrowGlueThreshold(_doc, opt.lineWidth),
-					opt.fitLineBodyGlue && _flat >= 0
-						? anyparse.format.BodyFit.continuationRescuesArrowBody(_cols, _doc, _flat, opt.lineWidth)
-						: _dn(_cols, _dc([_dhl(), _doc])),
-					_doc
-				));
-			}
-			: rightCall;
+		final rightEmit: Expr = branch.fmtHasFlag('arrowBodyLineWrap') ? arrowBodyLineWrapExpr(rightCall) : rightCall;
 		final ivOpExpr: Expr = intervalPolicyOp(opText);
 		final innerExpr: Expr = if (infixPolicyFlag == 'intervalPolicy')
 			macro {
@@ -10146,7 +10107,7 @@ class WriterLowering {
 			// (`MarkWrapping.hx:985-1041`): collect arrows whose
 			// flat line exceeds `maxLineLength`, apply break
 			// after `->`, try collapse, restore on still-exceed.
-			// Our `_dile` IS the collapse — flat side fires
+			// Our `_dilr` IS the collapse — flat side fires
 			// when the line fits, brk side fires when it does
 			// not, both decided at render time.
 			//
@@ -10162,18 +10123,7 @@ class WriterLowering {
 			// (`->` form) and `HxParenLambda.body` (`=>` form)
 			// for symmetric coverage of the canonical and
 			// legacy lambda-body syntaxes.
-			parts.push(macro {
-				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-				final _doc: anyparse.core.Doc = $writeCall;
-				final _flat: Int = anyparse.format.wrap.WrapList.flatLength(_doc);
-				_dwb(_dilr(
-					anyparse.format.BodyFit.arrowGlueThreshold(_doc, opt.lineWidth),
-					opt.fitLineBodyGlue && _flat >= 0
-						? anyparse.format.BodyFit.continuationRescuesArrowBody(_cols, _doc, _flat, opt.lineWidth)
-						: _dn(_cols, _dc([_dhl(), _doc])),
-					_doc
-				));
-			});
+			parts.push(arrowBodyLineWrapExpr(writeCall));
 		} else {
 			parts.push(writeCall);
 		}
@@ -10585,20 +10535,6 @@ class WriterLowering {
 	): Null<Expr> {
 		final refName: String = child.annotations[AnnotationKeys.BASE_REF];
 		final writeFn: String = writeFnFor(refName);
-		// ω-issue-423-mech-a / ω-anonfunction-empty-curly /
-		// ω-expressionif-collapse: opt-fanout flags wrapping the descendant
-		// writer's `opt` arg in `_setExprPosition` / `_setAnonFnBody` /
-		// `_setValueIfBranch`.
-		final propagateExpr: Bool = child.fmtHasFlag('propagateExprPosition');
-		final propagateAnonFn: Bool = child.fmtHasFlag('propagateAnonFnContext');
-		final propagateValueIfBranch: Bool = child.fmtHasFlag('propagateValueIfBranch');
-		// ω-elseif-body-break: `@:fmt(propagateElseIfBranch)` on `HxIfStmt.elseBody`
-		// flags the else-branch recursion's opt with `_inElseIfBranch` — but ONLY
-		// when the else-branch runtime ctor is `IfStmt` (an `else if`), matched via
-		// the same trivia-aware ctor pattern as the elseIf glue. A block / simple
-		// else-branch leaves the flag untouched, so a fitting `if` nested inside an
-		// else-block body still keeps its own body inline.
-		final propagateElseIfBranch: Bool = child.fmtHasFlag('propagateElseIfBranch');
 		// ω-single-stmt-braces CHAIN symmetry: runtime force-keep for this else's
 		// chain. Mid-chain it is already true via `opt._ssbChainSuppress`; at the
 		// chain root it is the spine scan over then + else-if bodies. Reused by the
@@ -10616,29 +10552,7 @@ class WriterLowering {
 				false
 			)
 			: null;
-		final optArgExpr: Expr = {
-			var e: Expr = macro opt;
-			if (propagateExpr) e = macro _setExprPosition($e);
-			if (propagateAnonFn) e = macro _setAnonFnBody($e);
-			if (propagateValueIfBranch) e = macro _setValueIfBranch($e);
-			e = arrowValueIfBlockOpt(child, e);
-			if (propagateElseIfBranch) {
-				final ifPat: Null<Expr> = findCtorPattern(refName, 'IfStmt');
-				if (ifPat != null) {
-					// else-if -> set; a non-if else-branch (block / simple stmt) must
-					// CLEAR the flag it may have inherited from a preceding chain link
-					// (`if {} else if {} else { … }`) — the block is not an else-branch-if.
-					final setExpr: Expr = macro _setElseIfBranch($e);
-					final clearExpr: Expr = macro _clearElseIfBranch($e);
-					e = {
-						expr: ESwitch(macro _optVal, [{ values: [ifPat], expr: setExpr, guard: null }], clearExpr),
-						pos: Context.currentPos()
-					};
-				}
-			}
-			e = wrapElseChainSuppress(e, child, refName, elseChainSuppressExpr);
-			e;
-		};
+		final optArgExpr: Expr = optionalRefOptArgExpr(child, refName, elseChainSuppressExpr);
 		final rawWriteCall: Expr = {
 			expr: ECall(macro $i{writeFn}, [macro _optVal, optArgExpr]),
 			pos: Context.currentPos(),
@@ -11329,6 +11243,49 @@ class WriterLowering {
 			if (target != null && ownStarHasFlag(target, flag)) return true;
 		}
 		return false;
+	}
+
+	/**
+	 * The `opt` argument expression for an optional-Ref field's descendant writer: the
+	 * opt-fanout wraps composed in declaration order, the `arrowValueIfBlockOpt` step,
+	 * the `propagateElseIfBranch` runtime-ctor switch, and the else-chain suppress
+	 * wrap.
+	 */
+	private function optionalRefOptArgExpr(child: ShapeNode, refName: String, elseChainSuppressExpr: Expr): Expr {
+		// ω-issue-423-mech-a / ω-anonfunction-empty-curly /
+		// ω-expressionif-collapse: opt-fanout flags wrapping the descendant
+		// writer's `opt` arg in `_setExprPosition` / `_setAnonFnBody` /
+		// `_setValueIfBranch`.
+		final propagateExpr: Bool = child.fmtHasFlag('propagateExprPosition');
+		final propagateAnonFn: Bool = child.fmtHasFlag('propagateAnonFnContext');
+		final propagateValueIfBranch: Bool = child.fmtHasFlag('propagateValueIfBranch');
+		// ω-elseif-body-break: `@:fmt(propagateElseIfBranch)` on `HxIfStmt.elseBody`
+		// flags the else-branch recursion's opt with `_inElseIfBranch` — but ONLY
+		// when the else-branch runtime ctor is `IfStmt` (an `else if`), matched via
+		// the same trivia-aware ctor pattern as the elseIf glue. A block / simple
+		// else-branch leaves the flag untouched, so a fitting `if` nested inside an
+		// else-block body still keeps its own body inline.
+		final propagateElseIfBranch: Bool = child.fmtHasFlag('propagateElseIfBranch');
+		var e: Expr = macro opt;
+		if (propagateExpr) e = macro _setExprPosition($e);
+		if (propagateAnonFn) e = macro _setAnonFnBody($e);
+		if (propagateValueIfBranch) e = macro _setValueIfBranch($e);
+		e = arrowValueIfBlockOpt(child, e);
+		if (propagateElseIfBranch) {
+			final ifPat: Null<Expr> = findCtorPattern(refName, 'IfStmt');
+			if (ifPat != null) {
+				// else-if -> set; a non-if else-branch (block / simple stmt) must
+				// CLEAR the flag it may have inherited from a preceding chain link
+				// (`if {} else if {} else { … }`) — the block is not an else-branch-if.
+				final setExpr: Expr = macro _setElseIfBranch($e);
+				final clearExpr: Expr = macro _clearElseIfBranch($e);
+				e = {
+					expr: ESwitch(macro _optVal, [{ values: [ifPat], expr: setExpr, guard: null }], clearExpr),
+					pos: Context.currentPos()
+				};
+			}
+		}
+		return wrapElseChainSuppress(e, child, refName, elseChainSuppressExpr);
 	}
 
 	/** `AstPredsT.<name>(<args>)` — trivia-family predicate call for the static trivia emit helpers. */
@@ -17231,21 +17188,7 @@ class WriterLowering {
 		uniformBetweenOptField: Null<String>, anyEmptyLinesFlag: Bool, uniformStmtBlanks: Bool
 	): Expr {
 		final blankExtras: Expr = blankBefore2ExtrasExpr(macro _inner.push(_dhl()));
-		if (!anyEmptyLinesFlag) {
-			// ω-uniform-statement-blanks: gate the source-blank push on the
-			// pre-pass `_uniformCollapse` flag (declared in `triviaBlockElseBody`
-			// when this Star opted into `@:fmt(uniformStmtBlanks)`). Non-opted
-			// block Stars keep the pre-slice guard byte-identical.
-			final blankGuardExpr: Expr = uniformStmtBlanks
-				? macro (_t.blankBefore && _si > 0 && !_uniformCollapse)
-				: macro (_t.blankBefore && _si > 0);
-			return macro {
-				if ($blankGuardExpr) {
-					_inner.push(_dhl());
-					$blankExtras;
-				}
-			};
-		}
+		if (!anyEmptyLinesFlag) return triviaBlockSourceBlankOnlyExpr(uniformStmtBlanks, blankExtras);
 		final stripByDocExpr: Expr = afterFieldsWithDocComments
 			? macro (_prevHadDocComment && opt.afterFieldsWithDocComments == anyparse.format.CommentEmptyLinesPolicy.None)
 			: macro false;
@@ -18378,6 +18321,91 @@ class WriterLowering {
 	 */
 	private static function triviaSepBlankHardlineExpr(uniformStmtBlanks: Bool): Expr {
 		return uniformStmtBlanks ? macro (_t.blankBefore && !_uniformCollapse) : macro _t.blankBefore;
+	}
+
+	/**
+	 * The `arrowBodyLineWrap` emit for a lambda body: wrap `bodyCall` in the
+	 * `_dwb(_dilr(...))` arrow-body marker, so at render time the body either stays
+	 * glued to the arrow (when `BodyFit.arrowGlueThreshold` holds), or — under
+	 * `opt.fitLineBodyGlue` on a hardline-free body — is rescued onto the
+	 * continuation by `BodyFit.continuationRescuesArrowBody`, or else breaks after
+	 * the arrow and nests one level.
+	 *
+	 * Shared verbatim by the Pratt infix `->` branch (`lowerInfixTightAssign`) and the
+	 * bare-Ref field path (`emitBareRefNonBodyPolicy`).
+	 */
+	private static function arrowBodyLineWrapExpr(bodyCall: Expr): Expr {
+		return macro {
+			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			final _doc: anyparse.core.Doc = $bodyCall;
+			final _flat: Int = anyparse.format.wrap.WrapList.flatLength(_doc);
+			_dwb(_dilr(
+				anyparse.format.BodyFit.arrowGlueThreshold(_doc, opt.lineWidth),
+				opt.fitLineBodyGlue && _flat >= 0
+					? anyparse.format.BodyFit.continuationRescuesArrowBody(_cols, _doc, _flat, opt.lineWidth)
+					: _dn(_cols, _dc([_dhl(), _doc])),
+				_doc
+			));
+		};
+	}
+
+	/**
+	 * The first string argument of a call-form `@:fmt(<flag>(...))` on `starNode`, or
+	 * null when the flag is absent or bare (no argument at all).
+	 */
+	private static function fmtFirstStringArg(starNode: ShapeNode, flag: String): Null<String> {
+		final args: Null<Array<String>> = starNode.fmtReadStringArgs(flag);
+		return args != null && args.length >= 1 ? args[0] : null;
+	}
+
+	/**
+	 * The single string argument of a call-form `@:fmt(<flag>('<optField>'))` on
+	 * `starNode`, or null when the flag is absent. A present flag carrying any
+	 * other arity is a grammar-author error and aborts the build.
+	 */
+	private static function fmtSingleStringArg(starNode: ShapeNode, flag: String): Null<String> {
+		final args: Null<Array<String>> = starNode.fmtReadStringArgs(flag);
+		if (args != null && args.length != 1)
+			Context.fatalError(
+				'WriterLowering: @:fmt($flag) expects exactly 1 string arg (optField), got ${args.length}', Context.currentPos()
+			);
+		return args != null ? args[0] : null;
+	}
+
+	/**
+	 * The `opt` expression threaded into the RIGHT operand's write call of a Pratt
+	 * infix branch, or null when the branch flags no fanout.
+	 *
+	 * ω-arrow-body-objlit-pad: `@:fmt(propagateArrowLambdaBody)` on the infix `->`
+	 * branch (HxExpr.ThinArrow) flags the RIGHT operand write. Composed outside
+	 * `_setExprPosition` so its descent clear does not wipe the just-set flag. Left
+	 * operand passes `opt` unchanged, so the flag survives leftmost descents —
+	 * replicating the fork's token-adjacency (`{` directly after `->`) for free.
+	 */
+	private static function rightOperandOptExpr(branch: ShapeNode): Null<Expr> {
+		final rightOptBase: Null<Expr> = branch.fmtHasFlag('propagateExprPosition') ? macro _setExprPosition(opt) : null;
+		return branch.fmtHasFlag('propagateArrowLambdaBody') ? macro _setArrowLambdaBody(${rightOptBase ?? macro opt}) : rightOptBase;
+	}
+
+	/**
+	 * The blank-before emit for a block Star carrying no empty-line policy flags:
+	 * push a hardline for the source blank the parser recorded, gated on the
+	 * `_uniformCollapse` pre-pass when the Star opted into `uniformStmtBlanks`.
+	 */
+	private static function triviaBlockSourceBlankOnlyExpr(uniformStmtBlanks: Bool, blankExtras: Expr): Expr {
+		// ω-uniform-statement-blanks: gate the source-blank push on the
+		// pre-pass `_uniformCollapse` flag (declared in `triviaBlockElseBody`
+		// when this Star opted into `@:fmt(uniformStmtBlanks)`). Non-opted
+		// block Stars keep the pre-slice guard byte-identical.
+		final blankGuardExpr: Expr = uniformStmtBlanks
+			? macro (_t.blankBefore && _si > 0 && !_uniformCollapse)
+			: macro (_t.blankBefore && _si > 0);
+		return macro {
+			if ($blankGuardExpr) {
+				_inner.push(_dhl());
+				$blankExtras;
+			}
+		};
 	}
 
 }

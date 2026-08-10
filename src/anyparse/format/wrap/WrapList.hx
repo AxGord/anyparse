@@ -191,24 +191,23 @@ class WrapList {
 		keepInnerWhenEmpty: Bool, rules: WrapRules, ?options: WrapListOptions
 	): Doc {
 		// Resolve every optional axis ONCE, into locals the body then reads as plain
-		// values. `forceMode` alone stays nullable: null is its meaningful state.
-		final axes: WrapListOptions = options ?? {};
-		final appendTrailingComma: Bool = axes.appendTrailingComma ?? false;
-		final leadFlat: Doc = axes.leadFlat ?? Empty;
-		final leadBreak: Doc = axes.leadBreak ?? Empty;
-		final forceExceeds: Bool = axes.forceExceeds ?? false;
+		// values. `forceMode`, `sepBeforeFlags` and `sourceBreakBefore` stay nullable:
+		// null is their meaningful state.
+		final axes: ResolvedWrapListOptions = resolveAxes(options);
+		final appendTrailingComma: Bool = axes.appendTrailingComma;
+		final leadFlat: Doc = axes.leadFlat;
+		final leadBreak: Doc = axes.leadBreak;
+		final forceExceeds: Bool = axes.forceExceeds;
 		final forceMode: Null<WrapMode> = axes.forceMode;
-		final compactContinuation: Bool = axes.compactContinuation ?? false;
-		final groupRestProbe: Bool = axes.groupRestProbe ?? false;
+		final compactContinuation: Bool = axes.compactContinuation;
+		final groupRestProbe: Bool = axes.groupRestProbe;
 		final sepBeforeFlags: Null<Array<Bool>> = axes.sepBeforeFlags;
-		final sourceMultilineKeep: Bool = axes.sourceMultilineKeep ?? false;
+		final sourceMultilineKeep: Bool = axes.sourceMultilineKeep;
 		final sourceBreakBefore: Null<Array<Bool>> = axes.sourceBreakBefore;
-		final keepCloseGlued: Bool = axes.keepCloseGlued ?? false;
-		final flatTrailingComma: Bool = axes.flatTrailingComma ?? false;
-		final comprehensionFitMeasure: Bool = axes.comprehensionFitMeasure ?? false;
-		// `Line('\n')` is not a Haxe-constant default — unwrap the absent
-		// case into the legacy hardcoded hardline here.
-		final trailBreakDoc: Doc = axes.trailBreak ?? Line('\n');
+		final keepCloseGlued: Bool = axes.keepCloseGlued;
+		final flatTrailingComma: Bool = axes.flatTrailingComma;
+		final comprehensionFitMeasure: Bool = axes.comprehensionFitMeasure;
+		final trailBreakDoc: Doc = axes.trailBreakDoc;
 		if (items.length == 0) return WrapBoundary(Text(open + (keepInnerWhenEmpty ? ' ' : '') + close));
 
 		// ω-arrowif-open: a call/array arg whose body is a PLAIN `if` (no else,
@@ -3720,4 +3719,57 @@ arr.length
 		};
 	}
 
+	/**
+	 * Resolve every optional axis of `options` ONCE, so `emit`'s body reads plain
+	 * values. `forceMode` and the two per-element flag arrays are handed through
+	 * unchanged: null is their meaningful state. `trailBreakDoc` unwraps the absent
+	 * case into the legacy hardcoded hardline — `Line('\n')` is not a Haxe-constant
+	 * default, so it cannot live on the `WrapListOptions` field itself.
+	 */
+	private static function resolveAxes(?options: WrapListOptions): ResolvedWrapListOptions {
+		final axes: WrapListOptions = options ?? {};
+		return {
+			appendTrailingComma: axes.appendTrailingComma ?? false,
+			leadFlat: axes.leadFlat ?? Empty,
+			leadBreak: axes.leadBreak ?? Empty,
+			forceExceeds: axes.forceExceeds ?? false,
+			forceMode: axes.forceMode,
+			compactContinuation: axes.compactContinuation ?? false,
+			groupRestProbe: axes.groupRestProbe ?? false,
+			sepBeforeFlags: axes.sepBeforeFlags,
+			sourceMultilineKeep: axes.sourceMultilineKeep ?? false,
+			sourceBreakBefore: axes.sourceBreakBefore,
+			keepCloseGlued: axes.keepCloseGlued ?? false,
+			flatTrailingComma: axes.flatTrailingComma ?? false,
+			comprehensionFitMeasure: axes.comprehensionFitMeasure ?? false,
+			trailBreakDoc: axes.trailBreak ?? Line('\n')
+		};
+	}
+
 }
+
+/**
+ * Every optional `WrapListOptions` axis carried as a concrete value, so the
+ * defaulting lives in `WrapList.resolveAxes` instead of `emit`'s body. `forceMode`
+ * and the two per-element flag arrays stay nullable — absence is their meaningful
+ * state.
+ *
+ * Keep in sync with `WrapListOptions`: a new axis read straight off the raw
+ * options in `emit` would silently bypass the resolve.
+ */
+private typedef ResolvedWrapListOptions = {
+	final appendTrailingComma: Bool;
+	final leadFlat: Doc;
+	final leadBreak: Doc;
+	final forceExceeds: Bool;
+	final forceMode: Null<WrapMode>;
+	final compactContinuation: Bool;
+	final groupRestProbe: Bool;
+	final sepBeforeFlags: Null<Array<Bool>>;
+	final sourceMultilineKeep: Bool;
+	final sourceBreakBefore: Null<Array<Bool>>;
+	final keepCloseGlued: Bool;
+	final flatTrailingComma: Bool;
+	final comprehensionFitMeasure: Bool;
+	final trailBreakDoc: Doc;
+};
