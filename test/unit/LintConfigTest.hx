@@ -212,4 +212,40 @@ class LintConfigTest extends Test {
 		Assert.equals(0, numeric.resolutionLibs().length, 'discriminating: the co-declared key is wiped with it');
 	}
 
+
+	/**
+	 * The `compilerOracle` key resolves against the config directory, but the compile CWD is the
+	 * HXML's OWN directory — an `.hxml`'s `-cp` entries are written relative to where the hxml
+	 * lives, so a config in a subdirectory naming a parent hxml (`"../build.hxml"`) must still
+	 * compile from that parent. Running it from the CONFIG dir resolves every classpath one level
+	 * too deep and the build never typechecks.
+	 */
+	public function testCompilerOracleRunsFromTheHxmlDirectory(): Void {
+		final nested: LintConfig = LintConfig.parse('{"compilerOracle":"../build.hxml"}', '/proj/src');
+		Assert.equals('/proj/build.hxml', nested.compilerOracle(), 'the hxml resolves against the config dir');
+		Assert.equals('/proj', nested.compilerOracleDir(), 'and the compile runs from the hxml dir, not the config dir');
+		final sibling: LintConfig = LintConfig.parse('{"compilerOracle":"build.hxml"}', '/proj');
+		Assert.equals('/proj/build.hxml', sibling.compilerOracle(), 'a same-dir hxml resolves to the same absolute path');
+		Assert.equals('/proj', sibling.compilerOracleDir(), 'and its compile dir is the config dir — the root-config case, unchanged');
+		final absolute: LintConfig = LintConfig.parse('{"compilerOracle":"/elsewhere/build.hxml"}', '/proj/src');
+		Assert.equals('/elsewhere/build.hxml', absolute.compilerOracle(), 'an absolute hxml is kept verbatim');
+		Assert.equals('/elsewhere', absolute.compilerOracleDir(), 'and still compiles from its own directory');
+		final atRoot: LintConfig = LintConfig.parse('{"compilerOracle":"build.hxml"}', '/');
+		Assert.equals(
+			'/', atRoot.compilerOracleDir(), 'an hxml directly under the filesystem root compiles from the root, never an empty cwd'
+		);
+	}
+
+	/**
+	 * Parsed with no base directory there is nothing to resolve against — the path stays verbatim
+	 * and no compile dir is claimed. This branch is unchanged by the resolution above; it is
+	 * pinned because without its explicit null the compile dir would become the meaningless
+	 * `haxe.io.Path.directory('../build.hxml')` == `'..'`.
+	 */
+	public function testCompilerOracleWithoutBaseDirStaysVerbatim(): Void {
+		final cfg: LintConfig = LintConfig.parse('{"compilerOracle":"../build.hxml"}');
+		Assert.equals('../build.hxml', cfg.compilerOracle(), 'no base dir leaves the declared path untouched');
+		Assert.isNull(cfg.compilerOracleDir(), 'and claims no compile dir');
+	}
+
 }

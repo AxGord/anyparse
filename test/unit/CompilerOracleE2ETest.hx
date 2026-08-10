@@ -4,9 +4,11 @@ import utest.Assert;
 import utest.Test;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
+import anyparse.check.LintConfig;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 #if (sys || nodejs)
+import sys.FileSystem;
 import sys.io.File;
 #end
 
@@ -28,6 +30,19 @@ final class CompilerOracleE2ETest extends Test {
 	private static final VALID: String = 'class Good {\n\tstatic function main() {\n\t\tvar x:Int = 1;\n\t\ttrace(x);\n\t}\n}\n';
 	private static final BROKEN: String = 'class Good {\n\tstatic function main() {\n\t\tvar x:Int = "no";\n\t\ttrace(x);\n\t}\n}\n';
 	private static final HXML: String = '-cp .\n-main Good\n';
+
+	/** The nested project's main, in `src/`: it names a type reachable ONLY through the hxml's `-cp lib`, which the default cwd classpath cannot stand in for. */
+	private static final NESTED_MAIN: String =
+		'class Good {\n\tstatic function main() {\n\t\tvar x:Int = 1;\n\t\ttrace(x + Helper.bump());\n\t}\n}\n';
+
+	/** The nested project's library type, in `lib/` — off the default cwd classpath of every candidate compile directory. */
+	private static final NESTED_HELPER: String = 'class Helper {\n\tpublic static function bump():Int {\n\t\treturn 2;\n\t}\n}\n';
+
+	/** The nested project's hxml: its `-cp` entries are written relative to the HXML's own directory, so only a compile run from there resolves them. */
+	private static final NESTED_HXML: String = '-cp lib\n-cp src\n-main Good\n';
+
+	/** The nested project's `apqlint.json`, living in `src/` and naming the hxml one level up. */
+	private static final NESTED_CONFIG: String = '{"compilerOracle":"../build.hxml"}';
 	#end
 
 	public function testOracleConfirmsValidBuild(): Void {
@@ -149,7 +164,73 @@ final class CompilerOracleE2ETest extends Test {
 		#end
 	}
 
+	/**
+	 * A nested `apqlint.json` — the config in a SUBDIRECTORY, its `compilerOracle` naming an
+	 * `.hxml` one level up. The hxml's `-cp src` is written relative to the hxml, so the compile
+	 * must run from the HXML's directory; running it from the CONFIG's directory resolves the
+	 * classpath as `src/src` and every type goes missing, so report mode failed the lint of every
+	 * file under such a config, permanently.
+	 */
+	public function testNestedConfigReportModeConfirms(): Void {
+		#if (sys || nodejs)
+		if (!oracleWorks()) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final dir: String = writeNestedProject();
+		Assert.equals(0, Cli.run(['lint', '$dir/src/Good.hx']), 'a config naming a parent-directory hxml still typechecks');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The same layout on the FIX side: a rejected baseline makes `FixVerifier` bail before it
+	 * touches anything, so every `RiskyFix` under a nested config was silently left report-only.
+	 * The oracle is threaded through the real `LintConfig` rather than a hand-built pair — it is
+	 * the config that decides both the hxml and the directory the compile runs from.
+	 */
+	public function testNestedConfigRiskyFixApplies(): Void {
+		#if (sys || nodejs)
+		if (!oracleWorks()) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final dir: String = writeNestedProject();
+		final path: String = '$dir/src/Good.hx';
+		final config: LintConfig = LintConfig.discover(path);
+		final hxml: Null<String> = config.compilerOracle();
+		if (hxml == null) {
+			Assert.fail('the nested apqlint.json declares a compilerOracle');
+			CliFixture.removeDir(dir);
+			return;
+		}
+		final result: FixVerifyResult = FixVerifier.verify(
+			[{ file: path, source: NESTED_MAIN }],
+			[new TestRiskyLiteralRewrite('2')], new HaxeQueryPlugin(), hxml, config.compilerOracleDir(), (p, c) -> File.saveContent(p, c)
+		);
+		Assert.isTrue(result.baseline.match(Confirmed), 'the nested-config baseline typechecks');
+		Assert.equals(1, result.applied.length, 'the risky fix survives the typecheck and is applied');
+		Assert.isTrue(File.getContent(path).indexOf('= 2;') != -1, 'disk carries the rewritten literal');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
+	/** A miniature of this project's own layout: `build.hxml` at the root, the sources and their `apqlint.json` in `src/`. */
+	private function writeNestedProject(): String {
+		final dir: String = CliFixture.writeDir('oracle_nested', [{ name: 'build.hxml', source: NESTED_HXML }]);
+		FileSystem.createDirectory('$dir/lib');
+		File.saveContent('$dir/lib/Helper.hx', NESTED_HELPER);
+		FileSystem.createDirectory('$dir/src');
+		File.saveContent('$dir/src/Good.hx', NESTED_MAIN);
+		File.saveContent('$dir/src/apqlint.json', NESTED_CONFIG);
+		return dir;
+	}
+
 	private function writeOracleDir(main: String): String {
 		return CliFixture.writeDir('oracle', [{ name: 'Good.hx', source: main }, { name: 'check.hxml', source: HXML }]);
 	}

@@ -325,8 +325,24 @@ sources target a different Haxe version than the machine's — otherwise there i
 no way to refuse, since discovery falls through to the known install prefixes
 however `HAXE_STD_PATH` and `PATH` are set.
 
+A top-level `"compilerOracle"` (a path to an `.hxml`, relative to the config
+file resolved to absolute) opts the run into treating the Haxe compiler as
+ground truth: `apq` runs `haxe <hxml> --no-output` and folds the verdict back
+in — report mode prints a `compiler-confirmed` note on a clean build and FAILS
+the run with the compiler's errors on a broken one, while `--fix` uses it to
+verify each risky autofix and revert the ones that stop the project
+typechecking. Without the key the compiler is never spawned. The compile runs
+from the HXML's OWN directory, not the config's: an `.hxml` writes its `-cp`
+entries relative to where the hxml lives, so a config in a subdirectory naming
+a parent build file (`"../build.hxml"`) still compiles with the classpaths its
+author meant.
+
 ```json
 { "resolutionLibs": ["openfl"] }
+```
+
+```json
+{ "compilerOracle": "../build.hxml" }
 ```
 
 ```json

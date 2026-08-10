@@ -34,8 +34,9 @@ enum OracleOutcome {
  * nodejs (the target `apq` ships on), `sys.io.Process` on a native sys target,
  * and a compile-time `Unavailable` on a pure target with no process API — so
  * the class type-checks under `#if (sys || nodejs)` everywhere while only the
- * nodejs path is exercised in practice. `cwd` is honoured on nodejs; a native
- * sys spawn resolves relative `.hxml` paths against the process CWD.
+ * nodejs path is exercised in practice. `cwd` is honoured on nodejs;
+ * the native sys branch IGNORES it and runs in the process CWD, so an
+ * hxml's own relative `-cp` entries resolve against the wrong root there.
  */
 @:nullSafety(Strict)
 final class CompilerOracle {

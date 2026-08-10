@@ -5,6 +5,7 @@ import anyparse.check.config.ApqLintConfigParser;
 import anyparse.grammar.json.JValue;
 import anyparse.query.ConfigFinder;
 import haxe.Exception;
+import haxe.io.Path;
 
 /**
  * Config for a single rule: an optional `enabled` toggle, an optional
@@ -46,10 +47,10 @@ final class LintConfig {
 
 	private final _rules: Map<String, RuleConfig>;
 
-	/** The `compilerOracle` hxml path verbatim from the config root, or null when unset. */
+	/** The `compilerOracle` hxml path, resolved against the declaring config's directory (verbatim when parsed without a base), or null when unset. */
 	private final _compilerOracle: Null<String>;
 
-	/** The directory of the `apqlint.json` that declared the oracle — the compile CWD — or null when parsed without a base. */
+	/** The directory of that hxml — the compile CWD — or null when unset or parsed without a base. */
 	private final _compilerOracleDir: Null<String>;
 
 	/** The declared library source roots (`resolutionRoots`), each resolved to absolute against the config directory; an empty array when the key is absent. */
@@ -75,15 +76,24 @@ final class LintConfig {
 
 	/**
 	 * The project's compiler-oracle hxml (the root `compilerOracle` key), or null
-	 * when the config does not opt in. The path is verbatim from the JSON — the
-	 * caller runs `haxe <path> --no-output` from `compilerOracleDir()` so a path
-	 * relative to the `apqlint.json` resolves like `cd <project> && haxe <path>`.
+	 * when the config does not opt in. A relative path is resolved against the
+	 * declaring `apqlint.json`'s directory, so the key reads like a path typed next
+	 * to the config; the caller runs `haxe <path> --no-output` from
+	 * `compilerOracleDir()`.
 	 */
 	public function compilerOracle(): Null<String> {
 		return _compilerOracle;
 	}
 
-	/** The working directory for the compiler-oracle run (the config file's directory), or null. */
+	/**
+	 * The working directory for the compiler-oracle run — the HXML's OWN directory,
+	 * which is where its `-cp` entries are written relative to. It differs from the
+	 * config's directory whenever the declared path carries a directory component:
+	 * `"../build.hxml"` (compiling from the config dir would resolve every classpath
+	 * one level too deep) or `"build/compile.hxml"` (one level too shallow). Null when
+	 * no oracle is configured, or when the config was parsed without a base directory
+	 * — there is then nothing to resolve the declared path against.
+	 */
 	public function compilerOracleDir(): Null<String> {
 		return _compilerOracleDir;
 	}
@@ -279,9 +289,16 @@ final class LintConfig {
 			final rule: Null<RuleConfig> = parseRule(raw);
 			if (rule != null) rules[id] = rule;
 		}
-		final oracle: Null<String> = config.compilerOracle;
-		final roots: Array<String> = (config.resolutionRoots ?? []).map(resolveRoot.bind(baseDir));
-		return new LintConfig(rules, oracle, oracle == null ? null : baseDir, roots, config.resolutionLibs, config.resolutionStd);
+		// The oracle hxml resolves against the CONFIG dir, but the compile runs from the HXML's
+		// OWN dir: an `.hxml`'s `-cp` entries are written relative to where the hxml lives, and
+		// `haxe <path>` does not chdir to it — a config in a subdirectory naming a parent hxml
+		// (`"../build.hxml"`) compiled from the config dir resolves every classpath one level
+		// too deep. With no base dir there is nothing to resolve against and nothing to claim.
+		final declaredOracle: Null<String> = config.compilerOracle;
+		final oracle: Null<String> = declaredOracle == null ? null : resolveAgainstConfigDir(baseDir, declaredOracle);
+		final oracleDir: Null<String> = oracle == null || baseDir == null ? null : hxmlCompileDir(oracle);
+		final roots: Array<String> = (config.resolutionRoots ?? []).map(resolveAgainstConfigDir.bind(baseDir));
+		return new LintConfig(rules, oracle, oracleDir, roots, config.resolutionLibs, config.resolutionStd);
 	}
 
 	/**
@@ -315,9 +332,19 @@ final class LintConfig {
 		};
 	}
 
-	/** Resolve a `resolutionRoots` entry to absolute against the config directory; a verbatim absolute path (or one parsed without a base) is kept as-is. */
-	private static function resolveRoot(baseDir: Null<String>, root: String): String {
-		return baseDir == null || haxe.io.Path.isAbsolute(root) ? root : haxe.io.Path.normalize(haxe.io.Path.join([baseDir, root]));
+	/** Resolve a config-relative path (a `resolutionRoots` entry, the `compilerOracle` hxml) to absolute against the config dir; an absolute path (or one parsed without a base) is kept as-is. */
+	private static function resolveAgainstConfigDir(baseDir: Null<String>, path: String): String {
+		return baseDir == null || Path.isAbsolute(path) ? path : Path.normalize(Path.join([baseDir, path]));
+	}
+
+	/**
+	 * The directory a compile of `hxml` must run from — its own directory, or `/` when it sits
+	 * directly under the filesystem root, where `Path.directory` yields `""` and an empty cwd
+	 * would fail the spawn instead of compiling at the root.
+	 */
+	private static function hxmlCompileDir(hxml: String): String {
+		final dir: String = Path.directory(hxml);
+		return dir == '' ? '/' : dir;
 	}
 
 }
