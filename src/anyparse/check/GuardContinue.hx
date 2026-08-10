@@ -24,13 +24,13 @@ using Lambda;
  *
  * ## The `if (!cond)` inversion — De Morgan when possible, order-safe
  *
- * `cond` is negated by `CheckScan.negateConditionText`, two-tier. When the grammar exposes
+ * `cond` is negated by `NegationScan.negateConditionText`, two-tier. When the grammar exposes
  * a `BooleanLogicSupport` and the condition span is comment-free, the negation is pushed
  * inward by De Morgan (`a && b` → `!a || !b`, `!(a || b)` → `a && b`, `==` / `!=` flipped),
  * with the ordered comparisons `< <= > >=` deliberately KEPT wrapped `!(a < b)` unless
  * proven totally ordered — a NaN or `null` breaks it. Falling back — a seam-less grammar, a
  * comment in the condition the De Morgan rewrite would drop, or a condition whose flattened
- * `||` chain would STRAND a null-safety narrowing (`CheckScan.narrowingStranded`: Haxe
+ * `||` chain would STRAND a null-safety narrowing (`NegationScan.narrowingStranded`: Haxe
  * carries a narrowing fact into a later `||` operand from the FIRST operand only, so
  * `a != null && b != null && p(a.length, b.length)` must not become
  * `a == null || b == null || p(a.length, b.length)`) — the old text engine wraps
@@ -181,7 +181,7 @@ final class GuardContinue implements Check {
 			metaKinds: plugin.metaShape().metaKinds,
 			opaqueKinds: shape.opaqueKinds ?? [],
 			hoist: hoistSeams(shape),
-			negation: CheckScan.negationSeams(shape),
+			negation: NegationScan.negationSeams(shape),
 			support: plugin.booleanLogicSupport()
 		};
 	}
@@ -265,7 +265,7 @@ final class GuardContinue implements Check {
 			final m: Null<Candidate> = match(node, root, source, s);
 			// An inversion that cannot shed its `!( … )` wrap reads worse than the nesting it
 			// removes — the guard form buys nothing there, so the site is left alone.
-			if (m != null && CheckScan.negationIsClean(m.cond, source, s.negation, s.support, types)) {
+			if (m != null && NegationScan.negationIsClean(m.cond, source, s.negation, s.support, types)) {
 				final span: Null<Span> = m.ifNode.span;
 				if (span != null) out.push({
 					file: file,
@@ -625,7 +625,7 @@ final class GuardContinue implements Check {
 		final ifSpan: Null<Span> = m.ifNode.span;
 		final thenSpan: Null<Span> = m.thenBlock.span;
 		if (ifSpan == null || thenSpan == null) return null;
-		final neg: String = CheckScan.negateConditionText(m.cond, source, s.negation, s.support, types);
+		final neg: String = NegationScan.negateConditionText(m.cond, source, s.negation, s.support, types);
 		final innerFrom: Int = thenSpan.from + 1;
 		final inner: String = StringTools.rtrim(applyRenames(source.substring(innerFrom, thenSpan.to - 1), innerFrom, m.renames));
 		var to: Int = ifSpan.to;

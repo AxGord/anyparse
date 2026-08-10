@@ -41,7 +41,7 @@ using Lambda;
  *
  * ## The `if (!cond)` inversion - De Morgan when possible, order-safe
  *
- * `cond` is negated by `CheckScan.negateConditionText`, the engine `loop-guard` and
+ * `cond` is negated by `NegationScan.negateConditionText`, the engine `loop-guard` and
  * `guard-continue` share, two-tier. When the grammar exposes a `BooleanLogicSupport` and
  * the condition span is comment-free, the negation is pushed inward by De Morgan
  * (`a && b` -> `!a || !b`, `!(a || b)` -> `a && b`, `==` / `!=` flipped NaN-safely), with the
@@ -65,7 +65,7 @@ using Lambda;
  * (verified: the de-nested body still narrows after the wrapped guard). The gate is
  * syntactic and conservative - no type information: a negated `&&` chain is flagged when an
  * operand at index 3 or later shares a plain identifier with an operand at index 2 or later
- * that precedes it. It lives in `CheckScan.narrowingStranded`, applied by
+ * that precedes it. It lives in `NegationScan.narrowingStranded`, applied by
  * `negateConditionText` itself, so `loop-guard` (which negates in the opposite direction, a
  * skip condition into a keep condition) and `guard-continue` are covered by the same seat.
  * This check reads the predicate directly for one EXTRA gate of its own: a condition that
@@ -229,7 +229,7 @@ final class GuardReturn implements Check {
 				// An inversion that cannot shed its `!( … )` wrap reads worse than the positive
 				// branch it replaces — the whole point of the guard form is lost, so skip the site.
 				final span: Null<Span> = m.ifNode.span;
-				if (span != null && CheckScan.negationIsClean(m.cond, source, s.negation, s.logic, types)) violations.push({
+				if (span != null && NegationScan.negationIsClean(m.cond, source, s.negation, s.logic, types)) violations.push({
 					file: file,
 					span: span,
 					rule: 'guard-return',
@@ -303,7 +303,7 @@ final class GuardReturn implements Check {
 			shape: shape,
 			implicitTailEnabled: voidReturnKind != null && blockBodyKind != null && valueReturnKinds.length > 0,
 			condKind: shape.conditionalMemberKind,
-			negation: CheckScan.negationSeams(shape),
+			negation: NegationScan.negationSeams(shape),
 			logic: plugin.booleanLogicSupport()
 		};
 	}
@@ -423,7 +423,7 @@ final class GuardReturn implements Check {
 		// already spans lines becomes a nested multi-line `!( … )` wrap — worse to read
 		// than the branch it would replace. Only that path is affected; a De-Morganed
 		// multi-line condition still de-nests.
-		if (CheckScan.narrowingStranded(cond, s.negation) && spansLines(source, cond)) return null;
+		if (NegationScan.narrowingStranded(cond, s.negation) && spansLines(source, cond)) return null;
 		final blocked: Bool = spanCommentBlocked(source, ifNode, cond, thenBlock, tail ?? ifNode)
 			|| redeclaresSibling(block, ifNode, thenBlock, s, scopeNames);
 		return blocked ? null : {
@@ -557,7 +557,7 @@ final class GuardReturn implements Check {
 		final ifSpan: Null<Span> = m.ifNode.span;
 		final thenSpan: Null<Span> = m.thenBlock.span;
 		if (ifSpan == null || thenSpan == null) return null;
-		final neg: String = CheckScan.negateConditionText(m.cond, source, s.negation, s.logic, types);
+		final neg: String = NegationScan.negateConditionText(m.cond, source, s.negation, s.logic, types);
 		final inner: String = source.substring(thenSpan.from + 1, thenSpan.to - 1).rtrim();
 		final tail: Null<QueryNode> = m.tail;
 		if (tail == null) return { span: new Span(ifSpan.from, ifSpan.to), text: 'if ($neg) return;$inner' };

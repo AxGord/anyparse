@@ -63,7 +63,7 @@ interface BooleanLogicSupport {
 	 * flipped — `!(a < b)` and `a >= b` differ whenever an operand is a NaN or a
 	 * `null`. Operands carry precedence-safe parentheses. Comments in the operator
 	 * glue between operands are dropped, so the caller must gate:
-	 * `CheckScan.negateConditionText` falls back to a verbatim wrap when the
+	 * `NegationScan.negateConditionText` falls back to a verbatim wrap when the
 	 * condition span holds a comment marker.
 	 *
 	 * `typeNominalOf` lifts that wrap where the comparison is provably total: it answers
@@ -115,7 +115,7 @@ interface BooleanLogicSupport {
 	 *
 	 * A non-null answer does NOT promise a rewrite: the worth gate inside `simplifyNegatedCompound`
 	 * still decides, and refuses whatever would not pay. The NODE is returned rather than a `Bool`
-	 * so the caller can run its own operand-level gates on it (`CheckScan.narrowingStranded`).
+	 * so the caller can run its own operand-level gates on it (`NegationScan.narrowingStranded`).
 	 */
 	public function negatedOperandOf(not: QueryNode): Null<QueryNode>;
 

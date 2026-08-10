@@ -15,7 +15,7 @@ using Lambda;
  * the directive text itself survives only as trivia on the line, so every consumer that needs the
  * text has to read the source — and until this class there was no shared read, only per-caller
  * probes: `CondBranchProjection.gapHasBranchDirective` and `MemberOrder.hasBranchDirective` answer
- * "does a branch open in this gap", and `MemberOrder.extractConditionText` recovers ONE region's
+ * "does a branch open in this gap", and `MemberSlots.extractConditionText` recovers ONE region's
  * condition from its node span. None of them enumerates directives, so both consumers of this class
  * — the `redundant-condcomp-parens` check and `apq lit --include-directives` — would otherwise have
  * grown a lexer each. Those older probes have NOT been migrated onto this reader; folding them in

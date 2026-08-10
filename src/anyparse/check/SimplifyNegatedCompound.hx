@@ -65,7 +65,7 @@ import anyparse.runtime.Span;
  * position and is evaluated at most once, so a call operand's count and order are unchanged.
  * Haxe's null narrowing survives the same way (`!(x == null || f(x))` → `x != null && f(x)`
  * narrows `x` for `f` exactly as the `||` chain did), except in one shape the shared
- * `CheckScan.narrowingStranded` gate rejects: a chain whose third-or-later operand depends on
+ * `NegationScan.narrowingStranded` gate rejects: a chain whose third-or-later operand depends on
  * a narrowing introduced by a non-first operand, which the compiler does not carry across the
  * flipped connective.
  *
@@ -197,7 +197,7 @@ final class SimplifyNegatedCompound implements Check {
 		// Verified no-op for a single comparison: `narrowingStranded` returns false immediately for
 		// any kind that is neither the and-kind nor the or-kind. The gate is inherited unchanged by
 		// the new arm rather than being N/A by omission.
-		if (CheckScan.narrowingStranded(operand, s.negation)) return null;
+		if (NegationScan.narrowingStranded(operand, s.negation)) return null;
 		final text: Null<String> = s.support.simplifyNegatedCompound(node, parent, source, types);
 		return text == null ? null : { span: span, text: text, message: messageFor(operand, s) };
 	}
@@ -227,7 +227,7 @@ final class SimplifyNegatedCompound implements Check {
 		final support: Null<BooleanLogicSupport> = plugin.booleanLogicSupport();
 		return support == null ? null : {
 			opaqueKinds: shape.opaqueKinds ?? [],
-			negation: CheckScan.negationSeams(shape),
+			negation: NegationScan.negationSeams(shape),
 			support: support
 		};
 	}

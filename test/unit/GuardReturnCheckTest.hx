@@ -17,7 +17,7 @@ import anyparse.query.CachingGrammarPlugin;
  * `if (cond) { BLOCK }` (no `else`, `BLOCK` terminal and holding at least two
  * statements) and a lone trailing `return TAIL;` is flagged `Info` and inverted into
  * an early-return guard — `if (!cond) return TAIL; <BLOCK de-nested>`. The inversion
- * runs through the shared `CheckScan.negateConditionText`, so `==` / `!=` flip
+ * runs through the shared `NegationScan.negateConditionText`, so `==` / `!=` flip
  * (NaN-safe), `!e` strips, `a && b` De Morgans to `!a || !b`, and an ordered
  * comparison stays wrapped `!(a < b)` unless BOTH its operands resolve to a
  * type `<` orders TOTALLY — free of both NaN and `null`, so never `String` — which

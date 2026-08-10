@@ -86,9 +86,6 @@ typedef SortPlan = {
 @:nullSafety(Strict)
 final class MemberOrder implements Check implements ConfigAware {
 
-	/** The inter-slot separator carrying exactly one blank line - what both fix arms (the reorder rebuild and the spacing-only fallback) place between rank groups. */
-	private static final GROUP_SEPARATOR: String = '\n\n';
-
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`) - read for the `movableArglessNew` option in `fix`. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
@@ -161,7 +158,7 @@ final class MemberOrder implements Check implements ConfigAware {
 		out: Array<Violation>, file: String, source: String, node: QueryNode, shape: RefShape, accessors: Map<Int, Bool>
 	): Void {
 		if ((shape.visibilityContainerKinds ?? []).contains(node.kind)) {
-			final members: Array<OrderedMember> = collectMembers(node, source, shape, accessors);
+			final members: Array<OrderedMember> = MemberSlots.collectMembers(node, source, shape, accessors);
 			final issue: Null<LayoutIssue> = firstLayoutIssue(members, source, computePlan(members, source, shape));
 			if (issue != null) out.push({
 				file: file,
@@ -202,7 +199,7 @@ final class MemberOrder implements Check implements ConfigAware {
 		edits: Array<{ span: Span, text: String }>, source: String, container: QueryNode, shape: RefShape, flagged: Array<Int>,
 		accessors: Map<Int, Bool>, movableArglessNew: Bool
 	): Void {
-		final members: Array<OrderedMember> = collectMembers(container, source, shape, accessors);
+		final members: Array<OrderedMember> = MemberSlots.collectMembers(container, source, shape, accessors);
 		if (members.length < 2) return;
 		final plan: SortPlan = computePlan(members, source, shape);
 		final bad: Null<LayoutIssue> = firstLayoutIssue(members, source, plan);
@@ -210,108 +207,22 @@ final class MemberOrder implements Check implements ConfigAware {
 		final sorted: Array<OrderedMember> = members.copy();
 		sorted.sort((a, b) -> compareOrder(a, b, plan));
 		if (!reorderSafe(members, sorted, source, shape, movableArglessNew)) {
-			emitSpacingOnly(edits, members, source);
+			MemberSpacing.emitSpacingOnly(edits, members, source);
 			return;
 		}
-		if (!hasConditionalMember(members)) {
-			if (hasNonWhitespaceGap(members, source)) {
+		if (!MemberSpacing.hasConditionalMember(members)) {
+			if (MemberSpacing.hasNonWhitespaceGap(members, source)) {
 				for (i in 0...members.length) if (members[i].node != sorted[i].node)
 					edits.push({ span: members[i].span, text: source.substring(sorted[i].span.from, sorted[i].span.to) });
 				return;
 			}
 			final region: Span = new Span(members[0].span.from, members[members.length - 1].span.to);
-			edits.push({ span: region, text: joinMembers(sorted, source) });
+			edits.push({ span: region, text: MemberSpacing.joinMembers(sorted, source) });
 			return;
 		}
 		final rebuilt: Null<String> = buildConditionalRegion(sorted, source, shape);
 		if (rebuilt == null) return;
 		edits.push({ span: new Span(members[0].regionFrom, members[members.length - 1].regionTo), text: rebuilt });
-	}
-
-	/**
-	 * The spacing-only degradation for a container whose member order cannot be
-	 * rewritten safely (`reorderSafe` refused): normalise every violating
-	 * inter-slot gap over the ORIGINAL member sequence - one blank line between
-	 * rank groups, none inside a tight field group - and, via `emitDirectiveSpacing`,
-	 * set every member-level `#if`/`#end` block off with a blank line before and
-	 * after, leaving the order itself untouched (the order finding stays report-only).
-	 * Shares `spacingViolation` with `firstSpacingIssue` and `directiveGapEdits` with
-	 * `firstDirectiveSpacingIssue`, so the fix emits nothing exactly where the check
-	 * finds no issue and a re-run converges.
-	 */
-	private static function emitSpacingOnly(
-		edits: Array<{ span: Span, text: String }>, members: Array<OrderedMember>, source: String
-	): Void {
-		if (spacingDisabled(members, source)) return;
-		for (i in 0...members.length - 1) {
-			final a: OrderedMember = members[i];
-			final b: OrderedMember = members[i + 1];
-			final want: Null<Int> = spacingViolation(a, b, source);
-			if (want == null) continue;
-			final gap: String = source.substring(a.span.to, b.span.from);
-			final indent: String = gap.substring(gap.lastIndexOf('\n') + 1);
-			edits.push({ span: new Span(a.span.to, b.span.from), text: (want == 1 ? GROUP_SEPARATOR : '\n') + indent });
-		}
-		emitDirectiveSpacing(edits, members, source);
-	}
-
-	/**
-	 * Collect `container`'s members in source (pre-order) order with each member's
-	 * rank and full slot span, descending into `#if` conditional regions so a guarded
-	 * member is recorded with the condition it is declared under (see `collectInto`).
-	 */
-	private static function collectMembers(
-		container: QueryNode, source: String, shape: RefShape, accessors: Map<Int, Bool>
-	): Array<OrderedMember> {
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
-		final out: Array<OrderedMember> = [];
-		collectInto(out, container, source, shape, comments, [], null, accessors);
-		return out;
-	}
-
-	/** The canonical-order rank of a member given its static / public flags and whether it is a field. */
-	private static function rankOf(
-		node: QueryNode, isStatic: Bool, isPublic: Bool, isField: Bool, accessors: Map<Int, Bool>, shape: RefShape
-	): MemberRank {
-		if (isField) return fieldRankOf(node, isStatic, isPublic, accessors, shape);
-		final name: String = node.name ?? '';
-		return if (shape.constructorName != null && name == shape.constructorName)
-			Constructor
-		else if (isAccessor(name, shape))
-			Accessor
-		else if (isStatic)
-			(isPublic ? StaticPublicMethod : StaticPrivateMethod)
-		else
-			(isPublic ? PublicMethod : PrivateMethod);
-	}
-
-	/**
-	 * The canonical-order rank of a FIELD: mutability splits stored fields, and a span present in
-	 * the accessor map marks the declaration as a property slot ranked by its getter/read-only form.
-	 */
-	private static function fieldRankOf(
-		node: QueryNode, isStatic: Bool, isPublic: Bool, accessors: Map<Int, Bool>, shape: RefShape
-	): MemberRank {
-		final mutable: Bool = (shape.mutableFieldDeclKinds ?? []).contains(node.kind);
-		if (isStatic)
-			return !mutable
-				? (isPublic ? StaticPublicImmutableField : StaticPrivateImmutableField)
-				: (isPublic ? StaticPublicMutableField : StaticPrivateMutableField);
-		final span: Null<Span> = node.span;
-		if (span == null || !accessors.exists(span.from))
-			return !mutable
-				? (isPublic ? PublicImmutableField : PrivateImmutableField)
-				: (isPublic ? PublicMutableField : PrivateMutableField);
-		final getter: Bool = accessors[span.from] == true;
-		return isPublic
-			? (getter ? PublicGetterProperty : PublicReadOnlyProperty)
-			: (getter ? PrivateGetterProperty : PrivateReadOnlyProperty);
-	}
-
-	/** Whether `name` begins with a property-accessor prefix (`get_` / `set_`). */
-	private static function isAccessor(name: String, shape: RefShape): Bool {
-		for (prefix in shape.accessorMethodPrefixes ?? []) if (name.startsWith(prefix)) return true;
-		return false;
 	}
 
 	/**
@@ -420,115 +331,6 @@ final class MemberOrder implements Check implements ConfigAware {
 	}
 
 	/**
-	 * Collect `parent`'s direct member declarations into `out` in source (pre-order)
-	 * order, descending into `conditionalMemberKind` (`#if`) regions so each guarded
-	 * member is recorded with the condition it is declared under. `condStack` holds the
-	 * enclosing `#if` condition conjuncts (an identical conjunct is deduped, collapsing
-	 * a redundant `#if X` nested in `#if X`); `outerCond` is the outermost enclosing
-	 * conditional's span - the rebuild-region bound for every member under it. On the way
-	 * out of each conditional, `assignBranches` recovers which `#elseif` / `#else` branch
-	 * each of its members sits in, since the parse tree carries no branch structure.
-	 */
-	private static function collectInto(
-		out: Array<OrderedMember>, parent: QueryNode, source: String, shape: RefShape,
-		comments: Array<{ from: Int, to: Int, isLine: Bool }>, condStack: Array<String>, outerCond: Null<Span>, accessors: Map<Int, Bool>
-	): Void {
-		final members: Array<String> = shape.memberDeclKinds ?? [];
-		final visibility: Array<String> = shape.visibilityModifierKinds ?? [];
-		final staticKind: Null<String> = shape.staticModifierKind;
-		final defaultVis: String = shape.defaultVisibilityModifierText ?? '';
-		final condKind: Null<String> = shape.conditionalMemberKind;
-		var isStatic: Bool = false;
-		var isPublic: Bool = false;
-		for (child in parent.children) {
-			if (condKind != null && child.kind == condKind) {
-				final span: Null<Span> = child.span;
-				final cond: Null<String> = extractConditionText(child, source, shape);
-				final nextStack: Array<String> = cond != null && !condStack.contains(cond) ? condStack.concat([cond]) : condStack;
-				final firstIdx: Int = out.length;
-				collectInto(out, child, source, shape, comments, nextStack, outerCond ?? span, accessors);
-				if (span != null && out.length > firstIdx) {
-					absorbLeadDoc(out, firstIdx, source, comments, span.from);
-					assignBranches(out, firstIdx, span, source, shape);
-				}
-				isStatic = false;
-				isPublic = false;
-			} else if (members.contains(child.kind)) {
-				pushMember(out, child, parent, source, shape, comments, condStack, outerCond, isStatic, isPublic, accessors);
-				isStatic = false;
-				isPublic = false;
-			} else {
-				if (staticKind != null && child.kind == staticKind) isStatic = true;
-				if (visibility.contains(child.kind)) {
-					final s: Null<Span> = child.span;
-					if (s != null && source.substring(s.from, s.to).trim() != defaultVis) isPublic = true;
-				}
-			}
-		}
-	}
-
-	/**
-	 * The `#if` condition text of a conditional-member node, whitespace-normalised, or
-	 * null. The condition ends at the first newline after `#if` (it is a single-line
-	 * directive) or at the first member, whichever comes first — so a doc comment that
-	 * sits between the `#if` line and the first member is NOT captured into the condition.
-	 */
-	private static function extractConditionText(node: QueryNode, source: String, shape: RefShape): Null<String> {
-		final span: Null<Span> = node.span;
-		if (span == null) return null;
-		final ifKw: String = shape.conditionalIfKeyword ?? '#if';
-		final ifIdx: Int = source.indexOf(ifKw, span.from);
-		if (ifIdx < 0) return null;
-		final condStart: Int = ifIdx + ifKw.length;
-		final firstChild: Null<QueryNode> = node.children.length > 0 ? node.children[0] : null;
-		final childSpan: Null<Span> = firstChild?.span;
-		final childFrom: Int = childSpan != null ? childSpan.from : span.to;
-		final nl: Int = source.indexOf('\n', condStart);
-		final lineEnd: Int = nl < 0 ? span.to : nl;
-		final condEnd: Int = childFrom < lineEnd ? childFrom : lineEnd;
-		if (condEnd <= condStart) return null;
-		final raw: String = source.substring(condStart, condEnd).trim();
-		return raw == '' ? null : normalizeCondition(raw);
-	}
-
-	/** Collapse internal whitespace runs in a condition to single spaces for stable comparison. */
-	private static function normalizeCondition(cond: String): String {
-		return (~/\s+/g).replace(cond, ' ');
-	}
-
-	/**
-	 * Join condition conjuncts into one parenthesised `#if` expression. Each conjunct is
-	 * itself parenthesised unless already balanced-parenthesised, and the whole is wrapped
-	 * in an outer pair — the grammar's `#if` accepts a single (parenthesised) condition, not
-	 * a bare top-level `&&`, so `((A) && (B))`, never `(A) && (B)`.
-	 */
-	private static function joinConds(stack: Array<String>): String {
-		return stack.length == 1 ? stack[0] : '(${stack.map(parenthesiseConjunct).join(' && ')})';
-	}
-
-	/** Wrap `cond` in parentheses unless it is already a single balanced parenthesised group. */
-	private static function parenthesiseConjunct(cond: String): String {
-		return isBalancedParenWrapped(cond) ? cond : '($cond)';
-	}
-
-	/** Whether `cond` is wrapped in one outer pair of balanced parentheses spanning the whole string. */
-	private static function isBalancedParenWrapped(cond: String): Bool {
-		if (!cond.startsWith('(') || !cond.endsWith(')')) return false;
-		var depth: Int = 0;
-		for (i in 0...cond.length) {
-			switch cond.charAt(i) {
-				case '(':
-					depth++;
-				case ')':
-					depth--;
-					if (depth == 0 && i < cond.length - 1) return false;
-				case _:
-			}
-		}
-		return depth == 0;
-	}
-
-	/**
 	 * Rebuild a container's whole member region from `sorted` (canonical order): each maximal
 	 * run of members sharing one `#if` condition AND branch shape is wrapped in a single
 	 * `#if <cond> ... #end`, set off by a blank line before the `#if` and after the `#end`;
@@ -580,7 +382,7 @@ final class MemberOrder implements Check implements ConfigAware {
 				prevMember = null;
 			}
 			final blankBefore: Bool = if (prevMember != null)
-				separatorBetween(prevMember, m, source) == GROUP_SEPARATOR;
+				MemberSpacing.separatorBetween(prevMember, m, source) == MemberSpacing.GROUP_SEPARATOR;
 			else if (m.condition != null)
 				false;
 			else
@@ -623,24 +425,6 @@ final class MemberOrder implements Check implements ConfigAware {
 	/** Whether two optional `#if` conditions are equal (both null = unconditional). */
 	private static inline function sameCondition(a: Null<String>, b: Null<String>): Bool {
 		return a == b;
-	}
-
-	/**
-	 * Attach a doc/comment block sitting on the lines immediately before a conditional's
-	 * `#if` (the parser puts it outside the conditional) to the conditional's first
-	 * member `out[firstIdx]`, so the rebuild re-emits it with that member inside the
-	 * regenerated `#if`. Extends the member's rebuild-region start back over the block.
-	 */
-	private static function absorbLeadDoc(
-		out: Array<OrderedMember>, firstIdx: Int, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, ifPos: Int
-	): Void {
-		final nl: Int = source.lastIndexOf('\n', ifPos);
-		final ifLineStart: Int = nl < 0 ? 0 : nl + 1;
-		final leadFrom: Int = RefactorSupport.leadingCommentBlockStart(source, comments, ifPos);
-		if (leadFrom >= ifLineStart) return;
-		out[firstIdx].leadTrivia = source.substring(leadFrom, ifLineStart);
-		out[firstIdx].leadFrom = leadFrom;
-		if (leadFrom < out[firstIdx].regionFrom) out[firstIdx].regionFrom = leadFrom;
 	}
 
 	/** Whether a comment in the member region is covered by no member's slot or absorbed lead-doc — an orphan note the reorder would strand. Directives are regenerated, so need no coverage. */
@@ -695,35 +479,6 @@ final class MemberOrder implements Check implements ConfigAware {
 		return false;
 	}
 
-	/** Build and push the `OrderedMember` for member `child` of `parent`, ranked under the running modifier flags and the `condStack` condition. */
-	private static function pushMember(
-		out: Array<OrderedMember>, child: QueryNode, parent: QueryNode, source: String, shape: RefShape,
-		comments: Array<{ from: Int, to: Int, isLine: Bool }>, condStack: Array<String>, outerCond: Null<Span>, isStatic: Bool,
-		isPublic: Bool, accessors: Map<Int, Bool>
-	): Void {
-		final span: Null<Span> = child.span;
-		if (span == null) return;
-		final group: Span = RefactorSupport.declGroupSpan(child, parent, span);
-		final full: Span = RefactorSupport.memberTriviaSpan(source, group, comments);
-		final isField: Bool = (shape.fieldDeclKinds ?? []).contains(child.kind);
-		final region: Span = outerCond ?? full;
-		out.push({
-			node: child,
-			rank: rankOf(child, isStatic, isPublic, isField, accessors, shape),
-			index: out.length,
-			span: full,
-			isField: isField,
-			isStatic: isStatic,
-			initNode: isField && child.children.length > 0 ? child.children[0] : null,
-			condition: condStack.length == 0 ? null : joinConds(condStack),
-			branch: null,
-			regionFrom: region.from,
-			regionTo: region.to,
-			leadTrivia: '',
-			leadFrom: full.from
-		});
-	}
-
 
 	/** Whether a line in `source[from,to)` starts (after indentation) with `#else` or `#elseif`. */
 	private static function hasBranchDirective(source: String, from: Int, to: Int): Bool {
@@ -740,105 +495,10 @@ final class MemberOrder implements Check implements ConfigAware {
 	 * and the fix so both agree on which member is flagged, and with which message.
 	 */
 	private static function firstLayoutIssue(members: Array<OrderedMember>, source: String, plan: SortPlan): Null<LayoutIssue> {
-		return firstOrderIssue(members, source, plan) ?? firstSpacingIssue(members, source) ?? firstDirectiveSpacingIssue(members, source);
-	}
-
-	/**
-	 * The first member separated from its predecessor by the wrong number of blank
-	 * lines, or null. The per-pair policy lives in `spacingViolation` (shared with
-	 * the fixer's spacing-only fallback): different-rank neighbours want exactly one
-	 * blank line; same-rank FIELD neighbours want none (a tight group), unless either
-	 * slot leads with a comment - the writer itself keeps a blank line after a
-	 * doc-commented member, and a blank before a doc comment is never stripped or
-	 * demanded. Same-rank methods are left alone - they are conventionally
-	 * blank-separated. Disabled outright (`spacingDisabled`) for a non-conditional
-	 * container with a non-whitespace inter-slot gap (a stray `;`, a trailing
-	 * comment): the fixer falls back to order-only slot swaps there, so a spacing
-	 * finding could never converge. Skips pairs sharing a line, crossing an `#if`
-	 * boundary, or whose gap holds directive / stray text.
-	 */
-	private static function firstSpacingIssue(members: Array<OrderedMember>, source: String): Null<LayoutIssue> {
-		if (spacingDisabled(members, source)) return null;
-		for (i in 0...members.length - 1) {
-			final want: Null<Int> = spacingViolation(members[i], members[i + 1], source);
-			if (want != null) return {
-				member: members[i + 1],
-				message: want == 1
-					? 'rank groups are not separated by a blank line'
-					: 'members of one rank group are separated by a blank line'
-			};
-		}
-		return null;
-	}
-
-	/**
-	 * The blank-line count the spacing rule demands between the adjacent slots `a`
-	 * and `b` when the pair currently violates it, or null when the pair is exempt
-	 * (different `#if` condition, same-line, directive / stray text in the gap,
-	 * same-rank non-field or comment-led pair) or already correct. The single source
-	 * of the per-pair spacing policy - shared by the check (`firstSpacingIssue`) and
-	 * the fixer's spacing-only fallback (`emitSpacingOnly`) so the two cannot drift.
-	 */
-	private static function spacingViolation(a: OrderedMember, b: OrderedMember, source: String): Null<Int> {
-		if (a.condition != b.condition) return null;
-		final gap: String = source.substring(a.span.to, b.span.from);
-		if (gap.indexOf('\n') < 0 || gap.trim() != '') return null;
-		final blanks: Int = blankLineCount(gap);
-		return if (a.rank != b.rank)
-			blanks != 1 ? 1 : null
-		else if (b.isField && blanks != 0 && !slotStartsWithComment(a, source) && !slotStartsWithComment(b, source))
-			0
-		else
-			null;
-	}
-
-	/**
-	 * Whether the spacing rule is disabled for this container outright: a
-	 * non-conditional container with non-whitespace in an inter-slot gap (a stray
-	 * `;`, a trailing comment) - the order fixer falls back to slot swaps there, so
-	 * a spacing finding could never converge.
-	 */
-	private static function spacingDisabled(members: Array<OrderedMember>, source: String): Bool {
-		return !hasConditionalMember(members) && hasNonWhitespaceGap(members, source);
-	}
-
-	/** The number of whitespace-only lines wholly inside `gap` (the inter-slot text) - a tab-only line counts. */
-	private static function blankLineCount(gap: String): Int {
-		final lines: Array<String> = gap.split('\n');
-		var count: Int = 0;
-		for (i in 1...lines.length - 1) if (StringTools.trim(lines[i]) == '') count++;
-		return count;
-	}
-
-	/** Whether `m`'s slot text begins (after trimming) with a comment - a doc/line comment the spacing rule never strips or demands a blank against. */
-	private static function slotStartsWithComment(m: OrderedMember, source: String): Bool {
-		final t: String = source.substring(m.span.from, m.span.to).trim();
-		return t.startsWith('/*') || t.startsWith('//');
-	}
-
-	/**
-	 * The separator between two consecutive reordered members: a blank line between rank
-	 * groups, before a method, or before a comment-led slot (a member whose leading doc the
-	 * writer keeps blank-separated); a single newline between two same-rank plain fields. Note
-	 * this drives the raw joins INSIDE a rebuilt `#if` region, where the writer preserves them
-	 * verbatim; outside `#if`, the writer re-inserts blank-after-doc during canonicalization.
-	 */
-	private static function separatorBetween(prev: OrderedMember, next: OrderedMember, source: String): String {
-		return prev.rank != next.rank || !next.isField || slotStartsWithComment(next, source) ? GROUP_SEPARATOR : '\n';
-	}
-
-	/** Whether any inter-member gap in the region holds non-whitespace (a stray `;`, a trailing comment) a rebuild would silently drop - the guard that falls the reorder back to per-slot swaps. */
-	private static function hasNonWhitespaceGap(members: Array<OrderedMember>, source: String): Bool {
-		for (i in 0...members.length - 1) if (source.substring(members[i].span.to, members[i + 1].span.from).trim() != '') return true;
-		return false;
-	}
-
-	/** Join `sorted` member slots for the reordered region, blank-separating rank groups and members that lead with a comment. */
-	private static function joinMembers(sorted: Array<OrderedMember>, source: String): String {
-		final parts: Array<String> = [source.substring(sorted[0].span.from, sorted[0].span.to)];
-		for (i in 1...sorted.length)
-			parts.push(separatorBetween(sorted[i - 1], sorted[i], source) + source.substring(sorted[i].span.from, sorted[i].span.to));
-		return parts.join('');
+		return
+			firstOrderIssue(members, source, plan) ?? MemberSpacing.firstSpacingIssue(members, source) ?? MemberSpacing.firstDirectiveSpacingIssue(
+				members, source
+			);
 	}
 
 	/** The first out-of-order member wrapped as a `LayoutIssue`, or null when the sequence is canonical. */
@@ -848,12 +508,6 @@ final class MemberOrder implements Check implements ConfigAware {
 			member: bad,
 			message: 'type members are not in canonical order (constants, fields, constructor, methods; public before private)'
 		};
-	}
-
-	/** Whether any member is `#if`-guarded - such a container rebuilds through `buildConditionalRegion`, never the slot-swap path. */
-	private static function hasConditionalMember(members: Array<OrderedMember>): Bool {
-		for (m in members) if (m.condition != null) return true;
-		return false;
 	}
 
 
@@ -1088,24 +742,6 @@ final class MemberOrder implements Check implements ConfigAware {
 		return cond == null ? m.index : groupFirst[groupKey(section, cond, branchSignatureOf(m))] ?? m.index;
 	}
 
-	/**
-	 * The first member preceded (across an `#if`) by a missing blank line: a member-level
-	 * `#if` must have a blank line before it and its `#end` a blank line after, so a
-	 * conditional block stands apart from its neighbours. Reads `directiveGapEdits` (shared
-	 * with the spacing-only fix so the two agree on which blanks are missing); the container's
-	 * leading `#if` / trailing `#end` (no member pair spans them) are exempt, as is an `#else`
-	 * gap (same condition on both sides).
-	 */
-	private static function firstDirectiveSpacingIssue(members: Array<OrderedMember>, source: String): Null<LayoutIssue> {
-		if (hasUnmodelledElse(members, source)) return null;
-		for (i in 0...members.length - 1) {
-			final gap: DirectiveGap = directiveGapEdits(members[i], members[i + 1], source);
-			if (gap.ifEdit != null) return { member: members[i + 1], message: 'a member-level #if is not preceded by a blank line' };
-			if (gap.endEdit != null) return { member: members[i + 1], message: 'a member-level #end is not followed by a blank line' };
-		}
-		return null;
-	}
-
 
 	/**
 	 * The `computeGroupFirst` / `compareOrder` map key for a member's conditional block: keyed by
@@ -1125,124 +761,6 @@ final class MemberOrder implements Check implements ConfigAware {
 		return branchIndexOf(a) - branchIndexOf(b);
 	}
 
-	/**
-	 * The directive-spacing arm of the spacing-only fallback: set every member-level `#if` off
-	 * with a blank line before it and its `#end` with a blank line after it - the blanks
-	 * `directiveGapEdits` reports - so a reorder-unsafe container whose guarded block cannot
-	 * move still gets that block visually separated from its neighbours (the CheckBox shape).
-	 * Exempts a container with an unmodelled `#else`, as the check does.
-	 */
-	private static function emitDirectiveSpacing(
-		edits: Array<{ span: Span, text: String }>, members: Array<OrderedMember>, source: String
-	): Void {
-		if (hasUnmodelledElse(members, source)) return;
-		for (i in 0...members.length - 1) {
-			final gap: DirectiveGap = directiveGapEdits(members[i], members[i + 1], source);
-			final ifEdit: Null<{ span: Span, text: String }> = gap.ifEdit;
-			if (ifEdit != null) edits.push(ifEdit);
-			final endEdit: Null<{ span: Span, text: String }> = gap.endEdit;
-			if (endEdit != null) edits.push(endEdit);
-		}
-	}
-
-	/**
-	 * The blank-line edits the directive-spacing rule wants for the cross-condition gap between
-	 * two consecutive members `a` and `b`: `ifEdit` inserts a blank line before the gap's first
-	 * `#if`, `endEdit` a blank line after its last `#end`; each null when that blank already
-	 * exists, the gap holds no such directive, or the pair shares a condition. The single source
-	 * of the directive-spacing policy - the check (`firstDirectiveSpacingIssue`, its message from
-	 * which edit is present) and the spacing-only fix (`emitDirectiveSpacing`, both applied) read
-	 * it, so the two cannot drift.
-	 */
-	private static function directiveGapEdits(a: OrderedMember, b: OrderedMember, source: String): DirectiveGap {
-		if (a.condition == b.condition) return { ifEdit: null, endEdit: null };
-		final gapFrom: Int = a.span.to;
-		final gapTo: Int = b.span.from;
-		var firstIfStart: Int = -1;
-		var lastEndTo: Int = -1;
-		var cursor: Int = gapFrom;
-		for (seg in source.substring(gapFrom, gapTo).split('\n')) {
-			final t: String = StringTools.trim(seg);
-			if (firstIfStart < 0 && t.startsWith('#if')) firstIfStart = cursor;
-			if (t == '#end') lastEndTo = cursor + seg.length;
-			cursor += seg.length + 1;
-		}
-		final ifEdit: Null<{ span: Span, text: String }> =
-			firstIfStart >= 0 && blankLineCount(source.substring(gapFrom, firstIfStart)) < 1 ? {
-				span: new Span(gapFrom, firstIfStart),
-				text: GROUP_SEPARATOR
-			} : null;
-		final endEdit: Null<{ span: Span, text: String }> = if (lastEndTo >= 0 && blankLineCount(source.substring(lastEndTo, gapTo)) < 1) {
-			final tail: String = source.substring(lastEndTo, gapTo);
-			{ span: new Span(lastEndTo, gapTo), text: GROUP_SEPARATOR + tail.substring(tail.lastIndexOf('\n') + 1) };
-		} else
-			null;
-		return { ifEdit: ifEdit, endEdit: endEdit };
-	}
-
-
-	/**
-	 * Recover the branch layout of the `#if` / `#elseif` / `#else` / `#end` construct spanning
-	 * `constructSpan` and record it on the members `collectInto` just pushed (`out[firstIdx...]`).
-	 * The grammar exposes NO branch structure - every branch's members arrive as flat children of
-	 * one `Conditional` node - so the boundaries come from the directive lines in the construct's
-	 * own source, the same textual read `extractConditionText` already does for the condition.
-	 * An unbranched construct is left alone: `branch` stays null, which is today's shape.
-	 *
-	 * Records a negative `index` (which bails the reorder) when the construct is not a flat,
-	 * single-section branch set: a nested conditional inside a branch, an already-branched nested
-	 * construct, members spread over more than one section, or a condition text that could not be
-	 * read. A rebuild would then have to split the construct across sections, emit a branch with no
-	 * members, or emit branches under no `#if` at all - none worth the risk of rewriting
-	 * conditional compilation.
-	 */
-	private static function assignBranches(
-		out: Array<OrderedMember>, firstIdx: Int, constructSpan: Span, source: String, shape: RefShape
-	): Void {
-		final opens: Array<{ at: Int, text: String }> = [
-			for (o in branchOpenings(constructSpan, source, shape)) if (!insideAnyMember(out, firstIdx, o.at)) o
-		];
-		if (opens.length == 0) return;
-		final texts: Array<String> = [for (o in opens) o.text];
-		final condition: Null<String> = out[firstIdx].condition;
-		if (condition == null || !isFlatBranchSet(out, firstIdx, condition)) {
-			final refused: BranchInfo = { index: -1, opens: texts };
-			for (i in firstIdx ... out.length) out[i].branch = refused;
-			return;
-		}
-		for (i in firstIdx ... out.length) {
-			final decl: Null<Span> = out[i].node.span;
-			final at: Int = decl != null ? decl.from : out[i].span.from;
-			var index: Int = 0;
-			for (o in opens) if (o.at < at) index++;
-			out[i].branch = { index: index, opens: texts };
-		}
-	}
-
-	/** Every `#elseif` / `#else` directive line inside `constructSpan`, in source order - each opens the next branch. */
-	private static function branchOpenings(constructSpan: Span, source: String, shape: RefShape): Array<{ at: Int, text: String }> {
-		final keywords: Array<String> = shape.conditionalElseKeywords ?? [];
-		final out: Array<{ at: Int, text: String }> = [];
-		if (keywords.length == 0) return out;
-		var pos: Int = constructSpan.from;
-		while (pos < constructSpan.to) {
-			final nl: Int = source.indexOf('\n', pos);
-			final end: Int = nl < 0 || nl > constructSpan.to ? constructSpan.to : nl;
-			final line: String = source.substring(pos, end).trim();
-			for (k in keywords) if (line.startsWith(k)) {
-				out.push({ at: pos, text: line });
-				break;
-			}
-			pos = end + 1;
-		}
-		return out;
-	}
-
-	/** Whether `at` falls inside one of the member slots `out[firstIdx...]` - a directive in a member's own body is not a branch boundary. */
-	private static function insideAnyMember(out: Array<OrderedMember>, firstIdx: Int, at: Int): Bool {
-		for (i in firstIdx ... out.length) if (at >= out[i].span.from && at < out[i].span.to) return true;
-		return false;
-	}
 
 	/** The branch a member sits in - 0 for an unconditional member or for the then-branch of a construct. */
 	private static inline function branchIndexOf(m: OrderedMember): Int {
@@ -1288,13 +806,6 @@ final class MemberOrder implements Check implements ConfigAware {
 			if (before.opens != after.opens || after.index <= before.index) return true;
 		}
 		return false;
-	}
-
-
-	/** Whether `out[firstIdx...]` is ONE flat, single-section branch set: no member under a nested conditional, none already branched, none whose rank crosses into another section. */
-	private static function isFlatBranchSet(out: Array<OrderedMember>, firstIdx: Int, condition: Null<String>): Bool {
-		for (i in firstIdx ... out.length) if (out[i].branch != null || out[i].condition != condition) return false;
-		return true;
 	}
 
 
@@ -1361,7 +872,7 @@ final class MemberOrder implements Check implements ConfigAware {
  * comparator and `firstOutOfOrder` need (Haxe otherwise forbids ordered comparison on an
  * abstract).
  */
-private enum abstract MemberRank(Int) {
+enum abstract MemberRank(Int) {
 	final StaticPublicImmutableField = 0;
 	final StaticPublicMutableField = 1;
 	final StaticPrivateImmutableField = 2;

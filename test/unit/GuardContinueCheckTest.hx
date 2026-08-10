@@ -14,7 +14,7 @@ import anyparse.runtime.Span;
  * The `guard-continue` check: a loop (`for` / `while` / `do … while`) whose braced
  * body's LAST statement is a bare `if (cond) { … }` (no `else`) preceded by ≥1 other
  * statement is flagged `Info` and de-nested to an `if (!cond) continue;` guard. The
- * inversion pushes De Morgan inward through the shared `CheckScan.negateConditionText`
+ * inversion pushes De Morgan inward through the shared `NegationScan.negateConditionText`
  * (backed by the grammar's `BooleanLogicSupport`): `a && b` → `!a || !b`, `==` / `!=`
  * flipped, but an ordered comparison (`< <= > >=`) kept wrapped `!(…)` (NaN-safe — `!(a <
  * b)` and `a >= b` differ under NaN), and a comment inside the condition — or a condition

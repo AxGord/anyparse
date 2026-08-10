@@ -130,8 +130,8 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		final typed: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final types: Null<Map<Int, String>> = typed?.declaredTypeSources(source);
 		final symbols: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
-		final lambdaBlocked: Bool = CheckScan.conflictingUsing(
-			CheckScan.usingModules(tree), LAMBDA_MODULE, COUNT_METHOD, plugin, () -> symbols, []
+		final lambdaBlocked: Bool = UsingScan.conflictingUsing(
+			UsingScan.usingModules(tree), LAMBDA_MODULE, COUNT_METHOD, plugin, () -> symbols, []
 		);
 		final wanted: Array<String> = [];
 		for (v in violations) {
@@ -145,8 +145,8 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		// needed `Lambda` — deciding first would leave an unused `using Lambda;` behind, which
 		// widens static-extension resolution for the whole file.
 		final edits: Array<{ span: Span, text: String }> = RefactorSupport.dropContainedEdits([for (c in collected) c.edit]);
-		if (!keptNeedsLambda(collected, edits) || CheckScan.hasUsingModule(tree, LAMBDA_MODULE)) return edits;
-		final usingEdit: { span: Span, text: String } = CheckScan.usingInsertEdit(tree, LAMBDA_MODULE);
+		if (!keptNeedsLambda(collected, edits) || UsingScan.hasUsingModule(tree, LAMBDA_MODULE)) return edits;
+		final usingEdit: { span: Span, text: String } = UsingScan.usingInsertEdit(tree, LAMBDA_MODULE);
 		if (!RefactorSupport.editsOverlapAny([usingEdit], edits)) edits.push(usingEdit);
 		return edits;
 	}

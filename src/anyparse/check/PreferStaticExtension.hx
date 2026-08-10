@@ -128,7 +128,7 @@ import anyparse.runtime.Span;
  *   keeps the first branch's declaration of a name, so the shadow gate reads that branch's
  *   member list only. The alias arm refuses such a decl outright; a split CLASS could still
  *   hide a member the other branch declares.
- * - The `using` declaration kind is spelled literally (`CheckScan.USING_DECL_KIND`, shared with
+ * - The `using` declaration kind is spelled literally (`UsingScan.USING_DECL_KIND`, shared with
  *   `prefer-find`): the grammar exposes no seam for it, so a grammar naming it differently gets
  *   no `using`-awareness.
  *
@@ -235,7 +235,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 			if (candidate == null || candidate.verdict != Verdict.Fixable) continue;
 			// A rewrite without the module in scope does not compile, so a file that lacks the
 			// `using` and forbids inserting one is refused before any edit is built.
-			if (!options.addUsing && !CheckScan.hasUsingModule(root, candidate.module)) continue;
+			if (!options.addUsing && !UsingScan.hasUsingModule(root, candidate.module)) continue;
 			final pair: Null<Array<{ span: Span, text: String }>> = rewriteEdits(candidate, source);
 			if (pair == null || RefactorSupport.editsOverlapAny(pair, edits)) continue;
 			for (edit in pair) edits.push(edit);
@@ -288,7 +288,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		// DEEP-mode resolution context (see `receiverNominal`): built once per file, and only for a
 		// file that actually holds a call on a configured module.
 		final chain: ChainTypeContext = { declaredTypeSources: s.typed.declaredTypeSources(source), source: source };
-		final usings: Array<String> = CheckScan.usingModules(tree);
+		final usings: Array<String> = UsingScan.usingModules(tree);
 		// The conflict verdict depends only on (module, method), while a file repeats the same
 		// pair across every call site — and each miss costs a whole-index member-closure query.
 		final conflicts: Map<String, Bool> = [];
@@ -340,7 +340,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		// deleted regions, where the comment gate already guards them.
 		final recv: QueryNode = RefactorSupport.unwrapParens(call.children[1], s.parenKind);
 		if (callSpan == null || recv.span == null) return null;
-		if (CheckScan.conflictingUsing(usings, module, method, plugin, symbols, conflicts)) return null;
+		if (UsingScan.conflictingUsing(usings, module, method, plugin, symbols, conflicts)) return null;
 		final nominal: Null<String> = receiverNominal(recv, root, s, declaredTypes, chain, symbols, file);
 		// A `Dynamic` receiver dispatches no extension at RUNTIME while the rewrite still compiles.
 		if (nominal != null && nominal == s.dynamicTypeName) return null;
@@ -491,8 +491,8 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	private static function appendUsingInserts(tree: QueryNode, modules: Array<String>, edits: Array<{ span: Span, text: String }>): Void {
 		var anchor: Null<Span> = null;
 		var text: String = '';
-		for (module in modules) if (!CheckScan.hasUsingModule(tree, module)) {
-			final insert: { span: Span, text: String } = CheckScan.usingInsertEdit(tree, module);
+		for (module in modules) if (!UsingScan.hasUsingModule(tree, module)) {
+			final insert: { span: Span, text: String } = UsingScan.usingInsertEdit(tree, module);
 			anchor = insert.span;
 			text += insert.text;
 		}

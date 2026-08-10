@@ -31,7 +31,7 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
  * "do not enter the body" — and both run every gate below. The merge arm additionally
  * parenthesises whichever operand binds looser than `&&`: the KEPT header condition through
  * `RefShape.andLowerPrecedenceKinds` (the same list `collapsible-if` merges with), and a De
- * Morgan `||` negation through the `slotKind` argument `CheckScan.negateConditionText` /
+ * Morgan `||` negation through the `slotKind` argument `NegationScan.negateConditionText` /
  * `BooleanLogicSupport.negateCondition` take — the merge slot is synthetic, so it is
  * addressed by KIND where `simplify-negated-compound` passes a parent node.
  *
@@ -39,9 +39,9 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
  *
  * `INV` negates the guard condition `g` so the surviving iterations are the ones the
  * `continue` skipped. When the grammar exposes a `BooleanLogicSupport` and `g` is
- * comment-free, `CheckScan.negateConditionText` pushes De Morgan inward; otherwise (a
+ * comment-free, `NegationScan.negateConditionText` pushes De Morgan inward; otherwise (a
  * seam-less grammar, a comment inside `g`, or a condition whose flattened `||` chain would
- * STRAND a null-safety narrowing — `CheckScan.narrowingStranded`) it falls back to the
+ * STRAND a null-safety narrowing — `NegationScan.narrowingStranded`) it falls back to the
  * verbatim text engine. Both agree on the leaf rules:
  *
  * - `!e` → `e` (strip the `!`, unwrapping a redundant paren so `!(a && b)` → `a && b`);
@@ -211,7 +211,7 @@ final class LoopGuard implements Check {
 			continueKind: continueKind,
 			ifKinds: ifKinds,
 			blockStmtKind: blockStmtKind,
-			negation: CheckScan.negationSeams(shape),
+			negation: NegationScan.negationSeams(shape),
 			opaqueKinds: shape.opaqueKinds ?? [],
 			support: plugin.booleanLogicSupport(),
 			andOperatorText: shape.andOperatorText,
@@ -228,7 +228,7 @@ final class LoopGuard implements Check {
 			final m: Null<Candidate> = match(node, source, s, shielded);
 			// The lifted header tests the INVERTED guard condition; if that inversion cannot
 			// shed its `!( … )` wrap, the header reads worse than the `continue` it replaces.
-			if (m != null && CheckScan.negationIsClean(m.cond, source, s.negation, s.support, types)) {
+			if (m != null && NegationScan.negationIsClean(m.cond, source, s.negation, s.support, types)) {
 				final span: Null<Span> = m.guard.span;
 				if (span != null) out.push({
 					file: file,
@@ -328,7 +328,7 @@ final class LoopGuard implements Check {
 	private static function invert(
 		cond: QueryNode, source: String, s: Seams, ?types: (QueryNode) -> Null<String>, ?slotKind: String
 	): String {
-		return CheckScan.negateConditionText(cond, source, s.negation, s.support, types, slotKind);
+		return NegationScan.negateConditionText(cond, source, s.negation, s.support, types, slotKind);
 	}
 
 }

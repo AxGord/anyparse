@@ -26,9 +26,6 @@ using StringTools;
 @:nullSafety(Strict)
 final class CheckScan {
 
-	/** The grammar's `using` declaration kind, spelled literally (see `hasUsingModule`). */
-	public static inline final USING_DECL_KIND: String = 'UsingDecl';
-
 	/** The class-body member kinds a method declaration projects as — a plain method and a `final` one. */
 	public static final METHOD_KINDS: Array<String> = ['FnMember', 'FinalModifiedMember'];
 
@@ -44,24 +41,8 @@ final class CheckScan {
 	/** The static-text child kind inside an interpolated string expression. */
 	public static inline final STRING_FRAGMENT_KIND: String = 'Literal';
 
-	/** A binary logical node has exactly [left, right] children. */
-	private static inline final BINARY_CHILD_COUNT: Int = 2;
-
-	/** The shortest disjunction that can strand a narrowing: with two operands the first operand's fact always reaches the second. */
-	private static inline final STRANDABLE_CHAIN_LENGTH: Int = 3;
-
 	/** A sole-referenced declaration has exactly one non-declaration reference resolving to it. */
 	private static inline final SOLE_REFERENCE_COUNT: Int = 1;
-
-	/** The top-level declaration kinds a `using` insert anchors after — the file's package / import / using header. */
-	private static final USING_ANCHOR_KINDS: Array<String> = [
-		'PackageDecl',
-		'ImportDecl',
-		'ImportAliasDecl',
-		'ImportAliasInDecl',
-		'ImportWildDecl',
-		USING_DECL_KIND
-	];
 
 	/**
 	 * Parse `source` with `plugin`, or null on any parse failure — the tolerant
@@ -180,88 +161,6 @@ final class CheckScan {
 	}
 
 	/**
-	 * The source text of a negation of `cond`, comment-preserving — the shared
-	 * condition-inverting engine of `loop-guard`, `guard-continue` and `guard-return`.
-	 *
-	 * When a grammar `support` is passed AND the condition span holds no comment marker AND the
-	 * condition does not strand a null-safety narrowing (`narrowingStranded`), the negation is
-	 * delegated to `BooleanLogicSupport.negateCondition`: De Morgan pushed inward
-	 * (`a && b` → `!a || !b`) order-safely — ordered comparisons stay wrapped `!(a < b)` unless
-	 * `typeNominalOf` proves both operands totally ordered. The comment scan is
-	 * STRING-LITERAL-BLIND: a `//` or `/*` inside a string operand conservatively forces the
-	 * fallback (a verbatim `!(cond)` wrap — correct output, just not De-Morganed). With no
-	 * `support`, a comment in the condition span, or a stranded narrowing, the text engine below is
-	 * used, in three shapes, in order:
-	 *
-	 *  - a leading logical-not is STRIPPED (`!e` → `e`), unwrapping one redundant paren
-	 *    (`!(a && b)` → `a && b`, `!!x` → `!x`) — the inner source verbatim;
-	 *  - an `==` / `!=` is FLIPPED (`a == b` → `a != b` and back), NaN-safe (IEEE
-	 *    `NaN == x` is false and `NaN != x` true) — UNLESS a comment sits in the operator
-	 *    gap, which the flip would drop, so it falls through to the verbatim wrap;
-	 *  - everything else (ordered comparisons `< <= > >=`, `&& || ?? ?:`, a call, …) is
-	 *    wrapped `!(<cond>)` VERBATIM — the only sound negation for `<` / `>=` (they DIFFER
-	 *    from their flips when an operand is a NaN or a `null`) and comment-preserving for every
-	 *    shape. A bare atomic (`atomicKinds`) drops the parens (`!cond`); the wrap is always fully
-	 *    parenthesised, so a low-precedence body (`a ?? b`, `c ? t : e`) negates correctly.
-	 *
-	 * For every standard type and normal abstract this is exactly `!(cond)`. The flip and
-	 * strip assume standard boolean algebra, so they are UNSOUND only for the pathological
-	 * case of a Haxe abstract that overloads `==` / `!=` non-complementarily or `!`
-	 * non-involutively (`@:op`) — where `a != b` need not be `!(a == b)`; the
-	 * always-parenthesised wrap is the sound form there. This edge is shared with `loop-guard`.
-	 */
-	public static function negateConditionText(
-		cond: QueryNode, source: String, seams: NegationSeams, ?support: BooleanLogicSupport, ?typeNominalOf: (QueryNode) -> Null<String>,
-		?slotKind: String
-	): String {
-		final cs: Null<Span> = cond.span;
-		if (cs == null) return '';
-		if (support != null && !hasCommentMarker(source, cs.from, cs.to) && !narrowingStranded(cond, seams))
-			return support.negateCondition(cond, source, typeNominalOf, slotKind);
-		final inner: Null<QueryNode> = notUnwrapNode(cond, seams);
-		if (inner != null) {
-			final innerSpan: Null<Span> = inner.span;
-			// The STRIP arm is the ONE fallback shape that can bind looser than the slot it lands in
-			// (`!(a || b)` hands back `a || b` verbatim); the flip and the wrap below both bind tighter
-			// than `&&`. The `&&` slot is also the only one `RefShape` describes — via the same
-			// `andLowerPrecedenceKinds` list `collapsible-if` merges with, which must stay in step with
-			// the seam engine's own `slotPrecedence` answering this question for the De Morgan tier.
-			if (innerSpan != null) {
-				final text: String = source.substring(innerSpan.from, innerSpan.to);
-				final loose: Bool = slotKind != null && slotKind == seams.andKind && seams.andLowerPrecedenceKinds.contains(inner.kind);
-				return loose ? '($text)' : text;
-			}
-		}
-		final flipped: Null<String> = eqFlipText(cond, source, seams);
-		if (flipped != null) return flipped;
-		final src: String = source.substring(cs.from, cs.to);
-		return seams.atomicKinds.contains(cond.kind) ? '!$src' : '!($src)';
-	}
-
-	/**
-	 * Whether inverting `cond` is worth doing at all — true unless the negation engine had to
-	 * DECLINE a rewrite it knows how to perform. The three inverting checks gate on this BEFORE
-	 * they flag: their purpose is to make a block read better by shedding a nesting level, and an
-	 * inversion that has to keep `!(a < b)` wrapped — because the flip could not be proven free of
-	 * both NaN and `null` — trades that nesting for a negation the positive form did not need.
-	 *
-	 * A wrap the engine could never avoid (`!(a is B)`, `!(a ?? b)`) is NOT a decline: that IS
-	 * the canonical negation, and such a site still inverts. The text fallback tier (no grammar
-	 * `support`, a comment in the condition, or a stranded null-safety narrowing) has no flip to
-	 * decline, so it keeps emitting exactly what it always did.
-	 */
-	public static function negationIsClean(
-		cond: QueryNode, source: String, seams: NegationSeams, ?support: BooleanLogicSupport, ?typeNominalOf: (QueryNode) -> Null<String>
-	): Bool {
-		final cs: Null<Span> = cond.span;
-		// Only the De Morgan tier can decline anything — the text fallback has no flip to refuse,
-		// so its verbatim wrap is the shape it always emitted and the site still inverts.
-		return cs != null
-			&& (support == null || hasCommentMarker(source, cs.from, cs.to) || narrowingStranded(cond, seams)
-				|| !support.negateConditionDeclinesFlip(cond, source, typeNominalOf));
-	}
-
-	/**
 	 * The operand-type probe `negateConditionText` hands to a `BooleanLogicSupport` so it may
 	 * flip an ordered comparison instead of wrapping it `!(…)` — see
 	 * `BooleanLogicSupport.negateCondition`. Answers a node's declared type nominal through the
@@ -307,170 +206,9 @@ final class CheckScan {
 		return node -> RefactorSupport.expressionTypeNominal(node, tree, shape, declaredTypes, resolved, file, chain);
 	}
 
-	/**
-	 * The `NegationSeams` `shape` exposes: the kinds `negateConditionText` strips, unwraps
-	 * and flips, the atomic-expression kinds that take a bare `!` rather than `!(…)`, and the
-	 * logical / identifier kinds the stranded-narrowing gate walks. Built here rather than at
-	 * each call site because the three inverting checks (`guard-return`, `guard-continue`,
-	 * `loop-guard`) read exactly the same seams, and a field added to `NegationSeams` must not
-	 * have to be threaded through three identical literals.
-	 */
-	public static function negationSeams(shape: RefShape): NegationSeams {
-		return {
-			notKind: shape.notKind,
-			parenKind: shape.parenKind,
-			eqKind: shape.eqKind,
-			notEqKind: shape.notEqKind,
-			atomicKinds: [
-				for (k in [
-					(shape.identKind: Null<String>),
-					shape.callKind,
-					shape.fieldAccessKind,
-					shape.forceFieldAccessKind,
-					shape.nullSafeAccessKind,
-					shape.indexAccessKind,
-					shape.newExprKind,
-					shape.parenKind,
-					shape.boolLitKind
-				]) if (k != null) k
-			],
-			andKind: shape.logicalAndKind,
-			orKind: shape.logicalOrKind,
-			identKind: shape.identKind,
-			andLowerPrecedenceKinds: shape.andLowerPrecedenceKinds ?? []
-		};
-	}
-
-	/**
-	 * Whether De-Morganing `cond` would strand a Haxe null-safety narrowing — the gate every
-	 * consumer of `negateConditionText` needs, and which that engine applies itself; exposed
-	 * because a check may want to know BEFORE it decides to flag at all (`guard-return` refuses
-	 * an already multi-line condition on this path, whose verbatim wrap would read worse than
-	 * the branch it replaces).
-	 *
-	 * An `&&` chain negates into a flat left-associative `||` chain, and Haxe carries a
-	 * narrowing fact into a later `||` operand from the chain's FIRST operand ONLY
-	 * (measured on the compiler: in `a == null || b == null || p(a.length, b.length)`
-	 * the `b` narrowing does not reach operand 3, while the `a` one does). The scan is
-	 * syntactic and conservative - no type information: a negated `&&` chain strands
-	 * when an operand at index 2 or later (0-based) shares a plain identifier with a
-	 * preceding operand OTHER than the first. A `!` node is not descended: negating it
-	 * STRIPS the `!` and re-emits its operand verbatim, restructuring nothing. A grammar
-	 * with no `andKind` seam never strands.
-	 */
-	public static function narrowingStranded(cond: QueryNode, seams: NegationSeams): Bool {
-		final andKind: Null<String> = seams.andKind;
-		if (andKind == null) return false;
-		if (cond.kind == seams.parenKind) return cond.children.length == 1 && narrowingStranded(cond.children[0], seams);
-		if (cond.kind == seams.notKind) return false;
-		if (cond.kind != andKind && cond.kind != seams.orKind) return false;
-		final operands: Array<QueryNode> = [];
-		flattenChain(cond, cond.kind, seams.parenKind, operands);
-		if (cond.kind == andKind && chainStrands(operands, seams)) return true;
-		for (operand in operands) if (narrowingStranded(operand, seams)) return true;
-		return false;
-	}
-
-	/**
-	 * Whether a top-level `using <module>;` is already present — then the module's
-	 * extension methods resolve without inserting one. `module` may be QUALIFIED
-	 * (`pkg.Lambda`), in which case only an exact match counts; a SIMPLE `module`
-	 * (`Lambda`) also matches a qualified declaration ending in it (`pkg.Lambda`),
-	 * since both bring the same module into scope. Shared by `prefer-find` and
-	 * `prefer-static-extension`.
-	 *
-	 * CAVEAT on that simple-name match: the index models no packages, so a `using
-	 * other.pkg.Lambda` of an UNRELATED project-local module sharing the simple name reads
-	 * as present and suppresses the insert. It errs toward not inserting — a loud compile
-	 * error rather than a silent behaviour change — and a stdlib module (the configured
-	 * default) has no same-named sibling to collide with.
-	 *
-	 * The declaration kind is spelled literally (`USING_DECL_KIND`): `RefShape` exposes no
-	 * using-declaration seam, so a grammar naming it differently reads as having no
-	 * `using` at all — which only ever causes a redundant insert, never a wrong one.
-	 */
-	public static function hasUsingModule(tree: QueryNode, module: String): Bool {
-		final simple: Bool = module.indexOf('.') == -1;
-		for (child in tree.children) if (child.kind == USING_DECL_KIND) {
-			final name: Null<String> = child.name;
-			if (name != null && (name == module || (simple && StringTools.endsWith(name, '.$module')))) return true;
-		}
-		return false;
-	}
-
-	/**
-	 * A ZERO-WIDTH edit inserting `using <module>;` into `tree`. The insert companion of
-	 * `hasUsingModule`; the caller applies it only after deciding at least one rewrite needs
-	 * the module in scope.
-	 *
-	 * The position is a CORRECTNESS choice, not cosmetics: Haxe resolves static extensions in
-	 * REVERSE declaration order, so the LAST `using` wins. Inserting after an existing `using`
-	 * run would give the new module top priority and silently re-target every same-named
-	 * extension call the file already makes through an earlier `using`. So the insert goes
-	 * ABOVE the FIRST existing `using` — lowest priority, no existing call disturbed — and
-	 * falls back to after the last package / import declaration, or the file head with a
-	 * trailing blank line, only when the file declares no `using` at all.
-	 */
-	public static function usingInsertEdit(tree: QueryNode, module: String): { span: Span, text: String } {
-		var anchor: Null<Span> = null;
-		for (child in tree.children) {
-			if (child.kind == USING_DECL_KIND) {
-				final first: Null<Span> = child.span;
-				if (first != null) return { span: new Span(first.from, first.from), text: 'using $module;\n' };
-			}
-			if (!USING_ANCHOR_KINDS.contains(child.kind)) continue;
-			final span: Null<Span> = child.span;
-			if (span != null) anchor = span;
-		}
-		final at: Null<Span> = anchor;
-		return at == null ? { span: new Span(0, 0), text: 'using $module;\n\n' } : {
-			span: new Span(at.to, at.to),
-			text: '\nusing $module;'
-		};
-	}
-
-	/**
-	 * Whether a `using` OTHER than `module` in the same file could also supply `method` — the
-	 * gate every extension-method rewrite needs before it emits a `<recv>.<method>(…)` call.
-	 *
-	 * Haxe resolves static extensions in REVERSE declaration order, so a second module declaring
-	 * the same name decides where the rewritten call lands. Two rules depend on that: writing an
-	 * explicit `Module.m(x)` in such a file may be deliberate disambiguation the rewrite would
-	 * undo, and a `using` INSERTED below an existing run (see `usingInsertEdit`) loses to it. A
-	 * module naming the same type as `module` is skipped; for the rest a known extension table
-	 * decides, and without one `symbols` must PROVE the module declares no such member. Every
-	 * doubt — an unknown module with no index, or one the index cannot resolve — counts as a
-	 * conflict, so the caller refuses rather than emits a silently retargeted call.
-	 *
-	 * The verdict depends only on the `(module, method)` pair while a file repeats it across
-	 * every site, and each miss costs a whole-index member-closure query, so `memo` carries it
-	 * for the caller's run. Pass a fresh map per file — a `using` set is per-file state.
-	 */
-	public static function conflictingUsing(
-		usings: Array<String>, module: String, method: String, plugin: GrammarPlugin, symbols: () -> Null<SymbolIndex>,
-		memo: Map<String, Bool>
-	): Bool {
-		final key: String = '$module:$method';
-		final cached: Null<Bool> = memo[key];
-		if (cached != null) return cached;
-		final verdict: Bool = conflictScan(usings, module, method, plugin, symbols);
-		memo[key] = verdict;
-		return verdict;
-	}
-
 	/** The last dot-segment of a module path — the name a call site spells (`utils.TextUtil` -> `TextUtil`); `RefactorSupport.lastSegment` under a name that says which question the check layer is asking. */
 	public static inline function simpleModuleName(path: String): String {
 		return RefactorSupport.lastSegment(path);
-	}
-
-	/** The module paths of every top-level `using` declaration in `tree` — the read side of `hasUsingModule`. */
-	public static function usingModules(tree: QueryNode): Array<String> {
-		final out: Array<String> = [];
-		for (child in tree.children) if (child.kind == USING_DECL_KIND) {
-			final name: Null<String> = child.name;
-			if (name != null) out.push(name);
-		}
-		return out;
 	}
 
 	/**
@@ -841,29 +579,6 @@ final class CheckScan {
 		return node.kind == condKind ? span : null;
 	}
 
-	/** The unmemoised body of `conflictingUsing` — one pass over the file's other `using` declarations. */
-	private static function conflictScan(
-		usings: Array<String>, module: String, method: String, plugin: GrammarPlugin, symbols: () -> Null<SymbolIndex>
-	): Bool {
-		final simple: String = simpleModuleName(module);
-		for (path in usings) if (path != module && simpleModuleName(path) != simple) {
-			final known: Null<Array<String>> = plugin.knownExtensionMethods(path);
-			if (known != null) {
-				if (known.contains(method)) return true;
-				continue;
-			}
-			final index: Null<SymbolIndex> = symbols();
-			// The FULL module path, not its last segment: `typeProvablyLacksMember` resolves a
-			// dotted name by import path, so a module whose simple name another package reuses
-			// no longer reads as ambiguous-and-therefore-conflicting.
-			// The FULL module path, not its last segment: `typeProvablyLacksMember` resolves a
-			// dotted name by import path, so a module whose simple name another package reuses
-			// no longer reads as ambiguous-and-therefore-conflicting.
-			if (index == null || !index.typeProvablyLacksMember(path, method)) return true;
-		}
-		return false;
-	}
-
 	/**
 	 * Iterate `violations`, recover each flagged node from `byKey` by its `from:to`
 	 * span, and collect the non-null edits `produce` builds — the span-lookup loop
@@ -1002,79 +717,6 @@ final class CheckScan {
 		return kept;
 	}
 
-	/**
-	 * The `!e` -> `e` STRIP arm of `negateConditionText`: unwraps a leading logical-not
-	 * (and one redundant paren under it), returning the inner NODE — the caller reads its
-	 * source and asks `slotWrap` whether the slot it lands in needs a parenthesis pair.
-	 * Null when `cond` is not a not-node.
-	 */
-	private static function notUnwrapNode(cond: QueryNode, seams: NegationSeams): Null<QueryNode> {
-		final notKind: Null<String> = seams.notKind;
-		if (notKind == null || cond.kind != notKind || cond.children.length < 1) return null;
-		final inner: QueryNode = cond.children[0];
-		final parenKind: Null<String> = seams.parenKind;
-		return parenKind != null && inner.kind == parenKind && inner.children.length == 1 ? inner.children[0] : inner;
-	}
-
-	/**
-	 * The `==` / `!=` FLIP arm of `negateConditionText`: rewrites a binary (in)equality
-	 * to its complement operator (NaN-safe; see the caller's doc for the non-complementary
-	 * `@:op` abstract caveat shared with `loop-guard`). Null when `cond` is not a binary
-	 * (in)equality or a comment sits in the operator gap (the flip would drop it).
-	 */
-	private static function eqFlipText(cond: QueryNode, source: String, seams: NegationSeams): Null<String> {
-		final eqKind: Null<String> = seams.eqKind;
-		final notEqKind: Null<String> = seams.notEqKind;
-		if (eqKind == null || notEqKind == null) return null;
-		if ((cond.kind != eqKind && cond.kind != notEqKind) || cond.children.length != 2) return null;
-		final l: Null<Span> = cond.children[0].span;
-		final r: Null<Span> = cond.children[1].span;
-		if (!(l != null && r != null && !hasCommentMarker(source, l.to, r.from))) return null;
-		final op: String = cond.kind == eqKind ? ' != ' : ' == ';
-		return source.substring(l.from, l.to) + op + source.substring(r.from, r.to);
-	}
-
-	/**
-	 * Append the left-associative `kind` chain under `node` as a flat operand list.
-	 * Parentheses are TRANSPARENT: the negation drops them and re-adds them only where
-	 * precedence demands, so `a && (b && c)` emits the same flat `!a || !b || !c` as
-	 * `a && b && c` and must flatten to the same three operands. Descending through a
-	 * paren that wraps a DIFFERENT operator changes nothing — the inner node is pushed
-	 * as the one operand the paren stood for, carrying the same identifiers.
-	 */
-	private static function flattenChain(node: QueryNode, kind: String, parenKind: Null<String>, out: Array<QueryNode>): Void {
-		if (node.kind == parenKind && node.children.length == 1) {
-			flattenChain(node.children[0], kind, parenKind, out);
-			return;
-		}
-		if (node.kind != kind || node.children.length != BINARY_CHILD_COUNT) {
-			out.push(node);
-			return;
-		}
-		flattenChain(node.children[0], kind, parenKind, out);
-		flattenChain(node.children[1], kind, parenKind, out);
-	}
-
-	/**
-	 * Whether the disjunction `operands` negates into would strand a narrowing: some
-	 * operand at index 2 or later shares an identifier with a preceding operand that is
-	 * not the first (whose fact alone survives the `||` chain).
-	 */
-	private static function chainStrands(operands: Array<QueryNode>, seams: NegationSeams): Bool {
-		if (operands.length < STRANDABLE_CHAIN_LENGTH) return false;
-		final names: Array<Array<String>> = [for (operand in operands) identNames(operand, seams, [])];
-		for (i in 2...operands.length) for (j in 1...i) for (name in names[i]) if (names[j].contains(name)) return true;
-		return false;
-	}
-
-	/** Append every plain-identifier name in `node`'s subtree to `out` and return it. */
-	private static function identNames(node: QueryNode, seams: NegationSeams, out: Array<String>): Array<String> {
-		final name: Null<String> = node.name;
-		if (node.kind == seams.identKind && name != null && name != '' && !out.contains(name)) out.push(name);
-		for (child in node.children) identNames(child, seams, out);
-		return out;
-	}
-
 	private static function collectClassBodies(node: QueryNode, out: Array<QueryNode>): Void {
 		if (isClassBodyKind(node.kind)) out.push(node);
 		for (child in node.children) collectClassBodies(child, out);
@@ -1133,7 +775,7 @@ private typedef CondSimplifySeams = {
 };
 
 /**
- * The condition-kind seams `CheckScan.negateConditionText` reads to invert a condition:
+ * The condition-kind seams `NegationScan.negateConditionText` reads to invert a condition:
  * the logical-not (`notKind`) it strips, the paren (`parenKind`) it unwraps, the
  * `==` / `!=` kinds (`eqKind` / `notEqKind`) it flips, the atomic-expression kinds
  * (`atomicKinds`) that take a bare `!` rather than `!(…)`, and the logical
