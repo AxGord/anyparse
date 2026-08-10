@@ -36,8 +36,6 @@ import anyparse.runtime.Span;
 @:nullSafety(Strict)
 final class MemberBranchScan {
 
-	private function new() {}
-
 	/**
 	 * The seams `fold` reads over one file — resolved once per file rather than per container.
 	 * Comment tokens (needed only to mask a `#else` written inside a comment out of the

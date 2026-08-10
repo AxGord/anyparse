@@ -32,8 +32,6 @@ final class CondBranchProjection {
 	 */
 	public static inline final COND_BRANCH_KIND: String = 'CondBranch';
 
-	private function new() {}
-
 	/**
 	 * The branch-aware rewrite of `tree`: every conditional-compilation region
 	 * (`RefShape.conditionalMemberKind`) whose PARENT is a statement list

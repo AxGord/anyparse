@@ -14,8 +14,6 @@ package anyparse.core;
 @:nullSafety(Strict)
 final class EnvFlag {
 
-	private function new() {}
-
 	/** Whether `name` is set to anything other than the empty string or `0`. */
 	public static function isSet(name: String): Bool {
 		#if (sys || nodejs)

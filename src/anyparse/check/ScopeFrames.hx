@@ -40,8 +40,6 @@ import anyparse.query.QueryNode;
 @:nullSafety(Strict)
 final class ScopeFrames {
 
-	private function new() {}
-
 	/**
 	 * The names visible inside `node` itself: `inherited` for anything that is not a statement
 	 * list, and `inherited` unioned with the list's own frame for one that is.

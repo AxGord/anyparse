@@ -34,8 +34,6 @@ final class FormatConfigDiscovery {
 	// `Map.exists` distinguishes "not looked up yet" from "looked up, found nothing".
 	private static final CACHE: Map<String, Null<String>> = [];
 
-	private function new() {}
-
 	/**
 	 * `text` with a BLANK payload folded into "no config at all".
 	 *

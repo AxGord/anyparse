@@ -178,29 +178,14 @@ class MethodChainEmit {
 		// the impossibility-pruning at N=1 keeps the renderer's tree
 		// minimal (one impossible state filtered out per `t < lineWidth`
 		// or `t > lineWidth` case).
-		final tail: Doc = if (extraThresholds.length == 0) {
-			final modeFlat: WrapMode = evalAt(false, []);
-			final modeBreak: WrapMode = evalAt(true, []);
-			if (modeFlat == modeBreak)
-				shapeAt(modeFlat);
-			else {
-				// `IfFullLineExceeds` over `Group(IfBreak(…))`: chain's own
-				// `Group` measures only its own subtree; trailing tokens on
-				// the same rendered line (e.g. ` BODY` after the for-cond
-				// close-paren on `condition_wrapping_method_chain`, where
-				// `BODY` lives inside a sibling `BodyGroup` from
-				// `forBody=fitLine`) vanish from the fit decision. The
-				// asymmetric BG semantic: own-subtree DEFERS BG (chain-of-
-				// lambdas like `xs.map(λ).filter(λ)` don't inflate the
-				// probe), rest-of-stack DESCENDS BG (sibling body after
-				// chain IS visible). Slice ω-iffulllineexceeds-primitive.
-				final ifFLE: Doc = IfFullLineExceeds(opt.lineWidth, shapeAt(modeBreak), shapeAt(modeFlat));
-				maybeTagReglue(ifFLE, modeBreak, modeFlat, segments, nestSuppress, segCallLeadingBreak);
-			}
-		} else if (extraThresholds.length == 1)
-			emitSingleThreshold(extraThresholds[0], opt, segments, nestSuppress, segCallLeadingBreak, evalAt, shapeAt);
-		else
-			buildChainThresholdTree(extraThresholds, [], evalAt, shapeAt, opt.lineWidth);
+		final tail: Doc = switch extraThresholds.length {
+			case 0:
+				emitNoThreshold(opt, segments, nestSuppress, segCallLeadingBreak, evalAt, shapeAt);
+			case 1:
+				emitSingleThreshold(extraThresholds[0], opt, segments, nestSuppress, segCallLeadingBreak, evalAt, shapeAt);
+			case _:
+				buildChainThresholdTree(extraThresholds, [], evalAt, shapeAt, opt.lineWidth);
+		}
 		// ω-methodchain-all-or-nothing: the receiver is emitted OUTSIDE the
 		// width decision, so the renderer reaches the probe with the pen at the
 		// column where the head actually ENDED — its last physical line, not
@@ -665,6 +650,33 @@ class MethodChainEmit {
 		return modeNY == modeYY ? maybeTagReglue(ifFLE, modeNY, modeNN, segments, nestSuppress, segCallLeadingBreak) : ifFLE;
 	}
 
+	/**
+	 * The zero-extra-threshold leaf of chain-emit's cascade: only the
+	 * lineWidth axis is live, so the layout is decided by evaluating the
+	 * cascade at (exceeds=false) and (exceeds=true). Sister of
+	 * `emitSingleThreshold` (one extra threshold) and
+	 * `buildChainThresholdTree` (two or more).
+	 */
+	private static function emitNoThreshold(
+		opt: WriteOptions, segments: Array<Doc>, nestSuppress: Bool, segCallLeadingBreak: Bool, evalAt: (Bool, Array<Int>) -> WrapMode,
+		shapeAt: (WrapMode) -> Doc
+	): Doc {
+		final modeFlat: WrapMode = evalAt(false, []);
+		final modeBreak: WrapMode = evalAt(true, []);
+		if (modeFlat == modeBreak) return shapeAt(modeFlat);
+		// `IfFullLineExceeds` over `Group(IfBreak(…))`: chain's own
+		// `Group` measures only its own subtree; trailing tokens on
+		// the same rendered line (e.g. ` BODY` after the for-cond
+		// close-paren on `condition_wrapping_method_chain`, where
+		// `BODY` lives inside a sibling `BodyGroup` from
+		// `forBody=fitLine`) vanish from the fit decision. The
+		// asymmetric BG semantic: own-subtree DEFERS BG (chain-of-
+		// lambdas like `xs.map(λ).filter(λ)` don't inflate the
+		// probe), rest-of-stack DESCENDS BG (sibling body after
+		// chain IS visible). Slice ω-iffulllineexceeds-primitive.
+		final ifFLE: Doc = IfFullLineExceeds(opt.lineWidth, shapeAt(modeBreak), shapeAt(modeFlat));
+		return maybeTagReglue(ifFLE, modeBreak, modeFlat, segments, nestSuppress, segCallLeadingBreak);
+	}
 
 	/**
 	 * ω-methodchain-callparam-restaware: within a DOT-BROKEN chain shape, a

@@ -20,20 +20,6 @@ using Lambda;
 @:nullSafety(Strict)
 final class HaxeNamingSupport implements NamingSupport {
 
-	private static final CAMEL_CASE_PATTERN: String = "^[a-z_][a-zA-Z0-9]*$";
-
-	/** Camel-case with NO leading underscore - a local must not carry the private-field `_` prefix. */
-	private static final LOCAL_CASE_PATTERN: String = "^[a-z][a-zA-Z0-9]*$";
-
-	/** A discard binding: underscores only, nothing to name (`for (_ in items)`). */
-	private static final DISCARD_NAME_PATTERN: EReg = new EReg("^_+$", '');
-
-	/** A magic dunder name (`__init__`) - a language / framework contract, not a style choice. */
-	private static final DUNDER_NAME_PATTERN: EReg = new EReg("^__.+__$", '');
-
-	/** The node kind of a binding declared after the comma in `var a = 1, b = 2;` — see `VarHost`. */
-	private static inline final VAR_MORE_KIND: String = 'VarMore';
-
 	/**
 	 * Haxe reserved keywords. A de-prefixed local whose bare name lands on one of
 	 * these is not a usable identifier, so its rename is skipped (report-only).
@@ -89,6 +75,21 @@ final class HaxeNamingSupport implements NamingSupport {
 		'var',
 		'while'
 	];
+
+	private static final CAMEL_CASE_PATTERN: String = "^[a-z_][a-zA-Z0-9]*$";
+
+	/** Camel-case with NO leading underscore - a local must not carry the private-field `_` prefix. */
+	private static final LOCAL_CASE_PATTERN: String = "^[a-z][a-zA-Z0-9]*$";
+
+	/** A discard binding: underscores only, nothing to name (`for (_ in items)`). */
+	private static final DISCARD_NAME_PATTERN: EReg = new EReg("^_+$", '');
+
+	/** A magic dunder name (`__init__`) - a language / framework contract, not a style choice. */
+	private static final DUNDER_NAME_PATTERN: EReg = new EReg("^__.+__$", '');
+
+	/** The node kind of a binding declared after the comma in `var a = 1, b = 2;` — see `VarHost`. */
+	private static inline final VAR_MORE_KIND: String = 'VarMore';
+
 
 	/**
 	 * Modifier node kinds the Haxe projection surfaces as separate siblings

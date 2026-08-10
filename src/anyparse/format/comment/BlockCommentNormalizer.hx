@@ -321,7 +321,12 @@ class BlockCommentNormalizer {
 			// lines keep the absolute fallback: their ws joins `cp` on the next
 			// parse, which is what makes them self-healing.
 			final matchesCp: Bool = ws.startsWith(cp);
-			final stripWs: String = cpLen > 0 && matchesCp ? ws.substr(cpLen) : i == last && !matchesCp ? '' : ws;
+			final stripWs: String = if (cpLen > 0 && matchesCp)
+				ws.substr(cpLen)
+			else if (i == last && !matchesCp)
+				''
+			else
+				ws;
 
 			if (i == last) {
 				if (lastIsClosingBrace) {
@@ -557,9 +562,12 @@ class BlockCommentNormalizer {
 	private static function closeLineWs(
 		body: String, ws: String, commonPrefix: Null<String>, shouldBake: Bool, indentUnit: String
 	): String {
-		if (body.fastCodeAt(0) == '}'.code) return '';
-		if (commonPrefix == null || !ws.startsWith(commonPrefix)) return '';
-		return (shouldBake ? indentUnit : '') + ws.substr(commonPrefix.length);
+		return if (body.fastCodeAt(0) == '}'.code)
+			''
+		else if (commonPrefix == null || !ws.startsWith(commonPrefix))
+			''
+		else
+			(shouldBake ? indentUnit : '') + ws.substr(commonPrefix.length);
 	}
 
 }

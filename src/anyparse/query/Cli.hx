@@ -12979,6 +12979,12 @@ final class Cli {
 		final caseFailRe: EReg = ~/^ {4}-\s+(.+)$/; // noqa: magic-number
 		final summaryRe: EReg = ~/^(\d+)\s+Assertions?\s+(\d+)\s+Success\s+(\d+)\s+Failures?\s+(\d+)\s+Errors?\s*$/;
 		final locRe: EReg = ~/^(.*):(\d+)$/;
+		// Capture-group ordinals of the regexes above, named so a reader does not
+		// have to count groups: `assertRe`'s trailing free-text message, and
+		// `summaryRe`'s Failures / Errors counts.
+		final assertMessageGroup: Int = 3;
+		final summaryFailuresGroup: Int = 3;
+		final summaryErrorsGroup: Int = 4;
 		// The FAILED-assertion detail row: `println(indent(failure, 8))`
 		// in BasicReporter — 8-space indent, no leading dash, no
 		// `[...]` brackets (that shape is the assertion row itself,
@@ -13027,7 +13033,7 @@ final class Cli {
 							className: currentClass,
 							testName: currentCase,
 							line: locLine,
-							message: assertRe.matched(3).trim(),
+							message: assertRe.matched(assertMessageGroup).trim(),
 							kind: TestSummaryFailureKind.Fail
 						};
 						awaitingDetail = true;
@@ -13038,8 +13044,8 @@ final class Cli {
 				currentClass = '';
 				currentCase = '';
 				assertions = parsePositiveInt(summaryRe.matched(1));
-				failures = parsePositiveInt(summaryRe.matched(3));
-				errors = parsePositiveInt(summaryRe.matched(4));
+				failures = parsePositiveInt(summaryRe.matched(summaryFailuresGroup));
+				errors = parsePositiveInt(summaryRe.matched(summaryErrorsGroup));
 			} else if (suiteRe.match(line)) {
 				closeCase();
 				currentClass = suiteRe.matched(1);

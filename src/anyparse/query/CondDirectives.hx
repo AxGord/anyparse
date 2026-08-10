@@ -44,8 +44,6 @@ final class CondDirectives {
 	/** The condition operators recognised between two operands, longest first so `>` never shadows `>=`. */
 	private static final OPERATORS: Array<String> = ['&&', '||', '==', '!=', '>=', '<=', '>', '<'];
 
-	private function new() {}
-
 	/**
 	 * Every conditional-compilation directive in `source`, in source order. Empty when the
 	 * grammar declares no opener keyword, or when the text holds none.

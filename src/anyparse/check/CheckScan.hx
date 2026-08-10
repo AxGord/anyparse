@@ -63,8 +63,6 @@ final class CheckScan {
 		USING_DECL_KIND
 	];
 
-	private function new() {}
-
 	/**
 	 * Parse `source` with `plugin`, or null on any parse failure — the tolerant
 	 * parse every check's `run` / `fix` opens with (`Check` forbids throwing on

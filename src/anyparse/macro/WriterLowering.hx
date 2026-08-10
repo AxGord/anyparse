@@ -8170,25 +8170,26 @@ class WriterLowering {
 		final interpFlat: Bool = branch.fmtHasFlag('captureSource');
 		final parenHardFlatten: Bool = branch.fmtHasFlag('expressionParenHardFlatten');
 		final propagateFieldLevelVar: Bool = branch.fmtHasFlag('propagateFieldLevelVar');
-		var _o: Expr = macro opt;
-		if (propagateExpr) _o = macro _setExprPosition($_o);
-		if (propagateEnumAbstract) _o = macro _setEnumAbstract($_o);
+		var optExpr: Expr = macro opt;
+		if (propagateExpr) optExpr = macro _setExprPosition($optExpr);
+		if (propagateEnumAbstract) optExpr = macro _setEnumAbstract($optExpr);
 		if (clearExpr) {
 			final operandAccess: Expr = macro $i{argNames[0]};
 			final operandIsBlock: Expr = AstPredLowering.predCallExpr(
 				_shape.root, _ctx.trivia, false, 'operandIsBlockExpr', [operandAccess]
 			);
-			_o = macro ($operandIsBlock ? _clearExprPosition($_o) : $_o);
+			optExpr = macro ($operandIsBlock ? _clearExprPosition($optExpr) : $optExpr);
 		}
-		if (propagateFieldLevelVar) _o = macro _setFieldLevelVar($_o);
-		if (interpFlat) _o = macro _setChainModeOverride($_o, anyparse.format.wrap.WrapMode.NoWrap);
+		if (propagateFieldLevelVar) optExpr = macro _setFieldLevelVar($optExpr);
+		if (interpFlat) optExpr = macro _setChainModeOverride($optExpr, anyparse.format.wrap.WrapMode.NoWrap);
 		if (parenHardFlatten)
-			_o = macro (
+			optExpr = macro (
 				opt._parenInCondition
 					? _setChainModeOverride(
-						_clearParenInCondition($_o), anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap)
+						_clearParenInCondition($optExpr),
+						anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap)
 					)
-					: $_o
+					: $optExpr
 			);
 		// ω-keep-chain (increment: opadd_chain_keep): a `ParenExpr`
 		// (`@:fmt(expressionParenHardFlatten)`) wrapping a chain marks the
@@ -8204,9 +8205,9 @@ class WriterLowering {
 		// → byte-inert. A BARE chain return value (opbool case-2) has NO
 		// enclosing `ParenExpr`, so the flag stays false and its chain keeps
 		// its own headBreak + Nest. Trivia-only.
-		if (parenHardFlatten && _ctx.trivia) _o = macro _setKeepChainInParen($_o, true);
-		if (kwNewlineExpr != null) _o = macro _setVarKwNewline($_o, $kwNewlineExpr);
-		return _o;
+		if (parenHardFlatten && _ctx.trivia) optExpr = macro _setKeepChainInParen($optExpr, true);
+		if (kwNewlineExpr != null) optExpr = macro _setVarKwNewline($optExpr, $kwNewlineExpr);
+		return optExpr;
 	}
 
 	/**
@@ -12419,14 +12420,14 @@ class WriterLowering {
 		// the typedef-blank + doc-comment-cascade Expr builders that the force-multi loop
 		// and `sepCtx` consume. Extracted to `triviaSepTypedefBlanksExprs` so the
 		// orchestrator stays under the complexity gate; behaviour byte-identical.
-		final _blanks: SepStarBlanks = triviaSepTypedefBlanksExprs(beforeDocCommentEmptyLines, typedefBodyBlanks, uniformStmtBlanks);
-		final keepCurlyBeginExpr: Expr = _blanks.keepCurlyBeginExpr;
-		final keepCurlyEndExpr: Expr = _blanks.keepCurlyEndExpr;
-		final typedefBeginExpr: Expr = _blanks.typedefBeginExpr;
-		final typedefEndExpr: Expr = _blanks.typedefEndExpr;
-		final typedefBetweenExpr: Expr = _blanks.typedefBetweenExpr;
-		final blankBeforeExpr: Expr = _blanks.blankBeforeExpr;
-		final initCurrDocCommentExpr: Expr = _blanks.initCurrDocCommentExpr;
+		final blanks: SepStarBlanks = triviaSepTypedefBlanksExprs(beforeDocCommentEmptyLines, typedefBodyBlanks, uniformStmtBlanks);
+		final keepCurlyBeginExpr: Expr = blanks.keepCurlyBeginExpr;
+		final keepCurlyEndExpr: Expr = blanks.keepCurlyEndExpr;
+		final typedefBeginExpr: Expr = blanks.typedefBeginExpr;
+		final typedefEndExpr: Expr = blanks.typedefEndExpr;
+		final typedefBetweenExpr: Expr = blanks.typedefBetweenExpr;
+		final blankBeforeExpr: Expr = blanks.blankBeforeExpr;
+		final initCurrDocCommentExpr: Expr = blanks.initCurrDocCommentExpr;
 		// ω-typedef-anon-force-multi: when the Star carries
 		// `@:fmt(forceMultiInTypedef)`, the outermost typedef-RHS anon
 		// has flipped `opt._inTypedefBody=true` via the parent Ref's

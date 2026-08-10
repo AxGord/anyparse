@@ -10,11 +10,18 @@ using StringTools;
 using Lambda;
 
 /**
- * Flags `import` statements whose bound name is never referenced elsewhere
- * in the same file. Import extraction (kind / alias / span, skip-parse
- * handling) rides on the cross-file `SymbolIndex`; the "is it referenced"
- * test is a raw word-boundary scan of the source, OUTSIDE the import
- * statements themselves.
+ * One file's text plus the two masks every reference test takes: its import
+ * statements (an occurrence inside one is not a use) and its comment regions
+ * (a `.` inside a comment qualifies nothing). Hoisted once per file.
+ */
+private typedef FileScan = { source: String, importSpans: Array<Span>, commentRegions: Array<Span> };
+
+/**
+ * Flags `import` / `using` statements whose bound name is never referenced
+ * elsewhere in the same file. Import extraction (kind / alias / span,
+ * skip-parse handling) rides on the cross-file `SymbolIndex`; the "is it
+ * referenced" test is a raw word-boundary scan of the source, OUTSIDE the
+ * import statements themselves.
  *
  * ## Why a raw scan, not the AST
  *
@@ -34,32 +41,47 @@ using Lambda;
  * preceding non-whitespace char is a qualification `.`. An import binds a
  * SIMPLE name, while a dotted path resolves from its root — a file whose only
  * mentions of the bound name are `haxe.macro.Context.currentPos()` needs no
- * import, and counting those tails kept such an import alive forever. The root
- * of a path is not dot-preceded and still counts (`Mod.VALUE` is what
+ * import, and counting those tails kept such an import alive forever. The
+ * root of a path is not dot-preceded and still counts (`Mod.VALUE` is what
  * `import pkg.Mod;` provides), and a `...` dot is the range / rest operator,
  * never a qualifier — `for (i in 0...Limit.MAX)` is a bare reference.
  *
  * ## Conservative by design
  *
  * The bound name of an `import pkg.Mod;` / `import pkg.Mod.Sub;` is the leaf
- * segment (`Mod` / `Sub`); for `import pkg.Mod as Alias;` it is the alias. If that name occurs as no word-boundary token anywhere outside the import statements, the import is unused → `Warning` — except a plain module import whose module is IN the lint file set: it binds every top-level type of the module, so a reference to any SECONDARY type keeps it (see `secondaryTypeReferenced`), and a reference to a bare CONSTRUCTOR of an in-set enum / enum-abstract type keeps it too (`enumCtorReferenced` — resolved only when the enum module is itself in the lint set, so run `--fix` project-wide). The remaining forms:
+ * segment (`Mod` / `Sub`); for `import pkg.Mod as Alias;` it is the alias. If
+ * that name occurs as no word-boundary token anywhere outside the import
+ * statements the import is unused → `Warning` — except a plain module import
+ * whose module is IN the lint file set: it binds every top-level type of the
+ * module, so a reference to any SECONDARY type keeps it (see
+ * `secondaryTypeReferenced`), and a reference to a bare CONSTRUCTOR of an
+ * in-set enum / enum-abstract type keeps it too (`enumCtorReferenced` —
+ * resolved only when the enum module is itself in the lint set, so run
+ * `--fix` project-wide). The remaining forms:
  *
- *  - `import pkg.Type.*;` (static wildcard) — when `Type` is in the lint set,
- *    its static fields / enum(-abstract) values / constructors are known, so a
- *    bare reference to any keeps the import and none referenced is a deletable
- *    `Warning` (`addWildViolation`). A package `import pkg.*;` or a wildcard on
- *    an out-of-set type has an unknown symbol set and stays an unverifiable `Info`.
+ *  - `import pkg.Type.*;` (static wildcard) — when `Type` is in the lint set
+ *    its static fields / enum(-abstract) values / constructors are known, so
+ *    a bare reference to any keeps the import and none referenced is a
+ *    deletable `Warning` (`addWildViolation`). A package `import pkg.*;` or a
+ *    wildcard on an out-of-set type has an unknown symbol set and stays an
+ *    unverifiable `Info`.
  *  - `using pkg.Mod;` — in use when its bound name is referenced (a static /
- *    type use such as `StringTools.fastCodeAt`) OR one of the extension methods
- *    it provides is called as `.method(`. Verified-unused when the module's
- *    methods are known (`knownExtensionMethods`, a `Warning` that `--fix`
- *    deletes); an unknown module stays an `Info`. See `addUsingViolation`.
- * One file's text plus the two masks every reference test takes: its import
- * statements (an occurrence inside one is not a use) and its comment regions
- * (a `.` inside a comment qualifies nothing). Hoisted once per file.
+ *    type use such as `StringTools.fastCodeAt`) OR one of the extension
+ *    methods it provides is called as `.method(`. Verified-unused when the
+ *    module's methods are known (`knownExtensionMethods`, a `Warning` that
+ *    `--fix` deletes); an unknown module stays an `Info`. See
+ *    `addUsingViolation`.
+ *
+ * ## Report vs fix
+ *
+ * `fix` emits an empty-text edit over the statement span of every `Warning`,
+ * so `lint --fix` deletes exactly the imports the scan PROVED unreferenced.
+ * Everything the scan cannot prove is an `Info` and is report-only: a
+ * wildcard or `using` whose symbol set is outside the lint scope, an import
+ * whose declaring module is not in the scope, and any `#if`-guarded import
+ * (the branch-blind scan cannot tell used-here from used-in-another-branch,
+ * and a deletion inside a conditional region would be unsafe).
  */
-private typedef FileScan = { source: String, importSpans: Array<Span>, commentRegions: Array<Span> };
-
 @:nullSafety(Strict)
 final class UnusedImport implements Check {
 

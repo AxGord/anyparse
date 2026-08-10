@@ -544,8 +544,6 @@ final class HaxeFormatConfigLoader {
 	/** `indentation.character` values already reported — one line per value per process. */
 	private static final warnedIndentCharacters: Array<String> = [];
 
-	private function new() {}
-
 	/**
 	 * Parses a `hxformat.json` document and returns the equivalent
 	 * `HxModuleWriteOptions`, starting from the Haxe format defaults

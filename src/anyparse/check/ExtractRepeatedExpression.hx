@@ -115,7 +115,7 @@ final class ExtractRepeatedExpression implements Check {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final root: QueryNode = tree;
-			final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(entry.source) : new Map<Int, String>();
+			final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(entry.source) : [];
 			final ctx: Ctx = {
 				shape: shape,
 				identKind: shape.identKind,

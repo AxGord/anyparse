@@ -45,9 +45,6 @@ class HxBlockCommentCloseWriteTest extends Test {
 		Assert.equals(settled, roundTrip(settled));
 	}
 
-	private function roundTrip(source: String): Null<String> return new HaxeQueryPlugin().writeRoundTrip(source);
-
-
 	/**
 	 * No interior content line → no frame (`commonPrefix` null): the close used to
 	 * keep its ABSOLUTE ws and re-absorb the renderer's nest every write (0→2→4→6
@@ -61,7 +58,6 @@ class HxBlockCommentCloseWriteTest extends Test {
 		Assert.isTrue(first.indexOf('\n\t\tnote*/') >= 0);
 		Assert.equals(first, roundTrip(first));
 	}
-
 
 	/**
 	 * The non-`}` branch's RELATIVE formula: a close authored two levels deeper
@@ -79,7 +75,6 @@ class HxBlockCommentCloseWriteTest extends Test {
 		Assert.equals(first, roundTrip(first));
 	}
 
-
 	/**
 	 * `firstInlineRebuildDoc`: a `**\/` deco close is excluded from the interior
 	 * common prefix, and its mismatched ws used to fall back to the ABSOLUTE source
@@ -92,5 +87,7 @@ class HxBlockCommentCloseWriteTest extends Test {
 		final first: String = once;
 		Assert.equals(first, roundTrip(first));
 	}
+
+	private function roundTrip(source: String): Null<String> return new HaxeQueryPlugin().writeRoundTrip(source);
 
 }
