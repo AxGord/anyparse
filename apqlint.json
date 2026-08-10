@@ -1,3 +1,4 @@
 {
-    "compilerOracle": "test-js.hxml"
+    "compilerOracle": "test-js.hxml",
+    "compilerOracleServer": true
 }

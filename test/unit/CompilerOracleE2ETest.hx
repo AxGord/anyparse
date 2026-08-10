@@ -7,6 +7,7 @@ import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
+import anyparse.check.CompilerServer;
 #if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;
@@ -43,6 +44,15 @@ final class CompilerOracleE2ETest extends Test {
 
 	/** The nested project's `apqlint.json`, living in `src/` and naming the hxml one level up. */
 	private static final NESTED_CONFIG: String = '{"compilerOracle":"../build.hxml"}';
+
+	/** A pid far above any process a machine can run — the planted record a warm run must refuse to connect to. */
+	private static final DEAD_SERVER_PID: String = '2147480000';
+
+	/** A recorded warm server whose process cannot exist: the fixture for the dead-record recovery path. */
+	private static final DEAD_SERVER_RECORD: String = '{"port":1,"pid":$DEAD_SERVER_PID,"compiledAt":1000000000}';
+
+	/** How far ahead of now a pinned modification time is set, so a later write can be pinned back to the value the server already recorded. */
+	private static inline final FUTURE_MTIME_MS: Float = 5000;
 	#end
 
 	public function testOracleConfirmsValidBuild(): Void {
@@ -219,6 +229,115 @@ final class CompilerOracleE2ETest extends Test {
 		#end
 	}
 
+	/**
+	 * Three verdicts through ONE reused server: the first lint spawns it and confirms, a
+	 * break is REJECTED, and restoring the source confirms again — so reuse is idempotent
+	 * rather than a first-run accident, and the warm path (not a silent fall-back to the
+	 * cold one) is what answered.
+	 *
+	 * The middle verdict also covers the STALENESS guard, deterministically. Pinning the
+	 * modification time to one value across both compiles is what does it: the server decides
+	 * staleness by that value, so the break is invisible to it BY CONSTRUCTION and only the
+	 * pre-typecheck `server/invalidate` can catch it. Without pinning, the two writes straddle
+	 * a wall-clock second by luck and the hazard is never reached.
+	 */
+	public function testWarmServerReportModeConfirmsAndRejects(): Void {
+		#if nodejs
+		if (!oracleWorks()) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final dir: String = writeLintDir(VALID, true, true);
+		final path: String = '$dir/Good.hx';
+		final warmBefore: Int = CompilerServer.invocations;
+		final coldBefore: Int = CompilerOracle.invocations;
+		final stamp: Date = Date.fromTime(Date.now().getTime() + FUTURE_MTIME_MS);
+		pinMtime(path, stamp);
+		Assert.equals(0, Cli.run(['lint', path]), 'a valid build confirms through the warm server');
+		Assert.isTrue(CompilerServer.invocations > warmBefore, 'the warm path is the one that answered');
+		Assert.equals(coldBefore, CompilerOracle.invocations, 'a warm confirm never falls back to the cold compiler');
+		File.saveContent(path, BROKEN);
+		pinMtime(path, stamp);
+		Assert.equals(1, Cli.run(['lint', path]), 'a break the server cannot see by modification time is still rejected');
+		File.saveContent(path, VALID);
+		Assert.equals(0, Cli.run(['lint', path]), 'restoring the source confirms again');
+		stopWarmServer(path);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('the warm server is a nodejs path');
+		#end
+	}
+
+	/**
+	 * The warm server is opt-in: a `compilerOracle` config WITHOUT `compilerOracleServer`
+	 * starts no daemon, so a project that asked only for a typecheck never gets one — while
+	 * the cold oracle still runs and still decides the verdict.
+	 */
+	public function testWarmServerNotSpawnedWithoutTheKey(): Void {
+		#if nodejs
+		if (!oracleWorks()) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final dir: String = writeLintDir(VALID, true, false);
+		final warmBefore: Int = CompilerServer.invocations;
+		final coldBefore: Int = CompilerOracle.invocations;
+		Assert.equals(0, Cli.run(['lint', '$dir/Good.hx']), 'the cold path still confirms a valid build');
+		Assert.equals(warmBefore, CompilerServer.invocations, 'no compilerOracleServer key means no warm server');
+		Assert.isTrue(CompilerOracle.invocations > coldBefore, 'the cold oracle ran instead');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('the warm server is a nodejs path');
+		#end
+	}
+
+	/**
+	 * A recorded server whose process is gone must not be believed. The fixture plants a
+	 * record naming a pid no machine can be running; the run has to notice, establish a real
+	 * server, and still produce the cold path's verdict.
+	 */
+	public function testWarmServerReplacesADeadRecordedServer(): Void {
+		#if nodejs
+		if (!oracleWorks()) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final dir: String = writeLintDir(VALID, true, true);
+		final path: String = '$dir/Good.hx';
+		final config: LintConfig = LintConfig.discover(path);
+		final hxml: Null<String> = config.compilerOracle();
+		if (hxml == null) {
+			Assert.fail('the fixture apqlint.json declares a compilerOracle');
+			CliFixture.removeDir(dir);
+			return;
+		}
+		final record: String = CompilerServer.stateFile(hxml, config.compilerOracleDir());
+		File.saveContent(record, DEAD_SERVER_RECORD);
+		Assert.equals(0, Cli.run(['lint', path]), 'a dead recorded server does not change the verdict');
+		Assert.isTrue(File.getContent(record).indexOf(DEAD_SERVER_PID) == -1, 'the dead record is replaced by a live one');
+		stopWarmServer(path);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('the warm server is a nodejs path');
+		#end
+	}
+
+	/**
+	 * An unrelated listener accepts `--connect` and lets the compiler client exit 0 having
+	 * compiled nothing, which would read as a clean build — so an exit status alone can
+	 * never be believed. Only a display-protocol reply proves a real compilation server is
+	 * on the port.
+	 */
+	public function testServerReplyProvesACompilationServer(): Void {
+		Assert.isTrue(CompilerServer.isServerReply('{"jsonrpc":"2.0","id":1,"result":{"result":null}}'), 'a real reply carries a result');
+		Assert.isFalse(CompilerServer.isServerReply(''), 'a stray listener answers with nothing at all');
+		Assert.isFalse(
+			CompilerServer.isServerReply('{"jsonrpc":"2.0","id":1,"method":"server/invalidate","params":{"file":"A.hx"}}'),
+			'a listener echoing the request back is not a compilation server'
+		);
+		Assert.isFalse(CompilerServer.isServerReply('Couldn\'t connect on 127.0.0.1:29999 (Connection refused)'));
+	}
+
 	#if (sys || nodejs)
 	/** A miniature of this project's own layout: `build.hxml` at the root, the sources and their `apqlint.json` in `src/`. */
 	private function writeNestedProject(): String {
@@ -235,13 +354,28 @@ final class CompilerOracleE2ETest extends Test {
 		return CliFixture.writeDir('oracle', [{ name: 'Good.hx', source: main }, { name: 'check.hxml', source: HXML }]);
 	}
 
-	private function writeLintDir(main: String, withKey: Bool): String {
+	private function writeLintDir(main: String, withKey: Bool, warmServer: Bool = false): String {
+		final keyed: String = warmServer
+			? '{"compilerOracle":"check.hxml","compilerOracleServer":true}'
+			: '{"compilerOracle":"check.hxml"}';
 		final files: Array<{ name: String, source: String }> = [
 			{ name: 'Good.hx', source: main },
 			{ name: 'check.hxml', source: HXML },
-			{ name: 'apqlint.json', source: withKey ? '{"compilerOracle":"check.hxml"}' : '{"rules":{}}' }
+			{ name: 'apqlint.json', source: withKey ? keyed : '{"rules":{}}' }
 		];
 		return CliFixture.writeDir('oracle', files);
+	}
+
+	/** Force `path`'s modification time to `stamp` — the device that makes the server's staleness comparison deterministic instead of a race with the wall clock. */
+	private inline function pinMtime(path: String, stamp: Date): Void {
+		js.node.Fs.utimesSync(path, stamp, stamp);
+	}
+
+	/** Reap the warm server a fixture started, keyed through the config exactly as the CLI keyed it. */
+	private function stopWarmServer(path: String): Void {
+		final config: LintConfig = LintConfig.discover(path);
+		final hxml: Null<String> = config.compilerOracle();
+		if (hxml != null) CompilerServer.stopShared(hxml, config.compilerOracleDir());
 	}
 
 	private function oracleWorks(): Bool {

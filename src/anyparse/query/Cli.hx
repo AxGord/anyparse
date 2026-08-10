@@ -45,6 +45,8 @@ import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.Clusters.ClusterReport;
+import anyparse.check.CompilerServer;
+import anyparse.core.EnvFlag;
 import anyparse.query.ExitCode.*;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
@@ -1273,7 +1275,7 @@ final class Cli {
 		renderLintReport(paths, shown, sourceOf, o.format, o.flat);
 		lintSummary(all, paths, o.includeInfo);
 
-		final oracleExit: Null<Int> = reportModeOracle(oracleHxml, oracleDir);
+		final oracleExit: Null<Int> = reportModeOracle(oracleHxml, oracleDir, paths, oracleConfig?.compilerOracleServer() ?? false);
 		if (oracleExit != null) return oracleExit;
 
 		final failOn: Null<Severity> = o.failOn;
@@ -12488,9 +12490,11 @@ final class Cli {
 	 * degrade to a skip note when the oracle can't run. Null = no fail. Split out of
 	 * `runLint` to keep it under the complexity budget.
 	 */
-	private static function reportModeOracle(oracleHxml: Null<String>, oracleDir: Null<String>): Null<Int> {
+	private static function reportModeOracle(
+		oracleHxml: Null<String>, oracleDir: Null<String>, paths: Array<String>, warmServer: Bool
+	): Null<Int> {
 		if (oracleHxml == null) return null;
-		switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
+		switch reportOracleVerdict(oracleHxml, oracleDir, paths, warmServer) {
 			case Confirmed:
 				stderr('apq lint: compiler oracle confirmed — build typechecks (nullSafety trust: compiler-confirmed)\n');
 			case Unavailable(reason):
@@ -12501,6 +12505,43 @@ final class Cli {
 				return EXIT_RUNTIME;
 		}
 		return null;
+	}
+
+	/**
+	 * The report-mode oracle verdict: through the project's shared WARM compilation server
+	 * when the config opted in (`compilerOracleServer`) and the process did not decline it
+	 * (`APQ_NO_ORACLE_SERVER`), else a fresh `haxe <hxml> --no-output`. Verdict-equivalent by
+	 * construction — the warm path answers null for every condition it cannot decide under
+	 * (no server, a dead one, a port that answers as something else), and the cold oracle
+	 * takes over then. The `--fix` risky-fix verification never comes here: a post-write
+	 * typecheck is the one question a compilation server cannot answer honestly.
+	 */
+	private static function reportOracleVerdict(hxml: String, dir: Null<String>, paths: Array<String>, warmServer: Bool): OracleOutcome {
+		final declined: Bool = !warmServer || EnvFlag.isSet('APQ_NO_ORACLE_SERVER');
+		// A warm CONFIRM stands as it is; a warm REJECTION is re-run COLD before it is reported.
+		// A compilation server can re-emit a stale null-safety diagnostic for a module it restored
+		// from cache rather than recompiled — measured here: one site made every cached recompile
+		// of this project spuriously red while the cold compile was green. So a rejection always
+		// carries the cold compiler's own verdict and error text, and the server can only ever
+		// change what a verdict COSTS.
+		return switch (declined ? null : CompilerServer.typecheck(hxml, dir, paths)) {
+			case Confirmed: Confirmed;
+			case Rejected(_): coldAfterWarmRejection(hxml, dir);
+			case null, _: CompilerOracle.typecheck(hxml, dir);
+		};
+	}
+
+	/**
+	 * The COLD verdict after the warm server rejected, plus a note when the two disagree. That
+	 * disagreement is the only externally visible symptom of a stale cached diagnostic, and
+	 * without the note the run silently costs a warm typecheck plus a cold one forever with
+	 * nothing to point at.
+	 */
+	private static function coldAfterWarmRejection(hxml: String, dir: Null<String>): OracleOutcome {
+		final cold: OracleOutcome = CompilerOracle.typecheck(hxml, dir);
+		if (cold.match(Confirmed))
+			stderr('apq lint: warm compiler server rejected a build the compiler accepts — stale cached diagnostic, cold verdict used\n');
+		return cold;
 	}
 
 	private static function runExtractConstant(args: Array<String>): Int {

@@ -337,12 +337,42 @@ entries relative to where the hxml lives, so a config in a subdirectory naming
 a parent build file (`"../build.hxml"`) still compiles with the classpaths its
 author meant.
 
+A top-level `"compilerOracleServer"` (boolean, default `false`) moves the
+REPORT-mode oracle onto a WARM Haxe compilation server shared by every `apq`
+process on the machine, instead of a fresh compile per run. The first lint
+spawns a detached `haxe --wait <port>`, drives its initial compile, and records
+the port and pid under the OS temp dir (`apq-oracle-<digest>.json`, keyed by the
+hxml and its compile directory); every later lint typechecks through
+`--connect`. Measured on this repo (median of 3): the oracle alone 14.6s → 0.4s,
+a single-file `hxq lint <file> --all` 17.9s → 3.2s, a whole `hxq lint src/ --all`
+45.7s → 32.5s; the very first call, which spawns the server and drives its full
+compile, costs 18.3s — one run's worth of the cold path it then replaces. It is
+opt-in because the server DELIBERATELY outlives the run
+that started it — `APQ_NO_ORACLE_SERVER` (any value but empty or `0`) declines
+it per process, and the recorded pid is how a daemon you no longer want gets
+stopped. Every condition the warm path cannot decide under (nothing recorded, a
+dead pid, no free port, or a port that answers as something other than a
+compilation server) falls back to the cold compile, so the key changes what a
+verdict COSTS, never what it is.
+
+Two exclusions are deliberate. The `--fix` risky-fix verification always uses a
+fresh compile: a compilation server compares modification times at one-second
+granularity, so a file written in the same second as the compile that read it
+stays frozen at its previous content — exactly the question a post-write
+verification asks. For the same reason every linted file modified since the last
+compile is `server/invalidate`d before the typecheck, which leaves as a residual
+only a file OUTSIDE the linted set written within that same second.
+
 ```json
 { "resolutionLibs": ["openfl"] }
 ```
 
 ```json
 { "compilerOracle": "../build.hxml" }
+```
+
+```json
+{ "compilerOracle": "build.hxml", "compilerOracleServer": true }
 ```
 
 ```json

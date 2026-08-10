@@ -27,6 +27,8 @@ typedef ApqLintConfig = {
 
 	@:optional var compilerOracle: String;
 
+	@:optional var compilerOracleServer: Bool;
+
 	@:optional var resolutionRoots: Array<String>;
 
 	@:optional var resolutionLibs: Array<String>;

@@ -247,7 +247,12 @@ final class StdResolver {
 	/** Resolve a symlink chain to its canonical target; the input path on any failure (an unreadable / broken link degrades gracefully). */
 	private static function resolveSymlink(path: String): String {
 		#if (sys || nodejs)
-		return try FileSystem.fullPath(path) catch (exception: haxe.Exception) path;
+		// `FileSystem.fullPath` is DECLARED to return a non-null `String`, but a module restored
+		// from a compilation-server cache has that read as nullable, and the mismatch surfaces as
+		// a null-safety error on warm compiles only. Bridging the result explicitly makes the
+		// function correct under either reading instead of only the fresh-compile one.
+		final full: Null<String> = try FileSystem.fullPath(path) catch (exception: haxe.Exception) null;
+		return full ?? path;
 		#else
 		return path;
 		#end

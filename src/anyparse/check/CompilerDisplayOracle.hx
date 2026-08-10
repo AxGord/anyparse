@@ -48,9 +48,6 @@ final class CompilerDisplayOracle implements TypeOracle {
 
 	private static inline final PORT_SPAN: Int = 40000;
 
-	/** Warm poll budget: `--connect` attempts (each ~0.3s apart) to let the server boot and run its first compile. */
-	private static inline final MAX_WARM_ATTEMPTS: Int = 40;
-
 	private final _hxml: String;
 	private final _cwd: Null<String>;
 	private final _port: Int;
@@ -105,7 +102,7 @@ final class CompilerDisplayOracle implements TypeOracle {
 	/** Reap the background server. Idempotent and exception-safe. */
 	public function stop(): Void {
 		#if nodejs
-		killChild(_child);
+		CompilerServer.killChild(_child);
 		#end
 	}
 
@@ -121,10 +118,10 @@ final class CompilerDisplayOracle implements TypeOracle {
 		while (attempt < MAX_PORT_ATTEMPTS) {
 			attempt++;
 			final port: Int = PORT_BASE + Std.random(PORT_SPAN);
-			final child: Dynamic = spawnServer(port);
+			final child: Dynamic = CompilerServer.spawnServer(port, false);
 			if (child == null) continue;
-			if (warm(port, hxml, cwd)) return new CompilerDisplayOracle(hxml, cwd, port, child);
-			killChild(child);
+			if (CompilerServer.warm(port, hxml, cwd)) return new CompilerDisplayOracle(hxml, cwd, port, child);
+			CompilerServer.killChild(child);
 		}
 		return null;
 		#else
@@ -151,9 +148,8 @@ final class CompilerDisplayOracle implements TypeOracle {
 	}
 
 	#if nodejs
-	private function connectRun(extra: Array<String>): Null<String> {
-		final res: Null<Dynamic> = connect(_port, _hxml, _cwd, extra);
-		return res == null ? null : oracleText(res.stdout) + oracleText(res.stderr);
+	private inline function connectRun(extra: Array<String>): Null<String> {
+		return CompilerServer.connect(_port, _hxml, _cwd, extra)?.output;
 	}
 
 	/** Run one `@type` display query for `path`, or null when it yields no `<type>`. */
@@ -179,64 +175,6 @@ final class CompilerDisplayOracle implements TypeOracle {
 		addForm(out, relativeToCwd(file, _cwd));
 		addForm(out, file);
 		return out;
-	}
-
-	private static function spawnServer(port: Int): Dynamic {
-		try {
-			final opts: Dynamic = { detached: false, stdio: 'ignore' };
-			return js.node.ChildProcess.spawn('haxe', ['--wait', '$port'], opts);
-		} catch (e: haxe.Exception) {
-			return null;
-		}
-	}
-
-	private static inline function killChild(child: Dynamic): Void {
-		// child.kill() does not throw for an already-dead process (it returns false) — no guard needed.
-		child?.kill();
-	}
-
-	/**
-	 * Poll `--connect` until the server answers (its first real connect drives the
-	 * initial full compile and blocks until done) or the boot budget is spent. A
-	 * `Could not connect` reply means the port is not listening yet — sleep and retry.
-	 */
-	private static function warm(port: Int, hxml: String, cwd: Null<String>): Bool {
-		var attempt: Int = 0;
-		while (attempt < MAX_WARM_ATTEMPTS) {
-			attempt++;
-			final res: Null<Dynamic> = connect(port, hxml, cwd, ['--no-output']);
-			if (res == null) {
-				sleep();
-				continue;
-			}
-			final combined: String = oracleText(res.stdout) + oracleText(res.stderr);
-			if (combined.indexOf('Could not connect') == -1) return true;
-			sleep();
-			continue;
-		}
-		return false;
-	}
-
-	private static function connect(port: Int, hxml: String, cwd: Null<String>, extra: Array<String>): Null<Dynamic> {
-		try {
-			final args: Array<String> = ['--connect', '$port', hxml].concat(extra);
-			final opts: Dynamic = { encoding: 'utf8' };
-			if (cwd != null) Reflect.setField(opts, 'cwd', cwd);
-			final res: Dynamic = js.node.ChildProcess.spawnSync('haxe', args, opts);
-			final err: Null<Dynamic> = (res.error: Dynamic);
-			return err != null ? null : res;
-		} catch (e: haxe.Exception) {
-			return null;
-		}
-	}
-
-	private static function sleep(): Void {
-		// spawnSync reports a missing/failed `sleep` via its result, never a throw — a tighter poll is harmless.
-		js.node.ChildProcess.spawnSync('sleep', ['0.3']);
-	}
-
-	private static function oracleText(value: Dynamic): String {
-		return value == null ? '' : Std.string(value);
 	}
 
 	/** `file` made relative to `cwd` (the compile-server client cwd) so the display path matches the module the compiler registered; unchanged when `cwd` is null or not a prefix. */

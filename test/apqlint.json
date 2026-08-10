@@ -1,5 +1,6 @@
 {
     "compilerOracle": "../test-js.hxml",
+    "compilerOracleServer": true,
     "rules": {
         "magic-number": { "enabled": false },
         "string-literal-dup": { "enabled": false },

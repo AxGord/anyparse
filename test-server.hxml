@@ -10,6 +10,13 @@
 # that port answers --connect without error and silently skips the
 # build (exit 0, no bin/test.n written, no output) - use plain
 # test.hxml as the safe default; it never depends on one.
+#
+# The lint compiler oracle now has its OWN warm server (apqlint.json
+# `compilerOracleServer`, anyparse.check.CompilerServer). That is not
+# this file: it owns the server it talks to, proves the port answers
+# as a compilation server before believing any verdict, and re-runs a
+# rejection cold - the three things a hand-started --connect here does
+# not do. The warning above still stands for THIS file.
 --connect 7822
 test-common.hxml
 -neko bin/test.n

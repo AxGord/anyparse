@@ -53,6 +53,9 @@ final class LintConfig {
 	/** The directory of that hxml — the compile CWD — or null when unset or parsed without a base. */
 	private final _compilerOracleDir: Null<String>;
 
+	/** Whether the project opted the oracle into the shared warm compilation server (`compilerOracleServer`); false unless the key asks for it. */
+	private final _compilerOracleServer: Bool;
+
 	/** The declared library source roots (`resolutionRoots`), each resolved to absolute against the config directory; an empty array when the key is absent. */
 	private final _resolutionRoots: Array<String>;
 
@@ -64,11 +67,12 @@ final class LintConfig {
 
 	public function new(
 		rules: Map<String, RuleConfig>, ?compilerOracle: String, ?compilerOracleDir: String, ?resolutionRoots: Array<String>,
-		?resolutionLibs: Array<String>, ?resolutionStd: Bool
+		?resolutionLibs: Array<String>, ?resolutionStd: Bool, ?compilerOracleServer: Bool
 	) {
 		_rules = rules;
 		_compilerOracle = compilerOracle;
 		_compilerOracleDir = compilerOracleDir;
+		_compilerOracleServer = compilerOracleServer ?? false;
 		_resolutionRoots = resolutionRoots ?? [];
 		_resolutionLibs = resolutionLibs ?? [];
 		_resolutionStd = resolutionStd ?? true;
@@ -96,6 +100,19 @@ final class LintConfig {
 	 */
 	public function compilerOracleDir(): Null<String> {
 		return _compilerOracleDir;
+	}
+
+	/**
+	 * Whether the compiler oracle may run through the project's shared warm compilation
+	 * server (`compilerOracleServer`) instead of a fresh `haxe` process per lint run. Opt-in
+	 * and false by default: the server is a daemon that OUTLIVES the run, which is a larger
+	 * commitment than the typecheck `compilerOracle` asks for. Report mode honours it and
+	 * falls back to the cold oracle whenever the server path cannot answer; the `--fix`
+	 * risky-fix verification ignores it entirely, since a post-write typecheck is exactly
+	 * what a compilation server cannot answer honestly (see `CompilerServer`).
+	 */
+	public function compilerOracleServer(): Bool {
+		return _compilerOracleServer;
 	}
 
 	/**
@@ -298,7 +315,7 @@ final class LintConfig {
 		final oracle: Null<String> = declaredOracle == null ? null : resolveAgainstConfigDir(baseDir, declaredOracle);
 		final oracleDir: Null<String> = oracle == null || baseDir == null ? null : hxmlCompileDir(oracle);
 		final roots: Array<String> = (config.resolutionRoots ?? []).map(resolveAgainstConfigDir.bind(baseDir));
-		return new LintConfig(rules, oracle, oracleDir, roots, config.resolutionLibs, config.resolutionStd);
+		return new LintConfig(rules, oracle, oracleDir, roots, config.resolutionLibs, config.resolutionStd, config.compilerOracleServer);
 	}
 
 	/**
