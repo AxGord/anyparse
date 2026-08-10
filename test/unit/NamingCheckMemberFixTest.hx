@@ -1,0 +1,885 @@
+package unit;
+
+import utest.Assert;
+import anyparse.check.Check.Violation;
+import anyparse.check.Naming;
+import anyparse.grammar.haxe.HaxeNamingSupport;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+
+using StringTools;
+
+import anyparse.query.RefactorSupport;
+import anyparse.runtime.Span;
+import anyparse.query.SymbolIndex;
+import anyparse.query.CachingGrammarPlugin;
+
+/**
+ * The `naming` autofix on a class-level DECLARATION — a private field, a private
+ * method, a `static final` constant, a property-backed field — where the rename is
+ * only safe once the declaration is proved CONFINED to the sources the check can
+ * see.
+ *
+ * Covered here: what confinement requires (no subclass, no `@:access` grant, no
+ * `@:allow`, no skip-parsing file in the index, no RTTI class) and what a
+ * confinement proof must still survive: a foreign-receiver access, an
+ * own-type-receiver access, a comment or string-literal mention, a name collision,
+ * an unattributable occurrence, a parameter capture. The reflection guard — which
+ * `Reflect.*` field-name arguments count as a reference to the member — is here
+ * too, including the on-disk cross-file fixtures behind `#if (sys || nodejs)`.
+ *
+ * The CROSS-FILE staging of such a rename lives in `NamingCheckCrossFileFixTest`.
+ */
+class NamingCheckMemberFixTest extends NamingCheckTestBase {
+
+	public function testFixSkipsPrivateField(): Void {
+		// A private field is cross-file-reachable (subclass / @:access) — report-only, no rename edit.
+		final src: String = 'class C {\n\tprivate var BadField:Int;\n}';
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	public function testFixSkipsType(): Void {
+		// A type is cross-file-reachable — report-only, no rename edit.
+		final src: String = 'class foo {}';
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	public function testFixRenamesConfinedPrivateField(): Void {
+		// A private field confined to its file (no subtype / @:access / @:allow), all references resolved → renamed.
+		final src: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
+		assertFixCanonicalWithIndex(src, '_shape', 'var shape');
+	}
+
+	public function testFixSkipsPrivateFieldWithSubclass(): Void {
+		// A subclass (any file) could read the inherited field → report-only.
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n}';
+		final files = [
+			{ file: 'pkg/C.hx', source: cSrc },
+			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D extends C {\n\tpublic function g() { return shape; }\n}' }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final cVs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		Assert.equals(1, cVs.length);
+		Assert.equals(0, check.fix(cSrc, cVs, new HaxeQueryPlugin(), index).length);
+	}
+
+	public function testFixSkipsPrivateFieldWithAccessGrant(): Void {
+		// Another file with @:access(C) can read C's privates → report-only.
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n}';
+		final files = [
+			{ file: 'pkg/C.hx', source: cSrc },
+			{ file: 'pkg/E.hx', source: 'package pkg;\n@:access(pkg.C)\nclass E {}' }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final cVs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		Assert.equals(0, check.fix(cSrc, cVs, new HaxeQueryPlugin(), index).length);
+	}
+
+	public function testFixSkipsPrivateFieldWithAllow(): Void {
+		// @:allow on the class grants another type access → report-only.
+		final src: String = 'package pkg;\n@:allow(pkg.X)\nclass C {\n\tprivate var shape:Int;\n}';
+		final files = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin(), index).length);
+	}
+
+	public function testFixRenamesPrivateFieldWithNonThisAccess(): Void {
+		// A non-`this` access (`o.shape`) is attributed through `o`'s declared type and renames along.
+		final src: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function eq(o:C) { return o.shape == shape; }\n}';
+		assertRenamedSingle(src, 'return o._shape == _shape', 'o.shape');
+	}
+
+	public function testFixWithoutIndexLeavesPrivateFieldReportOnly(): Void {
+		// No index passed → a private field cannot be proven confined → report-only.
+		final src: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n}';
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run([{ file: 'pkg/C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	public function testFixSkipsPrivateFieldWhenAnyFileSkipParses(): Void {
+		// A skip-parse file could hide a subtype / @:access we never see → conservatively report-only.
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n}';
+		final files = [
+			{ file: 'pkg/C.hx', source: cSrc },
+			{ file: 'pkg/Bad.hx', source: 'package pkg;\nclass Bad { function f() { ' }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final cVs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		Assert.equals(0, check.fix(cSrc, cVs, new HaxeQueryPlugin(), index).length);
+	}
+
+	public function testFixSkipsPrivateFieldNameCollision(): Void {
+		// Renaming `shape` to `_shape` when `_shape` is already a field of the type
+		// would duplicate the binding — skip, report-only.
+		final src: String = 'package pkg;\nclass C {\n\tprivate var _shape:Int;\n\tprivate var shape:Int;\n'
+			+ '\tpublic function f() { return this.shape + this._shape; }\n}';
+		final files = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin(), index).length);
+	}
+
+	/**
+	 * A same-named member on ANOTHER type is not a reference to this field: `r.bottom` where `r`
+	 * is a `Rect` must not veto renaming `C.bottom`. The receiver's declared type decides.
+	 */
+	public function testFixRenamesFieldWithForeignReceiverAccess(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tprivate var bottom:Int = 0;\n\n\t'
+			+ 'public function f(r:Rect):Int {\n\t\treturn bottom + r.bottom;\n\t}\n}';
+		assertRenamedWithRect(src, 'var _bottom:Int', 'var bottom:Int');
+	}
+
+	/** The foreign access itself is left ALONE — only this class's own reads are rewritten. */
+	public function testForeignReceiverAccessIsNotRewritten(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tprivate var bottom:Int = 0;\n\n\t'
+			+ 'public function f(r:Rect):Int {\n\t\treturn bottom + r.bottom;\n\t}\n}';
+		// One assertion covering both facts: this class's read IS rewritten, the foreign one is NOT.
+		assertRenamedWithRect(src, 'return _bottom + r.bottom', 'r._bottom');
+	}
+
+	/**
+	 * A receiver whose type IS the owner is a real reference `renameOccurrences` cannot see — it emits
+	 * bare and `this.`-qualified reads only — so it renames ALONG with the declaration. Leaving it
+	 * behind would strand it on a name the fix has removed.
+	 */
+	public function testFixRenamesFieldWithOwnTypeReceiverAccess(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tprivate var bottom:Int = 0;\n\n\t'
+			+ 'public function f(other:C):Int {\n\t\treturn bottom + other.bottom;\n\t}\n}';
+		assertRenamedSingle(src, 'return _bottom + other._bottom', 'other.bottom');
+	}
+
+	/**
+	 * The owner-bound merge takes the RECEIVER-attributed half only. The bare half is attributed by the
+	 * enclosing CLASS, so it also holds reads bound to a same-named local or parameter; merging it would
+	 * rewrite THOSE. Three distinct `__id` bindings in one class, each renaming to its own target.
+	 */
+	public function testFixKeepsBareReadsOutOfTheOwnerBoundMerge(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tprivate var __id:Int = 0;\n\n\tpublic function add():Int {\n\t\treturn __id;\n\t}\n'
+			+ '\n\tpublic function remove(__id:Int):Void {\n\t\tremoveAt(__id);\n\t}\n\n\t' + 'private function removeAt(x:Int):Void {}\n}';
+		assertRenamedSingle(src, 'removeAt(id)', '__id');
+	}
+
+	/** A receiver whose type does not resolve keeps blocking — fail-closed. */
+	public function testFixSkipsFieldWithUnresolvableReceiverAccess(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tprivate var bottom:Int = 0;\n\n\t'
+			+ 'public function f(u:Unknown):Int {\n\t\treturn bottom + u.bottom;\n\t}\n}';
+		assertNotRenamed(src);
+	}
+
+	/**
+	 * An all-lowercase field name is a common word, so a word-boundary match inside a comment is
+	 * probably prose and is left ALONE — but it does not block the rename either. A comment does
+	 * not execute: the worst case is a sentence that ages, never a broken build.
+	 */
+	public function testFixRenamesFieldMentionedInNonDistinctiveComment(): Void {
+		final src: String = 'package pkg;\nclass C {\n\t// resets the shape state\n\tprivate var shape:Int;\n'
+			+ '\tpublic function f() { return this.shape; }\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		switch RefactorSupport.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin(), index), true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('var _shape:Int') >= 0, text);
+				// The prose keeps its own word.
+				Assert.isTrue(text.indexOf('// resets the shape state') >= 0, text);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+	}
+
+	/** A `noqa` comment is a DIRECTIVE, not prose — it still refuses. */
+	public function testFixSkipsFieldMentionedInNoqaComment(): Void {
+		final src: String =
+			'package pkg;\nclass C {\n\t// noqa: shape\n\tprivate var shape:Int;\n\tpublic function f():Int { return this.shape; }\n}';
+		assertNotRenamed(src);
+	}
+
+	public function testFixRenamesDistinctiveFieldMentionedInComment(): Void {
+		// A distinctive field name (carries an uppercase letter) is safe to rename inside a
+		// comment too, so a commented-out reference stays consistent with the renamed code.
+		final src: String = 'package pkg;\nclass C {\n\t// legacy xShape fallback\n\tprivate var xShape:Int;\n'
+			+ '\tpublic function f() { return this.xShape; }\n}';
+		final files = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		assertCanonicalized(src, check.fix(src, vs, new HaxeQueryPlugin(), index), '// legacy _xShape fallback', 'var xShape');
+	}
+
+	public function testFixRenamesConfinedStaticFinal(): Void {
+		// A confined private static final wrongly given a `_` prefix (the macro-build
+		// anchor shape) → the underscore is stripped to a camelCase constant name.
+		final src: String = 'package pkg;\nclass C {\n\tprivate static final _forceBuild:Int = 0;\n}';
+		assertFixCanonicalWithIndex(src, 'final forceBuild', '_forceBuild');
+	}
+
+	public function testFixSkipsStaticFinalNameCollision(): Void {
+		// Stripping `_count` → `count` collides with an existing `count` field → report-only.
+		final src: String = 'package pkg;\nclass C {\n\tprivate static final _count:Int = 0;\n\tpublic var count:Int;\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin(), index).length);
+	}
+
+	public function testFixSkipsNonDerivableStaticFinal(): Void {
+		// Stripping `_FORCE_build` yields `FORCE_build`, not a valid camelCase name → report-only.
+		final src: String = 'package pkg;\nclass C {\n\tprivate static final _FORCE_build:Int = 0;\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin(), index).length);
+	}
+
+	public function testFixRenamesUpperSnakeStaticFinal(): Void {
+		// A confined private static final wrongly given a `_` prefix keeps its
+		// UPPER_SNAKE shape once the underscore is stripped (`_FORCE_BUILD` →
+		// `FORCE_BUILD`, valid per the Constant rule's UPPER_SNAKE branch).
+		final src: String = 'package pkg;\nclass C {\n\tprivate static final _FORCE_BUILD:Int = 0;\n}';
+		assertFixCanonicalWithIndex(src, 'final FORCE_BUILD', '_FORCE_BUILD');
+	}
+
+	public function testFixMemoizesConfinementAcrossFindingsOnOneOwner(): Void {
+		// Two flagged private static finals in ONE class: the per-owner confinement
+		// memo runs the project-wide scan once, and both findings are still fixed.
+		final src: String =
+			'package pkg;\nclass C {\n\tprivate static final _forceBuild:Int = 0;\n\tprivate static final _cacheSize:Int = 0;\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(2, vs.length);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin(), index);
+		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('forceBuild') >= 0);
+				Assert.isTrue(text.indexOf('cacheSize') >= 0);
+				Assert.isTrue(text.indexOf('_forceBuild') == -1);
+				Assert.isTrue(text.indexOf('_cacheSize') == -1);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+	}
+
+	public function testFixSkipsPrivateFieldReferencedByStringInAnotherFile(): Void {
+		#if (sys || nodejs)
+		// C's `shape` is confined (no subtype / @:access / @:allow), so WITHOUT the
+		// cross-file guard it would be renamed — but Other.hx reaches it by a
+		// reflection string `'shape'`, which a rename would break silently.
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
+		final otherSrc: String = "package pkg;\nclass Other {\n\tpublic function g() { return Reflect.field(this, 'shape'); }\n}";
+		final dir: String = CliFixture.writeDir('namingrefl', [{ name: 'C.hx', source: cSrc }, { name: 'Other.hx', source: otherSrc }]);
+		final files: Array<{ file: String, source: String }> = [
+			{ file: '$dir/C.hx', source: cSrc },
+			{
+				file: '$dir/Other.hx',
+				source: otherSrc
+			}
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final cVs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == '$dir/C.hx');
+		Assert.equals(1, cVs.length);
+		Assert.equals(0, check.fix(cSrc, cVs, new HaxeQueryPlugin(), index).length);
+		cleanupNamingDir(dir, ['C.hx', 'Other.hx']);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testFixRenamesPrivateFieldWhenOtherFileHasOnlyIdentifierOrSubstring(): Void {
+		#if (sys || nodejs)
+		// Other.hx contains `shape` only as an identifier (a param) and as a
+		// substring of a longer string ("reshaped:"), neither of which is the exact
+		// quoted name — so the cross-file guard does not trip and the rename applies.
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
+		final otherSrc: String =
+			'package pkg;\nclass Other {\n\tpublic function g(shape:Int):String {\n\t\treturn "reshaped:" + shape;\n\t}\n}';
+		final dir: String = CliFixture.writeDir('namingid', [{ name: 'C.hx', source: cSrc }, { name: 'Other.hx', source: otherSrc }]);
+		final files: Array<{ file: String, source: String }> = [
+			{ file: '$dir/C.hx', source: cSrc },
+			{
+				file: '$dir/Other.hx',
+				source: otherSrc
+			}
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final cVs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == '$dir/C.hx');
+		Assert.equals(1, cVs.length);
+		final edits: Array<{ span: Span, text: String }> = check.fix(cSrc, cVs, new HaxeQueryPlugin(), index);
+		switch RefactorSupport.canonicalize(cSrc, edits, true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('_shape') >= 0);
+				Assert.isTrue(text.indexOf('var shape') == -1);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+		cleanupNamingDir(dir, ['C.hx', 'Other.hx']);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A field named after its OWN package: `package touches;` puts the word in a module path, which
+	 * is not a reference to anything. It used to leave an unattributable occurrence and veto the
+	 * rename outright.
+	 */
+	public function testFixRenamesFieldNamedAfterItsOwnPackage(): Void {
+		final src: String =
+			'package touches;\n\nclass C {\n\tprivate var touches:Int = 0;\n\n\tpublic function f():Int {\n\t\treturn touches;\n\t}\n}';
+		assertRenamedIn('touches/C.hx', src, 'var _touches:Int', 'var touches:Int');
+	}
+
+	/** Same for a package segment some import traverses, and for an imported TYPE's own name. */
+	public function testFixRenamesFieldNamedAfterAnImportedPathSegment(): Void {
+		final src: String = 'package pkg;\n\nimport editor.bottom.Bottom;\n\nclass C {\n\t'
+			+ 'private var bottom:Int = 0;\n\n\tpublic function f():Int {\n\t\treturn bottom + Bottom.K;\n\t}\n}';
+		assertRenamedIn('pkg/C.hx', src, 'var _bottom:Int', 'var bottom:Int');
+	}
+
+	/** An occurrence in ACTIVE code still blocks — the relaxation is scoped to module paths. */
+	public function testFixSkipsFieldWithUnattributableActiveOccurrence(): Void {
+		final src: String = 'package pkg;\n\nclass C {\n\tprivate var bottom:Int = 0;\n\n\t'
+			+ 'public function f(r:Unknown):Int {\n\t\treturn bottom + r.bottom;\n\t}\n}';
+		assertNotRenamed(src);
+	}
+
+	/** A word inside a longer literal is prose: `t('Can edit')` must not veto renaming `edit`. */
+	public function testFixRenamesFieldMentionedAsWordInsideLiteral(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tprivate final edit:Int = label();\n\n\tpublic function f():Int {\n'
+			+ '\t\treturn edit;\n\t}\n\n\tprivate function label():Int {\n\t\ttrace(\'Can edit\');\n\t\treturn 1;\n\t}\n}';
+		assertLocalRenamed([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src, '_edit', 'final edit');
+	}
+
+	/** The same for a compound key: `'field:field'` names no member. */
+	public function testFixRenamesFieldMentionedInsideCompoundLiteral(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tprivate final field:Int = 1;\n\n\t'
+			+ "public function f():Int {\n\t\ttrace('field:field');\n\t\treturn field;\n\t}\n}";
+		assertLocalRenamed([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src, '_field', 'final field');
+	}
+
+	/** A literal whose WHOLE content is the name can be a by-name lookup — still refused. */
+	public function testFixSkipsFieldNamedByWholeLiteral(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tprivate final edit:Int = 1;\n\n\t'
+			+ "public function f():Int {\n\t\ttrace('edit');\n\t\treturn edit;\n\t}\n}";
+		assertNotRenamed(src);
+	}
+
+	/**
+	 * An interpolation read IS a reference and is renamed ALONG with the code — it never reaches the
+	 * occurrence classifier, because `Rename.renameOccurrences` already covers it. The `StringWord`
+	 * relaxation must not turn such a read into ignored prose.
+	 */
+	public function testFixRenamesFieldReadByInterpolation(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tprivate final edit:Int = 1;\n\n\t'
+			+ "public function f():String {\n\t\treturn 'v=${edit}!';\n\t}\n}";
+		assertLocalRenamed([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src, "${_edit}", "${edit}");
+	}
+
+	public function testFixSkipsPrivatePropertyWithAccessors(): Void {
+		// A confined private property backed by physical `get_`/`set_` accessors:
+		// renaming the property to `_value` alone leaves the accessors named
+		// `get_Value` / `set_Value`, but Haxe then requires `get__value` /
+		// `set__value` - the single-decl autofix would emit non-compiling source, so
+		// it must skip the property (report-only).
+		final src: String = 'package pkg;\nclass C {\n\tprivate var Value(get, set):Int;\n\tfunction get_Value():Int return this.Value;\n'
+			+ '\tfunction set_Value(v:Int):Int return this.Value = v;\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("'Value'"));
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin(), index).length);
+	}
+
+	public function testFixStillRenamesConfinedPropertylessPrivateField(): Void {
+		// Guard against over-skipping: a plain confined private field with no
+		// accessor siblings is still renamed - the property skip must not swallow it.
+		final src: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
+		assertFixCanonicalWithIndex(src, '_shape', 'var shape');
+	}
+
+	public function testFixSkipsFieldRedefiningInheritedUnderscoreName(): Void {
+		// Renaming `count` -> `_count` would REDEFINE `_count` inherited from Base - a Haxe compile
+		// error ("Redefinition of variable in subclass") a local shadow does not have. The field
+		// inheritance gate skips it - report-only.
+		final baseSrc: String = 'package pkg;\nclass Base {\n\tprivate var _count:Int = 0;\n}';
+		final cSrc: String =
+			'package pkg;\nclass C extends Base {\n\tprivate var count:Int = 1;\n\tpublic function f() { return this.count; }\n}';
+		final files: Array<{ file: String, source: String }> =
+			[{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final cVs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		Assert.isTrue(cVs.length >= 1);
+		Assert.equals(0, check.fix(cSrc, cVs, new HaxeQueryPlugin(), index).length);
+	}
+
+	public function testFixSkipsFieldInRttiClass(): Void {
+		// A field of a class carrying `@:rtti` directly is serialized by reflecting on field NAMES;
+		// renaming it breaks saved files. Report-only even though the field is otherwise confined.
+		final src: String = 'package pkg;\n@:rtti\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin(), index).length);
+	}
+
+	public function testFixSkipsFieldExtendingRttiClass(): Void {
+		// A subclass extending a `@:rtti` base (without its own `@:rtti`) is still name-reflected
+		// through the base - the transitive index check skips its field.
+		final baseSrc: String = 'package pkg;\n@:rtti\nclass Base {\n\tpublic function new() {}\n}';
+		final cSrc: String =
+			'package pkg;\nclass C extends Base {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
+		final files: Array<{ file: String, source: String }> =
+			[{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final cVs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		Assert.equals(1, cVs.length);
+		Assert.equals(0, check.fix(cSrc, cVs, new HaxeQueryPlugin(), index).length);
+	}
+
+	/**
+	 * A `_`-prefix field rename resolves its supertype closure through the plugin's
+	 * RESOLUTION scope: `Base` lives only in the resolution-scope library (not the
+	 * report files), and a clean `Base` lets `x -> _x` proceed. The report-only
+	 * `index` (confinement) cannot see `Base`; before the resolution wiring the field
+	 * gate consulted THAT index and blocked the rename as an unresolvable supertype.
+	 */
+	public function testFixFieldResolvesCleanSupertypeThroughResolutionScope(): Void {
+		// The import is load-bearing, not decoration: a cross-package `extends Base` does not
+		// compile without it, and the supertype resolution the fix relies on reads exactly the
+		// imports the file declares.
+		final subSrc: String =
+			'package pkg;\nimport ext.Base;\n\nclass Sub extends Base {\n\tprivate var x:Int;\n\tpublic function f() { return this.x; }\n}';
+		final edits: Array<{ span: Span, text: String }> = fixWithResolutionScope(subSrc, 'package ext;\nclass Base {}');
+		assertCanonicalized(subSrc, edits, '_x', 'var x');
+	}
+
+	/**
+	 * The mirror: when the resolution-scope `Base` DECLARES `_x`, the rename `x -> _x`
+	 * would trigger Haxe's "Redefinition of variable in subclass", so the field gate —
+	 * now walking the closure through the resolution index — blocks it (report-only).
+	 */
+	public function testFixFieldBlockedBySupertypeMemberInResolutionScope(): Void {
+		final subSrc: String = 'package pkg;\nclass Sub extends Base {\n\tprivate var x:Int;\n\tpublic function f() { return this.x; }\n}';
+		final edits: Array<{ span: Span, text: String }> = fixWithResolutionScope(
+			subSrc, 'package ext;\nclass Base {\n\tprivate var _x:Int;\n}'
+		);
+		Assert.equals(0, edits.length);
+	}
+
+	public function testFixDePrefixesDoubleUnderscoreField(): Void {
+		// A private field with a doubled underscore (`__size`) de-prefixes to the single-underscore
+		// convention (`_size`), mirroring the snake/de-prefix normalisation already applied to locals.
+		final src: String = 'package pkg;\nclass C {\n\tprivate var __size:Int;\n\tpublic function f() { return this.__size; }\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin(), index);
+		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('_size') >= 0);
+				Assert.isTrue(text.indexOf('__size') == -1);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+	}
+
+	public function testFixBlocksFieldWithUnresolvableOccurrence(): Void {
+		// A field reference behind a mid-expression `#if` is raw trivia the resolver cannot bind -
+		// an uncovered active-code occurrence. Even with per-binding attribution, an UNRESOLVABLE
+		// occurrence still fails the completeness gate closed, so the field rename is skipped.
+		final src: String = 'package pkg;\nclass C {\n\tprivate var __id:Int = 0;\n\tpublic function f():Int {\n'
+			+ '\t\treturn __id #if cpp + __id #end;\n\t}\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	/**
+	 * The field `logo` is used bare before and after a `switch` whose arms each declare their own
+	 * `logo` local. Each arm frames its own body (`RefShape.branchScopeKinds`), so the bare uses
+	 * bind to the FIELD and rename with it, while both arm-locals keep their name. Before the arms
+	 * framed, the first arm's local swallowed every occurrence in the method and the completeness
+	 * gate refused the whole rename rather than orphan the field's uses.
+	 */
+	public function testFixRenamesFieldAcrossCaseArmsDeclaringTheSameName(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tprivate var logo:Null<Sprite>;\n\tpublic function make(kind:Int):Void {\n'
+			+ '\t\tif (logo != null) removeChild(logo);\n\t\tlogo = switch kind {\n\t\t\tcase 0:\n'
+			+ '\t\t\t\tfinal logo:Sprite = new Sprite();\n\t\t\t\tlogo;\n\t\t\tcase _:\n\t\t\t\tfinal logo:Sprite = new Sprite();\n'
+			+ '\t\t\t\tlogo;\n\t\t};\n\t\taddChild(logo);\n\t}\n\tfunction removeChild(o:Sprite):Void {}\n'
+			+ '\tfunction addChild(o:Sprite):Void {}\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		switch RefactorSupport.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin(), index), true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('private var _logo:Null<Sprite>') >= 0, text);
+				// The field's own uses, on both sides of the switch.
+				Assert.isTrue(text.indexOf('if (_logo != null) removeChild(_logo)') >= 0, text);
+				Assert.isTrue(text.indexOf('addChild(_logo)') >= 0, text);
+				// Both arm-locals keep their name — they are not the flagged declaration.
+				Assert.equals(2, text.split('final logo:Sprite = new Sprite();').length - 1);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+	}
+
+	public function testFixRenamesFieldWithSameNamedParamInAnotherMethod(): Void {
+		// The valid counterpart of the leak case: a same-named PARAM in one method (properly scoped) does
+		// NOT steal the field's bare uses in ANOTHER method - those correctly bind to the field and rename
+		// with it; the param is excluded (it genuinely binds elsewhere) and stays put.
+		final src: String = 'package pkg;\nclass C {\n\tprivate var logo:Null<Sprite>;\n\tpublic function set(logo:Sprite):Void {\n'
+			+ '\t\tthis.logo = logo;\n\t}\n\tpublic function use():Void {\n\t\tif (logo != null) logo.x = 0;\n\t}\n}';
+		assertLocalRenamed([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src, 'var _logo', 'var logo');
+	}
+
+	/**
+	 * The member-rename path DECLINES on a bound target name — it never qualifies the
+	 * rewritten references (`this.x`) the way the `trivial-getter` collapse does. Kept as
+	 * a contract test: the sibling audit of the loop-variable shadow hole turned on this
+	 * difference, and the decline is what makes the naming fix immune to it.
+	 */
+	public function testMemberRenameDeclinesOnBoundTargetName(): Void {
+		final src: String = 'class C {\n\tprivate var __count:Int = 0;\n\tprivate var _count:Int = 1;\n'
+			+ '\tpublic function sum():Int return __count + _count;\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	/**
+	 * A private METHOD confined to its file de-prefixes like a private field: the resolver
+	 * binds its declaration and every in-file call, so `__startCycle` -> `startCycle` is a
+	 * complete rename. The autofix used to refuse the whole Method category, leaving the
+	 * `__`-prefix findings report-only forever.
+	 */
+	public function testFixRenamesConfinedPrivateMethod(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tpublic function new() { __startCycle(); }\n'
+			+ '\tprivate function __startCycle():Void { trace(1); }\n}';
+		assertFixCanonicalWithIndex(src, 'startCycle', '__startCycle');
+	}
+
+	/**
+	 * The callback-value shape: the method is never CALLED, only passed by name to a
+	 * subscribe / unsubscribe pair. Both value reads resolve to the declaration, so the
+	 * completeness gate is satisfied and all three occurrences rename together.
+	 */
+	public function testFixRenamesPrivateMethodUsedAsCallbackValue(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tpublic function new() { add(__onHover); }\n'
+			+ '\tpublic function dispose():Void { remove(__onHover); }\n\tprivate function __onHover(e:Int):Void { trace(e); }\n'
+			+ '\tprivate function add(f:Int -> Void):Void {}\n\tprivate function remove(f:Int -> Void):Void {}\n}';
+		assertFixCanonicalWithIndex(src, 'add(onHover)', '__onHover');
+	}
+
+	/**
+	 * An `override` binds the name to the SUPERTYPE's declaration - renaming the override
+	 * alone orphans it ("Field ... is declared 'override' but ... does not override"). The
+	 * member is still confined and its target name still free, so only the override gate
+	 * can refuse it.
+	 */
+	public function testFixSkipsOverridePrivateMethod(): Void {
+		final baseSrc: String = 'package pkg;\nclass Base {\n\tprivate function __render():Void {}\n}';
+		final cSrc: String = 'package pkg;\nclass C extends Base {\n\toverride private function __render():Void { trace(1); }\n}';
+		assertFixSkipped([{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }], 'pkg/C.hx', cSrc);
+	}
+
+	/**
+	 * A subclass can call the inherited private method, so the member is NOT confined and a
+	 * single-file rename would leave the subclass calling a name that no longer exists. The
+	 * cross-file rename path stays field/constant-only, so this is report-only.
+	 */
+	public function testFixSkipsPrivateMethodWithSubclass(): Void {
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate function __tick():Void {}\n\tpublic function f() { __tick(); }\n}';
+		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g() { __tick(); }\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/D.hx', source: dSrc }], 'pkg/C.hx', cSrc);
+	}
+
+	/**
+	 * Renaming `__tick` -> `tick` where a supertype already declares `tick` is a Haxe compile
+	 * error ("Field tick should be declared with 'override' since it is inherited from
+	 * superclass"). The inherited-member gate - previously field-only - must cover a method too.
+	 */
+	public function testFixSkipsMethodRedefiningInheritedName(): Void {
+		final baseSrc: String = 'package pkg;\nclass Base {\n\tprivate function tick():Void {}\n}';
+		final cSrc: String =
+			'package pkg;\nclass C extends Base {\n\tprivate function __tick():Void { trace(1); }\n\tpublic function f() { __tick(); }\n}';
+		assertFixSkipped([{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }], 'pkg/C.hx', cSrc);
+	}
+
+	/** A PUBLIC method is reachable from anywhere - outside the single-file rename's proof - so it stays report-only. */
+	public function testFixSkipsPublicMethod(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tpublic function __run():Void {}\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	/**
+	 * An annotated method is `implicitlyReachable`: a macro / `@:keep` / framework can reach it
+	 * by NAME through a channel no identifier-level completeness proof sees. Report-only.
+	 */
+	public function testFixSkipsAnnotatedPrivateMethod(): Void {
+		final src: String = 'package pkg;\nclass C {\n\t@:keep private function __boot():Void {}\n\tpublic function f() { __boot(); }\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	/**
+	 * `_new` de-prefixes to `new` - the CONSTRUCTOR name, not a usable method identifier. The
+	 * de-prefix normalizer must refuse a keyword result, as the local / param one already does.
+	 */
+	public function testFixSkipsMethodDeprefixingToKeyword(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tprivate function _new():Void {}\n\tpublic function f() { _new(); }\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	/**
+	 * A method of a `@:rtti` class is reflected on by NAME - report-only. Held by TWO independent
+	 * gates (verified: ablating either alone leaves this green, ablating both flips it) - the
+	 * projection's `renameUnsafe` marking of every member of a directly-`@:rtti` type, and the
+	 * transitive-rtti gate now extended to the Method category.
+	 */
+	public function testFixSkipsMethodInRttiClass(): Void {
+		final src: String = 'package pkg;\n@:rtti\nclass C {\n\tprivate function __load():Void {}\n\tpublic function f() { __load(); }\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	/**
+	 * A private field whose corrected name the constructor PARAMETER already holds is the param
+	 * idiom: the field write would become a self-assignment, so the write is qualified through
+	 * `this.` instead of the rename being refused.
+	 */
+	public function testFixQualifiesParamCapturedFieldRename(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tprivate final __position:Int;\n\tpublic function new(_position:Int) {\n'
+			+ '\t\t__position = _position;\n\t}\n}';
+		assertFixCanonicalWithIndex(src, 'this._position = _position', '__position');
+	}
+
+	/**
+	 * A capture by a LOCAL is a naming mistake, not the param idiom - qualifying it would emit
+	 * correct but confusing code, so the rename stays refused. Pins `Rename.qualifyCaptured`'s
+	 * boundary through the `naming` path.
+	 */
+	public function testFixRefusesLocalCapturedFieldRename(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tprivate final __position:Int = 0;\n\tpublic function f(position:Int):Int {\n'
+			+ '\t\tfinal _position:Int = position;\n\t\treturn __position + _position;\n\t}\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	/**
+	 * A STATIC member can never be named through `this.`, so the qualification arm must not be
+	 * reached for one. Pins the check's own static gate, ahead of the expensive occurrence
+	 * resolution - without it the capture repair emits `this.run()` for a static method.
+	 */
+	public function testFixRefusesStaticMemberCapture(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tprivate static function __run():Void {}\n\tpublic function f(run:Int):Void {\n'
+			+ '\t\ttrace(run);\n\t\t__run();\n\t}\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	/**
+	 * A member of a Haxe `abstract` cannot be named through `this.` (there `this` is the
+	 * underlying value), so the collision must stay a refusal - the qualified rewrite would not
+	 * compile. Pins the check's own arm through the shared reachability predicate.
+	 */
+	public function testFixRefusesAbstractMemberCapture(): Void {
+		final src: String = 'package pkg;\nabstract A(Int) {\n\tprivate function __run():Int return this + 1;\n'
+			+ '\tpublic function f(run:Int):Int return __run() + run;\n}';
+		assertFixSkipped([{ file: 'pkg/A.hx', source: src }], 'pkg/A.hx', src);
+	}
+
+	/**
+	 * The private-field normalizer shares the camel word-splitting policy: a leading acronym run
+	 * lowercases all but its last character, so the fix cannot manufacture the very
+	 * lowercase-head-over-caps-tail shape the artifact arm exists to remove.
+	 */
+	public function testFixLowercasesLeadingAcronymPrivateField(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tprivate var URLPath:Int = 0;\n\tpublic function f():Int return URLPath;\n}';
+		assertFixCanonicalWithIndex(src, '_urlPath', '_uRLPath');
+	}
+
+	/** An all-caps private field lowercases whole, not first-letter-only: `HEIGHT` -> `_height`, never `_hEIGHT`. */
+	public function testFixLowercasesAllCapsPrivateField(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tprivate var HEIGHT:Int = 0;\n\tpublic function f():Int return HEIGHT;\n}';
+		assertFixCanonicalWithIndex(src, '_height', '_hEIGHT');
+	}
+
+	public function testReflectionMemberNamesReadsSingleQuotedFieldArgument(): Void {
+		Assert.isTrue(reflectionNames("class C {\n\tfunction f() {\n\t\tReflect.getProperty(o, 'shape');\n\t}\n}").contains('shape'));
+	}
+
+	public function testReflectionMemberNamesReadsDoubleQuotedFieldArgument(): Void {
+		Assert.isTrue(reflectionNames('class C {\n\tfunction f() {\n\t\tReflect.field(o, "shape");\n\t}\n}').contains('shape'));
+	}
+
+	public function testReflectionMemberNamesCoverTheWholeFieldApi(): Void {
+		for (m in [
+			'field',
+			'setField',
+			'getProperty',
+			'setProperty',
+			'hasField',
+			'deleteField',
+			'callMethod'
+		])
+			Assert.isTrue(
+				reflectionNames('class C {\n\tfunction f() {\n\t\tReflect.$m(o, "shape", 1);\n\t}\n}').contains('shape'),
+				'Reflect.$m should project shape'
+			);
+	}
+
+	public function testReflectionMemberNamesFindsANestedCall(): Void {
+		final src: String = "class C {\n\tfunction f() {\n\t\ttrace('' + Reflect.field(o, 'shape'));\n\t}\n}";
+		Assert.isTrue(reflectionNames(src).contains('shape'));
+	}
+
+	/** A string that merely SPELLS a member — a `case` action id, an asset key — is not a reference to it. */
+	public function testReflectionMemberNamesIgnoresAPlainStringLiteral(): Void {
+		final src: String =
+			"class C {\n\tfunction f(a:String) {\n\t\tswitch a {\n\t\t\tcase 'shape': trace('shape');\n\t\t\tcase _:\n\t\t}\n\t}\n}";
+		Assert.equals(0, reflectionNames(src).length);
+	}
+
+	/** `field` / `setProperty` are ordinary method names any type may carry — the receiver decides. */
+	public function testReflectionMemberNamesIgnoresTheSameMethodOnAnotherReceiver(): Void {
+		Assert.equals(0, reflectionNames("class C {\n\tfunction f() {\n\t\tform.field('shape');\n\t}\n}").length);
+	}
+
+	/** The documented limit: a name the call computes is unknowable, so it is outside the projection. */
+	public function testReflectionMemberNamesIgnoresADynamicName(): Void {
+		final src: String = 'class C {\n\tfunction f(key:String) {\n\t\tReflect.field(o, key);\n\t}\n}';
+		Assert.equals(0, reflectionNames(src).length);
+	}
+
+	public function testReflectionMemberNamesIgnoresAnInterpolatedLiteral(): Void {
+		final src: String = "class C {\n\tfunction f(p:String) {\n\t\tReflect.field(o, 'sh${p}pe');\n\t}\n}";
+		Assert.equals(0, reflectionNames(src).length);
+	}
+
+	public function testReflectionMemberNamesDeduplicates(): Void {
+		final src: String = "class C {\n\tfunction f() {\n\t\tReflect.field(o, 'shape');\n\t\tReflect.hasField(o, 'shape');\n\t}\n}";
+		Assert.equals(1, reflectionNames(src).length);
+	}
+
+	/** The member names `src` reaches through a reflection call, via the grammar's own projection. */
+	private function reflectionNames(src: String): Array<String> {
+		final support: HaxeNamingSupport = new HaxeNamingSupport();
+		return support.reflectionMemberNames(new HaxeQueryPlugin().parseFile(src), src);
+	}
+
+	private function cleanupNamingDir(dir: String, names: Array<String>): Void {
+		#if (sys || nodejs)
+		for (n in names) if (sys.FileSystem.exists('$dir/$n')) sys.FileSystem.deleteFile('$dir/$n');
+		if (sys.FileSystem.exists(dir)) sys.FileSystem.deleteDirectory(dir);
+		#end
+	}
+
+	/** `src` plus a sibling `pkg.Rect` that carries its own `bottom`, fixed and asserted. */
+	private function assertRenamedWithRect(src: String, present: String, absent: String): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: src },
+			{ file: 'pkg/Rect.hx', source: 'package pkg;\n\nclass Rect {\n\tpublic var bottom:Int = 0;\n\n\tpublic function new() {}\n}' }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		Assert.isTrue(vs.length >= 1);
+		assertCanonicalized(src, check.fix(src, vs, new HaxeQueryPlugin(), index), present, absent);
+	}
+
+	/** `assertNotRenamed`'s single-file setup, asserting on the fixed TEXT instead of a refusal. */
+	private function assertRenamedSingle(src: String, present: String, absent: String): Void {
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		Assert.isTrue(vs.length >= 1);
+		assertCanonicalized(src, check.fix(src, vs, new HaxeQueryPlugin(), index), present, absent);
+	}
+
+	/**
+	 * Run naming's field fix on `subSrc` (the sole report file) with `libSrc` as the
+	 * only resolution-scope library file. Confinement uses the report-only index; the
+	 * field inheritance proof uses the host's resolution index (report UNION library).
+	 */
+	private function fixWithResolutionScope(subSrc: String, libSrc: String): Array<{ span: Span, text: String }> {
+		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/Sub.hx', source: subSrc }];
+		final lib: Array<{ file: String, source: String }> = [{ file: 'ext/Base.hx', source: libSrc }];
+		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, library: new LibrarySources(lib) } });
+		final reportIndex: SymbolIndex = SymbolIndex.build(report, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(report, scoped).filter(v -> v.file == 'pkg/Sub.hx');
+		Assert.equals(1, vs.length);
+		return check.fix(subSrc, vs, scoped, reportIndex);
+	}
+
+	#if (sys || nodejs)
+	/** A private field another file reads via `Reflect.getProperty(o, 'shape')` stays report-only. */
+	public inline function testFixSkipsPrivateFieldNamedByReflectionInAnotherFile(): Void {
+		assertReflectionGuard(
+			"package pkg;\nclass E {\n\tpublic function f(o:Dynamic) {\n\t\ttrace(Reflect.getProperty(o, 'shape'));\n\t}\n}", false
+		);
+	}
+
+	/** The same spelling as a plain action id is NOT a reference — the rename must land. */
+	public inline function testFixRenamesPrivateFieldOnlySpelledByAStringInAnotherFile(): Void {
+		assertReflectionGuard("package pkg;\nclass E {\n\tpublic function f(a:String) {\n\t\tif (a == 'shape') trace(a);\n\t}\n}", true);
+	}
+
+	/** A comment mentioning the name in quotes is text, not a reflection call. */
+	public inline function testFixRenamesPrivateFieldMentionedInAnotherFilesComment(): Void {
+		assertReflectionGuard("package pkg;\nclass E {\n\t// reads 'shape' from the model\n\tpublic function f() {}\n}", true);
+	}
+
+	/**
+	 * Whether `C.shape`'s rename survives `otherSource` sitting beside it. Both files go to
+	 * DISK because the guard reads its sources through the index's paths (`SymbolIndex` keeps
+	 * none), so an in-memory pair would leave the guard with nothing to look at and pass
+	 * vacuously.
+	 */
+	private function assertReflectionGuard(otherSource: String, expectRenamed: Bool): Void {
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\n\tpublic function f():Void {\n\t\tshape = 1;\n\t}\n}';
+		final dir: String = CliFixture.writeDir('namingrefl', [
+			{ name: 'C.hx', source: cSrc },
+			{ name: 'E.hx', source: otherSource }
+		]);
+		final files: Array<{ file: String, source: String }> = [
+			{ file: '$dir/C.hx', source: cSrc },
+			{ file: '$dir/E.hx', source: otherSource }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == '$dir/C.hx');
+		Assert.isTrue(vs.length >= 1);
+		final edits: Array<{ span: Span, text: String }> = check.fix(cSrc, vs, new HaxeQueryPlugin(), index);
+		Assert.equals(expectRenamed, edits.length > 0);
+		cleanupNamingDir(dir, ['C.hx', 'E.hx']);
+	}
+	#end
+
+}

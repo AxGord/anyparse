@@ -601,6 +601,15 @@ import unit.HxArrowBlockIfOverflowSliceTest;
 import unit.LambdaBranchingBodyBlockCheckTest;
 import unit.EmptyCaseArmCheckTest;
 import unit.HxBlockCommentCloseWriteTest;
+import unit.NamingCheckLocalFixTest;
+import unit.NamingCheckMemberFixTest;
+import unit.NamingCheckCrossFileFixTest;
+import unit.FoldStringLiteralsWidthCheckTest;
+import unit.FoldStringLiteralsCandidateGateTest;
+import unit.RedundantParensTierArmsTest;
+import unit.TrivialGetterShapeCollapseTest;
+import unit.ExplicitLocalTypeReadFixTest;
+import unit.ExplicitLocalTypeParenInitTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1014,6 +1023,8 @@ class RunTests {
 		addCase(new OversizedTypeCheckTest());
 		addCase(new ListenerSymmetryCheckTest());
 		addCase(new ExplicitLocalTypeCheckTest());
+		addCase(new ExplicitLocalTypeReadFixTest());
+		addCase(new ExplicitLocalTypeParenInitTest());
 		addCase(new ExplicitLocalTypeIndexAccessTest());
 		addCase(new ExplicitLocalTypeOracleTest());
 		addCase(new ExplicitLocalTypeOracleE2ETest());
@@ -1046,6 +1057,7 @@ class RunTests {
 		addCase(new DeadBinderCounterLoopCheckTest());
 		addCase(new RedundantReplaceLoopCheckTest());
 		addCase(new TrivialGetterCheckTest());
+		addCase(new TrivialGetterShapeCollapseTest());
 		addCase(new TrivialGetterStaticShadowTest());
 		addCase(new PreferInlineCheckTest());
 		addCase(new PreferInlineOracleTest());
@@ -1094,6 +1106,7 @@ class RunTests {
 		addCase(new DuplicateCaseCheckTest());
 		addCase(new RedundantParensCheckTest());
 		addCase(new RedundantParensOperandArmsTest());
+		addCase(new RedundantParensTierArmsTest());
 		addCase(new RedundantThisCheckTest());
 		addCase(new RedundantThisUsingExtensionTest());
 		addCase(new UnnecessaryNullCheckCheckTest());
@@ -1180,7 +1193,12 @@ class RunTests {
 		addCase(new PreferBindCheckTest());
 		addCase(new RedundantMapIterKeyCheckTest());
 		addCase(new FoldStringLiteralsCheckTest());
+		addCase(new FoldStringLiteralsWidthCheckTest());
+		addCase(new FoldStringLiteralsCandidateGateTest());
 		addCase(new NamingCheckTest());
+		addCase(new NamingCheckLocalFixTest());
+		addCase(new NamingCheckMemberFixTest());
+		addCase(new NamingCheckCrossFileFixTest());
 		addCase(new ClassifyOccurrencesTest());
 		addCase(new FmtSliceTest());
 		addCase(new NewFileSliceTest());
