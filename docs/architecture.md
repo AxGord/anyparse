@@ -236,6 +236,7 @@ The runtime is what macro-generated parsers use at runtime. It is small and has 
 anyparse.runtime/
 ├── Input.hx         — byte stream abstraction (StringInput, BytesInput, ...)
 ├── Span.hx          — {from, to} with lazy line/col resolution
+├── LineIndex.hx     — per-source line-start prefix index for repeated line/col lookups
 ├── ParseError.hx    — span + message + expected + severity
 ├── ParseResult.hx   — wrapper: { value, span, errors, complete }
 ├── Node.hx          — AST node metadata wrapper for Tolerant mode
@@ -249,7 +250,7 @@ Key design properties:
 - **Allocation minimized in Fast mode.** `ParseResult` and `Node` wrappers are only used in Tolerant mode. Fast mode returns bare AST values.
 - **Cache opt-in.** By default, `Parser.cache` is `NoOpCache` — zero overhead. Real caching is plugged in only in incremental scenarios.
 - **Cancellation optional.** `Parser.cancelled` is `() -> false` by default. Hot loops check it; if never true, cost is one inlined comparison.
-- **Line/col lazy.** `Span` stores only byte offsets. Line/col computed on first call via a newline-prefix-sum index built incrementally.
+- **Line/col lazy.** `Span` stores only byte offsets and resolves line/col by a linear walk per call. A caller resolving many offsets in the same text builds a `LineIndex` over it instead — a newline prefix index plus binary search, owned by the caller, not shared.
 
 ## Two compilation modes per grammar
 

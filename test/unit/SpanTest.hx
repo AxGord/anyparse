@@ -3,10 +3,13 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.runtime.Span;
+import anyparse.runtime.LineIndex;
 
 /**
  * Tests for `Span` — zero-width construction, `toString` shape, and
- * `lineCol` resolution across line-boundary edge cases.
+ * `lineCol` resolution across line-boundary edge cases, plus the parity
+ * contract that `LineIndex.lineColAt` resolves every offset exactly as
+ * `Span.lineCol` does.
  */
 class SpanTest extends Test {
 
@@ -74,6 +77,49 @@ class SpanTest extends Test {
 		Assert.equals(1, p.col);
 	}
 
+	private function testLineColAtCarriageReturn(): Void {
+		// \r is an ordinary column-advancing character; only \n breaks the line.
+		final source: String = 'a\r\nb';
+		Assert.equals(1, new Span(1, 1).lineCol(source).line);
+		Assert.equals(2, new Span(1, 1).lineCol(source).col);
+		Assert.equals(1, new Span(2, 2).lineCol(source).line);
+		Assert.equals(3, new Span(2, 2).lineCol(source).col);
+		Assert.equals(2, new Span(3, 3).lineCol(source).line);
+		Assert.equals(1, new Span(3, 3).lineCol(source).col);
+	}
+
+	private function testLineColAtLastCharacter(): Void {
+		final p: Position = new Span(10, 10).lineCol('hello\nworld');
+		Assert.equals(2, p.line);
+		Assert.equals(5, p.col);
+	}
+
+	private function testLineColAtSourceLength(): Void {
+		final p: Position = new Span(11, 11).lineCol('hello\nworld');
+		Assert.equals(2, p.line);
+		Assert.equals(6, p.col);
+	}
+
+	private function testLineColAtNegativeOffset(): Void {
+		// A negative offset (the shared backtrack sentinel spans -2..-2) resolves to 1:1.
+		final p: Position = new Span(-2, -2).lineCol('a\nb');
+		Assert.equals(1, p.line);
+		Assert.equals(1, p.col);
+	}
+
+	private function testLineIndexMatchesLineColAtEveryOffset(): Void {
+		for (source in [
+			'',
+			'a',
+			'hello\nworld',
+			'a\r\nb\r\nc',
+			'\n\n\n',
+			'x\ny\n',
+			'abc\nde\nfghi',
+			'1\n2\n3\n4\n5\n6\n7\n8\n9'
+		]) assertIndexParity(source);
+	}
+
 	private function testOffsetOfStart(): Void {
 		Assert.equals(0, Span.offsetOf('hello\nworld', 1, 1));
 	}
@@ -125,6 +171,16 @@ class SpanTest extends Test {
 		final s: Span = new Span(2, 5);
 		Assert.equals(2, s.from);
 		Assert.equals(5, s.to);
+	}
+
+	private static function assertIndexParity(source: String): Void {
+		final index: LineIndex = new LineIndex(source);
+		for (offset in -3...source.length + 4) {
+			final expected: Position = new Span(offset, offset).lineCol(source);
+			final actual: Position = index.lineColAt(offset);
+			Assert.equals(expected.line, actual.line, 'line mismatch at offset $offset');
+			Assert.equals(expected.col, actual.col, 'col mismatch at offset $offset');
+		}
 	}
 
 }

@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.RefactorSupport;
+import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -38,22 +39,23 @@ final class Suppression {
 	public static function apply(violations: Array<Violation>, files: Array<{ file: String, source: String }>): Array<Violation> {
 		if (violations.length == 0) return violations;
 
-		final sourceByFile: Map<String, String> = [];
+		final indexByFile: Map<String, LineIndex> = [];
 		final entriesByFile: Map<String, Array<Entry>> = [];
 		for (f in files) {
-			sourceByFile[f.file] = f.source;
-			entriesByFile[f.file] = collectEntries(f.source);
+			final index: LineIndex = new LineIndex(f.source);
+			indexByFile[f.file] = index;
+			entriesByFile[f.file] = collectEntries(f.source, index);
 		}
 
 		return violations.filter(v -> {
 			final span: Null<Span> = v.span;
 			if (span == null) return true;
-			final source: Null<String> = sourceByFile[v.file];
-			if (source == null) return true;
+			final index: Null<LineIndex> = indexByFile[v.file];
+			if (index == null) return true;
 			final entries: Null<Array<Entry>> = entriesByFile[v.file];
 			if (entries == null || entries.length == 0) return true;
-			final fromLine: Int = span.lineCol(source).line;
-			final toLine: Int = new Span(span.to, span.to).lineCol(source).line;
+			final fromLine: Int = index.lineColAt(span.from).line;
+			final toLine: Int = index.lineColAt(span.to).line;
 			return !suppressedInRange(entries, fromLine, toLine, v.rule);
 		});
 	}
@@ -79,15 +81,17 @@ final class Suppression {
 	}
 
 	/**
-	 * Scan `source` for suppression directives and resolve each to an `Entry`.
-	 * Comments are visited in source order so `CHECKSTYLE:OFF`/`ON` pairs match
-	 * by nesting; an unclosed `OFF` extends to end of file.
+	 * Scan `source` for suppression directives and resolve each to an `Entry`,
+	 * resolving comment offsets through `index`, which must be built over that
+	 * same `source`. Comments are visited in source order so
+	 * `CHECKSTYLE:OFF`/`ON` pairs match by nesting; an unclosed `OFF` extends
+	 * to end of file.
 	 */
-	private static function collectEntries(source: String): Array<Entry> {
+	private static function collectEntries(source: String, index: LineIndex): Array<Entry> {
 		final entries: Array<Entry> = [];
 		var openLine: Int = -1;
 		for (tok in RefactorSupport.collectCommentTokens(source)) {
-			final line: Int = new Span(tok.from, tok.from).lineCol(source).line;
+			final line: Int = index.lineColAt(tok.from).line;
 			final body: Span = RefactorSupport.commentBody(source, tok);
 			final text: String = source.substring(body.from, body.to).trim();
 
@@ -109,7 +113,7 @@ final class Suppression {
 			}
 		}
 		if (openLine >= 0) {
-			final lastLine: Int = new Span(source.length, source.length).lineCol(source).line;
+			final lastLine: Int = index.lineColAt(source.length).line;
 			entries.push({
 				lineFrom: openLine,
 				lineTo: lastLine,

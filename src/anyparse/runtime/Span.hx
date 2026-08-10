@@ -1,5 +1,7 @@
 package anyparse.runtime;
 
+using StringTools;
+
 /**
  * Line-and-column position resolved from a `Span`'s byte offset.
  * Both fields are 1-indexed to match what editors and IDEs expect.
@@ -16,9 +18,10 @@ typedef Position = {
  *
  * Line and column resolution is lazy — `Span` itself stores only offsets,
  * and callers pass the source text to `lineCol` to get a 1-indexed
- * `{line, col}` for human-facing output. Phase 1 walks the source
- * linearly on every call; a shared incremental `LineColumnIndex` can be
- * plugged in later without changing the `Span` contract.
+ * `{line, col}` for human-facing output. `lineCol` walks the source
+ * linearly, which is right for a one-off lookup; a caller resolving many
+ * offsets in the same text builds a `LineIndex` over it instead, without
+ * changing the `Span` contract.
  */
 @:nullSafety(Strict)
 final class Span {
@@ -44,7 +47,7 @@ final class Span {
 		var line: Int = 1;
 		var col: Int = 1;
 		for (i in 0...end) {
-			if (source.charCodeAt(i) == '\n'.code) {
+			if (source.fastCodeAt(i) == '\n'.code) {
 				line++;
 				col = 1;
 			} else {
@@ -71,7 +74,7 @@ final class Span {
 		var curCol: Int = 1;
 		for (i in 0...source.length) {
 			if (curLine == line && curCol == col) return i;
-			if (source.charCodeAt(i) == '\n'.code) {
+			if (source.fastCodeAt(i) == '\n'.code) {
 				if (curLine == line) return i;
 				curLine++;
 				curCol = 1;
