@@ -4,6 +4,7 @@ import utest.Assert;
 import utest.Test;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli;
+import anyparse.query.SharedParseTier;
 #if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;
@@ -50,7 +51,7 @@ class ResolutionLibraryCacheTest extends Test {
 	 * The SERVE path — the half of the tier that actually saves the work, and the half nothing
 	 * used to assert. Deleting BOTH shared-tier lookups (`parseFile`'s and `spanTypeInfo`'s) once
 	 * left the whole suite green while this fixture's `Cli.run` went 4.5x slower, because the hit
-	 * counter lived in `shareLibrary`'s own `exists` short-circuit and so measured promotion
+	 * counter lived in `SharedParseTier.promote`'s own `exists` short-circuit and so measured promotion
 	 * bookkeeping rather than serving.
 	 *
 	 * Pinned as an exact identity on the INNER (`_inner.parseFile` / `_inner.spanTypeInfo`)
@@ -69,33 +70,31 @@ class ResolutionLibraryCacheTest extends Test {
 		]);
 		final args: Array<String> = ['lint', '--rule', 'redundant-this', '--fail-on', 'info', '$proj/ServeDerived.hx'];
 
-		final parsesBefore: Int = CachingGrammarPlugin.innerParses;
-		final spansBefore: Int = CachingGrammarPlugin.innerSpanParses;
-		final promotedBefore: Int = CachingGrammarPlugin.libraryParses;
+		final parsesBefore: Int = SharedParseTier.innerParses;
+		final spansBefore: Int = SharedParseTier.innerSpanParses;
+		final promotedBefore: Int = SharedParseTier.libraryParses;
 		Assert.equals(1, Cli.run(args), 'the first run resolves the library base and flags this.ping()');
-		final parsesAfterFirst: Int = CachingGrammarPlugin.innerParses;
-		final spansAfterFirst: Int = CachingGrammarPlugin.innerSpanParses;
-		final promoted: Int = CachingGrammarPlugin.libraryParses - promotedBefore;
+		final parsesAfterFirst: Int = SharedParseTier.innerParses;
+		final spansAfterFirst: Int = SharedParseTier.innerSpanParses;
+		final promoted: Int = SharedParseTier.libraryParses - promotedBefore;
 		Assert.isTrue(promoted > 0, 'the first run promoted at least this fixture library — the identity below is not vacuous');
 
-		final hitsBefore: Int = CachingGrammarPlugin.libraryHits;
-		final spanHitsBefore: Int = CachingGrammarPlugin.librarySpanHits;
+		final hitsBefore: Int = SharedParseTier.libraryHits;
+		final spanHitsBefore: Int = SharedParseTier.librarySpanHits;
 		Assert.equals(1, Cli.run(args), 'the second run reaches the same finding');
 
 		Assert.equals(
-			parsesAfterFirst - parsesBefore - promoted, CachingGrammarPlugin.innerParses - parsesAfterFirst,
+			parsesAfterFirst - parsesBefore - promoted, SharedParseTier.innerParses - parsesAfterFirst,
 			'the second run inner-parses only what the first run parsed besides the library — zero library sources'
 		);
 		Assert.equals(
-			spansAfterFirst - spansBefore - promoted, CachingGrammarPlugin.innerSpanParses - spansAfterFirst,
+			spansAfterFirst - spansBefore - promoted, SharedParseTier.innerSpanParses - spansAfterFirst,
 			'the same for span info — the second run span-parses zero library sources'
 		);
 		Assert.isTrue(
-			CachingGrammarPlugin.libraryHits - hitsBefore >= promoted, 'every promoted parse was SERVED from the tier in the second run'
+			SharedParseTier.libraryHits - hitsBefore >= promoted, 'every promoted parse was SERVED from the tier in the second run'
 		);
-		Assert.isTrue(
-			CachingGrammarPlugin.librarySpanHits - spanHitsBefore >= promoted, 'the span half of the tier served the second run too'
-		);
+		Assert.isTrue(SharedParseTier.librarySpanHits - spanHitsBefore >= promoted, 'the span half of the tier served the second run too');
 
 		CliFixture.removeDir(proj);
 		CliFixture.removeDir(lib);
@@ -120,12 +119,12 @@ class ResolutionLibraryCacheTest extends Test {
 		final args: Array<String> = ['lint', '--rule', 'redundant-this', '--fail-on', 'info', '$proj/Derived.hx'];
 
 		Assert.equals(1, Cli.run(args), 'the first run resolves the library base and flags this.foo()');
-		final parsesAfterFirst: Int = CachingGrammarPlugin.libraryParses;
-		final hitsAfterFirst: Int = CachingGrammarPlugin.libraryHits;
+		final parsesAfterFirst: Int = SharedParseTier.libraryParses;
+		final hitsAfterFirst: Int = SharedParseTier.libraryHits;
 
 		Assert.equals(1, Cli.run(args), 'the second run reaches the same finding');
-		Assert.equals(parsesAfterFirst, CachingGrammarPlugin.libraryParses, 'the second run re-parses no library source');
-		Assert.isTrue(CachingGrammarPlugin.libraryHits > hitsAfterFirst, 'the second run is served from the process-scoped tier');
+		Assert.equals(parsesAfterFirst, SharedParseTier.libraryParses, 'the second run re-parses no library source');
+		Assert.isTrue(SharedParseTier.libraryHits > hitsAfterFirst, 'the second run is served from the process-scoped tier');
 
 		CliFixture.removeDir(proj);
 		CliFixture.removeDir(lib);
@@ -148,11 +147,11 @@ class ResolutionLibraryCacheTest extends Test {
 			{ name: 'apqlint.json', source: '{"resolutionRoots":["$lib"]}' }
 		]);
 		Assert.equals(0, Cli.run(['lint', '--rule', 'redundant-this', '$proj/Derived.hx']), 'the warming report run succeeds');
-		final parsesWarm: Int = CachingGrammarPlugin.libraryParses;
+		final parsesWarm: Int = SharedParseTier.libraryParses;
 
 		Assert.equals(0, Cli.run(['lint', '--fix', '--rule', 'redundant-this', '$proj/Derived.hx']), 'the fix run succeeds');
 		Assert.isTrue(File.getContent('$proj/Derived.hx').indexOf('this.foo()') == -1, 'the fix actually rewrote the report file');
-		Assert.equals(parsesWarm, CachingGrammarPlugin.libraryParses, 'no pass of the fix loop added a report source to the shared tier');
+		Assert.equals(parsesWarm, SharedParseTier.libraryParses, 'no pass of the fix loop added a report source to the shared tier');
 
 		CliFixture.removeDir(proj);
 		CliFixture.removeDir(lib);

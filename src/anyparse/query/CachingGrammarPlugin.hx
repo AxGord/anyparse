@@ -11,7 +11,6 @@ import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.GrammarPlugin.CheckOverrides;
 import anyparse.query.SpanTypeInfoProvider;
-import haxe.Exception;
 
 /**
  * A `GrammarPlugin` decorator that memoizes `parseFile` / `parseFileTypeRefs` by source
@@ -31,8 +30,7 @@ import haxe.Exception;
  * method delegates straight through; a parse that throws is not cached (a
  * skip-parse file re-parses per check, a negligible minority).
  *
- * Behind them sits ONE process-scoped tier, for the resolution LIBRARY only
- * (`shareLibrary`): a fresh wrapper per `Cli.run` otherwise means re-parsing the
+ * Behind them sits ONE process-scoped tier, for the resolution LIBRARY only (`SharedParseTier`): a fresh wrapper per `Cli.run` otherwise means re-parsing the
  * 200+ auto-discovered Haxe std files, plus every declared `resolutionRoots` /
  * `resolutionLibs` source, on every run in the process. Only the library half of a `ResolutionSources` ever enters it, which is what bounds it — a `--fix` loop's per-pass rewritten report sources never do, and the nominal `LibrarySources` type makes feeding it the report half a compile error rather than a convention. Same single-thread rule as the
  * instance caches; same content key, so a library file changed on disk misses.
@@ -41,56 +39,12 @@ import haxe.Exception;
 final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoProvider implements SpanTypeInfoProvider
 		implements SymbolIndexHost {
 
-	/** Library sources actually parsed into the shared tier — a served entry leaves this untouched (the caching-invariant tests read it). */
-	public static var libraryParses(default, null): Int = 0;
-
-	/**
-	 * Shared-tier SERVES from `parseFile` — incremented inside the serve branch itself, so it
-	 * measures the lookup that saves the work rather than `shareLibrary`'s promotion
-	 * bookkeeping. That distinction is the whole point: an earlier version counted hits in
-	 * `shareLibrary`'s own `exists` short-circuit, so BOTH serve lookups could be deleted with
-	 * the suite still green while the run got 4.5x slower.
-	 */
-	public static var libraryHits(default, null): Int = 0;
-
-	/** The `spanTypeInfo` half of `libraryHits`, counted in its own serve branch for the same reason. */
-	public static var librarySpanHits(default, null): Int = 0;
-
-	/**
-	 * `_inner.parseFile` invocations — the work the tiers exist to avoid. Two runs over the same
-	 * scope pay the same cost for everything EXCEPT the library the first one promoted (the
-	 * report sources, and the retries of any library file that does not parse, recur
-	 * identically), so run 2's delta must equal run 1's delta minus run 1's `libraryParses`.
-	 * That subtraction is what "zero inner parses of library sources" means arithmetically, and
-	 * it is the identity `ResolutionLibraryCacheTest` pins.
-	 */
-	public static var innerParses(default, null): Int = 0;
-
-	/** `_inner.spanTypeInfo` (or the five-accessor fallback) invocations — the span-parse twin of `innerParses`. */
-	public static var innerSpanParses(default, null): Int = 0;
-
-	// PROCESS-scoped second tier behind `_parseCache` / `_spanInfoCache`, written by
-	// `shareLibrary` and by nothing else, so only RESOLUTION-LIBRARY sources ever enter it.
-	// A blanket static tier would be wrong: a `--fix` loop rewrites a report file every pass,
-	// so every intermediate source would be retained for the life of the process. Library
-	// sources have no such churn — they are read-only for the whole run — and keying on
-	// (language, source CONTENT) means an entry can only ever be served for byte-identical
-	// input, so a library directory deleted and recreated with different content under the
-	// SAME path misses and re-parses. The file SET is never cached (each run re-expands its
-	// own scan roots), so two runs configuring different scopes cannot see each other's
-	// library. Single-threaded by the same rule as the instance caches below. The language is the
-	// OUTER key rather than part of a composite one: two grammars parse the same bytes into
-	// different trees, but folding the language into the key would mean building a fresh string
-	// per lookup and re-hashing the whole source on every `parseFile` call.
-	private static final SHARED_PARSE_TIERS: Map<String, Map<String, QueryNode>> = [];
-	private static final SHARED_SPAN_TIERS: Map<String, Map<String, SpanTypeInfo>> = [];
-
 	private final _inner: GrammarPlugin;
 
-	// This wrapper's language slices of the two process-scoped tiers above, resolved once in the
-	// constructor so a lookup is one map read against the caller's own source string.
-	private final _sharedParseCache: Map<String, QueryNode>;
-	private final _sharedSpanCache: Map<String, SpanTypeInfo>;
+	// The PROCESS-scoped tier behind the run-scoped caches below: this wrapper's language slice
+	// of it, resolved once in the constructor. Only RESOLUTION-LIBRARY sources ever enter it —
+	// `SharedParseTier` documents why that bound is what makes a process-scoped tier safe here.
+	private final _shared: SharedParseTier;
 	private final _parseCache: Map<String, QueryNode> = [];
 	private final _typeRefCache: Map<String, QueryNode> = [];
 	private final _branchAwareCache: Map<String, QueryNode> = [];
@@ -121,16 +75,9 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	private var _resolutionIndex: Null<SymbolIndex> = null;
 	private var _resolutionIndexBuilt: Bool = false;
 
-	// The library array instance `shareLibrary` has already walked. The thunk memoises its
-	// library, so every `resolutionFiles()` call after the first in a run hands back the SAME
-	// array — one per `--fix` pass — and re-walking it would re-hash every library source for
-	// nothing. Reference identity, not content: a different array is a different library.
-	private var _promotedLibrary: Null<Array<{ file: String, source: String }>> = null;
-
 	public function new(inner: GrammarPlugin) {
 		_inner = inner;
-		_sharedParseCache = tier(SHARED_PARSE_TIERS, inner.langName());
-		_sharedSpanCache = tier(SHARED_SPAN_TIERS, inner.langName());
+		_shared = new SharedParseTier(inner.langName());
 	}
 
 	/**
@@ -172,14 +119,14 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	 * per-pass index go through it, so neither can skip the promotion.
 	 *
 	 * Called once per `--fix` pass, and the thunk memoises its library, so the promotion walk is
-	 * itself memoised on the library ARRAY INSTANCE (`shareLibrary`) — re-hashing every library
+	 * itself memoised on the library ARRAY INSTANCE (`SharedParseTier.promote`) — re-hashing every library
 	 * source once per pass would otherwise be the tier's own overhead.
 	 */
 	public function resolutionFiles(): Null<Array<{ file: String, source: String }>> {
 		final scope: Null<ResolutionScope> = _resolutionScope;
 		if (scope == null) return null;
 		final sources: ResolutionSources = scope.sources();
-		shareLibrary(sources.library);
+		_shared.promote(sources.library, this);
 		return sources.report.concat(sources.library.entries());
 	}
 
@@ -214,12 +161,9 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	public function parseFile(source: String): QueryNode {
 		final cached: Null<QueryNode> = _parseCache[source];
 		if (cached != null) return cached;
-		final shared: Null<QueryNode> = _sharedParseCache[source];
-		if (shared != null) {
-			libraryHits++;
-			return shared;
-		}
-		innerParses++;
+		final shared: Null<QueryNode> = _shared.servedParse(source);
+		if (shared != null) return shared;
+		SharedParseTier.noteInnerParse();
 		final tree: QueryNode = _inner.parseFile(source);
 		_parseCache[source] = tree;
 		return tree;
@@ -328,12 +272,9 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	public function spanTypeInfo(source: String): SpanTypeInfo {
 		final cached: Null<SpanTypeInfo> = _spanInfoCache[source];
 		if (cached != null) return cached;
-		final shared: Null<SpanTypeInfo> = _sharedSpanCache[source];
-		if (shared != null) {
-			librarySpanHits++;
-			return shared;
-		}
-		innerSpanParses++;
+		final shared: Null<SpanTypeInfo> = _shared.servedSpanInfo(source);
+		if (shared != null) return shared;
+		SharedParseTier.noteInnerSpanParse();
 		final batched: Null<SpanTypeInfoProvider> = _inner is SpanTypeInfoProvider ? cast _inner : null;
 		final result: SpanTypeInfo = batched != null ? batched.spanTypeInfo(source) : fallbackSpanInfo(source);
 		_spanInfoCache[source] = result;
@@ -384,42 +325,6 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		};
 	}
 
-	/**
-	 * PROMOTE every library source's parse and span-info into the process-scoped tier, so the
-	 * next `Cli.run` over the same library serves them instead of re-parsing 200+ std files
-	 * from scratch. Idempotent and content-addressed: an entry already present is a HIT and
-	 * costs nothing, and only a byte-identical source can serve it.
-	 *
-	 * A source that does not parse is left out entirely (`SymbolIndexBuilder.extract` re-tries
-	 * it and records the file as skipped) — the same treatment the instance parse cache gives a
-	 * throwing parse, over a negligible minority of library files.
-	 */
-	private function shareLibrary(library: LibrarySources): Void {
-		final entries: Array<{ file: String, source: String }> = library.entries();
-		if (_promotedLibrary == entries) return;
-		_promotedLibrary = entries;
-		for (entry in entries) {
-			// Routed through `parseFile` — NOT short-circuited on `_sharedParseCache.exists` —
-			// so an already-promoted entry goes through the SERVE branch, the one thing this
-			// tier exists for. Short-circuiting here is what made the serve path deletable with
-			// a green suite: the counters then measured this loop, never the lookup.
-			final tree: Null<QueryNode> = try parseFile(entry.source) catch (exception: Exception) null;
-			if (tree == null || _sharedParseCache.exists(entry.source)) continue;
-			_sharedParseCache[entry.source] = tree;
-			_sharedSpanCache[entry.source] = spanTypeInfo(entry.source);
-			libraryParses++;
-		}
-	}
-
-	/** The `lang` slice of a process-scoped `tiers` map, created empty on first use. */
-	private static function tier<T>(tiers: Map<String, Map<String, T>>, lang: String): Map<String, T> {
-		final existing: Null<Map<String, T>> = tiers[lang];
-		if (existing != null) return existing;
-		final created: Map<String, T> = [];
-		tiers[lang] = created;
-		return created;
-	}
-
 }
 
 /**
@@ -440,7 +345,7 @@ typedef ResolutionSources = {
  * The library half of a `ResolutionSources`, as a NOMINAL type.
  *
  * Structurally it is the same `Array<{file, source}>` as the report half, so nothing but naming
- * convention stopped a caller from handing the REPORT array to `shareLibrary` — and "only
+ * convention stopped a caller from handing the REPORT array to `SharedParseTier.promote` — and "only
  * library sources are ever promoted" is the entire growth bound on the process-scoped parse
  * tier. A `--fix` loop rewrites a report file every pass, so one such misfeed would retain every
  * intermediate source for the life of the process, silently and unboundedly. Wrapping it makes

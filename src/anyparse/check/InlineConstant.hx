@@ -363,7 +363,7 @@ final class InlineConstant implements Check {
 	 *    corpus is exactly this shape, so the arm's real input is dominated by the class it cannot see;
 	 *  - an ALIAS import (`import pkg.Other as Alias;`) never enters simple-name scope — the grammar's
 	 *    `ImportAliasDecl` carries only the alias — so a same-simple-named local type is proven in the
-	 *    real target's place. `TypeRefPrinter.aliasTargetsOf` recovers the target by re-reading the
+	 *    real target's place. `ModuleScan.aliasTargetsOf` recovers the target by re-reading the
 	 *    import's own source span for the file it is printing: a per-file text scan, not an index
 	 *    capability, so the arm can only REFUSE an alias-bound receiver, never resolve through it;
 	 *  - an import of a type OUTSIDE the resolution scope (a haxelib module, a file the lint scope
