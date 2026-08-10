@@ -1503,11 +1503,11 @@ final class Cli {
 	 * Split `checks` into the sets `lint --fix` applies differently.
 	 *
 	 * A RiskyFix check is verified against the compiler oracle and is EXCLUDED from the
-	 * unverified safe loop. prefer-inline is the exception: as an `OracleRelaxable` check it
-	 * has a byte-identical safe subset, so WITHOUT an oracle it runs in the safe loop
-	 * (null-safety gate on) instead of being left report-only, and WITH an oracle it joins the
-	 * verified risky set with its candidate set widened (`setOracleRelaxed`, applied by the
-	 * caller). Every OTHER RiskyFix check (avoid-dynamic) keeps the contract: verified when an
+	 * unverified safe loop. The `OracleRelaxable` checks (prefer-inline, prefer-interpolation)
+	 * are the exception: each has a byte-identical safe subset, so WITHOUT an oracle it runs in
+	 * the safe loop (null-safety gate on) instead of being left report-only, and WITH an oracle
+	 * it joins the verified risky set with its candidate set widened (`setOracleRelaxed`,
+	 * applied by the caller). Every OTHER RiskyFix check (avoid-dynamic) keeps the contract: verified when an
 	 * oracle is configured, report-only via `verifyRiskyFixes` otherwise — its risky fix is
 	 * NEVER applied unverified. So a RiskyFix check only leaves the risky set for the safe loop
 	 * when it is OracleRelaxable AND no oracle is configured.
