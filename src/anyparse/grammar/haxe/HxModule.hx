@@ -44,13 +44,13 @@ package anyparse.grammar.haxe;
  * lines at head before ctor X" slice (e.g. file-leading typedef header)
  * by pointing at a different opt field. The head emit is spliced once
  * at the start of the elseBody in
- * `WriterLowering.triviaEofStarExpr` (and mirrored in
+ * `TriviaEofLowering.triviaEofStarExpr` (and mirrored in
  * `triviaTryparseStarExpr` for inner Stars), driven by
  * `WriterLowering.buildHeadCtorBlankInfo` and `CascadeEmit.headEmit`.
  *
  * `@:fmt(blankLinesAfterCtor('decl', 'PackageDecl', 'PackageEmpty', 'afterPackage'))`
  * (slice ω-after-package) instructs the trivia-mode EOF Star path in
- * `WriterLowering.triviaEofStarExpr` to emit exactly `opt.afterPackage`
+ * `TriviaEofLowering.triviaEofStarExpr` to emit exactly `opt.afterPackage`
  * blank lines after any element whose `decl` field is `PackageDecl`
  * or `PackageEmpty`. Override semantics, not floor: the source-captured
  * blank-line count is replaced with this value when the previous

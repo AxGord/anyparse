@@ -64,7 +64,7 @@ final class HaxeFormatValues {
 				WrapMode.FillLineWithLeadingBreak;
 			// ω-keep-objectlit: fork's `WrappingType.Keep` preserves
 			// source-newline pattern per-element. Loader maps it to
-			// `WrapMode.Keep`; `triviaSepStarExpr` (`WriterLowering.hx`)
+			// `WrapMode.Keep`; `triviaSepStarExpr` (`TriviaSepLowering.hx`)
 			// consumes it for trivia-bearing Stars (ObjectLit, Anon-type,
 			// etc.) via the `_keepEmit` gate. `BinaryChainEmit` and
 			// `MethodChainEmit` route `Keep` to their `shapeNoWrap` arms

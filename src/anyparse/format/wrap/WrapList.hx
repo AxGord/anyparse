@@ -55,7 +55,7 @@ typedef WrapListOptions = {
 	 * omitting caller stays byte-identical. Per-construct `RightCurlyPlacement` knobs pass
 	 * `Empty` for `Inline` (close glued to the last body token) or `Line('\n')` for `Same`;
 	 * `Empty` is therefore a REAL value here, distinct from omission. Mirrors the trivia
-	 * branch's `triviaTrailDoc` in `WriterLowering.triviaSepStarExpr` so the wrap-engine and
+	 * branch's `triviaTrailDoc` in `TriviaSepLowering.triviaSepStarExpr` so the wrap-engine and
 	 * trivia paths honour the same `RightCurlyPlacement.{Inline,Same}` semantic. Honoured by
 	 * `shapeOnePerLine` only — `OnePerLineAfterFirst` / `FillLine` glue the close by mode
 	 * design and have no Inline-vs-Same axis to express. ω-wraplist-trailbreakdoc — first
@@ -580,7 +580,7 @@ class WrapList {
 
 	/**
 	 * ω-keep-fnsig-newline: width-independent Keep predicate for the trivia
-	 * source-newline-preservation path (`WriterLowering.triviaSepStarExpr`'s
+	 * source-newline-preservation path (`TriviaSepLowering.triviaSepStarExpr`'s
 	 * `_keepEmit` gate). The trivia branch decides whether to reproduce each
 	 * element's source `newlineBefore` BEFORE per-element Docs (and thus
 	 * rendered widths) exist, so it cannot consult the column-aware cascade

@@ -540,7 +540,7 @@ final class HaxeFormat implements TextFormat {
 	 * by
 	 * `@:fmt(blankLinesAfterCtor('decl', 'PackageDecl', 'PackageEmpty', 'afterPackage'))`
 	 * on `HxModule.decls` and consumed by the trivia-mode EOF Star path
-	 * in `WriterLowering.triviaEofStarExpr`.
+	 * in `TriviaEofLowering.triviaEofStarExpr`.
 	 *
 	 * `beforePackage` default (ω-before-package) is `0` — exact number of
 	 * blank lines emitted at file head BEFORE the leading `package …;`
@@ -553,7 +553,7 @@ final class HaxeFormat implements TextFormat {
 	 * Driven by
 	 * `@:fmt(blankLinesAtHeadIfCtor('decl', 'PackageDecl', 'PackageEmpty', 'beforePackage'))`
 	 * on `HxModule.decls` and consumed by the head-emit splice in
-	 * `WriterLowering.triviaEofStarExpr` (head-of-Star override fires
+	 * `TriviaEofLowering.triviaEofStarExpr` (head-of-Star override fires
 	 * once before the per-element loop).
 	 *
 	 * `beforeUsing` default (ω-imports-using-blank) is `1` — exact number
@@ -567,7 +567,7 @@ final class HaxeFormat implements TextFormat {
 	 * `emptyLines.importAndUsing.beforeUsing: @:default(1)`. Driven by
 	 * `@:fmt(blankLinesBeforeCtor('decl', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))`
 	 * on `HxModule.decls` and consumed by the trivia-mode EOF Star path
-	 * in `WriterLowering.triviaEofStarExpr`.
+	 * in `TriviaEofLowering.triviaEofStarExpr`.
 	 *
 	 * `betweenImports` default (ω-imports-using-between) is `0` — exact
 	 * number of blank lines between two consecutive same-kind imports
@@ -590,7 +590,7 @@ final class HaxeFormat implements TextFormat {
 	 * 'betweenImportsLevel', 'betweenImports',
 	 * 'betweenImportsPathDiffers'))` on `HxModule.decls` and consumed
 	 * by the trivia-mode EOF Star path in
-	 * `WriterLowering.triviaEofStarExpr`. The path-comparison helper
+	 * `TriviaEofLowering.triviaEofStarExpr`. The path-comparison helper
 	 * is wired through the format-neutral
 	 * `WriteOptions.betweenImportsPathDiffers` adapter slot, defaulted
 	 * to `HxBetweenImportsLevel.pathDiffers`.
@@ -612,7 +612,7 @@ final class HaxeFormat implements TextFormat {
 	 * 'FnDecl', 'beforeType'))` on `HxModule.decls`,
 	 * `HxConditionalDecl.body` / `elseBody`, and `HxElseifDecl.body`
 	 * (mirrored cluster), consumed by the trivia-mode EOF Star path in
-	 * `WriterLowering.triviaEofStarExpr`. Conditional transparency
+	 * `TriviaEofLowering.triviaEofStarExpr`. Conditional transparency
 	 * from the generated `betweenImportsTailLeafClassify` /
 	 * `betweenImportsHeadLeafClassify` typed predicates extends to this
 	 * transition automatically — both share the `'decl'` classifier.
@@ -1083,7 +1083,7 @@ final class HaxeFormat implements TextFormat {
 	 * `HxExpr.ArrayExpr`. The single answer to "is this bracketed list a
 	 * comprehension?", shared by every writer-side consumer so a future
 	 * generator ctor is taught in one place: the writer's sep-Star cascade
-	 * swap and its source-newline scan (`WriterLowering.triviaSepStarExpr` /
+	 * swap and its source-newline scan (`TriviaSepLowering.triviaSepStarExpr` /
 	 * `triviaSepPredicateScanExpr`) and the decl-RHS `=`-break disarm
 	 * (`WriterLowering.breakAfterLeadOnOverflowWrap`).
 	 *
@@ -1673,7 +1673,7 @@ final class HaxeFormat implements TextFormat {
 	 * 2` is modelled as `defaultAdditionalIndent: 2` (every break-mode
 	 * shape in this cascade shares the same indent, so the per-rule vs
 	 * default distinction is byte-equivalent here). Consumed by the
-	 * dedicated heritage emit in `WriterLowering.triviaTryparseStarExpr`.
+	 * dedicated heritage emit in `TriviaTryparseLowering.triviaTryparseStarExpr`.
 	 *
 	 * Fresh struct per call (mutation safety) — same convention as the
 	 * other `default*Wrap` helpers.

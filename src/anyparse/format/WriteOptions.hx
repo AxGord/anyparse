@@ -334,7 +334,7 @@ typedef WriteOptions = {
 	 * true iff the two paths fall into different groups at the
 	 * configured granularity. Drives the
 	 * `@:fmt(blankLinesBetweenSameCtorByLevel(...))` cascade in
-	 * `WriterLowering.triviaEofStarExpr`: the meta's last arg names
+	 * `TriviaEofLowering.triviaEofStarExpr`: the meta's last arg names
 	 * this opt field, the engine emits a pure
 	 * `opt.betweenImportsPathDiffers(prev, curr, level)` call. Args
 	 * are primitive (`String` paths + `Int` level) so the engine

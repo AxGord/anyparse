@@ -46,7 +46,7 @@ enum abstract WrapMode(Int) from Int to Int {
 	 * `keep2`).
 	 *
 	 * Effective only at the trivia-emit branch
-	 * (`WriterLowering.triviaSepStarExpr`). The cascade engine's
+	 * (`TriviaSepLowering.triviaSepStarExpr`). The cascade engine's
 	 * `shape` switch maps `Keep → shapeNoWrap` as a defensive
 	 * fallback — Keep cascades the writer pre-empts before invoking
 	 * `WrapList.emit`. If a Keep rule ever reaches the engine, the
@@ -66,7 +66,7 @@ enum abstract WrapMode(Int) from Int to Int {
 	 * source-newline axis. Fork's `WrappingType.Ignore`.
 	 *
 	 * Effective only at the trivia-emit branch
-	 * (`WriterLowering.triviaSepStarExpr`); the cascade engine's
+	 * (`TriviaSepLowering.triviaSepStarExpr`); the cascade engine's
 	 * `shape` switch maps `Ignore → shapeNoWrap` as a defensive
 	 * fallback identical to Keep's.
 	 *

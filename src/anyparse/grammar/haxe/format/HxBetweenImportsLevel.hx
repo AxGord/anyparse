@@ -6,7 +6,7 @@ package anyparse.grammar.haxe.format;
  * `BetweenImportsEmptyLinesLevel` (slice ω-imports-using-between).
  *
  * Drives the `@:fmt(blankLinesBetweenSameCtorByLevel(...))` cascade in
- * `WriterLowering.triviaEofStarExpr`: when two consecutive elements are
+ * `TriviaEofLowering.triviaEofStarExpr`: when two consecutive elements are
  * both imports or both usings, the writer emits
  * `opt.betweenImports` blank lines IFF
  * `pathDiffers(prevPath, currPath, opt.betweenImportsLevel)` returns

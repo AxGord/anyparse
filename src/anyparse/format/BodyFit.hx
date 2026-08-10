@@ -10,7 +10,7 @@ import anyparse.format.wrap.WrapList;
  * Two writer paths place a construct's body relative to its header under
  * `BodyPolicy.FitLine`: `WriterLowering.buildBodyFitExpr` for a bare-Ref
  * body field (`return expr;`, `if (c) body`, `for (…) body`) and
- * `WriterLowering.triviaTryparseCaseWrapExpr` for the `@:tryparse` Star
+ * `TriviaTryparseLowering.triviaTryparseCaseWrapExpr` for the `@:tryparse` Star
  * body of `HxCaseBranch.body` / `HxDefaultBranch.stmts`. They shipped as
  * two hand-written copies of the same Doc shape, and the copies drifted:
  * the case-path copy lost the `flatLength == -1` clause, which made its

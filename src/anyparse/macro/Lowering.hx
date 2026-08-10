@@ -1720,7 +1720,7 @@ class Lowering {
 		// ω-objectlit-source-inter-sep: additionally capture per-
 		// iteration into `_sepAfter` for the per-element
 		// `Trivial.sepAfter` slot. The writer's trivia-branch sep gate
-		// (`triviaSepStarExpr` :6592) consults this to suppress inter-
+		// (`TriviaSepLowering.triviaSepStarExpr`) consults this to suppress inter-
 		// element seps the source intentionally omitted
 		// (lineends/issue_111). Sep-less Stars push `sepAfter: true`
 		// (default declared just inside the loop body) so the writer's
@@ -4399,7 +4399,7 @@ class Lowering {
 			// ω-objectlit-source-inter-sep: additionally capture per-
 			// iteration into `_sepAfter` for the per-element
 			// `Trivial.sepAfter` slot. The writer's trivia-branch sep
-			// gate (`triviaSepStarExpr` :6592) consults this to
+			// gate (`TriviaSepLowering.triviaSepStarExpr`) consults this to
 			// suppress inter-element seps the source intentionally
 			// omitted (lineends/issue_111). For sep-less branches the
 			// loop body sets `_sepAfter = true` (always-emit default).

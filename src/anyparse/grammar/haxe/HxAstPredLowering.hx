@@ -674,7 +674,7 @@ final class HxAstPredLowering extends AstPredLowering {
 	 * `betweenImportsTailLeafClassify` / `betweenImportsHeadLeafClassify`
 	 * / `tailLeafKeepsBlankAfterConditional`, consumed by the
 	 * between-cascade and after-conditional-block emissions in
-	 * `WriterLowering.triviaEofStarExpr` (the meta arg names the
+	 * `TriviaEofLowering.triviaEofStarExpr` (the meta arg names the
 	 * generated function). Each walks the conditional's branches to its
 	 * TAIL leaf decl (`elseBody` → `elseifs[last..0].body` → `body`,
 	 * last element of the FIRST non-empty branch in that priority) or
