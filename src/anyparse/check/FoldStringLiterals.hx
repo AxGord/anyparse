@@ -495,16 +495,21 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		if (sameBoundaries(settled.groups, decomposition.current)) return null;
 		final groups: Int = settled.groups.length;
 		if (groups >= current && !overLong(ctx, decomposition.editSpan)) return null;
-		final width: Null<{ written: Int, original: Int }> = settled.width;
+		final width: Null<WidthPair> = settled.width;
 		// Strict LOCAL monotonicity — the fixpoint guard. Comparing against the whole
 		// edit region's max width is vacuous when the region carries an IRREDUCIBLE
 		// over-wide segment (no seam to split at): every candidate measures under that
 		// ceiling, the split and merge preferences disagree, and `--fix` ping-pongs
-		// A<->B until the pass cap. Comparing the written window's MAX against the
-		// SAME window's ORIGINAL max admits only plans that strictly improve their
-		// window (an untouched over-wide line INSIDE the window enters both maxima
-		// equally, which can only tighten the gate toward refusal — never a wrong
-		// accept), so plan(fix(x)) can never propose the reverse edit. `width ==
+		// A<->B until the pass cap. Comparing the widths the candidate ADDED against the
+		// widths it REMOVED admits only plans that strictly improve the lines they
+		// TOUCH, so plan(fix(x)) can never propose the reverse edit: the reverse puts
+		// exactly those two sets the other way round. A line the splice left alone is
+		// on neither side (`widestDiffering` differences the window by content), so an
+		// irreducible over-wide segment sitting BETWEEN two changed lines neither
+		// refuses a plan that improves them nor licenses one that does not. Dropping
+		// it cannot flip the FIRST clause toward refusal either, since a line on both
+		// sides contributed its width to both of the old maxima: what this clause
+		// refuses is a strict subset of what the region-wide maxima refused. `width ==
 		// null` (the writer declined to render) falls through to ACCEPT — the old
 		// gate's fail-open shape, kept deliberately: the arithmetic planner is then
 		// the only measure, and refusing would silence the merge direction wholesale.
@@ -573,7 +578,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		var budget: Int = startBudget;
 		var groups: Array<Int> = filled;
 		var rendered: Rendered = first;
-		var width: Null<{ written: Int, original: Int }> = renderedWidth(ctx, span, rendered.text);
+		var width: Null<WidthPair> = renderedWidth(ctx, span, rendered.text);
 		var pass: Int = 0;
 		while (pass < MAX_BACKOFF_PASSES && width != null && width.written > ctx.metrics.lineWidth) {
 			final reduced: Int = Std.int(Math.min(budget - (width.written - ctx.metrics.lineWidth), rendered.widest - 1));
@@ -582,7 +587,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			if (next == null || sameBoundaries(next, groups)) break;
 			final nextRendered: Null<Rendered> = joinGroups(ctx, decomposition, next);
 			if (nextRendered == null) break;
-			final nextWidth: Null<{ written: Int, original: Int }> = renderedWidth(ctx, span, nextRendered.text);
+			final nextWidth: Null<WidthPair> = renderedWidth(ctx, span, nextRendered.text);
 			if (nextWidth == null || nextWidth.written >= width.written) break;
 			budget = reduced;
 			groups = next;
@@ -978,7 +983,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	 * candidate. A member the scope cannot reproduce falls back to splicing the whole
 	 * file, which is always correct and always slower.
 	 */
-	private static function renderedWidth(ctx: PlanContext, span: Span, candidate: String): Null<{ written: Int, original: Int }> {
+	private static function renderedWidth(ctx: PlanContext, span: Span, candidate: String): Null<WidthPair> {
 		final scope: Null<MemberScope> = ctx.scopeFor(span);
 
 		if (scope != null) {
@@ -997,16 +1002,17 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	}
 
 	/**
-	 * The widest line of `written` once the leading and trailing lines it SHARES with
-	 * `original` are dropped — the region the splice actually changed — PAIRED with the
-	 * widest ORIGINAL line over that same window: the baseline the plan gate's
-	 * strict-improvement (fixpoint) test measures against. The window is one contiguous
-	 * index range, so an untouched line BETWEEN two changed lines stays in it and enters
-	 * both maxima equally. Null when the writer declined to render the candidate.
+	 * The widest line the candidate's render ADDED, paired with the widest line it
+	 * REMOVED — the numbers the plan gate's strict-improvement (fixpoint) test compares.
+	 * The leading and trailing lines `written` SHARES with `original` are dropped first,
+	 * and inside what is left the two sides are differenced BY CONTENT: a line present on
+	 * both sides is untouched by the splice and enters NEITHER maximum, however wide it
+	 * is. Taking the whole window's max instead let one irreducible over-wide line
+	 * BETWEEN two changed lines pin `written` and `original` equal, which reads to the
+	 * gate as "no improvement" and refused a plan that improved every line it touched.
+	 * Null when the writer declined to render the candidate.
 	 */
-	private static function widestDiffering(
-		original: Array<String>, written: Null<String>, indentWidth: Int
-	): Null<{ written: Int, original: Int }> {
+	private static function widestDiffering(original: Array<String>, written: Null<String>, indentWidth: Int): Null<WidthPair> {
 		if (written == null) return null;
 		final lines: Array<String> = written.split('\n');
 		var prefix: Int = 0;
@@ -1017,15 +1023,17 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			&& lines[lines.length - 1 - suffix] == original[original.length - 1 - suffix]
 		)
 			suffix++;
+		final surplus: Map<String, Int> = [];
+		for (i in prefix ... lines.length - suffix) surplus[lines[i]] = (surplus[lines[i]] ?? 0) + 1;
+		for (i in prefix ... original.length - suffix) surplus[original[i]] = (surplus[original[i]] ?? 0) - 1;
 		var widest: Int = 0;
-		for (i in prefix ... lines.length - suffix) {
-			final width: Int = displayWidth(lines[i], indentWidth);
-			if (width > widest) widest = width;
-		}
 		var originalWidest: Int = 0;
-		for (i in prefix ... original.length - suffix) {
-			final width: Int = displayWidth(original[i], indentWidth);
-			if (width > originalWidest) originalWidest = width;
+		for (line => count in surplus) if (count != 0) {
+			final width: Int = displayWidth(line, indentWidth);
+			if (count > 0 && width > widest)
+				widest = width;
+			else if (count < 0 && width > originalWidest)
+				originalWidest = width;
 		}
 		return { written: widest, original: originalWidest };
 	}
@@ -1470,6 +1478,18 @@ private typedef Rendered = {
 };
 
 /**
+ * The widest line a candidate's render ADDED, paired with the widest line it
+ * REMOVED — the two numbers the plan gate's strict-improvement test compares. They
+ * are maxima over disjoint sets and need not describe the same line; a line the
+ * render left untouched is in neither, so an over-wide line the edit never reaches
+ * cannot pin both sides equal.
+ */
+private typedef WidthPair = {
+	final written: Int;
+	final original: Int;
+};
+
+/**
  * What the back-off settled on: the final boundaries, their rendered text, and the
  * measured width. A null `width` means the writer DECLINED to render the candidate,
  * not that it was never asked — every candidate that changes anything is measured.
@@ -1477,7 +1497,7 @@ private typedef Rendered = {
 private typedef Settled = {
 	final groups: Array<Int>;
 	final text: String;
-	final width: Null<{ written: Int, original: Int }>;
+	final width: Null<WidthPair>;
 };
 
 /**

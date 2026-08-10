@@ -44,6 +44,14 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 	/** The planner's own budget for a `widthSource` fixture: line width less the start column and the `+ ` glue. */
 	private static inline final FIXTURE_BUDGET: Int = LINE_WIDTH - FIXTURE_INDENT - CALL_HEAD - 2;
 
+	/**
+	 * The double-quoted macro reification the fixpoint fixtures wrap around: 142 columns
+	 * at three tabs, and no seam to split at — the irreducible over-wide line whose
+	 * presence must never stand in for a verdict on the lines around it.
+	 */
+	private static inline final IRREDUCIBLE: String =
+		"\"\\t\\t\\tmacro if ($p{['sourceObject', fieldEntry.slot]} != null) $p{[fieldEntry.slot]} = $p{['sourceObject', fieldEntry.slot]}\\n\"";
+
 	/** A merge whose rendered line lands EXACTLY on `maxLineLength` is accepted (the fits-probe boundary). */
 	public function testWidthBoundaryAtLimitMerges(): Void {
 		final vs: Array<Violation> = violations(widthSource(FIXTURE_BUDGET));
@@ -313,9 +321,7 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 		final head: String =
 			"\t\tfinal expected: String = 'class C {\\n\\tfunction test() {\\n\\t\\tfinal resultList = [\\n\\t\\t\\twhile (iteratorValue.hasNextElement())\\n'";
 		Assert.equals(0, violations(cycleFixture(head)).length);
-		final reificationAlone: String = 'class C {\n\tfunction f() {\n'
-			+ "\t\tfinal expected: String = \"\\t\\t\\tmacro if ($p{['sourceObject', fieldEntry.slot]} != null) $p{[fieldEntry.slot]} = $p{['sourceObject', fieldEntry.slot]}\\n\";\n"
-			+ '\t}\n}';
+		final reificationAlone: String = 'class C {\n\tfunction f() {\n\t\tfinal expected: String = $IRREDUCIBLE;\n\t}\n}';
 		Assert.equals(0, violations(reificationAlone).length);
 	}
 
@@ -344,6 +350,51 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 			case Err(message):
 				Assert.fail('fix canonicalize Err: $message');
 		}
+	}
+
+	/**
+	 * MIDDLE-SANDWICH precision, accept side. The chain merges a literal pair on EITHER
+	 * side of the irreducible line, so the plan changes a line above it and a line below
+	 * it and leaves the 142-column line between them alone. Measured as one contiguous
+	 * window, that untouched line entered both maxima and pinned them EQUAL — the gate
+	 * read "no improvement" and refused a plan that narrowed every line it touched, so
+	 * `--fix` recovered one pair per pass through the inner-chain descent (2 edits over
+	 * 3 passes). Differenced by CONTENT it is on neither side, and the whole chain folds
+	 * in ONE pass. The assertion spans the construct — both merges AND the untouched
+	 * line between them — so no half of it can pass on the unchanged source.
+	 */
+	public function testMiddleSandwichFoldsBothSidesInOnePass(): Void {
+		final src: String = sandwichSource(30, 30);
+		Assert.equals(1, violations(src).length);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.contains(
+			'String = \'${''.rpad('A', 30)}${''.rpad('B', 30)}\'\n\t\t\t+ $IRREDUCIBLE'
+			+ '\n\t\t\t+ \'${''.rpad('C', 30)}${''.rpad('D', 30)}\';'
+		));
+		Assert.equals(0, violations(fixed).length);
+	}
+
+	/**
+	 * MIDDLE-SANDWICH geometry read by the OTHER consumer of the same measurement, and a
+	 * no-regression guard rather than a discriminator: it flips on disabling `settle`'s
+	 * back-off loop, not on reverting the content difference. The head pair is sized so
+	 * its merge renders 155 columns, the back-off sees that CHANGED line past the limit,
+	 * re-fills against a narrower budget and settles on the tail merge alone — so
+	 * dropping untouched lines from the measurement narrows what the back-off and the
+	 * gate see without blinding either: the 142-column line neither triggers a back-off
+	 * of its own nor masks the 155-column one. The preserved head split and the changed
+	 * tail are asserted as ONE string, so the unchanged source cannot satisfy it, and the
+	 * result is re-linted: this side of the geometry converges too.
+	 */
+	public function testMiddleSandwichRefusesHeadMergeThatOverflows(): Void {
+		final src: String = sandwichSource(60, 30);
+		Assert.equals(1, violations(src).length);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.contains(
+			'String = \'${''.rpad('A', 60)}\'\n\t\t\t+ \'${''.rpad('B', 60)}\'\n\t\t\t+ $IRREDUCIBLE'
+			+ '\n\t\t\t+ \'${''.rpad('C', 30)}${''.rpad('D', 30)}\';'
+		));
+		Assert.equals(0, violations(fixed).length);
 	}
 
 	/**
@@ -484,8 +535,27 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 			'class C {',
 			'\tfunction f() {',
 			head,
-			"\t\t\t+ \"\\t\\t\\tmacro if ($p{['sourceObject', fieldEntry.slot]} != null) $p{[fieldEntry.slot]} = $p{['sourceObject', fieldEntry.slot]}\\n\"",
+			'\t\t\t+ $IRREDUCIBLE',
 			"\t\t\t+ '\\t\\t];\\n\\t}\\n}';",
+			'\t}',
+			'}'
+		].join('\n');
+	}
+
+	/**
+	 * The MIDDLE-SANDWICH geometry: an adjacent literal pair on EITHER side of the
+	 * irreducible over-wide line, so a whole-chain plan changes a line above it and a line
+	 * below it while leaving that line itself alone. `headLen` sizes the pair above — and
+	 * with it the width the writer renders its merge at — and `tailLen` the pair below.
+	 */
+	private function sandwichSource(headLen: Int, tailLen: Int): String {
+		return [
+			'class C {',
+			'\tfunction f() {',
+			'\t\tfinal expected: String = \'${''.rpad('A', headLen)}\'',
+			'\t\t\t+ \'${''.rpad('B', headLen)}\'',
+			'\t\t\t+ $IRREDUCIBLE',
+			'\t\t\t+ \'${''.rpad('C', tailLen)}\' + \'${''.rpad('D', tailLen)}\';',
 			'\t}',
 			'}'
 		].join('\n');
