@@ -239,9 +239,12 @@ class FoldStringLiteralsCheckTest extends FoldStringLiteralsCheckTestBase {
 	}
 
 	public function testConcatInsideInterpolationBlockNotFolded(): Void {
-		// A `+` chain that itself sits INSIDE a `${...}` interpolation block must
-		// not fold - the result would nest an interpolated string inside an
-		// interpolation block (fragile in the real compiler's interp scanner).
+		// A `+` chain that itself sits INSIDE a `${...}` interpolation block is
+		// never a candidate: the walk stops at string literals, so re-planning
+		// inside a block is out of scope by design. (The nesting itself is legal -
+		// `testDollarInsideNestedStringOperandMerges` emits a block inside a
+		// nested string on purpose - the refusal here is about not RE-FOLDING
+		// what an author already wrote inside an interpolation.)
 		final src: String = "class C { function f(t:String):String { return 'x${t.split('a').join(q() + \"n\")}y'; } }";
 		Assert.equals(0, violations(src).length);
 	}
@@ -315,6 +318,35 @@ class FoldStringLiteralsCheckTest extends FoldStringLiteralsCheckTestBase {
 	/** A BALANCED brace closes where that scanner expects it to, so it merges. */
 	public function testBalancedBraceOperandMerges(): Void {
 		Assert.equals("'v=${{x: 1}.x}'", foldOf("class C { function f() { g('v=' + {x: 1}.x); } }"));
+	}
+
+	/**
+	 * A `$` INSIDE a nested string literal is no hazard: the real compiler's block
+	 * scanner counts braces without lexing nested strings and never re-scans block
+	 * content for `$`, and the block's re-parse reads the nested literal exactly as
+	 * the bare operand read it — `'$id'` interpolates either way, `"$lit"` stays
+	 * plain either way, and a `${ … }` block inside the nested string balances the
+	 * naive count. All three merge (compile-and-run verified on Haxe 4.3.7); the
+	 * bare-`$` spellings that still refuse are pinned in
+	 * `testBareDollarOperandsNotMerged`.
+	 */
+	public function testDollarInsideNestedStringOperandMerges(): Void {
+		Assert.equals("'a,${(f ? '$id' : 'NULL')},b'", foldOf(wrap("'a,' + (f ? '$id' : 'NULL') + ',b'")));
+		Assert.equals("'a,${(f ? \"$lit\" : \"n\")},b'", foldOf(wrap("'a,' + (f ? \"$lit\" : \"n\") + ',b'")));
+		Assert.equals("'L,${(x ? '${a.b}!' : 'n')},R'", foldOf(wrap("'L,' + (x ? '${a.b}!' : 'n') + ',R'")));
+	}
+
+	/**
+	 * The two parseable spellings of a `$` OUTSIDE any nested string, pinned so a later
+	 * relaxation has to answer both. A regex literal with an ODD quote (`~/it's/`) opens a
+	 * phantom string the toggle never closes — and the real lexer agrees: it recursively
+	 * lexes nested strings inside a block, so the dangling quote swallows the block
+	 * terminator ("Unterminated string", compile-verified). `$type(x)` is the one non-macro
+	 * bare-`$` expression; merging it would compile, but it is conservatively kept bare.
+	 */
+	public function testBareDollarOperandsNotMerged(): Void {
+		Assert.equals(0, violations(wrap("'a' + ~/it's/.match(s) + 'b'")).length);
+		Assert.equals(0, violations(wrap("'a,' + $type(x) + ',b'")).length);
 	}
 
 	/**

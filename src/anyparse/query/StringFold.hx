@@ -33,9 +33,10 @@ typedef StringLiteral = {
  * binds at least as tightly as concatenation, so `renderBare` may emit it WITHOUT
  * the parentheses a ternary or another lower-binding shape needs. The flag is read
  * off the NODE at decomposition time; re-deriving it from `src` would be a second,
- * worse parser. A source carrying a `$`, a line break, a backslash or an unbalanced
- * brace cannot go inside a `${ … }` block, so `renderGroup` refuses a group
- * containing one and the segment can only ever be emitted bare.
+ * worse parser. A source carrying a bare `$` outside a nested string
+ * literal, a line break, a backslash, an unbalanced brace or an unbalanced QUOTE (a regex literal can carry one) cannot go inside a `${ … }` block, so `renderGroup` refuses a group containing one and the
+ * segment can only ever be emitted bare; a `$` INSIDE a nested string is
+ * harmless — the block's re-parse reads it exactly as the bare operand did.
  */
 enum ConcatSegment {
 	SegText(quote: String, raw: String);

@@ -108,7 +108,10 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 		Assert.equals('\'$$$one$$$two\' + \' items\'', foldOf(src));
 	}
 
-	/** MERGE fixture, shaped after a real query builder: a literal / ternary / literal / call / literal chain at three tabs. */
+	/**
+	 * MERGE fixture, shaped after a real query builder: a literal / ternary / literal / call / literal
+	 * chain at three tabs — the ternary's nested `$keyId` strings merge into the block (no `$` refusal).
+	 */
 	public function testMergeQueryChainFixture(): Void {
 		final src: String = [
 			'class C {',
@@ -122,7 +125,7 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 			'}'
 		].join('\n');
 		Assert.equals(
-			"'SELECT rowpath FROM records WHERE grouped = ' + (grouped ? '1 AND group_key_id = $keyId' : '0 AND key_id = $keyId')"
+			"'SELECT rowpath FROM records WHERE grouped = ${(grouped ? '1 AND group_key_id = $keyId' : '0 AND key_id = $keyId')}'"
 			+ " + ' AND status = ${_linkChannel.quote(statusLabelOfRecord(STATUS_REMOTE_UPDATED_LOCAL_SYNCED_FETCHED))} LIMIT 1'",
 			foldOf(src)
 		);

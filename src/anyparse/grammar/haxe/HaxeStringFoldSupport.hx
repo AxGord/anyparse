@@ -366,12 +366,26 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	 * than anyparse's own lexer; the LINE-BREAK refusal is this model's own, and is
 	 * STRICTER than the compiler:
 	 *
-	 *  - a `$` would re-interpolate, and a BACKSLASH is refused because the scanner does
-	 *    not process escapes inside a nested same-quote string (`'\\'` reports
-	 *    "Unterminated string"). A line break is refused because FOLDING one into a block
-	 *    would reflow the caller's literal, NOT because the compiler rejects it: a Haxe
-	 *    string literal spans lines freely and `${if (a)\n\tb\nelse c}` compiles. Callers
-	 *    reasoning about what the scanner ACCEPTS must not read this as its rule;
+	 *  - a `$` OUTSIDE a nested string literal mis-parses in the block — `'${$x}'` is
+	 *    "Unknown identifier : $x" (a dollar-ident, reification territory), and the
+	 *    one non-macro spelling, the `$type` diagnostic builtin, is conservatively
+	 *    kept bare too. INSIDE a nested string a `$` is harmless: the block's
+	 *    re-parse reads the nested literal exactly as the bare operand read it —
+	 *    `'$id'` interpolates either way, `"$lit"` stays plain either way
+	 *    (compile-and-run verified on Haxe 4.3.7, including a `${ … }` block inside
+	 *    the nested string). The quote tracker is a plain toggle — a BACKSLASH is
+	 *    refused outright, so no escape can fake a quote — but a quote char in a
+	 *    REGEX literal (`~/it's/`) still opens a phantom string; the final
+	 *    `quote == 0` check turns that mis-model into a refusal, which matches the
+	 *    real lexer: it recursively lexes nested strings inside a block, and the
+	 *    dangling quote swallows the block terminator ("Unterminated string",
+	 *    compile-verified). The backslash refusal itself is also the scanner's — it
+	 *    does not process escapes inside a nested same-quote string (`'\\'` reports
+	 *    "Unterminated string"). A line break is refused because FOLDING one into a
+	 *    block would reflow the caller's literal, NOT because the compiler rejects
+	 *    it: a Haxe string literal spans lines freely and `${if (a)\n\tb\nelse c}`
+	 *    compiles. Callers reasoning about what the scanner ACCEPTS must not read
+	 *    this as its rule;
 	 *  - the block's closing `}` is found by counting `{` / `}` NAIVELY, without
 	 *    lexing nested strings, so a brace inside one still counts. A source whose
 	 *    running depth ever goes negative closes the block early (`q("}")` reports
@@ -380,9 +394,18 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	 */
 	private static function interpolationBlockSafe(src: String): Bool {
 		var depth: Int = 0;
+		var quote: Int = 0;
 		for (i in 0...src.length) {
 			final c: Int = src.fastCodeAt(i);
-			if (c == "$".code || c == '\n'.code || c == '\r'.code || c == '\\'.code) return false;
+			if (c == '\n'.code || c == '\r'.code || c == '\\'.code) return false;
+			if (quote == 0) {
+				if (c == "'".code || c == '"'.code)
+					quote = c;
+				else if (c == "$".code)
+					return false;
+			} else if (c == quote) {
+				quote = 0;
+			}
 			if (c == '{'.code) {
 				depth++;
 			} else if (c == '}'.code) {
@@ -390,7 +413,7 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 				if (depth < 0) return false;
 			}
 		}
-		return depth == 0;
+		return depth == 0 && quote == 0;
 	}
 
 	/**

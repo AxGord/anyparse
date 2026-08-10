@@ -99,12 +99,13 @@ using StringTools;
  * - The replaced span is the OPERAND extent, not the chain node's: a `+` node absorbs the
  *   trivia trailing its last operand, and replacing that would delete a `// …` ending the
  *   construct's line.
- * - An expression segment carrying `$`, a newline, a BACKSLASH or an UNBALANCED
- *   brace cannot enter a `${ … }` block: the real compiler's block scanner neither
- *   processes escapes inside a nested same-quote string nor lexes strings while it
- *   counts braces, so both mis-lex there even though anyparse's own interp scanner
- *   accepts them. It does not reject the construct — it only forces that segment
- *   into a group of its own, rendered bare.
+ * - An expression segment carrying a bare `$` outside a nested string
+ *   literal, a newline, a BACKSLASH or an UNBALANCED brace or quote cannot enter a `${ … }` block: the real compiler's block scanner neither processes escapes
+ *   inside a nested same-quote string nor lexes strings while it counts braces,
+ *   so both mis-lex there even though anyparse's own interp scanner accepts
+ *   them; a `$` INSIDE a nested string is fine — the block's re-parse reads it
+ *   exactly as the bare operand did. It does not reject the construct — it
+ *   only forces that segment into a group of its own, rendered bare.
  * - A DOUBLE-quoted text segment whose escapes DECODE to a `$` may not be re-emitted
  *   into a SINGLE-quoted literal: Haxe decodes before it scans for `$`, so
  *   `"a\x24b" + 'c'` folded to `'a\x24bc'` would silently print the value of the
