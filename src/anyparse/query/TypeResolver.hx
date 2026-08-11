@@ -205,7 +205,7 @@ final class TypeResolver {
 	public static function resolveBindingFrom(name: String, recvSpan: Span, tree: QueryNode, shape: RefShape): Null<Int> {
 		for (hit in Refs.find(name, tree, shape)) {
 			final hs: Null<Span> = hit.span;
-			if (!(hs != null && hs.from == recvSpan.from && hs.to == recvSpan.to)) continue;
+			if (hs == null || hs.from != recvSpan.from || hs.to != recvSpan.to) continue;
 			final b: Null<Span> = hit.bindingSpan;
 			return b?.from;
 		}

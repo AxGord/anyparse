@@ -164,17 +164,20 @@ class GuardReturnCheckTest extends Test {
 		);
 	}
 
-	public function testStrandedNarrowingFallsBackToVerbatimWrap(): Void {
-		// `b`'s narrowing comes from operand 2 and would not reach operand 3 of the
-		// negated `||` chain, so the whole condition is wrapped instead.
+	public function testStrandedNarrowingRegroupsDeMorgan(): Void {
+		// `b`'s fact would not survive a FLAT `||` chain (Haxe carries only the first
+		// operand's narrowing that far), so the negation right-nests the tail: inside
+		// the group `b == null` is first again and its fact reaches `p`.
 		final fixed: String = fx(cond('a != null && b != null && p(a.length, b.length)'));
-		Assert.isTrue(fixed.indexOf('if (!(a != null && b != null && p(a.length, b.length))) return false;') != -1);
+		Assert.isTrue(fixed.indexOf('if (a == null || (b == null || !p(a.length, b.length))) return false;') != -1);
 	}
 
-	public function testStrandedNarrowingMultiLineConditionNotFlagged(): Void {
-		// The verbatim wrap of an ALREADY multi-line condition reads worse than the
-		// branch it would replace, so the site is left alone.
-		Assert.equals(0, v(cond('a != null\n\t\t\t&& b != null\n\t\t\t&& p(a.length, b.length)')).length);
+	public function testStrandedMultiLineConditionStillDeMorgans(): Void {
+		// The regrouped De Morgan leaves no verbatim-wrap tier for a stranded chain, so
+		// the old multi-line refusal has nothing left to protect — the site de-nests and
+		// the condition collapses to the one-line grouped disjunction.
+		final fixed: String = fx(cond('a != null\n\t\t\t&& b != null\n\t\t\t&& p(a.length, b.length)'));
+		Assert.isTrue(fixed.indexOf('if (a == null || (b == null || !p(a.length, b.length))) return false;') != -1);
 	}
 
 	public function testDeMorganedMultiLineConditionStillFlagged(): Void {
@@ -182,11 +185,11 @@ class GuardReturnCheckTest extends Test {
 		Assert.equals(1, v(cond('a != null\n\t\t\t&& b != null\n\t\t\t&& c != null')).length);
 	}
 
-	public function testParenNestedStrandedNarrowingFallsBackToVerbatimWrap(): Void {
-		// The negation DROPS the parens, so the emitted chain is the same flat three-operand
-		// `||` as the unparenthesised shape — the gate must see through the parens too.
+	public function testParenNestedStrandedNarrowingRegroupsDeMorgan(): Void {
+		// The negation DROPS the parens, so the flattened chain is the same three
+		// operands as the unparenthesised shape — and regroups at the same seam.
 		final fixed: String = fx(cond('a != null && (b != null && p(a.length, b.length))'));
-		Assert.isTrue(fixed.indexOf('if (!(a != null && (b != null && p(a.length, b.length)))) return false;') != -1);
+		Assert.isTrue(fixed.indexOf('if (a == null || (b == null || !p(a.length, b.length))) return false;') != -1);
 	}
 
 	public function testStrandedNarrowingFirstOperandStillDeMorgans(): Void {

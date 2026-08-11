@@ -47,31 +47,21 @@ using Lambda;
  * (`a && b` -> `!a || !b`, `!(a || b)` -> `a && b`, `==` / `!=` flipped NaN-safely), with the
  * ordered comparisons `< <= > >=` deliberately KEPT wrapped `!(a < b)` - flipped only where
  * the operand types prove both totally ordered, since `!(a < b)` and `a >= b` differ whenever
- * an operand is a NaN or a `null`. Falling back - a seam-less grammar, a
- * comment in the condition the De Morgan rewrite would drop, or the stranded-narrowing
- * gate below - the text engine wraps `!(cond)` VERBATIM. Either tier is sound and compiles.
+ * an operand is a NaN or a `null`. Falling back - a seam-less grammar, or a comment in the
+ * condition the De Morgan rewrite would drop - the text engine wraps `!(cond)` VERBATIM.
+ * Either tier is sound and compiles.
  *
- * ### The stranded-narrowing gate on the De Morgan path
+ * ### Stranded narrowings REGROUP on the De Morgan path
  *
  * De Morgan turns an `&&` chain into an `||` chain, and Haxe's strict null-safety carries a
- * narrowing fact into a later `||` operand from the chain's FIRST operand ONLY. So
- * `a != null && b != null && p(a.length, b.length)` (which compiles) becomes
- * `a == null || b == null || p(a.length, b.length)` (which does NOT - `b` is no longer
- * narrowed). Measured on the compiler: the fact of operand 1 reaches operand 3, the fact of
- * operand 2 does not; a two-operand chain is always safe, and a right-nested
- * `x || (y || z)` is safe. Rather than emit a right-nested disjunction, the shared engine
- * DECLINES the De Morgan tier for such a condition and falls back to the verbatim `!(cond)`
- * wrap, whose interior is the original `&&` chain and so narrows exactly as before
- * (verified: the de-nested body still narrows after the wrapped guard). The gate is
- * syntactic and conservative - no type information: a negated `&&` chain is flagged when an
- * operand at index 3 or later shares a plain identifier with an operand at index 2 or later
- * that precedes it. It lives in `NegationScan.narrowingStranded`, applied by
- * `negateConditionText` itself, so `loop-guard` (which negates in the opposite direction, a
- * skip condition into a keep condition) and `guard-continue` are covered by the same seat.
- * This check reads the predicate directly for one EXTRA gate of its own: a condition that
- * ALREADY spans lines takes NO fix on this path at all, since the verbatim wrap re-emits it
- * as-is and a nested multi-line `!( … )` would read worse than the branch it replaces (a
- * De-Morganed multi-line condition still de-nests).
+ * narrowing fact into a later `||` operand from the chain's FIRST operand ONLY. So a flat
+ * `a == null || b == null || p(a.length, b.length)` does not compile - `b` is no longer
+ * narrowed - while the right-nested `a == null || (b == null || p(a.length, b.length))`
+ * narrows fine (both measured on the compiler, including a fact crossing INTO a later
+ * group). The shared engine therefore right-nests a parenthesised group at every operand
+ * whose fact a flat chain would strand (`HaxeBooleanLogicSupport.negateAndChain`), so
+ * `loop-guard`, `guard-continue` and this check all emit the grouped De Morgan instead of
+ * falling back to a verbatim wrap.
  *
  * ## The implicit-tail arm
  *
@@ -229,7 +219,7 @@ final class GuardReturn implements Check {
 				// An inversion that cannot shed its `!( … )` wrap reads worse than the positive
 				// branch it replaces — the whole point of the guard form is lost, so skip the site.
 				final span: Null<Span> = m.ifNode.span;
-				if (span != null && NegationScan.negationIsClean(m.cond, source, s.negation, s.logic, types)) violations.push({
+				if (span != null && NegationScan.negationIsClean(m.cond, source, s.logic, types)) violations.push({
 					file: file,
 					span: span,
 					rule: 'guard-return',
@@ -396,8 +386,7 @@ final class GuardReturn implements Check {
 	 * The candidate `ifNode` (paired with `tail`, or null on the implicit-tail arm) once every
 	 * SHARED gate holds, else null: a statement-position `if` with no `else`, a braced
 	 * then-branch of at least `MIN_THEN_STATEMENTS`, no conditional-compilation region in the
-	 * rewritten span, no already-multi-line condition the stranded-narrowing fallback would
-	 * re-wrap verbatim, no comment the rewrite would strand, and no de-nested local that would
+	 * rewritten span, no comment the rewrite would strand, and no de-nested local that would
 	 * same-scope re-declare a name already bound where the run lands.
 	 *
 	 * The TERMINAL gate is the one that is NOT shared - it applies only when there IS a `tail`.
@@ -419,11 +408,6 @@ final class GuardReturn implements Check {
 		if (!s.blockKinds.contains(thenBlock.kind) || thenBlock.children.length < MIN_THEN_STATEMENTS) return null;
 		if (tail != null && !s.flow.isTerminal(thenBlock.children[thenBlock.children.length - 1])) return null;
 		if (hasConditionalRegion(ifNode) || (tail != null && hasConditionalRegion(tail))) return null;
-		// The stranded-narrowing fallback re-emits `cond` VERBATIM, so a condition that
-		// already spans lines becomes a nested multi-line `!( … )` wrap — worse to read
-		// than the branch it would replace. Only that path is affected; a De-Morganed
-		// multi-line condition still de-nests.
-		if (NegationScan.narrowingStranded(cond, s.negation) && spansLines(source, cond)) return null;
 		final blocked: Bool = spanCommentBlocked(source, ifNode, cond, thenBlock, tail ?? ifNode)
 			|| redeclaresSibling(block, ifNode, thenBlock, s, scopeNames);
 		return blocked ? null : {
@@ -565,12 +549,6 @@ final class GuardReturn implements Check {
 		if (tailSpan == null) return null;
 		final tailSource: String = source.substring(tailSpan.from, tailSpan.to);
 		return { span: new Span(ifSpan.from, tailSpan.to), text: 'if ($neg) $tailSource$inner' };
-	}
-
-	/** Whether `node`'s source spans more than one line. */
-	private static function spansLines(source: String, node: QueryNode): Bool {
-		final span: Null<Span> = node.span;
-		return span != null && source.substring(span.from, span.to).indexOf('\n') != -1;
 	}
 
 }

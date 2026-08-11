@@ -295,7 +295,7 @@ final class CallSites {
 			final span: Null<Span> = callee.span;
 			return span == null ? CalleeNone : CalleeBare(span);
 		}
-		if (!(callee.kind == 'FieldAccess' && callee.name == name && callee.children.length > 0)) return CalleeNone;
+		if (callee.kind != 'FieldAccess' || callee.name != name || callee.children.length <= 0) return CalleeNone;
 		final recv: QueryNode = callee.children[0];
 		if (recv.kind == 'IdentExpr' && recv.name == 'this') return CalleeThis;
 		final recvName: String = recv.name ?? recv.kind;

@@ -28,14 +28,15 @@ using Lambda;
  * a `BooleanLogicSupport` and the condition span is comment-free, the negation is pushed
  * inward by De Morgan (`a && b` → `!a || !b`, `!(a || b)` → `a && b`, `==` / `!=` flipped),
  * with the ordered comparisons `< <= > >=` deliberately KEPT wrapped `!(a < b)` unless
- * proven totally ordered — a NaN or `null` breaks it. Falling back — a seam-less grammar, a
- * comment in the condition the De Morgan rewrite would drop, or a condition whose flattened
- * `||` chain would STRAND a null-safety narrowing (`NegationScan.narrowingStranded`: Haxe
- * carries a narrowing fact into a later `||` operand from the FIRST operand only, so
- * `a != null && b != null && p(a.length, b.length)` must not become
- * `a == null || b == null || p(a.length, b.length)`) — the old text engine wraps
- * `!(cond)` VERBATIM (`!` strip, NaN-safe `==` / `!=` flip, everything else
- * parenthesised-wrapped), preserving the comment. Either tier is sound and compiles.
+ * proven totally ordered — a NaN or `null` breaks it. A `||` chain that would
+ * STRAND a null-safety narrowing (Haxe carries a narrowing fact into a later `||` operand
+ * from the FIRST operand only) right-nests a parenthesised group at the stranded operand
+ * instead: `a != null && b != null && p(a.length, b.length)` becomes
+ * `a == null || (b == null || !p(a.length, b.length))`, which narrows fine — measured on
+ * the compiler. Falling back — a seam-less grammar, or a comment in the condition the
+ * De Morgan rewrite would drop — the old text engine wraps `!(cond)` VERBATIM (`!` strip,
+ * NaN-safe `==` / `!=` flip, everything else parenthesised-wrapped), preserving the
+ * comment. Either tier is sound and compiles.
  *
  * ## Gates — every one is a correctness gate; a violated gate is a semantic bug
  *
@@ -265,7 +266,7 @@ final class GuardContinue implements Check {
 			final m: Null<Candidate> = match(node, root, source, s);
 			// An inversion that cannot shed its `!( … )` wrap reads worse than the nesting it
 			// removes — the guard form buys nothing there, so the site is left alone.
-			if (m != null && NegationScan.negationIsClean(m.cond, source, s.negation, s.support, types)) {
+			if (m != null && NegationScan.negationIsClean(m.cond, source, s.support, types)) {
 				final span: Null<Span> = m.ifNode.span;
 				if (span != null) out.push({
 					file: file,

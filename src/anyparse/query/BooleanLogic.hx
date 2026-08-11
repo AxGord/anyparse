@@ -61,7 +61,10 @@ interface BooleanLogicSupport {
 	 * Morgan: `!` stripped, `&&` / `||` distributed, `==` / `!=` flipped; an
 	 * ordered comparison (`<` `<=` `>` `>=`) is wrapped `!(…)` verbatim rather than
 	 * flipped — `!(a < b)` and `a >= b` differ whenever an operand is a NaN or a
-	 * `null`. Operands carry precedence-safe parentheses. Comments in the operator
+	 * `null`. Operands carry precedence-safe parentheses, and a `||` chain that would
+	 * strand a null-safety narrowing must right-nest a parenthesised group at the stranded
+	 * null test (pure associativity — order and short-circuit unchanged), so
+	 * the result narrows wherever the input did. Comments in the operator
 	 * glue between operands are dropped, so the caller must gate:
 	 * `NegationScan.negateConditionText` falls back to a verbatim wrap when the
 	 * condition span holds a comment marker.
@@ -114,8 +117,8 @@ interface BooleanLogicSupport {
 	 * `RefShape` kinds and one private in the Haxe engine, that had to be widened in lockstep.
 	 *
 	 * A non-null answer does NOT promise a rewrite: the worth gate inside `simplifyNegatedCompound`
-	 * still decides, and refuses whatever would not pay. The NODE is returned rather than a `Bool`
-	 * so the caller can run its own operand-level gates on it (`NegationScan.narrowingStranded`).
+	 * still decides, and refuses whatever would not pay. The NODE is returned rather than a
+	 * `Bool` so the caller can run its own operand-level gates on it.
 	 */
 	public function negatedOperandOf(not: QueryNode): Null<QueryNode>;
 

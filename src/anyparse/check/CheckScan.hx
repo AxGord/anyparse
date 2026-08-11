@@ -780,10 +780,11 @@ private typedef CondSimplifySeams = {
  * the logical-not (`notKind`) it strips, the paren (`parenKind`) it unwraps, the
  * `==` / `!=` kinds (`eqKind` / `notEqKind`) it flips, the atomic-expression kinds
  * (`atomicKinds`) that take a bare `!` rather than `!(…)`, and the logical
- * (`andKind` / `orKind`) plus plain-identifier (`identKind`) kinds the
- * stranded-narrowing gate walks. `andLowerPrecedenceKinds` is the `RefShape` list
- * `collapsible-if` merges with — it decides the parenthesis pair when a caller asks
- * for the negation as an operand of the logical-and slot.
+ * (`andKind` / `orKind`) kinds that word `simplify-negated-compound`'s finding — `andKind`
+ * also discriminates the and-slot for `negateConditionText`'s STRIP arm.
+ * `andLowerPrecedenceKinds` is the `RefShape` list `collapsible-if` merges with — it decides
+ * the parenthesis pair when a caller asks for the negation as an operand of the
+ * logical-and slot.
  */
 typedef NegationSeams = {
 	final notKind: Null<String>;
@@ -793,6 +794,5 @@ typedef NegationSeams = {
 	final atomicKinds: Array<String>;
 	final andKind: Null<String>;
 	final orKind: Null<String>;
-	final identKind: String;
 	final andLowerPrecedenceKinds: Array<String>;
 };

@@ -25,9 +25,10 @@ import anyparse.runtime.Span;
  * single-comparison arm that wrap IS the input, so the worth gate turns "unproven" into an outright
  * refusal; on the compound arm the same wrap survives inside a still-worthwhile partial result.
  *
- * Gates, shared by both arms: a comment in the span, a `#if` region, a stranded null-safety
- * narrowing, a macro-reification subtree, and any operand outside the seam's whitelist (`|`, `&`,
- * `is`, a call, another `!`) all refuse.
+ * Gates, shared by both arms: a comment in the span, a `#if` region, a macro-reification
+ * subtree, and any operand outside the seam's whitelist (`|`, `&`, `is`, a call, another
+ * `!`) all refuse; a chain that would strand a null-safety narrowing right-nests a
+ * parenthesised group at the stranded operand instead of refusing.
  */
 class SimplifyNegatedCompoundCheckTest extends Test {
 
@@ -250,10 +251,22 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		Assert.equals(wrap('var b = x != null && f(x);'), applyFix(wrap('var b = !(x == null || !f(x));')));
 	}
 
-	public function testStrandedNarrowingNotFlagged(): Void {
-		// Worth passes (one `!` stripped), but negating the `&&` chain into `||` would strand
-		// the `b` narrowing operand 2 depends on — the shared gate refuses first.
-		Assert.equals(0, violations(wrap('var v = !(a != null && b != null && !p(a.x, b.y));')).length);
+	public function testStrandedNarrowingRegroupsAndFlagged(): Void {
+		// Worth passes (the outer wrap and the inner `!p` both shed) and the stranded `b` narrowing
+		// no longer refuses:
+		// the negation right-nests the tail so `b`'s fact survives inside its group.
+		final source: String = wrap('var v = !(a != null && b != null && !p(a.x, b.y));');
+		Assert.equals(1, violations(source).length);
+		Assert.equals(wrap('var v = a == null || (b == null || p(a.x, b.y));'), applyFix(source));
+	}
+
+	public function testFixRegroupsEqualityChain(): Void {
+		// The guard-family leftover this regrouping exists for: a verbatim wrap over an
+		// all-equality chain whose null check a later operand depends on.
+		Assert.equals(
+			wrap("var b = path == '' || (s == null || s.name == '..');"),
+			applyFix(wrap("var b = !(path != '' && s != null && s.name != '..');"))
+		);
 	}
 
 	public function testCommentInSpanNotFlagged(): Void {

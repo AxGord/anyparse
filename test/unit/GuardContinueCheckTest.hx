@@ -17,10 +17,10 @@ import anyparse.runtime.Span;
  * inversion pushes De Morgan inward through the shared `NegationScan.negateConditionText`
  * (backed by the grammar's `BooleanLogicSupport`): `a && b` → `!a || !b`, `==` / `!=`
  * flipped, but an ordered comparison (`< <= > >=`) kept wrapped `!(…)` (NaN-safe — `!(a <
- * b)` and `a >= b` differ under NaN), and a comment inside the condition — or a condition
- * whose flattened `||` chain would strand a null-safety narrowing — falls back to the
- * verbatim `!(cond)` wrap. A de-nested local whose name clashes with a preceding sibling or
- * the iterator is AUTO-RENAMED to a fresh `<name>2` (binder, plain reads and `$name`
+ * b)` and `a >= b` differ under NaN); a `||` chain that would strand a null-safety
+ * narrowing right-nests a parenthesised group at the stranded operand, and a comment
+ * inside the condition falls back to the verbatim `!(cond)` wrap. A de-nested local whose
+ * name clashes with a preceding sibling or the iterator is AUTO-RENAMED to a fresh `<name>2` (binder, plain reads and `$name`
  * interpolation reads together); a deeper redeclaration of that name, an inner lambda
  * mentioning it, or an unaccounted-for textual occurrence refuses instead. Plus a
  * glue-comment gate and the sole-`if` / else / empty / unbraced / non-tail exclusions. A
@@ -213,12 +213,13 @@ class GuardContinueCheckTest extends Test {
 		Assert.isTrue(fx(cond('a != null && b != null && c != null')).indexOf('if (a == null || b == null || c == null) continue;') != -1);
 	}
 
-	public function testStrandedNarrowingFallsBackToVerbatimWrap(): Void {
-		// `b`'s narrowing comes from operand 2 and would not reach operand 3 of the
-		// negated `||` chain, so the whole condition is wrapped instead.
+	public function testStrandedNarrowingRegroupsDeMorgan(): Void {
+		// `b`'s fact would not survive a FLAT `||` chain (Haxe carries only the first
+		// operand's narrowing that far), so the negation right-nests the tail: inside
+		// the group `b == null` is first again and its fact reaches `p`.
 		Assert.isTrue(
 			fx(cond('a != null && b != null && p(a.length, b.length)'))
-				.indexOf('if (!(a != null && b != null && p(a.length, b.length))) continue;') != -1
+				.indexOf('if (a == null || (b == null || !p(a.length, b.length))) continue;') != -1
 		);
 	}
 
@@ -227,13 +228,28 @@ class GuardContinueCheckTest extends Test {
 		Assert.isTrue(fx(cond('a != null && q() && p(a.length, 0)')).indexOf('if (a == null || !q() || !p(a.length, 0)) continue;') != -1);
 	}
 
-	public function testParenNestedStrandedNarrowingFallsBackToVerbatimWrap(): Void {
-		// The negation DROPS the parens, so the emitted chain is the same flat three-operand
-		// `||` as the unparenthesised shape — the gate must see through the parens too.
+	public function testParenNestedStrandedNarrowingRegroupsDeMorgan(): Void {
+		// The negation DROPS the parens, so the flattened chain is the same three
+		// operands as the unparenthesised shape — and regroups at the same seam.
 		Assert.isTrue(
 			fx(cond('a != null && (b != null && p(a.length, b.length))'))
-				.indexOf('if (!(a != null && (b != null && p(a.length, b.length)))) continue;') != -1
+				.indexOf('if (a == null || (b == null || !p(a.length, b.length))) continue;') != -1
 		);
+	}
+
+	public function testTwoStrandedNarrowingsNestTwoGroups(): Void {
+		// Each stranded null test opens its own group: within a group its null check is
+		// first again, and the later `t` pair strands within THAT group, nesting once more.
+		Assert.isTrue(
+			fx(cond('ok && s != null && s.ready && t != null && t.live'))
+				.indexOf('if (!ok || (s == null || !s.ready || (t == null || !t.live))) continue;') != -1
+		);
+	}
+
+	public function testSharedIdentWithoutNullTestStaysFlat(): Void {
+		// Only a null TEST sources a narrowing fact; mere ident sharing between later
+		// operands opens no group — the flat chain compiles and reads cleaner.
+		Assert.isTrue(fx(cond('a != null && b == c && p(b, a)')).indexOf('if (a == null || b != c || !p(b, a)) continue;') != -1);
 	}
 
 	// --- negatives: never flagged --------------------------------------------------

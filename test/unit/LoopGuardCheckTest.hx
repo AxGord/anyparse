@@ -16,11 +16,12 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
  * (`for (x in xs) if (c && INV) { REST }`), each side parenthesised only when it binds looser
  * than `&&`. The inversion pushes De Morgan inward (`a && b` → `!a || !b`), flips `==` / `!=`
  * (NaN-safe), and keeps an ordered comparison (`< <= > >=`) wrapped `!(…)` (unflipped, since
- * `!(a < b)` and `a >= b` differ under NaN); a comment inside the condition — or a condition
- * whose flattened `||` chain would strand a null-safety narrowing — falls back to the verbatim
- * `!(cond)` wrap. A cascade of guards, a guard-only body, an unbraced body, an `else` branch
- * and a comment inside the guard are safe misses on both arms; a later `continue` deeper in the
- * body is preserved. The LIFT arm carries one gate the MERGE arm does not need: its emitted
+ * `!(a < b)` and `a >= b` differ under NaN); a `||` chain that would strand a null-safety
+ * narrowing right-nests a parenthesised group at the stranded operand, and a comment inside
+ * the condition falls back to the verbatim `!(cond)` wrap.
+ * A cascade of guards, a guard-only body, an unbraced body, an `else` branch and a comment
+ * inside the guard are safe misses on both arms; a later `continue` deeper in the body is
+ * preserved. The LIFT arm carries one gate the MERGE arm does not need: its emitted
  * header has no `else`, so a loop sitting anywhere an `else` can follow — the then-branch of an
  * else-carrying conditional, reached through any number of brace-less bodies — is left alone,
  * else that trailing `else` rebinds to the emitted header.
@@ -127,20 +128,21 @@ class LoopGuardCheckTest extends Test {
 		);
 	}
 
-	public function testStrandedNarrowingFallsBackToVerbatimWrap(): Void {
-		// `b`'s narrowing comes from operand 2 and would not reach operand 3 of the negated
-		// `||` chain, so the lifted header wraps the whole condition verbatim instead.
+	public function testStrandedNarrowingRegroupsDeMorgan(): Void {
+		// `b`'s fact would not survive a FLAT `||` chain (Haxe carries only the first
+		// operand's narrowing that far), so the lifted header right-nests the tail:
+		// inside the group `b == null` is first again and its fact reaches `p`.
 		Assert.equals(
-			wrap('for (x in xs) if (!(a != null && b != null && p(a.length, b.length))) {\n\t\t\ttrace(x);\n\t\t}'),
+			wrap('for (x in xs) if (a == null || (b == null || !p(a.length, b.length))) {\n\t\t\ttrace(x);\n\t\t}'),
 			applyFix(wrap('for (x in xs) {\n\t\t\tif (a != null && b != null && p(a.length, b.length)) continue;\n\t\t\ttrace(x);\n\t\t}'))
 		);
 	}
 
-	public function testParenNestedStrandedNarrowingFallsBackToVerbatimWrap(): Void {
-		// The negation DROPS the parens, so the emitted chain is the same flat three-operand
-		// `||` as the unparenthesised shape — the gate must see through the parens too.
+	public function testParenNestedStrandedNarrowingRegroupsDeMorgan(): Void {
+		// The negation DROPS the parens, so the flattened chain is the same three
+		// operands as the unparenthesised shape — and regroups at the same seam.
 		Assert.equals(
-			wrap('for (x in xs) if (!(a != null && (b != null && p(a.length, b.length)))) {\n\t\t\ttrace(x);\n\t\t}'),
+			wrap('for (x in xs) if (a == null || (b == null || !p(a.length, b.length))) {\n\t\t\ttrace(x);\n\t\t}'),
 			applyFix(
 				wrap('for (x in xs) {\n\t\t\tif (a != null && (b != null && p(a.length, b.length))) continue;\n\t\t\ttrace(x);\n\t\t}')
 			)

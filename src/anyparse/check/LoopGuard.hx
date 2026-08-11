@@ -39,10 +39,10 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
  *
  * `INV` negates the guard condition `g` so the surviving iterations are the ones the
  * `continue` skipped. When the grammar exposes a `BooleanLogicSupport` and `g` is
- * comment-free, `NegationScan.negateConditionText` pushes De Morgan inward; otherwise (a
- * seam-less grammar, a comment inside `g`, or a condition whose flattened `||` chain would
- * STRAND a null-safety narrowing — `NegationScan.narrowingStranded`) it falls back to the
- * verbatim text engine. Both agree on the leaf rules:
+ * comment-free, `NegationScan.negateConditionText` pushes De Morgan inward — right-nesting
+ * a parenthesised group wherever the flat `||` chain would strand a null-safety narrowing —
+ * otherwise (a seam-less grammar, or a comment inside `g`) it falls back to the verbatim
+ * text engine. Both agree on the leaf rules:
  *
  * - `!e` → `e` (strip the `!`, unwrapping a redundant paren so `!(a && b)` → `a && b`);
  * - `a == b` → `a != b`, `a != b` → `a == b` (NaN-safe: IEEE `NaN == x` is false and
@@ -228,7 +228,7 @@ final class LoopGuard implements Check {
 			final m: Null<Candidate> = match(node, source, s, shielded);
 			// The lifted header tests the INVERTED guard condition; if that inversion cannot
 			// shed its `!( … )` wrap, the header reads worse than the `continue` it replaces.
-			if (m != null && NegationScan.negationIsClean(m.cond, source, s.negation, s.support, types)) {
+			if (m != null && NegationScan.negationIsClean(m.cond, source, s.support, types)) {
 				final span: Null<Span> = m.guard.span;
 				if (span != null) out.push({
 					file: file,

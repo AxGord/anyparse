@@ -64,10 +64,10 @@ import anyparse.runtime.Span;
  * evaluates A, then B only if `!A` was true — the same condition. Each term keeps its
  * position and is evaluated at most once, so a call operand's count and order are unchanged.
  * Haxe's null narrowing survives the same way (`!(x == null || f(x))` → `x != null && f(x)`
- * narrows `x` for `f` exactly as the `||` chain did), except in one shape the shared
- * `NegationScan.narrowingStranded` gate rejects: a chain whose third-or-later operand depends on
- * a narrowing introduced by a non-first operand, which the compiler does not carry across the
- * flipped connective.
+ * narrows `x` for `f` exactly as the `||` chain did). A chain whose third-or-later operand
+ * depends on a narrowing introduced by a non-first operand — a fact the compiler does not
+ * carry across a FLAT flipped `||` chain — right-nests a parenthesised group at that operand
+ * instead (`HaxeBooleanLogicSupport.negateAndChain`), keeping every fact reachable.
  *
  * ## Gates
  *
@@ -76,15 +76,14 @@ import anyparse.runtime.Span;
  * siblings, so a rebuilt chain would splice both arms together. A macro-reification subtree
  * (`RefShape.opaqueKinds`) is never entered. Only the OUTERMOST candidate of a nest is
  * flagged; a `!( … )` inside it becomes reachable on the next `--fix` pass, so two edits can
- * never overlap. The single-comparison arm inherits every one of them unchanged — including
- * `narrowingStranded`, which answers false for a lone comparison and so cannot reject it.
+ * never overlap. The single-comparison arm inherits every one of them unchanged.
  *
  * ## Grammar-agnostic
  *
  * The shape test itself is `BooleanLogicSupport.negatedOperandOf`, and every rewrite decision
  * — negation, precedence, parenthesisation, the worth count — lives behind the same seam, so
- * a grammar without it makes the check a no-op. `RefShape` is read only for the opaque kinds
- * and for the and / or kinds that word the finding and drive the shared narrowing gate. `!!x`
+ * a grammar without it makes the check a no-op. `RefShape` is read only for the opaque
+ * kinds and for the and / or kinds that word the finding. `!!x`
  * and `!(!x)` are NOT this rule's shape: a single-term double negation belongs to
  * `double-negation`, which reads through parentheses for exactly that reason.
  */
@@ -166,7 +165,7 @@ final class SimplifyNegatedCompound implements Check {
 
 	/**
 	 * Every accepted rewrite in `node`'s subtree, outermost-first: a `!( … )` whose operand
-	 * passes the comment / `#if` / narrowing gates and whose seam rewrite pays. Descent STOPS at
+	 * passes the comment / `#if` gates and whose seam rewrite pays. Descent STOPS at
 	 * an accepted node, so a nested candidate is left for the next `--fix` pass and no two edits
 	 * can overlap; a REJECTED node is descended into normally, since nothing will consume it.
 	 */
@@ -194,10 +193,6 @@ final class SimplifyNegatedCompound implements Check {
 		// would be dropped; a `#if` region projects as flat siblings, so a rebuilt chain would
 		// splice both arms together. Both refuse rather than emit a lossy rewrite.
 		if (CheckScan.hasCommentMarker(source, span.from, span.to) || hasConditionalRegion(node)) return null;
-		// Verified no-op for a single comparison: `narrowingStranded` returns false immediately for
-		// any kind that is neither the and-kind nor the or-kind. The gate is inherited unchanged by
-		// the new arm rather than being N/A by omission.
-		if (NegationScan.narrowingStranded(operand, s.negation)) return null;
 		final text: Null<String> = s.support.simplifyNegatedCompound(node, parent, source, types);
 		return text == null ? null : { span: span, text: text, message: messageFor(operand, s) };
 	}
@@ -219,8 +214,7 @@ final class SimplifyNegatedCompound implements Check {
 	/**
 	 * Bundle the opaque-kind list + the boolean-logic seam. The shape test now lives entirely
 	 * behind that seam (`negatedOperandOf`), so a missing `booleanLogicSupport` is the ONLY thing
-	 * that makes the check a no-op; the and / or kinds still come from `RefShape`, but only to
-	 * word the finding and to run the shared narrowing gate.
+	 * that makes the check a no-op; the and / or kinds still come from `RefShape`, but only to word the finding.
 	 */
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();

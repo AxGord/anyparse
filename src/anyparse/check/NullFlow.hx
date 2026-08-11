@@ -1123,7 +1123,7 @@ final class NullFlow {
 		}
 		if (rk != ctx.identKind) return;
 		final other: Null<String> = r.name;
-		if (!(other != null && other != name && ctx.ownNames.contains(other) && !ctx.captured.contains(other))) return;
+		if (other == null || other == name || !ctx.ownNames.contains(other) || ctx.captured.contains(other)) return;
 		final copy: String = other;
 		state.aliases.push({ a: name, b: copy });
 	}

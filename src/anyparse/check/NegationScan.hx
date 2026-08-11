@@ -19,25 +19,19 @@ import anyparse.runtime.Span;
 @:nullSafety(Strict)
 final class NegationScan {
 
-	/** A binary logical node has exactly [left, right] children. */
-	private static inline final BINARY_CHILD_COUNT: Int = 2;
-
-	/** The shortest disjunction that can strand a narrowing: with two operands the first operand's fact always reaches the second. */
-	private static inline final STRANDABLE_CHAIN_LENGTH: Int = 3;
-
 	/**
 	 * The source text of a negation of `cond`, comment-preserving — the shared
 	 * condition-inverting engine of `loop-guard`, `guard-continue` and `guard-return`.
 	 *
-	 * When a grammar `support` is passed AND the condition span holds no comment marker AND the
-	 * condition does not strand a null-safety narrowing (`narrowingStranded`), the negation is
+	 * When a grammar `support` is passed AND the condition span holds no comment marker, the negation is
 	 * delegated to `BooleanLogicSupport.negateCondition`: De Morgan pushed inward
 	 * (`a && b` → `!a || !b`) order-safely — ordered comparisons stay wrapped `!(a < b)` unless
-	 * `typeNominalOf` proves both operands totally ordered. The comment scan is
+	 * `typeNominalOf` proves both operands totally ordered, and a `||` chain that would strand a
+	 * null-safety narrowing right-nests a parenthesised group instead (the engine's own guarantee). The comment scan is
 	 * STRING-LITERAL-BLIND: a `//` or `/*` inside a string operand conservatively forces the
-	 * fallback (a verbatim `!(cond)` wrap — correct output, just not De-Morganed). With no
-	 * `support`, a comment in the condition span, or a stranded narrowing, the text engine below is
-	 * used, in three shapes, in order:
+	 * fallback (a verbatim `!(cond)` wrap — correct output, just not De-Morganed). With no `support`
+	 * or a comment in the condition span, the text engine below is used, in three shapes, in
+	 * order:
 	 *
 	 *  - a leading logical-not is STRIPPED (`!e` → `e`), unwrapping one redundant paren
 	 *    (`!(a && b)` → `a && b`, `!!x` → `!x`) — the inner source verbatim;
@@ -62,7 +56,7 @@ final class NegationScan {
 	): String {
 		final cs: Null<Span> = cond.span;
 		if (cs == null) return '';
-		if (support != null && !CheckScan.hasCommentMarker(source, cs.from, cs.to) && !narrowingStranded(cond, seams))
+		if (support != null && !CheckScan.hasCommentMarker(source, cs.from, cs.to))
 			return support.negateCondition(cond, source, typeNominalOf, slotKind);
 		final inner: Null<QueryNode> = notUnwrapNode(cond, seams);
 		if (inner != null) {
@@ -93,24 +87,25 @@ final class NegationScan {
 	 *
 	 * A wrap the engine could never avoid (`!(a is B)`, `!(a ?? b)`) is NOT a decline: that IS
 	 * the canonical negation, and such a site still inverts. The text fallback tier (no grammar
-	 * `support`, a comment in the condition, or a stranded null-safety narrowing) has no flip to
-	 * decline, so it keeps emitting exactly what it always did.
+	 * `support`, or a comment in the condition) has no flip to decline, so it keeps emitting
+	 * exactly what it always did.
 	 */
 	public static function negationIsClean(
-		cond: QueryNode, source: String, seams: NegationSeams, ?support: BooleanLogicSupport, ?typeNominalOf: (QueryNode) -> Null<String>
+		cond: QueryNode, source: String, ?support: BooleanLogicSupport, ?typeNominalOf: (QueryNode) -> Null<String>
 	): Bool {
 		final cs: Null<Span> = cond.span;
 		// Only the De Morgan tier can decline anything — the text fallback has no flip to refuse,
 		// so its verbatim wrap is the shape it always emitted and the site still inverts.
 		return cs != null
-			&& (support == null || CheckScan.hasCommentMarker(source, cs.from, cs.to) || narrowingStranded(cond, seams)
+			&& (support == null || CheckScan.hasCommentMarker(source, cs.from, cs.to)
 				|| !support.negateConditionDeclinesFlip(cond, source, typeNominalOf));
 	}
 
 	/**
 	 * The `NegationSeams` `shape` exposes: the kinds `negateConditionText` strips, unwraps
 	 * and flips, the atomic-expression kinds that take a bare `!` rather than `!(…)`, and the
-	 * logical / identifier kinds the stranded-narrowing gate walks. Built here rather than at
+	 * logical kinds that word `simplify-negated-compound`'s finding and drive the STRIP arm's
+	 * and-slot paren decision (`andKind` + `andLowerPrecedenceKinds`). Built here rather than at
 	 * each call site because the three inverting checks (`guard-return`, `guard-continue`,
 	 * `loop-guard`) read exactly the same seams, and a field added to `NegationSeams` must not
 	 * have to be threaded through three identical literals.
@@ -136,39 +131,8 @@ final class NegationScan {
 			],
 			andKind: shape.logicalAndKind,
 			orKind: shape.logicalOrKind,
-			identKind: shape.identKind,
 			andLowerPrecedenceKinds: shape.andLowerPrecedenceKinds ?? []
 		};
-	}
-
-	/**
-	 * Whether De-Morganing `cond` would strand a Haxe null-safety narrowing — the gate every
-	 * consumer of `negateConditionText` needs, and which that engine applies itself; exposed
-	 * because a check may want to know BEFORE it decides to flag at all (`guard-return` refuses
-	 * an already multi-line condition on this path, whose verbatim wrap would read worse than
-	 * the branch it replaces).
-	 *
-	 * An `&&` chain negates into a flat left-associative `||` chain, and Haxe carries a
-	 * narrowing fact into a later `||` operand from the chain's FIRST operand ONLY
-	 * (measured on the compiler: in `a == null || b == null || p(a.length, b.length)`
-	 * the `b` narrowing does not reach operand 3, while the `a` one does). The scan is
-	 * syntactic and conservative - no type information: a negated `&&` chain strands
-	 * when an operand at index 2 or later (0-based) shares a plain identifier with a
-	 * preceding operand OTHER than the first. A `!` node is not descended: negating it
-	 * STRIPS the `!` and re-emits its operand verbatim, restructuring nothing. A grammar
-	 * with no `andKind` seam never strands.
-	 */
-	public static function narrowingStranded(cond: QueryNode, seams: NegationSeams): Bool {
-		final andKind: Null<String> = seams.andKind;
-		if (andKind == null) return false;
-		if (cond.kind == seams.parenKind) return cond.children.length == 1 && narrowingStranded(cond.children[0], seams);
-		if (cond.kind == seams.notKind) return false;
-		if (cond.kind != andKind && cond.kind != seams.orKind) return false;
-		final operands: Array<QueryNode> = [];
-		flattenChain(cond, cond.kind, seams.parenKind, operands);
-		if (cond.kind == andKind && chainStrands(operands, seams)) return true;
-		for (operand in operands) if (narrowingStranded(operand, seams)) return true;
-		return false;
 	}
 
 	/**
@@ -198,50 +162,9 @@ final class NegationScan {
 		if ((cond.kind != eqKind && cond.kind != notEqKind) || cond.children.length != 2) return null;
 		final l: Null<Span> = cond.children[0].span;
 		final r: Null<Span> = cond.children[1].span;
-		if (!(l != null && r != null && !CheckScan.hasCommentMarker(source, l.to, r.from))) return null;
+		if (l == null || (r == null || CheckScan.hasCommentMarker(source, l.to, r.from))) return null;
 		final op: String = cond.kind == eqKind ? ' != ' : ' == ';
 		return source.substring(l.from, l.to) + op + source.substring(r.from, r.to);
-	}
-
-	/**
-	 * Append the left-associative `kind` chain under `node` as a flat operand list.
-	 * Parentheses are TRANSPARENT: the negation drops them and re-adds them only where
-	 * precedence demands, so `a && (b && c)` emits the same flat `!a || !b || !c` as
-	 * `a && b && c` and must flatten to the same three operands. Descending through a
-	 * paren that wraps a DIFFERENT operator changes nothing — the inner node is pushed
-	 * as the one operand the paren stood for, carrying the same identifiers.
-	 */
-	private static function flattenChain(node: QueryNode, kind: String, parenKind: Null<String>, out: Array<QueryNode>): Void {
-		if (node.kind == parenKind && node.children.length == 1) {
-			flattenChain(node.children[0], kind, parenKind, out);
-			return;
-		}
-		if (node.kind != kind || node.children.length != BINARY_CHILD_COUNT) {
-			out.push(node);
-			return;
-		}
-		flattenChain(node.children[0], kind, parenKind, out);
-		flattenChain(node.children[1], kind, parenKind, out);
-	}
-
-	/**
-	 * Whether the disjunction `operands` negates into would strand a narrowing: some
-	 * operand at index 2 or later shares an identifier with a preceding operand that is
-	 * not the first (whose fact alone survives the `||` chain).
-	 */
-	private static function chainStrands(operands: Array<QueryNode>, seams: NegationSeams): Bool {
-		if (operands.length < STRANDABLE_CHAIN_LENGTH) return false;
-		final names: Array<Array<String>> = [for (operand in operands) identNames(operand, seams, [])];
-		for (i in 2...operands.length) for (j in 1...i) for (name in names[i]) if (names[j].contains(name)) return true;
-		return false;
-	}
-
-	/** Append every plain-identifier name in `node`'s subtree to `out` and return it. */
-	private static function identNames(node: QueryNode, seams: NegationSeams, out: Array<String>): Array<String> {
-		final name: Null<String> = node.name;
-		if (node.kind == seams.identKind && name != null && name != '' && !out.contains(name)) out.push(name);
-		for (child in node.children) identNames(child, seams, out);
-		return out;
 	}
 
 }

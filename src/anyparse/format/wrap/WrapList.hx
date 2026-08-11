@@ -1858,7 +1858,7 @@ class WrapList {
 		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
 		appendTrailingComma: Bool, lineWidth: Int
 	): Null<Doc> {
-		if (!(mode == FillLineWithLeadingBreak && items.length == 1 && !isArrowBodyMarker(items[0]) && !isMethodChainItem(items[0])))
+		if (mode != FillLineWithLeadingBreak || items.length != 1 || isArrowBodyMarker(items[0]) || isMethodChainItem(items[0]))
 			return null;
 		final glued: Doc = Concat([Text(open), openInside, items[0], closeInside, Text(close)]);
 		final broken: Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma);

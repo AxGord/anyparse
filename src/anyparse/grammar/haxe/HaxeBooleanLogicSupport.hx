@@ -357,6 +357,9 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	 * consumer, so a caller that passes no `types` gets the wrap rather than a rewrite the
 	 * engine cannot justify. `==` / `!=` flip either way (a flip is NaN- and null-equivalent
 	 * to the wrap for them).
+	 *
+	 * An `&&` chain negates through `negateAndChain`, which right-nests a parenthesised
+	 * group wherever the flat `||` chain would strand a null-safety narrowing.
 	 */
 	private static function negate(node: QueryNode, source: String, ?types: (QueryNode) -> Null<String>): Operand {
 		switch node.kind {
@@ -370,14 +373,7 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 					notDelta: l.notDelta + r.notDelta
 				};
 			case 'And':
-				final l: Operand = negate(node.children[0], source, types);
-				final r: Operand = negate(node.children[1], source, types);
-				return {
-					src: '${wrap(l, PREC_OR)} || ${wrap(r, PREC_OR)}',
-					prec: PREC_OR,
-					declined: l.declined || r.declined,
-					notDelta: l.notDelta + r.notDelta
-				};
+				return node.children.length == 2 ? negateAndChain(node, source, types) : wrapNot(node, source);
 			case 'Eq':
 				return flip(node, source, '!=');
 			case 'NotEq':
@@ -414,6 +410,120 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 			case _:
 				return wrapNot(node, source);
 		}
+	}
+
+	/**
+	 * Negate an `&&` chain into its `||` disjunction, right-nesting a parenthesised group at
+	 * every null-test operand whose narrowing a FLAT chain would strand. Haxe carries a
+	 * narrowing fact into a later `||` operand from the chain's FIRST operand only — measured
+	 * on the compiler: in `a == null || b == null || p(a.length, b.length)` the `a` fact
+	 * reaches operand 3 while the `b` fact does not, yet the right-nested
+	 * `a == null || (b == null || p(…))` narrows fine, a fact also crossing INTO a later group.
+	 * Grouping is pure `||` associativity — order, short-circuit and evaluation count are
+	 * untouched — so the rewrite is sound even where the scan over-detects.
+	 *
+	 * The scan is syntactic, no type information: a group opens at the EARLIEST operand
+	 * (index 1 or later) that is a bare null comparison (`x != null`, possibly negated or
+	 * parenthesised — the one operand shape null safety reads a fact from; `is` does not
+	 * narrow nullability, measured) naming an identifier some LATER operand (index 2 or
+	 * later) mentions, and the tail then re-scans within the group, where that operand's
+	 * fact is a first-operand fact again — a second stranded null test nests a second group.
+	 * A chain with no such pair joins flat, byte-identical to the plain binary fold.
+	 */
+	private static function negateAndChain(node: QueryNode, source: String, types: Null<(QueryNode) -> Null<String>>): Operand {
+		final operands: Array<QueryNode> = [];
+		flattenAnd(node, operands);
+		final negated: Array<Operand> = [for (o in operands) negate(o, source, types)];
+		final names: Array<Array<String>> = [for (o in operands) identNames(o, [])];
+		final providers: Array<Array<String>> = operands.map(nullTestIdents);
+		return orJoinGrouped(negated, names, providers, 0);
+	}
+
+	/**
+	 * The identifiers a null-safety fact can flow FROM in operand `o`: every plain identifier
+	 * inside a bare `== null` / `!= null` comparison (parens and `!` stripped — `!(x == null)`
+	 * negates to the same null test). Any other operand shape answers empty: a null test buried
+	 * inside a compound operand proves nothing once that operand joins the flipped chain.
+	 */
+	private static function nullTestIdents(o: QueryNode): Array<String> {
+		var n: QueryNode = o;
+		while ((n.kind == 'ParenExpr' || n.kind == 'Not') && n.children.length == 1) n = n.children[0];
+		if ((n.kind != 'Eq' && n.kind != 'NotEq') || n.children.length != 2) return [];
+		final l: QueryNode = n.children[0];
+		final r: QueryNode = n.children[1];
+		if (l.kind != 'NullLit' && r.kind != 'NullLit') return [];
+		return identNames(l.kind == 'NullLit' ? r : l, []);
+	}
+
+	/**
+	 * Append the left-associative `&&` chain under `node` as a flat operand list. Parentheses
+	 * are TRANSPARENT — the negation drops them and re-adds them only where precedence
+	 * demands, so `a && (b && c)` must flatten to the same three operands as `a && b && c`.
+	 * A malformed `&&` node (not exactly two children) is pushed as an opaque leaf, which
+	 * `negate` then wraps verbatim rather than recursing forever.
+	 */
+	private static function flattenAnd(node: QueryNode, out: Array<QueryNode>): Void {
+		if (node.kind == 'ParenExpr' && node.children.length == 1) {
+			flattenAnd(node.children[0], out);
+			return;
+		}
+		if (node.kind != 'And' || node.children.length != 2) {
+			out.push(node);
+			return;
+		}
+		flattenAnd(node.children[0], out);
+		flattenAnd(node.children[1], out);
+	}
+
+	/**
+	 * The `||` join of `negs[from...]`: flat up to the earliest strandable null-test operand
+	 * (`strandedGroupStart`), then one parenthesised group holding the recursively re-grouped
+	 * tail. `names[i]` lists operand `i`'s plain identifiers and `providers[i]` the ones its
+	 * null test can source a fact from, both parallel to `negs`.
+	 */
+	private static function orJoinGrouped(
+		negs: Array<Operand>, names: Array<Array<String>>, providers: Array<Array<String>>, from: Int
+	): Operand {
+		final groupAt: Int = strandedGroupStart(names, providers, from);
+		final flatEnd: Int = groupAt < 0 ? negs.length : groupAt;
+		final parts: Array<String> = [for (i in from ... flatEnd) wrap(negs[i], PREC_OR)];
+		var declined: Bool = false;
+		var notDelta: Int = 0;
+		for (i in from ... flatEnd) {
+			declined = declined || negs[i].declined;
+			notDelta += negs[i].notDelta;
+		}
+		if (groupAt >= 0) {
+			final group: Operand = orJoinGrouped(negs, names, providers, groupAt);
+			parts.push('(${group.src})');
+			declined = declined || group.declined;
+			notDelta += group.notDelta;
+		}
+		return {
+			src: parts.join(' || '),
+			prec: PREC_OR,
+			declined: declined,
+			notDelta: notDelta
+		};
+	}
+
+	/**
+	 * The earliest operand that opens a narrowing group in the chain starting at `from`, or
+	 * -1 for a chain that joins flat: a null-test operand at relative index 1 or later whose
+	 * tested identifier a later operand at relative index 2 or later mentions. The chain's
+	 * first operand never opens one — its fact alone survives a flat `||` chain.
+	 */
+	private static function strandedGroupStart(names: Array<Array<String>>, providers: Array<Array<String>>, from: Int): Int {
+		for (j in from + 1...names.length) for (i in j + 1...names.length) for (name in names[i]) if (providers[j].contains(name)) return j;
+		return -1;
+	}
+
+	/** Append every plain-identifier name in `node`'s subtree to `out` and return it. */
+	private static function identNames(node: QueryNode, out: Array<String>): Array<String> {
+		final name: Null<String> = node.name;
+		if (node.kind == 'IdentExpr' && name != null && name != '' && !out.contains(name)) out.push(name);
+		for (child in node.children) identNames(child, out);
+		return out;
 	}
 
 	/** Negate an opaque operand: `!x` for an atom, `!(x)` otherwise. */
