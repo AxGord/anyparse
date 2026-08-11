@@ -418,9 +418,11 @@ class WriterCodegen {
 			// 4 cascade-emit functions do via Slice C's wraps.
 			docHelper('_dwb', [{ name: 'inner', type: macro :anyparse.core.Doc }], macro anyparse.core.Doc.WrapBoundary(inner)),
 			// ω-iffulllineexceeds-primitive: full-line probe consuming the
-			// primitive's own flat width PLUS the BG-descending rest-of-stack
-			// lookahead. Fires `br` when `col + flatTokenWidth(fl) +
-			// flatTokenWidthOfRestStackFull(stack) >= n`. Used by the
+			// primitive's own flat width PLUS the rest-of-stack lookahead
+			// (calibration-gated in the renderer: BG-descending at
+			// `n == lineWidth`, BG-deferring at the strict-`>` `lineWidth + 1`
+			// this consumer uses). Fires `br` when
+			// `col + flatTokenWidth(fl) + restWidth >= n`. Used by the
 			// expression-paren collapse consumer (C2a/B) to decide paren-open.
 			docHelper('_dfle', [
 				{ name: 'n', type: macro :Int },

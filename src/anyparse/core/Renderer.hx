@@ -1886,15 +1886,18 @@ class Renderer {
 				// regular `flatTokenWidth` (defers BG — so a lambda
 				// body BG inside one of `flatDoc`'s segments stays
 				// deferred and doesn't inflate the chain probe),
-				// but the rest-of-stack lookahead descends BG via
-				// `flatTokenWidthOfRestStackFull` so a sibling body
-				// BG that follows on the same source line (e.g.
-				// `for (cond) BODY` with `forBody=fitLine` BG-wrap)
-				// is visible to the probe. Closes the chain-emit
-				// blindspot at `condition_wrapping_method_chain`
-				// while avoiding the chain-of-lambdas over-fire
-				// (regression class of the symmetric-descend
-				// approach). Slice ω-iffulllineexceeds-primitive.
+				// while the rest-of-stack lookahead is calibration-
+				// gated (`restWidth` below): the `n == width` chain
+				// probes descend BG via `flatTokenWidthOfRestStackFull`
+				// so a sibling body BG that follows on the same source
+				// line (e.g. `for (cond) BODY` with `forBody=fitLine`
+				// BG-wrap) is visible to the probe — closing the
+				// chain-emit blindspot at
+				// `condition_wrapping_method_chain` while avoiding the
+				// chain-of-lambdas over-fire (regression class of the
+				// symmetric-descend approach); the strict-`>`
+				// `n == width + 1` probes defer BG like every other
+				// walk. Slice ω-iffulllineexceeds-primitive.
 				//
 				// Mode propagation matches `IfLineExceeds`: brk-side
 				// forces `MBreak` (slice ω-iflineexceeds-brk-mode
@@ -1921,8 +1924,20 @@ class Renderer {
 					// calibrated to the un-flushed column and would over-fire (wrap
 					// a chain that fits) if the pending space were added.
 					final effPending: Int = n > width ? pendingSpace : 0;
-					final fullLineCrosses: Bool = col + effPending + DocMeasure.flatTokenWidth(flatDoc)
-						+ flatTokenWidthOfRestStackFull(stack) >= n;
+					// The rest-of-stack walker is calibration-gated like `effPending`:
+					// the strict-`>` probes at `lineWidth + 1` (the
+					// `expressionParenHardFlatten` paren-open family, plus
+					// `BinaryChainEmit`'s opAdd trailing-paren probe — where the
+					// walker choice was probed nil) DEFER a trailing `BodyGroup` — a
+					// BG after the probe is a MOVABLE fitLine body (`case P if (c):
+					// BODY`, `for (cond) BODY`) that drops to its own line whenever
+					// the shared line overflows, so counting it opens a paren whose
+					// own line fits (the case-guard label tear). The chain probes
+					// emitted at `lineWidth` (n == width) keep the descending walk —
+					// their glued-body blindspot is the reason the Full walker
+					// exists (condition_wrapping_method_chain).
+					final restWidth: Int = n > width ? flatTokenWidthOfRestStack(stack) : flatTokenWidthOfRestStackFull(stack);
+					final fullLineCrosses: Bool = col + effPending + DocMeasure.flatTokenWidth(flatDoc) + restWidth >= n;
 					// ω-collapse-commit: record the open/glued decision at
 					// this node's true render column for the Doc→Doc pass.
 					// Keyed by node identity (enum `==` is reference equality

@@ -611,6 +611,7 @@ import unit.TrivialGetterShapeCollapseTest;
 import unit.ExplicitLocalTypeReadFixTest;
 import unit.ExplicitLocalTypeParenInitTest;
 import unit.HxConditionalExprFitSliceTest;
+import unit.HxCaseGuardFitSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -704,6 +705,7 @@ class RunTests {
 		addCase(new HxMacroTypeExprSliceTest());
 		addCase(new HxMultiPatternCaseSliceTest());
 		addCase(new HxRegexLitSliceTest());
+		addCase(new HxCaseGuardFitSliceTest());
 		addCase(new HxSwitchGuardSliceTest());
 		addCase(new HxCaseCaptureSliceTest());
 		addCase(new HxTrailingSepSliceTest());

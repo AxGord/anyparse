@@ -221,9 +221,8 @@ final class CollapsePass {
 		// fillLine shape the If*-pivot matcher cannot reach.
 		switch d {
 			case WrapBoundary(Group(Nest(nc, Fill(fitems, _, _)))) if (
-fitems.length > 1
-				&& subtreeOpens(fitems[fitems.length - 1], decisions)
-):
+				fitems.length > 1 && subtreeOpens(fitems[fitems.length - 1], decisions)
+			):
 				return WrapBoundary(Group(Nest(nc, gluedFillChain(fitems, decisions, width))));
 			case _:
 		}
@@ -889,17 +888,22 @@ fitems.length > 1
 		// paren's own indent (which a blanket `Flatten` over the whole Group
 		// would destroy). Gated on `subtreeOpens` so only the spine carrying
 		// an opened paren is rewritten; sibling Groups are untouched.
+		// `Flatten` joins the same arms: a chain's committed-glued (NoWrap)
+		// shape arrives as `Flatten(...)`, and rebuilding it verbatim would
+		// leave the committed-open paren INSIDE the force-flat region, where
+		// the renderer emits its materialized hardlines as raw newlines with
+		// neither indent nor column bookkeeping (the zero-indent case-guard
+		// ladder).
 		switch d {
-			case Group(Concat(items)) | GroupWithRestProbe(Concat(items)) if (subtreeOpens(d, decisions)):
+			case Group(Concat(items)) | GroupWithRestProbe(Concat(items)) | Flatten(Concat(items)) if (subtreeOpens(d, decisions)):
 				return Concat([
 					for (it in items)
 						subtreeOpens(it, decisions) ? commitOpens(it, decisions) : Flatten(commitOpens(it, decisions))
 				]);
-			case Group(inner) | GroupWithRestProbe(inner) if (subtreeOpens(d, decisions)):
+			case Group(inner) | GroupWithRestProbe(inner) | Flatten(inner) if (subtreeOpens(d, decisions)):
 				return commitOpens(inner, decisions);
 			case _:
 		}
-
 		return mapChildren(d, child -> commitOpens(child, decisions));
 	}
 

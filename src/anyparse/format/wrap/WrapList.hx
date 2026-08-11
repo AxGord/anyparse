@@ -2391,9 +2391,8 @@ class WrapList {
 					) | IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineExceedsWithRest(_, _, _) | IfNaturalFirstLineFitsOpenDelim(
 						_, _, _
 					) | IfArrowContinuationFits(_, _, _, _, _) | IfIndentWidthExceeds(_, _, _, _) | IfGluedFirstLineExceeds(_, _, _, _) if (
-arr.length
-							== 2 && k == 1
-):
+						arr.length == 2 && k == 1
+					):
 						hit = isMethodChainItem(arr[k]);
 					case _:
 				}

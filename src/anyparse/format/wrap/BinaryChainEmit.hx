@@ -887,10 +887,12 @@ final class BinaryChainEmit {
 			//    `+ 1` on `n` cancel the same way, so statement output is unchanged
 			//    at every probed width) and the CALL-ARGUMENT continuation does not —
 			//    there `col` is exact and the rest is 0, so it fired on a line
-			//    landing EXACTLY on the limit and broke an argument that fits. The
-			//    ctor swap also swaps the rest-of-stack walker
-			//    (`flatTokenWidthOfRestStack` defers `BodyGroup`, the `Full` form
-			//    descends it) — probed nil on this arm's shapes. Both edges are
+			//    landing EXACTLY on the limit and broke an argument that fits. At
+			//    this ctor's `lineWidth + 1` calibration the renderer picks the
+			//    BG-deferring rest-of-stack walker (`flatTokenWidthOfRestStack`,
+			//    same as `IfLineExceeds`; the BG-descending `Full` form serves the
+			//    `n == lineWidth` chain probes) — probed nil on this arm's shapes
+			//    at the time of the ctor swap. Both edges are
 			//    pinned (`HxOpAddParenInnerBreakTest` at the statement, T20's
 			//    continuation pins at the call argument).
 			//  - `IfArrowContinuationFits`'s own `n` is `lineWidth + 1` for the family
