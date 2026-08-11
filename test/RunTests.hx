@@ -616,6 +616,7 @@ import unit.ExplicitLocalTypeParenInitTest;
 import unit.HxConditionalExprFitSliceTest;
 import unit.HxCaseGuardFitSliceTest;
 import unit.HxMethodChainExactLimitBoundaryTest;
+import unit.NamingCheckHoistFixTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1211,6 +1212,7 @@ class RunTests {
 		addCase(new NamingCheckLocalFixTest());
 		addCase(new NamingCheckMemberFixTest());
 		addCase(new NamingCheckCrossFileFixTest());
+		addCase(new NamingCheckHoistFixTest());
 		addCase(new ClassifyOccurrencesTest());
 		addCase(new FmtSliceTest());
 		addCase(new NewFileSliceTest());

@@ -776,6 +776,9 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			assertFalseCalls: ['Assert.isFalse'],
 			mapExistsMethods: ['exists'],
 			finalClassMetaName: '@:final',
+			// `@:generic` expands its class per type parameter, so there is no single class to hold a
+			// static — Haxe rejects one with "A generic class can't have static fields" (verified 4.3.7).
+			staticlessTypeMetaNames: ['@:generic'],
 			plainClassDeclKind: 'ClassDecl',
 			finalClassDeclKind: 'FinalDecl',
 			typeDeclKinds: [

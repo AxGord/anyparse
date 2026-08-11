@@ -60,7 +60,7 @@ final class EncapsulateField {
 		)
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
-		final decl: Null<TypeDeclMatch> = uniqueType(tree, typeName);
+		final decl: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(tree, typeName);
 		if (decl == null) return Err('no unique type "$typeName" in the source');
 		final declNN: TypeDeclMatch = decl;
 
@@ -106,18 +106,6 @@ final class EncapsulateField {
 		final replacement: String = '$newField\n\n$getter\n\n$setter';
 
 		return RefactorSupport.canonicalize(source, [{ span: f.group, text: replacement }], reformat, plugin, optsJson);
-	}
-
-	/** The sole type declaration named `typeName`, or null. Final-aware. */
-	private static function uniqueType(tree: QueryNode, typeName: String): Null<TypeDeclMatch> {
-		final matches: Array<TypeDeclMatch> = [];
-		function walk(node: QueryNode): Void {
-			final m: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
-			if (m != null && m.name == typeName) matches.push(m);
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return matches.length == 1 ? matches[0] : null;
 	}
 
 	/**

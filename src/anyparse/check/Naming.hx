@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.ConstantHoist.Hoist;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingPolicy;
@@ -140,8 +141,28 @@ final class Naming implements Check implements CrossFileFix {
 		// confinement / reflection proofs (they reason about report-file reachability).
 		final resolutionIndex: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
 
-		final edits: Array<{ span: Span, text: String }> = [];
+		// The HOIST arm runs FIRST. A flagged LOCAL that is an author-intended CONSTANT — an
+		// UPPER_SNAKE name over a compile-time-constant initializer — moves to its enclosing type
+		// KEEPING its spelling, which at class level is what the Constant rule wants; camelCasing it
+		// in place would destroy the intent the name states. Every gate failure leaves the
+		// declaration to the ordinary rename arm below, silently. The occupancy gate reads THIS
+		// check's own occurrence resolution, handed over as a resolver so `ConstantHoist` needs
+		// nothing private of it.
+		final hoists: Array<Hoist> = ConstantHoist.hoistsFor(
+			decls, source, tree, policy, plugin, support, flaggedFroms, resolutionIndex, violations[0].file,
+			(declFrom, name) ->
+				resolutionIndex == null
+					? null
+					: declaringFileRenameSpans(
+						source, tree, declFrom, name, shape, plugin, isDistinctiveName(name), true,
+						{ index: resolutionIndex, file: violations[0].file }
+					)
+		);
+		final hoistedFroms: Array<Int> = [for (h in hoists) h.declFrom];
+		final edits: Array<{ span: Span, text: String }> = ConstantHoist.edits(hoists);
 		for (decl in decls) {
+			final declSpan: Null<Span> = decl.span;
+			if (declSpan != null && hoistedFroms.contains(declSpan.from)) continue;
 			final rename: Null<Array<{ span: Span, text: String }>> = renameEditsFor(
 				decl, source, tree, policy, shape, plugin, flaggedFroms, reflectionNames, confinedMemo, resolutionIndex, index,
 				violations[0].file

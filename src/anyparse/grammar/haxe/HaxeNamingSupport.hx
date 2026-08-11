@@ -7,6 +7,7 @@ import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
 import haxe.Exception;
 import anyparse.query.SymbolIndex;
+import anyparse.query.NamingPolicy.HoistedConstant;
 
 using StringTools;
 using Lambda;
@@ -125,6 +126,14 @@ final class HaxeNamingSupport implements NamingSupport {
 	/** Reads a plain string literal's content — the grammar's own lexer rules, not a second parser. */
 	private static final STRING_FOLD: HaxeStringFoldSupport = new HaxeStringFoldSupport();
 
+	/**
+	 * The modifier kinds a HOISTED constant is emitted with, least-specific first (`Inline` is appended
+	 * for the scalar arm). Kinds rather than names so the run has ONE spelling in this class: both
+	 * halves of `hoistedConstant` — the neutral `mods` the policy selects a rule by, and the keyword
+	 * prefix of the emitted text — come from `modNames` over this list, and cannot drift apart.
+	 */
+	private static final HOIST_MOD_KINDS: Array<String> = ['Private', 'Static'];
+
 	public function new() {}
 
 	public function project(tree: QueryNode): Array<NamedDecl> {
@@ -148,6 +157,11 @@ final class HaxeNamingSupport implements NamingSupport {
 		final out: Array<String> = [];
 		collectReflectionNames(tree, source, out);
 		return out;
+	}
+
+	public function hoistedConstant(declarationText: String, scalar: Bool): Null<HoistedConstant> {
+		final mods: Array<String> = modNames(scalar ? HOIST_MOD_KINDS.concat(['Inline']) : HOIST_MOD_KINDS);
+		return { text: '${mods.join(' ')} $declarationText', mods: mods };
 	}
 
 	/**
@@ -606,6 +620,15 @@ final class HaxeNamingSupport implements NamingSupport {
 			contractName: structural,
 			reservedName: isReservedName(name)
 		};
+	}
+
+	/**
+	 * The neutral modifier names of `kinds` — the same projection `modsOf` reads OFF a declaration,
+	 * asked here for a run this class is about to WRITE. An unmapped kind passes through as its own
+	 * spelling, which no caller produces (the list is a literal in this file).
+	 */
+	private static function modNames(kinds: Array<String>): Array<String> {
+		return [for (kind in kinds) MOD_KIND_TO_NAME[kind] ?? kind];
 	}
 
 }

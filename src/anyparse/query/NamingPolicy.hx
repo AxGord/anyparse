@@ -166,4 +166,35 @@ interface NamingSupport {
 	 */
 	public function reflectionMemberNames(tree: QueryNode, source: String): Array<String>;
 
+	/**
+	 * The class-level member a local constant HOISTED out of a function body becomes, or null when
+	 * the grammar has no such member form (the hoist arm then no-ops for it). `declarationText` is
+	 * the local declaration verbatim from its own keyword on and terminated (`final PAD:Int = 40;`),
+	 * so the type annotation and the initializer are carried exactly as written; the implementation
+	 * only prefixes the modifier run.
+	 *
+	 * `scalar` says whether the initializer is a value the language folds at every use site, which
+	 * is what earns an `inline` keyword. A String does not: on hxcpp an inlined String re-emits its
+	 * bytes per use site, so it stays a plain static field (the same split `inline-constant` makes,
+	 * for the same measured reason).
+	 */
+	public function hoistedConstant(declarationText: String, scalar: Bool): Null<HoistedConstant>;
+
 }
+
+/**
+ * One member a constant hoist would emit: the declaration TEXT the grammar renders, and the
+ * neutral modifier run that text carries.
+ *
+ * The two travel together because the caller needs both and they must not disagree: `mods` is what
+ * selects the Constant `NamingRule` the emitted member will be judged by, and a policy may split
+ * its Constant rules on exactly the modifier the two arms differ in (`inline`). Deriving `mods`
+ * caller-side would encode the grammar's modifier run a second time, in the one place guaranteed
+ * to drift from it.
+ */
+typedef HoistedConstant = {
+	final text: String;
+
+	/** The neutral modifiers `text` carries (`['private', 'static', 'inline']`) — the rule selector. */
+	final mods: Array<String>;
+};

@@ -808,6 +808,25 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * The type declaration named `typeName` in `tree`, or null when the module declares none or more
+	 * than one — a name that is ambiguous within one file cannot address a single declaration, so
+	 * every caller wants the same refusal rather than an arbitrary first match. An empty or omitted
+	 * `kinds` filters nothing; a non-empty one keeps only matches whose `TypeDeclMatch.kind` it lists
+	 * (a caller that may only address, say, a CLASS).
+	 */
+	public static function uniqueTypeDeclNamed(tree: QueryNode, typeName: String, ?kinds: Array<String>): Null<TypeDeclMatch> {
+		final allow: Array<String> = kinds ?? [];
+		final matches: Array<TypeDeclMatch> = [];
+		function walk(node: QueryNode): Void {
+			final match: Null<TypeDeclMatch> = typeDeclOf(node);
+			if (match != null && match.name == typeName && (allow.length == 0 || allow.contains(match.kind))) matches.push(match);
+			for (child in node.children) walk(child);
+		}
+		walk(tree);
+		return matches.length == 1 ? matches[0] : null;
+	}
+
+	/**
 	 * Resolve the cursor to the type declaration it sits on: the
 	 * innermost (deepest pre-order) decl whose `fullSpan` contains the
 	 * cursor and whose name identifier-token contains the cursor OR whose
@@ -2676,11 +2695,24 @@ final class RefactorSupport {
 	 * the member cut: the members move out and nothing inherits them.
 	 */
 	public static function typeHeaderInsertOffset(source: String, decl: TypeDeclMatch, typeName: String): Null<Int> {
+		final brace: Null<Int> = typeBodyBraceOffset(source, decl, typeName);
+		return brace == null ? null : headerScan(source, typeHeaderFrom(source, decl, typeName), brace).tokenEnd;
+	}
+
+	/**
+	 * The offset of `decl`'s body-opening `{`, or null when it has no brace body (`typedef T = Int;`).
+	 * Scanned over the HEADER only — comment- and string-aware (`headerScan`), and cut short at the
+	 * first child that starts after a located brace, so a `{` inside a type-parameter constraint or a
+	 * header comment cannot be mistaken for the body's.
+	 *
+	 * The position an insertion takes from here is `brace + 1`: right AFTER the brace, never before
+	 * the first member — that position sits past the member's leading doc comment, which the insertion
+	 * would then silently steal.
+	 */
+	public static function typeBodyBraceOffset(source: String, decl: TypeDeclMatch, typeName: String): Null<Int> {
 		final nameSpan: Span = decl.nameNode.span ?? decl.fullSpan;
-		final nameAt: Int = activeCodeIdentTokenOffset(source, nameSpan, typeName);
-		final headerFrom: Int = nameAt < 0 ? nameSpan.from : nameAt + typeName.length;
 		final limit: Int = nameSpan.to <= source.length ? nameSpan.to : source.length;
-		var from: Int = headerFrom;
+		var from: Int = typeHeaderFrom(source, decl, typeName);
 		var brace: Int = -1;
 		// Children are in document order: the first one that starts after a located
 		// brace belongs to the body, every earlier one is part of the header.
@@ -2692,7 +2724,7 @@ final class RefactorSupport {
 			if (s.to > from) from = s.to;
 		}
 		if (brace < 0) brace = headerScan(source, from, limit).brace;
-		return brace < 0 || source.fastCodeAt(brace) != '{'.code ? null : headerScan(source, headerFrom, brace).tokenEnd;
+		return brace < 0 || source.fastCodeAt(brace) != '{'.code ? null : brace;
 	}
 
 	/**
@@ -3021,6 +3053,13 @@ final class RefactorSupport {
 	/** One of the flag letters Haxe accepts after a regex literal's closing `/`. */
 	private static inline function isRegexFlag(c: Int): Bool {
 		return c == 'g'.code || c == 'i'.code || c == 'm'.code || c == 's'.code || c == 'u'.code;
+	}
+
+	/** The offset just past `decl`'s NAME token — where its header (supertype clauses, type params) begins. */
+	private static function typeHeaderFrom(source: String, decl: TypeDeclMatch, typeName: String): Int {
+		final nameSpan: Span = decl.nameNode.span ?? decl.fullSpan;
+		final nameAt: Int = activeCodeIdentTokenOffset(source, nameSpan, typeName);
+		return nameAt < 0 ? nameSpan.from : nameAt + typeName.length;
 	}
 
 	/**

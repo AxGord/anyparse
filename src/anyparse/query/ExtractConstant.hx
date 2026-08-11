@@ -53,7 +53,7 @@ final class ExtractConstant {
 		)
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
-		final decl: Null<TypeDeclMatch> = uniqueType(tree, typeName);
+		final decl: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(tree, typeName);
 		if (decl == null) return Err('no unique type "$typeName" in the source');
 		final declNN: TypeDeclMatch = decl;
 		if (memberNamed(declNN, name)) return Err('type "$typeName" already has a member named "$name"');
@@ -129,18 +129,6 @@ final class ExtractConstant {
 			case Ok(moduleFinal): Ok(changes, moduleFinal, !moduleExists);
 			case Err(message): Err(message);
 		};
-	}
-
-	/** The sole type declaration named `typeName`, or null. Final-aware. */
-	private static function uniqueType(tree: QueryNode, typeName: String): Null<TypeDeclMatch> {
-		final matches: Array<TypeDeclMatch> = [];
-		function walk(node: QueryNode): Void {
-			final m: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
-			if (m != null && m.name == typeName) matches.push(m);
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return matches.length == 1 ? matches[0] : null;
 	}
 
 	/** Does `decl` declare a member named `name` (any field / method)? */
@@ -224,7 +212,7 @@ final class ExtractConstant {
 			'module "$modulePath" does not parse: ${exception.toString()}'
 		)
 		catch (exception: Exception) return Err('module "$modulePath" does not parse: ${exception.message}');
-		final decl: Null<TypeDeclMatch> = uniqueType(mtree, moduleClass);
+		final decl: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(mtree, moduleClass);
 		if (decl == null) return Err('module "$modulePath" has no unique type "$moduleClass"');
 		final declNN: TypeDeclMatch = decl;
 		if (memberNamed(declNN, name)) return Err('module "$moduleClass" already has a member named "$name"');
@@ -238,7 +226,6 @@ final class ExtractConstant {
 				existing, [{ span: new Span(insertAt, insertAt), text: '$memberText\n' }], reformat, plugin, optsJson
 			);
 	}
-
 
 	/**
 	 * Does `tree` already carry a top-level `import <modulePath>;` / `using

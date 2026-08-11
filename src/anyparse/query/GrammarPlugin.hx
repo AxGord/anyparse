@@ -1826,6 +1826,15 @@ typedef RefShape = {
 	@:optional var finalClassMetaName: String;
 
 	/**
+	 * The metadata tags whose presence on a type declaration means the language forbids STATIC
+	 * members there — Haxe `@:generic`, which rejects them outright ("A generic class can't have
+	 * static fields", verified on 4.3.7). A fix that would ADD a static member to a type must ask
+	 * this first; `naming`'s constant-hoist arm does. Optional; unset → no type is refused, which
+	 * is the right default for a grammar whose statics are unconditional.
+	 */
+	@:optional var staticlessTypeMetaNames: Array<String>;
+
+	/**
 	 * The plain class-declaration node kind (Haxe `ClassDecl`) — a `finalClassMetaName`
 	 * meta on one is a `@:final class` the modifier replaces; the `prefer-final-class`
 	 * fix removes the meta and inserts `final ` before the class keyword. Optional.
