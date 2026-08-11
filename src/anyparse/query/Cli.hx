@@ -12765,8 +12765,17 @@ final class Cli {
 		// One WHOLE-SET run per check, findings grouped per file — the same scope contract
 		// as `FixVerifier.verify` and the safe loop's `fullScopeIds`: a per-file run
 		// starves any cross-file resolution the check's gates or classifiers lean on.
+		// Through `Linter.collect`, never `check.run` directly — the one gated entry every consumer
+		// of a check's findings shares (see its doc; this path is one of the two that used to bypass).
+		// KNOWINGLY NOT INDEPENDENTLY COVERED: no test can distinguish this line from a direct
+		// `check.run`, because the only `OracleAssisted` builtin cannot produce an edit inside a
+		// quotation anyway — the display server has no typed AST for reified source, so `typeAt`
+		// returns nothing there (measured: with this line reverted, a quoted untyped local is still
+		// left alone). What the suite does cover is the shared entry itself and the identical wiring
+		// in `FixVerifier.verify`, which IS discriminating. Keep this line spelled the same as that
+		// one so the two cannot drift apart unnoticed.
 		final findingsByCheck: Array<{ check: Check, all: Array<Violation> }> = [
-			for (check in oracleChecks) { check: check, all: check.run(files, plugin).filter(v -> v.rule == check.id()) }
+			for (check in oracleChecks) { check: check, all: Linter.collect(files, plugin, [check]).filter(v -> v.rule == check.id()) }
 		];
 		for (entry in files) {
 			final allEdits: Array<{ span: Span, text: String }> = [];

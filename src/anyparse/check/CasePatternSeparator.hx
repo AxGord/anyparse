@@ -14,16 +14,12 @@ using StringTools;
 
 /**
  * The seam kinds the check resolves once per run: `scan` is the case-pattern kind set both
- * case-arm rules share (`CasePatternScan`), and the other two are what this rule adds on top —
- * `orPatternKind`, the node a `case A | B:` label projects its alternation as, and
- * `macroQuoteKinds`, the regions where that projection is DATA rather than code.
+ * case-arm rules share (`CasePatternScan`), and `orPatternKind` — the node a `case A | B:` label
+ * projects its alternation as — is the one this rule adds on top.
  */
 private typedef SeparatorSeams = {
 	final scan: CaseSeams;
 	final orPatternKind: String;
-
-	/** Kinds opening a macro QUOTATION — every case branch below one is data, not code, and is skipped. */
-	final macroQuoteKinds: Array<String>;
 }
 
 /**
@@ -47,11 +43,12 @@ private typedef SeparatorSeams = {
  *
  * Only the TOP level of a label is ever touched. A NESTED or-pattern (`case Some(E | F):`) has no
  * comma spelling at all, and it is not the direct child of the pattern wrapper, so neither
- * direction reaches it. Neither is anything inside a MACRO QUOTATION (`macroQuoteKinds`): there the
- * source IS the AST a macro builds, and the two spellings do not build the same one — measured,
- * `macro switch x { case A | B: … }` reifies its label as ONE `EBinop(OpOr, …)` value while
- * `case A, B:` reifies as TWO, so respelling the separator silently changes what a macro reading
- * `Case.values` sees, with nothing rejecting the result.
+ * direction reaches it.
+ * Neither is anything inside a REIFICATION subtree (`RefShape.opaqueKinds` — a `macro …`
+ * quotation): there the source IS the AST a macro builds, and the two spellings do not build the
+ * same one — measured, `macro switch x { case A | B: … }` reifies its label as ONE
+ * `EBinop(OpOr, …)` value while `case A, B:` reifies as TWO, so respelling the separator silently
+ * changes what a macro reading `Case.values` sees, with nothing rejecting the result.
  *
  * ## Why the pipe direction gates and the comma direction does not
  *
@@ -89,9 +86,9 @@ private typedef SeparatorSeams = {
  * ## Grammar-agnostic
  *
  * Every kind arrives through `CasePatternScan.seamsOf` plus `RefShape.orPatternKind`; a grammar
- * leaving any of them unset makes the check a no-op. `macroQuoteKinds` is the exception: unset
- * there means the grammar has no quotation construct, so there is nothing to skip and the check
- * runs everywhere.
+ * leaving any of them unset makes the check a no-op. `opaqueKinds` is the exception: unset there
+ * means the grammar has no reification construct, so there is nothing to skip and the check runs
+ * everywhere.
  */
 @:nullSafety(Strict)
 final class CasePatternSeparator implements Check implements DefaultOff implements ConfigAware {
@@ -185,17 +182,15 @@ final class CasePatternSeparator implements Check implements DefaultOff implemen
 	/**
 	 * The seam kinds both halves of the check read, or null when the grammar leaves the case-pattern
 	 * set or the OR-PATTERN kind unset — which is what makes the whole check a no-op for that
-	 * language. `macroQuoteKinds` is the one seam an unset value does NOT disable: no quotation kind
-	 * means the grammar has no quotation, so there is nothing to skip.
+	 * language.
 	 */
 	private static function seamsOf(plugin: GrammarPlugin): Null<SeparatorSeams> {
-		final shape: RefShape = plugin.refShape();
 		final resolved: Null<CaseSeams> = CasePatternScan.seamsOf(plugin);
-		final orKind: Null<String> = shape.orPatternKind;
+		final orKind: Null<String> = plugin.refShape().orPatternKind;
 		if (resolved == null || orKind == null) return null;
 		final scan: CaseSeams = resolved;
 		final orPatternKind: String = orKind;
-		return { scan: scan, orPatternKind: orPatternKind, macroQuoteKinds: shape.macroQuoteKinds ?? [] };
+		return { scan: scan, orPatternKind: orPatternKind };
 	}
 
 	/** Whether the file's config asks for the `pipe` style; every other value reads as the comma default. */
@@ -206,11 +201,11 @@ final class CasePatternSeparator implements Check implements DefaultOff implemen
 	/**
 	 * Walk `node`, flagging every case branch whose separator differs from the configured style.
 	 * The whole tree is walked so a switch nested in a case BODY is reached too — except a MACRO
-	 * QUOTATION, whose entire subtree is skipped: what is written there is the AST a macro builds,
+	 * REIFICATION subtree, which is skipped whole: what is written there is the AST a macro builds,
 	 * and the two spellings do not build the same one (see the type doc).
 	 */
 	private static function walk(out: Array<Violation>, file: String, node: QueryNode, seams: SeparatorSeams, pipe: Bool): Void {
-		if (seams.macroQuoteKinds.contains(node.kind)) return;
+		if (seams.scan.opaqueKinds.contains(node.kind)) return;
 		if (node.kind == seams.scan.caseBranchKind) {
 			final span: Null<Span> = node.span;
 			final flagged: Bool = pipe ? joinableRun(seams, node) : hasOrPattern(seams, node);

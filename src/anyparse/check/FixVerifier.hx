@@ -121,7 +121,10 @@ final class FixVerifier {
 		// before entries < k had their fixes applied — harmless while risky fixes are
 		// same-file insertions.
 		for (check in riskyChecks) {
-			final all: Array<Violation> = check.run(files, plugin).filter(v -> v.rule == check.id());
+			// Through `Linter.collect`, never `check.run` directly: that is what applies the central
+			// reification gate here. The oracle below cannot stand in for it — a risky rewrite inside
+			// a `macro …` quotation still typechecks, so verification would pass it untouched.
+			final all: Array<Violation> = Linter.collect(files, plugin, [check]).filter(v -> v.rule == check.id());
 			for (entry in files) {
 				final own: Array<Violation> = all.filter(v -> v.file == entry.file);
 				if (own.length == 0) continue;

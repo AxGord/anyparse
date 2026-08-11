@@ -47,6 +47,10 @@ interface Check {
 	/**
 	 * Run the check across `files` and return every violation found, in
 	 * the check's natural order. Must not throw on unparseable input.
+	 *
+	 * CONSUMERS: call `Linter.collect` (or `Linter.run`) rather than this directly — that is where the
+	 * central reification gate drops a finding written inside a `macro …` quotation, and a consumer
+	 * that reaches past it silently re-opens the class of bug the gate exists for.
 	 */
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation>;
 
@@ -82,6 +86,23 @@ interface ConfigAware {
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void;
 
 }
+
+/**
+ * Opt-OUT marker for a `Check` that legitimately needs to see INSIDE a `macro …` quotation.
+ *
+ * By default every finding whose span sits inside a reification subtree is dropped before it is
+ * ever reported or fixed — source written there is the AST the surrounding program BUILDS, so a
+ * rewrite that is equivalent anywhere else hands the macro different data instead, and a
+ * report-only finding there is un-actionable besides (see `ReificationScan`). The drop is applied
+ * once, in `Linter.collect`, through which every consumer of a check's findings reads them.
+ *
+ * NOTHING implements this today, and no builtin should without a reason written down beside it.
+ * The slot exists so the central drop is a policy a future check can DECLINE rather than a trap
+ * it cannot see: a check that analyses quotations AS DATA — a macro-hygiene rule, a reification
+ * linter — would otherwise silently report nothing at all and give no hint why.
+ */
+@:nullSafety(Strict)
+interface QuotationAware {}
 
 /**
  * Opt-in marker for a `Check` whose `fix()` edits are STRUCTURALLY RISKY — a

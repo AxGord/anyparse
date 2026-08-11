@@ -248,6 +248,27 @@ final class Linter {
 	}
 
 	/**
+	 * Every finding `checks` produce over `files`, with the central REIFICATION gate applied — the
+	 * ONE entry point through which a `Check.run` result reaches the rest of the tool.
+	 *
+	 * That it is one entry point is the whole design. A finding inside a `macro …` quotation must be
+	 * dropped for every check (see `ReificationScan`), and a gate written once per consumer is a rule
+	 * each new consumer has to remember: two of them — `FixVerifier.verify` and `Cli`'s
+	 * oracle-assisted batch — already existed unnoticed when the gate was first added, and were found
+	 * by measuring rather than by reading. Both now come through here, as does `run` itself, so the
+	 * filter cannot disagree between them and a new consumer inherits it by using the obvious call.
+	 *
+	 * `run` is what a CONFIGURED lint wants (enablement, severity overrides, inline suppression on
+	 * top); `collect` is the raw gated set, for the fix paths that apply their own policy.
+	 */
+	public static function collect(
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, checks: Array<Check>
+	): Array<Violation> {
+		final raw: Array<Violation> = [for (check in checks) for (violation in check.run(files, plugin)) violation];
+		return ReificationScan.withoutQuoted(raw, files, plugin, ReificationScan.exemptIdsOf(checks));
+	}
+
+	/**
 	 * Run each check in `checks` (default: `builtins()`) over `files` and
 	 * return all violations, check by check in registry order. A check
 	 * must be skip-parse tolerant (see `Check`); the linter does not catch
@@ -283,7 +304,7 @@ final class Linter {
 		// checks so they don't re-walk ancestor dirs + re-parse the JSON per file; a null
 		// resolver resets them to their own `LintConfig.discover` fallback.
 		for (check in active) if (check is ConfigAware) (cast check: ConfigAware).setConfigResolver(resolveConfig);
-		final out: Array<Violation> = [for (check in active) for (violation in check.run(files, cached)) violation];
+		final out: Array<Violation> = collect(files, cached, active);
 		if (resolveConfig == null) return Suppression.apply(out, files);
 		// Per-file config: resolve the apqlint.json for each finding's OWN file, drop
 		// it when its rule is disabled there (unless an explicit --rule selection

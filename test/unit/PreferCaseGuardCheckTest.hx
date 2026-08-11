@@ -28,6 +28,15 @@ import anyparse.check.Check;
  */
 class PreferCaseGuardCheckTest extends Test {
 
+	/** The trigger shape written INSIDE a `macro …` quotation, where the arm is AST the macro builds. */
+	private static inline final QUOTED: String = 'class C {\n\tfunction f(s:String):Void {\n\t\tfinal e = macro {\n\t\t\tswitch s {\n'
+		+ '\t\t\t\tcase "a": if (b) p();\n\t\t\t}\n\t\t};\n\t}\n}\n';
+
+	/** The same shape quoted AND then written as real code — exactly one of the two is a finding. */
+	private static inline final QUOTED_THEN_RUNTIME: String = 'class C {\n\tfunction f(s:String):Void {\n\t\tfinal e = macro {\n'
+		+ '\t\t\tswitch s {\n\t\t\t\tcase "a": if (b) p();\n\t\t\t}\n\t\t};\n\t\tswitch s {\n\t\t\tcase "a": if (b) p();\n\t\t}\n\t}\n}\n';
+
+
 	/** `maxLineLength` from the repository's own `hxformat.json`, which `C.hx` resolves to. */
 	private static inline final LINE_WIDTH: Int = 140;
 
@@ -39,6 +48,16 @@ class PreferCaseGuardCheckTest extends Test {
 
 	/** The longest pattern whose converted label still fits `LINE_WIDTH`. */
 	private static inline final WIDEST_FITTING_PATTERN: Int = LINE_WIDTH - CASE_COLUMN - LABEL_OVERHEAD;
+
+	/** Moving an arm's `if` into a guard inside a REIFICATION subtree changes the `Case` the macro emits. */
+	public function testMacroQuotationNotFlagged(): Void {
+		Assert.equals(0, linted(QUOTED).length);
+	}
+
+	/** …and the skip is the quotation's SUBTREE, not everything that follows it. */
+	public function testArmAfterMacroQuotationStillFlagged(): Void {
+		CheckFixture.assertOnlyAfterQuotation(linted(QUOTED_THEN_RUNTIME), QUOTED_THEN_RUNTIME, 'arm');
+	}
 
 	public function testBlockBodyFlagged(): Void {
 		final vs: Array<Violation> = violations(sw('case "a": if (b) {\n\t\t\t\tp();\n\t\t\t\tq();\n\t\t\t}'));
@@ -331,8 +350,17 @@ class PreferCaseGuardCheckTest extends Test {
 		return buf.toString();
 	}
 
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferCaseGuard().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	/**
+	 * The same findings THROUGH THE LINTER — the altitude the central reification gate lives at
+	 * (`Linter.run`), so a quoted finding is dropped here and not by the check itself.
+	 */
+	private function linted(src: String): Array<Violation> {
+		return Linter.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin(), [new PreferCaseGuard()]);
 	}
 
 	/** Run over TWO files so the resolution index can see `other`'s declarations. */

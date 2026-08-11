@@ -29,11 +29,31 @@ import anyparse.query.SymbolIndex;
  */
 class PreferSwitchCheckTest extends Test {
 
+	/** The trigger shape written INSIDE a `macro …` quotation, where the chain is AST the macro builds. */
+	private static inline final QUOTED: String = 'class C {\n\tfunction f(x:Int):Void {\n\t\tfinal e = macro {\n\t\t\tif (x == 1) f();\n'
+		+ '\t\t\telse if (x == 2) g();\n\t\t\telse if (x == 3) i();\n\t\t\telse h();\n\t\t};\n\t}\n}\n';
+
+	/** The same shape quoted AND then written as real code — exactly one of the two is a finding. */
+	private static inline final QUOTED_THEN_RUNTIME: String = 'class C {\n\tfunction f(x:Int):Void {\n\t\tfinal e = macro {\n'
+		+ '\t\t\tif (x == 1) f();\n\t\t\telse if (x == 2) g();\n\t\t\telse if (x == 3) i();\n\t\t\telse h();\n\t\t};\n'
+		+ '\t\tif (x == 1) f();\n\t\telse if (x == 2) g();\n\t\telse if (x == 3) i();\n\t\telse h();\n\t}\n}\n';
+
+
 	/**
 	 * An enum-abstract module: its values are exhaustiveness-checked by the compiler, and
 	 * two fixtures below need the SAME module to differ only in the trailing `else`.
 	 */
 	private static final ENUM_ABSTRACT: String = 'enum abstract NodeMeta(Int) {\n\tfinal ALPHA = 0;\n\tvar BETA = 1;\n\tvar GAMMA = 2;\n}';
+
+	/** Rewriting a chain inside a REIFICATION subtree changes the `EIf` tree the macro emits into an `ESwitch`. */
+	public function testMacroQuotationNotFlagged(): Void {
+		Assert.equals(0, linted(QUOTED).length);
+	}
+
+	/** …and the skip is the quotation's SUBTREE, not everything that follows it. */
+	public function testChainAfterMacroQuotationStillFlagged(): Void {
+		CheckFixture.assertOnlyAfterQuotation(linted(QUOTED_THEN_RUNTIME), QUOTED_THEN_RUNTIME, 'chain');
+	}
 
 	public function testStringChainFlagged(): Void {
 		final vs: Array<Violation> = violations(wrap("if (x == 'a') a(); else if (x == 'b') b(); else c();"));
@@ -267,8 +287,17 @@ class PreferSwitchCheckTest extends Test {
 		return all;
 	}
 
+
 	private function violations(src: String, ?constants: String): Array<Violation> {
 		return new PreferSwitch().run(entries(src, constants), new HaxeQueryPlugin());
+	}
+
+	/**
+	 * The same findings THROUGH THE LINTER — the altitude the central reification gate lives at
+	 * (`Linter.run`), so a quoted finding is dropped here and not by the check itself.
+	 */
+	private function linted(src: String): Array<Violation> {
+		return Linter.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin(), [new PreferSwitch()]);
 	}
 
 	private function fixedSource(src: String, ?constants: String): String {

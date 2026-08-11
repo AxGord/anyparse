@@ -16,6 +16,25 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
  */
 class DuplicateCaseCheckTest extends Test {
 
+	/** The trigger shape written INSIDE a `macro …` quotation, where the arms are AST the macro builds. */
+	private static inline final QUOTED: String = 'class C {\n\tfunction f(k:Int):Void {\n\t\tfinal e = macro switch m {\n'
+		+ '\t\t\tcase 1: a();\n\t\t\tcase 1: b();\n\t\t\tcase _: c();\n\t\t};\n\t}\n}\n';
+
+	/** The same shape quoted AND then written as real code — exactly one of the two is a finding. */
+	private static inline final QUOTED_THEN_RUNTIME: String = 'class C {\n\tfunction f(k:Int):Void {\n\t\tfinal e = macro switch m {\n'
+		+ '\t\t\tcase 1: a();\n\t\t\tcase 1: b();\n\t\t\tcase _: c();\n\t\t};\n\t\tswitch k {\n\t\t\tcase 1: a();\n\t\t\tcase 1: b();\n'
+		+ '\t\t\tcase _: c();\n\t\t}\n\t}\n}\n';
+
+	/** Deleting a dead arm inside a REIFICATION subtree changes the `cases` array the macro emits. */
+	public function testMacroQuotationNotFlagged(): Void {
+		Assert.equals(0, linted(QUOTED).length);
+	}
+
+	/** …and the skip is the quotation's SUBTREE, not everything that follows it. */
+	public function testSwitchAfterMacroQuotationStillFlagged(): Void {
+		CheckFixture.assertOnlyAfterQuotation(linted(QUOTED_THEN_RUNTIME), QUOTED_THEN_RUNTIME, 'switch');
+	}
+
 	public function testDuplicateLiteralCaseFlagged(): Void {
 		final vs: Array<Violation> = violations(
 			'class C {\n\tfunction f():Void {\n\t\tswitch k {\n\t\t\tcase 1: a();\n\t\t\tcase 1: b();\n\t\t\tcase _: c();\n\t\t}\n\t}\n}'
@@ -85,8 +104,17 @@ class DuplicateCaseCheckTest extends Test {
 		return CheckFixture.fixedSource(new DuplicateCase(), src);
 	}
 
+
 	private function violations(src: String): Array<Violation> {
 		return new DuplicateCase().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	/**
+	 * The same findings THROUGH THE LINTER — the altitude the central reification gate lives at
+	 * (`Linter.run`), so a quoted finding is dropped here and not by the check itself.
+	 */
+	private function linted(src: String): Array<Violation> {
+		return Linter.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin(), [new DuplicateCase()]);
 	}
 
 }

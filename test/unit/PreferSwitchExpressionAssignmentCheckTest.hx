@@ -22,6 +22,25 @@ import anyparse.runtime.Span;
  */
 class PreferSwitchExpressionAssignmentCheckTest extends Test {
 
+	/** The trigger shape written INSIDE a `macro …` quotation, where the switch is AST the macro builds. */
+	private static inline final QUOTED: String = 'class C {\n\tfunction f(x:Int, r:Int):Void {\n\t\tfinal e = macro {\n'
+		+ '\t\t\tswitch x {\n\t\t\t\tcase 1: r = 1;\n\t\t\t\tcase 2: r = 2;\n\t\t\t\tcase _: r = 3;\n\t\t\t}\n\t\t};\n\t}\n}\n';
+
+	/** The same shape quoted AND then written as real code — exactly one of the two is a finding. */
+	private static inline final QUOTED_THEN_RUNTIME: String = 'class C {\n\tfunction f(x:Int, r:Int):Void {\n\t\tfinal e = macro {\n'
+		+ '\t\t\tswitch x {\n\t\t\t\tcase 1: r = 1;\n\t\t\t\tcase 2: r = 2;\n\t\t\t\tcase _: r = 3;\n\t\t\t}\n\t\t};\n'
+		+ '\t\tswitch x {\n\t\t\tcase 1: r = 1;\n\t\t\tcase 2: r = 2;\n\t\t\tcase _: r = 3;\n\t\t}\n\t}\n}\n';
+
+	/** Collapsing a switch inside a REIFICATION subtree changes the statement tree the macro emits into an expression. */
+	public function testMacroQuotationNotFlagged(): Void {
+		Assert.equals(0, linted(QUOTED).length);
+	}
+
+	/** …and the skip is the quotation's SUBTREE, not everything that follows it. */
+	public function testSwitchAfterMacroQuotationStillFlagged(): Void {
+		CheckFixture.assertOnlyAfterQuotation(linted(QUOTED_THEN_RUNTIME), QUOTED_THEN_RUNTIME, 'switch');
+	}
+
 	public function testBasicFlagged(): Void {
 		final vs: Array<Violation> = violations(
 			wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase 2: x = \'b\';\n\t\t}')
@@ -453,8 +472,17 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 		return 'class C {\n\tfunction f() {\n\t\t$body\n\t}\n}';
 	}
 
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferSwitchExpressionAssignment().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	/**
+	 * The same findings THROUGH THE LINTER — the altitude the central reification gate lives at
+	 * (`Linter.run`), so a quoted finding is dropped here and not by the check itself.
+	 */
+	private function linted(src: String): Array<Violation> {
+		return Linter.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin(), [new PreferSwitchExpressionAssignment()]);
 	}
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {

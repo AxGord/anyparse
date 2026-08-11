@@ -354,13 +354,28 @@ typedef RefShape = {
 	@:optional var refsCache: RefsCache;
 
 	/**
-	 * Node kinds whose SUBTREE is opaque to textual reference analysis —
-	 * metaprogramming reification where an identifier's uses are injected by
-	 * splicing rather than written literally (Haxe's `macro { … }`, surfaced as
-	 * `MacroExpr`). A reference-analysis check (e.g. `unused-local`) must not
-	 * flag a binding declared inside such a subtree: its uses may be spliced in
-	 * from elsewhere and are invisible to a source scan. Optional — a grammar
-	 * with no reification leaves it unset (treated as empty).
+	 * Node kinds whose SUBTREE is a REIFICATION — source the surrounding program treats as data
+	 * rather than as code it runs (Haxe's `macro { … }` / `macro …`, surfaced as `MacroExpr`).
+	 * Optional — a grammar with no reification leaves it unset (treated as empty). Two jobs, and
+	 * every check that touches such a subtree needs one of them:
+	 *
+	 *  - REFERENCE ANALYSIS cannot see inside. A binding declared there may be used by a splice
+	 *    from anywhere, invisible to a source scan, so `unused-local` and its kin must not flag it.
+	 *  - A REWRITE inside changes the tree the program BUILDS, not the behaviour of the file it sits
+	 *    in — and the two are not the same edit. Measured: `macro switch x { case A | B: … }`
+	 *    reifies its label as ONE `EBinop(OpOr, …)` value while `case A, B:` reifies as TWO, and
+	 *    `default:` reifies as `ESwitch.edef` where `case _:` becomes another entry of `cases`. So a
+	 *    source-equivalent respelling silently hands a macro different data, with nothing rejecting
+	 *    the result. A finding there is also un-actionable even report-only: the reader cannot act
+	 *    on it without changing what the macro emits.
+	 *
+	 * A check with a plain recursive walk stops at the kind (`if (opaqueKinds.contains(node.kind))
+	 * return;` — `redundant-case-body`, `empty-case-arm`, `unused-case-binder`,
+	 * `collapse-nested-switch`, `case-pattern-separator`); one whose collector is not a plain walk
+	 * drops the findings instead, through `ReificationScan.withoutQuoted`. Same kind set, same intent.
+	 *
+	 * Not to be confused with `parenOpaqueSubtreeKinds`, which carries this kind AND `Plain` — the
+	 * case-pattern wrapper the case rules must still process.
 	 */
 	@:optional var opaqueKinds: Array<String>;
 
@@ -430,22 +445,6 @@ typedef RefShape = {
 	 * check a no-op.
 	 */
 	@:optional var orPatternKind: String;
-
-	/**
-	 * Node kinds that open a MACRO QUOTATION — a region whose source is DATA the surrounding
-	 * program builds rather than code it runs (Haxe `MacroExpr`, the `macro …` form). A rewrite
-	 * that is source-equivalent outside one is not equivalent inside it: measured, `macro switch x
-	 * { case A | B: … }` reifies its label as ONE `EBinop(OpOr, …)` value while `case A, B:`
-	 * reifies as TWO, so `case-pattern-separator` respelling the separator silently changes what a
-	 * macro reading `Case.values` sees, with nothing rejecting the result. A check that REWRITES
-	 * source must therefore leave such a subtree alone. Optional; unset means the grammar has no
-	 * quotation construct and nothing is skipped.
-	 *
-	 * Distinct from its two neighbours on purpose: `opaqueKinds` states the same subtree is opaque
-	 * to REFERENCE analysis (uses may be spliced in from elsewhere), and `parenOpaqueSubtreeKinds`
-	 * also carries `Plain` — the case-pattern wrapper this rule must still process.
-	 */
-	@:optional var macroQuoteKinds: Array<String>;
 
 	/**
 	 * The parenthesized-expression node kind — the `redundant-parens` check flags a

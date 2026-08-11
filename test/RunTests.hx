@@ -294,6 +294,8 @@ import unit.IdenticalOperandsCheckTest;
 import unit.SelfAssignmentCheckTest;
 import unit.DuplicateCaseCheckTest;
 import unit.CasePatternSeparatorCheckTest;
+import unit.ReificationGateTest;
+import unit.ReificationGateFixPathTest;
 import unit.RedundantParensCheckTest;
 import unit.RedundantParensOperandArmsTest;
 import unit.ConstantConditionCheckTest;
@@ -1110,6 +1112,8 @@ class RunTests {
 		addCase(new UnusedPublicMemberCheckTest());
 		addCase(new DuplicateCaseCheckTest());
 		addCase(new CasePatternSeparatorCheckTest());
+		addCase(new ReificationGateTest());
+		addCase(new ReificationGateFixPathTest());
 		addCase(new RedundantParensCheckTest());
 		addCase(new RedundantParensOperandArmsTest());
 		addCase(new RedundantParensTierArmsTest());

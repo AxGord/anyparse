@@ -24,6 +24,16 @@ import anyparse.runtime.Span;
  */
 class PreferSwitchExpressionCheckTest extends Test {
 
+	/** The trigger shape written INSIDE a `macro …` quotation, where the chain is AST the macro builds. */
+	private static inline final QUOTED: String = 'class C {\n\tfunction f(x:Int):Int {\n\t\tfinal e = macro {\n'
+		+ '\t\t\tfinal q = if (x == 1) 1; else if (x == 2) 2; else if (x == 3) 3; else 0;\n\t\t};\n\t\treturn 0;\n\t}\n}\n';
+
+	/** The same shape quoted AND then written as real code — exactly one of the two is a finding. */
+	private static inline final QUOTED_THEN_RUNTIME: String = 'class C {\n\tfunction f(x:Int):Int {\n\t\tfinal e = macro {\n'
+		+ '\t\t\tfinal q = if (x == 1) 1; else if (x == 2) 2; else if (x == 3) 3; else 0;\n\t\t};\n'
+		+ '\t\treturn if (x == 1) 1; else if (x == 2) 2; else if (x == 3) 3; else 0;\n\t}\n}\n';
+
+
 	/** The anonymized constants module the cross-file fixtures resolve against. */
 	private static final CONSTANTS: String = 'class NodeMeta {\n\tpublic static inline final KIND_RECTANGLE_SOLID:String = \'rs\';\n'
 		+ "\tpublic static inline final KIND_RECTANGLE_STROKE:String = 'rk';\n\tpublic static inline final KIND_OVAL_SOLID:String = 'os';\n"
@@ -49,6 +59,16 @@ class PreferSwitchExpressionCheckTest extends Test {
 		+ '\t\t\t\t\t\t&& targetType == NodeMeta.KIND_TEXT_NODE_BUBBLE_FILL_SHADE\n'
 		+ '\t\t\t\t\t\t? AreaShade(readCurrent ? cast(obj, TextNodeBubble).areaShade : newShade)\n'
 		+ '\t\t\t\t\t\t: Shade(readCurrent ? obj.shade : newShade);\n\t}\n}';
+
+	/** Rewriting a chain inside a REIFICATION subtree changes the `EIf` tree the macro emits into an `ESwitch`. */
+	public function testMacroQuotationNotFlagged(): Void {
+		Assert.equals(0, linted(QUOTED).length);
+	}
+
+	/** …and the skip is the quotation's SUBTREE, not everything that follows it. */
+	public function testChainAfterMacroQuotationStillFlagged(): Void {
+		CheckFixture.assertOnlyAfterQuotation(linted(QUOTED_THEN_RUNTIME), QUOTED_THEN_RUNTIME, 'chain');
+	}
 
 	public function testTernaryChainInReturnFlagged(): Void {
 		final vs: Array<Violation> = violations(wrap('return x == 1 ? a() : x == 2 ? b() : c();'));
@@ -276,8 +296,17 @@ class PreferSwitchExpressionCheckTest extends Test {
 		return src.indexOf('class BoardView') >= 0 ? 'BoardView.hx' : 'C.hx';
 	}
 
+
 	private function violations(src: String, ?constants: String): Array<Violation> {
 		return new PreferSwitchExpression().run(entries(src, constants), new HaxeQueryPlugin());
+	}
+
+	/**
+	 * The same findings THROUGH THE LINTER — the altitude the central reification gate lives at
+	 * (`Linter.run`), so a quoted finding is dropped here and not by the check itself.
+	 */
+	private function linted(src: String): Array<Violation> {
+		return Linter.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin(), [new PreferSwitchExpression()]);
 	}
 
 	private function fixedSource(src: String, ?constants: String): String {

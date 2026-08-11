@@ -17,6 +17,24 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
  */
 class PreferCaseWildcardCheckTest extends Test {
 
+	/** The trigger shape written INSIDE a `macro …` quotation, where it is AST the macro builds. */
+	private static inline final QUOTED: String =
+		'class C {\n\tfunction f(k:Int):Void {\n\t\tfinal e = macro switch m {\n\t\t\tcase 1: a();\n\t\t\tdefault: b();\n\t\t};\n\t}\n}\n';
+
+	/** The same shape quoted AND then written as real code — exactly one of the two is a finding. */
+	private static inline final QUOTED_THEN_RUNTIME: String = 'class C {\n\tfunction f(k:Int):Void {\n\t\tfinal e = macro switch m {\n'
+		+ '\t\t\tcase 1: a();\n\t\t\tdefault: b();\n\t\t};\n\t\tswitch k {\n\t\t\tcase 1: a();\n\t\t\tdefault: b();\n\t\t}\n\t}\n}\n';
+
+	/** A `default:` inside a REIFICATION subtree is DATA: it reifies as `ESwitch.edef`, where `case _:` becomes another entry of `cases`. */
+	public function testMacroQuotationNotFlagged(): Void {
+		Assert.equals(0, linted(QUOTED).length);
+	}
+
+	/** …and the skip is the quotation's SUBTREE, not everything that follows it. */
+	public function testSwitchAfterMacroQuotationStillFlagged(): Void {
+		CheckFixture.assertOnlyAfterQuotation(linted(QUOTED_THEN_RUNTIME), QUOTED_THEN_RUNTIME, 'switch');
+	}
+
 	public function testDefaultFlagged(): Void {
 		final source: String = stmtSwitch('default: b();');
 		final vs: Array<Violation> = violations(source);
@@ -76,8 +94,17 @@ class PreferCaseWildcardCheckTest extends Test {
 		return 'class C {\n\tfunction f(x:Int):Void {\n\t\tswitch x {\n\t\t\tcase 1: a();\n\t\t\t$lastBranch\n\t\t}\n\t}\n}';
 	}
 
+
 	private function violations(source: String): Array<Violation> {
 		return new PreferCaseWildcard().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+	}
+
+	/**
+	 * The same findings THROUGH THE LINTER — the altitude the central reification gate lives at
+	 * (`Linter.run`), so a quoted finding is dropped here and not by the check itself.
+	 */
+	private function linted(src: String): Array<Violation> {
+		return Linter.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin(), [new PreferCaseWildcard()]);
 	}
 
 	private function applyFix(source: String): String {

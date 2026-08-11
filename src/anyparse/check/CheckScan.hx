@@ -92,11 +92,19 @@ final class CheckScan {
 		plugin: GrammarPlugin, source: String, violations: Array<Violation>, indexKinds: Array<String>,
 		produce: (node:QueryNode, span:Span) -> Null<{ span: Span, text: String }>
 	): Array<{ span: Span, text: String }> {
+		return collectSpanEdits(violations, nodesByKind(plugin, source, indexKinds), produce);
+	}
+
+	/**
+	 * Every spanned node of `kinds` in `source`, keyed `from:to` — the lookup table a span-addressed
+	 * fix re-derives its targets from. Empty when `source` does not parse, which every caller reads
+	 * as "nothing to do here" rather than as an error.
+	 */
+	public static function nodesByKind(plugin: GrammarPlugin, source: String, kinds: Array<String>): Map<String, QueryNode> {
 		final tree: Null<QueryNode> = parseOrNull(plugin, source);
-		if (tree == null) return [];
 		final byKey: Map<String, QueryNode> = [];
-		RefactorSupport.indexNodesByKind(tree, indexKinds, byKey);
-		return collectSpanEdits(violations, byKey, produce);
+		if (tree != null) RefactorSupport.indexNodesByKind(tree, kinds, byKey);
+		return byKey;
 	}
 
 	/**
@@ -235,6 +243,7 @@ final class CheckScan {
 	public static inline function lineDeletionSpan(source: String, span: Span): Span {
 		return RefactorSupport.lineDeletionSpan(source, span);
 	}
+
 
 	/**
 	 * The node kinds whose presence in a subtree makes a once-vs-twice evaluation
