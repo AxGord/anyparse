@@ -12,12 +12,12 @@ import haxe.Exception;
 
 /**
  * Flags an INSTANCE field (`var` or `final`) that has NO declaration initializer but
- * whose write is one unconditional top-level constructor statement
- * `x = expr;` / `this.x = expr;` whose right-hand side is context-independent
+ * whose write is one unconditional constructor assignment `x = expr` / `this.x = expr`
+ * whose right-hand side is context-independent
  * (references no constructor parameters, no `this`, no other instance members, no
  * constructor locals — only literals, static / global references, and constructions
  * such as `new Shape()`). `Severity.Info`, with an autofix that MOVES `= expr` onto
- * the field declaration and deletes the constructor statement — e.g.
+ * the field declaration and removes the constructor write — e.g.
  * `private var _a:Array<Int>;` + constructor `_a = new Array<Int>();` becomes
  * `private var _a:Array<Int> = new Array<Int>();`.
  *
@@ -184,9 +184,46 @@ import haxe.Exception;
  * chain's order proof needs one build's member sequence and a region's branches are several.
  * A field name declared in two mutually exclusive branches is refused outright (its rival
  * declarations share one constructor statement, and the move deletes that statement for
- * both). A field whose write count
- * differs from one qualifies only through the chain; an UNRESOLVED write to the field
- * NAME disqualifies it on either path.
+ * both). A field whose write count differs from one qualifies only through the
+ * chain; an UNRESOLVED write to the field NAME disqualifies it on either path.
+ *
+ * ## Write shapes
+ *
+ * Two write shapes qualify, differing in what the FIX does rather than in what it proves. A
+ * top-level constructor STATEMENT (`soleConstructorFieldInit`) moves whole: the declaration gains
+ * the initializer and the statement’s line goes. An EMBEDDED assignment
+ * (`RefactorSupport.soleConstructorFieldWrite`) is an assignment EXPRESSION whose value is consumed
+ * where it stands — `super([_a = new Row(…)], …)`, the layout-tree idiom — so the statement holding
+ * it must SURVIVE: the fix moves the right-hand side to the declaration and collapses the
+ * expression to the field name, a read of what the prologue has by then initialised. Deleting its
+ * line would delete live code, which is why the two shapes cannot share one edit path.
+ *
+ * An embedded write additionally owes `RefactorSupport.ctorWriteUnconditional`, a positive
+ * whitelist of the node kinds through which an operand is evaluated exactly once. That sibling
+ * predicate admits a write in a ternary arm, an `&&` operand or a loop body, because Haxe accepts
+ * those for a `final` field; hoisting one into the always-run prologue would turn a conditional
+ * initialisation unconditional, so this rule demands the stricter position. An embedded write also
+ * joins NO chain and needs none: the chain keys a candidate by the top-level statement it owns and
+ * several embedded writes share one (every element of a single `super([…])` argument), while the
+ * enclosing statement stays put, so the SOLE-write proof carries the move exactly as it does for a
+ * `#if`-guarded field.
+ *
+ * `hoistCrossesSuper` refines the base-constructor gate for one shape `ctorCallsSuper` refused
+ * wholesale: a write inside the SOLE `super(...)` call’s own ARGUMENT region. Arguments are
+ * evaluated in order to pass them, so such a write already runs before the base constructor body,
+ * and moving it to the prologue keeps it on that same side. Everything else still refuses — a
+ * second super call anywhere (the lexical comparison stops meaning anything), a write outside the
+ * argument region, an unrecognisable call.
+ *
+ * `contextFreeRhs`’s unresolved-name arm is decided from POSITIVE evidence: under `extends`, a
+ * lowercase name the single-file resolver cannot bind is admitted when the file EXPLICITLY imports
+ * it as a static (`SymbolIndex.fileImportsMemberName`). The absence proof that first suggests
+ * itself — no ancestor DECLARES the name — is unsound here, because declaration absence is exactly
+ * what a `@:build` / `@:autoBuild` macro undoes: openfl carries one on `Sprite`, so every display
+ * subclass in an openfl app sits under an injector, and a real tree offered
+ * `onEnable = changeEnabled - true` as movable on the strength of such a proof, where
+ * `changeEnabled` is macro-generated and a declaration initializer may not read it at all. See
+ * `inheritedProbe` for the residual.
  */
 @:nullSafety(Strict)
 final class FieldInitAtDeclaration implements Check {
@@ -211,11 +248,12 @@ final class FieldInitAtDeclaration implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
 		final writeIndex: FieldWriteIndex = FieldWriteIndex.build(files, plugin);
+		final lazyIndex: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		final classLike: Array<String> = RefactorSupport.classLikeContainerKinds(shape);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (_: Exception) null;
-			if (tree != null) walk(tree, entry.file, entry.source, shape, classLike, writeIndex, violations);
+			if (tree != null) walk(tree, entry.file, entry.source, shape, classLike, writeIndex, lazyIndex, violations);
 		}
 		return violations;
 	}
@@ -256,35 +294,107 @@ final class FieldInitAtDeclaration implements Check {
 				rhs: QueryNode,
 				target: Span
 			}> = RefactorSupport.constructorFieldInitAt(tree, span.from, shape);
-			if (loc == null) continue;
-			final rhsSpan: Null<Span> = loc.rhs.span;
-			final fieldSpan: Null<Span> = loc.field.span;
-			final stmtSpan: Null<Span> = loc.stmt.span;
-			if (rhsSpan == null || fieldSpan == null || stmtSpan == null) continue;
-			if (!prefixMovesTogether(loc.container, stmtSpan.from, moving, source, shape)) {
-				final key: String = '${v.file}#${loc.field.name}';
-				if (!skipsReported.contains(key)) {
-					skipsReported.push(key);
-					stderr(
-						'apq fix: field-init-at-declaration: \'${loc.field.name}\' skipped — a prefix candidate is not in the fix set\n'
-					);
+			if (loc != null) {
+				final rhsSpan: Null<Span> = loc.rhs.span;
+				final fieldSpan: Null<Span> = loc.field.span;
+				final stmtSpan: Null<Span> = loc.stmt.span;
+				if (rhsSpan == null || fieldSpan == null || stmtSpan == null) continue;
+				if (!prefixMovesTogether(loc.container, stmtSpan.from, moving, source, shape, inheritedProbe(v.file, () -> index))) {
+					reportSkip(v.file, loc.field.name);
+					continue;
 				}
+				final insertPos: Int = RefactorSupport.fieldDeclInitInsertPos(source, fieldSpan);
+				edits.push({ span: new Span(insertPos, insertPos), text: ' = ${source.substring(rhsSpan.from, rhsSpan.to)}' });
+				edits.push({ span: RefactorSupport.lineExtendedSpan(source, stmtSpan), text: '' });
+				continue;
+			}
+			// The EMBEDDED shape: the assignment's value is consumed where it stands, so the statement
+			// holding it must SURVIVE. Two edits instead of insert-plus-delete-line: the declaration
+			// gains ` = <rhs>` as before, and the assignment expression collapses to the target text
+			// it was assigning — `_a = new Row(…)` becomes `_a`, a read of the field the prologue has
+			// by then initialised.
+			final emb: Null<{
+				container: QueryNode,
+				field: QueryNode,
+				assign: QueryNode,
+				rhs: QueryNode,
+				target: Span
+			}> = embeddedFieldWriteAt(tree, span.from, shape);
+			if (emb == null) continue;
+			final rhsSpan: Null<Span> = emb.rhs.span;
+			final fieldSpan: Null<Span> = emb.field.span;
+			final assignSpan: Null<Span> = emb.assign.span;
+			if (rhsSpan == null || fieldSpan == null || assignSpan == null) continue;
+			if (!prefixMovesTogether(emb.container, assignSpan.from, moving, source, shape, inheritedProbe(v.file, () -> index))) {
+				reportSkip(v.file, emb.field.name);
 				continue;
 			}
 			final insertPos: Int = RefactorSupport.fieldDeclInitInsertPos(source, fieldSpan);
 			edits.push({ span: new Span(insertPos, insertPos), text: ' = ${source.substring(rhsSpan.from, rhsSpan.to)}' });
-			edits.push({ span: RefactorSupport.lineExtendedSpan(source, stmtSpan), text: '' });
+			edits.push({ span: assignSpan, text: source.substring(emb.target.from, emb.target.to) });
 		}
 		return edits;
+	}
+
+	/** Push the `field-init-at-declaration` violation for an accepted `cand`. */
+	private static inline function flag(out: Array<Violation>, file: String, cand: Candidate): Void {
+		out.push({
+			file: file,
+			span: cand.span,
+			rule: 'field-init-at-declaration',
+			severity: Severity.Info,
+			message: 'field \'${cand.name}\' is initialised with a constant in the constructor; move it to the declaration'
+		});
+	}
+
+	/**
+	 * The container, field, assignment node, right-hand side and target span of the EMBEDDED sole
+	 * constructor write of the field declared at `fieldFrom` — the `fix`-side counterpart of
+	 * `RefactorSupport.constructorFieldInitAt`, which only ever resolves the top-level-statement
+	 * shape. Null when the field, its sole constructor and its sole non-closure write are not all
+	 * resolvable.
+	 */
+	private static function embeddedFieldWriteAt(tree: QueryNode, fieldFrom: Int, shape: RefShape): Null<{
+		container: QueryNode,
+		field: QueryNode,
+		assign: QueryNode,
+		rhs: QueryNode,
+		target: Span
+	}> {
+		final loc: Null<{ container: QueryNode, field: QueryNode }> = RefactorSupport.classLikeFieldAt(tree, fieldFrom, shape);
+		if (loc == null) return null;
+		final ctor: Null<QueryNode> = RefactorSupport.soleConstructor(loc.container, shape);
+		if (ctor == null) return null;
+		final write: Null<{ assign: QueryNode, rhs: QueryNode, target: Span }> = RefactorSupport.soleConstructorFieldWrite(
+			loc.container, ctor, loc.field, shape
+		);
+		return write == null ? null : {
+			container: loc.container,
+			field: loc.field,
+			assign: write.assign,
+			rhs: write.rhs,
+			target: write.target
+		};
+	}
+
+	/**
+	 * Report `name` skipped once per field per process. `lint --fix` re-runs the rule until it
+	 * reaches a fixpoint, so an undeduplicated line would repeat once per pass.
+	 */
+	private static function reportSkip(file: String, name: Null<String>): Void {
+		final key: String = '$file#$name';
+		if (skipsReported.contains(key)) return;
+		skipsReported.push(key);
+		stderr('apq fix: field-init-at-declaration: \'$name\' skipped — a prefix candidate is not in the fix set\n');
 	}
 
 	/** Walk `node`, considering every class-like container found. */
 	private static function walk(
 		node: QueryNode, file: String, source: String, shape: RefShape, classLike: Array<String>, writeIndex: FieldWriteIndex,
-		out: Array<Violation>
+		lazyIndex: () -> Null<SymbolIndex>, out: Array<Violation>
 	): Void {
-		if (classLike.contains(node.kind)) considerContainer(node, file, source, shape, writeIndex, out);
-		for (child in node.children) walk(child, file, source, shape, classLike, writeIndex, out);
+		if (classLike.contains(node.kind)) considerContainer(node, file, source, shape, writeIndex, lazyIndex, out);
+		for (child in node.children) walk(child, file, source, shape, classLike, writeIndex, lazyIndex, out);
 	}
 
 	/**
@@ -302,49 +412,111 @@ final class FieldInitAtDeclaration implements Check {
 	 * statement, or a refused candidate, ends the run for everything after it.
 	 */
 	private static function considerContainer(
-		container: QueryNode, file: String, source: String, shape: RefShape, writeIndex: FieldWriteIndex, out: Array<Violation>
+		container: QueryNode, file: String, source: String, shape: RefShape, writeIndex: FieldWriteIndex,
+		lazyIndex: () -> Null<SymbolIndex>, out: Array<Violation>
 	): Void {
 		final owner: Null<String> = container.name;
 		if (owner == null) return;
 		final ctor: Null<QueryNode> = RefactorSupport.soleConstructor(container, shape);
 		if (ctor == null) return;
+		final mayBeInherited: (String) -> Bool = inheritedProbe(file, lazyIndex);
 		final statics: Array<Int> = RefactorSupport.staticMemberFroms(container, shape);
+		final found: Candidates = collectCandidates(container, ctor, owner, source, statics, shape, writeIndex, mayBeInherited);
+		// An EMBEDDED write joins NO chain, and cannot: the chain keys a candidate by the top-level
+		// statement it owns, while several embedded writes share one statement (every element of a
+		// single `super([…])` argument). It also needs no chain — the fix leaves that statement standing
+		// and rewrites only the assignment expression, so the SOLE-write proof carries the move on its
+		// own, exactly as it does for a `#if`-guarded field.
+		for (cand in found.embedded) if (cand.sole) flag(out, file, cand);
+		var chainOk: Bool = true;
+		for (stmt in ctorStatements(ctor, shape)) {
+			final stmtSpan: Null<Span> = stmt.span;
+			final cand: Null<Candidate> = stmtSpan == null ? null : found.byStmt[stmtSpan.from];
+			if (cand == null) {
+				chainOk = false;
+				continue;
+			}
+			if (!cand.sole && !(chainOk && found.coMoversOrderSafe && cand.orderSafe)) {
+				chainOk = false;
+				continue;
+			}
+			flag(out, file, cand);
+		}
+	}
+
+	/**
+	 * Every candidate of `container`, split by acceptance path: `byStmt` keys the top-level-statement
+	 * ones by the statement they own (the chain walk's lookup), `embedded` holds the ones whose write is
+	 * an assignment expression owning no statement of its own, and `coMoversOrderSafe` records whether
+	 * every init that will share the prologue resolves nothing in-class — the condition a CHAINED
+	 * candidate additionally needs, which a sole-write candidate or a pre-existing declaration
+	 * initializer can revoke for everyone.
+	 *
+	 * A field name `container` declares more than once (only reachable across mutually exclusive `#if`
+	 * branches) is dropped outright: its rival declarations share one constructor statement, and
+	 * choosing a branch is not the fix's to make.
+	 */
+	private static function collectCandidates(
+		container: QueryNode, ctor: QueryNode, owner: String, source: String, statics: Array<Int>, shape: RefShape,
+		writeIndex: FieldWriteIndex, mayBeInherited: (String) -> Bool
+	): Candidates {
 		final byStmt: Map<Int, Candidate> = [];
+		final embedded: Array<Candidate> = [];
 		final rivalled: Array<String> = rivalDeclaredNames(container, shape);
 		var coMoversOrderSafe: Bool = true;
 		// Every member host, not just the container's direct children: a field written inside a
 		// member-position `#if` sits one level down and was silently exempt.
 		RefactorSupport.eachMemberHost(container, host -> {
 			for (member in host.children) {
-				final cand: Null<Candidate> = candidateFor(member, container, ctor, owner, source, statics, shape, writeIndex);
+				final cand: Null<Candidate> = candidateFor(
+					member, container, ctor, owner, source, statics, shape, writeIndex, mayBeInherited
+				);
 				if (cand == null) {
-					if (coMoverOrderUnsafe(member, container, statics, source, shape)) coMoversOrderSafe = false;
+					if (coMoverOrderUnsafe(member, container, statics, source, shape, mayBeInherited)) coMoversOrderSafe = false;
 					continue;
 				}
-				if (!rivalled.contains(cand.name)) byStmt[cand.stmtFrom] = cand;
+				if (rivalled.contains(cand.name)) continue;
+				if (cand.embedded)
+					embedded.push(cand);
+				else
+					byStmt[cand.stmtFrom] = cand;
 			}
 		});
 		for (cand in byStmt) if (cand.sole && !cand.orderSafe) coMoversOrderSafe = false;
-		var chainOk: Bool = true;
-		for (stmt in ctorStatements(ctor, shape)) {
-			final stmtSpan: Null<Span> = stmt.span;
-			final cand: Null<Candidate> = stmtSpan == null ? null : byStmt[stmtSpan.from];
-			if (cand == null) {
-				chainOk = false;
-				continue;
-			}
-			if (!cand.sole && !(chainOk && coMoversOrderSafe && cand.orderSafe)) {
-				chainOk = false;
-				continue;
-			}
-			out.push({
-				file: file,
-				span: cand.span,
-				rule: 'field-init-at-declaration',
-				severity: Severity.Info,
-				message: 'field \'${cand.name}\' is initialised with a constant in the constructor; move it to the declaration'
-			});
-		}
+		for (cand in embedded) if (cand.sole && !cand.orderSafe) coMoversOrderSafe = false;
+		return {
+			byStmt: byStmt,
+			embedded: embedded,
+			coMoversOrderSafe: coMoversOrderSafe
+		};
+	}
+
+	/**
+	 * A probe answering "could this unresolved lowercase name be a member the container INHERITS?" —
+	 * the question `contextFreeRhs` must ask before treating such a name as a global, since a
+	 * single-file resolver cannot tell an imported static from an inherited member.
+	 *
+	 * Answered from POSITIVE evidence only: the file EXPLICITLY imports the name as a static
+	 * (`import macros.Lang.t;`), so a bare occurrence binds globally. The tempting alternative —
+	 * `typeProvablyLacksMember`, "no ancestor declares this name" — is an ABSENCE proof, and absence is
+	 * exactly what a build macro undoes by adding members that exist in no source text. That is not a
+	 * corner case: openfl carries `@:autoBuild(AssetsMacro.initBinding())` on `Sprite`, so every display
+	 * subclass in an openfl app has an injector above it, and pony's `@:bindable` generates a signal
+	 * member per field — a real tree produced `onEnable = changeEnabled - true` as movable on the
+	 * strength of such a proof, where `changeEnabled` is macro-generated and a declaration initializer
+	 * may not read it at all.
+	 *
+	 * With no index the answer is "maybe", keeping the blanket veto the rule had before. The residual
+	 * is a member that SHADOWS an explicitly imported static of the same name; Haxe rejects the moved
+	 * initializer outright in that case ("Cannot access this or other member field in variable
+	 * initialization", 4.3.7), so the cost is a loud compile error at the rewritten line, never a silent
+	 * behaviour change.
+	 */
+	private static function inheritedProbe(file: String, lazyIndex: () -> Null<SymbolIndex>): (String) -> Bool {
+		return member -> {
+			final index: Null<SymbolIndex> = lazyIndex();
+			return index == null || !index.fileImportsMemberName(file, member);
+		};
 	}
 
 	/** The constructor body's top-level statements; empty when the body is not a block. */
@@ -387,7 +559,7 @@ final class FieldInitAtDeclaration implements Check {
 	 */
 	private static function assignedMovableField(
 		stmt: QueryNode, container: QueryNode, statics: Array<Int>, source: String, shape: RefShape
-	): Null<{ name: String, span: Span }> {
+	): Null<{ name: String, span: Span, rhs: QueryNode }> {
 		final stmtKind: Null<String> = shape.exprStatementKind;
 		final assignKind: Null<String> = shape.assignKind;
 		if (stmtKind == null || assignKind == null || stmt.kind != stmtKind || stmt.children.length < 1) return null;
@@ -396,7 +568,11 @@ final class FieldInitAtDeclaration implements Check {
 		final target: QueryNode = assign.children[0];
 		for (member in container.children) {
 			final mv: Null<{ name: String, span: Span }> = movableField(member, statics, source, shape);
-			if (mv != null && denotesMember(target, mv.span.from, mv.name, container, shape)) return mv;
+			if (mv != null && denotesMember(target, mv.span.from, mv.name, container, shape)) return {
+				name: mv.name,
+				span: mv.span,
+				rhs: assign.children[1]
+			};
 		}
 		return null;
 	}
@@ -410,7 +586,7 @@ final class FieldInitAtDeclaration implements Check {
 	 * instead.
 	 */
 	private static function prefixMovesTogether(
-		container: QueryNode, boundary: Int, moving: Array<Int>, source: String, shape: RefShape
+		container: QueryNode, boundary: Int, moving: Array<Int>, source: String, shape: RefShape, mayBeInherited: (String) -> Bool
 	): Bool {
 		final ctor: Null<QueryNode> = RefactorSupport.soleConstructor(container, shape);
 		if (ctor == null) return false;
@@ -418,10 +594,42 @@ final class FieldInitAtDeclaration implements Check {
 		for (stmt in ctorStatements(ctor, shape)) {
 			final span: Null<Span> = stmt.span;
 			if (span == null || span.from >= boundary) continue;
-			final mv: Null<{ name: String, span: Span }> = assignedMovableField(stmt, container, statics, source, shape);
-			if (mv != null && !moving.contains(mv.span.from)) return false;
+			// The moment a statement `run` could NOT have accepted appears, run's chain is broken
+			// there — so whatever sits after it was accepted on the SOLE-write path, which never
+			// needed a group proof and hops arbitrary earlier straight-line statements by design.
+			// Nothing further to demand.
+			final mv: Null<{ name: String, span: Span, rhs: QueryNode }> = acceptableCoMover(
+				stmt, container, ctor, source, statics, shape, mayBeInherited
+			);
+			if (mv == null) return true;
+			if (!moving.contains(mv.span.from)) return false;
 		}
 		return true;
+	}
+
+	/**
+	 * `stmt` as an init `run` would have accepted as part of a CHAIN, judged by the acceptance gates
+	 * that are decidable from `source` alone — candidate shape, a context-free right-hand side, a
+	 * reachable prefix, no read of the field before the init, and no hoist across a base-constructor
+	 * call. Null when any of them fails.
+	 *
+	 * The one gate NOT replicated is the cross-file write count, which needs a `FieldWriteIndex`
+	 * `fix` does not receive; a field whose count differs is therefore read here as chained when
+	 * `run` may have refused it outright. That direction only ever keeps the guard armed one
+	 * statement longer, so it can over-decline a fix but never mis-apply one — and it is the reason
+	 * this cannot simply call `candidateFor`.
+	 */
+	private static function acceptableCoMover(
+		stmt: QueryNode, container: QueryNode, ctor: QueryNode, source: String, statics: Array<Int>, shape: RefShape,
+		mayBeInherited: (String) -> Bool
+	): Null<{ name: String, span: Span, rhs: QueryNode }> {
+		final mv: Null<{ name: String, span: Span, rhs: QueryNode }> = assignedMovableField(stmt, container, statics, source, shape);
+		final span: Null<Span> = stmt.span;
+		if (mv == null || span == null) return null;
+		if (!contextFreeRhs(mv.rhs, container, statics, shape, true, mayBeInherited)) return null;
+		if (!RefactorSupport.ctorPrefixUnconditional(ctor, span.from, shape)) return null;
+		if (hoistCrossesSuper(ctor, container, span.from, shape)) return null;
+		return readBeforeInit(ctor, mv.span.from, mv.name, span.from, container, shape) ? null : mv;
 	}
 
 	/**
@@ -457,7 +665,7 @@ final class FieldInitAtDeclaration implements Check {
 	 * before the constructor body runs.
 	 */
 	private static function contextFreeRhs(
-		node: QueryNode, container: QueryNode, statics: Array<Int>, shape: RefShape, allowStatics: Bool
+		node: QueryNode, container: QueryNode, statics: Array<Int>, shape: RefShape, allowStatics: Bool, mayBeInherited: (String) -> Bool
 	): Bool {
 		final identKind: String = shape.identKind;
 		final selfText: Null<String> = shape.selfReferenceText;
@@ -479,18 +687,21 @@ final class FieldInitAtDeclaration implements Check {
 			if (bf != null) return allowStatics && statics.contains(bf);
 			if (!hasSupertype(container, shape)) return true;
 			final c0: Int = StringTools.fastCodeAt(name, 0);
-			return c0 >= 'A'.code && c0 <= 'Z'.code;
+			// An uppercase root is a TYPE reference (`Colors.WHITE`) — never an inherited member, and
+			// decided without touching the index. A lowercase one asks the index whether any ancestor
+			// could declare it.
+			return c0 >= 'A'.code && c0 <= 'Z'.code || !mayBeInherited(name);
 		}
-		for (child in node.children) if (!contextFreeRhs(child, container, statics, shape, allowStatics)) return false;
+		for (child in node.children) if (!contextFreeRhs(child, container, statics, shape, allowStatics, mayBeInherited)) return false;
 		return true;
 	}
 
 	/**
 	 * Whether the field is referenced anywhere in the constructor BEFORE its
-	 * initializing statement. Any such reference is a READ: a second TOP-LEVEL
-	 * constructor write to the same field would have made `soleConstructorFieldInit`
-	 * return null (it demands a single match), and a NESTED write sits under a branch
-	 * or loop, a statement shape the chain refuses outright. Moving the init ahead of
+	 * initializing statement. Any such reference is a READ: whichever shape resolved the
+	 * candidate demanded a SINGLE match — `soleConstructorFieldInit` over the top-level
+	 * statements, `RefactorSupport.soleConstructorFieldWrite` over the whole constructor
+	 * subtree — so no second write to the field can precede this one. Moving the init ahead of
 	 * the constructor body would change the observed value, so the candidate is
 	 * rejected. Detects a direct reference — a bare identifier resolving to the field,
 	 * or `this.field`; a read reached only through a preceding method call (including a
@@ -506,7 +717,6 @@ final class FieldInitAtDeclaration implements Check {
 		return false;
 	}
 
-
 	/**
 	 * Whether the container carries any supertype clause (`extends` /
 	 * `implements`) - the condition under which an unresolved bare ident may
@@ -519,35 +729,57 @@ final class FieldInitAtDeclaration implements Check {
 		return false;
 	}
 
+
 	/**
-	 * Whether `ctor` holds an explicit base-constructor call — a `callKind` node anywhere in
-	 * its subtree whose callee is the bare `superReferenceText` identifier. Deliberately NOT
-	 * any `super` reference at all: `super.foo()` is a base-MEMBER access, which the prologue
-	 * does not race. With `superReferenceText` OR `callKind` unset the question cannot be asked,
-	 * so the answer falls back to `hasSupertype` — coarser, refusing every subclass rather than
-	 * only the ones that call up. Closed only while `supertypeClauseKinds` is itself declared:
-	 * with that seam unset too, `hasSupertype` is false for every container and this gate is
-	 * ABSENT rather than coarser. All three seams are optional independently, so a grammar
-	 * declaring none of them disarms the gate; `HaxeQueryPlugin` declares all three.
+	 * Whether hoisting the write at `writeFrom` into the declaration prologue would cross an explicit
+	 * base-constructor call. Haxe emits declaration initializers ahead of the constructor BODY, and an
+	 * explicit `super(...)` lives inside that body, so an init moved across one runs before the base
+	 * constructor has set up whatever it reads.
+	 *
+	 * The coarse question — does this constructor call up at all — is what the class doc argues for,
+	 * because "the init precedes THE super call" usually has no answer: the call can sit in a branch and
+	 * appear more than once. ONE shape does have an answer, and it is the layout-tree idiom this rule was
+	 * extended for: a write inside the sole call's own ARGUMENT region. Arguments are evaluated in order
+	 * to pass them, so such a write already runs before the base constructor body, and moving it to the
+	 * prologue keeps it on that same side — it then crosses only the constructor's own preceding
+	 * statements, which `contextFreeRhs` and the chain gates already cover.
+	 *
+	 * Everything else refuses: more than one super call, a write outside the argument region, and any
+	 * grammar whose seams leave the call unrecognisable. A `super.foo()` is deliberately not a call up —
+	 * it is a base-MEMBER access, which the prologue does not race — and `collectSuperCalls` excludes it
+	 * by requiring the callee to be the bare `super` identifier rather than a field access on it.
 	 */
-	private static function ctorCallsSuper(ctor: QueryNode, container: QueryNode, shape: RefShape): Bool {
+	private static function hoistCrossesSuper(ctor: QueryNode, container: QueryNode, writeFrom: Int, shape: RefShape): Bool {
 		final superText: Null<String> = shape.superReferenceText;
 		final callKind: Null<String> = shape.callKind;
-		return superText == null || callKind == null
-			? hasSupertype(container, shape)
-			: holdsSuperCall(ctor, superText, callKind, shape.identKind);
+		// With either seam unset the base-constructor call cannot be recognised at all, so the answer
+		// falls back to `hasSupertype` — coarser, refusing every subclass rather than only the ones that
+		// call up. Closed only while `supertypeClauseKinds` is itself declared: with that seam unset too,
+		// `hasSupertype` is false for every container and this gate is ABSENT rather than coarser. The
+		// three seams are optional independently, so a grammar declaring none disarms it entirely;
+		// `HaxeQueryPlugin` declares all three.
+		if (superText == null || callKind == null) return hasSupertype(container, shape);
+		final calls: Array<QueryNode> = [];
+		collectSuperCalls(ctor, superText, callKind, shape.identKind, calls);
+		// No call up at all: the prologue crosses nothing. Several: they can sit on different branches,
+		// so "the write precedes THE super call" has no answer and the gate refuses.
+		if (calls.length == 0) return false;
+		if (calls.length != 1) return true;
+		final callSpan: Null<Span> = calls[0].span;
+		final calleeSpan: Null<Span> = calls[0].children[0].span;
+		return callSpan == null || calleeSpan == null || writeFrom < calleeSpan.to || writeFrom >= callSpan.to;
 	}
 
-	/** Whether `node`'s subtree holds a call whose callee is the bare identifier `superText`. */
-	private static function holdsSuperCall(node: QueryNode, superText: String, callKind: String, identKind: String): Bool {
+	/** Collect every call in `node`'s subtree whose callee is the bare identifier `superText`. */
+	private static function collectSuperCalls(
+		node: QueryNode, superText: String, callKind: String, identKind: String, out: Array<QueryNode>
+	): Void {
 		if (node.kind == callKind && node.children.length > 0) {
 			final callee: QueryNode = node.children[0];
-			if (callee.kind == identKind && callee.name == superText) return true;
+			if (callee.kind == identKind && callee.name == superText) out.push(node);
 		}
-		for (child in node.children) if (holdsSuperCall(child, superText, callKind, identKind)) return true;
-		return false;
+		for (child in node.children) collectSuperCalls(child, superText, callKind, identKind, out);
 	}
-
 
 	/** Guarded stderr write — mirrors `LintConfig.stderr` (`#if sys` alone is false on hxnodejs). */
 	private static function stderr(s: String): Void {
@@ -555,7 +787,6 @@ final class FieldInitAtDeclaration implements Check {
 		Sys.stderr().writeString(s);
 		#end
 	}
-
 
 	/**
 	 * Whether a NON-candidate member makes the constructor prologue order-unsafe for a
@@ -575,15 +806,14 @@ final class FieldInitAtDeclaration implements Check {
 	 * is a member with no initializer.
 	 */
 	private static function coMoverOrderUnsafe(
-		member: QueryNode, container: QueryNode, statics: Array<Int>, source: String, shape: RefShape
+		member: QueryNode, container: QueryNode, statics: Array<Int>, source: String, shape: RefShape, mayBeInherited: (String) -> Bool
 	): Bool {
 		if (RefactorSupport.isConditionalKind(member.kind)) return true;
 		final fields: Array<String> = shape.fieldDeclKinds ?? [];
 		final span: Null<Span> = member.span;
 		return span != null && fields.contains(member.kind) && !statics.contains(span.from) && member.children.length >= 1
-			&& !contextFreeRhs(member.children[0], container, statics, shape, false);
+			&& !contextFreeRhs(member.children[0], container, statics, shape, false, mayBeInherited);
 	}
-
 
 	/**
 	 * `member` as a chain CANDIDATE — a movable field whose sole top-level constructor
@@ -596,37 +826,70 @@ final class FieldInitAtDeclaration implements Check {
 	 */
 	private static function candidateFor(
 		member: QueryNode, container: QueryNode, ctor: QueryNode, owner: String, source: String, statics: Array<Int>, shape: RefShape,
-		writeIndex: FieldWriteIndex
+		writeIndex: FieldWriteIndex, mayBeInherited: (String) -> Bool
 	): Null<Candidate> {
 		final mv: Null<{ name: String, span: Span }> = movableField(member, statics, source, shape);
 		if (mv == null) return null;
-		final init: Null<{ stmt: QueryNode, rhs: QueryNode, target: Span }> = RefactorSupport.soleConstructorFieldInit(
-			container, ctor, member, shape
-		);
-		if (init == null) return null;
-		final stmtSpan: Null<Span> = init.stmt.span;
-		if (stmtSpan == null || writeIndex.hasUnresolvedWrite(mv.name)) return null;
+		final write: Null<{ rhs: QueryNode, at: Span, embedded: Bool }> = ctorWriteFor(container, ctor, member, shape);
+		if (write == null || writeIndex.hasUnresolvedWrite(mv.name)) return null;
+		final at: Int = write.at.from;
+		// An embedded write may sit in a LAZILY evaluated operand (a ternary arm, an `&&` right side, a
+		// loop body) — shapes `soleConstructorFieldWrite` admits because Haxe accepts them for a `final`
+		// field. Hoisting one into the always-run prologue would make a conditional initialisation
+		// unconditional, so the move demands the separate whitelist proof.
+		if (write.embedded && !RefactorSupport.ctorWriteUnconditional(ctor, at, shape)) return null;
 		// Gating the CANDIDATE rather than one of the two acceptance paths is what makes both
 		// inherit it: the chain path already demanded an unbroken run of accepted inits, so
 		// this is a no-op there, and the sole-write path — which looks at no prefix at all —
 		// is the one that needed it.
-		if (!RefactorSupport.ctorPrefixUnconditional(ctor, stmtSpan.from, shape)) return null;
+		if (!RefactorSupport.ctorPrefixUnconditional(ctor, at, shape)) return null;
 		// Haxe emits declaration initializers ahead of the constructor BODY, an explicit `super()`
-		// included, so no init may be hoisted across one. Gated on the CANDIDATE for the same reason
-		// as the line above — see the class doc. Unlike that line the answer is CONTAINER-invariant,
-		// so this re-walks the whole constructor subtree once per member; it sits here anyway so
-		// both acceptance paths inherit it from one place.
-		if (ctorCallsSuper(ctor, container, shape)) return null;
-		final unsafeRead: Bool = readBeforeInit(ctor, mv.span.from, mv.name, stmtSpan.from, container, shape);
-		return !contextFreeRhs(init.rhs, container, statics, shape, true) || unsafeRead ? null : {
+		// included, so no init may be hoisted across one — except one written INSIDE that call's own
+		// arguments, which already runs before it. Gated on the CANDIDATE for the same reason as the
+		// line above, so both acceptance paths inherit it from one place.
+		if (hoistCrossesSuper(ctor, container, at, shape)) return null;
+		final unsafeRead: Bool = readBeforeInit(ctor, mv.span.from, mv.name, at, container, shape);
+		return !contextFreeRhs(write.rhs, container, statics, shape, true, mayBeInherited) || unsafeRead ? null : {
 			name: mv.name,
-			stmtFrom: stmtSpan.from,
+			stmtFrom: at,
 			span: mv.span,
-			orderSafe: contextFreeRhs(init.rhs, container, statics, shape, false),
-			sole: writeIndex.writeCount(owner, mv.name) == 1
+			orderSafe: contextFreeRhs(write.rhs, container, statics, shape, false, mayBeInherited),
+			sole: writeIndex.writeCount(owner, mv.name) == 1,
+			embedded: write.embedded
 		};
 	}
 
+	/**
+	 * The constructor write that initialises `member`, as its right-hand side, the span the move
+	 * anchors on and whether it is EMBEDDED. Takes the top-level-statement shape first — whose anchor
+	 * is the whole statement, since the fix deletes it — and the embedded shape second, anchored on the
+	 * assignment expression the fix rewrites in place. Null when neither resolves.
+	 */
+	private static function ctorWriteFor(
+		container: QueryNode, ctor: QueryNode, member: QueryNode, shape: RefShape
+	): Null<{ rhs: QueryNode, at: Span, embedded: Bool }> {
+		final init: Null<{ stmt: QueryNode, rhs: QueryNode, target: Span }> = RefactorSupport.soleConstructorFieldInit(
+			container, ctor, member, shape
+		);
+		if (init != null) {
+			final stmtSpan: Null<Span> = init.stmt.span;
+			return stmtSpan == null ? null : {
+				rhs: init.rhs,
+				at: stmtSpan,
+				embedded: false
+			};
+		}
+		final write: Null<{ assign: QueryNode, rhs: QueryNode, target: Span }> = RefactorSupport.soleConstructorFieldWrite(
+			container, ctor, member, shape
+		);
+		if (write == null) return null;
+		final assignSpan: Null<Span> = write.assign.span;
+		return assignSpan == null ? null : {
+			rhs: write.rhs,
+			at: assignSpan,
+			embedded: true
+		};
+	}
 
 	/**
 	 * The member names `container` declares MORE THAN ONCE — only reachable across mutually
@@ -665,4 +928,15 @@ private typedef Candidate = {
 	var span: Span;
 	var orderSafe: Bool;
 	var sole: Bool;
+	var embedded: Bool;
+}
+
+/**
+ * `container`'s candidates split by acceptance path — `byStmt` keyed by the top-level statement each
+ * owns, `embedded` owning none — plus whether every prologue co-mover is `orderSafe`.
+ */
+private typedef Candidates = {
+	var byStmt: Map<Int, Candidate>;
+	var embedded: Array<Candidate>;
+	var coMoversOrderSafe: Bool;
 }

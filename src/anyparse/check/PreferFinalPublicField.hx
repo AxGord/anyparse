@@ -28,7 +28,7 @@ import anyparse.runtime.Span;
  *    initializer, that initializer is the one assignment and `writtenAnywhere` must
  *    find no other. WITHOUT one, the shared
  *    `RefactorSupport.ctorSoleAssignmentFinalizable` proves the sole write is exactly
- *    one unconditional top-level constructor statement (the arm `prefer-final-field`
+ *    one unconditional constructor assignment (the arm `prefer-final-field`
  *    always had); `writtenAnywhere` — which the constructor write itself trips — is
  *    replaced by `FieldWriteIndex.writtenOutsideDeclaration`: every resolved write
  *    must lie inside the declaring file's decl range, bailing too when that range
@@ -92,7 +92,7 @@ final class PreferFinalPublicField implements Check {
 
 	public function description(): String {
 		return
-			'a public var field never reassigned — assigned only at its declaration or by a sole constructor statement — that can be final';
+			'a public var field never reassigned — assigned only at its declaration or by a sole constructor assignment — that can be final';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -123,7 +123,7 @@ final class PreferFinalPublicField implements Check {
 	/**
 	 * Flag `field` when it is provably single-assignment through one of two arms — WITH a
 	 * declaration initializer (never written anywhere), or WITHOUT one when its sole
-	 * write is exactly one unconditional top-level constructor statement
+	 * write is exactly one unconditional constructor assignment
 	 * (`RefactorSupport.ctorSoleAssignmentFinalizable`) — its enclosing type has no
 	 * writing subtype, and no write — resolved, or unresolved-but-possibly-targeting
 	 * (`hasUnresolvedWriteTargeting`, which re-derives the candidate's declared type

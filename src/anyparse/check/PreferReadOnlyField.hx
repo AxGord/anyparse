@@ -48,7 +48,7 @@ using StringTools;
  * A candidate must be written somewhere (`FieldWriteIndex.writtenAnywhere`) — a field
  * with NO write is `prefer-final-public-field`'s territory (it can become `final`),
  * not this one. A WRITTEN no-init field whose sole write is one unconditional
- * top-level constructor statement is ALSO that check's territory (its constructor
+ * constructor assignment is ALSO that check's territory (its constructor
  * arm makes it `final` outright), so it is ceded through the same shared
  * `RefactorSupport.ctorSoleAssignmentFinalizable` predicate — both checks must agree
  * on it, or such a field would get two conflicting fixes (or none). An INITIALIZED

@@ -422,6 +422,51 @@ class PreferFinalFieldCheckTest extends Test {
 		Assert.equals(0, violations(src).length);
 	}
 
+	/**
+	 * A field whose sole write is an EMBEDDED constructor assignment — an assignment expression
+	 * consumed as a call argument, the layout-tree idiom `super([_a = new Row(…)])` — is `final`-izable.
+	 * Haxe accepts a `final` field assigned that way (4.3.7, `--interp`); only the statement-shaped
+	 * write was recognised before, so every such field stayed a `var`.
+	 */
+	public function testEmbeddedCtorWriteFinalizable(): Void {
+		Assert.equals(1, violations('class C { private var _a:Foo; public function new() { sink([_a = new Foo()]); } }').length);
+	}
+
+	/** The same write inside the sole `super(...)` call's arguments qualifies too. */
+	public function testEmbeddedInSuperArgsFinalizable(): Void {
+		Assert.equals(1, violations('class C extends B { private var _a:Foo; public function new() { super([_a = new Foo()]); } }').length);
+	}
+
+	/**
+	 * A write inside a CLOSURE is refused — the one nesting Haxe rejects outright ("This expression
+	 * cannot be accessed for writing" plus "Some final fields are uninitialized in this class"), so
+	 * `final` there would not compile.
+	 */
+	public function testClosureCtorWriteNotFinalizable(): Void {
+		Assert.equals(0, violations('class C { private var _a:Foo; public function new() { run(() -> _a = new Foo()); } }').length);
+	}
+
+	/**
+	 * A branch-nested write stays a `var`, and not because Haxe would reject the keyword — it accepts a
+	 * `final` field assigned inside an `if`, running no definite-assignment analysis (4.3.7,
+	 * `--interp`). The shared predicate keeps demanding an UNCONDITIONAL position, which the
+	 * statement-shaped write gave it implicitly, so admitting the embedded shape widens WHERE the write
+	 * may sit, never WHETHER it may be conditional. `testNoInitConditionalNotFlagged` pins the same
+	 * contract from the other side.
+	 */
+	public function testBranchNestedCtorWriteFinalizable(): Void {
+		Assert.equals(0, violations('class C { private var _a:Foo; public function new(c:Bool) { if (c) _a = new Foo(); } }').length);
+	}
+
+	/** The embedded arm rewrites the declaration keyword and leaves the constructor write in place. */
+	public function testFixFinalizesEmbeddedCtorWrite(): Void {
+		final fixed: String = fixedSource(
+			'class C {\n\tprivate var _a:Foo;\n\tpublic function new() {\n\t\tsink([_a = new Foo()]);\n\t}\n}'
+		);
+		Assert.isTrue(fixed.indexOf('private final _a:Foo;') >= 0);
+		Assert.isTrue(fixed.indexOf('sink([_a = new Foo()]);') >= 0);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferFinalField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

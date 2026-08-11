@@ -618,6 +618,90 @@ class FieldInitAtDeclarationCheckTest extends Test {
 		Assert.equals(0, violations(src).length);
 	}
 
+	/** An EMBEDDED write — an assignment expression consumed as a call argument — is flagged. */
+	public function testEmbeddedCallArgWriteMoved(): Void {
+		Assert.equals(1, violations('class C { private var _a:Foo; public function new() { sink([_a = new Foo()]); } }').length);
+	}
+
+	/**
+	 * A write inside the sole `super(...)` call's own ARGUMENTS is flagged even though the constructor
+	 * calls up: arguments are evaluated to pass them, so the write already runs before the base
+	 * constructor body and the move keeps it on the same side of that boundary.
+	 */
+	public function testEmbeddedInSuperArgsMoved(): Void {
+		Assert.equals(1, violations('class C extends B { private var _a:Foo; public function new() { super([_a = new Foo()]); } }').length);
+	}
+
+	/**
+	 * The same write in a statement AFTER `super(...)` is refused — hoisting it into the prologue would
+	 * move it ahead of the base constructor, which the arguments case does not.
+	 */
+	public function testEmbeddedAfterSuperNotMoved(): Void {
+		Assert.equals(
+			0, violations('class C extends B { private var _a:Foo; public function new() { super(); sink([_a = new Foo()]); } }').length
+		);
+	}
+
+	/**
+	 * An embedded write in a LAZILY evaluated operand runs conditionally where the prologue runs always
+	 * — refused, even though `soleConstructorFieldWrite` admits the shape (Haxe accepts it for a
+	 * `final` field).
+	 */
+	public function testEmbeddedInTernaryArmNotMoved(): Void {
+		Assert.equals(
+			0, violations('class C { private var _a:Foo; public function new(c:Bool) { sink([c ? _a = new Foo() : null]); } }').length
+		);
+	}
+
+	/** An embedded write behind an `&&` is lazily evaluated too — refused. */
+	public function testEmbeddedBehindAndNotMoved(): Void {
+		Assert.equals(
+			0, violations('class C { private var _a:Foo; public function new(c:Bool) { sink(c && (_a = new Foo()) != null); } }').length
+		);
+	}
+
+	/** A write inside a CLOSURE is the one nesting Haxe itself rejects for a `final` field — refused. */
+	public function testEmbeddedInClosureNotMoved(): Void {
+		Assert.equals(0, violations('class C { private var _a:Foo; public function new() { run(() -> _a = new Foo()); } }').length);
+	}
+
+	/**
+	 * The embedded fix keeps the enclosing statement and collapses the assignment to the field NAME —
+	 * the value is consumed in place, so deleting its line would delete live code. Asserted together
+	 * with the declaration it moved to, and against the input's own `_a = new Foo()`, which only the
+	 * transformation can remove.
+	 */
+	public function testFixRewritesEmbeddedWriteToFieldName(): Void {
+		final fixed: String = fixedSource(
+			'class C extends B {\n\tprivate var _a:Foo;\n\tpublic function new() {\n\t\tsuper([_a = new Foo()]);\n\t}\n}'
+		);
+		Assert.isTrue(fixed.indexOf('private var _a:Foo = new Foo();') >= 0);
+		Assert.isTrue(fixed.indexOf('super([_a]);') >= 0);
+		Assert.equals(-1, fixed.indexOf('_a = new Foo()'));
+	}
+
+	/**
+	 * Under `extends`, a lowercase right-hand-side name the single-file resolver cannot bind is
+	 * admitted when the file EXPLICITLY imports it as a static — positive proof it binds globally.
+	 */
+	public function testImportedStaticRhsUnderExtendsMoved(): Void {
+		Assert.equals(
+			1,
+			violations("import p.L.t;\nclass C extends B { private var _a:Foo; public function new() { super([_a = new Foo(t('x'))]); } }")
+				.length
+		);
+	}
+
+	/**
+	 * Without that import the SAME source is refused: the name could be an inherited member, or one a
+	 * build macro injects, and neither is visible to any source scan.
+	 */
+	public function testUnimportedLowercaseRhsUnderExtendsNotMoved(): Void {
+		Assert.equals(
+			0, violations("class C extends B { private var _a:Foo; public function new() { super([_a = new Foo(t('x'))]); } }").length
+		);
+	}
+
 	/** Assert `src` yields exactly one violation and that its declaration span names `field`. */
 	private function assertSoleViolationOn(src: String, field: String): Void {
 		final vs: Array<Violation> = violations(src);

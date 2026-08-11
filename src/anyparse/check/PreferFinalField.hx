@@ -14,8 +14,8 @@ import anyparse.runtime.Span;
  * `var` to `final`. `Severity.Info` (a modernization cleanup toward immutability), with
  * an autofix. Structurally a sibling of `unused-private`: same confinement gate, same
  * conservative in-file scan. Two cases qualify: a field whose declaration initializer is
- * its only assignment, and a no-initializer field whose sole write is exactly one
- * unconditional top-level constructor statement.
+ * its only assignment, and a no-initializer field whose sole write is exactly one unconditional
+ * constructor assignment.
  *
  * ## Soundness — why a missed write is impossible
  *
@@ -23,7 +23,7 @@ import anyparse.runtime.Span;
  * direction, so the candidate must be PROVABLY single-assignment:
  *
  * 1. The field has a declaration initializer (one assignment), OR is a no-initializer
- *    field assigned by exactly one unconditional top-level constructor statement (the
+ *    field assigned by exactly one unconditional constructor assignment (the
  *    no-initializer case below).
  * 2. It is private and every write to it is confined to this file (`writesConfined`) —
  *    no skip-parsed file, no `@:access` grant, no `@:allow`, and no subtype writing the
@@ -55,9 +55,13 @@ import anyparse.runtime.Span;
  *
  * ## No-initializer case; properties skipped
  *
- * A no-initializer field is ALSO flagged when its sole write is exactly one
- * unconditional top-level constructor statement (`x = expr` / `this.x = expr`, not
- * nested in a branch / loop / closure) and no other write exists — Haxe allows a
+ * A no-initializer field is ALSO flagged when its sole write is exactly one unconditional
+ * constructor assignment (`x = expr` / `this.x = expr`, not nested in a branch / loop /
+ * closure) and no other write exists. The write need not be a top-level STATEMENT: an
+ * assignment EXPRESSION consumed in place — `super([_a = new Row(…)])`, the layout-tree
+ * idiom — qualifies too, since the keyword swap changes no evaluation. `field-init-at-
+ * declaration` cannot move such a write to the declaration on its own, so this is often
+ * the only rule that reaches those fields — Haxe allows a
  * `final` assigned once in the constructor. This covers the unmovable
  * constructor-argument-dependent fields (`_b = param`) that
  * `field-init-at-declaration` cannot move to the declaration. A property
@@ -89,7 +93,7 @@ final class PreferFinalField implements Check {
 
 	public function description(): String {
 		return
-			'a private var field never reassigned — assigned only at its declaration or by a sole constructor statement — that can be final';
+			'a private var field never reassigned — assigned only at its declaration or by a sole constructor assignment — that can be final';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -145,7 +149,7 @@ final class PreferFinalField implements Check {
 	 * Flag `field` for `var → final` in either case: a field WITH an initializer that is
 	 * not a property, confined, not written elsewhere, and not an abstract's mutable
 	 * underlying (`abstractMethodMayMutate`); OR a no-initializer field whose sole write
-	 * is exactly one unconditional top-level constructor statement — the shared
+	 * is exactly one unconditional constructor assignment — the shared
 	 * `RefactorSupport.ctorSoleAssignmentFinalizable` predicate, wrapped in this check's
 	 * `writesConfined` gate.
 	 */

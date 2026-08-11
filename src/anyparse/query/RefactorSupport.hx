@@ -1896,6 +1896,79 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * The single assignment to `field` ANYWHERE in `ctor`'s body — `field = expr` /
+	 * `this.field = expr` at any expression depth, including one EMBEDDED in a call argument
+	 * (`super([_a = new Row(…)])`, the layout-tree idiom) — paired with its right-hand side and
+	 * the target's span, or null when there is not exactly one.
+	 *
+	 * A strict SUPERSET of `soleConstructorFieldInit`, which admits only a direct child of the
+	 * body's statement list. A caller whose edit DELETES the statement must keep using that one:
+	 * an embedded write's value is consumed in place, so deleting its line deletes live code.
+	 * `container` scopes binding resolution, so a bare `field =` resolving to a shadowing
+	 * constructor local / parameter does NOT match.
+	 *
+	 * A write inside a CLOSURE refuses, and that is the one nesting Haxe itself rejects:
+	 * `new() { run(() -> _a = 1); }` over a `final _a` fails with `This expression cannot be
+	 * accessed for writing` plus `Some final fields are uninitialized in this class` (4.3.7,
+	 * `--interp`). Every OTHER nesting — an `if` / `switch` branch, a loop body, a ternary arm, an
+	 * `&&` right operand — the compiler ACCEPTS for a `final` field, measured on the same build, so
+	 * this predicate admits them: it answers "is this the field's sole assignment", never "does it
+	 * run exactly once". A consumer that MOVES the right-hand side therefore owes the separate
+	 * `ctorWriteUnconditional` proof; a consumer that only rewrites the declaration's `var` to
+	 * `final` does not, since the keyword changes no evaluation.
+	 */
+	public static function soleConstructorFieldWrite(
+		container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape
+	): Null<{ assign: QueryNode, rhs: QueryNode, target: Span }> {
+		final bodyKind: Null<String> = shape.blockBodyKind;
+		final assignKind: Null<String> = shape.assignKind;
+		final fieldSpan: Null<Span> = field.span;
+		final fieldName: Null<String> = field.name;
+		if (bodyKind == null || assignKind == null || fieldSpan == null || fieldName == null) return null;
+		final body: Null<QueryNode> = ctor.children.find(c -> c.kind == bodyKind);
+		if (body == null) return null;
+		final found: Array<{ assign: QueryNode, inClosure: Bool }> = [];
+		collectCtorFieldWrites(body, fieldSpan.from, fieldName, container, shape, assignKind, closureHostKinds(shape), false, found);
+		if (found.length != 1 || found[0].inClosure) return null;
+		final assign: QueryNode = found[0].assign;
+		final targetSpan: Null<Span> = assign.children[0].span;
+		return targetSpan == null ? null : {
+			assign: assign,
+			rhs: assign.children[1],
+			target: targetSpan
+		};
+	}
+
+	/**
+	 * Whether the assignment node starting at `writeFrom` sits in an UNCONDITIONALLY EVALUATED
+	 * position of `ctor`'s body — every step from one of the body's top-level statements down to it
+	 * evaluates its operand exactly once, whatever the data. The question to ask before hoisting
+	 * that write's right-hand side into the declaration prologue, which runs always: a write nested
+	 * in an `if`, a ternary arm, an `&&` operand or a loop body runs conditionally, and
+	 * `soleConstructorFieldWrite` deliberately admits all of those because Haxe accepts them for a
+	 * `final` field. The two predicates split on exactly that line.
+	 *
+	 * Decided as a POSITIVE WHITELIST of transparent node kinds, never as a negative "and not an
+	 * `if`, and not a ternary, and not …" list — a negative list leaks by CATEGORY, admitting
+	 * whatever lazily-evaluated shape nobody enumerated. Admitted, each read off its own `RefShape`
+	 * seam: an expression statement, a local declaration, a parenthesis, a call (callee and every
+	 * argument), a `new`, an array literal, an object literal and its fields, and an outer
+	 * assignment's right-hand side. Anything else refuses — including any kind whose seam the
+	 * grammar leaves unset, so a plugin declaring none of them admits nothing rather than
+	 * everything.
+	 */
+	public static function ctorWriteUnconditional(ctor: QueryNode, writeFrom: Int, shape: RefShape): Bool {
+		final bodyKind: Null<String> = shape.blockBodyKind;
+		if (bodyKind == null) return false;
+		final body: Null<QueryNode> = ctor.children.find(c -> c.kind == bodyKind);
+		if (body == null) return false;
+		final transparent: Array<String> = unconditionalOperandKinds(shape);
+		for (stmt in body.children) if (transparent.contains(stmt.kind) && reachesThroughOperands(stmt, writeFrom, transparent))
+			return true;
+		return false;
+	}
+
+	/**
 	 * Whether the constructor statement starting at `boundary` is UNCONDITIONALLY REACHED:
 	 * every top-level statement lexically before it COMPLETES NORMALLY, so control arrives at
 	 * `boundary` on every path. The question to ask before hoisting that statement's code into
@@ -2764,14 +2837,19 @@ final class RefactorSupport {
 	 * assignment: it has no declaration initializer (a `final` with one cannot be
 	 * reassigned in the constructor) and no `(` in its declaration head (which covers
 	 * properties and parenthesised function types), its sole write is exactly one
-	 * unconditional top-level constructor statement (`x = expr` / `this.x = expr` via
-	 * `constructorFieldInitAt` — a shadowing local or parameter that owns the
-	 * assignment leaves it a `var`), it is not static (`static final` requires a
+	 * constructor assignment `x = expr` / `this.x = expr` OUTSIDE a closure
+	 * (`soleConstructorFieldWrite`), it is not static (`static final` requires a
 	 * declaration initializer), and no other write to its name appears anywhere in
 	 * `source` — a conservative text scan (`MemberWriteScan.writtenInRange`) that also
 	 * sees `#if` bodies the structural walkers cannot. A `@:build` macro injecting a
 	 * writer is the residual blind spot, shared with every other arm of the three
 	 * consumers and surfacing as a loud compile error at the injected write.
+	 *
+	 * The write need NOT be a top-level STATEMENT — an assignment embedded in a call
+	 * argument (`super([_a = new Row(…)])`) qualifies, because `var` -> `final` changes
+	 * no evaluation and the only nesting Haxe rejects for a `final` field is a closure,
+	 * which `soleConstructorFieldWrite` refuses. A shadowing local or parameter that
+	 * owns the assignment leaves the field a `var`.
 	 *
 	 * The shared core of the constructor arms of `prefer-final-field` /
 	 * `prefer-final-public-field` AND of `prefer-read-only-field`'s cession of the same
@@ -2790,15 +2868,28 @@ final class RefactorSupport {
 		if (source.substring(span.from, span.to).indexOf('(') >= 0) return false;
 		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
 		if (tree == null) return false;
-		final loc: Null<{
-			container: QueryNode,
-			field: QueryNode,
-			stmt: QueryNode,
-			rhs: QueryNode,
-			target: Span
-		}> = constructorFieldInitAt(tree, span.from, plugin.refShape());
-		return loc != null && !staticMemberFroms(loc.container, plugin.refShape()).contains(span.from)
-			&& !MemberWriteScan.writtenInRange(source, name, loc.target, 0, source.length);
+		final shape: RefShape = plugin.refShape();
+		final loc: Null<{ container: QueryNode, field: QueryNode }> = classLikeFieldAt(tree, span.from, shape);
+		if (loc == null) return false;
+		final ctor: Null<QueryNode> = soleConstructor(loc.container, shape);
+		if (ctor == null) return false;
+		// `soleConstructorFieldWrite` rather than `soleConstructorFieldInit`: the write need not be a
+		// top-level STATEMENT, only the constructor's sole assignment to the field, so an assignment
+		// EXPRESSION consumed in place (`super([_a = new Row(…)])`) qualifies.
+		final write: Null<{ assign: QueryNode, rhs: QueryNode, target: Span }> = soleConstructorFieldWrite(
+			loc.container, ctor, loc.field, shape
+		);
+		if (write == null) return false;
+		final writeSpan: Null<Span> = write.assign.span;
+		// Haxe would ALSO accept `final` for a write nested in a branch, a loop or a lazy operand — it
+		// runs no definite-assignment analysis — but this predicate keeps demanding an unconditional
+		// position, which is what a top-level statement gave it before. Widening that is a separate
+		// judgement about whether a conditionally-assigned `final` is worth reporting, not a
+		// consequence of admitting the embedded shape, and `testNoInitConditionalNotFlagged` pins the
+		// answer the three consumers ship today.
+		if (writeSpan == null || !ctorWriteUnconditional(ctor, writeSpan.from, shape)) return false;
+		return !staticMemberFroms(loc.container, shape).contains(span.from)
+			&& !MemberWriteScan.writtenInRange(source, name, write.target, 0, source.length);
 	}
 
 	/**
@@ -3433,6 +3524,63 @@ final class RefactorSupport {
 		final name: Null<String> = target.name;
 		final span: Null<Span> = target.span;
 		return name != null && span != null && TypeResolver.resolveBindingFrom(name, span, container, shape) == fieldFrom;
+	}
+
+	/**
+	 * Collect every assignment to the field declared at `fieldFrom` under `fieldName` in `node`'s
+	 * subtree, each tagged with whether a closure host encloses it. The walk descends INTO closures
+	 * on purpose: a closure write must be COUNTED (else a second writer hides and the caller
+	 * concludes "sole assignment") even though the caller then refuses it.
+	 */
+	private static function collectCtorFieldWrites(
+		node: QueryNode, fieldFrom: Int, fieldName: String, container: QueryNode, shape: RefShape, assignKind: String,
+		closures: Array<String>, inClosure: Bool, out: Array<{ assign: QueryNode, inClosure: Bool }>
+	): Void {
+		final enclosed: Bool = inClosure || closures.contains(node.kind);
+		if (
+			node.kind == assignKind && node.children.length >= 2
+			&& ctorTargetIsField(node.children[0], fieldFrom, fieldName, container, shape)
+		) out.push({
+			assign: node,
+			inClosure: enclosed
+		});
+		for (child in node.children)
+			collectCtorFieldWrites(child, fieldFrom, fieldName, container, shape, assignKind, closures, enclosed, out);
+	}
+
+	/** The kinds that host a deferred body — a lambda, a local `function`, a local `inline function`. */
+	private static function closureHostKinds(shape: RefShape): Array<String> {
+		return (shape.lambdaKinds ?? []).concat(shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
+	}
+
+	/**
+	 * The node kinds through which evaluation of a child operand is UNCONDITIONAL — the whitelist
+	 * `ctorWriteUnconditional` walks. Every entry comes from its own `RefShape` seam, so an unset
+	 * seam simply contributes nothing.
+	 */
+	private static function unconditionalOperandKinds(shape: RefShape): Array<String> {
+		final kinds: Array<String> = [];
+		inline function admit(kind: Null<String>): Void if (kind != null && !kinds.contains(kind)) kinds.push(kind);
+		admit(shape.exprStatementKind);
+		admit(shape.parenKind);
+		admit(shape.callKind);
+		admit(shape.newExprKind);
+		admit(shape.arrayLiteralKind);
+		admit(shape.objectLiteralKind);
+		admit(shape.objectFieldKind);
+		admit(shape.assignKind);
+		for (kind in shape.localDeclKinds ?? []) admit(kind);
+		return kinds;
+	}
+
+	/** Whether `writeFrom` is reachable from `node` through `transparent` kinds only. */
+	private static function reachesThroughOperands(node: QueryNode, writeFrom: Int, transparent: Array<String>): Bool {
+		final span: Null<Span> = node.span;
+		if (span == null) return false;
+		if (span.from == writeFrom) return true;
+		if (!transparent.contains(node.kind)) return false;
+		for (child in node.children) if (reachesThroughOperands(child, writeFrom, transparent)) return true;
+		return false;
 	}
 
 	/** Recursively find the class-like container whose direct field member starts at `fieldFrom`. */

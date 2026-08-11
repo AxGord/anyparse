@@ -868,6 +868,34 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * Whether `file` EXPLICITLY imports the name `name` as a static member — `import pkg.Type.name;`
+	 * or an aliased `import pkg.Type.other as name;`. POSITIVE evidence that a bare `name` written in
+	 * that file binds globally, and deliberately not the same kind of claim as
+	 * `typeProvablyLacksMember`: that one proves no ancestor DECLARES the name, and declaration
+	 * absence is precisely what a `@:build` / `@:autoBuild` macro undoes by adding members that appear
+	 * in no source text. An import is written in the file and no macro can conjure one, so this answer
+	 * survives a macro-extended closure.
+	 *
+	 * A wildcard `import pkg.Type.*;` answers FALSE — it introduces names this index cannot enumerate,
+	 * so no individual one is proven. A `using` answers false too: a static extension is reachable
+	 * only as `receiver.name()`, never as a bare `name`.
+	 */
+	public function fileImportsMemberName(file: String, name: String): Bool {
+		final host: Null<FileInfo> = _files.find(f -> f.file == file);
+		if (host == null) return false;
+		for (imp in host.imports) switch imp.kind {
+			case ImportKind.Import:
+				final dot: Int = imp.raw.lastIndexOf('.');
+				if ((dot < 0 ? imp.raw : imp.raw.substr(dot + 1)) == name) return true;
+			case ImportKind.Alias:
+				if (imp.alias == name) return true;
+			case ImportKind.Wild | ImportKind.Using:
+		}
+		return false;
+	}
+
+
+	/**
 	 * Whether ANY indexed type named `typeName` DIRECTLY declares a member named
 	 * `member` — methods included, supertypes NOT consulted. The SHADOW companion of
 	 * `typeProvablyLacksMember` (which proves absence across the whole closure) and of
@@ -1410,6 +1438,7 @@ final class SymbolIndex {
 		}
 		return false;
 	}
+
 
 	/**
 	 * The SINGLE project-wide declaration of `raw`'s simple name, or null when that name is absent
