@@ -2,6 +2,8 @@ package anyparse.check;
 
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
+import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -100,7 +102,8 @@ final class CasePatternScan {
 			staticModifierKind: shape.staticModifierKind,
 			conditionalKind: shape.conditionalMemberKind,
 			opaqueKinds: shape.opaqueKinds ?? [],
-			constantLeafKinds: leaves
+			constantLeafKinds: leaves,
+			scope: scopeSeamsOf(shape)
 		};
 	}
 
@@ -230,6 +233,110 @@ final class CasePatternScan {
 		if (node.children.length == 0) return false;
 		final callee: QueryNode = node.children[0];
 		return callee.kind == seams.identKind || callee.kind == seams.fieldAccessKind;
+	}
+
+	/**
+	 * The kind of VISIBLE DECLARATION a bare pattern binder named `name`, written in `arm`, shadows
+	 * — `'field'`, `'inherited field'`, `'parameter'` or `'local'` — or null when it shadows nothing
+	 * this scan can see.
+	 *
+	 * Haxe resolves a bare lowercase identifier in a pattern as a CAPTURE, never as a comparison
+	 * against a same-named binding in scope: `case closeAction:` over a field of that name matches
+	 * EVERY value and compiles without a warning (verified on `--interp`). So a binder whose name is
+	 * already taken is almost always an intended comparison, and the shadowed declaration is the
+	 * evidence for it. `shadowing-case-binder` reports that; `unused-case-binder` uses the same
+	 * answer to REFUSE spelling such a binder `_`, a rewrite that preserves behaviour while erasing
+	 * the only trace of the mistake.
+	 *
+	 * The scan walks the ancestor chain OUTWARD from `arm`: a function-like ancestor is asked for a
+	 * parameter of that name and then for a binding declared before the arm (`bindingDeclKinds` —
+	 * locals, loop and catch binders, local functions); a type ancestor is asked for a member, and —
+	 * when an `index` is supplied — for an inherited one. A local declared AFTER the arm is not in
+	 * scope there, so it is not shadowed; a binding written INSIDE the arm is the binder's own and is
+	 * skipped.
+	 *
+	 * A grammar leaving the relevant kinds unset answers null throughout, which leaves both callers
+	 * exactly as they were before this scan existed.
+	 */
+	public static function shadowedDeclaration(
+		seams: CaseSeams, root: QueryNode, arm: QueryNode, name: String, ?index: SymbolIndex
+	): Null<String> {
+		final armSpan: Null<Span> = arm.span;
+		if (armSpan == null) return null;
+		final at: Span = armSpan;
+		final path: Array<QueryNode> = [];
+		if (!pathTo(root, arm, path)) return null;
+		for (step in 0...path.length) {
+			final node: QueryNode = path[path.length - 1 - step];
+			if (seams.scope.functionKinds.contains(node.kind)) {
+				if (declaresNamed(seams.scope.paramKinds, node.children, name)) return 'parameter';
+				if (declaresBefore(seams, node, arm, at, name)) return 'local';
+			}
+			if (!seams.scope.classLikeKinds.contains(node.kind)) continue;
+			if (declaresNamed(seams.scope.memberDeclKinds, node.children, name)) return 'field';
+			final owner: Null<String> = node.name;
+			if (index != null && owner != null && index.supertypeDeclaresMember(owner, name)) return 'inherited field';
+		}
+		return null;
+	}
+
+	/**
+	 * Visit every arm of every switch in `node`'s subtree, in document order, never descending into a
+	 * reification subtree — a splice inside one may carry code no source scan resolves. `visit`
+	 * receives the switch node and the arm's child index, so a caller that cares about an arm's
+	 * POSITION (the last-arm gate `unused-case-binder` carries) still has it.
+	 */
+	public static function eachCaseArm(seams: CaseSeams, node: QueryNode, visit: (QueryNode, Int) -> Void): Void {
+		if (seams.opaqueKinds.contains(node.kind)) return;
+		if (seams.switchKinds.contains(node.kind)) for (at in 1...node.children.length) visit(node, at);
+		for (child in node.children) eachCaseArm(seams, child, visit);
+	}
+
+	/**
+	 * `arm`'s binders grouped by NAME, in first-occurrence order — Haxe requires every alternative of
+	 * `case A(x), B(x):` to bind the same names, so a name must be decided as a whole and never one
+	 * occurrence at a time.
+	 *
+	 * Null when the arm is not one to reason about at all: not a `case` (a `default:` binds nothing),
+	 * one holding a conditional-compilation region (its arm run cannot be enumerated) or a macro
+	 * reification (a splice may carry a read no source scan resolves), or one whose patterns
+	 * `binders` refuses. This is the shared HEAD of `unused-case-binder` and
+	 * `shadowing-case-binder` — both ask exactly these questions before their own gates begin.
+	 */
+	public static function binderGroups(seams: CaseSeams, arm: QueryNode): Null<Array<Array<PatternBinder>>> {
+		if (arm.kind != seams.caseBranchKind) return null;
+		final conditional: Null<String> = seams.conditionalKind;
+		if (conditional != null && containsAnyKind(arm, [conditional])) return null;
+		if (containsAnyKind(arm, seams.opaqueKinds)) return null;
+		final found: Null<Array<PatternBinder>> = binders(seams, arm);
+		if (found == null) return null;
+		final all: Array<PatternBinder> = found;
+		final groups: Array<Array<PatternBinder>> = [];
+		final seen: Array<String> = [];
+		for (binder in all) if (!seen.contains(binder.name)) {
+			seen.push(binder.name);
+			groups.push(all.filter(b -> b.name == binder.name));
+		}
+		return groups;
+	}
+
+	/**
+	 * The per-run context both case-binder rules open with: every file that parses, the
+	 * unqualified-resolvable CONSTANT names collected across all of them (a project-wide run
+	 * therefore refuses more bare identifiers than a single-file one), and one symbol index over the
+	 * same set. Built once here rather than twice, because a rule that computed the constant set from
+	 * a DIFFERENT file list than its sibling would disagree with it about what a bare identifier even
+	 * is.
+	 */
+	public static function runContextOf(
+		seams: CaseSeams, files: Array<{ file: String, source: String }>, plugin: GrammarPlugin
+	): CaseRunContext {
+		final parsed: Array<{ file: String, source: String, tree: QueryNode }> = CheckScan.parseAll(plugin, files);
+		return {
+			parsed: parsed,
+			constants: declaredConstantNames(seams, [for (entry in parsed) entry.tree]),
+			index: SymbolIndex.build(files, plugin)
+		};
 	}
 
 	/**
@@ -390,6 +497,58 @@ final class CasePatternScan {
 		return leaves;
 	}
 
+
+	/** Push the chain of nodes from `node` down to `target` inclusive; whether `target` was reached. */
+	private static function pathTo(node: QueryNode, target: QueryNode, out: Array<QueryNode>): Bool {
+		out.push(node);
+		if (node == target) return true;
+		for (child in node.children) if (pathTo(child, target, out)) return true;
+		out.pop();
+		return false;
+	}
+
+
+	/** Whether any direct child of `nodes` whose kind is in `kinds` declares `name`. */
+	private static function declaresNamed(kinds: Array<String>, nodes: Array<QueryNode>, name: String): Bool {
+		for (node in nodes) if (kinds.contains(node.kind) && node.name == name) return true;
+		return false;
+	}
+
+
+	/**
+	 * Whether `scope`'s subtree declares `name` at a position BEFORE `arm` — the bindings actually in
+	 * scope where the pattern is written. The arm's own subtree is skipped: a binding inside it
+	 * belongs to the binder, not to what the binder shadows.
+	 */
+	private static function declaresBefore(seams: CaseSeams, scope: QueryNode, arm: QueryNode, at: Span, name: String): Bool {
+		if (scope == arm) return false;
+		final span: Null<Span> = scope.span;
+		if (seams.scope.bindingDeclKinds.contains(scope.kind) && scope.name == name && span != null && span.from < at.from) return true;
+		for (child in scope.children) if (declaresBefore(seams, child, arm, at, name)) return true;
+		return false;
+	}
+
+
+	/**
+	 * The SCOPE half of the seams — every kind `shadowedDeclaration` needs to walk an ancestor chain.
+	 * Split out of `seamsOf` so that function stays under the complexity budget: each `??` fallback is
+	 * a branch of its own, and there are six here.
+	 */
+	private static function scopeSeamsOf(shape: RefShape): ScopeSeams {
+		final functionKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []);
+		final catchKind: Null<String> = shape.catchClauseKind;
+		return {
+			functionKinds: functionKinds,
+			paramKinds: shape.paramKinds ?? [],
+			bindingDeclKinds: (shape.localDeclKinds ?? []).concat(shape.iterationBindingKinds ?? [])
+				.concat(shape.iterationValueBinderKinds ?? [])
+				.concat(catchKind == null ? [] : [catchKind])
+				.concat(functionKinds),
+			classLikeKinds: RefactorSupport.classLikeContainerKinds(shape),
+			memberDeclKinds: shape.memberDeclKinds ?? []
+		};
+	}
+
 }
 
 /** One name a case label BINDS, with the edit that turns it into the wildcard. */
@@ -450,4 +609,38 @@ typedef CaseSeams = {
 
 	/** The pattern leaves that bind nothing and hold no sub-pattern: a dotted path and the literals. */
 	final constantLeafKinds: Array<String>;
+
+	/** The SCOPE kinds `shadowedDeclaration` walks the ancestor chain with. */
+	final scope: ScopeSeams;
+};
+
+/** The scope-shaped half of `CaseSeams`, read only by `shadowedDeclaration` and its helpers. */
+typedef ScopeSeams = {
+
+	/** Function-like kinds — the ancestors that own a parameter list and a local scope. */
+	final functionKinds: Array<String>;
+
+	/** Parameter kinds — the declarations a function-like ancestor carries as direct children. */
+	final paramKinds: Array<String>;
+
+	/** Every local BINDING kind: declarations, loop and catch binders, and local functions. */
+	final bindingDeclKinds: Array<String>;
+
+	/** The type kinds that own a member list — the ancestors asked for a field. */
+	final classLikeKinds: Array<String>;
+
+	/** The member kinds a `classLikeKinds` container declares. */
+	final memberDeclKinds: Array<String>;
+};
+/** What `runContextOf` resolves once for a whole lint run. */
+typedef CaseRunContext = {
+
+	/** Every file that parsed, with its source and tree. */
+	final parsed: Array<{ file: String, source: String, tree: QueryNode }>;
+
+	/** Names a bare pattern identifier must avoid to read as a binder at all. */
+	final constants: Array<String>;
+
+	/** The index over the same file set — the resolution half of `shadowedDeclaration`. */
+	final index: SymbolIndex;
 };

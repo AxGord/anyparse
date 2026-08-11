@@ -617,6 +617,8 @@ import unit.HxConditionalExprFitSliceTest;
 import unit.HxCaseGuardFitSliceTest;
 import unit.HxMethodChainExactLimitBoundaryTest;
 import unit.NamingCheckHoistFixTest;
+import unit.UnnecessarySwitchCheckTest;
+import unit.ShadowingCaseBinderCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1153,8 +1155,10 @@ class RunTests {
 		addCase(new ComparisonToBooleanCheckTest());
 		addCase(new CollapseNestedSwitchCheckTest());
 		addCase(new UnusedCaseBinderCheckTest());
+		addCase(new ShadowingCaseBinderCheckTest());
 		addCase(new RedundantCaseBodyCheckTest());
 		addCase(new EmptyCaseArmCheckTest());
+		addCase(new UnnecessarySwitchCheckTest());
 		addCase(new CollapsibleIfCheckTest());
 		addCase(new CollapsibleElseIfCheckTest());
 		addCase(new DoubleNegationCheckTest());

@@ -1,12 +1,11 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.PurityScan.PurityCtx;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TypeInfoProvider;
-import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -77,16 +76,6 @@ final class ExtractRepeatedExpression implements Check {
 
 	private static inline final RULE_ID: String = 'extract-repeated-expression';
 
-	/**
-	 * Simple receiver names whose static methods are pure (referentially
-	 * transparent) stdlib operations — so a call on one is safe to compute once.
-	 * The non-deterministic `random` member is rejected separately.
-	 */
-	private static final PURE_CALL_RECEIVERS: Array<String> = ['Math', 'Std', 'StringTools'];
-
-	/** Members on a `PURE_CALL_RECEIVERS` receiver that are NOT pure (non-deterministic). */
-	private static final IMPURE_MEMBERS: Array<String> = ['random'];
-
 	public function new() {}
 
 	public function id(): String {
@@ -109,27 +98,22 @@ final class ExtractRepeatedExpression implements Check {
 		final functionUnitKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []);
 		final exclusiveConditionalKinds: Array<String> = (shape.branchConditionKinds ?? []).concat(shape.switchKinds ?? []);
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final root: QueryNode = tree;
-			final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(entry.source) : [];
+			final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, entry.source, root, index);
+			if (purity == null) continue;
+			final resolved: PurityCtx = purity;
 			final ctx: Ctx = {
-				shape: shape,
-				identKind: shape.identKind,
 				fieldAccessKind: faK,
 				callKind: callK,
-				indexAccessKind: indexKind,
 				candidateKinds: candidateKinds,
 				functionUnitKinds: functionUnitKinds,
 				exclusiveConditionalKinds: exclusiveConditionalKinds,
 				opaqueKinds: shape.opaqueKinds ?? [],
-				selfReferenceText: shape.selfReferenceText,
-				declaredTypes: declaredTypes,
-				index: index,
-				root: root
+				purity: resolved
 			};
 			final units: Array<QueryNode> = [];
 			collectUnits(root, functionUnitKinds, units);
@@ -179,7 +163,7 @@ final class ExtractRepeatedExpression implements Check {
 		for (norm => occ in groups) if (occ.length >= MIN_OCCURRENCES) {
 			final rep: QueryNode = occ[0].node;
 			if (!isNonTrivial(rep, ctx)) continue;
-			if (!isPureExpr(rep, ctx)) continue;
+			if (!PurityScan.isPure(rep, ctx.purity)) continue;
 			if (allPairsExclusive(occ)) continue;
 			occ.sort((a, b) -> a.span.from - b.span.from);
 			kept.push({ norm: norm, occ: occ });
@@ -253,64 +237,6 @@ final class ExtractRepeatedExpression implements Check {
 		return best;
 	}
 
-	/**
-	 * Whether every node in `node`'s subtree is side-effect-free: a safe skeleton
-	 * kind (`RefactorSupport.isSafeKind`), a field / index READ, or a provably-pure
-	 * stdlib call. A field read whose resolvable first hop is a property getter, and
-	 * any non-whitelisted call, make it impure.
-	 */
-	private static function isPureExpr(node: QueryNode, ctx: Ctx): Bool {
-		final k: String = node.kind;
-		if (RefactorSupport.isSafeKind(k)) return node.children.foreach(c -> isPureExpr(c, ctx));
-		if (k != ctx.fieldAccessKind) return if (ctx.indexAccessKind != null && k == ctx.indexAccessKind)
-			node.children.foreach(c -> isPureExpr(c, ctx))
-		else if (k == ctx.callKind)
-			isPureCall(node, ctx) && node.children.foreach(c -> isPureExpr(c, ctx))
-		else
-			false;
-		if (isSideEffectingGetter(node, ctx)) return false;
-		return node.children.foreach(c -> isPureExpr(c, ctx));
-	}
-
-	/**
-	 * Whether a `callKind` node is a provably-pure stdlib call — its callee is a
-	 * `Recv.method` field access where `Recv` is a bare identifier in
-	 * `PURE_CALL_RECEIVERS` and `method` is not an `IMPURE_MEMBERS` name. Any other
-	 * callee (an instance method, a local function, a complex receiver) is unproven
-	 * and therefore impure.
-	 */
-	private static function isPureCall(call: QueryNode, ctx: Ctx): Bool {
-		if (call.children.length < 1) return false;
-		final callee: QueryNode = call.children[0];
-		if (callee.kind != ctx.fieldAccessKind || callee.children.length != 1) return false;
-		final method: Null<String> = callee.name;
-		if (method == null || IMPURE_MEMBERS.contains(method)) return false;
-		final recv: QueryNode = callee.children[0];
-		return recv.kind == ctx.identKind && recv.name != null && PURE_CALL_RECEIVERS.contains(recv.name);
-	}
-
-	/**
-	 * Whether a `fieldAccessKind` node reads a member proven to be a property GETTER
-	 * — resolvable only when the receiver is a bare identifier (its declared type) or
-	 * `this` (the enclosing type); a deeper receiver is left unresolved (assumed a
-	 * plain read). Reuses `SymbolIndex.memberGetter` (the getter-property map).
-	 */
-	private static function isSideEffectingGetter(fa: QueryNode, ctx: Ctx): Bool {
-		final field: Null<String> = fa.name;
-		if (field == null || fa.children.length != 1) return false;
-		final recv: QueryNode = fa.children[0];
-		if (recv.kind != ctx.identKind) return false;
-		final recvName: Null<String> = recv.name;
-		if (recvName == null) return false;
-		final typeName: Null<String> = if (recvName == ctx.selfReferenceText) {
-			final span: Null<Span> = fa.span;
-			span == null ? null : TypeResolver.enclosingTypeName(ctx.root, span);
-		} else {
-			TypeResolver.identTypeName(recv, ctx.root, ctx.shape, ctx.declaredTypes);
-		}
-		return typeName != null && ctx.index.memberGetter(typeName, field) == true;
-	}
-
 	/** Whether every pair of occurrences is mutually exclusive — so at most one runs per invocation. */
 	private static function allPairsExclusive(occ: Array<Candidate>): Bool {
 		for (i in 0...occ.length) for (j in i + 1...occ.length) if (!mutuallyExclusive(occ[i].path, occ[j].path)) return false;
@@ -377,17 +303,11 @@ private typedef Group = {
 
 /** Per-file resolved constants threaded through the recursive walk. */
 private typedef Ctx = {
-	var shape: RefShape;
-	var identKind: String;
 	var fieldAccessKind: String;
 	var callKind: String;
-	var indexAccessKind: Null<String>;
 	var candidateKinds: Array<String>;
 	var functionUnitKinds: Array<String>;
 	var exclusiveConditionalKinds: Array<String>;
 	var opaqueKinds: Array<String>;
-	var selfReferenceText: Null<String>;
-	var declaredTypes: Map<Int, String>;
-	var index: SymbolIndex;
-	var root: QueryNode;
+	var purity: PurityCtx;
 }

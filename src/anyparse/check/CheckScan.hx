@@ -125,6 +125,22 @@ final class CheckScan {
 	}
 
 	/**
+	 * Every entry of `files` that PARSES, with its tree — the loop a whole-scope check opens with,
+	 * here once instead of once per check. An unparseable file is dropped silently, which is the
+	 * `Check` contract: a check must be as tolerant as `SymbolIndex.build`.
+	 */
+	public static function parseAll(
+		plugin: GrammarPlugin, files: Array<{ file: String, source: String }>
+	): Array<{ file: String, source: String, tree: QueryNode }> {
+		final out: Array<{ file: String, source: String, tree: QueryNode }> = [];
+		for (entry in files) {
+			final tree: Null<QueryNode> = parseOrNull(plugin, entry.source);
+			if (tree != null) out.push({ file: entry.file, source: entry.source, tree: tree });
+		}
+		return out;
+	}
+
+	/**
 	 * `parseOrNull` over the TYPE-REFERENCE projection (`GrammarPlugin.parseFileTypeRefs`) — the
 	 * parallel tree that surfaces the annotation positions the default projection drops into trivia.
 	 * Same tolerance contract; a check reads one or the other, never both from one parse.

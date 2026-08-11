@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.CasePatternScan.CaseRunContext;
 import anyparse.check.CasePatternScan.CaseSeams;
 import anyparse.check.CasePatternScan.PatternBinder;
 import anyparse.check.Check.Violation;
@@ -112,21 +113,17 @@ final class UnusedCaseBinder implements Check {
 		final seams: Null<CaseSeams> = CasePatternScan.seamsOf(plugin);
 		if (seams == null) return [];
 		final resolved: CaseSeams = seams;
-		final parsed: Array<{ file: String, source: String, tree: QueryNode }> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) parsed.push({ file: entry.file, source: entry.source, tree: tree });
-		}
-		final constants: Array<String> = CasePatternScan.declaredConstantNames(resolved, [for (p in parsed) p.tree]);
+		final context: CaseRunContext = CasePatternScan.runContextOf(resolved, files, plugin);
 		return [
-			for (entry in parsed) for (candidate in collect(resolved, entry.tree, entry.source, constants))
-				{
-					file: entry.file,
-					span: candidate.span,
-					rule: RULE_ID,
-					severity: Severity.Warning,
-					message: 'case binder \'${candidate.name}\' is never read; replace it with _'
-				}
+			for (entry in context.parsed)
+				for (candidate in collect(resolved, entry.tree, entry.source, context.constants, context.index))
+					{
+						file: entry.file,
+						span: candidate.span,
+						rule: RULE_ID,
+						severity: Severity.Warning,
+						message: 'case binder \'${candidate.name}\' is never read; replace it with _'
+					}
 		];
 	}
 
@@ -151,8 +148,10 @@ final class UnusedCaseBinder implements Check {
 		if (parsed == null) return [];
 		final tree: QueryNode = parsed;
 		final constants: Array<String> = CasePatternScan.declaredConstantNames(resolved, [tree]);
+		final resolvedIndex: SymbolIndex = index ?? SymbolIndex.build([{ file: file, source: source }], plugin);
 		final byKey: Map<String, Candidate> = [];
-		for (candidate in collect(resolved, tree, source, constants)) byKey['${candidate.span.from}:${candidate.span.to}'] = candidate;
+		for (candidate in collect(resolved, tree, source, constants, resolvedIndex))
+			byKey['${candidate.span.from}:${candidate.span.to}'] = candidate;
 
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (violation in violations) {
@@ -165,46 +164,36 @@ final class UnusedCaseBinder implements Check {
 	}
 
 	/** Every unread binder in `tree`, in document order. */
-	private static function collect(seams: CaseSeams, tree: QueryNode, source: String, constants: Array<String>): Array<Candidate> {
+	private static function collect(
+		seams: CaseSeams, tree: QueryNode, source: String, constants: Array<String>, index: SymbolIndex
+	): Array<Candidate> {
 		final out: Array<Candidate> = [];
-		walk(seams, tree, source, constants, out);
+		CasePatternScan.eachCaseArm(
+			seams, tree, (switchNode, at) -> armCandidates(seams, tree, switchNode, at, source, constants, index, out)
+		);
 		return out;
 	}
 
-	/**
-	 * Walk the whole tree so a switch nested in another switch's arm is reached too, but
-	 * never DESCEND into a macro-reification subtree: a splice inside one may carry a read
-	 * of the binder that no source scan can see.
-	 */
-	private static function walk(seams: CaseSeams, node: QueryNode, source: String, constants: Array<String>, out: Array<Candidate>): Void {
-		if (seams.opaqueKinds.contains(node.kind)) return;
-		if (seams.switchKinds.contains(node.kind)) for (at in 1...node.children.length)
-			armCandidates(seams, node, at, source, constants, out);
-		for (child in node.children) walk(seams, child, source, constants, out);
-	}
 
 	/** Every unread binder of `switchNode`'s arm at `at`, grouped by name so an or-pattern is replaced as one. */
 	private static function armCandidates(
-		seams: CaseSeams, switchNode: QueryNode, at: Int, source: String, constants: Array<String>, out: Array<Candidate>
+		seams: CaseSeams, root: QueryNode, switchNode: QueryNode, at: Int, source: String, constants: Array<String>, index: SymbolIndex,
+		out: Array<Candidate>
 	): Void {
 		final arm: QueryNode = switchNode.children[at];
-		if (arm.kind != seams.caseBranchKind) return;
-		final conditional: Null<String> = seams.conditionalKind;
-		if (conditional != null && CasePatternScan.containsAnyKind(arm, [conditional])) return;
-		if (CasePatternScan.containsAnyKind(arm, seams.opaqueKinds)) return;
-		final found: Null<Array<PatternBinder>> = CasePatternScan.binders(seams, arm);
-		if (found == null) return;
-		final all: Array<PatternBinder> = found;
+		final groups: Null<Array<Array<PatternBinder>>> = CasePatternScan.binderGroups(seams, arm);
+		if (groups == null) return;
 		final last: Bool = at == switchNode.children.length - 1;
 		final single: Bool = CasePatternScan.patternRun(seams, arm).length == 1;
-		final seen: Array<String> = [];
-		for (binder in all) {
-			final name: String = binder.name;
-			if (seen.contains(name)) continue;
-			seen.push(name);
-			final group: Array<PatternBinder> = all.filter(b -> b.name == name);
+		for (group in groups) {
+			final name: String = group[0].name;
 			if (CasePatternScan.mentionCount(seams, arm, name) != group.length) continue;
 			if (!admissible(group, constants, last, single) || !commentFree(group, source)) continue;
+			// A WHOLE-pattern binder naming something already in scope, read nowhere — almost always an
+			// intended comparison Haxe silently turned into a catch-all. Spelling it `_` preserves
+			// behaviour and deletes the only evidence, so it stays for `shadowing-case-binder` to report
+			// and for a human to decide. A NESTED one is an ordinary capture and keeps its fix.
+			if (group[0].whole && CasePatternScan.shadowedDeclaration(seams, root, arm, name, index) != null) continue;
 			final span: Null<Span> = group[0].node.span;
 			if (span == null) continue;
 			final reported: Span = span;

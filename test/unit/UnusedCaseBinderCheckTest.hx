@@ -194,6 +194,33 @@ class UnusedCaseBinderCheckTest extends Test {
 		Assert.equals(0, violations(src).length);
 	}
 
+	/**
+	 * A binder that SHADOWS something in scope is left alone. Rewriting it to `_` preserves
+	 * behaviour and erases the only evidence of what is almost always an intended comparison —
+	 * `shadowing-case-binder` reports that shape instead, and both rules read the one predicate.
+	 */
+	public function testShadowingBinderRefused(): Void {
+		Assert.equals(0, violations(shadowing('closeAction')).length);
+	}
+
+	/** The minimal pair: the same arm under a name nothing declares is still rewritten. */
+	public function testFreeBinderStillFlagged(): Void {
+		Assert.equals(1, violations(shadowing('freeName')).length);
+	}
+
+	/**
+	 * A NESTED shadowing binder is still rewritten: the gate covers only a WHOLE-pattern binder,
+	 * where the comparison misreading is the dominant one. This shape is heaps' `HlslOut`
+	 * (`case TArray(e, …)` under a parameter named `e`, copy-pasted from the arm above), and
+	 * "spell it `_`" is exactly the right advice for it.
+	 */
+	public function testNestedShadowingBinderStillFlagged(): Void {
+		final src: String = 'class C {\n\tfunction f(e: Dynamic, v: Dynamic): Void {\n\t\tswitch v {\n\t\t\tcase Node(e): r();'
+			+ '\n\t\t\tcase _: r();\n\t\t}\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.stringContains('case Node(_)', applyFixOnce(src));
+	}
+
 	/** The canary: the trailing arm binds `_data` and never reads it. */
 	private inline function canary(): String {
 		return 'class C {\n\tfunction f(data: Dynamic): String {\n\t\treturn switch data.role {\n\t\t\tcase "Owner": t("Owner", 10149);'
@@ -220,6 +247,13 @@ class UnusedCaseBinderCheckTest extends Test {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};
+	}
+
+
+	/** A class declaring `closeAction`, switching on `v` with a lone `case $name:` arm. */
+	private function shadowing(name: String): String {
+		return 'class C {\n\tvar closeAction: String;\n\n\tfunction f(v: Dynamic): Void {\n\t\tswitch v {\n\t\t\tcase $name: r();\n\t\t}\n'
+			+ '\t}\n}';
 	}
 
 }

@@ -197,6 +197,7 @@ final class Linter {
 			new RedundantReplaceLoop(),
 			new TrivialGetter(),
 			new NullableSwitchMissingNull(),
+			new ShadowingCaseBinder(),
 			new UnusedCaseBinder(),
 			new RedundantCaseBody(),
 			// Deletes a whole case arm, as `redundant-case-body`'s subsume does, and the two CAN
@@ -209,6 +210,12 @@ final class Linter {
 			// and defers a check whose edits overlap an accepted one, and both shapes converge
 			// across `--fix` passes whichever went first.
 			new EmptyCaseArm(),
+			// The TERMINATOR of the case-arm cascade: the three rules above each stop at a switch
+			// holding one catch-all, and this one removes that husk. Registered after them so a
+			// single `--fix` pass reduces the arms first; `Cli.computeFileLintEdits` defers any
+			// check whose edits overlap an accepted one, and this rule's edit SPANS the whole
+			// switch, so it contains theirs whenever both fire on the same one.
+			new UnnecessarySwitch(),
 			new DuplicateCode(),
 			new ListenerSymmetry(),
 			new StringLiteralDup(),
