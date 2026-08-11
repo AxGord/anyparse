@@ -802,6 +802,10 @@ class TriviaTypeSynth {
 		// CHECKSTYLE:ON
 	}
 
+	private static inline function wrapOptional(node: ShapeNode, base: ComplexType): ComplexType {
+		return node.annotations[AnnotationKeys.BASE_OPTIONAL] == true ? TPath({ pack: [], name: 'Null', params: [TPType(base)] }) : base;
+	}
+
 	/**
 	 * ω-paired-converters (Phase A1) — emit a `Converters` class with
 	 * `pairedToRaw_<T>` static helpers for every paired type in the
@@ -2080,10 +2084,6 @@ class TriviaTypeSynth {
 				Context.fatalError('TriviaTypeSynth: unexpected node kind ${node.kind} in field-shape', Context.currentPos());
 				throw 'unreachable';
 		};
-	}
-
-	private static inline function wrapOptional(node: ShapeNode, base: ComplexType): ComplexType {
-		return node.annotations[AnnotationKeys.BASE_OPTIONAL] == true ? TPath({ pack: [], name: 'Null', params: [TPType(base)] }) : base;
 	}
 
 	private static function refIsBearing(refName: String): Bool {

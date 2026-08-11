@@ -72,6 +72,10 @@ final class CommentRewrite {
 		return edits.length == 0 ? Ok(source) : RefactorSupport.canonicalize(source, edits, reformat, plugin, optsJson);
 	}
 
+	private static inline function isDigit(c: Int): Bool {
+		return c >= '0'.code && c <= '9'.code;
+	}
+
 	/**
 	 * Expand a `regex`-mode replacement template against the active match `m`:
 	 * `$$` becomes `$`; `$<digits>` / `${<digits>}` a capture group; `${N+K}` /
@@ -144,10 +148,6 @@ final class CommentRewrite {
 		catch (exception: Exception)
 			throw new Exception('replacement references group $index which the pattern does not capture');
 		return matched ?? '';
-	}
-
-	private static inline function isDigit(c: Int): Bool {
-		return c >= '0'.code && c <= '9'.code;
 	}
 
 	/**

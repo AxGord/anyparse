@@ -38,6 +38,38 @@ import anyparse.grammar.haxe.HxType;
  */
 class HxCastSliceTest extends HxTestHelpers {
 
+	// ======== Slice 46 writer: tight `cast(` on paren-form operand ========
+
+	public inline function testWriterCastParenTight(): Void {
+		// Slice 46 (writer half): `cast (x)` round-trips as tight
+		// `cast(x)` because operand=ParenExpr is in the
+		// `tightOnParenOperand` list. Bare `cast x` keeps the space.
+		writerEquals('class C { var f:Int = cast (x); }', 'class C {\n\tvar f:Int = cast(x);\n}\n', 'tight `cast(x)` on ParenExpr operand');
+	}
+
+	public inline function testWriterCastECheckTypeTight(): Void {
+		writerEquals(
+			'class C { var f:Int = cast (x:Int); }', 'class C {\n\tvar f:Int = cast(x : Int);\n}\n',
+			'tight `cast(x : Int)` on ECheckTypeExpr operand'
+		);
+	}
+
+	public inline function testWriterCastIdentSpaced(): Void {
+		writerEquals(
+			'class C { var f:Int = cast x; }', 'class C {\n\tvar f:Int = cast x;\n}\n',
+			'spaced `cast x` on bare IdentExpr operand (knob does not fire)'
+		);
+	}
+
+	public inline function testWriterCastIsBoolTight(): Void {
+		// The pre-Slice-46 fixture-failing case: `cast (x) is Bool`
+		// round-trips as `cast(x) is Bool` with tight cast paren.
+		writerEquals(
+			'class C { function m():Void { (cast (x) is Bool); } }', 'class C {\n\tfunction m():Void {\n\t\t(cast(x) is Bool);\n\t}\n}\n',
+			'tight `cast(x)` survives the outer `is Bool` Pratt frame'
+		);
+	}
+
 	// ======== TypedCastExpr — `cast(expr, Type)` ========
 
 	public function testTypedCastBasic(): Void {
@@ -238,38 +270,6 @@ class HxCastSliceTest extends HxTestHelpers {
 		roundTrip('class C { var f:Int = cast foo(); }', 'cast foo()');
 		roundTrip('class C { var f:Int = cast (x); }', 'cast (x)');
 		roundTrip('class C { function m():Void { cast foo(); } }', 'stmt-level cast');
-	}
-
-	// ======== Slice 46 writer: tight `cast(` on paren-form operand ========
-
-	public inline function testWriterCastParenTight(): Void {
-		// Slice 46 (writer half): `cast (x)` round-trips as tight
-		// `cast(x)` because operand=ParenExpr is in the
-		// `tightOnParenOperand` list. Bare `cast x` keeps the space.
-		writerEquals('class C { var f:Int = cast (x); }', 'class C {\n\tvar f:Int = cast(x);\n}\n', 'tight `cast(x)` on ParenExpr operand');
-	}
-
-	public inline function testWriterCastECheckTypeTight(): Void {
-		writerEquals(
-			'class C { var f:Int = cast (x:Int); }', 'class C {\n\tvar f:Int = cast(x : Int);\n}\n',
-			'tight `cast(x : Int)` on ECheckTypeExpr operand'
-		);
-	}
-
-	public inline function testWriterCastIdentSpaced(): Void {
-		writerEquals(
-			'class C { var f:Int = cast x; }', 'class C {\n\tvar f:Int = cast x;\n}\n',
-			'spaced `cast x` on bare IdentExpr operand (knob does not fire)'
-		);
-	}
-
-	public inline function testWriterCastIsBoolTight(): Void {
-		// The pre-Slice-46 fixture-failing case: `cast (x) is Bool`
-		// round-trips as `cast(x) is Bool` with tight cast paren.
-		writerEquals(
-			'class C { function m():Void { (cast (x) is Bool); } }', 'class C {\n\tfunction m():Void {\n\t\t(cast(x) is Bool);\n\t}\n}\n',
-			'tight `cast(x)` survives the outer `is Bool` Pratt frame'
-		);
 	}
 
 	// ======== Combined: nested cast forms ========

@@ -30,6 +30,23 @@ import anyparse.grammar.haxe.HxModifier;
  */
 class HxAbstractClassSliceTest extends HxTestHelpers {
 
+	// -- Round-trip / corpus drivers --
+
+	public inline function testCorpusAbstractClassRoundTrip(): Void {
+		roundTripModule(
+			'abstract class Foo {\n\tabstract function foo();\n\tpublic abstract function foo2();\n\tpublic function foo3();\n}\n',
+			'abstract_class'
+		);
+	}
+
+	public inline function testCorpusIssue626RoundTrip(): Void {
+		roundTripModule(
+			'abstract class Foo {\n\tstatic\n\toverload extern inline function foo() {}\n\n\toverload\n'
+			+ '\tstatic extern inline function foo(i:Int) {}\n}\n\n\toverload\n\tstatic inline function foo(i:Int) {}\n',
+			'issue_626_overload_modifier'
+		);
+	}
+
 	// -- HxDecl.AbstractClassDecl --
 
 	public function testAbstractClassEmpty(): Void {
@@ -101,23 +118,6 @@ class HxAbstractClassSliceTest extends HxTestHelpers {
 		Assert.equals(2, mods.length);
 		Assert.isTrue(mods[0].match(Overload));
 		Assert.isTrue(mods[1].match(Static));
-	}
-
-	// -- Round-trip / corpus drivers --
-
-	public inline function testCorpusAbstractClassRoundTrip(): Void {
-		roundTripModule(
-			'abstract class Foo {\n\tabstract function foo();\n\tpublic abstract function foo2();\n\tpublic function foo3();\n}\n',
-			'abstract_class'
-		);
-	}
-
-	public inline function testCorpusIssue626RoundTrip(): Void {
-		roundTripModule(
-			'abstract class Foo {\n\tstatic\n\toverload extern inline function foo() {}\n\n\toverload\n'
-			+ '\tstatic extern inline function foo(i:Int) {}\n}\n\n\toverload\n\tstatic inline function foo(i:Int) {}\n',
-			'issue_626_overload_modifier'
-		);
 	}
 
 	private function roundTripModule(source: String, ?label: String): Void {

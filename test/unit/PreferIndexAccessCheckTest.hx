@@ -432,6 +432,11 @@ class PreferIndexAccessCheckTest extends Test {
 		);
 	}
 
+	/** `holderUserField` with the default `m:Map<String, Int>` field. */
+	private inline function holderUser(body: String): String {
+		return holderUserField('m:Map<String, Int>', body);
+	}
+
 	private function src(decl: String, body: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\t$decl\n\t\t$body\n\t}\n}';
 	}
@@ -447,11 +452,6 @@ class PreferIndexAccessCheckTest extends Test {
 	/** A two-class same-file source: a `Holder` with field `<field>` and a `C.f(h:Holder)` body `<body>;`. */
 	private function holderUserField(field: String, body: String): String {
 		return 'class Holder {\n\tpublic var $field;\n}\n\nclass C {\n\tfunction f(h:Holder):Void {\n\t\t$body;\n\t}\n}';
-	}
-
-	/** `holderUserField` with the default `m:Map<String, Int>` field. */
-	private inline function holderUser(body: String): String {
-		return holderUserField('m:Map<String, Int>', body);
 	}
 
 	/** Run over several sources at once, so the type gate can resolve a member declared in another file. */

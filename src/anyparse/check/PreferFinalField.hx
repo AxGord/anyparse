@@ -122,6 +122,25 @@ final class PreferFinalField implements Check {
 		return RefactorSupport.finalizeFieldEdits(source, [for (v in violations) v.span], plugin);
 	}
 
+	/** Push a `prefer-final-field` violation for `name` at `span` with the reason phrase `reason`. */
+	private static inline function flag(out: Array<Violation>, file: String, span: Span, name: String, reason: String): Void {
+		out.push({
+			file: file,
+			span: span,
+			rule: 'prefer-final-field',
+			severity: Severity.Info,
+			message: 'field \'$name\' $reason; use final'
+		});
+	}
+
+	/**
+	 * Whether `name` is written anywhere in `source` outside `exclude` (its own
+	 * declaration) — the in-file half of the proof, over the whole file.
+	 */
+	private static inline function writtenInFile(source: String, name: String, exclude: Span): Bool {
+		return MemberWriteScan.writtenInRange(source, name, exclude, 0, source.length);
+	}
+
 	/**
 	 * Flag `field` for `var → final` in either case: a field WITH an initializer that is
 	 * not a property, confined, not written elsewhere, and not an abstract's mutable
@@ -167,17 +186,6 @@ final class PreferFinalField implements Check {
 		flag(out, file, span, name, 'is assigned only in the constructor');
 	}
 
-	/** Push a `prefer-final-field` violation for `name` at `span` with the reason phrase `reason`. */
-	private static inline function flag(out: Array<Violation>, file: String, span: Span, name: String, reason: String): Void {
-		out.push({
-			file: file,
-			span: span,
-			rule: 'prefer-final-field',
-			severity: Severity.Info,
-			message: 'field \'$name\' $reason; use final'
-		});
-	}
-
 	/**
 	 * Whether every write to the private field `name` of `owner` lives in `source`.
 	 * `RefactorSupport.isPrivateMemberConfined`'s subtype veto is blanket — ANY indexed
@@ -196,14 +204,6 @@ final class PreferFinalField implements Check {
 	private static function writesConfined(owner: String, name: String, source: String, index: SymbolIndex, plugin: GrammarPlugin): Bool {
 		return RefactorSupport.privateMemberScanIsSound(source, index) && !MemberWriteScan.accessGrantMayWrite(owner, name, index, plugin)
 			&& !MemberWriteScan.subtypeMayWrite(owner, name, index, plugin);
-	}
-
-	/**
-	 * Whether `name` is written anywhere in `source` outside `exclude` (its own
-	 * declaration) — the in-file half of the proof, over the whole file.
-	 */
-	private static inline function writtenInFile(source: String, name: String, exclude: Span): Bool {
-		return MemberWriteScan.writtenInRange(source, name, exclude, 0, source.length);
 	}
 
 }

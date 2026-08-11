@@ -330,6 +330,21 @@ final class SwitchChain {
 	}
 
 	/**
+	 * The switch SUBJECT source for `scan` — the lone discriminant verbatim, or the
+	 * delimited tuple `[d1, d2]` — or null when a tuple is needed and the grammar spells
+	 * none. Both checks build their violation message from it, so the message names the
+	 * same subject the fix would emit.
+	 */
+	private static inline function subjectText(scan: ChainScan, seams: ChainSeams): Null<String> {
+		return groupText(scan.discTexts, seams);
+	}
+
+	/** The trimmed source text of `span`. */
+	private static inline function spanText(source: String, span: Span): String {
+		return source.substring(span.from, span.to).trim();
+	}
+
+	/**
 	 * Scan the chain at `head` into the pieces a switch is rendered from, or null when any
 	 * gate rejects it (see the type doc). `resolveIndex` is consulted ONLY for a
 	 * qualified-static constant candidate — a structurally cheap pre-check runs first — so
@@ -419,16 +434,6 @@ final class SwitchChain {
 	}
 
 	/**
-	 * The switch SUBJECT source for `scan` — the lone discriminant verbatim, or the
-	 * delimited tuple `[d1, d2]` — or null when a tuple is needed and the grammar spells
-	 * none. Both checks build their violation message from it, so the message names the
-	 * same subject the fix would emit.
-	 */
-	private static inline function subjectText(scan: ChainScan, seams: ChainSeams): Null<String> {
-		return groupText(scan.discTexts, seams);
-	}
-
-	/**
 	 * The scanned pieces as a `ChainScan`, or null when the chain as a whole is rejected: no
 	 * discriminant resolved, fewer than two rungs (a lone conditional is not a chain, and a
 	 * one-arm switch reads worse than what it replaced), or no trailing else-slot at all —
@@ -447,11 +452,6 @@ final class SwitchChain {
 		if (parts.length == 1) return parts[0];
 		final tuple: Null<{ open: String, close: String }> = seams.tuple;
 		return tuple == null ? null : '${tuple.open}${parts.join(', ')}${tuple.close}';
-	}
-
-	/** The trimmed source text of `span`. */
-	private static inline function spanText(source: String, span: Span): String {
-		return source.substring(span.from, span.to).trim();
 	}
 
 	/**

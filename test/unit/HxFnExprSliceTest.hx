@@ -30,6 +30,10 @@ import anyparse.grammar.haxe.HxModuleWriter;
  */
 class HxFnExprSliceTest extends HxTestHelpers {
 
+	public inline function testAnonFnExprBodyRoundTrip(): Void {
+		roundTrip('class C {\n\tfunction m() {\n\t\thandle(function (res) trace(res));\n\t}\n}', 'expr body');
+	}
+
 	public function testAnonFnExprBodyInCall(): Void {
 		final source: String = 'class C {\n\tfunction m() {\n\t\thandle(function (res) trace(res));\n\t}\n}';
 		final module: HxModule = HaxeModuleParser.parse(source);
@@ -56,10 +60,6 @@ class HxFnExprSliceTest extends HxTestHelpers {
 		final module: HxModule = HaxeModuleParser.parse(source);
 		Assert.notNull(module);
 		roundTrip(source, 'anon fn typed params + expr body');
-	}
-
-	public inline function testAnonFnExprBodyRoundTrip(): Void {
-		roundTrip('class C {\n\tfunction m() {\n\t\thandle(function (res) trace(res));\n\t}\n}', 'expr body');
 	}
 
 	private function assertFirstStmtCallArgIsFnExprWithExprBody(source: String): Void {

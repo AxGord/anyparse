@@ -22,6 +22,15 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxInlineExprSliceTest extends HxTestHelpers {
 
+	public inline function testInlineCallRoundTrip(): Void {
+		// Writer ripple: InlineExpr emits via the generic single-Ref
+		// value:HxExpr path (ThrowExpr/CastExpr/ReturnExpr precedent).
+		roundTrip(
+			'class C { static function f() { var a = inline g(); var b = inline new E(""); inline g(); use(inline g(3)); } }',
+			'inline-expr'
+		);
+	}
+
 	public function testInlineCallExpr(): Void {
 		switch initOf('class C { var x = inline foo(); }') {
 			case InlineExpr(Call(IdentExpr(v), _)):
@@ -87,15 +96,6 @@ class HxInlineExprSliceTest extends HxTestHelpers {
 			case _:
 				Assert.fail('expected LocalInlineFnStmt, got ${body[0]}');
 		}
-	}
-
-	public inline function testInlineCallRoundTrip(): Void {
-		// Writer ripple: InlineExpr emits via the generic single-Ref
-		// value:HxExpr path (ThrowExpr/CastExpr/ReturnExpr precedent).
-		roundTrip(
-			'class C { static function f() { var a = inline g(); var b = inline new E(""); inline g(); use(inline g(3)); } }',
-			'inline-expr'
-		);
 	}
 
 	private function initOf(source: String): HxExpr {

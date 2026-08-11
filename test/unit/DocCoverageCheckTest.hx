@@ -180,14 +180,14 @@ class DocCoverageCheckTest extends Test {
 		Assert.equals(152, Linter.builtins().length);
 	}
 
-	/** Run with the default config (type requirement only). */
-	private function typeVs(src: String): Array<Violation> {
-		return new DocCoverage().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
 	/** Run with member coverage opted in and the type requirement off (isolates member findings). */
 	private inline function memberVs(src: String): Array<Violation> {
 		return run('{"rules":{"doc-coverage":{"requireMemberDoc":true,"requireTypeDoc":false}}}', src);
+	}
+
+	/** Run with the default config (type requirement only). */
+	private function typeVs(src: String): Array<Violation> {
+		return new DocCoverage().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
 	/** Run the check with a specific `apqlint.json` config threaded through the resolver. */

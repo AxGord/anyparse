@@ -69,6 +69,84 @@ class HxGroupTrailCommentWriteTest extends Test {
 	private static final CFG_DEFAULT_NOWRAP: String =
 		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "noWrap", "rules": []}}}';
 
+	// --- 4. the same shapes under a `NoWrap`-resolving cascade ----------
+	// Compiled defaults never resolve `callParameter` to `NoWrap` for these
+	// inputs, so section 1 exercises only the render-time half of the guard.
+	// A config whose cascade DOES resolve `NoWrap` routes the body through
+	// `WrapList.shapeNoWrap`'s force-flat `Flatten`, where the renderer
+	// drops the guard - every one of these corrupted until `shapeNoWrap`
+	// learned to skip the marker for a guard-bearing body.
+
+	/** The named defect under a sole-argument `noWrap` rule. */
+	public inline function testSoleCallArgUnderNoWrap(): Void {
+		assertSurvivesNoWrap('class C {\n\tfunction f(a:Int) {\n\t\tg(\n\t\t\ta // trailing\n\t\t);\n\t}\n}', '// trailing');
+	}
+
+	/** A nested sole call: the inner closer AND the outer one are both at risk. */
+	public inline function testNestedSoleCallUnderNoWrap(): Void {
+		assertSurvivesNoWrap('class C {\n\tfunction f(a:Int) {\n\t\th(g(\n\t\t\ta // trailing\n\t\t));\n\t}\n}', '// trailing');
+	}
+
+	/** `return g(sole)`. */
+	public inline function testReturnSoleCallUnderNoWrap(): Void {
+		assertSurvivesNoWrap('class C {\n\tfunction f():Int {\n\t\treturn g(\n\t\t\t1 // trailing\n\t\t);\n\t}\n}', '// trailing');
+	}
+
+	/** `super(sole)`. */
+	public inline function testSuperSoleCallUnderNoWrap(): Void {
+		assertSurvivesNoWrap('class C extends B {\n\tfunction new() {\n\t\tsuper(\n\t\t\t1 // trailing\n\t\t);\n\t}\n}', '// trailing');
+	}
+
+	/** A method-chain segment's sole argument. */
+	public inline function testChainSegmentSoleArgUnderNoWrap(): Void {
+		assertSurvivesNoWrap('class C {\n\tfunction f() {\n\t\tobj.m(\n\t\t\t1 // trailing\n\t\t).n();\n\t}\n}', '// trailing');
+	}
+
+	/** An arrow body as the sole argument. */
+	public inline function testArrowArgBodyUnderNoWrap(): Void {
+		assertSurvivesNoWrap('class C {\n\tfunction f() {\n\t\tg(\n\t\t\tx -> x // trailing\n\t\t);\n\t}\n}', '// trailing');
+	}
+
+	/** A call nested inside metadata arguments. */
+	public inline function testMetadataNestedSoleArgUnderNoWrap(): Void {
+		assertSurvivesNoWrap('class C {\n\t@:build(Macro.run(\n\t\t"x" // trailing\n\t))\n\tfunction f() {}\n}', '// trailing');
+	}
+
+	/** `var x = g(sole)`. */
+	public inline function testVarInitSoleCallUnderNoWrap(): Void {
+		assertSurvivesNoWrap('class C {\n\tfunction f() {\n\t\tvar v = g(\n\t\t\t1 // trailing\n\t\t);\n\t}\n}', '// trailing');
+	}
+
+	/** A qualified static call `T.m(sole)`. */
+	public inline function testStaticSoleCallUnderNoWrap(): Void {
+		assertSurvivesNoWrap('class C {\n\tfunction f() {\n\t\tT.m(\n\t\t\t1 // trailing\n\t\t);\n\t}\n}', '// trailing');
+	}
+
+	/** `untyped g(sole)`. */
+	public inline function testUntypedSoleCallUnderNoWrap(): Void {
+		assertSurvivesNoWrap('class C {\n\tfunction f() {\n\t\tuntyped g(\n\t\t\t1 // trailing\n\t\t);\n\t}\n}', '// trailing');
+	}
+
+	/** `macro g(sole)` - a reification whose payload is a call. */
+	public inline function testMacroSoleCallUnderNoWrap(): Void {
+		assertSurvivesNoWrap(
+			'class C {\n\tmacro static function f() {\n\t\treturn macro g(\n\t\t\t1 // trailing\n\t\t);\n\t}\n}', '// trailing'
+		);
+	}
+
+	/** A sole call inside an array comprehension. */
+	public inline function testComprehensionSoleCallUnderNoWrap(): Void {
+		assertSurvivesNoWrap(
+			'class C {\n\tfunction f() {\n\t\treturn [\n\t\t\tfor (i in a) g(\n\t\t\t\ti // trailing\n\t\t\t)\n\t\t];\n\t}\n}',
+			'// trailing'
+		);
+	}
+
+	/** A sole call in condition position - `if (g(sole))`. */
+	public inline function testConditionSoleCallUnderNoWrap(): Void {
+		assertSurvivesNoWrap('class C {\n\tfunction f() {\n\t\tif (g(\n\t\t\t1 // trailing\n\t\t)) act();\n\t}\n}', '// trailing');
+	}
+
 	// --- 1. postfix Call Star: the corrupting seam ----------------------
 
 	/**
@@ -183,19 +261,6 @@ class HxGroupTrailCommentWriteTest extends Test {
 		Assert.equals('$source\n', roundTrip(source));
 	}
 
-	// --- 4. the same shapes under a `NoWrap`-resolving cascade ----------
-	// Compiled defaults never resolve `callParameter` to `NoWrap` for these
-	// inputs, so section 1 exercises only the render-time half of the guard.
-	// A config whose cascade DOES resolve `NoWrap` routes the body through
-	// `WrapList.shapeNoWrap`'s force-flat `Flatten`, where the renderer
-	// drops the guard - every one of these corrupted until `shapeNoWrap`
-	// learned to skip the marker for a guard-bearing body.
-
-	/** The named defect under a sole-argument `noWrap` rule. */
-	public inline function testSoleCallArgUnderNoWrap(): Void {
-		assertSurvivesNoWrap('class C {\n\tfunction f(a:Int) {\n\t\tg(\n\t\t\ta // trailing\n\t\t);\n\t}\n}', '// trailing');
-	}
-
 	/**
 	 * The layout is the SAME bytes the compiled-default cascade emits (see
 	 * `testCallArgTrailingLineCommentKeepsCloser`): the argument stays
@@ -212,71 +277,6 @@ class HxGroupTrailCommentWriteTest extends Test {
 	public function testSoleCallArgUnderDefaultNoWrap(): Void {
 		final source: String = 'class C {\n\tfunction f(a:Int) {\n\t\tg(\n\t\t\ta // trailing\n\t\t);\n\t}\n}';
 		assertSeam(source, '// trailing', roundTripWith.bind(_, CFG_DEFAULT_NOWRAP));
-	}
-
-	/** A nested sole call: the inner closer AND the outer one are both at risk. */
-	public inline function testNestedSoleCallUnderNoWrap(): Void {
-		assertSurvivesNoWrap('class C {\n\tfunction f(a:Int) {\n\t\th(g(\n\t\t\ta // trailing\n\t\t));\n\t}\n}', '// trailing');
-	}
-
-	/** `return g(sole)`. */
-	public inline function testReturnSoleCallUnderNoWrap(): Void {
-		assertSurvivesNoWrap('class C {\n\tfunction f():Int {\n\t\treturn g(\n\t\t\t1 // trailing\n\t\t);\n\t}\n}', '// trailing');
-	}
-
-	/** `super(sole)`. */
-	public inline function testSuperSoleCallUnderNoWrap(): Void {
-		assertSurvivesNoWrap('class C extends B {\n\tfunction new() {\n\t\tsuper(\n\t\t\t1 // trailing\n\t\t);\n\t}\n}', '// trailing');
-	}
-
-	/** A method-chain segment's sole argument. */
-	public inline function testChainSegmentSoleArgUnderNoWrap(): Void {
-		assertSurvivesNoWrap('class C {\n\tfunction f() {\n\t\tobj.m(\n\t\t\t1 // trailing\n\t\t).n();\n\t}\n}', '// trailing');
-	}
-
-	/** An arrow body as the sole argument. */
-	public inline function testArrowArgBodyUnderNoWrap(): Void {
-		assertSurvivesNoWrap('class C {\n\tfunction f() {\n\t\tg(\n\t\t\tx -> x // trailing\n\t\t);\n\t}\n}', '// trailing');
-	}
-
-	/** A call nested inside metadata arguments. */
-	public inline function testMetadataNestedSoleArgUnderNoWrap(): Void {
-		assertSurvivesNoWrap('class C {\n\t@:build(Macro.run(\n\t\t"x" // trailing\n\t))\n\tfunction f() {}\n}', '// trailing');
-	}
-
-	/** `var x = g(sole)`. */
-	public inline function testVarInitSoleCallUnderNoWrap(): Void {
-		assertSurvivesNoWrap('class C {\n\tfunction f() {\n\t\tvar v = g(\n\t\t\t1 // trailing\n\t\t);\n\t}\n}', '// trailing');
-	}
-
-	/** A qualified static call `T.m(sole)`. */
-	public inline function testStaticSoleCallUnderNoWrap(): Void {
-		assertSurvivesNoWrap('class C {\n\tfunction f() {\n\t\tT.m(\n\t\t\t1 // trailing\n\t\t);\n\t}\n}', '// trailing');
-	}
-
-	/** `untyped g(sole)`. */
-	public inline function testUntypedSoleCallUnderNoWrap(): Void {
-		assertSurvivesNoWrap('class C {\n\tfunction f() {\n\t\tuntyped g(\n\t\t\t1 // trailing\n\t\t);\n\t}\n}', '// trailing');
-	}
-
-	/** `macro g(sole)` - a reification whose payload is a call. */
-	public inline function testMacroSoleCallUnderNoWrap(): Void {
-		assertSurvivesNoWrap(
-			'class C {\n\tmacro static function f() {\n\t\treturn macro g(\n\t\t\t1 // trailing\n\t\t);\n\t}\n}', '// trailing'
-		);
-	}
-
-	/** A sole call inside an array comprehension. */
-	public inline function testComprehensionSoleCallUnderNoWrap(): Void {
-		assertSurvivesNoWrap(
-			'class C {\n\tfunction f() {\n\t\treturn [\n\t\t\tfor (i in a) g(\n\t\t\t\ti // trailing\n\t\t\t)\n\t\t];\n\t}\n}',
-			'// trailing'
-		);
-	}
-
-	/** A sole call in condition position - `if (g(sole))`. */
-	public inline function testConditionSoleCallUnderNoWrap(): Void {
-		assertSurvivesNoWrap('class C {\n\tfunction f() {\n\t\tif (g(\n\t\t\t1 // trailing\n\t\t)) act();\n\t}\n}', '// trailing');
 	}
 
 	/**
@@ -300,6 +300,16 @@ class HxGroupTrailCommentWriteTest extends Test {
 		Assert.equals('class C {\n\tfunction f(a:Int) {\n\t\tg(a);\n\t}\n}\n', roundTripWith(source, CFG_NOWRAP));
 	}
 
+	/** Seam assertion at the COMPILED writer defaults. */
+	private inline function assertSurvives(source: String, comment: String): Void {
+		assertSeam(source, comment, roundTrip);
+	}
+
+	/** Seam assertion under a cascade that resolves `NoWrap` for a sole argument. */
+	private inline function assertSurvivesNoWrap(source: String, comment: String): Void {
+		assertSeam(source, comment, roundTripWith.bind(_, CFG_NOWRAP));
+	}
+
 	/**
 	 * The seam assertion: the emitted source must RE-PARSE (a swallowed
 	 * closer does not), must still carry the comment, and must be a fixed
@@ -315,16 +325,6 @@ class HxGroupTrailCommentWriteTest extends Test {
 			return;
 		}
 		Assert.equals(out, emit(out), 'not idempotent: <$out>');
-	}
-
-	/** Seam assertion at the COMPILED writer defaults. */
-	private inline function assertSurvives(source: String, comment: String): Void {
-		assertSeam(source, comment, roundTrip);
-	}
-
-	/** Seam assertion under a cascade that resolves `NoWrap` for a sole argument. */
-	private inline function assertSurvivesNoWrap(source: String, comment: String): Void {
-		assertSeam(source, comment, roundTripWith.bind(_, CFG_NOWRAP));
 	}
 
 	private function roundTrip(source: String): String {

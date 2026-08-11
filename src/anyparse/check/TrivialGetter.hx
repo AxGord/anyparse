@@ -262,6 +262,72 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	}
 
 	/**
+	 * Whether a (transitive) subtype overrides property `propName`'s accessor or redeclares the
+	 * property (`SymbolIndex.subtypeOverridesProperty`) — the precise per-property subtype gate
+	 * that replaces the blanket `hasSubtype` skip. A null index (a direct fix caller without one)
+	 * cannot resolve the hierarchy and so never blocks: the report pass, which always carries an
+	 * index, has already gated the finding.
+	 */
+	private static inline function subtypeBlocks(index: Null<SymbolIndex>, className: Null<String>, propName: String): Bool {
+		return index != null && className != null && index.subtypeOverridesProperty(className, propName);
+	}
+
+	/**
+	 * Whether a subtype references the backing field `field` the collapse would DELETE
+	 * (`SymbolIndex.subtypeReferencesField`) — a subclass reading `owner`'s private `_x` directly
+	 * breaks with 'Unknown identifier' once `_x` is removed, since the rename only rewrites references
+	 * inside the owner. The inline arm keeps the backing field, so it is exempt; a null index (a
+	 * direct fix caller) cannot resolve the hierarchy and never blocks (the report pass already gated).
+	 */
+	private static inline function subtypeFieldBlocks(
+		index: Null<SymbolIndex>, className: Null<String>, field: String, inlineGetter: Null<QueryNode>
+	): Bool {
+		return inlineGetter == null && index != null && className != null && index.subtypeReferencesField(className, field);
+	}
+
+	/** Whether `c` is an identifier character. */
+	private static inline function isIdentChar(c: Int): Bool {
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
+	}
+
+	/** Whether `c` is whitespace. */
+	private static inline function isSpace(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
+	}
+
+	/** Whether `node` opens a new function scope (method / local fn / lambda) that binds parameters and locals. */
+	private static inline function isFnScope(node: QueryNode): Bool {
+		return switch node.kind {
+			case 'FnMember' | 'FinalModifiedMember' | 'LocalFnStmt' | 'LocalInlineFnStmt' | 'FnExpr' | 'NamedFnExpr' | 'ThinParenLambdaExpr'
+				| 'ParenLambdaExpr'
+				| 'ThinArrow': true;
+			case _: false;
+		}
+	}
+
+	/** The last `.`-separated segment of `path` (its simple name). */
+	private static inline function simpleName(path: String): String {
+		final segments: Array<String> = path.split('.');
+		return segments[segments.length - 1] ?? path;
+	}
+
+	/**
+	 * The qualifier prefix for a shadowed backing-field reference: the enclosing class name
+	 * (`C.`) whenever `this` cannot carry it — inside a static method, where `this` is illegal,
+	 * and for a STATIC property, which `this` never reaches from any method — else `this.` for
+	 * an instance property in an instance method. A `(default, null)` property is writable from
+	 * within its own class, so `C.prop = value` is legal too.
+	 */
+	private static inline function shadowQualifier(classQualified: Bool, className: Null<String>): String {
+		return classQualified && className != null ? '$className.' : 'this.';
+	}
+
+	/** Whether `span` is fully contained in any of `spans`. */
+	private static inline function withinAny(spans: Array<Span>, span: Span): Bool {
+		return spans.exists(s -> span.from >= s.from && span.to <= s.to);
+	}
+
+	/**
 	 * Flag each collapsible property of `cls` (`classifyProperty` decides the shape and applies
 	 * the soundness gates), using the shared `memberTables`. A class whose property a subtype overrides in the
 	 * index is skipped — a subclass could override an accessor, so the suggested rewrite would
@@ -308,30 +374,6 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 				message: c.message
 			});
 		}
-	}
-
-	/**
-	 * Whether a (transitive) subtype overrides property `propName`'s accessor or redeclares the
-	 * property (`SymbolIndex.subtypeOverridesProperty`) — the precise per-property subtype gate
-	 * that replaces the blanket `hasSubtype` skip. A null index (a direct fix caller without one)
-	 * cannot resolve the hierarchy and so never blocks: the report pass, which always carries an
-	 * index, has already gated the finding.
-	 */
-	private static inline function subtypeBlocks(index: Null<SymbolIndex>, className: Null<String>, propName: String): Bool {
-		return index != null && className != null && index.subtypeOverridesProperty(className, propName);
-	}
-
-	/**
-	 * Whether a subtype references the backing field `field` the collapse would DELETE
-	 * (`SymbolIndex.subtypeReferencesField`) — a subclass reading `owner`'s private `_x` directly
-	 * breaks with 'Unknown identifier' once `_x` is removed, since the rename only rewrites references
-	 * inside the owner. The inline arm keeps the backing field, so it is exempt; a null index (a
-	 * direct fix caller) cannot resolve the hierarchy and never blocks (the report pass already gated).
-	 */
-	private static inline function subtypeFieldBlocks(
-		index: Null<SymbolIndex>, className: Null<String>, field: String, inlineGetter: Null<QueryNode>
-	): Bool {
-		return inlineGetter == null && index != null && className != null && index.subtypeReferencesField(className, field);
 	}
 
 	/**
@@ -394,16 +436,6 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		var j: Int = i;
 		while (j < n && isSpace(source.fastCodeAt(j))) j++;
 		return j;
-	}
-
-	/** Whether `c` is an identifier character. */
-	private static inline function isIdentChar(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
-	}
-
-	/** Whether `c` is whitespace. */
-	private static inline function isSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 	}
 
 	/**
@@ -609,16 +641,6 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		return true;
 	}
 
-	/** Whether `node` opens a new function scope (method / local fn / lambda) that binds parameters and locals. */
-	private static inline function isFnScope(node: QueryNode): Bool {
-		return switch node.kind {
-			case 'FnMember' | 'FinalModifiedMember' | 'LocalFnStmt' | 'LocalInlineFnStmt' | 'FnExpr' | 'NamedFnExpr' | 'ThinParenLambdaExpr'
-				| 'ParenLambdaExpr'
-				| 'ThinArrow': true;
-			case _: false;
-		}
-	}
-
 	/**
 	 * Whether the subtree `node` binds `name` in ANY form the language offers (`bindsNameHere`).
 	 * Scanned subtree-wide from a function scope, so a nested function's binding also trips it —
@@ -713,12 +735,6 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			if (nm != null) out.push(simpleName(nm));
 		}
 		return out;
-	}
-
-	/** The last `.`-separated segment of `path` (its simple name). */
-	private static inline function simpleName(path: String): String {
-		final segments: Array<String> = path.split('.');
-		return segments[segments.length - 1] ?? path;
 	}
 
 	/**
@@ -857,17 +873,6 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			case _:
 				return false;
 		}
-	}
-
-	/**
-	 * The qualifier prefix for a shadowed backing-field reference: the enclosing class name
-	 * (`C.`) whenever `this` cannot carry it — inside a static method, where `this` is illegal,
-	 * and for a STATIC property, which `this` never reaches from any method — else `this.` for
-	 * an instance property in an instance method. A `(default, null)` property is writable from
-	 * within its own class, so `C.prop = value` is legal too.
-	 */
-	private static inline function shadowQualifier(classQualified: Bool, className: Null<String>): String {
-		return classQualified && className != null ? '$className.' : 'this.';
 	}
 
 	/**
@@ -1111,11 +1116,6 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		if (fieldRefName(node) == field) return true;
 		for (child in node.children) if (mentionsField(child, field)) return true;
 		return false;
-	}
-
-	/** Whether `span` is fully contained in any of `spans`. */
-	private static inline function withinAny(spans: Array<Span>, span: Span): Bool {
-		return spans.exists(s -> span.from >= s.from && span.to <= s.to);
 	}
 
 	/** The span to delete for a plain-field collapse — ` (read, write)` after `var <name>`, leading space included. */

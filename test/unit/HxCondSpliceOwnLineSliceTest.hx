@@ -218,12 +218,12 @@ final class HxCondSpliceOwnLineSliceTest extends HxTestHelpers {
 		}
 	}
 
-	private function parseBody(source: String): Array<HxStatement> {
-		return fnBodyStmts(parseSingleFnDecl(source));
-	}
-
 	private inline function triviaWrite(src: String, ?json: String): String {
 		return HxWriteFixture.triviaWrite(src, json ?? '{}');
+	}
+
+	private function parseBody(source: String): Array<HxStatement> {
+		return fnBodyStmts(parseSingleFnDecl(source));
 	}
 
 }

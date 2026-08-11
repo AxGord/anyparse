@@ -47,6 +47,22 @@ import anyparse.grammar.haxe.HxStatement;
  */
 class HxBinopStmtNoSemiSliceTest extends HxTestHelpers {
 
+	// -- Writer fidelity: a swallowed-then-restored `;` must round-trip
+	// byte-identically, and the newly-parseable no-`;` forms must be
+	// idempotent.
+
+	public inline function testIfExprSwallowedSemiRoundTrip(): Void {
+		roundTrip('class C {\n\tfunction f() {\n\t\ta << if (e) f(m);\n\t\tx();\n\t}\n}', 'shl-if-explicit-semi');
+	}
+
+	public inline function testBinopBraceTailRoundTrip(): Void {
+		roundTrip('class C {\n\tfunction f() {\n\t\ta << function() {\n\t\t\tb();\n\t\t}\n\t\tx();\n\t}\n}', 'shl-fn-no-semi');
+	}
+
+	public inline function testVarInitLambdaRoundTrip(): Void {
+		roundTrip('class C {\n\tfunction f() {\n\t\tvar a = () -> {\n\t\t\tg();\n\t\t}\n\t\tb();\n\t}\n}', 'var-lambda-no-semi');
+	}
+
 	// -- A1: non-assign binop RHS ends with `}` --
 
 	public function testShlFnExprNoSemi(): Void {
@@ -188,22 +204,6 @@ class HxBinopStmtNoSemiSliceTest extends HxTestHelpers {
 		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\ta << while (e) f(m);\n\t\tx();\n\t}\n}');
 		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(2, stmts.length);
-	}
-
-	// -- Writer fidelity: a swallowed-then-restored `;` must round-trip
-	// byte-identically, and the newly-parseable no-`;` forms must be
-	// idempotent.
-
-	public inline function testIfExprSwallowedSemiRoundTrip(): Void {
-		roundTrip('class C {\n\tfunction f() {\n\t\ta << if (e) f(m);\n\t\tx();\n\t}\n}', 'shl-if-explicit-semi');
-	}
-
-	public inline function testBinopBraceTailRoundTrip(): Void {
-		roundTrip('class C {\n\tfunction f() {\n\t\ta << function() {\n\t\t\tb();\n\t\t}\n\t\tx();\n\t}\n}', 'shl-fn-no-semi');
-	}
-
-	public inline function testVarInitLambdaRoundTrip(): Void {
-		roundTrip('class C {\n\tfunction f() {\n\t\tvar a = () -> {\n\t\t\tg();\n\t\t}\n\t\tb();\n\t}\n}', 'var-lambda-no-semi');
 	}
 
 }

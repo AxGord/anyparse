@@ -30,6 +30,22 @@ import anyparse.grammar.haxe.HxModuleWriter;
  */
 class HxToplevelImportWildSliceTest extends HxTestHelpers {
 
+	public inline function testRoundTripImportWild(): Void {
+		roundTrip('import haxe.*;');
+	}
+
+	public inline function testRoundTripUsingWild(): Void {
+		roundTrip('using tink.core.*;');
+	}
+
+	public inline function testRoundTripImportWildThenUsingWild(): Void {
+		roundTrip('import haxe.*;\nusing haxe.*;');
+	}
+
+	public inline function testRoundTripWildAndPlainMix(): Void {
+		roundTrip('import haxe.*;\nimport foo.Bar;');
+	}
+
 	public function testImportWildSingleSegment(): Void {
 		final ast: HxModule = HaxeModuleParser.parse('import haxe.*;');
 		Assert.equals(1, ast.decls.length);
@@ -143,22 +159,6 @@ class HxToplevelImportWildSliceTest extends HxTestHelpers {
 	public function testWriterEmitsUsingWild(): Void {
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('using foo.bar.*;'));
 		Assert.equals('using foo.bar.*;\n', out);
-	}
-
-	public inline function testRoundTripImportWild(): Void {
-		roundTrip('import haxe.*;');
-	}
-
-	public inline function testRoundTripUsingWild(): Void {
-		roundTrip('using tink.core.*;');
-	}
-
-	public inline function testRoundTripImportWildThenUsingWild(): Void {
-		roundTrip('import haxe.*;\nusing haxe.*;');
-	}
-
-	public inline function testRoundTripWildAndPlainMix(): Void {
-		roundTrip('import haxe.*;\nimport foo.Bar;');
 	}
 
 }

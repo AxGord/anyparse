@@ -145,6 +145,11 @@ final class ExtractRepeatedExpression implements Check {
 		return [];
 	}
 
+	/** Whether `outer` strictly contains `inner` (covers it and is not the identical span). */
+	private static inline function strictlyContains(outer: Span, inner: Span): Bool {
+		return outer.from <= inner.from && inner.to <= outer.to && (outer.from < inner.from || inner.to < outer.to);
+	}
+
 	/** Every function / lambda node in `node`'s subtree — each is an independent body unit. */
 	private static function collectUnits(node: QueryNode, functionUnitKinds: Array<String>, out: Array<QueryNode>): Void {
 		if (functionUnitKinds.contains(node.kind)) out.push(node);
@@ -330,11 +335,6 @@ final class ExtractRepeatedExpression implements Check {
 			if (g.occ.foreach(go -> h.occ.exists(ho -> strictlyContains(ho.span, go.span)))) return true;
 		}
 		return false;
-	}
-
-	/** Whether `outer` strictly contains `inner` (covers it and is not the identical span). */
-	private static inline function strictlyContains(outer: Span, inner: Span): Bool {
-		return outer.from <= inner.from && inner.to <= outer.to && (outer.from < inner.from || inner.to < outer.to);
 	}
 
 	/** The finding message: occurrence count plus the truncated normalized expression. */

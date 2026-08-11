@@ -96,6 +96,11 @@ final class EmptyComment implements Check {
 		return edits;
 	}
 
+	/** Whether code unit `c` is horizontal or vertical whitespace. */
+	private static inline function isWs(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
+	}
+
 	/** Scan every comment token in `source`, flagging each content-free one that is not a paragraph separator. */
 	private static function scan(out: Array<Violation>, file: String, source: String): Void {
 		final toks: Array<CommentToken> = RefactorSupport.collectCommentTokens(source);
@@ -199,11 +204,6 @@ final class EmptyComment implements Check {
 				break;
 		}
 		return new Span(from, span.to);
-	}
-
-	/** Whether code unit `c` is horizontal or vertical whitespace. */
-	private static inline function isWs(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 	}
 
 }

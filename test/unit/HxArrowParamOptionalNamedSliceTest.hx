@@ -50,6 +50,12 @@ class HxArrowParamOptionalNamedSliceTest extends HxTestHelpers {
 
 	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 120}}';
 
+	public inline function testWriterEmitsTightQuestionMarkAndColon(): Void {
+		writerEquals(
+			'class Foo {\n\tvar f:(?b:Int)->Void;\n}', 'class Foo {\n\tvar f:(?b:Int) -> Void;\n}\n', 'tight source spaces arrow only'
+		);
+	}
+
 	public function testSingleOptionalNamedArg(): Void {
 		final v: HxVarDecl = parseSingleVarDecl('class Foo { var f:(?b:Int) -> Void; }');
 		final fn: HxArrowFnType = expectArrowFnType(v.type);
@@ -138,12 +144,6 @@ class HxArrowParamOptionalNamedSliceTest extends HxTestHelpers {
 			case null, _:
 				Assert.fail('expected Arrow(_, OptionalArg), got ${v.type}');
 		}
-	}
-
-	public inline function testWriterEmitsTightQuestionMarkAndColon(): Void {
-		writerEquals(
-			'class Foo {\n\tvar f:(?b:Int)->Void;\n}', 'class Foo {\n\tvar f:(?b:Int) -> Void;\n}\n', 'tight source spaces arrow only'
-		);
 	}
 
 	public function testLongArrowTypeSignatureWraps(): Void {

@@ -39,6 +39,28 @@ import anyparse.grammar.haxe.HxStatement;
  */
 class HxFnReturnBodySliceTest extends HxTestHelpers {
 
+	// ======== Round-trip ========
+
+	public inline function testRoundTripReturnBodyClass(): Void {
+		roundTrip('class Main {\n\tstatic function f():Int return 1;\n}');
+	}
+
+	public inline function testRoundTripReturnBodyNoType(): Void {
+		roundTrip('class C {\n\tfunction f() return 1;\n}');
+	}
+
+	public inline function testRoundTripReturnBodyComplex(): Void {
+		roundTrip('class C {\n\tstatic function f(x:Int):Int return x + 1;\n}');
+	}
+
+	public inline function testRoundTripReturnBodyToplevel(): Void {
+		roundTrip('function f():Int return 42;');
+	}
+
+	public inline function testRoundTripStatementReturnUnchanged(): Void {
+		roundTrip('class C {\n\tfunction f() {\n\t\treturn 1;\n\t}\n}');
+	}
+
 	// ======== Class-member position ========
 
 	public function testClassMemberReturnBodyTyped(): Void {
@@ -92,28 +114,6 @@ class HxFnReturnBodySliceTest extends HxTestHelpers {
 			case _:
 				Assert.fail('expected ReturnStmt, got ${stmts[0]}');
 		}
-	}
-
-	// ======== Round-trip ========
-
-	public inline function testRoundTripReturnBodyClass(): Void {
-		roundTrip('class Main {\n\tstatic function f():Int return 1;\n}');
-	}
-
-	public inline function testRoundTripReturnBodyNoType(): Void {
-		roundTrip('class C {\n\tfunction f() return 1;\n}');
-	}
-
-	public inline function testRoundTripReturnBodyComplex(): Void {
-		roundTrip('class C {\n\tstatic function f(x:Int):Int return x + 1;\n}');
-	}
-
-	public inline function testRoundTripReturnBodyToplevel(): Void {
-		roundTrip('function f():Int return 42;');
-	}
-
-	public inline function testRoundTripStatementReturnUnchanged(): Void {
-		roundTrip('class C {\n\tfunction f() {\n\t\treturn 1;\n\t}\n}');
 	}
 
 	// ======== Helpers ========

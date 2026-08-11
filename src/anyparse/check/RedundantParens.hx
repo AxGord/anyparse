@@ -409,6 +409,46 @@ final class RedundantParens implements Check implements ConfigAware {
 		};
 	}
 
+	/** Whether `c` is an identifier or number character — one a neighbouring token can lex into. */
+	private static inline function isWordChar(c: Int): Bool {
+		return c == '_'.code || c >= 'a'.code && c <= 'z'.code || c >= 'A'.code && c <= 'Z'.code || c >= '0'.code && c <= '9'.code;
+	}
+
+	/** Whether `c` is a character operators are spelled from, which the lexer reads greedily. */
+	private static inline function isOperatorChar(c: Int): Bool {
+		return OPERATOR_CHARS.indexOf(String.fromCharCode(c)) >= 0;
+	}
+
+	/**
+	 * Whether a kind of `kinds` sits at the RIGHT EDGE of `inner`, which makes the
+	 * parentheses around it load-bearing. The walk follows the last child while that child
+	 * ends where its parent ends, so it reaches through a metadata wrapper / trailing
+	 * ternary branch / trailing operand and stops at a bracket-closed host, whose own
+	 * closing token already bounds the construct.
+	 *
+	 * TWO vocabularies ask it. `RefShape.separatorGreedyExprKinds` for a DELIMITED slot —
+	 * what can eat the separator that ends the slot — and `RefShape.rightGreedyExprKinds`
+	 * for the four precedence-gated slots, what can eat whatever follows the pair. The walk
+	 * is the same; only the terminal set differs.
+	 */
+	private static inline function spineEndsWith(inner: QueryNode, kinds: Array<String>): Bool {
+		return spineTerminal(inner, kinds, false);
+	}
+
+	/**
+	 * The LEFT-edge mirror of `spineEndsWith`: whether a kind of `kinds` owns the leftmost
+	 * token of `inner`. Reaches through a chain of binary operators to whatever is written
+	 * first and stops as soon as something of the parent's own opens before it.
+	 */
+	private static inline function spineStartsWith(inner: QueryNode, kinds: Array<String>): Bool {
+		return spineTerminal(inner, kinds, true);
+	}
+
+	/** Whether `child` is the first thing inside `parent` — nothing of `parent`'s own opens before it. */
+	private static inline function startsTogether(parent: QueryNode, child: QueryNode): Bool {
+		return edgeAligned(parent, child, true);
+	}
+
 	/** A grammar vocabulary an arm reads, or an EMPTY list when the arm is off or the grammar declares none. */
 	private static function armVocabulary<T>(declared: Null<Array<T>>, on: Bool): Array<T> {
 		return on ? declared ?? [] : [];
@@ -438,16 +478,6 @@ final class RedundantParens implements Check implements ConfigAware {
 		if (at < 0 || at >= source.length) return '';
 		final neighbour: Int = source.charCodeAt(at) ?? 0;
 		return isWordChar(neighbour) || (isOperatorChar(neighbour) && isOperatorChar(abutting)) ? ' ' : '';
-	}
-
-	/** Whether `c` is an identifier or number character — one a neighbouring token can lex into. */
-	private static inline function isWordChar(c: Int): Bool {
-		return c == '_'.code || c >= 'a'.code && c <= 'z'.code || c >= 'A'.code && c <= 'Z'.code || c >= '0'.code && c <= '9'.code;
-	}
-
-	/** Whether `c` is a character operators are spelled from, which the lexer reads greedily. */
-	private static inline function isOperatorChar(c: Int): Bool {
-		return OPERATOR_CHARS.indexOf(String.fromCharCode(c)) >= 0;
 	}
 
 	/**
@@ -600,31 +630,6 @@ final class RedundantParens implements Check implements ConfigAware {
 	}
 
 	/**
-	 * Whether a kind of `kinds` sits at the RIGHT EDGE of `inner`, which makes the
-	 * parentheses around it load-bearing. The walk follows the last child while that child
-	 * ends where its parent ends, so it reaches through a metadata wrapper / trailing
-	 * ternary branch / trailing operand and stops at a bracket-closed host, whose own
-	 * closing token already bounds the construct.
-	 *
-	 * TWO vocabularies ask it. `RefShape.separatorGreedyExprKinds` for a DELIMITED slot —
-	 * what can eat the separator that ends the slot — and `RefShape.rightGreedyExprKinds`
-	 * for the four precedence-gated slots, what can eat whatever follows the pair. The walk
-	 * is the same; only the terminal set differs.
-	 */
-	private static inline function spineEndsWith(inner: QueryNode, kinds: Array<String>): Bool {
-		return spineTerminal(inner, kinds, false);
-	}
-
-	/**
-	 * The LEFT-edge mirror of `spineEndsWith`: whether a kind of `kinds` owns the leftmost
-	 * token of `inner`. Reaches through a chain of binary operators to whatever is written
-	 * first and stops as soon as something of the parent's own opens before it.
-	 */
-	private static inline function spineStartsWith(inner: QueryNode, kinds: Array<String>): Bool {
-		return spineTerminal(inner, kinds, true);
-	}
-
-	/**
 	 * The walk both spine tests are: descend the `leading` edge of `inner` — first child
 	 * going left, last child going right — for as long as that child sits flush against it,
 	 * and answer whether a kind of `kinds` was reached. The two directions are one
@@ -640,11 +645,6 @@ final class RedundantParens implements Check implements ConfigAware {
 			n = next;
 		}
 		return true;
-	}
-
-	/** Whether `child` is the first thing inside `parent` — nothing of `parent`'s own opens before it. */
-	private static inline function startsTogether(parent: QueryNode, child: QueryNode): Bool {
-		return edgeAligned(parent, child, true);
 	}
 
 	/**

@@ -148,6 +148,11 @@ final class IfExpressionChain {
 	/** A conditional's then-branch is `children[1]`, between the condition and the else-branch. */
 	private static inline final THEN_BRANCH_INDEX: Int = 1;
 
+	/** `span`'s `from:to` key — how a carried comment finds the copied piece it rides. */
+	public static inline function spanKey(span: Span): String {
+		return '${span.from}:${span.to}';
+	}
+
 	/**
 	 * Recognise the chain rooted at `head`: follow the else-nesting (`children[2]` being
 	 * another `if`) to the terminal plain `else`, collecting each branch's single
@@ -241,11 +246,6 @@ final class IfExpressionChain {
 	public static function droppedComment(headSpan: Span, kept: Array<Span>, comments: Array<{ from: Int, to: Int, isLine: Bool }>): Bool {
 		for (tok in comments) if (tok.from >= headSpan.from && tok.to <= headSpan.to && !contained(tok, kept)) return true;
 		return false;
-	}
-
-	/** `span`'s `from:to` key — how a carried comment finds the copied piece it rides. */
-	public static inline function spanKey(span: Span): String {
-		return '${span.from}:${span.to}';
 	}
 
 	/** An empty carry — what the phase-one build reads, before the comments have been classified. */
@@ -466,6 +466,17 @@ final class IfExpressionChain {
 		return new Span(span.from, end);
 	}
 
+	/** Whether `source[from…to)` breaks a line — the one line-boundary question the carry asks. */
+	private static inline function crossesLine(source: String, from: Int, to: Int): Bool {
+		return source.substring(from, to).indexOf('\n') >= 0;
+	}
+
+	/** Whether `source[at]` is whitespace — the trivia `tokenSpan` walks back over. */
+	private static inline function isTrailingSpace(source: String, at: Int): Bool {
+		final c: Int = source.fastCodeAt(at);
+		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
+	}
+
 	/**
 	 * The one statement a branch holds — a bare statement, or the sole child of a
 	 * `{ … }` wrapping EXACTLY one. Null when the branch is a block of zero or several
@@ -521,17 +532,6 @@ final class IfExpressionChain {
 			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code && c != ';'.code && c != '}'.code) return false;
 		}
 		return true;
-	}
-
-	/** Whether `source[from…to)` breaks a line — the one line-boundary question the carry asks. */
-	private static inline function crossesLine(source: String, from: Int, to: Int): Bool {
-		return source.substring(from, to).indexOf('\n') >= 0;
-	}
-
-	/** Whether `source[at]` is whitespace — the trivia `tokenSpan` walks back over. */
-	private static inline function isTrailingSpace(source: String, at: Int): Bool {
-		final c: Int = source.fastCodeAt(at);
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 	}
 
 }

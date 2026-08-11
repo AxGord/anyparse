@@ -148,9 +148,6 @@ using StringTools;
 @:nullSafety(Strict)
 final class CollapseNestedSwitch implements Check implements DefaultOff {
 
-	private static final RULE_ID: String = 'collapse-nested-switch';
-	private static final MESSAGE: String = 'this case body is a switch on its own binder; collapse it into a deep pattern';
-
 	/** All that may separate the outer pattern from the nested switch: the label's own terminator. */
 	private static inline final LABEL_TERMINATOR: String = ':';
 
@@ -162,6 +159,9 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 
 	/** A collapsible outer arm has exactly [pattern, nested switch]. */
 	private static inline final COLLAPSIBLE_ARM_CHILD_COUNT: Int = 2;
+
+	private static final RULE_ID: String = 'collapse-nested-switch';
+	private static final MESSAGE: String = 'this case body is a switch on its own binder; collapse it into a deep pattern';
 
 	public function new() {}
 
@@ -539,14 +539,12 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 		for (child in node.children) boundNames(seams, child, skip, out);
 	}
 
-
 	/** The length of `kids`' LEADING run of case-pattern wrappers. */
 	private static function patternRunLength(seams: Seams, kids: Array<QueryNode>): Int {
 		var run: Int = 0;
 		while (run < kids.length && kids[run].kind == seams.plainCasePatternKind) run++;
 		return run;
 	}
-
 
 	/** The index of `text`'s first non-whitespace character, or -1 when it has none. */
 	private static function firstNonSpace(text: String): Int {

@@ -132,6 +132,10 @@ final class Json {
 		return '${AstSearchMatchesWriter.write(envelope, JsonFormat.instance.defaultWriteOptions)}\n';
 	}
 
+	private static inline function emptySpan(): AstSearchSpan {
+		return { start: [0, 0], end: [0, 0] };
+	}
+
 	private static function toAst(node: QueryNode, source: String): AstNodeJson {
 		final children: Array<AstNodeJson> = node.children.map(c -> toAst(c, source));
 		final ast: AstNodeJson = { kind: node.kind, children: children };
@@ -165,10 +169,6 @@ final class Json {
 			start: [from.line, from.col],
 			end: [to.line, to.col],
 		};
-	}
-
-	private static inline function emptySpan(): AstSearchSpan {
-		return { start: [0, 0], end: [0, 0] };
 	}
 
 }

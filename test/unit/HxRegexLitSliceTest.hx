@@ -21,6 +21,10 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxRegexLitSliceTest extends HxTestHelpers {
 
+	public inline function testRegexRoundTrip(): Void {
+		roundTrip('class C { var x = ~/^-?(?:0|[1-9][0-9]*)/; var y = ~/a\\/b/gi; }', 'L2-regex-lit');
+	}
+
 	public function testSimpleRegex(): Void {
 		Assert.equals('~/foo/', regexOf('class C { var x = ~/foo/; }'));
 	}
@@ -52,10 +56,6 @@ class HxRegexLitSliceTest extends HxTestHelpers {
 			case null, _:
 				Assert.fail('expected BitNot(IdentExpr(y)), got ${decl.init}');
 		}
-	}
-
-	public inline function testRegexRoundTrip(): Void {
-		roundTrip('class C { var x = ~/^-?(?:0|[1-9][0-9]*)/; var y = ~/a\\/b/gi; }', 'L2-regex-lit');
 	}
 
 	private function regexOf(source: String): String {

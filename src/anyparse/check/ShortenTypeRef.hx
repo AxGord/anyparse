@@ -313,6 +313,16 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		return importPath == null ? null : byPath[importPath];
 	}
 
+	/** Whether `c` can sit INSIDE a dotted type path — an identifier character or the separator itself. */
+	private static inline function isPathChar(c: Int): Bool {
+		return c == '.'.code || RefactorSupport.isIdentChar(c);
+	}
+
+	/** A span as the key `fix` matches a re-derived occurrence against the violation it was reported as. */
+	private static inline function spanKey(span: Span): String {
+		return '${span.from}:${span.to}';
+	}
+
 	/** Which of the three messages `plan` earns — unproven first, then the import-free arm, then the add-import one. */
 	private static function messageFor(plan: PathPlan): String {
 		return if (!plan.proven)
@@ -525,16 +535,6 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 			i = at + 1;
 		}
 		return -1;
-	}
-
-	/** Whether `c` can sit INSIDE a dotted type path — an identifier character or the separator itself. */
-	private static inline function isPathChar(c: Int): Bool {
-		return c == '.'.code || RefactorSupport.isIdentChar(c);
-	}
-
-	/** A span as the key `fix` matches a re-derived occurrence against the violation it was reported as. */
-	private static inline function spanKey(span: Span): String {
-		return '${span.from}:${span.to}';
 	}
 
 }

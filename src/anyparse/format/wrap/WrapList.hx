@@ -1129,6 +1129,113 @@ class WrapList {
 	}
 
 	/**
+	 * Wrap `body` with `lead` unless `lead` is `Empty` — avoids a
+	 * pointless single-element `Concat` for the common no-lead path.
+	 */
+	private static inline function prependLead(body: Doc, lead: Doc): Doc {
+		return switch lead {
+			case Empty: body;
+			case _: Concat([lead, body]);
+		};
+	}
+
+	/**
+	 * Classifies a `WrapMode` as single-line (`NoWrap`) vs multi-line
+	 * (`OnePerLine`, `OnePerLineAfterFirst`, `FillLine`, …). Used by
+	 * `emit` to pick `leadFlat` vs `leadBreak` when the cascade
+	 * collapses to a single mode and no `Group(IfBreak)` wrap is
+	 * emitted. `FillLine` counts as multi-line by intent — its inner
+	 * `Group` decides per-item fit but the construct as a whole opts
+	 * into wrapped layout.
+	 */
+	private static inline function isFlatMode(mode: WrapMode): Bool {
+		return switch mode {
+			case NoWrap: true;
+			case _: false;
+		};
+	}
+
+	/**
+	 * ω-array-reflow: when `on` is set (the caller threaded
+	 * `@:fmt(reflowSourceMultiline)`'s runtime `_smlKeep` gate), a cascade
+	 * resolution of `NoWrap` is floored to `OnePerLine`. The source list
+	 * already spans multiple lines, so collapsing it fully flat would
+	 * discard the author's "stay multi-line" intent; flooring keeps the
+	 * list broken while still letting width-driven modes (`FillLine`,
+	 * `FillLineWithLeadingBreak`) reflow it. No-op when `on` is false — gate-less consumers stay byte-identical.
+	 */
+	private static inline function floorSourceMultiline(mode: WrapMode, on: Bool): WrapMode {
+		return on && mode == NoWrap ? OnePerLine : mode;
+	}
+
+	/**
+	 * Returns `true` when `sepBeforeFlags[i]` is set, meaning
+	 * the engine should skip the separator between items `[i-1]` and `i`.
+	 * Null / out-of-bounds is treated as "do not skip".
+	 */
+	private static inline function skipSepBefore(flags: Null<Array<Bool>>, i: Int): Bool {
+		return flags != null && i >= 0 && i < flags.length && flags[i];
+	}
+
+	/**
+	 * ω-group-rest-probe slice 2: pick `GroupWithRestProbe` over `Group`
+	 * when the caller's Star opted into rest-of-stack lookahead via
+	 * `@:fmt(groupRestProbe)`. Used at sites where significant same-line
+	 * content trails the wrap construct (e.g. typedef LHS `<T,U,V>`
+	 * followed by ` = Rhs<...>;` on the same source line). Fork's wrap
+	 * engine considers `lengthAfter` when deciding whether to wrap the
+	 * LHS — our plain `Group.fitsFlat` is blind to rest-of-stack.
+	 * `GroupWithRestProbe(inner)` subtracts
+	 * `flatTokenWidthOfRestStack(stack)` from the budget at render time,
+	 * matching fork's bias. Default `false` keeps every other consumer
+	 * (call args, object literals, anon types, HxTypeRef.params) on the
+	 * legacy `Group` decision.
+	 */
+	private static inline function groupOrRestProbe(inner: Doc, groupRestProbe: Bool): Doc {
+		return groupRestProbe ? GroupWithRestProbe(inner) : Group(inner);
+	}
+
+	private static inline function isLeadingTransparent(d: Doc): Bool {
+		return switch d {
+			case Empty, Concat([]): true;
+			case _: false;
+		};
+	}
+
+	/**
+	 * True iff `d`'s FIRST structural break (soft or hard line) is immediately
+	 * preceded by an ARRAY open delimiter `[` — i.e. `d`'s multi-line-ness is
+	 * owned by a (possibly nested) array literal whose open bracket sits at the
+	 * end of the head line (`new X([\n … \n], y)`, `f([\n … \n])`). The
+	 * generalisation of `startsWithCollectionDelim` from "STARTS with `[`" to
+	 * "first BREAKS at `[`", so a call / `new` whose sole multi-line-ness is an
+	 * array arg is recognised as huggable: the head up to the bracket rides the
+	 * open-paren line, the bracket self-breaks one-per-line, and the arg tail
+	 * (`], y)`) plus any inline sibling args ride the array-close line
+	 * (`f(new X([\n … \n], y), z)`).
+	 *
+	 * ARRAY-ONLY (`[`, not `{`): an object / anon-type `{` at the first break is
+	 * excluded — a function-signature param `x: Null<{…}>` breaks at that `{` too,
+	 * and the fork opens the signature paren there rather than hugging it. Object-
+	 * literal call args that START with `{` keep the existing `startsWithCollection
+	 * Delim` path.
+	 *
+	 * A SOFT line reached before the bracket disqualifies `d`: the bracket then
+	 * sits inside a chain (opAdd / opBool / ternary continuation) whose own wrap
+	 * semantics the fork honours (it explodes the call rather than hugging).
+	 *
+	 * In-order left-spine DFS reusing `flatPushChildren`'s child order (so it
+	 * descends the SAME flat side that `flatLength` walked to prove `d` breaks —
+	 * the caller gates on `flatLength(d) < 0` first, so a raw hardline is
+	 * guaranteed reachable here). Tracks the last Text leaf's final char and, at
+	 * the first line break, answers whether that char is `[`. O(spine up to the
+	 * first break), no re-measure.
+	 */
+	private static inline function firstBreakIsArrayDelim(d: Doc): Bool {
+		return firstBreakIsDelimChar(d, '['.code);
+	}
+
+	/**
 	 * Normal-path 0-extra-threshold tree: the cascade collapses to the
 	 * legacy 2-state shape. When flat (`exceeds=false`) and break
 	 * (`exceeds=true`) resolve to the SAME mode, `emitZeroThresholdAgree`
@@ -1653,46 +1760,6 @@ class WrapList {
 		return null;
 	}
 
-	/**
-	 * Wrap `body` with `lead` unless `lead` is `Empty` — avoids a
-	 * pointless single-element `Concat` for the common no-lead path.
-	 */
-	private static inline function prependLead(body: Doc, lead: Doc): Doc {
-		return switch lead {
-			case Empty: body;
-			case _: Concat([lead, body]);
-		};
-	}
-
-	/**
-	 * Classifies a `WrapMode` as single-line (`NoWrap`) vs multi-line
-	 * (`OnePerLine`, `OnePerLineAfterFirst`, `FillLine`, …). Used by
-	 * `emit` to pick `leadFlat` vs `leadBreak` when the cascade
-	 * collapses to a single mode and no `Group(IfBreak)` wrap is
-	 * emitted. `FillLine` counts as multi-line by intent — its inner
-	 * `Group` decides per-item fit but the construct as a whole opts
-	 * into wrapped layout.
-	 */
-	private static inline function isFlatMode(mode: WrapMode): Bool {
-		return switch mode {
-			case NoWrap: true;
-			case _: false;
-		};
-	}
-
-	/**
-	 * ω-array-reflow: when `on` is set (the caller threaded
-	 * `@:fmt(reflowSourceMultiline)`'s runtime `_smlKeep` gate), a cascade
-	 * resolution of `NoWrap` is floored to `OnePerLine`. The source list
-	 * already spans multiple lines, so collapsing it fully flat would
-	 * discard the author's "stay multi-line" intent; flooring keeps the
-	 * list broken while still letting width-driven modes (`FillLine`,
-	 * `FillLineWithLeadingBreak`) reflow it. No-op when `on` is false — gate-less consumers stay byte-identical.
-	 */
-	private static inline function floorSourceMultiline(mode: WrapMode, on: Bool): WrapMode {
-		return on && mode == NoWrap ? OnePerLine : mode;
-	}
-
 	private static function shape(
 		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
 		appendTrailingComma: Bool, trailBreak: Doc, groupRestProbe: Bool, sepBeforeFlags: Null<Array<Bool>>, lineWidth: Int,
@@ -2055,15 +2122,6 @@ class WrapList {
 			case Ignore: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags, flatTrailingComma);
 			case _: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags, flatTrailingComma);
 		};
-	}
-
-	/**
-	 * Returns `true` when `sepBeforeFlags[i]` is set, meaning
-	 * the engine should skip the separator between items `[i-1]` and `i`.
-	 * Null / out-of-bounds is treated as "do not skip".
-	 */
-	private static inline function skipSepBefore(flags: Null<Array<Bool>>, i: Int): Bool {
-		return flags != null && i >= 0 && i < flags.length && flags[i];
 	}
 
 	/**
@@ -2834,24 +2892,6 @@ class WrapList {
 	}
 
 	/**
-	 * ω-group-rest-probe slice 2: pick `GroupWithRestProbe` over `Group`
-	 * when the caller's Star opted into rest-of-stack lookahead via
-	 * `@:fmt(groupRestProbe)`. Used at sites where significant same-line
-	 * content trails the wrap construct (e.g. typedef LHS `<T,U,V>`
-	 * followed by ` = Rhs<...>;` on the same source line). Fork's wrap
-	 * engine considers `lengthAfter` when deciding whether to wrap the
-	 * LHS — our plain `Group.fitsFlat` is blind to rest-of-stack.
-	 * `GroupWithRestProbe(inner)` subtracts
-	 * `flatTokenWidthOfRestStack(stack)` from the budget at render time,
-	 * matching fork's bias. Default `false` keeps every other consumer
-	 * (call args, object literals, anon types, HxTypeRef.params) on the
-	 * legacy `Group` decision.
-	 */
-	private static inline function groupOrRestProbe(inner: Doc, groupRestProbe: Bool): Doc {
-		return groupRestProbe ? GroupWithRestProbe(inner) : Group(inner);
-	}
-
-	/**
 	 * ω-1arg-close-chain-opl-gate: structural marker probe for chain-OPL
 	 * shape inside a 1-arg list. Returns `true` when `item` likely
 	 * originated from `MethodChainEmit` in `OnePerLine` mode — receiver
@@ -3086,13 +3126,6 @@ class WrapList {
 			case IfNaturalFirstLineFitsOpenDelim(_, _, _): false;
 			case IfArrowContinuationFits(_, _, _, _, _) | IfIndentWidthExceeds(_, _, _, _) | IfGluedFirstLineExceeds(_, _, _, _): false;
 			case _: null;
-		};
-	}
-
-	private static inline function isLeadingTransparent(d: Doc): Bool {
-		return switch d {
-			case Empty, Concat([]): true;
-			case _: false;
 		};
 	}
 
@@ -3517,39 +3550,6 @@ class WrapList {
 	}
 
 	/**
-	 * True iff `d`'s FIRST structural break (soft or hard line) is immediately
-	 * preceded by an ARRAY open delimiter `[` — i.e. `d`'s multi-line-ness is
-	 * owned by a (possibly nested) array literal whose open bracket sits at the
-	 * end of the head line (`new X([\n … \n], y)`, `f([\n … \n])`). The
-	 * generalisation of `startsWithCollectionDelim` from "STARTS with `[`" to
-	 * "first BREAKS at `[`", so a call / `new` whose sole multi-line-ness is an
-	 * array arg is recognised as huggable: the head up to the bracket rides the
-	 * open-paren line, the bracket self-breaks one-per-line, and the arg tail
-	 * (`], y)`) plus any inline sibling args ride the array-close line
-	 * (`f(new X([\n … \n], y), z)`).
-	 *
-	 * ARRAY-ONLY (`[`, not `{`): an object / anon-type `{` at the first break is
-	 * excluded — a function-signature param `x: Null<{…}>` breaks at that `{` too,
-	 * and the fork opens the signature paren there rather than hugging it. Object-
-	 * literal call args that START with `{` keep the existing `startsWithCollection
-	 * Delim` path.
-	 *
-	 * A SOFT line reached before the bracket disqualifies `d`: the bracket then
-	 * sits inside a chain (opAdd / opBool / ternary continuation) whose own wrap
-	 * semantics the fork honours (it explodes the call rather than hugging).
-	 *
-	 * In-order left-spine DFS reusing `flatPushChildren`'s child order (so it
-	 * descends the SAME flat side that `flatLength` walked to prove `d` breaks —
-	 * the caller gates on `flatLength(d) < 0` first, so a raw hardline is
-	 * guaranteed reachable here). Tracks the last Text leaf's final char and, at
-	 * the first line break, answers whether that char is `[`. O(spine up to the
-	 * first break), no re-measure.
-	 */
-	private static inline function firstBreakIsArrayDelim(d: Doc): Bool {
-		return firstBreakIsDelimChar(d, '['.code);
-	}
-
-	/**
 	 * True iff the Text atom `s` is a COMMENT rather than source tokens — the
 	 * verbatim `trailingCommentDocVerbatim` / leading-comment output, i.e. a
 	 * trimmed atom opening `//` or `/*`. A string literal can never collide:
@@ -3623,7 +3623,6 @@ class WrapList {
 		return false;
 	}
 
-
 	/**
 	 * True iff `item` is a paren/bare arrow-lambda arg whose body is a PLAIN
 	 * `if` (no top-level `else`) that is NOT a `{}`-block. Such an arrow hides
@@ -3638,7 +3637,6 @@ class WrapList {
 		final body: Null<Doc> = arrowBodyDoc(item);
 		return body != null && firstVisibleText(body) == 'if' && !hasTopLevelElse(body, 0);
 	}
-
 
 	/**
 	 * Deep-map that re-tags every hardline-FREE `BodyGroup` inside `d` as a

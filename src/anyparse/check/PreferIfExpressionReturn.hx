@@ -128,6 +128,11 @@ final class PreferIfExpressionReturn implements Check {
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
+	/** The source text `span` covers. */
+	private static inline function text(source: String, span: Span): String {
+		return source.substring(span.from, span.to);
+	}
+
 	/** Bundle the required `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
 	private static function readSeams(shape: RefShape): Null<Seams> {
 		final ifKinds: Null<Array<String>> = shape.ifStatementKinds;
@@ -239,12 +244,6 @@ final class PreferIfExpressionReturn implements Check {
 			for (p in m.pairs) { cond: text(source, p.cond), value: IfExpressionChain.spanText(source, p.value, m.carried) }
 		];
 		return { span: span, text: IfExpressionChain.buildText(text(source, m.prefix), built, text(source, m.terminalValue)) };
-	}
-
-
-	/** The source text `span` covers. */
-	private static inline function text(source: String, span: Span): String {
-		return source.substring(span.from, span.to);
 	}
 
 }

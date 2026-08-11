@@ -380,6 +380,241 @@ final class RefactorSupport {
 		'Xml'
 	];
 
+	/** Is `kind` a class-member declaration (field / method)? */
+	public static inline function isFieldMemberKind(kind: String): Bool {
+		return FIELD_MEMBER_KINDS.contains(kind);
+	}
+
+	/**
+	 * Whether `kind` declares a member. `isFieldMemberKind` plus the enum constructors and
+	 * the three conditional member forms `HxClassMember` dispatches BEFORE their plain
+	 * twins (`var x … #if … ;`, `function #if a f #else g #end`, a `#if` splice at member
+	 * scope). Each of those carries a signature and a body like any member, so a walk
+	 * looking for member HOSTS has to recognise them or it descends into one.
+	 */
+	public static inline function isMemberDeclKind(kind: String): Bool {
+		return isFieldMemberKind(kind) || kind == 'SimpleCtor' || kind == 'ParamCtor' || kind == 'VarSemiCondInitMember'
+			|| kind == 'CondNameFnMember' || kind == 'CondSpliceMember';
+	}
+
+	/**
+	 * Whether a walk looking for member declarations should descend from a `parentKind`
+	 * node into a `childKind` one. Split out of `eachMemberHost` for a walk that threads
+	 * its own state down the tree (`unused-private` carries an `extends` flag) and so
+	 * cannot delegate the recursion itself — the pruning knowledge still lives here.
+	 */
+	public static inline function descendsToMemberHost(parentKind: String, childKind: String): Bool {
+		return !isMemberDeclKind(childKind) && (parentKind == TYPEDEF_DECL_KIND || childKind != ANON_KIND);
+	}
+
+	/**
+	 * The last dotted segment of `dotted` — the simple name a plain import binds
+	 * (`pkg.sub.Foo` -> `Foo`), and the whole string when it carries no dot at all.
+	 *
+	 * Purely textual: it splits on the LAST `.` and asks nothing of the tree, so it
+	 * is equally correct for an import payload, a canonical type path, a `using`
+	 * target and a dotted field path. Callers that need the module-vs-sub-type
+	 * distinction (`pkg.Mod.Sub`) must resolve that themselves — this returns `Sub`.
+	 */
+	public static inline function lastSegment(dotted: String): String {
+		final dot: Int = dotted.lastIndexOf('.');
+		return dot < 0 ? dotted : dotted.substring(dot + 1);
+	}
+
+	/** A name is renameable when it is a valid identifier and not `this`. */
+	public static inline function isRenameableName(name: Null<String>): Bool {
+		return name != null && name != 'this' && isIdentifier(name);
+	}
+
+	public static inline function isIdentStartChar(c: Int): Bool {
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code;
+	}
+
+	/** Does `s` begin with an upper-case ASCII letter — the Haxe convention a type name follows, distinguishing a type reference from a lower-case value / package segment? */
+	public static inline function isUpperInitial(s: String): Bool {
+		final c: Int = s.fastCodeAt(0);
+		return c >= 'A'.code && c <= 'Z'.code;
+	}
+
+	public static inline function isIdentChar(c: Int): Bool {
+		return isIdentStartChar(c) || (c >= '0'.code && c <= '9'.code);
+	}
+
+	/** Is `c` an ASCII space / tab / newline / carriage return? */
+	public static inline function isSpace(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
+	}
+
+	/**
+	 * Does `name` occur as a word-boundary identifier token within
+	 * `source[from, end)` at an offset that lies inside none of `excluded`?
+	 * The conservative "is this name referenced" primitive shared by the
+	 * dead-code checks: `unused-import` scans the whole file excluding the
+	 * import statements; `unused-local` scans a declaration's enclosing scope
+	 * excluding the declaration itself. Word-boundary = a non-identifier char on
+	 * both sides, so `name` does not match inside `nameSuffix`. A textual scan
+	 * (not an AST projection) is deliberate: it catches reference forms the
+	 * grammar hides under non-obvious ctors (`'$name'` simple interpolation,
+	 * macro reification) at the cost of also counting the name in comments /
+	 * strings — which only ever keeps a binding, never wrongly deletes one.
+	 * `end` is clamped to the source length. A dotted path's tail counts too
+	 * (`this.name` IS a read of member `name`); the callers for which it is not —
+	 * `unused-import`, since an import binds a SIMPLE name — take
+	 * `referencedUnqualifiedInRange` instead.
+	 *
+	 * One boundary is not spelled with a boundary CHARACTER: a numeric escape
+	 * (`\x24`, `$`) that decodes to the interpolation trigger `$` ends in a
+	 * hex digit, so a plain word-boundary test reads `'\x24name'` as one long
+	 * token and misses a real read (see `interpolationEscapeBefore`).
+	 */
+	public static inline function referencedInRange(source: String, name: String, from: Int, end: Int, excluded: Array<Span>): Bool {
+		return scanReference(source, name, from, end, excluded, null);
+	}
+
+	/**
+	 * `referencedInRange` restricted to occurrences that stand as a SIMPLE name —
+	 * an occurrence whose preceding non-whitespace character is a qualification
+	 * `.` does not count. The test `unused-import` needs: a Haxe import binds a
+	 * simple name, while a dotted path resolves from its ROOT
+	 * (`haxe.macro.Context.currentPos()` needs no import at all), so a tail
+	 * segment never goes through one. The ROOT of a path is not dot-preceded and
+	 * still counts — `Mod.VALUE` is exactly what `import pkg.Mod;` provides.
+	 *
+	 * A SINGLE dot qualifies. `...` is the range / rest operator, not a
+	 * qualifier: in `for (i in 0...Limit.MAX)` the name IS dot-preceded, yet it
+	 * is a bare reference — reading that as qualification would delete an import
+	 * the build needs. Safe navigation (`o?.f`) and a field access inside string
+	 * interpolation (`'${o.f}'`) are single-dot field accesses and are correctly
+	 * skipped by the same test.
+	 *
+	 * A SEPARATE method rather than a tightening of `referencedInRange`: the
+	 * shared predicate's over-counting is load-bearing for its other callers —
+	 * `unused-private` reads `this.field` as a genuine reference, and a stricter
+	 * answer there would delete a live member.
+	 *
+	 * `commentRegions` (`collectCommentRegions`, hoisted once per file by the
+	 * caller) is REQUIRED, not a convenience: a line comment ending in a sentence
+	 * period puts a `.` directly before the next line's first token, and reading
+	 * that as qualification deletes an import the build needs. It is the only
+	 * inert construct that can end in a bare `.` — a string / regex / block
+	 * comment closes with its own delimiter — but the mask is exact for all of
+	 * them and costs one scan per file.
+	 */
+	public static inline function referencedUnqualifiedInRange(
+		source: String, name: String, from: Int, end: Int, excluded: Array<Span>, commentRegions: Array<Span>
+	): Bool {
+		return scanReference(source, name, from, end, excluded, commentRegions);
+	}
+
+	/**
+	 * Whether `text` holds a `//` or `/*` comment marker. The primitive under
+	 * `hasCommentMarker` and under `CheckScan.hasCommentMarker`, exposed separately for the
+	 * callers whose subject is not a contiguous source range — a concatenation of trivia
+	 * gaps, or one already-trimmed line.
+	 *
+	 * Deliberately STRING-BLIND: a marker inside a string literal (`'http://x'`) answers yes.
+	 * See `hasCommentMarker` for why that stays.
+	 */
+	public static inline function textHasCommentMarker(text: String): Bool {
+		return text.indexOf('//') >= 0 || text.indexOf('/*') >= 0;
+	}
+
+	/**
+	 * Whether `[from, to)` of `source` holds a `//` or `/*` comment marker — the "don't
+	 * delete a comment" guard every rewriting check consults before regenerating a region.
+	 * An empty or reversed range answers no; the guard is load-bearing, since
+	 * `String.substring` SWAPS a reversed pair and would otherwise scan the wrong text.
+	 *
+	 * ## Why it stays string-blind
+	 *
+	 * The scan cannot tell a real marker from one inside a string literal, so `'http://x'`
+	 * reads as a comment. Teaching it about literals would make it answer `false` on inputs
+	 * where it now answers `true` — a TIGHTENING, and a shared predicate may only be
+	 * tightened when every caller's conservative direction points the same way.
+	 *
+	 * It does not. For nearly every consumer a spurious `true` REFUSES a rewrite (report-only
+	 * instead of autofixed) — harmless, and the direction that never deletes a comment. The
+	 * exceptions are `CheckScan`'s negation machinery — `negateConditionText`,
+	 * `negationIsClean` and the `eqFlipText` it dispatches through — where the answer is not
+	 * a refusal but a TIER SELECTOR: a `true` routes the rewrite to the verbatim text
+	 * fallback, and `negationIsClean` then reports the site as clean precisely BECAUSE that
+	 * tier declines nothing. Making the scan literal-aware moves such a condition onto the
+	 * De Morgan tier, which can decline — flipping a finding off — and changes the text
+	 * `eqFlipText` emits. That is a real behaviour change, not extra safety, so the
+	 * string-blind answer is the shared contract and any caller that needs precision must
+	 * ask the lexical regions (`scanLexicalRegions`) rather than tighten this.
+	 */
+	public static inline function hasCommentMarker(source: String, from: Int, to: Int): Bool {
+		return from < to && textHasCommentMarker(source.substring(from, to));
+	}
+
+	/**
+	 * The part of `isPrivateMemberConfined` that NO precise gate can refine: no file
+	 * skip-parsed (one could hide any writer at all) and no `@:allow` in the member's own
+	 * file (which hands its privates to a type the index cannot name from here). The other
+	 * two vetoes — subtype and `@:access` grant — name a REACHABLE file each, so a caller
+	 * that can scan those files for what it actually fears pairs this with its own gates
+	 * instead: `prefer-final-field` asks only whether such a file WRITES the member, since
+	 * a read survives `final`.
+	 */
+	public static inline function privateMemberScanIsSound(source: String, index: SymbolIndex): Bool {
+		return index.skippedFiles().length <= 0 && source.indexOf('@:allow') < 0;
+	}
+
+	/** Whether `loop` carries a key-value VALUE binder — i.e. it binds a key AND a value. */
+	public static inline function hasIterationValueBinder(loop: QueryNode, valueBinderKinds: Array<String>): Bool {
+		return iterationValueBinder(loop, valueBinderKinds) != null;
+	}
+
+	/**
+	 * The report + resolution-scope `SymbolIndex` the plugin host carries — a subtype declared in a
+	 * configured resolution library, or in the implicitly-scoped Haxe std, is indexed there too — or
+	 * null when the plugin is not a resolution host or no scope reached it at all (the caller falls
+	 * back to the report index). The eager counterpart of `lazySymbolIndex`, for a check that already
+	 * holds a report index and only needs to know whether a WIDER one exists:
+	 * `resolutionIndexOf(plugin) ?? index`.
+	 *
+	 * The null return is now the RARE case rather than the default. A `Cli` run reaches it only when
+	 * the project declares no resolution key AND no Haxe std is discoverable — a machine without Haxe,
+	 * or one that declined the std via `APQ_NO_STD` / `"resolutionStd": false`. It is still the plain
+	 * answer for a direct `check.run` with a bare plugin, which is what the unit tests that pin the
+	 * report-only behaviour use.
+	 */
+	public static inline function resolutionIndexOf(plugin: GrammarPlugin): Null<SymbolIndex> {
+		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
+		return host != null && host.hasAnyResolutionScope() ? host.resolutionIndex() : null;
+	}
+
+	/**
+	 * The resolution scope's RAW sources (report UNION the library roots) when `plugin` hosts one, else
+	 * null. The text counterpart of `resolutionIndexOf`, for a scan that needs no parse: the index drops
+	 * a skip-parsed file from both `allFiles` and `sourceOf`, so a whole-scope TEXT proof read off the
+	 * index would treat that file as holding nothing at all.
+	 */
+	public static inline function resolutionSourcesOf(plugin: GrammarPlugin): Null<Array<{ file: String, source: String }>> {
+		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
+		return host != null && host.hasAnyResolutionScope() ? host.resolutionFiles() : null;
+	}
+
+	/**
+	 * A node kind that contributes no side effect on its own: an enumerated
+	 * `SAFE_KINDS` member, or any leaf whose kind ends with `Lit` / `StringExpr`
+	 * (a literal payload not separately enumerated).
+	 */
+	public static inline function isSafeKind(kind: String): Bool {
+		return SAFE_KINDS.contains(kind) || kind.endsWith('Lit') || kind.endsWith('StringExpr');
+	}
+
+	/**
+	 * Whether a projected node kind denotes a `#if...#end` region — a block
+	 * `Conditional`, an expression `ConditionalExpr`, or any `CondSplice*`
+	 * mid-expression / statement splice. An unrecognised conditional kind
+	 * degrades to `ActiveCode`, which still blocks — fail-closed.
+	 */
+	public static inline function isConditionalKind(kind: String): Bool {
+		return kind == 'Conditional' || kind == 'ConditionalExpr' || kind.startsWith('CondSplice');
+	}
+
 	/**
 	 * Resolve the cursor to the named occurrence node it sits on, in two
 	 * tiers (innermost-wins within each):
@@ -489,23 +724,6 @@ final class RefactorSupport {
 		return found;
 	}
 
-	/** Is `kind` a class-member declaration (field / method)? */
-	public static inline function isFieldMemberKind(kind: String): Bool {
-		return FIELD_MEMBER_KINDS.contains(kind);
-	}
-
-	/**
-	 * Whether `kind` declares a member. `isFieldMemberKind` plus the enum constructors and
-	 * the three conditional member forms `HxClassMember` dispatches BEFORE their plain
-	 * twins (`var x … #if … ;`, `function #if a f #else g #end`, a `#if` splice at member
-	 * scope). Each of those carries a signature and a body like any member, so a walk
-	 * looking for member HOSTS has to recognise them or it descends into one.
-	 */
-	public static inline function isMemberDeclKind(kind: String): Bool {
-		return isFieldMemberKind(kind) || kind == 'SimpleCtor' || kind == 'ParamCtor' || kind == 'VarSemiCondInitMember'
-			|| kind == 'CondNameFnMember' || kind == 'CondSpliceMember';
-	}
-
 	/**
 	 * Visit `node` and every descendant that can HOST a member declaration, so a caller can
 	 * scan each host's direct children. Descends through wrappers — a `#if` region puts a
@@ -520,16 +738,6 @@ final class RefactorSupport {
 	public static function eachMemberHost(node: QueryNode, visit: QueryNode -> Void): Void {
 		visit(node);
 		for (child in node.children) if (descendsToMemberHost(node.kind, child.kind)) eachMemberHost(child, visit);
-	}
-
-	/**
-	 * Whether a walk looking for member declarations should descend from a `parentKind`
-	 * node into a `childKind` one. Split out of `eachMemberHost` for a walk that threads
-	 * its own state down the tree (`unused-private` carries an `extends` flag) and so
-	 * cannot delegate the recursion itself — the pruning knowledge still lives here.
-	 */
-	public static inline function descendsToMemberHost(parentKind: String, childKind: String): Bool {
-		return !isMemberDeclKind(childKind) && (parentKind == TYPEDEF_DECL_KIND || childKind != ANON_KIND);
 	}
 
 	/**
@@ -628,20 +836,6 @@ final class RefactorSupport {
 		final slash: Int = file.lastIndexOf('/');
 		final tail: String = slash < 0 ? file : file.substr(slash + 1);
 		return tail.endsWith('.hx') ? tail.substr(0, tail.length - '.hx'.length) : tail;
-	}
-
-	/**
-	 * The last dotted segment of `dotted` — the simple name a plain import binds
-	 * (`pkg.sub.Foo` -> `Foo`), and the whole string when it carries no dot at all.
-	 *
-	 * Purely textual: it splits on the LAST `.` and asks nothing of the tree, so it
-	 * is equally correct for an import payload, a canonical type path, a `using`
-	 * target and a dotted field path. Callers that need the module-vs-sub-type
-	 * distinction (`pkg.Mod.Sub`) must resolve that themselves — this returns `Sub`.
-	 */
-	public static inline function lastSegment(dotted: String): String {
-		final dot: Int = dotted.lastIndexOf('.');
-		return dot < 0 ? dotted : dotted.substring(dot + 1);
 	}
 
 	/**
@@ -828,11 +1022,6 @@ final class RefactorSupport {
 		return out.length == 0 ? null : out;
 	}
 
-	/** A name is renameable when it is a valid identifier and not `this`. */
-	public static inline function isRenameableName(name: Null<String>): Bool {
-		return name != null && name != 'this' && isIdentifier(name);
-	}
-
 	/** Whole-string check: a non-empty identifier (`[A-Za-z_][A-Za-z0-9_]*`). */
 	public static function isIdentifier(s: String): Bool {
 		if (s.length == 0) return false;
@@ -840,25 +1029,6 @@ final class RefactorSupport {
 		if (!isIdentStartChar(first)) return false;
 		for (i in 1...s.length) if (!isIdentChar(s.fastCodeAt(i))) return false;
 		return true;
-	}
-
-	public static inline function isIdentStartChar(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code;
-	}
-
-	/** Does `s` begin with an upper-case ASCII letter — the Haxe convention a type name follows, distinguishing a type reference from a lower-case value / package segment? */
-	public static inline function isUpperInitial(s: String): Bool {
-		final c: Int = s.fastCodeAt(0);
-		return c >= 'A'.code && c <= 'Z'.code;
-	}
-
-	public static inline function isIdentChar(c: Int): Bool {
-		return isIdentStartChar(c) || (c >= '0'.code && c <= '9'.code);
-	}
-
-	/** Is `c` an ASCII space / tab / newline / carriage return? */
-	public static inline function isSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 	}
 
 	/**
@@ -1151,109 +1321,6 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * Does `name` occur as a word-boundary identifier token within
-	 * `source[from, end)` at an offset that lies inside none of `excluded`?
-	 * The conservative "is this name referenced" primitive shared by the
-	 * dead-code checks: `unused-import` scans the whole file excluding the
-	 * import statements; `unused-local` scans a declaration's enclosing scope
-	 * excluding the declaration itself. Word-boundary = a non-identifier char on
-	 * both sides, so `name` does not match inside `nameSuffix`. A textual scan
-	 * (not an AST projection) is deliberate: it catches reference forms the
-	 * grammar hides under non-obvious ctors (`'$name'` simple interpolation,
-	 * macro reification) at the cost of also counting the name in comments /
-	 * strings — which only ever keeps a binding, never wrongly deletes one.
-	 * `end` is clamped to the source length. A dotted path's tail counts too
-	 * (`this.name` IS a read of member `name`); the callers for which it is not —
-	 * `unused-import`, since an import binds a SIMPLE name — take
-	 * `referencedUnqualifiedInRange` instead.
-	 *
-	 * One boundary is not spelled with a boundary CHARACTER: a numeric escape
-	 * (`\x24`, `$`) that decodes to the interpolation trigger `$` ends in a
-	 * hex digit, so a plain word-boundary test reads `'\x24name'` as one long
-	 * token and misses a real read (see `interpolationEscapeBefore`).
-	 */
-	public static inline function referencedInRange(source: String, name: String, from: Int, end: Int, excluded: Array<Span>): Bool {
-		return scanReference(source, name, from, end, excluded, null);
-	}
-
-	/**
-	 * `referencedInRange` restricted to occurrences that stand as a SIMPLE name —
-	 * an occurrence whose preceding non-whitespace character is a qualification
-	 * `.` does not count. The test `unused-import` needs: a Haxe import binds a
-	 * simple name, while a dotted path resolves from its ROOT
-	 * (`haxe.macro.Context.currentPos()` needs no import at all), so a tail
-	 * segment never goes through one. The ROOT of a path is not dot-preceded and
-	 * still counts — `Mod.VALUE` is exactly what `import pkg.Mod;` provides.
-	 *
-	 * A SINGLE dot qualifies. `...` is the range / rest operator, not a
-	 * qualifier: in `for (i in 0...Limit.MAX)` the name IS dot-preceded, yet it
-	 * is a bare reference — reading that as qualification would delete an import
-	 * the build needs. Safe navigation (`o?.f`) and a field access inside string
-	 * interpolation (`'${o.f}'`) are single-dot field accesses and are correctly
-	 * skipped by the same test.
-	 *
-	 * A SEPARATE method rather than a tightening of `referencedInRange`: the
-	 * shared predicate's over-counting is load-bearing for its other callers —
-	 * `unused-private` reads `this.field` as a genuine reference, and a stricter
-	 * answer there would delete a live member.
-	 *
-	 * `commentRegions` (`collectCommentRegions`, hoisted once per file by the
-	 * caller) is REQUIRED, not a convenience: a line comment ending in a sentence
-	 * period puts a `.` directly before the next line's first token, and reading
-	 * that as qualification deletes an import the build needs. It is the only
-	 * inert construct that can end in a bare `.` — a string / regex / block
-	 * comment closes with its own delimiter — but the mask is exact for all of
-	 * them and costs one scan per file.
-	 */
-	public static inline function referencedUnqualifiedInRange(
-		source: String, name: String, from: Int, end: Int, excluded: Array<Span>, commentRegions: Array<Span>
-	): Bool {
-		return scanReference(source, name, from, end, excluded, commentRegions);
-	}
-
-	/**
-	 * Whether `text` holds a `//` or `/*` comment marker. The primitive under
-	 * `hasCommentMarker` and under `CheckScan.hasCommentMarker`, exposed separately for the
-	 * callers whose subject is not a contiguous source range — a concatenation of trivia
-	 * gaps, or one already-trimmed line.
-	 *
-	 * Deliberately STRING-BLIND: a marker inside a string literal (`'http://x'`) answers yes.
-	 * See `hasCommentMarker` for why that stays.
-	 */
-	public static inline function textHasCommentMarker(text: String): Bool {
-		return text.indexOf('//') >= 0 || text.indexOf('/*') >= 0;
-	}
-
-	/**
-	 * Whether `[from, to)` of `source` holds a `//` or `/*` comment marker — the "don't
-	 * delete a comment" guard every rewriting check consults before regenerating a region.
-	 * An empty or reversed range answers no; the guard is load-bearing, since
-	 * `String.substring` SWAPS a reversed pair and would otherwise scan the wrong text.
-	 *
-	 * ## Why it stays string-blind
-	 *
-	 * The scan cannot tell a real marker from one inside a string literal, so `'http://x'`
-	 * reads as a comment. Teaching it about literals would make it answer `false` on inputs
-	 * where it now answers `true` — a TIGHTENING, and a shared predicate may only be
-	 * tightened when every caller's conservative direction points the same way.
-	 *
-	 * It does not. For nearly every consumer a spurious `true` REFUSES a rewrite (report-only
-	 * instead of autofixed) — harmless, and the direction that never deletes a comment. The
-	 * exceptions are `CheckScan`'s negation machinery — `negateConditionText`,
-	 * `negationIsClean` and the `eqFlipText` it dispatches through — where the answer is not
-	 * a refusal but a TIER SELECTOR: a `true` routes the rewrite to the verbatim text
-	 * fallback, and `negationIsClean` then reports the site as clean precisely BECAUSE that
-	 * tier declines nothing. Making the scan literal-aware moves such a condition onto the
-	 * De Morgan tier, which can decline — flipping a finding off — and changes the text
-	 * `eqFlipText` emits. That is a real behaviour change, not extra safety, so the
-	 * string-blind answer is the shared contract and any caller that needs precision must
-	 * ask the lexical regions (`scanLexicalRegions`) rather than tighten this.
-	 */
-	public static inline function hasCommentMarker(source: String, from: Int, to: Int): Bool {
-		return from < to && textHasCommentMarker(source.substring(from, to));
-	}
-
-	/**
 	 * Format `text` into a doc-comment block, one ` * ` line per line. Leading /
 	 * trailing blank lines of the payload are trimmed (a stdin / heredoc payload
 	 * always carries a trailing newline — an edge blank is a delivery artifact,
@@ -1412,19 +1479,6 @@ final class RefactorSupport {
 	 */
 	public static function isPrivateMemberConfined(owner: String, source: String, index: SymbolIndex): Bool {
 		return privateMemberScanIsSound(source, index) && !index.hasSubtype(owner) && !index.hasAccessGrant(owner);
-	}
-
-	/**
-	 * The part of `isPrivateMemberConfined` that NO precise gate can refine: no file
-	 * skip-parsed (one could hide any writer at all) and no `@:allow` in the member's own
-	 * file (which hands its privates to a type the index cannot name from here). The other
-	 * two vetoes — subtype and `@:access` grant — name a REACHABLE file each, so a caller
-	 * that can scan those files for what it actually fears pairs this with its own gates
-	 * instead: `prefer-final-field` asks only whether such a file WRITES the member, since
-	 * a read survives `final`.
-	 */
-	public static inline function privateMemberScanIsSound(source: String, index: SymbolIndex): Bool {
-		return index.skippedFiles().length <= 0 && source.indexOf('@:allow') < 0;
 	}
 
 	/**
@@ -2539,11 +2593,6 @@ final class RefactorSupport {
 		return loop.children.find(c -> valueBinderKinds.contains(c.kind));
 	}
 
-	/** Whether `loop` carries a key-value VALUE binder — i.e. it binds a key AND a value. */
-	public static inline function hasIterationValueBinder(loop: QueryNode, valueBinderKinds: Array<String>): Bool {
-		return iterationValueBinder(loop, valueBinderKinds) != null;
-	}
-
 	/**
 	 * The OPERAND children of an iteration node — its iterable and its body — with the VALUE binder
 	 * of a key-value iteration filtered out. A consumer indexing `children[0]` for the iterable, or
@@ -2560,36 +2609,6 @@ final class RefactorSupport {
 	 */
 	public static function iterationIterable(loop: QueryNode, valueBinderKinds: Array<String>): Null<QueryNode> {
 		return loop.children.find(child -> !valueBinderKinds.contains(child.kind));
-	}
-
-	/**
-	 * The report + resolution-scope `SymbolIndex` the plugin host carries — a subtype declared in a
-	 * configured resolution library, or in the implicitly-scoped Haxe std, is indexed there too — or
-	 * null when the plugin is not a resolution host or no scope reached it at all (the caller falls
-	 * back to the report index). The eager counterpart of `lazySymbolIndex`, for a check that already
-	 * holds a report index and only needs to know whether a WIDER one exists:
-	 * `resolutionIndexOf(plugin) ?? index`.
-	 *
-	 * The null return is now the RARE case rather than the default. A `Cli` run reaches it only when
-	 * the project declares no resolution key AND no Haxe std is discoverable — a machine without Haxe,
-	 * or one that declined the std via `APQ_NO_STD` / `"resolutionStd": false`. It is still the plain
-	 * answer for a direct `check.run` with a bare plugin, which is what the unit tests that pin the
-	 * report-only behaviour use.
-	 */
-	public static inline function resolutionIndexOf(plugin: GrammarPlugin): Null<SymbolIndex> {
-		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
-		return host != null && host.hasAnyResolutionScope() ? host.resolutionIndex() : null;
-	}
-
-	/**
-	 * The resolution scope's RAW sources (report UNION the library roots) when `plugin` hosts one, else
-	 * null. The text counterpart of `resolutionIndexOf`, for a scan that needs no parse: the index drops
-	 * a skip-parsed file from both `allFiles` and `sourceOf`, so a whole-scope TEXT proof read off the
-	 * index would treat that file as holding nothing at all.
-	 */
-	public static inline function resolutionSourcesOf(plugin: GrammarPlugin): Null<Array<{ file: String, source: String }>> {
-		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
-		return host != null && host.hasAnyResolutionScope() ? host.resolutionFiles() : null;
 	}
 
 	/**
@@ -2630,15 +2649,6 @@ final class RefactorSupport {
 			}
 			return index;
 		};
-	}
-
-	/**
-	 * A node kind that contributes no side effect on its own: an enumerated
-	 * `SAFE_KINDS` member, or any leaf whose kind ends with `Lit` / `StringExpr`
-	 * (a literal payload not separately enumerated).
-	 */
-	public static inline function isSafeKind(kind: String): Bool {
-		return SAFE_KINDS.contains(kind) || kind.endsWith('Lit') || kind.endsWith('StringExpr');
 	}
 
 	/** Is `offset` inside any of `spans` (`from`-inclusive, `to`-exclusive)? */
@@ -2715,16 +2725,6 @@ final class RefactorSupport {
 				out.push({ span: new Span(at, afterIdx), kind: classifyAt(source, at, len, condSpans, regions) });
 		}
 		return out;
-	}
-
-	/**
-	 * Whether a projected node kind denotes a `#if...#end` region — a block
-	 * `Conditional`, an expression `ConditionalExpr`, or any `CondSplice*`
-	 * mid-expression / statement splice. An unrecognised conditional kind
-	 * degrades to `ActiveCode`, which still blocks — fail-closed.
-	 */
-	public static inline function isConditionalKind(kind: String): Bool {
-		return kind == 'Conditional' || kind == 'ConditionalExpr' || kind.startsWith('CondSplice');
 	}
 
 	/**
@@ -3007,6 +3007,22 @@ final class RefactorSupport {
 		return found;
 	}
 
+	/** Whether `kinds` is set and holds `kind` — an unset seam contributes nothing. */
+	private static inline function kindIn(kinds: Null<Array<String>>, kind: String): Bool {
+		return kinds != null && kinds.contains(kind);
+	}
+
+	/** Increment the integer counter for `key`. */
+	private static inline function bumpCount(map: Map<String, Int>, key: String): Void {
+		final cur: Null<Int> = map[key];
+		map[key] = (cur ?? 0) + 1;
+	}
+
+	/** One of the flag letters Haxe accepts after a regex literal's closing `/`. */
+	private static inline function isRegexFlag(c: Int): Bool {
+		return c == 'g'.code || c == 'i'.code || c == 'm'.code || c == 's'.code || c == 'u'.code;
+	}
+
 	/**
 	 * Is `offset` inside a COMMENT region? The first lexical region that
 	 * contains it decides; a string literal is not a comment, so code
@@ -3108,11 +3124,6 @@ final class RefactorSupport {
 		return kind == shape.exprStatementKind || isConditionalKind(kind) || kindIn(shape.localDeclKinds, kind)
 			|| kindIn(shape.staticLocalDeclKinds, kind) || kindIn(shape.ifStatementKinds, kind) || kindIn(shape.switchKinds, kind)
 			|| kindIn(shape.tryStatementKinds, kind) || kindIn(shape.localFunctionKinds, kind) || kindIn(shape.inlineFunctionKinds, kind);
-	}
-
-	/** Whether `kinds` is set and holds `kind` — an unset seam contributes nothing. */
-	private static inline function kindIn(kinds: Null<Array<String>>, kind: String): Bool {
-		return kinds != null && kinds.contains(kind);
 	}
 
 	/** Recursive worker of `casePatternNames`; `inPattern` marks a subtree already inside a pattern. */
@@ -3565,12 +3576,6 @@ final class RefactorSupport {
 		for (c in node.children) tallyGuardIdents(c, identKind, nullKind, eqKind, notEqKind, identCount, checkCount);
 	}
 
-	/** Increment the integer counter for `key`. */
-	private static inline function bumpCount(map: Map<String, Int>, key: String): Void {
-		final cur: Null<Int> = map[key];
-		map[key] = (cur ?? 0) + 1;
-	}
-
 	/** The identifier compared against null in `node` (one operand an ident, the other null), or null. */
 	private static function nullComparedIdent(node: QueryNode, identKind: String, nullKind: String): Null<String> {
 		if (node.children.length != 2) return null;
@@ -3874,11 +3879,6 @@ final class RefactorSupport {
 			i++;
 		}
 		return -1;
-	}
-
-	/** One of the flag letters Haxe accepts after a regex literal's closing `/`. */
-	private static inline function isRegexFlag(c: Int): Bool {
-		return c == 'g'.code || c == 'i'.code || c == 'm'.code || c == 's'.code || c == 'u'.code;
 	}
 
 	/** Walk `node`, appending the name-token span of every direct child of a `hosts` node. */

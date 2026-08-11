@@ -54,10 +54,10 @@ class Lowering {
 	/** Maximal word at the dispatch position — the `FirstKw` guard's subject. */
 	private static inline final GUARD_WORD_LOCAL: String = '_gW';
 
+	private final _eregByRule: Map<String, GeneratedRule.EregSpec> = [];
 	private final _shape: ShapeBuilder.ShapeResult;
 	private final _formatInfo: FormatReader.FormatInfo;
 	private final _ctx: LoweringCtx;
-	private final _eregByRule: Map<String, GeneratedRule.EregSpec> = [];
 
 	public function new(shape: ShapeBuilder.ShapeResult, formatInfo: FormatReader.FormatInfo, ctx: LoweringCtx) {
 		_shape = shape;
@@ -445,7 +445,6 @@ class Lowering {
 		statements.push(macro throw anyparse.runtime.ParseError.backtrack);
 		return macro $b{statements};
 	}
-
 
 	/**
 	 * Lower the Pratt-loop body for a `@:infix`-annotated enum. The body
@@ -5878,6 +5877,26 @@ expectLit(ctx, $v{trailText}));
 	 */
 	public static inline function trailPresentLocalName(localName: String): String return '${localName}_trailPresent';
 
+	/**
+	 * Emit parse steps for a `@:bin(N, Dec|Oct)` Int field — read N bytes
+	 * as an ASCII slice, strip trailing spaces, and decode as an integer
+	 * in the given base.
+	 */
+	private static inline function emitBinFixedIntField(
+		localName: String, len: Int, encoding: String, fieldName: String, parseSteps: Array<Expr>
+	): Void {
+		emitIntSliceLocal(localName, len, encoding, 'field "$fieldName"', parseSteps);
+	}
+
+	/**
+	 * Emit parse steps for a `@:length(N, Dec|Oct)` length prefix. Reads
+	 * N bytes, right-trims, decodes as an integer in the given base, and
+	 * stores the result in `_lenPrefix_<field>:Int`.
+	 */
+	private static inline function emitBinLengthPrefix(fieldName: String, width: Int, encoding: String, parseSteps: Array<Expr>): Void {
+		emitIntSliceLocal('_lenPrefix_$fieldName', width, encoding, 'length prefix for "$fieldName"', parseSteps);
+	}
+
 	private static function isBareLeft(e: Expr): Bool {
 		return switch e.expr {
 			case EConst(CIdent('left')): true;
@@ -5969,17 +5988,6 @@ expectLit(ctx, $v{trailText}));
 	}
 
 	/**
-	 * Emit parse steps for a `@:bin(N, Dec|Oct)` Int field — read N bytes
-	 * as an ASCII slice, strip trailing spaces, and decode as an integer
-	 * in the given base.
-	 */
-	private static inline function emitBinFixedIntField(
-		localName: String, len: Int, encoding: String, fieldName: String, parseSteps: Array<Expr>
-	): Void {
-		emitIntSliceLocal(localName, len, encoding, 'field "$fieldName"', parseSteps);
-	}
-
-	/**
 	 * Emit parse steps for a `@:bin("fieldName")` Bytes field — read a
 	 * variable number of bytes determined by `parseInt(trim(fieldRef))`.
 	 */
@@ -6007,15 +6015,6 @@ expectLit(ctx, $v{trailText}));
 			]),
 			pos: Context.currentPos(),
 		});
-	}
-
-	/**
-	 * Emit parse steps for a `@:length(N, Dec|Oct)` length prefix. Reads
-	 * N bytes, right-trims, decodes as an integer in the given base, and
-	 * stores the result in `_lenPrefix_<field>:Int`.
-	 */
-	private static inline function emitBinLengthPrefix(fieldName: String, width: Int, encoding: String, parseSteps: Array<Expr>): Void {
-		emitIntSliceLocal('_lenPrefix_$fieldName', width, encoding, 'length prefix for "$fieldName"', parseSteps);
 	}
 
 	/**

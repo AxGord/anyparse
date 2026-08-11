@@ -70,15 +70,15 @@ final class CliFixture {
 		FileSystem.deleteDirectory(dir);
 	}
 
+	private static inline function stripTrailingSlash(p: String): String {
+		return p.endsWith('/') ? p.substring(0, p.length - 1) : p;
+	}
+
 	private static function tempDir(): String {
 		final tmpdir: Null<String> = Sys.getEnv('TMPDIR');
 		if (tmpdir != null && tmpdir.length > 0) return stripTrailingSlash(tmpdir);
 		final temp: Null<String> = Sys.getEnv('TEMP');
 		return temp != null && temp.length > 0 ? stripTrailingSlash(temp) : '/tmp';
-	}
-
-	private static inline function stripTrailingSlash(p: String): String {
-		return p.endsWith('/') ? p.substring(0, p.length - 1) : p;
 	}
 
 }

@@ -271,6 +271,22 @@ final class BinaryChainEmit {
 		return opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
 	}
 
+	private static inline function sameRule(
+		a: { mode: WrapMode, location: WrappingLocation }, b: { mode: WrapMode, location: WrappingLocation }
+	): Bool {
+		return a.mode == b.mode && a.location == b.location;
+	}
+
+	/**
+	 * True for modes that lay the chain across multiple lines
+	 * (`OnePerLine` / `OnePerLineAfterFirst` / `FillLine` /
+	 * `FillLineWithLeadingBreak`). `NoWrap` / `Keep` / `Ignore` keep the
+	 * chain inline. Used by the ω-chain-keep-flat unwrap pivot.
+	 */
+	private static inline function isBreakMode(m: WrapMode): Bool {
+		return m == OnePerLine || m == OnePerLineAfterFirst || m == FillLine || m == FillLineWithLeadingBreak;
+	}
+
 	/**
 	 * Recursive helper that builds the `IfWidthExceeds + IfBreak` tree
 	 * for chain-emit's cascade-with-thresholds layout. Sister of
@@ -308,22 +324,6 @@ final class BinaryChainEmit {
 		final brk: Doc = buildBinaryThresholdTree(rest, firingPlus, forcedExceeds, evalAt, shapeAt);
 		final flat: Doc = buildBinaryThresholdTree(rest, firing, forcedExceeds, evalAt, shapeAt);
 		return IfWidthExceeds(t, brk, flat);
-	}
-
-	private static inline function sameRule(
-		a: { mode: WrapMode, location: WrappingLocation }, b: { mode: WrapMode, location: WrappingLocation }
-	): Bool {
-		return a.mode == b.mode && a.location == b.location;
-	}
-
-	/**
-	 * True for modes that lay the chain across multiple lines
-	 * (`OnePerLine` / `OnePerLineAfterFirst` / `FillLine` /
-	 * `FillLineWithLeadingBreak`). `NoWrap` / `Keep` / `Ignore` keep the
-	 * chain inline. Used by the ω-chain-keep-flat unwrap pivot.
-	 */
-	private static inline function isBreakMode(m: WrapMode): Bool {
-		return m == OnePerLine || m == OnePerLineAfterFirst || m == FillLine || m == FillLineWithLeadingBreak;
 	}
 
 	/**

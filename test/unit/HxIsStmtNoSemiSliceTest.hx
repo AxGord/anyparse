@@ -32,6 +32,13 @@ import anyparse.grammar.haxe.HxStatement;
  */
 class HxIsStmtNoSemiSliceTest extends HxTestHelpers {
 
+	// -- Idempotency: issue_605 brace-block round-trip via the module
+	// pipeline --
+
+	public inline function testCorpusIssue605RoundTrip(): Void {
+		roundTrip('class C {\n\tfunction f() {\n\t\t{x is String}\n\t}\n}', 'issue_605_operator_is');
+	}
+
 	// -- Isolated: bare `x is Type` as sole statement, no `;` --
 
 	public function testBareIsStmtNoSemi(): Void {
@@ -89,13 +96,6 @@ class HxIsStmtNoSemiSliceTest extends HxTestHelpers {
 	public function testCorpusIssue605BraceBlockSingleIs(): Void {
 		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\t{x is String}\n\t}\n}');
 		Assert.equals(1, cls.members.length);
-	}
-
-	// -- Idempotency: issue_605 brace-block round-trip via the module
-	// pipeline --
-
-	public inline function testCorpusIssue605RoundTrip(): Void {
-		roundTrip('class C {\n\tfunction f() {\n\t\t{x is String}\n\t}\n}', 'issue_605_operator_is');
 	}
 
 }

@@ -373,6 +373,12 @@ class PreferFindCheckTest extends Test {
 			+ '\t\t}\n\t\ttrace(oXml);\n\t}\n}';
 	}
 
+	/** A `p.C` with a `using Other;` and one Form-A first-match loop — the conflicting-`using` fixture. */
+	private inline function usingOtherSource(): String {
+		return 'package p;\n\nusing Other;\n\nclass C {\n\tfunction f(xs:Array<Int>):Null<Int> {\n\t\tfor (x in xs) if (x > 2) return x;\n'
+			+ '\t\treturn null;\n\t}\n}';
+	}
+
 	/** `source` run through `prefer-find`, then `prefer-safe-nav`, then `prefer-final`, canonicalized after each. */
 	private function fixCascade(source: String): String {
 		var out: String = source;
@@ -390,12 +396,6 @@ class PreferFindCheckTest extends Test {
 			}
 		}
 		return out;
-	}
-
-	/** A `p.C` with a `using Other;` and one Form-A first-match loop — the conflicting-`using` fixture. */
-	private inline function usingOtherSource(): String {
-		return 'package p;\n\nusing Other;\n\nclass C {\n\tfunction f(xs:Array<Int>):Null<Int> {\n\t\tfor (x in xs) if (x > 2) return x;\n'
-			+ '\t\treturn null;\n\t}\n}';
 	}
 
 	/** `source` fixed with `other` (an `Other.hx` module) in the index the conflict gate consults. */

@@ -31,6 +31,22 @@ import anyparse.grammar.haxe.HxModuleWriter;
  */
 class HxToplevelImportUsingSliceTest extends HxTestHelpers {
 
+	public inline function testRoundTripImport(): Void {
+		roundTrip('import haxe.io.Bytes;');
+	}
+
+	public inline function testRoundTripUsing(): Void {
+		roundTrip('using tink.CoreApi;');
+	}
+
+	public inline function testRoundTripPackageImportClass(): Void {
+		roundTrip('package foo.bar;\nimport baz.Qux;\nclass C {}');
+	}
+
+	public inline function testRoundTripImportUsingSequence(): Void {
+		roundTrip('import tink.state.Observable;\nusing tink.CoreApi;');
+	}
+
 	public function testImportSingleSegment(): Void {
 		final ast: HxModule = HaxeModuleParser.parse('import L;');
 		Assert.equals(1, ast.decls.length);
@@ -148,22 +164,6 @@ class HxToplevelImportUsingSliceTest extends HxTestHelpers {
 	public function testWriterEmitsUsing(): Void {
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('using StringTools;'));
 		Assert.equals('using StringTools;\n', out);
-	}
-
-	public inline function testRoundTripImport(): Void {
-		roundTrip('import haxe.io.Bytes;');
-	}
-
-	public inline function testRoundTripUsing(): Void {
-		roundTrip('using tink.CoreApi;');
-	}
-
-	public inline function testRoundTripPackageImportClass(): Void {
-		roundTrip('package foo.bar;\nimport baz.Qux;\nclass C {}');
-	}
-
-	public inline function testRoundTripImportUsingSequence(): Void {
-		roundTrip('import tink.state.Observable;\nusing tink.CoreApi;');
 	}
 
 }

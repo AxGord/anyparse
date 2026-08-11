@@ -329,14 +329,65 @@ final class SymbolIndex {
 		_sources = sources;
 	}
 
-	/** The `FileInfo` for `file`, or null when the file is not indexed. */
-	public function fileInfo(file: String): Null<FileInfo> {
-		return _files.find(f -> f.file == file);
-	}
-
 	/** Every indexed file's `FileInfo`, in input order. */
 	public inline function allFiles(): Array<FileInfo> {
 		return _files.copy();
+	}
+
+	/**
+	 * The verbatim declared type SOURCE of a receiver path's FINAL member, resolved IMPORT- and
+	 * INHERITANCE-aware from `fromFile`'s scope. `startTypeName` is the path root's type name (a
+	 * value's declared type, `this`'s enclosing type, or a static TYPE-name root); it resolves via
+	 * `resolveTypeRef` to the SPECIFIC type in scope, then each `memberPath[i]` is looked up on
+	 * that exact type + its supertype closure and its nominal resolved import-aware to the next
+	 * type in ITS declaring file's scope. Package-safe by construction: a same-simple-named type in
+	 * ANOTHER package never contributes a member (the flaw of the package-blind simple-name walk).
+	 * Null when the root, any intermediate type, or any member is unresolved / ambiguous (fails
+	 * closed). Feeds `RefactorSupport.staticRootPathTypeSource` and the value-root gate.
+	 */
+	public inline function resolvePathFinalMemberTypeSource(
+		fromFile: String, startTypeName: String, memberPath: Array<String>
+	): Null<String> {
+		return pathFinalMemberWalk(fromFile, startTypeName, memberPath, false);
+	}
+
+	/**
+	 * `resolvePathFinalMemberTypeSource` with TYPE-ARGUMENT SUBSTITUTION: `startTypeSource` is the
+	 * root's WRITTEN type (`Box<Item>`, arguments included), and a member declared as one of its
+	 * type's parameters answers the matching argument instead of the parameter name. Resolves
+	 * `Box<Item>.payload : T` to `Item`, which is what makes a generic container's element member
+	 * reachable at all — the verbatim `T` resolves to no type.
+	 *
+	 * Strictly more conservative than the plain walk wherever it is unsure: substitution applies
+	 * ONLY to a member declared DIRECTLY on the current type (an INHERITED member's `T` names the
+	 * SUPERTYPE's parameter, and the extends-clause argument mapping is not modelled), and any
+	 * effective source that STILL mentions a parameter name of the type it came from aborts THIS
+	 * walk. Null on every unresolved / ambiguous link, exactly like the plain walk.
+	 *
+	 * "Aborts this walk" is the honest scope: the caller
+	 * (`RefactorSupport.pathReceiverMemberTypeSource`) treats a null the same way it treats one from
+	 * the plain walk and drops to its package-blind fallback, which may still answer the verbatim
+	 * parameter source. That keeps the deep answer a superset of the shallow one, and a bare
+	 * parameter name is not a type any consumer of this chain acts on.
+	 */
+	public inline function resolveGenericPathFinalMemberTypeSource(
+		fromFile: String, startTypeSource: String, memberPath: Array<String>
+	): Null<String> {
+		return pathFinalMemberWalk(fromFile, startTypeSource, memberPath, true);
+	}
+
+	/**
+	 * Whether any (transitive) SUBTYPE of `owner` references the private backing field `field` the trivial-getter collapse would DELETE — a subclass reading `owner`'s private `_x` directly breaks with 'Unknown identifier' once `_x` is removed, since the rename only rewrites references inside `owner`. The subtype closure is walked DOWNWARD over the index by simple-name supertype edges, so only real descendants are visited (a sibling sharing an unresolvable ancestor never false-blocks). A subtype declaring its OWN `field` is skipped (a bare reference there binds to that member, not the inherited one); a subtype whose declaration span word-boundary-references `field` blocks the collapse, and an unscannable source — or a second type carrying `owner`'s own simple name, which the index cannot tell apart from `owner` — blocks conservatively. Sound over indexed subtypes; a subtype in an unindexed file is the inherent blind spot the accessor-override gate shares.
+	 */
+	public inline function subtypeReferencesField(owner: String, field: String): Bool {
+		return subtypeDeclMatches(
+			owner, field, (_, src, span, redeclares) -> !redeclares && RefactorSupport.identTokenOffset(src, span, field) >= 0
+		);
+	}
+
+	/** The `FileInfo` for `file`, or null when the file is not indexed. */
+	public function fileInfo(file: String): Null<FileInfo> {
+		return _files.find(f -> f.file == file);
 	}
 
 	/** Files that failed to parse and were excluded from the index. */
@@ -690,48 +741,6 @@ final class SymbolIndex {
 	}
 
 	/**
-	 * The verbatim declared type SOURCE of a receiver path's FINAL member, resolved IMPORT- and
-	 * INHERITANCE-aware from `fromFile`'s scope. `startTypeName` is the path root's type name (a
-	 * value's declared type, `this`'s enclosing type, or a static TYPE-name root); it resolves via
-	 * `resolveTypeRef` to the SPECIFIC type in scope, then each `memberPath[i]` is looked up on
-	 * that exact type + its supertype closure and its nominal resolved import-aware to the next
-	 * type in ITS declaring file's scope. Package-safe by construction: a same-simple-named type in
-	 * ANOTHER package never contributes a member (the flaw of the package-blind simple-name walk).
-	 * Null when the root, any intermediate type, or any member is unresolved / ambiguous (fails
-	 * closed). Feeds `RefactorSupport.staticRootPathTypeSource` and the value-root gate.
-	 */
-	public inline function resolvePathFinalMemberTypeSource(
-		fromFile: String, startTypeName: String, memberPath: Array<String>
-	): Null<String> {
-		return pathFinalMemberWalk(fromFile, startTypeName, memberPath, false);
-	}
-
-	/**
-	 * `resolvePathFinalMemberTypeSource` with TYPE-ARGUMENT SUBSTITUTION: `startTypeSource` is the
-	 * root's WRITTEN type (`Box<Item>`, arguments included), and a member declared as one of its
-	 * type's parameters answers the matching argument instead of the parameter name. Resolves
-	 * `Box<Item>.payload : T` to `Item`, which is what makes a generic container's element member
-	 * reachable at all — the verbatim `T` resolves to no type.
-	 *
-	 * Strictly more conservative than the plain walk wherever it is unsure: substitution applies
-	 * ONLY to a member declared DIRECTLY on the current type (an INHERITED member's `T` names the
-	 * SUPERTYPE's parameter, and the extends-clause argument mapping is not modelled), and any
-	 * effective source that STILL mentions a parameter name of the type it came from aborts THIS
-	 * walk. Null on every unresolved / ambiguous link, exactly like the plain walk.
-	 *
-	 * "Aborts this walk" is the honest scope: the caller
-	 * (`RefactorSupport.pathReceiverMemberTypeSource`) treats a null the same way it treats one from
-	 * the plain walk and drops to its package-blind fallback, which may still answer the verbatim
-	 * parameter source. That keeps the deep answer a superset of the shallow one, and a bare
-	 * parameter name is not a type any consumer of this chain acts on.
-	 */
-	public inline function resolveGenericPathFinalMemberTypeSource(
-		fromFile: String, startTypeSource: String, memberPath: Array<String>
-	): Null<String> {
-		return pathFinalMemberWalk(fromFile, startTypeSource, memberPath, true);
-	}
-
-	/**
 	 * Whether a (transitive) supertype of `typeName` declares a member named `field`.
 	 * Such a field's property access is fixed by the supertype, so a check must not
 	 * tighten it (`var` → `final` / `(default, null)`) — Haxe rejects an override /
@@ -980,15 +989,6 @@ final class SymbolIndex {
 	}
 
 	/**
-	 * Whether any (transitive) SUBTYPE of `owner` references the private backing field `field` the trivial-getter collapse would DELETE — a subclass reading `owner`'s private `_x` directly breaks with 'Unknown identifier' once `_x` is removed, since the rename only rewrites references inside `owner`. The subtype closure is walked DOWNWARD over the index by simple-name supertype edges, so only real descendants are visited (a sibling sharing an unresolvable ancestor never false-blocks). A subtype declaring its OWN `field` is skipped (a bare reference there binds to that member, not the inherited one); a subtype whose declaration span word-boundary-references `field` blocks the collapse, and an unscannable source — or a second type carrying `owner`'s own simple name, which the index cannot tell apart from `owner` — blocks conservatively. Sound over indexed subtypes; a subtype in an unindexed file is the inherent blind spot the accessor-override gate shares.
-	 */
-	public inline function subtypeReferencesField(owner: String, field: String): Bool {
-		return subtypeDeclMatches(
-			owner, field, (_, src, span, redeclares) -> !redeclares && RefactorSupport.identTokenOffset(src, span, field) >= 0
-		);
-	}
-
-	/**
 	 * Whether `matches` holds for ANY (transitive) subtype of `owner`, given that subtype's
 	 * whole source, its raw declaration span, and whether it REDECLARES `field` (shadowing
 	 * the inherited member). True without consulting `matches` when the hierarchy is
@@ -1064,6 +1064,28 @@ final class SymbolIndex {
 	public function resolveTypeRefsFrom(raw: String, fromFile: String): Array<{ file: FileInfo, type: TypeDeclInfo }> {
 		final fi: Null<FileInfo> = fileInfo(fromFile);
 		return fi == null ? [] : resolveTypeRefAll(raw, fi);
+	}
+
+	/** The `seen`-set identity of a resolved type: its declaring file plus its name — see `markSeen`. */
+	private inline function seenKey(cur: ResolvedType): String {
+		return '${cur.file.file}#${cur.type.name}';
+	}
+
+	/**
+	 * Mark `cur`'s resolved `(file, name)` identity in `seen` and answer whether this is its FIRST
+	 * visit — the cycle guard every supertype walk opens with. A re-entered node answers false, and
+	 * the caller ends that branch with its own not-found value.
+	 */
+	private inline function markSeen(cur: ResolvedType, seen: Array<String>): Bool {
+		final key: String = seenKey(cur);
+		if (seen.contains(key)) return false;
+		seen.push(key);
+		return true;
+	}
+
+	/** The import path naming type `t` in file `fi`: its module when `t` is the module main type, else `module.name`. */
+	private inline function importPathFor(fi: FileInfo, t: TypeDeclInfo): String {
+		return t.isMain ? fi.module : '${fi.module}.${t.name}';
 	}
 
 	/**
@@ -1263,11 +1285,6 @@ final class SymbolIndex {
 		return true;
 	}
 
-	/** The `seen`-set identity of a resolved type: its declaring file plus its name — see `markSeen`. */
-	private inline function seenKey(cur: ResolvedType): String {
-		return '${cur.file.file}#${cur.type.name}';
-	}
-
 	/** Every indexed decl named `typeName` (simple name), each paired with its declaring file. */
 
 	private function resolvedDeclsNamed(typeName: String): Array<ResolvedType> {
@@ -1292,18 +1309,6 @@ final class SymbolIndex {
 		final host: FileInfo = fi;
 		final t: Null<TypeDeclInfo> = host.types.find(td -> td.name == typeName);
 		return t == null ? null : { file: host, type: t };
-	}
-
-	/**
-	 * Mark `cur`'s resolved `(file, name)` identity in `seen` and answer whether this is its FIRST
-	 * visit — the cycle guard every supertype walk opens with. A re-entered node answers false, and
-	 * the caller ends that branch with its own not-found value.
-	 */
-	private inline function markSeen(cur: ResolvedType, seen: Array<String>): Bool {
-		final key: String = seenKey(cur);
-		if (seen.contains(key)) return false;
-		seen.push(key);
-		return true;
 	}
 
 	/**
@@ -1493,11 +1498,6 @@ final class SymbolIndex {
 			case ImportKind.Alias:
 		}
 		return false;
-	}
-
-	/** The import path naming type `t` in file `fi`: its module when `t` is the module main type, else `module.name`. */
-	private inline function importPathFor(fi: FileInfo, t: TypeDeclInfo): String {
-		return t.isMain ? fi.module : '${fi.module}.${t.name}';
 	}
 
 	/**
@@ -1734,6 +1734,18 @@ final class SymbolIndex {
 		return path;
 	}
 
+	/**
+	 * Whether a supertype reference is `Dynamic`. `implements Dynamic<T>` marks dynamic FIELD
+	 * ACCESS and declares no NAMED member, so it can never be the inherited `_x` a rename would
+	 * redefine — it must be SKIPPED rather than counted as an unresolvable dead end, which would
+	 * wrongly block every `openfl` display subclass (`DisplayObject` carries such a clause under
+	 * `#if`). Matched on the last path segment, so a qualified spelling is skipped too.
+	 */
+	private static inline function dynamicSupertypeRef(raw: String): Bool {
+		final dot: Int = raw.lastIndexOf('.');
+		return (dot < 0 ? raw : raw.substr(dot + 1)) == 'Dynamic';
+	}
+
 	/** Whether `text` names any of `params` as a WHOLE identifier token — `Item` does not mention `T`, `Array<T>` does. */
 	private static function mentionsTypeParam(text: String, params: Array<String>): Bool {
 		if (params.length == 0) return false;
@@ -1749,18 +1761,6 @@ final class SymbolIndex {
 			i = end;
 		}
 		return false;
-	}
-
-	/**
-	 * Whether a supertype reference is `Dynamic`. `implements Dynamic<T>` marks dynamic FIELD
-	 * ACCESS and declares no NAMED member, so it can never be the inherited `_x` a rename would
-	 * redefine — it must be SKIPPED rather than counted as an unresolvable dead end, which would
-	 * wrongly block every `openfl` display subclass (`DisplayObject` carries such a clause under
-	 * `#if`). Matched on the last path segment, so a qualified spelling is skipped too.
-	 */
-	private static inline function dynamicSupertypeRef(raw: String): Bool {
-		final dot: Int = raw.lastIndexOf('.');
-		return (dot < 0 ? raw : raw.substr(dot + 1)) == 'Dynamic';
 	}
 
 	/**

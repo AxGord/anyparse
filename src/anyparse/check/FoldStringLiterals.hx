@@ -308,6 +308,21 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		return claim(node, source, concatKind, stringLiteralKinds) != null;
 	}
 
+	/** The column width of `source[from...to)`, counting a tab as `indentWidth` columns. */
+	private static inline function columnWidth(ctx: PlanContext, from: Int, to: Int): Int {
+		return CheckScan.displayColumn(ctx.source, from, to, ctx.metrics.indentWidth);
+	}
+
+	/** Whether `code` is a space or a tab. */
+	private static inline function isBlank(code: Int): Bool {
+		return code == ' '.code || code == '\t'.code;
+	}
+
+	/** `line`'s width in columns, counting a tab as `indentWidth`. */
+	private static inline function displayWidth(line: String, indentWidth: Int): Int {
+		return CheckScan.displayColumn(line, 0, line.length, indentWidth);
+	}
+
 	/** Every plan `tree` yields, in source order — the ONE traversal `run` reports from and `fix` is filtered against. */
 	private static function collectPlans(ctx: PlanContext, gate: MacroGate, tree: QueryNode): Array<PlannedFold> {
 		final out: Array<PlannedFold> = [];
@@ -1035,16 +1050,6 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		return nextBreak == -1 ? source.length : nextBreak;
 	}
 
-	/** The column width of `source[from...to)`, counting a tab as `indentWidth` columns. */
-	private static inline function columnWidth(ctx: PlanContext, from: Int, to: Int): Int {
-		return CheckScan.displayColumn(ctx.source, from, to, ctx.metrics.indentWidth);
-	}
-
-	/** Whether `code` is a space or a tab. */
-	private static inline function isBlank(code: Int): Bool {
-		return code == ' '.code || code == '\t'.code;
-	}
-
 	/**
 	 * The TRUE rendered width of `candidate` spliced in at `span`: render both the
 	 * spliced and the unchanged text through the writer, drop the leading and trailing
@@ -1114,11 +1119,6 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 				originalWidest = width;
 		}
 		return { written: widest, original: originalWidest };
-	}
-
-	/** `line`'s width in columns, counting a tab as `indentWidth`. */
-	private static inline function displayWidth(line: String, indentWidth: Int): Int {
-		return CheckScan.displayColumn(line, 0, line.length, indentWidth);
 	}
 
 	/** The finding text, naming the direction the segmentation moves in. */
@@ -1845,6 +1845,21 @@ private class BoundaryRank {
 			Seam;
 	}
 
+	/** The character code just left of `at` in `s`, or -1 when `at` is already its start. */
+	private static inline function charBefore(s: String, at: Int): Int {
+		return at <= 0 ? -1 : s.fastCodeAt(at - 1);
+	}
+
+	/** Whether `c` OPENS a bracket pair — the character a separator cut keeps with what introduced it. */
+	private static inline function isOpen(c: Int): Bool {
+		return c == '('.code || c == '['.code || c == '{'.code;
+	}
+
+	/** Whether `c` CLOSES a bracket pair — what makes the separator after it a structural boundary. */
+	private static inline function isClose(c: Int): Bool {
+		return c == ')'.code || c == ']'.code || c == '}'.code;
+	}
+
 	/**
 	 * The text immediately left of the boundary at `j`: the run of TEXT segments ending
 	 * there, joined, and only as far back as the ranking can still read.
@@ -1869,21 +1884,6 @@ private class BoundaryRank {
 				break;
 		}
 		return text;
-	}
-
-	/** The character code just left of `at` in `s`, or -1 when `at` is already its start. */
-	private static inline function charBefore(s: String, at: Int): Int {
-		return at <= 0 ? -1 : s.fastCodeAt(at - 1);
-	}
-
-	/** Whether `c` OPENS a bracket pair — the character a separator cut keeps with what introduced it. */
-	private static inline function isOpen(c: Int): Bool {
-		return c == '('.code || c == '['.code || c == '{'.code;
-	}
-
-	/** Whether `c` CLOSES a bracket pair — what makes the separator after it a structural boundary. */
-	private static inline function isClose(c: Int): Bool {
-		return c == ')'.code || c == ']'.code || c == '}'.code;
 	}
 
 }

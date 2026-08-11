@@ -123,19 +123,6 @@ final class MemberWriteScan {
 	}
 
 	/**
-	 * The ways a write to `owner`'s member `name` can arrive through the SUBTYPE `subtype`
-	 * without the write index attributing it to `owner`: inside the subtype's own body, or
-	 * from a file granting itself `@:access(subtype)`. The second is not theoretical even
-	 * for a PRIVATE member — `@:access(Sub)` in a third file makes `s.p = 5` on `s:Sub`
-	 * compile against a `p` declared in `Sub`'s SUPERtype, while a grant scan keyed on the
-	 * owner sees nothing (that file's grant list names the subtype, not the owner).
-	 */
-	private static function subtypeReach(scope: SymbolIndex, subtype: String, name: String, src: String, span: Span): Bool {
-		return mayWrite(src, name, span.from, span.to)
-			|| scope.accessGrantMatches(subtype, granted -> mayWrite(granted, name, 0, granted.length));
-	}
-
-	/**
 	 * Whether the offsets `from ... to` of `src` may write `name`: either a build macro can
 	 * inject a member the text scan cannot see, or the scan finds a write outright.
 	 */
@@ -152,6 +139,30 @@ final class MemberWriteScan {
 	 */
 	private static inline function carriesBuildMacro(source: String): Bool {
 		return source.indexOf('@:build') >= 0 || source.indexOf('@:autoBuild') >= 0;
+	}
+
+	/** Whether `c` is an operator character that can form an assignment token. */
+	private static inline function isOperatorChar(c: Int): Bool {
+		return switch c {
+			case '='.code | '+'.code | '-'.code | '*'.code | '/'.code | '%'.code | '&'.code | '|'.code | '^'.code | '<'.code | '>'.code
+				| '?'.code
+				| '~'.code
+				| '!'.code: true;
+			case _: false;
+		};
+	}
+
+	/**
+	 * The ways a write to `owner`'s member `name` can arrive through the SUBTYPE `subtype`
+	 * without the write index attributing it to `owner`: inside the subtype's own body, or
+	 * from a file granting itself `@:access(subtype)`. The second is not theoretical even
+	 * for a PRIVATE member — `@:access(Sub)` in a third file makes `s.p = 5` on `s:Sub`
+	 * compile against a `p` declared in `Sub`'s SUPERtype, while a grant scan keyed on the
+	 * owner sees nothing (that file's grant list names the subtype, not the owner).
+	 */
+	private static function subtypeReach(scope: SymbolIndex, subtype: String, name: String, src: String, span: Span): Bool {
+		return mayWrite(src, name, span.from, span.to)
+			|| scope.accessGrantMatches(subtype, granted -> mayWrite(granted, name, 0, granted.length));
 	}
 
 	/**
@@ -196,17 +207,6 @@ final class MemberWriteScan {
 		return token == '++' || token == '--'
 			|| (token.length != 0 && token.fastCodeAt(token.length - 1) == '='.code && token != '==' && token != '<=' && token != '>='
 				&& token != '!=' && token != '=>');
-	}
-
-	/** Whether `c` is an operator character that can form an assignment token. */
-	private static inline function isOperatorChar(c: Int): Bool {
-		return switch c {
-			case '='.code | '+'.code | '-'.code | '*'.code | '/'.code | '%'.code | '&'.code | '|'.code | '^'.code | '<'.code | '>'.code
-				| '?'.code
-				| '~'.code
-				| '!'.code: true;
-			case _: false;
-		};
 	}
 
 }

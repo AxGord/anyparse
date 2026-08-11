@@ -23,6 +23,20 @@ import anyparse.grammar.haxe.HxSwitchStmt;
  */
 class HxSwitchNewSliceTest extends HxTestHelpers {
 
+	public inline function testNewQualifiedRoundTrip(): Void {
+		roundTrip('class C { function f():Void { var e = new haxe.Exception("x"); throw new haxe.ds.StringMap(); } }');
+	}
+
+	public inline function testNewTypeParamsRoundTrip(): Void {
+		roundTrip(
+			'class C { function f():Void { var h = new Holder<RecordItem1, RecordItem1, Void>("a", true, "b"); var m = new Map<String, Int>(); } }'
+		);
+	}
+
+	public inline function testNewDollarRoundTrip(): Void {
+		roundTrip("class C { function f():Void { cases.push(macro {name: $v{tp.name}, exec: new $tp()}); } }");
+	}
+
 	// ---- Switch statement tests ----
 
 	public function testEmptySwitch(): Void {
@@ -502,10 +516,6 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public inline function testNewQualifiedRoundTrip(): Void {
-		roundTrip('class C { function f():Void { var e = new haxe.Exception("x"); throw new haxe.ds.StringMap(); } }');
-	}
-
 	public function testNewSingleTypeParam(): Void {
 		final body: Array<HxStatement> = parseBody('class C { function f():Void { new Map<Int>(); } }');
 		Assert.equals(1, body.length);
@@ -560,12 +570,6 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public inline function testNewTypeParamsRoundTrip(): Void {
-		roundTrip(
-			'class C { function f():Void { var h = new Holder<RecordItem1, RecordItem1, Void>("a", true, "b"); var m = new Map<String, Int>(); } }'
-		);
-	}
-
 	// Slice 54 — macro type-reification in `new` target (`new $tp()`,
 	// `new $tp.Sub()`). HxNewTypeName terminal twin of HxTypeName with
 	// an optional leading `$` on the first ident segment.
@@ -600,10 +604,6 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 			case null, _:
 				Assert.fail('expected ExprStmt');
 		}
-	}
-
-	public inline function testNewDollarRoundTrip(): Void {
-		roundTrip("class C { function f():Void { cases.push(macro {name: $v{tp.name}, exec: new $tp()}); } }");
 	}
 
 	public function testSwitchExprInReturn(): Void {

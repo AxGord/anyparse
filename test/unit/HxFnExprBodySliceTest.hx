@@ -44,6 +44,22 @@ import anyparse.grammar.haxe.HxModuleWriter;
  */
 class HxFnExprBodySliceTest extends HxTestHelpers {
 
+	// ======== Round-trip ========
+
+	public inline function testRoundTripExprBodyClass(): Void {
+		roundTrip('class Main {\n\tstatic function main() trace("foo");\n}');
+	}
+
+	public inline function testRoundTripExprBodyToplevel(): Void {
+		roundTrip('function f() trace("hi");');
+	}
+
+	public inline function testRoundTripBlockBodyUnaffected(): Void {
+		// Sanity: BlockBody round-trip is preserved by the writer's gate
+		// extension — `lcSep` still emitted for the brace-bearing ctor.
+		roundTrip('class C {\n\tfunction f() {\n\t\ttrace("x");\n\t}\n}');
+	}
+
 	// ======== Class-member position ========
 
 	public function testClassMemberExprBodyTrace(): Void {
@@ -104,22 +120,6 @@ class HxFnExprBodySliceTest extends HxTestHelpers {
 			case _:
 				Assert.fail('expected InterfaceDecl');
 		}
-	}
-
-	// ======== Round-trip ========
-
-	public inline function testRoundTripExprBodyClass(): Void {
-		roundTrip('class Main {\n\tstatic function main() trace("foo");\n}');
-	}
-
-	public inline function testRoundTripExprBodyToplevel(): Void {
-		roundTrip('function f() trace("hi");');
-	}
-
-	public inline function testRoundTripBlockBodyUnaffected(): Void {
-		// Sanity: BlockBody round-trip is preserved by the writer's gate
-		// extension — `lcSep` still emitted for the brace-bearing ctor.
-		roundTrip('class C {\n\tfunction f() {\n\t\ttrace("x");\n\t}\n}');
 	}
 
 	public function testRoundTripNoBodyUnaffected(): Void {

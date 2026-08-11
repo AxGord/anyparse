@@ -56,12 +56,6 @@ class ExplicitLocalTypeParenInitTest extends ExplicitLocalTypeCheckTestBase {
 		assertFixContains('var a:Int = 5;\n\t\tfinal v = (a);', 'v:Int');
 	}
 
-	public function testFixParenCrossClassStaticFieldRead(): Void {
-		assertFixIdx(wrap('var v = (API.API_URL);'), [
-			{ file: 'API.hx', source: 'class API {\n\tpublic static final API_URL:String = "x";\n}' }
-		], 'v:String');
-	}
-
 	public inline function testCheckTypeUnwrapLeavesBareFormIntact(): Void {
 		// `(x : Int)` IS the check-type node — its parens belong to the node, not a wrapper.
 		// The unwrap must not disturb it.
@@ -88,6 +82,12 @@ class ExplicitLocalTypeParenInitTest extends ExplicitLocalTypeCheckTestBase {
 		// The optional-param soundness guard survives the unwrap (body type Null<String>
 		// differs from the written source `String`) -> report-only.
 		assertNoFixSrc('class C {\n\tfunction f(?p:String):Void {\n\t\tfinal v = (p);\n\t}\n}');
+	}
+
+	public function testFixParenCrossClassStaticFieldRead(): Void {
+		assertFixIdx(wrap('var v = (API.API_URL);'), [
+			{ file: 'API.hx', source: 'class API {\n\tpublic static final API_URL:String = "x";\n}' }
+		], 'v:String');
 	}
 
 	public function testParenLocalStillReported(): Void {

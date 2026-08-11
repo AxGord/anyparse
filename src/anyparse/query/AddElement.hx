@@ -281,6 +281,19 @@ final class AddElement {
 		return trimmedHeld.endsWith(';') || trimmedHeld.endsWith('}') ? held : '$held;';
 	}
 
+	private static inline function isContainer(node: QueryNode): Bool {
+		return EXPR_CONTAINER_KINDS.contains(node.kind) || RefactorSupport.typeDeclOf(node) != null;
+	}
+
+	private static inline function isSpace(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
+	}
+
+	/** Whether `cursor` falls within the first token of a node starting at `from` (its start through the token's trailing boundary, inclusive). */
+	private static inline function cursorInFirstToken(source: String, from: Int, cursor: Int): Bool {
+		return cursor >= from && cursor <= RefactorSupport.firstTokenEnd(source, from);
+	}
+
 	private static function braceLessBodySlot(parent: Null<QueryNode>, element: QueryNode, plugin: GrammarPlugin): Bool {
 		if (parent == null) return false;
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
@@ -318,14 +331,6 @@ final class AddElement {
 		}
 		walk(tree);
 		return best;
-	}
-
-	private static inline function isContainer(node: QueryNode): Bool {
-		return EXPR_CONTAINER_KINDS.contains(node.kind) || RefactorSupport.typeDeclOf(node) != null;
-	}
-
-	private static inline function isSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 	}
 
 	/**
@@ -429,11 +434,6 @@ final class AddElement {
 		if (!empty && isComma) edits.push({ span: new Span(at, at), text: ',' });
 		edits.push({ span: new Span(afterComments, afterComments), text: '\n$trimmed' });
 		return RefactorSupport.canonicalize(source, edits, reformat, plugin, optsJson);
-	}
-
-	/** Whether `cursor` falls within the first token of a node starting at `from` (its start through the token's trailing boundary, inclusive). */
-	private static inline function cursorInFirstToken(source: String, from: Int, cursor: Int): Bool {
-		return cursor >= from && cursor <= RefactorSupport.firstTokenEnd(source, from);
 	}
 
 }

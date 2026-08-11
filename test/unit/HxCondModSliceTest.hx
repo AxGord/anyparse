@@ -64,21 +64,6 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
  */
 class HxCondModSliceTest extends HxTestHelpers {
 
-	public function testBareExternElseAtExtern(): Void {
-		// Pony's dominant shape (95 of its 100 modules), e.g. pony/Or.hx:19.
-		final mods: Array<HxMemberModifier> =
-			memberModifiers('class C { #if (haxe_ver >= 4.2) extern #else @:extern #end public inline function f():Void {} }');
-		Assert.equals(3, mods.length);
-		final inner: HxConditionalMod = expectMemberCond(mods[0]);
-		Assert.equals('(haxe_ver >= 4.2)', (inner.cond: String));
-		Assert.equals(1, inner.body.length);
-		Assert.equals(HxCondModPrefix.Extern, inner.body[0]);
-		Assert.equals(0, inner.elseifs.length);
-		Assert.equals('@:extern', elseEntryMetaName(inner, 0));
-		Assert.equals(HxMemberModifier.Public, mods[1]);
-		Assert.equals(HxMemberModifier.Inline, mods[2]);
-	}
-
 	public inline function testFromPrefixedRegion(): Void {
 		// pony/events/Listener0.hx:24 - a real meta tag precedes the region,
 		// so the metadata Star consumes `@:from` and then yields at `#if`.
@@ -102,6 +87,64 @@ class HxCondModSliceTest extends HxTestHelpers {
 			'class C { @:nullSafety(Off) #if (haxe_ver >= 4.2) extern #else @:extern #end public inline function f():Void {} }',
 			'@:nullSafety'
 		);
+	}
+
+	public inline function testStdJsonMultiLineGuardWritesVerbatim(): Void {
+		// js/_std/haxe/Json.hx lines 25-28 as it actually reads - the guard
+		// spans four lines, which is the trivia-sensitive form; the
+		// single-line variant asserted above is the reduced shape.
+		triviaRoundTrip('@:coreApi\n#if !haxeJSON\n@:native("JSON")\nextern\n#end\nclass Json {}');
+	}
+
+	public inline function testSwfMetaRegionThenModifierRegionWritesVerbatim(): Void {
+		// swf AnimateLibraryExporter.hx:1501-1502 in full: a metadata-only
+		// region on its own line, then `private` + a keyword region. The
+		// first is meta-Star-claimed, the second modifier-Star-claimed, on
+		// adjacent lines of one declaration.
+		triviaRoundTrip('#if (haxe_ver < 4.0) @:enum #end\nprivate #if (haxe_ver >= 4.0) enum #end abstract T(Int) from Int to Int {}');
+	}
+
+	public inline function testPonyPrefixKeepsItsOwnLine(): Void {
+		// The `#end` -> next-modifier newline rides the per-element trivia
+		// channel; pony/Or.hx:19 puts the whole guard on its own line. Byte
+		// fidelity of that newline is a TRIVIA-pipeline property, so this
+		// goes through HaxeModuleTriviaParser/Writer - the plain
+		// `HxModuleWriter` used by `roundTrip` collapses the modifier list
+		// onto one line for the pre-slice single-branch shape too.
+		triviaRoundTrip(
+			'abstract Or<A, B>(S) from S to S {\n\t#if (haxe_ver >= 4.2) extern #else @:extern #end\n'
+			+ '\tpublic inline function f():Void {}\n}'
+		);
+	}
+
+	public inline function testV4MultiLineShapeUnchanged(): Void {
+		// issue_332_conditional_modifiers V4 - cond / modifier / `#end` on
+		// three separate source lines. Adding two fields after `body` must
+		// not disturb the trivia slots the writer reads for this.
+		triviaRoundTrip(
+			'class Main {\n\t#if (neko_v21 || (cpp && !cppia) || flash)\n\tinline\n\t#end\n\tpublic static function main() {}\n}'
+		);
+	}
+
+	public inline function testV1SingleBranchOwnLineUnchanged(): Void {
+		// issue_332 V1 - the pre-slice single-branch shape, byte-pinned on
+		// the same pipeline so a regression here is attributable.
+		triviaRoundTrip('class Main {\n\t#if (neko_v21 || (cpp && !cppia) || flash) inline #end\n\tpublic static function main() {}\n}');
+	}
+
+	public function testBareExternElseAtExtern(): Void {
+		// Pony's dominant shape (95 of its 100 modules), e.g. pony/Or.hx:19.
+		final mods: Array<HxMemberModifier> =
+			memberModifiers('class C { #if (haxe_ver >= 4.2) extern #else @:extern #end public inline function f():Void {} }');
+		Assert.equals(3, mods.length);
+		final inner: HxConditionalMod = expectMemberCond(mods[0]);
+		Assert.equals('(haxe_ver >= 4.2)', (inner.cond: String));
+		Assert.equals(1, inner.body.length);
+		Assert.equals(HxCondModPrefix.Extern, inner.body[0]);
+		Assert.equals(0, inner.elseifs.length);
+		Assert.equals('@:extern', elseEntryMetaName(inner, 0));
+		Assert.equals(HxMemberModifier.Public, mods[1]);
+		Assert.equals(HxMemberModifier.Inline, mods[2]);
 	}
 
 	public function testTwoTokenBranches(): Void {
@@ -219,49 +262,6 @@ class HxCondModSliceTest extends HxTestHelpers {
 			'class C {\n\t@:op(A >> B) #if (haxe_ver >= 4.2) extern #else @:extern #end\n\tprivate inline function f():Void {}\n}',
 			'class C {\n\tpublic static #if !macro macro #end function f():Void {}\n}'
 		]) triviaRoundTrip(src);
-	}
-
-	public inline function testStdJsonMultiLineGuardWritesVerbatim(): Void {
-		// js/_std/haxe/Json.hx lines 25-28 as it actually reads - the guard
-		// spans four lines, which is the trivia-sensitive form; the
-		// single-line variant asserted above is the reduced shape.
-		triviaRoundTrip('@:coreApi\n#if !haxeJSON\n@:native("JSON")\nextern\n#end\nclass Json {}');
-	}
-
-	public inline function testSwfMetaRegionThenModifierRegionWritesVerbatim(): Void {
-		// swf AnimateLibraryExporter.hx:1501-1502 in full: a metadata-only
-		// region on its own line, then `private` + a keyword region. The
-		// first is meta-Star-claimed, the second modifier-Star-claimed, on
-		// adjacent lines of one declaration.
-		triviaRoundTrip('#if (haxe_ver < 4.0) @:enum #end\nprivate #if (haxe_ver >= 4.0) enum #end abstract T(Int) from Int to Int {}');
-	}
-
-	public inline function testPonyPrefixKeepsItsOwnLine(): Void {
-		// The `#end` -> next-modifier newline rides the per-element trivia
-		// channel; pony/Or.hx:19 puts the whole guard on its own line. Byte
-		// fidelity of that newline is a TRIVIA-pipeline property, so this
-		// goes through HaxeModuleTriviaParser/Writer - the plain
-		// `HxModuleWriter` used by `roundTrip` collapses the modifier list
-		// onto one line for the pre-slice single-branch shape too.
-		triviaRoundTrip(
-			'abstract Or<A, B>(S) from S to S {\n\t#if (haxe_ver >= 4.2) extern #else @:extern #end\n'
-			+ '\tpublic inline function f():Void {}\n}'
-		);
-	}
-
-	public inline function testV4MultiLineShapeUnchanged(): Void {
-		// issue_332_conditional_modifiers V4 - cond / modifier / `#end` on
-		// three separate source lines. Adding two fields after `body` must
-		// not disturb the trivia slots the writer reads for this.
-		triviaRoundTrip(
-			'class Main {\n\t#if (neko_v21 || (cpp && !cppia) || flash)\n\tinline\n\t#end\n\tpublic static function main() {}\n}'
-		);
-	}
-
-	public inline function testV1SingleBranchOwnLineUnchanged(): Void {
-		// issue_332 V1 - the pre-slice single-branch shape, byte-pinned on
-		// the same pipeline so a regression here is attributable.
-		triviaRoundTrip('class Main {\n\t#if (neko_v21 || (cpp && !cppia) || flash) inline #end\n\tpublic static function main() {}\n}');
 	}
 
 	public function testSingleBranchModifierRegionUnchanged(): Void {

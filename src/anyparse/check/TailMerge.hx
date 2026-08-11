@@ -179,6 +179,13 @@ final class TailMerge implements Check {
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
+	/** The reported wording; `count` is at least 1. */
+	private static inline function message(count: Int): String {
+		return count == 1
+			? 'this statement repeats the tail that follows the if — drop it and fall through'
+			: 'these $count statements repeat the tail that follows the if — drop them and fall through';
+	}
+
 	/** Every duplicated-tail candidate in `tree`, in document order — the one walk `run` and `fix` share. */
 	private static function scan(tree: QueryNode, source: String, seams: Seams): Array<Candidate> {
 		final out: Array<Candidate> = [];
@@ -309,13 +316,6 @@ final class TailMerge implements Check {
 				count: count,
 				fixable: commentsAllowFix(source, tail, fallStmts, prevSpan.to, fall.prevEnd, blockSpan.to)
 			};
-	}
-
-	/** The reported wording; `count` is at least 1. */
-	private static inline function message(count: Int): String {
-		return count == 1
-			? 'this statement repeats the tail that follows the if — drop it and fall through'
-			: 'these $count statements repeat the tail that follows the if — drop them and fall through';
 	}
 
 	/** Length of the longest common suffix of `stmts` and `fallStmts` under `sameStatement`. */

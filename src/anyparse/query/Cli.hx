@@ -456,6 +456,19 @@ final class Cli {
 
 	private static inline final BYTE_DIFF_LEAD: Int = 4;
 	private static inline final STAGE_PROBE_PATH: String = '/tmp/anyparse-last-probe.hx';
+	private static inline final AUTO_LIMIT_THRESHOLD: Int = 500;
+
+	/**
+	 * Heartbeat interval for the multi-file walk progress line — emit a
+	 * stderr `scanned K/N` every this many files so a corpus-wide walk
+	 * never goes silent (a watchdog reading a redirected stream sees
+	 * steady byte growth). Tuned so a several-hundred-file `src/` walk
+	 * yields ~10–20 lines rather than one-per-file flooding.
+	 */
+	private static inline final PROGRESS_INTERVAL: Int = 25;
+
+	private static inline final DEFAULT_CHAIN_LINES: Int = 200;
+	private static inline final DEFAULT_REACH_PATHS: Int = 10;
 
 	/**
 	 * Boolean (value-less) `--flag` set for `runAst`. Listed explicitly
@@ -473,20 +486,6 @@ final class Cli {
 		'--stdin',
 		'--spans',
 	];
-
-	private static inline final AUTO_LIMIT_THRESHOLD: Int = 500;
-
-	/**
-	 * Heartbeat interval for the multi-file walk progress line — emit a
-	 * stderr `scanned K/N` every this many files so a corpus-wide walk
-	 * never goes silent (a watchdog reading a redirected stream sees
-	 * steady byte growth). Tuned so a several-hundred-file `src/` walk
-	 * yields ~10–20 lines rather than one-per-file flooding.
-	 */
-	private static inline final PROGRESS_INTERVAL: Int = 25;
-
-	private static inline final DEFAULT_CHAIN_LINES: Int = 200;
-	private static inline final DEFAULT_REACH_PATHS: Int = 10;
 
 	#if (sys || nodejs)
 	/**
@@ -691,6 +690,435 @@ final class Cli {
 				printUsage();
 				return EXIT_USAGE;
 		}
+	}
+
+	/** Source-offset sort key for a violation span; null spans sort last. */
+	private static inline function spanStart(span: Null<Span>): Int {
+		return span != null ? span.from : MAX_INT;
+	}
+
+	private static inline function stripQuotes(s: String): String {
+		final t: String = s.trim();
+		if (t.length < 2) return t;
+		final first: String = t.charAt(0);
+		final last: String = t.charAt(t.length - 1);
+		return (first == "'" && last == "'") || (first == '"' && last == '"') ? t.substring(1, t.length - 1) : t;
+	}
+
+	private static inline function kindAllowed(k: RefKind, decls: Bool, reads: Bool, writes: Bool): Bool {
+		return switch k {
+			case Decl: decls;
+			case Read: reads;
+			case Write: writes;
+		}
+	}
+
+	private static inline function isAstBoolFlag(flag: String): Bool {
+		return AST_BOOL_FLAGS.contains(flag);
+	}
+
+	/**
+	 * Read a file as **source for parsing**. Same as `readFile` for plain
+	 * `.hx` files; auto-extracts the input section (between the 1st and
+	 * 2nd `\n---\n` separators) when the path ends with `.hxtest` AND the
+	 * content has the canonical 3-section layout (`config / input /
+	 * expected`, as defined by `unit.HxFormatterCorpusHelpers`). This
+	 * collapses the recurring `.hxtest` strip-test dance — `awk` /
+	 * scratch-file extract followed by parse — into a direct
+	 * `hxq strip /path/case.hxtest --replace … --with …`.
+	 *
+	 * Non-3-section `.hxtest` files (malformed, or a fork variant) pass
+	 * through unchanged so the parser sees the raw bytes and the user
+	 * gets a normal parse-error trace, not a silent transformation.
+	 */
+	private static inline function readSourceForParse(path: String): String {
+		return readHxtestSectionOrRaw(path, 1);
+	}
+
+	/**
+	 * Read a file as **expected output bytes** for byte-comparison
+	 * (`writer-equals <input> <expected>`). Symmetric to
+	 * `readSourceForParse`: when the path ends with `.hxtest` and has the
+	 * canonical 3-section layout, returns section 3 (the fork's reference
+	 * formatted output); otherwise returns the raw bytes. Lets a fork
+	 * fixture serve as its own expected-bytes file in one command instead
+	 * of pre-extracting via `awk` / scratch file.
+	 */
+	private static inline function readExpectedForCompare(path: String): String {
+		return readHxtestSectionOrRaw(path, 2);
+	}
+
+	/**
+	 * The nearest ancestor `hxformat.json` content for `filePath`, or null. Thin alias
+	 * for `FormatConfigDiscovery.discover` — the CLI keeps the short local name its
+	 * ~20 call sites use.
+	 */
+	private static inline function discoverFormatConfig(filePath: String): Null<String> {
+		return FormatConfigDiscovery.discover(filePath);
+	}
+
+	private static inline function sysPrint(s: String): Void {
+		#if (sys || nodejs)
+		Sys.print(s);
+		#end
+	}
+
+	/**
+	 * Walker exit code honouring `--exit-on-empty`: `EXIT_RUNTIME` when the walk
+	 * found nothing and the flag was set, else `EXIT_OK`. Default (flag unset)
+	 * keeps every walk exiting 0 — backward compatible.
+	 */
+	private static inline function emptyExit(empty: Bool): Int {
+		return empty && _requireMatch ? EXIT_RUNTIME : EXIT_OK;
+	}
+
+	/** The plural suffix for a count: `''` for 1, `'s'` otherwise. */
+	private static inline function plural(n: Int): String return n == 1 ? '' : 's';
+
+	/** Terminal-case StripOpts: a flag/usage path that the caller returns immediately, ignoring every other field. */
+	private static inline function stripParseExit(code: Int): StripOpts {
+		return {
+			lang: '',
+			showSource: false,
+			dryRun: false,
+			perPattern: false,
+			fromCluster: null,
+			regexMode: false,
+			files: [],
+			patterns: [],
+			replacements: [],
+			errExit: code
+		};
+	}
+
+	/** Terminal-case ReconOpts: a flag/usage path the caller returns immediately, ignoring every other field. */
+	private static inline function reconParseExit(code: Int): ReconOpts {
+		return {
+			lang: '',
+			topN: 0,
+			probePath: null,
+			rootDir: null,
+			clusterFilter: null,
+			predictStrip: false,
+			regressionProbe: false,
+			candidatesRegex: null,
+			predictRelax: false,
+			permissiveConstruct: false,
+			showSource: false,
+			noTargetClusterFilter: null,
+			patterns: [],
+			replacements: [],
+			regexMode: false,
+			compiledRegex: null,
+			writerEqualsAfter: false,
+			writerEqualsPlain: false,
+			expectedPath: null,
+			errExit: code
+		};
+	}
+
+	/** Terminal-case AstOpts: a flag/usage path that the caller returns immediately, ignoring every other field. */
+	private static inline function astParseExit(code: Int): AstOpts {
+		return {
+			lang: '',
+			json: false,
+			depth: -1,
+			selectExpr: null,
+			atExpr: null,
+			wantDoc: false,
+			wantSource: false,
+			writerOutput: false,
+			writerOutputPlain: false,
+			writerDiff: false,
+			minChildren: -1,
+			maxChildren: -1,
+			childrenLimit: -1,
+			spans: false,
+			countOnly: false,
+			file: null,
+			codeArg: null,
+			stdinFlag: false,
+			errExit: code
+		};
+	}
+
+	private static inline function metaParseExit(code: Int): MetaOpts {
+		return {
+			lang: '',
+			json: false,
+			argContains: null,
+			onKind: null,
+			flat: false,
+			limit: -1,
+			positionals: [],
+			errExit: code
+		};
+	}
+
+	private static inline function blastParseExit(code: Int): BlastOpts {
+		return {
+			lang: '',
+			flat: false,
+			limit: -1,
+			showAll: false,
+			name: null,
+			inputSpecs: [],
+			errExit: code
+		};
+	}
+
+	private static inline function litParseExit(code: Int): LitOpts {
+		return {
+			lang: '',
+			exact: false,
+			flat: false,
+			limit: -1,
+			kindFilter: null,
+			includeComments: false,
+			includeDirectives: false,
+			target: null,
+			inputSpecs: [],
+			errExit: code
+		};
+	}
+
+	private static inline function newParseExit(code: Int): NewOpts {
+		return {
+			lang: '',
+			write: false,
+			asClass: false,
+			open: false,
+			raw: false,
+			kind: 'class',
+			iface: null,
+			underlying: null,
+			bodiesArg: null,
+			bodiesFromFile: null,
+			extendsList: [],
+			fromList: [],
+			toList: [],
+			fields: [],
+			path: null,
+			errExit: code
+		};
+	}
+
+	private static inline function searchParseExit(code: Int): SearchOpts {
+		return {
+			lang: '',
+			json: false,
+			kind: null,
+			limit: -1,
+			explain: false,
+			flat: false,
+			pattern: null,
+			inputSpecs: [],
+			errExit: code
+		};
+	}
+
+	private static inline function lintParseExit(code: Int): LintOpts {
+		return {
+			lang: '',
+			flat: false,
+			includeInfo: false,
+			fix: false,
+			failOn: null,
+			format: 'text',
+			ruleFilters: [],
+			inputSpecs: [],
+			errExit: code
+		};
+	}
+
+	private static inline function usesParseExit(code: Int): UsesOpts {
+		return {
+			lang: '',
+			wantDoc: false,
+			wantSource: false,
+			flat: false,
+			limit: -1,
+			name: null,
+			inputSpecs: [],
+			errExit: code
+		};
+	}
+
+	private static inline function extractMethodParseExit(code: Int): ExtractMethodOpts {
+		return {
+			lang: '',
+			write: false,
+			reformat: false,
+			file: null,
+			startPos: null,
+			endPos: null,
+			name: null,
+			errExit: code
+		};
+	}
+
+	private static inline function addMemberParseExit(code: Int): AddMemberOpts {
+		return {
+			lang: '',
+			write: false,
+			reformat: false,
+			typeName: null,
+			file: null,
+			memberText: null,
+			fromFile: null,
+			errExit: code
+		};
+	}
+
+	private static inline function setDocParseExit(code: Int): SetDocOpts {
+		return {
+			lang: '',
+			write: false,
+			reformat: false,
+			fromFile: null,
+			file: null,
+			pos: null,
+			selectExpr: null,
+			matchExpr: null,
+			nth: null,
+			docText: null,
+			errExit: code
+		};
+	}
+
+	private static inline function fmtParseExit(code: Int): FmtOpts {
+		return {
+			lang: '',
+			write: false,
+			list: false,
+			inputSpecs: [],
+			errExit: code
+		};
+	}
+
+	private static inline function moveParseExit(code: Int): MoveOpts {
+		return {
+			lang: '',
+			write: false,
+			scope: null,
+			file: null,
+			posSpec: null,
+			selectExpr: null,
+			matchExpr: null,
+			nth: null,
+			destFile: null,
+			errExit: code
+		};
+	}
+
+	private static inline function refsParseExit(code: Int): RefsOpts {
+		return {
+			lang: '',
+			json: false,
+			wantDecls: false,
+			wantReads: false,
+			wantWrites: false,
+			wantDoc: false,
+			wantSource: false,
+			flat: false,
+			limit: -1,
+			name: null,
+			inputSpecs: [],
+			errExit: code
+		};
+	}
+
+	private static inline function setCommentParseExit(code: Int): SetCommentOpts {
+		return {
+			lang: '',
+			write: false,
+			reformat: false,
+			fromFile: null,
+			file: null,
+			pos: null,
+			commentText: null,
+			errExit: code
+		};
+	}
+
+	private static inline function replaceNodeParseExit(code: Int): ReplaceNodeOpts {
+		return {
+			lang: '',
+			write: false,
+			reformat: false,
+			selectExpr: null,
+			atSpec: null,
+			matchExpr: null,
+			nth: null,
+			kind: null,
+			withDoc: false,
+			file: null,
+			newSource: null,
+			fromFile: null,
+			errExit: code
+		};
+	}
+
+	private static inline function mentionsParseExit(code: Int): MentionsOpts {
+		return {
+			lang: '',
+			flat: false,
+			limit: -1,
+			name: null,
+			inputSpecs: [],
+			errExit: code
+		};
+	}
+
+	private static inline function gatesParseExit(code: Int): GatesOpts {
+		return {
+			lang: '',
+			flat: false,
+			limit: -1,
+			mechanism: 'trail-opt',
+			inputSpecs: [],
+			errExit: code
+		};
+	}
+
+	private static inline function commentRewriteParseExit(code: Int): CommentRewriteOpts {
+		return {
+			lang: '',
+			write: false,
+			list: false,
+			reformat: false,
+			regex: false,
+			find: null,
+			replace: null,
+			inputSpecs: [],
+			errExit: code
+		};
+	}
+
+	private static inline function addElementParseExit(code: Int): AddElementOpts {
+		return {
+			lang: '',
+			write: false,
+			reformat: false,
+			afterSpec: null,
+			beforeSpec: null,
+			appendSpec: null,
+			selectExpr: null,
+			matchExpr: null,
+			nth: null,
+			file: null,
+			code: null,
+			fromFile: null,
+			errExit: code
+		};
+	}
+
+	private static inline function runCallees(args: Array<String>): Int {
+		return runCallChains('callees', true, args);
+	}
+
+	private static inline function runCallers(args: Array<String>): Int {
+		return runCallChains('callers', false, args);
 	}
 
 	private static function runRefs(args: Array<String>): Int {
@@ -1284,11 +1712,6 @@ final class Cli {
 			for (v in all) if ((cast v.severity: Int) <= threshold) return EXIT_RUNTIME;
 		}
 		return EXIT_OK;
-	}
-
-	/** Source-offset sort key for a violation span; null spans sort last. */
-	private static inline function spanStart(span: Null<Span>): Int {
-		return span != null ? span.from : MAX_INT;
 	}
 
 	/**
@@ -3989,14 +4412,6 @@ final class Cli {
 		return inner.trim();
 	}
 
-	private static inline function stripQuotes(s: String): String {
-		final t: String = s.trim();
-		if (t.length < 2) return t;
-		final first: String = t.charAt(0);
-		final last: String = t.charAt(t.length - 1);
-		return (first == "'" && last == "'") || (first == '"' && last == '"') ? t.substring(1, t.length - 1) : t;
-	}
-
 	private static function printGatesUsage(): Void {
 		sysPrint('Usage: apq gates [<file-or-dir-or-glob>...] [--flat] [--limit N] [--mechanism <name>]\n');
 		sysPrint('\n');
@@ -4277,14 +4692,6 @@ final class Cli {
 			if (arg.startsWith('$needle(')) return true;
 		}
 		return false;
-	}
-
-	private static inline function kindAllowed(k: RefKind, decls: Bool, reads: Bool, writes: Bool): Bool {
-		return switch k {
-			case Decl: decls;
-			case Read: reads;
-			case Write: writes;
-		}
 	}
 
 	private static function runSearch(args: Array<String>): Int {
@@ -4642,10 +5049,6 @@ final class Cli {
 		#end
 	}
 
-	private static inline function isAstBoolFlag(flag: String): Bool {
-		return AST_BOOL_FLAGS.contains(flag);
-	}
-
 	/**
 	 * `apq writer-probe <input> [--lang haxe]` — emit BOTH trivia and
 	 * plain writer outputs in one call, separated by labelled fences.
@@ -4976,37 +5379,6 @@ final class Cli {
 	}
 
 	/**
-	 * Read a file as **source for parsing**. Same as `readFile` for plain
-	 * `.hx` files; auto-extracts the input section (between the 1st and
-	 * 2nd `\n---\n` separators) when the path ends with `.hxtest` AND the
-	 * content has the canonical 3-section layout (`config / input /
-	 * expected`, as defined by `unit.HxFormatterCorpusHelpers`). This
-	 * collapses the recurring `.hxtest` strip-test dance — `awk` /
-	 * scratch-file extract followed by parse — into a direct
-	 * `hxq strip /path/case.hxtest --replace … --with …`.
-	 *
-	 * Non-3-section `.hxtest` files (malformed, or a fork variant) pass
-	 * through unchanged so the parser sees the raw bytes and the user
-	 * gets a normal parse-error trace, not a silent transformation.
-	 */
-	private static inline function readSourceForParse(path: String): String {
-		return readHxtestSectionOrRaw(path, 1);
-	}
-
-	/**
-	 * Read a file as **expected output bytes** for byte-comparison
-	 * (`writer-equals <input> <expected>`). Symmetric to
-	 * `readSourceForParse`: when the path ends with `.hxtest` and has the
-	 * canonical 3-section layout, returns section 3 (the fork's reference
-	 * formatted output); otherwise returns the raw bytes. Lets a fork
-	 * fixture serve as its own expected-bytes file in one command instead
-	 * of pre-extracting via `awk` / scratch file.
-	 */
-	private static inline function readExpectedForCompare(path: String): String {
-		return readHxtestSectionOrRaw(path, 2);
-	}
-
-	/**
 	 * Common backend for the two `.hxtest`-aware readers. `sectionIdx`
 	 * is the 0-based section index into the `\n---\n` split — `1` for
 	 * the input source, `2` for the expected output. Trims exactly one
@@ -5043,15 +5415,6 @@ final class Cli {
 		var section: String = parts[0];
 		if (section.length > 0 && section.charAt(section.length - 1) == '\n') section = section.substr(0, section.length - 1);
 		return section;
-	}
-
-	/**
-	 * The nearest ancestor `hxformat.json` content for `filePath`, or null. Thin alias
-	 * for `FormatConfigDiscovery.discover` — the CLI keeps the short local name its
-	 * ~20 call sites use.
-	 */
-	private static inline function discoverFormatConfig(filePath: String): Null<String> {
-		return FormatConfigDiscovery.discover(filePath);
 	}
 
 	private static function expectValue(args: Array<String>, idx: Int, flag: String): String {
@@ -6359,12 +6722,6 @@ final class Cli {
 		return seen;
 	}
 
-	private static inline function sysPrint(s: String): Void {
-		#if (sys || nodejs)
-		Sys.print(s);
-		#end
-	}
-
 	/**
 	 * Common leading-whitespace prefix length (chars) shared by every
 	 * non-blank line of `lines` in the 1-based inclusive `[from, to]` range
@@ -7114,34 +7471,6 @@ final class Cli {
 	}
 
 	/**
-	 * Walker exit code honouring `--exit-on-empty`: `EXIT_RUNTIME` when the walk
-	 * found nothing and the flag was set, else `EXIT_OK`. Default (flag unset)
-	 * keeps every walk exiting 0 — backward compatible.
-	 */
-	private static inline function emptyExit(empty: Bool): Int {
-		return empty && _requireMatch ? EXIT_RUNTIME : EXIT_OK;
-	}
-
-	/** The plural suffix for a count: `''` for 1, `'s'` otherwise. */
-	private static inline function plural(n: Int): String return n == 1 ? '' : 's';
-
-	/** Terminal-case StripOpts: a flag/usage path that the caller returns immediately, ignoring every other field. */
-	private static inline function stripParseExit(code: Int): StripOpts {
-		return {
-			lang: '',
-			showSource: false,
-			dryRun: false,
-			perPattern: false,
-			fromCluster: null,
-			regexMode: false,
-			files: [],
-			patterns: [],
-			replacements: [],
-			errExit: code
-		};
-	}
-
-	/**
 	 * Parse `strip` argv into a StripOpts. A terminal case (`-h`/`--help`
 	 * or any usage error) prints its message and returns with `errExit`
 	 * set; the caller returns that code immediately. The natural end
@@ -7376,32 +7705,6 @@ final class Cli {
 			sysPrint('${prefix}PARSE FAIL: ${e.message}\n');
 			return { changed: changed, status: 1 };
 		}
-	}
-
-	/** Terminal-case ReconOpts: a flag/usage path the caller returns immediately, ignoring every other field. */
-	private static inline function reconParseExit(code: Int): ReconOpts {
-		return {
-			lang: '',
-			topN: 0,
-			probePath: null,
-			rootDir: null,
-			clusterFilter: null,
-			predictStrip: false,
-			regressionProbe: false,
-			candidatesRegex: null,
-			predictRelax: false,
-			permissiveConstruct: false,
-			showSource: false,
-			noTargetClusterFilter: null,
-			patterns: [],
-			replacements: [],
-			regexMode: false,
-			compiledRegex: null,
-			writerEqualsAfter: false,
-			writerEqualsPlain: false,
-			expectedPath: null,
-			errExit: code
-		};
 	}
 
 	/**
@@ -7781,31 +8084,6 @@ final class Cli {
 		return null;
 	}
 
-	/** Terminal-case AstOpts: a flag/usage path that the caller returns immediately, ignoring every other field. */
-	private static inline function astParseExit(code: Int): AstOpts {
-		return {
-			lang: '',
-			json: false,
-			depth: -1,
-			selectExpr: null,
-			atExpr: null,
-			wantDoc: false,
-			wantSource: false,
-			writerOutput: false,
-			writerOutputPlain: false,
-			writerDiff: false,
-			minChildren: -1,
-			maxChildren: -1,
-			childrenLimit: -1,
-			spans: false,
-			countOnly: false,
-			file: null,
-			codeArg: null,
-			stdinFlag: false,
-			errExit: code
-		};
-	}
-
 	/**
 	 * Report the `apq ast` "two positional arguments" usage error. Detects
 	 * the `apq ast <TypeName> <dir>` miss — `ast` is single-file, while
@@ -8180,19 +8458,6 @@ final class Cli {
 		return EXIT_OK;
 	}
 
-	private static inline function metaParseExit(code: Int): MetaOpts {
-		return {
-			lang: '',
-			json: false,
-			argContains: null,
-			onKind: null,
-			flat: false,
-			limit: -1,
-			positionals: [],
-			errExit: code
-		};
-	}
-
 	private static function parseMetaArgs(args: Array<String>): MetaOpts {
 		var lang: String = 'haxe';
 		var json: Bool = false;
@@ -8274,18 +8539,6 @@ final class Cli {
 			allEntries.push({ file: path, source: source, hits: filtered });
 		}
 		return allEntries;
-	}
-
-	private static inline function blastParseExit(code: Int): BlastOpts {
-		return {
-			lang: '',
-			flat: false,
-			limit: -1,
-			showAll: false,
-			name: null,
-			inputSpecs: [],
-			errExit: code
-		};
 	}
 
 	private static function parseBlastArgs(args: Array<String>): BlastOpts {
@@ -8407,21 +8660,6 @@ final class Cli {
 		return true;
 	}
 
-	private static inline function litParseExit(code: Int): LitOpts {
-		return {
-			lang: '',
-			exact: false,
-			flat: false,
-			limit: -1,
-			kindFilter: null,
-			includeComments: false,
-			includeDirectives: false,
-			target: null,
-			inputSpecs: [],
-			errExit: code
-		};
-	}
-
 	private static function parseLitArgs(args: Array<String>): LitOpts {
 		var lang: String = 'haxe';
 		var exact: Bool = false;
@@ -8535,27 +8773,6 @@ final class Cli {
 			if (allEntries.length > 0) autoWidened = true;
 		}
 		return { entries: allEntries, autoWidened: autoWidened };
-	}
-
-	private static inline function newParseExit(code: Int): NewOpts {
-		return {
-			lang: '',
-			write: false,
-			asClass: false,
-			open: false,
-			raw: false,
-			kind: 'class',
-			iface: null,
-			underlying: null,
-			bodiesArg: null,
-			bodiesFromFile: null,
-			extendsList: [],
-			fromList: [],
-			toList: [],
-			fields: [],
-			path: null,
-			errExit: code
-		};
 	}
 
 	private static function parseNewArgs(args: Array<String>): NewOpts {
@@ -8701,20 +8918,6 @@ final class Cli {
 		return emitNew(filePath, res.result, res.stubbed, o.write);
 	}
 
-	private static inline function searchParseExit(code: Int): SearchOpts {
-		return {
-			lang: '',
-			json: false,
-			kind: null,
-			limit: -1,
-			explain: false,
-			flat: false,
-			pattern: null,
-			inputSpecs: [],
-			errExit: code
-		};
-	}
-
 	private static function parseSearchArgs(args: Array<String>): SearchOpts {
 		var lang: String = 'haxe';
 		var json: Bool = false;
@@ -8843,20 +9046,6 @@ final class Cli {
 		} else {
 			for (entry in shown) sysPrint(Text.renderSearchMatches(entry.file, entry.source, entry.matches, flat));
 		}
-	}
-
-	private static inline function lintParseExit(code: Int): LintOpts {
-		return {
-			lang: '',
-			flat: false,
-			includeInfo: false,
-			fix: false,
-			failOn: null,
-			format: 'text',
-			ruleFilters: [],
-			inputSpecs: [],
-			errExit: code
-		};
 	}
 
 	private static function parseLintArgs(args: Array<String>): LintOpts {
@@ -9814,19 +10003,6 @@ final class Cli {
 		return suggestions.length > 0 ? '\napq $cmd: Did you mean: ${suggestions.join(', ')}?' : '';
 	}
 
-	private static inline function usesParseExit(code: Int): UsesOpts {
-		return {
-			lang: '',
-			wantDoc: false,
-			wantSource: false,
-			flat: false,
-			limit: -1,
-			name: null,
-			inputSpecs: [],
-			errExit: code
-		};
-	}
-
 	private static function parseUsesArgs(args: Array<String>): UsesOpts {
 		var lang: String = 'haxe';
 		var wantDoc: Bool = false;
@@ -9923,19 +10099,6 @@ final class Cli {
 		}
 	}
 
-	private static inline function extractMethodParseExit(code: Int): ExtractMethodOpts {
-		return {
-			lang: '',
-			write: false,
-			reformat: false,
-			file: null,
-			startPos: null,
-			endPos: null,
-			name: null,
-			errExit: code
-		};
-	}
-
 	private static function parseExtractMethodArgs(args: Array<String>): ExtractMethodOpts {
 		var lang: String = 'haxe';
 		var write: Bool = false;
@@ -10003,19 +10166,6 @@ final class Cli {
 		return extractMethodParseExit(EXIT_USAGE);
 	}
 
-	private static inline function addMemberParseExit(code: Int): AddMemberOpts {
-		return {
-			lang: '',
-			write: false,
-			reformat: false,
-			typeName: null,
-			file: null,
-			memberText: null,
-			fromFile: null,
-			errExit: code
-		};
-	}
-
 	private static function parseAddMemberArgs(args: Array<String>): AddMemberOpts {
 		var lang: String = 'haxe';
 		var write: Bool = false;
@@ -10067,22 +10217,6 @@ final class Cli {
 			memberText: memberText,
 			fromFile: fromFile,
 			errExit: null
-		};
-	}
-
-	private static inline function setDocParseExit(code: Int): SetDocOpts {
-		return {
-			lang: '',
-			write: false,
-			reformat: false,
-			fromFile: null,
-			file: null,
-			pos: null,
-			selectExpr: null,
-			matchExpr: null,
-			nth: null,
-			docText: null,
-			errExit: code
 		};
 	}
 
@@ -10152,16 +10286,6 @@ final class Cli {
 		};
 	}
 
-	private static inline function fmtParseExit(code: Int): FmtOpts {
-		return {
-			lang: '',
-			write: false,
-			list: false,
-			inputSpecs: [],
-			errExit: code
-		};
-	}
-
 	private static function parseFmtArgs(args: Array<String>): FmtOpts {
 		var lang: String = 'haxe';
 		var write: Bool = false;
@@ -10227,21 +10351,6 @@ final class Cli {
 		} else
 			sysPrint(formatted);
 		return { changed: false, failed: false, fatalExit: null };
-	}
-
-	private static inline function moveParseExit(code: Int): MoveOpts {
-		return {
-			lang: '',
-			write: false,
-			scope: null,
-			file: null,
-			posSpec: null,
-			selectExpr: null,
-			matchExpr: null,
-			nth: null,
-			destFile: null,
-			errExit: code
-		};
 	}
 
 	private static function parseMoveArgs(args: Array<String>): MoveOpts {
@@ -10333,23 +10442,6 @@ final class Cli {
 				stderr('apq $cmd: $message\n');
 				return EXIT_RUNTIME;
 		}
-	}
-
-	private static inline function refsParseExit(code: Int): RefsOpts {
-		return {
-			lang: '',
-			json: false,
-			wantDecls: false,
-			wantReads: false,
-			wantWrites: false,
-			wantDoc: false,
-			wantSource: false,
-			flat: false,
-			limit: -1,
-			name: null,
-			inputSpecs: [],
-			errExit: code
-		};
 	}
 
 	private static function parseRefsArgs(args: Array<String>): RefsOpts {
@@ -10463,19 +10555,6 @@ final class Cli {
 		return { entries: allEntries, memberAccesses: memberAccesses, bindings: bindings };
 	}
 
-	private static inline function setCommentParseExit(code: Int): SetCommentOpts {
-		return {
-			lang: '',
-			write: false,
-			reformat: false,
-			fromFile: null,
-			file: null,
-			pos: null,
-			commentText: null,
-			errExit: code
-		};
-	}
-
 	private static function parseSetCommentArgs(args: Array<String>): SetCommentOpts {
 		var lang: String = 'haxe';
 		var write: Bool = false;
@@ -10527,24 +10606,6 @@ final class Cli {
 			pos: pos,
 			commentText: commentText,
 			errExit: null
-		};
-	}
-
-	private static inline function replaceNodeParseExit(code: Int): ReplaceNodeOpts {
-		return {
-			lang: '',
-			write: false,
-			reformat: false,
-			selectExpr: null,
-			atSpec: null,
-			matchExpr: null,
-			nth: null,
-			kind: null,
-			withDoc: false,
-			file: null,
-			newSource: null,
-			fromFile: null,
-			errExit: code
 		};
 	}
 
@@ -10752,17 +10813,6 @@ final class Cli {
 		sysPrint('replace-node; the file must already be canonical unless --reformat is given.\n');
 	}
 
-	private static inline function mentionsParseExit(code: Int): MentionsOpts {
-		return {
-			lang: '',
-			flat: false,
-			limit: -1,
-			name: null,
-			inputSpecs: [],
-			errExit: code
-		};
-	}
-
 	private static function parseMentionsArgs(args: Array<String>): MentionsOpts {
 		var lang: String = 'haxe';
 		var flat: Bool = false;
@@ -10904,17 +10954,6 @@ final class Cli {
 		return true;
 	}
 
-	private static inline function gatesParseExit(code: Int): GatesOpts {
-		return {
-			lang: '',
-			flat: false,
-			limit: -1,
-			mechanism: 'trail-opt',
-			inputSpecs: [],
-			errExit: code
-		};
-	}
-
 	private static function parseGatesArgs(args: Array<String>): GatesOpts {
 		var lang: String = 'haxe';
 		var flat: Bool = false;
@@ -11013,20 +11052,6 @@ final class Cli {
 		}
 	}
 
-	private static inline function commentRewriteParseExit(code: Int): CommentRewriteOpts {
-		return {
-			lang: '',
-			write: false,
-			list: false,
-			reformat: false,
-			regex: false,
-			find: null,
-			replace: null,
-			inputSpecs: [],
-			errExit: code
-		};
-	}
-
 	private static function parseCommentRewriteArgs(args: Array<String>): CommentRewriteOpts {
 		var lang: String = 'haxe';
 		var write: Bool = false;
@@ -11115,24 +11140,6 @@ final class Cli {
 			}
 		}
 		return { changed: changed, failed: failed };
-	}
-
-	private static inline function addElementParseExit(code: Int): AddElementOpts {
-		return {
-			lang: '',
-			write: false,
-			reformat: false,
-			afterSpec: null,
-			beforeSpec: null,
-			appendSpec: null,
-			selectExpr: null,
-			matchExpr: null,
-			nth: null,
-			file: null,
-			code: null,
-			fromFile: null,
-			errExit: code
-		};
 	}
 
 	private static function parseAddElementArgs(args: Array<String>): AddElementOpts {
@@ -11331,14 +11338,6 @@ final class Cli {
 			result.push(kind);
 		}
 		return result;
-	}
-
-	private static inline function runCallees(args: Array<String>): Int {
-		return runCallChains('callees', true, args);
-	}
-
-	private static inline function runCallers(args: Array<String>): Int {
-		return runCallChains('callers', false, args);
 	}
 
 	private static function runCallChains(cmd: String, outward: Bool, args: Array<String>): Int {

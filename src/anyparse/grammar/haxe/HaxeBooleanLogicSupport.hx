@@ -279,6 +279,12 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 		return NEGATABLE_OPERAND_KINDS.contains(inner.kind) ? inner : null;
 	}
 
+	/** Verbatim source of `node` (empty when unspanned — the re-parse gate then rejects the fix). */
+	private static inline function src(node: QueryNode, source: String): String {
+		final span: Null<Span> = node.span;
+		return span == null ? '' : source.substring(span.from, span.to).trim();
+	}
+
 	/**
 	 * The precedence an expression must bind at to sit UNPARENTHESISED in a `slotKind` child slot, or null when the slot constrains nothing — including a kind this function does not model, since an unlisted kind is by construction one no caller may rely on — a statement, a condition, a call
 	 * argument, an array element, an already-parenthesised expression: any expression is
@@ -606,12 +612,6 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 				PREC_ASSIGN;
 			case _: PREC_ATOM;
 		};
-	}
-
-	/** Verbatim source of `node` (empty when unspanned — the re-parse gate then rejects the fix). */
-	private static inline function src(node: QueryNode, source: String): String {
-		final span: Null<Span> = node.span;
-		return span == null ? '' : source.substring(span.from, span.to).trim();
 	}
 
 	/**

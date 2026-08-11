@@ -383,6 +383,11 @@ class JoinReturnCheckTest extends Test {
 		Assert.equals('return (cast x : Bytes);', es[0].text);
 	}
 
+	/** Two sibling `#if` branches declaring the same name, each returning it. */
+	private inline function branchPair(): String {
+		return '#if A\n\t\tvar x:Int = g();\n\t\treturn x;\n\t\t#else\n\t\tfinal x:Int = h();\n\t\treturn x;\n\t\t#end';
+	}
+
 	/** Wrap a statement body in a minimal parseable class + method with an inferred return type. */
 	private function wrap(body: String): String {
 		return 'class C {\n\tfunction f() {\n\t\t$body\n\t}\n}';
@@ -408,11 +413,6 @@ class JoinReturnCheckTest extends Test {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};
-	}
-
-	/** Two sibling `#if` branches declaring the same name, each returning it. */
-	private inline function branchPair(): String {
-		return '#if A\n\t\tvar x:Int = g();\n\t\treturn x;\n\t\t#else\n\t\tfinal x:Int = h();\n\t\treturn x;\n\t\t#end';
 	}
 
 	/** Wrap an assignment-arm body in a method with a pre-existing `str` param and an inferred return type. */

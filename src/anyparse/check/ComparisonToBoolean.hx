@@ -184,6 +184,11 @@ final class ComparisonToBoolean implements Check {
 		);
 	}
 
+	/** The trimmed source text under `span`. */
+	private static inline function spanText(span: Span, source: String): String {
+		return source.substring(span.from, span.to).trim();
+	}
+
 	/**
 	 * The per-file resolution context the resolved-type proof reads. `castTargets` is memoized
 	 * because recovering it costs a SECOND full parse of the file, and `index` is the run's lazy
@@ -573,11 +578,6 @@ final class ComparisonToBoolean implements Check {
 			instanceMethodReturns: shape.instanceMethodReturns ?? [],
 			boolOpKinds: boolOpKinds
 		};
-	}
-
-	/** The trimmed source text under `span`. */
-	private static inline function spanText(span: Span, source: String): String {
-		return source.substring(span.from, span.to).trim();
 	}
 
 }

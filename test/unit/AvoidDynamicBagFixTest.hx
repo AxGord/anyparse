@@ -115,15 +115,19 @@ class AvoidDynamicBagFixTest extends Test {
 		Assert.equals(0, edits(usingLocal('bag.setField("a", "x");\n\t\tbag.other();'), new FakeTypeOracle(null)).length);
 	}
 
+	private inline function fieldValueSrc(): String {
+		return 'using Reflect;\nclass C {\n\tfunction f(g:G):Dynamic {\n\t\tfinal bag:Dynamic = {};\n\t\t'
+			+ 'bag.setField("k", g.value);\n\t\treturn bag;\n\t}\n}\nclass G {\n\tpublic var value:String = "";\n}';
+	}
+
+	private inline function apply(src: String, e: Array<{ span: Span, text: String }>): String {
+		return CheckFixture.applyEdits(src, e);
+	}
+
 	// ---- helpers ----
 
 	private function usingLocal(body: String): String {
 		return 'using Reflect;\nclass C {\n\tfunction f():Dynamic {\n\t\tfinal bag:Dynamic = {};\n\t\t$body\n\t\treturn bag;\n\t}\n}';
-	}
-
-	private inline function fieldValueSrc(): String {
-		return 'using Reflect;\nclass C {\n\tfunction f(g:G):Dynamic {\n\t\tfinal bag:Dynamic = {};\n\t\t'
-			+ 'bag.setField("k", g.value);\n\t\treturn bag;\n\t}\n}\nclass G {\n\tpublic var value:String = "";\n}';
 	}
 
 	private function edits(src: String, oracle: TypeOracle): Array<{ span: Span, text: String }> {
@@ -131,10 +135,6 @@ class AvoidDynamicBagFixTest extends Test {
 		final check: AvoidDynamic = new AvoidDynamic();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
 		return check.fixWithOracle(src, vs, plugin, oracle);
-	}
-
-	private inline function apply(src: String, e: Array<{ span: Span, text: String }>): String {
-		return CheckFixture.applyEdits(src, e);
 	}
 
 }

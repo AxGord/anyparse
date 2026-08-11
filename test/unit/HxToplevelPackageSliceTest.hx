@@ -33,6 +33,22 @@ import anyparse.grammar.haxe.HxModuleWriter;
  */
 class HxToplevelPackageSliceTest extends HxTestHelpers {
 
+	public inline function testRoundTripPackageEmpty(): Void {
+		roundTrip('package;');
+	}
+
+	public inline function testRoundTripPackageSingleSegment(): Void {
+		roundTrip('package foo;');
+	}
+
+	public inline function testRoundTripPackageDottedPath(): Void {
+		roundTrip('package haxe.io.bytes;');
+	}
+
+	public inline function testRoundTripPackageThenClass(): Void {
+		roundTrip('package foo.bar;\nclass C {}');
+	}
+
 	public function testPackageEmpty(): Void {
 		final ast: HxModule = HaxeModuleParser.parse('package;');
 		Assert.equals(1, ast.decls.length);
@@ -116,22 +132,6 @@ class HxToplevelPackageSliceTest extends HxTestHelpers {
 	public function testWriterEmitsPackageDecl(): Void {
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('package foo.bar;'));
 		Assert.equals('package foo.bar;\n', out);
-	}
-
-	public inline function testRoundTripPackageEmpty(): Void {
-		roundTrip('package;');
-	}
-
-	public inline function testRoundTripPackageSingleSegment(): Void {
-		roundTrip('package foo;');
-	}
-
-	public inline function testRoundTripPackageDottedPath(): Void {
-		roundTrip('package haxe.io.bytes;');
-	}
-
-	public inline function testRoundTripPackageThenClass(): Void {
-		roundTrip('package foo.bar;\nclass C {}');
 	}
 
 }

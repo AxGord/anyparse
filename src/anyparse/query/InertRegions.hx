@@ -25,15 +25,15 @@ import anyparse.runtime.Span;
 @:nullSafety(Strict)
 final class InertRegions {
 
+	/** The INTERPOLATING string kind (Haxe single quotes) — masked segment by segment, never whole. */
+	private static inline final INTERP_STRING_KIND: String = 'SingleStringExpr';
+
 	/**
 	 * Literal kinds whose WHOLE span is inert text — a double-quoted string (Haxe never
 	 * interpolates one) and a regex literal, whose body is pattern syntax, not Haxe. Neither can
 	 * bind or read a name, so both are masked entire.
 	 */
 	private static final WHOLE_LITERAL_KINDS: Array<String> = ['DoubleStringExpr', 'RegexLit'];
-
-	/** The INTERPOLATING string kind (Haxe single quotes) — masked segment by segment, never whole. */
-	private static inline final INTERP_STRING_KIND: String = 'SingleStringExpr';
 
 	/**
 	 * The segments of an interpolating literal that carry TEXT: a plain fragment, the escaped

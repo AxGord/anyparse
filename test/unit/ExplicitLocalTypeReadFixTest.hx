@@ -71,89 +71,6 @@ class ExplicitLocalTypeReadFixTest extends ExplicitLocalTypeCheckTestBase {
 		assertFixContains('var a:Int = 5;\n\t\tfinal v = a;', 'v:Int');
 	}
 
-	// --- fix: cross-class static field read (Type.field, via SymbolIndex) ---
-
-	public function testFixCrossClassStaticFieldRead(): Void {
-		assertFixIdx(wrap('var v = API.API_URL;'), [
-			{ file: 'API.hx', source: 'class API {\n\tpublic static final API_URL:String = "x";\n}' }
-		], 'v:String');
-	}
-
-	public function testFixCrossClassStaticNullableFieldPreservesNull(): Void {
-		// The soundness case: a `Null<String>` static field read stays `Null<String>`.
-		assertFixIdx(wrap('var v = API.TOKEN;'), [
-			{ file: 'API.hx', source: 'class API {\n\tpublic static final TOKEN:Null<String> = null;\n}' }
-		], 'v:Null<String>');
-	}
-
-	public function testFixSameFileStaticFieldRead(): Void {
-		// Both types in one module file — the index still carries the sibling type.
-		final src: String =
-			'class C {\n\tfunction f():Void {\n\t\tvar v = API.API_URL;\n\t}\n}\nclass API {\n\tpublic static final API_URL:Int = 5;\n}';
-		assertFixIdx(src, [], 'v:Int');
-	}
-
-	public function testFixStaticFieldReadUnderConditional(): Void {
-		// `#if`/`#else` static field, SAME type in both branches -> unanimous -> resolves.
-		final api: String = 'class API {\n#if release\n\tpublic static final API_URL:String = "a";\n#else\n'
-			+ '\tpublic static final API_URL:String = "b";\n#end\n}';
-		assertFixIdx(wrap('var v = API.API_URL;'), [{ file: 'API.hx', source: api }], 'v:String');
-	}
-
-	// --- fix: static field read report-only cases ---
-
-	public function testSkipStaticFieldNoIndex(): Void {
-		// Without a threaded index the cross-file receiver cannot resolve -> report-only.
-		assertNoFixSrc(wrap('var v = API.API_URL;'));
-	}
-
-	public function testSkipStaticFieldUnknownType(): Void {
-		assertNoFixIdx(wrap('var v = Unknown.FOO;'), [
-			{ file: 'API.hx', source: 'class API {\n\tpublic static final API_URL:String = "x";\n}' }
-		]);
-	}
-
-	public function testSkipStaticFieldAmbiguousType(): Void {
-		// Two indexed `class API` disagree on the member type -> ambiguous -> report-only.
-		assertNoFixIdx(wrap('var v = API.API_URL;'), [
-			{ file: 'A.hx', source: 'class API {\n\tpublic static final API_URL:String = "x";\n}' },
-			{ file: 'B.hx', source: 'class API {\n\tpublic static final API_URL:Int = 5;\n}' }
-		]);
-	}
-
-	public function testSkipStaticFieldUntypedMember(): Void {
-		// The member has no written type (inference-typed) -> nothing to copy -> report-only.
-		assertNoFixIdx(wrap('var v = API.API_URL;'), [{ file: 'API.hx', source: 'class API {\n\tpublic static final API_URL = 5;\n}' }]);
-	}
-
-	public function testSkipStaticFieldNonBuiltinType(): Void {
-		// The field type `Token` is spelled in API.hx's import scope; copying it into C.hx
-		// (which does not import Token) would not resolve -> report-only.
-		assertNoFixIdx(wrap('var v = API.CURRENT;'), [
-			{ file: 'API.hx', source: 'class API {\n\tpublic static final CURRENT:Token = null;\n}' }
-		]);
-	}
-
-	public function testSkipStaticFieldConditionalDiffers(): Void {
-		// `#if`/`#else` static field of DIFFERING types -> not unanimous -> report-only.
-		final api: String =
-			'class API {\n#if release\n\tpublic static final API_URL:String = "a";\n#else\n\tpublic static final API_URL:Int = 1;\n#end\n}';
-		assertNoFixIdx(wrap('var v = API.API_URL;'), [{ file: 'API.hx', source: api }]);
-	}
-
-	public function testSkipInstanceFieldAccess(): Void {
-		// A lower-initial VALUE receiver is an instance access, not a static one -> report-only.
-		assertNoFixIdx(wrap("final obj:String = 'x';\n\t\tfinal v = obj.length;"), []);
-	}
-
-	public function testSkipStaticFieldReceiverShadowedByLocal(): Void {
-		// A local named `API` shadows the type: `API.API_URL` now reads the local's field, not
-		// the static. The receiver resolves to a value binding -> report-only.
-		assertNoFixIdx(wrap('var API:C = this;\n\t\tvar v = API.API_URL;'), [
-			{ file: 'API.hx', source: 'class API {\n\tpublic static final API_URL:String = "x";\n}' }
-		]);
-	}
-
 	// --- fix: inference-resolved shapes stay report-only ---
 
 	public inline function testSkipGenericMethodCall(): Void {
@@ -250,6 +167,89 @@ class ExplicitLocalTypeReadFixTest extends ExplicitLocalTypeCheckTestBase {
 		// A local named `Date` shadows the type: `Date.now()` reads the local's field, not the
 		// static. The receiver resolves to a value binding -> report-only.
 		assertNoFix('var Date:C = this;\n\t\tfinal n = Date.now();');
+	}
+
+	// --- fix: cross-class static field read (Type.field, via SymbolIndex) ---
+
+	public function testFixCrossClassStaticFieldRead(): Void {
+		assertFixIdx(wrap('var v = API.API_URL;'), [
+			{ file: 'API.hx', source: 'class API {\n\tpublic static final API_URL:String = "x";\n}' }
+		], 'v:String');
+	}
+
+	public function testFixCrossClassStaticNullableFieldPreservesNull(): Void {
+		// The soundness case: a `Null<String>` static field read stays `Null<String>`.
+		assertFixIdx(wrap('var v = API.TOKEN;'), [
+			{ file: 'API.hx', source: 'class API {\n\tpublic static final TOKEN:Null<String> = null;\n}' }
+		], 'v:Null<String>');
+	}
+
+	public function testFixSameFileStaticFieldRead(): Void {
+		// Both types in one module file — the index still carries the sibling type.
+		final src: String =
+			'class C {\n\tfunction f():Void {\n\t\tvar v = API.API_URL;\n\t}\n}\nclass API {\n\tpublic static final API_URL:Int = 5;\n}';
+		assertFixIdx(src, [], 'v:Int');
+	}
+
+	public function testFixStaticFieldReadUnderConditional(): Void {
+		// `#if`/`#else` static field, SAME type in both branches -> unanimous -> resolves.
+		final api: String = 'class API {\n#if release\n\tpublic static final API_URL:String = "a";\n#else\n'
+			+ '\tpublic static final API_URL:String = "b";\n#end\n}';
+		assertFixIdx(wrap('var v = API.API_URL;'), [{ file: 'API.hx', source: api }], 'v:String');
+	}
+
+	// --- fix: static field read report-only cases ---
+
+	public function testSkipStaticFieldNoIndex(): Void {
+		// Without a threaded index the cross-file receiver cannot resolve -> report-only.
+		assertNoFixSrc(wrap('var v = API.API_URL;'));
+	}
+
+	public function testSkipStaticFieldUnknownType(): Void {
+		assertNoFixIdx(wrap('var v = Unknown.FOO;'), [
+			{ file: 'API.hx', source: 'class API {\n\tpublic static final API_URL:String = "x";\n}' }
+		]);
+	}
+
+	public function testSkipStaticFieldAmbiguousType(): Void {
+		// Two indexed `class API` disagree on the member type -> ambiguous -> report-only.
+		assertNoFixIdx(wrap('var v = API.API_URL;'), [
+			{ file: 'A.hx', source: 'class API {\n\tpublic static final API_URL:String = "x";\n}' },
+			{ file: 'B.hx', source: 'class API {\n\tpublic static final API_URL:Int = 5;\n}' }
+		]);
+	}
+
+	public function testSkipStaticFieldUntypedMember(): Void {
+		// The member has no written type (inference-typed) -> nothing to copy -> report-only.
+		assertNoFixIdx(wrap('var v = API.API_URL;'), [{ file: 'API.hx', source: 'class API {\n\tpublic static final API_URL = 5;\n}' }]);
+	}
+
+	public function testSkipStaticFieldNonBuiltinType(): Void {
+		// The field type `Token` is spelled in API.hx's import scope; copying it into C.hx
+		// (which does not import Token) would not resolve -> report-only.
+		assertNoFixIdx(wrap('var v = API.CURRENT;'), [
+			{ file: 'API.hx', source: 'class API {\n\tpublic static final CURRENT:Token = null;\n}' }
+		]);
+	}
+
+	public function testSkipStaticFieldConditionalDiffers(): Void {
+		// `#if`/`#else` static field of DIFFERING types -> not unanimous -> report-only.
+		final api: String =
+			'class API {\n#if release\n\tpublic static final API_URL:String = "a";\n#else\n\tpublic static final API_URL:Int = 1;\n#end\n}';
+		assertNoFixIdx(wrap('var v = API.API_URL;'), [{ file: 'API.hx', source: api }]);
+	}
+
+	public function testSkipInstanceFieldAccess(): Void {
+		// A lower-initial VALUE receiver is an instance access, not a static one -> report-only.
+		assertNoFixIdx(wrap("final obj:String = 'x';\n\t\tfinal v = obj.length;"), []);
+	}
+
+	public function testSkipStaticFieldReceiverShadowedByLocal(): Void {
+		// A local named `API` shadows the type: `API.API_URL` now reads the local's field, not
+		// the static. The receiver resolves to a value binding -> report-only.
+		assertNoFixIdx(wrap('var API:C = this;\n\t\tvar v = API.API_URL;'), [
+			{ file: 'API.hx', source: 'class API {\n\tpublic static final API_URL:String = "x";\n}' }
+		]);
 	}
 
 	public function testSkipStaticMethodIndexShadowedType(): Void {

@@ -32,6 +32,12 @@ import anyparse.grammar.haxe.HxStatement;
  */
 class HxSharpErrorSliceTest extends HxTestHelpers {
 
+	// -- Idempotency on the corpus module form --
+
+	public inline function testSharpErrorRoundTrip(): Void {
+		roundTrip('#if java\n#error "please implement"\n#end\nclass Main {\n\tpublic function new() {}\n}');
+	}
+
 	// -- Isolated ctor: module-decl scope, double-quoted, verbatim --
 
 	public function testErrorDeclModuleScope(): Void {
@@ -105,12 +111,6 @@ class HxSharpErrorSliceTest extends HxTestHelpers {
 		Assert.equals('"js is defined"', (expectErrorDecl(cond.body[0].decl): String));
 		Assert.equals(1, cond.elseifs.length);
 		Assert.equals('php', (cond.elseifs[0].cond: String));
-	}
-
-	// -- Idempotency on the corpus module form --
-
-	public inline function testSharpErrorRoundTrip(): Void {
-		roundTrip('#if java\n#error "please implement"\n#end\nclass Main {\n\tpublic function new() {}\n}');
 	}
 
 	// -- Regression: a module with no `#error` is unaffected --

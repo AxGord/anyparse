@@ -75,6 +75,11 @@ final class SourceSlice {
 		return block == null ? null : source.substring(lineStart[lineOfOffset(lineStart, lineEnd, block.from)], lineEnd[i]);
 	}
 
+	/** Whether `code` is a space, tab or carriage return — the trailing bytes a line may carry past its last real character. */
+	private static inline function isBlank(code: Int): Bool {
+		return code == ' '.code || code == '\t'.code || code == '\r'.code;
+	}
+
 	/**
 	 * Populate `starts` / `ends` with the offset range of every line.
 	 * `ends[n]` excludes the newline; a trailing `\r` stays in range so
@@ -96,12 +101,6 @@ final class SourceSlice {
 	private static function lineOfOffset(starts: Array<Int>, ends: Array<Int>, offset: Int): Int {
 		for (n in 0...starts.length) if (offset <= ends[n]) return n;
 		return starts.length - 1;
-	}
-
-
-	/** Whether `code` is a space, tab or carriage return — the trailing bytes a line may carry past its last real character. */
-	private static inline function isBlank(code: Int): Bool {
-		return code == ' '.code || code == '\t'.code || code == '\r'.code;
 	}
 
 }

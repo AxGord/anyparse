@@ -259,6 +259,11 @@ final class GuardReturn implements Check {
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
+	/** The local declaration node a top-level statement holds, or null — see `RefactorSupport.topLevelDeclaredNode`. */
+	private static inline function declaredNode(stmt: QueryNode, s: Seams): Null<QueryNode> {
+		return RefactorSupport.topLevelDeclaredNode(stmt, s.localDeclKinds, s.localDeclExprKinds, s.metaKinds);
+	}
+
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
@@ -520,11 +525,6 @@ final class GuardReturn implements Check {
 			if (n != null && names.contains(n)) return true;
 		}
 		return false;
-	}
-
-	/** The local declaration node a top-level statement holds, or null — see `RefactorSupport.topLevelDeclaredNode`. */
-	private static inline function declaredNode(stmt: QueryNode, s: Seams): Null<QueryNode> {
-		return RefactorSupport.topLevelDeclaredNode(stmt, s.localDeclKinds, s.localDeclExprKinds, s.metaKinds);
 	}
 
 	/**

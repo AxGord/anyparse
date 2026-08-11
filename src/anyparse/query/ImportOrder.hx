@@ -139,6 +139,26 @@ final class ImportOrder {
 	/** The order names, indexed by the order id `orderOf` returns — the `import-order` rule's `order` option values. */
 	public static final ORDER_NAMES: Array<String> = ['ascii', 'case-insensitive'];
 
+	/** The id of the order NAMED `name` (an `import-order` `order` option value), or -1 when it names none. */
+	public static inline function orderNamed(name: String): Int {
+		return ORDER_NAMES.indexOf(name);
+	}
+
+	/**
+	 * Every PLAIN `import` statement of `root`'s top level as a slot, in source order — the block
+	 * shape `runsOf` and `insertOffset` read. A statement the grammar recorded no span for carries
+	 * negative offsets: it cannot be placed on a line, so it ENDS the run it sits in rather than
+	 * joining it — the run around a line the machinery cannot see must not be read as one block.
+	 */
+	public static inline function slotsOf(root: QueryNode): Array<ImportSlot> {
+		return slotsOfKind(root, 'ImportDecl');
+	}
+
+	/** The paths of `run`, in run order — the list every order question is asked about. */
+	public static inline function pathsOf(run: Array<ImportLine>): Array<String> {
+		return [for (line in run) line.path];
+	}
+
 	/**
 	 * The FIRST order in `ORDER_NAMES` that explains `paths` (non-decreasing under it), or -1
 	 * when none does. An empty list is -1 — there is no run to preserve the order of, and every
@@ -181,11 +201,6 @@ final class ImportOrder {
 			fewest = count;
 		}
 		return best;
-	}
-
-	/** The id of the order NAMED `name` (an `import-order` `order` option value), or -1 when it names none. */
-	public static inline function orderNamed(name: String): Int {
-		return ORDER_NAMES.indexOf(name);
 	}
 
 	/**
@@ -280,16 +295,6 @@ final class ImportOrder {
 	}
 
 	/**
-	 * Every PLAIN `import` statement of `root`'s top level as a slot, in source order — the block
-	 * shape `runsOf` and `insertOffset` read. A statement the grammar recorded no span for carries
-	 * negative offsets: it cannot be placed on a line, so it ENDS the run it sits in rather than
-	 * joining it — the run around a line the machinery cannot see must not be read as one block.
-	 */
-	public static inline function slotsOf(root: QueryNode): Array<ImportSlot> {
-		return slotsOfKind(root, 'ImportDecl');
-	}
-
-	/**
 	 * Every top-level `using` statement of `root` as a movable whole LINE, in source order, or null
 	 * when ANY of them is not liftable as a line (`lineOf` — its line carries other code, a block
 	 * comment follows it, the file ends without a newline, the grammar recorded no span). Null is
@@ -315,9 +320,19 @@ final class ImportOrder {
 		return out;
 	}
 
-	/** The paths of `run`, in run order — the list every order question is asked about. */
-	public static inline function pathsOf(run: Array<ImportLine>): Array<String> {
-		return [for (line in run) line.path];
+	/** Whether `candidate` outranks `incumbent` under the class doc's ordered / affinity / slot-inside criteria. */
+	private static inline function beats(candidate: RunChoice, incumbent: RunChoice): Bool {
+		return if (candidate.ordered != incumbent.ordered)
+			candidate.ordered
+		else if (candidate.affinity != incumbent.affinity)
+			candidate.affinity > incumbent.affinity
+		else
+			candidate.slot >= 0 && incumbent.slot < 0;
+	}
+
+	/** Whether what follows the statement on its own line is nothing, or a `//` comment — the only two shapes a whole-line move may carry. */
+	private static inline function isPureTail(tail: String): Bool {
+		return tail == '' || tail.startsWith('//');
 	}
 
 	/** Every top-level statement of `root` whose node `kind` matches, as a slot, in source order. */
@@ -352,16 +367,6 @@ final class ImportOrder {
 			if (best == null || beats(candidate, best)) best = candidate;
 		}
 		return best;
-	}
-
-	/** Whether `candidate` outranks `incumbent` under the class doc's ordered / affinity / slot-inside criteria. */
-	private static inline function beats(candidate: RunChoice, incumbent: RunChoice): Bool {
-		return if (candidate.ordered != incumbent.ordered)
-			candidate.ordered
-		else if (candidate.affinity != incumbent.affinity)
-			candidate.affinity > incumbent.affinity
-		else
-			candidate.slot >= 0 && incumbent.slot < 0;
 	}
 
 	/** The index in `run` of the first import that sorts AFTER `path` under `order`, or -1 when `path` sorts past them all. */
@@ -415,11 +420,6 @@ final class ImportOrder {
 				chunkFrom: withLeadingComments(source, lineStart),
 				chunkTo: newline + 1
 			};
-	}
-
-	/** Whether what follows the statement on its own line is nothing, or a `//` comment — the only two shapes a whole-line move may carry. */
-	private static inline function isPureTail(tail: String): Bool {
-		return tail == '' || tail.startsWith('//');
 	}
 
 	/**

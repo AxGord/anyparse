@@ -108,6 +108,19 @@ final class BodyFit {
 	private static inline final NO_CONSTRUCT_HEAD: Int = -1;
 
 	/**
+	 * The BREAK shape every `FitLine` outcome falls back to: `body` on the
+	 * next line, one indent level deeper than the header.
+	 *
+	 * Three sites want exactly this Doc — the sibling-coordinated probe's
+	 * break branch, `glueLayout`'s over-wide answer, and the control-flow
+	 * glue refusal — so it has one owner rather than three literal copies to
+	 * keep in step.
+	 */
+	public static inline function breakLayout(cols: Int, body: Doc): Doc {
+		return Doc.Nest(cols, Doc.Concat([Doc.Line('\n'), body]));
+	}
+
+	/**
 	 * Build the `FitLine` placement Doc for `body` under a header rendered at
 	 * the enclosing indent.
 	 *
@@ -171,19 +184,6 @@ final class BodyFit {
 			glueLayout(cols, body, nestGluedBody ? Doc.Nest(cols, glued) : glued, lineWidth);
 		}
 		return siblingWidth < 0 ? own : Doc.IfIndentWidthExceeds(siblingWidth, lineWidth, breakLayout(cols, body), own);
-	}
-
-	/**
-	 * The BREAK shape every `FitLine` outcome falls back to: `body` on the
-	 * next line, one indent level deeper than the header.
-	 *
-	 * Three sites want exactly this Doc — the sibling-coordinated probe's
-	 * break branch, `glueLayout`'s over-wide answer, and the control-flow
-	 * glue refusal — so it has one owner rather than three literal copies to
-	 * keep in step.
-	 */
-	public static inline function breakLayout(cols: Int, body: Doc): Doc {
-		return Doc.Nest(cols, Doc.Concat([Doc.Line('\n'), body]));
 	}
 
 	/**

@@ -115,6 +115,16 @@ final class DocCoverage implements Check implements ConfigAware {
 		return [];
 	}
 
+	/** The declared name of a type node — its own, or its container child's for a `final class` (whose name sits on the inner `ClassForm`). */
+	private static inline function typeName(node: QueryNode, seams: Seams): String {
+		return CheckScan.typeDeclName(node, seams.containers.concat(seams.interfaceDecls));
+	}
+
+	/** Whether `node` is a leading modifier / `@:meta` annotation (part of a decl's preceding run), not a member or clause. */
+	private static inline function isLeadingAnnotation(node: QueryNode, seams: Seams): Bool {
+		return CheckScan.isLeadingAnnotation(node, seams.modifiers);
+	}
+
 	/**
 	 * Scan a module's direct children. A running modifier / `@:meta` sibling run
 	 * precedes each top-level type decl; `runStart` tracks its start (the doc anchor),
@@ -202,16 +212,6 @@ final class DocCoverage implements Check implements ConfigAware {
 		return seams.containers.contains(typeNode.kind) || seams.interfaceDecls.contains(typeNode.kind)
 			? typeNode
 			: typeNode.children.find(c -> seams.containers.contains(c.kind) || seams.interfaceDecls.contains(c.kind));
-	}
-
-	/** The declared name of a type node — its own, or its container child's for a `final class` (whose name sits on the inner `ClassForm`). */
-	private static inline function typeName(node: QueryNode, seams: Seams): String {
-		return CheckScan.typeDeclName(node, seams.containers.concat(seams.interfaceDecls));
-	}
-
-	/** Whether `node` is a leading modifier / `@:meta` annotation (part of a decl's preceding run), not a member or clause. */
-	private static inline function isLeadingAnnotation(node: QueryNode, seams: Seams): Bool {
-		return CheckScan.isLeadingAnnotation(node, seams.modifiers);
 	}
 
 	/** Build one `Info` finding on the declaration's HEADER line (so an inline `// noqa` on that line suppresses it). */

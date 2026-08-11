@@ -151,6 +151,15 @@ class BlockCommentNormalizer {
 		return { lines: newLines };
 	}
 
+	private static inline function indentUnitOf(opt: WriteOptions): String {
+		return opt.indentChar == IndentChar.Tab ? '\t' : ''.rpad(' ', opt.indentSize);
+	}
+
+	/** Whether `c` is comment-body whitespace — the separator a ` * ` gutter marker may carry. */
+	private static inline function isSpace(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code || c == '\r'.code;
+	}
+
 	/**
 	 * Whether captured block-comment `content` is eligible for the
 	 * canonical (`Plain` / `Javadoc` / `JavadocNoStars`) rewrite. Two
@@ -351,10 +360,6 @@ class BlockCommentNormalizer {
 		return Concat(docs);
 	}
 
-	private static inline function indentUnitOf(opt: WriteOptions): String {
-		return opt.indentChar == IndentChar.Tab ? '\t' : ''.rpad(' ', opt.indentSize);
-	}
-
 	private static function commonPrefixOf(a: String, b: String): String {
 		final lim: Int = a.length < b.length ? a.length : b.length;
 		var j: Int = 0;
@@ -513,11 +518,6 @@ class BlockCommentNormalizer {
 		return out;
 	}
 
-	/** Whether `c` is comment-body whitespace — the separator a ` * ` gutter marker may carry. */
-	private static inline function isSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\r'.code;
-	}
-
 	/** The length of `body`'s leading run of `*`. */
 	private static function leadingStarRun(body: String): Int {
 		var i: Int = 0;
@@ -542,7 +542,6 @@ class BlockCommentNormalizer {
 		}
 		return (commonPrefix ?? '').length;
 	}
-
 
 	/**
 	 * The rewritten ws for a CONTENT-BEARING close line. Never the source ws

@@ -83,6 +83,16 @@ final class Patch {
 		return RefactorSupport.canonicalize(source, edits, reformat, plugin, optsJson);
 	}
 
+	/** The repeated-fragment refusal, shared by the byte-exact and dedented arms. */
+	private static inline function repeated(label: String, count: Int, kind: String): String {
+		return '${label}the old fragment occurs $count times in the resolved $kind node — widen the snippet until it is unique, '
+			+ 'or pass --all to rewrite every occurrence';
+	}
+
+	private static inline function fail(message: String): { ranges: Array<{ from: Int, to: Int }>, error: Null<String> } {
+		return { ranges: [], error: message };
+	}
+
 	/**
 	 * Locate `oldText` within `slice` — byte-exact first, then the dedented
 	 * line-wise fallback — enforcing the exactly-once discipline. A failure is
@@ -105,16 +115,6 @@ final class Patch {
 			fail(repeated(label, dedented.length, kind))
 		else
 			{ ranges: dedented, error: null };
-	}
-
-	/** The repeated-fragment refusal, shared by the byte-exact and dedented arms. */
-	private static inline function repeated(label: String, count: Int, kind: String): String {
-		return '${label}the old fragment occurs $count times in the resolved $kind node — widen the snippet until it is unique, '
-			+ 'or pass --all to rewrite every occurrence';
-	}
-
-	private static inline function fail(message: String): { ranges: Array<{ from: Int, to: Int }>, error: Null<String> } {
-		return { ranges: [], error: message };
 	}
 
 	/**

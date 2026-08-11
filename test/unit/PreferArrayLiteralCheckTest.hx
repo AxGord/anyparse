@@ -17,6 +17,38 @@ import anyparse.query.SymbolIndex;
  */
 class PreferArrayLiteralCheckTest extends Test {
 
+	/** An unannotated local is NOT pinned — reported but left a finding, no edit (the gate is conservative). */
+	public inline function testGateRefusesUntypedLocal(): Void {
+		assertGateRefuses('class C { function f():Void { var xs = new Array(); } }');
+	}
+
+	/** An unannotated local whose only type source is the constructor `<Int>` is NOT pinned — `[]` would drop `<Int>`. */
+	public inline function testGateRefusesUntypedTypeParam(): Void {
+		assertGateRefuses('class C { function f():Void { var xs = new Array<Int>(); } }');
+	}
+
+	/** An argument-position `new Array()` is pinned by the callee, not the typed local — no edit. */
+	public inline function testGateRefusesArgPosition(): Void {
+		assertGateRefuses(
+			'class C { function f():Void { var xs:Array<Int> = take(new Array()); } function take(a:Array<Int>):Array<Int> { return a; } }'
+		);
+	}
+
+	/** A return-position `new Array()` is not a declaration initializer — no edit. */
+	public inline function testGateRefusesReturnPosition(): Void {
+		assertGateRefuses('class C { function f():Array<Int> { return new Array(); } }');
+	}
+
+	/** An assignment whose lvalue does not resolve to any known binding is NOT pinned — reported, no edit. */
+	public inline function testGateRefusesUnresolvedAssignment(): Void {
+		assertGateRefuses('class C { function f():Void { unknownVar = new Array(); } }');
+	}
+
+	/** A `this.<field>` assignment with no SymbolIndex threaded stays report-only (the cross-file resolver cannot reach the member). */
+	public inline function testThisFieldAssignmentNeedsIndex(): Void {
+		assertGateRefuses('class C { var xs:Array<Int>; function f():Void { this.xs = new Array(); } }');
+	}
+
 	public function testNewArrayTypedFlagged(): Void {
 		final vs: Array<Violation> = violations(wrap('new Array<Int>()'));
 		Assert.equals(1, vs.length);
@@ -51,28 +83,6 @@ class PreferArrayLiteralCheckTest extends Test {
 		Assert.equals('[]', fixText('class C { public var xs:Array<Int> = new Array(); }'));
 	}
 
-	/** An unannotated local is NOT pinned — reported but left a finding, no edit (the gate is conservative). */
-	public inline function testGateRefusesUntypedLocal(): Void {
-		assertGateRefuses('class C { function f():Void { var xs = new Array(); } }');
-	}
-
-	/** An unannotated local whose only type source is the constructor `<Int>` is NOT pinned — `[]` would drop `<Int>`. */
-	public inline function testGateRefusesUntypedTypeParam(): Void {
-		assertGateRefuses('class C { function f():Void { var xs = new Array<Int>(); } }');
-	}
-
-	/** An argument-position `new Array()` is pinned by the callee, not the typed local — no edit. */
-	public inline function testGateRefusesArgPosition(): Void {
-		assertGateRefuses(
-			'class C { function f():Void { var xs:Array<Int> = take(new Array()); } function take(a:Array<Int>):Array<Int> { return a; } }'
-		);
-	}
-
-	/** A return-position `new Array()` is not a declaration initializer — no edit. */
-	public inline function testGateRefusesReturnPosition(): Void {
-		assertGateRefuses('class C { function f():Array<Int> { return new Array(); } }');
-	}
-
 	public function testRegisteredInBuiltins(): Void {
 		Assert.notNull(Linter.byId('prefer-array-literal'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
@@ -101,16 +111,6 @@ class PreferArrayLiteralCheckTest extends Test {
 	/** A `this.<field>` assignment resolves the field type through the SymbolIndex — rewritten to `[]`. */
 	public function testFixThisFieldAssignment(): Void {
 		Assert.equals('[]', fixTextIndexed('class C { var xs:Array<Int>; function f():Void { this.xs = new Array(); } }'));
-	}
-
-	/** An assignment whose lvalue does not resolve to any known binding is NOT pinned — reported, no edit. */
-	public inline function testGateRefusesUnresolvedAssignment(): Void {
-		assertGateRefuses('class C { function f():Void { unknownVar = new Array(); } }');
-	}
-
-	/** A `this.<field>` assignment with no SymbolIndex threaded stays report-only (the cross-file resolver cannot reach the member). */
-	public inline function testThisFieldAssignmentNeedsIndex(): Void {
-		assertGateRefuses('class C { var xs:Array<Int>; function f():Void { this.xs = new Array(); } }');
 	}
 
 	private function wrap(expr: String): String {

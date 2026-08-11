@@ -39,6 +39,12 @@ using Lambda;
 @:nullSafety(Strict)
 final class EnglishComments implements Check {
 
+	/** Lowest flagged code unit; below it (ASCII, Latin-1, Latin-extended, Greek) a char is never a hit — fast reject. */
+	private static inline final FIRST_NON_LATIN: Int = 0x0400;
+
+	/** Maximum code units in a finding's excerpt. */
+	private static inline final EXCERPT_LEN: Int = 30;
+
 	/** Inclusive [lo, hi] UTF-16 code-unit bounds of the non-Latin letter blocks flagged (all BMP). */
 	private static final BLOCKS: Array<{ lo: Int, hi: Int }> = [
 		{ lo: 0x0400, hi: 0x052F }, // Cyrillic + Cyrillic Supplement
@@ -50,12 +56,6 @@ final class EnglishComments implements Check {
 		{ lo: 0x4E00, hi: 0x9FFF }, // CJK Unified Ideographs
 		{ lo: 0xAC00, hi: 0xD7AF }
 	];
-
-	/** Lowest flagged code unit; below it (ASCII, Latin-1, Latin-extended, Greek) a char is never a hit — fast reject. */
-	private static inline final FIRST_NON_LATIN: Int = 0x0400;
-
-	/** Maximum code units in a finding's excerpt. */
-	private static inline final EXCERPT_LEN: Int = 30;
 
 	public function new() {}
 

@@ -190,15 +190,15 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 		assertWrite(expected, src);
 	}
 
+	private inline function triviaWrite(src: String): String {
+		return HxWriteFixture.triviaWrite(src, CFG);
+	}
+
 	/** Writes `src` under `CFG`, asserts it equals `expected`, and asserts the result is a fixed point. */
 	private function assertWrite(expected: String, src: String): Void {
 		final out: String = triviaWrite(src);
 		Assert.equals(expected, out);
 		Assert.equals(out, triviaWrite(out));
-	}
-
-	private inline function triviaWrite(src: String): String {
-		return HxWriteFixture.triviaWrite(src, CFG);
 	}
 
 }

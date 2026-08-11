@@ -155,6 +155,11 @@ final class Address {
 		return k >= 0 ? '$selector --nth ${k + 1}' : posFallback;
 	}
 
+	/** Identifier-character test for the name-token word-boundary scan. */
+	private static inline function isIdentChar(c: Int): Bool {
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
+	}
+
 	/** A position `<line>[:<col>]`; a missing column snaps to the line's first non-whitespace character. */
 	private static function resolveAt(tree: QueryNode, source: String, at: String): AddressResult {
 		final colon: Int = at.indexOf(':');
@@ -259,11 +264,6 @@ final class Address {
 			return sub;
 		}
 		return null;
-	}
-
-	/** Identifier-character test for the name-token word-boundary scan. */
-	private static inline function isIdentChar(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
 	}
 
 	/** One selector segment for a node: `Kind` or `Kind:name`. */

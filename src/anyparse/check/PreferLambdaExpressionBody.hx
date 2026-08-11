@@ -412,6 +412,11 @@ final class PreferLambdaExpressionBody implements Check {
 		);
 	}
 
+	/** `lines[i]` without surrounding whitespace, or empty when the index is past the end. */
+	private static inline function trimmedAt(lines: Array<String>, i: Int): String {
+		return i < lines.length ? StringTools.trim(lines[i]) : '';
+	}
+
 	/**
 	 * Every collapsible lambda body in `source` that also PAYS FOR ITSELF in the writer's own
 	 * rendering (empty when the source does not parse, or when the writer declines it). `run`
@@ -571,11 +576,6 @@ final class PreferLambdaExpressionBody implements Check {
 		final shared: Int = before.length < after.length ? before.length : after.length;
 		for (i in 0...shared) if (before[i] != after[i]) return i;
 		return before.length == after.length ? -1 : shared;
-	}
-
-	/** `lines[i]` without surrounding whitespace, or empty when the index is past the end. */
-	private static inline function trimmedAt(lines: Array<String>, i: Int): String {
-		return i < lines.length ? StringTools.trim(lines[i]) : '';
 	}
 
 	/**

@@ -115,6 +115,22 @@ class WriterCodegen {
 		return fields;
 	}
 
+	/**
+	 * ω-issue-423-mech-a — true iff the writer's `WriteOptions` typedef
+	 * carries the `_inExprPosition:Bool` field. Used to gate emission
+	 * of the `_setExprPosition` helper: grammars whose options struct
+	 * doesn't declare the field (Json, Bin, etc.) skip the helper to
+	 * avoid a compile-time field-resolution error inside its body.
+	 *
+	 * Walks `TType`/`TAnon` so it sees the intersection-typedef form
+	 * (`HxModuleWriteOptions = WriteOptions & {...}`) — `getType`
+	 * resolves to the alias before unification. `TLazy` is followed
+	 * eagerly to handle forward-referenced typedefs.
+	 */
+	private static inline function optionsHasInExprPosition(optionsTypePath: String): Bool {
+		return optionsHasField(optionsTypePath, '_inExprPosition');
+	}
+
 	// -------- public entry point --------
 
 	private static function publicEntry(
@@ -196,22 +212,6 @@ class WriterCodegen {
 		final simple: String = simpleName(optionsTypePath);
 		final pack: Array<String> = packOf(optionsTypePath);
 		return TPath({ pack: pack, name: simple, params: [] });
-	}
-
-	/**
-	 * ω-issue-423-mech-a — true iff the writer's `WriteOptions` typedef
-	 * carries the `_inExprPosition:Bool` field. Used to gate emission
-	 * of the `_setExprPosition` helper: grammars whose options struct
-	 * doesn't declare the field (Json, Bin, etc.) skip the helper to
-	 * avoid a compile-time field-resolution error inside its body.
-	 *
-	 * Walks `TType`/`TAnon` so it sees the intersection-typedef form
-	 * (`HxModuleWriteOptions = WriteOptions & {...}`) — `getType`
-	 * resolves to the alias before unification. `TLazy` is followed
-	 * eagerly to handle forward-referenced typedefs.
-	 */
-	private static inline function optionsHasInExprPosition(optionsTypePath: String): Bool {
-		return optionsHasField(optionsTypePath, '_inExprPosition');
 	}
 
 	/**
@@ -2448,7 +2448,6 @@ class WriterCodegen {
 		};
 	}
 
-
 	/**
 	 * ω-single-stmt-braces — opt-fanout shim for the dangling-else
 	 * suppress frame. Set-only (never cleared on descent — over-
@@ -2481,7 +2480,6 @@ class WriterCodegen {
 			pos: Context.currentPos(),
 		};
 	}
-
 
 	/**
 	 * ω-single-stmt-braces CHAIN symmetry — two-way opt-fanout shim for the

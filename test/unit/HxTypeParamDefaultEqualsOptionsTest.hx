@@ -40,6 +40,18 @@ final class HxTypeParamDefaultEqualsOptionsTest extends Test {
 		super();
 	}
 
+	public inline function testVarInitAssignStaysSpacedRegardlessOfPolicy(): Void {
+		assertSpacedUnderAllPolicies('class C<T = Int> { var x:Int = 0; }', 'var x:Int = 0;', 'var init');
+	}
+
+	public inline function testFunctionParamDefaultStaysSpacedRegardlessOfPolicy(): Void {
+		assertSpacedUnderAllPolicies('class C<T = Int> { function f(x:Int = 0):Void {} }', 'x:Int = 0', 'param default');
+	}
+
+	public inline function testTypedefAssignStaysSpacedRegardlessOfTypeParamPolicy(): Void {
+		assertSpacedUnderAllPolicies('typedef Foo<T = Int> = Bar;', '= Bar;', 'typedef-rhs');
+	}
+
 	public function testTypeParamDefaultEqualsDefaultIsBoth(): Void {
 		final defaults: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		Assert.equals(WhitespacePolicy.Both, defaults.typeParamDefaultEquals);
@@ -89,18 +101,6 @@ final class HxTypeParamDefaultEqualsOptionsTest extends Test {
 	public function testFunctionTypeParamDefaultNone(): Void {
 		final out: String = writeWith('class C { function f<T = Int>():Void {} }', WhitespacePolicy.None);
 		Assert.isTrue(out.indexOf('function f<T=Int>():Void') != -1, 'expected `function f<T=Int>():Void` in: <$out>');
-	}
-
-	public inline function testVarInitAssignStaysSpacedRegardlessOfPolicy(): Void {
-		assertSpacedUnderAllPolicies('class C<T = Int> { var x:Int = 0; }', 'var x:Int = 0;', 'var init');
-	}
-
-	public inline function testFunctionParamDefaultStaysSpacedRegardlessOfPolicy(): Void {
-		assertSpacedUnderAllPolicies('class C<T = Int> { function f(x:Int = 0):Void {} }', 'x:Int = 0', 'param default');
-	}
-
-	public inline function testTypedefAssignStaysSpacedRegardlessOfTypeParamPolicy(): Void {
-		assertSpacedUnderAllPolicies('typedef Foo<T = Int> = Bar;', '= Bar;', 'typedef-rhs');
 	}
 
 	public function testJsonBinopPolicyNoneMapsToTypeParamDefaultEqualsNone(): Void {

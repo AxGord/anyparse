@@ -247,19 +247,6 @@ class HaxeWriterRoundTripTest extends HxTestHelpers {
 		roundTrip('class F { var x:String = "hello"; }');
 	}
 
-	private function testDoubleStringMultilineLiteralPreserved(): Void {
-		// ω-doublestring-rawstring: literal embedded newlines inside a
-		// double-quoted string must survive round-trip verbatim (Haxe
-		// allows multiline strings). Previously decoded + re-escaped
-		// via `escapeChar` which converted literal `\n` → `\n` escape,
-		// collapsing the multiline source to inline-escaped form.
-		// Source has actual newlines between the quotes — no `\n` escape.
-		final src: String = 'class F { var x:String = "a\n\nb"; }';
-		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src));
-		Assert.isTrue(out.indexOf('"a\n\nb"') != -1, 'expected literal multiline string preserved in: <$out>');
-		Assert.isTrue(out.indexOf('\\n') == -1, 'did not expect re-escaped \\n in: <$out>');
-	}
-
 	private inline function testSingleString(): Void {
 		roundTrip("class F { var x:String = 'hello'; }");
 	}
@@ -274,6 +261,55 @@ class HaxeWriterRoundTripTest extends HxTestHelpers {
 
 	private inline function testSingleStringDollar(): Void {
 		roundTrip("class F { var x:String = 'costs $$5'; }");
+	}
+
+	private inline function testMixedDecls(): Void {
+		roundTrip('class A {} typedef B = C; enum D { X; } interface E {} abstract F(Int) {}');
+	}
+
+	private inline function testParamDefault(): Void {
+		roundTrip('class F { function f(x:Int = 0):Void {} }');
+	}
+
+	private inline function testNestedExpr(): Void {
+		roundTrip('class F { var x:Int = (a + b) * (c - d); }');
+	}
+
+	private inline function testCompoundAssign(): Void {
+		roundTrip('class F { function f():Void { var x:Int = a += b *= 2; } }');
+	}
+
+	private inline function testIfBlock(): Void {
+		roundTrip('class F { function f():Void { if (x) { return 1; } } }');
+	}
+
+	private inline function writeWithIfBody(src: String, policy: BodyPolicy, lineWidth: Int): String {
+		return writeWithOpts(src, policy, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, lineWidth);
+	}
+
+	private inline function writeWithForBody(src: String, policy: BodyPolicy, lineWidth: Int): String {
+		return writeWithOpts(src, BodyPolicy.Same, BodyPolicy.Same, policy, BodyPolicy.Same, BodyPolicy.Same, lineWidth);
+	}
+
+	private inline function writeWithWhileBody(src: String, policy: BodyPolicy, lineWidth: Int): String {
+		return writeWithOpts(src, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, policy, BodyPolicy.Same, lineWidth);
+	}
+
+	private inline function writeWithDoBody(src: String, policy: BodyPolicy, lineWidth: Int): String {
+		return writeWithOpts(src, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, policy, lineWidth);
+	}
+
+	private function testDoubleStringMultilineLiteralPreserved(): Void {
+		// ω-doublestring-rawstring: literal embedded newlines inside a
+		// double-quoted string must survive round-trip verbatim (Haxe
+		// allows multiline strings). Previously decoded + re-escaped
+		// via `escapeChar` which converted literal `\n` → `\n` escape,
+		// collapsing the multiline source to inline-escaped form.
+		// Source has actual newlines between the quotes — no `\n` escape.
+		final src: String = 'class F { var x:String = "a\n\nb"; }';
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src));
+		Assert.isTrue(out.indexOf('"a\n\nb"') != -1, 'expected literal multiline string preserved in: <$out>');
+		Assert.isTrue(out.indexOf('\\n') == -1, 'did not expect re-escaped \\n in: <$out>');
 	}
 
 	private function testSingleStringEscapedDollarRoundTrip(): Void {
@@ -298,26 +334,6 @@ class HaxeWriterRoundTripTest extends HxTestHelpers {
 		// Sister: inside `"..."`, embedded `"` MUST be escaped as `\"`.
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('class F { var x:String = "a \\"b\\" c"; }'));
 		Assert.isTrue(out.indexOf('"a \\"b\\" c"') != -1, 'expected `\\"` inside double-quoted string in: <$out>');
-	}
-
-	private inline function testMixedDecls(): Void {
-		roundTrip('class A {} typedef B = C; enum D { X; } interface E {} abstract F(Int) {}');
-	}
-
-	private inline function testParamDefault(): Void {
-		roundTrip('class F { function f(x:Int = 0):Void {} }');
-	}
-
-	private inline function testNestedExpr(): Void {
-		roundTrip('class F { var x:Int = (a + b) * (c - d); }');
-	}
-
-	private inline function testCompoundAssign(): Void {
-		roundTrip('class F { function f():Void { var x:Int = a += b *= 2; } }');
-	}
-
-	private inline function testIfBlock(): Void {
-		roundTrip('class F { function f():Void { if (x) { return 1; } } }');
 	}
 
 	private function testFunctionNameAdjacentToParen(): Void {
@@ -414,22 +430,6 @@ class HaxeWriterRoundTripTest extends HxTestHelpers {
 	private function testDoBodyPolicyFitLineBreaksWhenTooLong(): Void {
 		final out: String = writeWithDoBody('class F { function f() { do doSomethingVeryLong(); while (x); } }', BodyPolicy.FitLine, 20);
 		Assert.isTrue(out.indexOf('do\n\t\t\tdoSomethingVeryLong(); while (x);') != -1, 'expected broken do-body in: <$out>');
-	}
-
-	private inline function writeWithIfBody(src: String, policy: BodyPolicy, lineWidth: Int): String {
-		return writeWithOpts(src, policy, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, lineWidth);
-	}
-
-	private inline function writeWithForBody(src: String, policy: BodyPolicy, lineWidth: Int): String {
-		return writeWithOpts(src, BodyPolicy.Same, BodyPolicy.Same, policy, BodyPolicy.Same, BodyPolicy.Same, lineWidth);
-	}
-
-	private inline function writeWithWhileBody(src: String, policy: BodyPolicy, lineWidth: Int): String {
-		return writeWithOpts(src, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, policy, BodyPolicy.Same, lineWidth);
-	}
-
-	private inline function writeWithDoBody(src: String, policy: BodyPolicy, lineWidth: Int): String {
-		return writeWithOpts(src, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, policy, lineWidth);
 	}
 
 	private function writeWithOpts(

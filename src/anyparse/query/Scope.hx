@@ -65,12 +65,12 @@ final class ScopeFrame {
 		this.node = node;
 	}
 
-	public function declare(name: String, span: Span): Void {
-		if (!_bindings.exists(name)) _bindings[name] = span;
-	}
-
 	public inline function resolve(name: String): Null<Span> {
 		return _bindings[name];
+	}
+
+	public function declare(name: String, span: Span): Void {
+		if (!_bindings.exists(name)) _bindings[name] = span;
 	}
 
 }

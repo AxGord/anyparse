@@ -68,6 +68,9 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 */
 	private static inline final MAX_BODY_NODES: Int = 32;
 
+	/** The `Call` node kind — shared by the forward classifier and both reference scans. */
+	private static inline final CALL_KIND: String = 'Call';
+
 	/** Field-access chain link kinds — a chain is `IdentExpr` at the leaf wrapped in any of these. */
 	private static final CHAIN_KINDS: Array<String> = ['FieldAccess', 'SafeFieldAccess', 'ForceFieldAccess'];
 
@@ -108,9 +111,6 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		'ParenExpr',
 		'Is'
 	];
-
-	/** The `Call` node kind — shared by the forward classifier and both reference scans. */
-	private static inline final CALL_KIND: String = 'Call';
 
 	/** The class-body member kinds that END a modifier run — a method and the three field forms. */
 	private static final MEMBER_KINDS: Array<String> = ['FnMember', 'VarMember', 'FinalMember', 'FinalModifiedMember'];
@@ -234,6 +234,80 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		return edits;
 	}
 
+	/** `node` with a wrapping `ReturnExpr` peeled (an arrow `return EXPR` body projects the wrapper). */
+	private static inline function unwrapReturn(node: QueryNode): QueryNode {
+		return node.kind == 'ReturnExpr' && node.children.length == 1 ? node.children[0] : node;
+	}
+
+	/**
+	 * Whether `node` is an allocation-free literal — a scalar, or a string literal WITHOUT
+	 * interpolation parts (a plain single-quoted string carries only `Literal` children; any `Ident` /
+	 * `Block` part makes it a runtime concatenation).
+	 */
+	private static inline function isPlainLiteral(node: QueryNode): Bool {
+		return SCALAR_LIT_KINDS.contains(node.kind) || (node.kind == 'SingleStringExpr' || node.kind == 'DoubleStringExpr')
+			&& !node.children.exists(c -> c.kind != 'Literal');
+	}
+
+	/** Whether `node` qualifies as a thin-forward argument / mutator operand: a bare chain or a plain literal. */
+	private static inline function isSimpleOperand(node: QueryNode): Bool {
+		return isChain(node) || isPlainLiteral(node);
+	}
+
+	/** Whether `fn`'s body is an empty `BlockBody` (the no-op arm's message discriminator). */
+	private static inline function isEmptyBody(fn: QueryNode): Bool {
+		final body: Null<QueryNode> = bodyOf(fn);
+		return body != null && body.kind == 'BlockBody' && body.children.length == 0;
+	}
+
+	/** Whether `fn`'s body exceeds the `MAX_BODY_NODES` inline budget (node count of the body subtree). */
+	private static inline function bodyExceedsBudget(fn: QueryNode): Bool {
+		final body: Null<QueryNode> = bodyOf(fn);
+		return body != null && nodeCount(body) > MAX_BODY_NODES;
+	}
+
+	/** Whether `kind` is an identifier / field-access value node whose name could be a method-value reference. */
+	private static inline function isAccessKind(kind: String): Bool {
+		return kind == 'IdentExpr' || CHAIN_KINDS.contains(kind);
+	}
+
+	/** The last `.`-separated segment of `path` (its simple name). */
+	private static inline function simpleName(path: String): String {
+		final segments: Array<String> = path.split('.');
+		return segments[segments.length - 1] ?? path;
+	}
+
+	/**
+	 * Whether `node` is a `null` literal in a VALUE slot (not a `==` / `!=` / `??` null-check operand) —
+	 * the one context-sensitive construct a benefit-class body can still carry: a `null` argument /
+	 * operand re-typechecks in the CALLER's null-safety mode once inlined.
+	 */
+	private static inline function isRiskyHere(node: QueryNode, parentKind: String): Bool {
+		return node.kind == 'NullLit' && parentKind != 'Eq' && parentKind != 'NotEq' && parentKind != 'NullCoal';
+	}
+
+	/**
+	 * Whether `meta` provably leaves the method's BODY meaning unchanged. True for every USER
+	 * annotation (a name not in the compiler's `@:` namespace is not read by any backend) and for the
+	 * listed compiler annotations; false for every other `@:` one.
+	 *
+	 * The `@:` side is a whitelist on purpose. Its complement — the target-binding family
+	 * (`@:native`, `@:hlNative`, `@:cs.native`, `@:java.native`, `@:python.native`, `@:jsRequire`,
+	 * `@:selfCall`) and the code-injection family (`@:functionCode`, `@:functionTailCode`) — is
+	 * open-ended, and a negative list leaks by category: the first version named only `@:native` /
+	 * `@:functionCode` / `@:extern` and a real-tree run still produced 634 wrong findings in one lime
+	 * file, every one an `@:hlNative` stub whose body is `return 0;`. Under those the written body is
+	 * a placeholder the backend discards, so inlining substitutes the placeholder at the call site
+	 * and the redirect never happens, turning `native(x) == 0` into `0 == 0`.
+	 *
+	 * Residual: a `@:build` macro reading a USER annotation could replace the body. That is the same
+	 * optimism this rule already applies to an unresolvable supertype, and refusing all user metadata
+	 * measurably costs real findings (`@:beta`, `@SuppressWarnings`, `@ignore` on openfl / lime).
+	 */
+	private static inline function inlineNeutralMeta(meta: String): Bool {
+		return !meta.startsWith('@:') || INLINE_NEUTRAL_METAS.contains(meta);
+	}
+
 	/**
 	 * Flag each candidate method of `cls` (a benefit-class body) that passes every soundness gate: not value-referenced / reflection-named anywhere, not overridden by a subtype, not implementing an abstract-superclass slot, not required by an implemented interface, and (per `isCandidateMethod`) not a constructor / override / dynamic / macro / @:keep / already-inline / self-recursive method, body in a benefit class.
 	 */
@@ -348,11 +422,6 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			}
 	}
 
-	/** `node` with a wrapping `ReturnExpr` peeled (an arrow `return EXPR` body projects the wrapper). */
-	private static inline function unwrapReturn(node: QueryNode): QueryNode {
-		return node.kind == 'ReturnExpr' && node.children.length == 1 ? node.children[0] : node;
-	}
-
 	/**
 	 * Whether `node` is a bare field-access chain (`x`, `this.x`, `a.b.c`, `obj?.f`). A chain rooted at
 	 * `super` is REJECTED — Haxe refuses `inline` on a body containing `super` ("Cannot inline function
@@ -365,21 +434,6 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 				node.children.length == 1 && isChain(node.children[0]);
 			case _: false;
 		}
-	}
-
-	/**
-	 * Whether `node` is an allocation-free literal — a scalar, or a string literal WITHOUT
-	 * interpolation parts (a plain single-quoted string carries only `Literal` children; any `Ident` /
-	 * `Block` part makes it a runtime concatenation).
-	 */
-	private static inline function isPlainLiteral(node: QueryNode): Bool {
-		return SCALAR_LIT_KINDS.contains(node.kind) || (node.kind == 'SingleStringExpr' || node.kind == 'DoubleStringExpr')
-			&& !node.children.exists(c -> c.kind != 'Literal');
-	}
-
-	/** Whether `node` qualifies as a thin-forward argument / mutator operand: a bare chain or a plain literal. */
-	private static inline function isSimpleOperand(node: QueryNode): Bool {
-		return isChain(node) || isPlainLiteral(node);
 	}
 
 	/**
@@ -416,21 +470,9 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		return true;
 	}
 
-	/** Whether `fn`'s body is an empty `BlockBody` (the no-op arm's message discriminator). */
-	private static inline function isEmptyBody(fn: QueryNode): Bool {
-		final body: Null<QueryNode> = bodyOf(fn);
-		return body != null && body.kind == 'BlockBody' && body.children.length == 0;
-	}
-
 	/** `fn`'s body child — its `ExprBody` or `BlockBody`, else null (a bodyless declaration). */
 	private static function bodyOf(fn: QueryNode): Null<QueryNode> {
 		return fn.children.find(c -> c.kind == 'ExprBody' || c.kind == 'BlockBody');
-	}
-
-	/** Whether `fn`'s body exceeds the `MAX_BODY_NODES` inline budget (node count of the body subtree). */
-	private static inline function bodyExceedsBudget(fn: QueryNode): Bool {
-		final body: Null<QueryNode> = bodyOf(fn);
-		return body != null && nodeCount(body) > MAX_BODY_NODES;
 	}
 
 	/** The number of nodes in `node`'s subtree, itself included. */
@@ -468,11 +510,6 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		final isCall: Bool = node.kind == CALL_KIND;
 		final children: Array<QueryNode> = node.children;
 		for (i in 0...children.length) collectValueRefs(children[i], isCall && i == 0, candidateNames, out);
-	}
-
-	/** Whether `kind` is an identifier / field-access value node whose name could be a method-value reference. */
-	private static inline function isAccessKind(kind: String): Bool {
-		return kind == 'IdentExpr' || CHAIN_KINDS.contains(kind);
 	}
 
 	/**
@@ -519,12 +556,6 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		return out;
 	}
 
-	/** The last `.`-separated segment of `path` (its simple name). */
-	private static inline function simpleName(path: String): String {
-		final segments: Array<String> = path.split('.');
-		return segments[segments.length - 1] ?? path;
-	}
-
 	/**
 	 * Whether an implemented interface declares `name` — so a physical (non-inline) method is
 	 * required. `typeProvablyLacksMember` returns false for an unresolvable interface, so an
@@ -565,37 +596,6 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		if (isRiskyHere(node, parentKind)) return true;
 		for (c in node.children) if (subtreeHasNullSafetyRisk(c, node.kind)) return true;
 		return false;
-	}
-
-	/**
-	 * Whether `node` is a `null` literal in a VALUE slot (not a `==` / `!=` / `??` null-check operand) —
-	 * the one context-sensitive construct a benefit-class body can still carry: a `null` argument /
-	 * operand re-typechecks in the CALLER's null-safety mode once inlined.
-	 */
-	private static inline function isRiskyHere(node: QueryNode, parentKind: String): Bool {
-		return node.kind == 'NullLit' && parentKind != 'Eq' && parentKind != 'NotEq' && parentKind != 'NullCoal';
-	}
-
-	/**
-	 * Whether `meta` provably leaves the method's BODY meaning unchanged. True for every USER
-	 * annotation (a name not in the compiler's `@:` namespace is not read by any backend) and for the
-	 * listed compiler annotations; false for every other `@:` one.
-	 *
-	 * The `@:` side is a whitelist on purpose. Its complement — the target-binding family
-	 * (`@:native`, `@:hlNative`, `@:cs.native`, `@:java.native`, `@:python.native`, `@:jsRequire`,
-	 * `@:selfCall`) and the code-injection family (`@:functionCode`, `@:functionTailCode`) — is
-	 * open-ended, and a negative list leaks by category: the first version named only `@:native` /
-	 * `@:functionCode` / `@:extern` and a real-tree run still produced 634 wrong findings in one lime
-	 * file, every one an `@:hlNative` stub whose body is `return 0;`. Under those the written body is
-	 * a placeholder the backend discards, so inlining substitutes the placeholder at the call site
-	 * and the redirect never happens, turning `native(x) == 0` into `0 == 0`.
-	 *
-	 * Residual: a `@:build` macro reading a USER annotation could replace the body. That is the same
-	 * optimism this rule already applies to an unresolvable supertype, and refusing all user metadata
-	 * measurably costs real findings (`@:beta`, `@SuppressWarnings`, `@ignore` on openfl / lime).
-	 */
-	private static inline function inlineNeutralMeta(meta: String): Bool {
-		return !meta.startsWith('@:') || INLINE_NEUTRAL_METAS.contains(meta);
 	}
 
 }

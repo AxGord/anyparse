@@ -194,6 +194,52 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 		}
 	}
 
+	/** The raw source between the literal's two quote characters. */
+	private static inline function inner(source: String, span: Span): String {
+		return source.substring(span.from + 1, span.to - 1);
+	}
+
+	/**
+	 * Cut every text segment after each `\n` ESCAPE it carries, the escape staying with the
+	 * LEFT piece. This was the FIRST seam that made a lone over-long string TOKEN
+	 * layout-fixable at all: the writer can wrap a `+` chain but nothing can wrap one
+	 * literal, so a message whose own text names its line breaks has to become a chain
+	 * before layout can reach it.
+	 *
+	 * Idempotent with `renderPlain`, which is the whole reason the cut may be made here
+	 * rather than in the grouping: two same-quote pieces render back to the single
+	 * literal they came from, and re-decomposing that literal cuts it in the same two
+	 * places. A group that keeps them together is therefore indistinguishable from never
+	 * having split.
+	 *
+	 * The scan is the DECODER's, not a search (`scanCuts` / `isNewlineCut`): a backslash
+	 * opens an escape of whatever length that escape spells, so the `n` of `\\n` is an
+	 * ordinary letter and never a seam. A RAW line break in the source is not one either — it
+	 * already ends the line it sits on, so cutting there buys no width and would leave the
+	 * break dangling inside the left literal.
+	 * Nor is a line break spelled `\x0a` / `\u000a`: it decodes to one, but only the `\n` SPELLING is a
+	 * seam, and refusing the others costs a seam rather than correctness.
+	 */
+	private static inline function splitAtNewlines(segments: Array<ConcatSegment>): Array<ConcatSegment> {
+		return splitText(segments, newlinePieces);
+	}
+
+	/**
+	 * Cut every text segment at each of its SEPARATOR boundaries — the lowest tier of cut
+	 * point, and the only one a solid run of prose or a comma-separated column list has at
+	 * all. WHICH of those boundaries a group should end at is the check's decision, not
+	 * this one's: the grammar only says where a cut is legal.
+	 *
+	 * Runs AFTER `splitAtNewlines`, so the pieces it sees already end at their line breaks.
+	 * Idempotent with `renderPlain` for the same reason that one is: the pieces append back
+	 * to the identical raw, so re-decomposing a rendered group cuts it in exactly the same
+	 * places, and a group that keeps two of them together is indistinguishable from never
+	 * having split.
+	 */
+	private static inline function splitAtSeparators(segments: Array<ConcatSegment>): Array<ConcatSegment> {
+		return splitText(segments, separatorPieces);
+	}
+
 	/**
 	 * An all-text group as ONE plain literal in the quote its texts share, joined by
 	 * RAW concatenation — the original `fold-adjacent-string-literals` semantics,
@@ -265,11 +311,6 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 		return out;
 	}
 
-	/** The raw source between the literal's two quote characters. */
-	private static inline function inner(source: String, span: Span): String {
-		return source.substring(span.from + 1, span.to - 1);
-	}
-
 	/**
 	 * Fuse adjacent same-quote text segments into one. A `Dollar` fragment sits
 	 * BETWEEN two `Literal` fragments of the same literal, and leaving the three
@@ -287,31 +328,6 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 				out.push(s);
 		}
 		return out;
-	}
-
-	/**
-	 * Cut every text segment after each `\n` ESCAPE it carries, the escape staying with the
-	 * LEFT piece. This was the FIRST seam that made a lone over-long string TOKEN
-	 * layout-fixable at all: the writer can wrap a `+` chain but nothing can wrap one
-	 * literal, so a message whose own text names its line breaks has to become a chain
-	 * before layout can reach it.
-	 *
-	 * Idempotent with `renderPlain`, which is the whole reason the cut may be made here
-	 * rather than in the grouping: two same-quote pieces render back to the single
-	 * literal they came from, and re-decomposing that literal cuts it in the same two
-	 * places. A group that keeps them together is therefore indistinguishable from never
-	 * having split.
-	 *
-	 * The scan is the DECODER's, not a search (`scanCuts` / `isNewlineCut`): a backslash
-	 * opens an escape of whatever length that escape spells, so the `n` of `\\n` is an
-	 * ordinary letter and never a seam. A RAW line break in the source is not one either — it
-	 * already ends the line it sits on, so cutting there buys no width and would leave the
-	 * break dangling inside the left literal.
-	 * Nor is a line break spelled `\x0a` / `\u000a`: it decodes to one, but only the `\n` SPELLING is a
-	 * seam, and refusing the others costs a seam rather than correctness.
-	 */
-	private static inline function splitAtNewlines(segments: Array<ConcatSegment>): Array<ConcatSegment> {
-		return splitText(segments, newlinePieces);
 	}
 
 	/**
@@ -371,22 +387,6 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	 */
 	private static function isNewlineCut(raw: String, from: Int, to: Int): Bool {
 		return to == from + 2 && raw.fastCodeAt(from) == '\\'.code && raw.fastCodeAt(from + 1) == 'n'.code;
-	}
-
-	/**
-	 * Cut every text segment at each of its SEPARATOR boundaries — the lowest tier of cut
-	 * point, and the only one a solid run of prose or a comma-separated column list has at
-	 * all. WHICH of those boundaries a group should end at is the check's decision, not
-	 * this one's: the grammar only says where a cut is legal.
-	 *
-	 * Runs AFTER `splitAtNewlines`, so the pieces it sees already end at their line breaks.
-	 * Idempotent with `renderPlain` for the same reason that one is: the pieces append back
-	 * to the identical raw, so re-decomposing a rendered group cuts it in exactly the same
-	 * places, and a group that keeps two of them together is indistinguishable from never
-	 * having split.
-	 */
-	private static inline function splitAtSeparators(segments: Array<ConcatSegment>): Array<ConcatSegment> {
-		return splitText(segments, separatorPieces);
 	}
 
 	/** `raw` cut at every separator boundary, both sides of each cut non-empty; a raw carrying no separator yields itself. */

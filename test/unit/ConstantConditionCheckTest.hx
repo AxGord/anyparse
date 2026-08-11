@@ -171,6 +171,10 @@ class ConstantConditionCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}
 
+	private inline function applyEdits(src: String, edits: Array<{ span: Span, text: String }>): String {
+		return CheckFixture.applyEdits(src, edits);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new ConstantCondition().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
@@ -181,10 +185,6 @@ class ConstantConditionCheckTest extends Test {
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
 		);
 		return applyEdits(src, edits);
-	}
-
-	private inline function applyEdits(src: String, edits: Array<{ span: Span, text: String }>): String {
-		return CheckFixture.applyEdits(src, edits);
 	}
 
 }

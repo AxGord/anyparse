@@ -111,6 +111,12 @@ final class RedundantCondCompParens implements Check {
 		return edits;
 	}
 
+	/** Whether `source` holds a space or a tab at `at`. */
+	private static inline function isSpaceAt(source: String, at: Int): Bool {
+		final c: Int = source.fastCodeAt(at);
+		return c == ' '.code || c == '\t'.code;
+	}
+
 	/** Every parenthesised-single-flag condition in `source`, in source order. */
 	private static function sites(source: String, plugin: GrammarPlugin): Array<FlagParens> {
 		final out: Array<FlagParens> = [];
@@ -145,12 +151,6 @@ final class RedundantCondCompParens implements Check {
 		final flag: String = source.substring(from, to);
 		while (to < close && isSpaceAt(source, to)) to++;
 		return to == close ? flag : null;
-	}
-
-	/** Whether `source` holds a space or a tab at `at`. */
-	private static inline function isSpaceAt(source: String, at: Int): Bool {
-		final c: Int = source.fastCodeAt(at);
-		return c == ' '.code || c == '\t'.code;
 	}
 
 }

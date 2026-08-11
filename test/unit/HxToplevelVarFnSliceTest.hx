@@ -41,6 +41,24 @@ import anyparse.grammar.haxe.HxModule;
  */
 class HxToplevelVarFnSliceTest extends HxTestHelpers {
 
+	public inline function testRoundTripFinal(): Void {
+		roundTrip('final FOO:Int = 1;');
+	}
+
+	public inline function testRoundTripFinalClass(): Void {
+		roundTrip('final class Foo {}');
+	}
+
+	// ======== Round-trip ========
+
+	public inline function testRoundTripVar(): Void {
+		roundTrip('var x:Int = 42;');
+	}
+
+	public inline function testRoundTripFn(): Void {
+		roundTrip('function main() {}');
+	}
+
 	// ======== Top-level `var` ========
 
 	public function testToplevelVarSimple(): Void {
@@ -142,14 +160,6 @@ class HxToplevelVarFnSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public inline function testRoundTripFinal(): Void {
-		roundTrip('final FOO:Int = 1;');
-	}
-
-	public inline function testRoundTripFinalClass(): Void {
-		roundTrip('final class Foo {}');
-	}
-
 	public function testClassFinalMemberStillWorks(): Void {
 		// Adding top-level FinalDecl must NOT cannibalize class-member
 		// `final` parsing.
@@ -200,16 +210,6 @@ class HxToplevelVarFnSliceTest extends HxTestHelpers {
 	public function testMixedClassVarFn(): Void {
 		final ast: HxModule = HaxeModuleParser.parse('class A {}\nvar x = 1;\nfunction f() {}');
 		Assert.equals(3, ast.decls.length);
-	}
-
-	// ======== Round-trip ========
-
-	public inline function testRoundTripVar(): Void {
-		roundTrip('var x:Int = 42;');
-	}
-
-	public inline function testRoundTripFn(): Void {
-		roundTrip('function main() {}');
 	}
 
 	// ======== Negative — class-member position still works ========

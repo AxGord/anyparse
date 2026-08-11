@@ -35,16 +35,16 @@ typedef ReconCluster = {
 // probe subject and is intentional, not a real naming-convention violation.
 final class _ReconSkipParse { // noqa: naming
 
-	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
-	private static final SUBDIRS: Array<String> = [
-		'sameline', 'whitespace', 'indentation',        'wrapping', 'emptylines',
-		'lineends',      'other', 'formatrange', 'expressionlevel',    'missing',
-	];
 	private static inline final HXTEST_EXT: String = '.hxtest';
 	private static inline final HEAD_LEN: Int = 70;
 	private static inline final LOCUS_LEN: Int = 20;
 	private static inline final TOP_N_DEFAULT: Int = 30;
 	private static inline final EXAMPLES_PER_CLUSTER: Int = 2;
+	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final SUBDIRS: Array<String> = [
+		'sameline', 'whitespace', 'indentation',        'wrapping', 'emptylines',
+		'lineends',      'other', 'formatrange', 'expressionlevel',    'missing',
+	];
 
 	// Recon driver: the dense arg-parse + per-bucket sweep loop is intentional for a
 	// throwaway fixture, so the elevated cyclomatic complexity is accepted here.

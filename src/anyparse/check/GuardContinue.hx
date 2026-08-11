@@ -162,6 +162,11 @@ final class GuardContinue implements Check {
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
+	/** The local declaration node a top-level statement holds, or null — see `RefactorSupport.topLevelDeclaredNode`. */
+	private static inline function declaredNode(stmt: QueryNode, s: Seams): Null<QueryNode> {
+		return RefactorSupport.topLevelDeclaredNode(stmt, s.localDeclKinds, s.localDeclExprKinds, s.metaKinds);
+	}
+
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
@@ -254,7 +259,6 @@ final class GuardContinue implements Check {
 		]) for (k in grp) if (!out.contains(k)) out.push(k);
 		return out;
 	}
-
 
 	/** Walk `node`, flagging each loop whose body ends in a de-nestable trailing `if`. */
 	private static function walk(
@@ -418,7 +422,6 @@ final class GuardContinue implements Check {
 		else
 			kids[kids.length - 1];
 	}
-
 
 	/**
 	 * The renames that resolve every then-branch top-level local whose name is already bound
@@ -598,11 +601,6 @@ final class GuardContinue implements Check {
 		return code != null
 			&& (code >= '0'.code && code <= '9'.code || code >= 'A'.code && code <= 'Z'.code || code >= 'a'.code && code <= 'z'.code
 				|| code == '_'.code);
-	}
-
-	/** The local declaration node a top-level statement holds, or null — see `RefactorSupport.topLevelDeclaredNode`. */
-	private static inline function declaredNode(stmt: QueryNode, s: Seams): Null<QueryNode> {
-		return RefactorSupport.topLevelDeclaredNode(stmt, s.localDeclKinds, s.localDeclExprKinds, s.metaKinds);
 	}
 
 	/** Whether a comment sits in the dropped `if (` or `) {` glue (a comment in the condition or the then-body is preserved and does NOT refuse). */

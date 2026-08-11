@@ -28,6 +28,10 @@ import anyparse.grammar.haxe.HaxeParser;
  */
 class HxMacroModHexSliceTest extends HxTestHelpers {
 
+	public inline function testHexRoundTrip(): Void {
+		roundTrip('class C { var x = 0x20; var y = 0XFF; var z = 0xDeadBeef; }', 'P5-hex-lit');
+	}
+
 	public function testLowercaseHex(): Void {
 		Assert.equals('0x20', hexOf('class C { var x = 0x20; }'));
 	}
@@ -70,10 +74,6 @@ class HxMacroModHexSliceTest extends HxTestHelpers {
 			case null, _:
 				Assert.fail('expected FloatLit, got ${decl.init}');
 		}
-	}
-
-	public inline function testHexRoundTrip(): Void {
-		roundTrip('class C { var x = 0x20; var y = 0XFF; var z = 0xDeadBeef; }', 'P5-hex-lit');
 	}
 
 	public function testMacroModifierBare(): Void {

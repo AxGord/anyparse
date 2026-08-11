@@ -286,6 +286,11 @@ final class LintConfig {
 		return parseOrNull(content, baseDir) ?? new LintConfig([]);
 	}
 
+	/** `dir`, or `/` for the empty string `Path.directory` yields at the filesystem root. */
+	private static inline function dirOrRoot(dir: String): String {
+		return dir == '' ? '/' : dir;
+	}
+
 	/** Guarded stderr write — mirrors `Cli.stderr` (`#if sys` alone is false on hxnodejs). */
 	private static function stderr(s: String): Void {
 		#if (sys || nodejs)
@@ -385,11 +390,6 @@ final class LintConfig {
 			if (pathExists(Path.normalize(Path.join([config, rel])))) configHits++;
 		}
 		return configHits > ownHits ? config : own;
-	}
-
-	/** `dir`, or `/` for the empty string `Path.directory` yields at the filesystem root. */
-	private static inline function dirOrRoot(dir: String): String {
-		return dir == '' ? '/' : dir;
 	}
 
 	/**

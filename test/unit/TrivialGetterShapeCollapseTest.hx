@@ -25,6 +25,19 @@ import anyparse.runtime.Span;
  */
 class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 
+	/**
+	 * The confined case: property, backing field and getter all in ONE branch. The collapse's edits —
+	 * the accessor-clause rewrite, the field deletion and the getter deletion, modifier runs included
+	 * — all land inside the region, leaving the directives untouched.
+	 */
+	public inline function testConditionalCollapseStaysInsideItsBranch(): Void {
+		assertFixContains(
+			'class C {\n\t#if cpp\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'
+			+ '\tprivate function get_active():Bool return _active;\n\t#end\n}',
+			'#if cpp\n\tpublic var active(default, null):Bool = false;\n\t#end'
+		);
+	}
+
 	public function testShapeATrivialGetterRealSetterFlagged(): Void {
 		final vs: Array<Violation> = violations(cls(
 			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n'
@@ -390,7 +403,6 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		Assert.equals(1, violations(source).length);
 	}
 
-
 	public function testSubclassReadingBackingFieldCollapsesCrossFile(): Void {
 		// Sub extends Base and reads Base's PRIVATE _active directly (legal — subclass-visible). The
 		// collapse deletes _active; the cross-file fix rewrites Sub's READ `_active` -> `active` so the
@@ -507,7 +519,6 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		Assert.isTrue((out['Sub.hx'] ?? '').indexOf('return label;') >= 0);
 	}
 
-
 	public function testAbstractOwnerCrossFileSubtypeReadCollapses(): Void {
 		// The OWNER is an abstract class; a subtype in another file reads its private backing field.
 		// Exercises subtypeRefWalk's owner-span exclusion / cls attribution for AbstractClassDecl:
@@ -545,7 +556,6 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		Assert.equals(0, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
 	}
 
-
 	/**
 	 * A property and its trivial getter written inside a member-position `#if` are members of the
 	 * class like any other. The region is ONE child of the container holding every branch's members
@@ -572,19 +582,6 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 			violations(
 				'class C {\n\t#if cpp\n\tpublic var active(get, never):Bool;\n\t#end\n\tprivate var _active:Bool = false;\n\tprivate function get_active():Bool return _active;\n\t#if !cpp\n\tpublic function readIt():Bool return _active;\n\t#end\n}'
 			).length
-		);
-	}
-
-	/**
-	 * The confined case: property, backing field and getter all in ONE branch. The collapse's edits —
-	 * the accessor-clause rewrite, the field deletion and the getter deletion, modifier runs included
-	 * — all land inside the region, leaving the directives untouched.
-	 */
-	public inline function testConditionalCollapseStaysInsideItsBranch(): Void {
-		assertFixContains(
-			'class C {\n\t#if cpp\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'
-			+ '\tprivate function get_active():Bool return _active;\n\t#end\n}',
-			'#if cpp\n\tpublic var active(default, null):Bool = false;\n\t#end'
 		);
 	}
 

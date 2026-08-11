@@ -51,6 +51,14 @@ final class CasePatternScan {
 	/** A structure-pattern field carries exactly its value pattern. */
 	private static inline final OBJECT_FIELD_CHILD_COUNT: Int = 1;
 
+	/**
+	 * Whether `name` opens with an uppercase ASCII letter — the family spelling of a constructor reference. Public because `collapse-nested-switch` makes the same assumption and reads it from here rather than keeping its own copy.
+	 */
+	public static inline function startsUpper(name: String): Bool {
+		final code: Int = name.fastCodeAt(0);
+		return code >= 'A'.code && code <= 'Z'.code;
+	}
+
 	/** The seam kinds both case-arm rules read, or null when the grammar leaves a required one unset. */
 	public static function seamsOf(plugin: GrammarPlugin): Null<CaseSeams> {
 		final shape: RefShape = plugin.refShape();
@@ -222,14 +230,6 @@ final class CasePatternScan {
 		if (node.children.length == 0) return false;
 		final callee: QueryNode = node.children[0];
 		return callee.kind == seams.identKind || callee.kind == seams.fieldAccessKind;
-	}
-
-	/**
-	 * Whether `name` opens with an uppercase ASCII letter — the family spelling of a constructor reference. Public because `collapse-nested-switch` makes the same assumption and reads it from here rather than keeping its own copy.
-	 */
-	public static inline function startsUpper(name: String): Bool {
-		final code: Int = name.fastCodeAt(0);
-		return code >= 'A'.code && code <= 'Z'.code;
 	}
 
 	/**

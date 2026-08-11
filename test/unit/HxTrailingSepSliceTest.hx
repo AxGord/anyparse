@@ -25,6 +25,12 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxTrailingSepSliceTest extends HxTestHelpers {
 
+	// idempotency round-trip
+
+	public inline function testTrailingCommaRoundTrip(): Void {
+		roundTrip('class C { var a = [1, 2, 3,]; var o:Dynamic = {p: 1, q: 2,}; function f() { g(1, 2,); } }', 'L1-trailing-sep');
+	}
+
 	// array literal (Case-4 enum-Alt ArrayExpr)
 
 	public function testArrayTrailingComma(): Void {
@@ -105,12 +111,6 @@ class HxTrailingSepSliceTest extends HxTestHelpers {
 			case null, _:
 				Assert.fail('call no-trail');
 		}
-	}
-
-	// idempotency round-trip
-
-	public inline function testTrailingCommaRoundTrip(): Void {
-		roundTrip('class C { var a = [1, 2, 3,]; var o:Dynamic = {p: 1, q: 2,}; function f() { g(1, 2,); } }', 'L1-trailing-sep');
 	}
 
 }

@@ -338,6 +338,80 @@ final class NullFlow {
 		return RefactorSupport.isMultiDeclarator(node, continuationKinds);
 	}
 
+	/** Whether `rhs` is the null literal — a syntactically definite-null assignment value. */
+	private static inline function isNullLitRhs(rhs: Null<QueryNode>, ctx: FlowCtx): Bool {
+		return rhs != null && ctx.nullLitKind != null && rhs.kind == ctx.nullLitKind;
+	}
+
+	/** Record `name` as `NonNull` in `state`, clearing any `Null` / `MaybeNull` fact (the three sets stay disjoint), deduplicated. */
+	private static inline function markNonNull(state: FlowState, name: String): Void {
+		if (!state.nonNull.contains(name)) state.nonNull.push(name);
+		state.known.remove(name);
+		state.maybe.remove(name);
+	}
+
+	/** Record `name` as `Null` in `state`, clearing any `NonNull` / `MaybeNull` fact (the three sets stay disjoint), deduplicated. */
+	private static inline function markKnown(state: FlowState, name: String): Void {
+		if (!state.known.contains(name)) state.known.push(name);
+		state.nonNull.remove(name);
+		state.maybe.remove(name);
+	}
+
+	/** Record `name` as `MaybeNull` in `state` — a value from a nullable source, pending a narrowing — clearing any `NonNull` / `Null` fact (the three sets stay disjoint), deduplicated. */
+	private static inline function markMaybe(state: FlowState, name: String): Void {
+		if (!state.maybe.contains(name)) state.maybe.push(name);
+		state.nonNull.remove(name);
+		state.known.remove(name);
+	}
+
+	/** Drop every fact about `name` — it becomes `Unknown`. */
+	private static inline function clearName(state: FlowState, name: String): Void {
+		state.nonNull.remove(name);
+		state.known.remove(name);
+		state.maybe.remove(name);
+		killAuxFacts(state, name);
+	}
+
+	/** A deep copy of `state` — an isolated branch state the caller can mutate without affecting the original. */
+	private static inline function copyState(state: FlowState): FlowState {
+		return {
+			nonNull: state.nonNull.copy(),
+			known: state.known.copy(),
+			maybe: state.maybe.copy(),
+			predicates: state.predicates.copy(),
+			aliases: state.aliases.copy(),
+			present: state.present.copy()
+		};
+	}
+
+	/** Replace the contents of `state` in place with `next` (the running state is mutated for the caller). */
+	private static inline function setState(state: FlowState, next: FlowState): Void {
+		state.nonNull.resize(0);
+		for (n in next.nonNull) state.nonNull.push(n);
+		state.known.resize(0);
+		for (n in next.known) state.known.push(n);
+		state.maybe.resize(0);
+		for (n in next.maybe) state.maybe.push(n);
+		state.predicates.resize(0);
+		for (p in next.predicates) state.predicates.push(p);
+		state.aliases.resize(0);
+		for (a in next.aliases) state.aliases.push(a);
+		state.present.resize(0);
+		for (e in next.present) state.present.push(e);
+	}
+
+	/** A fresh all-`Unknown` flow state — every fact set empty. */
+	private static inline function emptyState(): FlowState {
+		return {
+			nonNull: [],
+			known: [],
+			maybe: [],
+			predicates: [],
+			aliases: [],
+			present: []
+		};
+	}
+
 	/**
 	 * Analyze one function body from a fresh (all-`Unknown`) entry state. Only the
 	 * unit's own names (its parameters plus locally-declared `var`/`final`s) are
@@ -854,11 +928,6 @@ final class NullFlow {
 		return rhs != null && ctx.nonNullRhsKinds.contains(rhs.kind);
 	}
 
-	/** Whether `rhs` is the null literal — a syntactically definite-null assignment value. */
-	private static inline function isNullLitRhs(rhs: Null<QueryNode>, ctx: FlowCtx): Bool {
-		return rhs != null && ctx.nullLitKind != null && rhs.kind == ctx.nullLitKind;
-	}
-
 	/** Whether `rhs` is a nullable source per the consumer's seed predicate (mechanism A) — always false when no seed was supplied, so the flow checks never see a `MaybeNull` fact. */
 	private static function isNullableSourceRhs(rhs: Null<QueryNode>, ctx: FlowCtx): Bool {
 		final seed: Null<(QueryNode) -> Bool> = ctx.nullableSourceRhs;
@@ -970,47 +1039,6 @@ final class NullFlow {
 		}
 	}
 
-	/** Record `name` as `NonNull` in `state`, clearing any `Null` / `MaybeNull` fact (the three sets stay disjoint), deduplicated. */
-	private static inline function markNonNull(state: FlowState, name: String): Void {
-		if (!state.nonNull.contains(name)) state.nonNull.push(name);
-		state.known.remove(name);
-		state.maybe.remove(name);
-	}
-
-	/** Record `name` as `Null` in `state`, clearing any `NonNull` / `MaybeNull` fact (the three sets stay disjoint), deduplicated. */
-	private static inline function markKnown(state: FlowState, name: String): Void {
-		if (!state.known.contains(name)) state.known.push(name);
-		state.nonNull.remove(name);
-		state.maybe.remove(name);
-	}
-
-	/** Record `name` as `MaybeNull` in `state` — a value from a nullable source, pending a narrowing — clearing any `NonNull` / `Null` fact (the three sets stay disjoint), deduplicated. */
-	private static inline function markMaybe(state: FlowState, name: String): Void {
-		if (!state.maybe.contains(name)) state.maybe.push(name);
-		state.nonNull.remove(name);
-		state.known.remove(name);
-	}
-
-	/** Drop every fact about `name` — it becomes `Unknown`. */
-	private static inline function clearName(state: FlowState, name: String): Void {
-		state.nonNull.remove(name);
-		state.known.remove(name);
-		state.maybe.remove(name);
-		killAuxFacts(state, name);
-	}
-
-	/** A deep copy of `state` — an isolated branch state the caller can mutate without affecting the original. */
-	private static inline function copyState(state: FlowState): FlowState {
-		return {
-			nonNull: state.nonNull.copy(),
-			known: state.known.copy(),
-			maybe: state.maybe.copy(),
-			predicates: state.predicates.copy(),
-			aliases: state.aliases.copy(),
-			present: state.present.copy()
-		};
-	}
-
 	/**
 	 * Whether `arm` definitely transfers control out instead of falling through to the
 	 * statement after the enclosing construct — a `return` / `throw`
@@ -1047,34 +1075,6 @@ final class NullFlow {
 			)) p],
 			aliases: [for (x in a.aliases) if (b.aliases.exists(q -> (q.a == x.a && q.b == x.b) || (q.a == x.b && q.b == x.a))) x],
 			present: [for (e in a.present) if (b.present.exists(q -> q.map == e.map && q.key == e.key)) e]
-		};
-	}
-
-	/** Replace the contents of `state` in place with `next` (the running state is mutated for the caller). */
-	private static inline function setState(state: FlowState, next: FlowState): Void {
-		state.nonNull.resize(0);
-		for (n in next.nonNull) state.nonNull.push(n);
-		state.known.resize(0);
-		for (n in next.known) state.known.push(n);
-		state.maybe.resize(0);
-		for (n in next.maybe) state.maybe.push(n);
-		state.predicates.resize(0);
-		for (p in next.predicates) state.predicates.push(p);
-		state.aliases.resize(0);
-		for (a in next.aliases) state.aliases.push(a);
-		state.present.resize(0);
-		for (e in next.present) state.present.push(e);
-	}
-
-	/** A fresh all-`Unknown` flow state — every fact set empty. */
-	private static inline function emptyState(): FlowState {
-		return {
-			nonNull: [],
-			known: [],
-			maybe: [],
-			predicates: [],
-			aliases: [],
-			present: []
 		};
 	}
 

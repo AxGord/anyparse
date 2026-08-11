@@ -141,14 +141,14 @@ using StringTools;
 @:nullSafety(Strict)
 final class PreferCaseGuard implements Check implements RiskyFix {
 
-	private static final RULE_ID: String = 'prefer-case-guard';
-	private static final MESSAGE: String = 'this case body is a single if; write it as a case guard';
-
 	/** An `if` with no `else` has exactly [cond, then]. */
 	private static inline final IF_WITHOUT_ELSE_CHILD_COUNT: Int = 2;
 
 	/** All that may separate the last pattern from the `if`: the label's own colon. */
 	private static inline final LABEL_TERMINATOR: String = ':';
+
+	private static final RULE_ID: String = 'prefer-case-guard';
+	private static final MESSAGE: String = 'this case body is a single if; write it as a case guard';
 
 	public function new() {}
 
@@ -231,6 +231,10 @@ final class PreferCaseGuard implements Check implements RiskyFix {
 			if (candidate != null) edits.push({ span: candidate.edit, text: candidate.text });
 		}
 		return RefactorSupport.dropContainedEdits(edits);
+	}
+
+	private static inline function numericLiteral(scan: Scan, node: QueryNode): Bool {
+		return scan.seams.numericKinds.contains(node.kind) && node.children.length == 0;
 	}
 
 	/** Every convertible branch in `scan`'s source, in document order. */
@@ -365,10 +369,6 @@ final class PreferCaseGuard implements Check implements RiskyFix {
 		return content.indexOf('\\') != -1 || content.indexOf('"') != -1 || content.indexOf("'") != -1 ? null : 'text:$content';
 	}
 
-	private static inline function numericLiteral(scan: Scan, node: QueryNode): Bool {
-		return scan.seams.numericKinds.contains(node.kind) && node.children.length == 0;
-	}
-
 	/**
 	 * Whether any segment of the dotted path `access` names a type whose values the
 	 * compiler tracks as a closed constructor list (`bareConstructorTypeKinds`) -- the
@@ -489,7 +489,6 @@ final class PreferCaseGuard implements Check implements RiskyFix {
 		for (i in at + 1...keys.length) for (key in keys[i]) if (own.contains(key)) return true;
 		return false;
 	}
-
 
 	/** The display column `at` sits at on its own line, tabs counted as the writer's indent width. */
 	private static function columnOf(scan: Scan, at: Int): Int {

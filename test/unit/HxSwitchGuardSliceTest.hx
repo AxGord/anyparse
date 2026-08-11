@@ -29,6 +29,12 @@ import anyparse.grammar.haxe.HxSwitchStmt;
  */
 class HxSwitchGuardSliceTest extends HxTestHelpers {
 
+	public inline function testGuardRoundTrip(): Void {
+		roundTrip(
+			'class C { function f(x:E):Void { switch (x) { case A if (b): y(); case C, D if (e): z(); case _: w(); } } }', 'switch-guard'
+		);
+	}
+
 	public function testCaseWithGuardPresent(): Void {
 		final sw: HxSwitchStmt = parseSwitch('class C { function f(x:E):Void { switch (x) { case A if (b): y(); case _: z(); } } }');
 		final p: HxCasePattern = caseBranch(sw.cases[0]).patterns[0];
@@ -108,12 +114,6 @@ class HxSwitchGuardSliceTest extends HxTestHelpers {
 		Assert.equals(2, ps.length);
 		Assert.isNull(ps[0].guard);
 		Assert.isNull(ps[1].guard);
-	}
-
-	public inline function testGuardRoundTrip(): Void {
-		roundTrip(
-			'class C { function f(x:E):Void { switch (x) { case A if (b): y(); case C, D if (e): z(); case _: w(); } } }', 'switch-guard'
-		);
 	}
 
 	private function parseSwitch(source: String): HxSwitchStmt {

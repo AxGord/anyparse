@@ -558,6 +558,12 @@ class GuardReturnCheckTest extends Test {
 		);
 	}
 
+	/** The member-path fixture the resolution tests share: `res.count > 0` wrapping a two-statement branch. */
+	private inline function memberPathSource(): String {
+		return 'class C {\n\tfunction f(res:Res):Bool {\n\t\tif (res.count > 0) {\n\t\t\tlog(res);\n\t\t\treturn true;\n\t\t}\n'
+			+ '\t\treturn false;\n\t}\n}\n';
+	}
+
 	// --- helpers --------------------------------------------------------------------------
 
 	private function wrap(bodyCode: String): String {
@@ -619,12 +625,6 @@ class GuardReturnCheckTest extends Test {
 			if (next == cur) return cur;
 			cur = next;
 		}
-	}
-
-	/** The member-path fixture the resolution tests share: `res.count > 0` wrapping a two-statement branch. */
-	private inline function memberPathSource(): String {
-		return 'class C {\n\tfunction f(res:Res):Bool {\n\t\tif (res.count > 0) {\n\t\t\tlog(res);\n\t\t\treturn true;\n\t\t}\n'
-			+ '\t\treturn false;\n\t}\n}\n';
 	}
 
 	/**

@@ -102,13 +102,12 @@ using StringTools;
 @:nullSafety(Strict)
 final class EmptyCaseArm implements Check {
 
-	private static final RULE_ID: String = 'empty-case-arm';
-
 	/** A deletable switch holds its subject plus at least TWO arms (gate 2). */
 	private static inline final MIN_SWITCH_CHILDREN: Int = 3;
 
 	private static inline final MESSAGE: String =
 		'this trailing empty case arm matches values and does nothing — the switch has no catch-all, so deleting it changes nothing';
+	private static final RULE_ID: String = 'empty-case-arm';
 
 	public function new() {}
 

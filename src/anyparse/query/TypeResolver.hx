@@ -663,6 +663,22 @@ final class TypeResolver {
 		};
 	}
 
+	/** Whether `c` is a character of a plain nominal type reference — `[A-Za-z0-9_.]`. */
+	private static inline function isNominalChar(c: Int): Bool {
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code
+			|| c == '.'.code;
+	}
+
+	/** Whether `kind` is a member or type declaration — a scope a `@:nullSafety` meta can annotate. */
+	private static inline function isDeclScope(kind: String): Bool {
+		return RefactorSupport.isFieldMemberKind(kind) || isTypeDeclScope(kind);
+	}
+
+	/** Whether `kind` is a TYPE declaration (class / interface / enum / typedef / abstract) — the level a `@:nullSafety` may affirm at. */
+	private static inline function isTypeDeclScope(kind: String): Bool {
+		return RefactorSupport.TYPE_DECL_KINDS.contains(kind) || kind == 'FinalDecl';
+	}
+
 	/** The innermost type declaration whose span contains `faSpan`, or null. */
 	private static function innermostTypeDecl(tree: QueryNode, faSpan: Span): Null<TypeDeclMatch> {
 		var best: Null<TypeDeclMatch> = null;
@@ -684,12 +700,6 @@ final class TypeResolver {
 		if (node.name == name) return true;
 		for (c in node.children) if (subtreeHasName(c, name)) return true;
 		return false;
-	}
-
-	/** Whether `c` is a character of a plain nominal type reference — `[A-Za-z0-9_.]`. */
-	private static inline function isNominalChar(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code
-			|| c == '.'.code;
 	}
 
 	/**
@@ -735,19 +745,9 @@ final class TypeResolver {
 		return scopes;
 	}
 
-	/** Whether `kind` is a member or type declaration — a scope a `@:nullSafety` meta can annotate. */
-	private static inline function isDeclScope(kind: String): Bool {
-		return RefactorSupport.isFieldMemberKind(kind) || isTypeDeclScope(kind);
-	}
-
 	/** Whether a `@:nullSafety` meta node carries the disable argument (`Off`). */
 	private static function metaDisabled(meta: QueryNode, disableArg: Null<String>): Bool {
 		return disableArg != null && subtreeHasName(meta, disableArg);
-	}
-
-	/** Whether `kind` is a TYPE declaration (class / interface / enum / typedef / abstract) — the level a `@:nullSafety` may affirm at. */
-	private static inline function isTypeDeclScope(kind: String): Bool {
-		return RefactorSupport.TYPE_DECL_KINDS.contains(kind) || kind == 'FinalDecl';
 	}
 
 	/**

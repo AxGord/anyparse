@@ -94,6 +94,32 @@ class WriterLowering {
 	}
 
 	/**
+	 * ω-if-leader-case-symmetry: the case-UNIT flattener. A `#if`-guarded case
+	 * region is ONE Star element whose Doc carries directive hardlines (flat
+	 * width `-1`), so without this predicate the region could only FOLLOW a
+	 * sibling's break, never LEAD one; it expands the region into its inner
+	 * case elements, and both channels of the pre-pass then judge each one on
+	 * its own.
+	 */
+	private inline function caseSiblingUnitsFnExpr(caseSymArgs: Null<Array<String>>, elemRefName: String): Null<Expr> {
+		return casePredFnExpr(caseSymArgs, elemRefName, 'caseSiblingUnits');
+	}
+
+	/**
+	 * ω-case-sibling-symmetry widened: the STRUCTURAL verdict, answering what
+	 * the flat-width measurement cannot — whether a unit sits below its label
+	 * for reasons of SHAPE (a multi-statement body, a single statement the
+	 * flat-refusal gate rejects, or a label-splice region, whose shared body
+	 * always renders below the labels it was split from). One `true` in the
+	 * expanded unit list decides the whole switch, so the pre-pass short-
+	 * circuits to `BodyFit.SIBLING_FORCE_BREAK` and never runs the measuring
+	 * loop at all.
+	 */
+	private inline function caseSiblingStructuralFnExpr(caseSymArgs: Null<Array<String>>, elemRefName: String): Null<Expr> {
+		return casePredFnExpr(caseSymArgs, elemRefName, 'caseUnitStructuralBreak');
+	}
+
+	/**
 	 * The three-way blockEnded predicate channel, shared by the plain
 	 * writer's sep-elision sites: no predicate → inert `false`; an
 	 * `astPreds` format → the generated typed predicate of the build's
@@ -11208,32 +11234,6 @@ class WriterLowering {
 	}
 
 	/**
-	 * ω-if-leader-case-symmetry: the case-UNIT flattener. A `#if`-guarded case
-	 * region is ONE Star element whose Doc carries directive hardlines (flat
-	 * width `-1`), so without this predicate the region could only FOLLOW a
-	 * sibling's break, never LEAD one; it expands the region into its inner
-	 * case elements, and both channels of the pre-pass then judge each one on
-	 * its own.
-	 */
-	private inline function caseSiblingUnitsFnExpr(caseSymArgs: Null<Array<String>>, elemRefName: String): Null<Expr> {
-		return casePredFnExpr(caseSymArgs, elemRefName, 'caseSiblingUnits');
-	}
-
-	/**
-	 * ω-case-sibling-symmetry widened: the STRUCTURAL verdict, answering what
-	 * the flat-width measurement cannot — whether a unit sits below its label
-	 * for reasons of SHAPE (a multi-statement body, a single statement the
-	 * flat-refusal gate rejects, or a label-splice region, whose shared body
-	 * always renders below the labels it was split from). One `true` in the
-	 * expanded unit list decides the whole switch, so the pre-pass short-
-	 * circuits to `BodyFit.SIBLING_FORCE_BREAK` and never runs the measuring
-	 * loop at all.
-	 */
-	private inline function caseSiblingStructuralFnExpr(caseSymArgs: Null<Array<String>>, elemRefName: String): Null<Expr> {
-		return casePredFnExpr(caseSymArgs, elemRefName, 'caseUnitStructuralBreak');
-	}
-
-	/**
 	 * omega-case-body-controlflow-glue: the CONTROL-FLOW verdict — whether a
 	 * unit holds exactly one body statement and that statement is keyword-led
 	 * control flow. Paired with the pre-pass's own `flatLength == -1`
@@ -11328,6 +11328,144 @@ class WriterLowering {
 			}
 		}
 		return wrapElseChainSuppress(e, child, refName, elseChainSuppressExpr);
+	}
+
+	/**
+	 * ω-pad-trailing-ref — wrap a sep-emission `Expr` with the
+	 * `prevPadTrailing` runtime drop. When the immediately preceding
+	 * field fired `@:fmt(padTrailing)`, drop THIS sep at runtime so
+	 * the pad's emission owns the boundary alone.
+	 *
+	 * No-op (returns `result` unchanged) when `prevPadTrailing` is
+	 * null — preserves byte-identical behaviour for callers without
+	 * an upstream pad signal.
+	 *
+	 * Two consumer sites: `sameLineSeparator` (kw-Ref / opt-Ref /
+	 * opt-lead struct-field sep) and the inter-Star sep at the
+	 * struct-field bare-tryparse-Star branch (sub-slice 7). Both
+	 * read the same macro-time `prevPadTrailing` set by
+	 * `composePadTrailing` at the end of each iteration.
+	 */
+	private static inline function withPadTrailingDrop(prevPadTrailing: Null<Expr>, result: Expr): Expr {
+		return prevPadTrailing != null ? macro ($prevPadTrailing ? _de() : $result) : result;
+	}
+
+	/**
+	 * ω-cond-comp-expr-body-nest — wrap a body Ref's writer call so the
+	 * leading separator + body emit either as inline `' ' + body`
+	 * (source on same line) or as `Nest(_cols, [hardline, body])`
+	 * (source had a newline at the boundary). Pure source-shape decision —
+	 * no user-config policy involvement, distinct from the heavier
+	 * `bodyPolicyWrap` (Same/Next/Keep + bodyOnSameLine slot) and the
+	 * shape-aware `bareBodyBreakWrap` (block-ctor switch). Sister to the
+	 * issue_48-v2 inline `nlAccess ? _dhl() : _dt(' ')` sep but with the
+	 * `_dn(_cols, ...)` wrap so the body picks up `+1` indent step on
+	 * break — required for expression-scope cond-comp where the fork
+	 * convention places the body one level deeper than `#if`/`#elseif`/
+	 * `#else` (issue_429), unlike stmt/decl scope where body sits at
+	 * the same indent as the keyword.
+	 *
+	 * `sourceNewlineExpr` is a runtime `Bool` Expr the caller assembles
+	 * from the appropriate per-kind slot:
+	 *   - Bare-Ref non-first → `value.<f>BeforeNewline` directly (true
+	 *     means the source had a newline before this field's first
+	 *     token, so break + nest).
+	 *   - Optional-kw-Ref → `!value.<f>BodyOnSameLine` (the captured
+	 *     slot stores `true` when body sat on the same line as the kw,
+	 *     so we negate to get the break decision).
+	 *
+	 * The wrapper itself is signal-agnostic — kind dispatch lives at
+	 * the call site so each path can read its own slot and gate on
+	 * `ctx.trivia` / `isTriviaBearing(typePath)` before opting in.
+	 *
+	 * Plain mode and non-trivia-bearing types must NOT call this helper
+	 * — there's no captured slot to read; the call site falls back to
+	 * the existing `_dt(' ') + writeCall` default sep instead.
+	 *
+	 * Used by `@:fmt(nestBodyOnSourceNewline)` on body Ref fields of
+	 * `HxConditionalExpr.expr`, `HxConditionalExpr.elseExpr`, and
+	 * `HxElseifExpr.expr`. All current consumers have a non-Star
+	 * prior sibling (`cond:HxPpCondLit` for the bare-Ref expr fields;
+	 * the prior sibling is irrelevant for the optional-kw-Ref path
+	 * which owns its own kw separator). Future consumers placing
+	 * the flag on a bare-Ref whose prior sibling is an optional Star
+	 * would need to compose with `prevAnyStarNonEmpty` at the call
+	 * site — the wrapper itself is intentionally signal-only, mirroring
+	 * the simplicity of `bareBodyBreakWrap`.
+	 */
+	private static inline function nestBodyOnSourceNewlineWrap(writeCall: Expr, sourceNewlineExpr: Expr): Expr {
+		// omega-cond-expr-fit: with `sameLine.conditionalExprFit` on, the flat
+		// arm becomes a soft `Nest(cols, [Line(' '), body])` - a space while the
+		// ctor-level `condExprFitGroup` group fits, the nested next-line shape
+		// when it breaks. Every consumer of this helper is a field of the
+		// expression-scope cond-comp family, so no per-field opt-in is needed;
+		// with the knob off the emitted Doc is byte-identical to the old shape.
+		final sameLayoutExpr: Expr = macro opt.conditionalExprFit ? _dn(_cols, _dc([_dl(), $writeCall])) : _dc([_dt(' '), $writeCall]);
+		final nextLayoutExpr: Expr = macro _dn(_cols, _dc([_dhl(), $writeCall]));
+		return macro {
+			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			$sourceNewlineExpr ? $nextLayoutExpr : $sameLayoutExpr;
+		};
+	}
+
+	/**
+	 * Build the field-access Expr `opt.<fieldName>` — used everywhere the
+	 * generated writer reads a `WriteOptions` knob (cascade rules, body
+	 * policy flags, leftCurly placement, etc.). Replaces 4-line inline
+	 * `optFieldAccess(name)`
+	 * boilerplate at ~46 sites.
+	 *
+	 * The sites that build the access with a non-`Context.currentPos()`
+	 * position (the `interMemberInfo` / `staticVarSubdivInfo` per-info
+	 * loops, now in `TriviaBlockLowering`) stay inline — the helper
+	 * assumes `Context.currentPos()`.
+	 */
+	private static inline function optFieldAccess(fieldName: String): Expr {
+		return { expr: EField(macro opt, fieldName), pos: Context.currentPos() };
+	}
+
+	/**
+	 * Build the field-access Expr `value.<fieldName><BEFORE_NEWLINE_SUFFIX>`
+	 * for a trivia-bearing struct field's `<field>BeforeNewline:Bool` synth slot
+	 * (created by `TriviaTypeSynth.isBareNonFirstRef`). The slot reads `true`
+	 * when the parser captured a source newline in the gap before the field.
+	 *
+	 * Used by `lowerStruct` for source-newline preservation paths
+	 * (issue_48-v2 bare-ref hardline) — also see `beforeNewlineNotAccess` for
+	 * the `bodyOnSameLine` inverse used by `bodyPolicyWrap` consumers.
+	 */
+	private static inline function beforeNewlineAccess(fieldName: String): Expr {
+		return {
+			expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-598-member-leading-comment — build `value.<fieldName>BeforeLeading`,
+	 * the `Array<String>` of verbatim comments the parser captured in the gap
+	 * before a bare non-first Ref field (synth via
+	 * `TriviaTypeSynth.isBareNonFirstRef`). Non-empty only when a comment was
+	 * dropped between the preceding content (e.g. a member modifier) and the
+	 * field's first token; emitted by the bare-Ref non-first separator.
+	 */
+	private static inline function beforeLeadingAccess(fieldName: String): Expr {
+		return {
+			expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_LEADING_SUFFIX),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * Build `!value.<fieldName><BEFORE_NEWLINE_SUFFIX>` — the `bodyOnSameLine`
+	 * inverse of the trivia BeforeNewline slot, used by `bodyPolicyWrap`'s
+	 * `Keep`-policy dispatch and the `bodyPolicyForCtor` runtime wrap.
+	 */
+	private static inline function beforeNewlineNotAccess(fieldName: String): Expr {
+		return {
+			expr: EUnop(OpNot, false, beforeNewlineAccess(fieldName)),
+			pos: Context.currentPos(),
+		};
 	}
 
 	/** `AstPredsT.<name>(<args>)` — trivia-family predicate call for the static trivia emit helpers. */
@@ -11438,84 +11576,6 @@ class WriterLowering {
 			macro $fires || ($transparent && $prev)
 		else
 			fires;
-	}
-
-	/**
-	 * ω-pad-trailing-ref — wrap a sep-emission `Expr` with the
-	 * `prevPadTrailing` runtime drop. When the immediately preceding
-	 * field fired `@:fmt(padTrailing)`, drop THIS sep at runtime so
-	 * the pad's emission owns the boundary alone.
-	 *
-	 * No-op (returns `result` unchanged) when `prevPadTrailing` is
-	 * null — preserves byte-identical behaviour for callers without
-	 * an upstream pad signal.
-	 *
-	 * Two consumer sites: `sameLineSeparator` (kw-Ref / opt-Ref /
-	 * opt-lead struct-field sep) and the inter-Star sep at the
-	 * struct-field bare-tryparse-Star branch (sub-slice 7). Both
-	 * read the same macro-time `prevPadTrailing` set by
-	 * `composePadTrailing` at the end of each iteration.
-	 */
-	private static inline function withPadTrailingDrop(prevPadTrailing: Null<Expr>, result: Expr): Expr {
-		return prevPadTrailing != null ? macro ($prevPadTrailing ? _de() : $result) : result;
-	}
-
-	/**
-	 * ω-cond-comp-expr-body-nest — wrap a body Ref's writer call so the
-	 * leading separator + body emit either as inline `' ' + body`
-	 * (source on same line) or as `Nest(_cols, [hardline, body])`
-	 * (source had a newline at the boundary). Pure source-shape decision —
-	 * no user-config policy involvement, distinct from the heavier
-	 * `bodyPolicyWrap` (Same/Next/Keep + bodyOnSameLine slot) and the
-	 * shape-aware `bareBodyBreakWrap` (block-ctor switch). Sister to the
-	 * issue_48-v2 inline `nlAccess ? _dhl() : _dt(' ')` sep but with the
-	 * `_dn(_cols, ...)` wrap so the body picks up `+1` indent step on
-	 * break — required for expression-scope cond-comp where the fork
-	 * convention places the body one level deeper than `#if`/`#elseif`/
-	 * `#else` (issue_429), unlike stmt/decl scope where body sits at
-	 * the same indent as the keyword.
-	 *
-	 * `sourceNewlineExpr` is a runtime `Bool` Expr the caller assembles
-	 * from the appropriate per-kind slot:
-	 *   - Bare-Ref non-first → `value.<f>BeforeNewline` directly (true
-	 *     means the source had a newline before this field's first
-	 *     token, so break + nest).
-	 *   - Optional-kw-Ref → `!value.<f>BodyOnSameLine` (the captured
-	 *     slot stores `true` when body sat on the same line as the kw,
-	 *     so we negate to get the break decision).
-	 *
-	 * The wrapper itself is signal-agnostic — kind dispatch lives at
-	 * the call site so each path can read its own slot and gate on
-	 * `ctx.trivia` / `isTriviaBearing(typePath)` before opting in.
-	 *
-	 * Plain mode and non-trivia-bearing types must NOT call this helper
-	 * — there's no captured slot to read; the call site falls back to
-	 * the existing `_dt(' ') + writeCall` default sep instead.
-	 *
-	 * Used by `@:fmt(nestBodyOnSourceNewline)` on body Ref fields of
-	 * `HxConditionalExpr.expr`, `HxConditionalExpr.elseExpr`, and
-	 * `HxElseifExpr.expr`. All current consumers have a non-Star
-	 * prior sibling (`cond:HxPpCondLit` for the bare-Ref expr fields;
-	 * the prior sibling is irrelevant for the optional-kw-Ref path
-	 * which owns its own kw separator). Future consumers placing
-	 * the flag on a bare-Ref whose prior sibling is an optional Star
-	 * would need to compose with `prevAnyStarNonEmpty` at the call
-	 * site — the wrapper itself is intentionally signal-only, mirroring
-	 * the simplicity of `bareBodyBreakWrap`.
-	 */
-	private static inline function nestBodyOnSourceNewlineWrap(writeCall: Expr, sourceNewlineExpr: Expr): Expr {
-		// omega-cond-expr-fit: with `sameLine.conditionalExprFit` on, the flat
-		// arm becomes a soft `Nest(cols, [Line(' '), body])` - a space while the
-		// ctor-level `condExprFitGroup` group fits, the nested next-line shape
-		// when it breaks. Every consumer of this helper is a field of the
-		// expression-scope cond-comp family, so no per-field opt-in is needed;
-		// with the knob off the emitted Doc is byte-identical to the old shape.
-		final sameLayoutExpr: Expr = macro opt.conditionalExprFit ? _dn(_cols, _dc([_dl(), $writeCall])) : _dc([_dt(' '), $writeCall]);
-		final nextLayoutExpr: Expr = macro _dn(_cols, _dc([_dhl(), $writeCall]));
-		return macro {
-			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-			$sourceNewlineExpr ? $nextLayoutExpr : $sameLayoutExpr;
-		};
 	}
 
 	/**
@@ -12244,66 +12304,6 @@ class WriterLowering {
 	private static function dcCall(parts: Array<Expr>): Expr {
 		final arr: Expr = { expr: EArrayDecl(parts), pos: Context.currentPos() };
 		return macro _dc($arr);
-	}
-
-	/**
-	 * Build the field-access Expr `opt.<fieldName>` — used everywhere the
-	 * generated writer reads a `WriteOptions` knob (cascade rules, body
-	 * policy flags, leftCurly placement, etc.). Replaces 4-line inline
-	 * `optFieldAccess(name)`
-	 * boilerplate at ~46 sites.
-	 *
-	 * The sites that build the access with a non-`Context.currentPos()`
-	 * position (the `interMemberInfo` / `staticVarSubdivInfo` per-info
-	 * loops, now in `TriviaBlockLowering`) stay inline — the helper
-	 * assumes `Context.currentPos()`.
-	 */
-	private static inline function optFieldAccess(fieldName: String): Expr {
-		return { expr: EField(macro opt, fieldName), pos: Context.currentPos() };
-	}
-
-	/**
-	 * Build the field-access Expr `value.<fieldName><BEFORE_NEWLINE_SUFFIX>`
-	 * for a trivia-bearing struct field's `<field>BeforeNewline:Bool` synth slot
-	 * (created by `TriviaTypeSynth.isBareNonFirstRef`). The slot reads `true`
-	 * when the parser captured a source newline in the gap before the field.
-	 *
-	 * Used by `lowerStruct` for source-newline preservation paths
-	 * (issue_48-v2 bare-ref hardline) — also see `beforeNewlineNotAccess` for
-	 * the `bodyOnSameLine` inverse used by `bodyPolicyWrap` consumers.
-	 */
-	private static inline function beforeNewlineAccess(fieldName: String): Expr {
-		return {
-			expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX),
-			pos: Context.currentPos(),
-		};
-	}
-
-	/**
-	 * ω-598-member-leading-comment — build `value.<fieldName>BeforeLeading`,
-	 * the `Array<String>` of verbatim comments the parser captured in the gap
-	 * before a bare non-first Ref field (synth via
-	 * `TriviaTypeSynth.isBareNonFirstRef`). Non-empty only when a comment was
-	 * dropped between the preceding content (e.g. a member modifier) and the
-	 * field's first token; emitted by the bare-Ref non-first separator.
-	 */
-	private static inline function beforeLeadingAccess(fieldName: String): Expr {
-		return {
-			expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_LEADING_SUFFIX),
-			pos: Context.currentPos(),
-		};
-	}
-
-	/**
-	 * Build `!value.<fieldName><BEFORE_NEWLINE_SUFFIX>` — the `bodyOnSameLine`
-	 * inverse of the trivia BeforeNewline slot, used by `bodyPolicyWrap`'s
-	 * `Keep`-policy dispatch and the `bodyPolicyForCtor` runtime wrap.
-	 */
-	private static inline function beforeNewlineNotAccess(fieldName: String): Expr {
-		return {
-			expr: EUnop(OpNot, false, beforeNewlineAccess(fieldName)),
-			pos: Context.currentPos(),
-		};
 	}
 
 	private static function makeWriteCall(writeFnName: String, valueExpr: Expr, hasPratt: Bool, ctxPrec: Int, ?optExpr: Expr): Expr {

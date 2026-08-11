@@ -29,15 +29,6 @@ using StringTools;
 @:nullSafety(Strict)
 final class DynamicBag {
 
-	/**
-	 * Reflect operations that form a string-keyed BAG, each mapping to a `DynamicAccess`
-	 * map operation: `setField` -> `bag[k] = v`, `field` -> `bag[k]`, `hasField` ->
-	 * `bag.exists(k)`, `deleteField` -> `bag.remove(k)`, `fields` -> `bag.keys()`. Any
-	 * OTHER reflect call (`getProperty` / `callMethod` / …) is not plain string-keyed
-	 * storage, so it is NOT a bag op and DISQUALIFIES the declaration.
-	 */
-	private static final BAG_METHODS: Array<String> = ['setField', 'field', 'hasField', 'deleteField', 'fields'];
-
 	/** Max inferred-type text length before an oracle-named anon struct is rejected as over-verbose (mirrors explicit-local-type). */
 	private static inline final BAG_MAX_ANON: Int = 80;
 
@@ -54,6 +45,15 @@ final class DynamicBag {
 	private static inline final DIRECT_KEY_INDEX: Int = 2;
 
 	private static inline final USING_KEY_INDEX: Int = 1;
+
+	/**
+	 * Reflect operations that form a string-keyed BAG, each mapping to a `DynamicAccess`
+	 * map operation: `setField` -> `bag[k] = v`, `field` -> `bag[k]`, `hasField` ->
+	 * `bag.exists(k)`, `deleteField` -> `bag.remove(k)`, `fields` -> `bag.keys()`. Any
+	 * OTHER reflect call (`getProperty` / `callMethod` / …) is not plain string-keyed
+	 * storage, so it is NOT a bag op and DISQUALIFIES the declaration.
+	 */
+	private static final BAG_METHODS: Array<String> = ['setField', 'field', 'hasField', 'deleteField', 'fields'];
 
 	/** The DynamicAccess bag edits for `violations`; `oracle` (optional) resolves the value-type inference tail. */
 	@:access(anyparse.check.AvoidDynamic)

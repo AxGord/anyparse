@@ -114,10 +114,10 @@ import anyparse.check.Check.TypeOracle;
 @:nullSafety(Strict)
 final class AvoidDynamic implements Check implements ConfigAware implements RiskyFix implements OracleAssisted {
 
+	private static inline final RULE_ID: String = 'avoid-dynamic';
+
 	/** Call-path roots that mark a local as a Reflect/Json boundary transit — reported distinctly. */
 	private static final DEFAULT_BOUNDARY_CALLS: Array<String> = ['Reflect', 'Json'];
-
-	private static inline final RULE_ID: String = 'avoid-dynamic';
 
 	// ---- DynamicAccess bag arm (D4) ----
 
@@ -210,6 +210,14 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, oracle: TypeOracle
 	): Array<{ span: Span, text: String }> {
 		return DynamicBag.bagEdits(source, violations, plugin, oracle);
+	}
+
+	private static inline function isSpaceCode(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
+	}
+
+	private static inline function isWordChar(c: Int): Bool {
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
 	}
 
 	/**
@@ -491,10 +499,6 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		return true;
 	}
 
-	private static inline function isSpaceCode(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
-	}
-
 	/** The resolved kind sets threaded through the walk, built once per run. */
 	private static function buildCtx(shape: RefShape, dynName: String): DynCtx {
 		final fieldKinds: Array<String> = shape.fieldDeclKinds ?? [];
@@ -676,10 +680,6 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		for (k in 0...dynLen) if (source.fastCodeAt(i + k) != dyn.fastCodeAt(k)) return false;
 		final after: Int = i + dynLen < source.length ? source.fastCodeAt(i + dynLen) : -1;
 		return !isWordChar(after);
-	}
-
-	private static inline function isWordChar(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
 	}
 
 	/**

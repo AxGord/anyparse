@@ -46,6 +46,16 @@ import anyparse.grammar.haxe.HxVarNameLit;
  */
 class HxCaseCaptureSliceTest extends HxTestHelpers {
 
+	public inline function testCorpusIssue27RoundTrip(): Void {
+		// Fork corpus shape — section-2 input, byte-identical to the
+		// section-3 expected output after trivia round-trip.
+		roundTrip(
+			'class Main {\n\tstatic function main() {\n\t\tswitch (foo) {\n\t\t\tcase var bar:\n\t\t\t\ttrace("");\n'
+			+ '\t\t\tcase Pattern(var foo, var bar):\n\t\t\t\ttrace("");\n\t\t}\n\t}\n}',
+			'issue_27_case_var_line_end'
+		);
+	}
+
 	public function testOuterCaptureSurfacesAsCaptureCtor(): Void {
 		final sw: HxSwitchStmt = parseSwitch('class C { function f(x:E):Void { switch (x) { case var bar: y(); case _: z(); } } }');
 		final p: HxCasePattern = caseBranch(sw.cases[0]).patterns[0];
@@ -120,16 +130,6 @@ class HxCaseCaptureSliceTest extends HxTestHelpers {
 			case s:
 				Assert.fail('expected Assign with IdentExpr(vararg), got $s');
 		}
-	}
-
-	public inline function testCorpusIssue27RoundTrip(): Void {
-		// Fork corpus shape — section-2 input, byte-identical to the
-		// section-3 expected output after trivia round-trip.
-		roundTrip(
-			'class Main {\n\tstatic function main() {\n\t\tswitch (foo) {\n\t\t\tcase var bar:\n\t\t\t\ttrace("");\n'
-			+ '\t\t\tcase Pattern(var foo, var bar):\n\t\t\t\ttrace("");\n\t\t}\n\t}\n}',
-			'issue_27_case_var_line_end'
-		);
 	}
 
 	private function parseSwitch(source: String): HxSwitchStmt {

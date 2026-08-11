@@ -279,6 +279,10 @@ class HxLambdaParamDefaultSliceTest extends HxTestHelpers {
 		}
 	}
 
+	private inline function triviaWrite(src: String): String {
+		return HxWriteFixture.triviaWrite(src, CFG);
+	}
+
 	private function soleAnonFnParam(source: String): HxLambdaParamBody {
 		final decl: HxVarDecl = parseSingleVarDecl(source);
 		final params: Array<HxLambdaParam> = switch decl.init {
@@ -287,10 +291,6 @@ class HxLambdaParamDefaultSliceTest extends HxTestHelpers {
 		};
 		Assert.equals(1, params.length);
 		return lambdaParamBody(params[0]);
-	}
-
-	private inline function triviaWrite(src: String): String {
-		return HxWriteFixture.triviaWrite(src, CFG);
 	}
 
 }

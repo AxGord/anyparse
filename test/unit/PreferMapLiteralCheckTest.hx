@@ -17,6 +17,21 @@ import anyparse.query.SymbolIndex;
  */
 class PreferMapLiteralCheckTest extends Test {
 
+	/** The critical case: an unannotated `var m = new Map()` is NOT pinned — `[]` infers `Array`, not `Map`, so rewriting it would miscompile. Reported, not fixed. */
+	public inline function testGateRefusesUntypedLocal(): Void {
+		assertGateRefuses('class C { function f():Void { var m = new Map(); } }');
+	}
+
+	/** An unannotated local whose only type source is the constructor `<Int, Int>` is NOT pinned — `[]` drops the key/value types and infers Array. */
+	public inline function testGateRefusesUntypedTypeParam(): Void {
+		assertGateRefuses('class C { function f():Void { var m = new Map<Int, Int>(); } }');
+	}
+
+	/** SOUNDNESS: a `new Map()` assigned to a `Dynamic`-typed target must NOT become `[]` (which would infer Array). Reported, no edit. */
+	public inline function testGateRefusesDynamicTargetAssignment(): Void {
+		assertGateRefuses('class C { var d:Dynamic; function f():Void { d = new Map(); } }');
+	}
+
 	public function testNewMapTypedFlagged(): Void {
 		final vs: Array<Violation> = violations(wrap('new Map<Int, Int>()'));
 		Assert.equals(1, vs.length);
@@ -47,16 +62,6 @@ class PreferMapLiteralCheckTest extends Test {
 		Assert.equals('[]', fixText('class C { public var m:Map<String, Int> = new Map(); }'));
 	}
 
-	/** The critical case: an unannotated `var m = new Map()` is NOT pinned — `[]` infers `Array`, not `Map`, so rewriting it would miscompile. Reported, not fixed. */
-	public inline function testGateRefusesUntypedLocal(): Void {
-		assertGateRefuses('class C { function f():Void { var m = new Map(); } }');
-	}
-
-	/** An unannotated local whose only type source is the constructor `<Int, Int>` is NOT pinned — `[]` drops the key/value types and infers Array. */
-	public inline function testGateRefusesUntypedTypeParam(): Void {
-		assertGateRefuses('class C { function f():Void { var m = new Map<Int, Int>(); } }');
-	}
-
 	public function testRegisteredInBuiltins(): Void {
 		Assert.notNull(Linter.byId('prefer-map-literal'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
@@ -75,11 +80,6 @@ class PreferMapLiteralCheckTest extends Test {
 	/** A `this.<field>` Map assignment resolves the field type through the SymbolIndex — rewritten to `[]`. */
 	public function testFixThisFieldAssignment(): Void {
 		Assert.equals('[]', fixTextIndexed('class C { var m:Map<Int, String>; function f():Void { this.m = new Map(); } }'));
-	}
-
-	/** SOUNDNESS: a `new Map()` assigned to a `Dynamic`-typed target must NOT become `[]` (which would infer Array). Reported, no edit. */
-	public inline function testGateRefusesDynamicTargetAssignment(): Void {
-		assertGateRefuses('class C { var d:Dynamic; function f():Void { d = new Map(); } }');
 	}
 
 	/** SOUNDNESS: a `this.<field>` Map assignment whose field is `Dynamic` must NOT become `[]`, even with an index threaded. Reported, no edit. */

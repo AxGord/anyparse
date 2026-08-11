@@ -121,6 +121,11 @@ final class StringLiteralDup implements Check implements ConfigAware {
 		return [];
 	}
 
+	/** A configured value when it is a positive integer, else the built-in default (a zero / negative option is ignored). */
+	private static inline function positiveOr(value: Null<Int>, fallback: Int): Int {
+		return value != null && value > 0 ? value : fallback;
+	}
+
 	/**
 	 * Collect every eligible plain literal grouped by its content, then emit one
 	 * `Info` for each group whose size reaches `minOcc`, anchored at the group's
@@ -177,11 +182,6 @@ final class StringLiteralDup implements Check implements ConfigAware {
 			}
 		}
 		for (child in node.children) collect(child, source, support, metaKinds, minLen, here, groups);
-	}
-
-	/** A configured value when it is a positive integer, else the built-in default (a zero / negative option is ignored). */
-	private static inline function positiveOr(value: Null<Int>, fallback: Int): Int {
-		return value != null && value > 0 ? value : fallback;
 	}
 
 	/** `content` quoted for a message, elided to `MESSAGE_PREVIEW` characters so a long literal does not bloat the report. */

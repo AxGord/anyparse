@@ -18,8 +18,7 @@ using StringTools;
 /**
  * The `member-order` check: a type whose members are not in canonical order
  * (constants, fields, constructor, methods; public before private) is flagged
- * `Info` and `--fix` reorders them. Reordering bails when a field initializer is
- * side-effecting or reads a sibling field in a way the sort would reverse.
+ * `Info` and `--fix` reorders them. Reordering bails when a field initializer is side-effecting or reads a sibling field in a way the sort would reverse - counting only flips with INITIALIZED fields, since an init-less field runs no code in the init phase. Within one rank `inline` members sort first, then initialized fields before init-less ones.
  */
 class MemberOrderCheckTest extends Test {
 
@@ -80,8 +79,8 @@ class MemberOrderCheckTest extends Test {
 
 	/** A field init whose CALL reads a sibling (indirect dep) must not be reordered across that sibling. */
 	public function testIndirectFieldDepNotFixed(): Void {
-		final src: String =
-			'class C { public function m():Void {} private static var log:Int = 0; public static var first:Int = push(); static function push():Int { return log; } }';
+		final src: String = 'class C { public function m():Void {} '
+			+ 'private static var log:Int = 0; public static var first:Int = push(); static function push():Int { return log; } }';
 		Assert.isTrue(violations(src).length > 0);
 		Assert.equals(0, edits(src).length);
 	}
@@ -393,11 +392,11 @@ class MemberOrderCheckTest extends Test {
 	 * report-only advisory.
 	 */
 	public function testUnsafeReorderDegradesToSpacingOnly(): Void {
-		final src: String = 'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n'
+		final src: String = 'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n'
 			+ '\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
 		assertOrderAdvisoryOnly(violations(src));
 		Assert.equals(
-			'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}',
+			'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}',
 			fixedSource(src)
 		);
 		final fixed: String = canonicalizedFix(src);
@@ -411,11 +410,11 @@ class MemberOrderCheckTest extends Test {
 	 * spacing policy apply over the original member order.
 	 */
 	public function testUnsafeReorderCollapsesStrayBlankWithinGroup(): Void {
-		final src: String = 'class C {\n\tpublic var a:Int;\n\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n'
+		final src: String = 'class C {\n\tpublic var a:Int = 0;\n\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n'
 			+ '\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
 		assertOrderAdvisoryOnly(violations(src));
 		Assert.equals(
-			'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}',
+			'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}',
 			fixedSource(src)
 		);
 	}
@@ -427,7 +426,7 @@ class MemberOrderCheckTest extends Test {
 	 * is disabled there too, so such an edit could never converge.
 	 */
 	public function testUnsafeReorderStrayGapEmitsNoSpacingEdits(): Void {
-		final src: String = 'class C {\n\tpublic var a:Int;\n\t;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n'
+		final src: String = 'class C {\n\tpublic var a:Int = 0;\n\t;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n'
 			+ '\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
 		assertOrderAdvisoryOnly(violations(src));
 		Assert.equals(0, edits(src).length);
@@ -441,11 +440,11 @@ class MemberOrderCheckTest extends Test {
 	 * advisory and the fix converges on its own output (the CheckBox shape).
 	 */
 	public function testUnsafeReorderSpacesConditionalBlock(): Void {
-		final src: String =
-			'class C {\n\tprivate final b:S = new S();\n\t#if !mobile\n\tprivate final h:S = new S();\n\t#end\n\tprivate var ht:Float;\n}';
+		final src: String = 'class C {\n\tprivate final b:S = new S();\n\t#if !mobile\n\tprivate final h:S = new S();\n\t#end\n'
+			+ '\tprivate var ht:Float = 0;\n}';
 		assertOrderAdvisoryOnly(violations(src));
 		Assert.equals(
-			'class C {\n\tprivate final b:S = new S();\n\n\t#if !mobile\n\tprivate final h:S = new S();\n\t#end\n\n\tprivate var ht:Float;\n}',
+			'class C {\n\tprivate final b:S = new S();\n\n\t#if !mobile\n\tprivate final h:S = new S();\n\t#end\n\n\tprivate var ht:Float = 0;\n}',
 			fixedSource(src)
 		);
 		final fixed: String = canonicalizedFix(src);
@@ -460,7 +459,7 @@ class MemberOrderCheckTest extends Test {
 	 * and converges through the production canonicalization.
 	 */
 	public function testMovableArglessNewReordersUnderOption(): Void {
-		final src: String = 'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n'
+		final src: String = 'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n'
 			+ '\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
 		final fixed: String = fixedSource(src, movableArglessNewResolver());
 		Assert.isTrue(fixed.indexOf('final t') < fixed.indexOf('var a'), 'argless-new final moved before the vars: $fixed');
@@ -474,10 +473,10 @@ class MemberOrderCheckTest extends Test {
 	 * `final t = new T()` container degrades to spacing-only edits, its order untouched.
 	 */
 	public function testMovableArglessNewOffByteIdentical(): Void {
-		final src: String = 'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n'
+		final src: String = 'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n'
 			+ '\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
 		Assert.equals(
-			'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}',
+			'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}',
 			fixedSource(src)
 		);
 	}
@@ -485,7 +484,7 @@ class MemberOrderCheckTest extends Test {
 	/** An argful `new T(0)` initializer stays blocking even with the option on - only ZERO-argument allocations are movable. */
 	public function testArgfulNewStillBlocksUnderOption(): Void {
 		final src: String =
-			'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\tpublic final t:T = new T(0);\n\n\tpublic function new() {}\n}';
+			'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int;\n\tpublic final t:T = new T(0);\n\n\tpublic function new() {}\n}';
 		assertOrderAdvisoryOnly(violations(src));
 		final fixed: String = fixedSource(src, movableArglessNewResolver());
 		Assert.isTrue(fixed.indexOf('var b') < fixed.indexOf('final t'), 'argful new NOT moved before the vars: $fixed');
@@ -497,7 +496,7 @@ class MemberOrderCheckTest extends Test {
 	 */
 	public function testFieldReferencingNewStillBlocksUnderOption(): Void {
 		final src: String =
-			'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\tpublic final t:T = new T(a);\n\n\tpublic function new() {}\n}';
+			'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int;\n\tpublic final t:T = new T(a);\n\n\tpublic function new() {}\n}';
 		assertOrderAdvisoryOnly(violations(src));
 		final fixed: String = fixedSource(src, movableArglessNewResolver());
 		Assert.isTrue(fixed.indexOf('var b') < fixed.indexOf('final t'), 'field-referencing new NOT moved before the vars: $fixed');
@@ -837,13 +836,113 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, edits(src).length, 'no edit can reverse the read');
 	}
 
+	/** A side-effecting init whose only sort flips are with fields that have NO initializer reorders — an init-less field runs no code in the init phase. */
+	public function testSideEffectFlipWithUninitFieldReorders(): Void {
+		final src: String = 'class C { private var b:Float; private final s:Foo = new Foo(1); }';
+		Assert.isTrue(violations(src).length > 0);
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('final s') < fixed.indexOf('var b'), 'side-effecting final moved above the init-less var: $fixed');
+	}
+
+	/** A side-effecting init still refuses to flip with an INITIALIZED same-phase field — only init-less fields are exempt. */
+	public function testSideEffectFlipWithInitializedFieldStillBails(): Void {
+		final src: String = 'class C { private var b:Float = 0; private final s:Foo = new Foo(1); }';
+		Assert.isTrue(violations(src).length > 0);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** Within one rank an initialized field sorts above an init-less one. */
+	public function testInitializedFieldFirstWithinRank(): Void {
+		final src: String = 'class C { private final a:Int; private final b:Int = 1; }';
+		Assert.equals(1, violations(src).length);
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('final b') < fixed.indexOf('final a'), 'initialized final above the init-less one: $fixed');
+	}
+
+	/** Initialized-before-init-less within a rank is canonical — not flagged. */
+	public function testInitializedFirstCanonicalNotFlagged(): Void {
+		Assert.equals(0, violations('class C { private final b:Int = 1; private final a:Int; }').length);
+	}
+
+	/** Within one method rank an `inline` member sorts above a non-inline one. */
+	public function testInlineMethodFirstWithinRank(): Void {
+		final src: String = 'class C { function m():Void {} inline function i():Void {} }';
+		Assert.equals(1, violations(src).length);
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('function i') < fixed.indexOf('function m'), 'inline method above the plain one: $fixed');
+	}
+
+	/** Inline-before-plain within a rank is canonical — not flagged. */
+	public function testInlineFirstCanonicalNotFlagged(): Void {
+		Assert.equals(0, violations('class C { inline function i():Void {} function m():Void {} }').length);
+	}
+
+	/** A static inline constant sorts above its non-inline same-rank sibling. */
+	public function testStaticInlineConstFirstWithinRank(): Void {
+		final fixed: String = fixedSource('class C { static final A:Int = 1; static inline final B:Int = 2; }');
+		Assert.isTrue(fixed.indexOf('final B') < fixed.indexOf('final A'), 'inline const above the plain one: $fixed');
+	}
+
+	/** Accessor pairs keep source order — the inline sub-key must not tear a non-inline getter from its inline setter. */
+	public function testAccessorPairNotSplitByInline(): Void {
+		final src: String =
+			'class C { public var x(get, set):Int; function get_x():Int { return 0; } inline function set_x(v:Int):Int { return v; } }';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/** The Cropping11Popup shape: a side-effecting final flips only with init-less members; the fix converges canonical. */
+	public function testUninitFlipFixConvergesCanonical(): Void {
+		final src: String = 'class C {\n\tprivate final a:Int;\n\n\tprivate var b:Float;\n\n\tprivate final s:Foo = new Foo(1);\n'
+			+ '\tprivate final c:Point;\n}';
+		final fixed: String = canonicalizedFix(src);
+		Assert.equals(0, violations(fixed).length, 'converges: $fixed');
+		Assert.isTrue(fixed.indexOf('final s') < fixed.indexOf('final a'), 'initialized final leads its rank: $fixed');
+		Assert.isTrue(fixed.indexOf('final c') < fixed.indexOf('var b'), 'vars after finals: $fixed');
+	}
+
+	/** A sibling read of an INLINE constant is compile-time folded — the reader reorders across it freely (the ShareControl shape). */
+	public function testSiblingReadOfInlineConstantReorders(): Void {
+		final src: String = 'class C { private static inline final P:Int = 16; public static inline final W:Int = (116 + P) * 2; }';
+		Assert.equals(1, violations(src).length);
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('final W') < fixed.indexOf('final P'), 'reader moved above the inline constant it reads: $fixed');
+	}
+
+	/** A side-effecting init crosses an INLINE constant freely — the constant is folded at compile time, no runtime flip exists. */
+	public function testSideEffectFlipWithInlineConstantReorders(): Void {
+		final src: String = 'class C { private static final _log:L = Logger.get(); private static inline final MAX:Int = 10; }';
+		Assert.equals(1, violations(src).length);
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(
+			fixed.indexOf('final MAX') < fixed.indexOf('final _log'), 'inline constant moved above the side-effecting init: $fixed'
+		);
+	}
+
+	/** A textual read of an INIT-LESS sibling is no order dependency — the sibling runs no init code, the reader sees the default either way. */
+	public function testSiblingReadOfUninitFieldReorders(): Void {
+		final src: String = 'class C { private static var total:Int; private static var seed:Int = f(total); }';
+		Assert.equals(1, violations(src).length);
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(
+			fixed.indexOf('var seed') < fixed.indexOf('var total'), 'initialized reader moved above the init-less field it reads: $fixed'
+		);
+	}
+
+	/** The `Main.iapStore` shape: a single-rank guarded `public var` written behind the private instance field it outranks. */
+	private inline function contentRankedBlockSource(): String {
+		return 'class C {\n\tpublic static var s:Int = 0;\n\n\tpublic final a:S;\n\n\tprivate var p:Int = 0;\n'
+			+ '\n\t#if (mobile || APPSTORE)\n\tpublic var iap:I;\n\t#end\n}';
+	}
+
 	private function violations(src: String): Array<Violation> {
-		return new MemberOrder().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final check: MemberOrder = new MemberOrder();
+		check.setConfigResolver(emptyConfigResolver());
+		return check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
 	private function edits(src: String, ?resolve: (String) -> LintConfig): Array<{ span: Span, text: String }> {
 		final check: MemberOrder = new MemberOrder();
-		if (resolve != null) check.setConfigResolver(resolve);
+		check.setConfigResolver(resolve ?? emptyConfigResolver());
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		return check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
 	}
@@ -855,6 +954,12 @@ class MemberOrderCheckTest extends Test {
 	/** A config resolver that enables the opt-in `movableArglessNew` member-order option for every file. */
 	private function movableArglessNewResolver(): (String) -> LintConfig {
 		final cfg: LintConfig = LintConfig.parse('{"rules": {"member-order": {"movableArglessNew": true}}}');
+		return _ -> cfg;
+	}
+
+	/** A resolver pinning the EMPTY config, so a test run's verdicts cannot depend on an `apqlint.json` discovered from the process cwd. */
+	private function emptyConfigResolver(): (String) -> LintConfig {
+		final cfg: LintConfig = LintConfig.parse('{}');
 		return _ -> cfg;
 	}
 
@@ -882,7 +987,7 @@ class MemberOrderCheckTest extends Test {
 	private function canonicalizedFix(src: String, ?resolve: (String) -> LintConfig): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: MemberOrder = new MemberOrder();
-		if (resolve != null) check.setConfigResolver(resolve);
+		check.setConfigResolver(resolve ?? emptyConfigResolver());
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
 		return switch RefactorSupport.canonicalize(src, check.fix(src, vs, plugin), true, plugin) {
 			case Ok(text): text;
@@ -901,12 +1006,6 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(
 			'type members are not in canonical order (constants, fields, constructor, methods; public before private)', vs[0].message
 		);
-	}
-
-	/** The `Main.iapStore` shape: a single-rank guarded `public var` written behind the private instance field it outranks. */
-	private inline function contentRankedBlockSource(): String {
-		return 'class C {\n\tpublic static var s:Int = 0;\n\n\tpublic final a:S;\n\n\tprivate var p:Int = 0;\n'
-			+ '\n\t#if (mobile || APPSTORE)\n\tpublic var iap:I;\n\t#end\n}';
 	}
 
 }

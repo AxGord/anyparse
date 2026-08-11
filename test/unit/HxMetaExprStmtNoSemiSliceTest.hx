@@ -33,6 +33,28 @@ import anyparse.grammar.haxe.HxStatement;
  */
 class HxMetaExprStmtNoSemiSliceTest extends HxTestHelpers {
 
+	// -- Idempotency: corpus issue_602 round-trip via the module
+	// pipeline (parse + write + parse + write must converge). Plain
+	// mode emits `;` after the brace; the second write must agree
+	// with the first.
+
+	public inline function testCorpusIssue602RoundTrip(): Void {
+		roundTrip(
+			'class Main {\n\tstatic function foobar() {\n\t\tfunction foo() {\n\t\t\treturn bar;\n\t\t}\n'
+			+ '\t\t@:nullSafety(Off) return switch thing {\n\t\t\tcase something: null;\n\t\t};\n'
+			+ '\t\t@:nullSafety(Off) return switch thing {\n\t\t\tcase something: null;\n\t\t}\n\t}\n}',
+			'issue_602_return_metadata'
+		);
+	}
+
+	public inline function testCorpusIssue567RoundTrip(): Void {
+		roundTrip(
+			'class Main {\n\tstatic function main() {\n\t\t@:nullSafety(Off) if (foo) {\n\t\t\treturn;\n\t}\n\t\t@:nullSafety(Off)\n'
+			+ '\t\tif (foo) {\n\t\t\treturn;\n\t\t}\n\t}\n}',
+			'issue_567_metadata_if_expression'
+		);
+	}
+
 	// -- Isolated: @:meta return switch — single statement, no `;` --
 
 	public function testMetaReturnSwitchNoSemi(): Void {
@@ -126,28 +148,6 @@ class HxMetaExprStmtNoSemiSliceTest extends HxTestHelpers {
 			+ '\t\tif (foo) {\n\t\t\treturn;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, cls.members.length);
-	}
-
-	// -- Idempotency: corpus issue_602 round-trip via the module
-	// pipeline (parse + write + parse + write must converge). Plain
-	// mode emits `;` after the brace; the second write must agree
-	// with the first.
-
-	public inline function testCorpusIssue602RoundTrip(): Void {
-		roundTrip(
-			'class Main {\n\tstatic function foobar() {\n\t\tfunction foo() {\n\t\t\treturn bar;\n\t\t}\n'
-			+ '\t\t@:nullSafety(Off) return switch thing {\n\t\t\tcase something: null;\n\t\t};\n'
-			+ '\t\t@:nullSafety(Off) return switch thing {\n\t\t\tcase something: null;\n\t\t}\n\t}\n}',
-			'issue_602_return_metadata'
-		);
-	}
-
-	public inline function testCorpusIssue567RoundTrip(): Void {
-		roundTrip(
-			'class Main {\n\tstatic function main() {\n\t\t@:nullSafety(Off) if (foo) {\n\t\t\treturn;\n\t}\n\t\t@:nullSafety(Off)\n'
-			+ '\t\tif (foo) {\n\t\t\treturn;\n\t\t}\n\t}\n}',
-			'issue_567_metadata_if_expression'
-		);
 	}
 
 }

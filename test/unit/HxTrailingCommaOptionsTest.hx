@@ -134,6 +134,10 @@ class HxTrailingCommaOptionsTest extends Test {
 		assertNoTrailingComma(out, 'b:Int', ')');
 	}
 
+	private inline function writeWithBreak(src: String, arrays: Bool, args: Bool, params: Bool): String {
+		return writeWith(src, 10, arrays, args, params);
+	}
+
 	private function writeWithObjectLits(src: String, objectLits: Bool): String {
 		final opts: HxModuleWriteOptions = makeOpts(10, false, false, false);
 		opts.trailingCommaObjectLits = objectLits;
@@ -164,10 +168,6 @@ class HxTrailingCommaOptionsTest extends Test {
 			i++;
 		}
 		return '';
-	}
-
-	private inline function writeWithBreak(src: String, arrays: Bool, args: Bool, params: Bool): String {
-		return writeWith(src, 10, arrays, args, params);
 	}
 
 	private function writeWith(src: String, lineWidth: Int, arrays: Bool, args: Bool, params: Bool): String {

@@ -21,6 +21,12 @@ final class CommentProse {
 	/** The line-comment opener, stripped from each body line. */
 	public static inline final LINE_MARKER: String = '//';
 
+	/** The characters a section rule is drawn from (gate 9) — `//----`, `// === `, `// --- Mobile touch ---`. */
+	private static inline final SEPARATOR_CHARS: String = '-=*_#';
+
+	/** The longest a DECORATED phrase can be and still read as a section label rather than a sentence (gate 9). */
+	private static inline final DECORATED_LABEL_WORDS: Int = 4;
+
 	/**
 	 * Tooling directives (gate 5), lower-cased and matched as a LINE PREFIX. `noqa` and
 	 * `CHECKSTYLE:` are this project's own suppression markers (`Suppression`); the
@@ -31,12 +37,6 @@ final class CommentProse {
 
 	/** Task markers (gate 6), lower-cased and matched ANYWHERE in a line. */
 	private static final TASK_MARKERS: Array<String> = ['todo', 'fixme', 'hack', 'xxx'];
-
-	/** The characters a section rule is drawn from (gate 9) — `//----`, `// === `, `// --- Mobile touch ---`. */
-	private static inline final SEPARATOR_CHARS: String = '-=*_#';
-
-	/** The longest a DECORATED phrase can be and still read as a section label rather than a sentence (gate 9). */
-	private static inline final DECORATED_LABEL_WORDS: Int = 4;
 
 	/**
 	 * Declaration and statement HEADS (gate 7): the Haxe keywords that open a line of code
@@ -116,6 +116,21 @@ final class CommentProse {
 		return !readsAsProse(text);
 	}
 
+	/** Whether `c` is one of the characters a section rule is drawn from. */
+	private static inline function isRuleChar(c: Int): Bool {
+		return SEPARATOR_CHARS.indexOf(String.fromCharCode(c)) >= 0;
+	}
+
+	/** Whether `c` may appear inside a Haxe identifier. */
+	private static inline function isIdentChar(c: Int): Bool {
+		return isIdentStart(c) || (c >= '0'.code && c <= '9'.code);
+	}
+
+	/** Whether `c` may START a Haxe identifier. */
+	private static inline function isIdentStart(c: Int): Bool {
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code || c == '$'.code;
+	}
+
 	/** Whether every line is drawn only from rule characters and whitespace. */
 	private static function ruleCharsOnly(lines: Array<String>): Bool {
 		for (line in lines) for (i in 0...line.length) {
@@ -123,11 +138,6 @@ final class CommentProse {
 			if (c != ' '.code && c != '\t'.code && !isRuleChar(c)) return false;
 		}
 		return true;
-	}
-
-	/** Whether `c` is one of the characters a section rule is drawn from. */
-	private static inline function isRuleChar(c: Int): Bool {
-		return SEPARATOR_CHARS.indexOf(String.fromCharCode(c)) >= 0;
 	}
 
 	/** `text` with every rule character replaced by a space. */
@@ -283,16 +293,6 @@ final class CommentProse {
 	private static function terminatesLine(text: String, from: Int): Bool {
 		final rest: String = text.substr(from).trim();
 		return rest.length == 0 || rest.startsWith(LINE_MARKER);
-	}
-
-	/** Whether `c` may appear inside a Haxe identifier. */
-	private static inline function isIdentChar(c: Int): Bool {
-		return isIdentStart(c) || (c >= '0'.code && c <= '9'.code);
-	}
-
-	/** Whether `c` may START a Haxe identifier. */
-	private static inline function isIdentStart(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code || c == '$'.code;
 	}
 
 }

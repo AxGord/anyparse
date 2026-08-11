@@ -28,6 +28,11 @@ import anyparse.grammar.haxe.HxParamBody;
  */
 class HxParamBodyUntypedSliceTest extends HxTestHelpers {
 
+	/** Untyped params survive the write -> reparse -> write idempotency. */
+	public inline function testUntypedParamRoundTrip(): Void {
+		roundTrip('class C { function f(x) return x; function g(a, b:Int):Int { return b; } }');
+	}
+
 	/** `function f(x)` — single untyped param, no `:Type`. */
 	public function testUntypedSingleParam(): Void {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function f(x):Void {} }');
@@ -120,11 +125,6 @@ class HxParamBodyUntypedSliceTest extends HxTestHelpers {
 			case _:
 				Assert.fail('expected ExprBody(ReturnExpr(IdentExpr)), got ${decl.body}');
 		}
-	}
-
-	/** Untyped params survive the write -> reparse -> write idempotency. */
-	public inline function testUntypedParamRoundTrip(): Void {
-		roundTrip('class C { function f(x) return x; function g(a, b:Int):Int { return b; } }');
 	}
 
 	/** Untyped params parse through the module root in multiple classes. */

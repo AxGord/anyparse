@@ -31,11 +31,6 @@ class HxInlineBlockCommentWriteTest extends Test {
 	 */
 	private var _savedDecline: Null<String> = null;
 
-	public function setup(): Void {
-		_savedDecline = Sys.getEnv(CommentInventory.DECLINE_ENV);
-		Sys.putEnv(CommentInventory.DECLINE_ENV, '');
-	}
-
 	public inline function teardown(): Void Sys.putEnv(CommentInventory.DECLINE_ENV, _savedDecline);
 
 	public inline function testIfConditionLeadingBlockComment(): Void {
@@ -44,6 +39,11 @@ class HxInlineBlockCommentWriteTest extends Test {
 
 	public inline function testReturnLeadingBlockComment(): Void {
 		assertRefusesLoss('class Foo {\n\tfunction bar() {\n\t\treturn /* r */ x;\n\t}\n}\n', '/* r */');
+	}
+
+	public function setup(): Void {
+		_savedDecline = Sys.getEnv(CommentInventory.DECLINE_ENV);
+		Sys.putEnv(CommentInventory.DECLINE_ENV, '');
 	}
 
 	public function testAssignmentTrailingBlockComment(): Void {

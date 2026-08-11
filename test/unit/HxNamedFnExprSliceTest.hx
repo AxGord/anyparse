@@ -28,6 +28,22 @@ import anyparse.grammar.haxe.HxStatement;
  */
 class HxNamedFnExprSliceTest extends HxTestHelpers {
 
+	// --- writer round-trip ---
+
+	public inline function testWriterRoundTripNamedFnExpr(): Void {
+		writerEquals(
+			'class C { static function main() { var g = function compute(x:Int):Int { return x; } } }',
+			'class C {\n\tstatic function main() {\n\t\tvar g = function compute(x:Int):Int {\n\t\t\treturn x;\n\t\t};\n\t}\n}\n'
+		);
+	}
+
+	public inline function testWriterRoundTripIssue557(): Void {
+		// Idempotency over the exact fixture shape — guards that the
+		// trivia pipeline (corpus harness path) keeps the named-fn
+		// expression byte-stable across reparse.
+		roundTrip('class C { static function main() { var example:{ function test():Void; } = { test: function test():Void {} }; } }');
+	}
+
 	// --- basic forms ---
 
 	public function testNamedFnExprBasic(): Void {
@@ -80,22 +96,6 @@ class HxNamedFnExprSliceTest extends HxTestHelpers {
 	public function testAnonFnExprWithTypeParamsFallback(): Void {
 		final init: HxExpr = varStmtInit(parseBody('class C { function f():Void { var g = function<T>(t:T):T return t; } }')[0]);
 		Assert.isTrue(expectFnExpr(init), 'anonymous function<T>(...) must parse as FnExpr');
-	}
-
-	// --- writer round-trip ---
-
-	public inline function testWriterRoundTripNamedFnExpr(): Void {
-		writerEquals(
-			'class C { static function main() { var g = function compute(x:Int):Int { return x; } } }',
-			'class C {\n\tstatic function main() {\n\t\tvar g = function compute(x:Int):Int {\n\t\t\treturn x;\n\t\t};\n\t}\n}\n'
-		);
-	}
-
-	public inline function testWriterRoundTripIssue557(): Void {
-		// Idempotency over the exact fixture shape — guards that the
-		// trivia pipeline (corpus harness path) keeps the named-fn
-		// expression byte-stable across reparse.
-		roundTrip('class C { static function main() { var example:{ function test():Void; } = { test: function test():Void {} }; } }');
 	}
 
 	private function parseBody(source: String): Array<HxStatement> {

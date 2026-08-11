@@ -218,6 +218,30 @@ final class InlineConstant implements Check {
 	}
 
 	/**
+	 * Whether `meta` is an annotation that pins a member in place for reflection / external tooling
+	 * (`@:keep` or `@:rtti`) — a field it covers is never inlined. Applies to a field-level meta and,
+	 * via `walk`, to a class-level one covering every member.
+	 */
+	private static inline function isPinMeta(meta: Null<String>): Bool {
+		return meta == KEEP_META || meta == RTTI_META;
+	}
+
+	/** Whether `c` can start an identifier — a letter or `_`. */
+	private static inline function isIdentStart(c: Int): Bool {
+		return c == '_'.code || isUpper(c) || (c >= 'a'.code && c <= 'z'.code);
+	}
+
+	/** Whether `c` can continue an identifier — an identifier-start char or a digit. */
+	private static inline function isIdentPart(c: Int): Bool {
+		return isIdentStart(c) || (c >= '0'.code && c <= '9'.code);
+	}
+
+	/** Whether `c` is an ASCII uppercase letter — the first char of a type / module name. */
+	private static inline function isUpper(c: Int): Bool {
+		return c >= 'A'.code && c <= 'Z'.code;
+	}
+
+	/**
 	 * Walk `node`; scan every visibility-bearing container's direct children for inlinable static
 	 * final constants. Class-level `@:keep` / `@:rtti` meta projects as `Meta` siblings PRECEDING the
 	 * container (not as its children), so a running pin flag over each node's direct children — set by
@@ -562,15 +586,6 @@ final class InlineConstant implements Check {
 	}
 
 	/**
-	 * Whether `meta` is an annotation that pins a member in place for reflection / external tooling
-	 * (`@:keep` or `@:rtti`) — a field it covers is never inlined. Applies to a field-level meta and,
-	 * via `walk`, to a class-level one covering every member.
-	 */
-	private static inline function isPinMeta(meta: Null<String>): Bool {
-		return meta == KEEP_META || meta == RTTI_META;
-	}
-
-	/**
 	 * The module (class) names referenced inside macro-context code across `files` — a public constant
 	 * of one is macro-consumed and left non-inline. Cheap and conservative: a file is macro-context
 	 * when its source imports `haxe.macro`, contains a `#if macro` / `#elseif macro` region, or
@@ -614,21 +629,6 @@ final class InlineConstant implements Check {
 			} else
 				i++;
 		}
-	}
-
-	/** Whether `c` can start an identifier — a letter or `_`. */
-	private static inline function isIdentStart(c: Int): Bool {
-		return c == '_'.code || isUpper(c) || (c >= 'a'.code && c <= 'z'.code);
-	}
-
-	/** Whether `c` can continue an identifier — an identifier-start char or a digit. */
-	private static inline function isIdentPart(c: Int): Bool {
-		return isIdentStart(c) || (c >= '0'.code && c <= '9'.code);
-	}
-
-	/** Whether `c` is an ASCII uppercase letter — the first char of a type / module name. */
-	private static inline function isUpper(c: Int): Bool {
-		return c >= 'A'.code && c <= 'Z'.code;
 	}
 
 }

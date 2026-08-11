@@ -48,19 +48,6 @@ class ExplicitLocalTypeIndexAccessTest extends Test {
 		assertNoFix('final b:Bag<Int> = null;\n\t\tfinal v = b["a"];');
 	}
 
-	public function testSkipIndexAccessShadowedContainerNominal(): Void {
-		// The table is keyed on the SIMPLE name, so an indexed PROJECT `Vector<T>` with its own
-		// `@:arrayAccess` would be read as the stdlib one and annotated `Int` where the real return
-		// is `Null<Int>`. Every sibling arm carries this shadow gate; so does this one.
-		assertNoFixIdx(wrap('final v:Vector<Int> = null;\n\t\tfinal e = v[0];'), [
-			{
-				file: 'mypkg/Vector.hx',
-				source: 'package mypkg;\nabstract Vector<T>(Array<T>) {\n'
-				+ '\t@:arrayAccess public inline function get(i:Int):Null<T> return this[i];\n}'
-			}
-		]);
-	}
-
 	public inline function testSkipIndexAccessDynamicElement(): Void {
 		// `Array<Dynamic>[0]` does NOT infer `Dynamic` — the compiler leaves the local an unbound
 		// monomorph that unifies with its first real use, so writing `:Dynamic` would SILENCE errors
@@ -79,15 +66,6 @@ class ExplicitLocalTypeIndexAccessTest extends Test {
 		assertNoFix('final m:Map = null;\n\t\tfinal v = m["a"];');
 	}
 
-	public function testSkipIndexAccessOversizedAnonElement(): Void {
-		// An anonymous-structure element over the `maxInferredTypeLength` cap is declined exactly as
-		// the oracle tail declines one — the rule's output must not depend on which tier named it.
-		assertNoFix(
-			'final rows:Array<{alpha:String, beta:String, gamma:String, delta:String, epsilon:String, zeta:String, eta:String}> = [];\n'
-			+ '\t\tfinal r = rows[0];'
-		);
-	}
-
 	public inline function testFixIndexAccessSmallAnonElement(): Void {
 		// Under the cap, an anon-struct element still annotates — the gate is length, not shape.
 		assertFixContains('final rows:Array<{a:Int}> = [];\n\t\tfinal r = rows[0];', 'r:{a:Int}');
@@ -97,6 +75,28 @@ class ExplicitLocalTypeIndexAccessTest extends Test {
 		// A rest parameter's BODY type is `haxe.Rest<Array<Int>>` while its written source is the
 		// bare `Array<Int>`, so `xs[0]` is an `Array<Int>` — copying the source would say `Int`.
 		assertNoFixSrc('class C {\n\tfunction f(...xs:Array<Int>):Void {\n\t\tfinal v = xs[0];\n\t}\n}');
+	}
+
+	public function testSkipIndexAccessShadowedContainerNominal(): Void {
+		// The table is keyed on the SIMPLE name, so an indexed PROJECT `Vector<T>` with its own
+		// `@:arrayAccess` would be read as the stdlib one and annotated `Int` where the real return
+		// is `Null<Int>`. Every sibling arm carries this shadow gate; so does this one.
+		assertNoFixIdx(wrap('final v:Vector<Int> = null;\n\t\tfinal e = v[0];'), [
+			{
+				file: 'mypkg/Vector.hx',
+				source: 'package mypkg;\nabstract Vector<T>(Array<T>) {\n'
+				+ '\t@:arrayAccess public inline function get(i:Int):Null<T> return this[i];\n}'
+			}
+		]);
+	}
+
+	public function testSkipIndexAccessOversizedAnonElement(): Void {
+		// An anonymous-structure element over the `maxInferredTypeLength` cap is declined exactly as
+		// the oracle tail declines one — the rule's output must not depend on which tier named it.
+		assertNoFix(
+			'final rows:Array<{alpha:String, beta:String, gamma:String, delta:String, epsilon:String, zeta:String, eta:String}> = [];\n'
+			+ '\t\tfinal r = rows[0];'
+		);
 	}
 
 	private function wrap(body: String): String {

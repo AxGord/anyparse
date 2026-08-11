@@ -95,6 +95,16 @@ final class MagicNumber implements Check implements ConfigAware {
 	}
 
 	/**
+	 * A literal in the index slot of a subscript access (`args[3]`) — the number
+	 * is a position, not a hidden quantity, and extracting it would not aid the
+	 * reader. A computed index (`args[i + 3]`) keeps the literal under the
+	 * operator node, so it stays flagged.
+	 */
+	private static inline function isArrayIndex(parent: Null<QueryNode>, cfg: MagicNumberCfg): Bool {
+		return parent != null && cfg.indexAccessKind != '' && parent.kind == cfg.indexAccessKind;
+	}
+
+	/**
 	 * Walk `node`, tracking whether we are inside a function unit (`inFunction`,
 	 * sticky once set), the `parent` node (for sibling/context checks), and whether
 	 * we sit in a string-POSITION context (`positionCtx` — inside a position-method
@@ -149,16 +159,6 @@ final class MagicNumber implements Check implements ConfigAware {
 		}
 		final f: Float = Std.parseFloat(clean);
 		return Math.isNaN(f) ? null : f;
-	}
-
-	/**
-	 * A literal in the index slot of a subscript access (`args[3]`) — the number
-	 * is a position, not a hidden quantity, and extracting it would not aid the
-	 * reader. A computed index (`args[i + 3]`) keeps the literal under the
-	 * operator node, so it stays flagged.
-	 */
-	private static inline function isArrayIndex(parent: Null<QueryNode>, cfg: MagicNumberCfg): Bool {
-		return parent != null && cfg.indexAccessKind != '' && parent.kind == cfg.indexAccessKind;
 	}
 
 	/** A `Call` to one of `positionMethodNames` — its callee node's name is the invoked string-position method. */

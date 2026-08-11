@@ -80,6 +80,32 @@ final class ElseIfCommentReflow {
 		};
 	}
 
+	private static inline function rewrap(scanned: ElseIfHeadScan, wrap: Doc -> Doc): ElseIfHeadScan {
+		return switch scanned {
+			case Anchored(doc): Anchored(wrap(doc));
+			case Scanning(afterCond): Scanning(afterCond);
+			case Refused: Refused;
+		};
+	}
+
+	private static inline function isHardline(flat: String): Bool {
+		return flat.length > 0 && flat.fastCodeAt(0) == '\n'.code;
+	}
+
+	/**
+	 * Whether `s` may sit on the head line ahead of the relocated comment.
+	 *
+	 * A head line opens its body's block, so `{` is allowed; it never CLOSES one, so
+	 * a `}` means the body has already rendered and finished and the walk is past the
+	 * head. Same for a `;`: the walk has left the head for a rendered statement, and
+	 * anything further right belongs to the body or to the nested `if`'s own `else`.
+	 * A `//` already on the line would swallow the relocated comment, and a newline
+	 * means the head line being measured is not the one the comment would join.
+	 */
+	private static inline function isHeadText(s: String): Bool {
+		return s.indexOf('//') < 0 && s.indexOf('}') < 0 && s.indexOf(';') < 0 && s.indexOf('\n') < 0;
+	}
+
 	/**
 	 * One scan step. `afterCond` is the phase: `false` while the walk is still
 	 * inside the `if` keyword + condition run, `true` once the condition unit
@@ -131,32 +157,6 @@ final class ElseIfCommentReflow {
 				return Refused;
 		}
 		return Scanning(seenCond);
-	}
-
-	private static inline function rewrap(scanned: ElseIfHeadScan, wrap: Doc -> Doc): ElseIfHeadScan {
-		return switch scanned {
-			case Anchored(doc): Anchored(wrap(doc));
-			case Scanning(afterCond): Scanning(afterCond);
-			case Refused: Refused;
-		};
-	}
-
-	private static inline function isHardline(flat: String): Bool {
-		return flat.length > 0 && flat.fastCodeAt(0) == '\n'.code;
-	}
-
-	/**
-	 * Whether `s` may sit on the head line ahead of the relocated comment.
-	 *
-	 * A head line opens its body's block, so `{` is allowed; it never CLOSES one, so
-	 * a `}` means the body has already rendered and finished and the walk is past the
-	 * head. Same for a `;`: the walk has left the head for a rendered statement, and
-	 * anything further right belongs to the body or to the nested `if`'s own `else`.
-	 * A `//` already on the line would swallow the relocated comment, and a newline
-	 * means the head line being measured is not the one the comment would join.
-	 */
-	private static inline function isHeadText(s: String): Bool {
-		return s.indexOf('//') < 0 && s.indexOf('}') < 0 && s.indexOf(';') < 0 && s.indexOf('\n') < 0;
 	}
 
 }

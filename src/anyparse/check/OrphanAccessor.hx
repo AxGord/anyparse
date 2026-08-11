@@ -239,6 +239,17 @@ final class OrphanAccessor implements Check implements DefaultOff {
 		}
 	}
 
+	/** One finding of this rule. */
+	private static inline function violation(file: String, span: Span, severity: Severity, message: String): Violation {
+		return {
+			file: file,
+			span: span,
+			rule: 'orphan-accessor',
+			severity: severity,
+			message: message
+		};
+	}
+
 	/**
 	 * Whether the flagged accessor `name` may be DELETED: the report scan must be complete (no
 	 * skip-parse file could hide a use), the owning class must not be `@:keep` (its members are
@@ -375,7 +386,6 @@ final class OrphanAccessor implements Check implements DefaultOff {
 		for (child in node.children) collectStringContents(child, source, fold, out);
 	}
 
-
 	/** Collect into `out` the accessor-shaped names `node` and its descendants carry on a `kinds` node. */
 	private static function collectReferences(node: QueryNode, kinds: Array<String>, out: Array<String>): Void {
 		final name: Null<String> = node.name;
@@ -388,23 +398,10 @@ final class OrphanAccessor implements Check implements DefaultOff {
 		for (child in node.children) collectReferences(child, kinds, out);
 	}
 
-	/** One finding of this rule. */
-	private static inline function violation(file: String, span: Span, severity: Severity, message: String): Violation {
-		return {
-			file: file,
-			span: span,
-			rule: 'orphan-accessor',
-			severity: severity,
-			message: message
-		};
-	}
-
-
 	/** `RefactorSupport.isMemberDeclKind` as a node predicate — the member set every region guard counts. */
 	private static function isDeclKind(node: QueryNode): Bool {
 		return RefactorSupport.isMemberDeclKind(node.kind);
 	}
-
 
 	/**
 	 * Whether the modifier run `run` carries `wanted` — an annotation NAME when `isMeta`, otherwise a

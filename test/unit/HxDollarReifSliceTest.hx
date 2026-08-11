@@ -28,6 +28,46 @@ import anyparse.runtime.ParseError;
  */
 class HxDollarReifSliceTest extends HxTestHelpers {
 
+	public inline function testDollarReifRoundTrip(): Void {
+		roundTrip(
+			"class C { static function f() { var a = macro $i{name}; var b = macro ${x + 1}; var c = macro $foo; } }", 'L-dollar-reif'
+		);
+	}
+
+	public inline function testDollarFieldAccessRoundTrip(): Void {
+		// `obj.$name` / `$struct.$name` — the `$`-prefixed field rides
+		// verbatim in the HxFieldNameLit slice, so the writer's
+		// `'.' + field` emission round-trips byte-for-byte with no
+		// format-side change (Slice 4).
+		roundTrip(
+			"class C { static function f() { if ($struct.$name == null) $struct.$name = obj.observables.$name; } }", 'L-dollar-field'
+		);
+	}
+
+	public inline function testDollarTypeRoundTrip(): Void {
+		// Writer ripple net: `$ct` in type position flows the generic
+		// single-Ref `@:lead("$")` writer path (DollarIdentExpr twin).
+		roundTrip("class C {\n\tvar x:$ct = 1;\n}\n", 'dollar-type');
+	}
+
+	public inline function testMacroVarFinalExprRoundTrip(): Void {
+		// Writer ripple net: VarExpr/FinalExpr emit via the generic
+		// HxVarDecl path (HxStatement.VarStmt minus the trailOpt/fmt).
+		roundTrip('class C { static function f() { var a = macro var y = 1; var b = macro final _z:Int = p; } }', 'macro-var-final');
+	}
+
+	public inline function testMacroThrowRoundTrip(): Void {
+		// Writer ripple net: ThrowExpr emits via the generic single-Ref
+		// value:HxExpr path (ReturnExpr/CastExpr/MacroExpr precedent).
+		roundTrip('class C { static function f() { var a = macro throw e; var b = macro throw new E("x"); } }', 'macro-throw');
+	}
+
+	public inline function testDollarVarNameRoundTrip(): Void {
+		// Writer net: the `@:rawString` name terminal emits the matched
+		// slice (with the `$`) verbatim via the generic terminal path.
+		roundTrip("class C { static function f() { var $x = 1; } }", 'dollar-var-name');
+	}
+
 	public function testDollarIdent(): Void {
 		switch initOf("class C { var x = $foo; }") {
 			case DollarIdentExpr(name):
@@ -112,22 +152,6 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public inline function testDollarReifRoundTrip(): Void {
-		roundTrip(
-			"class C { static function f() { var a = macro $i{name}; var b = macro ${x + 1}; var c = macro $foo; } }", 'L-dollar-reif'
-		);
-	}
-
-	public inline function testDollarFieldAccessRoundTrip(): Void {
-		// `obj.$name` / `$struct.$name` — the `$`-prefixed field rides
-		// verbatim in the HxFieldNameLit slice, so the writer's
-		// `'.' + field` emission round-trips byte-for-byte with no
-		// format-side change (Slice 4).
-		roundTrip(
-			"class C { static function f() { if ($struct.$name == null) $struct.$name = obj.observables.$name; } }", 'L-dollar-field'
-		);
-	}
-
 	// -------- $-reification in TYPE position (Slice apq-P5-T) --------
 
 	public function testDollarTypeHint(): Void {
@@ -161,12 +185,6 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 			case t:
 				Assert.fail('expected Named(Int), got $t');
 		}
-	}
-
-	public inline function testDollarTypeRoundTrip(): Void {
-		// Writer ripple net: `$ct` in type position flows the generic
-		// single-Ref `@:lead("$")` writer path (DollarIdentExpr twin).
-		roundTrip("class C {\n\tvar x:$ct = 1;\n}\n", 'dollar-type');
 	}
 
 	// -------- expression-position var/final (Slice apq-P5-U) --------
@@ -214,12 +232,6 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public inline function testMacroVarFinalExprRoundTrip(): Void {
-		// Writer ripple net: VarExpr/FinalExpr emit via the generic
-		// HxVarDecl path (HxStatement.VarStmt minus the trailOpt/fmt).
-		roundTrip('class C { static function f() { var a = macro var y = 1; var b = macro final _z:Int = p; } }', 'macro-var-final');
-	}
-
 	// -------- expression-position throw (Slice apq-P5-W) --------
 
 	public function testMacroThrowExpr(): Void {
@@ -257,12 +269,6 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public inline function testMacroThrowRoundTrip(): Void {
-		// Writer ripple net: ThrowExpr emits via the generic single-Ref
-		// value:HxExpr path (ReturnExpr/CastExpr/MacroExpr precedent).
-		roundTrip('class C { static function f() { var a = macro throw e; var b = macro throw new E("x"); } }', 'macro-throw');
-	}
-
 	// -------- $-reification in var/final NAME position (Slice apq-P5-X1) --------
 
 	public function testDollarVarName(): Void {
@@ -296,12 +302,6 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 		// name terminal (the HxIdentLit -> HxVarNameLit swap is transparent).
 		final decl: HxVarDecl = parseSingleVarDecl('class C { var x = 1; }');
 		Assert.equals('x', (decl.name: String));
-	}
-
-	public inline function testDollarVarNameRoundTrip(): Void {
-		// Writer net: the `@:rawString` name terminal emits the matched
-		// slice (with the `$`) verbatim via the generic terminal path.
-		roundTrip("class C { static function f() { var $x = 1; } }", 'dollar-var-name');
 	}
 
 	public function testDollarBraceVarNameDeferredLimitation(): Void {

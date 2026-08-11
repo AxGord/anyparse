@@ -39,12 +39,6 @@ import anyparse.query.SpanTypeInfoProvider;
 final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoProvider implements SpanTypeInfoProvider
 		implements SymbolIndexHost {
 
-	private final _inner: GrammarPlugin;
-
-	// The PROCESS-scoped tier behind the run-scoped caches below: this wrapper's language slice
-	// of it, resolved once in the constructor. Only RESOLUTION-LIBRARY sources ever enter it —
-	// `SharedParseTier` documents why that bound is what makes a process-scoped tier safe here.
-	private final _shared: SharedParseTier;
 	private final _parseCache: Map<String, QueryNode> = [];
 	private final _typeRefCache: Map<String, QueryNode> = [];
 	private final _branchAwareCache: Map<String, QueryNode> = [];
@@ -63,6 +57,12 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	// out so `Refs.find` resolves against ONE memoized index per tree instead of
 	// re-walking per query.
 	private final _refsCache: RefsCache = new RefsCache();
+	private final _inner: GrammarPlugin;
+
+	// The PROCESS-scoped tier behind the run-scoped caches below: this wrapper's language slice
+	// of it, resolved once in the constructor. Only RESOLUTION-LIBRARY sources ever enter it —
+	// `SharedParseTier` documents why that bound is what makes a process-scoped tier safe here.
+	private final _shared: SharedParseTier;
 
 	// Resolution scope (SymbolIndexHost): a thunk yielding the report files and the
 	// configured library sources APART, and the memoised index built from their union. Both

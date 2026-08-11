@@ -76,6 +76,9 @@ final class HaxeNamingSupport implements NamingSupport {
 		'while'
 	];
 
+	/** The node kind of a binding declared after the comma in `var a = 1, b = 2;` — see `VarHost`. */
+	private static inline final VAR_MORE_KIND: String = 'VarMore';
+
 	private static final CAMEL_CASE_PATTERN: String = "^[a-z_][a-zA-Z0-9]*$";
 
 	/** Camel-case with NO leading underscore - a local must not carry the private-field `_` prefix. */
@@ -86,10 +89,6 @@ final class HaxeNamingSupport implements NamingSupport {
 
 	/** A magic dunder name (`__init__`) - a language / framework contract, not a style choice. */
 	private static final DUNDER_NAME_PATTERN: EReg = new EReg("^__.+__$", '');
-
-	/** The node kind of a binding declared after the comma in `var a = 1, b = 2;` — see `VarHost`. */
-	private static inline final VAR_MORE_KIND: String = 'VarMore';
-
 
 	/**
 	 * Modifier node kinds the Haxe projection surfaces as separate siblings
@@ -232,6 +231,29 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 	/**
+	 * Whether a projected declaration is a structural / serialization field - a
+	 * typedef or inline anon-structure member (a `Required` / `Optional` node
+	 * whose parent is `Anon`). Its name is a wire contract (a server JSON key, a
+	 * structural-typed payload), so the autofix must not rename it: cross-file
+	 * consumers are invisible to a single-file rename. Covers named typedefs,
+	 * inline anon types in signatures / type params, and structure-extension
+	 * bodies alike - all descend through an `Anon` node.
+	 */
+	private static inline function isStructuralField(parent: Null<QueryNode>): Bool {
+		return parent != null && parent.kind == 'Anon';
+	}
+
+	/** Whether `kind` is a metadata sibling — a bare `@:tag` (`Meta`) or an argumented `@:tag(...)` (`MetaCall`, e.g. `@:op(A < B)`). */
+	private static inline function isMetaKind(kind: String): Bool {
+		return kind == 'Meta' || kind == 'MetaCall';
+	}
+
+	/** Whether `category` is a type MEMBER (field / constant / method) - the categories a `@:rtti` class's reflection reads by name. */
+	private static inline function isMemberCategory(category: NamingCategory): Bool {
+		return category == NamingCategory.Field || category == NamingCategory.Constant || category == NamingCategory.Method;
+	}
+
+	/**
 	 * Walk `node`, appending a `NamedDecl` for every declaration whose kind
 	 * maps to a category. `mods` come from the modifier siblings preceding the
 	 * node in its parent (the projection surfaces `public static fn` as
@@ -317,7 +339,6 @@ final class HaxeNamingSupport implements NamingSupport {
 		}
 	}
 
-
 	/**
 	 * The mechanical fix for a private field missing its `_` prefix: prepend `_`, apply the shared
 	 * camel word policy of `smartSegment`, and lowercase the first letter (`shape` -> `_shape`,
@@ -356,7 +377,6 @@ final class HaxeNamingSupport implements NamingSupport {
 		return new EReg("^[a-zA-Z][a-zA-Z0-9_]*$", '').match(stripped) && !KEYWORDS.contains(stripped) ? stripped : null;
 	}
 
-
 	/**
 	 * Is a member of `category` named `name` reachable without an in-source
 	 * identifier reference? A constructor (`new`), a magic dunder name the runtime
@@ -371,19 +391,6 @@ final class HaxeNamingSupport implements NamingSupport {
 		return (category == NamingCategory.Field || category == NamingCategory.Method || category == NamingCategory.Constant)
 			&& (name == 'new' || DUNDER_NAME_PATTERN.match(name) || name.startsWith('get_') || name.startsWith('set_')
 				|| metaPrecedes(node, parent) || node.kind == 'FinalMember' && mods.contains('static') && isTypeReferenceInit(node));
-	}
-
-	/**
-	 * Whether a projected declaration is a structural / serialization field - a
-	 * typedef or inline anon-structure member (a `Required` / `Optional` node
-	 * whose parent is `Anon`). Its name is a wire contract (a server JSON key, a
-	 * structural-typed payload), so the autofix must not rename it: cross-file
-	 * consumers are invisible to a single-file rename. Covers named typedefs,
-	 * inline anon types in signatures / type params, and structure-extension
-	 * bodies alike - all descend through an `Anon` node.
-	 */
-	private static inline function isStructuralField(parent: Null<QueryNode>): Bool {
-		return parent != null && parent.kind == 'Anon';
 	}
 
 	/**
@@ -455,12 +462,6 @@ final class HaxeNamingSupport implements NamingSupport {
 		return false;
 	}
 
-	/** Whether `kind` is a metadata sibling — a bare `@:tag` (`Meta`) or an argumented `@:tag(...)` (`MetaCall`, e.g. `@:op(A < B)`). */
-	private static inline function isMetaKind(kind: String): Bool {
-		return kind == 'Meta' || kind == 'MetaCall';
-	}
-
-
 	/**
 	 * One `snake_case` segment normalized. An ALL-UPPERCASE segment (a screaming
 	 * constant word like `FILE`) is lowercased whole so the camel join reads
@@ -498,7 +499,6 @@ final class HaxeNamingSupport implements NamingSupport {
 		return next >= 'a'.code && next <= 'z'.code ? i : 0;
 	}
 
-
 	/**
 	 * The mechanical fix for a local / param / catch name violating camelCase: strip
 	 * every leading underscore, convert internal `snake_case` segments to camelCase,
@@ -527,13 +527,6 @@ final class HaxeNamingSupport implements NamingSupport {
 		return KEYWORDS.contains(lowered) ? null : lowered;
 	}
 
-
-	/** Whether `category` is a type MEMBER (field / constant / method) - the categories a `@:rtti` class's reflection reads by name. */
-	private static inline function isMemberCategory(category: NamingCategory): Bool {
-		return category == NamingCategory.Field || category == NamingCategory.Constant || category == NamingCategory.Method;
-	}
-
-
 	/**
 	 * Whether a `@:rtti` metadata sibling precedes `node` in its modifier / meta run
 	 * - the type carries `@:rtti` directly. The same preceding-sibling scan as
@@ -552,7 +545,6 @@ final class HaxeNamingSupport implements NamingSupport {
 		}
 		return false;
 	}
-
 
 	/**
 	 * Is `name` a Haxe idiom no naming policy governs? A discard binding

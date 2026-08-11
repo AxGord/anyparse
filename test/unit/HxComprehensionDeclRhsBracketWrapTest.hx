@@ -218,15 +218,15 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 		assertWrite(src, src, CFG_CALL);
 	}
 
+	private inline function triviaWrite(src: String, cfg: String): String {
+		return HxWriteFixture.triviaWrite(src, cfg);
+	}
+
 	/** Writes `src` under `cfg`, asserts it equals `expected`, and asserts the result is a fixed point. */
 	private function assertWrite(expected: String, src: String, cfg: String): Void {
 		final out: String = triviaWrite(src, cfg);
 		Assert.equals(expected, out);
 		Assert.equals(out, triviaWrite(out, cfg));
-	}
-
-	private inline function triviaWrite(src: String, cfg: String): String {
-		return HxWriteFixture.triviaWrite(src, cfg);
 	}
 
 }

@@ -51,6 +51,15 @@ private typedef MemberSeams = {
 @:nullSafety(Strict)
 final class SymbolIndexBuilder {
 
+	/** The anonymous-structure node a `typedef T = {…}` projects as its body. */
+	private static inline final ANON_KIND: String = 'Anon';
+
+	/** The grammar kind a `typedef` declaration projects as. */
+	private static inline final TYPEDEF_DECL_KIND: String = 'TypedefDecl';
+
+	/** A `> Base,` structural extension written inside an anonymous structure. */
+	private static inline final EXTENDS_FIELD_KIND: String = 'ExtendsField';
+
 	/**
 	 * The bodyless declaration heads a `CondSharedBodyDecl` region can carry,
 	 * mapped to the decl kind the same declaration projects as when written
@@ -61,15 +70,6 @@ final class SymbolIndexBuilder {
 		'ClassHead' => 'ClassDecl',
 		'AbstractHead' => 'AbstractDecl'
 	];
-
-	/** The anonymous-structure node a `typedef T = {…}` projects as its body. */
-	private static inline final ANON_KIND: String = 'Anon';
-
-	/** The grammar kind a `typedef` declaration projects as. */
-	private static inline final TYPEDEF_DECL_KIND: String = 'TypedefDecl';
-
-	/** A `> Base,` structural extension written inside an anonymous structure. */
-	private static inline final EXTENDS_FIELD_KIND: String = 'ExtendsField';
 
 	/**
 	 * The shorthand anon-structure field forms `name:T` / `?name:T`. Counted as members ONLY
@@ -110,6 +110,22 @@ final class SymbolIndexBuilder {
 			));
 		}
 		return { files: infos, skipped: skipped, sources: sources };
+	}
+
+	/** Whether `kind` is a metadata node — a bare `@:x` (`Meta`) or an argument-bearing `@:x(...)` (`MetaCall`). */
+	private static inline function isMetaNodeKind(kind: String): Bool {
+		return kind == 'Meta' || kind == 'MetaCall';
+	}
+
+	/**
+	 * The type declaration `node` carries, across all three grammar shapes: a
+	 * plain decl, a `final`-wrapped one (both via `RefactorSupport.typeDeclOf`)
+	 * and a split-header conditional region. One resolver so the lifting done
+	 * by `declNodes` and the indexing done by `extractFileInfo` can never
+	 * disagree about what counts as a declaration.
+	 */
+	private static inline function typeDeclAt(node: QueryNode): Null<TypeDeclMatch> {
+		return RefactorSupport.typeDeclOf(node) ?? condSharedBodyDeclOf(node);
 	}
 
 	/**
@@ -425,11 +441,6 @@ final class SymbolIndexBuilder {
 		};
 	}
 
-	/** Whether `kind` is a metadata node — a bare `@:x` (`Meta`) or an argument-bearing `@:x(...)` (`MetaCall`). */
-	private static inline function isMetaNodeKind(kind: String): Bool {
-		return kind == 'Meta' || kind == 'MetaCall';
-	}
-
 	/**
 	 * Whether the abstract rooted at `node` may rebind its underlying `this`: it carries a
 	 * `@:build` / `@:autoBuild` (any macro-generated member is invisible to the scan, so treat it as
@@ -664,17 +675,6 @@ final class SymbolIndexBuilder {
 	}
 
 	/**
-	 * The type declaration `node` carries, across all three grammar shapes: a
-	 * plain decl, a `final`-wrapped one (both via `RefactorSupport.typeDeclOf`)
-	 * and a split-header conditional region. One resolver so the lifting done
-	 * by `declNodes` and the indexing done by `extractFileInfo` can never
-	 * disagree about what counts as a declaration.
-	 */
-	private static inline function typeDeclAt(node: QueryNode): Null<TypeDeclMatch> {
-		return RefactorSupport.typeDeclOf(node) ?? condSharedBodyDeclOf(node);
-	}
-
-	/**
 	 * The FIRST branch's type declaration of a split-header conditional region
 	 * (`CondSharedBodyDecl`), or null for any other node and for a region
 	 * carrying no recognised head. The head child holds the name, the type
@@ -730,7 +730,6 @@ final class SymbolIndexBuilder {
 				case _: null;
 			};
 	}
-
 
 	/**
 	 * The RAW written names of a decl's `implements` targets only (its `ImplementsClause`

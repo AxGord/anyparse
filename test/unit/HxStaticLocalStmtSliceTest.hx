@@ -23,6 +23,34 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxStaticLocalStmtSliceTest extends HxTestHelpers {
 
+	// -- writerEquals on simple static-local shapes (single binding) --
+	// Note: the multi-var/leading-meta corpus shape (`static final @Test
+	// a = 1, b = 2;` etc.) round-trips, but the HxVarMore `,` writer is
+	// tight (`,b`, not `, b`) so a byte-equal assert against the
+	// human-canonical form is out of scope for this slice. The
+	// `roundTrip` helper covers the multi-var path via AST-level parity.
+
+	public inline function testStaticVarWriterEquals(): Void {
+		writerEquals(
+			'class M {\n\tstatic function m() {\n\t\tstatic var x = 1;\n\t}\n}',
+			'class M {\n\tstatic function m() {\n\t\tstatic var x = 1;\n\t}\n}\n'
+		);
+	}
+
+	public inline function testStaticFinalWriterEquals(): Void {
+		writerEquals(
+			'class M {\n\tstatic function m() {\n\t\tstatic final y = 2;\n\t}\n}',
+			'class M {\n\tstatic function m() {\n\t\tstatic final y = 2;\n\t}\n}\n'
+		);
+	}
+
+	public inline function testStaticLocalsRoundTrip(): Void {
+		roundTrip(
+			'class Main {\n\tstatic function main() {\n\t\tstatic final @Test a = 1, b = 2;\n\t\tstatic var c, d;\n\t\tfinal e = 2;\n'
+			+ '\t\tvar f;\n\t}\n}'
+		);
+	}
+
 	// -- Static var with init --
 
 	public function testStaticVarStmt(): Void {
@@ -65,34 +93,6 @@ class HxStaticLocalStmtSliceTest extends HxTestHelpers {
 		Assert.equals(1, decl.more.length);
 		final tail: HxVarDecl = decl.more[0].decl;
 		Assert.equals('b', (tail.name: String));
-	}
-
-	// -- writerEquals on simple static-local shapes (single binding) --
-	// Note: the multi-var/leading-meta corpus shape (`static final @Test
-	// a = 1, b = 2;` etc.) round-trips, but the HxVarMore `,` writer is
-	// tight (`,b`, not `, b`) so a byte-equal assert against the
-	// human-canonical form is out of scope for this slice. The
-	// `roundTrip` helper covers the multi-var path via AST-level parity.
-
-	public inline function testStaticVarWriterEquals(): Void {
-		writerEquals(
-			'class M {\n\tstatic function m() {\n\t\tstatic var x = 1;\n\t}\n}',
-			'class M {\n\tstatic function m() {\n\t\tstatic var x = 1;\n\t}\n}\n'
-		);
-	}
-
-	public inline function testStaticFinalWriterEquals(): Void {
-		writerEquals(
-			'class M {\n\tstatic function m() {\n\t\tstatic final y = 2;\n\t}\n}',
-			'class M {\n\tstatic function m() {\n\t\tstatic final y = 2;\n\t}\n}\n'
-		);
-	}
-
-	public inline function testStaticLocalsRoundTrip(): Void {
-		roundTrip(
-			'class Main {\n\tstatic function main() {\n\t\tstatic final @Test a = 1, b = 2;\n\t\tstatic var c, d;\n\t\tfinal e = 2;\n'
-			+ '\t\tvar f;\n\t}\n}'
-		);
 	}
 
 	// -- No-static regression: bare `var`/`final` still route to VarStmt/FinalStmt --

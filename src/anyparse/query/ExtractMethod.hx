@@ -189,6 +189,22 @@ final class ExtractMethod {
 		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
 
+	/** `from` offset of a hit's binding span, or -1 when unbound. */
+	private static inline function bindFrom(hit: RefHit): Int {
+		final b: Null<Span> = hit.bindingSpan;
+		return b == null ? -1 : b.from;
+	}
+
+	/** Is `kind` a statement node (its kind ends with `Stmt`)? */
+	private static inline function isStatement(kind: String): Bool {
+		return kind.endsWith('Stmt');
+	}
+
+	/** `var` when the returned local is reassigned after the range, else `final`. */
+	private static inline function bindKeyword(returnVar: ReturnVar): String {
+		return returnVar.writtenAfter ? 'var' : 'final';
+	}
+
 	/**
 	 * The contiguous run of direct-child statements of a single block that
 	 * START at `startOffset` and END within `endOffset`. A statement's
@@ -301,12 +317,6 @@ final class ExtractMethod {
 		return hits.exists(h -> h.kind == RefKind.Write && bindFrom(h) == declFrom && h.span.from >= toOffset);
 	}
 
-	/** `from` offset of a hit's binding span, or -1 when unbound. */
-	private static inline function bindFrom(hit: RefHit): Int {
-		final b: Null<Span> = hit.bindingSpan;
-		return b == null ? -1 : b.from;
-	}
-
 	/**
 	 * The first local NAME that is (a) declared OUTSIDE the range, (b)
 	 * a non-field local / parameter, (c) WRITTEN inside the range, and (d)
@@ -371,11 +381,6 @@ final class ExtractMethod {
 		return found;
 	}
 
-	/** Is `kind` a statement node (its kind ends with `Stmt`)? */
-	private static inline function isStatement(kind: String): Bool {
-		return kind.endsWith('Stmt');
-	}
-
 	/**
 	 * The closure's return expression for `returnVars`: empty when nothing is
 	 * returned, the bare name for a single value, or an anonymous struct
@@ -407,11 +412,6 @@ final class ExtractMethod {
 				final binds: Array<String> = returnVars.map(r -> '${bindKeyword(r)} ${r.name} = $tmp.${r.name};');
 				'final $tmp = $name();\n' + binds.join('\n');
 		};
-	}
-
-	/** `var` when the returned local is reassigned after the range, else `final`. */
-	private static inline function bindKeyword(returnVar: ReturnVar): String {
-		return returnVar.writtenAfter ? 'var' : 'final';
 	}
 
 	/**

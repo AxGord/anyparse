@@ -111,6 +111,16 @@ final class Inline {
 		};
 	}
 
+	/** `from` offset of a Read/Write hit's binding span (callers pre-null-check). */
+	private static inline function bindingSpanFrom(hit: RefHit): Int {
+		final b: Null<Span> = hit.bindingSpan;
+		return b == null ? -1 : b.from;
+	}
+
+	private static inline function isSpace(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code || c == '\r'.code;
+	}
+
 	/**
 	 * Free-identifier safety: for every `IdentExpr` in the initializer
 	 * (other than `this`), confirm that
@@ -191,16 +201,6 @@ final class Inline {
 		if (lineEnd < source.length && source.charAt(lineEnd) == '\n') lineEnd++;
 
 		return new Span(lineStart, lineEnd);
-	}
-
-	/** `from` offset of a Read/Write hit's binding span (callers pre-null-check). */
-	private static inline function bindingSpanFrom(hit: RefHit): Int {
-		final b: Null<Span> = hit.bindingSpan;
-		return b == null ? -1 : b.from;
-	}
-
-	private static inline function isSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\r'.code;
 	}
 
 	/**

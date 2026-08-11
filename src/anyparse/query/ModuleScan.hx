@@ -22,6 +22,9 @@ using Lambda;
 @:nullSafety(Strict)
 final class ModuleScan {
 
+	/** The wildcard import kind — the one bulk form whose binding set depends on the package it names. */
+	private static inline final WILDCARD_IMPORT_KIND: String = 'ImportWildDecl';
+
 	/** The import / using declaration kinds a grammar projects at the top level — the anchor set for an insert and for the bound-name scan. */
 	private static final IMPORT_DECL_KINDS: Array<String> = [
 		'ImportDecl',
@@ -30,9 +33,6 @@ final class ModuleScan {
 		'ImportAliasDecl',
 		'ImportAliasInDecl'
 	];
-
-	/** The wildcard import kind — the one bulk form whose binding set depends on the package it names. */
-	private static inline final WILDCARD_IMPORT_KIND: String = 'ImportWildDecl';
 
 	/** The BULK import kinds — the two statements that bind names they do not spell out (`shadowedByBulkImport`). */
 	private static final BULK_IMPORT_KINDS: Array<String> = [WILDCARD_IMPORT_KIND, 'UsingDecl'];

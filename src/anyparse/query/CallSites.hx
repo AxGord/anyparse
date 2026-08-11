@@ -149,6 +149,12 @@ final class CallSites {
 		return '${pos.line}:${pos.col}';
 	}
 
+	/** `from` offset of a Read / Write hit's binding span (caller null-checks). */
+	private static inline function bindingFrom(hit: RefHit): Int {
+		final b: Null<Span> = hit.bindingSpan;
+		return b == null ? -1 : b.from;
+	}
+
 	/**
 	 * Collect a method's in-file call sites and prove the set complete.
 	 *
@@ -335,12 +341,6 @@ final class CallSites {
 		}
 		walk(tree);
 		return count;
-	}
-
-	/** `from` offset of a Read / Write hit's binding span (caller null-checks). */
-	private static inline function bindingFrom(hit: RefHit): Int {
-		final b: Null<Span> = hit.bindingSpan;
-		return b == null ? -1 : b.from;
 	}
 
 	/**

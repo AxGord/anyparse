@@ -28,6 +28,21 @@ import anyparse.grammar.haxe.HxModuleWriter;
  */
 class HxImportAliasSliceTest extends HxTestHelpers {
 
+	public inline function testRoundTripImportAliasSimple(): Void {
+		roundTrip('import Std.is as isOfType;');
+	}
+
+	public inline function testRoundTripImportAliasMixedWithPlain(): Void {
+		roundTrip('import Std.is as isOfType;\nimport haxe.io.Bytes;\n');
+	}
+
+	public inline function testRoundTripImportAliasInCondComp(): Void {
+		// Matches issue_634 — the alias form inside a `#if … #else … #end`
+		// guard. The cond-comp body re-enters `HxDecl` so the new
+		// ImportAliasDecl ctor is reachable here too.
+		roundTrip('import Std.is as isOfType;\n#if (haxe_ver >= 4.2)\nimport Std.isOfType;\n#else\nimport Std.is as isOfType;\n#end\n');
+	}
+
 	public function testImportAliasSimple(): Void {
 		final ast: HxModule = HaxeModuleParser.parse('import Std.is as isOfType;');
 		Assert.equals(1, ast.decls.length);
@@ -78,21 +93,6 @@ class HxImportAliasSliceTest extends HxTestHelpers {
 	public function testWriterEmitsImportAlias(): Void {
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('import Std.is as isOfType;'));
 		Assert.equals('import Std.is as isOfType;\n', out);
-	}
-
-	public inline function testRoundTripImportAliasSimple(): Void {
-		roundTrip('import Std.is as isOfType;');
-	}
-
-	public inline function testRoundTripImportAliasMixedWithPlain(): Void {
-		roundTrip('import Std.is as isOfType;\nimport haxe.io.Bytes;\n');
-	}
-
-	public inline function testRoundTripImportAliasInCondComp(): Void {
-		// Matches issue_634 — the alias form inside a `#if … #else … #end`
-		// guard. The cond-comp body re-enters `HxDecl` so the new
-		// ImportAliasDecl ctor is reachable here too.
-		roundTrip('import Std.is as isOfType;\n#if (haxe_ver >= 4.2)\nimport Std.isOfType;\n#else\nimport Std.is as isOfType;\n#end\n');
 	}
 
 }

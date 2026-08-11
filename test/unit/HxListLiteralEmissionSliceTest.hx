@@ -137,6 +137,12 @@ class HxListLiteralEmissionSliceTest extends Test {
 	private static final MATRIX: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\tSTRAIGHT_LINE, STRAIGHT_LINE_DASHED,\n'
 		+ '\t\t\tARC_LINE, ARC_LINE_DASHED,\n\t\t\tWAVE_LINE, WAVE_LINE_DASHED\n\t\t];\n\t}\n}\n';
 
+	// --- config plumbing ---
+
+	public inline function testTrailingCommaDefaultsToKeep(): Void {
+		Assert.equals(TrailingCommaPolicy.Keep, HaxeFormat.instance.defaultWriteOptions.trailingComma);
+	}
+
 	public function testRemoveDropsMultilineCallArgTrailingComma(): Void {
 		// A plain call has no source-trailing-comma slot, so the ADD knob is
 		// the only way its broken arg list can end with a `,` at all.
@@ -174,12 +180,6 @@ class HxListLiteralEmissionSliceTest extends Test {
 		final blankFree: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talpha,\n\t\t\tbeta,\n\t\t\tgamma\n\t\t];\n\t}\n}\n';
 		Assert.equals(write(blankFree, COLLAPSE_NOWRAP_JSON), write(ARR_NOWRAP, COLLAPSE_NOWRAP_JSON));
 		Assert.equals(write(ARR_NOWRAP, COLLAPSE_NOWRAP_JSON), write(write(ARR_NOWRAP, COLLAPSE_NOWRAP_JSON), COLLAPSE_NOWRAP_JSON));
-	}
-
-	// --- config plumbing ---
-
-	public inline function testTrailingCommaDefaultsToKeep(): Void {
-		Assert.equals(TrailingCommaPolicy.Keep, HaxeFormat.instance.defaultWriteOptions.trailingComma);
 	}
 
 	public function testConfigTrailingCommaRemoveParsed(): Void {
@@ -285,6 +285,22 @@ class HxListLiteralEmissionSliceTest extends Test {
 		Assert.equals(expected, noAlign(MATRIX));
 	}
 
+	private static inline function collapse(source: String): String {
+		return write(source, COLLAPSE_JSON);
+	}
+
+	private static inline function noAlign(source: String): String {
+		return write(source, NO_ALIGN_JSON);
+	}
+
+	private static inline function addKnob(source: String): String {
+		return write(source, ADD_JSON);
+	}
+
+	private static inline function removeOverAdd(source: String): String {
+		return write(source, REMOVE_OVER_ADD_JSON);
+	}
+
 	// --- helpers ---
 
 	private static function opts(json: String): HxModuleWriteOptions {
@@ -299,24 +315,8 @@ class HxListLiteralEmissionSliceTest extends Test {
 		return write(source, BASE_JSON);
 	}
 
-	private static inline function collapse(source: String): String {
-		return write(source, COLLAPSE_JSON);
-	}
-
 	private static function remove(source: String): String {
 		return write(source, REMOVE_JSON);
-	}
-
-	private static inline function noAlign(source: String): String {
-		return write(source, NO_ALIGN_JSON);
-	}
-
-	private static inline function addKnob(source: String): String {
-		return write(source, ADD_JSON);
-	}
-
-	private static inline function removeOverAdd(source: String): String {
-		return write(source, REMOVE_OVER_ADD_JSON);
 	}
 
 }

@@ -179,6 +179,15 @@ final class JoinReturn implements Check {
 		);
 	}
 
+	/**
+	 * The verbatim source of `fn`'s explicit return type, or null when it declares none. The
+	 * return type is the child immediately before the body (`functionBodyKinds`) when that
+	 * child is not a parameter (`paramKinds`).
+	 */
+	private static inline function functionReturnTypeSource(fn: QueryNode, s: Seams, source: String): Null<String> {
+		return TypeResolver.functionReturnTypeSource(fn, source, s.bodyKinds, s.paramKinds);
+	}
+
 	/** Bundle the required `RefShape` / control-flow kinds, or null when a required one is unset (the check is then a no-op). */
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
@@ -224,15 +233,6 @@ final class JoinReturn implements Check {
 			}
 		}
 		for (c in node.children) collectMatches(c, source, comments, childRetType, s, tree, declTypeSources, lambdaSpans, out);
-	}
-
-	/**
-	 * The verbatim source of `fn`'s explicit return type, or null when it declares none. The
-	 * return type is the child immediately before the body (`functionBodyKinds`) when that
-	 * child is not a parameter (`paramKinds`).
-	 */
-	private static inline function functionReturnTypeSource(fn: QueryNode, s: Seams, source: String): Null<String> {
-		return TypeResolver.functionReturnTypeSource(fn, source, s.bodyKinds, s.paramKinds);
 	}
 
 	/**
@@ -325,7 +325,6 @@ final class JoinReturn implements Check {
 			&& TypeResolver.stripWs(ctorName) == TypeResolver.stripWs(ann);
 	}
 
-
 	/**
 	 * Whether a comment sits inside the joined region `[declSpan.from, retTo)` but outside the
 	 * only verbatim-kept span, the initializer. Such a comment (on the declaration keyword /
@@ -341,7 +340,6 @@ final class JoinReturn implements Check {
 		}
 		return false;
 	}
-
 
 	/**
 	 * The join match for an assignment `x = e;` immediately followed by `return x;`, or null
@@ -437,13 +435,11 @@ final class JoinReturn implements Check {
 		return survivingRead;
 	}
 
-
 	/** Whether `span` is nested inside any lambda span in `lambdaSpans` -- i.e. a captured reference. */
 	private static function inAnyLambda(span: Span, lambdaSpans: Array<Span>): Bool {
 		for (ls in lambdaSpans) if (ls.from <= span.from && span.to <= ls.to) return true;
 		return false;
 	}
-
 
 	/** Collect the span of every lambda (`RefShape.lambdaKinds`) reachable under `node`. */
 	private static function collectLambdaSpans(node: QueryNode, lambdaKinds: Array<String>, out: Array<Span>): Void {

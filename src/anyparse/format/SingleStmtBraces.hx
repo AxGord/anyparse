@@ -249,6 +249,26 @@ class SingleStmtBraces {
 		return siblingKeepsBraces && Type.enumConstructor(block) != 'IfStmt' && innerSelfTerminates(block);
 	}
 
+	/** Is `o` a trivia typedef struct that declares `name`? Enum values and `null` are not. */
+	private static inline function hasStructField(o: Dynamic, name: String): Bool {
+		return o != null && !Reflect.isEnumValue(o) && Reflect.hasField(o, name);
+	}
+
+	/** The `i`-th enum parameter, or `null` when the ctor carries fewer. */
+	private static inline function paramAt(e: EnumValue, i: Int): Dynamic {
+		final ps: Array<Dynamic> = Type.enumParameters(e);
+		return i < ps.length ? ps[i] : null;
+	}
+
+	/**
+	 * The payload of an `anyparse.runtime.Trivial` element wrapper, or the value
+	 * itself when it is not wrapped. Star-field elements arrive wrapped; a plain
+	 * Ref field does not, and no grammar typedef declares a field named `node`.
+	 */
+	private static inline function triviaNode(v: Dynamic): Dynamic {
+		return hasStructField(v, 'node') ? Reflect.field(v, 'node') : v;
+	}
+
 	/**
 	 * Does this statement carry its own terminator when it stands alone outside a
 	 * block? Gate 3 asks it about HOISTING a statement OUT of braces; the gate-7
@@ -369,11 +389,6 @@ class SingleStmtBraces {
 		return hasStructField(head, name) ? tailDanglingIf(Reflect.field(head, name)) : true;
 	}
 
-	/** Is `o` a trivia typedef struct that declares `name`? Enum values and `null` are not. */
-	private static inline function hasStructField(o: Dynamic, name: String): Bool {
-		return o != null && !Reflect.isEnumValue(o) && Reflect.hasField(o, name);
-	}
-
 	/**
 	 * Ctors whose rendering ends on a token no `else` can attach to: a closing
 	 * `)` / `]` / `}`, a postfix operator, or an identifier. Nothing inside them
@@ -440,21 +455,6 @@ class SingleStmtBraces {
 		};
 	}
 
-	/** The `i`-th enum parameter, or `null` when the ctor carries fewer. */
-	private static inline function paramAt(e: EnumValue, i: Int): Dynamic {
-		final ps: Array<Dynamic> = Type.enumParameters(e);
-		return i < ps.length ? ps[i] : null;
-	}
-
-	/**
-	 * The payload of an `anyparse.runtime.Trivial` element wrapper, or the value
-	 * itself when it is not wrapped. Star-field elements arrive wrapped; a plain
-	 * Ref field does not, and no grammar typedef declares a field named `node`.
-	 */
-	private static inline function triviaNode(v: Dynamic): Dynamic {
-		return hasStructField(v, 'node') ? Reflect.field(v, 'node') : v;
-	}
-
 	private static function containsIf(v: Dynamic): Bool {
 		if (v == null) return false;
 		if (Std.isOfType(v, String) || Std.isOfType(v, Bool) || Std.isOfType(v, Float) || Std.isOfType(v, Int)) return false;
@@ -474,7 +474,6 @@ class SingleStmtBraces {
 		for (f in Reflect.fields(v)) if (containsIf(Reflect.field(v, f))) return true;
 		return false;
 	}
-
 
 	/**
 	 * Gates 1-2: the trivia `BlockStmt` param list must hold exactly one
@@ -523,7 +522,6 @@ class SingleStmtBraces {
 		return inner == null || !Reflect.isEnumValue(inner) ? null : inner;
 	}
 
-
 	/**
 	 * Do-while body unwrap — `HxDoWhileBody.BlockBody` → `ExprBody`
 	 * ctor mapping (`do { x(); } while (c);` → `do x() while (c);`).
@@ -545,7 +543,6 @@ class SingleStmtBraces {
 		final en: Null<Enum<Dynamic>> = Type.getEnum(cast block);
 		return en == null ? block : Type.createEnum(en, 'ExprBody', [Type.enumParameters(innerE)[0], false]);
 	}
-
 
 	/**
 	 * omega-ssb-wrap - the repair direction of gate 8: a bare `if` in
@@ -573,7 +570,6 @@ class SingleStmtBraces {
 		final args: Array<Dynamic> = [[elem], null, null, false, [], false];
 		return Type.createEnum(en, 'BlockStmt', args);
 	}
-
 
 	/**
 	 * The single inner ELEMENT (`Trivial` wrapper) IFF `unwrapStmt` de-braces

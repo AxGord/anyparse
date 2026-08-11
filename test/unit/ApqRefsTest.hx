@@ -36,6 +36,38 @@ using Lambda;
 class ApqRefsTest extends Test {
 
 	/**
+	 * A local `function f(...) {...}` statement opens its OWN scope frame:
+	 * sibling local fns' same-named params must not cross-bind. Regression
+	 * for the CallGraph `span` collision — reads inside the second local fn
+	 * bound to the FIRST one's param before `LocalFnStmt` joined
+	 * `scopeKinds` / `declHostKinds`.
+	 */
+	public inline function testSiblingLocalFnParamsDoNotCrossBind(): Void {
+		assertSiblingParamsDoNotCrossBind('function');
+	}
+
+	/**
+	 * The same for a local `inline function` - the form the project's Haxe style prescribes for a
+	 * local helper. It projects as its own ctor (`LocalInlineFnStmt`, the `inline` keyword folded
+	 * into the kind), which was in neither `scopeKinds` nor `declHostKinds`: the parameters of two
+	 * sibling inline helpers collected into the ENCLOSING function's single frame, so the second
+	 * one's read of `p` bound to the FIRST one's declaration.
+	 */
+	public inline function testSiblingLocalInlineFnParamsDoNotCrossBind(): Void {
+		assertSiblingParamsDoNotCrossBind('inline function');
+	}
+
+	/** A local fn's name is a Decl visible from the enclosing body (calls bind to it). */
+	public inline function testLocalFnNameIsDecl(): Void {
+		assertLocalFnNameIsDecl('function');
+	}
+
+	/** A local `inline function`'s name is a Decl visible from the enclosing body, exactly as the plain form's is. */
+	public inline function testLocalInlineFnNameIsDecl(): Void {
+		assertLocalFnNameIsDecl('inline function');
+	}
+
+	/**
 	 * Each `switch` arm frames its own body: two arms declaring the SAME name are two distinct
 	 * bindings, and each arm's read binds to its own. Before arms framed, the first arm's local
 	 * swallowed the second arm's reads as well.
@@ -494,38 +526,6 @@ class ApqRefsTest extends Test {
 		final hits: Array<RefHit> = findIn("class X { function f() { var ctx = 0; var e = macro { bar(ctx); baz(${ctx}); }; } }", 'ctx');
 		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
 		Assert.equals(1, reads.length, 'only the interpolated read, emit skipped — got ${describe(hits)}');
-	}
-
-	/**
-	 * A local `function f(...) {...}` statement opens its OWN scope frame:
-	 * sibling local fns' same-named params must not cross-bind. Regression
-	 * for the CallGraph `span` collision — reads inside the second local fn
-	 * bound to the FIRST one's param before `LocalFnStmt` joined
-	 * `scopeKinds` / `declHostKinds`.
-	 */
-	public inline function testSiblingLocalFnParamsDoNotCrossBind(): Void {
-		assertSiblingParamsDoNotCrossBind('function');
-	}
-
-	/**
-	 * The same for a local `inline function` - the form the project's Haxe style prescribes for a
-	 * local helper. It projects as its own ctor (`LocalInlineFnStmt`, the `inline` keyword folded
-	 * into the kind), which was in neither `scopeKinds` nor `declHostKinds`: the parameters of two
-	 * sibling inline helpers collected into the ENCLOSING function's single frame, so the second
-	 * one's read of `p` bound to the FIRST one's declaration.
-	 */
-	public inline function testSiblingLocalInlineFnParamsDoNotCrossBind(): Void {
-		assertSiblingParamsDoNotCrossBind('inline function');
-	}
-
-	/** A local fn's name is a Decl visible from the enclosing body (calls bind to it). */
-	public inline function testLocalFnNameIsDecl(): Void {
-		assertLocalFnNameIsDecl('function');
-	}
-
-	/** A local `inline function`'s name is a Decl visible from the enclosing body, exactly as the plain form's is. */
-	public inline function testLocalInlineFnNameIsDecl(): Void {
-		assertLocalFnNameIsDecl('inline function');
 	}
 
 	/**

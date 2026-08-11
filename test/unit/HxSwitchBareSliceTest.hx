@@ -21,6 +21,20 @@ import anyparse.grammar.haxe.HxSwitchStmtBare;
  */
 class HxSwitchBareSliceTest extends HxTestHelpers {
 
+	// ---- Round-trip ----
+
+	public inline function testSwitchStmtBareRoundTrip(): Void {
+		roundTrip('class C { function f():Void { switch x { case 1: a; case 2: b; } } }', 'switch-stmt-bare');
+	}
+
+	public inline function testSwitchExprBareRoundTrip(): Void {
+		roundTrip('class C { function f():String { return switch x { case 1: "a"; case _: "b"; }; } }', 'switch-expr-bare');
+	}
+
+	public inline function testSwitchBareNestedRoundTrip(): Void {
+		roundTrip('class C { function f():Void { switch x { case 1: switch y { case 2: a; } } } }', 'switch-stmt-bare-nested');
+	}
+
 	// ---- Statement-position bare switch ----
 
 	public function testSwitchStmtBareIdentSubject(): Void {
@@ -156,20 +170,6 @@ class HxSwitchBareSliceTest extends HxTestHelpers {
 			case null, _:
 				Assert.fail('expected ReturnStmt');
 		}
-	}
-
-	// ---- Round-trip ----
-
-	public inline function testSwitchStmtBareRoundTrip(): Void {
-		roundTrip('class C { function f():Void { switch x { case 1: a; case 2: b; } } }', 'switch-stmt-bare');
-	}
-
-	public inline function testSwitchExprBareRoundTrip(): Void {
-		roundTrip('class C { function f():String { return switch x { case 1: "a"; case _: "b"; }; } }', 'switch-expr-bare');
-	}
-
-	public inline function testSwitchBareNestedRoundTrip(): Void {
-		roundTrip('class C { function f():Void { switch x { case 1: switch y { case 2: a; } } } }', 'switch-stmt-bare-nested');
 	}
 
 	private function parseBody(source: String): Array<HxStatement> {

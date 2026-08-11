@@ -118,6 +118,16 @@ final class EmptyDocTag implements Check {
 		return edits;
 	}
 
+	/** Whether the line's bare content opens a tag. */
+	private static inline function opensTag(source: String, line: Span): Bool {
+		return tagName(source, bareFrom(source, line), line.to) != null;
+	}
+
+	/** Whether code unit `c` is an ASCII letter. */
+	private static inline function isLetter(c: Int): Bool {
+		return c >= 'a'.code && c <= 'z'.code || c >= 'A'.code && c <= 'Z'.code;
+	}
+
 	/** Scan every doc comment in `source`, flagging each content-free tag section. */
 	private static function scan(out: Array<Violation>, file: String, source: String): Void {
 		for (tok in RefactorSupport.collectCommentTokens(source)) if (isDoc(source, tok)) {
@@ -254,11 +264,6 @@ final class EmptyDocTag implements Check {
 		return true;
 	}
 
-	/** Whether the line's bare content opens a tag. */
-	private static inline function opensTag(source: String, line: Span): Bool {
-		return tagName(source, bareFrom(source, line), line.to) != null;
-	}
-
 	/**
 	 * The tag name - the letters after an opening `@`, terminated by whitespace or the line
 	 * end - or null when the bare content opens no tag. The terminator is what keeps
@@ -285,11 +290,6 @@ final class EmptyDocTag implements Check {
 	private static function hasSpace(text: String): Bool {
 		for (i in 0...text.length) if (RefactorSupport.isSpace(text.fastCodeAt(i))) return true;
 		return false;
-	}
-
-	/** Whether code unit `c` is an ASCII letter. */
-	private static inline function isLetter(c: Int): Bool {
-		return c >= 'a'.code && c <= 'z'.code || c >= 'A'.code && c <= 'Z'.code;
 	}
 
 	/**

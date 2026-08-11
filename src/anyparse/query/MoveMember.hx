@@ -258,6 +258,30 @@ final class MoveMember {
 		return applyAndValidate(editsByFile, prep.sourceOf, plugin, memberNames.join(', '), advisoryExtras);
 	}
 
+	private static inline function insideAnyCut(prep: MovePrep, offset: Int): Bool {
+		return prep.moved.exists(m -> offset >= m.cut.from && offset < m.cut.to);
+	}
+
+	private static inline function quoted(names: Array<String>): String {
+		return names.map(n -> '"$n"').join(', ');
+	}
+
+	private static inline function pushUnique(names: Array<String>, name: String): Void {
+		if (!names.contains(name)) names.push(name);
+	}
+
+	private static inline function deriveViaName(destTypeName: String): String {
+		return destTypeName == '' ? '_via' : '_${destTypeName.charAt(0).toLowerCase()}${destTypeName.substr(1)}';
+	}
+
+	private static inline function paramNameOf(fieldName: String): String {
+		return fieldName.startsWith('_') ? fieldName.substr(1) : fieldName;
+	}
+
+	private static inline function constructorGroupOf(decl: TypeDeclMatch): Null<MemberGroup> {
+		return memberGroupOf(decl, 'new');
+	}
+
 	/**
 	 * The unique type decl named `typeName` in `tree`, or null on 0 / 2+.
 	 */
@@ -850,10 +874,6 @@ final class MoveMember {
 		}
 	}
 
-	private static inline function insideAnyCut(prep: MovePrep, offset: Int): Bool {
-		return prep.moved.exists(m -> offset >= m.cut.from && offset < m.cut.to);
-	}
-
 	/**
 	 * Whether any moved body references `this` (an `IdentExpr` named `this`
 	 * inside a cut span) — such a reference cannot survive a move.
@@ -1030,14 +1050,6 @@ final class MoveMember {
 		return null;
 	}
 
-	private static inline function quoted(names: Array<String>): String {
-		return names.map(n -> '"$n"').join(', ');
-	}
-
-	private static inline function pushUnique(names: Array<String>, name: String): Void {
-		if (!names.contains(name)) names.push(name);
-	}
-
 	/**
 	 * `--closure` expansion: grows `seed` to the transitive closure of
 	 * instance-METHOD siblings called from the moved bodies (the members
@@ -1158,18 +1170,6 @@ final class MoveMember {
 			advisoryExtras.push(
 				'moved bodies read final field(s) ${quoted(fieldDeps)} — construct "${prep.destTypeName}" with the same values'
 			);
-	}
-
-	private static inline function deriveViaName(destTypeName: String): String {
-		return destTypeName == '' ? '_via' : '_${destTypeName.charAt(0).toLowerCase()}${destTypeName.substr(1)}';
-	}
-
-	private static inline function paramNameOf(fieldName: String): String {
-		return fieldName.startsWith('_') ? fieldName.substr(1) : fieldName;
-	}
-
-	private static inline function constructorGroupOf(decl: TypeDeclMatch): Null<MemberGroup> {
-		return memberGroupOf(decl, 'new');
 	}
 
 	/**
@@ -1318,7 +1318,6 @@ final class MoveMember {
 		return null;
 	}
 
-
 	/**
 	 * Wraps a scaffold via name in a `VScaffold`, refusing when the name
 	 * already collides with a source member (a duplicate field or an
@@ -1332,7 +1331,6 @@ final class MoveMember {
 			)
 			: VScaffold(name);
 	}
-
 
 	/**
 	 * Cross-package refusal: a fully-qualified caller `pkg.Src.member` cannot
@@ -1390,7 +1388,6 @@ final class MoveMember {
 		final edit: Null<{ span: Span, text: String }> = MoveSymbol.addImportEdit(prep.destSource, prep.destInfo, srcPath);
 		if (edit != null) editsFor(editsByFile, prep.destFile).push(edit);
 	}
-
 
 	/**
 	 * The refusal for a cross-package move of an INSTANCE member — this

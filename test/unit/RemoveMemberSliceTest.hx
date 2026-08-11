@@ -14,6 +14,25 @@ import anyparse.query.RemoveMember;
  */
 class RemoveMemberSliceTest extends Test {
 
+	/** An unknown type is refused. */
+	public inline function testTypeNotFound(): Void {
+		assertErr('class C {\n\tvar x:Int;\n}\n', 'Nope', 'x');
+	}
+
+	/** An unknown member is refused. */
+	public inline function testMemberNotFound(): Void {
+		assertErr('class C {\n\tvar x:Int;\n}\n', 'C', 'nope');
+	}
+
+	/**
+	 * A field of an anonymous structure written as a member's TYPE is not a member of the
+	 * enclosing class. Matching it deleted the field out of the annotation and left
+	 * `cfg:{}` — a silent Ok that no longer type-checks.
+	 */
+	public inline function testAnonStructureFieldInMemberTypeIsRefused(): Void {
+		assertErr('class C {\n\tvar cfg:{ var inner:Int; } = { inner: 1 };\n}\n', 'C', 'inner');
+	}
+
 	/** Remove a method by name; the sibling member survives. */
 	public function testRemoveMethod(): Void {
 		final source: String = 'class C {\n\tvar keep:Int;\n\tpublic function drop():Void {}\n}\n';
@@ -110,25 +129,6 @@ class RemoveMemberSliceTest extends Test {
 			case Err(message):
 				Assert.fail('expected Ok, got Err: $message');
 		}
-	}
-
-	/** An unknown type is refused. */
-	public inline function testTypeNotFound(): Void {
-		assertErr('class C {\n\tvar x:Int;\n}\n', 'Nope', 'x');
-	}
-
-	/** An unknown member is refused. */
-	public inline function testMemberNotFound(): Void {
-		assertErr('class C {\n\tvar x:Int;\n}\n', 'C', 'nope');
-	}
-
-	/**
-	 * A field of an anonymous structure written as a member's TYPE is not a member of the
-	 * enclosing class. Matching it deleted the field out of the annotation and left
-	 * `cfg:{}` — a silent Ok that no longer type-checks.
-	 */
-	public inline function testAnonStructureFieldInMemberTypeIsRefused(): Void {
-		assertErr('class C {\n\tvar cfg:{ var inner:Int; } = { inner: 1 };\n}\n', 'C', 'inner');
 	}
 
 	/** Control: a typedef's own fields ARE its members and stay removable. */

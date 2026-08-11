@@ -86,7 +86,6 @@ final class HxMethodChainAllOrNothingSliceTest extends Test {
 		+ '\t\tremoteClient.second(plainArgumentValueName).third(anotherPlainArgumentValueName).fourth((r:ResponsePayload) -> {\n'
 		+ '\t\t\thandleResult(r);\n\t\t}).fifth(yetAnotherPlainArgumentValue);\n\t}\n\n}';
 
-
 	/** A chain whose head is a bare IDENT, wide enough (161 columns flat) that the tail cannot fit after it. */
 	private static final IDENT_HEAD_SRC: String = 'class TweenSample {\n\n\tprivate function run():Void {\n'
 		+ '\t\tActuate.tween(_progressBarShape, TRANSITION_DURATION, { x: 0, alpha: 1 }).ease(Quad.easeInOut).onUpdate(progressUpdateHandler).onComplete(finishHandler);\n'
@@ -179,6 +178,10 @@ final class HxMethodChainAllOrNothingSliceTest extends Test {
 		}
 	}
 
+	private inline function triviaWrite(src: String): String {
+		return HxWriteFixture.triviaWrite(src, CFG);
+	}
+
 	/**
 	 * The five cascades that reach `emit`'s five distinct return shapes: a
 	 * collapsed cascade (both `evalAt` states agree) in each break mode, a split
@@ -222,10 +225,6 @@ final class HxMethodChainAllOrNothingSliceTest extends Test {
 			Concat([Text('.first('), Text('alpha'), Text(')')]),
 			Concat([Text('.second('), Text('beta'), Text(')')])
 		];
-	}
-
-	private inline function triviaWrite(src: String): String {
-		return HxWriteFixture.triviaWrite(src, CFG);
 	}
 
 }

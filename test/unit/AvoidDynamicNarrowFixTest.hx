@@ -245,6 +245,10 @@ class AvoidDynamicNarrowFixTest extends Test {
 		Assert.isTrue(out.indexOf('var x:Foo = a;') != -1, 'the local is narrowed');
 	}
 
+	private inline function apply(src: String, e: Array<{ span: Span, text: String }>): String {
+		return CheckFixture.applyEdits(src, e);
+	}
+
 	// ---- helpers ----
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
@@ -257,10 +261,6 @@ class AvoidDynamicNarrowFixTest extends Test {
 	private function narrow(src: String): Null<String> {
 		final e: Array<{ span: Span, text: String }> = edits(src);
 		return e.length == 0 ? null : e[0].text;
-	}
-
-	private inline function apply(src: String, e: Array<{ span: Span, text: String }>): String {
-		return CheckFixture.applyEdits(src, e);
 	}
 
 }

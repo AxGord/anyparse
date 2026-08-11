@@ -28,6 +28,15 @@ import anyparse.grammar.haxe.HxTypedefDecl;
  */
 class HxConditionalTypeSliceTest extends HxTestHelpers {
 
+	// -- Idempotency on the corpus form --
+
+	public inline function testConditionalTypedefRoundTrip(): Void {
+		roundTrip(
+			'typedef ChildProcessExecCallback = #if (haxe_ver >= 4) (error : Null<ChildProcessExecError>, stdout : EitherType<Buffer, String>, \n'
+			+ 'stderr : EitherType<Buffer, String>) -> Void; #else Null<ChildProcessExecError>->EitherType<Buffer, String>->EitherType<Buffer, String>->Void; #end'
+		);
+	}
+
 	// -- Isolated ctor: bare-ident cond, both branches present --
 
 	public function testConditionalTypedefIfElse(): Void {
@@ -77,15 +86,6 @@ class HxConditionalTypeSliceTest extends HxTestHelpers {
 		Assert.equals('ChildProcessExecCallback', (td.name: String));
 		final cond: HxConditionalType = expectConditionalType(td.type);
 		Assert.notNull(cond.elseClause);
-	}
-
-	// -- Idempotency on the corpus form --
-
-	public inline function testConditionalTypedefRoundTrip(): Void {
-		roundTrip(
-			'typedef ChildProcessExecCallback = #if (haxe_ver >= 4) (error : Null<ChildProcessExecError>, stdout : EitherType<Buffer, String>, \n'
-			+ 'stderr : EitherType<Buffer, String>) -> Void; #else Null<ChildProcessExecError>->EitherType<Buffer, String>->EitherType<Buffer, String>->Void; #end'
-		);
 	}
 
 	// -- Regression: a plain typedef is unaffected by the new ctor --

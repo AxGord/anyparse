@@ -86,10 +86,10 @@ import haxe.Exception;
 @:nullSafety(Strict)
 final class RedundantCaseBody implements Check {
 
-	private static final RULE_ID: String = 'redundant-case-body';
-
 	/** What separates two alternatives of one label — the writer re-canonicalises the spacing. */
 	private static inline final ALTERNATIVE_SEPARATOR: String = ', ';
+
+	private static final RULE_ID: String = 'redundant-case-body';
 
 	public function new() {}
 
@@ -286,7 +286,6 @@ final class RedundantCaseBody implements Check {
 		for (i in 0...a.nodes.length) if (!RefactorSupport.structurallyEqual(a.nodes[i], b.nodes[i])) return false;
 		return CheckScan.normalizeSpan(source, a.from, a.to).norm == CheckScan.normalizeSpan(source, b.from, b.to).norm;
 	}
-
 
 	/** `edits` with every span that overlaps an earlier one dropped — the loser refires next pass. */
 	private static function disjoint(edits: Array<{ span: Span, text: String }>): Array<{ span: Span, text: String }> {

@@ -29,6 +29,14 @@ import anyparse.runtime.ParseError;
  */
 class HxStringSliceTest extends HxTestHelpers {
 
+	/**
+	 * Round-trip the real-world shape that blocked self-parse:
+	 * `'$'` alone and `'$'.code` (Pattern.hx:97 / Matcher.hx:83).
+	 */
+	public inline function testSingleLoneDollarRoundTrip(): Void {
+		roundTrip("class C { var x:String = '$'; var y:Int = '$'.code; }");
+	}
+
 	// ======== double-quoted (unchanged from v1 — flat String) ========
 
 	/** Empty double-quoted string `""` -> decoded to `""`. */
@@ -238,14 +246,6 @@ class HxStringSliceTest extends HxTestHelpers {
 		final parts: Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$$'; }").init);
 		Assert.equals(1, parts.length);
 		assertDollar(parts[0]);
-	}
-
-	/**
-	 * Round-trip the real-world shape that blocked self-parse:
-	 * `'$'` alone and `'$'.code` (Pattern.hx:97 / Matcher.hx:83).
-	 */
-	public inline function testSingleLoneDollarRoundTrip(): Void {
-		roundTrip("class C { var x:String = '$'; var y:Int = '$'.code; }");
 	}
 
 	/** Whitespace preserved inside string — spaces are literal. */

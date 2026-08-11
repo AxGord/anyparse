@@ -120,6 +120,21 @@ final class PreferLineComment implements Check implements DefaultOff {
 		];
 	}
 
+	/** `line` with `dedent` removed from its front; a line that does not carry it (a blank one) is unchanged. */
+	private static inline function dedented(line: String, dedent: String): String {
+		return line.startsWith(dedent) ? line.substr(dedent.length) : line;
+	}
+
+	/** A gutter block's ` * ` line marker stripped; elsewhere a leading star is content and stays. */
+	private static inline function stripGutter(line: String, gutter: Bool): String {
+		return if (!gutter || !line.startsWith('*'))
+			line
+		else if (line.startsWith('* '))
+			line.substr(2)
+		else
+			line.substr(1); // noqa: magic-number
+	}
+
 	/** The block and local-function node kinds the gates are decided against. */
 	private static function decisionKinds(shape: RefShape): LineCommentKinds {
 		final blocks: Array<String> = [];
@@ -262,21 +277,6 @@ final class PreferLineComment implements Check implements DefaultOff {
 			common = seen == null ? lead : sharedPrefix(seen, lead);
 		}
 		return common ?? '';
-	}
-
-	/** `line` with `dedent` removed from its front; a line that does not carry it (a blank one) is unchanged. */
-	private static inline function dedented(line: String, dedent: String): String {
-		return line.startsWith(dedent) ? line.substr(dedent.length) : line;
-	}
-
-	/** A gutter block's ` * ` line marker stripped; elsewhere a leading star is content and stays. */
-	private static inline function stripGutter(line: String, gutter: Bool): String {
-		return if (!gutter || !line.startsWith('*'))
-			line
-		else if (line.startsWith('* '))
-			line.substr(2)
-		else
-			line.substr(1); // noqa: magic-number
 	}
 
 	/** `line`'s leading spaces and tabs. */

@@ -281,6 +281,10 @@ class HxCondSpliceScopeSliceTest extends HxTestHelpers {
 		}
 	}
 
+	private inline function triviaWrite(src: String): String {
+		return HxWriteFixture.triviaWrite(src, '{}');
+	}
+
 	private function parseBody(source: String): Array<HxStatement> {
 		return fnBodyStmts(parseSingleFnDecl(source));
 	}
@@ -292,10 +296,6 @@ class HxCondSpliceScopeSliceTest extends HxTestHelpers {
 			case SwitchStmt(stmt): stmt;
 			case null, _: throw 'expected SwitchStmt';
 		};
-	}
-
-	private inline function triviaWrite(src: String): String {
-		return HxWriteFixture.triviaWrite(src, '{}');
 	}
 
 }

@@ -217,6 +217,44 @@ final class Naming implements Check implements CrossFileFix {
 		return out;
 	}
 
+	/**
+	 * Whether `category` is a type MEMBER whose privacy the cross-file index can turn into a
+	 * confinement proof - a field, a static-final constant or a method. A type or a
+	 * function-body binding is neither (the former is never confinable, the latter always is).
+	 */
+	private static inline function isConfinableMemberCategory(category: NamingCategory): Bool {
+		return category == NamingCategory.Field || category == NamingCategory.Constant || category == NamingCategory.Method;
+	}
+
+	/**
+	 * A cheap PRE-gate on `decl`: is it even the KIND of declaration whose collision a `this.`
+	 * qualification could repair? A non-`static` field or method is - a parameter capturing its
+	 * references is the param idiom, repaired by naming the member through `this.`. A function-body
+	 * binding (Local / Param / CatchVar) is one for the MIRROR direction, where the renamed binding
+	 * itself proves nothing and it is the CAPTURED member reference that gets qualified. Everything
+	 * else (a type, a `static` member, a Constant - static by construction) is refused outright.
+	 * Placed ahead of the occurrence resolution so the ordinary refusal path costs nothing extra. It
+	 * is NOT the proof: which arm applies, and whether the binding or the capture is truly reachable
+	 * through `selfReferenceText`, is decided by `Rename.qualifyCaptured` inside
+	 * `qualifyCapturedEdits`.
+	 */
+	private static inline function qualifiableBinding(decl: NamedDecl): Bool {
+		return switch decl.category {
+			case NamingCategory.Field | NamingCategory.Method: !decl.mods.contains('static');
+			case NamingCategory.Local | NamingCategory.Param | NamingCategory.CatchVar: true;
+			case _: false;
+		}
+	}
+
+	/**
+	 * Whether `category` is a binding scoped to one function BODY - a local, a parameter, a catch
+	 * variable. The three categories the scope-aware collision proof governs, and the ones whose
+	 * references can never precede their declaration.
+	 */
+	private static inline function isBodyScopedCategory(category: NamingCategory): Bool {
+		return category == NamingCategory.Local || category == NamingCategory.Param || category == NamingCategory.CatchVar;
+	}
+
 	/** The first rule in `policy` applicable to `decl` (category + modifier filters), or null. */
 	private static function applicableRule(decl: NamedDecl, policy: NamingPolicy): Null<NamingRule> {
 		return policy.find(
@@ -320,15 +358,6 @@ final class Naming implements Check implements CrossFileFix {
 	}
 
 	/**
-	 * Whether `category` is a type MEMBER whose privacy the cross-file index can turn into a
-	 * confinement proof - a field, a static-final constant or a method. A type or a
-	 * function-body binding is neither (the former is never confinable, the latter always is).
-	 */
-	private static inline function isConfinableMemberCategory(category: NamingCategory): Bool {
-		return category == NamingCategory.Field || category == NamingCategory.Constant || category == NamingCategory.Method;
-	}
-
-	/**
 	 * The rename edits for one projected declaration, or null when it must be skipped: not
 	 * among the flagged spans, not rename-safe, no applicable rule with a derivable correction,
 	 * already conformant, a collision the `this.`-qualification arm cannot repair, or an
@@ -401,26 +430,6 @@ final class Naming implements Check implements CrossFileFix {
 		return collides
 			? qualifyCapturedEdits(source, tree, span.from, spans, newName, shape, plugin, edits, resolutionIndex, file)
 			: edits;
-	}
-
-	/**
-	 * A cheap PRE-gate on `decl`: is it even the KIND of declaration whose collision a `this.`
-	 * qualification could repair? A non-`static` field or method is - a parameter capturing its
-	 * references is the param idiom, repaired by naming the member through `this.`. A function-body
-	 * binding (Local / Param / CatchVar) is one for the MIRROR direction, where the renamed binding
-	 * itself proves nothing and it is the CAPTURED member reference that gets qualified. Everything
-	 * else (a type, a `static` member, a Constant - static by construction) is refused outright.
-	 * Placed ahead of the occurrence resolution so the ordinary refusal path costs nothing extra. It
-	 * is NOT the proof: which arm applies, and whether the binding or the capture is truly reachable
-	 * through `selfReferenceText`, is decided by `Rename.qualifyCaptured` inside
-	 * `qualifyCapturedEdits`.
-	 */
-	private static inline function qualifiableBinding(decl: NamedDecl): Bool {
-		return switch decl.category {
-			case NamingCategory.Field | NamingCategory.Method: !decl.mods.contains('static');
-			case NamingCategory.Local | NamingCategory.Param | NamingCategory.CatchVar: true;
-			case _: false;
-		}
 	}
 
 	/**
@@ -858,7 +867,6 @@ final class Naming implements Check implements CrossFileFix {
 		for (child in node.children) collectAttributedRefs(child, name, source, cls, bare, typed, recvNames);
 	}
 
-
 	/** The binding-decl offset of the read / write hit at `recvFrom`, or null when it is unresolved. */
 	private static function receiverBindingOffset(hits: Array<RefHit>, recvFrom: Int): Null<Int> {
 		for (h in hits) if ((h.kind == RefKind.Read || h.kind == RefKind.Write) && h.span.from == recvFrom) {
@@ -933,7 +941,6 @@ final class Naming implements Check implements CrossFileFix {
 		return names.exists(name -> source.indexOf('\'$name\'') >= 0 || source.indexOf('"$name"') >= 0);
 	}
 
-
 	/**
 	 * Whether `name` is distinctive enough that a word-boundary match inside a comment is
 	 * very unlikely to be prose: it carries an underscore or an uppercase letter (`_x`,
@@ -948,7 +955,6 @@ final class Naming implements Check implements CrossFileFix {
 		}
 		return false;
 	}
-
 
 	/**
 	 * Route one `FieldAccess` named `name` to the right occurrence bucket: a `this.` / `super.` access
@@ -974,7 +980,6 @@ final class Naming implements Check implements CrossFileFix {
 			if (!recvNames.contains(rn)) recvNames.push(rn);
 		}
 	}
-
 
 	/**
 	 * Attribute every `recv.name` access in `typed` by the receiver's declared type: owner-bound when
@@ -1008,7 +1013,6 @@ final class Naming implements Check implements CrossFileFix {
 				RefactorSupport.pushUniqueSpan(ignore, seenIgnore, off, name.length);
 		}
 	}
-
 
 	/**
 	 * The spans where `name` names a TYPE rather than a value. Gated on the index first: unless the name
@@ -1248,7 +1252,6 @@ final class Naming implements Check implements CrossFileFix {
 		return best;
 	}
 
-
 	/**
 	 * The spans of every top-level type declaration in `tree` that is NEITHER `ownerName` nor a
 	 * subtype of it - a sibling hierarchy sharing the module. The target-name collision scan
@@ -1280,7 +1283,6 @@ final class Naming implements Check implements CrossFileFix {
 		return out;
 	}
 
-
 	/**
 	 * The span of the local FUNCTION declared at `declFrom`, or null when the declaration there is
 	 * anything else. A local `function` is the one declaration kind that opens a scope its own NAME
@@ -1301,16 +1303,6 @@ final class Naming implements Check implements CrossFileFix {
 		}
 		walk(tree);
 		return found;
-	}
-
-
-	/**
-	 * Whether `category` is a binding scoped to one function BODY - a local, a parameter, a catch
-	 * variable. The three categories the scope-aware collision proof governs, and the ones whose
-	 * references can never precede their declaration.
-	 */
-	private static inline function isBodyScopedCategory(category: NamingCategory): Bool {
-		return category == NamingCategory.Local || category == NamingCategory.Param || category == NamingCategory.CatchVar;
 	}
 
 }

@@ -113,6 +113,24 @@ final class IfFalseDeadCode implements Check {
 		return edits;
 	}
 
+	/** `true` iff the source at `from` opens with `#if false` / `#if (false)` (word-bounded). */
+	private static inline function isIfFalseAt(source: String, from: Int): Bool {
+		return isIfLiteralAt(source, from, 'false');
+	}
+
+	/** `true` iff the source at `from` opens with `#if true` / `#if (true)` (word-bounded). */
+	private static inline function isIfTrueAt(source: String, from: Int): Bool {
+		return isIfLiteralAt(source, from, 'true');
+	}
+
+	private static inline function isWs(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code || c == '\r'.code || c == '\n'.code;
+	}
+
+	private static inline function isWordChar(c: Int): Bool {
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
+	}
+
 	private static function walk(out: Array<Violation>, file: String, source: String, node: QueryNode): Void {
 		final span: Null<Span> = node.span;
 		final isFalse: Bool = span != null && isIfFalseAt(source, span.from);
@@ -194,16 +212,6 @@ final class IfFalseDeadCode implements Check {
 		return source.charCodeAt(j) == ')'.code;
 	}
 
-	/** `true` iff the source at `from` opens with `#if false` / `#if (false)` (word-bounded). */
-	private static inline function isIfFalseAt(source: String, from: Int): Bool {
-		return isIfLiteralAt(source, from, 'false');
-	}
-
-	/** `true` iff the source at `from` opens with `#if true` / `#if (true)` (word-bounded). */
-	private static inline function isIfTrueAt(source: String, from: Int): Bool {
-		return isIfLiteralAt(source, from, 'true');
-	}
-
 	/**
 	 * Index in `slice` (which itself opens with the region's own `#if
 	 * <literal>` / `#if (<literal>)`) right after the condition, where the
@@ -269,14 +277,6 @@ final class IfFalseDeadCode implements Check {
 
 	private static function sliceStartsWith(s: String, at: Int, what: String): Bool {
 		return at + what.length <= s.length && s.substr(at, what.length) == what;
-	}
-
-	private static inline function isWs(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\r'.code || c == '\n'.code;
-	}
-
-	private static inline function isWordChar(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
 	}
 
 }

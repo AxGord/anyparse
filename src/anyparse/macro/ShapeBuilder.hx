@@ -355,6 +355,20 @@ class ShapeBuilder {
 		return node;
 	}
 
+	private static inline function isMapPath(path: String): Bool {
+		return path == 'Map' || path == 'haxe.ds.Map';
+	}
+
+	private static inline function isStdPrimitiveAbstract(a: AbstractType): Bool {
+		return a.pack.length == 0 && (a.name == 'Bool' || a.name == 'Int' || a.name == 'Float');
+	}
+
+	private static inline function typePathOfEnum(e: EnumType): String return joinPack(e.pack, e.name);
+
+	private static inline function typePathOfDef(d: DefType): String return joinPack(d.pack, d.name);
+
+	private static inline function typePathOfAbstract(a: AbstractType): String return joinPack(a.pack, a.name);
+
 	/**
 	 * The `[K, V]` type params when `t` is a DIRECT `Map<K, V>`
 	 * spelling — matched as BOTH `TType` (the top-level `Map` is a
@@ -371,10 +385,6 @@ class ShapeBuilder {
 			case TAbstract(ref, params) if (params.length == 2 && isMapPath(joinPack(ref.get().pack, ref.get().name))): params;
 			case _: null;
 		};
-	}
-
-	private static inline function isMapPath(path: String): Bool {
-		return path == 'Map' || path == 'haxe.ds.Map';
 	}
 
 	/**
@@ -458,16 +468,6 @@ class ShapeBuilder {
 			case _: null;
 		};
 	}
-
-	private static inline function isStdPrimitiveAbstract(a: AbstractType): Bool {
-		return a.pack.length == 0 && (a.name == 'Bool' || a.name == 'Int' || a.name == 'Float');
-	}
-
-	private static inline function typePathOfEnum(e: EnumType): String return joinPack(e.pack, e.name);
-
-	private static inline function typePathOfDef(d: DefType): String return joinPack(d.pack, d.name);
-
-	private static inline function typePathOfAbstract(a: AbstractType): String return joinPack(a.pack, a.name);
 
 	private static function joinPack(pack: Array<String>, name: String): String {
 		return pack.length == 0 ? name : '${pack.join('.')}.$name';

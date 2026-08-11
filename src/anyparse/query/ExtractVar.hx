@@ -194,6 +194,16 @@ final class ExtractVar {
 		return Ok(rewritten);
 	}
 
+	/** Is `kind` a statement node (its kind ends with `Stmt`)? */
+	private static inline function isStatement(kind: String): Bool {
+		return kind.endsWith('Stmt');
+	}
+
+	/** Whitespace test for the trailing-trivia trim. */
+	private static inline function isWsCode(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
+	}
+
 	/**
 	 * Is `name` already declared as a parameter or local binding within the
 	 * function enclosing `cursor`? The hoisted `final name = …` would shadow
@@ -272,11 +282,6 @@ final class ExtractVar {
 		return result;
 	}
 
-	/** Is `kind` a statement node (its kind ends with `Stmt`)? */
-	private static inline function isStatement(kind: String): Bool {
-		return kind.endsWith('Stmt');
-	}
-
 	/**
 	 * Is `kind` structural (a statement / declaration / member / param
 	 * wrapper) rather than an expression? Suffix-based with a short list
@@ -302,11 +307,6 @@ final class ExtractVar {
 			if (c != ' '.code && c != '\t'.code && c != '\r'.code) return false;
 		}
 		return true;
-	}
-
-	/** Whitespace test for the trailing-trivia trim. */
-	private static inline function isWsCode(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 	}
 
 }

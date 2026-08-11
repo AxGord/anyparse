@@ -36,6 +36,10 @@ class HxTransformSliceTest extends Test {
 		super();
 	}
 
+	public inline function testIdentityEmptyModule(): Void {
+		assertIdentity('');
+	}
+
 	// ---------------- identity ----------------
 
 	public function testIdentityPreservesStructure(): Void {
@@ -49,10 +53,6 @@ class HxTransformSliceTest extends Test {
 			+ '\t\t\tcase _: "many";\n\t\t}\n\t\ttry {\n\t\t\treturn total;\n\t\t} catch (e:Dynamic) {\n\t\t\treturn -1;\n'
 			+ '\t\t}\n\t}\n}';
 		assertIdentity(src);
-	}
-
-	public inline function testIdentityEmptyModule(): Void {
-		assertIdentity('');
 	}
 
 	public function testIdentitySmallShapes(): Void {

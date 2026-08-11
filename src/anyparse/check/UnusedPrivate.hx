@@ -201,6 +201,30 @@ final class UnusedPrivate implements Check {
 	}
 
 	/**
+	 * Whether `node` is a class body whose direct children carry the members and any
+	 * `extends` clause — `CheckScan.isClassBodyKind`: a plain, `final` / modified, or `abstract class`.
+	 */
+	private static inline function isClassScopeNode(kind: String): Bool {
+		return CheckScan.isClassBodyKind(kind);
+	}
+
+	/**
+	 * Raw-text presence of ANY conditional-compilation directive. In a file carrying one
+	 * the single-file reference scan is branch-blind, so a member used only under a `#if`
+	 * arm (and members declared inside one) would read as unused. A flagged MEMBER survives
+	 * this only via the report-UNION-resolution zero-occurrence proof (`referencedElsewhere`);
+	 * the empty-constructor arm keeps the coarse whole-file veto.
+	 */
+	private static inline function fileHasConditional(source: String): Bool {
+		return source.indexOf('#if') >= 0 || source.indexOf('#else') >= 0 || source.indexOf('#elseif') >= 0;
+	}
+
+	/** Space / tab / newline / carriage-return. */
+	private static inline function isWhitespace(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
+	}
+
+	/**
 	 * The widest source scope available for the zero-occurrence proof: the host's resolution-scoped
 	 * index (report UNION the DECLARED library roots) when `plugin` is a `SymbolIndexHost` carrying a
 	 * declared scope, else the report-scoped `index` the caller passed, else null (a direct `fix` call
@@ -349,14 +373,6 @@ final class UnusedPrivate implements Check {
 	}
 
 	/**
-	 * Whether `node` is a class body whose direct children carry the members and any
-	 * `extends` clause — `CheckScan.isClassBodyKind`: a plain, `final` / modified, or `abstract class`.
-	 */
-	private static inline function isClassScopeNode(kind: String): Bool {
-		return CheckScan.isClassBodyKind(kind);
-	}
-
-	/**
 	 * Whether a class-scope `node` carries an `extends` clause among its direct
 	 * children (`(ClassForm C (ExtendsClause …) …)`).
 	 */
@@ -422,7 +438,6 @@ final class UnusedPrivate implements Check {
 		return false;
 	}
 
-
 	/**
 	 * Whether `node` is the private empty constructor `private function new() {}` — a
 	 * `FnMember` named `new` with no parameters and an empty block body. Such a member
@@ -436,17 +451,6 @@ final class UnusedPrivate implements Check {
 	/** Whether a `FnMember`'s only child is an empty block body (no params, no statements). */
 	private static function isEmptyCtorBody(node: QueryNode): Bool {
 		return node.children.length == 1 && node.children[0].kind == 'BlockBody' && node.children[0].children.length == 0;
-	}
-
-	/**
-	 * Raw-text presence of ANY conditional-compilation directive. In a file carrying one
-	 * the single-file reference scan is branch-blind, so a member used only under a `#if`
-	 * arm (and members declared inside one) would read as unused. A flagged MEMBER survives
-	 * this only via the report-UNION-resolution zero-occurrence proof (`referencedElsewhere`);
-	 * the empty-constructor arm keeps the coarse whole-file veto.
-	 */
-	private static inline function fileHasConditional(source: String): Bool {
-		return source.indexOf('#if') >= 0 || source.indexOf('#else') >= 0 || source.indexOf('#elseif') >= 0;
 	}
 
 	/** Collect every plain string-literal's raw content in `node`'s subtree into `out`. */
@@ -607,12 +611,6 @@ final class UnusedPrivate implements Check {
 		for (k in 0...kw.length) if (source.fastCodeAt(start + k) != kw.fastCodeAt(k)) return false;
 		return start == 0 || !RefactorSupport.isIdentChar(source.fastCodeAt(start - 1));
 	}
-
-	/** Space / tab / newline / carriage-return. */
-	private static inline function isWhitespace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
-	}
-
 
 	/**
 	 * Whether a flagged MEMBER (not the constructor) clears every deletion gate: a

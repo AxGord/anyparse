@@ -26,6 +26,38 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxTryExprSliceTest extends HxTestHelpers {
 
+	// ======== Round-trip ========
+
+	public inline function testRoundTripSimple(): Void {
+		roundTrip('class C { var x:Dynamic = try foo() catch (e:Any) null; }', 'try-expr simple');
+	}
+
+	public inline function testRoundTripFieldAccess(): Void {
+		roundTrip('class C { var x:Dynamic = try Xml.parse(data).firstElement() catch (_:Any) null; }', 'try-expr field-access');
+	}
+
+	public inline function testRoundTripBlockBody(): Void {
+		roundTrip('class C { var x:Dynamic = try { foo(); } catch (e:Any) { bar; }; }', 'try-expr block bodies');
+	}
+
+	public inline function testRoundTripReturn(): Void {
+		roundTrip('class C { function m():Dynamic { return try foo() catch (e:Any) null; } }', 'try-expr return');
+	}
+
+	public inline function testRoundTripStatementForm(): Void {
+		roundTrip('class C { function m():Void { try { foo(); } catch (e:Any) { bar; } } }', 'try-stmt regression');
+	}
+
+	/**
+	 * Idempotency for the `;`-before-catch form. The `;` is consumed and
+	 * not re-emitted (the first write normalises to the no-`;` form), so
+	 * the second write must match the first — byte-preservation of the
+	 * source `;` vs the haxe-formatter reference is a deferred follow-up.
+	 */
+	public inline function testRoundTripSemicolonBeforeCatch(): Void {
+		roundTrip('class C { var x:Dynamic = try foo(); catch (e:Any) null; }', 'try-expr semicolon-before-catch');
+	}
+
 	// ======== Bare-expression bodies ========
 
 	/** `var x = try foo() catch (e:Any) null;` — minimal expression form. */
@@ -204,38 +236,6 @@ class HxTryExprSliceTest extends HxTestHelpers {
 			case _:
 				Assert.fail('expected TryCatchStmt at statement level, got ${stmts[0]}');
 		}
-	}
-
-	// ======== Round-trip ========
-
-	public inline function testRoundTripSimple(): Void {
-		roundTrip('class C { var x:Dynamic = try foo() catch (e:Any) null; }', 'try-expr simple');
-	}
-
-	public inline function testRoundTripFieldAccess(): Void {
-		roundTrip('class C { var x:Dynamic = try Xml.parse(data).firstElement() catch (_:Any) null; }', 'try-expr field-access');
-	}
-
-	public inline function testRoundTripBlockBody(): Void {
-		roundTrip('class C { var x:Dynamic = try { foo(); } catch (e:Any) { bar; }; }', 'try-expr block bodies');
-	}
-
-	public inline function testRoundTripReturn(): Void {
-		roundTrip('class C { function m():Dynamic { return try foo() catch (e:Any) null; } }', 'try-expr return');
-	}
-
-	public inline function testRoundTripStatementForm(): Void {
-		roundTrip('class C { function m():Void { try { foo(); } catch (e:Any) { bar; } } }', 'try-stmt regression');
-	}
-
-	/**
-	 * Idempotency for the `;`-before-catch form. The `;` is consumed and
-	 * not re-emitted (the first write normalises to the no-`;` form), so
-	 * the second write must match the first — byte-preservation of the
-	 * source `;` vs the haxe-formatter reference is a deferred follow-up.
-	 */
-	public inline function testRoundTripSemicolonBeforeCatch(): Void {
-		roundTrip('class C { var x:Dynamic = try foo(); catch (e:Any) null; }', 'try-expr semicolon-before-catch');
 	}
 
 }

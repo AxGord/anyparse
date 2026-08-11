@@ -638,6 +638,46 @@ final class DocMeasure {
 		return scanTail(d) == TailBreak;
 	}
 
+	/** True iff char code `c` may start an identifier (letter / `_` / `$`). */
+	private static inline function isIdentStart(c: Int): Bool {
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code || c == '$'.code;
+	}
+
+	/**
+	 * True iff char code `c` (the char immediately before a `(`) marks that `(`
+	 * as a CALL open paren rather than a grouping paren — an identifier char,
+	 * a close `)` (`f()()`), or a type-param close `>` (`f<T>()`).
+	 */
+	private static inline function isCallPrefixChar(c: Int): Bool {
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code
+			|| c == '$'.code || c == ')'.code || c == '>'.code;
+	}
+
+	/**
+	 * Does `d` render no visible characters of its own? The transparent set of
+	 * `firstVisibleTextStartsWith`'s left-spine item scan, factored out so the scan's
+	 * skip test and the probed-node arm read the same list.
+	 *
+	 * `Line` counts as whitespace-only in both its flat (`OptSpace`-style pad) and its
+	 * hardline form — neither contributes a visible token, and the caller is asking
+	 * which TOKEN comes first, not where the lines fall.
+	 *
+	 * The `case _` here is deliberate and is NOT the silent-default hazard the module
+	 * bans elsewhere: this is a two-way classification whose safe answer for anything
+	 * unrecognised is "not whitespace", and its sole caller
+	 * `firstVisibleTextStartsWith` enumerates every `Doc` ctor with no catch-all ten
+	 * lines below — so a new ctor still breaks compilation there and forces the author
+	 * past this list.
+	 */
+	private static inline function isWhitespaceOnlyLeaf(d: Doc): Bool {
+		return switch d {
+			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+				| OptHardlineSkipBeforeHardline:
+				true;
+			case _: false;
+		};
+	}
+
 	/**
 	 * Tri-state right-to-left walker behind `endsWithForcedCloseLine`:
 	 * `TailCloses` while only close delimiters and whitespace have been seen,
@@ -711,21 +751,6 @@ final class DocMeasure {
 			if (c != ')'.code && c != '}'.code && c != ']'.code) return false;
 		}
 		return true;
-	}
-
-	/** True iff char code `c` may start an identifier (letter / `_` / `$`). */
-	private static inline function isIdentStart(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code || c == '$'.code;
-	}
-
-	/**
-	 * True iff char code `c` (the char immediately before a `(`) marks that `(`
-	 * as a CALL open paren rather than a grouping paren — an identifier char,
-	 * a close `)` (`f()()`), or a type-param close `>` (`f<T>()`).
-	 */
-	private static inline function isCallPrefixChar(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code
-			|| c == '$'.code || c == ')'.code || c == '>'.code;
 	}
 
 	/**
@@ -839,32 +864,6 @@ final class DocMeasure {
 				stack.push(inner);
 				return { add: 0, stop: false, delim: null };
 		}
-	}
-
-
-	/**
-	 * Does `d` render no visible characters of its own? The transparent set of
-	 * `firstVisibleTextStartsWith`'s left-spine item scan, factored out so the scan's
-	 * skip test and the probed-node arm read the same list.
-	 *
-	 * `Line` counts as whitespace-only in both its flat (`OptSpace`-style pad) and its
-	 * hardline form — neither contributes a visible token, and the caller is asking
-	 * which TOKEN comes first, not where the lines fall.
-	 *
-	 * The `case _` here is deliberate and is NOT the silent-default hazard the module
-	 * bans elsewhere: this is a two-way classification whose safe answer for anything
-	 * unrecognised is "not whitespace", and its sole caller
-	 * `firstVisibleTextStartsWith` enumerates every `Doc` ctor with no catch-all ten
-	 * lines below — so a new ctor still breaks compilation there and forces the author
-	 * past this list.
-	 */
-	private static inline function isWhitespaceOnlyLeaf(d: Doc): Bool {
-		return switch d {
-			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
-				| OptHardlineSkipBeforeHardline:
-				true;
-			case _: false;
-		};
 	}
 
 }

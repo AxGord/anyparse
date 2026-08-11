@@ -44,6 +44,30 @@ final class CondDirectives {
 	/** The condition operators recognised between two operands, longest first so `>` never shadows `>=`. */
 	private static final OPERATORS: Array<String> = ['&&', '||', '==', '!=', '>=', '<=', '>', '<'];
 
+	/** The verbatim directive text of `directive` — its keyword plus its condition, e.g. `#if (sys)` / `#elseif js` / `#end`. */
+	public static inline function text(source: String, directive: CondDirective): String {
+		return source.substring(directive.span.from, directive.span.to);
+	}
+
+	/** Whether `c` can open an identifier. */
+	public static inline function isIdentStart(c: Int): Bool {
+		return c == '_'.code || c >= 'a'.code && c <= 'z'.code || c >= 'A'.code && c <= 'Z'.code;
+	}
+
+	/** Whether `c` can continue an identifier. */
+	public static inline function isIdentChar(c: Int): Bool {
+		return isIdentStart(c) || isDigit(c);
+	}
+
+	/**
+	 * Whether `source` holds an identifier character at `at` — the positional form of
+	 * `isIdentChar`, for a caller asking whether a neighbour would lex into one token with an
+	 * identifier spliced next to it. Out of range answers false: nothing there to weld with.
+	 */
+	public static inline function isIdentCharAt(source: String, at: Int): Bool {
+		return at >= 0 && at < source.length && isIdentChar(source.fastCodeAt(at));
+	}
+
 	/**
 	 * Every conditional-compilation directive in `source`, in source order. Empty when the
 	 * grammar declares no opener keyword, or when the text holds none.
@@ -74,28 +98,19 @@ final class CondDirectives {
 		return out;
 	}
 
-	/** The verbatim directive text of `directive` — its keyword plus its condition, e.g. `#if (sys)` / `#elseif js` / `#end`. */
-	public static inline function text(source: String, directive: CondDirective): String {
-		return source.substring(directive.span.from, directive.span.to);
+	/** Whether `c` opens a string literal. */
+	private static inline function isQuote(c: Int): Bool {
+		return c == '"'.code || c == '\''.code;
 	}
 
-	/** Whether `c` can open an identifier. */
-	public static inline function isIdentStart(c: Int): Bool {
-		return c == '_'.code || c >= 'a'.code && c <= 'z'.code || c >= 'A'.code && c <= 'Z'.code;
+	/** Whether `c` ends a physical line. */
+	private static inline function isLineBreak(c: Int): Bool {
+		return c == '\n'.code || c == '\r'.code;
 	}
 
-	/** Whether `c` can continue an identifier. */
-	public static inline function isIdentChar(c: Int): Bool {
-		return isIdentStart(c) || isDigit(c);
-	}
-
-	/**
-	 * Whether `source` holds an identifier character at `at` — the positional form of
-	 * `isIdentChar`, for a caller asking whether a neighbour would lex into one token with an
-	 * identifier spliced next to it. Out of range answers false: nothing there to weld with.
-	 */
-	public static inline function isIdentCharAt(source: String, at: Int): Bool {
-		return at >= 0 && at < source.length && isIdentChar(source.fastCodeAt(at));
+	/** Whether `c` is an ASCII digit. */
+	private static inline function isDigit(c: Int): Bool {
+		return c >= '0'.code && c <= '9'.code;
 	}
 
 	/**
@@ -269,21 +284,6 @@ final class CondDirectives {
 			i++;
 		}
 		return i;
-	}
-
-	/** Whether `c` opens a string literal. */
-	private static inline function isQuote(c: Int): Bool {
-		return c == '"'.code || c == '\''.code;
-	}
-
-	/** Whether `c` ends a physical line. */
-	private static inline function isLineBreak(c: Int): Bool {
-		return c == '\n'.code || c == '\r'.code;
-	}
-
-	/** Whether `c` is an ASCII digit. */
-	private static inline function isDigit(c: Int): Bool {
-		return c >= '0'.code && c <= '9'.code;
 	}
 
 	/**

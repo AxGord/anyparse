@@ -179,6 +179,16 @@ final class Text {
 		return buf.toString();
 	}
 
+	private static inline function indentBlock(text: String): String {
+		return '  ' + text.split('\n').join('\n  ') + '\n';
+	}
+
+	private static inline function countBindings(m: Match): Int {
+		var n: Int = 0;
+		for (_ in m.bindings) n++;
+		return n;
+	}
+
 	/**
 	 * Emit the optional `--doc` / `--source` blocks after a hit line.
 	 * Each block is 2-space indented and followed by a blank line.
@@ -198,16 +208,6 @@ final class Text {
 		if (s.length <= 0) return;
 		buf.add(indentBlock(s));
 		buf.add('\n');
-	}
-
-	private static inline function indentBlock(text: String): String {
-		return '  ' + text.split('\n').join('\n  ') + '\n';
-	}
-
-	private static inline function countBindings(m: Match): Int {
-		var n: Int = 0;
-		for (_ in m.bindings) n++;
-		return n;
 	}
 
 	private static function summariseBound(source: String, bound: QueryNode): String {

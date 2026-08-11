@@ -154,6 +154,19 @@ final class MemberBranchScan {
 	}
 
 	/**
+	 * Whether `node` is a member-position conditional-compilation region under `seams` — the test
+	 * `fold` itself applies.
+	 */
+	private static inline function isRegion(seams: MemberBranchSeams, node: QueryNode): Bool {
+		return seams.condKind != null && node.kind == seams.condKind;
+	}
+
+	/** A member run that has seen nothing yet — every modifier it goes on to collect is certain. */
+	private static inline function freshRun(): MemberRun {
+		return { nodes: [], certain: true };
+	}
+
+	/**
 	 * Fold one conditional region branch by branch and merge the outgoing states with `join`.
 	 * Every branch is scanned — not `exists`-style short-circuited — because each holds its own
 	 * members and each must reach `step`.
@@ -173,14 +186,6 @@ final class MemberBranchScan {
 		// always compiles), which is the fail-closed direction for every caller: it can only widen
 		// what the next member's run might hold, never narrow it.
 		return join(out, incoming);
-	}
-
-	/**
-	 * Whether `node` is a member-position conditional-compilation region under `seams` — the test
-	 * `fold` itself applies.
-	 */
-	private static inline function isRegion(seams: MemberBranchSeams, node: QueryNode): Bool {
-		return seams.condKind != null && node.kind == seams.condKind;
 	}
 
 	/**
@@ -208,11 +213,6 @@ final class MemberBranchScan {
 			if (hit != null) return hit;
 		}
 		return null;
-	}
-
-	/** A member run that has seen nothing yet — every modifier it goes on to collect is certain. */
-	private static inline function freshRun(): MemberRun {
-		return { nodes: [], certain: true };
 	}
 
 	/**

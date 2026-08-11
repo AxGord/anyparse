@@ -348,6 +348,11 @@ final class AssignmentTreeHoist {
 		return span == null ? null : source.substring(span.from, span.to);
 	}
 
+	/** All switch-machinery kinds present -- the recursion recognises a switch only when they are. */
+	private static inline function switchReady(s: TreeSeams): Bool {
+		return s.switchKinds != null;
+	}
+
 	/**
 	 * The comment slots of a chain's branches: one seat per branch whose value is ONE copied span
 	 * (a plain-assign leaf), running from that branch's condition end to where the NEXT copied
@@ -388,11 +393,6 @@ final class AssignmentTreeHoist {
 		if (cur != null) return IfExpressionChain.sameSource(cur, lhs, source);
 		ref.lvalue = lhs;
 		return true;
-	}
-
-	/** All switch-machinery kinds present -- the recursion recognises a switch only when they are. */
-	private static inline function switchReady(s: TreeSeams): Bool {
-		return s.switchKinds != null;
 	}
 
 	/** The last pattern wrapper child of a case branch (the tail of a comma-alternative list). */

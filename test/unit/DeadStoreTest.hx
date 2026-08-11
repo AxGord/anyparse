@@ -19,6 +19,47 @@ import anyparse.runtime.Span;
  */
 class DeadStoreTest extends Test {
 
+	public inline function testFixStripsDeadInitializer(): Void {
+		// `var x = 1` is reassigned before any read — the initializer is stripped to `var x;`.
+		assertFix('class C { function f():Int { var x = 1; x = 2; return x; } }', 'var x;', 'x = 1');
+	}
+
+	public inline function testFixDeletesDeadStoreBetweenReads(): Void {
+		// `x = 99` dies between two live reads — deleting it must keep `trace(x)` and the return.
+		assertFix('class C { function f(a:Int):Int { var x = a; trace(x); x = 99; x = a + 1; return x; } }', 'trace(x)', '99');
+	}
+
+	public inline function testFixDeletesTrailingStore(): Void {
+		// A store followed only by the exit is deleted; the earlier live read stays.
+		assertFix('class C { function f(a:Int):Void { var x = a; trace(x); x = a + 1; } }', 'trace(x)', 'a + 1');
+	}
+
+	public inline function testFixKeepsTypeOnStrippedInit(): Void {
+		// The name and type are kept verbatim — only ` = e` is removed.
+		assertFix('class C { function f():Int { var x:Int = 1; x = 2; return x; } }', 'var x:Int;', '= 1');
+	}
+
+	public inline function testFixRefusesCallRhs(): Void {
+		// A call right-hand side may have side effects — the dead store stays a finding.
+		assertNoFix('class C { function f(a:Int):Void { var x = a; trace(x); x = compute(); } }');
+	}
+
+	public inline function testFixRefusesNewRhs(): Void {
+		// `new` runs a constructor — never deleted.
+		assertNoFix('class C { function f(a:Int):Void { var y = a; trace(y); y = new Foo(); } }');
+	}
+
+	public inline function testFixRefusesBareBranchBody(): Void {
+		// A dead store that is a bare (unbraced) branch body is left — deleting it would corrupt
+		// the `if`; only a direct block statement is removed.
+		assertNoFix('class C { function f(a:Int):Void { var z = a; trace(z); if (a > 0) z = 5; } }');
+	}
+
+	public inline function testFixRefusesCallInitializer(): Void {
+		// An impure initializer is not stripped even when reassigned before a read.
+		assertNoFix('class C { function f(a:Int):Int { var w = compute(); w = a; return w; } }');
+	}
+
 	public function testReassignedInitFlagged(): Void {
 		// The initializer is overwritten before any read — one dead store (the init).
 		Assert.equals(1, violations('class C { function f():Int { var x = 1; x = 2; return x; } }').length);
@@ -219,48 +260,6 @@ class DeadStoreTest extends Test {
 		Assert.notNull(Linter.byId('dead-store'));
 	}
 
-	public inline function testFixStripsDeadInitializer(): Void {
-		// `var x = 1` is reassigned before any read — the initializer is stripped to `var x;`.
-		assertFix('class C { function f():Int { var x = 1; x = 2; return x; } }', 'var x;', 'x = 1');
-	}
-
-
-	public inline function testFixDeletesDeadStoreBetweenReads(): Void {
-		// `x = 99` dies between two live reads — deleting it must keep `trace(x)` and the return.
-		assertFix('class C { function f(a:Int):Int { var x = a; trace(x); x = 99; x = a + 1; return x; } }', 'trace(x)', '99');
-	}
-
-	public inline function testFixDeletesTrailingStore(): Void {
-		// A store followed only by the exit is deleted; the earlier live read stays.
-		assertFix('class C { function f(a:Int):Void { var x = a; trace(x); x = a + 1; } }', 'trace(x)', 'a + 1');
-	}
-
-	public inline function testFixKeepsTypeOnStrippedInit(): Void {
-		// The name and type are kept verbatim — only ` = e` is removed.
-		assertFix('class C { function f():Int { var x:Int = 1; x = 2; return x; } }', 'var x:Int;', '= 1');
-	}
-
-	public inline function testFixRefusesCallRhs(): Void {
-		// A call right-hand side may have side effects — the dead store stays a finding.
-		assertNoFix('class C { function f(a:Int):Void { var x = a; trace(x); x = compute(); } }');
-	}
-
-	public inline function testFixRefusesNewRhs(): Void {
-		// `new` runs a constructor — never deleted.
-		assertNoFix('class C { function f(a:Int):Void { var y = a; trace(y); y = new Foo(); } }');
-	}
-
-	public inline function testFixRefusesBareBranchBody(): Void {
-		// A dead store that is a bare (unbraced) branch body is left — deleting it would corrupt
-		// the `if`; only a direct block statement is removed.
-		assertNoFix('class C { function f(a:Int):Void { var z = a; trace(z); if (a > 0) z = 5; } }');
-	}
-
-	public inline function testFixRefusesCallInitializer(): Void {
-		// An impure initializer is not stripped even when reassigned before a read.
-		assertNoFix('class C { function f(a:Int):Int { var w = compute(); w = a; return w; } }');
-	}
-
 	public function testFixSkipParseNoEdit(): Void {
 		// An unparseable source yields no edits (no crash).
 		Assert.equals(0, new DeadStore().fix('class Bad { function f() { var x = ', [], new HaxeQueryPlugin()).length);
@@ -311,7 +310,6 @@ class DeadStoreTest extends Test {
 				Assert.fail('fix canonicalize Err: $message');
 		}
 	}
-
 
 	private function assertNoFix(src: String): Void {
 		final check: DeadStore = new DeadStore();

@@ -36,6 +36,18 @@ import anyparse.grammar.haxe.HxModuleWriter;
  */
 class HxImportAliasInSliceTest extends HxTestHelpers {
 
+	public inline function testRoundTripImportAliasInSimple(): Void {
+		roundTrip('import Std.is in isOfType;');
+	}
+
+	public inline function testRoundTripImportAliasInCondComp(): Void {
+		roundTrip('import Std.is in isOfType;\n#if (haxe_ver >= 4.2)\nimport Std.isOfType;\n#else\nimport Std.is in isOfType;\n#end\n');
+	}
+
+	public inline function testMixedAsAndInRoundTrip(): Void {
+		roundTrip('import python.lib.socket.Socket as PSocket;\nimport python.lib.Socket in PSocketModule;\n');
+	}
+
 	public function testImportAliasInSimple(): Void {
 		final ast: HxModule = HaxeModuleParser.parse('import Std.is in isOfType;');
 		Assert.equals(1, ast.decls.length);
@@ -109,14 +121,6 @@ class HxImportAliasInSliceTest extends HxTestHelpers {
 		Assert.isFalse(out.indexOf(' as isOfType;') >= 0);
 	}
 
-	public inline function testRoundTripImportAliasInSimple(): Void {
-		roundTrip('import Std.is in isOfType;');
-	}
-
-	public inline function testRoundTripImportAliasInCondComp(): Void {
-		roundTrip('import Std.is in isOfType;\n#if (haxe_ver >= 4.2)\nimport Std.isOfType;\n#else\nimport Std.is in isOfType;\n#end\n');
-	}
-
 	// -- The real motivating shape: `as` and `in` mixed in one file --
 
 	public function testMixedAsAndInAdjacent(): Void {
@@ -136,10 +140,6 @@ class HxImportAliasInSliceTest extends HxTestHelpers {
 			case _:
 				Assert.fail('expected ImportAliasInDecl second, got ${ast.decls[1].decl}');
 		}
-	}
-
-	public inline function testMixedAsAndInRoundTrip(): Void {
-		roundTrip('import python.lib.socket.Socket as PSocket;\nimport python.lib.Socket in PSocketModule;\n');
 	}
 
 	public function testMixedAsAndInKeywordsNotCrossRewritten(): Void {

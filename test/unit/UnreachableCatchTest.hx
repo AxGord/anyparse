@@ -17,6 +17,27 @@ import anyparse.query.RefactorSupport;
  */
 class UnreachableCatchTest extends Test {
 
+	public inline function testFixDeletesDuplicateClause(): Void {
+		// The later duplicate clause (its `dead()` body) is removed; the earlier one is kept.
+		assertFix('class E {} class C { function f() { try { g(); } catch (e:E) { keep(); } catch (e:E) { dead(); } } }', 'keep', 'dead');
+	}
+
+	public inline function testFixCatchAllDeletesLater(): Void {
+		// A catch-all first makes the later typed clause dead — it is deleted.
+		assertFix(
+			'class E {} class C { function f() { try { g(); } catch (e:Dynamic) { keep(); } catch (e:E) { dead(); } } }', 'keep', 'dead'
+		);
+	}
+
+	public inline function testFixNestedOverlapKeepsOuterOnly(): Void {
+		// The outer dead clause nests an inner dead clause; deleting the outer removes both — the
+		// contained inner edit is dropped, so `inner`/`b` vanish with the outer and only `ok` stays.
+		assertFix(
+			'class C { function f() { try { risky(); } catch (e:Dynamic) { ok(); } catch (e:Dynamic) { try { inner(); } catch (a:Dynamic) { fine(); } catch (b:Dynamic) { dead(); } } } }',
+			'ok', 'dead'
+		);
+	}
+
 	public function testDuplicateCatchFlagged(): Void {
 		Assert.equals(1, violations('class E {} class C { function f() { try { g(); } catch (e:E) {} catch (e:E) {} } }').length);
 	}
@@ -77,27 +98,6 @@ class UnreachableCatchTest extends Test {
 		Assert.equals(1, vs.length);
 		Assert.equals('unreachable-catch', vs[0].rule);
 		Assert.equals(Severity.Warning, vs[0].severity);
-	}
-
-	public inline function testFixDeletesDuplicateClause(): Void {
-		// The later duplicate clause (its `dead()` body) is removed; the earlier one is kept.
-		assertFix('class E {} class C { function f() { try { g(); } catch (e:E) { keep(); } catch (e:E) { dead(); } } }', 'keep', 'dead');
-	}
-
-	public inline function testFixCatchAllDeletesLater(): Void {
-		// A catch-all first makes the later typed clause dead — it is deleted.
-		assertFix(
-			'class E {} class C { function f() { try { g(); } catch (e:Dynamic) { keep(); } catch (e:E) { dead(); } } }', 'keep', 'dead'
-		);
-	}
-
-	public inline function testFixNestedOverlapKeepsOuterOnly(): Void {
-		// The outer dead clause nests an inner dead clause; deleting the outer removes both — the
-		// contained inner edit is dropped, so `inner`/`b` vanish with the outer and only `ok` stays.
-		assertFix(
-			'class C { function f() { try { risky(); } catch (e:Dynamic) { ok(); } catch (e:Dynamic) { try { inner(); } catch (a:Dynamic) { fine(); } catch (b:Dynamic) { dead(); } } } }',
-			'ok', 'dead'
-		);
 	}
 
 	public function testFixNoDeadClauseNoEdit(): Void {

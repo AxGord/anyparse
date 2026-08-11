@@ -29,6 +29,12 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxLocalVarMetaSliceTest extends HxTestHelpers {
 
+	// -- Round-trip the fork fixture body --
+
+	public inline function testForkFixtureRoundTrip(): Void {
+		roundTrip("class Main {\n\tfunction main() {\n\t\tvar @:name name = 'Foo';\n\t}\n}", 'fork var_meta_data fixture');
+	}
+
 	// -- Single meta before a local var name (the fork fixture) --
 
 	public function testSingleMetaBeforeLocalVarName(): Void {
@@ -74,12 +80,6 @@ class HxLocalVarMetaSliceTest extends HxTestHelpers {
 	public function testNoMetaRoundTripUnchanged(): Void {
 		roundTrip('class M { function main() { var x = 1; } }', 'no-meta local var');
 		roundTrip('class M { function main() { final y:Int = 2; } }', 'no-meta local final');
-	}
-
-	// -- Round-trip the fork fixture body --
-
-	public inline function testForkFixtureRoundTrip(): Void {
-		roundTrip("class Main {\n\tfunction main() {\n\t\tvar @:name name = 'Foo';\n\t}\n}", 'fork var_meta_data fixture');
 	}
 
 	// -- Meta inside an HxVarMore continuation (`var a, @:foo b`) --

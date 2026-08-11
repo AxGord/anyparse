@@ -26,42 +26,6 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
  */
 class ExplicitLocalTypeCheckTest extends ExplicitLocalTypeCheckTestBase {
 
-	// --- detection ---
-
-	public function testUntypedVarFlagged(): Void {
-		final vs: Array<Violation> = violations(wrap('var a = 5;'));
-		Assert.equals(1, vs.length);
-		Assert.equals('explicit-local-type', vs[0].rule);
-		Assert.equals(Severity.Warning, vs[0].severity);
-	}
-
-	public function testUntypedFinalFlagged(): Void {
-		Assert.equals(1, violations(wrap('final a = 5;')).length);
-	}
-
-	public function testTypedLocalNotFlagged(): Void {
-		Assert.equals(0, violations(wrap('var a:Int = 5;')).length);
-	}
-
-	public function testTypedFinalNotFlagged(): Void {
-		Assert.equals(0, violations(wrap('final a:String = "x";')).length);
-	}
-
-	public function testParameterNotFlagged(): Void {
-		Assert.equals(0, violations('class C {\n\tfunction f(p):Void {}\n}').length);
-	}
-
-	public function testNoInitUntypedFlaggedNoFix(): Void {
-		final src: String = wrap('var a;');
-		Assert.equals(1, violations(src).length);
-		Assert.equals(0, new ExplicitLocalType().fix(src, violations(src), new HaxeQueryPlugin()).length);
-	}
-
-	public function testMacroLocalSkipped(): Void {
-		final src: String = 'class C {\n\tmacro static function f() {\n\t\treturn macro {\n\t\t\tvar inside = 5;\n\t\t};\n\t}\n}';
-		Assert.equals(0, violations(src).length);
-	}
-
 	// --- fix: structurally-pinned shapes annotated ---
 
 	public inline function testFixString(): Void {
@@ -106,6 +70,65 @@ class ExplicitLocalTypeCheckTest extends ExplicitLocalTypeCheckTestBase {
 		assertFixContains('final b = new haxe.io.BytesBuffer();', ':haxe.io.BytesBuffer');
 	}
 
+	// --- fix: inference-resolved shapes stay report-only ---
+
+	public inline function testSkipEmptyArray(): Void {
+		assertNoFix('final empty = [];');
+	}
+
+	public inline function testSkipHeterogeneousArray(): Void {
+		assertNoFix("var hetero = [1, 'x'];");
+	}
+
+	public inline function testSkipBareNew(): Void {
+		assertNoFix('final bare = new Map();');
+	}
+
+	public inline function testSkipNullInit(): Void {
+		assertNoFix('final nul = null;');
+	}
+
+	public inline function testFixBareNewQualifiedPath(): Void {
+		// `Path` is a whitelisted non-generic constructor type -> the written name verbatim.
+		assertFixContains("final p = new haxe.io.Path('x');", 'p:haxe.io.Path');
+	}
+
+	// --- detection ---
+
+	public function testUntypedVarFlagged(): Void {
+		final vs: Array<Violation> = violations(wrap('var a = 5;'));
+		Assert.equals(1, vs.length);
+		Assert.equals('explicit-local-type', vs[0].rule);
+		Assert.equals(Severity.Warning, vs[0].severity);
+	}
+
+	public function testUntypedFinalFlagged(): Void {
+		Assert.equals(1, violations(wrap('final a = 5;')).length);
+	}
+
+	public function testTypedLocalNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('var a:Int = 5;')).length);
+	}
+
+	public function testTypedFinalNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('final a:String = "x";')).length);
+	}
+
+	public function testParameterNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f(p):Void {}\n}').length);
+	}
+
+	public function testNoInitUntypedFlaggedNoFix(): Void {
+		final src: String = wrap('var a;');
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, new ExplicitLocalType().fix(src, violations(src), new HaxeQueryPlugin()).length);
+	}
+
+	public function testMacroLocalSkipped(): Void {
+		final src: String = 'class C {\n\tmacro static function f() {\n\t\treturn macro {\n\t\t\tvar inside = 5;\n\t\t};\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
 	public function testFixBareNewIndexedPlainClass(): Void {
 		assertFixIdx(
 			wrap('final t = new Widget();'), [{ file: 'Widget.hx', source: 'class Widget {\n\tpublic function new() {}\n}' }], ':Widget'
@@ -127,24 +150,6 @@ class ExplicitLocalTypeCheckTest extends ExplicitLocalTypeCheckTestBase {
 		assertNoFixIdx(wrap('final s = new StringBuf();'), [
 			{ file: 'StringBuf.hx', source: 'class StringBuf<T> {\n\tpublic function new() {}\n}' }
 		]);
-	}
-
-	// --- fix: inference-resolved shapes stay report-only ---
-
-	public inline function testSkipEmptyArray(): Void {
-		assertNoFix('final empty = [];');
-	}
-
-	public inline function testSkipHeterogeneousArray(): Void {
-		assertNoFix("var hetero = [1, 'x'];");
-	}
-
-	public inline function testSkipBareNew(): Void {
-		assertNoFix('final bare = new Map();');
-	}
-
-	public inline function testSkipNullInit(): Void {
-		assertNoFix('final nul = null;');
 	}
 
 	public function testIdempotentOnTyped(): Void {
@@ -194,11 +199,6 @@ class ExplicitLocalTypeCheckTest extends ExplicitLocalTypeCheckTestBase {
 			{ file: 'a/StringBuf.hx', source: 'class StringBuf {\n\tpublic function new() {}\n}' },
 			{ file: 'b/StringBuf.hx', source: 'class StringBuf<T> {\n\tpublic function new() {}\n}' }
 		]);
-	}
-
-	public inline function testFixBareNewQualifiedPath(): Void {
-		// `Path` is a whitelisted non-generic constructor type -> the written name verbatim.
-		assertFixContains("final p = new haxe.io.Path('x');", 'p:haxe.io.Path');
 	}
 
 	// --- helpers ---

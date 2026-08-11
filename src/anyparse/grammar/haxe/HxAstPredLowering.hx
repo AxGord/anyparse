@@ -31,6 +31,13 @@ final class HxAstPredLowering extends AstPredLowering {
 	private static inline final HX_ELSEIF_DECL: String = 'anyparse.grammar.haxe.HxElseifDecl';
 
 	/**
+	 * The keyword a `HxExpr.CondSpliceTail` fragment starts with when it
+	 * is an if-chain continuation rather than a standalone guarded
+	 * statement. See `condSpliceTailElseLedField`.
+	 */
+	private static inline final ELSE_KEYWORD: String = 'else';
+
+	/**
 	 * `HxExpr` `*Assign` ctor names — every right-associative `=` infix
 	 * (`Assign` plus the 14 compound forms). `stmtExprNoSemi` walks
 	 * through an assignment-statement's right operand: the last token
@@ -159,13 +166,6 @@ final class HxAstPredLowering extends AstPredLowering {
 	 * the same `HxVarDecl`, so one or-pattern case walks `.init`.
 	 */
 	private static final VAR_INIT_STMT_CTORS: Array<String> = ['VarStmt', 'FinalStmt', 'StaticVarStmt', 'StaticFinalStmt'];
-
-	/**
-	 * The keyword a `HxExpr.CondSpliceTail` fragment starts with when it
-	 * is an if-chain continuation rather than a standalone guarded
-	 * statement. See `condSpliceTailElseLedField`.
-	 */
-	private static inline final ELSE_KEYWORD: String = 'else';
 
 	/**
 	 * Import / using family ctors of `HxDecl` whose leaf carries a

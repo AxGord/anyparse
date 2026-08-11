@@ -220,6 +220,14 @@ final class Metavar {
 		return new QueryNode(tree.kind, n, newChildren, tree.span);
 	}
 
+	private static inline function isIdentStart(c: Int): Bool {
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code;
+	}
+
+	private static inline function isIdentCont(c: Int): Bool {
+		return isIdentStart(c) || (c >= '0'.code && c <= '9'.code);
+	}
+
 	private static function scanStringEnd(source: String, start: Int, quote: Int): Int {
 		var i: Int = start + 1;
 		final len: Int = source.length;
@@ -250,14 +258,6 @@ final class Metavar {
 			i++;
 		}
 		return len;
-	}
-
-	private static inline function isIdentStart(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code;
-	}
-
-	private static inline function isIdentCont(c: Int): Bool {
-		return isIdentStart(c) || (c >= '0'.code && c <= '9'.code);
 	}
 
 }

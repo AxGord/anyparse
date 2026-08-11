@@ -160,6 +160,9 @@ final class TypeRefPrinter {
 		'Xml' => 'Xml'
 	];
 
+	/** Paths `print` promised an import for, in first-promised order. */
+	private final _pendingImports: Array<String> = [];
+
 	/** The file's `package` declaration payload (`''` for the root package), or null when the printer has no tree. */
 	private final _pkg: Null<String>;
 
@@ -183,9 +186,6 @@ final class TypeRefPrinter {
 
 	/** Whether a fresh import has a legal splice point in this file (see the constructor). */
 	private final _canAnchorImports: Bool;
-
-	/** Paths `print` promised an import for, in first-promised order. */
-	private final _pendingImports: Array<String> = [];
 
 	/** Every `#if`-guarded import-ish declaration of the file, at any directive nesting depth; empty with no tree. */
 	private final _guardedImports: Array<QueryNode>;
@@ -218,6 +218,11 @@ final class TypeRefPrinter {
 		// fallback would splice the import AHEAD of `package`, which does not parse. Refuse to
 		// import at all rather than emit that.
 		_canAnchorImports = root == null || !ModuleScan.hasSpanlessPackage(root);
+	}
+
+	/** Whether `print` has promised at least one import that `pendingImportEdits` will materialise. */
+	public inline function hasPendingImports(): Bool {
+		return _pendingImports.length > 0;
 	}
 
 	/**
@@ -363,9 +368,16 @@ final class TypeRefPrinter {
 		];
 	}
 
-	/** Whether `print` has promised at least one import that `pendingImportEdits` will materialise. */
-	public inline function hasPendingImports(): Bool {
-		return _pendingImports.length > 0;
+	/**
+	 * Whether THIS module's own top level declares `simple` AND that declaration is `canonical` — the
+	 * MODULE-LOCAL binding, which outranks every import in Haxe's resolution order. Asked at two
+	 * priorities (`shadowedByModuleImport` exempts it, `shadowedLocally` short-circuits on it), so it
+	 * lives here rather than being spelled twice: the two sites must never drift apart about what
+	 * "the file declares this type itself" means.
+	 */
+	private inline function moduleLocalBinds(canonical: String, simple: String): Bool {
+		final root: Null<QueryNode> = _root;
+		return root != null && ModuleScan.declaresTypeNamed(root, simple) && moduleLocalPathOf(simple) == canonical;
 	}
 
 	/**
@@ -734,18 +746,6 @@ final class TypeRefPrinter {
 		final pkg: Null<String> = _pkg;
 		return index != null && pkg != null
 			&& index.declaringFiles(simple).exists(f -> f.pkg == pkg && ModuleScan.pathOfTypeIn(f, simple) != canonical);
-	}
-
-	/**
-	 * Whether THIS module's own top level declares `simple` AND that declaration is `canonical` — the
-	 * MODULE-LOCAL binding, which outranks every import in Haxe's resolution order. Asked at two
-	 * priorities (`shadowedByModuleImport` exempts it, `shadowedLocally` short-circuits on it), so it
-	 * lives here rather than being spelled twice: the two sites must never drift apart about what
-	 * "the file declares this type itself" means.
-	 */
-	private inline function moduleLocalBinds(canonical: String, simple: String): Bool {
-		final root: Null<QueryNode> = _root;
-		return root != null && ModuleScan.declaresTypeNamed(root, simple) && moduleLocalPathOf(simple) == canonical;
 	}
 
 	/** The dotted path a type named `simple` declared in THIS module carries: `pkg.Module.simple`, reduced to `pkg.Module` when it IS the main type. */

@@ -24,6 +24,22 @@ class HxVarNoTypeSliceTest extends HxTestHelpers {
 		super();
 	}
 
+	public inline function testWriterRoundTripInitOnly(): Void {
+		roundTrip('class Foo { var x = 1; }');
+	}
+
+	public inline function testWriterRoundTripBareName(): Void {
+		roundTrip('class Foo { var x; }');
+	}
+
+	public inline function testWriterRoundTripMetadataNoType(): Void {
+		roundTrip('class Foo { @in var someVar = 123; }');
+	}
+
+	public inline function testWriterRoundTripMixedShapes(): Void {
+		roundTrip('class F { var a; var b:Int; var c = 1; var d:Int = 2; }');
+	}
+
 	public function testInitOnlyNoType(): Void {
 		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x = 1; }');
 		Assert.equals('x', (decl.name: String));
@@ -81,22 +97,6 @@ class HxVarNoTypeSliceTest extends HxTestHelpers {
 		final decl: HxVarDecl = expectVarMember(m.member);
 		Assert.isNull(decl.type);
 		Assert.notNull(decl.init);
-	}
-
-	public inline function testWriterRoundTripInitOnly(): Void {
-		roundTrip('class Foo { var x = 1; }');
-	}
-
-	public inline function testWriterRoundTripBareName(): Void {
-		roundTrip('class Foo { var x; }');
-	}
-
-	public inline function testWriterRoundTripMetadataNoType(): Void {
-		roundTrip('class Foo { @in var someVar = 123; }');
-	}
-
-	public inline function testWriterRoundTripMixedShapes(): Void {
-		roundTrip('class F { var a; var b:Int; var c = 1; var d:Int = 2; }');
 	}
 
 }

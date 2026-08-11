@@ -27,6 +27,20 @@ final class LoopScan {
 	/** The one numeric literal a counter / range may start from. */
 	private static inline final ZERO_LITERAL: String = '0';
 
+	/** The name `node` carries when it is a bare identifier, else null. */
+	public static inline function bareIdentName(node: QueryNode, s: LoopSeams): Null<String> {
+		return node.kind == s.identKind ? node.name : null;
+	}
+
+	/**
+	 * Whether every mention of `name` in `node`'s subtree sits in a position that cannot change the collection it denotes: a READ of `sizeMember` on it (`name.length`, including through `?.` / `!.`) or an index READ (`name[e]`). Everything else answers false — a call on it (`name.push(v)`), a method VALUE taken off it (`f(name.pop)`), a bare mention handing the reference to a callee (`f(name)`), a write to the binding, a write THROUGH it (`name.length = 0`, `name[k] = v`), a receiverless use.
+	 *
+	 * The scan is BODY-LOCAL, which is its documented limit: an alias handed out before the loop, or a call that reaches the same collection through a field the callee owns, is invisible to it. Closing that would need whole-program alias analysis; each rule's type doc repeats the caveat.
+	 */
+	public static inline function usedOnlyAsStableCollection(node: QueryNode, name: String, sizeMember: String, s: LoopSeams): Bool {
+		return stableUseScan(node, null, null, name, sizeMember, s);
+	}
+
 	/**
 	 * Bundle the `RefShape` kinds both loop rules read, or null when one the scans cannot work
 	 * without is unset (the calling check is then a no-op). `identKind` is required by `RefShape`
@@ -125,11 +139,6 @@ final class LoopScan {
 		return span != null && s.numericLiteralKinds.contains(node.kind) && source.substring(span.from, span.to) == ZERO_LITERAL;
 	}
 
-	/** The name `node` carries when it is a bare identifier, else null. */
-	public static inline function bareIdentName(node: QueryNode, s: LoopSeams): Null<String> {
-		return node.kind == s.identKind ? node.name : null;
-	}
-
 	/**
 	 * Whether `decl` is a single-variable local declaration (one initializer child, no
 	 * multi-declaration comma) — the shape both rules consume, whose name is the binding
@@ -156,15 +165,6 @@ final class LoopScan {
 		if (typeSources == null) return null;
 		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(ident, root, s.shape);
 		return bindingFrom == null ? null : typeSources[bindingFrom];
-	}
-
-	/**
-	 * Whether every mention of `name` in `node`'s subtree sits in a position that cannot change the collection it denotes: a READ of `sizeMember` on it (`name.length`, including through `?.` / `!.`) or an index READ (`name[e]`). Everything else answers false — a call on it (`name.push(v)`), a method VALUE taken off it (`f(name.pop)`), a bare mention handing the reference to a callee (`f(name)`), a write to the binding, a write THROUGH it (`name.length = 0`, `name[k] = v`), a receiverless use.
-	 *
-	 * The scan is BODY-LOCAL, which is its documented limit: an alias handed out before the loop, or a call that reaches the same collection through a field the callee owns, is invisible to it. Closing that would need whole-program alias analysis; each rule's type doc repeats the caveat.
-	 */
-	public static inline function usedOnlyAsStableCollection(node: QueryNode, name: String, sizeMember: String, s: LoopSeams): Bool {
-		return stableUseScan(node, null, null, name, sizeMember, s);
 	}
 
 	/**

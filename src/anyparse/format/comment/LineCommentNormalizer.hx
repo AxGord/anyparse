@@ -103,6 +103,16 @@ class LineCommentNormalizer {
 		return opt.addLineCommentSpace ? '// $trimmed' : '//$trimmed';
 	}
 
+	/** True for an ASCII letter or digit. */
+	private static inline function isAlnum(c: Int): Bool {
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code);
+	}
+
+	/** The ` `/`\t`/`\r` prefix of `body`. */
+	private static inline function leadingWhitespace(body: String): String {
+		return body.substr(0, firstNonWhitespaceIndex(body));
+	}
+
 	private static function isDecorationPrefix(body: String): Bool {
 		if (body.length == 0) return false;
 		final c: Int = body.fastCodeAt(0);
@@ -129,16 +139,6 @@ class LineCommentNormalizer {
 			i++;
 		}
 		return i;
-	}
-
-	/** True for an ASCII letter or digit. */
-	private static inline function isAlnum(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code);
-	}
-
-	/** The ` `/`\t`/`\r` prefix of `body`. */
-	private static inline function leadingWhitespace(body: String): String {
-		return body.substr(0, firstNonWhitespaceIndex(body));
 	}
 
 	/**

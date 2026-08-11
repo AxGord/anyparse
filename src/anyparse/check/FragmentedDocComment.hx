@@ -72,6 +72,16 @@ final class FragmentedDocComment implements Check {
 		return edits;
 	}
 
+	/**
+	 * Whether `tok` is a documentation block — opens with the doc marker and is not
+	 * the empty form. A plain block comment (a license header, a section banner) is
+	 * NOT a doc and so never joins a fragmented-doc run, matching the doc-vs-plain
+	 * discrimination `RefactorSupport.docExtendedSpan` already makes.
+	 */
+	private static inline function isDocBlock(source: String, tok: CommentTok): Bool {
+		return RefactorSupport.isDocBlock(source, tok);
+	}
+
 	/** Runs of 2+ block comments on consecutive lines (whitespace-only, no blank line, between them). */
 	private static function adjacentBlockRuns(source: String): Array<Array<CommentTok>> {
 		final comments: Array<CommentTok> = RefactorSupport.collectCommentTokens(source);
@@ -90,16 +100,6 @@ final class FragmentedDocComment implements Check {
 				i++;
 		}
 		return runs;
-	}
-
-	/**
-	 * Whether `tok` is a documentation block — opens with the doc marker and is not
-	 * the empty form. A plain block comment (a license header, a section banner) is
-	 * NOT a doc and so never joins a fragmented-doc run, matching the doc-vs-plain
-	 * discrimination `RefactorSupport.docExtendedSpan` already makes.
-	 */
-	private static inline function isDocBlock(source: String, tok: CommentTok): Bool {
-		return RefactorSupport.isDocBlock(source, tok);
 	}
 
 	/** Whether only whitespace with at most one newline separates `a` and `b` (consecutive lines, no blank line). */

@@ -157,6 +157,9 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 
 	private static inline final RULE_ID: String = 'explicit-local-type';
 
+	/** Default `maxInferredTypeLength`: an anonymous-structure annotation longer than this stays report-only. */
+	private static inline final DEFAULT_MAX_ANON_LEN: Int = 80;
+
 	/**
 	 * Builtin type names a cross-file type SOURCE may be copied verbatim as: the source is
 	 * spelled in the DECLARING file, so every component must resolve identically in ANY
@@ -201,9 +204,6 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		'Http',
 		'Path'
 	];
-
-	/** Default `maxInferredTypeLength`: an anonymous-structure annotation longer than this stays report-only. */
-	private static inline final DEFAULT_MAX_ANON_LEN: Int = 80;
 
 	/** The per-file config resolver injected by the linter (`ConfigAware`), or null to fall back to `LintConfig.discover`. */
 	private var _configResolver: Null<(String) -> LintConfig> = null;

@@ -23,6 +23,24 @@ using StringTools;
 @:nullSafety(Strict)
 final class MemberSlots {
 
+	/** The branch a member sits in - 0 for an unconditional member or for the then-branch of a construct. */
+	public static inline function branchIndexOf(m: OrderedMember): Int {
+		final b: Null<BranchInfo> = m.branch;
+		return b == null ? 0 : b.index;
+	}
+
+	/** A member's construct branch shape, `''` when it is in none - part of the block key, so only same-shaped constructs merge into one block. */
+	public static inline function branchSignatureOf(m: OrderedMember): String {
+		final b: Null<BranchInfo> = m.branch;
+		return b == null ? '' : b.opens.join('\n');
+	}
+
+	/** The branch-opening directives of a member's construct, empty when it is in none: `opens[k - 1]` opens branch `k`. */
+	public static inline function branchOpensOf(m: OrderedMember): Array<String> {
+		final b: Null<BranchInfo> = m.branch;
+		return b == null ? [] : b.opens;
+	}
+
 	/**
 	 * Collect `container`'s members in source (pre-order) order with each member's
 	 * rank and full slot span, descending into `#if` conditional regions so a guarded
@@ -101,8 +119,15 @@ final class MemberSlots {
 		final staticKind: Null<String> = shape.staticModifierKind;
 		final defaultVis: String = shape.defaultVisibilityModifierText ?? '';
 		final condKind: Null<String> = shape.conditionalMemberKind;
+		final inlineKind: Null<String> = shape.inlineModifierKind;
 		var isStatic: Bool = false;
 		var isPublic: Bool = false;
+		var isInline: Bool = false;
+		inline function resetModifiers(): Void {
+			isStatic = false;
+			isPublic = false;
+			isInline = false;
+		}
 		for (child in parent.children) {
 			if (condKind != null && child.kind == condKind) {
 				final span: Null<Span> = child.span;
@@ -114,14 +139,13 @@ final class MemberSlots {
 					absorbLeadDoc(out, firstIdx, source, comments, span.from);
 					assignBranches(out, firstIdx, span, source, shape);
 				}
-				isStatic = false;
-				isPublic = false;
+				resetModifiers();
 			} else if (members.contains(child.kind)) {
-				pushMember(out, child, parent, source, shape, comments, condStack, outerCond, isStatic, isPublic, accessors);
-				isStatic = false;
-				isPublic = false;
+				pushMember(out, child, parent, source, shape, comments, condStack, outerCond, isStatic, isPublic, isInline, accessors);
+				resetModifiers();
 			} else {
 				if (staticKind != null && child.kind == staticKind) isStatic = true;
+				if (inlineKind != null && child.kind == inlineKind) isInline = true;
 				if (visibility.contains(child.kind)) {
 					final s: Null<Span> = child.span;
 					if (s != null && source.substring(s.from, s.to).trim() != defaultVis) isPublic = true;
@@ -213,7 +237,7 @@ final class MemberSlots {
 	private static function pushMember(
 		out: Array<OrderedMember>, child: QueryNode, parent: QueryNode, source: String, shape: RefShape,
 		comments: Array<{ from: Int, to: Int, isLine: Bool }>, condStack: Array<String>, outerCond: Null<Span>, isStatic: Bool,
-		isPublic: Bool, accessors: Map<Int, Bool>
+		isPublic: Bool, isInline: Bool, accessors: Map<Int, Bool>
 	): Void {
 		final span: Null<Span> = child.span;
 		if (span == null) return;
@@ -228,6 +252,7 @@ final class MemberSlots {
 			span: full,
 			isField: isField,
 			isStatic: isStatic,
+			isInline: isInline,
 			initNode: isField && child.children.length > 0 ? child.children[0] : null,
 			condition: condStack.length == 0 ? null : joinConds(condStack),
 			branch: null,

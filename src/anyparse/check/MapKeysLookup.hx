@@ -157,6 +157,14 @@ final class MapKeysLookup implements Check {
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
+	private static inline function isIdentNamed(node: QueryNode, name: String, cfg: Cfg): Bool {
+		return node.kind == cfg.identKind && node.name == name;
+	}
+
+	private static inline function isWriteMethod(name: Null<String>): Bool {
+		return name == SET_METHOD || name == REMOVE_METHOD || name == CLEAR_METHOD;
+	}
+
 	/** Resolve the required + optional `RefShape` seams and the type provider, or null when a required kind is unset. */
 	private static function readCfg(plugin: GrammarPlugin): Null<Cfg> {
 		final shape: RefShape = plugin.refShape();
@@ -293,7 +301,6 @@ final class MapKeysLookup implements Check {
 		final recv: QueryNode = callee.children[0];
 		return RefactorSupport.pathOf(recv, cfg.identKind, cfg.fieldKind) == null ? null : recv;
 	}
-
 
 	/**
 	 * Whether `node` is the SAME path as `path`, compared segment by segment rather than by
@@ -474,16 +481,6 @@ final class MapKeysLookup implements Check {
 		// binding) resolves import-aware from the reference file's scope.
 		return RefactorSupport.valueTypeNominal(recv, root, cfg.shape, declaredTypes, symbols(), file);
 	}
-
-
-	private static inline function isIdentNamed(node: QueryNode, name: String, cfg: Cfg): Bool {
-		return node.kind == cfg.identKind && node.name == name;
-	}
-
-	private static inline function isWriteMethod(name: Null<String>): Bool {
-		return name == SET_METHOD || name == REMOVE_METHOD || name == CLEAR_METHOD;
-	}
-
 
 	/** Mirror of `walk` for the fix path: emit the key-value rewrite for each wanted loop. */
 	private static function fixWalk(

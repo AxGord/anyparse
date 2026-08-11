@@ -23,6 +23,14 @@ import anyparse.grammar.haxe.HxModule;
  */
 class HxEllipsisMemberSliceTest extends HxTestHelpers {
 
+	public inline function testEllipsisMemberWriterEquals(): Void {
+		writerEquals('class A {\n\t...\n}\n\nclass B {\n\t...\n}', 'class A {\n\t...\n}\n\nclass B {\n\t...\n}\n');
+	}
+
+	public inline function testEllipsisMemberRoundTrip(): Void {
+		roundTrip('class A {\n\t...\n}\n\nclass B {\n\t...\n}');
+	}
+
 	public function testEllipsisMemberSingleClass(): Void {
 		final cls: HxClassDecl = HaxeParser.parse('class A { ... }');
 		Assert.equals(1, cls.members.length);
@@ -37,14 +45,6 @@ class HxEllipsisMemberSliceTest extends HxTestHelpers {
 	public function testEllipsisMemberTwoClasses(): Void {
 		final module: HxModule = HaxeModuleParser.parse('class A {\n\t...\n}\n\nclass B {\n\t...\n}');
 		Assert.equals(2, module.decls.length);
-	}
-
-	public inline function testEllipsisMemberWriterEquals(): Void {
-		writerEquals('class A {\n\t...\n}\n\nclass B {\n\t...\n}', 'class A {\n\t...\n}\n\nclass B {\n\t...\n}\n');
-	}
-
-	public inline function testEllipsisMemberRoundTrip(): Void {
-		roundTrip('class A {\n\t...\n}\n\nclass B {\n\t...\n}');
 	}
 
 	public function testNoEllipsisRegression(): Void {

@@ -274,6 +274,10 @@ class IfFalseDeadCodeCheckTest extends Test {
 		);
 	}
 
+	private inline function applyEdits(src: String, edits: Array<{ span: Span, text: String }>): String {
+		return CheckFixture.applyEdits(src, edits);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new IfFalseDeadCode().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
@@ -284,10 +288,6 @@ class IfFalseDeadCodeCheckTest extends Test {
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
 		);
 		return applyEdits(src, edits);
-	}
-
-	private inline function applyEdits(src: String, edits: Array<{ span: Span, text: String }>): String {
-		return CheckFixture.applyEdits(src, edits);
 	}
 
 }

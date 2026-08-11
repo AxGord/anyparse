@@ -178,12 +178,12 @@ class HxCondUnbalancedRegionSliceTest extends HxTestHelpers {
 		}
 	}
 
-	private function parseBody(source: String): Array<HxStatement> {
-		return fnBodyStmts(parseSingleFnDecl(source));
-	}
-
 	private inline function triviaWrite(src: String): String {
 		return HxWriteFixture.triviaWrite(src, '{}');
+	}
+
+	private function parseBody(source: String): Array<HxStatement> {
+		return fnBodyStmts(parseSingleFnDecl(source));
 	}
 
 }

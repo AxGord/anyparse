@@ -29,6 +29,30 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		'package pkg;\nclass C {\n\tprivate var size:Int;\n\tpublic function f() { return this.size; }\n}';
 
 	/**
+	 * HALF-APPLIED HAZARD: the subtype's simple name is AMBIGUOUS in the scope (a secondary type
+	 * elsewhere in the set shares it), so the positive `isSubtype` proof MISSES - it needs a unique
+	 * decl at every closure step. The occurrence must then stay UNCOVERED so the completeness gate
+	 * blocks; attributing it to the "different owner" ignore bucket instead drops it silently and the
+	 * rename commits the declaring file ALONE, leaving the subtype reading a name that no longer
+	 * exists (`Unknown identifier`). Observed live on a 798-file tree where the subtype's simple name
+	 * collided with a secondary type in another module.
+	 */
+	public inline function testCrossFileFixBlocksWhenSubtypeNameIsAmbiguous(): Void {
+		// A bare inherited read in the subtype, attributed by its ENCLOSING class.
+		assertAmbiguousSubtypeBlocks('package pkg;\nclass D extends C {\n\tpublic function g() { return size; }\n}');
+	}
+
+	/**
+	 * The typed-receiver twin of the ambiguous-subtype hazard: `d.size` where `d:D` and `D`'s simple
+	 * name is ambiguous. `isSubtype('D', 'C')` misses, and the old `else` arm swept EVERY resolvable
+	 * non-subtype receiver into the ignore bucket, so the access was dropped and the rename
+	 * half-applied. A receiver type that is not PROVABLY unrelated must block instead.
+	 */
+	public inline function testCrossFileFixBlocksOnAmbiguousReceiverType(): Void {
+		assertAmbiguousSubtypeBlocks('package pkg;\nclass D extends C {\n\tpublic function g(d:D) { return d.size; }\n}');
+	}
+
+	/**
 	 * A receiver typed to a SUBTYPE of the owner reaches the same declaration and is renamed too. The
 	 * subtype's mere existence makes the private field non-confined, so this shape only ever reaches
 	 * the CROSS-FILE path (`isPrivateMemberConfined`) — the single-file `fix` refuses it earlier.
@@ -251,30 +275,6 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
 		Assert.equals(0, check.crossFileFix(files, vs, new HaxeQueryPlugin(), index).length);
-	}
-
-	/**
-	 * HALF-APPLIED HAZARD: the subtype's simple name is AMBIGUOUS in the scope (a secondary type
-	 * elsewhere in the set shares it), so the positive `isSubtype` proof MISSES - it needs a unique
-	 * decl at every closure step. The occurrence must then stay UNCOVERED so the completeness gate
-	 * blocks; attributing it to the "different owner" ignore bucket instead drops it silently and the
-	 * rename commits the declaring file ALONE, leaving the subtype reading a name that no longer
-	 * exists (`Unknown identifier`). Observed live on a 798-file tree where the subtype's simple name
-	 * collided with a secondary type in another module.
-	 */
-	public inline function testCrossFileFixBlocksWhenSubtypeNameIsAmbiguous(): Void {
-		// A bare inherited read in the subtype, attributed by its ENCLOSING class.
-		assertAmbiguousSubtypeBlocks('package pkg;\nclass D extends C {\n\tpublic function g() { return size; }\n}');
-	}
-
-	/**
-	 * The typed-receiver twin of the ambiguous-subtype hazard: `d.size` where `d:D` and `D`'s simple
-	 * name is ambiguous. `isSubtype('D', 'C')` misses, and the old `else` arm swept EVERY resolvable
-	 * non-subtype receiver into the ignore bucket, so the access was dropped and the rename
-	 * half-applied. A receiver type that is not PROVABLY unrelated must block instead.
-	 */
-	public inline function testCrossFileFixBlocksOnAmbiguousReceiverType(): Void {
-		assertAmbiguousSubtypeBlocks('package pkg;\nclass D extends C {\n\tpublic function g(d:D) { return d.size; }\n}');
 	}
 
 	/**

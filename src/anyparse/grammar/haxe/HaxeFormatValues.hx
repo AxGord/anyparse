@@ -46,6 +46,10 @@ import anyparse.format.TrailingCommaPolicy;
 @:nullSafety(Strict)
 final class HaxeFormatValues {
 
+	private static inline function trailingCommaToBool(policy: HxFormatTrailingCommaPolicy): Bool {
+		return policy == HxFormatTrailingCommaPolicy.Yes;
+	}
+
 	private static function wrappingLocationFromString(s: String): Null<WrappingLocation> {
 		return switch s {
 			case 'beforeLast': WrappingLocation.BeforeLast;
@@ -131,10 +135,6 @@ final class HaxeFormatValues {
 			case HxFormatSameLinePolicy.Keep: SameLinePolicy.Keep;
 			case _: SameLinePolicy.Same;
 		};
-	}
-
-	private static inline function trailingCommaToBool(policy: HxFormatTrailingCommaPolicy): Bool {
-		return policy == HxFormatTrailingCommaPolicy.Yes;
 	}
 
 	private static function bodyPolicyToRuntime(policy: HxFormatBodyPolicy): BodyPolicy {

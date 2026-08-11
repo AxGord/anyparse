@@ -207,6 +207,22 @@ final class DeadStore implements Check {
 		return edits;
 	}
 
+	/** Whether `node`'s span is one `run` flagged. */
+	private static inline function isFlagged(ctx: FixCtx, node: QueryNode): Bool {
+		final span: Null<Span> = node.span;
+		return span != null && ctx.flagged.contains('${span.from}:${span.to}');
+	}
+
+	/** Add `name` to the live set, deduplicated. */
+	private static inline function addLive(live: Array<String>, name: String): Void {
+		if (!live.contains(name)) live.push(name);
+	}
+
+	/** Whether `c` is a horizontal-space code (space or tab) — the whitespace an initializer strip walks over. */
+	private static inline function isHSpace(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code;
+	}
+
 	/**
 	 * Walk `node`, appending a deletion edit for each dead store `run` flagged whose right-hand side is
 	 * safe to drop. A dead `var` initializer is stripped in place; a standalone assignment statement (a
@@ -235,12 +251,6 @@ final class DeadStore implements Check {
 				edits.push({ span: RefactorSupport.lineExtendedSpan(ctx.source, stmtSpan), text: '' });
 		}
 		for (c in node.children) walkFix(c, ctx, edits);
-	}
-
-	/** Whether `node`'s span is one `run` flagged. */
-	private static inline function isFlagged(ctx: FixCtx, node: QueryNode): Bool {
-		final span: Null<Span> = node.span;
-		return span != null && ctx.flagged.contains('${span.from}:${span.to}');
 	}
 
 	/**
@@ -522,11 +532,6 @@ final class DeadStore implements Check {
 		for (n in ctx.ownNames) addLive(live, n);
 	}
 
-	/** Add `name` to the live set, deduplicated. */
-	private static inline function addLive(live: Array<String>, name: String): Void {
-		if (!live.contains(name)) live.push(name);
-	}
-
 	/** Every identifier name occurring anywhere in `node`'s subtree (including nested functions and write targets — over-counting reads only ever loses precision, never soundness). */
 	private static function collectReads(node: QueryNode, ctx: LiveCtx): Array<String> {
 		final out: Array<String> = [];
@@ -562,7 +567,6 @@ final class DeadStore implements Check {
 		return out;
 	}
 
-
 	/**
 	 * The span from the initializer's `=` (with the whitespace around it) through the initializer's
 	 * end — deleting it turns `var x:T = e;` into `var x:T;`, keeping the name and type verbatim.
@@ -576,12 +580,6 @@ final class DeadStore implements Check {
 		while (cut > 0 && isHSpace(source.fastCodeAt(cut - 1))) cut--;
 		return new Span(cut, initSpan.to);
 	}
-
-	/** Whether `c` is a horizontal-space code (space or tab) — the whitespace an initializer strip walks over. */
-	private static inline function isHSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code;
-	}
-
 
 	/**
 	 * Whether deleting an assignment / initializer whose right-hand side is `rhs` cannot drop a side

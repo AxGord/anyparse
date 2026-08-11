@@ -168,6 +168,14 @@ final class InlineMethod {
 		};
 	}
 
+	private static inline function isPureKind(kind: String): Bool {
+		return PURE_ARG_KINDS.contains(kind) || kind.endsWith('Lit') || kind.endsWith('StringExpr');
+	}
+
+	private static inline function isSpace(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code || c == '\r'.code;
+	}
+
 	/**
 	 * The single return expression `E` of `decl`'s body, or null when the
 	 * body is not exactly one returned expression. Handles the three body
@@ -349,10 +357,6 @@ final class InlineMethod {
 		return pure;
 	}
 
-	private static inline function isPureKind(kind: String): Bool {
-		return PURE_ARG_KINDS.contains(kind) || kind.endsWith('Lit') || kind.endsWith('StringExpr');
-	}
-
 	/**
 	 * The span of bytes to delete for the decl: its whole owned lines —
 	 * back over the leading indentation to the previous line break and
@@ -379,10 +383,6 @@ final class InlineMethod {
 		if (lineEnd < source.length && source.charAt(lineEnd) == '\n') lineEnd++;
 
 		return new Span(lineStart, lineEnd);
-	}
-
-	private static inline function isSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\r'.code;
 	}
 
 	/**

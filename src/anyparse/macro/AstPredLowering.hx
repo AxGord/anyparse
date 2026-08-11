@@ -272,6 +272,16 @@ class AstPredLowering {
 		return { expr: EField(target, name), pos: Context.currentPos() };
 	}
 
+	/** Simple (unqualified) name of a type path. */
+	public static inline function simpleName(typePath: String): String {
+		return PairedShapeLowering.simpleName(typePath);
+	}
+
+	/** Package parts of a type path, empty for a root-package type. */
+	public static inline function packOf(typePath: String): Array<String> {
+		return PairedShapeLowering.packOf(typePath);
+	}
+
 	/**
 	 * Fully-qualified path parts of the predicate marker class serving
 	 * the pipeline described by (`trivia`, `spans`) for the grammar
@@ -312,16 +322,6 @@ class AstPredLowering {
 	 */
 	public static function predFnExpr(rootTypePath: String, trivia: Bool, spans: Bool, name: String): Expr {
 		return MacroStringTools.toFieldExpr(predClassParts(rootTypePath, trivia, spans).concat([name]));
-	}
-
-	/** Simple (unqualified) name of a type path. */
-	public static inline function simpleName(typePath: String): String {
-		return PairedShapeLowering.simpleName(typePath);
-	}
-
-	/** Package parts of a type path, empty for a root-package type. */
-	public static inline function packOf(typePath: String): Array<String> {
-		return PairedShapeLowering.packOf(typePath);
 	}
 
 }

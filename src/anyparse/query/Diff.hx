@@ -88,6 +88,14 @@ final class Diff {
 		return buf.toString();
 	}
 
+	private static inline function posOrZero(p: Null<Position>): String {
+		return p == null ? '?:?' : '${p.line}:${p.col}';
+	}
+
+	private static inline function nodeLabel(n: QueryNode): String {
+		return n.name == null ? n.kind : '${n.kind} \'${n.name}\'';
+	}
+
 	private static function walk(a: Null<QueryNode>, b: Null<QueryNode>, out: Array<DiffHit>): Void {
 		if (a == null && b == null) return;
 		if (a == null) {
@@ -115,14 +123,6 @@ final class Diff {
 			for (i in lb ... la) walk(a.children[i], null, out);
 		else if (lb > la)
 			for (i in la ... lb) walk(null, b.children[i], out);
-	}
-
-	private static inline function posOrZero(p: Null<Position>): String {
-		return p == null ? '?:?' : '${p.line}:${p.col}';
-	}
-
-	private static inline function nodeLabel(n: QueryNode): String {
-		return n.name == null ? n.kind : '${n.kind} \'${n.name}\'';
 	}
 
 }

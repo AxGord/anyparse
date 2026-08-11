@@ -107,6 +107,16 @@ final class RedundantImport implements Check implements RiskyFix {
 	}
 
 	/**
+	 * Whether `o` brings every top-level type of `module` into scope: an unguarded, unaliased
+	 * `import <module>;` or `using <module>;` (a `using` is an import plus static extension). An
+	 * `Alias` binds only its alias, a `Wild` binds statics or main types, and a GUARDED statement
+	 * exists in some builds only — none of the three qualifies.
+	 */
+	private static inline function providesModule(o: ImportInfo, module: String): Bool {
+		return !o.guarded && (o.kind == ImportKind.Import || o.kind == ImportKind.Using) && o.raw == module;
+	}
+
+	/**
 	 * The module path that already binds `imp`'s leaf name in `info`, or null when `imp` is not a
 	 * provably redundant sub-module type import. See the class doc for the gate set; each one fails
 	 * closed.
@@ -130,16 +140,6 @@ final class RedundantImport implements Check implements RiskyFix {
 			null
 		else
 			module;
-	}
-
-	/**
-	 * Whether `o` brings every top-level type of `module` into scope: an unguarded, unaliased
-	 * `import <module>;` or `using <module>;` (a `using` is an import plus static extension). An
-	 * `Alias` binds only its alias, a `Wild` binds statics or main types, and a GUARDED statement
-	 * exists in some builds only — none of the three qualifies.
-	 */
-	private static inline function providesModule(o: ImportInfo, module: String): Bool {
-		return !o.guarded && (o.kind == ImportKind.Import || o.kind == ImportKind.Using) && o.raw == module;
 	}
 
 	/** Whether the index knows a file whose module IS `module` and which declares a top-level type named `name`. */

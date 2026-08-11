@@ -22,6 +22,32 @@ class RedundantParensOperandArmsTestBase extends Test {
 	/** Pass budget for `converged` — generous; the deepest fixture here settles in two. */
 	private static inline final MAX_PASSES: Int = 8;
 
+	private inline function atoms(): (String) -> LintConfig {
+		return configured('{"rules": {"redundant-parens": {"atoms": true}}}');
+	}
+
+	private inline function sameOperatorLeft(): (String) -> LintConfig {
+		return configured('{"rules": {"redundant-parens": {"sameOperatorLeft": true}}}');
+	}
+
+	private inline function comparisonOperands(): (String) -> LintConfig {
+		return configured('{"rules": {"redundant-parens": {"comparisonOperands": true}}}');
+	}
+
+	/** An explicit EMPTY project config — hermetic, unlike falling through to a discovered `apqlint.json`. */
+	private inline function none(): (String) -> LintConfig {
+		return configured('{}');
+	}
+
+	private inline function additiveOperands(): (String) -> LintConfig {
+		return configured('{"rules": {"redundant-parens": {"additiveOperands": true}}}');
+	}
+
+	/** `body` as the sole statement of a method — the shortest host for a statement-level fixture. */
+	private inline function inFn(body: String): String {
+		return 'class C {\n\tfunction f():Void {\n\t\t$body\n\t}\n}';
+	}
+
 	/** `fixed(before)` must equal `after`, and the two must parse to the same paren-free shape. */
 	private function assertDrop(before: String, after: String, resolve: (String) -> LintConfig): Void {
 		Assert.equals(after, fixed(before, resolve));
@@ -60,41 +86,14 @@ class RedundantParensOperandArmsTestBase extends Test {
 		return Text.render(stripParens(new HaxeQueryPlugin().parseFile(src)));
 	}
 
-
 	private function stripParens(node: QueryNode): QueryNode {
 		final bare: QueryNode = RefactorSupport.unwrapParens(node, 'ParenExpr');
 		return new QueryNode(bare.kind, bare.name, [for (c in bare.children) stripParens(c)]);
 	}
 
-	private inline function atoms(): (String) -> LintConfig {
-		return configured('{"rules": {"redundant-parens": {"atoms": true}}}');
-	}
-
-	private inline function sameOperatorLeft(): (String) -> LintConfig {
-		return configured('{"rules": {"redundant-parens": {"sameOperatorLeft": true}}}');
-	}
-
-	private inline function comparisonOperands(): (String) -> LintConfig {
-		return configured('{"rules": {"redundant-parens": {"comparisonOperands": true}}}');
-	}
-
-	/** An explicit EMPTY project config — hermetic, unlike falling through to a discovered `apqlint.json`. */
-	private inline function none(): (String) -> LintConfig {
-		return configured('{}');
-	}
-
-	private inline function additiveOperands(): (String) -> LintConfig {
-		return configured('{"rules": {"redundant-parens": {"additiveOperands": true}}}');
-	}
-
 	private function configured(json: String): (String) -> LintConfig {
 		final config: LintConfig = LintConfig.parse(json);
 		return _ -> config;
-	}
-
-	/** `body` as the sole statement of a method — the shortest host for a statement-level fixture. */
-	private inline function inFn(body: String): String {
-		return 'class C {\n\tfunction f():Void {\n\t\t$body\n\t}\n}';
 	}
 
 }

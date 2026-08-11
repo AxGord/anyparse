@@ -155,6 +155,20 @@ final class RedundantToString implements Check implements DefaultOff {
 	}
 
 	/**
+	 * Whether `c` continues an identifier. Hand-rolled rather than taken from a seam: the
+	 * `$name` shorthand is the ONE place this check emits new syntax, and the alphabet that
+	 * bounds it is the interpolation scanner's, not the grammar's general identifier rule.
+	 */
+	private static inline function isIdentContinue(c: Int): Bool {
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
+	}
+
+	/** A span rendered as the key `fix` matches a violation against its re-collected candidate by. */
+	private static inline function spanKey(span: Span): String {
+		return '${span.from}:${span.to}';
+	}
+
+	/**
 	 * The per-file context `run` and `fix` share, or null when `source` does not parse. Both build
 	 * it the same way, so the collector they drive can only differ through `index` — whole-scope in
 	 * `run`, and whole-scope in `fix` too whenever the caller passes one (`Cli` always does).
@@ -451,20 +465,6 @@ final class RedundantToString implements Check implements DefaultOff {
 			null
 		else
 			{ span: span, text: '$$$name' };
-	}
-
-	/**
-	 * Whether `c` continues an identifier. Hand-rolled rather than taken from a seam: the
-	 * `$name` shorthand is the ONE place this check emits new syntax, and the alphabet that
-	 * bounds it is the interpolation scanner's, not the grammar's general identifier rule.
-	 */
-	private static inline function isIdentContinue(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
-	}
-
-	/** A span rendered as the key `fix` matches a violation against its re-collected candidate by. */
-	private static inline function spanKey(span: Span): String {
-		return '${span.from}:${span.to}';
 	}
 
 	/** Resolve the seam kinds this check reads, or null when a required one is unset. */

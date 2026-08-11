@@ -122,6 +122,17 @@ final class ExplicitType implements Check {
 		return edits;
 	}
 
+	/** Whether `c` is a space or tab — horizontal whitespace, excluding line breaks. */
+	private static inline function isInlineSpace(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code;
+	}
+
+	/** Whether `c` continues a dotted type-reference token — a letter, digit, `_` or `.`. */
+	private static inline function isNominalPart(c: Int): Bool {
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code
+			|| c == '.'.code;
+	}
+
 	/**
 	 * Walk `node` carrying its `parentKind` (for the enum-abstract exemption). A
 	 * field with no type annotation is flagged unless its container is an enum
@@ -174,7 +185,6 @@ final class ExplicitType implements Check {
 		return !params.contains(before.kind) && !bodies.contains(before.kind);
 	}
 
-
 	private static function push(out: Array<Violation>, file: String, span: Null<Span>, message: String): Void {
 		if (span != null) out.push({
 			file: file,
@@ -184,7 +194,6 @@ final class ExplicitType implements Check {
 			message: message
 		});
 	}
-
 
 	/**
 	 * The `: Void` return-type pass of `fix()`: annotate every flagged function whose
@@ -241,7 +250,6 @@ final class ExplicitType implements Check {
 		walk(tree);
 	}
 
-
 	/**
 	 * The offset right after the parameter list's `)` — where `: Void` is inserted,
 	 * before the body — found by scanning back from the block body's `{` over
@@ -258,12 +266,6 @@ final class ExplicitType implements Check {
 		while (pos > lo && isInlineSpace(source.fastCodeAt(pos - 1))) pos--;
 		return pos > lo && source.fastCodeAt(pos - 1) == ')'.code ? pos : -1;
 	}
-
-	/** Whether `c` is a space or tab — horizontal whitespace, excluding line breaks. */
-	private static inline function isInlineSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code;
-	}
-
 
 	/**
 	 * The INHERITED-SIGNATURE pass of `fix()`: type a flagged parameter by COPYING the annotation
@@ -535,13 +537,6 @@ final class ExplicitType implements Check {
 		}
 		return out;
 	}
-
-	/** Whether `c` continues a dotted type-reference token — a letter, digit, `_` or `.`. */
-	private static inline function isNominalPart(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code
-			|| c == '.'.code;
-	}
-
 
 	/**
 	 * The initializer pass of `fix()`: for each flagged field / parameter whose

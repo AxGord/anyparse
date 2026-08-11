@@ -23,6 +23,18 @@ import anyparse.grammar.haxe.HxStatement;
  */
 class HxFinalUntypedSliceTest extends HxTestHelpers {
 
+	public inline function testUntypedAtomRoundTrip(): Void {
+		roundTrip('class C { function m():Void { return untyped; } }', 'return untyped;');
+	}
+
+	public inline function testUntypedBlockStmtRoundTrip(): Void {
+		roundTrip('class C { function m():Void { untyped { foo(); } } }', 'untyped { foo(); }');
+	}
+
+	public inline function testUntypedBlockBodyRoundTrip(): Void {
+		roundTrip('class C { function f():Int untyped { return 1; } }', 'untyped fn body');
+	}
+
 	// ======== FinalStmt — statement-level final binding ========
 
 	public function testFinalStmtBare(): Void {
@@ -211,10 +223,6 @@ class HxFinalUntypedSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public inline function testUntypedAtomRoundTrip(): Void {
-		roundTrip('class C { function m():Void { return untyped; } }', 'return untyped;');
-	}
-
 	// ======== UntypedBlockStmt — `untyped { stmts }` block statement ========
 
 	public function testUntypedBlockStmtAsStatement(): Void {
@@ -235,10 +243,6 @@ class HxFinalUntypedSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public inline function testUntypedBlockStmtRoundTrip(): Void {
-		roundTrip('class C { function m():Void { untyped { foo(); } } }', 'untyped { foo(); }');
-	}
-
 	// ======== UntypedBlockBody — `function f():Type untyped { body }` ========
 
 	public function testUntypedBlockBodyOnFn(): Void {
@@ -251,10 +255,6 @@ class HxFinalUntypedSliceTest extends HxTestHelpers {
 			case null, _:
 				Assert.fail('expected UntypedBlockBody, got ${fn.body}');
 		}
-	}
-
-	public inline function testUntypedBlockBodyRoundTrip(): Void {
-		roundTrip('class C { function f():Int untyped { return 1; } }', 'untyped fn body');
 	}
 
 	// ======== Combined: final stmt holding untyped init ========

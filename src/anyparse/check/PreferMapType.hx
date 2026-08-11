@@ -221,7 +221,6 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	/** An empty constructor argument list — the only one this rule rewrites (the `NewLiteral` precedent). */
 	private static inline final EMPTY_ARGUMENT_LIST: String = '()';
 
-
 	/**
 	 * The ANNOTATION type-reference kind, spelled literally: `RefShape` carries no field naming
 	 * it, and it needs a different position rule from the clause kind below. Both are declared in
@@ -239,22 +238,8 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	/** The grammar's name/type pair inside an anonymous-structure field — transparent to the position walk. */
 	private static inline final FIELD_PAIR_KIND: String = 'Plain';
 
-
 	/** The fully-qualified prefix a self-proving reference carries. */
 	private static inline final QUALIFIED_PREFIX: String = '$MAP_MODULE_PACKAGE.';
-
-	/**
-	 * The concrete map implementations this rule rewrites, each mapped to the key type the unified
-	 * syntax must SPELL OUT — empty when the implementation already writes its key as the first
-	 * type parameter. `WeakMap` is deliberately absent: weakly-held entries are different
-	 * semantics, not a different spelling.
-	 */
-	private static final CONCRETE_MAP_KEY_TYPES: Map<String, String> = [
-		'IntMap' => 'Int',
-		'StringMap' => 'String',
-		'ObjectMap' => '',
-		'EnumValueMap' => ''
-	];
 
 	/** The finding message when the rewrite is available — the only message `fix` acts on. */
 	private static inline final MSG_FIXABLE: String = 'this concrete map type can be the unified Map<K, V> syntax';
@@ -275,6 +260,22 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	private static inline final MSG_KEY_UNPROVEN: String =
 		'a concrete map type replaceable with Map<K, V> (report-only: the key type does not prove Map resolves to this implementation)';
 
+	/** Hop budget for following a module-declared alias chain — a cycle is illegal Haxe, but a scan must still terminate. */
+	private static inline final ALIAS_CHAIN_LIMIT: Int = 16;
+
+	/**
+	 * The concrete map implementations this rule rewrites, each mapped to the key type the unified
+	 * syntax must SPELL OUT — empty when the implementation already writes its key as the first
+	 * type parameter. `WeakMap` is deliberately absent: weakly-held entries are different
+	 * semantics, not a different spelling.
+	 */
+	private static final CONCRETE_MAP_KEY_TYPES: Map<String, String> = [
+		'IntMap' => 'Int',
+		'StringMap' => 'String',
+		'ObjectMap' => '',
+		'EnumValueMap' => ''
+	];
+
 	/**
 	 * Key type names `Map`'s `@:multiType` selector chain claims BEFORE it can reach `ObjectMap` /
 	 * `EnumValueMap`, plus the two top types that unify with every one of them. The chain is
@@ -283,9 +284,6 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	 * reaches the same implementation the source already names.
 	 */
 	private static final KEY_TYPES_ROUTED_ELSEWHERE: Array<String> = ['String', 'Int', 'UInt', 'EnumValue', 'Dynamic', 'Any'];
-
-	/** Hop budget for following a module-declared alias chain — a cycle is illegal Haxe, but a scan must still terminate. */
-	private static inline final ALIAS_CHAIN_LIMIT: Int = 16;
 
 	public function new() {}
 
@@ -355,6 +353,11 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 		return edits;
 	}
 
+	/** The edit replacing the concrete map's name token at `at` with the unified name. */
+	private static inline function nameEdit(at: Int, name: String): { span: Span, text: String } {
+		return { span: new Span(at, at + name.length), text: UNIFIED_MAP };
+	}
+
 	/**
 	 * Every concrete-map reference in `source` this rule has something to say about. The type-ref
 	 * projection is a SECOND parse (`parseFileTypeRefs`) — the default tree drops annotation
@@ -379,7 +382,6 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 		}, out);
 		return out;
 	}
-
 
 	/**
 	 * Visit `node`'s subtree, collecting candidates. `accepted` says whether THIS node, were it a
@@ -737,11 +739,6 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 		final key: Null<String> = CONCRETE_MAP_KEY_TYPES[site.concrete];
 		if (key != null && key != '') edits.push({ span: new Span(base + open, base + open + 1), text: '<$key, ' });
 		return edits;
-	}
-
-	/** The edit replacing the concrete map's name token at `at` with the unified name. */
-	private static inline function nameEdit(at: Int, name: String): { span: Span, text: String } {
-		return { span: new Span(at, at + name.length), text: UNIFIED_MAP };
 	}
 
 	/** The offset of the type-parameter list's `<` at or after `from` in `text`, or -1 when the reference carries none. */

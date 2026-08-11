@@ -199,6 +199,41 @@ class MethodChainEmit {
 	}
 
 	/**
+	 * ω-methodchain-all-or-nothing — the GLUED tail: every segment on the
+	 * head's own line. Kept as a named shaper (rather than an inline
+	 * `Concat(segments)`) because `CollapsePass.rewriteChainProbe` destructures
+	 * this exact `Concat` to re-measure a re-glued chain's first line.
+	 */
+	private static inline function shapeNoWrapTail(segments: Array<Doc>): Doc {
+		return Concat(segments);
+	}
+
+	/**
+	 * ω-methodchain-cuddled-links — may a chain link start on `doc`'s last
+	 * rendered line? Yes exactly when that line is a dedented CLOSING line: a
+	 * forced hardline followed only by close delimiters and whitespace, which
+	 * `DocMeasure.endsWithForcedCloseLine` answers structurally (never by width,
+	 * so no render-time measurement can change a chain's shape) — read its doc
+	 * for what does and does not force such a hardline, including the
+	 * input-layout sensitivity of an object-literal tail.
+	 *
+	 * The closes-only half of that predicate is load-bearing here beyond mere
+	 * shape: it pins the ride-along point to a low column (base indent plus two
+	 * or three characters), so a cuddled `.method(` head cannot blow the line by
+	 * itself.
+	 */
+	private static inline function endsWithMultilineClose(doc: Doc): Bool {
+		return DocMeasure.endsWithForcedCloseLine(doc);
+	}
+
+	private static inline function isTextAtom(d: Doc): Bool {
+		return switch d {
+			case Text(_): true;
+			case _: false;
+		};
+	}
+
+	/**
 	 * Recursive helper that builds the `IfWidthExceeds + IfFullLineExceeds`
 	 * tree for chain-emit's cascade-with-thresholds layout. Sister of
 	 * `WrapList.buildThresholdTree` and `BinaryChainEmit.buildBinaryThresholdTree`
@@ -368,16 +403,6 @@ class MethodChainEmit {
 	}
 
 	/**
-	 * ω-methodchain-all-or-nothing — the GLUED tail: every segment on the
-	 * head's own line. Kept as a named shaper (rather than an inline
-	 * `Concat(segments)`) because `CollapsePass.rewriteChainProbe` destructures
-	 * this exact `Concat` to re-measure a re-glued chain's first line.
-	 */
-	private static inline function shapeNoWrapTail(segments: Array<Doc>): Doc {
-		return Concat(segments);
-	}
-
-	/**
 	 * ω-methodchain-reeval-after-callparam (CollapsePass increment 3, subroot-E):
 	 * wrap a chain's `IfFullLineExceeds(width, breakShape, glueShape)` in a
 	 * `CollapseChainProbe` so `CollapsePass.rewriteChainProbe` can STRIP the
@@ -529,24 +554,6 @@ class MethodChainEmit {
 		}
 		if (run != null) out.push(Nest(cols, Concat(run)));
 		return out;
-	}
-
-	/**
-	 * ω-methodchain-cuddled-links — may a chain link start on `doc`'s last
-	 * rendered line? Yes exactly when that line is a dedented CLOSING line: a
-	 * forced hardline followed only by close delimiters and whitespace, which
-	 * `DocMeasure.endsWithForcedCloseLine` answers structurally (never by width,
-	 * so no render-time measurement can change a chain's shape) — read its doc
-	 * for what does and does not force such a hardline, including the
-	 * input-layout sensitivity of an object-literal tail.
-	 *
-	 * The closes-only half of that predicate is load-bearing here beyond mere
-	 * shape: it pins the ride-along point to a low column (base indent plus two
-	 * or three characters), so a cuddled `.method(` head cannot blow the line by
-	 * itself.
-	 */
-	private static inline function endsWithMultilineClose(doc: Doc): Bool {
-		return DocMeasure.endsWithForcedCloseLine(doc);
 	}
 
 	/**
@@ -782,13 +789,6 @@ class MethodChainEmit {
 				var i: Int = 0;
 				while (i < items.length && items[i] == Empty) i++;
 				i < items.length && startsWithHardline(items[i]);
-			case _: false;
-		};
-	}
-
-	private static inline function isTextAtom(d: Doc): Bool {
-		return switch d {
-			case Text(_): true;
 			case _: false;
 		};
 	}

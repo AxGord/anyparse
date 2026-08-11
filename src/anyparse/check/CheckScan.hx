@@ -26,23 +26,94 @@ using StringTools;
 @:nullSafety(Strict)
 final class CheckScan {
 
-	/** The class-body member kinds a method declaration projects as — a plain method and a `final` one. */
-	public static final METHOD_KINDS: Array<String> = ['FnMember', 'FinalModifiedMember'];
-
 	/** The read-accessor method-name prefix; its length also slices the property name off. */
 	public static inline final GET_PREFIX: String = 'get_';
 
 	/** The write-accessor method-name prefix (same length as `GET_PREFIX`, which slices both). */
 	public static inline final SET_PREFIX: String = 'set_';
 
-	/** The node kinds a string expression projects as — the hosts whose `Literal` children are interpolation fragments. */
-	public static final STRING_EXPR_KINDS: Array<String> = ['SingleStringExpr', 'DoubleStringExpr'];
-
 	/** The static-text child kind inside an interpolated string expression. */
 	public static inline final STRING_FRAGMENT_KIND: String = 'Literal';
 
+	/** The class-body member kinds a method declaration projects as — a plain method and a `final` one. */
+	public static final METHOD_KINDS: Array<String> = ['FnMember', 'FinalModifiedMember'];
+
+	/** The node kinds a string expression projects as — the hosts whose `Literal` children are interpolation fragments. */
+	public static final STRING_EXPR_KINDS: Array<String> = ['SingleStringExpr', 'DoubleStringExpr'];
+
 	/** A sole-referenced declaration has exactly one non-declaration reference resolving to it. */
 	private static inline final SOLE_REFERENCE_COUNT: Int = 1;
+
+	/** The last dot-segment of a module path — the name a call site spells (`utils.TextUtil` -> `TextUtil`); `RefactorSupport.lastSegment` under a name that says which question the check layer is asking. */
+	public static inline function simpleModuleName(path: String): String {
+		return RefactorSupport.lastSegment(path);
+	}
+
+	/**
+	 * Whether `[from, to)` of `source` holds a `//` or `/*` comment marker — the check
+	 * layer's entry point to `RefactorSupport.hasCommentMarker`, which owns the scan and
+	 * the recorded per-caller argument for why it stays string-blind.
+	 *
+	 * The conservative "don't delete a comment" guard: for every consumer but the negation
+	 * pair below, a marker found inside a string literal only ever REFUSES a fix, never
+	 * deletes code. `negateConditionText` / `negationIsClean` read it as a tier selector
+	 * instead — see the primitive's doc before changing anything here.
+	 */
+	public static inline function hasCommentMarker(source: String, from: Int, to: Int): Bool {
+		return RefactorSupport.hasCommentMarker(source, from, to);
+	}
+
+	/**
+	 * The check layer's entry point to `RefactorSupport.lineDeletionSpan`, which owns the scan:
+	 * `span` extended BACKWARD over its own line's leading indentation and the newline before it, so
+	 * deleting the result removes the whole line instead of leaving a blank one. Every caller pairs it
+	 * with a comment gate over the region its deletion disturbs — the scan stops at the first
+	 * non-whitespace, so a comment there would survive to document whatever follows.
+	 */
+	public static inline function lineDeletionSpan(source: String, span: Span): Span {
+		return RefactorSupport.lineDeletionSpan(source, span);
+	}
+
+	/**
+	 * Whether `kind` is a class-body node whose direct children carry the members —
+	 * `ClassDecl` (a plain class), `ClassForm` (the inner form of a `final` class
+	 * under a `FinalDecl` wrapper), or `AbstractClassDecl` (an `abstract class`).
+	 * Shared by the class-walking checks (PreferInline / TrivialGetter / UnusedPrivate / Naming) so their walkers agree on
+	 * the set; note PreferInline and TrivialGetter REWRITE members of whatever this admits — widen it only with their fix
+	 * gates in mind.
+	 */
+	public static inline function isClassBodyKind(kind: String): Bool {
+		return kind == 'ClassDecl' || kind == 'ClassForm' || kind == 'AbstractClassDecl';
+	}
+
+	/**
+	 * The delete-the-whole-member edit for `node`: its modifier / metadata run (`declGroupSpan`,
+	 * which needs the declaring `parent` for the sibling run) folded in, then the whole line
+	 * (`lineExtendedSpan`), so no blank modifier line is left behind. The member's LEADING DOC
+	 * COMMENT is kept — `unused-private`'s shape. Use `docDeletionEdit` to take the doc with it.
+	 */
+	public static inline function deletionEdit(
+		source: String, node: QueryNode, parent: QueryNode, span: Span
+	): { span: Span, text: String } {
+		return { span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.declGroupSpan(node, parent, span)), text: '' };
+	}
+
+	/**
+	 * `deletionEdit` widened to swallow the member's leading DOC COMMENT (`docExtendedSpan`) as
+	 * well, so deleting a documented method strands nothing — the shape `orphan-accessor` and
+	 * `unused-public-member` delete with.
+	 */
+	public static inline function docDeletionEdit(
+		source: String, node: QueryNode, parent: QueryNode, span: Span
+	): { span: Span, text: String } {
+		final group: Span = RefactorSupport.declGroupSpan(node, parent, span);
+		return { span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, group)), text: '' };
+	}
+
+	/** The `<file>#<from>:<to>` key one declaration is memoised under between a check's `run` and its `fix`. */
+	public static inline function spanKey(file: String, span: Span): String {
+		return '$file#${span.from}:${span.to}';
+	}
 
 	/**
 	 * Parse `source` with `plugin`, or null on any parse failure — the tolerant
@@ -214,37 +285,6 @@ final class CheckScan {
 		return node -> RefactorSupport.expressionTypeNominal(node, tree, shape, declaredTypes, resolved, file, chain);
 	}
 
-	/** The last dot-segment of a module path — the name a call site spells (`utils.TextUtil` -> `TextUtil`); `RefactorSupport.lastSegment` under a name that says which question the check layer is asking. */
-	public static inline function simpleModuleName(path: String): String {
-		return RefactorSupport.lastSegment(path);
-	}
-
-	/**
-	 * Whether `[from, to)` of `source` holds a `//` or `/*` comment marker — the check
-	 * layer's entry point to `RefactorSupport.hasCommentMarker`, which owns the scan and
-	 * the recorded per-caller argument for why it stays string-blind.
-	 *
-	 * The conservative "don't delete a comment" guard: for every consumer but the negation
-	 * pair below, a marker found inside a string literal only ever REFUSES a fix, never
-	 * deletes code. `negateConditionText` / `negationIsClean` read it as a tier selector
-	 * instead — see the primitive's doc before changing anything here.
-	 */
-	public static inline function hasCommentMarker(source: String, from: Int, to: Int): Bool {
-		return RefactorSupport.hasCommentMarker(source, from, to);
-	}
-
-	/**
-	 * The check layer's entry point to `RefactorSupport.lineDeletionSpan`, which owns the scan:
-	 * `span` extended BACKWARD over its own line's leading indentation and the newline before it, so
-	 * deleting the result removes the whole line instead of leaving a blank one. Every caller pairs it
-	 * with a comment gate over the region its deletion disturbs — the scan stops at the first
-	 * non-whitespace, so a comment there would survive to document whatever follows.
-	 */
-	public static inline function lineDeletionSpan(source: String, span: Span): Span {
-		return RefactorSupport.lineDeletionSpan(source, span);
-	}
-
-
 	/**
 	 * The node kinds whose presence in a subtree makes a once-vs-twice evaluation
 	 * rewrite unsafe: every binding-write (`writeParentKinds`), plus `callKind` and
@@ -260,18 +300,6 @@ final class CheckScan {
 		final newExprKind: Null<String> = shape.newExprKind;
 		if (newExprKind != null) kinds.push(newExprKind);
 		return kinds;
-	}
-
-	/**
-	 * Whether `kind` is a class-body node whose direct children carry the members —
-	 * `ClassDecl` (a plain class), `ClassForm` (the inner form of a `final` class
-	 * under a `FinalDecl` wrapper), or `AbstractClassDecl` (an `abstract class`).
-	 * Shared by the class-walking checks (PreferInline / TrivialGetter / UnusedPrivate / Naming) so their walkers agree on
-	 * the set; note PreferInline and TrivialGetter REWRITE members of whatever this admits — widen it only with their fix
-	 * gates in mind.
-	 */
-	public static inline function isClassBodyKind(kind: String): Bool {
-		return kind == 'ClassDecl' || kind == 'ClassForm' || kind == 'AbstractClassDecl';
 	}
 
 	/**
@@ -445,35 +473,6 @@ final class CheckScan {
 		var cols: Int = 0;
 		for (i in from ... to) cols += source.fastCodeAt(i) == '\t'.code ? indentWidth : 1;
 		return cols;
-	}
-
-	/**
-	 * The delete-the-whole-member edit for `node`: its modifier / metadata run (`declGroupSpan`,
-	 * which needs the declaring `parent` for the sibling run) folded in, then the whole line
-	 * (`lineExtendedSpan`), so no blank modifier line is left behind. The member's LEADING DOC
-	 * COMMENT is kept — `unused-private`'s shape. Use `docDeletionEdit` to take the doc with it.
-	 */
-	public static inline function deletionEdit(
-		source: String, node: QueryNode, parent: QueryNode, span: Span
-	): { span: Span, text: String } {
-		return { span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.declGroupSpan(node, parent, span)), text: '' };
-	}
-
-	/**
-	 * `deletionEdit` widened to swallow the member's leading DOC COMMENT (`docExtendedSpan`) as
-	 * well, so deleting a documented method strands nothing — the shape `orphan-accessor` and
-	 * `unused-public-member` delete with.
-	 */
-	public static inline function docDeletionEdit(
-		source: String, node: QueryNode, parent: QueryNode, span: Span
-	): { span: Span, text: String } {
-		final group: Span = RefactorSupport.declGroupSpan(node, parent, span);
-		return { span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, group)), text: '' };
-	}
-
-	/** The `<file>#<from>:<to>` key one declaration is memoised under between a check's `run` and its `fix`. */
-	public static inline function spanKey(file: String, span: Span): String {
-		return '$file#${span.from}:${span.to}';
 	}
 
 	/**

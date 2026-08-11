@@ -43,6 +43,9 @@ using Lambda;
  */
 class QueryWalkerLowering extends PairedShapeLowering {
 
+	/** The `HxType` ctor whose body is a decl host - the one `type` field value the walk descends instead of skipping. */
+	private static inline final ANON_CTOR: String = 'Anon';
+
 	/** Struct fields consulted, in order, for a String-valued display name. */
 	private static final NAME_STRING_SLOTS: Array<String> = ['name', 'type', 'varName'];
 
@@ -58,9 +61,6 @@ class QueryWalkerLowering extends PairedShapeLowering {
 
 	/** Ctors of a single-Ref wrapper enum whose payload carries the name (`HxAnonVarBody`). */
 	private static final NAME_UNWRAP_CTORS: Array<String> = ['Optional', 'Plain'];
-
-	/** The `HxType` ctor whose body is a decl host - the one `type` field value the walk descends instead of skipping. */
-	private static inline final ANON_CTOR: String = 'Anon';
 
 	/** `HxType` ctors whose first operand names a nominal type - the `TypeRef` emit sites. */
 	private static final TYPE_REF_NAME_CTORS: Array<String> = ['Named', 'DollarType'];
@@ -114,6 +114,38 @@ class QueryWalkerLowering extends PairedShapeLowering {
 			walks: walks,
 			names: names,
 			typeRefs: typeRefs,
+		};
+	}
+
+	private inline function descendCore(child: ShapeNode, access: Expr, intoName: String, depth: Int): Array<Expr> {
+		return switch child.kind {
+			case Ref:
+				final ref: String = child.annotations[AnnotationKeys.BASE_REF];
+				isTerminalRule(ref) ? [] : [call(walkFnName(ref), [access, ident(intoName), ident('withTypeRefs')])];
+			case Star:
+				final loopVar: String = '_e$depth';
+				final body: Array<Expr> = descend(child.children[0], ident(loopVar), intoName, depth + 1);
+				body.length == 0 ? [] : [macro for ($i{loopVar} in $access) $e{block(body)}];
+			case Terminal: [];
+			case Seq, Alt, Opt:
+				Context.fatalError(
+					'QueryWalkerLowering: inline ${child.kind} child cannot be walked - named rules must arrive as Ref',
+					Context.currentPos()
+				);
+				throw 'unreachable';
+		};
+	}
+
+	private inline function typeRefsDescendCore(child: ShapeNode, access: Expr, depth: Int): Array<Expr> {
+		return switch child.kind {
+			case Ref:
+				final ref: String = child.annotations[AnnotationKeys.BASE_REF];
+				_typeRefRules.contains(ref) ? [call(typeRefsFnName(ref), [access, ident('into'), ident('_s')])] : [];
+			case Star:
+				final loopVar: String = '_r$depth';
+				final body: Array<Expr> = typeRefsDescend(child.children[0], ident(loopVar), depth + 1);
+				body.length == 0 ? [] : [macro for ($i{loopVar} in $access) $e{block(body)}];
+			case Terminal, Seq, Alt, Opt: [];
 		};
 	}
 
@@ -276,25 +308,6 @@ class QueryWalkerLowering extends PairedShapeLowering {
 				macro if ($i{local} != null) $e{block(guarded)}
 			])
 		];
-	}
-
-	private inline function descendCore(child: ShapeNode, access: Expr, intoName: String, depth: Int): Array<Expr> {
-		return switch child.kind {
-			case Ref:
-				final ref: String = child.annotations[AnnotationKeys.BASE_REF];
-				isTerminalRule(ref) ? [] : [call(walkFnName(ref), [access, ident(intoName), ident('withTypeRefs')])];
-			case Star:
-				final loopVar: String = '_e$depth';
-				final body: Array<Expr> = descend(child.children[0], ident(loopVar), intoName, depth + 1);
-				body.length == 0 ? [] : [macro for ($i{loopVar} in $access) $e{block(body)}];
-			case Terminal: [];
-			case Seq, Alt, Opt:
-				Context.fatalError(
-					'QueryWalkerLowering: inline ${child.kind} child cannot be walked - named rules must arrive as Ref',
-					Context.currentPos()
-				);
-				throw 'unreachable';
-		};
 	}
 
 	/**
@@ -482,19 +495,6 @@ class QueryWalkerLowering extends PairedShapeLowering {
 				macro if ($i{local} != null) $e{block(guarded)}
 			])
 		];
-	}
-
-	private inline function typeRefsDescendCore(child: ShapeNode, access: Expr, depth: Int): Array<Expr> {
-		return switch child.kind {
-			case Ref:
-				final ref: String = child.annotations[AnnotationKeys.BASE_REF];
-				_typeRefRules.contains(ref) ? [call(typeRefsFnName(ref), [access, ident('into'), ident('_s')])] : [];
-			case Star:
-				final loopVar: String = '_r$depth';
-				final body: Array<Expr> = typeRefsDescend(child.children[0], ident(loopVar), depth + 1);
-				body.length == 0 ? [] : [macro for ($i{loopVar} in $access) $e{block(body)}];
-			case Terminal, Seq, Alt, Opt: [];
-		};
 	}
 
 	/** Every named rule a node's own children reference directly (through `Star` elements too), Terminals excluded. */

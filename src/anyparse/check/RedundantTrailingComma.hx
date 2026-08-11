@@ -101,6 +101,14 @@ final class RedundantTrailingComma implements Check implements DefaultOff {
 		return edits;
 	}
 
+	private static inline function isCloser(c: String): Bool {
+		return c == ']' || c == '}' || c == ')';
+	}
+
+	private static inline function oneChar(at: Int): Span {
+		return new Span(at, at + 1);
+	}
+
 	/** Walk `node`, flagging every trailing comma reached. */
 	private static function walk(out: Array<Violation>, file: String, source: String, node: QueryNode, kinds: ListKinds): Void {
 		final comma: Null<Span> = trailingComma(source, node, kinds);
@@ -172,14 +180,6 @@ final class RedundantTrailingComma implements Check implements DefaultOff {
 			}
 		}
 		return out;
-	}
-
-	private static inline function isCloser(c: String): Bool {
-		return c == ']' || c == '}' || c == ')';
-	}
-
-	private static inline function oneChar(at: Int): Span {
-		return new Span(at, at + 1);
 	}
 
 }

@@ -29,6 +29,21 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxIsSliceTest extends HxTestHelpers {
 
+	/** Round-trip simple form. */
+	public inline function testRoundTripSimple(): Void {
+		roundTrip('class C { var f:Bool = x is Bool; }');
+	}
+
+	/** Round-trip chained form. */
+	public inline function testRoundTripChain(): Void {
+		roundTrip('class C { var f:Bool = x is Int is String; }');
+	}
+
+	/** Round-trip `is` as identifier — must not become operator on reparse. */
+	public inline function testRoundTripIsAsIdent(): Void {
+		roundTrip('class C { var f:Bool = is(""); }');
+	}
+
 	/** `x is Bool` — basic asymmetric infix shape. */
 	public function testSimpleIs(): Void {
 		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Bool = x is Bool; }');
@@ -87,21 +102,6 @@ class HxIsSliceTest extends HxTestHelpers {
 			case null, _:
 				Assert.fail('expected Is(IdentExpr, Named)');
 		}
-	}
-
-	/** Round-trip simple form. */
-	public inline function testRoundTripSimple(): Void {
-		roundTrip('class C { var f:Bool = x is Bool; }');
-	}
-
-	/** Round-trip chained form. */
-	public inline function testRoundTripChain(): Void {
-		roundTrip('class C { var f:Bool = x is Int is String; }');
-	}
-
-	/** Round-trip `is` as identifier — must not become operator on reparse. */
-	public inline function testRoundTripIsAsIdent(): Void {
-		roundTrip('class C { var f:Bool = is(""); }');
 	}
 
 }

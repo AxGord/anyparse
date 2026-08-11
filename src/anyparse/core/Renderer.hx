@@ -373,6 +373,144 @@ class Renderer {
 	}
 
 	/**
+		Emits `indent` columns worth of leading whitespace. When
+		`indentChar=Tab`, this is `floor(indent / tabWidth)` tabs followed
+		by `indent mod tabWidth` spaces — in the clean case where every
+		`Nest` value is a multiple of `tabWidth`, the remainder is zero
+		and output is pure tabs.
+	**/
+	private static inline function writeIndent(buf: StringBuf, indent: Int, indentChar: IndentChar, tabWidth: Int): Void {
+		if (indentChar == Tab && tabWidth > 0) {
+			final tabs: Int = Std.int(indent / tabWidth);
+			final rem: Int = indent - tabs * tabWidth;
+			for (_ in 0...tabs) buf.add('\t');
+			for (_ in 0...rem) buf.add(' ');
+		} else {
+			for (_ in 0...indent) buf.add(' ');
+		}
+	}
+
+	/**
+	 * True when `s` ends with an open delimiter (`(`/`[`/`{`) — drives the
+	 * `OpenDelim` `lastEmit` classification.
+	 */
+	private static inline function endsWithOpenDelim(s: String): Bool {
+		if (s.length == 0) return false;
+		final c: Int = s.fastCodeAt(s.length - 1);
+		return c == '('.code || c == '['.code || c == '{'.code;
+	}
+
+	/**
+	 * Classify the `lastEmit` state produced by emitting text `s`.
+	 */
+	private static inline function lastEmitFromText(s: String): LastEmit {
+		return endsWithOpenDelim(s) ? OpenDelim : Other;
+	}
+
+	/**
+	 * Width of the `OptSpace` still pending at the current pen — content that is
+	 * NOT yet in `ctx.col` but lands on the same physical line as whatever is
+	 * emitted next. Fed to the column-aware push helpers so their fit probes
+	 * measure the full line (see `pushStructural` / `pushExceedsBranch`).
+	 */
+	private static inline function pendingSpaceWidth(ctx: RenderCtx): Int {
+		return ctx.pendingOptSpace != null ? ctx.pendingOptSpace.length : 0;
+	}
+
+	/**
+	 * ω-glue-width gates 2 and 3: would moving a glued body to `brokenIndent`
+	 * be worth it? Answered off ONE natural first-line re-measure of the glued
+	 * Doc, taken as if the pen sat one column LEFT of `brokenIndent` — the walk
+	 * spends that column on the glue separator (`OptSpace(' ')`, which every
+	 * `BodyFit.glueLayout` caller puts first in the glued shape) and the body
+	 * then lands exactly on the indent it would break to. `broken -
+	 * brokenIndent` is therefore the body's own first-line width there.
+	 *
+	 * Two ways to answer no, each closing a measured hole:
+	 *
+	 *  - `broken > n` — still over-wide after the move, so the move fixes
+	 *    nothing and only costs a line and an indent level. Mirrors the fit-gate
+	 *    in `collapseParenCommitsOpen`: when the inner cannot be made a single
+	 *    fitting line, opening does not help. This is also what absorbs the
+	 *    measurer's own slop — `naturalWidthStructural` resolves the
+	 *    `IfFirstLineExceeds` probe family on its FLAT side, so a body whose
+	 *    bracket opens through one measures a few columns too wide, and without
+	 *    this test that slop broke a `return <ternary>` whose rendered line sat
+	 *    exactly at the limit.
+	 *  - `broken <= brokenIndent + 1` — the body would put at most ONE column on
+	 *    that line: it breaks right after its own opening token. A statement
+	 *    block, or a literal already committed to breaking, gives the header
+	 *    back only those columns and strands its `{` on a line of its own. The
+	 *    same reasoning `selfBreakingBraceBody` applies to the arrow-body
+	 *    marker, though not the same predicate — that one also demands a
+	 *    `{`-leading body and reads a flat measurer, while this is a pure width
+	 *    test and refuses any one-column first line. Constructed (a `case` label
+	 *    ALREADY past the limit whose body is a block) the move came out
+	 *    strictly worse than the glue.
+	 */
+	private static inline function brokenBodyIsWorthMoving(flatDoc: Doc, brokenIndent: Int, n: Int, width: Int): Bool {
+		final broken: Int = naturalFirstLineWidth(flatDoc, brokenIndent - 1, brokenIndent, width);
+		return broken <= n && broken > brokenIndent + 1;
+	}
+
+	/**
+	 * First-line-only view of `embeddedLineWidths`, for the `Fill` packing probe:
+	 * lets a fill pack a verbatim multi-line token when its FIRST line fits the
+	 * remaining budget (matching haxe-formatter, which re-flows the head of a
+	 * token-splice operand onto the packed chain line) instead of breaking the
+	 * whole operand onto its own line for its full flat width. A packed item's
+	 * tail is the fill's own business, so the `last` half is not consulted.
+	 */
+	private static inline function embeddedFirstLineWidth(d: Doc): Int {
+		return embeddedLineWidths(d).first;
+	}
+
+	/**
+	 * omega-arrow-block-body-open: does `flatDoc` — the FLAT side of an
+	 * `@:fmt(arrowBodyLineWrap)` arrow-body marker — open with `{` and break
+	 * IMMEDIATELY after it, before any other token? That is the population whose head
+	 * line the body terminates by itself, so an extra break after `->` shortens
+	 * nothing: a multi-statement block, or a `{ … }` literal whose own wrap cascade
+	 * committed to breaking at build time.
+	 *
+	 * All three conjuncts are load-bearing, each closing a measured hole:
+	 *
+	 *  - `{`-leading alone is NOT "is a block". `x -> { a: 1, b: 2 }` is an object
+	 *    literal whose flat doc also starts with `{`, and a FLAT one rides the head
+	 *    line in full, so breaking after `->` genuinely shortens it. Suppressing that
+	 *    break pushed a fixture from 127 to 141 columns against a 140 budget.
+	 *  - `hasForcedBreak` alone is not enough either, in BOTH directions. A non-brace
+	 *    body that breaks internally still gains a shorter head line from the arrow
+	 *    break; and a `{`-leading body can break somewhere OTHER than right after `{`
+	 *    — under `wrapping.objectLiteral.defaultWrap: "keep"` a one-line source
+	 *    literal reproduces its own layout, so `{ onDone: () -> { … }, tag: 1 }` has
+	 *    a forced hardline (the inner block's) while its head line runs on. That took
+	 *    a fixture from 108 to 146 columns.
+	 *  - `flatTokenWidthFirstLine(flatDoc) <= 1` is what states "breaks before any
+	 *    other token". MEASURED, not assumed: a statement block sits behind a
+	 *    `BodyGroup` that the first-line walk defers to 0, and a self-breaking object
+	 *    literal measures exactly 1 (its `{`, then the hardline) — both stay in the
+	 *    population, while the keep-mode literal above measures its whole head run
+	 *    and drops out.
+	 *
+	 * Read STRUCTURALLY — all three walkers resolve every conditional on its flat
+	 * side — so no render-time width measurement can change which arm a construct
+	 * takes. That is a deliberate limit: an object literal that breaks only AT RENDER
+	 * TIME (its own `Group` losing a width probe) answers `false` here, takes the
+	 * arrow break, and then breaks anyway, so its `{` still lands alone. Measured on
+	 * a 40-case width sweep, the gate removes 40 of 56 stranded opens and adds zero
+	 * over-width lines, and the 16 it leaves are all that band — byte-identical to
+	 * the pre-slice writer, since no line of an object-literal rendering changes.
+	 * Closing them needs a width-aware answer, which would make this guard disagree
+	 * with the two natural walks that resolve the same marker without a rest-stack
+	 * term; that trade is a separate slice.
+	 */
+	private static inline function selfBreakingBraceBody(flatDoc: Doc): Bool {
+		return DocMeasure.firstVisibleTextStartsWith(flatDoc, '{'.code) && DocMeasure.hasForcedBreak(flatDoc)
+			&& flatTokenWidthFirstLine(flatDoc) <= 1;
+	}
+
+	/**
 	 * Decide whether a collapse-candidate expression paren COMMITS to open
 	 * for the `CollapsePass` decision list (ω-collapse-commit). `breakDoc` is
 	 * the paren's OPEN branch from `IfFullLineExceeds(n, breakDoc, glued)`;
@@ -543,24 +681,6 @@ class Renderer {
 		if (at + needleLen > s.length) return false;
 		for (k in 0...needleLen) if (s.fastCodeAt(at + k) != needle.fastCodeAt(k)) return false;
 		return true;
-	}
-
-	/**
-		Emits `indent` columns worth of leading whitespace. When
-		`indentChar=Tab`, this is `floor(indent / tabWidth)` tabs followed
-		by `indent mod tabWidth` spaces — in the clean case where every
-		`Nest` value is a multiple of `tabWidth`, the remainder is zero
-		and output is pure tabs.
-	**/
-	private static inline function writeIndent(buf: StringBuf, indent: Int, indentChar: IndentChar, tabWidth: Int): Void {
-		if (indentChar == Tab && tabWidth > 0) {
-			final tabs: Int = Std.int(indent / tabWidth);
-			final rem: Int = indent - tabs * tabWidth;
-			for (_ in 0...tabs) buf.add('\t');
-			for (_ in 0...rem) buf.add(' ');
-		} else {
-			for (_ in 0...indent) buf.add(' ');
-		}
 	}
 
 	/**
@@ -2328,33 +2448,6 @@ class Renderer {
 	}
 
 	/**
-	 * True when `s` ends with an open delimiter (`(`/`[`/`{`) — drives the
-	 * `OpenDelim` `lastEmit` classification.
-	 */
-	private static inline function endsWithOpenDelim(s: String): Bool {
-		if (s.length == 0) return false;
-		final c: Int = s.fastCodeAt(s.length - 1);
-		return c == '('.code || c == '['.code || c == '{'.code;
-	}
-
-	/**
-	 * Classify the `lastEmit` state produced by emitting text `s`.
-	 */
-	private static inline function lastEmitFromText(s: String): LastEmit {
-		return endsWithOpenDelim(s) ? OpenDelim : Other;
-	}
-
-	/**
-	 * Width of the `OptSpace` still pending at the current pen — content that is
-	 * NOT yet in `ctx.col` but lands on the same physical line as whatever is
-	 * emitted next. Fed to the column-aware push helpers so their fit probes
-	 * measure the full line (see `pushStructural` / `pushExceedsBranch`).
-	 */
-	private static inline function pendingSpaceWidth(ctx: RenderCtx): Int {
-		return ctx.pendingOptSpace != null ? ctx.pendingOptSpace.length : 0;
-	}
-
-	/**
 	 * Flush a pending `OptSpace` into `ctx.buf` at the current pen, first
 	 * flushing any pending indent. A no-op when nothing is pending.
 	 */
@@ -3122,55 +3215,6 @@ class Renderer {
 		}
 	}
 
-
-	/**
-	 * ω-glue-width gates 2 and 3: would moving a glued body to `brokenIndent`
-	 * be worth it? Answered off ONE natural first-line re-measure of the glued
-	 * Doc, taken as if the pen sat one column LEFT of `brokenIndent` — the walk
-	 * spends that column on the glue separator (`OptSpace(' ')`, which every
-	 * `BodyFit.glueLayout` caller puts first in the glued shape) and the body
-	 * then lands exactly on the indent it would break to. `broken -
-	 * brokenIndent` is therefore the body's own first-line width there.
-	 *
-	 * Two ways to answer no, each closing a measured hole:
-	 *
-	 *  - `broken > n` — still over-wide after the move, so the move fixes
-	 *    nothing and only costs a line and an indent level. Mirrors the fit-gate
-	 *    in `collapseParenCommitsOpen`: when the inner cannot be made a single
-	 *    fitting line, opening does not help. This is also what absorbs the
-	 *    measurer's own slop — `naturalWidthStructural` resolves the
-	 *    `IfFirstLineExceeds` probe family on its FLAT side, so a body whose
-	 *    bracket opens through one measures a few columns too wide, and without
-	 *    this test that slop broke a `return <ternary>` whose rendered line sat
-	 *    exactly at the limit.
-	 *  - `broken <= brokenIndent + 1` — the body would put at most ONE column on
-	 *    that line: it breaks right after its own opening token. A statement
-	 *    block, or a literal already committed to breaking, gives the header
-	 *    back only those columns and strands its `{` on a line of its own. The
-	 *    same reasoning `selfBreakingBraceBody` applies to the arrow-body
-	 *    marker, though not the same predicate — that one also demands a
-	 *    `{`-leading body and reads a flat measurer, while this is a pure width
-	 *    test and refuses any one-column first line. Constructed (a `case` label
-	 *    ALREADY past the limit whose body is a block) the move came out
-	 *    strictly worse than the glue.
-	 */
-	private static inline function brokenBodyIsWorthMoving(flatDoc: Doc, brokenIndent: Int, n: Int, width: Int): Bool {
-		final broken: Int = naturalFirstLineWidth(flatDoc, brokenIndent - 1, brokenIndent, width);
-		return broken <= n && broken > brokenIndent + 1;
-	}
-
-	/**
-	 * First-line-only view of `embeddedLineWidths`, for the `Fill` packing probe:
-	 * lets a fill pack a verbatim multi-line token when its FIRST line fits the
-	 * remaining budget (matching haxe-formatter, which re-flows the head of a
-	 * token-splice operand onto the packed chain line) instead of breaking the
-	 * whole operand onto its own line for its full flat width. A packed item's
-	 * tail is the fill's own business, so the `last` half is not consulted.
-	 */
-	private static inline function embeddedFirstLineWidth(d: Doc): Int {
-		return embeddedLineWidths(d).first;
-	}
-
 	/**
 	 * Widths of the FIRST and the LAST physical line of `d`'s flat projection
 	 * WHEN that projection carries an embedded `\n` inside a `Text` leaf — a
@@ -3267,53 +3311,6 @@ class Renderer {
 		return { first: first, last: total };
 	}
 
-
-	/**
-	 * omega-arrow-block-body-open: does `flatDoc` — the FLAT side of an
-	 * `@:fmt(arrowBodyLineWrap)` arrow-body marker — open with `{` and break
-	 * IMMEDIATELY after it, before any other token? That is the population whose head
-	 * line the body terminates by itself, so an extra break after `->` shortens
-	 * nothing: a multi-statement block, or a `{ … }` literal whose own wrap cascade
-	 * committed to breaking at build time.
-	 *
-	 * All three conjuncts are load-bearing, each closing a measured hole:
-	 *
-	 *  - `{`-leading alone is NOT "is a block". `x -> { a: 1, b: 2 }` is an object
-	 *    literal whose flat doc also starts with `{`, and a FLAT one rides the head
-	 *    line in full, so breaking after `->` genuinely shortens it. Suppressing that
-	 *    break pushed a fixture from 127 to 141 columns against a 140 budget.
-	 *  - `hasForcedBreak` alone is not enough either, in BOTH directions. A non-brace
-	 *    body that breaks internally still gains a shorter head line from the arrow
-	 *    break; and a `{`-leading body can break somewhere OTHER than right after `{`
-	 *    — under `wrapping.objectLiteral.defaultWrap: "keep"` a one-line source
-	 *    literal reproduces its own layout, so `{ onDone: () -> { … }, tag: 1 }` has
-	 *    a forced hardline (the inner block's) while its head line runs on. That took
-	 *    a fixture from 108 to 146 columns.
-	 *  - `flatTokenWidthFirstLine(flatDoc) <= 1` is what states "breaks before any
-	 *    other token". MEASURED, not assumed: a statement block sits behind a
-	 *    `BodyGroup` that the first-line walk defers to 0, and a self-breaking object
-	 *    literal measures exactly 1 (its `{`, then the hardline) — both stay in the
-	 *    population, while the keep-mode literal above measures its whole head run
-	 *    and drops out.
-	 *
-	 * Read STRUCTURALLY — all three walkers resolve every conditional on its flat
-	 * side — so no render-time width measurement can change which arm a construct
-	 * takes. That is a deliberate limit: an object literal that breaks only AT RENDER
-	 * TIME (its own `Group` losing a width probe) answers `false` here, takes the
-	 * arrow break, and then breaks anyway, so its `{` still lands alone. Measured on
-	 * a 40-case width sweep, the gate removes 40 of 56 stranded opens and adds zero
-	 * over-width lines, and the 16 it leaves are all that band — byte-identical to
-	 * the pre-slice writer, since no line of an object-literal rendering changes.
-	 * Closing them needs a width-aware answer, which would make this guard disagree
-	 * with the two natural walks that resolve the same marker without a rest-stack
-	 * term; that trade is a separate slice.
-	 */
-	private static inline function selfBreakingBraceBody(flatDoc: Doc): Bool {
-		return DocMeasure.firstVisibleTextStartsWith(flatDoc, '{'.code) && DocMeasure.hasForcedBreak(flatDoc)
-			&& flatTokenWidthFirstLine(flatDoc) <= 1;
-	}
-
-
 	/**
 	 * ω-fill-after-collection: does this fill item open with a collection
 	 * delimiter (`[` array / comprehension, `{` object literal / anon type)?
@@ -3337,7 +3334,6 @@ class Renderer {
 		final trimmed: String = StringTools.trim(head);
 		return trimmed != '[]' && trimmed != '{}';
 	}
-
 
 	/**
 	 * ω-fill-after-collection: `fillRest[idx…]` joined by `sep`, for the

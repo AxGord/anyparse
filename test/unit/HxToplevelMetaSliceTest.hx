@@ -27,6 +27,26 @@ import anyparse.grammar.haxe.HxModuleWriter;
  */
 class HxToplevelMetaSliceTest extends HxTestHelpers {
 
+	public inline function testRoundTripMetaClass(): Void {
+		roundTrip('@:enum class M {}');
+	}
+
+	public inline function testRoundTripMetaTypedef(): Void {
+		roundTrip('@:keep typedef T = Int;');
+	}
+
+	public inline function testRoundTripMetasOnClass(): Void {
+		roundTrip('@:allow(pack.Base) @test("foo") class Main {}');
+	}
+
+	public inline function testRoundTripMetaWithModifier(): Void {
+		roundTrip('@:keep private class M {}');
+	}
+
+	public inline function testRoundTripPackageImportMetaClass(): Void {
+		roundTrip('package foo;\nimport bar.Baz;\n@:enum class M {}');
+	}
+
 	public function testSingleMetaOnClass(): Void {
 		final ast: HxModule = HaxeModuleParser.parse('@:enum class M {}');
 		Assert.equals(1, ast.decls.length);
@@ -140,26 +160,6 @@ class HxToplevelMetaSliceTest extends HxTestHelpers {
 	public function testWriterEmitsMetaWithModifier(): Void {
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('@:keep private class M {}'));
 		Assert.equals('@:keep private class M {}\n', out);
-	}
-
-	public inline function testRoundTripMetaClass(): Void {
-		roundTrip('@:enum class M {}');
-	}
-
-	public inline function testRoundTripMetaTypedef(): Void {
-		roundTrip('@:keep typedef T = Int;');
-	}
-
-	public inline function testRoundTripMetasOnClass(): Void {
-		roundTrip('@:allow(pack.Base) @test("foo") class Main {}');
-	}
-
-	public inline function testRoundTripMetaWithModifier(): Void {
-		roundTrip('@:keep private class M {}');
-	}
-
-	public inline function testRoundTripPackageImportMetaClass(): Void {
-		roundTrip('package foo;\nimport bar.Baz;\n@:enum class M {}');
 	}
 
 }

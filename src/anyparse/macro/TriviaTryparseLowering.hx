@@ -44,6 +44,29 @@ import haxe.macro.Expr;
  */
 final class TriviaTryparseLowering {
 
+	/**
+	 * Tryparse-Star `flatGateExpr` builder (ω-case-body-policy /
+	 * ω-issue-423-mech-a). Builds the runtime COMMITTED-flatten gate from the
+	 * `@:fmt(bodyPolicy(...))` flag names: single-flag, dual-flag (dispatch
+	 * on `opt._inExprPosition`), or `false`.
+	 */
+	private static inline function triviaTryparseFlatGateExpr(caseBodyFlagNames: Null<Array<String>>): Expr {
+		return triviaTryparseCaseGateExpr(caseBodyFlagNames, false);
+	}
+
+	/**
+	 * ω-case-body-fitline — the `FitLine` sibling of `triviaTryparseFlatGateExpr`.
+	 *
+	 * Same dual-flag dispatch, different per-flag predicate: reports that
+	 * the resolved policy is `FitLine`, i.e. the flat/break choice is the
+	 * renderer's. Consumed by the `_fitCase` runtime local, which is
+	 * computed AFTER `_flatCase` and is mutually exclusive with it (a
+	 * policy is `Same`/`Keep` or `FitLine`, never both).
+	 */
+	private static inline function triviaTryparseFitGateExpr(caseBodyFlagNames: Null<Array<String>>): Expr {
+		return triviaTryparseCaseGateExpr(caseBodyFlagNames, true);
+	}
+
 	@:access(anyparse.macro.WriterLowering)
 	private static function triviaTryparseStarExpr(
 		fieldAccess: Expr, elemFn: String, sepExpr: Expr, sepBeforeFirst: Bool, nestBody: Bool, trailBBAccess: Null<Expr>,
@@ -1069,29 +1092,6 @@ final class TriviaTryparseLowering {
 			final overrideBlock: Expr = { expr: EBlock(block), pos: Context.currentPos() };
 			overrideBlock;
 		};
-	}
-
-	/**
-	 * Tryparse-Star `flatGateExpr` builder (ω-case-body-policy /
-	 * ω-issue-423-mech-a). Builds the runtime COMMITTED-flatten gate from the
-	 * `@:fmt(bodyPolicy(...))` flag names: single-flag, dual-flag (dispatch
-	 * on `opt._inExprPosition`), or `false`.
-	 */
-	private static inline function triviaTryparseFlatGateExpr(caseBodyFlagNames: Null<Array<String>>): Expr {
-		return triviaTryparseCaseGateExpr(caseBodyFlagNames, false);
-	}
-
-	/**
-	 * ω-case-body-fitline — the `FitLine` sibling of `triviaTryparseFlatGateExpr`.
-	 *
-	 * Same dual-flag dispatch, different per-flag predicate: reports that
-	 * the resolved policy is `FitLine`, i.e. the flat/break choice is the
-	 * renderer's. Consumed by the `_fitCase` runtime local, which is
-	 * computed AFTER `_flatCase` and is mutually exclusive with it (a
-	 * policy is `Same`/`Keep` or `FitLine`, never both).
-	 */
-	private static inline function triviaTryparseFitGateExpr(caseBodyFlagNames: Null<Array<String>>): Expr {
-		return triviaTryparseCaseGateExpr(caseBodyFlagNames, true);
 	}
 
 	/**

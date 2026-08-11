@@ -178,6 +178,26 @@ final class PreferDocComment implements Check implements DefaultOff {
 		];
 	}
 
+	/** Whether `outer`'s span covers `inner`'s — a nesting relation, so the two are not siblings. */
+	private static inline function encloses(outer: Anchor, inner: Anchor): Bool {
+		return outer.from <= inner.from && outer.to >= inner.to;
+	}
+
+	/**
+	 * Where the replacement stops: the run's last token end, minus a trailing CR. The
+	 * token spans up to (not including) the `\n`, so on a CRLF file the `\r` sits INSIDE
+	 * it — replacing through it would leave the emitted close followed by a bare `\n` and
+	 * silently downgrade that one line ending.
+	 */
+	private static inline function editEndOf(source: String, last: CommentTok): Int {
+		return last.to > last.from && source.fastCodeAt(last.to - 1) == '\r'.code ? last.to - 1 : last.to;
+	}
+
+	/** The whitespace between `at`'s line start and `at`. */
+	private static inline function indentOf(source: String, at: Int): String {
+		return source.substring(RefactorSupport.startOfLine(source, at), at);
+	}
+
 	/** Every convertible run in `source`, in source order. */
 	private static function rewrites(source: String, plugin: GrammarPlugin, seams: Seams): Array<DocCommentRewrite> {
 		final comments: Array<CommentTok> = RefactorSupport.collectCommentTokens(source);
@@ -388,11 +408,6 @@ final class PreferDocComment implements Check implements DefaultOff {
 		return true;
 	}
 
-	/** Whether `outer`'s span covers `inner`'s — a nesting relation, so the two are not siblings. */
-	private static inline function encloses(outer: Anchor, inner: Anchor): Bool {
-		return outer.from <= inner.from && outer.to >= inner.to;
-	}
-
 	/**
 	 * GATE 10, second half — whether the run labels a SECTION rather than the one
 	 * declaration under it.
@@ -444,7 +459,6 @@ final class PreferDocComment implements Check implements DefaultOff {
 		return self.ownerEnd;
 	}
 
-
 	/** The start of the first non-blank line of `lineStart`'s group. */
 	private static function groupStart(source: String, lineStart: Int): Int {
 		var at: Int = lineStart;
@@ -483,16 +497,6 @@ final class PreferDocComment implements Check implements DefaultOff {
 	}
 
 	/**
-	 * Where the replacement stops: the run's last token end, minus a trailing CR. The
-	 * token spans up to (not including) the `\n`, so on a CRLF file the `\r` sits INSIDE
-	 * it — replacing through it would leave the emitted close followed by a bare `\n` and
-	 * silently downgrade that one line ending.
-	 */
-	private static inline function editEndOf(source: String, last: CommentTok): Int {
-		return last.to > last.from && source.fastCodeAt(last.to - 1) == '\r'.code ? last.to - 1 : last.to;
-	}
-
-	/**
 	 * The doc block replacing a run. A multi-line run gets the ` * ` marker column and a
 	 * star-aligned ` *\/` close — byte-identical to `BlockCommentNormalizer.canonicalDoc`
 	 * under `commentStyle: Javadoc`, and a fixed point of the default writer. A
@@ -508,11 +512,6 @@ final class PreferDocComment implements Check implements DefaultOff {
 	private static function commentText(source: String, tok: CommentTok): String {
 		final body: String = source.substring(tok.from + CommentProse.LINE_MARKER.length, tok.to).rtrim();
 		return body.length > 0 && body.fastCodeAt(0) == ' '.code ? body.substr(1) : body;
-	}
-
-	/** The whitespace between `at`'s line start and `at`. */
-	private static inline function indentOf(source: String, at: Int): String {
-		return source.substring(RefactorSupport.startOfLine(source, at), at);
 	}
 
 	/**

@@ -49,8 +49,6 @@ using StringTools;
 @:nullSafety(Strict)
 class HxFormatterCorpusTest extends Test {
 
-	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
-	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 	private static inline final SAMELINE_SUBDIR: String = 'test/testcases/sameline';
 	private static inline final WHITESPACE_SUBDIR: String = 'test/testcases/whitespace';
 	private static inline final INDENTATION_SUBDIR: String = 'test/testcases/indentation';
@@ -67,6 +65,8 @@ class HxFormatterCorpusTest extends Test {
 	private static inline final SNIPPET_LEN: Int = 24;
 	private static inline final SWEEP_JSON_PATH: String = 'bin/.last-sweep.json';
 	private static inline final SWEEP_PREV_PATH: String = 'bin/.prev-sweep.json';
+	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
 	// ω-sweep-fixture-status: per-fixture status map for `apq recon
 	// --regression-probe`. Each runCategory iteration appends one entry
@@ -273,6 +273,8 @@ class HxFormatterCorpusTest extends Test {
 		#end
 	}
 
+	private static inline function signed(n: Int): String return n > 0 ? '+$n' : '$n';
+
 	/**
 	 * Aggregate-totals + delta-vs-baseline report. Reads the previous
 	 * sweep's JSON (if any), formats the Δ triple, then overwrites the
@@ -339,8 +341,6 @@ class HxFormatterCorpusTest extends Test {
 		} catch (_: Exception) {/* snapshot write failed — non-fatal for this run */}
 		#end
 	}
-
-	private static inline function signed(n: Int): String return n > 0 ? '+$n' : '$n';
 
 	/**
 	 * Classifies a parse failure into a stable category key suitable

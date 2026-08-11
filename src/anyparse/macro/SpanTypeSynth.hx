@@ -81,6 +81,10 @@ class SpanTypeSynth {
 		Context.defineModule(modulePath, paired);
 	}
 
+	private static inline function wrapOptional(node: ShapeNode, base: ComplexType): ComplexType {
+		return node.annotations[AnnotationKeys.BASE_OPTIONAL] == true ? TPath({ pack: [], name: 'Null', params: [TPType(base)] }) : base;
+	}
+
 	private static function buildTypeDefinition(origName: String, origNode: ShapeNode, synthPack: Array<String>): TypeDefinition {
 		final pairedSimple: String = leafOf(origName) + PAIRED_SUFFIX;
 		final pos: Position = Context.currentPos();
@@ -186,10 +190,6 @@ class SpanTypeSynth {
 				Context.fatalError('SpanTypeSynth: unexpected node kind ${node.kind} in field-shape', Context.currentPos());
 				throw 'unreachable';
 		};
-	}
-
-	private static inline function wrapOptional(node: ShapeNode, base: ComplexType): ComplexType {
-		return node.annotations[AnnotationKeys.BASE_OPTIONAL] == true ? TPath({ pack: [], name: 'Null', params: [TPType(base)] }) : base;
 	}
 
 	private static function refIsBearing(refName: String): Bool {

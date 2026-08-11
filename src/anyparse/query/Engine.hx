@@ -91,6 +91,11 @@ final class Engine {
 		return atKindWalk(tree, offset, new SelectorSegment(kind, null), equiv, null, -1).node;
 	}
 
+	/** Collect `node` once — nested `>>` ancestor contexts can reach the same descendant through several chains (reference identity). */
+	private static inline function pushUnique(out: Array<QueryNode>, node: QueryNode): Void {
+		if (!out.contains(node)) out.push(node);
+	}
+
 	private static function truncateAt(node: QueryNode, depth: Int, maxDepth: Int): QueryNode {
 		// Spans are preserved across `truncate` / `truncateChildren` —
 		// `--spans` rendering needs them on every visible node, and
@@ -199,11 +204,6 @@ final class Engine {
 			curWidth = r.width;
 		}
 		return { node: curBest, width: curWidth };
-	}
-
-	/** Collect `node` once — nested `>>` ancestor contexts can reach the same descendant through several chains (reference identity). */
-	private static inline function pushUnique(out: Array<QueryNode>, node: QueryNode): Void {
-		if (!out.contains(node)) out.push(node);
 	}
 
 }

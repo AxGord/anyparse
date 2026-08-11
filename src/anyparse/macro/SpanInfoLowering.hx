@@ -102,6 +102,26 @@ class SpanInfoLowering extends PairedShapeLowering {
 		};
 	}
 
+	private inline function recurseCore(child: ShapeNode, access: Expr, spanExpr: Expr, depth: Int): Array<Expr> {
+		return switch child.kind {
+			case Ref:
+				final ref: String = child.annotations[AnnotationKeys.BASE_REF];
+				isTerminalRule(ref) ? [] : [
+					call(spanInfoFnName(ref), [access, spanExpr, ident('b'), ident('source'), ident('tp')])
+				];
+			case Star:
+				final loopVar: String = '_s$depth';
+				final body: Array<Expr> = recurse(child.children[0], ident(loopVar), spanExpr, depth + 1);
+				body.length == 0 ? [] : [macro for ($i{loopVar} in $access) $e{block(body)}];
+			case Terminal: [];
+			case Seq, Alt, Opt:
+				Context.fatalError(
+					'SpanInfoLowering: inline ${child.kind} child cannot be walked - named rules must arrive as Ref', Context.currentPos()
+				);
+				throw 'unreachable';
+		};
+	}
+
 	/**
 	 * Seed the nominal-rule set from every `type` / `returnType` field that
 	 * points at an `Alt`. The reflective `nominalTypeName` / `typeFieldSpan`
@@ -270,26 +290,6 @@ class SpanInfoLowering extends PairedShapeLowering {
 				macro if ($i{local} != null) $e{block(recurseCore(child, ident(local), spanExpr, depth))}
 			])
 		];
-	}
-
-	private inline function recurseCore(child: ShapeNode, access: Expr, spanExpr: Expr, depth: Int): Array<Expr> {
-		return switch child.kind {
-			case Ref:
-				final ref: String = child.annotations[AnnotationKeys.BASE_REF];
-				isTerminalRule(ref) ? [] : [
-					call(spanInfoFnName(ref), [access, spanExpr, ident('b'), ident('source'), ident('tp')])
-				];
-			case Star:
-				final loopVar: String = '_s$depth';
-				final body: Array<Expr> = recurse(child.children[0], ident(loopVar), spanExpr, depth + 1);
-				body.length == 0 ? [] : [macro for ($i{loopVar} in $access) $e{block(body)}];
-			case Terminal: [];
-			case Seq, Alt, Opt:
-				Context.fatalError(
-					'SpanInfoLowering: inline ${child.kind} child cannot be walked - named rules must arrive as Ref', Context.currentPos()
-				);
-				throw 'unreachable';
-		};
 	}
 
 	/**

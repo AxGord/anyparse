@@ -39,23 +39,6 @@ class HxSingleStmtBracesSliceTest extends Test {
 		Assert.isFalse(HaxeFormat.instance.defaultWriteOptions.dropSingleStmtBraces);
 	}
 
-	public function testLoaderMapsRemove(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
-		Assert.isTrue(opts.dropSingleStmtBraces);
-	}
-
-	public function testLoaderExplicitKeepStaysOff(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{ "whitespace": { "bracesConfig": { "singleStatementBraces": "keep" } } }'
-		);
-		Assert.isFalse(opts.dropSingleStmtBraces);
-	}
-
-	public function testLoaderOmittedStaysOff(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		Assert.isFalse(opts.dropSingleStmtBraces);
-	}
-
 	public inline function testSingleStmtIfUnbraced(): Void {
 		assertFmt(
 			'class F {\n\tfunction f(a:Bool):Bool {\n\t\tif (a) {\n\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t}\n}',
@@ -265,15 +248,6 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
-	public function testIdempotentAndReparses(): Void {
-		final source: String = 'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tif (b) x();\n\t\t} else\n\t\t\ty();\n'
-			+ '\t\tif (a) {\n\t\t\treturn;\n\t\t}\n\t}\n}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
-		final pass1: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
-		final pass2: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(pass1), opts);
-		Assert.equals(pass1, pass2);
-	}
-
 	public inline function testDefaultConfigKeepsBracesByteIdentical(): Void {
 		assertInert('class F {\n\tfunction f(a:Bool):Bool {\n\t\tif (a) {\n\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t}\n}', '{}');
 	}
@@ -373,20 +347,6 @@ class HxSingleStmtBracesSliceTest extends Test {
 			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) x();\n\t\telse if (b) y();\n\t\telse z();\n\t}\n}',
 			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a)\n\t\t\tx();\n\t\telse if (b)\n\t\t\ty();\n\t\telse\n\t\t\tz();\n'
 			+ '\t}\n}'
-		);
-	}
-
-	public function testSymmetryWrapIsPolicyGated(): Void {
-		// ONE asymmetric source, three configs: the repair fires under `remove` and is
-		// byte-inert under both `keep` and an omitted key. Asserting the two halves
-		// together is what makes this a gate test — the inert halves alone pass with the
-		// repair arm deleted, and the `remove` half alone says nothing about gating.
-		final source: String =
-			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tp();\n\t\t\tq();\n\t\t} else\n\t\t\tr();\n\t}\n}';
-		assertInert(source, '{}');
-		assertInert(source, '{ "whitespace": { "bracesConfig": { "singleStatementBraces": "keep" } } }');
-		assertFmt(
-			source, 'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tp();\n\t\t\tq();\n\t\t} else {\n\t\t\tr();\n\t\t}\n\t}\n}'
 		);
 	}
 
@@ -692,6 +652,46 @@ class HxSingleStmtBracesSliceTest extends Test {
 	 */
 	public inline function testOpenTrailingPlusOwnTrailingKeepsBraces(): Void {
 		assertInert('class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) { // outer\n\t\t\tp(); // inner\n\t\t}\n\t}\n}', removeConfig);
+	}
+
+	public function testLoaderMapsRemove(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
+		Assert.isTrue(opts.dropSingleStmtBraces);
+	}
+
+	public function testLoaderExplicitKeepStaysOff(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{ "whitespace": { "bracesConfig": { "singleStatementBraces": "keep" } } }'
+		);
+		Assert.isFalse(opts.dropSingleStmtBraces);
+	}
+
+	public function testLoaderOmittedStaysOff(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		Assert.isFalse(opts.dropSingleStmtBraces);
+	}
+
+	public function testIdempotentAndReparses(): Void {
+		final source: String = 'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tif (b) x();\n\t\t} else\n\t\t\ty();\n'
+			+ '\t\tif (a) {\n\t\t\treturn;\n\t\t}\n\t}\n}';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
+		final pass1: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
+		final pass2: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(pass1), opts);
+		Assert.equals(pass1, pass2);
+	}
+
+	public function testSymmetryWrapIsPolicyGated(): Void {
+		// ONE asymmetric source, three configs: the repair fires under `remove` and is
+		// byte-inert under both `keep` and an omitted key. Asserting the two halves
+		// together is what makes this a gate test — the inert halves alone pass with the
+		// repair arm deleted, and the `remove` half alone says nothing about gating.
+		final source: String =
+			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tp();\n\t\t\tq();\n\t\t} else\n\t\t\tr();\n\t}\n}';
+		assertInert(source, '{}');
+		assertInert(source, '{ "whitespace": { "bracesConfig": { "singleStatementBraces": "keep" } } }');
+		assertFmt(
+			source, 'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tp();\n\t\t\tq();\n\t\t} else {\n\t\t\tr();\n\t\t}\n\t}\n}'
+		);
 	}
 
 	public function testTrailingCommentDeBraceIdempotent(): Void {

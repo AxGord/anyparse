@@ -23,6 +23,14 @@ import anyparse.grammar.haxe.HxStatement;
  */
 class HxEllipsisStmtSliceTest extends HxTestHelpers {
 
+	public inline function testEllipsisStmtWriterEquals(): Void {
+		writerEquals('class A {\n\tfunction f():Void {\n\t\t....\n\t}\n}', 'class A {\n\tfunction f():Void {\n\t\t....\n\t}\n}\n');
+	}
+
+	public inline function testEllipsisStmtRoundTrip(): Void {
+		roundTrip('class A {\n\tfunction f():Void {\n\t\t....\n\t}\n}');
+	}
+
 	public function testEllipsisStmtSingleBody(): Void {
 		final module: HxModule = HaxeModuleParser.parse('class A {\n\tfunction f():Void {\n\t\t....\n\t}\n}');
 		Assert.equals(1, module.decls.length);
@@ -35,14 +43,6 @@ class HxEllipsisStmtSliceTest extends HxTestHelpers {
 			case _:
 				Assert.fail('expected EllipsisStmt, got ${body[0]}');
 		}
-	}
-
-	public inline function testEllipsisStmtWriterEquals(): Void {
-		writerEquals('class A {\n\tfunction f():Void {\n\t\t....\n\t}\n}', 'class A {\n\tfunction f():Void {\n\t\t....\n\t}\n}\n');
-	}
-
-	public inline function testEllipsisStmtRoundTrip(): Void {
-		roundTrip('class A {\n\tfunction f():Void {\n\t\t....\n\t}\n}');
 	}
 
 	public function testNoEllipsisStmtRegression(): Void {

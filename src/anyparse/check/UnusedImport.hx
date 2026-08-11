@@ -166,6 +166,11 @@ final class UnusedImport implements Check {
 		return edits;
 	}
 
+	/** Whether `imp`'s full module path is in a checkstyle `ignoreModules` list. */
+	private static inline function moduleIgnored(imp: ImportInfo, ignore: Array<String>): Bool {
+		return ignore.contains(imp.raw);
+	}
+
 	/**
 	 * Append the verdict for one import. A wildcard (`import pkg.*;`) is an
 	 * unverifiable `Info`; a `using` is delegated to `addUsingViolation`; every
@@ -299,11 +304,6 @@ final class UnusedImport implements Check {
 		out.push(make(file, imp, Severity.Warning, 'unused using \'${imp.raw}\''));
 	}
 
-	/** Whether `imp`'s full module path is in a checkstyle `ignoreModules` list. */
-	private static inline function moduleIgnored(imp: ImportInfo, ignore: Array<String>): Bool {
-		return ignore.contains(imp.raw);
-	}
-
 	/** True when any constructor of the enum-type imported by `raw` is referenced bare in the file (outside the imports). */
 	private static function enumCtorReferenced(raw: String, scan: FileScan, enumCtorsByPath: Map<String, Array<String>>): Bool {
 		final ctors: Null<Array<String>> = enumCtorsByPath[raw];
@@ -336,7 +336,6 @@ final class UnusedImport implements Check {
 	private static function stripWildStar(raw: String): String {
 		return raw.endsWith('.*') ? raw.substr(0, raw.length - 2) : raw;
 	}
-
 
 	/** Member names keyed by importable path (`module` for a main type, `module.Type` for a sub-module type). */
 	private static function membersByImportPath(index: SymbolIndex): Map<String, Array<String>> {

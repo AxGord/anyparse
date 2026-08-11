@@ -258,6 +258,15 @@ final class Rename {
 	}
 
 	/**
+	 * Is the node whose span starts at `from` a class-member declaration
+	 * (a field / method)? Drives whether the occurrence set is augmented
+	 * with `this.<name>` field accesses.
+	 */
+	private static inline function nodeAtFromIsFieldMember(tree: QueryNode, from: Int): Bool {
+		return fieldMemberAtFrom(tree, from) != null;
+	}
+
+	/**
 	 * A same-name RESOLUTION BLIND SPOT that would turn this rename into a silent semantic
 	 * change, or null when none applies. Three cases:
 	 *
@@ -310,7 +319,6 @@ final class Rename {
 			+ ' where reference resolution mis-binds - split the scopes or rename the other declaration first';
 	}
 
-
 	/** The span of a second same-block declaration of `oldName` in `scope`, or null. */
 	private static function sameBlockRedeclaration(scope: QueryNode, oldName: String, plugin: GrammarPlugin, shape: RefShape): Null<Span> {
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
@@ -345,15 +353,6 @@ final class Rename {
 		}
 		walk(tree);
 		return found;
-	}
-
-	/**
-	 * Is the node whose span starts at `from` a class-member declaration
-	 * (a field / method)? Drives whether the occurrence set is augmented
-	 * with `this.<name>` field accesses.
-	 */
-	private static inline function nodeAtFromIsFieldMember(tree: QueryNode, from: Int): Bool {
-		return fieldMemberAtFrom(tree, from) != null;
 	}
 
 	/**

@@ -144,6 +144,11 @@ final class PreferRangeLoop implements Check {
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
+	/** The bound's identifier name when `B` is a bare identifier, else null (a literal bound has no name to track). */
+	private static inline function boundIdentName(bound: QueryNode, s: Seams): Null<String> {
+		return bound.kind == s.identKind ? bound.name : null;
+	}
+
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
 	private static function readSeams(shape: RefShape): Null<Seams> {
 		final whileStmtKind: Null<String> = shape.whileStmtKind;
@@ -276,7 +281,6 @@ final class PreferRangeLoop implements Check {
 		return false;
 	}
 
-
 	/** Collapse whitespace runs to single spaces and trim, so a multi-line bound fits one message line. */
 	private static function normalize(text: String): String {
 		final buf: StringBuf = new StringBuf();
@@ -299,11 +303,6 @@ final class PreferRangeLoop implements Check {
 	private static function excerpt(text: String): String {
 		final flat: String = normalize(text);
 		return flat.length > EXCERPT_MAX ? '${flat.substring(0, EXCERPT_MAX)}…' : flat;
-	}
-
-	/** The bound's identifier name when `B` is a bare identifier, else null (a literal bound has no name to track). */
-	private static inline function boundIdentName(bound: QueryNode, s: Seams): Null<String> {
-		return bound.kind == s.identKind ? bound.name : null;
 	}
 
 	/** The counter variable of a `var i = A;` single-var declaration (not `final`, one initializer, no multi-declaration comma), or null. */
@@ -350,7 +349,6 @@ final class PreferRangeLoop implements Check {
 		return !boundWritten && !containsKind(body, s.continueKind, s) && !declaresName(body, loopVar, s);
 	}
 
-
 	/**
 	 * Whether any lambda / local-function subtree within `scope` references `loopVar`
 	 * (a word-boundary match inside the closure's span). Such a closure captures the
@@ -366,7 +364,6 @@ final class PreferRangeLoop implements Check {
 		for (c in scope.children) if (capturedByClosure(c, source, loopVar, s)) return true;
 		return false;
 	}
-
 
 	/**
 	 * The matched counter loop `(decl, whileNode)` inside `scope` — the loop variable,

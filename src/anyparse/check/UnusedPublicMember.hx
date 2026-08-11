@@ -150,6 +150,23 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 	/** This check's stable id — named once so the literal is not itself a repeated string. */
 	private static inline final RULE_ID: String = 'unused-public-member';
 
+	/** The wrapper of a dunder name (`__init__`) — a compiler hook, not a call target. */
+	private static inline final DUNDER: String = '__';
+
+	/** The modifier sibling an explicit `public` projects as. */
+	private static inline final PUBLIC_MODIFIER: String = 'Public';
+
+	/** The modifier sibling `override` projects as. */
+	private static inline final OVERRIDE_MODIFIER: String = 'Override';
+
+	/**
+	 * Shortest interpolation FRAGMENT that can block a deletion. Same rationale as
+	 * `orphan-accessor`'s accessor-prefix length: a one- or two-character fragment (`'_'`,
+	 * `'$a-$b'`) carries no naming intent and is contained in almost every identifier, so
+	 * admitting it would veto every deletion in scope.
+	 */
+	private static inline final MIN_FRAGMENT_LENGTH: Int = 4;
+
 	/**
 	 * Method names the runtime or the compiler reaches with NO call token anywhere in source —
 	 * so the reference test, which only ever sees written text, cannot possibly find one.
@@ -181,24 +198,6 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 		'hxSerialize',
 		'hxUnserialize'
 	];
-
-
-	/** The wrapper of a dunder name (`__init__`) — a compiler hook, not a call target. */
-	private static inline final DUNDER: String = '__';
-
-	/** The modifier sibling an explicit `public` projects as. */
-	private static inline final PUBLIC_MODIFIER: String = 'Public';
-
-	/** The modifier sibling `override` projects as. */
-	private static inline final OVERRIDE_MODIFIER: String = 'Override';
-
-	/**
-	 * Shortest interpolation FRAGMENT that can block a deletion. Same rationale as
-	 * `orphan-accessor`'s accessor-prefix length: a one- or two-character fragment (`'_'`,
-	 * `'$a-$b'`) carries no naming intent and is contained in almost every identifier, so
-	 * admitting it would veto every deletion in scope.
-	 */
-	private static inline final MIN_FRAGMENT_LENGTH: Int = 4;
 
 	/**
 	 * `<file>#<from>:<to>` of every flagged method whose deletion `run` PROVED safe. Every gate
@@ -536,7 +535,6 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 		}
 		for (child in node.children) collectFragments(child, source, fold, out);
 	}
-
 
 	/** `RefactorSupport.isMemberDeclKind` as a node predicate — the member set every region guard counts. */
 	private static function isDeclKind(node: QueryNode): Bool {

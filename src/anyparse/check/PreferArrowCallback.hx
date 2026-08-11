@@ -142,6 +142,11 @@ final class PreferArrowCallback implements Check {
 		return edits;
 	}
 
+	/** Whether `node` hosts call arguments — a call or a `new` construction. */
+	private static inline function isArgHost(ctx: Ctx, node: QueryNode): Bool {
+		return node.kind == ctx.callKind || node.kind == ctx.shape.newExprKind;
+	}
+
 	private static function makeCtx(
 		file: String, source: String, tree: QueryNode, plugin: GrammarPlugin, shape: RefShape, fnKind: String, callKind: String,
 		getIndex: () -> Null<SymbolIndex>, declTrees: Map<String, Null<QueryNode>>
@@ -175,11 +180,6 @@ final class PreferArrowCallback implements Check {
 			if (span != null && handle(node, arg, span)) consumed.push(arg);
 		}
 		for (c in node.children) if (!consumed.contains(c)) walkArgHosts(ctx, c, handle);
-	}
-
-	/** Whether `node` hosts call arguments — a call or a `new` construction. */
-	private static inline function isArgHost(ctx: Ctx, node: QueryNode): Bool {
-		return node.kind == ctx.callKind || node.kind == ctx.shape.newExprKind;
 	}
 
 	/** The argument expressions of a call / construction (callee and type-argument children excluded). */

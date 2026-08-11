@@ -23,6 +23,18 @@ class TypeRefPrinterTest extends Test {
 	private static inline final SPLIT_RUNS: String = 'package app;\n\nimport a.Alpha;\nimport m.Mid;\nimport z.Zeta;\n'
 		+ '\nusing ext.Tools;\n\nimport b.Bee;\nimport c.Cee;\n\nclass C {}\n';
 
+	// --- route 2: free short name -> import + short name ---
+
+	public inline function testFreeNameGetsImportAndShortName(): Void {
+		assertImported('package pkg;\n\nclass C {}\n');
+	}
+
+	// --- route 3: taken short name -> correct fully-qualified form ---
+
+	public inline function testImportedOtherPathStaysQualified(): Void {
+		assertNotImported('package pkg;\n\nimport other.Widget;\n\nclass C {}\n');
+	}
+
 	// --- route 1: already visible -> short name ---
 
 	public function testImportedMainTypePrintsShort(): Void {
@@ -182,12 +194,6 @@ class TypeRefPrinterTest extends Test {
 		Assert.isFalse(p.hasPendingImports());
 	}
 
-	// --- route 2: free short name -> import + short name ---
-
-	public inline function testFreeNameGetsImportAndShortName(): Void {
-		assertImported('package pkg;\n\nclass C {}\n');
-	}
-
 	public function testRepeatedPrintImportsOnce(): Void {
 		final src: String = 'package pkg;\n\nclass C {}\n';
 		final p: TypeRefPrinter = printer(src);
@@ -277,12 +283,6 @@ class TypeRefPrinterTest extends Test {
 	 */
 	public function testDiscoveredInterpolationHoleStillVetoesTheImport(): Void {
 		assertNotImported(withBody("'a \\x24{Widget.x} b'"));
-	}
-
-	// --- route 3: taken short name -> correct fully-qualified form ---
-
-	public inline function testImportedOtherPathStaysQualified(): Void {
-		assertNotImported('package pkg;\n\nimport other.Widget;\n\nclass C {}\n');
 	}
 
 	public function testAliasBoundNameStaysQualified(): Void {

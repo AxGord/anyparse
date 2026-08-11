@@ -89,6 +89,11 @@ final class ListenerSymmetry implements Check {
 		return [];
 	}
 
+	/** Absolute value of `n` — the member-index distance for the adjacency test. */
+	private static inline function intAbs(n: Int): Int {
+		return n < 0 ? -n : n;
+	}
+
 	/** Walk `node`; check every type-body descendant's listener methods for symmetry. */
 	private static function walk(out: Array<Violation>, file: String, source: String, node: QueryNode, cfg: ListenerCfg): Void {
 		if (cfg.containerKinds.contains(node.kind)) checkContainer(out, file, source, node, cfg);
@@ -183,11 +188,6 @@ final class ListenerSymmetry implements Check {
 			severity: Severity.Info,
 			message: message
 		};
-	}
-
-	/** Absolute value of `n` — the member-index distance for the adjacency test. */
-	private static inline function intAbs(n: Int): Int {
-		return n < 0 ? -n : n;
 	}
 
 }

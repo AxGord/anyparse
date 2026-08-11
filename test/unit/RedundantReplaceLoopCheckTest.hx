@@ -594,6 +594,12 @@ class RedundantReplaceLoopCheckTest extends Test {
 		);
 	}
 
+	/** The verbatim `stripWord` canary shape: a parameter `S` and a literal `B`. */
+	private inline function stripWordSource(): String {
+		return 'class C {\n\tpublic static function stripWord(line:String, word:String):String {\n'
+			+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, \'\');\n\t\treturn line;\n\t}\n}';
+	}
+
 	private function wrapFn(body: String): String {
 		return 'class C {\n\tfunction f(now:String):Void {\n\t\t$body\n\t}\n}';
 	}
@@ -602,12 +608,6 @@ class RedundantReplaceLoopCheckTest extends Test {
 	private function wrapParams(body: String): String {
 		return
 			'class C {\n\tpublic static function f(line:String, word:String, replace:String):String {\n\t\t$body\n\t\treturn line;\n\t}\n}';
-	}
-
-	/** The verbatim `stripWord` canary shape: a parameter `S` and a literal `B`. */
-	private inline function stripWordSource(): String {
-		return 'class C {\n\tpublic static function stripWord(line:String, word:String):String {\n'
-			+ '\t\twhile (line.indexOf(word) != -1) line = line.replace(word, \'\');\n\t\treturn line;\n\t}\n}';
 	}
 
 	private function violations(source: String): Array<Violation> {

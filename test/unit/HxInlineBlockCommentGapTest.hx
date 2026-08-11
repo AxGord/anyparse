@@ -108,12 +108,12 @@ class HxInlineBlockCommentGapTest extends Test {
 	 */
 	private var _savedDecline: Null<String> = null;
 
+	public inline function teardown(): Void Sys.putEnv(CommentInventory.DECLINE_ENV, _savedDecline);
+
 	public function setup(): Void {
 		_savedDecline = Sys.getEnv(CommentInventory.DECLINE_ENV);
 		Sys.putEnv(CommentInventory.DECLINE_ENV, '');
 	}
-
-	public inline function teardown(): Void Sys.putEnv(CommentInventory.DECLINE_ENV, _savedDecline);
 
 	public function testCapturedSeamsRoundTripWithTheirComment(): Void {
 		for (entry in CAPTURED) {

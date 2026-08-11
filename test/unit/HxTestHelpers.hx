@@ -56,6 +56,15 @@ import anyparse.grammar.haxe.HxArrowParamBody;
 class HxTestHelpers extends Test {
 
 	/**
+	 * Returns the raw enum member list, each member exposing the
+	 * leading metadata Star alongside the constructor. Use this when a
+	 * test inspects `@:meta` prefixes — analog of `expectAnonMembers`.
+	 */
+	private inline function enumMembers(ed: HxEnumDecl): Array<HxEnumMember> {
+		return ed.ctors;
+	}
+
+	/**
 	 * Idempotency round-trip check: `write(parse(write(parse(s))))`
 	 * must equal `write(parse(s))`. The first write normalises formatting;
 	 * the second must produce identical output.
@@ -237,15 +246,6 @@ class HxTestHelpers extends Test {
 	 */
 	private function enumCtors(ed: HxEnumDecl): Array<HxEnumCtor> {
 		return [for (m in ed.ctors) m.ctor];
-	}
-
-	/**
-	 * Returns the raw enum member list, each member exposing the
-	 * leading metadata Star alongside the constructor. Use this when a
-	 * test inspects `@:meta` prefixes — analog of `expectAnonMembers`.
-	 */
-	private inline function enumMembers(ed: HxEnumDecl): Array<HxEnumMember> {
-		return ed.ctors;
 	}
 
 	/**

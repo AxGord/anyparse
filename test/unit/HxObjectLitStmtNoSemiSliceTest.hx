@@ -29,6 +29,25 @@ import anyparse.grammar.haxe.HxStatement;
  */
 class HxObjectLitStmtNoSemiSliceTest extends HxTestHelpers {
 
+	// -- Idempotency: corpus issue_161 round-trip via the module
+	// pipeline (parse + write + parse + write must converge).
+
+	public inline function testCorpusIssue161RoundTrip(): Void {
+		roundTrip(
+			'class Main {\n\tpublic static function main() {\n\t\t{\n\t\t\tfoo: {\n\t\t\t\tif (foo)\n\t\t\t\t\tbar;\n\t\t\t\t"";\n'
+			+ '\t\t\t}\n\t\t}\n\t}\n}',
+			'issue_161_if_body_in_object_literal'
+		);
+	}
+
+	public inline function testCorpusWhitespaceAfterObjectLiteralRoundTrip(): Void {
+		roundTrip(
+			'class Main {\n\tstatic function main() {\n\t\tswitch (foo) {\n\t\t\tcase {kind: TkIdent, text: \"error\"}:\n'
+			+ "\t\t\t\tdoSomething();\n\t\t}\n\t\t{f: macro ${a},}\n\t}\n}",
+			'whitespace_after_object_literal'
+		);
+	}
+
 	// -- Isolated: bare object literal as sole statement, no `;` --
 
 	public function testBareObjectLitNoSemi(): Void {
@@ -137,25 +156,6 @@ class HxObjectLitStmtNoSemiSliceTest extends HxTestHelpers {
 			+ '\t\t\t}\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, cls.members.length);
-	}
-
-	// -- Idempotency: corpus issue_161 round-trip via the module
-	// pipeline (parse + write + parse + write must converge).
-
-	public inline function testCorpusIssue161RoundTrip(): Void {
-		roundTrip(
-			'class Main {\n\tpublic static function main() {\n\t\t{\n\t\t\tfoo: {\n\t\t\t\tif (foo)\n\t\t\t\t\tbar;\n\t\t\t\t"";\n'
-			+ '\t\t\t}\n\t\t}\n\t}\n}',
-			'issue_161_if_body_in_object_literal'
-		);
-	}
-
-	public inline function testCorpusWhitespaceAfterObjectLiteralRoundTrip(): Void {
-		roundTrip(
-			'class Main {\n\tstatic function main() {\n\t\tswitch (foo) {\n\t\t\tcase {kind: TkIdent, text: \"error\"}:\n'
-			+ "\t\t\t\tdoSomething();\n\t\t}\n\t\t{f: macro ${a},}\n\t}\n}",
-			'whitespace_after_object_literal'
-		);
 	}
 
 }

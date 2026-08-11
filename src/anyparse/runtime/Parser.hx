@@ -34,17 +34,16 @@ final class Parser {
 
 	public var maxFailExpected(default, null): Null<String> = null;
 
-	public final input: Input;
 	public final errors: Array<ParseError> = [];
 	public final indentStack: Array<Int> = [];
 	public final captures: Map<String, String> = [];
+	public final input: Input;
 
 	public var pos: Int = 0;
 
 	// Deliberately mutable: the injection point for the planned cache
 	// layer (swap NoOpCache for a real ParseCache per parse session).
 	public var cache: ParseCache = NoOpCache.instance; // noqa: prefer-final-public-field
-
 	public var cancelled: () -> Bool = alwaysFalse;
 
 	/**
