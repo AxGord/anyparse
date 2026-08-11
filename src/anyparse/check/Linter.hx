@@ -52,6 +52,7 @@ final class Linter {
 			new IdenticalOperands(),
 			new SelfAssignment(),
 			new DuplicateCase(),
+			new CasePatternSeparator(),
 			new RedundantParens(),
 			new RedundantCondCompParens(),
 			new ConstantCondition(),

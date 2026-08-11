@@ -293,6 +293,7 @@ import unit.ExplicitTypeCheckTest;
 import unit.IdenticalOperandsCheckTest;
 import unit.SelfAssignmentCheckTest;
 import unit.DuplicateCaseCheckTest;
+import unit.CasePatternSeparatorCheckTest;
 import unit.RedundantParensCheckTest;
 import unit.RedundantParensOperandArmsTest;
 import unit.ConstantConditionCheckTest;
@@ -1108,6 +1109,7 @@ class RunTests {
 		addCase(new OrphanAccessorCheckTest());
 		addCase(new UnusedPublicMemberCheckTest());
 		addCase(new DuplicateCaseCheckTest());
+		addCase(new CasePatternSeparatorCheckTest());
 		addCase(new RedundantParensCheckTest());
 		addCase(new RedundantParensOperandArmsTest());
 		addCase(new RedundantParensTierArmsTest());

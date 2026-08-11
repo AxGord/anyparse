@@ -423,6 +423,31 @@ typedef RefShape = {
 	@:optional var caseBranchKind: String;
 
 	/**
+	 * The OR-PATTERN node kind (Haxe `BitOr` — `case A | B:` projects as ONE case
+	 * pattern whose direct child is this, a 3+ chain nesting left-associatively) — the
+	 * `case-pattern-separator` check normalises a case label's TOP-LEVEL alternatives
+	 * to one separator, this or the multi-pattern comma. Optional; unset makes the
+	 * check a no-op.
+	 */
+	@:optional var orPatternKind: String;
+
+	/**
+	 * Node kinds that open a MACRO QUOTATION — a region whose source is DATA the surrounding
+	 * program builds rather than code it runs (Haxe `MacroExpr`, the `macro …` form). A rewrite
+	 * that is source-equivalent outside one is not equivalent inside it: measured, `macro switch x
+	 * { case A | B: … }` reifies its label as ONE `EBinop(OpOr, …)` value while `case A, B:`
+	 * reifies as TWO, so `case-pattern-separator` respelling the separator silently changes what a
+	 * macro reading `Case.values` sees, with nothing rejecting the result. A check that REWRITES
+	 * source must therefore leave such a subtree alone. Optional; unset means the grammar has no
+	 * quotation construct and nothing is skipped.
+	 *
+	 * Distinct from its two neighbours on purpose: `opaqueKinds` states the same subtree is opaque
+	 * to REFERENCE analysis (uses may be spliced in from elsewhere), and `parenOpaqueSubtreeKinds`
+	 * also carries `Plain` — the case-pattern wrapper this rule must still process.
+	 */
+	@:optional var macroQuoteKinds: Array<String>;
+
+	/**
 	 * The parenthesized-expression node kind — the `redundant-parens` check flags a
 	 * redundant double wrap (`((e))`), and `prefer-ternary-expression` counts it as a
 	 * delimited slot (a grouping paren bounds its child on both sides). Optional; unset

@@ -527,6 +527,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			addAssignKind: 'AddAssign',
 			callKind: 'Call',
 			caseBranchKind: 'CaseBranch',
+			orPatternKind: 'BitOr',
+			macroQuoteKinds: ['MacroExpr'],
 			switchKinds: ['SwitchStmt', 'SwitchStmtBare', 'SwitchExpr', 'SwitchExprBare'],
 			// The two statement-position forms of the four above: a bare subject and a
 			// parenthesised one. Their arms need not be exhaustive, which is what a case

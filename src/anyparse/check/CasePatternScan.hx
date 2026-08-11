@@ -203,6 +203,28 @@ final class CasePatternScan {
 	}
 
 	/**
+	 * `node`'s name when it carries a NON-EMPTY one, else null — the guard every reader of a bare
+	 * identifier pattern opens with, here rather than once per reader. Public for the same reason
+	 * `startsUpper` is: `case-pattern-separator` asks it of the same nodes.
+	 */
+	public static function patternName(node: QueryNode): Null<String> {
+		final name: Null<String> = node.name;
+		return name == null || name.length == 0 ? null : name;
+	}
+
+	/**
+	 * Whether `node` is a constructor-EXTRACTION pattern whose callee is NAMED — a bare identifier
+	 * or the dotted path of a qualified constructor, the only two callee spellings a pattern may
+	 * carry. Public for the same reason `startsUpper` is: `case-pattern-separator`'s pattern
+	 * whitelist asks this exact question of the same node, and a second copy would drift.
+	 */
+	public static function isNamedCallee(seams: CaseSeams, node: QueryNode): Bool {
+		if (node.children.length == 0) return false;
+		final callee: QueryNode = node.children[0];
+		return callee.kind == seams.identKind || callee.kind == seams.fieldAccessKind;
+	}
+
+	/**
 	 * Whether `name` opens with an uppercase ASCII letter — the family spelling of a constructor reference. Public because `collapse-nested-switch` makes the same assumption and reads it from here rather than keeping its own copy.
 	 */
 	public static inline function startsUpper(name: String): Bool {
@@ -276,8 +298,8 @@ final class CasePatternScan {
 	 * spelled bare) introduce no binder, anything else binds and is replaceable by the wildcard.
 	 */
 	private static function scanIdentPattern(seams: CaseSeams, node: QueryNode, at: Span, whole: Bool, out: Array<PatternBinder>): Bool {
-		final ident: Null<String> = node.name;
-		if (ident == null || ident.length == 0) return false;
+		final ident: Null<String> = patternName(node);
+		if (ident == null) return false;
 		final name: String = ident;
 		if (name == seams.wildcardPatternName || startsUpper(name)) return true;
 		out.push({
@@ -333,9 +355,7 @@ final class CasePatternScan {
 
 	/** A constructor-extraction pattern: an identifier or field-access callee over scanned arguments. */
 	private static function scanCallPattern(seams: CaseSeams, node: QueryNode, out: Array<PatternBinder>): Bool {
-		if (node.children.length == 0) return false;
-		final callee: QueryNode = node.children[0];
-		if (callee.kind != seams.identKind && callee.kind != seams.fieldAccessKind) return false;
+		if (!isNamedCallee(seams, node)) return false;
 		for (i in 1...node.children.length) if (!scanPattern(seams, node.children[i], false, out)) return false;
 		return true;
 	}
