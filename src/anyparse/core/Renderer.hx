@@ -2057,7 +2057,24 @@ class Renderer {
 					// their glued-body blindspot is the reason the Full walker
 					// exists (condition_wrapping_method_chain).
 					final restWidth: Int = n > width ? flatTokenWidthOfRestStack(stack) : flatTokenWidthOfRestStackFull(stack);
-					final fullLineCrosses: Bool = col + effPending + DocMeasure.flatTokenWidth(flatDoc) + restWidth >= n;
+					// ω-chain-exact-limit-boundary: a chain probe (`n == lineWidth` —
+					// bare `lineWidth` is the FAMILY DISCRIMINATOR selecting the
+					// BG-descending rest walker and the no-pending-space charge above)
+					// whose glued tail is genuinely one-line-able measures the TRUE
+					// physical line, and the fork keeps a flush-at-limit line — so its
+					// exceed threshold is `n + 1` (a plain `>= n` dot-broke a chain
+					// landing EXACTLY on the limit one column early). A tail carrying a
+					// forced hardline (multi-line lambda body, trivia-bearing object
+					// literal) measures a flattened PROXY instead (hardlines measure 0,
+					// their flat-join space 1, a BG-deferred body 0), and the
+					// explode-vs-cuddle decision for those shapes is
+					// calibrated to the raw `>= n` — real fluent chains sit flush on the
+					// proxy boundary (`HxMethodChainCuddledLinkTest`'s exploded
+					// fixtures), so the `+ 1` applies ONLY to the true-width tails. The
+					// strict probes (`n == lineWidth + 1`) already encode the exceed
+					// threshold in `n`.
+					final fireAt: Int = n > width || DocMeasure.hasForcedBreak(flatDoc) ? n : n + 1;
+					final fullLineCrosses: Bool = col + effPending + DocMeasure.flatTokenWidth(flatDoc) + restWidth >= fireAt;
 					// ω-collapse-commit: record the open/glued decision at
 					// this node's true render column for the Doc→Doc pass.
 					// Keyed by node identity (enum `==` is reference equality

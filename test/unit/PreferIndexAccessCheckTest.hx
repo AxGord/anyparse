@@ -83,8 +83,7 @@ class PreferIndexAccessCheckTest extends Test {
 		// A `this.<field>` path receiver resolving to Map is now flagged (path support).
 		Assert.equals(
 			1,
-			violations('class C {\n\tfinal m:Map<String, String> = [];\n\tfunction f():Void {\n\t\tvar v = this.m.get("a");\n\t}\n}')
-				.length
+			violations('class C {\n\tfinal m:Map<String, String> = [];\n\tfunction f():Void {\n\t\tvar v = this.m.get("a");\n\t}\n}').length
 		);
 	}
 

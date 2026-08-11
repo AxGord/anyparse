@@ -323,8 +323,7 @@ class LoopGuardCheckTest extends Test {
 	}
 
 	public function testHeaderIfCommentInsideGuardNotFlagged(): Void {
-		Assert.equals(0, violations(wrap('for (x in xs) if (c) {\n\t\t\tif (x == 0) /* skip */ continue;\n\t\t\ttrace(x);\n\t\t}'))
-			.length);
+		Assert.equals(0, violations(wrap('for (x in xs) if (c) {\n\t\t\tif (x == 0) /* skip */ continue;\n\t\t\ttrace(x);\n\t\t}')).length);
 	}
 
 	public function testHeaderIfDeclinedFlipNotFlagged(): Void {

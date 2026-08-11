@@ -81,8 +81,7 @@ class ApqUsesTest extends Test {
 		// NOT carry type-ref nodes — otherwise those four would regress.
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: QueryNode = plugin.parseFile('class X { var m:HxVarMore; }');
-		Assert.equals(0, Uses.find('HxVarMore', tree, plugin.typeRefShape())
-			.length, 'default parseFile tree must expose no TypeRef nodes');
+		Assert.equals(0, Uses.find('HxVarMore', tree, plugin.typeRefShape()).length, 'default parseFile tree must expose no TypeRef nodes');
 	}
 
 	// ======== Helpers ========

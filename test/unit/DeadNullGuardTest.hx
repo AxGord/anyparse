@@ -435,14 +435,12 @@ class DeadNullGuardTest extends Test {
 
 	public function testAliasGuardFlagged(): Void {
 		// `var v = u` aliases the two — a guard on v narrows u, so the inner check on u is dead (feature 2).
-		Assert.equals(1, violations('class C { function f(?u:String) { var v = u; if (v != null) { if (u != null) trace(u); } } }')
-			.length);
+		Assert.equals(1, violations('class C { function f(?u:String) { var v = u; if (v != null) { if (u != null) trace(u); } } }').length);
 	}
 
 	public function testAliasReverseGuardFlagged(): Void {
 		// The alias is bidirectional — a guard on u narrows v.
-		Assert.equals(1, violations('class C { function f(?u:String) { var v = u; if (u != null) { if (v != null) trace(v); } } }')
-			.length);
+		Assert.equals(1, violations('class C { function f(?u:String) { var v = u; if (u != null) { if (v != null) trace(v); } } }').length);
 	}
 
 	public function testAliasWriteTargetKills(): Void {

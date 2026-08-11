@@ -36,14 +36,12 @@ class NullableSwitchMissingNullCheckTest extends Test {
 	public function testCaseNullNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(cls('function f(x:Null<Int>):Void { switch x { case null: trace(9); case 1: trace(1); case _: trace(0); } }'))
-				.length
+			violations(cls('function f(x:Null<Int>):Void { switch x { case null: trace(9); case 1: trace(1); case _: trace(0); } }')).length
 		);
 	}
 
 	public function testCaseNullWildcardComboNotFlagged(): Void {
-		Assert.equals(0, violations(cls('function f(x:Null<Int>):Void { switch x { case 1: trace(1); case null, _: trace(0); } }'))
-			.length);
+		Assert.equals(0, violations(cls('function f(x:Null<Int>):Void { switch x { case 1: trace(1); case null, _: trace(0); } }')).length);
 	}
 
 	public function testOptionalParamFlagged(): Void {

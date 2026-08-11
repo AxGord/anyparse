@@ -98,8 +98,7 @@ class CheckstyleConfigLoaderTest extends Test {
 	}
 
 	public function testTypeDefaultTrue(): Void {
-		Assert.equals(true, CheckstyleConfigLoader.loadOverrides('{"checks":[{"type":"Type","props":{}}]}')
-			.explicitTypeIgnoreEnumAbstract);
+		Assert.equals(true, CheckstyleConfigLoader.loadOverrides('{"checks":[{"type":"Type","props":{}}]}').explicitTypeIgnoreEnumAbstract);
 	}
 
 	public function testEmptyBlockStmtEnables(): Void {

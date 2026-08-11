@@ -38,8 +38,7 @@ class CollapsibleIfCheckTest extends Test {
 	}
 
 	public function testMultiStatementBlockNotFlagged(): Void {
-		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tif (a) {\n\t\t\tp();\n\t\t\tif (b) q();\n\t\t}\n\t}\n}')
-			.length);
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tif (a) {\n\t\t\tp();\n\t\t\tif (b) q();\n\t\t}\n\t}\n}').length);
 	}
 
 	public function testFixMergesWithAnd(): Void {

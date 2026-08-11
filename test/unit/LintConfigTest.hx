@@ -149,9 +149,7 @@ class LintConfigTest extends Test {
 	 * offending elements and kept the rest.
 	 */
 	public function testResolutionRootsMalformedDegradesWholesale(): Void {
-		Assert.equals(0, LintConfig.parse('{"resolutionRoots":"lib"}', '/p')
-			.resolutionRoots()
-			.length, 'a non-array value yields no roots');
+		Assert.equals(0, LintConfig.parse('{"resolutionRoots":"lib"}', '/p').resolutionRoots().length, 'a non-array value yields no roots');
 		final mixed: LintConfig = LintConfig.parse('{"resolutionRoots":["ok",5,null,true],"resolutionStd":false}', '/p');
 		Assert.equals(0, mixed.resolutionRoots().length, 'a non-string element rejects the whole array — no partial list');
 		Assert.isTrue(mixed.resolutionStd(), 'and every other key degrades with it, back to the default');
@@ -177,9 +175,7 @@ class LintConfigTest extends Test {
 
 	/** The `resolutionLibs` twin of `testResolutionRootsMalformedDegradesWholesale` — same typed-schema boundary. */
 	public function testResolutionLibsMalformedDegradesWholesale(): Void {
-		Assert.equals(0, LintConfig.parse('{"resolutionLibs":"openfl"}', '/p')
-			.resolutionLibs()
-			.length, 'a non-array value yields no libs');
+		Assert.equals(0, LintConfig.parse('{"resolutionLibs":"openfl"}', '/p').resolutionLibs().length, 'a non-array value yields no libs');
 		final mixed: LintConfig = LintConfig.parse('{"resolutionLibs":["ok",5,null,true],"resolutionStd":false}', '/p');
 		Assert.equals(0, mixed.resolutionLibs().length, 'a non-string element rejects the whole array — no partial list');
 		Assert.isTrue(mixed.resolutionStd(), 'and every other key degrades with it, back to the default');

@@ -165,8 +165,7 @@ class UnguardedNullableDerefTest extends Test {
 	}
 
 	public function testShortCircuitNotFlagged(): Void {
-		Assert.equals(0, violations('class C { function f(m:Map<String,Int>) { var u = m[k]; var ok = u != null && u.foo > 0; } }')
-			.length);
+		Assert.equals(0, violations('class C { function f(m:Map<String,Int>) { var u = m[k]; var ok = u != null && u.foo > 0; } }').length);
 	}
 
 	public function testReassignNonNullNotFlagged(): Void {
@@ -280,8 +279,7 @@ class UnguardedNullableDerefTest extends Test {
 
 	public function testAssertIsTrueBareNarrowsNotFlagged(): Void {
 		// The truth-asserted `u != null` clears u's MaybeNull fact (maybe-only) — sibling of Assert.notNull.
-		Assert.equals(0, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; Assert.isTrue(u != null); u.foo; } }')
-			.length);
+		Assert.equals(0, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; Assert.isTrue(u != null); u.foo; } }').length);
 	}
 
 	public function testAssertIsFalseBareNarrowsNotFlagged(): Void {
@@ -311,8 +309,7 @@ class UnguardedNullableDerefTest extends Test {
 
 	public function testAssertIsTrueWrongPolarityStillFlagged(): Void {
 		// `Assert.isTrue(u == null)` proves u IS null, not non-null — narrows nothing on the truth path.
-		Assert.equals(1, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; Assert.isTrue(u == null); u.foo; } }')
-			.length);
+		Assert.equals(1, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; Assert.isTrue(u == null); u.foo; } }').length);
 	}
 
 	public function testAssertIsFalseWrongPolarityStillFlagged(): Void {

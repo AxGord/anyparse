@@ -206,8 +206,7 @@ final class CollapsibleElseIf implements Check {
 		if (node.kind != seams.blockStmtKind || node.children.length != 1) return false;
 		final inner: QueryNode = node.children[0];
 		final innerSpan: Null<Span> = inner.span;
-		return innerSpan != null && seams.ifKinds.contains(inner.kind) && source.substring(blockSpan.from + 1, innerSpan.from)
-			.trim() == '';
+		return innerSpan != null && seams.ifKinds.contains(inner.kind) && source.substring(blockSpan.from + 1, innerSpan.from).trim() == '';
 	}
 
 	/**

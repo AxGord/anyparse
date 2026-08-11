@@ -28,8 +28,7 @@ class PreferTernaryReturnCheckTest extends Test {
 	}
 
 	public function testBracedThenFlagged(): Void {
-		Assert.equals(1, violations('class C {\n\tfunction f():Int {\n\t\tif (a) {\n\t\t\treturn 1;\n\t\t}\n\t\treturn 0;\n\t}\n}')
-			.length);
+		Assert.equals(1, violations('class C {\n\tfunction f():Int {\n\t\tif (a) {\n\t\t\treturn 1;\n\t\t}\n\t\treturn 0;\n\t}\n}').length);
 	}
 
 	public function testVoidReturnThenNotFlagged(): Void {

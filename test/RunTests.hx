@@ -615,6 +615,7 @@ import unit.ExplicitLocalTypeReadFixTest;
 import unit.ExplicitLocalTypeParenInitTest;
 import unit.HxConditionalExprFitSliceTest;
 import unit.HxCaseGuardFitSliceTest;
+import unit.HxMethodChainExactLimitBoundaryTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -862,6 +863,7 @@ class RunTests {
 		addCase(new HxCallGroupRestProbeChainOperandTest());
 		addCase(new HxCallGroupRestProbeNestedArgTest());
 		addCase(new HxChainFillBoundaryCallOperandTest());
+		addCase(new HxMethodChainExactLimitBoundaryTest());
 		addCase(new HxReturnCallOpenParenSliceTest());
 		addCase(new HxCondSpliceFidelitySliceTest());
 		addCase(new HxExprStmtTerminatorSliceTest());

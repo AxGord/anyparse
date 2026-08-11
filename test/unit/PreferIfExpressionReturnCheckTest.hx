@@ -64,8 +64,7 @@ class PreferIfExpressionReturnCheckTest extends Test {
 	}
 
 	public function testMultiStatementBranchNotFlagged(): Void {
-		Assert.equals(0, violations(wrap('if (a) {\n\t\t\tg();\n\t\t\treturn 1;\n\t\t} else if (b) return 2;\n\t\telse return 3;'))
-			.length);
+		Assert.equals(0, violations(wrap('if (a) {\n\t\t\tg();\n\t\t\treturn 1;\n\t\t} else if (b) return 2;\n\t\telse return 3;')).length);
 	}
 
 	/**

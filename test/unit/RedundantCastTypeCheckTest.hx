@@ -190,8 +190,7 @@ class RedundantCastTypeCheckTest extends Test {
 		// takes; only its position BEFORE the parameter list separates them.
 		Assert.equals(
 			0,
-			violations('class Foo {} class C { function f<T:Foo>() { return cast(mk(), Foo); } function mk():Dynamic return null; }')
-				.length
+			violations('class Foo {} class C { function f<T:Foo>() { return cast(mk(), Foo); } function mk():Dynamic return null; }').length
 		);
 	}
 
