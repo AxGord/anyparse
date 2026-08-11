@@ -7,6 +7,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
+import anyparse.grammar.haxe.HxStringEscape;
 
 using StringTools;
 
@@ -45,12 +46,21 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 	private static inline final FIXTURE_BUDGET: Int = LINE_WIDTH - FIXTURE_INDENT - CALL_HEAD - 2;
 
 	/**
-	 * The double-quoted macro reification the fixpoint fixtures wrap around: 142 columns
-	 * at three tabs, and no seam to split at — the irreducible over-wide line whose
+	 * The double-quoted macro-reification line the fixpoint fixtures wrap around: 142
+	 * columns at three tabs, and no seam to split at — the irreducible over-wide line whose
 	 * presence must never stand in for a verdict on the lines around it.
+	 *
+	 * Its spaces read `_`, its commas and opening brackets `.`, which is what keeps it
+	 * irreducible now that a text can also be cut at a SEPARATOR: the shape and the 128
+	 * characters are the real reification's, only spelled with no legal cut point in them.
+	 * Its own `\n` is terminal, so that seam yields nothing either.
 	 */
 	private static inline final IRREDUCIBLE: String =
-		"\"\\t\\t\\tmacro if ($p{['sourceObject', fieldEntry.slot]} != null) $p{[fieldEntry.slot]} = $p{['sourceObject', fieldEntry.slot]}\\n\"";
+		"\"\\t\\t\\tmacro_if_.$p..'sourceObject'._fieldEntry.slot]}_!=_null)_$p..fieldEntry.slot]}_=_$p..'sourceObject'._fieldEntry.slot]}\\n\"";
+
+	/** A real column list, 128 characters of solid text whose ONLY cut points are its commas — no space, bracket or `\n`. */
+	private static inline final COLUMN_LIST: String =
+		'filepath,folder,cloud_id,folder_cloud_id,action,filepath_movedfrom,filepath_movedfromorigin,timestamp,synced_at,deleted_at,stamp';
 
 	/** A merge whose rendered line lands EXACTLY on `maxLineLength` is accepted (the fits-probe boundary). */
 	public function testWidthBoundaryAtLimitMerges(): Void {
@@ -151,7 +161,13 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 		);
 	}
 
-	/** MERGE fixture 3: the over-wide header literal keeps a segment of its own; the rest packs into as few as fit. */
+	/**
+	 * MERGE fixture 3, and the real trigger for separator cutting: the header literal is
+	 * 150 columns on its own, and before a text could be cut at a separator it could only
+	 * ever be a group of ITS OWN — the fix left that line over the limit. It is now cut
+	 * after a `, ` inside the column list, and everything after it packs into as few groups
+	 * as fit, so every line of the result lands inside the limit.
+	 */
 	public function testMultiLineLiteralChainFixture(): Void {
 		final src: String = [
 			'class C {',
@@ -168,7 +184,9 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 		].join('\n');
 		final folded: String = foldOf(src);
 		Assert.isTrue(folded.startsWith("'INSERT OR IGNORE INTO records (rowpath, grouped, key_id, group_key_id, status, stamp,"));
-		Assert.isTrue(folded.contains("VALUES (' + '${link.quote(r.newRowpath)}, ${r.grouped}, "));
+		Assert.isTrue(
+			folded.contains("stamp, rowpath_movedfrom, ' + 'rowpath_movedfromroot) VALUES (${link.quote(r.newRowpath)}, ${r.grouped}, ")
+		);
 		Assert.isTrue(folded.endsWith("$movedFromRootSql)'"));
 	}
 
@@ -322,7 +340,7 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 	 */
 	public function testIrreducibleOverwideSegmentNoResegmentOfFittingLines(): Void {
 		final head: String =
-			"\t\tfinal expected: String = 'class C {\\n\\tfunction test() {\\n\\t\\tfinal resultList = [\\n\\t\\t\\twhile (iteratorValue.hasNextElement())\\n'";
+			"\t\tfinal expected: String = 'class C {\\n\\tfunction test() {\\n\\t\\tfinal resultList = [\\n\\t\\t\\twhile (iteratorValue.hasNextElement())\\n'"; // noqa
 		Assert.equals(0, violations(cycleFixture(head)).length);
 		final reificationAlone: String = 'class C {\n\tfunction f() {\n\t\tfinal expected: String = $IRREDUCIBLE;\n\t}\n}';
 		Assert.equals(0, violations(reificationAlone).length);
@@ -336,7 +354,7 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 	 */
 	public function testOverwideHeadSplitsOnceAndConverges(): Void {
 		final head: String =
-			"\t\tfinal expected: String = 'class C {\\n\\tfunction test() {\\n\\t\\tfinal resultList = [\\n\\t\\t\\tfor (fieldEntry in fieldEntryCollection)\\n'";
+			"\t\tfinal expected: String = 'class C {\\n\\tfunction test() {\\n\\t\\tfinal resultList = [\\n\\t\\t\\tfor (fieldEntry in fieldEntryCollection)\\n'"; // noqa
 		final src: String = cycleFixture(head);
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
@@ -398,6 +416,138 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 			+ '\n\t\t\t+ \'${''.rpad('C', 30)}${''.rpad('D', 30)}\';'
 		));
 		Assert.equals(0, violations(fixed).length);
+	}
+
+	/**
+	 * The lowest cut tier: a solid over-long text with no interpolation and no `\n` is
+	 * cut at a plain COMMA. The fixture carries no space at all, deliberately — a space
+	 * outranks a comma, so a spaced list would cut elsewhere and stop pinning this tier.
+	 * The changed half and the preserved half are asserted as ONE string, so the unsplit
+	 * input satisfies neither.
+	 */
+	public function testOverLongSolidLiteralSplitsAtComma(): Void {
+		final src: String = separatorSource(COLUMN_LIST);
+		Assert.equals(1, violations(src).length);
+		Assert.equals(
+			"'filepath,folder,cloud_id,folder_cloud_id,action,filepath_movedfrom,filepath_movedfromorigin,timestamp,synced_at,deleted_at,'"
+			+ " + 'stamp$v'",
+			foldOf(src)
+		);
+	}
+
+	/**
+	 * The RANK ladder, not the widest fit: inside the window that keeps the group count
+	 * minimal, the boundary right after an open bracket preceded by a space outranks
+	 * every plain space further right. A greedy last-fit would cut after the space
+	 * following the `a` run instead, so the fixture discriminates the tie-break.
+	 */
+	public function testSplitPrefersBracketAdjacentBoundary(): Void {
+		final src: String = separatorSource('MATCH [' + ''.rpad('a', 60) + ' ' + ''.rpad('b', 60)); // noqa: fold-adjacent-string-literals
+		Assert.equals(1, violations(src).length);
+		Assert.equals("'MATCH [' + '" + ''.rpad('a', 60) + ' ' + ''.rpad('b', 60) + "$v'", foldOf(src)); // noqa
+	}
+
+	/**
+	 * The preserved fallback: an over-long token carrying NO separator keeps its own
+	 * over-wide group and is accepted as is. Paired with the fixtures above, this is what
+	 * says the new tier cuts at separators rather than at any character that fits.
+	 */
+	public function testSolidLiteralWithoutSeparatorsAcceptedAsIs(): Void {
+		Assert.equals(0, violations(separatorSource('https://cdn.example.com/assets/' + ''.rpad('u', 110))).length); // noqa
+	}
+
+	/** The separator split's own output re-decomposes to the same segment list, so re-linting it finds nothing. */
+	public function testSplitOutputIsFixedPoint(): Void {
+		assertFixIsIdempotent(separatorSource(COLUMN_LIST));
+	}
+
+	/**
+	 * A separator spelled as an ESCAPE is not one: the cut scan walks escapes the way the
+	 * lexer does and never decodes them, so a `\x20` between two solid runs leaves the
+	 * literal seamless — while the same text with a RAW space is cut right after it. The
+	 * `$$` rides along to pin the other half of that walk: a cut may never land between
+	 * an escaped dollar's two characters, and the split half re-parses as one again.
+	 */
+	public function testEscapeSpelledSeparatorIsNotACut(): Void {
+		Assert.equals(0, violations(separatorSource(''.rpad('a', 62) + "\\x20$$" + ''.rpad('b', 62))).length); // noqa
+		final spaced: String = ''.rpad('a', 62) + " $$" + ''.rpad('b', 62); // noqa: fold-adjacent-string-literals
+		Assert.equals("'" + ''.rpad('a', 62) + " ' + '$$" + ''.rpad('b', 62) + "$v'", foldOf(separatorSource(spaced))); // noqa
+	}
+
+	/**
+	 * A BRACED unicode escape carries an opening brace, so a cut scan that skipped a fixed
+	 * two characters past the backslash landed on it and bisected the escape — emitting a
+	 * literal ending in a truncated `\u{`, which does not compile. The scan asks
+	 * `HxStringEscape` for the span of each character instead, so the escape is one unit:
+	 * with nothing else to cut at the literal is left alone, and with a space in front of it
+	 * the cut lands on that space and the escape comes through whole. Both halves are
+	 * asserted, so the fix cannot pass on the absence of a split.
+	 */
+	public function testBracedUnicodeEscapeIsNeverBisected(): Void {
+		Assert.equals(0, violations(separatorSource(''.rpad('a', 60) + '\\u{1F600}' + ''.rpad('b', 60))).length); // noqa
+		final spaced: String = ''.rpad('a', 60) + ' \\u{1F600}' + ''.rpad('b', 60); // noqa: fold-adjacent-string-literals
+		Assert.equals("'" + ''.rpad('a', 60) + " ' + '\\u{1F600}" + ''.rpad('b', 60) + "$v'", foldOf(separatorSource(spaced))); // noqa
+	}
+
+	/**
+	 * The value-changing half of the same bisection, and the reason the escape span has to
+	 * come from the decoder rather than from a character count. `escapeLiteral` refuses a
+	 * DOUBLE-quoted text whose escapes decode to a `$`, because Haxe decodes before it scans
+	 * a single-quoted literal for interpolation. That refusal is per SEGMENT, so a cut inside
+	 * `\u{24}` split the trigger into two halves that each pass it, and the fold emitted
+	 * `'a\u{24}b$v'` — the value of `b` where the source said the text `a$b`. With the escape
+	 * intact the whole raw carries it, the group is refused, and nothing is reported.
+	 */
+	public function testEscapedDollarEscapeIsNotFoldedIntoInterpolation(): Void {
+		final src: String = [
+			'class C {',
+			'\tfunction f() {',
+			'\t\tg(',
+			'\t\t\t"a\\u{24}b"',
+			'\t\t\t+ v',
+			'\t\t);',
+			'\t}',
+			'}'
+		].join('\n');
+		Assert.isTrue(HxStringEscape.carriesEscapedDollar('a\\u{24}b'));
+		Assert.equals(0, violations(src).length);
+		Assert.equals('', foldOf(src));
+	}
+
+	/**
+	 * An opening bracket is a cut point ONLY where a space or a comma introduced it. A regex
+	 * spells brackets with neither, and cutting there once broke a 501-column character class
+	 * into five unreadable pieces — value-preserving and useless. Such a literal carries no
+	 * legal cut at all now, so it keeps its own over-wide group and nothing is reported.
+	 */
+	public function testBareBracketIsNotACut(): Void {
+		final regex: String = '(' + ''.rpad('a', 42) + ')[' + ''.rpad('b', 42) + '](' + ''.rpad('c', 42) + ')'; // noqa
+		Assert.equals(0, violations(separatorSource(regex)).length);
+	}
+
+	/**
+	 * A BARE first group — a `$name` or `${ … }` head the source did not write as its own
+	 * operand — is the one end `fill` may not steer to, because `mergeLeadingBares` folds it
+	 * into the next group WITHOUT pricing the result. That boundary reads as a seam and wins
+	 * the ladder outright, so the merged first line landed 145 columns wide and stayed there:
+	 * the partition re-lints to itself, so nothing ever recovers it.
+	 *
+	 * The `$name` shorthand runs to the first non-identifier character, so the head here is
+	 * the whole `abcde` + `x` run and the space after it is the literal's first text piece —
+	 * which is exactly the shape that makes the head bare AND wide. The control is the SAME
+	 * geometry with those 67 columns spelled as TEXT; the two are asserted together, so the
+	 * bare head must reach the same three groups the plain one does.
+	 */
+	public function testBareHeadDoesNotSteerIntoAnUnpricedMerge(): Void {
+		final tail: String = ''.rpad('x', 60) + ' ' + ''.rpad('y', 62) + ' ' + ''.rpad('z', 63); // noqa: fold-adjacent-string-literals
+		Assert.equals(
+			"'$abcde" + ''.rpad('x', 60) + " ' + '" + ''.rpad('y', 62) + " ' + '" + ''.rpad('z', 63) + "$v'", // noqa
+			foldOf(separatorSource("$abcde" + tail)) // noqa: fold-adjacent-string-literals
+		);
+		Assert.equals(
+			"'wvutsr" + ''.rpad('x', 60) + " ' + '" + ''.rpad('y', 62) + " ' + '" + ''.rpad('z', 63) + "$v'", // noqa
+			foldOf(separatorSource('wvutsr' + tail)) // noqa: fold-adjacent-string-literals
+		);
 	}
 
 	/**
@@ -559,6 +709,24 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 			'\t\t\t+ \'${''.rpad('B', headLen)}\'',
 			'\t\t\t+ $IRREDUCIBLE',
 			'\t\t\t+ \'${''.rpad('C', tailLen)}\' + \'${''.rpad('D', tailLen)}\';',
+			'\t}',
+			'}'
+		].join('\n');
+	}
+
+	/**
+	 * A `g(<literal> + v);` chain at three tabs — the host every separator fixture
+	 * measures at. The literal starts at column 12, so the planner's budget is 126: a
+	 * 127-character text already overflows the source line and no single group can hold it.
+	 */
+	private function separatorSource(text: String): String {
+		return [
+			'class C {',
+			'\tfunction f() {',
+			'\t\tg(',
+			'\t\t\t\'$text\'',
+			'\t\t\t+ v',
+			'\t\t);',
 			'\t}',
 			'}'
 		].join('\n');

@@ -126,25 +126,20 @@ final class HxStringEscape {
 		return isIdentStart(code) || code >= '0'.code && code <= '9'.code;
 	}
 
-	/** Whether any decoded character of `raw` is a `$`, counting only escape-spelled ones when `escapedOnly`. */
-	private static function carries(raw: String, escapedOnly: Bool): Bool {
-		var i: Int = 0;
-		while (i < raw.length) {
-			final c: HxDecodedChar = charAt(raw, i);
-			if (c.code == DOLLAR && (!escapedOnly || c.to - c.from > 1)) return true;
-			i = c.to;
-		}
-		return false;
-	}
-
 	/**
 	 * The one character `raw` spells at `i`. A backslash opens an escape: `\xNN` and
 	 * `\uNNNN` / `\u{N…}` decode their hex digits, `\n` / `\r` / `\t` their control
 	 * character, and every other two-character form decodes to the character after
 	 * the backslash — which is what `\\`, `\'` and `\"` need and what an INVALID
 	 * escape (`\X24`, rejected by the compiler) harmlessly falls back to.
+	 *
+	 * Public because the SPAN is the answer as often as the code is: a scan that walks a
+	 * raw literal cannot advance by a fixed number of characters without landing inside a
+	 * `\u{…}` body, whose braces then read as ordinary text. `HaxeStringFoldSupport.scanCuts`
+	 * is that caller — the escape lengths live here, and nowhere else. `i` must be a valid
+	 * index into `raw`.
 	 */
-	private static function charAt(raw: String, i: Int): HxDecodedChar {
+	public static function charAt(raw: String, i: Int): HxDecodedChar {
 		final c: Int = raw.fastCodeAt(i);
 		if (c != BACKSLASH || i + 1 >= raw.length) return { code: c, from: i, to: i + 1 };
 		final body: Int = i + TAG_LENGTH;
@@ -161,6 +156,17 @@ final class HxStringEscape {
 			{ code: '\t'.code, from: i, to: body }
 		else
 			{ code: tag, from: i, to: body };
+	}
+
+	/** Whether any decoded character of `raw` is a `$`, counting only escape-spelled ones when `escapedOnly`. */
+	private static function carries(raw: String, escapedOnly: Bool): Bool {
+		var i: Int = 0;
+		while (i < raw.length) {
+			final c: HxDecodedChar = charAt(raw, i);
+			if (c.code == DOLLAR && (!escapedOnly || c.to - c.from > 1)) return true;
+			i = c.to;
+		}
+		return false;
 	}
 
 	/**

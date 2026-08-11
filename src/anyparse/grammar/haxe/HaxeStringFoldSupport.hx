@@ -25,9 +25,10 @@ import anyparse.query.StringFold.ConcatSegment;
  *
  * `segmentsOf` / `expressionSegment` are the general decomposition the width-aware
  * `fold-adjacent-string-literals` grouping runs on, and `renderGroup` / `renderBare`
- * are their inverse. A text fragment is cut once more, at each `\n` ESCAPE it carries
- * (`splitAtNewlines`), which is the only seam a literal with no interpolation has.
- * Three Haxe facts live here and nowhere else: `PRIMARY_KINDS`,
+ * are their inverse. A text fragment is cut twice more: at each `\n` ESCAPE it carries
+ * (`splitAtNewlines`), then at each SEPARATOR boundary (`splitAtSeparators`) — together
+ * the only seams a literal with no interpolation has. Three Haxe facts live here and
+ * nowhere else: `PRIMARY_KINDS`,
  * the expression kinds that bind at least as tightly as `+` (so a bare operand needs
  * no parentheses); the single-quoted escaping rules — a lone `$` normalises to `$$`,
  * a double-quoted literal re-escapes `\"` to `"`, `$` to `$$` and `'` to `\'`, and a
@@ -136,7 +137,7 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	public function segmentsOf(node: QueryNode, source: String): Null<Array<ConcatSegment>> {
 		final span: Null<Span> = node.span;
 		if (span == null || span.to - span.from < 2) return null;
-		if (node.kind == 'DoubleStringExpr') return splitAtNewlines([SegText('"', inner(source, span))]);
+		if (node.kind == 'DoubleStringExpr') return splitAtSeparators(splitAtNewlines([SegText('"', inner(source, span))]));
 		if (node.kind != 'SingleStringExpr') return null;
 		final out: Array<ConcatSegment> = [];
 		for (c in node.children) {
@@ -161,7 +162,7 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 			}
 		}
 		if (out.length == 0) out.push(SegText("'", ''));
-		return splitAtNewlines(coalesceText(out));
+		return splitAtSeparators(splitAtNewlines(coalesceText(out)));
 	}
 
 	/**
@@ -274,8 +275,8 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	 * BETWEEN two `Literal` fragments of the same literal, and leaving the three
 	 * apart would let the grouping cut a plain run of TEXT at the `$` — a split
 	 * this rule promises never to make. Fusing FIRST is also what lets
-	 * `splitAtNewlines` see a `\n` escape that a `$` happens to sit next to: the two
-	 * run in that order, so the only text seams that survive are the ones it cuts.
+	 * `splitAtNewlines` see a `\n` escape that a `$` happens to sit next to: the passes run
+	 * in that order, so the only text seams that survive are the ones they cut.
 	 */
 	private static function coalesceText(segments: Array<ConcatSegment>): Array<ConcatSegment> {
 		final out: Array<ConcatSegment> = [];
@@ -289,8 +290,8 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	}
 
 	/**
-	 * Cut every text segment after each `\n` ESCAPE it carries, the escape staying with
-	 * the LEFT piece. This is the seam that makes a lone over-long string TOKEN
+	 * Cut every text segment after each `\n` ESCAPE it carries, the escape staying with the
+	 * LEFT piece. This was the FIRST seam that made a lone over-long string TOKEN
 	 * layout-fixable at all: the writer can wrap a `+` chain but nothing can wrap one
 	 * literal, so a message whose own text names its line breaks has to become a chain
 	 * before layout can reach it.
@@ -301,18 +302,27 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	 * places. A group that keeps them together is therefore indistinguishable from never
 	 * having split.
 	 *
-	 * The scan is the lexer's, not a search: a backslash consumes the character after it,
-	 * so the `n` of `\\n` is an ordinary letter and never a seam. A RAW line break in the
-	 * source is not one either — it already ends the line it sits on, so cutting there
-	 * buys no width and would leave the break dangling inside the left literal. Nor is a
-	 * line break spelled `\x0a` / `\u000a`: it decodes to one, but only the `\n` spelling
-	 * is worth the decoder, and refusing the others costs a seam rather than correctness.
+	 * The scan is the DECODER's, not a search (`scanCuts` / `isNewlineCut`): a backslash
+	 * opens an escape of whatever length that escape spells, so the `n` of `\\n` is an
+	 * ordinary letter and never a seam. A RAW line break in the source is not one either — it
+	 * already ends the line it sits on, so cutting there buys no width and would leave the
+	 * break dangling inside the left literal.
+	 * Nor is a line break spelled `\x0a` / `\u000a`: it decodes to one, but only the `\n` SPELLING is a
+	 * seam, and refusing the others costs a seam rather than correctness.
 	 */
-	private static function splitAtNewlines(segments: Array<ConcatSegment>): Array<ConcatSegment> {
+	private static inline function splitAtNewlines(segments: Array<ConcatSegment>): Array<ConcatSegment> {
+		return splitText(segments, newlinePieces);
+	}
+
+	/**
+	 * Cut every text segment at the boundaries `pieces` finds in its raw content, and pass
+	 * every other segment through — the shape both text-splitting passes share.
+	 */
+	private static function splitText(segments: Array<ConcatSegment>, pieces: (String) -> Array<String>): Array<ConcatSegment> {
 		final out: Array<ConcatSegment> = [];
 		for (s in segments) switch s {
 			case SegText(quote, raw):
-				for (piece in newlinePieces(raw)) out.push(SegText(quote, piece));
+				for (piece in pieces(raw)) out.push(SegText(quote, piece));
 			case _:
 				out.push(s);
 		}
@@ -321,23 +331,96 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 
 	/** `raw` cut after each `\n` escape; a raw ending in one yields no empty tail, and a raw with no seam yields itself. */
 	private static function newlinePieces(raw: String): Array<String> {
+		return scanCuts(raw, isNewlineCut);
+	}
+
+	/**
+	 * `raw` cut at every position `isCut` accepts, walked CHARACTER BY CHARACTER the way the
+	 * lexer reads it: `HxStringEscape.charAt` owns how many raw characters each escape spells,
+	 * so the cursor can never land inside one. `isCut` is handed the raw and the `[from, to)`
+	 * span of the character just read, and a `true` cuts at `to` — the character stays with
+	 * the LEFT piece. A raw no cut applies to yields itself.
+	 *
+	 * Advancing by a FIXED count is what bisected a `\u{1F600}`: two characters past the
+	 * backslash is its `{`, which the separator scan then read as an ordinary opening bracket
+	 * and cut after, emitting a literal that ended in a truncated `\u{` and did not compile.
+	 * Escape lengths belong to the decoder, so this asks it.
+	 */
+	private static function scanCuts(raw: String, isCut: (String, Int, Int) -> Bool): Array<String> {
 		final pieces: Array<String> = [];
 		var from: Int = 0;
 		var i: Int = 0;
 		while (i < raw.length) {
-			if (raw.fastCodeAt(i) != '\\'.code) {
-				i++;
-			} else if (i + 1 < raw.length && raw.fastCodeAt(i + 1) == 'n'.code) {
-				pieces.push(raw.substring(from, i + 2));
-				i += 2;
-				from = i;
-			} else {
-				i += 2;
+			final to: Int = HxStringEscape.charAt(raw, i).to;
+			if (isCut(raw, i, to)) {
+				pieces.push(raw.substring(from, to));
+				from = to;
 			}
+			i = to;
 		}
 		if (from < raw.length) pieces.push(raw.substring(from));
 		if (pieces.length == 0) pieces.push(raw);
 		return pieces;
+	}
+
+	/**
+	 * Whether the character `raw` spells across `[from, to)` is the `\n` ESCAPE. A RAW line
+	 * break is not a seam — it already ends the line it sits on, so cutting there buys no
+	 * width — and neither is a line break spelled `\x0a` / `\u{a}`, which is why the SPELLING
+	 * is tested rather than the decoded code: refusing those costs a seam, never correctness.
+	 */
+	private static function isNewlineCut(raw: String, from: Int, to: Int): Bool {
+		return to == from + 2 && raw.fastCodeAt(from) == '\\'.code && raw.fastCodeAt(from + 1) == 'n'.code;
+	}
+
+	/**
+	 * Cut every text segment at each of its SEPARATOR boundaries — the lowest tier of cut
+	 * point, and the only one a solid run of prose or a comma-separated column list has at
+	 * all. WHICH of those boundaries a group should end at is the check's decision, not
+	 * this one's: the grammar only says where a cut is legal.
+	 *
+	 * Runs AFTER `splitAtNewlines`, so the pieces it sees already end at their line breaks.
+	 * Idempotent with `renderPlain` for the same reason that one is: the pieces append back
+	 * to the identical raw, so re-decomposing a rendered group cuts it in exactly the same
+	 * places, and a group that keeps two of them together is indistinguishable from never
+	 * having split.
+	 */
+	private static inline function splitAtSeparators(segments: Array<ConcatSegment>): Array<ConcatSegment> {
+		return splitText(segments, separatorPieces);
+	}
+
+	/** `raw` cut at every separator boundary, both sides of each cut non-empty; a raw carrying no separator yields itself. */
+	private static function separatorPieces(raw: String): Array<String> {
+		return scanCuts(raw, isSeparatorCut);
+	}
+
+	/**
+	 * Whether the character `raw` spells across `[from, to)` ends a SEPARATOR a cut may
+	 * follow. Only a single plain character can — a multi-character escape never is one, so a
+	 * separator a literal spells as `\x20` is deliberately not a seam — and a cut needs a
+	 * non-empty right side. Three boundaries:
+	 *
+	 *  - a space that no space follows, so a run of spaces is never split and the whole run
+	 *    stays with the LEFT piece;
+	 *  - a comma that no space follows — a `, ` pair is the space run's boundary and not the
+	 *    comma's, so the two rules never both fire on one position;
+	 *  - an opening `(`, `[` or `{` that a space or a comma INTRODUCED, which keeps the
+	 *    bracket with what introduced it. One with neither before it is NOT a boundary: a
+	 *    regex spells its groups and character classes that way, and cutting there splits a
+	 *    token no reader wants split (a 501-column pattern came back in five pieces).
+	 *
+	 * A `$` is not a boundary character, which is what keeps a cut out of the middle of an
+	 * escaped `$$`. The character before an opening bracket is read raw too, so an escape's
+	 * last character can stand in for it — never a space or a comma in any escape the
+	 * compiler accepts, so that reading only ever refuses.
+	 */
+	private static function isSeparatorCut(raw: String, from: Int, to: Int): Bool {
+		if (to != from + 1 || to >= raw.length) return false;
+		final c: Int = raw.fastCodeAt(from);
+		if (c == ' '.code || c == ','.code) return raw.fastCodeAt(to) != ' '.code;
+		if (from == 0 || c != '('.code && c != '['.code && c != '{'.code) return false;
+		final before: Int = raw.fastCodeAt(from - 1);
+		return before == ' '.code || before == ','.code;
 	}
 
 	/**
@@ -424,8 +507,14 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	 * decodes `\x24` / `$` / `\u{24}` before it scans a `'…'` for interpolation,
 	 * so such a raw reaching the output is a live `$` — `"\x24a"` is the text `$a`, but
 	 * `'\x24a'` is the VALUE of the local `a`. A RAW `$` is no obstacle;
-	 * `escapeDoubleToSingle` doubles it. And the test is precise, not "any `\x` /
-	 * `\u` escape": `"\x41b"` denotes `Ab` under either quoting and folds fine.
+	 * `escapeDoubleToSingle` doubles it. And the test is precise, not "any `\x` / `\u` escape": `"\x41b"` denotes `Ab` under
+	 * either quoting and folds fine.
+	 *
+	 * The test is per SEGMENT, which is sound ONLY while no atom boundary can bisect an
+	 * escape: cut `\u{24}` into `\u{` and `24}` and each half passes it — the first reads as a
+	 * malformed escape, the second carries no backslash at all — so the trigger reaches a
+	 * single-quoted output as a live `$`. `scanCuts` walks the raw through `HxStringEscape`,
+	 * which is what guarantees a cut lands on a character boundary or nowhere.
 	 *
 	 * The single-quoted side asks nothing, and must not: its `$`s are the deliberate
 	 * `$$` that `segmentsOf` emits for a `Dollar` fragment, and an escape-SPELLED

@@ -22,9 +22,14 @@ typedef StringLiteral = {
  * verbatim), so two same-`quote` texts concatenate by plain string append. A
  * lone `$` is normalised to the escaped `$$` form on the way in — otherwise
  * appending a text starting with a letter would silently create an interpolation.
- * A grammar may also cut text at its own line-break ESCAPE, which is what gives a
- * literal carrying no interpolation any seam at all; the pieces still append, so the
- * round trip is unchanged.
+ * A grammar may also cut text at its own line-break ESCAPE, and at each SEPARATOR
+ * boundary its text carries (a space run, a comma, an opening bracket) — together those
+ * are what give a literal carrying no interpolation any seam at all. The pieces still
+ * append, so re-rendering is value-identical either way. The space and comma cuts also
+ * re-arise identically on re-decomposition; a bracket cut reads its space/comma
+ * INTRODUCER, which a group boundary can strand in the previous piece, so re-decomposing
+ * an output can yield a COARSER list — a lost seam stays lost, which is what keeps the
+ * grouping idempotent.
  *
  * `SegIdent` is the `$name` shorthand: a bare identifier operand, or an `Ident`
  * fragment of an interpolated literal.
@@ -91,10 +96,13 @@ interface StringFoldSupport {
 
 	/**
 	 * `node` decomposed into its `ConcatSegment` pieces when it IS a string literal,
-	 * else null. A plain literal yields one `SegText`; an interpolated one yields its
-	 * child sequence mapped piece-per-fragment, so re-decomposing this check's OWN
-	 * output reproduces the same list — the property idempotency rests on. `source` is
-	 * the file text the spans index into.
+	 * else null. A plain literal yields its text cut at each line-break escape and each
+	 * separator boundary; an interpolated one yields its child sequence mapped
+	 * piece-per-fragment. Re-decomposing this check's OWN output reproduces the same list,
+	 * except that a bracket cut whose introducer a group boundary stranded in the previous
+	 * piece loses its seam — the list only gets COARSER, so grouping stays idempotent (see
+	 * `ConcatSegment`). `source` is the file
+	 * text the spans index into.
 	 *
 	 * A null answer means two different things to the caller, and it knows which by the
 	 * node's KIND: for a node it did not take for a literal, "treat it as a bare

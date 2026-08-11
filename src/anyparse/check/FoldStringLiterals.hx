@@ -18,11 +18,12 @@ using StringTools;
  * Canonicalises a string concatenation to the MINIMAL number of `+` segments that
  * fits the file's own `maxLineLength`: adjacent literals and expression operands
  * MERGE into one interpolated literal, and an already-merged literal that overflows
- * the line SPLITS back out at its seams — a `${ … }` interpolation, or an embedded
- * `\n` ESCAPE. That second seam is what makes a lone over-long string TOKEN
- * layout-fixable at all: the writer can wrap a `+` chain, but nothing can wrap one
- * literal, so a message whose own text names its line breaks has to become a chain
- * before layout can reach it.
+ * the line SPLITS back out at its seams — a `${ … }` interpolation, an embedded `\n`
+ * ESCAPE, or, lowest of the tiers, a SEPARATOR inside the literal's own TEXT (a space
+ * run, a comma, an opening bracket). Those text cuts are what make a lone over-long
+ * string TOKEN layout-fixable at all: the writer can wrap a `+` chain, but nothing can
+ * wrap one literal, so a message that outruns its line has to become a chain before
+ * layout can reach it.
  *
  * `Severity.Info` — a layout cleanup, not a defect — with an autofix, and ON by
  * default, as the narrower adjacent-literal fold it grew out of was (`"a" + "b"` ->
@@ -35,12 +36,14 @@ using StringTools;
  *
  * A construct — the maximal left-associative `+` chain, or a standalone string
  * literal — is flattened into a list of `ConcatSegment`s. A literal operand
- * contributes its own fragments (text, cut at each `\n` escape / `$name` / `${expr}`),
- * a bare expression operand contributes one segment, and the operands BEFORE the first
- * literal collapse into a single segment covering their source verbatim. Re-decomposing
- * this rule's OWN output reproduces the identical list, so any deterministic
- * grouping over it is a fixed point by construction — the property every other
- * piece of the design is arranged to protect.
+ * contributes its own fragments (text, cut at each `\n` escape and at each separator
+ * boundary / `$name` / `${expr}`), a bare expression operand contributes one segment,
+ * and the operands BEFORE the first literal collapse into a single segment covering
+ * their source verbatim. Re-decomposing this rule's OWN output reproduces the identical
+ * list — except that a bracket cut can lose its seam when a group boundary strands its
+ * space/comma introducer in the previous piece; the list only ever gets COARSER, never
+ * different, so any deterministic grouping over it is still a fixed point by
+ * construction — the property every other piece of the design is arranged to protect.
  *
  * Grouping is then the only decision: partition the list into consecutive groups,
  * render each as one literal (or, for a lone expression segment, as a bare operand)
@@ -137,8 +140,25 @@ using StringTools;
  *   RE-CUT at different boundaries, needs the construct's source lines to be
  *   genuinely over-long; a chain the writer already lays out within the limit keeps
  *   the author's own phrasing instead of being repacked by the greedy fill.
- * - A single segment wider than the budget forms its own group and is accepted as
- *   is — literal TEXT is never split at word boundaries, only at segment seams.
+ * - SEPARATOR CUTS ARE A TIE-BREAK, NEVER A LICENCE. The group count stays the PRIMARY
+ *   criterion — MINIMAL as the greedy fill reaches it, which is not the same as PROVEN
+ *   minimal (the scan stops at the first extension that does not fit, and a rendered
+ *   width is not monotone in the segment count: a differently-quoted segment can flip a
+ *   group's render mode and shrink it). It is this rule's contract, and also what keeps
+ *   the result a fixed point: two adjacent groups that could re-merge inside the budget
+ *   would mean the count was not the one the fill reaches, and the next run would flag
+ *   the rule's own output. Among the ends that keep that count the boundary is picked
+ *   by CLASS — a seam the decomposition already had (an operand edge, a `${ … }`
+ *   fragment, a `\n` escape) first; then an opening bracket a space introduced, or a
+ *   space run a closing bracket ended; then those same two with a comma in place of the
+ *   space; then a plain space run; and last a plain comma. An opening bracket with
+ *   NEITHER of those before it is no cut point at all — a regex spells its groups and
+ *   classes that way, and breaking one there splits a token for no gain. Equal class
+ *   keeps the WIDEST end, which is the greedy answer this rule gave before there were
+ *   text cuts at all.
+ * - A single segment wider than the budget still forms its own group and is accepted as
+ *   is. That is what a text carrying NO separator — a URL, a base64 blob — still does:
+ *   no legal cut exists in it, so nothing is reported and the over-wide line stands.
  *
  * Not proven for an abstract that overloads `@:op(A + B)`: such a `+` may not be
  * concatenation at all, and no structural check can see it. That is why the
@@ -790,34 +810,91 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	}
 
 	/**
-	 * Greedy left-to-right fill: each group takes as many further segments as it can
-	 * render within `budget`. A single segment wider than the budget forms its own
-	 * group and is accepted as-is — literal TEXT is never split at word boundaries,
-	 * only at segment seams. A segment that cannot sit inside a `${ … }` block (see
-	 * `ConcatSegment.SegExpr`) ends the group it would have joined, so it lands in a
-	 * group of its own and renders bare.
+	 * Left-to-right fill in two passes. The BACKWARD one prices, for every start, the widest
+	 * group that fits (`lastFit`) and the fewest groups the tail can then be cut into
+	 * (`minCount`). The FORWARD one walks the starts and picks, among the ends that keep that
+	 * minimum, the best-CLASSED boundary (`BoundaryRank`) — the widest one of equal class,
+	 * which is the plain greedy answer this used to give.
+	 *
+	 * A single segment wider than the budget still forms its own group and is accepted as-is,
+	 * which is what a text carrying no separator at all does. A segment that cannot sit inside
+	 * a `${ … }` block (see `ConcatSegment.SegExpr`) ends the group it would have joined, so it
+	 * lands in a group of its own and renders bare.
 	 */
 	private static function fill(ctx: PlanContext, decomposition: Decomposition, budget: Int): Null<Array<Int>> {
 		final segments: Array<ConcatSegment> = decomposition.segments;
 		final locked: Array<Int> = decomposition.locked;
-		final ends: Array<Int> = [];
-		var i: Int = 0;
-		while (i < segments.length) {
-			var best: Int = i + 1;
+		final count: Int = segments.length;
+		// Backward pass. `lastFit[i]` is the greedy answer — the widest group starting at `i`
+		// that fits, or `i + 1` when not even the pair does — and `minCount[i]` the fewest
+		// groups `i…` takes when every group is grown that way. GREEDY-minimal rather than
+		// proven minimal: the scan stops at the first extension that does not fit, and a
+		// rendered width is not monotone in the segment count (a differently-quoted segment
+		// can flip a group's render mode and SHRINK it). Both passes need one consistent
+		// target to preserve, which this is.
+		final lastFit: Array<Int> = [for (_ in 0...count + 1) 0];
+		final minCount: Array<Int> = [for (_ in 0...count + 1) 0];
+		var i: Int = count - 1;
+		while (i >= 0) {
+			var last: Int = i + 1;
 			var j: Int = i + 1;
 			// A locked boundary at `j` means segment `j` may not join what precedes it: taking
 			// it in would swallow the comment sitting in that gap.
-			while (j < segments.length && !locked.contains(j)) {
+			while (j < count && !locked.contains(j)) {
 				final candidate: Null<String> = renderRange(ctx, segments, i, j + 1);
 				if (candidate == null || candidate.length > budget) break;
-				best = j + 1;
+				last = j + 1;
 				j++;
 			}
-			if (renderRange(ctx, segments, i, best) == null) return null;
-			ends.push(best);
-			i = best;
+			lastFit[i] = last;
+			minCount[i] = 1 + minCount[last];
+			i--;
+		}
+		// Forward pass. Every end in `from + 1 … lastFit[from]` is feasible — the scan above
+		// rendered each of those prefixes — so the choice is free among the ones that keep the
+		// group count at that target, and there the best-CLASSED boundary wins, the widest of
+		// equal class. `lastFit[from]` is always one of them and is taken whatever `steerable`
+		// says: it is the answer the plain greedy fill gave, and when it is the only end that
+		// fits there is nothing to steer to.
+		final ends: Array<Int> = [];
+		var from: Int = 0;
+		while (from < count) {
+			var end: Int = lastFit[from];
+			var rank: BoundaryClass = BoundaryRank.of(segments, end);
+			var candidate: Int = lastFit[from] - 1;
+			while (candidate > from) {
+				if (1 + minCount[candidate] == minCount[from] && steerable(decomposition, from, candidate)) {
+					final other: BoundaryClass = BoundaryRank.of(segments, candidate);
+					if (other < rank) {
+						rank = other;
+						end = candidate;
+					}
+				}
+				candidate--;
+			}
+			ends.push(end);
+			from = end;
 		}
 		return mergeLeadingBares(ctx, decomposition, ends);
+	}
+
+	/**
+	 * Whether `fill` may STEER to `end` for the group starting at `from`. The one refusal is a
+	 * partition `mergeLeadingBares` would rewrite: it folds a BARE first group into the next
+	 * one without pricing the result, so choosing that end hands it a merge it cannot refuse
+	 * and the merged first line lands over budget — permanently, since re-planning the fixed
+	 * text reproduces the same choice and nothing ever recovers it. The boundary after a bare
+	 * head reads as a `Seam` (no text left of it at all), which is the best class there is, so
+	 * without this it wins outright whenever it preserves the group count.
+	 *
+	 * Only the ALTERNATIVES are filtered, never `lastFit[from]`: when the bare head is the
+	 * only end that fits there is no other partition to reach, and the merge is then exactly
+	 * what has to happen — a source that opens with a bare operand may not become two leading
+	 * bare operands.
+	 */
+	private static function steerable(decomposition: Decomposition, from: Int, end: Int): Bool {
+		return
+			from > 0 || decomposition.startsBare || decomposition.locked.contains(end) || !isBareGroup(decomposition.segments, from, end);
 	}
 
 	/**
@@ -1681,6 +1758,132 @@ private class PlanContext {
 		var indent: Int = lineStart;
 		while (indent < source.length && FoldStringLiterals.isBlank(source.fastCodeAt(indent))) indent++;
 		return FoldStringLiterals.columnWidth(this, lineStart, indent) == metrics.indentWidth ? indent : -1;
+	}
+
+}
+
+/**
+ * The boundary CLASSES the ladder ranks, best first — `BoundaryRank.of`'s answer, and
+ * the tie-break `FoldStringLiterals.fill` picks a group end with, among the ends that
+ * keep the group count it settled on.
+ */
+private enum abstract BoundaryClass(Int) {
+
+	/**
+	 * Not a text cut — the construct's end, or a boundary this side of the ladder cannot
+	 * attribute to a separator. See `BoundaryRank.of` on why that is a RECONSTRUCTION and not
+	 * a fact the segment list carries.
+	 */
+	final Seam = 0;
+
+	/** An opening bracket a space introduced, or a space run a closing bracket ended. */
+	final BracketBySpace = 1;
+
+	/** Those same two boundaries with a comma where the space was. */
+	final BracketByComma = 2;
+
+	/** A plain space run. */
+	final PlainSpace = 3;
+
+	/** A plain comma. */
+	final PlainComma = 4;
+
+	/** Ordered comparison, which an `enum abstract` does not forward on its own. */
+	@:op(A < B) private static function lt(a: BoundaryClass, b: BoundaryClass): Bool;
+
+}
+
+/**
+ * How good the cut before segment `j` reads. It is ONLY ever a tie-break among the ends that
+ * keep the group count minimal — never a licence to add a group.
+ *
+ * The class is RECONSTRUCTED from at most two characters of the text left of the boundary, not
+ * read off the segment list, which records no reason for the cut it holds. So `Seam` means
+ * "no separator explains this boundary": the construct's end, a right side that is not text,
+ * a left side that is not text — and, structurally, every operand edge, `${ … }` fragment
+ * boundary and `\n` escape whose left text does not happen to end in a separator. The
+ * heuristic is conservative in one direction only: an operand edge whose left literal DOES
+ * end in one (`'abc ' + 'def'`) reads as the text cut it looks like, `PlainSpace` rather
+ * than `Seam`. That costs a preference, never a wrong cut — the boundary exists either way.
+ *
+ * Everything else ranks a bracket-adjacent cut above a bare one, because a bracket belongs
+ * with whatever introduced it.
+ *
+ * The characters are read RAW, so an escape-spelled one simply does not match and the
+ * boundary reads as a plain one. That is conservative rather than wrong: whether the cut is
+ * LEGAL was already decided in the grammar, which reads the same raw text.
+ */
+@:nullSafety(Strict)
+private class BoundaryRank {
+
+	/** The class of the boundary before `segments[j]`; `j == segments.length` is the construct's end. */
+	public static function of(segments: Array<ConcatSegment>, j: Int): BoundaryClass {
+		if (j == segments.length || !segments[j].match(SegText(_, _))) return Seam;
+		final left: String = leftText(segments, j);
+		final tail: Int = left.length - 1;
+		if (tail < 0) return Seam;
+		final last: Int = left.fastCodeAt(tail);
+		if (isOpen(last)) return bracketClass(charBefore(left, tail));
+		if (last == ','.code) return isClose(charBefore(left, tail)) ? BracketByComma : PlainComma;
+		if (last != ' '.code) return Seam;
+		var run: Int = tail;
+		while (run > 0 && left.fastCodeAt(run - 1) == ' '.code) run--;
+		return isClose(charBefore(left, run)) ? BracketBySpace : PlainSpace;
+	}
+
+	/**
+	 * An opening bracket's class, decided by the character that INTRODUCED it. Neither means the
+	 * grammar never cut here — a bracket with no space and no comma before it is not a separator
+	 * boundary at all — so the only boundaries that reach this reading are seams.
+	 */
+	private static inline function bracketClass(before: Int): BoundaryClass {
+		return if (before == ' '.code)
+			BracketBySpace
+		else if (before == ','.code)
+			BracketByComma
+		else
+			Seam;
+	}
+
+	/**
+	 * The text immediately left of the boundary at `j`: the run of TEXT segments ending
+	 * there, joined, and only as far back as the ranking can still read.
+	 *
+	 * It reads past `j - 1` at all because the grammar's cut set isolates a lone bracket —
+	 * and, after a `\n` cut, a lone run of spaces — into a piece of its own, so the character
+	 * that INTRODUCED the separator is then the previous piece's last one. A rank that looked
+	 * only at `j - 1` would read the ladder's best class (a bracket a space introduced) as its
+	 * worst. Two characters are always enough to stop: a piece holding its own separator plus
+	 * one more character answers on its own, and an all-space piece long enough to survive
+	 * the bound can only follow a comma or an opening bracket, which rank the same as no
+	 * character at all.
+	 */
+	private static function leftText(segments: Array<ConcatSegment>, j: Int): String {
+		var text: String = '';
+		var k: Int = j - 1;
+		while (k >= 0 && text.length < 2) switch segments[k] {
+			case SegText(_, raw):
+				text = raw + text;
+				k--;
+			case _:
+				break;
+		}
+		return text;
+	}
+
+	/** The character code just left of `at` in `s`, or -1 when `at` is already its start. */
+	private static inline function charBefore(s: String, at: Int): Int {
+		return at <= 0 ? -1 : s.fastCodeAt(at - 1);
+	}
+
+	/** Whether `c` OPENS a bracket pair — the character a separator cut keeps with what introduced it. */
+	private static inline function isOpen(c: Int): Bool {
+		return c == '('.code || c == '['.code || c == '{'.code;
+	}
+
+	/** Whether `c` CLOSES a bracket pair — what makes the separator after it a structural boundary. */
+	private static inline function isClose(c: Int): Bool {
+		return c == ')'.code || c == ']'.code || c == '}'.code;
 	}
 
 }
