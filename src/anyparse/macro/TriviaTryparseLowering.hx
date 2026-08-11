@@ -109,6 +109,16 @@ final class TriviaTryparseLowering {
 		// double-emitting inserts a spurious blank that COMPOUNDS on re-format.
 		// Blank-line extras (authored blanks) are still emitted. Default false.
 		elemSelfTrailsNewline: Bool = false,
+		// omega-cond-expr-fit: the Star carries `@:fmt(condExprFitBreak)` (the
+		// expression-scope cond-comp `elseifs`). Its inter-element and
+		// trailing-pad SPACE separators become knob-gated soft `Line(' ')`
+		// docs, so they break together with the ctor-level
+		// `condExprFitGroup` group. Default false -> byte-identical.
+		// Mutually exclusive with `lineLengthAwareSeps` (disjoint carriers
+		// today): the sep builders prefer that flag, and the trailing-pad
+		// soft doc ignores it - a Star carrying both would get split-brain
+		// separators.
+		condExprFitSeps: Bool = false,
 		// Typed nested-conditional element probe: the
 		// `<AstPredsT>.elementIsConditional_<ElemRule>` function-reference
 		// Expr, built at the instance caller (where the Star's element
@@ -186,7 +196,17 @@ final class TriviaTryparseLowering {
 		final padLeadingSpaceDoc: Expr = sepBeforeAccess != null && sepText != null
 			? macro ($sepBeforeAccess ? _dt($v{sepText + ' '}) : $basePadLeadingSpaceDoc)
 			: basePadLeadingSpaceDoc;
-		final subsequentSepDoc: Expr = lineLengthAwareSeps ? macro _dile(opt.lineWidth, _dhl(), _dt(' ')) : subsequentSepExpr;
+		// omega-cond-expr-fit: soft inter-element / trailing-pad separators for
+		// the `@:fmt(condExprFitBreak)` Star - a space while the ctor-level
+		// group fits, a break when it does not. Knob-gated at runtime so the
+		// default stays byte-identical.
+		final subsequentSepDoc: Expr = if (lineLengthAwareSeps)
+			macro _dile(opt.lineWidth, _dhl(), _dt(' '))
+		else if (condExprFitSeps)
+			macro (opt.conditionalExprFit ? _dl() : $subsequentSepExpr)
+		else
+			subsequentSepExpr;
+		final trailPadSpaceDoc: Expr = condExprFitSeps ? macro (opt.conditionalExprFit ? _dl() : _dt(' ')) : macro _dt(' ');
 		final priorAfterTrailEmit: Expr = triviaTryparsePriorAfterTrailEmit(priorAfterTrailExpr);
 		final finalWrapDocs: Expr = triviaTryparseFinalWrapDocs(lineLengthAwareSeps);
 		final condIncreaseGateExpr: Expr = triviaTryparseCondIncreaseGateExpr(condBodyIndent);
@@ -233,6 +253,7 @@ final class TriviaTryparseLowering {
 			tryparseBlockEndedSepEmit: tryparseBlockEndedSepEmit,
 			tryparseBlockEndedTrailEmit: tryparseBlockEndedTrailEmit,
 			lastTrailTerminatorEmit: lastTrailTerminatorEmit,
+			trailPadSpaceDoc: trailPadSpaceDoc,
 			finalWrapDocs: finalWrapDocs,
 			forceInlineSep: forceInlineSep,
 			elemSelfTrailsNewline: elemSelfTrailsNewline,
@@ -780,8 +801,9 @@ final class TriviaTryparseLowering {
 		final tryparseBlockEndedTrailEmit: Expr = c.tryparseBlockEndedTrailEmit;
 		final lastTrailTerminatorEmit: Expr = c.lastTrailTerminatorEmit;
 		final finalWrapDocs: Expr = c.finalWrapDocs;
+		final trailPadSpaceDoc: Expr = c.trailPadSpaceDoc;
 		final trailDocsExpr: Expr = triviaTryparseTrailDocsExpr();
-		final wrapDispatch: Expr = triviaTryparseWrapDispatchExpr(finalWrapDocs, c.glueRefusalExpr);
+		final wrapDispatch: Expr = triviaTryparseWrapDispatchExpr(finalWrapDocs, c.glueRefusalExpr, trailPadSpaceDoc);
 		return macro {
 			$tryparseBlockEndedTrailEmit;
 			// ω-cond-indent-policy: under AlignedIncrease hold the trailing
@@ -801,7 +823,7 @@ final class TriviaTryparseLowering {
 				_condTrailPad = _lineTrailBroken ? _dhl() : _dt(' ');
 			} else if (_padTrailing && _arr.length > 0 && _trailLC.length == 0) {
 				_lineTrailBroken = _padHardline || _trailEndsLine;
-				_docs.push(_lineTrailBroken ? _dhl() : _dt(' '));
+				_docs.push(_lineTrailBroken ? _dhl() : $trailPadSpaceDoc);
 			} else if (_metaPolicy != 0 && _arr.length > 0) {
 				_lineTrailBroken = true;
 				_docs.push(_dhl());
@@ -936,7 +958,7 @@ final class TriviaTryparseLowering {
 	 * orphan trail run ends with that run's own hardline-led docs — so neither
 	 * can glue a follower onto a `//` comment.
 	 */
-	private static function triviaTryparseWrapDispatchExpr(finalWrapDocs: Expr, glueRefusalExpr: Expr): Expr {
+	private static function triviaTryparseWrapDispatchExpr(finalWrapDocs: Expr, glueRefusalExpr: Expr, trailPadSpaceDoc: Expr): Expr {
 		final caseWrap: Expr = triviaTryparseCaseWrapExpr(glueRefusalExpr);
 		return macro {
 			// ω-force-flat-engine sister-coverage: tryparse Star is used
@@ -981,7 +1003,7 @@ final class TriviaTryparseLowering {
 				// being commented out by a trailing `//` line comment.
 				if (_padTrailing && _trailLC.length > 0 && _arr.length > 0) {
 					_lineTrailBroken = _padHardline || _trailEndsLine;
-					_docs.push(_lineTrailBroken ? _dhl() : _dt(' '));
+					_docs.push(_lineTrailBroken ? _dhl() : $trailPadSpaceDoc);
 				}
 				// ω-line-comment-directive-break: an arm that emits NO pad at all
 				// (an EMPTY body holding only comments) still owes the break. The

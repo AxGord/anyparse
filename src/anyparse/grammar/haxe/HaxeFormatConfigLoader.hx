@@ -622,6 +622,7 @@ final class HaxeFormatConfigLoader {
 			expressionIfArrowBodyReflow: base.expressionIfArrowBodyReflow,
 			elseIfCommentReflow: base.elseIfCommentReflow,
 			fitLineBodyGlue: base.fitLineBodyGlue,
+			conditionalExprFit: base.conditionalExprFit,
 			ifElseSemicolonNextLine: base.ifElseSemicolonNextLine,
 			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
 			existingBetweenFields: base.existingBetweenFields,
@@ -994,6 +995,10 @@ final class HaxeFormatConfigLoader {
 		// FitLine body placement - it changes no body policy, it decides whether a
 		// body the next line would not rescue glues to the header line instead.
 		if (section.fitLineBodyGlue != null) opt.fitLineBodyGlue = section.fitLineBodyGlue;
+		// omega-cond-expr-fit: an independent Bool knob on expression-scope
+		// conditional layout - it changes no body policy, it decides whether an
+		// over-wide glued `#if ... #end` value breaks at its directive seams.
+		if (section.conditionalExprFit != null) opt.conditionalExprFit = section.conditionalExprFit;
 		if (section.ifElseSemicolonNextLine != null) opt.ifElseSemicolonNextLine = section.ifElseSemicolonNextLine;
 		if (section.expressionTry != null) opt.expressionTry = HaxeFormatValues.sameLineToRuntime(section.expressionTry);
 		if (section.expressionIfWithBlocks != null) opt.expressionIfWithBlocks = section.expressionIfWithBlocks;

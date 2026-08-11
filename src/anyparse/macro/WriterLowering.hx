@@ -1539,6 +1539,10 @@ class WriterLowering {
 		final tryparseElemCondFn: Null<Expr> = _formatInfo.astPreds && (tryparseCondBodyIndent || tryparseBlockEnded)
 			? AstPredLowering.predFnExpr(_shape.root, true, false, 'elementIsConditional_${simpleName(c.elemRefName)}')
 			: null;
+		// omega-cond-expr-fit: `@:fmt(condExprFitBreak)` on the tryparse Star
+		// (the expression-scope cond-comp `elseifs`) swaps its inter-element
+		// and trailing-pad spaces for knob-gated soft `Line(' ')` seps.
+		final tryparseCondExprFit: Bool = starNode.fmtHasFlag('condExprFitBreak');
 		parts.push(TriviaTryparseLowering.triviaTryparseStarExpr(
 			fieldAccess, elemFn, sepExpr, sameLineName != null, nestBody, tryparseTrailBB, tryparseTrailLC, tryparseTrailBA,
 			firstSepOverride, subsequentSepOverride, caseBodyFlagNames, flatChildOptPairs, tryparsePadLeading, tryparsePadTrailing,
@@ -1547,7 +1551,7 @@ class WriterLowering {
 			cascadeInfos.betweenSameCtorIfNotInfos, tryparseLineLengthAware, tryparsePriorAfterTrailExpr, tryparseForceInlineSep,
 			tryparseBlockEnded || tryparseSepFaithful ? tryparseSepText : null, tryparseBlockEnded, tryparseSepFaithful,
 			tryparseHeritageWrap, tryparseCondBodyIndent, tryparseOperandBreakAfterMultilineBrace, clearExprPositionNonTail,
-			tryparseSepBeforeAccess, tryparseElemSelfTrailsNewline, tryparseElemCondFn, refuseGlueOnControlFlow
+			tryparseSepBeforeAccess, tryparseElemSelfTrailsNewline, tryparseCondExprFit, tryparseElemCondFn, refuseGlueOnControlFlow
 		));
 	}
 
@@ -3130,6 +3134,14 @@ class WriterLowering {
 			final signal: Expr = sig.signal;
 			picked = macro $guard ? $signal : $picked;
 		}
+		// omega-cond-expr-fit: `@:fmt(condExprFitBreak)` fields swap the flat
+		// space for a soft `Line(' ')` under the runtime knob. The soft Line
+		// must never land outside the ctor-level `condExprFitGroup` group
+		// (root render mode is MBreak, so ungrouped it renders as a NEWLINE,
+		// not a space) - the invariant holds by grammar co-location: the same
+		// knob builds the group, and every flag carrier is a field of
+		// `HxConditionalExpr`, consumed only by the group-building ctor.
+		if (child.fmtHasFlag('condExprFitBreak')) return macro $picked ? _dhl() : (opt.conditionalExprFit ? _dl() : _dt(' '));
 		return macro $picked ? _dhl() : _dt(' ');
 	}
 
@@ -8410,7 +8422,22 @@ class WriterLowering {
 	 * every other policy leaves it unwrapped (byte-identical).
 	 */
 	private function kwRefFinalDoc(c: LowerBranchCtx, parts: Array<Expr>): Expr {
-		final case3Doc: Expr = parts.length == 1 ? parts[0] : dcCall(parts);
+		final concatDoc: Expr = parts.length == 1 ? parts[0] : dcCall(parts);
+		// omega-cond-expr-fit: `@:fmt(condExprFitGroup)` on an expression-scope
+		// cond-comp ctor wraps the whole `#if ... #end` emission in a
+		// `GroupWithRestProbe` when `sameLine.conditionalExprFit` is on, so the
+		// family's soft `Line(' ')` seams (padTrailingDoc / nest-body flat arms /
+		// the elseifs Star separators) resolve TOGETHER against one fit decision
+		// - rest-aware so the statement's own `;` after `#end` is counted. Off
+		// (the default) the group is not built and no soft Line exists anywhere
+		// in the family, so the output is byte-identical to the source-driven
+		// layout. Gated on trivia mode like every soft-seam emitter (plain mode
+		// captures no source-newline slots, so a plain-mode group would wrap
+		// only hard content and could still flip a stray ungrouped `Line` in a
+		// branch body from newline to space when it fits).
+		final case3Doc: Expr = c.branch.fmtHasFlag('condExprFitGroup') && _ctx.trivia
+			? macro (opt.conditionalExprFit ? _dgrp($concatDoc) : $concatDoc)
+			: concatDoc;
 		// ω-cond-indent-policy FixedZero/AlignedDecrease: a cond-comp ctor
 		// opting into `@:fmt(conditionalMarkerDedent)` (the `#if … #end`
 		// Conditional ctors) wraps its whole construct Doc in a render-time
@@ -11477,7 +11504,13 @@ class WriterLowering {
 	 * the simplicity of `bareBodyBreakWrap`.
 	 */
 	private static inline function nestBodyOnSourceNewlineWrap(writeCall: Expr, sourceNewlineExpr: Expr): Expr {
-		final sameLayoutExpr: Expr = macro _dc([_dt(' '), $writeCall]);
+		// omega-cond-expr-fit: with `sameLine.conditionalExprFit` on, the flat
+		// arm becomes a soft `Nest(cols, [Line(' '), body])` - a space while the
+		// ctor-level `condExprFitGroup` group fits, the nested next-line shape
+		// when it breaks. Every consumer of this helper is a field of the
+		// expression-scope cond-comp family, so no per-field opt-in is needed;
+		// with the knob off the emitted Doc is byte-identical to the old shape.
+		final sameLayoutExpr: Expr = macro opt.conditionalExprFit ? _dn(_cols, _dc([_dl(), $writeCall])) : _dc([_dt(' '), $writeCall]);
 		final nextLayoutExpr: Expr = macro _dn(_cols, _dc([_dhl(), $writeCall]));
 		return macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
@@ -14887,6 +14920,13 @@ typedef TryparseStarCtx = {
 	final finalWrapDocs: Expr;
 	final forceInlineSep: Bool;
 	final elemSelfTrailsNewline: Bool;
+
+	/**
+	 * omega-cond-expr-fit: the trailing-pad SPACE Doc - `_dt(' ')` for every
+	 * ordinary Star, the knob-gated soft `Line(' ')` for a Star carrying
+	 * `@:fmt(condExprFitBreak)` (the expression-scope cond-comp `elseifs`).
+	 */
+	final trailPadSpaceDoc: Expr;
 
 	/** Typed nested-conditional element probe fn-ref (`AstPredsT.elementIsConditional_<ElemRule>`), or null when the format has no generated predicates. */
 	final elemCondFn: Null<Expr>;

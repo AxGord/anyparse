@@ -710,6 +710,7 @@ final class HaxeFormat implements TextFormat {
 		expressionIfArrowBodyReflow: false,
 		elseIfCommentReflow: false,
 		fitLineBodyGlue: false,
+		conditionalExprFit: false,
 		ifElseSemicolonNextLine: true,
 		afterFieldsWithDocComments: CommentEmptyLinesPolicy.One,
 		existingBetweenFields: KeepEmptyLinesPolicy.Keep,

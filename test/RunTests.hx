@@ -610,6 +610,7 @@ import unit.RedundantParensTierArmsTest;
 import unit.TrivialGetterShapeCollapseTest;
 import unit.ExplicitLocalTypeReadFixTest;
 import unit.ExplicitLocalTypeParenInitTest;
+import unit.HxConditionalExprFitSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -934,6 +935,7 @@ class RunTests {
 		addCase(new HxCondCommentDirectiveSeamTest());
 		addCase(new HxCondElseifChainBlankTest());
 		addCase(new HxCondExprValueFixpointSliceTest());
+		addCase(new HxConditionalExprFitSliceTest());
 		addCase(new HxCaseCommentWriteTest());
 		addCase(new HxHeadCommentSeamWriteTest());
 		addCase(new HxGroupTrailCommentWriteTest());

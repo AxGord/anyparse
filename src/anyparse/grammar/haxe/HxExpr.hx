@@ -492,7 +492,7 @@ enum HxExpr {
 	@:kw('function') @:fmt(anonFuncParens)
 	FnExpr(fn: HxFnExpr);
 
-	@:kw('#if') @:trail('#end')
+	@:kw('#if') @:trail('#end') @:fmt(condExprFitGroup)
 	ConditionalExpr(inner: HxConditionalExpr);
 
 	@:kw('#if') @:trail('#end')

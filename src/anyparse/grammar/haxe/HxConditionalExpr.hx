@@ -102,13 +102,21 @@ package anyparse.grammar.haxe;
  * inverts to `false`). Per-kind dispatch lives in
  * `WriterLowering.lowerStruct`: bare-Ref non-first reads
  * `value.exprBeforeNewline` directly; opt-kw-Ref reads
- * `!value.elseExprBodyOnSameLine`. Stmt/decl scope mirrors don't get
- * the flag — fork keeps body at the keyword's indent there.
+ * `!value.elseExprBodyOnSameLine`. Stmt/decl scope mirrors don't get the flag — fork keeps body at the
+ * keyword's indent there.
+ *
+ * `@:fmt(condExprFitBreak)` on `expr`, `elseifs`, and `elseExpr` (slice
+ * ω-cond-expr-fit) marks each field's flat separator as a knob-gated soft
+ * `Line(' ')` — a space while the enclosing `ConditionalExpr` ctor's
+ * `condExprFitGroup` group fits its line, a directive-seam break when it
+ * does not (`sameLine.conditionalExprFit`; canonical doc on
+ * `HxModuleWriteOptions.conditionalExprFit`). The Star's flag additionally
+ * softens its inter-element and trailing-pad separators.
  */
 @:peg
 typedef HxConditionalExpr = {
 	var cond: HxPpCondLit;
-	@:fmt(padTrailing, captureSourceNewlineAfter, nestBodyOnSourceNewline) var expr: HxExpr;
-	@:trivia @:tryparse @:fmt(padTrailing) var elseifs: Array<HxElseifExpr>;
-	@:optional @:kw('#else') @:fmt(padTrailing, captureSourceNewlineAfter, nestBodyOnSourceNewline) var elseExpr: Null<HxExpr>;
+	@:fmt(padTrailing, captureSourceNewlineAfter, nestBodyOnSourceNewline, condExprFitBreak) var expr: HxExpr;
+	@:trivia @:tryparse @:fmt(padTrailing, condExprFitBreak) var elseifs: Array<HxElseifExpr>;
+	@:optional @:kw('#else') @:fmt(padTrailing, captureSourceNewlineAfter, nestBodyOnSourceNewline, condExprFitBreak) var elseExpr: Null<HxExpr>;
 };

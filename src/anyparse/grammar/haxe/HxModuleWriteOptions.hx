@@ -945,6 +945,22 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * `Next` body policy never sees it.
 	 */
 	fitLineBodyGlue: Bool,
+
+	/**
+	 * ω-cond-expr-fit: break an expression-scope `#if … #end` region at its
+	 * directive seams — the way a regular `if / else if / else` chain breaks —
+	 * when the GLUED form does not fit the line. One `GroupWithRestProbe` wraps
+	 * the whole `ConditionalExpr` emission, so every seam answers TOGETHER: a
+	 * fitting region keeps its spaces, an over-wide one drops each directive
+	 * onto its own line at the statement indent with each branch value one
+	 * indent step deeper. Off (the default), layout stays purely source-driven.
+	 *
+	 * Fed by `sameLine.conditionalExprFit`; consumed by the `ConditionalExpr`
+	 * ctor's `@:fmt(condExprFitGroup)` wrap, `WriterLowering.padTrailingDoc`'s
+	 * `@:fmt(condExprFitBreak)` arm, `nestBodyOnSourceNewlineWrap`'s flat arm,
+	 * and the `elseifs` Star's inter-element / trailing-pad separators.
+	 */
+	conditionalExprFit: Bool,
 	ifElseSemicolonNextLine: Bool,
 	afterFieldsWithDocComments: CommentEmptyLinesPolicy,
 	existingBetweenFields: KeepEmptyLinesPolicy,
