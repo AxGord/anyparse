@@ -305,7 +305,7 @@ final class PreferComprehension implements Check {
 		if (declName == null || declSpan == null || initSpan == null || forSpan == null || scopeSpan == null) return null;
 		if (!isEmptyArrayLiteral(source.substring(initSpan.from, initSpan.to))) return null;
 		if (CheckScan.hasCommentMarker(source, declSpan.to, forSpan.from)) return null;
-		final annotation: Null<String> = annotationOf(declSpan, initSpan, declName, ctx);
+		final annotation: Null<String> = RefactorSupport.declaredTypeAnnotation(source, declSpan, initSpan, declName);
 		final element: Null<String> = annotation == null ? null : elementTypeOf(annotation, s.elementTypeParams);
 		final acc: Acc = { checks: [], hoisted: [], elementType: element };
 		final inner: Null<String> = buildInner(forNode, declName, ctx, acc);
@@ -605,7 +605,7 @@ final class PreferComprehension implements Check {
 			name: boundName,
 			init: init,
 			initSpan: initRange,
-			annotation: annotationOf(declRange, initRange, boundName, ctx),
+			annotation: RefactorSupport.declaredTypeAnnotation(ctx.source, declRange, initRange, boundName),
 			useSpan: useRange,
 			useParent: uses[0].parent,
 			useIndex: uses[0].index,
@@ -721,44 +721,6 @@ final class PreferComprehension implements Check {
 		return false;
 	}
 
-	/**
-	 * The type annotation written on a local declaration, or null when it carries none. The tree
-	 * holds no type child for a local, so it is read off the source head: everything before the
-	 * LAST `=`, then the first `:` at or after the last STANDALONE occurrence of the declared name
-	 * (standalone so a leading `@:meta` cannot be mistaken for the annotation, and a type whose own
-	 * spelling ends in the name — `t:MyToolt` — cannot swallow it).
-	 */
-	private static function annotationOf(declSpan: Span, initSpan: Span, name: String, ctx: Ctx): Null<String> {
-		final prefix: String = ctx.source.substring(declSpan.from, initSpan.from);
-		final eq: Int = prefix.lastIndexOf('=');
-		if (eq < 0) return null;
-		final head: String = prefix.substring(0, eq);
-		final at: Int = lastIdentIndex(head, name);
-		if (at < 0) return null;
-		final colon: Int = head.indexOf(':', at);
-		if (colon < 0) return null;
-		final text: String = head.substring(colon + 1).trim();
-		return text == '' ? null : text;
-	}
-
-	/** The index of the LAST occurrence of `name` in `head` that stands alone as an identifier, or -1. */
-	private static function lastIdentIndex(head: String, name: String): Int {
-		var at: Int = head.lastIndexOf(name);
-		while (at >= 0) {
-			final after: Int = at + name.length;
-			final openLeft: Bool = at == 0 || !isIdentChar(head.fastCodeAt(at - 1));
-			final openRight: Bool = after >= head.length || !isIdentChar(head.fastCodeAt(after));
-			if (openLeft && openRight) return at;
-			if (at == 0) return -1;
-			at = head.lastIndexOf(name, at - 1);
-		}
-		return -1;
-	}
-
-	/** Whether `c` may appear inside an identifier — a letter, a digit or an underscore. */
-	private static function isIdentChar(c: Int): Bool {
-		return c == '_'.code || (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code);
-	}
 
 	/** `source[span]` with every chain local's single use replaced by its (recursively rendered) initializer. */
 	private static function renderSpan(span: Span, locals: Array<ChainLocal>, ctx: Ctx, acc: Acc): String {

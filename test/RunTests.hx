@@ -621,6 +621,7 @@ import unit.NamingCheckHoistFixTest;
 import unit.UnnecessarySwitchCheckTest;
 import unit.ShadowingCaseBinderCheckTest;
 import unit.ImportOutsideGuardCheckTest;
+import unit.JoinArrayPushesCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1203,6 +1204,7 @@ class RunTests {
 		addCase(new JoinStringAppendCheckTest());
 		addCase(new JoinReturnCheckTest());
 		addCase(new JoinSingleUseLocalCheckTest());
+		addCase(new JoinArrayPushesCheckTest());
 		addCase(new PreferSingleQuotesCheckTest());
 		addCase(new CachingGrammarPluginTest());
 		addCase(new RefsCacheTest());

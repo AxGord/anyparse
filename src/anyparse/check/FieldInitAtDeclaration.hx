@@ -58,9 +58,9 @@ import haxe.Exception;
  * refuses a candidate whose constructor calls up ANYWHERE, and it gates the CANDIDATE for
  * the same reason `ctorPrefixUnconditional` does, so both acceptance paths inherit it. With
  * `superReferenceText` or `callKind` unset the call cannot be recognised at all, and the
- * gate falls back to `hasSupertype`, which refuses every subclass — coarser, still
- * closed. That fallback rests on ONE MORE optional seam, and there the gate does degrade
- * OPEN: `hasSupertype` reads `supertypeClauseKinds ?? []` and answers false on an empty
+ * gate falls back to `RefactorSupport.hasSupertypeClause`, which refuses every subclass — coarser,
+ * still closed. That fallback rests on ONE MORE optional seam, and there the gate does degrade
+ * OPEN: `hasSupertypeClause` reads `supertypeClauseKinds ?? []` and answers false on an empty
  * list, so a plugin declaring NONE of the three seams gets no gate at all rather than a
  * coarse one. Deliberately not closed in code by making an undeclared
  * `supertypeClauseKinds` refuse every container — that would kill the rule for any language
@@ -94,9 +94,9 @@ import haxe.Exception;
  * calls are context-free), which is exactly why the second pillar is needed:
  *
  * - INSTANCE-UNREACHABILITY. No accepted-prefix right-hand side can leak `this`
- *   (`contextFreeRhs` refuses `this` and every in-class non-static resolution), and
- *   no other statement shape is allowed in the prefix — no bare call, no
- *   `super(...)`, no local declaration, no branch or loop. So the second writer of
+ *   (`RefactorSupport.contextFreeRhs` refuses `this` and every in-class non-static
+ *   resolution), and no other statement shape is allowed in the prefix — no bare call,
+ *   no `super(...)`, no local declaration, no branch or loop. So the second writer of
  *   the field, wherever it lives, cannot be reached in the window the move opens;
  *   `super(...)` is barred precisely because an overridden method invoked from the
  *   SUPERCLASS constructor could write the field.
@@ -215,10 +215,10 @@ import haxe.Exception;
  * second super call anywhere (the lexical comparison stops meaning anything), a write outside the
  * argument region, an unrecognisable call.
  *
- * `contextFreeRhs`’s unresolved-name arm is decided from POSITIVE evidence: under `extends`, a
- * lowercase name the single-file resolver cannot bind is admitted when the file EXPLICITLY imports
- * it as a static (`SymbolIndex.fileImportsMemberName`). The absence proof that first suggests
- * itself — no ancestor DECLARES the name — is unsound here, because declaration absence is exactly
+ * `RefactorSupport.contextFreeRhs`’s unresolved-name arm is decided from POSITIVE evidence: under
+ * `extends`, a lowercase name the single-file resolver cannot bind is admitted when the file
+ * EXPLICITLY imports it as a static (`SymbolIndex.fileImportsMemberName`). The absence proof
+ * that first suggests itself — no ancestor DECLARES the name — is unsound here, because declaration absence is exactly
  * what a `@:build` / `@:autoBuild` macro undoes: openfl carries one on `Sprite`, so every display
  * subclass in an openfl app sits under an injector, and a real tree offered
  * `onEnable = changeEnabled - true` as movable on the strength of such a proof, where
@@ -626,7 +626,7 @@ final class FieldInitAtDeclaration implements Check {
 		final mv: Null<{ name: String, span: Span, rhs: QueryNode }> = assignedMovableField(stmt, container, statics, source, shape);
 		final span: Null<Span> = stmt.span;
 		if (mv == null || span == null) return null;
-		if (!contextFreeRhs(mv.rhs, container, statics, shape, true, mayBeInherited)) return null;
+		if (!RefactorSupport.contextFreeRhs(mv.rhs, container, statics, shape, true, mayBeInherited)) return null;
 		if (!RefactorSupport.ctorPrefixUnconditional(ctor, span.from, shape)) return null;
 		if (hoistCrossesSuper(ctor, container, span.from, shape)) return null;
 		return readBeforeInit(ctor, mv.span.from, mv.name, span.from, container, shape) ? null : mv;
@@ -654,49 +654,6 @@ final class FieldInitAtDeclaration implements Check {
 	}
 
 	/**
-	 * The binding-span starts of `container`'s members preceded by a `Static`
-	 * modifier sibling — the static members a right-hand side may safely reference.
-	 * Whether every identifier read in `node` is context-independent: a global / type /
-	 * imported name (unresolved within the class) or a static member of the class — a
-	 * value available at declaration-init time — and the subtree contains no `this`. A
-	 * reference that resolves within the class but is not static (a constructor parameter
-	 * or local, or a non-static instance member) makes the init order-dependent and thus
-	 * unmovable, since a static member is the only in-class binding whose value exists
-	 * before the constructor body runs.
-	 */
-	private static function contextFreeRhs(
-		node: QueryNode, container: QueryNode, statics: Array<Int>, shape: RefShape, allowStatics: Bool, mayBeInherited: (String) -> Bool
-	): Bool {
-		final identKind: String = shape.identKind;
-		final selfText: Null<String> = shape.selfReferenceText;
-		// `$p` inside a single-quoted string projects as the interp `Ident` kind, not
-		// `IdentExpr` - it is a reference all the same, and the resolver binds it by the
-		// same scope rules, so the two share one arm (`${p}` blocks carry a regular
-		// IdentExpr child and were already reached by the child walk).
-		if (node.kind == identKind || node.kind == shape.stringInterpIdentKind) {
-			final name: Null<String> = node.name;
-			final span: Null<Span> = node.span;
-			if (name == null || span == null) return false;
-			if (selfText != null && name == selfText) return false;
-			final bf: Null<Int> = TypeResolver.resolveBindingFrom(name, span, container, shape);
-			// An unresolved ident is the provably-global case (imports/statics) - UNLESS the
-			// container has a supertype clause: an INHERITED member is invisible to the
-			// single-file resolver and indistinguishable from a global, so under `extends` /
-			// `implements` an unresolved lowercase ident fails closed too (type refs like
-			// `Colors.WHITE` keep their uppercase root and stay movable).
-			if (bf != null) return allowStatics && statics.contains(bf);
-			if (!hasSupertype(container, shape)) return true;
-			final c0: Int = StringTools.fastCodeAt(name, 0);
-			// An uppercase root is a TYPE reference (`Colors.WHITE`) — never an inherited member, and
-			// decided without touching the index. A lowercase one asks the index whether any ancestor
-			// could declare it.
-			return c0 >= 'A'.code && c0 <= 'Z'.code || !mayBeInherited(name);
-		}
-		for (child in node.children) if (!contextFreeRhs(child, container, statics, shape, allowStatics, mayBeInherited)) return false;
-		return true;
-	}
-
-	/**
 	 * Whether the field is referenced anywhere in the constructor BEFORE its
 	 * initializing statement. Any such reference is a READ: whichever shape resolved the
 	 * candidate demanded a SINGLE match — `soleConstructorFieldInit` over the top-level
@@ -716,19 +673,6 @@ final class FieldInitAtDeclaration implements Check {
 		for (child in node.children) if (readBeforeInit(child, fieldFrom, fieldName, boundary, container, shape)) return true;
 		return false;
 	}
-
-	/**
-	 * Whether the container carries any supertype clause (`extends` /
-	 * `implements`) - the condition under which an unresolved bare ident may
-	 * actually be an inherited member rather than a global.
-	 */
-	private static function hasSupertype(container: QueryNode, shape: RefShape): Bool {
-		final clauses: Array<String> = shape.supertypeClauseKinds ?? [];
-		if (clauses.length == 0) return false;
-		for (c in container.children) if (clauses.contains(c.kind)) return true;
-		return false;
-	}
-
 
 	/**
 	 * Whether hoisting the write at `writeFrom` into the declaration prologue would cross an explicit
@@ -753,14 +697,14 @@ final class FieldInitAtDeclaration implements Check {
 		final superText: Null<String> = shape.superReferenceText;
 		final callKind: Null<String> = shape.callKind;
 		// With either seam unset the base-constructor call cannot be recognised at all, so the answer
-		// falls back to `hasSupertype` — coarser, refusing every subclass rather than only the ones that
+		// falls back to `RefactorSupport.hasSupertypeClause` — coarser, refusing every subclass rather than only the ones that
 		// call up. Closed only while `supertypeClauseKinds` is itself declared: with that seam unset too,
-		// `hasSupertype` is false for every container and this gate is ABSENT rather than coarser. The
+		// `hasSupertypeClause` is false for every container and this gate is ABSENT rather than coarser. The
 		// three seams are optional independently, so a grammar declaring none disarms it entirely;
 		// `HaxeQueryPlugin` declares all three.
-		if (superText == null || callKind == null) return hasSupertype(container, shape);
+		if (superText == null || callKind == null) return RefactorSupport.hasSupertypeClause(container, shape);
 		final calls: Array<QueryNode> = [];
-		collectSuperCalls(ctor, superText, callKind, shape.identKind, calls);
+		RefactorSupport.collectSuperCalls(ctor, superText, callKind, shape.identKind, calls);
 		// No call up at all: the prologue crosses nothing. Several: they can sit on different branches,
 		// so "the write precedes THE super call" has no answer and the gate refuses.
 		if (calls.length == 0) return false;
@@ -768,17 +712,6 @@ final class FieldInitAtDeclaration implements Check {
 		final callSpan: Null<Span> = calls[0].span;
 		final calleeSpan: Null<Span> = calls[0].children[0].span;
 		return callSpan == null || calleeSpan == null || writeFrom < calleeSpan.to || writeFrom >= callSpan.to;
-	}
-
-	/** Collect every call in `node`'s subtree whose callee is the bare identifier `superText`. */
-	private static function collectSuperCalls(
-		node: QueryNode, superText: String, callKind: String, identKind: String, out: Array<QueryNode>
-	): Void {
-		if (node.kind == callKind && node.children.length > 0) {
-			final callee: QueryNode = node.children[0];
-			if (callee.kind == identKind && callee.name == superText) out.push(node);
-		}
-		for (child in node.children) collectSuperCalls(child, superText, callKind, identKind, out);
 	}
 
 	/** Guarded stderr write — mirrors `LintConfig.stderr` (`#if sys` alone is false on hxnodejs). */
@@ -812,7 +745,7 @@ final class FieldInitAtDeclaration implements Check {
 		final fields: Array<String> = shape.fieldDeclKinds ?? [];
 		final span: Null<Span> = member.span;
 		return span != null && fields.contains(member.kind) && !statics.contains(span.from) && member.children.length >= 1
-			&& !contextFreeRhs(member.children[0], container, statics, shape, false, mayBeInherited);
+			&& !RefactorSupport.contextFreeRhs(member.children[0], container, statics, shape, false, mayBeInherited);
 	}
 
 	/**
@@ -849,11 +782,11 @@ final class FieldInitAtDeclaration implements Check {
 		// line above, so both acceptance paths inherit it from one place.
 		if (hoistCrossesSuper(ctor, container, at, shape)) return null;
 		final unsafeRead: Bool = readBeforeInit(ctor, mv.span.from, mv.name, at, container, shape);
-		return !contextFreeRhs(write.rhs, container, statics, shape, true, mayBeInherited) || unsafeRead ? null : {
+		return !RefactorSupport.contextFreeRhs(write.rhs, container, statics, shape, true, mayBeInherited) || unsafeRead ? null : {
 			name: mv.name,
 			stmtFrom: at,
 			span: mv.span,
-			orderSafe: contextFreeRhs(write.rhs, container, statics, shape, false, mayBeInherited),
+			orderSafe: RefactorSupport.contextFreeRhs(write.rhs, container, statics, shape, false, mayBeInherited),
 			sole: writeIndex.writeCount(owner, mv.name) == 1,
 			embedded: write.embedded
 		};

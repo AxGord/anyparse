@@ -189,6 +189,10 @@ final class Linter {
 			new PreferSafeNavComparison(),
 			new EnglishComments(),
 			new PreferComprehension(),
+			// Registry order is free: this rule claims an empty-array binding followed by PUSH
+			// STATEMENTS, `prefer-comprehension` one followed by a `for` LOOP — the statement after
+			// the binding decides, and it cannot be both.
+			new JoinArrayPushes(),
 			new PreferFind(),
 			new PreferStaticExtension(),
 			new LoopGuard(),

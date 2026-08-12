@@ -28,6 +28,32 @@ enum EditResult {
 }
 
 /**
+ * What a declaration's HEAD says about its type, as `RefactorSupport.declaredType` reads it off the
+ * source text (the tree carries no type child for a local or a field).
+ *
+ * Three cases, not two, because the reader can FAIL. `Absent` is a positive statement — the head
+ * holds no annotation, so the initializer's own type is the declared one — and a consumer may act
+ * on it; `Unreadable` says only that the scan could not attribute an annotation, and a consumer
+ * that would treat absence as a PROOF must refuse there instead. The distinction is load-bearing:
+ * `final stack:pkg.stack = []` puts a standalone occurrence of the declared name in the TYPE's own
+ * tail, so the naive "no `:` after the name" test reads the annotation as absent and would hand a
+ * caller a proof it never had. A consumer that only TRANSCRIBES an annotation (there is nothing to
+ * copy either way) may collapse the two.
+ */
+enum DeclaredType {
+
+	/** The head writes no type annotation — the initializer types the binding. */
+	Absent;
+
+	/** The head writes `: <text>`; `text` is the annotation's verbatim source, trimmed. */
+	Written(text: String);
+
+	/** The head carries a type the scan could not attribute to the declared name — nothing is proven. */
+	Unreadable;
+
+}
+
+/**
  * One resolved top-level type declaration, normalised across the plain
  * and `final`-wrapped grammar shapes so every consumer compares uniformly.
  *
@@ -2055,6 +2081,93 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * Whether every identifier read in `node` is context-independent: a global / type /
+	 * imported name (unresolved within the class) or a static member of the class — a
+	 * value available at declaration-init time — and the subtree contains no `this`. A
+	 * reference that resolves within the class but is not static (a constructor parameter
+	 * or local, or a non-static instance member) makes the init order-dependent and thus
+	 * unmovable, since a static member is the only in-class binding whose value exists
+	 * before the constructor body runs.
+	 *
+	 * Shared by the two rules that move an expression out of the constructor BODY and into
+	 * the declaration prologue — `field-init-at-declaration` hoists a whole right-hand side,
+	 * `join-array-pushes` folds a pushed element into an array literal's initializer. Both
+	 * need the SAME proof, and it settles two questions at once: the moved text must be
+	 * LEGAL at declaration-initializer position (Haxe rejects `this` and a sibling-instance
+	 * read there) and INDEPENDENT of the constructor's context (a parameter or local does
+	 * not exist yet).
+	 *
+	 * `allowStatics` false additionally refuses an in-class STATIC read — the stricter form
+	 * `field-init-at-declaration`'s prologue-order gate asks for. `mayBeInherited` answers
+	 * "could this unresolved lowercase name be a member the container INHERITS?"; a caller
+	 * holding no positive evidence passes `_ -> true`, which keeps the closed direction.
+	 */
+	public static function contextFreeRhs(
+		node: QueryNode, container: QueryNode, statics: Array<Int>, shape: RefShape, allowStatics: Bool, mayBeInherited: (String) -> Bool
+	): Bool {
+		final identKind: String = shape.identKind;
+		final selfText: Null<String> = shape.selfReferenceText;
+		// `$p` inside a single-quoted string projects as the interp `Ident` kind, not
+		// `IdentExpr` - it is a reference all the same, and the resolver binds it by the
+		// same scope rules, so the two share one arm (`${p}` blocks carry a regular
+		// IdentExpr child and were already reached by the child walk).
+		if (node.kind == identKind || node.kind == shape.stringInterpIdentKind) {
+			final name: Null<String> = node.name;
+			final span: Null<Span> = node.span;
+			if (name == null || span == null) return false;
+			if (selfText != null && name == selfText) return false;
+			final bf: Null<Int> = TypeResolver.resolveBindingFrom(name, span, container, shape);
+			// An unresolved ident is the provably-global case (imports/statics) - UNLESS the
+			// container has a supertype clause: an INHERITED member is invisible to the
+			// single-file resolver and indistinguishable from a global, so under `extends` /
+			// `implements` an unresolved lowercase ident fails closed too (type refs like
+			// `Colors.WHITE` keep their uppercase root and stay movable).
+			if (bf != null) return allowStatics && statics.contains(bf);
+			if (!hasSupertypeClause(container, shape)) return true;
+			final c0: Int = StringTools.fastCodeAt(name, 0);
+			// An uppercase root is a TYPE reference (`Colors.WHITE`) — never an inherited member, and
+			// decided without touching the index. A lowercase one asks the index whether any ancestor
+			// could declare it.
+			return c0 >= 'A'.code && c0 <= 'Z'.code || !mayBeInherited(name);
+		}
+		for (child in node.children) if (!contextFreeRhs(child, container, statics, shape, allowStatics, mayBeInherited)) return false;
+		return true;
+	}
+
+	/**
+	 * Whether `container` carries any supertype clause (`extends` / `implements`) — the
+	 * condition under which an unresolved bare ident may actually be an inherited member
+	 * rather than a global, and the coarse fallback a base-constructor gate degrades to when
+	 * the call itself cannot be recognised.
+	 *
+	 * Answers false when `supertypeClauseKinds` is unset, which degrades OPEN: a grammar
+	 * declaring none of the inheritance seams gets no gate rather than a coarse one.
+	 * Deliberately not closed by making an undeclared seam refuse every container — that
+	 * would disarm the callers for any language with no inheritance concept.
+	 */
+	public static function hasSupertypeClause(container: QueryNode, shape: RefShape): Bool {
+		final clauses: Array<String> = shape.supertypeClauseKinds ?? [];
+		if (clauses.length == 0) return false;
+		for (c in container.children) if (clauses.contains(c.kind)) return true;
+		return false;
+	}
+
+	/**
+	 * Collect every call in `node`'s subtree whose callee is the bare identifier `superText` —
+	 * the explicit base-constructor calls. A `super.foo()` is deliberately NOT one: it is a
+	 * base-MEMBER access, whose callee is a field access on `super` rather than `super` itself.
+	 */
+	public static function collectSuperCalls(
+		node: QueryNode, superText: String, callKind: String, identKind: String, out: Array<QueryNode>
+	): Void {
+		if (node.kind == callKind && node.children.length > 0) {
+			final callee: QueryNode = node.children[0];
+			if (callee.kind == identKind && callee.name == superText) out.push(node);
+		}
+		for (child in node.children) collectSuperCalls(child, superText, callKind, identKind, out);
+	}
+
+	/**
 	 * The class-like container and the field member declared at `fieldFrom`, found by
 	 * re-walking `tree` — the fix-side re-derivation from a violation's span (a
 	 * violation carries only its file and span, so the container and field are
@@ -2114,6 +2227,55 @@ final class RefactorSupport {
 			break;
 		}
 		return i > fieldSpan.from && source.fastCodeAt(i) == ';'.code ? i : fieldSpan.to;
+	}
+
+	/**
+	 * What the head of a declaration whose initializer starts at `initSpan` says about its TYPE. The
+	 * tree holds no type child for a local or a field, so it is read off the source: everything
+	 * before the LAST `=`, then the first `:` at or after the last STANDALONE occurrence of the
+	 * declared name — standalone so a leading `@:meta` cannot be mistaken for the annotation, and so
+	 * a type whose own spelling ends in the name (`t:MyToolt`) cannot swallow it.
+	 *
+	 * The scan can FAIL, and `DeclaredType` keeps that case apart from a genuinely unannotated
+	 * declaration, because a consumer may treat absence as a PROOF (see the enum's own doc). The two
+	 * are told apart by asking the FIRST standalone occurrence as well: no `:` after either one means
+	 * the head really writes no type, while a `:` after the first and none after the last means the
+	 * annotation's own text repeats the declared name (`stack:pkg.stack`, `a:Stack<a>`) and the scan
+	 * cannot say which occurrence is the binder. A missing `=`, a name that occurs nowhere standalone
+	 * and an empty annotation text are `Unreadable` for the same reason.
+	 *
+	 * Shared by the checks that must know what a `[]` initializer was DECLARED as:
+	 * `prefer-comprehension` transcribes the annotation onto the comprehension it emits (and reads
+	 * `Unreadable` exactly as `Absent`, since neither gives it anything to copy — that is what
+	 * `declaredTypeAnnotation` projects), while `join-array-pushes` asks whether it names an array
+	 * type and must refuse an unreadable head.
+	 */
+	public static function declaredType(source: String, declSpan: Span, initSpan: Span, name: String): DeclaredType {
+		final prefix: String = source.substring(declSpan.from, initSpan.from);
+		final eq: Int = prefix.lastIndexOf('=');
+		if (eq < 0) return Unreadable;
+		final head: String = prefix.substring(0, eq);
+		final at: Int = lastStandaloneIdentIndex(head, name);
+		if (at < 0) return Unreadable;
+		final colon: Int = head.indexOf(':', at);
+		if (colon >= 0) {
+			final text: String = head.substring(colon + 1).trim();
+			return text == '' ? Unreadable : Written(text);
+		}
+		final first: Int = firstStandaloneIdentIndex(head, name);
+		return first >= 0 && head.indexOf(':', first) < 0 ? Absent : Unreadable;
+	}
+
+	/**
+	 * The annotation text `declaredType` read, or null when it read none — the `Null<String>`
+	 * projection for a consumer that only TRANSCRIBES the annotation, for which an unreadable head
+	 * and an absent one are the same answer: there is nothing to copy either way.
+	 */
+	public static function declaredTypeAnnotation(source: String, declSpan: Span, initSpan: Span, name: String): Null<String> {
+		return switch declaredType(source, declSpan, initSpan, name) {
+			case Written(text): text;
+			case Absent, Unreadable: null;
+		};
 	}
 
 	/**
@@ -3130,6 +3292,12 @@ final class RefactorSupport {
 		return found;
 	}
 
+	/** Whether the occurrence of `name` at `at` in `head` stands alone — no identifier character on either side. */
+	private static inline function standaloneIdentAt(head: String, name: String, at: Int): Bool {
+		final after: Int = at + name.length;
+		return (at == 0 || !isIdentChar(head.fastCodeAt(at - 1))) && (after >= head.length || !isIdentChar(head.fastCodeAt(after)));
+	}
+
 	/** Whether `kinds` is set and holds `kind` — an unset seam contributes nothing. */
 	private static inline function kindIn(kinds: Null<Array<String>>, kind: String): Bool {
 		return kinds != null && kinds.contains(kind);
@@ -3144,6 +3312,27 @@ final class RefactorSupport {
 	/** One of the flag letters Haxe accepts after a regex literal's closing `/`. */
 	private static inline function isRegexFlag(c: Int): Bool {
 		return c == 'g'.code || c == 'i'.code || c == 'm'.code || c == 's'.code || c == 'u'.code;
+	}
+
+	/** The index of the LAST occurrence of `name` in `head` that stands alone as an identifier, or -1. */
+	private static function lastStandaloneIdentIndex(head: String, name: String): Int {
+		var at: Int = head.lastIndexOf(name);
+		while (at >= 0) {
+			if (standaloneIdentAt(head, name, at)) return at;
+			if (at == 0) return -1;
+			at = head.lastIndexOf(name, at - 1);
+		}
+		return -1;
+	}
+
+	/** The index of the FIRST occurrence of `name` in `head` that stands alone as an identifier, or -1. */
+	private static function firstStandaloneIdentIndex(head: String, name: String): Int {
+		var at: Int = head.indexOf(name);
+		while (at >= 0) {
+			if (standaloneIdentAt(head, name, at)) return at;
+			at = head.indexOf(name, at + 1);
+		}
+		return -1;
 	}
 
 	/** The offset just past `decl`'s NAME token — where its header (supertype clauses, type params) begins. */

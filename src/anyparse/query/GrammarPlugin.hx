@@ -2000,6 +2000,21 @@ typedef RefShape = {
 	@:optional var indexedElementTypeParams: Map<String, Int>;
 
 	/**
+	 * SIMPLE names of the ARRAY type — the sequential container whose `push` appends one element
+	 * at the END and whose literal notation is the empty-array initializer (Haxe `['Array']`).
+	 *
+	 * The question a rewrite over `[]` + `push` must ask before it fires: a user `abstract` over
+	 * `Array<T>` may declare its own `push` with entirely different semantics (`this.unshift(v)`
+	 * prepends), so `final s:Stack<Int> = []; s.push(1); s.push(2);` is NOT the literal `[1, 2]`.
+	 * Only a binding whose declared type names one of these is provably the plain array; an
+	 * UNANNOTATED `= []` infers its type from the literal and needs no entry.
+	 *
+	 * Optional; unset leaves every ANNOTATED binding unprovable, which costs REACH — a consumer
+	 * then fires only on the inferred form.
+	 */
+	@:optional var arrayTypeNames: Array<String>;
+
+	/**
 	 * Scope-introducing node kinds whose OWN name binds the ITERATION KEY-OR-ELEMENT and whose
 	 * FIRST NON-BINDER child is the iterable expression (Haxe `ForStmt` / `ForExpr`). Lets a
 	 * consumer answer the type of a `for` binder, which no `:Type` annotation covers: the binder
