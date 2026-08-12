@@ -9438,7 +9438,7 @@ final class Cli {
 		for (v in Linter.run(files, cached, fullScopeChecks, resolveConfig, applyEnablement)) violations.push(v);
 		final nextActive: Array<{ file: String, source: String }> = [];
 		var fixedDelta: Int = 0;
-		// Cross-file fixes (naming's non-confined private-field rename) run FIRST, against this
+		// Cross-file fixes (naming's non-confined private / public member rename) run FIRST, against this
 		// pass's pristine sources so every slice matches the index. Renames that share a target file
 		// are grouped into one component and committed together (all its files canonicalize or none)
 		// — so a mega-class's many field renames all land in ONE pass instead of serialising across

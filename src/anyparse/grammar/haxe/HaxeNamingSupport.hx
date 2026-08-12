@@ -207,7 +207,12 @@ final class HaxeNamingSupport implements NamingSupport {
 				requireMods: ['public'],
 				forbidMods: [],
 				format: new EReg("^[a-z][a-zA-Z0-9]*$", ''),
-				label: 'camelCase public field'
+				label: 'camelCase public field',
+				// The same correction the Constant / Method rules derive, for the same reason: the `_`
+				// prefix is a PRIVATE-field marker and carries nothing on a public one. Only a leading
+				// underscore is derivable - an UPPER_SNAKE public field (`STORE_FILE_NAME`) strips to
+				// itself, so `correctedName` yields null and the finding stays report-only.
+				normalize: stripUnderscorePrefix
 			},
 			{
 				category: NamingCategory.Method,

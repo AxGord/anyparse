@@ -178,17 +178,21 @@ final class Naming implements Check implements CrossFileFix {
 	}
 
 	/**
-	 * Cross-file autofix (the `CrossFileFix` seam): rename each flagged NON-confined
-	 * private field / constant whose references reach into its subtypes / `@:access`-grant
-	 * files. The single-file `fix` skips such a member (it is not confined); here the
-	 * rename is proven complete across EVERY affected report file and emitted as one atomic
-	 * multi-file edit set. The declaring file resolves scope-correctly (the T29 occurrence
-	 * set + completeness gate); each subtype / grant file classifies every occurrence of the
-	 * old name — an `ActiveCode` one is a reference to rename, a `CommentTrivia` one renames
-	 * along when the name is distinctive, and a `ConditionalRaw` / `StringLiteral` /
-	 * `DirectiveComment` occurrence (or a `targetName` already colliding in a file, an
-	 * unresolvable hierarchy, an `@:rtti` / reflection-string hazard) turns the WHOLE rename
-	 * report-only. The caller (`apq lint --fix`) commits every affected file or none.
+	 * Cross-file autofix (the `CrossFileFix` seam): rename each flagged member whose references can reach
+	 * beyond its declaring file — a NON-confined private field / constant / method (reachable from its
+	 * subtypes / `@:access`-grant files), or ANY public one (reachable from anywhere). The single-file
+	 * `fix` skips both (a non-confined member is not provably contained; a public one is refused outright
+	 * by `isRenameSafe`); here the rename is proven complete across EVERY affected report file and emitted
+	 * as one atomic multi-file edit set. The declaring file resolves scope-correctly (the T29 occurrence
+	 * set + completeness gate), and a collision with a constructor PARAMETER there is repaired by
+	 * qualifying through `this.` rather than refused; each other affected file classifies every occurrence
+	 * of the old name — an `ActiveCode` one is a reference to rename, a `CommentTrivia` one renames along
+	 * when the name is distinctive, and a `ConditionalRaw` / `StringLiteral` / `DirectiveComment`
+	 * occurrence (or a `targetName` already colliding in a file, an unresolvable hierarchy, an `@:rtti` /
+	 * reflection-string hazard) turns the WHOLE rename report-only. A public member's affected set is every
+	 * scope file MENTIONING the name (plus the owner's own hierarchy), so the completeness proof spans the
+	 * whole lint scope: a narrow `--fix` scope refuses rather than half-applying. The caller
+	 * (`apq lint --fix`) commits every affected file or none.
 	 */
 	public function crossFileFix(
 		files: Array<{ file: String, source: String }>, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -539,11 +543,11 @@ final class Naming implements Check implements CrossFileFix {
 
 	/**
 	 * The resolved cross-file rename CANDIDATE for one flagged violation, or null when it must be
-	 * skipped: not a NON-confined private field / constant, something the single-file path already
-	 * covers (a confined member), an unenumerable hierarchy (a skip-parse file hiding a subtype, an
-	 * `@:allow` grant, a non-unique owner), no derivable corrected name, or a blocked
-	 * inherited-member / `@:rtti` guard. Carries the parsed declaring file plus the names the
-	 * per-file span pass needs.
+	 * skipped: not a member this path owns (see `crossFileCategory`), something the single-file path
+	 * already covers (a confined private member), an unenumerable hierarchy (a skip-parse file hiding a
+	 * subtype, an `@:allow` grant, a non-unique owner), no derivable corrected name, or a blocked
+	 * inherited-member / `@:rtti` guard. Carries the parsed declaring file, `isPublic` (which decides the
+	 * affected-file set), plus the names the per-file span pass needs.
 	 */
 	private static function crossFileCandidate(
 		v: Violation, sourceByFile: Map<String, String>, support: NamingSupport, plugin: GrammarPlugin, index: SymbolIndex,
@@ -560,15 +564,37 @@ final class Naming implements Check implements CrossFileFix {
 		final tree: QueryNode = declTree;
 		final decl: Null<NamedDecl> = support.project(tree).find(d -> d.span != null && d.span.from == vspan.from);
 		if (decl == null) return null;
-		// Candidate: a NON-confined private field / constant the single-file `fix` skips.
+		// Candidate: a NON-confined private field / constant the single-file `fix` skips, or ANY public
+		// member - `isRenameSafe` refuses every public declaration, so this is a public member's only path.
 		if (decl.renameUnsafe == true) return null;
-		final cat: NamingCategory = decl.category;
-		if (cat != NamingCategory.Field && cat != NamingCategory.Constant || decl.mods.contains('public')) return null;
+		final isPublic: Bool = decl.mods.contains('public');
+		if (!crossFileCategory(decl)) return null;
 		final owner: Null<String> = decl.enclosingType;
 		if (owner == null) return null;
 		final ownerName: String = owner;
-		// A confined member is the single-file path's job; only a non-confined one crosses files.
-		if (RefactorSupport.isPrivateMemberConfined(ownerName, source, index)) return null;
+		// A METHOD a SUBTYPE overrides renames as a FAMILY: the override is not a candidate of its own
+		// (`crossFileCategory` turns one away), and renaming the base alone leaves `override function
+		// __draw` overriding nothing - which the completeness gate catches across FILES, where the
+		// subtype's declaration is an occurrence no receiver attributes, but not within ONE file. The
+		// family carries every such declaration into the same edit set; `null` means one same-named
+		// declaration's relation to the owner is unprovable, and a partial family is worse than none.
+		// Asked of the RESOLUTION index, the superset - a family it reports too large only refuses more.
+		final family: Null<Array<OverrideFamilyMember>> = decl.category == NamingCategory.Method
+			? resolutionIndex.overrideFamilyOf(ownerName, decl.name)
+			: [];
+		if (family == null) return null;
+		final overrides: Array<OverrideFamilyMember> = family;
+		// A confined PRIVATE member is the single-file path's job; only a non-confined one crosses files.
+		// A PUBLIC member is never confined in that sense - any file holding a value of the owner's type
+		// reaches it - so the proof does not apply and it always crosses.
+		if (!isPublic && RefactorSupport.isPrivateMemberConfined(ownerName, source, index)) return null;
+		// No reflection guard here, deliberately. `isRenameSafe`'s exists because the single-file path
+		// never looks at another file; this path DOES - a public member's affected set is every scope file
+		// mentioning the name (`publicAffectedFiles`), and `otherFileRenameSpans` already refuses on a
+		// name-shaped string literal in any of them. Measured: with a duplicate AST-projected guard
+		// removed, `Reflect.field(x, '__size')` in the declaring file AND in another file both still
+		// refuse. A second mechanism answering the same question would only add a disk read per candidate
+		// and a gate no in-memory test can reach.
 		// Unresolvable hierarchy: a skip-parse file could hide a subtype / grant we never see; an
 		// `@:allow` grants an unenumerable type; a non-unique owner makes the subtype match ambiguous.
 		if (index.skippedFiles().length > 0 || source.indexOf('@:allow') >= 0 || index.declaringFiles(ownerName).length != 1) return null;
@@ -581,7 +607,9 @@ final class Naming implements Check implements CrossFileFix {
 			oldName: decl.name,
 			targetName: targetName,
 			ownerName: ownerName,
-			distinctive: isDistinctiveName(decl.name)
+			distinctive: isDistinctiveName(decl.name),
+			isPublic: isPublic,
+			family: overrides
 		};
 	}
 
@@ -609,9 +637,9 @@ final class Naming implements Check implements CrossFileFix {
 	}
 
 	/**
-	 * The cross-file rename fixing one flagged NON-confined private field / constant, or null when
-	 * it cannot be proven complete. Resolves the candidate (`crossFileCandidate`), then collects and
-	 * gates each affected file's occurrence spans; a bail in ANY file makes the whole rename
+	 * The cross-file rename fixing one flagged NON-confined private, or public, field / constant / method,
+	 * or null when it cannot be proven complete. Resolves the candidate (`crossFileCandidate`), then
+	 * collects and gates each affected file's occurrence spans; a bail in ANY file makes the whole rename
 	 * report-only. Returns the per-file `CrossFileEdits` slices.
 	 */
 	private static function crossFileRenameFor(
@@ -622,27 +650,87 @@ final class Naming implements Check implements CrossFileFix {
 		if (candidate == null) return null;
 		final c: CrossFileCandidate = candidate;
 		final slices: Array<CrossFileEdits> = [];
-		for (file in affectedFiles(c.ownerName, c.declFile, index)) {
+		final hierarchy: Array<String> = affectedFiles(c.ownerName, c.declFile, index);
+		final scanned: Array<String> = c.isPublic ? publicAffectedFiles(hierarchy, c.oldName, index, sourceByFile) : hierarchy;
+		// An override the edit set cannot reach makes the base unrenameable: the family is resolved
+		// against the RESOLUTION index, which sees files the lint scope does not, and half a family
+		// leaves a declaration overriding nothing.
+		for (fm in c.family) if (!scanned.contains(fm.file)) return null;
+		for (file in scanned) {
 			final fileSource: Null<String> = sourceByFile[file];
 			if (fileSource == null) return null;
 			final fsrc: String = fileSource;
 			final fileTree: Null<QueryNode> = file == c.declFile ? c.tree : CheckScan.parseOrNull(plugin, fsrc);
 			if (fileTree == null) return null;
+			final familySpans: Array<Span> = familyOccurrences(c.family, file, fsrc, fileTree, shape);
 			final spans: Null<Array<Span>> = file == c.declFile
 				? declaringFileRenameSpans(
 					fsrc, c.tree, c.declFrom, c.oldName, shape, plugin, c.distinctive, false,
-					{ index: resolutionIndex, file: c.declFile, ownerName: c.ownerName }
+					{ index: resolutionIndex, file: c.declFile, ownerName: c.ownerName }, familySpans
 				)
-				: otherFileRenameSpans(fsrc, c.oldName, plugin, c.distinctive, c.ownerName, shape, resolutionIndex, file);
+				: otherFileRenameSpans(fsrc, c.oldName, plugin, c.distinctive, c.ownerName, shape, resolutionIndex, file, familySpans);
 			if (spans == null) return null;
+			// A file receiving NO edit and lying outside the owner's own hierarchy cannot collide: nothing
+			// is rewritten there and no member of the owner is inherited there, so the scan below would
+			// only refuse on an unrelated binding of the target name. Only a PUBLIC member's affected set
+			// carries such a file (see `publicAffectedFiles`); for a private one the loop set IS the
+			// hierarchy, so this never fires and the scan runs over exactly the files it always did.
+			if (spans.length == 0 && !hierarchy.contains(file)) continue;
 			// A `targetName` already bound where the rename lands would collide once it does - scanned
 			// across the OWNER's own hierarchy in this file only, since a sibling hierarchy's same-named
 			// member is not reachable from it (see `unrelatedTypeSpans`).
 			final unrelated: Array<Span> = unrelatedTypeSpans(fileTree, c.ownerName, shape, resolutionIndex);
-			if (RefactorSupport.nameBoundInRange(fsrc, c.targetName, 0, fsrc.length, unrelated, plugin)) return null;
-			if (spans.length > 0) slices.push({ file: file, edits: [for (s in spans) { span: s, text: c.targetName }] });
+			final baseEdits: Array<{ span: Span, text: String }> = [for (s in spans) { span: s, text: c.targetName }];
+			// The param idiom, reached one path over from where the single-file rename repairs it:
+			// `__x = x` renamed to `x` is the self-assignment `x = x`, and qualified it reads
+			// `this.x = x`. Only the DECLARING file can be repaired that way - `this.` names the enclosing
+			// class's own member, which is precisely what the collision shadows there, while a collision
+			// in any other file is a real one. `qualifyCapturedEdits` decides by RE-RESOLUTION, so an
+			// empty capture mismatch means the collision belongs to some OTHER binding and the refusal
+			// correctly stands.
+			final edits: Null<Array<{ span: Span, text: String }>> = if (!RefactorSupport.nameBoundInRange(
+				fsrc, c.targetName, 0, fsrc.length, unrelated, plugin
+			))
+				baseEdits;
+			else if (file != c.declFile)
+				null;
+			else
+				qualifyCapturedEdits(fsrc, c.tree, c.declFrom, spans, c.targetName, shape, plugin, baseEdits, resolutionIndex, file);
+			if (edits == null) return null;
+			// Re-bound: a narrowed local does not stay narrowed inside an anonymous structure literal.
+			final fileEdits: Array<{ span: Span, text: String }> = edits;
+			if (spans.length > 0) slices.push({ file: file, edits: fileEdits });
 		}
 		return slices.length == 0 ? null : slices;
+	}
+
+	/**
+	 * Every occurrence, in `file`, of an override family member DECLARED there — its declaration name
+	 * token plus the bare / `this.`-qualified reads its own type makes of it, resolved exactly as the
+	 * base's own are. Empty when the file declares no family member. These are RENAME targets, not
+	 * exclusions: an override left spelled the old way overrides nothing.
+	 */
+	private static function familyOccurrences(
+		family: Array<OverrideFamilyMember>, file: String, source: String, tree: QueryNode, shape: RefShape
+	): Array<Span> {
+		final out: Array<Span> = [];
+		for (fm in family) if (fm.file == file) for (occ in Rename.renameOccurrences(source, tree, fm.declFrom, shape)) if (
+			!out.exists(s -> s.from == occ.from)
+		)
+			out.push(occ);
+		return out;
+	}
+
+	/**
+	 * `extra` appended to a COPY of `base`, skipping any span that starts where one already there does.
+	 * The two halves resolve DIFFERENT bindings — the member's own and each override's — and a resolver
+	 * that attributes one bare read to both would otherwise leave `applyEdits` two edits over one span
+	 * with no defined winner.
+	 */
+	private static function mergeUniqueSpans(base: Array<Span>, extra: Array<Span>): Array<Span> {
+		final out: Array<Span> = base.copy();
+		for (s in extra) if (!out.exists(o -> o.from == s.from)) out.push(s);
+		return out;
 	}
 
 	/**
@@ -675,8 +763,12 @@ final class Naming implements Check implements CrossFileFix {
 	 */
 	private static function declaringFileRenameSpans(
 		source: String, tree: QueryNode, declFrom: Int, name: String, shape: RefShape, plugin: GrammarPlugin, distinctive: Bool,
-		bodyScoped: Bool = false, ?ctx: RenameContext
+		bodyScoped: Bool = false, ?ctx: RenameContext, ?familySpans: Array<Span>
 	): Null<Array<Span>> {
+		// A subtype declared beside its base overrides the member in THIS file; its declaration and own
+		// reads are rename targets, and excluded from the completeness scan for the same reason the
+		// base's own occurrences are.
+		final family: Array<Span> = familySpans ?? [];
 		final covered: Array<Span> = Rename.renameOccurrences(source, tree, declFrom, shape);
 		if (covered.length == 0) return null;
 		// A body-scoped binding (local / param / catch variable) is visible from its DECLARATION on -
@@ -734,13 +826,14 @@ final class Naming implements Check implements CrossFileFix {
 			.concat(ownerBound)
 			.concat(foreign)
 			.concat(typeRefs)
+			.concat(family)
 			.concat(RefactorSupport.modulePathSpans(tree, shape));
 		final classified: Null<Array<ClassifiedOccurrence>> = RefactorSupport.classifyOccurrences(
 			source, name, plugin, 0, source.length, excluded
 		);
-		if (classified == null)
-			return RefactorSupport.referencedInRange(source, name, 0, source.length, excluded) ? null : covered.concat(ownerBound);
-		final spans: Array<Span> = covered.concat(ownerBound);
+		final renamed: Array<Span> = mergeUniqueSpans(covered.concat(ownerBound), family);
+		if (classified == null) return RefactorSupport.referencedInRange(source, name, 0, source.length, excluded) ? null : renamed;
+		final spans: Array<Span> = renamed;
 		// A distinctive comment mention renames along, but only within the binding's own lexical container:
 		// the same distinctive name can name an UNRELATED binding elsewhere in the file, and a comment about
 		// THAT one must not be rewritten (nor block this rename). A field's container is its type, so its
@@ -776,10 +869,15 @@ final class Naming implements Check implements CrossFileFix {
 	 */
 	private static function otherFileRenameSpans(
 		source: String, name: String, plugin: GrammarPlugin, distinctive: Bool, ownerName: String, shape: RefShape,
-		resolutionIndex: SymbolIndex, file: String
+		resolutionIndex: SymbolIndex, file: String, ?familySpans: Array<Span>
 	): Null<Array<Span>> {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return null;
+		// This file declares an override of the member: its declaration and the reads its own type makes
+		// of it are rename targets. Without them the declaration is an occurrence no receiver attributes,
+		// and the completeness gate below vetoes the whole rename - which is how an override family used
+		// to be refused rather than renamed.
+		final family: Array<Span> = familySpans ?? [];
 		final refs: {
 			bareBound: Array<Span>,
 			typedBound: Array<Span>,
@@ -787,7 +885,7 @@ final class Naming implements Check implements CrossFileFix {
 		} = inheritedFieldRefSpans(source, tree, name, ownerName, plugin, shape, resolutionIndex);
 		// No scope-correct reference set exists for a file that does not declare the binding, so BOTH
 		// owner-bound halves are the rename targets here.
-		final ownerBound: Array<Span> = refs.bareBound.concat(refs.typedBound);
+		final ownerBound: Array<Span> = mergeUniqueSpans(refs.bareBound.concat(refs.typedBound), family);
 		// Both the owner-bound targets AND the provably-different-owner occurrences are excluded from
 		// the completeness scan: the former are renamed, the latter left as-is; only an occurrence that
 		// is NEITHER (unprovable) stays uncovered and blocks the whole rename below.
@@ -915,6 +1013,45 @@ final class Naming implements Check implements CrossFileFix {
 			}
 		}
 		for (fi in index.allFiles()) if (fi.accessGrants.contains(owner) && !out.contains(fi.file)) out.push(fi.file);
+		return out;
+	}
+
+	/**
+	 * Whether the cross-file rename path OWNS this declaration's category: a field / constant, or a
+	 * METHOD that is neither an `override` nor `implicitlyReachable`. Those two are the hazards
+	 * `isRenameSafe` names for a method — an `override` binds the name to the SUPERTYPE's declaration, so
+	 * renaming the override alone orphans it, and an annotation-bearing member can be reached by NAME from
+	 * a macro / `@:keep` / framework, references no identifier-level completeness proof sees. Visibility is
+	 * not asked here: a CONFINED private member is turned away later, by the proof that it is the
+	 * single-file path's job.
+	 */
+	private static function crossFileCategory(decl: NamedDecl): Bool {
+		return switch decl.category {
+			case NamingCategory.Field | NamingCategory.Constant: true;
+			case NamingCategory.Method:
+				!decl.mods.contains('override') && decl.implicitlyReachable != true;
+			case _: false;
+		}
+	}
+
+	/**
+	 * The files a PUBLIC member's rename can touch: the owner's own `hierarchy` (declaring file, every
+	 * subtype, every `@:access` grant) UNION every scope file whose source MENTIONS the old name. A public
+	 * member is reachable from anywhere, so the subtype closure alone is not the affected set — but
+	 * parsing the whole scope per finding is not one either. The textual pre-filter is safe in the
+	 * conservative direction: an identifier reference — and a reflection string — must SPELL the name, so
+	 * a file with no textual occurrence holds none. The `hierarchy` half stays in the union because a
+	 * subtype that never mentions the old name can still declare the TARGET name, which the rename would
+	 * turn into Haxe's "Redefinition of variable in subclass".
+	 */
+	private static function publicAffectedFiles(
+		hierarchy: Array<String>, oldName: String, index: SymbolIndex, sourceByFile: Map<String, String>
+	): Array<String> {
+		final out: Array<String> = hierarchy.copy();
+		for (fi in index.allFiles()) if (!out.contains(fi.file)) {
+			final source: Null<String> = sourceByFile[fi.file];
+			if (source != null && source.indexOf(oldName) >= 0) out.push(fi.file);
+		}
 		return out;
 	}
 
@@ -1359,4 +1496,12 @@ private typedef CrossFileCandidate = {
 	final targetName: String;
 	final ownerName: String;
 	final distinctive: Bool;
+	final isPublic: Bool;
+
+	/**
+	 * The PROVEN override family of this declaration — every subtype redeclaring it, each with its
+	 * file and declaration offset. Empty for a member nothing overrides. Renamed in the SAME edit
+	 * set as the base: an override left behind overrides nothing and does not compile.
+	 */
+	final family: Array<OverrideFamilyMember>;
 };

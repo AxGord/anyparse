@@ -178,6 +178,49 @@ class CrossRenameMemberSliceTest extends Test {
 		]));
 	}
 
+	/**
+	 * Renaming the BASE carries its override — the counterpart of `testOverrideRefused`, which points
+	 * at the same pair from the other end and tells the caller to come here. The override's own
+	 * declaration, the subtype's own call and a SUBTYPE-typed receiver all move with the base; leaving
+	 * any of them behind produces code that does not compile.
+	 */
+	public function testBaseRenameCarriesOverrideFamily(): Void {
+		final base: String = 'class Base {\n\tpublic function new() {}\n\tpublic function speak():Void {}\n}';
+		final sub: String = 'class Sub extends Base {\n\tpublic function new() { super(); }\n'
+			+ '\toverride public function speak():Void {}\n\tpublic function again():Void speak();\n}';
+		final caller: String = 'class C {\n\tfunction m(s:Sub):Void s.speak();\n}';
+		final expectedSub: String = 'class Sub extends Base {\n\tpublic function new() { super(); }\n'
+			+ '\toverride public function talk():Void {}\n\tpublic function again():Void talk();\n}';
+		final changes: Array<FileChange> = okChanges('base.hx', base, 'speak', 'talk', [
+			{ file: 'base.hx', source: base },
+			{ file: 'sub.hx', source: sub },
+			{ file: 'c.hx', source: caller },
+		]);
+		Assert.equals(3, changes.length);
+		Assert.equals(
+			'class Base {\n\tpublic function new() {}\n\tpublic function talk():Void {}\n}', changeFor(changes, 'base.hx').newSource
+		);
+		Assert.equals(expectedSub, changeFor(changes, 'sub.hx').newSource);
+		Assert.equals(2, changeFor(changes, 'sub.hx').count);
+		// A receiver typed as the SUBTYPE reaches the same member — an exact-type match left it behind.
+		Assert.equals('class C {\n\tfunction m(s:Sub):Void s.talk();\n}', changeFor(changes, 'c.hx').newSource);
+	}
+
+	/**
+	 * A type declaring the same member whose relation to the source type cannot be PROVEN refuses the
+	 * rename outright. `Foreign` extends a type the scope does not declare, so it is neither provably
+	 * family nor provably unrelated — and renaming the base while guessing about it is exactly how a
+	 * half-applied family gets emitted.
+	 */
+	public function testUnprovableFamilyRefused(): Void {
+		final base: String = 'class Root {\n\tpublic function ping():Void {}\n}';
+		final foreign: String = 'class Foreign extends Absent {\n\toverride public function ping():Void {}\n}';
+		assertErr(run('base.hx', base, 'ping', 'pong', [
+			{ file: 'base.hx', source: base },
+			{ file: 'foreign.hx', source: foreign },
+		]));
+	}
+
 	/** A destination name already declared on the type is refused. */
 	public function testNameCollisionRefused(): Void {
 		final a: String = 'class Foo {\n\tpublic function alpha():Void {}\n\tpublic function beta():Void {}\n}';

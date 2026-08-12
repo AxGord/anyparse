@@ -8,6 +8,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 import anyparse.query.SymbolIndex;
 import anyparse.check.Check.CrossFileEdits;
+import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.CachingGrammarPlugin.LibrarySources;
 
 /**
  * The `naming` autofix crossing FILE boundaries: a private field renamed in its
@@ -405,6 +407,235 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(0, check.crossFileFix(files, vs, new HaxeQueryPlugin(), index).length);
+	}
+
+	/**
+	 * A PUBLIC field reached through a typed receiver in another file renames in both. The
+	 * single-file `fix` refuses every public declaration (`isRenameSafe`), so this shape only ever
+	 * reaches the CROSS-FILE path — and the consumer file joins the affected set by MENTIONING the
+	 * old name, not by being a subtype (`Consumer` is unrelated to `Holder`).
+	 */
+	public function testCrossFileFixRenamesPublicFieldThroughTypedReceiver(): Void {
+		final hSrc: String = 'package pkg;\nclass Holder {\n\tpublic final __size:Int;\n\tpublic function new(n:Int) { __size = n; }\n}';
+		final cSrc: String = 'package pkg;\nclass Consumer {\n\tpublic function read(h:Holder):Int { return h.__size + 1; }\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/Holder.hx', source: hSrc },
+			{ file: 'pkg/Consumer.hx', source: cSrc }
+		];
+		final rename: Array<CrossFileEdits> = crossFileRename(files);
+		assertRenameSlice(rename, 'pkg/Holder.hx', hSrc, 'public final size:Int', '__size');
+		// The renamed access next to its untouched neighbour: only the rename can produce this.
+		assertRenameSlice(rename, 'pkg/Consumer.hx', cSrc, 'return h.size + 1', '__size');
+	}
+
+	/**
+	 * THE REPORTED CASE. `__position` renamed to `position` collides with the constructor PARAMETER
+	 * of that name, which would make the write the self-assignment `position = position` — valid,
+	 * silently wrong code no re-parse or typecheck rejects. The declaring file's collision is
+	 * REPAIRED by qualifying through `this.` rather than refusing the whole rename.
+	 */
+	public function testCrossFileFixQualifiesPublicFieldCapturedByCtorParam(): Void {
+		final src: String =
+			'package pkg;\nclass Holder {\n\tpublic final __size:Int;\n\tpublic function new(size:Int) { __size = size; }\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/Holder.hx', source: src }];
+		// One string spanning both halves: the declaration renamed AND the write qualified.
+		assertRenameSlice(crossFileRename(files), 'pkg/Holder.hx', src, 'this.size = size', '__size');
+	}
+
+	/**
+	 * A NON-confined PRIVATE method — one a subtype in another file inherits and calls — renames
+	 * across both files. Only a subtype can reach it, so the single-file `fix` refuses it as
+	 * unconfined and this is its only path; the bare inherited call is attributed by its enclosing
+	 * class and renamed along.
+	 */
+	public function testCrossFileFixRenamesNonConfinedPrivateMethod(): Void {
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate function __helper():Int { return 1; }\n\t'
+			+ 'public function f():Int { return __helper(); }\n}';
+		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g():Int { return __helper() + 1; }\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: cSrc },
+			{ file: 'pkg/D.hx', source: dSrc }
+		];
+		final rename: Array<CrossFileEdits> = crossFileRename(files);
+		assertRenameSlice(rename, 'pkg/C.hx', cSrc, 'private function helper():Int', '__helper');
+		// The renamed inherited call next to its untouched arithmetic: only the rename produces this.
+		assertRenameSlice(rename, 'pkg/D.hx', dSrc, 'return helper() + 1', '__helper');
+	}
+
+	/** A PUBLIC method renames across files too, through a receiver typed to its owner. */
+	public function testCrossFileFixRenamesPublicMethod(): Void {
+		final bSrc: String = 'package pkg;\nclass Base {\n\tpublic function __draw():Int { return 1; }\n}';
+		final cSrc: String = 'package pkg;\nclass Caller {\n\tpublic function go(b:Base):Int { return b.__draw(); }\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/Base.hx', source: bSrc },
+			{ file: 'pkg/Caller.hx', source: cSrc }
+		];
+		final rename: Array<CrossFileEdits> = crossFileRename(files);
+		assertRenameSlice(rename, 'pkg/Base.hx', bSrc, 'public function draw():Int', '__draw');
+		assertRenameSlice(rename, 'pkg/Caller.hx', cSrc, 'return b.draw();', '__draw');
+	}
+
+	/**
+	 * A method a subtype OVERRIDES renames as a FAMILY, not as one declaration: base and override move
+	 * in ONE edit set. Renaming either half alone leaves `override function __draw` overriding nothing,
+	 * which does not compile.
+	 *
+	 * Both declarations sit in ONE file on purpose: that is the spelling the completeness gate does NOT
+	 * catch. Across files the subtype's declaration is an occurrence no receiver attributes and the
+	 * rename bails there; in the same file it used to be dropped silently, so this fixture renamed the
+	 * base and emitted code that no longer compiled.
+	 */
+	public function testCrossFileFixRenamesOverrideFamilyInOneFile(): Void {
+		final src: String = 'package pkg;\nclass OBase {\n\tpublic function __draw():Int { return 1; }\n}\n\n'
+			+ 'class OSub extends OBase {\n\toverride public function __draw():Int { return 2; }\n}';
+		final rename: Array<CrossFileEdits> = crossFileRename([{ file: 'pkg/OBase.hx', source: src }]);
+		// Base and override renamed in ONE string - neither declaration alone can satisfy this.
+		assertRenameSlice(
+			rename, 'pkg/OBase.hx', src,
+			'public function draw():Int { return 1; }\n}\n\nclass OSub extends OBase {\n\toverride public function draw():Int', '__draw'
+		);
+	}
+
+	/**
+	 * The cross-FILE spelling of the same family: the subtype lives in its own module and also CALLS
+	 * the member it overrides. The override's declaration and that call both move with the base.
+	 */
+	public function testCrossFileFixRenamesOverrideFamilyAcrossFiles(): Void {
+		final baseSrc: String = 'package pkg;\nclass FBase {\n\tpublic function __draw():Int { return 1; }\n}';
+		final subSrc: String = 'package pkg;\nclass FSub extends FBase {\n' + '\toverride public function __draw():Int { return 2; }\n'
+			+ '\tpublic function again():Int { return __draw() + 1; }\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/FBase.hx', source: baseSrc },
+			{ file: 'pkg/FSub.hx', source: subSrc }
+		];
+		final rename: Array<CrossFileEdits> = crossFileRename(files);
+		assertRenameSlice(rename, 'pkg/FBase.hx', baseSrc, 'public function draw():Int { return 1; }', '__draw');
+		// The renamed OVERRIDE next to the renamed call it makes - one string neither half produces alone.
+		assertRenameSlice(
+			rename, 'pkg/FSub.hx', subSrc,
+			'override public function draw():Int { return 2; }\n\tpublic function again():Int { return draw() + 1; }', '__draw'
+		);
+	}
+
+	/**
+	 * A same-named declaration whose relation to the owner cannot be PROVEN must not be renamed around.
+	 * `Foreign` extends a type this scope does not declare, so it is neither proven family nor proven
+	 * unrelated.
+	 *
+	 * Measured, so the doc does not overclaim: this fixture is refused by the COMPLETENESS gate as well —
+	 * the public member's affected set includes every file mentioning the name, and `Foreign`'s own
+	 * declaration is an occurrence no receiver attributes. It guards that the family feature did not turn
+	 * this case into a rename; the unprovable-family refusal ITSELF is discriminated by
+	 * `SymbolIndexSliceTest.testOverrideFamilyOfRefusesUnprovable` and
+	 * `CrossRenameMemberSliceTest.testUnprovableFamilyRefused`.
+	 */
+	public function testCrossFileFixRefusesUnprovableOverrideFamily(): Void {
+		final baseSrc: String = 'package pkg;\nclass UBase {\n\tpublic function __draw():Int { return 1; }\n}';
+		final foreignSrc: String = 'package pkg;\nclass Foreign extends Unknown {\n' + '\tpublic function __draw():Int { return 2; }\n}';
+		assertCrossFileRefused([
+			{ file: 'pkg/UBase.hx', source: baseSrc },
+			{ file: 'pkg/Foreign.hx', source: foreignSrc }
+		]);
+	}
+
+	/**
+	 * An override living OUTSIDE the edited scope refuses the base's rename. The family is resolved
+	 * against the RESOLUTION index (report UNION library), which sees the subtype; the edit set can
+	 * only reach report files, so renaming the base here would emit a library override of a name that
+	 * no longer exists. The only fixture where the two indices genuinely disagree.
+	 */
+	public function testCrossFileFixRefusesOverrideOutsideTheEditedScope(): Void {
+		final baseSrc: String = 'package pkg;\nclass SBase {\n\tpublic function __draw():Int { return 1; }\n}';
+		final libSrc: String = 'package ext;\nimport pkg.SBase;\nclass SSub extends SBase {\n'
+			+ '\toverride public function __draw():Int { return 2; }\n}';
+		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/SBase.hx', source: baseSrc }];
+		final lib: Array<{ file: String, source: String }> = [{ file: 'ext/SSub.hx', source: libSrc }];
+		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, library: new LibrarySources(lib) } });
+		final reportIndex: SymbolIndex = SymbolIndex.build(report, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(report, scoped);
+		// The finding MUST exist, or the zero below would prove nothing.
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.crossFileFix(report, vs, scoped, reportIndex).length);
+	}
+
+	/**
+	 * An `implicitlyReachable` member — one carrying metadata a macro / `@:keep` / framework can
+	 * reach by NAME — has references no identifier-level completeness proof sees.
+	 */
+	public function testCrossFileFixRefusesImplicitlyReachablePublicMethod(): Void {
+		final src: String = 'package pkg;\nclass K {\n\t@:keep public function __draw():Int { return 1; }\n}';
+		assertCrossFileRefused([{ file: 'pkg/K.hx', source: src }]);
+	}
+
+	/**
+	 * A reflection call naming the member in ANOTHER file would break silently after a rename. No
+	 * dedicated guard handles it: a public member's affected set is every scope file MENTIONING the name,
+	 * so the reflection string's file is scanned and its name-shaped string literal refuses the whole
+	 * rename through the ordinary occurrence classification. This asserts that the public path inherits
+	 * that refusal — verified by removing a duplicate AST-projected guard and finding this shape, and its
+	 * same-file twin, still refused.
+	 */
+	public function testCrossFileFixRefusesPublicFieldNamedByStringLiteral(): Void {
+		final hSrc: String = 'package pkg;\nclass Holder {\n\tpublic final __size:Int;\n\tpublic function new(n:Int) { __size = n; }\n}';
+		final rSrc: String =
+			'package pkg;\nclass RUser {\n\tpublic function get(h:Holder):Dynamic { return Reflect.field(h, \'__size\'); }\n}';
+		assertCrossFileRefused([{ file: 'pkg/Holder.hx', source: hSrc }, { file: 'pkg/RUser.hx', source: rSrc }]);
+	}
+
+	/**
+	 * The owner's own HIERARCHY stays in a public member's affected set even when a subtype file
+	 * never MENTIONS the old name: renaming `__size` to `size` would turn the subtype's own `size`
+	 * into Haxe's "Redefinition of variable in subclass". Drop the hierarchy half of the union and
+	 * this file is never scanned, so the rename commits and the build breaks.
+	 */
+	public function testCrossFileFixRefusesPublicFieldWhenSubtypeBindsTargetName(): Void {
+		final hSrc: String = 'package pkg;\nclass Holder {\n\tpublic var __size:Int;\n}';
+		final sSrc: String = 'package pkg;\nclass Sub extends Holder {\n\tprivate var size:Int;\n}';
+		assertCrossFileRefused([{ file: 'pkg/Holder.hx', source: hSrc }, { file: 'pkg/Sub.hx', source: sSrc }]);
+	}
+
+	/**
+	 * A file that only MENTIONS the old name — every occurrence attributed to a PROVABLY unrelated
+	 * type, so it receives no edit — is not scanned for a target-name collision. `Other` carries the
+	 * mention; `Mystery`, whose supertype does not resolve, is not provably unrelated to the owner
+	 * and binds the target name. Without the no-edit skip that binding refuses the whole rename,
+	 * even though nothing is ever written to this file.
+	 */
+	public function testCrossFileFixIgnoresTargetBindingInAFileItDoesNotEdit(): Void {
+		final hSrc: String = 'package pkg;\nclass Holder {\n\tpublic final __size:Int;\n\tpublic function new(n:Int) { __size = n; }\n}';
+		final oSrc: String = 'package pkg;\nclass Other {\n\tpublic function f():String { return \'reads the __size of it\'; }\n}\n\n'
+			+ 'class Mystery extends Unknown {\n\tpublic var size:Int;\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/Holder.hx', source: hSrc },
+			{ file: 'pkg/Other.hx', source: oSrc }
+		];
+		final rename: Array<CrossFileEdits> = crossFileRename(files);
+		// The renamed write beside its untouched parameter: only the rename produces this string.
+		assertRenameSlice(rename, 'pkg/Holder.hx', hSrc, 'public function new(n:Int) { size = n; }', '__size');
+		// Nothing is written to the mentioning file — its only occurrence is inert literal text.
+		for (slice in rename) Assert.notEquals('pkg/Other.hx', slice.file);
+	}
+
+	/** The single cross-file rename `files` yields, as its per-file slices. */
+	private function crossFileRename(files: Array<{ file: String, source: String }>): Array<CrossFileEdits> {
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
+		Assert.equals(1, renames.length);
+		return renames.length == 1 ? renames[0] : [];
+	}
+
+	/** `files` carries at least one finding and the cross-file rename refuses it outright. */
+	private function assertCrossFileRefused(files: Array<{ file: String, source: String }>): Void {
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		// The finding MUST exist, or the zero below would prove nothing.
+		Assert.isTrue(vs.length >= 1);
 		Assert.equals(0, check.crossFileFix(files, vs, new HaxeQueryPlugin(), index).length);
 	}
 

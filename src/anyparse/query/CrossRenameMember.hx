@@ -6,6 +6,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
+import anyparse.query.SymbolIndex.OverrideFamilyMember;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -152,7 +153,21 @@ final class CrossRenameMember {
 		if (parse.error != null) return Err(parse.error);
 
 		final uniqueErr: Null<String> = checkTypeUniqueness(parse.parsed, cursorFile, t.typeName);
-		return uniqueErr != null ? Err(uniqueErr) : apply(parse.parsed, cursorFile, t, newName, cursor, plugin, refShape);
+		if (uniqueErr != null) return Err(uniqueErr);
+		// The overrides the refusal above promises rename with the base. Built over THIS scope's own
+		// in-memory sources, so the op stays pure - no disk, and the index sees exactly what the caller
+		// passed. `null` means one same-named declaration's relation to the owner is unprovable: half a
+		// family leaves a declaration overriding nothing, so the whole rename is refused.
+		final index: SymbolIndex = SymbolIndex.build(scopeFiles, plugin);
+		final family: Null<Array<OverrideFamilyMember>> = index.overrideFamilyOf(t.typeName, t.memberName);
+		if (family == null)
+			return Err('cannot rename "${t.memberName}": another type declares it and cannot be proven unrelated to "${t.typeName}"');
+		final overrides: Array<OverrideFamilyMember> = family;
+		// The destination name must be free on every type the edit set touches, not only the cursor's -
+		// an override renamed onto a name its own type already declares is a duplicate field.
+		for (fm in overrides) if (index.typeDeclaresMember(fm.typeName, newName))
+			return Err('type "${fm.typeName}" already declares a member "$newName"');
+		return apply(parse.parsed, cursorFile, t, newName, cursor, plugin, refShape, overrides, index);
 	}
 
 	/**
@@ -309,7 +324,7 @@ final class CrossRenameMember {
 	 */
 	private static function apply(
 		parsed: Array<ParsedFile>, cursorFile: String, target: MemberTarget, newName: String, cursor: Int, plugin: GrammarPlugin,
-		refShape: RefShape
+		refShape: RefShape, family: Array<OverrideFamilyMember>, index: SymbolIndex
 	): CrossRenameResult {
 		final changes: Array<FileChange> = [];
 		for (entry in parsed) {
@@ -323,7 +338,12 @@ final class CrossRenameMember {
 				? Rename.renameOccurrences(entry.source, entry.tree, cursor, refShape)
 				: [];
 			for (occ in resolved) addOff(occ.from);
-			final qualified: LocatedOffsets = qualifiedMemberOffsets(entry.source, entry.tree, target, plugin, refShape);
+			// An override declared in this file: its own declaration plus the bare / `this.` reads its
+			// type makes of it, resolved by the same machinery the cursor file uses. Renaming the base
+			// without these leaves `override function <old>` overriding nothing.
+			for (fm in family) if (fm.file == entry.file)
+				for (occ in Rename.renameOccurrences(entry.source, entry.tree, fm.declFrom, refShape)) addOff(occ.from);
+			final qualified: LocatedOffsets = qualifiedMemberOffsets(entry.source, entry.tree, target, plugin, refShape, index);
 			if (qualified.error != null) return Err('${entry.file}: ${qualified.error}');
 			for (off in qualified.offsets) addOff(off);
 			if (offsets.length == 0) continue;
@@ -356,11 +376,11 @@ final class CrossRenameMember {
 	 * through the returned `error`.
 	 */
 	private static function qualifiedMemberOffsets(
-		source: String, tree: QueryNode, target: MemberTarget, plugin: GrammarPlugin, refShape: RefShape
+		source: String, tree: QueryNode, target: MemberTarget, plugin: GrammarPlugin, refShape: RefShape, index: SymbolIndex
 	): LocatedOffsets {
 		return target.isStatic
 			? staticMemberOffsets(source, tree, target.typeName, target.memberName, refShape)
-			: instanceMemberOffsets(source, tree, target.typeName, target.memberName, plugin, refShape);
+			: instanceMemberOffsets(source, tree, target.typeName, target.memberName, plugin, refShape, index);
 	}
 
 	/**
@@ -416,7 +436,8 @@ final class CrossRenameMember {
 	 * whose member token cannot be located refuses the whole rename.
 	 */
 	private static function instanceMemberOffsets(
-		source: String, tree: QueryNode, typeName: String, memberName: String, plugin: GrammarPlugin, refShape: RefShape
+		source: String, tree: QueryNode, typeName: String, memberName: String, plugin: GrammarPlugin, refShape: RefShape,
+		index: SymbolIndex
 	): LocatedOffsets {
 		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final declared: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
@@ -433,7 +454,7 @@ final class CrossRenameMember {
 		for (cand in candidates) {
 			final recvSpan: Null<Span> = cand.recv.span;
 			final faSpan: Null<Span> = cand.fa.span;
-			if (recvSpan == null || faSpan == null || !receiverIsSourceType(cand.recv, typeName, declared, hitsByName)) continue;
+			if (recvSpan == null || faSpan == null || !receiverIsSourceType(cand.recv, typeName, declared, hitsByName, index)) continue;
 			final off: Int = RefactorSupport.activeCodeIdentTokenOffset(source, new Span(recvSpan.to, faSpan.to), memberName);
 			if (off < 0) return { offsets: [], error: unlocatableAccess(source, faSpan, memberName) };
 			if (!out.contains(off)) out.push(off);
@@ -479,7 +500,7 @@ final class CrossRenameMember {
 	 * rewritten; an unresolved one is left alone (advisory / loud-fail).
 	 */
 	private static function receiverIsSourceType(
-		recv: QueryNode, typeName: String, declared: Map<Int, String>, hitsByName: Map<String, Array<RefHit>>
+		recv: QueryNode, typeName: String, declared: Map<Int, String>, hitsByName: Map<String, Array<RefHit>>, index: SymbolIndex
 	): Bool {
 		final rn: Null<String> = recv.name;
 		final recvSpan: Null<Span> = recv.span;
@@ -487,7 +508,13 @@ final class CrossRenameMember {
 		final bindingFrom: Null<Int> = receiverBinding(hitsByName[rn] ?? [], recvSpan.from);
 		if (bindingFrom == null) return false;
 		final from: Int = bindingFrom;
-		return declared[from] == typeName;
+		final declaredType: Null<String> = declared[from];
+		if (declaredType == null) return false;
+		// A receiver typed as a proven SUBTYPE reaches the same member - whether the subtype overrides it
+		// (renamed with the base) or merely inherits it. Requiring an exact type match left every such
+		// access spelled the old way, which for an override family is a rename that does not compile.
+		final recvType: String = declaredType;
+		return recvType == typeName || index.isSubtype(recvType, typeName);
 	}
 
 	/**

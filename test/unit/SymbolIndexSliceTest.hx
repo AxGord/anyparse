@@ -1398,6 +1398,69 @@ class SymbolIndexSliceTest extends Test {
 		Assert.equals(false, ambiguous.memberGetter('Sub', 'f'), 'an ambiguous simple name resolves to neither');
 	}
 
+	/**
+	 * `overrideFamilyOf` — the ACTIONABLE counterpart of `subtypeDeclaresMember`. A proven subtype
+	 * that redeclares the member is family; an unrelated type merely sharing the name is not; and an
+	 * implementation of an interface method is family even though it carries no `override` keyword.
+	 */
+	public function testOverrideFamilyOfProvenMembers(): Void {
+		final base: String = 'package pkg;\nclass B {\n\tpublic function draw():Void {}\n}';
+		final sub: String = 'package pkg;\nclass S extends B {\n\toverride public function draw():Void {}\n}';
+		final iface: String = 'package pkg;\ninterface I {\n\tpublic function draw():Void;\n}';
+		final impl: String = 'package pkg;\nclass Impl implements I {\n\tpublic function draw():Void {}\n}';
+		final alien: String = 'package pkg;\nclass Alien {\n\tpublic function draw():Void {}\n}';
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'pkg/B.hx', source: base },
+			{ file: 'pkg/S.hx', source: sub },
+			{ file: 'pkg/I.hx', source: iface },
+			{ file: 'pkg/Impl.hx', source: impl },
+			{ file: 'pkg/Alien.hx', source: alien }
+		], plugin());
+		final family: Null<Array<OverrideFamilyMember>> = index.overrideFamilyOf('B', 'draw');
+		Assert.notNull(family);
+		if (family == null) return;
+		// `Alien` declares the same name and is provably unrelated, so it must NOT be an edit target.
+		Assert.equals(1, family.length);
+		Assert.equals('S', family[0].typeName);
+		Assert.equals('pkg/S.hx', family[0].file);
+		// The offset addresses the override's own declaration — the cursor a rename takes.
+		Assert.equals('function draw', sub.substr(family[0].declFrom, 13));
+		// No `override` keyword on an interface implementation, and it is still family.
+		final ifaceFamily: Null<Array<OverrideFamilyMember>> = index.overrideFamilyOf('I', 'draw');
+		Assert.notNull(ifaceFamily);
+		if (ifaceFamily != null) Assert.equals('Impl', ifaceFamily.length == 1 ? ifaceFamily[0].typeName : '<${ifaceFamily.length}>');
+	}
+
+	/**
+	 * A same-named declaration on a type whose ancestry does NOT resolve is neither proven family nor
+	 * proven unrelated, so the whole answer is `null` — the caller must refuse rather than rename a
+	 * partial family. `[]` stays the answer when nothing else declares the member at all.
+	 */
+	public function testOverrideFamilyOfRefusesUnprovable(): Void {
+		final base: String = 'package pkg;\nclass B {\n\tpublic function draw():Void {}\n}';
+		final foreign: String = 'package pkg;\nclass F extends Absent {\n\toverride public function draw():Void {}\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/B.hx', source: base },
+			{ file: 'pkg/F.hx', source: foreign }
+		];
+		Assert.isNull(SymbolIndex.build(files, plugin()).overrideFamilyOf('B', 'draw'));
+		// The SAME unresolvable type WITHOUT the override modifier cannot be `B`'s override at all —
+		// Haxe rejects a bare redeclaration under a plain-class owner — so it must veto nothing. Without
+		// this exclusion the refusal is near-universal in a framework tree, where no class's ancestry
+		// resolves to the end.
+		final bare: String = 'package pkg;\nclass F extends Absent {\n\tpublic function draw():Void {}\n}';
+		final bareFamily: Null<Array<OverrideFamilyMember>> = SymbolIndex.build([
+			{ file: 'pkg/B.hx', source: base },
+			{ file: 'pkg/F.hx', source: bare }
+		], plugin()).overrideFamilyOf('B', 'draw');
+		Assert.notNull(bareFamily);
+		if (bareFamily != null) Assert.equals(0, bareFamily.length);
+		// Alone, the same base has an EMPTY family — `null` above is the unprovable type talking.
+		final solo: Null<Array<OverrideFamilyMember>> = SymbolIndex.build([files[0]], plugin()).overrideFamilyOf('B', 'draw');
+		Assert.notNull(solo);
+		if (solo != null) Assert.equals(0, solo.length);
+	}
+
 	/** Build a one-type index from `source` and assert its single declaration's type-parameter arity and names. */
 	private function assertHeaderParams(source: String, arity: Int, names: Array<String>): Void {
 		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/H.hx', source: source }], plugin());

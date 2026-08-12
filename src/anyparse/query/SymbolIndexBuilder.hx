@@ -399,6 +399,7 @@ final class SymbolIndexBuilder {
 							visibility: runVisibility,
 							isOverride: runOverride,
 							kind: child.kind,
+							declFrom: sp.from,
 							isStatic: runStatic,
 							isInline: runInline,
 							isMacro: runMacro,

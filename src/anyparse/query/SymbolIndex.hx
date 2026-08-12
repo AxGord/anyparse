@@ -84,6 +84,14 @@ typedef MemberInfo = {
 	var kind: String;
 
 	/**
+	 * Byte offset where the member's DECLARATION node starts, in its own file's source. The
+	 * position a rename takes as its cursor, so a consumer holding only the index can address a
+	 * member declaration in a file it has not walked — `overrideFamilyOf` hands it out so an
+	 * override in another file can be renamed with its base.
+	 */
+	var declFrom: Int;
+
+	/**
 	 * True when the member's modifier run carries the grammar's `static` modifier. A
 	 * type-qualified `Type.member` reference normally resolves only to a static member —
 	 * with one exception a consumer must handle itself: an enum-abstract VALUE is written
@@ -269,6 +277,20 @@ typedef FileInfo = {
 	var accessGrants: Array<String>;
 }
 
+/**
+ * One PROVEN member of an override family — a type that redeclares the base's member and is
+ * provably a subtype of it, paired with its declaring file and the offset of its own declaration.
+ * A rename of the base must rewrite each of these in the same atomic edit set: leaving one behind
+ * emits `override function f` overriding nothing, which does not compile.
+ */
+typedef OverrideFamilyMember = {
+	var file: String;
+	var typeName: String;
+
+	/** Offset of the override's own declaration node, usable as a rename cursor. */
+	var declFrom: Int;
+}
+
 /** A type declaration paired with its declaring file, for the inheritance-resolution walk. */
 private typedef ResolvedType = {
 	var file: FileInfo;
@@ -289,6 +311,14 @@ final class SymbolIndex {
 
 	/** The grammar kind an `abstract` declaration projects as. */
 	private static final ABSTRACT_DECL_KIND: String = 'AbstractDecl';
+
+	/**
+	 * The owner decl kinds whose member a subtype may implement WITHOUT the override modifier — an
+	 * interface method, and an `abstract` method on an abstract class. Under any other kind Haxe
+	 * rejects a redeclaration that omits `override`, which makes the modifier a reliable filter on
+	 * override-family candidates.
+	 */
+	private static final BARE_IMPLEMENTABLE_OWNER_KINDS: Array<String> = ['InterfaceDecl', 'AbstractClassDecl'];
 
 	/**
 	 * The grammar kind an anonymous structure projects as, in BOTH a typedef body and a type expression.
@@ -1014,6 +1044,64 @@ final class SymbolIndex {
 			if (!provablyNotSubtype(t.name, owner)) return true;
 		}
 		return false;
+	}
+
+	/**
+	 * The PROVEN override family of `owner.member` — every type that redeclares it and is provably a
+	 * subtype, each paired with its file and declaration offset. The ACTIONABLE counterpart of
+	 * `subtypeDeclaresMember` / `subtypeOverridesProperty`, and deliberately not the same set: those
+	 * two answer a VETO, where being over-broad is the safe direction, so they say yes on an
+	 * unresolvable hierarchy. Handing that set to an editor would rewrite unrelated same-named
+	 * members, so the imprecision is split out of the result instead of folded into it:
+	 *
+	 * - `null` — a same-named declaration exists whose relation to `owner` is UNPROVABLE (no ancestor
+	 *   declares the member and the type is not provably unrelated). The caller must refuse the whole
+	 *   rename; a partial family is worse than none.
+	 * - `[]` — no other type declares the member. The rename is the base's alone.
+	 * - non-empty — exactly the members that must be renamed with the base.
+	 *
+	 * Membership is NOT gated on the override modifier: a Haxe implementation of an `abstract` or
+	 * interface method carries no `override` keyword and is still a real override. What proves
+	 * membership is the subtype relation (`isSubtype`) or the resolved declaration the member
+	 * overrides (`overriddenDeclarer`) naming `owner`.
+	 */
+	public function overrideFamilyOf(owner: String, member: String): Null<Array<OverrideFamilyMember>> {
+		final family: Array<OverrideFamilyMember> = [];
+		// Whether the owner's own declaration can be implemented WITHOUT the override modifier: an
+		// interface member, or an `abstract` method on an abstract class. Unknown owner reads as yes.
+		final ownerKind: Null<String> = ownerDeclKind(owner);
+		final bareImplementable: Bool = ownerKind == null || BARE_IMPLEMENTABLE_OWNER_KINDS.contains(ownerKind);
+		for (fi in _files) for (t in fi.types) if (t.name != owner) {
+			final decl: Null<MemberInfo> = t.members.find(m -> m.name == member);
+			if (decl == null) continue;
+			final entry: OverrideFamilyMember = { file: fi.file, typeName: t.name, declFrom: decl.declFrom };
+			if (isSubtype(t.name, owner)) {
+				family.push(entry);
+				continue;
+			}
+			// The declaration this one overrides, resolved through the written supertype paths: a type
+			// overriding some OTHER hierarchy's same-named member is not family, however unresolvable
+			// its own ancestry is above that declaration.
+			final declarer: Null<String> = overriddenDeclarer({ file: fi, type: t }, [member], owner);
+			if (declarer != null) {
+				if (declarer == owner) family.push(entry);
+				continue;
+			}
+			// Neither proven in nor proven out. Before failing closed, one exclusion that costs nothing:
+			// a redeclaration missing the OVERRIDE modifier is a compile error under a plain-class owner,
+			// so such a type is no family candidate whatever its ancestry says. Without it the refusal is
+			// near-universal in a framework tree — every class extends a library type the scope cannot
+			// resolve, so `provablyNotSubtype` fails for every unrelated namesake as well.
+			if (!decl.isOverride && !bareImplementable) continue;
+			if (!provablyNotSubtype(t.name, owner)) return null;
+		}
+		return family;
+	}
+
+	/** The SIMPLE-name lookup of a type's declaration kind, or null when the scope declares it zero or ambiguously many times. */
+	private function ownerDeclKind(owner: String): Null<String> {
+		final ds: Array<TypeDeclInfo> = declsNamed(owner);
+		return ds.length == 1 ? ds[0].kind : null;
 	}
 
 	/**
