@@ -16,9 +16,12 @@ using Lambda;
  * text has to read the source — and until this class there was no shared read, only per-caller
  * probes: `CondBranchProjection.gapHasBranchDirective` and `MemberOrder.hasBranchDirective` answer
  * "does a branch open in this gap", and `MemberSlots.extractConditionText` recovers ONE region's
- * condition from its node span. None of them enumerates directives, so both consumers of this class
- * — the `redundant-condcomp-parens` check and `apq lit --include-directives` — would otherwise have
- * grown a lexer each. Those older probes have NOT been migrated onto this reader; folding them in
+ * condition from its node span. None of them enumerates directives, so the
+ * consumers of this class — the `redundant-condcomp-parens` and `cond-region-merge` checks and
+ * `apq lit --include-directives` — would otherwise have grown a lexer each. `MemberSlots` shares
+ * this class's condition NORMALISATION (`normalizeCondition` / `isBalancedParenWrapped` /
+ * `stripOuterParens`) but still reads its own condition text off a node span; the older probes
+ * have NOT been migrated onto this reader otherwise; folding them in
  * (and with them the hardcoded `#end` / `#else` spellings in `MemberOrder`, `CondAssignMerge`,
  * `IfFalseDeadCode` and `TailMerge`) is the follow-up that would make the first sentence true of the
  * whole engine rather than of this class's own consumers.
@@ -96,6 +99,35 @@ final class CondDirectives {
 			i = directive.span.to;
 		}
 		return out;
+	}
+
+	/** Collapse internal whitespace runs in `condition` to single spaces, so two spellings of one condition compare equal. */
+	public static function normalizeCondition(condition: String): String {
+		return (~/\s+/g).replace(condition.trim(), ' ');
+	}
+
+	/** Whether `condition` is wrapped in ONE outer pair of balanced parentheses spanning the whole string. */
+	public static function isBalancedParenWrapped(condition: String): Bool {
+		if (!condition.startsWith('(') || !condition.endsWith(')')) return false;
+		var depth: Int = 0;
+		for (i in 0...condition.length) {
+			switch condition.charAt(i) {
+				case '(':
+					depth++;
+				case ')':
+					depth--;
+					if (depth == 0 && i < condition.length - 1) return false;
+				case _:
+			}
+		}
+		return depth == 0;
+	}
+
+	/** `condition` with every enclosing pair of balanced parentheses removed - `((sys))` reads as `sys`. */
+	public static function stripOuterParens(condition: String): String {
+		var text: String = condition;
+		while (isBalancedParenWrapped(text)) text = text.substring(1, text.length - 1).trim();
+		return text;
 	}
 
 	/** Whether `c` opens a string literal. */

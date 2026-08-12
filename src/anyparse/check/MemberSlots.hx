@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.MemberOrder.BranchInfo;
 import anyparse.check.MemberOrder.MemberRank;
 import anyparse.check.MemberOrder.OrderedMember;
+import anyparse.query.CondDirectives;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -175,12 +176,7 @@ final class MemberSlots {
 		final condEnd: Int = childFrom < lineEnd ? childFrom : lineEnd;
 		if (condEnd <= condStart) return null;
 		final raw: String = source.substring(condStart, condEnd).trim();
-		return raw == '' ? null : normalizeCondition(raw);
-	}
-
-	/** Collapse internal whitespace runs in a condition to single spaces for stable comparison. */
-	private static function normalizeCondition(cond: String): String {
-		return (~/\s+/g).replace(cond, ' ');
+		return raw == '' ? null : CondDirectives.normalizeCondition(raw);
 	}
 
 	/**
@@ -195,24 +191,7 @@ final class MemberSlots {
 
 	/** Wrap `cond` in parentheses unless it is already a single balanced parenthesised group. */
 	private static function parenthesiseConjunct(cond: String): String {
-		return isBalancedParenWrapped(cond) ? cond : '($cond)';
-	}
-
-	/** Whether `cond` is wrapped in one outer pair of balanced parentheses spanning the whole string. */
-	private static function isBalancedParenWrapped(cond: String): Bool {
-		if (!cond.startsWith('(') || !cond.endsWith(')')) return false;
-		var depth: Int = 0;
-		for (i in 0...cond.length) {
-			switch cond.charAt(i) {
-				case '(':
-					depth++;
-				case ')':
-					depth--;
-					if (depth == 0 && i < cond.length - 1) return false;
-				case _:
-			}
-		}
-		return depth == 0;
+		return CondDirectives.isBalancedParenWrapped(cond) ? cond : '($cond)';
 	}
 
 	/**

@@ -553,6 +553,7 @@ import unit.PreferTernaryExpressionCheckTest;
 import unit.PreferTryExpressionAssignmentCheckTest;
 import unit.PreferTryExpressionReturnCheckTest;
 import unit.TryCatchNullGuardCheckTest;
+import unit.CondRegionMergeCheckTest;
 import unit.RedundantCondCompParensCheckTest;
 import unit.ApqLitDirectivesCliTest;
 import unit.FormatConfigDiscoveryTest;
@@ -1149,6 +1150,7 @@ class RunTests {
 		addCase(new EmptyCommentCheckTest());
 		addCase(new EmptyDocTagCheckTest());
 		addCase(new RedundantCondCompParensCheckTest());
+		addCase(new CondRegionMergeCheckTest());
 		addCase(new ApqLitDirectivesCliTest());
 		addCase(new RedundantElseCheckTest());
 		addCase(new TailMergeCheckTest());

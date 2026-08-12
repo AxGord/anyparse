@@ -55,6 +55,7 @@ final class Linter {
 			new CasePatternSeparator(),
 			new RedundantParens(),
 			new RedundantCondCompParens(),
+			new CondRegionMerge(),
 			new ConstantCondition(),
 			new EmptyStatement(),
 			new RedundantTrailingComma(),
