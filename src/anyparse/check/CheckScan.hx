@@ -35,6 +35,18 @@ final class CheckScan {
 	/** The static-text child kind inside an interpolated string expression. */
 	public static inline final STRING_FRAGMENT_KIND: String = 'Literal';
 
+	/**
+	 * The largest top-level statement count a bare `{ … }` statement block may hold and still read as noise
+	 * rather than as a deliberate section marker. Calibrated on a real tree: the blocks a reader wants gone
+	 * hold two or three statements, while every block that turned out to be delimiting a phase of a long
+	 * function held more.
+	 *
+	 * Shared by `unnecessary-block`, which decides whether to unwrap an existing bare block, and by
+	 * `keptBodyText`, which decides whether an always-true `if` leaves one behind — the two must agree, or the
+	 * fixers disagree about the same shape and one of them emits what the other refuses to clean.
+	 */
+	public static inline final BARE_BLOCK_MAX_STATEMENTS: Int = 5;
+
 	/** The class-body member kinds a method declaration projects as — a plain method and a `final` one. */
 	public static final METHOD_KINDS: Array<String> = ['FnMember', 'FinalModifiedMember'];
 
@@ -239,19 +251,32 @@ final class CheckScan {
 		final root: QueryNode = tree;
 		final shape: RefShape = plugin.refShape();
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
+		final blockKinds: Array<String> = support != null ? support.blockKinds() : [];
+		// Without the block-container seam `ScopeFrames` cannot collect a frame, so every collision test would
+		// pass vacuously — leave `containerKinds` empty and never unwrap rather than unwrap unchecked.
+		final caseBranchKinds: Array<String> = support == null ? [] : [for (k in [shape.caseBranchKind, shape.defaultBranchKind]) if (
+			k != null
+		) k];
 		final seams: CondSimplifySeams = {
 			ifKinds: shape.ifStatementKinds ?? [],
 			andKind: shape.logicalAndKind ?? '',
 			orKind: shape.logicalOrKind ?? '',
 			parenKind: shape.parenKind ?? '',
-			blockKinds: support != null ? support.blockKinds() : []
+			blockKinds: blockKinds,
+			blockStmtKind: shape.blockStmtKind,
+			containerKinds: blockKinds.concat(caseBranchKinds),
+			scopeKinds: shape.scopeKinds,
+			functionKinds: shape.functionKinds ?? [],
+			localDeclKinds: ScopeFrames.bindingKinds(shape),
+			condKind: shape.conditionalMemberKind
 		};
 		final parents: Map<QueryNode, QueryNode> = [];
 		fillParents(root, parents);
+		final frames: Map<QueryNode, Array<String>> = ScopeFrames.frameIndex(root, seams);
 		final byKey: Map<String, QueryNode> = [];
 		RefactorSupport.indexNodesByKind(root, flaggedKinds, byKey);
 		return nonOverlappingEdits(
-			collectSpanEdits(violations, byKey, (node, _) -> conditionEdit(node, alwaysTrueOf(node), parents, source, seams))
+			collectSpanEdits(violations, byKey, (node, _) -> conditionEdit(node, alwaysTrueOf(node), parents, frames, source, seams))
 		);
 	}
 
@@ -632,12 +657,13 @@ final class CheckScan {
 	 * `||` for always-false); refuse otherwise.
 	 */
 	private static function conditionEdit(
-		node: QueryNode, alwaysTrue: Bool, parents: Map<QueryNode, QueryNode>, source: String, seams: CondSimplifySeams
+		node: QueryNode, alwaysTrue: Bool, parents: Map<QueryNode, QueryNode>, frames: Map<QueryNode, Array<String>>, source: String,
+		seams: CondSimplifySeams
 	): Null<{ span: Span, text: String }> {
 		final parent: Null<QueryNode> = parents[node];
 		if (parent == null) return null;
 		if (seams.ifKinds.contains(parent.kind) && parent.children.length == 2 && parent.children[0] == node)
-			return ifShapeEdit(parent, alwaysTrue, parents, source, seams);
+			return ifShapeEdit(parent, alwaysTrue, parents, frames, source, seams);
 		final wantKind: String = alwaysTrue ? seams.andKind : seams.orKind;
 		return wantKind != '' && parent.kind == wantKind && homogeneousChain(parent, wantKind, parents, seams)
 			? dropOperandEdit(parent, node, source)
@@ -652,20 +678,21 @@ final class CheckScan {
 	 * branch is not orphaned). Refuses when a comment sits in any removed region.
 	 */
 	private static function ifShapeEdit(
-		ifNode: QueryNode, alwaysTrue: Bool, parents: Map<QueryNode, QueryNode>, source: String, seams: CondSimplifySeams
+		ifNode: QueryNode, alwaysTrue: Bool, parents: Map<QueryNode, QueryNode>, frames: Map<QueryNode, Array<String>>, source: String,
+		seams: CondSimplifySeams
 	): Null<{ span: Span, text: String }> {
 		final ns: Null<Span> = ifNode.span;
 		final body: QueryNode = ifNode.children[1];
 		final bs: Null<Span> = body.span;
 		if (ns == null || bs == null) return null;
+		final ifParent: Null<QueryNode> = parents[ifNode];
 		// An always-true guard keeps only the body — refuse if a comment sits in the removed
 		// `if (…)` header or trailing region (comments inside the body are preserved).
 		if (alwaysTrue) return hasCommentMarker(source, ns.from, bs.from) || hasCommentMarker(source, bs.to, ns.to) ? null : {
 			span: ns,
-			text: source.substring(bs.from, bs.to)
+			text: keptBodyText(body, bs, ifParent, frames, source, seams)
 		};
 		if (hasCommentMarker(source, ns.from, ns.to)) return null;
-		final ifParent: Null<QueryNode> = parents[ifNode];
 		final inBlock: Bool = ifParent != null && seams.blockKinds.contains(ifParent.kind);
 		return inBlock ? { span: RefactorSupport.lineExtendedSpan(source, ns), text: '' } : { span: ns, text: '{}' };
 	}
@@ -779,6 +806,38 @@ final class CheckScan {
 		return close != -1 && close < annotationSpan.from;
 	}
 
+	/**
+	 * The text an always-true `if` leaves behind in its own place.
+	 *
+	 * Normally that is the body verbatim: a block self-terminates, is legal wherever an `if` statement was, and
+	 * keeps the scope the braces held — the one substitution that is safe in every position. But when the `if`
+	 * sits directly in a statement list, those braces buy nothing, and leaving them behind is how this fixer
+	 * used to manufacture the bare blocks `unnecessary-block` then had to clean up on a later pass. So the
+	 * braces are dropped when the parent is a statement-list container AND the body's own top-level bindings do
+	 * not collide with that container's frame — the same gate, and the same scope model, `unnecessary-block`
+	 * applies (`ScopeFrames.collidesWithScope` documents why a collision must refuse rather than shadow).
+	 *
+	 * An empty body keeps its braces: splicing nothing would delete the statement, which is `empty-block`'s
+	 * call to make, not this one's. So does an over-weight one, at the same threshold `unnecessary-block`
+	 * applies — see `BARE_BLOCK_MAX_STATEMENTS`.
+	 */
+	private static function keptBodyText(
+		body: QueryNode, bs: Span, ifParent: Null<QueryNode>, frames: Map<QueryNode, Array<String>>, source: String,
+		seams: CondSimplifySeams
+	): String {
+		final whole: String = source.substring(bs.from, bs.to);
+		if (
+			ifParent == null || body.kind != seams.blockStmtKind || body.children.length == 0
+			|| body.children.length > BARE_BLOCK_MAX_STATEMENTS
+		)
+			return whole;
+		final parent: QueryNode = ifParent;
+		return seams.containerKinds.contains(parent.kind)
+			&& !ScopeFrames.collidesWithScope(body.children, seams.localDeclKinds, frames[parent] ?? [])
+			? source.substring(bs.from + 1, bs.to - 1).trim()
+			: whole;
+	}
+
 }
 
 /**
@@ -797,6 +856,12 @@ private typedef CondSimplifySeams = {
 	final orKind: String;
 	final parenKind: String;
 	final blockKinds: Array<String>;
+	final blockStmtKind: Null<String>;
+	final containerKinds: Array<String>;
+	final scopeKinds: Array<String>;
+	final functionKinds: Array<String>;
+	final localDeclKinds: Array<String>;
+	final condKind: Null<String>;
 };
 
 /**

@@ -146,6 +146,33 @@ class UnnecessaryNullCheckCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * The always-true unwrap used to splice the body block WHOLE, leaving a bare `{ … }` behind that only a
+	 * later `unnecessary-block` pass could clear. With no collision the braces go too, so the body's local
+	 * lands beside the statement that followed the `if`.
+	 */
+	public function testFixUnwrapBlockBodyDropsBraces(): Void {
+		assertFixContains(
+			wrap('if (x != null) {\n\t\t\tfinal t:Int = x;\n\t\t\ttrace(t);\n\t\t}\n\t\ttrace(9);'),
+			'\t\tfinal t:Int = x;\n\t\ttrace(t);\n\t\ttrace(9);', '\t\t\tfinal t:Int = x;'
+		);
+	}
+
+	/** A body local shadowing an enclosing one keeps its braces — the `if` still goes, the scope stays. */
+	public function testFixKeepsBracesWhenBodyLocalCollides(): Void {
+		assertFixContains(
+			wrap('final t:Int = 1;\n\t\tif (x != null) {\n\t\t\tfinal t:Int = x;\n\t\t\ttrace(t);\n\t\t}\n\t\ttrace(t);'),
+			'{\n\t\t\tfinal t:Int = x;', 'if (x != null)'
+		);
+	}
+
+	/** Past `CheckScan.BARE_BLOCK_MAX_STATEMENTS` the body reads as a section — the `if` goes, the block stays. */
+	public function testFixKeepsBracesOnOverWeightBody(): Void {
+		final body: String = 'if (x != null) {\n\t\t\tfinal t:Int = x;\n\t\t\ttrace(1);\n\t\t\ttrace(2);\n\t\t\ttrace(3);\n'
+			+ '\t\t\ttrace(4);\n\t\t\ttrace(t);\n\t\t}';
+		assertFixContains(wrap(body), '{\n\t\t\tfinal t:Int = x;', 'if (x != null)');
+	}
+
 	/** A module whose `f` takes a provably-non-null `x:Int`, wrapping `body`. */
 	private function wrap(body: String): String {
 		return

@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 
 /**
@@ -100,13 +101,84 @@ final class ScopeFrames {
 		return names;
 	}
 
-	/** Append every local-decl name under `node` to `out`, descending through anything that is not `skip` or a scope. */
+	/**
+	 * The visible-name frame at every node of `root`: the names a statement moved to that node's position
+	 * would land among. Threads `ownScopeNames` / `ownParamNames` / `childScopeNames` down the tree once, so a
+	 * consumer that needs frames at several unrelated positions pays for one walk instead of one per position.
+	 *
+	 * The entry for a scope-opening node holds that scope's OWN frame — a consumer asking "may I unwrap this
+	 * block into its parent" must read the entry of the PARENT container, not of the block.
+	 */
+	public static function frameIndex(root: QueryNode, seams: FrameSeams): Map<QueryNode, Array<String>> {
+		final out: Map<QueryNode, Array<String>> = [];
+		indexFrames(root, seams, [], out);
+		return out;
+	}
+
+	/**
+	 * Whether any top-level binding among `stmts` (kinds in `bindingKinds`) carries a name already bound in
+	 * `scopeNames` — the frame the run is about to be moved INTO — so the move would redeclare it there.
+	 *
+	 * Haxe permits same-scope shadowing, so such a move COMPILES and no oracle catches it; it silently rebinds
+	 * every later read of the outer binding. This refusal is the only thing between the rewrite and that.
+	 */
+	public static function collidesWithScope(stmts: Array<QueryNode>, bindingKinds: Array<String>, scopeNames: Array<String>): Bool {
+		for (s in stmts) {
+			final nm: Null<String> = s.name;
+			if (nm != null && bindingKinds.contains(s.kind) && scopeNames.contains(nm)) return true;
+		}
+		return false;
+	}
+
+	/** The names `block`'s own direct children bind (kinds in `bindingKinds`) — what unwrapping it would hoist. */
+	public static function topLevelBindingNames(block: QueryNode, bindingKinds: Array<String>): Array<String> {
+		final names: Array<String> = [];
+		for (c in block.children) {
+			final nm: Null<String> = c.name;
+			if (nm != null && bindingKinds.contains(c.kind)) names.push(nm);
+		}
+		return names;
+	}
+
+	/**
+	 * Every statement kind that BINDS a name into its enclosing frame — `RefShape.localDeclKinds` widened with
+	 * the expression-position and static local forms, and with the function-declaration kinds, whose names bind
+	 * OUTSIDE the scope they open.
+	 *
+	 * Both sides of a de-nest gate must read the SAME set: a kind counted when testing what a moved run
+	 * declares, but not when collecting the frame it lands in, is a silent hole — `LocalInlineFnStmt` was
+	 * exactly that for `unnecessary-block`.
+	 */
+	public static function bindingKinds(shape: RefShape): Array<String> {
+		return (shape.localDeclKinds ?? []).concat(shape.localDeclExprKinds ?? [])
+			.concat(shape.staticLocalDeclKinds ?? [])
+			.concat(shape.functionKinds ?? [])
+			.concat(shape.localFunctionKinds ?? [])
+			.concat(shape.inlineFunctionKinds ?? []);
+	}
+
+	/**
+	 * Append every local-decl name under `node` to `out`, descending through anything that is not `skip` or a
+	 * scope. A child that OPENS a scope still contributes its own name when the caller's `localDeclKinds` lists its
+	 * kind — a local `function` / `inline function` declares into the enclosing frame while scoping only its body —
+	 * so the name test runs before the descent test, not inside it.
+	 */
 	private static function collect(node: QueryNode, seams: FrameSeams, skip: Null<QueryNode>, out: Array<String>): Void {
-		for (c in node.children) if (c != skip && !seams.scopeKinds.contains(c.kind)) {
+		for (c in node.children) if (c != skip) {
 			final nm: Null<String> = c.name;
 			if (nm != null && seams.localDeclKinds.contains(c.kind)) out.push(nm);
-			collect(c, seams, skip, out);
+			if (!seams.scopeKinds.contains(c.kind)) collect(c, seams, skip, out);
 		}
+	}
+
+	/** Record `node`'s own frame in `out`, then descend with each child's inherited frame. */
+	private static function indexFrames(
+		node: QueryNode, seams: FrameSeams, inherited: Array<String>, out: Map<QueryNode, Array<String>>
+	): Void {
+		final scopeNames: Array<String> = ownScopeNames(node, seams, inherited);
+		out[node] = scopeNames;
+		final ownParams: Null<Array<String>> = ownParamNames(node, seams);
+		for (c in node.children) indexFrames(c, seams, childScopeNames(node, c, seams, inherited, scopeNames, ownParams), out);
 	}
 
 }

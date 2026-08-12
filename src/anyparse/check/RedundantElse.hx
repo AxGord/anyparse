@@ -244,23 +244,9 @@ final class RedundantElse implements Check {
 		elseNode: QueryNode, source: String, support: ControlFlowSupport, localDeclKinds: Array<String>, scopeNames: Array<String>
 	): Null<String> {
 		final stmts: Array<QueryNode> = support.blockKinds().contains(elseNode.kind) ? elseNode.children : [elseNode];
-		if (collidesWithScope(stmts, localDeclKinds, scopeNames)) return null;
+		if (ScopeFrames.collidesWithScope(stmts, localDeclKinds, scopeNames)) return null;
 		final run: Null<Span> = deNestedRun(elseNode, support);
 		return run == null ? null : source.substring(run.from, run.to);
-	}
-
-	/**
-	 * Whether any top-level local declaration among `stmts` (kinds in `localDeclKinds`)
-	 * has a name already bound in the enclosing scope (`scopeNames`) — de-nesting it would
-	 * be a same-scope redeclaration (an error under `-D no-shadowing`), so such a body is
-	 * left nested.
-	 */
-	private static function collidesWithScope(stmts: Array<QueryNode>, localDeclKinds: Array<String>, scopeNames: Array<String>): Bool {
-		for (s in stmts) {
-			final nm: Null<String> = s.name;
-			if (nm != null && localDeclKinds.contains(s.kind) && scopeNames.contains(nm)) return true;
-		}
-		return false;
 	}
 
 
