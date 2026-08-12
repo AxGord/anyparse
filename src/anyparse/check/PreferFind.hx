@@ -8,6 +8,7 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import anyparse.query.RefactorSupport;
+import anyparse.check.UsingScan.UsingHeader;
 
 using StringTools;
 using Lambda;
@@ -147,7 +148,8 @@ final class PreferFind implements Check {
 		// rather than emit a silently retargeted one. The gates run on the plugin's resolution
 		// index when it has one, the caller's otherwise.
 		final symbols: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
-		if (UsingScan.conflictingUsing(UsingScan.usingModules(tree), LAMBDA_MODULE, FIND_METHOD, plugin, () -> symbols, [])) return [];
+		final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
+		if (UsingScan.conflictingUsing(UsingScan.usingModules(header), LAMBDA_MODULE, FIND_METHOD, plugin, () -> symbols, [])) return [];
 		final byKey: Map<String, FixCandidate> = [];
 		collectFixCandidates(tree, source, s, byKey);
 		final edits: Array<{ span: Span, text: String }> = [];
@@ -162,8 +164,8 @@ final class PreferFind implements Check {
 			for (e in candEdits) edits.push(e);
 			rewrote = true;
 		}
-		if (rewrote && !UsingScan.hasUsingModule(tree, LAMBDA_MODULE)) {
-			final usingEdit: { span: Span, text: String } = UsingScan.usingInsertEdit(tree, LAMBDA_MODULE);
+		if (rewrote && !UsingScan.hasUsingModule(header, LAMBDA_MODULE)) {
+			final usingEdit: { span: Span, text: String } = UsingScan.usingInsertEdit(header, LAMBDA_MODULE);
 			if (!RefactorSupport.editsOverlapAny([usingEdit], edits)) edits.push(usingEdit);
 		}
 		return edits;

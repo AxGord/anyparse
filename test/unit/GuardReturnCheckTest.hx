@@ -345,7 +345,7 @@ class GuardReturnCheckTest extends Test {
 		Assert.notNull(Linter.byId('guard-return'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.isTrue(ids.contains('guard-return'));
-		Assert.equals(155, Linter.builtins().length);
+		Assert.equals(156, Linter.builtins().length);
 	}
 
 	// --- implicit Void tail: an `if` with no explicit trailing return -----------------------

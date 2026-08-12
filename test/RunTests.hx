@@ -620,6 +620,7 @@ import unit.HxMethodChainExactLimitBoundaryTest;
 import unit.NamingCheckHoistFixTest;
 import unit.UnnecessarySwitchCheckTest;
 import unit.ShadowingCaseBinderCheckTest;
+import unit.ImportOutsideGuardCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1172,6 +1173,7 @@ class RunTests {
 		addCase(new PreferLocalFunctionCheckTest());
 		addCase(new NoUnderscorePrefixCheckTest());
 		addCase(new ImportBlockOrderCheckTest());
+		addCase(new ImportOutsideGuardCheckTest());
 		addCase(new RedundantImportCheckTest());
 		addCase(new MisplacedTypeDocCheckTest());
 		addCase(new PreferTypedThrowCheckTest());

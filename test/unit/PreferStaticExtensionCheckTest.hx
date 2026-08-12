@@ -66,6 +66,25 @@ class PreferStaticExtensionCheckTest extends Test {
 		Assert.isTrue(out.indexOf('w.deco(1);') != -1, out);
 	}
 
+	public function testFixInsertsUsingInsideConditionalWrapper(): Void {
+		// The whole module body is guarded by one `#if`, so the import run — and every call the
+		// rewrite touches — lives inside it. The insert belongs with those imports, not above the
+		// `#if` on its own island between `package` and the guard.
+		final out: String = fixResultOf(conditionalFiles());
+		Assert.isTrue(out.indexOf('using Ext;') != -1, out);
+		Assert.isTrue(out.indexOf('#if FLAG') < out.indexOf('using Ext;'), out);
+		Assert.isTrue(out.indexOf('import sub.Widget;') < out.indexOf('using Ext;'), out);
+		Assert.isTrue(out.indexOf('w.deco(1);') != -1, out);
+	}
+
+	public function testGuardedUsingSuppressesInsert(): Void {
+		// A `using` inside the guard is in scope for the guarded code, so a second one is pure
+		// noise — the presence test has to see through the `#if` the same way the insert does.
+		final out: String = fixResultOf(conditionalFiles('using Ext;\n\n'));
+		Assert.equals(out.indexOf('using Ext;'), out.lastIndexOf('using Ext;'));
+		Assert.isTrue(out.indexOf('w.deco(1);') != -1, out);
+	}
+
 	public function testAddUsingFalseReportsButDoesNotFix(): Void {
 		final config: String = '{"rules": {"prefer-static-extension": {"types": ["Ext"], "addUsing": false}}}';
 		Assert.equals(1, violationsOf(importingFiles(), config).length);
@@ -603,6 +622,23 @@ class PreferStaticExtensionCheckTest extends Test {
 			{
 				file: 'C.hx',
 				source: 'package top;\n\nimport sub.Widget;\n\nclass C {\n\tfunction f(w:Widget):Void {\n\t\tExt.deco(w, 1);\n\t}\n}\n'
+			},
+			{ file: 'Ext.hx', source: EXT_SOURCE },
+			{ file: 'sub/Widget.hx', source: 'package sub;\n\n$WIDGET_SOURCE' }
+		];
+	}
+
+	/**
+	 * `importingFiles` with the whole module body — imports, `head` and the class — wrapped in a
+	 * single `#if FLAG` guard: the shape a debug-only module has, where the top-level scan sees
+	 * nothing but `package` and one `Conditional`.
+	 */
+	private function conditionalFiles(head: String = ''): Array<{ file: String, source: String }> {
+		return [
+			{
+				file: 'C.hx',
+				source: 'package top;\n\n#if FLAG\nimport sub.Widget;\n\n${head}class C {\n\tfunction f(w:Widget):Void {\n'
+					+ '\t\tExt.deco(w, 1);\n\t}\n}\n#end\n'
 			},
 			{ file: 'Ext.hx', source: EXT_SOURCE },
 			{ file: 'sub/Widget.hx', source: 'package sub;\n\n$WIDGET_SOURCE' }

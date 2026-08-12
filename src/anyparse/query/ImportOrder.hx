@@ -311,8 +311,27 @@ final class ImportOrder {
 	 * declaration order, so sorting a `using` group is a semantic rewrite, not a relayout.
 	 */
 	public static function usingLinesOf(source: String, root: QueryNode): Null<Array<ImportLine>> {
+		return linesOfKinds(source, root, ['UsingDecl']);
+	}
+
+	/**
+	 * Every declaration of `root` whose kind is in `kinds`, as a movable whole LINE, in SOURCE
+	 * order — the generalisation `usingLinesOf` is now one call of. Null when ANY of them is not
+	 * liftable as a line (`lineOf` — its line carries other code, a block comment follows it, the
+	 * file ends without a newline, the grammar recorded no span), which is the answer a caller
+	 * RELOCATING the set needs before it moves anything; a `root` declaring none is an EMPTY array.
+	 *
+	 * `root` is any node whose children carry the declarations — the module for a file's own
+	 * header, a `#if … #end` region node for the header nested inside one.
+	 *
+	 * The lines describe POSITION, never order (see `usingLinesOf`): a `using` group's internal
+	 * order is what Haxe reads in reverse, so these must not reach `compare` / `orderOf` / `slotIn`.
+	 */
+	public static function linesOfKinds(source: String, root: QueryNode, kinds: Array<String>): Null<Array<ImportLine>> {
+		final slots: Array<ImportSlot> = [for (kind in kinds) for (slot in slotsOfKind(root, kind)) slot];
+		slots.sort((a, b) -> a.from - b.from);
 		final out: Array<ImportLine> = [];
-		for (slot in slotsOfKind(root, 'UsingDecl')) {
+		for (slot in slots) {
 			final line: Null<ImportLine> = lineOf(source, slot);
 			if (line == null) return null;
 			out.push(line);

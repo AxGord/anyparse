@@ -42,6 +42,9 @@ final class Linter {
 			new UnusedLocal(),
 			new DuplicateImport(),
 			new RedundantImport(),
+			// After the import-removing rules on purpose: an import stranded above a whole-body `#if`
+			// that is ALSO unused should be deleted by `unused-import`, not relocated by this one.
+			new ImportOutsideGuard(),
 			new Naming(),
 			new UnusedPrivate(),
 			new Complexity(),

@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
+import anyparse.check.UsingScan.UsingHeader;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -218,6 +219,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final root: QueryNode = tree;
+		final header: UsingHeader = UsingScan.headerOf(root, source, plugin);
 		// `Cli` hands `fix` the REPORT-scoped index, but the gates must re-derive on the SAME
 		// scope `run` proved them on — the plugin's resolution index (report files UNION the
 		// libraries and the std). Without this a std-typed receiver reads as unresolvable here,
@@ -235,13 +237,13 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 			if (candidate == null || candidate.verdict != Verdict.Fixable) continue;
 			// A rewrite without the module in scope does not compile, so a file that lacks the
 			// `using` and forbids inserting one is refused before any edit is built.
-			if (!options.addUsing && !UsingScan.hasUsingModule(root, candidate.module)) continue;
+			if (!options.addUsing && !UsingScan.hasUsingModule(header, candidate.module)) continue;
 			final pair: Null<Array<{ span: Span, text: String }>> = rewriteEdits(candidate, source);
 			if (pair == null || RefactorSupport.editsOverlapAny(pair, edits)) continue;
 			for (edit in pair) edits.push(edit);
 			if (!rewritten.contains(candidate.module)) rewritten.push(candidate.module);
 		}
-		appendUsingInserts(root, rewritten, edits);
+		appendUsingInserts(header, rewritten, edits);
 		return edits;
 	}
 
@@ -288,7 +290,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		// DEEP-mode resolution context (see `receiverNominal`): built once per file, and only for a
 		// file that actually holds a call on a configured module.
 		final chain: ChainTypeContext = { declaredTypeSources: s.typed.declaredTypeSources(source), source: source };
-		final usings: Array<String> = UsingScan.usingModules(tree);
+		final usings: Array<String> = UsingScan.usingModules(UsingScan.headerOf(tree, source, plugin));
 		// The conflict verdict depends only on (module, method), while a file repeats the same
 		// pair across every call site — and each miss costs a whole-index member-closure query.
 		final conflicts: Map<String, Bool> = [];
@@ -488,11 +490,13 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	 * edit rather than pushed as several — two zero-width edits at one offset would apply in an
 	 * unspecified order.
 	 */
-	private static function appendUsingInserts(tree: QueryNode, modules: Array<String>, edits: Array<{ span: Span, text: String }>): Void {
+	private static function appendUsingInserts(
+		header: UsingHeader, modules: Array<String>, edits: Array<{ span: Span, text: String }>
+	): Void {
 		var anchor: Null<Span> = null;
 		var text: String = '';
-		for (module in modules) if (!UsingScan.hasUsingModule(tree, module)) {
-			final insert: { span: Span, text: String } = UsingScan.usingInsertEdit(tree, module);
+		for (module in modules) if (!UsingScan.hasUsingModule(header, module)) {
+			final insert: { span: Span, text: String } = UsingScan.usingInsertEdit(header, module);
 			anchor = insert.span;
 			text += insert.text;
 		}

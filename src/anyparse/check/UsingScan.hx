@@ -1,7 +1,10 @@
 package anyparse.check;
 
+import anyparse.query.CondDirectives;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -11,6 +14,10 @@ import anyparse.runtime.Span;
  * each has to ask the same three questions of a file's header: is the module already brought in
  * with `using`, where would the insert go, and does some OTHER `using` already bind the method
  * name (which would make the rewrite resolve elsewhere).
+ *
+ * The header is not always the file's TOP LEVEL: a module whose whole body sits inside one
+ * `#if … #end` region carries its imports there too, and `headerOf` reads that region as the
+ * header — its doc holds the gates that decide when a region qualifies.
  *
  * Split out of `CheckScan`, on the same contract: PURE static helpers over the tree a check
  * already holds, no shared mutable state and no cache — the memo a caller wants is its own
@@ -33,7 +40,25 @@ final class UsingScan {
 	];
 
 	/**
-	 * Whether a top-level `using <module>;` is already present — then the module's
+	 * The `using` header of `tree`: its top level, paired with the `#if … #end` region that guards the
+	 * module's WHOLE body when the file has one.
+	 *
+	 * A debug- or platform-only module wraps everything below `package` in a single conditional, so its
+	 * import run — and every call a rewrite touches — sits INSIDE that region while the top level holds
+	 * nothing but `package` and the region itself. Read one level down, the insert joins that import run
+	 * and a `using` already declared there counts as present; read at the top level only, the insert
+	 * lands on an island above the `#if` and the guarded `using` is invisible, so a second one is
+	 * spliced in.
+	 *
+	 * Build it ONCE per file and pass it to the three readers: `guardOf` scans the file's directives,
+	 * which a per-site rebuild would repeat for every candidate.
+	 */
+	public static function headerOf(tree: QueryNode, source: String, plugin: GrammarPlugin): UsingHeader {
+		return { root: tree, guard: guardOf(tree, source, plugin) };
+	}
+
+	/**
+	 * Whether a `using <module>;` the header already binds is in scope — then the module's
 	 * extension methods resolve without inserting one. `module` may be QUALIFIED
 	 * (`pkg.Lambda`), in which case only an exact match counts; a SIMPLE `module`
 	 * (`Lambda`) also matches a qualified declaration ending in it (`pkg.Lambda`),
@@ -50,9 +75,9 @@ final class UsingScan {
 	 * using-declaration seam, so a grammar naming it differently reads as having no
 	 * `using` at all — which only ever causes a redundant insert, never a wrong one.
 	 */
-	public static function hasUsingModule(tree: QueryNode, module: String): Bool {
+	public static function hasUsingModule(header: UsingHeader, module: String): Bool {
 		final simple: Bool = module.indexOf('.') == -1;
-		for (child in tree.children) if (child.kind == USING_DECL_KIND) {
+		for (child in headerDecls(header)) if (child.kind == USING_DECL_KIND) {
 			final name: Null<String> = child.name;
 			if (name != null && (name == module || (simple && StringTools.endsWith(name, '.$module')))) return true;
 		}
@@ -60,7 +85,7 @@ final class UsingScan {
 	}
 
 	/**
-	 * A ZERO-WIDTH edit inserting `using <module>;` into `tree`. The insert companion of
+		  * A ZERO-WIDTH edit inserting `using <module>;` into the header. The insert companion of
 	 * `hasUsingModule`; the caller applies it only after deciding at least one rewrite needs
 	 * the module in scope.
 	 *
@@ -71,19 +96,22 @@ final class UsingScan {
 	 * ABOVE the FIRST existing `using` — lowest priority, no existing call disturbed — and
 	 * falls back to after the last package / import declaration, or the file head with a
 	 * trailing blank line, only when the file declares no `using` at all.
+	 *
+	 * An UNGUARDED `using` decides the position on its own: it is in scope for the whole file, so an
+	 * insert below it — inside the guard included — would outrank it. Only when the file has none does
+	 * the guard's own header take over, which is where the rewrites and their imports live.
 	 */
-	public static function usingInsertEdit(tree: QueryNode, module: String): { span: Span, text: String } {
-		var anchor: Null<Span> = null;
-		for (child in tree.children) {
-			if (child.kind == USING_DECL_KIND) {
-				final first: Null<Span> = child.span;
-				if (first != null) return { span: new Span(first.from, first.from), text: 'using $module;\n' };
-			}
-			if (!USING_ANCHOR_KINDS.contains(child.kind)) continue;
-			final span: Null<Span> = child.span;
-			if (span != null) anchor = span;
+	public static function usingInsertEdit(header: UsingHeader, module: String): { span: Span, text: String } {
+		final unguarded: Null<Span> = firstUsing(header.root);
+		if (unguarded != null) return { span: new Span(unguarded.from, unguarded.from), text: 'using $module;\n' };
+		final guard: Null<QueryNode> = header.guard;
+		if (guard != null) {
+			final guarded: Null<Span> = firstUsing(guard);
+			if (guarded != null) return { span: new Span(guarded.from, guarded.from), text: 'using $module;\n' };
+			final inner: Null<Span> = lastAnchor(guard);
+			if (inner != null) return { span: new Span(inner.to, inner.to), text: '\nusing $module;' };
 		}
-		final at: Null<Span> = anchor;
+		final at: Null<Span> = lastAnchor(header.root);
 		return at == null ? { span: new Span(0, 0), text: 'using $module;\n\n' } : {
 			span: new Span(at.to, at.to),
 			text: '\nusing $module;'
@@ -119,10 +147,10 @@ final class UsingScan {
 		return verdict;
 	}
 
-	/** The module paths of every top-level `using` declaration in `tree` — the read side of `hasUsingModule`. */
-	public static function usingModules(tree: QueryNode): Array<String> {
+	/** The module paths of every `using` declaration the header binds — the read side of `hasUsingModule`. */
+	public static function usingModules(header: UsingHeader): Array<String> {
 		final out: Array<String> = [];
-		for (child in tree.children) if (child.kind == USING_DECL_KIND) {
+		for (child in headerDecls(header)) if (child.kind == USING_DECL_KIND) {
 			final name: Null<String> = child.name;
 			if (name != null) out.push(name);
 		}
@@ -152,4 +180,102 @@ final class UsingScan {
 		return false;
 	}
 
+	/** The declarations the header binds: the file's top level, followed by the whole-body guard's own when it has one. */
+	private static function headerDecls(header: UsingHeader): Array<QueryNode> {
+		final guard: Null<QueryNode> = header.guard;
+		return guard == null ? header.root.children : header.root.children.concat(guard.children);
+	}
+
+	/**
+	 * The `#if … #end` region holding every type `tree` declares, or null when the file has none — the
+	 * answer for the ordinary unguarded module, and the conservative one for every shape the gates
+	 * below refuse.
+	 *
+	 * Three gates, each closing a way the region could fail to cover a rewrite site:
+	 *
+	 *  - ONE region at the top level, with no type declared OUTSIDE it. A site in an unguarded type
+	 *    resolves in the builds where the condition does not hold, so a `using` placed inside the
+	 *    region would not be in scope for it.
+	 *  - The region declares a type ITSELF (its own, or one nested in a further region). A guarded
+	 *    import run with the code outside it is what the first gate refuses; this one refuses a file
+	 *    whose region guards no code at all.
+	 *  - NO `#else` / `#elseif` seam of its OWN. The grammar projects every branch of one region as
+	 *    flat siblings, so an anchor picked from the children cannot be told from one in another
+	 *    branch — and an insert after the first branch's last import is absent from every other
+	 *    branch's build. A NESTED region's seams belong to that region and do not count; an unbalanced
+	 *    directive scan refuses.
+	 */
+	private static function guardOf(tree: QueryNode, source: String, plugin: GrammarPlugin): Null<QueryNode> {
+		final shape: RefShape = plugin.refShape();
+		final regionKind: Null<String> = shape.conditionalMemberKind;
+		if (regionKind == null) return null;
+		var region: Null<QueryNode> = null;
+		for (child in tree.children) if (child.kind == regionKind) {
+			if (region != null) return null;
+			region = child;
+		} else if (RefactorSupport.typeDeclOf(child) != null)
+			return null;
+		final guard: Null<QueryNode> = region;
+		return guard != null && declaresType(guard, regionKind) && singleBranch(guard, source, shape) ? guard : null;
+	}
+
+	/** Whether `node` declares a type directly, or inside a region nested in it — `guardOf`'s coverage gate. */
+	private static function declaresType(node: QueryNode, regionKind: String): Bool {
+		for (child in node.children) {
+			if (RefactorSupport.typeDeclOf(child) != null) return true;
+			if (child.kind == regionKind && declaresType(child, regionKind)) return true;
+		}
+		return false;
+	}
+
+	/** Whether `region` opens no `#else` / `#elseif` branch of its own — `guardOf`'s third gate. */
+	private static function singleBranch(region: QueryNode, source: String, shape: RefShape): Bool {
+		final span: Null<Span> = region.span;
+		final opener: Null<String> = shape.conditionalIfKeyword;
+		final closer: Null<String> = shape.conditionalEndKeyword;
+		final seams: Null<Array<String>> = shape.conditionalElseKeywords;
+		if (span == null || opener == null || closer == null || seams == null) return false;
+		var depth: Int = 0;
+		for (directive in CondDirectives.scan(source, shape)) {
+			if (directive.span.from < span.from || directive.span.to > span.to) continue;
+			if (directive.keyword == opener)
+				depth++;
+			else if (directive.keyword == closer) {
+				depth--;
+				if (depth == 0) return true;
+			} else if (depth == 1 && seams.contains(directive.keyword))
+				return false;
+		}
+		return false;
+	}
+
+	/** The span of the FIRST `using` declared directly under `node`, or null when it declares none. */
+	private static function firstUsing(node: QueryNode): Null<Span> {
+		for (child in node.children) if (child.kind == USING_DECL_KIND) {
+			final span: Null<Span> = child.span;
+			if (span != null) return span;
+		}
+		return null;
+	}
+
+	/** The span of the LAST package / import / using declared directly under `node` — the declaration an insert follows. */
+	private static function lastAnchor(node: QueryNode): Null<Span> {
+		var anchor: Null<Span> = null;
+		for (child in node.children) if (USING_ANCHOR_KINDS.contains(child.kind)) {
+			final span: Null<Span> = child.span;
+			if (span != null) anchor = span;
+		}
+		return anchor;
+	}
+
+}
+
+/**
+ * A module's `using` header: the file's top level, plus the `#if … #end` region that guards its
+ * WHOLE body when it has one — built by `UsingScan.headerOf`. `guard` is null for the ordinary
+ * unguarded module and for every region the coverage gates refuse.
+ */
+typedef UsingHeader = {
+	final root: QueryNode;
+	final guard: Null<QueryNode>;
 }
