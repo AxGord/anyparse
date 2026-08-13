@@ -1,4 +1,13 @@
 {
-    "compilerOracle": "test-js.hxml",
-    "compilerOracleServer": true
+	"compilerOracle": "test-js.hxml",
+	"compilerOracleServer": true,
+	"resolutionLibs": [
+		"hxnodejs",
+		"utest"
+	],
+	"rules": {
+		"explicit-local-type": {
+			"enabled": true
+		}
+	}
 }
