@@ -132,7 +132,7 @@ final class _ReconSkipParse { // noqa: naming
 			'--- skip-parse construct-locus histogram (total $total, showing top $shown of ${entries.length}; --all overrides) ---'
 		);
 		for (idx in 0...shown) {
-			final entry = entries[idx];
+			final entry: { key: String, cluster: ReconCluster } = entries[idx];
 			final c: ReconCluster = entry.cluster;
 			final examplesStr: String = c.examples.length == 1 ? c.examples[0] : c.examples.join(', ');
 			final raw: String = normalize(c.rawSample);

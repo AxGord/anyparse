@@ -5,6 +5,7 @@ import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxType;
+import anyparse.grammar.haxe.HxVarDecl;
 
 /**
  * Tests for the `cast` keyword expression atoms in the Haxe grammar.
@@ -73,7 +74,7 @@ class HxCastSliceTest extends HxTestHelpers {
 	// ======== TypedCastExpr — `cast(expr, Type)` ========
 
 	public function testTypedCastBasic(): Void {
-		final decl = parseSingleVarDecl('class C { var f:Int = cast(x, Int); }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = cast(x, Int); }');
 		switch decl.init {
 			case TypedCastExpr(info):
 				switch info.target {
@@ -89,7 +90,7 @@ class HxCastSliceTest extends HxTestHelpers {
 	}
 
 	public function testTypedCastComplexExpr(): Void {
-		final decl = parseSingleVarDecl('class C { var f:Int = cast(a + b, Float); }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = cast(a + b, Float); }');
 		switch decl.init {
 			case TypedCastExpr(info):
 				switch info.target {
@@ -106,10 +107,10 @@ class HxCastSliceTest extends HxTestHelpers {
 	}
 
 	public function testTypedCastGenericType(): Void {
-		final decl = parseSingleVarDecl('class C { var f:Int = cast(x, Map<String, Int>); }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = cast(x, Map<String, Int>); }');
 		switch decl.init {
 			case TypedCastExpr(info):
-				final ref = expectNamedTypeFromHxType(info.type);
+				final ref: anyparse.grammar.haxe.HxTypeRef = expectNamedTypeFromHxType(info.type);
 				Assert.equals('Map', (ref.name: String));
 				Assert.notNull(ref.params);
 				Assert.equals(2, ref.params.length);
@@ -122,7 +123,7 @@ class HxCastSliceTest extends HxTestHelpers {
 		// Regression: before this slice, `cast(x, T)` parsed as
 		// Call(IdentExpr("cast"), [...]). Verify it now parses as
 		// TypedCastExpr — semantic AST shape, not call shape.
-		final decl = parseSingleVarDecl('class C { var f:Int = cast(x, Int); }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = cast(x, Int); }');
 		switch decl.init {
 			case Call(IdentExpr(_), _):
 				Assert.fail('regressed: cast(x, T) parsed as Call');
@@ -142,7 +143,7 @@ class HxCastSliceTest extends HxTestHelpers {
 	// ======== CastExpr — `cast x` (bare unsafe cast) ========
 
 	public function testCastBareIdent(): Void {
-		final decl = parseSingleVarDecl('class C { var f:Int = cast x; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = cast x; }');
 		switch decl.init {
 			case CastExpr(IdentExpr(name)):
 				Assert.equals('x', (name: String));
@@ -152,7 +153,7 @@ class HxCastSliceTest extends HxTestHelpers {
 	}
 
 	public function testCastBareCall(): Void {
-		final decl = parseSingleVarDecl('class C { var f:Int = cast foo(); }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = cast foo(); }');
 		switch decl.init {
 			case CastExpr(Call(IdentExpr(name), args)):
 				Assert.equals('foo', (name: String));
@@ -163,7 +164,7 @@ class HxCastSliceTest extends HxTestHelpers {
 	}
 
 	public function testCastBareFieldAccess(): Void {
-		final decl = parseSingleVarDecl('class C { var f:Int = cast x.field; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = cast x.field; }');
 		switch decl.init {
 			case CastExpr(FieldAccess(IdentExpr(x), field)):
 				Assert.equals('x', (x: String));
@@ -176,7 +177,7 @@ class HxCastSliceTest extends HxTestHelpers {
 	public function testCastSingleArgParenIsBareCast(): Void {
 		// `cast (x)` (or `cast(x)` without comma) is bare cast applied to
 		// a parenthesised expression — TypedCastExpr requires the comma.
-		final decl = parseSingleVarDecl('class C { var f:Int = cast (x); }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = cast (x); }');
 		switch decl.init {
 			case CastExpr(ParenExpr(IdentExpr(name))):
 				Assert.equals('x', (name: String));
@@ -192,7 +193,7 @@ class HxCastSliceTest extends HxTestHelpers {
 		// `@:fmt(atomOperand)` on `CastExpr` routes operand parse to
 		// `parseHxExprAtom`, so the trailing `+ b` stays for the outer
 		// Pratt loop. Pre-slice this parsed as `CastExpr(Add(a, b))`.
-		final decl = parseSingleVarDecl('class C { var f:Int = cast a + b; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = cast a + b; }');
 		switch decl.init {
 			case Add(CastExpr(IdentExpr(a)), IdentExpr(b)):
 				Assert.equals('a', (a: String));
@@ -205,7 +206,7 @@ class HxCastSliceTest extends HxTestHelpers {
 	public function testCastBindsTighterThanIs(): Void {
 		// Slice 46: `cast x is Bool` — atom-bound `cast x` becomes the
 		// left of `is`. Pre-slice parsed as `CastExpr(Is(x, Bool))`.
-		final decl = parseSingleVarDecl('class C { var f:Bool = cast x is Bool; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Bool = cast x is Bool; }');
 		switch decl.init {
 			case Is(CastExpr(IdentExpr(name)), _):
 				Assert.equals('x', (name: String));
@@ -219,7 +220,7 @@ class HxCastSliceTest extends HxTestHelpers {
 		// then `is Bool` is the outer Pratt operator. The
 		// `tightOnParenOperand` writer knob then drops the kw trailing
 		// space (operand=ParenExpr) so output is `cast(x) is Bool`.
-		final decl = parseSingleVarDecl('class C { var f:Bool = cast (x) is Bool; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Bool = cast (x) is Bool; }');
 		switch decl.init {
 			case Is(CastExpr(ParenExpr(IdentExpr(name))), _):
 				Assert.equals('x', (name: String));
@@ -231,7 +232,7 @@ class HxCastSliceTest extends HxTestHelpers {
 	public function testCastECheckTypeBindsTighterThanIs(): Void {
 		// Slice 46: `cast (x:Int) is Bool` — operand `(x:Int)` is
 		// ECheckTypeExpr atom; `is Bool` is the outer Pratt operator.
-		final decl = parseSingleVarDecl('class C { var f:Bool = cast (x:Int) is Bool; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Bool = cast (x:Int) is Bool; }');
 		switch decl.init {
 			case Is(CastExpr(ECheckTypeExpr(info)), _):
 				switch info.expr {
@@ -256,7 +257,7 @@ class HxCastSliceTest extends HxTestHelpers {
 
 	public function testCastIdentifierPrefixNotConsumed(): Void {
 		// `castle` must parse as a regular identifier (word boundary on `cast` kw).
-		final decl = parseSingleVarDecl('class C { var f:Int = castle; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = castle; }');
 		switch decl.init {
 			case IdentExpr(name):
 				Assert.equals('castle', (name: String));
@@ -276,7 +277,7 @@ class HxCastSliceTest extends HxTestHelpers {
 
 	public function testTypedCastWrapsBareCast(): Void {
 		// `cast(cast x, Int)` — TypedCastExpr whose target is CastExpr.
-		final decl = parseSingleVarDecl('class C { var f:Int = cast(cast x, Int); }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = cast(cast x, Int); }');
 		switch decl.init {
 			case TypedCastExpr(info):
 				switch info.target {
@@ -290,7 +291,7 @@ class HxCastSliceTest extends HxTestHelpers {
 
 	public function testCastWrapsTypedCast(): Void {
 		// `cast cast(x, Int)` — bare CastExpr wrapping TypedCastExpr.
-		final decl = parseSingleVarDecl('class C { var f:Int = cast cast(x, Int); }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = cast cast(x, Int); }');
 		switch decl.init {
 			case CastExpr(TypedCastExpr(info)):
 				switch info.target {

@@ -3,6 +3,9 @@ package unit;
 import utest.Assert;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
+import anyparse.grammar.haxe.HxParamBody;
+import anyparse.grammar.haxe.HxStatement;
+import anyparse.grammar.haxe.HxTypeRef;
 
 /**
  * Spread / rest operator `...` parse + write tests.
@@ -30,7 +33,7 @@ class HxSpreadSliceTest extends HxTestHelpers {
 	public function testRestParamSingle(): Void {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function f(...r:Int):Void {} }');
 		Assert.equals(1, decl.params.length);
-		final body = expectRestParam(decl.params[0]);
+		final body: HxParamBody = expectRestParam(decl.params[0]);
 		Assert.equals('r', (body.name: String));
 		Assert.equals('Int', (expectNamedType(body.type).name: String));
 		Assert.isNull(body.defaultValue);
@@ -40,7 +43,7 @@ class HxSpreadSliceTest extends HxTestHelpers {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function f(a:Int, ...r:Int):Void {} }');
 		Assert.equals(2, decl.params.length);
 		Assert.equals('a', (expectRequiredParam(decl.params[0]).name: String));
-		final tail = expectRestParam(decl.params[1]);
+		final tail: HxParamBody = expectRestParam(decl.params[1]);
 		Assert.equals('r', (tail.name: String));
 		Assert.equals('Int', (expectNamedType(tail.type).name: String));
 	}
@@ -56,9 +59,9 @@ class HxSpreadSliceTest extends HxTestHelpers {
 	public function testRestParamWithGenericType(): Void {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function f(...r:Array<Int>):Void {} }');
 		Assert.equals(1, decl.params.length);
-		final body = expectRestParam(decl.params[0]);
+		final body: HxParamBody = expectRestParam(decl.params[0]);
 		Assert.equals('r', (body.name: String));
-		final ref = expectNamedType(body.type);
+		final ref: HxTypeRef = expectNamedType(body.type);
 		Assert.equals('Array', (ref.name: String));
 	}
 
@@ -72,7 +75,7 @@ class HxSpreadSliceTest extends HxTestHelpers {
 
 	public function testSpreadInCallArg(): Void {
 		final decl: HxFnDecl = parseSingleFnDecl('class M { static function m() { f(...args); } }');
-		final stmts = fnBodyStmts(decl);
+		final stmts: Array<HxStatement> = fnBodyStmts(decl);
 		Assert.equals(1, stmts.length);
 		switch stmts[0] {
 			case ExprStmt(Call(_, args)):
@@ -93,7 +96,7 @@ class HxSpreadSliceTest extends HxTestHelpers {
 		// `@:prefix` recurses into `parseHxExprAtom`, which captures the
 		// full postfix chain in one step.
 		final decl: HxFnDecl = parseSingleFnDecl('class M { static function m() { f(...rest.append(999)); } }');
-		final stmts = fnBodyStmts(decl);
+		final stmts: Array<HxStatement> = fnBodyStmts(decl);
 		switch stmts[0] {
 			case ExprStmt(Call(_, [Spread(Call(FieldAccess(IdentExpr(_), _), _))])):
 				Assert.pass();
@@ -108,7 +111,7 @@ class HxSpreadSliceTest extends HxTestHelpers {
 		// from the atom parser; the Pratt loop sees `...` as the
 		// `Interval` infix when an atom (`0`) is already on the stack.
 		final decl: HxFnDecl = parseSingleFnDecl('class M { static function m() { for (i in 0...10) {} } }');
-		final stmts = fnBodyStmts(decl);
+		final stmts: Array<HxStatement> = fnBodyStmts(decl);
 		switch stmts[0] {
 			case ForStmt(stmt):
 				switch stmt.iterable {

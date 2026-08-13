@@ -4,6 +4,9 @@ import utest.Assert;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxVarDecl;
+import anyparse.grammar.haxe.HxClassDecl;
+import anyparse.grammar.haxe.HxFnDecl;
+import anyparse.grammar.haxe.HxStatement;
 
 /**
  * Phase 3 Slice 24 — `inline` keyword as expression-position prefix
@@ -76,7 +79,7 @@ class HxInlineExprSliceTest extends HxTestHelpers {
 		// `inline g();` as a body statement — the parser dispatches to
 		// `LocalInlineFnStmt` first (requires `inline function`), rolls
 		// back, then `ExprStmt → InlineExpr(Call)` matches.
-		final ast = HaxeParser.parse('class C { function f():Void { inline g(); } }');
+		final ast: HxClassDecl = HaxeParser.parse('class C { function f():Void { inline g(); } }');
 		Assert.equals(1, ast.members.length);
 		// Just assert the body parses without throwing — the structural
 		// shape is exercised by the round-trip test below.
@@ -86,9 +89,9 @@ class HxInlineExprSliceTest extends HxTestHelpers {
 	public function testLocalInlineFnStmtStillWins(): Void {
 		// Regression: `inline function name(...) {}` must remain a
 		// `LocalInlineFnStmt`, not collapse into `InlineExpr(FnExpr)`.
-		final ast = HaxeParser.parse('class C { function f():Void { inline function g():Void {} } }');
-		final fn = expectFnMember(ast.members[0].member);
-		final body = fnBodyStmts(fn);
+		final ast: HxClassDecl = HaxeParser.parse('class C { function f():Void { inline function g():Void {} } }');
+		final fn: HxFnDecl = expectFnMember(ast.members[0].member);
+		final body: Array<HxStatement> = fnBodyStmts(fn);
 		Assert.equals(1, body.length);
 		switch body[0] {
 			case LocalInlineFnStmt(decl):

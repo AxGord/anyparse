@@ -29,7 +29,7 @@ class HxTypeArrowSliceTest extends HxTestHelpers {
 		final ast: HxClassDecl = HaxeParser.parse('class Foo { var f:Void->Void; }');
 		Assert.equals(1, ast.members.length);
 		final v: HxVarDecl = expectVarMember(ast.members[0].member);
-		final arr = expectArrow(v.type);
+		final arr: { right: HxType, left: HxType } = expectArrow(v.type);
 		Assert.equals('Void', (expectNamedType(arr.left).name: String));
 		Assert.equals('Void', (expectNamedType(arr.right).name: String));
 	}
@@ -37,10 +37,10 @@ class HxTypeArrowSliceTest extends HxTestHelpers {
 	public function testRightAssoc(): Void {
 		final ast: HxClassDecl = HaxeParser.parse('class Foo { var f:Int->String->Void; }');
 		final v: HxVarDecl = expectVarMember(ast.members[0].member);
-		final outer = expectArrow(v.type);
+		final outer: { right: HxType, left: HxType } = expectArrow(v.type);
 		Assert.equals('Int', (expectNamedType(outer.left).name: String));
 		// right-assoc: outer.right itself is an Arrow.
-		final inner = expectArrow(outer.right);
+		final inner: { right: HxType, left: HxType } = expectArrow(outer.right);
 		Assert.equals('String', (expectNamedType(inner.left).name: String));
 		Assert.equals('Void', (expectNamedType(inner.right).name: String));
 	}
@@ -69,7 +69,7 @@ class HxTypeArrowSliceTest extends HxTestHelpers {
 	public function testArrowWithTypeParamLeft(): Void {
 		final ast: HxClassDecl = HaxeParser.parse('class Foo { var f:Array<Int>->Void; }');
 		final v: HxVarDecl = expectVarMember(ast.members[0].member);
-		final arr = expectArrow(v.type);
+		final arr: { right: HxType, left: HxType } = expectArrow(v.type);
 		final leftRef: HxTypeRef = expectNamedType(arr.left);
 		Assert.equals('Array', (leftRef.name: String));
 		Assert.notNull(leftRef.params);
@@ -85,14 +85,14 @@ class HxTypeArrowSliceTest extends HxTestHelpers {
 		Assert.equals('Array', (outerRef.name: String));
 		Assert.notNull(outerRef.params);
 		Assert.equals(1, outerRef.params.length);
-		final inner = expectArrow(outerRef.params[0].type);
+		final inner: { right: HxType, left: HxType } = expectArrow(outerRef.params[0].type);
 		Assert.equals('Int', (expectNamedType(inner.left).name: String));
 		Assert.equals('Void', (expectNamedType(inner.right).name: String));
 	}
 
 	public function testArrowOnFnReturnType(): Void {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function bar():Int->Void {} }');
-		final arr = expectArrow(decl.returnType);
+		final arr: { right: HxType, left: HxType } = expectArrow(decl.returnType);
 		Assert.equals('Int', (expectNamedType(arr.left).name: String));
 		Assert.equals('Void', (expectNamedType(arr.right).name: String));
 	}
@@ -100,7 +100,7 @@ class HxTypeArrowSliceTest extends HxTestHelpers {
 	public function testArrowOnFnParamType(): Void {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function bar(cb:Int->Void):Void {} }');
 		Assert.equals(1, decl.params.length);
-		final arr = expectArrow(expectRequiredParam(decl.params[0]).type);
+		final arr: { right: HxType, left: HxType } = expectArrow(expectRequiredParam(decl.params[0]).type);
 		Assert.equals('Int', (expectNamedType(arr.left).name: String));
 		Assert.equals('Void', (expectNamedType(arr.right).name: String));
 	}
@@ -108,7 +108,7 @@ class HxTypeArrowSliceTest extends HxTestHelpers {
 	public function testWhitespaceTolerantSpaces(): Void {
 		final ast: HxClassDecl = HaxeParser.parse('class Foo { var f:Int -> Void; }');
 		final v: HxVarDecl = expectVarMember(ast.members[0].member);
-		final arr = expectArrow(v.type);
+		final arr: { right: HxType, left: HxType } = expectArrow(v.type);
 		Assert.equals('Int', (expectNamedType(arr.left).name: String));
 		Assert.equals('Void', (expectNamedType(arr.right).name: String));
 	}

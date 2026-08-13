@@ -24,13 +24,13 @@ class DocRendererTest extends Test {
 	}
 
 	private function testConcat(): Void {
-		final doc = D.concat([D.text('hello'), D.text(' '), D.text('world')]);
+		final doc: Doc = D.concat([D.text('hello'), D.text(' '), D.text('world')]);
 		Assert.equals('hello world', Renderer.render(doc, 80));
 	}
 
 	private function testSoftlineFlat(): Void {
 		// A group that fits: softlines collapse to nothing, lines become spaces.
-		final doc = D.group(D.concat([
+		final doc: Doc = D.group(D.concat([
 			D.text('['),
 			D.softline(),
 			D.text('1'),
@@ -45,7 +45,7 @@ class DocRendererTest extends Test {
 
 	private function testGroupBreaksWhenTooLong(): Void {
 		// Same shape, but width too small → breaks all lines.
-		final doc = D.group(D.concat([
+		final doc: Doc = D.group(D.concat([
 			D.text('['),
 			D.nest(2, D.concat([
 				D.softline(),
@@ -65,13 +65,13 @@ class DocRendererTest extends Test {
 		Assert.equals('[a, b, c]', Renderer.render(doc, 80));
 
 		// At width 5 we expect a break with indent = 2.
-		final expected = '[\n  a,\n  b,\n  c\n]';
+		final expected: String = '[\n  a,\n  b,\n  c\n]';
 		Assert.equals(expected, Renderer.render(doc, 5));
 	}
 
 	private function testNestedGroups(): Void {
 		// Outer array of two inner arrays. Outer doesn't fit, inners do.
-		final inner1 = D.group(D.concat([
+		final inner1: Doc = D.group(D.concat([
 			D.text('['),
 			D.text('1'),
 			D.text(','),
@@ -79,7 +79,7 @@ class DocRendererTest extends Test {
 			D.text('2'),
 			D.text(']'),
 		]));
-		final inner2 = D.group(D.concat([
+		final inner2: Doc = D.group(D.concat([
 			D.text('['),
 			D.text('3'),
 			D.text(','),
@@ -87,7 +87,7 @@ class DocRendererTest extends Test {
 			D.text('4'),
 			D.text(']'),
 		]));
-		final outer = D.group(D.concat([
+		final outer: Doc = D.group(D.concat([
 			D.text('['),
 			D.nest(2, D.concat([
 				D.softline(),
@@ -104,7 +104,7 @@ class DocRendererTest extends Test {
 		Assert.equals('[[1, 2], [3, 4]]', Renderer.render(outer, 80));
 
 		// Width 10: outer breaks, inners stay flat on their own lines.
-		final expected = '[\n  [1, 2],\n  [3, 4]\n]';
+		final expected: String = '[\n  [1, 2],\n  [3, 4]\n]';
 		Assert.equals(expected, Renderer.render(outer, 10));
 	}
 
@@ -232,23 +232,23 @@ class DocRendererTest extends Test {
 	}
 
 	private function testInterspersePreservesElements(): Void {
-		final items = [D.text('a'), D.text('b'), D.text('c')];
-		final result = D.intersperse(items, D.text(','));
-		final doc = D.concat(result);
+		final items: Array<Doc> = [D.text('a'), D.text('b'), D.text('c')];
+		final result: Array<Doc> = D.intersperse(items, D.text(','));
+		final doc: Doc = D.concat(result);
 		Assert.equals('a,b,c', Renderer.render(doc, 80));
 	}
 
 	private function testInterspersePreservesSingleItem(): Void {
-		final items = [D.text('only')];
-		final result = D.intersperse(items, D.text(','));
-		final doc = D.concat(result);
+		final items: Array<Doc> = [D.text('only')];
+		final result: Array<Doc> = D.intersperse(items, D.text(','));
+		final doc: Doc = D.concat(result);
 		Assert.equals('only', Renderer.render(doc, 80));
 	}
 
 	private function testInterspersePreservesEmpty(): Void {
 		final items = [];
-		final result = D.intersperse(items, D.text(','));
-		final doc = D.concat(result);
+		final result: Array<Doc> = D.intersperse(items, D.text(','));
+		final doc: Doc = D.concat(result);
 		Assert.equals('', Renderer.render(doc, 80));
 	}
 

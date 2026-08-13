@@ -180,7 +180,7 @@ final class CatchDynamic implements Check implements ConfigAware {
 	private static function flagCatch(
 		out: Array<Violation>, file: String, source: String, catchNode: QueryNode, catchAll: Array<String>
 	): Void {
-		final bare = catchBareRegion(catchNode, source);
+		final bare: Null<{ varName: String, to: Int, from: Int }> = catchBareRegion(catchNode, source);
 		if (bare != null) {
 			out.push({
 				file: file,
@@ -287,7 +287,7 @@ final class CatchDynamic implements Check implements ConfigAware {
 		span: Span,
 		text: String
 	}> {
-		final b = catchBareRegion(catchNode, source);
+		final b: Null<{ varName: String, to: Int, from: Int }> = catchBareRegion(catchNode, source);
 		return b == null || !flagged.exists('${b.from}:${b.to}') ? null : { span: new Span(b.from, b.to), text: '(${b.varName}:$exText)' };
 	}
 

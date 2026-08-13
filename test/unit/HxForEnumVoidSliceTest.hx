@@ -13,6 +13,7 @@ import anyparse.grammar.haxe.HxMetadataUtil;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.runtime.ParseError;
+import anyparse.grammar.haxe.HxParamBody;
 
 /**
  * Tests for slice lambda_1: for statement, enum ctor parameters, and void return.
@@ -163,7 +164,7 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 		final decl: HxEnumCtorDecl = expectParamCtor(enumCtors(ed)[0]);
 		Assert.equals('Some', (decl.name: String));
 		Assert.equals(1, decl.params.length);
-		final body = expectRequiredParam(decl.params[0]);
+		final body: HxParamBody = expectRequiredParam(decl.params[0]);
 		Assert.equals('v', (body.name: String));
 		Assert.equals('Int', (expectNamedType(body.type).name: String));
 		Assert.equals('None', (expectSimpleCtor(enumCtors(ed)[1]): String));
@@ -187,7 +188,7 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 		Assert.equals(1, enumCtors(ed).length);
 		final decl: HxEnumCtorDecl = expectParamCtor(enumCtors(ed)[0]);
 		Assert.equals(1, decl.params.length);
-		final body = expectRequiredParam(decl.params[0]);
+		final body: HxParamBody = expectRequiredParam(decl.params[0]);
 		Assert.equals('x', (body.name: String));
 		switch body.defaultValue {
 			case null:

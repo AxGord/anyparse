@@ -69,7 +69,7 @@ class HxTypeParensSliceTest extends HxTestHelpers {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function bar(cb:(Int->Bool)):Void {} }');
 		Assert.equals(1, decl.params.length);
 		final paramType: HxType = expectRequiredParam(decl.params[0]).type;
-		final innerArrow = expectArrowType(expectParensType(paramType));
+		final innerArrow: { right: HxType, left: HxType } = expectArrowType(expectParensType(paramType));
 		Assert.equals('Int', (expectNamedType(innerArrow.left).name: String));
 		Assert.equals('Bool', (expectNamedType(innerArrow.right).name: String));
 	}

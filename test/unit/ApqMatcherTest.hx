@@ -6,6 +6,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Matcher;
 import anyparse.query.Pattern;
 import anyparse.query.QueryNode;
+import anyparse.runtime.Span;
 
 using StringTools;
 
@@ -36,7 +37,7 @@ class ApqMatcherTest extends Test {
 		Assert.equals(2, matches.length, 'two throw-new sites expected — got ${matches.length}');
 		final names: Array<String> = [
 			for (m in matches) {
-				final e = m.bindings.get('E');
+				final e: Null<QueryNode> = m.bindings.get('E');
 				e == null ? '<none>' : (e.name ?? '<noname>');
 			}
 		];
@@ -100,7 +101,7 @@ class ApqMatcherTest extends Test {
 		Assert.equals(2, matches.length, 'field + local var must both match — got ${matches.length}');
 		final names: Array<String> = [
 			for (m in matches) {
-				final v = m.bindings.get('v');
+				final v: Null<QueryNode> = m.bindings.get('v');
 				v == null ? '<none>' : (v.name ?? '<noname>');
 			}
 		];
@@ -145,7 +146,7 @@ class ApqMatcherTest extends Test {
 		final bound: Null<QueryNode> = m.bindings['x'];
 		Assert.notNull(bound, '$$x binding must be present');
 		if (bound == null) return;
-		final span = bound.span;
+		final span: Null<Span> = bound.span;
 		Assert.notNull(span, '$$x binding must carry a span');
 		if (span == null) return;
 		final slice: String = source.substring(span.from, span.to);

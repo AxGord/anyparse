@@ -5,6 +5,7 @@ import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Address;
 import anyparse.query.QueryNode;
+import anyparse.runtime.Span;
 
 /**
  * Unit tests for the shared target-address resolver (`Address.resolve`) — the
@@ -64,7 +65,7 @@ class AddressTest extends Test {
 				final n: Null<QueryNode> = node;
 				Assert.notNull(n);
 				if (n != null) Assert.equals('FnMember', n.kind);
-				final span = n?.span;
+				final span: Null<Span> = n?.span;
 				Assert.equals(span?.from, offset);
 			case Err(message):
 				Assert.fail(message);

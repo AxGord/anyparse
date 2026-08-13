@@ -110,7 +110,7 @@ class LintSliceTest extends Test {
 		Assert.isNull(Linter.byId('does-not-exist'));
 		Assert.equals(157, Linter.builtins().length);
 
-		final files = [
+		final files: Array<{ source: String, file: String }> = [
 			{ file: 'pkg/C.hx', source: 'package pkg;\nimport a.b.Unused;\n/** A class. */\nclass C {}' }
 		];
 		final viaDefault: Array<Violation> = Linter.run(files, plugin());
@@ -142,7 +142,7 @@ class LintSliceTest extends Test {
 
 	/** An unparseable file is excluded; the check does not throw (skip-parse tolerance). */
 	public function testSkipParseExcluded(): Void {
-		final files = [
+		final files: Array<{ source: String, file: String }> = [
 			{ file: 'pkg/Good.hx', source: 'package pkg;\nimport a.b.Unused;\nclass Good {}' },
 			{ file: 'pkg/Bad.hx', source: 'package pkg;\nclass Bad { function f() { ' },
 		];
@@ -509,7 +509,7 @@ class LintSliceTest extends Test {
 		// `self-assignment` emit nested deletions. Batching them blindly would corrupt
 		// the splice; dropping the contained edit keeps only the outer dead-run delete.
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\treturn;\n\t\tvar x = 0;\n\t\tx = x;\n\t}\n}';
-		final files = [{ file: 'C.hx', source: src }];
+		final files: Array<{ source: String, file: String }> = [{ file: 'C.hx', source: src }];
 		final edits: Array<{ span: Span, text: String }> = new DeadCode().fix(src, new DeadCode().run(files, plugin()), plugin());
 		for (e in new SelfAssignment().fix(src, new SelfAssignment().run(files, plugin()), plugin())) edits.push(e);
 		switch RefactorSupport.canonicalize(src, RefactorSupport.dropContainedEdits(edits), true, plugin()) {

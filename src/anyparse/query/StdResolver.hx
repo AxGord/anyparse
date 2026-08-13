@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.core.EnvFlag;
+import js.node.ChildProcess.ChildProcessSpawnSyncResult;
 
 using StringTools;
 
@@ -217,7 +218,7 @@ final class StdResolver {
 	/** Spawn `which haxe` and return its trimmed stdout on a zero exit, or null on any failure (mirrors `HaxelibResolver.runLibpath`). */
 	private static function whichHaxe(): Null<String> {
 		#if nodejs
-		final res = js.node.ChildProcess.spawnSync('which', ['haxe'], { encoding: 'utf8' });
+		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync('which', ['haxe'], { encoding: 'utf8' });
 		final launchError: Null<Dynamic> = (res.error: Dynamic);
 		if (launchError != null) return null;
 		final status: Null<Int> = (res.status: Null<Int>);

@@ -265,7 +265,7 @@ class SymbolIndexSliceTest extends Test {
 	 * of a cross-file-safe private-member rename, matched by simple type name.
 	 */
 	public function testInheritanceAndAccessGrantQueries(): Void {
-		final files = [
+		final files: Array<{ source: String, file: String }> = [
 			{ file: 'pkg/Base.hx', source: 'package pkg;\nclass Base {}' },
 			{ file: 'pkg/Sub.hx', source: 'package pkg;\nclass Sub extends Base implements IFace {}' },
 			{ file: 'pkg/Peer.hx', source: 'package pkg;\n@:access(pkg.Base)\nclass Peer {}' }
@@ -675,7 +675,7 @@ class SymbolIndexSliceTest extends Test {
 	 * which leaves a base method's parameter alone when an override may use it.
 	 */
 	public function testSubtypeDeclaresMember(): Void {
-		final files = [
+		final files: Array<{ source: String, file: String }> = [
 			{ file: 'pkg/Base.hx', source: 'package pkg;\nclass Base {\n\tfunction over():Void {}\n\n\tfunction only():Void {}\n}' },
 			{ file: 'pkg/Mid.hx', source: 'package pkg;\nclass Mid extends Base {}' },
 			{ file: 'pkg/Leaf.hx', source: 'package pkg;\nclass Leaf extends Mid {\n\toverride function over():Void {}\n}' }
@@ -766,7 +766,7 @@ class SymbolIndexSliceTest extends Test {
 	}
 
 	public function testSubtypeOverridesProperty(): Void {
-		final files = [
+		final files: Array<{ source: String, file: String }> = [
 			{
 				file: 'pkg/Base.hx',
 				source: 'package pkg;\nclass Base {\n\tpublic var data(get, set):Int;\n\tfunction get_data():Int return 0;\n}'
@@ -796,7 +796,7 @@ class SymbolIndexSliceTest extends Test {
 	public function testSubtypeOverridesPropertyUnresolvable(): Void {
 		// Loose OVERRIDES get_tag but reaches through Ext, which is NOT indexed -> its position
 		// relative to Root is unresolvable, so it conservatively blocks Root's collapse.
-		final blocking = [
+		final blocking: Array<{ source: String, file: String }> = [
 			{
 				file: 'pkg/Root.hx',
 				source: 'package pkg;\nclass Root {\n\tpublic var tag(get, set):Int;\n\tfunction get_tag():Int return 0;\n}'
@@ -806,7 +806,7 @@ class SymbolIndexSliceTest extends Test {
 		Assert.isTrue(SymbolIndex.build(blocking, new HaxeQueryPlugin()).subtypeOverridesProperty('Root', 'tag'));
 		// Fresh declares get_tag as a FRESH (non-override) accessor through the same unresolvable Ext
 		// base -> it is not overriding Root, so the collapse stays safe (the DropDownListItem shape).
-		final safe = [
+		final safe: Array<{ source: String, file: String }> = [
 			{
 				file: 'pkg/Root.hx',
 				source: 'package pkg;\nclass Root {\n\tpublic var tag(get, set):Int;\n\tfunction get_tag():Int return 0;\n}'
@@ -820,7 +820,7 @@ class SymbolIndexSliceTest extends Test {
 	}
 
 	public function testSubtypeReferencesField(): Void {
-		final files = [
+		final files: Array<{ source: String, file: String }> = [
 			{ file: 'pkg/Base.hx', source: 'package pkg;\nclass Base {\n\tprivate var _x:Int = 0;\n}' },
 			{ file: 'pkg/Reader.hx', source: 'package pkg;\nclass Reader extends Base {\n\tpublic function get():Int return _x;\n}' },
 			{ file: 'pkg/Clean.hx', source: 'package pkg;\nclass Clean {\n\tprivate var _y:Int = 0;\n}' },

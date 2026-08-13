@@ -3,6 +3,7 @@ package anyparse.query;
 import haxe.Exception;
 import anyparse.query.format.json.HaxelibJson;
 import anyparse.query.format.json.HaxelibJsonParser;
+import js.node.ChildProcess.ChildProcessSpawnSyncResult;
 
 using StringTools;
 
@@ -75,7 +76,7 @@ final class HaxelibResolver {
 	/** Spawn `haxelib libpath <name>` and return its stdout on a zero exit, or null on any failure (mirrors `CompilerOracle`'s target-conditional spawn). */
 	private static function runLibpath(name: String): Null<String> {
 		#if nodejs
-		final res = js.node.ChildProcess.spawnSync('haxelib', ['libpath', name], { encoding: 'utf8' });
+		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync('haxelib', ['libpath', name], { encoding: 'utf8' });
 		final launchError: Null<Dynamic> = (res.error: Dynamic);
 		if (launchError != null) return null;
 		final status: Null<Int> = (res.status: Null<Int>);

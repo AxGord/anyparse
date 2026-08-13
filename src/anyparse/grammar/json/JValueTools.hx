@@ -26,7 +26,7 @@ class JValueTools {
 				if (xs.length != ys.length)
 					false;
 				else {
-					var eq = true;
+					var eq: Bool = true;
 					for (i in 0...xs.length) {
 						if (!equals(xs[i], ys[i])) {
 							eq = false;
@@ -39,7 +39,7 @@ class JValueTools {
 				if (xs.length != ys.length)
 					false;
 				else {
-					var eq = true;
+					var eq: Bool = true;
 					for (i in 0...xs.length) {
 						if (xs[i].key != ys[i].key || !equals(xs[i].value, ys[i].value)) {
 							eq = false;

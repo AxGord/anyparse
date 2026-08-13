@@ -6,6 +6,7 @@ import anyparse.grammar.haxe.HxFnBody;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxStatement;
+import anyparse.grammar.haxe.HxClassDecl;
 
 /**
  * Slice 35: `....` placeholder as a function-body statement.
@@ -59,7 +60,7 @@ class HxEllipsisStmtSliceTest extends HxTestHelpers {
 	}
 
 	private function expectFnMemberFromTopLevelClass(module: HxModule, idx: Int): HxFnDecl {
-		final cls = expectClassDecl(module.decls[idx]);
+		final cls: HxClassDecl = expectClassDecl(module.decls[idx]);
 		return expectFnMember(cls.members[0].member);
 	}
 

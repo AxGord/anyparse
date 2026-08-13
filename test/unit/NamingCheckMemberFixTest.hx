@@ -58,7 +58,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	public function testFixSkipsPrivateFieldWithSubclass(): Void {
 		// A subclass (any file) could read the inherited field → report-only.
 		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n}';
-		final files = [
+		final files: Array<{ source: String, file: String }> = [
 			{ file: 'pkg/C.hx', source: cSrc },
 			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D extends C {\n\tpublic function g() { return shape; }\n}' }
 		];
@@ -72,7 +72,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	public function testFixSkipsPrivateFieldWithAccessGrant(): Void {
 		// Another file with @:access(C) can read C's privates → report-only.
 		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n}';
-		final files = [
+		final files: Array<{ source: String, file: String }> = [
 			{ file: 'pkg/C.hx', source: cSrc },
 			{ file: 'pkg/E.hx', source: 'package pkg;\n@:access(pkg.C)\nclass E {}' }
 		];
@@ -85,7 +85,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	public function testFixSkipsPrivateFieldWithAllow(): Void {
 		// @:allow on the class grants another type access → report-only.
 		final src: String = 'package pkg;\n@:allow(pkg.X)\nclass C {\n\tprivate var shape:Int;\n}';
-		final files = [{ file: 'pkg/C.hx', source: src }];
+		final files: Array<{ source: String, file: String }> = [{ file: 'pkg/C.hx', source: src }];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
@@ -109,7 +109,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	public function testFixSkipsPrivateFieldWhenAnyFileSkipParses(): Void {
 		// A skip-parse file could hide a subtype / @:access we never see → conservatively report-only.
 		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n}';
-		final files = [
+		final files: Array<{ source: String, file: String }> = [
 			{ file: 'pkg/C.hx', source: cSrc },
 			{ file: 'pkg/Bad.hx', source: 'package pkg;\nclass Bad { function f() { ' }
 		];
@@ -124,7 +124,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		// would duplicate the binding — skip, report-only.
 		final src: String = 'package pkg;\nclass C {\n\tprivate var _shape:Int;\n\tprivate var shape:Int;\n'
 			+ '\tpublic function f() { return this.shape + this._shape; }\n}';
-		final files = [{ file: 'pkg/C.hx', source: src }];
+		final files: Array<{ source: String, file: String }> = [{ file: 'pkg/C.hx', source: src }];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
@@ -214,7 +214,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		// comment too, so a commented-out reference stays consistent with the renamed code.
 		final src: String = 'package pkg;\nclass C {\n\t// legacy xShape fallback\n\tprivate var xShape:Int;\n'
 			+ '\tpublic function f() { return this.xShape; }\n}';
-		final files = [{ file: 'pkg/C.hx', source: src }];
+		final files: Array<{ source: String, file: String }> = [{ file: 'pkg/C.hx', source: src }];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());

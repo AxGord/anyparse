@@ -4,6 +4,7 @@ import utest.Assert;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxStatement;
+import anyparse.grammar.haxe.HxVarDecl;
 
 /**
  * Tests for the TINY-bundle slice adding `final` binding statement and
@@ -124,7 +125,7 @@ class HxFinalUntypedSliceTest extends HxTestHelpers {
 	// ======== UntypedExpr — `untyped expr` atom ========
 
 	public function testUntypedAtom(): Void {
-		final decl = parseSingleVarDecl('class C { var f:Int = untyped 1; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = untyped 1; }');
 		switch decl.init {
 			case UntypedExpr(IntLit(v)):
 				Assert.equals(1, (v: Int));
@@ -134,7 +135,7 @@ class HxFinalUntypedSliceTest extends HxTestHelpers {
 	}
 
 	public function testUntypedWrapsIdent(): Void {
-		final decl = parseSingleVarDecl('class C { var f:Int = untyped foo; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = untyped foo; }');
 		switch decl.init {
 			case UntypedExpr(IdentExpr(name)):
 				Assert.equals('foo', (name: String));
@@ -144,7 +145,7 @@ class HxFinalUntypedSliceTest extends HxTestHelpers {
 	}
 
 	public function testUntypedWrapsCall(): Void {
-		final decl = parseSingleVarDecl('class C { var f:Int = untyped foo(); }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = untyped foo(); }');
 		switch decl.init {
 			case UntypedExpr(Call(IdentExpr(name), args)):
 				Assert.equals('foo', (name: String));
@@ -170,7 +171,7 @@ class HxFinalUntypedSliceTest extends HxTestHelpers {
 		// Haxe semantics: the keyword disables type-checking for the
 		// entire RHS, not just the next atom). Implementation: the ctor
 		// operand is `HxExpr` (Pratt-resolved), not `HxExpr` atom.
-		final decl = parseSingleVarDecl('class C { var f:Int = untyped a + b; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = untyped a + b; }');
 		switch decl.init {
 			case UntypedExpr(Add(IdentExpr(a), IdentExpr(b))):
 				Assert.equals('a', (a: String));
@@ -181,7 +182,7 @@ class HxFinalUntypedSliceTest extends HxTestHelpers {
 	}
 
 	public function testUntypedNested(): Void {
-		final decl = parseSingleVarDecl('class C { var f:Int = untyped untyped x; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = untyped untyped x; }');
 		switch decl.init {
 			case UntypedExpr(UntypedExpr(IdentExpr(x))):
 				Assert.equals('x', (x: String));
@@ -192,7 +193,7 @@ class HxFinalUntypedSliceTest extends HxTestHelpers {
 
 	public function testUntypedIdentifierPrefixNotConsumed(): Void {
 		// `untypedFoo` must parse as a bare identifier (word boundary on kw).
-		final decl = parseSingleVarDecl('class C { var f:Int = untypedFoo; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = untypedFoo; }');
 		switch decl.init {
 			case IdentExpr(name):
 				Assert.equals('untypedFoo', (name: String));

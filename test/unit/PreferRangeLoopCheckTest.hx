@@ -182,7 +182,7 @@ class PreferRangeLoopCheckTest extends Test {
 	}
 
 	private function assertFixCanonical(src: String, present: String, absent: String): Void {
-		final r = runAndExpectOne(src);
+		final r: { vs: Array<Violation>, check: PreferRangeLoop } = runAndExpectOne(src);
 		switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(present) >= 0);
@@ -193,7 +193,7 @@ class PreferRangeLoopCheckTest extends Test {
 	}
 
 	private function assertFixRefused(src: String): Void {
-		final r = runAndExpectOne(src);
+		final r: { vs: Array<Violation>, check: PreferRangeLoop } = runAndExpectOne(src);
 		Assert.equals(0, r.check.fix(src, r.vs, new HaxeQueryPlugin()).length);
 	}
 

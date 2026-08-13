@@ -22,7 +22,7 @@ class SymbolQuerySliceTest extends Test {
 	 * grammar kind, and the decl's resolved coordinate.
 	 */
 	public function testSymbolsListing(): Void {
-		final files = [
+		final files: Array<{ source: String, file: String }> = [
 			{ file: 'src/pkg/A.hx', source: 'package pkg;\nclass A {}\ntypedef Helper = {};' },
 			{ file: 'src/pkg/B.hx', source: 'package pkg;\nclass B {}' },
 		];
@@ -50,7 +50,7 @@ class SymbolQuerySliceTest extends Test {
 
 	/** `--kind` keeps only decls of one grammar kind. */
 	public function testKindFilter(): Void {
-		final files = [
+		final files: Array<{ source: String, file: String }> = [
 			{ file: 'src/pkg/A.hx', source: 'package pkg;\nclass A {}\ntypedef Helper = {};\ninterface I {}' },
 		];
 		final classes: Array<SymbolRow> = SymbolQuery.symbols(files, plugin(), 'ClassDecl');
@@ -67,7 +67,7 @@ class SymbolQuerySliceTest extends Test {
 	 * AND by a sub-type path; an unrelated import is excluded.
 	 */
 	public function testImporters(): Void {
-		final files = [
+		final files: Array<{ source: String, file: String }> = [
 			{ file: 'src/pkg/Refs.hx', source: 'package pkg;\nclass Refs {}\ntypedef RefHit = Int;' },
 			{ file: 'src/pkg/UsesModule.hx', source: 'package pkg;\nimport pkg.Refs;\nclass UsesModule {}' },
 			{ file: 'src/pkg/UsesSub.hx', source: 'package pkg;\nimport pkg.Refs.RefHit;\nclass UsesSub {}' },
@@ -99,7 +99,7 @@ class SymbolQuerySliceTest extends Test {
 	 * `SymbolIndex.build`.
 	 */
 	public function testSkipParseExcluded(): Void {
-		final files = [
+		final files: Array<{ source: String, file: String }> = [
 			{ file: 'src/pkg/Good.hx', source: 'package pkg;\nclass Good {}' },
 			{ file: 'src/pkg/Bad.hx', source: 'package pkg;\nclass Bad { function f() { ' },
 		];
@@ -114,7 +114,7 @@ class SymbolQuerySliceTest extends Test {
 	 * when the type is not declared in the scope.
 	 */
 	public function testDeclares(): Void {
-		final files = [
+		final files: Array<{ source: String, file: String }> = [
 			{ file: 'src/pkg/A.hx', source: 'package pkg;\nclass A {}\ntypedef Helper = {};' },
 			{ file: 'src/pkg/B.hx', source: 'package pkg;\nclass B {}' },
 		];
@@ -135,7 +135,7 @@ class SymbolQuerySliceTest extends Test {
 
 	/** Two decls of the same simple name across files are an ambiguity — both rows returned. */
 	public function testDeclaresAmbiguous(): Void {
-		final files = [
+		final files: Array<{ source: String, file: String }> = [
 			{ file: 'src/one/Dup.hx', source: 'package one;\nclass Dup {}' },
 			{ file: 'src/two/Dup.hx', source: 'package two;\nclass Dup {}' },
 		];

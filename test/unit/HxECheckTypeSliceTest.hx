@@ -2,6 +2,8 @@ package unit;
 
 import utest.Assert;
 import anyparse.grammar.haxe.HxExpr;
+import anyparse.grammar.haxe.HxTypeRef;
+import anyparse.grammar.haxe.HxVarDecl;
 
 /**
  * Tests for the SMALL slice adding the type-check expression atom
@@ -27,7 +29,7 @@ import anyparse.grammar.haxe.HxExpr;
 class HxECheckTypeSliceTest extends HxTestHelpers {
 
 	public function testECheckTypeStringLit(): Void {
-		final decl = parseSingleVarDecl('class C { var f:Int = ("" : String); }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = ("" : String); }');
 		switch decl.init {
 			case ECheckTypeExpr(info):
 				switch info.expr {
@@ -43,7 +45,7 @@ class HxECheckTypeSliceTest extends HxTestHelpers {
 	}
 
 	public function testECheckTypeIdent(): Void {
-		final decl = parseSingleVarDecl('class C { var f:Int = (x : Int); }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = (x : Int); }');
 		switch decl.init {
 			case ECheckTypeExpr(info):
 				switch info.expr {
@@ -59,7 +61,7 @@ class HxECheckTypeSliceTest extends HxTestHelpers {
 	}
 
 	public function testECheckTypeComplexExpr(): Void {
-		final decl = parseSingleVarDecl('class C { var f:Int = (a + b : Float); }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = (a + b : Float); }');
 		switch decl.init {
 			case ECheckTypeExpr(info):
 				switch info.expr {
@@ -76,10 +78,10 @@ class HxECheckTypeSliceTest extends HxTestHelpers {
 	}
 
 	public function testECheckTypeGenericType(): Void {
-		final decl = parseSingleVarDecl('class C { var f:Int = (x : Map<String, Int>); }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = (x : Map<String, Int>); }');
 		switch decl.init {
 			case ECheckTypeExpr(info):
-				final ref = expectNamedType(info.type);
+				final ref: HxTypeRef = expectNamedType(info.type);
 				Assert.equals('Map', (ref.name: String));
 				Assert.notNull(ref.params);
 				Assert.equals(2, ref.params.length);
@@ -91,7 +93,7 @@ class HxECheckTypeSliceTest extends HxTestHelpers {
 	public function testECheckTypeEmptyArrayLiteral(): Void {
 		// Common idiom: `([] : Array<Int>)` — type-check around an empty
 		// array literal so the type-checker resolves the element type.
-		final decl = parseSingleVarDecl('class C { var f:Int = ([] : Array<Int>); }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = ([] : Array<Int>); }');
 		switch decl.init {
 			case ECheckTypeExpr(info):
 				switch info.expr {
@@ -109,7 +111,7 @@ class HxECheckTypeSliceTest extends HxTestHelpers {
 	public function testECheckTypeFollowedByPostfix(): Void {
 		// The postfix loop runs after the atom — ECheckType wraps the
 		// inner; `.length` lands on the wrapper as `FieldAccess`.
-		final decl = parseSingleVarDecl('class C { var f:Int = ("" : String).length; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = ("" : String).length; }');
 		switch decl.init {
 			case FieldAccess(ECheckTypeExpr(info), field):
 				Assert.equals('length', (field: String));
@@ -125,7 +127,7 @@ class HxECheckTypeSliceTest extends HxTestHelpers {
 		// Bare `(x)` must keep parsing as ParenExpr — ECheckType requires
 		// the inner `:`, so without it `tryBranch` rolls back and the
 		// next atom (ParenExpr) commits.
-		final decl = parseSingleVarDecl('class C { var f:Int = (x); }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = (x); }');
 		switch decl.init {
 			case ParenExpr(IdentExpr(name)):
 				Assert.equals('x', (name: String));
@@ -140,7 +142,7 @@ class HxECheckTypeSliceTest extends HxTestHelpers {
 		// single-expression key routes through `ECheckTypeExpr` (spaced
 		// `:`) and the `Arrow` operator (spaced `=>`) — mirroring
 		// haxe-formatter's `Binop(OpArrow, ECheckType(...), body)`.
-		final decl = parseSingleVarDecl('class C { var f:Int = (x : Int) => x + 1; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = (x : Int) => x + 1; }');
 		switch decl.init {
 			case Arrow(ECheckTypeExpr(_), _):
 				Assert.pass();

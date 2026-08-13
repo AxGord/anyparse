@@ -2,6 +2,8 @@ package anyparse.check;
 
 using StringTools;
 
+import js.node.ChildProcess.ChildProcessSpawnSyncResult;
+
 /**
  * The verdict of one compiler-oracle typecheck run — `apq lint`'s bridge to
  * treating the Haxe compiler as ground truth. A project opts in through the
@@ -56,7 +58,7 @@ final class CompilerOracle {
 		#if nodejs
 		final options: Dynamic = { encoding: 'utf8' };
 		if (cwd != null) Reflect.setField(options, 'cwd', cwd);
-		final res = js.node.ChildProcess.spawnSync('haxe', [hxml, '--no-output'], options);
+		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync('haxe', [hxml, '--no-output'], options);
 		final launchError: Null<Dynamic> = (res.error: Dynamic);
 		if (launchError != null) {
 			// ENOBUFS = the compiler out-wrote the default output buffer; a build that

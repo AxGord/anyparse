@@ -1,5 +1,6 @@
 package unit;
 
+import anyparse.grammar.haxe.HxVarDecl;
 import utest.Assert;
 
 /**
@@ -61,7 +62,7 @@ class HxNumericSeparatorSliceTest extends HxTestHelpers {
 	}
 
 	public function testIntUnderscoreParse(): Void {
-		final decl = parseSingleVarDecl('class C { var f:Int = 1_000_000; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = 1_000_000; }');
 		switch decl.init {
 			case IntLit(v):
 				Assert.equals(1000000, (v: Int));
@@ -71,7 +72,7 @@ class HxNumericSeparatorSliceTest extends HxTestHelpers {
 	}
 
 	public function testIntTypedSuffixParse(): Void {
-		final decl = parseSingleVarDecl('class C { var f:Int = 12_0i32; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = 12_0i32; }');
 		switch decl.init {
 			case IntLit(v):
 				Assert.equals(120, (v: Int));
@@ -81,7 +82,7 @@ class HxNumericSeparatorSliceTest extends HxTestHelpers {
 	}
 
 	public function testHexUnderscoreParse(): Void {
-		final decl = parseSingleVarDecl('class C { var f:Int = 0xDE_AD_BE_EF; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = 0xDE_AD_BE_EF; }');
 		switch decl.init {
 			case HexLit(v):
 				Assert.equals('0xDE_AD_BE_EF', (v: String));
@@ -91,7 +92,7 @@ class HxNumericSeparatorSliceTest extends HxTestHelpers {
 	}
 
 	public function testFloatFullSuffixParse(): Void {
-		final decl = parseSingleVarDecl('class C { var f:Float = 1_2.3_4f64; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Float = 1_2.3_4f64; }');
 		switch decl.init {
 			case FloatLit(v):
 				Assert.floatEquals(12.34, (v: Float));
@@ -101,7 +102,7 @@ class HxNumericSeparatorSliceTest extends HxTestHelpers {
 	}
 
 	public function testFloatLeadingDotParse(): Void {
-		final decl = parseSingleVarDecl('class C { var f:Float = .3_4_5; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Float = .3_4_5; }');
 		switch decl.init {
 			case FloatLit(v):
 				Assert.floatEquals(0.345, (v: Float));
@@ -111,7 +112,7 @@ class HxNumericSeparatorSliceTest extends HxTestHelpers {
 	}
 
 	public function testFloatExpNoDotParse(): Void {
-		final decl = parseSingleVarDecl('class C { var f:Float = 1_2e3_4; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Float = 1_2e3_4; }');
 		switch decl.init {
 			case FloatLit(v):
 				Assert.floatEquals(12e34, (v: Float));
@@ -122,7 +123,7 @@ class HxNumericSeparatorSliceTest extends HxTestHelpers {
 
 	public function testFloatFSuffixOnlyParse(): Void {
 		// `12f64` — no `.`, no `e`, just digits + f-suffix.
-		final decl = parseSingleVarDecl('class C { var f:Float = 1_2f64; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Float = 1_2f64; }');
 		switch decl.init {
 			case FloatLit(v):
 				Assert.floatEquals(12.0, (v: Float));

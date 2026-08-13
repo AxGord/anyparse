@@ -198,7 +198,7 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 	public function testParamTypeOnFnArgument(): Void {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function bar(xs:Array<Int>):Void {} }');
 		Assert.equals(1, decl.params.length);
-		final paramType = expectRequiredParam(decl.params[0]).type;
+		final paramType: Null<HxType> = expectRequiredParam(decl.params[0]).type;
 		Assert.equals('Array', (expectNamedType(paramType).name: String));
 		final inner: Null<Array<HxTypeArg>> = expectNamedType(paramType).params;
 		Assert.notNull(inner);

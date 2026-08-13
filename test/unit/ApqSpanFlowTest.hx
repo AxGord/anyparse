@@ -4,6 +4,7 @@ import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.QueryNode;
+import anyparse.runtime.Span;
 
 /**
  * Slice 2B probe — end-to-end check that `HaxeQueryPlugin` populates
@@ -33,7 +34,7 @@ class ApqSpanFlowTest extends Test {
 		Assert.isTrue(tree.children.length > 0, 'must have at least one decl child');
 		final firstDecl: QueryNode = tree.children[0];
 		Assert.notNull(firstDecl.span, 'top-level decl must carry a span');
-		final span = firstDecl.span;
+		final span: Null<Span> = firstDecl.span;
 		if (span == null) return;
 		Assert.isTrue(span.from >= 0);
 		Assert.isTrue(span.to <= source.length);
@@ -47,7 +48,7 @@ class ApqSpanFlowTest extends Test {
 		Assert.equals(3, tree.children.length);
 		var prevFrom: Int = -1;
 		for (decl in tree.children) {
-			final span = decl.span;
+			final span: Null<Span> = decl.span;
 			Assert.notNull(span, 'every top-level decl needs a span');
 			if (span == null) continue;
 			Assert.isTrue(span.from > prevFrom, 'span order must be strict — got from=${span.from}, prev=$prevFrom');
@@ -66,7 +67,7 @@ class ApqSpanFlowTest extends Test {
 	}
 
 	private function walkAssertSpans(node: QueryNode, sourceLen: Int): Void {
-		final span = node.span;
+		final span: Null<Span> = node.span;
 		if (span != null) {
 			Assert.isTrue(span.from >= 0, '${node.kind}: from=${span.from} negative');
 			Assert.isTrue(span.to <= sourceLen, '${node.kind}: to=${span.to} > sourceLen=$sourceLen');

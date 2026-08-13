@@ -975,7 +975,9 @@ class Lowering {
 			// terminal slot's read alone and the downstream signal walker
 			// in `WriterLowering.padTrailingDoc` would lose its primary
 			// (non-terminal) signal.
-			final newlineAfter = emitNewlineAfterCapture(child, typePath, fieldName, isStar, trailText, parseSteps);
+			final newlineAfter: { newlineAfterLocal: String, hasNewlineAfterSlot: Bool } = emitNewlineAfterCapture(
+				child, typePath, fieldName, isStar, trailText, parseSteps
+			);
 			final hasNewlineAfterSlot: Bool = newlineAfter.hasNewlineAfterSlot;
 			final newlineAfterLocal: String = newlineAfter.newlineAfterLocal;
 			pushStructFieldEntries(
@@ -5253,7 +5255,9 @@ expectLit(ctx, $v{trailText}));
 		// dispatch. Currently consumed by `HxTryCatchStmt.body` to
 		// preserve `try\n\tuntyped {…}` source shape under
 		// `untypedBody=Keep`.
-		final beforeSlots = computeBeforeSlots(child, node, typePath, isStar, isOptional, kwLead, leadText);
+		final beforeSlots: { hasBeforeNewlineSlot: Bool, hasBeforeLeadingSlot: Bool } = computeBeforeSlots(
+			child, node, typePath, isStar, isOptional, kwLead, leadText
+		);
 		final hasBeforeNewlineSlot: Bool = beforeSlots.hasBeforeNewlineSlot;
 		final hasBeforeLeadingSlot: Bool = beforeSlots.hasBeforeLeadingSlot;
 		// ω-casepattern-keep: extend the first-field source-newline-before

@@ -22,7 +22,7 @@ class TrivialGetterCheckTestBase extends Test {
 	}
 
 	private function assertFixCanonical(src: String, present: String, absent: String): Void {
-		final r = runAndExpectOne(src);
+		final r: { vs: Array<Violation>, check: TrivialGetter } = runAndExpectOne(src);
 		switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(present) >= 0);
@@ -33,7 +33,7 @@ class TrivialGetterCheckTestBase extends Test {
 	}
 
 	private function assertFixContains(src: String, present: String): Void {
-		final r = runAndExpectOne(src);
+		final r: { vs: Array<Violation>, check: TrivialGetter } = runAndExpectOne(src);
 		switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(present) >= 0);
@@ -43,7 +43,7 @@ class TrivialGetterCheckTestBase extends Test {
 	}
 
 	private function assertFixRefused(src: String): Void {
-		final r = runAndExpectOne(src);
+		final r: { vs: Array<Violation>, check: TrivialGetter } = runAndExpectOne(src);
 		Assert.equals(0, r.check.fix(src, r.vs, new HaxeQueryPlugin()).length);
 	}
 
@@ -55,7 +55,7 @@ class TrivialGetterCheckTestBase extends Test {
 	}
 
 	private function fixedText(src: String): String {
-		final r = runAndExpectOne(src);
+		final r: { vs: Array<Violation>, check: TrivialGetter } = runAndExpectOne(src);
 		return switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text): text;
 			case Err(message):

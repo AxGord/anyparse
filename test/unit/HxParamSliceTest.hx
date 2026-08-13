@@ -38,7 +38,7 @@ class HxParamSliceTest extends HxTestHelpers {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function bar(x:Int):Bool {} }');
 		Assert.equals('bar', (decl.name: String));
 		Assert.equals(1, decl.params.length);
-		final body = expectRequiredParam(decl.params[0]);
+		final body: HxParamBody = expectRequiredParam(decl.params[0]);
 		Assert.equals('x', (body.name: String));
 		Assert.equals('Int', (expectNamedType(body.type).name: String));
 		Assert.isNull(body.defaultValue);
@@ -49,10 +49,10 @@ class HxParamSliceTest extends HxTestHelpers {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function add(a:Int, b:Int):Int {} }');
 		Assert.equals('add', (decl.name: String));
 		Assert.equals(2, decl.params.length);
-		final b0 = expectRequiredParam(decl.params[0]);
+		final b0: HxParamBody = expectRequiredParam(decl.params[0]);
 		Assert.equals('a', (b0.name: String));
 		Assert.equals('Int', (expectNamedType(b0.type).name: String));
-		final b1 = expectRequiredParam(decl.params[1]);
+		final b1: HxParamBody = expectRequiredParam(decl.params[1]);
 		Assert.equals('b', (b1.name: String));
 		Assert.equals('Int', (expectNamedType(b1.type).name: String));
 	}
@@ -60,13 +60,13 @@ class HxParamSliceTest extends HxTestHelpers {
 	public function testThreeParams(): Void {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function f(a:Int, b:String, c:Bool):Void {} }');
 		Assert.equals(3, decl.params.length);
-		final b0 = expectRequiredParam(decl.params[0]);
+		final b0: HxParamBody = expectRequiredParam(decl.params[0]);
 		Assert.equals('a', (b0.name: String));
 		Assert.equals('Int', (expectNamedType(b0.type).name: String));
-		final b1 = expectRequiredParam(decl.params[1]);
+		final b1: HxParamBody = expectRequiredParam(decl.params[1]);
 		Assert.equals('b', (b1.name: String));
 		Assert.equals('String', (expectNamedType(b1.type).name: String));
-		final b2 = expectRequiredParam(decl.params[2]);
+		final b2: HxParamBody = expectRequiredParam(decl.params[2]);
 		Assert.equals('c', (b2.name: String));
 		Assert.equals('Bool', (expectNamedType(b2.type).name: String));
 	}
@@ -74,7 +74,7 @@ class HxParamSliceTest extends HxTestHelpers {
 	public function testParamWithDefaultValue(): Void {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function f(x:Int = 42):Void {} }');
 		Assert.equals(1, decl.params.length);
-		final body = expectRequiredParam(decl.params[0]);
+		final body: HxParamBody = expectRequiredParam(decl.params[0]);
 		Assert.equals('x', (body.name: String));
 		Assert.equals('Int', (expectNamedType(body.type).name: String));
 		switch body.defaultValue {
@@ -89,11 +89,11 @@ class HxParamSliceTest extends HxTestHelpers {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function f(a:Int, b:Int = 0, c:Bool = true):Int {} }');
 		Assert.equals(3, decl.params.length);
 
-		final b0 = expectRequiredParam(decl.params[0]);
+		final b0: HxParamBody = expectRequiredParam(decl.params[0]);
 		Assert.equals('a', (b0.name: String));
 		Assert.isNull(b0.defaultValue);
 
-		final b1 = expectRequiredParam(decl.params[1]);
+		final b1: HxParamBody = expectRequiredParam(decl.params[1]);
 		Assert.equals('b', (b1.name: String));
 		switch b1.defaultValue {
 			case IntLit(v):
@@ -102,7 +102,7 @@ class HxParamSliceTest extends HxTestHelpers {
 				Assert.fail('expected IntLit(0)');
 		}
 
-		final b2 = expectRequiredParam(decl.params[2]);
+		final b2: HxParamBody = expectRequiredParam(decl.params[2]);
 		Assert.equals('c', (b2.name: String));
 		switch b2.defaultValue {
 			case BoolLit(v):
@@ -115,7 +115,7 @@ class HxParamSliceTest extends HxTestHelpers {
 	public function testDefaultValueExpression(): Void {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function f(x:Int = 1 + 2):Void {} }');
 		Assert.equals(1, decl.params.length);
-		final body = expectRequiredParam(decl.params[0]);
+		final body: HxParamBody = expectRequiredParam(decl.params[0]);
 		switch body.defaultValue {
 			case Add(left, right):
 				switch left {
@@ -136,10 +136,10 @@ class HxParamSliceTest extends HxTestHelpers {
 	public function testWhitespaceTolerance(): Void {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function f( a : Int , b : String ):Void {} }');
 		Assert.equals(2, decl.params.length);
-		final b0 = expectRequiredParam(decl.params[0]);
+		final b0: HxParamBody = expectRequiredParam(decl.params[0]);
 		Assert.equals('a', (b0.name: String));
 		Assert.equals('Int', (expectNamedType(b0.type).name: String));
-		final b1 = expectRequiredParam(decl.params[1]);
+		final b1: HxParamBody = expectRequiredParam(decl.params[1]);
 		Assert.equals('b', (b1.name: String));
 		Assert.equals('String', (expectNamedType(b1.type).name: String));
 	}
@@ -201,7 +201,7 @@ class HxParamSliceTest extends HxTestHelpers {
 	public function testOptionalSingleParam(): Void {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function f(?x:Int):Void {} }');
 		Assert.equals(1, decl.params.length);
-		final body = expectOptionalParam(decl.params[0]);
+		final body: HxParamBody = expectOptionalParam(decl.params[0]);
 		Assert.equals('x', (body.name: String));
 		Assert.equals('Int', (expectNamedType(body.type).name: String));
 		Assert.isNull(body.defaultValue);
@@ -210,7 +210,7 @@ class HxParamSliceTest extends HxTestHelpers {
 	public function testOptionalParamWithDefault(): Void {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function f(?x:Int = 42):Void {} }');
 		Assert.equals(1, decl.params.length);
-		final body = expectOptionalParam(decl.params[0]);
+		final body: HxParamBody = expectOptionalParam(decl.params[0]);
 		Assert.equals('x', (body.name: String));
 		switch body.defaultValue {
 			case IntLit(v):
@@ -223,10 +223,10 @@ class HxParamSliceTest extends HxTestHelpers {
 	public function testMixedHeadOptional(): Void {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function f(?a:Int, b:String):Void {} }');
 		Assert.equals(2, decl.params.length);
-		final b0 = expectOptionalParam(decl.params[0]);
+		final b0: HxParamBody = expectOptionalParam(decl.params[0]);
 		Assert.equals('a', (b0.name: String));
 		Assert.equals('Int', (expectNamedType(b0.type).name: String));
-		final b1 = expectRequiredParam(decl.params[1]);
+		final b1: HxParamBody = expectRequiredParam(decl.params[1]);
 		Assert.equals('b', (b1.name: String));
 		Assert.equals('String', (expectNamedType(b1.type).name: String));
 	}
@@ -234,9 +234,9 @@ class HxParamSliceTest extends HxTestHelpers {
 	public function testMixedTailOptional(): Void {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function f(a:Int, ?b:String):Void {} }');
 		Assert.equals(2, decl.params.length);
-		final b0 = expectRequiredParam(decl.params[0]);
+		final b0: HxParamBody = expectRequiredParam(decl.params[0]);
 		Assert.equals('a', (b0.name: String));
-		final b1 = expectOptionalParam(decl.params[1]);
+		final b1: HxParamBody = expectOptionalParam(decl.params[1]);
 		Assert.equals('b', (b1.name: String));
 	}
 
