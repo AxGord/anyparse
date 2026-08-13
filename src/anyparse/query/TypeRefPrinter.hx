@@ -1,6 +1,6 @@
 package anyparse.query;
 
-import anyparse.query.ImportOrder.ImportSlot;
+import anyparse.query.ImportOrder.ImportAnchor;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.runtime.Span;
 
@@ -33,96 +33,6 @@ typedef PendingImportEdit = {
 	var paths: Array<String>;
 }
 
-/** One import insert: the byte offset to splice at, and the statement text already carrying its own newline. */
-private typedef ImportAnchor = {
-	var offset: Int;
-	var text: String;
-
-	/**
-	 * The order carried by the import RUN this anchor lands in, or -1 when it lands in none (a
-	 * fallback anchor). Several fresh lines sharing one anchor are sorted under it, so they never
-	 * leave that run explained by neither order.
-	 */
-	var order: Int;
-}
-
-/**
- * Prints a type reference INTO a specific file: the import-aware counterpart of a raw
- * `substring(lastIndexOf('.') + 1)`. Every fixer that MATERIALISES a type path — an
- * `explicit-local-type` annotation, a `prefer-typed-throw` `new Exception(...)` — faces the
- * same three-way decision, and getting it wrong emits code that either fails to compile or
- * silently binds a different type. The decision, in preference order:
- *
- *  1. **Short name**, when the type is ALREADY visible in the file:
- *     - a plain `import pack.Module;` / `import pack.Module.SubType;` binding exactly this
- *       path (`TypeInfoProvider.importMap`);
- *     - an ALIASED `import pack.Module as U;` whose target is this path — the ALIAS is
- *       printed (the grammar drops an alias's original path, so it is recovered by slicing
- *       the statement's own source);
- *     - a SECONDARY top-level type of a module the file plainly imports (`import pack.Module;`
- *       binds every type `Module` declares, not only its main one — `moduleImportBinds`);
- *     - a type declared in THIS module (a same-file secondary type);
- *     - the MAIN type of another module in the SAME package (`pkg.Name` where the file's
- *       package is `pkg`) — visible with no import. A same-package SUB-module type
- *       (`pkg.Module.SubType`) is NOT: it still needs an import, so it takes route 2 / 3;
- *     - an always-in-scope top-level name whose OWN path this is (`String`, `haxe.ds.Map`, ...;
- *       plus, with an index, any type declared in a root-package file — those are global in
- *       Haxe).
- *
- *     Except for the alias route (which reads its own binding), every route above is gated by
- *     `shadowedLocally`: Haxe's resolution order is module type, then import / alias, then same
- *     package, then top level, so a lower-priority route can be overruled by a higher-priority
- *     binding. A bare `Widget` does not mean the same-package `pkg.Widget` in a file that also
- *     carries `import other.Widget;` — nor in one carrying a BULK import (`import other.*;`,
- *     `using other.Widget;`) that binds the name, which `shadowedByBulkImport` decides against
- *     the index.
- *
- *  2. Else **add an import** and use the short name — but ONLY when the short name is FREE
- *     in that file: nothing visible here binds it (`shadowedLocally`), no EARLIER pending
- *     import of a different path already claimed it (Haxe accepts two imports of one simple
- *     name and silently lets the last win), and it does not occur as a word-boundary token
- *     anywhere in the source (an occurrence with no binding to the path being printed must
- *     resolve elsewhere — a wildcard import, a type parameter, a `pkg.Name` qualified use — so
- *     an import would collide with it or retarget it). The insert respects the file's existing
- *     import ORDER: an already-sorted import block keeps its sort, an unsorted one is appended
- *     to (after the last plain `import`, so the file's `using` group stays last).
- *
- *  3. Else the **correct fully-qualified form**. For a SECONDARY (sub-module) type that is
- *     the module-qualified `pack.Module.SubType`, NEVER the `pack.SubType` hybrid — the
- *     hybrid compiles only while an import of the short name happens to exist and breaks the
- *     moment it goes away (observed in the wild: a file carrying
- *     `import api.model.folders.FolderContent.FolderContentEntity;` was given the annotation
- *     `:api.model.folders.FolderContentEntity`). A hybrid handed IN is repaired: `canonicalize`
- *     resolves it against the file's imports and the `SymbolIndex` before anything decides on
- *     it.
- *
- * A run with NO dot is returned verbatim and never triggers an import: a bare name carries
- * no derivable module path, and `printTypeExpr` walks structural field names (`{ name :
- * String }`) through the same entry point.
- *
- * `resolvePath` exposes the other half of that machinery — the DECLARATION a written
- * reference denotes, proven against the index — so a caller rewriting an EXISTING reference
- * (`shorten-type-ref`) can require that its replacement names the same declaration rather
- * than trusting the print alone.
- *
- * LIMIT — an UNRESOLVABLE hybrid. `pack.Module` (a main type) and `pack.SubType` (a hybrid)
- * are textually identical shapes; only the file's imports or the `SymbolIndex` tell them
- * apart. `canonicalize` asks the index for EVERY path the simple name is declared under and
- * keeps the one whose module-dropped form is exactly the hybrid — so a name ambiguous across
- * packages is still repaired, and only a tie WITHIN one package (`pkg.A.X` and `pkg.B.X` both
- * drop to `pkg.X`) is refused. When the index knows the name not at all, route 2 reads the
- * path as a module and proposes `import pack.SubType;` — which does not resolve for a real
- * sub-type. That is a proposal, not
- * a silent result: every caller of this printer runs behind a verification pass that
- * typechecks the edited file and reverts it to report-only, and widening the resolution scope
- * (`resolutionRoots`) makes `canonicalize` repair the path instead. The predecessor behaviour
- * was strictly worse — it emitted the hybrid VERBATIM, which typechecks while the import that
- * props it up survives and breaks silently later.
- *
- * The printer is per-file and stateful only in its pending-import set and a lazy inert-region
- * memo; every resolution input is immutable. `importsOnly` builds the degenerate form for a
- * caller with no parsed file — a pure shorten-or-qualify that never inserts an import.
- */
 @:access(anyparse.query.ModuleScan)
 @:nullSafety(Strict)
 final class TypeRefPrinter {
@@ -185,6 +95,9 @@ final class TypeRefPrinter {
 	/** The file's parsed top level; null in the `importsOnly` form. */
 	private final _root: Null<QueryNode>;
 
+	/** The grammar the file was parsed with — `ImportOrder.insertionFor`'s input; null in the `importsOnly` form. */
+	private final _plugin: Null<GrammarPlugin>;
+
 	/** The cross-file index for same-package / root-package / canonical-path resolution, or null when the run has none. */
 	private final _index: Null<SymbolIndex>;
 
@@ -204,10 +117,11 @@ final class TypeRefPrinter {
 	private var _inertRegions: Null<Array<Span>> = null;
 
 	private function new(
-		source: Null<String>, root: Null<QueryNode>, importMap: Map<String, String>, index: Null<SymbolIndex>
+		source: Null<String>, root: Null<QueryNode>, importMap: Map<String, String>, index: Null<SymbolIndex>, plugin: Null<GrammarPlugin>
 	) {
 		_source = source;
 		_root = root;
+		_plugin = plugin;
 		_importMap = importMap;
 		_index = index;
 		_pkg = root == null ? null : ModuleScan.packageOf(root);
@@ -348,25 +262,22 @@ final class TypeRefPrinter {
 	 * is the deterministic default.
 	 */
 	public function pendingImportEdits(): Array<PendingImportEdit> {
-		final buckets: Array<{ offset: Int, order: Int, lines: Array<{ path: String, text: String }> }> = [];
+		final buckets: Array<{ anchor: ImportAnchor, paths: Array<String> }> = [];
 		for (path in _pendingImports) {
 			final anchor: ImportAnchor = anchorFor(path);
-			final line: { path: String, text: String } = { path: path, text: anchor.text };
-			final existing: Null<{ offset: Int, order: Int, lines: Array<{ path: String, text: String }> }> = buckets.find(b ->
-				b.offset == anchor.offset
-			);
+			final existing: Null<{ anchor: ImportAnchor, paths: Array<String> }> = buckets.find(b -> b.anchor.offset == anchor.offset);
 			if (existing == null)
-				buckets.push({ offset: anchor.offset, order: anchor.order, lines: [line] });
+				buckets.push({ anchor: anchor, paths: [path] });
 			else
-				existing.lines.push(line);
+				existing.paths.push(path);
 		}
 		return [
 			for (bucket in buckets) {
-				bucket.lines.sort((a, b) -> ImportOrder.compare(bucket.order, a.path, b.path));
+				bucket.paths.sort((a, b) -> ImportOrder.compare(bucket.anchor.order, a, b));
 				{
-					span: new Span(bucket.offset, bucket.offset),
-					text: [for (line in bucket.lines) line.text].join(''),
-					paths: [for (line in bucket.lines) line.path]
+					span: new Span(bucket.anchor.offset, bucket.anchor.offset),
+					text: bucket.anchor.lead + [for (path in bucket.paths) 'import $path;\n'].join(''),
+					paths: bucket.paths
 				};
 			}
 		];
@@ -502,34 +413,20 @@ final class TypeRefPrinter {
 	}
 
 	/**
-	 * The `import <path>;` line for `path` plus the offset to splice it at. Priority: the slot
-	 * `ImportOrder` picks inside the plain-import RUN the path belongs to (that run's own ordering
-	 * is preserved), else after the last plain `import` (so a fresh import never lands past the
-	 * file's `using` group), else after the last `using` / wildcard / alias, else after the
-	 * `package` declaration, else the file start. The statement carries a TRAILING `\n` when the
-	 * offset is a line start (a run slot, or a file with nothing to anchor on), a LEADING one when
-	 * it splices after a statement's end.
+	 * Where `path`'s fresh import line goes in this file — `ImportOrder.insertionFor`, the one seat
+	 * every inserting caller shares (its doc holds the slot-then-fallbacks ladder). A printer with no
+	 * file scope, or one built without a grammar, anchors at the file start and never reaches here:
+	 * `canAddImport` refuses the import first.
 	 */
 	private function anchorFor(path: String): ImportAnchor {
-		final stmt: String = 'import $path;';
 		final root: Null<QueryNode> = _root;
 		final source: Null<String> = _source;
-		if (root == null) return { offset: 0, text: '$stmt\n', order: -1 };
-		if (source != null) {
-			final slots: Array<ImportSlot> = ImportOrder.slotsOf(root);
-			final runSlot: Int = ImportOrder.insertOffset(source, slots, path);
-			if (runSlot >= 0) return { offset: runSlot, text: '$stmt\n', order: ImportOrder.orderAt(source, slots, runSlot) };
-		}
-		var lastPlain: Null<Span> = null;
-		var lastAny: Null<Span> = null;
-		var packageSpan: Null<Span> = null;
-		for (c in root.children) {
-			if (c.kind == 'ImportDecl' && c.span != null) lastPlain = c.span;
-			if (ModuleScan.IMPORT_DECL_KINDS.contains(c.kind) && c.span != null) lastAny = c.span;
-			if (c.kind == 'PackageDecl' && c.span != null) packageSpan = c.span;
-		}
-		final span: Null<Span> = lastPlain ?? lastAny ?? packageSpan;
-		return span == null ? { offset: 0, text: '$stmt\n', order: -1 } : { offset: span.to, text: '\n$stmt', order: -1 };
+		final plugin: Null<GrammarPlugin> = _plugin;
+		return root == null || source == null || plugin == null ? {
+			offset: 0,
+			lead: '',
+			order: -1
+		} : ImportOrder.insertionFor(source, root, plugin, path);
 	}
 
 	/**
@@ -774,8 +671,10 @@ final class TypeRefPrinter {
 	 * the plain-import map, and optionally the cross-file `index` for same-package /
 	 * root-package / canonical-path resolution. This is the form that can ADD imports.
 	 */
-	public static function forFile(source: String, root: QueryNode, importMap: Map<String, String>, ?index: SymbolIndex): TypeRefPrinter {
-		return new TypeRefPrinter(source, root, importMap, index);
+	public static function forFile(
+		source: String, root: QueryNode, importMap: Map<String, String>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): TypeRefPrinter {
+		return new TypeRefPrinter(source, root, importMap, index, plugin);
 	}
 
 	/**
@@ -786,7 +685,7 @@ final class TypeRefPrinter {
 	 * the one `ExplicitLocalType.normalizeInferredType`'s public pure signature keeps.
 	 */
 	public static function importsOnly(importMap: Map<String, String>): TypeRefPrinter {
-		return new TypeRefPrinter(null, null, importMap, null);
+		return new TypeRefPrinter(null, null, importMap, null, null);
 	}
 
 }

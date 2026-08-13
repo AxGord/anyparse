@@ -39,6 +39,22 @@ typedef ImportLine = {
 }
 
 /** One run weighed as a host for a fresh import: the run, whether an order explains it, its dotted-prefix affinity, and the index the path sorts before (-1 = append at the run's end). */
+/**
+ * Where a fresh import LINE goes in a file's header, and what a caller must write there —
+ * `ImportOrder.insertionFor`'s answer, and the ONE place that question is answered.
+ *
+ * `offset` is a LINE START, so every caller splices whole lines and none of them reasons about
+ * newlines: `lead` carries the single exception, the file whose last header line has no
+ * terminating newline, where the anchor is the end of the source and the text needs a `\n`
+ * ahead of it. `order` is the order carried by the RUN the anchor landed in, or -1 for a
+ * fallback anchor — several fresh lines sharing one anchor are sorted under it, so they do not
+ * leave that run explained by neither order.
+ */
+typedef ImportAnchor = {
+	final offset: Int;
+	final lead: String;
+	final order: Int;
+}
 private typedef RunChoice = {
 	final run: Array<ImportLine>;
 	final ordered: Bool;
@@ -72,9 +88,10 @@ private typedef RunChoice = {
  * that run whenever it belonged earlier. The `import-order` rule then flagged the line the
  * inserter had just placed: two waves of edits where zero were needed.
  *
- * A `#if`-guarded import is not a slot at all (`slotsOf` reads top-level statements, and the
- * guarded ones live inside the `Conditional`), so no anchor can ever fall inside a guarded
- * region — the region only ever ENDS the runs around it.
+ * A `#if` region ENDS the runs around it and is never a slot itself — with ONE exception every
+ * caller resolves before it reads a slot: the region that guards the module's WHOLE body IS the
+ * header, and `headerRootOf` returns it in the module's place. Its own children are then the top
+ * level this class reads, and the regions nested inside it end runs like any other.
  *
  * ORDERS, tried in this sequence:
  *
@@ -142,6 +159,68 @@ final class ImportOrder {
 	/** The id of the order NAMED `name` (an `import-order` `order` option value), or -1 when it names none. */
 	public static inline function orderNamed(name: String): Int {
 		return ORDER_NAMES.indexOf(name);
+	}
+
+	/**
+	 * The node whose children carry the import block of `tree`: the `#if … #end` region that guards the
+	 * module's WHOLE body when the file has one (`ModuleScan.guardedBodyRegion` — its doc holds the
+	 * gates), else the module itself.
+	 *
+	 * Every caller of `slotsOf` / `runsOf` must resolve this FIRST. A debug- or platform-only module
+	 * keeps its whole header inside the guard, so read at the top level it offers no run at all: the
+	 * insert seat returns -1 and each caller's fallback anchors on `package`, stranding the fresh line
+	 * above the `#if` where it is in scope for nothing the module declares. The `import-order` rule was
+	 * blind to the same block from the other side and so reported nothing about the disorder that
+	 * produced.
+	 */
+	public static inline function headerRootOf(tree: QueryNode, source: String, plugin: GrammarPlugin): QueryNode {
+		return ModuleScan.guardedBodyRegion(tree, source, plugin) ?? tree;
+	}
+
+	/**
+	 * Where a fresh `import <path>;` LINE belongs in `root` — the whole answer, slot and fallbacks,
+	 * for every caller that inserts one (`AddImport`, `TypeRefPrinter`'s materialisers, `MoveSymbol`'s
+	 * reference-carrying moves). `path` is omitted by a caller with nothing to place, which asks only
+	 * where the header ENDS; it then skips straight to the fallbacks.
+	 *
+	 * Everything is read from the HEADER root (`headerRootOf`), so a module whose whole body is
+	 * `#if`-guarded is served inside its region rather than above it. In order:
+	 *
+	 *  1. The slot the path sorts into inside the header's plain-import RUN (`insertOffset`).
+	 *  2. The line after the header's last PLAIN import — a fresh import never lands past a `using`
+	 *     group while an import is available to follow.
+	 *  3. The line after the header's last `using` / wildcard / aliased import.
+	 *  4. The guarded header's own body start, for a guard declaring no header line of its own.
+	 *  5. The line after the `package` declaration — either spelling, since the ROOT package
+	 *     `package;` projects as a different kind from a named one and a miss here falls through to
+	 *     the file start, which splices the import ABOVE `package` and does not compile.
+	 *  6. The file start, for a file with no header at all.
+	 *
+	 * This ladder used to be written out three times, and the copies had drifted: only one preferred
+	 * a plain import over a `using`, only one knew the root package, and none but the newest knew the
+	 * guard. Two inserts into one file could therefore disagree about where its header is.
+	 */
+	public static function insertionFor(source: String, root: QueryNode, plugin: GrammarPlugin, ?path: String): ImportAnchor {
+		final header: QueryNode = headerRootOf(root, source, plugin);
+		if (path != null) {
+			final slots: Array<ImportSlot> = slotsOf(header);
+			final slot: Int = insertOffset(source, slots, path);
+			if (slot >= 0) return { offset: slot, lead: '', order: orderAt(source, slots, slot) };
+		}
+		var anchorEnd: Int = lastHeaderEnd(header);
+		if (anchorEnd < 0 && header != root) {
+			final bodyStart: Int = ModuleScan.guardBodyStart(source, header);
+			if (bodyStart >= 0) return { offset: bodyStart, lead: '', order: -1 };
+		}
+		if (anchorEnd < 0) for (c in root.children) if (ModuleScan.PACKAGE_DECL_KINDS.contains(c.kind)) {
+			final span: Null<Span> = c.span;
+			if (span != null) anchorEnd = span.to;
+		}
+		if (anchorEnd < 0) return { offset: 0, lead: '', order: -1 };
+		final newline: Int = source.indexOf('\n', anchorEnd);
+		// The one anchor that is not a line start: nothing follows the header, so the fresh line
+		// brings its own separator instead.
+		return newline < 0 ? { offset: source.length, lead: '\n', order: -1 } : { offset: newline + 1, lead: '', order: -1 };
 	}
 
 	/**
@@ -439,6 +518,24 @@ final class ImportOrder {
 				chunkFrom: withLeadingComments(source, lineStart),
 				chunkTo: newline + 1
 			};
+	}
+
+	/**
+	 * The span end of the header declaration a fresh line follows: `node`'s last PLAIN import when it
+	 * declares one, else its last `using` / wildcard / aliased import, else -1. Preferring the plain
+	 * import is what keeps a fresh import out of the `using` group — the group's own order ranks
+	 * static-extension resolution, so a line appended past it reads as part of it.
+	 */
+	private static function lastHeaderEnd(node: QueryNode): Int {
+		var plain: Int = -1;
+		var any: Int = -1;
+		for (c in node.children) {
+			final span: Null<Span> = c.span;
+			if (span == null) continue;
+			if (c.kind == 'ImportDecl') plain = span.to;
+			if (ModuleScan.IMPORT_DECL_KINDS.contains(c.kind)) any = span.to;
+		}
+		return plain >= 0 ? plain : any;
 	}
 
 	/**

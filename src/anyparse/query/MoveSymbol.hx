@@ -1,7 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.TypeRefShape;
-import anyparse.query.ImportOrder.ImportSlot;
+import anyparse.query.ImportOrder.ImportAnchor;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
@@ -164,7 +164,7 @@ final class MoveSymbol {
 		// 7b. Insert the decl (plus carried imports) into the destination.
 		//     The carried imports go at the destination's import region;
 		//     the decl text is appended after the existing content.
-		final destInsertEdits: Array<{ span: Span, text: String }> = buildDestInsertEdits(destSource, destInfo, declText, carried);
+		final destInsertEdits: Array<{ span: Span, text: String }> = buildDestInsertEdits(destSource, declText, carried, plugin);
 		for (e in destInsertEdits) editsFor(editsByFile, destFile).push(e);
 
 		// 7c. Rewrite cross-file importers: every file (other than dest)
@@ -179,7 +179,7 @@ final class MoveSymbol {
 		//     is now redundant (the type is local) and is removed.
 		if (oldImportPath != null) {
 			if (sourceStillUsesType(cursorSource, cut, plugin, typeRefShape, typeName)) {
-				final insert: Null<{ span: Span, text: String }> = addImportEdit(cursorSource, cursorInfo, newImportPath);
+				final insert: Null<{ span: Span, text: String }> = addImportEdit(cursorSource, cursorInfo, plugin, newImportPath);
 				if (insert != null) editsFor(editsByFile, cursorFile).push(insert);
 			}
 			for (imp in destInfo.imports) if (imp.raw == oldImportPath)
@@ -254,52 +254,32 @@ final class MoveSymbol {
 	 * existing import (or after the package declaration). Returns null
 	 * when the import is already present.
 	 */
-	public static function addImportEdit(source: String, info: FileInfo, path: String): Null<{ span: Span, text: String }> {
+	public static function addImportEdit(
+		source: String, info: FileInfo, plugin: GrammarPlugin, path: String
+	): Null<{ span: Span, text: String }> {
 		// A guarded (`#if`) import of the same path does NOT satisfy `already`: the
 		// moved reference must resolve in every config, so an unconditional
 		// top-level import is still added.
 		final already: Bool = info.imports.exists(imp -> !imp.guarded && imp.kind == ImportKind.Import && imp.raw == path);
 		if (already) return null;
-		final insertAt: Int = importInsertionOffset(source, info, path);
-		return { span: new Span(insertAt, insertAt), text: 'import $path;\n' };
+		final anchor: ImportAnchor = importAnchor(source, plugin, path);
+		return { span: new Span(anchor.offset, anchor.offset), text: '${anchor.lead}import $path;\n' };
 	}
 
 	/**
-	 * Offset at which a fresh import line of `path` should be inserted: the slot `ImportOrder`
-	 * picks inside the plain-import RUN `path` belongs to, else the start of the line AFTER the
-	 * last existing import statement, else after the package declaration, else the very start of
-	 * the file. The returned offset is always a line start, so the caller appends `text + '\n'`.
+	 * Where a fresh import line of `path` goes in `source` — `ImportOrder.insertionFor`, the one seat
+	 * every inserting caller shares (its doc holds the slot-then-fallbacks ladder). `path` is omitted
+	 * by a caller with nothing to place, which asks only where the header ends.
 	 *
-	 * `path` is optional only for a caller with nothing to place (a plain "where does the import
-	 * block end" question); without it the run slot cannot be computed and the append offset
-	 * is returned, which is what every caller got before ordering existed.
+	 * The file is re-parsed here rather than read off its indexed `FileInfo`: the seat answers from the
+	 * TREE, which is what lets it see the header of a module whose whole body sits inside one `#if`
+	 * region — a shape `FileInfo`'s flat import list, with only a `guarded` flag per statement, cannot
+	 * describe. An unparseable source anchors at the file start, which the caller's own re-parse
+	 * validation then rejects.
 	 */
-	public static function importInsertionOffset(source: String, info: FileInfo, ?path: String): Int {
-		if (path != null) {
-			// TOP-LEVEL plain imports only, in source order — the statements the runs are cut from.
-			final block: Array<ImportSlot> = [
-				for (imp in info.imports)
-					if (!imp.guarded && imp.kind == ImportKind.Import) { path: imp.raw, from: imp.span.from, to: imp.span.to }
-			];
-			final slot: Int = ImportOrder.insertOffset(source, block, path);
-			if (slot >= 0) return slot;
-		}
-		var anchorEnd: Int = -1;
-		// TOP-LEVEL imports only: a guarded import's span sits inside a `#if`
-		// region, so anchoring on it would place the fresh line inside that region.
-		for (imp in info.imports) if (!imp.guarded && imp.span.to > anchorEnd) anchorEnd = imp.span.to;
-		if (anchorEnd < 0) {
-			// No imports — anchor after the package decl's line, if any.
-			final pkgIdx: Int = source.indexOf('package ');
-			if (pkgIdx == 0) {
-				final semi: Int = source.indexOf(';', pkgIdx);
-				if (semi >= 0) anchorEnd = semi + 1;
-			}
-		}
-		if (anchorEnd < 0) return 0;
-		// Step to the start of the next line after the anchor.
-		final nl: Int = source.indexOf('\n', anchorEnd);
-		return nl < 0 ? source.length : nl + 1;
+	public static function importAnchor(source: String, plugin: GrammarPlugin, ?path: String): ImportAnchor {
+		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
+		return tree == null ? { offset: 0, lead: '', order: -1 } : ImportOrder.insertionFor(source, tree, plugin, path);
 	}
 
 	/**
@@ -352,15 +332,15 @@ final class MoveSymbol {
 	 * blank line.
 	 */
 	private static function buildDestInsertEdits(
-		destSource: String, destInfo: FileInfo, declText: String, carried: Array<ImportInfo>
+		destSource: String, declText: String, carried: Array<ImportInfo>, plugin: GrammarPlugin
 	): Array<{ span: Span, text: String }> {
 		final edits: Array<{ span: Span, text: String }> = [];
 
 		if (carried.length > 0) {
 			final importLines: String = carried.map(imp -> importLineFor(imp)).join('\n');
-			final insertAt: Int = importInsertionOffset(destSource, destInfo);
+			final anchor: ImportAnchor = importAnchor(destSource, plugin);
 			// Insert as its own line(s) after the anchor.
-			edits.push({ span: new Span(insertAt, insertAt), text: '$importLines\n' });
+			edits.push({ span: new Span(anchor.offset, anchor.offset), text: '${anchor.lead}$importLines\n' });
 		}
 
 		// Append the decl after the file content. Ensure exactly one blank

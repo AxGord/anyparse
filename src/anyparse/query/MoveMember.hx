@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.TypeRefShape;
+import anyparse.query.ImportOrder.ImportAnchor;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
@@ -254,7 +255,7 @@ final class MoveMember {
 		final destError: Null<String> = assembleDestination(prep, scaffoldFields, movedTextEdits, editsByFile, advisoryExtras);
 		if (destError != null) return Err(destError);
 		pushImportEdits(prep, typeRefShape, callerFilesNeedingImport, plugin, editsByFile);
-		pushCrossPackageImports(prep, editsByFile, movedTextEdits);
+		pushCrossPackageImports(prep, editsByFile, movedTextEdits, plugin);
 		return applyAndValidate(editsByFile, prep.sourceOf, plugin, memberNames.join(', '), advisoryExtras);
 	}
 
@@ -746,11 +747,11 @@ final class MoveMember {
 				prep.srcSource, m.group.groupSpan, prep.srcInfo, prep.destInfo, plugin, typeRefShape, prep.srcTypeName
 			)) if (!carried.exists(c -> c.raw == imp.raw && c.kind == imp.kind)) carried.push(imp);
 		if (carried.length > 0) {
-			final insertAt: Int = MoveSymbol.importInsertionOffset(prep.destSource, prep.destInfo);
+			final anchor: ImportAnchor = MoveSymbol.importAnchor(prep.destSource, plugin);
 			final lines: String = [
 				for (imp in carried) '${imp.kind == ImportKind.Using ? 'using' : 'import'} ${imp.raw};\n'
 			].join('');
-			editsFor(editsByFile, prep.destFile).push({ span: new Span(insertAt, insertAt), text: lines });
+			editsFor(editsByFile, prep.destFile).push({ span: new Span(anchor.offset, anchor.offset), text: anchor.lead + lines });
 		}
 		final destImportPath: String = prep.destTypeName == RefactorSupport.baseNameOf(prep.destFile)
 			? prep.destInfo.module
@@ -759,7 +760,7 @@ final class MoveMember {
 			final info: Null<FileInfo> = prep.index.fileInfo(file);
 			final callerSource: Null<String> = prep.sourceOf[file];
 			if (info == null || callerSource == null || info.pkg == prep.destInfo.pkg) continue;
-			final edit: Null<{ span: Span, text: String }> = MoveSymbol.addImportEdit(callerSource, info, destImportPath);
+			final edit: Null<{ span: Span, text: String }> = MoveSymbol.addImportEdit(callerSource, info, plugin, destImportPath);
 			if (edit != null) editsFor(editsByFile, file).push(edit);
 		}
 	}
@@ -1370,7 +1371,8 @@ final class MoveMember {
 	 * no-op within one package.
 	 */
 	private static function pushCrossPackageImports(
-		prep: MovePrep, editsByFile: Map<String, Array<{ span: Span, text: String }>>, movedTextEdits: Array<{ span: Span, text: String }>
+		prep: MovePrep, editsByFile: Map<String, Array<{ span: Span, text: String }>>, movedTextEdits: Array<{ span: Span, text: String }>,
+		plugin: GrammarPlugin
 	): Void {
 		if (prep.srcInfo.pkg == prep.destInfo.pkg) return;
 		final srcEdits: Array<{ span: Span, text: String }> = editsByFile[prep.srcFile] ?? [];
@@ -1378,14 +1380,14 @@ final class MoveMember {
 			final destPath: String = prep.destTypeName == RefactorSupport.baseNameOf(prep.destFile)
 				? prep.destInfo.module
 				: '${prep.destInfo.module}.${prep.destTypeName}';
-			final edit: Null<{ span: Span, text: String }> = MoveSymbol.addImportEdit(prep.srcSource, prep.srcInfo, destPath);
+			final edit: Null<{ span: Span, text: String }> = MoveSymbol.addImportEdit(prep.srcSource, prep.srcInfo, plugin, destPath);
 			if (edit != null) editsFor(editsByFile, prep.srcFile).push(edit);
 		}
 		if (!movedTextEdits.exists(e -> StringTools.contains(e.text, '${prep.srcTypeName}.'))) return;
 		final srcPath: String = prep.srcTypeName == RefactorSupport.baseNameOf(prep.srcFile)
 			? prep.srcInfo.module
 			: '${prep.srcInfo.module}.${prep.srcTypeName}';
-		final edit: Null<{ span: Span, text: String }> = MoveSymbol.addImportEdit(prep.destSource, prep.destInfo, srcPath);
+		final edit: Null<{ span: Span, text: String }> = MoveSymbol.addImportEdit(prep.destSource, prep.destInfo, plugin, srcPath);
 		if (edit != null) editsFor(editsByFile, prep.destFile).push(edit);
 	}
 

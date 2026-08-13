@@ -160,7 +160,10 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 			if (tree == null) continue;
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
 			final requested: Int = requestedOrder(config);
-			for (wedge in wedgesOf(entry.source, tree, config)) {
+			// A module whose whole body is `#if`-guarded keeps its import block inside the region, so the
+			// blocks are read from the HEADER root — at the top level such a file offers none at all.
+			final header: QueryNode = ImportOrder.headerRootOf(tree, entry.source, plugin);
+			for (wedge in wedgesOf(entry.source, header, config)) {
 				final first: ImportLine = wedge.usings[0];
 				violations.push({
 					file: entry.file,
@@ -170,7 +173,7 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 					message: 'using \'${first.path}\' splits the import block; using statements belong after every import'
 				});
 			}
-			for (block in blocksOf(entry.source, tree)) {
+			for (block in blocksOf(entry.source, header)) {
 				final paths: Array<String> = ImportOrder.pathsOf(block);
 				if (acceptable(paths, requested)) continue;
 				final offender: ImportLine = firstOutOfPlace(block, fixOrder(requested, paths));
@@ -194,6 +197,7 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 		if (tree == null) return [];
 		final config: LintConfig = LintConfig.resolveWith(_resolveConfig, violations[0].file);
 		final requested: Int = requestedOrder(config);
+		final header: QueryNode = ImportOrder.headerRootOf(tree, source, plugin);
 		final flagged: Array<Int> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
@@ -204,7 +208,7 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 		// A merged wedge REWRITES the region its runs live in, so a run it takes over must not also
 		// get the per-run reorder edit below: the two spans overlap and the caller batches both.
 		final merged: Array<Int> = [];
-		final wedges: Array<UsingWedge> = wedgesOf(source, tree, config);
+		final wedges: Array<UsingWedge> = wedgesOf(source, header, config);
 		final scopeTypes: Map<String, Array<String>> = wedges.length == 0 ? moduleTypes : moduleTypesOf(widestIndex(plugin, index));
 		for (wedge in wedges) {
 			if (!flagged.contains(wedge.usings[0].declFrom)) continue;
@@ -218,7 +222,7 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 			for (line in wedge.imports) merged.push(line.declFrom);
 			edits.push({ span: new Span(wedge.from, wedge.to), text: text });
 		}
-		for (block in blocksOf(source, tree)) {
+		for (block in blocksOf(source, header)) {
 			if (block.exists(line -> merged.contains(line.declFrom))) continue;
 			if (!block.exists(line -> flagged.contains(line.declFrom))) continue;
 			if (!reorderable(block, source, moduleTypes)) continue;

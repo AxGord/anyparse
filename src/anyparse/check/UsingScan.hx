@@ -1,10 +1,8 @@
 package anyparse.check;
 
-import anyparse.query.CondDirectives;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.ModuleScan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -16,8 +14,8 @@ import anyparse.runtime.Span;
  * name (which would make the rewrite resolve elsewhere).
  *
  * The header is not always the file's TOP LEVEL: a module whose whole body sits inside one
- * `#if … #end` region carries its imports there too, and `headerOf` reads that region as the
- * header — its doc holds the gates that decide when a region qualifies.
+ * `#if … #end` region carries its imports there too, and `headerOf` reads that region as the header —
+ * `ModuleScan.guardedBodyRegion` holds the gates that decide when a region qualifies.
  *
  * Split out of `CheckScan`, on the same contract: PURE static helpers over the tree a check
  * already holds, no shared mutable state and no cache — the memo a caller wants is its own
@@ -32,6 +30,7 @@ final class UsingScan {
 	/** The top-level declaration kinds a `using` insert anchors after — the file's package / import / using header. */
 	private static final USING_ANCHOR_KINDS: Array<String> = [
 		'PackageDecl',
+		'PackageEmpty',
 		'ImportDecl',
 		'ImportAliasDecl',
 		'ImportAliasInDecl',
@@ -54,7 +53,7 @@ final class UsingScan {
 	 * which a per-site rebuild would repeat for every candidate.
 	 */
 	public static function headerOf(tree: QueryNode, source: String, plugin: GrammarPlugin): UsingHeader {
-		return { root: tree, guard: guardOf(tree, source, plugin) };
+		return { root: tree, guard: ModuleScan.guardedBodyRegion(tree, source, plugin) };
 	}
 
 	/**
@@ -184,69 +183,6 @@ final class UsingScan {
 	private static function headerDecls(header: UsingHeader): Array<QueryNode> {
 		final guard: Null<QueryNode> = header.guard;
 		return guard == null ? header.root.children : header.root.children.concat(guard.children);
-	}
-
-	/**
-	 * The `#if … #end` region holding every type `tree` declares, or null when the file has none — the
-	 * answer for the ordinary unguarded module, and the conservative one for every shape the gates
-	 * below refuse.
-	 *
-	 * Three gates, each closing a way the region could fail to cover a rewrite site:
-	 *
-	 *  - ONE region at the top level, with no type declared OUTSIDE it. A site in an unguarded type
-	 *    resolves in the builds where the condition does not hold, so a `using` placed inside the
-	 *    region would not be in scope for it.
-	 *  - The region declares a type ITSELF (its own, or one nested in a further region). A guarded
-	 *    import run with the code outside it is what the first gate refuses; this one refuses a file
-	 *    whose region guards no code at all.
-	 *  - NO `#else` / `#elseif` seam of its OWN. The grammar projects every branch of one region as
-	 *    flat siblings, so an anchor picked from the children cannot be told from one in another
-	 *    branch — and an insert after the first branch's last import is absent from every other
-	 *    branch's build. A NESTED region's seams belong to that region and do not count; an unbalanced
-	 *    directive scan refuses.
-	 */
-	private static function guardOf(tree: QueryNode, source: String, plugin: GrammarPlugin): Null<QueryNode> {
-		final shape: RefShape = plugin.refShape();
-		final regionKind: Null<String> = shape.conditionalMemberKind;
-		if (regionKind == null) return null;
-		var region: Null<QueryNode> = null;
-		for (child in tree.children) if (child.kind == regionKind) {
-			if (region != null) return null;
-			region = child;
-		} else if (RefactorSupport.typeDeclOf(child) != null)
-			return null;
-		final guard: Null<QueryNode> = region;
-		return guard != null && declaresType(guard, regionKind) && singleBranch(guard, source, shape) ? guard : null;
-	}
-
-	/** Whether `node` declares a type directly, or inside a region nested in it — `guardOf`'s coverage gate. */
-	private static function declaresType(node: QueryNode, regionKind: String): Bool {
-		for (child in node.children) {
-			if (RefactorSupport.typeDeclOf(child) != null) return true;
-			if (child.kind == regionKind && declaresType(child, regionKind)) return true;
-		}
-		return false;
-	}
-
-	/** Whether `region` opens no `#else` / `#elseif` branch of its own — `guardOf`'s third gate. */
-	private static function singleBranch(region: QueryNode, source: String, shape: RefShape): Bool {
-		final span: Null<Span> = region.span;
-		final opener: Null<String> = shape.conditionalIfKeyword;
-		final closer: Null<String> = shape.conditionalEndKeyword;
-		final seams: Null<Array<String>> = shape.conditionalElseKeywords;
-		if (span == null || opener == null || closer == null || seams == null) return false;
-		var depth: Int = 0;
-		for (directive in CondDirectives.scan(source, shape)) {
-			if (directive.span.from < span.from || directive.span.to > span.to) continue;
-			if (directive.keyword == opener)
-				depth++;
-			else if (directive.keyword == closer) {
-				depth--;
-				if (depth == 0) return true;
-			} else if (depth == 1 && seams.contains(directive.keyword))
-				return false;
-		}
-		return false;
 	}
 
 	/** The span of the FIRST `using` declared directly under `node`, or null when it declares none. */

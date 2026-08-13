@@ -4,6 +4,7 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.Span;
+import anyparse.query.GrammarPlugin.RefShape;
 
 using StringTools;
 using Lambda;
@@ -26,7 +27,7 @@ final class ModuleScan {
 	private static inline final WILDCARD_IMPORT_KIND: String = 'ImportWildDecl';
 
 	/** The import / using declaration kinds a grammar projects at the top level — the anchor set for an insert and for the bound-name scan. */
-	private static final IMPORT_DECL_KINDS: Array<String> = [
+	public static final IMPORT_DECL_KINDS: Array<String> = [
 		'ImportDecl',
 		'UsingDecl',
 		'ImportWildDecl',
@@ -37,9 +38,71 @@ final class ModuleScan {
 	/** The BULK import kinds — the two statements that bind names they do not spell out (`shadowedByBulkImport`). */
 	private static final BULK_IMPORT_KINDS: Array<String> = [WILDCARD_IMPORT_KIND, 'UsingDecl'];
 
+	/**
+	 * The `package` declaration kinds. A named `package pkg;` and the ROOT-package `package;` project
+	 * APART, and every anchor that reads only the named one falls through on a root-package file to
+	 * the file-start fallback — which splices the import ABOVE `package`, and does not compile.
+	 */
+	public static final PACKAGE_DECL_KINDS: Array<String> = ['PackageDecl', 'PackageEmpty'];
+
+	/**
+	 * The `#if … #end` region holding every type `tree` declares, or null when the file has none — the
+	 * answer for the ordinary unguarded module, and the conservative one for every shape the gates
+	 * below refuse.
+	 *
+	 * A debug- or platform-only module wraps everything below `package` in a single conditional, so its
+	 * import run sits INSIDE that region while the top level holds nothing but `package` and the region
+	 * itself. Every reader that anchors an insert on the file's header — `ImportOrder`'s run seat, the
+	 * `using` insert, the `import-order` rule — must ask this first, or it reads the file as having no
+	 * header at all and lands its line on an island above the `#if`, in scope for nothing the module
+	 * declares.
+	 *
+	 * Three gates, each closing a way the region could fail to cover the code an insert serves:
+	 *
+	 *  - ONE region at the top level, with no type declared OUTSIDE it. A site in an unguarded type
+	 *    resolves in the builds where the condition does not hold, so a declaration placed inside the
+	 *    region would not be in scope for it.
+	 *  - The region declares a type ITSELF (its own, or one nested in a further region). A guarded
+	 *    import run with the code outside it is what the first gate refuses; this one refuses a file
+	 *    whose region guards no code at all.
+	 *  - NO `#else` / `#elseif` seam of its OWN. The grammar projects every branch of one region as
+	 *    flat siblings, so an anchor picked from the children cannot be told from one in another
+	 *    branch — and an insert after the first branch's last import is absent from every other
+	 *    branch's build. A NESTED region's seams belong to that region and do not count; an unbalanced
+	 *    directive scan refuses.
+	 */
+	public static function guardedBodyRegion(tree: QueryNode, source: String, plugin: GrammarPlugin): Null<QueryNode> {
+		final shape: RefShape = plugin.refShape();
+		final regionKind: Null<String> = shape.conditionalMemberKind;
+		if (regionKind == null) return null;
+		var region: Null<QueryNode> = null;
+		for (child in tree.children) if (child.kind == regionKind) {
+			if (region != null) return null;
+			region = child;
+		} else if (RefactorSupport.typeDeclOf(child) != null)
+			return null;
+		final guard: Null<QueryNode> = region;
+		return guard != null && regionDeclaresType(guard, regionKind) && singleBranchRegion(guard, source, shape) ? guard : null;
+	}
+
+	/**
+	 * The offset just past `guard`'s opening directive line — the position a fresh header line takes in
+	 * a guarded module that declares none of its own, or -1 when the region has no span or no line end.
+	 *
+	 * The `#if <cond>` directive owns the region's first line, so its line END is a position no
+	 * declaration's leading trivia reaches — unlike the first child's span, which a doc comment would be
+	 * spliced through.
+	 */
+	public static function guardBodyStart(source: String, guard: QueryNode): Int {
+		final span: Null<Span> = guard.span;
+		if (span == null) return -1;
+		final newline: Int = source.indexOf('\n', span.from);
+		return newline < 0 ? -1 : newline + 1;
+	}
+
 	/** Whether the file carries a `package` declaration whose span the grammar did not record. */
 	private static function hasSpanlessPackage(root: QueryNode): Bool {
-		for (c in root.children) if (c.kind == 'PackageDecl' && c.span == null) return true;
+		for (c in root.children) if (PACKAGE_DECL_KINDS.contains(c.kind) && c.span == null) return true;
 		return false;
 	}
 
@@ -113,6 +176,36 @@ final class ModuleScan {
 			collectGuardedImports(c, true, out);
 		else if (guarded && IMPORT_DECL_KINDS.contains(c.kind))
 			out.push(c);
+	}
+
+	/** Whether `node` declares a type directly, or inside a region nested in it — `guardedBodyRegion`'s coverage gate. */
+	private static function regionDeclaresType(node: QueryNode, regionKind: String): Bool {
+		for (child in node.children) {
+			if (RefactorSupport.typeDeclOf(child) != null) return true;
+			if (child.kind == regionKind && regionDeclaresType(child, regionKind)) return true;
+		}
+		return false;
+	}
+
+	/** Whether `region` opens no `#else` / `#elseif` branch of its own — `guardedBodyRegion`'s third gate. */
+	private static function singleBranchRegion(region: QueryNode, source: String, shape: RefShape): Bool {
+		final span: Null<Span> = region.span;
+		final opener: Null<String> = shape.conditionalIfKeyword;
+		final closer: Null<String> = shape.conditionalEndKeyword;
+		final seams: Null<Array<String>> = shape.conditionalElseKeywords;
+		if (span == null || opener == null || closer == null || seams == null) return false;
+		var depth: Int = 0;
+		for (directive in CondDirectives.scan(source, shape)) {
+			if (directive.span.from < span.from || directive.span.to > span.to) continue;
+			if (directive.keyword == opener)
+				depth++;
+			else if (directive.keyword == closer) {
+				depth--;
+				if (depth == 0) return true;
+			} else if (depth == 1 && seams.contains(directive.keyword))
+				return false;
+		}
+		return false;
 	}
 
 	/** Whether the type named `name` in `file` is that module's MAIN type — the only kind a package wildcard binds. */

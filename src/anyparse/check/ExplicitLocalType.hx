@@ -411,7 +411,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	public static function printerFor(source: String, tree: QueryNode, plugin: GrammarPlugin): TypeRefPrinter {
 		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
-		return TypeRefPrinter.forFile(source, tree, importMap, RefactorSupport.resolutionIndexOf(plugin));
+		return TypeRefPrinter.forFile(source, tree, importMap, plugin, RefactorSupport.resolutionIndexOf(plugin));
 	}
 
 	public static function stripTypeParamQualifiers(printed: String, site: AnnotationSite): String {

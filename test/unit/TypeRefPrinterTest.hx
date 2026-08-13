@@ -848,7 +848,7 @@ class TypeRefPrinterTest extends Test {
 	private function printerWith(source: String, index: Null<SymbolIndex>): TypeRefPrinter {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final root: QueryNode = plugin.parseFile(source);
-		return TypeRefPrinter.forFile(source, root, plugin.importMap(source), index);
+		return TypeRefPrinter.forFile(source, root, plugin.importMap(source), plugin, index);
 	}
 
 	private function indexOf(files: Array<{ file: String, source: String }>): SymbolIndex {

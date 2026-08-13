@@ -389,7 +389,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	/** A printer over `source` with the file's plain-import map and the run's resolution index. */
 	private static function printerFor(source: String, tree: QueryNode, plugin: GrammarPlugin, index: Null<SymbolIndex>): TypeRefPrinter {
 		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		return TypeRefPrinter.forFile(source, tree, provider != null ? provider.importMap(source) : [], index);
+		return TypeRefPrinter.forFile(source, tree, provider != null ? provider.importMap(source) : [], plugin, index);
 	}
 
 	/** The written paths of `occurrences`, deduplicated, in first-seen order — the plan's iteration order. */

@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.ImportOrder.ImportAnchor;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -44,14 +45,9 @@ final class AddImport {
 		if (trimmed.length == 0) return Err('add-import requires a non-empty module path');
 
 		final targetKind: String = isUsing ? 'UsingDecl' : 'ImportDecl';
-		var lastImport: Null<QueryNode> = null;
-		var packageDecl: Null<QueryNode> = null;
 		for (c in tree.children) switch c.kind {
 			case 'ImportDecl', 'UsingDecl', 'ImportWildDecl', 'ImportAliasDecl', 'ImportAliasInDecl':
-				lastImport = c;
 				if (c.kind == targetKind && c.name == trimmed) return Err('already imported: $trimmed');
-			case 'PackageDecl':
-				packageDecl = c;
 			case 'Conditional':
 				if (guardedDuplicate(c.children, targetKind, trimmed))
 					return Err('already imported inside a conditional-compilation (#if) block: $trimmed');
@@ -60,23 +56,16 @@ final class AddImport {
 
 		final stmt: String = '${(isUsing ? 'using ' : 'import ') + trimmed};';
 
-		// Insertion site, in priority order: the slot `ImportOrder` picks
-		// inside the plain-import RUN the path belongs to, else after the
-		// last existing import / using (extend the block), else after the
-		// package declaration, else at the very start of the file. Exact
-		// whitespace is the writer's concern — the canonicalize finalize
-		// re-emits the whole file.
-		final orderedSlot: Int = orderable(trimmed, isUsing) ? ImportOrder.insertOffset(source, ImportOrder.slotsOf(tree), trimmed) : -1;
-		final lastImportTo: Int = spanTo(lastImport);
-		final packageTo: Int = spanTo(packageDecl);
-		final edit: { span: Span, text: String } = if (orderedSlot >= 0)
-			{ span: new Span(orderedSlot, orderedSlot), text: '$stmt\n' };
-		else if (lastImportTo >= 0)
-			{ span: new Span(lastImportTo, lastImportTo), text: '\n$stmt' };
-		else if (packageTo >= 0)
-			{ span: new Span(packageTo, packageTo), text: '\n$stmt' };
-		else
-			{ span: new Span(0, 0), text: '$stmt\n' };
+		// Placement is `ImportOrder`'s single answer for every inserting caller: the run slot the path
+		// sorts into, else the header's own fallback ladder — read from the `#if` region when one
+		// guards the module's whole body. A `using`, a wildcard or an aliased payload passes no path,
+		// so it takes the ladder rather than a slot the plain-import ordering cannot see.
+		final anchor: ImportAnchor = ImportOrder.insertionFor(source, tree, plugin, orderable(trimmed, isUsing) ? trimmed : null);
+		// Exact whitespace is the writer's concern — the canonicalize finalize re-emits the whole file.
+		final edit: { span: Span, text: String } = {
+			span: new Span(anchor.offset, anchor.offset),
+			text: '${anchor.lead}$stmt\n'
+		};
 
 		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
@@ -89,13 +78,6 @@ final class AddImport {
 	 */
 	private static inline function orderable(path: String, isUsing: Bool): Bool {
 		return !isUsing && path.indexOf('*') < 0 && path.indexOf(' ') < 0;
-	}
-
-	/** `node`'s span end, or -1 when the node or its span is null. */
-	private static inline function spanTo(node: Null<QueryNode>): Int {
-		if (node == null) return -1;
-		final s: Null<Span> = node.span;
-		return s == null ? -1 : s.to;
 	}
 
 	/**

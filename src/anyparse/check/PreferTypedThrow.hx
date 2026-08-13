@@ -166,7 +166,9 @@ final class PreferTypedThrow implements Check implements DefaultOff {
 		if (!anyFixable) return [];
 		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
-		final printer: TypeRefPrinter = TypeRefPrinter.forFile(source, tree, importMap, index ?? RefactorSupport.resolutionIndexOf(plugin));
+		final printer: TypeRefPrinter = TypeRefPrinter.forFile(
+			source, tree, importMap, plugin, index ?? RefactorSupport.resolutionIndexOf(plugin)
+		);
 		final edits: Array<{ span: Span, text: String }> = [];
 		walkThrows(tree, seams, false, (literal, insideConditional) -> {
 			final span: Null<Span> = literal.span;

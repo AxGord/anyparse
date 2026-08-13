@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ImportOrder;
+import anyparse.query.ModuleScan;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -147,11 +148,8 @@ final class ImportOutsideGuard implements Check {
 		final movedImports: Array<ImportLine> = outerImports.filter(line -> line.declFrom < guardFrom);
 		final movedUsings: Array<ImportLine> = outerUsings.filter(line -> line.declFrom < guardFrom);
 		if (movedImports.length + movedUsings.length == 0) return [];
-		// The `#if <cond>` directive owns the region's first line, so its line END is a position
-		// no declaration's leading trivia reaches — unlike the first child's span, which a doc
-		// comment would be spliced through.
-		final bodyStart: Int = source.indexOf('\n', guardFrom) + 1;
-		if (bodyStart <= 0) return [];
+		final bodyStart: Int = ModuleScan.guardBodyStart(source, guarded.guard);
+		if (bodyStart < 0) return [];
 		final importAt: Int = innerImports.length == 0 ? bodyStart : innerImports[0].chunkFrom;
 		final usingAt: Int = if (innerUsings.length > 0)
 			innerUsings[0].chunkFrom;

@@ -5,7 +5,6 @@ import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.MoveSymbol;
-import anyparse.query.SymbolIndex;
 
 using StringTools;
 
@@ -263,12 +262,25 @@ class MoveSymbolSliceTest extends Test {
 	 */
 	public function testImportAnchorSkipsGuardedImport(): Void {
 		final source: String = 'package pkg;\nimport a.Top;\n#if js\nimport b.Guarded;\n#end\nclass C {}\n';
-		final index: SymbolIndex = SymbolIndex.build([{ file: 'pkg/C.hx', source: source }], plugin());
-		final info: Null<FileInfo> = index.fileInfo('pkg/C.hx');
-		Assert.notNull(info);
+		Assert.equals(source.indexOf('#if js'), MoveSymbol.importAnchor(source, plugin()).offset);
+	}
 
-		final at: Int = MoveSymbol.importInsertionOffset(source, (info: FileInfo));
-		Assert.equals(source.indexOf('#if js'), at);
+	/**
+	 * A module whose WHOLE body is `#if`-guarded carries its import run INSIDE the region, so the
+	 * anchor lands there — the same header the `add-import` op and the `import-order` rule read.
+	 * Anchoring at the top level would strand the line above the `#if`, in scope for nothing the
+	 * module declares.
+	 */
+	public function testImportAnchorEntersAWholeBodyGuard(): Void {
+		final source: String = 'package pkg;\n\n#if js\nimport a.Top;\n\nclass C {}\n#end\n';
+		Assert.equals(source.indexOf('import a.Top;'), MoveSymbol.importAnchor(source, plugin(), 'a.Bee').offset);
+	}
+
+	/** A ROOT-package `package;` anchors BELOW itself — an import above `package` does not compile. */
+	public function testImportAnchorClearsAnEmptyPackage(): Void {
+		final source: String = 'package;\n\nclass C {}\n';
+		final at: Int = MoveSymbol.importAnchor(source, plugin(), 'a.Bee').offset;
+		Assert.isTrue(at > source.indexOf('package;'), 'anchor $at must sit below the package statement');
 	}
 
 	/**

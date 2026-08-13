@@ -139,6 +139,43 @@ class AddImportSliceTest extends Test {
 		assertAdd(source, 'c.D', false, expected, true);
 	}
 
+	/**
+	 * A module whose WHOLE body sits inside one `#if … #end` carries its import run there, so the
+	 * fresh import takes its ordered slot INSIDE the guard. Read at the top level only, the file
+	 * offers no run at all and the import lands on an island above the `#if` — in scope for nothing
+	 * the guarded code declares.
+	 */
+	public function testGuardedRunTakesItsOrderedSlot(): Void {
+		final source: String = 'package foo;\n\n#if DEBUG\nimport a.Al;\nimport m.Mid;\n\nclass C {}\n#end\n';
+		final expected: String = 'package foo;\n\n#if DEBUG\nimport a.Al;\nimport c.Cee;\nimport m.Mid;\n\nclass C {}\n#end\n';
+		assertAdd(source, 'c.Cee', false, expected);
+	}
+
+	/** A ROOT-package `package;` still anchors the import BELOW it — an import above `package` does not compile. */
+	public function testEmptyPackageStillAnchorsBelowIt(): Void {
+		final source: String = 'package;\n\nclass C {}\n';
+		final expected: String = 'package;\n\nimport a.Al;\n\nclass C {}\n';
+		assertAdd(source, 'a.Al', false, expected);
+	}
+
+	/**
+	 * A fresh `using` lands ABOVE the file's existing `using` group, never past it. Haxe ranks static
+	 * extensions in REVERSE declaration order, so appending below would give the new module TOP
+	 * priority and silently re-target every same-named extension call the file already makes.
+	 */
+	public function testUsingLandsBelowTheImportsAndAboveTheUsingGroup(): Void {
+		final source: String = 'package foo;\n\nimport a.Al;\nimport m.Mid;\n\nusing e.Ext;\n\nclass C {}\n';
+		final expected: String = 'package foo;\n\nimport a.Al;\nimport m.Mid;\n\nusing z.Zed;\nusing e.Ext;\n\nclass C {}\n';
+		assertAdd(source, 'z.Zed', true, expected);
+	}
+
+	/** A wildcard takes no ordered slot, but it still joins the IMPORT block rather than landing past the `using` group. */
+	public function testWildcardJoinsTheImportBlockNotTheUsingGroup(): Void {
+		final source: String = 'package foo;\n\nimport a.Al;\nimport m.Mid;\n\nusing e.Ext;\n\nclass C {}\n';
+		final expected: String = 'package foo;\n\nimport a.Al;\nimport m.Mid;\nimport q.*;\n\nusing e.Ext;\n\nclass C {}\n';
+		assertAdd(source, 'q.*', false, expected);
+	}
+
 	private function assertAdd(source: String, path: String, isUsing: Bool, expected: String, reformat: Bool = false): Void {
 		final result: EditResult = addOf(source, path, isUsing, reformat);
 		switch result {
