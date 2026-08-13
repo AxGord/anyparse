@@ -12821,8 +12821,14 @@ final class Cli {
 	 * remaining, never keeping an unverified edit.
 	 */
 	private static function verifyOracleBatch(
-		candidates: Array<{ file: String, before: String, after: String }>, oracleHxml: String, oracleDir: Null<String>
+		candidates: Array<{ file: String, before: String, after: String }>, oracleHxml: String, oracleDir: Null<String>,
+		?typecheck: (String, Null<String>) -> OracleOutcome
 	): OracleBatchResult {
+		// The oracle arrives as a parameter for the same reason `TypeOracle` is an interface: the
+		// three rollback CAUSES below are environment-shaped (a compiler that will not launch, an
+		// error text naming no candidate, a batch that never settles) and a fixture cannot stage
+		// them against a real haxe. A test supplies canned verdicts; production passes nothing.
+		final verdict: (String, Null<String>) -> OracleOutcome = typecheck ?? (h, d) -> CompilerOracle.typecheck(h, d);
 		for (c in candidates) writeFile(c.file, c.after);
 		final reverted: Array<String> = [];
 		var confirmed: Bool = false;
@@ -12831,7 +12837,7 @@ final class Cli {
 		final maxPasses: Int = 6;
 		while (pass < maxPasses && !confirmed) {
 			pass++;
-			switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
+			switch verdict(oracleHxml, oracleDir) {
 				case Confirmed:
 					confirmed = true;
 				case Unavailable(_):
