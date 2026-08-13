@@ -22,6 +22,9 @@ import anyparse.runtime.Span;
 typedef FixVerifyResult = {
 	var baseline: OracleOutcome;
 	var applied: Array<String>;
+
+	/** Total EDITS that survived verification — the honest "issues fixed" contribution, unlike the FILE count. */
+	var appliedEdits: Int;
 	var reverted: Array<String>;
 	var partials: Array<FixVerifyPartial>;
 }
@@ -100,6 +103,7 @@ final class FixVerifier {
 		final applied: Array<String> = [];
 		final reverted: Array<String> = [];
 		final partials: Array<FixVerifyPartial> = [];
+		var appliedEdits: Int = 0;
 		final baseline: OracleOutcome = CompilerOracle.typecheck(oracleHxml, oracleDir);
 		switch baseline {
 			case Confirmed:
@@ -107,6 +111,7 @@ final class FixVerifier {
 				return {
 					baseline: baseline,
 					applied: applied,
+					appliedEdits: appliedEdits,
 					reverted: reverted,
 					partials: partials
 				};
@@ -142,9 +147,11 @@ final class FixVerifier {
 					case NoChange:
 					case Applied:
 						applied.push(entry.file);
+						appliedEdits += edits.length;
 					case Reverted:
 						reverted.push(entry.file);
 					case Partial(keptEdits, revertedEdits, probes):
+						appliedEdits += keptEdits;
 						if (keptEdits > 0)
 							applied.push(entry.file)
 						else
@@ -162,6 +169,7 @@ final class FixVerifier {
 		return {
 			baseline: baseline,
 			applied: applied,
+			appliedEdits: appliedEdits,
 			reverted: reverted,
 			partials: partials
 		};

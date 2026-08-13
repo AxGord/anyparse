@@ -1902,9 +1902,9 @@ final class Cli {
 		fixedCount += risky.appliedCount;
 		final riskyTail: String = risky.tail;
 
-		// OracleAssisted checks (explicit-local-type's generics/inference tail): applied
-		// ONLY with a compilerOracle — each finding's type is asked of a warm display
-		// server, the edited files are re-typechecked, and any that break the build are
+		// OracleAssisted checks (explicit-local-type's inference tail, explicit-type's return
+		// types): applied ONLY with a compilerOracle — each finding's type is asked of a warm
+		// display server, the edited files are re-typechecked, and any that break the build are
 		// reverted to report-only (verifyOracleBatch). No oracle / no such check → inert.
 		final oracleAssisted: Array<Check> = [for (c in checks) if (c is OracleAssisted) c];
 		final oa: { tail: String, appliedCount: Int } = applyOracleAssistedFixes(
@@ -5625,8 +5625,8 @@ final class Cli {
 		sysPrint('A top-level "compilerOracle" key (path to an .hxml, relative to the config)\n');
 		sysPrint('runs "haxe <hxml> --no-output" as a ground-truth typecheck: a compile error\n');
 		sysPrint('fails the run, a RiskyFix rule fix is reverted under --fix if it breaks the\n');
-		sysPrint('build, and an OracleAssisted rule (explicit-local-type) asks a warm display\n');
-		sysPrint('server for the inferred type of each finding it cannot resolve structurally,\n');
+		sysPrint('build, and an OracleAssisted rule (explicit-local-type, explicit-type) asks a\n');
+		sysPrint('warm display server for the type of each finding it cannot resolve structurally,\n');
 		sysPrint('reverting any annotated file that fails to typecheck. Without the key no\n');
 		sysPrint('compiler is ever spawned.\n');
 		sysPrint('\n');
@@ -9016,7 +9016,7 @@ final class Cli {
 		final topN: Int = entries.length < 12 ? entries.length : 12; // noqa: magic-number
 		stderr('apq search: 0 matches; pattern root kind is "$patternKind". Top kinds seen in input (${entries.length} distinct):\n');
 		for (k in 0...topN) {
-			final e = entries[k];
+			final e: { k: String, n: Int } = entries[k];
 			final marker: String = e.k == patternKind ? ' ← matches pattern root' : '';
 			stderr('  ${e.k} (${e.n})$marker\n');
 		}
@@ -12451,9 +12451,9 @@ final class Cli {
 			case Confirmed:
 				for (f in verified.applied) if (!changedFiles.contains(f)) changedFiles.push(f);
 				return {
-					tail: ', risky-fix verified: ${verified.applied.length} applied, ${verified.reverted.length} reverted to report-only'
+					tail: ', risky-fix verified: ${verified.applied.length} file(s) applied, ${verified.reverted.length} reverted to report-only'
 						+ bisectTail(verified.partials),
-					appliedCount: verified.applied.length
+					appliedCount: verified.appliedEdits
 				};
 			case Unavailable(reason):
 				return { tail: ', risky-fix skipped (oracle unavailable: $reason)', appliedCount: 0 };
@@ -12729,9 +12729,9 @@ final class Cli {
 	}
 
 	/**
-	 * The OracleAssisted tail of `--fix`: for each oracle-assisted check (only
-	 * `explicit-local-type` today), ask a warm Haxe display server for the compiler's
-	 * inferred type of every finding the structural arm left, annotate it, then WRITE
+	 * The OracleAssisted tail of `--fix`: for each oracle-assisted check, ask a warm Haxe display
+	 * server for the compiler's inferred type of every finding the structural arm left, annotate
+	 * it, then WRITE
 	 * the edited files and VERIFY the project still typechecks with a FRESH
 	 * `CompilerOracle.typecheck` — reverting any file the compiler rejects (the
 	 * report-only fallback). Runs ONLY when a `compilerOracle` is configured and the
@@ -12761,13 +12761,17 @@ final class Cli {
 		if (display == null) return { tail: ', oracle-assisted skipped (display server unavailable)', appliedCount: 0 };
 		for (check in oracleChecks) if (check is ConfigAware) (cast check: ConfigAware).setConfigResolver(resolveConfig);
 		final candidates: Array<{ file: String, before: String, after: String }> = [];
+		// Per-file EDIT counts, so the run's "fixed N issue(s)" stays one unit: the safe loop
+		// contributes edits, and a phase that reports FILES would silently shrink the total
+		// (37 files carrying ~400 annotations once read as "37 issues").
+		final editsPerFile: Map<String, Int> = [];
 		// One WHOLE-SET run per check, findings grouped per file — the same scope contract
 		// as `FixVerifier.verify` and the safe loop's `fullScopeIds`: a per-file run
 		// starves any cross-file resolution the check's gates or classifiers lean on.
 		// Through `Linter.collect`, never `check.run` directly — the one gated entry every consumer
 		// of a check's findings shares (see its doc; this path is one of the two that used to bypass).
 		// KNOWINGLY NOT INDEPENDENTLY COVERED: no test can distinguish this line from a direct
-		// `check.run`, because the only `OracleAssisted` builtin cannot produce an edit inside a
+		// `check.run`, because no `OracleAssisted` builtin can produce an edit inside a
 		// quotation anyway — the display server has no typed AST for reified source, so `typeAt`
 		// returns nothing there (measured: with this line reverted, a quoted untyped local is still
 		// left alone). What the suite does cover is the shared entry itself and the identical wiring
@@ -12784,6 +12788,7 @@ final class Cli {
 				for (e in (cast byCheck.check: OracleAssisted).fixWithOracle(entry.source, own, plugin, display)) allEdits.push(e);
 			}
 			if (allEdits.length == 0) continue;
+			editsPerFile[entry.file] = allEdits.length;
 			switch RefactorSupport.canonicalize(entry.source, allEdits, false, plugin, optsByFile[entry.file]) {
 				case Ok(text) if (text != entry.source):
 					candidates.push({ file: entry.file, before: entry.source, after: text });
@@ -12792,11 +12797,16 @@ final class Cli {
 		}
 		display.stop();
 		if (candidates.length == 0) return { tail: ', oracle-assisted: 0 applied', appliedCount: 0 };
-		final result: { applied: Array<String>, reverted: Array<String> } = verifyOracleBatch(candidates, oracleHxml, oracleDir);
+		final result: OracleBatchResult = verifyOracleBatch(candidates, oracleHxml, oracleDir);
 		for (f in result.applied) if (!changedFiles.contains(f)) changedFiles.push(f);
+		var edits: Int = 0;
+		for (f in result.applied) edits += editsPerFile[f] ?? 0;
+		// The revert CAUSE is part of the verdict: a compiler rejection, an unavailable oracle and a
+		// non-convergent batch are three different things to act on, and used to print identically.
+		final why: String = result.reverted.length == 0 ? '' : ' (${result.reason})';
 		return {
-			tail: ', oracle-assisted: ${result.applied.length} applied, ${result.reverted.length} reverted to report-only',
-			appliedCount: result.applied.length
+			tail: ', oracle-assisted: ${result.applied.length} file(s) applied, ${result.reverted.length} reverted to report-only$why',
+			appliedCount: edits
 		};
 	}
 
@@ -12812,10 +12822,11 @@ final class Cli {
 	 */
 	private static function verifyOracleBatch(
 		candidates: Array<{ file: String, before: String, after: String }>, oracleHxml: String, oracleDir: Null<String>
-	): { applied: Array<String>, reverted: Array<String> } {
+	): OracleBatchResult {
 		for (c in candidates) writeFile(c.file, c.after);
 		final reverted: Array<String> = [];
 		var confirmed: Bool = false;
+		var reason: String = 'compiler rejected';
 		var pass: Int = 0;
 		final maxPasses: Int = 6;
 		while (pass < maxPasses && !confirmed) {
@@ -12824,11 +12835,13 @@ final class Cli {
 				case Confirmed:
 					confirmed = true;
 				case Unavailable(_):
+					reason = 'oracle unavailable';
 					revertRemaining(candidates, reverted);
 					break;
 				case Rejected(errors):
 					final culprits: Array<String> = oracleErrorFiles(errors, candidates, reverted);
 					if (culprits.length == 0) {
+						reason = 'compiler rejected, no file named';
 						revertRemaining(candidates, reverted);
 						break;
 					}
@@ -12838,9 +12851,12 @@ final class Cli {
 					}
 			}
 		}
-		if (!confirmed) revertRemaining(candidates, reverted);
+		if (!confirmed) {
+			if (pass >= maxPasses) reason = 'not converged in $maxPasses passes';
+			revertRemaining(candidates, reverted);
+		}
 		final applied: Array<String> = [for (c in candidates) if (!reverted.contains(c.file)) c.file];
-		return { applied: applied, reverted: reverted };
+		return { applied: applied, reverted: reverted, reason: reason };
 	}
 
 	/** Candidate files (not already reverted) the compiler error text blames — a local's bad annotation errors in its own file, so the error's `path:` names the culprit. */
@@ -14160,7 +14176,7 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('--- skip-parse construct-locus histogram (total $total, showing top $shown of ${entries.length}; --all overrides) ---\n');
 		for (idx in 0...shown) {
-			final entry = entries[idx];
+			final entry: { key: String, cluster: ReconCluster } = entries[idx];
 			final c: ReconCluster = entry.cluster;
 			final examplesStr: String = c.examples.length == 1 ? c.examples[0] : c.examples.join(', ');
 			final raw: String = reconNormalize(c.rawSample);
@@ -15540,4 +15556,16 @@ typedef AddElementOpts = {
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
+};
+
+/**
+ * The oracle batch's verdict: which files kept their annotations, which were rolled back, and WHY
+ * the rollback happened — the three causes (a compiler rejection naming no candidate, an
+ * unavailable oracle, a batch that did not converge) are different problems and used to print the
+ * same line. `reason` is meaningful only when `reverted` is non-empty.
+ */
+private typedef OracleBatchResult = {
+	final applied: Array<String>;
+	final reverted: Array<String>;
+	final reason: String;
 };

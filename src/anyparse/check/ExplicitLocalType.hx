@@ -301,12 +301,12 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		if (tree == null) return [];
 		final byKey: Map<String, QueryNode> = [];
 		RefactorSupport.indexNodesByKind(tree, locals, byKey);
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
-		// The printer owns the short-name / add-import / fully-qualified decision for every
-		// nominal the oracle names, and accumulates the imports its short forms rely on.
-		final printer: TypeRefPrinter = TypeRefPrinter.forFile(source, tree, importMap, RefactorSupport.resolutionIndexOf(plugin));
+		final printer: TypeRefPrinter = printerFor(source, tree, plugin);
 		final maxAnon: Int = maxAnonLen(violations);
+		final fields: Array<String> = shape.fieldDeclKinds ?? [];
+		final functions: Array<String> = [
+			for (k in (shape.memberDeclKinds ?? []).concat(shape.localFunctionKinds ?? [])) if (!fields.contains(k)) k
+		];
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
@@ -317,7 +317,8 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			if (at <= 0) continue;
 			final raw: Null<String> = oracle.typeAt(v.file, at - 1);
 			if (raw == null) continue;
-			final norm: Null<String> = normalizeWith(raw, printer, maxAnon);
+			final owner: Null<String> = enclosingGenericFunction(tree, source, span.from, functions);
+			final norm: Null<String> = normalizeWith(raw, printer, maxAnon, { file: v.file, methodName: owner });
 			if (norm != null) edits.push({ span: new Span(at, at), text: ':$norm' });
 		}
 		if (edits.length > 0) for (importEdit in printer.pendingImportEdits()) edits.push(importEdit);
@@ -348,7 +349,9 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 * it never adds an import, having no file to anchor one in. PURE and unit-testable.
 	 */
 	public static function normalizeInferredType(raw: String, importMap: Map<String, String>, maxAnonLen: Int): Null<String> {
-		return normalizeWith(raw, TypeRefPrinter.importsOnly(importMap), maxAnonLen);
+		// No enclosing-function context here: the class-parameter half of the qualifier strip
+		// still applies (it needs none), the method-parameter half is skipped.
+		return normalizeWith(raw, TypeRefPrinter.importsOnly(importMap), maxAnonLen, { file: null, methodName: null });
 	}
 
 	/**
@@ -361,11 +364,13 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 * the name is free, else the correct fully-qualified (module-qualified for a sub-type)
 	 * form, which always resolves.
 	 */
-	public static function normalizeWith(raw: String, printer: TypeRefPrinter, maxAnonLen: Int): Null<String> {
-		final t: String = raw.trim();
+	public static function normalizeWith(raw: String, printer: TypeRefPrinter, maxAnonLen: Int, site: AnnotationSite): Null<String> {
+		final t: String = stripTypeParamQualifiers(raw.trim(), site);
 		return if (t == '')
 			null
 		else if (t.indexOf('Unknown<') != -1)
+			null
+		else if (hasForeignPrivateType(t))
 			null
 		else if (t.indexOf('{') != -1 && t.length > maxAnonLen)
 			null
@@ -373,6 +378,137 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			null
 		else
 			printer.printTypeExpr(t);
+	}
+
+	/**
+	 * `printed` with COMPILER-QUALIFIED type parameters reduced to the bare names a source file
+	 * can actually spell. The compiler prints a type parameter with its owner in front, in TWO
+	 * forms, both unwritable (`Module pkg.Box does not define type T`): a CLASS parameter as
+	 * `<owner type path>.<name>` (`pkg.Box.T`), a METHOD parameter as `<method name>.<name>`
+	 * (`pair.U`). Both reach EVERY consumer of the oracle — a return type, a local, a `Dynamic`
+	 * replacement — so the strip lives inside `normalizeWith` where none of them can forget it.
+	 *
+	 * The segment before the last tells the forms apart, because a real type reference the
+	 * compiler prints never carries an upper-case segment anywhere but at the END — a module's
+	 * SECONDARY type comes out as `pack.Sub` with the module dropped (measured: `pkg.Box.Side`
+	 * prints `pkg.Side`). So an upper-case non-final segment IS an owner type and the run is a
+	 * class parameter; a lower-case one is a package segment unless it equals `methodName`,
+	 * which the caller supplies ONLY for a function that DECLARES type parameters (null
+	 * otherwise) — without that proof the same shape is an ordinary package-qualified type
+	 * whose tail happens to match the function name.
+	 *
+	 * Both strips are sound ONLY because the annotation is written INSIDE the owner, where the
+	 * bare name is in scope — this is not a general type-reference normaliser. Runs are cut on
+	 * the same character class `TypeRefPrinter.printTypeExpr` uses, so the two agree on what a
+	 * type reference is.
+	 */
+	/**
+	 * The per-file type printer both oracle-assisted passes build identically: the file's import
+	 * map from the grammar's `TypeInfoProvider` (empty when the plugin exposes none) plus the run's
+	 * resolution index. The printer owns the short-name / add-import / fully-qualified decision for
+	 * every nominal the oracle names, and accumulates the imports its short forms rely on.
+	 */
+	public static function printerFor(source: String, tree: QueryNode, plugin: GrammarPlugin): TypeRefPrinter {
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
+		return TypeRefPrinter.forFile(source, tree, importMap, RefactorSupport.resolutionIndexOf(plugin));
+	}
+
+	public static function stripTypeParamQualifiers(printed: String, site: AnnotationSite): String {
+		return mapTypeRuns(printed, run -> bareTypeParam(run, site));
+	}
+
+	/**
+	 * `printed` with every dotted type-reference run replaced by `f(run)`, everything between them
+	 * copied verbatim. Runs are cut on the same character class `TypeRefPrinter.printTypeExpr` uses,
+	 * so this tokenizer and the printer agree on what a type reference is.
+	 */
+	private static function mapTypeRuns(printed: String, f: String -> String): String {
+		final buf: StringBuf = new StringBuf();
+		final n: Int = printed.length;
+		var i: Int = 0;
+		while (i < n) {
+			final c: Int = printed.fastCodeAt(i);
+			if (!RefactorSupport.isIdentChar(c) && c != '.'.code) {
+				buf.addChar(c);
+				i++;
+				continue;
+			}
+			final start: Int = i;
+			while (i < n) {
+				final cc: Int = printed.fastCodeAt(i);
+				if (!RefactorSupport.isIdentChar(cc) && cc != '.'.code) break;
+				i++;
+			}
+			buf.add(f(printed.substring(start, i)));
+		}
+		return buf.toString();
+	}
+
+	/** `run` cut down to its last segment when it is a qualified type parameter, else `run` verbatim. */
+	private static function bareTypeParam(run: String, site: AnnotationSite): String {
+		final parts: Array<String> = run.split('.');
+		if (parts.length < 2) return run;
+		final last: String = parts[parts.length - 1];
+		for (i in 0...parts.length - 1) {
+			if (RefactorSupport.isUpperInitial(parts[i])) return last;
+			if (isOwnPrivateModule(parts.slice(0, i + 1), site.file)) return last;
+		}
+		return site.methodName != null && parts[parts.length - 2] == site.methodName ? last : run;
+	}
+
+	/**
+	 * Whether `segment` is the synthetic private-module name (`_Holder`) of the module `file` itself
+	 * — the one place a private type IS nameable, by its bare name. Compared on the file's basename,
+	 * so no classpath root has to be known.
+	 */
+	private static function isOwnPrivateModule(path: Array<String>, file: Null<String>): Bool {
+		final segment: String = path[path.length - 1];
+		if (file == null || segment.length < 2 || segment.fastCodeAt(0) != '_'.code) return false;
+		// The segments BEFORE the synthetic name are the package, so the whole run pins one path —
+		// matching the basename alone would accept a same-named module of a different package.
+		path[path.length - 1] = segment.substr(1);
+		final expected: String = '${path.join('/')}.hx';
+		return file == expected || file.endsWith('/$expected');
+	}
+
+	/**
+	 * Whether `printed` still names a PRIVATE module type after the strip — a `_`-prefixed segment in
+	 * any but the last position of a dotted run. What survives `bareTypeParam` belongs to ANOTHER
+	 * module, and Haxe offers no spelling that reaches it, so the annotation stays report-only.
+	 */
+	private static function hasForeignPrivateType(printed: String): Bool {
+		var found: Bool = false;
+		mapTypeRuns(printed, run -> {
+			final parts: Array<String> = run.split('.');
+			for (p in 0...parts.length - 1) if (parts[p].length > 1 && parts[p].fastCodeAt(0) == '_'.code) found = true;
+			return run;
+		});
+		return found;
+	}
+
+	/**
+	 * The name of the innermost GENERIC function enclosing `offset`, or null when none does —
+	 * the `methodName` proof `stripTypeParamQualifiers` needs. Genericity is read from the
+	 * source: a `<` immediately after the name token. Descending order makes the last match the
+	 * innermost, and a subtree whose span excludes `offset` is pruned.
+	 */
+	private static function enclosingGenericFunction(tree: QueryNode, source: String, offset: Int, functions: Array<String>): Null<String> {
+		var best: Null<String> = null;
+
+		function walk(node: QueryNode): Void {
+			final span: Null<Span> = node.span;
+			// A spanless node (the module root) is NOT a miss — it is pruneless, so descend.
+			if (span != null && (offset < span.from || offset > span.to)) return;
+			final name: Null<String> = node.name;
+			if (span != null && functions.contains(node.kind) && name != null) {
+				final at: Int = RefactorSupport.activeCodeIdentTokenOffset(source, span, name);
+				if (at >= 0 && source.fastCodeAt(at + name.length) == '<'.code) best = name;
+			}
+			for (c in node.children) walk(c);
+		}
+		walk(tree);
+		return best;
 	}
 
 	/**
@@ -745,3 +881,20 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	}
 
 }
+
+/**
+ * Where an oracle-named type will be WRITTEN — the context that decides which of the compiler's
+ * qualifiers are strippable. Both fields are proof-carrying: a non-null `methodName` means the
+ * enclosing function DECLARES type parameters, a non-null `file` lets a private module type of
+ * that very file be named bare. Null means "no proof", which always costs a strip, never a wrong
+ * one.
+ */
+typedef AnnotationSite = {
+
+	/** The file receiving the annotation, or null when the caller has none. */
+	final file: Null<String>;
+
+	/** The enclosing function's name, ONLY when it declares type parameters; null otherwise. */
+	final methodName: Null<String>;
+
+};

@@ -622,6 +622,7 @@ import unit.UnnecessarySwitchCheckTest;
 import unit.ShadowingCaseBinderCheckTest;
 import unit.ImportOutsideGuardCheckTest;
 import unit.JoinArrayPushesCheckTest;
+import unit.ExplicitTypeReturnOracleTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1043,6 +1044,7 @@ class RunTests {
 		addCase(new ExplicitLocalTypeIndexAccessTest());
 		addCase(new ExplicitLocalTypeOracleTest());
 		addCase(new ExplicitLocalTypeOracleE2ETest());
+		addCase(new ExplicitTypeReturnOracleTest());
 		addCase(new MagicNumberCheckTest());
 		addCase(new StringLiteralDupCheckTest());
 		addCase(new PreferEnumAbstractCheckTest());

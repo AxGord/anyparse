@@ -181,8 +181,9 @@ interface TypeOracle {
  * `fixWithOracle` for each unfixed finding, applies the edits per file, and verifies
  * the file still typechecks (reverting it otherwise — the report-only fallback). With
  * no oracle configured the seam is never entered, so behaviour is byte-identical to a
- * run without the key. The first consumer is `explicit-local-type`, whose
- * resolver-unreachable tail (generics / inference) only the compiler can name.
+ * run without the key. The consumers are `explicit-local-type`, whose resolver-unreachable
+ * tail (generics / inference) only the compiler can name, `avoid-dynamic`, and
+ * `explicit-type`, whose non-Void return types have no structural evidence at all.
  */
 @:nullSafety(Strict)
 interface OracleAssisted {

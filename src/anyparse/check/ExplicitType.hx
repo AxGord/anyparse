@@ -7,6 +7,9 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import anyparse.query.RefactorSupport;
 import anyparse.query.TypeInfoProvider;
+import anyparse.check.Check.OracleAssisted;
+import anyparse.check.Check.TypeOracle;
+import anyparse.query.TypeRefPrinter;
 
 using StringTools;
 using Lambda;
@@ -16,7 +19,11 @@ using Lambda;
  * field with no `:Type`, a function parameter with no `:Type`, or a function with
  * no return type. Stating types everywhere is a documented project rule; the check
  * holds without a type-checker because the omission is purely syntactic.
- * A conservative autofix fills in a statically-certain initializer type, plus a : Void return type when a block-bodied function has no value-return and no throw in its own scope (nested functions and lambdas excluded); the rest stays report-only.
+ * A conservative autofix fills in a statically-certain initializer type, plus a : Void return
+ * type when a block-bodied function has no value-return and no throw in its own scope (nested
+ * functions and lambdas excluded). A non-Void return type has no structural evidence at all, so
+ * it is the `OracleAssisted` pass (`fixWithOracle`), which asks the compiler and therefore runs
+ * only under a configured `compilerOracle`; the rest stays report-only.
  *
  * ## Grammar-agnostic
  *
@@ -31,7 +38,14 @@ using Lambda;
  * no-op.
  */
 @:nullSafety(Strict)
-final class ExplicitType implements Check {
+final class ExplicitType implements Check implements OracleAssisted {
+
+	/**
+	 * An anonymous-structure return type longer than this stays report-only — the same
+	 * default the sibling `explicit-local-type` applies to inferred local types, where a
+	 * long inline structure is noise rather than documentation.
+	 */
+	private static inline final MAX_ANON_LEN: Int = 80;
 
 	/**
 	 * Simple names visible WITHOUT an import from every Haxe module — the standard library's root
@@ -63,6 +77,65 @@ final class ExplicitType implements Check {
 	];
 
 	public function new() {}
+
+	/**
+	 * The oracle-assisted RETURN-TYPE pass: annotate every flagged function whose type the
+	 * display server names. `fix()` leaves a non-`Void` return type report-only because no
+	 * structural evidence pins it; the compiler's own answer is that evidence, so the same
+	 * findings become fixable the moment a project configures a `compilerOracle`. Everything
+	 * else the check reports — fields, parameters — is already handled structurally and is
+	 * skipped here: a violation whose span keys a FUNCTION node is the return-type finding,
+	 * since a field / parameter violation keys its own node instead.
+	 *
+	 * Per finding, every failed gate is a silent skip that leaves it report-only: a `macro`
+	 * function (its `Expr` return is implicit), a body the annotation cannot be placed before
+	 * (`voidInsertPoint`), a name token the source does not spell in active code, a reply that
+	 * is not a printed function type (`returnTypeOf`), and a type `normalizeWith` refuses.
+	 */
+	public function fixWithOracle(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, oracle: TypeOracle
+	): Array<{ span: Span, text: String }> {
+		final shape: RefShape = plugin.refShape();
+		final fields: Array<String> = shape.fieldDeclKinds ?? [];
+		final members: Array<String> = shape.memberDeclKinds ?? [];
+		final bodies: Array<String> = shape.functionBodyKinds ?? [];
+		final functions: Array<String> = [for (k in members) if (!fields.contains(k)) k];
+		if (functions.length == 0 || bodies.length == 0 || violations.length == 0) return [];
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		if (tree == null) return [];
+		final flagged: Map<String, Bool> = [];
+		for (v in violations) {
+			final vspan: Null<Span> = v.span;
+			if (vspan != null) flagged['${vspan.from}:${vspan.to}'] = true;
+		}
+		final printer: TypeRefPrinter = ExplicitLocalType.printerFor(source, tree, plugin);
+		final seams: ReturnSeams = {
+			source: source,
+			file: violations[0].file,
+			bodies: bodies,
+			flagged: flagged,
+			printer: printer,
+			oracle: oracle
+		};
+		final macroKind: Null<String> = shape.macroModifierKind;
+		final boundary: QueryNode -> Bool = c -> members.contains(c.kind);
+		final edits: Array<{ span: Span, text: String }> = [];
+
+		function walk(node: QueryNode): Void {
+			final kids: Array<QueryNode> = node.children;
+			for (i in 0...kids.length) {
+				final child: QueryNode = kids[i];
+				if (functions.contains(child.kind) && !RefactorSupport.macroModifierPrecedes(kids, i, macroKind, boundary)) {
+					final edit: Null<{ span: Span, text: String }> = returnEdit(seams, child);
+					if (edit != null) edits.push(edit);
+				}
+				walk(child);
+			}
+		}
+		walk(tree);
+		if (edits.length > 0) for (importEdit in printer.pendingImportEdits()) edits.push(importEdit);
+		return edits;
+	}
 
 	public function id(): String {
 		return 'explicit-type';
@@ -100,8 +173,9 @@ final class ExplicitType implements Check {
 	 * literal (`String` / `Bool` / `Int` / `Float`, negatives included), a `new T<...>()`
 	 * with written type parameters, or a typed cast / check-type `(x : T)`. Everything
 	 * uncertain — a bare `new T()` (possibly generic), a call, a field read, an array /
-	 * map / ternary, a `[]`, or a missing return type — is left report-only: a wrong
-	 * annotation breaks the build, so when uncertain the fix skips.
+	 * map / ternary, or a `[]` — is left report-only: a wrong annotation breaks the build, so when
+	 * uncertain the fix skips. A missing non-Void return type is report-only HERE too, and is
+	 * picked up by `fixWithOracle` when the project configures a compiler oracle.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -122,6 +196,36 @@ final class ExplicitType implements Check {
 		return edits;
 	}
 
+	/**
+	 * The RETURN half of a printed function type — `(name : String) -> String` yields `String`.
+	 * Public as the parse seam its own tests drive: only a function-TYPED parameter discriminates
+	 * the depth scan, and no realistic fixture reaches that shape through the display server.
+	 * The compiler prints a method's own type as a parenthesised parameter group followed by
+	 * `->` and the result, so a reply of any other shape (a position that resolved to a value,
+	 * a query the server could not answer) yields null. The group's closing parenthesis is
+	 * found by DEPTH, so a function-typed parameter cannot end it early.
+	 */
+	public static function returnTypeOf(printed: String): Null<String> {
+		final t: String = printed.trim();
+		if (t.length == 0 || t.fastCodeAt(0) != '('.code) return null;
+		var depth: Int = 0;
+		var i: Int = 0;
+		while (i < t.length) {
+			final c: Int = t.fastCodeAt(i);
+			if (c == '('.code)
+				depth++;
+			else if (c == ')'.code && --depth == 0)
+				break;
+			i++;
+		}
+		if (i >= t.length) return null;
+		final rest: String = t.substring(i + 1).ltrim();
+		if (!rest.startsWith('->')) return null;
+		final ret: String = rest.substring(2).trim();
+		return ret.length == 0 ? null : ret;
+	}
+
+
 	/** Whether `c` is a space or tab — horizontal whitespace, excluding line breaks. */
 	private static inline function isInlineSpace(c: Int): Bool {
 		return c == ' '.code || c == '\t'.code;
@@ -131,6 +235,37 @@ final class ExplicitType implements Check {
 	private static inline function isNominalPart(c: Int): Bool {
 		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code
 			|| c == '.'.code;
+	}
+
+
+	/**
+	 * The annotation edit for ONE flagged function, or null when any gate fails. Split out of
+	 * `fixWithOracle` for the complexity budget; every `null` here leaves the finding report-only.
+	 */
+	private static function returnEdit(s: ReturnSeams, fn: QueryNode): Null<{ span: Span, text: String }> {
+		final span: Null<Span> = fn.span;
+		final name: Null<String> = fn.name;
+		if (span == null || name == null || !s.flagged.exists('${span.from}:${span.to}')) return null;
+		final body: Null<QueryNode> = fn.children.find(c -> s.bodies.contains(c.kind));
+		if (body == null) return null;
+		final at: Int = voidInsertPoint(span.from, body, s.source);
+		if (at < 0) return null;
+		// The display server answers at a position INSIDE the name token, not at the
+		// `function` keyword the node's span starts on.
+		final nameAt: Int = RefactorSupport.activeCodeIdentTokenOffset(s.source, span, name);
+		if (nameAt < 0) return null;
+		final raw: Null<String> = s.oracle.typeAt(s.file, nameAt + name.length - 1);
+		final ret: Null<String> = raw == null ? null : returnTypeOf(raw);
+		if (ret == null) return null;
+		// The `<method>.<param>` form can only be printed for a method that DECLARES type
+		// parameters — `<` right after the name token. Without that proof the same shape is an
+		// ordinary package-qualified type whose package tail happens to match the method name.
+		final generic: Bool = s.source.fastCodeAt(nameAt + name.length) == '<'.code;
+		final norm: Null<String> = ExplicitLocalType.normalizeWith(ret, s.printer, MAX_ANON_LEN, {
+			file: s.file,
+			methodName: generic ? name : null
+		});
+		return norm == null ? null : { span: new Span(at, at), text: ':$norm' };
 	}
 
 	/**
@@ -251,9 +386,10 @@ final class ExplicitType implements Check {
 	}
 
 	/**
-	 * The offset right after the parameter list's `)` — where `: Void` is inserted,
-	 * before the body — found by scanning back from the block body's `{` over
-	 * horizontal whitespace only. The first non-whitespace character must be the `)`;
+	 * The offset right after the parameter list's `)` — where a return-type annotation is
+	 * inserted, before the body — found by scanning back from the body's first token over
+	 * horizontal whitespace only. Shared by the structural `: Void` pass and the oracle-assisted
+	 * one. The first non-whitespace character must be the `)`;
 	 * anything else (a comment ending in `)`, or the `)` and `{` on separate lines)
 	 * leaves the finding report-only, so a `)` inside a comment between the parameter
 	 * list and the body is never mistaken for the parameter close. Returns -1 when the
@@ -586,6 +722,20 @@ final class ExplicitType implements Check {
 private typedef InheritedParam = {
 	final text: String;
 	final file: String;
+};
+
+/**
+ * The read-only context `ExplicitType.returnEdit` needs per finding: the `source` and `file`
+ * being fixed (the display server addresses a POSITION IN A FILE), the body-marker kinds, the
+ * violation spans this call owns, the per-file type `printer`, and the `oracle` itself.
+ */
+private typedef ReturnSeams = {
+	final source: String;
+	final file: String;
+	final bodies: Array<String>;
+	final flagged: Map<String, Bool>;
+	final printer: TypeRefPrinter;
+	final oracle: TypeOracle;
 };
 
 /**

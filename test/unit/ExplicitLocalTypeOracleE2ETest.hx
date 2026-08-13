@@ -9,6 +9,7 @@ import anyparse.check.ExplicitLocalType;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.query.RefactorSupport;
+import anyparse.runtime.Span;
 #if (sys || nodejs)
 import sys.io.File;
 #end
@@ -37,6 +38,20 @@ class ExplicitLocalTypeOracleE2ETest extends Test {
 		+ '\t\treturn macro {\n\t\t\tvar quoted = [for (i in 0...3) i];\n\t\t\ttrace(quoted);\n\t\t};\n\t}\n\n'
 		+ '\tstatic function main() {\n\t\tvar comp = [for (i in 0...3) i];\n\t\ttrace(comp, build());\n\t}\n\n}\n';
 
+	/**
+	 * A GENERIC owner: `held` needs the oracle and its type mentions the CLASS parameter (printed
+	 * `Array<Box.T>`), `both` the METHOD parameter (`Array<pair.U>`) — neither spelling compiles,
+	 * so without the qualifier strip the whole file is reverted and `msg` loses its annotation too.
+	 */
+	private static final BOX: String = 'class Box<T> {\n\n\tpublic final v:T;\n\n\tpublic function new(v:T) {\n\t\tthis.v = v;\n\t}\n\n'
+		+ '\tpublic function get():T {\n\t\tvar held = [v].map(x -> x);\n\t\treturn held[0];\n\t}\n\n'
+		+ '\tpublic function pair<U>(u:U):Array<U> {\n\t\tvar both = [u].map(x -> x);\n\t\treturn both;\n\t}\n\n'
+		+ '\tpublic function tag():Int {\n\t\tvar entry = [({n: 1} : Entry)];\n\t\treturn entry[0].n;\n\t}\n\n}\n\n'
+		+ 'private typedef Entry = {final n:Int;}\n';
+
+	private static final BOXMAIN: String = 'class Main {\n\n\tstatic function main() {\n'
+		+ '\t\tfinal b:Box<Int> = new Box(1);\n\t\ttrace(b.get(), b.pair(\'s\'), b.tag());\n\t}\n\n}\n';
+
 	private static final HXML: String = '-cp .\n-main Main\n';
 	#end
 
@@ -58,7 +73,7 @@ class ExplicitLocalTypeOracleE2ETest extends Test {
 			CliFixture.removeDir(dir);
 			return;
 		}
-		final edits = check.fixWithOracle(SRC, violations, plugin, display);
+		final edits: Array<{ text: String, span: Span }> = check.fixWithOracle(SRC, violations, plugin, display);
 		display.stop();
 		switch RefactorSupport.canonicalize(SRC, edits, true, plugin) {
 			case Ok(text):
@@ -98,8 +113,7 @@ class ExplicitLocalTypeOracleE2ETest extends Test {
 			{ name: 'check.hxml', source: HXML },
 			{ name: 'apqlint.json', source: apqlint }
 		]);
-		Cli.run(['lint', '--fix', '--rule', 'explicit-local-type', '$dir/Main.hx']);
-		final packed: String = StringTools.replace(File.getContent('$dir/Main.hx'), ' ', '');
+		final packed: String = fixedPacked('$dir/Main.hx', '$dir/Main.hx');
 		Assert.isTrue(packed.indexOf('varcomp:Array<Int>') != -1, 'the RUNTIME local is annotated, so the oracle path did run');
 		Assert.isTrue(packed.indexOf('varquoted=[for') != -1, 'the QUOTED local is left exactly as written');
 		CliFixture.removeDir(dir);
@@ -120,8 +134,7 @@ class ExplicitLocalTypeOracleE2ETest extends Test {
 			{ name: 'check.hxml', source: HXML },
 			{ name: 'apqlint.json', source: apqlint }
 		]);
-		Cli.run(['lint', '--fix', '--rule', 'explicit-local-type', '$dir/Main.hx']);
-		final packed: String = StringTools.replace(File.getContent('$dir/Main.hx'), ' ', '');
+		final packed: String = fixedPacked('$dir/Main.hx', '$dir/Main.hx');
 		Assert.isTrue(packed.indexOf('varmapped:Array<Int>') != -1, 'disk carries the oracle-annotated .map() local');
 		Assert.isTrue(packed.indexOf('varcomp:Array<Int>') != -1, 'disk carries the oracle-annotated comprehension local');
 		Assert.isTrue(packed.indexOf('varempty=[]') != -1, 'the monomorph stays unannotated');
@@ -131,7 +144,38 @@ class ExplicitLocalTypeOracleE2ETest extends Test {
 		#end
 	}
 
+	public function testCliFixAnnotatesGenericLocals(): Void {
+		#if (sys || nodejs)
+		if (!oracleWorks()) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final apqlint: String = '{"compilerOracle":"check.hxml","rules":{"explicit-local-type":{"enabled":true}}}';
+		final dir: String = CliFixture.writeDir('eltgeneric', [
+			{ name: 'Box.hx', source: BOX },
+			{ name: 'Main.hx', source: BOXMAIN },
+			{ name: 'check.hxml', source: HXML },
+			{ name: 'apqlint.json', source: apqlint }
+		]);
+		final packed: String = fixedPacked(dir, '$dir/Box.hx');
+		Assert.isTrue(packed.indexOf('varheld:Array<T>') != -1, 'the CLASS type parameter is annotated bare');
+		Assert.isTrue(packed.indexOf('varboth:Array<U>') != -1, 'the METHOD type parameter is annotated bare');
+		Assert.isTrue(packed.indexOf('varentry:Array<Entry>') != -1, 'the own-module PRIVATE type is annotated bare');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
+	/**
+	 * Run `lint --fix` over `scope` and return `target`'s content with every space removed — the
+	 * shape every CLI scenario here shares, so an assertion can be written against the packed text.
+	 */
+	private function fixedPacked(scope: String, target: String): String {
+		Cli.run(['lint', '--fix', '--rule', 'explicit-local-type', scope]);
+		return StringTools.replace(File.getContent(target), ' ', '');
+	}
 	private function oracleWorks(): Bool {
 		final dir: String = CliFixture.writeDir('eltoracle', [{ name: 'Main.hx', source: SRC }, { name: 'check.hxml', source: HXML }]);
 		final ok: Bool = switch CompilerOracle.typecheck('check.hxml', dir) {

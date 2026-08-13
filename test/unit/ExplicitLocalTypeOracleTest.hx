@@ -79,6 +79,73 @@ class ExplicitLocalTypeOracleTest extends Test {
 		Assert.isNull(ExplicitLocalType.normalizeInferredType('   ', [], 80));
 	}
 
+	// --- stripTypeParamQualifiers: the compiler's qualified type parameters ---
+
+	public function testStripsClassTypeParam(): Void {
+		Assert.equals('T', ExplicitLocalType.stripTypeParamQualifiers('pkg.Box.T', { file: null, methodName: 'get' }));
+	}
+
+	public function testStripsClassTypeParamInsideGeneric(): Void {
+		Assert.equals('pkg.Box<T>', ExplicitLocalType.stripTypeParamQualifiers('pkg.Box<pkg.Box.T>', { file: null, methodName: 'wrap' }));
+	}
+
+	public function testStripsMethodTypeParam(): Void {
+		Assert.equals(
+			'{ b : U, a : T }',
+			ExplicitLocalType.stripTypeParamQualifiers('{ b : pair.U, a : pkg.Box.T }', { file: null, methodName: 'pair' })
+		);
+	}
+
+	public function testKeepsPackageQualifiedType(): Void {
+		Assert.equals(
+			'haxe.ds.Map<String, Int>',
+			ExplicitLocalType.stripTypeParamQualifiers('haxe.ds.Map<String, Int>', { file: null, methodName: 'get' })
+		);
+	}
+
+	public function testKeepsSecondaryModuleType(): Void {
+		Assert.equals('pkg.Side', ExplicitLocalType.stripTypeParamQualifiers('pkg.Side', { file: null, methodName: 'side' }));
+	}
+
+	public function testKeepsMethodNameMismatch(): Void {
+		Assert.equals('other.U', ExplicitLocalType.stripTypeParamQualifiers('other.U', { file: null, methodName: 'pair' }));
+	}
+
+	/**
+	 * A NON-generic method gets a null `methodName`, so a package tail that happens to match its
+	 * name is still a package — `function utils()` returning `utils.Thing` keeps its qualifier.
+	 */
+	public function testKeepsPackageTailMatchingNonGenericMethod(): Void {
+		Assert.equals('utils.Thing', ExplicitLocalType.stripTypeParamQualifiers('utils.Thing', { file: null, methodName: null }));
+	}
+
+	// --- private module types: nameable only inside their own module ---
+
+	public function testStripsOwnPrivateModuleType(): Void {
+		final site: AnnotationSite = { file: 'src/pkg/Holder.hx', methodName: null };
+		Assert.equals('Array<Entry>', ExplicitLocalType.stripTypeParamQualifiers('Array<pkg._Holder.Entry>', site));
+	}
+
+	public function testKeepsForeignPrivateModuleType(): Void {
+		final site: AnnotationSite = { file: 'pkg/Other.hx', methodName: null };
+		Assert.equals('Array<pkg._Holder.Entry>', ExplicitLocalType.stripTypeParamQualifiers('Array<pkg._Holder.Entry>', site));
+	}
+
+	/** Same module NAME, different package — the package half of the path must discriminate. */
+	public function testKeepsSameNamedPrivateModuleOfAnotherPackage(): Void {
+		final site: AnnotationSite = { file: 'src/other/Holder.hx', methodName: null };
+		Assert.equals('Array<pkg._Holder.Entry>', ExplicitLocalType.stripTypeParamQualifiers('Array<pkg._Holder.Entry>', site));
+	}
+
+	/** A private type of ANOTHER module has no spelling that reaches it, so the annotation is refused. */
+	public function testRejectsForeignPrivateModuleType(): Void {
+		Assert.isNull(ExplicitLocalType.normalizeInferredType('Array<pkg._Holder.Entry>', [], 80));
+	}
+
+	public function testKeepsBareName(): Void {
+		Assert.equals('String', ExplicitLocalType.stripTypeParamQualifiers('String', { file: null, methodName: 'get' }));
+	}
+
 	// --- normalizeInferredType: import-aware shortening ---
 
 	public function testShortensBuiltinQualifiedMap(): Void {
