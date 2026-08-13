@@ -11,8 +11,9 @@ import anyparse.runtime.Span;
 using StringTools;
 
 /**
- * Flags a function LITERAL bound to a LOCAL and rewrites the binding into a local function
- * DECLARATION placed where the literal already sat:
+ * Flags a function LITERAL — an anonymous `function (…) { … }` or an arrow lambda — bound to a
+ * LOCAL, and rewrites the binding into a local function DECLARATION placed where the literal
+ * already sat:
  *
  * ```haxe
  * var handler:MouseEvent->Void;
@@ -55,6 +56,12 @@ using StringTools;
  *   `:T` annotation supplied is gone after the hoist, and an unannotated parameter whose body
  *   dereferences it no longer types. The RETURN type needs no such gate: a `function` literal
  *   with no explicit `return` is `Void` in both forms. A rest parameter is refused outright.
+ * - a lambda whose body is a BLOCK is hoisted only where the declaration's written type names a
+ *   `Void` result. `->` takes an expression, and a block IS one — its value is its last
+ *   expression (`() -> { 5; }` returns `5`) — while a declaration's block body has no implicit
+ *   result at all (`function f() { 5; }` returns `Void`). Without that proof the hoist would
+ *   silently retype the binding. A lambda's EXPRESSION body needs no proof: the emitted `return`
+ *   carries the value over.
  * - no comment sits in a span the rewrite drops (the declaration statement, the `name = ` head,
  *   the initializer's `;`). A comment INSIDE the literal's body rides along with it — the body
  *   is copied verbatim.
@@ -67,7 +74,8 @@ using StringTools;
  * `function name(<params>)[:Ret] <body>` is inserted before the host statement, and the
  * assignment collapses to the bare `name`. When the assignment IS the whole statement the
  * declaration REPLACES it — rewriting only the assignment would leave a `name;` no-op behind.
- * An expression body is not self-terminating, so it regains the `;` its statement carried. The
+ * A body that does not close on a brace is not self-terminating, so it regains the `;` its
+ * statement carried, and a lambda's expression body regains the `return` its arrow implied. The
  * emitted text is re-formatted by the canonical writer, so it carries no indentation of its own.
  */
 @:nullSafety(Strict)
@@ -124,30 +132,40 @@ final class PreferLocalFunction implements Check {
 	}
 
 	/**
+	 * Whether the literal's own RESULT survives the hoist. An arrow lambda's `{ … }` body is an
+	 * expression — its value is the block's last expression — while a function declaration's block body
+	 * has no implicit result at all (`() -> { 5; }` returns `5`, `function f() { 5; }` returns `Void`).
+	 * So a bare block body may be hoisted only where the declaration proved the result is `Void`; an
+	 * unannotated binding proves nothing and is refused. A bare EXPRESSION body keeps its value through
+	 * the `return` the rewrite emits, and a body that arrived wrapped in a body node was never an
+	 * expression to begin with — neither needs the proof.
+	 */
+	private static inline function resultSurvives(parts: FnParts, returnsVoid: Bool): Bool {
+		return !parts.bare || !parts.block || returnsVoid;
+	}
+
+	/**
 	 * Bundle the kinds the check reads, or null when a required one is unset (the check is then a
 	 * no-op). `localFunctionKinds` is required for its EXISTENCE only: a grammar that names no
 	 * local-function form has nothing to rewrite the binding into.
 	 */
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
-		final fnExprKind: Null<String> = shape.fnExprKind;
-		if (fnExprKind == null) return null;
+		final literalKinds: Array<String> = literalKindsOf(shape);
+		if (literalKinds.length == 0) return null;
 		final assignKind: Null<String> = shape.assignKind;
 		if (assignKind == null) return null;
 		final exprStmtKind: Null<String> = shape.exprStatementKind;
 		if (exprStmtKind == null) return null;
-		final blockBodyKind: Null<String> = shape.blockBodyKind;
-		if (blockBodyKind == null) return null;
 		final localDeclKinds: Null<Array<String>> = shape.localDeclKinds;
 		if (localDeclKinds == null || localDeclKinds.length == 0) return null;
 		final localFunctionKinds: Null<Array<String>> = shape.localFunctionKinds;
 		if (localFunctionKinds == null || localFunctionKinds.length == 0) return null;
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		return support == null ? null : {
-			fnExprKind: fnExprKind,
+			literalKinds: literalKinds,
 			assignKind: assignKind,
 			exprStmtKind: exprStmtKind,
-			blockBodyKind: blockBodyKind,
 			localDeclKinds: localDeclKinds,
 			localDeclContinuationKinds: shape.localDeclContinuationKinds ?? [],
 			identKind: shape.identKind,
@@ -164,8 +182,23 @@ final class PreferLocalFunction implements Check {
 			nullLiteralKind: shape.nullLiteralKind,
 			castKinds: shape.typedCastKinds ?? [],
 			uncheckedCastKind: shape.uncheckedCastKind,
+			voidTypeName: shape.voidTypeName,
 			blockKinds: support.blockKinds()
 		};
+	}
+
+	/**
+	 * Every function-literal kind the rewrite reads: the anonymous `function (…) { … }` form and the
+	 * grammar's lambda kinds. `partsOf` tells the two apart by SHAPE rather than by kind — a body that
+	 * arrives wrapped in a body node is copied verbatim, while a lambda's BARE expression child regains
+	 * the `return` its arrow implied.
+	 */
+	private static function literalKindsOf(shape: RefShape): Array<String> {
+		final out: Array<String> = [];
+		final fnExprKind: Null<String> = shape.fnExprKind;
+		if (fnExprKind != null) out.push(fnExprKind);
+		for (kind in shape.lambdaKinds ?? []) if (!out.contains(kind)) out.push(kind);
+		return out;
 	}
 
 	/** Every rewritable binding reachable under `tree`, in document order. */
@@ -197,7 +230,7 @@ final class PreferLocalFunction implements Check {
 		list: QueryNode, st: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams
 	): Null<Match> {
 		if (!s.localDeclKinds.contains(st.kind) || s.localDeclContinuationKinds.contains(st.kind)) return null;
-		if (st.children.length != 1 || st.children[0].kind != s.fnExprKind) return null;
+		if (st.children.length != 1 || !s.literalKinds.contains(st.children[0].kind)) return null;
 		if (RefactorSupport.isMultiDeclarator(st, s.localDeclContinuationKinds)) return null;
 		final fn: QueryNode = st.children[0];
 		final name: Null<String> = st.name;
@@ -205,9 +238,11 @@ final class PreferLocalFunction implements Check {
 		final fnSpan: Null<Span> = fn.span;
 		if (name == null || stSpan == null || fnSpan == null) return null;
 		final parts: Null<FnParts> = partsOf(fn, source, s);
-		return if (parts == null)
+		if (parts == null) return null;
+		final declared: DeclaredType = declaredType(source, stSpan, name, s.voidTypeName);
+		return if (!declared.survives)
 			null
-		else if (!declarationTypeSurvives(source, stSpan, name))
+		else if (!resultSurvives(parts, declared.returnsVoid))
 			null
 		else if (!bindingIsSole(list, name, stSpan.from, null, s))
 			null
@@ -238,7 +273,9 @@ final class PreferLocalFunction implements Check {
 		final decl: Null<QueryNode> = bareDeclarationBefore(kids, index, name, s);
 		final declSpan: Null<Span> = decl?.span;
 		if (declSpan == null) return null;
-		if (!declarationTypeSurvives(source, declSpan, name)) return null;
+		final declared: DeclaredType = declaredType(source, declSpan, name, s.voidTypeName);
+		if (!declared.survives) return null;
+		if (!resultSurvives(parts, declared.returnsVoid)) return null;
 		if (!bindingIsSole(list, name, stSpan.from, lhsSpan, s)) return null;
 		if (commentOverlaps(comments, assignSpan.from, fnSpan.from)) return null;
 		final cut: Span = RefactorSupport.lineExtendedSpan(source, declSpan);
@@ -282,7 +319,7 @@ final class PreferLocalFunction implements Check {
 	/** Whether `node` is a plain `<ident> = <function literal>` assignment. */
 	private static function isBinding(node: QueryNode, s: Seams): Bool {
 		return node.kind == s.assignKind && node.children.length == ASSIGN_CHILD_COUNT && node.children[0].kind == s.identKind
-			&& node.children[1].kind == s.fnExprKind;
+			&& s.literalKinds.contains(node.children[1].kind);
 	}
 
 	/** The single-declarator, initializer-free declaration of `name` among `kids[0...index)`, or null when there is none. */
@@ -306,49 +343,58 @@ final class PreferLocalFunction implements Check {
 	}
 
 	/**
-	 * Whether the declaration's type annotation survives being dropped — the hoist replaces it with
-	 * whatever the literal's own signature infers, so only an annotation that signature REPRODUCES
-	 * may go. A written FUNCTION type does: the parameters are annotated (`partsOf` refuses
-	 * otherwise) and a `function` literal without an explicit `return` is `Void`, so the hoisted
-	 * declaration carries the same type. A NOMINAL one does not, and the failure is silent: Pony's
-	 * `var l:Listener1<Int> = null; l = function(n:Int):Void { … }` binds an abstract whose `@:from`
-	 * wraps the literal ONCE, at the assignment. Hoisted, `l` is the raw function and every use site
-	 * wraps it again — so an `add(l)` / `remove(l)` pair that shared one wrapper stops doing so, and
-	 * the code still compiles. No annotation at all is trivially safe.
+	 * What the declaration's written type says about the hoist: whether the annotation may be DROPPED, and
+	 * whether it named a `Void` result.
+	 *
+	 * It survives being dropped only when the literal's own signature REPRODUCES it. A written FUNCTION
+	 * type does: the parameters are annotated (`partsOf` refuses otherwise) and a `function` literal
+	 * without an explicit `return` is `Void`, so the hoisted declaration carries the same type. A NOMINAL
+	 * one does not, and the failure is silent: Pony's `var l:Listener1<Int> = null; l = function(n:Int):Void { … }`
+	 * binds an abstract whose `@:from` wraps the literal ONCE, at the assignment. Hoisted, `l` is the raw
+	 * function and every use site wraps it again — so an `add(l)` / `remove(l)` pair that shared one wrapper
+	 * stops doing so, and the code still compiles. No annotation at all is trivially safe.
+	 *
+	 * The RESULT type it named is what `resultSurvives` needs before a lambda's block body may be hoisted.
 	 */
-	private static function declarationTypeSurvives(source: String, declSpan: Span, name: String): Bool {
+	private static function declaredType(source: String, declSpan: Span, name: String, voidTypeName: Null<String>): DeclaredType {
 		final text: String = source.substring(declSpan.from, declSpan.to);
 		var i: Int = 0;
 		while (i < text.length && RefactorSupport.isIdentChar(text.fastCodeAt(i))) i++; // the var / final keyword
 		while (i < text.length && RefactorSupport.isSpace(text.fastCodeAt(i))) i++;
 		final nameStart: Int = i;
 		while (i < text.length && RefactorSupport.isIdentChar(text.fastCodeAt(i))) i++;
-		if (text.substring(nameStart, i) != name) return false;
+		if (text.substring(nameStart, i) != name) return { survives: false, returnsVoid: false };
 		while (i < text.length && RefactorSupport.isSpace(text.fastCodeAt(i))) i++;
-		return i >= text.length || text.fastCodeAt(i) != ':'.code || hasTopLevelArrow(text, i + 1);
+		if (i >= text.length || text.fastCodeAt(i) != ':'.code) return { survives: true, returnsVoid: false };
+		final returnType: Null<String> = topLevelReturnType(text, i + 1);
+		return { survives: returnType != null, returnsVoid: returnType != null && returnType == voidTypeName };
 	}
 
 	/**
-	 * Whether a written type carries a top-level `->` — it is a function type, not a nominal one that
-	 * merely holds functions (`Array<Int->Void>`, `Null<Void->Void>`). Scanning stops at the depth-0
-	 * `=` / `;` that ends the annotation.
+	 * The result type a written type names after its LAST top-level `->`, or null when it carries none — a
+	 * nominal type that merely holds functions (`Array<Int->Void>`, `Null<Void->Void>`). Scanning stops at
+	 * the depth-0 `=` / `;` that ends the annotation.
 	 */
-	private static function hasTopLevelArrow(text: String, from: Int): Bool {
+	private static function topLevelReturnType(text: String, from: Int): Null<String> {
 		var depth: Int = 0;
+		var arrowEnd: Int = -1;
+		var stop: Int = text.length;
 		var i: Int = from;
 		while (i < text.length) {
 			final c: Int = text.fastCodeAt(i);
 			if (c == '<'.code || c == '('.code || c == '{'.code || c == '['.code)
 				depth++
 			else if (c == '>'.code && i > from && text.fastCodeAt(i - 1) == '-'.code) {
-				if (depth == 0) return true;
+				if (depth == 0) arrowEnd = i + 1;
 			} else if (c == '>'.code || c == ')'.code || c == '}'.code || c == ']'.code)
 				depth--
-			else if (depth == 0 && (c == '='.code || c == ';'.code))
-				return false;
+			else if (depth == 0 && (c == '='.code || c == ';'.code)) {
+				stop = i;
+				break;
+			}
 			i++;
 		}
-		return false;
+		return arrowEnd < 0 ? null : text.substring(arrowEnd, stop).trim();
 	}
 
 	/** Whether `node` is `null`, or a cast of it (`cast null`, `cast(null, T)`) — a value the declaration carried only to satisfy definite assignment. */
@@ -390,12 +436,19 @@ final class PreferLocalFunction implements Check {
 		for (c in node.children) scanRefs(c, node, name, hoistFrom, allowedWrite, s, out);
 	}
 
-	/** Split the literal into fully-typed parameter texts, an optional return-type hint and a body — null when a gate refuses it. */
+	/**
+	 * Split the literal into fully-typed parameter texts, an optional return-type hint and a body — null
+	 * when a gate refuses it. A body arriving as a body-kind child is a `function` literal's; a BARE last
+	 * child is a lambda's arrow body, which the emitter has to re-terminate itself.
+	 */
 	private static function partsOf(fn: QueryNode, source: String, s: Seams): Null<FnParts> {
 		final params: Array<String> = [];
+		final last: Int = fn.children.length - 1;
 		var hintSpan: Null<Span> = null;
 		var body: Null<QueryNode> = null;
-		for (c in fn.children) {
+		var bare: Bool = false;
+		for (i in 0...fn.children.length) {
+			final c: QueryNode = fn.children[i];
 			if (s.paramKinds.contains(c.kind)) {
 				if (c.kind == s.restParamKind) return null;
 				final span: Null<Span> = c.span;
@@ -407,7 +460,10 @@ final class PreferLocalFunction implements Check {
 				body = c;
 			else if (s.typeAnnotationKinds.contains(c.kind))
 				hintSpan = c.span;
-			else
+			else if (i == last) {
+				body = c;
+				bare = true;
+			} else
 				return null;
 		}
 		final b: Null<QueryNode> = body;
@@ -417,7 +473,8 @@ final class PreferLocalFunction implements Check {
 			params: params,
 			hintSpan: hintSpan,
 			bodySpan: bodySpan,
-			block: b.kind == s.blockBodyKind
+			block: s.blockKinds.contains(b.kind),
+			bare: bare
 		};
 	}
 
@@ -432,12 +489,16 @@ final class PreferLocalFunction implements Check {
 		return i < text.length && text.fastCodeAt(i) == ':'.code;
 	}
 
-	/** The local function declaration replacing the binding — body verbatim, `;` restored for an expression body. */
+	/**
+	 * The local function declaration replacing the binding — body verbatim, `return` restored for an
+	 * arrow's expression body and `;` for any body that does not close on a brace.
+	 */
 	private static function declarationText(name: String, parts: FnParts, source: String): String {
 		final hintSpan: Null<Span> = parts.hintSpan;
 		final hint: String = hintSpan == null ? '' : ':${source.substring(hintSpan.from, hintSpan.to).trim()}';
 		final body: String = source.substring(parts.bodySpan.from, parts.bodySpan.to);
-		return 'function $name(${parts.params.join(', ')})$hint $body${parts.block ? '' : ';'}';
+		final lead: String = parts.bare && !parts.block ? 'return ' : '';
+		return 'function $name(${parts.params.join(', ')})$hint $lead$body${parts.block ? '' : ';'}';
 	}
 
 	/** Whether any comment token overlaps `[from, to)` — a span the rewrite drops. */
@@ -450,10 +511,9 @@ final class PreferLocalFunction implements Check {
 
 /** The kinds `prefer-local-function` reads. */
 private typedef Seams = {
-	var fnExprKind: String;
+	var literalKinds: Array<String>;
 	var assignKind: String;
 	var exprStmtKind: String;
-	var blockBodyKind: String;
 	var localDeclKinds: Array<String>;
 	var localDeclContinuationKinds: Array<String>;
 	var identKind: String;
@@ -470,6 +530,7 @@ private typedef Seams = {
 	var nullLiteralKind: Null<String>;
 	var castKinds: Array<String>;
 	var uncheckedCastKind: Null<String>;
+	var voidTypeName: Null<String>;
 	var blockKinds: Array<String>;
 }
 
@@ -479,15 +540,29 @@ private typedef Match = {
 	var edits: Array<{ span: Span, text: String }>;
 }
 
-/** A literal's emitted pieces: typed parameter texts, the return-type hint span, the body span and whether that body is a block. */
+/**
+ * A literal's emitted pieces: typed parameter texts, the return-type hint span, the body span, whether
+ * that body is a block, and whether it arrived BARE — a lambda's arrow body rather than a body node.
+ */
 private typedef FnParts = {
 	var params: Array<String>;
 	var hintSpan: Null<Span>;
 	var bodySpan: Span;
 	var block: Bool;
+	var bare: Bool;
 }
 
-/** Occurrence tally for one name: how many declarations were seen, and whether every occurrence passed its gate. */
+/**
+ * What a binding's written type says: whether the hoist may drop it, and whether it named a `Void` result.
+ */
+private typedef DeclaredType = {
+	var survives: Bool;
+	var returnsVoid: Bool;
+}
+
+/**
+ * Occurrence tally for one name: how many declarations were seen, and whether every occurrence passed its gate.
+ */
 private typedef Refs = {
 	var declarations: Int;
 	var ok: Bool;

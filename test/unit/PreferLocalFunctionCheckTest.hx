@@ -74,6 +74,62 @@ class PreferLocalFunctionCheckTest extends Test {
 		Assert.isTrue(fixed(src).indexOf('function q():Void { p(); }') >= 0);
 	}
 
+	// ---- arrow lambdas ----
+
+	/**
+	 * The shape that motivated the arrow support: an event handler whose lambda closes over the timer
+	 * it detaches. The declaration's `->Void` result is what lets a block body move at all.
+	 */
+	public function testArrowBlockBodyWithVoidResultHoisted(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar h:Int->Void = null;\n\t\tg(1, h = (e:Int) -> { p(e); }, 2);\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\tfunction h(e:Int) { p(e); }\ng(1, h, 2);\n\t}\n}', fixed(src));
+	}
+
+	/** A lambda's expression body IS its value — the declaration regains the `return` the arrow implied. */
+	public function testArrowExpressionBodyGainsReturn(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar h:Int->Int = null;\n\t\tg(h = (x:Int) -> x * 2);\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\tfunction h(x:Int) return x * 2;\ng(h);\n\t}\n}', fixed(src));
+	}
+
+	/**
+	 * The hoisted fixture with `Void` swapped for `Int`: a `{ … }` arrow body is an EXPRESSION whose
+	 * value is its last expression, and a declaration's block body has none — so the hoist would retype
+	 * the binding and the annotation no longer proves it may.
+	 */
+	public function testArrowBlockBodyWithNonVoidResultRefused(): Void {
+		Assert.equals(
+			0,
+			violations('class C {\n\tfunction f():Void {\n\t\tvar h:Int->Int = null;\n\t\tg(1, h = (e:Int) -> { p(e); }, 2);\n\t}\n}')
+				.length
+		);
+	}
+
+	/** The initializer form reads the same proof out of the same annotation slot. */
+	public function testArrowInitializerWithVoidResultHoisted(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar h:Int->Void = (e:Int) -> { p(e); };\n\t\tg(h);\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\tfunction h(e:Int) { p(e); }\n\t\tg(h);\n\t}\n}', fixed(src));
+	}
+
+	/** The same initializer with its type REMOVED: nothing proves the block's value was `Void`. */
+	public function testUnannotatedArrowBlockBodyRefused(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar h = (e:Int) -> { p(e); };\n\t\tg(h);\n\t}\n}').length);
+	}
+
+	/**
+	 * An arrow parameter without a type: the expected type its declaration supplied dies with the hoist.
+	 * The paren-less form is refused one step earlier — it projects its parameter as a plain identifier
+	 * rather than a parameter node at all.
+	 */
+	public function testUntypedArrowParameterRefused(): Void {
+		Assert.equals(
+			0, violations('class C {\n\tfunction f():Void {\n\t\tvar h:Int->Void = null;\n\t\tg(h = (e) -> p(e));\n\t}\n}').length
+		);
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar h:Int->Void = null;\n\t\tg(h = e -> p(e));\n\t}\n}').length);
+	}
+
 	// ---- gates ----
 
 	/**

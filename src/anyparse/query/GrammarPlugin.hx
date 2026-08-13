@@ -1040,10 +1040,13 @@ typedef RefShape = {
 
 	/**
 	 * Lambda / anonymous-function kinds — expression-position function values
-	 * (`x -> …`, `(a, b) -> …`, `function(…) { … }`). The call-graph layer
-	 * registers each as an anonymous function node (a `Contains` edge from its
-	 * enclosing function) and a `Ref` edge when passed as a call argument.
+	 * (`x -> …`, `(a, b) -> …`, `function(…) { … }`). 
+	 * The call-graph layer registers each as an anonymous function node (a `Contains`
+	 * edge from its enclosing function) and a `Ref` edge when passed as a call argument.
 	 * Unset → lambdas are invisible to the call graph.
+	 *
+	 * SEAM: `prefer-local-function` reads it alongside `fnExprKind` as the set of literals whose
+	 * binding to a local it may hoist into a local function declaration.
 	 */
 	@:optional var lambdaKinds: Array<String>;
 
