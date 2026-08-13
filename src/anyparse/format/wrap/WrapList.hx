@@ -2527,11 +2527,25 @@ class WrapList {
 		// break-mode cascade already produces (`Group`'s `fitsFlat` commits to
 		// `MBreak` for exactly this content). Bodies with no such atom - every
 		// comment-free list - keep the marker and stay byte-identical.
+		//
+		// nowrap-hardline-escape: the same escape for a body holding a HARD line
+		// (`flatLength(body) < 0`). Force-flat cannot delete one, so the marker
+		// changes no line break - it only strips the INDENT context the hardline
+		// needs, and the continuation renders at column 0. The live case is an
+		// if-EXPRESSION as the sole call argument under `sameLine.expressionIf:
+		// next`: its body policy emits `Nest(cols, [hardline, value])`, and a
+		// `noWrap` cascade rule (`itemCount <= 1`) picks this shape, so
+		// `f(if (c)\n'a'\nelse\n'b')` came out flush-left while the SAME argument
+		// in a multi-arg call, an array literal, an object literal or a paren
+		// indented correctly - those all reach a break shape, which nests. The
+		// predicate is the one `measureItems` / `arrowBodyIsBrokenIfElse` already
+		// ask, so "the renderer would never pick this layout on its own" stays one
+		// idea with two atom classes rather than two rules.
 		final body: Doc = Concat(inner);
 		return Concat([
 			Text(open),
 			openInside,
-			DocMeasure.hasOptHardline(body) ? body : Flatten(body),
+			DocMeasure.hasOptHardline(body) || flatLength(body) < 0 ? body : Flatten(body),
 			closeInside,
 			Text(close),
 		]);

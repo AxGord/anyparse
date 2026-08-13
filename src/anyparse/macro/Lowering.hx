@@ -4974,9 +4974,9 @@ class Lowering {
 			});
 		else if (parseGateCall != null && trailOptional)
 			steps.push(macro if ($gateCond)
-matchLit(ctx, $v{trailText})
-else
-expectLit(ctx, $v{trailText}));
+				matchLit(ctx, $v{trailText})
+			else
+				expectLit(ctx, $v{trailText}));
 		else if (triviaTrailOpt)
 			steps.push(macro final _trailPresent: Bool = matchLit(ctx, $v{trailText}));
 		else if (trailOptional)
