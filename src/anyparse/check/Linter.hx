@@ -97,6 +97,11 @@ final class Linter {
 			new ReturnReassignTernary(),
 			new PreferIfExpressionReturn(),
 			new PreferIfExpressionAssignment(),
+			// Sinks a branching CALL into its one varying argument, where the assignment siblings
+			// sink a branching ASSIGNMENT into its r-value. Emits the if-EXPRESSION form for a
+			// 2-branch chain too and leaves the ternary downgrade to `prefer-ternary-expression`
+			// above -- the `--fix` driver loops to a fixed point, so registry order is free.
+			new JoinBranchCall(),
 			new PreferSwitchExpressionAssignment(),
 			new PreferTryExpressionAssignment(),
 			new PreferTryExpressionReturn(),

@@ -414,7 +414,7 @@ class ImportBlockOrderCheckTest extends Test {
 		final check: Null<Check> = Linter.byId('import-order');
 		Assert.notNull(check);
 		Assert.isTrue(Std.isOfType(check, DefaultOff), 'import-order is opt-in');
-		Assert.equals(157, Linter.builtins().length);
+		Assert.equals(158, Linter.builtins().length);
 	}
 
 	/**
