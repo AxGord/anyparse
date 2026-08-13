@@ -90,6 +90,10 @@ final class Linter {
 			new SimplifyBooleanReturnChain(),
 			new PreferTernaryReturn(),
 			new PreferTernaryAssignment(),
+			// Disjoint from `prefer-ternary-assignment` by target count: that one owns the
+			// single-l-value collapse (via a ternary `simplify-boolean-ternary` then reduces),
+			// this one the multi-target boolean-flag block no ternary would improve.
+			new SimplifyBooleanBranchAssignment(),
 			new PreferTernaryExpression(),
 			// After `prefer-switch-expression` in intent, not in position: the two never both
 			// claim a chain (this one asks that check first), so registry order is free.

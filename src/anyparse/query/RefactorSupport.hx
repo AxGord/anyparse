@@ -1285,6 +1285,17 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * The whitespace prefix of the line `from` sits on, or `''` when anything else precedes that
+	 * offset on the line. A multi-statement splice re-indents its continuation lines with this, so
+	 * the rewritten region still reads as source for the round trip that parses it back; the writer
+	 * re-indents the whole file afterwards regardless.
+	 */
+	public static function lineIndentAt(source: String, from: Int): String {
+		final prefix: String = source.substring(source.lastIndexOf('\n', from) + 1, from);
+		return prefix.trim() == '' ? prefix : '';
+	}
+
+	/**
 	 * Extend `span` BACKWARD over its own line's leading indentation and the newline before it, so
 	 * deleting the result removes the whole line rather than leaving a blank one. The backward-only
 	 * twin of `lineExtendedSpan`, which sweeps in BOTH directions and refuses when the element shares

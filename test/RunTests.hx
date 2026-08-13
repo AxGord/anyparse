@@ -480,6 +480,7 @@ import unit.SpanTypeInfoPinTest;
 import unit.ExplicitLocalTypeCheckTest;
 import unit.RedundantBypassAccessorCheckTest;
 import unit.PreferTernaryAssignmentCheckTest;
+import unit.SimplifyBooleanBranchAssignmentCheckTest;
 import unit.ReturnReassignTernaryCheckTest;
 import unit.PreferIfExpressionAssignmentCheckTest;
 import unit.PreferIfExpressionReturnCheckTest;
@@ -1198,6 +1199,7 @@ class RunTests {
 		addCase(new PreferFinalCheckTest());
 		addCase(new PreferTernaryReturnCheckTest());
 		addCase(new PreferTernaryAssignmentCheckTest());
+		addCase(new SimplifyBooleanBranchAssignmentCheckTest());
 		addCase(new ReturnReassignTernaryCheckTest());
 		addCase(new PreferIfExpressionReturnCheckTest());
 		addCase(new PreferIfExpressionAssignmentCheckTest());

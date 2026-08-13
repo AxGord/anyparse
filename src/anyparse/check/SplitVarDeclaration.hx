@@ -238,7 +238,7 @@ final class SplitVarDeclaration implements Check {
 		final declarators: Null<Array<String>> = declaratorSlices(source, stmtSpan, chain);
 		if (declarators == null) return null;
 
-		final indent: String = indentOf(source, stmtSpan.from);
+		final indent: String = RefactorSupport.lineIndentAt(source, stmtSpan.from);
 		final statements: Array<String> = [
 			for (i in 0...declarators.length) i == 0 ? declarators[i] : '$keyword ${declarators[i]}'
 		];
@@ -292,16 +292,6 @@ final class SplitVarDeclaration implements Check {
 		var i: Int = from;
 		while (i < source.length && KEYWORD_LETTERS.indexOf(source.charAt(i)) != -1) i++;
 		return i == from || i >= source.length || !source.isSpace(i) ? null : source.substring(from, i);
-	}
-
-	/**
-	 * The whitespace prefix of the line `from` sits on, or `''` when anything else precedes the
-	 * statement on that line. The writer re-indents the whole file anyway; this only keeps the
-	 * spliced text readable for the round trip that reads it.
-	 */
-	private static function indentOf(source: String, from: Int): String {
-		final prefix: String = source.substring(source.lastIndexOf('\n', from) + 1, from);
-		return prefix.trim() == '' ? prefix : '';
 	}
 
 }
