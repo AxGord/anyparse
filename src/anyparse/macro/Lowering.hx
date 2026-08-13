@@ -4743,8 +4743,41 @@ class Lowering {
 			pos: Context.currentPos(),
 		});
 		if (trailText != null) appendKwRefTrailStep(steps, trailText, triviaTrailOpt, triviaCaptureSource, trailOptional, parseGateCall);
+		appendRejectFollowKwStep(steps, branch);
 		steps.push(macro return $ctorCall);
 		return macro $b{steps};
+	}
+
+	/**
+	 * Branch-level `@:rejectFollowKw('<kw>')`: a negative lookahead that makes an
+	 * otherwise-successful branch backtrack when the named keyword is the next token.
+	 *
+	 * The case it exists for is a branch whose trailing `@:tryparse` Star can legally
+	 * match ZERO elements. Such a branch reports success on input the NEXT branch was
+	 * meant to take, and `tryBranch` never gets to roll back — it only rolls back on
+	 * failure. `HxStatement.TryCatchStmt` is exactly that shape: `catches` is a
+	 * `@:tryparse` Star and a catch-less `try {…}` is valid Haxe, so a `try` whose
+	 * catch bodies are bare expressions (`catch (e:E) f(e) catch (e2:F) g(e2);` — no
+	 * `;` before the second `catch`, hence no `HxStatement` to match) parsed as a
+	 * catch-less try and left the `catch` chain for the enclosing block, which fails.
+	 * Rejecting a following `catch` hands that input to `TryCatchStmtBare`, whose
+	 * `HxExpr` bodies do match it.
+	 *
+	 * The peek runs on a saved position that is restored either way: the branch either
+	 * throws, or returns with `ctx.pos` exactly where the parse left it, so the trivia
+	 * scan of whatever comes next is unaffected.
+	 */
+	private function appendRejectFollowKwStep(steps: Array<Expr>, branch: ShapeNode): Void {
+		final rejectKw: Null<String> = branch.readMetaString(':rejectFollowKw');
+		if (rejectKw == null) return;
+
+		steps.push(macro {
+			final _rejectPos: Int = ctx.pos;
+			skipWs(ctx);
+			final _rejectHit: Bool = peekKw(ctx, $v{rejectKw});
+			ctx.pos = _rejectPos;
+			if (_rejectHit) throw anyparse.runtime.ParseError.backtrack;
+		});
 	}
 
 	/**

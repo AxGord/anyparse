@@ -2,6 +2,7 @@ package unit;
 
 import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
+import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxCatchClause;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxDoWhileStmt;
@@ -452,6 +453,80 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 				}
 			case null, _:
 				Assert.fail('expected BlockStmt');
+		}
+	}
+
+	/**
+	 * A statement-shaped try body (block or switch) followed by a CHAIN of bare-expression
+	 * catches. `TryCatchStmt` takes the body, then its `@:tryparse` catches Star matches
+	 * none of them — a bare body is not an `HxStatement` without its `;`, and only the last
+	 * catch in a chain has one. A catch-less `try {…}` being valid Haxe, the branch used to
+	 * report success and leave `catch` for the enclosing block, which could not start a
+	 * statement with it. `@:rejectFollowKw('catch')` turns that into a backtrack, so the
+	 * input reaches `TryCatchStmtBare`, whose `HxExpr` bodies match both shapes.
+	 *
+	 * One bare catch parses either way: its `;` makes the body an `ExprStmt`, so the block
+	 * form matches it — which is why the gap only ever showed up from the second catch on.
+	 */
+	public function testBareCatchChainAfterStatementBody(): Void {
+		for (source in [
+			'class C { function f():Void { try { g(); } catch (a:E) p(a) catch (b:F) q(b); } }',
+			'class C { function f():Void { try switch x { case _: h(); } catch (a:E) p(a) catch (b:F) q(b); } }'
+		]) {
+			switch parseBody(source)[0] {
+				case TryCatchStmtBare(stmt): Assert.equals(2, stmt.catches.length);
+				case null, _: Assert.fail('expected TryCatchStmtBare for $source');
+			}
+			roundTrip(source);
+		}
+	}
+
+	/**
+	 * A chain whose LAST catch carries a block body and no trailing `;` is a try in
+	 * EXPRESSION position (`ExprStmt(TryExpr(...))`) — a block body self-terminates the
+	 * statement, so no `;` is required and the statement forms do not match.
+	 *
+	 * Before the reject this input did not parse at all. It parses now, and the writer
+	 * converges on it in two passes rather than one: the expression form prints inline and
+	 * `ExprStmt` appends the `;`, and that `;` is exactly what makes the re-read pick
+	 * `TryCatchStmtBare` instead, whose bare bodies break across lines. Both readings are
+	 * correct Haxe for their own text; what they do not share is a layout, so the first
+	 * write moves the source between them and every write after that is stable.
+	 *
+	 * Asserted as convergence rather than `roundTrip` on purpose — stating the real
+	 * behaviour beats a green test that hides it.
+	 */
+	public function testBareCatchChainEndingInBlockConvergesInTwoPasses(): Void {
+		final source: String = 'class C { function f():Void { try { g(); } catch (a:E) p(a) catch (b:F) { q(b); } } }';
+		switch parseBody(source)[0] {
+			case ExprStmt(TryExpr(_)): Assert.isTrue(true);
+			case null, _: Assert.fail('expected ExprStmt(TryExpr) for $source');
+		}
+
+		final first: String = HxModuleWriter.write(HaxeModuleParser.parse(source));
+		final second: String = HxModuleWriter.write(HaxeModuleParser.parse(first));
+		final third: String = HxModuleWriter.write(HaxeModuleParser.parse(second));
+		Assert.equals(second, third, 'writer did not settle after the form switch');
+	}
+
+	/**
+	 * The reject must not disturb the shapes that already worked: block catches, none at
+	 * all, and the mixed chain whose LAST catch is a bare body with its own `;` — that `;`
+	 * makes it an `ExprStmt`, so the block form legitimately matches the whole chain and
+	 * nothing follows for the reject to see.
+	 */
+	public function testBlockCatchesAndCatchlessTryStayBlockForm(): Void {
+		for (source in [
+			'class C { function f():Void { try { g(); } catch (a:E) { p(a); } catch (b:F) { q(b); } } }',
+			'class C { function f():Void { try { g(); } catch (a:E) { p(a); } catch (b:F) q(b); } }',
+			'class C { function f():Void { try switch x { case _: h(); } catch (a:E) { p(a); } } }',
+			'class C { function f():Void { try { g(); } } }'
+		]) {
+			switch parseBody(source)[0] {
+				case TryCatchStmt(_): Assert.isTrue(true);
+				case null, _: Assert.fail('expected TryCatchStmt for $source');
+			}
+			roundTrip(source);
 		}
 	}
 

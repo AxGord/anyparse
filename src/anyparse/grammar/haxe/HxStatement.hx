@@ -377,7 +377,7 @@ enum HxStatement {
 	@:kw('continue') @:trail(';')
 	ContinueStmt;
 
-	@:kw('try') @:fmt(tryPolicy, forwardNewlineForBody)
+	@:kw('try') @:rejectFollowKw('catch') @:fmt(tryPolicy, forwardNewlineForBody)
 	TryCatchStmt(stmt: HxTryCatchStmt);
 
 	@:kw('try') @:trail(';')
