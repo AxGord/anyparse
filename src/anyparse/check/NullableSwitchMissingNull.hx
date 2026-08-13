@@ -14,53 +14,65 @@ import anyparse.runtime.Span;
 using StringTools;
 
 /**
- * Flags a `switch` over a **provably-nullable subject** whose branches include a
- * catch-all wildcard (`case _:` / `default:`) but NO `case null` — a latent NPE.
- * Haxe's `case _:` and `default:` do NOT match `null` (the compiler skips the null
- * check for them), so switching a null subject falls through every arm: on hxcpp a
- * null enum subject SEGFAULTS, on the other targets the null silently matches no
- * branch. The author believes the wildcard covers everything; null is the one value
- * it does not. `Severity.Warning`, `fix` routes null through the existing catch-all
- * by rewriting the lone wildcard head — `case _:` / `default:` -> `case null, _:` — a
- * behaviour-preserving change for the non-null cases that sends null to the wildcard
- * body (the safest default; split the arm later for a distinct null body).
+ * Flags a `switch` over a **provably-nullable ENUM subject** that has NO arm matching null
+ * and NO wildcard — the one shape whose null subject is dereferenced. Reading a value's
+ * constructor tag is what a wildcard-less enum switch compiles to, and it happens BEFORE any
+ * pattern is tried, so a null subject faults: hxcpp SIGSEGVs, js throws
+ * `Cannot read properties of null (reading '_hx_index')`, eval throws `Null Access`.
+ * `Severity.Warning`, REPORT-ONLY — there is no catch-all body to route null into, so what
+ * `case null` should DO is the author's decision, not a mechanical edit.
  *
- * ## Trigger — all three
+ * ## Why a wildcard makes the shape safe
  *
- * A switch is flagged when (1) its subject is provably nullable, (2) some branch is
- * an UNGUARDED wildcard — a `default:` (`defaultBranchKind`) or a `case _:` whose
- * pattern is `wildcardPatternName` and which carries no guard — and (3) no branch
- * mentions `null` (`case null:` / `case null, _:` / any pattern that is the null
- * literal, guarded or not, all count as handling null). Without a wildcard the
- * compiler's own exhaustiveness forces the null case on enums and a non-exhaustive
- * non-enum switch simply no-matches, so ONLY wildcard switches are flagged.
+ * `case _:` / `default:` is the exact opposite of a hazard here: its presence makes the
+ * compiler emit a null check ahead of the tag read, and null then lands in the wildcard body.
+ * Measured on hxcpp (with and without `-D analyzer-optimize -dce full`), js and eval, for
+ * `String`, `Null<Int>` and `enum` subjects, in statement and expression position — every
+ * wildcard shape routes null to the wildcard and none faults. A wildcard-less switch over a
+ * NON-enum subject is equally safe: it compiles to plain comparisons, which null simply fails
+ * to match, and control falls past the switch.
+ *
+ * So the trigger is the CONJUNCTION of three things, each necessary: nullable subject,
+ * runtime-tagged (enum) subject type, and no arm — wildcard or `case null` — that catches
+ * null. Drop any one and the shape does not fault.
+ *
+ * ## Trigger — all four
+ *
+ * (1) No branch is a wildcard: a `default:` (`defaultBranchKind`) or a `case _:` whose
+ * pattern is `wildcardPatternName`. A GUARD does not weaken it —
+ * `case _ if (false)` over a null enum was measured surviving on hxcpp, so the mere
+ * presence of the arm is what makes the compiler emit the null check. (2) No branch
+ * mentions `null`
+ * (`case null:` / `case null, _:` / any null-literal pattern, guarded or not). (3) The subject
+ * is provably nullable. (4) The subject's declared type is a `runtimeTaggedTypeKinds`
+ * declaration the `SymbolIndex` can resolve — a real `enum`, `Null<T>` unwrapped first. An
+ * `enum abstract` is deliberately excluded: its values ARE the underlying primitives, so its
+ * switch is plain comparisons.
  *
  * ## Provably-nullable subject
  *
- * Routed through the `NullFlow` engine (the mechanism-A machinery
- * `unguarded-nullable-deref` uses), so a subject narrowed non-null on the path
- * (`if (x == null) return; switch x`) is a safe miss and a local bound from a
- * nullable source is caught. A bare-identifier subject is nullable when, at the
- * switch, flow does not prove it non-null AND either: flow proves it `MaybeNull`
- * (bound from a `Map` index / `Null<T>` call — source 2) or `Null`; its declared
- * type's outer nominal is a `Null<…>` wrapper (`nullableReturnMarkerTypes`, so
- * `Dynamic` / `Any` are excluded) for a LOCAL or PARAMETER binding only — a bare field never narrows, so it stays out of scope (source 1a); or it binds to an optional parameter
- * (`?x:T`, `optionalParamKind` — source 1b). A non-identifier subject is nullable
- * when it is itself a nullable-source expression — a `Map` index, an `Array` /
- * `List` nullable call, a `Null<T>`-returning call (`NullableSource.describe`,
- * source 3). A `?`-coalesced subject (`switch (x ?? d)`, `nullCoalesceKind`) is
- * never nullable (the `??` removes null). A bare field / `this.f` subject is out of
- * v1 scope, and only switches inside a function body are analyzed (the flow
- * engine's scope) — a field-initializer switch is a documented miss.
+ * Routed through the `NullFlow` engine (the mechanism-A machinery `unguarded-nullable-deref`
+ * uses), so a subject narrowed non-null on the path (`if (x == null) return; switch x`) is a
+ * safe miss and a local bound from a nullable source is caught. A bare-identifier subject is
+ * nullable when, at the switch, flow does not prove it non-null AND either: flow proves it
+ * `MaybeNull` (bound from a `Map` index / `Null<T>` call — source 2) or `Null`; its declared
+ * type's outer nominal is a `Null<…>` wrapper (`nullableReturnMarkerTypes`, so `Dynamic` /
+ * `Any` are excluded) for a LOCAL or PARAMETER binding only — a bare field never narrows, so
+ * it stays out of scope (source 1a); or it binds to an optional parameter (`?x:T`,
+ * `optionalParamKind` — source 1b). Gate (4) then re-reads the same binding, so a
+ * non-identifier subject — a `Map` index, a nullable call — never reaches the finding even
+ * when flow calls it nullable: there is no declared type to prove the enum with, and the
+ * check fails closed. A `?`-coalesced subject (`switch (x ?? d)`, `nullCoalesceKind`) is never
+ * nullable. Only switches inside a function body are analyzed (the flow engine's scope) — a
+ * field-initializer switch is a documented miss.
  *
  * ## Grammar-agnostic
  *
  * Required: `switchKinds`, `caseBranchKind`, `plainCasePatternKind`, `identKind`,
- * `nullLiteralKind`, `wildcardPatternName` (any unset → no-op). Optional:
- * `defaultBranchKind` (the `default:` wildcard), `parenKind` (guard detection),
- * `nullCoalesceKind`, `optionalParamKind`, `nullableReturnMarkerTypes`, and the
- * `NullableSource` config for sources 2 / 3. Needs `plugin is TypeInfoProvider` for
- * declared-type / return resolution.
+ * `nullLiteralKind`, `wildcardPatternName`, `runtimeTaggedTypeKinds` (any unset → no-op).
+ * Optional: `defaultBranchKind`, `parenKind` (guard detection), `nullCoalesceKind`,
+ * `optionalParamKind`, `nullableReturnMarkerTypes`, and the `NullableSource` config for
+ * sources 2 / 3. Needs `plugin is TypeInfoProvider` for declared-type / return resolution.
  */
 @:nullSafety(Strict)
 final class NullableSwitchMissingNull implements Check {
@@ -72,8 +84,7 @@ final class NullableSwitchMissingNull implements Check {
 	}
 
 	public function description(): String {
-		return
-			'a switch over a nullable subject with a wildcard (case _ / default) but no case null — a latent NPE (case _ does not match null)';
+		return 'a wildcard-less switch over a nullable enum subject with no case null — the constructor-tag read dereferences null';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -96,6 +107,7 @@ final class NullableSwitchMissingNull implements Check {
 				file: entry.file,
 				root: root,
 				declaredTypes: declaredTypes,
+				declaredTypeSources: typed.declaredTypeSources(entry.source),
 				returnTypes: returnTypes,
 				s: s,
 				index: index
@@ -110,23 +122,7 @@ final class NullableSwitchMissingNull implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = readSeams(plugin.refShape());
-		if (seams == null) return [];
-		final s: Seams = seams;
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final bySubject: Map<String, QueryNode> = [];
-		indexSwitchesBySubject(tree, s, bySubject);
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final sw: Null<QueryNode> = bySubject['${span.from}:${span.to}'];
-			if (sw == null) continue;
-			final edit: Null<{ span: Span, text: String }> = wildcardNullEdit(sw, s, source);
-			if (edit != null) edits.push(edit);
-		}
-		return edits;
+		return [];
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
@@ -140,7 +136,10 @@ final class NullableSwitchMissingNull implements Check {
 		final nullLitKind: Null<String> = shape.nullLiteralKind;
 		if (nullLitKind == null) return null;
 		final wildcardName: Null<String> = shape.wildcardPatternName;
-		return wildcardName == null ? null : {
+		if (wildcardName == null) return null;
+		final taggedKinds: Null<Array<String>> = shape.runtimeTaggedTypeKinds;
+		return taggedKinds == null || taggedKinds.length == 0 ? null : {
+			taggedKinds: taggedKinds,
 			shape: shape,
 			switchKinds: switchKinds,
 			caseBranchKind: caseBranchKind,
@@ -190,35 +189,28 @@ final class NullableSwitchMissingNull implements Check {
 				continue;
 			}
 			if (branch.kind != s.caseBranchKind) continue;
-			final guarded: Bool = branchGuarded(branch, s);
 			for (p in branch.children) if (p.kind == s.plainKind && p.children.length >= 1) {
 				final pat: QueryNode = p.children[0];
 				if (pat.kind == s.nullLitKind)
 					hasNullArm = true;
-				else if (!guarded && pat.kind == s.identKind && pat.name == s.wildcardName)
+				else if (pat.kind == s.identKind && pat.name == s.wildcardName)
 					hasWildcard = true;
 			}
 		}
-		if (!hasWildcard || hasNullArm) return;
+		if (hasWildcard || hasNullArm) return;
 		final subject: QueryNode = node.children[0];
-		if (!subjectNullable(subject, facts, ctx)) return;
+		if (!subjectNullable(subject, facts, ctx) || !subjectRuntimeTagged(subject, ctx)) return;
 		final span: Null<Span> = subject.span;
 		if (span != null) out.push({
 			file: ctx.file,
 			span: span,
 			rule: 'nullable-switch-missing-null',
 			severity: Severity.Warning,
-			message: 'switch subject is nullable but case _ / default does not match null — add case null (case null, _:) or narrow the subject'
+			message: 'switch subject is a nullable enum and no arm matches null — reading the constructor tag off null'
+			+ ' dereferences it; add case null or narrow the subject'
 		});
 	}
 
-	/** Whether `branch` carries a case guard — a direct `parenKind` child sits between its patterns and its body. */
-	private static function branchGuarded(branch: QueryNode, s: Seams): Bool {
-		final parenKind: Null<String> = s.parenKind;
-		if (parenKind == null) return false;
-		for (c in branch.children) if (c.kind == parenKind) return true;
-		return false;
-	}
 
 	/**
 	 * Whether `subject` is provably nullable at the switch — a flow-narrowed non-null
@@ -251,6 +243,41 @@ final class NullableSwitchMissingNull implements Check {
 		}
 		final cfg: Null<NullableSourceCfg> = s.cfg;
 		return cfg != null && NullableSource.describe(subject, ctx.root, ctx.declaredTypes, ctx.returnTypes, cfg, ctx.index) != null;
+	}
+
+	/**
+	 * Whether `subject` is a bare identifier whose DECLARED type is a runtime-tagged type
+	 * (`Seams.taggedKinds` — a real `enum`), the one subject shape whose wildcard-less switch
+	 * dereferences a null value: the generated code reads the constructor tag off the subject
+	 * before any pattern is tried. A `Null<T>` wrapper is unwrapped first, so both
+	 * `x:Null<Colour>` and a flow-nullable `x:Colour` answer true. Every other shape answers
+	 * FALSE and the site is not flagged: a non-identifier subject (no declared type to resolve),
+	 * a type the `SymbolIndex` cannot see (an out-of-scope or stdlib enum), an `enum abstract`
+	 * (its values ARE the underlying primitives, so the switch is plain comparisons a null
+	 * subject merely fails to match), and every ordinary class / string / numeric subject.
+	 */
+	private static function subjectRuntimeTagged(subject: QueryNode, ctx: FileCtx): Bool {
+		final s: Seams = ctx.s;
+		if (subject.kind != s.identKind) return false;
+		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(subject, ctx.root, s.shape);
+		if (bindingFrom == null) return false;
+		final declared: Null<String> = ctx.declaredTypeSources[bindingFrom];
+		if (declared == null) return false;
+		final inner: String = unwrapNullable(declared, s);
+		for (hit in ctx.index.resolveTypeRefsFrom(inner, ctx.file)) if (s.taggedKinds.contains(hit.type.kind)) return true;
+		return false;
+	}
+
+	/**
+	 * The type argument of a `Null<T>`-style wrapper in the declared-type SOURCE `declared`, or
+	 * `declared` trimmed when it carries no wrapper. Only a wrapper named in `Seams.nullMarkers`
+	 * is unwrapped, and only one level -- `Null<Null<T>>` is not a shape Haxe produces.
+	 */
+	private static function unwrapNullable(declared: String, s: Seams): String {
+		final trimmed: String = declared.trim();
+		final open: Int = trimmed.indexOf('<');
+		if (open <= 0 || !trimmed.endsWith('>')) return trimmed;
+		return s.nullMarkers.contains(trimmed.substring(0, open)) ? trimmed.substring(open + 1, trimmed.length - 1).trim() : trimmed;
 	}
 
 
@@ -311,69 +338,6 @@ final class NullableSwitchMissingNull implements Check {
 	}
 
 
-	/** Index every switch by its subject's `from:to` span key — the finding's span — so a subject-spanned violation re-finds its switch. */
-	private static function indexSwitchesBySubject(node: QueryNode, s: Seams, out: Map<String, QueryNode>): Void {
-		if (s.switchKinds.contains(node.kind) && node.children.length >= 1) {
-			final subj: Null<Span> = node.children[0].span;
-			if (subj != null) out['${subj.from}:${subj.to}'] = node;
-		}
-		for (c in node.children) indexSwitchesBySubject(c, s, out);
-	}
-
-	/**
-	 * The single edit routing `null` through a switch's lone catch-all arm —
-	 * `case _:` / `default:` -> `case null, _:` — or null when the switch has no
-	 * unique unguarded catch-all (the fix fires only on exactly one, matching the
-	 * finding's trigger).
-	 */
-	private static function wildcardNullEdit(sw: QueryNode, s: Seams, source: String): Null<{ span: Span, text: String }> {
-		var edit: Null<{ span: Span, text: String }> = null;
-		var count: Int = 0;
-		for (i in 1...sw.children.length) {
-			final branch: QueryNode = sw.children[i];
-			if (s.defaultBranchKind != null && branch.kind == s.defaultBranchKind) {
-				count++;
-				edit = defaultToNullEdit(branch, source);
-			} else if (branch.kind == s.caseBranchKind && !branchGuarded(branch, s)) {
-				final wild: Null<QueryNode> = wildcardPattern(branch, s);
-				if (wild != null) {
-					count++;
-					final ws: Null<Span> = wild.span;
-					edit = ws == null ? null : { span: ws, text: 'null, _' };
-				}
-			}
-		}
-		return count == 1 ? edit : null;
-	}
-
-	/** The unguarded wildcard `_` pattern node of `branch` (a plain `case _`), or null. */
-	private static function wildcardPattern(branch: QueryNode, s: Seams): Null<QueryNode> {
-		for (p in branch.children) if (p.kind == s.plainKind && p.children.length >= 1) {
-			final pat: QueryNode = p.children[0];
-			if (pat.kind == s.identKind && pat.name == s.wildcardName) return pat;
-		}
-		return null;
-	}
-
-	/**
-	 * Rewrite a `default:` head to `case null, _:` — replace the leading `default` keyword
-	 * (read from source, so a colon inside a comment cannot fool a colon search) with
-	 * `case null, _`, keeping the `:` and everything after. Needs no body child, so an empty
-	 * `default:` is handled too.
-	 */
-	private static function defaultToNullEdit(branch: QueryNode, source: String): Null<{ span: Span, text: String }> {
-		final bs: Null<Span> = branch.span;
-		if (bs == null) return null;
-		var end: Int = bs.from;
-		while (end < source.length) {
-			final c: Int = source.fastCodeAt(end);
-			if (c < 'a'.code || c > 'z'.code) break;
-			end++;
-		}
-		return { span: new Span(bs.from, end), text: 'case null, _' };
-	}
-
-
 	/**
 	 * The plain own-name operand a bare (or parenthesized) null comparison proves non-null on
 	 * the asserted outcome: for a truth assert (`asTrue`) an `x != null`, for a falsity assert an
@@ -399,6 +363,7 @@ private typedef Seams = {
 	var identKind: String;
 	var nullLitKind: String;
 	var wildcardName: String;
+	var taggedKinds: Array<String>;
 	var defaultBranchKind: Null<String>;
 	var parenKind: Null<String>;
 	var nullCoalesceKind: Null<String>;
@@ -419,6 +384,7 @@ private typedef FileCtx = {
 	var file: String;
 	var root: QueryNode;
 	var declaredTypes: Map<Int, String>;
+	var declaredTypeSources: Map<Int, String>;
 	var returnTypes: Map<Int, String>;
 	var s: Seams;
 	var index: SymbolIndex;

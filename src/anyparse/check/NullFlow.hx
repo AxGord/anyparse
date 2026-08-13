@@ -66,6 +66,7 @@ private typedef FlowCtx = {
 	var localDeclContinuationKinds: Array<String>;
 	var ifKinds: Array<String>;
 	var loopKinds: Array<String>;
+	var preTestLoopKinds: Array<String>;
 	var switchKinds: Array<String>;
 	var tryKinds: Array<String>;
 	var blockKinds: Array<String>;
@@ -180,6 +181,15 @@ final class NullFlow {
 
 	/** Loop constructs — every name they assign is cleared before the body so a back-edge carries no stale fact. */
 	public static final LOOP_KINDS: Array<String> = ['WhileStmt', 'DoWhileStmt', 'ForStmt', 'WhileExpr', 'ForExpr'];
+
+	/**
+	 * The PRE-TEST loops among `LOOP_KINDS` — children `[condition, body …]`, the condition
+	 * evaluated before every iteration, so it narrows the body exactly as an `if` narrows its
+	 * then-arm (`while (x != null) { … }` leaves `x` non-null inside). A `DoWhileStmt` is
+	 * deliberately absent: its body runs BEFORE the test, so the condition proves nothing there.
+	 * A `for` has no null test to read.
+	 */
+	public static final PRE_TEST_LOOP_KINDS: Array<String> = ['WhileStmt', 'WhileExpr'];
 
 	/** `switch` construct kinds — joined branch-per-branch by the flow walk (statement and expression forms, bare and parenthesized subjects). */
 	public static final SWITCH_KINDS: Array<String> = ['SwitchStmt', 'SwitchStmtBare', 'SwitchExpr', 'SwitchExprBare'];
@@ -438,6 +448,7 @@ final class NullFlow {
 			localDeclContinuationKinds: shape.localDeclContinuationKinds ?? [],
 			ifKinds: IF_KINDS,
 			loopKinds: LOOP_KINDS,
+			preTestLoopKinds: PRE_TEST_LOOP_KINDS,
 			switchKinds: SWITCH_KINDS,
 			tryKinds: TRY_KINDS,
 			blockKinds: BLOCK_KINDS,
@@ -700,7 +711,18 @@ final class NullFlow {
 	private static function handleLoop(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
 		killWritten(node, state, ctx);
 		final bodyState: FlowState = copyState(state);
-		for (c in node.children) walk(c, bodyState, ctx);
+		if (!ctx.preTestLoopKinds.contains(node.kind) || node.children.length < 2) {
+			for (c in node.children) walk(c, bodyState, ctx);
+			return;
+		}
+		// A pre-test header proves its conjuncts for every iteration, so the body starts from the
+		// SAME narrowing an `if` gives its then-arm. `killWritten` above already dropped every name
+		// the body assigns, so a re-assignment later in the body cannot ride the header's fact past
+		// its own write — `handleWrite` re-decides it at that point.
+		final cond: QueryNode = node.children[0];
+		walk(cond, bodyState, ctx);
+		final narrowed: FlowState = narrowedCopy(cond, bodyState, ctx, ctx.notEqKind, ctx.eqKind, BOOL_AND_KIND);
+		for (i in 1...node.children.length) walk(node.children[i], narrowed, ctx);
 	}
 
 	/** Fire the consumer callback at `node` with the facts holding in `state`. */

@@ -665,6 +665,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			enumAbstractMetaName: '@:enum',
 			rawDynamicTypeName: 'Dynamic',
 			bareConstructorTypeKinds: ['EnumDecl', 'EnumAbstractDecl'],
+			runtimeTaggedTypeKinds: ['EnumDecl'],
 			overrideModifierKind: 'Override',
 			dynamicModifierKind: 'Dynamic',
 			defaultVisibilityModifierText: 'private',

@@ -1596,6 +1596,18 @@ typedef RefShape = {
 	@:optional var bareConstructorTypeKinds: Array<String>;
 
 	/**
+	 * Type-declaration kinds whose values carry a RUNTIME CONSTRUCTOR TAG that a
+	 * `switch` reads off the value itself (Haxe `EnumDecl`) — so a `switch` over a
+	 * null subject of such a type dereferences null before any pattern is tried,
+	 * unless a wildcard arm makes the compiler emit a null check first. The
+	 * `nullable-switch-missing-null` check uses it to flag exactly that shape. An
+	 * `enum abstract` is deliberately NOT such a kind: its values ARE the underlying
+	 * primitives and a switch over them compiles to plain comparisons, which a null
+	 * subject simply fails to match. Optional; unset makes the check a no-op.
+	 */
+	@:optional var runtimeTaggedTypeKinds: Array<String>;
+
+	/**
 	 * Method names that take or return a STRING POSITION / offset (`substr`,
 	 * `substring`, `charAt`, `charCodeAt`, `indexOf`, `lastIndexOf`, StringTools'
 	 * `hex`) — the `magic-number` check exempts a numeric literal that reaches such a
