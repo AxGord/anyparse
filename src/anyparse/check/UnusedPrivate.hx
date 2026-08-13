@@ -285,12 +285,17 @@ final class UnusedPrivate implements Check {
 	 * RETAINS the skip-parse veto (a skip-parsed report file could hide a reference the
 	 * scan cannot see, so any skip-parse in report scope keeps structural confinement).
 	 *
-	 * Three visibility carve-outs never reach the reference scan: an `abstract` member is a contract implemented by
-	 * subclasses, reachable through every implementor; an `override`
-	 * member inherits the base's visibility (not private) and is invoked
-	 * polymorphically from code a single-file scan cannot see; an `extern class`
-	 * member carries no visibility keyword yet is PUBLIC by the extern rule, and
-	 * is reached from outside the file (`externTypes` names its enclosing type).
+	 * Three visibility carve-outs never reach the reference scan: an `abstract` member is a
+	 * contract implemented by subclasses, reachable through every implementor; an `override`
+	 * member inherits the base's visibility (not private) and is invoked polymorphically from
+	 * code a single-file scan cannot see; an `extern class` member carries no visibility
+	 * keyword yet is PUBLIC by the extern rule, and is reached from outside the file
+	 * (`externTypes` names its enclosing type).
+	 *
+	 * A FOURTH carve-out cannot be read off the modifiers at all: the IMPLEMENTATION of an abstract
+	 * member carries neither keyword, because Haxe rejects `override` on one. It is recognised by asking
+	 * the widest index whether a supertype declares the name — the question `prefer-inline` already asks
+	 * for the same reason.
 	 */
 	private static function violationFor(
 		file: String, source: String, decl: NamedDecl, index: SymbolIndex, scopeIndex: SymbolIndex, support: NamingSupport,
@@ -308,6 +313,12 @@ final class UnusedPrivate implements Check {
 		final owner: Null<String> = decl.enclosingType;
 		final span: Null<Span> = decl.span;
 		if (owner == null || span == null || externTypes.contains(owner)) return null;
+		// An IMPLEMENTATION of an abstract supertype member carries neither `abstract` nor
+		// `override` — Haxe rejects `override` on one — so the modifier carve-outs above miss it
+		// while the base invokes it polymorphically through its own declaration. Asked of the
+		// WIDEST index, because the declaring base may live in a resolution library rather than
+		// the report scope. An unresolvable supertype leaves the member flaggable, as before.
+		if (scopeIndex.supertypeDeclaresMember(owner, decl.name)) return null;
 		final unused: Bool = RefactorSupport.isPrivateMemberConfined(owner, source, index)
 			? !RefactorSupport.referencedInRange(source, decl.name, 0, source.length, [span])
 			: provablyDeadProjectWide(decl.name, file, source, span, index, scopeIndex);

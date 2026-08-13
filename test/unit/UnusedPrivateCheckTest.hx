@@ -522,6 +522,22 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.equals(0, fixEdits('class C {\n\tprivate extern function ext():Void;\n}').length);
 	}
 
+	/**
+	 * An implementation of an ABSTRACT supertype member carries neither `abstract` nor `override`
+	 * — Haxe rejects `override` on one — so a carve-out reading only the declaration's modifiers
+	 * misses it, while the base invokes it polymorphically through its own abstract declaration.
+	 */
+	public function testAbstractImplementationNotFlagged(): Void {
+		final vs: Array<Violation> = violations([
+			{
+				file: 'Base.hx',
+				source: 'abstract class Base {\n\tpublic function run():Void {\n\t\tstep();\n\t}\n\n\tabstract private function step():Void;\n}'
+			},
+			{ file: 'Impl.hx', source: 'class Impl extends Base {\n\tprivate function step():Void {\n\t\ttrace(1);\n\t}\n}' }
+		]);
+		Assert.equals(0, vs.length, 'the implementation is reachable through the base, not dead');
+	}
+
 	private function one(source: String): Array<Violation> {
 		return violations([{ file: 'C.hx', source: source }]);
 	}
