@@ -470,6 +470,26 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * EVERY import path under which `typeName` is declared in this index, main types and secondary
+	 * (sub-module) ones alike — `Position` yields both `anyparse.runtime.Span.Position` and
+	 * `haxe.macro.Expr.Position` when the resolution scope carries the standard library.
+	 *
+	 * The ambiguity-refusing `importPathOf` is the right answer for a caller holding only a simple
+	 * name, but a caller that also holds the compiler's HYBRID spelling (`anyparse.runtime.Position`)
+	 * can disambiguate with it, and needs the candidates to do so.
+	 */
+	public function importPathsOf(typeName: String): Array<String> {
+		final out: Array<String> = [];
+		for (file in declaringFiles(typeName)) {
+			final type: Null<TypeDeclInfo> = file.types.find(t -> t.name == typeName);
+			if (type == null) continue;
+			final path: String = type.isMain ? file.module : '${file.module}.$typeName';
+			if (!out.contains(path)) out.push(path);
+		}
+		return out;
+	}
+
+	/**
 	 * Files that import the module `modulePath` — an `ImportInfo` whose
 	 * `raw` equals `modulePath` (the main type / module itself) OR
 	 * starts with `modulePath + '.'` (a sub-type of the module, e.g.

@@ -107,8 +107,12 @@ private typedef ImportAnchor = {
  *
  * LIMIT — an UNRESOLVABLE hybrid. `pack.Module` (a main type) and `pack.SubType` (a hybrid)
  * are textually identical shapes; only the file's imports or the `SymbolIndex` tell them
- * apart. When NEITHER knows the simple name, route 2 reads the path as a module and proposes
- * `import pack.SubType;` — which does not resolve for a real sub-type. That is a proposal, not
+ * apart. `canonicalize` asks the index for EVERY path the simple name is declared under and
+ * keeps the one whose module-dropped form is exactly the hybrid — so a name ambiguous across
+ * packages is still repaired, and only a tie WITHIN one package (`pkg.A.X` and `pkg.B.X` both
+ * drop to `pkg.X`) is refused. When the index knows the name not at all, route 2 reads the
+ * path as a module and proposes `import pack.SubType;` — which does not resolve for a real
+ * sub-type. That is a proposal, not
  * a silent result: every caller of this printer runs behind a verification pass that
  * typechecks the edited file and reverts it to report-only, and widening the resolution scope
  * (`resolutionRoots`) makes `canonicalize` repair the path instead. The predecessor behaviour
@@ -547,11 +551,18 @@ final class TypeRefPrinter {
 		final imported: Null<String> = _importMap[simple];
 		if (imported != null && imported != raw && ModuleScan.dropModuleSegment(imported) == raw) return imported;
 		final index: Null<SymbolIndex> = _index;
-		if (index != null) {
-			final path: Null<String> = index.importPathOf(simple);
-			if (path != null && path != raw && ModuleScan.dropModuleSegment(path) == raw) return path;
-		}
-		return raw;
+		if (index == null) return raw;
+		// `raw` narrows what `importPathOf` cannot: a simple name ambiguous across PACKAGES
+		// (`Position` is both `anyparse.runtime.Span.Position` and `haxe.macro.Expr.Position` once
+		// std is in scope) still has one declaration whose module-dropped form is exactly this
+		// hybrid. Two sub-module types of the SAME package collide even there — `pkg.A.X` and
+		// `pkg.B.X` both drop to `pkg.X` — so a tie is refused rather than guessed: picking wrong
+		// would emit an import that COMPILES while binding a different type, which no verification
+		// pass can catch.
+		final matches: Array<String> = [
+			for (path in index.importPathsOf(simple)) if (path != raw && ModuleScan.dropModuleSegment(path) == raw) path
+		];
+		return matches.length == 1 ? matches[0] : raw;
 	}
 
 	/** Whether the index knows a type named `simple` whose own import path IS `path` — i.e. `path` is real and needs no repair. */
