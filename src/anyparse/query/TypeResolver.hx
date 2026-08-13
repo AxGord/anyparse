@@ -97,6 +97,15 @@ final class TypeResolver {
 	];
 
 	/**
+	 * The innermost type declaration whose span contains `faSpan` — the whole match, for a consumer
+	 * that needs the declaration's KIND or its node rather than the name `enclosingTypeName` answers
+	 * with: what a bare `this` denotes at a position depends on which kind of type hosts it.
+	 */
+	public static inline function enclosingTypeDecl(tree: QueryNode, faSpan: Span): Null<TypeDeclMatch> {
+		return innermostTypeDecl(tree, faSpan);
+	}
+
+	/**
 	 * True when `faNode` (a field-access node) is a provably side-effect-free read.
 	 * Three resolved receivers: an anonymous-struct value (fields can't be getters);
 	 * a local/param of a class/abstract type whose member `field` is a plain member;
@@ -602,8 +611,7 @@ final class TypeResolver {
 
 	/** The simple name of the innermost type declaration whose span contains `faSpan`, or null. */
 	public static function enclosingTypeName(tree: QueryNode, faSpan: Span): Null<String> {
-		final td: Null<TypeDeclMatch> = innermostTypeDecl(tree, faSpan);
-		return td?.name;
+		return enclosingTypeDecl(tree, faSpan)?.name;
 	}
 
 	/**

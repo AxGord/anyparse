@@ -151,11 +151,7 @@ class PreferStaticExtensionCheckTest extends Test {
 	public function testUnresolvedReceiverReportedOnly(): Void {
 		final source: String = 'using Ext;\n\nclass C {\n\tfunction make():Widget\n\t\treturn null;\n\n\tfunction f():Void {\n'
 			+ '\t\tExt.deco(make(), 1);\n\t}\n}\n';
-		final files: Array<{ file: String, source: String }> = fileSet(source);
-		final vs: Array<Violation> = violationsOf(files);
-		Assert.equals(1, vs.length);
-		Assert.isTrue(vs[0].message.indexOf('receiver type unresolved') != -1, vs[0].message);
-		Assert.equals(0, editsOf(files).length);
+		assertUnresolvedReceiver(fileSet(source));
 	}
 
 	public function testDynamicReceiverNotFlagged(): Void {
@@ -533,13 +529,9 @@ class PreferStaticExtensionCheckTest extends Test {
 		// A single UNBOUND identifier is not guessed to be a type name, so `Mk.make()` resolves to
 		// nothing and the site stays report-only — the conservative miss, pinned deliberately.
 		final source: String = user('using Ext;\n\n', 'Ext.deco(Mk.make(), 1);');
-		final files: Array<{ file: String, source: String }> = fileSet(source, WIDGET_SOURCE, [
+		assertUnresolvedReceiver(fileSet(source, WIDGET_SOURCE, [
 			{ file: 'Mk.hx', source: 'class Mk {\n\tpublic static function make(): Widget return null;\n}\n' }
-		]);
-		final vs: Array<Violation> = violationsOf(files);
-		Assert.equals(1, vs.length);
-		Assert.isTrue(vs[0].message.indexOf('receiver type unresolved') != -1, vs[0].message);
-		Assert.equals(0, editsOf(files).length);
+		]));
 	}
 
 	public function testParenthesizedReceiverUnwrapped(): Void {
@@ -556,11 +548,7 @@ class PreferStaticExtensionCheckTest extends Test {
 		// forms.
 		final source: String =
 			'using Ext;\n\nclass C {\n\tfunction f(b:Bool, w:Widget, v:Widget):Void {\n\t\tExt.deco(b ? w : v, 1);\n\t}\n}\n';
-		final files: Array<{ file: String, source: String }> = fileSet(source);
-		final vs: Array<Violation> = violationsOf(files);
-		Assert.equals(1, vs.length);
-		Assert.isTrue(vs[0].message.indexOf('receiver type unresolved') != -1, vs[0].message);
-		Assert.equals(0, editsOf(files).length);
+		assertUnresolvedReceiver(fileSet(source));
 	}
 
 	public function testAddUsingFalseWithUsingPresentStillFixes(): Void {
@@ -569,9 +557,68 @@ class PreferStaticExtensionCheckTest extends Test {
 		Assert.isTrue(out.indexOf('w.deco(1);') != -1, out);
 	}
 
+	public function testAbstractSelfReceiverRewritten(): Void {
+		// Inside an abstract `this` IS the underlying value, and the header names its type one child
+		// away — so the shadow gate has a nominal to weigh and the rewrite is proven.
+		final files: Array<{ file: String, source: String }> = selfFiles('abstract C(Widget) from Widget to Widget');
+		final vs: Array<Violation> = violationsOf(files);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('this.deco(1)') != -1, vs[0].message);
+		Assert.isTrue(vs[0].message.indexOf('receiver type unresolved') == -1, vs[0].message);
+		final out: String = fixResultOf(files);
+		Assert.isTrue(out.indexOf('this.deco(1);') != -1, out);
+		Assert.isTrue(out.indexOf('Ext.deco(') == -1, out);
+	}
+
+	public function testEnumAbstractSelfReceiverRewritten(): Void {
+		final files: Array<{ file: String, source: String }> = selfFiles('enum abstract C(Widget)');
+		Assert.equals(1, violationsOf(files).length);
+		Assert.isTrue(fixResultOf(files).indexOf('this.deco(1);') != -1);
+	}
+
+	public function testAbstractSelfReceiverUnderlyingShadowNotFlagged(): Void {
+		// The underlying type is the one the rewritten access lands on, so a member of ITS is the
+		// shadow that drops the site.
+		final widget: String = 'class Widget {\n\tpublic function deco(n: Int): Widget return this;\n}\n';
+		Assert.equals(0, violationsOf(selfFiles('abstract C(Widget) from Widget to Widget', '', widget)).length);
+	}
+
+	public function testAbstractOwnMemberDoesNotShadowSelfReceiver(): Void {
+		// The mirror of the gate above: an abstract's OWN members are not reachable through `this`
+		// (verified against the compiler), so declaring `deco` on the abstract shadows nothing.
+		final files: Array<{ file: String, source: String }> = selfFiles(
+			'abstract C(Widget) from Widget to Widget', '\tpublic function deco(n:Int):C\n\t\treturn this;\n\n'
+		);
+		Assert.equals(1, violationsOf(files).length);
+		Assert.isTrue(fixResultOf(files).indexOf('this.deco(1);') != -1);
+	}
+
+	public function testAbstractNonNominalUnderlyingReportedOnly(): Void {
+		assertUnresolvedReceiver(selfFiles('abstract C({w:Widget})'));
+	}
+
+	public function testClassSelfReceiverReportedOnly(): Void {
+		// Deliberately narrow: inside a class `this` is the enclosing instance, which no configured
+		// module's receiver can be — the site stays report-only instead of widening the rewrite.
+		assertUnresolvedReceiver(selfFiles('class C'));
+	}
+
 	/** A `C.hx` source with `head` before the class and `body` as the sole statement of `f(w: Widget)`. */
 	private function user(head: String, body: String): String {
 		return '${head}class C {\n\tfunction f(w:Widget):Void {\n\t\t$body\n\t}\n}\n';
+	}
+
+	/** A bare-`this` receiver fixture: `head` is the host type's header, `extra` any member before the call site. */
+	private function selfFiles(head: String, extra: String = '', widget: String = WIDGET_SOURCE): Array<{ file: String, source: String }> {
+		return fileSet('using Ext;\n\n$head {\n$extra\tpublic function f():Void {\n\t\tExt.deco(this, 1);\n\t}\n}\n', widget);
+	}
+
+	/** Pins a site as reported but never rewritten, with the unresolved-receiver wording. */
+	private function assertUnresolvedReceiver(files: Array<{ file: String, source: String }>): Void {
+		final vs: Array<Violation> = violationsOf(files);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('receiver type unresolved') != -1, vs[0].message);
+		Assert.equals(0, editsOf(files).length);
 	}
 
 	/**

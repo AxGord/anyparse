@@ -6,6 +6,7 @@ import anyparse.check.UsingScan.UsingHeader;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -64,9 +65,10 @@ import anyparse.runtime.Span;
  * substitution along the chain; a METHOD CALL on either through the called method's declared return
  * type, recursively along a chain, or through the `staticMethodReturns` table for a tabled stdlib
  * static), plus `literalTypeNames` for a `stringLiteralKinds` receiver. Everything else stays UNRESOLVED: an
- * operator expression, a ternary, a `?.` chain, a bare `this` (whose meaning differs inside an
- * abstract), a `Null<…>` / `Any` declared type — and a NUMERIC literal, which is a deliberately
- * skipped FIXABLE class rather than an unresolvable one: `255.hex(2)` compiles fine under
+ * operator expression, a ternary, a `?.` chain, a bare `this` outside an abstract body (inside one it
+ * resolves to the underlying type the header names — the single host where `this` is not the
+ * enclosing instance), a `Null<…>` / `Any` declared type — and a NUMERIC literal, which is a
+ * deliberately skipped FIXABLE class rather than an unresolvable one: `255.hex(2)` compiles fine under
  * `using StringTools`, but `5.trim()` types as the float `5.` applied to `trim`, so the safe
  * rewrite depends on the literal's exact spelling. Given a resolved nominal `R` and the method
  * `m`:
@@ -156,6 +158,16 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 
 	/** Cap on the receiver / argument excerpt length in the suggestion message. */
 	private static inline final EXCERPT_MAX: Int = 40;
+
+	/** The clause type-reference kind an abstract header's underlying type projects as — literal for the same reason. */
+	private static inline final UNDERLYING_TYPE_KIND: String = 'Named';
+
+	/**
+	 * The two abstract declaration kinds, spelled literally: `RefShape.enumAbstractDeclKind` names
+	 * only the enum spelling and no seam carries the plain one. They are the one host where a bare
+	 * `this` denotes something other than the enclosing type's own instance.
+	 */
+	private static final ABSTRACT_DECL_KINDS: Array<String> = ['AbstractDecl', 'EnumAbstractDecl'];
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
@@ -424,15 +436,43 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		symbols: () -> Null<SymbolIndex>, file: String
 	): Null<String> {
 		if (s.stringLiteralKinds.contains(recv.kind)) return s.literalTypeNames[recv.kind];
-		if (recv.kind == s.identKind && recv.name == s.shape.selfReferenceText) return null;
 		if (recv.kind != s.identKind && recv.kind != s.fieldKind && recv.kind != s.callKind) return null;
-		final nominal: Null<String> = RefactorSupport.expressionTypeNominal(recv, root, s.shape, declaredTypes, symbols(), file, chain);
+		final selfText: Null<String> = s.shape.selfReferenceText;
+		final self: Bool = recv.kind == s.identKind && selfText != null && recv.name == selfText;
+		final nominal: Null<String> = self
+			? abstractSelfNominal(recv, root)
+			: RefactorSupport.expressionTypeNominal(recv, root, s.shape, declaredTypes, symbols(), file, chain);
 		return if (nominal == null || nominal == s.dynamicTypeName)
 			nominal
 		else if (s.nullableWrappers.contains(nominal))
 			null
 		else
 			nominal;
+	}
+
+	/**
+	 * The nominal type a bare `this` denotes at `recv` — the enclosing ABSTRACT's underlying type,
+	 * which is what Haxe resolves a `this.member` access against inside an abstract body, and thus
+	 * the type the shadow gate has to weigh. The abstract's OWN members are NOT reachable through
+	 * `this` (an abstract declaring `hex` still gets `StringTools.hex` at `this.hex(6)` under a
+	 * `using`, verified against the compiler), so reading the host's own name here would both gate
+	 * on the wrong member list and drop sites that are safe.
+	 *
+	 * Null for every other host, a CLASS included: there `this` is the enclosing instance, whose
+	 * name resolves perfectly well — but no configured module takes such a receiver, so resolving it
+	 * would widen the rewrite surface without reaching a real site. Null too when the underlying type
+	 * is not a plain nominal (an anonymous structure, a function type), which leaves those sites
+	 * report-only rather than rewritten.
+	 */
+	private static function abstractSelfNominal(recv: QueryNode, root: QueryNode): Null<String> {
+		final span: Null<Span> = recv.span;
+		if (span == null) return null;
+		final decl: Null<TypeDeclMatch> = TypeResolver.enclosingTypeDecl(root, span);
+		if (decl == null || !ABSTRACT_DECL_KINDS.contains(decl.kind)) return null;
+		final underlying: Array<QueryNode> = decl.nameNode.children;
+		if (underlying.length == 0 || underlying[0].kind != UNDERLYING_TYPE_KIND) return null;
+		final written: Null<String> = underlying[0].name;
+		return written == null ? null : RefactorSupport.outerNominalOf(written);
 	}
 
 	/** The `recv.method(rest)` form the message shows, excerpt-normalized, or null when a span is unavailable. */
