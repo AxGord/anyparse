@@ -221,6 +221,13 @@ package anyparse.grammar.haxe.format;
 
 	@:optional var expressionIfArrowBodyReflow: Bool;
 
+	/**
+	 * omega-value-if-fit: fit-decides EVERY value-`if`, not only an arrow body -- flat on one line
+	 * when it fits, otherwise the exact layout `expressionIf` gives it. Sibling of
+	 * `expressionIfArrowBodyReflow`, which wins in an arrow body. Default `false`.
+	 */
+	@:optional var expressionIfFit: Bool;
+
 	@:optional var elseIfCommentReflow: Bool;
 
 	@:optional var comprehensionFor: HxFormatBodyPolicy;

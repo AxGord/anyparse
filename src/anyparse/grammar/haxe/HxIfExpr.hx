@@ -171,7 +171,7 @@ package anyparse.grammar.haxe;
  * condition field.
  */
 @:peg
-@:fmt(arrowValueIfReflow('expressionIfArrowBodyReflow', 'elseBranch', 'IfExpr'))
+@:fmt(arrowValueIfReflow('expressionIfArrowBodyReflow', 'elseBranch', 'IfExpr', 'expressionIfFit'))
 typedef HxIfExpr = {
 	@:lead('(') @:trail(')') @:fmt(condWrap('conditionWrap')) var cond: HxExpr;
 	@:trailOpt(';') @:fmt(bodyPolicy('ifBody', 'expressionIfBody'),

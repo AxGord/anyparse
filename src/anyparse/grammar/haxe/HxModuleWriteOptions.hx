@@ -875,6 +875,27 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	expressionIfArrowBodyReflow: Bool,
 
 	/**
+	 * omega-value-if-fit: when `true`, a value-position `if` / `else if` chain is decided by FIT
+	 * instead of always exploding — flat on one line when it fits at its column, and otherwise the
+	 * EXACT shape the `expressionIfBody` / `expressionElseBody` policies produce today (each branch
+	 * value on its own indented line, `else` back at the `if`'s indent).
+	 *
+	 * Mechanically it is the sibling of `expressionIfArrowBodyReflow` and shares its three seams: the
+	 * `Group` wrapping the node, the soft pre-`else` gap, and the branch gap. The two differ in ONE
+	 * place — the arrow knob forces each branch policy to `Same`, gluing the value to its condition,
+	 * so a broken chain reads `if (c) v` / `else if (d) v` / `else v`; this knob instead softens the
+	 * branch gap's own `Line('\n')` to `Line(' ')`, so a broken chain keeps the policy layout and only
+	 * a FITTING one collapses. Both are the same idea: give the chain one break axis and let the group
+	 * decide it for every arm at once.
+	 *
+	 * Gated on expression position rather than on `_inArrowLambdaBody`, so it covers every value-`if`
+	 * — an initializer, a `return`, a call argument. An arrow body under BOTH knobs keeps the arrow
+	 * shape: that gate is checked first. Default `false` keeps every value-`if` exploding (fork
+	 * parity). Fed by `sameLine.expressionIfFit`.
+	 */
+	expressionIfFit: Bool,
+
+	/**
 	 * omega-elseif-comment-reflow: when `true`, an `else if` whose nested `if`
 	 * carries EXACTLY one interposed `//` line comment glues as usual and
 	 * re-emits that comment at the end of the nested `if`'s head line - after

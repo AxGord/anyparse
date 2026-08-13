@@ -2175,7 +2175,7 @@ class WriterCodegen {
 	 */
 	private static function nextLayoutKwGapDocField(): Field {
 		final body: Expr = macro {
-			final _innerParts: Array<anyparse.core.Doc> = [_dhl()];
+			final _innerParts: Array<anyparse.core.Doc> = [gap];
 			for (_ci in 0...kwLeading.length) {
 				_innerParts.push(leadingCommentDocRun(kwLeading, _ci, opt));
 				_innerParts.push(_dhl());
@@ -2194,6 +2194,11 @@ class WriterCodegen {
 					{ name: 'cols', type: macro :Int },
 					{ name: 'bodyDoc', type: macro :anyparse.core.Doc },
 					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
+					// omega-value-if-fit: the kw->body gap, supplied by the caller so an
+					// `arrowValueIfReflowSite` can hand in a SOFT `Line(' ')` the enclosing `Group`
+					// may flatten. The comment separators below stay hard: a captured comment
+					// refuses the re-flow outright, so they are only ever reached with a hard gap.
+					{ name: 'gap', type: macro :anyparse.core.Doc },
 				],
 				ret: macro :anyparse.core.Doc,
 				expr: body,

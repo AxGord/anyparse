@@ -708,6 +708,7 @@ final class HaxeFormat implements TextFormat {
 		elseIf: KeywordPlacement.Same,
 		fitLineIfWithElse: false,
 		expressionIfArrowBodyReflow: false,
+		expressionIfFit: false,
 		elseIfCommentReflow: false,
 		fitLineBodyGlue: false,
 		conditionalExprFit: false,

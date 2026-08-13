@@ -620,6 +620,7 @@ final class HaxeFormatConfigLoader {
 			elseIf: base.elseIf,
 			fitLineIfWithElse: base.fitLineIfWithElse,
 			expressionIfArrowBodyReflow: base.expressionIfArrowBodyReflow,
+			expressionIfFit: base.expressionIfFit,
 			elseIfCommentReflow: base.elseIfCommentReflow,
 			fitLineBodyGlue: base.fitLineBodyGlue,
 			conditionalExprFit: base.conditionalExprFit,
@@ -987,6 +988,10 @@ final class HaxeFormatConfigLoader {
 		// three `expressionIf*` body policies - it overrides them, and only for
 		// a value-if chain that is the direct body of an arrow lambda.
 		if (section.expressionIfArrowBodyReflow != null) opt.expressionIfArrowBodyReflow = section.expressionIfArrowBodyReflow;
+		// omega-value-if-fit: the same shape of knob for EVERY value-if rather than only an arrow
+		// body -- it fans out into no body policy either, it decides whether a FITTING chain may
+		// collapse to one line while a breaking one keeps exactly the policy layout.
+		if (section.expressionIfFit != null) opt.expressionIfFit = section.expressionIfFit;
 		// omega-elseif-comment-reflow: an independent Bool knob on the `elseIf`
 		// glue path - it changes no body policy, it decides whether ONE interposed
 		// line comment may move to the nested if's head line.

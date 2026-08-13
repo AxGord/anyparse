@@ -45,6 +45,9 @@ class WriterLowering {
 	 */
 	private static inline final ARROW_VALUE_IF_SITE: String = 'arrowValueIfReflowSite';
 
+	/** `@:fmt(arrowValueIfReflow)` arg count that carries the optional value-if FIT knob as its 4th arg. */
+	private static inline final FIT_KNOB_ARG_COUNT: Int = 4;
+
 	/**
 	 * Build-scoped mirrors of `_shape.root` / `_formatInfo.astPreds` for
 	 * the STATIC trivia emit helpers (the tryparse/block builder web),
@@ -1165,7 +1168,13 @@ class WriterLowering {
 				final grpInner: Expr = grpBuf.length == 1 ? grpBuf[0] : dcCall(grpBuf);
 				if (optionalBodyFieldName != null) {
 					final elseAcc: Expr = { expr: EField(macro value, optionalBodyFieldName), pos: Context.currentPos() };
-					parts.push(macro $elseAcc == null ? _dbg($grpInner) : _dg($grpInner));
+					// omega-value-if-fit: the cond-fit group must NOT open under the value-if re-flow. It
+					// wraps the condition plus the THEN body only, so its own `fitsFlat` answers for half
+					// the chain: the then-gap renders flat inside it while the `else` gaps break in the
+					// enclosing group, and the chain comes out a ragged hybrid. The re-flow's premise is
+					// ONE break axis for every arm, so the construct group is dropped and the outer
+					// `Group` decides alone.
+					parts.push(fitGroupExpr(node, elseAcc, grpInner));
 				} else
 					parts.push(macro _dbg($grpInner));
 				condFitGroupStartIdx = -1;
@@ -3108,7 +3117,43 @@ class WriterLowering {
 		// whole computed gap (the `shapeAware` hardline AND the `Same`-policy
 		// space), since with the branch policy forced to `Same` the shape-aware
 		// arm is suppressed and the space would leave the chain unbreakable.
-		return child.fmtHasFlag(ARROW_VALUE_IF_SITE) ? macro (_aifReflow ? _dl() : $sepExpr) : sepExpr;
+		// omega-value-if-fit reuses the seam, with ONE extra refusal the arrow knob does not need: a
+		// BLOCK previous body. A block-branch chain (`return if (c) { … } else if (d) { … }`) can
+		// never collapse to one line, so the soft gap buys nothing there and costs the `} else` glue
+		// `shapeAware` computes -- the chain would come back as `}` / `else if (…) {` on two lines.
+		// The arrow knob keeps its unconditional override in BOTH arms, so its output is unchanged.
+		return child.fmtHasFlag(ARROW_VALUE_IF_SITE) ? valueIfFitSeam(prevBodyField, sepExpr) : sepExpr;
+	}
+
+	/**
+	 * The pre-`else` gap of an `arrowValueIfReflowSite`: a soft `Line(" ")` under either re-flow gate,
+	 * so the chain has ONE break axis its enclosing `Group` decides. `_vifFit` is ignored when the
+	 * PREVIOUS body is a block ctor -- see the call site; `_aifReflow` overrides in both arms, which
+	 * is what keeps the arrow knob byte-identical.
+	 */
+	private function valueIfFitSeam(prevBody: Null<PrevBodyInfo>, sepExpr: Expr): Expr {
+		final blockPatterns: Array<Expr> = prevBody == null ? [] : collectBlockCtorPatterns(prevBody.typePath);
+		if (blockPatterns.length == 0) return macro (_aifReflow || _vifFit ? _dl() : $sepExpr);
+		final cases: Array<Case> = [
+			{ values: blockPatterns, expr: macro (_aifReflow ? _dl() : $sepExpr), guard: null },
+			{ values: [macro _], expr: macro (_aifReflow || _vifFit ? _dl() : $sepExpr), guard: null }
+		];
+		return { expr: ESwitch(prevBody.access, cases, null), pos: Context.currentPos() };
+	}
+
+	/**
+	 * The gap before a body at an `arrowValueIfReflowSite`: a soft `Line(" ")` the enclosing `Group`
+	 * may flatten, or the bare `Line("\n")` every other site keeps.
+	 *
+	 * The soft form is additionally refused at RUNTIME for a body that already breaks
+	 * (`WrapList.flatLength(body) < 0`) -- a block, a `switch`, a multi-line literal. Such a chain can
+	 * never be one line, so softening buys nothing and costs the layout the policy gives it: the
+	 * construct would glue to the `if` / `else` head and the author"s vertical shape would be gone.
+	 * The predicate is the one `measureItems` and `arrowBodyIsBrokenIfElse` already ask, and it reads
+	 * the BUILT doc, so it covers every construct without enumerating ctor names.
+	 */
+	private function valueIfGapExpr(softGap: Bool, bodyRef: Expr): Expr {
+		return softGap ? macro (_vifFit && anyparse.format.wrap.WrapList.flatLength($bodyRef) >= 0 ? _dl() : _dhl()) : macro _dhl();
 	}
 
 	/**
@@ -6546,6 +6591,12 @@ class WriterLowering {
 				+ ' args',
 				Context.currentPos()
 			);
+		// omega-value-if-fit: at an `arrowValueIfReflowSite` the gap before the body softens from
+		// `Line('\n')` (a break the renderer can never flatten) to `Line(' ')`, so the `Group`
+		// wrapping the chain decides it. Broken, the two render identically -- newline plus the
+		// `Nest` indent -- which is why a NON-fitting chain keeps the layout it has today. Every
+		// other body site keeps the bare `_dhl()` and stays byte-identical.
+		final softGap: Bool = opts.arrowValueIfSite == true;
 		final indentObjGuardedNext: Null<Expr> = if (indentObjArgs != null && !hasKwSlots) {
 			final ctorName: String = indentObjArgs[0];
 			final optAccess: Expr = optFieldAccess(indentObjArgs[1]);
@@ -6556,17 +6607,23 @@ class WriterLowering {
 					!$optAccess && $lcAccess == anyparse.format.BracePlacement.Next && Type.enumConstructor($bodyValueExpr) == $v{ctorName}
 					&& anyparse.format.wrap.WrapList.flatLength(_body) == -1
 				)
-					_dc([_dhl(), _body])
+					_dc([${valueIfGapExpr(softGap, macro _body)}, _body])
 				else
-					_dn(_cols, _dc([_dhl(), _body]));
+					_dn(_cols, _dc([${valueIfGapExpr(softGap, macro _body)}, _body]));
 			};
 		}
 		else
 			null;
 		return indentObjGuardedNext ?? (
 			hasKwSlots
-				? macro nextLayoutKwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $writeCall, opt)
-				: macro _dn(_cols, _dc([_dhl(), $writeCall]))
+				? macro {
+					final _vifBody: anyparse.core.Doc = $writeCall;
+					nextLayoutKwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, _vifBody, opt, ${valueIfGapExpr(softGap, macro _vifBody)});
+				}
+				: macro {
+					final _vifBody: anyparse.core.Doc = $writeCall;
+					_dn(_cols, _dc([${valueIfGapExpr(softGap, macro _vifBody)}, _vifBody]));
+				}
 		);
 	}
 
@@ -8572,16 +8629,31 @@ class WriterLowering {
 	private function arrowValueIfReflowWrap(node: ShapeNode, dcExpr: Expr): Expr {
 		final args: Null<Array<String>> = node.fmtReadStringArgs('arrowValueIfReflow');
 		if (args == null) return dcExpr;
-		if (args.length != 3)
+		if (args.length != 3 && args.length != FIT_KNOB_ARG_COUNT)
 			Context.fatalError(
-				'WriterLowering: @:fmt(arrowValueIfReflow) expects 3 string args (knobField, spineField, spineCtor), got ${args.length}',
+				'WriterLowering: @:fmt(arrowValueIfReflow) expects 3 or 4 string args (knobField, spineField, spineCtor'
+				+ ', [fitKnobField]), got ${args.length}',
 				Context.currentPos()
 			);
 		final knobAccess: Expr = optFieldAccess(args[0]);
+		// omega-value-if-fit: the optional 4th arg names the sibling knob that re-flows EVERY
+		// value-if rather than only an arrow body. Absent, the local folds to a constant `false` and
+		// every expression below collapses to the arrow-only shape, so a 3-arg site stays byte-inert.
+		final fitAccess: Expr = args.length == FIT_KNOB_ARG_COUNT ? optFieldAccess(args[3]) : macro false;
 		final spineCleanExpr: Expr = arrowValueIfSpineCleanExpr(node, args[1], args[2]);
 		return macro {
 			final _aifGate: Bool = $knobAccess && opt._inArrowLambdaBody;
-			final _aifReflow: Bool = _aifGate && !opt._arrowValueIfBlocked && !opt._arrowValueIfElemTrailComment && $spineCleanExpr;
+			// The arrow gate is checked FIRST and excludes the fit gate: a chain in an arrow body
+			// under both knobs keeps the arrow shape (branch values glued to their conditions),
+			// the more specific answer for that position.
+			final _vifGate: Bool = !_aifGate && $fitAccess && opt._inExprPosition;
+			final _anyGate: Bool = _aifGate || _vifGate;
+			// ONE spine walk for both gates -- short-circuited by `_anyGate`, so a file compiled with
+			// neither knob never runs it. `_aifReflow` keeps its exact old value when the fit knob is
+			// off, since `_vifGate` is then false and `_anyGate` collapses to `_aifGate`.
+			final _aifClean: Bool = _anyGate && !opt._arrowValueIfBlocked && !opt._arrowValueIfElemTrailComment && $spineCleanExpr;
+			final _aifReflow: Bool = _aifGate && _aifClean;
+			final _vifFit: Bool = _vifGate && _aifClean;
 			// Two comment positions live outside the node: one on the branch
 			// VALUE's own slot (a call's `closeTrailing`), which the spine walk
 			// now asks for, and one on the enclosing list element, which arrives
@@ -8594,9 +8666,9 @@ class WriterLowering {
 			// descents) carries the verdict down to members the walk already
 			// judged, so an ANCESTOR's comment reaches them too. Only ever true
 			// with the knob ON, so the OFF path is byte-inert.
-			final _aifBlocked: Bool = _aifGate && !_aifReflow;
+			final _aifBlocked: Bool = _anyGate && !_aifReflow && !_vifFit;
 			final _aifDoc: anyparse.core.Doc = $dcExpr;
-			_aifReflow && !opt._inValueIfBranch ? _dg(_aifDoc) : _aifDoc;
+			(_aifReflow || _vifFit) && !opt._inValueIfBranch ? _dg(_aifDoc) : _aifDoc;
 		};
 	}
 
@@ -12298,6 +12370,20 @@ class WriterLowering {
 		final fitPat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'FitLine']);
 		final optFlag: Expr = optFieldAccess(flagName);
 		return macro ($optFlag == $fitPat);
+	}
+
+	/**
+	 * The construct-level cond-fit group for a body field carrying an optional `else` sibling --
+	 * `BodyGroup` with no else, `Group` with one. On a node carrying `@:fmt(arrowValueIfReflow)` the
+	 * `Group` arm is additionally suppressed while the value-if re-flow is active (see the call site);
+	 * `_vifFit` exists only on such a node, and is false unless its knob is on, so every other struct
+	 * is byte-identical.
+	 */
+	private function fitGroupExpr(node: ShapeNode, elseAcc: Expr, grpInner: Expr): Expr {
+		final grouped: Expr = node.fmtReadStringArgs("arrowValueIfReflow") == null
+			? macro _dg($grpInner)
+			: macro (_vifFit ? $grpInner : _dg($grpInner));
+		return macro $elseAcc == null ? _dbg($grpInner) : $grouped;
 	}
 
 	/** Build `_dc([elem1, elem2, ...])` from a macro-time array of Exprs. */

@@ -626,6 +626,7 @@ import unit.ExplicitTypeReturnOracleTest;
 import unit.OracleBatchRevertReasonTest;
 import unit.JoinBranchCallCheckTest;
 import unit.HxCallParamIfExpressionArgSliceTest;
+import unit.HxValueIfFitSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -856,6 +857,7 @@ class RunTests {
 		addCase(new HxTypeParamFieldNoWrapSliceTest());
 		addCase(new HxCallParamObjectLiteralSliceTest());
 		addCase(new HxCallParamIfExpressionArgSliceTest());
+		addCase(new HxValueIfFitSliceTest());
 		addCase(new HxCallParamFunctionLambdaSliceTest());
 		addCase(new HxComprehensionBlockHugSliceTest());
 		addCase(new HxComprehensionCloserSliceTest());
