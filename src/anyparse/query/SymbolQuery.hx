@@ -1,5 +1,7 @@
 package anyparse.query;
 
+import anyparse.runtime.Span.Position;
+
 /**
  * One row of the `apq symbols` listing: a top-level type declaration
  * resolved to its canonical import path plus its source coordinate.
@@ -55,7 +57,7 @@ final class SymbolQuery {
 			final maybeSrc: Null<String> = sourceOf[info.file];
 			final src: String = maybeSrc ?? '';
 			for (type in info.types) if (kindFilter == null || type.kind == kindFilter) {
-				final pos = type.span.lineCol(src);
+				final pos: Position = type.span.lineCol(src);
 				rows.push({
 					qualified: type.isMain ? info.module : '${info.module}.${type.name}',
 					name: type.name,
