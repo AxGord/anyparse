@@ -26,10 +26,15 @@ using Lambda;
  * Fix: descend the `type` field when it is an `HxType.Anon` enum
  * (`isAnonType` gate — `Named`/`Arrow` type-refs stay skipped, no
  * phantom child per typed binding) + `VarField`/`FinalField`/
- * `FnField` host kinds. The 5 anon-surfacing tests are RED pre-fix
- * (0 hits / not a decl) → GREEN post-fix; the 2 blast-radius guards
- * (`Named` type-ref, alias typedef) are GREEN both sides and assert
- * the fix introduces NO spurious child.
+ * `FnField` host kinds. The anon-surfacing tests are RED pre-fix
+ * (0 hits) → GREEN post-fix; the 2 blast-radius guards (`Named`
+ * type-ref, alias typedef) are GREEN both sides and assert the fix
+ * introduces NO spurious child.
+ *
+ * The descent is a `meta` capability only. `Refs` gates the same subtree
+ * back out (`RefShape.typeAnnotationKinds`): a structural field LABEL is
+ * not a value binding, and declaring it captured a same-named member's
+ * reads across the annotation's whole frame.
  */
 class ApqMetaAnonFieldSliceTest extends Test {
 
@@ -61,9 +66,17 @@ class ApqMetaAnonFieldSliceTest extends Test {
 		if (m != null) Assert.equals('x', m.declName, 'attributes to the bare field x — got ${describe(hits)}');
 	}
 
-	public function testAnonFieldIsRefsDeclHost(): Void {
+	/**
+	 * An anon field is a decl host to `meta` — that is what carries its annotation — but NOT to
+	 * `refs`, which resolves VALUE bindings. The label declares no value: an access to it
+	 * (`o.f`) resolves through the receiver's TYPE, so a `refs` decl for it would be an orphan
+	 * that `rename` happily rewrites alone, breaking every access. Worse, the same ctors spell a
+	 * parameter and a class field, so declaring them captured a same-named member's reads across
+	 * the annotation's whole frame — a class frame for a field annotation.
+	 */
+	public function testAnonFieldIsNotARefsDeclHost(): Void {
 		final hits: Array<RefHit> = refsIn('typedef T = { var f:Int; };', 'f');
-		Assert.isTrue(hits.exists(h -> h.kind == RefKind.Decl), 'anon field `f` is a decl — got ${hits.length} hits');
+		Assert.equals(0, hits.length, 'anon field `f` is a TYPE label, not a value binding — got ${hits.length} hits');
 	}
 
 	public function testAnonInVarTypeHintMetaSurfaces(): Void {

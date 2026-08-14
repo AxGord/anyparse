@@ -24,9 +24,18 @@ import anyparse.runtime.Span;
  *
  * Phase 3.2 scope: lexical scope tracking. The walker maintains a
  * `ScopeStack` and pushes a frame on every `kind ∈ shape.scopeKinds`
- * node. On entering a fresh scope its decl-host descendants are
- * pre-collected (walk stops at inner scope boundaries) so reads can
- * resolve to forward-declared bindings in the same scope.
+ * node; a frame's decl-host descendants are pre-collected on entry (the
+ * walk stops at inner scope boundaries).
+ *
+ * Whether a pre-collected binding is visible to a reference EARLIER in the frame is the
+ * frame's own policy. A type body hoists, so a method resolves a field declared below it. A
+ * function body, a block or a `switch` arm (`RefShape.positionScopedKinds`) does not, so a
+ * reference that precedes the declaration resolves past the frame — Haxe locals are not
+ * hoisted. `ScopeBinding.visibleFrom` carries the offset each binding takes effect at.
+ *
+ * A TYPE annotation declares nothing, however much its ctors look like declarations: an
+ * anonymous structure spells its field labels on the very ctors a parameter or a field uses,
+ * so `RefShape.typeAnnotationKinds` gates them out of both the pre-collect and the hits.
  *
  * Each emitted hit carries a `bindingSpan`:
  *  - Decl hits self-bind (`bindingSpan == own span`).
@@ -89,7 +98,7 @@ final class Refs {
 		for (n in names) if (!out.exists(n)) out[n] = [];
 		if (names.length == 0) return out;
 		final scopes: ScopeStack = new ScopeStack();
-		walkMulti(tree, shape, scopes, out, false, false);
+		walkMulti(tree, shape, scopes, out, WalkFlags.None);
 		return out;
 	}
 
@@ -107,7 +116,7 @@ final class Refs {
 	public static function findWithSkipped(name: String, tree: QueryNode, shape: RefShape): { hits: Array<RefHit>, skipped: Int } {
 		final out: Map<String, Array<RefHit>> = [name => []];
 		final skipped: Map<String, Int> = [name => 0];
-		walkMulti(tree, shape, new ScopeStack(), out, false, false, skipped);
+		walkMulti(tree, shape, new ScopeStack(), out, WalkFlags.None, skipped);
 		return { hits: out[name] ?? [], skipped: skipped[name] ?? 0 };
 	}
 
@@ -134,16 +143,16 @@ final class Refs {
 	 * its interior a real expression subtree, whose identifiers are ordinary `identKind`
 	 * reads already.
 	 */
-	private static inline function classify(kind: String, shape: RefShape, isWriteTarget: Bool): Null<RefKind> {
+	private static inline function classify(kind: String, shape: RefShape, flags: WalkFlags): Null<RefKind> {
 		// Decl-host takes precedence over identKind: a single grammar
 		// would normally place the decl name on a different ctor than
 		// the reference ctor, but the contract leaves the option open.
-		return if (shape.declHostKinds.contains(kind))
-			RefKind.Decl
-		else if (shape.selfScopeDeclKinds.contains(kind))
-			RefKind.Decl
+		return if (shape.declHostKinds.contains(kind) || shape.selfScopeDeclKinds.contains(kind))
+			// Inside a type annotation the SAME ctor spells a structural field LABEL, which
+			// binds no value — see the `Refs` seam on `RefShape.typeAnnotationKinds`.
+			flags.has(WalkFlags.InTypeAnnotation) ? null : RefKind.Decl
 		else if (kind == shape.identKind)
-			isWriteTarget ? RefKind.Write : RefKind.Read
+			flags.has(WalkFlags.WriteTarget) ? RefKind.Write : RefKind.Read
 		else if (isInterpRead(kind, shape))
 			RefKind.Read
 		else
@@ -161,18 +170,26 @@ final class Refs {
 		return kind == shape.stringInterpIdentKind && kind != shape.identKind;
 	}
 
+	/**
+	 * Whether a node of `kind` opens a TYPE annotation — a subtree that declares no value
+	 * binding, however much its ctors look like declarations. See the `Refs` seam on
+	 * `RefShape.typeAnnotationKinds`.
+	 */
+	private static inline function isTypeAnnotation(kind: String, shape: RefShape): Bool {
+		final kinds: Null<Array<String>> = shape.typeAnnotationKinds;
+		return kinds != null && kinds.contains(kind);
+	}
+
+
 	private static function walkMulti(
-		node: QueryNode, shape: RefShape, scopes: ScopeStack, out: Map<String, Array<RefHit>>, isWriteTarget: Bool, macroEmit: Bool,
-		?skipped: Map<String, Int>
+		node: QueryNode, shape: RefShape, scopes: ScopeStack, out: Map<String, Array<RefHit>>, flags: WalkFlags, ?skipped: Map<String, Int>
 	): Void {
-		// Inside a macro-reification subtree (`opaqueKinds`, e.g. `macro { … }`) a
-		// plain identifier is a runtime emit spliced into generated code — NOT a
-		// reference to the enclosing scope — and a reified `var` is not a real
-		// binding. While in this `macroEmit` context suppress scope handling and
-		// ref emission; only a macro interpolation (`interpolationKinds`: `${…}` /
-		// `$v{…}`) re-opens normal resolution for its own subtree, where an
-		// identifier IS a genuine compile-time reference.
-		final frame: Null<ScopeFrame> = frameFor(node, shape, macroEmit, out);
+		// Inside a macro-reification subtree a plain identifier is a runtime emit spliced into
+		// generated code — NOT a reference to the enclosing scope — and a reified `var` is not a
+		// real binding, so this context suppresses scope handling and ref emission alike. Where the
+		// context begins and ends is `childContext`'s answer.
+		final macroEmit: Bool = flags.has(WalkFlags.MacroEmit);
+		final frame: Null<ScopeFrame> = frameFor(node, shape, macroEmit, out, scopes);
 		if (frame != null) scopes.push(frame);
 		if (!macroEmit) {
 			final nname: Null<String> = node.name;
@@ -181,9 +198,9 @@ final class Refs {
 				if (hits != null) {
 					final span: Null<Span> = node.span;
 					if (span != null) {
-						final kind: Null<RefKind> = classify(node.kind, shape, isWriteTarget);
+						final kind: Null<RefKind> = classify(node.kind, shape, flags);
 						if (kind != null) {
-							final bindingSpan: Null<Span> = kind == RefKind.Decl ? span : scopes.resolveInnermost(nname);
+							final bindingSpan: Null<Span> = kind == RefKind.Decl ? span : scopes.resolveInnermost(nname, span.from);
 							hits.push(new RefHit(kind, nname, span, bindingSpan, isInterpRead(node.kind, shape)));
 						} else if (skipped != null && isMemberAccess(node.kind, shape))
 							skipped[nname] = (skipped[nname] ?? 0) + 1;
@@ -191,18 +208,36 @@ final class Refs {
 				}
 			}
 		}
-		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
-		final interpolationKinds: Array<String> = shape.interpolationKinds ?? [];
-		final childMacroEmit: Bool = opaqueKinds.contains(node.kind) || (!interpolationKinds.contains(node.kind) && macroEmit);
 		final isWriteParent: Bool = shape.writeParentKinds.contains(node.kind);
+		final childFlags: WalkFlags = childContext(node, shape, flags);
 		final children: Array<QueryNode> = node.children;
-		for (i in 0...children.length) walkMulti(children[i], shape, scopes, out, isWriteParent && i == 0, childMacroEmit, skipped);
+		for (i in 0...children.length)
+			walkMulti(children[i], shape, scopes, out, childFlags.with(WalkFlags.WriteTarget, isWriteParent && i == 0), skipped);
 		if (frame != null) scopes.pop();
 	}
 
 	/**
-	 * The scope frame `node` opens, primed with the declarations it binds, or null when it opens none.
-	 * Three kinds open one:
+	 * The context every child of `node` inherits, given the context `node` itself was walked in.
+	 *
+	 * `MacroEmit` enters at a reification (`opaqueKinds`, e.g. `macro { … }`), where a plain
+	 * identifier is a runtime emit spliced into generated code rather than a reference to the
+	 * enclosing scope; only a macro interpolation (`interpolationKinds`: `${…}` / `$v{…}`) re-opens
+	 * normal resolution for its own subtree.
+	 *
+	 * `InTypeAnnotation` enters at a type annotation and never leaves it — the interior stays
+	 * READABLE (a metadata argument there is a real reference), but nothing in it DECLARES.
+	 */
+	private static function childContext(node: QueryNode, shape: RefShape, flags: WalkFlags): WalkFlags {
+		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
+		final interpolationKinds: Array<String> = shape.interpolationKinds ?? [];
+		final macroEmit: Bool = opaqueKinds.contains(node.kind)
+			|| (!interpolationKinds.contains(node.kind) && flags.has(WalkFlags.MacroEmit));
+		final inTypeAnnotation: Bool = flags.has(WalkFlags.InTypeAnnotation) || isTypeAnnotation(node.kind, shape);
+		return flags.with(WalkFlags.MacroEmit, macroEmit).with(WalkFlags.InTypeAnnotation, inTypeAnnotation);
+	}
+
+	/**
+	 * The scope frame `node` opens, primed with the declarations it binds, or null when it opens none. Three kinds open one:
 	 *
 	 * - a grammar `scopeKinds` node — a real lexical scope, which also binds its OWN name when it is a
 	 *   `selfScopeDeclKinds` host (a `for` iterator, a catch-clause exception);
@@ -226,7 +261,9 @@ final class Refs {
 	 * Only the branch-aware projection carries the kind, so a plain parse frames byte-identically to
 	 * before.
 	 */
-	private static function frameFor(node: QueryNode, shape: RefShape, macroEmit: Bool, out: Map<String, Array<RefHit>>): Null<ScopeFrame> {
+	private static function frameFor(
+		node: QueryNode, shape: RefShape, macroEmit: Bool, out: Map<String, Array<RefHit>>, scopes: ScopeStack
+	): Null<ScopeFrame> {
 		if (macroEmit) return null;
 		final isScope: Bool = shape.scopeKinds.contains(node.kind);
 		// A switch ARM frames its own body (`branchScopeKinds`): a local declared there dies at the
@@ -235,14 +272,41 @@ final class Refs {
 		// not a declaration to this walker at all; it projects as a plain identifier read.)
 		final branchKinds: Null<Array<String>> = shape.branchScopeKinds;
 		final isBranchScope: Bool = branchKinds != null && branchKinds.contains(node.kind);
-		if (!isScope && !isBranchScope && node.kind != CondBranchProjection.COND_BRANCH_KIND) return null;
-		final frame: ScopeFrame = new ScopeFrame(node);
+		final isCondBranch: Bool = node.kind == CondBranchProjection.COND_BRANCH_KIND;
+		if (!isScope && !isBranchScope && !isCondBranch) return null;
+		// A `CondBranch` overlays the frame it sits in rather than containing anything, so it borrows
+		// that frame's visibility policy — see `ScopeStack.currentPositionScoped`.
+		final posKinds: Null<Array<String>> = shape.positionScopedKinds;
+		final positionScoped: Bool = isCondBranch ? scopes.currentPositionScoped() : posKinds != null && posKinds.contains(node.kind);
+		final frame: ScopeFrame = new ScopeFrame(node, positionScoped, headerFloor(node, shape, positionScoped));
 		collectDeclsMulti(node, shape, frame, out);
 		final selfSpan: Null<Span> = node.span;
 		final selfName: Null<String> = node.name;
 		if (isScope && selfSpan != null && selfName != null && out.exists(selfName) && shape.selfScopeDeclKinds.contains(node.kind))
-			frame.declare(selfName, selfSpan);
+			frame.declare(selfName, selfSpan, visibleFrom(node, selfSpan, shape, positionScoped));
 		return frame;
+	}
+
+	/**
+	 * `ScopeFrame.visibleFloor` for the frame `node` opens: the start of its BODY when the
+	 * construct both binds a name and spells a HEADER inside its own span, else `0`.
+	 *
+	 * The constructs are exactly the `selfScopeDeclKinds` ones — a `for`, a catch clause: they
+	 * bind into the frame they open, so `visibleFrom` answers their own span start and would put
+	 * the binding in scope across the header too. Measured against the compiler: `for (i in 0...i)`
+	 * iterates over the OUTER `i`, and renaming that outer binding must therefore rewrite the
+	 * `0...i` operand. A catch clause carries no expression in its header today, which is why it
+	 * never showed the defect; the floor makes that safety structural instead of incidental.
+	 *
+	 * The body is the LAST child in all three projections (`ForStmt` / `ForExpr` / `CatchClause`) —
+	 * the key-value binder and the iterable precede it.
+	 */
+	private static function headerFloor(node: QueryNode, shape: RefShape, positionScoped: Bool): Int {
+		if (!positionScoped || !shape.selfScopeDeclKinds.contains(node.kind)) return 0;
+		final children: Array<QueryNode> = node.children;
+		if (children.length == 0) return 0;
+		final body: Null<Span> = children[children.length - 1].span;
+		return body == null ? 0 : body.from;
 	}
 
 	private static function collectDeclsMulti(
@@ -252,23 +316,95 @@ final class Refs {
 	}
 
 	private static function collectIntoMulti(node: QueryNode, shape: RefShape, frame: ScopeFrame, out: Map<String, Array<RefHit>>): Void {
-		final name: Null<String> = node.name;
+		// A TYPE annotation binds nothing, however much its ctors look like declarations — an
+		// anonymous structure spells its field labels on the parameter / field ctors. Without this
+		// stop a field's `{p:Int}` declares `p` into the CLASS frame, shadowing the real member for
+		// every method of the type. See the `Refs` seam on `RefShape.typeAnnotationKinds`.
+		if (isTypeAnnotation(node.kind, shape)) return;
 		// A switch arm's declarations belong to ITS frame, not this one — stop, exactly as at a
 		// nested scope. `CondBranch` is deliberately absent: a `#if` branch's declaration stays
 		// visible past `#end`, so the enclosing frame must still adopt it.
 		final branchKinds: Null<Array<String>> = shape.branchScopeKinds;
 		if (shape.scopeKinds.contains(node.kind) || (branchKinds != null && branchKinds.contains(node.kind))) {
-			if (name != null && out.exists(name) && shape.declHostKinds.contains(node.kind)) {
-				final span: Null<Span> = node.span;
-				if (span != null) frame.declare(name, span);
-			}
+			declareIfHost(node, shape, frame, out);
 			return;
 		}
-		if (name != null && out.exists(name) && shape.declHostKinds.contains(node.kind)) {
-			final span: Null<Span> = node.span;
-			if (span != null) frame.declare(name, span);
-		}
+		declareIfHost(node, shape, frame, out);
 		for (c in node.children) collectIntoMulti(c, shape, frame, out);
+	}
+
+	/**
+	 * Bind `node`'s own name into `frame` when it hosts a declaration of one of the searched
+	 * names, at the offset from which the frame lets a reference see it.
+	 */
+	private static function declareIfHost(node: QueryNode, shape: RefShape, frame: ScopeFrame, out: Map<String, Array<RefHit>>): Void {
+		final name: Null<String> = node.name;
+		if (name == null || !out.exists(name) || !shape.declHostKinds.contains(node.kind)) return;
+		final span: Null<Span> = node.span;
+		if (span != null) frame.declare(name, span, visibleFrom(node, span, shape, frame.positionScoped));
+	}
+
+	/**
+	 * The source offset from which a reference resolves to `node`'s binding within the frame it
+	 * is declared in.
+	 *
+	 * A hoisting frame answers `0`: every reference in a type body sees every member of it,
+	 * which is what lets a method read a field declared further down.
+	 *
+	 * A position-scoped frame answers where the binding takes effect, and that is NOT simply the
+	 * declaration's start:
+	 *
+	 * - a declaration that opens a scope of its OWN — a local `function`, a nested type — is
+	 *   visible from its start, because the scope it opens lies inside its span and the binding
+	 *   must be reachable there: a local function recurses;
+	 * - any other declaration is visible only past its own end, so its initializer still reads
+	 *   the enclosing binding of the same name (`var x = x;` binds the outer `x` — measured
+	 *   against the compiler, not assumed);
+	 * - except that a multi-binding list (`var a = 1, b = a;`) carries its later bindings as
+	 *   CONTINUATION children inside the first one's span, and those do see it. The answer is
+	 *   then the first continuation child's start, which is past the first initializer and
+	 *   before every later one.
+	 */
+	private static function visibleFrom(node: QueryNode, span: Span, shape: RefShape, positionScoped: Bool): Int {
+		if (!positionScoped) return 0;
+		if (shape.scopeKinds.contains(node.kind)) return span.from;
+		final continuationKinds: Null<Array<String>> = shape.localDeclContinuationKinds;
+		if (continuationKinds != null) for (c in node.children) if (continuationKinds.contains(c.kind)) {
+			final continuationSpan: Null<Span> = c.span;
+			if (continuationSpan != null) return continuationSpan.from;
+		}
+		return span.to;
+	}
+
+}
+
+/**
+ * The context `Refs.walkMulti` carries down the tree, as one bit set.
+ *
+ * Three independent booleans that all propagate to children and are all `Bool`. As three adjacent positional parameters a transposition at the call site compiles clean and silently
+ * mis-walks the whole tree; as one value it is unrepresentable. The abstract IS an `Int`, so
+ * the walker's hottest signature gets cheaper rather than dearer.
+ */
+enum abstract WalkFlags(Int) from Int to Int {
+
+	/** Nothing set — the walk's entry state. */
+	final None = 0;
+
+	/** The node sits at child-index 0 of a `RefShape.writeParentKinds` ctor: an assignment target. */
+	final WriteTarget = 1;
+
+	/** Inside a `RefShape.opaqueKinds` reification, where an identifier is emitted code, not a reference. */
+	final MacroEmit = 2;
+
+	/** Inside a `RefShape.typeAnnotationKinds` subtree, where a decl-host ctor spells a field LABEL. */
+	final InTypeAnnotation = 4;
+
+	public inline function has(flag: WalkFlags): Bool {
+		return this & (flag: Int) != 0;
+	}
+
+	public inline function with(flag: WalkFlags, on: Bool): WalkFlags {
+		return on ? this | (flag: Int) : this & ~(flag: Int);
 	}
 
 }

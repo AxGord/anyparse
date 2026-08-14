@@ -346,6 +346,46 @@ typedef RefShape = {
 	@:optional var branchScopeKinds: Array<String>;
 
 	/**
+	 * Scope kinds whose declarations take effect only from their own position in the source
+	 * onward, instead of for the whole frame — a function body, a block, a `switch` arm. A
+	 * reference that PRECEDES such a declaration binds to whatever was in effect there, which
+	 * for most languages is what the compiler does with a local: it is not hoisted.
+	 *
+	 * A TYPE body must NOT be listed. Members ARE forward-visible there — a method may read a
+	 * field declared below it and the compiler binds it — so a type frame stays hoisting.
+	 *
+	 * The field names the NON-hoisting set rather than the hoisting one so that leaving it
+	 * unset is the pre-existing all-hoisting behaviour, and no grammar that has not been
+	 * audited changes. Naming the hoisting set would default to "nothing hoists", silently
+	 * un-resolving every forward reference to a type member in every other grammar — a
+	 * default that breaks by omission rather than by commission.
+	 *
+	 * Keyed by kind, not by which vocabulary declared the kind: an entry of `branchScopeKinds`
+	 * belongs here too when the construct is a statement list. Optional; unset hoists
+	 * everything, as before this field existed.
+	 *
+	 * KNOWN GAP, deliberately left open. A declaration written as the BRACE-LESS body of an
+	 * `if` / `while` / `do` / `try` (and of an `else` — see `OrphanElseStmt`) still binds into
+	 * the enclosing frame, where the compiler scopes it to the construct. Wrong, and harmless:
+	 * such a declaration is dead by construction — it IS the whole body, so nothing can read it
+	 * — and the construct occurs ZERO times in ~20 300 real Haxe files (TM 805, this repo 691,
+	 * haxelib 16 182, Haxe std 2 624).
+	 *
+	 * Both mechanisms that would close it cost more than the defect. Listing the constructs in
+	 * `scopeKinds` widens a vocabulary ~15 checks read as "lexical container of a declaration",
+	 * and merges the two arms of `if (c) var a = 1; else var a = 2;` into one frame. Capping the
+	 * body slot inside `Refs` was built and measured: on the same ~20 300 files it fired twice,
+	 * both times WRONGLY — a real braced `untyped { … }` block (`UntypedBlockStmt`, absent from
+	 * `scopeKinds`) had its declarations split one frame apart (`std/js/_std/Reflect.hx`,
+	 * `std/flash/_std/haxe/Resource.hx`), and a multi-statement `#if` region in a body slot took
+	 * the whole region as the body, because the plain tree folds every branch into ONE
+	 * `Conditional` with no branch boundary to take the first statement of. The second has no fix
+	 * at this layer; it needs the branch-aware projection, whose reachability from `Refs.find` on
+	 * the `rename` / `CrossRename` / CLI paths is unestablished.
+	 */
+	@:optional var positionScopedKinds: Array<String>;
+
+	/**
 	 * Run-scoped reference-resolution cache. A caching plugin wrapper attaches its
 	 * per-run `RefsCache` here so `Refs.find` resolves against a memoized full-file
 	 * index instead of walking the tree per query. Optional — a bare grammar shape
@@ -721,6 +761,22 @@ typedef RefShape = {
 	 * function-type forms). `prefer-arrow-callback` excludes them when indexing call
 	 * arguments and uses them to spot a literal's return hint. Optional; unset makes
 	 * that check a no-op.
+	 *
+	 * SEAM: `Refs` reads it as "this subtree declares no VALUE binding". An anonymous-structure
+	 * type spells its field labels on the very ctors a parameter or a class field uses
+	 * (`{p:Int}` projects as `Anon(Required p)`), so without the gate every such annotation
+	 * declares its labels into the surrounding frame — the class frame for a field annotation,
+	 * poisoning every method of the type. A kind listed here must therefore host no real
+	 * binding — `ApqRefsTest.testEveryTypeAnnotationKindIsAGrammarTypeVariant` checks that, since
+	 * the invariant is stronger than what the other consumers need and would otherwise be prose.
+	 * References inside one are still reported: a metadata argument on an anon field
+	 * (`{ @:m(foo) var f:Int; }`) is a genuine identifier read.
+	 *
+	 * The gate is on EMISSION and on the enclosing frame's pre-collect, not on frame creation: a
+	 * scope opened INSIDE such a subtree would still prime itself, so a read there could carry a
+	 * `bindingSpan` naming a span that no `[decl]` row reports. Harmless (resolution is correct and
+	 * `rename` refuses the shape) and unreachable in the Haxe grammar, where no `scopeKinds` ctor
+	 * occurs under a type.
 	 */
 	@:optional var typeAnnotationKinds: Array<String>;
 

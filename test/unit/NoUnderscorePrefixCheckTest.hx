@@ -597,19 +597,23 @@ class NoUnderscorePrefixCheckTest extends Test {
 	}
 
 	/**
-	 * Attributing a local function's occurrences must start AT its declaration, not at the enclosing
-	 * block: Haxe does not hoist one, so a read BEFORE it binds to whatever it shadows - here the
-	 * parameter being renamed. Counting that read as the local function's would EXCLUDE it from the
-	 * completeness gate and emit `trace(_x)` against a parameter that no longer exists. `locals: false`
-	 * keeps the local function out of the candidate set, so the refusal must come from the attribution
-	 * window rather than from the two candidates claiming one target.
+	 * Attributing a local function's occurrences must start AT its declaration, not at the
+	 * enclosing block: Haxe does not hoist one, so a read BEFORE it binds to whatever it shadows
+	 * - here the parameter being renamed. That read is therefore part of the PARAMETER's
+	 * occurrence set and must be rewritten with it, while the call AFTER the declaration is the
+	 * local function's and must be left alone. Counting the read as the local function's excluded
+	 * it from the completeness gate, which refused the whole strip. `locals: false` keeps the
+	 * local function out of the candidate set, so both spans can only come from the attribution
+	 * window.
 	 */
-	public function testReadBeforeALocalFunctionStillBlocksAParameterStrip(): Void {
+	public function testAReadBeforeALocalFunctionIsRenamedWithTheParameter(): Void {
 		final src: String =
 			'package pkg;\nclass C {\n\tpublic function m(_x:Int):Void {\n\t\ttrace(_x);\n\t\tfunction _x():Void {}\n\t\t_x();\n\t}\n}';
 		final config: String = '{"rules":{"no-underscore-prefix":{"enabled":true,"params":true,"locals":false}}}';
 		Assert.equals(1, violations(src, config).length);
-		Assert.equals(0, edits(src, config).length);
+		// One fragment spanning all three lines: the read renamed with the parameter, the local
+		// function's own declaration and its call left alone. Neither half can pass on its own.
+		assertFixed(src, ['m(x:Int)', '\t\ttrace(x);\n\t\tfunction _x():Void {}\n\t\t_x();'], ['_x:Int', 'trace(_x)'], config);
 	}
 
 	/**
@@ -694,8 +698,8 @@ class NoUnderscorePrefixCheckTest extends Test {
 	}
 
 	/** Canonicalize the check's edits for `src` and assert every `present` fragment appears and every `absent` one does not. */
-	private function assertFixed(src: String, present: Array<String>, absent: Array<String>): Void {
-		final applied: Array<{ span: Span, text: String }> = edits(src);
+	private function assertFixed(src: String, present: Array<String>, absent: Array<String>, ?config: String): Void {
+		final applied: Array<{ span: Span, text: String }> = edits(src, config);
 		Assert.isTrue(applied.length > 0);
 		switch RefactorSupport.canonicalize(src, applied, true, new HaxeQueryPlugin()) {
 			case Ok(text):

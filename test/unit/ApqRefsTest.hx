@@ -7,6 +7,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.runtime.Span;
+import anyparse.grammar.haxe.HxType;
 
 using StringTools;
 using Lambda;
@@ -412,6 +413,209 @@ class ApqRefsTest extends Test {
 		if (boundTo != null) Assert.equals(field.span.from, boundTo.from, 'method-body read resolves to class field');
 	}
 
+	/**
+	 * A local is not hoisted, so every occurrence BEFORE its declaration binds to what encloses the
+	 * frame - here the class field. Ground truth for this exact shape: with `n` a `(default, set)`
+	 * property, compiling it prints the setter running twice and the `return` yielding the property's
+	 * `0`, never the local's `9`.
+	 */
+	public function testOccurrencesBeforeALaterLocalBindToTheField(): Void {
+		final source: String = 'class X { var n:Int = 0; function f(a:Bool):Int { if (a) { n = 1; return n; } var n:Int = 9; return n; } }';
+		final hits: Array<RefHit> = findIn(source, 'n');
+		final localAt: Int = source.indexOf('var n:Int = 9');
+		final fieldDecl: Null<RefHit> = hits.find(h -> h.kind == RefKind.Decl && h.span.from < localAt);
+		final localDecl: Null<RefHit> = hits.find(h -> h.kind == RefKind.Decl && h.span.from >= localAt);
+		Assert.notNull(fieldDecl, 'field decl expected - got ${describe(hits)}');
+		Assert.notNull(localDecl, 'local decl expected - got ${describe(hits)}');
+		if (fieldDecl == null || localDecl == null) return;
+		for (h in hits) if (h.kind != RefKind.Decl && h.span.from < localAt) {
+			final boundTo: Null<Span> = h.bindingSpan;
+			Assert.notNull(boundTo, 'occurrence before the local must resolve - got ${describe(hits)}');
+			if (boundTo != null) Assert.equals(fieldDecl.span.from, boundTo.from, 'binds to the field - got ${describe(hits)}');
+		}
+		final trailing: Null<RefHit> = hits.find(h -> h.kind == RefKind.Read && h.span.from > localAt);
+		Assert.notNull(trailing, 'read after the local expected - got ${describe(hits)}');
+		if (trailing != null && trailing.bindingSpan != null)
+			Assert.equals(localDecl.span.from, trailing.bindingSpan.from, 'the read AFTER it binds to the local - got ${describe(hits)}');
+	}
+
+	/**
+	 * A local takes effect past its own initializer, so the initializer still reads the enclosing
+	 * binding of the same name. Measured: with a field `n = 3`, `var n:Int = n + 1; return n;`
+	 * returns 4.
+	 */
+	public function testALocalsOwnInitializerReadsTheEnclosingBinding(): Void {
+		final source: String = 'class X { var n:Int = 3; function f():Int { var n:Int = n + 1; return n; } }';
+		final hits: Array<RefHit> = findIn(source, 'n');
+		final localAt: Int = source.indexOf('var n:Int = n + 1');
+		final fieldDecl: Null<RefHit> = hits.find(h -> h.kind == RefKind.Decl && h.span.from < localAt);
+		final initRead: Null<RefHit> = hits.find(h -> h.kind == RefKind.Read && h.span.from < source.indexOf('return n'));
+		Assert.notNull(fieldDecl, 'field decl expected - got ${describe(hits)}');
+		Assert.notNull(initRead, 'initializer read expected - got ${describe(hits)}');
+		if (fieldDecl != null && initRead != null && initRead.bindingSpan != null)
+			Assert.equals(fieldDecl.span.from, initRead.bindingSpan.from, 'initializer reads the field - got ${describe(hits)}');
+	}
+
+	/**
+	 * The later bindings of a multi-`var` list sit INSIDE the first one's span, and they do see it:
+	 * measured, `var n:Int = 100, m:Int = n;` binds `m` to 100 while the enclosing field holds 3. So
+	 * the first binding takes effect at the continuation, not at the end of the whole statement.
+	 */
+	public function testAMultiVarContinuationSeesTheBindingBeforeIt(): Void {
+		final source: String = 'class X { var n:Int = 3; function f():Int { var n:Int = 100, m:Int = n; return m; } }';
+		final hits: Array<RefHit> = findIn(source, 'n');
+		final localDecl: Null<RefHit> = hits.find(h -> h.kind == RefKind.Decl && h.span.from > source.indexOf('function f'));
+		final continuationRead: Null<RefHit> = hits.find(h -> h.kind == RefKind.Read);
+		Assert.notNull(localDecl, 'local decl expected - got ${describe(hits)}');
+		Assert.notNull(continuationRead, 'continuation read expected - got ${describe(hits)}');
+		if (localDecl != null && continuationRead != null && continuationRead.bindingSpan != null)
+			Assert.equals(localDecl.span.from, continuationRead.bindingSpan.from, 'reads the local - got ${describe(hits)}');
+	}
+
+	/**
+	 * A declaration that opens a scope of its own is visible INSIDE it: a local function recurses.
+	 * The blanket "past its own end" rule would leave the recursive call unresolved.
+	 */
+	public function testALocalFunctionSeesItselfSoItCanRecurse(): Void {
+		final source: String = 'class X { function f():Int { function g(k:Int):Int return k <= 1 ? 1 : g(k - 1) * k; return g(4); } }';
+		final hits: Array<RefHit> = findIn(source, 'g');
+		final decl: Null<RefHit> = hits.find(h -> h.kind == RefKind.Decl);
+		final recursive: Null<RefHit> = hits.find(h -> h.kind == RefKind.Read && h.span.from < source.indexOf('return g(4)'));
+		Assert.notNull(decl, 'local fn decl expected - got ${describe(hits)}');
+		Assert.notNull(recursive, 'recursive read expected - got ${describe(hits)}');
+		if (decl == null || recursive == null) return;
+		final boundTo: Null<Span> = recursive.bindingSpan;
+		// NOT guarded by a null check: when the mechanism breaks the recursive read resolves to
+		// nothing, and a guard here would let the test pass on exactly the regression it exists for.
+		Assert.notNull(boundTo, 'the recursive call must RESOLVE - got ${describe(hits)}');
+		if (boundTo != null)
+			Assert.equals(decl.span.from, boundTo.from, 'the recursive call binds to the local fn - got ${describe(hits)}');
+	}
+
+	/**
+	 * A TYPE body hoists: a method may read a field declared BELOW it and the compiler binds it
+	 * (measured - the shape returns `later + 1`). Position-scoping must not reach a type frame.
+	 */
+	public function testATypeBodyStillHoistsItsMembers(): Void {
+		final source: String = 'class X { function f():Int return later + 1; var later:Int = 5; }';
+		final hits: Array<RefHit> = findIn(source, 'later');
+		final decl: Null<RefHit> = hits.find(h -> h.kind == RefKind.Decl);
+		final read: Null<RefHit> = hits.find(h -> h.kind == RefKind.Read);
+		Assert.notNull(decl, 'field decl expected - got ${describe(hits)}');
+		Assert.notNull(read, 'forward read expected - got ${describe(hits)}');
+		if (decl == null || read == null) return;
+		final boundTo: Null<Span> = read.bindingSpan;
+		// NOT guarded by a null check: position-scoping a TYPE body leaves this read unresolved,
+		// and a guard here would let the test pass on exactly the regression it exists for.
+		Assert.notNull(boundTo, 'the forward read must RESOLVE - got ${describe(hits)}');
+		if (boundTo != null) Assert.equals(decl.span.from, boundTo.from, 'the read above binds to the field below - got ${describe(hits)}');
+	}
+
+	/**
+	 * A `switch` arm is a position-scoped statement list like any other, so a read that precedes
+	 * an arm-local binds outward. Ground truth: with `n` a `(default, set)` property, an arm that
+	 * writes `n = 1` above its own `var n:Int = 5` calls the SETTER and then returns 5.
+	 *
+	 * Fails when `CaseBranch` / `DefaultBranch` leave `positionScopedKinds` — the arm frame then
+	 * hoists and the write re-acquires the defect inside every switch.
+	 */
+	public function testAWriteBeforeAnArmLocalBindsToTheField(): Void {
+		final source: String =
+			'class X { var n:Int = 0; function f(v:Int):Int { switch v { case 0: n = 1; var n:Int = 5; return n; case _: } return -1; } }';
+		final hits: Array<RefHit> = findIn(source, 'n');
+		final armLocalAt: Int = source.indexOf('var n:Int = 5');
+		final fieldDecl: Null<RefHit> = hits.find(h -> h.kind == RefKind.Decl && h.span.from < armLocalAt);
+		final write: Null<RefHit> = hits.find(h -> h.kind == RefKind.Write);
+		Assert.notNull(fieldDecl, 'field decl expected - got ${describe(hits)}');
+		Assert.notNull(write, 'the arm write expected - got ${describe(hits)}');
+		if (fieldDecl == null || write == null) return;
+		final boundTo: Null<Span> = write.bindingSpan;
+		Assert.notNull(boundTo, 'the write must RESOLVE - got ${describe(hits)}');
+		if (boundTo != null)
+			Assert.equals(fieldDecl.span.from, boundTo.from, 'the write above the arm-local binds to the field - got ${describe(hits)}');
+	}
+
+	/**
+	 * A `for` binder is NOT in scope in the loop's own HEADER. Ground truth: `var i = 3; for (i in
+	 * 0...i)` iterates three times, so `0...i` reads the OUTER `i` — and a rename of that outer
+	 * binding has to rewrite the range operand with it (measured: skipping it silently re-resolves
+	 * the range to a same-named field and changes the iteration count).
+	 *
+	 * The loop node's span covers the header as well as the body, so the binder's own span start
+	 * is the wrong answer; `ScopeFrame.visibleFloor` moves it to the body.
+	 */
+	public function testAForBinderIsNotInScopeInItsOwnHeader(): Void {
+		final source: String = 'class X { function f():Void { var i:Int = 3; for (i in 0...i) g(i); } }';
+		final hits: Array<RefHit> = findIn(source, 'i');
+		final outerDecl: Null<RefHit> = hits.find(h -> h.kind == RefKind.Decl && h.span.from < source.indexOf('for ('));
+		final binderDecl: Null<RefHit> = hits.find(h -> h.kind == RefKind.Decl && h.span.from >= source.indexOf('for ('));
+		final headerRead: Null<RefHit> = hits.find(h -> h.kind == RefKind.Read && h.span.from < source.indexOf('g(i)'));
+		final bodyRead: Null<RefHit> = hits.find(h -> h.kind == RefKind.Read && h.span.from > source.indexOf('g(i)'));
+		Assert.notNull(outerDecl, 'outer local decl expected - got ${describe(hits)}');
+		Assert.notNull(binderDecl, 'loop binder decl expected - got ${describe(hits)}');
+		Assert.notNull(headerRead, 'the `0...i` read expected - got ${describe(hits)}');
+		Assert.notNull(bodyRead, 'the body read expected - got ${describe(hits)}');
+		if (outerDecl == null || binderDecl == null || headerRead == null || bodyRead == null) return;
+		final headerBinding: Null<Span> = headerRead.bindingSpan;
+		final bodyBinding: Null<Span> = bodyRead.bindingSpan;
+		Assert.notNull(headerBinding, 'the header read must RESOLVE - got ${describe(hits)}');
+		Assert.notNull(bodyBinding, 'the body read must RESOLVE - got ${describe(hits)}');
+		if (headerBinding == null || bodyBinding == null) return;
+		Assert.equals(outerDecl.span.from, headerBinding.from, 'the header reads the OUTER binding - got ${describe(hits)}');
+		Assert.equals(binderDecl.span.from, bodyBinding.from, 'the body reads the loop binder - got ${describe(hits)}');
+	}
+
+	/**
+	 * The `Refs` seam on `RefShape.typeAnnotationKinds` carries a strictly stronger invariant than
+	 * its six other consumers need: not merely "this is a type annotation" but "this subtree
+	 * declares no value binding". A kind added there for another consumer's reason would silently
+	 * un-declare real bindings, and the invariant otherwise lives only in prose.
+	 *
+	 * Every listed kind must therefore be a variant of the grammar's TYPE enum, which is what makes
+	 * the subtree a type in the first place.
+	 */
+	public function testEveryTypeAnnotationKindIsAGrammarTypeVariant(): Void {
+		final listed: Null<Array<String>> = new HaxeQueryPlugin().refShape().typeAnnotationKinds;
+		Assert.notNull(listed, 'the Haxe shape must list its type-annotation kinds');
+		if (listed == null) return;
+		final typeVariants: Array<String> = Type.getEnumConstructs(HxType);
+		for (kind in listed)
+			Assert.isTrue(
+				typeVariants.contains(kind), '"$kind" is not an HxType variant, so its subtree is not a type: ${typeVariants.join(', ')}'
+			);
+	}
+
+	/**
+	 * An anonymous-structure TYPE spells its field labels on the very ctors a parameter or a field
+	 * uses, so without a gate `f(o:{p:Int})` would declare `p` into the function frame and capture
+	 * the method's read of the member. The label is neither a declaration nor a reference.
+	 */
+	public function testAnonTypeFieldLabelNeitherDeclaresNorCaptures(): Void {
+		final source: String = 'class X { var p:Int = 0; function f(o:{p:Int}):Int return p; }';
+		final hits: Array<RefHit> = findIn(source, 'p');
+		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(1, decls.length, 'only the member declares p - got ${describe(hits)}');
+		Assert.equals(1, reads.length, 'one read expected - got ${describe(hits)}');
+		if (decls.length == 1 && reads.length == 1 && reads[0].bindingSpan != null)
+			Assert.equals(decls[0].span.from, reads[0].bindingSpan.from, 'the read binds to the member - got ${describe(hits)}');
+	}
+
+	/**
+	 * The same leak on a FIELD annotation, where it is worst: the anon sits in the CLASS frame, so
+	 * its label would shadow the member for every method of the type.
+	 */
+	public function testAnonTypeFieldLabelInAFieldAnnotationDoesNotPoisonTheClassFrame(): Void {
+		final source: String = 'class X { var p:Int = 0; var shape:{p:Int}; function f():Int return p; }';
+		final hits: Array<RefHit> = findIn(source, 'p');
+		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		Assert.equals(1, decls.length, 'only the member declares p - got ${describe(hits)}');
+		final read: Null<RefHit> = hits.find(h -> h.kind == RefKind.Read);
+		Assert.notNull(read, 'method read expected - got ${describe(hits)}');
+		if (decls.length == 1 && read != null && read.bindingSpan != null)
+			Assert.equals(decls[0].span.from, read.bindingSpan.from, 'the read binds to the member - got ${describe(hits)}');
+	}
+
 	public function testBareAssignClassifiedAsWrite(): Void {
 		// `x = 1` — LHS is a direct IdentExpr child of Assign → Write.
 		final source: String = 'class X { static function f():Void { var x:Int = 0; x = 1; } }';
@@ -741,6 +945,74 @@ class ApqRefsTest extends Test {
 	}
 
 	/**
+	 * An `enum abstract` body is a type body like any other: a member may read a sibling member by
+	 * bare name. `EnumAbstractDecl` opened no frame at all, so the read resolved to nothing.
+	 *
+	 * Ground truth: `enum abstract EA(Int) to Int { final A = 1; final B = A + 1; }` compiles and
+	 * `(EA.B : Int)` prints 2.
+	 */
+	public function testEnumAbstractMemberResolvesASiblingMember(): Void {
+		final source: String = 'enum abstract EA(Int) to Int { final A = 1; final B = A + 1; }';
+		final hits: Array<RefHit> = findIn(source, 'A');
+		Assert.equals('${source.indexOf('A + 1')}->${source.indexOf('final A')}', bindings(hits), 'got ${describe(hits)}');
+	}
+
+	/**
+	 * And it HOISTS, so a member may read one declared BELOW it. Measured:
+	 * `enum abstract EA(Int) to Int { final A = B + 1; final B = 1; }` compiles and prints `A` as 2.
+	 */
+	public function testEnumAbstractMembersHoist(): Void {
+		final source: String = 'enum abstract EA(Int) to Int { final A = B + 1; final B = 1; }';
+		final hits: Array<RefHit> = findIn(source, 'B');
+		Assert.equals('${source.indexOf('B + 1')}->${source.indexOf('final B')}', bindings(hits), 'got ${describe(hits)}');
+	}
+
+	/**
+	 * The frame confines as well as it resolves: a sibling type in the same module sees nothing of
+	 * the enum abstract's members by bare name (`EA.A` is a member access, which `refs` never binds).
+	 * Asserted together with the in-body resolution so the string cannot be satisfied by the frame
+	 * being absent - without it the FIRST half reads `->none` too.
+	 */
+	public function testEnumAbstractMembersDoNotLeakToASiblingType(): Void {
+		final source: String = 'enum abstract EA(Int) { final A = 1; final B = A + 1; }\nclass X { function f():Int return A; }';
+		final hits: Array<RefHit> = findIn(source, 'A');
+		final expected: String =
+			'${source.indexOf('A + 1')}->${source.indexOf('final A')} ${source.indexOf('return A') + 'return '.length}->none';
+		Assert.equals(expected, bindings(hits), 'got ${describe(hits)}');
+	}
+
+
+	/**
+	 * A BRACED control-flow body scopes its declaration to the block frame: an inner read resolves
+	 * to it, and the read after the construct belongs to the field. Asserted as one string so the
+	 * inner half cannot be satisfied while the outer half regresses.
+	 */
+	public function testABracedIfBodyKeepsItsOwnBlockFrame(): Void {
+		final source: String =
+			'class X { static var x:Int = 60; static function f(c:Bool):Int { if (c) { var x:Int = 1; g(x); } return x; } }';
+		final hits: Array<RefHit> = findIn(source, 'x');
+		final inner: Int = source.indexOf('var x:Int = 1');
+		final field: Int = source.indexOf('var x:Int = 60');
+		final expected: String = '${source.indexOf('g(x)') + 2}->$inner ${source.indexOf('return x') + 'return '.length}->$field';
+		Assert.equals(expected, bindings(hits), 'got ${describe(hits)}');
+	}
+
+
+	/**
+	 * A `for` confines its brace-less body through its OWN frame (`scopeKinds` +
+	 * `selfScopeDeclKinds`), and must keep doing it: it is one of the two constructs on the right
+	 * side of the brace-less-body gap recorded on `RefShape.positionScopedKinds`.
+	 */
+	public function testAForLoopStillConfinesItsBracelessBody(): Void {
+		assertBracelessBodyConfines('for (i in 0...1) var x:Int = 1;');
+	}
+
+	/** And a `catch` clause the same, through its own `selfScopeDeclKinds` frame - the other one. */
+	public function testACatchClauseStillConfinesItsBracelessBody(): Void {
+		assertBracelessBodyConfines('try g() catch (e:Any) var x:Int = 1;');
+	}
+
+	/**
 	 * Two sibling local functions declared with `keyword` bind their same-named parameters
 	 * separately. Shared by the plain and the `inline` form: the grammar gives them different
 	 * ctors (`LocalFnStmt` / `LocalInlineFnStmt`) but identical binding semantics, and every
@@ -784,6 +1056,17 @@ class ApqRefsTest extends Test {
 		Assert.equals(decls[0].span.from, reads[0].bindingSpan?.from, 'the call must bind to the $keyword declaration');
 	}
 
+	/**
+	 * `body` is a control-flow construct that opens a frame of its OWN and declares a brace-less local `x` over a field of the same name. Asserts, as ONE string, that both the occurrence inside the construct and the read AFTER it belong to the FIELD - pairing the two keeps the assertion from passing on a shape where nothing resolved at all.
+	 */
+	private function assertBracelessBodyConfines(body: String): Void {
+		final source: String = 'class X { static var x:Int = 60; static function f(c:Bool):Int { $body g(x); return x; } }';
+		final hits: Array<RefHit> = findIn(source, 'x');
+		final field: Int = source.indexOf('var x:Int = 60');
+		final expected: String = '${source.indexOf('g(x)') + 2}->$field ${source.indexOf('return x') + 'return '.length}->$field';
+		Assert.equals(expected, bindings(hits), 'got ${describe(hits)}');
+	}
+
 	private static function findIn(source: String, name: String): Array<RefHit> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: QueryNode = plugin.parseFile(source);
@@ -806,6 +1089,21 @@ class ApqRefsTest extends Test {
 			final b: Null<Span> = h.bindingSpan;
 			return b == null ? base : '$base->bind@${b.from}-${b.to}';
 		}).join(', ') + ']';
+	}
+
+	/**
+	 * `<read offset>-><binding offset>` for every non-decl hit, in document order.
+	 *
+	 * One string naming BOTH ends of every resolution the shape produced. An assertion on it cannot be
+	 * satisfied by a hit that failed to resolve (which spells `->none`) nor by one that resolved to a
+	 * different declaration, so it discriminates where a `notNull` + `equals` pair on a single hit
+	 * found by a predicate can silently match the wrong hit or none at all.
+	 */
+	private static function bindings(hits: Array<RefHit>): String {
+		return hits.filter(h -> h.kind != RefKind.Decl).map(h -> {
+			final b: Null<Span> = h.bindingSpan;
+			return b == null ? '${h.span.from}->none' : '${h.span.from}->${b.from}';
+		}).join(' ');
 	}
 
 	/** 0-based-agnostic line index of a byte offset in `s` — fixture-local helper. */

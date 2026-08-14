@@ -149,6 +149,80 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	];
 
 	/**
+	 * Scope kinds whose declarations ARE forward-visible - the type bodies. A method may read a
+	 * field declared below it and the compiler binds it, so these frames hoist.
+	 *
+	 * `final class` projects as `FinalDecl(ClassForm …)` and `abstract class` as
+	 * `AbstractClassDecl`; both hold instance fields whose bare (non-`this`) references resolve
+	 * only if the class body opens a scope frame.
+	 *
+	 * `enum abstract` gets its own ctor rather than reusing `AbstractDecl`, so it needs its own
+	 * entry. Its members hoist like any other type body's: `final A = B + 1; final B = 1;`
+	 * compiles and evaluates `A` to 2 — measured, not assumed.
+	 */
+	private static final HOISTING_SCOPE_KINDS: Array<String> = [
+		'ClassDecl',
+		'ClassForm',
+		'AbstractClassDecl',
+		'InterfaceDecl',
+		'AbstractDecl',
+		'EnumAbstractDecl',
+		'EnumDecl',
+		'TypedefDecl',
+	];
+
+	/**
+	 * Scope kinds whose declarations take effect only from their own position onward - every
+	 * construct above whose body is a statement list or a parameter list. Haxe hoists neither a
+	 * local `var` nor a local `function` (a call before its declaration is `Unknown identifier`),
+	 * so a reference that precedes one binds to whatever encloses it: the member of the same
+	 * name, most often.
+	 *
+	 * `CatchClause` is surfaced by `appendNodes` from the `@:spanned('CatchClause')` paired
+	 * struct; it opens a scope (the clause body) and self-binds the exception name into that
+	 * frame (see `selfScopeDeclKinds`).
+	 *
+	 * A local `function f(...) {...}` statement opens its own frame - without it sibling local
+	 * fns' same-named params collect into the ENCLOSING function's frame and reads mis-bind
+	 * across siblings (the CallGraph `span` collision). `inline function` is the same construct
+	 * with the keyword folded into its own ctor, and it is the form this project's Haxe style
+	 * prescribes for a local helper - the two must never diverge HERE. They deliberately do
+	 * diverge in `functionKinds` / `localFunctionKinds` below, which measure complexity units
+	 * rather than scopes; a consumer that wants the scope reading unions `inlineFunctionKinds`
+	 * back in - there are several, so enumerate them with
+	 * `hxq mentions inlineFunctionKinds src/` rather than trusting a list here.
+	 *
+	 * A parameter needs no entry of its own: a function frame pre-collects only its own params
+	 * (the walk stops at the body's `BlockBody`), so they stay visible to the whole body while
+	 * the body's own declarations become position-scoped.
+	 */
+	private static final POSITION_SCOPED_SCOPE_KINDS: Array<String> = [
+		'FnDecl',
+		'FnExpr',
+		'FnMember',
+		'FinalModifiedMember',
+		'LocalFnStmt',
+		'LocalInlineFnStmt',
+		'ThinParenLambdaExpr',
+		'ParenLambdaExpr',
+		'BlockBody',
+		'BlockExpr',
+		'BlockStmt',
+		'ForStmt',
+		'ForExpr',
+		'CatchClause',
+	];
+
+	/**
+	 * The `switch` arms - see `RefShape.branchScopeKinds`. Position-scoped like any other
+	 * statement list, so they join `positionScopedKinds` too; kept apart from
+	 * `POSITION_SCOPED_SCOPE_KINDS` because an arm is NOT a `scopeKinds` entry (a dozen checks
+	 * read that vocabulary as "lexical container of a declaration", which an arm is not).
+	 */
+	private static final BRANCH_SCOPE_KINDS: Array<String> = ['CaseBranch', 'DefaultBranch'];
+
+
+	/**
 	 * The value-position hosts a conditional chain may be rewritten inside. Shared so
 	 * `switchExpressionHostKinds` and `ifExpressionChainHostKinds` (which adds the
 	 * arrow-lambda bodies) cannot drift: a new value host is added here once and both
@@ -448,50 +522,18 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			underlyingThisTypeKinds: ['AbstractDecl', 'EnumAbstractDecl'],
 			declHostKinds: DECL_HOST_KINDS,
 			// A `switch` arm confines the locals declared in it — see `RefShape.branchScopeKinds`.
-			branchScopeKinds: ['CaseBranch', 'DefaultBranch'],
+			branchScopeKinds: BRANCH_SCOPE_KINDS,
+
 			// `package a.b;` / `import c.d.E;` are dotted module paths, not references.
 			modulePathKinds: ['PackageDecl', 'ImportDecl'],
-			// `CatchClause` is surfaced by `appendNodes` from the
-			// `@:spanned('CatchClause')` paired struct; it opens a scope
-			// (the clause body) and self-binds the exception name into
-			// that frame (see `selfScopeDeclKinds`).
-			scopeKinds: [
-				'ClassDecl',
-				// `final class` projects as `FinalDecl(ClassForm …)` and `abstract class`
-				// as `AbstractClassDecl`; both hold instance fields whose bare (non-`this`)
-				// references resolve only if the class body opens a scope frame here.
-				'ClassForm',
-				'AbstractClassDecl',
-				'InterfaceDecl',
-				'AbstractDecl',
-				'EnumDecl',
-				'TypedefDecl',
-				'FnDecl',
-				'FnExpr',
-				'FnMember',
-				'FinalModifiedMember',
-				// A local `function f(...) {...}` statement opens its own frame —
-				// without it sibling local fns' same-named params collect into the
-				// ENCLOSING function's frame and reads mis-bind across siblings
-				// (the CallGraph `span` collision). `inline function` is the same
-				// construct with the keyword folded into its own ctor, and it is the
-				// form this project's Haxe style prescribes for a local helper - the
-				// two must never diverge HERE. They deliberately do diverge in
-				// `functionKinds` / `localFunctionKinds` below, which measure complexity
-				// units rather than scopes; a consumer that wants the scope reading unions
-				// `inlineFunctionKinds` back in - there are several, so enumerate them with
-				// `hxq mentions inlineFunctionKinds src/` rather than trusting a list here.
-				'LocalFnStmt',
-				'LocalInlineFnStmt',
-				'ThinParenLambdaExpr',
-				'ParenLambdaExpr',
-				'BlockBody',
-				'BlockExpr',
-				'BlockStmt',
-				'ForStmt',
-				'ForExpr',
-				'CatchClause',
-			],
+			// Every lexical scope, hoisting ones first. The two halves are named separately so
+			// `positionScopedKinds` below is their difference by construction rather than by hand:
+			// a kind added to one list can no longer go missing from the other.
+			scopeKinds: HOISTING_SCOPE_KINDS.concat(POSITION_SCOPED_SCOPE_KINDS),
+			// The non-hoisting half of `scopeKinds`, plus the `switch` arms — which are
+			// position-scoped statement lists too, but live in `branchScopeKinds` rather than
+			// `scopeKinds`. `RefShape.positionScopedKinds` is keyed by kind, not by vocabulary.
+			positionScopedKinds: POSITION_SCOPED_SCOPE_KINDS.concat(BRANCH_SCOPE_KINDS),
 			writeParentKinds: ASSIGN_KINDS.concat(['PreIncr', 'PreDecr', 'PostIncr', 'PostDecr']),
 			// Self-scoped decl kinds: scope-introducers whose own name binds
 			// into the frame they open (the for-loop iterator pattern). Listed
