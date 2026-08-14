@@ -8,6 +8,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import haxe.Exception;
 
 /**
  * Flags an `if` / `else if` / … / `else` chain whose EVERY branch is the SAME call differing in
@@ -36,8 +37,36 @@ import anyparse.runtime.Span;
  * A 2-branch `if`/`else` IS claimed here (unlike the assignment family, which reserves it for the
  * ternary rule) because the ternary handoff happens downstream instead: this rule always emits the
  * if-EXPRESSION form, and `prefer-ternary-expression` then rewrites a 2-branch one to `c ? a : b`.
- * The `--fix` driver loops to a fixed point, so one `lint --fix` run reaches the ternary; splitting
- * the shape across two rules here would only duplicate the ternary assembly.
+ * The `--fix` driver loops to a fixed point, so one `lint --fix` run reaches the ternary;
+ * splitting the shape across two rules here would only duplicate the ternary assembly.
+ *
+ * In VALUE position the two rules match the SAME span, and `Cli.computeFileLintEdits` keeps the
+ * edit of whichever check comes FIRST in `Linter.builtins()` -- the ternary -- which would write
+ * the callee TWICE and settle there. `claims` below is the handoff that prevents it: the ternary
+ * rule asks before rewriting a 2-branch if-EXPRESSION and declines when this rule owns the chain.
+ * The downstream ternary still happens, one pass later, on the single call left behind.
+ *
+ * ## Positions
+ *
+ * BOTH `if` positions are claimed: the STATEMENT chain (`if (c) f(x); else f(y);`) and the value
+ * chain an if-EXPRESSION heads (`final e = if (c) f(x) else f(y);`, `return if (c) …`, an argument
+ * slot). One `IfPosition` per claimed kind set drives the walk, so the two share every gate and
+ * differ in exactly two places.
+ *
+ * The first is what a BRANCH may be. A statement branch is unwrapped through `exprStatementKind`
+ * (and `blockStmtKind` for the braced form); a value branch IS the call expression, with no
+ * statement to unwrap. A BRACED value branch is therefore out of scope: it parses as a block
+ * EXPRESSION, which `blockStmtKind` does not name, so the site refuses cleanly. That kind is
+ * perfectly nameable -- `ControlFlowSupport.blockKinds()` carries `BlockExpr`, and a dozen sibling
+ * checks read it -- so this is an UNCLAIMED shape, not an unreachable one; claiming it would mean
+ * unwrapping a second block seam here.
+ *
+ * The second is the TERMINATOR, which belongs to whichever NODE owns it. An `if` STATEMENT owns
+ * its own `;`, so the rebuilt text re-emits one. An if-EXPRESSION does not: it is a child of the
+ * `final` / `return` / argument node that owns the `;`, so the rebuild must not add a second. The
+ * expression's own SPAN is no guide to this -- like every expression span it runs on through the
+ * trailing trivia, and can even cover a comment written past the last branch value, which
+ * `droppedComment` catches and refuses the site over.
  *
  * ## What is flagged
  *
@@ -45,8 +74,9 @@ import anyparse.runtime.Span;
  *
  * - else-nesting terminates in a plain `else` -- a chain with no final `else` leaves the argument
  *   with no value on the missing path (`IfExpressionChain.collect`);
- * - every branch AND the terminal is a single call STATEMENT (a bare `f(…);` or a braced
- *   `{ f(…); }` wrapping one) carrying at least one argument. A multi-statement block is
+ * - every branch AND the terminal is a single call carrying at least one argument -- a call
+ *   STATEMENT in statement position (a bare `f(…);` or a braced `{ f(…); }` wrapping one), a bare
+ *   call EXPRESSION in value position (see `## Positions` above). A multi-statement block is
  *   deliberately grouped and never collapsed, and a branch that assigns, returns or does anything
  *   but call is not this rule's shape;
  * - all the calls have the same argument count and a TEXTUALLY IDENTICAL callee
@@ -93,7 +123,8 @@ import anyparse.runtime.Span;
  * genuinely cannot unify is caught by the compiler, or by the oracle when one is configured.
  *
  * Needs `ifStatementKinds`, `exprStatementKind`, `blockStmtKind` and `callKind`; any unset makes
- * the check a no-op. The purity context additionally needs a symbol index -- without one the check
+ * the check a no-op. `ifExpressionKinds` is OPTIONAL -- unset, only the statement position is
+ * claimed. The purity context additionally needs a symbol index -- without one the check
  * reports nothing rather than guessing.
  */
 @:nullSafety(Strict)
@@ -146,11 +177,45 @@ final class JoinBranchCall implements Check {
 		if (ctx == null) return [];
 		final resolved: Ctx = ctx;
 		final edits: Array<{ span: Span, text: String }> =
-			CheckScan.applyBySpan(plugin, source, violations, seams.ifKinds, (node, span) -> {
-				final m: Null<Match> = match(node, resolved);
-				return m == null ? null : { span: span, text: buildText(m) };
+			CheckScan.applyBySpan(plugin, source, violations, [for (kind in seams.byKind.keys()) kind], (node, span) -> {
+				final pos: Null<IfPosition> = positionOf(node, resolved.seams);
+				// The index was built from `byKind`'s own keys, so every node reaching here has one.
+				if (pos == null) throw new Exception('join-branch-call: no claimed position for indexed kind ${node.kind}');
+				final m: Null<Match> = match(node, resolved, pos);
+				return m == null ? null : { span: span, text: buildText(m, pos) };
 			});
 		return RefactorSupport.dropContainedEdits(edits);
+	}
+
+	/**
+	 * Whether THIS rule claims the value-position chain headed by `head` -- its branches are the
+	 * same call differing in exactly one argument, so it will emit the single-call form.
+	 *
+	 * `prefer-ternary-expression` asks before rewriting a 2-branch if-EXPRESSION, because both rules
+	 * match that span and only one edit survives: `Cli.computeFileLintEdits` keeps whichever check
+	 * comes FIRST in `Linter.builtins()`, and the ternary is earlier. Without this handoff the user
+	 * saw two contradictory advisories on one span, and `--fix` wrote the callee TWICE
+	 * (`a ? log(1) : log(2)`) -- the very duplication this rule exists to remove, and a fixed point
+	 * no later rule reclaims (`prefer-if-expression-chain` needs three values). Mirrors
+	 * `PreferSwitchExpression.claims`, which `prefer-if-expression-chain` consults the same way, and
+	 * inherits its one caveat: the handoff does not know whether THIS rule is enabled, so a config
+	 * that disables `join-branch-call` also costs the ternary on these spans.
+	 *
+	 * Takes the caller's ALREADY-PARSED tree and comment list: this runs per candidate, and parsing
+	 * the file again each time would be quadratic. The symbol index stays behind `symbols` and is
+	 * forced only once every structural gate has passed, which on a 2-branch ternary candidate is
+	 * rare -- both branches must be calls of one textually identical callee.
+	 */
+	public static function claims(
+		plugin: GrammarPlugin, source: String, root: QueryNode, head: QueryNode, comments: Array<{ from: Int, to: Int, isLine: Bool }>,
+		symbols: () -> Null<SymbolIndex>
+	): Bool {
+		final seams: Null<Seams> = readSeams(plugin);
+		if (seams == null) return false;
+		final resolved: Seams = seams;
+		final pos: Null<IfPosition> = positionOf(head, resolved);
+		if (pos == null || pos.statement) return false;
+		return match(head, ctxOn(plugin, source, root, comments, resolved, symbols), pos) != null;
 	}
 
 	/** The source text of `span`. */
@@ -161,20 +226,34 @@ final class JoinBranchCall implements Check {
 	/** Bundle the required `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
-		final ifKinds: Null<Array<String>> = shape.ifStatementKinds;
-		if (ifKinds == null || ifKinds.length == 0) return null;
+		final stmtKinds: Array<String> = shape.ifStatementKinds ?? [];
+		if (stmtKinds.length == 0) return null;
 		final exprStmtKind: Null<String> = shape.exprStatementKind;
 		if (exprStmtKind == null) return null;
 		final blockStmtKind: Null<String> = shape.blockStmtKind;
 		if (blockStmtKind == null) return null;
 		final callKind: Null<String> = shape.callKind;
-		return callKind == null ? null : {
-			ifKinds: ifKinds,
+		if (callKind == null) return null;
+		final positions: Array<IfPosition> = [{ kinds: stmtKinds, statement: true }];
+		final valueKinds: Array<String> = shape.ifExpressionKinds ?? [];
+		if (valueKinds.length > 0) positions.push({ kinds: valueKinds, statement: false });
+		final byKind: Map<String, IfPosition> = [];
+		// FIRST position wins. A grammar naming one kind in BOTH lists would otherwise get the value
+		// position for a statement chain and lose its `;`; Haxe's two sets are disjoint, so this is
+		// a guard against a future grammar rather than a live case.
+		for (p in positions) for (kind in p.kinds) if (!byKind.exists(kind)) byKind[kind] = p;
+		return {
+			byKind: byKind,
 			exprStmtKind: exprStmtKind,
 			blockStmtKind: blockStmtKind,
 			callKind: callKind,
 			conditionalKinds: IfExpressionChain.conditionalKinds(shape)
 		};
+	}
+
+	/** The claimed `if` position `node` heads a chain in, or null when its kind heads none. */
+	private static function positionOf(node: QueryNode, s: Seams): Null<IfPosition> {
+		return s.byKind[node.kind];
 	}
 
 	/**
@@ -186,14 +265,25 @@ final class JoinBranchCall implements Check {
 	 */
 	private static function contextOf(plugin: GrammarPlugin, source: String, seams: Seams, symbols: () -> Null<SymbolIndex>): Null<Ctx> {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return null;
-		final root: QueryNode = tree;
+		return tree == null ? null : ctxOn(plugin, source, tree, RefactorSupport.collectCommentTokens(source), seams, symbols);
+	}
+
+	/**
+	 * The same context over an ALREADY-parsed tree and comment list. `claims` answers for a foreign
+	 * check mid-walk, where re-parsing the file per candidate would be quadratic -- so the two entry
+	 * points share ONE context builder rather than one of them growing a second lazy-purity closure
+	 * that could drift from this one.
+	 */
+	private static function ctxOn(
+		plugin: GrammarPlugin, source: String, root: QueryNode, comments: Array<{ from: Int, to: Int, isLine: Bool }>, seams: Seams,
+		symbols: () -> Null<SymbolIndex>
+	): Ctx {
 		var purity: Null<PurityCtx> = null;
 		var built: Bool = false;
 		return {
 			root: root,
 			source: source,
-			comments: RefactorSupport.collectCommentTokens(source),
+			comments: comments,
 			seams: seams,
 			purity: () -> {
 				if (!built) {
@@ -208,9 +298,10 @@ final class JoinBranchCall implements Check {
 
 	/** Walk `node`, flagging each chain HEAD whose branches are the same call differing in one argument. */
 	private static function walk(node: QueryNode, out: Array<Violation>, file: String, ctx: Ctx, ?parent: QueryNode): Void {
-		if (ctx.seams.ifKinds.contains(node.kind) && !IfExpressionChain.isElseIfLink(node, parent, ctx.seams.ifKinds)) {
+		final pos: Null<IfPosition> = positionOf(node, ctx.seams);
+		if (pos != null && !IfExpressionChain.isElseIfLink(node, parent, pos.kinds)) {
 			final span: Null<Span> = node.span;
-			if (span != null && match(node, ctx) != null) out.push({
+			if (span != null && match(node, ctx, pos) != null) out.push({
 				file: file,
 				span: span,
 				rule: RULE_ID,
@@ -226,20 +317,20 @@ final class JoinBranchCall implements Check {
 	 * whose hoisted parts and conditions are pure, and no comment sits in a dropped region, return
 	 * the copied text parts; else null.
 	 */
-	private static function match(head: QueryNode, ctx: Ctx): Null<Match> {
+	private static function match(head: QueryNode, ctx: Ctx, pos: IfPosition): Null<Match> {
 		final s: Seams = ctx.seams;
-		final chain: Null<IfChain> = IfExpressionChain.collect(head, s.ifKinds, s.blockStmtKind, MIN_CHAIN_BRANCHES);
+		final chain: Null<IfChain> = IfExpressionChain.collect(head, pos.kinds, s.blockStmtKind, MIN_CHAIN_BRANCHES);
 		if (chain == null) return null;
 		final calls: Array<QueryNode> = [];
 		for (b in chain.branches) {
 			// A NON-terminal branch value that ends an expression OPEN would absorb the ` else `
 			// emitted after it, re-parenting the rest of the chain onto it -- output that parses.
 			if (IfExpressionChain.holdsElseLessConditional(b.stmt, s.conditionalKinds)) return null;
-			final call: Null<QueryNode> = callIn(b.stmt, s);
+			final call: Null<QueryNode> = callIn(b.stmt, s, pos);
 			if (call == null) return null;
 			calls.push(call);
 		}
-		final terminal: Null<QueryNode> = callIn(chain.terminal, s);
+		final terminal: Null<QueryNode> = callIn(chain.terminal, s, pos);
 		if (terminal == null) return null;
 		calls.push(terminal);
 		final first: QueryNode = calls[0];
@@ -256,14 +347,21 @@ final class JoinBranchCall implements Check {
 	}
 
 	/**
-	 * The single call a branch statement holds -- a bare `f(…);` or a braced `{ f(…); }` wrapping
-	 * one -- carrying at least one argument. Null when the branch is anything else.
+	 * The single call a branch holds, carrying at least one argument. In STATEMENT position that is
+	 * a bare `f(…);` or a braced `{ f(…); }` wrapping one; in VALUE position the branch IS the call
+	 * expression, with no statement to unwrap -- so a braced value branch, which parses as a block
+	 * EXPRESSION rather than the `blockStmtKind` this unwraps through, falls through to null (an
+	 * out-of-scope shape, not an unreachable one -- see the class doc). Null for anything else.
 	 */
-	private static function callIn(stmt: QueryNode, s: Seams): Null<QueryNode> {
+	private static function callIn(stmt: QueryNode, s: Seams, pos: IfPosition): Null<QueryNode> {
+		if (!pos.statement) return callWithArguments(stmt, s);
 		final inner: QueryNode = stmt.kind == s.blockStmtKind && stmt.children.length == 1 ? stmt.children[0] : stmt;
-		if (inner.kind != s.exprStmtKind || inner.children.length != 1) return null;
-		final call: QueryNode = inner.children[0];
-		return call.kind == s.callKind && call.children.length > CALLEE_INDEX + 1 ? call : null;
+		return inner.kind != s.exprStmtKind || inner.children.length != 1 ? null : callWithArguments(inner.children[0], s);
+	}
+
+	/** `node` itself when it is a call carrying at least one argument, else null. */
+	private static function callWithArguments(node: QueryNode, s: Seams): Null<QueryNode> {
+		return node.kind == s.callKind && node.children.length > CALLEE_INDEX + 1 ? node : null;
 	}
 
 	/**
@@ -329,16 +427,34 @@ final class JoinBranchCall implements Check {
 		};
 	}
 
-	/** Build the `receiver.method(if (c1) v1 else if (c2) v2 … else vN);` text replacing the whole head-`if` span. */
-	private static function buildText(m: Match): String {
-		return '${m.prefix}${IfExpressionChain.buildValue(m.pairs, m.terminal)}${m.suffix};';
+	/**
+	 * Build the `receiver.method(if (c1) v1 else if (c2) v2 … else vN)` text replacing the whole
+	 * head-`if` span. The `;` is appended only in STATEMENT position, because the terminator
+	 * belongs to whichever NODE owns it: an `if` statement owns its own, while an if-EXPRESSION is a
+	 * child of the `final` / `return` / argument node that owns the `;`.
+	 */
+	private static function buildText(m: Match, pos: IfPosition): String {
+		final terminator: String = pos.statement ? ';' : '';
+		return '${m.prefix}${IfExpressionChain.buildValue(m.pairs, m.terminal)}${m.suffix}$terminator';
 	}
 
 }
 
+/**
+ * One `if` POSITION this rule claims: the kinds that head a chain there, and whether the rebuilt
+ * text owns its `;`. A statement chain owns its own terminator; an if-EXPRESSION does not --
+ * the `final` / `return` / argument node it is a child of owns that `;`.
+ */
+private typedef IfPosition = {
+	var kinds: Array<String>;
+	var statement: Bool;
+}
+
 /** The `RefShape` kinds `JoinBranchCall` reads, bundled once so the walkers take one argument. */
 private typedef Seams = {
-	var ifKinds: Array<String>;
+	/** Every claimed `if` kind mapped to the position it heads -- `positionOf` is one lookup, per node. */
+	var byKind: Map<String, IfPosition>;
+
 	var exprStmtKind: String;
 	var blockStmtKind: String;
 	var callKind: String;

@@ -64,6 +64,19 @@ import anyparse.runtime.Span;
  * matching `double-negation` / `comparison-to-boolean`: its interior is spliced code a
  * consumer may pattern-match on, not source a human reads.
  *
+ * ## Handoff to `join-branch-call`
+ *
+ * A 2-branch value `if` whose branches are the SAME call differing in one argument is BOTH this
+ * rule's shape and `join-branch-call`'s -- and only one of the two edits can survive, because
+ * `Cli.computeFileLintEdits` keeps whichever check comes first in `Linter.builtins()`, which is
+ * this one. Keeping it here writes the callee TWICE (`a ? log(1) : log(2)`) and settles there,
+ * since `prefer-if-expression-chain` needs three values to reclaim it. So `match` asks
+ * `JoinBranchCall.claims` and declines: that rule sinks the branching into the argument
+ * (`log(if (a) 1 else 2)`), and THIS rule takes the result on the next `--fix` pass, where the
+ * branch values are no longer calls. The same shape as `prefer-if-expression-chain` deferring to
+ * `PreferSwitchExpression.claims`. It costs the lazy symbol index `claims` may force -- only
+ * after every structural gate of that rule has passed, so effectively never.
+ *
  * The reported span is the whole `if`-expression.
  *
  * ## Autofix
@@ -104,8 +117,10 @@ final class PreferTernaryExpression implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin);
-		return seams == null ? [] : [
-			for (entry in files) for (m in collect(plugin, entry.source, seams))
+		if (seams == null) return [];
+		final resolveIndex: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		return [
+			for (entry in files) for (m in collect(plugin, entry.source, seams, resolveIndex))
 				{
 					file: entry.file,
 					span: m.span,
@@ -121,8 +136,9 @@ final class PreferTernaryExpression implements Check {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
+		final resolveIndex: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex([{ file: '', source: source }], plugin, index);
 		final byKey: Map<String, Match> = [];
-		for (m in collect(plugin, source, seams)) byKey['${m.span.from}:${m.span.to}'] = m;
+		for (m in collect(plugin, source, seams, resolveIndex)) byKey['${m.span.from}:${m.span.to}'] = m;
 		return RefactorSupport.dropContainedEdits(
 			CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: m.text }))
 		);
@@ -132,11 +148,19 @@ final class PreferTernaryExpression implements Check {
 	 * Every rewritable 2-branch value `if` in `source` (empty when it does not parse).
 	 * `run` and `fix` both go through it, so neither can encode a gate the other misses.
 	 */
-	private static function collect(plugin: GrammarPlugin, source: String, s: Seams): Array<Match> {
+	private static function collect(plugin: GrammarPlugin, source: String, s: Seams, resolveIndex: () -> Null<SymbolIndex>): Array<Match> {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
+		final root: QueryNode = tree;
 		final out: Array<Match> = [];
-		walk(tree, source, RefactorSupport.collectCommentTokens(source), s, out, null, 0);
+		walk(root, {
+			root: root,
+			source: source,
+			comments: RefactorSupport.collectCommentTokens(source),
+			seams: s,
+			plugin: plugin,
+			resolveIndex: resolveIndex
+		}, out, null, 0);
 		return out;
 	}
 
@@ -177,16 +201,13 @@ final class PreferTernaryExpression implements Check {
 	 * (`opaqueKinds`) is skipped wholesale, as the sibling rewrite rules do: its interior is
 	 * spliced code a consumer may pattern-match, not source anyone reads.
 	 */
-	private static function walk(
-		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, out: Array<Match>,
-		parent: Null<QueryNode>, childIndex: Int
-	): Void {
-		if (s.opaqueKinds.contains(node.kind)) return;
-		if (s.ifExprKinds.contains(node.kind) && slotAcceptsTernary(parent, childIndex, s)) {
-			final m: Null<Match> = match(node, source, comments, s);
+	private static function walk(node: QueryNode, scan: Scan, out: Array<Match>, parent: Null<QueryNode>, childIndex: Int): Void {
+		if (scan.seams.opaqueKinds.contains(node.kind)) return;
+		if (scan.seams.ifExprKinds.contains(node.kind) && slotAcceptsTernary(parent, childIndex, scan.seams)) {
+			final m: Null<Match> = match(node, scan);
 			if (m != null) out.push(m);
 		}
-		for (i in 0...node.children.length) walk(node.children[i], source, comments, s, out, node, i);
+		for (i in 0...node.children.length) walk(node.children[i], scan, out, node, i);
 	}
 
 	/**
@@ -211,23 +232,28 @@ final class PreferTernaryExpression implements Check {
 	 * welds the ternary's tail onto whatever comes next (`q` + `else` -> `qelse`, which still
 	 * PARSES, so the `--fix` validation gate would pass it).
 	 */
-	private static function match(
-		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams
-	): Null<Match> {
+	private static function match(node: QueryNode, scan: Scan): Null<Match> {
+		final s: Seams = scan.seams;
 		if (node.children.length != IF_ELSE_CHILD_COUNT) return null;
 		final condition: QueryNode = node.children[0];
 		final thenBranch: QueryNode = node.children[1];
 		final elseBranch: QueryNode = node.children[2];
 		if (!s.branchKinds.contains(thenBranch.kind) || !s.branchKinds.contains(elseBranch.kind)) return null;
+		// `join-branch-call` owns a chain whose branches are the SAME call differing in one
+		// argument: it writes the callee once, a ternary writes it twice. Both match this span and
+		// only one edit survives -- `Cli.computeFileLintEdits` keeps the earlier check in
+		// `Linter.builtins()` order, which is this one -- so the handoff has to happen here.
+		if (JoinBranchCall.claims(scan.plugin, scan.source, scan.root, node, scan.comments, scan.resolveIndex)) return null;
 		final span: Null<Span> = node.span;
 		final condSpan: Null<Span> = condition.span;
 		final thenSpan: Null<Span> = thenBranch.span;
 		final elseSpan: Null<Span> = elseBranch.span;
 		if (span == null || condSpan == null || thenSpan == null || elseSpan == null) return null;
-		if (IfExpressionChain.droppedComment(span, [condSpan, thenSpan, elseSpan], comments)) return null;
-		final cond: String = wrapCondition(source.substring(condSpan.from, condSpan.to), condition.kind, s.shape);
-		final thenSource: String = source.substring(thenSpan.from, thenSpan.to);
-		final elseSource: String = source.substring(elseSpan.from, elseSpan.to);
+		if (IfExpressionChain.droppedComment(span, [condSpan, thenSpan, elseSpan], scan.comments)) return null;
+		final src: String = scan.source;
+		final cond: String = wrapCondition(src.substring(condSpan.from, condSpan.to), condition.kind, s.shape);
+		final thenSource: String = src.substring(thenSpan.from, thenSpan.to);
+		final elseSource: String = src.substring(elseSpan.from, elseSpan.to);
 		return {
 			span: span,
 			editSpan: new Span(span.from, elseSpan.to),
@@ -259,4 +285,14 @@ private typedef Match = {
 	var span: Span;
 	var editSpan: Span;
 	var text: String;
+}
+
+/** The per-file walk state: the parsed tree, its source and comment tokens, the seams, and the lazy symbol index. */
+private typedef Scan = {
+	var root: QueryNode;
+	var source: String;
+	var comments: Array<{ from: Int, to: Int, isLine: Bool }>;
+	var seams: Seams;
+	var plugin: GrammarPlugin;
+	var resolveIndex: () -> Null<SymbolIndex>;
 }

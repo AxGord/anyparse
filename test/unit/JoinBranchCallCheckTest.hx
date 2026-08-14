@@ -1,13 +1,15 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.JoinBranchCall;
+import anyparse.check.Linter;
+import anyparse.check.PreferTernaryExpression;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `join-branch-call` check: an `if / else if / … / else` chain whose every branch is the SAME
@@ -18,11 +20,7 @@ import anyparse.runtime.Span;
 class JoinBranchCallCheckTest extends Test {
 
 	public function testChainFlagged(): Void {
-		final vs: Array<Violation> = violations(wrap('if (a) log(1);\n\t\telse if (b) log(2);\n\t\telse log(3);'));
-		Assert.equals(1, vs.length);
-		Assert.equals('join-branch-call', vs[0].rule);
-		Assert.equals(Severity.Info, vs[0].severity);
-		Assert.equals('these branch calls differ in one argument and can be a single call with an if-expression argument', vs[0].message);
+		assertOneFinding(wrap('if (a) log(1);\n\t\telse if (b) log(2);\n\t\telse log(3);'));
 	}
 
 	public function testFixThreeBranch(): Void {
@@ -137,12 +135,150 @@ class JoinBranchCallCheckTest extends Test {
 		Assert.equals(1, violations(wrap('if (a) log(1);\n\t\telse if (b) log(2);\n\t\telse if (c) log(3);\n\t\telse log(4);')).length);
 	}
 
+	/**
+	 * The VALUE position is claimed too. A branch value there is a bare call EXPRESSION rather than
+	 * a call statement, and the head span ends at the last branch value -- the enclosing declaration
+	 * owns the `;`.
+	 */
+	public function testValueChainFlagged(): Void {
+		assertOneFinding(wrap('final e = if (a) log(1) else if (b) log(2) else log(3);'));
+	}
+
+	/** The rebuilt value carries NO `;` -- the replaced span stops at the last branch value. */
+	public function testFixValueThreeBranch(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrap('final e = if (a) log(1) else if (b) log(2) else log(3);'));
+		Assert.equals(1, es.length);
+		Assert.equals('log(if (a) 1 else if (b) 2 else 3)', es[0].text);
+	}
+
+	public function testFixValueTwoBranch(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrap('final e = if (a) log(1) else log(2);'));
+		Assert.equals(1, es.length);
+		Assert.equals('log(if (a) 1 else 2)', es[0].text);
+	}
+
+	public function testValueChainInReturnFixed(): Void {
+		Assert.equals('${wrap('return log(if (a) 1 else 2);')}\n', applyFixOnce(wrap('return if (a) log(1) else log(2);')));
+	}
+
+	/** A chain nested as a call ARGUMENT is a value position like any other. */
+	public function testValueChainAsArgumentFixed(): Void {
+		Assert.equals('${wrap('f(g(if (a) 1 else 2));')}\n', applyFixOnce(wrap('f(if (a) g(1) else g(2));')));
+	}
+
+	/** End to end: the joined call lands AND the declaration keeps exactly one `;`. */
+	public function testApplyFixOnceValueChain(): Void {
+		final out: String = applyFixOnce(wrap('final e = if (a) log(1) else if (b) log(2) else log(3);'));
+		Assert.equals('${wrap('final e = log(if (a) 1 else if (b) 2 else 3);')}\n', out);
+	}
+
+	/** An else-less value chain leaves the argument with no value on the missing path. */
+	public function testElseLessValueChainNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('final e = if (a) log(1);')).length);
+	}
+
+	/**
+	 * A BRACED value branch parses as a `BlockExpr`, which is neither the call kind nor the block
+	 * STATEMENT kind, and no `blockExprKind` seam exists to unwrap it -- so the site refuses. A
+	 * deliberate boundary: the statement position collapses its braced form, the value position
+	 * does not.
+	 */
+	public function testBracedValueBranchNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('final e = if (a) { log(1); } else log(2);')).length);
+	}
+
+	/** The else-less-absorption guard reaches the value position too -- the kinds it scans union both. */
+	public function testElseLessConditionalInValueBranchNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('final e = if (q) log(if (p) 1) else log(2);')).length);
+	}
+
+	/** A condition that can WRITE would be observed by the hoisted reads only in the ORIGINAL order. */
+	public function testImpureConditionInValueChainNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('final e = if (reset()) log(1) else log(2);')).length);
+	}
+
+	public function testOneFindingPerValueChain(): Void {
+		Assert.equals(1, violations(wrap('final e = if (a) log(1) else if (b) log(2) else if (c) log(3) else log(4);')).length);
+	}
+
+	/**
+	 * The `;`-separated value chain -- the ONLY shape whose replaced span holds terminator tokens.
+	 * The parser absorbs each inner `;` into the branch it follows, so the rebuild drops them and
+	 * the enclosing declaration keeps the one that is really its own.
+	 */
+	public function testSemicolonSeparatedValueChainFixed(): Void {
+		Assert.equals(
+			'${wrap('final e = g(if (a) 1 else if (b) 2 else 3);')}\n',
+			applyFixOnce(wrap('final e = if (a) g(1); else if (b) g(2); else g(3);'))
+		);
+	}
+
+	/**
+	 * A value chain nested in a STATEMENT chain's branch: claiming both positions makes the two
+	 * overlap for the first time, and `RefactorSupport.dropContainedEdits` keeps only the outer.
+	 * The inner one is reclaimed by the next `--fix` pass.
+	 */
+	public function testNestedStatementAndValueChainsEmitOuterOnly(): Void {
+		final src: String = wrap('if (p) log(if (a) g(1) else g(2));\n\t\telse log(3);');
+		Assert.equals(2, violations(src).length);
+		final es: Array<{ span: Span, text: String }> = edits(src);
+		Assert.equals(1, es.length);
+		Assert.equals('log(if (p) if (a) g(1) else g(2) else 3);', es[0].text);
+	}
+
+	/** A comment past the last branch value is INSIDE the head span, so the fail-closed guard refuses. */
+	public function testTrailingCommentValueChainNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('final e = if (a) log(1) else log(2) /* tail */;')).length);
+	}
+
+	/**
+	 * The ordering contract, exercised through the DEFAULT rule set rather than `--rule` (which
+	 * force-enables and reorders, so it cannot see this). `prefer-ternary-expression` sits EARLIER
+	 * in `Linter.builtins()` and `Cli.computeFileLintEdits` keeps the earlier check's overlapping
+	 * edit -- so without `JoinBranchCall.claims` a 2-branch value chain drew TWO contradictory
+	 * advisories and `--fix` wrote the callee twice (`a ? log(1) : log(2)`).
+	 */
+	public function testTernaryDefersToThisRuleOnValueChain(): Void {
+		final src: String = wrap('final e = if (a) log(1) else log(2);');
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final claimed: Array<String> = [
+			for (check in Linter.builtins()) for (v in check.run(files, plugin))
+				if (v.rule == 'join-branch-call' || v.rule == 'prefer-ternary-expression') v.rule
+		];
+		Assert.equals('join-branch-call', claimed.join(','));
+	}
+
+	/** The 2-branch STATEMENT chain keeps the ternary handoff -- the value it emits is no longer a call. */
+	public function testStatementChainStillReachesTernary(): Void {
+		final joined: String = applyFixOnce(wrap('if (a) log(1);\n\t\telse log(2);'));
+		Assert.isTrue(joined.indexOf('log(if (a) 1 else 2);') != -1);
+		final after: Array<Violation> = new PreferTernaryExpression().run([{ file: 'C.hx', source: joined }], new HaxeQueryPlugin());
+		Assert.equals(1, after.length);
+	}
+
+	/** The VALUE arm reaches the ternary on the NEXT `--fix` pass, its branch values no longer calls. */
+	public function testValueChainStillReachesTernary(): Void {
+		final joined: String = applyFixOnce(wrap('final e = if (a) log(1) else log(2);'));
+		Assert.isTrue(joined.indexOf('log(if (a) 1 else 2);') != -1);
+		Assert.equals(1, new PreferTernaryExpression().run([{ file: 'C.hx', source: joined }], new HaxeQueryPlugin()).length);
+	}
+
 	/** Run `fix` and re-emit through the canonical writer -- the `lint --fix` path in one pass. */
 	private function applyFixOnce(src: String): String {
 		return switch RefactorSupport.canonicalize(src, edits(src), true, new HaxeQueryPlugin(), null) {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};
+	}
+
+	/** Assert `src` yields exactly ONE finding, carrying this rule's id, severity and message. */
+	private function assertOneFinding(src: String): Void {
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals('join-branch-call', vs[0].rule);
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.equals('these branch calls differ in one argument and can be a single call with an if-expression argument', vs[0].message);
 	}
 
 	/** Wrap a statement body in a minimal parseable class + method. */
