@@ -3287,27 +3287,39 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * `enclosingFunctionSubtree`, climbed OUT of a local `function <name>` whose own declaration
-	 * the cursor sits on — the scope a net keyed on `name` has to sweep.
+	 * The function subtree the same-name guards sweep - the one that OWNS `binding`.
 	 *
-	 * A local function IS a function subtree, so for a cursor anywhere on `function g() …` the
-	 * innermost containing function is that declaration itself, and a same-block net swept over
-	 * it sees only the BODY — never the sibling `function g()` two statements down that is the
-	 * whole reason the net exists. The binding lives in the block one level out, so the host is
-	 * the function enclosing THAT. Climbing repeats (a local `g` inside a local `g`) and always
-	 * widens, which is the safe direction: `sameBlockRedeclaration` recurses through everything
-	 * under the scope it is given, so a scope that is too wide can only over-refuse, never miss.
+	 * Those guards ask a question about the BINDING - is this name declared twice in one block? -
+	 * so the anchor is the binding's declaration, never the cursor. A read inside a nested local
+	 * function or lambda resolves to a binding declared in the OUTER function, and a cursor anchor
+	 * confines the sweep to that nested body, which holds no redeclaration: the guard passes and
+	 * the rename silently rebinds every reference that followed the second declaration.
+	 *
+	 * A local `function g` is declared in its PARENT's block while its own span contains that
+	 * declaration offset, so an anchor landing exactly on the function it names steps out one
+	 * level. Otherwise renaming `g` from its own declaration would sweep only its body and miss
+	 * the sibling `function g` two statements down. That is the climb the cursor anchor also needed,
+	 * now gated on the binding's identity instead of on its name.
+	 *
+	 * A binding no function owns is a TYPE MEMBER, for which `enclosingFunctionSubtree` answers the
+	 * whole tree. A block-local redeclaration cannot mis-bind a member's references - the duplicated
+	 * locals shadow the member and bind only to each other - so sweeping the module for one would
+	 * cost working renames and prove nothing (measured: 433 extra refusals across the installed
+	 * haxelib). Such a binding keeps the cursor's own function, which is what shipped.
+	 *
+	 * Every step widens, which is the safe direction: `sameBlockRedeclaration` recurses through
+	 * everything under the scope it is given, so a scope that is too wide can only over-refuse.
 	 */
-	public static function bindingHostSubtree(tree: QueryNode, cursor: Int, name: String, shape: RefShape): QueryNode {
+	public static function bindingHostSubtree(tree: QueryNode, cursor: Int, binding: Null<Int>, shape: RefShape): QueryNode {
+		final cursorHost: QueryNode = enclosingFunctionSubtree(tree, cursor, shape);
+		if (binding == null) return cursorHost;
+		final host: QueryNode = enclosingFunctionSubtree(tree, binding, shape);
+		if (host == tree) return cursorHost;
 		final localFnKinds: Array<String> = (shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
-		var scope: QueryNode = enclosingFunctionSubtree(tree, cursor, shape);
-		while (scope.name == name && localFnKinds.contains(scope.kind)) {
-			final parent: Null<QueryNode> = parentOf(tree, scope);
-			final parentSpan: Null<Span> = parent?.span;
-			if (parentSpan == null) return tree;
-			scope = enclosingFunctionSubtree(tree, parentSpan.from, shape);
-		}
-		return scope;
+		final span: Null<Span> = host.span;
+		if (span == null || span.from != binding || !localFnKinds.contains(host.kind)) return host;
+		final parentSpan: Null<Span> = parentOf(tree, host)?.span;
+		return parentSpan == null ? tree : enclosingFunctionSubtree(tree, parentSpan.from, shape);
 	}
 
 	/**

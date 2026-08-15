@@ -278,11 +278,12 @@ final class Rename {
 	 *    of the same name is correctly ignored;
 	 *  - an escape-spelled `${ … }` hole, which the rescan synthesizes WITHOUT a parsed
 	 *    expression: a read of the name inside it is invisible to every scan, so the rename would
-	 *    part-apply. Scoped to the cursor's enclosing function subtree, since the hole's contents
-	 *    cannot be attributed to a binding at all;
+	 *    part-apply. Scoped to the function that OWNS the binding, since the hole's contents cannot
+	 *    be attributed to a binding at all;
 	 *  - `oldName` declared MORE THAN ONCE in one block (Haxe-legal re-declaration, reached
 	 *    through a metadata wrapper too) — the index mis-binds the references that follow the
-	 *    second declaration. Same function-subtree scope: a local cannot be referenced outside it.
+	 *    second declaration. Same owning-function scope: a local cannot be referenced outside it, and
+	 *    a CURSOR anchor would confine the sweep to a nested local function the read sits in.
 	 *
 	 * All three refusals are deliberately conservative: a false positive costs a manual rename, a
 	 * false negative silently changes behaviour.
@@ -290,10 +291,11 @@ final class Rename {
 	private static function sameNameBlindSpot(
 		source: String, tree: QueryNode, cursor: Int, occurrences: Array<Span>, oldName: String, plugin: GrammarPlugin, shape: RefShape
 	): Null<String> {
-		final scope: QueryNode = RefactorSupport.bindingHostSubtree(tree, cursor, oldName, shape);
 		final cursorNode: Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
 		final hits: Array<RefHit> = cursorNode == null ? [] : Refs.find(oldName, tree, shape);
 		final binding: Null<Int> = cursorNode == null ? null : RefactorSupport.resolveBindingFrom(cursorNode, hits);
+		final scope: QueryNode = RefactorSupport.bindingHostSubtree(tree, cursor, binding, shape);
+
 		if (binding != null) {
 			final stray: Null<Span> = RefactorSupport.unrewrittenInterpRead(hits, binding, occurrences);
 			if (stray != null) {

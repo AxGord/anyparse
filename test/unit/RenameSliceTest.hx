@@ -516,6 +516,67 @@ class RenameSliceTest extends Test {
 		assertRename(src, 3, 7, 'total', expected);
 	}
 
+	/**
+	 * A read of `v` inside a nested local `function k` binds to the OUTER `v`, which `f`
+	 * declares twice - the shape this guard exists for. Anchored on the CURSOR the sweep was
+	 * confined to `k`'s body, which holds no redeclaration, so the rename went through: it
+	 * rewrote the trailing `trace(v)` and left `var v = 9` behind, and the program silently
+	 * printed the FIRST value there. Anchored on the resolved BINDING it refuses.
+	 */
+	public function testNestedLocalFunctionReadOfRedeclaredOuterLocalRefused(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar v = 1;\n\t\ttrace(v);\n\t\tfunction k()\n\t\t\ttrace(v);\n'
+			+ '\t\tk();\n\t\tvar v = 9;\n\t\ttrace(v);\n\t}\n}';
+		assertRenameErr(src, 6, 10, 'w', 'declared more than once in the block at 8:3');
+	}
+
+	/**
+	 * The same nesting with NO redeclaration renames from the nested cursor. Asserted on the
+	 * whole program, which carries both halves: the outer `var w = 1` the cursor never sat on,
+	 * and the nested `trace(w)` it did.
+	 */
+	public function testNestedLocalFunctionReadStillRenamesWithoutRedeclaration(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar v = 1;\n\t\ttrace(v);\n\t\tfunction k()\n\t\t\ttrace(v);\n'
+			+ '\t\tk();\n\t\ttrace(v);\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar w = 1;\n\t\ttrace(w);\n\t\tfunction k()\n\t\t\ttrace(w);\n'
+			+ '\t\tk();\n\t\ttrace(w);\n\t}\n}';
+		assertRename(src, 6, 10, 'w', expected);
+	}
+
+	/**
+	 * The nested function's OWN local shadows the duplicated outer name. That binding is owned by
+	 * `k`, which declares it once, so the rename proceeds and touches only `k`'s two occurrences.
+	 * Asserted on the whole program: `var w = 5` inside `k` next to both surviving outer `var v`.
+	 */
+	public function testNestedFunctionOwnLocalRenamesDespiteOuterRedeclaration(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar v = 1;\n\t\ttrace(v);\n\t\tfunction k() {\n\t\t\tvar v = 5;\n'
+			+ '\t\t\ttrace(v);\n\t\t}\n\t\tk();\n\t\tvar v = 9;\n\t\ttrace(v);\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar v = 1;\n\t\ttrace(v);\n\t\tfunction k() {\n\t\t\tvar w = 5;\n'
+			+ '\t\t\ttrace(w);\n\t\t}\n\t\tk();\n\t\tvar v = 9;\n\t\ttrace(v);\n\t}\n}';
+		assertRename(src, 6, 4, 'w', expected);
+	}
+
+	/** A LAMBDA body is the same blind spot as a named local function, and refuses the same way. */
+	public function testLambdaReadOfRedeclaredOuterLocalRefused(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar v = 1;\n\t\ttrace(v);\n\t\tvar g = () -> trace(v);\n'
+			+ '\t\tg();\n\t\tvar v = 9;\n\t\ttrace(v);\n\t}\n}';
+		assertRenameErr(src, 5, 23, 'w', 'declared more than once in the block at 7:3');
+	}
+
+	/**
+	 * A binding no function owns - a FIELD - keeps the cursor's own function as the sweep scope.
+	 * A local `b` declared twice in ANOTHER method shadows the field and binds only to itself, so
+	 * it says nothing about the field's occurrences; sweeping the whole module for it would refuse
+	 * this rename for nothing. Asserted on the whole program: the field and its read become `q`
+	 * while both `var b` in `g` stay.
+	 */
+	public function testFieldReadRenameIgnoresLocalRedeclarationElsewhere(): Void {
+		final src: String = 'class C {\n\tvar b:Int = 3;\n\tfunction f():Void {\n\t\ttrace(b);\n\t\tg();\n\t}\n'
+			+ '\tfunction g():Void {\n\t\tvar b = 1;\n\t\ttrace(b);\n\t\tvar b = 2;\n\t\ttrace(b);\n\t}\n}';
+		final expected: String = 'class C {\n\tvar q:Int = 3;\n\tfunction f():Void {\n\t\ttrace(q);\n\t\tg();\n\t}\n'
+			+ '\tfunction g():Void {\n\t\tvar b = 1;\n\t\ttrace(b);\n\t\tvar b = 2;\n\t\ttrace(b);\n\t}\n}';
+		assertRename(src, 4, 9, 'q', expected);
+	}
+
 	private function assertRename(source: String, line: Int, col: Int, newName: String, expected: String): Void {
 		final result: RenameResult = renameOf(source, line, col, newName);
 		switch result {
