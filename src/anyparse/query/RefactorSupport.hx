@@ -214,15 +214,32 @@ private typedef GuardedCtorInit = {
 @:nullSafety(Strict)
 final class RefactorSupport {
 
-	public static final FIELD_MEMBER_KINDS: Array<String> = [
+	/**
+	 * DATA-field member kinds — a member that HOLDS a value rather than a function body.
+	 * Separated from the function kinds because several questions are only meaningful for
+	 * one half: a language may forbid an instance data field where it allows an instance
+	 * method (Haxe's `abstract`), and a move that carries a data field carries its
+	 * initializer while a moved method carries none.
+	 */
+	public static final DATA_FIELD_KINDS: Array<String> = [
 		'VarMember',
 		'FinalMember',
-		'FnMember',
-		'FinalModifiedMember',
 		'VarField',
 		'FinalField',
-		'FnField',
 	];
+
+	/**
+	 * Every member kind a type body can declare that is not a constructor — the data
+	 * fields above plus the function forms. Built from `DATA_FIELD_KINDS` so the two are
+	 * each other's complement by construction: a kind added to one can no longer go
+	 * missing from the other. Its name reads narrower than it is; `isDataFieldKind` is
+	 * the test for the data half alone.
+	 */
+	public static final FIELD_MEMBER_KINDS: Array<String> = DATA_FIELD_KINDS.concat([
+		'FnMember',
+		'FinalModifiedMember',
+		'FnField',
+	]);
 
 	/**
 	 * Function-declaration kinds — class methods (`FnMember`, plus the
@@ -418,6 +435,11 @@ final class RefactorSupport {
 	/** Is `kind` a class-member declaration (field / method)? */
 	public static inline function isFieldMemberKind(kind: String): Bool {
 		return FIELD_MEMBER_KINDS.contains(kind);
+	}
+
+	/** Is `kind` a member that HOLDS a value — a data field rather than a method? */
+	public static inline function isDataFieldKind(kind: String): Bool {
+		return DATA_FIELD_KINDS.contains(kind);
 	}
 
 	/**
@@ -4788,6 +4810,38 @@ final class RefactorSupport {
 		for (i in 1...ordered.length) if (ordered[i].span.from < ordered[i - 1].span.to)
 			return Err('the nodes to remove share a line — removing them together would delete more than the two');
 		return canonicalize(source, kept, reformat, plugin, optsJson);
+	}
+
+
+	/**
+	 * Every identifier a `case` pattern in `tree` BINDS — the pattern wrapper is a case
+	 * branch's first child. Sibling case-branch captures flatten into ONE scope frame, so a
+	 * member sharing a capture's name can be mis-attributed by the resolver; the member
+	 * operations refuse a rename or a move when the member name is in this set.
+	 *
+	 * An identifier the LANGUAGE cannot bind as a pattern variable is left out: it is a
+	 * reference to a constant, and counting it as a capture refused every rename of an
+	 * `enum abstract` value that its own type spells in a `switch`. Governed by
+	 * `RefShape.upperInitialNeverCaptures`; unset keeps every pattern identifier.
+	 */
+	public static function casePatternCaptures(tree: QueryNode, shape: RefShape): Array<String> {
+		final out: Array<String> = [];
+		final identKind: String = shape.identKind;
+		final caseBranchKind: Null<String> = shape.caseBranchKind;
+		if (caseBranchKind == null) return out;
+		final skipUpperInitial: Bool = shape.upperInitialNeverCaptures == true;
+		function walkPattern(node: QueryNode): Void {
+			final name: Null<String> = node.name;
+			if (node.kind == identKind && name != null && !(skipUpperInitial && isUpperInitial(name)) && !out.contains(name))
+				out.push(name);
+			for (c in node.children) walkPattern(c);
+		}
+		function walk(node: QueryNode): Void {
+			if (node.kind == caseBranchKind && node.children.length > 0) walkPattern(node.children[0]);
+			for (c in node.children) walk(c);
+		}
+		walk(tree);
+		return out;
 	}
 
 }

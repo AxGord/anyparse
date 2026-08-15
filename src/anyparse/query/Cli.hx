@@ -1381,7 +1381,7 @@ final class Cli {
 	private static function cursorOnMemberDecl(source: String, line: Int, col: Int, plugin: GrammarPlugin): Bool {
 		return try {
 			final tree: QueryNode = plugin.parseFile(source);
-			CrossRenameMember.isMemberDeclAtCursor(tree, Span.offsetOf(source, line, col), source);
+			CrossRenameMember.isMemberDeclAtCursor(tree, Span.offsetOf(source, line, col), source, plugin.refShape());
 		} catch (exception: Exception) false;
 	}
 

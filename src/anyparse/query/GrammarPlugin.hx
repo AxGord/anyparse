@@ -386,6 +386,33 @@ typedef RefShape = {
 	@:optional var positionScopedKinds: Array<String>;
 
 	/**
+	 * Type-declaration kinds whose DATA members are static WITHOUT carrying the modifier —
+	 * Haxe's `abstract` and `enum abstract`, where an instance variable is not merely unusual
+	 * but rejected by the compiler (`Cannot declare member variable in abstract`), so every
+	 * value an `enum abstract` lists is a static one. Only DATA members are covered
+	 * (`RefactorSupport.DATA_FIELD_KINDS`); an abstract's METHODS may be either, and there the
+	 * modifier still decides.
+	 *
+	 * Read by the member operations to pick the STATIC resolution path — qualified `Type.member`
+	 * accesses across the scope — instead of the instance one, which looks for a receiver bound
+	 * to a value of the type and therefore finds nothing for a type used as a namespace.
+	 * Optional; unset means the modifier alone decides, as before this field existed.
+	 */
+	@:optional var implicitStaticFieldHostKinds: Array<String>;
+
+	/**
+	 * Whether an identifier whose initial is UPPER-CASE can never BIND in a `case` pattern.
+	 * Haxe rejects one outright (`pattern variables must be lower-case or with `var ` prefix`),
+	 * so `case RED:` is a reference to a constant and never a capture. Reading it as a capture
+	 * is what refused every rename of an `enum abstract` value that its own type spells in a
+	 * `switch` — the idiomatic shape. A leading `_` does NOT count as upper-case initial:
+	 * `case _Upper:` binds, and Haxe accepts it.
+	 * Optional; unset treats every pattern identifier as a possible binding, as before this
+	 * field existed.
+	 */
+	@:optional var upperInitialNeverCaptures: Bool;
+
+	/**
 	 * Run-scoped reference-resolution cache. A caching plugin wrapper attaches its
 	 * per-run `RefsCache` here so `Refs.find` resolves against a memoized full-file
 	 * index instead of walking the tree per query. Optional — a bare grammar shape

@@ -183,12 +183,6 @@ final class MoveMember {
 	private static final ADVISORY: String =
 		'import-carrying is best-effort (type-position dependencies only) — a missed import fails the destination compile loudly; references through strings, Reflect, or macro-built identifiers are not rewritten.';
 
-	/**
-	 * DATA-field member kinds (`RefactorSupport.FIELD_MEMBER_KINDS` also
-	 * contains function kinds — its name is broader than it reads).
-	 */
-	private static final DATA_FIELD_KINDS: Array<String> = ['VarMember', 'FinalMember', 'VarField', 'FinalField'];
-
 	private static final FINAL_FIELD_KINDS: Array<String> = ['FinalMember', 'FinalField'];
 
 	/**
@@ -215,7 +209,7 @@ final class MoveMember {
 			case PErr(message): return Err(message);
 			case POk(p): p;
 		};
-		final captures: Array<String> = casePatternCaptures(prep.srcTree);
+		final captures: Array<String> = RefactorSupport.casePatternCaptures(prep.srcTree, plugin.refShape());
 		final guard: Null<String> = moveGuardError(prep, captures);
 		if (guard != null) return Err(guard);
 		final fqnRefusal: Null<String> = crossPackageFqnRefusal(prep);
@@ -798,27 +792,6 @@ final class MoveMember {
 		return Ok(changes, advisory);
 	}
 
-	/**
-	 * Every ident bound by a switch case PATTERN anywhere in the tree.
-	 * `Refs` attributes reads of such captures to a same-named member
-	 * binding (CaseBranch is not a scope there), so a move touching one of
-	 * these names must refuse rather than silently rewrite match code.
-	 */
-	private static function casePatternCaptures(tree: QueryNode): Array<String> {
-		final out: Array<String> = [];
-		function walkPattern(node: QueryNode): Void {
-			final name: Null<String> = node.name;
-			if (node.kind == 'IdentExpr' && name != null && !out.contains(name)) out.push(name);
-			for (c in node.children) walkPattern(c);
-		}
-		function walk(node: QueryNode): Void {
-			if (node.kind == 'CaseBranch' && node.children.length > 0) walkPattern(node.children[0]);
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return out;
-	}
-
 	private static function isAllWhitespace(text: String): Bool {
 		for (i in 0...text.length) if (!RefactorSupport.isSpace(text.fastCodeAt(i))) return false;
 		return true;
@@ -863,7 +836,7 @@ final class MoveMember {
 			if (siblingStatic) {
 				movedTextEdits.push({ span: new Span(hit.span.from, hit.span.from), text: '${prep.srcTypeName}.' });
 				if (!siblingPublic && !state.accessMembers.contains(host.name)) state.accessMembers.push(host.name);
-			} else if (DATA_FIELD_KINDS.contains(sibling.member.kind)) {
+			} else if (RefactorSupport.isDataFieldKind(sibling.member.kind)) {
 				// Sibling-fields contract: a moved body may keep reading a
 				// FINAL field IF the destination declares a same-named final
 				// field wired with the same value at construction.
@@ -911,7 +884,7 @@ final class MoveMember {
 		final declared: Map<Int, String> = provider != null ? provider.declaredTypes(prep.srcSource) : [];
 		final fields: Array<MemberGroup> = [
 			for (g in membersOf(prep.srcDecl, prep.srcSource, prep.shape))
-				if (DATA_FIELD_KINDS.contains(g.member.kind) && !g.modifiers.exists(mod -> mod.kind == 'Static')) g
+				if (RefactorSupport.isDataFieldKind(g.member.kind) && !g.modifiers.exists(mod -> mod.kind == 'Static')) g
 		];
 		if (viaField != null) {
 			final g: Null<MemberGroup> = fields.find(f -> f.member.name == viaField);

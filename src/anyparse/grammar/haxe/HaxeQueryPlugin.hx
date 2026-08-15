@@ -560,6 +560,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'ForExpr',
 				'CatchClause',
 			],
+			// A data member of an abstract is static whether or not it says so: Haxe refuses
+			// `Cannot declare member variable in abstract`, which is what makes every value of
+			// an `enum abstract` a static field with no modifier to read.
+			implicitStaticFieldHostKinds: ['AbstractDecl', 'EnumAbstractDecl'],
+			upperInitialNeverCaptures: true,
 			opaqueKinds: ['MacroExpr'],
 			interpolationKinds: ['DollarBlockExpr', 'DollarReifExpr'],
 			branchKinds: [

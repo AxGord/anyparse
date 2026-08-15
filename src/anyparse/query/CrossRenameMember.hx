@@ -68,6 +68,10 @@ private typedef LocatedOffsets = {
  *    `pkg.Src.member` across the scope whose receiver is the type used as
  *    a namespace (a receiver shadowed by a value binding of the same name
  *    is excluded, mirroring `CrossRename` / `MoveMember`).
+ *  - A BARE `case <member>:` pattern whose switch SUBJECT is proven to hold a value of
+ *    the source type, by the same resolution the instance receivers go through.
+ *    Unqualified, a value of an `enum abstract` reads in a pattern as a reference to the
+ *    member, never as a capture.
  *  - INSTANCE members: every `obj.member` whose receiver `obj` resolves
  *    (through the scope resolver + `TypeInfoProvider.declaredTypes`) to a
  *    local / parameter / field DECLARED of the source type. A receiver
@@ -95,8 +99,9 @@ private typedef LocatedOffsets = {
  *    modifier, so the keyword alone never saw it.
  *  - A member whose name is also captured by a `case` pattern in the
  *    declaring file is refused: sibling case-branch captures flatten into
- *    one scope frame, so the resolver can mis-attribute a bare reference
- *    (see the `MoveMember` case-capture guard).
+ *    one scope frame, so the resolver can mis-attribute a bare reference (see
+ *    `RefactorSupport.casePatternCaptures`, shared with `MoveMember`). An identifier the
+ *    language cannot BIND in a pattern is not a capture and does not refuse.
  *  - The destination name already declared on the type, a constructor
  *    (`new`), an unparseable scope file, or a post-rewrite parse failure
  *    are all refused; the write is atomic (all files or none). "Declared
@@ -121,10 +126,17 @@ private typedef LocatedOffsets = {
  * each dangles into a compile error the user can see. The advisory
  * (always non-null on success) reminds them.
  *
- * An `enum abstract` value a `case` pattern spells is refused by the
- * case-capture guard. There the pattern is a CONSTANT, not a capture, so the
- * refusal is conservative rather than necessary — renaming the value would
- * have to rewrite the pattern with it.
+ * An `enum abstract` value spelled BARE in a `case` pattern renames with the declaration
+ * when the type of the switch subject resolves to the abstract. When it does not, the
+ * pattern keeps the old name and the compiler rejects it by name — Haxe never binds an
+ * upper-case pattern identifier, so the leftover is loud, never a silent capture.
+ *
+ * NOT yet rewritten, and the largest remaining residual: an unqualified value the compiler
+ * resolves from the EXPECTED TYPE — `return Seam;` inside a function returning the abstract,
+ * a ternary arm of such a return, `x == Seam`. Measured over 89 enum abstracts of this repo
+ * and of a large app: 193 such sites, 137 of them in return position. Each is a loud
+ * `Unknown identifier` after the rename, never a silent capture, because no local binds the
+ * name; proving one needs the expected type at the site, which this op does not model.
  *
  * Coordinate convention: `line` / `col` are 1-based, exactly as
  * `apq refs` prints them — identical to `Rename` / `CrossRename`.
@@ -134,7 +146,7 @@ final class CrossRenameMember {
 
 	/** The advisory appended to every successful member rename. */
 	private static final ADVISORY: String =
-		'member rename resolves instance receivers via declared types only — unresolved receivers (chained calls, un-annotated locals, casts), super-access, `using` extension calls, aliased-import homonyms, and overrides declared outside this scope are left as loud compile errors; verify by hand.';
+		'member rename resolves instance receivers and switch subjects via declared types only — unresolved receivers and subjects (chained calls, un-annotated locals, casts), an unqualified value the compiler resolves from the EXPECTED type (a bare `return VALUE;` of an enum abstract), super-access, `using` extension calls, aliased-import homonyms, and overrides declared outside this scope are left as loud compile errors; verify by hand.';
 
 	/**
 	 * Rename the member declaration at `line:col` (in `cursorFile` /
@@ -156,7 +168,7 @@ final class CrossRenameMember {
 
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(cursorSource, line, col);
-		final target: Null<MemberTarget> = resolveMemberAtCursor(cursorTree, cursor, cursorSource);
+		final target: Null<MemberTarget> = resolveMemberAtCursor(cursorTree, cursor, cursorSource, refShape);
 		if (target == null)
 			return Err(
 				'position $line:$col is not on a member declaration (field / method) — cross-file --scope renames a type or a member'
@@ -170,7 +182,7 @@ final class CrossRenameMember {
 		// `MemberBranchScan.declaresMemberNamed` for why that is not relaxed.
 		if (MemberBranchScan.declaresMemberNamed(t.srcDecl, refShape, cursorSource, newName))
 			return Err('type "${t.typeName}" already declares a member "$newName"');
-		if (casePatternCaptures(cursorTree).contains(t.memberName))
+		if (RefactorSupport.casePatternCaptures(cursorTree, refShape).contains(t.memberName))
 			return Err('cannot rename "${t.memberName}": a case-pattern capture in $cursorFile shares its name (would be mis-rewritten)');
 
 		final parse: ScopeParse = parseScopeFiles(scopeFiles, plugin);
@@ -214,8 +226,8 @@ final class CrossRenameMember {
 	 * bindings and is blind to `obj.member` by design, so it rewrote the declaration and left every
 	 * access through a receiver behind. Predicate and op call ONE resolver, so the two cannot diverge.
 	 */
-	public static function isMemberDeclAtCursor(tree: QueryNode, cursor: Int, source: String): Bool {
-		return resolveMemberAtCursor(tree, cursor, source) != null;
+	public static function isMemberDeclAtCursor(tree: QueryNode, cursor: Int, source: String, refShape: RefShape): Bool {
+		return resolveMemberAtCursor(tree, cursor, source, refShape) != null;
 	}
 
 	/**
@@ -227,7 +239,7 @@ final class CrossRenameMember {
 	 * declaration (a local function nested in a body is never a direct
 	 * type child, so it is excluded).
 	 */
-	private static function resolveMemberAtCursor(tree: QueryNode, cursor: Int, source: String): Null<MemberTarget> {
+	private static function resolveMemberAtCursor(tree: QueryNode, cursor: Int, source: String, refShape: RefShape): Null<MemberTarget> {
 		var best: Null<MemberTarget> = null;
 		function walk(node: QueryNode): Void {
 			final m: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
@@ -250,7 +262,7 @@ final class CrossRenameMember {
 						final spanNN: Span = span;
 						if (!RefactorSupport.identTokenContains(childNN, cursor, source) && spanNN.from != cursor) continue;
 						final groupSpan: Span = RefactorSupport.declGroupSpan(childNN, host, spanNN);
-						var isStatic: Bool = false;
+						var isStatic: Bool = implicitlyStatic(decl.kind, kind, refShape);
 						var isOverride: Bool = false;
 						for (j in 0...i) {
 							final s: Null<Span> = siblings[j].span;
@@ -275,25 +287,18 @@ final class CrossRenameMember {
 	}
 
 	/**
-	 * Every identifier captured by a `case` pattern anywhere in `tree` —
-	 * the pattern wrapper is `CaseBranch.children[0]`. Sibling case-branch
-	 * captures flatten into one scope frame, so a capture sharing the
-	 * member name would be mis-attributed by the resolver; the op refuses
-	 * when the member name is in this set. Mirrors `MoveMember`.
+	 * Whether a member of a `declKind` type is static WITHOUT saying so — the grammar's
+	 * `RefShape.implicitStaticFieldHostKinds` answer, narrowed to data members because an
+	 * abstract's METHODS may be either and there the modifier still decides.
+	 *
+	 * The modifier scan alone routed an `enum abstract` value to the INSTANCE path, whose
+	 * receiver resolution looks for a binding holding a VALUE of the type and so never matches
+	 * the type used as a namespace: the declaration was renamed and every `Colour.RED` in the
+	 * scope left behind, with an exit code of 0.
 	 */
-	private static function casePatternCaptures(tree: QueryNode): Array<String> {
-		final out: Array<String> = [];
-		function walkPattern(node: QueryNode): Void {
-			final name: Null<String> = node.name;
-			if (node.kind == 'IdentExpr' && name != null && !out.contains(name)) out.push(name);
-			for (c in node.children) walkPattern(c);
-		}
-		function walk(node: QueryNode): Void {
-			if (node.kind == 'CaseBranch' && node.children.length > 0) walkPattern(node.children[0]);
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return out;
+	private static function implicitlyStatic(declKind: String, memberKind: String, refShape: RefShape): Bool {
+		final hosts: Null<Array<String>> = refShape.implicitStaticFieldHostKinds;
+		return hosts != null && hosts.contains(declKind) && RefactorSupport.isDataFieldKind(memberKind);
 	}
 
 	/**
@@ -387,6 +392,7 @@ final class CrossRenameMember {
 			final qualified: LocatedOffsets = qualifiedMemberOffsets(entry.source, entry.tree, target, plugin, refShape, index);
 			if (qualified.error != null) return Err('${entry.file}: ${qualified.error}');
 			for (off in qualified.offsets) addOff(off);
+			for (off in patternConstantOffsets(entry.source, entry.tree, target, plugin, refShape, index)) addOff(off);
 			if (offsets.length == 0) continue;
 
 			final edits: Array<{ span: Span, text: String }> = [
@@ -576,6 +582,77 @@ final class CrossRenameMember {
 		final at: Position = faSpan.lineCol(source);
 		return 'cannot locate the "$memberName" token of the proven access at ${at.line}:${at.col}'
 			+ ' - refusing rather than renaming part of the scope';
+	}
+
+
+	/**
+	 * Every switch in `tree` that spells `memberName` BARE in at least one case pattern,
+	 * paired with that switch's SUBJECT and the offsets of those pattern tokens. A nested
+	 * switch owns its own branches — the branch walk stops at one, and the outer walk reaches
+	 * it as a candidate of its own.
+	 */
+	private static function switchPatternCandidates(
+		tree: QueryNode, memberName: String, refShape: RefShape
+	): Array<{ subject: QueryNode, offsets: Array<Int> }> {
+		final out: Array<{ subject: QueryNode, offsets: Array<Int> }> = [];
+		final switchKinds: Null<Array<String>> = refShape.switchKinds;
+		final caseBranchKind: Null<String> = refShape.caseBranchKind;
+		if (switchKinds == null || caseBranchKind == null) return out;
+		final kinds: Array<String> = switchKinds;
+		final branchKind: String = caseBranchKind;
+		final identKind: String = refShape.identKind;
+		function patternHits(node: QueryNode, hits: Array<Int>): Void {
+			final span: Null<Span> = node.span;
+			if (node.kind == identKind && node.name == memberName && span != null) hits.push(span.from);
+			for (c in node.children) patternHits(c, hits);
+		}
+		function branchesOf(node: QueryNode, hits: Array<Int>, isRoot: Bool): Void {
+			if (!isRoot && kinds.contains(node.kind)) return;
+			if (node.kind == branchKind && node.children.length > 0) patternHits(node.children[0], hits);
+			for (c in node.children) branchesOf(c, hits, false);
+		}
+		function collect(node: QueryNode): Void {
+			if (kinds.contains(node.kind) && node.children.length > 0) {
+				final hits: Array<Int> = [];
+				branchesOf(node, hits, true);
+				if (hits.length > 0) out.push({ subject: node.children[0], offsets: hits });
+			}
+			for (c in node.children) collect(c);
+		}
+		collect(tree);
+		return out;
+	}
+
+	/**
+	 * The member-token offset of every BARE `case <member>:` pattern in one file whose switch
+	 * subject is PROVEN to hold a value of the source type. Unqualified, an `enum abstract`
+	 * value spelled in a pattern is a reference to the member and never a capture (see
+	 * `RefactorSupport.casePatternCaptures`), so renaming the declaration without these
+	 * leaves patterns naming a constant that no longer exists — a rewrite that does not
+	 * compile, reported as success.
+	 *
+	 * The subject is proven exactly as an instance receiver is (`receiverIsSourceType`): an
+	 * identifier bound to a declaration written of the source type, or of a proven subtype.
+	 * A subject whose type does not resolve is left alone — the same loud-fail contract the
+	 * unresolved receivers carry, restated in the advisory.
+	 */
+	private static function patternConstantOffsets(
+		source: String, tree: QueryNode, target: MemberTarget, plugin: GrammarPlugin, refShape: RefShape, index: SymbolIndex
+	): Array<Int> {
+		final candidates: Array<{ subject: QueryNode, offsets: Array<Int> }> = switchPatternCandidates(tree, target.memberName, refShape);
+		if (candidates.length == 0) return [];
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final declared: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
+		final subjectNames: Array<String> = [];
+		for (candidate in candidates) {
+			final name: Null<String> = candidate.subject.name;
+			if (name != null && !subjectNames.contains(name)) subjectNames.push(name);
+		}
+		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti(subjectNames, tree, refShape);
+		final out: Array<Int> = [];
+		for (candidate in candidates) if (receiverIsSourceType(candidate.subject, target.typeName, declared, hitsByName, index))
+			for (off in candidate.offsets) if (!out.contains(off)) out.push(off);
+		return out;
 	}
 
 }

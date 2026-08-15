@@ -452,4 +452,81 @@ class CrossRenameMemberSliceTest extends Test {
 		return new HaxeQueryPlugin().refShape();
 	}
 
+	/**
+	 * An `enum abstract` value carries no `Static` modifier, yet a data member of an abstract
+	 * IS static — Haxe rejects an instance one outright. The rename must therefore take the
+	 * STATIC path and rewrite `Colour.RED` across the scope; the instance path it used to take
+	 * looks for a receiver BOUND to a value of the type and never matches a type used as a
+	 * namespace, so the declaration was renamed alone and the result did not compile.
+	 */
+	public function testEnumAbstractValueRenamesQualifiedAccesses(): Void {
+		final a: String = 'enum abstract Colour(Int) {\n\tvar RED = 0;\n\tvar GREEN = 1;\n}';
+		final b: String = 'class Palette {\n\tpublic static function pick(f:Bool):Colour return f ? Colour.RED : Colour.GREEN;\n}';
+		final expectedA: String = 'enum abstract Colour(Int) {\n\tvar CRIMSON = 0;\n\tvar GREEN = 1;\n}';
+		final expectedB: String =
+			'class Palette {\n\tpublic static function pick(f:Bool):Colour return f ? Colour.CRIMSON : Colour.GREEN;\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'RED', 'CRIMSON', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedA, changeFor(changes, 'a.hx').newSource);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+	}
+
+	/**
+	 * The `switch` an `enum abstract` writes over its OWN values is the idiomatic shape, and
+	 * the bare `case RED:` in it used to refuse the whole rename as a case-pattern capture.
+	 * Haxe never BINDS an upper-case pattern identifier, so that pattern is a reference to the
+	 * value; the single-file occurrence pass already rewrote it once the refusal was lifted.
+	 */
+	public function testEnumAbstractValueRenamesBarePatternInDeclaringFile(): Void {
+		final a: String = 'enum abstract Colour(Int) {\n\tvar RED = 0;\n\tvar GREEN = 1;\n'
+			+ '\tpublic function label():String return switch (cast this : Colour) {\n\t\tcase RED: \'r\';\n\t\tcase GREEN: \'g\';\n\t}\n}';
+		final expectedA: String = 'enum abstract Colour(Int) {\n\tvar CRIMSON = 0;\n\tvar GREEN = 1;\n'
+			+ '\tpublic function label():String return switch (cast this : Colour) {\n\t\tcase CRIMSON: \'r\';\n\t\tcase GREEN: \'g\';\n\t}\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'RED', 'CRIMSON', [{ file: 'a.hx', source: a }]);
+		Assert.equals(1, changes.length);
+		Assert.equals(expectedA, changeFor(changes, 'a.hx').newSource);
+	}
+
+	/**
+	 * A bare `case RED:` in ANOTHER file renames only where the switch SUBJECT proves the type.
+	 * Both switches here spell `RED`; only the one over a `Colour` subject is the value being
+	 * renamed, and the `Fruit` one — a different `enum abstract` declaring the same name — must
+	 * survive untouched. One expected source carries both halves, so neither can pass alone.
+	 */
+	public function testBarePatternRenamesOnlyWhereTheSubjectProvesTheType(): Void {
+		final a: String = 'enum abstract Colour(Int) {\n\tvar RED = 0;\n\tvar GREEN = 1;\n}';
+		final f: String = 'enum abstract Fruit(Int) {\n\tvar RED = 10;\n\tvar YELLOW = 11;\n}';
+		final b: String = 'class Palette {\n\tpublic static function colour(c:Colour):String return switch (c) {\n'
+			+ '\t\tcase RED: \'c\';\n\t\tcase GREEN: \'g\';\n\t}\n'
+			+ '\tpublic static function fruit(x:Fruit):String return switch (x) {\n'
+			+ '\t\tcase RED: \'f\';\n\t\tcase YELLOW: \'y\';\n\t}\n}';
+		final expectedB: String = 'class Palette {\n\tpublic static function colour(c:Colour):String return switch (c) {\n'
+			+ '\t\tcase CRIMSON: \'c\';\n\t\tcase GREEN: \'g\';\n\t}\n'
+			+ '\tpublic static function fruit(x:Fruit):String return switch (x) {\n'
+			+ '\t\tcase RED: \'f\';\n\t\tcase YELLOW: \'y\';\n\t}\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'RED', 'CRIMSON', [
+			{ file: 'a.hx', source: a },
+			{ file: 'f.hx', source: f },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(1, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * A LOWER-case member name a `case` pattern binds still refuses: the language does let a
+	 * pattern declare it, so the resolver cannot tell that binding from the member and the
+	 * rewrite would mis-attribute it. The narrowing that unblocked the upper-case values must
+	 * not reach this shape.
+	 */
+	public function testLowerCasePatternCaptureStillRefuses(): Void {
+		final a: String = 'class Config {\n\tpublic static var limit = 5;\n'
+			+ '\tpublic static function tag(v:Int):String return switch (v) {\n\t\tcase limit: \'x\';\n\t}\n}';
+		assertErr(run('a.hx', a, 'limit', 'cap', [{ file: 'a.hx', source: a }]));
+	}
+
 }
