@@ -1,11 +1,13 @@
 package anyparse.query;
 
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -36,18 +38,6 @@ using StringTools;
 final class EncapsulateField {
 
 	/** The sibling node kinds a member's modifiers / metadata project to. */
-	private static final MODIFIER_META: Array<String> = [
-		'Meta',
-		'Public',
-		'Private',
-		'Static',
-		'Inline',
-		'Override',
-		'Macro',
-		'Extern',
-		'Dynamic'
-	];
-
 	/**
 	 * Encapsulate the field `fieldName` of `typeName` in `source`. `reformat`
 	 * canonicalises a drifted file. Returns `Ok(rewritten)` or an `Err`.
@@ -69,7 +59,7 @@ final class EncapsulateField {
 			group: Span,
 			isStatic: Bool,
 			isVar: Bool
-		}> = resolveField(declNN, fieldName);
+		}> = resolveField(declNN, fieldName, source, plugin.refShape());
 		if (field == null) return Err('type "$typeName" has no field "$fieldName"');
 		final f: {
 			node: QueryNode,
@@ -79,7 +69,11 @@ final class EncapsulateField {
 		} = field;
 		if (!f.isVar) return Err('"$fieldName" is a final field — it has no setter to encapsulate');
 		if (f.isStatic) return Err('"$fieldName" is static — encapsulate covers instance fields');
-		if (memberNamed(declNN, 'get_$fieldName') || memberNamed(declNN, 'set_$fieldName'))
+		final shape: RefShape = plugin.refShape();
+		if (
+			MemberBranchScan.declaresMemberNamed(declNN, shape, source, 'get_$fieldName')
+			|| MemberBranchScan.declaresMemberNamed(declNN, shape, source, 'set_$fieldName')
+		)
 			return Err('an accessor "get_$fieldName" / "set_$fieldName" already exists');
 
 		final fieldSpan: Null<Span> = f.node.span;
@@ -113,48 +107,36 @@ final class EncapsulateField {
 	 * (modifiers included), and static / mutable flags. `isVar` is false
 	 * for a `final` field. Null when there is no data field of that name.
 	 */
-	private static function resolveField(decl: TypeDeclMatch, fieldName: String): Null<{
+	private static function resolveField(decl: TypeDeclMatch, fieldName: String, source: String, shape: RefShape): Null<{
 		node: QueryNode,
 		group: Span,
 		isStatic: Bool,
 		isVar: Bool
 	}> {
-		final siblings: Array<QueryNode> = decl.nameNode.children;
-		for (i => child in siblings) {
-			final kind: String = child.kind;
-			if (child.name != fieldName) continue;
-			final isData: Bool = kind == 'VarMember' || kind == 'FinalMember' || kind == 'VarField' || kind == 'FinalField';
-			if (!isData) continue;
+		var hit: Null<{
+			node: QueryNode,
+			group: Span,
+			isStatic: Bool,
+			isVar: Bool
+		}> = null;
+		// Branch-aware: the field may be declared inside a `#if` region, where the direct-children scan
+		// never saw it and the op answered "type has no field". The rewrite stays inside that region.
+		MemberBranchScan.eachTypeMember(decl, shape, source, n -> DATA_MEMBER_KINDS.contains(n.kind), (child, run) -> {
 			final span: Null<Span> = child.span;
-			if (span == null) continue;
+			if (hit != null || child.name != fieldName || span == null) return;
 			final spanNN: Span = span;
-			var isStatic: Bool = false;
-			var j: Int = i - 1;
-			while (j >= 0 && MODIFIER_META.contains(siblings[j].kind)) {
-				if (siblings[j].kind == 'Static') isStatic = true;
-				j--;
-			}
-			final isVar: Bool = kind == 'VarMember' || kind == 'VarField';
-			return {
+			final kind: String = child.kind;
+			hit = {
 				node: child,
-				group: RefactorSupport.declGroupSpan(child, decl.nameNode, spanNN),
-				isStatic: isStatic,
-				isVar: isVar
+				group: MemberBranchScan.groupSpanOf(run, spanNN),
+				isStatic: run.exists(m -> m.kind == 'Static'),
+				isVar: kind == 'VarMember' || kind == 'VarField'
 			};
-		}
-		return null;
+		});
+		return hit;
 	}
 
 	/** Does `decl` declare a member named `name` (any field / method)? */
-	private static function memberNamed(decl: TypeDeclMatch, name: String): Bool {
-		for (child in decl.nameNode.children) {
-			final kind: String = child.kind;
-			if ((RefactorSupport.isFieldMemberKind(kind) || RefactorSupport.FN_DECL_KINDS.contains(kind)) && child.name == name)
-				return true;
-		}
-		return false;
-	}
-
 	/**
 	 * Is there already an accessor clause `(...)` right after the field
 	 * name (within its group)? Skips whitespace from `nameEnd`; a `(` means
@@ -175,5 +157,9 @@ final class EncapsulateField {
 		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		return provider?.declaredTypeSources(source)[fieldFrom];
 	}
+
+
+	/** The stored-field kinds `encapsulate-field` can turn into a property. */
+	private static final DATA_MEMBER_KINDS: Array<String> = ['VarMember', 'FinalMember', 'VarField', 'FinalField'];
 
 }

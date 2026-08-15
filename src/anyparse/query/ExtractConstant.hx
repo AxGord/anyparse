@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.ParseError;
@@ -56,12 +57,14 @@ final class ExtractConstant {
 		final decl: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(tree, typeName);
 		if (decl == null) return Err('no unique type "$typeName" in the source');
 		final declNN: TypeDeclMatch = decl;
-		if (memberNamed(declNN, name)) return Err('type "$typeName" already has a member named "$name"');
+		final shape: RefShape = plugin.refShape();
+		if (MemberBranchScan.declaresMemberNamed(declNN, shape, source, name))
+			return Err('type "$typeName" already has a member named "$name"');
 
 		final occurrences: Array<Span> = collectOccurrences(declNN.nameNode, literal);
 		if (occurrences.length == 0) return Err('no plain literal \'$literal\' occurs in type "$typeName"');
 
-		final insertAt: Int = firstMemberStart(source, declNN);
+		final insertAt: Int = firstMemberStart(source, declNN, shape);
 		if (insertAt < 0) return Err('type "$typeName" has no member to anchor the constant before');
 
 		final firstOcc: Span = occurrences[0];
@@ -132,14 +135,6 @@ final class ExtractConstant {
 	}
 
 	/** Does `decl` declare a member named `name` (any field / method)? */
-	private static function memberNamed(decl: TypeDeclMatch, name: String): Bool {
-		for (child in decl.nameNode.children) if (
-			(RefactorSupport.isFieldMemberKind(child.kind) || RefactorSupport.FN_DECL_KINDS.contains(child.kind)) && child.name == name
-		)
-			return true;
-		return false;
-	}
-
 	/**
 	 * Spans of every plain string literal equal to `literal` anywhere under `typeNode`: a single-quoted `SingleStringExpr` with exactly one `Literal` child (an interpolated string carries extra children, so it is skipped), or any `DoubleStringExpr` (Haxe double-quoted strings never interpolate, so each is a plain literal). Matched on the raw source between the quotes; metadata subtrees are skipped.
 	 */
@@ -169,9 +164,15 @@ final class ExtractConstant {
 	/**
 	 * Source offset just before the first member, with its leading `/**` doc comment and modifier run included (via `docExtendedSpan`) — where the constant is spliced so it becomes the types first member while the original first member keeps its own doc. -1 when the type has no member.
 	 */
-	private static function firstMemberStart(source: String, decl: TypeDeclMatch): Int {
+	private static function firstMemberStart(source: String, decl: TypeDeclMatch, shape: RefShape): Int {
+		final condKind: Null<String> = shape.conditionalMemberKind;
+		// A `#if` region opening the body is a member position too: the constant is spliced BEFORE it,
+		// so it exists in every build. Splicing INSIDE the region would guard the constant, and treating
+		// the region as "no member at all" (which this scan used to do when every member was guarded)
+		// sent the caller down the append path instead.
 		for (child in decl.nameNode.children) if (
 			RefactorSupport.isFieldMemberKind(child.kind) || RefactorSupport.FN_DECL_KINDS.contains(child.kind)
+			|| (condKind != null && child.kind == condKind)
 		) {
 			final span: Null<Span> = child.span;
 			if (span == null) continue;
@@ -215,11 +216,13 @@ final class ExtractConstant {
 		final decl: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(mtree, moduleClass);
 		if (decl == null) return Err('module "$modulePath" has no unique type "$moduleClass"');
 		final declNN: TypeDeclMatch = decl;
-		if (memberNamed(declNN, name)) return Err('module "$moduleClass" already has a member named "$name"');
+		final shape: RefShape = plugin.refShape();
+		if (MemberBranchScan.declaresMemberNamed(declNN, shape, existing, name))
+			return Err('module "$moduleClass" already has a member named "$name"');
 		// Splice the constant into the constants rank (before the first member) rather than
 		// appending — an appended `public static final` after the holder's `private new()`
 		// would sit out of canonical member order. Empty module (no member): fall back to append.
-		final insertAt: Int = firstMemberStart(existing, declNN);
+		final insertAt: Int = firstMemberStart(existing, declNN, shape);
 		return insertAt < 0
 			? AddMember.addMember(existing, moduleClass, memberText, reformat, plugin, optsJson)
 			: RefactorSupport.canonicalize(

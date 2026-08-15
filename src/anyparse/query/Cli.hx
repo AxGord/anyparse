@@ -6015,7 +6015,9 @@ final class Cli {
 		sysPrint('qualified accesses — Src.member for a static member, obj.member whose\n');
 		sysPrint('receiver resolves to the source type for an instance member. Receivers\n');
 		sysPrint('whose type does not resolve, super-access, using-extension calls, and\n');
-		sysPrint('overrides are left as loud compile errors. Refuses an override member,\n');
+		sysPrint('overrides are left as loud compile errors. A member a #if region\n');
+		sysPrint('declares once per branch is one logical member: every branch declaration\n');
+		sysPrint('moves in the same edit set. Refuses an override member,\n');
 		sysPrint('a member an ancestor under scope declares (an implementation of an\n');
 		sysPrint('abstract or interface method carries no override modifier, so the\n');
 		sysPrint('keyword alone never saw it), a name already declared on the type, or a\n');

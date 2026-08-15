@@ -87,6 +87,58 @@ class RenameMemberInFileCliTest extends Test {
 		#end
 	}
 
+	/**
+	 * A member declared inside a `#if` region. The region projects as ONE node holding each
+	 * branch's members, so the member is not a direct child of its type and the cursor scan
+	 * missed it — the rename then fell through to the value namespace, which rewrites the
+	 * declaration and leaves `obj.member` behind.
+	 */
+	public function testGuardedMemberRenamesDeclAndReceiverCall(): Void {
+		#if (sys || nodejs)
+		final path: String = CliFixture.write(
+			'rn_member_guarded',
+			'class B {\n\tpublic function new() {}\n\n\t#if !mobile\n\tpublic function guarded(): String {\n\t\treturn "g";\n\t}\n'
+			+ '\t#end\n}\n\nclass Use {\n\tpublic function new() {}\n\n\t#if !mobile\n\tpublic function call(): String {\n'
+			+ '\t\tfinal b: B = new B();\n\t\treturn b.guarded();\n\t}\n\t#end\n}\n'
+		);
+		final rc: Int = Cli.run(['rename', path, '--select', 'FnMember:guarded', 'safe', '--write']);
+		Assert.equals(0, rc);
+		final out: String = File.getContent(path);
+		Assert.isTrue(out.indexOf('public function safe(): String') >= 0 && out.indexOf('return b.safe();') >= 0);
+		Assert.equals(-1, out.indexOf('guarded'));
+		FileSystem.deleteFile(path);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * One member declared once per branch is ONE logical member — a type may repeat a member
+	 * name only across branches. Rewriting the cursor's branch alone leaves every OTHER build
+	 * target with an access no declaration matches, which no single-target compile can catch.
+	 */
+	public function testEveryBranchDeclarationRenamesTogether(): Void {
+		#if (sys || nodejs)
+		final path: String = CliFixture.write(
+			'rn_member_branches',
+			'class B {\n\tpublic function new() {}\n\n\t#if mobile\n\tpublic function pick(): String {\n\t\treturn "m";\n\t}\n\t#else\n'
+			+ '\tpublic function pick(): String {\n\t\treturn "d";\n\t}\n\t#end\n}\n\nclass Use {\n\tpublic function new() {}\n\n'
+			+ '\tpublic function call(): String {\n\t\tfinal b: B = new B();\n\t\treturn b.pick();\n\t}\n}\n'
+		);
+		final rc: Int = Cli.run(['rename', path, '--select', 'FnMember:pick', '--nth', '1', 'choose', '--write']);
+		Assert.equals(0, rc);
+		final out: String = File.getContent(path);
+		Assert.isTrue(
+			out.indexOf('public function choose(): String {\n\t\treturn "m";') >= 0
+			&& out.indexOf('public function choose(): String {\n\t\treturn "d";') >= 0 && out.indexOf('return b.choose();') >= 0
+		);
+		Assert.equals(-1, out.indexOf('pick'));
+		FileSystem.deleteFile(path);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/** A constructor has no member name to rewrite - renaming it leaves the type without one. */
 	public function testConstructorIsRefused(): Void {
 		#if (sys || nodejs)

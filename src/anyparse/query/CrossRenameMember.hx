@@ -75,6 +75,14 @@ private typedef LocatedOffsets = {
  *    source type the miss surfaces as a compile error, never a wrong
  *    rewrite. A `new T()` receiver resolves through its own type
  *    name and needs no binding at all.
+ *  - EVERY branch of a `#if` region that declares the member. The region is a
+ *    member HOST, not a member — it holds each branch's members with their own
+ *    modifier siblings — so the cursor scan asks `RefactorSupport.eachMemberHost`,
+ *    the walk `SymbolIndexBuilder` already uses, and the edit set takes every
+ *    declaration from `SymbolIndex.declarationsOf`. A type may repeat a member
+ *    name only across branches, so those declarations are ONE logical member;
+ *    rewriting the cursor's branch alone leaves every OTHER build target with
+ *    accesses no declaration matches, which no single-target compile can catch.
  *
  * ## Refusals (correctness boundary)
  *
@@ -91,7 +99,11 @@ private typedef LocatedOffsets = {
  *    (see the `MoveMember` case-capture guard).
  *  - The destination name already declared on the type, a constructor
  *    (`new`), an unparseable scope file, or a post-rewrite parse failure
- *    are all refused; the write is atomic (all files or none).
+ *    are all refused; the write is atomic (all files or none). "Declared
+ *    on the type" counts the OTHER branches of a `#if` region, so renaming
+ *    one branch's member onto a name a sibling branch uses is refused even
+ *    though the two never coexist in one build — conservative, and it keeps
+ *    a rename from quietly merging two members into one.
  *  - A PROVEN access whose member token cannot be located in code is
  *    refused rather than skipped. That token is searched in the window
  *    between the receiver span and the field-access span, which also
@@ -109,16 +121,10 @@ private typedef LocatedOffsets = {
  * each dangles into a compile error the user can see. The advisory
  * (always non-null on success) reminds them.
  *
- * A member declared inside a `#if` region is missed EARLIER than that: a
- * conditional projects as ONE node holding each branch's statements, so the
- * member is not a direct child of the type and `resolveMemberAtCursor`
- * returns null. The CLI then falls through to the value namespace, which
- * rewrites the declaration and leaves `obj.member` behind — the very bug the
- * member path exists to fix. Measured: 3 of 471 member declarations in a
- * 40-file TM sample, 0 of 428 in anyparse. A conditional-aware collection
- * already exists as `anyparse.check.MemberSlots.collectMembers`, one layer
- * ABOVE this one, so reusing it means moving that collection down into the
- * query layer rather than calling across.
+ * An `enum abstract` value a `case` pattern spells is refused by the
+ * case-capture guard. There the pattern is a CONSTANT, not a capture, so the
+ * refusal is conservative rather than necessary — renaming the value would
+ * have to rewrite the pattern with it.
  *
  * Coordinate convention: `line` / `col` are 1-based, exactly as
  * `apq refs` prints them — identical to `Rename` / `CrossRename`.
@@ -160,7 +166,8 @@ final class CrossRenameMember {
 		if (t.memberName == 'new') return Err('cannot rename a constructor');
 		if (t.isOverride)
 			return Err('member "${t.memberName}" is an override — rename the base declaration instead (its overrides rename with it)');
-		if (memberExists(t.srcDecl, newName)) return Err('type "${t.typeName}" already declares a member "$newName"');
+		if (MemberBranchScan.declaresMemberNamed(t.srcDecl, refShape, cursorSource, newName))
+			return Err('type "${t.typeName}" already declares a member "$newName"');
 		if (casePatternCaptures(cursorTree).contains(t.memberName))
 			return Err('cannot rename "${t.memberName}": a case-pattern capture in $cursorFile shares its name (would be mis-rewritten)');
 
@@ -188,6 +195,10 @@ final class CrossRenameMember {
 		if (family == null)
 			return Err('cannot rename "${t.memberName}": another type declares it and cannot be proven unrelated to "${t.typeName}"');
 		final overrides: Array<OverrideFamilyMember> = family;
+		// The member's own declarations come next: a `#if` region can declare it once per branch, and
+		// each branch is a separate declaration the edit set must carry. The cursor's own declaration
+		// is re-listed among them - harmless, since `apply` dedups the resulting offsets.
+		for (own in index.declarationsOf(t.typeName, t.memberName)) overrides.push(own);
 		// The destination name must be free on every type the edit set touches, not only the cursor's -
 		// an override renamed onto a name its own type already declares is a duplicate field.
 		for (fm in overrides) if (index.typeDeclaresMember(fm.typeName, newName))
@@ -220,34 +231,40 @@ final class CrossRenameMember {
 			final m: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
 			if (m != null) {
 				final decl: TypeDeclMatch = m;
-				final siblings: Array<QueryNode> = decl.nameNode.children;
-				for (i => child in siblings) {
-					final span: Null<Span> = child.span;
-					if (span == null) continue;
-					final kind: String = child.kind;
-					if (!RefactorSupport.isFieldMemberKind(kind) && !RefactorSupport.FN_DECL_KINDS.contains(kind)) continue;
-					final name: Null<String> = child.name;
-					if (name == null) continue;
-					final childNN: QueryNode = child;
-					final spanNN: Span = span;
-					if (!RefactorSupport.identTokenContains(childNN, cursor, source) && spanNN.from != cursor) continue;
-					final groupSpan: Span = RefactorSupport.declGroupSpan(childNN, decl.nameNode, spanNN);
-					var isStatic: Bool = false;
-					var isOverride: Bool = false;
-					for (j in 0...i) {
-						final s: Null<Span> = siblings[j].span;
-						if (!(s != null && s.from >= groupSpan.from && s.to <= spanNN.from)) continue;
-						if (siblings[j].kind == 'Static') isStatic = true;
-						if (siblings[j].kind == 'Override') isOverride = true;
+				// A `#if` region is a member HOST, not a member: it projects as ONE node holding each
+				// branch's members with their own modifier siblings. Scanning the type's direct children
+				// alone left every guarded member unresolvable here, and the CLI then fell back to the
+				// value namespace — which rewrites the declaration and leaves `obj.member` behind.
+				RefactorSupport.eachMemberHost(decl.nameNode, host -> {
+					final siblings: Array<QueryNode> = host.children;
+					for (i => child in siblings) {
+						final span: Null<Span> = child.span;
+						if (span == null) continue;
+						final kind: String = child.kind;
+						if (!RefactorSupport.isFieldMemberKind(kind) && !RefactorSupport.FN_DECL_KINDS.contains(kind)) continue;
+						final name: Null<String> = child.name;
+						if (name == null) continue;
+						final childNN: QueryNode = child;
+						final spanNN: Span = span;
+						if (!RefactorSupport.identTokenContains(childNN, cursor, source) && spanNN.from != cursor) continue;
+						final groupSpan: Span = RefactorSupport.declGroupSpan(childNN, host, spanNN);
+						var isStatic: Bool = false;
+						var isOverride: Bool = false;
+						for (j in 0...i) {
+							final s: Null<Span> = siblings[j].span;
+							if (!(s != null && s.from >= groupSpan.from && s.to <= spanNN.from)) continue;
+							if (siblings[j].kind == 'Static') isStatic = true;
+							if (siblings[j].kind == 'Override') isOverride = true;
+						}
+						best = {
+							typeName: decl.name,
+							memberName: name,
+							isStatic: isStatic,
+							isOverride: isOverride,
+							srcDecl: decl
+						};
 					}
-					best = {
-						typeName: decl.name,
-						memberName: name,
-						isStatic: isStatic,
-						isOverride: isOverride,
-						srcDecl: decl
-					};
-				}
+				});
 			}
 			for (c in node.children) walk(c);
 		}
@@ -256,18 +273,9 @@ final class CrossRenameMember {
 	}
 
 	/**
-	 * Does `decl` already declare a field / method named `name`? Drives the
-	 * destination-name collision refusal.
+	 * Does `decl` already declare a field / method named `name`, in ANY `#if`
+	 * branch? Drives the destination-name collision refusal.
 	 */
-	private static function memberExists(decl: TypeDeclMatch, name: String): Bool {
-		for (child in decl.nameNode.children) {
-			final kind: String = child.kind;
-			if ((RefactorSupport.isFieldMemberKind(kind) || RefactorSupport.FN_DECL_KINDS.contains(kind)) && child.name == name)
-				return true;
-		}
-		return false;
-	}
-
 	/**
 	 * Every identifier captured by a `case` pattern anywhere in `tree` —
 	 * the pattern wrapper is `CaseBranch.children[0]`. Sibling case-branch

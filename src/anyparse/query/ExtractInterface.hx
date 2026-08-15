@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.format.comment.CommentLossException;
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
@@ -53,18 +54,6 @@ private typedef IfaceMethod = {
 final class ExtractInterface {
 
 	/** The sibling node kinds a member's modifiers / metadata project to. */
-	private static final MODIFIER_META: Array<String> = [
-		'Meta',
-		'Public',
-		'Private',
-		'Static',
-		'Inline',
-		'Override',
-		'Macro',
-		'Extern',
-		'Dynamic'
-	];
-
 	/**
 	 * Extract an interface named `ifaceName` (written to `ifaceFile`) from
 	 * `srcTypeName` in `srcSource`. `memberNames` selects the methods; null
@@ -88,7 +77,7 @@ final class ExtractInterface {
 		if (decl == null) return Err('no unique class "$srcTypeName" in $srcFile');
 		final declNN: TypeDeclMatch = decl;
 
-		final all: Array<IfaceMethod> = publicMethods(declNN, srcSource);
+		final all: Array<IfaceMethod> = publicMethods(declNN, srcSource, plugin.refShape());
 		final selected: Array<IfaceMethod> = switch selectMethods(all, memberNames) {
 			case Left(message): return Err(message);
 			case Right(list): list;
@@ -144,37 +133,34 @@ final class ExtractInterface {
 	 * `FnMember` span up to its body child, so it carries no modifier and
 	 * no body.
 	 */
-	private static function publicMethods(decl: TypeDeclMatch, source: String): Array<IfaceMethod> {
+	private static function publicMethods(decl: TypeDeclMatch, source: String, shape: RefShape): Array<IfaceMethod> {
 		final out: Array<IfaceMethod> = [];
-		final siblings: Array<QueryNode> = decl.nameNode.children;
-		for (i => child in siblings) if (child.kind == 'FnMember') {
+		// Branch-aware: a method a `#if` region declares is not a direct child of the type, and the
+		// scan that missed it produced an interface silently short of that method.
+		MemberBranchScan.eachTypeMember(decl, shape, source, n -> n.kind == 'FnMember', (child, run) -> {
 			final name: Null<String> = child.name;
 			final span: Null<Span> = child.span;
-			if (name == null || span == null || name == 'new') continue;
+			if (name == null || span == null || name == 'new') return;
 			final nameNN: String = name;
 			final spanNN: Span = span;
 			var isPublic: Bool = false;
 			var isStatic: Bool = false;
-			var j: Int = i - 1;
-			while (j >= 0 && MODIFIER_META.contains(siblings[j].kind)) {
-				switch siblings[j].kind {
-					case 'Public':
-						isPublic = true;
-					case 'Static':
-						isStatic = true;
-					case _:
-				}
-				j--;
+			for (mod in run) switch mod.kind {
+				case 'Public':
+					isPublic = true;
+				case 'Static':
+					isStatic = true;
+				case _:
 			}
 			// A `final function` wraps into FinalModifiedMember, never a plain
 			// FnMember, so this loop only ever sees non-final methods.
-			if (!isPublic || isStatic) continue;
+			if (!isPublic || isStatic) return;
 			final sig: Null<String> = signatureOf(child, source);
 			if (sig != null) {
 				final sigNN: String = sig;
 				out.push({ name: nameNN, signature: sigNN, from: spanNN.from });
 			}
-		}
+		});
 		return out;
 	}
 

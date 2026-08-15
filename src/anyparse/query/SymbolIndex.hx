@@ -974,6 +974,19 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * EVERY declaration of `member` on `typeName`. A type declares one member more than once only
+	 * when the declarations sit in different branches of a `#if` region, so they are ONE logical
+	 * member: rewriting a single branch leaves every other build target with accesses that no
+	 * declaration matches.
+	 */
+	public function declarationsOf(typeName: String, member: String): Array<OverrideFamilyMember> {
+		final out: Array<OverrideFamilyMember> = [];
+		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (m in t.members) if (m.name == member)
+			out.push({ file: fi.file, typeName: t.name, declFrom: m.declFrom });
+		return out;
+	}
+
+	/**
 	 * Whether `typeName` IMPLEMENTS an interface that declares a member named `field` —
 	 * or implements an interface that cannot be resolved in the current scope. Such a
 	 * field is pinned to the interface's declared property access, so a `var → final`

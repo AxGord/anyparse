@@ -63,7 +63,7 @@ final class SafeDelete {
 		final srcEntry: Null<Parsed> = parsed.find(p -> p.file == srcFile);
 		if (srcEntry == null) return Err('source file $srcFile is not in the scope file set');
 		final src: Parsed = srcEntry;
-		final memberSpan: Null<Span> = memberSpanOf(src.tree, srcTypeName, memberName);
+		final memberSpan: Null<Span> = memberSpanOf(src.tree, srcTypeName, memberName, src.source, refShape);
 		if (memberSpan == null) return Err('no member "$memberName" on a unique type "$srcTypeName" in $srcFile');
 		final memberSpanNN: Span = memberSpan;
 
@@ -78,7 +78,9 @@ final class SafeDelete {
 	 * `typeName` in `tree` (final-aware), or null when the type or member is
 	 * absent / ambiguous.
 	 */
-	private static function memberSpanOf(tree: QueryNode, typeName: String, memberName: String): Null<Span> {
+	private static function memberSpanOf(
+		tree: QueryNode, typeName: String, memberName: String, source: String, shape: RefShape
+	): Null<Span> {
 		final decls: Array<TypeDeclMatch> = [];
 		function walk(node: QueryNode): Void {
 			final m: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
@@ -87,9 +89,13 @@ final class SafeDelete {
 		}
 		walk(tree);
 		if (decls.length != 1) return null;
-		for (child in decls[0].nameNode.children) if (RefactorSupport.isFieldMemberKind(child.kind) && child.name == memberName)
-			return child.span;
-		return null;
+		var hit: Null<Span> = null;
+		// Branch-aware: a member a `#if` region declares is not a direct child of the type. The delete
+		// cuts it in place, inside that region.
+		MemberBranchScan.eachTypeMember(decls[0], shape, source, n -> RefactorSupport.isFieldMemberKind(n.kind), (child, _) -> {
+			if (hit == null && child.name == memberName) hit = child.span;
+		});
+		return hit;
 	}
 
 	/**

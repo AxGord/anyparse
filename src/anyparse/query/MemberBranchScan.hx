@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.CondBranchProjection;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.RefactorSupport.TypeDeclMatch;
 
 using Lambda;
 
@@ -103,6 +104,67 @@ final class MemberBranchScan {
 			visit(child, run.nodes, run.certain);
 			return freshRun();
 		}, joinRuns);
+	}
+
+	/**
+	 * Every declaration `isMember` accepts under the TYPE `decl`, branch-aware, with the modifier /
+	 * annotation run preceding it in its own branch. The ops' form of `eachMember`: each of them asks
+	 * this same question of a `TypeDeclMatch`, and each had hand-rolled a loop over the type node's
+	 * DIRECT children — which silently exempts every member a `#if` region declares, so the op reports
+	 * "no such member" on one that plainly exists, or worse, succeeds on an incomplete member set.
+	 *
+	 * The `runIsCertain` flag is deliberately not passed on: an uncertain run is the UNION across
+	 * branches, so reading a modifier off it is the fail-closed answer (a keyword any build applies,
+	 * applies), which is what every op here wants. A caller needing the distinction calls `eachMember`.
+	 */
+	public static function eachTypeMember(
+		decl: TypeDeclMatch, shape: RefShape, source: String, isMember: QueryNode -> Bool,
+		visit: (member:QueryNode, run:Array<QueryNode>) -> Void
+	): Void {
+		eachMember(seamsOf(shape, source), decl.nameNode, isMember, (member, run, _) -> visit(member, run));
+	}
+
+	/**
+	 * Does `decl` declare a field or method named `name`, in ANY branch? The destination-name
+	 * collision question every member-creating op asks, in one place: it lived as three byte-identical
+	 * private copies, each blind to guarded members and so each able to introduce a duplicate.
+	 */
+	public static function declaresMemberNamed(decl: TypeDeclMatch, shape: RefShape, source: String, name: String): Bool {
+		var found: Bool = false;
+		eachTypeMember(decl, shape, source, n -> RefactorSupport.isFieldMemberKind(n.kind), (member, _) -> {
+			if (member.name == name) found = true;
+		});
+		return found;
+	}
+
+	/**
+	 * Is `member` declared inside a conditional region of `decl` — i.e. does it exist in only SOME
+	 * builds? The question every MOVE op has to ask before it acts: cutting a member out of its branch
+	 * and pasting it elsewhere unguarded changes which builds have it, so a move must refuse rather
+	 * than silently widen the member's reach. Ops that leave the member in place never need this.
+	 */
+	public static function isGuardedMember(decl: TypeDeclMatch, shape: RefShape, source: String, member: QueryNode): Bool {
+		return branchSpanOf(seamsOf(shape, source), decl.nameNode, member) != null;
+	}
+
+	/**
+	 * The source span of a member together with the modifier / annotation `run` that precedes it —
+	 * `RefactorSupport.declGroupSpan` computed from the run `eachTypeMember` hands out, since a member
+	 * inside a conditional region has that region, not the type, as its parent node.
+	 */
+	public static function groupSpanOf(run: Array<QueryNode>, span: Span): Span {
+		// Only the CONSECUTIVE modifier / meta run directly before the member belongs to it, exactly as
+		// `declGroupSpan` walks back: `eachMember` hands out every non-member child since the previous
+		// member, and starting the group at the first of THOSE swallows whatever else sits between.
+		var from: Int = span.from;
+		var i: Int = run.length - 1;
+		while (i >= 0 && RefactorSupport.isModifierOrMetaKind(run[i].kind)) {
+			final s: Null<Span> = run[i].span;
+			if (s == null) break;
+			from = s.from;
+			i--;
+		}
+		return from == span.from ? span : new Span(from, span.to);
 	}
 
 	/**

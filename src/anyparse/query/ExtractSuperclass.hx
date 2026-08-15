@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.format.comment.CommentLossException;
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
@@ -58,18 +59,6 @@ private enum Either<L, R> {
 final class ExtractSuperclass {
 
 	/** The sibling node kinds a member's modifiers / metadata project to. */
-	private static final MODIFIER_META: Array<String> = [
-		'Meta',
-		'Public',
-		'Private',
-		'Static',
-		'Inline',
-		'Override',
-		'Macro',
-		'Extern',
-		'Dynamic'
-	];
-
 	/**
 	 * Extract a superclass `superName` (written to `superFile`) from
 	 * `srcTypeName` in `srcSource`, pulling up `memberNames`. PURE — the
@@ -94,11 +83,12 @@ final class ExtractSuperclass {
 		final declNN: TypeDeclMatch = decl;
 		if (superNameOf(declNN) != null) return Err('class "$srcTypeName" already extends a class — single inheritance, refusing');
 
-		final moved: Array<Moved> = switch resolveMembers(declNN, memberNames, srcSource) {
+		final shape: RefShape = plugin.refShape();
+		final moved: Array<Moved> = switch resolveMembers(declNN, memberNames, srcSource, shape) {
 			case Left(message): return Err(message);
 			case Right(list): list;
 		};
-		final stranded: Array<String> = strandedRefs(declNN, moved);
+		final stranded: Array<String> = strandedRefs(declNN, moved, srcSource, shape);
 		if (stranded.length > 0)
 			return Err('pulled-up member(s) reference member(s) staying behind: ${stranded.join(', ')} — add them to the set or refactor');
 
@@ -157,41 +147,46 @@ final class ExtractSuperclass {
 	 * static / `new` / override), with its cut span. Refuses an unknown /
 	 * duplicate / ineligible member.
 	 */
-	private static function resolveMembers(decl: TypeDeclMatch, names: Array<String>, source: String): Either<String, Array<Moved>> {
+	private static function resolveMembers(
+		decl: TypeDeclMatch, names: Array<String>, source: String, shape: RefShape
+	): Either<String, Array<Moved>> {
 		final out: Array<Moved> = [];
-		final siblings: Array<QueryNode> = decl.nameNode.children;
+		// Branch-aware: a member a `#if` region declares is not a direct child of the type, and the
+		// scan that missed it answered "class has no instance member" on one that plainly exists.
+		final found: Map<String, { node: QueryNode, run: Array<QueryNode>, span: Span }> = [];
+		MemberBranchScan.eachTypeMember(
+			decl, shape, source, n -> RefactorSupport.isFieldMemberKind(n.kind) || RefactorSupport.FN_DECL_KINDS.contains(n.kind),
+			(child, run) -> {
+				final nm: Null<String> = child.name;
+				final span: Null<Span> = child.span;
+				if (nm != null && span != null && !found.exists(nm)) found[nm] = { node: child, run: run, span: span };
+			}
+		);
 		for (name in names) {
 			if (name == 'new') return Left('cannot pull up a constructor');
 			if (out.exists(m -> m.name == name)) return Left('member "$name" is listed twice');
-			var hit: Null<Moved> = null;
-			for (i => child in siblings) {
-				final kind: String = child.kind;
-				if (child.name != name) continue;
-				if (!RefactorSupport.isFieldMemberKind(kind) && !RefactorSupport.FN_DECL_KINDS.contains(kind)) continue;
-				final span: Null<Span> = child.span;
-				if (span == null) continue;
-				final spanNN: Span = span;
-				var isStatic: Bool = false;
-				var isOverride: Bool = false;
-				var j: Int = i - 1;
-				while (j >= 0 && MODIFIER_META.contains(siblings[j].kind)) {
-					switch siblings[j].kind {
-						case 'Static':
-							isStatic = true;
-						case 'Override':
-							isOverride = true;
-						case _:
-					}
-					j--;
-				}
-				if (isStatic) return Left('"$name" is static — inheritance moves cover instance members only');
-				if (isOverride) return Left('"$name" is an override — cannot pull it up');
-				final groupSpan: Span = RefactorSupport.declGroupSpan(child, decl.nameNode, spanNN);
-				hit = { name: name, node: child, cut: cutSpanOf(source, groupSpan) };
-				break;
-			}
+			final hit: Null<{ node: QueryNode, run: Array<QueryNode>, span: Span }> = found[name];
 			if (hit == null) return Left('class has no instance member "$name"');
-			out.push(hit);
+			final hitNN: { node: QueryNode, run: Array<QueryNode>, span: Span } = hit;
+			var isStatic: Bool = false;
+			var isOverride: Bool = false;
+			for (mod in hitNN.run) switch mod.kind {
+				case 'Static':
+					isStatic = true;
+				case 'Override':
+					isOverride = true;
+				case _:
+			}
+			if (isStatic) return Left('"$name" is static — inheritance moves cover instance members only');
+			if (isOverride) return Left('"$name" is an override — cannot pull it up');
+			// Seeing a guarded member is not licence to MOVE it: cutting it out of its branch and
+			// pasting it into the superclass unguarded gives it to builds that never had it.
+			if (MemberBranchScan.isGuardedMember(decl, shape, source, hitNN.node))
+				return Left(
+					'"$name" is declared inside a conditional-compilation region — pulling it out of its branch would change which builds declare it'
+				);
+			final groupSpan: Span = RefactorSupport.declGroupSpan(hitNN.node, decl.nameNode, hitNN.span);
+			out.push({ name: name, node: hitNN.node, cut: cutSpanOf(source, groupSpan) });
 		}
 		out.sort((a, b) -> a.cut.from - b.cut.from);
 		return Right(out);
@@ -203,18 +198,19 @@ final class ExtractSuperclass {
 	 * AST-name match (bare call / read / `this.member`), so comments and
 	 * strings never trigger it.
 	 */
-	private static function strandedRefs(decl: TypeDeclMatch, moved: Array<Moved>): Array<String> {
+	private static function strandedRefs(decl: TypeDeclMatch, moved: Array<Moved>, source: String, shape: RefShape): Array<String> {
 		final movingNames: Map<String, Bool> = [for (m in moved) m.name => true];
 		final memberNames: Map<String, Bool> = [];
-		for (child in decl.nameNode.children) {
-			final kind: String = child.kind;
-			final nm: Null<String> = child.name;
-			if (
-				nm != null && !movingNames.exists(nm) && nm != 'new'
-				&& (RefactorSupport.isFieldMemberKind(kind) || RefactorSupport.FN_DECL_KINDS.contains(kind))
-			)
-				memberNames[nm] = true;
-		}
+		// Branch-aware, and this one fails SILENTLY when it is not: a member left behind inside a `#if`
+		// region was absent from this set, so a pulled-up method reading it passed the stranded-reference
+		// gate and the generated superclass did not compile.
+		MemberBranchScan.eachTypeMember(
+			decl, shape, source, n -> RefactorSupport.isFieldMemberKind(n.kind) || RefactorSupport.FN_DECL_KINDS.contains(n.kind),
+			(child, _) -> {
+				final nm: Null<String> = child.name;
+				if (nm != null && !movingNames.exists(nm) && nm != 'new') memberNames[nm] = true;
+			}
+		);
 		final found: Map<String, Bool> = [];
 		function walk(node: QueryNode): Void {
 			final nm: Null<String> = node.name;

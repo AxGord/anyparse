@@ -769,6 +769,12 @@ final class RefactorSupport {
 	 * `{ var x:Int; }` there projects the very kinds a member does (`VarField` /
 	 * `FinalField`), so descending reports its fields as members of the enclosing type —
 	 * a phantom that has bitten the symbol index and `remove-member` alike.
+	 *
+	 * For a TYPE's members prefer `MemberBranchScan.eachTypeMember`, which additionally recovers
+	 * the branch boundaries a flattened region loses, so each member sees the modifier run of its
+	 * OWN branch. Either beats iterating a type node's `children` directly: that shortcut sees no
+	 * member a `#if` region declares, and the miss is silent — the op reports success on a rewrite
+	 * that omits the guarded declaration, or refuses a member that plainly exists.
 	 */
 	public static function eachMemberHost(node: QueryNode, visit: QueryNode -> Void): Void {
 		visit(node);

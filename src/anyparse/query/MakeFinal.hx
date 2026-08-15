@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.Span;
@@ -63,14 +64,15 @@ final class MakeFinal {
 		if (srcEntry == null) return Err('source file $srcFile is not in the scope file set');
 		final src: Parsed = srcEntry;
 
-		final fieldNode: Null<QueryNode> = resolveVarField(src.tree, typeName, fieldName);
+		final shape: RefShape = plugin.refShape();
+		final fieldNode: Null<QueryNode> = resolveVarField(src.tree, typeName, fieldName, src.source, shape);
 		if (fieldNode == null) return Err('no mutable var field "$fieldName" on a unique type "$typeName" in $srcFile');
 		final fNode: QueryNode = fieldNode;
 		final fieldSpan: Null<Span> = fNode.span;
 		if (fieldSpan == null) return Err('field "$fieldName" carries no span');
 		final fieldSpanNN: Span = fieldSpan;
 
-		final ctorSpan: Null<Span> = constructorSpan(src.tree, typeName);
+		final ctorSpan: Null<Span> = constructorSpan(src.tree, typeName, src.source, shape);
 		final hasInit: Bool = fNode.children.length > 0;
 		final writes: { ctorWrites: Int, outside: Array<String> } = classifyWrites(parsed, srcFile, fieldName, ctorSpan);
 		if (writes.outside.length > 0)
@@ -114,22 +116,29 @@ final class MakeFinal {
 	 * (final-aware). Null when the type or a mutable field of that name is
 	 * absent / ambiguous (a `final` field is already done and not matched).
 	 */
-	private static function resolveVarField(tree: QueryNode, typeName: String, fieldName: String): Null<QueryNode> {
+	private static function resolveVarField(
+		tree: QueryNode, typeName: String, fieldName: String, source: String, shape: RefShape
+	): Null<QueryNode> {
 		final decl: Null<TypeDeclMatch> = findSoleTypeDecl(tree, typeName);
 		if (decl == null) return null;
-		for (child in decl.nameNode.children) {
-			final kind: String = child.kind;
-			if ((kind == 'VarMember' || kind == 'VarField') && child.name == fieldName) return child;
-		}
-		return null;
+		var hit: Null<QueryNode> = null;
+		// Branch-aware: a field a `#if` region declares is not a direct child of the type. The swap is
+		// in place, inside that region, so seeing it is the whole fix.
+		MemberBranchScan.eachTypeMember(decl, shape, source, n -> n.kind == 'VarMember' || n.kind == 'VarField', (child, _) -> {
+			if (hit == null && child.name == fieldName) hit = child;
+		});
+		return hit;
 	}
 
 	/** The span of the `new` constructor of the sole type `typeName`, or null. */
-	private static function constructorSpan(tree: QueryNode, typeName: String): Null<Span> {
+	private static function constructorSpan(tree: QueryNode, typeName: String, source: String, shape: RefShape): Null<Span> {
 		final decl: Null<TypeDeclMatch> = findSoleTypeDecl(tree, typeName);
 		if (decl == null) return null;
-		for (child in decl.nameNode.children) if (child.kind == 'FnMember' && child.name == 'new') return child.span;
-		return null;
+		var hit: Null<Span> = null;
+		MemberBranchScan.eachTypeMember(decl, shape, source, n -> n.kind == 'FnMember', (child, _) -> {
+			if (hit == null && child.name == 'new') hit = child.span;
+		});
+		return hit;
 	}
 
 	/**

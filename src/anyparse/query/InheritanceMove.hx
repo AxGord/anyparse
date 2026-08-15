@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
@@ -24,6 +25,9 @@ private typedef Resolved = {
 	var cut: Span;
 	var isStatic: Bool;
 	var isOverride: Bool;
+
+	/** Declared inside a `#if` region — present in only SOME builds, so it cannot leave its branch. */
+	var guarded: Bool;
 }
 
 /** One scope file parsed once. */
@@ -64,18 +68,6 @@ private typedef Parsed = {
 final class InheritanceMove {
 
 	/** The sibling node kinds a member's modifiers / metadata project to. */
-	private static final MODIFIER_META: Array<String> = [
-		'Meta',
-		'Public',
-		'Private',
-		'Static',
-		'Inline',
-		'Override',
-		'Macro',
-		'Extern',
-		'Dynamic'
-	];
-
 	/** Move `member` from the subclass `subType` up to its superclass `superType`. */
 	public static inline function pullUp(
 		srcFile: String, subType: String, member: String, superType: String, scopeFiles: Array<{ file: String, source: String }>,
@@ -125,14 +117,15 @@ final class InheritanceMove {
 			return Err('"$subName" does not directly extend "$expectedSuper" (extends "${actualSuper ?? 'nothing'}")');
 		}
 
-		final resolved: Null<Resolved> = resolveMember(srcDeclNN, memberName, src.source);
+		final shape: RefShape = plugin.refShape();
+		final resolved: Null<Resolved> = resolveMember(srcDeclNN, memberName, src.source, shape);
 		if (resolved == null) return Err('class "$srcType" has no member "$memberName"');
 		final m: Resolved = resolved;
-		final refusal: Null<String> = memberRefusal(m, memberName, targetType, targetDecl, target.source);
+		final refusal: Null<String> = memberRefusal(m, memberName, targetType, targetDecl, target.source, shape);
 		if (refusal != null) return Err(refusal);
 
 		if (dir == Up) {
-			final stranded: Array<String> = referencedSubMembers(srcDeclNN, memberName, m.node);
+			final stranded: Array<String> = referencedSubMembers(srcDeclNN, memberName, m.node, src.source, shape);
 			if (stranded.length > 0)
 				return Err(
 					'"$memberName" references subclass member(s) not present on "$targetType": ${stranded.join(', ')} '
@@ -163,7 +156,7 @@ final class InheritanceMove {
 	 * target. Null when the member may move.
 	 */
 	private static function memberRefusal(
-		m: Resolved, memberName: String, targetType: String, targetDecl: TypeDeclMatch, targetSource: String
+		m: Resolved, memberName: String, targetType: String, targetDecl: TypeDeclMatch, targetSource: String, shape: RefShape
 	): Null<String> {
 		return if (memberName == 'new')
 			'cannot move a constructor'
@@ -171,7 +164,9 @@ final class InheritanceMove {
 			'"$memberName" is static — inheritance moves cover instance members only'
 		else if (m.isOverride)
 			'"$memberName" is an override — move the base declaration instead'
-		else if (resolveMember(targetDecl, memberName, targetSource) != null)
+		else if (m.guarded)
+			'"$memberName" is declared inside a conditional-compilation region — moving it out of its branch would change which builds declare it'
+		else if (resolveMember(targetDecl, memberName, targetSource, shape) != null)
 			'type "$targetType" already declares a member "$memberName"'
 		else
 			null;
@@ -266,37 +261,27 @@ final class InheritanceMove {
 	 * Resolve the member named `name` in `decl`: its node, cut span (doc +
 	 * whole line included), and static / override flags. Null when absent.
 	 */
-	private static function resolveMember(decl: TypeDeclMatch, name: String, source: String): Null<Resolved> {
-		final siblings: Array<QueryNode> = decl.nameNode.children;
-		for (i => child in siblings) {
-			final kind: String = child.kind;
-			if (!RefactorSupport.isFieldMemberKind(kind) && !RefactorSupport.FN_DECL_KINDS.contains(kind)) continue;
-			if (child.name != name) continue;
-			final span: Null<Span> = child.span;
-			if (span == null) continue;
-			final spanNN: Span = span;
-			var isStatic: Bool = false;
-			var isOverride: Bool = false;
-			var j: Int = i - 1;
-			while (j >= 0 && MODIFIER_META.contains(siblings[j].kind)) {
-				switch siblings[j].kind {
-					case 'Static':
-						isStatic = true;
-					case 'Override':
-						isOverride = true;
-					case _:
-				}
-				j--;
+	private static function resolveMember(decl: TypeDeclMatch, name: String, source: String, shape: RefShape): Null<Resolved> {
+		var hit: Null<Resolved> = null;
+		// Branch-aware, so a member a `#if` region declares is found rather than reported absent. It is
+		// still refused as a MOVE (`guarded`) — cutting it out of its branch would change which builds
+		// declare it — but the refusal now names the real reason.
+		MemberBranchScan.eachTypeMember(
+			decl, shape, source, n -> RefactorSupport.isFieldMemberKind(n.kind) || RefactorSupport.FN_DECL_KINDS.contains(n.kind),
+			(child, run) -> {
+				final span: Null<Span> = child.span;
+				if (hit != null || child.name != name || span == null) return;
+				final spanNN: Span = span;
+				hit = {
+					node: child,
+					cut: cutSpanOf(source, MemberBranchScan.groupSpanOf(run, spanNN)),
+					isStatic: run.exists(m -> m.kind == 'Static'),
+					isOverride: run.exists(m -> m.kind == 'Override'),
+					guarded: MemberBranchScan.isGuardedMember(decl, shape, source, child)
+				};
 			}
-			final groupSpan: Span = RefactorSupport.declGroupSpan(child, decl.nameNode, spanNN);
-			return {
-				node: child,
-				cut: cutSpanOf(source, groupSpan),
-				isStatic: isStatic,
-				isOverride: isOverride
-			};
-		}
-		return null;
+		);
+		return hit;
 	}
 
 	/**
@@ -307,14 +292,20 @@ final class InheritanceMove {
 	 * triggers it. Conservative: a local / parameter that shadows a member
 	 * name may over-refuse, which only ever keeps a member in place.
 	 */
-	private static function referencedSubMembers(subDecl: TypeDeclMatch, movingName: String, moved: QueryNode): Array<String> {
+	private static function referencedSubMembers(
+		subDecl: TypeDeclMatch, movingName: String, moved: QueryNode, source: String, shape: RefShape
+	): Array<String> {
 		final memberNames: Map<String, Bool> = [];
-		for (child in subDecl.nameNode.children) {
-			final kind: String = child.kind;
-			final nm: Null<String> = child.name;
-			if (nm != null && nm != movingName && (RefactorSupport.isFieldMemberKind(kind) || RefactorSupport.FN_DECL_KINDS.contains(kind)))
-				memberNames[nm] = true;
-		}
+		// Branch-aware, and silently wrong when it is not: a member left behind inside a `#if` region
+		// was absent from this set, so a member referencing it passed the gate and the move produced
+		// code that does not compile.
+		MemberBranchScan.eachTypeMember(
+			subDecl, shape, source, n -> RefactorSupport.isFieldMemberKind(n.kind) || RefactorSupport.FN_DECL_KINDS.contains(n.kind),
+			(child, _) -> {
+				final nm: Null<String> = child.name;
+				if (nm != null && nm != movingName) memberNames[nm] = true;
+			}
+		);
 		final found: Map<String, Bool> = [];
 		function walk(node: QueryNode): Void {
 			final nm: Null<String> = node.name;
