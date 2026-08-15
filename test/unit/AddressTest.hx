@@ -6,6 +6,11 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Address;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
+import anyparse.query.Pattern.KindEquivalence;
+import anyparse.query.Engine;
+import anyparse.query.Selector;
+
+using Lambda;
 
 /**
  * Unit tests for the shared target-address resolver (`Address.resolve`) — the
@@ -288,6 +293,96 @@ class AddressTest extends Test {
 		}
 	}
 
+	/**
+	 * The address `describe` hands back must address the node it was asked about — checked
+	 * for EVERY node of a source rich enough to reach statement, branch and binary-operator
+	 * nodes. The check resolves through `Engine.select`, the whole-tree walk the index
+	 * exists to replace, so the interval arithmetic is confirmed by an independent oracle
+	 * rather than by itself.
+	 */
+	public function testEveryAddressResolvesBackToItsNode(): Void {
+		final fixture = indexFixture();
+		final position: EReg = ~/^\d+:\d+$/;
+		var resolved: Int = 0;
+		for (n in fixture.nodes) {
+			final address: String = fixture.index.describe(fixture.src, n);
+			if (position.match(address)) continue;
+			final parts: Array<String> = address.split(' --nth ');
+			final matches: Array<QueryNode> = Engine.select(fixture.tree, Selector.parse(parts[0]), fixture.equiv);
+			if (parts.length == 2) {
+				final nth: Null<Int> = Std.parseInt(parts[1]);
+				Assert.notNull(nth);
+				if (nth != null) Assert.equals(n, matches[nth - 1]);
+			} else {
+				Assert.equals(1, matches.length);
+				Assert.equals(n, matches[0]);
+			}
+			resolved++;
+		}
+		Assert.isTrue(resolved > 20);
+	}
+
+	/**
+	 * `Selector.parse` reads any `>` byte as a child separator, so a string literal whose
+	 * TEXT contains one turns `segmentOf`'s own address into a selector no node can
+	 * satisfy. `describe` must fall back to a bare position rather than emit that
+	 * unresolvable selector. Probed first via `hxq probe`: a `DoubleStringExpr`'s `name`
+	 * slot carries the raw quoted text (`"a > b"`), the exact slot `segmentOf` reads.
+	 */
+	public function testNameWithSelectorSeparatorFallsBackToPosition(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar s = "a > b";\n\t}\n}\n';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(src);
+		final nodes: Array<QueryNode> = [];
+		collectAll(tree, nodes);
+		final literal: Null<QueryNode> = nodes.find(n -> n.kind == 'DoubleStringExpr');
+		Assert.notNull(literal);
+		if (literal == null) return;
+		final address: String = Address.describe(tree, src, literal, plugin.selectKindEquivalence());
+		Assert.isTrue(~/^\d+:\d+$/.match(address));
+	}
+
+	/**
+	 * Two `Call` nodes of identical kind, one nested inside the other's argument — no
+	 * name anywhere disambiguates them, so `describe` falls back to a `--nth` ordinal.
+	 * That ordinal must be the node's own rank among `Call` matches in document
+	 * (pre-order) order — exactly what `descendantsOf`/`lowerBound` compute from
+	 * pre-order intervals instead of a walk.
+	 */
+	public function testNestedSameKindKeepsDocumentOrderOrdinal(): Void {
+		final src: String = 'class C {\n\tfunction h():Void {\n\t\tf(g(x));\n\t}\n}\n';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(src);
+		final equiv: KindEquivalence = plugin.selectKindEquivalence();
+		switch Address.resolve(tree, src, plugin, { match: 'g(x)' }) {
+			case Ok(_, node):
+				final inner: Null<QueryNode> = node;
+				Assert.notNull(inner);
+				if (inner == null) return;
+				final address: String = Address.describe(tree, src, inner, equiv);
+				final parts: Array<String> = address.split(' --nth ');
+				Assert.equals(2, parts.length);
+				final matches: Array<QueryNode> = Engine.select(tree, Selector.parse(parts[0]), equiv);
+				Assert.equals(Std.parseInt(parts[1]), matches.indexOf(inner) + 1);
+			case Err(message):
+				Assert.fail(message);
+		}
+	}
+
+	/**
+	 * One `AddressIndex` reused across a whole file's addresses must answer exactly what a
+	 * throwaway index per address answers. `Cli`'s JSON lint report keeps a single index
+	 * alive for every finding of a file, so anything an address left behind in the shared
+	 * per-kind groups would corrupt the next one — `Address.describe`, which builds a fresh
+	 * index per call, is the reference.
+	 */
+	public function testSharedIndexMatchesFreshIndexPerCall(): Void {
+		final fixture = indexFixture();
+		Assert.isTrue(fixture.nodes.length > 20);
+		for (n in fixture.nodes)
+			Assert.equals(Address.describe(fixture.tree, fixture.src, n, fixture.equiv), fixture.index.describe(fixture.src, n));
+	}
+
 	private function resolve(spec: AddressSpec): AddressResult {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: QueryNode = plugin.parseFile(SRC);
@@ -309,6 +404,42 @@ class AddressTest extends Test {
 			case Err(message):
 				Assert.fail(message);
 		}
+	}
+
+	/** Every node of `node`'s subtree, in pre-order — the walk C1/C2 need to visit every node. */
+	private function collectAll(node: QueryNode, out: Array<QueryNode>): Void {
+		out.push(node);
+		for (child in node.children) collectAll(child, out);
+	}
+
+	/**
+	 * The shared fixture of the two index-wide tests: a source rich enough to reach
+	 * statement, branch and binary-operator nodes, its tree, an `AddressIndex` over that
+	 * tree, and every node of it in pre-order.
+	 */
+	private function indexFixture(): {
+		src: String,
+		tree: QueryNode,
+		equiv: KindEquivalence,
+		index: AddressIndex,
+		nodes: Array<QueryNode>
+	} {
+		final src: String = 'class C {\n\tfunction f():Int {\n\t\tvar x = 1;\n\t\tvar y = 2;\n\t\ttrace(x);\n\t\ttrace(y);\n\t\t'
+			+ 'if (x > y) trace(x); else trace(y);\n\t\treturn x + y;\n\t}\n'
+			+ '\tfunction g():Void {\n\t\tvar x = 3;\n\t\ttrace(x);\n\t\tif (x > 0) {\n\t\t\ttrace(x);\n\t\t\ttrace(x);\n\t\t}\n\t}\n'
+			+ '\tfunction h():Void {\n\t\ttrace(1);\n\t\ttrace(2);\n\t\ttrace(3);\n\t}\n}\n';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(src);
+		final equiv: KindEquivalence = plugin.selectKindEquivalence();
+		final nodes: Array<QueryNode> = [];
+		collectAll(tree, nodes);
+		return {
+			src: src,
+			tree: tree,
+			equiv: equiv,
+			index: Address.describerFor(tree, equiv),
+			nodes: nodes
+		};
 	}
 
 }

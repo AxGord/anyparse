@@ -47,6 +47,8 @@ import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.Clusters.ClusterReport;
 import anyparse.check.CompilerServer;
 import anyparse.core.EnvFlag;
+import anyparse.query.Address.AddressIndex;
+import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.ExitCode.*;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
@@ -9265,6 +9267,15 @@ final class Cli {
 				// (`address`) — directly usable as a mutation-op --select argument.
 				// The caching plugin parses each file once across all findings.
 				final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin('haxe'));
+				final equiv: KindEquivalence = plugin.selectKindEquivalence();
+				// Addressing a node probes its tree several times, so an index per FINDING
+				// made the annotation cost far more than the analysis it annotates.
+				// `ordered` groups a file's findings together, so ONE slot serves a whole
+				// file and nothing is retained past it. Keyed by the TREE, not the path:
+				// the parse cache is keyed by CONTENT, and an index handed a node it never
+				// saw degrades every address to `<line>:<col>` in silence.
+				var indexTree: Null<QueryNode> = null;
+				var index: Null<AddressIndex> = null;
 				sysPrint(LintFormat.json(ordered, sourceOf, v -> {
 					final span: Null<Span> = v.span;
 					final source: Null<String> = sourceOf[v.file];
@@ -9273,7 +9284,14 @@ final class Cli {
 						try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
 					if (tree == null) return null;
 					final node: Null<QueryNode> = Engine.at(tree, span.from);
-					return node == null ? null : Address.describe(tree, source, node, plugin.selectKindEquivalence());
+					if (node == null) return null;
+					var current: Null<AddressIndex> = index;
+					if (current == null || indexTree != tree) {
+						current = Address.describerFor(tree, equiv);
+						indexTree = tree;
+						index = current;
+					}
+					return current.describe(source, node);
 				}));
 			case 'checkstyle':
 				sysPrint(LintFormat.checkstyle(ordered, sourceOf));

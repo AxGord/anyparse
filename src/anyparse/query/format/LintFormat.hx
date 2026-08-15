@@ -1,6 +1,7 @@
 package anyparse.query.format;
 
 import anyparse.check.Check.Violation;
+import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
 import haxe.Json;
 
@@ -8,7 +9,8 @@ import haxe.Json;
  * Machine-readable renderers for analysis-check violations — the JSON and
  * checkstyle-XML counterparts of `Text.renderViolations`. Both take a flat
  * violation list (already filtered and ordered by the caller) plus a
- * `file -> source` map for line/column resolution via `Span.lineCol`.
+ * `file -> source` map, from which each renderer builds one `LineIndex` per
+ * file and resolves every line/column through it.
  * Symmetric with the `checkstyle.json` config the project already consumes:
  * emitting checkstyle XML lets the same CI tooling ingest apq findings.
  */
@@ -26,9 +28,10 @@ final class LintFormat {
 	public static function json(
 		violations: Array<Violation>, sourceOf: Map<String, String>, ?addressOf: Violation -> Null<String>
 	): String {
+		final indexes: Map<String, LineIndex> = [];
 		final records: Array<Dynamic> = [
 			for (v in violations) {
-				final record: Dynamic = recordOf(v, sourceOf);
+				final record: Dynamic = recordOf(v, indexFor(v.file, sourceOf, indexes));
 				if (addressOf != null) {
 					final address: Null<String> = addressOf(v);
 					if (address != null) Reflect.setField(record, 'address', address);
@@ -59,16 +62,17 @@ final class LintFormat {
 			list.push(v);
 		}
 
+		final indexes: Map<String, LineIndex> = [];
 		final buf: StringBuf = new StringBuf();
 		buf.add('<?xml version="1.0" encoding="UTF-8"?>\n');
 		buf.add('<checkstyle version="8.0">\n');
 		for (file in order) {
 			final group: Null<Array<Violation>> = byFile[file];
 			if (group == null) continue;
-			final source: String = sourceOf[file] ?? '';
+			final index: LineIndex = indexFor(file, sourceOf, indexes);
 			buf.add('  <file name="${xml(file)}">\n');
 			for (v in group) {
-				final pos: Null<Position> = posOf(v, source);
+				final pos: Null<Position> = posOf(v, index);
 				final line: Int = pos != null ? pos.line : 0;
 				final col: Int = pos != null ? pos.col : 0;
 				buf.add('    <error line="$line" column="$col" severity="${v.severity.label()}"');
@@ -81,8 +85,8 @@ final class LintFormat {
 	}
 
 	/** One JSON record for a violation; null span yields null line/col. */
-	private static function recordOf(v: Violation, sourceOf: Map<String, String>): Dynamic {
-		final pos: Null<Position> = posOf(v, sourceOf[v.file] ?? '');
+	private static function recordOf(v: Violation, index: LineIndex): Dynamic {
+		final pos: Null<Position> = posOf(v, index);
 		return {
 			file: v.file,
 			line: pos?.line,
@@ -94,9 +98,9 @@ final class LintFormat {
 	}
 
 	/** Resolve a violation's 1-indexed position, or null when it has no span. */
-	private static function posOf(v: Violation, source: String): Null<Position> {
+	private static function posOf(v: Violation, index: LineIndex): Null<Position> {
 		final span: Null<Span> = v.span;
-		return span?.lineCol(source);
+		return span == null ? null : index.lineColAt(span.from);
 	}
 
 	/** XML-escape an attribute value. */
@@ -109,6 +113,21 @@ final class LintFormat {
 			.join('&gt;')
 			.split('"')
 			.join('&quot;');
+	}
+
+	/**
+	 * The line index of `file`, built at most once per render. `Span.lineCol` counts newlines
+	 * from offset zero on every call, so resolving one position per finding costs
+	 * O(findings x file size) — the shape that made a 413 KB file with ~9750 findings dominate a
+	 * whole-corpus run. `LineIndex` pays one linear pass per source instead, and its own doc
+	 * states it resolves identically, clamps included.
+	 */
+	private static function indexFor(file: String, sourceOf: Map<String, String>, cache: Map<String, LineIndex>): LineIndex {
+		final hit: Null<LineIndex> = cache[file];
+		if (hit != null) return hit;
+		final built: LineIndex = new LineIndex(sourceOf[file] ?? '');
+		cache[file] = built;
+		return built;
 	}
 
 }
