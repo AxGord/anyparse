@@ -84,7 +84,7 @@ final class ExtractInterface {
 		};
 		if (selected.length == 0) return Err('class "$srcTypeName" has no public instance method to extract');
 
-		final pkg: String = packageOf(tree);
+		final pkg: String = ModuleScan.packageOf(tree);
 		final imports: Array<String> = carriedImports(tree, selected);
 		final ifaceSource: String = switch buildInterface(ifaceName, pkg, selected, imports, plugin) {
 			case Left(message): return Err(message);
@@ -198,12 +198,6 @@ final class ExtractInterface {
 			out.push(m);
 		}
 		return Right(out);
-	}
-
-	/** The file's `package` path, or "" when none. */
-	private static function packageOf(tree: QueryNode): String {
-		for (child in tree.children) if (child.kind == 'PackageDecl') return child.name ?? '';
-		return '';
 	}
 
 	/**

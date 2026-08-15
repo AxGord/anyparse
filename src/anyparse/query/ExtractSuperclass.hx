@@ -93,7 +93,7 @@ final class ExtractSuperclass {
 			return Err('pulled-up member(s) reference member(s) staying behind: ${stranded.join(', ')} — add them to the set or refactor');
 
 		final blocks: Array<String> = [for (m in moved) trimNewlineEdges(srcSource.substring(m.cut.from, m.cut.to))];
-		final pkg: String = packageOf(tree);
+		final pkg: String = ModuleScan.packageOf(tree);
 		final imports: Array<String> = carriedImports(tree, blocks);
 		final superSource: String = switch buildSuperclass(superName, pkg, blocks, imports, plugin) {
 			case Left(message): return Err(message);
@@ -220,12 +220,6 @@ final class ExtractSuperclass {
 		}
 		for (m in moved) walk(m.node);
 		return [for (k in found.keys()) k];
-	}
-
-	/** The file's `package` path, or "" when none. */
-	private static function packageOf(tree: QueryNode): String {
-		for (child in tree.children) if (child.kind == 'PackageDecl') return child.name ?? '';
-		return '';
 	}
 
 	/** The source imports whose exposed name appears in any moved block. */

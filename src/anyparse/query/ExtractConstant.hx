@@ -111,7 +111,7 @@ final class ExtractConstant {
 
 			// Same-package files (and a root-package module, globally visible)
 			// reference the module with no import; a differing real package needs one.
-			final needsImport: Bool = modulePkg != '' && packageOf(tree) != modulePkg && !alreadyImportsModule(tree, modulePath);
+			final needsImport: Bool = modulePkg != '' && ModuleScan.packageOf(tree) != modulePkg && !alreadyImportsModule(tree, modulePath);
 			final newSource: String = if (!needsImport)
 				replaced
 			else
@@ -180,12 +180,6 @@ final class ExtractConstant {
 			return RefactorSupport.docExtendedSpan(source, group).from;
 		}
 		return -1;
-	}
-
-	/** The package of a parsed source (`PackageDecl.name`), or `''` when none. */
-	private static function packageOf(tree: QueryNode): String {
-		for (child in tree.children) if (child.kind == 'PackageDecl') return child.name ?? '';
-		return '';
 	}
 
 	/**
