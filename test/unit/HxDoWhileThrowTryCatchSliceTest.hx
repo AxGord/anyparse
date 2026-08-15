@@ -474,8 +474,10 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 			'class C { function f():Void { try switch x { case _: h(); } catch (a:E) p(a) catch (b:F) q(b); } }'
 		]) {
 			switch parseBody(source)[0] {
-				case TryCatchStmtBare(stmt): Assert.equals(2, stmt.catches.length);
-				case null, _: Assert.fail('expected TryCatchStmtBare for $source');
+				case TryCatchStmtBare(stmt):
+					Assert.equals(2, stmt.catches.length);
+				case null, _:
+					Assert.fail('expected TryCatchStmtBare for $source');
 			}
 			roundTrip(source);
 		}
@@ -499,8 +501,10 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 	public function testBareCatchChainEndingInBlockConvergesInTwoPasses(): Void {
 		final source: String = 'class C { function f():Void { try { g(); } catch (a:E) p(a) catch (b:F) { q(b); } } }';
 		switch parseBody(source)[0] {
-			case ExprStmt(TryExpr(_)): Assert.isTrue(true);
-			case null, _: Assert.fail('expected ExprStmt(TryExpr) for $source');
+			case ExprStmt(TryExpr(_)):
+				Assert.isTrue(true);
+			case null, _:
+				Assert.fail('expected ExprStmt(TryExpr) for $source');
 		}
 
 		final first: String = HxModuleWriter.write(HaxeModuleParser.parse(source));
@@ -523,8 +527,10 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 			'class C { function f():Void { try { g(); } } }'
 		]) {
 			switch parseBody(source)[0] {
-				case TryCatchStmt(_): Assert.isTrue(true);
-				case null, _: Assert.fail('expected TryCatchStmt for $source');
+				case TryCatchStmt(_):
+					Assert.isTrue(true);
+				case null, _:
+					Assert.fail('expected TryCatchStmt for $source');
 			}
 			roundTrip(source);
 		}

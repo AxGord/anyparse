@@ -69,9 +69,9 @@ class ApqDxTier3CliTest extends Test {
 			'apq_regex_strip', 'class M { var a = new Foo<X>(1); var b = new Foo<Y>(2); var c = new Bar<Z>(3); }'
 		);
 		final exit: Int = Cli.run([
-    'strip',               input, '--regex', '--dry-run',
-'--replace', 'new \\w+<\\w+>\\(',  '--with',          '',
-]);
+			    'strip',               input, '--regex', '--dry-run',
+			'--replace', 'new \\w+<\\w+>\\(',  '--with',          '',
+		]);
 		Assert.equals(0, exit);
 		FileSystem.deleteFile(input);
 		#else

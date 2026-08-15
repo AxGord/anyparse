@@ -2887,9 +2887,10 @@ final class Cli {
 	/**
 	 * `apq remove-member <file> --type <T> <memberName> [--reformat] [--write]`
 	 * — remove the member named `<memberName>` of type `<T>` (a field or
-	 * method), with its modifier / meta group. Both `<T>` and `<memberName>`
-	 * must resolve to exactly one node. The by-name counterpart of
-	 * `add-member`.
+	 * method), with its modifier / meta group. `<T>` must resolve to exactly one
+	 * node; `<memberName>` may resolve to several, when conditional-compilation
+	 * regions declare it once per build — those are one logical member and all
+	 * of them go. The by-name counterpart of `add-member`.
 	 */
 	private static function runRemoveMember(args: Array<String>): Int {
 		var lang: String = 'haxe';
@@ -5816,8 +5817,10 @@ final class Cli {
 		sysPrint('Usage: apq remove-member <file> --type <T> <memberName> [options]\n');
 		sysPrint('\n');
 		sysPrint('Remove the member named <memberName> of type <T> (a field or method), with\n');
-		sysPrint('its modifier / meta group. Both <T> and <memberName> must resolve to exactly\n');
-		sysPrint('one node. The by-name counterpart of add-member.\n');
+		sysPrint('its modifier / meta group. <T> must resolve to exactly one node. When the\n');
+		sysPrint('name is declared in several conditional-compilation branches, ALL of those\n');
+		sysPrint('declarations go — they are one logical member — and a region left with no\n');
+		sysPrint('member takes its directives with it. The by-name counterpart of add-member.\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --type <T>      The enclosing type (required)\n');

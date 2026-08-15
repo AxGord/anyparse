@@ -1202,19 +1202,7 @@ final class RefactorSupport {
 		source: String, node: QueryNode, parent: Null<QueryNode>, reformat: Bool, plugin: GrammarPlugin, withDoc: Bool = false,
 		?optsJson: String
 	): EditResult {
-		final nodeSpan: Null<Span> = node.span;
-		if (nodeSpan == null) return Err('the node to remove has no source span');
-		final group: Span = declGroupSpan(node, parent, nodeSpan);
-		// `--with-doc` extends the removed range back over a leading doc / block
-		// comment so a documented member's `/** */` is removed with it (else the
-		// comment is orphaned). The line/comma extension then runs on top.
-		final span: Span = withDoc ? docExtendedSpan(source, group) : group;
-
-		var isComma: Bool = adjacentToComma(source, span);
-		if (!isComma && parent != null) isComma = COMMA_CONTAINER_KINDS.contains(parent.kind);
-
-		final delSpan: Span = isComma ? commaExtendedSpan(source, span) : lineExtendedSpan(source, span);
-		return canonicalize(source, [{ span: delSpan, text: '' }], reformat, plugin, optsJson);
+		return deleteNodes(source, [{ node: node, parent: parent }], reformat, plugin, withDoc, optsJson);
 	}
 
 	/**
@@ -4745,6 +4733,61 @@ final class RefactorSupport {
 				pending = collectStaticFroms(child, staticKind, members, pending, out) || pending;
 		}
 		return pending;
+	}
+
+
+	/**
+	 * Remove EVERY node in `targets` from `source` in one canonicalisation — the multi-node
+	 * form of `deleteNode`, which is this with a single target.
+	 *
+	 * One call rather than a fold of single deletions because each `deleteNode` returns
+	 * REWRITTEN source: the second call would have to re-parse it and re-resolve its target,
+	 * and the writer may by then have moved the very span the caller measured. Collecting the
+	 * spans against ONE tree and handing them to `canonicalize` together keeps every span in
+	 * the coordinate system it was computed in.
+	 *
+	 * That is also why OVERLAP is refused rather than tolerated. `applyEdits` splices each span
+	 * independently, so a target nested inside another (a member and the region holding it, or
+	 * two nested regions) makes the second splice run on coordinates the first already shifted —
+	 * it deletes unrelated code, and the re-parse does not catch it because the wreckage usually
+	 * still parses. A caller that means to remove a node and its container passes the CONTAINER
+	 * alone. Spans widened to their line can also collide between neighbours that share a line,
+	 * which the same check catches.
+	 */
+	public static function deleteNodes(
+		source: String, targets: Array<{ node: QueryNode, parent: Null<QueryNode> }>, reformat: Bool, plugin: GrammarPlugin,
+		withDoc: Bool = false, ?optsJson: String
+	): EditResult {
+		if (targets.length == 0) return Err('no node to remove');
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (target in targets) {
+			final nodeSpan: Null<Span> = target.node.span;
+			if (nodeSpan == null) return Err('the node to remove has no source span');
+			final group: Span = declGroupSpan(target.node, target.parent, nodeSpan);
+			// `--with-doc` extends the removed range back over a leading doc / block
+			// comment so a documented member's `/** */` is removed with it (else the
+			// comment is orphaned). The line/comma extension then runs on top.
+			final span: Span = withDoc ? docExtendedSpan(source, group) : group;
+
+			var isComma: Bool = adjacentToComma(source, span);
+			final parent: Null<QueryNode> = target.parent;
+			if (!isComma && parent != null) isComma = COMMA_CONTAINER_KINDS.contains(parent.kind);
+
+			edits.push({ span: isComma ? commaExtendedSpan(source, span) : lineExtendedSpan(source, span), text: '' });
+		}
+		// A target nested in another — a member and the region holding it, two nested regions — is
+		// dropped in favour of the outer one, which removes it anyway. `isContainedEdit` is the same
+		// containment test `lint --fix` uses to keep an edit set atomic, and it already carries which
+		// geometries survive `applyEdits`' right-to-left splice.
+		final kept: Array<{ span: Span, text: String }> = [for (i => edit in edits) if (!isContainedEdit(edits, i)) edit];
+		final ordered: Array<{ span: Span, text: String }> = kept.copy();
+		ordered.sort((a, b) -> a.span.from - b.span.from);
+		// What is left must be disjoint. Node spans never partially overlap, but a span widened to
+		// its whole line does when two targets share a line — splicing those would delete the shared
+		// text twice over and take the survivor with it.
+		for (i in 1...ordered.length) if (ordered[i].span.from < ordered[i - 1].span.to)
+			return Err('the nodes to remove share a line — removing them together would delete more than the two');
+		return canonicalize(source, kept, reformat, plugin, optsJson);
 	}
 
 }

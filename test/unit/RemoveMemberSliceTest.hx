@@ -4,6 +4,8 @@ import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RemoveMember;
+import anyparse.query.RefactorSupport;
+import anyparse.query.QueryNode;
 
 /**
  * `RemoveMember.removeMember` — remove a field / method by its type and
@@ -159,6 +161,101 @@ class RemoveMemberSliceTest extends Test {
 
 		Assert.isTrue(text.indexOf('x') == -1, text);
 		Assert.isTrue(text.indexOf('y') >= 0, text);
+	}
+
+	/**
+	 * A name declared once per branch of one region is ONE logical member: both declarations go,
+	 * and the region — now holding nothing — goes with them. The assertion spans both halves in
+	 * one string, so it cannot pass on a run that removed only the first declaration.
+	 */
+	public function testBranchPairRemovesBothDeclarationsAndTheRegion(): Void {
+		final source: String = 'class C {\n\t#if mobile\n\tpublic function drop():Void {}\n\t#else\n'
+			+ '\tpublic function drop():Int return 1;\n\t#end\n\tvar keep:Int;\n}\n';
+		final text: String = okText(source, 'C', 'drop');
+		Assert.equals('class C {\n\tvar keep:Int;\n}\n', text);
+	}
+
+	/** Three branches, one name in each — all three go, and so does the region. */
+	public function testThreeBranchNameRemovesEveryDeclaration(): Void {
+		final source: String =
+			'class C {\n\t#if a\n\tvar drop:Int;\n\t#elseif b\n\tvar drop:String;\n\t#else\n\tvar drop:Bool;\n\t#end\n\tvar keep:Int;\n}\n';
+		final text: String = okText(source, 'C', 'drop');
+		Assert.equals('class C {\n\tvar keep:Int;\n}\n', text);
+	}
+
+	/**
+	 * A region that still holds another member keeps its directives, even though the removed name
+	 * appeared in two of its branches — the region-emptied rule counts what SURVIVES, not how many
+	 * declarations this call takes.
+	 */
+	public function testRegionKeepingAnotherMemberSurvivesABranchPairRemoval(): Void {
+		final source: String = 'class C {\n\t#if mobile\n\tvar drop:Int;\n\n\tvar stay:Int;\n\t#else\n\tvar drop:Bool;\n\t#end\n}\n';
+		final text: String = okText(source, 'C', 'drop');
+		Assert.isTrue(
+			text.indexOf('drop') == -1 && text.indexOf('#if mobile') >= 0 && text.indexOf('stay') >= 0,
+			'the surviving member must keep its region: $text'
+		);
+	}
+
+	/**
+	 * A region NESTED inside one that is also emptied is left to the outer removal. Splicing both
+	 * would delete the code that follows the outer region, because the two spans nest and the inner
+	 * splice shifts the coordinates the outer one was measured in — silently, since the wreckage
+	 * still parses. The trailing members are what such a run destroys, so they carry the assertion.
+	 */
+	public function testNestedEmptiedRegionIsRemovedOnceNotTwice(): Void {
+		final source: String = 'class C {\n\t#if a\n\tvar drop:Int;\n\n\t#if b\n\tvar drop:String;\n\t#end\n\t#end\n\tvar first:Int;\n\n'
+			+ '\tvar second:Int;\n}\n';
+		final text: String = okText(source, 'C', 'drop');
+		Assert.equals('class C {\n\tvar first:Int;\n\n\tvar second:Int;\n}\n', text);
+	}
+
+	/**
+	 * Repeating a name OUTSIDE a conditional region is not legal Haxe, so the source is already
+	 * rejected by the compiler — removing both would launder that, and the refusal names it.
+	 */
+	public function testUnguardedDuplicateNameIsRefused(): Void {
+		final source: String = 'class C {\n\tvar drop:Int;\n\n\tvar drop:String;\n}\n';
+		assertErr(source, 'C', 'drop');
+	}
+
+	/** One conditional declaration and one unguarded: the pair cannot compile, so it is refused too. */
+	public function testMixedGuardedAndUnguardedDuplicateIsRefused(): Void {
+		final source: String = 'class C {\n\t#if a\n\tvar drop:Int;\n\t#end\n\tvar drop:String;\n}\n';
+		assertErr(source, 'C', 'drop');
+	}
+
+	/**
+	 * The shared multi-node delete keeps only the OUTERMOST of nesting targets. `remove-member`
+	 * hands it exactly that shape from nested regions, and splicing both would run the second on
+	 * coordinates the first already shifted — deleting whatever follows the outer node while the
+	 * wreckage still parses, so nothing downstream would notice. The surviving member carries the
+	 * assertion, since it is what such a run destroys.
+	 */
+	public function testDeleteNodesKeepsOnlyTheOutermostOfNestingTargets(): Void {
+		final source: String = 'class C {\n\t#if a\n\tvar drop:Int;\n\t#end\n\tvar keep:Int;\n}\n';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(source);
+		var region: Null<QueryNode> = null;
+		var member: Null<QueryNode> = null;
+		function walk(node: QueryNode): Void {
+			if (node.kind == 'Conditional') region = node;
+			if (node.kind == 'VarMember' && node.name == 'drop') member = node;
+			for (child in node.children) walk(child);
+		}
+		walk(tree);
+		final regionNN: QueryNode = region ?? throw 'the fixture must hold a conditional region';
+		final memberNN: QueryNode = member ?? throw 'the fixture must hold the guarded member';
+		final targets: Array<{ node: QueryNode, parent: Null<QueryNode> }> = [
+			{ node: regionNN, parent: tree },
+			{ node: memberNN, parent: regionNN }
+		];
+		switch RefactorSupport.deleteNodes(source, targets, true, plugin) {
+			case Ok(text):
+				Assert.equals('class C {\n\tvar keep:Int;\n}\n', text);
+			case Err(message):
+				Assert.fail('nesting targets must collapse to the outer one, got Err: $message');
+		}
 	}
 
 	/** The round-2 repro: a doc'd `victim` whose text carries `marker`, followed by a doc'd `neighbor`. */

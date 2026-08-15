@@ -166,6 +166,8 @@ final class CrossRenameMember {
 		if (t.memberName == 'new') return Err('cannot rename a constructor');
 		if (t.isOverride)
 			return Err('member "${t.memberName}" is an override — rename the base declaration instead (its overrides rename with it)');
+		// Refuses a name occupied only by another conditional branch too — deliberately; see
+		// `MemberBranchScan.declaresMemberNamed` for why that is not relaxed.
 		if (MemberBranchScan.declaresMemberNamed(t.srcDecl, refShape, cursorSource, newName))
 			return Err('type "${t.typeName}" already declares a member "$newName"');
 		if (casePatternCaptures(cursorTree).contains(t.memberName))
@@ -272,10 +274,6 @@ final class CrossRenameMember {
 		return best;
 	}
 
-	/**
-	 * Does `decl` already declare a field / method named `name`, in ANY `#if`
-	 * branch? Drives the destination-name collision refusal.
-	 */
 	/**
 	 * Every identifier captured by a `case` pattern anywhere in `tree` —
 	 * the pattern wrapper is `CaseBranch.children[0]`. Sibling case-branch
