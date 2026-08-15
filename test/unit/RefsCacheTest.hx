@@ -102,6 +102,10 @@ class RefsCacheTest extends Test {
 				Assert.equals(e.bindingSpan == null, a.bindingSpan == null, 'name "$name" hit $i: bindingSpan nullity mismatch');
 				if (e.bindingSpan != null && a.bindingSpan != null)
 					Assert.equals(e.bindingSpan.from, a.bindingSpan.from, 'name "$name" hit $i: bindingSpan.from mismatch');
+				// The binding NODE travels with its span, and the two are null together by construction.
+				Assert.equals(e.bindingNode == null, e.bindingSpan == null, 'name "$name" hit $i: bare binding pair split');
+				Assert.equals(a.bindingNode == null, a.bindingSpan == null, 'name "$name" hit $i: cached binding pair split');
+				Assert.isTrue(e.bindingNode == a.bindingNode, 'name "$name" hit $i: bindingNode identity mismatch');
 			}
 		}
 	}

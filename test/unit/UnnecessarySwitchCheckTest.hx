@@ -94,6 +94,122 @@ class UnnecessarySwitchCheckTest extends Test {
 		Assert.equals(0, violations(bare).length, 'bare p is the same getter call');
 	}
 
+	/**
+	 * A PARAMETER of the property's name SHADOWS it, so the subject is that parameter — a plain
+	 * read, not a `get_p()` call. Minimal pair of `testGetterSubjectRefused`'s bare spelling: the
+	 * only difference is that the name is bound.
+	 */
+	public function testParameterShadowingGetterNameFlagged(): Void {
+		final out: String = unwrapped(shadowedProperty('f(p: Int)', 'switch p {\n\t\t\tcase _: t();\n\t\t}'));
+		Assert.stringContains(
+			'function f(p:Int):Void {\n\t\t{\n\t\t\tt();', out, 'the parameter survives, the switch around its read does not'
+		);
+	}
+
+	/** A LOCAL shadows the property the same way a parameter does. */
+	public function testLocalShadowingGetterNameFlagged(): Void {
+		final body: String = 'var p: Int = 0;\n\t\tswitch p {\n\t\t\tcase _: t();\n\t\t}';
+		Assert.stringContains(
+			'var p:Int = 0;\n\t\t{\n\t\t\tt();', unwrapped(shadowedProperty('f()', body)), 'the local survives, the switch does not'
+		);
+	}
+
+	/** A `for` iterator binds the name inside the loop, where the subject reads it. */
+	public function testForBinderShadowingGetterNameFlagged(): Void {
+		final body: String = 'for (p in xs) switch p {\n\t\t\tcase _: t();\n\t\t}';
+		Assert.stringContains(
+			'for (p in xs) {\n\t\t\tt();', unwrapped(shadowedProperty('f(xs: Array<Int>)', body)), 'the loop survives, the switch does not'
+		);
+	}
+
+	/** A catch clause binds the exception inside its own body, where the subject reads it. */
+	public function testCatchBinderShadowingGetterNameFlagged(): Void {
+		final body: String = 'try u() catch (p: String) switch p {\n\t\t\tcase _: t();\n\t\t}';
+		Assert.stringContains(
+			'catch (p:String)\n\t\t\tt();', unwrapped(shadowedProperty('f()', body)), 'the catch binder survives, the switch does not'
+		);
+	}
+
+	/** A local `function` binds its name into the enclosing body; a bare read of it is a closure read. */
+	public function testLocalFunctionShadowingGetterNameFlagged(): Void {
+		final body: String = 'function p(): Int return 2;\n\t\tswitch p {\n\t\t\tcase _: t();\n\t\t}';
+		Assert.stringContains(
+			'function p():Int\n\t\t\treturn 2;\n\t\t{\n\t\t\tt();', unwrapped(shadowedProperty('f()', body)),
+			'the local function survives, the switch does not'
+		);
+	}
+
+	/**
+	 * Haxe hoists a local `function` no more than a local `var`. Minimal pair of the test above —
+	 * the two statements, swapped.
+	 */
+	public function testReadBeforeShadowingLocalFunctionRefused(): Void {
+		final body: String = 'switch p {\n\t\t\tcase _: t();\n\t\t}\n\t\tfunction p(): Int return 2;';
+		Assert.equals(0, violations(shadowedProperty('f()', body)).length);
+	}
+
+	/**
+	 * A `for` HEADER is outside the scope its own iterator binds into, so the subject there reads
+	 * the property. Nothing in this check re-derives that — it is `Refs.headerFloor`'s answer, and
+	 * this is the fixture that fails if the floor stops applying: without it the subject resolves
+	 * to the iterator, which IS a value declaration whose node encloses the read, and the getter
+	 * call is deleted.
+	 */
+	public function testReadInForHeaderRefused(): Void {
+		final body: String = 'for (p in switch p {\n\t\t\tcase _: xs;\n\t\t}) t();';
+		Assert.equals(0, violations(shadowedProperty('f(xs: Array<Int>)', body)).length, 'the header read is not the iterator');
+	}
+
+	/**
+	 * A declaration under a TRANSPARENT wrapper escapes into the enclosing block, but its parent is
+	 * the wrapper — an admitted over-refusal, kept rather than closed by a list of non-scoping
+	 * kinds. See `TypeResolver.bindsToValueDeclaration`.
+	 */
+	public function testShadowUnderTransparentWrapperRefused(): Void {
+		final body: String = 'untyped var p = 1;\n\t\tswitch p {\n\t\t\tcase _: t();\n\t\t}';
+		Assert.equals(0, violations(shadowedProperty('f()', body)).length);
+	}
+
+	/**
+	 * Haxe does not hoist a local, so a read BEFORE the declaration is still the property. Minimal
+	 * pair of `testLocalShadowingGetterNameFlagged` — the two statements, swapped.
+	 */
+	public function testReadBeforeShadowingLocalRefused(): Void {
+		Assert.equals(0, violations(shadowedProperty('f()', 'switch p {\n\t\t\tcase _: t();\n\t\t}\n\t\tvar p: Int = 0;')).length);
+	}
+
+	/** A declaration's own initializer still sees the enclosing binding — here, the property. */
+	public function testReadInsideShadowingInitializerRefused(): Void {
+		Assert.equals(0, violations(shadowedProperty('f()', 'final p: Int = switch p {\n\t\t\tcase _: 42;\n\t\t};')).length);
+	}
+
+	/**
+	 * The plain tree folds every `#if` branch into ONE node with no boundary between them, so a
+	 * declaration in the sibling branch is not proof of anything at this read.
+	 */
+	public function testShadowInSiblingConditionalBranchRefused(): Void {
+		final body: String = '#if js\n\t\tvar p: Int = 0;\n\t\t#else\n\t\tswitch p {\n\t\t\tcase _: t();\n\t\t}\n\t\t#end';
+		Assert.equals(0, violations(shadowedProperty('f()', body)).length);
+	}
+
+	/** A declaration written as a brace-less body is scoped to that body, not to the block after it. */
+	public function testShadowInBracelessBodyRefused(): Void {
+		final body: String = 'if (c) var p: Int = 0;\n\t\tswitch p {\n\t\t\tcase _: t();\n\t\t}';
+		Assert.equals(0, violations(shadowedProperty('f(c: Bool)', body)).length);
+	}
+
+	/** An `untyped { … }` block scopes its declarations, though the resolver models no frame for it. */
+	public function testShadowInUntypedBlockRefused(): Void {
+		final body: String = 'untyped {\n\t\t\tvar p: Int = 0;\n\t\t}\n\t\tswitch p {\n\t\t\tcase _: t();\n\t\t}';
+		Assert.equals(0, violations(shadowedProperty('f()', body)).length);
+	}
+
+	/** A `for` iterator dies at the loop's end, so a read after it is the property again. */
+	public function testReadAfterForBinderRefused(): Void {
+		final body: String = 'for (p in xs) t();\n\t\tswitch p {\n\t\t\tcase _: t();\n\t\t}';
+		Assert.equals(0, violations(shadowedProperty('f(xs: Array<Int>)', body)).length);
+	}
+
 	/** A collection literal allocates but observes nothing — droppable, though never hoistable. */
 	public function testCollectionLiteralSubjectFlagged(): Void {
 		final src: String = 'class C {\n\tfunction f(a: Int, b: Int): Void {\n\t\tswitch [a, b] {\n\t\t\tcase _: t();\n\t\t}\n\t}\n}';
@@ -174,6 +290,26 @@ class UnnecessarySwitchCheckTest extends Test {
 	private function property(subject: String): String {
 		return 'class C {\n\tpublic var p(get, never): Int;\n\n\tfunction get_p(): Int {\n\t\tu();\n\t\treturn 1;\n\t}\n\n'
 			+ '\tfunction f(): Void {\n\t\tswitch $subject {\n\t\t\tcase _: t();\n\t\t}\n\t}\n}';
+	}
+
+	/**
+	 * A class with a side-effecting property `p`, whose method — spelled by `signature`, so a
+	 * fixture can bind `p` as a PARAMETER — holds `body` verbatim.
+	 */
+	private function shadowedProperty(signature: String, body: String): String {
+		return 'class C {\n\tpublic var p(get, never): Int;\n\n\tfunction get_p(): Int {\n\t\tu();\n\t\treturn 1;\n\t}\n\n'
+			+ '\tfunction $signature: Void {\n\t\t$body\n\t}\n}';
+	}
+
+	/**
+	 * The fixed text of `src`, having asserted that it reports exactly ONE finding. Every caller
+	 * then asserts one STRING spanning both halves of the rewrite — the binding the fix must
+	 * leave alone next to the arm body it unwrapped — so no assertion can be satisfied by an
+	 * untransformed input.
+	 */
+	private function unwrapped(src: String): String {
+		Assert.equals(1, violations(src).length);
+		return applyFixOnce(src);
 	}
 
 	private function violations(src: String): Array<Violation> {

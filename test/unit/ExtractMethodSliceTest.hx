@@ -142,6 +142,84 @@ class ExtractMethodSliceTest extends Test {
 		assertRefused(source, 3, 6, 3, 6, 'helper', true);
 	}
 
+	/**
+	 * A local the range declares whose name is declared TWICE in the enclosing
+	 * block is refused: `Refs` binds every later read to the FIRST declaration, so
+	 * the escape analysis cannot see that the range local is read after the range
+	 * and would drop the return value, silently changing what the program prints.
+	 * The shape `rename` refuses on too.
+	 */
+	public function testRefuseSameBlockRedeclaration(): Void {
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar v = 1;\n\t\tvar v = 9;\n\t\ttrace(v);\n\t\ttrace(v);\n\t}\n}\n';
+		assertRefusedWith(source, 4, 3, 5, 3, 'helper', true, 'local "v" is declared more than once in the block at 4:3');
+	}
+
+	/**
+	 * The same refusal for a local `function` the range declares: a later `g()` binds to the
+	 * FIRST declaration, so moving the second into the closure silently makes that call run the
+	 * other body. Reached only because the guard sweeps the block-scoped DECLARATION vocabulary
+	 * rather than `LOCAL_DECL_KINDS`, which knows `var` / `final` alone.
+	 */
+	public function testRefuseSameBlockLocalFunctionRedeclaration(): Void {
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tfunction g()\n\t\t\ttrace(1);\n\t\tg();\n'
+			+ '\t\tfunction g()\n\t\t\ttrace(2);\n\t\tg();\n\t}\n}\n';
+		assertRefusedWith(source, 6, 3, 8, 3, 'helper', true, 'local "g" is declared more than once in the block at 6:3');
+	}
+
+	/**
+	 * A local function declared ONCE still extracts — the guard is about the REdeclaration, not
+	 * about the kind. The whole declaration and its call move into the closure and the
+	 * surrounding statements stay where they were.
+	 */
+	public function testSingleLocalFunctionStillExtracts(): Void {
+		final source: String =
+			'class C {\n\tfunction f():Void {\n\t\ttrace(0);\n\t\tfunction g()\n\t\t\ttrace(1);\n\t\tg();\n\t\ttrace(2);\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\ttrace(0);\n\t\tfunction helper() {\n'
+			+ '\t\t\tfunction g()\n\t\t\t\ttrace(1);\n\t\t\tg();\n\t\t}\n\t\thelper();\n\t\ttrace(2);\n\t}\n}\n';
+		assertExtract(source, 4, 3, 6, 3, 'helper', true, expected);
+	}
+
+	/**
+	 * A `for` binder is self-scoped, so the sibling loop that binds `i` too is not a
+	 * redeclaration and must not block extracting the range that holds the first loop. The
+	 * extracted closure keeps its own `i`; the sibling loop stays outside it, unchanged.
+	 */
+	public function testSiblingLoopBindersStillExtract(): Void {
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tfor (i in 0...3)\n\t\t\ttrace(i);\n\t\ttrace(0);\n'
+			+ '\t\tfor (i in 0...2)\n\t\t\ttrace(i);\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tfunction helper() {\n\t\t\tfor (i in 0...3)\n'
+			+ '\t\t\t\ttrace(i);\n\t\t\ttrace(0);\n\t\t}\n\t\thelper();\n\t\tfor (i in 0...2)\n\t\t\ttrace(i);\n\t}\n}\n';
+		assertExtract(source, 3, 3, 5, 3, 'helper', true, expected);
+	}
+
+	/**
+	 * A redeclaration in a NESTED block is ordinary shadowing — a distinct binding
+	 * that expires at that block's `}`, which the resolver binds correctly — so the
+	 * guard must not fire: `v` IS read after the range, so the closure still
+	 * returns it, and the nested `var v = 5` is left untouched.
+	 */
+	public function testNestedBlockRedeclarationStillExtracts(): Void {
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\ttrace(0);\n\t\tvar v = 9;\n\t\ttrace(v);\n\t\ttrace(v);\n'
+			+ '\t\t{\n\t\t\tvar v = 5;\n\t\t\ttrace(v);\n\t\t}\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\ttrace(0);\n\t\tfunction helper() {\n\t\t\tvar v = 9;\n'
+			+ '\t\t\ttrace(v);\n\t\t\treturn v;\n\t\t}\n\t\tfinal v = helper();\n\t\ttrace(v);\n\t\t{\n\t\t\tvar v = 5;\n'
+			+ '\t\t\ttrace(v);\n\t\t}\n\t}\n}\n';
+		assertExtract(source, 4, 3, 5, 3, 'helper', true, expected);
+	}
+
+	/**
+	 * The guard is keyed on the names the RANGE declares: a block that redeclares
+	 * an unrelated `u` must not block extracting a range that declares only `w`,
+	 * and the redeclared `u` stays put around the new call.
+	 */
+	public function testUnrelatedRedeclarationStillExtracts(): Void {
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar u = 1;\n\t\ttrace(u);\n\t\tvar u = 2;\n\t\tvar w = 9;\n'
+			+ '\t\ttrace(w);\n\t\ttrace(u);\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar u = 1;\n\t\ttrace(u);\n\t\tvar u = 2;\n'
+			+ '\t\tfunction helper() {\n\t\t\tvar w = 9;\n\t\t\ttrace(w);\n\t\t}\n\t\thelper();\n\t\ttrace(u);\n\t}\n}\n';
+		assertExtract(source, 6, 3, 7, 3, 'helper', true, expected);
+	}
+
 	private function assertExtract(
 		source: String, startLine: Int, startCol: Int, endLine: Int, endCol: Int, name: String, reformat: Bool, expected: String
 	): Void {
@@ -164,6 +242,18 @@ class ExtractMethodSliceTest extends Test {
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
 			case Err(_):
 				Assert.pass();
+		}
+	}
+
+	private function assertRefusedWith(
+		source: String, startLine: Int, startCol: Int, endLine: Int, endCol: Int, name: String, reformat: Bool, needle: String
+	): Void {
+		final result: EditResult = extractOf(source, startLine, startCol, endLine, endCol, name, reformat);
+		switch result {
+			case Ok(text):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			case Err(message):
+				Assert.isTrue(message.indexOf(needle) != -1, message);
 		}
 	}
 

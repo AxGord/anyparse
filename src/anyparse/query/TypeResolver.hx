@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
+import anyparse.query.Refs.RefHit;
 
 using StringTools;
 
@@ -212,13 +213,8 @@ final class TypeResolver {
 	 * via the scope resolver — the key into a `TypeInfoProvider` decl-type map.
 	 */
 	public static function resolveBindingFrom(name: String, recvSpan: Span, tree: QueryNode, shape: RefShape): Null<Int> {
-		for (hit in Refs.find(name, tree, shape)) {
-			final hs: Null<Span> = hit.span;
-			if (hs == null || hs.from != recvSpan.from || hs.to != recvSpan.to) continue;
-			final b: Null<Span> = hit.bindingSpan;
-			return b?.from;
-		}
-		return null;
+		final hit: Null<RefHit> = resolveBindingHit(name, recvSpan, tree, shape);
+		return hit == null ? null : hit.bindingSpan?.from;
 	}
 
 	/**
@@ -362,7 +358,19 @@ final class TypeResolver {
 		return span == null ? null : source.substring(span.from, span.to);
 	}
 
-	public static function bindingIsLocalOrParam(
+	/**
+	 * Whether SOME `localDeclKinds` / `paramKinds` node COVERS the offset `bindingFrom` — a loose,
+	 * span-keyed answer, and named for it. The walk is pre-order, so it answers for the OUTERMOST
+	 * declaration containing the offset: a `for` binder nested in a `var`'s initializer reads as the
+	 * `var`, and any binding inside a local declaration reads as that declaration.
+	 *
+	 * That imprecision is the SAFE direction for all four consumers — `join-return`,
+	 * `join-single-use-local`, `nullable-switch-missing-null`, `return-reassign-ternary` — each of
+	 * which reads a `true` as "bail out". A caller that reads a `true` as PERMISSION to drop, hoist
+	 * or delete code must not use this: `bindsToValueDeclaration` is the precise sibling, which asks
+	 * the resolver for the binding NODE instead of re-finding one by span.
+	 */
+	public static function mayBeLocalOrParam(
 		tree: QueryNode, bindingFrom: Int, localDeclKinds: Array<String>, paramKinds: Array<String>
 	): Bool {
 		var found: Bool = false;
@@ -379,6 +387,85 @@ final class TypeResolver {
 		}
 		walk(tree);
 		return found;
+	}
+
+	/**
+	 * Whether the occurrence of `name` at `refSpan` binds to a VALUE DECLARATION — a local, a
+	 * parameter, a `for` / `catch` binder — rather than to a type member, to a phantom, or to
+	 * nothing the walk could resolve.
+	 *
+	 * POSITIVE proof; three conditions, every one required:
+	 *
+	 *  - the reference RESOLVES at all. An unresolved name — a cross-file read, an implicit-`this`
+	 *    member, an inherited member, a reification interior — answers false.
+	 *  - the binding node's KIND is one of the value-declaration vocabularies
+	 *    (`valueDeclarationKinds`). Every other binder class, present or future, answers false by
+	 *    construction rather than by an exclusion someone has to remember to write.
+	 *  - the binding is declared DIRECTLY into a scope the resolver MODELS, and that scope
+	 *    encloses the reference: its PARENT must be a `scopeKinds` / `branchScopeKinds` node
+	 *    covering `refSpan`.
+	 *
+	 * The third condition is what keeps the answer sound where the scope model is WIDER than the
+	 * language's. `Refs` adopts a declaration into the nearest enclosing scope-kind node, walking
+	 * through everything in between — so a declaration written as the brace-less body of an `if`
+	 * / `while`, inside an `untyped { … }` block, or inside a `#if` region (whose branches the
+	 * plain tree folds into ONE node with no boundary between them) is visible to references the
+	 * compiler binds elsewhere entirely. Each of those declares into a node that is not a modelled
+	 * scope, so each answers false here. A multi-binding list (`var a = 1, b = 2`) is the one shape
+	 * that legitimately declares INSIDE another declaration: `localDeclContinuationKinds` names the
+	 * continuation, and the list head stands in for it.
+	 *
+	 * It over-refuses one measured class in exchange, and deliberately: a local declared under a
+	 * TRANSPARENT wrapper — `untyped var x = 1;` or `@:meta var x = 1;`, which project as a
+	 * `localDeclExprKinds` node inside `UntypedExpr` / `MetaExpr` inside a statement — does escape
+	 * into the enclosing block (measured), yet its parent is the wrapper rather than the block.
+	 * Admitting it would mean listing the wrapper kinds that "do not scope", which is a NEGATIVE
+	 * list: the next member nobody thought of is a wrong DELETION, not a missed finding, whereas
+	 * the current whitelist fails closed on shapes nobody has thought of. The trade is cheap —
+	 * `untyped var` occurs 10 times in 20 964 real `.hx` files (TM, this repo, the Haxe std and the
+	 * installed haxelib set), all ten being two lines of ONE file duplicated across five library
+	 * versions — and it costs a finding, never a behaviour.
+	 *
+	 * A SELF-SCOPED binder (`for`, `catch`) has no such parent to ask — it IS the scope it binds
+	 * into — and its arm is a RESTATEMENT, not a gate: `Refs` pushes such a frame only while
+	 * walking inside the node that opens it and pops it on the way out, so every hit resolved
+	 * through one is inside that node by construction, and `frameFor` declines to self-declare at
+	 * all when the node's span is null. Removing the `covers` call there changes no result (the
+	 * suite stays green with it replaced by `true`); it is kept so the containment the sentence
+	 * above claims is asserted here rather than borrowed from another module.
+	 *
+	 * WHETHER the binding is in effect AT `refSpan` is not re-derived here either — that is
+	 * `Refs.visibleFrom` and `Refs.headerFloor`, and this function trusts their answer. The floor
+	 * is what keeps a `for` HEADER read (`for (p in <expr reading p>)`) bound to the enclosing
+	 * declaration instead of to the iterator the loop is about to bind, so an over-refusal there
+	 * does not silently become an admission. `UnnecessarySwitchCheckTest` covers that seam from
+	 * this side.
+	 *
+	 * NOT `mayBeLocalOrParam`, and deliberately beside it rather than replacing it. That one
+	 * re-finds the binding by span CONTAINMENT, so it answers for the OUTERMOST declaration
+	 * covering the offset — a `for` binder nested in a `var`'s initializer reads as the `var`.
+	 * Its consumers treat a `true` as "bail out", where being generous is the safe direction.
+	 * Every consumer of THIS answer treats a `true` as permission to DROP or HOIST code, so it may
+	 * not guess.
+	 */
+	public static function bindsToValueDeclaration(name: String, refSpan: Span, tree: QueryNode, shape: RefShape): Bool {
+		final hit: Null<RefHit> = resolveBindingHit(name, refSpan, tree, shape);
+		if (hit == null) return false;
+		final binding: Null<QueryNode> = hit.bindingNode;
+		if (binding == null || !valueDeclarationKinds(shape).contains(binding.kind)) return false;
+		if (shape.selfScopeDeclKinds.contains(binding.kind)) return covers(binding.span, refSpan);
+		final continuations: Array<String> = shape.localDeclContinuationKinds ?? [];
+		var declaration: QueryNode = binding;
+		while (continuations.contains(declaration.kind)) {
+			final head: Null<QueryNode> = RefactorSupport.parentOf(tree, declaration);
+			if (head == null) return false;
+			declaration = head;
+		}
+		final parent: Null<QueryNode> = RefactorSupport.parentOf(tree, declaration);
+		if (parent == null) return false;
+		final branchScopes: Array<String> = shape.branchScopeKinds ?? [];
+		if (!shape.scopeKinds.contains(parent.kind) && !branchScopes.contains(parent.kind)) return false;
+		return covers(parent.span, refSpan);
 	}
 
 	/**
@@ -671,6 +758,37 @@ final class TypeResolver {
 		};
 	}
 
+	/**
+	 * The `valueDeclarationKinds` subset whose declaration binds into the ENCLOSING statement list
+	 * — the statement-position locals with their expression and `static` twins, and the LOCAL
+	 * FUNCTION forms (a bare read of one is a closure read, not a member read). Public because
+	 * `RefactorSupport.sameBlockRedeclaration` asks exactly this question ("does one block declare
+	 * this name twice?"), and the two vocabularies must not drift: the union below is this list
+	 * plus the binders that scope THEMSELVES.
+	 *
+	 * Those excluded binders are not an oversight. A parameter is never a block child; a `for`
+	 * iterator, a catch variable and a key-value binder each bind into the scope they open, so two
+	 * sibling `for (i in xs)` loops — or two `catch (e:T)` clauses of one `try` — declare the name
+	 * twice under one parent while resolving correctly. Counting those would report a
+	 * redeclaration where there is none.
+	 *
+	 * `inlineFunctionKinds` is listed for completeness rather than for reachability: Haxe refuses a
+	 * bare read of an `inline function` local outright (`Cannot create closure on inline closure`),
+	 * so no valid input can bind an identifier to one. A grammar without that restriction gets the
+	 * right answer for free.
+	 */
+	public static function blockScopedValueDeclarationKinds(shape: RefShape): Array<String> {
+		return (shape.localDeclKinds ?? []).concat(shape.localDeclExprKinds ?? [])
+			.concat(shape.staticLocalDeclKinds ?? [])
+			.concat(shape.localFunctionKinds ?? [])
+			.concat(shape.inlineFunctionKinds ?? []);
+	}
+
+	/** Whether `outer` covers `inner` — the containment a tree's spans state between ancestor and descendant. */
+	private static inline function covers(outer: Null<Span>, inner: Span): Bool {
+		return outer != null && outer.from <= inner.from && inner.to <= outer.to;
+	}
+
 	/** Whether `c` is a character of a plain nominal type reference — `[A-Za-z0-9_.]`. */
 	private static inline function isNominalChar(c: Int): Bool {
 		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code
@@ -685,6 +803,32 @@ final class TypeResolver {
 	/** Whether `kind` is a TYPE declaration (class / interface / enum / typedef / abstract) — the level a `@:nullSafety` may affirm at. */
 	private static inline function isTypeDeclScope(kind: String): Bool {
 		return RefactorSupport.TYPE_DECL_KINDS.contains(kind) || kind == 'FinalDecl';
+	}
+
+
+	/**
+	 * Every node kind that DECLARES a value binding in `shape` — `blockScopedValueDeclarationKinds`
+	 * plus the parameter kinds, the self-scoped binders (a `for` iterator, a catch exception) and a
+	 * key-value loop's value binder. A UNION of the grammar's OWN binder vocabularies, so a grammar
+	 * that gains a binder kind gains it here with it.
+	 */
+	private static function valueDeclarationKinds(shape: RefShape): Array<String> {
+		return blockScopedValueDeclarationKinds(shape)
+			.concat(shape.paramKinds ?? [])
+			.concat(shape.selfScopeDeclKinds)
+			.concat(shape.iterationValueBinderKinds ?? []);
+	}
+
+
+	/**
+	 * The hit the reference walk emitted for the occurrence of `name` at `refSpan`, or null when
+	 * it emitted none there — a member-access slot, a reification interior, an unspanned node.
+	 * Both public resolvers read one field of it apiece: the binding's OFFSET keys a decl-type
+	 * map, the binding's NODE says what the reference actually binds to.
+	 */
+	private static function resolveBindingHit(name: String, refSpan: Span, tree: QueryNode, shape: RefShape): Null<RefHit> {
+		for (hit in Refs.find(name, tree, shape)) if (hit.span.from == refSpan.from && hit.span.to == refSpan.to) return hit;
+		return null;
 	}
 
 	/** The innermost type declaration whose span contains `faSpan`, or null. */

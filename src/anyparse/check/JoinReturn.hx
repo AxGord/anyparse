@@ -378,7 +378,7 @@ final class JoinReturn implements Check {
 		final binding: Null<Span> = writeBindingOf(hits, lhsSpan);
 		if (binding == null) return null;
 		final b: Span = binding;
-		if (!TypeResolver.bindingIsLocalOrParam(tree, b.from, s.localDeclKinds, s.paramKinds)) return null;
+		if (!TypeResolver.mayBeLocalOrParam(tree, b.from, s.localDeclKinds, s.paramKinds)) return null;
 		if (!referencesPermitCollapse(hits, b, retIdentSpan, assignSpan, lambdaSpans)) return null;
 
 		if (droppedComment(assignSpan, rhsSpan, retSpan.to, comments)) return null;

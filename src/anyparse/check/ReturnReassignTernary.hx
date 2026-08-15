@@ -40,7 +40,7 @@ import anyparse.runtime.Span;
  *   resolve to a binding;
  * - the second statement is `return x;` -- the SAME name, with nothing in between and
  *   at the same nesting level (they are siblings of one block);
- * - `x` resolves to a LOCAL or PARAM (`TypeResolver.bindingIsLocalOrParam`), NEVER a
+ * - `x` resolves to a LOCAL or PARAM (`TypeResolver.mayBeLocalOrParam`), NEVER a
  *   field: a bare field write can run a property setter, whose side effect the collapse
  *   would drop;
  * - NO reference to `x`'s binding is CAPTURED by a NESTED FUNCTION -- a lambda, a named
@@ -319,7 +319,7 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 		}
 		if (binding == null) return false;
 		final b: Span = binding;
-		if (!TypeResolver.bindingIsLocalOrParam(tree, b.from, s.localDeclKinds, s.paramKinds)) return false;
+		if (!TypeResolver.mayBeLocalOrParam(tree, b.from, s.localDeclKinds, s.paramKinds)) return false;
 		for (h in hits) {
 			final bs: Null<Span> = h.bindingSpan;
 			if (bs == null || bs.from != b.from || bs.to != b.to) continue;

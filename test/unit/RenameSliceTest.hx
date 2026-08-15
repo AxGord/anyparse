@@ -124,6 +124,53 @@ class RenameSliceTest extends Test {
 		}
 	}
 
+	/**
+	 * A local `function g()` declared twice in one block is the same mis-bind as a duplicated
+	 * `var`: every later `g()` stays bound to the FIRST body, so renaming either declaration
+	 * rewrites the declaration alone and silently changes which body the calls run. The
+	 * position the message carries is the SECOND declaration's.
+	 */
+	public function testSameBlockLocalFunctionRedeclarationRefused(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfunction g()\n\t\t\ttrace(1);\n\t\tg();\n'
+			+ '\t\tfunction g()\n\t\t\ttrace(2);\n\t\tg();\n\t}\n}';
+		assertRenameErr(src, 3, 3, 'h', 'declared more than once in the block at 6:3');
+	}
+
+	/** The `inline function` local form of that redeclaration refuses too. */
+	public function testSameBlockInlineFunctionRedeclarationRefused(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tinline function g()\n\t\t\ttrace(1);\n\t\tg();\n'
+			+ '\t\tinline function g()\n\t\t\ttrace(2);\n\t\tg();\n\t}\n}';
+		assertRenameErr(src, 3, 3, 'h', 'declared more than once in the block at 6:3');
+	}
+
+	/**
+	 * A local function redeclared in a NESTED block is ordinary shadowing — the compiler makes
+	 * it a distinct binding and the index resolves it — so the rename proceeds. Asserted on the
+	 * whole program, which carries both halves: the outer declaration and BOTH its calls become
+	 * `h`, while the nested `function g` and its call stay put.
+	 */
+	public function testNestedBlockLocalFunctionShadowStillRenames(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfunction g()\n\t\t\ttrace(1);\n\t\tg();\n\t\t{\n'
+			+ '\t\t\tfunction g()\n\t\t\t\ttrace(2);\n\t\t\tg();\n\t\t}\n\t\tg();\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tfunction h()\n\t\t\ttrace(1);\n\t\th();\n\t\t{\n'
+			+ '\t\t\tfunction g()\n\t\t\t\ttrace(2);\n\t\t\tg();\n\t\t}\n\t\th();\n\t}\n}';
+		assertRename(src, 3, 3, 'h', expected);
+	}
+
+	/**
+	 * Two sibling `for` loops binding the same iterator declare `i` twice under ONE parent, but
+	 * each binds into the loop it opens — a self-scoped binder the net must not count, or every
+	 * such rename would refuse. The first loop's binder and its use become `j`; the second
+	 * loop's `i` is untouched.
+	 */
+	public function testSiblingLoopBindersStillRename(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar s = 0;\n\t\tfor (i in 0...3)\n\t\t\ts += i;\n'
+			+ '\t\tfor (i in 0...2)\n\t\t\ts += i;\n\t\ttrace(s);\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar s = 0;\n\t\tfor (j in 0...3)\n\t\t\ts += j;\n'
+			+ '\t\tfor (i in 0...2)\n\t\t\ts += i;\n\t\ttrace(s);\n\t}\n}';
+		assertRename(src, 4, 8, 'j', expected);
+	}
+
 	public function testSiblingFunctionInterpReadDoesNotRefuse(): Void {
 		// A `$name` read in ANOTHER function is a different binding — the net is
 		// scoped to the enclosing function and must not refuse this rename.

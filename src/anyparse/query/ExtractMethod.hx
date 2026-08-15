@@ -73,6 +73,10 @@ private typedef ReturnVar = {
  *    nothing), one (the call returns it, bound at the call site), or
  *    two-plus (the call returns an anonymous struct of them, destructured
  *    back into the original names at the call site).
+ *  - A binding the range declares — a local, or a local `function` — whose
+ *    name is declared MORE THAN ONCE in one block is refused: reference
+ *    resolution mis-binds there, so whether it is read after the range cannot
+ *    be decided — the same blind spot `rename` refuses on.
  *
  * Coordinate convention: `startLine` / `startCol` / `endLine` / `endCol`
  * are interpreted exactly as `apq refs` PRINTS them
@@ -159,8 +163,40 @@ final class ExtractMethod {
 		// after it is out of scope. All after-the-range checks bind to the
 		// SPECIFIC declaration (its `span.from`), so a same-named local in a
 		// LATER function is never mistaken for a use.
-		final decls: Array<LocalDecl> = collectLocalDecls(sel.stmts);
+		final decls: Array<LocalDecl> = collectLocalDecls(sel.stmts, LOCAL_DECL_KINDS);
 		final declNames: Array<String> = [for (d in decls) d.name];
+
+		// A range binding whose name is declared twice in ONE block is a resolution
+		// blind spot: every read that follows the second declaration stays bound to
+		// the FIRST, so the escape analysis below cannot see whether the binding is
+		// read after the range. Refuse it, exactly as `rename` does on this shape.
+		// The scope swept is the enclosing FUNCTION, `rename`'s own, so a block
+		// ELSEWHERE in that function declaring the name twice refuses too - measured,
+		// and kept: the range's own binding does resolve there, but narrowing it would
+		// mean a second predicate answering the question the shared one already answers.
+		// Swept over the guard's OWN vocabulary, not `LOCAL_DECL_KINDS`: a local
+		// `function g()` declared twice mis-binds identically, and the range moving one
+		// of the two into the closure is what makes the later `g()` call the wrong body.
+		// That function is the one owning the range's BLOCK, not the innermost one at
+		// `sel.fromOffset`: a range whose first statement IS a local `function` puts that
+		// offset inside it, and the sweep would then see only that function's own body.
+		final block: Null<QueryNode> = RefactorSupport.parentOf(tree, sel.stmts[0]);
+		final blockSpan: Null<Span> = block?.span;
+		final scope: QueryNode = blockSpan == null ? tree : RefactorSupport.enclosingFunctionSubtree(tree, blockSpan.from, shape);
+		final boundNames: Array<String> = [
+			for (d in collectLocalDecls(sel.stmts, TypeResolver.blockScopedValueDeclarationKinds(shape))) d.name
+		];
+		for (nm in boundNames) {
+			final dup: Null<Span> = RefactorSupport.sameBlockRedeclaration(scope, nm, plugin, shape);
+			if (dup != null) {
+				final at: Position = dup.lineCol(source);
+				return Err(
+					'cannot extract: local "$nm" is declared more than once in the block at ${at.line}:${at.col}, where'
+					+ ' reference resolution mis-binds — a read after the range binds to the FIRST declaration, so whether the'
+					+ ' extracted local is read after the range cannot be decided. Split the scopes or rename the other declaration first'
+				);
+			}
+		}
 
 		final returnVars: Array<ReturnVar> = [];
 		for (d in decls) {
@@ -285,15 +321,21 @@ final class ExtractMethod {
 	}
 
 	/**
-	 * The `VarStmt` / `FinalStmt` locals declared in `stmts`, each with its
-	 * declaration `span.from` — the binding offset that a later read's
-	 * `bindingSpan.from` carries, used to bind the after-the-range checks
-	 * to THIS declaration rather than any same-named local.
+	 * The `kinds` declarations made in `stmts`, each with its declaration
+	 * `span.from` — the binding offset that a later read's `bindingSpan.from`
+	 * carries, used to bind the after-the-range checks to THIS declaration
+	 * rather than any same-named local.
+	 *
+	 * `kinds` is a parameter because the two callers ask different questions:
+	 * the escape analysis wants only the `LOCAL_DECL_KINDS` values it can hand
+	 * back through a return, the redeclaration guard every binding the block
+	 * scope carries — including a local `function`, which is a value binding
+	 * the guard's own vocabulary knows and this one must not silently drop.
 	 */
-	private static function collectLocalDecls(stmts: Array<QueryNode>): Array<LocalDecl> {
+	private static function collectLocalDecls(stmts: Array<QueryNode>, kinds: Array<String>): Array<LocalDecl> {
 		final out: Array<LocalDecl> = [];
 		function walk(node: QueryNode): Void {
-			if (LOCAL_DECL_KINDS.contains(node.kind)) {
+			if (kinds.contains(node.kind)) {
 				final nm: Null<String> = node.name;
 				final sp: Null<Span> = node.span;
 				if (nm != null && sp != null) {
@@ -390,7 +432,7 @@ final class ExtractMethod {
 		return switch returnVars.length {
 			case 0: '';
 			case 1: returnVars[0].name;
-			case _: '{' + returnVars.map(r -> '${r.name}: ${r.name}').join(', ') + '}';
+			case _: '{${returnVars.map(r -> '${r.name}: ${r.name}').join(', ')}}';
 		};
 	}
 

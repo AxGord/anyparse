@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.Scope.ScopeBinding;
 import anyparse.query.Scope.ScopeFrame;
 import anyparse.query.Scope.ScopeStack;
 import anyparse.runtime.Span;
@@ -37,7 +38,8 @@ import anyparse.runtime.Span;
  * anonymous structure spells its field labels on the very ctors a parameter or a field uses,
  * so `RefShape.typeAnnotationKinds` gates them out of both the pre-collect and the hits.
  *
- * Each emitted hit carries a `bindingSpan`:
+ * Each emitted hit carries a `bindingSpan` and the declaring node
+ * behind it (`bindingNode`):
  *  - Decl hits self-bind (`bindingSpan == own span`).
  *  - Read / Write hits bind to the innermost in-file declaration with
  *    a matching name (null when unresolved — typically a cross-file or
@@ -200,8 +202,12 @@ final class Refs {
 					if (span != null) {
 						final kind: Null<RefKind> = classify(node.kind, shape, flags);
 						if (kind != null) {
-							final bindingSpan: Null<Span> = kind == RefKind.Decl ? span : scopes.resolveInnermost(nname, span.from);
-							hits.push(new RefHit(kind, nname, span, bindingSpan, isInterpRead(node.kind, shape)));
+							// Re-bind: a narrowed local does not reach an anonymous-structure literal.
+							final at: Span = span;
+							final binding: Null<RefBinding> = kind == RefKind.Decl
+								? ({ node: node, span: at }: RefBinding)
+								: scopes.resolveInnermost(nname, at.from);
+							hits.push(new RefHit(kind, nname, at, binding, isInterpRead(node.kind, shape)));
 						} else if (skipped != null && isMemberAccess(node.kind, shape))
 							skipped[nname] = (skipped[nname] ?? 0) + 1;
 					}
@@ -283,7 +289,7 @@ final class Refs {
 		final selfSpan: Null<Span> = node.span;
 		final selfName: Null<String> = node.name;
 		if (isScope && selfSpan != null && selfName != null && out.exists(selfName) && shape.selfScopeDeclKinds.contains(node.kind))
-			frame.declare(selfName, selfSpan, visibleFrom(node, selfSpan, shape, positionScoped));
+			frame.declare(selfName, node, selfSpan, visibleFrom(node, selfSpan, shape, positionScoped));
 		return frame;
 	}
 
@@ -341,7 +347,7 @@ final class Refs {
 		final name: Null<String> = node.name;
 		if (name == null || !out.exists(name) || !shape.declHostKinds.contains(node.kind)) return;
 		final span: Null<Span> = node.span;
-		if (span != null) frame.declare(name, span, visibleFrom(node, span, shape, frame.positionScoped));
+		if (span != null) frame.declare(name, node, span, visibleFrom(node, span, shape, frame.positionScoped));
 	}
 
 	/**
@@ -416,8 +422,10 @@ enum abstract WalkFlags(Int) from Int to Int {
  * matching nodes) but is kept on the hit so downstream renderers can
  * be driven by the hit alone without threading the target separately.
  *
- * `bindingSpan` is the span of the declaration this hit resolves to:
- *  - Decl hits self-bind (`bindingSpan == span`).
+ * `bindingSpan` is the span of the declaration this hit resolves to, and
+ * `bindingNode` that declaration's own node:
+ *  - Decl hits self-bind (`bindingSpan == span`, `bindingNode` the hit's
+ *    own node).
  *  - Read / Write hits point to the innermost enclosing decl with a
  *    matching name, or null when unresolved (cross-file / implicit-
  *    `this` / grammar-gap on the binding's decl site).
@@ -429,6 +437,17 @@ final class RefHit {
 	public final name: String;
 	public final span: Span;
 	public final bindingSpan: Null<Span>;
+
+	/**
+	 * The node that DECLARES `bindingSpan` — the very node the resolving `ScopeFrame` bound the
+	 * name from. `bindingSpan` says WHERE the declaration is; this says WHAT it is, without a
+	 * consumer re-finding it by span arithmetic (which answers for the outermost declaration
+	 * covering the offset, not for the one that actually binds).
+	 *
+	 * Null exactly when `bindingSpan` is, and structurally so rather than by convention: the two
+	 * arrive as ONE optional `RefBinding`, so neither can be supplied without the other.
+	 */
+	public final bindingNode: Null<QueryNode>;
 
 	/**
 	 * Whether the occurrence is a braceless `$name` inside an interpolating string literal
@@ -445,15 +464,27 @@ final class RefHit {
 	 */
 	public final interpolated: Bool;
 
-	public function new(kind: RefKind, name: String, span: Span, ?bindingSpan: Span, interpolated: Bool = false) {
+	public function new(kind: RefKind, name: String, span: Span, ?binding: RefBinding, interpolated: Bool = false) {
 		this.kind = kind;
 		this.name = name;
 		this.span = span;
-		this.bindingSpan = bindingSpan;
+		bindingSpan = binding?.span;
+		bindingNode = binding?.node;
 		this.interpolated = interpolated;
 	}
 
 }
+
+/**
+ * The declaration a `RefHit` resolves to: the node that spells it and that node's span, as one
+ * value. Passing the pair as a single optional constructor argument is what makes `RefHit`'s
+ * "both or neither" contract structural instead of prose — the shape a `ScopeFrame` binding
+ * already has, so the resolver hands its own record straight over.
+ */
+typedef RefBinding = {
+	final node: QueryNode;
+	final span: Span;
+};
 
 /**
  * Reference classification per `docs/cli-query-tool.md` JSON schema.

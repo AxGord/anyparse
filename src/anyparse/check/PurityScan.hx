@@ -35,6 +35,11 @@ using Lambda;
  * non-deterministic members). Everything else — an instance call, a local-function call, a
  * complex-receiver call — is unproven and therefore impure.
  *
+ * A BARE identifier is a safe skeleton kind with one exception: unqualified inside its own type
+ * it may be a property read, which is a `get_p()` call. That one is asked of the SYMBOL INDEX and
+ * of the RESOLVER together — the enclosing type must declare a getter of the name, AND the
+ * identifier must not bind to a value declaration that shadows it (`readsGetterUnqualified`).
+ *
  * An UNRESOLVED receiver reads as a plain field rather than as a getter: the receiver's type is
  * only resolvable when it is a bare identifier with a declared type, or `this`. That is the
  * assumption `extract-repeated-expression` has always made, kept here unchanged; it is the one
@@ -147,16 +152,27 @@ final class PurityScan {
 	 * qualified spellings (`this.p`, `o.p`) arrive as a field access and are answered by
 	 * `isSideEffectingGetter`; unqualified inside its own type, the same read is an `identKind` leaf
 	 * that `RefactorSupport.isSafeKind` would wave through — `switch prop { case _: … }` would then
-	 * look droppable while dropping a `get_prop()` call. A local that merely shares the name resolves
-	 * to the same answer and is refused too: over-refusing costs a finding, under-refusing costs a
-	 * behaviour.
+	 * look droppable while dropping a `get_prop()` call.
+	 *
+	 * The enclosing type having a getter of that NAME is only half the question: a parameter or a
+	 * local of the same name SHADOWS it, and then the identifier reads that binding, not the
+	 * property. So the name is asked of the resolver, and a read it positively places in a value
+	 * declaration — `TypeResolver.bindsToValueDeclaration`, whose three conditions are stated there
+	 * — is not a property read at all. Anything the resolver cannot place that way stays refused,
+	 * including a name it fails to resolve: over-refusing costs a finding, under-refusing costs a
+	 * behaviour, and every consumer of this scan reads a pure verdict as permission to drop or
+	 * hoist the expression.
+	 *
+	 * The getter lookup runs FIRST because it is the cheap half — the resolver walk is reached only
+	 * for an identifier that names a getter of its own type, which is rare.
 	 */
 	private static function readsGetterUnqualified(ident: QueryNode, ctx: PurityCtx): Bool {
 		final name: Null<String> = ident.name;
 		final span: Null<Span> = ident.span;
 		if (name == null || span == null) return false;
 		final owner: Null<String> = TypeResolver.enclosingTypeName(ctx.root, span);
-		return owner != null && ctx.index.memberGetter(owner, name) == true;
+		if (owner == null || ctx.index.memberGetter(owner, name) != true) return false;
+		return !TypeResolver.bindsToValueDeclaration(name, span, ctx.root, ctx.shape);
 	}
 
 }

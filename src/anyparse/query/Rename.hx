@@ -290,7 +290,7 @@ final class Rename {
 	private static function sameNameBlindSpot(
 		source: String, tree: QueryNode, cursor: Int, occurrences: Array<Span>, oldName: String, plugin: GrammarPlugin, shape: RefShape
 	): Null<String> {
-		final scope: QueryNode = RefactorSupport.enclosingFunctionSubtree(tree, cursor, shape);
+		final scope: QueryNode = RefactorSupport.bindingHostSubtree(tree, cursor, oldName, shape);
 		final cursorNode: Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
 		final hits: Array<RefHit> = cursorNode == null ? [] : Refs.find(oldName, tree, shape);
 		final binding: Null<Int> = cursorNode == null ? null : RefactorSupport.resolveBindingFrom(cursorNode, hits);
@@ -312,31 +312,11 @@ final class Rename {
 					+ ' no parsed expression, so a read of the name inside it is invisible - respell that interpolation first';
 			}
 		}
-		final dup: Null<Span> = sameBlockRedeclaration(scope, oldName, plugin, shape);
+		final dup: Null<Span> = RefactorSupport.sameBlockRedeclaration(scope, oldName, plugin, shape);
 		if (dup == null) return null;
 		final at: Position = dup.lineCol(source);
 		return 'rename of "$oldName" is unsafe: the name is declared more than once in the block at ${at.line}:${at.col},'
 			+ ' where reference resolution mis-binds - split the scopes or rename the other declaration first';
-	}
-
-	/** The span of a second same-block declaration of `oldName` in `scope`, or null. */
-	private static function sameBlockRedeclaration(scope: QueryNode, oldName: String, plugin: GrammarPlugin, shape: RefShape): Null<Span> {
-		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
-		final localDeclExprKinds: Array<String> = shape.localDeclExprKinds ?? [];
-		final metaKinds: Array<String> = plugin.metaShape().metaKinds;
-		function walk(node: QueryNode): Null<Span> {
-			var seen: Bool = false;
-			for (c in node.children) {
-				if (RefactorSupport.topLevelDeclaredName(c, localDeclKinds, localDeclExprKinds, metaKinds) == oldName) {
-					if (seen) return c.span;
-					seen = true;
-				}
-				final found: Null<Span> = walk(c);
-				if (found != null) return found;
-			}
-			return null;
-		}
-		return walk(scope);
 	}
 
 	/**

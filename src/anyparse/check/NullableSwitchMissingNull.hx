@@ -235,7 +235,7 @@ final class NullableSwitchMissingNull implements Check {
 			final declared: Null<String> = ctx.declaredTypes[from];
 			if (
 				declared != null && s.nullMarkers.contains(declared)
-				&& TypeResolver.bindingIsLocalOrParam(ctx.root, from, s.localDeclKinds, s.paramKinds)
+				&& TypeResolver.mayBeLocalOrParam(ctx.root, from, s.localDeclKinds, s.paramKinds)
 			)
 				return true;
 			final optKind: Null<String> = s.optionalParamKind;

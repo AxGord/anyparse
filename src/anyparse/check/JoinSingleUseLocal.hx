@@ -394,7 +394,7 @@ final class JoinSingleUseLocal implements Check {
 		final span: Null<Span> = init.span;
 		if (name == null || span == null) return false;
 		final bindingFrom: Null<Int> = TypeResolver.resolveBindingFrom(name, span, tree, s.shape);
-		return bindingFrom != null && TypeResolver.bindingIsLocalOrParam(tree, bindingFrom, s.mutableKinds, []);
+		return bindingFrom != null && TypeResolver.mayBeLocalOrParam(tree, bindingFrom, s.mutableKinds, []);
 	}
 
 	/** Whether `next` is exactly `return <name>;` -- the pair `join-return` claims. */

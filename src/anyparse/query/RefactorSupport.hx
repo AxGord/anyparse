@@ -1731,13 +1731,12 @@ final class RefactorSupport {
 
 	/**
 	 * The local name a top-level statement DECLARES, or null — the `name` of
-	 * `topLevelDeclaredNode`'s result. Shared by `guard-continue`'s collision gate and
-	 * `Rename`'s same-name blind-spot net.
+	 * `topLevelDeclaredNode`'s result. ONE `declKinds` list rather than the node walk's
+	 * statement/expression pair: its only caller, `sameBlockRedeclaration`, asks with a
+	 * vocabulary that is already a union.
 	 */
-	public static function topLevelDeclaredName(
-		stmt: QueryNode, localDeclKinds: Array<String>, localDeclExprKinds: Array<String>, metaKinds: Array<String>
-	): Null<String> {
-		final decl: Null<QueryNode> = topLevelDeclaredNode(stmt, localDeclKinds, localDeclExprKinds, metaKinds);
+	public static function topLevelDeclaredName(stmt: QueryNode, declKinds: Array<String>, metaKinds: Array<String>): Null<String> {
+		final decl: Null<QueryNode> = topLevelDeclaredNode(stmt, declKinds, [], metaKinds);
 		return decl?.name;
 	}
 
@@ -3285,6 +3284,64 @@ final class RefactorSupport {
 		}
 		walk(tree);
 		return best;
+	}
+
+	/**
+	 * `enclosingFunctionSubtree`, climbed OUT of a local `function <name>` whose own declaration
+	 * the cursor sits on — the scope a net keyed on `name` has to sweep.
+	 *
+	 * A local function IS a function subtree, so for a cursor anywhere on `function g() …` the
+	 * innermost containing function is that declaration itself, and a same-block net swept over
+	 * it sees only the BODY — never the sibling `function g()` two statements down that is the
+	 * whole reason the net exists. The binding lives in the block one level out, so the host is
+	 * the function enclosing THAT. Climbing repeats (a local `g` inside a local `g`) and always
+	 * widens, which is the safe direction: `sameBlockRedeclaration` recurses through everything
+	 * under the scope it is given, so a scope that is too wide can only over-refuse, never miss.
+	 */
+	public static function bindingHostSubtree(tree: QueryNode, cursor: Int, name: String, shape: RefShape): QueryNode {
+		final localFnKinds: Array<String> = (shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
+		var scope: QueryNode = enclosingFunctionSubtree(tree, cursor, shape);
+		while (scope.name == name && localFnKinds.contains(scope.kind)) {
+			final parent: Null<QueryNode> = parentOf(tree, scope);
+			final parentSpan: Null<Span> = parent?.span;
+			if (parentSpan == null) return tree;
+			scope = enclosingFunctionSubtree(tree, parentSpan.from, shape);
+		}
+		return scope;
+	}
+
+	/**
+	 * The span of a SECOND same-block declaration of `name` within `scope`, or null when every
+	 * block there declares it at most once.
+	 *
+	 * Haxe allows re-declaring a name in one block, and the resolution index mis-binds every
+	 * reference that follows the second declaration — each stays bound to the FIRST. Two ops have
+	 * to refuse on that shape: `Rename`, whose splice would rewrite the wrong occurrences, and
+	 * `ExtractMethod`, which reads the same index to decide whether a range-local escapes the
+	 * range. Compared per PARENT node, so a re-declaration in a NESTED block — ordinary shadowing,
+	 * which the index resolves correctly — is not reported.
+	 *
+	 * The vocabulary is `TypeResolver.blockScopedValueDeclarationKinds`, NOT the grammar's local-var
+	 * lists alone: a local `function g() …` redeclared in one block is the same blind spot (every
+	 * later `g()` stays bound to the first), and it reached both ops as a silent miscompile until the
+	 * two vocabularies were derived from one place.
+	 */
+	public static function sameBlockRedeclaration(scope: QueryNode, name: String, plugin: GrammarPlugin, shape: RefShape): Null<Span> {
+		final declKinds: Array<String> = TypeResolver.blockScopedValueDeclarationKinds(shape);
+		final metaKinds: Array<String> = plugin.metaShape().metaKinds;
+		function walk(node: QueryNode): Null<Span> {
+			var seen: Bool = false;
+			for (c in node.children) {
+				if (topLevelDeclaredName(c, declKinds, metaKinds) == name) {
+					if (seen) return c.span;
+					seen = true;
+				}
+				final found: Null<Span> = walk(c);
+				if (found != null) return found;
+			}
+			return null;
+		}
+		return walk(scope);
 	}
 
 	/**

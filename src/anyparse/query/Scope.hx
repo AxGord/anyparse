@@ -53,13 +53,13 @@ final class ScopeStack {
 
 	/**
 	 * Walk frames top-down (innermost first) and return the first
-	 * binding span for `name`. Null when no enclosing scope declares
+	 * binding for `name`. Null when no enclosing scope declares
 	 * the symbol — typically a cross-file or implicit-`this` reference.
 	 */
-	public function resolveInnermost(name: String, at: Int): Null<Span> {
+	public function resolveInnermost(name: String, at: Int): Null<ScopeBinding> {
 		var i: Int = _frames.length - 1;
 		while (i >= 0) {
-			final hit: Null<Span> = _frames[i].resolve(name, at);
+			final hit: Null<ScopeBinding> = _frames[i].resolve(name, at);
 			if (hit != null) return hit;
 			i--;
 		}
@@ -111,18 +111,21 @@ final class ScopeFrame {
 	}
 
 	/**
-	 * The declaration span bound to `name` and visible at source offset `at`, or null when
+	 * The declaration bound to `name` and visible at source offset `at`, or null when
 	 * this frame binds the name nowhere — or binds it only from a later offset, which is the
 	 * whole point of a position-scoped frame: the reference belongs to an enclosing binding.
 	 */
-	public inline function resolve(name: String, at: Int): Null<Span> {
+	public inline function resolve(name: String, at: Int): Null<ScopeBinding> {
 		final binding: Null<ScopeBinding> = _bindings[name];
-		return binding != null && at >= binding.visibleFrom ? binding.span : null;
+		return binding != null && at >= binding.visibleFrom ? binding : null;
 	}
 
-	public function declare(name: String, span: Span, visibleFrom: Int): Void {
-		if (!_bindings.exists(name))
-			_bindings[name] = ({ span: span, visibleFrom: visibleFrom < visibleFloor ? visibleFloor : visibleFrom }: ScopeBinding);
+	public function declare(name: String, node: QueryNode, span: Span, visibleFrom: Int): Void {
+		if (!_bindings.exists(name)) _bindings[name] = ({
+			node: node,
+			span: span,
+			visibleFrom: visibleFrom < visibleFloor ? visibleFloor : visibleFrom
+		}: ScopeBinding);
 	}
 
 }
@@ -139,6 +142,14 @@ final class ScopeFrame {
  * itself so it can recurse. `Refs.visibleFrom` derives the offset per declaration kind.
  */
 typedef ScopeBinding = {
+	/**
+	 * The node that DECLARES the binding — the very node `Refs` bound the name from, not one
+	 * re-found later by span arithmetic. A consumer asking what a reference actually binds to
+	 * (a local? a parameter? a member?) reads its `kind` and its position in the tree directly;
+	 * `TypeResolver.bindsToValueDeclaration` is the one that does.
+	 */
+	final node: QueryNode;
+
 	final span: Span;
 	final visibleFrom: Int;
 };
