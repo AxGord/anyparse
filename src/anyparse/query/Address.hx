@@ -182,7 +182,39 @@ final class Address {
 			if (c != ' '.code && c != '\t'.code && c != '\r'.code) break;
 			offset++;
 		}
-		return offset >= source.length ? Err('line $line is past the end of the file') : Ok(offset, Engine.at(tree, offset));
+		if (offset >= source.length) return Err('line $line is past the end of the file');
+		final target: Int = declAfterModifierPrefix(tree, source, offset);
+		return Ok(target, Engine.at(tree, target));
+	}
+
+	/**
+	 * The offset a BARE line number addresses, given the offset of the line's first non-whitespace
+	 * character. A declaration's modifiers and metadata project as SIBLINGS before it, so that
+	 * character is `public` / `static` / `@:meta` and `Engine.at` lands on the prefix, not on the
+	 * declaration the line declares — every op then refuses a position copied straight out of lint or
+	 * compiler output. Walk the prefix run onto the declaration, the same grouping `declGroupSpan`
+	 * applies to structural edits. `<line>:<col>` keeps resolving exactly, so the prefix nodes stay
+	 * addressable.
+	 */
+	private static function declAfterModifierPrefix(tree: QueryNode, source: String, offset: Int): Int {
+		var at: Int = offset;
+		var node: Null<QueryNode> = Engine.at(tree, at);
+		while (node != null && RefactorSupport.isModifierOrMetaKind(node.kind)) {
+			final span: Null<Span> = node.span;
+			if (span == null) break;
+			var next: Int = span.to;
+			while (next < source.length && RefactorSupport.isSpace(source.fastCodeAt(next))) next++;
+			if (next >= source.length || next <= at) break;
+			final ahead: Null<QueryNode> = Engine.at(tree, next);
+			// Only a node that STARTS here is the thing the line declares. Anything else means the walk
+			// ran into trivia (a comment between the prefix and the declaration) and `Engine.at` answered
+			// with the enclosing type — keep the prefix node rather than widen the address to a container.
+			final aheadSpan: Null<Span> = ahead == null ? null : ahead.span;
+			if (aheadSpan == null || aheadSpan.from != next) break;
+			at = next;
+			node = ahead;
+		}
+		return at;
 	}
 
 	/** A Selector v2 path — must resolve to exactly one node (or `nth` picks among several). */

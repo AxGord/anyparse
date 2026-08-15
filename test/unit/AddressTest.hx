@@ -38,6 +38,52 @@ class AddressTest extends Test {
 		}
 	}
 
+	/**
+	 * A bare line number snaps to the line's first non-whitespace character, which for a
+	 * declaration is its modifier prefix. Modifiers project as SIBLINGS before the decl, so
+	 * `Engine.at` landed on `Public` and every op refused an address copied straight out of
+	 * lint or compiler output.
+	 */
+	public function testAtLineOnlySkipsModifierPrefix(): Void {
+		final src: String = 'class C {\n\tpublic static function f(): Int {\n\t\treturn 1;\n\t}\n}\n';
+		assertBareLineHitsFnMember(src, '2');
+	}
+
+	/** The `@:meta` run is part of the same prefix — a decl's annotations sit on their own lines. */
+	public function testAtLineOnlySkipsMetaPrefix(): Void {
+		final src: String = 'class C {\n\t@:keep\n\tpublic function f(): Int {\n\t\treturn 1;\n\t}\n}\n';
+		assertBareLineHitsFnMember(src, '2');
+	}
+
+	/**
+	 * A comment between the prefix and the declaration is trivia, so the offset after the
+	 * prefix belongs to no node of its own and `Engine.at` answers with the enclosing type.
+	 * The walk keeps the prefix node instead — widening a bare-line address to a whole class
+	 * would let `remove-element --at <line>` delete the type instead of one annotation.
+	 */
+	public function testAtLineOnlyKeepsPrefixWhenTriviaFollows(): Void {
+		final src: String = 'class C {\n\t@:keep\n\t// note\n\tpublic function f(): Int {\n\t\treturn 1;\n\t}\n}\n';
+		switch resolveIn(src, { at: '2' }) {
+			case Ok(offset, node):
+				Assert.equals('@:keep', src.substr(offset, 6));
+				Assert.notEquals('ClassDecl', node == null ? 'null' : node.kind);
+			case Err(message):
+				Assert.fail(message);
+		}
+	}
+
+	/** The explicit `<line>:<col>` form stays exact, so a modifier node is still addressable. */
+	public function testAtLineColStillResolvesTheModifier(): Void {
+		final src: String = 'class C {\n\tpublic static function f(): Int {\n\t\treturn 1;\n\t}\n}\n';
+		switch resolveIn(src, { at: '2:2' }) {
+			case Ok(offset, node):
+				Assert.equals('public', src.substr(offset, 6));
+				Assert.equals('Public', node == null ? 'null' : node.kind);
+			case Err(message):
+				Assert.fail(message);
+		}
+	}
+
 	public function testAtBlankLineErrs(): Void {
 		final src: String = 'class C {\n\n\tvar x: Int;\n}\n';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
@@ -246,6 +292,23 @@ class AddressTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: QueryNode = plugin.parseFile(SRC);
 		return Address.resolve(tree, SRC, plugin, spec);
+	}
+
+	/** `resolve` for a one-off source that is not `SRC`. */
+	private function resolveIn(src: String, spec: AddressSpec): AddressResult {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		return Address.resolve(plugin.parseFile(src), src, plugin, spec);
+	}
+
+	/** Asserts a BARE line address lands on the `function` keyword of an `FnMember`, not on its prefix. */
+	private function assertBareLineHitsFnMember(src: String, line: String): Void {
+		switch resolveIn(src, { at: line }) {
+			case Ok(offset, node):
+				Assert.equals('function', src.substr(offset, 8));
+				Assert.equals('FnMember', node == null ? 'null' : node.kind);
+			case Err(message):
+				Assert.fail(message);
+		}
 	}
 
 }

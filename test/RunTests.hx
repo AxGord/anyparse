@@ -629,6 +629,7 @@ import unit.OracleBatchRevertReasonTest;
 import unit.JoinBranchCallCheckTest;
 import unit.HxCallParamIfExpressionArgSliceTest;
 import unit.HxValueIfFitSliceTest;
+import unit.RenameMemberInFileCliTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -984,6 +985,7 @@ class RunTests {
 		addCase(new AddressTest());
 		addCase(new AddressCliTest());
 		addCase(new RenameTypeInFileCliTest());
+		addCase(new RenameMemberInFileCliTest());
 		addCase(new ApqAstIntegrationTest());
 		addCase(new ApqIfStmtChildOrderTest());
 		addCase(new ApqJsonSchemaProbe());

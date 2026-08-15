@@ -1273,6 +1273,11 @@ final class Cli {
 		// index - route it through the op `--scope` uses, with the cursor file as the scope.
 		if (cursorOnTypeDecl(source, pos.line, pos.col, plugin))
 			return runRenameTypeInFile(filePath, source, pos.line, pos.col, newNameStr, write, plugin);
+		// Same for a MEMBER: value-binding resolution binds a name lexically, never through a
+		// receiver's type, so `Rename` rewrote the declaration and left every `obj.member` access
+		// on the old name - a rewrite that does not compile.
+		if (cursorOnMemberDecl(source, pos.line, pos.col, plugin))
+			return runRenameMemberInFile(filePath, source, pos.line, pos.col, newNameStr, write, plugin);
 
 		final shape: RefShape = plugin.refShape();
 		final result: RenameResult = Rename.rename(source, pos.line, pos.col, newNameStr, plugin, shape, qualifyShadowed, filePath);
@@ -1368,6 +1373,17 @@ final class Cli {
 	}
 
 	/**
+	 * The member twin of `cursorOnTypeDecl`. It asks the resolver `CrossRenameMember` itself uses, so
+	 * the in-file branch and the `--scope` branch cannot disagree about what a member cursor is.
+	 */
+	private static function cursorOnMemberDecl(source: String, line: Int, col: Int, plugin: GrammarPlugin): Bool {
+		return try {
+			final tree: QueryNode = plugin.parseFile(source);
+			CrossRenameMember.isMemberDeclAtCursor(tree, Span.offsetOf(source, line, col), source);
+		} catch (exception: Exception) false;
+	}
+
+	/**
 	 * `apq rename <file> <addr> <newName>` with the cursor on a TYPE declaration and no
 	 * `--scope` - the type-namespace rename confined to the cursor file.
 	 *
@@ -1384,13 +1400,40 @@ final class Cli {
 	private static function runRenameTypeInFile(
 		filePath: String, source: String, line: Int, col: Int, newName: String, write: Bool, plugin: GrammarPlugin
 	): Int {
-		final result: CrossRenameResult = CrossRename.crossRenameType(
-			filePath, source, line, col, newName, [{ file: filePath, source: source }], plugin, plugin.typeRefShape(), plugin.refShape()
+		return emitInFileRename(
+			CrossRename.crossRenameType(
+				filePath, source, line, col, newName, [{ file: filePath, source: source }],
+				plugin, plugin.typeRefShape(), plugin.refShape()
+			),
+			write
 		);
+	}
+
+	/**
+	 * In-file rename of a MEMBER declaration, through the op `--scope` uses with the cursor file as
+	 * the whole scope. The member namespace resolves accesses via the receiver's declared type, which
+	 * the value-binding rename cannot do.
+	 */
+	private static function runRenameMemberInFile(
+		filePath: String, source: String, line: Int, col: Int, newName: String, write: Bool, plugin: GrammarPlugin
+	): Int {
+		return emitInFileRename(
+			CrossRenameMember.crossRenameMember(
+				filePath, source, line, col, newName, [{ file: filePath, source: source }], plugin, plugin.refShape()
+			),
+			write
+		);
+	}
+
+	/**
+	 * Emit the ONE file change an in-file cross-rename produces, type or member: write it or print
+	 * it, then the file-scope advisory and whatever the op itself reported.
+	 */
+	private static function emitInFileRename(result: CrossRenameResult, write: Bool): Int {
 		switch result {
 			case Ok(changes, advisory):
 				// The scope is one file and an empty change set is `Err`, so there is exactly one.
-				if (changes.length != 1) throw new Exception('in-file type rename produced ${changes.length} file change(s)');
+				if (changes.length != 1) throw new Exception('in-file rename produced ${changes.length} file change(s)');
 				final change: FileChange = changes[0];
 				if (write) {
 					writeFile(change.file, change.newSource);
@@ -5947,6 +5990,12 @@ final class Cli {
 		sysPrint('to cover them; the in-file form is for a type no other file names, and\n');
 		sysPrint('for one whose simple name --scope would reject as ambiguous.\n');
 		sysPrint('\n');
+		sysPrint('A cursor on a MEMBER declaration takes the same route through the\n');
+		sysPrint('MEMBER namespace, also confined to <file>: value-binding resolution\n');
+		sysPrint('binds a name lexically and never through a receiver type, so without\n');
+		sysPrint('it the declaration was rewritten and every obj.member access left on\n');
+		sysPrint('the old name. The refusals listed under --scope apply here too.\n');
+		sysPrint('\n');
 		sysPrint('With --scope <dir> the cursor selects a TYPE or a MEMBER declaration.\n');
 		sysPrint('On a TYPE declaration (class /\n');
 		sysPrint('interface / enum / typedef / abstract) that type is renamed across\n');
@@ -5967,8 +6016,10 @@ final class Cli {
 		sysPrint('receiver resolves to the source type for an instance member. Receivers\n');
 		sysPrint('whose type does not resolve, super-access, using-extension calls, and\n');
 		sysPrint('overrides are left as loud compile errors. Refuses an override member,\n');
-		sysPrint('a name already declared on the type, or a type declared more than once\n');
-		sysPrint('under scope.\n');
+		sysPrint('a member an ancestor under scope declares (an implementation of an\n');
+		sysPrint('abstract or interface method carries no override modifier, so the\n');
+		sysPrint('keyword alone never saw it), a name already declared on the type, or a\n');
+		sysPrint('type declared more than once under scope.\n');
 	}
 
 	private static function printMoveUsage(): Void {

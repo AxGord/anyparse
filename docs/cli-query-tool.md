@@ -269,7 +269,7 @@ Every mutation op resolves its target through one shared address layer
 
 | Form                 | Meaning |
 |----------------------|---------|
-| `<line>[:<col>]`     | 1-based position; **column omitted = the line's first non-whitespace character** (line numbers come from lint / compiler output; the column is the fiddly part) |
+| `<line>[:<col>]`     | 1-based position; **column omitted = the line's first non-whitespace character** (line numbers come from lint / compiler output; the column is the fiddly part), then past the declaration's modifier / metadata prefix — `public static function f` resolves the `FnMember`, not the `Public` sibling node, and `@:keep` on its own line reaches the declaration below it. The walk stops at anything that is not a node START, so a comment between the prefix and the declaration keeps the address on the prefix rather than widening it to the enclosing type. Spell the column explicitly to address a modifier or annotation itself |
 | `--select '<sel>'`   | Selector v2 path; must resolve to exactly one node |
 | `--match '<pattern>'`| An `apq search` structural pattern (`$x` metavars); the matched node is the target |
 | `--nth <k>`          | Picks the k-th (1-based, document order) of several `--select` / `--match` matches |

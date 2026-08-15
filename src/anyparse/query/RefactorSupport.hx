@@ -326,6 +326,15 @@ final class RefactorSupport {
 	]);
 
 	/**
+	 * Whether `kind` is one of the modifier / metadata siblings a declaration projects BEFORE itself
+	 * (`MODIFIER_META_KINDS`). Address resolution asks this to walk a bare line number past a
+	 * `public static` prefix onto the declaration the line actually declares.
+	 */
+	public static inline function isModifierOrMetaKind(kind: String): Bool {
+		return MODIFIER_META_KINDS.contains(kind);
+	}
+
+	/**
 	 * Node kinds an expression subtree may contain and still be
 	 * SIDE-EFFECT-FREE: literals, bare identifiers, parenthesised groups, and
 	 * the pure binary / unary / ternary operators. The string-payload leaf

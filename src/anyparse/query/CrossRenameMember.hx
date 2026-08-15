@@ -73,14 +73,18 @@ private typedef LocatedOffsets = {
  *    local / parameter / field DECLARED of the source type. A receiver
  *    whose type does not resolve is left alone — if it really was the
  *    source type the miss surfaces as a compile error, never a wrong
- *    rewrite.
+ *    rewrite. A `new T()` receiver resolves through its own type
+ *    name and needs no binding at all.
  *
  * ## Refusals (correctness boundary)
  *
  *  - The declaring type must be UNIQUE under the scope (a second type of
  *    the same name would make the simple-name receiver match ambiguous).
  *  - An `override` member is refused — it belongs to a base declaration;
- *    renaming it alone would dangle the override AND miss the base.
+ *    renaming it alone would dangle the override AND miss the base. So is
+ *    a member some ANCESTOR in the scope declares: an implementation of
+ *    an `abstract` method or an interface method carries no `override`
+ *    modifier, so the keyword alone never saw it.
  *  - A member whose name is also captured by a `case` pattern in the
  *    declaring file is refused: sibling case-branch captures flatten into
  *    one scope frame, so the resolver can mis-attribute a bare reference
@@ -104,6 +108,17 @@ private typedef LocatedOffsets = {
  * homonyms, and overrides declared OUTSIDE the scope are not rewritten —
  * each dangles into a compile error the user can see. The advisory
  * (always non-null on success) reminds them.
+ *
+ * A member declared inside a `#if` region is missed EARLIER than that: a
+ * conditional projects as ONE node holding each branch's statements, so the
+ * member is not a direct child of the type and `resolveMemberAtCursor`
+ * returns null. The CLI then falls through to the value namespace, which
+ * rewrites the declaration and leaves `obj.member` behind — the very bug the
+ * member path exists to fix. Measured: 3 of 471 member declarations in a
+ * 40-file TM sample, 0 of 428 in anyparse. A conditional-aware collection
+ * already exists as `anyparse.check.MemberSlots.collectMembers`, one layer
+ * ABOVE this one, so reusing it means moving that collection down into the
+ * query layer rather than calling across.
  *
  * Coordinate convention: `line` / `col` are 1-based, exactly as
  * `apq refs` prints them — identical to `Rename` / `CrossRename`.
@@ -159,6 +174,16 @@ final class CrossRenameMember {
 		// passed. `null` means one same-named declaration's relation to the owner is unprovable: half a
 		// family leaves a declaration overriding nothing, so the whole rename is refused.
 		final index: SymbolIndex = SymbolIndex.build(scopeFiles, plugin);
+		// The `isOverride` refusal above reads the OVERRIDE modifier, which an implementation of an
+		// `abstract` method or an interface method never carries - and `overrideFamilyOf` models the
+		// family from the BASE down, so neither sees a cursor sitting on such an implementation. Ask
+		// the index the upward question directly, or the rename leaves the base declaring a member
+		// nothing implements.
+		final ancestor: Null<String> = index.declaringAncestorOf(t.typeName, t.memberName);
+		if (ancestor != null)
+			return Err(
+				'member "${t.memberName}" implements a declaration on "$ancestor" — rename that one instead (its implementations rename with it)'
+			);
 		final family: Null<Array<OverrideFamilyMember>> = index.overrideFamilyOf(t.typeName, t.memberName);
 		if (family == null)
 			return Err('cannot rename "${t.memberName}": another type declares it and cannot be proven unrelated to "${t.typeName}"');
@@ -168,6 +193,16 @@ final class CrossRenameMember {
 		for (fm in overrides) if (index.typeDeclaresMember(fm.typeName, newName))
 			return Err('type "${fm.typeName}" already declares a member "$newName"');
 		return apply(parse.parsed, cursorFile, t, newName, cursor, plugin, refShape, overrides, index);
+	}
+
+	/**
+	 * Whether the cursor sits on a member declaration this op can rename. The CLI asks it to route an
+	 * IN-FILE rename to the member namespace instead of the value one — `Rename` indexes value
+	 * bindings and is blind to `obj.member` by design, so it rewrote the declaration and left every
+	 * access through a receiver behind. Predicate and op call ONE resolver, so the two cannot diverge.
+	 */
+	public static function isMemberDeclAtCursor(tree: QueryNode, cursor: Int, source: String): Bool {
+		return resolveMemberAtCursor(tree, cursor, source) != null;
 	}
 
 	/**
@@ -486,7 +521,11 @@ final class CrossRenameMember {
 			if (node.kind == 'FieldAccess' && node.name == memberName && children.length > 0) {
 				final recv: QueryNode = children[0];
 				final rn: Null<String> = recv.name;
-				if (recv.kind == 'IdentExpr' && rn != null && rn != 'this' && rn != 'super') out.push({ recv: recv, fa: node });
+				// A `new T()` receiver carries its type in its own name, so it is a candidate even though it
+				// binds nothing - see `receiverIsSourceType`. Without it `new Other().tag()` was never even
+				// offered for resolution and the access silently kept the old name.
+				final named: Bool = recv.kind == 'IdentExpr' && rn != 'this' && rn != 'super';
+				if (rn != null && (named || recv.kind == 'NewExpr')) out.push({ recv: recv, fa: node });
 			}
 			for (c in children) collect(c);
 		}
@@ -505,6 +544,10 @@ final class CrossRenameMember {
 		final rn: Null<String> = recv.name;
 		final recvSpan: Null<Span> = recv.span;
 		if (rn == null || recvSpan == null) return false;
+		// A constructor call names the type it builds, so `new Other().tag()` needs no binding at all.
+		// Demanding one skipped the site SILENTLY: the declaration was renamed and the access left on
+		// the old name, which is a rewrite that does not compile.
+		if (recv.kind == 'NewExpr') return rn == typeName || index.isSubtype(rn, typeName);
 		final bindingFrom: Null<Int> = receiverBinding(hitsByName[rn] ?? [], recvSpan.from);
 		if (bindingFrom == null) return false;
 		final from: Int = bindingFrom;

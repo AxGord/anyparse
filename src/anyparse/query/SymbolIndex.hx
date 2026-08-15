@@ -962,6 +962,18 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * An ancestor of `typeName` — superclass or interface — that declares `member`, or null when
+	 * none does. This is the UPWARD question `overrideFamilyOf` never asks: it models the family
+	 * from the BASE down, so a cursor sitting on an implementation finds nothing. In Haxe an
+	 * implementation of an `abstract` method or an interface method carries NO `override`
+	 * modifier, so a keyword check does not see it either.
+	 */
+	public function declaringAncestorOf(typeName: String, member: String): Null<String> {
+		final declarers: Array<String> = [for (fi in _files) for (t in fi.types) if (t.members.exists(m -> m.name == member)) t.name];
+		return declarers.find(n -> n != typeName && isSubtype(typeName, n));
+	}
+
+	/**
 	 * Whether `typeName` IMPLEMENTS an interface that declares a member named `field` —
 	 * or implements an interface that cannot be resolved in the current scope. Such a
 	 * field is pinned to the interface's declared property access, so a `var → final`
