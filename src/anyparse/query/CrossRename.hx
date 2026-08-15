@@ -62,6 +62,12 @@ typedef FileChange = {
  *    located precisely (the earlier segments are lower-case packages,
  *    but the splice anchors on the segment after the final `.` so a
  *    package segment that happens to match the type name is never hit).
+ *  - QUALIFIED type positions — the type named THROUGH its module path,
+ *    which the type-ref tree carries as ONE node whose name is the whole
+ *    dotted string. The spellings Haxe accepts are enumerated by
+ *    `qualifiedPaths` and matched WHOLE, never by last segment: that is what
+ *    keeps a same-simple-name type from another module (`haxe.io.Bytes`
+ *    against a local `Bytes`) out of the rewrite.
  *  - Static-receiver access `T.staticMethod()` / `T.CONST` — a
  *    `FieldAccess` whose receiver child is an `IdentExpr T` that does
  *    NOT resolve to a value binding. Such a receiver is the type used
@@ -70,7 +76,10 @@ typedef FileChange = {
  *    enum-constructor (ctors are bare `T` / `T(args)` / `case T:`,
  *    never `T.x`), and a value named `T` used as `T.x()` DOES resolve
  *    (an in-file binding) and is excluded — so this stays zero false
- *    positives.
+ *    positives. A DOTTED receiver — `pkg.Mod.CONST`, and every
+ *    `macro pkg.Mod.Ctor(…)` reification — is a `FieldAccess` CHAIN rather than an
+ *    identifier; it is flattened and matched WHOLE against the same qualified
+ *    candidates, and its root is a package identifier no value binding can shadow.
  *
  * ## Documented residual (loud-fail, not silent)
  *
@@ -86,15 +95,17 @@ typedef FileChange = {
  *    alias `U`, not `T`, so the `pkg.T` segment is not matched. The
  *    alias `U` (used in type positions) IS covered, but the import's
  *    own `T` segment is left, which dangles if `T` moved package.
- *  - A QUALIFIED sub-module reference in a type position - `Mod.T`, where `T`
- *    is declared beside the main type of `Mod`. The type-ref tree carries it as
- *    ONE `Named` node whose name is the whole dotted path, so neither
- *    `Uses.find(T)` nor `Uses.find(Mod)` matches. Measured: anyparse `src` has
- *    619 sub-module types, 142 of them referenced this way from another file
- *    across 802 sites (TM `src`: 62 of 224, 164 sites). Matching the LAST
- *    dotted segment is NOT the fix - a same-simple-name type declared outside
- *    scope (`haxe.io.Bytes` against a local `Bytes`) would be rewritten with
- *    it, which is the false-positive class this operation keeps at zero.
+ *  - A type position inside an ANONYMOUS STRUCTURE type — `{ node: T, … }`. The
+ *    type-ref projection does not carry it, so `Uses.find(T)` reports nothing there
+ *    and the plain-name arm has never covered it either. Measured on this repo, renaming
+ *    `anyparse.core.Doc` (1044 occupied sites): 70 such positions across 3 files, every
+ *    one a loud `Type not found`, and the ONLY class that rename still leaves behind.
+ *  - Renaming a module's MAIN type renames the MODULE PATH with it, and the op
+ *    does not touch the FILE: `Mod.hx` must be renamed to match by hand, and
+ *    references to the module's OTHER sub-module types (`pkg.Mod.Other`) still
+ *    carry the old module segment. That has always been true of the `import`
+ *    segment this op rewrites; the qualified positions now agree with it rather
+ *    than disagreeing.
  *  - Cross-package: a type declared under a DIFFERENT scope than the
  *    one being renamed (the uniqueness proof is over the given scope
  *    only).
@@ -111,10 +122,14 @@ typedef FileChange = {
 @:nullSafety(Strict)
 final class CrossRename {
 
+	/** The node kind a qualified namespace receiver chains through. */
+	private static final FIELD_ACCESS_KIND: String = 'FieldAccess';
+
 	/** The advisory appended to every successful rename. */
 	private static final ADVISORY: String = 'type-namespace rename only — verify bare `Class<T>` value uses (`var c = T;`),'
-		+ ' aliased imports (`import pkg.T as U;`), qualified sub-module references (`Mod.T` in a type position), and any'
-		+ ' cross-package declarations by hand.';
+		+ ' aliased imports (`import pkg.T as U;`), type positions inside an anonymous structure (`{ node: T }`), and any'
+		+ ' cross-package declarations by hand. Renaming the MAIN type of a module renames the module path with it: rename the'
+		+ ' FILE to match, and check references to the other sub-module types of that module.';
 
 	/**
 	 * Rename the type declaration at `line:col` (in `cursorFile` /
@@ -158,7 +173,18 @@ final class CrossRename {
 
 		// 3. Uniqueness: exactly one declaration of `typeName` under scope.
 		final uniqueErr: Null<String> = checkScopeUniqueness(parse.parsed, cursorFile, typeName);
-		return uniqueErr != null ? Err(uniqueErr) : applyTypeRename(parse.parsed, typeName, newName, plugin, typeRefShape, refShape);
+		if (uniqueErr != null) return Err(uniqueErr);
+
+		// 4. The declaring MODULE. A qualified reference names the type THROUGH its module path, so
+		//    the rewrite needs that path and not only the simple name.
+		final modulePkg: String = ModuleScan.packageOf(cursorTree);
+		final moduleBase: String = RefactorSupport.baseNameOf(cursorFile);
+		final module: { path: String, pkg: String, base: String } = {
+			path: modulePkg == '' ? moduleBase : '$modulePkg.$moduleBase',
+			pkg: modulePkg,
+			base: moduleBase
+		};
+		return applyTypeRename(parse.parsed, typeName, newName, plugin, typeRefShape, refShape, module);
 	}
 
 	/**
@@ -214,7 +240,8 @@ final class CrossRename {
 	 * than one collector).
 	 */
 	private static function collectOccurrences(
-		source: String, typeName: String, tree: QueryNode, plugin: GrammarPlugin, typeRefShape: TypeRefShape, refShape: RefShape
+		source: String, typeName: String, tree: QueryNode, plugin: GrammarPlugin, typeRefShape: TypeRefShape, refShape: RefShape,
+		module: { path: String, pkg: String, base: String }
 	): Array<Span> {
 		final out: Array<Span> = [];
 		final seen: Array<Int> = [];
@@ -223,6 +250,10 @@ final class CrossRename {
 		// a. Type positions.
 		final typeRefTree: QueryNode = plugin.parseFileTypeRefs(source);
 		for (hit in Uses.find(typeName, typeRefTree, typeRefShape)) add(RefactorSupport.identTokenOffset(source, hit.span, typeName));
+
+		// e. QUALIFIED type positions — the same type named THROUGH its module path.
+		final qualified: Array<String> = qualifiedPaths(typeName, module, ModuleScan.packageOf(tree));
+		for (off in qualifiedOffsets(source, typeRefTree, typeName, qualified, typeRefShape)) add(off);
 
 		// d-prep. Receiver offsets that resolve to a value binding — an
 		// in-file var / param / field named `typeName`. A static-receiver
@@ -247,14 +278,10 @@ final class CrossRename {
 				final nameSpan: Null<Span> = decl.nameNode.span;
 				if (nameSpan != null) add(RefactorSupport.identTokenOffset(source, nameSpan, typeName));
 			} else if (span != null && (node.kind == 'ImportDecl' || node.kind == 'UsingDecl'))
-				add(importSegmentOffset(source, span, node.name, typeName));
+				add(lastSegmentOffset(source, span, node.name, typeName));
 			final children: Array<QueryNode> = node.children;
-			if (node.kind == 'FieldAccess' && children.length > 0) {
-				final recv: QueryNode = children[0];
-				final recvSpan: Null<Span> = recv.span;
-				if (recv.kind == 'IdentExpr' && recv.name == typeName && recvSpan != null && !valueResolved.contains(recvSpan.from))
-					add(RefactorSupport.identTokenOffset(source, recvSpan, typeName));
-			}
+			if (node.kind == FIELD_ACCESS_KIND && children.length > 0)
+				add(namespaceReceiverOffset(source, children[0], typeName, qualified, valueResolved));
 			for (c in children) walk(c);
 		}
 		walk(tree);
@@ -263,15 +290,15 @@ final class CrossRename {
 	}
 
 	/**
-	 * Offset of the LAST dotted segment of an `import` / `using` path
-	 * when that segment equals `typeName`, else -1. `pathName` is the
-	 * node's name slot — the verbatim dotted path (`pkg.sub.Foo`). The
-	 * segment is located by finding the path text inside the node span
-	 * and anchoring on the character after the final `.`, so a leading
-	 * package segment that happens to match `typeName` (e.g.
-	 * `import Foo.sub.Foo;`) is never mistaken for the type segment.
+	 * Offset of the LAST dotted segment of a qualified path when that segment equals
+	 * `typeName`, else -1. `pathName` is the node's name slot — the verbatim dotted path
+	 * (`pkg.sub.Foo`), which both an `import` / `using` declaration and a QUALIFIED type
+	 * reference carry whole. The segment is located by finding the path text inside the node
+	 * span and anchoring on the character after the final `.`, so a leading package segment
+	 * that happens to match `typeName` (e.g. `import Foo.sub.Foo;`) is never mistaken for the
+	 * type segment.
 	 */
-	private static function importSegmentOffset(source: String, span: Span, pathName: Null<String>, typeName: String): Int {
+	private static function lastSegmentOffset(source: String, span: Span, pathName: Null<String>, typeName: String): Int {
 		if (pathName == null) return -1;
 		final lastDot: Int = pathName.lastIndexOf('.');
 		if (RefactorSupport.lastSegment(pathName) != typeName) return -1;
@@ -336,11 +363,12 @@ final class CrossRename {
 	 * or when nothing changed; otherwise `Ok` with the per-file changes + advisory.
 	 */
 	private static function applyTypeRename(
-		parsed: Array<ParsedFile>, typeName: String, newName: String, plugin: GrammarPlugin, typeRefShape: TypeRefShape, refShape: RefShape
+		parsed: Array<ParsedFile>, typeName: String, newName: String, plugin: GrammarPlugin, typeRefShape: TypeRefShape,
+		refShape: RefShape, module: { path: String, pkg: String, base: String }
 	): CrossRenameResult {
 		final changes: Array<FileChange> = [];
 		for (entry in parsed) {
-			final occurrences: Array<Span> = collectOccurrences(entry.source, typeName, entry.tree, plugin, typeRefShape, refShape);
+			final occurrences: Array<Span> = collectOccurrences(entry.source, typeName, entry.tree, plugin, typeRefShape, refShape, module);
 			if (occurrences.length == 0) continue;
 			final edits: Array<{ span: Span, text: String }> = [for (occ in occurrences) { span: occ, text: newName }];
 			final newSource: String = RefactorSupport.applyEdits(entry.source, edits);
@@ -356,6 +384,85 @@ final class CrossRename {
 			changes.push({ file: entry.file, newSource: newSource, count: occurrences.length });
 		}
 		return changes.length == 0 ? Err('rename "$typeName" -> "$newName" changed nothing') : Ok(changes, ADVISORY);
+	}
+
+	/**
+	 * Every DOTTED spelling of `typeName` a file in `filePkg` may legally use for a type declared
+	 * in `module` — the candidate paths arm (e) matches WHOLE, which is what keeps a type of the
+	 * same simple name declared anywhere else out of the rewrite.
+	 *
+	 * Read off the compiler rather than assumed. `pkg.Mod.T`, the full path from a class-path
+	 * root, works from anywhere. The short `Mod.T` works ONLY from a file in the module's own
+	 * package: an `import pkg.Mod;` does not make it legal elsewhere (`Type not found : Mod`),
+	 * and a module in the root package makes the two spellings the same string. A type whose name
+	 * equals the module's is the module's MAIN type — its qualified spelling IS the module path,
+	 * with no segment of its own, and in the root package it has no dotted spelling at all.
+	 */
+	private static function qualifiedPaths(
+		typeName: String, module: { path: String, pkg: String, base: String }, filePkg: String
+	): Array<String> {
+		if (typeName == module.base) return module.path == module.base ? [] : [module.path];
+		final out: Array<String> = ['${module.path}.$typeName'];
+		if (filePkg == module.pkg && module.path != module.base) out.push('${module.base}.$typeName');
+		return out;
+	}
+
+	/**
+	 * The last-segment offset of every QUALIFIED type position naming `typeName` through its
+	 * module path. The type-ref tree carries `pkg.Mod.T` as ONE node whose name is the whole
+	 * dotted string, so the plain-name arm never sees it and the declaration used to be renamed
+	 * with every such reference left behind — source that does not compile, reported as success.
+	 *
+	 * `tree` is the PLAIN tree, read only for the referencing file's own `package`: which dotted
+	 * spellings are legal depends on it (see `qualifiedPaths`).
+	 */
+	private static function qualifiedOffsets(
+		source: String, typeRefTree: QueryNode, typeName: String, qualified: Array<String>, typeRefShape: TypeRefShape
+	): Array<Int> {
+		return [
+			for (path in qualified) for (hit in Uses.find(path, typeRefTree, typeRefShape))
+				lastSegmentOffset(source, hit.span, path, typeName)
+		];
+	}
+
+	/**
+	 * The dotted path a receiver CHAIN spells — `anyparse.core.Doc` for the
+	 * `FieldAccess Doc (FieldAccess core (IdentExpr anyparse))` a qualified namespace access
+	 * projects as. Anything the chain cannot express as a plain path (a call, an index) makes it
+	 * not a path at all, and the empty string it returns matches no candidate.
+	 */
+	private static function flattenPath(node: QueryNode): String {
+		final name: Null<String> = node.name;
+		if (name == null) return '';
+		if (node.kind == 'IdentExpr') return name;
+		if (node.kind != FIELD_ACCESS_KIND || node.children.length == 0) return '';
+		final head: String = flattenPath(node.children[0]);
+		return head == '' ? '' : '$head.$name';
+	}
+
+	/**
+	 * d/f. The offset of the type token in a static-access RECEIVER, or -1 when `recv` is not this
+	 * type used as a namespace. Two shapes:
+	 *
+	 *  - d. A bare `IdentExpr T` that does NOT resolve to a value binding (an in-file var / param /
+	 *    field named `T` shadows the namespace and is excluded through `valueResolved`).
+	 *  - f. A DOTTED chain — `pkg.Mod.CONST`, and every `macro pkg.Mod.Ctor(…)` reification, whose
+	 *    receiver is a `FieldAccess` chain rather than an identifier and which arm (d) therefore
+	 *    never saw. The chain is flattened and matched WHOLE against the same candidates the
+	 *    qualified type positions use, so a same-simple-name type from another module is
+	 *    unreachable. Such a chain is rooted in a PACKAGE identifier, which no value binding can
+	 *    shadow, so it needs no `valueResolved` test of its own.
+	 */
+	private static function namespaceReceiverOffset(
+		source: String, recv: QueryNode, typeName: String, qualified: Array<String>, valueResolved: Array<Int>
+	): Int {
+		final recvSpan: Null<Span> = recv.span;
+		if (recv.name != typeName || recvSpan == null) return -1;
+		if (recv.kind == 'IdentExpr')
+			return valueResolved.contains(recvSpan.from) ? -1 : RefactorSupport.identTokenOffset(source, recvSpan, typeName);
+		if (recv.kind != FIELD_ACCESS_KIND) return -1;
+		final path: String = flattenPath(recv);
+		return qualified.contains(path) ? lastSegmentOffset(source, recvSpan, path, typeName) : -1;
 	}
 
 }

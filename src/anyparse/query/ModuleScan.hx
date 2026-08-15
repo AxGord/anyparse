@@ -313,7 +313,7 @@ final class ModuleScan {
 	}
 
 	/** The file's `package` payload (`''` for the root package, and for a file with no declaration at all). */
-	private static function packageOf(root: QueryNode): String {
+	public static function packageOf(root: QueryNode): String {
 		for (c in root.children) if (c.kind == 'PackageDecl') return c.name ?? '';
 		return '';
 	}

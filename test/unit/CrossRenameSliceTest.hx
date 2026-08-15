@@ -310,6 +310,107 @@ class CrossRenameSliceTest extends Test {
 	}
 
 	/**
+	 * A sub-module type named through its module — `pkg.Boxes.Rim` — is ONE node in the type-ref
+	 * tree whose name is the whole dotted path, so the plain name match never saw it and the
+	 * declaration was renamed with every such reference left behind. The same file also names
+	 * `ext.Other.Rim`, a same-simple-name type from a module OUTSIDE the scope: matching the FULL
+	 * path is what leaves it alone, and one expected source carries both halves.
+	 */
+	public function testQualifiedSubModuleReferenceRenamesAcrossScope(): Void {
+		final a: String = 'package pkg;\n\nclass Boxes {\n\tpublic function new() {}\n}\n\nclass Rim {\n\tpublic function new() {}\n}';
+		final b: String = 'package zone;\n\nclass Z {\n\tvar near:pkg.Boxes.Rim = new pkg.Boxes.Rim();\n\tvar far:ext.Other.Rim = null;\n}';
+		final expectedB: String =
+			'package zone;\n\nclass Z {\n\tvar near:pkg.Boxes.Edge = new pkg.Boxes.Edge();\n\tvar far:ext.Other.Rim = null;\n}';
+		final changes: Array<FileChange> = okChanges('pkg/Boxes.hx', a, 7, 7, 'Edge', [
+			{ file: 'pkg/Boxes.hx', source: a },
+			{ file: 'zone/Z.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'zone/Z.hx').newSource);
+		Assert.equals(2, changeFor(changes, 'zone/Z.hx').count);
+	}
+
+	/**
+	 * The short `Boxes.Rim` spelling is legal ONLY from a file in the module's own package —
+	 * compiler-checked: an `import pkg.Boxes;` elsewhere still gives `Type not found : Boxes`,
+	 * while a ROOT-package module of the same base name IS reachable that way from anywhere. So
+	 * the same three characters mean a different type in the two files here, and only the
+	 * same-package one may be rewritten. Without the package gate the foreign file's reference to
+	 * an out-of-scope root module would be rewritten into a type that does not exist.
+	 */
+	public function testShortModulePathRenamesOnlyInsideTheModulesOwnPackage(): Void {
+		final a: String = 'package pkg;\n\nclass Boxes {\n\tpublic function new() {}\n}\n\nclass Rim {\n\tpublic function new() {}\n}';
+		final near: String = 'package pkg;\n\nclass Near {\n\tvar r:Boxes.Rim = new Boxes.Rim();\n}';
+		final far: String = 'package zone;\n\nclass Far {\n\tvar r:Boxes.Rim = null;\n}';
+		final expectedNear: String = 'package pkg;\n\nclass Near {\n\tvar r:Boxes.Edge = new Boxes.Edge();\n}';
+		final changes: Array<FileChange> = okChanges('pkg/Boxes.hx', a, 7, 7, 'Edge', [
+			{ file: 'pkg/Boxes.hx', source: a },
+			{ file: 'pkg/Near.hx', source: near },
+			{ file: 'zone/Far.hx', source: far },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedNear, changeFor(changes, 'pkg/Near.hx').newSource);
+		Assert.isFalse(changes.exists(c -> c.file == 'zone/Far.hx'), 'the foreign-package short form must be left alone');
+	}
+
+	/**
+	 * A module's MAIN type is named through the module path itself — `pkg.Boxes`, with no segment
+	 * of its own — so the same qualified pass covers it, and the rewrite now agrees with the
+	 * import segment the op has always rewritten. Both still point at a module whose FILE the op
+	 * does not rename; that is the residual the advisory names.
+	 */
+	public function testFullyQualifiedMainTypeReferenceRenames(): Void {
+		final a: String = 'package pkg;\n\nclass Boxes {\n\tpublic function new() {}\n}';
+		final b: String = 'import pkg.Boxes;\n\nclass Z {\n\tvar b:pkg.Boxes = new pkg.Boxes();\n}';
+		final expectedB: String = 'import pkg.Crates;\n\nclass Z {\n\tvar b:pkg.Crates = new pkg.Crates();\n}';
+		final changes: Array<FileChange> = okChanges('pkg/Boxes.hx', a, 3, 7, 'Crates', [
+			{ file: 'pkg/Boxes.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(3, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * A static access reached through the module path — `pkg.Boxes.M`, and every
+	 * `macro pkg.Mod.Ctor(…)` reification — carries the type on a `FieldAccess` CHAIN, not on the
+	 * bare identifier the static-receiver arm recognised, so it was left behind. The same expression also reads `other.Boxes.M` — the SAME simple name, from a
+	 * different module outside the scope: the chain is matched WHOLE, so only the first receiver
+	 * moves.
+	 */
+	public function testQualifiedNamespaceReceiverRenames(): Void {
+		final a: String = 'package pkg;\n\nclass Boxes {\n\tpublic static final M:Int = 5;\n}';
+		final b: String = 'class Z {\n\tvar n:Int = pkg.Boxes.M + other.Boxes.M;\n}';
+		final expectedB: String = 'class Z {\n\tvar n:Int = pkg.Crates.M + other.Boxes.M;\n}';
+		final changes: Array<FileChange> = okChanges('pkg/Boxes.hx', a, 3, 7, 'Crates', [
+			{ file: 'pkg/Boxes.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(1, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * The same dotted-receiver form for a SUB-MODULE type: `pkg.Boxes.Rim.K` names `Rim` through
+	 * its module, one segment deeper than the main-type case, and the flattened chain must match
+	 * the sub-module candidate rather than the module path.
+	 */
+	public function testQualifiedNamespaceReceiverRenamesSubModuleType(): Void {
+		final a: String =
+			'package pkg;\n\nclass Boxes {\n\tpublic function new() {}\n}\n\nclass Rim {\n\tpublic static final K:Int = 1;\n}';
+		final b: String = 'class Z {\n\tvar n:Int = pkg.Boxes.Rim.K;\n}';
+		final expectedB: String = 'class Z {\n\tvar n:Int = pkg.Boxes.Edge.K;\n}';
+		final changes: Array<FileChange> = okChanges('pkg/Boxes.hx', a, 7, 7, 'Edge', [
+			{ file: 'pkg/Boxes.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+	}
+
+	/**
 	 * Drive a successful rename and return the changes, asserting the
 	 * result is `Ok`, the advisory is present, and every rewrite
 	 * re-parses (the op already validates this; the test makes it
