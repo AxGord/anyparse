@@ -6,6 +6,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
+import anyparse.query.TreePath;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
@@ -158,7 +159,7 @@ final class DynamicBag {
 
 	/** Whether `member` is preceded (before the previous sibling) by a `Public` visibility modifier — an explicitly public member. */
 	private static function isPublicMember(tree: QueryNode, member: QueryNode, ctx: DynCtx): Bool {
-		final parent: Null<QueryNode> = parentOf(tree, member);
+		final parent: Null<QueryNode> = TreePath.parentOf(tree, member);
 		if (parent == null) return false;
 		final kids: Array<QueryNode> = parent.children;
 		var idx: Int = -1;
@@ -174,22 +175,6 @@ final class DynamicBag {
 		return false;
 	}
 
-	/** The parent node of `target` in `tree`, or null when it is the root / not found. */
-	private static function parentOf(tree: QueryNode, target: QueryNode): Null<QueryNode> {
-		var found: Null<QueryNode> = null;
-		function walk(n: QueryNode): Void {
-			if (found != null) return;
-			for (c in n.children) {
-				if (c == target) {
-					found = n;
-					return;
-				}
-				walk(c);
-			}
-		}
-		walk(tree);
-		return found;
-	}
 
 	/**
 	 * The bag's reflect operations and written values when `decl` is used EXCLUSIVELY as a

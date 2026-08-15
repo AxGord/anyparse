@@ -86,6 +86,15 @@ typedef FileChange = {
  *    alias `U`, not `T`, so the `pkg.T` segment is not matched. The
  *    alias `U` (used in type positions) IS covered, but the import's
  *    own `T` segment is left, which dangles if `T` moved package.
+ *  - A QUALIFIED sub-module reference in a type position - `Mod.T`, where `T`
+ *    is declared beside the main type of `Mod`. The type-ref tree carries it as
+ *    ONE `Named` node whose name is the whole dotted path, so neither
+ *    `Uses.find(T)` nor `Uses.find(Mod)` matches. Measured: anyparse `src` has
+ *    619 sub-module types, 142 of them referenced this way from another file
+ *    across 802 sites (TM `src`: 62 of 224, 164 sites). Matching the LAST
+ *    dotted segment is NOT the fix - a same-simple-name type declared outside
+ *    scope (`haxe.io.Bytes` against a local `Bytes`) would be rewritten with
+ *    it, which is the false-positive class this operation keeps at zero.
  *  - Cross-package: a type declared under a DIFFERENT scope than the
  *    one being renamed (the uniqueness proof is over the given scope
  *    only).
@@ -103,8 +112,9 @@ typedef FileChange = {
 final class CrossRename {
 
 	/** The advisory appended to every successful rename. */
-	private static final ADVISORY: String =
-		'type-namespace rename only — verify bare `Class<T>` value uses (`var c = T;`), aliased imports (`import pkg.T as U;`), and any cross-package declarations by hand.';
+	private static final ADVISORY: String = 'type-namespace rename only — verify bare `Class<T>` value uses (`var c = T;`),'
+		+ ' aliased imports (`import pkg.T as U;`), qualified sub-module references (`Mod.T` in a type position), and any'
+		+ ' cross-package declarations by hand.';
 
 	/**
 	 * Rename the type declaration at `line:col` (in `cursorFile` /

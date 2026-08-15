@@ -60,7 +60,7 @@ final class Patch {
 
 		// The searchable region is the same modifier-folded slice `apq source
 		// --select` prints, so a fragment copied from that output matches as-is.
-		final groupSpan: Span = RefactorSupport.declGroupSpan(node, RefactorSupport.parentOf(tree, node), span);
+		final groupSpan: Span = RefactorSupport.declGroupSpan(node, TreePath.parentOf(tree, node), span);
 		final slice: String = source.substring(groupSpan.from, groupSpan.to);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (i in 0...pairs.length) {

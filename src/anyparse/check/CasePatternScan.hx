@@ -4,6 +4,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TreePath;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -264,8 +265,8 @@ final class CasePatternScan {
 		final armSpan: Null<Span> = arm.span;
 		if (armSpan == null) return null;
 		final at: Span = armSpan;
-		final path: Array<QueryNode> = [];
-		if (!pathTo(root, arm, path)) return null;
+		final path: Null<Array<QueryNode>> = TreePath.pathTo(root, arm);
+		if (path == null) return null;
 		for (step in 0...path.length) {
 			final node: QueryNode = path[path.length - 1 - step];
 			if (seams.scope.functionKinds.contains(node.kind)) {
@@ -495,16 +496,6 @@ final class CasePatternScan {
 		final nullKind: Null<String> = shape.nullLiteralKind;
 		if (nullKind != null) leaves.push(nullKind);
 		return leaves;
-	}
-
-
-	/** Push the chain of nodes from `node` down to `target` inclusive; whether `target` was reached. */
-	private static function pathTo(node: QueryNode, target: QueryNode, out: Array<QueryNode>): Bool {
-		out.push(node);
-		if (node == target) return true;
-		for (child in node.children) if (pathTo(child, target, out)) return true;
-		out.pop();
-		return false;
 	}
 
 

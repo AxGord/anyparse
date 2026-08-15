@@ -457,11 +457,11 @@ final class TypeResolver {
 		final continuations: Array<String> = shape.localDeclContinuationKinds ?? [];
 		var declaration: QueryNode = binding;
 		while (continuations.contains(declaration.kind)) {
-			final head: Null<QueryNode> = RefactorSupport.parentOf(tree, declaration);
+			final head: Null<QueryNode> = TreePath.parentOf(tree, declaration);
 			if (head == null) return false;
 			declaration = head;
 		}
-		final parent: Null<QueryNode> = RefactorSupport.parentOf(tree, declaration);
+		final parent: Null<QueryNode> = TreePath.parentOf(tree, declaration);
 		if (parent == null) return false;
 		final branchScopes: Array<String> = shape.branchScopeKinds ?? [];
 		if (!shape.scopeKinds.contains(parent.kind) && !branchScopes.contains(parent.kind)) return false;

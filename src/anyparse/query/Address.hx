@@ -83,7 +83,7 @@ final class Address {
 	 * wants its statement (`--kind ExprStmt`). Null when no ancestor matches.
 	 */
 	public static function liftToKind(tree: QueryNode, node: QueryNode, kind: String, equiv: Null<KindEquivalence>): Null<QueryNode> {
-		final path: Null<Array<QueryNode>> = pathTo(tree, node);
+		final path: Null<Array<QueryNode>> = TreePath.pathTo(tree, node);
 		if (path == null) return null;
 		final seg: SelectorSegment = new SelectorSegment(kind, null);
 		var i: Int = path.length - 1;
@@ -129,7 +129,7 @@ final class Address {
 	 * may have shifted. Falls back to `<line>:<col>` for an unreachable node.
 	 */
 	public static function describe(tree: QueryNode, source: String, node: QueryNode, ?equiv: KindEquivalence): String {
-		final path: Null<Array<QueryNode>> = pathTo(tree, node);
+		final path: Null<Array<QueryNode>> = TreePath.pathTo(tree, node);
 		final span: Null<Span> = node.span;
 		final posFallback: String = if (span != null) {
 			final pos: Position = span.lineCol(source);
@@ -254,17 +254,6 @@ final class Address {
 		return null;
 	}
 
-	/** Root-to-node path (inclusive), by reference identity; null when `node` is not in `tree`. */
-	private static function pathTo(tree: QueryNode, node: QueryNode): Null<Array<QueryNode>> {
-		if (tree == node) return [tree];
-		for (c in tree.children) {
-			final sub: Null<Array<QueryNode>> = pathTo(c, node);
-			if (sub == null) continue;
-			sub.unshift(tree);
-			return sub;
-		}
-		return null;
-	}
 
 	/** One selector segment for a node: `Kind` or `Kind:name`. */
 	private static function segmentOf(node: QueryNode): String {

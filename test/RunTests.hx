@@ -358,6 +358,7 @@ import unit.NullDereferenceTest;
 import unit.DeadStoreTest;
 import unit.AddressTest;
 import unit.AddressCliTest;
+import unit.RenameTypeInFileCliTest;
 import unit.PatchSliceTest;
 import unit.HxAnonTypeSourceTrailCommaSliceTest;
 import unit.HxFnMemberTrailSemiSliceTest;
@@ -982,6 +983,7 @@ class RunTests {
 		addCase(new ApqSelectorTest());
 		addCase(new AddressTest());
 		addCase(new AddressCliTest());
+		addCase(new RenameTypeInFileCliTest());
 		addCase(new ApqAstIntegrationTest());
 		addCase(new ApqIfStmtChildOrderTest());
 		addCase(new ApqJsonSchemaProbe());

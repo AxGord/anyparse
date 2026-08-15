@@ -571,7 +571,7 @@ final class JoinSingleUseLocal implements Check {
 	 *   hazard the initializer whitelist already refuses `a?.b` for, reached by a different route.
 	 */
 	private static function readPositionIsSafe(next: QueryNode, readSpan: Span, init: QueryNode, s: Seams): Bool {
-		final path: Null<Array<QueryNode>> = pathTo(next, readSpan);
+		final path: Null<Array<QueryNode>> = pathToSpan(next, readSpan);
 		if (path == null) return false;
 		final steps: Array<QueryNode> = path;
 		return
@@ -591,12 +591,12 @@ final class JoinSingleUseLocal implements Check {
 	}
 
 	/** The node chain from `root` down to the node whose span is exactly `target`, or null when there is none. */
-	private static function pathTo(root: QueryNode, target: Span): Null<Array<QueryNode>> {
+	private static function pathToSpan(root: QueryNode, target: Span): Null<Array<QueryNode>> {
 		final span: Null<Span> = root.span;
 		if (span == null || span.from > target.from || span.to < target.to) return null;
 		if (span.from == target.from && span.to == target.to) return [root];
 		for (c in root.children) {
-			final below: Null<Array<QueryNode>> = pathTo(c, target);
+			final below: Null<Array<QueryNode>> = pathToSpan(c, target);
 			if (below != null) return [root].concat(below);
 		}
 		return null;

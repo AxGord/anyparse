@@ -9,6 +9,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TreePath;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
@@ -584,8 +585,8 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 	private static function dominatingGuards(fn: QueryNode, whileNode: QueryNode, s: Seams): Array<QueryNode> {
 		final flow: Null<ControlFlowSupport> = s.flow;
 		if (flow == null) return [];
-		final path: Array<QueryNode> = [];
-		if (!pathTo(fn, whileNode, path)) return [];
+		final path: Null<Array<QueryNode>> = TreePath.pathTo(fn, whileNode);
+		if (path == null) return [];
 		final out: Array<QueryNode> = [];
 		for (i in 0...path.length - 1) {
 			final host: QueryNode = path[i];
@@ -599,18 +600,6 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 		return out;
 	}
 
-	/**
-	 * Push onto `out` the node chain from `node` down to `target` inclusive, answering whether
-	 * `target` is a descendant at all. Every element is a direct child of the one before it, which
-	 * is what lets `dominatingGuards` split each level into siblings before and after the path.
-	 */
-	private static function pathTo(node: QueryNode, target: QueryNode, out: Array<QueryNode>): Bool {
-		out.push(node);
-		if (node == target) return true;
-		for (child in node.children) if (pathTo(child, target, out)) return true;
-		out.pop();
-		return false;
-	}
 
 	/**
 	 * `guard`'s condition when it is an `if` whose then-branch unconditionally exits — a `return`

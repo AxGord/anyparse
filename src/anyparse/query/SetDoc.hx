@@ -59,7 +59,7 @@ final class SetDoc {
 		var node: QueryNode = resolved;
 		var span: Span = resolvedSpan;
 		while (true) {
-			final wrapper: Null<QueryNode> = RefactorSupport.parentOf(tree, node);
+			final wrapper: Null<QueryNode> = TreePath.parentOf(tree, node);
 			if (wrapper == null) break;
 			final wrapperSpan: Null<Span> = wrapper.span;
 			final decl: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(wrapper);
@@ -71,7 +71,7 @@ final class SetDoc {
 		// Fold modifiers / `@:meta` into the declaration unit, then extend back
 		// over any existing leading doc — the region between is exactly the
 		// declaration's documentation slot (empty when it has none → insert).
-		final groupSpan: Span = RefactorSupport.declGroupSpan(node, RefactorSupport.parentOf(tree, node), span);
+		final groupSpan: Span = RefactorSupport.declGroupSpan(node, TreePath.parentOf(tree, node), span);
 		final docExtended: Span = RefactorSupport.docExtendedSpan(source, groupSpan);
 		final docRegion: Span = new Span(docExtended.from, groupSpan.from);
 		final edit: { span: Span, text: String } = { span: docRegion, text: '${RefactorSupport.docComment(docText)}\n' };

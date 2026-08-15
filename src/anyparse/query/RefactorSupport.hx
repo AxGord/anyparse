@@ -867,7 +867,18 @@ final class RefactorSupport {
 			final m: Null<TypeDeclMatch> = typeDeclOf(node);
 			if (m != null) {
 				final span: Span = m.fullSpan;
-				if (cursor >= span.from && cursor < span.to && (identTokenContains(m.nameNode, cursor, source) || span.from == cursor))
+				// Three accepted anchors, because a `final class` splits the two spans: the name
+				// token, the start of the whole declaration (`final`), and the start of the NAMED
+				// node - which for that shape is the inner `ClassForm` at `class`, and is exactly
+				// the coordinate `apq refs --decls` prints. Without the third, the documented
+				// "copy the position from refs --decls" convention resolved no type declaration
+				// for a `final class` and the caller fell through to the value-namespace rename.
+				final nameSpan: Null<Span> = m.nameNode.span;
+				final onNameStart: Bool = nameSpan != null && nameSpan.from == cursor;
+				if (
+					cursor >= span.from && cursor < span.to
+					&& (identTokenContains(m.nameNode, cursor, source) || span.from == cursor || onNameStart)
+				)
 					best = m;
 			}
 			for (c in node.children) walk(c);
@@ -1158,21 +1169,6 @@ final class RefactorSupport {
 		return startSpan == null || declSpan == null ? nodeSpan : new Span(startSpan.from, declSpan.to);
 	}
 
-	/**
-	 * The parent of `target` within `root`'s subtree (by reference identity),
-	 * or null when `target` is `root` itself or is absent. A depth-first walk
-	 * — the query trees the ops resolve against are shallow, so this is cheap;
-	 * it gives `declGroupSpan` the sibling context a `--select` / `--at`
-	 * resolved node does not carry on its own.
-	 */
-	public static function parentOf(root: QueryNode, target: QueryNode): Null<QueryNode> {
-		for (child in root.children) {
-			if (child == target) return root;
-			final found: Null<QueryNode> = parentOf(child, target);
-			if (found != null) return found;
-		}
-		return null;
-	}
 
 	/**
 	 * Remove `node` (with its modifier / meta group, via `declGroupSpan`)
@@ -3318,7 +3314,7 @@ final class RefactorSupport {
 		final localFnKinds: Array<String> = (shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
 		final span: Null<Span> = host.span;
 		if (span == null || span.from != binding || !localFnKinds.contains(host.kind)) return host;
-		final parentSpan: Null<Span> = parentOf(tree, host)?.span;
+		final parentSpan: Null<Span> = TreePath.parentOf(tree, host)?.span;
 		return parentSpan == null ? tree : enclosingFunctionSubtree(tree, parentSpan.from, shape);
 	}
 

@@ -319,7 +319,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		if (className == null) return;
 		// Re-bound to a non-null local: the narrowing does not reach into the nested callback below.
 		final owner: String = className;
-		final subtypeMembers: Array<String> = index.hasSubtype(owner) ? subtypeMemberNames(index, owner) : [];
+		final subtypeMembers: Array<String> = index.hasSubtype(owner) ? index.subtypeMemberNames(owner) : [];
 		final ifaces: Array<String> = implementedInterfaces(cls);
 		forEachMethod(cls, branch, (name, fn, mods, metas) -> {
 			if (!isCandidateMethod(name, fn, mods, metas, relaxed)) return;
@@ -566,16 +566,6 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		return false;
 	}
 
-	/**
-	 * The member names declared by every STRICT subtype of `className` across the index — a method whose
-	 * name appears here is overridden.
-	 */
-	private static function subtypeMemberNames(index: SymbolIndex, className: String): Array<String> {
-		final out: Array<String> = [];
-		for (fi in index.allFiles()) for (t in fi.types) if (t.name != className && index.isSubtype(t.name, className)) for (m in t.members)
-			if (!out.contains(m.name)) out.push(m.name);
-		return out;
-	}
 
 	/**
 	 * Whether `fn`'s body contains a construct whose null-safety validity is CONTEXT-SENSITIVE, so

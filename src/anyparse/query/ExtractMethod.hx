@@ -180,7 +180,7 @@ final class ExtractMethod {
 		// That function is the one owning the range's BLOCK, not the innermost one at
 		// `sel.fromOffset`: a range whose first statement IS a local `function` puts that
 		// offset inside it, and the sweep would then see only that function's own body.
-		final block: Null<QueryNode> = RefactorSupport.parentOf(tree, sel.stmts[0]);
+		final block: Null<QueryNode> = TreePath.parentOf(tree, sel.stmts[0]);
 		final blockSpan: Null<Span> = block?.span;
 		final scope: QueryNode = blockSpan == null ? tree : RefactorSupport.enclosingFunctionSubtree(tree, blockSpan.from, shape);
 		final boundNames: Array<String> = [

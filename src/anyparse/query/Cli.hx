@@ -1269,6 +1269,10 @@ final class Cli {
 		if (pos == null) return EXIT_RUNTIME;
 
 		if (scope != null) return runRenameScope(filePath, source, pos.line, pos.col, newNameStr, scope, write, plugin);
+		// A TYPE name lives in the type namespace, which `Rename` (value bindings) does not
+		// index - route it through the op `--scope` uses, with the cursor file as the scope.
+		if (cursorOnTypeDecl(source, pos.line, pos.col, plugin))
+			return runRenameTypeInFile(filePath, source, pos.line, pos.col, newNameStr, write, plugin);
 
 		final shape: RefShape = plugin.refShape();
 		final result: RenameResult = Rename.rename(source, pos.line, pos.col, newNameStr, plugin, shape, qualifyShadowed, filePath);
@@ -1328,11 +1332,7 @@ final class Cli {
 		final refShape: RefShape = plugin.refShape();
 		// Dispatch on what the cursor lands on: a TYPE declaration renames
 		// through CrossRename, a MEMBER declaration through CrossRenameMember.
-		final onType: Bool = try {
-			final tree: QueryNode = plugin.parseFile(source);
-			RefactorSupport.resolveTypeDeclAtCursor(tree, Span.offsetOf(source, line, col), source) != null;
-		} catch (exception: Exception) false;
-		final result: CrossRenameResult = onType
+		final result: CrossRenameResult = cursorOnTypeDecl(source, line, col, plugin)
 			? CrossRename.crossRenameType(filePath, source, line, col, newName, scopeFiles, plugin, typeRefShape, refShape)
 			: CrossRenameMember.crossRenameMember(filePath, source, line, col, newName, scopeFiles, plugin, refShape);
 		switch result {
@@ -1346,6 +1346,58 @@ final class Cli {
 					for (c in changes) sysPrint('${c.file}: ${c.count} occurrence(s)\n');
 					sysPrint('total: ${changes.length} file(s), $totalOccurrences occurrence(s)\n');
 				}
+				if (advisory != null) stderr('apq rename: $advisory\n');
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq rename: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	/**
+	 * Does the cursor sit on a TYPE declaration? The single question BOTH rename
+	 * dispatches ask - the in-file path routes a type cursor to `runRenameTypeInFile`,
+	 * the `--scope` path to `CrossRename` - so a second copy could drift and send the
+	 * same cursor down two different ops.
+	 */
+	private static function cursorOnTypeDecl(source: String, line: Int, col: Int, plugin: GrammarPlugin): Bool {
+		return try {
+			final tree: QueryNode = plugin.parseFile(source);
+			RefactorSupport.resolveTypeDeclAtCursor(tree, Span.offsetOf(source, line, col), source) != null;
+		} catch (exception: Exception) false;
+	}
+
+	/**
+	 * `apq rename <file> <addr> <newName>` with the cursor on a TYPE declaration and no
+	 * `--scope` - the type-namespace rename confined to the cursor file.
+	 *
+	 * `Rename` resolves through the VALUE namespace, so on a type it rewrites the
+	 * declaration's name token and nothing else: `:T`, `new T()`, `extends T` and
+	 * `T.CONST` are type positions it never binds. The correct occurrence set is
+	 * `CrossRename`'s, so this runs that same op with the cursor file as the whole scope.
+	 *
+	 * The file scope is a real limitation, not a residual: a type referenced from ANOTHER
+	 * file keeps the old name there. Like every occurrence `CrossRename` leaves behind,
+	 * that dangles into a compile error rather than a silent semantic change - and the
+	 * advisory says so, pointing at `--scope`.
+	 */
+	private static function runRenameTypeInFile(
+		filePath: String, source: String, line: Int, col: Int, newName: String, write: Bool, plugin: GrammarPlugin
+	): Int {
+		final result: CrossRenameResult = CrossRename.crossRenameType(
+			filePath, source, line, col, newName, [{ file: filePath, source: source }], plugin, plugin.typeRefShape(), plugin.refShape()
+		);
+		switch result {
+			case Ok(changes, advisory):
+				// The scope is one file and an empty change set is `Err`, so there is exactly one.
+				if (changes.length != 1) throw new Exception('in-file type rename produced ${changes.length} file change(s)');
+				final change: FileChange = changes[0];
+				if (write) {
+					writeFile(change.file, change.newSource);
+					stderr('apq rename: wrote ${change.file}, ${change.count} occurrence(s)\n');
+				} else
+					sysPrint(change.newSource);
+				stderr('apq rename: in-file rename - references in OTHER files keep the old name; pass --scope <dir> to cover them\n');
 				if (advisory != null) stderr('apq rename: $advisory\n');
 				return EXIT_OK;
 			case Err(message):
@@ -5889,6 +5941,12 @@ final class Cli {
 		sysPrint('a renameable identifier, or an unparseable result, exits non-zero with\n');
 		sysPrint('the file untouched.\n');
 		sysPrint('\n');
+		sysPrint('A cursor on a TYPE declaration renames the TYPE namespace (the forms\n');
+		sysPrint('listed under --scope below), confined to <file>: references in other\n');
+		sysPrint('files keep the old name and dangle into a compile error. Pass --scope\n');
+		sysPrint('to cover them; the in-file form is for a type no other file names, and\n');
+		sysPrint('for one whose simple name --scope would reject as ambiguous.\n');
+		sysPrint('\n');
 		sysPrint('With --scope <dir> the cursor selects a TYPE or a MEMBER declaration.\n');
 		sysPrint('On a TYPE declaration (class /\n');
 		sysPrint('interface / enum / typedef / abstract) that type is renamed across\n');
@@ -5896,7 +5954,8 @@ final class Cli {
 		sysPrint('implements, type params, the decl name, import / using segments, and\n');
 		sysPrint('static-receiver accesses (T.staticMethod() / T.CONST whose receiver is\n');
 		sysPrint('not a value binding). Type-namespace only: bare Class<T> value uses\n');
-		sysPrint('(var c = T;) and aliased imports are NOT rewritten (a missed form\n');
+		sysPrint('(var c = T;), aliased imports, and qualified sub-module references\n');
+		sysPrint('(Mod.T in a type position) are NOT rewritten (a missed form\n');
 		sysPrint('dangles into a compile error, never a silent change). The rename refuses\n');
 		sysPrint('if the type is declared in more than one file under scope, if any scope\n');
 		sysPrint('file does not parse, or if any rewritten file fails to re-parse — the\n');

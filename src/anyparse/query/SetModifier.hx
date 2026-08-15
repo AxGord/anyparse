@@ -80,7 +80,7 @@ final class SetModifier {
 		final cursor: Int = Span.offsetOf(source, line, col);
 		final node: Null<QueryNode> = Engine.at(tree, cursor);
 		if (node == null) return Err('position $line:$col is not on a node');
-		final parent: Null<QueryNode> = RefactorSupport.parentOf(tree, node);
+		final parent: Null<QueryNode> = TreePath.parentOf(tree, node);
 		if (parent == null) return Err('the node at $line:$col has no parent (not a member / declaration)');
 
 		final siblings: Array<QueryNode> = parent.children;

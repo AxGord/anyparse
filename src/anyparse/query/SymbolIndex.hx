@@ -1158,6 +1158,38 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * Every simple member name declared by a type in `owner`s transitive SUBTYPE closure.
+	 * `prefer-inline` reads it as a veto list: a method whose name a subtype redeclares must stay
+	 * physical, since inlining would bind the call statically and skip the override.
+	 *
+	 * The walk is the memoised subtype adjacency (`subtypesOf`) expanded outward from `owner` -
+	 * the same worklist shape as `subtypeDeclMatches` above. The consumer used to ask this
+	 * question by scanning EVERY type in the index and testing `isSubtype` on each, which is one
+	 * supertype-closure walk per type per class - O(classes x types) over a corpus, plus an
+	 * `allFiles()` array COPY per class. Measured with `lint --rule prefer-inline` over a haxelib
+	 * prefix: 8.4s / 500 files, 11.5s / 1000, 49.9s / 2000, 322.5s / 4000, against a ~25s parse
+	 * baseline at 4000. The adjacency walk visits only the closure.
+	 *
+	 * Name-keyed like every other index query: two distinct types sharing one simple name both
+	 * expand. That can only ADD names to the veto list, which is the conservative direction for
+	 * the consumer - the same trade `subtypeDeclMatches` makes.
+	 */
+	public function subtypeMemberNames(owner: String): Array<String> {
+		final closure: Array<String> = [owner];
+		final out: Array<String> = [];
+		var i: Int = 0;
+		while (i < closure.length) {
+			final parent: String = closure[i++];
+			for (sub in subtypesOf(parent)) {
+				final t: TypeDeclInfo = sub.type;
+				if (!closure.contains(t.name)) closure.push(t.name);
+				if (t.name != owner) for (m in t.members) if (!out.contains(m.name)) out.push(m.name);
+			}
+		}
+		return out;
+	}
+
+	/**
 	 * Whether `typeName` OR any type in its transitive supertype closure carries
 	 * `@:rtti` (resolved via the index). True marks a serialization-sensitive
 	 * hierarchy - a class reflected on its field NAMES at runtime (a drill Node) -
