@@ -49,6 +49,28 @@ class RemoveMemberSliceTest extends Test {
 		Assert.isTrue(text.indexOf('keep') >= 0);
 	}
 
+	/**
+	 * A member that is the ONLY declaration of its `#if` region takes the region with it. Cutting
+	 * just the member left the bare `#if … #end` behind — syntax that compiles, that the writer
+	 * re-emits verbatim, and that no check reports, so nothing would ever have flagged it.
+	 */
+	public function testSoleMemberOfRegionTakesTheRegion(): Void {
+		final source: String = 'class C {\n\tvar keep:Int;\n\t#if !mobile\n\tpublic function drop():Void {}\n\t#end\n}\n';
+		final text: String = okText(source, 'C', 'drop');
+		Assert.isTrue(text.indexOf('drop') == -1 && text.indexOf('#if') == -1 && text.indexOf('keep') >= 0);
+	}
+
+	/**
+	 * A region whose OTHER branch still declares something keeps its directives — the branches are
+	 * alternatives, so the surviving one needs them.
+	 */
+	public function testRegionWithASurvivingBranchKeepsItsDirectives(): Void {
+		final source: String =
+			'class C {\n\t#if mobile\n\tpublic function drop():Void {}\n\t#else\n\tpublic function keep():Void {}\n\t#end\n}\n';
+		final text: String = okText(source, 'C', 'drop');
+		Assert.isTrue(text.indexOf('drop') == -1 && text.indexOf('#if mobile') >= 0 && text.indexOf('keep') >= 0);
+	}
+
 	/** A member of a `final class` resolves through the final-aware type lookup. */
 	public function testRemoveFinalClassMember(): Void {
 		final source: String = 'final class C {\n\tvar keep:Int;\n\tvar drop:Int;\n}\n';

@@ -240,6 +240,21 @@ class MoveMemberSliceTest extends Test {
 		]));
 	}
 
+	/**
+	 * A member declared inside a `#if` region is FOUND — the scan is branch-aware — and refused
+	 * anyway: cutting it out of its branch and pasting it into the destination unguarded hands it to
+	 * builds that never declared it, and leaves the emptied directives behind. The refusal names the
+	 * region, where the branch-blind scan used to answer "type A has no member util".
+	 */
+	public function testGuardedMemberRefused(): Void {
+		final a: String = 'package pkg;\n\nclass A {\n\t#if !mobile\n\tpublic static function util(x:Int):Int return x;\n\t#end\n}';
+		final b: String = 'package pkg;\n\nclass B {}';
+		assertErrContains(move('pkg/A.hx', 'A', 'util', 'B', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
+		]), 'conditional-compilation region');
+	}
+
 	public function testUnknownDestRefused(): Void {
 		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
 		assertErr(move('pkg/A.hx', 'A', 'util', 'Nope', [{ file: 'pkg/A.hx', source: a }]));

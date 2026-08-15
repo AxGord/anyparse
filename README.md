@@ -171,7 +171,7 @@ make these ops answer "no such member" on a member that plainly exists, or (wors
 incomplete set. They now scan through `MemberBranchScan.eachTypeMember`, each member carrying its
 own branch's modifier run. An op that MOVES a member out of its type refuses a guarded one instead:
 cutting it out of its branch and pasting it elsewhere unguarded would hand it to builds that never
-had it. `move-member` is the one op not yet converted.
+had it. Deleting a member that is the ONLY declaration of its region takes the region with it, so no bare `#if … #end` is left behind; a region whose other branch still declares something keeps its directives.
 
 | Command | Operation |
 |---|---|

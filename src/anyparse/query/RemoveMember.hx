@@ -4,6 +4,8 @@ import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.ParseError;
 import haxe.Exception;
 
+using Lambda;
+
 /**
  * Remove a member from a class / interface / abstract / enum / typedef by
  * name — the by-name convenience over cursor-based `RemoveElement`, sister
@@ -40,7 +42,20 @@ final class RemoveMember {
 		if (members.length > 1) return Err('ambiguous — "$memberName" matches ${members.length} members in "$typeName"');
 
 		final hit: { node: QueryNode, parent: QueryNode } = members[0];
-		return RefactorSupport.deleteNode(source, hit.node, hit.parent, reformat, plugin, withDoc, optsJson);
+		// A member that is the ONLY declaration of its `#if` region takes the region with it: cutting
+		// just the member leaves the bare directives behind — syntax that compiles, that the writer
+		// re-emits verbatim, and that no check reports. A region with a declaration in ANOTHER branch
+		// keeps its directives, since the remaining branch still needs them.
+		final condKind: Null<String> = plugin.refShape().conditionalMemberKind;
+		final region: QueryNode = hit.parent;
+		final held: Array<QueryNode> = region.children.filter(n -> RefactorSupport.isFieldMemberKind(n.kind));
+		if (condKind == null || region.kind != condKind || held.length != 1)
+			return RefactorSupport.deleteNode(source, hit.node, region, reformat, plugin, withDoc, optsJson);
+		var regionHost: Null<QueryNode> = null;
+		RefactorSupport.eachMemberHost(typeNode, host -> if (host.children.contains(region)) regionHost = host);
+		return regionHost == null
+			? RefactorSupport.deleteNode(source, hit.node, region, reformat, plugin, withDoc, optsJson)
+			: RefactorSupport.deleteNode(source, region, regionHost, reformat, plugin, withDoc, optsJson);
 	}
 
 	/** The node whose `typeDeclOf().name == typeName`, first in pre-order. */
