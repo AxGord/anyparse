@@ -6120,8 +6120,10 @@ final class Cli {
 		sysPrint('layer\'s job). The file must already be in canonical form (its own writer\n');
 		sysPrint('output); otherwise it is refused unless --reformat is given (which\n');
 		sysPrint('canonicalises the whole file). Quote <memberText> if it contains spaces.\n');
-		sysPrint('An unknown / ambiguous type name, a non-canonical file without --reformat,\n');
-		sysPrint('or an unparseable result, exits non-zero with the file untouched.\n');
+		sysPrint('A name <TypeName> already declares — in ANY conditional-compilation branch —\n');
+		sysPrint('is refused: the result would not compile. An unknown / ambiguous type name,\n');
+		sysPrint('a non-canonical file without --reformat, or an unparseable result, likewise\n');
+		sysPrint('exits non-zero with the file untouched.\n');
 	}
 
 	private static function printAddImportUsage(): Void {

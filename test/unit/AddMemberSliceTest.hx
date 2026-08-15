@@ -143,6 +143,50 @@ class AddMemberSliceTest extends Test {
 		assertAdd(source, 'C', 'public function g():Void {}', expected);
 	}
 
+	/** Refuse a member whose name the type already declares — the result would not compile. */
+	public function testRefuseDuplicateMemberName(): Void {
+		final source: String = 'class C {\n\tvar x:Int;\n}\n';
+		assertRefusedNaming(source, 'C', 'var x:Int;', 'x');
+	}
+
+	/**
+	 * Refuse a name declared only inside a `#if` region. The default build compiles the result
+	 * clean and only the define that reveals the guarded twin rejects it, so a single-arch
+	 * oracle calls this case healthy — the scan has to be branch-aware to see it at all.
+	 */
+	public function testRefuseDuplicateGuardedMemberName(): Void {
+		final source: String = 'class C {\n\t#if X\n\tvar h:Int;\n\t#end\n}\n';
+		assertRefusedNaming(source, 'C', 'var h:Int;', 'h');
+	}
+
+	/** A DISTINCT name next to a guarded member is still added — the gate refuses collisions, not regions. */
+	public function testAddsDistinctNameBesideGuardedMember(): Void {
+		final source: String = 'class C {\n\t#if X\n\tvar h:Int;\n\t#end\n}\n';
+		final expected: String = 'class C {\n\t#if X\n\tvar h:Int;\n\t#end\n\n\tvar k:Int;\n}\n';
+		assertAdd(source, 'C', 'var k:Int;', expected);
+	}
+
+	/** Refuse a duplicate enum constructor — `Duplicate constructor`, a member kind field-only scans miss. */
+	public function testRefuseDuplicateEnumConstructor(): Void {
+		final source: String = 'enum E {\n\tA;\n}\n';
+		assertRefusedNaming(source, 'E', 'A;', 'A');
+	}
+
+	/**
+	 * Refuse a duplicate `typedef` field. Its members hang off the anon body rather than off the
+	 * declaration, so a scan of the declaration's direct children reports the type as empty.
+	 */
+	public function testRefuseDuplicateTypedefField(): Void {
+		final source: String = 'typedef T = {\n\tvar x:Int;\n}\n';
+		assertRefusedNaming(source, 'T', 'var x:Int;', 'x');
+	}
+
+	/** Refuse member text that declares one name twice by itself, even though the type declares neither. */
+	public function testRefuseMemberTextRepeatingItsOwnName(): Void {
+		final source: String = 'class C {\n\tvar x:Int;\n}\n';
+		assertRefusedNaming(source, 'C', 'var z:Int;\nvar z:Int;', 'z');
+	}
+
 	private function assertAdd(source: String, typeName: String, memberText: String, expected: String, reformat: Bool = false): Void {
 		final result: EditResult = addOf(source, typeName, memberText, reformat);
 		switch result {
@@ -171,6 +215,23 @@ class AddMemberSliceTest extends Test {
 			Assert.pass();
 		} catch (exception: Exception) {
 			Assert.fail('add-member output failed to re-parse: ${exception.message}\n$text');
+		}
+	}
+
+	/**
+	 * The refusal must name the colliding member, not merely fail: every other gate on this path
+	 * (unknown type, non-canonical source, unparseable member) also answers `Err`, so an assertion
+	 * that only checks for `Err` would pass with this gate removed.
+	 */
+	private function assertRefusedNaming(source: String, typeName: String, memberText: String, name: String): Void {
+		switch addOf(source, typeName, memberText, false) {
+			case Ok(text):
+				Assert.fail('expected the duplicate-name refusal, got Ok:\n$text');
+			case Err(message):
+				Assert.isTrue(
+					message.indexOf('already declares a member named "$name"') >= 0,
+					'refusal must name the colliding member "$name": $message'
+				);
 		}
 	}
 
