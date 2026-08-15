@@ -44,6 +44,21 @@ class ApqMetaTest extends Test {
 		Assert.equals('X', hits[0].declName);
 	}
 
+	/**
+	 * Every top-level type form owns the annotation written above it. Asserted as ONE string over a
+	 * module declaring all four: a `final class` (whose name lives on `ClassForm`, one level inside
+	 * the nameless `FinalDecl` wrapper), an `abstract class`, an `enum abstract`, and a plain
+	 * `class`. Before `declHostKinds` named the first three and `followingDeclHost` looked through
+	 * the wrapper, all four annotations attributed to `ClassDecl Pl` — the only host in the module —
+	 * so a per-hit assertion on the plain class alone would have passed throughout.
+	 */
+	public function testEachTopLevelFormOwnsItsOwnAnnotation(): Void {
+		final source: String =
+			'@:a final class Fin {}\n@:b abstract class Abs {}\n@:c enum abstract EA(Int) {\n\tfinal X = 1;\n}\n@:d class Pl {}';
+		final expected: String = '[@:a()@ClassForm:Fin, @:b()@AbstractClassDecl:Abs, @:c()@EnumAbstractDecl:EA, @:d()@ClassDecl:Pl]';
+		Assert.equals(expected, describe(findIn(source)), 'each annotation must attach to the declaration it precedes');
+	}
+
 	public function testParenBearingArgsSliceToSource(): Void {
 		final hits: Array<MetaHit> = findIn('class X { @:foo(a, b) var n:Int; }');
 		Assert.equals(1, hits.length, 'one annotation hit expected — got ${describe(hits)}');

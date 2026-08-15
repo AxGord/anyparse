@@ -11,14 +11,23 @@ using StringTools;
  * Walks a `QueryNode` tree and collects every annotation node
  * (`kind ∈ shape.metaKinds`), attributing each to the declaration it
  * sits on. Annotations precede their declaration in source, so the
- * owner is the decl-host sibling whose span starts immediately after
- * the annotation — source order, NOT child-array order. The plugin's
- * flattened child order is not guaranteed to match source order
- * across constructs (e.g. the Haxe top-level wrapper emits the decl
- * before its metadata while the member wrapper emits metadata first),
- * but spans always reflect the source. When no following decl-host
- * sibling exists the annotation falls back to the nearest enclosing
- * decl-host ancestor — the documented v1 behaviour for
+ * owner is the decl-host sibling whose span starts immediately after the annotation — source
+ * order, NOT child-array order. A sibling that is NOT itself a host contributes its own
+ * direct host CHILDREN as candidates instead: a modifier WRAPPER carries the named
+ * declaration one level down (Haxe spells `final class X` as `FinalDecl(ClassForm X …)`,
+ * and the wrapper has no name of its own), so without that descent the annotation skips
+ * the declaration it sits on and lands on the next one in the module. The descent is stated
+ * over ANY non-host sibling rather than a named wrapper list, so a conditional-compilation
+ * region reaches its declarations too - measured on the Haxe std, where a `@:generic`
+ * written above an `#if`-guarded class now attributes to that class rather than to
+ * nothing.
+ *
+ * The plugin's flattened child order is not guaranteed to match source order across
+ * constructs (e.g. the Haxe top-level wrapper emits the decl before its metadata while
+ * the member wrapper emits metadata first), but spans always reflect the source.
+ *
+ * When no following decl-host sibling exists the annotation falls back to the nearest
+ * enclosing decl-host ancestor — the documented v1 behaviour for
  * expression-level metadata, which attributes to its enclosing
  * declaration rather than a finer expression target.
  *
@@ -67,14 +76,17 @@ final class Meta {
 		final after: Int = metaSpan.from;
 		var best: Null<QueryNode> = null;
 		var bestFrom: Int = 0;
-		for (s in siblings) if (shape.declHostKinds.contains(s.kind)) {
-			final ss: Null<Span> = s.span;
-			if (ss == null || ss.from <= after) continue;
-			if (best == null || ss.from < bestFrom) {
-				best = s;
-				bestFrom = ss.from;
+		inline function consider(n: QueryNode): Void {
+			final ns: Null<Span> = n.span;
+			if (ns != null && ns.from > after && (best == null || ns.from < bestFrom)) {
+				best = n;
+				bestFrom = ns.from;
 			}
 		}
+		for (s in siblings) if (shape.declHostKinds.contains(s.kind))
+			consider(s);
+		else
+			for (c in s.children) if (shape.declHostKinds.contains(c.kind)) consider(c);
 		return best;
 	}
 

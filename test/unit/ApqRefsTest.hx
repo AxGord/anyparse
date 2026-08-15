@@ -69,6 +69,33 @@ class ApqRefsTest extends Test {
 	}
 
 	/**
+	 * A `final class` projects as `FinalDecl(ClassForm …)` and only the INNER `ClassForm` carries
+	 * the type name, so `ClassForm` is the decl host and the nameless wrapper is not. Without it
+	 * the type's own name was no declaration at all.
+	 */
+	public inline function testFinalClassNameIsDecl(): Void {
+		assertTypeDeclHostsItsName('final class T {}', 'class T');
+	}
+
+	/** `abstract class` is a ctor of its own (`AbstractClassDecl`), not a modifier over `ClassDecl`, and it names itself. */
+	public inline function testAbstractClassNameIsDecl(): Void {
+		assertTypeDeclHostsItsName('abstract class T {}', 'abstract class T');
+	}
+
+	/** `enum abstract` likewise gets `EnumAbstractDecl` rather than reusing `AbstractDecl`. */
+	public inline function testEnumAbstractNameIsDecl(): Void {
+		assertTypeDeclHostsItsName('enum abstract T(Int) {\n\tfinal X = 1;\n}', 'enum abstract T');
+	}
+
+	/**
+	 * The already-covered plain `class`, through the SAME assertion, so the three forms above are
+	 * pinned to a shape this one demonstrably had before them rather than to a hand-written string.
+	 */
+	public inline function testPlainClassNameIsDecl(): Void {
+		assertTypeDeclHostsItsName('class T {}', 'class T');
+	}
+
+	/**
 	 * Each `switch` arm frames its own body: two arms declaring the SAME name are two distinct
 	 * bindings, and each arm's read binds to its own. Before arms framed, the first arm's local
 	 * swallowed the second arm's reads as well.
@@ -1054,6 +1081,25 @@ class ApqRefsTest extends Test {
 		// mutation). Adding the kind to `selfScopeDeclKinds` while it STAYS a decl host is a no-op, since
 		// the parent frame's decl-host collection binds the name there either way.
 		Assert.equals(decls[0].span.from, reads[0].bindingSpan?.from, 'the call must bind to the $keyword declaration');
+	}
+
+	/**
+	 * `decl` declares a type named `T` in a form whose name lives on a ctor of its own; `anchor` is
+	 * the source text that declaration node's span must START at. The anchor is what discriminates
+	 * WHICH node hosts the name - a `final class` spans `class T …` from the inner `ClassForm`,
+	 * never `final …` from the nameless `FinalDecl` wrapper around it.
+	 *
+	 * Asserts ONE string pairing the declaration hit with the read that binds to it, so neither a
+	 * declaration no read resolves to nor a read bound to nothing can satisfy it.
+	 */
+	private function assertTypeDeclHostsItsName(decl: String, anchor: String): Void {
+		final source: String = '$decl\n\nclass R {\n\tstatic function f():Void trace(T);\n}';
+		final from: Int = source.indexOf(anchor);
+		final to: Int = source.indexOf('\n\nclass R');
+		final read: Int = source.indexOf('trace(T)') + 'trace('.length;
+		final expected: String = '[decl:T@$from-$to->bind@$from-$to, read:T@$read-${read + 1}]';
+		final actual: String = describe(findIn(source, 'T'));
+		Assert.equals(expected, actual, 'the `$anchor` declaration must host its own name, got $actual');
 	}
 
 	/**

@@ -89,6 +89,19 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * (see the matching pair in `scopeKinds`). They are decl hosts, not
 	 * `selfScopeDeclKinds` entries, for the mirror of `KeyValueBinder`'s reason:
 	 * the scope they open is not the one their own name lives in.
+	 *
+	 * The three `final` / `abstract` type-declaration forms name themselves through
+	 * their own ctors, so each needs its own entry. `ClassForm` is the inner form of a
+	 * `final class`, which projects as `FinalDecl(ClassForm …)`: the NAME sits on the
+	 * inner node and `FinalDecl` carries none, so the wrapper is deliberately absent
+	 * here - the same normalisation `SELECT_KIND_EQUIVALENCE` and
+	 * `RefactorSupport.typeDeclOf` already apply. `AbstractClassDecl` (`abstract
+	 * class`) and `EnumAbstractDecl` (`enum abstract`) are ctors of their own rather
+	 * than modifier variants of `ClassDecl` / `AbstractDecl`, and both name
+	 * themselves. Without the three, such a type name was no declaration at all:
+	 * `refs` reported zero hits on the definition itself, and every consumer pairing a
+	 * declaration with its uses was blind to it. They join `HOISTING_SCOPE_KINDS`,
+	 * which already names all three for the mirror reason.
 	 */
 	private static final DECL_HOST_KINDS: Array<String> = [
 		'VarDecl',
@@ -96,9 +109,12 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		'LocalFnStmt',
 		'LocalInlineFnStmt',
 		'ClassDecl',
+		'ClassForm',
+		'AbstractClassDecl',
 		'InterfaceDecl',
 		'EnumDecl',
 		'AbstractDecl',
+		'EnumAbstractDecl',
 		'TypedefDecl',
 		'VarMember',
 		'FinalMember',
