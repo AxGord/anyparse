@@ -496,7 +496,29 @@ final class RefactorSupport {
 	 */
 	public static inline function isMemberDeclKind(kind: String): Bool {
 		return isFieldMemberKind(kind) || kind == 'SimpleCtor' || kind == 'ParamCtor' || kind == 'VarSemiCondInitMember'
-			|| kind == 'CondNameFnMember' || kind == 'CondSpliceMember';
+			|| isOpaqueMemberKind(kind);
+	}
+
+	/**
+	 * Whether `kind` is a member form whose declared NAMES the projected tree does not carry: a `#if`
+	 * region spliced at member scope (`CondSpliceMember`) and a `function` whose name is itself a
+	 * region (`CondNameFnMember`). The two lose their names for DIFFERENT reasons — `CondSpliceMember`
+	 * is raw in the grammar itself (`HxCondSharedBodyMember` swallows the whole region as
+	 * `HxCondSpliceRaw`), while `CondNameFnDecl` models the region structurally as
+	 * `HxConditionalFnName {cond, name, elseifs, elseName}` and only the QUERY PROJECTION drops it to a single
+	 * child, keeping the then-name and losing every `#else` / `#elseif` name. Either way the member
+	 * node answers no `name`, so a scan collecting declared names reads the region as declaring
+	 * nothing. `VarSemiCondInitMember` is deliberately NOT here: only its INITIALIZER is guarded, its
+	 * name sits outside the region and IS exposed.
+	 *
+	 * The blindness is invisible to a re-parse gate, because a duplicate declaration is a SEMANTIC
+	 * error — so `AddMember` refuses a host carrying one of these, and refuses a member text that is
+	 * one, rather than trusting the empty answer. The other member-writing ops do NOT yet: the ops
+	 * routed through `MemberBranchScan.declaresMemberNamed` (`CrossRenameMember`, `EncapsulateField`,
+	 * `ExtractConstant`) filter on `isFieldMemberKind` alone and stay blind to both kinds.
+	 */
+	public static inline function isOpaqueMemberKind(kind: String): Bool {
+		return kind == 'CondNameFnMember' || kind == 'CondSpliceMember';
 	}
 
 	/**

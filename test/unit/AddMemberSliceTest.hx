@@ -7,6 +7,8 @@ import anyparse.query.AddMember;
 import anyparse.query.RefactorSupport.EditResult;
 import haxe.Exception;
 
+using StringTools;
+
 /**
  * `AddMember.addMember` — append a member to a type body, WRITER-FORMATTED.
  *
@@ -187,6 +189,74 @@ class AddMemberSliceTest extends Test {
 		assertRefusedNaming(source, 'C', 'var z:Int;\nvar z:Int;', 'z');
 	}
 
+	/**
+	 * Refuse a type carrying a `#if` region spliced at MEMBER scope — `CondSpliceMember`, the
+	 * `#if <signature> #else <signature> #end <shared-body>` shape. The whole region projects as
+	 * ONE unnamed node, so the duplicate-name scan reads the type as declaring nothing there and
+	 * the op fail-opens. `pony/Tools.hx:490` is the live case: adding `sget` reported success and
+	 * produced a THIRD `sget`, which the compiler rejects with `Duplicate class field declaration`
+	 * under both define branches.
+	 */
+	public function testRefuseTypeWithCondSpliceRegion(): Void {
+		assertRefusedForOpaqueRegion(condSpliceSource(), 'T', 'public function g():Void {}');
+	}
+
+	/**
+	 * The refusal is TYPE-scoped, not file-scoped: a sibling declaration in the SAME file that
+	 * carries no opaque region is still served. A file-wide refusal would strand every type
+	 * declared next to one guarded member.
+	 */
+	public function testAddsToSiblingTypeBesideCondSpliceRegion(): Void {
+		final expected: String = condSpliceSource().replace('\tvar x:Int;\n}\n', '\tvar x:Int;\n\n\tvar y:Int;\n}\n');
+		assertAdd(condSpliceSource(), 'U', 'var y:Int;', expected);
+	}
+
+	/**
+	 * Refuse a type carrying a `function` whose NAME is a `#if` region — `CondNameFnMember`. Same
+	 * blindness in a different spelling: the member declares one name per branch and the node
+	 * exposes neither.
+	 */
+	public function testRefuseTypeWithCondNameFnRegion(): Void {
+		final source: String = 'class T {\n\tpublic function #if js alpha #else beta #end(b:Int):Int {\n\t\treturn b;\n\t}\n}\n';
+		assertRefusedForOpaqueRegion(source, 'T', 'public function g():Void {}');
+	}
+
+	/**
+	 * A PLAIN `#if` member region — complete declarations in both branches — is still served: its
+	 * members hang off the `Conditional` as ordinary named nodes, so the duplicate-name scan sees
+	 * them. Guards the gate against over-refusing every conditional-compilation region.
+	 */
+	public function testAddsBesidePlainConditionalMember(): Void {
+		final source: String = 'class T {\n\t#if js\n\tpublic function alpha():Int\n\t\treturn 1;\n\t#else\n\tpublic function beta():Int\n'
+			+ '\t\treturn 2;\n\t#end\n}\n';
+		final expected: String = source.replace('\t#end\n}\n', '\t#end\n\n\tpublic function g():Void {}\n}\n');
+		assertAdd(source, 'T', 'public function g():Void {}', expected);
+	}
+
+	/**
+	 * Refuse a member TEXT that is itself an opaque region — the mirror of the host gate. The
+	 * spliced node carries no name either, so the duplicate scan reads the ADDITION as declaring
+	 * nothing: the op appended a second `alpha` beside an existing one and reported success, which
+	 * `-D js` rejects as a duplicate.
+	 */
+	public function testRefuseOpaqueMemberText(): Void {
+		final source: String = 'class C {\n\tpublic function alpha():Int\n\t\treturn 1;\n}\n';
+		final text: String = '#if js\npublic function alpha(): Int\n#else\npublic function beta(): Int\n#end\n{\n\treturn 2;\n}';
+		assertRefusedMatching(source, 'C', text, 'the member text is a conditional member region', 'the opaque member text');
+	}
+
+	/**
+	 * A `var` whose INITIALIZER alone is guarded (`VarSemiCondInitMember`) is still served: its name
+	 * sits outside the region and IS exposed, which is exactly why `RefactorSupport.isOpaqueMemberKind`
+	 * excludes the kind. Pins that exclusion — adding the kind to the set would otherwise start
+	 * refusing these hosts with no test flipping.
+	 */
+	public function testAddsBesideGuardedVarInitializer(): Void {
+		final source: String = 'class C {\n\tpublic static var get:Int = #if nodejs\n\t1; #else 2; #end\n}\n';
+		final expected: String = source.replace('#end\n}\n', '#end\n\n\tvar y:Int;\n}\n');
+		assertAdd(source, 'C', 'var y:Int;', expected);
+	}
+
 	private function assertAdd(source: String, typeName: String, memberText: String, expected: String, reformat: Bool = false): Void {
 		final result: EditResult = addOf(source, typeName, memberText, reformat);
 		switch result {
@@ -219,20 +289,42 @@ class AddMemberSliceTest extends Test {
 	}
 
 	/**
-	 * The refusal must name the colliding member, not merely fail: every other gate on this path
-	 * (unknown type, non-canonical source, unparseable member) also answers `Err`, so an assertion
-	 * that only checks for `Err` would pass with this gate removed.
+	 * Refusal naming the colliding member.
 	 */
 	private function assertRefusedNaming(source: String, typeName: String, memberText: String, name: String): Void {
+		assertRefusedMatching(source, typeName, memberText, 'already declares a member named "$name"', 'the colliding member "$name"');
+	}
+
+	/**
+	 * The refusal must name ITS OWN gate, not merely fail: every gate on this path — unknown type,
+	 * non-canonical source, unparseable member, duplicate name, opaque region — answers `Err`, so an
+	 * assertion that only checks for `Err` would pass with the gate under test removed. `fragment` is
+	 * the text only that gate emits; `describe` names it in the failure message.
+	 */
+	private function assertRefusedMatching(source: String, typeName: String, memberText: String, fragment: String, describe: String): Void {
 		switch addOf(source, typeName, memberText, false) {
 			case Ok(text):
-				Assert.fail('expected the duplicate-name refusal, got Ok:\n$text');
+				Assert.fail('expected $describe refusal, got Ok:\n$text');
 			case Err(message):
-				Assert.isTrue(
-					message.indexOf('already declares a member named "$name"') >= 0,
-					'refusal must name the colliding member "$name": $message'
-				);
+				Assert.isTrue(message.indexOf(fragment) >= 0, 'refusal must name $describe: $message');
 		}
+	}
+
+	/**
+	 * Refusal naming the HOST type as carrying an opaque region.
+	 */
+	private function assertRefusedForOpaqueRegion(source: String, typeName: String, memberText: String): Void {
+		assertRefusedMatching(source, typeName, memberText, 'carries a conditional member region', 'the opaque member region');
+	}
+
+	/**
+	 * A class carrying a member-scope `#if` splice region beside a sibling class that carries none —
+	 * the two-type shape of `pony/Tools.hx`, writer-canonical so the canonical gate stays out of the
+	 * way.
+	 */
+	private static inline function condSpliceSource(): String {
+		return 'class T {\n\t#if js\n\tpublic function alpha(): Int\n\t#else\n\tpublic function beta(): Int\n\t#end\n\t{\n\t\treturn 1;\n'
+			+ '\t}\n}\n\nclass U {\n\tvar x:Int;\n}\n';
 	}
 
 	private static function addOf(source: String, typeName: String, memberText: String, reformat: Bool): EditResult {
