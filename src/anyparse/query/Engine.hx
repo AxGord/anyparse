@@ -68,7 +68,24 @@ final class Engine {
 		// -1 is an inert placeholder: `atWalk` only compares the width
 		// when a best already exists (`curBest == null ||` short-circuits
 		// first), so the seed value never participates in the decision.
-		return atWalk(tree, offset, null, -1).node;
+		return atWalk(tree, offset, null, -1, false).node;
+	}
+
+	/**
+	 * `at` for a tree whose spanned nodes each sit inside their nearest spanned
+	 * ancestor — it then suffices to descend through the children that can hold
+	 * `offset` (and through spanless ones, which rule nothing out), instead of
+	 * visiting every node. The candidates the walk sees are the same pre-order
+	 * SUBSEQUENCE, and the same `width <= best` / later-visited-wins rule picks
+	 * among them, so the answer is `at`'s answer.
+	 *
+	 * The nesting premise is a property of the TREE, not of any grammar. A caller
+	 * that has not established it must call `at`; this never verifies it, and on a
+	 * tree that breaks it a containing node reachable only through a non-containing
+	 * ancestor would be missed.
+	 */
+	public static function atNested(tree: QueryNode, offset: Int): Null<QueryNode> {
+		return holdsOffset(tree, offset) ? atWalk(tree, offset, null, -1, true).node : null;
 	}
 
 	/**
@@ -94,6 +111,12 @@ final class Engine {
 	/** Collect `node` once — nested `>>` ancestor contexts can reach the same descendant through several chains (reference identity). */
 	private static inline function pushUnique(out: Array<QueryNode>, node: QueryNode): Void {
 		if (!out.contains(node)) out.push(node);
+	}
+
+	/** Whether a pruned walk must enter `node`: its span covers `offset`, or it has none and rules nothing out. */
+	private static inline function holdsOffset(node: QueryNode, offset: Int): Bool {
+		final span: Null<Span> = node.span;
+		return span == null || (offset >= span.from && offset < span.to);
 	}
 
 	private static function truncateAt(node: QueryNode, depth: Int, maxDepth: Int): QueryNode {
@@ -162,9 +185,14 @@ final class Engine {
 	 * later-visited (deeper) node replaces — yielding the innermost
 	 * match. `width <= best` (not `<`) lets a deeper equal-width node
 	 * (transparent single-child) win.
+	 *
+	 * `prune` skips the children that cannot hold `offset` — `atNested`'s premise,
+	 * which the caller owns. It changes only which nodes are VISITED, never how a
+	 * visited one is judged: that rule lives here once so `at` and `atNested`
+	 * cannot drift apart.
 	 */
 	private static function atWalk(
-		node: QueryNode, offset: Int, best: Null<QueryNode>, bestWidth: Int
+		node: QueryNode, offset: Int, best: Null<QueryNode>, bestWidth: Int, prune: Bool
 	): { node: Null<QueryNode>, width: Int } {
 		var curBest: Null<QueryNode> = best;
 		var curWidth: Int = bestWidth;
@@ -176,8 +204,8 @@ final class Engine {
 				curWidth = width;
 			}
 		}
-		for (c in node.children) {
-			final r: { node: Null<QueryNode>, width: Int } = atWalk(c, offset, curBest, curWidth);
+		for (c in node.children) if (!prune || holdsOffset(c, offset)) {
+			final r: { node: Null<QueryNode>, width: Int } = atWalk(c, offset, curBest, curWidth, prune);
 			curBest = r.node;
 			curWidth = r.width;
 		}

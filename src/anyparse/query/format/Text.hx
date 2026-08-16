@@ -57,16 +57,17 @@ final class Text {
 	public static function renderRefs(file: String, source: String, hits: Array<RefHit>, doc: Bool, src: Bool, flat: Bool = false): String {
 		if (hits.length == 0) return '$file: no refs\n';
 		final buf: StringBuf = new StringBuf();
+		final lineIndex: LineIndex = new LineIndex(source);
 		if (!flat) buf.add('$file:\n');
 		for (h in hits) {
-			final pos: Position = h.span.lineCol(source);
+			final pos: Position = lineIndex.lineColAt(h.span.from);
 			if (flat)
 				buf.add('$file:${pos.line}:${pos.col}: [${h.kind.toString()}] ${h.name}');
 			else
 				buf.add('  ${pos.line}:${pos.col}: [${h.kind.toString()}] ${h.name}');
 			final bindingSpan: Null<Span> = h.bindingSpan;
 			if (bindingSpan != null && bindingSpan.from != h.span.from) {
-				final bp: Position = bindingSpan.lineCol(source);
+				final bp: Position = lineIndex.lineColAt(bindingSpan.from);
 				buf.add(' -> ${bp.line}:${bp.col}');
 			}
 			buf.add('\n');
@@ -80,9 +81,10 @@ final class Text {
 	): String {
 		if (hits.length == 0) return '$file: no uses\n';
 		final buf: StringBuf = new StringBuf();
+		final lineIndex: LineIndex = new LineIndex(source);
 		if (!flat) buf.add('$file:\n');
 		for (h in hits) {
-			final pos: Position = h.span.lineCol(source);
+			final pos: Position = lineIndex.lineColAt(h.span.from);
 			if (flat)
 				buf.add('$file:${pos.line}:${pos.col}: ${h.name}\n');
 			else
@@ -95,11 +97,12 @@ final class Text {
 	public static function renderMeta(file: String, source: String, hits: Array<MetaHit>, flat: Bool = false): String {
 		if (hits.length == 0) return '$file: no meta\n';
 		final buf: StringBuf = new StringBuf();
+		final lineIndex: LineIndex = new LineIndex(source);
 		if (!flat) buf.add('$file:\n');
 		for (h in hits) {
 			final span: Null<Span> = h.metaSpan;
 			if (span != null) {
-				final pos: Position = span.lineCol(source);
+				final pos: Position = lineIndex.lineColAt(span.from);
 				if (flat)
 					buf.add('$file:${pos.line}:${pos.col}: ');
 				else
@@ -136,13 +139,13 @@ final class Text {
 		// One line index for the file beats `Span.lineCol` per finding: that counts
 		// newlines from byte zero every time, so a file with many findings re-scanned
 		// its own source once per line reported. `lineColAt` is documented as exactly
-		// equivalent, clamps included.
-		final lines: LineIndex = new LineIndex(source);
+		// equivalent, clamps included. Same shape in every renderer below.
+		final lineIndex: LineIndex = new LineIndex(source);
 		if (!flat) buf.add('$file:\n');
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span != null) {
-				final pos: Position = lines.lineColAt(span.from);
+				final pos: Position = lineIndex.lineColAt(span.from);
 				if (flat)
 					buf.add('$file:${pos.line}:${pos.col}: ');
 				else
@@ -160,9 +163,10 @@ final class Text {
 	public static function renderSearchMatches(file: String, source: String, matches: Array<Match>, flat: Bool = false): String {
 		if (matches.length == 0) return '$file: no matches\n';
 		final buf: StringBuf = new StringBuf();
+		final lineIndex: LineIndex = new LineIndex(source);
 		if (!flat) buf.add('$file:\n');
 		for (m in matches) {
-			final pos: Position = m.span.lineCol(source);
+			final pos: Position = lineIndex.lineColAt(m.span.from);
 			if (flat)
 				buf.add('$file:${pos.line}:${pos.col}: match');
 			else

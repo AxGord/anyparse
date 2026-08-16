@@ -1794,15 +1794,13 @@ final class Cli {
 
 		// Report mode only — the fix path returned above, so this pass never runs redundantly in a
 		// --fix run. The resolution scope joins the checks' SymbolIndex; findings stay in the report
-		// files (wrapResolution returns the plugin untouched only when no scope reached this run at
-		// all — no declared key and no discoverable std).
-		// One wrapper for the whole report pass: the address annotation below reads the
-		// trees the checks just parsed out of its cache instead of parsing them again.
-		final linted: CachingGrammarPlugin = wrapResolution(plugin, resolution);
-		final all: Array<Violation> = Linter.run(files, linted, activeChecks, resolveConfig, applyEnablement);
+		// files. ONE wrapper serves both halves of the pass: the address annotation in the report
+		// reads the trees the checks just parsed out of its cache instead of parsing them again.
+		final cached: CachingGrammarPlugin = wrapResolution(plugin, resolution);
+		final all: Array<Violation> = Linter.run(files, cached, activeChecks, resolveConfig, applyEnablement);
 
 		final shown: Array<Violation> = o.includeInfo ? all : all.filter(v -> v.severity != Severity.Info);
-		renderLintReport(paths, shown, sourceOf, o.format, o.flat, linted);
+		renderLintReport(paths, shown, sourceOf, o.format, o.flat, cached);
 		lintSummary(all, paths, o.includeInfo);
 
 		final oracleExit: Null<Int> = reportModeOracle(oracleHxml, oracleDir, paths, oracleConfig?.compilerOracleServer() ?? false);
@@ -1965,8 +1963,7 @@ final class Cli {
 		// Parse each file once and reuse the tree across the SymbolIndex build, every
 		// check, and every fix — keyed by source content, so an unchanged file is
 		// reused across passes and only a rewritten one re-parses on its new content.
-		final cached: CachingGrammarPlugin = new CachingGrammarPlugin(plugin);
-		if (resolution != null) cached.setResolutionScope(resolution);
+		final cached: CachingGrammarPlugin = wrapResolution(plugin, resolution);
 		// hxformat.json is on disk and source-independent — discover once per file.
 		final optsByFile: Map<String, Null<String>> = [];
 		for (entry in files) optsByFile[entry.file] = discoverFormatConfig(entry.file);
@@ -9309,13 +9306,12 @@ final class Cli {
 		paths: Array<String>, shown: Array<Violation>, sourceOf: Map<String, String>, format: String, flat: Bool,
 		plugin: CachingGrammarPlugin
 	): Void {
-		// Order findings by input-file order, each file sorted by source
-		// position so the report reads top-to-bottom; shared by every format.
-		// Grouped in ONE pass rather than a filter per path: that scan was
-		// O(paths x findings) and the text branch below ran a second one. `paths`
-		// is deduplicated and order-preserving (`expandInputs`), and a file's
-		// findings enter a group in `shown` order exactly as the filter yielded
-		// them, so the emitted sequence is unchanged.
+		// Group findings per file, each group sorted by source position so the report
+		// reads top-to-bottom. ONE pass rather than a filter per path: that scan was
+		// O(paths x findings) and the text branch below ran a second one. `paths` is
+		// deduplicated and order-preserving (`expandInputs`), and a file's findings enter
+		// a group in `shown` order exactly as the filter yielded them, so every format's
+		// emitted sequence is unchanged.
 		final byFile: Map<String, Array<Violation>> = [];
 		for (v in shown) {
 			final group: Null<Array<Violation>> = byFile[v.file];
@@ -9325,10 +9321,15 @@ final class Cli {
 				group.push(v);
 		}
 		for (group in byFile) group.sort((a, b) -> spanStart(a.span) - spanStart(b.span));
-		final ordered: Array<Violation> = [];
-		for (path in paths) {
-			final group: Null<Array<Violation>> = byFile[path];
-			if (group != null) for (v in group) ordered.push(v);
+		// The two record formats want the groups concatenated in input-file order; the text
+		// branch prints them one group at a time and needs no such array.
+		inline function orderedByPath(): Array<Violation> {
+			final flatten: Array<Violation> = [];
+			for (path in paths) {
+				final group: Null<Array<Violation>> = byFile[path];
+				if (group != null) for (v in group) flatten.push(v);
+			}
+			return flatten;
 		}
 
 		switch format {
@@ -9336,9 +9337,9 @@ final class Cli {
 				// Each record carries the finding's canonical edit-stable selector
 				// (`address`) — directly usable as a mutation-op --select argument.
 				// The plugin is the one the CHECKS just ran through, so its parse cache
-				// already holds every reported file: a fresh wrapper here parsed each of
-				// them a second time, and that re-parse was 78% of the annotation's cost
-				// (2.12s of 2.69s on this repo's own src/, measured).
+				// already holds every reported file; a fresh wrapper here would parse each
+				// of them a second time, which dominated the whole annotation.
+				final ordered: Array<Violation> = orderedByPath();
 				final equiv: KindEquivalence = plugin.selectKindEquivalence();
 				// Addressing a node probes its tree several times, so an index per FINDING
 				// made the annotation cost far more than the analysis it annotates.
@@ -9362,11 +9363,10 @@ final class Cli {
 						index = current;
 					}
 					final node: Null<QueryNode> = current.nodeAt(span.from);
-					if (node == null) return null;
-					return current.describe(source, node);
+					return node == null ? null : current.describe(source, node);
 				}));
 			case 'checkstyle':
-				sysPrint(LintFormat.checkstyle(ordered, sourceOf));
+				sysPrint(LintFormat.checkstyle(orderedByPath(), sourceOf));
 			case _:
 				for (path in paths) {
 					final group: Null<Array<Violation>> = byFile[path];

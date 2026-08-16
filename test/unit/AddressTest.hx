@@ -392,6 +392,10 @@ class AddressTest extends Test {
 	 */
 	public function testNodeAtMatchesEngineAtAtEveryOffset(): Void {
 		final fixture = indexFixture();
+		// The fallback is output-identical to the fast path, so agreement alone cannot
+		// tell which one ran: a real grammar tree that stopped being nested would revert
+		// the whole optimisation with every assertion below still green. Pin the premise.
+		Assert.isTrue(fixture.index.nested);
 		var covered: Int = 0;
 		for (offset in 0...fixture.src.length + 1) {
 			final expected: Null<QueryNode> = Engine.at(fixture.tree, offset);
@@ -399,6 +403,25 @@ class AddressTest extends Test {
 			if (expected != null) covered++;
 		}
 		Assert.isTrue(covered > 100);
+	}
+
+	/**
+	 * A node reached through two parents. The index records it once and keeps the FIRST
+	 * parent, so the nesting test has to run before that skip — otherwise the second
+	 * enclosure is never examined, the tree passes for nested, and the pruned walk cannot
+	 * reach the node through the parent it did not record. `Engine.at` visits it twice and
+	 * so wins the equal-width tie that the pruned walk would lose.
+	 */
+	public function testSharedNodeUnderTwoParentsIsNotNested(): Void {
+		final shared: QueryNode = new QueryNode('Shared', null, [], new Span(0, 10));
+		final first: QueryNode = new QueryNode('First', null, [shared], new Span(0, 20));
+		final sibling: QueryNode = new QueryNode('Sibling', null, [], new Span(1, 11));
+		final second: QueryNode = new QueryNode('Second', null, [shared], new Span(50, 60));
+		final root: QueryNode = new QueryNode('Root', null, [first, sibling, second], new Span(0, 100));
+		final index: AddressIndex = Address.describerFor(root);
+		Assert.isFalse(index.nested);
+		for (offset in 0...101) Assert.equals(Engine.at(root, offset), index.nodeAt(offset));
+		Assert.equals(shared, index.nodeAt(5));
 	}
 
 	/**
@@ -450,12 +473,11 @@ class AddressTest extends Test {
 				Assert.notEquals(bare, address);
 				shared++;
 			}
-			if (address.indexOf(' >> ') >= 0 && address.indexOf(' --nth ') < 0) {
-				final only: Array<QueryNode> = selected(fixture, address);
-				Assert.equals(1, only.length);
-				Assert.equals(n, only[0]);
-				claimed++;
-			}
+			if (address.indexOf(' >> ') < 0 || address.indexOf(' --nth ') >= 0) continue;
+			final only: Array<QueryNode> = selected(fixture, address);
+			Assert.equals(1, only.length);
+			Assert.equals(n, only[0]);
+			claimed++;
 		}
 		Assert.isTrue(shared > 10);
 		Assert.isTrue(claimed > 5);

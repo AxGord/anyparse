@@ -296,6 +296,19 @@ final class Address {
 @:nullSafety(Strict)
 final class AddressIndex {
 
+	/**
+	 * Whether every spanned node sits inside its nearest spanned ancestor. That is
+	 * the premise `nodeAt` prunes on, and it is a property of the tree rather than
+	 * of the grammar, so it is measured while indexing instead of assumed: a tree
+	 * that breaks it sends `nodeAt` back to `Engine.at`'s full walk, which makes the
+	 * shortcut output-neutral on any tree rather than only on the ones checked.
+	 *
+	 * Readable because the two paths answer identically by design — so this flag is
+	 * the ONLY observable of which one runs, and a grammar change that quietly
+	 * un-nested real trees would otherwise revert the shortcut with nothing to notice.
+	 */
+	public var nested(default, null): Bool = true;
+
 	/** Nodes per kind-equivalence-canonical kind, in document order — a nameless segment's candidates. */
 	private final _byKind: Map<String, Array<QueryNode>> = [];
 
@@ -313,15 +326,6 @@ final class AddressIndex {
 
 	private final _root: QueryNode;
 	private final _equiv: Null<KindEquivalence>;
-
-	/**
-	 * Whether every spanned node sits inside its nearest spanned ancestor. That is
-	 * the premise `nodeAt` prunes on, and it is a property of the tree rather than
-	 * of the grammar, so it is measured while indexing instead of assumed: a tree
-	 * that breaks it sends `nodeAt` back to `Engine.at`'s full walk, which makes the
-	 * shortcut output-neutral on any tree rather than only on the ones checked.
-	 */
-	private var _nested: Bool = true;
 
 	public function new(root: QueryNode, ?equiv: KindEquivalence) {
 		_root = root;
@@ -354,48 +358,16 @@ final class AddressIndex {
 	 * The innermost node whose span contains `offset` — `Engine.at`'s answer without
 	 * `Engine.at`'s walk. A report addresses every finding of a file, so locating the
 	 * node was a full pre-order per FINDING while the index it feeds is one per file;
-	 * here the search descends only through children that can hold the offset, which
-	 * is the root-to-node path plus each level's siblings.
+	 * `Engine.atNested` instead descends only through the children that can hold the
+	 * offset, which is the root-to-node path plus each level's siblings.
 	 *
-	 * Identical to `Engine.at` by construction: the visited nodes are a subsequence of
-	 * its pre-order that keeps every node containing `offset`, and the winner depends
-	 * only on that subsequence (same `width <= best` rule, same later-visited-wins
-	 * tie-break). The premise is `_nested`, and a tree that breaks it is handed to
-	 * `Engine.at` unchanged rather than answered from a pruned walk.
+	 * All this class contributes is the PREMISE: `atNested` needs every spanned node to
+	 * sit inside its nearest spanned ancestor, and `indexNode` measures exactly that
+	 * while it builds. A tree that breaks it goes to `Engine.at` unchanged, so the
+	 * shortcut is output-neutral on any tree rather than only on the ones checked.
 	 */
 	public function nodeAt(offset: Int): Null<QueryNode> {
-		if (!_nested) return Engine.at(_root, offset);
-		return holdsOffset(_root, offset) ? atWithin(_root, offset, null, -1).node : null;
-	}
-
-	/**
-	 * `Engine.atWalk` over a subtree whose root the caller has already found to hold
-	 * `offset` — the candidate test is therefore containment of the CHILD, applied
-	 * before the recursion instead of inside it.
-	 */
-	private function atWithin(node: QueryNode, offset: Int, best: Null<QueryNode>, bestWidth: Int): { node: Null<QueryNode>, width: Int } {
-		var curBest: Null<QueryNode> = best;
-		var curWidth: Int = bestWidth;
-		final span: Null<Span> = node.span;
-		if (span != null) {
-			final width: Int = span.to - span.from;
-			if (curBest == null || width <= curWidth) {
-				curBest = node;
-				curWidth = width;
-			}
-		}
-		for (child in node.children) if (holdsOffset(child, offset)) {
-			final r: { node: Null<QueryNode>, width: Int } = atWithin(child, offset, curBest, curWidth);
-			curBest = r.node;
-			curWidth = r.width;
-		}
-		return { node: curBest, width: curWidth };
-	}
-
-	/** Whether the search must enter `node`: its span covers `offset`, or it has none and cannot rule its subtree out. */
-	private static inline function holdsOffset(node: QueryNode, offset: Int): Bool {
-		final span: Null<Span> = node.span;
-		return span == null || (offset >= span.from && offset < span.to);
+		return nested ? Engine.atNested(_root, offset) : Engine.at(_root, offset);
 	}
 
 	/**
@@ -422,7 +394,10 @@ final class AddressIndex {
 	 * `limit` (0 = every match) caps the LAST segment only: an earlier segment's matches
 	 * are the next one's search scope, so truncating one there would drop matches rather
 	 * than defer them. It is a cap on the answer, not a change to it — a caller reading
-	 * `length` past the cap must not pass one.
+	 * `length` past the cap must not pass one. Best-effort, too: a single-segment selector
+	 * answers unbounded (its group is the index's own array, which must not be sliced) and
+	 * so does `selectByWalk`. The only caller asks whether the answer is exactly one, and
+	 * that question survives an over-long answer.
 	 */
 	private function resolveSelector(selector: Selector, limit: Int = 0): Array<QueryNode> {
 		final segments: Array<SelectorSegment> = selector.segments;
@@ -515,9 +490,14 @@ final class AddressIndex {
 	 * an earlier call would group by the raw kind with no error and no failing test.
 	 * `enclosing` is the nearest SPANNED ancestor's span rather than the parent's, so a
 	 * spanless node in between does not hide a grandchild that escapes its grandparent
-	 * — the containment `nodeAt` prunes on is exactly the one measured here.
+	 * — the containment `nodeAt` prunes on is exactly the one measured here. That test
+	 * runs BEFORE the skip, because the skip keeps only the first parent: a node reached
+	 * a second time would otherwise never have its second enclosure checked, and a DAG
+	 * would pass for nested while `nodeAt`'s pruning could no longer reach it.
 	 */
 	private function indexNode(node: QueryNode, parent: Null<QueryNode>, enclosing: Null<Span>, ordinal: Int): Int {
+		final span: Null<Span> = node.span;
+		if (span != null && enclosing != null && (span.from < enclosing.from || span.to > enclosing.to)) nested = false;
 		if (_ordinalOf.exists(node)) return ordinal;
 		_ordinalOf[node] = ordinal;
 		if (parent != null) _parentOf[node] = parent;
@@ -526,8 +506,6 @@ final class AddressIndex {
 		bucket(_byKind, kind).push(node);
 		final name: Null<String> = node.name;
 		if (name != null) bucket(_byKindName, groupKey(kind, name)).push(node);
-		final span: Null<Span> = node.span;
-		if (span != null && enclosing != null && (span.from < enclosing.from || span.to > enclosing.to)) _nested = false;
 		final within: Null<Span> = span ?? enclosing;
 		var next: Int = ordinal + 1;
 		for (child in node.children) next = indexNode(child, node, within, next);
