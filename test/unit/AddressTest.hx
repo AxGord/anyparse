@@ -9,6 +9,7 @@ import anyparse.runtime.Span;
 import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.Engine;
 import anyparse.query.Selector;
+import haxe.Exception;
 
 using Lambda;
 
@@ -383,6 +384,83 @@ class AddressTest extends Test {
 			Assert.equals(Address.describe(fixture.tree, fixture.src, n, fixture.equiv), fixture.index.describe(fixture.src, n));
 	}
 
+	/**
+	 * `nodeAt` answers what `Engine.at` answers — the independent oracle — at EVERY offset
+	 * of the fixture, the inter-token ones where neither finds a node included. The index
+	 * prunes that walk rather than redefining it, so the agreement is offset-by-offset and
+	 * not merely on the offsets a report happens to address.
+	 */
+	public function testNodeAtMatchesEngineAtAtEveryOffset(): Void {
+		final fixture = indexFixture();
+		var covered: Int = 0;
+		for (offset in 0...fixture.src.length + 1) {
+			final expected: Null<QueryNode> = Engine.at(fixture.tree, offset);
+			Assert.equals(expected, fixture.index.nodeAt(offset));
+			if (expected != null) covered++;
+		}
+		Assert.isTrue(covered > 100);
+	}
+
+	/**
+	 * Two nested nodes of the SAME width: the deeper one wins, because a transparent
+	 * wrapper and its sole child are indistinguishable by width and the innermost is what
+	 * an address must name. `Engine.at` decides that with a later-visited-wins tie-break,
+	 * and a pruned walk only agrees while it keeps the same rule — the fixture's real tree
+	 * happens to hold no such pair, so the shape gets its own tree here.
+	 */
+	public function testNodeAtPicksTheInnermostOfEqualSpans(): Void {
+		final inner: QueryNode = new QueryNode('Inner', null, [], new Span(0, 10));
+		final wrapper: QueryNode = new QueryNode('Wrapper', null, [inner], new Span(0, 10));
+		final root: QueryNode = new QueryNode('Root', null, [wrapper], new Span(0, 10));
+		final index: AddressIndex = Address.describerFor(root);
+		for (offset in 0...11) Assert.equals(Engine.at(root, offset), index.nodeAt(offset));
+		Assert.equals(inner, index.nodeAt(5));
+	}
+
+	/**
+	 * A child whose span escapes its parent's is the one shape the pruning cannot answer:
+	 * the offset never reaches that child through a chain of containing parents. The index
+	 * measures the nesting while it builds and defers to `Engine.at` when it fails, so what
+	 * this pins is the safeguard — without it the escaping node is simply invisible.
+	 */
+	public function testNodeAtDefersWhenAChildEscapesItsParent(): Void {
+		final escaping: QueryNode = new QueryNode('Escaping', null, [], new Span(20, 30));
+		final parent: QueryNode = new QueryNode('Parent', null, [escaping], new Span(0, 10));
+		final root: QueryNode = new QueryNode('Root', null, [parent], new Span(0, 10));
+		final index: AddressIndex = Address.describerFor(root);
+		for (offset in 0...31) Assert.equals(Engine.at(root, offset), index.nodeAt(offset));
+		Assert.equals(escaping, index.nodeAt(25));
+	}
+
+	/**
+	 * A node whose bare `Kind[:name]` segment other nodes share is never addressed by that
+	 * segment alone. `describe` decides that by asking for at most TWO matches, so this
+	 * pins that the cap still separates "one" from "more than one": a cap of one would call
+	 * the first member of every shared group unique, and `Engine.select` is the independent
+	 * oracle that says otherwise.
+	 */
+	public function testSharedSegmentWidensIntoAUniqueAncestorPath(): Void {
+		final fixture = indexFixture();
+		var shared: Int = 0;
+		var claimed: Int = 0;
+		for (n in fixture.nodes) {
+			final bare: String = n.name != null ? '${n.kind}:${n.name}' : n.kind;
+			final address: String = fixture.index.describe(fixture.src, n);
+			if (selected(fixture, bare).length >= 2) {
+				Assert.notEquals(bare, address);
+				shared++;
+			}
+			if (address.indexOf(' >> ') >= 0 && address.indexOf(' --nth ') < 0) {
+				final only: Array<QueryNode> = selected(fixture, address);
+				Assert.equals(1, only.length);
+				Assert.equals(n, only[0]);
+				claimed++;
+			}
+		}
+		Assert.isTrue(shared > 10);
+		Assert.isTrue(claimed > 5);
+	}
+
 	private function resolve(spec: AddressSpec): AddressResult {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: QueryNode = plugin.parseFile(SRC);
@@ -410,6 +488,11 @@ class AddressTest extends Test {
 	private function collectAll(node: QueryNode, out: Array<QueryNode>): Void {
 		out.push(node);
 		for (child in node.children) collectAll(child, out);
+	}
+
+	/** What `Engine.select` — the independent oracle — makes of a `describe`-produced selector. */
+	private function selected(fixture: { tree: QueryNode, equiv: KindEquivalence }, selector: String): Array<QueryNode> {
+		return try Engine.select(fixture.tree, Selector.parse(selector), fixture.equiv) catch (exception: Exception) [];
 	}
 
 	/**

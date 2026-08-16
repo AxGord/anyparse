@@ -314,10 +314,19 @@ final class AddressIndex {
 	private final _root: QueryNode;
 	private final _equiv: Null<KindEquivalence>;
 
+	/**
+	 * Whether every spanned node sits inside its nearest spanned ancestor. That is
+	 * the premise `nodeAt` prunes on, and it is a property of the tree rather than
+	 * of the grammar, so it is measured while indexing instead of assumed: a tree
+	 * that breaks it sends `nodeAt` back to `Engine.at`'s full walk, which makes the
+	 * shortcut output-neutral on any tree rather than only on the ones checked.
+	 */
+	private var _nested: Bool = true;
+
 	public function new(root: QueryNode, ?equiv: KindEquivalence) {
 		_root = root;
 		_equiv = equiv;
-		indexNode(root, null, 0);
+		indexNode(root, null, null, 0);
 	}
 
 	/** The canonical, edit-stable address of `node` — `Address.describe`'s contract, answered from the index. */
@@ -341,9 +350,62 @@ final class AddressIndex {
 		return k >= 0 ? '$selector --nth ${k + 1}' : positionOf(source, node);
 	}
 
-	/** Whether `selectorExpr` resolves to exactly `node` — `Engine.select`'s answer, read off the index. */
+	/**
+	 * The innermost node whose span contains `offset` — `Engine.at`'s answer without
+	 * `Engine.at`'s walk. A report addresses every finding of a file, so locating the
+	 * node was a full pre-order per FINDING while the index it feeds is one per file;
+	 * here the search descends only through children that can hold the offset, which
+	 * is the root-to-node path plus each level's siblings.
+	 *
+	 * Identical to `Engine.at` by construction: the visited nodes are a subsequence of
+	 * its pre-order that keeps every node containing `offset`, and the winner depends
+	 * only on that subsequence (same `width <= best` rule, same later-visited-wins
+	 * tie-break). The premise is `_nested`, and a tree that breaks it is handed to
+	 * `Engine.at` unchanged rather than answered from a pruned walk.
+	 */
+	public function nodeAt(offset: Int): Null<QueryNode> {
+		if (!_nested) return Engine.at(_root, offset);
+		return holdsOffset(_root, offset) ? atWithin(_root, offset, null, -1).node : null;
+	}
+
+	/**
+	 * `Engine.atWalk` over a subtree whose root the caller has already found to hold
+	 * `offset` — the candidate test is therefore containment of the CHILD, applied
+	 * before the recursion instead of inside it.
+	 */
+	private function atWithin(node: QueryNode, offset: Int, best: Null<QueryNode>, bestWidth: Int): { node: Null<QueryNode>, width: Int } {
+		var curBest: Null<QueryNode> = best;
+		var curWidth: Int = bestWidth;
+		final span: Null<Span> = node.span;
+		if (span != null) {
+			final width: Int = span.to - span.from;
+			if (curBest == null || width <= curWidth) {
+				curBest = node;
+				curWidth = width;
+			}
+		}
+		for (child in node.children) if (holdsOffset(child, offset)) {
+			final r: { node: Null<QueryNode>, width: Int } = atWithin(child, offset, curBest, curWidth);
+			curBest = r.node;
+			curWidth = r.width;
+		}
+		return { node: curBest, width: curWidth };
+	}
+
+	/** Whether the search must enter `node`: its span covers `offset`, or it has none and cannot rule its subtree out. */
+	private static inline function holdsOffset(node: QueryNode, offset: Int): Bool {
+		final span: Null<Span> = node.span;
+		return span == null || (offset >= span.from && offset < span.to);
+	}
+
+	/**
+	 * Whether `selectorExpr` resolves to exactly `node` — `Engine.select`'s answer, read
+	 * off the index. The question is "exactly one", so a second match already settles it:
+	 * the resolve stops there instead of collecting every sibling of a selector whose whole
+	 * purpose is to be rejected and widened.
+	 */
 	private function uniquelyResolves(selectorExpr: String, node: QueryNode): Bool {
-		final matches: Array<QueryNode> = try resolveSelector(Selector.parse(selectorExpr)) catch (exception: Exception) return false;
+		final matches: Array<QueryNode> = try resolveSelector(Selector.parse(selectorExpr), 2) catch (exception: Exception) return false;
 		return matches.length == 1 && matches[0] == node;
 	}
 
@@ -356,14 +418,19 @@ final class AddressIndex {
 	 *
 	 * The result is READ-ONLY: a single-segment selector hands back the index's own
 	 * group rather than a copy.
+	 *
+	 * `limit` (0 = every match) caps the LAST segment only: an earlier segment's matches
+	 * are the next one's search scope, so truncating one there would drop matches rather
+	 * than defer them. It is a cap on the answer, not a change to it — a caller reading
+	 * `length` past the cap must not pass one.
 	 */
-	private function resolveSelector(selector: Selector): Array<QueryNode> {
+	private function resolveSelector(selector: Selector, limit: Int = 0): Array<QueryNode> {
 		final segments: Array<SelectorSegment> = selector.segments;
 		for (i in 1...segments.length) if (!segments[i].descendant) return selectByWalk(selector, segments);
 		var current: Array<QueryNode> = candidatesFor(segments[0]);
 		for (i in 1...segments.length) {
 			if (current.length == 0) return current;
-			current = descendantsOf(current, candidatesFor(segments[i]));
+			current = descendantsOf(current, candidatesFor(segments[i]), i == segments.length - 1 ? limit : 0);
 		}
 		return current;
 	}
@@ -395,8 +462,12 @@ final class AddressIndex {
 	 * order and without repeats. Both lists are document-ordered and subtrees are
 	 * nested or disjoint, so the outers' pre-order intervals sweep `group` left to
 	 * right: each starts at a binary search and stops at the first node past its end.
+	 *
+	 * `limit` (0 = every match) stops the sweep once that many are found. The prefix is
+	 * the same one the unbounded sweep produces, so a bounded call answers "are there at
+	 * least N" without paying for the rest.
 	 */
-	private function descendantsOf(outers: Array<QueryNode>, group: Array<QueryNode>): Array<QueryNode> {
+	private function descendantsOf(outers: Array<QueryNode>, group: Array<QueryNode>, limit: Int = 0): Array<QueryNode> {
 		final found: Array<QueryNode> = [];
 		var emitted: Int = -1;
 		for (outer in outers) {
@@ -410,6 +481,7 @@ final class AddressIndex {
 				if (ordinal == null) throw new Exception('address index: candidate ${group[i].kind} is not indexed (unreachable)');
 				if (ordinal > last) break;
 				found.push(group[i]);
+				if (limit > 0 && found.length >= limit) return found;
 				emitted = i;
 				i++;
 			}
@@ -441,8 +513,11 @@ final class AddressIndex {
 	 * trees are trees: zero shared node identities over 1355 parsed files.
 	 * Runs after `_equiv` is assigned, and must: it buckets by the CANONICAL kind, so
 	 * an earlier call would group by the raw kind with no error and no failing test.
+	 * `enclosing` is the nearest SPANNED ancestor's span rather than the parent's, so a
+	 * spanless node in between does not hide a grandchild that escapes its grandparent
+	 * — the containment `nodeAt` prunes on is exactly the one measured here.
 	 */
-	private function indexNode(node: QueryNode, parent: Null<QueryNode>, ordinal: Int): Int {
+	private function indexNode(node: QueryNode, parent: Null<QueryNode>, enclosing: Null<Span>, ordinal: Int): Int {
 		if (_ordinalOf.exists(node)) return ordinal;
 		_ordinalOf[node] = ordinal;
 		if (parent != null) _parentOf[node] = parent;
@@ -451,8 +526,11 @@ final class AddressIndex {
 		bucket(_byKind, kind).push(node);
 		final name: Null<String> = node.name;
 		if (name != null) bucket(_byKindName, groupKey(kind, name)).push(node);
+		final span: Null<Span> = node.span;
+		if (span != null && enclosing != null && (span.from < enclosing.from || span.to > enclosing.to)) _nested = false;
+		final within: Null<Span> = span ?? enclosing;
 		var next: Int = ordinal + 1;
-		for (child in node.children) next = indexNode(child, node, next);
+		for (child in node.children) next = indexNode(child, node, within, next);
 		_lastOrdinalOf[node] = next - 1;
 		return next;
 	}

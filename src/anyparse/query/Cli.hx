@@ -1796,10 +1796,13 @@ final class Cli {
 		// --fix run. The resolution scope joins the checks' SymbolIndex; findings stay in the report
 		// files (wrapResolution returns the plugin untouched only when no scope reached this run at
 		// all — no declared key and no discoverable std).
-		final all: Array<Violation> = Linter.run(files, wrapResolution(plugin, resolution), activeChecks, resolveConfig, applyEnablement);
+		// One wrapper for the whole report pass: the address annotation below reads the
+		// trees the checks just parsed out of its cache instead of parsing them again.
+		final linted: CachingGrammarPlugin = wrapResolution(plugin, resolution);
+		final all: Array<Violation> = Linter.run(files, linted, activeChecks, resolveConfig, applyEnablement);
 
 		final shown: Array<Violation> = o.includeInfo ? all : all.filter(v -> v.severity != Severity.Info);
-		renderLintReport(paths, shown, sourceOf, o.format, o.flat);
+		renderLintReport(paths, shown, sourceOf, o.format, o.flat, linted);
 		lintSummary(all, paths, o.includeInfo);
 
 		final oracleExit: Null<Int> = reportModeOracle(oracleHxml, oracleDir, paths, oracleConfig?.compilerOracleServer() ?? false);
@@ -1937,15 +1940,17 @@ final class Cli {
 	}
 
 	/**
-	 * Wrap `plugin` in a resolution-scope-carrying `CachingGrammarPlugin` when `resolution` is set;
-	 * else return it untouched. The untouched path is reached only when NO scope exists — the project
-	 * declares neither resolution key and no Haxe std is discoverable (no Haxe on the machine, or the
-	 * std declined via `APQ_NO_STD` / `"resolutionStd": false`) — not merely when none is configured.
+	 * Wrap `plugin` in a `CachingGrammarPlugin`, carrying `resolution` when a scope reached this run.
+	 * A scope is absent only when the project declares neither resolution key and no Haxe std is
+	 * discoverable (no Haxe on the machine, or the std declined via `APQ_NO_STD` /
+	 * `"resolutionStd": false`) — not merely when none is configured. The WRAPPER is unconditional
+	 * either way: `resolutionIndexOf` gates on `hasAnyResolutionScope`, so a scopeless wrapper answers
+	 * exactly what the bare plugin did, and the memoized parses serve the checks and the report's
+	 * address annotation regardless of whether anything cross-file resolves.
 	 */
-	private static function wrapResolution(plugin: GrammarPlugin, resolution: Null<ResolutionScope>): GrammarPlugin {
-		if (resolution == null) return plugin;
+	private static function wrapResolution(plugin: GrammarPlugin, resolution: Null<ResolutionScope>): CachingGrammarPlugin {
 		final host: CachingGrammarPlugin = new CachingGrammarPlugin(plugin);
-		host.setResolutionScope(resolution);
+		if (resolution != null) host.setResolutionScope(resolution);
 		return host;
 	}
 
@@ -9301,7 +9306,8 @@ final class Cli {
 	}
 
 	private static function renderLintReport(
-		paths: Array<String>, shown: Array<Violation>, sourceOf: Map<String, String>, format: String, flat: Bool
+		paths: Array<String>, shown: Array<Violation>, sourceOf: Map<String, String>, format: String, flat: Bool,
+		plugin: CachingGrammarPlugin
 	): Void {
 		// Order findings by input-file order, each file sorted by source
 		// position so the report reads top-to-bottom; shared by every format.
@@ -9316,8 +9322,10 @@ final class Cli {
 			case 'json':
 				// Each record carries the finding's canonical edit-stable selector
 				// (`address`) — directly usable as a mutation-op --select argument.
-				// The caching plugin parses each file once across all findings.
-				final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin('haxe'));
+				// The plugin is the one the CHECKS just ran through, so its parse cache
+				// already holds every reported file: a fresh wrapper here parsed each of
+				// them a second time, and that re-parse was 78% of the annotation's cost
+				// (2.12s of 2.69s on this repo's own src/, measured).
 				final equiv: KindEquivalence = plugin.selectKindEquivalence();
 				// Addressing a node probes its tree several times, so an index per FINDING
 				// made the annotation cost far more than the analysis it annotates.
@@ -9334,14 +9342,14 @@ final class Cli {
 					final tree: Null<QueryNode> =
 						try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
 					if (tree == null) return null;
-					final node: Null<QueryNode> = Engine.at(tree, span.from);
-					if (node == null) return null;
 					var current: Null<AddressIndex> = index;
 					if (current == null || indexTree != tree) {
 						current = Address.describerFor(tree, equiv);
 						indexTree = tree;
 						index = current;
 					}
+					final node: Null<QueryNode> = current.nodeAt(span.from);
+					if (node == null) return null;
 					return current.describe(source, node);
 				}));
 			case 'checkstyle':
