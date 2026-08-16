@@ -270,7 +270,7 @@ final class CrossRename {
 				final nameSpan: Null<Span> = decl.nameNode.span;
 				if (nameSpan != null) add(RefactorSupport.identTokenOffset(source, nameSpan, typeName));
 			} else if (span != null && (node.kind == 'ImportDecl' || node.kind == 'UsingDecl'))
-				add(lastSegmentOffset(source, span, node.name, typeName));
+				add(RefactorSupport.lastSegmentOffset(source, span, node.name, typeName));
 			final children: Array<QueryNode> = node.children;
 			if (node.kind == RefactorSupport.FIELD_ACCESS_KIND && children.length > 0)
 				add(namespaceReceiverOffset(source, children[0], typeName, qualified, valueResolved));
@@ -279,23 +279,6 @@ final class CrossRename {
 		walk(tree);
 
 		return out;
-	}
-
-	/**
-	 * Offset of the LAST dotted segment of a qualified path when that segment equals
-	 * `typeName`, else -1. `pathName` is the node's name slot — the verbatim dotted path
-	 * (`pkg.sub.Foo`), which both an `import` / `using` declaration and a QUALIFIED type
-	 * reference carry whole. The segment is located by finding the path text inside the node
-	 * span and anchoring on the character after the final `.`, so a leading package segment
-	 * that happens to match `typeName` (e.g. `import Foo.sub.Foo;`) is never mistaken for the
-	 * type segment.
-	 */
-	private static function lastSegmentOffset(source: String, span: Span, pathName: Null<String>, typeName: String): Int {
-		if (pathName == null) return -1;
-		final lastDot: Int = pathName.lastIndexOf('.');
-		if (RefactorSupport.lastSegment(pathName) != typeName) return -1;
-		final pathStart: Int = source.indexOf(pathName, span.from);
-		return pathStart < 0 || pathStart >= span.to ? -1 : pathStart + lastDot + 1;
 	}
 
 	/**
@@ -392,7 +375,7 @@ final class CrossRename {
 	): Array<Int> {
 		return [
 			for (path in qualified) for (hit in Uses.find(path, typeRefTree, typeRefShape))
-				lastSegmentOffset(source, hit.span, path, typeName)
+				RefactorSupport.lastSegmentOffset(source, hit.span, path, typeName)
 		];
 	}
 
@@ -416,7 +399,7 @@ final class CrossRename {
 		return if (recvSpan == null || !RefactorSupport.receiverIsTypeNamespace(recv, typeName, qualified, valueResolved))
 			-1
 		else if (recv.kind == RefactorSupport.FIELD_ACCESS_KIND)
-			lastSegmentOffset(source, recvSpan, RefactorSupport.flattenPath(recv), typeName)
+			RefactorSupport.lastSegmentOffset(source, recvSpan, RefactorSupport.flattenPath(recv), typeName)
 		else if (recv.kind == RefactorSupport.IDENT_EXPR_KIND)
 			RefactorSupport.identTokenOffset(source, recvSpan, typeName)
 		else

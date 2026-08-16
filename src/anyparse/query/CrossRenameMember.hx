@@ -271,7 +271,7 @@ final class CrossRenameMember {
 						final spanNN: Span = span;
 						if (!RefactorSupport.identTokenContains(childNN, cursor, source) && spanNN.from != cursor) continue;
 						final groupSpan: Span = RefactorSupport.declGroupSpan(childNN, host, spanNN);
-						var isStatic: Bool = implicitlyStatic(decl.kind, kind, refShape);
+						var isStatic: Bool = RefactorSupport.implicitlyStaticMember(decl.kind, kind, refShape);
 						var isOverride: Bool = false;
 						for (j in 0...i) {
 							final s: Null<Span> = siblings[j].span;
@@ -293,21 +293,6 @@ final class CrossRenameMember {
 		}
 		walk(tree);
 		return best;
-	}
-
-	/**
-	 * Whether a member of a `declKind` type is static WITHOUT saying so — the grammar's
-	 * `RefShape.implicitStaticFieldHostKinds` answer, narrowed to data members because an
-	 * abstract's METHODS may be either and there the modifier still decides.
-	 *
-	 * The modifier scan alone routed an `enum abstract` value to the INSTANCE path, whose
-	 * receiver resolution looks for a binding holding a VALUE of the type and so never matches
-	 * the type used as a namespace: the declaration was renamed and every `Colour.RED` in the
-	 * scope left behind, with an exit code of 0.
-	 */
-	private static function implicitlyStatic(declKind: String, memberKind: String, refShape: RefShape): Bool {
-		final hosts: Null<Array<String>> = refShape.implicitStaticFieldHostKinds;
-		return hosts != null && hosts.contains(declKind) && RefactorSupport.isDataFieldKind(memberKind);
 	}
 
 	/**

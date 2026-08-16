@@ -753,6 +753,87 @@ class MoveMemberSliceTest extends Test {
 		Assert.isTrue(newA.contains('\'[$${B.TAG}] $${B.TAG}b $$$$TAG\''), 'braced qualification expected:\n$newA');
 	}
 
+	public function testEnumAbstractValueRefusedInsteadOfViaFieldError(): Void {
+		final colour: String = 'package pal;\n\nenum abstract Colour(Int) {\n\tvar RED = 1;\n\tvar BLUE = 2;\n\n'
+			+ '\tpublic static function isRed(c:Colour):Bool return c == RED;\n}';
+		final palette: String = 'package pal;\n\nclass Palette {\n\tpublic static var COUNT = 0;\n}';
+		assertErrContains(move('pal/Colour.hx', 'Colour', 'RED', 'Palette', [
+			{ file: 'pal/Colour.hx', source: colour },
+			{ file: 'pal/Palette.hx', source: palette },
+		]), 'carries no `static` modifier yet is static anyway');
+	}
+
+	public function testEnumAbstractValueNotSilentlyMovedAsInstanceField(): Void {
+		final colour: String = 'package pal;\n\nenum abstract Colour(Int) {\n\tvar RED = 1;\n\tvar BLUE = 2;\n}';
+		final palette: String = 'package pal;\n\nclass Palette {\n\tpublic static var COUNT = 0;\n}';
+		final user: String = 'package pal;\n\nclass User {\n\tpublic static function pick():Colour return Colour.RED;\n}';
+		assertErrContains(move('pal/Colour.hx', 'Colour', 'RED', 'Palette', [
+			{ file: 'pal/Colour.hx', source: colour },
+			{ file: 'pal/Palette.hx', source: palette },
+			{ file: 'pal/User.hx', source: user },
+		]), 'carries no `static` modifier yet is static anyway');
+	}
+
+	public function testAbstractModifierlessPropertyRefused(): Void {
+		final meters: String = 'package pkg;\n\nabstract Meters(Int) {\n\tpublic var length(get, never):Int;\n\n'
+			+ '\tfunction get_length():Int return 0;\n}';
+		final box: String = 'package pkg;\n\nclass Box {}';
+		assertErrContains(move('pkg/Meters.hx', 'Meters', 'length', 'Box', [
+			{ file: 'pkg/Meters.hx', source: meters },
+			{ file: 'pkg/Box.hx', source: box },
+		]), 'carries no `static` modifier yet is static anyway');
+	}
+
+	public function testExplicitStaticInsideEnumAbstractStillMoves(): Void {
+		final colour: String = 'package pal;\n\nenum abstract Colour(Int) {\n\tvar RED = 1;\n\n'
+			+ '\tpublic static function hue():Int return 7;\n}';
+		final palette: String = 'package pal;\n\nclass Palette {\n\tpublic static var COUNT = 0;\n}';
+		final user: String = 'package pal;\n\nclass User {\n\tpublic static function pick():Int return Colour.hue();\n}';
+		final changes: Array<MoveChange> = okChanges('pal/Colour.hx', 'Colour', 'hue', 'Palette', [
+			{ file: 'pal/Colour.hx', source: colour },
+			{ file: 'pal/Palette.hx', source: palette },
+			{ file: 'pal/User.hx', source: user },
+		]);
+		final newPalette: String = changeFor(changes, 'pal/Palette.hx').newSource;
+		Assert.isTrue(newPalette.contains('public static function hue'), 'hue should land in Palette:\n$newPalette');
+		Assert.isTrue(changeFor(changes, 'pal/User.hx').newSource.contains('Palette.hue()'), 'the caller should repoint');
+		Assert.isTrue(changeFor(changes, 'pal/Colour.hx').newSource.contains('var RED = 1'), 'the enum value must stay put');
+	}
+
+	public function testQualifiedReceiverRepointsOnlyTheDeclaringModule(): Void {
+		final boxes: String = 'package pkg;\n\nclass Boxes {\n\tpublic static function tag():Int return 5;\n}';
+		final foreign: String = 'package other;\n\nclass Boxes {\n\tpublic static function tag():Int return 7;\n}';
+		final dest: String = 'package pkg;\n\nclass Dest {}';
+		final main: String = 'package pkg;\n\nclass Main {\n\tstatic function run():Int return pkg.Boxes.tag() + other.Boxes.tag();\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/Boxes.hx', 'Boxes', 'tag', 'Dest', [
+			{ file: 'pkg/Boxes.hx', source: boxes },
+			{ file: 'pkg/Dest.hx', source: dest },
+			{ file: 'pkg/Main.hx', source: main },
+			{ file: 'other/Boxes.hx', source: foreign },
+		]);
+		final newMain: String = changeFor(changes, 'pkg/Main.hx').newSource;
+		Assert.isTrue(newMain.contains('pkg.Dest.tag()'), 'the declaring module should repoint:\n$newMain');
+		Assert.isTrue(newMain.contains('other.Boxes.tag()'), 'a same-named module in another package must be left alone:\n$newMain');
+		Assert.isFalse(newMain.contains('other.Dest'), 'no "other.Dest" may be produced:\n$newMain');
+	}
+
+	public function testCrossPackageFqnRefusalIgnoresAForeignModule(): Void {
+		final boxes: String = 'package pkg;\n\nclass Boxes {\n\tpublic static function tag():Int return 5;\n}';
+		final foreign: String = 'package other;\n\nclass Boxes {\n\tpublic static function tag():Int return 7;\n}';
+		final dest: String = 'package dst;\n\nclass Dest {}';
+		final main: String = 'package app;\n\nimport pkg.Boxes;\n\nclass Main {\n'
+			+ '\tstatic function run():Int return Boxes.tag() + other.Boxes.tag();\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/Boxes.hx', 'Boxes', 'tag', 'Dest', [
+			{ file: 'pkg/Boxes.hx', source: boxes },
+			{ file: 'dst/Dest.hx', source: dest },
+			{ file: 'app/Main.hx', source: main },
+			{ file: 'other/Boxes.hx', source: foreign },
+		]);
+		final newMain: String = changeFor(changes, 'app/Main.hx').newSource;
+		Assert.isTrue(newMain.contains('Dest.tag()'), 'the bare caller should repoint:\n$newMain');
+		Assert.isTrue(newMain.contains('other.Boxes.tag()'), 'the foreign module must be left alone:\n$newMain');
+	}
+
 	private function move(
 		srcFile: String, srcType: String, members: String, destType: String, scopeFiles: Array<{ file: String, source: String }>,
 		?via: String, ?closure: Bool, ?scaffold: Bool

@@ -5,6 +5,7 @@ import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.ImportOrder.ImportAnchor;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
+import anyparse.query.RefactorSupport.ModulePath;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex.FileInfo;
@@ -83,6 +84,13 @@ private typedef SiblingScanState = {
  */
 private typedef MovePrep = {
 	var srcFile: String;
+
+	/**
+	 * The source file's module path (`pkg.Mod`) — which DOTTED spellings may legally name
+	 * `srcTypeName` from a given caller's package, so a same-named module in another package
+	 * is not repointed. Derived exactly as `CrossRenameMember` derives its own.
+	 */
+	var srcModule: ModulePath;
 	var srcTypeName: String;
 	var destTypeName: String;
 	var index: SymbolIndex;
@@ -170,6 +178,11 @@ private enum ViaResult {
  * are not findable syntactically), as is a static import
  * (`import pkg.Mod.Src.member`). A destination that already declares a
  * member of the same name is refused.
+ *
+ * A member that is static WITHOUT carrying `static` — an `enum
+ * abstract` value, an abstract's modifier-less `var` — is refused too:
+ * there its HOST KIND decides, and no destination preserves what such a
+ * member means (`resolveMovedMembers` states the two mechanisms).
  *
  * ## Atomicity and purity
  *
@@ -321,31 +334,45 @@ final class MoveMember {
 	}
 
 	/**
-	 * Offsets of `Src` receiver idents in `Src.member` field accesses,
-	 * skipping receivers resolved to a value binding (a local named like
-	 * the type) — the `CrossRename` static-receiver rule.
+	 * Offsets of the `Src` half of every `Src.member` field access in one file — what the move
+	 * repoints to `Dest`. Two receiver shapes, the same two `CrossRename` / `CrossRenameMember`
+	 * own, through the SHARED predicate rather than a third copy of it:
+	 *
+	 *  - A bare `IdentExpr Src`, unless the resolver bound it to a value (a local named like the
+	 *    type shadows the namespace).
+	 *  - A DOTTED chain, matched WHOLE against the paths that legally name this module from
+	 *    `tree`'s package (`RefactorSupport.qualifiedPaths`). Matching its LAST SEGMENT instead
+	 *    accepted a foreign same-named module: `move-member tag --to Dest` on `pkg.Boxes` rewrote
+	 *    `other.Boxes.tag()` into `other.Dest.tag()`, and the op WRITES — `Type not found :
+	 *    other.Dest` where the program printed 12 before, reported as `wrote 3 file(s)`.
+	 *
+	 * The dotted arm takes `lastSegmentOffset`, not `identTokenOffset`: the token to replace is the
+	 * path's final segment, while `identTokenOffset` returns the FIRST word-boundary match inside
+	 * the receiver span. The two cannot disagree on a path this gate admits — every earlier segment
+	 * is either a Haxe package segment (lower-case, so never a type name) or the module basename,
+	 * and a type named like its module takes the other `qualifiedPaths` branch — so the switch is
+	 * not a behaviour change; it drops the dependence on that invariant and matches `CrossRename`
+	 * on the same receiver shape.
 	 */
 	private static function qualifiedReceiverOffsets(
-		source: String, tree: QueryNode, srcTypeName: String, memberName: String, plugin: GrammarPlugin
+		source: String, tree: QueryNode, srcTypeName: String, memberName: String, plugin: GrammarPlugin, module: ModulePath
 	): Array<Int> {
 		final valueResolved: Array<Int> = [
 			for (h in Refs.find(srcTypeName, tree, plugin.refShape()))
 				if ((h.kind == RefKind.Read || h.kind == RefKind.Write) && h.bindingSpan != null) h.span.from
 		];
+		final qualified: Array<String> = RefactorSupport.qualifiedPaths(srcTypeName, module, ModuleScan.packageOf(tree));
 		final out: Array<Int> = [];
 		function walk(node: QueryNode): Void {
 			final children: Array<QueryNode> = node.children;
-			if (node.kind == 'FieldAccess' && node.name == memberName && children.length > 0) {
+			if (node.kind == RefactorSupport.FIELD_ACCESS_KIND && node.name == memberName && children.length > 0) {
 				final recv: QueryNode = children[0];
 				final recvSpan: Null<Span> = recv.span;
-				if (recv.kind == 'IdentExpr' && recv.name == srcTypeName && recvSpan != null && !valueResolved.contains(recvSpan.from)) {
-					final offset: Int = RefactorSupport.identTokenOffset(source, recvSpan, srcTypeName);
-					if (!out.contains(offset)) out.push(offset);
-				} else if (recv.kind == 'FieldAccess' && recv.name == srcTypeName && recvSpan != null) {
-					// Fully-qualified receiver `pkg.Src.member` — rewrite the
-					// last segment (same package, so `pkg.Dest` stays correct).
-					final offset: Int = RefactorSupport.identTokenOffset(source, recvSpan, srcTypeName);
-					if (!out.contains(offset)) out.push(offset);
+				if (recvSpan != null && RefactorSupport.receiverIsTypeNamespace(recv, srcTypeName, qualified, valueResolved)) {
+					final offset: Int = recv.kind == RefactorSupport.FIELD_ACCESS_KIND
+						? RefactorSupport.lastSegmentOffset(source, recvSpan, RefactorSupport.flattenPath(recv), srcTypeName)
+						: RefactorSupport.identTokenOffset(source, recvSpan, srcTypeName);
+					if (offset >= 0 && !out.contains(offset)) out.push(offset);
 				}
 			}
 			for (c in children) walk(c);
@@ -480,6 +507,7 @@ final class MoveMember {
 		final destInfoNN: FileInfo = destInfo;
 		return POk({
 			srcFile: srcFile,
+			srcModule: ModuleScan.moduleOf(srcTreeNN, srcFile),
 			srcTypeName: srcTypeName,
 			destTypeName: destTypeName,
 			index: index,
@@ -540,6 +568,12 @@ final class MoveMember {
 	 * they are rewritten in place (counted as remaining callers, with the
 	 * caller file remembered for the import pass); inside the cut they are
 	 * rewritten within the moved text.
+	 *
+	 * The edit swaps the TYPE SEGMENT alone, which assumes the destination is reachable by the
+	 * receiver's own prefix. KNOWN GAP, not fixed here: for a SUB-MODULE source type that is
+	 * false — `pkg.Mod.Helper.tag()` becomes `pkg.Mod.Dest.tag()` while `Dest` lives at
+	 * `pkg.Dest`, giving `Class<pkg.Mod> has no field Dest`. Fixing it means replacing the WHOLE
+	 * receiver span with the destination's own qualified path.
 	 */
 	private static function collectQualifiedEdits(
 		prep: MovePrep, m: MovedMember, plugin: GrammarPlugin, editsByFile: Map<String, Array<{ span: Span, text: String }>>,
@@ -549,7 +583,7 @@ final class MoveMember {
 		for (file => tree in prep.trees) {
 			final source: Null<String> = prep.sourceOf[file];
 			if (source == null) continue;
-			for (offset in qualifiedReceiverOffsets(source, tree, prep.srcTypeName, m.name, plugin)) {
+			for (offset in qualifiedReceiverOffsets(source, tree, prep.srcTypeName, m.name, plugin, prep.srcModule)) {
 				final edit: { span: Span, text: String } = {
 					span: new Span(offset, offset + prep.srcTypeName.length),
 					text: prep.destTypeName,
@@ -1023,12 +1057,33 @@ final class MoveMember {
 			// struct fields.
 			final groupNN: MemberGroup = group;
 			final memberSpanNN: Span = memberSpan;
+			// Staticness is a question about the HOST KIND as much as about the modifier run: an
+			// `enum abstract` value carries no `static` and is one regardless. Reading the modifier
+			// alone sent such a value down the instance path, where the move landed it in the
+			// destination as an INSTANCE field and left every `Colour.RED` in the scope unrewritten
+			// — `wrote 2 file(s)`, exit 0, and `Abstract<pal.Colour> has no field RED` on the next
+			// build.
+			final modifierStatic: Bool = groupNN.modifiers.exists(m -> m.kind == 'Static');
+			final hostStatic: Bool = RefactorSupport.implicitlyStaticMember(srcDecl.kind, groupNN.member.kind, shape);
+			// Knowing it is static is not licence to MOVE it. Such a member is bound to its host in
+			// a way relocation cannot preserve: an `enum abstract` value is TYPED as its declaring
+			// type, so a class destination turns it into a plain `Int` (and a mutable `static var`,
+			// which Haxe then refuses as a `case` pattern: "Only inline or read-only fields can be
+			// used as a pattern"), while another `enum abstract` destination retypes it just as
+			// surely ("pal.Shade should be pal.Colour"). The abstract PROPERTY that shares this
+			// shape — `var x(get, never)`, whose accessor clause the projection drops — would leave
+			// its `get_x` behind. Both compiler-probed; see `implicitlyStaticMember`.
+			if (hostStatic && !modifierStatic)
+				return 'member "$name" carries no `static` modifier yet is static anyway — "$srcTypeName"\'s kind decides, and no '
+					+ 'destination preserves what such a member means: an `enum abstract` value is TYPED as its declaring type, so every '
+					+ 'reference would be retyped and a class destination could not serve it as a `case` pattern, while an abstract\'s '
+					+ 'modifier-less `var` is a property whose accessors stay behind';
 			moved.push({
 				name: name,
 				group: groupNN,
 				span: memberSpanNN,
 				cut: cutSpanOf(srcSource, groupNN),
-				isStatic: groupNN.modifiers.exists(m -> m.kind == 'Static'),
+				isStatic: modifierStatic || hostStatic,
 			});
 		}
 		moved.sort((a, b) -> a.cut.from - b.cut.from);
@@ -1332,16 +1387,23 @@ final class MoveMember {
 		if (prep.srcInfo.pkg == prep.destInfo.pkg) return null;
 		final movedNames: Array<String> = [for (m in prep.moved) m.name];
 		final offenders: Array<String> = [];
-		function walk(node: QueryNode): Void {
+		// The dotted receiver must spell a path that legally names THIS module from the file it
+		// sits in; a last-segment test refused the move over `other.Boxes.tag()`, a same-named
+		// module in another package that the repointing would never have touched.
+		function walk(node: QueryNode, qualified: Array<String>): Void {
 			final children: Array<QueryNode> = node.children;
 			final nm: Null<String> = node.name;
-			if (node.kind == 'FieldAccess' && nm != null && movedNames.contains(nm) && children.length > 0) {
+			if (node.kind == RefactorSupport.FIELD_ACCESS_KIND && nm != null && movedNames.contains(nm) && children.length > 0) {
 				final recv: QueryNode = children[0];
-				if (recv.kind == 'FieldAccess' && recv.name == prep.srcTypeName && !offenders.contains(nm)) offenders.push(nm);
+				if (
+					recv.kind == RefactorSupport.FIELD_ACCESS_KIND && recv.name == prep.srcTypeName
+					&& qualified.contains(RefactorSupport.flattenPath(recv)) && !offenders.contains(nm)
+				)
+					offenders.push(nm);
 			}
-			for (c in children) walk(c);
+			for (c in children) walk(c, qualified);
 		}
-		for (file => tree in prep.trees) walk(tree);
+		for (tree in prep.trees) walk(tree, RefactorSupport.qualifiedPaths(prep.srcTypeName, prep.srcModule, ModuleScan.packageOf(tree)));
 		return offenders.length == 0
 			? null
 			: 'cross-package move: member(s) ${quoted(offenders)} are called via a fully-qualified '

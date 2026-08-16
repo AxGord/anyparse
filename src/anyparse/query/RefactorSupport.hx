@@ -466,6 +466,28 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * Whether a member of a `declKind` type is static WITHOUT saying so — the grammar's
+	 * `RefShape.implicitStaticFieldHostKinds` answer, narrowed to data members because an
+	 * abstract's METHODS may be either and there the modifier still decides.
+	 *
+	 * Shared by the member operations, because a MODIFIER-only read routes an `enum abstract`
+	 * value to the INSTANCE path — whose receiver resolution looks for a binding holding a
+	 * VALUE of the type, and so never matches the type used as a namespace.
+	 *
+	 * OVER-REPORTS THE PROPERTY FORM, compiler-probed: `abstract A(Int) { public var
+	 * length(get, never): Int; }` is legal and `length` is an INSTANCE member (`a.length`
+	 * compiles; `A.length` errors `Cannot access non-static abstract field statically`), yet
+	 * the query projection drops the accessor clause — it emits a bare `(VarMember length)`,
+	 * indistinguishable from an `enum abstract` value. A caller that only picks a resolution
+	 * path over-approximates harmlessly; a caller that WRITES must refuse the shape instead of
+	 * trusting the answer (`MoveMember.resolveMovedMembers` does).
+	 */
+	public static function implicitlyStaticMember(declKind: String, memberKind: String, refShape: RefShape): Bool {
+		final hosts: Null<Array<String>> = refShape.implicitStaticFieldHostKinds;
+		return hosts != null && hosts.contains(declKind) && isDataFieldKind(memberKind);
+	}
+
+	/**
 	 * Whether `kind` declares a member. `isFieldMemberKind` plus the enum constructors and
 	 * the three conditional member forms `HxClassMember` dispatches BEFORE their plain
 	 * twins (`var x … #if … ;`, `function #if a f #else g #end`, a `#if` splice at member
@@ -1004,6 +1026,24 @@ final class RefactorSupport {
 		return recv.kind == IDENT_EXPR_KIND
 			? !valueResolved.contains(recvSpan.from)
 			: recv.kind == FIELD_ACCESS_KIND && qualified.contains(flattenPath(recv));
+	}
+
+	/**
+	 * Offset of the LAST segment of the dotted `pathName` within `span` — where a rewrite of the
+	 * TYPE half of `a.b.C.member` must land. `pathName` is the node's name slot: an `import` /
+	 * `using` declaration and a QUALIFIED type reference each carry the whole dotted path there.
+	 *
+	 * Exact by construction: it finds the path text and steps past its final `.`, where
+	 * `identTokenOffset` takes the FIRST word-boundary occurrence of the name in the span and so
+	 * mis-lands whenever an earlier segment spells it too (`import Foo.sub.Foo;`). -1 when
+	 * `pathName` is null, its last segment is not `typeName`, or the path does not start in `span`.
+	 */
+	public static function lastSegmentOffset(source: String, span: Span, pathName: Null<String>, typeName: String): Int {
+		if (pathName == null) return -1;
+		final lastDot: Int = pathName.lastIndexOf('.');
+		if (lastSegment(pathName) != typeName) return -1;
+		final pathStart: Int = source.indexOf(pathName, span.from);
+		return pathStart < 0 || pathStart >= span.to ? -1 : pathStart + lastDot + 1;
 	}
 
 	/**
