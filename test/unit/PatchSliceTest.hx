@@ -156,6 +156,16 @@ class PatchSliceTest extends Test {
 		}
 	}
 
+	public function testModuleTypedefRegionStopsAtNextDeclDoc(): Void {
+		// A `@:trailOpt(';')` decl written without the `;` parses with a span running
+		// on to the next declaration, so the searchable region used to include the
+		// NEIGHBOUR's doc comment — patching a fragment of it rewrote a node nobody
+		// addressed. The region is trimmed to the bytes the typedef owns, so the
+		// fragment is simply not found.
+		final source: String = '/** typedef doc */\ntypedef T = {\n\tfinal a:Int;\n}\n\n/** class doc */\nclass C {}\n';
+		assertRefused(source, BySelector('TypedefDecl:T'), 'class doc', 'HIJACKED');
+	}
+
 	private function assertManyRefused(source: String, pairs: Array<{ oldText: String, newText: String }>): Void {
 		switch Patch.patchNodeMany(source, BySelector('FnMember:f'), pairs, false, new HaxeQueryPlugin()) {
 			case Ok(text):

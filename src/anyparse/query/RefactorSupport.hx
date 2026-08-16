@@ -1256,7 +1256,7 @@ final class RefactorSupport {
 			// The preceding token must be a BLOCK comment ending exactly here. Asking the
 			// lexer which token that is (rather than scanning back for a `/*`) is what keeps
 			// an opener written inside the doc's own TEXT from being mistaken for its start.
-			final open: Int = blockCommentEndingAt(tokens, i + 1);
+			final open: Int = commentEndingAt(tokens, i + 1, true);
 			if (open < 0) break;
 			// First comment (the decl's own doc) is absorbed unconditionally; any
 			// further comment back is absorbed only if it too is a `/**` doc, so a
@@ -1266,6 +1266,40 @@ final class RefactorSupport {
 			first = false;
 		}
 		return from == span.from ? span : new Span(from, span.to);
+	}
+
+	/**
+	 * Cut a declaration's TRAILING trivia — whitespace and whole comment tokens —
+	 * off the end of `span`, so a replace / remove / patch covers only the bytes the
+	 * declaration owns.
+	 *
+	 * A ctor annotated `@:trailOpt` whose optional trail token is ABSENT (a `typedef`
+	 * or a `final class` written without the `;`, a brace-terminated statement) ends
+	 * its parse span where the parser stopped looking for that token — past the blank
+	 * line and past the NEXT declaration's doc comment. The parser re-stashes that
+	 * run as the following node's LEADING trivia, so the bytes belong to the
+	 * neighbour; splicing over the raw span silently deleted a doc block nobody
+	 * addressed, and left `Patch` able to match a fragment inside it.
+	 *
+	 * Each comment's start comes from `collectCommentTokens` — the lexer's own
+	 * tokenisation — for the same reason `docExtendedSpan` reads it there: a `/*`
+	 * written inside a comment's TEXT is content, not an opener.
+	 */
+	public static function trailingTrimmedSpan(source: String, span: Span): Span {
+		final tokens: Array<{ from: Int, to: Int, isLine: Bool }> = collectCommentTokens(source);
+		var to: Int = span.to;
+		while (true) {
+			var i: Int = to - 1;
+			while (i >= span.from && isSpace(source.fastCodeAt(i))) i--;
+			if (i < span.from) break;
+			to = i + 1;
+			final open: Int = commentEndingAt(tokens, to, false);
+			// A comment reaching back to (or past) the span's own start is the node
+			// itself, not trailing trivia — leave the span alone.
+			if (open <= span.from) break;
+			to = open;
+		}
+		return to >= span.to ? span : new Span(span.from, to);
 	}
 
 	/**
@@ -4319,8 +4353,8 @@ final class RefactorSupport {
 	 * own view: a block comment is ONE token from its opener to the first closer, so an
 	 * opener sequence appearing inside the comment's text is content, not a boundary.
 	 */
-	private static function blockCommentEndingAt(tokens: Array<{ from: Int, to: Int, isLine: Bool }>, end: Int): Int {
-		for (t in tokens) if (!t.isLine && t.to == end) return t.from;
+	private static function commentEndingAt(tokens: Array<{ from: Int, to: Int, isLine: Bool }>, end: Int, blockOnly: Bool): Int {
+		for (t in tokens) if (t.to == end && !(blockOnly && t.isLine)) return t.from;
 		return -1;
 	}
 
@@ -4785,7 +4819,7 @@ final class RefactorSupport {
 		for (target in targets) {
 			final nodeSpan: Null<Span> = target.node.span;
 			if (nodeSpan == null) return Err('the node to remove has no source span');
-			final group: Span = declGroupSpan(target.node, target.parent, nodeSpan);
+			final group: Span = trailingTrimmedSpan(source, declGroupSpan(target.node, target.parent, nodeSpan));
 			// `--with-doc` extends the removed range back over a leading doc / block
 			// comment so a documented member's `/** */` is removed with it (else the
 			// comment is orphaned). The line/comma extension then runs on top.

@@ -7584,11 +7584,16 @@ final class Cli {
 			stderr('apq source: could not resolve a node from the address\n');
 			return null;
 		}
-		final span: Null<Span> = resolved.span;
-		if (span == null) {
+		final rawSpan: Null<Span> = resolved.span;
+		if (rawSpan == null) {
 			stderr('apq source: the matched node has no source span\n');
 			return null;
 		}
+		// The printed window must be the bytes the node OWNS: a `@:trailOpt` decl whose
+		// optional trail is absent parses with a span running on to the next declaration,
+		// and printing that showed a neighbour's doc comment as part of this node — the
+		// same range `patch` searches, which is where a fragment is copied from.
+		final span: Span = RefactorSupport.trailingTrimmedSpan(content, rawSpan);
 		final endOffset: Int = span.to > span.from ? span.to - 1 : span.from;
 		return { from: span.lineCol(content).line, to: new Span(endOffset, endOffset).lineCol(content).line };
 	}

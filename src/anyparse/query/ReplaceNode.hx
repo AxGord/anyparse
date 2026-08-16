@@ -121,7 +121,9 @@ final class ReplaceNode {
 		// (modifiers included), not a fragment that would duplicate the
 		// surviving modifier siblings. A non-decl node (expression, statement,
 		// package) has no modifier run, so `declGroupSpan` returns it intact.
-		final groupSpan: Span = RefactorSupport.declGroupSpan(node, TreePath.parentOf(tree, node), span);
+		final groupSpan: Span = RefactorSupport.trailingTrimmedSpan(
+			source, RefactorSupport.declGroupSpan(node, TreePath.parentOf(tree, node), span)
+		);
 		// `--with-doc` extends the replaced range back over the leading doc / block
 		// comment run (trivia the grammar keeps outside the node span) so the new
 		// source carries the declaration documentation. The same extension applies

@@ -155,6 +155,20 @@ class ReplaceNodeSliceTest extends Test {
 		assertReplace(source, ByKindPosition(4, 9, 'FnMember'), '/** new */\npublic function g():Void {}', expected, true);
 	}
 
+	/**
+	 * A module-level `typedef` carries `@:trailOpt(';')`, so with the `;` absent its
+	 * parse span runs past the closing `}` to the NEXT declaration — over the blank
+	 * line AND that declaration's doc comment, which the parser hands to the
+	 * neighbour as leading trivia. The replaced range must stop at the bytes the
+	 * typedef owns, else the neighbour's documentation is silently deleted while the
+	 * op reports a successful write.
+	 */
+	public function testModuleTypedefReplaceKeepsNextDeclDoc(): Void {
+		final source: String = '/** typedef doc */\ntypedef T = {\n\tfinal a:Int;\n}\n\n/** class doc */\nclass C {}\n';
+		final expected: String = '/** typedef doc */\ntypedef T = {\n\tfinal a:Int;\n\tfinal b:Int;\n}\n\n/** class doc */\nclass C {}\n';
+		assertReplace(source, BySelector('TypedefDecl:T'), 'typedef T = {\n\tfinal a:Int;\n\tfinal b:Int;\n}', expected);
+	}
+
 	private function assertReplace(
 		source: String, target: ReplaceTarget, newSource: String, expected: String, reformat: Bool = false
 	): Void {

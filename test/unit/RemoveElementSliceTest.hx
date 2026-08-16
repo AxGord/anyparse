@@ -102,6 +102,26 @@ class RemoveElementSliceTest extends Test {
 		assertRemove(source, 3, 13, true, expected);
 	}
 
+	/**
+	 * Removing a module-level `typedef` must not take the NEXT declaration's doc
+	 * comment with it. A `@:trailOpt(';')` decl written without the `;` parses with a
+	 * span that runs on to the following declaration, so the deletion range is trimmed
+	 * back to the bytes the typedef owns — `--with-doc` then removes its OWN leading
+	 * doc and nothing else.
+	 */
+	public function testRemoveModuleTypedefKeepsNextDeclDoc(): Void {
+		final source: String = '/** typedef doc */\ntypedef T = {\n\tfinal a:Int;\n}\n\n/** class doc */\nclass C {}\n';
+		final expected: String = '/** class doc */\nclass C {}\n';
+		final result: EditResult = RemoveElement.removeElement(source, 2, 1, false, new HaxeQueryPlugin(), true);
+		switch result {
+			case Ok(text):
+				Assert.equals(expected, text);
+				assertReparses(text);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
 	private function assertRemove(source: String, line: Int, col: Int, reformat: Bool, expected: String): Void {
 		final result: EditResult = removeOf(source, line, col, reformat);
 		switch result {
