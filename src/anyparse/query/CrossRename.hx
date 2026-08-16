@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
+import anyparse.query.RefactorSupport.ModulePath;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.ParseError;
@@ -65,8 +66,8 @@ typedef FileChange = {
  *  - QUALIFIED type positions — the type named THROUGH its module path,
  *    which the type-ref tree carries as ONE node whose name is the whole
  *    dotted string. The spellings Haxe accepts are enumerated by
- *    `qualifiedPaths` and matched WHOLE, never by last segment: that is what
- *    keeps a same-simple-name type from another module (`haxe.io.Bytes`
+ *    `RefactorSupport.qualifiedPaths` and matched WHOLE, never by last segment: that
+ *    is what keeps a same-simple-name type from another module (`haxe.io.Bytes`
  *    against a local `Bytes`) out of the rewrite.
  *  - Static-receiver access `T.staticMethod()` / `T.CONST` — a
  *    `FieldAccess` whose receiver child is an `IdentExpr T` that does
@@ -122,9 +123,6 @@ typedef FileChange = {
 @:nullSafety(Strict)
 final class CrossRename {
 
-	/** The node kind a qualified namespace receiver chains through. */
-	private static final FIELD_ACCESS_KIND: String = 'FieldAccess';
-
 	/** The advisory appended to every successful rename. */
 	private static final ADVISORY: String = 'type-namespace rename only — verify bare `Class<T>` value uses (`var c = T;`),'
 		+ ' aliased imports (`import pkg.T as U;`), type positions inside an anonymous structure (`{ node: T }`), and any'
@@ -177,13 +175,7 @@ final class CrossRename {
 
 		// 4. The declaring MODULE. A qualified reference names the type THROUGH its module path, so
 		//    the rewrite needs that path and not only the simple name.
-		final modulePkg: String = ModuleScan.packageOf(cursorTree);
-		final moduleBase: String = RefactorSupport.baseNameOf(cursorFile);
-		final module: { path: String, pkg: String, base: String } = {
-			path: modulePkg == '' ? moduleBase : '$modulePkg.$moduleBase',
-			pkg: modulePkg,
-			base: moduleBase
-		};
+		final module: ModulePath = ModuleScan.moduleOf(cursorTree, cursorFile);
 		return applyTypeRename(parse.parsed, typeName, newName, plugin, typeRefShape, refShape, module);
 	}
 
@@ -241,7 +233,7 @@ final class CrossRename {
 	 */
 	private static function collectOccurrences(
 		source: String, typeName: String, tree: QueryNode, plugin: GrammarPlugin, typeRefShape: TypeRefShape, refShape: RefShape,
-		module: { path: String, pkg: String, base: String }
+		module: ModulePath
 	): Array<Span> {
 		final out: Array<Span> = [];
 		final seen: Array<Int> = [];
@@ -252,7 +244,7 @@ final class CrossRename {
 		for (hit in Uses.find(typeName, typeRefTree, typeRefShape)) add(RefactorSupport.identTokenOffset(source, hit.span, typeName));
 
 		// e. QUALIFIED type positions — the same type named THROUGH its module path.
-		final qualified: Array<String> = qualifiedPaths(typeName, module, ModuleScan.packageOf(tree));
+		final qualified: Array<String> = RefactorSupport.qualifiedPaths(typeName, module, ModuleScan.packageOf(tree));
 		for (off in qualifiedOffsets(source, typeRefTree, typeName, qualified, typeRefShape)) add(off);
 
 		// d-prep. Receiver offsets that resolve to a value binding — an
@@ -280,7 +272,7 @@ final class CrossRename {
 			} else if (span != null && (node.kind == 'ImportDecl' || node.kind == 'UsingDecl'))
 				add(lastSegmentOffset(source, span, node.name, typeName));
 			final children: Array<QueryNode> = node.children;
-			if (node.kind == FIELD_ACCESS_KIND && children.length > 0)
+			if (node.kind == RefactorSupport.FIELD_ACCESS_KIND && children.length > 0)
 				add(namespaceReceiverOffset(source, children[0], typeName, qualified, valueResolved));
 			for (c in children) walk(c);
 		}
@@ -364,7 +356,7 @@ final class CrossRename {
 	 */
 	private static function applyTypeRename(
 		parsed: Array<ParsedFile>, typeName: String, newName: String, plugin: GrammarPlugin, typeRefShape: TypeRefShape,
-		refShape: RefShape, module: { path: String, pkg: String, base: String }
+		refShape: RefShape, module: ModulePath
 	): CrossRenameResult {
 		final changes: Array<FileChange> = [];
 		for (entry in parsed) {
@@ -387,34 +379,13 @@ final class CrossRename {
 	}
 
 	/**
-	 * Every DOTTED spelling of `typeName` a file in `filePkg` may legally use for a type declared
-	 * in `module` — the candidate paths arm (e) matches WHOLE, which is what keeps a type of the
-	 * same simple name declared anywhere else out of the rewrite.
-	 *
-	 * Read off the compiler rather than assumed. `pkg.Mod.T`, the full path from a class-path
-	 * root, works from anywhere. The short `Mod.T` works ONLY from a file in the module's own
-	 * package: an `import pkg.Mod;` does not make it legal elsewhere (`Type not found : Mod`),
-	 * and a module in the root package makes the two spellings the same string. A type whose name
-	 * equals the module's is the module's MAIN type — its qualified spelling IS the module path,
-	 * with no segment of its own, and in the root package it has no dotted spelling at all.
-	 */
-	private static function qualifiedPaths(
-		typeName: String, module: { path: String, pkg: String, base: String }, filePkg: String
-	): Array<String> {
-		if (typeName == module.base) return module.path == module.base ? [] : [module.path];
-		final out: Array<String> = ['${module.path}.$typeName'];
-		if (filePkg == module.pkg && module.path != module.base) out.push('${module.base}.$typeName');
-		return out;
-	}
-
-	/**
 	 * The last-segment offset of every QUALIFIED type position naming `typeName` through its
 	 * module path. The type-ref tree carries `pkg.Mod.T` as ONE node whose name is the whole
 	 * dotted string, so the plain-name arm never sees it and the declaration used to be renamed
 	 * with every such reference left behind — source that does not compile, reported as success.
 	 *
 	 * `tree` is the PLAIN tree, read only for the referencing file's own `package`: which dotted
-	 * spellings are legal depends on it (see `qualifiedPaths`).
+	 * spellings are legal depends on it (see `RefactorSupport.qualifiedPaths`).
 	 */
 	private static function qualifiedOffsets(
 		source: String, typeRefTree: QueryNode, typeName: String, qualified: Array<String>, typeRefShape: TypeRefShape
@@ -423,21 +394,6 @@ final class CrossRename {
 			for (path in qualified) for (hit in Uses.find(path, typeRefTree, typeRefShape))
 				lastSegmentOffset(source, hit.span, path, typeName)
 		];
-	}
-
-	/**
-	 * The dotted path a receiver CHAIN spells — `anyparse.core.Doc` for the
-	 * `FieldAccess Doc (FieldAccess core (IdentExpr anyparse))` a qualified namespace access
-	 * projects as. Anything the chain cannot express as a plain path (a call, an index) makes it
-	 * not a path at all, and the empty string it returns matches no candidate.
-	 */
-	private static function flattenPath(node: QueryNode): String {
-		final name: Null<String> = node.name;
-		if (name == null) return '';
-		if (node.kind == 'IdentExpr') return name;
-		if (node.kind != FIELD_ACCESS_KIND || node.children.length == 0) return '';
-		final head: String = flattenPath(node.children[0]);
-		return head == '' ? '' : '$head.$name';
 	}
 
 	/**
@@ -457,12 +413,14 @@ final class CrossRename {
 		source: String, recv: QueryNode, typeName: String, qualified: Array<String>, valueResolved: Array<Int>
 	): Int {
 		final recvSpan: Null<Span> = recv.span;
-		if (recv.name != typeName || recvSpan == null) return -1;
-		if (recv.kind == 'IdentExpr')
-			return valueResolved.contains(recvSpan.from) ? -1 : RefactorSupport.identTokenOffset(source, recvSpan, typeName);
-		if (recv.kind != FIELD_ACCESS_KIND) return -1;
-		final path: String = flattenPath(recv);
-		return qualified.contains(path) ? lastSegmentOffset(source, recvSpan, path, typeName) : -1;
+		return if (recvSpan == null || !RefactorSupport.receiverIsTypeNamespace(recv, typeName, qualified, valueResolved))
+			-1
+		else if (recv.kind == RefactorSupport.FIELD_ACCESS_KIND)
+			lastSegmentOffset(source, recvSpan, RefactorSupport.flattenPath(recv), typeName)
+		else if (recv.kind == RefactorSupport.IDENT_EXPR_KIND)
+			RefactorSupport.identTokenOffset(source, recvSpan, typeName)
+		else
+			-1;
 	}
 
 }

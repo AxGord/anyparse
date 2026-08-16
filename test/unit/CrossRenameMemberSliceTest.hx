@@ -27,10 +27,11 @@ using Lambda;
  * across scope), instance member (decl + `this.member` + bare +
  * `obj.member` with `obj` typed as the source type), field, final
  * method; zero-false-positive guards (a same-named member on a DIFFERENT
- * type, an unresolved receiver, and a shadowed static receiver are left
- * alone); refusals (override, name collision, ambiguous type, case-
- * capture collision, constructor, cursor off a member, no-op, invalid
- * name, skip-parse scope file).
+ * type, an unresolved receiver, a shadowed static receiver, and a same-named
+ * MODULE in another package reached through a dotted receiver are left alone);
+ * refusals (override, name collision, ambiguous type, case-capture
+ * collision, constructor, cursor off a member, no-op, invalid name,
+ * skip-parse scope file).
  */
 class CrossRenameMemberSliceTest extends Test {
 
@@ -527,6 +528,62 @@ class CrossRenameMemberSliceTest extends Test {
 		final a: String = 'class Config {\n\tpublic static var limit = 5;\n'
 			+ '\tpublic static function tag(v:Int):String return switch (v) {\n\t\tcase limit: \'x\';\n\t}\n}';
 		assertErr(run('a.hx', a, 'limit', 'cap', [{ file: 'a.hx', source: a }]));
+	}
+
+	/**
+	 * A qualified static access is matched by the WHOLE module path, not the last segment.
+	 * Both halves sit in ONE asserted expression, so the renamed one cannot be satisfied by
+	 * the unchanged input and the foreign one cannot be satisfied by a last-segment matcher.
+	 */
+	public function testStaticMemberQualifiedPathRenamesOnlyTheDeclaringModule(): Void {
+		final a: String = 'package pkg;\n\nclass Boxes {\n\tpublic static final CONST:Int = 5;\n}';
+		final b: String = 'class Z {\n\tvar n:Int = pkg.Boxes.CONST + other.Boxes.CONST;\n}';
+		final expectedB: String = 'class Z {\n\tvar n:Int = pkg.Boxes.LIMIT + other.Boxes.CONST;\n}';
+		final changes: Array<FileChange> = okChanges('pkg/Boxes.hx', a, 'CONST', 'LIMIT', [
+			{ file: 'pkg/Boxes.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(1, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * The same whole-path rule one level deeper: a SUB-MODULE type, reached as
+	 * `pkg.Mod.Helper.CONST`. `other.Mod.Helper.CONST` shares every segment but the package.
+	 */
+	public function testStaticMemberQualifiedSubModulePathRenamesOnlyTheDeclaringModule(): Void {
+		final a: String = 'package pkg;\n\nclass Mod {\n\tpublic function new() {}\n}\n\n'
+			+ 'class Helper {\n\tpublic static final CONST:Int = 1;\n}';
+		final b: String = 'class Z {\n\tvar n:Int = pkg.Mod.Helper.CONST + other.Mod.Helper.CONST;\n}';
+		final expectedB: String = 'class Z {\n\tvar n:Int = pkg.Mod.Helper.LIMIT + other.Mod.Helper.CONST;\n}';
+		final changes: Array<FileChange> = okChanges('pkg/Mod.hx', a, 'CONST', 'LIMIT', [
+			{ file: 'pkg/Mod.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(1, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * The short `Mod.Helper` spelling is legal ONLY from the module's own package, so the
+	 * IDENTICAL text in another package names a different (root-package) module and must be
+	 * left alone. Acceptance and refusal are asserted separately — neither half implies the other.
+	 */
+	public function testStaticMemberShortModulePathRenamesOnlyInsideTheModulesOwnPackage(): Void {
+		final a: String = 'package pkg;\n\nclass Mod {\n\tpublic function new() {}\n}\n\n'
+			+ 'class Helper {\n\tpublic static final CONST:Int = 1;\n}';
+		final inPkg: String = 'package pkg;\n\nclass User {\n\tvar n:Int = Mod.Helper.CONST;\n}';
+		final outside: String = 'package zzz;\n\nclass Other {\n\tvar n:Int = Mod.Helper.CONST;\n}';
+		final changes: Array<FileChange> = okChanges('pkg/Mod.hx', a, 'CONST', 'LIMIT', [
+			{ file: 'pkg/Mod.hx', source: a },
+			{ file: 'pkg/User.hx', source: inPkg },
+			{ file: 'zzz/Other.hx', source: outside },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals('package pkg;\n\nclass User {\n\tvar n:Int = Mod.Helper.LIMIT;\n}', changeFor(changes, 'pkg/User.hx').newSource);
+		Assert.isNull(changeOrNull(changes, 'zzz/Other.hx'));
 	}
 
 }

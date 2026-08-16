@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.CrossRename.CrossRenameResult;
 import anyparse.query.CrossRename.FileChange;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.RefactorSupport.ModulePath;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
@@ -64,10 +65,13 @@ private typedef LocatedOffsets = {
  *    calls and `this.member` field accesses. This is exactly the
  *    single-file occurrence set `Rename` computes, so the declaring file
  *    is delegated to `Rename.renameOccurrences`.
- *  - STATIC members: every qualified access `Src.member` /
- *    `pkg.Src.member` across the scope whose receiver is the type used as
- *    a namespace (a receiver shadowed by a value binding of the same name
- *    is excluded, mirroring `CrossRename` / `MoveMember`).
+ *  - STATIC members: every qualified access `Src.member` / `pkg.Src.member`
+ *    across the scope whose receiver is the type used as a namespace. A BARE
+ *    receiver is excluded when a value binding of the same name shadows it; a
+ *    DOTTED one must spell the declaring module WHOLE — one of
+ *    `RefactorSupport.qualifiedPaths`, never merely the same last segment, or
+ *    `other.Src.member` would rewrite with `pkg.Src.member`. Mirrors
+ *    `CrossRename`; `MoveMember` still matches by last segment.
  *  - A BARE `case <member>:` pattern whose switch SUBJECT is proven to hold a value of
  *    the source type, by the same resolution the instance receivers go through.
  *    Unqualified, a value of an `enum abstract` reads in a pattern as a reference to the
@@ -122,7 +126,8 @@ private typedef LocatedOffsets = {
  *
  * Unresolved instance receivers (chained calls, un-annotated locals,
  * casts), `super`-access, `using`-extension call sites, aliased-import
- * homonyms, and overrides declared OUTSIDE the scope are not rewritten —
+ * homonyms, a DOTTED static receiver whose path is not one the declaring
+ * module makes legal, and overrides declared OUTSIDE the scope are not rewritten —
  * each dangles into a compile error the user can see. The advisory
  * (always non-null on success) reminds them.
  *
@@ -217,7 +222,11 @@ final class CrossRenameMember {
 		// an override renamed onto a name its own type already declares is a duplicate field.
 		for (fm in overrides) if (index.typeDeclaresMember(fm.typeName, newName))
 			return Err('type "${fm.typeName}" already declares a member "$newName"');
-		return apply(parse.parsed, cursorFile, t, newName, cursor, plugin, refShape, overrides, index);
+		// The declaring MODULE. A qualified static access names the owning type THROUGH its module
+		// path, so the receiver match needs that path — matching the receiver's last segment instead
+		// rewrites `other.Mod.T.MEMBER` for a rename of `pkg.Mod.T.MEMBER`.
+		final module: ModulePath = ModuleScan.moduleOf(cursorTree, cursorFile);
+		return apply(parse.parsed, cursorFile, t, newName, cursor, plugin, refShape, overrides, index, module);
 	}
 
 	/**
@@ -370,7 +379,7 @@ final class CrossRenameMember {
 	 */
 	private static function apply(
 		parsed: Array<ParsedFile>, cursorFile: String, target: MemberTarget, newName: String, cursor: Int, plugin: GrammarPlugin,
-		refShape: RefShape, family: Array<OverrideFamilyMember>, index: SymbolIndex
+		refShape: RefShape, family: Array<OverrideFamilyMember>, index: SymbolIndex, module: ModulePath
 	): CrossRenameResult {
 		final changes: Array<FileChange> = [];
 		for (entry in parsed) {
@@ -389,7 +398,7 @@ final class CrossRenameMember {
 			// without these leaves `override function <old>` overriding nothing.
 			for (fm in family) if (fm.file == entry.file)
 				for (occ in Rename.renameOccurrences(entry.source, entry.tree, fm.declFrom, refShape)) addOff(occ.from);
-			final qualified: LocatedOffsets = qualifiedMemberOffsets(entry.source, entry.tree, target, plugin, refShape, index);
+			final qualified: LocatedOffsets = qualifiedMemberOffsets(entry.source, entry.tree, target, plugin, refShape, index, module);
 			if (qualified.error != null) return Err('${entry.file}: ${qualified.error}');
 			for (off in qualified.offsets) addOff(off);
 			for (off in patternConstantOffsets(entry.source, entry.tree, target, plugin, refShape, index)) addOff(off);
@@ -423,10 +432,11 @@ final class CrossRenameMember {
 	 * through the returned `error`.
 	 */
 	private static function qualifiedMemberOffsets(
-		source: String, tree: QueryNode, target: MemberTarget, plugin: GrammarPlugin, refShape: RefShape, index: SymbolIndex
+		source: String, tree: QueryNode, target: MemberTarget, plugin: GrammarPlugin, refShape: RefShape, index: SymbolIndex,
+		module: ModulePath
 	): LocatedOffsets {
 		return target.isStatic
-			? staticMemberOffsets(source, tree, target.typeName, target.memberName, refShape)
+			? staticMemberOffsets(source, tree, target.typeName, target.memberName, refShape, module)
 			: instanceMemberOffsets(source, tree, target.typeName, target.memberName, plugin, refShape, index);
 	}
 
@@ -440,12 +450,15 @@ final class CrossRenameMember {
 	 * sitting between the two is ever mistaken for it.
 	 */
 	private static function staticMemberOffsets(
-		source: String, tree: QueryNode, typeName: String, memberName: String, refShape: RefShape
+		source: String, tree: QueryNode, typeName: String, memberName: String, refShape: RefShape, module: ModulePath
 	): LocatedOffsets {
 		final valueResolved: Array<Int> = [
 			for (h in Refs.find(typeName, tree, refShape))
 				if ((h.kind == RefKind.Read || h.kind == RefKind.Write) && h.bindingSpan != null) h.span.from
 		];
+		// Which DOTTED receivers legally name this type from THIS file — the whole path, not its last
+		// segment: `Boxes` is a module name dozens of packages may each declare.
+		final qualified: Array<String> = RefactorSupport.qualifiedPaths(typeName, module, ModuleScan.packageOf(tree));
 		final out: Array<Int> = [];
 		var error: Null<String> = null;
 		function walk(node: QueryNode): Void {
@@ -454,16 +467,14 @@ final class CrossRenameMember {
 				final recv: QueryNode = children[0];
 				final recvSpan: Null<Span> = recv.span;
 				final faSpan: Null<Span> = node.span;
-				if (recvSpan != null && faSpan != null) {
-					final isNamespace: Bool = (recv.kind == 'IdentExpr' && recv.name == typeName && !valueResolved.contains(recvSpan.from))
-						|| (recv.kind == 'FieldAccess' && recv.name == typeName);
-					if (isNamespace) {
-						final off: Int = RefactorSupport.activeCodeIdentTokenOffset(source, new Span(recvSpan.to, faSpan.to), memberName);
-						if (off < 0)
-							error = unlocatableAccess(source, faSpan, memberName);
-						else if (!out.contains(off))
-							out.push(off);
-					}
+				if (
+					recvSpan != null && faSpan != null && RefactorSupport.receiverIsTypeNamespace(recv, typeName, qualified, valueResolved)
+				) {
+					final off: Int = RefactorSupport.activeCodeIdentTokenOffset(source, new Span(recvSpan.to, faSpan.to), memberName);
+					if (off < 0)
+						error = unlocatableAccess(source, faSpan, memberName);
+					else if (!out.contains(off))
+						out.push(off);
 				}
 			}
 			for (c in children) walk(c);

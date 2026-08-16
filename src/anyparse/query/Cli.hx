@@ -6021,10 +6021,14 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('On a MEMBER declaration (field / method, e.g. --select FnMember:foo)\n');
 		sysPrint('that member is renamed across scope: the decl, in-type references, and\n');
-		sysPrint('qualified accesses — Src.member for a static member, obj.member whose\n');
-		sysPrint('receiver resolves to the source type for an instance member. Receivers\n');
-		sysPrint('whose type does not resolve, super-access, using-extension calls, and\n');
-		sysPrint('overrides are left as loud compile errors. A member a #if region\n');
+		sysPrint('qualified accesses — Src.member / pkg.Src.member for a static member\n');
+		sysPrint('(a dotted receiver must name the declaring module WHOLE, the same\n');
+		sysPrint('spellings the type rename accepts, so other.Src.member is left alone),\n');
+		sysPrint('obj.member whose receiver resolves to the source type for an instance\n');
+		sysPrint('member. Receivers whose type does not resolve, a dotted static receiver\n');
+		sysPrint('spelling no legal path to the declaring module, super-access,\n');
+		sysPrint('using-extension calls, and overrides are left as loud compile errors.\n');
+		sysPrint('A member a #if region\n');
 		sysPrint('declares once per branch is one logical member: every branch declaration\n');
 		sysPrint('moves in the same edit set. Refuses an override member,\n');
 		sysPrint('a member an ancestor under scope declares (an implementation of an\n');

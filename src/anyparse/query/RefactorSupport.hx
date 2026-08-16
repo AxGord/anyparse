@@ -84,6 +84,23 @@ typedef TypeDeclMatch = {
 }
 
 /**
+ * The MODULE a type is declared in, in the three shapes a qualified reference needs.
+ *
+ *  - `path` — the module's full dotted path (`pkg.Mod`, or bare `Mod` in the root package).
+ *  - `pkg` — the module's package (`''` in the root package).
+ *  - `base` — the module's basename, i.e. the name its MAIN type must carry.
+ *
+ * A dotted reference names a type THROUGH this path, so a cross-file rewrite compares the
+ * receiver's WHOLE path against what `qualifiedPaths` makes legal — never against the
+ * reference's last segment, which a same-named module in another package also satisfies.
+ */
+typedef ModulePath = {
+	final path: String;
+	final pkg: String;
+	final base: String;
+}
+
+/**
  * The extra per-file context `RefactorSupport.expressionTypeNominal` needs for its DEEP
  * resolution mode: the WRITTEN form of every `:Type` annotation (a nominal alone cannot carry
  * type arguments) and the file's source text (the only place a `for` loop's header form is
@@ -314,6 +331,12 @@ final class RefactorSupport {
 
 	/** The grammar kind an anonymous structure projects as, in BOTH a typedef body and a type expression. */
 	private static final ANON_KIND: String = 'Anon';
+
+	/** The grammar kind a dotted member access projects as — one link of a receiver chain. */
+	public static final FIELD_ACCESS_KIND: String = 'FieldAccess';
+
+	/** The grammar kind a bare identifier projects as — the root of a receiver chain. */
+	public static final IDENT_EXPR_KIND: String = 'IdentExpr';
 
 	/** The numeric escapes that spell the interpolation trigger `$` (see `interpolationEscapeBefore`). */
 	private static final DOLLAR_ESCAPES: Array<String> = ['\\x24', '\\u0024'];
@@ -754,7 +777,7 @@ final class RefactorSupport {
 		// Cursor is on a node that the resolver does not emit as a ref
 		// hit — the `this.<field>` field-access case. Bind it to the sole
 		// member decl of the same name.
-		if (node.kind != 'FieldAccess') return null;
+		if (node.kind != FIELD_ACCESS_KIND) return null;
 		final memberDecl: Null<RefHit> = hits.find(h -> h.kind == RefKind.Decl);
 		return memberDecl?.span.from;
 	}
@@ -929,6 +952,58 @@ final class RefactorSupport {
 		final slash: Int = file.lastIndexOf('/');
 		final tail: String = slash < 0 ? file : file.substr(slash + 1);
 		return tail.endsWith('.hx') ? tail.substr(0, tail.length - '.hx'.length) : tail;
+	}
+
+
+	/**
+	 * Every DOTTED path by which a file in package `filePkg` may legally name `typeName`
+	 * declared in `module` — the whole set a qualified reference is matched against.
+	 *
+	 * For `T` in module `pkg.Mod` (file `pkg/Mod.hx`) Haxe accepts:
+	 *
+	 *  - `T` — from `pkg`, or after an import. Not dotted, so not listed here.
+	 *  - `pkg.Mod.T` — from anywhere.
+	 *  - `Mod.T` — ONLY from a file in `pkg`; `import pkg.Mod;` does NOT make it legal
+	 *    elsewhere. Hence the `filePkg == module.pkg` gate: a ROOT-package module is visible
+	 *    as `Mod.T` from every package, so the same text in two packages can name two
+	 *    different types, and only the gate keeps a rename off the foreign one.
+	 *  - `pkg.Mod` — the MAIN type alone (its name equals the basename); it has no
+	 *    `<module>.<type>` form, and in the root package no dotted form at all.
+	 */
+	public static function qualifiedPaths(typeName: String, module: ModulePath, filePkg: String): Array<String> {
+		if (typeName == module.base) return module.path == module.base ? [] : [module.path];
+		final out: Array<String> = ['${module.path}.$typeName'];
+		if (filePkg == module.pkg && module.path != module.base) out.push('${module.base}.$typeName');
+		return out;
+	}
+
+	/** The dotted path a receiver chain spells (`a.b.C`), or `''` when a link is not a plain name. */
+	public static function flattenPath(node: QueryNode): String {
+		final name: Null<String> = node.name;
+		if (name == null) return '';
+		if (node.kind == IDENT_EXPR_KIND) return name;
+		if (node.kind != FIELD_ACCESS_KIND || node.children.length == 0) return '';
+		final head: String = flattenPath(node.children[0]);
+		return head == '' ? '' : '$head.$name';
+	}
+
+	/**
+	 * Whether `recv` names the type `typeName` used as a NAMESPACE — the receiver half of a
+	 * static access the rename owns.
+	 *
+	 * A bare `IdentExpr` qualifies unless the resolver bound it to a value (`valueResolved`
+	 * holds those receiver offsets): an unresolved bare name is the type. A DOTTED receiver
+	 * qualifies only when its WHOLE path is one of `qualified` (`qualifiedPaths`); matching its
+	 * last segment instead would accept `other.Mod.T` for a rename of `pkg.Mod.T`.
+	 */
+	public static function receiverIsTypeNamespace(
+		recv: QueryNode, typeName: String, qualified: Array<String>, valueResolved: Array<Int>
+	): Bool {
+		final recvSpan: Null<Span> = recv.span;
+		if (recv.name != typeName || recvSpan == null) return false;
+		return recv.kind == IDENT_EXPR_KIND
+			? !valueResolved.contains(recvSpan.from)
+			: recv.kind == FIELD_ACCESS_KIND && qualified.contains(flattenPath(recv));
 	}
 
 	/**

@@ -5,6 +5,7 @@ import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.Span;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.RefactorSupport.ModulePath;
 
 using StringTools;
 using Lambda;
@@ -316,6 +317,14 @@ final class ModuleScan {
 	public static function packageOf(root: QueryNode): String {
 		for (c in root.children) if (c.kind == 'PackageDecl') return c.name ?? '';
 		return '';
+	}
+
+
+	/** The module `file` declares, read from its own `package` declaration and its basename. */
+	public static function moduleOf(root: QueryNode, file: String): ModulePath {
+		final pkg: String = packageOf(root);
+		final base: String = RefactorSupport.baseNameOf(file);
+		return { path: pkg == '' ? base : '$pkg.$base', pkg: pkg, base: base };
 	}
 
 }
