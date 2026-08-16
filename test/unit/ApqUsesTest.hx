@@ -95,6 +95,18 @@ class ApqUsesTest extends Test {
 		Assert.equals(1, types.length, 'the optional param type must still project, got ${describe(types)}');
 	}
 
+	public function testArrowFnParamNameInAReturnTypeIsNotATypeRef(): Void {
+		// The same arrow type in a RETURN slot reaches the tree through `_walk`, not
+		// `_typeRefs`: there the ctor NAME is the node kind, and `typeRefShape` lists
+		// `Named` — so qualifying the `_typeRefs` emit alone left the parameter label
+		// reported as a type reference on this second path.
+		final source: String = 'class X { function f():(p:HxVarDecl) -> Void { return null; } }';
+		final names: Array<UsesHit> = usesIn(source, 'p');
+		final types: Array<UsesHit> = usesIn(source, 'HxVarDecl');
+		Assert.equals(0, names.length, 'return-type arrow param name must not project as a type ref, got ${describe(names)}');
+		Assert.equals(1, types.length, 'the param type must still project, got ${describe(types)}');
+	}
+
 	public function testAnonInsideATypeParameterProjects(): Void {
 		// An anon struct in a type-PARAMETER slot reaches `_typeRefs`, not the
 		// decl-host descent in `_walk`, so before the `Anon` arm recursed every

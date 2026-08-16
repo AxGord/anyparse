@@ -139,14 +139,11 @@ enum HxType {
 	 * This branch also carries the POSITIONAL optional arg of a new-form
 	 * parenthesised arrow: `(?Int) -> Void` parses as
 	 * `ArrowFn([Positional(OptionalArg(Named(Int)))], Void)`, because
-	 * `HxArrowParam.OptionalNamed` needs a `:` after the name and rolls
-	 * back on a bare type. Same when the optional's type is itself a
+	 * `HxArrowParam.OptionalNamedParam` needs a `:` after the name and rolls back on a bare type. Same when the optional's type is itself a
 	 * function type — `(?Int -> Void) -> Void` is
 	 * `Positional(OptionalArg(Arrow(Int, Void)))`, which is what keeps
 	 * `HaxeTypeRewrites.arrowFnOldStyleRewrite`'s
-	 * `[Positional(Arrow(_, _))]` old-style pattern from firing on it. The
-	 * NAMED optional `(?x:Int) -> Void` is the one that lives on
-	 * `HxArrowParam.OptionalNamed`.
+	 * `[Positional(Arrow(_, _))]` old-style pattern from firing on it. The NAMED optional `(?x:Int) -> Void` is the one that lives on `HxArrowParam.OptionalNamedParam`.
 	 */
 	@:lead('?')
 	OptionalArg(inner: HxType);

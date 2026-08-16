@@ -11,16 +11,14 @@ import anyparse.grammar.haxe.HxVarDecl;
  * Slice fn-param-I — OPTIONAL NAMED argument in a function TYPE:
  * `(?b:Int) -> Void`.
  *
- * `HxArrowParam` had two branches: `Named` (`name:Type`, commit point
- * the `:` lead inside `HxArrowParamBody`) and the catch-all
+ * `HxArrowParam` had two branches: `NamedParam` (`name:Type`, commit point the `:` lead inside `HxArrowParamBody`) and the catch-all
  * `Positional` (any `HxType`, which covers the positional-optional
  * `?Int` via `HxType.OptionalArg`). Neither accepted `?` FOLLOWED BY a
  * name and a type annotation: `Positional` consumed `?b` as
  * `OptionalArg(Named(b))` and then the enclosing `@:sep(',')` /
  * `@:trail(')')` Star choked on the `:`.
  *
- * The slice adds a third branch, `@:lead('?') OptionalNamed`, sharing
- * `HxArrowParamBody` with `Named` and placed before the catch-all
+ * The slice adds a third branch, `@:lead('?') OptionalNamedParam`, sharing `HxArrowParamBody` with `NamedParam` and placed before the catch-all
  * `Positional`, which would otherwise swallow `?b` again.
  *
  * Real-world source: 3 Haxe stdlib modules.
@@ -30,9 +28,7 @@ import anyparse.grammar.haxe.HxVarDecl;
  *    nested function type sitting in the optional named slot.
  *
  * The positional-optional shape deliberately does NOT move: `(?Int)`
- * enters `OptionalNamed`, reads `Int` as a candidate name, fails the
- * mandatory `:` lead on `HxArrowParamBody.type`, and `tryBranch`
- * restores `ctx.pos`; `Named` then rejects the leading `?`, and
+ * enters `OptionalNamedParam`, reads `Int` as a candidate name, fails the mandatory `:` lead on `HxArrowParamBody.type`, and `tryBranch` restores `ctx.pos`; `NamedParam` then rejects the leading `?`, and
  * `Positional` reproduces the pre-slice `OptionalArg(Named(Int))` AST.
  * The regression cases below pin that for a type-shaped candidate name
  * (`?Int`), a qualified one (`?haxe.io.Bytes`) and a name-shaped one
@@ -113,7 +109,7 @@ class HxArrowParamOptionalNamedSliceTest extends HxTestHelpers {
 	}
 
 	public function testQualifiedPositionalOptionalStaysOnOptionalArg(): Void {
-		// GUARD: `?pack.Sub.Type` — `OptionalNamed` reads `pack` as a
+		// GUARD: `?pack.Sub.Type` — `OptionalNamedParam` reads `pack` as a
 		// candidate name and fails on the `.`, so `Positional` wins.
 		final v: HxVarDecl = parseSingleVarDecl('class Foo { var f:(?haxe.io.Bytes) -> Void; }');
 		final fn: HxArrowFnType = expectArrowFnType(v.type);

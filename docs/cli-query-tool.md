@@ -166,18 +166,23 @@ $ apq probe 'class C { function f(?d: Array<{ node: Doc }>): Void {} }' --type-r
   (ClassDecl C (FnMember f (Optional d (TypeRef Array) (TypeRef Doc)) (Named Void) (BlockBody))))
 ```
 
-Field **names** are never emitted: `apq uses node` on that source is 0
-hits. A name in a type-position projection would be read as a type
-reference by every consumer of it — `Naming` discounts these spans from
-its completeness gate and `CrossRename` rewrites at each of them, so a
-leaked name would silently orphan a value reference or rename a field
-label. Nesting does not duplicate either: an anon inside an anon
-reports each type once.
+Field **names** never project as *type references*: `apq uses node` on
+that source is 0 hits. (The raw dump still shows a field name as a
+node's own name — `var v:{node:Doc}` renders
+`(Anon (Required node (TypeRef Doc)))` — but that node's kind is not one
+of `TypeRefShape.typeRefKinds`, so no consumer reads it as a type.) A
+name that *did* project as a type reference would be read as one by
+every consumer — `Naming` discounts these spans from its completeness
+gate and `CrossRename` rewrites at each of them, so a leak would
+silently orphan a value reference or rename a field label. Nesting does
+not duplicate either: an anon inside an anon reports each type once.
 
-Residual gap: the head of a **structural extension** —
-`typedef Ext = { > Base, var x:Doc; }` — does not project `Base` (the
-`ExtendsField(type:HxTypeRef)` head is not a nominal-name constructor).
-`Doc` and every other field type in the same body do project.
+Residual gap: the **head** of a structural extension —
+`typedef Ext = { > Base, var x:Doc; }` — does not project `Base`, because
+`ExtendsField(type:HxTypeRef)` is not a nominal-name constructor. Only
+the head is missing: `{ > Base<Doc>, … }` still projects `Doc`
+(`(ExtendsField Base (TypeRef Doc))`), and every field type in the same
+body projects normally.
 
 ### `--doc` / `--source` (opt-in, on `refs` / `uses` / `ast`)
 

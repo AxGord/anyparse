@@ -76,6 +76,25 @@ class CrossRenameSliceTest extends Test {
 	}
 
 	/**
+	 * An arrow-type PARAMETER LABEL that happens to spell the renamed type. A label
+	 * binds nothing, so rewriting it is a silent unintended edit — it compiles either
+	 * way. The fixture holds the label and a real reference in ONE file, and the
+	 * expected text asserts both halves together.
+	 */
+	public function testArrowFnParameterLabelIsNotRenamed(): Void {
+		final a: String = 'class Foo {\n\tpublic function new() {}\n}';
+		final b: String = 'class Use {\n\tfunction g():(Foo:Int) -> Void {\n\t\treturn null;\n\t}\n\n\tvar f:Foo;\n}';
+		final expectedB: String = 'class Use {\n\tfunction g():(Foo:Int) -> Void {\n\t\treturn null;\n\t}\n\n\tvar f:Bar;\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(1, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
 	 * `final class` rename — the dominant style. File A declares
 	 * `final class Foo`; the named node is the inner `ClassForm` so the
 	 * decl-name occurrence is collected through the final-aware

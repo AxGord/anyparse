@@ -6296,7 +6296,7 @@ final class Cli {
 			'  --count             Print just the integer direct-child count at the displayed root (one line per match with --select). Sanity-check for member counts before writing a corpus-driver test assertion.\n'
 		);
 		sysPrint(
-			'  --type-refs         Render the type-position projection (parseFileTypeRefs) instead of the default tree — the dotted type references of the file (field/var annotations, param + return types, enum-ctor params, type parameters, and the field types of an anonymous structure in any of those). Field NAMES are never emitted — only types.\n'
+			'  --type-refs         Render the type-position projection (parseFileTypeRefs) instead of the default tree — the dotted type references of the file (field/var annotations, param + return types, enum-ctor params, type parameters, and the field types of an anonymous structure in any of those). Field NAMES never project as TYPE REFERENCES — the raw dump still shows them as node names, but uses/blast and the rewriting ops see only types.\n'
 		);
 		sysPrint('  --writer-output     Parse + format-write through the plugin trivia pipeline and print the emitted source\n');
 		sysPrint(

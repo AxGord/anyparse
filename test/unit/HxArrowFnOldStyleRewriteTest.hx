@@ -54,7 +54,7 @@ class HxArrowFnOldStyleRewriteTest extends HxTestHelpers {
 
 	public function testRewriteSingleNamedReturnsNull(): Void {
 		final input: HxType = ArrowFn({
-			args: [Named({ name: 'x', type: named('String') })],
+			args: [NamedParam({ name: 'x', type: named('String') })],
 			ret: named('Void'),
 		});
 		Assert.isNull(HaxeTypeRewrites.arrowFnOldStyleRewrite(input, makeOpts()));

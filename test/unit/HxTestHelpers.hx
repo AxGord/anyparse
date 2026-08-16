@@ -487,7 +487,7 @@ class HxTestHelpers extends Test {
 	}
 
 	/**
-	 * Unwraps `HxArrowParam.OptionalNamed` (`?name:Type`) to its body.
+	 * Unwraps `HxArrowParam.OptionalNamedParam` (`?name:Type`) to its body.
 	 *
 	 * This and the two `HxArrowParam` helpers below belong to the arrow
 	 * function TYPE family (`(args) -> ret`), NOT to the `HxParam` family of
@@ -499,24 +499,24 @@ class HxTestHelpers extends Test {
 	 *
 	 * All three enumerate every ctor rather than ending on `case _:` so a
 	 * future `HxArrowParam` branch breaks the build right here — that
-	 * tripwire is how the `OptionalNamed` slice found the switches it had
+	 * tripwire is how the `OptionalNamedParam` slice found the switches it had
 	 * to update. `expectArrowFnType` above switches on `HxType`, not on
 	 * `HxArrowParam`, so its catch-all is correct.
 	 */
 	private function expectOptionalNamedParam(p: HxArrowParam): HxArrowParamBody {
 		return switch p {
-			case OptionalNamed(body): body;
-			case Named(_): throw 'expected HxArrowParam.OptionalNamed, got Named';
-			case Positional(_): throw 'expected HxArrowParam.OptionalNamed, got Positional';
+			case OptionalNamedParam(body): body;
+			case NamedParam(_): throw 'expected HxArrowParam.OptionalNamedParam, got NamedParam';
+			case Positional(_): throw 'expected HxArrowParam.OptionalNamedParam, got Positional';
 		};
 	}
 
-	/** Unwraps `HxArrowParam.Named` (`name:Type`) to its body. */
+	/** Unwraps `HxArrowParam.NamedParam` (`name:Type`) to its body. */
 	private function expectNamedParam(p: HxArrowParam): HxArrowParamBody {
 		return switch p {
-			case Named(body): body;
-			case OptionalNamed(_): throw 'expected HxArrowParam.Named, got OptionalNamed';
-			case Positional(_): throw 'expected HxArrowParam.Named, got Positional';
+			case NamedParam(body): body;
+			case OptionalNamedParam(_): throw 'expected HxArrowParam.NamedParam, got OptionalNamedParam';
+			case Positional(_): throw 'expected HxArrowParam.NamedParam, got Positional';
 		};
 	}
 
@@ -524,8 +524,8 @@ class HxTestHelpers extends Test {
 	private function expectPositionalParam(p: HxArrowParam): HxType {
 		return switch p {
 			case Positional(type): type;
-			case Named(_): throw 'expected HxArrowParam.Positional, got Named';
-			case OptionalNamed(_): throw 'expected HxArrowParam.Positional, got OptionalNamed';
+			case NamedParam(_): throw 'expected HxArrowParam.Positional, got NamedParam';
+			case OptionalNamedParam(_): throw 'expected HxArrowParam.Positional, got OptionalNamedParam';
 		};
 	}
 

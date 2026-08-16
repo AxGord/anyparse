@@ -88,8 +88,10 @@ interface GrammarPlugin {
 	 * type-position references (field/var type annotations, enum-ctor
 	 * parameter types, …) as addressable nodes. `parseFile` deliberately
 	 * drops these to keep the tree lean for `ast`/`search`/`refs`/`meta`;
-	 * this parallel projection is consumed ONLY by the `uses` walker, so
-	 * those four consumers stay byte-identical by construction.
+	 * this parallel projection is read by `uses` / `blast` / `mentions` and by
+	 * the operations that REWRITE what it reports (`CrossRename`, `MoveSymbol`,
+	 * `MoveMember`, `PreferMapType`, `ShortenTypeRef`) plus the completeness gate
+	 * of `Naming` - never by those four, which stay byte-identical by construction.
 	 *
 	 * See `docs/cli-query-tool.md` (`apq uses`) and `TypeRefShape`.
 	 */
