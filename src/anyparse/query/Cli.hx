@@ -6039,6 +6039,18 @@ final class Cli {
 		sysPrint('member. Receivers whose type does not resolve, a dotted static receiver\n');
 		sysPrint('spelling no legal path to the declaring module, super-access,\n');
 		sysPrint('using-extension calls, and overrides are left as loud compile errors.\n');
+		sysPrint('An enum-abstract VALUE also renames where Haxe resolves it from the\n');
+		sysPrint('EXPECTED type: a bare VALUE in RETURN position whose enclosing function\n');
+		sysPrint('declares the abstract as its return type (one Null<..> wrapper unwrapped,\n');
+		sysPrint('the annotation resolved from the READING file by whole path, never by\n');
+		sysPrint('last segment), reached through the type-transparent slots under a return\n');
+		sysPrint('— parentheses, both ternary and if-expression arms, and the last\n');
+		sysPrint('statement of a switch-expression arm. A nested function owns its own\n');
+		sysPrint('return type and stops the proof; a member the enclosing type or an\n');
+		sysPrint('ancestor declares shadows the expected-type reading and is left alone.\n');
+		sysPrint('An expected-type value OUTSIDE return position (x == VALUE, an annotated\n');
+		sysPrint('assignment, a typed argument) or one in a function with no return\n');
+		sysPrint('annotation is not proven and is left for the compiler to reject.\n');
 		sysPrint('A member a #if region\n');
 		sysPrint('declares once per branch is one logical member: every branch declaration\n');
 		sysPrint('moves in the same edit set. Refuses an override member,\n');

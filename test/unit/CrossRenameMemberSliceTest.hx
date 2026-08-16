@@ -586,4 +586,324 @@ class CrossRenameMemberSliceTest extends Test {
 		Assert.isNull(changeOrNull(changes, 'zzz/Other.hx'));
 	}
 
+	/**
+	 * Haxe resolves an unqualified `enum abstract` value from the EXPECTED type, so a bare
+	 * `return SAME;` names the value of whatever type the function is declared to return. TWO
+	 * abstracts here declare `SAME`, and two functions differing ONLY in their declared return
+	 * spell the identical `return SAME;` — the `Colour` one renames, the `Shade` one must not.
+	 * One expected source carries both halves, so neither assertion is satisfied by the input.
+	 */
+	public function testExpectedReturnRenamesOnlyTheDeclaredReturnType(): Void {
+		final a: String = 'enum abstract Colour(Int) {\n\tvar SAME = 0;\n\tvar RED = 1;\n}';
+		final s: String = 'enum abstract Shade(Int) {\n\tvar SAME = 10;\n\tvar DARK = 11;\n}';
+		final b: String = 'class Palette {\n\tpublic static function colour():Colour return SAME;\n'
+			+ '\tpublic static function shade():Shade return SAME;\n}';
+		final expectedB: String = 'class Palette {\n\tpublic static function colour():Colour return EQUAL;\n'
+			+ '\tpublic static function shade():Shade return SAME;\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'SAME', 'EQUAL', [
+			{ file: 'a.hx', source: a },
+			{ file: 's.hx', source: s },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(1, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * Every TYPE-TRANSPARENT slot under a `return` carries the declared return type down
+	 * unchanged: a parenthesis, BOTH arms of a ternary and of an `if` expression (one fixture
+	 * apiece, so neither arm index can be dropped without a failure), the last statement of a
+	 * `switch`-expression arm, and a `Null<…>` wrapper (Haxe propagates the expected type
+	 * through it). All seven rewrite; the sibling returning the OTHER abstract that declares the
+	 * same value does not.
+	 */
+	public function testExpectedReturnRewritesTypeTransparentSlots(): Void {
+		final a: String = 'enum abstract Colour(Int) {\n\tvar SAME = 0;\n\tvar RED = 1;\n}';
+		final s: String = 'enum abstract Shade(Int) {\n\tvar SAME = 10;\n\tvar DARK = 11;\n}';
+		final b: String = 'class Palette {\n\tpublic static function par():Colour return (SAME);\n'
+			+ '\tpublic static function ternThen(f:Bool):Colour return f ? SAME : RED;\n'
+			+ '\tpublic static function ternElse(f:Bool):Colour return f ? RED : SAME;\n'
+			+ '\tpublic static function iffThen(f:Bool):Colour {\n\t\treturn if (f) SAME else RED;\n\t}\n'
+			+ '\tpublic static function iffElse(f:Bool):Colour {\n\t\treturn if (f) RED else SAME;\n\t}\n'
+			+ '\tpublic static function sw(i:Int):Colour {\n\t\treturn switch (i) {\n\t\t\tcase 1: SAME;\n\t\t\tcase _: RED;\n\t\t}\n\t}\n'
+			+ '\tpublic static function nul():Null<Colour> return SAME;\n' + '\tpublic static function other():Shade return SAME;\n}';
+		final expectedB: String = 'class Palette {\n\tpublic static function par():Colour return (EQUAL);\n'
+			+ '\tpublic static function ternThen(f:Bool):Colour return f ? EQUAL : RED;\n'
+			+ '\tpublic static function ternElse(f:Bool):Colour return f ? RED : EQUAL;\n'
+			+ '\tpublic static function iffThen(f:Bool):Colour {\n\t\treturn if (f) EQUAL else RED;\n\t}\n'
+			+ '\tpublic static function iffElse(f:Bool):Colour {\n\t\treturn if (f) RED else EQUAL;\n\t}\n'
+			+ '\tpublic static function sw(i:Int):Colour {\n\t\treturn switch (i) {\n\t\t\tcase 1: EQUAL;\n\t\t\tcase _: RED;\n\t\t}\n\t}\n'
+			+ '\tpublic static function nul():Null<Colour> return EQUAL;\n' + '\tpublic static function other():Shade return SAME;\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'SAME', 'EQUAL', [
+			{ file: 'a.hx', source: a },
+			{ file: 's.hx', source: s },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(7, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * A DOTTED return type must name the declaring module WHOLE, never merely share its last
+	 * segment — the defect `f3b46467` removed from the static-receiver match and `64a4ae5a` from
+	 * `move-member`. Both functions here are written `.Colour`; only the one spelling THIS
+	 * module's path renames, and the foreign `other.Colour` one survives byte-for-byte.
+	 */
+	public function testExpectedReturnDottedTypeMatchesTheWholeModulePath(): Void {
+		final a: String = 'package pkg;\n\nenum abstract Colour(Int) {\n\tvar SAME = 0;\n\tvar RED = 1;\n}';
+		final b: String = 'class Z {\n\tstatic function near():pkg.Colour return SAME;\n'
+			+ '\tstatic function far():other.Colour return SAME;\n}';
+		final expectedB: String = 'class Z {\n\tstatic function near():pkg.Colour return EQUAL;\n'
+			+ '\tstatic function far():other.Colour return SAME;\n}';
+		final changes: Array<FileChange> = okChanges('pkg/Colour.hx', a, 'SAME', 'EQUAL', [
+			{ file: 'pkg/Colour.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(1, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * A member INHERITED from a base class SHADOWS the expected-type resolution — verified on
+	 * Haxe 4.3.7, `class Main extends Base` whose `Base` declares `public var SAME:Colour` prints
+	 * the FIELD's value from `function inherited():Colour return SAME;`. `Refs` resolves
+	 * lexically, in one file, and cannot see that declaration, so the index is asked instead. The
+	 * sibling class that inherits nothing still renames, so the input satisfies neither half.
+	 */
+	public function testExpectedReturnLeavesAnInheritedShadowAlone(): Void {
+		final a: String = 'enum abstract Colour(Int) {\n\tvar SAME = 0;\n\tvar RED = 1;\n}';
+		final base: String = 'class Base {\n\tpublic var SAME:Colour = Colour.RED;\n\tpublic function new() {}\n}';
+		final b: String = 'class Holder extends Base {\n\tpublic function new() super();\n'
+			+ '\tpublic function pick():Colour return SAME;\n}\n\n'
+			+ 'class Free {\n\tpublic static function pick():Colour return SAME;\n}';
+		final expectedB: String = 'class Holder extends Base {\n\tpublic function new() super();\n'
+			+ '\tpublic function pick():Colour return SAME;\n}\n\n'
+			+ 'class Free {\n\tpublic static function pick():Colour return EQUAL;\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'SAME', 'EQUAL', [
+			{ file: 'a.hx', source: a },
+			{ file: 'base.hx', source: base },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(1, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * A NESTED function owns its own return type, so the outer function's proof stops at it. The
+	 * inner one returning the OTHER abstract and the one declaring no return type at all both
+	 * keep the old name, while the outer function's own `return` renames.
+	 */
+	public function testExpectedReturnStopsAtANestedFunction(): Void {
+		final a: String = 'enum abstract Colour(Int) {\n\tvar SAME = 0;\n\tvar RED = 1;\n}';
+		final s: String = 'enum abstract Shade(Int) {\n\tvar SAME = 10;\n\tvar DARK = 11;\n}';
+		final b: String = 'class Z {\n\tstatic function outer():Colour {\n'
+			+ '\t\tvar inner = function():Shade return SAME;\n\t\tvar bare = function() return SAME;\n\t\treturn SAME;\n\t}\n}';
+		final expectedB: String = 'class Z {\n\tstatic function outer():Colour {\n'
+			+ '\t\tvar inner = function():Shade return SAME;\n\t\tvar bare = function() return SAME;\n\t\treturn EQUAL;\n\t}\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'SAME', 'EQUAL', [
+			{ file: 'a.hx', source: a },
+			{ file: 's.hx', source: s },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(1, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * A NAMED function expression (`function g():Shade …`) is in neither the grammar's function
+	 * nor its lambda kind list, so the boundary is derived from the function-BODY child instead
+	 * of a kind name. Without that derivation its `return SAME;` would be attributed to the
+	 * enclosing `Colour` function and rewritten into another abstract's value.
+	 */
+	public function testExpectedReturnStopsAtANamedFunctionExpression(): Void {
+		final a: String = 'enum abstract Colour(Int) {\n\tvar SAME = 0;\n\tvar RED = 1;\n}';
+		final s: String = 'enum abstract Shade(Int) {\n\tvar SAME = 10;\n\tvar DARK = 11;\n}';
+		final b: String = 'class Z {\n\tstatic function outer():Colour {\n'
+			+ '\t\tvar named = function g():Shade return SAME;\n\t\treturn SAME;\n\t}\n}';
+		final expectedB: String = 'class Z {\n\tstatic function outer():Colour {\n'
+			+ '\t\tvar named = function g():Shade return SAME;\n\t\treturn EQUAL;\n\t}\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'SAME', 'EQUAL', [
+			{ file: 'a.hx', source: a },
+			{ file: 's.hx', source: s },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(1, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * A LOCAL of the same name binds the identifier, so `return SAME;` under it reads that local
+	 * and not the member — Haxe binds a local ahead of the expected type. The sibling function
+	 * with no such local still renames.
+	 */
+	public function testExpectedReturnLeavesALocalBindingAlone(): Void {
+		final a: String = 'enum abstract Colour(Int) {\n\tvar SAME = 0;\n\tvar RED = 1;\n}';
+		final b: String = 'class Z {\n\tstatic function shadowed():Colour {\n'
+			+ '\t\tfinal SAME:Colour = Colour.RED;\n\t\treturn SAME;\n\t}\n\tstatic function plain():Colour return SAME;\n}';
+		final expectedB: String = 'class Z {\n\tstatic function shadowed():Colour {\n'
+			+ '\t\tfinal SAME:Colour = Colour.RED;\n\t\treturn SAME;\n\t}\n\tstatic function plain():Colour return EQUAL;\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'SAME', 'EQUAL', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(1, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * Only an `enum abstract` VALUE is expected-type-resolvable. Measured on Haxe 4.3.7, a PLAIN
+	 * abstract's static is not — `abstract Plain(Int) { public static final PX:Plain; }` with
+	 * `function f():Plain return PX;` is `Unknown identifier : PX` — so the scan must not claim
+	 * that site, whose bare `PX` cannot be this member under any reading.
+	 */
+	public function testPlainAbstractStaticIsNotAnExpectedTypeValue(): Void {
+		final a: String = 'abstract Plain(Int) {\n\tpublic static final PX:Plain = cast 5;\n\tpublic static final QX:Plain = cast 6;\n}';
+		final b: String = 'class Z {\n\tstatic function get():Plain return PX;\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'PX', 'ZX', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(1, changes.length);
+		Assert.isNull(changeOrNull(changes, 'b.hx'));
+	}
+
+	/**
+	 * A supertype the index CANNOT SEE refuses the whole enclosing type. `supertypeDeclaresMember`
+	 * answers `false` both when no ancestor declares the name and when the ancestor is not indexed,
+	 * and only the first reading is a proof — compiled and run with `Base` outside the scope, the
+	 * rewrite silently changed the returned value from the inherited field to the constant. The
+	 * sibling class that inherits nothing still renames, so the gate is not simply switched off.
+	 */
+	public function testExpectedReturnLeavesAnUnprovableSupertypeChainAlone(): Void {
+		final a: String = 'enum abstract Colour(Int) {\n\tvar SAME = 0;\n\tvar RED = 1;\n}';
+		final b: String = 'class Holder extends Base {\n\tpublic function new() super();\n'
+			+ '\tpublic function pick():Colour return SAME;\n}\n\n'
+			+ 'class Free {\n\tpublic static function pick():Colour return SAME;\n}';
+		final expectedB: String = 'class Holder extends Base {\n\tpublic function new() super();\n'
+			+ '\tpublic function pick():Colour return SAME;\n}\n\n'
+			+ 'class Free {\n\tpublic static function pick():Colour return EQUAL;\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'SAME', 'EQUAL', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(1, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * A MODULE-level binding of the name shadows the expected type — measured on Haxe 4.3.7, a
+	 * module-level `var SAME:Colour` wins over `function pick():Colour return SAME;` both from a
+	 * module function and from a class method in the same file, and `Refs` binds neither read. The whole FILE is refused, and a `#if`-GUARDED one just as much — it is a child of the
+	 * region, not of the module, so a gate reading direct children alone let exactly the
+	 * branch-dependent case through. A file with no module-level binding still renames.
+	 */
+	public function testExpectedReturnRefusesAFileDeclaringAModuleBinding(): Void {
+		final a: String = 'enum abstract Colour(Int) {\n\tvar SAME = 0;\n\tvar RED = 1;\n}';
+		final m: String = 'var SAME:Colour = Colour.RED;\n\n' + 'function pick():Colour return SAME;\n\n'
+			+ 'class Z {\n\tpublic static function grab():Colour return SAME;\n}';
+		final g: String = '#if !js\nvar SAME:Colour = Colour.RED;\n#end\n\n'
+			+ 'class Guarded {\n\tpublic static function grab():Colour return SAME;\n}';
+		final b: String = 'class Clean {\n\tpublic static function pick():Colour return SAME;\n}';
+		final expectedB: String = 'class Clean {\n\tpublic static function pick():Colour return EQUAL;\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'SAME', 'EQUAL', [
+			{ file: 'a.hx', source: a },
+			{ file: 'm.hx', source: m },
+			{ file: 'g.hx', source: g },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.isNull(changeOrNull(changes, 'm.hx'));
+		Assert.isNull(changeOrNull(changes, 'g.hx'));
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+	}
+
+	/**
+	 * A TYPE-PARAMETER CONSTRAINT projects into the same slot as a return type —
+	 * `function f<T:Colour>()` and `function f():Colour` give byte-identical trees — so the slot
+	 * alone would read an un-annotated generic function as returning the abstract. The parameter
+	 * list still stands between a constraint and the body, which is what separates them. The
+	 * annotated sibling still renames.
+	 */
+	public function testExpectedReturnIgnoresATypeParameterConstraint(): Void {
+		final a: String = 'enum abstract Colour(Int) {\n\tvar SAME = 0;\n\tvar RED = 1;\n}';
+		final b: String = 'class Z {\n\tstatic function generic<T:Colour>() return SAME;\n'
+			+ '\tstatic function annotated():Colour return SAME;\n}';
+		final expectedB: String = 'class Z {\n\tstatic function generic<T:Colour>() return SAME;\n'
+			+ '\tstatic function annotated():Colour return EQUAL;\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'SAME', 'EQUAL', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(1, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * An EXPLICIT `static` inside an `enum abstract` is not a value: measured on Haxe 4.3.7,
+	 * `public static final PX:Colour = RED;` with `function f():Colour return PX;` is
+	 * `Identifier 'PX' is not part of Colour`. The host kind alone accepts it, so the modifier is
+	 * read as well — the twin of the plain-abstract guard, one host kind over.
+	 */
+	public function testEnumAbstractExplicitStaticIsNotAnExpectedTypeValue(): Void {
+		final a: String = 'enum abstract Colour(Int) {\n\tvar RED = 1;\n\tvar BLUE = 2;\n\n\tpublic static final PX:Colour = RED;\n}';
+		final b: String = 'class Z {\n\tstatic function get():Colour return PX;\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'PX', 'ZX', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(1, changes.length);
+		Assert.isNull(changeOrNull(changes, 'b.hx'));
+	}
+
+	/**
+	 * A `#if`-bodied function keeps its return type: the region projects as a conditional BODY
+	 * holding each branch's own body, which the function-boundary derivation would otherwise read
+	 * as a nested function of its own — with no return type — and every `return` inside it would
+	 * go unproven. Both branches rewrite, which is the only correct answer: rewriting one leaves
+	 * the other build target naming a value that no longer exists.
+	 */
+	public function testExpectedReturnCoversAConditionalFunctionBody(): Void {
+		final a: String = 'enum abstract Colour(Int) {\n\tvar SAME = 0;\n\tvar RED = 1;\n}';
+		final b: String = 'class Z {\n\tstatic function pick():Colour\n\t#if js\n\t\treturn SAME;\n\t#else\n\t\treturn SAME;\n\t#end\n}';
+		final expectedB: String =
+			'class Z {\n\tstatic function pick():Colour\n\t#if js\n\t\treturn EQUAL;\n\t#else\n\t\treturn EQUAL;\n\t#end\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'SAME', 'EQUAL', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(2, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * Only a NULLABLE wrapper is unwrapped. Haxe propagates the expected type through
+	 * `Null<Colour>` (verified by compiling and running one), and through nothing else the
+	 * nullability vocabulary happens to list: `Dynamic<Colour>` does not resolve a bare value at
+	 * all, so a rewrite there would be claiming a site the language never gave this member.
+	 */
+	public function testExpectedReturnUnwrapsOnlyANullableWrapper(): Void {
+		final a: String = 'enum abstract Colour(Int) {\n\tvar SAME = 0;\n\tvar RED = 1;\n}';
+		final b: String = 'class Z {\n\tstatic function nul():Null<Colour> return SAME;\n'
+			+ '\tstatic function dyn():Dynamic<Colour> return SAME;\n}';
+		final expectedB: String = 'class Z {\n\tstatic function nul():Null<Colour> return EQUAL;\n'
+			+ '\tstatic function dyn():Dynamic<Colour> return SAME;\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'SAME', 'EQUAL', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(1, changeFor(changes, 'b.hx').count);
+	}
+
 }

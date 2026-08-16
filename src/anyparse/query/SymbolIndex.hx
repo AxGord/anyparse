@@ -1971,4 +1971,29 @@ final class SymbolIndex {
 		return found;
 	}
 
+	/**
+	 * Whether EVERY supertype reference of `typeName`, transitively, names a declaration this
+	 * index holds. `supertypeDeclaresMember` answers `false` both when no ancestor declares the
+	 * member and when an ancestor is not indexed at all, and only the FIRST reading is a proof —
+	 * a consumer that must prove the ABSENCE of an inherited member (an expected-type rewrite,
+	 * which a shadowing field silently redirects) has to ask this too. Walks the same simple-name
+	 * hops `supertypeDeclares` walks, so the two agree about which links exist; `supertypes`
+	 * carries `implements` targets as well as `extends`, so an unindexed interface refuses too.
+	 */
+	public function supertypeChainResolved(typeName: String): Bool {
+		return supertypeChainWalk(typeName, []);
+	}
+
+	/**
+	 * `supertypeChainResolved`'s cycle-guarded recursion. A name already visited answers true —
+	 * whatever made it unresolvable was reported by the visit that pushed it.
+	 */
+	private function supertypeChainWalk(typeName: String, seen: Array<String>): Bool {
+		if (seen.contains(typeName)) return true;
+		seen.push(typeName);
+		for (t in declsNamed(typeName)) for (sup in t.supertypes) if (declsNamed(sup).length == 0 || !supertypeChainWalk(sup, seen))
+			return false;
+		return true;
+	}
+
 }

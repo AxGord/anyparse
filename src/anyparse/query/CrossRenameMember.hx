@@ -7,23 +7,29 @@ import anyparse.query.RefactorSupport.ModulePath;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
+import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.OverrideFamilyMember;
+import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
 using Lambda;
 
 /**
  * One resolved member the cursor sits on: its declaring type name, the
- * member name, whether it is `static` / `override`, and the enclosing
- * type declaration (for the same-type name-collision check).
+ * member name, whether it is `static` / `override`, whether it is a value
+ * of an `enum abstract` (the one member class Haxe resolves from the
+ * EXPECTED type), and the enclosing type declaration (for the same-type
+ * name-collision check).
  */
 private typedef MemberTarget = {
 	var typeName: String;
 	var memberName: String;
 	var isStatic: Bool;
 	var isOverride: Bool;
+	var isEnumValue: Bool;
 	var srcDecl: TypeDeclMatch;
 }
 
@@ -76,6 +82,10 @@ private typedef LocatedOffsets = {
  *    the source type, by the same resolution the instance receivers go through.
  *    Unqualified, a value of an `enum abstract` reads in a pattern as a reference to the
  *    member, never as a capture.
+ *  - An `enum abstract` VALUE spelled BARE in RETURN position, which Haxe resolves from the
+ *    EXPECTED type — proven by the enclosing function's DECLARED return type resolved from
+ *    the reading file, and reached through the type-TRANSPARENT slots under a `return`. See
+ *    `expectedReturnOffsets` for the whole proof and its residual.
  *  - INSTANCE members: every `obj.member` whose receiver `obj` resolves
  *    (through the scope resolver + `TypeInfoProvider.declaredTypes`) to a
  *    local / parameter / field DECLARED of the source type. A receiver
@@ -136,12 +146,19 @@ private typedef LocatedOffsets = {
  * pattern keeps the old name and the compiler rejects it by name — Haxe never binds an
  * upper-case pattern identifier, so the leftover is loud, never a silent capture.
  *
- * NOT yet rewritten, and the largest remaining residual: an unqualified value the compiler
- * resolves from the EXPECTED TYPE — `return Seam;` inside a function returning the abstract,
- * a ternary arm of such a return, `x == Seam`. Measured over 89 enum abstracts of this repo
- * and of a large app: 193 such sites, 137 of them in return position. Each is a loud
- * `Unknown identifier` after the rename, never a silent capture, because no local binds the
- * name; proving one needs the expected type at the site, which this op does not model.
+ * An `enum abstract` value the compiler resolves from the EXPECTED TYPE renames in RETURN
+ * position only (`expectedReturnOffsets`). The expected-type sites still NOT proven, each
+ * measured on this repo: an `x == VALUE` comparison, an annotated assignment, an argument in
+ * a typed parameter slot, a function with NO return annotation, and the value slots the
+ * descent does not model (a block expression's last statement, a `try` expression).
+ *
+ * A leftover is USUALLY loud, but calling it always loud would be wrong: `import pkg.Other;`
+ * of a second enum abstract brings ITS same-named value into simple-name scope, so an
+ * un-annotated `function f() return Seam;` silently returns the OTHER abstract's value after
+ * the rename instead of failing (verified on 4.3.7). That import path is also the largest
+ * un-modelled reference class overall — 453 of the 461 bare return-position sites in this
+ * repo are `ExitCode` values read that way inside `: Int` functions, which no expected type
+ * can prove.
  *
  * Coordinate convention: `line` / `col` are 1-based, exactly as
  * `apq refs` prints them — identical to `Rename` / `CrossRename`.
@@ -151,7 +168,7 @@ final class CrossRenameMember {
 
 	/** The advisory appended to every successful member rename. */
 	private static final ADVISORY: String =
-		'member rename resolves instance receivers and switch subjects via declared types only — unresolved receivers and subjects (chained calls, un-annotated locals, casts), an unqualified value the compiler resolves from the EXPECTED type (a bare `return VALUE;` of an enum abstract), super-access, `using` extension calls, aliased-import homonyms, and overrides declared outside this scope are left as loud compile errors; verify by hand.';
+		'member rename resolves instance receivers, switch subjects and expected-type returns via declared types only — unresolved receivers and subjects (chained calls, un-annotated locals, casts), an expected-type value OUTSIDE return position (`x == VALUE`, an annotated assignment, a typed argument) or in a function with no return annotation, an enum-abstract value brought into scope by importing its type, super-access, `using` extension calls, aliased-import homonyms, and overrides declared outside this scope are left for the compiler to reject; verify by hand.';
 
 	/**
 	 * Rename the member declaration at `line:col` (in `cursorFile` /
@@ -273,10 +290,14 @@ final class CrossRenameMember {
 						final groupSpan: Span = RefactorSupport.declGroupSpan(childNN, host, spanNN);
 						var isStatic: Bool = RefactorSupport.implicitlyStaticMember(decl.kind, kind, refShape);
 						var isOverride: Bool = false;
+						var saysStatic: Bool = false;
 						for (j in 0...i) {
 							final s: Null<Span> = siblings[j].span;
 							if (!(s != null && s.from >= groupSpan.from && s.to <= spanNN.from)) continue;
-							if (siblings[j].kind == 'Static') isStatic = true;
+							if (siblings[j].kind == 'Static') {
+								isStatic = true;
+								saysStatic = true;
+							}
 							if (siblings[j].kind == 'Override') isOverride = true;
 						}
 						best = {
@@ -284,6 +305,16 @@ final class CrossRenameMember {
 							memberName: name,
 							isStatic: isStatic,
 							isOverride: isOverride,
+							// A VALUE of an `enum abstract` — the exact member class Haxe resolves from the
+							// expected type. Measured on 4.3.7, a plain abstract's static is NOT one
+							// (`abstract Plain(Int) { public static final PX: Plain; }` with `function f():
+							// Plain return PX;` is `Unknown identifier : PX`), so the host kind alone would
+							// over-claim and `implicitStaticFieldHostKinds` cannot stand in for it. Neither
+							// is an EXPLICIT `static` inside an `enum abstract` — the same probe, one host
+							// kind over: `public static final PX: Colour = RED;` is `Identifier 'PX' is not
+							// part of Colour`. A value is the member that says no modifier at all.
+							isEnumValue: decl.kind == refShape.enumAbstractDeclKind && !saysStatic
+							&& RefactorSupport.implicitlyStaticMember(decl.kind, kind, refShape),
 							srcDecl: decl
 						};
 					}
@@ -387,6 +418,7 @@ final class CrossRenameMember {
 			if (qualified.error != null) return Err('${entry.file}: ${qualified.error}');
 			for (off in qualified.offsets) addOff(off);
 			for (off in patternConstantOffsets(entry.source, entry.tree, target, plugin, refShape, index)) addOff(off);
+			for (off in expectedReturnOffsets(entry.source, entry.file, entry.tree, target, refShape, index, cursorFile)) addOff(off);
 			if (offsets.length == 0) continue;
 
 			final edits: Array<{ span: Span, text: String }> = [
@@ -651,6 +683,307 @@ final class CrossRenameMember {
 		return out;
 	}
 
+	/**
+	 * The member-token offset of every BARE `<member>` in one file that an enclosing function's
+	 * DECLARED RETURN TYPE proves to be this value. Haxe resolves an unqualified `enum abstract`
+	 * value from the EXPECTED type, so `return Seam;` names `Colour.Seam` when — and only when —
+	 * the function returning it is written `: Colour`; a same-named value of a DIFFERENT abstract
+	 * in the same file stays untouched because its own function returns that other type.
+	 *
+	 * Both halves of the proof are POSITIVE — an enumeration of what the operation can prove, not
+	 * a list of shapes to avoid, so a construct nobody has thought of yet fails by construction:
+	 *
+	 *  - The TYPE. The return annotation's VERBATIM source (the projection drops a type's
+	 *    arguments from its name, so the span is read, not `QueryNode.name`) with one
+	 *    `Null<…>`-style wrapper unwrapped is handed to `SymbolIndex.resolveTypeRefsFrom` FROM THE
+	 *    READING FILE — the same whole-dotted-path / import / same-package / root-package rules
+	 *    the compiler applies, which is why a last-segment match (the defect `f3b46467` and
+	 *    `64a4ae5a` each removed once) cannot creep back in here. It must resolve to exactly ONE
+	 *    declaration and that one must be the type at the cursor; a return type resolving to
+	 *    nothing (a library type, a wildcard import the index does not model) proves nothing.
+	 *  - The POSITION. Only value slots reached from a `return` through TYPE-TRANSPARENT nodes:
+	 *    a parenthesis, both arms of a ternary or of an `if` expression, and the last statement of
+	 *    each `switch`-expression arm. Each carries the function's return type down unchanged.
+	 *
+	 * Three refusals sit outside that proof, each measured on 4.3.7 rather than assumed: an
+	 * occurrence the file's own scope BINDS (`var Seam = pick(); return Seam;` reads that local); a
+	 * file declaring a MODULE-level binding of the name, which beats the expected type and which
+	 * `Refs` does not index; and a hosting type — or an ancestor of it, or an ancestor the index
+	 * cannot even see — that declares the name (`hostShadows`).
+	 */
+	private static function expectedReturnOffsets(
+		source: String, file: String, tree: QueryNode, target: MemberTarget, refShape: RefShape, index: SymbolIndex, cursorFile: String
+	): Array<Int> {
+		if (!target.isEnumValue) return [];
+		// A WHOLE-WORD probe, not a substring one: `RED` occurs inside `COLORED` and inside every
+		// comment that mentions it, and the scan below is not free.
+		if (RefactorSupport.identTokenOffset(source, new Span(0, source.length), target.memberName) < 0) return [];
+		// A MODULE-level binding of the name shadows the expected type — measured on 4.3.7, a
+		// module-level `var same: Colour` wins over `function pick(): Colour return same;`, from a
+		// module function AND from a class method in the same file. `Refs` binds neither (the read
+		// comes back with no binding span), and a hosting TYPE is the wrong question for the
+		// second one, so the whole file is refused instead.
+		if (declaresModuleBinding(tree, target.memberName, refShape)) return [];
+		final seams: Null<ReturnSeams> = returnSeamsOf(target.memberName, refShape);
+		if (seams == null) return [];
+		// Strict null-safety takes a struct literal's field type from the DECLARED type, not the
+		// narrowed one, so the proven-non-null seams need their own binding.
+		final grammar: ReturnSeams = seams;
+		final scan: ReturnScan = {
+			source: source,
+			file: file,
+			cursorFile: cursorFile,
+			target: target,
+			seams: grammar,
+			index: index,
+			tree: tree,
+			refShape: refShape,
+			bound: null,
+			proven: [],
+			out: []
+		};
+		scanReturnPositions(tree, null, null, scan);
+		return scan.out;
+	}
+
+	/**
+	 * Whether the MODULE this file declares carries a top-level binding of `memberName` — a Haxe
+	 * 4.2 module-level `var` / `function`, which resolves unqualified everywhere in the module and
+	 * BEATS the expected type. Its reads are not indexed by `Refs`, so nothing downstream would
+	 * exclude them; refusing the file is the positive answer. Conditional-compilation regions are
+	 * descended into: a guarded binding is a child of the REGION, not of the module.
+	 */
+	private static function declaresModuleBinding(node: QueryNode, memberName: String, refShape: RefShape): Bool {
+		final conditional: Null<String> = refShape.conditionalMemberKind;
+		for (child in node.children) {
+			if (child.name == memberName && refShape.declHostKinds.contains(child.kind)) return true;
+			// A `#if`-guarded top-level binding is a child of the REGION, not of the module — probed:
+			// `#if js var same: Colour; #end` projects `(Conditional (VarDecl same …))`. A gate that
+			// read the module's direct children alone would let exactly the branch-dependent case
+			// through, which is the one no single-target compile can catch either.
+			if (child.kind == conditional && declaresModuleBinding(child, memberName, refShape)) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * The offsets this file's own scope BINDS to a local, a parameter or a field — never the
+	 * member. Computed on FIRST use: it costs a whole-file resolution pass, and a file that
+	 * mentions the name may hold no proven return position at all.
+	 */
+	private static function boundOffsets(scan: ReturnScan): Array<Int> {
+		final memo: Null<Array<Int>> = scan.bound;
+		if (memo != null) return memo;
+		final hits: Array<Int> = [
+			for (h in Refs.find(scan.target.memberName, scan.tree, scan.refShape))
+				if ((h.kind == RefKind.Read || h.kind == RefKind.Write) && h.bindingSpan != null) h.span.from
+		];
+		scan.bound = hits;
+		return hits;
+	}
+
+	/**
+	 * Walk one subtree, carrying the nearest enclosing FUNCTION and the type HOSTING it. A
+	 * function's proof is asked only when a `return` under it actually yields candidate offsets,
+	 * because asking costs an index resolution; `provenReturnType` then memoizes it per function.
+	 */
+	private static function scanReturnPositions(node: QueryNode, fn: Null<QueryNode>, host: Null<String>, scan: ReturnScan): Void {
+		final s: ReturnSeams = scan.seams;
+		if (s.opaqueKinds.contains(node.kind)) return;
+		final decl: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
+		final owner: Null<String> = decl != null ? decl.name : host;
+		final inner: Null<QueryNode> = isFunctionNode(node, s) ? node : fn;
+		if (inner != null && s.returnKinds.contains(node.kind) && node.children.length > 0) {
+			final candidates: Array<Int> = [];
+			collectValueSlots(node.children[0], s, candidates);
+			if (candidates.length > 0 && provenReturnType(inner, owner, scan)) for (off in candidates) if (
+				!boundOffsets(scan).contains(off) && !scan.out.contains(off)
+			)
+				scan.out.push(off);
+		}
+		for (c in node.children) scanReturnPositions(c, inner, owner, scan);
+	}
+
+	/**
+	 * Whether `fn`'s declared return type proves this member AND no member of the hosting type
+	 * shadows the expected-type reading — memoized on the function's own span, so a function with
+	 * several qualifying returns resolves its type once.
+	 */
+	private static function provenReturnType(fn: QueryNode, host: Null<String>, scan: ReturnScan): Bool {
+		final at: Null<Span> = fn.span;
+		if (at == null) return false;
+		final memo: Null<Bool> = scan.proven[at.from];
+		if (memo != null) return memo;
+		final answer: Bool = returnsSourceType(fn, scan) && !hostShadows(host, scan.target.memberName, scan.index);
+		scan.proven[at.from] = answer;
+		return answer;
+	}
+
+	/**
+	 * The seams `expectedReturnOffsets` reads, or null when the grammar names none of the four
+	 * load-bearing ones — identifiers, function bodies, value returns and type annotations. Every
+	 * other seam defaults to empty, which NARROWS what the scan proves instead of widening it.
+	 */
+	private static function returnSeamsOf(memberName: String, refShape: RefShape): Null<ReturnSeams> {
+		final bodyKinds: Null<Array<String>> = refShape.functionBodyKinds;
+		final returnKinds: Null<Array<String>> = refShape.valueReturnKinds;
+		final typeKinds: Null<Array<String>> = refShape.typeAnnotationKinds;
+		if (bodyKinds == null || returnKinds == null || typeKinds == null) return null;
+		final branchKinds: Array<String> = [];
+		final caseBranch: Null<String> = refShape.caseBranchKind;
+		if (caseBranch != null) branchKinds.push(caseBranch);
+		final defaultBranch: Null<String> = refShape.defaultBranchKind;
+		if (defaultBranch != null) branchKinds.push(defaultBranch);
+		final armHosts: Array<String> = (refShape.ifExpressionKinds ?? []).copy();
+		final ternary: Null<String> = refShape.ternaryKind;
+		if (ternary != null) armHosts.push(ternary);
+		return {
+			memberName: memberName,
+			identKind: refShape.identKind,
+			functionKinds: (refShape.functionKinds ?? []).concat(refShape.lambdaKinds ?? []).concat(refShape.inlineFunctionKinds ?? []),
+			bodyKinds: bodyKinds,
+			typeKinds: typeKinds,
+			returnKinds: returnKinds,
+			parenKind: refShape.parenKind,
+			armHostKinds: armHosts,
+			switchKinds: refShape.switchKinds ?? [],
+			branchKinds: branchKinds,
+			exprStatementKind: refShape.exprStatementKind,
+			nullableWrappers: refShape.nullableReturnMarkerTypes ?? [],
+			opaqueKinds: refShape.opaqueKinds ?? []
+		};
+	}
+
+	/**
+	 * Whether `node` owns a return type of its own: a kind the grammar NAMES as a function or
+	 * lambda, or ANY node carrying a function-BODY child — the derivation that also catches a
+	 * shape no kind list mentions (Haxe's named function expression `function g(): T …`, which is
+	 * in neither `functionKinds` nor `lambdaKinds`). Missing one would attribute an inner
+	 * function's `return` to the OUTER function's declared type, which is the one way this scan
+	 * could rewrite a value of another abstract.
+	 */
+	private static function isFunctionNode(node: QueryNode, s: ReturnSeams): Bool {
+		// A BODY is never a function: a conditional-compilation body (`CondBody`) holds each
+		// branch's own body as a child, so without this it read as a function of its own — with no
+		// return type — and silently suppressed every `return` inside a `#if`-bodied function.
+		return !s.bodyKinds.contains(node.kind)
+			&& (s.functionKinds.contains(node.kind) || node.children.exists(c -> s.bodyKinds.contains(c.kind)));
+	}
+
+	/**
+	 * Whether `fn`'s DECLARED return type resolves, FROM `file`, to exactly the type the cursor's
+	 * member belongs to. One nullable wrapper is unwrapped first: Haxe propagates the expected
+	 * type through it, verified by compiling `function nul(): Null<Colour> return SAME;` on 4.3.7.
+	 */
+	private static function returnsSourceType(fn: QueryNode, scan: ReturnScan): Bool {
+		final ret: Null<QueryNode> = returnTypeChild(fn, scan.source, scan.seams);
+		if (ret == null) return false;
+		final span: Null<Span> = ret.span;
+		if (span == null) return false;
+		final written: String = unwrapTypeWrapper(scan.source.substring(span.from, span.to).trim(), scan.seams.nullableWrappers);
+		if (written == '') return false;
+		final matches: Array<{ file: FileInfo, type: TypeDeclInfo }> = scan.index.resolveTypeRefsFrom(written, scan.file);
+		return matches.length == 1 && matches[0].type.name == scan.target.typeName && matches[0].file.file == scan.cursorFile;
+	}
+
+	/**
+	 * `fn`'s return-type annotation node — the child immediately before its BODY, when that child
+	 * is a type annotation carrying a name AND the source proves it is not something else. A
+	 * PARAMETER never reaches that slot (its own type nests inside the parameter node) but a
+	 * TYPE-PARAMETER CONSTRAINT does, so the slot alone is NOT enough; see the guard below. An
+	 * anonymous-structure or function return has no name and is left unproven.
+	 */
+	private static function returnTypeChild(fn: QueryNode, source: String, s: ReturnSeams): Null<QueryNode> {
+		final children: Array<QueryNode> = fn.children;
+		for (i in 0...children.length) if (s.bodyKinds.contains(children[i].kind)) {
+			if (i == 0) return null;
+			final candidate: QueryNode = children[i - 1];
+			if (!s.typeKinds.contains(candidate.kind) || candidate.name == null) return null;
+			final at: Null<Span> = candidate.span;
+			final body: Null<Span> = children[i].span;
+			// A TYPE-PARAMETER CONSTRAINT projects into the same slot: `function f<T: Colour>()`
+			// and `function f(): Colour` give byte-identical trees, and with two constraints the
+			// slot holds the LAST one. The parameter list still stands between a constraint and
+			// the body, so the gate `PreferMapType.returnTypeSlot` already uses on the type-ref
+			// tree — no `(` between the candidate and the body — separates them here too.
+			return at != null && body != null && source.substring(at.to, body.from).indexOf('(') < 0 ? candidate : null;
+		}
+		return null;
+	}
+
+	/**
+	 * `written` with ONE outer type-argument wrapper named in `wrappers` removed —
+	 * `Null<Colour>` -> `Colour`. Any other parametric type is returned WHOLE and then resolves to
+	 * no declaration, which is the conservative answer rather than a guess at its element type.
+	 */
+	private static function unwrapTypeWrapper(written: String, wrappers: Array<String>): String {
+		final open: Int = written.indexOf('<');
+		return open <= 0 || !written.endsWith('>') || !wrappers.contains(written.substring(0, open))
+			? written
+			: written.substring(open + 1, written.length - 1).trim();
+	}
+
+	/**
+	 * Collect into `out` every bare `<member>` offset reachable from a RETURNED expression through
+	 * type-transparent nodes. The accepted set is a whitelist of slots that carry the function's
+	 * return type down unchanged; every other node ends the descent. These are CANDIDATES only —
+	 * the caller drops the ones this file's own scope binds, once it has a proven function.
+	 */
+	private static function collectValueSlots(node: QueryNode, s: ReturnSeams, out: Array<Int>): Void {
+		final children: Array<QueryNode> = node.children;
+		if (node.kind == s.identKind) {
+			final span: Null<Span> = node.span;
+			if (node.name == s.memberName && span != null && !out.contains(span.from)) out.push(span.from);
+			return;
+		}
+		if (node.kind == s.parenKind) {
+			if (children.length > 0) collectValueSlots(children[0], s, out);
+			return;
+		}
+		// Both arms of a ternary / `if` expression ARE the expression's value; child 0 is the
+		// condition, a Bool, and never one.
+		if (s.armHostKinds.contains(node.kind)) {
+			for (i in 1...children.length) collectValueSlots(children[i], s, out);
+			return;
+		}
+		// A `switch` expression's value is the LAST statement of each arm. Child 0 is the subject;
+		// an arm's patterns and its optional guard PRECEDE its body, so an arm whose last child is
+		// not a statement carries no body at all and contributes nothing.
+		final exprStatementKind: Null<String> = s.exprStatementKind;
+		if (exprStatementKind == null || !s.switchKinds.contains(node.kind)) return;
+		for (i in 1...children.length) {
+			final branch: QueryNode = children[i];
+			if (!s.branchKinds.contains(branch.kind) || branch.children.length == 0) continue;
+			final last: QueryNode = branch.children[branch.children.length - 1];
+			if (last.kind == exprStatementKind && last.children.length > 0) collectValueSlots(last.children[0], s, out);
+		}
+	}
+
+	/**
+	 * Whether the type hosting the function — or an ancestor of it — declares a member of this
+	 * name, which SHADOWS the expected-type resolution. Verified on Haxe 4.3.7: with
+	 * `class Base { public var SAME: Colour; }`, `class Main extends Base` and
+	 * `function inherited(): Colour return SAME;`, the program prints the FIELD's value, not
+	 * `Colour.SAME` — so a rewrite there would silently retarget the read. `Refs` cannot see an
+	 * INHERITED member (it resolves lexically, in one file), which is why the question is asked of
+	 * the index instead — and why an ancestor the index CANNOT SEE refuses rather than passing:
+	 * with `Base` outside `--scope`, the rewrite silently changed `pick(): Colour return same;`
+	 * from the field's value to the constant, compiling clean. Absence of evidence is not proof.
+	 */
+	private static function hostShadows(host: Null<String>, memberName: String, index: SymbolIndex): Bool {
+		// A MODULE-level function has no hosting type, and a module-level field of the name is
+		// what would shadow it — the reading file is checked for one before the scan starts.
+		if (host == null) return false;
+		final owner: String = host;
+		// `supertypeDeclaresMember` answers `false` both when no ancestor declares the name and
+		// when an ancestor is not in the index, and only the first reading is a proof. Compiled
+		// and run: with `Base` OUTSIDE `--scope` declaring `public var same: Colour`, the rewrite
+		// changed `pick(): Colour return same;` from the field's value to the constant SILENTLY —
+		// the one failure mode this operation forbids. So an unresolvable chain refuses.
+		return index.typeDeclaresMember(owner, memberName) || index.supertypeDeclaresMember(owner, memberName)
+			|| !index.supertypeChainResolved(owner);
+	}
+
 }
 
 /**
@@ -660,4 +993,47 @@ final class CrossRenameMember {
 private typedef ScopeParse = {
 	final parsed: Array<ParsedFile>;
 	final error: Null<String>;
+};
+
+/**
+ * The grammar seams the EXPECTED-RETURN scan reads, resolved once per rename. Bundled so the
+ * recursive descent carries one argument instead of a dozen, exactly as the check layer bundles
+ * its own. Only the first four are load-bearing — a grammar that names none of the rest still
+ * proves a plain `return VALUE;`, it just proves fewer shapes.
+ */
+private typedef ReturnSeams = {
+	final memberName: String;
+	final identKind: String;
+	final functionKinds: Array<String>;
+	final bodyKinds: Array<String>;
+	final typeKinds: Array<String>;
+	final returnKinds: Array<String>;
+	final parenKind: Null<String>;
+	final armHostKinds: Array<String>;
+	final switchKinds: Array<String>;
+	final branchKinds: Array<String>;
+	final exprStatementKind: Null<String>;
+	final nullableWrappers: Array<String>;
+	final opaqueKinds: Array<String>;
+};
+
+/**
+ * One expected-return scan in flight: the file being scanned, the member being renamed, the
+ * grammar seams, the index the return types resolve through, the offsets the file's own scope
+ * BINDS (never the member, filled on first use), the per-function proof memo, and the
+ * accumulating result. Threaded so the walk stays a handful of small functions instead of one
+ * closure-carrying block.
+ */
+private typedef ReturnScan = {
+	final source: String;
+	final file: String;
+	final cursorFile: String;
+	final target: MemberTarget;
+	final seams: ReturnSeams;
+	final index: SymbolIndex;
+	final tree: QueryNode;
+	final refShape: RefShape;
+	var bound: Null<Array<Int>>;
+	final proven: Map<Int, Bool>;
+	final out: Array<Int>;
 };
