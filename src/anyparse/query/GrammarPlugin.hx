@@ -327,6 +327,30 @@ interface GrammarPlugin {
 typedef RefShape = {
 	var identKind: String;
 	var declHostKinds: Array<String>;
+
+	/**
+	 * Module-level kinds that declare a VALUE binding — Haxe's top-level `var` / `function` (4.2+)
+	 * and the inner form of the `final` spelling. A member operation asks THIS, never
+	 * `declHostKinds`, when its question is "does this module bind that NAME to a value": that
+	 * vocabulary names every TYPE-declaration kind, and a module-level type does not shadow a
+	 * value. Compiled and run on 4.3.7 — with `enum abstract Colour { var File = 3; }` and a reader
+	 * module declaring `class File`, `function pick(): Colour return File;` prints 3, so refusing
+	 * that file loses a correct rewrite. Every type spelling was probed the same way (`class`,
+	 * `interface`, `enum`, `typedef`, `abstract`, `enum abstract`) and all six are inert.
+	 *
+	 * A module-level VALUE does shadow, in both spellings: `var same: Colour` and `final same:
+	 * Colour` each beat the expected type. The `final` one is why `VarForm` is listed rather than
+	 * `FinalDecl` — Haxe projects it as `FinalDecl(VarForm same …)` with the name one level down,
+	 * while a `final class` projects as `FinalDecl(ClassForm …)` through the SAME wrapper. The
+	 * inner kind draws the value/type line the outer one erases, and it is NOT a member of
+	 * `declHostKinds` — the two vocabularies overlap, neither contains the other.
+	 *
+	 * REQUIRED, unlike most of what follows. An optional entry would need a fallback, and the only
+	 * candidate — `declHostKinds` — is wrong in BOTH directions: it refuses every module-level type
+	 * and it misses `VarForm`, so an un-audited grammar would inherit the exact wrong-rewrite hole
+	 * this entry exists to close. A default nobody can state correctly belongs at the producer.
+	 */
+	var moduleValueDeclKinds: Array<String>;
 	var scopeKinds: Array<String>;
 	var writeParentKinds: Array<String>;
 	var selfScopeDeclKinds: Array<String>;
@@ -458,6 +482,7 @@ typedef RefShape = {
 	 * Optional; unset leaves those spans in the scan, as before this field existed.
 	 */
 	@:optional var modulePathKinds: Array<String>;
+
 
 	/** Kinds that each add one decision point to a function's cyclomatic complexity. */
 	@:optional var branchKinds: Array<String>;
@@ -989,10 +1014,14 @@ typedef RefShape = {
 	@:optional var fieldDeclKinds: Array<String>;
 
 	/**
-	 * The function-body marker kinds (Haxe `BlockBody` / `ExprBody` / `NoBody`) —
-	 * `explicit-type` treats a function child that is neither a parameter
-	 * (`paramKinds`) nor one of these as the return type, so a function with no such
-	 * child has no explicit return type. Optional.
+	 * The function-body marker kinds (Haxe `BlockBody` / `ExprBody` / `NoBody`) — `explicit-type`
+	 * treats a function child that is neither a parameter (`paramKinds`) nor one of these as the
+	 * return type, so a function with no such child has no explicit return type. Optional.
+	 *
+	 * MUST BE DISJOINT from `functionKinds`: a grammar listing one kind in both makes
+	 * "is this node a function?" and "is this node a function's body?" answerable YES at once, and a
+	 * consumer deriving the function boundary from "carries a body child" then reads a conditional
+	 * BODY as a nested function with no return type of its own.
 	 */
 	@:optional var functionBodyKinds: Array<String>;
 

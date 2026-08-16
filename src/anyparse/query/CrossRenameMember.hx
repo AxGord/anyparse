@@ -690,8 +690,10 @@ final class CrossRenameMember {
 	 * the function returning it is written `: Colour`; a same-named value of a DIFFERENT abstract
 	 * in the same file stays untouched because its own function returns that other type.
 	 *
-	 * Both halves of the proof are POSITIVE — an enumeration of what the operation can prove, not
-	 * a list of shapes to avoid, so a construct nobody has thought of yet fails by construction:
+	 * Both halves of the proof are POSITIVE — an enumeration of what the operation can prove, not a
+	 * list of shapes to avoid, so a construct nobody has thought of yet goes unproven rather than
+	 * being claimed. The refusals below are the separate, NEGATIVE half: each names a shape the
+	 * positive proof does accept and the language then resolves elsewhere.
 	 *
 	 *  - The TYPE. The return annotation's VERBATIM source (the projection drops a type's
 	 *    arguments from its name, so the span is read, not `QueryNode.name`) with one
@@ -707,8 +709,9 @@ final class CrossRenameMember {
 	 *
 	 * Three refusals sit outside that proof, each measured on 4.3.7 rather than assumed: an
 	 * occurrence the file's own scope BINDS (`var Seam = pick(); return Seam;` reads that local); a
-	 * file declaring a MODULE-level binding of the name, which beats the expected type and which
-	 * `Refs` does not index; and a hosting type — or an ancestor of it, or an ancestor the index
+	 * file declaring a MODULE-level VALUE binding of the name, which beats the expected type and
+	 * which `Refs` does not index — a module-level TYPE of that name does not, being no binding at
+	 * all; and a hosting type — or an ancestor of it, or an ancestor the index
 	 * cannot even see — that declares the name (`hostShadows`).
 	 */
 	private static function expectedReturnOffsets(
@@ -718,11 +721,11 @@ final class CrossRenameMember {
 		// A WHOLE-WORD probe, not a substring one: `RED` occurs inside `COLORED` and inside every
 		// comment that mentions it, and the scan below is not free.
 		if (RefactorSupport.identTokenOffset(source, new Span(0, source.length), target.memberName) < 0) return [];
-		// A MODULE-level binding of the name shadows the expected type — measured on 4.3.7, a
-		// module-level `var same: Colour` wins over `function pick(): Colour return same;`, from a
-		// module function AND from a class method in the same file. `Refs` binds neither (the read
-		// comes back with no binding span), and a hosting TYPE is the wrong question for the
-		// second one, so the whole file is refused instead.
+		// A MODULE-level VALUE binding of the name shadows the expected type — measured on 4.3.7, a
+		// module-level `var same: Colour` (and a `final` one) wins over
+		// `function pick(): Colour return same;`, from a module function AND from a class method in
+		// the same file. `Refs` binds neither (the read comes back with no binding span), and a
+		// hosting TYPE is the wrong question for the second one, so the whole file is refused instead.
 		if (declaresModuleBinding(tree, target.memberName, refShape)) return [];
 		final seams: Null<ReturnSeams> = returnSeamsOf(target.memberName, refShape);
 		if (seams == null) return [];
@@ -747,21 +750,39 @@ final class CrossRenameMember {
 	}
 
 	/**
-	 * Whether the MODULE this file declares carries a top-level binding of `memberName` — a Haxe
-	 * 4.2 module-level `var` / `function`, which resolves unqualified everywhere in the module and
-	 * BEATS the expected type. Its reads are not indexed by `Refs`, so nothing downstream would
-	 * exclude them; refusing the file is the positive answer. Conditional-compilation regions are
-	 * descended into: a guarded binding is a child of the REGION, not of the module.
+	 * Whether the MODULE this file declares carries a top-level VALUE binding of `memberName` — a
+	 * Haxe 4.2 module-level `var` / `final` / `function`, which resolves unqualified everywhere in
+	 * the module and BEATS the expected type. Its reads are not indexed by `Refs`, so nothing
+	 * downstream would exclude them; refusing the file is the positive answer.
+	 *
+	 * A module-level TYPE of that name is NOT one, which is why the question goes to
+	 * `RefShape.moduleValueDeclKinds` and not to `declHostKinds` — that vocabulary names every
+	 * type-declaration kind and omits `VarForm` entirely, so neither list contains the other. Compiled and run on 4.3.7: with `class File` in the reading module and
+	 * `enum abstract Colour { var File = 3; }`, `function pick(): Colour return File;` prints 3 — the
+	 * value wins, and refusing the file threw that rewrite away.
+	 *
+	 * A child that NAMES NOTHING is descended into, because the binding it holds sits one level down
+	 * and both such wrappers are load-bearing. A `#if`-guarded binding is a child of the REGION
+	 * (`#if js var same: Colour; #end` projects `(Conditional (VarDecl same …))`) — the
+	 * branch-dependent case no single-target compile catches either. A module-level `final` is a child
+	 * of the `final` keyword's own dispatch node (`final same: Colour = …;` projects
+	 * `(FinalDecl (VarForm same …))`); it slipped the gate entirely while only direct children were
+	 * read, and the rewrite then retargeted a read of that binding to the constant with nothing to
+	 * reject it — measured on 4.3.7, a program printing 1 printed 3 after the rename and still
+	 * compiled.
+	 *
+	 * Stopping at a NAMED child is PRUNING, not safety. What
+	 * makes the descent safe at any depth is that the value kinds are module-EXCLUSIVE in this
+	 * grammar: a binding inside a type or a body projects as `VarMember` / `VarStmt` / `LocalFnStmt`,
+	 * never as one of these. An unnamed node with a BODY does exist and is reachable — Haxe's
+	 * `function #if js m1 #else m2 #end()` projects an unnamed member whose block the walk enters —
+	 * and finds nothing there, by that exclusivity rather than by the guard.
 	 */
 	private static function declaresModuleBinding(node: QueryNode, memberName: String, refShape: RefShape): Bool {
-		final conditional: Null<String> = refShape.conditionalMemberKind;
+		final valueKinds: Array<String> = refShape.moduleValueDeclKinds;
 		for (child in node.children) {
-			if (child.name == memberName && refShape.declHostKinds.contains(child.kind)) return true;
-			// A `#if`-guarded top-level binding is a child of the REGION, not of the module — probed:
-			// `#if js var same: Colour; #end` projects `(Conditional (VarDecl same …))`. A gate that
-			// read the module's direct children alone would let exactly the branch-dependent case
-			// through, which is the one no single-target compile can catch either.
-			if (child.kind == conditional && declaresModuleBinding(child, memberName, refShape)) return true;
+			if (child.name == memberName && valueKinds.contains(child.kind)) return true;
+			if (child.name == null && declaresModuleBinding(child, memberName, refShape)) return true;
 		}
 		return false;
 	}
@@ -796,10 +817,10 @@ final class CrossRenameMember {
 		if (inner != null && s.returnKinds.contains(node.kind) && node.children.length > 0) {
 			final candidates: Array<Int> = [];
 			collectValueSlots(node.children[0], s, candidates);
-			if (candidates.length > 0 && provenReturnType(inner, owner, scan)) for (off in candidates) if (
-				!boundOffsets(scan).contains(off) && !scan.out.contains(off)
-			)
-				scan.out.push(off);
+			if (candidates.length > 0 && provenReturnType(inner, owner, scan)) {
+				final bound: Array<Int> = boundOffsets(scan);
+				for (off in candidates) if (!bound.contains(off) && !scan.out.contains(off)) scan.out.push(off);
+			}
 		}
 		for (c in node.children) scanReturnPositions(c, inner, owner, scan);
 	}
@@ -865,7 +886,10 @@ final class CrossRenameMember {
 	private static function isFunctionNode(node: QueryNode, s: ReturnSeams): Bool {
 		// A BODY is never a function: a conditional-compilation body (`CondBody`) holds each
 		// branch's own body as a child, so without this it read as a function of its own — with no
-		// return type — and silently suppressed every `return` inside a `#if`-bodied function.
+		// return type — and silently suppressed every `return` inside a `#if`-bodied function. The
+		// conjunct costs nothing on a real function because the two vocabularies are DISJOINT,
+		// which `RefShape.functionBodyKinds` states as its own contract — so this can only ever
+		// subtract a body, never a function.
 		return !s.bodyKinds.contains(node.kind)
 			&& (s.functionKinds.contains(node.kind) || node.children.exists(c -> s.bodyKinds.contains(c.kind)));
 	}
@@ -903,10 +927,10 @@ final class CrossRenameMember {
 			final body: Null<Span> = children[i].span;
 			// A TYPE-PARAMETER CONSTRAINT projects into the same slot: `function f<T: Colour>()`
 			// and `function f(): Colour` give byte-identical trees, and with two constraints the
-			// slot holds the LAST one. The parameter list still stands between a constraint and
-			// the body, so the gate `PreferMapType.returnTypeSlot` already uses on the type-ref
-			// tree — no `(` between the candidate and the body — separates them here too.
-			return at != null && body != null && source.substring(at.to, body.from).indexOf('(') < 0 ? candidate : null;
+			// slot holds the LAST one. `RefactorSupport.isReturnTypeSlot` reads the gap between the
+			// candidate and the body for the parameter list that only a constraint has — the one
+			// predicate `PreferMapType.returnTypeSlot` asks of the type-ref tree.
+			return at != null && body != null && RefactorSupport.isReturnTypeSlot(source, at.to, body.from) ? candidate : null;
 		}
 		return null;
 	}

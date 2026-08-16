@@ -268,6 +268,22 @@ class PreferMapTypeCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * A COMMENT between the return type and the body is not a parameter list, so the annotation is
+	 * still a return type — `RefactorSupport.isReturnTypeSlot` skips comments before looking for the
+	 * `(` that only a constraint's parameter list leaves in the gap. The constraint sibling still
+	 * refuses, but note WHY, since the assertion is a regression guard rather than a discriminator:
+	 * its `(` PRECEDES any comment that could follow it, so the scan answers before reaching the
+	 * comment arm at all. The skip can only ever flip a return-type slot, never a constraint one.
+	 */
+	public function testReturnTypeRewrittenPastAComment(): Void {
+		Assert.equals(
+			imp('IntMap', 'class C { function f():Map<Int, Int> /* (n) */ { return null; } }'),
+			fixed(imp('IntMap', 'class C { function f():IntMap<Int> /* (n) */ { return null; } }'))
+		);
+		Assert.equals(0, violations(imp('IntMap', 'class C { function f<T:IntMap<Int>>() /* (n) */ {} }')).length);
+	}
+
 	public function testConditionalRegionNotFlagged(): Void {
 		Assert.equals(0, violations(imp('IntMap', 'class C {\n#if js\n\tvar m:IntMap<Int>;\n#end\n}')).length);
 	}

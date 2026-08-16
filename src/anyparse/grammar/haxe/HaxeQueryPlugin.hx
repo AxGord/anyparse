@@ -542,6 +542,14 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 
 			// `package a.b;` / `import c.d.E;` are dotted module paths, not references.
 			modulePathKinds: ['PackageDecl', 'ImportDecl'],
+			// Every module-level VALUE binding this grammar can spell, and nothing else: a top-level
+			// `var` / `function` (Haxe 4.2+) plus `VarForm`, the inner node of the `final` spelling,
+			// which projects as `FinalDecl(VarForm name …)` with the name one level down and is
+			// absent from `DECL_HOST_KINDS`. Every type-declaration kind is deliberately OUT — a
+			// module-level type named after a value shadows nothing, and a `final class` reaches the
+			// same wrapper as `FinalDecl(ClassForm …)`. Enumerated against `HxDecl`'s ctors, where
+			// these three are the only value binders. See `RefShape.moduleValueDeclKinds`.
+			moduleValueDeclKinds: ['VarDecl', 'FnDecl', 'VarForm'],
 			// Every lexical scope, hoisting ones first. The two halves are named separately so
 			// `positionScopedKinds` below is their difference by construction rather than by hand:
 			// a kind added to one list can no longer go missing from the other.

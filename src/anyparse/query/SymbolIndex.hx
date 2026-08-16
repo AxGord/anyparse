@@ -1978,21 +1978,27 @@ final class SymbolIndex {
 	 * a consumer that must prove the ABSENCE of an inherited member (an expected-type rewrite,
 	 * which a shadowing field silently redirects) has to ask this too. Walks the same simple-name
 	 * hops `supertypeDeclares` walks, so the two agree about which links exist; `supertypes`
-	 * carries `implements` targets as well as `extends`, so an unindexed interface refuses too.
+	 * carries `implements` targets as well as `extends`, so an unindexed interface refuses
+	 * too — and so does a `typeName` the index holds no declaration for at all, the same absence one
+	 * hop earlier.
 	 */
 	public function supertypeChainResolved(typeName: String): Bool {
 		return supertypeChainWalk(typeName, []);
 	}
 
 	/**
-	 * `supertypeChainResolved`'s cycle-guarded recursion. A name already visited answers true —
-	 * whatever made it unresolvable was reported by the visit that pushed it.
+	 * `supertypeChainResolved`'s cycle-guarded recursion. A name the index holds NO declaration for
+	 * answers false — that is the whole question, and answering it here is what lets the recursive
+	 * call stand alone where the caller used to test the next hop itself. A name already visited
+	 * answers true: whatever made it unresolvable was reported by the visit that pushed it, and a
+	 * false short-circuits the entire walk, so no later `seen` hit can mask one.
 	 */
 	private function supertypeChainWalk(typeName: String, seen: Array<String>): Bool {
 		if (seen.contains(typeName)) return true;
 		seen.push(typeName);
-		for (t in declsNamed(typeName)) for (sup in t.supertypes) if (declsNamed(sup).length == 0 || !supertypeChainWalk(sup, seen))
-			return false;
+		final decls: Array<TypeDeclInfo> = declsNamed(typeName);
+		if (decls.length == 0) return false;
+		for (t in decls) for (sup in t.supertypes) if (!supertypeChainWalk(sup, seen)) return false;
 		return true;
 	}
 

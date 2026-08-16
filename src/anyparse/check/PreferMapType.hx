@@ -6,6 +6,7 @@ import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -435,20 +436,18 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	 * The child-before-the-body rule alone is not enough here. A function that OMITS its return type
 	 * puts a type-parameter CONSTRAINT in exactly that slot — `function f<T:IntMap<Int>>() {}`
 	 * projects the constraint and the body as its only two children — and the two share a node kind.
-	 * A return type is the last thing before the body, so the source between them holds no `(`; a
-	 * constraint always has the parameter list between it and the body.
+	 * `RefactorSupport.isReturnTypeSlot` draws the line: a constraint always has the parameter
+	 * list between it and the body, a return type never does. `CrossRenameMember` asks the same
+	 * predicate of the expected-type return scan.
 	 */
 	private static function returnTypeSlot(node: QueryNode, seams: Seams): Int {
 		for (i in 0...node.children.length) if (seams.functionBodyKinds.contains(node.children[i].kind)) {
 			if (i == 0) return -1;
 			final candidate: Null<Span> = node.children[i - 1].span;
 			final body: Null<Span> = node.children[i].span;
-			return if (candidate == null || body == null)
-				-1
-			else if (seams.source.substring(candidate.to, body.from).indexOf('(') == -1)
-				i - 1
-			else
-				-1;
+			return candidate != null && body != null && RefactorSupport.isReturnTypeSlot(seams.source, candidate.to, body.from)
+				? i - 1
+				: -1;
 		}
 		return -1;
 	}

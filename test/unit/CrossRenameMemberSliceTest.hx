@@ -799,11 +799,21 @@ class CrossRenameMemberSliceTest extends Test {
 	}
 
 	/**
-	 * A MODULE-level binding of the name shadows the expected type — measured on Haxe 4.3.7, a
+	 * A MODULE-level VALUE binding of the name shadows the expected type — measured on Haxe 4.3.7, a
 	 * module-level `var SAME:Colour` wins over `function pick():Colour return SAME;` both from a
-	 * module function and from a class method in the same file, and `Refs` binds neither read. The whole FILE is refused, and a `#if`-GUARDED one just as much — it is a child of the
-	 * region, not of the module, so a gate reading direct children alone let exactly the
-	 * branch-dependent case through. A file with no module-level binding still renames.
+	 * module function and from a class method in the same file, and `Refs` binds neither read. The whole FILE is refused, in all five spellings the gate has to reach: a plain `var`; a `#if`-
+	 * GUARDED one, which is a child of the REGION rather than of the module; a `final`, which is a
+	 * child of the `final` keyword's own dispatch node (`FinalDecl(VarForm …)`) and slipped the gate
+	 * entirely while the descent keyed on the region kind alone — the rewrite then retargeted a read
+	 * of that binding to the constant and still compiled, a program printing 1 printing 3 after the
+	 * rename; a guarded `final`, two wrappers deep; and a module-level `function`, the third value kind. A file with no module-level
+	 * binding still renames.
+	 *
+	 * The `function` arm is the one whose fixture cannot also COMPILE: a bare read of a module
+	 * function in a `: Colour` return is a type error, so no valid program reaches the gate through
+	 * it. It is pinned structurally anyway — the name IS bound at module level, and a vocabulary
+	 * that dropped the kind would rewrite the read instead of refusing it, which is the wrong answer
+	 * to keep available for the day the surrounding types change.
 	 */
 	public function testExpectedReturnRefusesAFileDeclaringAModuleBinding(): Void {
 		final a: String = 'enum abstract Colour(Int) {\n\tvar SAME = 0;\n\tvar RED = 1;\n}';
@@ -811,40 +821,106 @@ class CrossRenameMemberSliceTest extends Test {
 			+ 'class Z {\n\tpublic static function grab():Colour return SAME;\n}';
 		final g: String = '#if !js\nvar SAME:Colour = Colour.RED;\n#end\n\n'
 			+ 'class Guarded {\n\tpublic static function grab():Colour return SAME;\n}';
+		final f: String = 'final SAME:Colour = Colour.RED;\n\n' + 'class Held {\n\tpublic static function grab():Colour return SAME;\n}';
+		final gf: String = '#if !js\nfinal SAME:Colour = Colour.RED;\n#end\n\n'
+			+ 'class GuardedHeld {\n\tpublic static function grab():Colour return SAME;\n}';
+		final fn: String = 'function SAME():Colour return Colour.RED;\n\n'
+			+ 'class Calls {\n\tpublic static function grab():Colour return SAME;\n}';
 		final b: String = 'class Clean {\n\tpublic static function pick():Colour return SAME;\n}';
 		final expectedB: String = 'class Clean {\n\tpublic static function pick():Colour return EQUAL;\n}';
 		final changes: Array<FileChange> = okChanges('a.hx', a, 'SAME', 'EQUAL', [
 			{ file: 'a.hx', source: a },
 			{ file: 'm.hx', source: m },
 			{ file: 'g.hx', source: g },
+			{ file: 'f.hx', source: f },
+			{ file: 'gf.hx', source: gf },
+			{ file: 'fn.hx', source: fn },
 			{ file: 'b.hx', source: b },
 		]);
 		Assert.equals(2, changes.length);
 		Assert.isNull(changeOrNull(changes, 'm.hx'));
 		Assert.isNull(changeOrNull(changes, 'g.hx'));
+		Assert.isNull(changeOrNull(changes, 'f.hx'));
+		Assert.isNull(changeOrNull(changes, 'gf.hx'));
+		Assert.isNull(changeOrNull(changes, 'fn.hx'));
 		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(1, changeFor(changes, 'b.hx').count);
 	}
 
 	/**
-	 * A TYPE-PARAMETER CONSTRAINT projects into the same slot as a return type —
-	 * `function f<T:Colour>()` and `function f():Colour` give byte-identical trees — so the slot
-	 * alone would read an un-annotated generic function as returning the abstract. The parameter
-	 * list still stands between a constraint and the body, which is what separates them. The
-	 * annotated sibling still renames.
+	 * A module-level TYPE of the value's name shadows NOTHING. Compiled and run on Haxe 4.3.7: with
+	 * `class File` in the reading module and `enum abstract Colour { var File = 3; }`,
+	 * `function pick():Colour return File;` prints 3 — the value wins. The gate asked
+	 * `declHostKinds`, whose type-declaration kinds refused the whole file, and the correct rewrite
+	 * was thrown away; it asks `RefShape.moduleValueDeclKinds` now. The expectation names the
+	 * untouched type declaration and the rewritten return in ONE string, so neither half can be
+	 * satisfied alone.
 	 */
-	public function testExpectedReturnIgnoresATypeParameterConstraint(): Void {
-		final a: String = 'enum abstract Colour(Int) {\n\tvar SAME = 0;\n\tvar RED = 1;\n}';
-		final b: String = 'class Z {\n\tstatic function generic<T:Colour>() return SAME;\n'
-			+ '\tstatic function annotated():Colour return SAME;\n}';
-		final expectedB: String = 'class Z {\n\tstatic function generic<T:Colour>() return SAME;\n'
-			+ '\tstatic function annotated():Colour return EQUAL;\n}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 'SAME', 'EQUAL', [
+	public function testExpectedReturnIgnoresAModuleTypeOfTheValueName(): Void {
+		final a: String = 'enum abstract Colour(Int) {\n\tvar File = 0;\n\tvar RED = 1;\n}';
+		final b: String = 'class File {\n\tpublic function new() {}\n}\n\n'
+			+ 'class Reader {\n\tpublic static function pick():Colour return File;\n}';
+		final expectedB: String = 'class File {\n\tpublic function new() {}\n}\n\n'
+			+ 'class Reader {\n\tpublic static function pick():Colour return Doc;\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'File', 'Doc', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
 		]);
 		Assert.equals(2, changes.length);
 		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
 		Assert.equals(1, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * A TYPE-PARAMETER CONSTRAINT projects into the same slot as a return type —
+	 * `function f<T:Colour>()` and `function f():Colour` give byte-identical trees — so the slot
+	 * alone would read an un-annotated generic function as returning the abstract. The parameter
+	 * list still stands between a constraint and the body, which is what separates them.
+	 *
+	 * Three functions, because two of them do not discriminate on their own: the constraint-only one
+	 * must refuse and the annotation-only one must rename, and a gate refusing EVERY generic function
+	 * satisfies both. The third carries BOTH — its slot holds the annotation, its parameter list
+	 * stands before it — and renames, which only the real discriminator gets right.
+	 */
+	public function testExpectedReturnIgnoresATypeParameterConstraint(): Void {
+		final a: String = 'enum abstract Colour(Int) {\n\tvar SAME = 0;\n\tvar RED = 1;\n}';
+		final b: String = 'class Z {\n\tstatic function generic<T:Colour>() return SAME;\n'
+			+ '\tstatic function both<T:Colour>():Colour return SAME;\n' + '\tstatic function annotated():Colour return SAME;\n}';
+		final expectedB: String = 'class Z {\n\tstatic function generic<T:Colour>() return SAME;\n'
+			+ '\tstatic function both<T:Colour>():Colour return EQUAL;\n' + '\tstatic function annotated():Colour return EQUAL;\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'SAME', 'EQUAL', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(2, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * A COMMENT between the return annotation and the body is not a parameter list. The slot's
+	 * discriminator is the `(` a type-parameter constraint's own parameter list leaves there
+	 * (`RefactorSupport.isReturnTypeSlot`), and a `(` written inside a comment used to count as one:
+	 * a block comment after the annotation and a trailing line comment on the next line each carried
+	 * the whole function out of the proof, silently. The generic sibling — a constraint, no
+	 * annotation, the same comment after its parameter list — still refuses, so skipping comments did
+	 * not erase the discriminator.
+	 */
+	public function testExpectedReturnSeesPastACommentBeforeTheBody(): Void {
+		final a: String = 'enum abstract Colour(Int) {\n\tvar SAME = 0;\n\tvar RED = 1;\n}';
+		final b: String = 'class Z {\n\tstatic function block():Colour /* (note) */ return SAME;\n'
+			+ '\tstatic function line():Colour\n\t\t// (note)\n\t\treturn SAME;\n'
+			+ '\tstatic function generic<T:Colour>() /* (note) */ return SAME;\n}';
+		final expectedB: String = 'class Z {\n\tstatic function block():Colour /* (note) */ return EQUAL;\n'
+			+ '\tstatic function line():Colour\n\t\t// (note)\n\t\treturn EQUAL;\n'
+			+ '\tstatic function generic<T:Colour>() /* (note) */ return SAME;\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'SAME', 'EQUAL', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(2, changeFor(changes, 'b.hx').count);
 	}
 
 	/**

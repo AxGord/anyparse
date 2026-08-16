@@ -896,6 +896,25 @@ class SymbolIndexSliceTest extends Test {
 	}
 
 	/**
+	 * `supertypeChainResolved` answers whether EVERY supertype hop, transitively, names a declaration
+	 * the index holds — the question a consumer asks before reading `supertypeDeclaresMember`'s
+	 * `false` as a proof. A chain reaching a library class the index never saw is false; so is a name
+	 * the index holds NO declaration for, which used to answer the permissive true a consumer would
+	 * have read as proof. The fully-indexed chain answers true, so the gate is not simply off.
+	 */
+	public function testSupertypeChainResolvedFailsClosed(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/Base.hx', source: 'class Base {}' },
+			{ file: 'src/Mid.hx', source: 'class Mid extends Base {}' },
+			{ file: 'src/Leaf.hx', source: 'class Leaf extends Mid {}' },
+			{ file: 'src/Free.hx', source: 'class Free extends SomethingExternal {}' },
+		], plugin());
+		Assert.isTrue(index.supertypeChainResolved('Leaf'));
+		Assert.isFalse(index.supertypeChainResolved('Free'));
+		Assert.isFalse(index.supertypeChainResolved('Nowhere'));
+	}
+
+	/**
 	 * A supertype whose simple name is ambiguous AND whose referring file brings neither into
 	 * scope stays unprovable: resolution returning several candidates is refused exactly like
 	 * resolution returning none.

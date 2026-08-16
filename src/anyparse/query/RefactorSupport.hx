@@ -1117,6 +1117,56 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * Whether the type annotation ending at `typeEnd` is a function's RETURN type rather than a
+	 * TYPE-PARAMETER CONSTRAINT. The two project into the SAME slot — the child immediately before the
+	 * function body — under the same node kind, so `function f<T: Colour>()` and `function f(): Colour`
+	 * give byte-identical trees and the slot alone proves nothing. What separates them is the PARAMETER
+	 * LIST: a constraint always has one between itself and the body, a return type never does, so a gap
+	 * holding no `(` is the discriminator.
+	 *
+	 * COMMENTS in the gap are skipped, because a `(` written inside one cannot be a parameter list.
+	 * Without that, a block comment or a trailing line comment between the annotation and the body
+	 * carried the whole function out of the proof — measured on both, each a silent refusal.
+	 *
+	 * A conditional-compilation directive needs no such arm: probed on `function f(): Colour #if
+	 * (myflag) return X; #else return X; #end`, the conditional BODY node opens AT the `#if`, so the
+	 * directive and its parentheses fall inside the body rather than in the gap. Metadata behaves the
+	 * same way — `@:meta("(")` before the body opens at the `@`.
+	 *
+	 * Every OTHER unknown is answered `false`, which is the direction both callers want: a comment
+	 * that does not close before the body, an offset pair that arrives reversed, a `bodyStart` past
+	 * the end of the source. That keeps a `(` the scan cannot attribute from ever reading as absent,
+	 * and it bounds the scan to the window it was handed. Note what the arm does NOT buy: a comment
+	 * can only ever flip a RETURN-type slot, never a constraint slot, because a constraint's `(`
+	 * precedes any comment that could follow it. And this project's own writer refuses to round-trip
+	 * a comment in that gap at all ("the writer round trip would drop the comment"), so the shapes
+	 * the arm accepts are ones no anyparse tool could have produced — a real writer gap, recorded
+	 * here because it is what makes the arm look unreachable on this tree.
+	 */
+	public static function isReturnTypeSlot(source: String, typeEnd: Int, bodyStart: Int): Bool {
+		if (typeEnd > bodyStart || bodyStart > source.length) return false;
+		var i: Int = typeEnd;
+		while (i < bodyStart) {
+			final c: Int = source.fastCodeAt(i);
+			if (c == '('.code) return false;
+			final next: Int = i + 1 < bodyStart ? source.fastCodeAt(i + 1) : 0;
+			if (c != '/'.code)
+				i++;
+			else if (next == '/'.code) {
+				final nl: Int = source.indexOf('\n', i + 2);
+				if (nl < 0 || nl >= bodyStart) return false;
+				i = nl + 1;
+			} else if (next == '*'.code) {
+				final close: Int = source.indexOf('*/', i + 2);
+				if (close < 0 || close + 2 > bodyStart) return false;
+				i = close + 2;
+			} else
+				i++;
+		}
+		return true;
+	}
+
+	/**
 	 * The span of the first standalone `name` token within `source[from, stop)` that a `$`
 	 * does NOT precede, or null when the window holds none — the BINDER a self-scoped
 	 * construct spells first (`for (item in …)`, `var name = …`).
