@@ -630,6 +630,7 @@ import unit.JoinBranchCallCheckTest;
 import unit.HxCallParamIfExpressionArgSliceTest;
 import unit.HxValueIfFitSliceTest;
 import unit.RenameMemberInFileCliTest;
+import unit.ApqAstTypeRefsCliTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1268,6 +1269,7 @@ class RunTests {
 		addCase(new ApqStripDryRunCliTest());
 		addCase(new ApqAstWriterOutputPlainTest());
 		addCase(new ApqAstSelectFuzzyTest());
+		addCase(new ApqAstTypeRefsCliTest());
 		addCase(new ApqDottedAccessNudgeTest());
 		addCase(new ApqSkipParseLocusTest());
 		addCase(new ApqReconCliTest());

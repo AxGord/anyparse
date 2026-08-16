@@ -487,6 +487,7 @@ final class Cli {
 		'--diff',
 		'--stdin',
 		'--spans',
+		'--type-refs',
 	];
 
 	#if (sys || nodejs)
@@ -837,6 +838,7 @@ final class Cli {
 			childrenLimit: -1,
 			spans: false,
 			countOnly: false,
+			typeRefs: false,
 			file: null,
 			codeArg: null,
 			stdinFlag: false,
@@ -4950,13 +4952,23 @@ final class Cli {
 		// added / removed / reshaped in one shot, without a second `hxq diff`
 		// call. Exit non-zero when the writer output fails to re-parse
 		// (writer produced syntactically broken Haxe).
-		if (o.writerOutput) return runAstWriterOutput(plugin, source, file, fileLabel, o.lang, o.writerOutputPlain, o.writerDiff);
+		if (o.writerOutput) {
+			if (o.typeRefs) {
+				stderr('apq ast: --type-refs cannot be combined with --writer-output (the type-ref projection is not writable)\n');
+				return EXIT_USAGE;
+			}
+			return runAstWriterOutput(plugin, source, file, fileLabel, o.lang, o.writerOutputPlain, o.writerDiff);
+		}
 		if (o.writerDiff) {
 			stderr('apq ast: --diff requires --writer-output (it diffs input vs writer-emitted output)\n');
 			return EXIT_USAGE;
 		}
 
-		final tree: QueryNode = try plugin.parseFile(source) catch (e: ParseError) {
+		// `--type-refs` swaps ONLY the projection: every downstream branch
+		// (--at / --select / --count / --json / --depth) renders it through
+		// the same code path the default tree uses, so the dump is directly
+		// comparable with a plain `ast` run of the same file.
+		final tree: QueryNode = try (o.typeRefs ? plugin.parseFileTypeRefs(source) : plugin.parseFile(source)) catch (e: ParseError) {
 			stderr('apq ast: $fileLabel: ${e.toString()}\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {
@@ -6283,6 +6295,9 @@ final class Cli {
 		);
 		sysPrint(
 			'  --count             Print just the integer direct-child count at the displayed root (one line per match with --select). Sanity-check for member counts before writing a corpus-driver test assertion.\n'
+		);
+		sysPrint(
+			'  --type-refs         Render the type-position projection (parseFileTypeRefs) instead of the default tree — the dotted type references of the file (field/var annotations, param + return types, enum-ctor params, type parameters). RAW dump: it shows the projection as it is today, gaps included (an anonymous structure inside a type parameter renders childless).\n'
 		);
 		sysPrint('  --writer-output     Parse + format-write through the plugin trivia pipeline and print the emitted source\n');
 		sysPrint(
@@ -8267,6 +8282,7 @@ final class Cli {
 		var childrenLimit: Int = -1;
 		var spans: Bool = false;
 		var countOnly: Bool = false;
+		var typeRefs: Bool = false;
 		var file: Null<String> = null;
 		// Inline source (`apq probe '<code>'` -> `--code <s>`) or stdin
 		// (`apq ast --stdin`) bypass the file read for micro-probes
@@ -8358,6 +8374,17 @@ final class Cli {
 					// overwrote an earlier ident. Plain `(no-spans)` form
 					// stays default to keep transcripts compact.
 					spans = true;
+				case '--type-refs':
+					// ω-ast-type-refs: dump the SAME S-expr/JSON projection the
+					// default `ast` prints, but over `parseFileTypeRefs` — the
+					// type-position tree that until now only `uses`/`blast`
+					// consumed and nothing exposed. "List every dotted type
+					// reference in this file" was unanswerable through hxq
+					// without it. The dump is deliberately RAW: it shows the
+					// projection's current gaps (e.g. anonymous structures
+					// inside a type parameter collapse to a childless node)
+					// rather than a repaired view.
+					typeRefs = true;
 				case '--count':
 					// ω-ast-count: print just the integer direct-child count
 					// at the displayed root (the module by default; each
@@ -8400,6 +8427,7 @@ final class Cli {
 			childrenLimit: childrenLimit,
 			spans: spans,
 			countOnly: countOnly,
+			typeRefs: typeRefs,
 			file: file,
 			codeArg: codeArg,
 			stdinFlag: stdinFlag,
@@ -15339,6 +15367,11 @@ typedef AstOpts = {
 	var childrenLimit: Int;
 	var spans: Bool;
 	var countOnly: Bool;
+	// `--type-refs`: render the plugin's type-position projection
+	// (`parseFileTypeRefs`) instead of the default `parseFile` tree.
+	// Same renderers, same --select/--at/--depth/--json plumbing —
+	// only the parsed tree differs.
+	var typeRefs: Bool;
 	var file: Null<String>;
 	// Inline source (`apq probe '<code>'` -> `--code <s>`) or stdin
 	// (`apq ast --stdin`) bypass the file read for micro-probes

@@ -55,6 +55,8 @@ apq ast <file> --depth <n>         # truncate beyond depth n (counted from
                                    # the matched node when paired with
                                    # --select / --at; --depth 0 = root only)
 apq ast <file> --select <path> --doc --source   # + doc-comment / verbatim slice
+apq ast <file> --type-refs         # the type-position projection instead of the
+                                   # default tree (see `apq uses` below)
 ```
 
 Output is deterministic so the tool is usable in CI and diff-based workflows.
@@ -115,6 +117,51 @@ Implementation note: the default parse tree (consumed by
 to stay lean; `uses` runs on a separate projection
 (`GrammarPlugin.parseFileTypeRefs`), so adding it leaves the other four
 commands byte-identical by construction.
+
+#### `apq ast --type-refs` — dump that projection
+
+`uses` answers "where is type `T` used"; it cannot answer "what types
+does this file reference at all". `--type-refs` renders the
+`parseFileTypeRefs` tree itself, through the very same S-expr / JSON
+path a plain `ast` uses — so `--select`, `--at`, `--depth`,
+`--children-limit`, `--count`, `--spans` and `--json` all compose with
+it unchanged. (`--writer-output` does not: the type-ref projection is
+not a writable tree, and the combination exits `EXIT_USAGE`.)
+
+```
+apq ast <file> --type-refs                      # whole type-ref tree
+apq ast <file> --type-refs --select TypeRef     # just the nominal references
+apq ast <file> --type-refs --json               # same tree, JSON form
+apq probe '<code>' --type-refs                  # inline probe
+```
+
+```
+$ apq probe 'class C { var a: Int; final b: Map<String, Foo>; }' --type-refs
+(module
+  (ClassDecl
+    C
+    (VarMember a (TypeRef Int))
+    (FinalMember b (TypeRef Map) (TypeRef String) (TypeRef Foo))))
+```
+
+Note the shape: a parameterized type flattens into **sibling**
+`TypeRef` nodes (`Map`, `String`, `Foo`), matching what `uses` reports.
+
+**The dump is deliberately RAW — it shows the projection as it is
+today, gaps included.** It is not a curated view of "the types this
+file references", and a missing node here means `uses` and `blast` are
+blind to that position too. The known gap: an **anonymous structure**
+never reaches the projection, so its member types vanish —
+
+```
+$ apq probe 'class C { function f(?d: Array<{ node: Doc }>): Void {} }' --type-refs
+(module (ClassDecl C (FnMember f (Optional d (TypeRef Array)) (Named Void) (BlockBody))))
+```
+
+`Doc` is absent, and `(TypeRef Array)` is childless. That is a
+projection defect, pinned by
+`unit.ApqAstTypeRefsCliTest.testAnonStructInTypeParamIsAbsent`; the
+expectation changes when the defect is fixed, the flag does not.
 
 ### `--doc` / `--source` (opt-in, on `refs` / `uses` / `ast`)
 
