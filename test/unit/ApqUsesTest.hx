@@ -74,6 +74,27 @@ class ApqUsesTest extends Test {
 		Assert.isTrue(hits.length >= 1, 'new T() expected, got ${describe(hits)}');
 	}
 
+	public function testArrowFnParamNameIsNotATypeRef(): Void {
+		// `HxArrowParam.Named(body)` shares its ctor name with `HxType.Named`,
+		// but only the latter fronts a `type` slot: the parameter NAME of a
+		// new-form arrow type must stay out of the projection while the
+		// parameter's own TYPE stays in it.
+		final source: String = 'class X { var cb:(p:HxVarDecl, q:Int) -> Void; }';
+		final names: Array<UsesHit> = usesIn(source, 'p');
+		final types: Array<UsesHit> = usesIn(source, 'HxVarDecl');
+		Assert.equals(0, names.length, 'arrow-fn param name must not project as a type ref, got ${describe(names)}');
+		Assert.equals(1, types.length, 'the named param type must still project, got ${describe(types)}');
+		Assert.equals(1, usesIn(source, 'Int').length, 'the second param type must still project');
+	}
+
+	public function testOptionalArrowFnParamNameIsNotATypeRef(): Void {
+		final source: String = 'class X { var cb:(?p:HxVarDecl) -> Void; }';
+		final names: Array<UsesHit> = usesIn(source, 'p');
+		final types: Array<UsesHit> = usesIn(source, 'HxVarDecl');
+		Assert.equals(0, names.length, 'optional arrow-fn param name must not project as a type ref, got ${describe(names)}');
+		Assert.equals(1, types.length, 'the optional param type must still project, got ${describe(types)}');
+	}
+
 	// ======== Gating by construction ========
 
 	public function testDefaultParseFileTreeHasNoTypeRefs(): Void {

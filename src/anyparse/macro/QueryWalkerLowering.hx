@@ -62,11 +62,27 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	/** Ctors of a single-Ref wrapper enum whose payload carries the name (`HxAnonVarBody`). */
 	private static final NAME_UNWRAP_CTORS: Array<String> = ['Optional', 'Plain'];
 
-	/** `HxType` ctors whose first operand names a nominal type - the `TypeRef` emit sites. */
+	/**
+	 * Ctors whose first operand names a nominal type - the `TypeRef` emit sites.
+	 *
+	 * Matched by ctor NAME, so the match is qualified by `_typeRefSeeds`: a rule
+	 * that only sits INSIDE a type expression may carry a same-named ctor that
+	 * means something else (`HxArrowParam.Named(body)` is a NAMED PARAMETER of a
+	 * new-form arrow type, whose head operand resolves to the parameter's name).
+	 * Without the qualifier that name is emitted as a type reference, and every
+	 * consumer that rewrites what the projection reports - `CrossRename` above all
+	 * - would rename a parameter as if it were a type.
+	 */
 	private static final TYPE_REF_NAME_CTORS: Array<String> = ['Named', 'DollarType'];
 
 	/** Rule names reachable from a `type` field - the rules that need a `_typeRefs` function. */
 	private final _typeRefRules: Array<String> = [];
+
+	/**
+	 * Rules that DIRECTLY front a `type` field - the seeds of `_typeRefRules`,
+	 * and the only rules whose `TYPE_REF_NAME_CTORS` ctor names a type.
+	 */
+	private final _typeRefSeeds: Array<String> = [];
 
 	public function new(shape: ShapeBuilder.ShapeResult) {
 		super(shape);
@@ -159,16 +175,15 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 * `parseFileTypeRefs` projection can reach and nowhere else.
 	 */
 	private function collectTypeRefRules(): Void {
-		final seeds: Array<String> = [];
 		for (node in _shape.rules) for (child in node.children) {
 			// An Alt's children are ctors, whose own children are the args.
 			final args: Array<ShapeNode> = node.kind == Alt ? child.children : [child];
 			for (arg in args) if (fieldNameOf(arg) == 'type') {
 				final ref: Null<String> = refOf(arg);
-				if (ref != null && !isTerminalRule(ref) && !seeds.contains(ref)) seeds.push(ref);
+				if (ref != null && !isTerminalRule(ref) && !_typeRefSeeds.contains(ref)) _typeRefSeeds.push(ref);
 			}
 		}
-		final pending: Array<String> = seeds.copy();
+		final pending: Array<String> = _typeRefSeeds.copy();
 		while (pending.length > 0) {
 			final rule: String = pending.shift();
 			if (_typeRefRules.contains(rule)) continue;
@@ -443,10 +458,13 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	}
 
 	/**
-	 * One ctor arm of `_typeRefs`. `Named` / `DollarType` emit the `TypeRef` for
-	 * their head operand and then recurse it for nested type parameters; `Anon`
-	 * emits nothing; every other ctor just recurses its operands. The ctor's own
-	 * `_span` is the node position, replacing the caller's `fallbackSpan`.
+	 * One ctor arm of `_typeRefs`. On a rule that fronts a `type` slot,
+	 * `Named` / `DollarType` emit the `TypeRef` for their head operand and
+	 * then recurse it for nested type parameters; on any deeper rule those
+	 * ctor names mean something else and recurse like any other operand.
+	 * `Anon` emits nothing; every other ctor just recurses its operands.
+	 * The ctor's own `_span` is the node position, replacing the
+	 * caller's `fallbackSpan`.
 	 */
 	private function typeRefsCase(rule: String, branch: ShapeNode): Case {
 		final ctor: String = branch.annotations[AnnotationKeys.BASE_CTOR];
@@ -456,7 +474,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 
 		final pattern: Expr = ctorPattern(rule, ctor, argNames);
 		final body: Array<Expr> = [];
-		if (TYPE_REF_NAME_CTORS.contains(ctor)) {
+		if (TYPE_REF_NAME_CTORS.contains(ctor) && _typeRefSeeds.contains(rule)) {
 			// Only the FIRST operand is the name head; the reflective version
 			// broke out of its loop after it.
 			if (branch.children.length > 0) {
