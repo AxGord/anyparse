@@ -11,6 +11,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.SourceSlice;
 import anyparse.query.Uses.UsesHit;
+import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -132,11 +133,16 @@ final class Text {
 	public static function renderViolations(file: String, source: String, violations: Array<Violation>, flat: Bool = false): String {
 		if (violations.length == 0) return '$file: no violations\n';
 		final buf: StringBuf = new StringBuf();
+		// One line index for the file beats `Span.lineCol` per finding: that counts
+		// newlines from byte zero every time, so a file with many findings re-scanned
+		// its own source once per line reported. `lineColAt` is documented as exactly
+		// equivalent, clamps included.
+		final lines: LineIndex = new LineIndex(source);
 		if (!flat) buf.add('$file:\n');
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span != null) {
-				final pos: Position = span.lineCol(source);
+				final pos: Position = lines.lineColAt(span.from);
 				if (flat)
 					buf.add('$file:${pos.line}:${pos.col}: ');
 				else

@@ -9311,11 +9311,24 @@ final class Cli {
 	): Void {
 		// Order findings by input-file order, each file sorted by source
 		// position so the report reads top-to-bottom; shared by every format.
+		// Grouped in ONE pass rather than a filter per path: that scan was
+		// O(paths x findings) and the text branch below ran a second one. `paths`
+		// is deduplicated and order-preserving (`expandInputs`), and a file's
+		// findings enter a group in `shown` order exactly as the filter yielded
+		// them, so the emitted sequence is unchanged.
+		final byFile: Map<String, Array<Violation>> = [];
+		for (v in shown) {
+			final group: Null<Array<Violation>> = byFile[v.file];
+			if (group == null)
+				byFile[v.file] = [v];
+			else
+				group.push(v);
+		}
+		for (group in byFile) group.sort((a, b) -> spanStart(a.span) - spanStart(b.span));
 		final ordered: Array<Violation> = [];
 		for (path in paths) {
-			final group: Array<Violation> = shown.filter(v -> v.file == path);
-			group.sort((a, b) -> spanStart(a.span) - spanStart(b.span));
-			for (v in group) ordered.push(v);
+			final group: Null<Array<Violation>> = byFile[path];
+			if (group != null) for (v in group) ordered.push(v);
 		}
 
 		switch format {
@@ -9356,9 +9369,8 @@ final class Cli {
 				sysPrint(LintFormat.checkstyle(ordered, sourceOf));
 			case _:
 				for (path in paths) {
-					final group: Array<Violation> = ordered.filter(v -> v.file == path);
-					if (group.length == 0) continue;
-					sysPrint(Text.renderViolations(path, sourceOf[path] ?? '', group, flat));
+					final group: Null<Array<Violation>> = byFile[path];
+					if (group != null) sysPrint(Text.renderViolations(path, sourceOf[path] ?? '', group, flat));
 				}
 		}
 	}
