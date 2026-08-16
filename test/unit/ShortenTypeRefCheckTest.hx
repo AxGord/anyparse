@@ -494,14 +494,28 @@ class ShortenTypeRefCheckTest extends Test {
 	}
 
 	/**
-	 * KNOWN MISS — an anonymous structure used as a GENERIC ARGUMENT. The type-refs projection
-	 * stops at the generic head there (`QueryWalkerLowering` emits nothing for the `Anon` ctor
-	 * reached through a `type` field), so no node carries the nominal inside it. Every other
-	 * nesting — anon at the annotation head, generic in generic, function type in generic — does
-	 * project. A behaviour pin, not a gate: closing it is a grammar-projection slice.
+	 * An anonymous structure used as a GENERIC ARGUMENT. The type-refs projection used to stop
+	 * at the generic head — `QueryWalkerLowering` emitted nothing for an `Anon` reached through a
+	 * `type` field — so no node carried the nominal inside the braces and the check could not see
+	 * it. Every other nesting (anon at the annotation head, generic in generic, function type in
+	 * generic) already projected.
 	 */
-	public function testAnonymousStructureInsideAGenericArgumentIsAKnownMiss(): Void {
-		Assert.equals(0, violations(consumer('import pkg.deep.Foo;\n\n', 'Array<{x:pkg.deep.Foo}>')).length);
+	public function testAnonymousStructureInsideAGenericArgumentShortens(): Void {
+		final src: String = consumer('import pkg.deep.Foo;\n\n', 'Array<{x:pkg.deep.Foo}>');
+		Assert.equals(1, violations(src).length, 'the qualified name inside the anon is reachable');
+		Assert.equals('\t\tfinal v:Array<{x:Foo}> = g();', annotationLine(applyFix(src)));
+	}
+
+	/**
+	 * Occurrences inside anon structures COUNT toward `IMPORT_THRESHOLD` like any other — and the
+	 * import they earn lands once, not once per occurrence.
+	 */
+	public function testAnonymousStructureOccurrencesCountTowardTheImportThreshold(): Void {
+		final src: String = inClass('', '\t\tfinal a:Array<{x:pkg.deep.Foo}> = g();\n\t\tfinal b:Array<{y:pkg.deep.Foo}> = g();\n');
+		final out: String = applyFix(src);
+		Assert.equals(1, out.split('import pkg.deep.Foo;').length - 1, 'exactly one import added, got: $out');
+		Assert.isTrue(out.indexOf('final a:Array<{x:Foo}> = g();') != -1, 'first use shortened, got: $out');
+		Assert.isTrue(out.indexOf('final b:Array<{y:Foo}> = g();') != -1, 'second use shortened, got: $out');
 	}
 
 	public function testAnnotationWithoutAnInitializerShortens(): Void {

@@ -145,6 +145,18 @@ class PreferMapTypeCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * A concrete map inside an anonymous structure inside a type argument. The check reads the
+	 * type-refs projection, which dropped the whole struct — so the rewrite could not reach the
+	 * site at all. The struct's own field NAME is asserted unchanged in the same string.
+	 */
+	public function testMapInsideAnAnonymousStructureRewritten(): Void {
+		Assert.equals(
+			imp('StringMap', 'class C { var m:Array<{ m:Map<String, Int> }>; }'),
+			fixed(imp('StringMap', 'class C { var m:Array<{ m:StringMap<Int> }>; }'))
+		);
+	}
+
 	/** Per-site edits compose: the outer head's key insert and the inner head's name replacement never overlap. */
 	public function testMapOfMapsRewrittenAtBothLevels(): Void {
 		Assert.equals(

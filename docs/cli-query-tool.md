@@ -150,18 +150,34 @@ Note the shape: a parameterized type flattens into **sibling**
 **The dump is deliberately RAW — it shows the projection as it is
 today, gaps included.** It is not a curated view of "the types this
 file references", and a missing node here means `uses` and `blast` are
-blind to that position too. The known gap: an **anonymous structure**
-never reaches the projection, so its member types vanish —
+blind to that position too.
+
+**Anonymous structures are covered.** The field *types* of an anon
+structure project wherever the structure itself can appear — as the
+annotation (`var v:{f:Doc}`), inside a type parameter
+(`Array<{f:Doc}>`, `Map<String,{f:Doc}>`, `Null<{f:Doc}>`), as an arrow
+operand (`{f:Doc} -> Void`) or arrow-function parameter
+(`(q:{f:Doc}) -> Void`), behind `(` `)` or the `?` optional-arg marker,
+and on a typedef right-hand side —
 
 ```
 $ apq probe 'class C { function f(?d: Array<{ node: Doc }>): Void {} }' --type-refs
-(module (ClassDecl C (FnMember f (Optional d (TypeRef Array)) (Named Void) (BlockBody))))
+(module
+  (ClassDecl C (FnMember f (Optional d (TypeRef Array) (TypeRef Doc)) (Named Void) (BlockBody))))
 ```
 
-`Doc` is absent, and `(TypeRef Array)` is childless. That is a
-projection defect, pinned by
-`unit.ApqAstTypeRefsCliTest.testAnonStructInTypeParamIsAbsent`; the
-expectation changes when the defect is fixed, the flag does not.
+Field **names** are never emitted: `apq uses node` on that source is 0
+hits. A name in a type-position projection would be read as a type
+reference by every consumer of it — `Naming` discounts these spans from
+its completeness gate and `CrossRename` rewrites at each of them, so a
+leaked name would silently orphan a value reference or rename a field
+label. Nesting does not duplicate either: an anon inside an anon
+reports each type once.
+
+Residual gap: the head of a **structural extension** —
+`typedef Ext = { > Base, var x:Doc; }` — does not project `Base` (the
+`ExtendsField(type:HxTypeRef)` head is not a nominal-name constructor).
+`Doc` and every other field type in the same body do project.
 
 ### `--doc` / `--source` (opt-in, on `refs` / `uses` / `ast`)
 

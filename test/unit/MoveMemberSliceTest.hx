@@ -146,6 +146,24 @@ class MoveMemberSliceTest extends Test {
 		Assert.isTrue(newB.contains('import haxe.io.Bytes;'), 'dependency import should carry to B');
 	}
 
+	/**
+	 * The carry when the moved signature names its dependency ONLY inside an
+	 * anonymous structure — the shape `pushImportEdits` could not see while the
+	 * type-refs projection dropped the whole struct.
+	 */
+	public function testDependencyImportInsideAnAnonymousStructureCarried(): Void {
+		final a: String = 'package pkg;\n\nimport haxe.io.Bytes;\n\nclass A {\n'
+			+ '\tpublic static function util(b:Array<{node:Bytes}>):Int return b.length;\n}';
+		final b: String = 'package pkg;\n\nclass B {}';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
+		]);
+		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
+		Assert.isTrue(newB.contains('import haxe.io.Bytes;'), 'the anon field type dependency should carry to B');
+		Assert.isTrue(newB.contains('b:Array<{node:Bytes}>'), 'the moved signature should land in B');
+	}
+
 	public function testCrossPackageCallerGainsImport(): Void {
 		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';

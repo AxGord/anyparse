@@ -55,6 +55,21 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		assertFixCanonicalWithIndex(src, '_shape', 'var shape');
 	}
 
+	/**
+	 * The completeness gate DISCOUNTS type references to the member's name — an occurrence that is
+	 * neither a renamed reference nor a proven non-reference vetoes the whole rename. An annotation
+	 * inside an anonymous structure lives only in the type-ref projection, which dropped the struct
+	 * whole, so `Array<{node:Thing}>` read as an unattributable reference and refused the rename.
+	 */
+	public function testFixRenamesFieldNamedAfterATypeUsedInsideAnAnonymousStructure(): Void {
+		final src: String = 'package pkg;\n\nclass C {\n\tprivate var Thing:Int = 0;\n\n\tpublic var box:Array<{node:Thing}>;\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: src },
+			{ file: 'pkg/Thing.hx', source: 'package pkg;\n\nclass Thing {\n\tpublic function new() {}\n}' }
+		];
+		assertLocalRenamed(files, 'pkg/C.hx', src, '_thing', 'var Thing');
+	}
+
 	public function testFixSkipsPrivateFieldWithSubclass(): Void {
 		// A subclass (any file) could read the inherited field → report-only.
 		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n}';

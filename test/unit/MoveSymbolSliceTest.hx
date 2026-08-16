@@ -120,6 +120,24 @@ class MoveSymbolSliceTest extends Test {
 	}
 
 	/**
+	 * The same carry when the dependency is named ONLY inside an anonymous
+	 * structure. `dependencyImportsToCarry` walks the type-refs projection,
+	 * which dropped the whole struct, so the import stayed behind and the
+	 * relocated body failed to resolve — a build break, not a loud refusal.
+	 */
+	public function testDependencyImportInsideAnAnonymousStructureCarried(): Void {
+		final a: String = 'package pkg;\n\nimport ext.Ext;\n\nclass Foo {\n\tvar e:Array<{node:Ext}>;\n}';
+		final b: String = 'package pkg;\n\nclass B {}';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 5, 7, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
+		]);
+		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
+		Assert.isTrue(newB.contains('import ext.Ext;'), 'B should gain the import the anon field type needs');
+		Assert.isTrue(newB.contains('var e:Array<{node:Ext}>;'), 'Foo body should land in B');
+	}
+
+	/**
 	 * A leading doc-comment moves WITH the type. `parseFile` drops the
 	 * doc-comment from the decl span, so the cut must scan backward over
 	 * it; the destination should carry the doc-comment line immediately

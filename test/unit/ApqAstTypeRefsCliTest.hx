@@ -21,8 +21,8 @@ using StringTools;
  * file" had no answer inside hxq. The flag renders that tree through the very
  * same S-expr / JSON path the default `ast` uses.
  *
- * The dump is deliberately RAW — `testAnonStructInTypeParamIsAbsent` pins a
- * live projection gap rather than papering over it.
+ * The dump is deliberately RAW — `testAnonStructInTypeParamProjects` pins
+ * the anonymous-structure shape it renders, names excluded.
  *
  * Output is observed by swapping `process.stdout.write`, which is a nodejs-only
  * capability; the non-nodejs arms fall back to exit codes plus the
@@ -42,13 +42,13 @@ class ApqAstTypeRefsCliTest extends Test {
 		+ '    (FnMember f (Required p) (Named Null) (ExprBody (ReturnExpr (NullLit))))))\n';
 
 	/**
-	 * PINNED DEFECT — `Array<{ node: Doc, crosses: Bool }>` reaches the
-	 * projection as a CHILDLESS `(TypeRef Array)`: the anonymous structure and
-	 * therefore `Doc` / `Bool` are dropped. This expectation is what changes
-	 * when the anon-structure slice lands; the flag itself does not.
+	 * `Array<{ node: Doc, crosses: Bool }>` projects the anonymous structure's
+	 * field TYPES as siblings of the enclosing `Array`, and its field NAMES
+	 * not at all — a name reaching the projection would be read as a type
+	 * reference by every consumer of it.
 	 */
-	private static final ANON_TYPE_REFS: String =
-		'(module (ClassDecl C (FnMember f (Optional d (TypeRef Array)) (Named Void) (BlockBody))))\n';
+	private static final ANON_TYPE_REFS: String = '(module\n  (ClassDecl\n    C\n'
+		+ '    (FnMember f (Optional d (TypeRef Array) (TypeRef Doc) (TypeRef Bool)) (Named Void) (BlockBody))))\n';
 
 	public function testTypeRefsDumpsEveryTypePosition(): Void {
 		#if nodejs
@@ -75,11 +75,12 @@ class ApqAstTypeRefsCliTest extends Test {
 		Assert.equals(MIXED_TYPE_REFS, Text.render(new HaxeQueryPlugin().parseFileTypeRefs(MIXED_SOURCE)));
 	}
 
-	public function testAnonStructInTypeParamIsAbsent(): Void {
+	public function testAnonStructInTypeParamProjects(): Void {
 		#if nodejs
 		final dump: String = captureStdout(['ast', '--code', ANON_SOURCE, '--type-refs']);
 		Assert.equals(ANON_TYPE_REFS, dump);
-		Assert.isFalse(dump.contains('Doc'), 'documented projection gap: the anon structure must still be missing, got: $dump');
+		Assert.isTrue(dump.contains('(TypeRef Doc)'), 'the anon field type must reach the projection, got: $dump');
+		Assert.isFalse(dump.contains('node'), 'the anon field NAME must stay out of the projection, got: $dump');
 		#else
 		Assert.equals(ANON_TYPE_REFS, Text.render(new HaxeQueryPlugin().parseFileTypeRefs(ANON_SOURCE)));
 		#end

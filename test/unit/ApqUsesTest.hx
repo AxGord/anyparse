@@ -95,6 +95,67 @@ class ApqUsesTest extends Test {
 		Assert.equals(1, types.length, 'the optional param type must still project, got ${describe(types)}');
 	}
 
+	public function testAnonInsideATypeParameterProjects(): Void {
+		// An anon struct in a type-PARAMETER slot reaches `_typeRefs`, not the
+		// decl-host descent in `_walk`, so before the `Anon` arm recursed every
+		// nominal name inside the braces was dropped with the whole struct.
+		assertAnonFieldTypeProjects('class X { var a:Array<{ f:HxVarDecl }>; }', 'Array type param');
+		assertAnonFieldTypeProjects('class X { var a:Map<String, { f:HxVarDecl }>; }', 'Map value param');
+		assertAnonFieldTypeProjects('class X { var a:Null<{ f:HxVarDecl }>; }', 'Null param');
+		assertAnonFieldTypeProjects('class X { var a:Array<Array<{ f:HxVarDecl }>>; }', 'nested Array param');
+		assertAnonFieldTypeProjects('typedef T = Array<{ f:HxVarDecl }>;', 'typedef RHS type param');
+	}
+
+	public function testAnonInAnOperandPositionProjects(): Void {
+		// Same loss on every `HxType` ctor that carries an operand: the arrow
+		// operands, the parens atom and the `?` optional-arg marker.
+		assertAnonFieldTypeProjects('class X { var a:{ f:HxVarDecl } -> Void; }', 'old-form arrow operand');
+		assertAnonFieldTypeProjects('class X { var a:(q:{ f:HxVarDecl }) -> Void; }', 'new-form arrow parameter');
+		assertAnonFieldTypeProjects('class X { var a:({ f:HxVarDecl }); }', 'parenthesised type');
+		assertAnonFieldTypeProjects('class X { var a:?{ f:HxVarDecl }; }', 'optional-arg marker');
+		assertAnonFieldTypeProjects('typedef T = { f:HxVarDecl } -> Void;', 'typedef RHS arrow operand');
+	}
+
+	public function testAnonInAnOptionalParameterProjects(): Void {
+		final source: String = 'class X { function m(?p:Array<{ f:HxVarDecl }>):Void {} }';
+		assertAnonFieldTypeProjects(source, 'optional fn param');
+		Assert.equals(0, usesIn(source, 'p').length, 'the optional parameter name must stay out of the projection');
+	}
+
+	public function testEveryNominalInsideAnAnonProjects(): Void {
+		// The whole struct was dropped, so a parameterized field type lost its
+		// head and its own parameters along with the field type.
+		final source: String = 'class X { var a:Array<{ inner:Map<String, HxVarDecl> }>; }';
+		Assert.equals(1, usesIn(source, 'Array').length, 'the enclosing Array must still project');
+		Assert.equals(1, usesIn(source, 'Map').length, 'the anon field head Map expected, got ${describe(usesIn(source, 'Map'))}');
+		Assert.equals(
+			1, usesIn(source, 'String').length, 'the anon field key param String expected, got ${describe(usesIn(source, 'String'))}'
+		);
+		Assert.equals(
+			1, usesIn(source, 'HxVarDecl').length, 'the anon field value param expected, got ${describe(usesIn(source, 'HxVarDecl'))}'
+		);
+	}
+
+	public function testAnonFieldNameIsNotATypeRef(): Void {
+		// `Naming` DISCOUNTS the type-ref spans from its completeness gate, so a
+		// field name leaking into the projection would silently orphan a real
+		// value reference of the same name.
+		final source: String = 'class X { var a:Array<{ node:HxVarDecl }>; }';
+		final names: Array<UsesHit> = usesIn(source, 'node');
+		final types: Array<UsesHit> = usesIn(source, 'HxVarDecl');
+		Assert.equals(0, names.length, 'anon field name must not project as a type ref, got ${describe(names)}');
+		Assert.equals(1, types.length, 'the anon field type must project, got ${describe(types)}');
+	}
+
+	public function testNestedAnonReportsEachTypeExactlyOnce(): Void {
+		// `seqFieldDescent` picks EITHER the decl-host descent OR the type-ref
+		// call, never both — an anon nested in an anon must not double-report.
+		final direct: Array<UsesHit> = usesIn('class X { var a:{ outer:{ inner:HxVarDecl } }; }', 'HxVarDecl');
+		final viaParam: Array<UsesHit> = usesIn('class X { var a:Array<{ outer:{ inner:HxVarDecl } }>; }', 'HxVarDecl');
+		Assert.equals(1, direct.length, 'anon-in-anon in a type slot expected once, got ${describe(direct)}');
+		Assert.equals(1, viaParam.length, 'anon-in-anon in a type param expected once, got ${describe(viaParam)}');
+	}
+
 	// ======== Gating by construction ========
 
 	public function testDefaultParseFileTreeHasNoTypeRefs(): Void {
@@ -114,6 +175,11 @@ class ApqUsesTest extends Test {
 	private static function usesIn(source: String, name: String): Array<UsesHit> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		return Uses.find(name, plugin.parseFileTypeRefs(source), plugin.typeRefShape());
+	}
+
+	private static function assertAnonFieldTypeProjects(source: String, label: String): Void {
+		final hits: Array<UsesHit> = usesIn(source, 'HxVarDecl');
+		Assert.equals(1, hits.length, '$label: the anon field type must project exactly once, got ${describe(hits)}');
 	}
 
 	private static function describe(hits: Array<UsesHit>): String {

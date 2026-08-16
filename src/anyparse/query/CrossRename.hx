@@ -96,11 +96,6 @@ typedef FileChange = {
  *    alias `U`, not `T`, so the `pkg.T` segment is not matched. The
  *    alias `U` (used in type positions) IS covered, but the import's
  *    own `T` segment is left, which dangles if `T` moved package.
- *  - A type position inside an ANONYMOUS STRUCTURE type — `{ node: T, … }`. The
- *    type-ref projection does not carry it, so `Uses.find(T)` reports nothing there
- *    and the plain-name arm has never covered it either. Measured on this repo, renaming
- *    `anyparse.core.Doc` (1044 occupied sites): 70 such positions across 3 files, every
- *    one a loud `Type not found`, and the ONLY class that rename still leaves behind.
  *  - Renaming a module's MAIN type renames the MODULE PATH with it, and the op
  *    does not touch the FILE: `Mod.hx` must be renamed to match by hand, and
  *    references to the module's OTHER sub-module types (`pkg.Mod.Other`) still
@@ -125,9 +120,9 @@ final class CrossRename {
 
 	/** The advisory appended to every successful rename. */
 	private static final ADVISORY: String = 'type-namespace rename only — verify bare `Class<T>` value uses (`var c = T;`),'
-		+ ' aliased imports (`import pkg.T as U;`), type positions inside an anonymous structure (`{ node: T }`), and any'
-		+ ' cross-package declarations by hand. Renaming the MAIN type of a module renames the module path with it: rename the'
-		+ ' FILE to match, and check references to the other sub-module types of that module.';
+		+ ' aliased imports (`import pkg.T as U;`), and any cross-package declarations by hand. Renaming the MAIN type of a'
+		+ ' module renames the module path with it: rename the FILE to match, and check references to the other sub-module'
+		+ ' types of that module.';
 
 	/**
 	 * Rename the type declaration at `line:col` (in `cursorFile` /

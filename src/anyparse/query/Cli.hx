@@ -6022,11 +6022,10 @@ final class Cli {
 		sysPrint('(pkg.Mod.T, and Mod.T from the module own package), and\n');
 		sysPrint('static-receiver accesses (T.staticMethod() / T.CONST / pkg.Mod.CONST\n');
 		sysPrint('whose receiver is not a value binding). Type-namespace only: bare\n');
-		sysPrint('Class<T> value uses (var c = T;), aliased imports, and type positions\n');
-		sysPrint('inside an anonymous structure ({ node: T }) are NOT rewritten (a missed\n');
-		sysPrint('form dangles into a compile error, never a silent change). Renaming the\n');
-		sysPrint('MAIN type of a module renames the module path with it — rename the FILE\n');
-		sysPrint('to match by hand. The rename refuses\n');
+		sysPrint('Class<T> value uses (var c = T;) and aliased imports are NOT rewritten\n');
+		sysPrint('(a missed form dangles into a compile error, never a silent change).\n');
+		sysPrint('Renaming the MAIN type of a module renames the module path with it —\n');
+		sysPrint('rename the FILE to match by hand. The rename refuses\n');
 		sysPrint('if the type is declared in more than one file under scope, if any scope\n');
 		sysPrint('file does not parse, or if any rewritten file fails to re-parse — the\n');
 		sysPrint('write is atomic. Without --write a per-file occurrence summary is printed.\n');
@@ -6297,7 +6296,7 @@ final class Cli {
 			'  --count             Print just the integer direct-child count at the displayed root (one line per match with --select). Sanity-check for member counts before writing a corpus-driver test assertion.\n'
 		);
 		sysPrint(
-			'  --type-refs         Render the type-position projection (parseFileTypeRefs) instead of the default tree — the dotted type references of the file (field/var annotations, param + return types, enum-ctor params, type parameters). RAW dump: it shows the projection as it is today, gaps included (an anonymous structure inside a type parameter renders childless).\n'
+			'  --type-refs         Render the type-position projection (parseFileTypeRefs) instead of the default tree — the dotted type references of the file (field/var annotations, param + return types, enum-ctor params, type parameters, and the field types of an anonymous structure in any of those). Field NAMES are never emitted — only types.\n'
 		);
 		sysPrint('  --writer-output     Parse + format-write through the plugin trivia pipeline and print the emitted source\n');
 		sysPrint(
@@ -8381,9 +8380,8 @@ final class Cli {
 					// consumed and nothing exposed. "List every dotted type
 					// reference in this file" was unanswerable through hxq
 					// without it. The dump is deliberately RAW: it shows the
-					// projection's current gaps (e.g. anonymous structures
-					// inside a type parameter collapse to a childless node)
-					// rather than a repaired view.
+					// projection exactly as the consumers read it, gaps
+					// included, rather than a repaired view.
 					typeRefs = true;
 				case '--count':
 					// ω-ast-count: print just the integer direct-child count

@@ -429,8 +429,11 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	/**
 	 * Body of `_typeRefs<Leaf>S` - the `parseFileTypeRefs` projection. Surfaces
 	 * every nominal type name inside a type value as a `TypeRef` node so
-	 * `apq uses` can see it. `Anon` is skipped here: its body is already
-	 * surfaced by the decl-host descent in `_walk`.
+	 * `apq uses` can see it. `Anon` recurses here like any other ctor: the
+	 * decl-host descent in `_walk` reaches an anon only when the anon IS the
+	 * value of a `type` slot, so one nested inside a type expression
+	 * (`Array<{ f: T }>`, `{ f: T } -> Void`, `?{ f: T }`) arrives here — and
+	 * skipping it dropped the whole struct, with every nominal name in it.
 	 */
 	private function lowerTypeRefs(rule: String, node: ShapeNode): Expr {
 		return switch node.kind {
@@ -462,15 +465,13 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 * `Named` / `DollarType` emit the `TypeRef` for their head operand and
 	 * then recurse it for nested type parameters; on any deeper rule those
 	 * ctor names mean something else and recurse like any other operand.
-	 * `Anon` emits nothing; every other ctor just recurses its operands.
+	 * every other ctor, `Anon` included, just recurses its operands.
 	 * The ctor's own `_span` is the node position, replacing the
 	 * caller's `fallbackSpan`.
 	 */
 	private function typeRefsCase(rule: String, branch: ShapeNode): Case {
 		final ctor: String = branch.annotations[AnnotationKeys.BASE_CTOR];
 		final argNames: Array<String> = [for (i in 0...branch.children.length) '_a$i'];
-
-		if (ctor == ANON_CTOR) return { values: [ctorPattern(rule, ctor, [for (_ in argNames) '_'])], expr: macro {} };
 
 		final pattern: Expr = ctorPattern(rule, ctor, argNames);
 		final body: Array<Expr> = [];

@@ -55,6 +55,27 @@ class CrossRenameSliceTest extends Test {
 	}
 
 	/**
+	 * A type position INSIDE an anonymous structure. The one nested in a type
+	 * PARAMETER (`Array<{node:Foo}>`) was the documented residual: the projection
+	 * dropped the whole struct, so `Uses.find` reported nothing there and the op
+	 * left a dangling name that only the compiler caught. The one whose struct IS
+	 * the annotation (`p:{cb:Foo -> Void}`) always worked — asserting the file as
+	 * ONE string keeps the fixture from passing on unchanged input.
+	 */
+	public function testTypePositionInsideAnAnonymousStructureRenames(): Void {
+		final a: String = 'class Foo {\n\tpublic function new() {}\n}';
+		final b: String = 'class Use {\n\tvar f:Array<{node:Foo}>;\n\tfunction g(p:{cb:Foo -> Void}):Void {}\n}';
+		final expectedB: String = 'class Use {\n\tvar f:Array<{node:Bar}>;\n\tfunction g(p:{cb:Bar -> Void}):Void {}\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(2, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
 	 * `final class` rename — the dominant style. File A declares
 	 * `final class Foo`; the named node is the inner `ClassForm` so the
 	 * decl-name occurrence is collected through the final-aware
