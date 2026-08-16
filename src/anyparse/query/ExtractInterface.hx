@@ -53,7 +53,6 @@ private typedef IfaceMethod = {
 @:nullSafety(Strict)
 final class ExtractInterface {
 
-	/** The sibling node kinds a member's modifiers / metadata project to. */
 	/**
 	 * Extract an interface named `ifaceName` (written to `ifaceFile`) from
 	 * `srcTypeName` in `srcSource`. `memberNames` selects the methods; null

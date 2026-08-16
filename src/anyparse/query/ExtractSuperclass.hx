@@ -58,7 +58,6 @@ private enum Either<L, R> {
 @:nullSafety(Strict)
 final class ExtractSuperclass {
 
-	/** The sibling node kinds a member's modifiers / metadata project to. */
 	/**
 	 * Extract a superclass `superName` (written to `superFile`) from
 	 * `srcTypeName` in `srcSource`, pulling up `memberNames`. PURE — the

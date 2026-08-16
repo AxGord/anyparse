@@ -134,7 +134,6 @@ final class ExtractConstant {
 		};
 	}
 
-	/** Does `decl` declare a member named `name` (any field / method)? */
 	/**
 	 * Spans of every plain string literal equal to `literal` anywhere under `typeNode`: a single-quoted `SingleStringExpr` with exactly one `Literal` child (an interpolated string carries extra children, so it is skipped), or any `DoubleStringExpr` (Haxe double-quoted strings never interpolate, so each is a plain literal). Matched on the raw source between the quotes; metadata subtrees are skipped.
 	 */
