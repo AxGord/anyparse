@@ -37,7 +37,6 @@ using StringTools;
 @:nullSafety(Strict)
 final class EncapsulateField {
 
-	/** The sibling node kinds a member's modifiers / metadata project to. */
 	/**
 	 * Encapsulate the field `fieldName` of `typeName` in `source`. `reformat`
 	 * canonicalises a drifted file. Returns `Ok(rewritten)` or an `Err`.
@@ -136,7 +135,6 @@ final class EncapsulateField {
 		return hit;
 	}
 
-	/** Does `decl` declare a member named `name` (any field / method)? */
 	/**
 	 * Is there already an accessor clause `(...)` right after the field
 	 * name (within its group)? Skips whitespace from `nameEnd`; a `(` means

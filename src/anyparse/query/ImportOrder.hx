@@ -38,7 +38,6 @@ typedef ImportLine = {
 	final chunkTo: Int;
 }
 
-/** One run weighed as a host for a fresh import: the run, whether an order explains it, its dotted-prefix affinity, and the index the path sorts before (-1 = append at the run's end). */
 /**
  * Where a fresh import LINE goes in a file's header, and what a caller must write there —
  * `ImportOrder.insertionFor`'s answer, and the ONE place that question is answered.
@@ -55,6 +54,8 @@ typedef ImportAnchor = {
 	final lead: String;
 	final order: Int;
 }
+
+/** One run weighed as a host for a fresh import: the run, whether an order explains it, its dotted-prefix affinity, and the index the path sorts before (-1 = append at the run's end). */
 private typedef RunChoice = {
 	final run: Array<ImportLine>;
 	final ordered: Bool;

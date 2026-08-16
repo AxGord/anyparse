@@ -67,7 +67,6 @@ private typedef Parsed = {
 @:nullSafety(Strict)
 final class InheritanceMove {
 
-	/** The sibling node kinds a member's modifiers / metadata project to. */
 	/** Move `member` from the subclass `subType` up to its superclass `superType`. */
 	public static inline function pullUp(
 		srcFile: String, subType: String, member: String, superType: String, scopeFiles: Array<{ file: String, source: String }>,

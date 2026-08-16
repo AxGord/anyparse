@@ -381,6 +381,18 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	}
 
 	/**
+	 * The per-file type printer both oracle-assisted passes build identically: the file's import
+	 * map from the grammar's `TypeInfoProvider` (empty when the plugin exposes none) plus the run's
+	 * resolution index. The printer owns the short-name / add-import / fully-qualified decision for
+	 * every nominal the oracle names, and accumulates the imports its short forms rely on.
+	 */
+	public static function printerFor(source: String, tree: QueryNode, plugin: GrammarPlugin): TypeRefPrinter {
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
+		return TypeRefPrinter.forFile(source, tree, importMap, plugin, RefactorSupport.resolutionIndexOf(plugin));
+	}
+
+	/**
 	 * `printed` with COMPILER-QUALIFIED type parameters reduced to the bare names a source file
 	 * can actually spell. The compiler prints a type parameter with its owner in front, in TWO
 	 * forms, both unwritable (`Module pkg.Box does not define type T`): a CLASS parameter as
@@ -402,18 +414,6 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 * the same character class `TypeRefPrinter.printTypeExpr` uses, so the two agree on what a
 	 * type reference is.
 	 */
-	/**
-	 * The per-file type printer both oracle-assisted passes build identically: the file's import
-	 * map from the grammar's `TypeInfoProvider` (empty when the plugin exposes none) plus the run's
-	 * resolution index. The printer owns the short-name / add-import / fully-qualified decision for
-	 * every nominal the oracle names, and accumulates the imports its short forms rely on.
-	 */
-	public static function printerFor(source: String, tree: QueryNode, plugin: GrammarPlugin): TypeRefPrinter {
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
-		return TypeRefPrinter.forFile(source, tree, importMap, plugin, RefactorSupport.resolutionIndexOf(plugin));
-	}
-
 	public static function stripTypeParamQualifiers(printed: String, site: AnnotationSite): String {
 		return mapTypeRuns(printed, run -> bareTypeParam(run, site));
 	}
