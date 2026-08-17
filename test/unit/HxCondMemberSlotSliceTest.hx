@@ -74,19 +74,85 @@ class HxCondMemberSlotSliceTest extends HxTestHelpers {
 	}
 
 	/**
-	 * Regression guard for the `CondBody`-is-LAST dispatch rule: a region
-	 * whose branches are single EXPRESSIONS parsed through
-	 * `HxFnBody.ExprBody` -> `HxExpr.ConditionalExpr` before this slice and
-	 * must keep doing so. Moving `CondBody` earlier in the enum silently
-	 * re-routes it.
+	 * Companion pin to the member-boundary guards in this class. A region whose
+	 * branches are single EXPRESSIONS used to reach `HxExpr.ConditionalExpr`
+	 * through `HxFnBody.ExprBody`; since `CondBody` moved ahead of `ExprBody`
+	 * it projects per-branch function BODIES instead. The re-route is the
+	 * price of the fix and is deliberate — this test is what makes a silent
+	 * reversal of it visible.
 	 */
-	public function testBalancedBlockBranchesStayExpressionScoped(): Void {
+	public function testBalancedBlockBranchesRouteThroughCondBody(): Void {
 		final src: String = 'class C {\n\tfunction f():Int #if lua { return 1; } #else { return 2; } #end\n}';
+		final inner: HxConditionalFnBody = expectCondBody(parseSingleFn(src).body);
+		switch inner.body {
+			case BlockBody(_):
+			case _:
+				Assert.fail('expected BlockBody in the then-branch, got ${inner.body}');
+		}
+		switch inner.elseBody {
+			case BlockBody(_):
+			case _:
+				Assert.fail('expected BlockBody in the else-branch, got ${inner.elseBody}');
+		}
+	}
+
+	/**
+	 * A region `CondBody` CANNOT represent — an `if` whose `else` lives
+	 * outside the guard — must still fail-rewind into `ExprBody` and be
+	 * spliced. This passes under EITHER ctor order, so what it pins is the
+	 * fail-rewind itself, not the ordering: `HxCondSpliceRaw` exists for
+	 * exactly these fragments and the reorder must not starve it.
+	 */
+	public function testSpliceShapedBodyStaysExpressionScoped(): Void {
+		final src: String = 'class C {\n\tfunction f() #if x if (c) g(); else #end h();\n}';
 		switch parseSingleFn(src).body {
 			case ExprBody(_):
 			case _:
-				Assert.fail('expected ExprBody (ConditionalExpr), got a re-routed body');
+				Assert.fail('expected ExprBody (CondSpliceExpr), got a re-routed body');
 		}
+	}
+
+	/**
+	 * The shape class the `CondBody`-before-`ExprBody` order gives up. The
+	 * region is BALANCED, so `CondBody` claims it and commits, and the tail
+	 * after `#end` is stranded at member position with nothing to backtrack
+	 * into. All three are legal Haxe that `ExprBody` ->
+	 * `HxExpr.ConditionalExpr` used to take. Zero occurrences in a
+	 * ~20,300-file sweep and loud rather than silent, so the trade was
+	 * taken — this test is what makes recovering it visible.
+	 */
+	public function testBalancedRegionWithExpressionTailIsRefused(): Void {
+		for (src in [
+			'class C {\n\tfunction f():Int #if a 1 #else 2 #end + 3;\n}',
+			'class C {\n\tfunction f() #if a x #else y #end.g();\n}',
+			'class C {\n\tfunction f() #if a x #else y #end ? p : q;\n}'
+		]) Assert.raises(HaxeParser.parse.bind(src));
+	}
+
+	/**
+	 * `HxFnBody` is reachable from four slots other than `HxFnDecl.body`,
+	 * and the reorder changes dispatch at every one of them. A `CondBody`
+	 * nested inside a `CondBody` branch exercises the recursive slot.
+	 */
+	public function testNestedCondBodyInsideABranch(): Void {
+		final src: String = 'class C {\n\tfunction f():Int #if a #if b return 1; #else return 2; #end #else return 3; #end\n}';
+		final outer: HxConditionalFnBody = expectCondBody(parseSingleFn(src).body);
+		expectCondBody(outer.body);
+		triviaEquals(src, 'nested cond fn body');
+	}
+
+	/**
+	 * `std/haxe/Int64.hx:55` — what the swallow ate there was the NEXT
+	 * member's doc comment plus its `public` keyword, so a rewrite moved the
+	 * doc inside `ofInt`'s body and left `toInt` private.
+	 */
+	public function testCondFnBodyKeepsFollowingMemberDocAndVisibility(): Void {
+		final src: String = 'class C {\n\t@:from public static inline function ofInt(x:Int):Int64'
+			+ ' #if lua return mk(x, 1); #else return mk(x, 2); #end\n'
+			+ '\n\t/**\n\t\tDoc of the next member.\n\t**/\n\tpublic static inline function toInt(x:Int64):Int {\n\t\treturn x.low;\n\t}\n}';
+		expectTwoMembersLedByCondBody(src);
+		Assert.isTrue(writeModule(src).indexOf('public static inline function toInt') != -1, 'the next member keeps `public`');
+		triviaEquals(src, 'Int64.ofInt with a documented member after #end');
 	}
 
 	public function testPlainFnBodiesUnaffected(): Void {
@@ -199,6 +265,33 @@ class HxCondMemberSlotSliceTest extends HxTestHelpers {
 	}
 
 	/**
+	 * A `#if` region occupying the WHOLE body slot must end at its own
+	 * `#end`: whatever follows belongs to the class, not to the body.
+	 * The source here compiles under BOTH define sets, so no reading of
+	 * it can justify folding `g` into `f`.
+	 */
+	public function testCondFnBodyStopsAtEndAndKeepsFollowingMember(): Void {
+		final src: String =
+			'class C {\n\tfunction f():Int #if flag return 1; #else return 2; #end\n\n\tfunction g():Int {\n\t\treturn 3;\n\t}\n}';
+		final ast: HxClassDecl = expectTwoMembersLedByCondBody(src);
+		Assert.equals('g', (expectFnMember(ast.members[1].member).name: String));
+		triviaEquals(src, 'cond fn body followed by another member');
+	}
+
+	/**
+	 * The `Json.hx` body shape with a member after `#end`. The swallow also
+	 * ate that member's leading `static`, so a rewrite silently demoted
+	 * `other` from static to instance — a semantic change, not a layout one.
+	 */
+	public function testCondFnBodyKeepsFollowingMemberModifier(): Void {
+		final src: String = 'class C {\n\tpublic static function parse(t:String):Dynamic #if flash11 ; #else {\n\t\treturn 1;\n\t} #end\n'
+			+ '\n\tstatic function other():Void {}\n}';
+		expectTwoMembersLedByCondBody(src);
+		Assert.isTrue(writeModule(src).indexOf('static function other') != -1, 'the following member keeps its `static`');
+		triviaEquals(src, 'Json.parse followed by a static member');
+	}
+
+	/**
 	 * Byte-exact check through the TRIVIA writer - the pipeline `hxq fmt`
 	 * runs. `HxModuleWriter.write` normalises the per-branch `;` out of a
 	 * conditional region (documented consume-not-store caveat), so it
@@ -228,6 +321,13 @@ class HxCondMemberSlotSliceTest extends HxTestHelpers {
 			case CondBody(inner): inner;
 			case _: throw 'expected CondBody, got $body';
 		};
+	}
+
+	private function expectTwoMembersLedByCondBody(source: String): HxClassDecl {
+		final ast: HxClassDecl = HaxeParser.parse(source);
+		Assert.equals(2, ast.members.length);
+		expectCondBody(expectFnMember(ast.members[0].member).body);
+		return ast;
 	}
 
 	private function expectCondNameFnMember(member: HxClassMember): HxCondNameFnDecl {

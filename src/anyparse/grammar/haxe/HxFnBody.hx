@@ -3,7 +3,9 @@ package anyparse.grammar.haxe;
 /**
  * Function-body shape on `HxFnDecl.body`.
  *
- * Four forms are recognised:
+ * Five forms are recognised. Four are described below in declaration
+ * order; `CondBody` - fourth in DISPATCH order, between `NoBody` and
+ * `ExprBody` - carries its own branch doc:
  *  - `UntypedBlockBody(body:HxUntypedFnBody)` — `untyped { stmts }` body
  *    with the `untyped` keyword as a pre-block modifier
  *    (`function f():Type untyped { body }`). Real Haxe sugar that
@@ -35,7 +37,8 @@ package anyparse.grammar.haxe;
  *    terminated by `;`: `function foo() trace("hi");` OR
  *    `function foo() trace("hi")` with the `;` elided (e.g. as the
  *    last class member before `}`, or a top-level decl before EOF).
- *    Catch-all branch tried after the two literal-led siblings;
+ *    Catch-all branch tried LAST, after the two literal-led
+ *    siblings and `CondBody`;
  *    `tryBranch`'s rollback ensures `BlockBody` (`{`-led) and `NoBody`
  *    (`;`-led) win on shared input. `@:trailOpt(';')` consumes the
  *    terminator when present and tracks its source presence — Haxe
@@ -55,11 +58,12 @@ package anyparse.grammar.haxe;
  *    already wired through `bodyPolicyForCtor`.
  *
  * Branch order matters for dispatch: UntypedBlockBody → BlockBody →
- * NoBody → ExprBody. UntypedBlockBody dispatches via the inner
+ * NoBody → CondBody → ExprBody. UntypedBlockBody dispatches via the inner
  * `HxUntypedFnBody`'s first-field `@:kw('untyped')` (peeked through
  * `tryBranch` rollback when input doesn't start with `untyped`); the
  * other three are tight first-char/keyword dispatches; ExprBody runs
- * the full HxExpr parser only when the preceding three fail.
+ * the full HxExpr parser LAST, only when the preceding four fail;
+ * see the CondBody branch for why it must not run first.
  * `HxFnBlock` is trivia-bearing, which transitively makes this enum
  * bearing — paired type `HxFnBodyT` synthesised by `TriviaTypeSynth`.
  */
@@ -75,22 +79,72 @@ enum HxFnBody {
 	@:lit(';')
 	NoBody;
 
-	@:trailOpt(';')
-	ExprBody(expr: HxExpr);
-
-
 	/**
 	 * `#if <cond> <body> [#elseif ...] [#else <body>] #end` occupying the
 	 * ENTIRE function-body slot (slice C1). See `HxConditionalFnBody`
 	 * for the motivating std sources and the Ref-vs-Star rationale.
 	 *
-	 * LAST in dispatch order on purpose: `ExprBody` routes a region whose
-	 * branches are single expressions through `HxExpr.ConditionalExpr`
-	 * (`function f() #if a { 1; } #else { 2; } #end` parsed that way
-	 * before this ctor existed and still does), so `CondBody` fires only
-	 * where the expression-scope conditional fail-rewinds - a `;`-only
-	 * branch (`NoBody`) or a `;`-terminated statement inside the region.
-	 * Putting it earlier would silently re-route already-parsing sources.
+	 * Dispatched BEFORE `ExprBody`, and that ordering is load-bearing.
+	 * `ExprBody` runs the whole `HxExpr` parser, whose last `#if` ctor is
+	 * `HxExpr.CondSpliceExpr` - a raw `{raw, tail}` swallow that consumes
+	 * the region through its `#end` and then parses whatever FOLLOWS as
+	 * the `tail`. At a member boundary that tail is the NEXT MEMBER, so
+	 * with `ExprBody` first a whole-body region silently absorbed the
+	 * member after `#end`, or just its leading `static` / `public` word
+	 * read as an `IdentExpr`. Live on `std/{flash,js}/_std/haxe/Json.hx`,
+	 * `std/haxe/Int64.hx` and `std/cs/_std/haxe/Rest.hx`, all of which
+	 * compile under every define set - the shape only projected correctly
+	 * while the region happened to be the LAST member, where the tail had
+	 * nothing left to eat. Trying `CondBody` first ends the body at its
+	 * own `#end` whenever the region is a balanced per-branch body. The
+	 * shapes whose SUB-PARSE fails - a dangling `else`, half a ternary -
+	 * still fail-rewind into `ExprBody` exactly as before.
+	 *
+	 * The measured cost, and why this is a TRADE and not a pure win: a
+	 * balanced region followed by an expression TAIL is representable
+	 * here, so `CondBody` commits and the tail is stranded at member
+	 * position with nothing to backtrack into. `#if a 1 #else 2 #end + 3`,
+	 * `#if a x #else y #end.g()` and the `?:` twin now FAIL TO PARSE in a
+	 * body slot where `ExprBody` -> `HxExpr.ConditionalExpr` used to take
+	 * them, and they are legal Haxe - `function f():Void #if flash a
+	 * #else b #end.push(1);` compiles and runs on 4.3.7. Taken knowingly:
+	 * a sweep of ~20,300 files (haxe std, haxelib, Pony, TM-Haxe4, the
+	 * haxe-formatter corpus, anyparse itself) found ZERO occurrences of
+	 * the tail shape against four in the std alone for the swallow, and a
+	 * parse refusal is loud where the swallow was silent corruption.
+	 * `testBalancedRegionWithExpressionTailIsRefused` pins the refusal.
+	 *
+	 * The principled recovery, deferred to its own slice: a restricted
+	 * arm type for `HxConditionalFnBody.body` that rejects a bare-VALUE
+	 * branch - an `ExprBody` carrying no `;` of its own. A whole-body
+	 * region always has `;`-terminated or braced arms; an operand region
+	 * never does, so the discriminator is exact. It costs a new `@:peg`
+	 * enum plus its writer paths, which is why it is not this change.
+	 *
+	 * Same reordering, second consequence: a region whose branches are
+	 * single EXPRESSIONS now projects here too, where it used to reach
+	 * `HxExpr.ConditionalExpr` through `ExprBody`
+	 * (`function f() #if a { 1; } #else { 2; } #end`). That projection is
+	 * the more accurate of the two - each branch IS a whole function body
+	 * - and it costs one layout difference: a trailing `;` written
+	 * OUTSIDE the region (`#if a 1 #else 2 #end;`) is no longer absorbed
+	 * by `ExprBody`'s `@:trailOpt(';')` and lands as a sibling
+	 * `EmptySemiMember` on its own line. Adding `@:trailOpt(';')` here
+	 * does NOT recover it - the two trailers together make every
+	 * `CondBody` source unparseable (measured), so the stray `;` stays a
+	 * known cosmetic drift.
+	 *
+	 * A second layout cost predates this change, but the reorder widens
+	 * who meets it: `HxFnDecl.body` wires `bodyPolicyForCtor` for
+	 * `UntypedBlockBody` and `ExprBody` and not for this ctor, so the
+	 * branch falls into `spacePrefixCtors` and the region is always
+	 * emitted one space after the signature - a source that put `#if` on
+	 * its own line (all four std files above) gets pulled up onto the
+	 * signature line. Wiring `bodyPolicyForCtor('CondBody',
+	 * 'functionBody')` is NOT a drop-in fix: that policy defaults to
+	 * `Next`, which would break the same-line sources (`Int32.hx`) that
+	 * round-trip byte-exactly today. It needs `Keep`-style source
+	 * fidelity, so it is a slice of its own.
 	 *
 	 * The `#if` keyword lives on `HxConditionalFnBody.cond` rather than
 	 * on this branch - the `HxUntypedFnBody` precedent one ctor up.
@@ -108,4 +162,7 @@ enum HxFnBody {
 	 */
 	@:trail('#end')
 	CondBody(inner: HxConditionalFnBody);
+
+	@:trailOpt(';')
+	ExprBody(expr: HxExpr);
 }

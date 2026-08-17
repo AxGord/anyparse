@@ -16,7 +16,7 @@ package anyparse.grammar.haxe;
  *
  * @:op(~A) private static inline function complement(a:Int32):Int32
  *     #if lua return lua.Boot.clampInt32(~a); #else return clamp(~a); #end
- *                                  // haxe/Int32.hx:175
+ *                                  // haxe/Int32.hx:172
  * ```
  *
  * Both shapes are ONE `#if` straddling the whole body slot, and the two
@@ -43,12 +43,15 @@ package anyparse.grammar.haxe;
  *
  * Scope discipline (the `HxMemberModifier` vs `HxModifier` precedent):
  * this typedef is referenced ONLY from `HxFnBody.CondBody`, which sits
- * LAST in that enum. `HxFnBody.ExprBody` -> `HxExpr.ConditionalExpr`
- * keeps every `#if` region whose branches are single EXPRESSIONS
- * (`function f() #if a { 1; } #else { 2; } #end` already parsed that
- * way), so this ctor only fires on regions the expression-scope
- * conditional cannot represent - branch bodies that are `;`, or
- * statements terminated by `;` inside the region.
+ * one slot AHEAD of `ExprBody` in that enum. Every whole-body `#if`
+ * region whose branches are complete bodies reaches here, the
+ * single-EXPRESSION branches that used to route through
+ * `HxFnBody.ExprBody` -> `HxExpr.ConditionalExpr` included
+ * (`function f() #if a { 1; } #else { 2; } #end`); regions whose sub-parse
+ * fails - a dangling `else`, half a ternary - fail-rewind past this ctor
+ * into the expression-scope splice. See the `HxFnBody.CondBody` doc for
+ * the member-swallow that forced the order, and for the one shape class
+ * the order gives up (a balanced region carrying an expression tail).
  *
  * Field flags mirror `HxConditionalExpr`, the single-Ref-body sibling:
  * `@:fmt(padTrailing)` on `body` / `elseifs` / `elseBody` closes the
