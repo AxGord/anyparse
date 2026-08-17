@@ -1036,6 +1036,26 @@ final class RefactorSupport {
 		return typeName == module.base ? module.path : '${module.path}.$typeName';
 	}
 
+	/**
+	 * Whether a BARE `typeName` needs no import to resolve from a file in `filePkg` — which only a
+	 * module's MAIN type read from that module's OWN package ever does. A SUB-MODULE type is
+	 * invisible bare outside its own module, a sibling file in the same package included.
+	 *
+	 * The proof every import decision owes before it omits an import. "The two files share a
+	 * package" is not that proof, and reading it as one leaves the file naming a type the compiler
+	 * cannot find.
+	 *
+	 * Deliberately conservative in one place: a ROOT-package main type IS visible bare from every
+	 * package, but only until the reading file's own package declares the same name, and nothing
+	 * here can see out of scope to rule that out — so the answer stays `false` and the caller emits
+	 * an `import Mod;` that is redundant rather than a bare name that could bind to the wrong type.
+	 * The same-MODULE case (both types in one file, where the bare name always resolves) is not
+	 * expressible from `filePkg` alone and is the caller's to exclude.
+	 */
+	public static inline function bareNameResolves(typeName: String, module: ModulePath, filePkg: String): Bool {
+		return typeName == module.base && filePkg == module.pkg;
+	}
+
 	/** The dotted path a receiver chain spells (`a.b.C`), or `''` when a link is not a plain name. */
 	public static function flattenPath(node: QueryNode): String {
 		final name: Null<String> = node.name;

@@ -152,10 +152,11 @@ private enum ViaResult {
 
 /**
  * Scope-correct, format-preserving move of one or more members (method,
- * `var` or `final` field) from one type to another within the SAME
- * PACKAGE — the Apply verb of the god-type decomposition loop:
- * `clusters` proposes a cut, `move-member` executes it. Reuses
- * `MoveSymbol`'s result shape and import machinery.
+ * `var` or `final` field) from one type to another — within one package,
+ * or across packages when every moved member is static — the Apply verb
+ * of the god-type decomposition loop: `clusters` proposes a cut,
+ * `move-member` executes it. Reuses `MoveSymbol`'s result shape and
+ * import machinery.
  *
  * ## What is rewritten
  *
@@ -177,23 +178,30 @@ private enum ViaResult {
  *  - References between moved members stay bare — they resolve at the
  *    destination. Bare self-references inside a moved body stay bare.
  *  - Bare accesses INSIDE a moved body to STATIC members staying on the
- *    source type are qualified as `Src.other` (same-package visible at
- *    the destination). When any such member is private, the moved decl
- *    gains an `@:access(<pkg>.<Src>)` line and the advisory says so.
+ *    source type are qualified as `Src.other`. When any such member is
+ *    private, the moved decl gains an `@:access(<pkg>.<Src>)` line and
+ *    the advisory says so.
  *  - A private (or default-visibility) member that still has callers
  *    after the move is promoted to `public` at the destination, noted
  *    in the advisory. With no remaining callers the visibility is kept.
  *  - The destination file gains the type-position imports the moved
- *    bodies depend on (best-effort, `MoveSymbol.dependencyImportsToCarry`);
- *    a rewritten caller file in ANOTHER package gains an import of the
- *    destination type.
+ *    bodies depend on (best-effort, `MoveSymbol.dependencyImportsToCarry`).
+ *    Every OTHER import here is owed by exactly one test,
+ *    `RefactorSupport.bareNameResolves`: a rewritten caller, the source
+ *    file and the destination file each gain an import of the type they
+ *    now name bare unless that bare name already resolves. Sharing a
+ *    package is not that proof — a SUB-MODULE type is invisible bare
+ *    even to a sibling file in its own package.
  *
  * ## Refusals (correctness boundary)
  *
  * A moved body that references `this`, calls an instance member staying
  * on the source type, or reads a MUTABLE instance field is refused — the
  * sibling-fields contract covers final fields only. A cross-package
- * destination is refused for the same reason as `MoveSymbol`. A `using`
+ * destination is refused for an INSTANCE move (the via field's type
+ * would have to be imported into the source, which is deferred); an
+ * all-static move across packages is wired, dotted callers included —
+ * they are repointed at the destination's root-anchored path. A `using`
  * of the source type anywhere in scope is refused (extension-call sites
  * are not findable syntactically), as is a static import
  * (`import pkg.Mod.Src.member`). A destination that already declares a
@@ -220,7 +228,8 @@ final class MoveMember {
 
 	/**
 	 * Move `memberNames` from `srcTypeName` (declared in `srcFile`) to
-	 * `destTypeName` (declared anywhere under scope, same package).
+	 * `destTypeName` (declared anywhere under scope — the same package, or
+	 * any package when every moved member is static).
 	 * `viaField` names the source-type field of type `destTypeName` that
 	 * remaining bare instance callers are rewired through (auto-detected
 	 * when the source type has exactly one such field). When `closure` is
@@ -245,8 +254,6 @@ final class MoveMember {
 		final captures: Array<String> = RefactorSupport.casePatternCaptures(prep.srcTree, plugin.refShape());
 		final guard: Null<String> = moveGuardError(prep, captures);
 		if (guard != null) return Err(guard);
-		final fqnRefusal: Null<String> = crossPackageFqnRefusal(prep);
-		if (fqnRefusal != null) return Err(fqnRefusal);
 		final editsByFile: Map<String, Array<{ span: Span, text: String }>> = [];
 		final movedTextEdits: Array<{ span: Span, text: String }> = [];
 		final callerFilesNeedingImport: Array<String> = [];
@@ -286,7 +293,7 @@ final class MoveMember {
 		final destError: Null<String> = assembleDestination(prep, scaffoldFields, movedTextEdits, editsByFile, advisoryExtras);
 		if (destError != null) return Err(destError);
 		pushImportEdits(prep, typeRefShape, callerFilesNeedingImport, plugin, editsByFile);
-		pushCrossPackageImports(prep, editsByFile, movedTextEdits, plugin);
+		pushEndpointImports(prep, editsByFile, movedTextEdits, plugin);
 		return applyAndValidate(editsByFile, prep.sourceOf, plugin, memberNames.join(', '), advisoryExtras);
 	}
 
@@ -600,23 +607,9 @@ final class MoveMember {
 	 * place (counted as remaining callers, and — for the BARE spelling only — the caller file is
 	 * remembered for the import pass); inside the cut they are rewritten within the moved text.
 	 *
-	 * KNOWN GAP, in the import pass rather than here: every import seat asks `info.pkg ==
-	 * destInfo.pkg` and treats a same-package answer as "the bare name resolves". That is false
-	 * for a SUB-MODULE type, which is never visible bare outside its own module — so a bare
-	 * `Dest.member` / `Src.member` is emitted with no import and the file stops compiling, again
-	 * reported as a successful write. Three seats, each reproduced on the compiler with a
-	 * same-package `Dest` declared beside `Box` in `pkg/Box.hx`:
-	 *
-	 *  - `pushImportEdits`, caller loop — a caller's bare `Mod.tag()` became `Dest.tag()`:
-	 *    `Type not found : Dest` where the program printed 5;
-	 *  - `pushCrossPackageImports`, source half — the source's own bare `tag()` became
-	 *    `Dest.tag()`: the same error where it printed 6;
-	 *  - `pushCrossPackageImports`, destination half — a moved body's sibling call landed in the
-	 *    destination as `Helper.other()` for a sub-module `Src`: `Type not found : Helper`.
-	 *
-	 * `RefactorSupport.rootQualifiedPath` already spells what each of those seats owes; the
-	 * discriminator is `typeName == module.base`. Left out here because it is a redesign of the
-	 * import heuristics, not of the receiver path.
+	 * Only a bare spelling is remembered: a dotted one is repointed at the destination's
+	 * root-anchored path, which carries itself. Whether the remembered file actually owes an
+	 * import is `RefactorSupport.bareNameResolves`' call, in `pushImportEdits`.
 	 */
 	private static function collectQualifiedEdits(
 		prep: MovePrep, m: MovedMember, editsByFile: Map<String, Array<{ span: Span, text: String }>>,
@@ -832,7 +825,10 @@ final class MoveMember {
 		for (file in callerFilesNeedingImport) {
 			final info: Null<FileInfo> = prep.index.fileInfo(file);
 			final callerSource: Null<String> = prep.sourceOf[file];
-			if (info == null || callerSource == null || info.pkg == prep.destInfo.pkg) continue;
+			if (info == null || callerSource == null) continue;
+			// Sharing the destination's package is not proof the bare name resolves: a
+			// sub-module destination is invisible bare even to a sibling file in that package.
+			if (RefactorSupport.bareNameResolves(prep.destTypeName, prep.destModule, info.pkg)) continue;
 			final edit: Null<{ span: Span, text: String }> = MoveSymbol.addImportEdit(callerSource, info, plugin, destImportPath);
 			if (edit != null) editsFor(editsByFile, file).push(edit);
 		}
@@ -1413,61 +1409,36 @@ final class MoveMember {
 	}
 
 	/**
-	 * Cross-package refusal: a fully-qualified caller `pkg.Src.member` cannot
-	 * be safely repointed, because rewriting only the `Src` segment yields
-	 * `pkg.Dest.member` in the SOURCE package — wrong when Dest lives
-	 * elsewhere, and silently wrong if the source package happens to declare
-	 * its own `Dest`. Refuse when the move is cross-package and any such
-	 * caller exists. Null otherwise. Bare `Src.member` callers are safe (they
-	 * pick up the destination import).
+	 * Import wiring between the two ENDPOINTS of the move: after it the source file
+	 * references `Dest` (rewritten callers) and the destination file may reference `Src`
+	 * (sibling-qualified `Src.other` calls in the moved body). Add the import each side
+	 * owes (deduped by `addImportEdit`) unless the bare name already resolves there.
+	 *
+	 * Not a cross-package pass: a SUB-MODULE endpoint needs its import from a sibling
+	 * file in its own package too, and only a move that never leaves the file is free.
 	 */
-	private static function crossPackageFqnRefusal(prep: MovePrep): Null<String> {
-		if (prep.srcInfo.pkg == prep.destInfo.pkg) return null;
-		final movedNames: Array<String> = [for (m in prep.moved) m.name];
-		final offenders: Array<String> = [];
-		// The dotted receiver must spell a path that legally names THIS module from the file it
-		// sits in; a last-segment test refused the move over `other.Boxes.tag()`, a same-named
-		// module in another package that the repointing would never have touched.
-		function walk(node: QueryNode, qualified: Array<String>): Void {
-			final children: Array<QueryNode> = node.children;
-			final nm: Null<String> = node.name;
-			if (node.kind == RefactorSupport.FIELD_ACCESS_KIND && nm != null && movedNames.contains(nm) && children.length > 0) {
-				final recv: QueryNode = children[0];
-				if (
-					recv.kind == RefactorSupport.FIELD_ACCESS_KIND && recv.name == prep.srcTypeName
-					&& qualified.contains(RefactorSupport.flattenPath(recv)) && !offenders.contains(nm)
-				)
-					offenders.push(nm);
-			}
-			for (c in children) walk(c, qualified);
-		}
-		for (tree in prep.trees) walk(tree, RefactorSupport.qualifiedPaths(prep.srcTypeName, prep.srcModule, ModuleScan.packageOf(tree)));
-		return offenders.length == 0
-			? null
-			: 'cross-package move: member(s) ${quoted(offenders)} are called via a fully-qualified '
-				+ '"${prep.srcTypeName}.<member>" receiver — repointing the package segment is unsafe; '
-				+ 'convert those call sites to a bare "${prep.srcTypeName}.<member>" (with an import) first';
-	}
-
-	/**
-	 * Cross-package import wiring: after a static cross-package move the source
-	 * file references `Dest` (rewritten callers) and the destination file may
-	 * reference `Src` (sibling-qualified `Src.other` calls in the moved body).
-	 * Add the missing imports on each side (deduped by `addImportEdit`). A
-	 * no-op within one package.
-	 */
-	private static function pushCrossPackageImports(
+	private static function pushEndpointImports(
 		prep: MovePrep, editsByFile: Map<String, Array<{ span: Span, text: String }>>, movedTextEdits: Array<{ span: Span, text: String }>,
 		plugin: GrammarPlugin
 	): Void {
-		if (prep.srcInfo.pkg == prep.destInfo.pkg) return;
+		// Types of ONE module see each other with no import, so a move that stays in the file
+		// owes nothing on either side.
+		if (prep.srcFile == prep.destFile) return;
 		final srcEdits: Array<{ span: Span, text: String }> = editsByFile[prep.srcFile] ?? [];
-		if (srcEdits.exists(e -> e.text != '' && StringTools.contains(e.text, prep.destTypeName))) {
-			final destPath: String = RefactorSupport.rootQualifiedPath(prep.destTypeName, prep.destModule);
+		final destPath: String = RefactorSupport.rootQualifiedPath(prep.destTypeName, prep.destModule);
+		// A dotted caller was repointed at the destination's WHOLE path, which carries itself; only a
+		// BARE spelling puts the source file in debt. The two coincide for a root-package main type,
+		// where the whole path IS the bare name — there the debt stands.
+		final wholePath: String = destPath == prep.destTypeName ? '' : destPath;
+		final srcNamesDestBare: Bool = srcEdits.exists(e ->
+			e.text != '' && e.text != wholePath && StringTools.contains(e.text, prep.destTypeName)
+		);
+		if (srcNamesDestBare && !RefactorSupport.bareNameResolves(prep.destTypeName, prep.destModule, prep.srcInfo.pkg)) {
 			final edit: Null<{ span: Span, text: String }> = MoveSymbol.addImportEdit(prep.srcSource, prep.srcInfo, plugin, destPath);
 			if (edit != null) editsFor(editsByFile, prep.srcFile).push(edit);
 		}
 		if (!movedTextEdits.exists(e -> StringTools.contains(e.text, '${prep.srcTypeName}.'))) return;
+		if (RefactorSupport.bareNameResolves(prep.srcTypeName, prep.srcModule, prep.destInfo.pkg)) return;
 		final srcPath: String = RefactorSupport.rootQualifiedPath(prep.srcTypeName, prep.srcModule);
 		final edit: Null<{ span: Span, text: String }> = MoveSymbol.addImportEdit(prep.destSource, prep.destInfo, plugin, srcPath);
 		if (edit != null) editsFor(editsByFile, prep.destFile).push(edit);

@@ -5616,7 +5616,7 @@ final class Cli {
 		sysPrint('  refs          Symbol references (value bindings; scope-aware)\n');
 		sysPrint('  rename        Scope-correct, format-preserving symbol rename\n');
 		sysPrint('  move          Move a type declaration to another file (same package)\n');
-		sysPrint('  move-member   Move a static member to another type (same package), rewriting call sites\n');
+		sysPrint('  move-member   Move members to another type (any package if all static), rewriting call sites\n');
 		sysPrint('  extract-interface  Generate an interface from a class\'s public methods + implement it\n');
 		sysPrint('  pull-up       Move an instance member up to its superclass\n');
 		sysPrint('  push-down     Move an instance member down to a subclass\n');
@@ -11875,9 +11875,10 @@ final class Cli {
 
 	private static function printMoveMemberUsage(): Void {
 		sysPrint('Usage: apq move-member <srcFile> <member[,member...]> --to <DestType> --scope <dir> [options]\n\n');
-		sysPrint('Move one or more members (method / var / final) to another type in the\n');
-		sysPrint('SAME package. Static: Src.member -> Dest.member across the scope, bare\n');
-		sysPrint('references qualified, imports carried. Instance (sibling-fields contract):\n');
+		sysPrint('Move one or more members (method / var / final) to another type — the\n');
+		sysPrint('SAME package, or any package when every moved member is static. Static:\n');
+		sysPrint('Src.member -> Dest.member across the scope, bare references qualified,\n');
+		sysPrint('imports carried. Instance (sibling-fields contract):\n');
 		sysPrint('moved bodies may read final fields the destination declares under the same\n');
 		sysPrint('names; remaining bare callers are rewired through a Src field of type Dest\n');
 		sysPrint('(--via, auto-detected when unique); calls between moved members stay bare;\n');
