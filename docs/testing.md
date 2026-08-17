@@ -215,7 +215,17 @@ The patch is a `git diff` rather than a script or a sed expression because the w
 | `BUILD-FAIL` | The patched tree does not compile. A mutation the compiler rejects proves nothing about the suite. |
 | `RUN-FAIL` | No usable transcript, or a red header whose result rows the parser could not name. |
 
-`SURVIVED` is deliberately stricter than "nothing failed". utest computes `isOk = !(hasFailures || hasErrors || hasWarnings)`, and it auto-adds a `Warning('no assertions')` to any test method that completes without asserting. So a mutation that makes a test stop asserting produces `failures: 0, warnings: 3` and a red run — which a scan for `FAILURE`/`ERROR` rows alone would have reported as a survivor, in the one direction where a wrong answer costs the most. The verdict therefore comes from the header line, and the per-class rows are used only to *name* what went red. A marker this parser does not recognise leaves a red run unnamed, which surfaces as `RUN-FAIL`, never as `SURVIVED`.
+`SURVIVED` is deliberately stricter than "nothing failed". utest computes `isOk = !(hasFailures || hasErrors || hasWarnings)`, and it auto-adds a `Warning('no assertions')` to any test method that completes without asserting. So a mutation that makes a test stop asserting produces `failures: 0, warnings: 3` and a red run — which a scan for `FAILURE`/`ERROR` rows alone would have reported as a survivor, in the one direction where a wrong answer costs the most. The verdict therefore comes from the header line, and the per-class rows are used only to *name* what went red. A marker the classifier does not recognise leaves a red run unnamed, which surfaces as `RUN-FAIL`, never as `SURVIVED`.
+
+**The classifier is `apq mutation-verdict`, not the script.** `tools/mutation-check.sh` shells out to it and does nothing with the transcript itself:
+
+```sh
+apq mutation-verdict <transcript> [--expect <csv>]   # line 1: verdict, line 2: row detail
+```
+
+It used to carry its own ~130-line awk implementation, which was a *second* utest transcript parser — `apq test-summary` had done that job for longer than the script has existed, and `tools/suite-shard.sh` reuses it precisely so a divergent copy cannot grow. One grew anyway, and the price is on record: both fixes `fdb44864` ("a red run can no longer be reported `SURVIVED`") and `ff3f20ae` ("find the utest header by *shape*") were bugs in the duplicate, 316 changed lines apart, and neither was reachable by a test, because a shell function is not testable. The Haxe classifier is pure over `TestSummaryResult` and covered by `test/unit/MutationVerdictTest.hx`.
+
+Two consequences worth knowing. The classifier runs from the **main** tree, never from the track's own build — a track's engine is compiled from the *mutated* source, so a mutation reaching the transcript parser would otherwise grade its own homework; `mutation-check.sh` therefore refuses to start when `bin/apq.js` is missing. And the `--expect` exit code answers *"could this be classified"*, not *"what was the verdict"*: every verdict, `RUN-FAIL` included, exits 0.
 
 Failures *beyond* the expectations do not demote `KILLED` to `MISMATCH`; they are listed on the row as `+extra: …`. A track asks whether the suite notices, and a wider blast radius still answers yes — the extras are reported because they are useful signal about coupling, not because they are a defect.
 

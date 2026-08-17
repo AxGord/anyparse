@@ -49,6 +49,7 @@ import anyparse.check.CompilerServer;
 import anyparse.core.EnvFlag;
 import anyparse.query.Address.AddressIndex;
 import anyparse.query.Pattern.KindEquivalence;
+import anyparse.query.MutationVerdict.MutationVerdictResult;
 import anyparse.query.ExitCode.*;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
@@ -118,6 +119,37 @@ typedef TestSummaryFailureLocus = {
 };
 
 /**
+ * utest's own end-of-run header block, read by SHAPE rather than by
+ * position. utest emits it LAST, so everything the tests printed to
+ * stdout comes first — a real unfiltered run of this suite puts ~1700
+ * lines of CLI chatter ahead of it, and taking the first `results:` line
+ * in the file would read a line the TESTS control. Requiring
+ * `assertations:` immediately followed by `successes:` opens the block;
+ * the counts and `results:` are taken from inside it, so neither end can
+ * be spoofed.
+ *
+ * `ok` is utest's OWN verdict (`results: … (success: true)`), keyed on
+ * `ResultStats.isOk = !(hasFailures || hasErrors || hasWarnings)`. It is
+ * NOT `failures == 0 && errors == 0`: `ITestHandler` auto-adds
+ * `Warning('no assertions')` to any test that completes without
+ * asserting, so a change that stops a test asserting produces
+ * `failures: 0, warnings: N` — a red run that a failure-row scan would
+ * call green. Read the verdict from here, never from the row counts.
+ *
+ * `assertions` is the header's own `assertations:` value, which counts
+ * ignores too; `TestSummaryResult.assertions` sums the result rows' dots
+ * instead and is short by them. The two agree on a clean run and are
+ * deliberately kept separate.
+ */
+typedef TestSummaryHeader = {
+	assertions: Int,
+	successes: Int,
+	errors: Int,
+	failures: Int,
+	warnings: Int,
+	ok: Bool
+};
+/**
  * Structured result of parsing a utest OR tink_testrunner stdout
  * transcript. `tests` counts PASSING test cases (utest: `OK`-marked test
  * rows; tink: case blocks with no failed/thrown assertion) — legacy
@@ -125,13 +157,23 @@ typedef TestSummaryFailureLocus = {
  * `firstFailure` is null when the run had no failures or errors;
  * otherwise it carries the first encountered locus (subsequent failures
  * only bump counters).
+ *
+ * `header` is utest's own end-of-run block — null for tink, and for a
+ * transcript truncated before it. Read `header.ok` for the red/green
+ * verdict, never the row counts. `noTests` flags utest's "No tests
+ * executed." row, which a filter matching no class produces and which
+ * would otherwise read as a clean green run. `failureNames` lists every
+ * non-OK result row as `<fq.Class>.<method>`.
  */
 typedef TestSummaryResult = {
 	tests: Int,
 	assertions: Int,
 	failures: Int,
 	errors: Int,
-	firstFailure: Null<TestSummaryFailureLocus>
+	firstFailure: Null<TestSummaryFailureLocus>,
+	header: Null<TestSummaryHeader>,
+	noTests: Bool,
+	failureNames: Array<String>
 };
 
 /**
@@ -587,6 +629,13 @@ final class Cli {
 				return runLint(rest);
 			case 'lint-diff':
 				return runLintDiff(rest);
+			case 'mutation-verdict':
+				#if (sys || nodejs)
+				return runMutationVerdict(rest);
+				#else
+				stderr('apq mutation-verdict: requires a sys target (file read)\n');
+				return EXIT_USAGE;
+				#end
 			case 'inline':
 				return runInline(rest);
 			case 'inline-method':
@@ -5642,6 +5691,7 @@ final class Cli {
 		sysPrint('  declares      Declaration site(s) of one named type (ambiguity check)\n');
 		sysPrint('  lint          Run analysis checks and report violations (e.g. unused-import)\n');
 		sysPrint('  lint-diff     Multiset diff of two lint --format json snapshots (blast radius)\n');
+		sysPrint('  mutation-verdict  Classify one utest transcript as KILLED/SURVIVED/… for mutation-check\n');
 		sysPrint('  inline        Inline a local variable into its uses\n');
 		sysPrint('  inline-method Inline a single-return function into its call sites + delete it\n');
 		sysPrint('  extract-var   Hoist an expression into a new local final\n');
@@ -13158,6 +13208,10 @@ final class Cli {
 		// Widened from `\s{4,}` because utest's indent isn't guaranteed
 		// 4-space (tabs / 2-space variants exist in older transcripts).
 		final detailBareRe: EReg = ~/^\s+(\S.*)$/;
+		// "No tests executed." arrives as an ordinary assertion-detail row,
+		// so match that row's SHAPE: an unanchored search would also fire on
+		// a test whose own message quotes the phrase.
+		final noTestsRe: EReg = ~/^\s*line: \d*, No tests executed\.$/;
 		var tests: Int = 0;
 		var assertions: Int = 0;
 		var failures: Int = 0;
@@ -13165,7 +13219,9 @@ final class Cli {
 		var currentClass: String = '';
 		var firstFailure: Null<TestSummaryFailureLocus> = null;
 		var awaitingDetail: Bool = false;
+		var noTests: Bool = false;
 		for (line in lines) {
+			if (!noTests && noTestsRe.match(line)) noTests = true;
 			if (awaitingDetail) {
 				awaitingDetail = false;
 				final locus: Null<TestSummaryFailureLocus> = firstFailure;
@@ -13212,8 +13268,106 @@ final class Cli {
 			assertions: assertions,
 			failures: failures,
 			errors: errors,
-			firstFailure: firstFailure
+			firstFailure: firstFailure,
+			header: readTestSummaryHeader(lines),
+			noTests: noTests,
+			failureNames: collectFailureNames(lines)
 		};
+	}
+
+	/**
+	 * utest's end-of-run header block, or null when the transcript carries
+	 * none (truncated, or a framework that emits no such block).
+	 *
+	 * Its own pass over the lines rather than a branch inside
+	 * `parseTestSummary`'s loop: the two read different things — that loop
+	 * reads the per-class RESULT ROWS, this reads the summary — and folding
+	 * the state machine in pushed the function past the complexity gate for
+	 * no shared work. Three cheap passes over a transcript beat one
+	 * unreadable one.
+	 *
+	 * The shape anchoring is the whole point; `TestSummaryHeader` documents
+	 * why the first `results:` line in the file is the wrong one to read.
+	 */
+	private static function readTestSummaryHeader(lines: Array<String>): Null<TestSummaryHeader> {
+		final assertRe: EReg = ~/^assertations:\s+(\d+)$/;
+		final successRe: EReg = ~/^successes:\s+(\d+)$/;
+		final countRe: EReg = ~/^(errors|failures|warnings):\s+(\d+)$/;
+		final resultsRe: EReg = ~/^results:/;
+		// 0 — outside the block; 1 — `assertations:` seen, still needs the
+		// `successes:` line right after it; 2 — inside, reading counts.
+		var open: Int = 0;
+		var assertions: Int = 0;
+		var successes: Int = 0;
+		var errors: Int = 0;
+		var failures: Int = 0;
+		var warnings: Int = 0;
+		for (line in lines) {
+			if (assertRe.match(line)) {
+				assertions = Std.parseInt(assertRe.matched(1)) ?? 0;
+				open = 1;
+			} else if (open == 1 && successRe.match(line)) {
+				successes = Std.parseInt(successRe.matched(1)) ?? 0;
+				open = 2;
+			} else if (open >= 2 && countRe.match(line)) {
+				final n: Int = Std.parseInt(countRe.matched(2)) ?? 0;
+				switch countRe.matched(1) {
+					case 'errors':
+						errors = n;
+					case 'failures':
+						failures = n;
+					case _:
+						warnings = n;
+				}
+			} else if (open >= 2 && resultsRe.match(line))
+				return {
+					assertions: assertions,
+					successes: successes,
+					errors: errors,
+					failures: failures,
+					warnings: warnings,
+					ok: line.indexOf('(success: true)') >= 0
+				};
+			else if (open == 1)
+				open = 0;
+		}
+		return null;
+	}
+
+	/**
+	 * Every non-OK result row as `<fq.Class>.<method>` — what NAMED went red,
+	 * for `apq mutation-verdict`. Whether the run WAS red is the header's
+	 * answer, never this list's.
+	 *
+	 * A bare identifier at column 0 is only a CANDIDATE class name, promoted
+	 * once the next line is an indented result row: utest splices multi-line
+	 * assertion messages in raw, and such a message's last line can look
+	 * identical to a class header. That narrows the hijack window without
+	 * closing it, and the residue is bounded — a mis-attributed NAME, never a
+	 * wrong red/green call.
+	 *
+	 * The marker slot takes ANY uppercase word rather than the four utest
+	 * emits today. Anything that is not `OK` is failing, so a marker a future
+	 * utest adds gets named instead of silently dropped.
+	 */
+	private static function collectFailureNames(lines: Array<String>): Array<String> {
+		final classRe: EReg = ~/^[A-Za-z_][A-Za-z0-9_.]*$/;
+		final rowRe: EReg = ~/^\s+([A-Za-z_][A-Za-z0-9_.]*):\s+[A-Z]+(\s|$)/;
+		final okRe: EReg = ~/:\s+OK(\s|$)/;
+		final names: Array<String> = [];
+		var pending: String = '';
+		var current: String = '';
+		for (line in lines) if (classRe.match(line))
+			pending = line;
+		else if (rowRe.match(line)) {
+			if (pending.length > 0) {
+				current = pending;
+				pending = '';
+			}
+			if (!okRe.match(line)) names.push('$current.${rowRe.matched(1)}');
+		} else
+			pending = '';
+		return names;
 	}
 
 	/**
@@ -13386,7 +13540,14 @@ final class Cli {
 			assertions: assertions,
 			failures: failures,
 			errors: errors,
-			firstFailure: firstFailure
+			firstFailure: firstFailure,
+			// tink_testrunner emits no utest-shaped header block and no
+			// "No tests executed." row, and nothing consumes tink failure
+			// names today — the three utest-only fields stay empty rather
+			// than being approximated from the rows.
+			header: null,
+			noTests: false,
+			failureNames: []
 		};
 	}
 
@@ -15023,6 +15184,69 @@ final class Cli {
 		for (line in LintDiff.render(result, label, limit)) sysPrint('$line\n');
 		return result.addedTotal == 0 && result.removedTotal == 0 ? EXIT_OK : EXIT_RUNTIME;
 	}
+	/**
+	 * `apq mutation-verdict <log> [--expect <csv>]` — classify one utest
+	 * transcript for `tools/mutation-check.sh`, printing the verdict on the
+	 * first line and the row detail on the second.
+	 *
+	 * Two lines rather than JSON on purpose: the caller is a shell script, and
+	 * the point of the subcommand is that shell no longer has to PARSE anything.
+	 * A JSON payload would just move the second parser from awk to `jq`.
+	 *
+	 * The exit code answers "could this be classified", not "what was the
+	 * verdict": every verdict — `RUN-FAIL` included — exits 0, because it is a
+	 * verdict. Only a usage error or an unreadable file is non-zero, which keeps
+	 * the caller's `if ! out=$(…)` guard meaning what it says.
+	 */
+	private static function runMutationVerdict(args: Array<String>): Int {
+		var logPath: Null<String> = null;
+		var expectCsv: String = '';
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--expect':
+					expectCsv = expectValue(args, ++i, '--expect');
+				case '--lang':
+					// hxq shim auto-injects --lang haxe; no grammar plugin is
+					// involved in reading a transcript. Consume it, as lint-diff
+					// and sweep do, to keep shim invariance.
+					expectValue(args, ++i, '--lang');
+				case '-h', '--help':
+					printMutationVerdictUsage();
+					return EXIT_OK;
+				case _:
+					if (a.startsWith('-')) {
+						stderr('apq mutation-verdict: unknown option "$a"\n');
+						printMutationVerdictUsage();
+						return EXIT_USAGE;
+					}
+					if (logPath != null) {
+						stderr('apq mutation-verdict: only one transcript supported (got "$logPath" and "$a")\n');
+						return EXIT_USAGE;
+					}
+					logPath = a;
+			}
+			i++;
+		}
+		if (logPath == null) {
+			stderr('apq mutation-verdict: no transcript given\n');
+			printMutationVerdictUsage();
+			return EXIT_USAGE;
+		}
+		final source: String = logPath;
+		final raw: String = try readFile(source) catch (exception: Exception) {
+			stderr('apq mutation-verdict: read failed: ${exception.message}\n');
+			return EXIT_RUNTIME;
+		}
+		final expected: Array<String> = [
+			for (part in expectCsv.split(',')) if (part.trim().length > 0) part.trim()
+		];
+		final verdict: MutationVerdictResult = MutationVerdict.classify(parseTestSummary(raw), expected);
+		sysPrint('${MutationVerdict.label(verdict.kind)}\n');
+		sysPrint('${verdict.detail}\n');
+		return EXIT_OK;
+	}
 
 	/**
 	 * Per-fixture status diff between two sweep snapshots. THE answer to
@@ -15151,6 +15375,25 @@ final class Cli {
 		sysPrint('                  so a relative and an absolute snapshot of one tree agree\n');
 		sysPrint('  --label <name>  Name this comparison in the output (a battery run has two)\n');
 		sysPrint('  --limit <n>     Example keys shown per sign (default 20; -1 shows all)\n');
+		sysPrint('  -h, --help      Show this help\n');
+	}
+	private static function printMutationVerdictUsage(): Void {
+		sysPrint('Usage: apq mutation-verdict <transcript> [--expect <csv>]\n');
+		sysPrint('\n');
+		sysPrint('Classify one utest stdout transcript for tools/mutation-check.sh.\n');
+		sysPrint('Prints the verdict on line 1 and the report-row detail on line 2:\n');
+		sysPrint('  KILLED    the run went red and every expectation matched something\n');
+		sysPrint('  SURVIVED  the run was GREEN by utest own predicate (warnings count as red)\n');
+		sysPrint('  MISMATCH  the run went red, but some expectation matched nothing\n');
+		sysPrint('  NO-TESTS  the filter matched no test class\n');
+		sysPrint('  RUN-FAIL  no usable transcript, or a red run whose rows did not parse\n');
+		sysPrint('\n');
+		sysPrint('The exit code says whether classification was possible, not what the\n');
+		sysPrint('verdict was: every verdict exits 0, a usage error or unreadable file 2.\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --expect <csv>  Comma-separated substrings matched against the failing\n');
+		sysPrint('                  test names; empty means any red run kills\n');
 		sysPrint('  -h, --help      Show this help\n');
 	}
 

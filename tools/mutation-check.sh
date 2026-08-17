@@ -54,8 +54,11 @@
 #   WT-FAIL    `git worktree add` failed — nothing to patch or run.
 #   PATCH-FAIL `git apply` failed. Manifest/patch defect.
 #   BUILD-FAIL the patched tree does not compile — a useless mutation.
-#   RUN-FAIL   no usable transcript, or a red header whose rows this
-#              parser could not name.
+#   RUN-FAIL   no usable transcript, or a red header whose rows the
+#              classifier could not name.
+#
+# Verdicts come from `apq mutation-verdict` (main-tree build), not from
+# this script — see `classify` below for why the parser is not here.
 #
 # Exit 0 only when every track is KILLED; any other verdict exits 1.
 #
@@ -163,6 +166,12 @@ run_track() {
     { IFS= read -r v; IFS= read -r d; } <<EOF
 $classified
 EOF
+    # The classifier reports WHY it could not judge; only the shell knows
+    # WHERE the transcript is, and a RUN-FAIL row is read by someone about
+    # to open it.
+    if [ "$v" = "RUN-FAIL" ]; then
+        d="$d ($log)"
+    fi
     write_verdict "$verdict_file" "$v" "$d"
     return 0
 }
@@ -172,168 +181,27 @@ write_verdict() {
 }
 
 # ------------------------------------------------------------- parsing
-# utest 1.13.2 plain-text transcript:
-#   header rows (`successes: N`, …, `results: ALL TESTS OK (success: true)`)
-#   then, per class, a bare fully-qualified class name on its own line,
-#   followed by two-space-indented `  testMethod: OK|FAILURE|ERROR|WARNING …`
-#   rows and further-indented detail rows.
 
 # classify <log> <expected-csv> -> two lines: verdict, detail.
+#
+# The whole classifier lives in `apq mutation-verdict`. It used to live
+# here, as ~130 lines of awk that re-implemented a utest transcript
+# parser `apq test-summary` had already carried for longer than this
+# script has existed — and which suite-shard.sh reuses precisely so a
+# second, divergent one cannot grow. One grew anyway, and the price is
+# on record: both fdb44864 ("a red run can no longer be reported
+# SURVIVED") and ff3f20ae ("find the utest header by SHAPE") were bugs
+# in the duplicate, 316 changed lines apart, and neither was reachable
+# by a test, because a shell function is not testable. The Haxe copy is
+# covered by test/unit/MutationVerdictTest.hx.
+#
+# It runs from the MAIN tree, never from the track's own build: the
+# track's engine is compiled FROM the mutated source, so a mutation that
+# reached the transcript parser would otherwise grade its own homework.
+# `cd "$repo"` is what makes the hxq shim resolve the unmutated tree.
 classify() {
     local log=$1 expected=$2
-    local header assertions failures exp_list matcher_out
-    local results_line missing extra joined nfail detail
-
-    # The header block is found by SHAPE, not by position — the same
-    # technique the "No tests executed." probe below uses, and for a
-    # sharper reason than it looks. utest emits this block LAST, at
-    # completion, so everything the tests themselves printed to stdout
-    # comes FIRST: a real unfiltered run of this suite puts ~1700 lines
-    # of CLI chatter ahead of it. Taking the first `^results:` in the
-    # file would therefore read a line the TESTS control, and one
-    # `results: … (success: true)` in that region would report a red run
-    # as SURVIVED — the one verdict this classifier exists to never get
-    # wrong. Requiring `assertations:` immediately followed by
-    # `successes:` opens the block, and the counts and `results:` are
-    # taken from inside it, so neither end can be spoofed.
-    #
-    # `assertations` is read directly rather than summed from the four
-    # category lines: ResultStats counts ignores in the total too, and
-    # the report does not print an `ignores:` line, so a sum would be
-    # short by them. The unit is ASSERTIONS, not test methods — the
-    # report row labels it as such.
-    header=$(awk '
-        /^assertations:[[:space:]]+[0-9]+$/ { a = $2; open = 1; next }
-        open == 1 && /^successes:[[:space:]]+[0-9]+$/ { open = 2; next }
-        open >= 2 && /^(errors|failures|warnings):[[:space:]]+[0-9]+$/ { next }
-        open >= 2 && /^results:/ { print a; print $0; exit }
-        { if (open == 1) open = 0 }
-    ' "$log" 2>/dev/null || true)
-    if [ -z "$header" ]; then
-        printf 'RUN-FAIL\n%s\n' "$log"
-        return 0
-    fi
-    { IFS= read -r assertions; IFS= read -r results_line; } <<EOF
-$header
-EOF
-
-    # "No tests executed." arrives as an ordinary assertion-detail row,
-    # so match that row's shape. An unanchored search of the whole log
-    # would also fire on a test whose own message quotes the phrase.
-    if grep -q '^[[:space:]]*line: [0-9]*, No tests executed\.$' "$log"; then
-        printf 'NO-TESTS\nfilter matched no test class (%s)\n' "$log"
-        return 0
-    fi
-
-    # The HEADER decides red/green; the rows below only NAME what went
-    # red. utest keys this line and its exit code on the same predicate,
-    # ResultStats.isOk = !(hasFailures || hasErrors || hasWarnings), and
-    # ITestHandler auto-adds Warning('no assertions') to any test that
-    # completes without asserting. So a mutation that stops a test
-    # asserting produces `failures: 0, warnings: N` — a red run the suite
-    # genuinely noticed, which a FAILURE|ERROR row scan would have called
-    # SURVIVED. Reading the verdict from the header cannot miss a marker
-    # utest adds later; the worst such a marker can do is leave the run
-    # unnamed, which lands as RUN-FAIL below.
-    case "$results_line" in
-        *'(success: true)'*)
-            printf 'SURVIVED\n0 tests failed / %s assertions\n' "$assertions"
-            return 0
-            ;;
-    esac
-
-    # A class line is a bare identifier at column 0 — but so is any line
-    # of a multi-line assertion message, which PlainTextReport splices in
-    # raw. Promoting a candidate only once the NEXT line is an indented
-    # result row narrows that, it does not close it: a message whose last
-    # line is a bare identifier at column 0, immediately followed by the
-    # next failing method's row, still hijacks the class name. The damage
-    # is bounded to a mis-attributed name — KILLED can degrade to
-    # MISMATCH — and never to a wrong red/green call, because that comes
-    # from the header above.
-    #
-    # The marker slot matches ANY uppercase word rather than the four
-    # utest emits today: a whitelist there would drop an unknown marker
-    # to the `pending = ""` arm, which clears the class binding and
-    # orphans the NEXT failure as `.method`. Generic slot + "anything not
-    # OK is failing" means a marker added by a future utest is named and
-    # counted instead. It cannot misfire on a real row — the marker slot
-    # only ever holds letters, and a method literally named `OK` reads
-    # `OK: FAILURE F`, which the inner test still classifies correctly.
-    failures=$(awk '
-        /^[A-Za-z_][A-Za-z0-9_.]*$/ { pending = $0; next }
-        /^[[:space:]]+[A-Za-z_][A-Za-z0-9_.]*:[[:space:]]+[A-Z]+([[:space:]]|$)/ {
-            if (pending != "") { cls = pending; pending = "" }
-            if ($0 !~ /:[[:space:]]+OK([[:space:]]|$)/) {
-                m = $1; sub(/:$/, "", m); print cls "." m
-            }
-            next
-        }
-        { pending = "" }
-    ' "$log" | sort -u)
-
-    if [ -z "$failures" ]; then
-        printf 'RUN-FAIL\nheader reports a red run but no result row parsed (%s)\n' "$log"
-        return 0
-    fi
-
-    # ONE normalisation of the expectation CSV, then ONE matcher. The two
-    # earlier passes answered the same "does this expectation match this
-    # name" question twice and had already diverged: the `missing` pass
-    # ran `printf | grep -q`, where grep exits at the first match and
-    # SIGPIPEs the printf on a long failure list (status 141, inverted by
-    # `!` into "missing" for an expectation that DID match), and the
-    # `extra` pass re-trimmed every expectation inside the inner loop —
-    # two forks per failure per expectation.
-    exp_list=$(printf '%s' "$expected" | tr ',' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$' || true)
-
-    # Passed through the environment, not `-v`: awk applies escape
-    # processing to a `-v` value, which would mangle a backslash.
-    matcher_out=$(printf '%s\n' "$failures" | MUTCHECK_EXPS="$exp_list" awk '
-        function join_capped(a, n,   i, s) {
-            s = ""
-            for (i = 1; i <= n && i <= 10; i++) s = s (i > 1 ? ", " : "") a[i]
-            if (n > 10) s = s ", …+" (n - 10) " more"
-            return s
-        }
-        BEGIN {
-            exps = ENVIRON["MUTCHECK_EXPS"]
-            ne = (exps == "" ? 0 : split(exps, E, "\n"))
-        }
-        {
-            all[++nf] = $0
-            if (ne == 0) next
-            matched = 0
-            for (i = 1; i <= ne; i++) if (index($0, E[i]) > 0) { hit[i] = 1; matched = 1 }
-            if (!matched) extra[++nx] = $0
-        }
-        END {
-            for (i = 1; i <= ne; i++) if (!(i in hit)) miss[++nm] = E[i]
-            print join_capped(miss, nm + 0)
-            print join_capped(extra, nx + 0)
-            print join_capped(all, nf + 0)
-            print nf + 0
-        }
-    ')
-
-    { IFS= read -r missing; IFS= read -r extra; IFS= read -r joined; IFS= read -r nfail; } <<EOF
-$matcher_out
-EOF
-
-    if [ -n "$missing" ]; then
-        printf 'MISMATCH\n%s tests failed / %s assertions: %s (missing: %s)\n' \
-            "$nfail" "$assertions" "$joined" "$missing"
-        return 0
-    fi
-
-    # Failures the expectations did not name are reported, not penalised:
-    # the question a track asks is "does the suite notice", and a wider
-    # blast radius still answers yes.
-    detail="$nfail tests failed / $assertions assertions: $joined"
-    if [ -n "$extra" ]; then
-        detail="$detail +extra: $extra"
-    fi
-    printf 'KILLED\n%s\n' "$detail"
+    ( cd "$repo" && "$repo/bin/hxq" mutation-verdict "$log" --expect "$expected" )
 }
 
 # --------------------------------------------------- child entry point
@@ -376,6 +244,14 @@ done
 
 if [ ! -f "$manifest" ]; then
     echo "mutation-check.sh: manifest '$manifest' not found" >&2
+    exit 2
+fi
+
+# The verdict classifier is `apq mutation-verdict` out of the MAIN tree.
+# Checked here rather than per track: without it every track would run its
+# build and its suite and only then fail to be judged.
+if [ ! -f "$repo/bin/apq.js" ]; then
+    echo "mutation-check.sh: $repo/bin/apq.js missing — run 'haxe bin/apq-js.hxml' first (the verdict classifier is 'apq mutation-verdict')" >&2
     exit 2
 fi
 
