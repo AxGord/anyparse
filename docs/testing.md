@@ -497,6 +497,24 @@ projects whose modules a server can actually keep. To see the warm diagnostics
 yourself, read the port out of `$TMPDIR/apq-oracle-*.json` and run
 `haxe --connect <port> test-js.hxml --no-output`.
 
+### `--no-oracle` for the edit loop
+
+What remains after that is the cold typecheck itself, and it is PROJECT-WIDE
+regardless of how narrow the lint scope is: **a single-file lint takes 18.7 s,
+of which 16.1 s is the oracle**. That is the largest single cost in the edit
+loop — the "lint the file I just touched" call, run dozens of times a slice.
+
+```sh
+hxq lint <file> --all --no-oracle    # 2.2s instead of 18.7s
+```
+
+Findings are byte-identical (`lint-diff` over `src/anyparse/check`:
+`468 findings (base 468) — 0 added / 0 removed`); the flag changes what the run
+can PROVE, not what it finds, and it says so on stderr rather than pretending a
+verdict. **Do not use it for a gate** — the battery, a pre-commit lint, or
+anything whose output is a verdict runs the oracle, because declining a gate can
+only ever weaken one.
+
 The baseline is four plain files per commit in `$ANYPARSE_BLAST_CACHE`
 (`~/anyparse-blast-cache` by default) — two lint snapshots, the corpus sweep
 snapshot, and a two-integer suite line. Keeping them outside the repo is

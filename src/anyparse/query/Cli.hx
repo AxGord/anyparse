@@ -988,6 +988,7 @@ final class Cli {
 			flat: false,
 			includeInfo: false,
 			fix: false,
+			noOracle: false,
 			failOn: null,
 			format: 'text',
 			ruleFilters: [],
@@ -1864,7 +1865,14 @@ final class Cli {
 		renderLintReport(paths, shown, sourceOf, o.format, o.flat, cached);
 		lintSummary(all, paths, o.includeInfo);
 
-		final oracleExit: Null<Int> = reportModeOracle(oracleHxml, oracleDir, paths, oracleConfig?.compilerOracleServer() ?? false);
+		// `--no-oracle` skips the typecheck entirely rather than faking its verdict:
+		// the note below says the compiler was not asked, so nothing downstream can
+		// read an unproved run as a proved one. It exists because the oracle is a
+		// PROJECT-WIDE typecheck regardless of how narrow the lint scope is — 16.1s of
+		// an 18.7s single-file run, which is the inner loop's largest single tax.
+		final oracleExit: Null<Int> = o.noOracle
+			? oracleSkippedNote(oracleHxml)
+			: reportModeOracle(oracleHxml, oracleDir, paths, oracleConfig?.compilerOracleServer() ?? false);
 		if (oracleExit != null) return oracleExit;
 
 		final failOn: Null<Severity> = o.failOn;
@@ -5810,6 +5818,10 @@ final class Cli {
 		sysPrint('  --list-rules      List every registered check and exit\n');
 		sysPrint('  --fix            Apply autofixes in place (e.g. delete unused imports)\n');
 		sysPrint('  --fail-on <sev>   Exit non-zero if a finding at-or-above <sev> exists\n');
+		sysPrint('  --no-oracle       Skip the compiler-oracle typecheck (a PROJECT-WIDE build\n');
+		sysPrint('                    regardless of scope: 16s of an 18.7s single-file run).\n');
+		sysPrint('                    Findings are unchanged; the run just cannot claim\n');
+		sysPrint('                    compiler-confirmed nullSafety trust\n');
 		sysPrint('                    (error|warning|info)\n');
 		sysPrint('  --format <fmt>    Output format: text (default), json, checkstyle\n');
 		sysPrint('  --all, -a        Include Info-severity advisories in the report\n');
@@ -9288,6 +9300,7 @@ final class Cli {
 		var flat: Bool = false;
 		var includeInfo: Bool = false;
 		var fix: Bool = false;
+		var noOracle: Bool = false;
 		var failOn: Null<Severity> = null;
 		var format: String = 'text';
 		final ruleFilters: Array<String> = [];
@@ -9307,6 +9320,8 @@ final class Cli {
 					flat = true;
 				case '--fix':
 					fix = true;
+				case '--no-oracle':
+					noOracle = true;
 				case '--fail-on':
 					final level: String = expectValue(args, ++i, '--fail-on');
 					failOn = Severity.fromName(level);
@@ -9340,6 +9355,7 @@ final class Cli {
 			flat: flat,
 			includeInfo: includeInfo,
 			fix: fix,
+			noOracle: noOracle,
 			failOn: failOn,
 			format: format,
 			ruleFilters: ruleFilters,
@@ -12752,6 +12768,16 @@ final class Cli {
 	}
 
 	/**
+	 * `--no-oracle`: say plainly that the compiler was not asked, and never fail on
+	 * it. Always null (no fail) — declining to run a gate can only ever weaken a
+	 * verdict, so it must never be able to produce one.
+	 */
+	private static function oracleSkippedNote(oracleHxml: Null<String>): Null<Int> {
+		if (oracleHxml != null) stderr('apq lint: compiler oracle SKIPPED (--no-oracle) — nullSafety trust unproved for this run\n');
+		return null;
+	}
+
+	/**
 	 * Report-mode compiler oracle: with a `compilerOracle` configured, typecheck the
 	 * project and (a) return a non-null EXIT_RUNTIME with the compiler's errors when
 	 * the build is rejected — failing the run; (b) print a `compiler-confirmed` note
@@ -15865,6 +15891,7 @@ typedef LintOpts = {
 	var flat: Bool;
 	var includeInfo: Bool;
 	var fix: Bool;
+	var noOracle: Bool;
 	var failOn: Null<Severity>;
 	var format: String;
 	var ruleFilters: Array<String>;

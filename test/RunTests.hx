@@ -634,6 +634,7 @@ import unit.RenameMemberInFileCliTest;
 import unit.ApqAstTypeRefsCliTest;
 import unit.LintDiffTest;
 import unit.MutationVerdictTest;
+import unit.LintNoOracleCliTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1048,6 +1049,7 @@ class RunTests {
 		addCase(new LintUnusedImportDottedSliceTest());
 		addCase(new LintUnusedImportResolutionScopeTest());
 		addCase(new LintFailOnCliTest());
+		addCase(new LintNoOracleCliTest());
 		addCase(new LintListRulesCliTest());
 		addCase(new UnusedPrivateCheckTest());
 		addCase(new ComplexityCheckTest());
