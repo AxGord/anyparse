@@ -50,8 +50,10 @@ esac
 script_dir=$(cd -P "$(dirname "$0")" && pwd)
 repo=$(cd -P "$script_dir/.." && pwd)
 
-# mkdir only after every argument has been validated, so a rejected
-# invocation leaves nothing behind.
+# `out` needs the directory to exist before `cd -P` can resolve it, so
+# the mkdir precedes the bin/ check below rather than following it. That
+# is harmless here: the only path the check rejects is the repo's own
+# bin/, which always exists already, so the mkdir is a no-op on it.
 mkdir -p "$workdir"
 out=$(cd -P "$workdir" && pwd)
 

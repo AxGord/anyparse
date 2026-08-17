@@ -181,16 +181,41 @@ write_verdict() {
 # classify <log> <expected-csv> -> two lines: verdict, detail.
 classify() {
     local log=$1 expected=$2
-    local results_line total failures exp_list matcher_out
-    local missing extra joined nfail detail
+    local header assertions failures exp_list matcher_out
+    local results_line missing extra joined nfail detail
 
-    # The first `^results:` line only — the header is emitted before any
-    # class row, and a spliced assertion message can contain anything.
-    results_line=$(awk '/^results:/ { print; exit }' "$log" 2>/dev/null || true)
-    if [ -z "$results_line" ]; then
+    # The header block is found by SHAPE, not by position — the same
+    # technique the "No tests executed." probe below uses, and for a
+    # sharper reason than it looks. utest emits this block LAST, at
+    # completion, so everything the tests themselves printed to stdout
+    # comes FIRST: a real unfiltered run of this suite puts ~1700 lines
+    # of CLI chatter ahead of it. Taking the first `^results:` in the
+    # file would therefore read a line the TESTS control, and one
+    # `results: … (success: true)` in that region would report a red run
+    # as SURVIVED — the one verdict this classifier exists to never get
+    # wrong. Requiring `assertations:` immediately followed by
+    # `successes:` opens the block, and the counts and `results:` are
+    # taken from inside it, so neither end can be spoofed.
+    #
+    # `assertations` is read directly rather than summed from the four
+    # category lines: ResultStats counts ignores in the total too, and
+    # the report does not print an `ignores:` line, so a sum would be
+    # short by them. The unit is ASSERTIONS, not test methods — the
+    # report row labels it as such.
+    header=$(awk '
+        /^assertations:[[:space:]]+[0-9]+$/ { a = $2; open = 1; next }
+        open == 1 && /^successes:[[:space:]]+[0-9]+$/ { open = 2; next }
+        open >= 2 && /^(errors|failures|warnings):[[:space:]]+[0-9]+$/ { next }
+        open >= 2 && /^results:/ { print a; print $0; exit }
+        { if (open == 1) open = 0 }
+    ' "$log" 2>/dev/null || true)
+    if [ -z "$header" ]; then
         printf 'RUN-FAIL\n%s\n' "$log"
         return 0
     fi
+    { IFS= read -r assertions; IFS= read -r results_line; } <<EOF
+$header
+EOF
 
     # "No tests executed." arrives as an ordinary assertion-detail row,
     # so match that row's shape. An unanchored search of the whole log
@@ -199,19 +224,6 @@ classify() {
         printf 'NO-TESTS\nfilter matched no test class (%s)\n' "$log"
         return 0
     fi
-
-    # Assertion-level counts from the first header block. Note the unit:
-    # utest's successes/failures/errors/warnings count ASSERTIONS, not
-    # test methods, so this is the denominator of an assertion figure and
-    # the row labels it as such.
-    total=$(awk '
-        /^successes:[[:space:]]+-?[0-9]+$/ { if (!hs) { s = $2; hs = 1 } }
-        /^failures:[[:space:]]+-?[0-9]+$/  { if (!hf) { f = $2; hf = 1 } }
-        /^errors:[[:space:]]+-?[0-9]+$/    { if (!he) { e = $2; he = 1 } }
-        /^warnings:[[:space:]]+-?[0-9]+$/  { if (!hw) { w = $2; hw = 1 } }
-        /^results:/ { exit }
-        END { print (s + f + e + w) + 0 }
-    ' "$log")
 
     # The HEADER decides red/green; the rows below only NAME what went
     # red. utest keys this line and its exit code on the same predicate,
@@ -225,7 +237,7 @@ classify() {
     # unnamed, which lands as RUN-FAIL below.
     case "$results_line" in
         *'(success: true)'*)
-            printf 'SURVIVED\n0 tests failed / %s assertions\n' "$total"
+            printf 'SURVIVED\n0 tests failed / %s assertions\n' "$assertions"
             return 0
             ;;
     esac
@@ -238,11 +250,19 @@ classify() {
     # next failing method's row, still hijacks the class name. The damage
     # is bounded to a mis-attributed name — KILLED can degrade to
     # MISMATCH — and never to a wrong red/green call, because that comes
-    # from the header above. Anything not marked OK counts as failing, so
-    # a marker this list does not know is dropped rather than passed.
+    # from the header above.
+    #
+    # The marker slot matches ANY uppercase word rather than the four
+    # utest emits today: a whitelist there would drop an unknown marker
+    # to the `pending = ""` arm, which clears the class binding and
+    # orphans the NEXT failure as `.method`. Generic slot + "anything not
+    # OK is failing" means a marker added by a future utest is named and
+    # counted instead. It cannot misfire on a real row — the marker slot
+    # only ever holds letters, and a method literally named `OK` reads
+    # `OK: FAILURE F`, which the inner test still classifies correctly.
     failures=$(awk '
         /^[A-Za-z_][A-Za-z0-9_.]*$/ { pending = $0; next }
-        /^[[:space:]]+[A-Za-z_][A-Za-z0-9_.]*:[[:space:]]+(OK|FAILURE|ERROR|WARNING)([[:space:]]|$)/ {
+        /^[[:space:]]+[A-Za-z_][A-Za-z0-9_.]*:[[:space:]]+[A-Z]+([[:space:]]|$)/ {
             if (pending != "") { cls = pending; pending = "" }
             if ($0 !~ /:[[:space:]]+OK([[:space:]]|$)/) {
                 m = $1; sub(/:$/, "", m); print cls "." m
@@ -285,12 +305,12 @@ classify() {
             if (ne == 0) next
             matched = 0
             for (i = 1; i <= ne; i++) if (index($0, E[i]) > 0) { hit[i] = 1; matched = 1 }
-            if (!matched) x[++nx] = $0
+            if (!matched) extra[++nx] = $0
         }
         END {
             for (i = 1; i <= ne; i++) if (!(i in hit)) miss[++nm] = E[i]
             print join_capped(miss, nm + 0)
-            print join_capped(x, nx + 0)
+            print join_capped(extra, nx + 0)
             print join_capped(all, nf + 0)
             print nf + 0
         }
@@ -302,14 +322,14 @@ EOF
 
     if [ -n "$missing" ]; then
         printf 'MISMATCH\n%s tests failed / %s assertions: %s (missing: %s)\n' \
-            "$nfail" "$total" "$joined" "$missing"
+            "$nfail" "$assertions" "$joined" "$missing"
         return 0
     fi
 
     # Failures the expectations did not name are reported, not penalised:
     # the question a track asks is "does the suite notice", and a wider
     # blast radius still answers yes.
-    detail="$nfail tests failed / $total assertions: $joined"
+    detail="$nfail tests failed / $assertions assertions: $joined"
     if [ -n "$extra" ]; then
         detail="$detail +extra: $extra"
     fi
@@ -390,13 +410,21 @@ fi
 
 if [ -n "$jobs" ]; then
     # A user-supplied value is validated, never clamped: silently turning
-    # `--jobs 0` into 1 contradicts the error message.
+    # `--jobs 0` into 1 contradicts the error message. The zero test is
+    # ARITHMETIC, not a literal in the pattern list — `case … |0)` reads
+    # only the one spelling, and `--jobs 00` would sail through it into
+    # `xargs -P 00`, which means UNBOUNDED parallelism: every track
+    # compiling and running at once, exactly what the limit prevents.
     case "$jobs" in
-        ''|*[!0-9]*|0)
+        ''|*[!0-9]*)
             echo "mutation-check.sh: --jobs must be a positive integer, got '$jobs'" >&2
             exit 2
             ;;
     esac
+    if [ "$jobs" -lt 1 ]; then
+        echo "mutation-check.sh: --jobs must be a positive integer, got '$jobs'" >&2
+        exit 2
+    fi
 else
     # max(1, min(4, cores/2)) — the clamps here bound OUR arithmetic, not
     # a request, so a single-core machine gets 1 rather than an error.
