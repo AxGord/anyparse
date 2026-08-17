@@ -611,19 +611,29 @@ under *Grammar platform* above) are part of this direction and already in place.
 ## Running the tests
 
 ```sh
-haxe test.hxml          # neko (fast compile, fast run, default)
-haxe test-js.hxml       # js/node — then: node bin/test.js
-haxe test-interp.hxml   # Haxe macro interpreter (no compile step)
+haxe test-js.hxml           # compile the runner to bin/test.js
+node bin/test.js            # run the whole suite (~21s)
+tools/suite-shard.sh -n 4   # the same suite across 4 processes (~9s)
 ```
 
-`test.hxml` and `test-interp.hxml` are self-contained: no compile-server
-dependency, so they build correctly whether or not a server happens to be
-running. `test-server.hxml` / `test-interp-server.hxml` are opt-in
-`--connect 7822` variants for a faster edit loop with a dedicated compile
-server (`haxe --wait 7822`, once) — only use them when you know a
-compatible server (started from this checkout) is listening; a stray or
-mismatched one on that port answers `--connect` without error and skips
-the build silently (exit 0, no artifact, no output).
+js/node is the only supported runner: the suite itself calls `js.node.*`
+directly (`CompilerOracleE2ETest` pins fixture mtimes through
+`js.node.Fs`), so there is no neko or `--interp` build of it.
+`test-js-common.hxml` and `bin/apq-js-common.hxml` both pass
+`-D analyzer-optimize`, so the suite exercises the codegen that ships.
+
+The **core** — parser, writer and the whole `apq lint` check set — is
+target-independent and stays that way on purpose ("Pure Haxe delivery, no
+JVM dependency", [`docs/design-principles.md`](docs/design-principles.md)). It
+compiles straight out of `src/` for a static target with no shims. A committed
+probe proves it — parser, writer and all builtin checks built for `--jvm`,
+without `-lib hxnodejs`:
+
+```sh
+haxe tools/jvm-portability.hxml && java -jar bin/jvm-portability.jar
+```
+
+The JVM is needed to run that probe, never to ship anyparse.
 
 The corpus round-trip layer runs only when `ANYPARSE_HXFORMAT_FORK` points at a
 haxe-formatter fixtures checkout.

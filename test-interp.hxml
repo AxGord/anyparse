@@ -1,6 +1,0 @@
-# Pure compile+run via the macro interpreter (no compile step, no
-# compile server dependency). See test-interp-server.hxml for the
-# --connect 7822 opt-in speed variant, and test.hxml for the same
-# self-contained-vs-server split with the reasoning in full.
-test-common.hxml
---interp

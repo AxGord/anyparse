@@ -2,7 +2,9 @@ package anyparse.check;
 
 using StringTools;
 
+#if nodejs
 import js.node.ChildProcess.ChildProcessSpawnSyncResult;
+#end
 
 /**
  * The verdict of one compiler-oracle typecheck run — `apq lint`'s bridge to

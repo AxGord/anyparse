@@ -1,0 +1,19 @@
+# Static-target portability probe for the anyparse CORE — see
+# docs/testing.md § "The core stays target-independent".
+#
+# Deliberately NOT the test runner: the suite calls js.node directly and is
+# js-only. This builds parser + writer + every builtin check for --jvm, with
+# no -lib hxnodejs and no stubs, so a bare `import js.node.…` or a structure
+# that only unifies under a laxer typer fails here instead of silently.
+#
+# A bare hxml-include line and every relative path inside an hxml resolve
+# against the CWD, so run this from the repo root:
+#   haxe tools/jvm-portability.hxml && java -jar bin/jvm-portability.jar
+#
+# Running it needs a JVM; anyparse itself never does.
+-cp src
+-cp tools
+-main JvmPortability
+# Mirrors bin/apq-js-common.hxml so the probe exercises the shipped codegen.
+-D analyzer-optimize
+--jvm bin/jvm-portability.jar

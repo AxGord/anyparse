@@ -1,8 +1,0 @@
-# Shared flags for the neko/interp test runners and their -server
-# variants (test.hxml, test-server.hxml, test-interp.hxml,
-# test-interp-server.hxml). Each includes this file and adds only its
-# own target/connect flags.
--cp src
--cp test
--lib utest
--main RunTests

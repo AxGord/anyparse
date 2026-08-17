@@ -6,6 +6,8 @@ This is a **parallel track** to the main anyparse roadmap ([roadmap.md](roadmap.
 
 Each phase has a goal, deliverables, and an explicit exit condition. A phase is not "done" until the exit condition is met and the project is green.
 
+**Read the target lines below as the original plan, not as current instructions.** Phases 1-4 shipped; the tool runs on js/node only. The `bin/apq.hxml` neko target named in Phase 1, and the "on neko/js/interp" and "sub-second on neko" wording in the exit conditions, were retired on 2026-08-17: the CLI spawns processes through `js.node`, and the neko artifact died at module load before running a query. Current build and layout: [cli-query-tool.md](cli-query-tool.md) § "Project structure".
+
 ## Phase 0: Design lock-in
 
 **Goal**: validate the pattern syntax, selector syntax, and matcher semantics on paper, against real query needs, before writing any engine code.

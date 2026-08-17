@@ -4,10 +4,10 @@
 # command line cannot retarget an hxml that already names an output.
 # `test-js.hxml` writes the shared `bin/test.js`; `tools/worker-build.sh`
 # passes a per-worker `-js <workdir>/test.js` instead.
-#
-# test-common.hxml already supplies -cp src, -cp test, -lib utest and
-# -main RunTests.
-test-common.hxml
+-cp src
+-cp test
+-lib utest
 -lib hxnodejs
+-main RunTests
 # Mirrors bin/apq-js-common.hxml so the suite runs the shipped codegen — see there.
 -D analyzer-optimize

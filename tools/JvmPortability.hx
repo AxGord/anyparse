@@ -1,0 +1,75 @@
+import anyparse.check.Check.Violation;
+import anyparse.check.Linter;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.GrammarPlugin;
+
+/**
+ * The static-target portability probe for the anyparse core: parse, writer
+ * round-trip and every builtin check, built for `--jvm` straight out of `src/`
+ * with no `-lib hxnodejs` and no stubs. See `docs/testing.md` § "The core stays
+ * target-independent" for the two failure modes it exists to catch.
+ *
+ * A JVM is needed to RUN it, never to ship anyparse — the point is that the core
+ * compiles for a target whose typer is stricter than js and neko, which is how a
+ * `js.node` leak or a structure-unification regression gets caught early.
+ *
+ * Paths come from argv; with none it reads a default slice of its own source tree.
+ */
+final class JvmPortability {
+
+	/** The default scope: the two packages whose portability actually regressed. */
+	private static final DEFAULT_SCOPE: Array<String> = ['src/anyparse/query', 'src/anyparse/check'];
+
+	/** The project's writer settings, threaded in so the probe writes the way `hxq fmt` does. */
+	private static final CONFIG: String = 'hxformat.json';
+
+	public static function main(): Void {
+		final args: Array<String> = Sys.args();
+		final paths: Array<String> = args.length > 0 ? args : collectAll(DEFAULT_SCOPE);
+		final files: Array<{ file: String, source: String }> = [
+			for (path in paths) { file: path, source: sys.io.File.getContent(path) }
+		];
+		final plugin: GrammarPlugin = new HaxeQueryPlugin();
+		final opts: Null<String> = sys.FileSystem.exists(CONFIG) ? sys.io.File.getContent(CONFIG) : null;
+		// The writer is exercised for COVERAGE, not for byte-equality: that is `hxq fmt
+		// --list`'s job and the suite's. `threw` is the number that has to stay 0 —
+		// `writeRoundTrip` throws only on a parse failure or a comment loss, never on a
+		// formatting difference. The project `hxformat.json` is threaded in because the
+		// writer's comment-capture seams are config-dependent: under compiled defaults
+		// `PreferLocalFunction.hx` drops a line comment that survives under the project
+		// config, so a probe that passed no options would sit at a permanent threw=1 and
+		// train the reader to ignore the one number it exists to report.
+		var wrote: Int = 0;
+		final threw: Array<String> = [];
+		for (f in files) {
+			try {
+				if (plugin.writeRoundTrip(f.source, opts) != null) wrote++;
+			} catch (exception: haxe.Exception) {
+				threw.push('${f.file}: ${exception.message}');
+			}
+		}
+		final violations: Array<Violation> = Linter.run(files, plugin);
+		Sys.println(
+			'files=${files.length} wrote=$wrote threw=${threw.length} checks=${Linter.builtins().length} violations=${violations.length}'
+		);
+		for (failure in threw) Sys.println('  threw $failure');
+	}
+
+	/** Every `.hx` under each of `dirs`, recursively. */
+	private static function collectAll(dirs: Array<String>): Array<String> {
+		final out: Array<String> = [];
+		for (dir in dirs) collect(dir, out);
+		return out;
+	}
+
+	private static function collect(dir: String, out: Array<String>): Void {
+		for (name in sys.FileSystem.readDirectory(dir)) {
+			final path: String = '$dir/$name';
+			if (sys.FileSystem.isDirectory(path))
+				collect(path, out);
+			else if (haxe.io.Path.extension(name) == 'hx')
+				out.push(path);
+		}
+	}
+
+}

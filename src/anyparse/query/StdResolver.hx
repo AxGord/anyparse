@@ -1,7 +1,9 @@
 package anyparse.query;
 
 import anyparse.core.EnvFlag;
+#if nodejs
 import js.node.ChildProcess.ChildProcessSpawnSyncResult;
+#end
 
 using StringTools;
 

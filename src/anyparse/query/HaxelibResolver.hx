@@ -3,7 +3,9 @@ package anyparse.query;
 import haxe.Exception;
 import anyparse.query.format.json.HaxelibJson;
 import anyparse.query.format.json.HaxelibJsonParser;
+#if nodejs
 import js.node.ChildProcess.ChildProcessSpawnSyncResult;
+#end
 
 using StringTools;
 

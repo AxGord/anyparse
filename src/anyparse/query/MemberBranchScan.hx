@@ -338,8 +338,16 @@ typedef MemberBranchSeams = {
  * collected since the last member, and whether EVERY build that reaches the next member sees
  * exactly those. `certain` goes false only where conditional branches leave different runs
  * behind — the shape an enabling gate cannot judge.
+ *
+ * `var`, not `final`, and it is load-bearing: `eachMember` seeds `fold` from a lambda that
+ * returns a bare object literal, so the type parameter binds to the plain anon `{ nodes,
+ * certain }` first and this typedef must unify INTO it. A `final` field lowers to a `never`
+ * setter and cannot (`Inconsistent setter for field certain : never should be default`).
+ * Measured with one variable, same source, target swapped: `--jvm` rejects it, `-js` and
+ * `-neko` accept it. `final` in a structure typedef is fine anywhere the expected type is
+ * written at the literal — see `docs/testing.md` § "The core stays target-independent".
  */
 private typedef MemberRun = {
-	final nodes: Array<QueryNode>;
-	final certain: Bool;
+	var nodes: Array<QueryNode>;
+	var certain: Bool;
 };

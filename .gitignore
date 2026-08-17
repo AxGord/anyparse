@@ -1,5 +1,6 @@
 bin/*.n
 bin/*.js
+bin/*.jar
 bin/*.n.map
 bin/*.js.map
 bin/.last-sweep.json

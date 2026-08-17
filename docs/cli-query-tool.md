@@ -631,7 +631,8 @@ Key points:
 
 ## Project structure
 
-Forward reference — files do not exist yet. When v1 ships:
+The skeleton this spec projected, as it actually shipped (`src/anyparse/query/`
+has grown well past the five modules named here):
 
 ```
 src/anyparse/query/
@@ -644,11 +645,12 @@ src/anyparse/query/
     Text.hx             # text output
     Json.hx             # JSON output
 bin/
-  apq.hxml              # neko target build config
+  apq-js-common.hxml    # shared build flags (no output line)
+  apq-js.hxml           # leaf: writes bin/apq.js
   hxq                   # shell alias script
 ```
 
-The library code lives inside `src/anyparse/` (no separate haxelib package). The `bin/apq.hxml` target produces a single-file binary; `hxq` is a tiny shell wrapper that prepends `--lang haxe`.
+The library code lives inside `src/anyparse/` (no separate haxelib package). `bin/apq-js.hxml` produces the single-file `bin/apq.js`; `hxq` is a tiny shell wrapper that prepends `--lang haxe`. The Phase-1 neko target (`bin/apq.hxml`) is gone: the CLI spawns processes through `js.node`, and the neko artifact it built died at module load before it ran a query.
 
 ## Resolved decisions (Phase 0)
 

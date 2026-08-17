@@ -119,9 +119,12 @@ function testCurlyLispRoundTrip() {
 Not unit tests. Separate binaries that measure throughput and memory on realistic inputs. The goal is to detect performance regressions between commits and to compare anyparse against the tools it is replacing (haxe-formatter, ax3, native `JSON.parse`).
 
 Benchmarks target each Haxe backend separately because performance differs significantly:
-- `bench-neko.hxml` — neko baseline
-- `bench-js.hxml` — Node.js
+- `bench-js.hxml` — Node.js, the target everything ships on today
 - `bench-hxcpp.hxml` — native
+
+Neko is not a benchmark target: the neko build of the CLI compiles but its
+artifact dies at module load (measured 2026-08-17). `--jvm` builds and runs
+the core fine, but it is a portability probe, not a delivery target.
 
 Each benchmark outputs structured JSON with throughput, timing breakdowns, and memory usage. CI collects these and compares against a baseline.
 
@@ -263,26 +266,70 @@ When adding a grammar, the PR includes a round-trip test with at least 20 curate
 ## Running tests
 
 ```sh
-haxe test.hxml          # neko, fastest compile+run (default)
-haxe test-js.hxml       # js/node, for cross-platform validation
-haxe test-interp.hxml   # Haxe macro interpreter, no compile step
+haxe test-js.hxml           # compile the runner to bin/test.js
+node bin/test.js            # the whole suite, one process (~21s)
+tools/suite-shard.sh -n 4   # the same suite across 4 processes (~9s)
+APQ_TEST=RemoveParam node bin/test.js   # one class, for the edit loop
 ```
 
-`test.hxml` and `test-interp.hxml` are self-contained (no compile-server
-dependency). `test-server.hxml` / `test-interp-server.hxml` add
-`--connect 7822` as an opt-in speed path for a dedicated compile server
-(`haxe --wait 7822`, once) — only use them when a compatible server
-from this checkout is actually listening, since a stray or mismatched
-server on that port answers `--connect` without error and silently
-skips the build (exit 0, no artifact produced, no output).
+js/node is the only runner. The suite itself is not target-independent —
+`CompilerOracleE2ETest` calls `js.node.Fs` directly to pin fixture mtimes —
+so there is no neko or `--interp` build of `RunTests`, and the neko/interp
+hxml files that used to sit beside `test-js.hxml` were deleted rather than
+left as runners that no longer compile.
 
-When Phase 2 adds hxcpp as a target:
+Both `test-js-common.hxml` and `bin/apq-js-common.hxml` pass
+`-D analyzer-optimize`, so the suite exercises the codegen that ships.
+
+### The core stays target-independent
+
+The runner being js-only says nothing about the library. Parser, writer and
+the whole `apq lint` check set compile straight out of `src/` for a static
+target — no copies, no stubs — and that is design principle 3 ("Pure Haxe
+delivery, no JVM dependency") in practice:
 
 ```sh
-haxe test-hxcpp.hxml    # native binary, slowest compile but closest to production
+haxe -cp src -main <harness> -D analyzer-optimize --jvm out.jar
 ```
 
-All targets must pass before a commit. Cross-target failures usually indicate a platform-specific issue that should be fixed, not ignored.
+Two things break this quietly, and both did:
+
+- **A bare `import js.node.…` at module scope.** The *uses* were already
+  behind `#if nodejs`; the import was not, and an import is resolved
+  unconditionally. Guard the import with the same condition as its uses.
+- **A `final` field in a structure `typedef` that a bare object literal has
+  to be inferred INTO.** A `final` structure field lowers to a `never`
+  setter. Where the expected type is written at the literal (a declared
+  local, field, parameter or return type) that costs nothing — `GrammarPlugin.LayoutMetrics`
+  keeps its `final` fields and builds for every target. The error appears
+  where the literal's own anonymous type is inferred FIRST and the typedef
+  then has to unify with it, typically through a type parameter: a lambda
+  returning `{ nodes: …, certain: … }` binds `fold`'s `S` to the plain
+  anon `{ nodes, certain }`, and a `MemberRun -> MemberRun -> MemberRun`
+  join no longer fits (`Inconsistent setter for field certain : never
+  should be default`).
+
+  Measured on `MemberBranchScan.MemberRun`, one variable — same source,
+  same flags, target swapped: `--jvm` rejects it; `-js` and `-neko` both
+  accept it. Not measured on hxcpp. So this is not "js versus static
+  targets": it is `--jvm` being strict where the others are lax, which is
+  exactly what makes a `--jvm` build worth running. The reverse also
+  holds — a shape where the join is a top-level function rather than a
+  lambda is rejected on `-js` too, so `final` here is not a
+  target-conditional style choice but a real unification constraint.
+
+A `--jvm` build of a minimal parse+lint harness is the cheapest way to
+re-check this after a slice that touches `src/anyparse/query` or
+`src/anyparse/check`. That harness is committed:
+
+```sh
+haxe tools/jvm-portability.hxml     # ~9s; parser + writer + every builtin check
+java -jar bin/jvm-portability.jar   # prints the counts it parsed and linted
+```
+
+It is a portability PROBE, not a dependency: nothing anyparse ships needs a
+JVM. It exists so the invariant above is something a slice can fail on
+instead of a paragraph nothing can flip.
 
 ### Parallel tracks: per-worker build outputs
 
