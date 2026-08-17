@@ -22,42 +22,11 @@
 
 set -e
 
-# Resolve this script's real path, following symlinks (POSIX `readlink`,
-# no `-f` — portable BSD/macOS + Linux). Without this, invoking via a
-# symlink would make `here` the symlink's dir, not the repo bin/.
-src="$0"
-while [ -h "$src" ]; do
-    dir=$(cd -P "$(dirname "$src")" && pwd)
-    src=$(readlink "$src")
-    case "$src" in
-        /*) ;;
-        *) src="$dir/$src" ;;
-    esac
-done
-here=$(cd -P "$(dirname "$src")" && pwd)
-
-# Worktree awareness: when invoked from inside a git worktree (or clone)
-# whose own bin/ holds a built engine, prefer THAT engine + its src/ over
-# the symlink-resolved one above. Without this, `hxq` run from a campaign
-# worktree queries the MAIN tree's apq.js and stale-checks the MAIN src/
-# — silently testing the wrong parser (the worktree's grammar edits are
-# invisible). Falls back to the symlink-resolved `here` when CWD is
-# outside a git tree (e.g. reading a reference library), when the
-# worktree's engine isn't built yet, or when CWD is the main tree
-# (then $wt_top/bin == $here, no change). `|| true` keeps `set -e` happy
-# when git is absent or CWD is not a repo.
-wt_top=$(git rev-parse --show-toplevel 2>/dev/null || true)
-if [ -n "$wt_top" ] && [ "$wt_top/bin" != "$here" ] && { [ -f "$wt_top/bin/apq.js" ] || [ -f "$wt_top/bin/apq.n" ]; }; then
-    here="$wt_top/bin"
-fi
-
-js="$here/apq.js"
-nn="$here/apq.n"
-
 # HXQ_BIN — explicit engine override, for parallel workers. Checked
-# FIRST, so it does not depend on the shared bin/ holding a build at all:
-# a fresh clone or a worktree whose bin/ is empty still runs the private
-# engine the caller names.
+# FIRST, before any path resolution: it depends on none of it, so an
+# override skips the symlink walk and the `git rev-parse` probe below
+# entirely, and works even where the shared bin/ holds no build at all
+# (a fresh clone, or a worktree whose bin/ is empty).
 #
 # Several agents working the same repo at once all rebuild and run the
 # ONE shared bin/apq.js: each build truncates the artifact the others are
@@ -83,15 +52,51 @@ if [ -n "${HXQ_BIN:-}" ]; then
         *) runner="node" ;;
     esac
     HXQ_QUIET=1
-elif [ -f "$js" ]; then
-    runner="node"
-    binary="$js"
-elif [ -f "$nn" ]; then
-    runner="neko"
-    binary="$nn"
 else
-    echo "hxq: neither $js nor $nn found — run \`haxe bin/apq-js.hxml\` (preferred) or \`haxe bin/apq.hxml\`" >&2
-    exit 1
+    # Resolve this script's real path, following symlinks (POSIX
+    # `readlink`, no `-f` — portable BSD/macOS + Linux). Without this,
+    # invoking via a symlink would make `here` the symlink's dir, not the
+    # repo bin/.
+    src="$0"
+    while [ -h "$src" ]; do
+        dir=$(cd -P "$(dirname "$src")" && pwd)
+        src=$(readlink "$src")
+        case "$src" in
+            /*) ;;
+            *) src="$dir/$src" ;;
+        esac
+    done
+    here=$(cd -P "$(dirname "$src")" && pwd)
+
+    # Worktree awareness: when invoked from inside a git worktree (or
+    # clone) whose own bin/ holds a built engine, prefer THAT engine +
+    # its src/ over the symlink-resolved one above. Without this, `hxq`
+    # run from a campaign worktree queries the MAIN tree's apq.js and
+    # stale-checks the MAIN src/ — silently testing the wrong parser (the
+    # worktree's grammar edits are invisible). Falls back to the
+    # symlink-resolved `here` when CWD is outside a git tree (e.g.
+    # reading a reference library), when the worktree's engine isn't
+    # built yet, or when CWD is the main tree (then $wt_top/bin == $here,
+    # no change). `|| true` keeps `set -e` happy when git is absent or
+    # CWD is not a repo.
+    wt_top=$(git rev-parse --show-toplevel 2>/dev/null || true)
+    if [ -n "$wt_top" ] && [ "$wt_top/bin" != "$here" ] && { [ -f "$wt_top/bin/apq.js" ] || [ -f "$wt_top/bin/apq.n" ]; }; then
+        here="$wt_top/bin"
+    fi
+
+    js="$here/apq.js"
+    nn="$here/apq.n"
+
+    if [ -f "$js" ]; then
+        runner="node"
+        binary="$js"
+    elif [ -f "$nn" ]; then
+        runner="neko"
+        binary="$nn"
+    else
+        echo "hxq: neither $js nor $nn found — run \`haxe bin/apq-js.hxml\` (preferred) or \`haxe bin/apq.hxml\`" >&2
+        exit 1
+    fi
 fi
 
 # Stale-build handling: if any .hx under src/ is newer than the selected
@@ -113,7 +118,9 @@ fi
 #   aborts on build failure. Stale results are silent regressions —
 #   defaulting to auto-rebuild keeps query output truthful without
 #   manual rebuilds between grammar edits.
-src_root="$here/../src"
+# `here` is set only on the shared-engine path above; an HXQ_BIN override
+# sets HXQ_QUIET=1, so this whole block is skipped in that case.
+src_root="${here:-}/../src"
 if [ "${HXQ_QUIET:-}" != "1" ] && [ -d "$src_root" ]; then
     stale=$(find "$src_root" -name '*.hx' -newer "$binary" -print -quit 2>/dev/null || true)
     if [ -n "$stale" ]; then

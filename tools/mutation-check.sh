@@ -40,22 +40,32 @@
 #             (`<fq.ClassName>.<testMethod>`).
 #
 # Verdicts:
-#   KILLED     the suite failed, and every expectation matched something
-#              (no expectations given = any failure kills). Failures
-#              beyond the expectations do NOT demote this — they are
-#              reported as `+extra:` on the row.
-#   SURVIVED   the suite ran and nothing failed. The vacuum.
-#   MISMATCH   the suite failed, but some expectation matched nothing.
+#   KILLED     the run went red, and every expectation matched something
+#              (no expectations given = any red kills). Failures beyond
+#              the expectations do NOT demote this — they are reported
+#              as `+extra:` on the row.
+#   SURVIVED   the run was GREEN — utest's own `(success: true)`. The
+#              vacuum. Note this is stricter than "nothing FAILED": a
+#              test that stops asserting is reported as a WARNING, and
+#              utest counts that as red.
+#   MISMATCH   the run went red, but some expectation matched nothing.
 #   NO-TESTS   the filter matched no test class. Loud on purpose: a
 #              typo'd filter would otherwise read as SURVIVED.
+#   WT-FAIL    `git worktree add` failed — nothing to patch or run.
 #   PATCH-FAIL `git apply` failed. Manifest/patch defect.
 #   BUILD-FAIL the patched tree does not compile — a useless mutation.
-#   RUN-FAIL   the runner produced no usable transcript.
+#   RUN-FAIL   no usable transcript, or a red header whose rows this
+#              parser could not name.
 #
 # Exit 0 only when every track is KILLED; any other verdict exits 1.
 #
-# Worktrees are always removed on exit. The logs and .verdict files in
-# the workroot are deliberately KEPT for post-mortem.
+# Every worktree this script created is removed on exit (including on
+# INT/TERM/HUP); a `worktree remove` that itself fails is swallowed so
+# one bad entry cannot strand the rest, which does mean a stuck worktree
+# can survive as a registered entry — `git worktree list` after a crashed
+# run is the check. The workroot is never deleted: its transcripts,
+# build logs and .verdict files are the post-mortem, and they accumulate
+# in TMPDIR across a long campaign.
 set -euo pipefail
 
 script_dir=$(cd -P "$(dirname "$0")" && pwd)
@@ -141,7 +151,19 @@ run_track() {
         ( cd "$wt" && APQ_TEST="$filter" node "$build/test.js" ) > "$log" 2>&1 || true
     fi
 
-    classify "$log" "$expected" > "$verdict_file"
+    # Captured, not redirected straight into the file: `> "$verdict_file"`
+    # truncates before classify runs, so an abort inside it would leave an
+    # empty file and the report would print a blank verdict column.
+    # write_verdict stays the single owner of the file format.
+    local classified v d
+    if ! classified=$(classify "$log" "$expected"); then
+        write_verdict "$verdict_file" "RUN-FAIL" "classifier aborted on $log"
+        return 0
+    fi
+    { IFS= read -r v; IFS= read -r d; } <<EOF
+$classified
+EOF
+    write_verdict "$verdict_file" "$v" "$d"
     return 0
 }
 
@@ -159,37 +181,70 @@ write_verdict() {
 # classify <log> <expected-csv> -> two lines: verdict, detail.
 classify() {
     local log=$1 expected=$2
-    local total failures missing extra detail first
+    local results_line total failures exp_list matcher_out
+    local missing extra joined nfail detail
 
-    if ! grep -q '^results:' "$log" 2>/dev/null; then
+    # The first `^results:` line only — the header is emitted before any
+    # class row, and a spliced assertion message can contain anything.
+    results_line=$(awk '/^results:/ { print; exit }' "$log" 2>/dev/null || true)
+    if [ -z "$results_line" ]; then
         printf 'RUN-FAIL\n%s\n' "$log"
         return 0
     fi
-    if grep -q 'No tests executed\.' "$log"; then
+
+    # "No tests executed." arrives as an ordinary assertion-detail row,
+    # so match that row's shape. An unanchored search of the whole log
+    # would also fire on a test whose own message quotes the phrase.
+    if grep -q '^[[:space:]]*line: [0-9]*, No tests executed\.$' "$log"; then
         printf 'NO-TESTS\nfilter matched no test class (%s)\n' "$log"
         return 0
     fi
 
-    # The tests-run count comes from the HEADER, not from counting rows:
-    # once a run has a failure utest stops listing the passing tests, so
-    # the per-class rows are the failures alone and a row count would
-    # report every killed track as "3/3 failed".
+    # Assertion-level counts from the first header block. Note the unit:
+    # utest's successes/failures/errors/warnings count ASSERTIONS, not
+    # test methods, so this is the denominator of an assertion figure and
+    # the row labels it as such.
     total=$(awk '
-        /^successes:[[:space:]]+[0-9]+$/ { s = $2 }
-        /^failures:[[:space:]]+[0-9]+$/  { f = $2 }
-        /^errors:[[:space:]]+[0-9]+$/    { e = $2 }
-        END { print (s + f + e) + 0 }
+        /^successes:[[:space:]]+-?[0-9]+$/ { if (!hs) { s = $2; hs = 1 } }
+        /^failures:[[:space:]]+-?[0-9]+$/  { if (!hf) { f = $2; hf = 1 } }
+        /^errors:[[:space:]]+-?[0-9]+$/    { if (!he) { e = $2; he = 1 } }
+        /^warnings:[[:space:]]+-?[0-9]+$/  { if (!hw) { w = $2; hw = 1 } }
+        /^results:/ { exit }
+        END { print (s + f + e + w) + 0 }
     ' "$log")
 
+    # The HEADER decides red/green; the rows below only NAME what went
+    # red. utest keys this line and its exit code on the same predicate,
+    # ResultStats.isOk = !(hasFailures || hasErrors || hasWarnings), and
+    # ITestHandler auto-adds Warning('no assertions') to any test that
+    # completes without asserting. So a mutation that stops a test
+    # asserting produces `failures: 0, warnings: N` — a red run the suite
+    # genuinely noticed, which a FAILURE|ERROR row scan would have called
+    # SURVIVED. Reading the verdict from the header cannot miss a marker
+    # utest adds later; the worst such a marker can do is leave the run
+    # unnamed, which lands as RUN-FAIL below.
+    case "$results_line" in
+        *'(success: true)'*)
+            printf 'SURVIVED\n0 tests failed / %s assertions\n' "$total"
+            return 0
+            ;;
+    esac
+
     # A class line is a bare identifier at column 0 — but so is any line
-    # of a multi-line assertion message, which utest splices in raw. A
-    # candidate is only promoted once the NEXT line is an indented result
-    # row, which is the one thing a message body cannot fake.
+    # of a multi-line assertion message, which PlainTextReport splices in
+    # raw. Promoting a candidate only once the NEXT line is an indented
+    # result row narrows that, it does not close it: a message whose last
+    # line is a bare identifier at column 0, immediately followed by the
+    # next failing method's row, still hijacks the class name. The damage
+    # is bounded to a mis-attributed name — KILLED can degrade to
+    # MISMATCH — and never to a wrong red/green call, because that comes
+    # from the header above. Anything not marked OK counts as failing, so
+    # a marker this list does not know is dropped rather than passed.
     failures=$(awk '
         /^[A-Za-z_][A-Za-z0-9_.]*$/ { pending = $0; next }
         /^[[:space:]]+[A-Za-z_][A-Za-z0-9_.]*:[[:space:]]+(OK|FAILURE|ERROR|WARNING)([[:space:]]|$)/ {
             if (pending != "") { cls = pending; pending = "" }
-            if ($0 ~ /:[[:space:]]+(FAILURE|ERROR)([[:space:]]|$)/) {
+            if ($0 !~ /:[[:space:]]+OK([[:space:]]|$)/) {
                 m = $1; sub(/:$/, "", m); print cls "." m
             }
             next
@@ -198,58 +253,63 @@ classify() {
     ' "$log" | sort -u)
 
     if [ -z "$failures" ]; then
-        printf 'SURVIVED\n0/%s failed\n' "$total"
+        printf 'RUN-FAIL\nheader reports a red run but no result row parsed (%s)\n' "$log"
         return 0
     fi
 
-    missing=""
-    if [ -n "$expected" ]; then
-        local exp rest
-        rest=$expected
-        while [ -n "$rest" ]; do
-            exp=${rest%%,*}
-            if [ "$exp" = "$rest" ]; then rest=""; else rest=${rest#*,}; fi
-            exp=$(printf '%s' "$exp" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
-            if [ -n "$exp" ] && ! printf '%s\n' "$failures" | grep -qF -- "$exp"; then
-                missing="$missing${missing:+, }$exp"
-            fi
-        done
-    fi
+    # ONE normalisation of the expectation CSV, then ONE matcher. The two
+    # earlier passes answered the same "does this expectation match this
+    # name" question twice and had already diverged: the `missing` pass
+    # ran `printf | grep -q`, where grep exits at the first match and
+    # SIGPIPEs the printf on a long failure list (status 141, inverted by
+    # `!` into "missing" for an expectation that DID match), and the
+    # `extra` pass re-trimmed every expectation inside the inner loop —
+    # two forks per failure per expectation.
+    exp_list=$(printf '%s' "$expected" | tr ',' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$' || true)
 
-    first=$(printf '%s\n' "$failures" | awk '{ printf "%s%s", sep, $0; sep = ", " } END { print "" }')
+    # Passed through the environment, not `-v`: awk applies escape
+    # processing to a `-v` value, which would mangle a backslash.
+    matcher_out=$(printf '%s\n' "$failures" | MUTCHECK_EXPS="$exp_list" awk '
+        function join_capped(a, n,   i, s) {
+            s = ""
+            for (i = 1; i <= n && i <= 10; i++) s = s (i > 1 ? ", " : "") a[i]
+            if (n > 10) s = s ", …+" (n - 10) " more"
+            return s
+        }
+        BEGIN {
+            exps = ENVIRON["MUTCHECK_EXPS"]
+            ne = (exps == "" ? 0 : split(exps, E, "\n"))
+        }
+        {
+            all[++nf] = $0
+            if (ne == 0) next
+            matched = 0
+            for (i = 1; i <= ne; i++) if (index($0, E[i]) > 0) { hit[i] = 1; matched = 1 }
+            if (!matched) x[++nx] = $0
+        }
+        END {
+            for (i = 1; i <= ne; i++) if (!(i in hit)) miss[++nm] = E[i]
+            print join_capped(miss, nm + 0)
+            print join_capped(x, nx + 0)
+            print join_capped(all, nf + 0)
+            print nf + 0
+        }
+    ')
+
+    { IFS= read -r missing; IFS= read -r extra; IFS= read -r joined; IFS= read -r nfail; } <<EOF
+$matcher_out
+EOF
+
     if [ -n "$missing" ]; then
-        printf 'MISMATCH\n%s/%s failed: %s (missing: %s)\n' \
-            "$(printf '%s\n' "$failures" | wc -l | tr -d ' ')" "$total" "$first" "$missing"
+        printf 'MISMATCH\n%s tests failed / %s assertions: %s (missing: %s)\n' \
+            "$nfail" "$total" "$joined" "$missing"
         return 0
     fi
 
     # Failures the expectations did not name are reported, not penalised:
     # the question a track asks is "does the suite notice", and a wider
     # blast radius still answers yes.
-    extra=""
-    if [ -n "$expected" ]; then
-        local f rest2 exp2 hit
-        while IFS= read -r f; do
-            hit=0
-            rest2=$expected
-            while [ -n "$rest2" ]; do
-                exp2=${rest2%%,*}
-                if [ "$exp2" = "$rest2" ]; then rest2=""; else rest2=${rest2#*,}; fi
-                exp2=$(printf '%s' "$exp2" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
-                if [ -n "$exp2" ]; then
-                    case "$f" in *"$exp2"*) hit=1 ;; esac
-                fi
-            done
-            if [ "$hit" -eq 0 ]; then
-                extra="$extra${extra:+, }$f"
-            fi
-        done <<EOF
-$failures
-EOF
-    fi
-
-    detail=$(printf '%s/%s failed: %s' \
-        "$(printf '%s\n' "$failures" | wc -l | tr -d ' ')" "$total" "$first")
+    detail="$nfail tests failed / $total assertions: $joined"
     if [ -n "$extra" ]; then
         detail="$detail +extra: $extra"
     fi
@@ -328,7 +388,18 @@ if [ "$missing_patch" -ne 0 ]; then
     exit 2
 fi
 
-if [ -z "$jobs" ]; then
+if [ -n "$jobs" ]; then
+    # A user-supplied value is validated, never clamped: silently turning
+    # `--jobs 0` into 1 contradicts the error message.
+    case "$jobs" in
+        ''|*[!0-9]*|0)
+            echo "mutation-check.sh: --jobs must be a positive integer, got '$jobs'" >&2
+            exit 2
+            ;;
+    esac
+else
+    # max(1, min(4, cores/2)) — the clamps here bound OUR arithmetic, not
+    # a request, so a single-core machine gets 1 rather than an error.
     if [ "$(uname -s)" = "Darwin" ]; then
         cores=$(sysctl -n hw.ncpu 2>/dev/null || echo 2)
     else
@@ -338,15 +409,9 @@ if [ -z "$jobs" ]; then
     if [ "$jobs" -gt 4 ]; then
         jobs=4
     fi
-fi
-case "$jobs" in
-    ''|*[!0-9]*)
-        echo "mutation-check.sh: --jobs must be a positive integer, got '$jobs'" >&2
-        exit 2
-        ;;
-esac
-if [ "$jobs" -lt 1 ]; then
-    jobs=1
+    if [ "$jobs" -lt 1 ]; then
+        jobs=1
+    fi
 fi
 
 workroot=$(mktemp -d "${TMPDIR:-/tmp}/anyparse-mutcheck.XXXXXX")
@@ -360,9 +425,11 @@ cleanup() {
     done
     git -C "$repo" worktree prune >/dev/null 2>&1 || true
 }
-# INT/TERM exit rather than resuming, which then fires the EXIT trap once.
+# INT/TERM/HUP exit rather than resuming, which then fires the EXIT trap
+# once. HUP matters here because the common way this runs is an agent
+# session whose terminal goes away mid-campaign.
 trap cleanup EXIT
-trap 'exit 130' INT TERM
+trap 'exit 130' INT TERM HUP
 
 # Worktree creation is SERIAL: parallel `git worktree add` races over
 # .git/worktrees. The expensive parts (build, test run) are the parallel
@@ -370,11 +437,12 @@ trap 'exit 130' INT TERM
 runnable=""
 while IFS=$'\t' read -r name patch filter expected; do
     if ! git -C "$repo" worktree add --detach --quiet "$workroot/wt-$name" HEAD 2>"$workroot/$name.wt.log"; then
-        write_verdict "$workroot/$name.verdict" "PATCH-FAIL" "worktree add failed: $(tr '\n' ' ' < "$workroot/$name.wt.log")"
+        write_verdict "$workroot/$name.verdict" "WT-FAIL" "worktree add failed: $(tr '\n' ' ' < "$workroot/$name.wt.log")"
         continue
     fi
     created="$created $name"
-    if ! git -C "$workroot/wt-$name" apply "$patch" 2>"$workroot/$name.apply.log"; then
+    # `--` so a patch path beginning with `-` is a path, not a flag.
+    if ! git -C "$workroot/wt-$name" apply -- "$patch" 2>"$workroot/$name.apply.log"; then
         write_verdict "$workroot/$name.verdict" "PATCH-FAIL" "$(tr '\n' ' ' < "$workroot/$name.apply.log")"
         continue
     fi

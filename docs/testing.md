@@ -147,7 +147,7 @@ That question has to be asked separately, because a green suite is not evidence 
 tools/mutation-check.sh <manifest> [--jobs N]
 ```
 
-Each *track* in the manifest is one deliberate breakage. The runner gives every track its own git worktree checked out from `HEAD`, applies the track's patch there, builds a private test runner into a private workdir (`tools/worker-build.sh`, see "Parallel tracks" below), runs the requested slice of the suite with the CWD set to that worktree, and classifies the transcript. Tracks run in parallel; `--jobs` defaults to `min(4, cores/2)`.
+Each *track* in the manifest is one deliberate breakage. The runner gives every track its own git worktree checked out from `HEAD`, applies the track's patch there, builds a private test runner into a private workdir (`tools/worker-build.sh`, see "Parallel tracks" below), runs the requested slice of the suite with the CWD set to that worktree, and classifies the transcript. Tracks run in parallel; `--jobs` defaults to `max(1, min(4, cores/2))`, and an explicit `--jobs` must be a positive integer (`0` is rejected rather than clamped).
 
 Because worktrees come from `HEAD`, uncommitted work in the main tree is invisible to a track. That is deliberate — a track measures a named commit plus one patch, not whatever happens to be lying around — but it means a mutation aimed at uncommitted code has to be committed first, or folded into the patch.
 
@@ -174,13 +174,16 @@ The patch is a `git diff` rather than a script or a sed expression because the w
 
 | Verdict | Meaning |
 |---|---|
-| `SURVIVED` | The suite ran and nothing failed. **This is the finding the tool exists for.** |
-| `KILLED` | At least one test failed, and every expectation matched something. No expectations given means any failure kills. |
-| `MISMATCH` | Something failed, but at least one expectation matched nothing — the suite noticed, just not where the track claimed it would. |
+| `SURVIVED` | The run came back **green** — utest's own `results: ALL TESTS OK (success: true)`. **This is the finding the tool exists for.** |
+| `KILLED` | The run went red, and every expectation matched something. No expectations given means any red kills. |
+| `MISMATCH` | The run went red, but at least one expectation matched nothing — the suite noticed, just not where the track claimed it would. |
 | `NO-TESTS` | The filter matched no test class. Loud on purpose: a typo'd filter otherwise reads as `SURVIVED`. |
+| `WT-FAIL` | `git worktree add` failed — there was nothing to patch or run. |
 | `PATCH-FAIL` | `git apply` failed. Manifest or patch defect. |
 | `BUILD-FAIL` | The patched tree does not compile. A mutation the compiler rejects proves nothing about the suite. |
-| `RUN-FAIL` | The runner produced no usable transcript. |
+| `RUN-FAIL` | No usable transcript, or a red header whose result rows the parser could not name. |
+
+`SURVIVED` is deliberately stricter than "nothing failed". utest computes `isOk = !(hasFailures || hasErrors || hasWarnings)`, and it auto-adds a `Warning('no assertions')` to any test method that completes without asserting. So a mutation that makes a test stop asserting produces `failures: 0, warnings: 3` and a red run — which a scan for `FAILURE`/`ERROR` rows alone would have reported as a survivor, in the one direction where a wrong answer costs the most. The verdict therefore comes from the header line, and the per-class rows are used only to *name* what went red. A marker this parser does not recognise leaves a red run unnamed, which surfaces as `RUN-FAIL`, never as `SURVIVED`.
 
 Failures *beyond* the expectations do not demote `KILLED` to `MISMATCH`; they are listed on the row as `+extra: …`. A track asks whether the suite notices, and a wider blast radius still answers yes — the extras are reported because they are useful signal about coupling, not because they are a defect.
 
@@ -189,13 +192,15 @@ Exit code: 0 only when every track is `KILLED`. Any other verdict exits 1, so a 
 The report is one row per track in manifest order, followed by a summary and the workroot path:
 
 ```
-KILLED     doc-blockonly        filter=SetDoc         12/40 failed: unit.SetDocSliceTest.testX, unit.SetDocSliceTest.testY
-SURVIVED   dead-branch          filter=HxLexer        0/85 failed
-MISMATCH   foo                  filter=Bar            2/9 failed: … (missing: unit.BazTest)
+KILLED     doc-blockonly        filter=SetDoc         2 tests failed / 40 assertions: unit.SetDocSliceTest.testX, unit.SetDocSliceTest.testY
+SURVIVED   dead-branch          filter=HxLexer        0 tests failed / 85 assertions
+MISMATCH   foo                  filter=Bar            2 tests failed / 9 assertions: … (missing: unit.BazTest)
 3 tracks: 1 killed, 1 survived, 1 mismatch, 0 error
 ```
 
-Worktrees are always removed on exit, including on interrupt. The workroot itself — every transcript, build log and verdict file — is deliberately kept for post-mortem.
+The two figures on a row are in different units on purpose: the count of failing *test methods* against the total *assertions* utest reported, since that total is the only run-size figure the header carries — once a run goes red utest stops listing the passing tests, so there is no test-level total to divide by. The name list is capped at the first ten, with `…+N more`; the full set is in the track's transcript, which the workroot path points at.
+
+Every worktree the runner created is removed on exit, including on `INT`/`TERM`/`HUP`. A `worktree remove` that itself fails is swallowed so one bad entry cannot strand the rest — which does mean a stuck worktree can survive as a registered entry, so `git worktree list` is worth a glance after a crashed run. The workroot itself is never deleted: its transcripts, build logs and verdict files are the post-mortem. They accumulate in `TMPDIR` across a long campaign, so a campaign that runs for days is worth sweeping by hand.
 
 ## Macro-specific tests
 

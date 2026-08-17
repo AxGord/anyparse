@@ -50,8 +50,19 @@ esac
 script_dir=$(cd -P "$(dirname "$0")" && pwd)
 repo=$(cd -P "$script_dir/.." && pwd)
 
+# mkdir only after every argument has been validated, so a rejected
+# invocation leaves nothing behind.
 mkdir -p "$workdir"
 out=$(cd -P "$workdir" && pwd)
+
+# `tools/worker-build.sh bin` would write bin/apq.js and bin/test.js —
+# precisely the shared-artifact clobbering this script exists to avoid.
+# Compared after resolution, so `bin`, `./bin` and an absolute path are
+# all caught.
+if [ "$out" = "$repo/bin" ]; then
+    echo "worker-build.sh: <workdir> is the repo's own bin/ — that is the shared build this script exists to avoid; pick a private directory" >&2
+    exit 2
+fi
 
 apq_pid=""
 test_pid=""
