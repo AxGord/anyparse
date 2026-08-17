@@ -530,7 +530,7 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 		var i: Int = 0;
 		var tokenStart: Int = -1;
 		while (i < text.length) {
-			final commentEnd: Int = commentRegionEnd(text, i);
+			final commentEnd: Int = RefactorSupport.commentRegionEnd(text, i);
 			if (commentEnd != -1) {
 				tokenStart = -1;
 				i = commentEnd;
@@ -545,19 +545,6 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 			i++;
 		}
 		return -1;
-	}
-
-	/** The offset just past the comment starting at `at`, or -1 when no comment starts there. */
-	private static function commentRegionEnd(text: String, at: Int): Int {
-		if (text.fastCodeAt(at) != '/'.code || at + 1 >= text.length) return -1;
-		final next: Int = text.fastCodeAt(at + 1);
-		if (next == '*'.code) {
-			final close: Int = text.indexOf('*/', at + 2);
-			return close == -1 ? text.length : close + 2;
-		}
-		if (next != '/'.code) return -1;
-		final line: Int = text.indexOf('\n', at + 2);
-		return line == -1 ? text.length : line + 1;
 	}
 
 	/**

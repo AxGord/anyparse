@@ -1131,9 +1131,10 @@ final class RefactorSupport {
 	 * LIST: a constraint always has one between itself and the body, a return type never does, so a gap
 	 * holding no `(` is the discriminator.
 	 *
-	 * COMMENTS in the gap are skipped, because a `(` written inside one cannot be a parameter list.
-	 * Without that, a block comment or a trailing line comment between the annotation and the body
-	 * carried the whole function out of the proof — measured on both, each a silent refusal.
+	 * COMMENTS in the gap are skipped through the shared `commentRegionEnd` scan, because a `(` written
+	 * inside one cannot be a parameter list. Without that, a block comment or a trailing line comment
+	 * between the annotation and the body carried the whole function out of the proof — measured on
+	 * both, each a silent refusal.
 	 *
 	 * A conditional-compilation directive needs no such arm: probed on `function f(): Colour #if
 	 * (myflag) return X; #else return X; #end`, the conditional BODY node opens AT the `#if`, so the
@@ -1156,19 +1157,17 @@ final class RefactorSupport {
 		while (i < bodyStart) {
 			final c: Int = source.fastCodeAt(i);
 			if (c == '('.code) return false;
-			final next: Int = i + 1 < bodyStart ? source.fastCodeAt(i + 1) : 0;
-			if (c != '/'.code)
+			if (c != '/'.code || i + 1 >= bodyStart) {
 				i++;
-			else if (next == '/'.code) {
-				final nl: Int = source.indexOf('\n', i + 2);
-				if (nl < 0 || nl >= bodyStart) return false;
-				i = nl + 1;
-			} else if (next == '*'.code) {
-				final close: Int = source.indexOf('*/', i + 2);
-				if (close < 0 || close + 2 > bodyStart) return false;
-				i = close + 2;
-			} else
+				continue;
+			}
+			final commentEnd: Int = commentRegionEnd(source, i);
+			if (commentEnd < 0)
 				i++;
+			else if (commentEnd > bodyStart)
+				return false;
+			else
+				i = commentEnd;
 		}
 		return true;
 	}
@@ -2588,33 +2587,50 @@ final class RefactorSupport {
 		return resolvedRebind ?? !finalSafeStdlibTypes.contains(declType);
 	}
 
-	/** Index of the first byte at or after `pos` that is neither whitespace nor inside a line or block comment. */
+	/**
+	 * Index of the first byte at or after `pos` that is neither whitespace nor inside a line or block
+	 * comment. A comment nothing closes leaves no such byte: the result is then past the source end,
+	 * which every caller's own bound test rejects.
+	 */
 	public static function skipForwardTrivia(source: String, pos: Int): Int {
 		final n: Int = source.length;
 		var i: Int = pos;
 		while (i < n) {
-			final c: Int = source.fastCodeAt(i);
-			if (isSpace(c)) {
+			if (isSpace(source.fastCodeAt(i))) {
 				i++;
 				continue;
 			}
-			if (c == '/'.code && i + 1 < n) {
-				final c1: Int = source.fastCodeAt(i + 1);
-				if (c1 == '/'.code) {
-					i += 2;
-					while (i < n && source.fastCodeAt(i) != '\n'.code) i++;
-					continue;
-				}
-				if (c1 == '*'.code) {
-					i += 2;
-					while (i + 1 < n && (source.fastCodeAt(i) != '*'.code || source.fastCodeAt(i + 1) != '/'.code)) i++;
-					i += 2;
-					continue;
-				}
-			}
-			break;
+			final commentEnd: Int = commentRegionEnd(source, i);
+			if (commentEnd < 0) break;
+			i = commentEnd;
 		}
 		return i;
+	}
+
+	/**
+	 * The offset just past the comment opening at `at`, or -1 when no comment opens there — the one
+	 * comment scan behind `skipForwardTrivia`, `headerScan` and `isReturnTypeSlot`, each of which
+	 * used to carry its own copy.
+	 *
+	 * A comment that NEVER CLOSES yields `source.length + 1`, one past every valid offset, so a
+	 * caller's `> bound` test rejects it at ANY bound including the source end. That is what lets
+	 * `isReturnTypeSlot` — whose `true` means "rewrite this" — fail closed on an unterminated `/*`
+	 * while a cursor-advancing caller reads the same value as "trivia to the end" and stops.
+	 *
+	 * Bounding is the CALLER's job: the scan reads the whole of `source` and never clamps, because
+	 * the three consumers bound it differently (a header range, a body start, the source end) and a
+	 * clamp would make "closed exactly at the bound" indistinguishable from "never closed".
+	 */
+	public static function commentRegionEnd(source: String, at: Int): Int {
+		if (at + 1 >= source.length || source.fastCodeAt(at) != '/'.code) return -1;
+		final next: Int = source.fastCodeAt(at + 1);
+		if (next == '*'.code) {
+			final close: Int = source.indexOf('*/', at + 2);
+			return close < 0 ? source.length + 1 : close + 2;
+		}
+		if (next != '/'.code) return -1;
+		final nl: Int = source.indexOf('\n', at + 2);
+		return nl < 0 ? source.length + 1 : nl + 1;
 	}
 
 	/** Extend a member's `span` back over own-line leading comments and forward over a same-line trailing comment, yielding its full source slot. */
@@ -3821,15 +3837,9 @@ final class RefactorSupport {
 		while (i < end) {
 			final c: Int = source.fastCodeAt(i);
 			if (c == '/'.code && i + 1 < end) {
-				final next: Int = source.fastCodeAt(i + 1);
-				if (next == '/'.code) {
-					final nl: Int = source.indexOf('\n', i + 2);
-					i = nl < 0 ? end : nl + 1;
-					continue;
-				}
-				if (next == '*'.code) {
-					final close: Int = source.indexOf('*/', i + 2);
-					i = close < 0 ? end : close + 2;
+				final commentEnd: Int = commentRegionEnd(source, i);
+				if (commentEnd >= 0) {
+					i = commentEnd;
 					continue;
 				}
 			}

@@ -517,6 +517,7 @@ import unit.AvoidDynamicBagCheckTest;
 import unit.AvoidDynamicBagFixTest;
 import unit.AvoidDynamicBagOracleE2ETest;
 import unit.ClassifyOccurrencesTest;
+import unit.TriviaScanSliceTest;
 import unit.EmptyCommentCheckTest;
 import unit.HxUniformStatementBlanksSliceTest;
 import unit.StdResolverTest;
@@ -1241,6 +1242,7 @@ class RunTests {
 		addCase(new NamingCheckCrossFileFixTest());
 		addCase(new NamingCheckHoistFixTest());
 		addCase(new ClassifyOccurrencesTest());
+		addCase(new TriviaScanSliceTest());
 		addCase(new FmtSliceTest());
 		addCase(new NewFileSliceTest());
 		addCase(new SetDocSliceTest());
