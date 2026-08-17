@@ -26,9 +26,12 @@ using Lambda;
  * Coverage: static member (decl + bare in-file callers + `Src.member`
  * across scope), instance member (decl + `this.member` + bare +
  * `obj.member` with `obj` typed as the source type), field, final
- * method; zero-false-positive guards (a same-named member on a DIFFERENT
- * type, an unresolved receiver, a shadowed static receiver, and a same-named
- * MODULE in another package reached through a dotted receiver are left alone);
+ * method; zero-false-positive guards (a same-named member on a DIFFERENT type, an
+ * unresolved receiver, a shadowed static receiver, a same-named MODULE in another
+ * package reached through a dotted receiver, a foreign instance receiver — annotated,
+ * `new`-built, or homonymous through a conditional-compilation header — and a
+ * function-typed receiver whose written type merely starts with the source type are
+ * left alone; the module-relative `Mod.Sub` spelling of a sub-module type is not);
  * refusals (override, name collision, ambiguous type, case-capture
  * collision, constructor, cursor off a member, no-op, invalid name,
  * skip-parse scope file).
@@ -136,6 +139,115 @@ class CrossRenameMemberSliceTest extends Test {
 		]);
 		Assert.equals(1, changes.length);
 		Assert.isNull(changeOrNull(changes, 'b.hx'));
+	}
+
+	/**
+	 * An instance receiver is proven by RESOLVING its written annotation, not by comparing simple
+	 * names: `pkg.Other` and a foreign `other.Other` share a last segment and only the first is the
+	 * type at the cursor. Both halves sit in ONE asserted source, so the renamed access cannot be
+	 * satisfied by the unchanged input and the foreign one cannot be satisfied by a last-segment
+	 * matcher.
+	 */
+	public function testInstanceReceiverQualifiedAnnotationRenamesOnlyTheDeclaringModule(): Void {
+		final a: String = 'package pkg;\n\nclass Other {\n\tpublic function new() {}\n\tpublic function tag():Void {}\n}';
+		final b: String = 'class Z {\n\tfunction m(p:pkg.Other, w:other.Other):Void {\n\t\tp.tag();\n\t\tw.tag();\n\t}\n}';
+		final expectedB: String = 'class Z {\n\tfunction m(p:pkg.Other, w:other.Other):Void {\n\t\tp.mark();\n\t\tw.tag();\n\t}\n}';
+		final changes: Array<FileChange> = okChanges('pkg/Other.hx', a, 'tag', 'mark', [
+			{ file: 'pkg/Other.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(1, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * A `new pkg.Other()` receiver names its type through the WHOLE module path, which the
+	 * projection keeps on the node's name — so proving it needs the same resolution the annotated
+	 * receivers go through, not a comparison against the type's simple name. The foreign
+	 * `new other.Other()` is the other half of the same expected source.
+	 */
+	public function testNewExprReceiverQualifiedPathRenamesOnlyTheDeclaringModule(): Void {
+		final a: String = 'package pkg;\n\nclass Other {\n\tpublic function new() {}\n\tpublic function tag():Void {}\n}';
+		final b: String = 'class Z {\n\tfunction m():Void {\n\t\tnew pkg.Other().tag();\n\t\tnew other.Other().tag();\n\t}\n}';
+		final expectedB: String = 'class Z {\n\tfunction m():Void {\n\t\tnew pkg.Other().mark();\n\t\tnew other.Other().tag();\n\t}\n}';
+		final changes: Array<FileChange> = okChanges('pkg/Other.hx', a, 'tag', 'mark', [
+			{ file: 'pkg/Other.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(1, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * The AST, not the source text, decides whether an annotation is nominal. `g:pkg.Other<Int>`
+	 * is a receiver of the source type and renames; `f:pkg.Other<Int> -> Void` is a FUNCTION,
+	 * and a first-`<` split of its text reads it as the nominal `pkg.Other`. Both halves sit in
+	 * ONE asserted source, so the generic receiver's coverage and the arrow's exclusion each need
+	 * the other to hold.
+	 */
+	public function testInstanceReceiverGenericRenamesButArrowTypeDoesNot(): Void {
+		final a: String = 'package pkg;\n\nclass Other<T> {\n\tpublic function new() {}\n\tpublic function tag():Void {}\n}';
+		final b: String = 'class Z {\n\tfunction m(g:pkg.Other<Int>, f:pkg.Other<Int> -> Void):Void {\n\t\tg.tag();\n\t\tf.tag();\n\t}\n}';
+		final expectedB: String =
+			'class Z {\n\tfunction m(g:pkg.Other<Int>, f:pkg.Other<Int> -> Void):Void {\n\t\tg.mark();\n\t\tf.tag();\n\t}\n}';
+		final changes: Array<FileChange> = okChanges('pkg/Other.hx', a, 'tag', 'mark', [
+			{ file: 'pkg/Other.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(1, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * The MODULE-RELATIVE spelling of a sub-module type — `Mod.Sub`, legal wherever the module is
+	 * in simple-name scope — is a third spelling beside the bare and the root-relative one, and
+	 * it resolves only FROM the reading file (`SymbolIndex.moduleRelativeRefAll`). Annotation and
+	 * `new` forms both rename; the root-relative `other.Mod.Sub` of another package is the
+	 * untouched half of the same asserted source.
+	 */
+	public function testInstanceReceiverModuleRelativeSubModulePathRenames(): Void {
+		final a: String = 'package pkg;\n\nclass Mod {\n\tpublic function new() {}\n}\n\n'
+			+ 'class Sub {\n\tpublic function new() {}\n\tpublic function tag():Void {}\n}';
+		final b: String = 'package pkg;\n\nclass Z {\n\tfunction m(p:Mod.Sub):Void {\n\t\tp.tag();\n'
+			+ '\t\tnew Mod.Sub().tag();\n\t\tnew other.Mod.Sub().tag();\n\t}\n}';
+		final expectedB: String = 'package pkg;\n\nclass Z {\n\tfunction m(p:Mod.Sub):Void {\n\t\tp.mark();\n'
+			+ '\t\tnew Mod.Sub().mark();\n\t\tnew other.Mod.Sub().tag();\n\t}\n}';
+		final changes: Array<FileChange> = okChanges('pkg/Mod.hx', a, 'tag', 'mark', [
+			{ file: 'pkg/Mod.hx', source: a },
+			{ file: 'pkg/Z.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'pkg/Z.hx').newSource);
+		Assert.equals(2, changeFor(changes, 'pkg/Z.hx').count);
+	}
+
+	/**
+	 * A same-named type declared by a CONDITIONAL-compilation header (`#if js class Other {
+	 * #else class Other implements Iface { #end`) is invisible to `checkTypeUniqueness` —
+	 * `RefactorSupport.typeDeclOf` does not know the shared-body decl kind — so the uniqueness
+	 * refusal never fires and the receiver proof is the ONLY thing standing between the rename
+	 * and a foreign `w.tag()`. It holds because the resolved declaration must live in the CURSOR's
+	 * file, the conjunct nothing else in this suite can flip.
+	 */
+	public function testConditionalHomonymInAnotherPackageUntouched(): Void {
+		final a: String = 'package pkg;\n\nclass Other {\n\tpublic function new() {}\n\tpublic function tag():Void {}\n}';
+		final foreign: String = 'package other;\n\n#if js\nclass Other {\n#else\nclass Other implements Iface {\n#end\n'
+			+ '\tpublic function new() {}\n\tpublic function ping():Void {}\n}';
+		final use: String = 'package other;\n\nclass Use {\n\tfunction m(w:Other):Void w.tag();\n}';
+		final changes: Array<FileChange> = okChanges('pkg/Other.hx', a, 'tag', 'mark', [
+			{ file: 'pkg/Other.hx', source: a },
+			{ file: 'other/Other.hx', source: foreign },
+			{ file: 'other/Use.hx', source: use },
+		]);
+		Assert.equals(1, changes.length);
+		Assert.equals(
+			'package pkg;\n\nclass Other {\n\tpublic function new() {}\n\tpublic function mark():Void {}\n}',
+			changeFor(changes, 'pkg/Other.hx').newSource
+		);
+		Assert.isNull(changeOrNull(changes, 'other/Use.hx'));
 	}
 
 	/**

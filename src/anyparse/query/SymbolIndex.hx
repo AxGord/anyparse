@@ -1635,7 +1635,10 @@ final class SymbolIndex {
 	/** Every in-scope declaration `raw` resolves to from `fromFile` (see `resolveTypeRef`), deduped by declaring file. */
 	private function resolveTypeRefAll(raw: String, fromFile: FileInfo): Array<ResolvedType> {
 		final dot: Int = raw.lastIndexOf('.');
-		if (dot >= 0) return resolveQualifiedRefAll(raw);
+		if (dot >= 0) {
+			final qualified: Array<ResolvedType> = resolveQualifiedRefAll(raw);
+			return qualified.length > 0 ? qualified : moduleRelativeRefAll(raw, fromFile);
+		}
 		final matches: Array<ResolvedType> = [];
 		final seen: Array<String> = [];
 		for (fi in _files) for (t in fi.types) if (t.name == raw && simpleRefInScope(fromFile, fi, t)) {
@@ -1649,9 +1652,46 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * Every decl the MODULE-RELATIVE form `Mod.Sub` names FROM `fromFile` — a sub-module type
+	 * qualified by its own module's name, which Haxe accepts wherever that module is in simple-name
+	 * scope (same package, root package, or a plain / `using` / wildcard import reaching it), the
+	 * same condition `simpleRefInScope` already states.
+	 *
+	 * `resolveQualifiedRefAll` cannot answer it and must not: it matches the ROOT-relative
+	 * `pkg.Mod.Sub` and is deliberately context-free, while `Mod.Sub` names different types from
+	 * different files. So this runs only as `resolveTypeRefAll`'s FALLBACK, after the root-relative
+	 * match found nothing — it can turn a 0-match into a match, never change one.
+	 */
+	private function moduleRelativeRefAll(raw: String, fromFile: FileInfo): Array<ResolvedType> {
+		final dot: Int = raw.lastIndexOf('.');
+		final simple: String = raw.substr(dot + 1);
+		final prefix: String = raw.substring(0, dot);
+		final matches: Array<ResolvedType> = [];
+		final seen: Array<String> = [];
+		for (fi in _files) for (t in fi.types) if (
+			!t.isMain && t.name == simple && moduleSimpleName(fi.module) == prefix && simpleRefInScope(fromFile, fi, t)
+		) {
+			final key: String = '${fi.file}#${t.name}';
+			if (!seen.contains(key)) {
+				seen.push(key);
+				matches.push({ file: fi, type: t });
+			}
+		}
+		return matches;
+	}
+
+	/** The last segment of a dotted module path — `pkg.Mod` -> `Mod`, a root-package `Mod` unchanged. */
+	private static inline function moduleSimpleName(module: String): String {
+		final dot: Int = module.lastIndexOf('.');
+		return dot < 0 ? module : module.substr(dot + 1);
+	}
+
+	/**
 	 * Every decl a QUALIFIED type reference names, matched on import path. Needs no referring
 	 * file: a dotted path means the same thing from everywhere, which is what lets a caller
 	 * holding a full module path (the `using`-conflict scan) resolve with no context at all.
+	 * The one dotted form it cannot answer — the module-relative `Mod.Sub` — is exactly the one
+	 * that DOES depend on the referring file; `moduleRelativeRefAll` owns it.
 	 */
 	private function resolveQualifiedRefAll(raw: String): Array<ResolvedType> {
 		final simple: String = raw.substr(raw.lastIndexOf('.') + 1);

@@ -53,6 +53,22 @@ private typedef LocatedOffsets = {
 };
 
 /**
+ * Everything one file's receiver / switch-subject proof needs, threaded as one value the way
+ * `ReturnScan` carries the return-position scan. `nominals` and `typeSources` are the two halves
+ * of a declared type and are BOTH read: the AST decides whether an annotation is nominal at all,
+ * the source text carries the path the AST's simple name drops.
+ */
+private typedef ReceiverProof = {
+	final typeName: String;
+	final nominals: Map<Int, String>;
+	final typeSources: Map<Int, String>;
+	final hitsByName: Map<String, Array<RefHit>>;
+	final index: SymbolIndex;
+	final file: String;
+	final cursorFile: String;
+};
+
+/**
  * Scope-correct, format-preserving cross-file rename of a METHOD or
  * FIELD — the value/method counterpart of `CrossRename` (which renames a
  * TYPE). Both are reached through `apq rename --scope`: the CLI resolves
@@ -86,13 +102,15 @@ private typedef LocatedOffsets = {
  *    EXPECTED type — proven by the enclosing function's DECLARED return type resolved from
  *    the reading file, and reached through the type-TRANSPARENT slots under a `return`. See
  *    `expectedReturnOffsets` for the whole proof and its residual.
- *  - INSTANCE members: every `obj.member` whose receiver `obj` resolves
- *    (through the scope resolver + `TypeInfoProvider.declaredTypes`) to a
- *    local / parameter / field DECLARED of the source type. A receiver
- *    whose type does not resolve is left alone — if it really was the
- *    source type the miss surfaces as a compile error, never a wrong
- *    rewrite. A `new T()` receiver resolves through its own type
- *    name and needs no binding at all.
+ *  - INSTANCE members: every `obj.member` whose receiver `obj` resolves (through
+ *    the scope resolver + `TypeInfoProvider.declaredTypeSources`) to a local /
+ *    parameter / field whose WRITTEN annotation names the source type, resolved
+ *    from the reading file by the compiler's own rules — so a same-named
+ *    `other.Other` of another package is NOT it and a qualified `pkg.Other` is.
+ *    A receiver whose type does not resolve is left alone — if it really was the
+ *    source type the miss surfaces as a compile error, never a wrong rewrite. A
+ *    `new T()` receiver names its type itself and needs no binding at all; that
+ *    name is the whole written path, so it resolves the same way.
  *  - EVERY branch of a `#if` region that declares the member. The region is a
  *    member HOST, not a member — it holds each branch's members with their own
  *    modifier siblings — so the cursor scan asks `RefactorSupport.eachMemberHost`,
@@ -414,10 +432,13 @@ final class CrossRenameMember {
 			// without these leaves `override function <old>` overriding nothing.
 			for (fm in family) if (fm.file == entry.file)
 				for (occ in Rename.renameOccurrences(entry.source, entry.tree, fm.declFrom, refShape)) addOff(occ.from);
-			final qualified: LocatedOffsets = qualifiedMemberOffsets(entry.source, entry.tree, target, plugin, refShape, index, module);
+			final qualified: LocatedOffsets = qualifiedMemberOffsets(
+				entry.source, entry.file, entry.tree, target, plugin, refShape, index, module, cursorFile
+			);
 			if (qualified.error != null) return Err('${entry.file}: ${qualified.error}');
 			for (off in qualified.offsets) addOff(off);
-			for (off in patternConstantOffsets(entry.source, entry.tree, target, plugin, refShape, index)) addOff(off);
+			for (off in patternConstantOffsets(entry.source, entry.file, entry.tree, target, plugin, refShape, index, cursorFile))
+				addOff(off);
 			for (off in expectedReturnOffsets(entry.source, entry.file, entry.tree, target, refShape, index, cursorFile)) addOff(off);
 			if (offsets.length == 0) continue;
 
@@ -449,12 +470,12 @@ final class CrossRenameMember {
 	 * through the returned `error`.
 	 */
 	private static function qualifiedMemberOffsets(
-		source: String, tree: QueryNode, target: MemberTarget, plugin: GrammarPlugin, refShape: RefShape, index: SymbolIndex,
-		module: ModulePath
+		source: String, file: String, tree: QueryNode, target: MemberTarget, plugin: GrammarPlugin, refShape: RefShape, index: SymbolIndex,
+		module: ModulePath, cursorFile: String
 	): LocatedOffsets {
 		return target.isStatic
 			? staticMemberOffsets(source, tree, target.typeName, target.memberName, refShape, module)
-			: instanceMemberOffsets(source, tree, target.typeName, target.memberName, plugin, refShape, index);
+			: instanceMemberOffsets(source, file, tree, target.typeName, target.memberName, plugin, refShape, index, cursorFile);
 	}
 
 	/**
@@ -503,19 +524,19 @@ final class CrossRenameMember {
 	/**
 	 * Instance member: the `member`-token offset of every `obj.member`
 	 * whose receiver `obj` is an identifier resolving (scope binding +
-	 * `TypeInfoProvider.declaredTypes`) to a declaration of the source
-	 * type. `this` / `super` receivers are skipped — the declaring-file
+	 * `TypeInfoProvider.declaredTypeSources`, then `resolvesToSourceType`)
+	 * to a declaration of the source type. `this` / `super` receivers are
+	 * skipped — the declaring-file
 	 * `Rename.renameOccurrences` pass covers `this.member`, and `super`
 	 * targets a base member. A receiver whose type does not resolve is
 	 * left alone (advisory / loud-fail); a receiver that DOES resolve but
 	 * whose member token cannot be located refuses the whole rename.
 	 */
 	private static function instanceMemberOffsets(
-		source: String, tree: QueryNode, typeName: String, memberName: String, plugin: GrammarPlugin, refShape: RefShape,
-		index: SymbolIndex
+		source: String, file: String, tree: QueryNode, typeName: String, memberName: String, plugin: GrammarPlugin, refShape: RefShape,
+		index: SymbolIndex, cursorFile: String
 	): LocatedOffsets {
 		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		final declared: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
 		final candidates: Array<{ recv: QueryNode, fa: QueryNode }> = memberAccessCandidates(tree, memberName);
 		if (candidates.length == 0) return { offsets: [], error: null };
 
@@ -524,12 +545,20 @@ final class CrossRenameMember {
 			final rn: Null<String> = cand.recv.name;
 			if (rn != null && !recvNames.contains(rn)) recvNames.push(rn);
 		}
-		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti(recvNames, tree, refShape);
+		final proof: ReceiverProof = {
+			typeName: typeName,
+			nominals: provider != null ? provider.declaredTypes(source) : [],
+			typeSources: provider != null ? provider.declaredTypeSources(source) : [],
+			hitsByName: Refs.findMulti(recvNames, tree, refShape),
+			index: index,
+			file: file,
+			cursorFile: cursorFile
+		};
 		final out: Array<Int> = [];
 		for (cand in candidates) {
 			final recvSpan: Null<Span> = cand.recv.span;
 			final faSpan: Null<Span> = cand.fa.span;
-			if (recvSpan == null || faSpan == null || !receiverIsSourceType(cand.recv, typeName, declared, hitsByName, index)) continue;
+			if (recvSpan == null || faSpan == null || !receiverIsSourceType(cand.recv, proof)) continue;
 			final off: Int = RefactorSupport.activeCodeIdentTokenOffset(source, new Span(recvSpan.to, faSpan.to), memberName);
 			if (off < 0) return { offsets: [], error: unlocatableAccess(source, faSpan, memberName) };
 			if (!out.contains(off)) out.push(off);
@@ -574,30 +603,86 @@ final class CrossRenameMember {
 	}
 
 	/**
-	 * Does `recv` resolve (scope binding + `declared` types) to a
-	 * declaration of the source type? Only a receiver this proves is
-	 * rewritten; an unresolved one is left alone (advisory / loud-fail).
+	 * Does `recv` resolve — a `new T()` through its own name, an identifier
+	 * through its scope binding's WRITTEN annotation — to a declaration of the
+	 * source type? Both names go to `resolvesToSourceType`, never to a compare
+	 * against the type's simple name. Only a receiver this proves is rewritten;
+	 * an unresolved one is left alone (advisory / loud-fail).
 	 */
-	private static function receiverIsSourceType(
-		recv: QueryNode, typeName: String, declared: Map<Int, String>, hitsByName: Map<String, Array<RefHit>>, index: SymbolIndex
-	): Bool {
+	private static function receiverIsSourceType(recv: QueryNode, proof: ReceiverProof): Bool {
 		final rn: Null<String> = recv.name;
 		final recvSpan: Null<Span> = recv.span;
 		if (rn == null || recvSpan == null) return false;
 		// A constructor call names the type it builds, so `new Other().tag()` needs no binding at all.
 		// Demanding one skipped the site SILENTLY: the declaration was renamed and the access left on
-		// the old name, which is a rewrite that does not compile.
-		if (recv.kind == 'NewExpr') return rn == typeName || index.isSubtype(rn, typeName);
-		final bindingFrom: Null<Int> = receiverBinding(hitsByName[rn] ?? [], recvSpan.from);
+		// the old name, which is a rewrite that does not compile. The name carries the WHOLE written
+		// path (`new pkg.Other()` projects as `NewExpr pkg.Other`), which is why it goes through the
+		// same resolution an annotation does instead of being compared to the type's simple name.
+		if (recv.kind == 'NewExpr') return resolvesToSourceType(rn, proof);
+		final bindingFrom: Null<Int> = receiverBinding(proof.hitsByName[rn] ?? [], recvSpan.from);
 		if (bindingFrom == null) return false;
 		final from: Int = bindingFrom;
-		final declaredType: Null<String> = declared[from];
-		if (declaredType == null) return false;
-		// A receiver typed as a proven SUBTYPE reaches the same member - whether the subtype overrides it
-		// (renamed with the base) or merely inherits it. Requiring an exact type match left every such
-		// access spelled the old way, which for an override family is a rename that does not compile.
-		final recvType: String = declaredType;
-		return recvType == typeName || index.isSubtype(recvType, typeName);
+		// The AST decides NOMINALITY, the source text carries the PATH. `declaredTypes` holds a key
+		// only where the annotation projects a nominal NAME; `declaredTypeSources` is keyed by every
+		// annotation that has a span, a strict SUPERSET whose extra keys are exactly the non-nominal
+		// types. Reading the text alone made `pkg.Other<Int> -> Void` — an arrow whose left operand is
+		// parameterised — split at its first `<` and pass as the nominal `pkg.Other`.
+		if (proof.nominals[from] == null) return false;
+		final written: Null<String> = proof.typeSources[from];
+		if (written == null) return false;
+		return resolvesToSourceType(nominalPathOf(written), proof);
+	}
+
+	/**
+	 * Does the nominal `path`, read FROM `proof.file`, name the type at the cursor — or a proven
+	 * SUBTYPE of it? A subtype receiver reaches the same member whether it overrides it (renamed
+	 * with the base) or merely inherits it; requiring an exact match left every such access spelled
+	 * the old way, which for an override family is a rename that does not compile.
+	 *
+	 * The resolver is `SymbolIndex.resolveTypeRefsFrom` — the whole-dotted-path / module-relative /
+	 * import / same-package / root-package rules the compiler applies, the same one
+	 * `expectedReturnOffsets` asks for a return annotation. Two deliberate differences from that
+	 * proof: it unwraps one nullable wrapper and this does not (a `Null<T>` receiver stays
+	 * unproven), and it has no subtype arm.
+	 *
+	 * Comparing SIMPLE names instead was wrong in BOTH directions, each measured on 4.3.7: a
+	 * receiver written `other.Other` (a same-named module of another package, out of scope) was
+	 * rewritten and the tree then failed to compile with `other.Other has no field newTag`, while
+	 * `new pkg.Other()` — whose node name is the whole path — matched nothing and left
+	 * `pkg.Other has no field tag` behind. That is the last-segment defect the static side removed
+	 * twice (`f3b46467`, `64a4ae5a`), on the INSTANCE side.
+	 *
+	 * A reference resolving to nothing (a library type, a type outside the scope, an ALIASED import,
+	 * whose original path the grammar does not expose) proves nothing and is left alone — the
+	 * unresolved-receiver contract.
+	 *
+	 * The subtype arm carries the one residual: `isSubtype` walks `TypeDeclInfo.supertypes`, which
+	 * are SIMPLE names, so a resolved subtype whose supertype is a same-named type of another
+	 * package is still read as reaching this member. `supertypesRaw` is what a stricter arm would
+	 * resolve; nothing today does.
+	 */
+	private static function resolvesToSourceType(path: String, proof: ReceiverProof): Bool {
+		if (path == '') return false;
+		final matches: Array<{ file: FileInfo, type: TypeDeclInfo }> = proof.index.resolveTypeRefsFrom(path, proof.file);
+		if (matches.length != 1) return false;
+		final resolved: { file: FileInfo, type: TypeDeclInfo } = matches[0];
+		return (resolved.type.name == proof.typeName && resolved.file.file == proof.cursorFile)
+			|| proof.index.isSubtype(resolved.type.name, proof.typeName);
+	}
+
+	/**
+	 * `written` reduced to the PATH it names — type ARGUMENTS dropped, the package KEPT:
+	 * `pkg.Box<Int>` -> `pkg.Box`. Both halves are load-bearing: resolution needs the whole path,
+	 * and it needs the arguments gone, since a generic receiver (`b: Box<Int>`) was already proven
+	 * by the simple-name compare and dropping it would be a silent loss.
+	 *
+	 * Splitting at the first `<` is exact ONLY because the caller has already asked the AST whether
+	 * the annotation is nominal at all (`declaredTypes`). Used as the nominality test itself, this
+	 * text read accepts an arrow type with a parameterised left operand.
+	 */
+	private static function nominalPathOf(written: String): String {
+		final lt: Int = written.indexOf('<');
+		return (lt < 0 ? written : written.substring(0, lt)).trim();
 	}
 
 	/**
@@ -665,21 +750,31 @@ final class CrossRenameMember {
 	 * unresolved receivers carry, restated in the advisory.
 	 */
 	private static function patternConstantOffsets(
-		source: String, tree: QueryNode, target: MemberTarget, plugin: GrammarPlugin, refShape: RefShape, index: SymbolIndex
+		source: String, file: String, tree: QueryNode, target: MemberTarget, plugin: GrammarPlugin, refShape: RefShape, index: SymbolIndex,
+		cursorFile: String
 	): Array<Int> {
 		final candidates: Array<{ subject: QueryNode, offsets: Array<Int> }> = switchPatternCandidates(tree, target.memberName, refShape);
 		if (candidates.length == 0) return [];
 		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		final declared: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
 		final subjectNames: Array<String> = [];
 		for (candidate in candidates) {
 			final name: Null<String> = candidate.subject.name;
 			if (name != null && !subjectNames.contains(name)) subjectNames.push(name);
 		}
-		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti(subjectNames, tree, refShape);
+		final proof: ReceiverProof = {
+			typeName: target.typeName,
+			nominals: provider != null ? provider.declaredTypes(source) : [],
+			typeSources: provider != null ? provider.declaredTypeSources(source) : [],
+			hitsByName: Refs.findMulti(subjectNames, tree, refShape),
+			index: index,
+			file: file,
+			cursorFile: cursorFile
+		};
 		final out: Array<Int> = [];
-		for (candidate in candidates) if (receiverIsSourceType(candidate.subject, target.typeName, declared, hitsByName, index))
-			for (off in candidate.offsets) if (!out.contains(off)) out.push(off);
+		for (candidate in candidates) if (receiverIsSourceType(candidate.subject, proof)) for (off in candidate.offsets) if (
+			!out.contains(off)
+		)
+			out.push(off);
 		return out;
 	}
 
