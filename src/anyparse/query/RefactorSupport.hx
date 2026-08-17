@@ -1021,6 +1021,21 @@ final class RefactorSupport {
 		return out;
 	}
 
+	/**
+	  * The ONE dotted path that names `typeName` in `module` from every file, whatever its package
+	 * or imports: `pkg.Mod` for a module's main type, `pkg.Mod.T` for a sub-module type, and the
+	 * basename alone (`Mod` / `Mod.T`) for a root-package module, which is visible everywhere.
+	 * The single exception is a ROOT-package module shadowed by a same-named module in the reading
+	 * file's own package — Haxe can spell only the near one, so no path reaches the root one.
+	 *
+	 * The root-anchored counterpart of `qualifiedPaths`: that one lists every spelling a reference
+	 * MAY already use, this one is the spelling a rewrite SHOULD emit when it cannot prove which
+	 * shorter form is legal at the reading site.
+	 */
+	public static function rootQualifiedPath(typeName: String, module: ModulePath): String {
+		return typeName == module.base ? module.path : '${module.path}.$typeName';
+	}
+
 	/** The dotted path a receiver chain spells (`a.b.C`), or `''` when a link is not a plain name. */
 	public static function flattenPath(node: QueryNode): String {
 		final name: Null<String> = node.name;
@@ -1061,11 +1076,24 @@ final class RefactorSupport {
 	 * `pathName` is null, its last segment is not `typeName`, or the path does not start in `span`.
 	 */
 	public static function lastSegmentOffset(source: String, span: Span, pathName: Null<String>, typeName: String): Int {
+		if (pathName == null || lastSegment(pathName) != typeName) return -1;
+		final pathStart: Int = pathOffset(source, span, pathName);
+		return pathStart < 0 ? -1 : pathStart + pathName.lastIndexOf('.') + 1;
+	}
+
+	/**
+	  * Offset at which the dotted `pathName` starts inside `span`, or -1 when `span` does not hold
+	 * the whole path contiguously (whitespace around a dot) or `pathName` is null. Both ends are
+	 * checked, because the caller turns this into a REPLACEMENT span `[at, at + pathName.length)`.
+	 *
+	 * Where `lastSegmentOffset` finds the TYPE half of `a.b.C.member`, this finds the whole
+	 * receiver: a rewrite that repoints a reference at a type reachable under a DIFFERENT module
+	 * must replace the entire path, not its final segment.
+	 */
+	public static function pathOffset(source: String, span: Span, pathName: Null<String>): Int {
 		if (pathName == null) return -1;
-		final lastDot: Int = pathName.lastIndexOf('.');
-		if (lastSegment(pathName) != typeName) return -1;
-		final pathStart: Int = source.indexOf(pathName, span.from);
-		return pathStart < 0 || pathStart >= span.to ? -1 : pathStart + lastDot + 1;
+		final at: Int = source.indexOf(pathName, span.from);
+		return at < 0 || at + pathName.length > span.to ? -1 : at;
 	}
 
 	/**

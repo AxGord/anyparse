@@ -56,6 +56,18 @@ private typedef BareHit = {
 }
 
 /**
+ * One TYPE-QUALIFIED reference to a moved member — the receiver span to overwrite and the
+ * destination spelling to put there. A DOTTED receiver is replaced whole by the destination's
+ * root-anchored path, which is legal from every file and therefore needs no import; a BARE one
+ * keeps its short form and leans on an import, so only that flavour reports `needsImport`.
+ */
+private typedef QualifiedHit = {
+	var span: Span;
+	var text: String;
+	var needsImport: Bool;
+}
+
+/**
  * A destination field to mirror under `--scaffold`: its name and the
  * verbatim source of its declared type on the source type.
  */
@@ -93,6 +105,14 @@ private typedef MovePrep = {
 	var srcModule: ModulePath;
 	var srcTypeName: String;
 	var destTypeName: String;
+
+	/**
+	 * The destination file's module path — the source of the destination type's ROOT-ANCHORED
+	 * spelling. A qualified caller is repointed at that whole path, because the source
+	 * receiver's own prefix reaches the destination only when the two types happen to be
+	 * sub-modules of one module.
+	 */
+	var destModule: ModulePath;
 	var index: SymbolIndex;
 	var sourceOf: Map<String, String>;
 	var trees: Map<String, QueryNode>;
@@ -235,7 +255,7 @@ final class MoveMember {
 			advisoryExtras.push('--closure pulled in ${prep.closureAdded.length} instance member(s): ${quoted(prep.closureAdded)}');
 		final outsideCallersOf: Map<String, Int> = [for (m in prep.moved) m.name => 0];
 		for (m in prep.moved) if (m.isStatic)
-			outsideCallersOf[m.name] = collectQualifiedEdits(prep, m, plugin, editsByFile, movedTextEdits, callerFilesNeedingImport);
+			outsideCallersOf[m.name] = collectQualifiedEdits(prep, m, editsByFile, movedTextEdits, callerFilesNeedingImport);
 
 		// Sibling scan first — its missing-dest-final-fields drive both the
 		// `new Dest(...)` wiring args and the destination scaffold.
@@ -334,45 +354,53 @@ final class MoveMember {
 	}
 
 	/**
-	 * Offsets of the `Src` half of every `Src.member` field access in one file — what the move
-	 * repoints to `Dest`. Two receiver shapes, the same two `CrossRename` / `CrossRenameMember`
-	 * own, through the SHARED predicate rather than a third copy of it:
+	 * The receiver EDIT for every `Src.member` field access in one file — the span to overwrite and
+	 * the destination spelling that belongs in it. Two receiver shapes, the same two `CrossRename` /
+	 * `CrossRenameMember` own, through the SHARED predicate rather than a third copy of it:
 	 *
 	 *  - A bare `IdentExpr Src`, unless the resolver bound it to a value (a local named like the
-	 *    type shadows the namespace).
+	 *    type shadows the namespace). It becomes the bare `Dest` name and reports `needsImport` —
+	 *    only an import makes that short spelling resolve.
 	 *  - A DOTTED chain, matched WHOLE against the paths that legally name this module from
 	 *    `tree`'s package (`RefactorSupport.qualifiedPaths`). Matching its LAST SEGMENT instead
 	 *    accepted a foreign same-named module: `move-member tag --to Dest` on `pkg.Boxes` rewrote
 	 *    `other.Boxes.tag()` into `other.Dest.tag()`, and the op WRITES — `Type not found :
 	 *    other.Dest` where the program printed 12 before, reported as `wrote 3 file(s)`.
 	 *
-	 * The dotted arm takes `lastSegmentOffset`, not `identTokenOffset`: the token to replace is the
-	 * path's final segment, while `identTokenOffset` returns the FIRST word-boundary match inside
-	 * the receiver span. The two cannot disagree on a path this gate admits — every earlier segment
-	 * is either a Haxe package segment (lower-case, so never a type name) or the module basename,
-	 * and a type named like its module takes the other `qualifiedPaths` branch — so the switch is
-	 * not a behaviour change; it drops the dependence on that invariant and matches `CrossRename`
-	 * on the same receiver shape.
+	 * The DOTTED arm replaces the WHOLE path, never just its last segment. Repointing that segment
+	 * alone assumes the destination is reachable under the RECEIVER's prefix, which holds only when
+	 * source and destination are sub-modules of one module; otherwise it invents a type. On the
+	 * sub-module source `pkg.Mod.Helper`, moving to a `Dest` that is its own `pkg.Dest` produced
+	 * `pkg.Mod.Dest.tag()` — `Class<pkg.Mod> has no field Dest` where the program printed 5 before,
+	 * again reported as a successful write. The replacement is `RefactorSupport.rootQualifiedPath`,
+	 * legal from every file, so a dotted caller owes no import.
 	 */
-	private static function qualifiedReceiverOffsets(
-		source: String, tree: QueryNode, srcTypeName: String, memberName: String, plugin: GrammarPlugin, module: ModulePath
-	): Array<Int> {
+	private static function qualifiedReceiverEdits(
+		source: String, tree: QueryNode, prep: MovePrep, memberName: String
+	): Array<QualifiedHit> {
 		final valueResolved: Array<Int> = [
-			for (h in Refs.find(srcTypeName, tree, plugin.refShape()))
+			for (h in Refs.find(prep.srcTypeName, tree, prep.shape))
 				if ((h.kind == RefKind.Read || h.kind == RefKind.Write) && h.bindingSpan != null) h.span.from
 		];
-		final qualified: Array<String> = RefactorSupport.qualifiedPaths(srcTypeName, module, ModuleScan.packageOf(tree));
-		final out: Array<Int> = [];
+		final qualified: Array<String> = RefactorSupport.qualifiedPaths(prep.srcTypeName, prep.srcModule, ModuleScan.packageOf(tree));
+		final destPath: String = RefactorSupport.rootQualifiedPath(prep.destTypeName, prep.destModule);
+		final out: Array<QualifiedHit> = [];
 		function walk(node: QueryNode): Void {
 			final children: Array<QueryNode> = node.children;
 			if (node.kind == RefactorSupport.FIELD_ACCESS_KIND && node.name == memberName && children.length > 0) {
 				final recv: QueryNode = children[0];
 				final recvSpan: Null<Span> = recv.span;
-				if (recvSpan != null && RefactorSupport.receiverIsTypeNamespace(recv, srcTypeName, qualified, valueResolved)) {
-					final offset: Int = recv.kind == RefactorSupport.FIELD_ACCESS_KIND
-						? RefactorSupport.lastSegmentOffset(source, recvSpan, RefactorSupport.flattenPath(recv), srcTypeName)
-						: RefactorSupport.identTokenOffset(source, recvSpan, srcTypeName);
-					if (offset >= 0 && !out.contains(offset)) out.push(offset);
+				if (recvSpan != null && RefactorSupport.receiverIsTypeNamespace(recv, prep.srcTypeName, qualified, valueResolved)) {
+					final dotted: Bool = recv.kind == RefactorSupport.FIELD_ACCESS_KIND;
+					final path: String = dotted ? RefactorSupport.flattenPath(recv) : prep.srcTypeName;
+					final offset: Int = dotted
+						? RefactorSupport.pathOffset(source, recvSpan, path)
+						: RefactorSupport.identTokenOffset(source, recvSpan, prep.srcTypeName);
+					if (offset >= 0 && !out.exists(h -> h.span.from == offset)) out.push({
+						span: new Span(offset, offset + path.length),
+						text: dotted ? destPath : prep.destTypeName,
+						needsImport: !dotted,
+					});
 				}
 			}
 			for (c in children) walk(c);
@@ -481,6 +509,8 @@ final class MoveMember {
 		if (destHit == null) return PErr('no type "$destTypeName" declared under scope');
 		final destSource: Null<String> = sourceOf[destHit.file];
 		if (destSource == null) return PErr('destination file ${destHit.file} is not in the scope file set');
+		final destTree: Null<QueryNode> = trees[destHit.file];
+		if (destTree == null) return PErr('destination file ${destHit.file} is not indexed');
 		final effectiveNames: Array<String> = closure
 			? expandInstanceCallClosure(srcDecl, srcTree, srcSource, memberNames, plugin)
 			: memberNames;
@@ -502,6 +532,7 @@ final class MoveMember {
 		final srcSourceNN: String = srcSource;
 		final srcTreeNN: QueryNode = srcTree;
 		final srcDeclNN: TypeDeclMatch = srcDecl;
+		final destTreeNN: QueryNode = destTree;
 		final destSourceNN: String = destSource;
 		final srcInfoNN: FileInfo = srcInfo;
 		final destInfoNN: FileInfo = destInfo;
@@ -510,6 +541,7 @@ final class MoveMember {
 			srcModule: ModuleScan.moduleOf(srcTreeNN, srcFile),
 			srcTypeName: srcTypeName,
 			destTypeName: destTypeName,
+			destModule: ModuleScan.moduleOf(destTreeNN, destHit.file),
 			index: index,
 			sourceOf: sourceOf,
 			trees: trees,
@@ -564,38 +596,46 @@ final class MoveMember {
 	}
 
 	/**
-	 * Qualified `Src.member` receivers across the scope: outside the cut
-	 * they are rewritten in place (counted as remaining callers, with the
-	 * caller file remembered for the import pass); inside the cut they are
-	 * rewritten within the moved text.
+	 * Qualified `Src.member` receivers across the scope: outside the cut they are rewritten in
+	 * place (counted as remaining callers, and — for the BARE spelling only — the caller file is
+	 * remembered for the import pass); inside the cut they are rewritten within the moved text.
 	 *
-	 * The edit swaps the TYPE SEGMENT alone, which assumes the destination is reachable by the
-	 * receiver's own prefix. KNOWN GAP, not fixed here: for a SUB-MODULE source type that is
-	 * false — `pkg.Mod.Helper.tag()` becomes `pkg.Mod.Dest.tag()` while `Dest` lives at
-	 * `pkg.Dest`, giving `Class<pkg.Mod> has no field Dest`. Fixing it means replacing the WHOLE
-	 * receiver span with the destination's own qualified path.
+	 * KNOWN GAP, in the import pass rather than here: every import seat asks `info.pkg ==
+	 * destInfo.pkg` and treats a same-package answer as "the bare name resolves". That is false
+	 * for a SUB-MODULE type, which is never visible bare outside its own module — so a bare
+	 * `Dest.member` / `Src.member` is emitted with no import and the file stops compiling, again
+	 * reported as a successful write. Three seats, each reproduced on the compiler with a
+	 * same-package `Dest` declared beside `Box` in `pkg/Box.hx`:
+	 *
+	 *  - `pushImportEdits`, caller loop — a caller's bare `Mod.tag()` became `Dest.tag()`:
+	 *    `Type not found : Dest` where the program printed 5;
+	 *  - `pushCrossPackageImports`, source half — the source's own bare `tag()` became
+	 *    `Dest.tag()`: the same error where it printed 6;
+	 *  - `pushCrossPackageImports`, destination half — a moved body's sibling call landed in the
+	 *    destination as `Helper.other()` for a sub-module `Src`: `Type not found : Helper`.
+	 *
+	 * `RefactorSupport.rootQualifiedPath` already spells what each of those seats owes; the
+	 * discriminator is `typeName == module.base`. Left out here because it is a redesign of the
+	 * import heuristics, not of the receiver path.
 	 */
 	private static function collectQualifiedEdits(
-		prep: MovePrep, m: MovedMember, plugin: GrammarPlugin, editsByFile: Map<String, Array<{ span: Span, text: String }>>,
+		prep: MovePrep, m: MovedMember, editsByFile: Map<String, Array<{ span: Span, text: String }>>,
 		movedTextEdits: Array<{ span: Span, text: String }>, callerFilesNeedingImport: Array<String>
 	): Int {
 		var outsideCallers: Int = 0;
 		for (file => tree in prep.trees) {
 			final source: Null<String> = prep.sourceOf[file];
 			if (source == null) continue;
-			for (offset in qualifiedReceiverOffsets(source, tree, prep.srcTypeName, m.name, plugin, prep.srcModule)) {
-				final edit: { span: Span, text: String } = {
-					span: new Span(offset, offset + prep.srcTypeName.length),
-					text: prep.destTypeName,
-				};
-				if (file == prep.srcFile && insideAnyCut(prep, offset)) {
+			for (hit in qualifiedReceiverEdits(source, tree, prep, m.name)) {
+				final edit: { span: Span, text: String } = { span: hit.span, text: hit.text };
+				if (file == prep.srcFile && insideAnyCut(prep, hit.span.from)) {
 					movedTextEdits.push(edit);
 				} else {
 					editsFor(editsByFile, file).push(edit);
 					// A caller inside the destination file needs no promotion —
 					// after the move it is a same-type qualified access.
 					if (file != prep.destFile) outsideCallers++;
-					if (file != prep.destFile && file != prep.srcFile && !callerFilesNeedingImport.contains(file))
+					if (hit.needsImport && file != prep.destFile && file != prep.srcFile && !callerFilesNeedingImport.contains(file))
 						callerFilesNeedingImport.push(file);
 				}
 			}
@@ -788,9 +828,7 @@ final class MoveMember {
 			].join('');
 			editsFor(editsByFile, prep.destFile).push({ span: new Span(anchor.offset, anchor.offset), text: anchor.lead + lines });
 		}
-		final destImportPath: String = prep.destTypeName == RefactorSupport.baseNameOf(prep.destFile)
-			? prep.destInfo.module
-			: '${prep.destInfo.module}.${prep.destTypeName}';
+		final destImportPath: String = RefactorSupport.rootQualifiedPath(prep.destTypeName, prep.destModule);
 		for (file in callerFilesNeedingImport) {
 			final info: Null<FileInfo> = prep.index.fileInfo(file);
 			final callerSource: Null<String> = prep.sourceOf[file];
@@ -1425,16 +1463,12 @@ final class MoveMember {
 		if (prep.srcInfo.pkg == prep.destInfo.pkg) return;
 		final srcEdits: Array<{ span: Span, text: String }> = editsByFile[prep.srcFile] ?? [];
 		if (srcEdits.exists(e -> e.text != '' && StringTools.contains(e.text, prep.destTypeName))) {
-			final destPath: String = prep.destTypeName == RefactorSupport.baseNameOf(prep.destFile)
-				? prep.destInfo.module
-				: '${prep.destInfo.module}.${prep.destTypeName}';
+			final destPath: String = RefactorSupport.rootQualifiedPath(prep.destTypeName, prep.destModule);
 			final edit: Null<{ span: Span, text: String }> = MoveSymbol.addImportEdit(prep.srcSource, prep.srcInfo, plugin, destPath);
 			if (edit != null) editsFor(editsByFile, prep.srcFile).push(edit);
 		}
 		if (!movedTextEdits.exists(e -> StringTools.contains(e.text, '${prep.srcTypeName}.'))) return;
-		final srcPath: String = prep.srcTypeName == RefactorSupport.baseNameOf(prep.srcFile)
-			? prep.srcInfo.module
-			: '${prep.srcInfo.module}.${prep.srcTypeName}';
+		final srcPath: String = RefactorSupport.rootQualifiedPath(prep.srcTypeName, prep.srcModule);
 		final edit: Null<{ span: Span, text: String }> = MoveSymbol.addImportEdit(prep.destSource, prep.destInfo, plugin, srcPath);
 		if (edit != null) editsFor(editsByFile, prep.destFile).push(edit);
 	}

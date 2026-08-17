@@ -852,6 +852,122 @@ class MoveMemberSliceTest extends Test {
 		Assert.isTrue(newMain.contains('other.Boxes.tag()'), 'the foreign module must be left alone:\n$newMain');
 	}
 
+	public function testSubModuleSourceQualifiedCallerRepointsWholePath(): Void {
+		final mod: String = 'package pkg;\n\nclass Mod {}\n\nclass Helper {\n\tpublic static function tag():Int return 5;\n}';
+		final dest: String = 'package pkg;\n\nclass Dest {}';
+		final user: String = 'package app;\n\nclass User {\n\tstatic function go():Int return pkg.Mod.Helper.tag();\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/Mod.hx', 'Helper', 'tag', 'Dest', [
+			{ file: 'pkg/Mod.hx', source: mod },
+			{ file: 'pkg/Dest.hx', source: dest },
+			{ file: 'app/User.hx', source: user },
+		]);
+		final newUser: String = changeFor(changes, 'app/User.hx').newSource;
+		Assert.isTrue(newUser.contains('pkg.Dest.tag()'), 'the whole receiver path must become the destination path:\n$newUser');
+		Assert.isFalse(newUser.contains('pkg.Mod.Dest'), '"Dest" is not a sub-module of "pkg.Mod":\n$newUser');
+		Assert.isFalse(newUser.contains('import '), 'a root-anchored path carries itself — no import is owed:\n$newUser');
+	}
+
+	public function testSubModuleSourceModuleShortCallerRepointsWholePath(): Void {
+		final mod: String = 'package pkg;\n\nclass Mod {}\n\nclass Helper {\n\tpublic static function tag():Int return 5;\n}';
+		final dest: String = 'package pkg;\n\nclass Dest {}';
+		final near: String = 'package pkg;\n\nclass Near {\n\tstatic function go():Int return Mod.Helper.tag();\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/Mod.hx', 'Helper', 'tag', 'Dest', [
+			{ file: 'pkg/Mod.hx', source: mod },
+			{ file: 'pkg/Dest.hx', source: dest },
+			{ file: 'pkg/Near.hx', source: near },
+		]);
+		final newNear: String = changeFor(changes, 'pkg/Near.hx').newSource;
+		Assert.isTrue(newNear.contains('pkg.Dest.tag()'), 'the short module spelling must repoint to the destination path:\n$newNear');
+		Assert.isFalse(newNear.contains('Mod.Dest'), '"Dest" is not a sub-module of "Mod":\n$newNear');
+	}
+
+	public function testSubModuleSourceBareCallerStaysShort(): Void {
+		final mod: String = 'package pkg;\n\nclass Mod {}\n\nclass Helper {\n\tpublic static function tag():Int return 5;\n}';
+		final dest: String = 'package pkg;\n\nclass Dest {}';
+		final user: String = 'package app;\n\nimport pkg.Mod.Helper;\n\nclass User {\n\tstatic function go():Int return Helper.tag();\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/Mod.hx', 'Helper', 'tag', 'Dest', [
+			{ file: 'pkg/Mod.hx', source: mod },
+			{ file: 'pkg/Dest.hx', source: dest },
+			{ file: 'app/User.hx', source: user },
+		]);
+		final newUser: String = changeFor(changes, 'app/User.hx').newSource;
+		Assert.isTrue(newUser.contains('Dest.tag()'), 'a bare receiver should repoint to the bare destination name:\n$newUser');
+		Assert.isFalse(newUser.contains('pkg.Dest.tag()'), 'a bare receiver stays bare — the import carries the path:\n$newUser');
+		Assert.isTrue(newUser.contains('import pkg.Dest;'), 'a bare caller still needs the destination import:\n$newUser');
+	}
+
+	public function testSubModuleDestQualifiedCallerGainsModuleSegment(): Void {
+		final mod: String = 'package pkg;\n\nclass Mod {\n\tpublic static function tag():Int return 5;\n}';
+		final box: String = 'package pkg;\n\nclass Box {}\n\nclass Dest {}';
+		final near: String = 'package pkg;\n\nclass Near {\n\tstatic function go():Int return pkg.Mod.tag();\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/Mod.hx', 'Mod', 'tag', 'Dest', [
+			{ file: 'pkg/Mod.hx', source: mod },
+			{ file: 'pkg/Box.hx', source: box },
+			{ file: 'pkg/Near.hx', source: near },
+		]);
+		final newNear: String = changeFor(changes, 'pkg/Near.hx').newSource;
+		Assert.isTrue(newNear.contains('pkg.Box.Dest.tag()'), 'a sub-module destination needs its module segment:\n$newNear');
+		Assert.isFalse(newNear.contains('pkg.Dest.tag()'), 'there is no module "pkg.Dest":\n$newNear');
+	}
+
+	public function testDestIsSourceModuleMainTypeCollapsesPath(): Void {
+		final mod: String = 'package pkg;\n\nclass Mod {}\n\nclass Helper {\n\tpublic static function tag():Int return 5;\n}';
+		final user: String = 'package app;\n\nclass User {\n\tstatic function go():Int return pkg.Mod.Helper.tag();\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/Mod.hx', 'Helper', 'tag', 'Mod', [
+			{ file: 'pkg/Mod.hx', source: mod },
+			{ file: 'app/User.hx', source: user },
+		]);
+		final newUser: String = changeFor(changes, 'app/User.hx').newSource;
+		Assert.isTrue(newUser.contains('pkg.Mod.tag()'), 'the module main type is spelled by the module path alone:\n$newUser');
+		Assert.isFalse(newUser.contains('pkg.Mod.Mod'), 'the main type must not be appended to its own module path:\n$newUser');
+	}
+
+	public function testSubModuleSiblingDestKeepsModulePath(): Void {
+		final mod: String =
+			'package pkg;\n\nclass Mod {}\n\nclass Helper {\n\tpublic static function tag():Int return 5;\n}\n\nclass Other {}';
+		final user: String = 'package app;\n\nclass User {\n\tstatic function go():Int return pkg.Mod.Helper.tag();\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/Mod.hx', 'Helper', 'tag', 'Other', [
+			{ file: 'pkg/Mod.hx', source: mod },
+			{ file: 'app/User.hx', source: user },
+		]);
+		final newUser: String = changeFor(changes, 'app/User.hx').newSource;
+		Assert.isTrue(newUser.contains('pkg.Mod.Other.tag()'), 'a sibling sub-module destination keeps the module path:\n$newUser');
+		Assert.isFalse(newUser.contains('import '), 'the path is unchanged, so no import is owed:\n$newUser');
+	}
+
+	public function testSubModuleRepointLeavesAForeignModuleAlone(): Void {
+		final mod: String = 'package pkg;\n\nclass Mod {}\n\nclass Helper {\n\tpublic static function tag():Int return 5;\n}';
+		final foreign: String = 'package other;\n\nclass Mod {}\n\nclass Helper {\n\tpublic static function tag():Int return 7;\n}';
+		final dest: String = 'package pkg;\n\nclass Dest {}';
+		final user: String =
+			'package app;\n\nclass User {\n\tstatic function go():Int return pkg.Mod.Helper.tag() + other.Mod.Helper.tag();\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/Mod.hx', 'Helper', 'tag', 'Dest', [
+			{ file: 'pkg/Mod.hx', source: mod },
+			{ file: 'pkg/Dest.hx', source: dest },
+			{ file: 'app/User.hx', source: user },
+			{ file: 'other/Mod.hx', source: foreign },
+		]);
+		final newUser: String = changeFor(changes, 'app/User.hx').newSource;
+		Assert.isTrue(newUser.contains('pkg.Dest.tag()'), 'the declaring module should repoint:\n$newUser');
+		Assert.isTrue(newUser.contains('other.Mod.Helper.tag()'), 'a same-named module in another package must be left alone:\n$newUser');
+		Assert.isFalse(newUser.contains('other.Dest'), 'no "other.Dest" may be produced:\n$newUser');
+	}
+
+	public function testRootPackageDestinationRepointsToTheBareModule(): Void {
+		final mod: String = 'class Mod {}\n\nclass Helper {\n\tpublic static function tag():Int return 5;\n}';
+		final dest: String = 'class Dest {}';
+		final user: String = 'package app;\n\nclass User {\n\tstatic function go():Int return Mod.Helper.tag();\n}';
+		final changes: Array<MoveChange> = okChanges('Mod.hx', 'Helper', 'tag', 'Dest', [
+			{ file: 'Mod.hx', source: mod },
+			{ file: 'Dest.hx', source: dest },
+			{ file: 'app/User.hx', source: user },
+		]);
+		final newUser: String = changeFor(changes, 'app/User.hx').newSource;
+		Assert.isTrue(newUser.contains('Dest.tag()'), 'a root-package module is named by its basename alone:\n$newUser');
+		Assert.isFalse(newUser.contains('Mod.Dest'), 'the source module segment must go:\n$newUser');
+		Assert.isFalse(newUser.contains('import '), 'a root-package module is visible everywhere — no import is owed:\n$newUser');
+	}
+
 	private function move(
 		srcFile: String, srcType: String, members: String, destType: String, scopeFiles: Array<{ file: String, source: String }>,
 		?via: String, ?closure: Bool, ?scaffold: Bool
