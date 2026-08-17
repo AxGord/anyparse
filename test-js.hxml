@@ -5,11 +5,5 @@
 # the @:peg/@:build files every Phase-3 slice edits. Run protocol:
 #   haxe test-js.hxml                       # compile only
 #   ANYPARSE_HXFORMAT_FORK=… node bin/test.js   # run (env not via --cmd)
--cp src
--cp test
--lib utest
--lib hxnodejs
--main RunTests
+test-js-common.hxml
 -js bin/test.js
-# Mirrors bin/apq-js.hxml so the suite runs the shipped codegen — see there.
--D analyzer-optimize

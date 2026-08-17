@@ -1,0 +1,14 @@
+# Shared flags for every JS build of the `apq`/`hxq` CLI engine. The
+# output line deliberately does NOT live here: haxe rejects a second
+# `-js` with "Error: Multiple targets", so an hxml that already names an
+# output cannot be retargeted by a later `-js` on the command line. Each
+# leaf supplies its own: `bin/apq-js.hxml` writes the shared
+# `bin/apq.js`, while `tools/worker-build.sh` passes a per-worker
+# `-js <workdir>/apq.js` so parallel agents never race over one artifact.
+-cp src
+-main anyparse.query.Cli
+-lib hxnodejs
+-D js-es=6
+# Shootout part B: -14.5% fmt work, -3.2% lint, -9.9% bundle, byte-identical
+# output, for +4-7% compile. No `-dce full` — it gives part of the win back.
+-D analyzer-optimize

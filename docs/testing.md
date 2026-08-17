@@ -135,6 +135,68 @@ Full pipeline tests on real-world data. Take a substantial input (the user's ax3
 
 **Added at Phase 4 onwards**, specifically for the AS3→Haxe conversion replacing ax3. The user's ~2000-file corpus is the canonical integration test: the new tool must produce equivalent Haxe output on every file, ideally faster than ax3 and without JVM.
 
+## Mutation checks: testing the tests
+
+The six layers all answer the same question from different angles: does the code do what it is supposed to do? A mutation check asks the inverted question: if the code *stopped* doing it, would anything go red?
+
+That question has to be asked separately, because a green suite is not evidence that the suite covers anything. A mechanism can be exercised by no fixture at all and still sit inside a passing run — every test that touches the file happens to take another branch, or asserts on a property the mechanism does not affect. The suite reports success, the coverage number looks fine, and the mechanism is a vacuum: it can be deleted, inverted, or quietly broken by an unrelated refactor and nothing will say so. The only reliable way to find such a vacuum is to break the mechanism on purpose and watch what the suite does.
+
+### The runner
+
+```sh
+tools/mutation-check.sh <manifest> [--jobs N]
+```
+
+Each *track* in the manifest is one deliberate breakage. The runner gives every track its own git worktree checked out from `HEAD`, applies the track's patch there, builds a private test runner into a private workdir (`tools/worker-build.sh`, see "Parallel tracks" below), runs the requested slice of the suite with the CWD set to that worktree, and classifies the transcript. Tracks run in parallel; `--jobs` defaults to `min(4, cores/2)`.
+
+Because worktrees come from `HEAD`, uncommitted work in the main tree is invisible to a track. That is deliberate — a track measures a named commit plus one patch, not whatever happens to be lying around — but it means a mutation aimed at uncommitted code has to be committed first, or folded into the patch.
+
+### Manifest format
+
+Line-oriented, `|`-separated, four fields, whitespace around fields trimmed. Blank lines and lines starting with `#` are ignored.
+
+```
+<name> | <patch-file> | <APQ_TEST filter> | <expected>[,<expected>...]
+```
+
+| Field | Meaning |
+|---|---|
+| `name` | Track id, `[A-Za-z0-9_.-]+`, unique in the manifest. Names the worktree directory and the report row. |
+| `patch` | A git patch — literally `git diff` output — applied with `git apply` inside the worktree. Resolved relative to the **manifest's own directory** (absolute paths pass through), so a manifest and its patches move as one bundle. |
+| `filter` | Required, non-empty. Passed as `APQ_TEST`. The literal word `ALL` runs the whole suite with `APQ_TEST` unset. |
+| `expected` | Comma-separated substrings, may be empty. Each is matched against the collected failure names, which have the form `<fq.ClassName>.<testMethod>`. |
+
+The patch is a `git diff` rather than a script or a sed expression because the worktree is created from `HEAD`: a diff taken against `HEAD` applies there deterministically, and authoring a track needs no new tooling. Break the mechanism in the main tree, `git diff > x.patch`, revert, add a manifest line.
+
+**Give every track a narrow `APQ_TEST` filter.** A track with `ALL` pays the entire suite for one mutation, and drags in cases whose outcome depends on the environment rather than on the mutation — most notably the corpus harness, which only runs when `ANYPARSE_HXFORMAT_FORK` is set. A filter naming the one or two classes that are supposed to catch the breakage keeps a track at seconds and keeps its verdict about the mutation.
+
+### Verdicts
+
+| Verdict | Meaning |
+|---|---|
+| `SURVIVED` | The suite ran and nothing failed. **This is the finding the tool exists for.** |
+| `KILLED` | At least one test failed, and every expectation matched something. No expectations given means any failure kills. |
+| `MISMATCH` | Something failed, but at least one expectation matched nothing — the suite noticed, just not where the track claimed it would. |
+| `NO-TESTS` | The filter matched no test class. Loud on purpose: a typo'd filter otherwise reads as `SURVIVED`. |
+| `PATCH-FAIL` | `git apply` failed. Manifest or patch defect. |
+| `BUILD-FAIL` | The patched tree does not compile. A mutation the compiler rejects proves nothing about the suite. |
+| `RUN-FAIL` | The runner produced no usable transcript. |
+
+Failures *beyond* the expectations do not demote `KILLED` to `MISMATCH`; they are listed on the row as `+extra: …`. A track asks whether the suite notices, and a wider blast radius still answers yes — the extras are reported because they are useful signal about coupling, not because they are a defect.
+
+Exit code: 0 only when every track is `KILLED`. Any other verdict exits 1, so a manifest can guard a mechanism in CI.
+
+The report is one row per track in manifest order, followed by a summary and the workroot path:
+
+```
+KILLED     doc-blockonly        filter=SetDoc         12/40 failed: unit.SetDocSliceTest.testX, unit.SetDocSliceTest.testY
+SURVIVED   dead-branch          filter=HxLexer        0/85 failed
+MISMATCH   foo                  filter=Bar            2/9 failed: … (missing: unit.BazTest)
+3 tracks: 1 killed, 1 survived, 1 mismatch, 0 error
+```
+
+Worktrees are always removed on exit, including on interrupt. The workroot itself — every transcript, build log and verdict file — is deliberately kept for post-mortem.
+
 ## Macro-specific tests
 
 anyparse is a macro-heavy project. Macros have three test shapes:
@@ -216,3 +278,28 @@ haxe test-hxcpp.hxml    # native binary, slowest compile but closest to producti
 ```
 
 All targets must pass before a commit. Cross-target failures usually indicate a platform-specific issue that should be fixed, not ignored.
+
+### Parallel tracks: per-worker build outputs
+
+`bin/apq.js` and `bin/test.js` are single shared artifacts. That is fine for one person at a keyboard and actively hostile to several agents working the repo at once: every build truncates the binary the others are executing, so a second worker cannot even run a probe while the first is compiling. The parallelism is lost before it starts, and the failures it produces look like flaky tests rather than like a build race.
+
+The fix is to stop sharing the artifact:
+
+```sh
+tools/worker-build.sh /tmp/w1              # builds /tmp/w1/apq.js and /tmp/w1/test.js
+tools/worker-build.sh /tmp/w1 test         # just the test runner
+node /tmp/w1/test.js                       # instead of node bin/test.js
+APQ_TEST=RemoveParam node /tmp/w1/test.js
+HXQ_BIN=/tmp/w1/apq.js hxq ast Foo.hx      # every hxq subcommand, queries and mutation ops alike
+```
+
+`HXQ_BIN` points the `hxq` shim at an explicit engine and, as a consequence, skips the shared stale-check and auto-rebuild entirely — the worker owns its own build, so the shim must not decide to rebuild `bin/apq.js` underneath it. The two builds inside `worker-build.sh` run concurrently, and it resolves the repo from its own location rather than from the CWD, so a copy of the script living inside a git worktree builds *that* worktree's `src/`.
+
+Some tests read paths relative to the CWD (`bin/.last-sweep.json`, `test/` fixtures, `hxformat.json`, `apqlint.json`), so run a private `test.js` with the CWD set to the tree it was built from.
+
+Two limits worth stating plainly, because a private engine invites more confidence than it earns:
+
+- **Builds, test runs and probes become parallel; the source tree does not.** Two agents running mutating ops on the same files still need coordination — a private engine isolates the *tool*, not the files it edits. Genuine source isolation means a git worktree per worker, which is what `tools/mutation-check.sh` does.
+- **A private engine is a snapshot.** It goes stale the moment another agent lands a `src/` change, and unlike the shared shim path nothing will warn you. Rebuild your own before trusting a probe.
+
+The build flags live in `bin/apq-js-common.hxml` and `test-js-common.hxml`, with the output line split out into the leaf files `bin/apq-js.hxml` and `test-js.hxml`. That split exists because Haxe rejects a second `-js` with `Error: Multiple targets` — an hxml that already names an output cannot be retargeted by a later `-js` on the command line, so the shared part must not name one. Note that a bare hxml-include line is resolved against the CWD, not against the including file's directory: build from the repo root.

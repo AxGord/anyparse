@@ -1,8 +1,4 @@
--cp src
--main anyparse.query.Cli
+# Shared `bin/apq.js`. All flags live in bin/apq-js-common.hxml — the
+# include path is resolved against the CWD, so build from the repo root.
+bin/apq-js-common.hxml
 -js bin/apq.js
--lib hxnodejs
--D js-es=6
-# Shootout part B: -14.5% fmt work, -3.2% lint, -9.9% bundle, byte-identical
-# output, for +4-7% compile. No `-dce full` — it gives part of the win back.
--D analyzer-optimize

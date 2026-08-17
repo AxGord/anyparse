@@ -54,7 +54,36 @@ fi
 js="$here/apq.js"
 nn="$here/apq.n"
 
-if [ -f "$js" ]; then
+# HXQ_BIN — explicit engine override, for parallel workers. Checked
+# FIRST, so it does not depend on the shared bin/ holding a build at all:
+# a fresh clone or a worktree whose bin/ is empty still runs the private
+# engine the caller names.
+#
+# Several agents working the same repo at once all rebuild and run the
+# ONE shared bin/apq.js: each build truncates the artifact the others are
+# executing, so in practice only one agent can work at a time. With
+# HXQ_BIN each agent builds a private engine into its own workdir
+# (`tools/worker-build.sh <workdir>`) and drives every hxq subcommand —
+# probes AND mutation ops — through it, so nobody rebuilds or races over
+# the shared binary.
+#
+# The caller owns its private build, so the stale check below is skipped
+# (HXQ_QUIET=1): the worker rebuilds when it decides to, and a private
+# engine is a deliberate snapshot. The trade-off is that the snapshot
+# goes stale the moment another agent lands a src/ change — rebuild
+# before trusting a probe.
+if [ -n "${HXQ_BIN:-}" ]; then
+    if [ ! -f "$HXQ_BIN" ]; then
+        echo "hxq: HXQ_BIN=$HXQ_BIN not found" >&2
+        exit 1
+    fi
+    binary="$HXQ_BIN"
+    case "$binary" in
+        *.n) runner="neko" ;;
+        *) runner="node" ;;
+    esac
+    HXQ_QUIET=1
+elif [ -f "$js" ]; then
     runner="node"
     binary="$js"
 elif [ -f "$nn" ]; then

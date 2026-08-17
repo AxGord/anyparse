@@ -1,0 +1,13 @@
+# Shared flags for every JS build of the test runner. As in
+# bin/apq-js-common.hxml, the output line cannot live here: haxe rejects
+# a second `-js` with "Error: Multiple targets", so a later `-js` on the
+# command line cannot retarget an hxml that already names an output.
+# `test-js.hxml` writes the shared `bin/test.js`; `tools/worker-build.sh`
+# passes a per-worker `-js <workdir>/test.js` instead.
+#
+# test-common.hxml already supplies -cp src, -cp test, -lib utest and
+# -main RunTests.
+test-common.hxml
+-lib hxnodejs
+# Mirrors bin/apq-js-common.hxml so the suite runs the shipped codegen — see there.
+-D analyzer-optimize
