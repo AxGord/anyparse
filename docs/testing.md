@@ -308,3 +308,48 @@ Two limits worth stating plainly, because a private engine invites more confiden
 - **A private engine is a snapshot.** It goes stale the moment another agent lands a `src/` change, and unlike the shared shim path nothing will warn you. Rebuild your own before trusting a probe.
 
 The build flags live in `bin/apq-js-common.hxml` and `test-js-common.hxml`, with the output line split out into the leaf files `bin/apq-js.hxml` and `test-js.hxml`. That split exists because Haxe rejects a second `-js` with `Error: Multiple targets` — an hxml that already names an output cannot be retargeted by a later `-js` on the command line, so the shared part must not name one. Note that a bare hxml-include line is resolved against the CWD, not against the including file's directory: build from the repo root.
+
+### Parallel shards: one suite, N processes
+
+The previous section parallelises *workers*. This one parallelises a *single* suite run. `tools/suite-shard.sh` splits the registered test classes into N `APQ_TEST` filters and runs one `node bin/test.js` per shard:
+
+```sh
+tools/suite-shard.sh                      # 4 shards (default)
+tools/suite-shard.sh -n 6                 # the measured knee on a 16-core box
+tools/suite-shard.sh --verify             # + a monolith run, counts compared
+tools/suite-shard.sh --expect <T>/<A>     # + compare to YOUR last known-good pair
+tools/suite-shard.sh --plan-only          # print the plan, run nothing
+tools/suite-shard.sh --bin /tmp/w1/test.js  # a private worker build (previous section)
+tools/suite-shard.sh --keep               # keep the work directory even on success
+```
+
+`--verify` and `--expect` are mutually exclusive — the first measures the pair the second asserts. Do not copy a literal into `--expect` out of this document: the totals move with every slice, and a stale pair fails a run that is fine.
+
+Measured on Mac15,9 / 16 CPU at `11423 tests / 24066 assertions`, wall time of the parallel region (end-to-end including planning in brackets):
+
+| shards | wall | speedup |
+|---:|---:|---:|
+| 1 | 21.8 s (22.4 s) | 1.0x |
+| 2 | 13.8–14.1 s (14.5–14.9 s) | 1.6x |
+| 4 | 8.5–8.9 s (9.5–9.9 s) | 2.5x |
+| 6 | 6.8–6.9 s (8.2–8.3 s) | 3.2x |
+| 8 | 6.9 s (8.5–8.6 s) | 3.2x |
+
+Past six shards the curve is flat: what remains is the sticky group below plus the per-process warm-up each shard re-pays (roughly 2.4 s of std/haxelib resolution parsing that a single process pays once). The default stays at 4 because the extra shards buy ~1.5 s at the price of that warm-up multiplied again — worth asking for explicitly on a many-core machine, not worth defaulting to on a small one.
+
+**The sticky group.** Most tests write unique per-run temp directories and pick random compiler-server ports, so they parallelise freely. Two paths are fixed constants and are *not* safe to split: `/tmp/anyparse-last-probe.hx` (`Cli.STAGE_PROBE_PATH` — a single slot that `apq probe` overwrites and the Tier-5 tests read back byte-for-byte) and `bin/.last-sweep.json` (the corpus Δ-baseline, rewritten by `HxFormatterCorpusTest` and read by `ApqDxTier5CliTest`). The eight classes that touch them are pinned to shard 0 as one block.
+
+That list is derived, not remembered: `hxq lit 'probe' test/ --kind Literal` finds every class holding an exact `'probe'` string leaf (read each hit — one of them is a fixture *method* named `probe`, not the subcommand), and `hxq lit '.last-sweep.json' test/` finds the baseline's users. Re-derive it when adding a test that stages a probe or touches the sweep baseline. A writer left outside the group does not fail the run: it races the read-back assertion in a window of well under a millisecond, so it shows up weeks later as an unreproducible flake. Better still is to make the path configurable so the block can shrink.
+
+**Parity is a gate, not a hope.** A sharded run that silently drops a class still reports green, so the script refuses to run unless the union of the shard lists equals the registration list exactly. Three specifics worth knowing:
+
+- The class list is read structurally out of `test/RunTests.hx` (`addCase(new X())` as an AST pattern), never by a name heuristic. Nine registered classes do not end in `Test` — five end in `Probe`, four *begin* with it — so both a `*Test` suffix filter and a `*Probe` glob drop tests silently; the suffix filter loses 43 of them, and nothing else notices. The pattern's `()` does not constrain arity either, so every extracted name must be a plain identifier: `addCase(new X(1))` would otherwise yield the filter string `unit.X(1))`, which matches no class while still passing class parity.
+- `APQ_TEST` is a **substring** match over the fully-qualified class name. A name that is a substring of another would run in two shards and inflate the totals, so the generator hard-fails on any such pair rather than producing a plausible-looking wrong number.
+- The sticky list is hand-maintained, so every pinned name must still be registered — otherwise a rename un-pins a class in silence and the race comes back.
+- Test and assertion totals grow with every slice, so no literal is pinned in the script. Class parity plus the no-collision gate plus a non-empty, green shard is what makes the totals trustworthy; `--verify` (pays for a monolith run, and fails on a monolith that is red as well as on one that disagrees) and `--expect T/A` are the explicit cross-checks when you want the totals proved rather than argued.
+
+Exit status is 0 only when every shard is green *and* parity holds. A red shard, an empty shard, a collision, an unnameable registration, an un-pinned sticky class, a misplaced class or a count mismatch all exit non-zero and keep the work directory — the shard logs when the run got that far, the plan files when it refused earlier.
+
+**When to shard, when not.** Shard the full battery during a slice — after the `APQ_TEST`-filtered edit loop, when you want the whole suite as a checkpoint. Run the **monolith** for the final pre-commit run of a slice or campaign, and any time the shard plan itself changed (a new sticky-state test, a new fixed shared path, a new class whose name overlaps another).
+
+Sharding moves the suite along two axes at once, and they fail in opposite directions. It changes **ordering** — cross-class effects like a warm cache one class leaves for the next, or a first-in-pays-the-warm-up cost, appear or vanish depending on which classes share a process, so a bug that only fires when A runs before B is invisible to a run that puts them in different processes. And it adds **concurrency** that the monolith never had: classes that used to be merely sequential now run simultaneously against one working tree, one `/tmp`, one `$HOME`. The monolith is the insurance against the first; the sticky group is the insurance against the second. One monolith per slice buys the first cheaply — nothing buys the second except keeping the shared-path inventory honest.
