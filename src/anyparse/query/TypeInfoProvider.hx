@@ -14,11 +14,16 @@ interface TypeInfoProvider {
 	 * Maps each declaration's binding-span start offset (the same `from` a
 	 * scope-resolved reference binds to — see `Refs.RefHit.bindingSpan`) to the
 	 * SIMPLE name of its declared type, for every local / parameter / field that
-	 * carries an explicit nominal `:Type` annotation. A declaration with no
-	 * annotation, or a non-nominal type (function / anonymous-inline /
-	 * parametric / `Null<…>` wrapper), is absent — its receiver stays
-	 * unresolved. Recovers a `recv.field` receiver's type without changing the
-	 * shared `QueryNode` shape.
+	 * carries an explicit nominal `:Type` annotation. A PARAMETRIC one IS present,
+	 * under its outer nominal — `var xs: Array<Int>` → `Array`, and so is a
+	 * `Null<…>` wrapper, under `Null` (a consumer that means the wrapped type has
+	 * to unwrap it itself; `nullableWrapperTypeNames` names the wrappers). A
+	 * declaration with no annotation, or a NON-NOMINAL type (a function type, an
+	 * anonymous structure), is absent — its receiver stays unresolved. That
+	 * absence is the map's other job: `CrossRenameMember` reads a key's PRESENCE
+	 * as the AST's verdict that an annotation is nominal at all, then takes the
+	 * written path from `declaredTypeSources`, because a text read of the source
+	 * cannot tell `pkg.Other<Int>` from `pkg.Other<Int> -> Void`.
 	 */
 	public function declaredTypes(source: String): Map<Int, String>;
 
@@ -52,12 +57,18 @@ interface TypeInfoProvider {
 	public function propertyWriteAccessors(source: String): Map<Int, Bool>;
 
 	/**
-	 * Maps each declaration's binding-span `from` (the `declaredTypes` key) to the
-	 * VERBATIM source text of its `:Type` annotation — `var x: Array<Int>` → the
-	 * substring `Array<Int>`. Lets a consumer compare two annotations by their
-	 * written form (sound within one file: a byte-identical type source denotes the
-	 * same type) instead of a package-stripped simple name. A declaration with no
-	 * recoverable type-annotation span is absent.
+	 * Maps each declaration's binding-span `from` to the VERBATIM source text of its
+	 * `:Type` annotation — `var x: Array<Int>` → the substring `Array<Int>`. Lets a
+	 * consumer compare two annotations by their written form (sound within one file:
+	 * a byte-identical type source denotes the same type) instead of a
+	 * package-stripped simple name, and recovers the dotted PATH that
+	 * `declaredTypes` drops.
+	 *
+	 * Keyed by the same walk as `declaredTypes` but under a WEAKER condition — the
+	 * annotation node needs a span, not a nominal name — so its key set is a
+	 * SUPERSET, and the extra keys are exactly the non-nominal annotations. Read
+	 * the two together when both the nominality verdict and the path are needed;
+	 * neither alone answers both.
 	 */
 	public function declaredTypeSources(source: String): Map<Int, String>;
 

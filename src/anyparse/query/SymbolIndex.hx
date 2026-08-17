@@ -1653,11 +1653,11 @@ final class SymbolIndex {
 
 	/**
 	 * Every decl the MODULE-RELATIVE form `Mod.Sub` names FROM `fromFile` — a sub-module type
-	 * qualified by its own module's name, which Haxe accepts wherever that module is in simple-name
-	 * scope (same package, root package, or a plain / `using` / wildcard import reaching it), the
-	 * same condition `simpleRefInScope` already states.
+	 * qualified by its own module's name, which Haxe accepts wherever the MODULE itself can be
+	 * named. That is `moduleRefInScope`, a strictly narrower rule than the one a bare type name
+	 * goes through, and the difference is measured rather than assumed.
 	 *
-	 * `resolveQualifiedRefAll` cannot answer it and must not: it matches the ROOT-relative
+	 * `resolveQualifiedRefAll` cannot answer this form and must not: it matches the ROOT-relative
 	 * `pkg.Mod.Sub` and is deliberately context-free, while `Mod.Sub` names different types from
 	 * different files. So this runs only as `resolveTypeRefAll`'s FALLBACK, after the root-relative
 	 * match found nothing — it can turn a 0-match into a match, never change one.
@@ -1669,7 +1669,7 @@ final class SymbolIndex {
 		final matches: Array<ResolvedType> = [];
 		final seen: Array<String> = [];
 		for (fi in _files) for (t in fi.types) if (
-			!t.isMain && t.name == simple && moduleSimpleName(fi.module) == prefix && simpleRefInScope(fromFile, fi, t)
+			!t.isMain && t.name == simple && moduleSimpleName(fi.module) == prefix && moduleRefInScope(fromFile, fi)
 		) {
 			final key: String = '${fi.file}#${t.name}';
 			if (!seen.contains(key)) {
@@ -1684,6 +1684,25 @@ final class SymbolIndex {
 	private static inline function moduleSimpleName(module: String): String {
 		final dot: Int = module.lastIndexOf('.');
 		return dot < 0 ? module : module.substr(dot + 1);
+	}
+
+	/**
+	 * Whether the MODULE of `fi` can be named by its own simple name from `fromFile` — the
+	 * visibility a module-relative `Mod.Sub` reference needs, which is NOT the one a bare TYPE
+	 * name needs, so `simpleRefInScope` cannot stand in for it. Compiled on 4.3.7: same package
+	 * resolves and `import pkg.*;` resolves, while BOTH `import pkg.Mod;` and `using pkg.Mod;`
+	 * fail with `Type not found : Mod` — a module import puts the module's TYPES in simple-name
+	 * scope, but the qualifier of `Mod.Sub` is read as a module PATH, which only the package
+	 * itself or a wildcard over it supplies.
+	 *
+	 * A ROOT-package module needs no arm: its own import path already IS `Mod.Sub`, so the
+	 * root-relative match in `resolveQualifiedRefAll` answers it and the fallback never runs.
+	 */
+	private static function moduleRefInScope(fromFile: FileInfo, fi: FileInfo): Bool {
+		if (fi.pkg == fromFile.pkg) return true;
+		final wild: String = '${fi.pkg}.*';
+		for (imp in fromFile.imports) if (imp.kind == ImportKind.Wild && imp.raw == wild) return true;
+		return false;
 	}
 
 	/**

@@ -186,7 +186,7 @@ final class CrossRenameMember {
 
 	/** The advisory appended to every successful member rename. */
 	private static final ADVISORY: String =
-		'member rename resolves instance receivers, switch subjects and expected-type returns via declared types only — unresolved receivers and subjects (chained calls, un-annotated locals, casts), an expected-type value OUTSIDE return position (`x == VALUE`, an annotated assignment, a typed argument) or in a function with no return annotation, an enum-abstract value brought into scope by importing its type, super-access, `using` extension calls, aliased-import homonyms, and overrides declared outside this scope are left for the compiler to reject; verify by hand.';
+		'member rename resolves instance receivers, switch subjects and expected-type returns via declared types only — unresolved receivers and subjects (chained calls, un-annotated locals, casts, a `Null<T>`-wrapped annotation, a type reaching the file through a per-directory `import.hx`), an expected-type value OUTSIDE return position (`x == VALUE`, an annotated assignment, a typed argument) or in a function with no return annotation, an enum-abstract value brought into scope by importing its type, super-access, `using` extension calls, aliased-import homonyms, and overrides declared outside this scope are left for the compiler to reject; verify by hand.';
 
 	/**
 	 * Rename the member declaration at `line:col` (in `cursorFile` /
@@ -475,7 +475,7 @@ final class CrossRenameMember {
 	): LocatedOffsets {
 		return target.isStatic
 			? staticMemberOffsets(source, tree, target.typeName, target.memberName, refShape, module)
-			: instanceMemberOffsets(source, file, tree, target.typeName, target.memberName, plugin, refShape, index, cursorFile);
+			: instanceMemberOffsets(source, file, tree, target, plugin, refShape, index, cursorFile);
 	}
 
 	/**
@@ -533,10 +533,10 @@ final class CrossRenameMember {
 	 * whose member token cannot be located refuses the whole rename.
 	 */
 	private static function instanceMemberOffsets(
-		source: String, file: String, tree: QueryNode, typeName: String, memberName: String, plugin: GrammarPlugin, refShape: RefShape,
-		index: SymbolIndex, cursorFile: String
+		source: String, file: String, tree: QueryNode, target: MemberTarget, plugin: GrammarPlugin, refShape: RefShape, index: SymbolIndex,
+		cursorFile: String
 	): LocatedOffsets {
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final memberName: String = target.memberName;
 		final candidates: Array<{ recv: QueryNode, fa: QueryNode }> = memberAccessCandidates(tree, memberName);
 		if (candidates.length == 0) return { offsets: [], error: null };
 
@@ -545,15 +545,7 @@ final class CrossRenameMember {
 			final rn: Null<String> = cand.recv.name;
 			if (rn != null && !recvNames.contains(rn)) recvNames.push(rn);
 		}
-		final proof: ReceiverProof = {
-			typeName: typeName,
-			nominals: provider != null ? provider.declaredTypes(source) : [],
-			typeSources: provider != null ? provider.declaredTypeSources(source) : [],
-			hitsByName: Refs.findMulti(recvNames, tree, refShape),
-			index: index,
-			file: file,
-			cursorFile: cursorFile
-		};
+		final proof: ReceiverProof = receiverProof(recvNames, source, file, tree, target, plugin, refShape, index, cursorFile);
 		final out: Array<Int> = [];
 		for (cand in candidates) {
 			final recvSpan: Null<Span> = cand.recv.span;
@@ -564,6 +556,28 @@ final class CrossRenameMember {
 			if (!out.contains(off)) out.push(off);
 		}
 		return { offsets: out, error: null };
+	}
+
+	/**
+	 * The proof one file's receivers and switch subjects are measured against — the two declared-type
+	 * maps, the scope hits for the candidate receiver `names`, and the resolution context. Both
+	 * callers need the identical value except for which names they resolved, which is what makes it
+	 * one function rather than two literals that must be kept in step.
+	 */
+	private static function receiverProof(
+		names: Array<String>, source: String, file: String, tree: QueryNode, target: MemberTarget, plugin: GrammarPlugin,
+		refShape: RefShape, index: SymbolIndex, cursorFile: String
+	): ReceiverProof {
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		return {
+			typeName: target.typeName,
+			nominals: provider != null ? provider.declaredTypes(source) : [],
+			typeSources: provider != null ? provider.declaredTypeSources(source) : [],
+			hitsByName: Refs.findMulti(names, tree, refShape),
+			index: index,
+			file: file,
+			cursorFile: cursorFile
+		};
 	}
 
 	/**
@@ -640,10 +654,11 @@ final class CrossRenameMember {
 	 * the old way, which for an override family is a rename that does not compile.
 	 *
 	 * The resolver is `SymbolIndex.resolveTypeRefsFrom` — the whole-dotted-path / module-relative /
-	 * import / same-package / root-package rules the compiler applies, the same one
-	 * `expectedReturnOffsets` asks for a return annotation. Two deliberate differences from that
-	 * proof: it unwraps one nullable wrapper and this does not (a `Null<T>` receiver stays
-	 * unproven), and it has no subtype arm.
+	 * import / same-package / root-package rules, the same one `expectedReturnOffsets` asks for a
+	 * return annotation. It APPROXIMATES the compiler rather than reproducing it, and the residual
+	 * list below says in which direction each gap runs. Three deliberate differences from that
+	 * sibling proof: it unwraps one nullable wrapper and this does not, it has no subtype arm, and
+	 * this one strips type ARGUMENTS off the path while it hands the written text over whole.
 	 *
 	 * Comparing SIMPLE names instead was wrong in BOTH directions, each measured on 4.3.7: a
 	 * receiver written `other.Other` (a same-named module of another package, out of scope) was
@@ -652,14 +667,17 @@ final class CrossRenameMember {
 	 * `pkg.Other has no field tag` behind. That is the last-segment defect the static side removed
 	 * twice (`f3b46467`, `64a4ae5a`), on the INSTANCE side.
 	 *
-	 * A reference resolving to nothing (a library type, a type outside the scope, an ALIASED import,
-	 * whose original path the grammar does not expose) proves nothing and is left alone — the
-	 * unresolved-receiver contract.
+	 * Residual, all of them MISSES (a left-behind access is a compile error, never a wrong rewrite):
+	 * a reference resolving to nothing proves nothing — a library type, a type outside the scope, an
+	 * ALIASED import (the grammar does not expose the original path), a type reaching the file
+	 * through a per-directory `import.hx` (`SymbolIndex` reads only a file's own import list), and a
+	 * `Null<T>`-wrapped receiver, whose path reduces to `Null`.
 	 *
-	 * The subtype arm carries the one residual: `isSubtype` walks `TypeDeclInfo.supertypes`, which
-	 * are SIMPLE names, so a resolved subtype whose supertype is a same-named type of another
-	 * package is still read as reaching this member. `supertypesRaw` is what a stricter arm would
-	 * resolve; nothing today does.
+	 * The one arm that can still authorise a rewrite on unproven evidence is the SUBTYPE one:
+	 * `isSubtype` walks `TypeDeclInfo.supertypes`, which are SIMPLE names, so a resolved subtype
+	 * whose supertype is a same-named type of another package reads as reaching this member.
+	 * `supertypesRaw` is what a stricter arm would resolve, the way `overriddenDeclarer` already
+	 * does; nothing here does yet.
 	 */
 	private static function resolvesToSourceType(path: String, proof: ReceiverProof): Bool {
 		if (path == '') return false;
@@ -755,21 +773,12 @@ final class CrossRenameMember {
 	): Array<Int> {
 		final candidates: Array<{ subject: QueryNode, offsets: Array<Int> }> = switchPatternCandidates(tree, target.memberName, refShape);
 		if (candidates.length == 0) return [];
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final subjectNames: Array<String> = [];
 		for (candidate in candidates) {
 			final name: Null<String> = candidate.subject.name;
 			if (name != null && !subjectNames.contains(name)) subjectNames.push(name);
 		}
-		final proof: ReceiverProof = {
-			typeName: target.typeName,
-			nominals: provider != null ? provider.declaredTypes(source) : [],
-			typeSources: provider != null ? provider.declaredTypeSources(source) : [],
-			hitsByName: Refs.findMulti(subjectNames, tree, refShape),
-			index: index,
-			file: file,
-			cursorFile: cursorFile
-		};
+		final proof: ReceiverProof = receiverProof(subjectNames, source, file, tree, target, plugin, refShape, index, cursorFile);
 		final out: Array<Int> = [];
 		for (candidate in candidates) if (receiverIsSourceType(candidate.subject, proof)) for (off in candidate.offsets) if (
 			!out.contains(off)

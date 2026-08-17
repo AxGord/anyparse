@@ -204,9 +204,10 @@ class CrossRenameMemberSliceTest extends Test {
 	/**
 	 * The MODULE-RELATIVE spelling of a sub-module type — `Mod.Sub`, legal wherever the module is
 	 * in simple-name scope — is a third spelling beside the bare and the root-relative one, and
-	 * it resolves only FROM the reading file (`SymbolIndex.moduleRelativeRefAll`). Annotation and
-	 * `new` forms both rename; the root-relative `other.Mod.Sub` of another package is the
-	 * untouched half of the same asserted source.
+	 * it resolves only FROM the reading file (`SymbolIndex.moduleRelativeRefAll`). Annotation and `new` forms both rename. The visibility rule is the MODULE's, not a bare type
+	 * name's, and it is narrower: compiled on 4.3.7, `import pkg.*;` reaches `Mod.Sub` while
+	 * `import pkg.Mod;` does NOT (`Type not found : Mod`). Both arms are asserted here, alongside
+	 * the root-relative `other.Mod.Sub` of another package, which resolves to nothing.
 	 */
 	public function testInstanceReceiverModuleRelativeSubModulePathRenames(): Void {
 		final a: String = 'package pkg;\n\nclass Mod {\n\tpublic function new() {}\n}\n\n'
@@ -215,13 +216,22 @@ class CrossRenameMemberSliceTest extends Test {
 			+ '\t\tnew Mod.Sub().tag();\n\t\tnew other.Mod.Sub().tag();\n\t}\n}';
 		final expectedB: String = 'package pkg;\n\nclass Z {\n\tfunction m(p:Mod.Sub):Void {\n\t\tp.mark();\n'
 			+ '\t\tnew Mod.Sub().mark();\n\t\tnew other.Mod.Sub().tag();\n\t}\n}';
+		final wild: String = 'package app;\n\nimport pkg.*;\n\nclass W {\n\tfunction m(p:Mod.Sub):Void p.tag();\n}';
+		final plain: String = 'package app;\n\nimport pkg.Mod;\n\nclass P {\n\tfunction m(p:Mod.Sub):Void p.tag();\n}';
 		final changes: Array<FileChange> = okChanges('pkg/Mod.hx', a, 'tag', 'mark', [
 			{ file: 'pkg/Mod.hx', source: a },
 			{ file: 'pkg/Z.hx', source: b },
+			{ file: 'app/W.hx', source: wild },
+			{ file: 'app/P.hx', source: plain },
 		]);
-		Assert.equals(2, changes.length);
+		Assert.equals(3, changes.length);
 		Assert.equals(expectedB, changeFor(changes, 'pkg/Z.hx').newSource);
 		Assert.equals(2, changeFor(changes, 'pkg/Z.hx').count);
+		Assert.equals(
+			'package app;\n\nimport pkg.*;\n\nclass W {\n\tfunction m(p:Mod.Sub):Void p.mark();\n}',
+			changeFor(changes, 'app/W.hx').newSource
+		);
+		Assert.isNull(changeOrNull(changes, 'app/P.hx'));
 	}
 
 	/**
