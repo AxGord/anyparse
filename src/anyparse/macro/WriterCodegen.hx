@@ -112,6 +112,15 @@ class WriterCodegen {
 			// caller's plain separator when no trailing captured.
 			fields.push(kwBeforeTrailingDocField());
 		}
+		// JVM has a hard 64 KB limit on a method body, and the helpers
+		// pushed above are tiny but called hundreds of times from a single
+		// rule method — `_clearElseIfBranch` alone expands 162 times inside
+		// `HaxeModuleTriviaWriter.writeHxIfStmtT`. Inlining them grows that
+		// method from 45 502 bytes of bytecode to an estimated ~79 000 and
+		// the class-file writer dies with `IO.Overflow("write_ui16")` on the
+		// u2 offsets of its Code attribute. Dropping `AInline` on the JVM
+		// target alone keeps every other target's codegen byte-identical.
+		if (Context.defined('jvm')) for (f in fields) if (f.access != null) f.access.remove(AInline);
 		return fields;
 	}
 
