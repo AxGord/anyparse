@@ -632,6 +632,7 @@ import unit.HxCallParamIfExpressionArgSliceTest;
 import unit.HxValueIfFitSliceTest;
 import unit.RenameMemberInFileCliTest;
 import unit.ApqAstTypeRefsCliTest;
+import unit.LintDiffTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1261,6 +1262,7 @@ class RunTests {
 		addCase(new GlobExpandTest());
 		addCase(new FarthestFailTest());
 		addCase(new ApqTextRenderTest());
+		addCase(new LintDiffTest());
 		addCase(new ApqSearchCliTest());
 		addCase(new ApqAtCliTest());
 		addCase(new ApqFromFileCliTest());

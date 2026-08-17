@@ -59,6 +59,8 @@ import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.format.json.SweepSnapshot;
 import anyparse.query.format.json.SweepSnapshotParser;
 import anyparse.query.format.json.SweepFixture;
+import anyparse.query.LintDiff.LintDiffResult;
+import anyparse.query.format.json.LintFindingJson;
 
 using StringTools;
 using Lambda;
@@ -473,6 +475,14 @@ final class Cli {
 	private static inline final DEFAULT_REACH_PATHS: Int = 10;
 
 	/**
+	 * `lint-diff` example keys printed per sign before the "… N more" note.
+	 * A blast-radius comparison either moved nothing — one headline line — or
+	 * wants every moved key read, and 20 is where a genuinely large diff still
+	 * scans in a battery transcript with the tail one `--limit` away.
+	 */
+	private static inline final LINT_DIFF_EXAMPLE_LIMIT: Int = 20;
+
+	/**
 	 * Boolean (value-less) `--flag` set for `runAst`. Listed explicitly
 	 * so `runProbe`'s argv walker can tell `--depth 5` (consumes 5)
 	 * from `--json` (consumes nothing). Stay in sync with the cases
@@ -575,6 +585,8 @@ final class Cli {
 				return runDeclares(rest);
 			case 'lint':
 				return runLint(rest);
+			case 'lint-diff':
+				return runLintDiff(rest);
 			case 'inline':
 				return runInline(rest);
 			case 'inline-method':
@@ -5629,6 +5641,7 @@ final class Cli {
 		sysPrint('  importers     List files importing a given module (cross-file)\n');
 		sysPrint('  declares      Declaration site(s) of one named type (ambiguity check)\n');
 		sysPrint('  lint          Run analysis checks and report violations (e.g. unused-import)\n');
+		sysPrint('  lint-diff     Multiset diff of two lint --format json snapshots (blast radius)\n');
 		sysPrint('  inline        Inline a local variable into its uses\n');
 		sysPrint('  inline-method Inline a single-return function into its call sites + delete it\n');
 		sysPrint('  extract-var   Hoist an expression into a new local final\n');
@@ -14933,6 +14946,83 @@ final class Cli {
 		}
 		return diffPath != null ? runSweepDiff(filePath, diffPath) : EXIT_OK;
 	}
+	/**
+		 * `apq lint-diff --old <a.json> --new <b.json>` — the blast-radius gate
+		 * `tools/battery.sh` runs once per compared tree.
+		 *
+		 * Both arguments are `apq lint --format json` snapshots; the comparison is a
+		  * MULTISET diff over `(file, rule, severity, message)` with the two
+	 * normalizations `LintDiff` documents — `--root` makes a relative and an
+	 * absolute snapshot of one tree comparable, and `duplicate-code` messages are
+	 * digit-masked.
+	 *
+	 * The two non-zero exits are deliberately DIFFERENT, because a caller must be
+	 * able to waive one and never the other: 1 means the comparison ran and the
+	 * snapshots disagree (the blast radius moved — a slice that adds code expects
+	 * this), 2 means the comparison could not run at all (a snapshot missing,
+	 * unreadable or malformed, or the flags wrong). Collapsing them would let
+	 * `battery.sh --allow-blast` — reached for exactly when movement is expected —
+	 * silently accept a broken baseline as a passed gate.
+	 */
+	private static function runLintDiff(args: Array<String>): Int {
+		var oldPath: Null<String> = null;
+		var newPath: Null<String> = null;
+		var root: String = '';
+		var label: String = '';
+		var limit: Int = LINT_DIFF_EXAMPLE_LIMIT;
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--old':
+					oldPath = expectValue(args, ++i, '--old');
+				case '--new':
+					newPath = expectValue(args, ++i, '--new');
+				case '--root':
+					root = expectValue(args, ++i, '--root');
+				case '--label':
+					label = expectValue(args, ++i, '--label');
+				case '--limit':
+					limit = Std.parseInt(expectValue(args, ++i, '--limit')) ?? LINT_DIFF_EXAMPLE_LIMIT;
+				case '--lang':
+					// hxq shim auto-injects --lang haxe; harmless here (lint-diff
+					// reads two JSON reports, no grammar plugin needed). Accept +
+					// consume the value to keep shim invariance, as sweep does.
+					expectValue(args, ++i, '--lang');
+				case '-h', '--help':
+					printLintDiffUsage();
+					return EXIT_OK;
+				case _:
+					stderr('apq lint-diff: unknown option "$a"\n');
+					printLintDiffUsage();
+					return EXIT_USAGE;
+			}
+			i++;
+		}
+		if (oldPath == null || newPath == null) {
+			stderr('apq lint-diff: both --old <path> and --new <path> are required\n');
+			printLintDiffUsage();
+			return EXIT_USAGE;
+		}
+		final oldFile: String = oldPath;
+		final newFile: String = newPath;
+		var result: Null<LintDiffResult> = null;
+		try {
+			final before: Array<LintFindingJson> = LintDiff.parseReport(readFile(oldFile));
+			final after: Array<LintFindingJson> = LintDiff.parseReport(readFile(newFile));
+			result = LintDiff.compare(LintDiff.tally(before, root), LintDiff.tally(after, root));
+		} catch (exception: Exception) {
+			// EXIT_USAGE, not EXIT_RUNTIME: "could not compare" must not look like
+			// "compared, and things moved". A half-read baseline UNDERSTATES the
+			// blast radius, and the caller that waives movement must still fail on
+			// this.
+			stderr('apq lint-diff: cannot compare $oldFile against $newFile: ${exception.message}\n');
+			return EXIT_USAGE;
+		}
+		if (result == null) throw 'apq lint-diff: the comparison neither produced a result nor threw';
+		for (line in LintDiff.render(result, label, limit)) sysPrint('$line\n');
+		return result.addedTotal == 0 && result.removedTotal == 0 ? EXIT_OK : EXIT_RUNTIME;
+	}
 
 	/**
 	 * Per-fixture status diff between two sweep snapshots. THE answer to
@@ -15042,6 +15132,25 @@ final class Cli {
 		sysPrint('                  auto-rotates this before each sweep write), no path needed.\n');
 		sysPrint('  --save <path>   Copy the current snapshot to <path>. Use before a grammar\n');
 		sysPrint('                  slice to capture a baseline for `--prev` / `--diff` later.\n');
+		sysPrint('  -h, --help      Show this help\n');
+	}
+	private static function printLintDiffUsage(): Void {
+		sysPrint('Usage: apq lint-diff --old <a.json> --new <b.json> [--root <prefix>] [--label <name>]\n');
+		sysPrint('\n');
+		sysPrint('Compare two `apq lint --format json` snapshots as MULTISETS of\n');
+		sysPrint('(file, rule, severity, message) keys and report added and removed.\n');
+		sysPrint('Line, column and address are deliberately not part of the key —\n');
+		sysPrint('they move under any edit above them. Exit 0 when the two snapshots\n');
+		sysPrint('carry the same findings, 1 when anything moved, 2 when the\n');
+		sysPrint('comparison could not run (snapshot missing or malformed).\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --old <path>    Baseline snapshot (required)\n');
+		sysPrint('  --new <path>    Snapshot compared against it (required)\n');
+		sysPrint('  --root <prefix> Strip this path prefix from EITHER side before comparing,\n');
+		sysPrint('                  so a relative and an absolute snapshot of one tree agree\n');
+		sysPrint('  --label <name>  Name this comparison in the output (a battery run has two)\n');
+		sysPrint('  --limit <n>     Example keys shown per sign (default 20; -1 shows all)\n');
 		sysPrint('  -h, --help      Show this help\n');
 	}
 

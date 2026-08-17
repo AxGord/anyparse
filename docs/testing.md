@@ -130,6 +130,35 @@ Each benchmark outputs structured JSON with throughput, timing breakdowns, and m
 
 **Benchmarks are not in Phase 1.** They matter starting from Phase 2 when a macro-generated parser has a baseline to measure against. Phase 3 (Haxe formatter) and Phase 4 (AS3 converter) are where benchmarks become critical.
 
+### The profiling harness
+
+`tools/ParseProf.hx` is the one that exists today. It builds straight out of
+`src/` with the flags the shipped CLI uses, so what you profile is the codegen
+that ships:
+
+```sh
+haxe tools/parse-prof.hxml                                  # -> bin/parse-prof.js
+node bin/parse-prof.js tparse src 1 hxformat.json
+node --cpu-prof --cpu-prof-interval=200 bin/parse-prof.js rt src 3 hxformat.json
+```
+
+Arguments are `<mode> <dir-or-manifest> [reps] [hxformat.json]`; a directory is
+walked for `.hx`, anything else is read as a manifest of paths with `#` comments
+and `${NAME}` environment expansion (`tools/bench-corpus.txt` is the calibrated
+one). The modes stack from the IO floor upwards — `read`, `tparse` (Fast-mode
+parser), `walk` (plus the `QueryNode` projection), `write` (writer alone, with
+the feeding parse subtracted), `rt` (exactly what `hxq fmt` runs), `lint`, and
+`perfile` for a per-file TSV that feeds corpus stratification. Each workload
+runs inside its own `phaseXxx` function so a V8 `--cpu-prof` tree can be
+attributed by nearest phase ancestor.
+
+Measurement hygiene lives in `tools/bench-ab.sh`, and the rule it exists to
+enforce is that a before/after pair timed minutes apart on a shared machine
+drifts by more than the effects being measured: arms are interleaved and the
+per-arm median is what gets quoted. Battery timings are the opposite kind of
+number — deliberately concurrent wall clock — and must never be quoted as
+benchmark results.
+
 ## Layer 6: End-to-end integration tests
 
 Full pipeline tests on real-world data. Take a substantial input (the user's ax3 corpus, a large Haxe project, a corpus of JSON API responses), run it through the full pipeline (parse → transform → write), and compare against an expected output.
@@ -400,3 +429,70 @@ Exit status is 0 only when every shard is green *and* parity holds. A red shard,
 **When to shard, when not.** Shard the full battery during a slice — after the `APQ_TEST`-filtered edit loop, when you want the whole suite as a checkpoint. Run the **monolith** for the final pre-commit run of a slice or campaign, and any time the shard plan itself changed (a new sticky-state test, a new fixed shared path, a new class whose name overlaps another).
 
 Sharding moves the suite along two axes at once, and they fail in opposite directions. It changes **ordering** — cross-class effects like a warm cache one class leaves for the next, or a first-in-pays-the-warm-up cost, appear or vanish depending on which classes share a process, so a bug that only fires when A runs before B is invisible to a run that puts them in different processes. And it adds **concurrency** that the monolith never had: classes that used to be merely sequential now run simultaneously against one working tree, one `/tmp`, one `$HOME`. The monolith is the insurance against the first; the sticky group is the insurance against the second. One monolith per slice buys the first cheaply — nothing buys the second except keeping the shared-path inventory honest.
+
+## The per-slice battery
+
+Every slice ends with the same checks, and running them by hand is not only
+slow — the step most often skipped under time pressure is the one with no
+cached "before" arm to make it cheap, and a skipped step reads exactly like a
+passed one in a summary. `tools/battery.sh` is that sequence as one command
+with one verdict:
+
+```sh
+tools/battery.sh                    # build, suite + monolith cross-check, corpus,
+                                    #   fmt, jvm probe if the core moved, lint, blast
+tools/battery.sh --quick            # mid-slice: drop the monolith cross-check
+tools/battery.sh --base 29011103    # compare the blast radius against a named snapshot
+tools/battery.sh --snapshot         # on green, cache this HEAD as the next "before" arm
+```
+
+`ANYPARSE_HXFORMAT_FORK` must be set: without it the corpus layer skips in
+silence, and a battery that cannot tell "corpus clean" from "corpus not run"
+is worse than no corpus gate, so the script refuses rather than warns.
+
+The baseline is four plain files per commit in `$ANYPARSE_BLAST_CACHE`
+(`~/anyparse-blast-cache` by default) — two lint snapshots, the corpus sweep
+snapshot, and a two-integer suite line. Keeping them outside the repo is
+deliberate: they are machine-local measurement state, and a committed one would
+conflict on every slice. `--snapshot` writes them, and only on green, so a red
+or half-run tree cannot move the baseline under the next comparison.
+
+**A run fails on** a build error, a red or count-diverged suite, a non-empty
+`fmt --list`, a `--jvm` probe that stops compiling, more corpus failures than
+the base, or any blast-radius change not explicitly waved through with
+`--allow-blast`. **It only reports** suite totals growing, corpus totals
+improving, and the lint findings a slice's own new files bring with them —
+those still print through `lint-diff`, and passing `--allow-blast` after
+reading them is the intended way to accept a slice that adds code.
+
+Every format-aware step is delegated to the CLI this project already builds —
+`apq lint-diff` for the blast radius, `apq sweep` for the corpus, `apq
+test-summary` through `suite-shard.sh` — rather than reimplemented in shell.
+That is why the script needs neither `jq` nor `python`: anything that has to
+*understand* a file is a subcommand, testable in the suite and dogfooding our
+own JSON parser.
+
+`apq lint-diff --old A.json --new B.json [--root <prefix>] [--label <name>]`
+compares two `apq lint --format json` reports as multisets of
+`(file, rule, message)`. Line, column and address are deliberately not part of
+the key — they move under any edit above them, so keying on them would report
+half the tree after a one-line insertion. Two normalizations come from measured
+false positives rather than anticipation: `--root` strips a path prefix from
+whichever side carries it (a relative and an absolute snapshot of one tree
+otherwise disagreed on 1812 of 2954 findings), and it reaches the paths a
+message quotes as well as the `file` field, because `duplicate-code` names its
+partner block by path and line — whose digits are additionally masked to `#`,
+so a shift in the partner file is not a finding while a genuinely new duplicate
+still is.
+
+Its two non-zero exits are different on purpose, and the battery treats them
+differently: **1** means the comparison ran and the snapshots disagree, which
+`--allow-blast` waives; **2** means it could not run at all — a snapshot
+missing, unreadable or malformed, or the flags wrong — and that fails the
+battery whatever flags you pass. Waiving expected movement must never waive a
+gate that never executed.
+
+The battery prints where its own time went. Those numbers measure the battery,
+not the code: two builds and two lint arms run concurrently on purpose. Never
+quote them as benchmark results — benchmark arms run sequentially, see
+"The profiling harness" above.
