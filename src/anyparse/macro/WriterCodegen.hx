@@ -46,7 +46,7 @@ class WriterCodegen {
 			// ω-expression-case-flat-fanout: typed `Reflect.copy(opt)` shim,
 			// emitted unconditionally so triviaTryparseStarExpr's flat-fanout
 			// path can call it without per-grammar gating.
-			fields.push(copyOptField(optionsCT));
+			fields.push(copyOptField(optionsTypePath, optionsCT));
 			// Per-grammar opt-fanout context helpers — each set/clear pair is
 			// emitted only when the opt typedef declares the gating field, so
 			// grammars whose options struct omits it skip the helper.
@@ -249,6 +249,54 @@ class WriterCodegen {
 				return false;
 			case _:
 				return false;
+		}
+	}
+
+	/**
+	 * Every field name of the writer options struct, base-first.
+	 *
+	 * The options typedef is an intersection (`HxModuleWriteOptions =
+	 * WriteOptions & {...}`), and the compiler already merges both halves
+	 * into the resolved anon's own `fields` — measured: 210 for
+	 * `HxModuleWriteOptions`, 21 base + 189 own. The `AExtend` walk is
+	 * therefore not what makes the list complete; it only groups the base's
+	 * fields first, and it is insurance against a future compiler
+	 * representation that leaves the halves unmerged.
+	 *
+	 * Order inside each group is whatever `AnonType.fields` yields, which is
+	 * ALPHABETICAL, not declaration order — so the emitted clone does NOT
+	 * share a hidden class with a format's hand-written `defaultWriteOptions`
+	 * literal. Harmless at the measured ratio (a handful of root objects
+	 * against ~246 000 clones), but the macro API exposes no declaration
+	 * order, so matching it is not a cheap change.
+	 *
+	 * An empty result means the path did not resolve to an anon; the caller
+	 * falls back to `Reflect.copy` rather than emitting a literal that would
+	 * drop fields.
+	 */
+	private static function optionsFieldNames(optionsTypePath: String): Array<String> {
+		final t: Null<haxe.macro.Type> = try Context.getType(optionsTypePath) catch (e: haxe.Exception) null;
+		final names: Array<String> = [];
+		if (t != null) collectAnonFieldNames(t, names);
+		return names;
+	}
+
+	private static function collectAnonFieldNames(t: haxe.macro.Type, out: Array<String>): Void {
+		switch (t) {
+			case TLazy(f):
+				collectAnonFieldNames(f(), out);
+			case TType(_, _):
+				collectAnonFieldNames(Context.follow(t, true), out);
+			case TAnonymous(aRef):
+				final anon: haxe.macro.Type.AnonType = aRef.get();
+				switch (anon.status) {
+					case AExtend(tl):
+						for (base in tl.get()) collectAnonFieldNames(base, out);
+					case _:
+				}
+				for (cf in anon.fields) if (!out.contains(cf.name))
+					out.push(cf.name);
+			case _:
 		}
 	}
 
@@ -483,29 +531,58 @@ class WriterCodegen {
 	/**
 	 * ω-expression-case-flat-fanout helper — typed shallow copy of `opt`.
 	 *
-	 * `Reflect.copy(o)` returns `Null<T>` which strict null safety refuses
-	 * to narrow at the call site. The helper carries `@:nullSafety(Off)`
-	 * locally so the cast to non-nullable T resolves without leaking
-	 * `untyped`/`Dynamic` into the callers. Used by `triviaTryparseStarExpr`
-	 * when a Star carries `@:fmt(flatChildOpt(...))` — the runtime flat
-	 * branch needs a per-call mutable copy to override knob fields without
+	 * Emits a monomorphic structural clone: an object literal naming every
+	 * field of the options struct (`{f1: o.f1, …}`), which the macro knows
+	 * at compile time. `Reflect.copy` on js is a `for…in` walk with a
+	 * dynamic read per field and measured 50.7 % of writer self-CPU
+	 * (245 912 copies × 210 fields on the anyparse tree); the literal is one
+	 * hidden class and one store per field. `Object.assign({}, o)` is NOT an
+	 * alternative — it measured 1.8× worse than `Reflect.copy`.
+	 *
+	 * The helper is deliberately NOT `AInline`: a 210-field literal expanded
+	 * into the ~1000 call sites would add megabytes to the js bundle and
+	 * blow the JVM 64 KB method-body limit. One out-of-line function keeps a
+	 * single literal site, so every clone shares one hidden class.
+	 *
+	 * Falls back to `Reflect.copy` when the options type does not resolve
+	 * to an anon (no field list to enumerate), and warns at compile time so
+	 * a grammar silently losing the fast path is visible. Only that branch
+	 * returns `Null<T>` — which strict null safety refuses to narrow at the
+	 * call site — so `@:nullSafety(Off)` is attached to it alone; the
+	 * literal path stays strict-checked.
+	 *
+	 * Used by `triviaTryparseStarExpr` when a Star carries
+	 * `@:fmt(flatChildOpt(...))` and by every opt-fanout helper below — the
+	 * runtime needs a per-call mutable copy to override knob fields without
 	 * touching the shared `opt` singleton.
 	 */
-	private static function copyOptField(optionsCT: ComplexType): Field {
+	private static function copyOptField(optionsTypePath: String, optionsCT: ComplexType): Field {
+		final names: Array<String> = optionsFieldNames(optionsTypePath);
+		final pos: Position = Context.currentPos();
+		final fallback: Bool = names.length == 0;
+		if (fallback)
+			Context.warning(
+				'WriterCodegen: options type $optionsTypePath did not resolve to an anon — _copyOpt falls back to Reflect.copy', pos
+			);
+		final body: Expr = if (fallback)
+			macro {
+				final _c: $optionsCT = cast Reflect.copy(o);
+				if (_c == null) throw 'WriterCodegen._copyOpt: Reflect.copy returned null';
+				return _c;
+			}
+		else {
+			final objFields: Array<ObjectField> = [
+				for (n in names) { field: n, expr: { expr: EField(macro o, n), pos: pos } }
+			];
+			final literal: Expr = { expr: EObjectDecl(objFields), pos: pos };
+			macro return $literal;
+		};
 		return {
 			name: '_copyOpt',
-			access: [APrivate, AStatic, AInline],
-			meta: [{ name: ':nullSafety', params: [macro Off], pos: Context.currentPos() }],
-			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
-				ret: optionsCT,
-				expr: macro {
-					final _c: $optionsCT = cast Reflect.copy(o);
-					if (_c == null) throw 'WriterCodegen._copyOpt: Reflect.copy returned null';
-					return _c;
-				},
-			}),
-			pos: Context.currentPos(),
+			access: [APrivate, AStatic],
+			meta: fallback ? [{ name: ':nullSafety', params: [macro Off], pos: pos }] : [],
+			kind: FFun({ args: [{ name: 'o', type: optionsCT }], ret: optionsCT, expr: body }),
+			pos: pos,
 		};
 	}
 
