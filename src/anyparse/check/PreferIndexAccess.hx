@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -32,7 +33,7 @@ using StringTools;
  * through `RefactorSupport.implicitThisMemberTypeSource`) OR a PATH
  * — a chain of plain field accesses over an identifier or `this` (`this.m`, `obj.m`, `a.b.c`),
  * whose root resolves the same way and whose field segments resolve cross-file through a
- * `SymbolIndex` (`RefactorSupport.pathRootTypeName` / `pathFinalMemberTypeSource`). An
+ * `SymbolIndex` (`NominalTypes.pathRootTypeName` / `pathFinalMemberTypeSource`). An
  * unresolvable receiver, a `StringMap` / `IntMap` / other concrete-map or unrelated type, and
  * a receiver with a call / index access / `?.` link anywhere in its path are all conservative
  * misses — the rule never flags without positive Map proof, since rewriting a non-Map to `[]`
@@ -246,7 +247,7 @@ final class PreferIndexAccess implements Check {
 		recv: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, declaredTypeSources: Map<Int, String>, cfg: Cfg,
 		symbols: () -> Null<SymbolIndex>, file: String, invisibleBinders: () -> Null<Array<String>>
 	): Bool {
-		final path: Null<Array<String>> = RefactorSupport.pathOf(recv, cfg.identKind, cfg.fieldKind);
+		final path: Null<Array<String>> = NominalTypes.pathOf(recv, cfg.identKind, cfg.fieldKind);
 		if (path == null) return false;
 		if (path.length == 1) {
 			final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(recv, root, cfg.shape);
@@ -258,10 +259,10 @@ final class PreferIndexAccess implements Check {
 		if (index == null) return false;
 		// A value / this root resolves through the simple-name segment walk; a static TYPE-name
 		// root (no value binding) resolves import-aware from the reference file's scope.
-		final rootType: Null<String> = RefactorSupport.pathRootTypeName(recv, root, declaredTypes, cfg.shape);
-		final src: Null<String> = RefactorSupport.pathReceiverMemberTypeSource(path, rootType, index, file);
+		final rootType: Null<String> = NominalTypes.pathRootTypeName(recv, root, declaredTypes, cfg.shape);
+		final src: Null<String> = NominalTypes.pathReceiverMemberTypeSource(path, rootType, index, file);
 		if (src == null) return false;
-		final nominal: Null<String> = RefactorSupport.outerNominalOf(src);
+		final nominal: Null<String> = NominalTypes.outerNominalOf(src);
 		return nominal != null && nominalIsMap(nominal, src, cfg);
 	}
 
@@ -280,7 +281,7 @@ final class PreferIndexAccess implements Check {
 		if (index == null) return false;
 		final src: Null<String> = RefactorSupport.implicitThisMemberTypeSource(recv, root, cfg.shape, index, file, invisibleBinders());
 		if (src == null) return false;
-		final nominal: Null<String> = RefactorSupport.outerNominalOf(src);
+		final nominal: Null<String> = NominalTypes.outerNominalOf(src);
 		return nominal != null && nominalIsMap(nominal, src, cfg);
 	}
 
@@ -342,7 +343,7 @@ final class PreferIndexAccess implements Check {
 		final method: Null<String> = callee.name;
 		if (callee.kind != cfg.fieldKind || method == null || callee.children.length != 1) return null;
 		final recv: QueryNode = callee.children[0];
-		if (RefactorSupport.pathOf(recv, cfg.identKind, cfg.fieldKind) == null) return null;
+		if (NominalTypes.pathOf(recv, cfg.identKind, cfg.fieldKind) == null) return null;
 		final isSet: Bool = if (method == GET_METHOD && call.children.length == GET_ARG_COUNT + 1)
 			false;
 		else if (method == SET_METHOD && call.children.length == SET_ARG_COUNT + 1)

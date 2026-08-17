@@ -14,6 +14,7 @@ import anyparse.check.Check.OracleAssisted;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.LintConfig;
+import anyparse.query.NominalTypes;
 
 using StringTools;
 
@@ -602,7 +603,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 *
 	 *  - a container with no written arguments, or a nominal absent from the table (a user abstract
 	 *    with its own `@:arrayAccess`, whose return this cannot know);
-	 *  - a nominal a NON-std indexed file declares (`RefactorSupport.shadowedByNonStdType`). The
+	 *  - a nominal a NON-std indexed file declares (`NominalTypes.shadowedByNonStdType`). The
 	 *    table is keyed on the SIMPLE name, so a project `Vector<T>` with its own `@:arrayAccess`
 	 *    would otherwise be read as the stdlib one; every sibling arm carries the same shadow gate;
 	 *  - a `Dynamic` element. `Array<Dynamic>[0]` does NOT infer `Dynamic` — the compiler leaves the
@@ -626,11 +627,11 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			TypeResolver.identDeclaredTypeSource(init.children[0], shape, tree, declaredTypeSources, true);
 		if (containerSource == null) return null;
 		final container: String = unwrapNullable(containerSource, shape);
-		final nominal: Null<String> = RefactorSupport.outerNominalOf(container);
-		final args: Null<Array<String>> = RefactorSupport.typeArgumentSourcesOf(container);
+		final nominal: Null<String> = NominalTypes.outerNominalOf(container);
+		final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(container);
 		if (nominal == null || args == null) return null;
 		final at: Null<Int> = elementParams[nominal];
-		if (at == null || at >= args.length || RefactorSupport.shadowedByNonStdType(index, nominal)) return null;
+		if (at == null || at >= args.length || NominalTypes.shadowedByNonStdType(index, nominal)) return null;
 		final element: String = args[at];
 		if (element == shape.rawDynamicTypeName) return null;
 		final annotation: String = (shape.nullableIndexTypeNames ?? []).contains(nominal) ? 'Null<$element>' : element;
@@ -836,7 +837,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 * The fixed return type of a static call `Type.method(...)` whose `Type.method` names a
 	 * `shape.staticMethodReturns` entry (`Context.resolvePath` → `String`, `Context.currentPos`
 	 * → `haxe.macro.Expr.Position`, `Date.now` → `Date`, …). The shape match and the genuine-TYPE
-	 * receiver gate live in the shared `RefactorSupport.tabledStaticCall`; what stays here is the
+	 * receiver gate live in the shared `NominalTypes.tabledStaticCall`; what stays here is the
 	 * SHADOW POLICY, which differs from the deep resolver's and is the only reason the two are not
 	 * one function — see the comment in the body. Null when the shape does not match, the method is
 	 * untabled, the receiver is not a provable type reference, or an indexed type carries the name.
@@ -846,7 +847,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	private static function staticMethodReturnType(
 		init: QueryNode, shape: RefShape, tree: QueryNode, index: Null<SymbolIndex>
 	): Null<String> {
-		final hit: Null<{ typeName: String, returnSource: String }> = RefactorSupport.tabledStaticCall(init, tree, shape);
+		final hit: Null<{ typeName: String, returnSource: String }> = NominalTypes.tabledStaticCall(init, tree, shape);
 		// The table is the FALLBACK for a type absent from the resolution index (a config-less
 		// run): its values are deliberately import-safe (`sys.io.FileOutput` fully qualified).
 		// When the type IS indexed (std joined via `StdResolver`, or a same-named project type),

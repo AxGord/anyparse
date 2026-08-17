@@ -4,6 +4,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.check.LoopScan.LoopSeams;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -178,7 +179,7 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 		// A container that RESOLVES to something other than `Array` has no key-value iteration to
 		// offer, so the message would be advice that does not compile; only an UNRESOLVED one keeps
 		// the report-only tolerance, where the suggestion is a lead rather than a claim.
-		return collectionTypeSource != null && RefactorSupport.outerNominalOf(collectionTypeSource) != ARRAY_TYPE ? null : {
+		return collectionTypeSource != null && NominalTypes.outerNominalOf(collectionTypeSource) != ARRAY_TYPE ? null : {
 			forSpan: forSpan,
 			declSpan: declSpan,
 			keyVar: h.keyVar,
@@ -271,10 +272,10 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 	 */
 	private static function provablyArrayElement(m: Match): Bool {
 		final collectionType: Null<String> = m.collectionTypeSource;
-		if (collectionType == null || RefactorSupport.outerNominalOf(collectionType) != ARRAY_TYPE) return false;
+		if (collectionType == null || NominalTypes.outerNominalOf(collectionType) != ARRAY_TYPE) return false;
 		final declared: Null<String> = m.declTypeSource;
 		if (declared == null) return true;
-		final args: Null<Array<String>> = RefactorSupport.typeArgumentSourcesOf(collectionType);
+		final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(collectionType);
 		return args != null && args.length == ARRAY_TYPE_ARGUMENTS && StringTools.trim(args[0]) == StringTools.trim(declared);
 	}
 

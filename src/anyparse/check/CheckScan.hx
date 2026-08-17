@@ -12,6 +12,7 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.Refs;
+import anyparse.query.NominalTypes;
 
 using StringTools;
 
@@ -286,7 +287,7 @@ final class CheckScan {
 	 * `BooleanLogicSupport.negateCondition`. Answers a node's declared type nominal through the
 	 * run's resolution scope, or null for anything it cannot pin, which keeps the wrap.
 	 *
-	 * The probe is `RefactorSupport.expressionTypeNominal`, run in its DEEP mode — the
+	 * The probe is `NominalTypes.expressionTypeNominal`, run in its DEEP mode — the
 	 * `ChainTypeContext` built below. On top of the plain identifier / field-path answer it
 	 * resolves four further shapes:
 	 *
@@ -303,7 +304,7 @@ final class CheckScan {
 	 * guard-family consumer relies on is untouched.
 	 *
 	 * The deep mode stays an OPT-IN parameter rather than a widening of
-	 * `RefactorSupport.valueTypeNominal` because its other consumers read a resolved nominal as a
+	 * `NominalTypes.valueTypeNominal` because its other consumers read a resolved nominal as a
 	 * licence to ACT, so each has to decide for itself. `map-keys-lookup` has not opted in;
 	 * `prefer-static-extension` HAS, deliberately — see `PreferStaticExtension.receiverNominal` for
 	 * why each deep arm is type-CORRECT and fail-closed rather than merely more permissive, which is
@@ -323,7 +324,7 @@ final class CheckScan {
 		// `Array.length` resolves; the report index alone would stop at the project boundary.
 		final resolved: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
 		final chain: ChainTypeContext = { declaredTypeSources: provider.declaredTypeSources(source), source: source };
-		return node -> RefactorSupport.expressionTypeNominal(node, tree, shape, declaredTypes, resolved, file, chain);
+		return node -> NominalTypes.expressionTypeNominal(node, tree, shape, declaredTypes, resolved, file, chain);
 	}
 
 	/**

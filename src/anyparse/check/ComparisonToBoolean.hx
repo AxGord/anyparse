@@ -9,6 +9,7 @@ import anyparse.runtime.Span;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeInfoProvider;
 import haxe.Exception;
+import anyparse.query.NominalTypes;
 
 using StringTools;
 
@@ -324,7 +325,7 @@ final class ComparisonToBoolean implements Check {
 		final lookup: Null<PinnedLookup> = pinnedLookup(other.children[0], field, shape, proof);
 		if (lookup == null) return null;
 		final memberSource: Null<String> = lookup.index.resolvePathFinalMemberTypeSource(proof.file, lookup.recvType, [field]);
-		return memberSource == null ? null : RefactorSupport.outerNominalOf(memberSource);
+		return memberSource == null ? null : NominalTypes.outerNominalOf(memberSource);
 	}
 
 	/**
@@ -374,7 +375,7 @@ final class ComparisonToBoolean implements Check {
 	 * `RefShape.instanceMethodReturns` answers BEHIND the index, for the stdlib methods whose own
 	 * source writes no return type — `haxe.ds.Map.exists` forwards to `IMap.exists(k:K):Bool` with
 	 * the annotation left inferred, so no resolution scope can read one. A written annotation always
-	 * wins over it, and `RefactorSupport.shadowedByNonStdType` — the same guard the sibling
+	 * wins over it, and `NominalTypes.shadowedByNonStdType` — the same guard the sibling
 	 * `staticMethodReturns` table rides — refuses it the moment ANY non-std file declares the
 	 * receiver's simple name. That guard is the load-bearing one, NOT `memberLookupIsPinned`: a
 	 * single project type named `Map` passes the pin, and its own `exists` may be unannotated (a
@@ -393,9 +394,9 @@ final class ComparisonToBoolean implements Check {
 		final recvType: String = lookup.recvType;
 		final written: Null<String> = lookup.index.returnNominalOf(recvType, method);
 		if (written != null) return written;
-		if (RefactorSupport.shadowedByNonStdType(lookup.index, recvType)) return null;
+		if (NominalTypes.shadowedByNonStdType(lookup.index, recvType)) return null;
 		final tabled: Null<String> = seams.instanceMethodReturns['$recvType.$method'];
-		return tabled == null ? null : RefactorSupport.outerNominalOf(tabled);
+		return tabled == null ? null : NominalTypes.outerNominalOf(tabled);
 	}
 
 	/**
@@ -443,7 +444,7 @@ final class ComparisonToBoolean implements Check {
 	 *  - a count of ZERO: an out-of-scope type nothing indexed declares. Every index-backed lookup then
 	 *    answers null of its own accord, so the excusal cannot license a proof — it only lets the
 	 *    stdlib table be REACHED, and that table has its own, stricter shadowing guard
-	 *    (`RefactorSupport.shadowedByNonStdType`) which this predicate must not be mistaken for.
+	 *    (`NominalTypes.shadowedByNonStdType`) which this predicate must not be mistaken for.
 	 *
 	 * `aliasTargetNominal` is null for every non-alias declaration AND for an alias whose target the
 	 * builder could not read as a nominal path, so an unreadable alias counts as independent and keeps
@@ -463,7 +464,7 @@ final class ComparisonToBoolean implements Check {
 		final declaredTypes: Null<Map<Int, String>> = proof.declaredTypes;
 		return declaredTypes == null
 			? null
-			: TypeResolver.simpleNominalName(RefactorSupport.valueTypeNominal(recv, proof.root, shape, declaredTypes, index, proof.file));
+			: TypeResolver.simpleNominalName(NominalTypes.valueTypeNominal(recv, proof.root, shape, declaredTypes, index, proof.file));
 	}
 
 	/**

@@ -165,7 +165,7 @@ typedef TypeDeclInfo = {
 	 *
 	 * The list is POSITIONAL — its index IS the argument index a consumer substitutes through — so
 	 * a phantom entry is worse than an empty list: it shifts every parameter after it. That is why
-	 * the header segmentation (`RefactorSupport.splitTypeArgumentList`) has to know every delimiter
+	 * the header segmentation (`NominalTypes.splitTypeArgumentList`) has to know every delimiter
 	 * a Haxe constraint may nest a comma inside, structures (`<T:{a:Int, b:Int}>`) included.
 	 */
 	var typeParamNames: Array<String>;
@@ -395,7 +395,7 @@ final class SymbolIndex {
 	 * walk. Null on every unresolved / ambiguous link, exactly like the plain walk.
 	 *
 	 * "Aborts this walk" is the honest scope: the caller
-	 * (`RefactorSupport.pathReceiverMemberTypeSource`) treats a null the same way it treats one from
+	 * (`NominalTypes.pathReceiverMemberTypeSource`) treats a null the same way it treats one from
 	 * the plain walk and drops to its package-blind fallback, which may still answer the verbatim
 	 * parameter source. That keeps the deep answer a superset of the shallow one, and a bare
 	 * parameter name is not a type any consumer of this chain acts on.
@@ -1301,9 +1301,9 @@ final class SymbolIndex {
 		var args: Array<String> = [];
 		var startName: String = startSource;
 		if (substitute) {
-			final startArgs: Null<Array<String>> = RefactorSupport.typeArgumentSourcesOf(startSource);
+			final startArgs: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(startSource);
 			if (startArgs != null) {
-				final head: Null<String> = RefactorSupport.outerNominalOf(startSource);
+				final head: Null<String> = NominalTypes.outerNominalOf(startSource);
 				if (head == null) return null;
 				args = startArgs;
 				startName = head;
@@ -1317,7 +1317,7 @@ final class SymbolIndex {
 			if (memberSource == null) return null;
 			final effective: Null<String> = substitute ? substitutedMemberSource(cur, memberPath[i], memberSource, args) : memberSource;
 			if (effective == null) return null;
-			if (substitute) args = RefactorSupport.typeArgumentSourcesOf(effective) ?? [];
+			if (substitute) args = NominalTypes.typeArgumentSourcesOf(effective) ?? [];
 			final nominal: String = StringTools.trim(effective.split('<')[0]);
 			current = resolveTypeRef(nominal, cur.file);
 		}

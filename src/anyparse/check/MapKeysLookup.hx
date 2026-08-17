@@ -7,6 +7,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
 import anyparse.query.RefactorSupport;
+import anyparse.query.NominalTypes;
 
 using StringTools;
 
@@ -277,13 +278,13 @@ final class MapKeysLookup implements Check {
 		// explicitly. Reading `children[0]` used to reach the same refusal by accident — the binder
 		// sits ahead of the iterable, so `keysReceiver` rejected the binder rather than the loop —
 		// and taking the real iterable removes that accident along with the trap.
-		if (RefactorSupport.hasIterationValueBinder(loop, cfg.valueBinderKinds)) return null;
-		final iterable: Null<QueryNode> = RefactorSupport.iterationIterable(loop, cfg.valueBinderKinds);
+		if (NominalTypes.hasIterationValueBinder(loop, cfg.valueBinderKinds)) return null;
+		final iterable: Null<QueryNode> = NominalTypes.iterationIterable(loop, cfg.valueBinderKinds);
 		if (iterable == null) return null;
 		final body: QueryNode = loop.children[loop.children.length - 1];
 		final recv: Null<QueryNode> = keysReceiver(iterable, cfg);
 		if (recv == null) return null;
-		final path: Null<Array<String>> = RefactorSupport.pathOf(recv, cfg.identKind, cfg.fieldKind);
+		final path: Null<Array<String>> = NominalTypes.pathOf(recv, cfg.identKind, cfg.fieldKind);
 		return path == null ? null : {
 			keyName: keyName,
 			iterable: iterable,
@@ -299,7 +300,7 @@ final class MapKeysLookup implements Check {
 		final callee: QueryNode = iterable.children[0];
 		if (callee.kind != cfg.fieldKind || callee.name != KEYS_METHOD || callee.children.length != 1) return null;
 		final recv: QueryNode = callee.children[0];
-		return RefactorSupport.pathOf(recv, cfg.identKind, cfg.fieldKind) == null ? null : recv;
+		return NominalTypes.pathOf(recv, cfg.identKind, cfg.fieldKind) == null ? null : recv;
 	}
 
 	/**
@@ -308,7 +309,7 @@ final class MapKeysLookup implements Check {
 	 * and the per-link kind check keeps `a.b` from matching the differently-evaluated `a?.b`.
 	 */
 	private static function isPath(node: QueryNode, path: Array<String>, cfg: Cfg): Bool {
-		final other: Null<Array<String>> = RefactorSupport.pathOf(node, cfg.identKind, cfg.fieldKind);
+		final other: Null<Array<String>> = NominalTypes.pathOf(node, cfg.identKind, cfg.fieldKind);
 		if (other == null || other.length != path.length) return false;
 		for (i in 0...path.length) if (other[i] != path[i]) return false;
 		return true;
@@ -376,7 +377,7 @@ final class MapKeysLookup implements Check {
 
 	/** `pathOf` with a leading self-reference segment dropped, so `this.files` and `files` denote one path. */
 	private static function memberPathOf(node: QueryNode, cfg: Cfg): Null<Array<String>> {
-		final p: Null<Array<String>> = RefactorSupport.pathOf(node, cfg.identKind, cfg.fieldKind);
+		final p: Null<Array<String>> = NominalTypes.pathOf(node, cfg.identKind, cfg.fieldKind);
 		return p == null ? null : stripSelf(p, cfg);
 	}
 
@@ -479,7 +480,7 @@ final class MapKeysLookup implements Check {
 	): Null<String> {
 		// A value / this root walks the simple-name segments; a static TYPE-name root (no value
 		// binding) resolves import-aware from the reference file's scope.
-		return RefactorSupport.valueTypeNominal(recv, root, cfg.shape, declaredTypes, symbols(), file);
+		return NominalTypes.valueTypeNominal(recv, root, cfg.shape, declaredTypes, symbols(), file);
 	}
 
 	/** Mirror of `walk` for the fix path: emit the key-value rewrite for each wanted loop. */
@@ -491,7 +492,7 @@ final class MapKeysLookup implements Check {
 			// Keyed on the same child `match` spans the violation at — the first NON-binder one.
 			// A positional `children[0]` here reads a key-value loop's binder instead, so the two
 			// walks disagree on the key and `--fix` silently declines a violation `lint` reported.
-			final iterable: Null<QueryNode> = RefactorSupport.iterationIterable(node, cfg.valueBinderKinds);
+			final iterable: Null<QueryNode> = NominalTypes.iterationIterable(node, cfg.valueBinderKinds);
 			final iterSpan: Null<Span> = iterable?.span;
 			if (iterSpan != null && wanted.contains('${iterSpan.from}:${iterSpan.to}')) {
 				final e: Null<Array<{ span: Span, text: String }>> = buildMapEdits(node, source, cfg);

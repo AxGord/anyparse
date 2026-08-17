@@ -682,7 +682,7 @@ final class FieldWriteIndex {
 		final params: Null<String> = parsed.params;
 		final at: Null<Int> = c.elementTypeParams[parsed.name];
 		if (params == null || at == null) return null;
-		final split: Array<String> = RefactorSupport.splitTypeArgumentList(params);
+		final split: Array<String> = NominalTypes.splitTypeArgumentList(params);
 		return at < split.length ? split[at] : null;
 	}
 
@@ -779,7 +779,7 @@ final class FieldWriteIndex {
 		}
 		if (depth != 0) return [];
 		final out: Array<String> = [];
-		for (p in RefactorSupport.splitTypeArgumentList(source.substring(start, j - 1))) {
+		for (p in NominalTypes.splitTypeArgumentList(source.substring(start, j - 1))) {
 			final colon: Int = p.indexOf(':');
 			final nm: String = StringTools.trim(colon < 0 ? p : p.substring(0, colon));
 			if (isDottedIdentPath(nm) && !out.contains(nm)) out.push(nm);

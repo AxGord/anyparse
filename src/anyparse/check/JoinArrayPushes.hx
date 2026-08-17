@@ -5,6 +5,7 @@ import anyparse.check.PurityScan.PurityCtx;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.FieldWriteIndex;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -124,7 +125,7 @@ using StringTools;
  * ## Gates both paths share
  *
  * - **The binding is provably an ARRAY.** When it carries an explicit type annotation, that
- *   annotation's OUTER NOMINAL name — `RefactorSupport.outerNominalOf`, which drops the package
+ *   annotation's OUTER NOMINAL name — `NominalTypes.outerNominalOf`, which drops the package
  *   qualifier and the type arguments, so `pkg.Array<Int>` reads as `Array` — must be a
  *   `RefShape.arrayTypeNames` entry, and that seam is documented as holding SIMPLE names for
  *   exactly this reason. A head the annotation reader cannot attribute to the declared name
@@ -419,7 +420,7 @@ final class JoinArrayPushes implements Check {
 		return switch RefactorSupport.declaredType(ctx.source, declSpan, literal, name) {
 			case Absent: true;
 			case Written(text):
-				final root: Null<String> = RefactorSupport.outerNominalOf(text);
+				final root: Null<String> = NominalTypes.outerNominalOf(text);
 				root != null && ctx.seams.arrayTypeNames.contains(root);
 			case Unreadable: false;
 		};

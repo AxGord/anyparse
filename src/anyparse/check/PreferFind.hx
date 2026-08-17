@@ -9,6 +9,7 @@ import anyparse.runtime.Span;
 import haxe.Exception;
 import anyparse.query.RefactorSupport;
 import anyparse.check.UsingScan.UsingHeader;
+import anyparse.query.NominalTypes;
 
 using StringTools;
 using Lambda;
@@ -445,7 +446,7 @@ final class PreferFind implements Check {
 		cond: QueryNode,
 		then: QueryNode
 	}> {
-		if (forNode.kind != s.forStmtKind || RefactorSupport.hasIterationValueBinder(forNode, s.valueBinderKinds)) return null;
+		if (forNode.kind != s.forStmtKind || NominalTypes.hasIterationValueBinder(forNode, s.valueBinderKinds)) return null;
 		final operands: Array<QueryNode> = RefactorSupport.loopOperands(forNode, s.valueBinderKinds);
 		final loopVar: Null<String> = forNode.name;
 		if (loopVar == null || operands.length != FOR_CHILD_COUNT) return null;

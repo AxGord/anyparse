@@ -6,6 +6,7 @@ import anyparse.check.LoopScan.LoopSeams;
 import anyparse.check.UsingScan.UsingHeader;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -328,7 +329,7 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 	/** The bound expression counting `collection`, or null when its declared container is not one this rewrite can spell. */
 	private static function boundOf(collection: String, typeSource: Null<String>): Null<Bound> {
 		if (typeSource == null || !stdlibSpelling(typeSource)) return null;
-		final nominal: Null<String> = RefactorSupport.outerNominalOf(typeSource);
+		final nominal: Null<String> = NominalTypes.outerNominalOf(typeSource);
 		return if (nominal == null)
 			null
 		else if (LENGTH_TYPES.contains(nominal))
@@ -356,7 +357,7 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 	private static function declaredNonInt(from: Int, types: Null<Map<Int, String>>): Bool {
 		if (types == null) return false;
 		final source: Null<String> = types[from];
-		return source != null && RefactorSupport.outerNominalOf(source) != INT_TYPE;
+		return source != null && NominalTypes.outerNominalOf(source) != INT_TYPE;
 	}
 
 	/**

@@ -21,7 +21,7 @@ import anyparse.runtime.Span;
  * The shape is not only hand-written: it is what the guard family's inverter EMITS when its
  * order gate cannot prove an ordered comparison free of NaN and `null` — it then wraps the
  * whole condition `!( … )` rather than flipping `<` to `>=`. Once the gate learns the type
- * (see `RefactorSupport.expressionTypeNominal`), the leftover wraps are exactly this rule's
+ * (see `NominalTypes.expressionTypeNominal`), the leftover wraps are exactly this rule's
  * input, so the two compose across `--fix` passes.
  *
  * ## The worth gate — a strict reduction, not a distribution

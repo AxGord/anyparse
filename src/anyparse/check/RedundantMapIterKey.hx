@@ -2,8 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -110,7 +110,7 @@ final class RedundantMapIterKey implements Check {
 	 */
 	private static function keyPrefixSpan(node: QueryNode, source: String, valueBinderKinds: Array<String>): Null<Span> {
 		final forSpan: Null<Span> = node.span;
-		final binder: Null<QueryNode> = RefactorSupport.iterationValueBinder(node, valueBinderKinds);
+		final binder: Null<QueryNode> = NominalTypes.iterationValueBinder(node, valueBinderKinds);
 		final valueSpan: Null<Span> = binder?.span;
 		if (forSpan == null || valueSpan == null) return null;
 		final open: Int = source.indexOf('(', forSpan.from);

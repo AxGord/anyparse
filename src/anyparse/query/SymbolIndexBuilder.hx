@@ -177,7 +177,7 @@ final class SymbolIndexBuilder {
 				final supersRaw: Array<String> = collectSupertypesRaw(node);
 				final isAbstract: Bool = abstractKinds.contains(typeDecl.kind);
 				final paramsText: Null<String> = declTypeParamListText(source, typeDecl);
-				final paramSegments: Array<String> = paramsText == null ? [] : RefactorSupport.splitTypeArgumentList(paramsText);
+				final paramSegments: Array<String> = paramsText == null ? [] : NominalTypes.splitTypeArgumentList(paramsText);
 				types.push({
 					name: typeDecl.name,
 					kind: typeDecl.kind,
@@ -754,7 +754,7 @@ final class SymbolIndexBuilder {
 	 * other declaration. The projection carries NO alias link — a `TypedefDecl` aliasing a named
 	 * type has no children at all — so the target is read from the declaration's own source: the
 	 * text after the first `=`, stripped of a trailing `;`, accepted only when
-	 * `RefactorSupport.outerNominalOf` recognises it as a nominal path (`Widget`, `pkg.Deep.Thing`,
+	 * `NominalTypes.outerNominalOf` recognises it as a nominal path (`Widget`, `pkg.Deep.Thing`,
 	 * `Array<Int>`). Null must be read by every consumer as "the alias is not resolvable", never
 	 * as "it aliases nothing". Four shapes yield it:
 	 *
@@ -775,7 +775,7 @@ final class SymbolIndexBuilder {
 		final body: String = tail.endsWith(';') ? tail.substring(0, tail.length - 1) : tail;
 		// A `->` anywhere makes the alias a function type: its head is not the type the alias
 		// denotes. Over-refusing a `Holder<Int -> Void>` argument the same way is harmless.
-		return body.indexOf('->') != -1 ? null : RefactorSupport.outerNominalOf(body.trim());
+		return body.indexOf('->') != -1 ? null : NominalTypes.outerNominalOf(body.trim());
 	}
 
 }

@@ -4,8 +4,8 @@ import anyparse.check.CasePatternScan.CaseSeams;
 import anyparse.check.CasePatternScan.PatternBinder;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
@@ -71,7 +71,7 @@ using StringTools;
  *
  * A Haxe `switch` over an `enum`, an `enum abstract` or `Bool` is EXHAUSTIVENESS-CHECKED: its
  * arm list is part of the compile, and dropping an arm there can turn a compiling switch into
- * a non-compiling one. So the subject's type is resolved (`RefactorSupport.valueTypeNominal`,
+ * a non-compiling one. So the subject's type is resolved (`NominalTypes.valueTypeNominal`,
  * through the symbol index, so a `d.code` / `S.mode` path resolves too) and matched against
  * the `openSwitchSubjectTypes` WHITELIST — `Int` / `UInt` / `Float` / `Single` / `String` for
  * Haxe, the types no arm list is ever checked against. An unresolved subject reads as null and
@@ -306,7 +306,7 @@ final class EmptyCaseArm implements Check {
 	 * direction, at the cost of one exotic shape nobody writes.
 	 */
 	private static function subjectOpen(ctx: Ctx, subject: QueryNode): Bool {
-		final nominal: Null<String> = RefactorSupport.valueTypeNominal(
+		final nominal: Null<String> = NominalTypes.valueTypeNominal(
 			subject, ctx.root, ctx.scan.shape, ctx.declaredTypes, ctx.index, ctx.file
 		);
 		return nominal != null && ctx.scan.openTypes.contains(nominal);

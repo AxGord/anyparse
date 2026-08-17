@@ -4,6 +4,7 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.check.UsingScan.UsingHeader;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
@@ -59,7 +60,7 @@ import anyparse.runtime.Span;
  *
  * The first argument is read WITHOUT its redundant parentheses (`Ext.deco((w), 1)` has the same
  * receiver as the bare form; the peeled `(` / `)` sit inside the deleted regions), and its
- * nominal type is resolved through `RefactorSupport.expressionTypeNominal` in its DEEP mode (a bare
+ * nominal type is resolved through `NominalTypes.expressionTypeNominal` in its DEEP mode (a bare
  * identifier via its binding annotation, or — for an unannotated `for` binder — via the iterable's
  * element type parameter; a plain field path cross-file through a `SymbolIndex`, with type-argument
  * substitution along the chain; a METHOD CALL on either through the called method's declared return
@@ -396,7 +397,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	 * The receiver's nominal type name, or null when it does not resolve to one the extension
 	 * gates can reason about. A `stringLiteralKinds` receiver takes its nominal from
 	 * `literalTypeNames`; an identifier, a plain field path or a METHOD CALL on either goes
-	 * through `RefactorSupport.expressionTypeNominal`, which reads a call tail's nominal off the
+	 * through `NominalTypes.expressionTypeNominal`, which reads a call tail's nominal off the
 	 * method's declared return type. A bare self-reference is refused because its meaning differs
 	 * inside an abstract, and a nullable / top-type wrapper (`Null` / `Any`) names no member host —
 	 * both read as unresolved. `Dynamic` passes through so the caller can drop it.
@@ -441,7 +442,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final self: Bool = recv.kind == s.identKind && selfText != null && recv.name == selfText;
 		final nominal: Null<String> = self
 			? abstractSelfNominal(recv, root)
-			: RefactorSupport.expressionTypeNominal(recv, root, s.shape, declaredTypes, symbols(), file, chain);
+			: NominalTypes.expressionTypeNominal(recv, root, s.shape, declaredTypes, symbols(), file, chain);
 		return if (nominal == null || nominal == s.dynamicTypeName)
 			nominal
 		else if (s.nullableWrappers.contains(nominal))
@@ -472,7 +473,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final underlying: Array<QueryNode> = decl.nameNode.children;
 		if (underlying.length == 0 || underlying[0].kind != UNDERLYING_TYPE_KIND) return null;
 		final written: Null<String> = underlying[0].name;
-		return written == null ? null : RefactorSupport.outerNominalOf(written);
+		return written == null ? null : NominalTypes.outerNominalOf(written);
 	}
 
 	/** The `recv.method(rest)` form the message shows, excerpt-normalized, or null when a span is unavailable. */

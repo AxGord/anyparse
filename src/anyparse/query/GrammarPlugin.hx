@@ -1890,7 +1890,7 @@ typedef RefShape = {
 	 * is fixed on every target.
 	 *
 	 * A consumer reads it as a FALLBACK behind the index — a written annotation always
-	 * wins — and must gate it on `RefactorSupport.shadowedByNonStdType`, exactly as
+	 * wins — and must gate it on `NominalTypes.shadowedByNonStdType`, exactly as
 	 * `staticMethodReturns` is gated: the moment ANY non-std file declares the receiver's
 	 * simple name, the table is the WRONG answer, and an index that merely failed to
 	 * answer is no evidence that it was not (a project `Map` whose own `exists` is
