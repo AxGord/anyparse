@@ -1,0 +1,15 @@
+# The Fast-parse / writer profiling harness (tools/ParseProf.hx), built out of
+# `src/` with the flags the shipped CLI uses, so what you profile is the codegen
+# that ships. Build from the repo root; the artifact is gitignored.
+#
+#   haxe tools/parse-prof.hxml
+#   node bin/parse-prof.js tparse src 1 hxformat.json
+#
+# `-lib hxnodejs` is needed because `Sys` / `sys.io.File` on js come from it.
+-cp src
+-cp tools
+-main ParseProf
+-lib hxnodejs
+-D js-es=6
+-D analyzer-optimize
+-js bin/parse-prof.js

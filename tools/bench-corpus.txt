@@ -1,0 +1,128 @@
+# The calibrated Fast-parse bench corpus: 99 files, ~7% of the parse cost of
+# the two reference trees, chosen so that A/B deltas measured on it reproduce
+# the deltas on the full trees. Feed it to tools/ParseProf.hx:
+#
+#   TM_SRC=<other-tree>/src node bin/parse-prof.js tparse tools/bench-corpus.txt 6 hxformat.json
+#
+# Half the corpus lives in a tree that is not in this repository, written
+# ${TM_SRC}/... - those lines are skipped when TM_SRC is unset, leaving the
+# anyparse-only half, which is still stratified but no longer calibrated.
+#
+# HOW IT WAS CHOSEN (reproduce with `perfile` + the recipe in
+# /Users/axg/anyparse-o1-parse-profile.md):
+#   1. `node bin/parse-prof.js perfile <tree> 3 hxformat.json` on both trees -
+#      per-file bytes, lines, parse us, round-trip us, node count and a
+#      node-kind census.
+#   2. Stratify into 4 size buckets (<2K, <8K, <32K, >=32K) x 4 construct
+#      classes (conditional-heavy, macro/metadata-heavy, string-heavy, plain).
+#   3. Give each stratum its share of a fixed corpus PARSE-COST budget, picking
+#      files at evenly spaced cost ranks inside the stratum; tune the budget
+#      until the file count lands near 100. Sampling at a uniform FILE rate
+#      instead drifts the cost mix by up to 19 points, because five files carry
+#      8% of all parse cost.
+#
+# CALIBRATION against the full trees (measured 2026-08-17, medians of 5
+# interleaved rounds): parse-cost mix within 3.9 points on every stratum;
+# rt/parse 3.43 against 3.38; A/B deltas within ~2-3 points for effects >=10%.
+# Use reps>=6 for timing (amortises JIT tier-up) and reps=1 for --cpu-prof
+# (the primitive mix then matches the full trees within ~2 points; at reps=10
+# V8 over-optimises and expectLit's share drops by 10).
+${TM_SRC}/Editor.hx
+${TM_SRC}/api/APIDevice.hx
+${TM_SRC}/api/model/LoginErrorResponse.hx
+${TM_SRC}/api/model/ProductKeyConversion.hx
+${TM_SRC}/api/model/ProductKeyValidation.hx
+${TM_SRC}/api/model/folders/Folders.hx
+${TM_SRC}/api/namespace/General.hx
+${TM_SRC}/api/namespace/Sessions.hx
+${TM_SRC}/common/ui/DatePicker.hx
+${TM_SRC}/common/ui/ToggleSwitch.hx
+${TM_SRC}/common/ui/components/IconToggleButton.hx
+${TM_SRC}/common/ui/components/RoundedButton.hx
+${TM_SRC}/common/ui/components/fileList/FileList.hx
+${TM_SRC}/common/ui/components/fileList/FileListEvent.hx
+${TM_SRC}/common/ui/components/form/DatePickerFormControlCompact.hx
+${TM_SRC}/common/ui/events/ImageButtonEvent.hx
+${TM_SRC}/components/editor/equipments/Goal.hx
+${TM_SRC}/drill/nodes/ToolNode.hx
+${TM_SRC}/editor/commands/SetAnimationSpeedCommand.hx
+${TM_SRC}/editor/header/topmenu/TopMenu.hx
+${TM_SRC}/editor/utils/MathCalc.hx
+${TM_SRC}/fs/FileSystemBase.hx
+${TM_SRC}/fs/SessionsFileSystem.hx
+${TM_SRC}/fs/SharedFileMoveDetector.hx
+${TM_SRC}/logs/SFS.hx
+${TM_SRC}/notifications/Notifications.hx
+${TM_SRC}/openfl/net/BlockingNativeURLLoader.hx
+${TM_SRC}/popups/PopupShadow.hx
+${TM_SRC}/popups/account/CroppingPopupInterface.hx
+${TM_SRC}/popups/account/formsv2/RegisterLoginTypeForm.hx
+${TM_SRC}/popups/export/LogoOverlay.hx
+${TM_SRC}/popups/export/exportjpeg/ExportJPEGPopup.hx
+${TM_SRC}/popups/fileDialog/DrillsDialog.hx
+${TM_SRC}/popups/fileDialog/FileDialogViewOptions.hx
+${TM_SRC}/popups/help/HelpMessageInfoPopup.hx
+${TM_SRC}/popups/help/HelpMessageInformation.hx
+${TM_SRC}/popups/masmigration/MigrationMASSuccessAlert.hx
+${TM_SRC}/popups/pitchAngles/PitchAnglesGrid.hx
+${TM_SRC}/popups/sessionPlanner/alerts/MissingDrillsList.hx
+${TM_SRC}/popups/settings/DeviceManagement.hx
+${TM_SRC}/popups/settings/account/plans/PlanColumn.hx
+${TM_SRC}/popups/settings/account/plans/PlanExpireHint.hx
+${TM_SRC}/popups/settings/license/AddUser.hx
+${TM_SRC}/popups/trainingMatchNotes/MatchNotes.hx
+${TM_SRC}/rightmenu/common/SelectableBaseButton.hx
+${TM_SRC}/rightmenu/components/AssetSprite.hx
+${TM_SRC}/tests/unit/RemoteFileSystemBaseTest.hx
+${TM_SRC}/tests/unit/SerFileDeleteRaceTest.hx
+${TM_SRC}/tests/unit/SharedSyncLoopTest.hx
+${TM_SRC}/utils/StringUtil.hx
+${TM_SRC}/utils/UUID.hx
+src/anyparse/check/AvoidDynamic.hx
+src/anyparse/check/DeadBinderCounterLoop.hx
+src/anyparse/check/DeadNullGuard.hx
+src/anyparse/check/EmptyCaseArm.hx
+src/anyparse/check/MapKeysLookup.hx
+src/anyparse/check/MissingVisibility.hx
+src/anyparse/check/PossibleNullDereference.hx
+src/anyparse/check/PreferIfExpressionReturn.hx
+src/anyparse/check/PreferNullCoalescing.hx
+src/anyparse/check/RedundantImport.hx
+src/anyparse/check/Severity.hx
+src/anyparse/check/ShadowingCaseBinder.hx
+src/anyparse/format/Format.hx
+src/anyparse/format/KeepEmptyLinesPolicy.hx
+src/anyparse/format/WhitespacePolicy.hx
+src/anyparse/format/comment/BlockCommentLine.hx
+src/anyparse/format/comment/BlockCommentLineBody.hx
+src/anyparse/format/comment/LineCommentNormalizer.hx
+src/anyparse/grammar/haxe/HaxeStringFoldSupport.hx
+src/anyparse/grammar/haxe/HxCasePattern.hx
+src/anyparse/grammar/haxe/HxCatchParam.hx
+src/anyparse/grammar/haxe/HxCondNameFnDecl.hx
+src/anyparse/grammar/haxe/HxCondSpliceRaw.hx
+src/anyparse/grammar/haxe/HxConditionalSemiExpr.hx
+src/anyparse/grammar/haxe/HxDoWhileBody.hx
+src/anyparse/grammar/haxe/HxDoWhileStmt.hx
+src/anyparse/grammar/haxe/HxElseifMod.hx
+src/anyparse/grammar/haxe/HxElseifParam.hx
+src/anyparse/grammar/haxe/HxFnBlock.hx
+src/anyparse/grammar/haxe/HxFnExprBody.hx
+src/anyparse/grammar/haxe/HxIfExpr.hx
+src/anyparse/grammar/haxe/HxParamBody.hx
+src/anyparse/grammar/haxe/format/HxFormatBodyPolicy.hx
+src/anyparse/grammar/haxe/format/HxFormatSingleStatementBracesPolicy.hx
+src/anyparse/grammar/json/JEntry.hx
+src/anyparse/grammar/json/JValueAst.hx
+src/anyparse/macro/AnnotationKeys.hx
+src/anyparse/macro/SpanTypeSynth.hx
+src/anyparse/macro/strategy/Bin.hx
+src/anyparse/query/ConfigFinder.hx
+src/anyparse/query/GrammarPlugin.hx
+src/anyparse/query/Matcher.hx
+src/anyparse/query/NominalTypes.hx
+src/anyparse/query/RemoveMember.hx
+src/anyparse/query/Rewrite.hx
+src/anyparse/query/Selector.hx
+src/anyparse/query/StringFold.hx
+src/anyparse/query/SymbolIndex.hx
