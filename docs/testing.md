@@ -460,6 +460,43 @@ tools/battery.sh --snapshot         # on green, cache this HEAD as the next "bef
 silence, and a battery that cannot tell "corpus clean" from "corpus not run"
 is worse than no corpus gate, so the script refuses rather than warns.
 
+### Why `compilerOracleServer` is off here
+
+Lint is the battery's largest step — about 70s of a 160s run, both trees — and
+`apqlint.json` sets `"compilerOracleServer": false` on purpose. Measured
+2026-08-18 on this project:
+
+| | lint `src --all` |
+|---|---|
+| `compilerOracleServer: true` | 57.95 / 58.39 / 57.75 s |
+| `compilerOracleServer: false` | 43.45 / 43.79 / 42.83 s |
+
+Three interleaved rounds, non-overlapping — **25 % (14.5 s) of every lint run**,
+for findings that are byte-identical: `apq lint-diff` over the two
+`--format json` snapshots reports `1407 findings (base 1407) — 0 added /
+0 removed`, and that includes all 41 `explicit-local-type` findings, the
+oracle-assisted rule.
+
+Two independent reasons, both measured rather than assumed:
+
+- **The warm path is not warm here.** A `haxe --connect` typecheck of
+  `test-js.hxml` takes 15.2 s and 16.0 s on consecutive runs against a cold
+  16.1 s — no speedup at all. A macro-heavy build re-runs its `@:build` macros
+  on the server too, so there is little left for it to restore.
+- **Its verdict is rejected every run.** The server re-emits stale null-safety
+  diagnostics for two `FileSystem.fullPath` sites the cold compiler accepts
+  (`CompilerServer.realPath`, `StdResolver.resolveSymlink` — both already
+  bridged through an explicit `Null<String>`, and both still red off the
+  cache). By design a warm REJECTION is never believed on its own, so
+  `Cli.reportOracleVerdict` re-runs it cold — which is where the second full
+  typecheck comes from.
+
+Neither is a defect in `CompilerServer`: the class is written so it can only
+change what a verdict COSTS, and here that cost is negative. It stays for
+projects whose modules a server can actually keep. To see the warm diagnostics
+yourself, read the port out of `$TMPDIR/apq-oracle-*.json` and run
+`haxe --connect <port> test-js.hxml --no-output`.
+
 The baseline is four plain files per commit in `$ANYPARSE_BLAST_CACHE`
 (`~/anyparse-blast-cache` by default) — two lint snapshots, the corpus sweep
 snapshot, and a two-integer suite line. Keeping them outside the repo is

@@ -1,6 +1,6 @@
 {
 	"compilerOracle": "test-js.hxml",
-	"compilerOracleServer": true,
+	"compilerOracleServer": false,
 	"resolutionLibs": [
 		"hxnodejs",
 		"utest"

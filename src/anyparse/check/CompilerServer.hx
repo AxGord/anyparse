@@ -30,10 +30,20 @@ typedef ServerState = {
 
 /**
  * A PERSISTENT Haxe compilation server shared by every `apq` process working on one
- * project — the warm path of the report-mode compiler oracle. `CompilerOracle` spawns a
- * fresh `haxe <hxml> --no-output` per lint run (14.6s on this project, measured); the
- * same typecheck through a server that already holds the compiled modules is 0.4s
- * when nothing changed underneath it, and the cost of recompiling what did otherwise.
+ * project — the warm path of the report-mode compiler oracle. `CompilerOracle` spawns
+ * a fresh `haxe <hxml> --no-output` per lint run (14.6s on this project, measured); the
+ * same typecheck through a server that already holds the compiled modules is 0.4s when
+ * nothing changed underneath it, and the cost of recompiling what did otherwise.
+ *
+ * MEASURED AGAIN 2026-08-18, and on THIS project it no longer holds: warm 15.2s / 16.0s
+ * against cold 16.1s, no speedup at all — a macro-heavy build re-runs its `@:build`
+ * macros on the server too, so there is little left for the server to restore. Combined
+ * with the always-red warm verdict below, the server here bought a SECOND full typecheck
+ * and nothing else: lint 57.9s against 43.3s over 3 interleaved rounds, with findings
+ * byte-identical by `apq lint-diff`. This project therefore sets
+ * `compilerOracleServer: false`. The class stays — the win is real on a project whose
+ * modules the server can actually keep.
+ *
  * The server is spawned DETACHED and deliberately outlives the process that started it —
  * that is the whole point, since a server warmed and killed inside one run would only
  * add cost. It is recorded in a state file under the OS temp dir keyed by the
