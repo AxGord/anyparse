@@ -8,3 +8,5 @@
 -lib hxnodejs
 -main _ReconSkipParse
 -js /tmp/recon.js
+# Mirrors bin/apq-js.hxml — a corpus sweep is the work it measures. See there.
+-D analyzer-optimize

@@ -11,3 +11,5 @@
 -lib hxnodejs
 -main RunTests
 -js bin/test.js
+# Mirrors bin/apq-js.hxml so the suite runs the shipped codegen — see there.
+-D analyzer-optimize
