@@ -94,18 +94,29 @@ class ApqDxTier5CliTest extends Test {
 
 	// --- 5. self-status --source ---
 
-	public function testSelfStatusSourceFlagAccepted(): Void {
-		// `--source` parses as a known flag. The walk against the project's
-		// own src/ either finds 0 skip-parse (clean tree → exit 0) or some
-		// — we don't pin a count, just that the flag is wired up.
-		Assert.equals(0, Cli.run(['self-status', '--source']), 'self-status --source is a known flag');
-	}
-
 	public function testSelfStatusUnknownFlagStillRejected(): Void {
 		Assert.equals(2, Cli.run(['self-status', '--bogus']), 'self-status rejects unknown flags as usage error');
 	}
 
 	#if (sys || nodejs)
+	public function testSelfStatusSourceFlagAccepted(): Void {
+		// `--source` parses as a known flag and the walk covers the <dir> it
+		// is given. This used to walk the project's whole `src/` to assert
+		// one exit code, which made it the most expensive method in the
+		// suite. `--strict` is what proves the walk really visited THIS
+		// fixture: the exit flips only because `Broken.hx` was counted as
+		// skip-parse, which neither an empty nor a wrong directory produces.
+		final dir: String = CliFixture.writeDir('self_status', [
+			{ name: 'Good.hx', source: 'class Good {}\n' },
+			{ name: 'Broken.hx', source: 'class Broken { var x: }\n' }
+		]);
+		Assert.equals(0, Cli.run(['self-status', dir, '--source']), 'self-status --source is a known flag');
+		Assert.equals(
+			1, Cli.run(['self-status', dir, '--source', '--strict']), 'self-status --strict exits non-zero on the fixture skip-parse'
+		);
+		CliFixture.removeDir(dir);
+	}
+
 	// --- 3. probe staging ---
 
 	public function testProbeStagesSourceToTmp(): Void {
