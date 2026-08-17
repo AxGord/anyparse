@@ -54,6 +54,17 @@ class Lowering {
 	/** Maximal word at the dispatch position — the `FirstKw` guard's subject. */
 	private static inline final GUARD_WORD_LOCAL: String = '_gW';
 
+	/**
+	 * How many guardable branches an Alt rule needs before the dispatch
+	 * prologue repays itself. Read by `lowerEnum` (which acts on it) and
+	 * by `dumpDispatch` (which reports it), so the dump can never claim a
+	 * dispatch decision the codegen does not make.
+	 *
+	 * One guardable branch cannot repay the prologue: the single trial it
+	 * saves costs about what the peek itself costs.
+	 */
+	private static inline final DISPATCH_MIN_GUARDS: Int = 2;
+
 	private final _eregByRule: Map<String, GeneratedRule.EregSpec> = [];
 	private final _shape: ShapeBuilder.ShapeResult;
 	private final _formatInfo: FormatReader.FormatInfo;
@@ -77,11 +88,16 @@ class Lowering {
 		// stay untouched.
 		final spanRuleNames: Map<String, Bool> = [];
 		for (typePath => node in _shape.rules) {
+			final entryFn: String = parseFnName(typePath);
 			for (rule in lowerRule(typePath, node)) {
 				rules.push(rule);
 				if (_ctx.spans && node.kind != Terminal) spanRuleNames[rule.fnName] = true;
+				if (rule.fnName == entryFn) checkRuleFirstToken(_shape.rules, typePath, rule);
 			}
 		}
+		#if anyparse_dispatch_dump
+		dumpDispatch(_shape.rules);
+		#end
 		if (_ctx.spans) for (rule in rules) if (spanRuleNames.exists(rule.fnName)) rule.body = instrumentSpans(rule.body);
 		return rules;
 	}
@@ -400,9 +416,7 @@ class Lowering {
 				needByte = true;
 			case Unknown:
 		}
-		// One guardable branch cannot repay the prologue: the single trial it
-		// saves costs about what the peek itself costs.
-		final dispatch: Bool = guardCount >= 2;
+		final dispatch: Bool = guardCount >= DISPATCH_MIN_GUARDS;
 		// The peek runs ONCE per dispatch and RESTORES `ctx.pos`, so every
 		// branch body still starts from the exact original position and does
 		// its own `skipWs`.
@@ -6151,11 +6165,21 @@ class Lowering {
 	 * in this tree, so they are unaffected.
 	 */
 	private static function stripSkipWs(e: Expr): Expr {
+		return isSkipWsStep(e) ? { expr: EBlock([]), pos: e.pos } : ExprTools.map(e, stripSkipWs);
+	}
+
+	/**
+	 * Whether `e` is the non-consuming `skipWs(ctx)` step a generated rule
+	 * body opens with — INCLUDING the empty block `stripSkipWs` leaves
+	 * behind in an `@:raw` / binary rule, which is the same step already
+	 * reduced to nothing. Shared by the eraser and by `bodyFirstToken`,
+	 * which must step over both spellings to reach the rule's first
+	 * committed token.
+	 */
+	private static function isSkipWsStep(e: Expr): Bool {
 		return switch e.expr {
-			case ECall({ expr: EConst(CIdent('skipWs')) }, _):
-				{ expr: EBlock([]), pos: e.pos };
-			case _:
-				ExprTools.map(e, stripSkipWs);
+			case EBlock([]), ECall({ expr: EConst(CIdent('skipWs')) }, _): true;
+			case _: false;
 		};
 	}
 
@@ -6264,6 +6288,230 @@ class Lowering {
 			case KwRef(_, lead) if (lead != null): litFirst([lead]);
 			case KwRef(_, _), Unsupported: Unknown;
 		};
+	}
+
+	/**
+		 * First token of a bare-`Ref` Alt branch, taken from the RULE it
+		 * references — the branch itself commits nothing before recursing, so
+		 * its first token is whatever the sub-rule's is.
+		 *
+		 * `@:fmt(atomOperand)` retargets the call to the `…Atom` variant of
+		 * the sub-rule rather than its entry function; `ruleFirstToken`
+		 * models the entry only, so such a branch answers `Unknown`.
+		 *
+		  * Kept separate from `branchFirstToken` so the dispatch dump can
+	 * report, per branch, what the branch-local classifier sees AND what
+	 * looking through the `Ref` would add.
+	 */
+	private static function refBranchFirstToken(rules: Map<String, ShapeNode>, branch: ShapeNode): BranchFirstToken {
+		return switch branchShape(branch) {
+			case KwRef(kw, lead) if (kw == null && lead == null && !branch.fmtHasFlag('atomOperand')):
+				ruleFirstToken(rules, branch.children[0].annotations[AnnotationKeys.BASE_REF], []);
+			case _: Unknown;
+		};
+	}
+
+	/**
+	 * The FIRST token the generated entry function of `refName` commits
+	 * to, or `Unknown` when it cannot be established from the shape.
+	 *
+	 * This is the RULE-level twin of `branchFirstToken`. The branch
+	 * classifier answers "what does this Alt branch consume first" from
+	 * the branch's OWN annotations and stops at a bare `Ref`, because the
+	 * branch commits nothing there. The answer for that case lives one
+	 * level down, in the referenced rule — and that is where the Haxe
+	 * grammar's costliest backtrack sites sit: `HxParenLambda`,
+	 * `HxThinParenLambda` and `HxECheckType` on `(`, `HxObjectLit` on
+	 * `{`, `HxInterpString` on `'`.
+	 *
+	 * THE SOUNDNESS INVARIANT is `BranchFirstToken`'s: a non-`Unknown`
+	 * answer claims the rule fails WITHOUT CONSUMING at every position
+	 * whose first byte / word is outside the returned set.
+	 * `checkRuleFirstToken` turns a claim the emission does not honour
+	 * into a COMPILE ERROR, so this classifier cannot silently drift from
+	 * `lowerStruct` the way two hand-kept predicate chains would.
+	 *
+	 * `seen` breaks rule cycles (`A`'s first field refs `B`, `B`'s refs
+	 * `A`): a revisited rule answers `Unknown`, the safe default.
+	 */
+	private static function ruleFirstToken(rules: Map<String, ShapeNode>, refName: String, seen: Array<String>): BranchFirstToken {
+		if (seen.contains(refName)) return Unknown;
+		final node: Null<ShapeNode> = rules[refName];
+		// Only a `Seq` rule answers. An `Alt`'s own first token is the
+		// UNION over its branches, which means nothing until the Pratt /
+		// postfix / `atomsOnly` split `lowerEnum` applies is modelled here
+		// too; a `Terminal`'s is a regex FIRST set. Both are deliberately
+		// out of scope — see `docs/roadmap.md` O3.
+		return node == null || node.kind != Seq ? Unknown : seqFirstToken(rules, node, seen.concat([refName]));
+	}
+
+	/**
+	 * First token of a `Seq` rule = first token of its FIRST field, which
+	 * `lowerStruct` emits before anything else.
+	 *
+	 * An OPTIONAL first field answers `Unknown`: its lead literal is
+	 * emitted inside the optional's own trial, so a position not starting
+	 * with it is not a failure of the rule at all — the field is absent
+	 * and the SECOND field decides. Guarding on it would skip a branch
+	 * that matches.
+	 *
+	 * A first field carrying no lead of its own but holding a bare `Ref`
+	 * hands the question one level down, exactly as a bare-`Ref` Alt
+	 * branch does.
+	 */
+	private static function seqFirstToken(rules: Map<String, ShapeNode>, node: ShapeNode, seen: Array<String>): BranchFirstToken {
+		if (node.children.length == 0) return Unknown;
+		final first: ShapeNode = node.children[0];
+		if (first.kind == Opt || first.annotations[AnnotationKeys.BASE_OPTIONAL] == true) return Unknown;
+		final kw: Null<String> = first.annotations[AnnotationKeys.KW_LEAD_TEXT];
+		if (kw != null) return wordOrByteFirst([kw]);
+		final lead: Null<String> = first.annotations[AnnotationKeys.LIT_LEAD_TEXT];
+		return if (lead != null)
+			litFirst([lead]);
+		else if (first.kind == Ref)
+			ruleFirstToken(rules, first.annotations[AnnotationKeys.BASE_REF], seen);
+		else
+			Unknown;
+	}
+
+	/**
+	 * The first token a LOWERED rule body actually commits to, read off
+	 * the emitted expression instead of off the shape — the oracle
+	 * `checkRuleFirstToken` holds `ruleFirstToken` against.
+	 *
+	 * Leading `skipWs(ctx)` calls are stepped over: `skipWs` consumes
+	 * only what the dispatch prologue's own `skipWs` consumed before
+	 * peeking, so it cannot move the token being classified. The first
+	 * statement that is anything else must be the `expectLit` /
+	 * `expectKw` the claim names, or the claim is wrong.
+	 */
+	private static function bodyFirstToken(body: Expr): BranchFirstToken {
+		final steps: Array<Expr> = switch body.expr {
+			case EBlock(exprs): exprs;
+			case _: [body];
+		};
+		for (step in steps) if (!isSkipWsStep(step)) return switch step.expr {
+			case ECall({ expr: EConst(CIdent('expectLit')) }, [_, { expr: EConst(CString(lit, _)) }]): litFirst([lit]);
+			case ECall({ expr: EConst(CIdent('expectKw')) }, [_, { expr: EConst(CString(kw, _)) }]): wordOrByteFirst([kw]);
+			case _: Unknown;
+		};
+		return Unknown;
+	}
+
+	/**
+	 * Hold `ruleFirstToken`'s claim about `typePath` against what the
+	 * rule's lowered body emits, and halt the build when they differ.
+	 *
+	 * An over-claiming first-token classification is the one defect no
+	 * runtime oracle catches: the dispatch guard it feeds skips a branch
+	 * whose trial WOULD have matched, and only on grammars or inputs the
+	 * corpus never exercises — a byte-identical corpus dump, a green
+	 * suite and an A/B over real files all stay quiet. The claim and the
+	 * emission are two independent code paths (`seqFirstToken` reads
+	 * annotations, `lowerStruct` picks between a dozen field-emission
+	 * variants), so this check is what keeps them in step — the same
+	 * contract `BranchShape` gives `lowerEnumBranch` and
+	 * `branchFirstToken`.
+	 */
+	private static function checkRuleFirstToken(rules: Map<String, ShapeNode>, typePath: String, rule: GeneratedRule): Void {
+		final claimed: BranchFirstToken = ruleFirstToken(rules, typePath, []);
+		if (claimed == Unknown) return;
+		final emitted: BranchFirstToken = bodyFirstToken(rule.body);
+		if (!sameFirstToken(claimed, emitted))
+			Context.fatalError(
+				'Lowering: the first-token claim for ${simpleName(typePath)} (${describeFirstToken(claimed)}) '
+				+ 'disagrees with what ${rule.fnName} emits (${describeFirstToken(emitted)}) — '
+				+ 'an Alt dispatch guard built on it would skip branches that match',
+				Context.currentPos()
+			);
+	}
+
+	/**
+	 * Equality over first-token facts. The payloads are SETS (distinct
+	 * first bytes, alternative keywords), so order must not decide the
+	 * answer.
+	 */
+	private static function sameFirstToken(a: BranchFirstToken, b: BranchFirstToken): Bool {
+		return switch [a, b] {
+			case [FirstKw(x), FirstKw(y)]: sameSet(x, y);
+			case [FirstLit(x), FirstLit(y)]: sameSet(x, y);
+			case [Unknown, Unknown]: true;
+			case _: false;
+		};
+	}
+
+	/** Set equality for the first-token payloads — same length, same members. */
+	private static function sameSet<T>(x: Array<T>, y: Array<T>): Bool {
+		if (x.length != y.length) return false;
+		for (v in x) if (!y.contains(v)) return false;
+		return true;
+	}
+
+	/**
+	 * One-line rendering of a first-token fact, shared by the dispatch
+	 * dump and the drift error so a report and a diagnostic can never
+	 * describe the same fact differently. Byte codes are printed as
+	 * character AND number, since the interesting ones (`(`, `{`, `'`)
+	 * are punctuation a bare character would make ambiguous in a log.
+	 */
+	private static function describeFirstToken(first: BranchFirstToken): String {
+		return switch first {
+			case FirstKw(words): 'kw ${words.join('|')}';
+			case FirstLit(codes): 'lit ${[for (code in codes) '${String.fromCharCode(code)}($code)'].join('|')}';
+			case Unknown: 'unknown';
+		};
+	}
+
+
+	/**
+	 * `-D anyparse_dispatch_dump` diagnostic — the per-grammar inventory
+	 * of what first-token dispatch reaches, printed as `//` comments
+	 * alongside the existing `anyparse_trivia_dump` / `anyparse_dump`
+	 * channels.
+	 *
+	 * Three record kinds: `dispatch.first` (one per rule — the rule-level
+	 * fact a caller could guard a `Ref` on), `dispatch.branch` (one per
+	 * Alt branch — its shape, the branch-local fact that guards it today,
+	 * and the fact looking through a bare `Ref` would add), and
+	 * `dispatch.rule` (per Alt — guardable count and whether the prologue
+	 * is emitted), closed by one `dispatch.total` summary line.
+	 */
+	private static function dumpDispatch(rules: Map<String, ShapeNode>): Void {
+		var ruleCount: Int = 0;
+		var altCount: Int = 0;
+		var dispatchCount: Int = 0;
+		var branchCount: Int = 0;
+		var guardedCount: Int = 0;
+		var refUnlockable: Int = 0;
+		for (typePath => node in rules) {
+			ruleCount++;
+			Sys.println('// dispatch.first: $typePath = ${describeFirstToken(ruleFirstToken(rules, typePath, []))}');
+			if (node.kind != Alt) continue;
+			altCount++;
+			var guardable: Int = 0;
+			for (branch in node.children) {
+				branchCount++;
+				final ctor: Null<String> = branch.annotations[AnnotationKeys.BASE_CTOR];
+				final own: BranchFirstToken = branchFirstToken(branch);
+				final viaRef: BranchFirstToken = refBranchFirstToken(rules, branch);
+				if (own != Unknown) {
+					guardedCount++;
+					guardable++;
+				} else if (viaRef != Unknown)
+					refUnlockable++;
+				Sys.println(
+					'// dispatch.branch: $typePath.$ctor shape=${branchShape(branch)} '
+					+ 'first=${describeFirstToken(own)} viaRef=${describeFirstToken(viaRef)}'
+				);
+			}
+			final dispatches: Bool = guardable >= DISPATCH_MIN_GUARDS;
+			if (dispatches) dispatchCount++;
+			Sys.println('// dispatch.rule: $typePath branches=${node.children.length} guardable=$guardable dispatch=$dispatches');
+		}
+		Sys.println(
+			'// dispatch.total: rules=$ruleCount alts=$altCount dispatching=$dispatchCount branches=$branchCount '
+			+ 'guarded=$guardedCount refUnlockable=$refUnlockable'
+		);
 	}
 
 	/**
