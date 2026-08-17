@@ -61,7 +61,9 @@ class Lowering {
 	 * dispatch decision the codegen does not make.
 	 *
 	 * One guardable branch cannot repay the prologue: the single trial it
-	 * saves costs about what the peek itself costs.
+	 * saves costs about what the peek itself costs. MEASURED, not argued: a
+	 * threshold of 1 makes 9 more Alts dispatch and parses 9.3% SLOWER
+	 * (356 ms vs 389 ms, calibrated corpus, median of 9 interleaved rounds).
 	 */
 	private static inline final DISPATCH_MIN_GUARDS: Int = 2;
 
@@ -402,7 +404,7 @@ class Lowering {
 		// miniblock pilots, depending on what each declares) has no such
 		// backstop. This is the one accepted behaviour change; the
 		// well-formed language is unaffected in every grammar.
-		final firstTokens: Array<BranchFirstToken> = branches.map(branchFirstToken);
+		final firstTokens: Array<BranchFirstToken> = branches.map(branchFirstToken.bind(_shape.rules));
 		final guards: Array<Null<Expr>> = firstTokens.map(branchGuardExpr);
 		var guardCount: Int = 0;
 		var needWord: Bool = false;
@@ -6270,7 +6272,7 @@ class Lowering {
 	 * actually consumes first" is now structural rather than a comment
 	 * asking two predicate chains to stay in step.
 	 */
-	private static function branchFirstToken(branch: ShapeNode): BranchFirstToken {
+	private static function branchFirstToken(rules: Map<String, ShapeNode>, branch: ShapeNode): BranchFirstToken {
 		return switch branchShape(branch) {
 			case Prefix(op): litFirst([op]);
 			case KwZeroArg(kw): wordOrByteFirst([kw]);
@@ -6280,13 +6282,16 @@ class Lowering {
 				litFirst([lead]);
 			// Split into guarded arms rather than an if-chain inside one
 			// arm: the keyword decides the first token whenever it is
-			// present, the lead literal otherwise, and a bare `Ref` has no
-			// first token at all. A new `BranchShape` constructor still
-			// breaks this switch — the trailing unguarded `KwRef` arm only
-			// makes the three KwRef sub-cases exhaustive among themselves.
+			// present, the lead literal otherwise, and a bare `Ref` commits
+			// nothing of its OWN — its first token is the referenced
+			// rule's, which `refBranchFirstToken` reads. A new
+			// `BranchShape` constructor still breaks this switch — the
+			// trailing `KwRef` arm only makes the three KwRef sub-cases
+			// exhaustive among themselves.
 			case KwRef(kw, _) if (kw != null): wordOrByteFirst([kw]);
 			case KwRef(_, lead) if (lead != null): litFirst([lead]);
-			case KwRef(_, _), Unsupported: Unknown;
+			case KwRef(_, _): refBranchFirstToken(rules, branch);
+			case Unsupported: Unknown;
 		};
 	}
 
@@ -6471,8 +6476,8 @@ class Lowering {
 	 *
 	 * Three record kinds: `dispatch.first` (one per rule — the rule-level
 	 * fact a caller could guard a `Ref` on), `dispatch.branch` (one per
-	 * Alt branch — its shape, the branch-local fact that guards it today,
-	 * and the fact looking through a bare `Ref` would add), and
+	 * Alt branch — its shape, the fact that guards it, and the fact taken
+	 * through a bare `Ref` when that is where it came from), and
 	 * `dispatch.rule` (per Alt — guardable count and whether the prologue
 	 * is emitted), closed by one `dispatch.total` summary line.
 	 */
@@ -6482,7 +6487,7 @@ class Lowering {
 		var dispatchCount: Int = 0;
 		var branchCount: Int = 0;
 		var guardedCount: Int = 0;
-		var refUnlockable: Int = 0;
+		var refViaCount: Int = 0;
 		for (typePath => node in rules) {
 			ruleCount++;
 			Sys.println('// dispatch.first: $typePath = ${describeFirstToken(ruleFirstToken(rules, typePath, []))}');
@@ -6492,13 +6497,13 @@ class Lowering {
 			for (branch in node.children) {
 				branchCount++;
 				final ctor: Null<String> = branch.annotations[AnnotationKeys.BASE_CTOR];
-				final own: BranchFirstToken = branchFirstToken(branch);
+				final own: BranchFirstToken = branchFirstToken(rules, branch);
 				final viaRef: BranchFirstToken = refBranchFirstToken(rules, branch);
 				if (own != Unknown) {
 					guardedCount++;
 					guardable++;
-				} else if (viaRef != Unknown)
-					refUnlockable++;
+				}
+				if (viaRef != Unknown) refViaCount++;
 				Sys.println(
 					'// dispatch.branch: $typePath.$ctor shape=${branchShape(branch)} '
 					+ 'first=${describeFirstToken(own)} viaRef=${describeFirstToken(viaRef)}'
@@ -6510,7 +6515,7 @@ class Lowering {
 		}
 		Sys.println(
 			'// dispatch.total: rules=$ruleCount alts=$altCount dispatching=$dispatchCount branches=$branchCount '
-			+ 'guarded=$guardedCount refUnlockable=$refUnlockable'
+			+ 'guarded=$guardedCount viaRef=$refViaCount'
 		);
 	}
 
