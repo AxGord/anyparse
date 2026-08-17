@@ -302,6 +302,158 @@ class MoveSymbolSliceTest extends Test {
 	}
 
 	/**
+	 * A module-level `typedef` carries `@:trailOpt(';')`: written WITHOUT the
+	 * `;` its parse span runs past the closing `}` to the next declaration —
+	 * over the blank line AND that declaration's doc comment, which the parser
+	 * hands back to the neighbour as leading trivia. The cut must stop at the
+	 * bytes the typedef owns, else the neighbour's documentation travels to the
+	 * destination as an orphan documenting nothing while the neighbour is left
+	 * bare — silently, since both files still parse.
+	 */
+	public function testMoveKeepsNextDeclDoc(): Void {
+		final a: String = 'package pkg;\n\ntypedef Foo = {\n\tfinal x:Int;\n}\n\n/** the bar */\ntypedef Bar = {\n\tfinal y:Int;\n}\n';
+		final b: String = 'package pkg;\n\nclass B {}\n';
+		// `typedef Foo` on line 3; `Foo` at col 9.
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 9, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
+		]);
+		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
+		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
+		// Byte-exact: Bar keeps its own doc, and the blank line the typedef sat
+		// above is consumed with it (no double blank left behind).
+		Assert.equals('package pkg;\n\n/** the bar */\ntypedef Bar = {\n\tfinal y:Int;\n}\n', newA);
+		// Byte-exact on the destination too: only the decl's OWN text moves, so the
+		// blank line the cut also removed does not arrive as a stray blank run.
+		Assert.equals('package pkg;\n\nclass B {}\n\ntypedef Foo = {\n\tfinal x:Int;\n}\n\n', newB);
+		Assert.isFalse(newB.contains('the bar'), 'the neighbour doc must not travel to B');
+	}
+
+	/**
+	 * A module-level `private` type moves. `private` projects as a SEPARATE
+	 * sibling node BEFORE the declaration, so the "shares a source line with
+	 * other code" guard — which requires the text between the line start and
+	 * the decl span to be blank — used to read the modifier as other code and
+	 * refuse an ordinary `private typedef` sitting alone on its own lines. The
+	 * cut is computed from the modifier-folded declaration group, so the
+	 * modifier travels to the destination with the type.
+	 */
+	public function testMovePrivateModuleType(): Void {
+		final a: String = 'package pkg;\n\nprivate typedef Priv = {\n\tfinal x:Int;\n}\n\nclass A {}\n';
+		final b: String = 'package pkg;\n\nclass B {}\n';
+		// `private typedef Priv` on line 3; `Priv` at col 17.
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 17, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
+		]);
+		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
+		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
+		Assert.equals('package pkg;\n\nclass A {}\n', newA);
+		Assert.isTrue(newB.contains('private typedef Priv = {'), 'the private modifier should move with the type');
+	}
+
+	/**
+	 * Guard for the `;`-TERMINATED form: the trail token is present, so the
+	 * parse span already ends at the `;` and the trailing trim has nothing to
+	 * cut. The cut stays exactly what it was — the decl's own lines plus one
+	 * newline — including the blank run it leaves behind, which is
+	 * pre-existing behaviour and NOT what the trim changes.
+	 */
+	public function testMoveSemicolonTerminatedTypedefUnchanged(): Void {
+		final a: String = 'package pkg;\n\ntypedef Foo = {\n\tfinal x:Int;\n};\n\n/** the bar */\ntypedef Bar = {\n\tfinal y:Int;\n};';
+		final b: String = 'package pkg;\n\nclass B {}';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 9, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
+		]);
+		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
+		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
+		Assert.equals('package pkg;\n\n\n/** the bar */\ntypedef Bar = {\n\tfinal y:Int;\n};', newA);
+		Assert.equals('package pkg;\n\nclass B {}\n\ntypedef Foo = {\n\tfinal x:Int;\n};\n', newB);
+	}
+
+	/**
+	 * Guard for a decl with NO following declaration to borrow trivia from:
+	 * the trailing trim and the blank-run extension are both no-ops, so the
+	 * cut and the inserted text are byte-identical to what they always were.
+	 */
+	public function testMoveTypedefWithNoNeighbourUnchanged(): Void {
+		final a: String = 'package pkg;\n\ntypedef Foo = {\n\tfinal x:Int;\n}';
+		final b: String = 'package pkg;\n\nclass B {}';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 9, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
+		]);
+		Assert.equals('package pkg;\n\n', changeFor(changes, 'pkg/A.hx').newSource);
+		Assert.equals('package pkg;\n\nclass B {}\n\ntypedef Foo = {\n\tfinal x:Int;\n}', changeFor(changes, 'pkg/B.hx').newSource);
+	}
+
+	/**
+	 * A `;`-less typedef that is the LAST declaration in the file: its parse span
+	 * claims the whole trailing blank run, so the cut runs the blank-line
+	 * extension all the way to EOF while only the decl's own text — one line
+	 * terminator, no blank run — moves to the destination.
+	 */
+	public function testMoveTrailingBlankRunAtEofCollapses(): Void {
+		final a: String = 'package pkg;\n\ntypedef Foo = {\n\tfinal x:Int;\n}\n\n\n';
+		final b: String = 'package pkg;\n\nclass B {}\n';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 9, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
+		]);
+		Assert.equals('package pkg;\n\n', changeFor(changes, 'pkg/A.hx').newSource);
+		Assert.equals('package pkg;\n\nclass B {}\n\ntypedef Foo = {\n\tfinal x:Int;\n}\n\n', changeFor(changes, 'pkg/B.hx').newSource);
+	}
+
+	/**
+	 * The full modifier group of a `final class` travels with it: `@:meta` and
+	 * `private` are separate sibling nodes BEFORE the declaration and `final `
+	 * lives in the OUTER `FinalDecl` span, so the cut must start at the first
+	 * sibling — which is what pins `declNode` to the `FinalDecl` rather than to
+	 * the inner `ClassForm`. The `FinalDecl` span runs on past its own `}` exactly
+	 * like a `;`-less typedef, so the neighbour's doc must survive here too.
+	 */
+	public function testMoveMetaPrivateFinalClass(): Void {
+		final a: String = 'package pkg;\n\n@:keep\nprivate final class Hidden {\n\tpublic function new() {}\n}\n\n'
+			+ '/** the keeper */\nfinal class Keeper {\n\tpublic function new() {}\n}\n';
+		final b: String = 'package pkg;\n\nclass B {}\n';
+		// `private final class Hidden` on line 4; `Hidden` at col 21.
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 4, 21, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
+		]);
+		Assert.equals(
+			'package pkg;\n\n/** the keeper */\nfinal class Keeper {\n\tpublic function new() {}\n}\n',
+			changeFor(changes, 'pkg/A.hx').newSource
+		);
+		Assert.equals(
+			'package pkg;\n\nclass B {}\n\n@:keep\nprivate final class Hidden {\n\tpublic function new() {}\n}\n\n',
+			changeFor(changes, 'pkg/B.hx').newSource
+		);
+	}
+
+	/**
+	 * A module-`private` type the source STILL references is refused. Moving it
+	 * leaves the source needing an import, and Haxe has no way to import a
+	 * module-private type from another module — the op would otherwise write an
+	 * `import` that cannot compile, which no re-parse gate would catch.
+	 */
+	public function testMovePrivateTypeStillUsedRefused(): Void {
+		final a: String = 'package pkg;\n\nprivate typedef Priv = {\n\tfinal a:Int;\n}\n\nclass A {\n\tvar p:Priv;\n}\n';
+		final b: String = 'package pkg;\n\nclass B {}\n';
+		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 17, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
+		], plugin(), typeRefShape());
+		switch result {
+			case Ok(changes, _):
+				Assert.fail('expected Err, got Ok with ${changes.length} change(s)');
+			case Err(message):
+				Assert.isTrue(message.contains('module-private'), 'the refusal must name the private-type cause: $message');
+		}
+	}
+
+	/**
 	 * Drive a successful move and return the changes, asserting the result
 	 * is `Ok`, the advisory is present, and every rewrite re-parses (the
 	 * op already validates this; the test makes it explicit by re-parsing

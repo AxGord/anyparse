@@ -131,11 +131,14 @@ final class MoveSymbol {
 		final sourceOf: Map<String, String> = target.sourceOf;
 
 		// 4. Cut span: extend backward over leading doc-comment / @:meta /
-		//    indentation, and forward over one trailing newline. Refuse a
-		//    decl sharing a source line with other code.
-		final cut: Null<Span> = computeCutSpan(cursorSource, declSpan);
-		if (cut == null) return Err('the type "$typeName" shares a source line with other code — refusing to move');
-		final declText: String = cursorSource.substring(cut.from, cut.to);
+		//    indentation, and forward over one trailing newline plus the blank
+		//    lines the untrimmed group had claimed. Refuse a decl sharing a source
+		//    line with other code (its modifiers are part of `declSpan`, so a
+		//    module-level `private` type is not that case).
+		final cutInfo: Null<{ span: Span, textEnd: Int }> = computeCutSpan(cursorSource, declSpan, target.declGroupEnd);
+		if (cutInfo == null) return Err('the type "$typeName" shares a source line with other code — refusing to move');
+		final cut: Span = cutInfo.span;
+		final declText: String = cursorSource.substring(cut.from, cutInfo.textEnd);
 
 		// 5. Dependency imports to carry: type-position names referenced
 		//    INSIDE the decl that the source imports explicitly and the
@@ -179,6 +182,14 @@ final class MoveSymbol {
 		//     is now redundant (the type is local) and is removed.
 		if (oldImportPath != null) {
 			if (sourceStillUsesType(cursorSource, cut, plugin, typeRefShape, typeName)) {
+				// A module-`private` type is invisible outside its own module, so the
+				// import that would repair the remaining references cannot be written
+				// at all — refuse instead of emitting one that does not compile.
+				if (target.declPrivate)
+					return Err(
+						'the type "$typeName" is module-private and $cursorFile still references it after the move — '
+						+ 'a private type cannot be imported from another module; make it public or move its uses too'
+					);
 				final insert: Null<{ span: Span, text: String }> = addImportEdit(cursorSource, cursorInfo, plugin, newImportPath);
 				if (insert != null) editsFor(editsByFile, cursorFile).push(insert);
 			}
@@ -283,17 +294,30 @@ final class MoveSymbol {
 	}
 
 	/**
-	 * The source range to CUT for the declaration whose own span is
-	 * `declSpan`: extended BACKWARD over the decl's leading indentation
-	 * and any contiguous preceding doc-comment / line-comment /
-	 * block-comment / `@:meta` lines (the `parseFile` tree drops trivia
-	 * and emits `@:meta` as separate preceding sibling nodes, so the cut
-	 * is computed from the raw source, not the tree), and FORWARD over
-	 * one trailing newline. Returns null when the declaration shares its
-	 * source line with other code (the line-up-to the decl is not pure
-	 * whitespace), which a whole-line cut cannot safely express.
+	 * The source range to CUT for the declaration that OWNS `declSpan`:
+	 * extended BACKWARD over the decl's leading indentation and any contiguous
+	 * preceding doc-comment / line-comment / block-comment / `@:meta` lines (the
+	 * `parseFile` tree drops trivia, so the cut is computed from the raw source,
+	 * not the tree), and FORWARD over one trailing newline plus any blank lines up
+	 * to `groupEnd`.
+	 *
+	 * `declSpan` is the modifier-folded, trailing-trimmed span, so the leading
+	 * `private` of a module-level type is inside it and a neighbour's doc comment is
+	 * not. `groupEnd` is where that group ended BEFORE the trim: the blank-line
+	 * extension never runs past it, which keeps the blank separation the untrimmed
+	 * cut used to remove while giving the neighbour its trivia back. (The one
+	 * trailing newline is taken unconditionally, as before, so the cut can end one
+	 * byte past `groupEnd` for a `;`-terminated decl.)
+	 *
+	 * `textEnd` splits the two: the cut REMOVES up to `span.to`, but only the
+	 * text up to `textEnd` MOVES, so the blank separation the cut also takes does
+	 * not arrive at the destination as a stray blank run.
+	 *
+	 * Returns null when the declaration shares its source line with other code
+	 * (the line-up-to the decl is not pure whitespace), which a whole-line cut
+	 * cannot safely express.
 	 */
-	private static function computeCutSpan(source: String, declSpan: Span): Null<Span> {
+	private static function computeCutSpan(source: String, declSpan: Span, groupEnd: Int): Null<{ span: Span, textEnd: Int }> {
 		// Start of the decl's own line.
 		final lineStart: Int = lineStartOf(source, declSpan.from);
 		// The characters between the line start and the decl must be pure
@@ -316,11 +340,41 @@ final class MoveSymbol {
 		}
 
 		// Extend forward over one trailing newline so the cut removes the
-		// whole decl block including its line terminator.
+		// whole decl block including its line terminator. Everything up to here is
+		// the decl's OWN text, which is what the destination receives.
 		var cutEnd: Int = declSpan.to;
 		if (cutEnd < source.length && source.charAt(cutEnd) == '\n') cutEnd++;
+		final textEnd: Int = cutEnd;
 
-		return new Span(cutStart, cutEnd);
+		// Then over the BLANK lines the untrimmed group had already claimed.
+		// `declSpan` is the trimmed span, so for a `@:trailOpt` decl written without
+		// its `;` it now stops at the closing brace — leaving behind the blank line
+		// that separated the decl from its neighbour, which the untrimmed cut
+		// removed. Only blank lines are taken, and never past `groupEnd`: a comment
+		// in that run documents the NEXT declaration, and a `;`-terminated decl
+		// (whose span never ran on) cuts exactly as before.
+		while (cutEnd < groupEnd) {
+			final lineEnd: Int = source.indexOf('\n', cutEnd);
+			if (lineEnd < 0 || lineEnd + 1 > groupEnd || !isBlank(source, cutEnd, lineEnd)) break;
+			cutEnd = lineEnd + 1;
+		}
+
+		return { span: new Span(cutStart, cutEnd), textEnd: textEnd };
+	}
+
+	/**
+	 * Whether the declaration is module-`private` — a `Private` node inside the
+	 * modifier run `declGroupSpan` folded in, i.e. between `group.from` and the
+	 * declaration's own start. A module-private type is invisible OUTSIDE its own
+	 * module, which is what makes an import of it after the move impossible.
+	 */
+	private static function hasPrivateModifier(parent: Null<QueryNode>, group: Span, declSpan: Span): Bool {
+		if (parent == null) return false;
+		for (sibling in parent.children) {
+			final span: Null<Span> = sibling.span;
+			if (sibling.kind == 'Private' && span != null && span.from >= group.from && span.to <= declSpan.from) return true;
+		}
+		return false;
 	}
 
 	/**
@@ -488,7 +542,6 @@ final class MoveSymbol {
 		final declMatch: Null<TypeDeclMatch> = RefactorSupport.resolveTypeDeclAtCursor(cursorTree, cursor, cursorSource);
 		if (declMatch == null) return PErr('position $line:$col is not on a type declaration');
 		final typeName: String = declMatch.name;
-		final declSpan: Span = declMatch.fullSpan;
 
 		// 3. Guards.
 		final declarers: Array<FileInfo> = index.declaringFiles(typeName);
@@ -509,9 +562,23 @@ final class MoveSymbol {
 		final cursorSourceNN: String = cursorSource;
 		final cursorInfoNN: FileInfo = cursorInfo;
 		final destInfoNN: FileInfo = destInfo;
+
+		// The bytes the declaration OWNS, which is neither end of `fullSpan`:
+		//  - `declGroupSpan` folds in the modifier / `@:meta` siblings the grammar
+		//    projects BEFORE the decl, so an ordinary module-level `private
+		//    typedef` no longer reads as sharing its line with other code.
+		//  - `trailingTrimmedSpan` cuts the run a `@:trailOpt(';')` decl written
+		//    WITHOUT its `;` swallows past its own closing brace — the blank line
+		//    and the NEXT declaration's doc comment, which the parser re-stashes as
+		//    that neighbour's leading trivia (the 816bb666 family).
+		final parseSpan: Span = declMatch.fullSpan;
+		final declParent: Null<QueryNode> = TreePath.parentOf(cursorTree, declMatch.declNode);
+		final groupSpan: Span = RefactorSupport.declGroupSpan(declMatch.declNode, declParent, parseSpan);
 		return POk({
 			typeName: typeName,
-			declSpan: declSpan,
+			declSpan: RefactorSupport.trailingTrimmedSpan(cursorSourceNN, groupSpan),
+			declGroupEnd: groupSpan.to,
+			declPrivate: hasPrivateModifier(declParent, groupSpan, parseSpan),
 			cursorSource: cursorSourceNN,
 			cursorInfo: cursorInfoNN,
 			destInfo: destInfoNN,
@@ -624,13 +691,22 @@ final class MoveSymbol {
 }
 
 /**
- * A validated move target: the type name, its full decl span, the cursor
- * file's source, the source and destination file infos, and the scope's
+ * A validated move target: the type name, the span of the bytes the
+ * declaration OWNS (modifier group folded in, trailing trivia trimmed off), the
+ * UNTRIMMED end of that group, whether the declaration is module-`private`, the
+ * cursor file's source, the source and destination file infos, and the scope's
  * source-text lookup.
+ *
+ * `declGroupEnd` is kept only so the cut can tell blank-line separation the
+ * span already claimed from trivia that belongs to the next declaration — see
+ * `computeCutSpan`. `declPrivate` gates the source-side import: a module-private
+ * type cannot be imported from another module.
  */
 private typedef MoveTarget = {
 	final typeName: String;
 	final declSpan: Span;
+	final declGroupEnd: Int;
+	final declPrivate: Bool;
 	final cursorSource: String;
 	final cursorInfo: FileInfo;
 	final destInfo: FileInfo;

@@ -58,28 +58,32 @@ enum DeclaredType {
  * and `final`-wrapped grammar shapes so every consumer compares uniformly.
  *
  *  - A plain `class C {}` parses as a single `ClassDecl C` node — `name`
- *    and `kind` come from the node, `nameNode` IS the node, and `fullSpan`
- *    is the node's own span.
+ *    and `kind` come from the node, both `nameNode` and `declNode` ARE the
+ *    node, and `fullSpan` is the node's own span.
  *  - A `final class C {}` parses as `FinalDecl(ClassForm C …)` — the OUTER
  *    `FinalDecl` carries NO name and a span that INCLUDES the `final `
  *    keyword; the INNER `ClassForm` carries the name `C` and a span that
  *    EXCLUDES `final `. For this shape `kind` is normalised to `ClassDecl`
  *    (a final class IS a class), `nameNode` is the inner `ClassForm` (it
  *    holds the name token, so `identTokenContains` and the decl-name
- *    occurrence anchor on it), and `fullSpan` is the OUTER `FinalDecl`
- *    span so a move cuts `final class C {…}` WITH its `final ` keyword.
+ *    occurrence anchor on it), `declNode` is the OUTER `FinalDecl`, and
+ *    `fullSpan` is that node's span so a move cuts `final class C {…}` WITH
+ *    its `final ` keyword.
  *
  * `final` is the only modifier that WRAPS a decl (it is legal in Haxe
  * only on `class` — `final interface` / `final abstract` are parse
  * errors). Every other modifier (`private` / `public` / `extern`) is a
  * SEPARATE preceding sibling node (`Private` / `Extern`) that leaves the
- * named decl node a plain `ClassDecl` / … — those already resolve through
- * the node-on-node branch, so no wrapper handling is needed for them.
+ * named decl node a plain `ClassDecl` / … — those already resolve through the
+ * node-on-node branch, so no wrapper handling is needed for them. They are NOT
+ * in `fullSpan` either: a caller that must cover them (a cut, a replace) folds
+ * the group with `declGroupSpan(declNode, …)`, which is what `declNode` is for.
  */
 typedef TypeDeclMatch = {
 	var name: String;
 	var kind: String;
 	var nameNode: QueryNode;
+	var declNode: QueryNode;
 	var fullSpan: Span;
 }
 
@@ -874,6 +878,7 @@ final class RefactorSupport {
 			name: name,
 			kind: node.kind,
 			nameNode: node,
+			declNode: node,
 			fullSpan: span
 		};
 
@@ -884,6 +889,7 @@ final class RefactorSupport {
 				name: innerName,
 				kind: 'ClassDecl',
 				nameNode: inner,
+				declNode: node,
 				fullSpan: span
 			};
 		}

@@ -704,6 +704,7 @@ final class SymbolIndexBuilder {
 				name: name,
 				kind: kind,
 				nameNode: child,
+				declNode: node,
 				fullSpan: span
 			};
 		}
