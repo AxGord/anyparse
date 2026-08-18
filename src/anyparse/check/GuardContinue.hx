@@ -389,14 +389,16 @@ final class GuardContinue implements Check {
 	 */
 	private static function thenEscapesIteration(node: QueryNode, s: Seams, inInnerLoop: Bool): Bool {
 		final h: Null<HoistSeams> = s.hoist;
-		return h == null ? true : LoopScan.escapesIteration(node, {
-			loopKinds: s.loopKinds,
-			doWhileKinds: s.doWhileKinds,
-			opaqueKinds: s.opaqueKinds,
-			nestedScopeKinds: h.nestedScopeKinds,
-			hardExitKinds: h.hardExitKinds,
-			loopJumpKinds: h.loopJumpKinds
-		}, inInnerLoop);
+		return h == null
+			? true
+			: LoopScan.escapesIteration(node, {
+				loopKinds: s.loopKinds,
+				doWhileKinds: s.doWhileKinds,
+				opaqueKinds: s.opaqueKinds,
+				nestedScopeKinds: h.nestedScopeKinds,
+				hardExitKinds: h.hardExitKinds,
+				loopJumpKinds: h.loopJumpKinds
+			}, inInnerLoop);
 	}
 
 	/**

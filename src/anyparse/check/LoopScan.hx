@@ -47,6 +47,11 @@ final class LoopScan {
 		return stableUseScan(node, null, null, name, sizeMember, s);
 	}
 
+	/** Whether `node` is a loop of either body order. */
+	public static inline function isLoop(node: QueryNode, s: LoopJumpSeams): Bool {
+		return s.loopKinds.contains(node.kind) || s.doWhileKinds.contains(node.kind);
+	}
+
 	/**
 	 * Bundle the `RefShape` kinds both loop rules read, or null when one the scans cannot work
 	 * without is unset (the calling check is then a no-op). `identKind` is required by `RefShape`
@@ -211,11 +216,6 @@ final class LoopScan {
 			kids[0]
 		else
 			kids[kids.length - 1];
-	}
-
-	/** Whether `node` is a loop of either body order. */
-	public static inline function isLoop(node: QueryNode, s: LoopJumpSeams): Bool {
-		return s.loopKinds.contains(node.kind) || s.doWhileKinds.contains(node.kind);
 	}
 
 	/**

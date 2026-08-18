@@ -137,12 +137,15 @@ final class WhileTrueCondition implements Check implements DefaultOff {
 		if (seams == null) return [];
 		final s: Seams = seams;
 		final file: String = violations.length == 0 ? '' : violations[0].file;
-		return CheckScan.applyTextMatches(plugin, source, violations, (tree, src) -> [
-			for (m in collectMatches(tree, src, s, plugin, file, index)) {
-				final text: Null<String> = m.text;
-				if (text != null) ({ span: m.span, text: text });
-			}
-		]);
+		return CheckScan.applyTextMatches(
+			plugin, source, violations,
+			(tree, src) -> [
+				for (m in collectMatches(tree, src, s, plugin, file, index)) {
+					final text: Null<String> = m.text;
+					if (text != null) ({ span: m.span, text: text });
+				}
+			]
+		);
 	}
 
 	/** Bundle the `RefShape` kinds this check reads, or null when a required one is unset (the check is then a no-op). */
@@ -259,18 +262,34 @@ final class WhileTrueCondition implements Check implements DefaultOff {
 	private static function classify(ifNode: QueryNode, rest: Array<QueryNode>, s: Seams): Null<Arms> {
 		if (ifNode.children.length == IF_NO_ELSE_CHILD_COUNT) {
 			final term: Null<Terminator> = exitBranch(ifNode.children[1], s);
-			return term == null ? null : { keep: null, lift: term.head, breakNode: term.breakNode, negate: true };
+			return term == null ? null : {
+				keep: null,
+				lift: term.head,
+				breakNode: term.breakNode,
+				negate: true
+			};
 		}
 		// Forms (b) and (c) consume the WHOLE body: a statement after the `if` would have to join
 		// the kept branch, and the two runs are not contiguous in the source.
 		if (ifNode.children.length != IF_WITH_ELSE_CHILD_COUNT || rest.length != 0) return null;
 		final thenTerm: Null<Terminator> = exitBranch(ifNode.children[1], s);
 		final elseTerm: Null<Terminator> = exitBranch(ifNode.children[2], s);
-		if (elseTerm != null && thenTerm == null)
-			return { keep: ifNode.children[1], lift: elseTerm.head, breakNode: elseTerm.breakNode, negate: false };
-		if (thenTerm != null && elseTerm == null)
-			return { keep: ifNode.children[2], lift: thenTerm.head, breakNode: thenTerm.breakNode, negate: true };
-		return null;
+		return if (elseTerm != null && thenTerm == null)
+			{
+				keep: ifNode.children[1],
+				lift: elseTerm.head,
+				breakNode: elseTerm.breakNode,
+				negate: false
+			};
+		else if (thenTerm != null && elseTerm == null)
+			{
+				keep: ifNode.children[2],
+				lift: thenTerm.head,
+				breakNode: thenTerm.breakNode,
+				negate: true
+			};
+		else
+			null;
 	}
 
 	/**
@@ -304,7 +323,7 @@ final class WhileTrueCondition implements Check implements DefaultOff {
 		final bodySpan: Null<Span> = bodyBlock.span;
 		if (ifSpan == null || bodySpan == null) return null;
 		final region: Span = new Span(ifSpan.to, bodySpan.to);
-		return { text: '{' + spanText(ctx.source, region), region: region };
+		return { text: '{${spanText(ctx.source, region)}', region: region };
 	}
 
 	/**
@@ -315,17 +334,18 @@ final class WhileTrueCondition implements Check implements DefaultOff {
 	 */
 	private static function liftedText(arms: Arms, emitted: Array<Null<Span>>, loopSpan: Span, ctx: Ctx): Null<String> {
 		final breakSpan: Null<Span> = arms.breakNode.span;
-		final kept: Array<Span> = [for (span in emitted) if (span != null) span];
-		final runFrom: Null<Span> = arms.lift.length == 0 ? null : arms.lift[0].span;
-		if (runFrom != null && breakSpan != null) kept.push(new Span(runFrom.from, breakSpan.from));
 		if (breakSpan == null) return null;
-		final hoisted: Null<Span> = arms.lift.length == 0 ? null : hoistableComment(breakSpan, loopSpan, ctx);
+		final runFrom: Null<Span> = arms.lift.length == 0 ? null : arms.lift[0].span;
+		final kept: Array<Span> = [for (span in emitted) if (span != null) span];
+		if (runFrom != null) kept.push(new Span(runFrom.from, breakSpan.from));
+		final hoisted: Null<Span> = runFrom == null ? null : hoistableComment(breakSpan, loopSpan, ctx);
 		if (hoisted != null) kept.push(hoisted);
 		for (c in ctx.comments) if (c.from >= loopSpan.from && c.to <= loopSpan.to && !containedIn(c.from, c.to, kept)) return null;
-		if (arms.lift.length == 0) return '';
-		if (runFrom == null) return null;
+		// No run to emit: an exiting branch that was a bare `break` lifts nothing (''), while a
+		// non-empty one whose first statement has no span cannot be transcribed at all (null).
+		if (runFrom == null) return arms.lift.length == 0 ? '' : null;
 		final run: String = ctx.source.substring(runFrom.from, breakSpan.from).rtrim();
-		return hoisted == null ? run : run + ' ' + spanText(ctx.source, hoisted);
+		return hoisted == null ? run : '$run ${spanText(ctx.source, hoisted)}';
 	}
 
 	/**
@@ -338,9 +358,9 @@ final class WhileTrueCondition implements Check implements DefaultOff {
 		for (c in ctx.comments) {
 			if (c.from < breakSpan.to) continue;
 			final gap: String = ctx.source.substring(breakSpan.to, c.from);
-			if (gap.indexOf('\n') != -1) return null;
-			if (gap.ltrim().replace(';', '') != '') return null;
-			return c.isLine && !tailOfLineIsBlank(ctx.source, loopSpan.to) ? null : new Span(c.from, c.to);
+			final sameLine: Bool = gap.indexOf('\n') == -1 && gap.ltrim().replace(';', '') == '';
+			final tailIsClear: Bool = !c.isLine || tailOfLineIsBlank(ctx.source, loopSpan.to);
+			return sameLine && tailIsClear ? new Span(c.from, c.to) : null;
 		}
 		return null;
 	}
