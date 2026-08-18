@@ -10,9 +10,10 @@ import anyparse.runtime.Span;
 using StringTools;
 
 /**
- * Flags an empty-array local declaration immediately followed by a `for` loop
- * whose only effect is `a.push(<expr>)`, which an array comprehension replaces —
- * `final a = []; for (x in xs) a.push(e);` collapses to `final a = [for (x in xs) e];`.
+ * Flags an empty-array local declaration immediately followed by a `for` or `while`
+ * loop whose only effect is `a.push(<expr>)`, which an array comprehension replaces —
+ * `final a = []; for (x in xs) a.push(e);` collapses to `final a = [for (x in xs) e];`,
+ * and `final a = []; while (c) a.push(e);` to `final a = [while (c) e];`.
  * `Severity.Info` (a modernization cleanup toward the idiomatic comprehension),
  * with an autofix. Grammar-agnostic over `RefShape`.
  *
@@ -21,12 +22,18 @@ using StringTools;
  * Two ADJACENT statements in one block: a local `var` / `final` whose initializer
  * is EXACTLY the empty array literal `[]` (a `new Array()` is left to
  * `prefer-array-literal`; after its `--fix` produces `[]` this check catches it on
- * the next run), then a `for` whose body — descending through braces, nested
- * `for`s and ONE trailing `if` guard — bottoms out in exactly one `a.push(e)` call
- * statement. The comprehension is assembled by transcribing each `for (...)` header
- * and the `if (cond)` guard verbatim from source (so a key-value `for (k => v in m)`
- * and a nested `for (a) for (b)` transfer intact), with the push argument as the
- * produced element.
+ * the next run), then a `for` or `while` whose body — descending through braces, nested loops of
+ * either kind and ONE trailing `if` guard — bottoms out in exactly one `a.push(e)`
+ * call statement. The comprehension is assembled by transcribing each `for (...)` /
+ * `while (...)` header and the `if (cond)` guard verbatim from source (so a key-value
+ * `for (k => v in m)` and a nested `for (a) for (b)` transfer intact), with the push
+ * argument as the produced element. `do … while` is NOT a comprehension form and
+ * misses on its own kind.
+ *
+ * A `while` CONDITION goes through the same self-reference gate as a `for` iterable,
+ * and that is what carries the form: `while (a.length < 11) a.push('')` reads the
+ * array being accumulated, and no comprehension can express it — the comprehension's
+ * own array is not that binding, so the rewrite would silently change the result.
  *
  * ## The chain form
  *
@@ -163,6 +170,9 @@ final class PreferComprehension implements Check {
 	/** A `for` node has exactly [iterable, body] OPERAND children — a key-value VALUE binder is not one. */
 	private static inline final FOR_CHILD_COUNT: Int = 2;
 
+	/** A `while` node has exactly [condition, body] children. */
+	private static inline final WHILE_CHILD_COUNT: Int = 2;
+
 	/** An `if` with no `else` has exactly [condition, then-branch] children. */
 	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
 
@@ -179,7 +189,7 @@ final class PreferComprehension implements Check {
 	}
 
 	public function description(): String {
-		return 'an empty-array local plus a push-only for loop replaceable with an array comprehension ([for])';
+		return 'an empty-array local plus a push-only for/while loop replaceable with an array comprehension ([for] / [while])';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -206,18 +216,8 @@ final class PreferComprehension implements Check {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin.refShape());
 		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final textBySpan: Map<String, String> = [];
-		for (m in collectMatches(tree, source, seams)) textBySpan['${m.span.from}:${m.span.to}'] = m.text;
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final text: Null<String> = textBySpan['${span.from}:${span.to}'];
-			if (text != null) edits.push({ span: span, text: text });
-		}
-		return RefactorSupport.dropContainedEdits(edits);
+		final s: Seams = seams;
+		return CheckScan.applyTextMatches(plugin, source, violations, (tree, src) -> collectMatches(tree, src, s));
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
@@ -235,6 +235,7 @@ final class PreferComprehension implements Check {
 		final blockStmtKind: Null<String> = shape.blockStmtKind;
 		return blockStmtKind == null ? null : {
 			forStmtKind: forStmtKind,
+			whileStmtKind: shape.whileStmtKind,
 			localDeclKinds: localDeclKinds,
 			callKind: callKind,
 			fieldAccessKind: fieldAccessKind,
@@ -296,7 +297,7 @@ final class PreferComprehension implements Check {
 		final s: Seams = ctx.seams;
 		final source: String = ctx.source;
 		if (!s.localDeclKinds.contains(decl.kind) || decl.children.length != 1) return null;
-		if (forNode.kind != s.forStmtKind) return null;
+		if (forNode.kind != s.forStmtKind && forNode.kind != s.whileStmtKind) return null;
 		final declName: Null<String> = decl.name;
 		final declSpan: Null<Span> = decl.span;
 		final initSpan: Null<Span> = decl.children[0].span;
@@ -334,36 +335,41 @@ final class PreferComprehension implements Check {
 		final s: Seams = ctx.seams;
 		if (node.kind == s.forStmtKind) {
 			final operands: Array<QueryNode> = RefactorSupport.loopOperands(node, s.valueBinderKinds);
-			if (operands.length != FOR_CHILD_COUNT) return null;
-			final iterable: QueryNode = operands[0];
-			final body: QueryNode = operands[1];
-			final nodeSpan: Null<Span> = node.span;
-			final bodySpan: Null<Span> = body.span;
-			if (nodeSpan == null || bodySpan == null) return null;
-			final header: Null<String> = transcribeHeader(nodeSpan.from, bodySpan.from, ctx);
-			if (header == null) return null;
-			acc.checks.push(iterable);
-			final rest: Null<String> = buildInner(body, name, ctx, acc);
-			return rest == null ? null : '$header $rest';
+			return operands.length != FOR_CHILD_COUNT ? null : buildHeaderLayer(node, operands[0], operands[1], name, ctx, acc);
 		}
+		if (node.kind == s.whileStmtKind)
+			return node.children.length != WHILE_CHILD_COUNT
+				? null
+				: buildHeaderLayer(node, node.children[0], node.children[1], name, ctx, acc);
 		if (node.kind == s.blockStmtKind) return buildBlock(node, name, ctx, acc);
-		if (s.ifKinds.contains(node.kind)) {
-			if (node.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
-			final cond: QueryNode = node.children[0];
-			final then: QueryNode = node.children[1];
-			final nodeSpan: Null<Span> = node.span;
-			final thenSpan: Null<Span> = then.span;
-			if (nodeSpan == null || thenSpan == null) return null;
-			final header: Null<String> = transcribeHeader(nodeSpan.from, thenSpan.from, ctx);
-			if (header == null) return null;
-			acc.checks.push(cond);
-			final rest: Null<String> = buildInner(then, name, ctx, acc);
-			return rest == null ? null : '$header $rest';
-		}
+		if (s.ifKinds.contains(node.kind))
+			return node.children.length != IF_NO_ELSE_CHILD_COUNT
+				? null
+				: buildHeaderLayer(node, node.children[0], node.children[1], name, ctx, acc);
 		final arg: Null<QueryNode> = pushArgument(node, name, ctx, acc);
 		if (arg == null) return null;
 		final argSpan: Null<Span> = arg.span;
 		return argSpan == null ? null : ctx.source.substring(argSpan.from, argSpan.to);
+	}
+
+	/**
+	 * The comprehension text for ONE header layer — a `for`, a `while` or an `if` guard — assembled
+	 * the same way for all three: `node`'s header transcribed verbatim up to `body`'s start, the
+	 * scanned `check` node (the iterable, or the condition) appended to `acc.checks` for the
+	 * self-reference gate, and `body`'s own transcription appended after it. Null when the header
+	 * carries a comment on its LAST line (see `transcribeHeader`) or when the body is off-shape.
+	 */
+	private static function buildHeaderLayer(
+		node: QueryNode, check: QueryNode, body: QueryNode, name: String, ctx: Ctx, acc: Acc
+	): Null<String> {
+		final nodeSpan: Null<Span> = node.span;
+		final bodySpan: Null<Span> = body.span;
+		if (nodeSpan == null || bodySpan == null) return null;
+		final header: Null<String> = transcribeHeader(nodeSpan.from, bodySpan.from, ctx);
+		if (header == null) return null;
+		acc.checks.push(check);
+		final rest: Null<String> = buildInner(body, name, ctx, acc);
+		return rest == null ? null : '$header $rest';
 	}
 
 	/**
@@ -927,6 +933,7 @@ final class PreferComprehension implements Check {
 /** The `RefShape` kinds `PreferComprehension` reads, bundled once so the walkers take one argument. */
 private typedef Seams = {
 	var forStmtKind: String;
+	var whileStmtKind: Null<String>;
 	var localDeclKinds: Array<String>;
 	var callKind: String;
 	var fieldAccessKind: String;

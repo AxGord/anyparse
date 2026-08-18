@@ -190,6 +190,24 @@ final class CheckScan {
 	}
 
 	/**
+	 * The autofix skeleton for a check whose MATCHES already carry their replacement text: parse
+	 * `source`, re-run `collect` over it, index each match's text by its span, and return the edits
+	 * for the violations the caller was actually asked to fix (contained edits dropped). Empty when
+	 * `source` does not parse. Sibling of `applyBySpan`, for a check that re-derives whole
+	 * `{span, text}` matches rather than looking single nodes up by kind.
+	 */
+	public static function applyTextMatches(
+		plugin: GrammarPlugin, source: String, violations: Array<Violation>,
+		collect: (tree:QueryNode, source:String) -> Array<{ span: Span, text: String }>
+	): Array<{ span: Span, text: String }> {
+		final tree: Null<QueryNode> = parseOrNull(plugin, source);
+		if (tree == null) return [];
+		final textBySpan: Map<String, String> = [];
+		for (m in collect(tree, source)) textBySpan['${m.span.from}:${m.span.to}'] = m.text;
+		return RefactorSupport.dropContainedEdits(collectSpanEdits(violations, textBySpan, (text, span) -> ({ span: span, text: text })));
+	}
+
+	/**
 	 * Every spanned node of `kinds` in `source`, keyed `from:to` — the lookup table a span-addressed
 	 * fix re-derives its targets from. Empty when `source` does not parse, which every caller reads
 	 * as "nothing to do here" rather than as an error.

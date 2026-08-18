@@ -458,6 +458,49 @@ class PreferComprehensionCheckTest extends Test {
 		);
 	}
 
+	public function testWhileFormFlaggedAndFixed(): Void {
+		Assert.equals(1, violations(fnRet('final out:Array<Int> = [];\n\t\twhile (it.hasNext()) out.push(it.next());')).length);
+		Assert.equals(
+			fnRet('final out:Array<Int> = [while (it.hasNext()) it.next()];'),
+			applyFix(fnRet('final out:Array<Int> = [];\n\t\twhile (it.hasNext()) out.push(it.next());'))
+		);
+	}
+
+	public function testWhileGuardAndBracedBodyFixed(): Void {
+		Assert.equals(
+			fnRet('final out:Array<Int> = [while (it.hasNext()) if (p(x)) x];'),
+			applyFix(fnRet('final out:Array<Int> = [];\n\t\twhile (it.hasNext()) if (p(x)) { out.push(x); }'))
+		);
+	}
+
+	public function testWhileNestedUnderForFixed(): Void {
+		Assert.equals(
+			fnRet('final out:Array<Int> = [for (x in xs) while (p(x)) x];'),
+			applyFix(fnRet('final out:Array<Int> = [];\n\t\tfor (x in xs) while (p(x)) out.push(x);'))
+		);
+	}
+
+	public function testWhileConditionReadingTheArrayNotFlagged(): Void {
+		// The load-bearing gate, measured on the real tree: `while (a.length < 11) a.push('')`
+		// cannot be a comprehension at all — the condition reads the array being accumulated, and
+		// the comprehension's own array is not that binding. It falls out of the SAME
+		// self-reference gate the `for` iterable already goes through.
+		Assert.equals(0, violations(fnRet('final out:Array<Int> = [];\n\t\twhile (out.length < 11) out.push(0);')).length);
+	}
+
+	public function testWhileConditionInterpolatingTheArrayNotFlagged(): Void {
+		Assert.equals(0, violations(fnRet("final out:Array<Int> = [];\n\t\twhile (p('$out')) out.push(0);")).length);
+	}
+
+	public function testDoWhileNotFlagged(): Void {
+		// `[do … while]` is not a comprehension form; `DoWhileStmt` is its own kind and must miss.
+		Assert.equals(0, violations(fnRet('final out:Array<Int> = [];\n\t\tdo out.push(0); while (p(x));')).length);
+	}
+
+	public function testCommentInTranscribedWhileHeaderNotFlagged(): Void {
+		Assert.equals(0, violations(fnRet('final out:Array<Int> = [];\n\t\twhile (p(x)) // note\n\t\t\tout.push(x);')).length);
+	}
+
 	private inline function chainBody(): String {
 		return 'final out:Array<Cmd> = [];\n\t\tfor (x in xs) if (isKind(x)) {\n\t\t\tfinal tool:ToolBase = cast x;'
 			+ '\n\t\t\tfinal cmd:Cmd = new MakeCmd(tool, m);\n\t\t\t// note\n\t\t\tout.push(cmd);\n\t\t}';
