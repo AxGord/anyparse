@@ -641,6 +641,7 @@ import unit.RemoveMemberDocSliceTest;
 import unit.DeleteBlankLineSliceTest;
 import unit.PreferForInCheckTest;
 import unit.WhileTrueConditionCheckTest;
+import unit.HxComplexItemWrapTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -863,6 +864,7 @@ class RunTests {
 		addCase(new HxComprehensionChainIdempotencyTest());
 		addCase(new HxComprehensionFitLineNoBreakTest());
 		addCase(new HxComprehensionCuddledOpenTest());
+		addCase(new HxComplexItemWrapTest());
 		addCase(new HxComprehensionDeclRhsBracketWrapTest());
 		addCase(new HxExprParenObjectLitGlueTest());
 		addCase(new HxFitLineBodyGlueSliceTest());
