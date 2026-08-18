@@ -23,6 +23,28 @@ final class HaxePatternFragment {
 		return span == null || span.to - span.from >= variant.trim().length - 1;
 	}
 
+	/**
+	 * Re-root a `final <name> = …` declaration pattern onto its named inner node.
+	 *
+	 * A module-level `final` binding projects as `FinalDecl(VarForm name …)` — the
+	 * `final` keyword is a WRAPPER ctor carrying no name, exactly like `final class`
+	 * → `FinalDecl(ClassForm …)`. The class-field and local spellings are flat
+	 * (`FinalMember` / `FinalStmt`), so a pattern rooted at the wrapper can never
+	 * unify with them: the matcher requires an equal name slot and an equal child
+	 * count, and the wrapper has neither. Rooting the pattern at `VarForm` — the node
+	 * that actually names the binding — is what lets the search-only kind-equivalence
+	 * relate all three positions.
+	 *
+	 * Only the variable form is re-rooted; `FinalDecl(ClassForm …)` is left alone,
+	 * since a real `final class` projects the same wrapper and already matches.
+	 *
+	 * Runs AFTER `consumesVariant`, which needs the wrapper's span — the `VarForm`
+	 * span starts after the `final` keyword.
+	 */
+	public static function rerootFinalVarDecl(node: QueryNode): QueryNode {
+		return node.kind == 'FinalDecl' && node.children.length == 1 && node.children[0].kind == 'VarForm' ? node.children[0] : node;
+	}
+
 	public static function wrapAsStmt(src: String): String {
 		return 'class _ApqPattern { static function _apq() { ${trimTrailingSemicolons(src)}; } }';
 	}

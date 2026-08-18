@@ -3,9 +3,11 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.Engine;
 import anyparse.query.Matcher;
 import anyparse.query.Pattern;
 import anyparse.query.QueryNode;
+import anyparse.query.Selector;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -109,20 +111,140 @@ class ApqMatcherTest extends Test {
 		Assert.isTrue(names.contains('local'), '$$v must bind local var — got ${names.join(',')}');
 	}
 
-	public function testVarEquivalenceIsScoped(): Void {
-		// S2 negative control: the var-decl equivalence must NOT
-		// over-collapse. `var $v = 0` must not match a `final`
-		// declaration (different keyword/semantics, deliberately a
-		// separate family) nor a function declaration.
+	public function testFnDeclPatternMatchesEveryPosition(): Void {
+		// B0 red-green: a Haxe `function` declaration surfaces as five
+		// position/modifier-specific kinds — module `FnDecl`, member `FnMember`,
+		// local `LocalFnStmt`, plus two that swallow a modifier keyword into their
+		// own span, `final function` (`FinalModifiedMember`) and a local `inline
+		// function` (`LocalInlineFnStmt`). A pattern parses via the Decl attempt to
+		// `FnDecl`, so before the search-only equivalence it matched nothing in
+		// ordinary code — `search --explain` reported the root kind as absent from
+		// every scanned file. The three modifier-free positions must match; `sealed`
+		// and `localInline` are in-fixture negatives, deliberately out of the group
+		// because the same relation drives `Rewrite` and matching them there deletes
+		// the modifier (RewriteSliceTest.testModifierBearingFunctionKindsAreNotRewritten).
+		// `host` is a third negative: same kind, different child shape (no parameter).
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final source: String = 'function mod(?p:Bool = true):Void {}
+class X {
+	public function member(?p:Bool = true):Void {}
+	final function sealed(?p:Bool = true):Void {}
+	static function host():Void {
+		function local(?p:Bool = true):Void {}
+		inline function localInline(?p:Bool = true):Void {}
+	}
+}';
+		final pattern: Pattern = plugin.parsePattern("function $n(?$p:Bool = true):Void {}");
+		final tree: QueryNode = plugin.parseFile(source);
+		final names: Array<String> = boundNames(Matcher.search(pattern, tree), 'n');
+		names.sort((a, b) -> a < b ? -1 : (a > b ? 1 : 0));
+		Assert.equals(
+			'local,member,mod', names.join(','), 'every modifier-free function declaration position must match — got ${names.join(',')}'
+		);
+	}
+
+	public function testFnEquivalenceIsScoped(): Void {
+		// Positive + negative in ONE input, so a disabled equivalence flips the
+		// assertion instead of leaving it vacuously true. The function group must
+		// reach the member and nothing else here: a `var` / `final` binding is a
+		// different family, an anonymous `function (…)` (`FnExpr`) has no name to
+		// bind, and a named function EXPRESSION (`NamedFnExpr`) is expression
+		// position, outside the declaration-only criterion.
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final source: String = 'class X {
-			final c = 0;
-			static function g() { return 0; }
-		}';
+	var v = 0;
+	final c = 0;
+	public function member(?p:Bool = true):Void {}
+	static function host():Void {
+		var f = function (?p:Bool = true):Void {};
+		var g = function named(?p:Bool = true):Void {};
+	}
+}';
+		final pattern: Pattern = plugin.parsePattern("function $n(?$p:Bool = true):Void {}");
+		final tree: QueryNode = plugin.parseFile(source);
+		final names: Array<String> = boundNames(Matcher.search(pattern, tree), 'n');
+		Assert.equals('member', names.join(','), 'only the declared member matches — got ${names.join(',')}');
+	}
+
+	public function testFinalDeclPatternMatchesEveryPosition(): Void {
+		// The `final` twin of the function case, with one extra wrinkle: the
+		// module-level spelling is `FinalDecl(VarForm …)`, a nameless wrapper the
+		// matcher can never unify with the flat `FinalMember` / `FinalStmt`. The
+		// pattern is re-rooted onto the named `VarForm`, which is what the group
+		// is keyed on.
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final source: String = 'final mod:T = new X();
+class Y {
+	final member:T = new X();
+	static function host():Void { final local:T = new X(); }
+}';
+		final pattern: Pattern = plugin.parsePattern("final $n:$t = new $x();");
+		final tree: QueryNode = plugin.parseFile(source);
+		final names: Array<String> = boundNames(Matcher.search(pattern, tree), 'n');
+		names.sort((a, b) -> a < b ? -1 : (a > b ? 1 : 0));
+		Assert.equals('local,member,mod', names.join(','), 'every final-binding position must match — got ${names.join(',')}');
+	}
+
+	public function testFinalEquivalenceIsScoped(): Void {
+		// Positive + negative in one input. `var v = 0;` differs from
+		// `final c = 0;` by the keyword alone, so a group that over-collapsed the
+		// two families would match both; a `final function` belongs to the
+		// function group, not this one.
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final source: String = 'class X {
+	var v = 0;
+	final c = 0;
+	final function sealed():Void {}
+	static function host():Void { var lv = 0; }
+}';
+		final pattern: Pattern = plugin.parsePattern("final $n = 0");
+		final tree: QueryNode = plugin.parseFile(source);
+		final names: Array<String> = boundNames(Matcher.search(pattern, tree), 'n');
+		Assert.equals('c', names.join(','), 'only the final binding matches — got ${names.join(',')}');
+	}
+
+	public function testVarEquivalenceIsScoped(): Void {
+		// S2 negative control, widened for B0: the var-decl equivalence must not
+		// over-collapse into the function or `final` families that now have groups
+		// of their own. Positive and negatives share one input — `var v = 0` and
+		// `final c = 0` differ by the keyword alone — so a broken group flips this
+		// in either direction instead of passing vacuously.
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final source: String = 'class X {
+	var v = 0;
+	final c = 0;
+	final function sealed():Void {}
+	static function g() { return 0; }
+	static function host():Void {
+		final lc = 0;
+		inline function localInline():Void {}
+	}
+}';
 		final pattern: Pattern = plugin.parsePattern("var $v = 0");
 		final tree: QueryNode = plugin.parseFile(source);
-		final matches: Array<Match> = Matcher.search(pattern, tree);
-		Assert.equals(0, matches.length, 'var pattern must not match final/fn — got ${matches.length}');
+		final names: Array<String> = boundNames(Matcher.search(pattern, tree), 'v');
+		Assert.equals('v', names.join(','), 'var pattern must match only the var — got ${names.join(',')}');
+	}
+
+	public function testSearchEquivalenceDoesNotLeakIntoSelect(): Void {
+		// The safety argument for the whole mechanism: the relation is carried on
+		// the `Pattern` and read only by the search `Matcher`, so `--select` (and
+		// with it `ast` / `refs` / `--on`) keeps the precise per-position kinds.
+		// The `1` assertions make this discriminating — a tree that had been
+		// collapsed would move them, not just the `0`s.
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final source: String = 'class X {
+	final c = 0;
+	public function member():Void { function local():Void {} }
+}';
+		final tree: QueryNode = plugin.parseFile(source);
+		final eq: KindEquivalence = plugin.selectKindEquivalence();
+		Assert.equals(0, Engine.select(tree, Selector.parse('FnDecl'), eq).length, '--select FnDecl must not reach a FnMember');
+		Assert.equals(0, Engine.select(tree, Selector.parse('FinalDecl'), eq).length, '--select FinalDecl must not reach a FinalMember');
+		Assert.equals(0, Engine.select(tree, Selector.parse('VarForm'), eq).length, 'no module-level final here');
+		Assert.equals(1, Engine.select(tree, Selector.parse('FnMember'), eq).length, 'the member keeps its own kind');
+		Assert.equals(1, Engine.select(tree, Selector.parse('LocalFnStmt'), eq).length, 'the local fn keeps its own kind');
+		Assert.equals(1, Engine.select(tree, Selector.parse('FinalMember'), eq).length, 'the final field keeps its own kind');
 	}
 
 	/**
@@ -253,6 +375,16 @@ class ApqMatcherTest extends Test {
 		if (bound != null) Assert.equals('a', bound.name);
 		final keyValue: Array<Match> = Matcher.search(plugin.parsePattern("for ($k => $v in $m) $body"), tree);
 		Assert.equals(1, keyValue.length, 'the key-value pattern matches exactly the key-value loop');
+	}
+
+	/** The names each match bound to the given metavariable, in match order. */
+	private static function boundNames(matches: Array<Match>, metavar: String): Array<String> {
+		return [
+			for (m in matches) {
+				final n: Null<QueryNode> = m.bindings.get(metavar);
+				n == null ? '<none>' : (n.name ?? '<noname>');
+			}
+		];
 	}
 
 }
