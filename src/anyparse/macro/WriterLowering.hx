@@ -10404,6 +10404,11 @@ class WriterLowering {
 		// the `groupRestProbe` rest-of-line fit bias. Not cleared on descent ->
 		// nested ctors inherit it.
 		final suppressCallRestProbe: Bool = child.fmtHasFlag('suppressCallRestProbe');
+		// ω-complex-item-count: `@:fmt(suppressComplexItems)` on the case-pattern
+		// body Ref (`HxCasePattern.expr`) and the switch subject
+		// (`HxSwitchStmt(Bare).expr`) marks the subtree so an array literal below
+		// it skips the complexity classification. Not cleared on descent.
+		final suppressComplexItems: Bool = child.fmtHasFlag('suppressComplexItems');
 		// omega-condsplice-tail-nest: `@:fmt(chainNestSuppress)` on a mandatory Ref
 		// (HxCondSpliceExpr.tail) suppresses the descendant chain's OWN continuation
 		// Nest so a `#if … #end` token-splice tail co-indents with the ENCLOSING chain
@@ -10438,6 +10443,7 @@ class WriterLowering {
 			// Set AFTER `_setExprPosition` so its descent-clear does not wipe the
 			// just-set flag (mirrors the `propagateArrowLambdaBody` ordering).
 			if (suppressCallRestProbe) e = macro _setSuppressCallRestProbe($e, true, opt);
+			if (suppressComplexItems) e = macro _setSuppressComplexItems($e, opt);
 			if (chainNestSuppress) e = macro _setCallArgChainNest($e, opt);
 			if (propagateArrowLambdaBody) e = macro _setArrowLambdaBody($e, opt);
 			if (propagateAnonFn) e = macro _setAnonFnBody($e, opt);

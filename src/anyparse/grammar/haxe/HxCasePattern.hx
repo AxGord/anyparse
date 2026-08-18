@@ -53,6 +53,6 @@ typedef HxCasePattern = {
 	// `groupRestProbe` rest-of-line fit bias -- the fork breaks the `|` (BitOr)
 	// chain, not the ctor args. Not applied to `guard` (a genuine
 	// expression-position condition where calls should wrap normally).
-	@:fmt(suppressCallRestProbe) var expr: HxCasePatternBody;
+	@:fmt(suppressCallRestProbe, suppressComplexItems) var expr: HxCasePatternBody;
 	@:optional @:kw('if') var guard: Null<HxExpr>;
 };

@@ -1279,6 +1279,32 @@ class WriterCodegen {
 	}
 
 	/**
+	 * ω-complex-item-count — opt-fanout shim marking a case-PATTERN body or a
+	 * switch SUBJECT (`@:fmt(suppressComplexItems)`), so an array literal below
+	 * it skips the per-element complexity classification that feeds
+	 * `complexItemCount >= n`. Idempotent (returns `o` unchanged when already
+	 * set). Sister to `_setSuppressCallRestProbe`. Gated on
+	 * `_suppressComplexItems:Bool`.
+	 */
+	private static function setSuppressComplexItemsField(optionsCT: ComplexType): Field {
+		return {
+			name: '_setSuppressComplexItems',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
+				ret: optionsCT,
+				expr: macro {
+					if (o._suppressComplexItems) return o;
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
+					_c._suppressComplexItems = true;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
 	 * ω-expr-paren-in-condition — sister reset helper to
 	 * `_setParenInCondition`. Returns `o` unchanged when `_parenInCondition`
 	 * is already `false`; otherwise returns a `_copyOpt(o)` with the flag
@@ -2487,6 +2513,11 @@ class WriterCodegen {
 		// iff the grammar declares `_suppressCallRestProbe`.
 		if (optionsHasField(optionsTypePath, '_suppressCallRestProbe')) {
 			fields.push(setSuppressCallRestProbeField(optionsCT));
+		}
+		// ω-complex-item-count: same one-field-per-block gate for
+		// `_setSuppressComplexItems`.
+		if (optionsHasField(optionsTypePath, '_suppressComplexItems')) {
+			fields.push(setSuppressComplexItemsField(optionsCT));
 		}
 		// ω-keep-kw-newline (increment 1b): opt-fanout helper pair for the
 		// VarStmt-family `@:fmt(captureKwNewline)` ctors. `_setVarKwNewline`

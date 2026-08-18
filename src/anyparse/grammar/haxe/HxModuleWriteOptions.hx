@@ -1293,6 +1293,16 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// statement/expression-position call keeps the rest-probe (wraps at limit+1,
 	// counting the trailing `;`).
 	_suppressCallRestProbe: Bool,
+	// ω-complex-item-count: the subtree is a case PATTERN or a switch SUBJECT,
+	// so an array literal inside it must not classify its elements for the
+	// `complexItemCount >= n` cascade condition. Both positions can hold a shape
+	// the classifier cannot tell from a value: an enum-constructor pattern
+	// (`case [Some(a), Some(b)]:`) parses as two `Call`s, and the fork never
+	// wraps a switch subject at all. Set via `_setSuppressComplexItems` from
+	// `@:fmt(suppressComplexItems)` on `HxCasePattern.expr` /
+	// `HxSwitchStmt(Bare).expr`; not cleared on descent, so a nested pattern
+	// inherits it. Default false → every value-position array classifies.
+	_suppressComplexItems: Bool,
 	_varKwNewline: Bool,
 	_inFieldLevelVar: Bool,
 	// ω-single-stmt-braces: dangling-else suppress frame. Set (via

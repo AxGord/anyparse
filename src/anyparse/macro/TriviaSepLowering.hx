@@ -907,7 +907,9 @@ final class TriviaSepLowering {
 		// carry `@:fmt(complexItems)` — the engine then counts 0 and the chunk
 		// policy stays off, so the emit call is byte-identical.
 		final complexKindsDecl: Expr = c.complexItems
-			? macro final _complexKinds: Null<Array<Int>> = anyparse.grammar.haxe.HaxeFormat.complexItemKinds(cast _arr)
+			? macro final _complexKinds: Null<Array<Int>> = opt._suppressComplexItems
+				? null
+				: anyparse.grammar.haxe.HaxeFormat.complexItemKinds(cast _arr)
 			: macro final _complexKinds: Null<Array<Int>> = null;
 		return if (c.wrapRulesField != null) {
 			final rulesExpr: Expr = WriterLowering.optFieldAccess(c.wrapRulesField);
