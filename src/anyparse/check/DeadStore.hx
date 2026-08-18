@@ -603,9 +603,11 @@ final class DeadStore implements Check {
 		final faKind: String = fieldAccessKind;
 		final identKind: Null<String> = shape.identKind;
 		final callKind: Null<String> = shape.callKind;
-		if (identKind != null && callKind != null && rhs.kind == callKind && PurityScan.isPureStdlibCall(rhs, faKind, identKind)) return [
-			for (i in 1...rhs.children.length) rhs.children[i]
-		].foreach(a -> rhsSafeToDelete(a, root, shape, declaredTypes, index, fieldAccessKind));
+		if (identKind != null && callKind != null && rhs.kind == callKind && PurityScan.isPureStdlibCall(rhs, faKind, identKind)) {
+			for (i in 1...rhs.children.length) if (!rhsSafeToDelete(rhs.children[i], root, shape, declaredTypes, index, fieldAccessKind))
+				return false;
+			return true;
+		}
 		if (index == null || rhs.kind != faKind) return false;
 		return TypeResolver.isPlainFieldRead(rhs, root, shape, declaredTypes, index);
 	}
