@@ -641,6 +641,7 @@ import unit.RemoveMemberDocSliceTest;
 import unit.DeleteBlankLineSliceTest;
 import unit.PreferForInCheckTest;
 import unit.WhileTrueConditionCheckTest;
+import unit.HxHeaderWrapLadderSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -880,6 +881,7 @@ class RunTests {
 		addCase(new HxChainOuterOperatorWrapSliceTest());
 		addCase(new HxTernaryCollectionHugSliceTest());
 		addCase(new HxCondWrapFitLineSliceTest());
+		addCase(new HxHeaderWrapLadderSliceTest());
 		addCase(new HxCondForContainerGlueSliceTest());
 		addCase(new HxIfExprCondWrapSliceTest());
 		addCase(new HxCondPlainCallLeadingBreakSliceTest());
