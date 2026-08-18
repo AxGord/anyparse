@@ -674,6 +674,83 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	}
 
 	/**
+	 * RUN-SCOPED CLAIM: a rename decided in ONE file must be visible when a SECOND file's rename is
+	 * decided in the same pass. `A.CAPS` and `B.Caps` (B extends A) both correct to `_caps`, and the
+	 * two take DIFFERENT paths — `A` is non-confined (it has a subtype) so it renames cross-file,
+	 * while `B` is confined so it renames through the per-file `fix`. Both consult the SAME pass's
+	 * index, where `A` still spells `CAPS`, so the inherited-member gate
+	 * (`typeProvablyLacksMember`) clears `B` and both landed `_caps`: `haxe` then rejects the tree
+	 * with "Redefinition of variable _caps in subclass is not allowed" (verified live). The second
+	 * one must DEFER — it re-fires next pass, judged against a source that finally holds the name.
+	 */
+	public function testCrossFileClaimBlocksASingleFileRenameToTheSameInheritedName(): Void {
+		final aSrc: String = 'package pkg;\nclass A {\n\tprivate var CAPS:Int = 1;\n\tpublic function a():Int { return CAPS; }\n}';
+		final bSrc: String = 'package pkg;\nclass B extends A {\n\tprivate var Caps:Int = 2;\n'
+			+ '\tpublic function b():Int { return Caps; }\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/A.hx', source: aSrc }, { file: 'pkg/B.hx', source: bSrc }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(2, vs.length);
+		// The driver's order: every cross-file rename of the pass first, then the per-file fixes.
+		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
+		Assert.equals(1, renames.length);
+		assertRenameSlice(renames[0], 'pkg/A.hx', aSrc, '_caps', 'CAPS');
+		Assert.equals(0, check.fix(bSrc, vs.filter(v -> v.file == 'pkg/B.hx'), new HaxeQueryPlugin(), index).length);
+	}
+
+	/**
+	 * The same claim, both renames on the CROSS-FILE path: `A.CAPS` and `B.Caps` are each
+	 * non-confined (`B extends A`, `C extends B`), so one `crossFileFix` call decides both against
+	 * the same index and emitted two renames to `_caps` — the identical redefinition error. Exactly
+	 * one may be claimed.
+	 */
+	public function testOnlyOneCrossFileRenameClaimsAnInheritedTargetNamePerPass(): Void {
+		final aSrc: String = 'package pkg;\nclass A {\n\tprivate var CAPS:Int = 1;\n\tpublic function a():Int { return CAPS; }\n}';
+		final bSrc: String = 'package pkg;\nclass B extends A {\n\tprivate var Caps:Int = 2;\n'
+			+ '\tpublic function b():Int { return Caps; }\n}';
+		final cSrc: String = 'package pkg;\nclass C extends B {\n\tpublic function c():Int { return 0; }\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/A.hx', source: aSrc },
+			{ file: 'pkg/B.hx', source: bSrc },
+			{ file: 'pkg/C.hx', source: cSrc }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(2, vs.length);
+		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
+		Assert.equals(1, renames.length);
+		assertRenameSlice(renames[0], 'pkg/A.hx', aSrc, '_caps', 'CAPS');
+	}
+
+	/**
+	 * The CONTROL for both claim tests: two flagged privates correcting to the same `_caps` in
+	 * UNRELATED types still BOTH rename in one pass. The claim is a hierarchy question, not a
+	 * name one — refusing on the bare name collision would strand every unrelated twin in the tree.
+	 */
+	public function testUnrelatedTypesMayBothClaimTheSameTargetNameInOnePass(): Void {
+		final aSrc: String = 'package pkg;\nclass A {\n\tprivate var CAPS:Int = 1;\n\tpublic function a():Int { return CAPS; }\n}';
+		final xSrc: String = 'package pkg;\nclass X {\n\tprivate var Caps:Int = 2;\n\tpublic function x():Int { return Caps; }\n}';
+		final subSrc: String = 'package pkg;\nclass ASub extends A {\n\tpublic function s():Int { return 0; }\n}';
+		final xSubSrc: String = 'package pkg;\nclass XSub extends X {\n\tpublic function s():Int { return 0; }\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/A.hx', source: aSrc },
+			{ file: 'pkg/X.hx', source: xSrc },
+			{ file: 'pkg/ASub.hx', source: subSrc },
+			{ file: 'pkg/XSub.hx', source: xSubSrc }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(2, vs.length);
+		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
+		Assert.equals(2, renames.length);
+		assertRenameSlice(renames[0], 'pkg/A.hx', aSrc, '_caps', 'CAPS');
+		assertRenameSlice(renames[1], 'pkg/X.hx', xSrc, '_caps', 'Caps:Int');
+	}
+
+	/**
 	 * A cross-file rename touching `declFile` must also carry `subFile`: committing the declaring
 	 * file alone orphans the subtype's inherited read and breaks the build.
 	 */
