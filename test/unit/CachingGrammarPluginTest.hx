@@ -6,6 +6,9 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.GrammarPlugin.LayoutMetrics;
+import anyparse.query.SpanTypeInfoProvider.SpanTypeInfo;
+import anyparse.runtime.Span;
+import haxe.Exception;
 
 /**
  * `CachingGrammarPlugin` memoizes `parseFile` / `parseFileTypeRefs` by source
@@ -83,6 +86,138 @@ class CachingGrammarPluginTest extends Test {
 		Assert.equals(inner.langName(), cached.langName());
 		Assert.notNull(cached.refShape());
 		Assert.notNull(cached.stringFoldSupport());
+	}
+
+	/**
+	 * The counter proof for the shared parsed root: the four projections of ONE source cost
+	 * ONE parse, where each of them used to parse that source itself. A second distinct
+	 * source must add exactly one more, so a counter frozen at 1 fails here instead of
+	 * reading as a pass.
+	 */
+	public function testOneParseServesEveryProjection(): Void {
+		final cached: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final first: String = 'class OneParseProbeA<T> {\n\tvar x: Int;\n\tfunction f(): Void {}\n}';
+		final second: String = 'class OneParseProbeB {\n\tvar y: String;\n}';
+		final before: Int = cached.rootParses;
+		projectEveryWay(cached, first);
+		Assert.equals(1, cached.rootParses - before, 'four projections of one source cost ONE parse');
+		projectEveryWay(cached, second);
+		Assert.equals(2, cached.rootParses - before, 'a second distinct source costs exactly one more');
+	}
+
+	/**
+	 * The seam is output-NEUTRAL: every projection taken through the shared root returns
+	 * what the UNWRAPPED plugin returns for the same source. The fixture carries an import,
+	 * a type parameter, a typed field and a typed cast so that none of the comparisons is
+	 * vacuously empty - the non-emptiness is asserted, not assumed.
+	 */
+	public function testProjectionsUnchangedByTheSharedRoot(): Void {
+		final plain: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final cached: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final src: String = 'package probe;\n\nimport haxe.io.Bytes;\n\nclass SharedRootProbe<T> {\n\n'
+			+ '\tpublic var raw: Bytes;\n\n\tpublic function new() {\n\t\traw = Bytes.alloc(1);\n\t}\n\n'
+			+ '\tpublic function pick(v: T): Int {\n\t\treturn cast(v, Int);\n\t}\n\n}\n';
+
+		final plainTree: String = shapeOf(plain.parseFile(src));
+		Assert.isTrue(plainTree.length > 100, 'the fixture projects a real tree - the shape comparisons are not vacuous');
+		Assert.equals(plainTree, shapeOf(cached.parseFile(src)), 'parseFile');
+		Assert.equals(shapeOf(plain.parseFileTypeRefs(src)), shapeOf(cached.parseFileTypeRefs(src)), 'parseFileTypeRefs');
+
+		final plainInfo: SpanTypeInfo = plain.spanTypeInfo(src);
+		final sharedInfo: SpanTypeInfo = cached.spanTypeInfo(src);
+		Assert.notEquals('', mapDigest(plainInfo.declaredTypes), 'the fixture fills declaredTypes');
+		Assert.notEquals('', mapDigest(plainInfo.castTargetSources), 'the fixture fills castTargetSources');
+		Assert.equals(mapDigest(plainInfo.declaredTypes), mapDigest(sharedInfo.declaredTypes), 'declaredTypes');
+		Assert.equals(mapDigest(plainInfo.returnTypes), mapDigest(sharedInfo.returnTypes), 'returnTypes');
+		Assert.equals(mapDigest(plainInfo.propertyAccessors), mapDigest(sharedInfo.propertyAccessors), 'propertyAccessors');
+		Assert.equals(mapDigest(plainInfo.propertyWriteAccessors), mapDigest(sharedInfo.propertyWriteAccessors), 'propertyWriteAccessors');
+		Assert.equals(mapDigest(plainInfo.declaredTypeSources), mapDigest(sharedInfo.declaredTypeSources), 'declaredTypeSources');
+		Assert.equals(mapDigest(plainInfo.castTargetSources), mapDigest(sharedInfo.castTargetSources), 'castTargetSources');
+
+		Assert.notEquals('', mapDigest(plain.importMap(src)), 'the fixture fills importMap');
+		Assert.equals(mapDigest(plain.importMap(src)), mapDigest(cached.importMap(src)), 'importMap');
+	}
+
+	/**
+	 * A source that does not parse keeps behaving exactly as before: `parseFile` throws and
+	 * leaves nothing in the tree cache, so a second call throws again; the other projections
+	 * answer empty. The NULL root is memoised like any other, so those four calls cost one
+	 * parse attempt rather than one each.
+	 */
+	public function testSkipParseSourceStillThrowsAndIsNotCached(): Void {
+		final cached: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final src: String = 'class SkipParseProbe { function (';
+		final before: Int = cached.rootParses;
+		Assert.raises(cached.parseFile.bind(src), Exception);
+		Assert.raises(cached.parseFile.bind(src), Exception);
+		Assert.isFalse(cached.spanTypeInfo(src).declaredTypes.keys().hasNext(), 'a failed parse yields the empty bundle');
+		Assert.isFalse(cached.importMap(src).keys().hasNext(), 'a failed parse yields the empty import map');
+		Assert.equals(1, cached.rootParses - before, 'the failed parse is memoised too - one attempt, not four');
+	}
+
+	/**
+	 * The shared root survives being projected repeatedly and in ANY order — a walk must
+	 * neither consume nor mutate it. The reverse-order wrapper works off a root the walker
+	 * memo was forced to re-parse (the eviction source in between), so this compares two
+	 * genuinely different roots reached through two different projection orders.
+	 */
+	public function testSharedRootSurvivesProjectionInAnyOrder(): Void {
+		final forward: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final reverse: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final src: String = 'import haxe.io.Bytes;\n\nclass OrderProbe<T> {\n\tvar a: Bytes;\n\n'
+			+ '\tfunction f(v: T): Int {\n\t\treturn cast(v, Int);\n\t}\n}';
+
+		final tree: String = shapeOf(forward.parseFile(src));
+		final refs: String = shapeOf(forward.parseFileTypeRefs(src));
+		final types: String = mapDigest(forward.spanTypeInfo(src).declaredTypes);
+		final imports: String = mapDigest(forward.importMap(src));
+		Assert.notEquals('', imports, 'the fixture fills importMap — the comparisons below are not vacuous');
+
+		new CachingGrammarPlugin(new HaxeQueryPlugin()).parseFile('class OrderProbeEvict {}');
+
+		Assert.equals(imports, mapDigest(reverse.importMap(src)), 'importMap first');
+		Assert.equals(types, mapDigest(reverse.spanTypeInfo(src).declaredTypes), 'spanTypeInfo second');
+		Assert.equals(refs, shapeOf(reverse.parseFileTypeRefs(src)), 'parseFileTypeRefs third');
+		Assert.equals(tree, shapeOf(reverse.parseFile(src)), 'parseFile last');
+		Assert.equals(1, reverse.rootParses, 'the reverse wrapper parsed that source exactly once');
+	}
+
+	/** Every source-taking projection of one source, in the order a lint run demands them. */
+	private static function projectEveryWay(cached: CachingGrammarPlugin, source: String): Void {
+		// The four results are deliberately discarded: this helper exists to DEMAND each
+		// projection, and what the callers assert on is `rootParses` — how many times that
+		// demand reached a real parse. Suppressed per line rather than worked around,
+		// because the discard IS the point; a sink local would make the values read as if
+		// they mattered.
+		cached.parseFile(source); // noqa: unused-return-value
+		cached.parseFileTypeRefs(source); // noqa: unused-return-value
+		cached.spanTypeInfo(source); // noqa: unused-return-value
+		cached.importMap(source); // noqa: unused-return-value
+	}
+
+	/** Kind, name and span of every node in document order - the fingerprint two projections must share. */
+	private static function shapeOf(node: QueryNode): String {
+		final buf: StringBuf = new StringBuf();
+		appendShape(node, buf);
+		return buf.toString();
+	}
+
+	/** One node of `shapeOf`, then its children - kept apart so the entry point can own the buffer. */
+	private static function appendShape(node: QueryNode, buf: StringBuf): Void {
+		final span: Null<Span> = node.span;
+		buf.add(node.kind);
+		buf.add('|');
+		buf.add(node.name ?? '-');
+		buf.add(span == null ? '|-(' : '|${span.from}:${span.to}(');
+		for (child in node.children) appendShape(child, buf);
+		buf.add(')');
+	}
+
+	/** Every entry of a map as one sorted string - two maps hold the same entries iff these match. */
+	private static function mapDigest<K, V>(map: Map<K, V>): String {
+		final rows: Array<String> = [for (k => v in map) '$k=$v'];
+		rows.sort(Reflect.compare);
+		return rows.join(';');
 	}
 
 }

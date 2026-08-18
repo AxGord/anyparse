@@ -19,6 +19,7 @@ import anyparse.query.SpanTypeInfoProvider;
 import anyparse.query.StdResolver;
 import anyparse.query.CondBranchProjection;
 import anyparse.query.FormatConfigDiscovery;
+import anyparse.query.ParsedRootProvider;
 
 /**
  * Haxe grammar binding for the `apq` query engine.
@@ -53,7 +54,8 @@ import anyparse.query.FormatConfigDiscovery;
  * applies. Its children (top-level decls) carry their own spans.
  */
 @:nullSafety(Strict)
-final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider implements SpanTypeInfoProvider {
+final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider implements SpanTypeInfoProvider
+		implements ParsedRootProvider {
 
 	/**
 	 * Binding-declaration kinds shared by `refShape` and `metaShape`
@@ -368,11 +370,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	public function langName(): String return 'haxe';
 
 	public function parseFile(source: String): QueryNode {
-		return buildTree(source, false);
+		return treeFromRoot(parseRoot(source), source, false);
 	}
 
 	public function parseFileTypeRefs(source: String): QueryNode {
-		return buildTree(source, true);
+		return treeFromRoot(parseRoot(source), source, true);
 	}
 
 	public function projectBranchAware(tree: QueryNode, source: String): QueryNode {
@@ -1320,7 +1322,38 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * (pinned by `SpanTypeInfoPinTest`).
 	 */
 	public function spanTypeInfo(source: String): SpanTypeInfo {
-		return HaxeQueryWalker.spanInfo(source);
+		return spanTypeInfoFromRoot(parseRoot(source), source);
+	}
+
+	/**
+	 * `ParsedRootProvider`: parse `source` into the grammar root - the handle the three
+	 * projections below share, so a caller needing more than one of them pays ONE parse
+	 * instead of one per projection. Null when the source does not parse; each projection
+	 * then behaves exactly as its source-taking twin did on that source.
+	 */
+	public function parseRoot(source: String): Null<Any> {
+		return HaxeQueryWalker.parseRoot(source);
+	}
+
+	/**
+	 * `ParsedRootProvider`: the `parseFile` / `parseFileTypeRefs` projection of an
+	 * already-parsed root, with `HxInterpProjection` applied: a single-quoted literal's
+	 * text fragment may SPELL its interpolation through escapes (`'\x24a'` is a read
+	 * of `a`), which the `@:rawString` terminal deliberately keeps verbatim and every
+	 * tree consumer would otherwise read as plain text. Applied at this one seat so
+	 * `parseFile` and `parseFileTypeRefs` — and through them every check, op and
+	 * probe — see the same model the compiler does. Throws on a null root, exactly as
+	 * `parseFile` always threw on a source that does not parse.
+	 */
+	public function treeFromRoot(root: Null<Any>, source: String, withTypeRefs: Bool): QueryNode {
+		final tree: QueryNode = new QueryNode('module', null, HaxeQueryWalker.walkRoot(cast root, withTypeRefs));
+		HxInterpProjection.reproject(tree, source);
+		return tree;
+	}
+
+	/** `ParsedRootProvider`: the `spanTypeInfo` projection of an already-parsed root — the empty bundle on a null one. */
+	public function spanTypeInfoFromRoot(root: Null<Any>, source: String): SpanTypeInfo {
+		return HaxeQueryWalker.spanInfoRoot(cast root, source);
 	}
 
 	/**
@@ -1332,8 +1365,17 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * reference to it must not resolve to the import (drops the rare collision).
 	 */
 	public function importMap(source: String): Map<String, String> {
+		return importMapFromRoot(parseRoot(source), source);
+	}
+
+	/**
+	 * `ParsedRootProvider`: the `importMap` projection of an already-parsed root. The
+	 * import walk and the type-parameter sweep both read THIS root, where the
+	 * source-taking form parsed once for each of them. The empty map on a null root.
+	 */
+	public function importMapFromRoot(root: Null<Any>, source: String): Map<String, String> {
 		final out: Map<String, String> = [];
-		final tree: Null<QueryNode> = try buildTree(source, false) catch (exception: Exception) null;
+		final tree: Null<QueryNode> = try treeFromRoot(root, source, false) catch (exception: Exception) null;
 		if (tree == null) return out;
 		for (node in tree.children) if (node.kind == 'ImportDecl') {
 			final raw: Null<String> = node.name;
@@ -1342,7 +1384,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				out[dot == -1 ? raw : raw.substring(dot + 1)] = raw;
 			}
 		}
-		for (tp in typeParamNames(source)) out.remove(tp);
+		for (tp in HaxeQueryWalker.typeParamNamesRoot(cast root, source)) out.remove(tp);
 		return out;
 	}
 
@@ -1365,25 +1407,6 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		final names: Array<String> = [];
 		collectStaticMethodsWithParam(tree, names);
 		return names;
-	}
-
-	/** Every declare-site type-parameter name in the file (`class C<T>`, `function f<U>`, …). */
-	private function typeParamNames(source: String): Array<String> {
-		return HaxeQueryWalker.typeParamNames(source);
-	}
-
-	/**
-	 * The walked tree with `HxInterpProjection` applied: a single-quoted literal's
-	 * text fragment may SPELL its interpolation through escapes (`'\x24a'` is a read
-	 * of `a`), which the `@:rawString` terminal deliberately keeps verbatim and every
-	 * tree consumer would otherwise read as plain text. Applied at this one seat so
-	 * `parseFile` and `parseFileTypeRefs` — and through them every check, op and
-	 * probe — see the same model the compiler does.
-	 */
-	private function buildTree(source: String, withTypeRefs: Bool): QueryNode {
-		final tree: QueryNode = new QueryNode('module', null, HaxeQueryWalker.walk(source, withTypeRefs));
-		HxInterpProjection.reproject(tree, source);
-		return tree;
 	}
 
 	/**

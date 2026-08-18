@@ -34,10 +34,26 @@ import anyparse.query.SpanTypeInfoProvider;
  * 200+ auto-discovered Haxe std files, plus every declared `resolutionRoots` /
  * `resolutionLibs` source, on every run in the process. Only the library half of a `ResolutionSources` ever enters it, which is what bounds it — a `--fix` loop's per-pass rewritten report sources never do, and the nominal `LibrarySources` type makes feeding it the report half a compile error rather than a convention. Same single-thread rule as the
  * instance caches; same content key, so a library file changed on disk misses.
+ *
+ * Under all of them is the run-scoped PARSED-ROOT cache, the one thing the projection
+ * caches above could not share: `parseFile`, `parseFileTypeRefs`, `spanTypeInfo` and
+ * `importMap` each memoise a DIFFERENT projection, so each used to begin by parsing the
+ * source again. When the wrapped grammar offers `ParsedRootProvider` the four go through
+ * ONE memoised root instead, and a source is parsed once per run however many
+ * projections that run demands (`rootParses` counts them). Instance state like every
+ * cache here, run-scoped for the same reason, and never shared across threads.
  */
 @:nullSafety(Strict)
 final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoProvider implements SpanTypeInfoProvider
 		implements SymbolIndexHost {
+
+	/** Roots parsed by this wrapper — one per distinct source once the projections share it. */
+	public var rootParses(default, null): Int = 0;
+
+	// The parsed ROOT per source — the one thing the projection caches below could not
+	// share, so each of them re-parsed. Values may be null (a source that does not parse
+	// memoises its failure too), so reads go through `exists`, not a null test.
+	private final _rootCache: Map<String, Null<Any>> = [];
 
 	private final _parseCache: Map<String, QueryNode> = [];
 	private final _typeRefCache: Map<String, QueryNode> = [];
@@ -59,6 +75,12 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	private final _refsCache: RefsCache = new RefsCache();
 	private final _inner: GrammarPlugin;
 
+	// The wrapped grammar's OPTIONAL root-sharing capability, resolved once — the same
+	// `_inner is X ? cast _inner : null` seam as `SpanTypeInfoProvider`, one level lower.
+	// Null for a grammar without it, and every entry point below then falls back to its
+	// source-taking `_inner` call, byte-identically.
+	private final _rootProvider: Null<ParsedRootProvider>;
+
 	// The PROCESS-scoped tier behind the run-scoped caches below: this wrapper's language slice
 	// of it, resolved once in the constructor. Only RESOLUTION-LIBRARY sources ever enter it —
 	// `SharedParseTier` documents why that bound is what makes a process-scoped tier safe here.
@@ -77,6 +99,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 
 	public function new(inner: GrammarPlugin) {
 		_inner = inner;
+		_rootProvider = inner is ParsedRootProvider ? cast inner : null;
 		_shared = new SharedParseTier(inner.langName());
 	}
 
@@ -127,6 +150,16 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		if (scope == null) return null;
 		final sources: ResolutionSources = scope.sources();
 		_shared.promote(sources.library, this);
+		// Drop the LIBRARY roots the moment the process-scoped tier owns their projections.
+		// Library sources are demanded as `{parseFile, spanInfo}` and only that, and those two
+		// calls are ADJACENT — the generated one-entry root memo already collapsed them before
+		// this cache existed — so holding their roots buys ZERO parses (346 of 1048 sources on
+		// this tree). Measured on a TM lint, three interleaved rounds against BOTH the base and
+		// the un-narrowed variant: keeping them costs +322 MB peak RSS for -7.4%, dropping them
+		// costs +168 MB for -7.2%. The speed difference is 0.04s, inside the noise; the memory
+		// difference is half the bill. A later demand the shared tier does not cover simply
+		// re-parses, which is correct, just slower.
+		for (entry in sources.library.entries()) _rootCache.remove(entry.source);
 		return sources.report.concat(sources.library.entries());
 	}
 
@@ -164,7 +197,10 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		final shared: Null<QueryNode> = _shared.servedParse(source);
 		if (shared != null) return shared;
 		SharedParseTier.noteInnerParse();
-		final tree: QueryNode = _inner.parseFile(source);
+		final provider: Null<ParsedRootProvider> = _rootProvider;
+		final tree: QueryNode = provider != null
+			? provider.treeFromRoot(rootOf(provider, source), source, false)
+			: _inner.parseFile(source);
 		_parseCache[source] = tree;
 		return tree;
 	}
@@ -172,7 +208,10 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	public function parseFileTypeRefs(source: String): QueryNode {
 		final cached: Null<QueryNode> = _typeRefCache[source];
 		if (cached != null) return cached;
-		final tree: QueryNode = _inner.parseFileTypeRefs(source);
+		final provider: Null<ParsedRootProvider> = _rootProvider;
+		final tree: QueryNode = provider != null
+			? provider.treeFromRoot(rootOf(provider, source), source, true)
+			: _inner.parseFileTypeRefs(source);
 		_typeRefCache[source] = tree;
 		return tree;
 	}
@@ -275,8 +314,14 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		final shared: Null<SpanTypeInfo> = _shared.servedSpanInfo(source);
 		if (shared != null) return shared;
 		SharedParseTier.noteInnerSpanParse();
+		final provider: Null<ParsedRootProvider> = _rootProvider;
 		final batched: Null<SpanTypeInfoProvider> = _inner is SpanTypeInfoProvider ? cast _inner : null;
-		final result: SpanTypeInfo = batched != null ? batched.spanTypeInfo(source) : fallbackSpanInfo(source);
+		final result: SpanTypeInfo = if (provider != null)
+			provider.spanTypeInfoFromRoot(rootOf(provider, source), source);
+		else if (batched != null)
+			batched.spanTypeInfo(source);
+		else
+			fallbackSpanInfo(source);
 		_spanInfoCache[source] = result;
 		return result;
 	}
@@ -301,10 +346,31 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	public function importMap(source: String): Map<String, String> {
 		final cached: Null<Map<String, String>> = _importMapCache[source];
 		if (cached != null) return cached;
+		final provider: Null<ParsedRootProvider> = _rootProvider;
 		final inner: Null<TypeInfoProvider> = _inner is TypeInfoProvider ? cast _inner : null;
-		final result: Map<String, String> = inner != null ? inner.importMap(source) : [];
+		final result: Map<String, String> = if (provider != null)
+			provider.importMapFromRoot(rootOf(provider, source), source);
+		else if (inner != null)
+			inner.importMap(source);
+		else
+			[];
 		_importMapCache[source] = result;
 		return result;
+	}
+
+	/**
+	 * The parsed root of `source`, memoised for the whole run — the ONE parse the four
+	 * projections above share. `exists` is the read rather than a null test because a
+	 * source that does not parse memoises a NULL root, so a skip-parse file is not
+	 * re-parsed once per projection either. Called only where `provider` is in hand, so
+	 * the capability check stays at the call site instead of being re-tested here.
+	 */
+	private function rootOf(provider: ParsedRootProvider, source: String): Null<Any> {
+		if (_rootCache.exists(source)) return _rootCache[source];
+		final root: Null<Any> = provider.parseRoot(source);
+		_rootCache[source] = root;
+		rootParses++;
+		return root;
 	}
 
 	/**

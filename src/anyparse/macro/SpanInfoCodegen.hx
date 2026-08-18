@@ -41,7 +41,9 @@ class SpanInfoCodegen {
 		for (fn in result.spanOfs) fields.push(unaryField(fn, NULL_SPAN_CT, 'Own span of a `${fn.typePath}` value.'));
 		final idCT: Null<ComplexType> = result.accessorIdCT;
 		if (idCT != null) fields.push(accessorField(idCT));
+		fields.push(publicSpanInfoRootField(result));
 		fields.push(publicSpanInfoField(result));
+		fields.push(publicTypeParamsRootField(result));
 		fields.push(publicTypeParamsField(result));
 		return fields;
 	}
@@ -107,8 +109,13 @@ class SpanInfoCodegen {
 		};
 	}
 
-	/** The public `spanInfo(root, source): SpanTypeInfo` entry - a fresh bundle filled by the root rule's own walk. */
-	private static function publicSpanInfoField(result: SpanInfoLowering.SpanInfoResult): Field {
+	/**
+	 * The public `spanInfoRoot(root, source): SpanTypeInfo` entry - a fresh bundle
+	 * filled by the root rule's own walk over a root the caller already parsed. A null
+	 * root (a source that does not parse) yields the empty bundle, as the source-taking
+	 * twin always did.
+	 */
+	private static function publicSpanInfoRootField(result: SpanInfoLowering.SpanInfoResult): Field {
 		final rootCall: Expr = {
 			expr: ECall(
 				{ expr: EConst(CIdent(result.rootFnName)), pos: Context.currentPos() },
@@ -126,10 +133,29 @@ class SpanInfoCodegen {
 				declaredTypeSources: [],
 				castTargetSources: []
 			};
-			final _r = _root(source);
+			final _r = root;
 			if (_r != null) $rootCall;
 			return b;
 		};
+		return {
+			name: 'spanInfoRoot',
+			access: [APublic, AStatic],
+			doc: 'The six span-indexed type/accessor maps of an already-parsed `${result.rootTypePath}`, in one walk.',
+			kind: FFun({
+				args: [
+					{ name: 'root', type: QueryWalkerCodegen.nullRootCT(result.rootCT) },
+					{ name: 'source', type: STRING_CT },
+				],
+				ret: BUNDLE_CT,
+				expr: body
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/** The source-taking twin of `spanInfoRoot`: parse through the memo, then project. */
+	private static function publicSpanInfoField(result: SpanInfoLowering.SpanInfoResult): Field {
+		final body: Expr = macro return spanInfoRoot(_root(source), source);
 		return {
 			name: 'spanInfo',
 			access: [APublic, AStatic],
@@ -144,12 +170,12 @@ class SpanInfoCodegen {
 	}
 
 	/**
-	 * The public `typeParamNames(root, source)` entry. It runs the SAME walk as
-	 * `spanInfo` and keeps only the type-parameter names; the maps it also fills
+	 * The public `typeParamNamesRoot(root, source)` entry. It runs the SAME walk as
+	 * `spanInfoRoot` and keeps only the type-parameter names; the maps it also fills
 	 * are discarded. One traversal family rather than two is worth the throwaway
 	 * bundle - the reflective version walked the whole tree for this too.
 	 */
-	private static function publicTypeParamsField(result: SpanInfoLowering.SpanInfoResult): Field {
+	private static function publicTypeParamsRootField(result: SpanInfoLowering.SpanInfoResult): Field {
 		final rootCall: Expr = {
 			expr: ECall(
 				{ expr: EConst(CIdent(result.rootFnName)), pos: Context.currentPos() },
@@ -167,10 +193,29 @@ class SpanInfoCodegen {
 				declaredTypeSources: [],
 				castTargetSources: []
 			};
-			final _r = _root(source);
+			final _r = root;
 			if (_r != null) $rootCall;
 			return tp;
 		};
+		return {
+			name: 'typeParamNamesRoot',
+			access: [APublic, AStatic],
+			doc: 'Every type-parameter name declared anywhere in an already-parsed `${result.rootTypePath}`, in first-occurrence order.',
+			kind: FFun({
+				args: [
+					{ name: 'root', type: QueryWalkerCodegen.nullRootCT(result.rootCT) },
+					{ name: 'source', type: STRING_CT },
+				],
+				ret: TPath({ pack: [], name: 'Array', params: [TPType(STRING_CT)] }),
+				expr: body
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/** The source-taking twin of `typeParamNamesRoot`: parse through the memo, then project. */
+	private static function publicTypeParamsField(result: SpanInfoLowering.SpanInfoResult): Field {
+		final body: Expr = macro return typeParamNamesRoot(_root(source), source);
 		return {
 			name: 'typeParamNames',
 			access: [APublic, AStatic],

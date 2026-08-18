@@ -33,13 +33,30 @@ class QueryWalkerCodegen {
 		params: [TPType(TPath({ pack: ['anyparse', 'runtime'], name: 'Span', params: [] }))]
 	});
 
+	// The two argument shapes several generated entries share. Named rather than repeated
+	// because the macro BODIES reference these parameters by name (`source`, `withTypeRefs`),
+	// so the entries have to agree on the spelling, not merely happen to.
+	private static final SOURCE_ARG: FunctionArg = { name: 'source', type: STRING_CT };
+	private static final WITH_TYPE_REFS_ARG: FunctionArg = { name: 'withTypeRefs', type: BOOL_CT };
+
 	public static function emit(result: QueryWalkerLowering.QueryWalkerResult, parserPath: String): Array<Field> {
 		final fields: Array<Field> = [rootMemoSource(), rootMemoValue(result), rootField(result, parserPath)];
 		for (fn in result.walks) fields.push(walkField(fn));
 		for (fn in result.names) fields.push(nameField(fn));
 		for (fn in result.typeRefs) fields.push(typeRefsField(fn));
+		fields.push(publicParseRootField(result));
+		fields.push(publicWalkRootField(result));
 		fields.push(publicWalkField(result));
 		return fields;
+	}
+
+	/**
+	 * `Null<T>` over the paired grammar root. Shared with `SpanInfoCodegen`, which emits
+	 * onto the SAME marker class from the same shape, so its root-taking entries must
+	 * spell the parameter exactly as the walker's do.
+	 */
+	public static function nullRootCT(rootCT: ComplexType): ComplexType {
+		return TPath({ pack: [], name: 'Null', params: [TPType(rootCT)] });
 	}
 
 	/** The memoised source of `_memoRoot` - `null` before the first parse. */
@@ -59,7 +76,7 @@ class QueryWalkerCodegen {
 			name: '_memoRoot',
 			access: [APrivate, AStatic],
 			doc: 'Parse root of `_memoSource`, or null when that source did not parse. A failed parse is memoised too, so a skip-parse file is not retried by every projection.',
-			kind: FVar(TPath({ pack: [], name: 'Null', params: [TPType(result.rootCT)] }), macro null),
+			kind: FVar(nullRootCT(result.rootCT), macro null),
 			pos: Context.currentPos(),
 		};
 	}
@@ -90,8 +107,8 @@ class QueryWalkerCodegen {
 			access: [APrivate, AStatic],
 			doc: 'The parse root of `source`, memoised on the last source seen; null when it does not parse.',
 			kind: FFun({
-				args: [{ name: 'source', type: STRING_CT }],
-				ret: TPath({ pack: [], name: 'Null', params: [TPType(result.rootCT)] }),
+				args: [SOURCE_ARG],
+				ret: nullRootCT(result.rootCT),
 				expr: body
 			}),
 			pos: Context.currentPos(),
@@ -112,7 +129,7 @@ class QueryWalkerCodegen {
 				args: [
 					{ name: 'v', type: fn.paramCT },
 					{ name: 'into', type: NODE_ARRAY_CT },
-					{ name: 'withTypeRefs', type: BOOL_CT },
+					WITH_TYPE_REFS_ARG,
 				],
 				ret: VOID_CT,
 				expr: fn.body
@@ -152,30 +169,74 @@ class QueryWalkerCodegen {
 	}
 
 	/**
-	 * The public `walk(root, withTypeRefs): Array<QueryNode>` entry - the root
-	 * rule's own `_walk` over a fresh accumulator, ordered by source position.
+	 * The public `parseRoot(source)` entry - the memoised parse root itself, handed
+	 * out so a caller needing several projections of one source pays ONE parse.
 	 */
-	private static function publicWalkField(result: QueryWalkerLowering.QueryWalkerResult): Field {
+	private static function publicParseRootField(result: QueryWalkerLowering.QueryWalkerResult): Field {
+		final body: Expr = macro return _root(source);
+		return {
+			name: 'parseRoot',
+			access: [APublic, AStatic],
+			doc: 'Parse `source` into the grammar root, memoised on the last source seen; null when it does not parse. '
+				+ 'The handle a caller projects more than once instead of re-parsing per projection.',
+			kind: FFun({
+				args: [SOURCE_ARG],
+				ret: nullRootCT(result.rootCT),
+				expr: body
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * The public `walkRoot(root, withTypeRefs): Array<QueryNode>` entry - the root
+	 * rule's own `_walk` over a fresh accumulator, ordered by source position, from a
+	 * root the caller already holds.
+	 */
+	private static function publicWalkRootField(result: QueryWalkerLowering.QueryWalkerResult): Field {
 		final rootCall: Expr = {
 			expr: ECall({ expr: EConst(CIdent(result.rootFnName)), pos: Context.currentPos() }, [macro _r, macro into, macro withTypeRefs]),
 			pos: Context.currentPos(),
 		};
 		final body: Expr = macro {
-			final _r = _root(source);
+			final _r = root;
 			if (_r == null) throw new haxe.Exception('parse failed');
 			final into: Array<anyparse.query.QueryNode> = [];
 			$rootCall;
 			return anyparse.query.QueryWalkSupport.orderBySpan(into);
 		};
 		return {
-			name: 'walk',
+			name: 'walkRoot',
 			access: [APublic, AStatic],
-			doc: 'Translate a parsed `${result.rootTypePath}` into the engine\'s `QueryNode` children. '
+			doc: 'Translate an already-parsed `${result.rootTypePath}` into the engine\'s `QueryNode` children. '
 				+ '`withTypeRefs` surfaces skipped name-slot types as `TypeRef` nodes (the `apq uses` projection).',
 			kind: FFun({
 				args: [
-					{ name: 'source', type: STRING_CT },
-					{ name: 'withTypeRefs', type: BOOL_CT },
+					{ name: 'root', type: nullRootCT(result.rootCT) },
+					WITH_TYPE_REFS_ARG,
+				],
+				ret: NODE_ARRAY_CT,
+				expr: body
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * The source-taking twin of `walkRoot`: parse through the memo, then project. What
+	 * a caller with one projection to make uses; the pair exists for the caller with four.
+	 */
+	private static function publicWalkField(result: QueryWalkerLowering.QueryWalkerResult): Field {
+		final body: Expr = macro return walkRoot(_root(source), withTypeRefs);
+		return {
+			name: 'walk',
+			access: [APublic, AStatic],
+			doc: 'Translate a parsed `${result.rootTypePath}` into `QueryNode` children - `walkRoot` over `parseRoot(source)`. '
+				+ '`withTypeRefs` surfaces skipped name-slot types as `TypeRef` nodes (the `apq uses` projection).',
+			kind: FFun({
+				args: [
+					SOURCE_ARG,
+					WITH_TYPE_REFS_ARG,
 				],
 				ret: NODE_ARRAY_CT,
 				expr: body
