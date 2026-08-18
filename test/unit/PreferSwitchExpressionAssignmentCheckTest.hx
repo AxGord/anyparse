@@ -496,9 +496,8 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 	public function testEmptyDefaultArmInterveningWriteNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(
-				wrap('var x:String = \'\';\n\t\tx = \'mid\';\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase _:\n\t\t}')
-			).length
+			violations(wrap('var x:String = \'\';\n\t\tx = \'mid\';\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase _:\n\t\t}'))
+				.length
 		);
 	}
 

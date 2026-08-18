@@ -321,39 +321,6 @@ final class AssignmentTreeHoist {
 	}
 
 	/**
-	 * The borrowed value for a completely empty default arm -- `emptyDefaultValue`'s own verbatim
-	 * text and span, contributing no leaf write (`leafCount: 0`; an empty arm writes nothing). Null
-	 * when no fallback was given, `branch` is not a default arm (`isDefaultArm`), or it is not
-	 * truly empty (`isEmptyArm`) -- `armBody`'s null also covers a MULTI-statement body, which must
-	 * keep failing here rather than silently taking the fallback.
-	 */
-	private static function borrowedEmptyDefaultUnit(
-		branch: QueryNode, emptyDefaultValue: Null<QueryNode>, source: String, s: TreeSeams
-	): Null<UnitValue> {
-		if (emptyDefaultValue == null || !isDefaultArm(branch, s) || !isEmptyArm(branch, s)) return null;
-		final span: Null<Span> = emptyDefaultValue.span;
-		if (span == null) return null;
-		final text: Null<String> = slice(source, emptyDefaultValue);
-		return text == null ? null : {
-			text: text,
-			kept: [span],
-			gaps: [],
-			atom: span,
-			leafCount: 0
-		};
-	}
-
-	/**
-	 * Whether a case / default arm has ZERO body children (its pattern wrapper(s) and guard
-	 * stripped) -- distinct from `armBody`'s null, which also covers MORE than one.
-	 */
-	private static function isEmptyArm(branch: QueryNode, s: TreeSeams): Bool {
-		final guard: Null<QueryNode> = caseGuard(branch, s);
-		for (c in branch.children) if (c.kind != s.plainCasePatternKind && c != guard) return false;
-		return true;
-	}
-
-	/**
 	 * Whether `branch` is an exhaustive default arm -- a `default:` (`defaultBranchKind`) or an
 	 * unguarded wildcard `case _:` (its pattern is the plain wrapper holding just the wildcard
 	 * identifier). A guarded wildcard can still fail to match, so it never counts.
@@ -394,6 +361,39 @@ final class AssignmentTreeHoist {
 	/** All switch-machinery kinds present -- the recursion recognises a switch only when they are. */
 	private static inline function switchReady(s: TreeSeams): Bool {
 		return s.switchKinds != null;
+	}
+
+	/**
+	 * The borrowed value for a completely empty default arm -- `emptyDefaultValue`'s own verbatim
+	 * text and span, contributing no leaf write (`leafCount: 0`; an empty arm writes nothing). Null
+	 * when no fallback was given, `branch` is not a default arm (`isDefaultArm`), or it is not
+	 * truly empty (`isEmptyArm`) -- `armBody`'s null also covers a MULTI-statement body, which must
+	 * keep failing here rather than silently taking the fallback.
+	 */
+	private static function borrowedEmptyDefaultUnit(
+		branch: QueryNode, emptyDefaultValue: Null<QueryNode>, source: String, s: TreeSeams
+	): Null<UnitValue> {
+		if (emptyDefaultValue == null || !isDefaultArm(branch, s) || !isEmptyArm(branch, s)) return null;
+		final span: Null<Span> = emptyDefaultValue.span;
+		if (span == null) return null;
+		final text: Null<String> = slice(source, emptyDefaultValue);
+		return text == null ? null : {
+			text: text,
+			kept: [span],
+			gaps: [],
+			atom: span,
+			leafCount: 0
+		};
+	}
+
+	/**
+	 * Whether a case / default arm has ZERO body children (its pattern wrapper(s) and guard
+	 * stripped) -- distinct from `armBody`'s null, which also covers MORE than one.
+	 */
+	private static function isEmptyArm(branch: QueryNode, s: TreeSeams): Bool {
+		final guard: Null<QueryNode> = caseGuard(branch, s);
+		for (c in branch.children) if (c.kind != s.plainCasePatternKind && c != guard) return false;
+		return true;
 	}
 
 	/**
