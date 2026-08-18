@@ -19,12 +19,15 @@ import utest.Test;
  *  4. the clause does not fit even one indent deeper -> it breaks over
  *     its own links there, `)` and the body as in 3.
  *
- * Step 2 is the one this slice adds. Before it, the chain-emit
- * `IfFullLineExceeds` probe measured the header PLUS the glued body
- * (`flatTokenWidthOfRestStackFull` descends the body's `BodyGroup`), so
- * a fitting header broke over its links purely because of the body's
- * width — and the body then glued onto the last link's `))`, a shape
- * step 2 replaces and the ladder never produces again.
+ * Step 2 is the one this slice adds; 1, 3 and 4 are pinned here because
+ * they are the shapes the change had to preserve. Before it, the
+ * chain-emit `IfFullLineExceeds` probe measured the header PLUS the
+ * glued body (`flatTokenWidthOfRestStackFull` descends the body's
+ * `BodyGroup`), so a fitting header broke over its links purely because
+ * of the body's width — and the now-short last link then re-glued the
+ * body onto its `))`. A body is never again glued to a multi-line
+ * header: once the header opens (steps 3 and 4) the body follows the
+ * `)` that closed it, at the construct's own indent.
  */
 @:nullSafety(Strict)
 final class HxHeaderWrapLadderSliceTest extends Test {
@@ -34,29 +37,19 @@ final class HxHeaderWrapLadderSliceTest extends Test {
 		+ ' "sameLine": {"ifBody": "fitLine", "forBody": "fitLine", "whileBody": "fitLine"}}';
 
 	private static final LADDER_FOR: String = 'class C {\n\tfunction f(text:String):Bool {\n'
-		+ '\t\tfor (word in text.trim().toLowerCase().split(\' \'))\n'
-		+ '\t\t\tif (_questionText.indexOf(word) == -1 && _answerText.indexOf(word) == -1) return false;\n'
-		+ '\t\treturn true;\n\t}\n}';
-
-	private static final LADDER_WHILE: String = 'class C {\n\tfunction f(text:String):Bool {\n'
-		+ '\t\twhile (text.trim().toLowerCase().split(\' \').length > 0)\n'
-		+ '\t\t\tif (_questionText.indexOf(word) == -1 && _answerText.indexOf(word) == -1) return false;\n'
-		+ '\t\treturn true;\n\t}\n}';
-
-	private static final LADDER_IF: String = 'class C {\n\tfunction f(text:String):Bool {\n'
-		+ '\t\tif (text.trim().toLowerCase().split(\' \').length > 0)\n'
-		+ '\t\t\tif (_questionText.indexOf(word) == -1 && _answerText.indexOf(word) == -1) return false;\n'
-		+ '\t\treturn true;\n\t}\n}';
+		+ '\t\tfor (word in text.trim().toLowerCase().split(\' \')) if (_questionText.indexOf(word) == -1 && _answerText.indexOf(word) == -1)\n'
+		+ '\t\t\treturn false;\n\t\treturn true;\n\t}\n}';
 
 	public function new(): Void {
 		super();
 	}
 
 	/**
-	 * Step 2 for `for`: the header alone is 57 columns and the whole
-	 * construct is 147, so the chain stays flat and the body drops.
-	 * Fed the OLD glued-to-`))` shape, so the assertion cannot be
-	 * satisfied by leaving the input alone.
+	 * Step 2 on the case that motivated the slice. The header alone is 57
+	 * columns and the whole construct 148, so the chain stays flat and the
+	 * body drops. Fed the OLD chain-broken shape, so the assertion cannot
+	 * be satisfied by leaving the input alone, and the expected text holds
+	 * the flat chain and the dropped body in ONE string.
 	 */
 	public function testForChainHeaderFitsBodyDrops(): Void {
 		final broken: String = 'class C {\n\tfunction f(text:String):Bool {\n'
@@ -70,26 +63,46 @@ final class HxHeaderWrapLadderSliceTest extends Test {
 		Assert.equals(LADDER_FOR, triviaWrite(LADDER_FOR));
 	}
 
+	/** Step 2 for `while`, with a plain (non-construct) body. */
 	public function testWhileChainHeaderFitsBodyDrops(): Void {
-		final broken: String = 'class C {\n\tfunction f(text:String):Bool {\n'
+		final broken: String = 'class C {\n\tfunction f(text:String):Void {\n'
 			+ '\t\twhile (text.trim()\n\t\t\t.toLowerCase()\n'
-			+ '\t\t\t.split(\' \').length > 0) if (_questionText.indexOf(word) == -1 && _answerText.indexOf(word) == -1) return false;\n'
-			+ '\t\treturn true;\n\t}\n}';
-		Assert.equals(LADDER_WHILE, triviaWrite(broken));
+			+ '\t\t\t.split(\' \').length > 0) dispatchSomeEventToTheListener(word, extraArgumentValue, anotherArgumentVal);\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction f(text:String):Void {\n'
+			+ '\t\twhile (text.trim().toLowerCase().split(\' \').length > 0)\n'
+			+ '\t\t\tdispatchSomeEventToTheListener(word, extraArgumentValue, anotherArgumentVal);\n\t}\n}';
+		Assert.equals(expected, triviaWrite(broken));
 	}
 
+	/** Step 2 for `if`, with a plain (non-construct) body. */
 	public function testIfChainHeaderFitsBodyDrops(): Void {
-		final broken: String = 'class C {\n\tfunction f(text:String):Bool {\n'
+		final broken: String = 'class C {\n\tfunction f(text:String):Void {\n'
 			+ '\t\tif (text.trim()\n\t\t\t.toLowerCase()\n'
-			+ '\t\t\t.split(\' \').length > 0) if (_questionText.indexOf(word) == -1 && _answerText.indexOf(word) == -1) return false;\n'
-			+ '\t\treturn true;\n\t}\n}';
-		Assert.equals(LADDER_IF, triviaWrite(broken));
+			+ '\t\t\t.split(\' \').length > 0) dispatchSomeEventToTheListener(word, extraArgumentValue, anotherArgumentValueXY);\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction f(text:String):Void {\n'
+			+ '\t\tif (text.trim().toLowerCase().split(\' \').length > 0)\n'
+			+ '\t\t\tdispatchSomeEventToTheListener(word, extraArgumentValue, anotherArgumentValueXY);\n\t}\n}';
+		Assert.equals(expected, triviaWrite(broken));
 	}
 
-	/** Step 1 is preserved: a body that fits beside the header stays glued. */
-	public function testShortBodyStaysGlued(): Void {
+	/** Step 1: a body that fits beside the header keeps the same line. */
+	public function testWholeConstructFitsStaysOneLine(): Void {
 		final src: String = 'class C {\n\tfunction f(text:String):Void {\n'
+			+ '\t\tfor (word in text.trim().toLowerCase().split(\' \')) dispatchSomeEventToTheListener(word, extraArgumentValue, anotherArgumentValueX);\n'
 			+ '\t\tfor (word in text.trim().toLowerCase().split(\' \')) trace(word);\n\t}\n}';
+		Assert.equals(src, triviaWrite(src));
+	}
+
+	/**
+	 * Step 3: the header alone does not fit, so the paren opens and the
+	 * clause — which DOES fit one indent deeper — stays flat there. The
+	 * body glues after the `)` at the `for`'s own indent, never onto a
+	 * chain link.
+	 */
+	public function testHeaderTooWideOpensParenAndBodyFollowsCloseParen(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfor (\n'
+			+ '\t\t\twordItem in someLongerReceiverNameXXXXXXXX.trimTheString().toLowerCaseVariant().splitOnTheSeparator(\' \').filterOutEmptyEntries()\n'
+			+ '\t\t) trace(wordItem);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

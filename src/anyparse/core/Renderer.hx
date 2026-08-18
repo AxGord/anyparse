@@ -2044,19 +2044,18 @@ class Renderer {
 					// calibrated to the un-flushed column and would over-fire (wrap
 					// a chain that fits) if the pending space were added.
 					final effPending: Int = n > width ? pendingSpace : 0;
-					// The rest-of-stack walker is calibration-gated like `effPending`:
-					// the strict-`>` probes at `lineWidth + 1` (the
-					// `expressionParenHardFlatten` paren-open family, plus
-					// `BinaryChainEmit`'s opAdd trailing-paren probe — where the
-					// walker choice was probed nil) DEFER a trailing `BodyGroup` — a
-					// BG after the probe is a MOVABLE fitLine body (`case P if (c):
-					// BODY`, `for (cond) BODY`) that drops to its own line whenever
-					// the shared line overflows, so counting it opens a paren whose
-					// own line fits (the case-guard label tear). The chain probes
-					// emitted at `lineWidth` (n == width) keep the descending walk —
-					// their glued-body blindspot is the reason the Full walker
-					// exists (condition_wrapping_method_chain).
-					final restWidth: Int = n > width ? flatTokenWidthOfRestStack(stack) : flatTokenWidthOfRestStackFull(stack);
+					// ω-header-wrap-ladder: EVERY `IfFullLineExceeds` consumer defers
+					// a trailing `BodyGroup`. A BG after the probe is a MOVABLE
+					// fitLine body (`case P if (c): BODY`, `for (cond) BODY`) that
+					// drops to its own line whenever the shared line overflows, so
+					// counting it decides the header's layout by the body's width:
+					// it opens a paren whose own line fits (the case-guard label
+					// tear) and — the reason this stopped being calibration-gated —
+					// it breaks a FITTING method chain over its links, after which
+					// the now-short last link happily re-glues the body onto its
+					// `))`. Measuring the header ALONE is what makes the ladder's
+					// step 2 (flat header, body on the next line) reachable.
+					final restWidth: Int = flatTokenWidthOfRestStack(stack);
 					// ω-chain-exact-limit-boundary: a chain probe (`n == lineWidth` —
 					// bare `lineWidth` is the FAMILY DISCRIMINATOR selecting the
 					// BG-descending rest walker and the no-pending-space charge above)
