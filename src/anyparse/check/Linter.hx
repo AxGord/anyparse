@@ -203,6 +203,12 @@ final class Linter {
 			// statement after the binding decides, and it cannot be both.
 			new JoinArrayPushes(),
 			new PreferFind(),
+			// Beside `prefer-find`, and disjoint from it by what the loop RETURNS: that rule
+			// requires `return <loopVar>`, these two a boolean LITERAL. The twins are disjoint
+			// from each other for the same reason one step down — the loop's literal is `true`
+			// for `prefer-exists` and `false` for `prefer-foreach`, so no site can be both.
+			new PreferExists(),
+			new PreferForeach(),
 			new PreferStaticExtension(),
 			new LoopGuard(),
 			new GuardContinue(),
