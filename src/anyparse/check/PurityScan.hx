@@ -109,16 +109,6 @@ final class PurityScan {
 	}
 
 	/**
-	 * Whether a `callKind` node is a provably-pure stdlib call — its callee is a `Recv.method`
-	 * field access where `Recv` is a bare identifier in `PURE_CALL_RECEIVERS` and `method` is not
-	 * an `IMPURE_MEMBERS` name. Any other callee (an instance method, a local function, a complex
-	 * receiver) is unproven and therefore impure.
-	 */
-	private static inline function isPureCall(call: QueryNode, ctx: PurityCtx): Bool {
-		return isPureStdlibCall(call, ctx.fieldAccessKind, ctx.identKind);
-	}
-
-	/**
 	 * The index-free half of `isPureCall`, for a caller that has a grammar but no symbol index:
 	 * whether `call`'s callee is a `Recv.method` field access where `Recv` is a bare identifier in
 	 * `PURE_CALL_RECEIVERS` and `method` is not an `IMPURE_MEMBERS` name. It answers for the CALL
@@ -133,6 +123,16 @@ final class PurityScan {
 		if (method == null || IMPURE_MEMBERS.contains(method)) return false;
 		final recv: QueryNode = callee.children[0];
 		return recv.kind == identKind && recv.name != null && PURE_CALL_RECEIVERS.contains(recv.name);
+	}
+
+	/**
+	 * Whether a `callKind` node is a provably-pure stdlib call — its callee is a `Recv.method`
+	 * field access where `Recv` is a bare identifier in `PURE_CALL_RECEIVERS` and `method` is not
+	 * an `IMPURE_MEMBERS` name. Any other callee (an instance method, a local function, a complex
+	 * receiver) is unproven and therefore impure.
+	 */
+	private static inline function isPureCall(call: QueryNode, ctx: PurityCtx): Bool {
+		return isPureStdlibCall(call, ctx.fieldAccessKind, ctx.identKind);
 	}
 
 	/**
@@ -156,7 +156,6 @@ final class PurityScan {
 		}
 		return typeName != null && ctx.index.memberGetter(typeName, field) == true;
 	}
-
 
 	/**
 	 * Whether a BARE identifier reads a property of the enclosing type whose getter runs code. The
