@@ -637,6 +637,7 @@ import unit.MutationVerdictTest;
 import unit.LintNoOracleCliTest;
 import unit.OracleCacheTest;
 import unit.ShardPlanTest;
+import unit.RemoveMemberDocSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1022,6 +1023,7 @@ class RunTests {
 		addCase(new RemoveElementSliceTest());
 		addCase(new RemoveImportSliceTest());
 		addCase(new RemoveMemberSliceTest());
+		addCase(new RemoveMemberDocSliceTest());
 		addCase(new CrossRenameSliceTest());
 		addCase(new CrossRenameMemberSliceTest());
 		addCase(new ExtractInterfaceSliceTest());

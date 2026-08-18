@@ -1414,7 +1414,7 @@ final class RefactorSupport {
 	 * the insert ops; the source is canonical-gated unless `reformat`.
 	 */
 	public static function deleteNode(
-		source: String, node: QueryNode, parent: Null<QueryNode>, reformat: Bool, plugin: GrammarPlugin, withDoc: Bool = false,
+		source: String, node: QueryNode, parent: Null<QueryNode>, reformat: Bool, plugin: GrammarPlugin, withDoc: Bool = true,
 		?optsJson: String
 	): EditResult {
 		return deleteNodes(source, [{ node: node, parent: parent }], reformat, plugin, withDoc, optsJson);
@@ -1427,9 +1427,10 @@ final class RefactorSupport {
 	 * keeps going back ONLY across further doc comments — a stray duplicate left by an
 	 * earlier edit — so a stacked duplicate is cleaned up as one unit while a DISTINCT
 	 * preceding block comment (a license header or section banner above the doc) is left
-	 * intact. Returns the span unchanged when only whitespace or a non-comment token
-	 * precedes. Line-comment (double-slash) doc runs are not handled (v1); the re-parse gate
-	 * validates the result either way.
+	 * intact. A comment that does not START its own line trails the PREVIOUS declaration
+	 * and is never absorbed. Returns the span unchanged when only whitespace or a
+	 * non-comment token precedes. Line-comment (double-slash) doc runs are not handled
+	 * (v1); the re-parse gate validates the result either way.
 	 *
 	 * Each comment's START comes from `collectCommentTokens` — the lexer's own tokenisation —
 	 * never from scanning the text for an opener sequence. A block comment does not nest, so
@@ -1451,6 +1452,10 @@ final class RefactorSupport {
 			// an opener written inside the doc's own TEXT from being mistaken for its start.
 			final open: Int = commentEndingAt(tokens, i + 1, true);
 			if (open < 0) break;
+			// A comment sharing its line with preceding CODE trails THAT declaration —
+			// `var keep:Int; /* about keep */` reads as keep's note, however adjacent it
+			// looks from below — so attribution follows the line the reader sees it on.
+			if (!startsItsLine(source, open)) break;
 			// First comment (the decl's own doc) is absorbed unconditionally; any
 			// further comment back is absorbed only if it too is a `/**` doc, so a
 			// plain `/*` license / section block above the doc survives.
@@ -4018,6 +4023,18 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * Whether only whitespace separates `at` from the start of its line — the test that
+	 * tells a declaration's own leading comment from the PREVIOUS declaration's trailing
+	 * one. Both end just above the next declaration and are equally adjacent to it; only
+	 * the line the comment opens on says whose it is.
+	 */
+	private static function startsItsLine(source: String, at: Int): Bool {
+		var i: Int = at - 1;
+		while (i >= 0 && (source.fastCodeAt(i) == ' '.code || source.fastCodeAt(i) == '\t'.code)) i--;
+		return i < 0 || source.fastCodeAt(i) == '\n'.code;
+	}
+
+	/**
 	 * End offset (exclusive) of the Haxe regex literal opened by `~/` at `open`,
 	 * flags included; -1 when it is not terminated on its own line. Matches the
 	 * compiler's own lexer: the body runs to the first unescaped `/`, and a
@@ -4471,7 +4488,7 @@ final class RefactorSupport {
 	 */
 	public static function deleteNodes(
 		source: String, targets: Array<{ node: QueryNode, parent: Null<QueryNode> }>, reformat: Bool, plugin: GrammarPlugin,
-		withDoc: Bool = false, ?optsJson: String
+		withDoc: Bool = true, ?optsJson: String
 	): EditResult {
 		if (targets.length == 0) return Err('no node to remove');
 		final edits: Array<{ span: Span, text: String }> = [];
@@ -4479,9 +4496,11 @@ final class RefactorSupport {
 			final nodeSpan: Null<Span> = target.node.span;
 			if (nodeSpan == null) return Err('the node to remove has no source span');
 			final group: Span = trailingTrimmedSpan(source, declGroupSpan(target.node, target.parent, nodeSpan));
-			// `--with-doc` extends the removed range back over a leading doc / block
-			// comment so a documented member's `/** */` is removed with it (else the
-			// comment is orphaned). The line/comma extension then runs on top.
+			// A declaration's doc comment is trivia OUTSIDE its node span, so the group span
+			// stops short of it and the block is left in the file — where it silently becomes
+			// the documentation of whatever declaration follows. Removing it WITH the node is
+			// therefore the default; `withDoc = false` is the deliberate opt-out for a caller
+			// that keeps the comment on purpose. The line/comma extension then runs on top.
 			final span: Span = withDoc ? docExtendedSpan(source, group) : group;
 
 			var isComma: Bool = adjacentToComma(source, span);

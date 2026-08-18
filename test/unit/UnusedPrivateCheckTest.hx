@@ -140,6 +140,29 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.equals(1, fixEdits('class C {\n\tprivate function dead() {}\n}').length);
 	}
 
+	/**
+	 * A dead private takes its doc comment with it. Kept behind, the block becomes the
+	 * documentation of whatever declaration follows — silently, since a single orphan
+	 * stacks with nothing and no check reports it.
+	 */
+	public function testFixTakesTheDeadMemberDoc(): Void {
+		// The doc must not NAME the member: `unused-private` keeps a member whose name
+		// occurs in a comment, so a self-naming doc would make this pass vacuously.
+		final src: String = 'class C {\n\t/** Explains the helper. */\n\tprivate function dead() {}\n\n\tpublic function keep() {}\n}';
+		final check: UnusedPrivate = new UnusedPrivate();
+		final edits: Array<{ span: Span, text: String }> = check.fix(
+			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
+		);
+		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('Explains the helper') == -1, text);
+				Assert.isTrue(text.indexOf('dead') == -1, text);
+				Assert.isTrue(text.indexOf('keep') >= 0, text);
+			case Err(message):
+				Assert.fail('canonicalize Err: $message');
+		}
+	}
+
 	public function testFixDeletesSideEffectFreeField(): Void {
 		Assert.equals(1, fixEdits('class C {\n\tprivate var _x:Int = 5;\n}').length);
 	}

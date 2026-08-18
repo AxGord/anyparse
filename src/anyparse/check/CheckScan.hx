@@ -101,22 +101,13 @@ final class CheckScan {
 
 	/**
 	 * The delete-the-whole-member edit for `node`: its modifier / metadata run (`declGroupSpan`,
-	 * which needs the declaring `parent` for the sibling run) folded in, then the whole line
-	 * (`lineExtendedSpan`), so no blank modifier line is left behind. The member's LEADING DOC
-	 * COMMENT is kept — `unused-private`'s shape. Use `docDeletionEdit` to take the doc with it.
+	 * which needs the declaring `parent` for the sibling run) folded in, then the LEADING DOC
+	 * COMMENT (`docExtendedSpan`), then the whole line (`lineExtendedSpan`) so no blank modifier
+	 * line is left behind. The doc goes because a deleted member takes its documentation with it —
+	 * kept behind, the block silently becomes the doc of whatever declaration follows, which is
+	 * exactly the orphan `fragmented-doc-comment` reports.
 	 */
 	public static inline function deletionEdit(
-		source: String, node: QueryNode, parent: QueryNode, span: Span
-	): { span: Span, text: String } {
-		return { span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.declGroupSpan(node, parent, span)), text: '' };
-	}
-
-	/**
-	 * `deletionEdit` widened to swallow the member's leading DOC COMMENT (`docExtendedSpan`) as
-	 * well, so deleting a documented method strands nothing — the shape `orphan-accessor` and
-	 * `unused-public-member` delete with.
-	 */
-	public static inline function docDeletionEdit(
 		source: String, node: QueryNode, parent: QueryNode, span: Span
 	): { span: Span, text: String } {
 		final group: Span = RefactorSupport.declGroupSpan(node, parent, span);
@@ -555,7 +546,7 @@ final class CheckScan {
 			for (child in host.children) {
 				final span: Null<Span> = child.span;
 				if (span != null && METHOD_KINDS.contains(child.kind) && wanted.contains('${span.from}:${span.to}'))
-					edits.push(docDeletionEdit(source, child, host, span));
+					edits.push(deletionEdit(source, child, host, span));
 			}
 		});
 		return edits;
