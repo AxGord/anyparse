@@ -119,8 +119,10 @@ function testCurlyLispRoundTrip() {
 Not unit tests. Separate binaries that measure throughput and memory on realistic inputs. The goal is to detect performance regressions between commits and to compare anyparse against the tools it is replacing (haxe-formatter, ax3, native `JSON.parse`).
 
 Benchmarks target each Haxe backend separately because performance differs significantly:
-- `bench-js.hxml` — Node.js, the target everything ships on today
-- `bench-hxcpp.hxml` — native
+- `tools/parse-prof.hxml` — Node.js, the target everything ships on today
+- `tools/bench-hxcpp.hxml` — native, the same `tools/ParseProf.hx` over the same
+  `src/` with the same `-D analyzer-optimize`, so the two arms differ only in
+  the backend
 
 Neko is not a benchmark target: the neko build of the CLI compiles but its
 artifact dies at module load (measured 2026-08-17). `--jvm` builds and runs
@@ -141,6 +143,33 @@ haxe tools/parse-prof.hxml                                  # -> bin/parse-prof.
 node bin/parse-prof.js tparse src 1 hxformat.json
 node --cpu-prof --cpu-prof-interval=200 bin/parse-prof.js rt src 3 hxformat.json
 ```
+
+The native twin is `tools/bench-hxcpp.hxml`. Point `HXCPP_COMPILE_CACHE` at a
+persistent directory or every build is a cold ~40 s instead of an incremental
+~12 s, and pass the binary to `tools/bench-ab.sh` as any other arm — an arm
+path that does not end in `.js` is executed directly instead of under `node`:
+
+```sh
+HXCPP_COMPILE_CACHE=~/.hxcpp_cache haxe tools/bench-hxcpp.hxml   # -> bin/parse-prof-cpp/ParseProf
+TM_SRC=<other-tree>/src tools/bench-ab.sh tparse tools/bench-corpus.txt 9 6 \
+  js:bin/parse-prof.js cpp:bin/parse-prof-cpp/ParseProf
+```
+
+There is no `--cpu-prof` on a native binary; the equivalent is macOS `sample`,
+and it needs symbols the release link strips. Rebuild the SAME objects with
+`-D no_gcc_strip` into a scratch output — the compile cache makes it a relink,
+so the code being sampled is the code that was timed — then sample the run:
+
+```sh
+haxe -cp src -cp tools -main ParseProf -D analyzer-optimize -D no_gcc_strip -cpp /tmp/pp-sym
+/tmp/pp-sym/ParseProf tparse tools/bench-corpus.txt 90 hxformat.json & sample $! 30 1 -f /tmp/pp.sample
+```
+
+Read the capture per THREAD: hxcpp runs parallel GC threads whose idle
+`__psynch_cvwait` swamps the flat "sort by top of stack" list, so self time has
+to come from the main thread's call-graph subtree (node count minus the sum of
+its children). Frames inside the executable print as `??? + 0x<offset>`; resolve
+them against `nm -n` with a `0x100000000` base.
 
 Arguments are `<mode> <dir-or-manifest> [reps] [hxformat.json]`; a directory is
 walked for `.hx`, anything else is read as a manifest of paths with `#` comments

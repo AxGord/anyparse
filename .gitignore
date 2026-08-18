@@ -11,3 +11,4 @@ dump/
 *.js.map
 .DS_Store
 .claude/
+bin/parse-prof-cpp/

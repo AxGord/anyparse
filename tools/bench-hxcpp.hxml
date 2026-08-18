@@ -1,0 +1,18 @@
+# The hxcpp arm of the Fast-parse / writer benchmark harness — the native twin of
+# `tools/parse-prof.hxml`, same `tools/ParseProf.hx` source, same `src/`, same
+# `-D analyzer-optimize`, so the two arms differ only in the backend.
+#
+# Build from the repo root; the artifact tree is gitignored. Point
+# HXCPP_COMPILE_CACHE at a persistent directory or every build is a cold ~40 s:
+#
+#   HXCPP_COMPILE_CACHE=~/.hxcpp_cache haxe tools/bench-hxcpp.hxml
+#   TM_SRC=... bin/parse-prof-cpp/ParseProf tparse tools/bench-corpus.txt 6 hxformat.json
+#
+# No `-lib hxnodejs`: `Sys` / `sys.io.File` are stdlib on a sys target, and the
+# one js-only clock in ParseProf (`performance.now()`) is already behind `#if js`
+# with a `haxe.Timer.stamp()` fallback.
+-cp src
+-cp tools
+-main ParseProf
+-D analyzer-optimize
+-cpp bin/parse-prof-cpp

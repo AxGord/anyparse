@@ -1,8 +1,14 @@
 #!/bin/zsh
 # Interleaved A/B over several builds of the parse/writer harness.
 #
-# Usage: tools/bench-ab.sh <mode> <target> <rounds> <reps> <label>:<js>...
+# Usage: tools/bench-ab.sh <mode> <target> <rounds> <reps> <label>:<binary>...
 #   tools/bench-ab.sh tparse tools/bench-corpus.txt 5 6 base:bin/parse-prof.js after:/tmp/after.js
+#
+# An arm whose path ends in `.js` runs under `node`; anything else is executed
+# directly, so a native hxcpp build of the same harness (tools/bench-hxcpp.hxml)
+# is just another arm:
+#   tools/bench-ab.sh tparse tools/bench-corpus.txt 5 6 \
+#     js:bin/parse-prof.js cpp:bin/parse-prof-cpp/ParseProf
 #
 # <mode> and <target> are ParseProf's (see tools/ParseProf.hx). <reps> is the
 # in-process repetition count: on the ~100-file calibrated corpus one pass is
@@ -20,7 +26,7 @@
 #    - so anything measured must never run under one.
 set -u
 if (( $# < 5 )); then
-  print -u2 "usage: $0 <mode> <target> <rounds> <reps> <label>:<js>..."
+  print -u2 "usage: $0 <mode> <target> <rounds> <reps> <label>:<binary>..."
   exit 2
 fi
 MODE=$1; TARGET=$2; ROUNDS=$3; REPS=$4; shift 4
@@ -31,8 +37,12 @@ typeset -A acc
 for r in $(seq 1 $ROUNDS); do
   for arm in "$@"; do
     label=${arm%%:*}
-    js=${arm#*:}
-    line=$(node "$js" "$MODE" "$TARGET" "$REPS" hxformat.json 2>/dev/null | tail -1)
+    bin=${arm#*:}
+    if [[ $bin == *.js ]]; then
+      line=$(node "$bin" "$MODE" "$TARGET" "$REPS" hxformat.json 2>/dev/null | tail -1)
+    else
+      line=$("$bin" "$MODE" "$TARGET" "$REPS" hxformat.json 2>/dev/null | tail -1)
+    fi
     ms=$(print -r -- "$line" | sed -E 's/.* msPerRep=([0-9.]+) .*/\1/')
     print "round=$r arm=$label ms=$ms | $line"
     acc[$label]="${acc[$label]:-} $ms"
