@@ -93,6 +93,30 @@ class PreferForInCheckTest extends Test {
 		);
 	}
 
+	public function testSameNameInASiblingFunctionStillInlines(): Void {
+		// The occurrence scan is bounded by the nearest enclosing BLOCK, not by the file: `it` /
+		// `iter` are among the most reused local names there are, and a whole-file count would
+		// leave the inlining arm dead in any file with two iterator loops.
+		Assert.equals(
+			twoFunctions('for (v in xs.iterator()) {\n\t\t\tuse(v);\n\t\t}', 'for (w in ys.iterator()) {\n\t\t\tuse(w);\n\t\t}'),
+			applyFix(twoFunctions(
+				'final it = xs.iterator();\n\t\twhile (it.hasNext()) {\n\t\t\tfinal v = it.next();\n\t\t\tuse(v);\n\t\t}',
+				'final it = ys.iterator();\n\t\twhile (it.hasNext()) {\n\t\t\tfinal w = it.next();\n\t\t\tuse(w);\n\t\t}'
+			))
+		);
+	}
+
+	public function testConditionalRegionIsNotAScope(): Void {
+		// A `#if` region does not bind names in Haxe, so a declaration inside one is still visible
+		// after `#end`, and the inlining arm must not delete it. What makes this pass is that the
+		// raw `Conditional` kind is not a block kind AT ALL, so the scope stays the function body —
+		// NOT the `CondBranch` subtraction in `readScopeKinds`, which no fixture can reach while
+		// checks parse through `parseFile` (see that method's doc).
+		final loop: String = 'while (iter.hasNext()) {\n\t\t\tfinal cp = iter.next();\n\t\t\tuse(cp);\n\t\t}';
+		final rewritten: String = 'for (cp in iter) {\n\t\t\tuse(cp);\n\t\t}';
+		Assert.equals(conditional(rewritten), applyFix(conditional(loop)));
+	}
+
 	public function testNonEmptinessCheckNotFlagged(): Void {
 		Assert.equals(0, violations(fn('if (it.hasNext()) use(1);')).length);
 	}
@@ -155,6 +179,15 @@ class PreferForInCheckTest extends Test {
 		final check: Null<Check> = Linter.byId('prefer-for-in');
 		Assert.notNull(check);
 		Assert.isTrue(Std.isOfType(check, DefaultOff), 'prefer-for-in is opt-in');
+	}
+
+	private function twoFunctions(first: String, second: String): String {
+		return 'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\t$first\n\t}\n\n\tfunction g(ys:Array<Int>):Void {\n\t\t$second\n\t}\n}';
+	}
+
+	private function conditional(loop: String): String {
+		return
+			'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\t#if A\n\t\tfinal iter = xs.iterator();\n\t\t$loop\n\t\t#end\n\t\tuse(iter);\n\t}\n}';
 	}
 
 	private function fn(stmts: String): String {

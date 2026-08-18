@@ -2,6 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
+import anyparse.query.CondBranchProjection;
+import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -107,7 +109,7 @@ final class PreferForIn implements Check implements DefaultOff {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin.refShape());
+		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
@@ -128,7 +130,7 @@ final class PreferForIn implements Check implements DefaultOff {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = readSeams(plugin.refShape());
+		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
@@ -145,7 +147,8 @@ final class PreferForIn implements Check implements DefaultOff {
 	}
 
 	/** Bundle the `RefShape` kinds this check reads, or null when a required one is unset (the check is then a no-op). */
-	private static function readSeams(shape: RefShape): Null<Seams> {
+	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
 		final whileStmtKind: Null<String> = shape.whileStmtKind;
 		if (whileStmtKind == null) return null;
 		final blockStmtKind: Null<String> = shape.blockStmtKind;
@@ -165,37 +168,57 @@ final class PreferForIn implements Check implements DefaultOff {
 			identKind: identKind,
 			localDeclKinds: localDeclKinds,
 			opaqueKinds: shape.opaqueKinds ?? [],
-			interpIdentKind: shape.stringInterpIdentKind
+			interpIdentKind: shape.stringInterpIdentKind,
+			scopeKinds: readScopeKinds(plugin)
 		};
+	}
+
+	/**
+	 * The block kinds a local declaration's visibility is bounded by — the grammar's own block
+	 * kinds MINUS the conditional-branch projection, which is NOT a scope: a `#if` region does
+	 * not bind names in Haxe, so a declaration inside one stays visible after `#end`, and
+	 * treating the branch as a scope would hide exactly that read. That subtraction is FORWARD
+	 * DEFENCE, not a live path: `CheckScan.parseOrNull` goes through `parseFile`, which does not
+	 * project branches (`projectBranchAware` is a separate opt-in entry), so no unit fixture can
+	 * flip it today — the raw `Conditional` kind is not a block kind at all, which is what makes
+	 * `testConditionalRegionIsNotAScope` pass. A grammar with no control-flow support returns an
+	 * empty list, and the occurrence scan then falls back to the whole file.
+	 */
+	private static function readScopeKinds(plugin: GrammarPlugin): Array<String> {
+		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
+		return support == null ? [] : [for (k in support.blockKinds()) if (k != CondBranchProjection.COND_BRANCH_KIND) k];
 	}
 
 	/** Walk `tree` and return every qualifying loop, each with its replacement span and text. */
 	private static function collectMatches(tree: QueryNode, source: String, s: Seams): Array<Match> {
-		final ctx: Ctx = { source: source, seams: s, root: tree };
+		final ctx: Ctx = { source: source, seams: s };
 		final out: Array<Match> = [];
-		walk(tree, ctx, out);
+		walk(tree, tree, ctx, out);
 		return out;
 	}
 
 	/**
 	 * Descend `node`, testing each child as a candidate loop with its preceding sibling as the
-	 * inlining arm's declaration. A reification subtree (`opaqueKinds`) is skipped wholesale.
+	 * inlining arm's declaration. `scope` is the nearest enclosing BLOCK, which bounds a local's
+	 * visibility and so bounds the inlining arm's occurrence scan. A reification subtree
+	 * (`opaqueKinds`) is skipped wholesale.
 	 */
-	private static function walk(node: QueryNode, ctx: Ctx, out: Array<Match>): Void {
+	private static function walk(node: QueryNode, scope: QueryNode, ctx: Ctx, out: Array<Match>): Void {
 		if (ctx.seams.opaqueKinds.contains(node.kind)) return;
+		final here: QueryNode = ctx.seams.scopeKinds.contains(node.kind) ? node : scope;
 		final kids: Array<QueryNode> = node.children;
 		for (i in 0...kids.length) {
-			final m: Null<Match> = tryMatch(kids[i], i == 0 ? null : kids[i - 1], ctx);
+			final m: Null<Match> = tryMatch(kids[i], i == 0 ? null : kids[i - 1], here, ctx);
 			if (m != null) out.push(m);
 		}
-		for (c in kids) walk(c, ctx, out);
+		for (c in kids) walk(c, here, ctx, out);
 	}
 
 	/**
 	 * Whether `loop` is the hand-rolled protocol; returns the replacement span and text when so,
 	 * else null. `prev` is the loop's preceding sibling, the inlining arm's only candidate.
 	 */
-	private static function tryMatch(loop: QueryNode, prev: Null<QueryNode>, ctx: Ctx): Null<Match> {
+	private static function tryMatch(loop: QueryNode, prev: Null<QueryNode>, scope: QueryNode, ctx: Ctx): Null<Match> {
 		final s: Seams = ctx.seams;
 		if (loop.kind != s.whileStmtKind || loop.children.length != WHILE_CHILD_COUNT) return null;
 		final body: QueryNode = loop.children[1];
@@ -214,7 +237,7 @@ final class PreferForIn implements Check implements DefaultOff {
 		final source: String = ctx.source;
 		final interior: String = source.substring(bodySpan.from, bodySpan.from + 1)
 			+ StringTools.rtrim(source.substring(bodySpan.from + 1, bindSpan.from)) + source.substring(bindSpan.to, bodySpan.to);
-		final inlined: Null<Match> = inlineDeclaration(prev, loopSpan, iterator, binder, interior, ctx);
+		final inlined: Null<Match> = inlineDeclaration(prev, scope, loopSpan, iterator, binder, interior, ctx);
 		return inlined ?? { span: loopSpan, text: 'for ($binder in $iterator) $interior' };
 	}
 
@@ -224,7 +247,7 @@ final class PreferForIn implements Check implements DefaultOff {
 	 * which leaves the caller's plain rewrite standing.
 	 */
 	private static function inlineDeclaration(
-		prev: Null<QueryNode>, loopSpan: Span, iterator: String, binder: String, interior: String, ctx: Ctx
+		prev: Null<QueryNode>, scope: QueryNode, loopSpan: Span, iterator: String, binder: String, interior: String, ctx: Ctx
 	): Null<Match> {
 		final s: Seams = ctx.seams;
 		if (prev == null || !s.localDeclKinds.contains(prev.kind)) return null;
@@ -233,7 +256,7 @@ final class PreferForIn implements Check implements DefaultOff {
 		final initSpan: Null<Span> = prev.children[0].span;
 		if (declSpan == null || initSpan == null) return null;
 		if (CheckScan.hasCommentMarker(ctx.source, declSpan.to, loopSpan.from)) return null;
-		if (occurrences(ctx.root, iterator, s) != PROTOCOL_OCCURRENCES) return null;
+		if (occurrences(scope, iterator, s) != PROTOCOL_OCCURRENCES) return null;
 		final iterable: String = StringTools.rtrim(ctx.source.substring(initSpan.from, initSpan.to));
 		if (RefactorSupport.textHasCommentMarker(iterable.substring(iterable.lastIndexOf('\n') + 1))) return null;
 		return { span: new Span(declSpan.from, loopSpan.to), text: 'for ($binder in $iterable) $interior' };
@@ -276,6 +299,7 @@ private typedef Seams = {
 	var localDeclKinds: Array<String>;
 	var opaqueKinds: Array<String>;
 	var interpIdentKind: Null<String>;
+	var scopeKinds: Array<String>;
 }
 
 /** A flagged loop: the full replacement span and the `for` text that takes its place. */
@@ -284,9 +308,8 @@ private typedef Match = {
 	var text: String;
 }
 
-/** Per-file inputs the walkers share: the source, the resolved seams and the file's root node. */
+/** Per-file inputs the walkers share: the source and the resolved seams. */
 private typedef Ctx = {
 	var source: String;
 	var seams: Seams;
-	var root: QueryNode;
 }
