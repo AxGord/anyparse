@@ -596,10 +596,9 @@ final class MoveMember {
 	 * following blank line is swallowed.
 	 */
 	private static function cutSpanOf(srcSource: String, group: MemberGroup): Span {
-		final lineCut: Span = RefactorSupport.lineExtendedSpan(srcSource, RefactorSupport.docExtendedSpan(srcSource, group.groupSpan));
-		final blankBefore: Bool = lineCut.from >= 2 && srcSource.fastCodeAt(lineCut.from - 2) == '\n'.code;
-		final blankAfter: Bool = lineCut.to < srcSource.length && srcSource.fastCodeAt(lineCut.to) == '\n'.code;
-		return blankBefore && blankAfter ? new Span(lineCut.from, lineCut.to + 1) : lineCut;
+		return RefactorSupport.blankExtendedSpan(
+			srcSource, RefactorSupport.lineExtendedSpan(srcSource, RefactorSupport.docExtendedSpan(srcSource, group.groupSpan))
+		);
 	}
 
 	/**

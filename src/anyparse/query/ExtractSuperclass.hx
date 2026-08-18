@@ -292,10 +292,9 @@ final class ExtractSuperclass {
 
 	/** The cut span of a member group: decl + leading doc + whole line(s). */
 	private static function cutSpanOf(source: String, groupSpan: Span): Span {
-		final lineCut: Span = RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, groupSpan));
-		final blankBefore: Bool = lineCut.from >= 2 && source.fastCodeAt(lineCut.from - 2) == '\n'.code;
-		final blankAfter: Bool = lineCut.to < source.length && source.fastCodeAt(lineCut.to) == '\n'.code;
-		return blankBefore && blankAfter ? new Span(lineCut.from, lineCut.to + 1) : lineCut;
+		return RefactorSupport.blankExtendedSpan(
+			source, RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, groupSpan))
+		);
 	}
 
 	/** Strip leading / trailing newlines from a cut block. */
