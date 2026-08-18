@@ -1015,43 +1015,6 @@ class Renderer {
 	}
 
 	/**
-	 * BG-descending sibling of `flatTokenWidthOfRestStack`. Identical
-	 * stack-walk + abort-at-hardline semantic except the
-	 * `BodyGroup(innerDoc)` arm descends in `MFlat` (mirrors `Group`)
-	 * instead of being deferred. Used exclusively by the
-	 * `IfFullLineExceeds` probe — chain-emit's wrap decision needs to
-	 * see inline body content that follows on the same rendered line
-	 * (e.g. `for (cond) BODY` where `BODY` lives inside a `BodyGroup`
-	 * from `forBody=fitLine`).
-	 *
-	 * The sister `flatTokenWidthOfRestStack` stays unchanged
-	 * (Departure 2) for the cond-wrap `IfLineExceeds` site whose probe
-	 * must NOT include body content (else trailing-comment cond-wrap
-	 * fixtures regress — see `feedback_bg_descend_reststack_*` memory).
-	 */
-	private static function flatTokenWidthOfRestStackFull(stack: Array<Frame>): Int {
-		var total: Int = 0;
-		var aborted: Bool = false;
-		var i: Int = stack.length - 1;
-		while (i >= 0 && !aborted) {
-			final f: Frame = stack[i];
-			i--;
-			if (f.fillRest != null) {
-				aborted = true;
-				continue;
-			}
-			final inner: Array<{ doc: Doc, mode: Mode }> = [{ doc: f.doc, mode: f.mode }];
-			while (inner.length > 0 && !aborted) {
-				final node: { doc: Doc, mode: Mode } = inner.pop();
-				final step: { add: Int, aborted: Bool } = restNodeWidth(node, inner, true);
-				total += step.add;
-				aborted = step.aborted;
-			}
-		}
-		return total;
-	}
-
-	/**
 	 * One step of `restStackHasTrailingContent`'s inner-doc scan. Pushes any
 	 * structural children onto `inner` for continued scanning. Returns `null`
 	 * to keep scanning, `true` when a non-trivial trailing token was found,
@@ -1293,13 +1256,14 @@ class Renderer {
 	/**
 	 * One step of the rest-of-stack flat-width walk shared by
 	 * `flatTokenWidthOfRestStack` (`bgDescend == false`) and
-	 * `flatTokenWidthOfRestStackFull` (`bgDescend == true`). Pushes structural
+	 * `naturalRestStackWidth` (`bgDescend == true`). Pushes structural
 	 * children onto `inner`. Returns the flat width contributed by `node.doc`
 	 * and whether a hardline / broken `Line` boundary terminates the walk.
 	 *
-	 * The sole difference between the two sister walkers is the `BodyGroup`
-	 * arm: the `Full` variant descends inline body content (`bgDescend`), the
-	 * plain variant defers it (BG decides its own layout, Departure 2).
+	 * `bgDescend` picks the `BodyGroup` arm: descend inline body content, or
+	 * defer it (BG decides its own layout, Departure 2). Every RENDER probe
+	 * defers — a trailing BG is a movable fitLine body and must not decide the
+	 * header line's layout (ω-header-wrap-ladder).
 	 */
 	private static function restNodeWidth(
 		node: { doc: Doc, mode: Mode }, inner: Array<{ doc: Doc, mode: Mode }>, bgDescend: Bool
@@ -1668,11 +1632,12 @@ class Renderer {
 	/**
 	 * Rest-of-stack flat width over a `naturalFirstLineWidth` natural-frame
 	 * `stack`: the same-line content the pending work-stack will still emit
-	 * AFTER the current `If*Exceeds` node, up to the first hardline. Mirrors
-	 * render's `flatTokenWidthOfRestStackFull` (BG-descend) — the difference
-	 * being our pending stack IS that lookahead. A chain's `IfFullLineExceeds`
-	 * must see the trailing close-delims (`))`, `;`) that ride the same line,
-	 * or it under-fires and the chain stays flat when render would break it.
+	 * AFTER the current `If*Exceeds` node, up to the first hardline — our
+	 * pending stack IS that lookahead. A chain's `IfFullLineExceeds` must see
+	 * the trailing close-delims (`))`, `;`) that ride the same line, or it
+	 * under-fires and the chain stays flat when render would break it. Walks
+	 * with `bgDescend == true`, unlike render's own rest walk; the difference
+	 * is inert for this walker's consumers (see the `IfLineExceeds` arm).
 	 */
 	private static function naturalRestStackWidth(stack: Array<{
 		doc: Doc,
@@ -1855,11 +1820,10 @@ class Renderer {
 				// content the pending work-stack will still emit). The lookahead
 				// lets a chain probe see trailing close-delims that ride the same
 				// line and break. APPROXIMATION: naturalRestStackWidth BG-DESCENDS
-				// (mirrors render's flatTokenWidthOfRestStackFull), whereas
-				// render's own IfLineExceeds uses the BG-DEFER variant. The
-				// canonical assignment-RHS consumer never sits an IfLineExceeds
-				// head with a trailing same-line body BodyGroup, so descend-vs-
-				// defer is inert here — one rest walker suffices (YAGNI).
+				// whereas render's rest walk defers. The canonical assignment-RHS
+				// consumer never sits an IfLineExceeds head with a trailing
+				// same-line body BodyGroup, so descend-vs-defer is inert here —
+				// one rest walker suffices (YAGNI).
 				pushNaturalExceeds(
 					stack, node, breakDoc, flatDoc, col + DocMeasure.flatTokenWidth(flatDoc) + naturalRestStackWidth(stack) >= nn
 				);
@@ -2001,23 +1965,16 @@ class Renderer {
 				// `pushFlatWidthBranch`.
 				pushFlatWidthBranch(f, stack, col, width);
 			case IfFullLineExceeds(n, breakDoc, flatDoc):
-				// Sibling of `IfLineExceeds` with asymmetric BG
-				// semantic: the primitive's own subtree uses the
-				// regular `flatTokenWidth` (defers BG — so a lambda
-				// body BG inside one of `flatDoc`'s segments stays
-				// deferred and doesn't inflate the chain probe),
-				// while the rest-of-stack lookahead is calibration-
-				// gated (`restWidth` below): the `n == width` chain
-				// probes descend BG via `flatTokenWidthOfRestStackFull`
-				// so a sibling body BG that follows on the same source
-				// line (e.g. `for (cond) BODY` with `forBody=fitLine`
-				// BG-wrap) is visible to the probe — closing the
-				// chain-emit blindspot at
-				// `condition_wrapping_method_chain` while avoiding the
-				// chain-of-lambdas over-fire (regression class of the
-				// symmetric-descend approach); the strict-`>`
-				// `n == width + 1` probes defer BG like every other
-				// walk. Slice ω-iffulllineexceeds-primitive.
+				// Sibling of `IfLineExceeds`. Both the primitive's own
+				// subtree (`flatTokenWidth`) and the rest-of-stack
+				// lookahead (`restWidth` below) DEFER `BodyGroup`, so
+				// neither a lambda body BG inside one of `flatDoc`'s
+				// segments nor a movable fitLine body that follows on
+				// the same source line inflates the probe. Slice
+				// ω-iffulllineexceeds-primitive introduced the
+				// primitive with a calibration-gated rest walk;
+				// ω-header-wrap-ladder removed the gate — counting the
+				// body broke a chain whose own header line fitted.
 				//
 				// Mode propagation matches `IfLineExceeds`: brk-side
 				// forces `MBreak` (slice ω-iflineexceeds-brk-mode
@@ -2058,7 +2015,7 @@ class Renderer {
 					final restWidth: Int = flatTokenWidthOfRestStack(stack);
 					// ω-chain-exact-limit-boundary: a chain probe (`n == lineWidth` —
 					// bare `lineWidth` is the FAMILY DISCRIMINATOR selecting the
-					// BG-descending rest walker and the no-pending-space charge above)
+					// no-pending-space charge above)
 					// whose glued tail is genuinely one-line-able measures the TRUE
 					// physical line, and the fork keeps a flush-at-limit line — so its
 					// exceed threshold is `n + 1` (a plain `>= n` dot-broke a chain

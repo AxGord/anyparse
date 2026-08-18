@@ -183,30 +183,26 @@ package anyparse.core;
  *                      slices that need line-aware probes outside the
  *                      wrap-engine cascade machinery.
  * - `IfFullLineExceeds(n, br, fl)` — sibling of `IfLineExceeds` with
- *                      an asymmetric `BodyGroup` semantic:
- *                      `flatTokenWidth(fl)` (the primitive's own subtree
- *                      width) DEFERS `BodyGroup` so a lambda body BG
- *                      INSIDE one of `fl`'s segments stays measured by
- *                      its header only — chain probes don't over-fire
- *                      when a chain segment contains a multi-line
- *                      lambda body;  while the rest-of-stack lookahead
- *                      is calibration-gated: the `n == width` chain
- *                      probes use `flatTokenWidthOfRestStackFull(stack)`,
- *                      which DESCENDS `BodyGroup` so a sibling body that
+ *                      a `BodyGroup`-deferring semantic on BOTH
+ *                      measures: `flatTokenWidth(fl)` (the primitive's
+ *                      own subtree width) DEFERS `BodyGroup` so a lambda
+ *                      body BG INSIDE one of `fl`'s segments stays
+ *                      measured by its header only — chain probes don't
+ *                      over-fire when a chain segment contains a
+ *                      multi-line lambda body — and the rest-of-stack
+ *                      lookahead defers it too, so a sibling body that
  *                      follows AFTER this primitive on the same source
- *                      line (e.g. the `for (cond) BODY` body wrapped in
- *                      BG by `sameLine.forBody=fitLine`) IS visible to
- *                      the probe — closing the chain-emit blindspot
- *                      where `Group(IfBreak)` at the chain level sees
- *                      only the chain's own subtree, missing trailing
- *                      tokens past close-paren including inline body
- *                      content in a sibling `BodyGroup`; the strict-`>`
- *                      `n == width + 1` paren-open probes DEFER BG (a
- *                      trailing BG is a movable fitLine body that drops
- *                      to its own line, so counting it tears a fitting
- *                      case-guard label). Used by `MethodChainEmit`
- *                      (descending) and the paren-open family
- *                      (deferring). Independent of the enclosing
+ *                      line (the `for (cond) BODY` body wrapped in BG by
+ *                      `sameLine.forBody=fitLine`, a `case P if (c):`
+ *                      guard's body) contributes nothing. Such a body is
+ *                      MOVABLE — it drops to its own line whenever the
+ *                      shared line overflows — so counting it would
+ *                      decide a header's layout by the body's width:
+ *                      it tears a fitting case-guard label, and it
+ *                      breaks a method chain whose own header line fits
+ *                      (ω-header-wrap-ladder). Used by
+ *                      `MethodChainEmit` and the paren-open family
+ *                      alike. Independent of the enclosing
  *                      Group's flat/break mode (mirrors
  *                      `IfLineExceeds`); `fitsFlat` and cascade-rule
  *                      static walks forward to `fl`. Slice
