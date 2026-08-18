@@ -6,6 +6,7 @@ package anyparse.macro;
 @:nullSafety(Strict)
 final class AnnotationKeys {
 
+	public static final BIN_MAGIC: String = 'bin.magic';
 	public static final LIT_SEP_STARTS_ELEMENT: String = 'lit.sepStartsElement';
 	public static final LIT_SEP_TAIL_RELAX: String = 'lit.sepTailRelax';
 	public static final LIT_SEP_ALT_TEXT: String = 'lit.sepAltText';

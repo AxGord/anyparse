@@ -759,7 +759,7 @@ class WriterLowering {
 		if (_formatInfo.isBinary) return false;
 		if (_formatInfo.fieldLookup != ByName) return false;
 		if (_formatInfo.keySyntax != Quoted) return false;
-		if (node.annotations['bin.magic'] != null) return false;
+		if (node.annotations[AnnotationKeys.BIN_MAGIC] != null) return false;
 		if (node.annotations['bin.align'] != null) return false;
 		for (child in node.children) {
 			if (child.readMetaString(':kw') != null) return false;
