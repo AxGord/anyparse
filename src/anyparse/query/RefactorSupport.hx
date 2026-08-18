@@ -1536,17 +1536,74 @@ final class RefactorSupport {
 		final startsLine: Bool = from == 0 || source.fastCodeAt(from - 1) == '\n'.code;
 
 		var to: Int = span.to;
-		while (to < source.length) {
-			final c: Int = source.fastCodeAt(to);
-			if (c == ' '.code || c == '\t'.code || c == '\r'.code)
-				to++
-			else
-				break;
-		}
+		while (to < source.length && isHorizontalSpace(source.fastCodeAt(to))) to++;
 		final endsLine: Bool = to >= source.length || source.fastCodeAt(to) == '\n'.code;
 		if (endsLine && to < source.length) to++;
 
 		return startsLine && endsLine ? new Span(from, to) : span;
+	}
+
+	/**
+	 * Give back ONE blank line when a whole-line deletion is flanked by a blank line on
+	 * BOTH sides — the separator the removed declaration owned. Every member of a
+	 * writer-canonical type is flanked that way, because the writer blank-separates
+	 * members, so without this a member deletion turns the single blank the author wrote
+	 * into a doubled run. Nothing downstream reports that: the writer re-emits the run up
+	 * to `emptyLines.maxAnywhereInFile`, so the result stays writer-canonical and
+	 * `fmt --list` stays clean, and no check reads blank lines. Under a config that caps
+	 * the run at one the writer collapses it and the same wrong span is merely hidden —
+	 * which is why the span, not the writer, is where this belongs.
+	 *
+	 * Flanked on ONE side only, nothing is given back, and that asymmetry is the point: a
+	 * lone blank on one side is a GROUP boundary, and consuming it would move the survivor
+	 * below into the group above — an edit the deletion was never asked to make. A
+	 * boundary that is not a blank line counts as no blank for the same test — but do
+	 * NOT read that as "the first / last member of a body is left alone". Under a config
+	 * whose `classEmptyLines.beginType` / `endType` are 0 it is; under one that sets them
+	 * to 1, as this project does, the brace-side gap IS a blank line and IS consumed.
+	 * Those two positions come out right because `classEmptyLines` decides that gap and
+	 * the writer re-normalises it either way, not because the brace reads as a boundary.
+	 *
+	 * A run that was ALREADY doubled stays doubled — one line back out of a pair still
+	 * leaves a pair once the other side is counted. Collapsing such a run is a different
+	 * edit and not a deletion's to make.
+	 *
+	 * Applies to a PURE deletion only, which is why it is called by `deleteNodes` and
+	 * `CheckScan.deletionEdit` rather than folded into `lineExtendedSpan`: most of that
+	 * helper's two dozen consumers splice replacement text into the line they widened, and
+	 * giving back a separator there would swallow a line the replacement still needs. The
+	 * callers are `deleteNodes`, `CheckScan.deletionEdit`, the collapsed-`if` arm of
+	 * `CheckScan.ifShapeEdit`, and the three `cutSpanOf` move helpers. That is NOT every
+	 * pure deletion in the tree: the statement-level check fixers (`unused-local`,
+	 * `dead-code`, `self-assignment` and a dozen more) each build their own
+	 * `{ span: lineExtendedSpan(…), text: '' }` inline, with no shared helper to route
+	 * through, and still leave the doubled run. Auditing those is a slice of its own —
+	 * they differ in what a "separator" means for a statement.
+	 */
+	public static function blankExtendedSpan(source: String, span: Span): Span {
+		// Only a cut that owns whole lines can be flanked by lines at all: `from` must sit at a
+		// line start and `to` just past a line end. That is exactly what `lineExtendedSpan`
+		// produces when it extended, and never when it declined to, so this is also the test
+		// that keeps a mid-line span (a comma-list element, a node sharing its line) out.
+		if (span.from <= 0 || source.fastCodeAt(span.from - 1) != '\n'.code) return span;
+		if (span.to <= span.from || span.to > source.length || source.fastCodeAt(span.to - 1) != '\n'.code) return span;
+
+		// `span.from - 1` is the newline that ended the line above, so the line itself starts
+		// before it; it is blank when only horizontal space separates that newline from the
+		// previous one (or from the start of the file).
+		var above: Int = span.from - 2;
+		while (above >= 0 && isHorizontalSpace(source.fastCodeAt(above))) above--;
+		if (above >= 0 && source.fastCodeAt(above) != '\n'.code) return span;
+
+		var below: Int = span.to;
+		while (below < source.length && isHorizontalSpace(source.fastCodeAt(below))) below++;
+		// End of file is not a blank line — there is no separator left to give back.
+		return below < source.length && source.fastCodeAt(below) == '\n'.code ? new Span(span.from, below + 1) : span;
+	}
+
+	/** Whether `code` is whitespace that does NOT end a line — space, tab, carriage return. */
+	private static inline function isHorizontalSpace(code: Int): Bool {
+		return code == ' '.code || code == '\t'.code || code == '\r'.code;
 	}
 
 	/**
@@ -4499,8 +4556,15 @@ final class RefactorSupport {
 	 * two nested regions) makes the second splice run on coordinates the first already shifted —
 	 * it deletes unrelated code, and the re-parse does not catch it because the wreckage usually
 	 * still parses. A caller that means to remove a node and its container passes the CONTAINER
-	 * alone. Spans widened to their line can also collide between neighbours that share a line,
-	 * which the same check catches.
+	 * alone. Spans widened to their line can also collide between neighbours that share a
+	 * line, which the same check catches.
+	 *
+	 * Each cut is widened once more, over ONE flanking blank line, so the deletion gives
+	 * back the separator the declaration owned (`blankExtendedSpan`). Two targets
+	 * separated by exactly one blank line then produce TOUCHING spans rather than
+	 * overlapping ones — the earlier cut ends where the later one begins — so a run of
+	 * adjacent declarations closes to a single blank however many of them one call
+	 * removes, and the disjointness check above still passes.
 	 */
 	public static function deleteNodes(
 		source: String, targets: Array<{ node: QueryNode, parent: Null<QueryNode> }>, reformat: Bool, plugin: GrammarPlugin,
@@ -4523,7 +4587,9 @@ final class RefactorSupport {
 			final parent: Null<QueryNode> = target.parent;
 			if (!isComma && parent != null) isComma = COMMA_CONTAINER_KINDS.contains(parent.kind);
 
-			edits.push({ span: isComma ? commaExtendedSpan(source, span) : lineExtendedSpan(source, span), text: '' });
+			// A comma list has no blank separators, so only the line branch gives one back.
+			final cut: Span = isComma ? commaExtendedSpan(source, span) : blankExtendedSpan(source, lineExtendedSpan(source, span));
+			edits.push({ span: cut, text: '' });
 		}
 		// A target nested in another — a member and the region holding it, two nested regions — is
 		// dropped in favour of the outer one, which removes it anyway. `isContainedEdit` is the same

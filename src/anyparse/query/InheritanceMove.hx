@@ -322,10 +322,9 @@ final class InheritanceMove {
 	 * is fenced by blanks on both sides. Mirrors `MoveMember.cutSpanOf`.
 	 */
 	private static function cutSpanOf(source: String, groupSpan: Span): Span {
-		final lineCut: Span = RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, groupSpan));
-		final blankBefore: Bool = lineCut.from >= 2 && source.fastCodeAt(lineCut.from - 2) == '\n'.code;
-		final blankAfter: Bool = lineCut.to < source.length && source.fastCodeAt(lineCut.to) == '\n'.code;
-		return blankBefore && blankAfter ? new Span(lineCut.from, lineCut.to + 1) : lineCut;
+		return RefactorSupport.blankExtendedSpan(
+			source, RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, groupSpan))
+		);
 	}
 
 	/** The offset of a type's body-closing `}`, or null. Mirrors `MoveMember`. */

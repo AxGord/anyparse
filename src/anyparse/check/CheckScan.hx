@@ -103,8 +103,9 @@ final class CheckScan {
 	 * The delete-the-whole-member edit for `node`: its modifier / metadata run (`declGroupSpan`,
 	 * which needs the declaring `parent` for the sibling run) folded in, then the LEADING
 	 * `/**` DOC (`docExtendedSpan` with `docOnly`, so a section banner or licence header
-	 * above the member is NOT deleted with it), then the whole line (`lineExtendedSpan`) so
-	 * no blank modifier line is left behind. The doc goes because a deleted member takes its
+	 * above the member is NOT deleted with it), then the whole line (`lineExtendedSpan`) so no blank
+	 * modifier line is left behind, and finally ONE flanking blank line (`blankExtendedSpan`) so the deletion gives
+	 * back the separator the member owned instead of leaving a doubled run. The doc goes because a deleted member takes its
 	 * documentation with it — kept behind, the block silently becomes the doc of whatever
 	 * declaration follows, which is exactly the orphan `fragmented-doc-comment` reports.
 	 */
@@ -112,7 +113,8 @@ final class CheckScan {
 		source: String, node: QueryNode, parent: QueryNode, span: Span
 	): { span: Span, text: String } {
 		final group: Span = RefactorSupport.declGroupSpan(node, parent, span);
-		return { span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, group, true)), text: '' };
+		final lines: Span = RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, group, true));
+		return { span: RefactorSupport.blankExtendedSpan(source, lines), text: '' };
 	}
 
 	/** The `<file>#<from>:<to>` key one declaration is memoised under between a check's `run` and its `fix`. */
@@ -687,7 +689,12 @@ final class CheckScan {
 		};
 		if (hasCommentMarker(source, ns.from, ns.to)) return null;
 		final inBlock: Bool = ifParent != null && seams.blockKinds.contains(ifParent.kind);
-		return inBlock ? { span: RefactorSupport.lineExtendedSpan(source, ns), text: '' } : { span: ns, text: '{}' };
+		// A collapsed-away `if` is a PURE deletion like a member removal, so it gives back its
+		// flanking blank line the same way; the `{}` arm replaces rather than deletes and must not.
+		return inBlock ? {
+			span: RefactorSupport.blankExtendedSpan(source, RefactorSupport.lineExtendedSpan(source, ns)),
+			text: ''
+		} : { span: ns, text: '{}' };
 	}
 
 	/**
