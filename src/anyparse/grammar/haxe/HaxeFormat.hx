@@ -711,6 +711,7 @@ final class HaxeFormat implements TextFormat {
 		expressionIfFit: false,
 		elseIfCommentReflow: false,
 		fitLineBodyGlue: false,
+		loopBodyIfElseNext: false,
 		conditionalExprFit: false,
 		ifElseSemicolonNextLine: true,
 		afterFieldsWithDocComments: CommentEmptyLinesPolicy.One,

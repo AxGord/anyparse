@@ -52,5 +52,7 @@ typedef HxForStmt = {
 	@:lead('(') @:fmt(condWrap('conditionWrap')) var varName: HxIdentLit;
 	@:optional @:lead('=>') var valueName: Null<HxKeyValueBinder>;
 	@:kw('in') @:trail(')') @:fmt(condWrapEnd) var iterable: HxExpr;
-	@:trailOpt(';') @:fmt(bodyPolicy('forBody'), dropSingleStmtBraces) var body: HxStatement;
+	@:trailOpt(';') @:fmt(bodyPolicy('forBody'), dropSingleStmtBraces, loopBodyIfElseNext(
+		'loopBodyIfElseNext', 'IfStmt', 'elseBody'
+	)) var body: HxStatement;
 };

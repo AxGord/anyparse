@@ -6733,9 +6733,15 @@ class WriterLowering {
 			// owner (`anyparse.format.BodyFit`), shared with the case-body Star
 			// path. `nestGluedBody = false` keeps this site byte-identical.
 			macro anyparse.format.BodyFit.fitLineLayout(_cols, _body, false, opt.lineWidth, anyparse.format.BodyFit.SIBLING_NONE);
+		// ω-loop-body-if-else-next: on a LOOP body field the whole FitLine answer
+		// above is skipped for one body shape — an `if` that owns an `else` — and
+		// replaced by the same `Next` layout the `fitLineIfWithElse` escape below
+		// uses. Every other body, this flag off, and every non-loop field keep the
+		// answer unchanged.
+		final fitGatedExpr: Expr = wrapLoopBodyIfElseNext(opts, fitInnerExpr);
 		if (elseFieldName == null) return macro {
 			final _body: anyparse.core.Doc = $writeCall;
-			$fitInnerExpr;
+			$fitGatedExpr;
 		};
 		final elseAccess: Expr = {
 			expr: EField(macro value, elseFieldName),
@@ -6747,7 +6753,7 @@ class WriterLowering {
 			// via propagateElseIfBranch) is an extra break trigger even when this
 			// `if` has no `else` of its own — mirrors fork's `isPartOfIfElse`
 			// "if inside else" clause. Still suppressed by `fitLineIfWithElse`.
-			opt.fitLineIfWithElse || ($elseAccess == null && !opt._inElseIfBranch) ? $fitInnerExpr : _dn(_cols, _dc([_dhl(), _body]));
+			opt.fitLineIfWithElse || ($elseAccess == null && !opt._inElseIfBranch) ? $fitGatedExpr : _dn(_cols, _dc([_dhl(), _body]));
 		};
 	}
 
@@ -6954,6 +6960,43 @@ class WriterLowering {
 			};
 			_mbgIsMetaBlock ? $sameLayoutExpr : $finalWrapExpr;
 		};
+	}
+
+	/**
+	 * Wrap the `FitLine` layout Expr with the ω-loop-body-if-else-next gate: a
+	 * loop body that is an `if` carrying an `else` takes the `Next` layout
+	 * instead of the FitLine answer.
+	 *
+	 * The three names arrive declaratively from
+	 * `@:fmt(loopBodyIfElseNext('<optField>', '<ifCtor>', '<elseField>'))` so the
+	 * macro stays format-neutral, and the shape question itself is asked at
+	 * runtime by `anyparse.format.LoopBodyShape.isIfWithElse` — the body value is
+	 * a trivia-synthesised enum, which no non-macro module may name.
+	 *
+	 * The gate looks at the CHILD's shape, not at a sibling field, and that is
+	 * the whole difference from `fitLineIfWithElse`: an `if` WITHOUT an `else`
+	 * keeps gluing to the loop header, because `for (x in xs) if (c) f(x);` is a
+	 * deliberate idiom. A body policy cannot express that distinction —
+	 * `forBody: next` moves the guard idiom under the header too, which is why
+	 * this is a knob and not a config value.
+	 *
+	 * Returns `fitInnerExpr` unchanged when no args (every non-loop body field).
+	 */
+	private function wrapLoopBodyIfElseNext(opts: WrapBodyOpts, fitInnerExpr: Expr): Expr {
+		final args: Null<Array<String>> = opts.loopBodyIfElseArgs;
+		if (args == null) return fitInnerExpr;
+		if (args.length != 3)
+			Context.fatalError(
+				'WriterLowering: bodyPolicyWrap loopBodyIfElseArgs requires (optField, ifCtor, elseField), got ${args.length} args',
+				Context.currentPos()
+			);
+		final flagAccess: Expr = { expr: EField(macro opt, args[0]), pos: Context.currentPos() };
+		final ifCtor: String = args[1];
+		final elseField: String = args[2];
+		final bodyValueExpr: Expr = opts.bodyValueExpr;
+		return macro $flagAccess && anyparse.format.LoopBodyShape.isIfWithElse($bodyValueExpr, $v{ifCtor}, $v{elseField})
+			? _dn(_cols, _dc([_dhl(), _body]))
+			: $fitInnerExpr;
 	}
 
 	/**
@@ -9357,6 +9400,12 @@ class WriterLowering {
 		// bodies and flag-false fall through to the regular policy
 		// cascade.
 		final inlineBlockBodyArgs: Null<Array<String>> = child.fmtReadStringArgs('inlineBlockBodyIfFlag');
+		// ω-loop-body-if-else-next: `@:fmt(loopBodyIfElseNext('<optField>',
+		// '<ifCtor>', '<elseField>'))` on a LOOP body field forwards the three
+		// names to `bodyPolicyWrap`, which degrades the `FitLine` layout to
+		// `Next` when the knob is on and the body is an `if` that owns an
+		// `else`. Currently consumed by `HxForStmt.body` / `HxWhileStmt.body`.
+		final loopBodyIfElseArgs: Null<Array<String>> = child.fmtReadStringArgs('loopBodyIfElseNext');
 		parts.push(bodyPolicyWrap({
 			flagName: bodyPolicyFlag,
 			exprFlagName: bodyPolicyExprFlag,
@@ -9377,6 +9426,7 @@ class WriterLowering {
 			condFitGroup: condFitGroup,
 			ssbTrailCommentExpr: ssbTrailCommentExpr,
 			arrowValueIfSite: child.fmtHasFlag(ARROW_VALUE_IF_SITE),
+			loopBodyIfElseArgs: loopBodyIfElseArgs,
 		}));
 		return { access: fieldAccess, typePath: refName };
 	}
@@ -14487,7 +14537,20 @@ typedef WrapBodyOpts = {
 	// `if`'s head line by `ElseIfCommentReflow.insertHeadTrail`. Every other
 	// arm, and a splice that finds no anchor, keep the untouched layout.
 	// False everywhere else -> byte-inert.
-	?elseIfCommentReflow: Bool
+	?elseIfCommentReflow: Bool,
+	// ω-loop-body-if-else-next: the three declarative names from
+	// `@:fmt(loopBodyIfElseNext('<optField>', '<ifCtor>', '<elseField>'))` on a
+	// LOOP body field (`HxForStmt.body` / `HxWhileStmt.body`). When
+	// `opt.<optField>` is set AND the body value is an `<ifCtor>` whose head
+	// carries a non-null `<elseField>`, the `FitLine` layout degrades to the
+	// `Next` one — the loop header keeps its own line and the whole `if`/`else`
+	// moves one indent step in, so the `else` lines up with its `if` instead of
+	// with the loop. An `if` WITHOUT an `else` keeps gluing: `for (x in xs) if
+	// (c) f(x);` is a deliberate idiom, which is why this cannot be a body
+	// policy (`forBody: next` moves that one too). Sibling of the
+	// `fitLineIfWithElse` escape one storey down, which asks about the placed
+	// node's own `else` field rather than about the CHILD's shape. Null → byte-inert.
+	?loopBodyIfElseArgs: Null<Array<String>>
 };
 
 /**

@@ -623,6 +623,7 @@ final class HaxeFormatConfigLoader {
 			expressionIfFit: base.expressionIfFit,
 			elseIfCommentReflow: base.elseIfCommentReflow,
 			fitLineBodyGlue: base.fitLineBodyGlue,
+			loopBodyIfElseNext: base.loopBodyIfElseNext,
 			conditionalExprFit: base.conditionalExprFit,
 			ifElseSemicolonNextLine: base.ifElseSemicolonNextLine,
 			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
@@ -1001,6 +1002,10 @@ final class HaxeFormatConfigLoader {
 		// FitLine body placement - it changes no body policy, it decides whether a
 		// body the next line would not rescue glues to the header line instead.
 		if (section.fitLineBodyGlue != null) opt.fitLineBodyGlue = section.fitLineBodyGlue;
+		// omega-loop-body-if-else-next: an independent Bool knob on the loop-body
+		// FitLine placement - it changes no body policy, it decides whether a loop
+		// body that is an `if` WITH an `else` breaks away from the header line.
+		if (section.loopBodyIfElseNext != null) opt.loopBodyIfElseNext = section.loopBodyIfElseNext;
 		// omega-cond-expr-fit: an independent Bool knob on expression-scope
 		// conditional layout - it changes no body policy, it decides whether an
 		// over-wide glued `#if ... #end` value breaks at its directive seams.

@@ -191,6 +191,8 @@ package anyparse.grammar.haxe.format;
 
 	@:optional var fitLineBodyGlue: Bool;
 
+	@:optional var loopBodyIfElseNext: Bool;
+
 	@:optional var conditionalExprFit: Bool;
 
 	@:optional var ifElseSemicolonNextLine: Bool;
