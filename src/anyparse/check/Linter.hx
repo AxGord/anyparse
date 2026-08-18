@@ -213,6 +213,10 @@ final class Linter {
 			// collide — that one claims a counter loop whose condition is `i < B`, this one a loop
 			// whose condition is exactly `it.hasNext()`.
 			new PreferForIn(),
+			// Beside the other loop-header rules, and disjoint from them by CONDITION: this one
+			// claims a loop whose condition is the literal `true`, which `prefer-range-loop`
+			// (`i < B`) and `prefer-for-in` (`it.hasNext()`) both refuse by shape.
+			new WhileTrueCondition(),
 			new PreferKeyValueLoop(),
 			new DeadBinderCounterLoop(),
 			new RedundantReplaceLoop(),
