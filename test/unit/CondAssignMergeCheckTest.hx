@@ -233,15 +233,21 @@ class CondAssignMergeCheckTest extends Test {
 	}
 
 	/**
-	 * A VALUE broken across lines cannot go inline verbatim either: its continuation would land
-	 * between two directives and read as part of a branch it does not belong to.
+	 * A VALUE broken across lines merges too: it goes inline VERBATIM, newlines included, and the
+	 * writer decides where the merged statement breaks — under `sameLine.conditionalExprFit` every
+	 * branch gets its own directive line, so no continuation reads as part of a branch it does not
+	 * belong to. Only the branch HEADERS still refuse a line break, having no such writer arm.
 	 */
-	public function testMultiLineValueNotFlagged(): Void {
-		Assert.equals(0, violations(wrap("#if a\n\t\ts = 'p'\n\t\t\t+ 'q';\n\t\t#else\n\t\ts = 'r';\n\t\t#end")).length);
+	public function testMultiLineValueFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrap("#if a\n\t\ts = 'p'\n\t\t\t+ 'q';\n\t\t#else\n\t\ts = 'r';\n\t\t#end"));
+		Assert.equals(1, es.length);
+		Assert.equals("s = #if a 'p'\n\t\t\t+ 'q' #else 'r' #end;", es[0].text);
 	}
 
-	public function testMultiLineReturnValueNotFlagged(): Void {
-		Assert.equals(0, violations(wrap("#if a\n\t\treturn 'p'\n\t\t\t+ 'q';\n\t\t#end\n\t\treturn 'r';")).length);
+	public function testMultiLineReturnValueFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrap("#if a\n\t\treturn 'p'\n\t\t\t+ 'q';\n\t\t#end\n\t\treturn 'r';"));
+		Assert.equals(1, es.length);
+		Assert.equals("return #if a 'p'\n\t\t\t+ 'q' #else 'r' #end;", es[0].text);
 	}
 
 	/** A condition broken across lines cannot go inline verbatim. */

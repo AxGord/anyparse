@@ -401,7 +401,7 @@ final class CondAssignMerge implements Check implements DefaultOff {
 		final out: Array<Parts> = [];
 		for (arm in arms) {
 			final parts: Null<Parts> = armParts(source, arm, seams);
-			if (parts == null || isMultiLine(parts.value)) return null;
+			if (parts == null) return null;
 			if (out.length > 0 && (parts.prefix != out[0].prefix || parts.exit != out[0].exit)) return null;
 			out.push(parts);
 		}
@@ -409,10 +409,13 @@ final class CondAssignMerge implements Check implements DefaultOff {
 	}
 
 	/**
-	 * Whether `text` spans more than one line — the verdict the branch HEADERS already get,
-	 * applied to the values. A value broken across lines cannot go inline verbatim any more than
-	 * a condition can: the merge would splice its continuation lines between two directives, where
-	 * they read as belonging to a branch they do not.
+	 * Whether `text` spans more than one line — the verdict the branch HEADERS get.
+	 *
+	 * A condition broken across lines cannot be emitted verbatim inside a one-statement merge: its
+	 * continuation would land between two directives and read as belonging to a branch it does not.
+	 * The VALUES used to share this refusal and no longer do — the writer's `conditionalExprFit` gives
+	 * every branch of a merged region its own directive line, so a multi-line value keeps its own shape
+	 * instead of being spliced into a neighbour. Headers have no such writer arm.
 	 */
 	private static function isMultiLine(text: String): Bool {
 		return text.indexOf('\n') != -1 || text.indexOf('\r') != -1;
@@ -442,7 +445,7 @@ final class CondAssignMerge implements Check implements DefaultOff {
 			}
 			buf.add(source.substring(at, arm.stmtSpan.from));
 			final header: String = buf.toString().trim();
-			if (header == '' || header.indexOf('\n') != -1 || header.indexOf('\r') != -1) return null;
+			if (header == '' || isMultiLine(header)) return null;
 			out.push(header);
 		}
 		return out;
