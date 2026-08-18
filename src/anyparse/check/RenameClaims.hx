@@ -30,7 +30,10 @@ import anyparse.query.SymbolIndex;
 @:nullSafety(Strict)
 final class RenameClaims {
 
+	/** The snapshot `_claims` was decided against; a different one retires them all. */
 	private var _index: Null<SymbolIndex> = null;
+
+	/** The accepted renames, in acceptance order. */
 	private var _claims: Array<MemberClaim> = [];
 
 	public function new() {}
@@ -54,7 +57,7 @@ final class RenameClaims {
 		return false;
 	}
 
-	/** Record an accepted member rename. A declaration `defers` can never veto claims nothing. */
+	/** Record an accepted member rename, so the rest of the pass defers to it. A declaration `defers` could never veto anyway - one with no owning type, or a run with no index - claims nothing. */
 	public function claim(owner: Null<String>, newName: String, index: Null<SymbolIndex>): Void {
 		// Re-bound: a narrowed local does not stay narrowed inside an anonymous structure literal.
 		if (owner == null || index == null) return;
