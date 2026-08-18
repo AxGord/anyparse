@@ -55,6 +55,33 @@ class Lowering {
 	private static inline final GUARD_WORD_LOCAL: String = '_gW';
 
 	/**
+	 * Names of the two locals a `@:tryparse` Star call-site gate emits.
+	 * Deliberately distinct from the `_gC0` / `_gW` pair above: a Star
+	 * loop lives INSIDE an Alt branch trial, so the enclosing rule's
+	 * dispatch prologue locals are in scope at the loop and reusing
+	 * their names would shadow them. Also distinct from every local the
+	 * loops themselves declare (`_savedPos`, `_lead`, `_leadStart`,
+	 * `_savedPending`, `_afterTriviaPos`, `_node`, `_e`).
+	 */
+	private static inline final STAR_GATE_BYTE_LOCAL: String = '_eC0';
+
+	/** Maximal word at the Star element position — the `FirstKw` gate's subject. */
+	private static inline final STAR_GATE_WORD_LOCAL: String = '_eW';
+
+	/**
+	 * Shape-node annotation recording `shouldLowerByName`'s answer.
+	 *
+	 * That answer is a FORMAT decision (`_formatInfo.fieldLookup` /
+	 * `keySyntax`), so the static first-token classifier cannot ask for
+	 * it — `generate` stamps it on every `Seq` rule before any lowering
+	 * runs instead. `seqFirstToken` needs it because a by-name struct
+	 * matches its fields in ANY order behind the format's own object
+	 * syntax: the positional first field says nothing about what the
+	 * emitted body opens with.
+	 */
+	private static inline final BY_NAME_KEY: String = 'lowering.byName';
+
+	/**
 	 * How many guardable branches an Alt rule needs before the dispatch
 	 * prologue repays itself. Read by `lowerEnum` (which acts on it) and
 	 * by `dumpDispatch` (which reports it), so the dump can never claim a
@@ -68,6 +95,21 @@ class Lowering {
 	private static inline final DISPATCH_MIN_GUARDS: Int = 2;
 
 	private final _eregByRule: Map<String, GeneratedRule.EregSpec> = [];
+
+	/**
+	 * One record per `@:tryparse` Star call site the lowering walked,
+	 * accumulated as a side effect of `emitStarFieldSteps` exactly as
+	 * `_eregByRule` is of `lowerTerminal`. Consumed only by
+	 * `dumpDispatch` under `-D anyparse_dispatch_dump`, so the dump can
+	 * never claim a gate the codegen did not emit.
+	 */
+	private final _starGates: Array<{
+		rule: Null<String>,
+		field: Null<String>,
+		elem: String,
+		first: BranchFirstToken,
+	}> = [];
+
 	private final _shape: ShapeBuilder.ShapeResult;
 	private final _formatInfo: FormatReader.FormatInfo;
 	private final _ctx: LoweringCtx;
@@ -89,16 +131,22 @@ class Lowering {
 		// primitives and have no ctor builds — skip them so their bodies
 		// stay untouched.
 		final spanRuleNames: Map<String, Bool> = [];
+		for (node in _shape.rules) if (node.kind == Seq) node.annotations[BY_NAME_KEY] = shouldLowerByName(node);
+		// `parseFnName` is an INSTANCE method (it consults `isSpanBearing`
+		// / `isTriviaBearing`), so the inverse map the emitted-body check
+		// needs to resolve a leading `parseXxx(ctx)` back to its rule is
+		// built here, once, rather than inside the static checker.
+		final fnToRule: Map<String, String> = [for (typePath in _shape.rules.keys()) parseFnName(typePath) => typePath];
 		for (typePath => node in _shape.rules) {
 			final entryFn: String = parseFnName(typePath);
 			for (rule in lowerRule(typePath, node)) {
 				rules.push(rule);
 				if (_ctx.spans && node.kind != Terminal) spanRuleNames[rule.fnName] = true;
-				if (rule.fnName == entryFn) checkRuleFirstToken(_shape.rules, typePath, rule);
+				if (rule.fnName == entryFn) checkRuleFirstToken(_shape.rules, fnToRule, typePath, rule);
 			}
 		}
 		#if anyparse_dispatch_dump
-		dumpDispatch(_shape.rules);
+		dumpDispatch(_shape.rules, _starGates);
 		#end
 		if (_ctx.spans) for (rule in rules) if (spanRuleNames.exists(rule.fnName)) rule.body = instrumentSpans(rule.body);
 		return rules;
@@ -404,8 +452,8 @@ class Lowering {
 		// miniblock pilots, depending on what each declares) has no such
 		// backstop. This is the one accepted behaviour change; the
 		// well-formed language is unaffected in every grammar.
-		final firstTokens: Array<BranchFirstToken> = branches.map(branchFirstToken.bind(_shape.rules));
-		final guards: Array<Null<Expr>> = firstTokens.map(branchGuardExpr);
+		final firstTokens: Array<BranchFirstToken> = branches.map(branchFirstToken.bind(_shape.rules, []));
+		final guards: Array<Null<Expr>> = firstTokens.map(branchGuardExpr.bind(_, GUARD_BYTE_LOCAL, GUARD_WORD_LOCAL));
 		var guardCount: Int = 0;
 		var needWord: Bool = false;
 		var needByte: Bool = false;
@@ -776,11 +824,15 @@ class Lowering {
 	// -------- struct rule --------
 
 	private function lowerStruct(node: ShapeNode, typePath: String): Expr {
-		if (shouldLowerByName(node)) return lowerStructByName(node);
+		// The stamp, not a second `shouldLowerByName` call: `generate`
+		// derives that decision once per `Seq` rule so `seqFirstToken` can
+		// read it too, and one derivation cannot drift from itself. Every
+		// node reaching here is a top-level rule, so the stamp is present.
+		if (node.annotations[BY_NAME_KEY] == true) return lowerStructByName(node);
 		final parseSteps: Array<Expr> = [];
 		final structFields: Array<ObjectField> = [];
 		// Binary: @:magic prefix — validate fixed magic bytes before fields.
-		final magic: Null<String> = node.annotations['bin.magic'];
+		final magic: Null<String> = node.annotations[AnnotationKeys.BIN_MAGIC];
 		if (magic != null) parseSteps.push(macro expectLit(ctx, $v{magic}));
 		for (child in node.children) {
 			final fieldName: Null<String> = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
@@ -1075,7 +1127,10 @@ class Lowering {
 	 * at compile time because there is no unambiguous way to stop a
 	 * sep-peek loop at EOF without a fail-rewind signal.
 	 */
-	private function emitStarFieldSteps(starNode: ShapeNode, localName: String, parseSteps: Array<Expr>, isLastField: Bool): Void {
+	private function emitStarFieldSteps(
+		starNode: ShapeNode, ownerPath: Null<String>, fieldName: Null<String>, localName: String, parseSteps: Array<Expr>,
+		isLastField: Bool
+	): Void {
 		final inner: ShapeNode = starNode.children[0];
 		if (inner.kind != Ref) {
 			Context.fatalError('Lowering: Star struct field must contain a Ref', Context.currentPos());
@@ -1090,6 +1145,44 @@ class Lowering {
 		final openText: Null<String> = starNode.annotations[AnnotationKeys.LIT_LEAD_TEXT];
 		final closeText: Null<String> = starNode.annotations[AnnotationKeys.LIT_TRAIL_TEXT];
 		final sepText: Null<String> = starNode.annotations[AnnotationKeys.LIT_SEP_TEXT];
+		// ω-star-call-gate: the element rule's first-token fact, used to
+		// SKIP the trial in a `@:tryparse` loop whose termination is a
+		// deliberate parse failure. That failure is the loop's normal exit,
+		// so its `throw` is pure waste — measured at ~310 ns plus per-frame
+		// cost on V8, ~186 746 times over the corpus.
+		//
+		// SEMANTICS: skipping the trial also skips its `ctx.recordFail`
+		// bookkeeping, so on MALFORMED input the farthest-fail diagnostic
+		// can move — the same accepted behaviour change `lowerEnum`
+		// documents at length for the Alt dispatch guards. For the Haxe
+		// grammar the enclosing `collectTrivia` / `skipWs` comment probes
+		// record at the position first, so the reported locus is unchanged.
+		//
+		// `Unknown` leaves every loop byte-identical to what it was before
+		// the gate existed.
+		//
+		// A `@:raw` OWNER is the one shape that must refuse the gate outright.
+		// `lowerRule` ends by running `stripSkipWs` over the whole body, which
+		// erases the loop's own `skipWs` — but NOT the gate, and not the
+		// ELEMENT rule's internal one when the element is not itself raw. The
+		// gate would then peek un-skipped bytes and end the loop at the first
+		// inter-element gap. A binary format is safe by symmetry: there EVERY
+		// rule is stripped, so the element still starts exactly where the gate
+		// peeks. An owner we cannot resolve is refused for the same reason we
+		// refuse anything unproven — `Unknown` costs only the guard.
+		final ownerNode: Null<ShapeNode> = ownerPath == null ? null : _shape.rules[ownerPath];
+		final gateableOwner: Bool = ownerNode != null && !ownerNode.hasMeta(':raw');
+		final elemFirst: BranchFirstToken = gateableOwner ? ruleFirstToken(_shape.rules, elemRefName, []) : Unknown;
+		final triviaStar: Bool = _ctx.trivia && starNode.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true;
+		final tryparseLoop: Bool = triviaStar
+			? starNode.hasMeta(':tryparse')
+			: closeText == null && (!isLastField || starNode.hasMeta(':tryparse'));
+		if (tryparseLoop) _starGates.push({
+			rule: ownerPath,
+			field: fieldName,
+			elem: elemRefName,
+			first: elemFirst
+		});
 		if (closeText == null && sepText != null && !starNode.hasMeta(':tryparse')) {
 			Context.fatalError(
 				'Lowering: Star struct field with @:sep without @:trail requires @:tryparse for fail-rewind termination',
@@ -1102,8 +1195,8 @@ class Lowering {
 		// mode (HxModule.decls). `@:sep` and `@:tryparse` combined with
 		// @:trivia are rejected — no current grammar combines them and the
 		// semantics of "trivia around a sep-separated list" are undecided.
-		if (_ctx.trivia && starNode.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true) {
-			emitTriviaStarFieldSteps(starNode, localName, parseSteps, isLastField, elemCT, elemCall, openText, closeText);
+		if (triviaStar) {
+			emitTriviaStarFieldSteps(starNode, localName, parseSteps, isLastField, elemCT, elemCall, openText, closeText, elemFirst);
 			return;
 		}
 		if (openText != null) {
@@ -1156,10 +1249,10 @@ class Lowering {
 			final sepBlockEnded: Bool = starNode.annotations[AnnotationKeys.LIT_SEP_BLOCK_ENDED] == true;
 			final predicateName: Null<String> = starNode.annotations[AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE];
 			final predicateCall: Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRef) : macro false;
-			parseSteps.push(buildTryparseSepLoop(elemCall, accumRef, sepCharCode, sepBlockEnded, predicateCall));
+			parseSteps.push(buildTryparseSepLoop(elemCall, accumRef, sepCharCode, sepBlockEnded, predicateCall, elemFirst));
 			return;
 		}
-		emitNonTriviaCloseSteps(starNode, parseSteps, isLastField, elemCall, accumRef, closeText, sepText);
+		emitNonTriviaCloseSteps(starNode, parseSteps, isLastField, elemCall, accumRef, closeText, sepText, elemFirst);
 	}
 
 	/**
@@ -1478,7 +1571,7 @@ class Lowering {
 	 */
 	private function emitTriviaStarFieldSteps(
 		starNode: ShapeNode, localName: String, parseSteps: Array<Expr>, isLastField: Bool, elemCT: ComplexType, elemCall: Expr,
-		openText: Null<String>, closeText: Null<String>
+		openText: Null<String>, closeText: Null<String>, elemFirst: BranchFirstToken
 	): Void {
 		final sepText: Null<String> = starNode.annotations[AnnotationKeys.LIT_SEP_TEXT];
 		final blockEndedFlag: Bool = starNode.annotations[AnnotationKeys.LIT_SEP_BLOCK_ENDED] == true;
@@ -1690,7 +1783,7 @@ class Lowering {
 				// call references.
 				if (starNode.fmtHasFlag('sepBeforeOpt')) emitSepBeforeOptStep(localName, parseSteps, sepText.charCodeAt(0));
 				parseSteps.push(buildTriviaTryparseSepBody(
-					elemCT, elemCall, accumRef, sepText, trailPresentLocal, trailBBLocal, trailLCLocal, trailBALocal, nestBody
+					elemCT, elemCall, accumRef, sepText, trailPresentLocal, trailBBLocal, trailLCLocal, trailBALocal, nestBody, elemFirst
 				));
 				return;
 			}
@@ -1711,7 +1804,8 @@ class Lowering {
 			// flow outward via rewind — preserving "blank line = belongs
 			// to next entity" convention.
 			parseSteps.push(buildTriviaTryparseNoSepBody(
-				elemCT, elemCall, accumRef, trailBBLocal, trailLCLocal, trailBALocal, nestBody, starNode.fmtHasFlag('padTrailing')
+				elemCT, elemCall, accumRef, trailBBLocal, trailLCLocal, trailBALocal, nestBody, starNode.fmtHasFlag('padTrailing'),
+				elemFirst
 			));
 			return;
 		}
@@ -1848,7 +1942,7 @@ class Lowering {
 		// `@:re`-driven terminal gets it), and catches the bug class
 		// instead of patching individual regexes after they leak into a
 		// slice's sweep delta.
-		return macro {
+		final body: Expr = macro {
 			final _rest: String = ctx.input.substring(ctx.pos, ctx.input.length);
 			if (!$i{eregVar}.match(_rest) || $i{eregVar}.matchedPos().pos != 0) {
 				ctx.recordFail(ctx.pos, $v{simple});
@@ -1858,6 +1952,40 @@ class Lowering {
 			ctx.pos += $advanceLenExpr;
 			return $decodeExpr;
 		};
+		// ω-terminal-first-byte: when `terminalFirstToken` reads a literal
+		// head off the regex source, reject a wrong first byte BEFORE the
+		// `substring` + `EReg.match` above.
+		//
+		// This is what makes the terminal's first-token CLAIM self-enforcing
+		// rather than merely checked: the same fact that produces the claim
+		// produces this reject, so the generated function CANNOT accept a
+		// first byte outside the claim — `checkRuleFirstToken` then reads
+		// this very statement back out of the emitted body as the fact.
+		// A classifier bug can therefore only make the terminal reject MORE
+		// than the regex would (a parse failure a test catches), never
+		// silently claim more than it rejects (a wrong dispatch guard no
+		// runtime oracle catches).
+		//
+		// `Input.charCodeAt` answers -1 outside `[0, length)`, so no bounds
+		// test is needed — end-of-input fails the compare like any other
+		// wrong byte. Free win on the hot literal terminals, which today pay
+		// a `substring` plus a regex run before finding out the first byte
+		// was never right.
+		final first: BranchFirstToken = terminalFirstToken(node);
+		final head: Null<Int> = switch first {
+			case FirstLit([code]): code;
+			case _: null;
+		};
+		if (head == null) return body;
+		final reject: Expr = macro if (ctx.input.charCodeAt(ctx.pos) != $v{head}) {
+			ctx.recordFail(ctx.pos, $v{simple});
+			throw anyparse.runtime.ParseError.backtrack;
+		};
+		final steps: Array<Expr> = switch body.expr {
+			case EBlock(exprs): exprs;
+			case _: [body];
+		};
+		return macro $b{[reject].concat(steps)};
 	}
 
 	/**
@@ -1917,7 +2045,7 @@ class Lowering {
 		if (_formatInfo.isBinary) return false;
 		if (_formatInfo.fieldLookup != ByName) return false;
 		if (_formatInfo.keySyntax != Quoted) return false;
-		if (node.annotations['bin.magic'] != null) return false;
+		if (node.annotations[AnnotationKeys.BIN_MAGIC] != null) return false;
 		if (node.annotations['bin.align'] != null) return false;
 		for (child in node.children) {
 			if (child.readMetaString(':kw') != null) return false;
@@ -2887,18 +3015,29 @@ class Lowering {
 
 	private function buildTriviaTryparseSepBody(
 		elemCT: ComplexType, elemCall: Expr, accumRef: Expr, sepText: String, trailPresentLocal: String, trailBBLocal: String,
-		trailLCLocal: String, trailBALocal: String, nestBody: Bool
+		trailLCLocal: String, trailBALocal: String, nestBody: Bool, elemFirst: BranchFirstToken
 	): Expr {
 		// ω-blockended-trivia-tryparse (Session 3): `@:tryparse +
 		// @:sep(text, tailRelax, blockEnded)` fork — permissive matchLit
 		// on sep. Element-parse failure rewinds + breaks via the try/catch.
 		// nestBody keeps the orphan-trail capture on parse failure.
+		// ω-star-call-gate: every sep local is written only AFTER a
+		// successful element parse, so a gate break leaves them exactly
+		// where the catch arm would. Both exits splice the same `Expr`.
+		final exitArm: Expr = nestBody
+			? starNestExitArm(trailBBLocal, trailLCLocal, trailBALocal)
+			: macro {
+				ctx.pos = _savedPos;
+				break;
+			};
+		final gate: Expr = starGateStep(elemFirst, exitArm);
 		return nestBody
 			? macro {
 				while (true) {
 					final _savedPos: Int = ctx.pos;
 					final _lead = collectTrivia(ctx);
 					final _afterTriviaPos: Int = ctx.pos;
+					$gate;
 					try {
 						final _node: $elemCT = $elemCall;
 						final _trailingBeforeSep: Null<String> = collectTrailingFull(ctx);
@@ -2924,23 +3063,15 @@ class Lowering {
 							sepAfter: _sepAfter,
 							node: _node,
 						});
-					} catch (_e: anyparse.runtime.ParseError) {
-						if (!_lead.blankBefore && _lead.leadingComments.length > 0) {
-							$i{trailBBLocal} = _lead.blankBefore;
-							$i{trailLCLocal} = _lead.leadingComments;
-							$i{trailBALocal} = _lead.blankAfterLeadingComments;
-							ctx.pos = _afterTriviaPos;
-						} else {
-							ctx.pos = _savedPos;
-						}
-						break;
-					}
+					} catch (_e: anyparse.runtime.ParseError)
+						$exitArm;
 				}
 			}
 			: macro {
 				while (true) {
 					final _savedPos: Int = ctx.pos;
 					final _lead = collectTrivia(ctx);
+					$gate;
 					try {
 						final _node: $elemCT = $elemCall;
 						final _trailingBeforeSep: Null<String> = collectTrailingFull(ctx);
@@ -2966,17 +3097,15 @@ class Lowering {
 							sepAfter: _sepAfter,
 							node: _node,
 						});
-					} catch (_e: anyparse.runtime.ParseError) {
-						ctx.pos = _savedPos;
-						break;
-					}
+					} catch (_e: anyparse.runtime.ParseError)
+						$exitArm;
 				}
 			};
 	}
 
 	private function buildTriviaTryparseNoSepBody(
 		elemCT: ComplexType, elemCall: Expr, accumRef: Expr, trailBBLocal: String, trailLCLocal: String, trailBALocal: String,
-		nestBody: Bool, branchTrail: Bool
+		nestBody: Bool, branchTrail: Bool, elemFirst: BranchFirstToken
 	): Expr {
 		// Try-parse termination: each iteration saves `ctx.pos` before
 		// `collectTrivia`, attempts the element parse, and rewinds to the
@@ -2984,11 +3113,18 @@ class Lowering {
 		// `@:fmt(nestBody)` Stars (case/default bodies) add a trailing-orphan
 		// capture; the non-nestBody path carries the ω-keep-pratt-blank stash.
 		if (nestBody) {
+			// ω-star-call-gate: `collectTrivia` already ran OUTSIDE the try,
+			// so the gate peeks exactly where the element parse would start,
+			// and the orphan-trail bookkeeping is spliced from ONE `Expr`
+			// into both the catch arm and the gate.
+			final nestExitArm: Expr = starNestExitArm(trailBBLocal, trailLCLocal, trailBALocal);
+			final nestGate: Expr = starGateStep(elemFirst, nestExitArm);
 			return macro {
 				while (true) {
 					final _savedPos: Int = ctx.pos;
 					final _lead = collectTrivia(ctx);
 					final _afterTriviaPos: Int = ctx.pos;
+					$nestGate;
 					try {
 						final _node: $elemCT = $elemCall;
 						final _trailing: Null<String> = collectTrailingFull(ctx);
@@ -3003,17 +3139,8 @@ class Lowering {
 							sepAfter: true,
 							node: _node,
 						});
-					} catch (_e: anyparse.runtime.ParseError) {
-						if (!_lead.blankBefore && _lead.leadingComments.length > 0) {
-							$i{trailBBLocal} = _lead.blankBefore;
-							$i{trailLCLocal} = _lead.leadingComments;
-							$i{trailBALocal} = _lead.blankAfterLeadingComments;
-							ctx.pos = _afterTriviaPos;
-						} else {
-							ctx.pos = _savedPos;
-						}
-						break;
-					}
+					} catch (_e: anyparse.runtime.ParseError)
+						$nestExitArm;
 				}
 			};
 		}
@@ -3041,6 +3168,7 @@ class Lowering {
 				$restoreStash;
 				break;
 			};
+		final nonNestGate: Expr = starGateStep(elemFirst, nonNestCatch);
 		return macro {
 			while (true) {
 				final _savedPos: Int = ctx.pos;
@@ -3067,6 +3195,7 @@ class Lowering {
 				// (an `@:optional Trivial.newlineAfterSep` slot, read only
 				// under `WrapMode.Keep`) → byte-inert for non-keep.
 				final _leadStart: Int = ctx.pos;
+				$nonNestGate;
 				try {
 					final _node: $elemCT = $elemCall;
 					final _trailing: Null<String> = collectTrailingFull(ctx);
@@ -3829,7 +3958,7 @@ class Lowering {
 	}
 
 	private function buildTryparseSepLoop(
-		elemCall: Expr, accumRef: Expr, sepCharCode: Int, sepBlockEnded: Bool, predicateCall: Expr
+		elemCall: Expr, accumRef: Expr, sepCharCode: Int, sepBlockEnded: Bool, predicateCall: Expr, elemFirst: BranchFirstToken
 	): Expr {
 		// Try-parse with sep peek. After each successful element,
 		// peeks the next non-whitespace char: if it equals the sep, consumes
@@ -3838,17 +3967,36 @@ class Lowering {
 		// the pre-whitespace position. The block-ended variant additionally
 		// tolerates an omitted sep when the prior element ended with `;` (or
 		// the schema predicate matches).
+		// ω-star-call-gate: the sep bookkeeping all runs AFTER a successful
+		// element parse, so breaking at the gate leaves every sep local
+		// exactly where the catch arm would — the two exits share one
+		// spliced `Expr`.
+		final exitArm: Expr = macro {
+			ctx.pos = _savedPos;
+			break;
+		};
+		final gate: Null<Expr> = starGateExpr(elemFirst, exitArm);
+		final elemStep: Expr = gate == null
+			? macro {
+				try {
+					skipWs(ctx);
+					$accumRef.push($elemCall);
+				} catch (_e: anyparse.runtime.ParseError)
+					$exitArm;
+			}
+			: macro {
+				skipWs(ctx);
+				$gate;
+				try {
+					$accumRef.push($elemCall);
+				} catch (_e: anyparse.runtime.ParseError)
+					$exitArm;
+			};
 		return sepBlockEnded
 			? macro {
 				while (true) {
 					final _savedPos: Int = ctx.pos;
-					try {
-						skipWs(ctx);
-						$accumRef.push($elemCall);
-					} catch (_e: anyparse.runtime.ParseError) {
-						ctx.pos = _savedPos;
-						break;
-					}
+					$elemStep;
 					final _prevEndPos: Int = ctx.pos;
 					skipWs(ctx);
 					final _isBE: Bool = _prevEndPos > 0 && {
@@ -3871,13 +4019,7 @@ class Lowering {
 			: macro {
 				while (true) {
 					final _savedPos: Int = ctx.pos;
-					try {
-						skipWs(ctx);
-						$accumRef.push($elemCall);
-					} catch (_e: anyparse.runtime.ParseError) {
-						ctx.pos = _savedPos;
-						break;
-					}
+					$elemStep;
 					skipWs(ctx);
 					if (ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) != $v{sepCharCode}) break;
 					ctx.pos++;
@@ -4044,7 +4186,7 @@ class Lowering {
 
 	private function emitNonTriviaCloseSteps(
 		starNode: ShapeNode, parseSteps: Array<Expr>, isLastField: Bool, elemCall: Expr, accumRef: Expr, closeText: Null<String>,
-		sepText: Null<String>
+		sepText: Null<String>, elemFirst: BranchFirstToken
 	): Void {
 		if (closeText == null && (!isLastField || starNode.hasMeta(':tryparse'))) {
 			// Try-parse mode: loop until element parse fails. Used by Star
@@ -4053,18 +4195,42 @@ class Lowering {
 			// next token cannot be parsed as an element (e.g. a modifier loop
 			// stopping at `var`/`function`, or a switch-case body stopping at
 			// the next `case`/`default`).
-			parseSteps.push(macro {
-				while (true) {
-					final _savedPos: Int = ctx.pos;
-					try {
-						skipWs(ctx);
-						$accumRef.push($elemCall);
-					} catch (_e: anyparse.runtime.ParseError) {
-						ctx.pos = _savedPos;
-						break;
+			//
+			// The termination bookkeeping lives in ONE `Expr` spliced into
+			// both the catch arm and the first-token gate, so the two exits
+			// cannot drift apart.
+			final exitArm: Expr = macro {
+				ctx.pos = _savedPos;
+				break;
+			};
+			final gate: Null<Expr> = starGateExpr(elemFirst, exitArm);
+			// `skipWs` moves out of the `try` when the gate is emitted: the
+			// gate must peek where the ELEMENT starts, and `skipWs` cannot
+			// throw (its body is a bounded scan plus `matchLit` comment
+			// probes, none of which raise), so the two shapes are
+			// observationally identical.
+			parseSteps.push(gate == null
+				? macro {
+					while (true) {
+						final _savedPos: Int = ctx.pos;
+						try {
+							skipWs(ctx);
+							$accumRef.push($elemCall);
+						} catch (_e: anyparse.runtime.ParseError)
+							$exitArm;
 					}
 				}
-			});
+				: macro {
+					while (true) {
+						final _savedPos: Int = ctx.pos;
+						skipWs(ctx);
+						$gate;
+						try {
+							$accumRef.push($elemCall);
+						} catch (_e: anyparse.runtime.ParseError)
+							$exitArm;
+					}
+				});
 			return;
 		}
 		if (closeText == null) {
@@ -5597,7 +5763,7 @@ class Lowering {
 				emitOptionalStarFieldSteps(child, localName, parseSteps);
 			case Star:
 				final isLastField: Bool = child == node.children[node.children.length - 1];
-				emitStarFieldSteps(child, localName, parseSteps, isLastField);
+				emitStarFieldSteps(child, node.annotations[AnnotationKeys.BASE_TYPE_PATH], fieldName, localName, parseSteps, isLastField);
 			case Terminal:
 				final binFixedLen: Null<Int> = child.annotations['bin.fixedLen'];
 				final binEncoding: Null<String> = child.annotations['bin.encoding'];
@@ -6272,7 +6438,7 @@ class Lowering {
 	 * actually consumes first" is now structural rather than a comment
 	 * asking two predicate chains to stay in step.
 	 */
-	private static function branchFirstToken(rules: Map<String, ShapeNode>, branch: ShapeNode): BranchFirstToken {
+	private static function branchFirstToken(rules: Map<String, ShapeNode>, seen: Array<String>, branch: ShapeNode): BranchFirstToken {
 		return switch branchShape(branch) {
 			case Prefix(op): litFirst([op]);
 			case KwZeroArg(kw): wordOrByteFirst([kw]);
@@ -6290,7 +6456,7 @@ class Lowering {
 			// exhaustive among themselves.
 			case KwRef(kw, _) if (kw != null): wordOrByteFirst([kw]);
 			case KwRef(_, lead) if (lead != null): litFirst([lead]);
-			case KwRef(_, _): refBranchFirstToken(rules, branch);
+			case KwRef(_, _): refBranchFirstToken(rules, seen, branch);
 			case Unsupported: Unknown;
 		};
 	}
@@ -6308,10 +6474,10 @@ class Lowering {
 	 * report, per branch, what the branch-local classifier sees AND what
 	 * looking through the `Ref` would add.
 	 */
-	private static function refBranchFirstToken(rules: Map<String, ShapeNode>, branch: ShapeNode): BranchFirstToken {
+	private static function refBranchFirstToken(rules: Map<String, ShapeNode>, seen: Array<String>, branch: ShapeNode): BranchFirstToken {
 		return switch branchShape(branch) {
 			case KwRef(kw, lead) if (kw == null && lead == null && !branch.fmtHasFlag('atomOperand')):
-				ruleFirstToken(rules, branch.children[0].annotations[AnnotationKeys.BASE_REF], []);
+				ruleFirstToken(rules, branch.children[0].annotations[AnnotationKeys.BASE_REF], seen);
 			case _: Unknown;
 		};
 	}
@@ -6342,12 +6508,194 @@ class Lowering {
 	private static function ruleFirstToken(rules: Map<String, ShapeNode>, refName: String, seen: Array<String>): BranchFirstToken {
 		if (seen.contains(refName)) return Unknown;
 		final node: Null<ShapeNode> = rules[refName];
-		// Only a `Seq` rule answers. An `Alt`'s own first token is the
-		// UNION over its branches, which means nothing until the Pratt /
-		// postfix / `atomsOnly` split `lowerEnum` applies is modelled here
-		// too; a `Terminal`'s is a regex FIRST set. Both are deliberately
-		// out of scope — see `docs/roadmap.md` O3.
-		return node == null || node.kind != Seq ? Unknown : seqFirstToken(rules, node, seen.concat([refName]));
+		if (node == null) return Unknown;
+		// `seen` grows on EVERY descent, not just the Seq one: an Alt
+		// branch that is a bare `Ref` re-enters here through
+		// `refBranchFirstToken`, so a grammar cycle (A -> branch Ref B ->
+		// ... -> A) is reachable the moment `Alt` answers at all.
+		final next: Array<String> = seen.concat([refName]);
+		return switch node.kind {
+			case Seq: seqFirstToken(rules, node, next);
+			case Alt: altFirstToken(rules, node, next);
+			case Terminal: terminalFirstToken(node);
+			case _: Unknown;
+		};
+	}
+
+	/**
+	 * First token of an `Alt` rule — the UNION over its branches.
+	 *
+	 * Refused (`Unknown`) in three cases, each because the claim would
+	 * not describe what the ENTRY function of the rule emits:
+	 *
+	 *  - ANY branch carrying `pratt.prec` / `postfix.op` / `ternary.op`.
+	 *    `lowerRule` splits such an enum into a precedence-climbing (or
+	 *    postfix) LOOP rule plus an atom sub-rule, and the entry function
+	 *    is the loop. Its first token is the ATOM set's, which
+	 *    `lowerEnum(atomsOnly = true)` computes over a FILTERED branch
+	 *    list — so the union taken here would include operator branches
+	 *    the atom dispatcher never tries.
+	 *  - Any branch whose own first token is `Unknown`. An unguardable
+	 *    branch can start with anything, so the rule can too.
+	 *  - Fewer branches than `DISPATCH_MIN_GUARDS`. Below that threshold
+	 *    `lowerEnum` emits NO dispatch prologue, so there would be no
+	 *    emission for `checkRuleFirstToken` to verify the claim against.
+	 */
+	private static function altFirstToken(rules: Map<String, ShapeNode>, node: ShapeNode, seen: Array<String>): BranchFirstToken {
+		if (node.children.length < DISPATCH_MIN_GUARDS) return Unknown;
+		final operatorKeys: Array<String> = [AnnotationKeys.PRATT_PREC, AnnotationKeys.POSTFIX_OP, AnnotationKeys.TERNARY_OP];
+		for (branch in node.children) for (key in operatorKeys) if (branch.annotations.get(key) != null) return Unknown;
+		return unionFirstToken(node.children.map(branchFirstToken.bind(rules, seen)));
+	}
+
+	/**
+	 * First token of a `@:re` Terminal rule — a deliberately tiny prefix
+	 * reader over the regex source, NOT a FIRST-set solver.
+	 *
+	 * Answers `FirstLit` with the pattern's first character only when
+	 * every one of these holds; anything else is `Unknown`, which costs
+	 * nothing but the guard we did not get:
+	 *
+	 *  - No `base.stringEnumValues`. Those terminals take
+	 *    `lowerStringEnumTerminal`, which has no regex at all, so the
+	 *    pattern this function would read does not describe them.
+	 *  - A non-empty pattern.
+	 *  - A head that no ALTERNATION can bypass — see `headIsMandatory`.
+	 *  - A first character that is not a regex metacharacter
+	 *    (`\ ^ $ . [ ] ( ) { } * + ? |`). Each of those makes the first
+	 *    MATCHED byte something other than the first PATTERN byte.
+	 *  - No head-erasing quantifier at index 1 (`?`, `*`, `{`). Those
+	 *    let a match start past the head. A `+` is fine — one-or-more
+	 *    still requires the head byte.
+	 */
+	private static function terminalFirstToken(node: ShapeNode): BranchFirstToken {
+		if (node.annotations['base.stringEnumValues'] != null) return Unknown;
+		final pattern: Null<String> = node.annotations['re.pattern'];
+		if (pattern == null || pattern.length == 0 || !headIsMandatory(pattern)) return Unknown;
+		final head: Int = pattern.charCodeAt(0);
+		if (isRegexMeta(head)) return Unknown;
+		if (pattern.length > 1) switch pattern.charCodeAt(1) {
+			case '?'.code, '*'.code, '{'.code:
+				return Unknown;
+		}
+		return FirstLit([head]);
+	}
+
+	/** A regex metacharacter — as a pattern's head it is not a literal first byte. */
+	private static function isRegexMeta(c: Int): Bool {
+		return switch c {
+			case '\\'.code, '^'.code, '$'.code, '.'.code, '['.code, ']'.code, '('.code, ')'.code, '{'.code, '}'.code, '*'.code, '+'.code,
+				'?'.code, '|'.code: true;
+			case _: false;
+		};
+	}
+
+	/**
+	 * Whether EVERY match of `pattern` must begin with the pattern's own
+	 * first character — the question a first-byte claim turns on.
+	 *
+	 * `Codegen.eregField` builds the EReg as `^${pattern}`, and `|` binds
+	 * looser than concatenation, so `^A|B` parses as `(^A)|B`: the anchor
+	 * covers the first alternative only and `B` can match anywhere. That
+	 * is the hazard `lowerTerminal`'s `matchedPos().pos != 0` check exists
+	 * for, and it is the ONLY way an alternation reaches the head — a `|`
+	 * nested inside a group or a character class cannot, because the head
+	 * literal remains the mandatory first element of the whole pattern.
+	 * So the scan refuses a `|` at paren-depth 0 outside a class, and
+	 * nothing else.
+	 *
+	 * Scanning rules, each needed to keep that answer right:
+	 *  - `\` consumes the next character whole, so `\(`, `\[` and `\|`
+	 *    never move the scanner's state.
+	 *  - Inside `[...]` nothing counts, and the class closes on the first
+	 *    unescaped `]`. That is the ECMAScript reading, and ECMAScript is
+	 *    what compiles these patterns: there `[]` is an EMPTY class and
+	 *    `[^]` is any-char, so the POSIX rule that a `]` in the first
+	 *    member slot is a literal member does NOT hold. Honouring it would
+	 *    read `a[]|b]c` as one class and hide a TOP-LEVEL alternation.
+	 *    Closing early is also the conservative direction for a PCRE-shaped
+	 *    pattern — it can only surface more `|` at depth 0, never fewer.
+	 *  - `(?:` is just a `(` as far as depth goes.
+	 *
+	 * An unbalanced pattern (a `)` with no `(`, a group or class left
+	 * open) answers `false`: a pattern the scan cannot follow is one it
+	 * cannot make a claim about.
+	 */
+	private static function headIsMandatory(pattern: String): Bool {
+		var depth: Int = 0;
+		var inClass: Bool = false;
+		var i: Int = 0;
+		while (i < pattern.length) {
+			final c: Int = pattern.charCodeAt(i);
+			if (c == '\\'.code) {
+				i += 2;
+				continue;
+			}
+			if (inClass) {
+				if (c == ']'.code) inClass = false;
+				i++;
+				continue;
+			}
+			switch c {
+				case '['.code:
+					inClass = true;
+				case '('.code:
+					depth++;
+				case ')'.code:
+					depth--;
+				case '|'.code:
+					if (depth == 0) return false;
+			}
+			if (depth < 0) return false;
+			i++;
+		}
+		return depth == 0 && !inClass;
+	}
+
+	/**
+	 * Union of several first-token facts into one that is sound for all
+	 * of them.
+	 *
+	 * All-`FirstKw` unions as `FirstKw` (deduped). Any mix with a
+	 * `FirstLit` degrades EVERY keyword to its first byte: matching a
+	 * word-shaped keyword is a strictly stronger condition than matching
+	 * its first byte, so the byte test is a NECESSARY condition of the
+	 * keyword test and the weaker guard can only over-accept — never skip
+	 * something that would have matched.
+	 *
+	 * A single `Unknown` part poisons the union: the alternative it
+	 * stands for can begin with anything.
+	 */
+	private static function unionFirstToken(parts: Array<BranchFirstToken>): BranchFirstToken {
+		if (parts.length == 0) return Unknown;
+		var allKw: Bool = true;
+		for (part in parts) {
+			if (part == Unknown) return Unknown;
+			if (part.match(FirstLit(_))) allKw = false;
+		}
+		if (allKw) {
+			final words: Array<String> = [];
+			for (part in parts) switch part {
+				case FirstKw(ws):
+					for (word in ws) if (!words.contains(word))
+						words.push(word);
+				case _:
+					throw 'unreachable';
+			}
+			return FirstKw(words);
+		}
+		final codes: Array<Int> = [];
+		for (part in parts) switch part {
+			case FirstKw(ws):
+				for (word in ws) if (!codes.contains(word.charCodeAt(0)))
+					codes.push(word.charCodeAt(0));
+			case FirstLit(cs):
+				for (code in cs) if (!codes.contains(code))
+					codes.push(code);
+			case Unknown:
+				throw 'unreachable';
+		}
+		return codes.length == 0 ? Unknown : FirstLit(codes);
 	}
 
 	/**
@@ -6365,9 +6713,19 @@ class Lowering {
 	 * branch does.
 	 */
 	private static function seqFirstToken(rules: Map<String, ShapeNode>, node: ShapeNode, seen: Array<String>): BranchFirstToken {
-		if (node.children.length == 0) return Unknown;
+		if (node.children.length == 0 || node.annotations[BY_NAME_KEY] == true) return Unknown;
+		// A binary `@:magic` prefix is an `expectLit` `lowerStruct` emits
+		// BEFORE any field, and a `@:length` prefix is a read emitted
+		// before the field it belongs to — in both cases the positional
+		// first field is not what the body opens with. No current grammar
+		// pairs either with a first field that would claim anything (so
+		// the divergence would surface as a spurious build break, not as a
+		// wrong guard), which is exactly why it is cheaper to refuse here
+		// than to leave the trap for the next binary grammar.
+		if (node.annotations[AnnotationKeys.BIN_MAGIC] != null) return Unknown;
 		final first: ShapeNode = node.children[0];
 		if (first.kind == Opt || first.annotations[AnnotationKeys.BASE_OPTIONAL] == true) return Unknown;
+		if (first.annotations['bin.lengthPrefix'] != null) return Unknown;
 		final kw: Null<String> = first.annotations[AnnotationKeys.KW_LEAD_TEXT];
 		if (kw != null) return wordOrByteFirst([kw]);
 		final lead: Null<String> = first.annotations[AnnotationKeys.LIT_LEAD_TEXT];
@@ -6390,17 +6748,183 @@ class Lowering {
 	 * statement that is anything else must be the `expectLit` /
 	 * `expectKw` the claim names, or the claim is wrong.
 	 */
-	private static function bodyFirstToken(body: Expr): BranchFirstToken {
+	private static function bodyFirstToken(
+		rules: Map<String, ShapeNode>, fnToRule: Map<String, String>, body: Expr, seen: Array<String>
+	): BranchFirstToken {
 		final steps: Array<Expr> = switch body.expr {
 			case EBlock(exprs): exprs;
 			case _: [body];
 		};
-		for (step in steps) if (!isSkipWsStep(step)) return switch step.expr {
+		var i: Int = 0;
+		// `isGuardSavedDecl` wins over `isInertStep`: the prologue's
+		// `final _gSaved:Int = ctx.pos;` IS an inert slot declaration, and
+		// skipping it would leave the scan pointing at `_gC0` with the
+		// dispatch shape no longer recognisable.
+		while (i < steps.length && !isGuardSavedDecl(steps[i]) && isInertStep(steps[i])) i++;
+		if (i >= steps.length) return Unknown;
+		final head: Expr = steps[i];
+		// An Alt dispatch body: the prologue's `_gSaved` snapshot, then one
+		// `if (<guard>) <trial>` per guardable branch. Reading the EMITTED
+		// guards back — rather than re-deriving them from the shape tree —
+		// is what keeps an `Alt` claim honest: the claim comes from
+		// `altFirstToken` over the shape, the verification from the
+		// generated AST, and `checkRuleFirstToken` fatals when they part.
+		if (isGuardSavedDecl(head)) return dispatchFirstToken(steps, i + 1);
+		// The terminal first-byte reject `lowerTerminal` emits from the same
+		// `terminalFirstToken` fact the claim is built on.
+		final byte: Null<Int> = firstByteRejectCode(head);
+		if (byte != null) return FirstLit([byte]);
+		// A leading `parseXxx(ctx)` — the emitted call for a `Seq` rule whose
+		// first field is a bare `Ref`. Resolving the function name back to
+		// its rule and recursing is NOT vacuous: it proves the shape-level
+		// `Ref` the claim was derived through is the call the body actually
+		// makes, and the recursion still bottoms out at a leaf rule whose own
+		// body is checked against an `expectLit` / `expectKw` / byte reject.
+		final called: Null<String> = leadingRefCallName(head);
+		if (called != null) {
+			final target: Null<String> = fnToRule[called];
+			if (target != null) return ruleFirstToken(rules, target, seen);
+		}
+		return switch head.expr {
 			case ECall({ expr: EConst(CIdent('expectLit')) }, [_, { expr: EConst(CString(lit, _)) }]): litFirst([lit]);
 			case ECall({ expr: EConst(CIdent('expectKw')) }, [_, { expr: EConst(CString(kw, _)) }]): wordOrByteFirst([kw]);
 			case _: Unknown;
 		};
-		return Unknown;
+	}
+
+	/**
+	 * Steps a rule body may open with that provably consume no TOKEN, so
+	 * the first-token fact lives in whatever follows them.
+	 *
+	 * Beyond `isSkipWsStep`'s whitespace skip (and the empty block a
+	 * `@:raw` rule's `stripSkipWs` leaves behind), two families qualify:
+	 *
+	 *  - The trivia-mode whitespace/comment scanners. `collectTrivia` and
+	 *    `skipWsAndStash` consume exactly what `skipWs` does — inter-token
+	 *    whitespace and comments — and stop at the first token byte.
+	 *  - A slot declaration whose initializer touches no input: a cursor
+	 *    snapshot (`ctx.pos`), an empty accumulator (`[]`), or a literal
+	 *    default (`false` / `true` / `null` / a number / a string).
+	 *
+	 * Nothing goes on this list without that argument. A step whose
+	 * non-consumption cannot be justified must be left OFF it — then the
+	 * claim fails `checkRuleFirstToken` and `ruleFirstToken` gets narrowed,
+	 * which is the safe direction.
+	 */
+	private static function isInertStep(e: Expr): Bool {
+		if (isSkipWsStep(e)) return true;
+		return switch e.expr {
+			case EVars(vars):
+				for (v in vars) if (!isInertInit(v.expr)) return false;
+				true;
+			case _: isInertInit(e);
+		};
+	}
+
+	/** Initializer of an `isInertStep` slot declaration — see there. */
+	private static function isInertInit(e: Null<Expr>): Bool {
+		if (e == null) return true;
+		return switch e.expr {
+			case EConst(CIdent('null' | 'true' | 'false')), EConst(CInt(_, _)), EConst(CFloat(_, _)), EConst(CString(_, _)),
+				EArrayDecl([]), EField({ expr: EConst(CIdent('ctx')) }, 'pos'),
+				ECall({ expr: EConst(CIdent('collectTrivia' | 'skipWsAndStash')) }, _): true;
+			case _: false;
+		};
+	}
+
+	/** The `final _gSaved:Int = ctx.pos;` that opens an Alt dispatch body. */
+	private static function isGuardSavedDecl(e: Expr): Bool {
+		return switch e.expr {
+			case EVars([v]): v.name == GUARD_SAVED_LOCAL;
+			case _: false;
+		};
+	}
+
+	/** The remaining prologue steps `lowerEnum` emits after `_gSaved`. */
+	private static function isDispatchPrologueStep(e: Expr): Bool {
+		return switch e.expr {
+			case EVars([v]):
+				v.name == GUARD_BYTE_LOCAL || v.name == GUARD_WORD_LOCAL;
+			case EBinop(OpAssign, { expr: EField({ expr: EConst(CIdent('ctx')) }, 'pos') }, { expr: EConst(CIdent(name)) }):
+				name == GUARD_SAVED_LOCAL;
+			case _: false;
+		};
+	}
+
+	/**
+	 * First token of an emitted Alt dispatch body, read off the guards it
+	 * actually carries. `from` points just past the `_gSaved` declaration.
+	 *
+	 * Every branch statement must be a guarded `if (<guard>) <trial>`; a
+	 * bare trial means an unguarded branch, which can start with anything,
+	 * so the whole body answers `Unknown`. The trailing
+	 * `throw ParseError.backtrack` ends the scan.
+	 */
+	private static function dispatchFirstToken(steps: Array<Expr>, from: Int): BranchFirstToken {
+		final parts: Array<BranchFirstToken> = [];
+		for (i in from ... steps.length) {
+			final step: Expr = steps[i];
+			if (isSkipWsStep(step) || isDispatchPrologueStep(step)) continue;
+			switch step.expr {
+				case EThrow(_):
+					break;
+				case EIf(cond, _, null):
+					final part: BranchFirstToken = guardFirstToken(cond);
+					if (part == Unknown) return Unknown;
+					parts.push(part);
+				case _:
+					return Unknown;
+			}
+		}
+		return unionFirstToken(parts);
+	}
+
+	/** One emitted branch guard — the or-chain `branchGuardExpr` built. */
+	private static function guardFirstToken(cond: Expr): BranchFirstToken {
+		return switch cond.expr {
+			case EBinop(OpBoolOr, left, right): unionFirstToken([guardFirstToken(left), guardFirstToken(right)]);
+			case EBinop(OpEq, { expr: EConst(CIdent(local)) }, { expr: EConst(CString(word, _)) }) if (local == GUARD_WORD_LOCAL):
+				FirstKw([word]);
+			case EBinop(OpEq, { expr: EConst(CIdent(local)) }, { expr: EConst(CInt(code, _)) }) if (local == GUARD_BYTE_LOCAL):
+				FirstLit([Std.parseInt(code)]);
+			case _: Unknown;
+		};
+	}
+
+	/**
+	 * The exact first-byte reject `lowerTerminal` emits — matched down to
+	 * the `ctx.input.charCodeAt(ctx.pos)` receiver so no other `if` against
+	 * an int can be mistaken for it.
+	 */
+	private static function firstByteRejectCode(e: Expr): Null<Int> {
+		return switch e.expr {
+			case EIf({
+				expr: EBinop(OpNotEq, {
+					expr: ECall(
+						{ expr: EField({ expr: EField({ expr: EConst(CIdent('ctx')) }, 'input') }, 'charCodeAt') },
+						[{ expr: EField({ expr: EConst(CIdent('ctx')) }, 'pos') }]
+					)
+				}, { expr: EConst(CInt(code, _)) })
+			}, _, null): Std.parseInt(code);
+			case _: null;
+		};
+	}
+
+	/**
+	 * Name of a leading `parseXxx(ctx)` call — bare, or as the initializer
+	 * of the `EVars` step a `Seq` field emits.
+	 */
+	private static function leadingRefCallName(e: Expr): Null<String> {
+		final call: Null<Expr> = switch e.expr {
+			case EVars([v]): v.expr;
+			case _: e;
+		};
+		return call == null
+			? null
+			: switch call.expr {
+				case ECall({ expr: EConst(CIdent(name)) }, [{ expr: EConst(CIdent('ctx')) }]) if (name.startsWith('parse')): name;
+				case _: null;
+			};
 	}
 
 	/**
@@ -6418,10 +6942,12 @@ class Lowering {
 	 * contract `BranchShape` gives `lowerEnumBranch` and
 	 * `branchFirstToken`.
 	 */
-	private static function checkRuleFirstToken(rules: Map<String, ShapeNode>, typePath: String, rule: GeneratedRule): Void {
+	private static function checkRuleFirstToken(
+		rules: Map<String, ShapeNode>, fnToRule: Map<String, String>, typePath: String, rule: GeneratedRule
+	): Void {
 		final claimed: BranchFirstToken = ruleFirstToken(rules, typePath, []);
 		if (claimed == Unknown) return;
-		final emitted: BranchFirstToken = bodyFirstToken(rule.body);
+		final emitted: BranchFirstToken = bodyFirstToken(rules, fnToRule, rule.body, [typePath]);
 		if (!sameFirstToken(claimed, emitted))
 			Context.fatalError(
 				'Lowering: the first-token claim for ${simpleName(typePath)} (${describeFirstToken(claimed)}) '
@@ -6481,7 +7007,14 @@ class Lowering {
 	 * `dispatch.rule` (per Alt — guardable count and whether the prologue
 	 * is emitted), closed by one `dispatch.total` summary line.
 	 */
-	private static function dumpDispatch(rules: Map<String, ShapeNode>): Void {
+	private static function dumpDispatch(
+		rules: Map<String, ShapeNode>, gates: Array<{
+			rule: Null<String>,
+			field: Null<String>,
+			elem: String,
+			first: BranchFirstToken
+		}>
+	): Void {
 		var ruleCount: Int = 0;
 		var altCount: Int = 0;
 		var dispatchCount: Int = 0;
@@ -6497,8 +7030,8 @@ class Lowering {
 			for (branch in node.children) {
 				branchCount++;
 				final ctor: Null<String> = branch.annotations[AnnotationKeys.BASE_CTOR];
-				final own: BranchFirstToken = branchFirstToken(rules, branch);
-				final viaRef: BranchFirstToken = refBranchFirstToken(rules, branch);
+				final own: BranchFirstToken = branchFirstToken(rules, [], branch);
+				final viaRef: BranchFirstToken = refBranchFirstToken(rules, [], branch);
 				if (own != Unknown) {
 					guardedCount++;
 					guardable++;
@@ -6513,9 +7046,17 @@ class Lowering {
 			if (dispatches) dispatchCount++;
 			Sys.println('// dispatch.rule: $typePath branches=${node.children.length} guardable=$guardable dispatch=$dispatches');
 		}
+		var gatedCount: Int = 0;
+		for (gate in gates) {
+			final gated: Bool = gate.first != Unknown;
+			if (gated) gatedCount++;
+			Sys.println(
+				'// dispatch.call: ${gate.rule}.${gate.field} elem=${gate.elem} first=${describeFirstToken(gate.first)} gated=$gated'
+			);
+		}
 		Sys.println(
 			'// dispatch.total: rules=$ruleCount alts=$altCount dispatching=$dispatchCount branches=$branchCount '
-			+ 'guarded=$guardedCount viaRef=$refViaCount'
+			+ 'guarded=$guardedCount viaRef=$refViaCount calls=${gates.length} gatedCalls=$gatedCount'
 		);
 	}
 
@@ -6597,11 +7138,72 @@ class Lowering {
 	 * `GUARD_BYTE_LOCAL`). `null` for `Unknown` — that branch is emitted
 	 * unwrapped.
 	 */
-	private static function branchGuardExpr(first: BranchFirstToken): Null<Expr> {
+	private static function branchGuardExpr(first: BranchFirstToken, byteLocal: String, wordLocal: String): Null<Expr> {
 		return switch first {
-			case FirstKw(words): orChain([for (word in words) macro $i{GUARD_WORD_LOCAL} == $v{word}]);
-			case FirstLit(codes): orChain([for (code in codes) macro $i{GUARD_BYTE_LOCAL} == $v{code}]);
+			case FirstKw(words): orChain([for (word in words) macro $i{wordLocal} == $v{word}]);
+			case FirstLit(codes): orChain([for (code in codes) macro $i{byteLocal} == $v{code}]);
 			case Unknown: null;
+		};
+	}
+
+	/**
+	 * `starGateExpr` in splice-ready form, for the loops that always have
+	 * a slot for the gate: an empty block when the fact is `Unknown`, which
+	 * the codegen erases, leaving the loop exactly what it was.
+	 */
+	private static function starGateStep(first: BranchFirstToken, exitArm: Expr): Expr {
+		return starGateExpr(first, exitArm) ?? macro {};
+	}
+
+	/**
+	 * The orphan-trail bookkeeping a `@:fmt(nestBody)` trivia Star runs
+	 * when the terminating element parse ends its loop.
+	 *
+	 * Shared by the sep and no-sep loops, and spliced into BOTH the catch
+	 * arm and the first-token gate of each, so no exit path can drift from
+	 * the others.
+	 */
+	private static function starNestExitArm(trailBBLocal: String, trailLCLocal: String, trailBALocal: String): Expr {
+		return macro {
+			if (!_lead.blankBefore && _lead.leadingComments.length > 0) {
+				$i{trailBBLocal} = _lead.blankBefore;
+				$i{trailLCLocal} = _lead.leadingComments;
+				$i{trailBALocal} = _lead.blankAfterLeadingComments;
+				ctx.pos = _afterTriviaPos;
+			} else {
+				ctx.pos = _savedPos;
+			}
+			break;
+		};
+	}
+
+	/**
+	 * Call-site first-token gate for a `@:tryparse` Star loop: a declared
+	 * local plus the same or-chain the Alt dispatch guards use, and the
+	 * loop's own exit bookkeeping when the chain says the element rule
+	 * cannot start here.
+	 *
+	 * Deliberately NOT a `throw` of the backtrack sentinel — avoiding the
+	 * throw is the entire point. The loop's termination is a NORMAL exit,
+	 * so the gate runs the exact `Expr` the catch arm runs (the caller
+	 * splices one value into both places) and falls out of the loop.
+	 *
+	 * `null` when the fact is `Unknown`, which every caller turns back into
+	 * its pre-gate loop shape, byte for byte.
+	 */
+	private static function starGateExpr(first: BranchFirstToken, exitArm: Expr): Null<Expr> {
+		final guard: Null<Expr> = branchGuardExpr(first, STAR_GATE_BYTE_LOCAL, STAR_GATE_WORD_LOCAL);
+		if (guard == null) return null;
+		// A word-shaped fact needs `peekWord`'s word-boundary semantics; a
+		// byte fact needs the raw code, where `Input.charCodeAt` answering
+		// -1 past the end makes an explicit bounds test unnecessary.
+		final peek: Expr = switch first {
+			case FirstKw(_): finalLocal(STAR_GATE_WORD_LOCAL, macro :String, macro peekWord(ctx));
+			case _: finalLocal(STAR_GATE_BYTE_LOCAL, macro :Int, macro ctx.input.charCodeAt(ctx.pos));
+		};
+		return macro {
+			$peek;
+			if (!$guard) $exitArm;
 		};
 	}
 
