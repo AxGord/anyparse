@@ -216,18 +216,8 @@ final class PreferComprehension implements Check {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin.refShape());
 		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final textBySpan: Map<String, String> = [];
-		for (m in collectMatches(tree, source, seams)) textBySpan['${m.span.from}:${m.span.to}'] = m.text;
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final text: Null<String> = textBySpan['${span.from}:${span.to}'];
-			if (text != null) edits.push({ span: span, text: text });
-		}
-		return RefactorSupport.dropContainedEdits(edits);
+		final s: Seams = seams;
+		return CheckScan.applyTextMatches(plugin, source, violations, (tree, src) -> collectMatches(tree, src, s));
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
@@ -345,49 +335,41 @@ final class PreferComprehension implements Check {
 		final s: Seams = ctx.seams;
 		if (node.kind == s.forStmtKind) {
 			final operands: Array<QueryNode> = RefactorSupport.loopOperands(node, s.valueBinderKinds);
-			if (operands.length != FOR_CHILD_COUNT) return null;
-			final iterable: QueryNode = operands[0];
-			final body: QueryNode = operands[1];
-			final nodeSpan: Null<Span> = node.span;
-			final bodySpan: Null<Span> = body.span;
-			if (nodeSpan == null || bodySpan == null) return null;
-			final header: Null<String> = transcribeHeader(nodeSpan.from, bodySpan.from, ctx);
-			if (header == null) return null;
-			acc.checks.push(iterable);
-			final rest: Null<String> = buildInner(body, name, ctx, acc);
-			return rest == null ? null : '$header $rest';
+			return operands.length != FOR_CHILD_COUNT ? null : buildHeaderLayer(node, operands[0], operands[1], name, ctx, acc);
 		}
-		if (node.kind == s.whileStmtKind) {
-			if (node.children.length != WHILE_CHILD_COUNT) return null;
-			final cond: QueryNode = node.children[0];
-			final body: QueryNode = node.children[1];
-			final nodeSpan: Null<Span> = node.span;
-			final bodySpan: Null<Span> = body.span;
-			if (nodeSpan == null || bodySpan == null) return null;
-			final header: Null<String> = transcribeHeader(nodeSpan.from, bodySpan.from, ctx);
-			if (header == null) return null;
-			acc.checks.push(cond);
-			final rest: Null<String> = buildInner(body, name, ctx, acc);
-			return rest == null ? null : '$header $rest';
-		}
+		if (node.kind == s.whileStmtKind)
+			return node.children.length != WHILE_CHILD_COUNT
+				? null
+				: buildHeaderLayer(node, node.children[0], node.children[1], name, ctx, acc);
 		if (node.kind == s.blockStmtKind) return buildBlock(node, name, ctx, acc);
-		if (s.ifKinds.contains(node.kind)) {
-			if (node.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
-			final cond: QueryNode = node.children[0];
-			final then: QueryNode = node.children[1];
-			final nodeSpan: Null<Span> = node.span;
-			final thenSpan: Null<Span> = then.span;
-			if (nodeSpan == null || thenSpan == null) return null;
-			final header: Null<String> = transcribeHeader(nodeSpan.from, thenSpan.from, ctx);
-			if (header == null) return null;
-			acc.checks.push(cond);
-			final rest: Null<String> = buildInner(then, name, ctx, acc);
-			return rest == null ? null : '$header $rest';
-		}
+		if (s.ifKinds.contains(node.kind))
+			return node.children.length != IF_NO_ELSE_CHILD_COUNT
+				? null
+				: buildHeaderLayer(node, node.children[0], node.children[1], name, ctx, acc);
 		final arg: Null<QueryNode> = pushArgument(node, name, ctx, acc);
 		if (arg == null) return null;
 		final argSpan: Null<Span> = arg.span;
 		return argSpan == null ? null : ctx.source.substring(argSpan.from, argSpan.to);
+	}
+
+	/**
+	 * The comprehension text for ONE header layer — a `for`, a `while` or an `if` guard — assembled
+	 * the same way for all three: `node`'s header transcribed verbatim up to `body`'s start, the
+	 * scanned `check` node (the iterable, or the condition) appended to `acc.checks` for the
+	 * self-reference gate, and `body`'s own transcription appended after it. Null when the header
+	 * carries a comment on its LAST line (see `transcribeHeader`) or when the body is off-shape.
+	 */
+	private static function buildHeaderLayer(
+		node: QueryNode, check: QueryNode, body: QueryNode, name: String, ctx: Ctx, acc: Acc
+	): Null<String> {
+		final nodeSpan: Null<Span> = node.span;
+		final bodySpan: Null<Span> = body.span;
+		if (nodeSpan == null || bodySpan == null) return null;
+		final header: Null<String> = transcribeHeader(nodeSpan.from, bodySpan.from, ctx);
+		if (header == null) return null;
+		acc.checks.push(check);
+		final rest: Null<String> = buildInner(body, name, ctx, acc);
+		return rest == null ? null : '$header $rest';
 	}
 
 	/**

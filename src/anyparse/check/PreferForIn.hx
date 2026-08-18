@@ -132,18 +132,8 @@ final class PreferForIn implements Check implements DefaultOff {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final textBySpan: Map<String, String> = [];
-		for (m in collectMatches(tree, source, seams)) textBySpan['${m.span.from}:${m.span.to}'] = m.text;
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final text: Null<String> = textBySpan['${span.from}:${span.to}'];
-			if (text != null) edits.push({ span: span, text: text });
-		}
-		return RefactorSupport.dropContainedEdits(edits);
+		final s: Seams = seams;
+		return CheckScan.applyTextMatches(plugin, source, violations, (tree, src) -> collectMatches(tree, src, s));
 	}
 
 	/** Bundle the `RefShape` kinds this check reads, or null when a required one is unset (the check is then a no-op). */
@@ -236,7 +226,7 @@ final class PreferForIn implements Check implements DefaultOff {
 		if (loopSpan == null || bodySpan == null || bindSpan == null) return null;
 		final source: String = ctx.source;
 		final interior: String = source.substring(bodySpan.from, bodySpan.from + 1)
-			+ StringTools.rtrim(source.substring(bodySpan.from + 1, bindSpan.from)) + source.substring(bindSpan.to, bodySpan.to);
+			+ source.substring(bodySpan.from + 1, bindSpan.from).rtrim() + source.substring(bindSpan.to, bodySpan.to);
 		final inlined: Null<Match> = inlineDeclaration(prev, scope, loopSpan, iterator, binder, interior, ctx);
 		return inlined ?? { span: loopSpan, text: 'for ($binder in $iterator) $interior' };
 	}
@@ -257,9 +247,11 @@ final class PreferForIn implements Check implements DefaultOff {
 		if (declSpan == null || initSpan == null) return null;
 		if (CheckScan.hasCommentMarker(ctx.source, declSpan.to, loopSpan.from)) return null;
 		if (occurrences(scope, iterator, s) != PROTOCOL_OCCURRENCES) return null;
-		final iterable: String = StringTools.rtrim(ctx.source.substring(initSpan.from, initSpan.to));
-		if (RefactorSupport.textHasCommentMarker(iterable.substring(iterable.lastIndexOf('\n') + 1))) return null;
-		return { span: new Span(declSpan.from, loopSpan.to), text: 'for ($binder in $iterable) $interior' };
+		final iterable: String = ctx.source.substring(initSpan.from, initSpan.to).rtrim();
+		return RefactorSupport.textHasCommentMarker(iterable.substring(iterable.lastIndexOf('\n') + 1)) ? null : {
+			span: new Span(declSpan.from, loopSpan.to),
+			text: 'for ($binder in $iterable) $interior'
+		};
 	}
 
 	/**
