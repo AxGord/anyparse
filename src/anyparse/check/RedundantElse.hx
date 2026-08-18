@@ -127,8 +127,7 @@ final class RedundantElse implements Check {
 	private static function walk(
 		out: Array<Violation>, file: String, node: QueryNode, seams: Seams, comments: Array<{ from: Int, to: Int, isLine: Bool }>
 	): Void {
-		if (seams.support.blockKinds()
-			.contains(node.kind)) for (stmt in node.children) if (seams.ifKinds.contains(stmt.kind))
+		if (seams.support.blockKinds().contains(node.kind)) for (stmt in node.children) if (seams.ifKinds.contains(stmt.kind))
 			flagIf(out, file, stmt, seams.support, comments);
 		for (c in node.children) walk(out, file, c, seams, comments);
 	}
