@@ -80,28 +80,31 @@ class ProfTop {
 	public static function main(): Void {
 		final args: Array<String> = Sys.args();
 		if (args.length < 1) {
-			Sys.println('usage: ProfTop <file.cpuprofile> [topN] [--under <fn>]');
+			Sys.println('usage: ProfTop <file.cpuprofile> [topN] [--under <fn>] [--not-under <fn>]');
 			Sys.exit(2);
 			return;
 		}
 		var top: Int = DEFAULT_TOP;
 		var under: String = '';
+		var notUnder: String = '';
 		var i: Int = 1;
 		while (i < args.length) {
 			switch args[i] {
 				case '--under':
 					under = i + 1 < args.length ? args[++i] : '';
+				case '--not-under':
+					notUnder = i + 1 < args.length ? args[++i] : '';
 				case arg:
 					final n: Null<Int> = Std.parseInt(arg);
 					if (n != null) top = n;
 			}
 			i++;
 		}
-		report(args[0], top, under);
+		report(args[0], top, under, notUnder);
 	}
 
 	/** Parse one capture, roll it up, print the top `top` rows by self time. */
-	private static function report(path: String, top: Int, under: String): Void {
+	private static function report(path: String, top: Int, under: String, notUnder: String): Void {
 		final profile: Profile = haxe.Json.parse(sys.io.File.getContent(path));
 		final labelOf: Map<Int, String> = [];
 		final parentOf: Map<Int, Int> = [];
@@ -118,14 +121,14 @@ class ProfTop {
 			final delta: Float = s < deltas.length ? deltas[s] : 0;
 			if (delta <= 0) continue;
 			final id: Int = samples[s];
-			if (under != '' && !passesThrough(id, under, labelOf, parentOf)) continue;
+			if (!inScope(id, under, notUnder, labelOf, parentOf)) continue;
 			final key: String = labelOf.exists(id) ? labelOf[id] : '(unknown $id)';
 			self[key] = (self.exists(key) ? self[key] : 0.0) + delta;
 			total += delta;
 		}
 		final rows: Array<{ label: String, us: Float }> = [for (key => us in self) { label: key, us: us }];
 		rows.sort((a, b) -> b.us > a.us ? 1 : (b.us < a.us ? -1 : 0));
-		final scope: String = under == '' ? '' : ' (under $under)';
+		final scope: String = (under == '' ? '' : ' (under $under)') + (notUnder == '' ? '' : ' (not under $notUnder)');
 		Sys.println('total ${round(total / US_PER_MS)} ms across ${samples.length} samples$scope');
 		final shown: Int = rows.length < top ? rows.length : top;
 		for (r in 0...shown) {
@@ -146,7 +149,21 @@ class ProfTop {
 		return file == '' ? shown : '$shown  [$file]';
 	}
 
-	/** Does the stack above `id` carry a frame whose label contains `want`? */
+	/**
+	 * Does this sample belong to the requested scope? `--under` keeps only stacks
+	 * passing through a frame, `--not-under` drops them — together they carve one
+	 * phase out of a harness that nests another inside it, which is the case the
+	 * `write` phase makes unavoidable: it parses first, so `--under phaseWrite` alone
+	 * still counts the parse.
+	 */
+	private static function inScope(id: Int, under: String, notUnder: String, labelOf: Map<Int, String>, parentOf: Map<Int, Int>): Bool {
+		return (under == '' || passesThrough(id, under, labelOf, parentOf))
+			&& !(notUnder != '' && passesThrough(id, notUnder, labelOf, parentOf));
+	}
+
+	/**
+	 * Does the stack above `id` carry a frame whose label contains `want`?
+	 */
 	private static function passesThrough(id: Int, want: String, labelOf: Map<Int, String>, parentOf: Map<Int, Int>): Bool {
 		var current: Int = id;
 		var hops: Int = 0;
