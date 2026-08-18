@@ -515,6 +515,73 @@ verdict. **Do not use it for a gate** — the battery, a pre-commit lint, or
 anything whose output is a verdict runs the oracle, because declining a gate can
 only ever weaken one.
 
+### The verdict cache: one tree, one typecheck
+
+What the gates cannot decline they can at least stop paying twice. Before it
+compiles anything, `Cli.reportOracleVerdict` derives a CONTENT fingerprint of
+the whole compile input and reuses the recorded verdict only while that
+fingerprint still matches (`anyparse.check.OracleCache`). Interleaved, three
+rounds, `lint src --all`:
+
+| | run |
+|---|---|
+| cold, no record | 40.7 s (base binary: 40.7 / 39.5 / 40.9 s) |
+| unchanged tree | 25.2 / 25.4 s |
+
+**−37 %**, and the cold arm is not measurably slower than the base — deriving
+the fingerprint costs ~0.28 s against a 16.1 s typecheck. Findings are
+byte-identical between the two arms (`0 errors, 54 warnings, 1356 infos in 699
+files`, same stdout to the byte).
+
+The key covers the compiler's own `Defines:` line (Haxe version plus every
+resolved library version), every hxml in the include chain, and every `.hx`
+under every classpath directory — where the directory list is the hxml's `-cp`
+roots, the compile directory itself (the compiler carries it implicitly, as the
+empty entry of its `Classpath:` line), and the entries the COMPILER names for
+the hxml's `-lib` set. That last part is what closes the haxelib hole: the
+library directories are never guessed, so their sources, their transitive
+dependencies, `extraLibs` and the Haxe std all enter the key by content. One
+`haxe -v <-lib …> --interp Std` spawn buys it, measured at 0.12 s.
+
+**Content only — never mtime.** That is not a style preference: the compilation
+server's mtime rule at one-second granularity gave 9 wrong verdicts in 10
+iterations here, including a broken build reported as clean (see § "Why
+`compilerOracleServer` is off here" and the `CompilerServer` class doc). A
+content hash has no such failure mode — break a compiled file in the same second
+you read it and the very next `lint` reports `compiler oracle REJECTED` with the
+compiler's own error text.
+
+`--fix` never consults it, by construction: `FixVerifier` writes files and then
+asks whether the project still compiles, so it calls `CompilerOracle` directly.
+`APQ_NO_ORACLE_CACHE` declines the cache process-wide — a weakening-only switch,
+since declining a cache costs time and cannot change a verdict. The residual
+holes it does NOT cover (non-`.hx` compile-time inputs, a classpath a `--macro`
+adds while typing, environment-supplied defines) are listed in the class doc;
+they are why this is a report-mode fast path and nothing more.
+
+### `apq oracle` — the battery's hand-off
+
+The battery used to typecheck the same hxml twice: its `build` step compiles
+`test-js.hxml`, and its `lint` step then asked the compiler the same question a
+minute later. Step `1b` now runs `apq oracle src` in the background right after
+the build, overlapping the suite/corpus/fmt/jvm steps, and `lint` waits for it
+and hits the cache.
+
+```sh
+apq oracle src        # one COLD typecheck, verdict recorded under the fingerprint
+```
+
+It cannot lie. There is no flag that asserts "this already typechecked" — the
+compiler always runs, and only an observed verdict is stored, so a misuse
+(running it on a tree that does not build) records a rejection, which is the
+truth. A tree that moves between the two steps simply misses the fingerprint and
+is compiled again. Its exit status is not a battery gate: the `lint` step reads
+the same verdict and fails there, with the compiler's error text.
+
+One property worth knowing: the store is a single slot per (hxml, cwd) pair, so
+alternating between two tree states misses every time. That is the cost side of
+never keeping a verdict that could be wrong.
+
 The baseline is four plain files per commit in `$ANYPARSE_BLAST_CACHE`
 (`~/anyparse-blast-cache` by default) — two lint snapshots, the corpus sweep
 snapshot, and a two-integer suite line. Keeping them outside the repo is
