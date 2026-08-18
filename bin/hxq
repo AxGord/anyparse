@@ -118,6 +118,10 @@ if [ "${HXQ_QUIET:-}" != "1" ] && [ -d "$src_root" ]; then
             # stderr and bail — running a stale binary after a failed
             # rebuild would be misleading.
             echo "hxq: src/ newer than $bin_name; auto-rebuilding ($hxml_name)..." >&2
+            echo "hxq: (~11s. A CHAIN of edits pays it PER OP, because a mutation op writes src/ itself." >&2
+            echo "hxq:  For a multi-step edit run the intermediate ops with HXQ_AUTO_REBUILD=0 and rebuild" >&2
+            echo "hxq:  once at the end. Never HXQ_QUIET=1 for that — it disables the check entirely and a" >&2
+            echo "hxq:  later verification probe then runs a stale binary and lies.)" >&2
             if ! (cd "$here/.." && haxe "$hxml_path") >&2; then
                 echo "hxq: auto-rebuild failed; aborting (set HXQ_AUTO_REBUILD=0 for warn-only mode, or HXQ_QUIET=1 to skip the check)" >&2
                 exit 1
