@@ -23,8 +23,7 @@ using StringTools;
 final class HxLoopBodyIfElseSliceTest extends Test {
 
 	/** A real project `hxformat.json`, minified. */
-	private static final PROJECT_CONFIG: String =
-		'{"indentation":{"character":"tab","tabWidth":4,"trailingWhitespace":false,"alignInlineSwitchCaseBody":true},"emptyLines":{"maxAn'
+	private static final PROJECT_CONFIG: String = '{"indentation":{"character":"tab","tabWidth":4,"trailingWhitespace":false,"alignInlineSwitchCaseBody":true},"emptyLines":{"maxAn'
 		+ 'ywhereInFile":1,"afterBlocks":"remove","afterLeftCurly":"remove","beforeRightCurly":"remove","classEmptyLines":{"beginType":1,"e'
 		+ 'ndType":1},"interfaceEmptyLines":{"beginType":1,"endType":1},"abstractEmptyLines":{"beginType":1,"endType":1},"uniformStatementB'
 		+ 'lanks":"collapse","aroundMultilineFields":1},"wrapping":{"comprehensionCuddledOpen":true,"methodChainCuddledLinks":true,"trailin'
@@ -58,8 +57,7 @@ final class HxLoopBodyIfElseSliceTest extends Test {
 		+ 'noBreak"},"comments":{"blockCommentStyle":"javadoc"},"sameLine":{"caseBody":"fitLine","expressionCase":"fitLine","ifBody":"fitLi'
 		+ 'ne","forBody":"fitLine","whileBody":"fitLine","functionBody":"fitLine","expressionIf":"next","expressionIfFit":true,"expressionI'
 		+ 'fArrowBodyReflow":true,"elseIfCommentReflow":true,"fitLineBodyGlue":true,"conditionalExprFit":true,"comprehensionFor":"fitLine"}'
-		+ '}'
-	;
+		+ '}';
 
 	/** The project config with the knob ON. */
 	private static final NEXT_ON: String = config(true);
@@ -153,6 +151,5 @@ final class HxLoopBodyIfElseSliceTest extends Test {
 	private static function config(next: Bool): String {
 		return PROJECT_CONFIG.replace('"sameLine":{', '"sameLine":{"loopBodyIfElseNext":' + (next ? 'true' : 'false') + ',');
 	}
-
 
 }

@@ -968,6 +968,33 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	fitLineBodyGlue: Bool,
 
 	/**
+	 * ω-loop-body-if-else-next: break a `for` / `while` header away from a body
+	 * that is an `if` carrying an `else`, placing the whole `if`/`else` one line
+	 * down and one indent step in.
+	 *
+	 * Under `forBody` / `whileBody: fitLine` a one-line-able body glues to the
+	 * loop header. For a bare guard `if` that is the point — `for (x in xs) if
+	 * (c) f(x);` is a deliberate idiom and stays glued. For an `if` that owns an
+	 * `else`, the same glue leaves the `else` at the LOOP's indent, where it
+	 * reads as a branch of the loop rather than of the `if`.
+	 *
+	 * The gate is therefore the BODY's shape, asked at runtime through
+	 * `anyparse.format.LoopBodyShape.isIfWithElse`. That is what config alone
+	 * cannot express: `forBody: next` produces the same layout for the `if`/
+	 * `else` pair but moves the guard idiom under the header too.
+	 *
+	 * Distinct from `fitLineIfWithElse` one storey down, which asks whether the
+	 * `if` BEING placed has an `else` sibling of its own. That flag is shared
+	 * with upstream semantics and is deliberately not widened to loops.
+	 *
+	 * Default `false` is fork parity. Fed by `sameLine.loopBodyIfElseNext`;
+	 * consumed by `WriterLowering.buildBodyFitExpr` at the two fields carrying
+	 * `@:fmt(loopBodyIfElseNext(...))`, so a `Keep` / `Same` / `Next` body policy
+	 * never sees it.
+	 */
+	loopBodyIfElseNext: Bool,
+
+	/**
 	 * ω-cond-expr-fit: break an expression-scope `#if … #end` region at its
 	 * directive seams — the way a regular `if / else if / else` chain breaks —
 	 * when the GLUED form does not fit the line. One `GroupWithRestProbe` wraps
