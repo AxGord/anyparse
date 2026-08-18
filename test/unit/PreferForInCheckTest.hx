@@ -3,8 +3,6 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.check.Check;
-import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.PreferForIn;
 import anyparse.check.Severity;
@@ -186,8 +184,8 @@ class PreferForInCheckTest extends Test {
 	}
 
 	private function conditional(loop: String): String {
-		return
-			'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\t#if A\n\t\tfinal iter = xs.iterator();\n\t\t$loop\n\t\t#end\n\t\tuse(iter);\n\t}\n}';
+		return 'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\t#if A\n\t\tfinal iter = xs.iterator();\n\t\t$loop\n\t\t#end\n'
+			+ '\t\tuse(iter);\n\t}\n}';
 	}
 
 	private function fn(stmts: String): String {
