@@ -1935,12 +1935,18 @@ class WriterLowering {
 			// enum-Alt) — read for dual-dispatch symmetry.
 			final trailingCommaRemovableStar: Bool = starNode.fmtHasFlag('trailingCommaRemovable');
 			final uniformStmtBlanksStar: Bool = starNode.fmtHasFlag('uniformStmtBlanks');
+			// ω-complex-item-count: struct-Star path reader for
+			// `@:fmt(complexItems)` — the per-element AST classification behind
+			// the `complexItemCount >= n` cascade condition and the fill-mode
+			// chunk policy. Live here for `HxNewExpr.args`; the array literal
+			// opts in through the enum-Alt reader.
+			final complexItemsStar: Bool = starNode.fmtHasFlag('complexItems');
 			parts.push(TriviaSepLowering.triviaSepStarExpr(
 				fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText, sepText,
 				wrapRulesField, leftCurlyOwnedBySep ? knobLeftCurly : null, knobRightCurly, trailPresentAccess, trailingCommaField,
 				openInsideStar, closeInsideStar, false, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
 				reflowSourceMultilineStar, matrixWrapStar, trailNLAccess, false, false, reflowInExprBranchStar, trailingCommaRemovableStar,
-				uniformStmtBlanksStar
+				uniformStmtBlanksStar, complexItemsStar
 			));
 			return;
 		}
@@ -5374,12 +5380,18 @@ class WriterLowering {
 		// second extends `emptyLines.uniformStatementBlanks` to element gaps.
 		final trailingCommaRemovableAlt: Bool = branch.fmtHasFlag('trailingCommaRemovable');
 		final uniformStmtBlanksAlt: Bool = branch.fmtHasFlag('uniformStmtBlanks');
+		// ω-complex-item-count: enum-Alt branch reader for `@:fmt(complexItems)`
+		// (`HxExpr.ArrayExpr`) — classify each element (call / `new`,
+		// call-bearing container literal, neither) so the cascade can send an
+		// array of constructor calls one-per-line on a SEMANTIC counter rather
+		// than a width proxy (which would also mangle `case [A, _]` patterns).
+		final complexItemsAlt: Bool = branch.fmtHasFlag('complexItems');
 		return TriviaSepLowering.triviaSepStarExpr(
 			c.argsAccess, slots.trailBBAccess, slots.trailLCAccess, slots.trailCloseAccess, slots.trailOpenAccess, c.elemFn, c.leadText,
 			c.trailText, c.sepText, wrapRulesField, knobLeftCurly, knobRightCurly, slots.sepTrailPresentAccess, trailingCommaField,
 			openInsideExpr, closeInsideExpr, beforeDocComments, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
 			reflowSourceMultilineAlt, matrixWrapAlt, null, typedefBodyBlanksAlt, propagateExprPositionAlt, false,
-			trailingCommaRemovableAlt, uniformStmtBlanksAlt
+			trailingCommaRemovableAlt, uniformStmtBlanksAlt, complexItemsAlt
 		);
 	}
 
@@ -6208,12 +6220,27 @@ class WriterLowering {
 			// the chain, not the operand args). Every non-`groupRestProbe` postfix
 			// sep-list ctor passes a constant `false` -- byte-inert.
 			final groupRestProbeExpr: Expr = c.branch.fmtHasFlag('groupRestProbe') ? (macro !opt._suppressCallRestProbe) : (macro false);
+			// ω-complex-item-count (D2): postfix-Star reader for
+			// `@:fmt(complexItems)` (`HxExpr.Call`). Classifies each ARGUMENT so
+			// the fill-mode chunk policy can give a call-bearing container
+			// literal past the first argument a line of its own — the fork's
+			// packing for `super(…, null,` / `[{…}]` / `true, false, false)`.
+			// Suppressed inside a case pattern / switch subject for the same
+			// reason the array literal is (an enum-ctor pattern parses as a
+			// `Call`). Absent flag → `null`, byte-identical emission.
+			final complexKindsExpr: Expr = c.branch.fmtHasFlag('complexItems')
+				? macro {
+					final _ck: Null<Array<Int>> = opt._suppressComplexItems ? null : anyparse.grammar.haxe.HxComplexItems.kinds(cast _args);
+					_ck;
+				}
+				: macro null;
 			final wrapListExpr: Expr = macro anyparse.format.wrap.WrapList.emit(
 				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $callInsideOpen, $callInsideClose, false, $rulesExpr, {
 					appendTrailingComma: $tcExpr,
 					groupRestProbe: $groupRestProbeExpr,
 					sepBeforeFlags: _sepBeforeFlags,
-					keepCloseGlued: $keepCloseGluedExpr
+					keepCloseGlued: $keepCloseGluedExpr,
+					complexItemKinds: $complexKindsExpr
 				}
 			);
 			if (!c.isTriviaStar) return wrapListExpr;
@@ -10333,6 +10360,26 @@ class WriterLowering {
 	}
 
 	/**
+	 * Apply the two SUB-POSITION suppress flags a mandatory-Ref child can carry, in
+	 * the order the descendant opt expects them.
+	 *
+	 * `@:fmt(suppressCallRestProbe)` (omega-call-grouprestprobe-subposition) marks a
+	 * `Call` subtree that is not in statement/expression position — a ctor pattern
+	 * (`case Nest(_, _) | Concat(_):`) must not wrap its args, the fork breaks the
+	 * `|` chain instead. `@:fmt(suppressComplexItems)` (ω-complex-item-count) marks
+	 * a case-pattern body or a switch subject so an array literal below it skips the
+	 * per-element complexity classification — an enum-constructor pattern parses as
+	 * a `Call` and would otherwise be counted. Neither is cleared on descent, so a
+	 * nested construct inherits both.
+	 */
+	private function subPositionSuppressOpt(child: ShapeNode, e: Expr): Expr {
+		var out: Expr = e;
+		if (child.fmtHasFlag('suppressCallRestProbe')) out = macro _setSuppressCallRestProbe($out, true, opt);
+		if (child.fmtHasFlag('suppressComplexItems')) out = macro _setSuppressComplexItems($out, opt);
+		return out;
+	}
+
+	/**
 	 * Build the mandatory-Ref body field's runtime `writeCall` Expr. Reads the
 	 * opt-fanout flags (`propagateExprPosition` / `propagateAnonFnContext` /
 	 * `propagateTypedefContext` / `switchSubjectNoWrap` / `propagateValueIfBranch`
@@ -10386,12 +10433,6 @@ class WriterLowering {
 		// Wrapped AFTER `_setExprPosition` so the descent clear inside it does
 		// not wipe the just-set flag.
 		final propagateArrowLambdaBody: Bool = child.fmtHasFlag('propagateArrowLambdaBody');
-		// omega-call-grouprestprobe-subposition: `@:fmt(suppressCallRestProbe)` on
-		// the case-pattern body Ref (HxCasePattern.expr) sets
-		// `_suppressCallRestProbe` on the descendant so a `Call` ctor pattern skips
-		// the `groupRestProbe` rest-of-line fit bias. Not cleared on descent ->
-		// nested ctors inherit it.
-		final suppressCallRestProbe: Bool = child.fmtHasFlag('suppressCallRestProbe');
 		// omega-condsplice-tail-nest: `@:fmt(chainNestSuppress)` on a mandatory Ref
 		// (HxCondSpliceExpr.tail) suppresses the descendant chain's OWN continuation
 		// Nest so a `#if … #end` token-splice tail co-indents with the ENCLOSING chain
@@ -10425,7 +10466,7 @@ class WriterLowering {
 			if (_ctx.trivia && child.fmtHasFlag('dropSingleStmtBraces')) e = macro _setSsbChainSuppress($e, false, opt);
 			// Set AFTER `_setExprPosition` so its descent-clear does not wipe the
 			// just-set flag (mirrors the `propagateArrowLambdaBody` ordering).
-			if (suppressCallRestProbe) e = macro _setSuppressCallRestProbe($e, true, opt);
+			e = subPositionSuppressOpt(child, e);
 			if (chainNestSuppress) e = macro _setCallArgChainNest($e, opt);
 			if (propagateArrowLambdaBody) e = macro _setArrowLambdaBody($e, opt);
 			if (propagateAnonFn) e = macro _setAnonFnBody($e, opt);
@@ -11799,8 +11840,9 @@ class WriterLowering {
 		return flagName == null
 			? null
 			: buildPolicySwitch(
-				['anyparse', 'format', 'WhitespacePolicy'],
-				optFieldAccess(flagName), [{ values: ['Before', 'Both'], expr: macro _dt(' ') }], macro _de()
+				['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName),
+				[{ values: ['Before', 'Both'], expr: macro _dt(' ') }],
+				macro _de()
 			);
 	}
 
@@ -11838,8 +11880,9 @@ class WriterLowering {
 		return flagName == null
 			? null
 			: buildPolicySwitch(
-				['anyparse', 'format', 'WhitespacePolicy'],
-				optFieldAccess(flagName), [{ values: ['After', 'Both'], expr: macro _dt(' ') }], macro _de()
+				['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName),
+				[{ values: ['After', 'Both'], expr: macro _dt(' ') }],
+				macro _de()
 			);
 	}
 
@@ -11867,8 +11910,9 @@ class WriterLowering {
 		return flagName == null
 			? null
 			: buildPolicySwitch(
-				['anyparse', 'format', 'WhitespacePolicy'],
-				optFieldAccess(flagName), [{ values: ['Before', 'Both'], expr: macro _dt(' ') }], macro _de()
+				['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName),
+				[{ values: ['Before', 'Both'], expr: macro _dt(' ') }],
+				macro _de()
 			);
 	}
 
@@ -12130,8 +12174,9 @@ class WriterLowering {
 		return flagName == null
 			? macro _dt($v{trailText})
 			: buildPolicySwitch(
-				['anyparse', 'format', 'WhitespacePolicy'],
-				optFieldAccess(flagName), [{ values: ['Before', 'Both'], expr: macro _dt($v{' ' + trailText}) }], macro _dt($v{trailText})
+				['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName),
+				[{ values: ['Before', 'Both'], expr: macro _dt($v{' ' + trailText}) }],
+				macro _dt($v{trailText})
 			);
 	}
 
@@ -14953,6 +14998,15 @@ typedef SepStarNoTriviaCtx = {
 	final forceModeExpr: Expr;
 	final flatTrailingCommaExpr: Expr;
 	final reflowSourceMultiline: Bool;
+
+	/**
+	 * ω-complex-item-count: the Star carries `@:fmt(complexItems)`, so the
+	 * no-trivia branch classifies each element at the AST layer and threads the
+	 * per-element codes into `WrapList.emit` as `complexItemKinds`. False on
+	 * every other Star → no classification runs and the emit call is
+	 * byte-identical.
+	 */
+	final complexItems: Bool;
 };
 /**
  * Output bundle of `triviaSepTrailExprs` — the source-trailing-comma /

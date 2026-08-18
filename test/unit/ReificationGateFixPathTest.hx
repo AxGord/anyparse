@@ -62,7 +62,9 @@ class ReificationGateFixPathTest extends Test {
 		// Both literals ARE findings of the double; it is the gate that halves them on the way in.
 		Assert.equals(2, new LiteralRewriteCheck().run(files, new HaxeQueryPlugin()).length, 'the double itself sees both literals');
 		final result: FixVerifyResult = FixVerifier.verify(
-			files, [new LiteralRewriteCheck()], new HaxeQueryPlugin(), 'check.hxml', dir, (p, c) -> File.saveContent(p, c)
+			files,
+			[new LiteralRewriteCheck()],
+			new HaxeQueryPlugin(), 'check.hxml', dir, (p, c) -> File.saveContent(p, c)
 		);
 		Assert.equals(1, result.applied.length, 'the unquoted rewrite is applied, so the verifier path really ran');
 		Assert.equals(0, result.reverted.length);

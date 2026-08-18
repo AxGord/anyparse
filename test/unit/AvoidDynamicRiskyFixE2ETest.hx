@@ -55,7 +55,9 @@ final class AvoidDynamicRiskyFixE2ETest extends Test {
 		final path: String = '$dir/Good.hx';
 		final files: Array<{ file: String, source: String }> = [{ file: path, source: APPLIES }];
 		final result: FixVerifyResult = FixVerifier.verify(
-			files, [new AvoidDynamic()], new HaxeQueryPlugin(), 'check.hxml', dir, (p, c) -> File.saveContent(p, c)
+			files,
+			[new AvoidDynamic()],
+			new HaxeQueryPlugin(), 'check.hxml', dir, (p, c) -> File.saveContent(p, c)
 		);
 		Assert.equals(1, result.applied.length, 'a valid Dynamic narrowing survives the typecheck and is applied');
 		Assert.equals(0, result.reverted.length);
@@ -78,7 +80,9 @@ final class AvoidDynamicRiskyFixE2ETest extends Test {
 		final path: String = '$dir/Good.hx';
 		final files: Array<{ file: String, source: String }> = [{ file: path, source: REVERTS }];
 		final result: FixVerifyResult = FixVerifier.verify(
-			files, [new AvoidDynamic()], new HaxeQueryPlugin(), 'check.hxml', dir, (p, c) -> File.saveContent(p, c)
+			files,
+			[new AvoidDynamic()],
+			new HaxeQueryPlugin(), 'check.hxml', dir, (p, c) -> File.saveContent(p, c)
 		);
 		Assert.equals(0, result.applied.length, 'a narrowing that breaks the build is not applied');
 		Assert.equals(1, result.reverted.length, 'it is reverted to a report-only fallback');

@@ -150,6 +150,28 @@ typedef WrapListOptions = {
 	 */
 	var ?comprehensionFitMeasure: Bool;
 
+	/**
+	 * Per-element complexity classification, length-aligned with `items` — the
+	 * AST-layer answer to "is this element a call / `new`, a container literal
+	 * carrying one, or neither". Codes are the grammar's `COMPLEX_ITEM_*`
+	 * constants: 0 neither, 1 call / `new`, 2 call-bearing container literal.
+	 *
+	 * Two consumers, one classification. The count of NON-zero entries feeds
+	 * the `ComplexItemCountLargerThan` cascade condition (`complexItemCount >=
+	 * n`), so a config can send an array of several constructor calls
+	 * one-per-line regardless of how narrow it renders. The code-2 subset
+	 * drives the fill-mode CHUNK policy (`shapeFillLine*`): a call-bearing
+	 * container that would otherwise stay PACKED on a shared argument line
+	 * takes a line of its own instead. See `chunkOwnLine` for the two
+	 * positions the policy leaves to the existing glues.
+	 *
+	 * Omitted (or an out-of-bounds index) reads as 0 everywhere, so a caller
+	 * that supplies no kinds counts none and keeps the pre-slice layout
+	 * byte-identically. Slice D1 + D2 — complex-element arrays and the
+	 * `callParameter` chunk policy.
+	 */
+	var ?complexItemKinds: Array<Int>;
+
 }
 
 /**
@@ -207,6 +229,7 @@ class WrapList {
 		final keepCloseGlued: Bool = axes.keepCloseGlued;
 		final flatTrailingComma: Bool = axes.flatTrailingComma;
 		final comprehensionFitMeasure: Bool = axes.comprehensionFitMeasure;
+		final complexItemKinds: Null<Array<Int>> = axes.complexItemKinds;
 		final trailBreakDoc: Doc = axes.trailBreakDoc;
 		if (items.length == 0) return WrapBoundary(Text(open + (keepInnerWhenEmpty ? ' ' : '') + close));
 
@@ -250,6 +273,10 @@ class WrapList {
 		final maxLen: Int = measure.maxLen;
 		final anyHardline: Bool = measure.anyHardline;
 		final cols: Int = continuationCols(rules, opt, items, maxLen, total, anyHardline, sourceMultilineKeep, compactContinuation);
+		// ω-complex-item-count: the cascade counter behind `complexItemCount >= n`.
+		// A caller that supplies no kinds counts 0, so the condition never fires
+		// and every pre-slice list is byte-identical.
+		final complexCount: Int = countComplexItems(complexItemKinds);
 
 		// Column-aware `LineLengthLargerThan` thresholds (slice
 		// ω-ifwidthexceeds-infra). Cascade rules with `lineLength >= n`
@@ -279,7 +306,8 @@ class WrapList {
 		function evalAt(exceeds: Bool, firing: Array<Int>): WrapMode {
 			return forceMode ?? floorSourceMultiline(
 				decideWithLineLengthState(
-					rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t)
+					rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t),
+					complexCount
 				),
 				sourceMultilineKeep
 			);
@@ -290,7 +318,8 @@ class WrapList {
 		function shapeAt(mode: WrapMode, lead: Doc): Doc {
 			final body: Doc = shape(
 				mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc, groupRestProbe,
-				sepBeforeFlags, opt.lineWidth, sourceBreakBefore, keepCloseGlued, flatTrailingComma, opt.comprehensionCuddledOpen
+				sepBeforeFlags, opt.lineWidth, sourceBreakBefore, keepCloseGlued, flatTrailingComma, opt.comprehensionCuddledOpen,
+				complexItemKinds
 			);
 			return prependLead(body, lead);
 		}
@@ -552,6 +581,18 @@ class WrapList {
 	}
 
 	/**
+	 * Number of NON-zero entries in a `complexItemKinds` array — the value the
+	 * `ComplexItemCountLargerThan` condition compares against. A null array
+	 * (the axis omitted) counts 0.
+	 */
+	public static function countComplexItems(kinds: Null<Array<Int>>): Int {
+		if (kinds == null) return 0;
+		var n: Int = 0;
+		for (kind in kinds) if (kind != 0) n++;
+		return n;
+	}
+
+	/**
 	 * Walks the rules cascade and returns the first matching mode.
 	 * `LineLengthLargerThan` evaluation is deferred to the caller-
 	 * supplied `lineLengthFires` predicate so consumers can enumerate
@@ -567,11 +608,11 @@ class WrapList {
 	 */
 	public static function decideWithLineLengthState(
 		rules: WrapRules, itemCount: Int, maxItemLen: Int, totalItemLen: Int, exceedsMaxLineLength: Bool, hasMultilineItems: Bool,
-		lineLengthFires: Int -> Bool
+		lineLengthFires: Int -> Bool, complexItemCount: Int = 0
 	): WrapMode {
 		for (rule in rules.rules) {
 			if (matchesWithLineLengthState(
-				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires
+				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires, complexItemCount
 			))
 				return rule.mode;
 		}
@@ -626,12 +667,12 @@ class WrapList {
 	 */
 	public static function decideRuleWithLineLengthState(
 		rules: WrapRules, itemCount: Int, maxItemLen: Int, totalItemLen: Int, exceedsMaxLineLength: Bool, hasMultilineItems: Bool,
-		lineLengthFires: Int -> Bool
+		lineLengthFires: Int -> Bool, complexItemCount: Int = 0
 	): { mode: WrapMode, location: WrappingLocation } {
 		final fallback: WrappingLocation = rules.defaultLocation ?? WrappingLocation.AfterLast;
 		for (rule in rules.rules) {
 			if (matchesWithLineLengthState(
-				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires
+				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires, complexItemCount
 			))
 				return { mode: rule.mode, location: rule.location ?? fallback };
 		}
@@ -1611,7 +1652,7 @@ class WrapList {
 
 	private static function matchesWithLineLengthState(
 		rule: WrapRule, itemCount: Int, maxItemLen: Int, totalItemLen: Int, exceedsMaxLineLength: Bool, hasMultilineItems: Bool,
-		lineLengthFires: Int -> Bool
+		lineLengthFires: Int -> Bool, complexItemCount: Int = 0
 	): Bool {
 		for (cond in rule.conditions) {
 			final ok: Bool = switch cond.cond {
@@ -1624,6 +1665,7 @@ class WrapList {
 				case ExceedsMaxLineLength: cond.value == 0 ? !exceedsMaxLineLength : exceedsMaxLineLength;
 				case LineLengthLargerThan: lineLengthFires(cond.value);
 				case HasMultilineItems: cond.value == 0 ? !hasMultilineItems : hasMultilineItems;
+				case ComplexItemCountLargerThan: complexItemCount >= cond.value;
 				case _: false;
 			};
 			if (!ok) return false;
@@ -1776,7 +1818,14 @@ class WrapList {
 		// down from `emit` because `shape` takes scalars rather than the whole
 		// `WriteOptions`. Default `false` keeps every non-threaded caller
 		// byte-identical.
-		comprehensionCuddledOpen: Bool = false
+		comprehensionCuddledOpen: Bool = false,
+		// ω-complex-item-count (D2): the per-element AST classification, read by
+		// the fill-mode CHUNK policy in `shapeFillLine` / `shapeFillLineWith
+		// LeadingBreak`. Forwarded through `shapeMultiArgCollection` because its
+		// open-shape branch builds one of those two shapes; the glue itself is
+		// not gated on it. Omitted → the policy is off and every caller is
+		// byte-identical.
+		?complexItemKinds: Array<Int>
 	): Doc {
 		// ω-thinarrow-break if-else: a sole bare-ident arrow arg of a call / new-expr
 		// (`f(p -> if … else …)`) whose body is an ALREADY-multiline if/else breaks
@@ -1820,11 +1869,11 @@ class WrapList {
 		if (multiArgBlockLambda != null) return multiArgBlockLambda;
 		final multiArgCollection: Null<Doc> = shapeMultiArgCollection(
 			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags,
-			keepCloseGlued, lineWidth
+			keepCloseGlued, lineWidth, complexItemKinds
 		);
 		return multiArgCollection ?? shapeByMode(
 			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreak, groupRestProbe, sepBeforeFlags,
-			sourceBreakBefore, keepCloseGlued, flatTrailingComma
+			sourceBreakBefore, keepCloseGlued, flatTrailingComma, complexItemKinds
 		);
 	}
 
@@ -2056,15 +2105,28 @@ class WrapList {
 	 */
 	private static function shapeMultiArgCollection(
 		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
-		appendTrailingComma: Bool, groupRestProbe: Bool, sepBeforeFlags: Null<Array<Bool>>, keepCloseGlued: Bool, lineWidth: Int
+		appendTrailingComma: Bool, groupRestProbe: Bool, sepBeforeFlags: Null<Array<Bool>>, keepCloseGlued: Bool, lineWidth: Int,
+		?complexItemKinds: Array<Int>
 	): Null<Doc> {
-		if (!((mode == FillLine || mode == FillLineWithLeadingBreak) && items.length > 1 && soleMultilineCollectionArg(items) >= 0))
-			return null;
+		if (mode != FillLine && mode != FillLineWithLeadingBreak || items.length <= 1) return null;
+		final collIdx: Int = soleMultilineCollectionArg(items);
+		if (collIdx < 0) return null;
+		// ω-complex-item-count (D2): the chunk policy deliberately does NOT
+		// pre-empt this glue. Declining here for a call-bearing collection with
+		// arguments after it was measured over anyparse's own tree and made 21
+		// files worse — `nullSwitch(ident('e'), macro false, [` … `], macro
+		// false)` and `walk(root, {` … `}, out)` both lose their compact hug for
+		// a bracket alone on a line. The glue already answers the width question
+		// through `IfFirstLineExceeds`, and a collection that carries its own
+		// break has already opened the call; the chunk policy's job is the
+		// element the glue never sees — one that would otherwise stay PACKED on
+		// a shared argument line.
 		final glueShape: Doc = multiArgBlockLambdaGlueShape(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
 		final openShape: Doc = mode == FillLineWithLeadingBreak
-			? shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma)
+			? shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma, complexItemKinds)
 			: shapeFillLine(
-				open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags, keepCloseGlued
+				open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags,
+				keepCloseGlued, complexItemKinds
 			);
 		return IfFirstLineExceeds(lineWidth, openShape, glueShape);
 	}
@@ -2081,17 +2143,18 @@ class WrapList {
 	private static function shapeByMode(
 		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
 		appendTrailingComma: Bool, trailBreak: Doc, groupRestProbe: Bool, sepBeforeFlags: Null<Array<Bool>>,
-		sourceBreakBefore: Null<Array<Bool>>, keepCloseGlued: Bool, flatTrailingComma: Bool
+		sourceBreakBefore: Null<Array<Bool>>, keepCloseGlued: Bool, flatTrailingComma: Bool, ?complexItemKinds: Array<Int>
 	): Doc {
 		return switch mode {
 			case NoWrap: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags, flatTrailingComma);
 			case OnePerLine: shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak, sepBeforeFlags);
 			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(open, close, sep, items, cols, appendTrailingComma, sepBeforeFlags);
 			case FillLine: shapeFillLine(
-				open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags, keepCloseGlued
+				open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags,
+				keepCloseGlued, complexItemKinds
 			);
 			case FillLineWithLeadingBreak:
-				shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma);
+				shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma, complexItemKinds);
 			case PackedOrOnePerLine:
 				shapePackedOrOnePerLine(open, close, sep, items, cols, appendTrailingComma, sepBeforeFlags);
 			// ω-keep-objectlit: Keep cascade hits are pre-empted by the
@@ -2701,9 +2764,68 @@ class WrapList {
 			: Concat([Text(open), items[0], Nest(cols, Concat(nested)), Text(close)]);
 	}
 
+	/**
+	 * True iff element `i` is a call-bearing CONTAINER literal
+	 * (`WrapListOptions.complexItemKinds` code 2) — the chunk policy's trigger.
+	 * Index 0 answers `false` even for a container: a leading container is
+	 * HUGGED by the head (`new Col([` … `], 436)`), which is the enclosing
+	 * call's own shape, not a chunk of the list.
+	 */
+	private static function isChunkContainer(kinds: Null<Array<Int>>, i: Int): Bool {
+		return kinds != null && i > 0 && i < kinds.length && kinds[i] == 2;
+	}
+
+	/**
+	 * True iff element `i` takes a line of its own under the chunk policy: a
+	 * chunk container that either has arguments still after it, or — being
+	 * last — renders on ONE line.
+	 *
+	 * The exemption is the LAST element that already breaks internally. Its own
+	 * break has already opened the call, and both the fork and the pre-slice
+	 * writer close on its delimiter line (`walk(root, {` … `});`,
+	 * `makeTimer('shell', totalTime, [` … `]);`) — giving it a further line of
+	 * its own only adds an indent level. A container with arguments AFTER it
+	 * cannot borrow that shape: something has to follow its close delimiter, and
+	 * the fork puts it on the next line.
+	 */
+	private static function chunkOwnLine(items: Array<Doc>, kinds: Null<Array<Int>>, i: Int): Bool {
+		return isChunkContainer(kinds, i) && (i < items.length - 1 || flatLength(items[i]) >= 0);
+	}
+
+	/**
+	 * True iff the fill-mode chunk policy forces a hard break BEFORE element
+	 * `i`: the element itself takes an own line, or the PREVIOUS element did
+	 * (an own line is bounded on both sides). Element 0 never breaks — the open
+	 * delimiter already positions it.
+	 */
+	private static function chunkBreakBefore(items: Array<Doc>, kinds: Null<Array<Int>>, i: Int): Bool {
+		return i > 0 && (chunkOwnLine(items, kinds, i) || chunkOwnLine(items, kinds, i - 1));
+	}
+
+	/** True iff any element of the list takes an own line under the chunk policy. */
+	private static function hasChunkOwnLine(items: Array<Doc>, kinds: Null<Array<Int>>): Bool {
+		if (kinds == null) return false;
+		for (i in 1...items.length) if (chunkOwnLine(items, kinds, i)) return true;
+		return false;
+	}
+
+	/**
+	 * True iff element `i` opens a new chunk in `shapeFillLine`'s packing: it
+	 * leads with a hardline, the source elided the separator before it, or the
+	 * chunk policy gives it (or its predecessor) a line of its own. The third
+	 * clause is the AST-driven one — it fires for a container that FITS, which no
+	 * Doc-level probe can see.
+	 */
+	private static function startsChunk(
+		items: Array<Doc>, i: Int, sepBeforeFlags: Null<Array<Bool>>, complexItemKinds: Null<Array<Int>>
+	): Bool {
+		return hasLeadingHardline(items[i]) || skipSepBefore(sepBeforeFlags, i) || chunkBreakBefore(items, complexItemKinds, i);
+	}
+
 	private static function shapeFillLine(
 		open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
-		appendTrailingComma: Bool, groupRestProbe: Bool, ?sepBeforeFlags: Array<Bool>, keepCloseGlued: Bool = false
+		appendTrailingComma: Bool, groupRestProbe: Bool, ?sepBeforeFlags: Array<Bool>, keepCloseGlued: Bool = false,
+		?complexItemKinds: Array<Int>
 	): Doc {
 		// ω-fill-leading-comment: the first item's Doc starts with the comment
 		// that preceded it in the source. Packed flat it lands glued to the open
@@ -2715,7 +2837,7 @@ class WrapList {
 		// Hand it to the leading-break variant, whose forced break after the open
 		// delim keeps the comment on the line it came from.
 		if (items.length > 0 && DocMeasure.firstVisibleTextStartsWith(items[0], '/'.code))
-			return shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma);
+			return shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma, complexItemKinds);
 		// Per-gap sep awareness (slice ω-fillline-pergap-sep): items split
 		// into chunks at every leading-hardline boundary. Within each
 		// chunk items pack via `Fill(chunk, softSep)` (Wadler fillSep —
@@ -2853,7 +2975,7 @@ class WrapList {
 			// where the outer `,` was elided in favour of the cond-comp
 			// body's own leading sep but neither element starts with a
 			// hardline at the Doc level.
-			final hardLed: Bool = !atEnd && (hasLeadingHardline(items[i]) || skipSepBefore(sepBeforeFlags, i));
+			final hardLed: Bool = !atEnd && startsChunk(items, i, sepBeforeFlags, complexItemKinds);
 			if (!(atEnd || hardLed)) continue;
 			if (chunkStart > 0) {
 				// The inter-chunk sep belongs immediately
@@ -3040,7 +3162,7 @@ class WrapList {
 	 * matching fork's `calcIndent + additionalIndent`.
 	 */
 	private static function shapeFillLineWithLeadingBreak(
-		open: String, close: String, sep: String, items: Array<Doc>, cols: Int, appendTrailingComma: Bool
+		open: String, close: String, sep: String, items: Array<Doc>, cols: Int, appendTrailingComma: Bool, ?complexItemKinds: Array<Int>
 	): Doc {
 		final softSep: Doc = Concat([Text(sep), Line(' ')]);
 		// Tail reserve identical in structure to `shapeFillLine` but
@@ -3062,7 +3184,17 @@ class WrapList {
 		// `callparam_fill_pack_after_opadd_first_arg`; corrects the outer-arg
 		// layout of `opadd_multiparam_{after_last,continuation_indent}` too
 		// (those stay FAIL only on a separate opAddSub-internal indent defect).
-		final inner: Doc = items.length == 1 ? items[0] : FillBreakAfterWrap(items, softSep, tailReserve);
+		// ω-complex-item-count (D2): with a chunk container present the items are
+		// packed per CHUNK instead of as one run — the container sits alone
+		// between two forced breaks, the scalars around it pack among
+		// themselves. Without one, the single-run `FillBreakAfterWrap` is
+		// unchanged.
+		final inner: Doc = if (items.length == 1)
+			items[0];
+		else if (hasChunkOwnLine(items, complexItemKinds))
+			chunkedFill(sep, items, softSep, tailReserve, complexItemKinds);
+		else
+			FillBreakAfterWrap(items, softSep, tailReserve);
 		final tail: Doc = appendTrailingComma ? Text(sep) : Empty;
 		// No `openInside` / `closeInside` padding: this shape ALWAYS breaks
 		// after the open delim and before the close, so an inside-of-delimiter
@@ -3079,6 +3211,32 @@ class WrapList {
 			Line('\n'),
 			Text(close),
 		]);
+	}
+
+	/**
+	 * ω-complex-item-count (D2): the chunk-policy body of
+	 * `shapeFillLineWithLeadingBreak`. Splits `items` at every
+	 * `chunkBreakBefore` boundary, packs each chunk with the shape's own
+	 * `FillBreakAfterWrap`, and joins the chunks with a separator plus a forced
+	 * hardline. Only the LAST chunk reserves cols for the trailing tail —
+	 * earlier chunks end at a forced break, so no tail shares their line.
+	 */
+	private static function chunkedFill(sep: String, items: Array<Doc>, softSep: Doc, tailReserve: Int, kinds: Null<Array<Int>>): Doc {
+		final parts: Array<Doc> = [];
+		var chunkStart: Int = 0;
+		for (i in 1...items.length + 1) {
+			final atEnd: Bool = i == items.length;
+			if (!(atEnd || chunkBreakBefore(items, kinds, i))) continue;
+			if (chunkStart > 0) {
+				parts.push(Text(sep));
+				parts.push(Line('\n'));
+			}
+			parts.push(
+				i - chunkStart == 1 ? items[chunkStart] : FillBreakAfterWrap(items.slice(chunkStart, i), softSep, atEnd ? tailReserve : 0)
+			);
+			chunkStart = i;
+		}
+		return Concat(parts);
 	}
 
 	/**
@@ -3753,6 +3911,7 @@ class WrapList {
 			keepCloseGlued: axes.keepCloseGlued ?? false,
 			flatTrailingComma: axes.flatTrailingComma ?? false,
 			comprehensionFitMeasure: axes.comprehensionFitMeasure ?? false,
+			complexItemKinds: axes.complexItemKinds,
 			trailBreakDoc: axes.trailBreak ?? Line('\n')
 		};
 	}
@@ -3782,5 +3941,6 @@ private typedef ResolvedWrapListOptions = {
 	final keepCloseGlued: Bool;
 	final flatTrailingComma: Bool;
 	final comprehensionFitMeasure: Bool;
+	final complexItemKinds: Null<Array<Int>>;
 	final trailBreakDoc: Doc;
 };

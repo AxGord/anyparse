@@ -38,6 +38,19 @@ package anyparse.format.wrap;
  *    ω-linelen-static introduced the cond; ω-ifwidthexceeds-infra
  *    added the column-aware Doc primitive; ω-methodchain-threshold-aware
  *    completed migration of all callers).
+ *  - `ComplexItemCountLargerThan` — `complexItemCount >= n`, where an
+ *    item counts as COMPLEX when the AST layer classified it as a
+ *    constructor call / function call, or as a container literal
+ *    (object / array) carrying a call or `new` anywhere in its subtree.
+ *    The per-element classification is a grammar-side question, so the
+ *    writer supplies it through `WrapListOptions.complexItemKinds`; a
+ *    list whose caller supplies no kinds counts 0 and the condition
+ *    never fires. Deliberately SEMANTIC rather than width-based: the
+ *    same cascade also governs array PATTERNS in `case` arms and
+ *    switch-subject arrays, whose elements are identifiers and
+ *    wildcards, so a width proxy mangles them while this counter cannot
+ *    reach them. Mapped from JSON `'complexItemCount >= n'` (slice
+ *    D1 — complex-element arrays).
  *  - `HasMultilineItems` — `anyHardline == (value != 0)`. Triggers when
  *    at least one item carries a forced hardline (`Line('\n')` or
  *    `OptHardline`) anywhere in its `Doc` subtree, including inside
@@ -72,5 +85,7 @@ enum abstract WrapConditionType(Int) from Int to Int {
 	final LineLengthLargerThan = 7;
 
 	final HasMultilineItems = 8;
+
+	final ComplexItemCountLargerThan = 9;
 
 }

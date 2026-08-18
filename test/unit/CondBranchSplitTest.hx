@@ -126,7 +126,9 @@ class CondBranchSplitTest extends Test {
 
 	public function testChildSpanOutsideRegionBails(): Void {
 		final region: QueryNode = new QueryNode(
-			'Conditional', null, [new QueryNode('ExprStmt', null, [], new Span(5, 30))], new Span(0, 20)
+			'Conditional', null,
+			[new QueryNode('ExprStmt', null, [], new Span(5, 30))],
+			new Span(0, 20)
 		);
 		Assert.isNull(CondBranchProjection.conditionalBranchRuns(region, 'x', ELSE_KEYWORDS, []));
 	}

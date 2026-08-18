@@ -120,7 +120,16 @@ final class TriviaSepLowering {
 		// collapses, a selective mix or a leading comment keeps the literal
 		// byte-exact. Default false → every other sep-Star caller is
 		// byte-identical.
-		uniformStmtBlanks: Bool = false
+		uniformStmtBlanks: Bool = false,
+		// ω-complex-item-count: when the sep-Star ctor carries
+		// `@:fmt(complexItems)` (`HxExpr.ArrayExpr`), classify every element at
+		// the AST layer — call / `new`, call-bearing container literal, or
+		// neither — and thread the per-element codes into `WrapList.emit` as
+		// `complexItemKinds`. Feeds the `complexItemCount >= n` cascade
+		// condition and the fill-mode chunk policy. Default false → no
+		// classification runs and every other sep-Star caller is
+		// byte-identical.
+		complexItems: Bool = false
 	): Expr {
 		// noqa: complexity
 		// ω-trivia-sep-anontype-braces (Phase B1): when the call site
@@ -265,6 +274,7 @@ final class TriviaSepLowering {
 			forceModeExpr: forceModeExpr,
 			flatTrailingCommaExpr: flatTrailingCommaExpr,
 			reflowSourceMultiline: reflowSourceMultiline,
+			complexItems: complexItems,
 		});
 		final sepCtx: WriterLowering.SepStarCtx = {
 			openText: openText,
@@ -892,6 +902,15 @@ final class TriviaSepLowering {
 		final openText: String = c.openText;
 		final closeText: String = c.closeText;
 		final sepText: String = c.sepText;
+		// ω-complex-item-count: the per-element AST classification, computed
+		// once over the captured element array. `null` when the Star does not
+		// carry `@:fmt(complexItems)` — the engine then counts 0 and the chunk
+		// policy stays off, so the emit call is byte-identical.
+		final complexKindsDecl: Expr = c.complexItems
+			? macro final _complexKinds: Null<Array<Int>> = opt._suppressComplexItems
+				? null
+				: anyparse.grammar.haxe.HxComplexItems.kinds(cast _arr)
+			: macro final _complexKinds: Null<Array<Int>> = null;
 		return if (c.wrapRulesField != null) {
 			final rulesExpr: Expr = WriterLowering.optFieldAccess(c.wrapRulesField);
 			// ω-functionsignature-body-aware-indent: thread the field-level
@@ -1021,6 +1040,7 @@ final class TriviaSepLowering {
 					? anyparse.grammar.haxe.HaxeFormat.defaultComprehensionWrap()
 					: $rulesExpr;
 				final _effSmlKeep: Bool = _comprehensionFit ? false : _smlKeep;
+				$complexKindsDecl;
 				final _wlResult: anyparse.core.Doc = anyparse.format.wrap.WrapList.emit(
 					$v{openText}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideDoc, $closeInsideDoc, false, _effRules, {
 						appendTrailingComma: $appendTrailingCommaExpr,
@@ -1034,7 +1054,8 @@ final class TriviaSepLowering {
 						sepBeforeFlags: _sepBeforeFlags,
 						sourceMultilineKeep: _effSmlKeep,
 						flatTrailingComma: $flatTrailingCommaExpr,
-						comprehensionFitMeasure: _comprehensionFit
+						comprehensionFitMeasure: _comprehensionFit,
+						complexItemKinds: _complexKinds
 					}
 				);
 				// ω-comprehension-count idempotence: a `for`/`while` array comprehension

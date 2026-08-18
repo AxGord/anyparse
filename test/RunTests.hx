@@ -641,6 +641,7 @@ import unit.RemoveMemberDocSliceTest;
 import unit.DeleteBlankLineSliceTest;
 import unit.PreferForInCheckTest;
 import unit.WhileTrueConditionCheckTest;
+import unit.HxComplexItemWrapTest;
 import unit.HxHeaderWrapLadderSliceTest;
 
 /**
@@ -864,6 +865,7 @@ class RunTests {
 		addCase(new HxComprehensionChainIdempotencyTest());
 		addCase(new HxComprehensionFitLineNoBreakTest());
 		addCase(new HxComprehensionCuddledOpenTest());
+		addCase(new HxComplexItemWrapTest());
 		addCase(new HxComprehensionDeclRhsBracketWrapTest());
 		addCase(new HxExprParenObjectLitGlueTest());
 		addCase(new HxFitLineBodyGlueSliceTest());

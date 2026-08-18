@@ -81,6 +81,23 @@ class HxWrapRulesIngestTest extends Test {
 		Assert.equals(160, opts.methodChainWrap.rules[0].conditions[0].value);
 	}
 
+	/**
+	 * ω-complex-item-count: `complexItemCount >= n` ingests like every other predicate. Sits
+	 * beside `testUnknownCondDropsRule` on purpose — before the mapping existed this exact JSON
+	 * took THAT path and the rule was silently dropped, which is what a config-only D1 arm
+	 * looks like when the engine has not learned the condition.
+	 */
+	public function testComplexItemCountCondIngested(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"wrapping":{"arrayWrap":{"rules":[{"type":"onePerLine","conditions":[{"cond":"complexItemCount >= n","value":2}]}]}}}'
+		);
+		Assert.equals(1, opts.arrayLiteralWrap.rules.length);
+		final rule: WrapRule = opts.arrayLiteralWrap.rules[0];
+		Assert.equals(WrapMode.OnePerLine, rule.mode);
+		Assert.equals(WrapConditionType.ComplexItemCountLargerThan, rule.conditions[0].cond);
+		Assert.equals(2, rule.conditions[0].value);
+	}
+
 	public function testUnknownCondDropsRule(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"wrapping":{"methodChain":{"rules":[{"type":"onePerLineAfterFirst","conditions":[{"cond":"thisCondIsBogus >= n","value":42}]},{"type":"noWrap","conditions":[{"cond":"itemCount <= n","value":3}]}]}}}'

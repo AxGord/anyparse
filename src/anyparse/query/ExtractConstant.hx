@@ -219,7 +219,9 @@ final class ExtractConstant {
 		return insertAt < 0
 			? AddMember.addMember(existing, moduleClass, memberText, reformat, plugin, optsJson)
 			: RefactorSupport.canonicalize(
-				existing, [{ span: new Span(insertAt, insertAt), text: '$memberText\n' }], reformat, plugin, optsJson
+				existing,
+				[{ span: new Span(insertAt, insertAt), text: '$memberText\n' }],
+				reformat, plugin, optsJson
 			);
 	}
 

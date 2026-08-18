@@ -383,7 +383,7 @@ enum HxExpr {
 
 	@:trivia @:lead('[') @:trail(']') @:sep(',') @:fmt(trailingComma('trailingCommaArrays'), trailingCommaRemovable,
 		wrapRules('arrayLiteralWrap'), reflowSourceMultiline, bracketKindPad, arrayMatrixWrap, propagateExprPosition, uniformStmtBlanks,
-		groupRestProbe)
+		groupRestProbe, complexItems)
 	ArrayExpr(elems: Array<HxExpr>);
 
 	ObjectLit(lit: HxObjectLit);
@@ -561,7 +561,7 @@ enum HxExpr {
 
 	@:postfix('(', ')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), trailingCommaRemovable, callParens, callParensInside,
 		wrapRules('callParameterWrap'), methodChain('methodChainWrap'), propagateExprPosition, callArgChainNest, groupRestProbe,
-		arrowValueIfElemTrail)
+		arrowValueIfElemTrail, complexItems)
 	Call(operand: HxExpr, args: Array<HxExpr>);
 
 	@:postfix('++')
