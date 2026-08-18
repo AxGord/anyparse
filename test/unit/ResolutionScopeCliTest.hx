@@ -213,7 +213,8 @@ class ResolutionScopeCliTest extends Test {
 		Assert.equals(
 			1,
 			lintWithLib(
-				'prefer-final-public-field', 'Owner.hx', OWNER, [{ name: 'Sub.hx', source: subtypeOf('Owner', 'trace(this.tag);') }]
+				'prefer-final-public-field', 'Owner.hx', OWNER,
+				[{ name: 'Sub.hx', source: subtypeOf('Owner', 'trace(this.tag);') }]
 			),
 			'a resolution-scope subtype that only reads the field still allows var -> final'
 		);

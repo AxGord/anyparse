@@ -123,7 +123,8 @@ final class HxCasePredLowering extends AstPredLowering {
 		final inner: Expr = sw(ident('_e'), [caseOf(HX_EXPR, ['And', 'Or'], macro true)], macro false);
 		final body: Expr = nullSwitch(ident('s'), macro false, [caseBind(HX_STATEMENT, 'ExprStmt', [0 => '_e'], inner)], macro false);
 		return predField(
-			'caseBodyRefusesFlat', [valueArg('s', HX_STATEMENT)],
+			'caseBodyRefusesFlat',
+			[valueArg('s', HX_STATEMENT)],
 			macro :Bool, body, 'True iff an `ExprStmt` case body has an outermost `&&` / `||` and must refuse inline emission.'
 		);
 	}
@@ -160,7 +161,8 @@ final class HxCasePredLowering extends AstPredLowering {
 			caseBind(HX_STATEMENT, 'ExprStmt', [0 => '_e'], exprCall),
 		], macro false);
 		return predField(
-			'caseBodyControlFlowRoot', [valueArg('s', HX_STATEMENT)],
+			'caseBodyControlFlowRoot',
+			[valueArg('s', HX_STATEMENT)],
 			macro :Bool, body, 'True iff a case body statement is a keyword-led control-flow statement (refuses to glue onto the label).'
 		);
 	}
@@ -191,7 +193,8 @@ final class HxCasePredLowering extends AstPredLowering {
 			caseBind(HX_EXPR, 'MetaExpr', [0 => '_mv'], recurse),
 		], macro false);
 		return predField(
-			'caseBodyControlFlowExpr', [valueArg('e', HX_EXPR)],
+			'caseBodyControlFlowExpr',
+			[valueArg('e', HX_EXPR)],
 			macro :Bool, body, 'True iff a case body expression is the expression form of a keyword-led control-flow construct.'
 		);
 	}
@@ -237,7 +240,8 @@ final class HxCasePredLowering extends AstPredLowering {
 		};
 		final body: Expr = nullSwitch(ident('c'), macro null, [caseBind(HX_SWITCH_CASE, 'Conditional', [0 => '_i'], collect)], macro null);
 		return predField(
-			'caseSiblingUnits_${AstPredLowering.simpleName(HX_SWITCH_CASE)}', [valueArg('c', HX_SWITCH_CASE)],
+			'caseSiblingUnits_${AstPredLowering.simpleName(HX_SWITCH_CASE)}',
+			[valueArg('c', HX_SWITCH_CASE)],
 			ruleNullArrayCT(HX_SWITCH_CASE), body,
 			'The case units a `#if`-guarded switch-case element expands to, or null when it is its own single unit.'
 		);
@@ -291,7 +295,8 @@ final class HxCasePredLowering extends AstPredLowering {
 			}
 		};
 		return predField(
-			'_caseSiblingUnitsInto', [
+			'_caseSiblingUnitsInto',
+			[
 				valueArg('p', HX_CONDITIONAL_CASE),
 				{ name: 'out', type: ruleArrayCT(HX_SWITCH_CASE) }
 			],
@@ -330,7 +335,8 @@ final class HxCasePredLowering extends AstPredLowering {
 			_caseSiblingUnitsInto(_c, out);
 		};
 		return predField(
-			'_addCaseSiblingUnit', [bareArg('n', HX_SWITCH_CASE), { name: 'out', type: ruleArrayCT(HX_SWITCH_CASE) }],
+			'_addCaseSiblingUnit',
+			[bareArg('n', HX_SWITCH_CASE), { name: 'out', type: ruleArrayCT(HX_SWITCH_CASE) }],
 			macro :Void, body, 'Appends one switch-case element to `out`, flattening a nested `#if` region into its own units.'
 		);
 	}
@@ -415,7 +421,8 @@ final class HxCasePredLowering extends AstPredLowering {
 			caseOf(HX_SWITCH_CASE, ['CondSpliceCase'], macro true),
 		], macro false);
 		return predField(
-			'caseUnitStructuralBreak_${AstPredLowering.simpleName(HX_SWITCH_CASE)}', [valueArg('c', HX_SWITCH_CASE)],
+			'caseUnitStructuralBreak_${AstPredLowering.simpleName(HX_SWITCH_CASE)}',
+			[valueArg('c', HX_SWITCH_CASE)],
 			macro :Bool, body,
 			'True iff a case unit\'s body sits below its label at any budget (multi-statement, one refused statement, '
 			+ 'or a label-splice region).'
@@ -456,7 +463,8 @@ final class HxCasePredLowering extends AstPredLowering {
 			caseBind(HX_SWITCH_CASE, 'DefaultBranch', [0 => '_d'], verdict(HX_DEFAULT_BRANCH, 'stmts', '_d')),
 		], macro false);
 		return predField(
-			'caseUnitControlFlowBody_${AstPredLowering.simpleName(HX_SWITCH_CASE)}', [valueArg('c', HX_SWITCH_CASE)],
+			'caseUnitControlFlowBody_${AstPredLowering.simpleName(HX_SWITCH_CASE)}',
+			[valueArg('c', HX_SWITCH_CASE)],
 			macro :Bool, body, 'True iff a case unit holds exactly one body statement and that statement is control-flow.'
 		);
 	}

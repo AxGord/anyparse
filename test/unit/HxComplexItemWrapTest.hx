@@ -15,13 +15,15 @@ import utest.Test;
  * shape that looks like a call in pattern position, which `PATTERNS_SRC` pins.
  *
  * D2 is not a condition but a shape: under a `fillLine` / `fillLineWithLeadingBreak` argument list a
- * call-bearing container literal PAST THE FIRST argument takes a line of its own, with the arguments
- * before and after packed around it. Two positions keep the pre-existing glue instead, and each has
- * its own fixture here: a container in FIRST position is hugged by the head (`new Stack([` … `], w,
- * 46)`), and a MULTI-LINE container in LAST position closes the call on its own bracket line
- * (`makeTimer('shell', totalTime, [` … `]);`) — the shape the fork's
- * `wrapping/issue_466_array_wrapping_regression` fixture pins, and the one an unrestricted decline
- * broke.
+ * call-bearing container literal that would otherwise stay PACKED on a shared argument line takes a
+ * line of its own instead, with the arguments before and after packed around it. Its scope is
+ * exactly the element no existing glue speaks for:
+ *  - element 0 is hugged by the head (`new Stack([` … `], w, 46)`);
+ *  - a container that carries its OWN break has already opened the call, so the multi-arg-collection
+ *    glue keeps it on the argument line (`super(W, H, …, [` … `], true, false, false)`) — declining
+ *    there was measured over anyparse's own tree and made 21 files worse.
+ * What is left is the container that FITS and would ride along in the fill packing, which is the
+ * shape `TRAILING_SRC` and `MIDFIT_SRC` pin.
  *
  * Config: every assertion here is a width decision, so a compiled-default config would answer a
  * different question than the project these shapes come from. `CONFIG` is that project's
@@ -96,16 +98,16 @@ final class HxComplexItemWrapTest extends Test {
 	private static final TRAILING_OUT: String = 'class S4 {\n\n\tpublic function new() {\n\t\tsuper(\n\t\t\t536, 334, true, true, t(\'To gain the full ed'
 		+ 'iting rights here\'), null,\n\t\t\t[{ title: t(\'Close\', 76), action: \'shut\', width: 100 }]\n\t\t);\n' + '\t}\n\n}';
 
-	/** A call with a multi-line call-bearing array in the middle and three scalars after it. */
+	/** A call with a call-bearing array in the middle whose OWN width breaks it, and three scalars after. */
 	private static final MIDLIST_SRC: String = 'class S5 {\n\n\tpublic function new(source:ListSource) {\n\t\tsuper(WIDTH, HEIGHT, true, true, tr(\'Move'
 		+ ' To\', 10084), null, [{ caption: tr(\'Cancel\', 73).toUpperCase(), action: CANCEL, style: OutlineButton.'
 		+ 'OUTLINE }, { caption: tr(\'Move Here\', 9945).toUpperCase(), action: MOVE }], true, false, false);\n\t}' + '\n\n}';
 
 	/** `MIDLIST_SRC` under `CONFIG`. */
-	private static final MIDLIST_OUT: String = 'class S5 {\n\n\tpublic function new(source:ListSource) {\n\t\tsuper(\n\t\t\tWIDTH, HEIGHT, true, true, t'
-		+ 'r(\'Move To\', 10084), null,\n\t\t\t[\n\t\t\t\t{ caption: tr(\'Cancel\', 73).toUpperCase(), action: CANC'
-		+ 'EL, style: OutlineButton.OUTLINE },\n\t\t\t\t{ caption: tr(\'Move Here\', 9945).toUpperCase(), action: M'
-		+ 'OVE }\n\t\t\t],\n\t\t\ttrue, false, false\n\t\t);\n\t}\n\n}';
+	private static final MIDLIST_OUT: String = 'class S5 {\n\n\tpublic function new(source:ListSource) {\n\t\tsuper(WIDTH, HEIGHT, true, true, tr(\'Move'
+		+ ' To\', 10084), null, [\n\t\t\t{ caption: tr(\'Cancel\', 73).toUpperCase(), action: CANCEL, style: Outlin'
+		+ 'eButton.OUTLINE },\n\t\t\t{ caption: tr(\'Move Here\', 9945).toUpperCase(), action: MOVE }\n\t\t], true,'
+		+ ' false, false);\n\t}\n\n}';
 
 	/** The same middle position with a container that FITS — width alone would keep it packed. */
 	private static final MIDFIT_SRC: String = 'class S6 {\n\n\tprivate function build():Void {\n\t\tregisterLayout(firstScalarValue, secondScalarValue,'
@@ -139,6 +141,12 @@ final class HxComplexItemWrapTest extends Test {
 	/** `TRAILING_SRC` under `CONFIG_NO_COND`. */
 	private static final TRAILING_OUT_NO_COND: String = 'class S4 {\n\n\tpublic function new() {\n\t\tsuper(\n\t\t\t536, 334, true, true, t(\'To gain the full ed'
 		+ 'iting rights here\'), null,\n\t\t\t[{ title: t(\'Close\', 76), action: \'shut\', width: 100 }]\n\t\t);\n' + '\t}\n\n}';
+
+	/** `MIDLIST_SRC` under `CONFIG_NO_COND`. */
+	private static final MIDLIST_OUT_NO_COND: String = 'class S5 {\n\n\tpublic function new(source:ListSource) {\n\t\tsuper(\n\t\t\tWIDTH, HEIGHT, true, true, t'
+		+ 'r(\'Move To\', 10084), null,\n\t\t\t[\n\t\t\t\t{ caption: tr(\'Cancel\', 73).toUpperCase(), action: CANC'
+		+ 'EL, style: OutlineButton.OUTLINE },\n\t\t\t\t{ caption: tr(\'Move Here\', 9945).toUpperCase(), action: M'
+		+ 'OVE }\n\t\t\t],\n\t\t\ttrue, false, false\n\t\t);\n\t}\n\n}';
 
 	/** `MIDFIT_SRC` under `CONFIG_NO_COND`. */
 	private static final MIDFIT_OUT_NO_COND: String = 'class S6 {\n\n\tprivate function build():Void {\n\t\tregisterLayout(\n\t\t\tfirstScalarValue, secondScal'
@@ -201,29 +209,30 @@ final class HxComplexItemWrapTest extends Test {
 	}
 
 	/**
-	 * A container in the MIDDLE splits the list in three: the arguments before it pack, it takes its
-	 * own line, the arguments after it pack again. The container here FITS, so the split comes from
-	 * the classification and not from an internal break.
+	 * A FITTING container in the MIDDLE splits the list in three: the arguments before it pack, it
+	 * takes its own line, the arguments after it pack again. Nothing about its width asks for that —
+	 * the split comes from the classification alone, which is why the two configs agree here.
 	 */
-	public function testMidListContainerSplitsTheArgumentsAroundIt(): Void {
+	public function testMidListFittingContainerSplitsTheArgumentsAroundIt(): Void {
 		Assert.equals(MIDFIT_OUT_NO_COND, write(MIDFIT_SRC, CONFIG_NO_COND));
 		Assert.equals(MIDFIT_OUT, write(MIDFIT_SRC, CONFIG));
 	}
 
 	/**
-	 * The multi-line sibling of the case above. Its container already breaks internally, so the
-	 * pre-slice writer produced this same layout — until D1 gave the array a real hardline, at which
-	 * point the sole-multi-line-collection glue started accepting and pulled every argument onto the
-	 * open paren. This asserts the glue still declines for a container with arguments after it.
+	 * The boundary of that policy: a container whose own elements break keeps the multi-arg-collection
+	 * glue and stays on the argument line, in the middle of the list as at its end. The two configs
+	 * DIFFER here — the counter turns the array's width-driven break into a forced one, which is what
+	 * lets the glue accept it — so this pins both sides.
 	 */
-	public function testMidListMultilineContainerDoesNotGlueToTheOpenParen(): Void {
+	public function testMidListBreakingContainerKeepsTheGlue(): Void {
+		Assert.equals(MIDLIST_OUT_NO_COND, write(MIDLIST_SRC, CONFIG_NO_COND));
 		Assert.equals(MIDLIST_OUT, write(MIDLIST_SRC, CONFIG));
 	}
 
 	/**
-	 * The other side of that decline: with NOTHING after it, a multi-line container keeps the glue and
-	 * the call closes on the bracket line. Declining for every non-first container instead broke the
-	 * fork corpus fixture `wrapping/issue_466_array_wrapping_regression`, which is this shape.
+	 * Same boundary at the END of the list, and the shape the fork's
+	 * `wrapping/issue_466_array_wrapping_regression` fixture pins: the call closes on the bracket
+	 * line rather than giving the array a further line of its own.
 	 */
 	public function testTrailingMultilineContainerKeepsTheGlue(): Void {
 		Assert.equals(LASTBIG_OUT, write(LASTBIG_SRC, CONFIG));

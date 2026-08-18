@@ -1159,12 +1159,13 @@ final class HaxeFormat implements TextFormat {
 				out.push(COMPLEX_ITEM_NONE);
 				continue;
 			}
-			out.push(switch Type.enumConstructor(node) {
+			final kind: Int = switch Type.enumConstructor(node) {
 				case 'Call', 'NewExpr': COMPLEX_ITEM_CALL;
 				case 'ArrayExpr', 'ObjectLit':
 					subtreeHasCallOrNew(node, 0) ? COMPLEX_ITEM_CONTAINER : COMPLEX_ITEM_NONE;
 				case _: COMPLEX_ITEM_NONE;
-			});
+			};
+			out.push(kind);
 		}
 		return out;
 	}

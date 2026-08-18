@@ -170,7 +170,8 @@ final class OracleCacheTest extends Test {
 		final path: String = '$dir/Good.hx';
 		final result: FixVerifyResult = FixVerifier.verify(
 			[{ file: path, source: VALID }],
-			[new TestRiskyLiteralRewrite('2')], new HaxeQueryPlugin(), 'check.hxml', dir, (p, c) -> File.saveContent(p, c)
+			[new TestRiskyLiteralRewrite('2')],
+			new HaxeQueryPlugin(), 'check.hxml', dir, (p, c) -> File.saveContent(p, c)
 		);
 		Assert.isTrue(result.baseline.match(Confirmed), 'the fix path asked the compiler itself, not the cache');
 		Assert.equals(1, result.applied.length, 'and applied the risky fix the poisoned record would have blocked');

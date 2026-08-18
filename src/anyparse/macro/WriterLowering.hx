@@ -6228,12 +6228,14 @@ class WriterLowering {
 			// Suppressed inside a case pattern / switch subject for the same
 			// reason the array literal is (an enum-ctor pattern parses as a
 			// `Call`). Absent flag → `null`, byte-identical emission.
-			final complexKindsExpr: Expr = c.branch.fmtHasFlag('complexItems') ? macro {
-				final _ck: Null<Array<Int>> = opt._suppressComplexItems
-					? null
-					: anyparse.grammar.haxe.HaxeFormat.complexItemKinds(cast _args);
-				_ck;
-			} : macro null;
+			final complexKindsExpr: Expr = c.branch.fmtHasFlag('complexItems')
+				? macro {
+					final _ck: Null<Array<Int>> = opt._suppressComplexItems
+						? null
+						: anyparse.grammar.haxe.HaxeFormat.complexItemKinds(cast _args);
+					_ck;
+				}
+				: macro null;
 			final wrapListExpr: Expr = macro anyparse.format.wrap.WrapList.emit(
 				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $callInsideOpen, $callInsideClose, false, $rulesExpr, {
 					appendTrailingComma: $tcExpr,
@@ -11832,8 +11834,9 @@ class WriterLowering {
 		return flagName == null
 			? null
 			: buildPolicySwitch(
-				['anyparse', 'format', 'WhitespacePolicy'],
-				optFieldAccess(flagName), [{ values: ['Before', 'Both'], expr: macro _dt(' ') }], macro _de()
+				['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName),
+				[{ values: ['Before', 'Both'], expr: macro _dt(' ') }],
+				macro _de()
 			);
 	}
 
@@ -11871,8 +11874,9 @@ class WriterLowering {
 		return flagName == null
 			? null
 			: buildPolicySwitch(
-				['anyparse', 'format', 'WhitespacePolicy'],
-				optFieldAccess(flagName), [{ values: ['After', 'Both'], expr: macro _dt(' ') }], macro _de()
+				['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName),
+				[{ values: ['After', 'Both'], expr: macro _dt(' ') }],
+				macro _de()
 			);
 	}
 
@@ -11900,8 +11904,9 @@ class WriterLowering {
 		return flagName == null
 			? null
 			: buildPolicySwitch(
-				['anyparse', 'format', 'WhitespacePolicy'],
-				optFieldAccess(flagName), [{ values: ['Before', 'Both'], expr: macro _dt(' ') }], macro _de()
+				['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName),
+				[{ values: ['Before', 'Both'], expr: macro _dt(' ') }],
+				macro _de()
 			);
 	}
 
@@ -12163,8 +12168,9 @@ class WriterLowering {
 		return flagName == null
 			? macro _dt($v{trailText})
 			: buildPolicySwitch(
-				['anyparse', 'format', 'WhitespacePolicy'],
-				optFieldAccess(flagName), [{ values: ['Before', 'Both'], expr: macro _dt($v{' ' + trailText}) }], macro _dt($v{trailText})
+				['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName),
+				[{ values: ['Before', 'Both'], expr: macro _dt($v{' ' + trailText}) }],
+				macro _dt($v{trailText})
 			);
 	}
 
