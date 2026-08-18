@@ -92,6 +92,73 @@ class PreferExistsCheckTest extends Test {
 		Assert.equals(0, violations(fn('for (x in xs) { trace(x); if (x > 2) return true; }\n\t\treturn false;')).length);
 	}
 
+	public function testFallThroughFromElseBranchFlagged(): Void {
+		final vs: Array<Violation> = violations(
+			fn('if (a) {\n\t\t\ttrace(b);\n\t\t} else {\n\t\t\tfor (x in xs) if (x > 2) return true;\n\t\t}\n\t\treturn false;')
+		);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('xs.exists(x -> x > 2)') != -1, vs[0].message);
+	}
+
+	public function testFallThroughAcrossTwoIfLevelsFlagged(): Void {
+		Assert.equals(
+			1,
+			violations(fn('if (a) {\n\t\t\tif (b) {\n\t\t\t\tfor (x in xs) if (x > 2) return true;\n\t\t\t}\n\t\t}\n\t\treturn false;'))
+				.length
+		);
+	}
+
+	public function testFallThroughStopsAtALoopBody(): Void {
+		// Falling off the end of a `while` body starts the NEXT ITERATION, so the trailing
+		// `return false;` is not what follows the loop — the successor must not cross it.
+		Assert.equals(
+			0, violations(fn('while (a) {\n\t\t\tfor (x in xs) if (x > 2) return true;\n\t\t}\n\t\treturn false;')).length
+		);
+	}
+
+	public function testFallThroughStopsAtATryBody(): Void {
+		Assert.equals(
+			0,
+			violations(fn('try {\n\t\t\tfor (x in xs) if (x > 2) return true;\n\t\t} catch (e:Dynamic) {}\n\t\treturn false;')).length
+		);
+	}
+
+	public function testFallThroughStopsAtASwitchArm(): Void {
+		// The arm body is BRACED on purpose: an unbraced arm's statements are not a statement list
+		// at all, so the pairing never happens and the fixture would pass behind that gate instead
+		// of this one. With a block there, only the successor rule can refuse it.
+		Assert.equals(
+			0,
+			violations(fn('switch (a) {\n\t\t\tcase _: {\n\t\t\t\tfor (x in xs) if (x > 2) return true;\n\t\t\t}\n\t\t}\n\t\treturn false;'))
+				.length
+		);
+	}
+
+	public function testConditionalRegionIsNotAStatementList(): Void {
+		// Pins a DIFFERENT gate from the three above, and says so: a `#if` region projects its
+		// branches as FLATTENED siblings and is deliberately absent from `blockKinds`, so nothing
+		// inside one is ever paired with a sibling outside it — with or without a successor.
+		Assert.equals(
+			0, violations(fn('#if js\n\t\tfor (x in xs) if (x > 2) return true;\n\t\t#end\n\t\treturn false;')).length
+		);
+	}
+
+	public function testGuardedBracedFormReportedOnce(): Void {
+		// `if (g) { for … }` + the fallback matches BOTH readings — the guarded merge and the bare
+		// fall-through inside the braces. One site, one finding: the merge.
+		final vs: Array<Violation> = violations(fn('if (a) { for (x in xs) if (x > 2) return true; }\n\t\treturn false;'));
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('a && xs.exists(x -> x > 2)') != -1, vs[0].message);
+	}
+
+	public function testFallThroughFixKeepsTheTrailingReturn(): Void {
+		final out: String = fixResult(
+			file('if (a) {\n\t\t\ttrace(b);\n\t\t} else {\n\t\t\tfor (x in xs) if (x > 2) return true;\n\t\t}\n\t\treturn false;', true)
+		);
+		Assert.isTrue(out.indexOf('return xs.exists(x -> x > 2);') != -1, out);
+		Assert.isTrue(out.indexOf('return false;') != -1, out);
+	}
+
 	public function testFixBareRewritesAndInsertsUsing(): Void {
 		final out: String = fixResult(file('for (x in xs) if (x > 2) return true;\n\t\treturn false;', false));
 		Assert.isTrue(out.indexOf('return xs.exists(x -> x > 2);') != -1, out);

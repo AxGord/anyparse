@@ -70,6 +70,20 @@ class PreferForeachCheckTest extends Test {
 		);
 	}
 
+	public function testFallThroughFromElseBranchFlagged(): Void {
+		final vs: Array<Violation> = violations(
+			fn('if (a) {\n\t\t\ttrace(b);\n\t\t} else {\n\t\t\tfor (x in xs) if (x > 2) return false;\n\t\t}\n\t\treturn true;')
+		);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('xs.foreach(x -> !(x > 2))') != -1, vs[0].message);
+	}
+
+	public function testFallThroughStopsAtALoopBody(): Void {
+		Assert.equals(
+			0, violations(fn('while (a) {\n\t\t\tfor (x in xs) if (x > 2) return false;\n\t\t}\n\t\treturn true;')).length
+		);
+	}
+
 	public function testFixWrapsCondition(): Void {
 		final out: String = fixResult(file('for (x in xs) if (x > 2) return false;\n\t\treturn true;', false));
 		Assert.isTrue(out.indexOf('return xs.foreach(x -> !(x > 2));') != -1, out);

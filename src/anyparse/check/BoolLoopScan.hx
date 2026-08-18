@@ -46,9 +46,15 @@ using StringTools;
  * - The loop body is a single `if` with NO `else`, whose then-branch is exactly
  *   `return <bool literal>` (bare, or a `{ … }` wrapping only that). The loop body itself may be
  *   a single-statement block, and so may a guard's body.
- * - The trailing statement is a real, immediately adjacent block sibling and is
- *   `return <the opposite bool literal>`. A non-literal fallback (`return xs.length == 0;`) or a
- *   REPEAT of the same literal is refused — neither is the `exists` / `foreach` identity.
+ * - The fallback is `return <the opposite bool literal>`. A non-literal fallback
+ *   (`return xs.length == 0;`) or a REPEAT of the same literal is refused — neither is the
+ *   `exists` / `foreach` identity.
+ * - That fallback is usually the loop's immediate sibling, and then the rewrite subsumes it. It
+ *   may also be reached by FALLING OUT of enclosing `if` branches — a third of the real sites put
+ *   the loop at the tail of an `else` block whose function ends `return false;` — and then only
+ *   the loop is replaced, because the other branches still run into that return. The successor is
+ *   propagated by `scan` and is dropped at every construct where falling off the end does not
+ *   continue after it (a loop body, a `switch`, a `try`, a conditional-compilation region).
  * - No key-value loop (`Lambda` iterates values, not pairs), no range `a...b` and no call
  *   iterable (`m.keys()` yields an `Iterator`, which is not `Iterable`) — the same three
  *   refusals `prefer-find` makes, for the same reasons.
@@ -108,7 +114,7 @@ final class BoolLoopScan {
 			if (tree == null) continue;
 			final source: String = entry.source;
 			final file: String = entry.file;
-			scan(tree, source, s, kind, cand -> {
+			scan(tree, null, source, s, kind, cand -> {
 				final v: Null<Violation> = buildViolation(cand, source, s, kind, ruleId, file);
 				if (v != null) out.push(v);
 			});
@@ -139,7 +145,7 @@ final class BoolLoopScan {
 		if (UsingScan.conflictingUsing(UsingScan.usingModules(header), LAMBDA_MODULE, method(kind), plugin, () -> symbols, []))
 			return [];
 		final byKey: Map<String, Cand> = [];
-		scan(tree, source, s, kind, cand -> {
+		scan(tree, null, source, s, kind, cand -> {
 			final span: Null<Span> = cand.anchor.span;
 			if (span != null) byKey['${span.from}:${span.to}'] = cand;
 		});
@@ -197,22 +203,66 @@ final class BoolLoopScan {
 		};
 	}
 
-	/** Descend `node`, testing each adjacent statement-list pair and handing every recovered loop to `emit`; skip reification subtrees. */
-	private static function scan(node: QueryNode, source: String, s: Seams, kind: BoolLoopKind, emit: (Cand) -> Void): Void {
+	/**
+	 * Descend `node`, handing every recovered loop to `emit`; skip reification subtrees.
+	 *
+	 * `succ` is the statement control reaches when `node` completes NORMALLY, or null when that is
+	 * unknown — the one piece of flow the shape needs, because the loop's fallback return is not
+	 * always its immediate sibling. Three rules propagate it, and everything else drops it:
+	 *
+	 * - a statement list gives child `i` the sibling `i + 1`, and its LAST child the list's own
+	 *   `succ` — a loop at the tail of a block falls out of that block;
+	 * - an `if` STATEMENT gives each branch body its own `succ` (leaving a branch continues after
+	 *   the `if`) and gives the condition none;
+	 * - every other node gives its children null. That is what keeps the walk sound: falling off
+	 *   the end of a LOOP body starts the next iteration rather than continuing after it, and a
+	 *   conditional-compilation region's flattened branches are not a statement list at all.
+	 */
+	private static function scan(
+		node: QueryNode, succ: Null<QueryNode>, source: String, s: Seams, kind: BoolLoopKind, emit: (Cand) -> Void
+	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		final kids: Array<QueryNode> = node.children;
-		if (s.blockKinds.contains(node.kind)) for (i in 0...kids.length - 1) {
-			final cand: Null<Cand> = candidateAt(kids[i], kids[i + 1], source, s, kind);
-			if (cand != null) emit(cand);
+		final isList: Bool = s.blockKinds.contains(node.kind);
+		// A branch body inherits the `if`'s own successor; a condition, and every other node's
+		// children, inherit nothing.
+		final branchSucc: Null<QueryNode> = s.ifKinds.contains(node.kind) ? succ : null;
+		for (i in 0...kids.length) {
+			final childSucc: Null<QueryNode> = if (isList)
+				(i < kids.length - 1 ? kids[i + 1] : succ);
+			else if (branchSucc != null && i > 0)
+				branchSucc;
+			else
+				null;
+			// A CLAIMED statement's subtree loses the successor. `if (g) { for … }` followed by the
+			// fallback is one site, and both readings of it match: the guarded merge at the `if`,
+			// and the bare fall-through at the loop inside the braces. They describe the same code
+			// and their edits overlap, so the merged form — reported here first — takes it.
+			var inner: Null<QueryNode> = childSucc;
+			if (isList) {
+				final cand: Null<Cand> = candidateAt(kids[i], childSucc, i < kids.length - 1, source, s, kind);
+				if (cand != null) {
+					emit(cand);
+					inner = null;
+				}
+			}
+			scan(kids[i], inner, source, s, kind, emit);
 		}
-		for (c in kids) scan(c, source, s, kind, emit);
 	}
 
 	/**
 	 * The bool-returning loop `a` / `b` form, or null when they are not it: `a` is the loop (bare)
-	 * or the guard holding it, `b` the trailing `return <opposite literal>`.
+	 * or the guard holding it, `b` the `return <opposite literal>` control reaches after it.
+	 *
+	 * `adjacent` says whether `b` is `a`'s immediate sibling. When it is, the rewrite SUBSUMES it —
+	 * the collapsed `return` says everything the pair said, and leaving the old one behind would be
+	 * dead code. When it is not, `b` is reached by falling out of one or more enclosing `if`
+	 * branches and other paths still run into it, so only the loop is replaced.
 	 */
-	private static function candidateAt(a: QueryNode, b: QueryNode, source: String, s: Seams, kind: BoolLoopKind): Null<Cand> {
+	private static function candidateAt(
+		a: QueryNode, b: Null<QueryNode>, adjacent: Bool, source: String, s: Seams, kind: BoolLoopKind
+	): Null<Cand> {
+		if (b == null) return null;
 		final trailing: Null<QueryNode> = boolReturnLiteral(b, s);
 		if (trailing == null) return null;
 		final trailingValue: Null<Bool> = literalValue(trailing, source);
@@ -221,7 +271,8 @@ final class BoolLoopScan {
 		final loopValue: Bool = kind == BoolLoopKind.Exists;
 		if (trailingValue == null || trailingValue == loopValue) return null;
 		final bare: Null<Head> = forIfHead(a, source, s);
-		if (bare != null && bare.value == loopValue) return { anchor: a, forNode: a, trailing: b, guard: null, head: bare };
+		if (bare != null && bare.value == loopValue)
+			return { anchor: a, forNode: a, trailing: b, guard: null, head: bare, subsumesTrailing: adjacent };
 		// The guarded form merges the guard with `&&`, which only reads as the original for the
 		// `exists` direction — see the type doc for why the `foreach` mirror is refused outright.
 		if (kind != BoolLoopKind.Exists || !s.ifKinds.contains(a.kind) || a.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
@@ -232,7 +283,8 @@ final class BoolLoopScan {
 			forNode: loop,
 			trailing: b,
 			guard: a.children[0],
-			head: guarded
+			head: guarded,
+			subsumesTrailing: adjacent
 		};
 	}
 
@@ -308,7 +360,9 @@ final class BoolLoopScan {
 		final trailingSpan: Null<Span> = cand.trailing.span;
 		final parts: Null<Parts> = callParts(cand, source, s, kind);
 		if (anchorSpan == null || trailingSpan == null || parts == null) return null;
-		final region: Span = new Span(anchorSpan.from, trailingSpan.to);
+		// A subsumed trailing return is swallowed by the replacement; a fall-through one is reached
+		// by other paths and must survive, so the region stops at the loop.
+		final region: Span = cand.subsumesTrailing ? new Span(anchorSpan.from, trailingSpan.to) : anchorSpan;
 		if (droppedRegionHasComment(source, region, parts.kept)) return null;
 		final core: String = '${parts.iterable}.${method(kind)}(${cand.head.loopVar} -> ${parts.predicate})';
 		final guard: Null<String> = parts.guard;
@@ -464,6 +518,9 @@ private typedef Cand = {
 	var trailing: QueryNode;
 	var guard: Null<QueryNode>;
 	var head: Head;
+
+	/** Whether `trailing` is the anchor's immediate sibling, so the rewrite replaces both rather than the loop alone. */
+	var subsumesTrailing: Bool;
 }
 
 /** The re-spliced texts of one rewrite plus the source spans they came from, in ascending order, for the comment gate. */
