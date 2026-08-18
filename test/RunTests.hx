@@ -640,6 +640,7 @@ import unit.ShardPlanTest;
 import unit.RemoveMemberDocSliceTest;
 import unit.DeleteBlankLineSliceTest;
 import unit.PreferForInCheckTest;
+import unit.WhileTrueConditionCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1090,6 +1091,7 @@ class RunTests {
 		addCase(new EnglishCommentsCheckTest());
 		addCase(new PreferComprehensionCheckTest());
 		addCase(new PreferForInCheckTest());
+		addCase(new WhileTrueConditionCheckTest());
 		addCase(new PreferFindCheckTest());
 		addCase(new PreferStaticExtensionCheckTest());
 		addCase(new LoopGuardCheckTest());
