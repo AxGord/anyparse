@@ -3,7 +3,6 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.check.Check;
-import anyparse.check.Check.GroupedEdit;
 import anyparse.check.PreferExists;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
