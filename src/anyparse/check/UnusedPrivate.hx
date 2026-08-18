@@ -131,8 +131,7 @@ final class UnusedPrivate implements Check {
 			collectCtorCandidates(tree, entry.file, ctorCandidates);
 		}
 		_reflectedContents = reflected;
-		if (index.skippedFiles()
-			.length == 0) for (c in ctorCandidates) if (
+		if (index.skippedFiles().length == 0) for (c in ctorCandidates) if (
 			!index.hasSubtype(c.className) && !isInstantiatedAnywhere(c.className, files) && !mentionedInStrings(c.className, reflected)
 		) violations.push({
 			file: c.file,

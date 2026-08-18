@@ -52,8 +52,7 @@ final class HxHeaderWrapLadderSliceTest extends Test {
 	 * the flat chain and the dropped body in ONE string.
 	 */
 	public function testForChainHeaderFitsBodyDrops(): Void {
-		final broken: String = 'class C {\n\tfunction f(text:String):Bool {\n'
-			+ '\t\tfor (word in text.trim()\n\t\t\t.toLowerCase()\n'
+		final broken: String = 'class C {\n\tfunction f(text:String):Bool {\n' + '\t\tfor (word in text.trim()\n\t\t\t.toLowerCase()\n'
 			+ '\t\t\t.split(\' \')) if (_questionText.indexOf(word) == -1 && _answerText.indexOf(word) == -1) return false;\n'
 			+ '\t\treturn true;\n\t}\n}';
 		Assert.equals(LADDER_FOR, triviaWrite(broken));
@@ -72,8 +71,7 @@ final class HxHeaderWrapLadderSliceTest extends Test {
 	 * breaks first, and the chain sees a hardline instead of a body.
 	 */
 	public function testWhileChainHeaderFitsBodyDrops(): Void {
-		final broken: String = 'class C {\n\tfunction f(text:String):Void {\n'
-			+ '\t\twhile (text.trim()\n\t\t\t.toLowerCase()\n'
+		final broken: String = 'class C {\n\tfunction f(text:String):Void {\n' + '\t\twhile (text.trim()\n\t\t\t.toLowerCase()\n'
 			+ '\t\t\t.split(\' \').length > 0) if (_questionText.indexOf(word) == -1 && _answerText.indexOf(word) == -1) return false;\n\t}\n}';
 		final expected: String = 'class C {\n\tfunction f(text:String):Void {\n'
 			+ '\t\twhile (text.trim().toLowerCase().split(\' \').length > 0) if (_questionText.indexOf(word) == -1'
@@ -83,8 +81,7 @@ final class HxHeaderWrapLadderSliceTest extends Test {
 
 	/** Step 2 for `if` — same nested-construct body as the `while` case above. */
 	public function testIfChainHeaderFitsBodyDrops(): Void {
-		final broken: String = 'class C {\n\tfunction f(text:String):Void {\n'
-			+ '\t\tif (text.trim()\n\t\t\t.toLowerCase()\n'
+		final broken: String = 'class C {\n\tfunction f(text:String):Void {\n' + '\t\tif (text.trim()\n\t\t\t.toLowerCase()\n'
 			+ '\t\t\t.split(\' \').length > 0) if (_questionText.indexOf(word) == -1 && _answerText.indexOf(word) == -1) return false;\n\t}\n}';
 		final expected: String = 'class C {\n\tfunction f(text:String):Void {\n'
 			+ '\t\tif (text.trim().toLowerCase().split(\' \').length > 0) if (_questionText.indexOf(word) == -1'
