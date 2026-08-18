@@ -636,6 +636,7 @@ import unit.LintDiffTest;
 import unit.MutationVerdictTest;
 import unit.LintNoOracleCliTest;
 import unit.OracleCacheTest;
+import unit.ShardPlanTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1027,6 +1028,7 @@ class RunTests {
 		addCase(new InheritanceMoveSliceTest());
 		addCase(new ExtractSuperclassSliceTest());
 		addCase(new SafeDeleteSliceTest());
+		addCase(new ShardPlanTest());
 		addCase(new EncapsulateFieldSliceTest());
 		addCase(new ExtractConstantSliceTest());
 		addCase(new MakeFinalSliceTest());
