@@ -150,9 +150,18 @@ final class AssignmentTreeHoist {
 	 * arm (a `#if`-guarded `Conditional`, …) or an arm body is not a hoistable unit. Does NOT
 	 * require a default -- the caller decides (a nested switch and the l-value arm require one; the
 	 * decl arm may synthesize it).
+	 *
+	 * `emptyDefaultValue`, when given, lets a completely EMPTY default arm (`case _:` / `default:`
+	 * with no body at all) borrow its value from it instead of failing the whole match -- meant for
+	 * the decl-pairing caller's own paired initializer, valid only because that caller already
+	 * proves the target holds exactly that value at the switch (adjacency + no other writes). The
+	 * value is copied VERBATIM (its span rides into `kept`) and contributes nothing to
+	 * `leafCount`: an empty arm performs no write. Every other caller passes nothing, so a nested
+	 * switch and the l-value arm keep refusing an empty arm exactly as before -- neither has a
+	 * value to lend it.
 	 */
 	public static function switchArms(
-		switchNode: QueryNode, ref: LvalueRef, source: String, s: TreeSeams, ?carried: Carried
+		switchNode: QueryNode, ref: LvalueRef, source: String, s: TreeSeams, ?carried: Carried, ?emptyDefaultValue: QueryNode
 	): Null<SwitchArms> {
 		if (!switchReady(s) || switchNode.children.length < 2) return null;
 		final subject: QueryNode = switchNode.children[0];
@@ -165,8 +174,9 @@ final class AssignmentTreeHoist {
 			final branch: QueryNode = switchNode.children[i];
 			if (branch.kind != s.caseBranchKind && branch.kind != s.defaultBranchKind) return null;
 			final body: Null<QueryNode> = armBody(branch, s);
-			if (body == null) return null;
-			final unit: Null<UnitValue> = unitValue(body, ref, source, s, carried);
+			final unit: Null<UnitValue> = body != null
+				? unitValue(body, ref, source, s, carried)
+				: borrowedEmptyDefaultUnit(branch, emptyDefaultValue, source, s);
 			if (unit == null) return null;
 			final header: Null<String> = armHeader(branch, source, s);
 			if (header == null) return null;
@@ -308,6 +318,39 @@ final class AssignmentTreeHoist {
 	public static function caseGuard(branch: QueryNode, s: TreeSeams): Null<QueryNode> {
 		for (i in 1...branch.children.length) if (branch.children[i].kind == s.parenKind) return branch.children[i];
 		return null;
+	}
+
+	/**
+	 * The borrowed value for a completely empty default arm -- `emptyDefaultValue`'s own verbatim
+	 * text and span, contributing no leaf write (`leafCount: 0`; an empty arm writes nothing). Null
+	 * when no fallback was given, `branch` is not a default arm (`isDefaultArm`), or it is not
+	 * truly empty (`isEmptyArm`) -- `armBody`'s null also covers a MULTI-statement body, which must
+	 * keep failing here rather than silently taking the fallback.
+	 */
+	private static function borrowedEmptyDefaultUnit(
+		branch: QueryNode, emptyDefaultValue: Null<QueryNode>, source: String, s: TreeSeams
+	): Null<UnitValue> {
+		if (emptyDefaultValue == null || !isDefaultArm(branch, s) || !isEmptyArm(branch, s)) return null;
+		final span: Null<Span> = emptyDefaultValue.span;
+		if (span == null) return null;
+		final text: Null<String> = slice(source, emptyDefaultValue);
+		return text == null ? null : {
+			text: text,
+			kept: [span],
+			gaps: [],
+			atom: span,
+			leafCount: 0
+		};
+	}
+
+	/**
+	 * Whether a case / default arm has ZERO body children (its pattern wrapper(s) and guard
+	 * stripped) -- distinct from `armBody`'s null, which also covers MORE than one.
+	 */
+	private static function isEmptyArm(branch: QueryNode, s: TreeSeams): Bool {
+		final guard: Null<QueryNode> = caseGuard(branch, s);
+		for (c in branch.children) if (c.kind != s.plainCasePatternKind && c != guard) return false;
+		return true;
 	}
 
 	/**

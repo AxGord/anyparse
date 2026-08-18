@@ -241,7 +241,10 @@ final class PreferSwitchExpressionAssignment implements Check {
 		if (referencesName(subject, name, s)) return null;
 
 		final ref: LvalueRef = { lvalue: null };
-		final sa: Null<SwitchArms> = AssignmentTreeHoist.switchArms(switchStmt, ref, source, s.tree);
+		// `init` is also the fallback an EMPTY default arm may borrow -- this caller alone proves
+		// the target holds exactly that (pure) value at the switch (adjacency + no other writes),
+		// so it alone is allowed to lend it (`AssignmentTreeHoist.switchArms`'s own doc).
+		final sa: Null<SwitchArms> = AssignmentTreeHoist.switchArms(switchStmt, ref, source, s.tree, null, init);
 		if (sa == null) return null;
 		final lvalue: Null<QueryNode> = ref.lvalue;
 		// No source default arm and no initializer to synthesize one from — cannot make it exhaustive.
