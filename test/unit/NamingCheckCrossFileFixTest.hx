@@ -30,6 +30,14 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	private static final AMBIGUITY_OWNER_SRC: String =
 		'package pkg;\nclass C {\n\tprivate var size:Int;\n\tpublic function f() { return this.size; }\n}';
 
+	/** The claim fixture's base: `A` declares a private `CAPS`, which corrects to `_caps`. */
+	private static final CLAIM_BASE_SRC: String =
+		'package pkg;\nclass A {\n\tprivate var CAPS:Int = 1;\n\tpublic function a():Int { return CAPS; }\n}';
+
+	/** The claim fixture's subclass: `B extends A` declares a private `Caps`, correcting to the SAME `_caps`. */
+	private static final CLAIM_SUB_SRC: String =
+		'package pkg;\nclass B extends A {\n\tprivate var Caps:Int = 2;\n\tpublic function b():Int { return Caps; }\n}';
+
 	/**
 	 * HALF-APPLIED HAZARD: the subtype's simple name is AMBIGUOUS in the scope (a secondary type
 	 * elsewhere in the set shares it), so the positive `isSubtype` proof MISSES - it needs a unique
@@ -619,12 +627,113 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		for (slice in rename) Assert.notEquals('pkg/Other.hx', slice.file);
 	}
 
-	/** The single cross-file rename `files` yields, as its per-file slices. */
-	private function crossFileRename(files: Array<{ file: String, source: String }>): Array<CrossFileEdits> {
+	/**
+	 * RUN-SCOPED CLAIM: a rename decided in ONE file must be visible when a SECOND file's rename is
+	 * decided in the same pass. `A.CAPS` and `B.Caps` both correct to `_caps`, and the two take
+	 * DIFFERENT paths — `A` is non-confined (it has a subtype) so it renames cross-file, while `B`
+	 * is confined so it renames through the per-file `fix`. Both consult the SAME pass's index,
+	 * where `A` still spells `CAPS`, so the inherited-member gate (`typeProvablyLacksMember`)
+	 * cleared `B` and both landed `_caps`: `haxe` then rejects the tree with "Redefinition of
+	 * variable _caps in subclass is not allowed" (verified live). The second must DEFER — it
+	 * re-fires next pass, judged against a source that finally holds the name.
+	 */
+	public function testCrossFileClaimBlocksASingleFileRenameToTheSameInheritedName(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/A.hx', source: CLAIM_BASE_SRC },
+			{ file: 'pkg/B.hx', source: CLAIM_SUB_SRC }
+		];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		// BOTH findings MUST exist, or the per-file zero below would be `fix`'s empty-violations
+		// early return rather than the claim gate.
+		Assert.equals(2, vs.length);
+		// The driver's own order: every cross-file rename of the pass first, then the per-file fixes.
 		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
+		Assert.equals(1, renames.length);
+		assertRenameSlice(renames[0], 'pkg/A.hx', CLAIM_BASE_SRC, '_caps', 'CAPS');
+		Assert.equals(0, check.fix(CLAIM_SUB_SRC, vs.filter(v -> v.file == 'pkg/B.hx'), new HaxeQueryPlugin(), index).length);
+	}
+
+	/**
+	 * The same claim with BOTH renames on the cross-file path: `C extends B` makes `B.Caps`
+	 * non-confined too, so one `crossFileFix` call decides both against one index and emitted two
+	 * renames to `_caps` — the identical redefinition error. Exactly one may be claimed.
+	 */
+	public function testOnlyOneCrossFileRenameClaimsAnInheritedTargetNamePerPass(): Void {
+		final subSrc: String = 'package pkg;\nclass C extends B {\n\tpublic function c():Int { return 0; }\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/A.hx', source: CLAIM_BASE_SRC },
+			{ file: 'pkg/B.hx', source: CLAIM_SUB_SRC },
+			{ file: 'pkg/C.hx', source: subSrc }
+		];
+		// BOTH must still be flagged, or the single rename below would be one candidate rather than
+		// two candidates of which one deferred.
+		Assert.equals(2, new Naming().run(files, new HaxeQueryPlugin()).length);
+		assertRenameSlice(crossFileRename(files), 'pkg/A.hx', CLAIM_BASE_SRC, '_caps', 'CAPS');
+	}
+
+	/**
+	 * The CONTROL for both claim tests: two flagged privates correcting to the same `_caps` in
+	 * UNRELATED types still BOTH rename in one pass. The claim is a hierarchy question, not a bare
+	 * name one — refusing on the name alone would strand every unrelated twin in the tree.
+	 */
+	public function testUnrelatedTypesMayBothClaimTheSameTargetNameInOnePass(): Void {
+		final xSrc: String = 'package pkg;\nclass X {\n\tprivate var Caps:Int = 2;\n\tpublic function x():Int { return Caps; }\n}';
+		final renames: Array<Array<CrossFileEdits>> = crossFileRenames([
+			{ file: 'pkg/A.hx', source: CLAIM_BASE_SRC },
+			{ file: 'pkg/X.hx', source: xSrc },
+			{ file: 'pkg/ASub.hx', source: 'package pkg;\nclass ASub extends A {\n\tpublic function s():Int { return 0; }\n}' },
+			{ file: 'pkg/XSub.hx', source: 'package pkg;\nclass XSub extends X {\n\tpublic function s():Int { return 0; }\n}' }
+		]);
+		Assert.equals(2, renames.length);
+		assertRenameSlice(renames[0], 'pkg/A.hx', CLAIM_BASE_SRC, '_caps', 'CAPS');
+		assertRenameSlice(renames[1], 'pkg/X.hx', xSrc, 'return _caps', 'Caps');
+	}
+
+	/**
+	 * The OTHER half of the claim design: a claim is a promise about ONE index, so the NEXT pass —
+	 * which the driver gives a freshly built index — must start from an empty ledger. Without that,
+	 * a deferral is a permanent refusal and the "deferral is not refusal" contract is a lie no test
+	 * would catch, since every other fixture here uses a single index.
+	 *
+	 * The fixture makes pass 1 defer a rename that is actually SAFE: `X` is an `abstract class`, a kind
+	 * `unrelatedClasses` refuses to certify (`isUniqueClass` demands a plain class), so it cannot prove
+	 * what is plainly true and `X.Caps` yields to `A.CAPS`'s claim on `_caps`. Pass 2 runs the SAME `Naming`
+	 * over the sources pass 1 produced, against a new index: the ledger retires, and `X` — whose own
+	 * supertype closure never reaches `_caps` — finally renames. A ledger that outlived its index
+	 * would return zero renames here.
+	 */
+	public function testANewIndexRetiresThePreviousPassClaims(): Void {
+		final xSrc: String = 'package pkg;\nabstract class X {\n\tprivate var Caps:Int = 2;\n\tpublic function x():Int { return Caps; }\n}';
+		final subSrc: String = 'package pkg;\nclass ASub extends A {\n\tpublic function s():Int { return 0; }\n}';
+		final xSubSrc: String = 'package pkg;\nclass XSub extends X {\n\tpublic function s():Int { return 0; }\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/A.hx', source: CLAIM_BASE_SRC },
+			{ file: 'pkg/X.hx', source: xSrc },
+			{ file: 'pkg/ASub.hx', source: subSrc },
+			{ file: 'pkg/XSub.hx', source: xSubSrc }
+		];
+		final check: Naming = new Naming();
+		Assert.equals(2, check.run(files, new HaxeQueryPlugin()).length);
+		final first: Array<Array<CrossFileEdits>> = check.crossFileFix(
+			files, check.run(files, new HaxeQueryPlugin()), new HaxeQueryPlugin(), SymbolIndex.build(files, new HaxeQueryPlugin())
+		);
+		// Only `A` lands: `X` is an `abstract class`, which `unrelatedClasses` will not certify, so it
+		// defers rather than risk the duplicate. That deferral is what the second pass has to undo.
+		Assert.equals(1, first.length);
+		assertRenameSlice(first[0], 'pkg/A.hx', CLAIM_BASE_SRC, '_caps', 'CAPS');
+		files[0].source = RefactorSupport.applyEdits(CLAIM_BASE_SRC, first[0][0].edits);
+		final second: Array<Array<CrossFileEdits>> = check.crossFileFix(
+			files, check.run(files, new HaxeQueryPlugin()), new HaxeQueryPlugin(), SymbolIndex.build(files, new HaxeQueryPlugin())
+		);
+		Assert.equals(1, second.length);
+		assertRenameSlice(second[0], 'pkg/X.hx', xSrc, 'return _caps', 'Caps');
+	}
+
+	/** The single cross-file rename `files` yields, as its per-file slices. */
+	private function crossFileRename(files: Array<{ file: String, source: String }>): Array<CrossFileEdits> {
+		final renames: Array<Array<CrossFileEdits>> = crossFileRenames(files);
 		Assert.equals(1, renames.length);
 		return renames.length == 1 ? renames[0] : [];
 	}
@@ -687,6 +796,13 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 			}
 			if (hasDecl) Assert.isTrue(hasSub, 'half-applied: $declFile renamed without $subFile');
 		}
+	}
+
+	/** Every cross-file rename `files` yields in ONE pass, from a fresh check. */
+	private function crossFileRenames(files: Array<{ file: String, source: String }>): Array<Array<CrossFileEdits>> {
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		return check.crossFileFix(files, check.run(files, new HaxeQueryPlugin()), new HaxeQueryPlugin(), index);
 	}
 
 }

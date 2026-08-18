@@ -63,6 +63,12 @@ final class Naming implements Check implements CrossFileFix {
 	 */
 	private static final ARTIFACT_NAME_PATTERN: EReg = new EReg("^[a-z][A-Z0-9]{4,}$", '');
 
+	/**
+	 * The member renames this `--fix` PASS has already accepted, across BOTH seams the pass drives
+	 * (`crossFileFix` and `fix`) — see `RenameClaims`.
+	 */
+	private final _runClaims: RenameClaims = new RenameClaims();
+
 	public function new() {}
 
 	public function id(): String {
@@ -168,7 +174,9 @@ final class Naming implements Check implements CrossFileFix {
 				decl, source, tree, policy, shape, plugin, flaggedFroms, reflectionNames, confinedMemo, resolutionIndex, index,
 				violations[0].file
 			);
-			if (rename == null || defersToAnAcceptedRename(rename, edits, claims)) continue;
+			final owner: Null<String> = RenameClaims.memberOwnerOf(decl);
+			if (rename == null || defersToAnAcceptedRename(rename, edits, claims, owner, resolutionIndex)) continue;
+			_runClaims.claim(owner, rename.newName, resolutionIndex);
 			claims.push(rename);
 			for (edit in rename.edits) edits.push(edit);
 		}
@@ -204,10 +212,51 @@ final class Naming implements Check implements CrossFileFix {
 		final sourceByFile: Map<String, String> = [for (f in files) f.file => f.source];
 		final out: Array<Array<CrossFileEdits>> = [];
 		for (v in violations) {
-			final rename: Null<Array<CrossFileEdits>> = crossFileRenameFor(v, sourceByFile, support, shape, plugin, idx, resolutionIndex);
-			if (rename != null) out.push(rename);
+			final rename: Null<CrossFileRename> = crossFileRenameFor(v, sourceByFile, support, shape, plugin, idx, resolutionIndex);
+			if (rename == null || _runClaims.defers(rename.owner, rename.newName, resolutionIndex)) continue;
+			_runClaims.claim(rename.owner, rename.newName, resolutionIndex);
+			out.push(rename.slices);
 		}
 		return out;
+	}
+
+	/**
+	 * Whether `rename` must DEFER to an edit already accepted in this pass, for any of the three
+	 * reasons a same-pass conflict takes.
+	 *
+	 * Its spans OVERLAP an accepted edit: two flagged declarations can want the SAME token, because
+	 * the qualification arm rewrites a bare reference to a MEMBER that may itself be flagged and
+	 * renamed in this very pass, and overlapping edits have no defined winner in `applyEdits`
+	 * (`dropContainedEdits` resolves by array index).
+	 *
+	 * Or an accepted rename already CLAIMED the same new name over an overlapping SCOPE. That reason
+	 * exists because `collidesInScope` reads the ORIGINAL source, where the new name does not yet
+	 * exist: `CAPS` and `Caps` both correcting to `_caps` each see a clean scope and would otherwise
+	 * both land, producing the duplicate declaration `haxe` rejects. Overlap, not equality, is the
+	 * scope test - a file-wide member claim covers every function scope inside it, and a closure's
+	 * scope is nested in its host's, while two DISJOINT function scopes genuinely may share a target
+	 * name (`remove(__id)` and `for (__id in ...)` both correcting to `id`).
+	 *
+	 * Or a rename accepted for ANOTHER FILE of this pass already claimed the same new name on a type in
+	 * the same inheritance chain (`RenameClaims`, which `owner` and `index` address). The two
+	 * reasons above are file-local, and `claims` only ever holds this one `fix(source, ...)` call's
+	 * renames - a pass also drives `crossFileFix`, and a superclass and its subclass do not even take
+	 * the same seam, since a type with a subtype is never confined.
+	 *
+	 * Deferral is not refusal, but the two kinds recover differently. A file-local loser re-fires on the
+	 * next `--fix` pass: `naming` is a full-scope check and the file it lost in was edited, so the
+	 * driver keeps it active, and by then the ordinary collision scan judges it against a source that
+	 * holds the name. A RUN-CLAIM loser may be the only finding in its file, in which case that file
+	 * receives no edit, drops out of the driver's `active` set, and waits for the next `--fix` RUN
+	 * instead - which is why `RenameClaims` says "a later pass or run".
+	 */
+	private function defersToAnAcceptedRename(
+		rename: DeclRename, edits: Array<{ span: Span, text: String }>, claims: Array<DeclRename>, owner: Null<String>,
+		index: Null<SymbolIndex>
+	): Bool {
+		if (RefactorSupport.editsOverlapAny(rename.edits, edits)) return true;
+		for (c in claims) if (c.newName == rename.newName && c.scope.from < rename.scope.to && rename.scope.from < c.scope.to) return true;
+		return _runClaims.defers(owner, rename.newName, index);
 	}
 
 	/**
@@ -276,35 +325,6 @@ final class Naming implements Check implements CrossFileFix {
 	 */
 	private static inline function isBodyScopedCategory(category: NamingCategory): Bool {
 		return category == NamingCategory.Local || category == NamingCategory.Param || category == NamingCategory.CatchVar;
-	}
-
-	/**
-	 * Whether `rename` must DEFER to an edit already accepted in this pass, for either of the two
-	 * reasons a same-pass conflict takes.
-	 *
-	 * Its spans OVERLAP an accepted edit: two flagged declarations can want the SAME token, because
-	 * the qualification arm rewrites a bare reference to a MEMBER that may itself be flagged and
-	 * renamed in this very pass, and overlapping edits have no defined winner in `applyEdits`
-	 * (`dropContainedEdits` resolves by array index).
-	 *
-	 * Or an accepted rename already CLAIMED the same new name over an overlapping SCOPE. That reason
-	 * exists because `collidesInScope` reads the ORIGINAL source, where the new name does not yet
-	 * exist: `CAPS` and `Caps` both correcting to `_caps` each see a clean scope and would otherwise
-	 * both land, producing the duplicate declaration `haxe` rejects. Overlap, not equality, is the
-	 * scope test - a file-wide member claim covers every function scope inside it, and a closure's
-	 * scope is nested in its host's, while two DISJOINT function scopes genuinely may share a target
-	 * name (`remove(__id)` and `for (__id in ...)` both correcting to `id`).
-	 *
-	 * Deferral is not refusal: `naming` is a full-scope check, so the loser re-fires on the next
-	 * `--fix` pass, by which time the winner has landed and the ordinary collision scan judges it
-	 * against a source that finally holds the name.
-	 */
-	private static function defersToAnAcceptedRename(
-		rename: DeclRename, edits: Array<{ span: Span, text: String }>, claims: Array<DeclRename>
-	): Bool {
-		if (RefactorSupport.editsOverlapAny(rename.edits, edits)) return true;
-		for (c in claims) if (c.newName == rename.newName && c.scope.from < rename.scope.to && rename.scope.from < c.scope.to) return true;
-		return false;
 	}
 
 	/** The first rule in `policy` applicable to `decl` (category + modifier filters), or null. */
@@ -689,7 +709,7 @@ final class Naming implements Check implements CrossFileFix {
 	private static function crossFileRenameFor(
 		v: Violation, sourceByFile: Map<String, String>, support: NamingSupport, shape: RefShape, plugin: GrammarPlugin,
 		index: SymbolIndex, resolutionIndex: SymbolIndex
-	): Null<Array<CrossFileEdits>> {
+	): Null<CrossFileRename> {
 		final candidate: Null<CrossFileCandidate> = crossFileCandidate(v, sourceByFile, support, plugin, index, resolutionIndex);
 		if (candidate == null) return null;
 		final c: CrossFileCandidate = candidate;
@@ -745,7 +765,7 @@ final class Naming implements Check implements CrossFileFix {
 			final fileEdits: Array<{ span: Span, text: String }> = edits;
 			if (spans.length > 0) slices.push({ file: file, edits: fileEdits });
 		}
-		return slices.length == 0 ? null : slices;
+		return slices.length == 0 ? null : { slices: slices, owner: c.ownerName, newName: c.targetName };
 	}
 
 	/**
@@ -1552,6 +1572,17 @@ private typedef CrossFileCandidate = {
 	 * set as the base: an override left behind overrides nothing and does not compile.
 	 */
 	final family: Array<OverrideFamilyMember>;
+};
+
+/**
+ * A completed CROSS-FILE rename: the per-file edit slices the caller commits atomically, plus the
+ * owning type and the new name. `crossFileFix` needs those two to record the rename with
+ * `RenameClaims`, and the slices alone do not carry them.
+ */
+private typedef CrossFileRename = {
+	final slices: Array<CrossFileEdits>;
+	final owner: String;
+	final newName: String;
 };
 
 /**
