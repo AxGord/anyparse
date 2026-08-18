@@ -149,10 +149,7 @@ class UnusedPrivateCheckTest extends Test {
 		// The doc must not NAME the member: `unused-private` keeps a member whose name
 		// occurs in a comment, so a self-naming doc would make this pass vacuously.
 		final src: String = 'class C {\n\t/** Explains the helper. */\n\tprivate function dead() {}\n\n\tpublic function keep() {}\n}';
-		final check: UnusedPrivate = new UnusedPrivate();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
+		final edits: Array<{ span: Span, text: String }> = fixEdits(src);
 		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('Explains the helper') == -1, text);

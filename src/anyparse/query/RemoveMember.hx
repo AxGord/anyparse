@@ -48,8 +48,12 @@ using Lambda;
  *   guard goes with the region on the removal that empties it. A region with a surviving
  *   branch keeps its directives and the doc of that branch.
  *
- * A plain non-doc block above the doc — a licence header, a section banner — is never
- * reached: the adjacent block is absorbed, then only further doc blocks above it.
+ * A plain non-doc block is never absorbed at all on this path. Directly above a
+ * declaration it is a licence header or a section banner far more often than it is
+ * documentation, and unlike `move-member` — which carries the region it absorbs and so
+ * loses nothing by guessing wrong — a removal cannot give it back. So the deleting
+ * callers pass `docOnly` and `/**` is the proof; `move-member` and `set-doc` keep the
+ * generous reading.
  */
 @:nullSafety(Strict)
 final class RemoveMember {

@@ -19,8 +19,8 @@ import haxe.Exception;
  * convention), and the whole file is re-emitted through the writer (which
  * fixes residual whitespace and re-parse-validates). The element node is
  * resolved with `RefactorSupport.elementAtFrom` + `parentOf`; the deletion
- * span (modifier / meta group and leading doc comment folded, one comma
- * swallowed for comma lists) and the writer finalize live in
+ * span (modifier / meta group and leading `/**` doc folded, one comma swallowed
+ * for comma lists) and the writer finalize live in
  * `RefactorSupport.deleteNode`, shared with the by-name remove wrappers
  * (`RemoveImport` / `RemoveMember`).
  */
@@ -30,9 +30,10 @@ final class RemoveElement {
 	/**
 	 * Remove the sibling element whose first token the cursor at `line:col` falls
 	 * within — a statement, `case`, comma-list element, or member (folded with its
-	 * leading modifier / `@:meta` group AND its leading doc comment). `reformat` opts
-	 * into a whole-file canonicalisation when the source is not writer-canonical;
-	 * `withDoc = false` keeps the doc. Returns `Ok(rewritten)` or an `Err`; the
+	 * leading modifier / `@:meta` group AND its leading `/**` doc block — a plain
+	 * block comment above it is left alone). `reformat` opts into a whole-file
+	 * canonicalisation when the source is not writer-canonical; `withDoc = false`
+	 * keeps the doc. Returns `Ok(rewritten)` or an `Err`; the
 	 * source is never mutated.
 	 */
 	public static function removeElement(

@@ -54,6 +54,8 @@ class RemoveMemberDocSliceTest extends Test {
 			'class C {\n\tpublic function drop():Void {}\n\n\t/** Doc of keep. */\n\tpublic function keep():Void {}\n}\n', 'C', 'drop'
 		);
 		Assert.isTrue(text.indexOf('/** Doc of keep. */\n\tpublic function keep') >= 0, text);
+		Assert.isTrue(text.indexOf('drop') == -1, text);
+		Assert.equals(1, blockOpeners(text), text);
 	}
 
 	/**
@@ -119,6 +121,38 @@ class RemoveMemberDocSliceTest extends Test {
 		Assert.isTrue(text.indexOf('Doc of drop') == -1, text);
 	}
 
+	/**
+	 * The same plain block DIRECTLY above the member, with no doc between, still survives.
+	 * Adjacency alone would read it as the documentation, and it usually is not: a section
+	 * banner or a licence header sits exactly there. A caller that CARRIES the region can
+	 * afford that guess, a caller that DELETES it cannot, so the deleting path asks for a
+	 * doc opener as proof.
+	 */
+	public function testPlainBlockCommentDirectlyAboveTheMemberSurvives(): Void {
+		final text: String = okMember(
+			'class C {\n\t/* ---- section: helpers ---- */\n\tvar drop:Int;\n\n\tvar keep:Int;\n}\n', 'C', 'drop'
+		);
+		Assert.isTrue(text.indexOf('section: helpers') >= 0, text);
+		Assert.isTrue(text.indexOf('drop') == -1, text);
+	}
+
+	/**
+	 * The module licence header is the block comment that sits directly above a Haxe
+	 * module's first import, so `unused-import --fix` would have deleted it on every file
+	 * it touched. It is not a doc block, so it stays.
+	 */
+	public function testLicenceHeaderAboveTheFirstImportSurvives(): Void {
+		final source: String = '/*\n * Copyright (c) 2026 Example. MIT licence.\n */\nimport a.A;\n\nimport b.B;\n\nclass C {}\n';
+		switch RemoveImport.removeImport(source, 'a.A', true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('MIT licence') >= 0, text);
+				Assert.isTrue(text.indexOf('a.A') == -1, text);
+				Assert.isTrue(text.indexOf('b.B') >= 0, text);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
 	/** A stacked run of doc blocks above the member is all of its documentation — all of it goes. */
 	public function testStackedDocRunAboveTheMemberAllGoes(): Void {
 		final text: String = okMember('class C {\n\t/** First. */\n\t/** Second. */\n\tvar drop:Int;\n\n\tvar keep:Int;\n}\n', 'C', 'drop');
@@ -170,6 +204,7 @@ class RemoveMemberDocSliceTest extends Test {
 		return count;
 	}
 
+	/** `removeMember` with the default doc handling, or a test failure and an empty string. */
 	private function okMember(source: String, typeName: String, memberName: String): String {
 		switch RemoveMember.removeMember(source, typeName, memberName, true, new HaxeQueryPlugin()) {
 			case Ok(text):
