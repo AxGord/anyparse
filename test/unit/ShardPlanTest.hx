@@ -44,9 +44,10 @@ class ShardPlanTest extends Test {
 	}
 
 	/**
-	 * `runner.addCase(testCase)` inside the runner own filtering wrapper is a
-	 * `FieldAccess` callee, not a registration — counting it would place a
-	 * class named after a local parameter.
+	  * The runner's own filtering wrapper calls `runner.addCase(...)` — a
+	 * `FieldAccess` callee, not a registration. The fixture gives that call a
+	 * `new` argument so that dropping the callee-shape guard makes it a
+	 * nameable registration, and the count assertion below is what fires.
 	 */
 	public function testCallOnAReceiverIsNotARegistration(): Void {
 		final rows: Array<ShardPlacement> = planned(registering(['AlphaTest']), 2);
@@ -122,13 +123,75 @@ class ShardPlanTest extends Test {
 	}
 
 	/**
-	 * 30 default-weight classes over four shards: the pinned group already
-	 * loads shard 0 far past what 30 x 30 ms can reach, so the greedy pass
-	 * splits the tail evenly over the other three and shard 0 gains nothing.
+	 * 30 default-weight classes over four shards, asserted as a PROPERTY and
+	 * never as a count vector: the vector depends on the
+	 * production weight table, and `CLASS_WEIGHTS` promises that no gate reads
+	 * it. Pinning `[8, 10, 10, 10]` here quietly made that promise false — a
+	 * weight correction would have reddened the suite.
+	 *
+	 * The tail shards see only default-weight classes, so a working greedy pass
+	 * splits them to within one class of each other; remove the min-scan and
+	 * everything lands on shard 0, which the empty-shard gate refuses instead.
 	 */
 	public function testGreedySplitIsBalanced(): Void {
 		final rows: Array<ShardPlacement> = planned(registering(generated(30)), 4);
-		Assert.same([ShardPlan.STICKY_CLASSES.length, 10, 10, 10], counts(rows, 4));
+		final perShard: Array<Int> = counts(rows, 4);
+		Assert.equals(ShardPlan.STICKY_CLASSES.length + 30, perShard[0] + perShard[1] + perShard[2] + perShard[3]);
+		final tail: Array<Int> = [perShard[1], perShard[2], perShard[3]];
+		tail.sort((x, y) -> x - y);
+		Assert.isTrue(tail[2] - tail[0] <= 1, 'tail split is unbalanced: $perShard');
+	}
+
+	/**
+	 * The one direct cover of the pinned collation. Byte-identity of the plan
+	 * across the port rode entirely on this order, and every other test reaches
+	 * it only through a tiebreak nothing asserts.
+	 *
+	 * Expected order verified against `LC_ALL=ru_RU.UTF-8 sort` on the same six
+	 * strings: punctuation before digits before letters, and lowercase before
+	 * uppercase once the letters agree.
+	 */
+	public function testCompareNamesPinsTheUtf8Order(): Void {
+		final names: Array<String> = ['unit.b', 'unit.B', 'unit.A', 'unit.a', 'unit._x', 'unit.0x'];
+		names.sort(ShardPlan.compareNames);
+		Assert.same(['unit._x', 'unit.0x', 'unit.a', 'unit.A', 'unit.b', 'unit.B'], names);
+	}
+
+	/**
+	 * `APQ_TEST` matches the fully-qualified name, so a bare registration must
+	 * be qualified the way the runner resolves it. Guessing `unit.` produced a
+	 * filter matching no class — a skip class parity cannot see, since the
+	 * bogus name is in the plan.
+	 */
+	public function testBareRegistrationFollowsTheRunnerImport(): Void {
+		final rows: Array<ShardPlacement> = planned(runnerImporting('other.pkg.ForeignTest'), 2);
+		final placed: Array<String> = names(rows);
+		Assert.isTrue(placed.contains('other.pkg.ForeignTest'));
+		Assert.isFalse(placed.contains('unit.ForeignTest'));
+	}
+
+	/**
+	 * A `Conditional` flattens every branch as siblings with no marker for
+	 * which one compiles, so planning them all invents a dead filter for the
+	 * branches that are off — and one class registered under two exclusive
+	 * branches reads as a duplicate.
+	 */
+	public function testRegistrationInsideAConditionalIsRefused(): Void {
+		final message: String = refusal(runnerWith([
+			'#if debug',
+			'addCase(new DebugOnlyTest());',
+			'#else',
+			'addCase(new ReleaseOnlyTest());',
+			'#end'
+		]), 2);
+		Assert.stringContains('registration inside a conditional-compilation region', message);
+		Assert.stringContains('DebugOnlyTest', message);
+		Assert.stringContains('ReleaseOnlyTest', message);
+	}
+
+	public function testShardCountAboveTheClassCountIsRefused(): Void {
+		final message: String = refusal(registering(['AlphaTest']), ShardPlan.STICKY_CLASSES.length + 2);
+		Assert.stringContains('exceeds the ${ShardPlan.STICKY_CLASSES.length + 1} registered classes', message);
 	}
 
 	public function testRenderLinesIsTabSeparatedInPlacementOrder(): Void {
@@ -142,8 +205,9 @@ class ShardPlanTest extends Test {
 	public function testRenderFiltersIsOneCommaJoinedLinePerShard(): Void {
 		final rows: Array<ShardPlacement> = planned(registering(generated(30)), 4);
 		final lines: Array<String> = ShardPlan.renderFilters(rows, 4).split('\n');
+		final perShard: Array<Int> = counts(rows, 4);
 		Assert.equals(5, lines.length);
-		for (s in 0...4) Assert.equals(counts(rows, 4)[s], lines[s].split(',').length);
+		for (s in 0...4) Assert.equals(perShard[s], lines[s].split(',').length);
 	}
 
 	#if (sys || nodejs)
@@ -226,9 +290,12 @@ class ShardPlanTest extends Test {
 		final buf: StringBuf = new StringBuf();
 		buf.add('class RunTests {\n');
 		buf.add('\tstatic function main(): Void {\n');
-		// The wrapper the real runner declares — its call must not be read as
-		// a registration.
-		buf.add('\t\trunner.addCase(testCase);\n');
+		// The wrapper the real runner declares — its call must not be read as a
+		// registration. The argument is a `new` on purpose: with the callee-shape
+		// guard removed this becomes a NAMEABLE registration and inflates the
+		// count, so the class-count assertion is what fires rather than a generic
+		// refusal from somewhere else.
+		buf.add('\t\trunner.addCase(new WrapperTest());\n');
 		for (name in sticky) buf.add('\t\taddCase(new ${bareName(name)}());\n');
 		for (statement in statements) buf.add('\t\t$statement\n');
 		buf.add('\t}\n');
@@ -255,10 +322,15 @@ class ShardPlanTest extends Test {
 		return [for (s in 0...shards) placements.count(p -> p.shard == s)];
 	}
 
-	private function distinct(names: Array<String>): Array<String> {
+	private function distinct(input: Array<String>): Array<String> {
 		final out: Array<String> = [];
-		for (name in names) if (!out.contains(name)) out.push(name);
+		for (name in input) if (!out.contains(name)) out.push(name);
 		return out;
+	}
+
+	/** A runner that imports `path` and registers it by its bare simple name. */
+	private function runnerImporting(path: String): String {
+		return 'import $path;\n\n${build(ShardPlan.STICKY_CLASSES, ['addCase(new ${bareName(path)}());'])}';
 	}
 
 }

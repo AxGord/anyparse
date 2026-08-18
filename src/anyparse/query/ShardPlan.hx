@@ -121,6 +121,11 @@ final class ShardPlan {
 	/** Longest source fragment quoted back for a registration that cannot be named. */
 	private static inline final QUOTE_LIMIT: Int = 120;
 
+	/** Why a registration was refused — the two halves of one message shape. */
+	private static inline final NAME_REASON: String = 'cannot derive an APQ_TEST filter from';
+
+	private static inline final CONDITIONAL_REASON: String = 'registration inside a conditional-compilation region';
+
 	/**
 	 * The base of each band in `primaryWeight`, in the order a UTF-8 locale
 	 * collates them: connector punctuation, then `.`, then the ten digits, then
@@ -148,7 +153,9 @@ final class ShardPlan {
 	 *
 	 * Stale weights cost BALANCE, never correctness — no gate reads them, so
 	 * a class whose cost has drifted lands on a busier shard and nothing else.
-	 * That property is why this table needs no maintenance schedule.
+	 * That property is why this table needs no maintenance schedule, and it is
+	 * a property the TESTS have to preserve too: assert that the split is
+	 * balanced, never that a particular class count vector comes out.
 	 */
 	private static final CLASS_WEIGHTS: Map<String, Int> = [
 		'unit.ApqDxTier5CliTest' => 40,
@@ -184,14 +191,26 @@ final class ShardPlan {
 	public static function plan(request: ShardPlanRequest): ShardPlanResult {
 		if (request.shards < 1) return Refused('${TAG}--shards must be >= 1, got ${request.shards}');
 
+		final imports: Array<String> = [];
+		collectImports(request.tree, imports);
 		final registered: Array<String> = [];
 		final unnameable: Array<String> = [];
-		collect(request, request.tree, registered, unnameable);
-		if (unnameable.length > 0) {
-			unnameable.push('$TAG${request.runner} holds a registration this generator cannot name — fix the shape or teach the parser');
-			return Refused(unnameable.join('\n'));
-		}
+		collect(request, request.tree, false, imports, registered, unnameable);
+		if (unnameable.length > 0) return Refused(
+			unnameable.concat([
+				'$TAG${request.runner} holds a registration this generator cannot name — fix the shape or teach the parser'
+			])
+				.join('\n')
+		);
 		if (registered.length == 0) return Refused('${TAG}found no $REGISTER_CALL(new X()) registrations in ${request.runner}');
+		// Bounded here rather than only by the empty-shard gate below: a wild
+		// --shards reaches `deal`'s per-shard load array first, and a V8 fatal
+		// allocation error is a poor answer to a typo.
+		if (request.shards > registered.length)
+			return Refused(
+				'${TAG}--shards ${request.shards} exceeds the ${registered.length} registered classes'
+				+ ' — every plan would leave an empty shard'
+			);
 
 		final sorted: Array<String> = registered.copy();
 		sorted.sort(compareNames);
@@ -237,18 +256,23 @@ final class ShardPlan {
 	}
 
 	/**
-	 * `sort(1)`'s order under a UTF-8 locale, pinned so the plan no longer
-	 * depends on the machine's `LC_COLLATE`: primary weights compare the base
-	 * character (punctuation, then digits, then letters case-folded), and case
-	 * decides only when the primaries tie, lowercase first. The shell version
-	 * inherited whatever collation the caller's locale supplied — the same
-	 * tree produced a different split under `LC_ALL=C` than under a UTF-8
-	 * locale, since C orders every uppercase letter ahead of every lowercase
-	 * one and this does not.
-	 *
-	 * Only the tiebreak between classes of equal weight rides on this, so a
+		 * `sort(1)`'s order under a UTF-8 locale, pinned so the plan no longer
+		 * depends on the machine's `LC_COLLATE`: primary weights compare the base
+		 * character (punctuation, then digits, then letters case-folded), and case
+		 * decides only when the primaries tie, lowercase first. The shell version
+		 * inherited whatever collation the caller's locale supplied — the same
+		 * tree produced a different split under `LC_ALL=C` than under a UTF-8
+		 * locale, since C orders every uppercase letter ahead of every lowercase
+		 * one and this does not.
+		 *
+		  * Only the tiebreak between classes of equal weight rides on this, so a
 	 * disagreement would cost balance rather than correctness — but a plan
 	 * that is reproducible across machines is worth the twenty lines.
+	 *
+	 * The claim is scoped to a qualified Haxe identifier, which is all
+	 * `isDottedIdentifier` admits. Outside that alphabet this sorts by code
+	 * point AFTER everything else, where real collation puts most punctuation
+	 * BEFORE digits — so do not reach for it as a general collator.
 	 */
 	public static function compareNames(a: String, b: String): Int {
 		final shortest: Int = a.length < b.length ? a.length : b.length;
@@ -274,16 +298,31 @@ final class ShardPlan {
 	 * own `runner.addCase(testCase)` — a `FieldAccess` callee inside the
 	 * filtering wrapper — out of the list.
 	 */
-	private static function collect(request: ShardPlanRequest, node: QueryNode, out: Array<String>, bad: Array<String>): Void {
+	private static function collect(
+		request: ShardPlanRequest, node: QueryNode, conditional: Bool, imports: Array<String>, out: Array<String>, bad: Array<String>
+	): Void {
 		final kids: Array<QueryNode> = node.children;
 		if (node.kind == 'Call' && kids.length > 0 && kids[0].kind == 'IdentExpr' && kids[0].name == REGISTER_CALL) {
-			final name: Null<String> = registrationName(kids);
+			final name: Null<String> = conditional ? null : registrationName(kids, imports);
 			if (name == null)
-				bad.push('${TAG}cannot derive an APQ_TEST filter from: ${locate(request, node)}');
+				bad.push('${TAG}${conditional ? CONDITIONAL_REASON : NAME_REASON}: ${locate(request, node)}');
 			else
 				out.push(name);
 		}
-		for (c in kids) collect(request, c, out, bad);
+		// A `Conditional` node holds EVERY branch's statements flattened as
+		// siblings, with no marker for which one compiles. Planning them all
+		// invents a filter matching nothing for the branches that are off, and
+		// one class registered under two exclusive branches reads as a duplicate
+		// — so the whole region is a refusal rather than a guess.
+		final inside: Bool = conditional || node.kind == 'Conditional';
+		for (c in kids) collect(request, c, inside, imports, out, bad);
+	}
+
+	/** Every module path the runner imports — how a bare registration is qualified. */
+	private static function collectImports(node: QueryNode, out: Array<String>): Void {
+		final path: Null<String> = node.name;
+		if (node.kind == 'ImportDecl' && path != null) out.push(path);
+		for (c in node.children) collectImports(c, out);
 	}
 
 	/**
@@ -292,17 +331,21 @@ final class ShardPlan {
 	 * argument that is not `new`, a constructor call carrying arguments, or a
 	 * type name that is not a plain (optionally dotted) identifier.
 	 */
-	private static function registrationName(kids: Array<QueryNode>): Null<String> {
+	private static function registrationName(kids: Array<QueryNode>, imports: Array<String>): Null<String> {
 		if (kids.length != 2) return null;
 		final arg: QueryNode = kids[1];
 		if (arg.kind != 'NewExpr' || arg.children.length != 0) return null;
 		final raw: Null<String> = arg.name;
-		return if (raw == null || !isDottedIdentifier(raw))
-			null
-		else if (raw.indexOf('.') >= 0)
-			raw
-		else
-			'$DEFAULT_PACKAGE.$raw';
+		if (raw == null || !isDottedIdentifier(raw)) return null;
+		if (raw.indexOf('.') >= 0) return raw;
+		// `APQ_TEST` matches the FULLY-QUALIFIED name, so a bare registration has
+		// to be qualified the way the runner itself resolves it — through its
+		// imports. Guessing `unit.` unconditionally is what the shell did, and a
+		// class imported from anywhere else then got a filter matching nothing:
+		// a silent skip that class parity cannot see, because the bogus name IS
+		// in the plan.
+		final imported: Null<String> = imports.find(path -> path.endsWith('.$raw'));
+		return imported ?? '$DEFAULT_PACKAGE.$raw';
 	}
 
 	/** `<runner>:<line>:<col>: <source>` for a registration a message has to quote. */
@@ -316,7 +359,16 @@ final class ShardPlan {
 		return '${request.runner}:${pos.line}:${pos.col}: $text';
 	}
 
-	/** Is `name` a plain identifier, or a dot-joined run of them? */
+	/**
+	 * Is `name` a plain identifier, or a dot-joined run of them?
+	 *
+	 * Also the reason no quote, `$`, backtick or newline can reach the shell's
+	 * `APQ_TEST=` value — check that before relaxing the pattern.
+	 *
+	 * Built per call on purpose: `EReg` carries mutable match state, so a
+	 * shared static instance would be exactly the global mutable state
+	 * invariant 1 forbids.
+	 */
 	private static function isDottedIdentifier(name: String): Bool {
 		return new EReg('^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$', '').match(name);
 	}
@@ -370,22 +422,30 @@ final class ShardPlan {
 	}
 
 	/**
-	 * Total = unique = assigned, and no shard left with nothing to run.
-	 * Returns the refusal text, or null when the plan is sound.
+	 * The plan's own post-conditions. Returns the refusal text, or null when
+	 * the plan is sound.
 	 *
-	 * The set comparison is not redundant with the counts: a scheduler bug
-	 * that placed one class twice and dropped another keeps both counts
-	 * right.
+	 * Two of them are STRUCTURAL: `deal` pushes exactly once per input, so the
+	 * count and the set comparison cannot fail as it is written today. They
+	 * stay as the contract any future scheduler still owes, not as live gates,
+	 * and they cost one sort. The three that ARE live are the ones `deal` can
+	 * break on its own: a shard index out of range, a pinned class off shard 0,
+	 * and a shard nothing was dealt to.
 	 */
-	private static function checkParity(registered: Array<String>, placements: Array<ShardPlacement>, shards: Int): Null<String> {
+	private static function checkParity(expected: Array<String>, placements: Array<ShardPlacement>, shards: Int): Null<String> {
 		final placed: Array<String> = [for (p in placements) p.cls];
 		placed.sort(compareNames);
 		final placedUnique: Array<String> = dedupe(placed);
-		if (placed.length != registered.length || placedUnique.length != registered.length)
+		if (placed.length != expected.length || placedUnique.length != expected.length)
 			return
-				'${TAG}PARITY FAIL — ${registered.length} registered classes, ${placed.length} placements, ${placedUnique.length} distinct';
-		for (i in 0...registered.length) if (placedUnique[i] != registered[i])
-			return '${TAG}PARITY FAIL — the shard plan does not cover the registered class list (${registered[i]} vs ${placedUnique[i]})';
+				'${TAG}PARITY FAIL — ${expected.length} registered classes, ${placed.length} placements, ${placedUnique.length} distinct';
+		for (i in 0...expected.length) if (placedUnique[i] != expected[i])
+			return '${TAG}PARITY FAIL — the shard plan does not cover the registered class list (${expected[i]} vs ${placedUnique[i]})';
+		for (p in placements) {
+			if (p.shard < 0 || p.shard >= shards) return '${TAG}PARITY FAIL — ${p.cls} placed on shard ${p.shard} of $shards';
+			if (p.shard != 0 && STICKY_CLASSES.contains(p.cls))
+				return '${TAG}PARITY FAIL — pinned ${p.cls} landed on shard ${p.shard}, not 0';
+		}
 		for (s in 0...shards) {
 			final count: Int = placements.count(p -> p.shard == s);
 			// An empty APQ_TEST match makes the runner exit 1, so an empty

@@ -15716,6 +15716,7 @@ final class Cli {
 		sysPrint('Always exits 0 on a successful parse — the test runner\'s exit code is\n');
 		sysPrint('the authoritative pass/fail signal.\n');
 	}
+
 	/**
 	 * `apq shard-plan` — the arithmetic `tools/suite-shard.sh` used to carry as
 	 * fifteen awk blocks. This layer only reads and parses the runner and prints
@@ -15802,7 +15803,6 @@ final class Cli {
 				EXIT_RUNTIME;
 		};
 	}
-
 
 	/** `apq shard-plan --help`. */
 	private static function printShardPlanUsage(): Void {
