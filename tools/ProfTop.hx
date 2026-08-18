@@ -2,6 +2,7 @@
 typedef ProfileFrame = {
 	var functionName: Null<String>;
 	var url: Null<String>;
+	var lineNumber: Null<Int>;
 };
 
 /** One node of the capture's call tree. */
@@ -141,12 +142,20 @@ class ProfTop {
 	/** `name  [file]` — the row label, and what `--under` matches against. */
 	private static function label(frame: ProfileFrame): String {
 		final name: Null<String> = frame.functionName;
-		final shown: String = name == null || name == '' ? '(anonymous)' : name;
+		final named: Bool = name != null && name != '';
+		final shown: String = named ? name : '(anonymous)';
 		final url: Null<String> = frame.url;
 		if (url == null || url == '') return shown;
 		final slash: Int = url.lastIndexOf('/');
 		final file: String = slash >= 0 ? url.substr(slash + 1) : url;
-		return file == '' ? shown : '$shown  [$file]';
+		if (file == '') return shown;
+		// An ANONYMOUS frame keeps its line, a named one does not. Rolling every
+		// closure into one `(anonymous)` row hides the biggest single item in a
+		// generated-code profile behind a label that names nothing; the line makes
+		// it addressable in the emitted bundle. Named frames stay merged on purpose
+		// — one row per function is what makes the rollup readable.
+		final line: Null<Int> = frame.lineNumber;
+		return named || line == null ? '$shown  [$file]' : '$shown  [$file:${line + 1}]';
 	}
 
 	/**
