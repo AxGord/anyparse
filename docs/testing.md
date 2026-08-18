@@ -397,7 +397,7 @@ The build flags live in `bin/apq-js-common.hxml` and `test-js-common.hxml`, with
 
 ### Parallel shards: one suite, N processes
 
-The previous section parallelises *workers*. This one parallelises a *single* suite run. `tools/suite-shard.sh` splits the registered test classes into N `APQ_TEST` filters and runs one `node bin/test.js` per shard:
+The previous section parallelises *workers*. This one parallelises a *single* suite run. `tools/suite-shard.sh` splits the registered test classes into N `APQ_TEST` filters and runs one `node bin/test.js` per shard. The split itself is not the script's — `apq shard-plan --runner test/RunTests.hx --shards N [--format lines|filters]` reads the registrations, applies every gate below, and prints the plan; the script spawns processes and waits. That division is the reason the gates are testable at all (`test/unit/ShardPlanTest.hx`), which they were not while they were awk:
 
 ```sh
 tools/suite-shard.sh                      # 4 shards (default)
@@ -427,11 +427,11 @@ Past six shards the curve is flat: what remains is the sticky group below plus t
 
 That list is derived, not remembered: `hxq lit 'probe' test/ --kind Literal` finds every class holding an exact `'probe'` string leaf (read each hit — one of them is a fixture *method* named `probe`, not the subcommand), and `hxq lit '.last-sweep.json' test/` finds the baseline's users. Re-derive it when adding a test that stages a probe or touches the sweep baseline. A writer left outside the group does not fail the run: it races the read-back assertion in a window of well under a millisecond, so it shows up weeks later as an unreproducible flake. Better still is to make the path configurable so the block can shrink.
 
-**Parity is a gate, not a hope.** A sharded run that silently drops a class still reports green, so the script refuses to run unless the union of the shard lists equals the registration list exactly. Three specifics worth knowing:
+**Parity is a gate, not a hope.** A sharded run that silently drops a class still reports green, so `apq shard-plan` refuses to emit a plan unless the union of the shard lists equals the registration list exactly. Three specifics worth knowing:
 
-- The class list is read structurally out of `test/RunTests.hx` (`addCase(new X())` as an AST pattern), never by a name heuristic. Nine registered classes do not end in `Test` — five end in `Probe`, four *begin* with it — so both a `*Test` suffix filter and a `*Probe` glob drop tests silently; the suffix filter loses 43 of them, and nothing else notices. The pattern's `()` does not constrain arity either, so every extracted name must be a plain identifier: `addCase(new X(1))` would otherwise yield the filter string `unit.X(1))`, which matches no class while still passing class parity.
+- The class list is read structurally out of `test/RunTests.hx` — `addCase(new X())` as an AST shape, never a name heuristic. Nine registered classes do not end in `Test` — five end in `Probe`, four *begin* with it — so both a `*Test` suffix filter and a `*Probe` glob drop tests silently; the suffix filter loses 43 of them, and nothing else notices. Because the read is structural, constructor arity and dotted-vs-bare names are structure too: a `NewExpr` carrying arguments, more than one argument, or an argument that is not `new` at all is a REFUSAL naming the line. The predecessor was a search pattern plus a regex strip, and it dropped `addCase(prebuilt)` and `addCase(new A(), new B())` in silence — a class registered either way ran in no shard while class parity still passed.
 - `APQ_TEST` is a **substring** match over the fully-qualified class name. A name that is a substring of another would run in two shards and inflate the totals, so the generator hard-fails on any such pair rather than producing a plausible-looking wrong number.
-- The sticky list is hand-maintained, so every pinned name must still be registered — otherwise a rename un-pins a class in silence and the race comes back.
+- The sticky list is hand-maintained (`ShardPlan.STICKY_CLASSES`), so every pinned name must still be registered — otherwise a rename un-pins a class in silence and the race comes back. The per-class weights next to it only balance the split; no gate reads them, so a stale weight costs balance and never correctness.
 - Test and assertion totals grow with every slice, so no literal is pinned in the script. Class parity plus the no-collision gate plus a non-empty, green shard is what makes the totals trustworthy; `--verify` (pays for a monolith run, and fails on a monolith that is red as well as on one that disagrees) and `--expect T/A` are the explicit cross-checks when you want the totals proved rather than argued.
 
 Exit status is 0 only when every shard is green *and* parity holds. A red shard, an empty shard, a collision, an unnameable registration, an un-pinned sticky class, a misplaced class or a count mismatch all exit non-zero and keep the work directory — the shard logs when the run got that far, the plan files when it refused earlier.
@@ -532,7 +532,8 @@ reading them is the intended way to accept a slice that adds code.
 
 Every format-aware step is delegated to the CLI this project already builds —
 `apq lint-diff` for the blast radius, `apq sweep` for the corpus, `apq
-test-summary` through `suite-shard.sh` — rather than reimplemented in shell.
+test-summary` and `apq shard-plan` through `suite-shard.sh` — rather than
+reimplemented in shell.
 That is why the script needs neither `jq` nor `python`: anything that has to
 *understand* a file is a subcommand, testable in the suite and dogfooding our
 own JSON parser.

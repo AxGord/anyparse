@@ -5,34 +5,20 @@
 # The suite is one `node bin/test.js` process and the profile says its cost
 # is a thick head plus a long flat tail: the top 20 of 634 classes are 75 %
 # of the wall time, the remaining 614 share the rest. That shape shards well
-# — four processes measure ~2.5x faster than one — but only if two things
-# hold, and both are gates in this script rather than advice in a doc:
+# — four processes measure ~2.5x faster than one — but only if every
+# registered class runs EXACTLY ONCE and the classes that share mutable
+# state outside their own process stay in ONE shard.
 #
-#   1. Every registered class runs EXACTLY ONCE. `APQ_TEST` is a SUBSTRING
-#      filter over the fully-qualified class name, so a class whose filter
-#      string is a substring of another class's runs in two shards (counts
-#      inflate) and a class missing from every shard list runs in none
-#      (counts shrink, silently, and the run still reports green). The
-#      generator therefore reads the REAL `addCase(new X())` list out of
-#      test/RunTests.hx — never a name heuristic. Nine registered classes
-#      do not end in `Test` (five end in `Probe`, four begin with it), and
-#      a suffix filter drops them and 43 tests with them. Every extracted
-#      name must also be a plain identifier, so a registration shape the
-#      parser cannot turn into a filter is a hard error rather than a
-#      filter that matches nothing. The run then refuses to start unless
-#      the union of the shard lists equals the extracted list exactly.
-#
-#   2. Classes that share MUTABLE STATE outside their own process stay in
-#      ONE shard. Two such paths are fixed constants, not per-test temps:
-#      `/tmp/anyparse-last-probe.hx` (`Cli.STAGE_PROBE_PATH`, a single slot
-#      that `apq probe` overwrites and the Tier-5 tests read back
-#      byte-for-byte) and `bin/.last-sweep.json` (the corpus Δ-baseline,
-#      rewritten by HxFormatterCorpusTest and read by ApqDxTier5CliTest).
-#      The classes that touch them are pinned to shard 0 as one group, and
-#      every pinned name must still be registered or the run refuses —
-#      otherwise a rename un-pins a class in silence. Everything else uses
-#      unique per-test temp directories and random compiler-server ports,
-#      so it parallelises freely.
+# Both of those are decided by `apq shard-plan`, not by this script. It
+# reads the real `addCase(new X())` list out of test/RunTests.hx as an AST
+# shape (never a name heuristic — nine registered classes do not end in
+# `Test`), refuses a registration it cannot turn into a filter, refuses a
+# name that is a substring of another (`APQ_TEST` is a SUBSTRING filter, so
+# such a class would run TWICE once the two land on different shards),
+# pins the shared-state group to shard 0, splits the rest greedily by
+# measured weight, and gates its own plan on covering the class list exactly
+# once. The reasoning behind each gate lives at `ShardPlan`, and
+# `unit.ShardPlanTest` is the cover it never had while it was awk.
 #
 # Measured on Mac15,9 / 16 CPU at 11423 tests, wall of the parallel region:
 # 1 shard 21.8s · 2 shards 13.9s · 4 shards 8.5s · 6 shards 6.9s · 8 shards
@@ -169,7 +155,7 @@ if [ ! -f "$test_js" ]; then
     exit 2
 fi
 if ! command -v hxq > /dev/null 2>&1; then
-    echo "suite-shard.sh: hxq is not on PATH — it reads the registered class list out of test/RunTests.hx" >&2
+    echo "suite-shard.sh: hxq is not on PATH — 'apq shard-plan' computes the whole shard plan" >&2
     exit 2
 fi
 
@@ -188,217 +174,63 @@ cleanup() {
 rc=0
 trap cleanup EXIT
 
-# --- 1. the registered class list --------------------------------------
+# --- 1. the shard plan -------------------------------------------------
 #
-# Structural, not textual: `addCase(new X())` is an AST pattern, so a
-# reformat or a comment cannot change what this sees. Output goes to a file
-# rather than a pipe — hxq's own gate refuses a `.hx` path inside a piped
-# grep/sed command line.
-hxq search 'addCase(new $x())' test/RunTests.hx --flat --limit 99999 \
-    > "$work/addcase.txt" 2> "$work/addcase.err" || {
-    echo "suite-shard.sh: reading test/RunTests.hx failed:" >&2
-    cat "$work/addcase.err" >&2
-    rc=1
-    exit 1
-}
-
-# The pattern's `()` does NOT constrain arity — `addCase(new X(1))` matches
-# it too, and the naive strip would yield the filter string `unit.X(1))`,
-# which matches no class: the shard silently runs fewer tests while class
-# parity still passes, because the bogus name is in the plan. So every
-# extracted name must be a plain (optionally dotted) identifier, and
-# anything else stops the run and is printed verbatim.
-awk -F'x=new ' '
-    NF > 1 {
-        n = $2
-        sub(/\(\)\)$/, "", n)
-        if (n !~ /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/) {
-            print "suite-shard.sh: cannot derive an APQ_TEST filter from: " $0 > "/dev/stderr"
-            bad = 1
-            next
-        }
-        # A dotted name is already qualified; a bare one is package `unit`.
-        print (index(n, ".") ? n : "unit." n)
-    }
-    END { if (bad) exit 3 }
-' "$work/addcase.txt" > "$work/classes.txt" || {
-    echo "suite-shard.sh: test/RunTests.hx holds a registration this generator cannot name — fix the shape or teach the parser" >&2
-    rc=1
-    exit 1
-}
-
-total_classes=$(awk 'END { print NR }' "$work/classes.txt")
-if [ "$total_classes" -eq 0 ]; then
-    echo "suite-shard.sh: found no addCase(new X()) registrations in test/RunTests.hx" >&2
-    rc=1
-    exit 1
-fi
-
-sort -u "$work/classes.txt" > "$work/classes.sorted"
-unique_classes=$(awk 'END { print NR }' "$work/classes.sorted")
-if [ "$unique_classes" -ne "$total_classes" ]; then
-    echo "suite-shard.sh: test/RunTests.hx registers the same class twice ($total_classes registrations, $unique_classes distinct) — a sharded run cannot reproduce that" >&2
-    rc=1
-    exit 1
-fi
-
-# --- 2. substring-collision gate ---------------------------------------
+# Everything that COUNTS is `apq shard-plan`: the structural read of the
+# `addCase(new X())` registrations out of test/RunTests.hx, the
+# substring-collision gate, the pinned group, the measured weights, the
+# greedy longest-processing-time-first split and the parity gates on its
+# result. It moved out of this script because a shell function is not
+# testable, and those gates are the only thing standing between a
+# silently-shrunken run and a green report — `unit.ShardPlanTest` is the
+# first cover any of them has ever had, and it plans the REAL runner as one
+# of its cases. Why each gate exists is documented at `ShardPlan`, next to
+# the code that enforces it. What stays here is orchestration: spawning the
+# shards, waiting on them, exit codes.
 #
-# `APQ_TEST=unit.Foo` also selects `unit.FooBar`. With one process that is
-# harmless (the class runs once either way); split across shards it runs
-# TWICE and the aggregate count silently exceeds the monolith's. O(n^2)
-# over ~600 names is a few milliseconds.
-awk '
-    { name[NR] = $0; n = NR }
-    END {
-        for (i = 1; i <= n; i++)
-            for (j = 1; j <= n; j++)
-                if (i != j && index(name[j], name[i]) > 0)
-                    print name[i] " is a substring of " name[j]
-    }
-' "$work/classes.sorted" > "$work/collisions.txt"
-
-if [ -s "$work/collisions.txt" ]; then
-    echo "suite-shard.sh: APQ_TEST filter collision — these names cannot be split across shards without double-running:" >&2
-    cat "$work/collisions.txt" >&2
-    rc=1
-    exit 1
-fi
-
-# --- 3. the plan -------------------------------------------------------
-#
-# Weights are the measured in-suite self-times from the suite profile
-# (2026-08-17, HEAD ff3f20ae), in milliseconds. In-suite rather than
-# isolated: an isolated run re-pays the ~2.4 s resolution warm-up that the
-# monolith pays once, which overstates every class that touches the
-# resolution library and produces a worse split. The tail is flat — the
-# overwhelming majority of classes are under 100 ms — so one default covers
-# it. Stale weights cost balance, never correctness: no gate reads them.
-#
-# The sticky list is derived, not remembered. Every class holding an exact
-# `probe` string leaf calls the subcommand that writes the single staging
-# slot: `hxq lit 'probe' test/ --kind Literal`, then READ each hit — one of
-# them is a fixture method named `probe`, not a subcommand. `hxq lit
-# '.last-sweep.json' test/` finds the corpus baseline's users. Re-derive
-# when adding a test that stages a probe or touches that baseline: a writer
-# left outside the group does not fail, it races a byte-for-byte read-back
-# in a sub-millisecond window and surfaces later as an unreproducible flake.
-sticky_list="unit.HxFormatterCorpusTest unit.ApqDxTier5CliTest unit.ApqDxTier4CliTest unit.ApqProbeCliTest unit.ApqReconCliTest unit.ApqWriterProbeCliTest unit.ApqAstTypeRefsCliTest unit.ApqHxtestSection1ConfigTest"
-
-# A pinned class that no longer exists is the silent failure mode of a
-# hand-maintained list: a rename un-pins it, nothing complains, and the
-# race comes back. Cheap to forbid.
-for sticky in $sticky_list; do
-    if ! grep -qxF "$sticky" "$work/classes.sorted"; then
-        echo "suite-shard.sh: pinned class $sticky is not registered in test/RunTests.hx — renamed or removed? update the sticky list" >&2
+# Two invocations because the two formats answer two questions: `lines` is
+# the plan as `<shard>\t<class>` rows — the artifact --plan-only points at,
+# and the thing to diff when a change is supposed to be plan-neutral —
+# while `filters` is the N `APQ_TEST` values, one per line, ready to hand
+# to a shard.
+plan_or_die() {
+    if ! hxq shard-plan --runner test/RunTests.hx --shards "$shards" --format "$1" \
+            > "$2" 2> "$work/plan.err"; then
+        cat "$work/plan.err" >&2
         rc=1
         exit 1
     fi
-done
+}
 
-awk -v sticky_list="$sticky_list" '
-    BEGIN {
-        split(sticky_list, s, " ")
-        for (i in s) sticky[s[i]] = 1
+plan_or_die lines "$work/assigned.txt"
+plan_or_die filters "$work/filters.txt"
 
-        # 4510 in the profile: testSelfStatusSourceFlagAccepted walked the
-        # whole src/ to assert one exit code. Scoped to a fixture since.
-        w["unit.ApqDxTier5CliTest"] = 40
-        w["unit.LintConfigCliTest"] = 2370
-        w["unit.CompilerOracleE2ETest"] = 2100
-        w["unit.ExplicitLocalTypeOracleE2ETest"] = 1900
-        w["unit.HxFormatterCorpusTest"] = 1400
-        w["unit.ExplicitTypeReturnOracleTest"] = 1310
-        w["unit.ApqDxTier4CliTest"] = 1180
-        w["unit.AvoidDynamicBagOracleE2ETest"] = 950
-        w["unit.PreferInlineOracleTest"] = 730
-        w["unit.LintFixFixedPointCliTest"] = 530
-        w["unit.FixVerifierGroupE2ETest"] = 520
-        w["unit.ResolutionScopeCliTest"] = 500
-        w["unit.LintPerFileConfigCliTest"] = 350
-        w["unit.PreferCaseGuardOracleE2ETest"] = 280
-        w["unit.AvoidDynamicRiskyFixE2ETest"] = 280
-        w["unit.ResolutionLibraryCacheTest"] = 250
-        w["unit.ImplicitStdScopeTest"] = 210
-        w["unit.GuardContinueCheckTest"] = 190
-        w["unit.FixVerifierScopeE2ETest"] = 170
-        w["unit.PreferStaticExtensionCheckTest"] = 150
-        default_weight = 30
-    }
-    {
-        weight = ($0 in w) ? w[$0] : default_weight
-        # Sticky first at any weight, so the group lands on shard 0 before
-        # the greedy pass starts filling it.
-        printf "%d\t%d\t%s\n", (($0 in sticky) ? 1 : 0), weight, $0
-    }
-' "$work/classes.sorted" | sort -k1,1nr -k2,2nr -k3,3 > "$work/weighted.txt"
+total_classes=$(wc -l < "$work/assigned.txt" | tr -d '[:space:]')
 
-# Longest-processing-time-first: the sticky group is dealt onto shard 0 as
-# one block, then every other class goes to whichever shard is lightest so
-# far. Greedy LPT is within 4/3 of optimal and needs no search.
-awk -v shards="$shards" '
-    { is_sticky[NR] = $1; weight[NR] = $2; name[NR] = $3; n = NR }
-    END {
-        for (s = 0; s < shards; s++) load[s] = 0
-        for (i = 1; i <= n; i++) {
-            if (is_sticky[i]) {
-                target = 0
-            } else {
-                target = 0
-                for (s = 1; s < shards; s++) if (load[s] < load[target]) target = s
-            }
-            load[target] += weight[i]
-            print target "\t" name[i]
-        }
-    }
-' "$work/weighted.txt" > "$work/assigned.txt"
-
-# --- 4. parity gates on the plan ---------------------------------------
-assigned_total=$(awk 'END { print NR }' "$work/assigned.txt")
-awk -F'\t' '{ print $2 }' "$work/assigned.txt" | sort -u > "$work/assigned.sorted"
-assigned_unique=$(awk 'END { print NR }' "$work/assigned.sorted")
-
-if [ "$assigned_total" -ne "$total_classes" ] || [ "$assigned_unique" -ne "$total_classes" ]; then
-    echo "suite-shard.sh: PARITY FAIL — $total_classes registered classes, $assigned_total placements, $assigned_unique distinct" >&2
-    diff "$work/classes.sorted" "$work/assigned.sorted" >&2 || true
-    rc=1
-    exit 1
-fi
-
-if ! diff -q "$work/classes.sorted" "$work/assigned.sorted" > /dev/null; then
-    echo "suite-shard.sh: PARITY FAIL — the shard plan does not cover the registered class list:" >&2
-    diff "$work/classes.sorted" "$work/assigned.sorted" >&2 || true
-    rc=1
-    exit 1
-fi
-
+# Line s+1 of the filters output IS shard s's APQ_TEST value; the class list
+# is that line split back on commas, kept only for the counts this script
+# reports. An empty shard cannot reach here — `shard-plan` refuses one,
+# because an empty APQ_TEST match makes the runner exit 1.
 s=0
 while [ "$s" -lt "$shards" ]; do
-    awk -F'\t' -v s="$s" '$1 == s { print $2 }' "$work/assigned.txt" > "$work/shard$s.list"
-    count=$(awk 'END { print NR }' "$work/shard$s.list")
-    if [ "$count" -eq 0 ]; then
-        # An empty APQ_TEST match makes the runner exit 1, so an empty
-        # shard is a hard error rather than a wasted process.
-        echo "suite-shard.sh: shard $s is empty — reduce -n below $shards" >&2
-        rc=1
-        exit 1
-    fi
-    awk 'NR > 1 { printf "," } { printf "%s", $0 } END { print "" }' "$work/shard$s.list" > "$work/shard$s.filter"
+    sed -n "$((s + 1))p" "$work/filters.txt" > "$work/shard$s.filter"
+    tr ',' '\n' < "$work/shard$s.filter" > "$work/shard$s.list"
     s=$((s + 1))
 done
 
 if [ "$plan_only" -eq 1 ]; then
     echo "suite-shard.sh: $total_classes classes over $shards shards (class parity OK)"
+    echo "  plan: $work/assigned.txt"
     s=0
     while [ "$s" -lt "$shards" ]; do
-        echo "  shard $s: $(awk 'END { print NR }' "$work/shard$s.list") classes -> $work/shard$s.list"
+        echo "  shard $s: $(wc -l < "$work/shard$s.list" | tr -d '[:space:]') classes -> $work/shard$s.list"
         s=$((s + 1))
     done
     keep=1
     exit 0
 fi
 
-# --- 5. run ------------------------------------------------------------
+# --- 2. run ------------------------------------------------------------
 now_ms() {
     if command -v perl > /dev/null 2>&1; then
         perl -MTime::HiRes=time -e 'printf "%.0f\n", time() * 1000'
@@ -429,7 +261,7 @@ for entry in $pids; do
 done
 elapsed_ms=$(( $(now_ms) - started ))
 
-# --- 6. per-shard summaries + aggregate --------------------------------
+# --- 3. per-shard summaries + aggregate --------------------------------
 #
 # `hxq test-summary` is the project's own utest-stdout parser (it locates
 # the report by SHAPE, since test stdout precedes it) — reusing it keeps
@@ -502,7 +334,7 @@ while [ "$s" -lt "$shards" ]; do
         f=0
         e=0
     fi
-    classes=$(awk 'END { print NR }' "$work/shard$s.list")
+    classes=$(wc -l < "$work/shard$s.list" | tr -d '[:space:]')
     shard_exit=$(cat "$work/shard$s.rc" 2> /dev/null || echo 1)
     sum_tests=$((sum_tests + t))
     sum_asserts=$((sum_asserts + a))
@@ -530,7 +362,7 @@ if [ "$sum_fail" -ne 0 ] || [ "$sum_err" -ne 0 ]; then
     shard_rc=1
 fi
 
-# --- 7. count parity ---------------------------------------------------
+# --- 4. count parity ---------------------------------------------------
 #
 # Class parity above already forbids a silent loss: every registered class
 # is placed exactly once, no name is a substring of another, and no shard

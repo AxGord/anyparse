@@ -50,6 +50,8 @@ import anyparse.core.EnvFlag;
 import anyparse.query.Address.AddressIndex;
 import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.MutationVerdict.MutationVerdictResult;
+import anyparse.query.ShardPlan.ShardPlanResult;
+import anyparse.query.ShardPlan.ShardPlacement;
 import anyparse.query.ExitCode.*;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
@@ -634,6 +636,13 @@ final class Cli {
 				return runMutationVerdict(rest);
 				#else
 				stderr('apq mutation-verdict: requires a sys target (file read)\n');
+				return EXIT_USAGE;
+				#end
+			case 'shard-plan':
+				#if (sys || nodejs)
+				return runShardPlan(rest);
+				#else
+				stderr('apq shard-plan: requires a sys target (file read)\n');
 				return EXIT_USAGE;
 				#end
 			case 'inline':
@@ -5700,6 +5709,7 @@ final class Cli {
 		sysPrint('  lint          Run analysis checks and report violations (e.g. unused-import)\n');
 		sysPrint('  lint-diff     Multiset diff of two lint --format json snapshots (blast radius)\n');
 		sysPrint('  mutation-verdict  Classify one utest transcript as KILLED/SURVIVED/… for mutation-check\n');
+		sysPrint('  shard-plan    Deal test/RunTests.hx registrations onto N APQ_TEST shards\n');
 		sysPrint('  inline        Inline a local variable into its uses\n');
 		sysPrint('  inline-method Inline a single-return function into its call sites + delete it\n');
 		sysPrint('  extract-var   Hoist an expression into a new local final\n');
@@ -15705,6 +15715,118 @@ final class Cli {
 		sysPrint('(class header / line / message included when utest emitted them).\n');
 		sysPrint('Always exits 0 on a successful parse — the test runner\'s exit code is\n');
 		sysPrint('the authoritative pass/fail signal.\n');
+	}
+	/**
+	 * `apq shard-plan` — the arithmetic `tools/suite-shard.sh` used to carry as
+	 * fifteen awk blocks. This layer only reads and parses the runner and prints
+	 * the result; every gate and the split itself are `ShardPlan`, under test.
+	 */
+	private static function runShardPlan(args: Array<String>): Int {
+		var runner: Null<String> = null;
+		var shardsText: Null<String> = null;
+		var format: String = 'lines';
+		var lang: String = 'haxe';
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--runner':
+					runner = expectValue(args, ++i, '--runner');
+				case '--shards':
+					shardsText = expectValue(args, ++i, '--shards');
+				case '--format':
+					format = expectValue(args, ++i, '--format');
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '-h', '--help':
+					printShardPlanUsage();
+					return EXIT_OK;
+				case _:
+					stderr('apq shard-plan: unexpected argument "$a" — the runner is named by --runner\n');
+					printShardPlanUsage();
+					return EXIT_USAGE;
+			}
+			i++;
+		}
+		if (runner == null) {
+			stderr('apq shard-plan: --runner <path> is required\n');
+			printShardPlanUsage();
+			return EXIT_USAGE;
+		}
+		if (shardsText == null) {
+			stderr('apq shard-plan: --shards <N> is required\n');
+			printShardPlanUsage();
+			return EXIT_USAGE;
+		}
+		if (format != 'lines' && format != 'filters') {
+			stderr('apq shard-plan: --format expects lines or filters, got "$format"\n');
+			return EXIT_USAGE;
+		}
+		// The regex, not Std.parseInt alone: parseInt reads a leading number out
+		// of "4x" and would silently plan four shards for a typo.
+		final shardsRaw: String = shardsText;
+		final shards: Null<Int> = new EReg('^[0-9]+$', '').match(shardsRaw) ? Std.parseInt(shardsRaw) : null;
+		if (shards == null || shards < 1) {
+			stderr('apq shard-plan: --shards expects a positive integer, got "$shardsRaw"\n');
+			return EXIT_USAGE;
+		}
+		final shardCount: Int = shards;
+
+		final io: { plugin: GrammarPlugin, paths: Array<String>, singleFile: Bool } = resolveInputPaths(lang, [runner]);
+		final paths: Array<String> = io.paths;
+		if (paths.length != 1) {
+			stderr('apq shard-plan: --runner must name ONE file, "$runner" matched ${paths.length}\n');
+			return EXIT_RUNTIME;
+		}
+		final path: String = paths[0];
+		final source: String = readSourceForParse(path);
+		final tree: Null<QueryNode> = parseWalked('shard-plan', io.plugin.parseFile, path, source, true);
+		if (tree == null) return EXIT_RUNTIME;
+
+		// Re-bound: a narrowed local never reaches an anonymous-structure literal
+		// whose expected field is non-nullable.
+		final parsed: QueryNode = tree;
+		final result: ShardPlanResult = ShardPlan.plan({
+			tree: parsed,
+			source: source,
+			runner: path,
+			shards: shardCount
+		});
+		return switch result {
+			case Planned(placements):
+				final rows: Array<ShardPlacement> = placements;
+				sysPrint(format == 'filters' ? ShardPlan.renderFilters(rows, shardCount) : ShardPlan.renderLines(rows));
+				EXIT_OK;
+			case Refused(message):
+				stderr('$message\n');
+				EXIT_RUNTIME;
+		};
+	}
+
+
+	/** `apq shard-plan --help`. */
+	private static function printShardPlanUsage(): Void {
+		sysPrint('Usage: apq shard-plan --runner <RunTests.hx> --shards <N> [--format lines|filters]\n');
+		sysPrint('\n');
+		sysPrint('Deal every class registered with addCase(new X()) onto N APQ_TEST shards,\n');
+		sysPrint('for tools/suite-shard.sh. The registrations are read as AST shapes, so both\n');
+		sysPrint('constructor arity and dotted-vs-bare names are structure rather than text.\n');
+		sysPrint('\n');
+		sysPrint('Output:\n');
+		sysPrint('  lines    (default) one "<shard>\\t<class>" row per registered class\n');
+		sysPrint('  filters  N lines, line i being the comma-joined APQ_TEST value of shard i\n');
+		sysPrint('\n');
+		sysPrint('Exits 1, printing the reason on stderr, for a registration it cannot name, a\n');
+		sysPrint('class registered twice, an APQ_TEST substring collision, a pinned class that\n');
+		sysPrint('is no longer registered, a plan that does not cover the class list, and an\n');
+		sysPrint('empty shard. The per-class weights only balance the split — no gate reads\n');
+		sysPrint('them, so a stale weight costs balance and never correctness.\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --runner <path>  utest runner to read the registrations from (required)\n');
+		sysPrint('  --shards <N>     How many shards to deal onto (required, >= 1)\n');
+		sysPrint('  --format <fmt>   lines (default) or filters\n');
+		sysPrint('  -h, --help       Show this help\n');
 	}
 	#end
 
