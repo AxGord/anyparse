@@ -160,19 +160,17 @@ final class Naming implements Check implements CrossFileFix {
 		);
 		final hoistedFroms: Array<Int> = [for (h in hoists) h.declFrom];
 		final edits: Array<{ span: Span, text: String }> = ConstantHoist.edits(hoists);
+		final claims: Array<DeclRename> = [];
 		for (decl in decls) {
 			final declSpan: Null<Span> = decl.span;
 			if (declSpan != null && hoistedFroms.contains(declSpan.from)) continue;
-			final rename: Null<Array<{ span: Span, text: String }>> = renameEditsFor(
+			final rename: Null<DeclRename> = renameEditsFor(
 				decl, source, tree, policy, shape, plugin, flaggedFroms, reflectionNames, confinedMemo, resolutionIndex, index,
 				violations[0].file
 			);
-			// Two flagged declarations can want the SAME token: the qualification arm rewrites a bare
-			// reference to a MEMBER that may itself be flagged and renamed in this very pass. Overlapping
-			// edits have no defined winner in `applyEdits` (`dropContainedEdits` resolves by array index),
-			// so the second declaration DEFERS - `naming` is a full-scope check, and a rename deferred by a
-			// same-file conflict re-fires on the next pass, by which time the first one has landed.
-			if (rename != null && !RefactorSupport.editsOverlapAny(rename, edits)) for (edit in rename) edits.push(edit);
+			if (rename == null || defersToAnAcceptedRename(rename, edits, claims)) continue;
+			claims.push(rename);
+			for (edit in rename.edits) edits.push(edit);
 		}
 		return edits;
 	}
@@ -278,6 +276,35 @@ final class Naming implements Check implements CrossFileFix {
 	 */
 	private static inline function isBodyScopedCategory(category: NamingCategory): Bool {
 		return category == NamingCategory.Local || category == NamingCategory.Param || category == NamingCategory.CatchVar;
+	}
+
+	/**
+	 * Whether `rename` must DEFER to an edit already accepted in this pass, for either of the two
+	 * reasons a same-pass conflict takes.
+	 *
+	 * Its spans OVERLAP an accepted edit: two flagged declarations can want the SAME token, because
+	 * the qualification arm rewrites a bare reference to a MEMBER that may itself be flagged and
+	 * renamed in this very pass, and overlapping edits have no defined winner in `applyEdits`
+	 * (`dropContainedEdits` resolves by array index).
+	 *
+	 * Or an accepted rename already CLAIMED the same new name over an overlapping SCOPE. That reason
+	 * exists because `collidesInScope` reads the ORIGINAL source, where the new name does not yet
+	 * exist: `CAPS` and `Caps` both correcting to `_caps` each see a clean scope and would otherwise
+	 * both land, producing the duplicate declaration `haxe` rejects. Overlap, not equality, is the
+	 * scope test - a file-wide member claim covers every function scope inside it, and a closure's
+	 * scope is nested in its host's, while two DISJOINT function scopes genuinely may share a target
+	 * name (`remove(__id)` and `for (__id in ...)` both correcting to `id`).
+	 *
+	 * Deferral is not refusal: `naming` is a full-scope check, so the loser re-fires on the next
+	 * `--fix` pass, by which time the winner has landed and the ordinary collision scan judges it
+	 * against a source that finally holds the name.
+	 */
+	private static function defersToAnAcceptedRename(
+		rename: DeclRename, edits: Array<{ span: Span, text: String }>, claims: Array<DeclRename>
+	): Bool {
+		if (RefactorSupport.editsOverlapAny(rename.edits, edits)) return true;
+		for (c in claims) if (c.newName == rename.newName && c.scope.from < rename.scope.to && rename.scope.from < c.scope.to) return true;
+		return false;
 	}
 
 	/** The first rule in `policy` applicable to `decl` (category + modifier filters), or null. */
@@ -395,7 +422,7 @@ final class Naming implements Check implements CrossFileFix {
 		decl: NamedDecl, source: String, tree: QueryNode, policy: NamingPolicy, shape: RefShape, plugin: GrammarPlugin,
 		flaggedFroms: Array<Int>, reflectionNames: Array<String>, confinedMemo: Map<String, Bool>, resolutionIndex: Null<SymbolIndex>,
 		index: Null<SymbolIndex>, file: String
-	): Null<Array<{ span: Span, text: String }>> {
+	): Null<DeclRename> {
 		final span: Null<Span> = decl.span;
 		if (span == null || !flaggedFroms.contains(span.from) || !isRenameSafe(decl, source, index, reflectionNames, confinedMemo))
 			return null;
@@ -452,9 +479,26 @@ final class Naming implements Check implements CrossFileFix {
 		if (renameSpans == null) return null;
 		final spans: Array<Span> = renameSpans;
 		final edits: Array<{ span: Span, text: String }> = [for (occ in spans) { span: occ, text: newName }];
-		return collides
-			? qualifyCapturedEdits(source, tree, span.from, spans, newName, shape, plugin, edits, resolutionIndex, file)
-			: edits;
+		final scope: Span = claimScope(tree, shape, span.from, bodyScoped, source.length);
+		if (!collides) return { newName: newName, edits: edits, scope: scope };
+		final qualified: Null<Array<{ span: Span, text: String }>> = qualifyCapturedEdits(
+			source, tree, span.from, spans, newName, shape, plugin, edits, resolutionIndex, file
+		);
+		return qualified == null ? null : { newName: newName, edits: qualified, scope: scope };
+	}
+
+	/**
+	 * The region a rename's new name occupies for same-pass claim purposes, mirroring
+	 * `collidesInScope`'s own scope notion: a local / param / catch var binds only through its
+	 * innermost enclosing function, everything else (member, constant, enum value) file-wide. A
+	 * body-scoped declaration with no resolvable enclosing function falls back to file-wide, the
+	 * same defensive direction `collidesInScope` takes.
+	 */
+	private static function claimScope(tree: QueryNode, shape: RefShape, from: Int, bodyScoped: Bool, sourceLength: Int): Span {
+		final whole: Span = new Span(0, sourceLength);
+		if (!bodyScoped) return whole;
+		final funcKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
+		return enclosingScopeSpan(tree, funcKinds, from, shape) ?? whole;
 	}
 
 	/**
@@ -1504,4 +1548,16 @@ private typedef CrossFileCandidate = {
 	 * set as the base: an override left behind overrides nothing and does not compile.
 	 */
 	final family: Array<OverrideFamilyMember>;
+};
+
+/**
+ * A completed rename for one declaration within a single `Naming.fix` pass: the SPANS to
+ * splice, the NEW NAME they introduce, and the SCOPE that name lands in. Carries all three
+ * because the same-pass claim gate (`claimTaken`) needs more than the spans — two renames can
+ * share no span yet still collide by normalizing to the same new name in one scope.
+ */
+private typedef DeclRename = {
+	final newName: String;
+	final edits: Array<{ span: Span, text: String }>;
+	final scope: Span;
 };

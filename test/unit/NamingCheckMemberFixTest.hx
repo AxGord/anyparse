@@ -800,6 +800,28 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		Assert.equals(1, reflectionNames(src).length);
 	}
 
+	/**
+	 * Same-pass claim gate (A2): two declarations whose normalized names COLLIDE
+	 * ('CAPS' and 'Caps' both -> '_caps') must not both land — the second DEFERS
+	 * via the same mechanism that already defers on overlapping edit spans, and
+	 * re-fires (getting refused for good by the whole-file collision scan) on the
+	 * next --fix pass.
+	 */
+	public function testFixDefersTheSecondDeclarationWantingAnAlreadyClaimedName(): Void {
+		final src: String =
+			'package pkg;\n\nclass C {\n\tprivate var CAPS:Int = 1;\n\tprivate var Caps:Int = 2;\n\n\tpublic function sum() { return CAPS + Caps; }\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		Assert.equals(2, vs.length);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin(), index);
+		// The renamed read next to the untouched one, in ONE string: neither half is true of the input,
+		// and the duplicate-field bug produces `_caps + _caps`.
+		assertCanonicalized(src, edits, '_caps + Caps', '_caps + _caps');
+		assertCanonicalized(src, edits, 'var Caps', 'var CAPS');
+	}
+
 	/** The member names `src` reaches through a reflection call, via the grammar's own projection. */
 	private function reflectionNames(src: String): Array<String> {
 		final support: HaxeNamingSupport = new HaxeNamingSupport();
