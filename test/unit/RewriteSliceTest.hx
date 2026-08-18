@@ -67,6 +67,27 @@ class RewriteSliceTest extends Test {
 		Assert.isTrue(isErr(Rewrite.rewrite(src, "foo($x, $y)", "foo($x, $z)", true, new HaxeQueryPlugin())));
 	}
 
+	/**
+	 * The search kind-equivalence is also the REWRITE relation — `Rewrite` splices
+	 * over the MATCHED node's span — so a group may hold only kinds whose span
+	 * carries nothing but the family keyword. `FinalModifiedMember` and
+	 * `LocalInlineFnStmt` swallow their modifier, and a `function $n(…)` pattern
+	 * reaching them would turn `final function` into `function` and an `inline
+	 * function` into a plain one: silent, re-parseable, semantics-changing. They are
+	 * kept out of `HaxeQueryPlugin.SEARCH_KIND_EQUIVALENCE`; this pins the
+	 * consequence rather than the constant, so widening the group fails HERE.
+	 */
+	public function testModifierBearingFunctionKindsAreNotRewritten(): Void {
+		final src: String = 'class C {\n\tfinal function sealed():Void {}\n\tpublic function plain():Void {}\n'
+			+ '\tstatic function host():Void {\n\t\tinline function helper():Void {}\n\t\thelper();\n\t}\n}';
+		final text: String = okText(
+			Rewrite.rewrite(src, "function $n():Void {}", "function $n():Void { trace(1); }", true, new HaxeQueryPlugin())
+		);
+		Assert.isTrue(text.contains('final function sealed'), 'the `final` modifier must survive — got:\n$text');
+		Assert.isTrue(text.contains('inline function helper'), 'the local `inline` modifier must survive — got:\n$text');
+		Assert.equals(1, text.split('trace(1)').length - 1, 'only the modifier-free member is rewritten — got:\n$text');
+	}
+
 	private function okText(res: EditResult): String {
 		return switch res {
 			case Ok(text): text;

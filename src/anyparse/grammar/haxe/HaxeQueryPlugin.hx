@@ -259,23 +259,72 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	];
 
 	/**
-	 * Search-only kind-equivalence. A Haxe `var` declaration surfaces
-	 * as three position-specific `QueryNode` kinds — module-level
-	 * `VarDecl`, class-field `VarMember`, local `VarStmt` — all
-	 * wrapping the same `HxVarDecl` struct (identical child shape). A
-	 * `var $v = …` pattern parses via the Decl attempt to `VarDecl`;
-	 * without this equivalence it would never match fields or locals
-	 * (the S2 dogfood gap). Carried on the `Pattern` and consulted
-	 * only by the search `Matcher`, so the `QueryNode` tree keeps the
-	 * precise per-position kinds: `ast` / `--select` / `refs` /
-	 * `meta` vocabulary — including the published `--on VarMember` —
-	 * is unchanged, and `DECL_HOST_KINDS` above stays correct (it
-	 * intentionally distinguishes the three for scope/decl-host
-	 * resolution). `final` declarations (`FinalMember` / `FinalStmt`
-	 * / `FinalField`) are deliberately a separate family: a different
-	 * keyword with immutability semantics, not in this gap's scope.
+	 * Search-only kind-equivalence. One Haxe declaration keyword surfaces as
+	 * several position-specific `QueryNode` kinds — a `var` is module-level
+	 * `VarDecl`, class-field `VarMember`, local `VarStmt`; a `function` is
+	 * `FnDecl` / `FnMember` / `LocalFnStmt`; a `final` binding is `VarForm` /
+	 * `FinalMember` / `FinalStmt` — while a pattern always parses through the
+	 * Decl attempt and lands on the module-level kind. Without an equivalence
+	 * such a pattern matches NOTHING outside module scope (the S2 dogfood gap),
+	 * and `search --explain` says so: `pattern root kind "FnDecl" NOT present in
+	 * any scanned file`.
+	 *
+	 * Carried on the `Pattern` and consulted only by the search `Matcher`, so the
+	 * `QueryNode` tree keeps the precise per-position kinds: `ast` / `--select` /
+	 * `refs` / `meta` vocabulary — including the published `--on VarMember` — is
+	 * unchanged, and `DECL_HOST_KINDS` above stays correct (it intentionally
+	 * distinguishes the positions for scope/decl-host resolution).
+	 *
+	 * A module-level `final` names itself ONE LEVEL DOWN: `final x = 1;` projects
+	 * as `FinalDecl(VarForm x …)`, the same wrapper shape as `final class`
+	 * (`FinalDecl(ClassForm …)`). `FinalDecl` therefore carries no name and one
+	 * extra child, and can never unify with the flat `FinalMember` / `FinalStmt` —
+	 * the matcher compares the name slot and the child COUNT. So the group is keyed
+	 * on the named inner `VarForm`, and `parsePattern` re-roots the pattern onto it
+	 * (`HaxePatternFragment.rerootFinalVarDecl`), the same normalisation
+	 * `moduleValueDeclKinds` below already applies.
+	 *
+	 * A group holds only the variants whose span carries NOTHING but the family
+	 * keyword, and that is a correctness rule rather than taste: this same relation
+	 * drives `Rewrite.rewrite` and `--match` addressing, which splice over the
+	 * MATCHED node's span. A variant that consumes an extra modifier keyword into
+	 * its own span therefore loses it — measured, `final function sealed()`
+	 * (`FinalModifiedMember`, span starts at `final`) and a local `inline function`
+	 * (`LocalInlineFnStmt`, span starts at `inline`) both come back stripped of
+	 * their modifier by a `function $n(…)` rewrite, silently and re-parseably.
+	 * `(Public)` / `(Static)` are safe for the opposite reason: they project as
+	 * SIBLING leaves outside the member's span. The same rule retroactively explains
+	 * the var family's omission of `StaticVarStmt` / `StaticFinalStmt` — their spans
+	 * start at `static`.
+	 *
+	 * That settles the one question `--select` cannot: `SELECT_KIND_EQUIVALENCE`
+	 * below DOES fold `FinalModifiedMember` onto `FnMember`, and search deliberately
+	 * does not follow it. `--select` is a read-only projection with no rewriting
+	 * consumer, so folding there costs nothing; the same fold here would deform
+	 * code. The residual gap — no pattern reaches a `final function` or a local
+	 * `inline function` at all — is left open on purpose: closing it needs a
+	 * rewrite-safe split (a wider relation for the read-only `search` command, or a
+	 * refusal in `Rewrite` for modifier-carrying variants), not a wider constant.
+	 *
+	 * The groups also stay per-keyword: `var $v = 0` must not match a `final`
+	 * binding (different keyword, immutability semantics) and neither matches a
+	 * function. Expression-position forms (`FnExpr`, `NamedFnExpr`, the lambdas,
+	 * `VarExpr` / `FinalExpr`) are outside the criterion — the relation covers
+	 * declaration positions only.
+	 *
+	 * One asymmetry is kept because the alternative is worse: a module-level `final`
+	 * matches AS the `VarForm`, whose span starts after the `final` keyword, so a
+	 * rewrite through it re-emits the keyword and the canonical gate rejects the
+	 * whole result (`result does not parse`) instead of writing it. Loud, and that
+	 * spelling occurs zero times in either corpus measured (TM `src/`, this repo's
+	 * `src/`); a member or local `final`, whose span does start at the keyword,
+	 * rewrites correctly.
 	 */
-	private static final SEARCH_KIND_EQUIVALENCE: KindEquivalence = new KindEquivalence([['VarDecl', 'VarMember', 'VarStmt']]);
+	private static final SEARCH_KIND_EQUIVALENCE: KindEquivalence = new KindEquivalence([
+		['VarDecl', 'VarMember', 'VarStmt'],
+		['FnDecl', 'FnMember', 'LocalFnStmt'],
+		['VarForm', 'FinalMember', 'FinalStmt'],
+	]);
 
 	/**
 	 * `--select` kind-equivalence: folds the `final` modifier-wrapper
@@ -1200,7 +1249,12 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				&& extracted.children[extracted.children.length - 1].kind == 'EmptyStmt'
 			)
 				continue;
-			final reclassified: QueryNode = Metavar.reclassify(extracted);
+			// `final x = …` extracts as the nameless wrapper `FinalDecl(VarForm …)`,
+			// which can never unify with the flat `FinalMember` / `FinalStmt`. Re-root
+			// onto the named inner node — after the `consumesVariant` gate above, which
+			// needs the wrapper's span.
+			final rooted: QueryNode = HaxePatternFragment.rerootFinalVarDecl(extracted);
+			final reclassified: QueryNode = Metavar.reclassify(rooted);
 			return new Pattern(reclassified, attempt.category, source, SEARCH_KIND_EQUIVALENCE);
 		}
 		// Every attempt's parser error is offset into a synthetic wrapper
