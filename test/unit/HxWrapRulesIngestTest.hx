@@ -92,9 +92,10 @@ class HxWrapRulesIngestTest extends Test {
 			'{"wrapping":{"arrayWrap":{"rules":[{"type":"onePerLine","conditions":[{"cond":"complexItemCount >= n","value":2}]}]}}}'
 		);
 		Assert.equals(1, opts.arrayLiteralWrap.rules.length);
-		Assert.equals(WrapMode.OnePerLine, opts.arrayLiteralWrap.rules[0].mode);
-		Assert.equals(WrapConditionType.ComplexItemCountLargerThan, opts.arrayLiteralWrap.rules[0].conditions[0].cond);
-		Assert.equals(2, opts.arrayLiteralWrap.rules[0].conditions[0].value);
+		final rule: WrapRule = opts.arrayLiteralWrap.rules[0];
+		Assert.equals(WrapMode.OnePerLine, rule.mode);
+		Assert.equals(WrapConditionType.ComplexItemCountLargerThan, rule.conditions[0].cond);
+		Assert.equals(2, rule.conditions[0].value);
 	}
 
 	public function testUnknownCondDropsRule(): Void {

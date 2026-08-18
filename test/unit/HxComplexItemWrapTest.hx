@@ -36,34 +36,34 @@ import utest.Test;
 final class HxComplexItemWrapTest extends Test {
 
 	/** The project's own `hxformat.json`, reduced to the sections these fixtures reach. */
-	private static final CONFIG: String = '{"indentation":{"character":"tab","tabWidth":4},"wrapping":{"maxLineLength":140,"arrayWrap":{"defaultWra'
-		+ 'p":"ignore","rules":[{"conditions":[{"cond":"complexItemCount >= n","value":2}],"type":"onePerLine"},{"c'
-		+ 'onditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"exceedsM'
-		+ 'axLineLength","value":1}],"type":"packedOrOnePerLine"}]},"objectLiteral":{"defaultWrap":"ignore","rules"'
-		+ ':[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"exc'
-		+ 'eedsMaxLineLength","value":1}],"type":"packedOrOnePerLine"}]},"callParameter":{"defaultWrap":"fillLineWi'
-		+ 'thLeadingBreak","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"co'
-		+ 'nditions":[{"cond":"itemCount <= n","value":1},{"cond":"totalItemLength <= n","value":100}],"type":"noWr'
-		+ 'ap"}]}},"whitespace":{"bracesConfig":{"objectLiteralBraces":{"openingPolicy":"after","closingPolicy":"be'
-		+ 'fore"}}},"sameLine":{"ifBody":"fitLine","functionBody":"fitLine","expressionIf":"next","expressionIfFit"'
-		+ ':true,"comprehensionFor":"fitLine"},"emptyLines":{"classEmptyLines":{"beginType":1,"endType":1}}}';
+	private static final CONFIG: String = '{"indentation":{"character":"tab","tabWidth":4},'
+		+ '"wrapping":{"maxLineLength":140,"arrayWrap":{"defaultWrap":"ignore","rules":[{"conditions":[{"cond":"complexItemCount >= '
+		+ 'n","value":2}],"type":"onePerLine"},{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{'
+		+ '"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"packedOrOnePerLine"}]},'
+		+ '"objectLiteral":{"defaultWrap":"ignore","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{'
+		+ '"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"packedOrOnePerLine"}]},'
+		+ '"callParameter":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],'
+		+ '"type":"noWrap"},{"conditions":[{"cond":"itemCount <= n","value":1},{"cond":"totalItemLength <= n","value":100}],"type":"noWr'
+		+ 'ap"}]}},"whitespace":{"bracesConfig":{"objectLiteralBraces":{"openingPolicy":"after","closingPolicy":"before"}}},'
+		+ '"sameLine":{"ifBody":"fitLine","functionBody":"fitLine","expressionIf":"next","expressionIfFit":true,'
+		+ '"comprehensionFor":"fitLine"},"emptyLines":{"classEmptyLines":{"beginType":1,"endType":1}}}';
 
 	/** `CONFIG` with the `complexItemCount` rule dropped — the opt-in arm. */
-	private static final CONFIG_NO_COND: String = '{"indentation":{"character":"tab","tabWidth":4},"wrapping":{"maxLineLength":140,"arrayWrap":{"defaultWra'
-		+ 'p":"ignore","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"condit'
-		+ 'ions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"packedOrOnePerLine"}]},"objectLiteral":{"defau'
-		+ 'ltWrap":"ignore","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"c'
-		+ 'onditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"packedOrOnePerLine"}]},"callParameter":{"'
-		+ 'defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0'
-		+ '}],"type":"noWrap"},{"conditions":[{"cond":"itemCount <= n","value":1},{"cond":"totalItemLength <= n","v'
-		+ 'alue":100}],"type":"noWrap"}]}},"whitespace":{"bracesConfig":{"objectLiteralBraces":{"openingPolicy":"af'
-		+ 'ter","closingPolicy":"before"}}},"sameLine":{"ifBody":"fitLine","functionBody":"fitLine","expressionIf":'
-		+ '"next","expressionIfFit":true,"comprehensionFor":"fitLine"},"emptyLines":{"classEmptyLines":{"beginType"' + ':1,"endType":1}}}';
+	private static final CONFIG_NO_COND: String = '{"indentation":{"character":"tab","tabWidth":4},'
+		+ '"wrapping":{"maxLineLength":140,"arrayWrap":{"defaultWrap":"ignore","rules":[{"conditions":[{"cond":"exceedsMaxLineLength",'
+		+ '"value":0}],"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"packedOrOnePerLine"}]},'
+		+ '"objectLiteral":{"defaultWrap":"ignore","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"c'
+		+ 'onditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"packedOrOnePerLine"}]},'
+		+ '"callParameter":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0'
+		+ '}],"type":"noWrap"},{"conditions":[{"cond":"itemCount <= n","value":1},{"cond":"totalItemLength <= n","value":100}],'
+		+ '"type":"noWrap"}]}},"whitespace":{"bracesConfig":{"objectLiteralBraces":{"openingPolicy":"after","closingPolicy":"before"}}},'
+		+ '"sameLine":{"ifBody":"fitLine","functionBody":"fitLine","expressionIf":"next","expressionIfFit":true,'
+		+ '"comprehensionFor":"fitLine"},"emptyLines":{"classEmptyLines":{"beginType":1,"endType":1}}}';
 
 	/** An argument list whose first argument is a `new` holding an array of three constructor calls. */
-	private static final CTORS_SRC: String = 'class S1 {\n\n\tpublic function new(frameWidth:Float, frameHeight:Float) {\n\t\tsuper(new Stack([_frame,'
-		+ ' new Gap(1, 6), _caption, new Gap(1, 6), new Frame(_clear, frameWidth, ICON_SIZE)], frameWidth, 46), fra'
-		+ 'meWidth, frameHeight, PANEL_COLOR, 1, 3);\n\t}\n\n}';
+	private static final CTORS_SRC: String = 'class S1 {\n\n\tpublic function new(frameWidth:Float, frameHeight:Float) {\n'
+		+ '\t\tsuper(new Stack([_frame, new Gap(1, 6), _caption, new Gap(1, 6), new Frame(_clear, frameWidth, ICON_SIZE)], frameWidth, '
+		+ '46), frameWidth, frameHeight, PANEL_COLOR, 1, 3);\n\t}\n\n}';
 
 	/** `CTORS_SRC` under `CONFIG`. */
 	private static final CTORS_OUT: String = 'class S1 {\n\n\tpublic function new(frameWidth:Float, frameHeight:Float) {\n\t\tsuper(new Stack([\n\t\t'
@@ -71,47 +71,51 @@ final class HxComplexItemWrapTest extends Test {
 		+ 'th, ICON_SIZE)\n\t\t], frameWidth, 46), frameWidth, frameHeight, PANEL_COLOR, 1, 3);\n\t}\n\n}';
 
 	/** Two call-bearing object literals on a line that FITS, beside two literals holding no call. */
-	private static final LITERALS_SRC: String = 'class S2 {\n\n\tprivate function actions():Array<ActionDescriptor> {\n\t\treturn [{ caption: tr(\'No\'),'
-		+ ' action: NO, style: OutlineButton.OUTLINE }, { caption: tr(\'Yes\'), action: YES }];\n\t}\n\n\tprivate f'
-		+ 'unction corners():Array<Corner> {\n\t\treturn [{ x: 1, y: 2 }, { x: 3, y: 4 }];\n\t}\n\n}';
+	private static final LITERALS_SRC: String = 'class S2 {\n\n\tprivate function actions():Array<ActionDescriptor> {\n'
+		+ '\t\treturn [{ caption: tr(\'No\'), action: NO, style: OutlineButton.OUTLINE }, { caption: tr(\'Yes\'), action: YES }];\n\t}\n\n'
+		+ '\tprivate function corners():Array<Corner> {\n\t\treturn [{ x: 1, y: 2 }, { x: 3, y: 4 }];\n\t}\n\n}';
 
 	/** `LITERALS_SRC` under `CONFIG`. */
-	private static final LITERALS_OUT: String = 'class S2 {\n\n\tprivate function actions():Array<ActionDescriptor> {\n\t\treturn [\n\t\t\t{ caption: tr('
-		+ '\'No\'), action: NO, style: OutlineButton.OUTLINE },\n\t\t\t{ caption: tr(\'Yes\'), action: YES }\n\t\t]'
-		+ ';\n\t}\n\n\tprivate function corners():Array<Corner> {\n\t\treturn [{ x: 1, y: 2 }, { x: 3, y: 4 }];\n\t' + '}\n\n}';
+	private static final LITERALS_OUT: String = 'class S2 {\n\n\tprivate function actions():Array<ActionDescriptor> {\n\t\treturn [\n'
+		+ '\t\t\t{ caption: tr(\'No\'), action: NO, style: OutlineButton.OUTLINE },\n\t\t\t{ caption: tr(\'Yes\'), action: YES }\n\t\t];\n'
+		+ '\t}\n\n\tprivate function corners():Array<Corner> {\n\t\treturn [{ x: 1, y: 2 }, { x: 3, y: 4 }];\n\t}\n\n}';
 
 	/** An enum-constructor array pattern and a switch subject built from two calls. */
-	private static final PATTERNS_SRC: String = 'class S3 {\n\n\tprivate function pick(v:Array<Option<Int>>):Int {\n\t\treturn switch v {\n\t\t\tcase [So'
-		+ 'me(a), Some(b)]: a + b;\n\t\t\tcase _: 0;\n\t\t}\n\t}\n\n\tprivate function pickSubject(a:Int, b:Int):In'
-		+ 't {\n\t\treturn switch [f(a), g(b)] {\n\t\t\tcase [1, 2]: 3;\n\t\t\tcase _: 0;\n\t\t}\n\t}\n\n}';
+	private static final PATTERNS_SRC: String = 'class S3 {\n\n\tprivate function pick(v:Array<Option<Int>>):Int {\n\t\treturn switch v {\n'
+		+ '\t\t\tcase [Some(a), Some(b)]: a + b;\n\t\t\tcase _: 0;\n\t\t}\n\t}\n\n\tprivate function pickSubject(a:Int, b:Int):Int {\n'
+		+ '\t\treturn switch [f(a), g(b)] {\n\t\t\tcase [1, 2]: 3;\n\t\t\tcase _: 0;\n\t\t}\n\t}\n\n}';
 
 	/** `PATTERNS_SRC` under `CONFIG`. */
-	private static final PATTERNS_OUT: String = 'class S3 {\n\n\tprivate function pick(v:Array<Option<Int>>):Int {\n\t\treturn switch v {\n\t\t\tcase [So'
-		+ 'me(a), Some(b)]: a + b;\n\t\t\tcase _: 0;\n\t\t}\n\t}\n\n\tprivate function pickSubject(a:Int, b:Int):In'
-		+ 't {\n\t\treturn switch [f(a), g(b)] {\n\t\t\tcase [1, 2]: 3;\n\t\t\tcase _: 0;\n\t\t}\n\t}\n\n}';
+	private static final PATTERNS_OUT: String = 'class S3 {\n\n\tprivate function pick(v:Array<Option<Int>>):Int {\n\t\treturn switch v {\n'
+		+ '\t\t\tcase [Some(a), Some(b)]: a + b;\n\t\t\tcase _: 0;\n\t\t}\n\t}\n\n\tprivate function pickSubject(a:Int, b:Int):Int {\n'
+		+ '\t\treturn switch [f(a), g(b)] {\n\t\t\tcase [1, 2]: 3;\n\t\t\tcase _: 0;\n\t\t}\n\t}\n\n}';
 
 	/** A call whose LAST argument is an array holding one call-bearing object literal that FITS. */
-	private static final TRAILING_SRC: String = 'class S4 {\n\n\tpublic function new() {\n\t\tsuper(536, 334, true, true, t(\'To gain the full editing ri'
-		+ 'ghts here\'), null, [{ title: t(\'Close\', 76), action: \'shut\', width: 100 }]);\n\t}\n\n}';
+	private static final TRAILING_SRC: String = 'class S4 {\n\n\tpublic function new() {\n'
+		+ '\t\tsuper(536, 334, true, true, t(\'To gain the full editing rights here\'), null, ['
+		+ '{ title: t(\'Close\', 76), action: \'shut\', width: 100 }]);\n\t}\n\n}';
 
 	/** `TRAILING_SRC` under `CONFIG`. */
-	private static final TRAILING_OUT: String = 'class S4 {\n\n\tpublic function new() {\n\t\tsuper(\n\t\t\t536, 334, true, true, t(\'To gain the full ed'
-		+ 'iting rights here\'), null,\n\t\t\t[{ title: t(\'Close\', 76), action: \'shut\', width: 100 }]\n\t\t);\n' + '\t}\n\n}';
+	private static final TRAILING_OUT: String = 'class S4 {\n\n\tpublic function new() {\n\t\tsuper(\n'
+		+ '\t\t\t536, 334, true, true, t(\'To gain the full editing rights here\'), null,\n'
+		+ '\t\t\t[{ title: t(\'Close\', 76), action: \'shut\', width: 100 }]\n\t\t);\n\t}\n\n}';
 
 	/** A call with a call-bearing array in the middle whose OWN width breaks it, and three scalars after. */
-	private static final MIDLIST_SRC: String = 'class S5 {\n\n\tpublic function new(source:ListSource) {\n\t\tsuper(WIDTH, HEIGHT, true, true, tr(\'Move'
-		+ ' To\', 10084), null, [{ caption: tr(\'Cancel\', 73).toUpperCase(), action: CANCEL, style: OutlineButton.'
-		+ 'OUTLINE }, { caption: tr(\'Move Here\', 9945).toUpperCase(), action: MOVE }], true, false, false);\n\t}' + '\n\n}';
+	private static final MIDLIST_SRC: String = 'class S5 {\n\n\tpublic function new(source:ListSource) {\n\t\tsuper(WIDTH, HEIGHT, true, '
+		+ 'true, tr(\'Move To\', 10084), null, [{ caption: tr(\'Cancel\', 73).toUpperCase(), '
+		+ 'action: CANCEL, style: OutlineButton.OUTLINE }, { caption: tr(\'Move Here\', '
+		+ '9945).toUpperCase(), action: MOVE }], true, false, false);\n\t}\n\n}';
 
 	/** `MIDLIST_SRC` under `CONFIG`. */
-	private static final MIDLIST_OUT: String = 'class S5 {\n\n\tpublic function new(source:ListSource) {\n\t\tsuper(WIDTH, HEIGHT, true, true, tr(\'Move'
-		+ ' To\', 10084), null, [\n\t\t\t{ caption: tr(\'Cancel\', 73).toUpperCase(), action: CANCEL, style: Outlin'
-		+ 'eButton.OUTLINE },\n\t\t\t{ caption: tr(\'Move Here\', 9945).toUpperCase(), action: MOVE }\n\t\t], true,'
-		+ ' false, false);\n\t}\n\n}';
+	private static final MIDLIST_OUT: String = 'class S5 {\n\n\tpublic function new(source:ListSource) {\n\t\tsuper(WIDTH, HEIGHT, true, '
+		+ 'true, tr(\'Move To\', 10084), null, [\n\t\t\t{ caption: tr(\'Cancel\', 73).toUpperCase(), '
+		+ 'action: CANCEL, style: OutlineButton.OUTLINE },\n\t\t\t{ caption: tr(\'Move Here\', '
+		+ '9945).toUpperCase(), action: MOVE }\n\t\t], true, false, false);\n\t}\n\n}';
 
 	/** The same middle position with a container that FITS — width alone would keep it packed. */
-	private static final MIDFIT_SRC: String = 'class S6 {\n\n\tprivate function build():Void {\n\t\tregisterLayout(firstScalarValue, secondScalarValue,'
-		+ ' [{ label: describe(\'mid\'), weight: 4 }], thirdScalarValue, fourthScalarValue, fifthValue);\n\t}\n\n}';
+	private static final MIDFIT_SRC: String = 'class S6 {\n\n\tprivate function build():Void {\n'
+		+ '\t\tregisterLayout(firstScalarValue, secondScalarValue, [{ label: describe(\'mid\'), '
+		+ 'weight: 4 }], thirdScalarValue, fourthScalarValue, fifthValue);\n\t}\n\n}';
 
 	/** `MIDFIT_SRC` under `CONFIG`. */
 	private static final MIDFIT_OUT: String = 'class S6 {\n\n\tprivate function build():Void {\n\t\tregisterLayout(\n\t\t\tfirstScalarValue, secondScal'
@@ -119,39 +123,41 @@ final class HxComplexItemWrapTest extends Test {
 		+ 'ifthValue\n\t\t);\n\t}\n\n}';
 
 	/** A call whose LAST argument is a MULTI-LINE call-bearing array — the fork hugs this one. */
-	private static final LASTBIG_SRC: String = 'class S7 {\n\n\tstatic function main() {\n\t\treturn makeTimer(\'shell\', totalTime, [\n\t\t\tmakeTimer('
-		+ '\'display call\', displayCallTime),\n\t\t\tmakeTimer(\'transmission\', transmissionTime),\n\t\t\tmakeTim'
-		+ 'er(\'parsing\', parsingTime),\n\t\t\tmakeTimer(\'processing\', processingTime)\n\t\t]);\n\t}\n\n}';
+	private static final LASTBIG_SRC: String = 'class S7 {\n\n\tstatic function main() {\n\t\treturn makeTimer(\'shell\', totalTime, [\n'
+		+ '\t\t\tmakeTimer(\'display call\', displayCallTime),\n\t\t\tmakeTimer(\'transmission\', transmissionTime),\n'
+		+ '\t\t\tmakeTimer(\'parsing\', parsingTime),\n\t\t\tmakeTimer(\'processing\', processingTime)\n\t\t]);\n\t}\n\n}';
 
 	/** `LASTBIG_SRC` under `CONFIG`. */
-	private static final LASTBIG_OUT: String = 'class S7 {\n\n\tstatic function main() {\n\t\treturn makeTimer(\'shell\', totalTime, [\n\t\t\tmakeTimer('
-		+ '\'display call\', displayCallTime),\n\t\t\tmakeTimer(\'transmission\', transmissionTime),\n\t\t\tmakeTim'
-		+ 'er(\'parsing\', parsingTime),\n\t\t\tmakeTimer(\'processing\', processingTime)\n\t\t]);\n\t}\n\n}';
+	private static final LASTBIG_OUT: String = 'class S7 {\n\n\tstatic function main() {\n\t\treturn makeTimer(\'shell\', totalTime, [\n'
+		+ '\t\t\tmakeTimer(\'display call\', displayCallTime),\n\t\t\tmakeTimer(\'transmission\', transmissionTime),\n'
+		+ '\t\t\tmakeTimer(\'parsing\', parsingTime),\n\t\t\tmakeTimer(\'processing\', processingTime)\n\t\t]);\n\t}\n\n}';
 
 	/** `CTORS_SRC` under `CONFIG_NO_COND`. */
-	private static final CTORS_OUT_NO_COND: String = 'class S1 {\n\n\tpublic function new(frameWidth:Float, frameHeight:Float) {\n\t\tsuper(\n\t\t\tnew Stack('
-		+ '[_frame, new Gap(1, 6), _caption, new Gap(1, 6), new Frame(_clear, frameWidth, ICON_SIZE)], frameWidth, '
+	private static final CTORS_OUT_NO_COND: String = 'class S1 {\n\n\tpublic function new(frameWidth:Float, frameHeight:Float) {\n'
+		+ '\t\tsuper(\n\t\t\tnew Stack([_frame, new Gap(1, 6), _caption, new Gap(1, 6), new '
+		+ 'Frame(_clear, frameWidth, ICON_SIZE)], frameWidth, '
 		+ '46),\n\t\t\tframeWidth, frameHeight, PANEL_COLOR, 1, 3\n\t\t);\n\t}\n\n}';
 
 	/** `LITERALS_SRC` under `CONFIG_NO_COND`. */
-	private static final LITERALS_OUT_NO_COND: String = 'class S2 {\n\n\tprivate function actions():Array<ActionDescriptor> {\n\t\treturn [{ caption: tr(\'No\'),'
-		+ ' action: NO, style: OutlineButton.OUTLINE }, { caption: tr(\'Yes\'), action: YES }];\n\t}\n\n\tprivate f'
-		+ 'unction corners():Array<Corner> {\n\t\treturn [{ x: 1, y: 2 }, { x: 3, y: 4 }];\n\t}\n\n}';
+	private static final LITERALS_OUT_NO_COND: String = 'class S2 {\n\n\tprivate function actions():Array<ActionDescriptor> {\n'
+		+ '\t\treturn [{ caption: tr(\'No\'), action: NO, style: OutlineButton.OUTLINE }, { caption: tr(\'Yes\'), action: YES }];\n\t}\n\n'
+		+ '\tprivate function corners():Array<Corner> {\n\t\treturn [{ x: 1, y: 2 }, { x: 3, y: 4 }];\n\t}\n\n}';
 
 	/** `TRAILING_SRC` under `CONFIG_NO_COND`. */
-	private static final TRAILING_OUT_NO_COND: String = 'class S4 {\n\n\tpublic function new() {\n\t\tsuper(\n\t\t\t536, 334, true, true, t(\'To gain the full ed'
-		+ 'iting rights here\'), null,\n\t\t\t[{ title: t(\'Close\', 76), action: \'shut\', width: 100 }]\n\t\t);\n' + '\t}\n\n}';
+	private static final TRAILING_OUT_NO_COND: String = 'class S4 {\n\n\tpublic function new() {\n\t\tsuper(\n\t\t\t536, 334, true, '
+		+ 'true, t(\'To gain the full editing rights here\'), null,\n\t\t\t[{ title: '
+		+ 't(\'Close\', 76), action: \'shut\', width: 100 }]\n\t\t);\n\t}\n\n}';
 
 	/** `MIDLIST_SRC` under `CONFIG_NO_COND`. */
-	private static final MIDLIST_OUT_NO_COND: String = 'class S5 {\n\n\tpublic function new(source:ListSource) {\n\t\tsuper(\n\t\t\tWIDTH, HEIGHT, true, true, t'
-		+ 'r(\'Move To\', 10084), null,\n\t\t\t[\n\t\t\t\t{ caption: tr(\'Cancel\', 73).toUpperCase(), action: CANC'
-		+ 'EL, style: OutlineButton.OUTLINE },\n\t\t\t\t{ caption: tr(\'Move Here\', 9945).toUpperCase(), action: M'
-		+ 'OVE }\n\t\t\t],\n\t\t\ttrue, false, false\n\t\t);\n\t}\n\n}';
+	private static final MIDLIST_OUT_NO_COND: String = 'class S5 {\n\n\tpublic function new(source:ListSource) {\n\t\tsuper(\n'
+		+ '\t\t\tWIDTH, HEIGHT, true, true, tr(\'Move To\', 10084), null,\n\t\t\t[\n\t\t\t\t{ caption: tr(\'Cancel\', 73).toUpperCase(), '
+		+ 'action: CANCEL, style: OutlineButton.OUTLINE },\n\t\t\t\t{ caption: tr(\'Move Here\', 9945).toUpperCase(), '
+		+ 'action: MOVE }\n\t\t\t],\n\t\t\ttrue, false, false\n\t\t);\n\t}\n\n}';
 
 	/** `MIDFIT_SRC` under `CONFIG_NO_COND`. */
-	private static final MIDFIT_OUT_NO_COND: String = 'class S6 {\n\n\tprivate function build():Void {\n\t\tregisterLayout(\n\t\t\tfirstScalarValue, secondScal'
-		+ 'arValue,\n\t\t\t[{ label: describe(\'mid\'), weight: 4 }],\n\t\t\tthirdScalarValue, fourthScalarValue, f'
-		+ 'ifthValue\n\t\t);\n\t}\n\n}';
+	private static final MIDFIT_OUT_NO_COND: String = 'class S6 {\n\n\tprivate function build():Void {\n\t\tregisterLayout(\n'
+		+ '\t\t\tfirstScalarValue, secondScalarValue,\n\t\t\t[{ label: describe(\'mid\'), weight: 4 }],\n'
+		+ '\t\t\tthirdScalarValue, fourthScalarValue, fifthValue\n\t\t);\n\t}\n\n}';
 
 	public function new(): Void {
 		super();

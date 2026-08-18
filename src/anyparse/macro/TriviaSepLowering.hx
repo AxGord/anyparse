@@ -909,7 +909,7 @@ final class TriviaSepLowering {
 		final complexKindsDecl: Expr = c.complexItems
 			? macro final _complexKinds: Null<Array<Int>> = opt._suppressComplexItems
 				? null
-				: anyparse.grammar.haxe.HaxeFormat.complexItemKinds(cast _arr)
+				: anyparse.grammar.haxe.HxComplexItems.kinds(cast _arr)
 			: macro final _complexKinds: Null<Array<Int>> = null;
 		return if (c.wrapRulesField != null) {
 			final rulesExpr: Expr = WriterLowering.optFieldAccess(c.wrapRulesField);

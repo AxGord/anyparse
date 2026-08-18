@@ -6230,9 +6230,7 @@ class WriterLowering {
 			// `Call`). Absent flag → `null`, byte-identical emission.
 			final complexKindsExpr: Expr = c.branch.fmtHasFlag('complexItems')
 				? macro {
-					final _ck: Null<Array<Int>> = opt._suppressComplexItems
-						? null
-						: anyparse.grammar.haxe.HaxeFormat.complexItemKinds(cast _args);
+					final _ck: Null<Array<Int>> = opt._suppressComplexItems ? null : anyparse.grammar.haxe.HxComplexItems.kinds(cast _args);
 					_ck;
 				}
 				: macro null;
@@ -10362,6 +10360,26 @@ class WriterLowering {
 	}
 
 	/**
+	 * Apply the two SUB-POSITION suppress flags a mandatory-Ref child can carry, in
+	 * the order the descendant opt expects them.
+	 *
+	 * `@:fmt(suppressCallRestProbe)` (omega-call-grouprestprobe-subposition) marks a
+	 * `Call` subtree that is not in statement/expression position — a ctor pattern
+	 * (`case Nest(_, _) | Concat(_):`) must not wrap its args, the fork breaks the
+	 * `|` chain instead. `@:fmt(suppressComplexItems)` (ω-complex-item-count) marks
+	 * a case-pattern body or a switch subject so an array literal below it skips the
+	 * per-element complexity classification — an enum-constructor pattern parses as
+	 * a `Call` and would otherwise be counted. Neither is cleared on descent, so a
+	 * nested construct inherits both.
+	 */
+	private function subPositionSuppressOpt(child: ShapeNode, e: Expr): Expr {
+		var out: Expr = e;
+		if (child.fmtHasFlag('suppressCallRestProbe')) out = macro _setSuppressCallRestProbe($out, true, opt);
+		if (child.fmtHasFlag('suppressComplexItems')) out = macro _setSuppressComplexItems($out, opt);
+		return out;
+	}
+
+	/**
 	 * Build the mandatory-Ref body field's runtime `writeCall` Expr. Reads the
 	 * opt-fanout flags (`propagateExprPosition` / `propagateAnonFnContext` /
 	 * `propagateTypedefContext` / `switchSubjectNoWrap` / `propagateValueIfBranch`
@@ -10415,17 +10433,6 @@ class WriterLowering {
 		// Wrapped AFTER `_setExprPosition` so the descent clear inside it does
 		// not wipe the just-set flag.
 		final propagateArrowLambdaBody: Bool = child.fmtHasFlag('propagateArrowLambdaBody');
-		// omega-call-grouprestprobe-subposition: `@:fmt(suppressCallRestProbe)` on
-		// the case-pattern body Ref (HxCasePattern.expr) sets
-		// `_suppressCallRestProbe` on the descendant so a `Call` ctor pattern skips
-		// the `groupRestProbe` rest-of-line fit bias. Not cleared on descent ->
-		// nested ctors inherit it.
-		final suppressCallRestProbe: Bool = child.fmtHasFlag('suppressCallRestProbe');
-		// ω-complex-item-count: `@:fmt(suppressComplexItems)` on the case-pattern
-		// body Ref (`HxCasePattern.expr`) and the switch subject
-		// (`HxSwitchStmt(Bare).expr`) marks the subtree so an array literal below
-		// it skips the complexity classification. Not cleared on descent.
-		final suppressComplexItems: Bool = child.fmtHasFlag('suppressComplexItems');
 		// omega-condsplice-tail-nest: `@:fmt(chainNestSuppress)` on a mandatory Ref
 		// (HxCondSpliceExpr.tail) suppresses the descendant chain's OWN continuation
 		// Nest so a `#if … #end` token-splice tail co-indents with the ENCLOSING chain
@@ -10459,8 +10466,7 @@ class WriterLowering {
 			if (_ctx.trivia && child.fmtHasFlag('dropSingleStmtBraces')) e = macro _setSsbChainSuppress($e, false, opt);
 			// Set AFTER `_setExprPosition` so its descent-clear does not wipe the
 			// just-set flag (mirrors the `propagateArrowLambdaBody` ordering).
-			if (suppressCallRestProbe) e = macro _setSuppressCallRestProbe($e, true, opt);
-			if (suppressComplexItems) e = macro _setSuppressComplexItems($e, opt);
+			e = subPositionSuppressOpt(child, e);
 			if (chainNestSuppress) e = macro _setCallArgChainNest($e, opt);
 			if (propagateArrowLambdaBody) e = macro _setArrowLambdaBody($e, opt);
 			if (propagateAnonFn) e = macro _setAnonFnBody($e, opt);
