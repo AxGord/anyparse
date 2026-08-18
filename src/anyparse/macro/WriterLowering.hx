@@ -552,7 +552,7 @@ class WriterLowering {
 		if (wantChainNest && wrapRulesField != null) {
 			final wrapRulesAccess: Expr = optFieldAccess(wrapRulesField);
 			elemOptArg = macro $wrapRulesAccess.defaultMode == anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak
-				? _setCallArgChainNest($elemOptArg)
+				? _setCallArgChainNest($elemOptArg, opt)
 				: $elemOptArg;
 		}
 		// omega-call-grouprestprobe-subposition (nested call argument): the two
@@ -564,7 +564,7 @@ class WriterLowering {
 		// `callParameterWrap` cascade, not that flag. Compile-time gate -> byte-inert
 		// for every non-call sep-list Star (type-params, function sigs, arrays, object
 		// lits). Mirrors the case-pattern / `??` / chain-operand guards.
-		if (wrapRulesField == 'callParameterWrap') elemOptArg = macro _setSuppressCallRestProbe($elemOptArg, true);
+		if (wrapRulesField == 'callParameterWrap') elemOptArg = macro _setSuppressCallRestProbe($elemOptArg, true, opt);
 		// omega-arrow-value-if-reflow: ctor-level `@:fmt(arrowValueIfElemTrail)`
 		// stamps `_arrowValueIfElemTrailComment` on the element that CARRIES a
 		// captured trailing comment. The comment after an arrow-body value-`if`
@@ -575,7 +575,7 @@ class WriterLowering {
 		// every comment-free element keeps the pre-slice opt and stays byte-inert;
 		// compile-time gated on the trivia Star, since the slot only exists there.
 		if (isTriviaStar && branch.fmtHasFlag('arrowValueIfElemTrail'))
-			elemOptArg = macro _args[_i].trailingComment != null ? _setArrowValueIfElemTrailComment($elemOptArg) : $elemOptArg;
+			elemOptArg = macro _args[_i].trailingComment != null ? _setArrowValueIfElemTrailComment($elemOptArg, opt) : $elemOptArg;
 		final elemCallArgs: Array<Expr> = [elemRead, elemOptArg];
 		if (isSelfRef && hasPratt) elemCallArgs.push(macro -1);
 		final elemCall: Expr = {
@@ -8242,23 +8242,23 @@ class WriterLowering {
 		final parenHardFlatten: Bool = branch.fmtHasFlag('expressionParenHardFlatten');
 		final propagateFieldLevelVar: Bool = branch.fmtHasFlag('propagateFieldLevelVar');
 		var optExpr: Expr = macro opt;
-		if (propagateExpr) optExpr = macro _setExprPosition($optExpr);
-		if (propagateEnumAbstract) optExpr = macro _setEnumAbstract($optExpr);
+		if (propagateExpr) optExpr = macro _setExprPosition($optExpr, opt);
+		if (propagateEnumAbstract) optExpr = macro _setEnumAbstract($optExpr, opt);
 		if (clearExpr) {
 			final operandAccess: Expr = macro $i{argNames[0]};
 			final operandIsBlock: Expr = AstPredLowering.predCallExpr(
 				_shape.root, _ctx.trivia, false, 'operandIsBlockExpr', [operandAccess]
 			);
-			optExpr = macro ($operandIsBlock ? _clearExprPosition($optExpr) : $optExpr);
+			optExpr = macro ($operandIsBlock ? _clearExprPosition($optExpr, opt) : $optExpr);
 		}
-		if (propagateFieldLevelVar) optExpr = macro _setFieldLevelVar($optExpr);
-		if (interpFlat) optExpr = macro _setChainModeOverride($optExpr, anyparse.format.wrap.WrapMode.NoWrap);
+		if (propagateFieldLevelVar) optExpr = macro _setFieldLevelVar($optExpr, opt);
+		if (interpFlat) optExpr = macro _setChainModeOverride($optExpr, anyparse.format.wrap.WrapMode.NoWrap, opt);
 		if (parenHardFlatten)
 			optExpr = macro (
 				opt._parenInCondition
 					? _setChainModeOverride(
-						_clearParenInCondition($optExpr),
-						anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap)
+						_clearParenInCondition($optExpr, opt),
+						anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap), opt
 					)
 					: $optExpr
 			);
@@ -8276,8 +8276,8 @@ class WriterLowering {
 		// → byte-inert. A BARE chain return value (opbool case-2) has NO
 		// enclosing `ParenExpr`, so the flag stays false and its chain keeps
 		// its own headBreak + Nest. Trivia-only.
-		if (parenHardFlatten && _ctx.trivia) optExpr = macro _setKeepChainInParen($optExpr, true);
-		if (kwNewlineExpr != null) optExpr = macro _setVarKwNewline($optExpr, $kwNewlineExpr);
+		if (parenHardFlatten && _ctx.trivia) optExpr = macro _setKeepChainInParen($optExpr, true, opt);
+		if (kwNewlineExpr != null) optExpr = macro _setVarKwNewline($optExpr, $kwNewlineExpr, opt);
 		return optExpr;
 	}
 
@@ -8883,9 +8883,14 @@ class WriterLowering {
 	 * Returns `optExpr` unchanged for every field without the flag, and
 	 * `_aifBlocked` is only ever true with the knob on, so both the flagless
 	 * sites and the default config are byte-inert.
+	 *
+	 * `optExpr` MUST be a chain rooted at the generated writer function's own
+	 * `opt` — the shim is passed `opt` as its `chainBaseArg`, which lets it
+	 * mutate an already-cloned link in place. A caller that hands in a chain
+	 * rooted anywhere else would let it mutate an opt someone else still holds.
 	 */
 	private function arrowValueIfBlockOpt(child: ShapeNode, optExpr: Expr): Expr {
-		return child.fmtHasFlag(ARROW_VALUE_IF_SITE) ? macro (_aifBlocked ? _setArrowValueIfBlocked($optExpr) : $optExpr) : optExpr;
+		return child.fmtHasFlag(ARROW_VALUE_IF_SITE) ? macro (_aifBlocked ? _setArrowValueIfBlocked($optExpr, opt) : $optExpr) : optExpr;
 	}
 
 	/**
@@ -9149,7 +9154,7 @@ class WriterLowering {
 			// the universal default `expressionWrappingWrap`
 			// (`{rules: [], defaultMode: NoWrap}` → false).
 			final _parenCond: Bool = anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null;
-			final opt = _setParenInCondition(_setChainModeOverride(opt, _chainOvr), _parenCond);
+			final opt = _setParenInCondition(_setChainModeOverride(opt, _chainOvr), _parenCond, opt);
 			// ω-condition-wrap-keep: when the cond paren is force-broken
 			// (source newline after `(` + Keep mode → `emitCondition`
 			// returns `brkShape`), the `brkShape`'s `Nest(cols, condDoc)`
@@ -9365,7 +9370,8 @@ class WriterLowering {
 		final starField: String = boolFlagArgs[1];
 		final ctorName: String = boolFlagArgs[2];
 		final starAccess: Expr = { expr: EField(macro value, starField), pos: pos };
-		final flagAccess: Expr = { expr: EField(macro _wo, optField), pos: pos };
+		final flagAccess: Expr = { expr: EField(macro _c, optField), pos: pos };
+		final flagOnOpt: Expr = { expr: EField(macro opt, optField), pos: pos };
 		final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
 		final useNodeAccess: Bool = _ctx.trivia && isTriviaBearing(typePath);
 		final probeBody: Expr = useNodeAccess
@@ -9378,20 +9384,28 @@ class WriterLowering {
 				_f = true;
 				break;
 			};
-		final propagateExprStmt: Expr = propagateExpr ? (macro _wo._inExprPosition = true) : (macro {});
+		final propagateExprStmt: Expr = propagateExpr ? (macro _c._inExprPosition = true) : (macro {});
+		// ω-optclone-chain-fusion: the probe runs against the SHARED `opt` and
+		// the 210-field copy is taken only when a field actually changes, so a
+		// class WITHOUT the probed modifier — the overwhelming majority — reads
+		// its flag off `opt` and allocates nothing (7 630 -> ~0 copies on a real
+		// tree).
+		var unchangedExpr: Expr = macro $flagOnOpt == _f;
+		if (propagateExpr) unchangedExpr = macro $unchangedExpr && opt._inExprPosition;
 		// Each `macro …` reification in an array literal must be
 		// parenthesised — bare `macro` after `[…,` mis-parses as
 		// "Keyword macro cannot be used as variable name". Plain
 		// identifiers (`propagateExprStmt`, `baseRawWriteCall`)
 		// are fine as-is.
 		final block: Array<Expr> = [
-			(macro final _wo = _copyOpt(opt)),
-			propagateExprStmt,
-			macro {
-				var _f: Bool = false;
-				$probeBody;
+			(macro var _f: Bool = false),
+			probeBody,
+			(macro final _wo = $unchangedExpr ? opt : {
+				final _c = _copyOpt(opt);
+				$propagateExprStmt;
 				$flagAccess = _f;
-			},
+				_c;
+			}),
 			baseRawWriteCall,
 		];
 		return { expr: EBlock(block), pos: pos };
@@ -10392,7 +10406,7 @@ class WriterLowering {
 			macro _wo;
 		} else {
 			var e: Expr = macro opt;
-			if (propagateExpr) e = macro _setExprPosition($e);
+			if (propagateExpr) e = macro _setExprPosition($e, opt);
 			// ω-single-stmt-braces: dangling-else suppress frame — when the
 			// enclosing `if` has an `else` at runtime AND its then-body renders
 			// WITHOUT braces, the whole then-body write runs with `_ssbSuppress` so
@@ -10402,26 +10416,26 @@ class WriterLowering {
 			// `else`). A brace-bearing then-body seals its subtree with its own `}`
 			// and never arms the frame. Null cond (no meta / no else sibling /
 			// plain mode) is byte-inert.
-			if (ssbSuppressCond != null) e = macro ($ssbSuppressCond ? _setSsbSuppress($e) : $e);
+			if (ssbSuppressCond != null) e = macro ($ssbSuppressCond ? _setSsbSuppress($e, opt) : $e);
 			// ω-single-stmt-braces CHAIN symmetry: a body's OWN content must NOT
 			// inherit the else-if chain-suppress flag — an independent if-chain
 			// nested inside this branch still de-braces on its own merits. Clear it
 			// on the descendant opt (trivia mode only; the flag exists on the
 			// HxModuleWriteOptions typedef the dropSingleStmtBraces bodies use).
-			if (_ctx.trivia && child.fmtHasFlag('dropSingleStmtBraces')) e = macro _setSsbChainSuppress($e, false);
+			if (_ctx.trivia && child.fmtHasFlag('dropSingleStmtBraces')) e = macro _setSsbChainSuppress($e, false, opt);
 			// Set AFTER `_setExprPosition` so its descent-clear does not wipe the
 			// just-set flag (mirrors the `propagateArrowLambdaBody` ordering).
-			if (suppressCallRestProbe) e = macro _setSuppressCallRestProbe($e, true);
-			if (chainNestSuppress) e = macro _setCallArgChainNest($e);
-			if (propagateArrowLambdaBody) e = macro _setArrowLambdaBody($e);
-			if (propagateAnonFn) e = macro _setAnonFnBody($e);
-			if (propagateTypedef) e = macro _setTypedefBody($e);
-			if (propagateEnumAbstract) e = macro _setEnumAbstract($e);
-			if (switchSubjectNoWrap) e = macro _setChainModeOverride($e, anyparse.format.wrap.WrapMode.NoWrap);
+			if (suppressCallRestProbe) e = macro _setSuppressCallRestProbe($e, true, opt);
+			if (chainNestSuppress) e = macro _setCallArgChainNest($e, opt);
+			if (propagateArrowLambdaBody) e = macro _setArrowLambdaBody($e, opt);
+			if (propagateAnonFn) e = macro _setAnonFnBody($e, opt);
+			if (propagateTypedef) e = macro _setTypedefBody($e, opt);
+			if (propagateEnumAbstract) e = macro _setEnumAbstract($e, opt);
+			if (switchSubjectNoWrap) e = macro _setChainModeOverride($e, anyparse.format.wrap.WrapMode.NoWrap, opt);
 			// The helper gates on `opt._inExprPosition` so only a value-if
 			// branch (not a statement-`if`) flips the narrow flag.
-			if (propagateValueIfBranch) e = macro _setValueIfBranch($e);
-			if (clearElseIfBranch) e = macro _clearElseIfBranch($e);
+			if (propagateValueIfBranch) e = macro _setValueIfBranch($e, opt);
+			if (clearElseIfBranch) e = macro _clearElseIfBranch($e, opt);
 			e = arrowValueIfBlockOpt(child, e);
 			e;
 		};
@@ -10843,13 +10857,19 @@ class WriterLowering {
 	 * link), CLEAR on a non-if terminal else so an if-chain nested inside that
 	 * block de-braces on its own merits. `e` unchanged off-path (plain mode /
 	 * non-dropSingleStmtBraces field / target with no `IfStmt` ctor).
+	 *
+	 * `e` MUST be a chain rooted at the generated writer function's own `opt` —
+	 * the shim is passed `opt` as its `chainBaseArg`, which lets it mutate an
+	 * already-cloned link in place instead of copying the 210-field record
+	 * again. A chain rooted anywhere else would let it mutate an opt someone
+	 * else still holds.
 	 */
 	private function wrapElseChainSuppress(e: Expr, child: ShapeNode, refName: String, chainSuppressExpr: Expr): Expr {
 		if (!_ctx.trivia || !child.fmtHasFlag('dropSingleStmtBraces')) return e;
 		final ifPat: Null<Expr> = findCtorPattern(refName, 'IfStmt');
 		if (ifPat == null) return e;
-		final setExpr: Expr = macro _setSsbChainSuppress($e, $chainSuppressExpr);
-		final clearExpr: Expr = macro _setSsbChainSuppress($e, false);
+		final setExpr: Expr = macro _setSsbChainSuppress($e, $chainSuppressExpr, opt);
+		final clearExpr: Expr = macro _setSsbChainSuppress($e, false, opt);
 		return {
 			expr: ESwitch(macro _optVal, [{ values: [ifPat], expr: setExpr, guard: null }], clearExpr),
 			pos: Context.currentPos()
@@ -11381,9 +11401,9 @@ class WriterLowering {
 		// else-block body still keeps its own body inline.
 		final propagateElseIfBranch: Bool = child.fmtHasFlag('propagateElseIfBranch');
 		var e: Expr = macro opt;
-		if (propagateExpr) e = macro _setExprPosition($e);
-		if (propagateAnonFn) e = macro _setAnonFnBody($e);
-		if (propagateValueIfBranch) e = macro _setValueIfBranch($e);
+		if (propagateExpr) e = macro _setExprPosition($e, opt);
+		if (propagateAnonFn) e = macro _setAnonFnBody($e, opt);
+		if (propagateValueIfBranch) e = macro _setValueIfBranch($e, opt);
 		e = arrowValueIfBlockOpt(child, e);
 		if (propagateElseIfBranch) {
 			final ifPat: Null<Expr> = findCtorPattern(refName, 'IfStmt');
@@ -11391,8 +11411,8 @@ class WriterLowering {
 				// else-if -> set; a non-if else-branch (block / simple stmt) must
 				// CLEAR the flag it may have inherited from a preceding chain link
 				// (`if {} else if {} else { … }`) — the block is not an else-branch-if.
-				final setExpr: Expr = macro _setElseIfBranch($e);
-				final clearExpr: Expr = macro _clearElseIfBranch($e);
+				final setExpr: Expr = macro _setElseIfBranch($e, opt);
+				final clearExpr: Expr = macro _clearElseIfBranch($e, opt);
 				e = {
 					expr: ESwitch(macro _optVal, [{ values: [ifPat], expr: setExpr, guard: null }], clearExpr),
 					pos: Context.currentPos()
@@ -14241,7 +14261,7 @@ class WriterLowering {
 	 */
 	private static function rightOperandOptExpr(branch: ShapeNode): Null<Expr> {
 		final rightOptBase: Null<Expr> = branch.fmtHasFlag('propagateExprPosition') ? macro _setExprPosition(opt) : null;
-		return branch.fmtHasFlag('propagateArrowLambdaBody') ? macro _setArrowLambdaBody(${rightOptBase ?? macro opt}) : rightOptBase;
+		return branch.fmtHasFlag('propagateArrowLambdaBody') ? macro _setArrowLambdaBody(${rightOptBase ?? macro opt}, opt) : rightOptBase;
 	}
 
 }
