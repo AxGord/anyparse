@@ -209,6 +209,10 @@ final class Linter {
 			new GuardReturn(),
 			new MapKeysLookup(),
 			new PreferRangeLoop(),
+			// Sits beside `prefer-range-loop`: both turn a `while` into a `for`, and they cannot
+			// collide — that one claims a counter loop whose condition is `i < B`, this one a loop
+			// whose condition is exactly `it.hasNext()`.
+			new PreferForIn(),
 			new PreferKeyValueLoop(),
 			new DeadBinderCounterLoop(),
 			new RedundantReplaceLoop(),
