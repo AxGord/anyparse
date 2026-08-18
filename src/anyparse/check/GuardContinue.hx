@@ -223,7 +223,7 @@ final class GuardContinue implements Check {
 			literalKinds: literalKinds,
 			hardExitKinds: hoistHardExitKinds(shape, loopJumpKinds),
 			loopJumpKinds: loopJumpKinds,
-			nestedScopeKinds: hoistNestedScopeKinds(shape)
+			nestedScopeKinds: LoopScan.nestedScopeKinds(shape)
 		};
 	}
 
@@ -243,20 +243,6 @@ final class GuardContinue implements Check {
 			shape.throwKinds ?? [],
 			shape.controlExitKinds ?? []
 		]) for (k in grp) if (!out.contains(k) && !loopJumpKinds.contains(k)) out.push(k);
-		return out;
-	}
-
-	/**
-	 * Function / lambda kinds whose subtree the escape scan does NOT descend — a
-	 * nested function's own jumps and returns are unrelated to this loop.
-	 */
-	private static function hoistNestedScopeKinds(shape: RefShape): Array<String> {
-		final out: Array<String> = [];
-		for (grp in [
-			shape.functionKinds ?? [],
-			shape.lambdaKinds ?? [],
-			shape.localFunctionKinds ?? []
-		]) for (k in grp) if (!out.contains(k)) out.push(k);
 		return out;
 	}
 
@@ -309,7 +295,7 @@ final class GuardContinue implements Check {
 	 * then-branch, its condition and the tail; else null.
 	 */
 	private static function match(loop: QueryNode, root: QueryNode, source: String, s: Seams): Null<Candidate> {
-		final body: Null<QueryNode> = loopBody(loop, s);
+		final body: Null<QueryNode> = LoopScan.loopBody(loop, s.doWhileKinds);
 		if (body == null || !s.blockKinds.contains(body.kind)) return null;
 		final stmts: Array<QueryNode> = body.children;
 		var ifIndex: Int = stmts.length - 1;
@@ -403,24 +389,14 @@ final class GuardContinue implements Check {
 	 */
 	private static function thenEscapesIteration(node: QueryNode, s: Seams, inInnerLoop: Bool): Bool {
 		final h: Null<HoistSeams> = s.hoist;
-		if (h == null) return true;
-		if (s.opaqueKinds.contains(node.kind) || h.nestedScopeKinds.contains(node.kind)) return false;
-		if (h.hardExitKinds.contains(node.kind)) return true;
-		if (!inInnerLoop && h.loopJumpKinds.contains(node.kind)) return true;
-		final inner: Bool = inInnerLoop || isLoop(node, s);
-		for (c in node.children) if (thenEscapesIteration(c, s, inner)) return true;
-		return false;
-	}
-
-	/** The loop's body block: the LAST child for a body-last loop (`for` / `while`), the FIRST for a body-first `do … while`. */
-	private static function loopBody(loop: QueryNode, s: Seams): Null<QueryNode> {
-		final kids: Array<QueryNode> = loop.children;
-		return if (kids.length == 0)
-			null
-		else if (s.doWhileKinds.contains(loop.kind))
-			kids[0]
-		else
-			kids[kids.length - 1];
+		return h == null ? true : LoopScan.escapesIteration(node, {
+			loopKinds: s.loopKinds,
+			doWhileKinds: s.doWhileKinds,
+			opaqueKinds: s.opaqueKinds,
+			nestedScopeKinds: h.nestedScopeKinds,
+			hardExitKinds: h.hardExitKinds,
+			loopJumpKinds: h.loopJumpKinds
+		}, inInnerLoop);
 	}
 
 	/**

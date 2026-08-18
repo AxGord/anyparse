@@ -14,6 +14,12 @@ import anyparse.runtime.Span;
  * Its limit is that the scan is BODY-LOCAL. An alias handed out before the loop, or a call that mutates the same collection through a field the callee owns, is outside what a per-file check can see; both rules state that caveat in their own type docs rather than pretending the gate is a proof.
  *
  * Grammar-agnostic: every node kind arrives through `LoopSeams`, built once per run by `seamsOf`, and a grammar leaving any required kind unset makes both rules a no-op.
+ *
+ * ## The JUMP-BINDING scans — a second, independent seam bundle
+ *
+ * Beside the collection scans this class also hosts the loop-body scans every rule that MOVES a jump needs: `loopBody` (the body block, last child for `for` / `while`, first for `do … while`) and `escapesIteration` (does this subtree leave the CURRENT iteration). They read `LoopJumpSeams`, a bundle of their own — `LoopSeams` demands field access, index access and numeric literals, none of which a jump scan asks about, so making one bundle serve both would refuse a grammar that answers everything the jump scan needs.
+ *
+ * `escapesIteration` is where the one non-obvious language fact lives: a `break` inside a `switch` inside a loop breaks the LOOP, not the switch (measured on `--interp`), so the scan DESCENDS into switch bodies — while a `break` inside a nested `for` / `while` / `do … while` binds to that inner loop, so `inInnerLoop` turns the loop-jump kinds off below one. A nested function or lambda gets neither: its jumps and returns belong to it, so the scan stops at its boundary.
  */
 @:nullSafety(Strict)
 final class LoopScan {
@@ -193,6 +199,59 @@ final class LoopScan {
 			: bareIdentName(node.children[0], s);
 	}
 
+	/**
+	 * The loop's body: the LAST child for a body-last loop (`for` / `while`), the FIRST for a
+	 * body-first `do … while`. Null when the node has no children at all.
+	 */
+	public static function loopBody(loop: QueryNode, doWhileKinds: Array<String>): Null<QueryNode> {
+		final kids: Array<QueryNode> = loop.children;
+		return if (kids.length == 0)
+			null
+		else if (doWhileKinds.contains(loop.kind))
+			kids[0]
+		else
+			kids[kids.length - 1];
+	}
+
+	/** Whether `node` is a loop of either body order. */
+	public static inline function isLoop(node: QueryNode, s: LoopJumpSeams): Bool {
+		return s.loopKinds.contains(node.kind) || s.doWhileKinds.contains(node.kind);
+	}
+
+	/**
+	 * Whether `node`'s subtree can leave the CURRENT iteration of the loop it belongs to — a
+	 * `hardExitKinds` node (`return` / `throw` / a grammar-specific exit) anywhere, or a
+	 * `loopJumpKinds` node (`break` / `continue`, or whichever subset the caller asked about) that
+	 * is NOT nested in an inner loop. `inInnerLoop` is threaded, not recomputed: an inner loop's own
+	 * jumps bind to IT, so they never escape the outer iteration, while a `return` still does.
+	 *
+	 * A `switch` is descended into deliberately — a `break` there breaks the LOOP, not the switch
+	 * (measured on `--interp`: the C/JS habit is wrong for Haxe). A nested function / lambda
+	 * (`nestedScopeKinds`) and a reification subtree (`opaqueKinds`) are not descended into at all.
+	 */
+	public static function escapesIteration(node: QueryNode, s: LoopJumpSeams, inInnerLoop: Bool): Bool {
+		if (s.opaqueKinds.contains(node.kind) || s.nestedScopeKinds.contains(node.kind)) return false;
+		if (s.hardExitKinds.contains(node.kind)) return true;
+		if (!inInnerLoop && s.loopJumpKinds.contains(node.kind)) return true;
+		final inner: Bool = inInnerLoop || isLoop(node, s);
+		for (c in node.children) if (escapesIteration(c, s, inner)) return true;
+		return false;
+	}
+
+	/**
+	 * The function / lambda / local-function kinds a jump scan must not descend into — a nested
+	 * scope's own jumps and returns are unrelated to the loop being rewritten.
+	 */
+	public static function nestedScopeKinds(shape: RefShape): Array<String> {
+		final out: Array<String> = [];
+		for (grp in [
+			shape.functionKinds ?? [],
+			shape.lambdaKinds ?? [],
+			shape.localFunctionKinds ?? []
+		]) for (k in grp) if (!out.contains(k)) out.push(k);
+		return out;
+	}
+
 	/** Recursive body of `usedOnlyAsStableCollection`, carrying the two ancestors a position verdict needs. */
 	private static function stableUseScan(
 		node: QueryNode, parent: Null<QueryNode>, grandParent: Null<QueryNode>, name: String, sizeMember: String, s: LoopSeams
@@ -247,4 +306,20 @@ typedef LoopSeams = {
 	var writeParentKinds: Array<String>;
 	var closureKinds: Array<String>;
 	var opaqueKinds: Array<String>;
+}
+
+/**
+ * The kinds the JUMP-BINDING scans (`loopBody`, `isLoop`, `escapesIteration`) read — deliberately
+ * separate from `LoopSeams`, which demands field access, index access and numeric literals that a
+ * jump scan never asks about. `hardExitKinds` are the exits an inner loop does NOT shield
+ * (`return` / `throw`); `loopJumpKinds` are the ones it does, and a caller narrows that list to ask
+ * a narrower question (`break` alone, when a `continue` is provably harmless).
+ */
+typedef LoopJumpSeams = {
+	var loopKinds: Array<String>;
+	var doWhileKinds: Array<String>;
+	var opaqueKinds: Array<String>;
+	var nestedScopeKinds: Array<String>;
+	var hardExitKinds: Array<String>;
+	var loopJumpKinds: Array<String>;
 }
