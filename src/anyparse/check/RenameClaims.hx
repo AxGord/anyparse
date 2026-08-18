@@ -31,21 +31,9 @@ import anyparse.query.SymbolIndex;
 final class RenameClaims {
 
 	private var _index: Null<SymbolIndex> = null;
-
 	private var _claims: Array<MemberClaim> = [];
 
 	public function new() {}
-
-	/**
-	 * The type whose inheritance chain a rename of `decl` would introduce the new name into — the
-	 * owner of a FIELD or a METHOD, the two categories Haxe forbids redeclaring in a subclass and
-	 * the two `Naming.renameEditsFor` already holds to the inherited-member proof. Null for
-	 * anything else: a local / param / catch var only SHADOWS an inherited member (which Haxe
-	 * permits), a type has no owner, and a static constant is not inherited at all.
-	 */
-	public static inline function memberOwnerOf(decl: NamedDecl): Null<String> {
-		return decl.category == NamingCategory.Field || decl.category == NamingCategory.Method ? decl.enclosingType : null;
-	}
 
 	/**
 	 * Whether a rename of `owner`'s member to `newName` must DEFER to one this pass already
@@ -81,6 +69,17 @@ final class RenameClaims {
 			_claims = [];
 		}
 		return _claims;
+	}
+
+	/**
+	 * The type whose inheritance chain a rename of `decl` would introduce the new name into — the
+	 * owner of a FIELD or a METHOD, the two categories Haxe forbids redeclaring in a subclass and
+	 * the two `Naming.renameEditsFor` already holds to the inherited-member proof. Null for
+	 * anything else: a local / param / catch var only SHADOWS an inherited member (which Haxe
+	 * permits), a type has no owner, and a static constant is not inherited at all.
+	 */
+	public static inline function memberOwnerOf(decl: NamedDecl): Null<String> {
+		return decl.category == NamingCategory.Field || decl.category == NamingCategory.Method ? decl.enclosingType : null;
 	}
 
 }
