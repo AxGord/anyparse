@@ -490,15 +490,77 @@ tools/battery.sh                    # build, suite + monolith cross-check, corpu
 tools/battery.sh --quick            # mid-slice: drop the monolith cross-check
 tools/battery.sh --base 29011103    # compare the blast radius against a named snapshot
 tools/battery.sh --snapshot         # on green, cache this HEAD as the next "before" arm
+tools/battery.sh --allow-blast      # accept the blast movement it printed last run
 ```
 
 `ANYPARSE_HXFORMAT_FORK` must be set: without it the corpus layer skips in
 silence, and a battery that cannot tell "corpus clean" from "corpus not run"
 is worse than no corpus gate, so the script refuses rather than warns.
 
+### The step graph: four branches, one join
+
+The checks read like a sequence, but their dependencies are far sparser than
+their order, so they run as four concurrent branches:
+
+```
+build ──┬─ suite ── corpus          corpus reads the sweep snapshot the suite wrote
+        ├─ fmt
+        ├─ jvm probe                only when the core moved
+        └─ oracle ── lint ── blast  lint reuses the oracle's verdict;
+                                    blast diffs lint's own output
+```
+
+`build` stays sequential because everything else executes what it produces.
+Inside a branch the order is a real dependency; across branches there is none
+that matters: all four read `src`, and each branch's writes are read only by
+itself. The suite branch is not read-only — it rewrites `bin/.last-sweep.json`,
+rotates `.prev-sweep.json` and stages `/tmp/anyparse-last-probe.hx` — but its
+own corpus step is the only consumer, and the jvm probe's
+`bin/jvm-portability.jar` has none. Check that again before adding a fifth
+branch rather than inheriting the claim: `tools/suite-shard.sh`'s shared-path
+inventory was written for shard-vs-shard, not for branch-vs-branch. `HXQ_QUIET=1` is exported
+between the build and the fork, and that ordering is load-bearing in both
+directions: set earlier it would let a stale binary through the launcher's
+own probe, set later a branch would decide to rebuild `bin/apq.js` while
+three others are executing it.
+
+Concurrency must not cost a result, so two properties are built in rather
+than hoped for.
+
+**Every branch is collected.** A red suite no longer stops the run: it fails
+the verdict and the other three branches still report. Three broken things
+are reported as three, because "one step failed and three never ran" is the
+summary this script exists to prevent. Each branch queues its failures to a
+file that the driver replays after the join — a branch subshell's own
+`verdict` variable is a copy that would be thrown away.
+
+**A step has three outcomes, never two.** The driver writes down, at launch,
+the step labels each branch PROMISES to record; after the join a promised
+label with no row becomes `not run` — printed as such in the timing table and
+failing the verdict on its own. That covers the anticipated case (corpus
+after a red suite: the sweep snapshot proves nothing) and, more importantly,
+the unanticipated one, where a branch aborts somewhere its author never
+considered. `skipped` is the only benign third state, and only where the
+script decided the step does not apply — the jvm probe on an untouched core,
+which prints `skipped  the core did not move since <base>`.
+
+No branch prints while they run (the driver announces the fork, and that is
+the only line): interleaved stdout from four concurrent steps is unusable. Each branch writes its own `.out`/`.err` pair
+and the driver replays them, stream by stream, in a fixed order — so the
+transcript reads exactly like the old sequential one, with the same
+`=== step ===` headers.
+
+One consequence is worth stating, because the transcript hides it. The
+`--verify` monolith now runs beside three CPU-heavy branches, up to nine
+`node`/`haxe` processes deep. It still buys what it is for — a monolith is one
+in-order process, so the ordering insurance survives — but it is no longer
+ISOLATED. A suite failure that reproduces under the battery and not under a
+bare `tools/suite-shard.sh --verify` is a load artefact, not a slice
+regression; re-run the suite alone before believing it.
+
 ### Why `compilerOracleServer` is off here
 
-Lint is the battery's largest step — about 70s of a 160s run, both trees — and
+Lint is the battery's largest branch — about 70s of its own, both trees — and
 `apqlint.json` sets `"compilerOracleServer": false` on purpose. Measured
 2026-08-18 on this project:
 
@@ -599,9 +661,11 @@ they are why this is a report-mode fast path and nothing more.
 
 The battery used to typecheck the same hxml twice: its `build` step compiles
 `test-js.hxml`, and its `lint` step then asked the compiler the same question a
-minute later. Step `1b` now runs `apq oracle src` in the background right after
-the build, overlapping the suite/corpus/fmt/jvm steps, and `lint` waits for it
-and hits the cache.
+minute later. The oracle now LEADS the lint branch, so it overlaps the
+suite/corpus/fmt/jvm branches, and `lint` — the very next step in the same
+branch — hits the cache. It sits there rather than in the driver as a
+background job because a branch subshell cannot `wait` on a pid that is not
+its own child; the wall-clock moment it starts is the same either way.
 
 ```sh
 apq oracle src        # one COLD typecheck, verdict recorded under the fingerprint
@@ -660,7 +724,14 @@ missing, unreadable or malformed, or the flags wrong — and that fails the
 battery whatever flags you pass. Waiving expected movement must never waive a
 gate that never executed.
 
-The battery prints where its own time went. Those numbers measure the battery,
-not the code: two builds and two lint arms run concurrently on purpose. Never
-quote them as benchmark results — benchmark arms run sequentially, see
-"The profiling harness" above.
+The battery prints where its own time went, and the rows marked `*` OVERLAP:
+they are the four branches' steps, running at once, and they sum to far more
+than the elapsed time. The table therefore closes on two different numbers —
+`concurrent span`, the wall clock of the parallel region, and `TOTAL (wall)`,
+the real end-to-end elapsed time — and neither is a measurement of the code.
+
+Those numbers measure the battery. A benchmark arm runs ALONE and
+SEQUENTIALLY on an otherwise idle machine; a battery row runs beside three
+other branches, up to nine `node`/`haxe` processes deep, and moves by tens of
+percent with ambient load. Never quote one as a benchmark result — see "The
+profiling harness" above for how a real arm is measured.
