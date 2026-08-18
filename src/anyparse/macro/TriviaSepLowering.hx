@@ -175,8 +175,8 @@ final class TriviaSepLowering {
 		// suppress inherited from an enclosing call-arg (`f({date: g(...)})`) would
 		// leave an over-long field value glued past `maxLineLength`.
 		final elemOptArg: Expr = switch wrapRulesField {
-			case 'callParameterWrap': macro _setSuppressCallRestProbe($elemOptBase, true);
-			case 'objectLiteralWrap', 'arrayLiteralWrap': macro _setSuppressCallRestProbe($elemOptBase, false);
+			case 'callParameterWrap': macro _setSuppressCallRestProbe($elemOptBase, true, opt);
+			case 'objectLiteralWrap', 'arrayLiteralWrap': macro _setSuppressCallRestProbe($elemOptBase, false, opt);
 			case null, _: elemOptBase;
 		}
 		final triviaElemCall: Expr = {

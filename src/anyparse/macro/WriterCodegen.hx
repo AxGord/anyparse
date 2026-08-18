@@ -624,7 +624,7 @@ class WriterCodegen {
 		if (clearsArrowValueIfBlocked) clears.push(macro _c._arrowValueIfBlocked = false);
 		final body: Expr = macro {
 			if ($guard) return o;
-			final _c: $optionsCT = _copyOpt(o);
+			final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 			_c._inExprPosition = true;
 			$b{clears};
 			return _c;
@@ -633,7 +633,7 @@ class WriterCodegen {
 			name: '_setExprPosition',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: body,
 			}),
@@ -670,11 +670,15 @@ class WriterCodegen {
 			name: '_setCaseSiblingWidth',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }, { name: 'w', type: macro :Int }],
+				args: [
+					{ name: 'o', type: optionsCT },
+					{ name: 'w', type: macro :Int },
+					chainBaseArg(optionsCT)
+				],
 				ret: optionsCT,
 				expr: macro {
 					if (o._caseSiblingFlatWidth == w) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._caseSiblingFlatWidth = w;
 					return _c;
 				},
@@ -688,11 +692,11 @@ class WriterCodegen {
 			name: '_setValueIfBranch',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._inExprPosition || o._inValueIfBranch) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inValueIfBranch = true;
 					return _c;
 				},
@@ -719,11 +723,11 @@ class WriterCodegen {
 			name: '_clearValueIfBranch',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._inValueIfBranch) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inValueIfBranch = false;
 					return _c;
 				},
@@ -763,11 +767,11 @@ class WriterCodegen {
 			name: '_setArrowValueIfElemTrailComment',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (o._arrowValueIfElemTrailComment) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._arrowValueIfElemTrailComment = true;
 					return _c;
 				},
@@ -781,11 +785,11 @@ class WriterCodegen {
 			name: '_setArrowValueIfBlocked',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (o._arrowValueIfBlocked) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._arrowValueIfBlocked = true;
 					return _c;
 				},
@@ -799,11 +803,11 @@ class WriterCodegen {
 			name: '_setArrowLambdaBody',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (o._inArrowLambdaBody) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inArrowLambdaBody = true;
 					return _c;
 				},
@@ -817,11 +821,11 @@ class WriterCodegen {
 			name: '_clearArrowLambdaBody',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._inArrowLambdaBody) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inArrowLambdaBody = false;
 					return _c;
 				},
@@ -848,11 +852,11 @@ class WriterCodegen {
 			name: '_clearExprPosition',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._inExprPosition) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inExprPosition = false;
 					return _c;
 				},
@@ -874,11 +878,11 @@ class WriterCodegen {
 			name: '_setElseIfBranch',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (o._inElseIfBranch) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inElseIfBranch = true;
 					return _c;
 				},
@@ -900,11 +904,11 @@ class WriterCodegen {
 			name: '_clearElseIfBranch',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._inElseIfBranch) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inElseIfBranch = false;
 					return _c;
 				},
@@ -929,11 +933,11 @@ class WriterCodegen {
 			name: '_setAnonFnBody',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (o._inAnonFnBody) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inAnonFnBody = true;
 					return _c;
 				},
@@ -960,11 +964,11 @@ class WriterCodegen {
 			name: '_clearAnonFnBody',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._inAnonFnBody) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inAnonFnBody = false;
 					return _c;
 				},
@@ -990,11 +994,11 @@ class WriterCodegen {
 			name: '_setTypedefBody',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (o._inTypedefBody) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inTypedefBody = true;
 					return _c;
 				},
@@ -1021,11 +1025,11 @@ class WriterCodegen {
 			name: '_clearTypedefBody',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._inTypedefBody) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inTypedefBody = false;
 					return _c;
 				},
@@ -1050,11 +1054,11 @@ class WriterCodegen {
 			name: '_setIntersectionBreak',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (o._intersectionOperandBreak) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._intersectionOperandBreak = true;
 					return _c;
 				},
@@ -1079,11 +1083,11 @@ class WriterCodegen {
 			name: '_setFieldLevelVar',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (o._inFieldLevelVar) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inFieldLevelVar = true;
 					return _c;
 				},
@@ -1108,11 +1112,11 @@ class WriterCodegen {
 			name: '_clearFieldLevelVar',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._inFieldLevelVar) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inFieldLevelVar = false;
 					return _c;
 				},
@@ -1138,11 +1142,11 @@ class WriterCodegen {
 			name: '_setCallArgChainNest',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (o._callArgChainNest) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._callArgChainNest = true;
 					return _c;
 				},
@@ -1168,11 +1172,11 @@ class WriterCodegen {
 			name: '_clearCallArgChainNest',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._callArgChainNest) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._callArgChainNest = false;
 					return _c;
 				},
@@ -1198,11 +1202,12 @@ class WriterCodegen {
 				args: [
 					{ name: 'o', type: optionsCT },
 					{ name: 'v', type: macro :Bool },
+					chainBaseArg(optionsCT),
 				],
 				ret: optionsCT,
 				expr: macro {
 					if (o._parenInCondition == v) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._parenInCondition = v;
 					return _c;
 				},
@@ -1227,11 +1232,12 @@ class WriterCodegen {
 				args: [
 					{ name: 'o', type: optionsCT },
 					{ name: 'v', type: macro :Bool },
+					chainBaseArg(optionsCT),
 				],
 				ret: optionsCT,
 				expr: macro {
 					if (o._inTernaryCond == v) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inTernaryCond = v;
 					return _c;
 				},
@@ -1258,11 +1264,12 @@ class WriterCodegen {
 				args: [
 					{ name: 'o', type: optionsCT },
 					{ name: 'v', type: macro :Bool },
+					chainBaseArg(optionsCT),
 				],
 				ret: optionsCT,
 				expr: macro {
 					if (o._suppressCallRestProbe == v) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._suppressCallRestProbe = v;
 					return _c;
 				},
@@ -1284,11 +1291,11 @@ class WriterCodegen {
 			name: '_clearParenInCondition',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._parenInCondition) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._parenInCondition = false;
 					return _c;
 				},
@@ -1314,11 +1321,12 @@ class WriterCodegen {
 				args: [
 					{ name: 'o', type: optionsCT },
 					{ name: 'v', type: macro :Bool },
+					chainBaseArg(optionsCT),
 				],
 				ret: optionsCT,
 				expr: macro {
 					if (o._varKwNewline == v) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._varKwNewline = v;
 					return _c;
 				},
@@ -1340,11 +1348,11 @@ class WriterCodegen {
 			name: '_clearVarKwNewline',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._varKwNewline) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._varKwNewline = false;
 					return _c;
 				},
@@ -1370,11 +1378,12 @@ class WriterCodegen {
 				args: [
 					{ name: 'o', type: optionsCT },
 					{ name: 'v', type: macro :Bool },
+					chainBaseArg(optionsCT),
 				],
 				ret: optionsCT,
 				expr: macro {
 					if (o._keepFlatInner == v) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._keepFlatInner = v;
 					return _c;
 				},
@@ -1394,11 +1403,11 @@ class WriterCodegen {
 			name: '_clearKeepFlatInner',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._keepFlatInner) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._keepFlatInner = false;
 					return _c;
 				},
@@ -1421,11 +1430,12 @@ class WriterCodegen {
 				args: [
 					{ name: 'o', type: optionsCT },
 					{ name: 'v', type: macro :Bool },
+					chainBaseArg(optionsCT),
 				],
 				ret: optionsCT,
 				expr: macro {
 					if (o._keepChainInParen == v) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._keepChainInParen = v;
 					return _c;
 				},
@@ -1444,11 +1454,11 @@ class WriterCodegen {
 			name: '_clearKeepChainInParen',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._keepChainInParen) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._keepChainInParen = false;
 					return _c;
 				},
@@ -1471,11 +1481,11 @@ class WriterCodegen {
 			name: '_setSuppressMore',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (o._suppressMore) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._suppressMore = true;
 					return _c;
 				},
@@ -1497,11 +1507,11 @@ class WriterCodegen {
 			name: '_clearSuppressMore',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._suppressMore) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._suppressMore = false;
 					return _c;
 				},
@@ -1535,13 +1545,19 @@ class WriterCodegen {
 				args: [
 					{ name: 'o', type: optionsCT },
 					{ name: 'mode', type: macro :Null<anyparse.format.wrap.WrapMode> },
+					chainBaseArg(optionsCT),
 				],
 				ret: optionsCT,
 				expr: macro {
 					if (mode == null) return o;
 					final _mode: anyparse.format.wrap.WrapMode = mode;
 					if (o._chainModeOverride == _mode) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					// Read every `o` field BEFORE the clone line: on the fusion
+					// path `_c` and `o` are the SAME record, so a read after a
+					// write would see the new value.
+					final _boolLoc: anyparse.format.wrap.WrappingLocation = _resolveChainLoc(o.opBoolChainWrap);
+					final _addSubLoc: anyparse.format.wrap.WrappingLocation = _resolveChainLoc(o.opAddSubChainWrap);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._chainModeOverride = _mode;
 					// Mode override forces chain layout to the cond-wrap
 					// mode (mirrors fork's `collapseChainWraps` post-pass),
@@ -1553,16 +1569,8 @@ class WriterCodegen {
 					// `BeforeLast` mirrors haxe-formatter's idiomatic default
 					// (`\n&& X`) for unconfigured opBoolChain; was hardcoded
 					// before priority_over_opbool exposed the gap.
-					_c.opBoolChainWrap = {
-						rules: [],
-						defaultMode: _mode,
-						defaultLocation: _resolveChainLoc(o.opBoolChainWrap),
-					};
-					_c.opAddSubChainWrap = {
-						rules: [],
-						defaultMode: _mode,
-						defaultLocation: _resolveChainLoc(o.opAddSubChainWrap),
-					};
+					_c.opBoolChainWrap = { rules: [], defaultMode: _mode, defaultLocation: _boolLoc };
+					_c.opAddSubChainWrap = { rules: [], defaultMode: _mode, defaultLocation: _addSubLoc };
 					return _c;
 				},
 			}),
@@ -2526,11 +2534,11 @@ class WriterCodegen {
 			name: '_setEnumAbstract',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (o._inEnumAbstract) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inEnumAbstract = true;
 					return _c;
 				},
@@ -2559,11 +2567,11 @@ class WriterCodegen {
 			name: '_setSsbSuppress',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }],
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
 					if (o._ssbSuppress) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._ssbSuppress = true;
 					return _c;
 				},
@@ -2587,17 +2595,59 @@ class WriterCodegen {
 			name: '_setSsbChainSuppress',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }, { name: 'v', type: macro :Bool }],
+				args: [
+					{ name: 'o', type: optionsCT },
+					{ name: 'v', type: macro :Bool },
+					chainBaseArg(optionsCT)
+				],
 				ret: optionsCT,
 				expr: macro {
 					if (o._ssbChainSuppress == v) return o;
-					final _c: $optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._ssbChainSuppress = v;
 					return _c;
 				},
 			}),
 			pos: Context.currentPos(),
 		};
+	}
+
+	/**
+	 * ω-optclone-chain-fusion — the trailing `_b` (chain-base) argument every
+	 * opt-fanout shim carries.
+	 *
+	 * A composition site threads one opt through several shims in ONE emitted
+	 * expression (`_setSuppressCallRestProbe(_setCallArgChainNest(_setExprPosition(opt)))`).
+	 * Each shim used to clone, so a three-step chain minted three 210-field
+	 * records where one would do: on a real tree 48 % of every `_copyOpt` call
+	 * had a source object the PREVIOUS step had just created, and threading the
+	 * base retired 34.7 % of the calls outright.
+	 *
+	 * `_b` is the chain's ROOT expression. It is spelled with the same
+	 * identifier (`opt`) as the root and sits in the same scope, so the two
+	 * always denote the same binding — including where generated code rebinds
+	 * `opt` (`final opt = _setParenInCondition(… opt …, opt)`, whose `_b` still
+	 * resolves to the outer one). An incoming `o` that is not `_b` can
+	 * therefore only be a clone an EARLIER step of the same expression just
+	 * made: it is reachable from nowhere else, so the shim mutates it in place
+	 * instead of cloning again. The first step still clones, and a callee
+	 * re-roots at its own `opt`, so ownership never crosses a call boundary —
+	 * which is what keeps the output byte-identical.
+	 *
+	 * The `_b != null` conjunct is load-bearing, not defensive: `o` is never
+	 * null, so a bare `o != _b` would read as `true` at every site that passes
+	 * no base and would license in-place mutation there.
+	 *
+	 * One rule for a shim body: after the clone line, only WRITE `_c` — never
+	 * read `o` for a field already written, since on the fusion path `_c` and
+	 * `o` are the same record. Hoist such reads above the clone line the way
+	 * `_setChainModeOverride` does.
+	 *
+	 * Defaults to `null` (own nothing, always clone), so an emission site that
+	 * has not been audited for its chain root stays on the old behaviour.
+	 */
+	private static inline function chainBaseArg(optionsCT: ComplexType): FunctionArg {
+		return { name: '_b', type: macro :Null<$optionsCT>, value: macro null };
 	}
 
 }
