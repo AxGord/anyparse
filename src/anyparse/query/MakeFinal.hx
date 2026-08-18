@@ -72,6 +72,12 @@ final class MakeFinal {
 		if (fieldSpan == null) return Err('field "$fieldName" carries no span');
 		final fieldSpanNN: Span = fieldSpan;
 
+		// The whole op rests on `classifyWrites` seeing every assignment. An unparsed
+		// conditional-compilation region projects no nodes, so a write inside one reads as
+		// absent and the field is made `final` over an assignment the compiler still performs.
+		final opaque: Null<String> = RefactorSupport.opaqueCondRegionInAny(parsed, fieldName, shape, 'making "$fieldName" final');
+		if (opaque != null) return Err(opaque);
+
 		final ctorSpan: Null<Span> = constructorSpan(src.tree, typeName, src.source, shape);
 		final hasInit: Bool = fNode.children.length > 0;
 		final writes: { ctorWrites: Int, outside: Array<String> } = classifyWrites(parsed, srcFile, fieldName, ctorSpan);

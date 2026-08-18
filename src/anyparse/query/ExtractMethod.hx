@@ -187,6 +187,12 @@ final class ExtractMethod {
 			for (d in collectLocalDecls(sel.stmts, TypeResolver.blockScopedValueDeclarationKinds(shape))) d.name
 		];
 		for (nm in boundNames) {
+			// Same question, asked of a region with no nodes: whether a name the range binds is
+			// read after it cannot be decided when an unparsed conditional region may hold that read.
+			final opaque: Null<String> = RefactorSupport.opaqueCondRegionDiagnostic(
+				source, scope, nm, shape, 'extract of a range binding "$nm"'
+			);
+			if (opaque != null) return Err(opaque);
 			final dup: Null<Span> = RefactorSupport.sameBlockRedeclaration(scope, nm, plugin, shape);
 			if (dup != null) {
 				final at: Position = dup.lineCol(source);

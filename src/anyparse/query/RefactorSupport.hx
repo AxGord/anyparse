@@ -291,6 +291,13 @@ final class RefactorSupport {
 	/** The grammar kind a `typedef` projects as — the only member host whose members sit under an `Anon`. */
 	private static final TYPEDEF_DECL_KIND: String = 'TypedefDecl';
 
+	/**
+	 * How many characters of an unparsed conditional-compilation region a refusal diagnostic quotes
+	 * back — enough to recognise the region in the file, short enough to keep the message one line.
+	 */
+	private static inline final REGION_EXCERPT_CHARS: Int = 60;
+
+
 	/** The grammar kind an anonymous structure projects as, in BOTH a typedef body and a type expression. */
 	private static final ANON_KIND: String = 'Anon';
 
@@ -3286,6 +3293,127 @@ final class RefactorSupport {
 			if (found != null) return found;
 		}
 		return null;
+	}
+
+	/**
+	 * The span of an UNPARSED conditional-compilation region inside `scope` whose raw bytes
+	 * spell `name` as a standalone identifier, or null when no region there could hold one.
+	 *
+	 * `RefShape.opaqueCondRegionKinds` names the ctors a grammar falls back to when a
+	 * `#if … #end` region is not a balanced subtree. Such a node keeps its CONTINUATION as a
+	 * child (the tail operand, the shared body, the statement after `#end`) and drops the
+	 * region itself: nothing in it projects. So the unmodelled bytes are exactly the parts of
+	 * the node's own span that no child covers, which is what this returns — the region text
+	 * a diagnostic quotes back, not the whole node.
+	 *
+	 * Asked by TEXT because there is no tree to ask. That makes the test conservative in the
+	 * one direction that is safe: a mention bound to some OTHER binding of the same name, or
+	 * one sitting in a comment or a string literal inside the region, refuses a rename that
+	 * would have been fine. Being wrong the other way is a silent miscompile in whichever
+	 * build defines the condition, and no scan of a region with no nodes can do better.
+	 * Standalone-identifier matching rather than a bare substring: a real reference is a
+	 * token, so `tagName` does not count as a mention of `tag`, and an interpolated `$tag`
+	 * still does (a `$` is not an identifier character).
+	 */
+	public static function opaqueCondRegionMentioning(scope: QueryNode, source: String, name: String, shape: RefShape): Null<Span> {
+		final kinds: Array<String> = shape.opaqueCondRegionKinds ?? [];
+		if (kinds.length == 0 || name.length == 0) return null;
+		function walk(node: QueryNode): Null<Span> {
+			final span: Null<Span> = node.span;
+			if (span != null && kinds.contains(node.kind)) for (gap in unmodelledGaps(node, span)) if (mentionsIdent(source, gap, name))
+				return gap;
+			for (c in node.children) {
+				final found: Null<Span> = walk(c);
+				if (found != null) return found;
+			}
+			return null;
+		}
+		return walk(scope);
+	}
+
+	/**
+	 * The fail-closed diagnostic every MUTATING op shares for an unparsed conditional-compilation
+	 * region that mentions `name`, or null when `scope` holds none.
+	 *
+	 * One builder rather than a message per op: the refusal is the same fact everywhere (the model
+	 * dropped these bytes, so no rewrite can be complete over them), and a reader who has met it
+	 * once should recognise it from any op. `what` is the op's own subject, spelled as its other
+	 * diagnostics spell it (`rename of "x"`, `inline of "f"`); `file` is included only when the op
+	 * works over more than one, where a bare line:col would not locate the region.
+	 */
+	public static function opaqueCondRegionDiagnostic(
+		source: String, scope: QueryNode, name: String, shape: RefShape, what: String
+	): Null<String> {
+		final region: Null<Span> = opaqueCondRegionMentioning(scope, source, name, shape);
+		if (region == null) return null;
+		final at: Position = region.lineCol(source);
+		return '$what is unsafe: the unparsed conditional-compilation region at ${at.line}:${at.col} spells "$name" in bytes'
+			+ ' the parser captured raw (${regionExcerpt(source, region)}), so no scan can see that occurrence and the'
+			+ ' rewrite would leave it on the old name - restructure the region into a balanced #if first';
+	}
+
+	/**
+	 * The first `opaqueCondRegionDiagnostic` any of `files` yields for `name`, prefixed with the
+	 * file it came from, or null when none does.
+	 *
+	 * The multi-file arm every CROSS-file mutating op needs, as one pre-pass rather than a check
+	 * threaded through each op's own rewrite loop: the refusal is atomic — a region anywhere in the
+	 * scope defeats the whole edit set — so deciding it before the first edit is both cheaper and
+	 * the only order that cannot half-apply. The file prefix is load-bearing here where the
+	 * single-file arm's bare line:col is not: one coordinate names no file.
+	 */
+	public static function opaqueCondRegionInAny(
+		files: Array<{ final file: String; final source: String; final tree: QueryNode; }>, name: String, shape: RefShape, what: String
+	): Null<String> {
+		for (f in files) {
+			final opaque: Null<String> = opaqueCondRegionDiagnostic(f.source, f.tree, name, shape, what);
+			if (opaque != null) return '${f.file}: $opaque';
+		}
+		return null;
+	}
+
+	/**
+	 * A single-line excerpt of `span`'s source text for a diagnostic — whitespace runs collapsed
+	 * to one space and the result capped at `REGION_EXCERPT_CHARS`, so a region spanning several
+	 * source lines still names itself in one message line.
+	 */
+	private static function regionExcerpt(source: String, span: Span): String {
+		final flat: String = ~/\s+/g.replace(source.substring(span.from, span.to), ' ').trim();
+		return flat.length <= REGION_EXCERPT_CHARS ? flat : '${flat.substr(0, REGION_EXCERPT_CHARS)}...';
+	}
+
+	/**
+	 * The parts of `span` that none of `node`'s direct children cover — the bytes the model
+	 * dropped. Children are taken in span order and a child with no span contributes nothing,
+	 * which widens the gap rather than narrowing it: the safe direction for a fail-closed gate.
+	 */
+	private static function unmodelledGaps(node: QueryNode, span: Span): Array<Span> {
+		final covered: Array<Span> = [for (c in node.children) if (c.span != null) (c.span: Span)];
+		covered.sort((a, b) -> a.from - b.from);
+		final out: Array<Span> = [];
+		var at: Int = span.from;
+		for (c in covered) {
+			if (c.from > at) out.push(new Span(at, c.from < span.to ? c.from : span.to));
+			if (c.to > at) at = c.to;
+		}
+		if (at < span.to) out.push(new Span(at, span.to));
+		return out;
+	}
+
+	/**
+	 * Whether `source` spells `name` as a standalone identifier token anywhere inside `span`.
+	 *
+	 * A `#`-prefixed spelling is skipped: `#end` / `#if` / `#else` are the directive keywords that
+	 * DELIMIT the region, not references inside it, and every such region ends in one — counting
+	 * them would refuse every rename of a binding called `end` in any file carrying a splice.
+	 */
+	private static function mentionsIdent(source: String, span: Span, name: String): Bool {
+		var at: Int = source.indexOf(name, span.from);
+		while (at >= 0 && at + name.length <= span.to) {
+			if (standaloneIdentAt(source, name, at) && (at == 0 || source.fastCodeAt(at - 1) != '#'.code)) return true;
+			at = source.indexOf(name, at + 1);
+		}
+		return false;
 	}
 
 	/**

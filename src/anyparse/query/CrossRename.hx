@@ -336,6 +336,10 @@ final class CrossRename {
 		parsed: Array<ParsedFile>, typeName: String, newName: String, plugin: GrammarPlugin, typeRefShape: TypeRefShape,
 		refShape: RefShape, module: ModulePath
 	): CrossRenameResult {
+		// A type name is reachable from any file of the scope, so an unparsed
+		// conditional-compilation region ANYWHERE in it can hide a type position.
+		final opaque: Null<String> = RefactorSupport.opaqueCondRegionInAny(parsed, typeName, refShape, 'rename of "$typeName"');
+		if (opaque != null) return Err(opaque);
 		final changes: Array<FileChange> = [];
 		for (entry in parsed) {
 			final occurrences: Array<Span> = collectOccurrences(entry.source, typeName, entry.tree, plugin, typeRefShape, refShape, module);

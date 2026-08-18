@@ -225,6 +225,31 @@ class RemoveParamSliceTest extends Test {
 		assertRefused(source, 2, 9, 0);
 	}
 
+	/**
+	 * A call written inside an unparsed conditional-compilation region (`CondSpliceStmt` here)
+	 * projects no node, so `CallSites.collect` proves a set that is complete only for the builds
+	 * that strip the region — removing the parameter would leave that call with an argument too
+	 * many. The shared `RefactorSupport.opaqueCondRegionDiagnostic` gate refuses it, which is what
+	 * covers `change-sig`, `inline-method` and `introduce-parameter-object` at the same seam.
+	 */
+	public function testRefuseCallInsideUnparsedConditionalRegion(): Void {
+		final source: String = 'class C {\n\tpublic function f(a:Int, b:Int):Void {}\n\tpublic function caller(c:Bool):Void {\n'
+			+ '\t\t#if flash if (c) f(1, 2); else #end f(3, 4);\n\t}\n}';
+		assertRefused(source, 2, 9, 1);
+	}
+
+	/**
+	 * The same file WITHOUT the function's name inside the region still removes: the gate is
+	 * name-scoped, not a blanket refusal of every file carrying a splice.
+	 */
+	public function testRemoveWithUnrelatedUnparsedConditionalRegion(): Void {
+		final source: String = 'class C {\n\tpublic function f(a:Int, b:Int):Void {}\n\tpublic function caller(c:Bool):Void {\n'
+			+ '\t\t#if flash if (c) trace(1); else #end trace(2);\n\t\tf(3, 4);\n\t}\n}';
+		final expected: String = 'class C {\n\tpublic function f(a:Int):Void {}\n\tpublic function caller(c:Bool):Void {\n'
+			+ '\t\t#if flash if (c) trace(1); else #end trace(2);\n\t\tf(3);\n\t}\n}';
+		assertRemove(source, 2, 9, 1, expected, true);
+	}
+
 	private function assertRemove(source: String, line: Int, col: Int, index: Int, expected: String, advisoryNonNull: Bool): Void {
 		final result: RemoveParamResult = removeOf(source, line, col, index);
 		switch result {

@@ -256,26 +256,18 @@ final class Inline {
 		final freeIdentErr: Null<String> = checkFreeIdents(name, initializer, tree, shape);
 		if (freeIdentErr != null) return PErr(freeIdentErr);
 
-		// The two interpolation refusals come LAST: both ask the author to go edit the source
-		// and retry, which is wasted advice when an unconditional gate above would reject the
-		// inline anyway.
+		// The "go edit the source and retry" refusals come LAST: that advice is wasted when an
+		// unconditional gate above would reject the inline anyway.
 		//
 		// A braceless `$name` read is a position only a bare IDENTIFIER may occupy:
 		// substituting an expression there yields literal text (`'$name'` becomes
 		// `'$(a + b)'`), and the re-parse gate cannot catch it because the rewrite is a
-		// perfectly valid string. A `${ … }` hole IS an ordinary expression position this op
-		// handles — unless the rescan synthesized it from an escape-spelled `$`, in which case
-		// it carries no parsed expression and the read inside it is invisible: deleting the
-		// declaration would strand it.
+		// perfectly valid string. The two blind-region refusals follow it.
 		if (reads.exists(h -> h.interpolated))
 			return PErr('"$name" is read through a braceless string interpolation ($$$name) - rebrace it as $${$name} first');
-		final blockKind: Null<String> = shape.stringInterpBlockKind;
-		final scope: QueryNode = RefactorSupport.enclosingFunctionSubtree(tree, binding, shape);
-		return blockKind != null && RefactorSupport.unreadableInterpBlock(scope, blockKind) != null
-			? PErr(
-				'"$name" shares its scope with an escape-spelled string interpolation carrying no parsed expression -'
-				+ ' a read of the name inside it cannot be seen; respell that interpolation first'
-			)
+		final blind: Null<String> = scopeBlindSpot(source, tree, binding, name, shape);
+		return blind != null
+			? PErr(blind)
 			: POk({
 				name: name,
 				decl: decl,
@@ -283,6 +275,27 @@ final class Inline {
 				initRange: initRange,
 				reads: reads
 			});
+	}
+
+	/**
+	 * The diagnostic for a region of the local's OWN function that holds no readable nodes, or null
+	 * when the function has none. Two such regions exist and they refuse for one reason: a read of
+	 * `name` inside either is invisible to `reads`, so the substitution skips it and the decl
+	 * deletion strands it — a rewrite that re-parses cleanly and means something else.
+	 *
+	 * A `${ … }` interpolation hole IS an ordinary expression position this op handles; the blind
+	 * one is a hole the rescan synthesized from an escape-spelled `$`, which carries no parsed
+	 * expression. The other is an unparsed conditional-compilation region, blind by construction.
+	 */
+	private static function scopeBlindSpot(source: String, tree: QueryNode, binding: Int, name: String, shape: RefShape): Null<String> {
+		final scope: QueryNode = RefactorSupport.enclosingFunctionSubtree(tree, binding, shape);
+		final opaque: Null<String> = RefactorSupport.opaqueCondRegionDiagnostic(source, scope, name, shape, 'inline of "$name"');
+		if (opaque != null) return opaque;
+		final blockKind: Null<String> = shape.stringInterpBlockKind;
+		return blockKind != null && RefactorSupport.unreadableInterpBlock(scope, blockKind) != null
+			? '"$name" shares its scope with an escape-spelled string interpolation carrying no parsed expression -'
+				+ ' a read of the name inside it cannot be seen; respell that interpolation first'
+			: null;
 	}
 
 	/**

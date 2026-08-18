@@ -785,6 +785,10 @@ final class Naming implements Check implements CrossFileFix {
 		// it on a name the fix has removed. `rename` refuses the same shape; the completeness
 		// scan below cannot see it, since the occurrence sits inside a string literal.
 		if (RefactorSupport.unrewrittenInterpRead(Refs.find(name, tree, shape), declFrom, covered) != null) return null;
+		// An unparsed conditional-compilation region is the same drop one level lower: its interior
+		// projects no nodes at all, so neither `renameOccurrences` nor the completeness scan below can
+		// see a read of `name` written inside it, and the fix would strand it on the old spelling.
+		if (RefactorSupport.opaqueCondRegionMentioning(tree, source, name, shape) != null) return null;
 		// Attribute every OTHER same-name occurrence to its binding: one provably bound to a DIFFERENT
 		// binding (a param / loop var / sibling local sharing the name) is neither a rename target nor a
 		// blocker for THIS binding, so it joins the resolved set as an excluded span. An occurrence whose

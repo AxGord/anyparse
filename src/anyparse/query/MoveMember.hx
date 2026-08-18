@@ -994,6 +994,16 @@ final class MoveMember {
 	 * destination. Returns the message, or null when clear.
 	 */
 	private static function moveGuardError(prep: MovePrep, captures: Array<String>): Null<String> {
+		// Every caller rewrite here rests on `Refs` seeing the whole occurrence set, and an
+		// unparsed conditional-compilation region projects no nodes — a call written inside one
+		// keeps naming the source type after the member has left it.
+		final scope: Array<{ final file: String; final source: String; final tree: QueryNode; }> = [
+			for (file => tree in prep.trees) { file: file, source: prep.sourceOf[file] ?? '', tree: tree }
+		];
+		for (m in prep.moved) {
+			final opaque: Null<String> = RefactorSupport.opaqueCondRegionInAny(scope, m.name, prep.shape, 'move of "${m.name}"');
+			if (opaque != null) return opaque;
+		}
 		for (m in prep.moved) if (captures.contains(m.name))
 			return 'a switch case pattern in ${prep.srcFile} binds "${m.name}" — reference resolution cannot tell the '
 				+ 'capture from the member; rename the capture first';

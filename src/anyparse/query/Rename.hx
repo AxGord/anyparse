@@ -315,10 +315,16 @@ final class Rename {
 			}
 		}
 		final dup: Null<Span> = RefactorSupport.sameBlockRedeclaration(scope, oldName, plugin, shape);
-		if (dup == null) return null;
-		final at: Position = dup.lineCol(source);
-		return 'rename of "$oldName" is unsafe: the name is declared more than once in the block at ${at.line}:${at.col},'
-			+ ' where reference resolution mis-binds - split the scopes or rename the other declaration first';
+		if (dup != null) {
+			final at: Position = dup.lineCol(source);
+			return 'rename of "$oldName" is unsafe: the name is declared more than once in the block at ${at.line}:${at.col},'
+				+ ' where reference resolution mis-binds - split the scopes or rename the other declaration first';
+		}
+		// A LOCAL cannot be referenced outside the function that owns it, so a splice elsewhere in
+		// the file says nothing about it. A MEMBER can be read from any method, and `scope` for one
+		// is only the CURSOR's function - the whole tree is the honest reach there.
+		final regionScope: QueryNode = binding != null && nodeAtFromIsFieldMember(tree, binding) ? tree : scope;
+		return RefactorSupport.opaqueCondRegionDiagnostic(source, regionScope, oldName, shape, 'rename of "$oldName"');
 	}
 
 	/**

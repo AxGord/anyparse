@@ -1292,6 +1292,24 @@ typedef RefShape = {
 	@:optional var conditionalEndKeyword: String;
 
 	/**
+	 * Node kinds that SWALLOW a conditional-compilation region as a RAW byte capture —
+	 * the fallback ctors a grammar reaches when the region is not a balanced subtree
+	 * (Haxe `CondSpliceExpr` / `CondSpliceTail` / `CondSpliceStmt` / …, each holding an
+	 * `HxCondSpliceRaw`-style terminal). Their interior projects NO nodes: an identifier
+	 * written inside one is invisible to `Refs`, to every check, and to every rewriting op,
+	 * so a name-driven mutation would part-apply and leave the region on the old spelling —
+	 * valid-looking source that miscompiles only in the build defining the condition.
+	 *
+	 * The structural conditional kind (`conditionalMemberKind`) is deliberately NOT one of
+	 * these: it keeps its guarded material as real children, which every consumer resolves.
+	 *
+	 * Read by `RefactorSupport.opaqueCondRegionMentioning`, the fail-closed gate the
+	 * mutating ops consult. Optional; unset leaves those ops with no such gate — correct for
+	 * a grammar with no conditional compilation, silent corruption for one that has it.
+	 */
+	@:optional var opaqueCondRegionKinds: Array<String>;
+
+	/**
 	 * Type names that are provably non-nullable on static targets — Haxe value
 	 * types (`Int` / `Float` / `Bool` / `UInt`) whose `!= null` comparison is
 	 * constant regardless of null-safety. The `unnecessary-null-check` check

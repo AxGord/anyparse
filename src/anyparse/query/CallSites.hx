@@ -138,6 +138,12 @@ final class CallSites {
 	public static function collect(
 		decl: QueryNode, tree: QueryNode, source: String, name: String, binding: Int, shape: RefShape
 	): CollectResult {
+		// The completeness proof is what every consumer buys here, and an unparsed
+		// conditional-compilation region defeats it by construction: a call written inside one
+		// projects no node, so both collectors report a set that is complete only for the builds
+		// that strip the region. Refused before either runs - the shape neither can see.
+		final opaque: Null<String> = RefactorSupport.opaqueCondRegionDiagnostic(source, tree, name, shape, 'rewriting calls of "$name"');
+		if (opaque != null) return CErr(opaque);
 		final isMethod: Bool = decl.kind != 'LocalFnStmt';
 		return isMethod ? collectMethodCalls(tree, source, name, binding, shape) : collectLocalFnCalls(tree, source, name);
 	}

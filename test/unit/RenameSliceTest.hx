@@ -577,6 +577,80 @@ class RenameSliceTest extends Test {
 		assertRename(src, 4, 9, 'q', expected);
 	}
 
+	/**
+	 * A `#if … #end` region in EXPRESSION position that no structural conditional can
+	 * represent is swallowed as a RAW byte span (`CondSpliceExpr`): its interior projects no
+	 * nodes at all, so `Refs` never sees the `tag` read inside it and the splice would rewrite
+	 * only the two occurrences outside. That is a silent miscompile in the build that defines
+	 * the condition - refuse instead, naming the region.
+	 */
+	public function testExpressionSpliceOccurrenceRefused(): Void {
+		final src: String = 'class B {\n\tstatic function f():String {\n\t\tvar tag:String = "a";\n'
+			+ "\t\treturn 'x' + #if flash tag + #end 'y' + tag;\n\t}\n}";
+		assertRenameErr(src, 3, 7, 'label', 'unparsed conditional-compilation region at 4:16');
+	}
+
+	/**
+	 * The POSTFIX splice form (`CondSpliceTail` - an infix tail spliced onto a complete
+	 * operand) hides an occurrence exactly the same way, and refuses the same way.
+	 */
+	public function testPostfixSpliceOccurrenceRefused(): Void {
+		final src: String = 'class B {\n\tstatic function f():Int {\n\t\tvar tag:Int = 1;\n\t\treturn 2 + 3 #if flash + tag #end;\n\t}\n}';
+		assertRenameErr(src, 3, 7, 'label', 'unparsed conditional-compilation region');
+	}
+
+	/**
+	 * The same STATEMENT-position splice (`CondSpliceStmt` - an if-head whose else branch lives
+	 * outside the region) is the same raw swallow, and refuses too. Distinct from the modelled
+	 * statement conditional below, which keeps its interior as real nodes.
+	 */
+	public function testStatementSpliceOccurrenceRefused(): Void {
+		final src: String = 'class B {\n\tstatic function f(c:Bool):Void {\n\t\tvar tag:Int = 1;\n'
+			+ '\t\t#if flash if (c) trace(tag); else #end trace(tag);\n\t}\n}';
+		assertRenameErr(src, 3, 7, 'label', 'unparsed conditional-compilation region');
+	}
+
+	/**
+	 * An expression-position splice whose raw text CANNOT hold the renamed name proceeds - the
+	 * gate is name-scoped, not a blanket refusal of every file carrying a splice. Asserted on
+	 * the whole program: both `tag` occurrences move to `label` while the region keeps `other`
+	 * byte for byte.
+	 */
+	public function testUnrelatedExpressionSpliceStillRenames(): Void {
+		final src: String = 'class B {\n\tstatic function f(other:String):String {\n\t\tvar tag:String = "a";\n'
+			+ "\t\treturn 'x' + #if flash other + #end 'y' + tag;\n\t}\n}";
+		final expected: String = 'class B {\n\tstatic function f(other:String):String {\n\t\tvar label:String = "a";\n'
+			+ "\t\treturn 'x' + #if flash other + #end 'y' + label;\n\t}\n}";
+		assertRename(src, 3, 7, 'label', expected);
+	}
+
+	/**
+	 * A STATEMENT-position `#if` region the grammar models structurally (`Conditional`, with the
+	 * guarded statements as real children) is not a blind spot at all: `Refs` resolves the read
+	 * inside it and the rename rewrites it. Must keep renaming - the guard's vocabulary names the
+	 * raw-swallow kinds only.
+	 */
+	public function testModelledStatementConditionalStillRenames(): Void {
+		final src: String = 'class C {\n\tstatic function f():Void {\n\t\tvar value:Int = 1;\n\t\t#if flash\n'
+			+ '\t\ttrace(value);\n\t\t#end\n\t\ttrace(value);\n\t}\n}';
+		final expected: String = 'class C {\n\tstatic function f():Void {\n\t\tvar val:Int = 1;\n\t\t#if flash\n'
+			+ '\t\ttrace(val);\n\t\t#end\n\t\ttrace(val);\n\t}\n}';
+		assertRename(src, 3, 7, 'val', expected);
+	}
+
+	/**
+	 * Every splice region ENDS in `#end`, so a byte scan that counts a `#`-prefixed directive
+	 * keyword as a mention would refuse every rename of a binding called `end` in any file
+	 * carrying one - a blanket refusal wearing a name-scoped disguise. It renames.
+	 */
+	public function testDirectiveKeywordIsNotAMention(): Void {
+		final src: String = 'class B {\n\tstatic function f(other:String):String {\n\t\tvar end:String = "a";\n'
+			+ "\t\treturn 'x' + #if flash other + #end 'y' + end;\n\t}\n}";
+		final expected: String = 'class B {\n\tstatic function f(other:String):String {\n\t\tvar last:String = "a";\n'
+			+ "\t\treturn 'x' + #if flash other + #end 'y' + last;\n\t}\n}";
+		assertRename(src, 3, 7, 'last', expected);
+	}
+
 	private function assertRename(source: String, line: Int, col: Int, newName: String, expected: String): Void {
 		final result: RenameResult = renameOf(source, line, col, newName);
 		switch result {

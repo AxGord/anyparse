@@ -67,6 +67,11 @@ final class SafeDelete {
 		if (memberSpan == null) return Err('no member "$memberName" on a unique type "$srcTypeName" in $srcFile');
 		final memberSpanNN: Span = memberSpan;
 
+		// An unparsed conditional-compilation region projects no nodes, so `collectReferences` reads
+		// "unreferenced" over one that mentions the member - the exact false ABSENCE this op deletes on.
+		final opaque: Null<String> = RefactorSupport.opaqueCondRegionInAny(parsed, memberName, refShape, 'delete of "$memberName"');
+		if (opaque != null) return Err(opaque);
+
 		final refs: Array<{ file: String, count: Int }> = collectReferences(parsed, srcFile, memberName, memberSpanNN, refShape);
 		if (refs.length <= 0) return RemoveMember.removeMember(src.source, srcTypeName, memberName, reformat, plugin, true);
 		final where: String = [for (r in refs) '${r.file} (${r.count})'].join(', ');

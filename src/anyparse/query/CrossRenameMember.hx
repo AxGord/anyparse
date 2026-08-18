@@ -261,7 +261,15 @@ final class CrossRenameMember {
 		// path, so the receiver match needs that path — matching the receiver's last segment instead
 		// rewrites `other.Mod.T.MEMBER` for a rename of `pkg.Mod.T.MEMBER`.
 		final module: ModulePath = ModuleScan.moduleOf(cursorTree, cursorFile);
-		return apply(parse.parsed, cursorFile, t, newName, cursor, plugin, refShape, overrides, index, module);
+		// A member is reachable from any method in any file of the scope, so an unparsed
+		// conditional-compilation region ANYWHERE in the scope can hide a qualified access `apply`
+		// would then leave on the old name.
+		final opaque: Null<String> = RefactorSupport.opaqueCondRegionInAny(
+			parse.parsed, t.memberName, refShape, 'rename of "${t.memberName}"'
+		);
+		return opaque != null
+			? Err(opaque)
+			: apply(parse.parsed, cursorFile, t, newName, cursor, plugin, refShape, overrides, index, module);
 	}
 
 	/**
