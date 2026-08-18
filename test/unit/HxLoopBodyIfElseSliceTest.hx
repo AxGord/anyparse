@@ -23,41 +23,61 @@ using StringTools;
 final class HxLoopBodyIfElseSliceTest extends Test {
 
 	/** A real project `hxformat.json`, minified. */
-	private static final PROJECT_CONFIG: String = '{"indentation":{"character":"tab","tabWidth":4,"trailingWhitespace":false,"alignInlineSwitchCaseBody":true},"emptyLines":{"maxAn'
-		+ 'ywhereInFile":1,"afterBlocks":"remove","afterLeftCurly":"remove","beforeRightCurly":"remove","classEmptyLines":{"beginType":1,"e'
-		+ 'ndType":1},"interfaceEmptyLines":{"beginType":1,"endType":1},"abstractEmptyLines":{"beginType":1,"endType":1},"uniformStatementB'
-		+ 'lanks":"collapse","aroundMultilineFields":1},"wrapping":{"comprehensionCuddledOpen":true,"methodChainCuddledLinks":true,"trailin'
-		+ 'gComma":"remove","arrayMatrixWrap":"matrixWrapNoAlign","functionSignature":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"'
-		+ 'conditions":[{"cond":"totalItemLength <= n","value":100},{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"condition'
-		+ 's":[{"cond":"itemCount <= n","value":1}],"type":"noWrap"}]},"maxLineLength":140,"anonType":{"defaultWrap":"ignore","rules":[{"co'
-		+ 'nditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}]'
-		+ ',"type":"packedOrOnePerLine"}]},"callParameter":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"excee'
-		+ 'dsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"itemCount <= n","value":1},{"cond":"totalItemLength <= n",'
-		+ '"value":100}],"type":"noWrap"}]},"opBoolChain":{"defaultWrap":"noWrap","rules":[{"conditions":[{"cond":"itemCount <= n","value":'
-		+ '3},{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"totalItemLength <= n","value":120},{"cond'
-		+ '":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine'
-		+ '","location":"beforeLast"}]},"expressionWrapping":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"exc'
-		+ 'eedsMaxLineLength","value":0}],"type":"noWrap"}]},"opAddSubChain":{"defaultWrap":"noWrap","rules":[{"conditions":[{"cond":"excee'
-		+ 'dsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine","locat'
-		+ 'ion":"beforeLast"}]},"conditionWrapping":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"exceedsMaxLi'
-		+ 'neLength","value":0}],"type":"noWrap"}]},"objectLiteral":{"defaultWrap":"ignore","rules":[{"conditions":[{"cond":"exceedsMaxLine'
-		+ 'Length","value":0}],"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"packedOrOnePerLine"}]},"a'
-		+ 'rrayWrap":{"defaultWrap":"ignore","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditio'
-		+ 'ns":[{"cond":"exceedsMaxLineLength","value":1}],"type":"packedOrOnePerLine"}]}},"whitespace":{"addLineCommentSpace":false,"norma'
-		+ 'lizeLineCommentIndent":true,"commaPolicy":"after","ifPolicy":"around","forPolicy":"around","whilePolicy":"around","switchPolicy"'
-		+ ':"around","catchPolicy":"around","arrowFunctionsPolicy":"around","functionTypeHaxe3Policy":"none","functionTypeHaxe4Policy":"non'
-		+ 'e","binopPolicy":"around","intervalPolicy":"around","openingBracketPolicy":"none","closingBracketPolicy":"none","bracesConfig":{'
-		+ '"objectLiteralBraces":{"openingPolicy":"after","closingPolicy":"before","arrowBodyOpenPad":true,"arrowBodyReflow":true},"anonTyp'
-		+ 'eBraces":{"openingPolicy":"after","closingPolicy":"before"},"typedefBraces":{"openingPolicy":"after","closingPolicy":"before"},"'
-		+ 'blockBraces":{"openingPolicy":"around","closingPolicy":"before"},"unknownBraces":{"openingPolicy":"after","closingPolicy":"befor'
-		+ 'e"},"singleStatementBraces":"remove"},"parenConfig":{"callParens":{"openingPolicy":"none","closingPolicy":"none"},"funcParamPare'
-		+ 'ns":{"openingPolicy":"none","closingPolicy":"none"},"conditionParens":{"openingPolicy":"before","closingPolicy":"after"},"anonFu'
-		+ 'ncParamParens":{"openingPolicy":"none","closingPolicy":"none"},"forLoopParens":{"openingPolicy":"before","closingPolicy":"after"'
-		+ '},"expressionParens":{"openingPolicy":"none","closingPolicy":"none"},"switchSubjectParens":"remove"}},"lineEnds":{"emptyCurly":"'
-		+ 'noBreak"},"comments":{"blockCommentStyle":"javadoc"},"sameLine":{"caseBody":"fitLine","expressionCase":"fitLine","ifBody":"fitLi'
-		+ 'ne","forBody":"fitLine","whileBody":"fitLine","functionBody":"fitLine","expressionIf":"next","expressionIfFit":true,"expressionI'
-		+ 'fArrowBodyReflow":true,"elseIfCommentReflow":true,"fitLineBodyGlue":true,"conditionalExprFit":true,"comprehensionFor":"fitLine"}'
-		+ '}';
+	private static final PROJECT_CONFIG: String = '{"indentation":{"character":"tab","tabWidth":4,"trailingWhitespace":false,'
+		+ '"alignInlineSwitchCaseBody":true},"emptyLines":{"maxAn' + 'ywhereInFile":1,"afterBlocks":"remove","afterLeftCurly":"remove",'
+		+ '"beforeRightCurly":"remove","classEmptyLines":{"beginType":1,"endType":1},'
+		+ '"interfaceEmptyLines":{"beginType":1,"endType":1},"abstractEmptyLines":{"beginType":1,'
+		+ '"endType":1},"uniformStatementBlanks":"collapse","aroundMultilineFields":1},'
+		+ '"wrapping":{"comprehensionCuddledOpen":true,"methodChainCuddledLinks":true,"trailin'
+		+ 'gComma":"remove","arrayMatrixWrap":"matrixWrapNoAlign",'
+		+ '"functionSignature":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"'
+		+ 'conditions":[{"cond":"totalItemLength <= n","value":100},{"cond":"exceedsMaxLineLength",'
+		+ '"value":0}],"type":"noWrap"},{"conditions":[{"cond":"itemCount <= n","value":1}],'
+		+ '"type":"noWrap"}]},"maxLineLength":140,"anonType":{"defaultWrap":"ignore","rules":[{"co'
+		+ 'nditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{'
+		+ '"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"packedOrOnePerLine"}]},'
+		+ '"callParameter":{"defaultWrap":"fillLineWithLeadingBreak",' + '"rules":[{"conditions":[{"cond":"excee'
+		+ 'dsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"itemCount <= '
+		+ 'n","value":1},{"cond":"totalItemLength <= n","value":100}],"type":"noWrap"}]},'
+		+ '"opBoolChain":{"defaultWrap":"noWrap","rules":[{"conditions":[{"cond":"itemCount <= '
+		+ 'n","value":3},{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{'
+		+ '"conditions":[{"cond":"totalItemLength <= n","value":120},{"cond' + '":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{'
+		+ '"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine' + '","location":"beforeLast"}]},'
+		+ '"expressionWrapping":{"defaultWrap":"fillLineWithLeadingBreak",'
+		+ '"rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"}]},'
+		+ '"opAddSubChain":{"defaultWrap":"noWrap","rules":[{"conditions":[{"cond":"excee'
+		+ 'dsMaxLineLength","value":0}],"type":"noWrap"},{'
+		+ '"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine","locat'
+		+ 'ion":"beforeLast"}]},"conditionWrapping":{"defaultWrap":"fillLineWithLeadingBreak",'
+		+ '"rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"}]},'
+		+ '"objectLiteral":{"defaultWrap":"ignore","rules":[{"conditions":[{"cond":"exceedsMaxLine'
+		+ 'Length","value":0}],"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength",'
+		+ '"value":1}],"type":"packedOrOnePerLine"}]},"arrayWrap":{"defaultWrap":"ignore",'
+		+ '"rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{'
+		+ '"conditions":[{"cond":"exceedsMaxLineLength","value":1}],'
+		+ '"type":"packedOrOnePerLine"}]}},"whitespace":{"addLineCommentSpace":false,'
+		+ '"normalizeLineCommentIndent":true,"commaPolicy":"after","ifPolicy":"around",'
+		+ '"forPolicy":"around","whilePolicy":"around","switchPolicy":"around",'
+		+ '"catchPolicy":"around","arrowFunctionsPolicy":"around","functionTypeHaxe3Policy":"none",'
+		+ '"functionTypeHaxe4Policy":"none","binopPolicy":"around","intervalPolicy":"around",'
+		+ '"openingBracketPolicy":"none","closingBracketPolicy":"none","bracesConfig":{'
+		+ '"objectLiteralBraces":{"openingPolicy":"after","closingPolicy":"before",'
+		+ '"arrowBodyOpenPad":true,"arrowBodyReflow":true},"anonTyp' + 'eBraces":{"openingPolicy":"after","closingPolicy":"before"},'
+		+ '"typedefBraces":{"openingPolicy":"after","closingPolicy":"before"},"'
+		+ 'blockBraces":{"openingPolicy":"around","closingPolicy":"before"},'
+		+ '"unknownBraces":{"openingPolicy":"after","closingPolicy":"before"},'
+		+ '"singleStatementBraces":"remove"},"parenConfig":{"callParens":{"openingPolicy":"none",'
+		+ '"closingPolicy":"none"},"funcParamParens":{"openingPolicy":"none",'
+		+ '"closingPolicy":"none"},"conditionParens":{"openingPolicy":"before",'
+		+ '"closingPolicy":"after"},"anonFuncParamParens":{"openingPolicy":"none",'
+		+ '"closingPolicy":"none"},"forLoopParens":{"openingPolicy":"before",'
+		+ '"closingPolicy":"after"},"expressionParens":{"openingPolicy":"none",'
+		+ '"closingPolicy":"none"},"switchSubjectParens":"remove"}},"lineEnds":{"emptyCurly":"'
+		+ 'noBreak"},"comments":{"blockCommentStyle":"javadoc"},"sameLine":{"caseBody":"fitLine",'
+		+ '"expressionCase":"fitLine","ifBody":"fitLine","forBody":"fitLine","whileBody":"fitLine",'
+		+ '"functionBody":"fitLine","expressionIf":"next","expressionIfFit":true,'
+		+ '"expressionIfArrowBodyReflow":true,"elseIfCommentReflow":true,"fitLineBodyGlue":true,'
+		+ '"conditionalExprFit":true,"comprehensionFor":"fitLine"}}';
 
 	/** The project config with the knob ON. */
 	private static final NEXT_ON: String = config(true);
@@ -86,24 +106,24 @@ final class HxLoopBodyIfElseSliceTest extends Test {
 		+ '\t\t\t\tlowerCount = numLines;\n\t\t\t} else {\n\t\t\t\tremoved = upper;\n\t\t\t\tbreak;\n\t\t\t}\n\t}\n\n}';
 
 	/** The project idiom: a guard `if` with NO `else`, statement body. Must keep gluing under both knob states. */
-	private static final FOR_GUARD_STMT: String = 'class C {\n\n\tfunction apply(xs:Array<Int>):Void {\n'
-		+ '\t\tfor (x in xs) if (isWanted(x)) collect(x);\n\t}\n\n}';
+	private static final FOR_GUARD_STMT: String =
+		'class C {\n\n\tfunction apply(xs:Array<Int>):Void {\n\t\tfor (x in xs) if (isWanted(x)) collect(x);\n\t}\n\n}';
 
 	/** The same idiom with a braced body. Must keep gluing too. */
 	private static final FOR_GUARD_BLOCK: String = 'class C {\n\n\tfunction apply(xs:Array<Int>):Void {\n'
 		+ '\t\tfor (x in xs) if (isWanted(x)) {\n\t\t\tcollect(x);\n\t\t\tnotify(x);\n\t\t}\n\t}\n\n}';
 
 	/** A `while` whose body is a guard `if` with no `else` - the idiom again, on the other loop. */
-	private static final WHILE_GUARD_STMT: String = 'class C {\n\n\tfunction drain():Void {\n'
-		+ '\t\twhile (hasNext()) if (isWanted(peek())) collect(take());\n\t}\n\n}';
+	private static final WHILE_GUARD_STMT: String =
+		'class C {\n\n\tfunction drain():Void {\n\t\twhile (hasNext()) if (isWanted(peek())) collect(take());\n\t}\n\n}';
 
 	/** A loop body that is not an `if` at all - nothing about it changes. */
-	private static final FOR_PLAIN_BODY: String = 'class C {\n\n\tfunction total(xs:Array<Int>):Void {\n'
-		+ '\t\tfor (x in xs) sum += x;\n\t}\n\n}';
+	private static final FOR_PLAIN_BODY: String =
+		'class C {\n\n\tfunction total(xs:Array<Int>):Void {\n\t\tfor (x in xs) sum += x;\n\t}\n\n}';
 
 	/** An `if`/`else` that is NOT a loop body - the knob is scoped to `forBody` / `whileBody` and must not reach it. */
-	private static final PLAIN_IF_ELSE: String = 'class C {\n\n\tfunction pick(flag:Bool):Void {\n\t\tif (flag)\n\t\t\ttakeFirst();\n'
-		+ '\t\telse\n\t\t\ttakeSecond();\n\t}\n\n}';
+	private static final PLAIN_IF_ELSE: String =
+		'class C {\n\n\tfunction pick(flag:Bool):Void {\n\t\tif (flag)\n\t\t\ttakeFirst();\n\t\telse\n\t\t\ttakeSecond();\n\t}\n\n}';
 
 	/** The reported `for` site: with the knob on, the `else` moves under its own `if`. */
 	public function testForIfElseBreaksUnderHeader(): Void {
@@ -149,7 +169,7 @@ final class HxLoopBodyIfElseSliceTest extends Test {
 	 * The project `hxformat.json` verbatim, with the one key under test spliced into its `sameLine` section.
 	 */
 	private static function config(next: Bool): String {
-		return PROJECT_CONFIG.replace('"sameLine":{', '"sameLine":{"loopBodyIfElseNext":' + (next ? 'true' : 'false') + ',');
+		return PROJECT_CONFIG.replace('"sameLine":{', '"sameLine":{"loopBodyIfElseNext":${next ? 'true' : 'false'},');
 	}
 
 }
