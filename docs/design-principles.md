@@ -10,13 +10,17 @@ These are the non-negotiable rules of anyparse. Each one exists because of a spe
 
 **Consequence**: if something cannot be expressed declaratively, we extend the strategy/metadata vocabulary rather than drop to imperative code. The macro is complex because the grammar is simple.
 
-## 2. Zero global mutable state
+## 2. Zero global mutable state — in the generated code, and only there
 
-**Rule**: no `static var` in hot paths. No global singletons. No thread-local equivalents of `TokenStream.MODE`. The macro refuses to compile rules that read or write non-`ctx` mutable state. Every piece of runtime state lives inside a `Parser` instance passed as the first argument to generated functions.
+**Rule**: generated parsers and writers hold no `static var`. Every piece of runtime state lives inside a `Parser` instance passed as the first argument to generated functions. That part holds, and the grammar layer is built on it.
 
-**Why**: haxe-formatter has `tokentree.TokenStream.MODE` as a global static. `Formatter.format()` crashes randomly when called from multiple threads. ax3 knows this and forces its output phase single-threaded as a workaround, losing a 5x speedup on a 2000-file codebase. The user's own fork patches around the consequences but cannot fix the root cause without rewriting the library.
+**What does NOT hold — measured, and the reason this principle was rewritten**: the runtime *around* the generated code keeps process-scoped caches, and they make a parallel parse inside one process unsafe. The offenders are named rather than described: `SharedParseTier` (five static vars), `FormatConfigDiscovery.CACHE`, `HaxeQueryPlugin.extMethodsCache`, and the one-entry root memo the query walker generates (`_memoSource` / `_memoRoot`). Evidence: eight JVM threads produced 247 228 of 479 415 nodes with 132 parse failures and **zero exceptions** — silent corruption, not a crash — while hxcpp segfaults at four threads or more. Handing each thread its own plugin instance does **not** help, because the state is static, not per-instance.
 
-**Consequence**: thread safety is a compile-time guarantee. An 8-core machine gets 8x throughput, not 1x. When we replace haxe-formatter, parallelism works by construction — not as a feature we add later.
+**Why**: haxe-formatter has `tokentree.TokenStream.MODE` as a global static. `Formatter.format()` crashes randomly when called from multiple threads. ax3 knows this and forces its output phase single-threaded as a workaround, losing a 5x speedup on a 2000-file codebase. The user's own fork patches around the consequences but cannot fix the root cause without rewriting the library. That motivation is unchanged; what changed is our honesty about how far we have actually got.
+
+**Consequence**: parallelism is **processes**, not threads. That is a deliberate position, not a defeat — process fan-out is measured at 3.15x with bit-exact output on the target benchmark, and independently at 3.06x on the round-trip workload (2026-08-18), with the knee at four processes and saturation near 3.1x. Note what that is *not*: the earlier claim here read "an 8-core machine gets 8x throughput, not 1x". It does not. Anything that keeps per-run state must therefore be **run-scoped** — an instance field on a wrapper created per lint run or fix run — and adding a fourth process-scoped cache is a regression against this principle even when it is faster.
+
+**Not evidenced**: this principle used to assert that "the macro refuses to compile rules that read or write non-`ctx` mutable state". No such refusal is visible in `src/anyparse/macro`. It may simply never have been needed — grammar rules do not reach for statics — but it is a compile-time guarantee we claim and do not demonstrate, so it is written here as an open item rather than as a fact.
 
 ## 3. Pure Haxe delivery, no JVM dependency
 

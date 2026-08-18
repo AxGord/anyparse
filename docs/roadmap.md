@@ -97,7 +97,7 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 [archive/roadmap-phase3-slices.md](archive/roadmap-phase3-slices.md).
 
 
-**Exit condition**: the new formatter matches or exceeds haxe-formatter's output on the user's regression corpus, runs faster, and is thread-safe (validated by running N parallel formatter instances on different files with no data races).
+**Exit condition**: the new formatter matches or exceeds haxe-formatter's output on the user's regression corpus, runs faster, and parallelises across PROCESSES with bit-exact output (validated by fanning the corpus across N processes and byte-comparing against a single-process run). Thread-level parallelism inside one process is explicitly out of scope — see design-principles.md § 2, where the measurement that ruled it out is recorded.
 
 ## Phase 4: AS3 grammar and AS3→Haxe transform
 
