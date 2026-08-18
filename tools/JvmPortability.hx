@@ -18,6 +18,9 @@ import anyparse.query.LintDiff;
  */
 final class JvmPortability {
 
+	/** One decimal place — the probe reports tens of seconds, not microbenchmarks. */
+	private static inline final ROUND_SCALE: Float = 10;
+
 	/** The default scope: the two packages whose portability actually regressed. */
 	private static final DEFAULT_SCOPE: Array<String> = ['src/anyparse/query', 'src/anyparse/check'];
 
@@ -40,6 +43,11 @@ final class JvmPortability {
 		// `PreferLocalFunction.hx` drops a line comment that survives under the project
 		// config, so a probe that passed no options would sit at a permanent threw=1 and
 		// train the reader to ignore the one number it exists to report.
+		// Phase timings are printed because this probe is the battery's second
+		// largest step (about 40s of 155s: 8s to compile, 31s to run) and was
+		// otherwise a black box — "the JVM is slow" is not a finding anyone can
+		// act on, "the round trip is 22s of it" is.
+		final readAt: Float = Sys.time();
 		var wrote: Int = 0;
 		final threw: Array<String> = [];
 		for (f in files) {
@@ -49,12 +57,20 @@ final class JvmPortability {
 				threw.push('${f.file}: ${exception.message}');
 			}
 		}
+		final wroteAt: Float = Sys.time();
 		final violations: Array<Violation> = Linter.run(files, plugin);
+		final lintedAt: Float = Sys.time();
 		Sys.println(
 			'files=${files.length} wrote=$wrote threw=${threw.length} checks=${Linter.builtins().length} violations=${violations.length}'
 			+ ' lintdiff=${lintDiffProbe()}'
 		);
+		Sys.println('  phases: roundtrip=${seconds(wroteAt - readAt)}s lint=${seconds(lintedAt - wroteAt)}s');
 		for (failure in threw) Sys.println('  threw $failure');
+	}
+
+	/** One decimal place — the probe reports tens of seconds, not microbenchmarks. */
+	private static function seconds(delta: Float): String {
+		return '${Math.round(delta * ROUND_SCALE) / ROUND_SCALE}';
 	}
 
 	/**
