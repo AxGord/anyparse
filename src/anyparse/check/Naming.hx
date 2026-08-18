@@ -1557,7 +1557,7 @@ private typedef CrossFileCandidate = {
 /**
  * A completed rename for one declaration within a single `Naming.fix` pass: the SPANS to
  * splice, the NEW NAME they introduce, and the SCOPE that name lands in. Carries all three
- * because the same-pass claim gate (`claimTaken`) needs more than the spans — two renames can
+ * because the same-pass claim gate (`defersToAnAcceptedRename`) needs more than the spans — two renames can
  * share no span yet still collide by normalizing to the same new name in one scope.
  */
 private typedef DeclRename = {

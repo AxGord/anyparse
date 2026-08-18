@@ -364,7 +364,7 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 	/**
-		  * The mechanical fix for a private field missing its `_` prefix: prepend `_` to the shared
+	 * The mechanical fix for a private field missing its `_` prefix: prepend `_` to the shared
 	 * `camelCore` (`shape` -> `_shape`, `Shape` -> `_shape`, `HEIGHT` -> `_height`, `URLPath` ->
 	 * `_urlPath`, `CELLS_NUM_X` -> `_cellsNumX`). Sharing `camelCore` - and through it
 	 * `smartSegment` - is what stops the fix MANUFACTURING a lowercase-head-over-caps-tail name
@@ -522,7 +522,7 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 	/**
-		  * The mechanical fix for a local / param / catch name violating camelCase: the shared
+	 * The mechanical fix for a local / param / catch name violating camelCase: the shared
 	 * `camelCore` (`_items` -> `items`, `__scaleX` -> `scaleX`, `MyLocal` -> `myLocal`, `min_gap` ->
 	 * `minGap`), refused when the result is a Haxe keyword (`_new` -> `new`) - not a usable
 	 * identifier here, unlike under `underscoreCamel`'s `_` prefix, so the binding stays
@@ -535,12 +535,12 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 	/**
-		 * The camelCase core both `snakeToCamel` and `underscoreCamel` correct through: strip every
-		 * leading underscore, split the rest on `_`, apply `smartSegment`'s word policy per segment,
-		 * join with capitalised heads, and lowercase the first letter. An all-uppercase segment is
-		 * lowercased whole (`MISSING_FILE` -> `missingFile`); a segment opening with an acronym run
-		 * keeps only that run's last character capitalised (`URLPath` -> `urlPath`); a mixed-case
-		  * segment is preserved (`coachingQualification_Id` -> `coachingQualificationId`). Null when
+	 * The camelCase core both `snakeToCamel` and `underscoreCamel` correct through: strip every
+	 * leading underscore, split the rest on `_`, apply `smartSegment`'s word policy per segment,
+	 * join with capitalised heads, and lowercase the first letter. An all-uppercase segment is
+	 * lowercased whole (`MISSING_FILE` -> `missingFile`); a segment opening with an acronym run
+	 * keeps only that run's last character capitalised (`URLPath` -> `urlPath`); a mixed-case
+	 * segment is preserved (`coachingQualification_Id` -> `coachingQualificationId`). Null when
 	 * nothing survives the strip (`_`, `__`), or when a separator falls between two DIGIT runs and
 	 * camelCase therefore cannot re-encode it (see the loop). The keyword test and the `_` prefix
 	 * belong to the callers - that is the whole of what the two corrections differ by.
