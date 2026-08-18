@@ -6,6 +6,13 @@ using StringTools;
 using Lambda;
 
 /**
+ * The two `insideBroken` arms of `rewrite`'s child recursion, bound once per
+ * pass. `decisions` and `width` are pass-invariant and `insideBroken` has two
+ * values, so one pair serves the whole walk.
+ */
+private typedef RewriteRec = { flat: Doc -> Doc, broken: Doc -> Doc };
+
+/**
  * Doc→Doc pre-render collapse pass (increment-2 chain-collapse).
  *
  * Breaks the branch-blind circular coupling between an expression paren's
@@ -124,7 +131,7 @@ final class CollapsePass {
 	 *    (threading `insideBroken`).
 	 */
 	private static function rewrite(
-		d: Doc, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>, insideBroken: Bool, width: Int
+		d: Doc, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>, insideBroken: Bool, width: Int, ?rec: RewriteRec
 	): Doc {
 		// FORWARD direction takes precedence: when the chain's flat (glued)
 		// branch contains a candidate paren that WOULD open, commit the chain
@@ -222,7 +229,24 @@ final class CollapsePass {
 				return WrapBoundary(Group(Nest(nc, gluedFillChain(fitems, decisions, width))));
 			case _:
 		}
-		return mapChildren(d, child -> rewrite(child, decisions, insideBroken, width));
+		final pair: RewriteRec = rec ?? recPair(decisions, width);
+		return mapChildren(d, insideBroken ? pair.broken : pair.flat);
+	}
+
+	/**
+	 * Bind `rewrite`'s child recursion for one pass. `decisions` and `width` are
+	 * pass-invariant and `insideBroken` only ever holds two values, so the whole
+	 * walk needs exactly this pair; `rewrite` threads it back in as `rec` instead
+	 * of building a fresh closure at every Doc node. The two arms recurse into
+	 * each other through `rewrite`, hence the two-step assignment.
+	 */
+	private static function recPair(decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>, width: Int): RewriteRec {
+		var pair: Null<RewriteRec> = null;
+		pair = {
+			flat: child -> rewrite(child, decisions, false, width, pair),
+			broken: child -> rewrite(child, decisions, true, width, pair)
+		};
+		return pair;
 	}
 
 	/**
