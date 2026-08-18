@@ -459,6 +459,72 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 		Assert.equals(0, violations(wrap('var x:Int;\n\t\tswitch v {\n\t\t\tcase 1: x = if (q) 2;\n\t\t\tcase _: x = 9;\n\t\t}')).length);
 	}
 
+	/**
+	 * An empty `case _:` borrows the paired declaration's PURE-literal initializer as its own
+	 * value, exactly the shape `writtenOnlyByArms` still validates: the target holds that literal
+	 * at the switch (adjacency + no other writes), so an empty arm evaluates to the same value it
+	 * would already have held.
+	 */
+	public function testEmptyDefaultArmBorrowsInit(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits(wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase _:\n\t\t}'));
+		Assert.equals(1, es.length);
+		Assert.equals('final x:String = switch v { case 1: \'a\'; case _: \'\'; };', es[0].text);
+	}
+
+	/** An empty `default:` arm borrows the initializer just like an empty wildcard `case _:`. */
+	public function testEmptyDefaultBranchBorrowsInit(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits(wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tdefault:\n\t\t}'));
+		Assert.equals(1, es.length);
+		Assert.equals('final x:String = switch v { case 1: \'a\'; default: \'\'; };', es[0].text);
+	}
+
+	/** A bare `var x;` has no initializer to lend an empty default arm — still not exhaustive. */
+	public function testEmptyDefaultArmNoInitNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('var x:String;\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase _:\n\t\t}')).length);
+	}
+
+	/** An impure initializer must not be duplicated into the borrowed default arm either. */
+	public function testEmptyDefaultArmImpureInitNotFlagged(): Void {
+		Assert.equals(
+			0, violations(wrap('var x:String = compute();\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase _:\n\t\t}')).length
+		);
+	}
+
+	/** A write to `x` between the declaration and the switch means the empty arm's borrowed value would be wrong — refused. */
+	public function testEmptyDefaultArmInterveningWriteNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				wrap('var x:String = \'\';\n\t\tx = \'mid\';\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase _:\n\t\t}')
+			).length
+		);
+	}
+
+	/**
+	 * A standalone switch (the l-value arm, consumer 3) has no paired declaration to lend an empty
+	 * default arm a value — the opt-in fallback is NOT threaded to this caller, so it keeps
+	 * refusing exactly as before the slice.
+	 */
+	public function testLvalueEmptyDefaultArmNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('switch v {\n\t\t\tcase 1: obj.y = 1;\n\t\t\tcase _:\n\t\t}')).length);
+	}
+
+	/**
+	 * A nested switch arm (consumer 1, `switchValue`) has no initializer to synthesize either — an
+	 * empty default arm inside it must still refuse the whole nested-switch value.
+	 */
+	public function testNestedSwitchEmptyDefaultArmNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(wrap(
+				'var x:Int = 0;\n\t\tswitch v {\n\t\t\tcase A: switch inner {\n\t\t\t\tcase P: x = 1;\n\t\t\t\tcase _:\n\t\t\t}\n'
+				+ '\t\t\tcase _: x = 2;\n\t\t}'
+			)).length
+		);
+	}
+
 	/** Run `fix` and re-emit through the canonical writer — the `lint --fix` path in one pass. */
 	private function applyFixOnce(src: String): String {
 		return switch RefactorSupport.canonicalize(src, edits(src), true, new HaxeQueryPlugin(), null) {
