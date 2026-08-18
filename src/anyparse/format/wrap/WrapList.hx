@@ -2141,13 +2141,17 @@ class WrapList {
 		final collIdx: Int = soleMultilineCollectionArg(items);
 		if (collIdx < 0) return null;
 		// ω-complex-item-count (D2): the glue pulls every argument onto the open
-		// delimiter's line — right for a collection the head HUGS (`new Col([` …
-		// `], 436)`, always element 0), wrong for one that arrives after other
-		// arguments, where the fork gives the collection a line of its own
-		// (`…, null,` / `[` … `],` / `true, false, false`). Decline for exactly
-		// that element so the chunk policy in the fill shapes owns it. Callers
-		// that supply no kinds keep the glue unconditionally.
-		if (isChunkContainer(complexItemKinds, collIdx)) return null;
+		// delimiter's line. That is right at BOTH ends of the list — a leading
+		// collection is hugged by the head (`new Col([` … `], 436)`) and a
+		// TRAILING one closes the call on its own bracket line
+		// (`makeTimer("vshaxe", totalTime, [` … `]);`, fork fixture
+		// `wrapping/issue_466_array_wrapping_regression`). It is wrong only for a
+		// collection with arguments still to come, where the fork gives the
+		// collection its own line and packs the rest after it (`…, null,` / `[` …
+		// `],` / `true, false, false`). Decline for exactly that element so the
+		// chunk policy in the fill shapes owns it; callers that supply no kinds
+		// keep the glue unconditionally.
+		if (isChunkContainer(complexItemKinds, collIdx) && collIdx < items.length - 1) return null;
 		final glueShape: Doc = multiArgBlockLambdaGlueShape(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
 		final openShape: Doc = mode == FillLineWithLeadingBreak
 			? shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma, complexItemKinds)
