@@ -635,6 +635,7 @@ import unit.ApqAstTypeRefsCliTest;
 import unit.LintDiffTest;
 import unit.MutationVerdictTest;
 import unit.LintNoOracleCliTest;
+import unit.OracleCacheTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1129,6 +1130,7 @@ class RunTests {
 		addCase(new UnusedReturnValueTest());
 		addCase(new ExtractRepeatedExpressionTest());
 		addCase(new CompilerOracleE2ETest());
+		addCase(new OracleCacheTest());
 		addCase(new FixVerifierBisectTest());
 		addCase(new FixVerifierGroupTest());
 		addCase(new FixVerifierGroupE2ETest());

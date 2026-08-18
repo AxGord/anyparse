@@ -221,6 +221,25 @@ fi
 # already hit once: a quiet launcher runs a stale binary and the probe lies.
 export HXQ_QUIET=1
 
+# --- 1b. compiler oracle, in the background ----------------------------
+#
+# The `lint` step below runs a PROJECT-WIDE `haxe <hxml> --no-output` — 16s of
+# its own, on an hxml the build step above just typechecked. `apq oracle` runs
+# that typecheck ONCE, cold, and records the verdict under a content
+# fingerprint of the whole compile input; the lint step then re-derives the
+# fingerprint and reuses the verdict only if it still matches. Nothing is
+# trusted — the record comes from a real compiler run, and a tree that moved
+# between the two steps simply misses and recompiles.
+#
+# Backgrounded so it overlaps the suite/corpus/fmt/jvm steps instead of the
+# lint step's critical path. Its exit status is NOT a gate: the lint step
+# reads the same verdict and fails there, with the compiler's error text.
+oracle_pid=""
+if [ -x bin/hxq ]; then
+    bin/hxq oracle src > "$work/oracle.log" 2>&1 &
+    oracle_pid=$!
+fi
+
 # --- 2. suite ----------------------------------------------------------
 step_begin "suite"
 shard_args="-n $shards"
@@ -324,6 +343,12 @@ if [ "$run_jvm" -eq 1 ]; then
 fi
 
 # --- 6. lint, both trees at once --------------------------------------
+#
+# The backgrounded oracle above must have landed its verdict before the lint
+# arms derive their fingerprint, or they simply compile it themselves.
+if [ -n "$oracle_pid" ]; then
+    wait "$oracle_pid" || true
+fi
 step_begin "lint"
 lint_new_anyparse="$work/lint-anyparse.json"
 lint_new_tm="$work/lint-tm.json"

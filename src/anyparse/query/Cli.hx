@@ -50,6 +50,7 @@ import anyparse.core.EnvFlag;
 import anyparse.query.Address.AddressIndex;
 import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.MutationVerdict.MutationVerdictResult;
+import anyparse.check.OracleCache;
 import anyparse.query.ExitCode.*;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
@@ -629,6 +630,8 @@ final class Cli {
 				return runLint(rest);
 			case 'lint-diff':
 				return runLintDiff(rest);
+			case 'oracle':
+				return runOracle(rest);
 			case 'mutation-verdict':
 				#if (sys || nodejs)
 				return runMutationVerdict(rest);
@@ -5699,6 +5702,7 @@ final class Cli {
 		sysPrint('  declares      Declaration site(s) of one named type (ambiguity check)\n');
 		sysPrint('  lint          Run analysis checks and report violations (e.g. unused-import)\n');
 		sysPrint('  lint-diff     Multiset diff of two lint --format json snapshots (blast radius)\n');
+		sysPrint('  oracle        Typecheck the project once and record the verdict for lint\n');
 		sysPrint('  mutation-verdict  Classify one utest transcript as KILLED/SURVIVED/… for mutation-check\n');
 		sysPrint('  inline        Inline a local variable into its uses\n');
 		sysPrint('  inline-method Inline a single-return function into its call sites + delete it\n');
@@ -12803,15 +12807,44 @@ final class Cli {
 	}
 
 	/**
-	 * The report-mode oracle verdict: through the project's shared WARM compilation server
-	 * when the config opted in (`compilerOracleServer`) and the process did not decline it
+	 * The report-mode oracle verdict, through a CONTENT-ADDRESSED cache first. The key is a
+	 * fingerprint of everything the compiler would read (`OracleCache`), so a hit is only ever
+	 * taken on a byte-identical compile input — never on a modification time, never on "nothing
+	 * looks changed". Every doubt yields no fingerprint or no record, and then the compiler
+	 * itself decides, which is why the cache can only change what a verdict COSTS.
+	 *
+	 * `APQ_NO_ORACLE_CACHE` declines it process-wide. That is a weakening-only switch: declining
+	 * a cache can cost time, never change a verdict.
+	 *
+	 * The `--fix` risky-fix verification never reaches here — `FixVerifier` calls
+	 * `CompilerOracle` directly, so a post-write typecheck is always a real compiler run.
+	 */
+	private static function reportOracleVerdict(hxml: String, dir: Null<String>, paths: Array<String>, warmServer: Bool): OracleOutcome {
+		final fingerprint: Null<String> = EnvFlag.isSet('APQ_NO_ORACLE_CACHE') ? null : OracleCache.fingerprint(hxml, dir);
+		if (fingerprint != null) {
+			final cached: Null<OracleOutcome> = OracleCache.lookup(hxml, dir, fingerprint);
+			if (cached != null) {
+				stderr(
+					'apq lint: compiler oracle verdict reused — the compile input hashes identical to the last typecheck (no compile)\n'
+				);
+				return cached;
+			}
+		}
+		final verdict: OracleOutcome = compiledOracleVerdict(hxml, dir, paths, warmServer);
+		if (fingerprint != null) OracleCache.store(hxml, dir, fingerprint, verdict);
+		return verdict;
+	}
+
+	/**
+	 * The verdict an actual COMPILER produced: through the project's shared WARM compilation
+	 * server when the config opted in (`compilerOracleServer`) and the process did not decline it
 	 * (`APQ_NO_ORACLE_SERVER`), else a fresh `haxe <hxml> --no-output`. Verdict-equivalent by
 	 * construction — the warm path answers null for every condition it cannot decide under
 	 * (no server, a dead one, a port that answers as something else), and the cold oracle
-	 * takes over then. The `--fix` risky-fix verification never comes here: a post-write
+	 * takes over then. The `--fix` risky-fix verification never comes here either: a post-write
 	 * typecheck is the one question a compilation server cannot answer honestly.
 	 */
-	private static function reportOracleVerdict(hxml: String, dir: Null<String>, paths: Array<String>, warmServer: Bool): OracleOutcome {
+	private static function compiledOracleVerdict(hxml: String, dir: Null<String>, paths: Array<String>, warmServer: Bool): OracleOutcome {
 		final declined: Bool = !warmServer || EnvFlag.isSet('APQ_NO_ORACLE_SERVER');
 		// A warm CONFIRM stands as it is; a warm REJECTION is re-run COLD before it is reported.
 		// A compilation server can re-emit a stale null-safety diagnostic for a module it restored
@@ -12837,6 +12870,105 @@ final class Cli {
 		if (cold.match(Confirmed))
 			stderr('apq lint: warm compiler server rejected a build the compiler accepts — stale cached diagnostic, cold verdict used\n');
 		return cold;
+	}
+
+	/**
+	 * `apq oracle <scope>` — run the compiler oracle ONCE, cold, and record its verdict under
+	 * the current content fingerprint, so a following `apq lint` reuses it instead of
+	 * typechecking the same tree a second time. It cannot lie: the compiler ALWAYS runs, and
+	 * nothing is recorded that was not observed. A tree that moves between the two commands
+	 * simply misses the fingerprint and recompiles.
+	 *
+	 * The scope is there to locate the project's `apqlint.json` exactly as `lint` does; without
+	 * a `compilerOracle` key the command is inert and exits 0, again exactly like `lint`.
+	 */
+	private static function runOracle(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		final specs: Array<String> = [];
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					// hxq shim auto-injects --lang haxe; the scope is resolved through the same
+					// helper `lint` uses, so accept + consume the value to keep shim invariance.
+					lang = expectValue(args, ++i, '--lang');
+				case '-h', '--help':
+					printOracleUsage();
+					return EXIT_OK;
+				case _:
+					if (a.startsWith('-')) {
+						stderr('apq oracle: unknown option "$a"\n');
+						printOracleUsage();
+						return EXIT_USAGE;
+					}
+					specs.push(a);
+			}
+			i++;
+		}
+		if (specs.length == 0) {
+			stderr('apq oracle: expected <scope> (one or more file/dir/glob specs)\n');
+			printOracleUsage();
+			return EXIT_USAGE;
+		}
+		final paths: Array<String> = resolveInputPaths(lang, specs).paths;
+		if (paths.length == 0) {
+			stderr('apq oracle: ${specs.join(', ')} matched no .hx files\n');
+			return EXIT_RUNTIME;
+		}
+		final config: LintConfig = LintConfig.discover(paths[0]);
+		final hxml: Null<String> = config.compilerOracle();
+		if (hxml != null) return recordOracleVerdict(hxml, config.compilerOracleDir());
+		stderr('apq oracle: no compilerOracle configured for ${specs.join(', ')} — nothing to typecheck\n');
+		return EXIT_OK;
+	}
+
+	/**
+	 * The compile-and-record half of `apq oracle`: the fingerprint is taken BEFORE the compile
+	 * (it describes the input the compiler is about to read), one COLD typecheck runs — never
+	 * the warm server, never the cache — and only an observed verdict is stored. A project that
+	 * yields no fingerprint says so, so a silently non-caching setup is visible rather than a
+	 * `lint` that mysteriously never speeds up.
+	 */
+	private static function recordOracleVerdict(hxml: String, dir: Null<String>): Int {
+		final fingerprint: Null<String> = OracleCache.fingerprint(hxml, dir);
+		final outcome: OracleOutcome = CompilerOracle.typecheck(hxml, dir);
+		if (fingerprint != null) OracleCache.store(hxml, dir, fingerprint, outcome);
+		final exit: Int = reportOracleRun(outcome);
+		if (fingerprint == null) stderr('apq oracle: no fingerprint for this project — the verdict was not recorded\n');
+		return exit;
+	}
+
+	/** One stderr line per `apq oracle` outcome, plus the exit status that goes with it. */
+	private static function reportOracleRun(outcome: OracleOutcome): Int {
+		switch outcome {
+			case Confirmed:
+				stderr('apq oracle: build typechecks — verdict recorded (lint will not recompile an unchanged tree)\n');
+			case Unavailable(reason):
+				stderr('apq oracle: unavailable — $reason (nothing recorded)\n');
+			case Rejected(errors):
+				stderr('apq oracle: build does NOT typecheck:\n$errors\n');
+				return EXIT_RUNTIME;
+		}
+		return EXIT_OK;
+	}
+
+	private static function printOracleUsage(): Void {
+		sysPrint('Usage: apq oracle <scope>\n');
+		sysPrint('\n');
+		sysPrint('Typecheck the project ONCE, cold, and record the verdict under a content\n');
+		sysPrint('fingerprint of the whole compile input — every hxml in the include chain and\n');
+		sysPrint('every .hx on the classpath the compiler itself names. A later `apq lint`\n');
+		sysPrint('re-derives that fingerprint and reuses the verdict only while it still\n');
+		sysPrint('matches, so an edited tree is recompiled rather than trusted.\n');
+		sysPrint('\n');
+		sysPrint('The compiler ALWAYS runs here — there is no flag that records a verdict\n');
+		sysPrint('nobody observed. The scope only locates the project apqlint.json; without a\n');
+		sysPrint('`compilerOracle` key the command is inert. Exit 0 when the build typechecks\n');
+		sysPrint('or the oracle could not run, 1 when it does not typecheck, 2 on usage.\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  -h, --help      Show this help\n');
 	}
 
 	private static function runExtractConstant(args: Array<String>): Int {
