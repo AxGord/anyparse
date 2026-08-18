@@ -63,25 +63,32 @@ final class HxHeaderWrapLadderSliceTest extends Test {
 		Assert.equals(LADDER_FOR, triviaWrite(LADDER_FOR));
 	}
 
-	/** Step 2 for `while`, with a plain (non-construct) body. */
+	/**
+	 * Step 2 for `while`. The body is a nested construct on purpose: its
+	 * OWN body sits behind a `BodyGroup` the enclosing fit measure defers,
+	 * so the header line stays under the limit and the header's chain is
+	 * the only thing that can move it. A plain-call body does NOT
+	 * discriminate here — it is fully counted, the whole construct group
+	 * breaks first, and the chain sees a hardline instead of a body.
+	 */
 	public function testWhileChainHeaderFitsBodyDrops(): Void {
 		final broken: String = 'class C {\n\tfunction f(text:String):Void {\n'
 			+ '\t\twhile (text.trim()\n\t\t\t.toLowerCase()\n'
-			+ '\t\t\t.split(\' \').length > 0) dispatchSomeEventToTheListener(word, extraArgumentValue, anotherArgumentVal);\n\t}\n}';
+			+ '\t\t\t.split(\' \').length > 0) if (_questionText.indexOf(word) == -1 && _answerText.indexOf(word) == -1) return false;\n\t}\n}';
 		final expected: String = 'class C {\n\tfunction f(text:String):Void {\n'
-			+ '\t\twhile (text.trim().toLowerCase().split(\' \').length > 0)\n'
-			+ '\t\t\tdispatchSomeEventToTheListener(word, extraArgumentValue, anotherArgumentVal);\n\t}\n}';
+			+ '\t\twhile (text.trim().toLowerCase().split(\' \').length > 0) if (_questionText.indexOf(word) == -1'
+			+ ' && _answerText.indexOf(word) == -1)\n\t\t\treturn false;\n\t}\n}';
 		Assert.equals(expected, triviaWrite(broken));
 	}
 
-	/** Step 2 for `if`, with a plain (non-construct) body. */
+	/** Step 2 for `if` — same nested-construct body as the `while` case above. */
 	public function testIfChainHeaderFitsBodyDrops(): Void {
 		final broken: String = 'class C {\n\tfunction f(text:String):Void {\n'
 			+ '\t\tif (text.trim()\n\t\t\t.toLowerCase()\n'
-			+ '\t\t\t.split(\' \').length > 0) dispatchSomeEventToTheListener(word, extraArgumentValue, anotherArgumentValueXY);\n\t}\n}';
+			+ '\t\t\t.split(\' \').length > 0) if (_questionText.indexOf(word) == -1 && _answerText.indexOf(word) == -1) return false;\n\t}\n}';
 		final expected: String = 'class C {\n\tfunction f(text:String):Void {\n'
-			+ '\t\tif (text.trim().toLowerCase().split(\' \').length > 0)\n'
-			+ '\t\t\tdispatchSomeEventToTheListener(word, extraArgumentValue, anotherArgumentValueXY);\n\t}\n}';
+			+ '\t\tif (text.trim().toLowerCase().split(\' \').length > 0) if (_questionText.indexOf(word) == -1'
+			+ ' && _answerText.indexOf(word) == -1)\n\t\t\treturn false;\n\t}\n}';
 		Assert.equals(expected, triviaWrite(broken));
 	}
 
