@@ -32,13 +32,13 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxHeaderWrapLadderSliceTest extends Test {
 
-	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 140, "conditionWrapping": {"defaultWrap": "fillLineWithLeadingBreak",'
-		+ ' "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}},'
-		+ ' "sameLine": {"ifBody": "fitLine", "forBody": "fitLine", "whileBody": "fitLine"}}';
-
+	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 140, "conditionWrapping": {'
+		+ '"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "sameLine": {'
+		+ '"ifBody": "fitLine", "forBody": "fitLine", "whileBody": "fitLine"}}';
 	private static final LADDER_FOR: String = 'class C {\n\tfunction f(text:String):Bool {\n'
-		+ '\t\tfor (word in text.trim().toLowerCase().split(\' \')) if (_questionText.indexOf(word) == -1 && _answerText.indexOf(word) == -1)\n'
-		+ '\t\t\treturn false;\n\t\treturn true;\n\t}\n}';
+		+ '\t\tfor (word in text.trim().toLowerCase().split(\' \')) if (_questionText.indexOf(word) '
+		+ '== -1 && _answerText.indexOf(word) == -1)\n\t\t\treturn false;\n\t\treturn true;\n\t}\n}';
 
 	public function new(): Void {
 		super();
@@ -52,9 +52,9 @@ final class HxHeaderWrapLadderSliceTest extends Test {
 	 * the flat chain and the dropped body in ONE string.
 	 */
 	public function testForChainHeaderFitsBodyDrops(): Void {
-		final broken: String = 'class C {\n\tfunction f(text:String):Bool {\n' + '\t\tfor (word in text.trim()\n\t\t\t.toLowerCase()\n'
-			+ '\t\t\t.split(\' \')) if (_questionText.indexOf(word) == -1 && _answerText.indexOf(word) == -1) return false;\n'
-			+ '\t\treturn true;\n\t}\n}';
+		final broken: String = 'class C {\n\tfunction f(text:String):Bool {\n\t\tfor (word in text.trim()\n\t\t\t.toLowerCase()\n'
+			+ '\t\t\t.split(\' \')) if (_questionText.indexOf(word) == -1 && _answerText.indexOf(word) == -1) '
+			+ 'return false;\n\t\treturn true;\n\t}\n}';
 		Assert.equals(LADDER_FOR, triviaWrite(broken));
 	}
 
@@ -71,29 +71,29 @@ final class HxHeaderWrapLadderSliceTest extends Test {
 	 * breaks first, and the chain sees a hardline instead of a body.
 	 */
 	public function testWhileChainHeaderFitsBodyDrops(): Void {
-		final broken: String = 'class C {\n\tfunction f(text:String):Void {\n' + '\t\twhile (text.trim()\n\t\t\t.toLowerCase()\n'
-			+ '\t\t\t.split(\' \').length > 0) if (_questionText.indexOf(word) == -1 && _answerText.indexOf(word) == -1) return false;\n\t}\n}';
-		final expected: String = 'class C {\n\tfunction f(text:String):Void {\n'
-			+ '\t\twhile (text.trim().toLowerCase().split(\' \').length > 0) if (_questionText.indexOf(word) == -1'
-			+ ' && _answerText.indexOf(word) == -1)\n\t\t\treturn false;\n\t}\n}';
+		final broken: String = 'class C {\n\tfunction f(text:String):Void {\n\t\twhile (text.trim()\n\t\t\t.toLowerCase()\n'
+			+ '\t\t\t.split(\' \').length > 0) if (_questionText.indexOf(word) == -1 && _answerText.indexOf(word) == -1) '
+			+ 'return false;\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction f(text:String):Void {\n\t\twhile (text.trim().toLowerCase().split(\' \').length > '
+			+ '0) if (_questionText.indexOf(word) == -1 && _answerText.indexOf(word) == -1)\n\t\t\treturn false;\n\t}\n}';
 		Assert.equals(expected, triviaWrite(broken));
 	}
 
 	/** Step 2 for `if` — same nested-construct body as the `while` case above. */
 	public function testIfChainHeaderFitsBodyDrops(): Void {
-		final broken: String = 'class C {\n\tfunction f(text:String):Void {\n' + '\t\tif (text.trim()\n\t\t\t.toLowerCase()\n'
-			+ '\t\t\t.split(\' \').length > 0) if (_questionText.indexOf(word) == -1 && _answerText.indexOf(word) == -1) return false;\n\t}\n}';
-		final expected: String = 'class C {\n\tfunction f(text:String):Void {\n'
-			+ '\t\tif (text.trim().toLowerCase().split(\' \').length > 0) if (_questionText.indexOf(word) == -1'
-			+ ' && _answerText.indexOf(word) == -1)\n\t\t\treturn false;\n\t}\n}';
+		final broken: String = 'class C {\n\tfunction f(text:String):Void {\n\t\tif (text.trim()\n\t\t\t.toLowerCase()\n'
+			+ '\t\t\t.split(\' \').length > 0) if (_questionText.indexOf(word) == -1 && _answerText.indexOf(word) == -1) '
+			+ 'return false;\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction f(text:String):Void {\n\t\tif (text.trim().toLowerCase().split(\' \').length > 0) '
+			+ 'if (_questionText.indexOf(word) == -1 && _answerText.indexOf(word) == -1)\n\t\t\treturn false;\n\t}\n}';
 		Assert.equals(expected, triviaWrite(broken));
 	}
 
 	/** Step 1: a body that fits beside the header keeps the same line. */
 	public function testWholeConstructFitsStaysOneLine(): Void {
 		final src: String = 'class C {\n\tfunction f(text:String):Void {\n'
-			+ '\t\tfor (word in text.trim().toLowerCase().split(\' \')) dispatchSomeEventToTheListener(word, extraArgumentValue, anotherArgumentValueX);\n'
-			+ '\t\tfor (word in text.trim().toLowerCase().split(\' \')) trace(word);\n\t}\n}';
+			+ '\t\tfor (word in text.trim().toLowerCase().split(\' \')) dispatchSomeEventToTheListener(word, extraArgumentValue, '
+			+ 'anotherArgumentValueX);\n\t\tfor (word in text.trim().toLowerCase().split(\' \')) trace(word);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -105,8 +105,8 @@ final class HxHeaderWrapLadderSliceTest extends Test {
 	 */
 	public function testHeaderTooWideOpensParenAndBodyFollowsCloseParen(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfor (\n'
-			+ '\t\t\twordItem in someLongerReceiverNameXXXXXXXX.trimTheString().toLowerCaseVariant().splitOnTheSeparator(\' \').filterOutEmptyEntries()\n'
-			+ '\t\t) trace(wordItem);\n\t}\n}';
+			+ '\t\t\twordItem in someLongerReceiverNameXXXXXXXX.trimTheString().toLowerCaseVariant().splitOnTheSeparator(\' '
+			+ '\').filterOutEmptyEntries()\n\t\t) trace(wordItem);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
