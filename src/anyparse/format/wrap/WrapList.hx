@@ -161,9 +161,9 @@ typedef WrapListOptions = {
 	 * n`), so a config can send an array of several constructor calls
 	 * one-per-line regardless of how narrow it renders. The code-2 subset
 	 * drives the fill-mode CHUNK policy (`shapeFillLine*`): a call-bearing
-	 * container that is not the first element takes a line of its own, which
-	 * is how the fork packed a call whose last argument is a list of object
-	 * literals.
+	 * container that would otherwise stay PACKED on a shared argument line
+	 * takes a line of its own instead. See `chunkOwnLine` for the two
+	 * positions the policy leaves to the existing glues.
 	 *
 	 * Omitted (or an out-of-bounds index) reads as 0 everywhere, so a caller
 	 * that supplies no kinds counts none and keeps the pre-slice layout
@@ -1819,11 +1819,11 @@ class WrapList {
 		// `WriteOptions`. Default `false` keeps every non-threaded caller
 		// byte-identical.
 		comprehensionCuddledOpen: Bool = false,
-		// ω-complex-item-count (D2): the per-element AST classification. Read by
-		// the fill-mode CHUNK policy (a call-bearing container literal past the
-		// first element takes a line of its own) and by the multi-arg-collection
-		// glue, which declines for exactly those elements so the chunk policy
-		// can shape them. Omitted → both behaviours are off and every caller is
+		// ω-complex-item-count (D2): the per-element AST classification, read by
+		// the fill-mode CHUNK policy in `shapeFillLine` / `shapeFillLineWith
+		// LeadingBreak`. Forwarded through `shapeMultiArgCollection` because its
+		// open-shape branch builds one of those two shapes; the glue itself is
+		// not gated on it. Omitted → the policy is off and every caller is
 		// byte-identical.
 		?complexItemKinds: Array<Int>
 	): Doc {
