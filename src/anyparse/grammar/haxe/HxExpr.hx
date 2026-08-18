@@ -383,7 +383,7 @@ enum HxExpr {
 
 	@:trivia @:lead('[') @:trail(']') @:sep(',') @:fmt(trailingComma('trailingCommaArrays'), trailingCommaRemovable,
 		wrapRules('arrayLiteralWrap'), reflowSourceMultiline, bracketKindPad, arrayMatrixWrap, propagateExprPosition, uniformStmtBlanks,
-		groupRestProbe)
+		groupRestProbe, complexItems)
 	ArrayExpr(elems: Array<HxExpr>);
 
 	ObjectLit(lit: HxObjectLit);

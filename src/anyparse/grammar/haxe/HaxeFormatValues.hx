@@ -104,6 +104,7 @@ final class HaxeFormatValues {
 			case 'exceedsMaxLineLength' | 'ExceedsMaxLineLength': WrapConditionType.ExceedsMaxLineLength;
 			case 'lineLength >= n' | 'LineLengthLargerThan': WrapConditionType.LineLengthLargerThan;
 			case 'hasMultilineItems' | 'HasMultilineItems': WrapConditionType.HasMultilineItems;
+			case 'complexItemCount >= n' | 'ComplexItemCountLargerThan': WrapConditionType.ComplexItemCountLargerThan;
 			case _: null;
 		};
 	}

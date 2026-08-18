@@ -1935,12 +1935,18 @@ class WriterLowering {
 			// enum-Alt) — read for dual-dispatch symmetry.
 			final trailingCommaRemovableStar: Bool = starNode.fmtHasFlag('trailingCommaRemovable');
 			final uniformStmtBlanksStar: Bool = starNode.fmtHasFlag('uniformStmtBlanks');
+			// ω-complex-item-count: struct-Star path reader for
+			// `@:fmt(complexItems)` — the per-element AST classification behind
+			// the `complexItemCount >= n` cascade condition and the fill-mode
+			// chunk policy. Live here for `HxNewExpr.args`; the array literal
+			// opts in through the enum-Alt reader.
+			final complexItemsStar: Bool = starNode.fmtHasFlag('complexItems');
 			parts.push(TriviaSepLowering.triviaSepStarExpr(
 				fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText, sepText,
 				wrapRulesField, leftCurlyOwnedBySep ? knobLeftCurly : null, knobRightCurly, trailPresentAccess, trailingCommaField,
 				openInsideStar, closeInsideStar, false, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
 				reflowSourceMultilineStar, matrixWrapStar, trailNLAccess, false, false, reflowInExprBranchStar, trailingCommaRemovableStar,
-				uniformStmtBlanksStar
+				uniformStmtBlanksStar, complexItemsStar
 			));
 			return;
 		}
@@ -5374,12 +5380,18 @@ class WriterLowering {
 		// second extends `emptyLines.uniformStatementBlanks` to element gaps.
 		final trailingCommaRemovableAlt: Bool = branch.fmtHasFlag('trailingCommaRemovable');
 		final uniformStmtBlanksAlt: Bool = branch.fmtHasFlag('uniformStmtBlanks');
+		// ω-complex-item-count: enum-Alt branch reader for `@:fmt(complexItems)`
+		// (`HxExpr.ArrayExpr`) — classify each element (call / `new`,
+		// call-bearing container literal, neither) so the cascade can send an
+		// array of constructor calls one-per-line on a SEMANTIC counter rather
+		// than a width proxy (which would also mangle `case [A, _]` patterns).
+		final complexItemsAlt: Bool = branch.fmtHasFlag('complexItems');
 		return TriviaSepLowering.triviaSepStarExpr(
 			c.argsAccess, slots.trailBBAccess, slots.trailLCAccess, slots.trailCloseAccess, slots.trailOpenAccess, c.elemFn, c.leadText,
 			c.trailText, c.sepText, wrapRulesField, knobLeftCurly, knobRightCurly, slots.sepTrailPresentAccess, trailingCommaField,
 			openInsideExpr, closeInsideExpr, beforeDocComments, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
 			reflowSourceMultilineAlt, matrixWrapAlt, null, typedefBodyBlanksAlt, propagateExprPositionAlt, false,
-			trailingCommaRemovableAlt, uniformStmtBlanksAlt
+			trailingCommaRemovableAlt, uniformStmtBlanksAlt, complexItemsAlt
 		);
 	}
 
@@ -14953,6 +14965,15 @@ typedef SepStarNoTriviaCtx = {
 	final forceModeExpr: Expr;
 	final flatTrailingCommaExpr: Expr;
 	final reflowSourceMultiline: Bool;
+
+	/**
+	 * ω-complex-item-count: the Star carries `@:fmt(complexItems)`, so the
+	 * no-trivia branch classifies each element at the AST layer and threads the
+	 * per-element codes into `WrapList.emit` as `complexItemKinds`. False on
+	 * every other Star → no classification runs and the emit call is
+	 * byte-identical.
+	 */
+	final complexItems: Bool;
 };
 /**
  * Output bundle of `triviaSepTrailExprs` — the source-trailing-comma /

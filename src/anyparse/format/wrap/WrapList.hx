@@ -150,6 +150,28 @@ typedef WrapListOptions = {
 	 */
 	var ?comprehensionFitMeasure: Bool;
 
+	/**
+	 * Per-element complexity classification, length-aligned with `items` — the
+	 * AST-layer answer to "is this element a call / `new`, a container literal
+	 * carrying one, or neither". Codes are the grammar's `COMPLEX_ITEM_*`
+	 * constants: 0 neither, 1 call / `new`, 2 call-bearing container literal.
+	 *
+	 * Two consumers, one classification. The count of NON-zero entries feeds
+	 * the `ComplexItemCountLargerThan` cascade condition (`complexItemCount >=
+	 * n`), so a config can send an array of several constructor calls
+	 * one-per-line regardless of how narrow it renders. The code-2 subset
+	 * drives the fill-mode CHUNK policy (`shapeFillLine*`): a call-bearing
+	 * container that is not the first element takes a line of its own, which
+	 * is how the fork packed a call whose last argument is a list of object
+	 * literals.
+	 *
+	 * Omitted (or an out-of-bounds index) reads as 0 everywhere, so a caller
+	 * that supplies no kinds counts none and keeps the pre-slice layout
+	 * byte-identically. Slice D1 + D2 — complex-element arrays and the
+	 * `callParameter` chunk policy.
+	 */
+	var ?complexItemKinds: Array<Int>;
+
 }
 
 /**
@@ -207,6 +229,7 @@ class WrapList {
 		final keepCloseGlued: Bool = axes.keepCloseGlued;
 		final flatTrailingComma: Bool = axes.flatTrailingComma;
 		final comprehensionFitMeasure: Bool = axes.comprehensionFitMeasure;
+		final complexItemKinds: Null<Array<Int>> = axes.complexItemKinds;
 		final trailBreakDoc: Doc = axes.trailBreakDoc;
 		if (items.length == 0) return WrapBoundary(Text(open + (keepInnerWhenEmpty ? ' ' : '') + close));
 
@@ -250,6 +273,10 @@ class WrapList {
 		final maxLen: Int = measure.maxLen;
 		final anyHardline: Bool = measure.anyHardline;
 		final cols: Int = continuationCols(rules, opt, items, maxLen, total, anyHardline, sourceMultilineKeep, compactContinuation);
+		// ω-complex-item-count: the cascade counter behind `complexItemCount >= n`.
+		// A caller that supplies no kinds counts 0, so the condition never fires
+		// and every pre-slice list is byte-identical.
+		final complexCount: Int = countComplexItems(complexItemKinds);
 
 		// Column-aware `LineLengthLargerThan` thresholds (slice
 		// ω-ifwidthexceeds-infra). Cascade rules with `lineLength >= n`
@@ -279,7 +306,8 @@ class WrapList {
 		function evalAt(exceeds: Bool, firing: Array<Int>): WrapMode {
 			return forceMode ?? floorSourceMultiline(
 				decideWithLineLengthState(
-					rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t)
+					rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t),
+					complexCount
 				),
 				sourceMultilineKeep
 			);
@@ -552,6 +580,18 @@ class WrapList {
 	}
 
 	/**
+	 * Number of NON-zero entries in a `complexItemKinds` array — the value the
+	 * `ComplexItemCountLargerThan` condition compares against. A null array
+	 * (the axis omitted) counts 0.
+	 */
+	public static function countComplexItems(kinds: Null<Array<Int>>): Int {
+		if (kinds == null) return 0;
+		var n: Int = 0;
+		for (kind in kinds) if (kind != 0) n++;
+		return n;
+	}
+
+	/**
 	 * Walks the rules cascade and returns the first matching mode.
 	 * `LineLengthLargerThan` evaluation is deferred to the caller-
 	 * supplied `lineLengthFires` predicate so consumers can enumerate
@@ -567,11 +607,11 @@ class WrapList {
 	 */
 	public static function decideWithLineLengthState(
 		rules: WrapRules, itemCount: Int, maxItemLen: Int, totalItemLen: Int, exceedsMaxLineLength: Bool, hasMultilineItems: Bool,
-		lineLengthFires: Int -> Bool
+		lineLengthFires: Int -> Bool, complexItemCount: Int = 0
 	): WrapMode {
 		for (rule in rules.rules) {
 			if (matchesWithLineLengthState(
-				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires
+				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires, complexItemCount
 			))
 				return rule.mode;
 		}
@@ -626,12 +666,12 @@ class WrapList {
 	 */
 	public static function decideRuleWithLineLengthState(
 		rules: WrapRules, itemCount: Int, maxItemLen: Int, totalItemLen: Int, exceedsMaxLineLength: Bool, hasMultilineItems: Bool,
-		lineLengthFires: Int -> Bool
+		lineLengthFires: Int -> Bool, complexItemCount: Int = 0
 	): { mode: WrapMode, location: WrappingLocation } {
 		final fallback: WrappingLocation = rules.defaultLocation ?? WrappingLocation.AfterLast;
 		for (rule in rules.rules) {
 			if (matchesWithLineLengthState(
-				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires
+				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires, complexItemCount
 			))
 				return { mode: rule.mode, location: rule.location ?? fallback };
 		}
@@ -1611,7 +1651,7 @@ class WrapList {
 
 	private static function matchesWithLineLengthState(
 		rule: WrapRule, itemCount: Int, maxItemLen: Int, totalItemLen: Int, exceedsMaxLineLength: Bool, hasMultilineItems: Bool,
-		lineLengthFires: Int -> Bool
+		lineLengthFires: Int -> Bool, complexItemCount: Int = 0
 	): Bool {
 		for (cond in rule.conditions) {
 			final ok: Bool = switch cond.cond {
@@ -1624,6 +1664,7 @@ class WrapList {
 				case ExceedsMaxLineLength: cond.value == 0 ? !exceedsMaxLineLength : exceedsMaxLineLength;
 				case LineLengthLargerThan: lineLengthFires(cond.value);
 				case HasMultilineItems: cond.value == 0 ? !hasMultilineItems : hasMultilineItems;
+				case ComplexItemCountLargerThan: complexItemCount >= cond.value;
 				case _: false;
 			};
 			if (!ok) return false;
@@ -3753,6 +3794,7 @@ class WrapList {
 			keepCloseGlued: axes.keepCloseGlued ?? false,
 			flatTrailingComma: axes.flatTrailingComma ?? false,
 			comprehensionFitMeasure: axes.comprehensionFitMeasure ?? false,
+			complexItemKinds: axes.complexItemKinds,
 			trailBreakDoc: axes.trailBreak ?? Line('\n')
 		};
 	}
@@ -3782,5 +3824,6 @@ private typedef ResolvedWrapListOptions = {
 	final keepCloseGlued: Bool;
 	final flatTrailingComma: Bool;
 	final comprehensionFitMeasure: Bool;
+	final complexItemKinds: Null<Array<Int>>;
 	final trailBreakDoc: Doc;
 };
