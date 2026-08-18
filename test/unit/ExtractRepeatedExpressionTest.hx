@@ -28,6 +28,28 @@ class ExtractRepeatedExpressionTest extends Test {
 		Assert.equals(0, violations('class C { function m() { k(a.b.c); k(a.b.c); } }').length);
 	}
 
+	public function testCalleeOfCallNotCounted(): Void {
+		// The callee position holds a method REFERENCE, not a value: hoisting `a.b.c` out of
+		// `a.b.c(...)` binds a method, which is never what the suggestion means. The receiver
+		// `a.b` is left as the only value candidate, and it is a single hop — trivial.
+		Assert.equals(0, violations('class C { function m() { a.b.c(1); a.b.c(2); a.b.c(3); } }').length);
+	}
+
+	public function testCalleeReceiverStillCountedWhenNonTrivial(): Void {
+		// Excluding the callee does not blind the check to the value inside it: `a.b.c` is a
+		// two-hop chain and a genuine repeated value, so it is reported in place of `a.b.c.d`.
+		final vs: Array<Violation> = violations('class C { function m() { a.b.c.d(1); a.b.c.d(2); a.b.c.d(3); } }');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('`a.b.c`') != -1);
+	}
+
+	public function testRepeatedCallValueStillFlagged(): Void {
+		// A repeated pure CALL is a value, not a callee — the gate must not touch it.
+		final vs: Array<Violation> = violations('class C { function m(v:Float) { s(Std.int(v)); s(Std.int(v)); s(Std.int(v)); } }');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('Std.int(v)') != -1);
+	}
+
 	public function testSingleHopNotFlagged(): Void {
 		// `this.x` is one hop and holds no call — caching it buys nothing.
 		Assert.equals(0, violations('class C { var x:Int; function m() { p(this.x); p(this.x); p(this.x); } }').length);

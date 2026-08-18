@@ -109,19 +109,30 @@ final class PurityScan {
 	}
 
 	/**
+	 * The index-free half of `isPureCall`, for a caller that has a grammar but no symbol index:
+	 * whether `call`'s callee is a `Recv.method` field access where `Recv` is a bare identifier in
+	 * `PURE_CALL_RECEIVERS` and `method` is not an `IMPURE_MEMBERS` name. It answers for the CALL
+	 * NODE ONLY — the arguments are the caller's business, so a caller that walks a subtree must
+	 * recurse into them itself (`Std.int(Math.random())` has a pure callee and an impure argument).
+	 */
+	public static function isPureStdlibCall(call: QueryNode, fieldAccessKind: String, identKind: String): Bool {
+		if (call.children.length < 1) return false;
+		final callee: QueryNode = call.children[0];
+		if (callee.kind != fieldAccessKind || callee.children.length != 1) return false;
+		final method: Null<String> = callee.name;
+		if (method == null || IMPURE_MEMBERS.contains(method)) return false;
+		final recv: QueryNode = callee.children[0];
+		return recv.kind == identKind && recv.name != null && PURE_CALL_RECEIVERS.contains(recv.name);
+	}
+
+	/**
 	 * Whether a `callKind` node is a provably-pure stdlib call — its callee is a `Recv.method`
 	 * field access where `Recv` is a bare identifier in `PURE_CALL_RECEIVERS` and `method` is not
 	 * an `IMPURE_MEMBERS` name. Any other callee (an instance method, a local function, a complex
 	 * receiver) is unproven and therefore impure.
 	 */
-	private static function isPureCall(call: QueryNode, ctx: PurityCtx): Bool {
-		if (call.children.length < 1) return false;
-		final callee: QueryNode = call.children[0];
-		if (callee.kind != ctx.fieldAccessKind || callee.children.length != 1) return false;
-		final method: Null<String> = callee.name;
-		if (method == null || IMPURE_MEMBERS.contains(method)) return false;
-		final recv: QueryNode = callee.children[0];
-		return recv.kind == ctx.identKind && recv.name != null && PURE_CALL_RECEIVERS.contains(recv.name);
+	private static inline function isPureCall(call: QueryNode, ctx: PurityCtx): Bool {
+		return isPureStdlibCall(call, ctx.fieldAccessKind, ctx.identKind);
 	}
 
 	/**
@@ -145,7 +156,6 @@ final class PurityScan {
 		}
 		return typeName != null && ctx.index.memberGetter(typeName, field) == true;
 	}
-
 
 	/**
 	 * Whether a BARE identifier reads a property of the enclosing type whose getter runs code. The

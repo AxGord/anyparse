@@ -44,6 +44,18 @@ class DeadStoreTest extends Test {
 		assertNoFix('class C { function f(a:Int):Void { var x = a; trace(x); x = compute(); } }');
 	}
 
+	public inline function testFixStripsPureStdlibCallInitializer(): Void {
+		// `Std.int(v)` is a provably-pure stdlib call — dropping it drops nothing, so the dead
+		// initializer is stripped like any other pure one.
+		assertFix('class C { function f(v:Float):Int { var x:Int = Std.int(v); x = 2; return x; } }', 'var x:Int;', 'Std.int(v)');
+	}
+
+	public inline function testFixRefusesNonDeterministicStdlibInitializer(): Void {
+		// `Math.random()` is stdlib but not referentially transparent — the argument is walked,
+		// so the outer `Std.int(...)` being pure does not launder it.
+		assertNoFix('class C { function f(a:Int):Int { var x:Int = Std.int(Math.random()); x = a; return x; } }');
+	}
+
 	public inline function testFixRefusesNewRhs(): Void {
 		// `new` runs a constructor — never deleted.
 		assertNoFix('class C { function f(a:Int):Void { var y = a; trace(y); y = new Foo(); } }');
