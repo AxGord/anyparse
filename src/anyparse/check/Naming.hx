@@ -243,9 +243,12 @@ final class Naming implements Check implements CrossFileFix {
 	 * renames - a pass also drives `crossFileFix`, and a superclass and its subclass do not even take
 	 * the same seam, since a type with a subtype is never confined.
 	 *
-	 * Deferral is not refusal: `naming` is a full-scope check, so the loser re-fires on the next
-	 * `--fix` pass, by which time the winner has landed and the ordinary collision scan judges it
-	 * against a source that finally holds the name.
+	 * Deferral is not refusal, but the two kinds recover differently. A file-local loser re-fires on the
+	 * next `--fix` pass: `naming` is a full-scope check and the file it lost in was edited, so the
+	 * driver keeps it active, and by then the ordinary collision scan judges it against a source that
+	 * holds the name. A RUN-CLAIM loser may be the only finding in its file, in which case that file
+	 * receives no edit, drops out of the driver's `active` set, and waits for the next `--fix` RUN
+	 * instead - which is why `RenameClaims` says "a later pass or run".
 	 */
 	private function defersToAnAcceptedRename(
 		rename: DeclRename, edits: Array<{ span: Span, text: String }>, claims: Array<DeclRename>, owner: Null<String>,
@@ -1570,10 +1573,11 @@ private typedef CrossFileCandidate = {
 	 */
 	final family: Array<OverrideFamilyMember>;
 };
+
 /**
  * A completed CROSS-FILE rename: the per-file edit slices the caller commits atomically, plus the
- * owning type and the new name, which `crossFileFix` needs to record the rename as a run claim
- * (`Naming.defersToARunClaim`) and the slices alone do not carry.
+ * owning type and the new name. `crossFileFix` needs those two to record the rename with
+ * `RenameClaims`, and the slices alone do not carry them.
  */
 private typedef CrossFileRename = {
 	final slices: Array<CrossFileEdits>;

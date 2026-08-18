@@ -51,16 +51,24 @@ final class RenameClaims {
 	 */
 	public function defers(owner: Null<String>, newName: String, index: Null<SymbolIndex>): Bool {
 		if (owner == null || index == null) return false;
-		final idx: SymbolIndex = index;
-		final own: String = owner;
-		for (c in ledger(idx)) if (c.newName == newName && !idx.unrelatedClasses(own, c.owner)) return true;
+		for (c in ledger(index)) if (c.newName == newName && !index.unrelatedClasses(owner, c.owner)) return true;
 		return false;
 	}
 
-	/** Record an accepted member rename, so the rest of the pass defers to it. A declaration `defers` could never veto anyway - one with no owning type, or a run with no index - claims nothing. */
+	/**
+	 * Record an accepted member rename, so the rest of the pass defers to it. A declaration `defers`
+	 * could never veto anyway - one with no owning type, or a run with no index to prove a hierarchy
+	 * with - claims nothing.
+	 *
+	 * The claim records the DECISION, not the commit: the driver can still drop the rename afterwards
+	 * (an edit set overlapping another check's, a canonicalisation `Err`, a cross-file component that
+	 * fails to stage), and the claim stands for the rest of the pass regardless. That direction is the
+	 * safe one - it defers a rename rather than landing a duplicate - but it means a winner that keeps
+	 * failing to commit keeps its loser deferred.
+	 */
 	public function claim(owner: Null<String>, newName: String, index: Null<SymbolIndex>): Void {
-		// Re-bound: a narrowed local does not stay narrowed inside an anonymous structure literal.
 		if (owner == null || index == null) return;
+		// Re-bound: a narrowed local does not stay narrowed inside an anonymous structure literal.
 		final own: String = owner;
 		ledger(index).push({ owner: own, newName: newName });
 	}
@@ -75,11 +83,15 @@ final class RenameClaims {
 	}
 
 	/**
-	 * The type whose inheritance chain a rename of `decl` would introduce the new name into — the
-	 * owner of a FIELD or a METHOD, the two categories Haxe forbids redeclaring in a subclass and
-	 * the two `Naming.renameEditsFor` already holds to the inherited-member proof. Null for
-	 * anything else: a local / param / catch var only SHADOWS an inherited member (which Haxe
-	 * permits), a type has no owner, and a static constant is not inherited at all.
+	 * The type whose inheritance chain a rename of `decl` would introduce the new name into - the owner
+	 * of a FIELD or a METHOD, the two categories Haxe forbids redeclaring in a subclass and the two
+	 * `Naming.renameEditsFor` already holds to the inherited-member proof. Null for anything else: a
+	 * local / param / catch var only SHADOWS an inherited member (which Haxe permits), a type has no
+	 * owner, and a static constant is not inherited at all.
+	 *
+	 * The CROSS-FILE seam does not route through here - it claims with the candidate's own owner, and
+	 * `crossFileCandidate` admits a static Constant too. That asymmetry is over-deferral only (a static
+	 * cannot be a subclass redefinition), never a missed collision.
 	 */
 	public static inline function memberOwnerOf(decl: NamedDecl): Null<String> {
 		return decl.category == NamingCategory.Field || decl.category == NamingCategory.Method ? decl.enclosingType : null;
