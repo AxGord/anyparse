@@ -63,6 +63,21 @@ final class Naming implements Check implements CrossFileFix {
 	 */
 	private static final ARTIFACT_NAME_PATTERN: EReg = new EReg("^[a-z][A-Z0-9]{4,}$", '');
 
+	/**
+	 * The `SymbolIndex` `_runClaims` was decided against. Each claim is a promise about THAT
+	 * snapshot - "a rename I already accepted will put this name on that type" - so a different
+	 * index retires the whole ledger. `apq lint --fix` rebuilds its index once per pass, which is
+	 * exactly the scope the claims are good for: a rename accepted in pass N is IN the sources pass
+	 * N+1 indexes, where the ordinary inherited-member proof sees it without any help.
+	 */
+	private var _claimIndex: Null<SymbolIndex> = null;
+
+	/**
+	 * Member renames already accepted against `_claimIndex`, whichever seam accepted them - the
+	 * cross-file one or the per-file `fix`. See `defersToARunClaim`.
+	 */
+	private var _runClaims: Array<MemberClaim> = [];
+
 	public function new() {}
 
 	public function id(): String {
@@ -168,7 +183,13 @@ final class Naming implements Check implements CrossFileFix {
 				decl, source, tree, policy, shape, plugin, flaggedFroms, reflectionNames, confinedMemo, resolutionIndex, index,
 				violations[0].file
 			);
-			if (rename == null || defersToAnAcceptedRename(rename, edits, claims)) continue;
+			final owner: Null<String> = inheritedNameOwner(decl);
+			if (
+				rename == null || defersToAnAcceptedRename(rename, edits, claims)
+				|| defersToARunClaim(owner, rename.newName, resolutionIndex)
+			)
+				continue;
+			claimInheritedName(owner, rename.newName, resolutionIndex);
 			claims.push(rename);
 			for (edit in rename.edits) edits.push(edit);
 		}
@@ -204,8 +225,10 @@ final class Naming implements Check implements CrossFileFix {
 		final sourceByFile: Map<String, String> = [for (f in files) f.file => f.source];
 		final out: Array<Array<CrossFileEdits>> = [];
 		for (v in violations) {
-			final rename: Null<Array<CrossFileEdits>> = crossFileRenameFor(v, sourceByFile, support, shape, plugin, idx, resolutionIndex);
-			if (rename != null) out.push(rename);
+			final rename: Null<CrossFileRename> = crossFileRenameFor(v, sourceByFile, support, shape, plugin, idx, resolutionIndex);
+			if (rename == null || defersToARunClaim(rename.owner, rename.newName, resolutionIndex)) continue;
+			claimInheritedName(rename.owner, rename.newName, resolutionIndex);
+			out.push(rename.slices);
 		}
 		return out;
 	}
@@ -305,6 +328,71 @@ final class Naming implements Check implements CrossFileFix {
 		if (RefactorSupport.editsOverlapAny(rename.edits, edits)) return true;
 		for (c in claims) if (c.newName == rename.newName && c.scope.from < rename.scope.to && rename.scope.from < c.scope.to) return true;
 		return false;
+	}
+
+	/**
+	 * Whether a rename of `owner`'s member to `newName` must DEFER to one this run already accepted
+	 * on a type in the same inheritance chain.
+	 *
+	 * `defersToAnAcceptedRename` closes the same hazard WITHIN one file; this one closes it across
+	 * the two seams a single `--fix` pass drives — `crossFileFix` for a member whose references
+	 * leave its declaring file, `fix` for a confined one — and those are not the same code path even
+	 * for two members of ONE hierarchy: a type with a subtype is never confined, so a superclass
+	 * renames cross-file while its subclass renames per-file. Both consult the index built at the
+	 * START of the pass, where neither new name exists yet, so the inherited-member proof
+	 * (`SymbolIndex.typeProvablyLacksMember`) clears BOTH and `class A { private var CAPS; }` plus
+	 * `class B extends A { private var Caps; }` each land `_caps` — which is Haxe's "Redefinition of
+	 * variable in subclass is not allowed" (verified).
+	 *
+	 * The test is a HIERARCHY one, not a bare name one: two unrelated types may both take `_caps` in
+	 * one pass, and refusing that would strand every same-named twin in the tree. Unrelatedness must
+	 * be PROVEN (`SymbolIndex.unrelatedClasses` — both names unique, both closures fully enumerated,
+	 * neither reaching the other), so an ambiguous or unresolvable pair defers rather than lands.
+	 *
+	 * Deferral is not refusal, exactly as for the in-file gate: the loser re-fires on a later
+	 * `--fix` pass or run, judged against sources that finally hold the name — where it is either
+	 * allowed or refused for the real reason.
+	 */
+	private function defersToARunClaim(owner: Null<String>, newName: String, index: Null<SymbolIndex>): Bool {
+		if (owner == null || index == null) return false;
+		final idx: SymbolIndex = index;
+		final own: String = owner;
+		for (c in runClaims(idx)) if (c.newName == newName && !idx.unrelatedClasses(own, c.owner)) return true;
+		return false;
+	}
+
+	/**
+	 * Record an accepted member rename so the rest of this pass can see it. A declaration that
+	 * cannot collide by inheritance (no owning type, or no index to prove a hierarchy with) claims
+	 * nothing.
+	 */
+	private function claimInheritedName(owner: Null<String>, newName: String, index: Null<SymbolIndex>): Void {
+		// Re-bound: a narrowed local does not stay narrowed inside an anonymous structure literal.
+		if (owner == null || index == null) return;
+		final own: String = owner;
+		runClaims(index).push({ owner: own, newName: newName });
+	}
+
+	/**
+	 * The claim ledger for `index`, reset the moment a DIFFERENT index arrives — see `_claimIndex`.
+	 */
+	private function runClaims(index: SymbolIndex): Array<MemberClaim> {
+		if (_claimIndex != index) {
+			_claimIndex = index;
+			_runClaims = [];
+		}
+		return _runClaims;
+	}
+
+	/**
+	 * The type whose inheritance chain a rename of `decl` would introduce the new name into - the
+	 * owner of a FIELD or a METHOD, the two categories Haxe forbids redeclaring in a subclass and
+	 * the two `renameEditsFor` already holds to the inherited-member proof. Null for anything else:
+	 * a local / param / catch var only SHADOWS an inherited member, a type has no owner, and a
+	 * static constant is not inherited at all.
+	 */
+	private static inline function inheritedNameOwner(decl: NamedDecl): Null<String> {
+		return decl.category == NamingCategory.Field || decl.category == NamingCategory.Method ? decl.enclosingType : null;
 	}
 
 	/** The first rule in `policy` applicable to `decl` (category + modifier filters), or null. */
@@ -689,7 +777,7 @@ final class Naming implements Check implements CrossFileFix {
 	private static function crossFileRenameFor(
 		v: Violation, sourceByFile: Map<String, String>, support: NamingSupport, shape: RefShape, plugin: GrammarPlugin,
 		index: SymbolIndex, resolutionIndex: SymbolIndex
-	): Null<Array<CrossFileEdits>> {
+	): Null<CrossFileRename> {
 		final candidate: Null<CrossFileCandidate> = crossFileCandidate(v, sourceByFile, support, plugin, index, resolutionIndex);
 		if (candidate == null) return null;
 		final c: CrossFileCandidate = candidate;
@@ -745,7 +833,7 @@ final class Naming implements Check implements CrossFileFix {
 			final fileEdits: Array<{ span: Span, text: String }> = edits;
 			if (spans.length > 0) slices.push({ file: file, edits: fileEdits });
 		}
-		return slices.length == 0 ? null : slices;
+		return slices.length == 0 ? null : { slices: slices, owner: c.ownerName, newName: c.targetName };
 	}
 
 	/**
@@ -1553,6 +1641,16 @@ private typedef CrossFileCandidate = {
 	 */
 	final family: Array<OverrideFamilyMember>;
 };
+/**
+ * A completed CROSS-FILE rename: the per-file edit slices the caller commits atomically, plus the
+ * owning type and the new name, which `crossFileFix` needs to record the rename as a run claim
+ * (`Naming.defersToARunClaim`) and the slices alone do not carry.
+ */
+private typedef CrossFileRename = {
+	final slices: Array<CrossFileEdits>;
+	final owner: String;
+	final newName: String;
+};
 
 /**
  * A completed rename for one declaration within a single `Naming.fix` pass: the SPANS to
@@ -1564,4 +1662,12 @@ private typedef DeclRename = {
 	final newName: String;
 	final edits: Array<{ span: Span, text: String }>;
 	final scope: Span;
+};
+/**
+ * One accepted member rename, held for the rest of the `--fix` pass that accepted it: the type the
+ * new name lands on, and the name itself. See `Naming.defersToARunClaim`.
+ */
+private typedef MemberClaim = {
+	final owner: String;
+	final newName: String;
 };
