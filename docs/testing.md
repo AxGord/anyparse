@@ -159,6 +159,42 @@ per-arm median is what gets quoted. Battery timings are the opposite kind of
 number — deliberately concurrent wall clock — and must never be quoted as
 benchmark results.
 
+### Reading a capture: `tools/ProfTop.hx`
+
+A `.cpuprofile` is a call tree, not a report. `ProfTop` rolls one up by SELF
+time per function and prints the top rows:
+
+```sh
+node --cpu-prof --cpu-prof-dir=/tmp/prof --cpu-prof-interval=200 \
+  bin/parse-prof.js tparse tools/bench-corpus.txt 2 hxformat.json
+haxe -cp tools --run ProfTop /tmp/prof/*.cpuprofile 20
+haxe -cp tools --run ProfTop /tmp/prof/*.cpuprofile 10 --under phaseWrite
+```
+
+No build step — it is a `--run` script over the std library, which is where the
+language policy puts standalone logic. (`--interp` does not work: it eats the
+trailing arguments as its own.) Self time comes from `samples` + `timeDeltas`
+rather than `hitCount`, so a capture taken with a custom `--cpu-prof-interval`
+still reports real microseconds. `--under <fn>` narrows the rollup to samples
+whose stack passes through a frame of that name, which is how one phase of a
+multi-phase harness gets attributed; it matches the rendered row label
+(`functionName  [file]`), and Haxe class names do not survive into JS frame
+names, so `--under phaseWrite` works where `--under CompilerServer` matches
+nothing.
+
+**`spawnSync` and friends are BLOCKED WAIT, not CPU.** A profile samples
+whatever frame is on the stack, and a synchronous child-process call sits there
+for the whole child's lifetime — `spawnSync` at 54.6% means "we waited on
+children for 54.6% of the run". That is worth knowing and it is not our CPU:
+optimising our own code cannot shrink it. Both of the largest wins of
+2026-08-18 came from reading it that way (the warm compiler server bought
+nothing; a single-file lint was paying for a project-wide typecheck), and
+reading it as CPU would have sent the work into the analyser instead.
+
+Read a profile for SHARES and take deltas from a separate unprofiled run:
+`--cpu-prof` overhead is not uniform across trees (+7% anyparse, +15% TM), so a
+profiled before/after pair is not a delta.
+
 ## Layer 6: End-to-end integration tests
 
 Full pipeline tests on real-world data. Take a substantial input (the user's ax3 corpus, a large Haxe project, a corpus of JSON API responses), run it through the full pipeline (parse → transform → write), and compare against an expected output.
