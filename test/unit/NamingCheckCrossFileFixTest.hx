@@ -645,6 +645,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		// BOTH findings MUST exist, or the per-file zero below would be `fix`'s empty-violations
+		// early return rather than the claim gate.
+		Assert.equals(2, vs.length);
 		// The driver's own order: every cross-file rename of the pass first, then the per-file fixes.
 		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
 		Assert.equals(1, renames.length);
@@ -659,12 +662,15 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	 */
 	public function testOnlyOneCrossFileRenameClaimsAnInheritedTargetNamePerPass(): Void {
 		final subSrc: String = 'package pkg;\nclass C extends B {\n\tpublic function c():Int { return 0; }\n}';
-		final rename: Array<CrossFileEdits> = crossFileRename([
+		final files: Array<{ file: String, source: String }> = [
 			{ file: 'pkg/A.hx', source: CLAIM_BASE_SRC },
 			{ file: 'pkg/B.hx', source: CLAIM_SUB_SRC },
 			{ file: 'pkg/C.hx', source: subSrc }
-		]);
-		assertRenameSlice(rename, 'pkg/A.hx', CLAIM_BASE_SRC, '_caps', 'CAPS');
+		];
+		// BOTH must still be flagged, or the single rename below would be one candidate rather than
+		// two candidates of which one deferred.
+		Assert.equals(2, new Naming().run(files, new HaxeQueryPlugin()).length);
+		assertRenameSlice(crossFileRename(files), 'pkg/A.hx', CLAIM_BASE_SRC, '_caps', 'CAPS');
 	}
 
 	/**
@@ -682,7 +688,47 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		]);
 		Assert.equals(2, renames.length);
 		assertRenameSlice(renames[0], 'pkg/A.hx', CLAIM_BASE_SRC, '_caps', 'CAPS');
-		assertRenameSlice(renames[1], 'pkg/X.hx', xSrc, '_caps', 'Caps:Int');
+		assertRenameSlice(renames[1], 'pkg/X.hx', xSrc, 'return _caps', 'Caps');
+	}
+
+	/**
+	 * The OTHER half of the claim design: a claim is a promise about ONE index, so the NEXT pass —
+	 * which the driver gives a freshly built index — must start from an empty ledger. Without that,
+	 * a deferral is a permanent refusal and the "deferral is not refusal" contract is a lie no test
+	 * would catch, since every other fixture here uses a single index.
+	 *
+	 * The fixture makes pass 1 defer a rename that is actually SAFE: `X` is an `abstract class`, a kind
+	 * `unrelatedClasses` refuses to certify (`isUniqueClass` demands a plain class), so it cannot prove
+	 * what is plainly true and `X.Caps` yields to `A.CAPS`'s claim on `_caps`. Pass 2 runs the SAME `Naming`
+	 * over the sources pass 1 produced, against a new index: the ledger retires, and `X` — whose own
+	 * supertype closure never reaches `_caps` — finally renames. A ledger that outlived its index
+	 * would return zero renames here.
+	 */
+	public function testANewIndexRetiresThePreviousPassClaims(): Void {
+		final xSrc: String = 'package pkg;\nabstract class X {\n\tprivate var Caps:Int = 2;\n\tpublic function x():Int { return Caps; }\n}';
+		final subSrc: String = 'package pkg;\nclass ASub extends A {\n\tpublic function s():Int { return 0; }\n}';
+		final xSubSrc: String = 'package pkg;\nclass XSub extends X {\n\tpublic function s():Int { return 0; }\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/A.hx', source: CLAIM_BASE_SRC },
+			{ file: 'pkg/X.hx', source: xSrc },
+			{ file: 'pkg/ASub.hx', source: subSrc },
+			{ file: 'pkg/XSub.hx', source: xSubSrc }
+		];
+		final check: Naming = new Naming();
+		Assert.equals(2, check.run(files, new HaxeQueryPlugin()).length);
+		final first: Array<Array<CrossFileEdits>> = check.crossFileFix(
+			files, check.run(files, new HaxeQueryPlugin()), new HaxeQueryPlugin(), SymbolIndex.build(files, new HaxeQueryPlugin())
+		);
+		// Only `A` lands: `X` is an `abstract class`, which `unrelatedClasses` will not certify, so it
+		// defers rather than risk the duplicate. That deferral is what the second pass has to undo.
+		Assert.equals(1, first.length);
+		assertRenameSlice(first[0], 'pkg/A.hx', CLAIM_BASE_SRC, '_caps', 'CAPS');
+		files[0].source = RefactorSupport.applyEdits(CLAIM_BASE_SRC, first[0][0].edits);
+		final second: Array<Array<CrossFileEdits>> = check.crossFileFix(
+			files, check.run(files, new HaxeQueryPlugin()), new HaxeQueryPlugin(), SymbolIndex.build(files, new HaxeQueryPlugin())
+		);
+		Assert.equals(1, second.length);
+		assertRenameSlice(second[0], 'pkg/X.hx', xSrc, 'return _caps', 'Caps');
 	}
 
 	/** The single cross-file rename `files` yields, as its per-file slices. */
