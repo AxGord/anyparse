@@ -54,7 +54,9 @@ final class PreferForeach implements Check implements DefaultOff {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return BoolLoopScan.edits(source, violations, plugin, index, BoolLoopKind.Foreach);
+		return [
+			for (e in BoolLoopScan.edits(source, violations, plugin, index, BoolLoopKind.Foreach)) { span: e.span, text: e.text }
+		];
 	}
 
 }

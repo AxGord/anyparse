@@ -2,6 +2,8 @@ package anyparse.check;
 
 import anyparse.check.BoolLoopScan.BoolLoopKind;
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.GroupedEdit;
+import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
@@ -31,12 +33,15 @@ import anyparse.runtime.Span;
  * check cannot see, and a measured site over a real application iterates a
  * `Null<Map<Int, ObjectFrameData>>`, so this is a live hazard rather than a hypothetical. As a
  * `RiskyFix` the edit is applied speculatively and REVERTED when it breaks the build, and with
- * no compiler oracle configured the check is report-only. `Lambda.foreach` has no such
+ * no compiler oracle configured the check is report-only. It is a `GroupedFix` for the same
+ * reason: reverting the rewrite while keeping the `using Lambda;` the fix inserted would leave a
+ * file that still compiles, so the verifier could not tell that subset was wrong — measured on
+ * the very fixture above, which came back with an orphaned `using` before the grouping landed. `Lambda.foreach` has no such
  * collision — no stdlib collection declares `foreach` — which is why `prefer-foreach` ships as
  * an ordinary trusted fix, on the same footing as `prefer-find`.
  */
 @:nullSafety(Strict)
-final class PreferExists implements Check implements DefaultOff implements RiskyFix {
+final class PreferExists implements Check implements DefaultOff implements RiskyFix implements GroupedFix {
 
 	/** The rule id, and the `--rule` selector that force-enables this default-off check. */
 	private static inline final RULE_ID: String = 'prefer-exists';
@@ -58,6 +63,14 @@ final class PreferExists implements Check implements DefaultOff implements Risky
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
+		return [
+			for (e in fixGrouped(source, violations, plugin, index)) { span: e.span, text: e.text }
+		];
+	}
+
+	public function fixGrouped(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<GroupedEdit> {
 		return BoolLoopScan.edits(source, violations, plugin, index, BoolLoopKind.Exists);
 	}
 

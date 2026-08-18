@@ -65,9 +65,7 @@ class PreferForeachCheckTest extends Test {
 	}
 
 	public function testNonAdjacentTrailingReturnNotFlagged(): Void {
-		Assert.equals(
-			0, violations(fn('for (x in xs) if (x > 2) return false;\n\t\tfinal q = xs.length;\n\t\treturn true;')).length
-		);
+		Assert.equals(0, violations(fn('for (x in xs) if (x > 2) return false;\n\t\tfinal q = xs.length;\n\t\treturn true;')).length);
 	}
 
 	public function testFallThroughFromElseBranchFlagged(): Void {
@@ -79,9 +77,7 @@ class PreferForeachCheckTest extends Test {
 	}
 
 	public function testFallThroughStopsAtALoopBody(): Void {
-		Assert.equals(
-			0, violations(fn('while (a) {\n\t\t\tfor (x in xs) if (x > 2) return false;\n\t\t}\n\t\treturn true;')).length
-		);
+		Assert.equals(0, violations(fn('while (a) {\n\t\t\tfor (x in xs) if (x > 2) return false;\n\t\t}\n\t\treturn true;')).length);
 	}
 
 	public function testFixWrapsCondition(): Void {
@@ -101,7 +97,8 @@ class PreferForeachCheckTest extends Test {
 	}
 
 	private function fn(body: String): String {
-		return 'class C {\n\tfunction f(xs:Array<Int>, m:Map<String, Int>, n:Null<Array<Int>>, a:Bool, b:Bool):Bool {\n\t\t${body}\n\t}\n\n\tfunction keep(x:Int):Bool {\n\t\treturn x > 0;\n\t}\n}';
+		return 'class C {\n\tfunction f(xs:Array<Int>, m:Map<String, Int>, n:Null<Array<Int>>, a:Bool, b:Bool):Bool {\n\t\t$body\n\t}\n\n'
+			+ '\tfunction keep(x:Int):Bool {\n\t\treturn x > 0;\n\t}\n}';
 	}
 
 	private function file(body: String, withUsing: Bool): String {
@@ -116,7 +113,9 @@ class PreferForeachCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferForeach = new PreferForeach();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin, SymbolIndex.build([{ file: 'C.hx', source: src }], plugin));
+		final edits: Array<{ span: Span, text: String }> = check.fix(
+			src, vs, plugin, SymbolIndex.build([{ file: 'C.hx', source: src }], plugin)
+		);
 		switch RefactorSupport.canonicalize(src, edits, true, plugin) {
 			case Ok(text):
 				return text;

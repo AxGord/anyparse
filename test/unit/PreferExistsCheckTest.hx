@@ -3,6 +3,7 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.check.Check;
+import anyparse.check.Check.GroupedEdit;
 import anyparse.check.PreferExists;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
@@ -60,9 +61,7 @@ class PreferExistsCheckTest extends Test {
 	}
 
 	public function testGuardWithElseNotFlagged(): Void {
-		Assert.equals(
-			0, violations(fn('if (a) for (x in xs) if (x > 2) return true; else return false;\n\t\treturn false;')).length
-		);
+		Assert.equals(0, violations(fn('if (a) for (x in xs) if (x > 2) return true; else return false;\n\t\treturn false;')).length);
 	}
 
 	public function testKeyValueLoopNotFlagged(): Void {
@@ -79,9 +78,7 @@ class PreferExistsCheckTest extends Test {
 	}
 
 	public function testNonAdjacentTrailingReturnNotFlagged(): Void {
-		Assert.equals(
-			0, violations(fn('for (x in xs) if (x > 2) return true;\n\t\tfinal q = xs.length;\n\t\treturn false;')).length
-		);
+		Assert.equals(0, violations(fn('for (x in xs) if (x > 2) return true;\n\t\tfinal q = xs.length;\n\t\treturn false;')).length);
 	}
 
 	public function testForeachDirectionNotClaimed(): Void {
@@ -111,15 +108,12 @@ class PreferExistsCheckTest extends Test {
 	public function testFallThroughStopsAtALoopBody(): Void {
 		// Falling off the end of a `while` body starts the NEXT ITERATION, so the trailing
 		// `return false;` is not what follows the loop — the successor must not cross it.
-		Assert.equals(
-			0, violations(fn('while (a) {\n\t\t\tfor (x in xs) if (x > 2) return true;\n\t\t}\n\t\treturn false;')).length
-		);
+		Assert.equals(0, violations(fn('while (a) {\n\t\t\tfor (x in xs) if (x > 2) return true;\n\t\t}\n\t\treturn false;')).length);
 	}
 
 	public function testFallThroughStopsAtATryBody(): Void {
 		Assert.equals(
-			0,
-			violations(fn('try {\n\t\t\tfor (x in xs) if (x > 2) return true;\n\t\t} catch (e:Dynamic) {}\n\t\treturn false;')).length
+			0, violations(fn('try {\n\t\t\tfor (x in xs) if (x > 2) return true;\n\t\t} catch (e:Dynamic) {}\n\t\treturn false;')).length
 		);
 	}
 
@@ -129,8 +123,9 @@ class PreferExistsCheckTest extends Test {
 		// of this one. With a block there, only the successor rule can refuse it.
 		Assert.equals(
 			0,
-			violations(fn('switch (a) {\n\t\t\tcase _: {\n\t\t\t\tfor (x in xs) if (x > 2) return true;\n\t\t\t}\n\t\t}\n\t\treturn false;'))
-				.length
+			violations(
+				fn('switch (a) {\n\t\t\tcase _: {\n\t\t\t\tfor (x in xs) if (x > 2) return true;\n\t\t\t}\n\t\t}\n\t\treturn false;')
+			).length
 		);
 	}
 
@@ -138,9 +133,7 @@ class PreferExistsCheckTest extends Test {
 		// Pins a DIFFERENT gate from the three above, and says so: a `#if` region projects its
 		// branches as FLATTENED siblings and is deliberately absent from `blockKinds`, so nothing
 		// inside one is ever paired with a sibling outside it — with or without a successor.
-		Assert.equals(
-			0, violations(fn('#if js\n\t\tfor (x in xs) if (x > 2) return true;\n\t\t#end\n\t\treturn false;')).length
-		);
+		Assert.equals(0, violations(fn('#if js\n\t\tfor (x in xs) if (x > 2) return true;\n\t\t#end\n\t\treturn false;')).length);
 	}
 
 	public function testGuardedBracedFormReportedOnce(): Void {
@@ -184,7 +177,35 @@ class PreferExistsCheckTest extends Test {
 
 	public function testCommentInDroppedRegionNotFixed(): Void {
 		final src: String = file('for (x in xs) // why\n\t\t\tif (x > 2) return true;\n\t\treturn false;', true);
-		Assert.equals(0, new PreferExists().fix(src, violationsOf(src), new HaxeQueryPlugin()).length);
+		Assert.equals(0, new PreferExists().fix(src, violations(src), new HaxeQueryPlugin()).length);
+	}
+
+	public function testInsertedUsingIsAtomicWithItsRewrites(): Void {
+		// Reverting the rewrite while KEEPING the inserted `using` leaves a file that still
+		// compiles, so the verifier could not tell that subset was wrong — measured as an orphaned
+		// `using Lambda;` on a Map-receiver fixture before the grouping landed.
+		final src: String = file('for (x in xs) if (x > 2) return true;\n\t\treturn false;', false);
+		final edits: Array<GroupedEdit> = grouped(src);
+		Assert.equals(2, edits.length);
+		Assert.notNull(edits[0].group);
+		Assert.equals(edits[0].group, edits[1].group);
+	}
+
+	public function testEditsStayIndependentWhenTheUsingIsAlreadyThere(): Void {
+		final src: String = file(
+			'if (a) {\n\t\t\tfor (x in xs) if (x > 2) return true;\n\t\t} else {\n\t\t\tfor (x in xs) if (x < 0) return true;\n\t\t}\n'
+			+ '\t\treturn false;',
+			true
+		);
+		final edits: Array<GroupedEdit> = grouped(src);
+		Assert.equals(2, edits.length);
+		for (e in edits) Assert.isNull(e.group);
+	}
+
+	private function grouped(src: String): Array<GroupedEdit> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: PreferExists = new PreferExists();
+		return check.fixGrouped(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
 	}
 
 	private function fn(body: String): String {
@@ -196,10 +217,6 @@ class PreferExistsCheckTest extends Test {
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return violationsOf(source);
-	}
-
-	private function violationsOf(source: String): Array<Violation> {
 		return new PreferExists().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
 	}
 
@@ -207,7 +224,9 @@ class PreferExistsCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferExists = new PreferExists();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin, SymbolIndex.build([{ file: 'C.hx', source: src }], plugin));
+		final edits: Array<{ span: Span, text: String }> = check.fix(
+			src, vs, plugin, SymbolIndex.build([{ file: 'C.hx', source: src }], plugin)
+		);
 		switch RefactorSupport.canonicalize(src, edits, true, plugin) {
 			case Ok(text):
 				return text;

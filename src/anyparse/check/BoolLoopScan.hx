@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.Violation;
 import anyparse.check.UsingScan.UsingHeader;
 import anyparse.query.GrammarPlugin;
@@ -89,6 +90,9 @@ final class BoolLoopScan {
 	/** The module whose `exists` / `foreach` the rewrite calls — the `using` the fix inserts when the file lacks it. */
 	private static inline final LAMBDA_MODULE: String = 'Lambda';
 
+	/** The atomic group binding an INSERTED `using Lambda;` to every call that needs it (see `edits`). */
+	private static inline final USING_GROUP: Int = 0;
+
 	/** The boolean literal's source text for `true` — the engine reads the VALUE off the span. */
 	private static inline final TRUE_LITERAL: String = 'true';
 
@@ -96,7 +100,7 @@ final class BoolLoopScan {
 	private static inline final FALSE_LITERAL: String = 'false';
 
 	/** The extension method `kind` rewrites to — the name a second `using` must be proven not to supply. */
-	public static function method(kind: BoolLoopKind): String {
+	public static inline function method(kind: BoolLoopKind): String {
 		return kind == BoolLoopKind.Exists ? 'exists' : 'foreach';
 	}
 
@@ -104,9 +108,8 @@ final class BoolLoopScan {
 	public static function findings(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, kind: BoolLoopKind, ruleId: String
 	): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final s: Seams = seams;
+		final s: Null<Seams> = readSeams(plugin);
+		if (s == null) return [];
 		final out: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> =
@@ -124,7 +127,8 @@ final class BoolLoopScan {
 
 	/**
 	 * The span edits rewriting each recovered loop in `source` to `xs.exists(…)` / `xs.foreach(…)`,
-	 * plus a `using Lambda;` when the file lacks one and anything was rewritten.
+	 * plus a `using Lambda;` when the file lacks one and anything was rewritten — the whole set
+	 * atomic in that case, independently revertible otherwise (see the grouping note below).
 	 *
 	 * The emitted call must reach `Lambda`'s member: Haxe resolves static extensions in REVERSE
 	 * declaration order and an inserted `using` goes ABOVE any existing run, so a second `using`
@@ -134,38 +138,42 @@ final class BoolLoopScan {
 	 */
 	public static function edits(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, index: Null<SymbolIndex>, kind: BoolLoopKind
-	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final s: Seams = seams;
+	): Array<GroupedEdit> {
+		final s: Null<Seams> = readSeams(plugin);
+		if (s == null) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final symbols: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
 		final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
-		if (UsingScan.conflictingUsing(UsingScan.usingModules(header), LAMBDA_MODULE, method(kind), plugin, () -> symbols, []))
-			return [];
+		if (UsingScan.conflictingUsing(UsingScan.usingModules(header), LAMBDA_MODULE, method(kind), plugin, () -> symbols, [])) return [];
 		final byKey: Map<String, Cand> = [];
 		scan(tree, null, source, s, kind, cand -> {
 			final span: Null<Span> = cand.anchor.span;
 			if (span != null) byKey['${span.from}:${span.to}'] = cand;
 		});
-		final out: Array<{ span: Span, text: String }> = [];
-		var rewrote: Bool = false;
+		final rewrites: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
 			final cand: Null<Cand> = byKey['${span.from}:${span.to}'];
 			if (cand == null) continue;
 			final edit: Null<{ span: Span, text: String }> = buildEdit(cand, source, s, kind);
-			if (edit == null || RefactorSupport.editsOverlapAny([edit], out)) continue;
-			out.push(edit);
-			rewrote = true;
+			if (edit == null || RefactorSupport.editsOverlapAny([edit], rewrites)) continue;
+			rewrites.push(edit);
 		}
-		if (rewrote && !UsingScan.hasUsingModule(header, LAMBDA_MODULE)) {
-			final usingEdit: { span: Span, text: String } = UsingScan.usingInsertEdit(header, LAMBDA_MODULE);
-			if (!RefactorSupport.editsOverlapAny([usingEdit], out)) out.push(usingEdit);
-		}
-		return out;
+		if (rewrites.length == 0) return [];
+		if (UsingScan.hasUsingModule(header, LAMBDA_MODULE)) return [for (e in rewrites) { span: e.span, text: e.text, group: null }];
+		final usingEdit: { span: Span, text: String } = UsingScan.usingInsertEdit(header, LAMBDA_MODULE);
+		if (RefactorSupport.editsOverlapAny([usingEdit], rewrites))
+			return [for (e in rewrites) { span: e.span, text: e.text, group: null }];
+		// The inserted `using` and the calls that need it are ONE atomic group: a verifier that
+		// reverted every rewrite while keeping the `using` would leave a file that still compiles,
+		// so nothing downstream could tell that subset was wrong — the orphan-import class
+		// `GroupedFix` exists for. Grouping only bites in a file that needed a new `using`; a file
+		// that already had one keeps per-edit granularity, which is the common case.
+		final grouped: Array<GroupedEdit> = [for (e in rewrites) { span: e.span, text: e.text, group: USING_GROUP }];
+		grouped.push({ span: usingEdit.span, text: usingEdit.text, group: USING_GROUP });
+		return grouped;
 	}
 
 	/** Bundle the `RefShape` kinds the engine reads, or null when a required one is unset (the check is then a no-op). */
@@ -271,8 +279,14 @@ final class BoolLoopScan {
 		final loopValue: Bool = kind == BoolLoopKind.Exists;
 		if (trailingValue == null || trailingValue == loopValue) return null;
 		final bare: Null<Head> = forIfHead(a, source, s);
-		if (bare != null && bare.value == loopValue)
-			return { anchor: a, forNode: a, trailing: b, guard: null, head: bare, subsumesTrailing: adjacent };
+		if (bare != null && bare.value == loopValue) return {
+			anchor: a,
+			forNode: a,
+			trailing: b,
+			guard: null,
+			head: bare,
+			subsumesTrailing: adjacent
+		};
 		// The guarded form merges the guard with `&&`, which only reads as the original for the
 		// `exists` direction — see the type doc for why the `foreach` mirror is refused outright.
 		if (kind != BoolLoopKind.Exists || !s.ifKinds.contains(a.kind) || a.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
@@ -310,14 +324,17 @@ final class BoolLoopScan {
 		final lit: Null<QueryNode> = boolReturnLiteral(unwrapSole(body.children[1], s), s);
 		if (lit == null) return null;
 		final value: Null<Bool> = literalValue(lit, source);
-		return value == null ? null : { loopVar: loopVar, iterable: iterable, cond: body.children[0], value: value };
+		return value == null ? null : {
+			loopVar: loopVar,
+			iterable: iterable,
+			cond: body.children[0],
+			value: value
+		};
 	}
 
 	/** The boolean literal of a `return <bool literal>;` statement, or null for any other statement. */
 	private static function boolReturnLiteral(node: QueryNode, s: Seams): Null<QueryNode> {
-		return node.kind == s.returnKind && node.children.length == 1 && node.children[0].kind == s.boolLitKind
-			? node.children[0]
-			: null;
+		return node.kind == s.returnKind && node.children.length == 1 && node.children[0].kind == s.boolLitKind ? node.children[0] : null;
 	}
 
 	/** A boolean literal's VALUE, read off its source text; null when the span is missing or the text is neither spelling. */
@@ -390,9 +407,7 @@ final class BoolLoopScan {
 		if (guard != null) {
 			final guardSpan: Null<Span> = guard.span;
 			if (guardSpan == null) return null;
-			guardText = parenthesizeUnless(
-				source.substring(guardSpan.from, guardSpan.to), !s.andLowerPrecedenceKinds.contains(guard.kind)
-			);
+			guardText = parenthesizeUnless(source.substring(guardSpan.from, guardSpan.to), !s.andLowerPrecedenceKinds.contains(guard.kind));
 			kept.unshift(guardSpan);
 		}
 		return {
