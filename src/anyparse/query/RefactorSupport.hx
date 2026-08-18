@@ -4028,7 +4028,7 @@ final class RefactorSupport {
 	 * one. Both end just above the next declaration and are equally adjacent to it; only
 	 * the line the comment opens on says whose it is.
 	 */
-	private static function startsItsLine(source: String, at: Int): Bool {
+	public static function startsItsLine(source: String, at: Int): Bool {
 		var i: Int = at - 1;
 		while (i >= 0 && (source.fastCodeAt(i) == ' '.code || source.fastCodeAt(i) == '\t'.code)) i--;
 		return i < 0 || source.fastCodeAt(i) == '\n'.code;
