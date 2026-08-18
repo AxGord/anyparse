@@ -272,6 +272,11 @@ final class HaxeNamingSupport implements NamingSupport {
 		return category == NamingCategory.Field || category == NamingCategory.Constant || category == NamingCategory.Method;
 	}
 
+	/** Whether `c` is an ASCII decimal digit. */
+	private static inline function isDigit(c: Int): Bool {
+		return c >= '0'.code && c <= '9'.code;
+	}
+
 	/**
 	 * Walk `node`, appending a `NamedDecl` for every declaration whose kind
 	 * maps to a category. `mods` come from the modifier siblings preceding the
@@ -359,22 +364,20 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 	/**
-	 * The mechanical fix for a private field missing its `_` prefix: prepend `_`, apply the shared
-	 * camel word policy of `smartSegment`, and lowercase the first letter (`shape` -> `_shape`,
-	 * `Shape` -> `_shape`, `HEIGHT` -> `_height`, `URLPath` -> `_urlPath`). Sharing `smartSegment`
-	 * is what stops the fix MANUFACTURING a lowercase-head-over-caps-tail name (`_hEIGHT`), which
-	 * the `naming` artifact arm could never report back - its pattern is anchored at the head, and
-	 * the `_` prefix hides it. It splits no `snake_case`: an internal `_` is part of a private
-	 * field's own spelling, so that stays `snakeToCamel`'s job. Not `inline` - passed as a
-	 * `NamingRule.normalize` function value.
+		  * The mechanical fix for a private field missing its `_` prefix: prepend `_` to the shared
+	 * `camelCore` (`shape` -> `_shape`, `Shape` -> `_shape`, `HEIGHT` -> `_height`, `URLPath` ->
+	 * `_urlPath`, `CELLS_NUM_X` -> `_cellsNumX`). Sharing `camelCore` - and through it
+	 * `smartSegment` - is what stops the fix MANUFACTURING a lowercase-head-over-caps-tail name
+	 * (`_hEIGHT`), which the `naming` artifact arm could never report back: its pattern is anchored
+	 * at the head, and the `_` prefix hides it. Splitting on `_` is what makes an UPPER_SNAKE
+	 * private field FIXABLE rather than report-only - the rule's own format (`^_[a-z][a-zA-Z0-9]*$`)
+	 * admits no internal underscore, so a name that keeps one can never satisfy the rule it is
+	 * being corrected for. No keyword test: every result opens with `_`, so none can be a keyword.
+	 * Not `inline` - passed as a `NamingRule.normalize` function value.
 	 */
 	private static function underscoreCamel(name: String): Null<String> {
-		var start: Int = 0;
-		while (start < name.length && name.fastCodeAt(start) == '_'.code) start++;
-		final core: String = name.substr(start);
-		if (core.length == 0) return null;
-		final camel: String = smartSegment(core);
-		return '_${camel.charAt(0).toLowerCase()}${camel.substr(1)}';
+		final core: Null<String> = camelCore(name);
+		return core == null ? null : '_$core';
 	}
 
 	/**
@@ -519,31 +522,52 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 	/**
-	 * The mechanical fix for a local / param / catch name violating camelCase: strip
-	 * every leading underscore, convert internal `snake_case` segments to camelCase,
-	 * and lowercase the first letter. An all-uppercase segment is lowercased whole
-	 * (`MISSING_FILE` -> `missingFile`); a segment opening with an acronym run keeps only
-	 * that run's last character capitalised (`URLPath` -> `urlPath`); a mixed-case segment
-	 * is preserved (`coachingQualification_Id` -> `coachingQualificationId`), so `_items` ->
-	 * `items`, `__scaleX` -> `scaleX`, `MyLocal` -> `myLocal`, `min_gap` -> `minGap`.
-	 * Returns null when nothing survives the strip (`_`, `__`) or the result is a Haxe
-	 * keyword (`_new` -> `new`) - neither is a usable identifier, so the binding stays
-	 * report-only. Subsumes the former de-prefix / lowercase-first normalizers. Not
-	 * `inline` - passed as a `NamingRule.normalize` function value.
+		  * The mechanical fix for a local / param / catch name violating camelCase: the shared
+	 * `camelCore` (`_items` -> `items`, `__scaleX` -> `scaleX`, `MyLocal` -> `myLocal`, `min_gap` ->
+	 * `minGap`), refused when the result is a Haxe keyword (`_new` -> `new`) - not a usable
+	 * identifier here, unlike under `underscoreCamel`'s `_` prefix, so the binding stays
+	 * report-only. Subsumes the former de-prefix / lowercase-first normalizers. Not `inline` -
+	 * passed as a `NamingRule.normalize` function value.
 	 */
 	private static function snakeToCamel(name: String): Null<String> {
+		final lowered: Null<String> = camelCore(name);
+		return lowered == null || KEYWORDS.contains(lowered) ? null : lowered;
+	}
+
+	/**
+		 * The camelCase core both `snakeToCamel` and `underscoreCamel` correct through: strip every
+		 * leading underscore, split the rest on `_`, apply `smartSegment`'s word policy per segment,
+		 * join with capitalised heads, and lowercase the first letter. An all-uppercase segment is
+		 * lowercased whole (`MISSING_FILE` -> `missingFile`); a segment opening with an acronym run
+		 * keeps only that run's last character capitalised (`URLPath` -> `urlPath`); a mixed-case
+		  * segment is preserved (`coachingQualification_Id` -> `coachingQualificationId`). Null when
+	 * nothing survives the strip (`_`, `__`), or when a separator falls between two DIGIT runs and
+	 * camelCase therefore cannot re-encode it (see the loop). The keyword test and the `_` prefix
+	 * belong to the callers - that is the whole of what the two corrections differ by.
+	 */
+	private static function camelCore(name: String): Null<String> {
 		var start: Int = 0;
 		while (start < name.length && name.fastCodeAt(start) == '_'.code) start++;
 		final segments: Array<String> = [for (s in name.substr(start).split('_')) if (s.length > 0) smartSegment(s)];
 		if (segments.length == 0) return null;
 		final buf: StringBuf = new StringBuf();
-		for (i in 0...segments.length) {
+		buf.add(segments[0]);
+		for (i in 1...segments.length) {
 			final seg: String = segments[i];
-			buf.add(i == 0 ? seg : seg.charAt(0).toUpperCase() + seg.substr(1));
+			final prev: String = segments[i - 1];
+			// A `_` BETWEEN TWO DIGIT RUNS is the one separator camelCase cannot re-encode: the capital
+			// that marks every other segment boundary does not exist for a digit, so the two runs fuse
+			// into one and the name changes meaning - `_u5_7` (an age band "U5 - 7") would read as
+			// `_u57`, and `_u1_14` / `_u11_4` would BOTH land on `_u1114`. A digit run next to a LETTER
+			// keeps its boundary either way (`HEADLINE_1` -> `Headline1`, `1_TEXTFORMAT` -> `1Textformat`),
+			// so only this pairing refuses. No derivable correction means the declaration stays
+			// report-only, which is what the rule already did for every multi-segment name before the
+			// split landed.
+			if (isDigit(seg.fastCodeAt(0)) && isDigit(prev.fastCodeAt(prev.length - 1))) return null;
+			buf.add(seg.charAt(0).toUpperCase() + seg.substr(1));
 		}
 		final joined: String = buf.toString();
-		final lowered: String = joined.charAt(0).toLowerCase() + joined.substr(1);
-		return KEYWORDS.contains(lowered) ? null : lowered;
+		return joined.charAt(0).toLowerCase() + joined.substr(1);
 	}
 
 	/**

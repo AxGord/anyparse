@@ -808,18 +808,55 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	 * next --fix pass.
 	 */
 	public function testFixDefersTheSecondDeclarationWantingAnAlreadyClaimedName(): Void {
-		final src: String =
-			'package pkg;\n\nclass C {\n\tprivate var CAPS:Int = 1;\n\tprivate var Caps:Int = 2;\n\n\tpublic function sum() { return CAPS + Caps; }\n}';
-		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
-		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
-		Assert.equals(2, vs.length);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin(), index);
+		final src: String = 'package pkg;\n\nclass C {\n\tprivate var CAPS:Int = 1;\n\tprivate var Caps:Int = 2;\n'
+			+ '\n\tpublic function sum() { return CAPS + Caps; }\n}';
 		// The renamed read next to the untouched one, in ONE string: neither half is true of the input,
 		// and the duplicate-field bug produces `_caps + _caps`.
-		assertCanonicalized(src, edits, '_caps + Caps', '_caps + _caps');
-		assertCanonicalized(src, edits, 'var Caps', 'var CAPS');
+		assertRenamedIn('pkg/C.hx', src, '_caps + Caps', '_caps + _caps');
+		assertRenamedIn('pkg/C.hx', src, 'var Caps', 'var CAPS');
+	}
+
+	/**
+	 * `underscoreCamel` (B5) splits on `_` via the shared `camelCore`, so a multi-segment
+	 * UPPER_SNAKE private field is corrected outright rather than staying report-only.
+	 */
+	public function testFixRenamesAnUpperSnakePrivateField(): Void {
+		final src: String =
+			'package pkg;\n\nclass C {\n\tprivate var CELLS_NUM_X:Int = 20;\n\n\tpublic function f() { return CELLS_NUM_X; }\n}';
+		assertRenamedIn('pkg/C.hx', src, '_cellsNumX', 'CELLS_NUM_X');
+	}
+
+	/**
+	 * Sibling of the above proving the SEGMENT-COUNT boundary itself moved: before B5 only a
+	 * single-segment name ('CAPS' -> '_caps') fixed; a two-segment name ('CAPS_TWO') stayed
+	 * report-only because `correctedName` returned null. Now it is renamed too.
+	 */
+	public function testFixRenamesAMultiSegmentUpperSnakePrivateField(): Void {
+		final src: String = 'package pkg;\n\nclass C {\n\tprivate var CAPS_TWO:Int = 1;\n\n\tpublic function f() { return CAPS_TWO; }\n}';
+		assertRenamedIn('pkg/C.hx', src, '_capsTwo', 'CAPS_TWO');
+	}
+
+	/**
+	 * The one boundary the `_` split must NOT cross (B5): a separator BETWEEN TWO DIGIT RUNS has no
+	 * camelCase spelling, because the capital that marks every other segment boundary does not exist
+	 * for a digit. `_u5_7` (an age band "U5 - 7") would fuse to `_u57` - a different reading, and one
+	 * `_u1_14` and `_u11_4` would BOTH land on - so the finding stays report-only rather than being
+	 * "corrected" into a worse name. Measured on a real tree: without this guard the split renamed
+	 * four such age-band fields.
+	 */
+	public function testFixRefusesAFieldWhoseUnderscoreSeparatesTwoDigitRuns(): Void {
+		final src: String = 'package pkg;\n\nclass C {\n\tprivate final _u5_7:Int = 1;\n\n\tpublic function f() { return _u5_7; }\n}';
+		assertNotRenamed(src);
+	}
+
+	/**
+	 * The sister side of that boundary: a digit run adjacent to LETTERS keeps its boundary either way
+	 * (`HEADLINE_1` -> `Headline1`, `1_FORMAT` -> `1Format`), so such a name IS corrected.
+	 */
+	public function testFixRenamesAFieldWithADigitSegmentBetweenLetterSegments(): Void {
+		final src: String = 'package pkg;\n\nclass C {\n\tprivate var HEADLINE_1_FORMAT:Int = 1;\n'
+			+ '\n\tpublic function f() { return HEADLINE_1_FORMAT; }\n}';
+		assertRenamedIn('pkg/C.hx', src, '_headline1Format', 'HEADLINE_1_FORMAT');
 	}
 
 	/** The member names `src` reaches through a reflection call, via the grammar's own projection. */
