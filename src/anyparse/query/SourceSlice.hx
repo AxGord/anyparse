@@ -72,7 +72,15 @@ final class SourceSlice {
 		var cursor: Int = lineEnd[i] - 1;
 		while (cursor > lineStart[i] && isBlank(source.fastCodeAt(cursor))) cursor--;
 		final block: Null<Span> = RefactorSupport.commentBlockAt(source, cursor);
-		return block == null ? null : source.substring(lineStart[lineOfOffset(lineStart, lineEnd, block.from)], lineEnd[i]);
+		// A comment that does not START its line trails the CODE before it — the line
+		// `var keep:Int; /* about keep */` ends in `*/` like any doc line, so the line
+		// scan above accepts it and the slice would hand back the previous
+		// declaration's code as this one's documentation. Same rule the deletion span
+		// uses (`RefactorSupport.startsItsLine`), so the read and the write side agree
+		// on which comment belongs to whom.
+		return block == null || !RefactorSupport.startsItsLine(source, block.from)
+			? null
+			: source.substring(lineStart[lineOfOffset(lineStart, lineEnd, block.from)], lineEnd[i]);
 	}
 
 	/** Whether `code` is a space, tab or carriage return — the trailing bytes a line may carry past its last real character. */

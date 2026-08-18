@@ -27,17 +27,46 @@ using Lambda;
  * check is region-level, not branch-level — the tree flattens a region's
  * branches into one child list — so two declarations inside the SAME branch,
  * equally illegal, are removed rather than refused.
+ *
+ * ## The doc comment goes with the member
+ *
+ * A leading doc block is trivia OUTSIDE the member node span, so removing only the
+ * declaration left it behind — where it silently became the documentation of the next
+ * one. It goes too, through `RefactorSupport.docExtendedSpan`: the same region `set-doc`
+ * replaces and `move-member` carries, not a second notion of it. Pass `withDoc = false`
+ * (`--keep-doc`) to opt out. Four boundaries, decided:
+ *
+ * - NO doc: only code or whitespace precedes, the span comes back unchanged, and the
+ *   removal is byte-for-byte what it always was.
+ * - A comment TRAILING the previous declaration, on the line of that declaration, is NOT
+ *   taken. It ends just above the victim and is exactly as adjacent as a real doc, so
+ *   adjacency cannot tell them apart; the line it OPENS on can, and that decides.
+ * - A `@:meta` / modifier group between the doc and the declaration is already folded in
+ *   by `declGroupSpan`, which the doc region is measured from — so the doc above
+ *   `@:keep public static` is found, not the gap under it.
+ * - `#if` guards: a doc INSIDE the region goes with the member; a doc written ABOVE the
+ *   guard goes with the region on the removal that empties it. A region with a surviving
+ *   branch keeps its directives and the doc of that branch.
+ *
+ * A plain non-doc block is never absorbed at all on this path. Directly above a
+ * declaration it is a licence header or a section banner far more often than it is
+ * documentation, and unlike `move-member` — which carries the region it absorbs and so
+ * loses nothing by guessing wrong — a removal cannot give it back. So the deleting
+ * callers pass `docOnly` and `/**` is the proof; `move-member` and `set-doc` keep the
+ * generous reading.
  */
 @:nullSafety(Strict)
 final class RemoveMember {
 
 	/**
-	 * Remove every declaration named `memberName` of the type named `typeName`.
-	 * `reformat` opts into a whole-file canonicalisation when the source is not
-	 * already writer-canonical. Returns `Ok(rewritten)` or an `Err`.
+	 * Remove every declaration named `memberName` of the type named `typeName`,
+	 * with its modifier / `@:meta` group and its leading doc comment. `reformat`
+	 * opts into a whole-file canonicalisation when the source is not already
+	 * writer-canonical; `withDoc = false` keeps the doc. Returns `Ok(rewritten)`
+	 * or an `Err`.
 	 */
 	public static function removeMember(
-		source: String, typeName: String, memberName: String, reformat: Bool, plugin: GrammarPlugin, withDoc: Bool = false,
+		source: String, typeName: String, memberName: String, reformat: Bool, plugin: GrammarPlugin, withDoc: Bool = true,
 		?optsJson: String
 	): EditResult {
 		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(

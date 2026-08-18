@@ -19,26 +19,25 @@ import haxe.Exception;
  * convention), and the whole file is re-emitted through the writer (which
  * fixes residual whitespace and re-parse-validates). The element node is
  * resolved with `RefactorSupport.elementAtFrom` + `parentOf`; the deletion
- * span (modifier / meta group folded, one comma swallowed for comma lists)
- * and the writer finalize live in `RefactorSupport.deleteNode`, shared with
- * the by-name remove wrappers (`RemoveImport` / `RemoveMember`).
+ * span (modifier / meta group and leading `/**` doc folded, one comma swallowed
+ * for comma lists) and the writer finalize live in
+ * `RefactorSupport.deleteNode`, shared with the by-name remove wrappers
+ * (`RemoveImport` / `RemoveMember`).
  */
 @:nullSafety(Strict)
 final class RemoveElement {
 
 	/**
-		 * Remove the sibling element whose first token the cursor at `line:col` falls within
-		 * — a statement, `case`, comma-list element, or member (folded with its leading
-		 * modifier / `@:meta` group). `reformat` opts into a whole-file canonicalisation when
-		 * the source is not writer-canonical; `withDoc` also removes a leading `/**
-	 * Remove the sibling element whose first token the cursor at `line:col` falls within
-	 * — a statement, `case`, comma-list element, or member (folded with its leading
-	 * modifier / `@:meta` group). `reformat` opts into a whole-file canonicalisation when
-	 * the source is not writer-canonical; `withDoc` also removes a leading `/*`-doc comment.
-	 * Returns `Ok(rewritten)` or an `Err`; the source is never mutated.
+	 * Remove the sibling element whose first token the cursor at `line:col` falls
+	 * within — a statement, `case`, comma-list element, or member (folded with its
+	 * leading modifier / `@:meta` group AND its leading `/**` doc block — a plain
+	 * block comment above it is left alone). `reformat` opts into a whole-file
+	 * canonicalisation when the source is not writer-canonical; `withDoc = false`
+	 * keeps the doc. Returns `Ok(rewritten)` or an `Err`; the
+	 * source is never mutated.
 	 */
 	public static function removeElement(
-		source: String, line: Int, col: Int, reformat: Bool, plugin: GrammarPlugin, withDoc: Bool = false, ?optsJson: String
+		source: String, line: Int, col: Int, reformat: Bool, plugin: GrammarPlugin, withDoc: Bool = true, ?optsJson: String
 	): EditResult {
 		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
 			'source does not parse: ${exception.toString()}'

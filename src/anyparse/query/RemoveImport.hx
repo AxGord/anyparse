@@ -17,7 +17,12 @@ using Lambda;
  * legacy `import pkg.Mod in Alias;` — it is the alias `Alias` (the
  * original path is not exposed — the documented grammar limitation). The
  * path must name EXACTLY ONE import — zero or many is an `Err` — and the
- * statement is removed through `RefactorSupport.deleteNode`.
+ * statement is removed through `RefactorSupport.deleteNode`, which takes a leading
+ * `/**` doc block with it: a doc directly above one import is about THAT import, and
+ * left behind it re-attaches to the next statement — the same silent orphan the member
+ * remove used to leave. A PLAIN block comment is not taken, because the one that sits
+ * above a module first import is normally its licence header. `withDoc = false`
+ * (`--keep-doc`) suppresses the doc removal too.
  */
 @:nullSafety(Strict)
 final class RemoveImport {
@@ -31,12 +36,13 @@ final class RemoveImport {
 	];
 
 	/**
-	 * Remove the import / using whose exposed path equals `modulePath`.
-	 * `reformat` opts into a whole-file canonicalisation when the source is
-	 * not already writer-canonical. Returns `Ok(rewritten)` or an `Err`.
+	 * Remove the import / using whose exposed path equals `modulePath`, with its
+	 * leading `/**` doc block. `reformat` opts into a whole-file canonicalisation
+	 * when the source is not already writer-canonical; `withDoc = false` keeps the
+	 * comment. Returns `Ok(rewritten)` or an `Err`.
 	 */
 	public static function removeImport(
-		source: String, modulePath: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
+		source: String, modulePath: String, reformat: Bool, plugin: GrammarPlugin, withDoc: Bool = true, ?optsJson: String
 	): EditResult {
 		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
 			'source does not parse: ${exception.toString()}'
@@ -49,7 +55,7 @@ final class RemoveImport {
 		else if (matches.length > 1)
 			Err('ambiguous — "$modulePath" matches ${matches.length} import statements')
 		else
-			RefactorSupport.deleteNode(source, matches[0], tree, reformat, plugin, optsJson);
+			RefactorSupport.deleteNode(source, matches[0], tree, reformat, plugin, withDoc, optsJson);
 	}
 
 }

@@ -2842,13 +2842,14 @@ final class Cli {
 	 * the sibling element whose first token is at `line:col` (a statement /
 	 * case / array / object / call-arg element / member), with its modifier /
 	 * meta group, writer-formatted + re-parse-validated. The structural
-	 * inverse of `add-element`; same column convention `apq refs` prints.
+	 * inverse of `add-element`; same column convention `apq refs` prints. A leading
+	 * doc comment goes with the element unless `--keep-doc` says otherwise.
 	 */
 	private static function runRemoveElement(args: Array<String>): Int {
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var reformat: Bool = false;
-		var withDoc: Bool = false;
+		var withDoc: Bool = true;
 		var file: Null<String> = null;
 		var posSpec: Null<String> = null;
 		var selectExpr: Null<String> = null;
@@ -2872,7 +2873,11 @@ final class Cli {
 				case '--reformat':
 					reformat = true;
 				case '--with-doc':
+					// Accepted and inert: taking the doc is the default now. Kept so an
+					// existing script that spells the old opt-in keeps working.
 					withDoc = true;
+				case '--keep-doc':
+					withDoc = false;
 				case '-h', '--help':
 					printRemoveElementUsage();
 					return EXIT_OK;
@@ -2915,13 +2920,15 @@ final class Cli {
 	/**
 	 * `apq remove-import <file> <module.path> [--reformat] [--write]` — remove
 	 * the `import` / `using` whose exposed path equals `<module.path>` (the
-	 * alias for an aliased import). The path must name exactly one statement.
+	 * alias for an aliased import). The path must name exactly one statement, and
+	 * a block comment directly above it goes too unless `--keep-doc` says otherwise.
 	 * The by-name counterpart of `remove-element`; backend of `lint --fix`.
 	 */
 	private static function runRemoveImport(args: Array<String>): Int {
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var reformat: Bool = false;
+		var withDoc: Bool = true;
 		var file: Null<String> = null;
 		var modulePath: Null<String> = null;
 
@@ -2935,6 +2942,8 @@ final class Cli {
 					write = true;
 				case '--reformat':
 					reformat = true;
+				case '--keep-doc':
+					withDoc = false;
 				case '-h', '--help':
 					printRemoveImportUsage();
 					return EXIT_OK;
@@ -2968,7 +2977,7 @@ final class Cli {
 		};
 		final plugin: GrammarPlugin = pickPlugin(lang);
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
-		return finishEdit('remove-import', filePath, write, RemoveImport.removeImport(source, path, reformat, plugin, optsJson));
+		return finishEdit('remove-import', filePath, write, RemoveImport.removeImport(source, path, reformat, plugin, withDoc, optsJson));
 	}
 
 	/**
@@ -2977,13 +2986,14 @@ final class Cli {
 	 * method), with its modifier / meta group. `<T>` must resolve to exactly one
 	 * node; `<memberName>` may resolve to several, when conditional-compilation
 	 * regions declare it once per build — those are one logical member and all
-	 * of them go. The by-name counterpart of `add-member`.
+	 * of them go, each with its leading doc comment unless `--keep-doc` says
+	 * otherwise. The by-name counterpart of `add-member`.
 	 */
 	private static function runRemoveMember(args: Array<String>): Int {
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var reformat: Bool = false;
-		var withDoc: Bool = false;
+		var withDoc: Bool = true;
 		var typeName: Null<String> = null;
 		var file: Null<String> = null;
 		var memberName: Null<String> = null;
@@ -3001,7 +3011,11 @@ final class Cli {
 				case '--reformat':
 					reformat = true;
 				case '--with-doc':
+					// Accepted and inert: taking the doc is the default now. Kept so an
+					// existing script that spells the old opt-in keeps working.
 					withDoc = true;
+				case '--keep-doc':
+					withDoc = false;
 				case '-h', '--help':
 					printRemoveMemberUsage();
 					return EXIT_OK;
@@ -5905,7 +5919,7 @@ final class Cli {
 		sysPrint('  --nth <k>           Pick the k-th (1-based) of several --select/--match matches\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
-		sysPrint('  --with-doc      Also remove the element\'s leading doc comment\n');
+		sysPrint('  --keep-doc      Leave the element\'s leading doc comment behind\n');
 		printEditOptionsTail();
 	}
 
@@ -5915,6 +5929,9 @@ final class Cli {
 		sysPrint('Remove the import / using statement whose exposed path equals <module.path>\n');
 		sysPrint('(the alias for an aliased import). The path must name exactly one statement.\n');
 		sysPrint('The by-name counterpart of remove-element; backend of lint --fix.\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --keep-doc      Leave the import\'s leading block comment behind\n');
 		printOptionsEditTail();
 	}
 
@@ -5929,7 +5946,7 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --type <T>      The enclosing type (required)\n');
-		sysPrint('  --with-doc      Also remove the member\'s leading doc comment\n');
+		sysPrint('  --keep-doc      Leave the member\'s leading doc comment behind\n');
 		printEditOptionsTail();
 	}
 

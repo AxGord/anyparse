@@ -69,6 +69,17 @@ class ApqDocSourceTest extends Test {
 		Assert.equals('/* note */', SourceSlice.leadingDoc(src, span));
 	}
 
+	/**
+	 * A block comment TRAILING the previous declaration on that declaration's own line
+	 * is not this one's documentation, however adjacent it looks. The line scan accepts
+	 * any line ending in a comment closer, so without the own-line rule the slice handed
+	 * back the previous declaration's CODE as the doc.
+	 */
+	public function testLeadingDocIgnoresPreviousDeclarationsTrailingComment(): Void {
+		final src: String = 'class C {\n\tvar keep:Int = 0; /** about keep */\n\n\tvar count:Int = 0;\n}';
+		Assert.isNull(SourceSlice.leadingDoc(src, spanAt(src, 'var count')));
+	}
+
 	public function testLeadingDocAbsentReturnsNull(): Void {
 		final src: String = 'class E {}';
 		Assert.isNull(SourceSlice.leadingDoc(src, spanAt(src, 'class E')));
