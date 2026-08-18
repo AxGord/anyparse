@@ -318,7 +318,8 @@ class WrapList {
 		function shapeAt(mode: WrapMode, lead: Doc): Doc {
 			final body: Doc = shape(
 				mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc, groupRestProbe,
-				sepBeforeFlags, opt.lineWidth, sourceBreakBefore, keepCloseGlued, flatTrailingComma, opt.comprehensionCuddledOpen
+				sepBeforeFlags, opt.lineWidth, sourceBreakBefore, keepCloseGlued, flatTrailingComma, opt.comprehensionCuddledOpen,
+				complexItemKinds
 			);
 			return prependLead(body, lead);
 		}
@@ -577,6 +578,35 @@ class WrapList {
 			}
 		}
 		return out;
+	}
+
+	/**
+	 * True iff element `i` is a call-bearing CONTAINER literal
+	 * (`WrapListOptions.complexItemKinds` code 2) — the chunk policy's trigger.
+	 * Index 0 answers `false` even for a container: a leading container is
+	 * HUGGED by the head (`new Col([` … `], 436)`), which is the enclosing
+	 * call's own shape, not a chunk of the list.
+	 */
+	private static function isChunkContainer(kinds: Null<Array<Int>>, i: Int): Bool {
+		return kinds != null && i > 0 && i < kinds.length && kinds[i] == 2;
+	}
+
+	/**
+	 * True iff the fill-mode chunk policy forces a hard break BEFORE element
+	 * `i`: the element itself is a chunk container, or the PREVIOUS element was
+	 * one (a container takes a line of its own, so the break lands on both
+	 * sides of it). Element 0 never breaks — the open delimiter already
+	 * positions it.
+	 */
+	private static function chunkBreakBefore(kinds: Null<Array<Int>>, i: Int): Bool {
+		return i > 0 && (isChunkContainer(kinds, i) || isChunkContainer(kinds, i - 1));
+	}
+
+	/** True iff any element of the list triggers the chunk policy. */
+	private static function hasChunkContainer(kinds: Null<Array<Int>>, count: Int): Bool {
+		if (kinds == null) return false;
+		for (i in 1...count) if (isChunkContainer(kinds, i)) return true;
+		return false;
 	}
 
 	/**
@@ -1817,7 +1847,14 @@ class WrapList {
 		// down from `emit` because `shape` takes scalars rather than the whole
 		// `WriteOptions`. Default `false` keeps every non-threaded caller
 		// byte-identical.
-		comprehensionCuddledOpen: Bool = false
+		comprehensionCuddledOpen: Bool = false,
+		// ω-complex-item-count (D2): the per-element AST classification. Read by
+		// the fill-mode CHUNK policy (a call-bearing container literal past the
+		// first element takes a line of its own) and by the multi-arg-collection
+		// glue, which declines for exactly those elements so the chunk policy
+		// can shape them. Omitted → both behaviours are off and every caller is
+		// byte-identical.
+		?complexItemKinds: Array<Int>
 	): Doc {
 		// ω-thinarrow-break if-else: a sole bare-ident arrow arg of a call / new-expr
 		// (`f(p -> if … else …)`) whose body is an ALREADY-multiline if/else breaks
@@ -1861,11 +1898,11 @@ class WrapList {
 		if (multiArgBlockLambda != null) return multiArgBlockLambda;
 		final multiArgCollection: Null<Doc> = shapeMultiArgCollection(
 			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags,
-			keepCloseGlued, lineWidth
+			keepCloseGlued, lineWidth, complexItemKinds
 		);
 		return multiArgCollection ?? shapeByMode(
 			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreak, groupRestProbe, sepBeforeFlags,
-			sourceBreakBefore, keepCloseGlued, flatTrailingComma
+			sourceBreakBefore, keepCloseGlued, flatTrailingComma, complexItemKinds
 		);
 	}
 
@@ -2097,15 +2134,26 @@ class WrapList {
 	 */
 	private static function shapeMultiArgCollection(
 		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
-		appendTrailingComma: Bool, groupRestProbe: Bool, sepBeforeFlags: Null<Array<Bool>>, keepCloseGlued: Bool, lineWidth: Int
+		appendTrailingComma: Bool, groupRestProbe: Bool, sepBeforeFlags: Null<Array<Bool>>, keepCloseGlued: Bool, lineWidth: Int,
+		?complexItemKinds: Array<Int>
 	): Null<Doc> {
-		if (!((mode == FillLine || mode == FillLineWithLeadingBreak) && items.length > 1 && soleMultilineCollectionArg(items) >= 0))
-			return null;
+		if (mode != FillLine && mode != FillLineWithLeadingBreak || items.length <= 1) return null;
+		final collIdx: Int = soleMultilineCollectionArg(items);
+		if (collIdx < 0) return null;
+		// ω-complex-item-count (D2): the glue pulls every argument onto the open
+		// delimiter's line — right for a collection the head HUGS (`new Col([` …
+		// `], 436)`, always element 0), wrong for one that arrives after other
+		// arguments, where the fork gives the collection a line of its own
+		// (`…, null,` / `[` … `],` / `true, false, false`). Decline for exactly
+		// that element so the chunk policy in the fill shapes owns it. Callers
+		// that supply no kinds keep the glue unconditionally.
+		if (isChunkContainer(complexItemKinds, collIdx)) return null;
 		final glueShape: Doc = multiArgBlockLambdaGlueShape(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
 		final openShape: Doc = mode == FillLineWithLeadingBreak
-			? shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma)
+			? shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma, complexItemKinds)
 			: shapeFillLine(
-				open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags, keepCloseGlued
+				open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags, keepCloseGlued,
+				complexItemKinds
 			);
 		return IfFirstLineExceeds(lineWidth, openShape, glueShape);
 	}
@@ -2122,17 +2170,18 @@ class WrapList {
 	private static function shapeByMode(
 		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
 		appendTrailingComma: Bool, trailBreak: Doc, groupRestProbe: Bool, sepBeforeFlags: Null<Array<Bool>>,
-		sourceBreakBefore: Null<Array<Bool>>, keepCloseGlued: Bool, flatTrailingComma: Bool
+		sourceBreakBefore: Null<Array<Bool>>, keepCloseGlued: Bool, flatTrailingComma: Bool, ?complexItemKinds: Array<Int>
 	): Doc {
 		return switch mode {
 			case NoWrap: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags, flatTrailingComma);
 			case OnePerLine: shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak, sepBeforeFlags);
 			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(open, close, sep, items, cols, appendTrailingComma, sepBeforeFlags);
 			case FillLine: shapeFillLine(
-				open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags, keepCloseGlued
+				open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags, keepCloseGlued,
+				complexItemKinds
 			);
 			case FillLineWithLeadingBreak:
-				shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma);
+				shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma, complexItemKinds);
 			case PackedOrOnePerLine:
 				shapePackedOrOnePerLine(open, close, sep, items, cols, appendTrailingComma, sepBeforeFlags);
 			// ω-keep-objectlit: Keep cascade hits are pre-empted by the
@@ -2744,7 +2793,8 @@ class WrapList {
 
 	private static function shapeFillLine(
 		open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
-		appendTrailingComma: Bool, groupRestProbe: Bool, ?sepBeforeFlags: Array<Bool>, keepCloseGlued: Bool = false
+		appendTrailingComma: Bool, groupRestProbe: Bool, ?sepBeforeFlags: Array<Bool>, keepCloseGlued: Bool = false,
+		?complexItemKinds: Array<Int>
 	): Doc {
 		// ω-fill-leading-comment: the first item's Doc starts with the comment
 		// that preceded it in the source. Packed flat it lands glued to the open
@@ -2756,7 +2806,7 @@ class WrapList {
 		// Hand it to the leading-break variant, whose forced break after the open
 		// delim keeps the comment on the line it came from.
 		if (items.length > 0 && DocMeasure.firstVisibleTextStartsWith(items[0], '/'.code))
-			return shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma);
+			return shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma, complexItemKinds);
 		// Per-gap sep awareness (slice ω-fillline-pergap-sep): items split
 		// into chunks at every leading-hardline boundary. Within each
 		// chunk items pack via `Fill(chunk, softSep)` (Wadler fillSep —
@@ -2894,7 +2944,13 @@ class WrapList {
 			// where the outer `,` was elided in favour of the cond-comp
 			// body's own leading sep but neither element starts with a
 			// hardline at the Doc level.
-			final hardLed: Bool = !atEnd && (hasLeadingHardline(items[i]) || skipSepBefore(sepBeforeFlags, i));
+			// ω-complex-item-count (D2): a call-bearing container literal past the
+			// first element opens a chunk of its own, and so does whatever
+			// follows it — the same boundary the leading-hardline test produces,
+			// asked of the AST instead of the rendered Doc, so a container that
+			// happens to FIT its line still takes one.
+			final hardLed: Bool = !atEnd
+				&& (hasLeadingHardline(items[i]) || skipSepBefore(sepBeforeFlags, i) || chunkBreakBefore(complexItemKinds, i));
 			if (!(atEnd || hardLed)) continue;
 			if (chunkStart > 0) {
 				// The inter-chunk sep belongs immediately
@@ -3080,8 +3136,37 @@ class WrapList {
 	 * `outer + additional` tabs (the wrap-engine indent regime),
 	 * matching fork's `calcIndent + additionalIndent`.
 	 */
+	/**
+	 * ω-complex-item-count (D2): the chunk-policy body of
+	 * `shapeFillLineWithLeadingBreak`. Splits `items` at every
+	 * `chunkBreakBefore` boundary, packs each chunk with the shape's own
+	 * `FillBreakAfterWrap`, and joins the chunks with a separator plus a forced
+	 * hardline. Only the LAST chunk reserves cols for the trailing tail —
+	 * earlier chunks end at a forced break, so no tail shares their line.
+	 */
+	private static function chunkedFill(
+		sep: String, items: Array<Doc>, softSep: Doc, tailReserve: Int, kinds: Null<Array<Int>>
+	): Doc {
+		final parts: Array<Doc> = [];
+		var chunkStart: Int = 0;
+		for (i in 1...items.length + 1) {
+			final atEnd: Bool = i == items.length;
+			if (!(atEnd || chunkBreakBefore(kinds, i))) continue;
+			if (chunkStart > 0) {
+				parts.push(Text(sep));
+				parts.push(Line('\n'));
+			}
+			if (i - chunkStart == 1)
+				parts.push(items[chunkStart]);
+			else
+				parts.push(FillBreakAfterWrap(items.slice(chunkStart, i), softSep, atEnd ? tailReserve : 0));
+			chunkStart = i;
+		}
+		return Concat(parts);
+	}
+
 	private static function shapeFillLineWithLeadingBreak(
-		open: String, close: String, sep: String, items: Array<Doc>, cols: Int, appendTrailingComma: Bool
+		open: String, close: String, sep: String, items: Array<Doc>, cols: Int, appendTrailingComma: Bool, ?complexItemKinds: Array<Int>
 	): Doc {
 		final softSep: Doc = Concat([Text(sep), Line(' ')]);
 		// Tail reserve identical in structure to `shapeFillLine` but
@@ -3103,7 +3188,17 @@ class WrapList {
 		// `callparam_fill_pack_after_opadd_first_arg`; corrects the outer-arg
 		// layout of `opadd_multiparam_{after_last,continuation_indent}` too
 		// (those stay FAIL only on a separate opAddSub-internal indent defect).
-		final inner: Doc = items.length == 1 ? items[0] : FillBreakAfterWrap(items, softSep, tailReserve);
+		// ω-complex-item-count (D2): with a chunk container present the items are
+		// packed per CHUNK instead of as one run — the container sits alone
+		// between two forced breaks, the scalars around it pack among
+		// themselves. Without one, the single-run `FillBreakAfterWrap` is
+		// unchanged.
+		final inner: Doc = if (items.length == 1)
+			items[0];
+		else if (hasChunkContainer(complexItemKinds, items.length))
+			chunkedFill(sep, items, softSep, tailReserve, complexItemKinds);
+		else
+			FillBreakAfterWrap(items, softSep, tailReserve);
 		final tail: Doc = appendTrailingComma ? Text(sep) : Empty;
 		// No `openInside` / `closeInside` padding: this shape ALWAYS breaks
 		// after the open delim and before the close, so an inside-of-delimiter

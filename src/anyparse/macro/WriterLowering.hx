@@ -6220,12 +6220,27 @@ class WriterLowering {
 			// the chain, not the operand args). Every non-`groupRestProbe` postfix
 			// sep-list ctor passes a constant `false` -- byte-inert.
 			final groupRestProbeExpr: Expr = c.branch.fmtHasFlag('groupRestProbe') ? (macro !opt._suppressCallRestProbe) : (macro false);
+			// ω-complex-item-count (D2): postfix-Star reader for
+			// `@:fmt(complexItems)` (`HxExpr.Call`). Classifies each ARGUMENT so
+			// the fill-mode chunk policy can give a call-bearing container
+			// literal past the first argument a line of its own — the fork's
+			// packing for `super(…, null,` / `[{…}]` / `true, false, false)`.
+			// Suppressed inside a case pattern / switch subject for the same
+			// reason the array literal is (an enum-ctor pattern parses as a
+			// `Call`). Absent flag → `null`, byte-identical emission.
+			final complexKindsExpr: Expr = c.branch.fmtHasFlag('complexItems') ? macro {
+				final _ck: Null<Array<Int>> = opt._suppressComplexItems
+					? null
+					: anyparse.grammar.haxe.HaxeFormat.complexItemKinds(cast _args);
+				_ck;
+			} : macro null;
 			final wrapListExpr: Expr = macro anyparse.format.wrap.WrapList.emit(
 				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $callInsideOpen, $callInsideClose, false, $rulesExpr, {
 					appendTrailingComma: $tcExpr,
 					groupRestProbe: $groupRestProbeExpr,
 					sepBeforeFlags: _sepBeforeFlags,
-					keepCloseGlued: $keepCloseGluedExpr
+					keepCloseGlued: $keepCloseGluedExpr,
+					complexItemKinds: $complexKindsExpr
 				}
 			);
 			if (!c.isTriviaStar) return wrapListExpr;
