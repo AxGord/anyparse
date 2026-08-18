@@ -24,6 +24,11 @@ import anyparse.query.SymbolIndex;
  * once per pass, which is exactly the scope the claims are good for — a rename accepted in pass N
  * is IN the sources pass N+1 indexes, where the ordinary inherited-member proof sees it unaided.
  *
+ * Both seams pass the index THEIR OWN decision was made against (`resolutionIndexOf(plugin) ?? index`,
+ * computed once per seam), so a claim is always keyed to the snapshot that justified it. The two
+ * seams agreeing on that object is what keeps one ledger spanning the pass; if a future edit made
+ * them disagree, the ledger would retire between them and this gap would re-open silently.
+ *
  * Deferral is not refusal: the loser re-fires on a later pass or run and is judged against sources
  * that finally hold the name, where it is either allowed or refused for the real reason.
  */
