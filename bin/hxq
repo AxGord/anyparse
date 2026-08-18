@@ -127,9 +127,20 @@ if [ "${HXQ_QUIET:-}" != "1" ] && [ -d "$src_root" ]; then
                 exit 1
             fi
         else
-            # Legacy warn-only mode (opt-in via HXQ_AUTO_REBUILD=0).
-            # mtime-keyed throttle. Portable mtime: `stat` differs
-            # across BSD/macOS (`-f %m`) and GNU (`-c %Y`).
+            # Warn-only mode (opt-in via HXQ_AUTO_REBUILD=0), for a chain of
+            # edits that should pay ONE rebuild at the end instead of one per op.
+            #
+            # It warns EVERY time, deliberately. It used to warn once per binary
+            # mtime and then go quiet, which put the silence exactly where the
+            # danger is: in a 15-op chain you saw the warning on op 1 and nothing
+            # on op 15 — the op most likely to be the verification probe, reading
+            # a stale binary and "refuting" a fix that actually landed. One line
+            # of noise is cheap; a slice built on a lying probe is not.
+            #
+            # The marker survives, but it now decides only how LOUD the warning
+            # is: the full explanation once per binary, a single line every time
+            # after. Portable mtime: `stat` differs across BSD/macOS (`-f %m`)
+            # and GNU (`-c %Y`).
             if mtime=$(stat -f %m "$binary" 2>/dev/null); then :
             elif mtime=$(stat -c %Y "$binary" 2>/dev/null); then :
             else mtime="unknown"
@@ -140,9 +151,11 @@ if [ "${HXQ_QUIET:-}" != "1" ] && [ -d "$src_root" ]; then
             [ -r "$marker" ] && last=$(cat "$marker" 2>/dev/null || true)
             if [ "$last" != "$mtime" ]; then
                 echo "hxq: warning: src/ has .hx files newer than $bin_name — run \`haxe $hxml_name\` to rebuild (first stale: $stale)" >&2
-                echo "hxq: (silenced for this binary mtime; clear HXQ_AUTO_REBUILD to auto-rebuild, set HXQ_QUIET=1 to disable check)" >&2
+                echo "hxq: (HXQ_AUTO_REBUILD=0 is set, so this warns instead of rebuilding. Every later op warns too, one line, until you rebuild.)" >&2
                 mkdir -p "$cache_dir" 2>/dev/null || true
                 printf '%s' "$mtime" > "$marker" 2>/dev/null || true
+            else
+                echo "hxq: warning: STILL STALE — $bin_name is older than src/, so this op ran the OLD engine" >&2
             fi
         fi
     fi
