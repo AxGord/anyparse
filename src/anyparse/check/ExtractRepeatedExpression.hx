@@ -52,6 +52,13 @@ using Lambda;
  *   them in different branch children (child index >= 1, since `children[0]` is the
  *   always-evaluated condition / subject of every `branchConditionKinds` /
  *   `switchKinds` node).
+ * - **Callee position.** An expression in the CALLEE slot of a call (`f.g.h` in `f.g.h(x)`) is
+ *   descended into but never counted. It names a METHOD, not a value: a `final` bound to it
+ *   holds a bound method, which is not what "compute once, reuse" means and is not what any
+ *   author does with the suggestion. The gate is positional, so the same text counted as a
+ *   VALUE elsewhere (an argument, a receiver, a right-hand side) still groups normally — and
+ *   the callee's own RECEIVER is still a candidate, so a genuinely repeated value inside a
+ *   repeated call surfaces in its own right (`a.b.c` out of `a.b.c.d(…)`).
  * - **Subsumed sub-expressions.** A repeated sub-expression whose every occurrence
  *   nests inside an occurrence of an equally- or more-frequent larger repeated
  *   expression is dropped, so a chain reports at its maximal form (`a.b.c()` once,
@@ -183,16 +190,16 @@ final class ExtractRepeatedExpression implements Check {
 	/**
 	 * Walk `node`, appending each candidate-kind expression (with its whitespace-
 	 * normalized text, span and branch path) to `out`. Descent stops at a nested
-	 * function / lambda unit and at a macro-reification subtree. Entering a branch
-	 * child (index >= 1) of an `if` / `switch` pushes that branch onto `path`, so a
-	 * candidate records which mutually-exclusive branches it lives in.
+	 * function / lambda unit and at a macro-reification subtree. Entering a branch child (index >= 1) of an `if` / `switch` pushes that branch onto `path`, so a
+	 * candidate records which mutually-exclusive branches it lives in. The CALLEE child of a call
+	 * (`isCallee`) is descended into but never recorded — see the class doc's position rule.
 	 */
 	private static function collect(
-		node: QueryNode, source: String, ctx: Ctx, path: Array<BranchStep>, out: Array<Candidate>, isRoot: Bool
+		node: QueryNode, source: String, ctx: Ctx, path: Array<BranchStep>, out: Array<Candidate>, isRoot: Bool, isCallee: Bool = false
 	): Void {
 		if (!isRoot && (ctx.functionUnitKinds.contains(node.kind) || ctx.opaqueKinds.contains(node.kind))) return;
 		final span: Null<Span> = node.span;
-		if (!isRoot && span != null && ctx.candidateKinds.contains(node.kind)) {
+		if (!isRoot && !isCallee && span != null && ctx.candidateKinds.contains(node.kind)) {
 			final s: Span = span;
 			out.push({
 				node: node,
@@ -204,13 +211,14 @@ final class ExtractRepeatedExpression implements Check {
 		final condKey: Null<String> = span != null && ctx.exclusiveConditionalKinds.contains(node.kind) ? '${span.from}:${span.to}' : null;
 		for (i in 0...node.children.length) {
 			final child: QueryNode = node.children[i];
+			final childIsCallee: Bool = node.kind == ctx.callKind && i == 0;
 			if (condKey != null && i >= 1) {
 				final k: String = condKey;
 				path.push({ key: k, idx: i });
-				collect(child, source, ctx, path, out, false);
+				collect(child, source, ctx, path, out, false, childIsCallee);
 				path.pop();
 			} else {
-				collect(child, source, ctx, path, out, false);
+				collect(child, source, ctx, path, out, false, childIsCallee);
 			}
 		}
 	}

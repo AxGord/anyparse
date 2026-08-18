@@ -583,15 +583,30 @@ final class DeadStore implements Check {
 
 	/**
 	 * Whether deleting an assignment / initializer whose right-hand side is `rhs` cannot drop a side
-	 * effect: `rhs` is side-effect-free, or — with a type index — a single field read the index proves
-	 * reads a plain field rather than a property getter (the allowance `unused-local` uses).
+	 * effect. Three allowances: `rhs` is side-effect-free by shape
+	 * (`RefactorSupport.isSideEffectFree`); it is a provably-pure stdlib call
+	 * (`PurityScan.isPureStdlibCall`) whose every argument is itself safe to delete — the argument
+	 * walk is what refuses `Std.int(Math.random())`, whose callee is pure but whose argument is not;
+	 * or — with a type index — it is a single field read the index proves reads a plain field rather
+	 * than a property getter (the allowance `unused-local` uses). Deleting is stricter than hoisting,
+	 * so `PurityScan.isPure` is deliberately NOT used whole: its optimistic reading of an unresolved
+	 * receiver as a plain field is safe for a caller that computes the expression once, and not for
+	 * one that drops it. Only the call predicate, which needs no index and makes no such assumption,
+	 * is borrowed.
 	 */
 	private static function rhsSafeToDelete(
 		rhs: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>,
 		fieldAccessKind: Null<String>
 	): Bool {
 		if (RefactorSupport.isSideEffectFree(rhs)) return true;
-		if (index == null || fieldAccessKind == null || rhs.kind != fieldAccessKind) return false;
+		if (fieldAccessKind == null) return false;
+		final faKind: String = fieldAccessKind;
+		final identKind: Null<String> = shape.identKind;
+		final callKind: Null<String> = shape.callKind;
+		if (identKind != null && callKind != null && rhs.kind == callKind && PurityScan.isPureStdlibCall(rhs, faKind, identKind)) return [
+			for (i in 1...rhs.children.length) rhs.children[i]
+		].foreach(a -> rhsSafeToDelete(a, root, shape, declaredTypes, index, fieldAccessKind));
+		if (index == null || rhs.kind != faKind) return false;
 		return TypeResolver.isPlainFieldRead(rhs, root, shape, declaredTypes, index);
 	}
 
