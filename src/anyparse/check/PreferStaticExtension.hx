@@ -402,17 +402,22 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	 * inside an abstract, and a nullable / top-type wrapper (`Null` / `Any`) names no member host —
 	 * both read as unresolved. `Dynamic` passes through so the caller can drop it.
 	 *
-	 * The walk runs in DEEP mode (a `ChainTypeContext`), which adds three resolutions the shallow
-	 * one structurally cannot have: a `for` BINDER's type read off the iterable's element parameter
+	 * The walk runs in DEEP mode (a `ChainTypeContext`), which adds four resolutions the shallow one
+	 * structurally cannot have: a `for` BINDER's type read off the iterable's element parameter
 	 * (`for (key in Reflect.fields(o)) StringTools.urlEncode(key)` — the binder carries no
 	 * annotation, so shallow answers null and every such site stayed hedged), a TABLED stdlib static
-	 * call's return type, and type-argument substitution along a member chain. Deep mode is an
+	 * call's return type, type-argument substitution along a member chain, and a `using`-brought
+	 * STATIC EXTENSION on a call tail (`StringTools.endsWith(s.rtrim(), '()')` — the receiver's own
+	 * type was unresolvable before, so the site stayed hedged). Deep mode is an
 	 * OPT-IN per consumer precisely because a resolved nominal is this rule's licence to ACT: the
 	 * arms above are taken not because they resolve MORE but because each is type-CORRECT and fails
 	 * closed — the element-parameter table carries the obligation that `iterator()` and
 	 * `keyValueIterator()` agree, and the static table is refused for a type any non-std indexed
-	 * file redeclares. A future arm that merely widens coverage without that guarantee does NOT
-	 * belong under this opt-in.
+	 * file redeclares; and the extension arm answers only after `typeProvablyLacksMember` PROVES the
+	 * receiver's own type declares no such name (a real member BEATS an extension), walks the
+	 * `using`s in the compiler's reverse declaration order, and requires the extension's first
+	 * parameter to accept the receiver by exact nominal or proven subtype. A future arm that merely
+	 * widens coverage without that guarantee does NOT belong under this opt-in.
 	 *
 	 * The substitution arm is the one whose failure is NOT closed, and the reason it is still safe
 	 * here is a downstream gate rather than the walk: `pathReceiverMemberTypeSource`'s package-blind

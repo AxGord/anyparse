@@ -301,7 +301,7 @@ final class CheckScan {
 	 *
 	 * The probe is `NominalTypes.expressionTypeNominal`, run in its DEEP mode — the
 	 * `ChainTypeContext` built below. On top of the plain identifier / field-path answer it
-	 * resolves four further shapes:
+	 * resolves five further shapes:
 	 *
 	 *  - a METHOD CALL's return nominal, through its receiver chain (`chain.indexOf(x)` → `Int`);
 	 *  - a `for` BINDER's type, read off the iterable's element type parameter — the binder carries
@@ -309,9 +309,12 @@ final class CheckScan {
 	 *  - a TABLED stdlib static call's return (`RefShape.staticMethodReturns`), which is what makes
 	 *    the binder arm reach `for (key in Reflect.fields(o))`;
 	 *  - a generic member's TYPE ARGUMENT, so `b.payload.text` on a `b:Box<Item>` reaches `Item`'s
-	 *    member instead of stopping at the verbatim parameter name `T`.
+	 *    member instead of stopping at the verbatim parameter name `T`;
+	 *  - a `using`-brought STATIC EXTENSION on a call tail, which is what lets a chain survive its
+	 *    first extension link (`text.trim().toLowerCase()`) instead of dying there — the file's
+	 *    `using` header rides in the context for it.
 	 *
-	 * All four are added PROOF only: every extra resolution can turn a conservative `!(a < b)`
+	 * All five are added PROOF only: every extra resolution can turn a conservative `!(a < b)`
 	 * wrap into a licensed flip, never the reverse, so the unproven → refuse default every
 	 * guard-family consumer relies on is untouched.
 	 *

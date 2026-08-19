@@ -176,7 +176,8 @@ class PreferForeachCheckTest extends Test {
 		return new PreferForeach().run([
 			{
 				file: 'C.hx',
-				source: '$usings\nclass C {\n\tfunction f(s:S):Bool {\n\t\tfor (x in s.items()) if (x > 2) return false;\n\t\treturn true;\n\t}\n}'
+				source: '$usings\nclass C {\n\tfunction f(s:S):Bool {\n'
+				+ '\t\tfor (x in s.items()) if (x > 2) return false;\n\t\treturn true;\n\t}\n}'
 			},
 			{ file: 'S.hx', source: 'class S {$sBody}' },
 			{ file: 'ExtArray.hx', source: 'class ExtArray {\n\tpublic static function items(s:S):Array<Int> {\n\t\treturn [];\n\t}\n}' },

@@ -31,9 +31,10 @@ using StringTools;
  * - **Typing a value or an expression.** `valueTypeNominal` and `expressionTypeNominal` are
  *   the entry points the analysis checks call. The private deep walk below them keeps the
  *   answer at SOURCE level (type arguments intact, for substitution) and adds the arms a
- *   plain path has not got: a method call resolved through `SymbolIndex.returnNominalOf`, a
- *   tabled `Type.method` static call, and the loop binder whose type is the ELEMENT type of
- *   what it iterates (`iterationValueBinder` / `iterationIterable` /
+ *   plain path has not got: a method call resolved through `SymbolIndex.returnNominalOf` or, when
+ *   the receiver provably lacks the member, through a `using` STATIC EXTENSION
+ *   (`staticExtensionNominal`); a tabled `Type.method` static call; and the loop binder whose
+ *   type is the ELEMENT type of what it iterates (`iterationValueBinder` / `iterationIterable` /
  *   `forBindingElementTypeSource`).
  *
  * Every resolution entry point answers null for "unknown" rather than guessing, so a consumer that
@@ -256,7 +257,7 @@ final class NominalTypes {
 	 * SITE rather than a widening, and each consumer decides for itself.
 	 *
 	 * `chain` is the second, deeper opt-in — null gives EXACTLY the answer above, non-null adds
-	 * three proof capacities the nominal-only walk structurally cannot have:
+	 * four proof capacities the nominal-only walk structurally cannot have:
 	 *
 	 *  - a `for` BINDER's type, read off the iterable's element parameter. The binder carries no
 	 *    `:Type`, so `declaredTypes` has no entry for it and the shallow walk answers null.
@@ -265,13 +266,16 @@ final class NominalTypes {
 	 *  - TYPE-ARGUMENT SUBSTITUTION along the member chain: a member declared `T` on
 	 *    `Box<T:Item>`, reached through a receiver written `Box<Item>`, resolves to `Item`. The
 	 *    shallow walk keeps the verbatim `T`, which resolves to nothing.
+	 *  - a `using`-brought STATIC EXTENSION on the call tail (`staticExtensionNominal`), reached
+	 *    only after the receiver's own type is PROVEN not to declare the name. Without it a chain
+	 *    dies at its first extension link — `text.trim().toLowerCase()` typed nothing at all.
 	 *
 	 * Two consumers take the deep opt-in: `CheckScan.typeNominalResolver`'s ordered-comparison gate,
 	 * where more proof can only turn a conservative wrap into a licensed flip; and
 	 * `prefer-static-extension`, which ACTS on the answer and whose own doc records why each arm
 	 * clears the higher bar that demands.
 	 *
-	 * The three fail closed everywhere they are unsure, with ONE documented leak an acting consumer
+	 * The four fail closed everywhere they are unsure, with ONE documented leak an acting consumer
 	 * must handle itself: `SymbolIndex.resolveGenericPathFinalMemberTypeSource` refuses an effective
 	 * source that still mentions a parameter name, but that refusal is the SUBSTITUTING walk's, not
 	 * the whole answer's — `pathReceiverMemberTypeSource` still runs its package-blind fallback
@@ -283,7 +287,9 @@ final class NominalTypes {
 	 * Deliberately NOT resolved (safe misses, each a null): a bare `f()` / `this.f()` call, whose
 	 * enclosing-type lookup is a different mechanism; a `Type.staticMethod()` whose receiver is a
 	 * SINGLE unbound identifier and whose `Type.method` is NOT in `staticMethodReturns`, since the
-	 * walk will not otherwise guess that an unbound name is a type.
+	 * walk will not otherwise guess that an unbound name is a type; and an extension whose first
+	 * parameter accepts the receiver only STRUCTURALLY (`Lambda.exists(it:Iterable<A>, …)` on an
+	 * `Array`), which no nominal table can prove.
 	 */
 	public static function expressionTypeNominal(
 		node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>, file: String,
