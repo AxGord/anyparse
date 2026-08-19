@@ -244,7 +244,9 @@ final class PreferSwitchExpressionAssignment implements Check {
 		// `init` is also the fallback an EMPTY default arm may borrow -- this caller alone proves
 		// the target holds exactly that (pure) value at the switch (adjacency + no other writes),
 		// so it alone is allowed to lend it (`AssignmentTreeHoist.switchArms`'s own doc).
-		final sa: Null<SwitchArms> = AssignmentTreeHoist.switchArms(switchStmt, ref, source, s.tree, null, init);
+		final sa: Null<SwitchArms> = AssignmentTreeHoist.switchArms(
+			switchStmt, ref, source, s.tree, null, init == null ? null : AssignmentTreeHoist.verbatimUnit(init, source)
+		);
 		if (sa == null) return null;
 		final lvalue: Null<QueryNode> = ref.lvalue;
 		// No source default arm and no initializer to synthesize one from — cannot make it exhaustive.
@@ -298,7 +300,7 @@ final class PreferSwitchExpressionAssignment implements Check {
 		decl: QueryNode, declSpan: Span, switchSpan: Span, init: Null<QueryNode>, subject: QueryNode, sa: SwitchArms, source: String,
 		comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams
 	): Null<Match> {
-		final prefix: Null<{ text: String, keptTo: Int }> = finalDeclPrefix(decl, declSpan, init, source);
+		final prefix: Null<{ text: String, keptTo: Int }> = AssignmentTreeHoist.declPrefix(declSpan, init, source, 'final');
 		final subjectSrc: Null<String> = AssignmentTreeHoist.slice(source, subject);
 		final subjectSpan: Null<Span> = subject.span;
 		if (prefix == null || subjectSrc == null || subjectSpan == null) return null;
@@ -348,29 +350,6 @@ final class PreferSwitchExpressionAssignment implements Check {
 	/** The reassignment positions of `name` in `tree` — a `Write` hit's own span, the exact scan `prefer-final` uses. */
 	private static function writeSpans(name: String, tree: QueryNode, shape: RefShape): Array<Span> {
 		return [for (h in Refs.find(name, tree, shape)) if (h.kind == RefKind.Write) h.span];
-	}
-
-	/**
-	 * The `final x:T` prefix (keyword swapped, declared type preserved) plus the offset up to
-	 * which the declaration source is copied verbatim (the kept region for the comment guard):
-	 * before the `=` for an initialized decl, before the trailing `;` for a bare one. Null on a
-	 * missing span or malformed declaration.
-	 */
-	private static function finalDeclPrefix(
-		decl: QueryNode, declSpan: Span, init: Null<QueryNode>, source: String
-	): Null<{ text: String, keptTo: Int }> {
-		final prefixEnd: Int = if (init != null) {
-			final initSpan: Null<Span> = init.span;
-			if (initSpan == null) return null;
-			final eq: Int = source.lastIndexOf('=', initSpan.from);
-			if (eq < declSpan.from) return null;
-			eq;
-		} else {
-			if (declSpan.to <= declSpan.from || source.charAt(declSpan.to - 1) != ';') return null;
-			declSpan.to - 1;
-		}
-		final raw: String = source.substring(declSpan.from, prefixEnd).rtrim();
-		return { text: (~/^var\b/).replace(raw, 'final'), keptTo: prefixEnd };
 	}
 
 
