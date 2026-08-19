@@ -183,10 +183,11 @@ class PatternParseProbe extends Test {
 	public function testEllipsisBecomesAStarNode(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final pattern: Pattern = plugin.parsePattern('g(...)');
+		final children: Array<QueryNode> = pattern.root.children;
 		Assert.equals('Call', pattern.root.kind);
-		Assert.equals(2, pattern.root.children.length);
-		Assert.equals(PatternStar.KIND, pattern.root.children[1].kind);
-		Assert.isNull(pattern.root.children[1].name, 'a star carries no name - nothing can reference it');
+		Assert.equals(2, children.length);
+		Assert.equals(PatternStar.KIND, children[1].kind);
+		Assert.isNull(children[1].name, 'a star carries no name - nothing can reference it');
 		Assert.isFalse(pattern.isDegenerate(), 'a starred call still carries the callee as shape');
 	}
 
