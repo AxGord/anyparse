@@ -108,6 +108,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	/** The class-body member kinds `memberTables` reads — the two field forms and the two method forms. */
 	private static final MEMBER_KINDS: Array<String> = ['VarMember', 'FinalMember', 'FnMember', 'FinalModifiedMember'];
 
+	/** The metadata that gives a property physical storage of its OWN — what makes a self-backed trivial getter legal, and dead the moment the collapse gives the property a `default` side. */
+	private static inline final IS_VAR_META: String = '@:isVar';
+
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
@@ -243,7 +246,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			for (prop in t.properties) if (prop.span.from == span.from) {
 				if (subtypeBlocks(subtypeIndex, className, prop.name)) return null;
 				final c = classifyProperty(cls, src, v.file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
-				if (c == null || c.inlineGetter != null) return null;
+				// The self-backed arm deletes nothing outside the owner, so no other file can need an edit.
+				if (c == null || c.inlineGetter != null || c.selfBacked) return null;
 				if (!subtypeIndex.subtypeReferencesField(owner, c.field)) return null;
 				final ownerEdits: Null<Array<{ span: Span, text: String }>> = buildFix(cls, src, prop.span, prop.name, prop.isStatic, c);
 				if (ownerEdits == null) return null;
@@ -275,13 +279,16 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 * Whether a subtype references the backing field `field` the collapse would DELETE
 	 * (`SymbolIndex.subtypeReferencesField`) — a subclass reading `owner`'s private `_x` directly
 	 * breaks with 'Unknown identifier' once `_x` is removed, since the rename only rewrites references
-	 * inside the owner. The inline arm keeps the backing field, so it is exempt; a null index (a
-	 * direct fix caller) cannot resolve the hierarchy and never blocks (the report pass already gated).
+	 * inside the owner. The inline arm keeps the backing field, so it is exempt; the SELF-BACKED arm
+	 * deletes no field at all (the surviving property carries the name a subtype already uses), so it
+	 * is exempt too; a null index (a direct fix caller) cannot resolve the hierarchy and never blocks
+	 * (the report pass already gated).
 	 */
 	private static inline function subtypeFieldBlocks(
-		index: Null<SymbolIndex>, className: Null<String>, field: String, inlineGetter: Null<QueryNode>
+		index: Null<SymbolIndex>, className: Null<String>, field: String, selfBacked: Bool, inlineGetter: Null<QueryNode>
 	): Bool {
-		return inlineGetter == null && index != null && className != null && index.subtypeReferencesField(className, field);
+		return !selfBacked && inlineGetter == null && index != null && className != null
+			&& index.subtypeReferencesField(className, field);
 	}
 
 	/** Whether `c` is an identifier character. */
@@ -342,25 +349,26 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		for (prop in t.properties) if (!subtypeBlocks(subtypeIndex, className, prop.name)) {
 			final c = classifyProperty(cls, source, file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
 			if (c == null) continue;
+			// Every member the collapse DELETES: the accessors, plus the backing field on the bridged
+			// arm. The self-backed arm deletes no field — the property IS the storage — so its
+			// deletion set is the accessors alone.
+			final deletions: Array<QueryNode> = c.selfBacked ? c.deletedAccessors : [c.fieldNode].concat(c.deletedAccessors);
 			// Every node the collapse touches: the inline arm rewrites only the getter, the collapse
 			// arm deletes the backing field and the accessors and rewrites the property head.
-			final touched: Array<QueryNode> = c.inlineGetter != null
-				? [c.inlineGetter]
-				: [prop.node, c.fieldNode].concat(c.deletedAccessors);
+			final touched: Array<QueryNode> = c.inlineGetter != null ? [c.inlineGetter] : [prop.node].concat(deletions);
 			if (!collapseConfinedToBranch(branch, cls, source, touched, c.field)) continue;
 			// Emptying a `#if` region of members leaves a shape the grammar does not model, and the
 			// re-parse gate would then drop EVERY edit the pass had for this file. The collapse arm
 			// removes the field and the accessors together, so it is judged as one set.
 			if (
 				c.inlineGetter == null
-				&& MemberBranchScan.survivingDeletions(branch, cls, [c.fieldNode].concat(c.deletedAccessors), isDeclKind).length
-					!= 1 + c.deletedAccessors.length
+				&& MemberBranchScan.survivingDeletions(branch, cls, deletions, isDeclKind).length != deletions.length
 			)
 				continue;
 			// A subtype references the backing field the collapse deletes; still emit when every such
 			// occurrence is a provable READ (the cross-file collapse rewrites them), else stay blocked.
 			if (
-				subtypeFieldBlocks(subtypeIndex, className, c.field, c.inlineGetter)
+				subtypeFieldBlocks(subtypeIndex, className, c.field, c.selfBacked, c.inlineGetter)
 				&& crossFileReadRewrite(owner, c.field, prop.name, file, subtypeIndex, sourceByFile, plugin) == null
 			)
 				continue;
@@ -453,7 +461,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		) {
 			final c = classifyProperty(cls, source, file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
 			if (c == null) continue;
-			if (subtypeFieldBlocks(index, className, c.field, c.inlineGetter)) continue;
+			if (subtypeFieldBlocks(index, className, c.field, c.selfBacked, c.inlineGetter)) continue;
 			final e: Null<Array<{ span: Span, text: String }>> = buildFix(cls, source, prop.span, prop.name, prop.isStatic, c);
 			if (e != null) for (edit in e) out.push(edit);
 		}
@@ -479,7 +487,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			deletedAccessors: Array<QueryNode>,
 			ctorInit: Null<{ stmt: QueryNode, rhsSpan: Span }>,
 			bypassStmts: Array<QueryNode>,
-			inlineGetter: Null<QueryNode>
+			inlineGetter: Null<QueryNode>,
+			selfBacked: Bool,
+			metaSpan: Null<Span>
 		}
 	): Null<Array<{ span: Span, text: String }>> {
 		final inlineGetter: Null<QueryNode> = c.inlineGetter;
@@ -489,6 +499,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			final gSpan: Null<Span> = inlineGetter.span;
 			return gSpan == null ? null : [{ span: new Span(gSpan.from, gSpan.from), text: 'inline ' }];
 		}
+		if (c.selfBacked) return buildSelfBackedFix(cls, source, c.clauseSpan, c.clauseText, c.deletedAccessors, c.metaSpan);
 		final edits: Array<{ span: Span, text: String }> = [{ span: c.clauseSpan, text: c.clauseText }];
 		final initSpan: Null<Span> = if (c.ctorInit != null)
 			c.ctorInit.rhsSpan
@@ -524,6 +535,56 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			edits
 		else
 			null;
+	}
+
+	/**
+	 * The edits realising a SELF-BACKED collapse: the accessor-clause rewrite, the `@:isVar` removal
+	 * when the property carries it, and one whole-declaration deletion per collapsed accessor. This
+	 * is the bridged collapse minus everything that existed only because the storage was a SECOND
+	 * member — no field deletion, no initializer relocation, no reference rename and no
+	 * `@:bypassAccessor` marking. Dropping the metadata is not a separate tidy-up: Haxe rejects the
+	 * pre-collapse `(get, set)` / `(get, never)` shape without it and the post-collapse shape does
+	 * not need it, so the two edits are one change and are emitted together or not at all.
+	 */
+	private static function buildSelfBackedFix(
+		cls: QueryNode, source: String, clauseSpan: Span, clauseText: String, deletedAccessors: Array<QueryNode>, metaSpan: Null<Span>
+	): Null<Array<{ span: Span, text: String }>> {
+		final edits: Array<{ span: Span, text: String }> = [{ span: clauseSpan, text: clauseText }];
+		if (metaSpan != null) edits.push({ span: metaRemovalSpan(source, metaSpan), text: '' });
+		for (acc in deletedAccessors) {
+			final span: Null<Span> = acc.span;
+			if (span == null) return null;
+			edits.push({
+				span: RefactorSupport.lineExtendedSpan(
+					source, RefactorSupport.declGroupSpan(acc, RefactorSupport.memberHostOf(cls, acc), span)
+				),
+				text: ''
+			});
+		}
+		return edits;
+	}
+
+	/**
+	 * The span to delete for an `@:isVar` annotation: its whole LINE when it sits on one alone
+	 * (`lineExtendedSpan` says so by returning a widened span), else the token plus the horizontal
+	 * space that separated it from what follows — or, when it was the last thing on its line, plus
+	 * the space that separated it from what precedes. Removing the bare token would otherwise leave
+	 * a doubled or trailing space next to a sibling annotation.
+	 */
+	private static function metaRemovalSpan(source: String, meta: Span): Span {
+		final line: Span = RefactorSupport.lineExtendedSpan(source, meta);
+		if (line.from != meta.from || line.to != meta.to) return line;
+		var to: Int = meta.to;
+		while (to < source.length && isHorizontalSpace(source.fastCodeAt(to))) to++;
+		if (to > meta.to) return new Span(meta.from, to);
+		var from: Int = meta.from;
+		while (from > 0 && isHorizontalSpace(source.fastCodeAt(from - 1))) from--;
+		return new Span(from, meta.to);
+	}
+
+	/** Whether `c` is a space or a tab (a line-internal separator, newline excluded). */
+	private static inline function isHorizontalSpace(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code;
 	}
 
 	/**
@@ -755,7 +816,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			span: Span,
 			isPublic: Bool,
 			isStatic: Bool,
-			write: String
+			write: String,
+			isVarMeta: Null<QueryNode>
 		}>
 	} {
 		final privateFieldNodes: Map<String, QueryNode> = [];
@@ -777,7 +839,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			span: Span,
 			isPublic: Bool,
 			isStatic: Bool,
-			write: String
+			write: String,
+			isVarMeta: Null<QueryNode>
 		}> = [];
 		MemberBranchScan.eachMember(branch, cls, child -> MEMBER_KINDS.contains(child.kind), (child, run, certain) -> {
 			// A modifier run only SOME builds see cannot answer `public` / `static`, both of which this
@@ -803,7 +866,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 								span: span,
 								isPublic: isPublic,
 								isStatic: mods.contains('Static'),
-								write: access.write
+								write: access.write,
+								isVarMeta: run.find(node -> node.kind == 'Meta' && node.name == IS_VAR_META)
 							});
 						}
 					}
@@ -896,7 +960,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			node: QueryNode,
 			span: Span,
 			isPublic: Bool,
-			write: String
+			write: String,
+			isVarMeta: Null<QueryNode>
 		},
 		getters: Map<String, {
 			node: QueryNode,
@@ -920,7 +985,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		deletedAccessors: Array<QueryNode>,
 		ctorInit: Null<{ stmt: QueryNode, rhsSpan: Span }>,
 		bypassStmts: Array<QueryNode>,
-		inlineGetter: Null<QueryNode>
+		inlineGetter: Null<QueryNode>,
+		selfBacked: Bool,
+		metaSpan: Null<Span>
 	}> {
 		final getter: Null<{
 			node: QueryNode,
@@ -941,7 +1008,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		}> = if (prop.write == 'never' || prop.write == 'null')
 			trivGet == null ? null : {
 				field: trivGet,
-				clauseText: '(default, null)',
+				clauseText: readOnlyClauseText(prop.name, prop.write, trivGet),
 				deleted: [getter.node],
 				ctorInit: null,
 				message: messageFor('nullcase', prop.name, trivGet),
@@ -953,13 +1020,19 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		else
 			null;
 		if (raw == null) return null;
-		if (!privateFieldNodes.exists(raw.field)) return null;
-		final fieldNode: Null<QueryNode> = privateFieldNodes[raw.field];
+		// SELF-BACKED: the trivially returned name is the property's OWN, which Haxe permits only
+		// when the property has physical storage of its own (`@:isVar`, or an already-physical
+		// accessor side). There is no second slot, so the property node stands in for the backing
+		// field and every rename / write / deletion the bridged arm performs on that slot is moot.
+		final selfBacked: Bool = raw.field == prop.name;
+		if (selfBacked && accessorOverrides(getter, setters['set_${prop.name}'])) return null;
+		final fieldNode: Null<QueryNode> = selfBacked ? prop.node : privateFieldNodes[raw.field];
 		if (fieldNode == null) return null;
 		// A collapsing arm merges the property and its backing field into ONE slot, so
 		// their declared types must match — a getter performing an implicit conversion
 		// (e.g. Array -> ReadOnlyArray) would otherwise retype the storage and break
-		// every mutating use of the old field. The inline arm keeps both slots.
+		// every mutating use of the old field. The inline arm keeps both slots. A self-backed
+		// property is compared against itself, so the check reduces to "carries an annotation".
 		if (raw.inlineGetter == null && !declaredTypesMatch(source, prop.node, fieldNode)) return null;
 		// The interface-conformance gate applies only to a COLLAPSING shape (the getter is dropped);
 		// the inline arm keeps the getter, so a required interface accessor is never removed.
@@ -967,17 +1040,60 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		final clauseSpan: Null<Span> = raw.clauseText == '' && raw.inlineGetter == null
 			? clauseRemovalSpan(source, prop.span)
 			: accessorParenSpan(source, prop.span);
+		final metaSpan: Null<Span> = selfBacked ? prop.isVarMeta?.span : null;
 		return clauseSpan == null ? null : {
 			field: raw.field,
 			fieldNode: fieldNode,
-			message: raw.message,
+			message: selfBacked ? selfBackedMessage(prop.name, raw.clauseText, raw.deleted, metaSpan != null) : raw.message,
 			clauseSpan: clauseSpan,
 			clauseText: raw.clauseText,
 			deletedAccessors: raw.deleted,
 			ctorInit: raw.ctorInit,
 			bypassStmts: raw.bypassStmts,
-			inlineGetter: raw.inlineGetter
+			inlineGetter: raw.inlineGetter,
+			selfBacked: selfBacked,
+			metaSpan: metaSpan
 		};
+	}
+
+	/**
+	 * The collapse target of a read-only property (`(get, never)` / `(get, null)`): `(default,
+	 * null)`, except for a SELF-BACKED `(get, never)`, which becomes `(default, never)`. The
+	 * difference is measured: `never` refuses a write from EVERY position, the constructor
+	 * included, so a self-backed `(get, never)` property has no writer to keep legal and
+	 * `(default, null)` would widen its access for nothing. The bridged arm has the opposite
+	 * need — its private backing field IS written inside the class, and those writes become
+	 * property writes, which only `null` permits.
+	 */
+	private static inline function readOnlyClauseText(propName: String, write: String, field: String): String {
+		return write == 'never' && field == propName ? '(default, never)' : '(default, null)';
+	}
+
+	/**
+	 * Whether either accessor carries `override`, which refuses the self-backed collapse. A
+	 * self-backed property can legally sit over an INHERITED accessor method (a supertype
+	 * declaring a plain `get_x` the subclass's `@:isVar var x(get, ...)` then overrides —
+	 * measured to compile), and deleting the override would silently re-point every call on
+	 * the supertype's own implementation. The bridged arm reaches the same shapes through
+	 * `subtypeOverridesProperty` in the other direction; this is its supertype-side twin.
+	 */
+	private static inline function accessorOverrides(
+		getter: { isOverride: Bool }, setter: Null<{ isOverride: Bool }>
+	): Bool {
+		return getter.isOverride || (setter != null && setter.isOverride);
+	}
+
+	/**
+	 * The report message for a SELF-BACKED collapse, built from the target clause and the accessors
+	 * it deletes: `clauseText` is the accessor clause the property ends up with (empty for a plain
+	 * field), `deleted` the accessor members that go. The `@:isVar` clause is appended only when the
+	 * property actually carries the metadata — a `(get, null)` property is self-backed without it.
+	 */
+	private static function selfBackedMessage(propName: String, clauseText: String, deleted: Array<QueryNode>, hasMeta: Bool): String {
+		final decl: String = clauseText == '' ? 'a plain field \'var $propName\'' : '\'var $propName$clauseText\'';
+		final names: Array<String> = [for (acc in deleted) acc.name ?? '?'];
+		return 'property \'$propName\' is its own backing field; use $decl, remove ${names.join('/')}'
+			+ (hasMeta ? ' and drop $IS_VAR_META' : '');
 	}
 
 	/**
@@ -1170,7 +1286,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			};
 		}
 		if (trivGet != null || trivSet == null) return null;
-		if (!privateFieldNodes.exists(trivSet)) return null;
+		// A self-backed setter assigns the property's OWN name; there is no private slot to find.
+		if (trivSet != prop.name && !privateFieldNodes.exists(trivSet)) return null;
 		final getterSpan: Null<Span> = getterNode.span;
 		return if (getterSpan == null)
 			null
@@ -1321,6 +1438,18 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		bypassStmts: Array<QueryNode>,
 		inlineGetter: Null<QueryNode>
 	}> {
+		// SELF-BACKED: the property is its own storage, so an external write already routes through
+		// `set_x` and keeps routing through it after the collapse — there is no bypass to mark, no
+		// constructor-init to relocate, and so no write count that could push this to the inline arm.
+		if (trivGet == prop.name) return {
+			field: trivGet,
+			clauseText: '(default, set)',
+			deleted: [getterNode],
+			ctorInit: null,
+			message: messageFor('setA', prop.name, trivGet),
+			bypassStmts: [],
+			inlineGetter: null
+		};
 		if (!privateFieldNodes.exists(trivGet)) return null;
 		final fieldNode: Null<QueryNode> = privateFieldNodes[trivGet];
 		final setterSpan: Null<Span> = setter.node.span;
