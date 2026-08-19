@@ -177,7 +177,7 @@ final class InlineConstant implements Check {
 		final resolved: Null<Seams> = resolveSeams(plugin);
 		if (resolved == null) return [];
 		final seams: Seams = resolved;
-		final reflected: Array<String> = collectReflectedNames(files, plugin, seams.stringFold);
+		final reflected: Array<String> = CheckScan.plainStringContents(files, plugin, seams.stringFold);
 		final macroConsumed: Array<String> = collectMacroConsumedModules(files);
 		final proof: InitProof = (container, init) -> isInlinableInitializer(container, init, seams);
 		final violations: Array<Violation> = [];
@@ -474,26 +474,6 @@ final class InlineConstant implements Check {
 			}
 		}
 		return false;
-	}
-
-	/** Every plain string literal's raw content across `files` — the names a constant might be reflected by. */
-	private static function collectReflectedNames(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, stringFold: Null<StringFoldSupport>
-	): Array<String> {
-		final out: Array<String> = [];
-		if (stringFold == null) return out;
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) collectStrings(tree, entry.source, stringFold, out);
-		}
-		return out;
-	}
-
-	/** Append every plain string literal's content in `node`'s subtree to `out` (duplicates kept — only membership is read). */
-	private static function collectStrings(node: QueryNode, source: String, stringFold: StringFoldSupport, out: Array<String>): Void {
-		final literal: Null<StringLiteral> = stringFold.literalOf(node, source);
-		if (literal != null) out.push(literal.content);
-		for (child in node.children) collectStrings(child, source, stringFold, out);
 	}
 
 	/** Resolve every seam the check reads, or null when a required one is unset (the check no-ops). */

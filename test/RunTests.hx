@@ -509,6 +509,7 @@ import unit.LintUnusedImportResolutionScopeTest;
 import unit.HxSwitchSubjectParensStripSliceTest;
 import unit.PreferInlineCheckTest;
 import unit.InlineConstantCheckTest;
+import unit.StaticConstantCheckTest;
 import unit.ExtractRepeatedExpressionTest;
 import unit.JoinReturnCheckTest;
 import unit.ExplicitLocalTypeOracleTest;
@@ -1143,6 +1144,7 @@ class RunTests {
 		addCase(new UnnecessaryBlockCheckTest());
 		addCase(new PreferFinalFieldCheckTest());
 		addCase(new InlineConstantCheckTest());
+		addCase(new StaticConstantCheckTest());
 		addCase(new FieldInitAtDeclarationCheckTest());
 		addCase(new PreferFinalAbstractMethodCheckTest());
 		addCase(new PreferFinalPublicFieldCheckTest());

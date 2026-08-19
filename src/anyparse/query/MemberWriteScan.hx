@@ -6,9 +6,9 @@ import anyparse.query.GrammarPlugin;
 using StringTools;
 
 /**
- * Conservative text scan for "is this member NAME written here", and the two cross-file
- * questions built on it: does a SUBTYPE write an inherited member, does an `@:access`
- * GRANTEE write it.
+ * Conservative text scans for the cross-file questions a member-access rewrite has to answer:
+ * "is this member NAME written here" (does a SUBTYPE write an inherited member, does an
+ * `@:access` GRANTEE write it), and the weaker "is it MENTIONED here at all".
  *
  * ## Why the checks need this
  *
@@ -73,6 +73,37 @@ final class MemberWriteScan {
 	}
 
 	/**
+	 * Whether any (transitive) subtype of `owner` MENTIONS the inherited member `name` at all —
+	 * the weaker question a rule changing how a member is REACHED must ask, where the write scans
+	 * above ask about mutability. A subtype reads a private INSTANCE field unqualified and it
+	 * resolves; the same bare read of a private STATIC of the superclass is `Unknown identifier`
+	 * (measured on Haxe 4.3.7, `--interp` and `-cpp` alike), so `instance final -> static final`
+	 * needs every such read rewritten to `Owner.NAME` — an edit `Check.fix` cannot make, since it
+	 * is handed one file. A mention therefore refuses outright.
+	 *
+	 * Fails closed on the same terms as `subtypeMayWrite`: an unresolvable hierarchy, a subtype
+	 * whose source was not retained, a REdeclaration of the name, and an `@:build` in the
+	 * subtype's file (a macro can inject a read no text scan sees) all answer true. Same index
+	 * choice too — the resolution scope when one is configured, else the report index.
+	 */
+	public static inline function subtypeMayReference(owner: String, name: String, index: SymbolIndex, plugin: GrammarPlugin): Bool {
+		return scopeOf(
+			index, plugin
+		)
+			.subtypeDeclMatches(
+				owner, name,
+				(subtype, src, span, redeclares) ->
+					redeclares || mayReference(src, name, span.from, span.to)
+					|| scopeOf(index, plugin).accessGrantMatches(subtype, granted -> mayReference(granted, name, 0, granted.length))
+			);
+	}
+
+	/** Whether any file granting itself `@:access(owner)` MENTIONS `name` — `accessGrantMayWrite`'s read counterpart (see `subtypeMayReference`). */
+	public static inline function accessGrantMayReference(owner: String, name: String, index: SymbolIndex, plugin: GrammarPlugin): Bool {
+		return scopeOf(index, plugin).accessGrantMatches(owner, src -> mayReference(src, name, 0, src.length));
+	}
+
+	/**
 	 * Whether any file granting itself `@:access(owner)` may write `name`. The grant is
 	 * file-scoped — every member of such a file reaches the type's privates — so the whole
 	 * grantee source is scanned, unlike a subtype's declaration slice.
@@ -131,13 +162,21 @@ final class MemberWriteScan {
 	}
 
 	/**
+	 * Whether the offsets `from ... to` of `src` may MENTION `name`: either a build macro can
+	 * inject a reference the text scan cannot see, or the name occurs as a word-boundary token.
+	 */
+	private static inline function mayReference(src: String, name: String, from: Int, to: Int): Bool {
+		return carriesBuildMacro(src) || RefactorSupport.referencedInRange(src, name, from, to, []);
+	}
+
+	/**
 	 * Whether `source` carries a `@:build` / `@:autoBuild` — a macro can add a member the
 	 * text scan cannot see, so a file with one counts as a possible writer. A mention inside
 	 * a comment or string over-counts, which only ever keeps the looser access. The one shape
 	 * this cannot see is metadata injected by the BUILD (`--macro addMetadata(...)` in an
 	 * hxml); that is outside any source scan, and the compiler oracle is the net for it.
 	 */
-	private static inline function carriesBuildMacro(source: String): Bool {
+	public static inline function carriesBuildMacro(source: String): Bool {
 		return source.indexOf('@:build') >= 0 || source.indexOf('@:autoBuild') >= 0;
 	}
 
