@@ -446,6 +446,50 @@ class PreferStaticExtensionCheckTest extends Test {
 		Assert.isTrue(out.indexOf('m.self().make().deco(1);') != -1, out);
 	}
 
+	/**
+	 * The receiver is itself a `using`-brought extension call whose parameter accepts the
+	 * receiver STRUCTURALLY — `Bag` declares `iterator()` but implements nothing, so only
+	 * membership can prove `IterExt.pick(it:Iterable<T>)` is what `b.pick()` binds.
+	 */
+	public function testStructuralIterableExtensionChainRewritten(): Void {
+		final out: String = fixResultOf(bagFiles('Ext.deco(b.pick(), 1);'));
+		Assert.isTrue(out.indexOf('b.pick().deco(1);') != -1, out);
+		Assert.isTrue(out.indexOf('Ext.deco(') == -1, out);
+	}
+
+	/** A receiver whose type declares no `iterator()` satisfies nothing, so the chain stays unresolved. */
+	public function testNonIterableExtensionChainStaysUnresolved(): Void {
+		assertUnresolvedReceiver(bagFiles('Ext.deco(p.pick(), 1);'));
+	}
+
+	/**
+	 * The type ARGUMENT gate end to end: `IterExt.fixed(it:Iterable<Widget>)` is iterable-shaped,
+	 * but a receiver NOMINAL carries no element type to match `Widget` against, so the site stays
+	 * report-only rather than being claimed on the container membership alone.
+	 */
+	public function testConcreteElementTypeExtensionChainStaysUnresolved(): Void {
+		assertUnresolvedReceiver(bagFiles('Ext.deco(b.fixed(), 1);'));
+	}
+
+	/** The structural-membership fixture set: a `Bag` that only DECLARES `iterator()`, a plain type, and a generic extension module. */
+	private function bagFiles(body: String): Array<{ file: String, source: String }> {
+		return fileSet(
+			'using Ext;\nusing IterExt;\n\nclass C {\n\tfunction f(b:Bag, p:Plain):Void {\n\t\t$body\n\t}\n}\n', WIDGET_SOURCE, [
+				{ file: 'Bag.hx', source: 'class Bag {\n\tpublic function iterator(): BagIter return null;\n}\n' },
+				{
+					file: 'BagIter.hx',
+					source: 'class BagIter {\n\tpublic function hasNext(): Bool return false;\n\n\tpublic function next(): Widget return null;\n}\n'
+				},
+				{ file: 'Plain.hx', source: 'class Plain {}\n' },
+				{
+					file: 'IterExt.hx',
+					source: 'class IterExt {\n\tpublic static function pick<T>(it: Iterable<T>): Widget return null;\n\n'
+					+ '\tpublic static function fixed(it: Iterable<Widget>): Widget return null;\n}\n'
+				}
+			]
+		);
+	}
+
 	public function testForBinderOverTabledStaticCallResolvesReceiver(): Void {
 		// The TM shape: `for (key in Reflect.fields(o)) StringTools.urlEncode(key)`. The iterable is
 		// a TABLED stdlib static (`Reflect.fields` -> `Array<String>`), so the binder's element type
