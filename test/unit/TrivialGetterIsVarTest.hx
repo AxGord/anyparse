@@ -126,13 +126,7 @@ class TrivialGetterIsVarTest extends TrivialGetterCheckTestBase {
 
 	/** A subtype merely READING the property is fine — the property survives the collapse, so nothing is stranded. */
 	public function testSubclassReadingPropertyStillCollapses(): Void {
-		final base: String = 'class C {\n\t@:isVar public var angle(get, set):Float;\n\tfunction get_angle():Float return angle;\n'
-			+ '\tfunction set_angle(v:Float):Float { redraw(); return angle = v; }\n}';
-		final sub: String = 'class D extends C {\n\tfunction show():Void { trace(angle); }\n}';
-		final vs: Array<Violation> = new TrivialGetter().run(
-			[{ file: 'C.hx', source: base }, { file: 'D.hx', source: sub }], new HaxeQueryPlugin()
-		);
-		Assert.equals(1, vs.length);
+		Assert.equals('C.hx', subtypeReadFixture().vs[0].file);
 	}
 
 	/**
@@ -141,13 +135,8 @@ class TrivialGetterIsVarTest extends TrivialGetterCheckTestBase {
 	 * subtype keeps reading the very property that survives.
 	 */
 	public function testSubclassReadingPropertyStillFixes(): Void {
-		final base: String = 'class C {\n\t@:isVar public var angle(get, set):Float;\n\tfunction get_angle():Float return angle;\n'
-			+ '\tfunction set_angle(v:Float):Float { redraw(); return angle = v; }\n}';
-		final sub: String = 'class D extends C {\n\tfunction show():Void { trace(angle); }\n}';
-		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: base }, { file: 'D.hx', source: sub }];
-		final r: { check: TrivialGetter, vs: Array<Violation> } = runFilesAndExpectOne(files);
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		Assert.isTrue(r.check.fix(base, r.vs, plugin, SymbolIndex.build(files, plugin)).length > 0);
+		final f: SubtypeReadFixture = subtypeReadFixture();
+		Assert.isTrue(f.check.fix(f.files[0].source, f.vs, f.plugin, SymbolIndex.build(f.files, f.plugin)).length > 0);
 	}
 
 	/** An `override` getter answers a supertype contract the collapse would silently break. */
@@ -175,13 +164,39 @@ class TrivialGetterIsVarTest extends TrivialGetterCheckTestBase {
 
 	/** The self-backed arm registers no cross-file rename: nothing is deleted, so there is nothing to rewrite elsewhere. */
 	public function testNoCrossFileRenameForSelfBacked(): Void {
-		final base: String = 'class C {\n\t@:isVar public var angle(get, set):Float;\n\tfunction get_angle():Float return angle;\n'
-			+ '\tfunction set_angle(v:Float):Float { redraw(); return angle = v; }\n}';
-		final sub: String = 'class D extends C {\n\tfunction show():Void { trace(angle); }\n}';
-		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: base }, { file: 'D.hx', source: sub }];
+		final f: SubtypeReadFixture = subtypeReadFixture();
+		Assert.equals(0, f.check.crossFileFix(f.files, f.vs, f.plugin, SymbolIndex.build(f.files, f.plugin)).length);
+	}
+
+	/**
+	 * The shared two-file fixture — a self-backed shape-A owner plus a subtype that only READS the
+	 * property — already run through `runFilesAndExpectOne`, so every caller inherits the assertion
+	 * that the owner produces exactly one finding.
+	 */
+	private function subtypeReadFixture(): SubtypeReadFixture {
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'C.hx',
+				source: 'class C {\n\t@:isVar public var angle(get, set):Float;\n\tfunction get_angle():Float return angle;\n'
+					+ '\tfunction set_angle(v:Float):Float { redraw(); return angle = v; }\n}'
+			},
+			{ file: 'D.hx', source: 'class D extends C {\n\tfunction show():Void { trace(angle); }\n}' }
+		];
 		final r: { check: TrivialGetter, vs: Array<Violation> } = runFilesAndExpectOne(files);
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		Assert.equals(0, r.check.crossFileFix(files, r.vs, plugin, SymbolIndex.build(files, plugin)).length);
+		return {
+			files: files,
+			check: r.check,
+			vs: r.vs,
+			plugin: new HaxeQueryPlugin()
+		};
 	}
 
 }
+
+/** The `subtypeReadFixture` bundle: the file set, the check instance that produced the finding, the finding, and a plugin for the fix calls. */
+typedef SubtypeReadFixture = {
+	files: Array<{ file: String, source: String }>,
+	check: TrivialGetter,
+	vs: Array<Violation>,
+	plugin: HaxeQueryPlugin
+};
