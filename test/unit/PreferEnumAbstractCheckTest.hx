@@ -296,10 +296,28 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.equals(1, vs.length);
 	}
 
+	public function testWholeTypeStringFixEmitsEnumAbstract(): Void {
+		// The motivating conversion, pinned verbatim: the class head becomes an `enum abstract`
+		// over the constants' own primitive with a `to` clause, and each member loses the
+		// modifiers and the type annotation that an enum-abstract value may not carry.
+		final src: String = 'class HorizontalAlignment {\n\tpublic static inline final CENTER:String = \'center\';\n\tpublic static '
+			+ 'inline final LEFT:String = \'left\';\n\tpublic static inline final NONE:String = \'none\';\n\tpublic static inline '
+			+ 'final RIGHT:String = \'right\';\n\tpublic static inline final STRETCH:String = \'stretch\';\n}';
+		Assert.equals(
+			'enum abstract HorizontalAlignment(String) to String {\n\tfinal CENTER = \'center\';\n\tfinal LEFT = \'left\';\n\t'
+			+ 'final NONE = \'none\';\n\tfinal RIGHT = \'right\';\n\tfinal STRETCH = \'stretch\';\n}',
+			fixedSource(src)
+		);
+	}
+
 	/** Every finding of this check is a report-only `prefer-enum-abstract` advisory. */
 	private function assertAdvisory(v: Violation): Void {
 		Assert.equals('prefer-enum-abstract', v.rule);
 		Assert.equals(Severity.Info, v.severity);
+	}
+
+	private function fixedSource(src: String): String {
+		return CheckFixture.fixedSource(new PreferEnumAbstract(), src);
 	}
 
 	private function violations(src: String): Array<Violation> {
