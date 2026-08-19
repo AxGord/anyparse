@@ -578,16 +578,21 @@ class RenameSliceTest extends Test {
 	}
 
 	/**
-	 * A `#if … #end` region in EXPRESSION position that no structural conditional can
-	 * represent is swallowed as a RAW byte span (`CondSpliceExpr`): its interior projects no
-	 * nodes at all, so `Refs` never sees the `tag` read inside it and the splice would rewrite
-	 * only the two occurrences outside. That is a silent miscompile in the build that defines
-	 * the condition - refuse instead, naming the region.
+	 * A `#if … #end` region in EXPRESSION position whose fragment ends on a DANGLING infix
+	 * operator - the eight-site census shape. It used to be swallowed as a RAW byte span
+	 * (`CondSpliceExpr`) whose interior projected no nodes at all, so `Refs` never saw the
+	 * `tag` read inside it and the rename REFUSED, naming the region, rather than rewriting
+	 * two of three occurrences and miscompiling the build that defines the condition.
+	 *
+	 * The fragment is a run of `(atom, operator)` terms, so it is modelled now
+	 * (`CondSpliceOpExpr`) and all three occurrences move - including the one inside the guard.
 	 */
-	public function testExpressionSpliceOccurrenceRefused(): Void {
+	public function testExpressionSpliceOccurrenceRenames(): Void {
 		final src: String = 'class B {\n\tstatic function f():String {\n\t\tvar tag:String = "a";\n'
 			+ "\t\treturn 'x' + #if flash tag + #end 'y' + tag;\n\t}\n}";
-		assertRenameErr(src, 3, 7, 'label', 'unparsed conditional-compilation region at 4:16');
+		final expected: String = 'class B {\n\tstatic function f():String {\n\t\tvar label:String = "a";\n'
+			+ "\t\treturn 'x' + #if flash label + #end 'y' + label;\n\t}\n}";
+		assertRename(src, 3, 7, 'label', expected);
 	}
 
 	/**
