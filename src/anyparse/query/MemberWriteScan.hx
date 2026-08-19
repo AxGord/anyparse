@@ -113,6 +113,17 @@ final class MemberWriteScan {
 	}
 
 	/**
+	 * Whether `source` carries a `@:build` / `@:autoBuild` — a macro can add a member the
+	 * text scan cannot see, so a file with one counts as a possible writer. A mention inside
+	 * a comment or string over-counts, which only ever keeps the looser access. The one shape
+	 * this cannot see is metadata injected by the BUILD (`--macro addMetadata(...)` in an
+	 * hxml); that is outside any source scan, and the compiler oracle is the net for it.
+	 */
+	public static inline function carriesBuildMacro(source: String): Bool {
+		return source.indexOf('@:build') >= 0 || source.indexOf('@:autoBuild') >= 0;
+	}
+
+	/**
 	 * Whether `name` is written anywhere in `source` outside `exclude` (typically its own
 	 * declaration), over the offsets `from ... to` only. A candidate name must lie WHOLLY
 	 * inside the range; the operator scan that follows it may run past `to`, and the
@@ -167,17 +178,6 @@ final class MemberWriteScan {
 	 */
 	private static inline function mayReference(src: String, name: String, from: Int, to: Int): Bool {
 		return carriesBuildMacro(src) || RefactorSupport.referencedInRange(src, name, from, to, []);
-	}
-
-	/**
-	 * Whether `source` carries a `@:build` / `@:autoBuild` — a macro can add a member the
-	 * text scan cannot see, so a file with one counts as a possible writer. A mention inside
-	 * a comment or string over-counts, which only ever keeps the looser access. The one shape
-	 * this cannot see is metadata injected by the BUILD (`--macro addMetadata(...)` in an
-	 * hxml); that is outside any source scan, and the compiler oracle is the net for it.
-	 */
-	public static inline function carriesBuildMacro(source: String): Bool {
-		return source.indexOf('@:build') >= 0 || source.indexOf('@:autoBuild') >= 0;
 	}
 
 	/** Whether `c` is an operator character that can form an assignment token. */

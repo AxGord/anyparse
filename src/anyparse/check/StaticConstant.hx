@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
+import anyparse.check.ConstantFieldScan.ConstantFieldSeams;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberWriteScan;
@@ -153,11 +154,11 @@ final class StaticConstant implements Check implements DefaultOff {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final resolved: Null<Seams> = resolveSeams(plugin);
+		final resolved: Null<ConstantFieldSeams> = ConstantFieldScan.seams(plugin);
 		if (resolved == null) return [];
-		final seams: Seams = resolved;
+		final seams: ConstantFieldSeams = resolved;
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		final reflected: Array<String> = CheckScan.plainStringContents(files, plugin, seams.stringFold);
+		final reflected: Array<String> = ConstantFieldScan.reflectedNames(files, plugin, seams.stringFold);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
@@ -194,6 +195,11 @@ final class StaticConstant implements Check implements DefaultOff {
 		return edits;
 	}
 
+	/** Whether `meta` blocks the promotion — reflection pins (`@:keep` / `@:rtti`) and `@:structInit`. */
+	private static inline function isBlockingMeta(meta: Null<String>): Bool {
+		return meta == KEEP_META || meta == RTTI_META || meta == STRUCT_INIT_META;
+	}
+
 	/**
 	 * Walk `node`; scan every class-like container's members. A class-level `@:keep` / `@:rtti` /
 	 * `@:structInit` projects as `Meta` siblings PRECEDING the container rather than as its children,
@@ -207,7 +213,7 @@ final class StaticConstant implements Check implements DefaultOff {
 			if (ctx.seams.metaKinds.contains(child.kind))
 				blocked = blocked || isBlockingMeta(child.name);
 			else {
-				if (ctx.seams.containers.contains(child.kind) && !blocked) scanContainer(child, ctx);
+				if (ctx.seams.classLikeContainers.contains(child.kind) && !blocked) scanContainer(child, ctx);
 				walk(child, ctx, blocked);
 				blocked = false;
 			}
@@ -220,7 +226,7 @@ final class StaticConstant implements Check implements DefaultOff {
 	 * builds see cannot answer `static`, and such a member is skipped.
 	 */
 	private static function scanContainer(container: QueryNode, ctx: Ctx): Void {
-		final seams: Seams = ctx.seams;
+		final seams: ConstantFieldSeams = ctx.seams;
 		MemberBranchScan.eachMember(ctx.branch, container, child -> seams.members.contains(child.kind), (member, run, certain) -> {
 			if (!certain || !seams.finalFieldKinds.contains(member.kind)) return;
 			var blocked: Bool = false;
@@ -228,7 +234,7 @@ final class StaticConstant implements Check implements DefaultOff {
 				if (mod.kind == seams.staticKind || seams.inlineKind != null && mod.kind == seams.inlineKind)
 					blocked = true;
 				else if (seams.visibility.contains(mod.kind))
-					blocked = blocked || isExportedVisibility(ctx.source, mod, seams.defaultVis);
+					blocked = blocked || ConstantFieldScan.isExportedVisibility(ctx.source, mod, seams.defaultVis);
 				else if (seams.metaKinds.contains(mod.kind))
 					blocked = blocked || isBlockingMeta(mod.name);
 			}
@@ -246,7 +252,7 @@ final class StaticConstant implements Check implements DefaultOff {
 		final span: Null<Span> = field.span;
 		final owner: Null<String> = container.name;
 		if (name == null || span == null || owner == null) return;
-		final init: Null<QueryNode> = initializerOf(field);
+		final init: Null<QueryNode> = ConstantFieldScan.initializerOf(field);
 		if (init == null || !isConstantLiteral(init, ctx.source, ctx.seams)) return;
 		if (MemberWriteScan.writtenInRange(ctx.source, name, span, 0, ctx.source.length)) return;
 		if (ctx.reflected.contains(name)) return;
@@ -263,24 +269,16 @@ final class StaticConstant implements Check implements DefaultOff {
 		});
 	}
 
-	/** The member host's initializer — its last child (the value expression; the type annotation is not a child). */
-	private static function initializerOf(field: QueryNode): Null<QueryNode> {
-		final count: Int = field.children.length;
-		return count >= 1 ? field.children[count - 1] : null;
-	}
-
 	/**
 	 * Whether `init` is a value the compiler knows and every instance would share: an
 	 * `inlineConstantLiteralKinds` literal, a `negationKind` over a numeric one, or a PLAIN string
 	 * literal. `literalOf` is what makes the string arm safe — it answers null for an interpolated
 	 * literal, so `'${UUID.uuid()}: close'` refuses exactly like a call in value position.
 	 */
-	private static function isConstantLiteral(init: QueryNode, source: String, seams: Seams): Bool {
-		if (seams.literalKinds.contains(init.kind)) return true;
-		if (seams.stringLiteralKinds.contains(init.kind))
-			return seams.stringFold != null && seams.stringFold.literalOf(init, source) != null;
-		if (seams.negationKind == null || init.kind != seams.negationKind || init.children.length != 1) return false;
-		return seams.numericKinds.contains(init.children[0].kind);
+	private static function isConstantLiteral(init: QueryNode, source: String, seams: ConstantFieldSeams): Bool {
+		if (ConstantFieldScan.isScalarLiteral(init, seams)) return true;
+		final fold: Null<StringFoldSupport> = seams.stringFold;
+		return seams.stringLiteralKinds.contains(init.kind) && fold?.literalOf(init, source) != null;
 	}
 
 	/**
@@ -312,76 +310,14 @@ final class StaticConstant implements Check implements DefaultOff {
 		return i >= 0 && source.fastCodeAt(i) == '.'.code;
 	}
 
-	/** Whether `meta` blocks the promotion — reflection pins (`@:keep` / `@:rtti`) and `@:structInit`. */
-	private static inline function isBlockingMeta(meta: Null<String>): Bool {
-		return meta == KEEP_META || meta == RTTI_META || meta == STRUCT_INIT_META;
-	}
-
-	/** Whether `child` (a visibility modifier) is a non-default (exported) keyword — `public` rather than the private default. */
-	private static function isExportedVisibility(source: String, child: QueryNode, defaultVis: String): Bool {
-		final span: Null<Span> = child.span;
-		return span != null && source.substring(span.from, span.to).trim() != defaultVis;
-	}
-
-	/** Resolve every seam the check reads, or null when a required one is unset (the check no-ops). */
-	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
-		final shape: RefShape = plugin.refShape();
-		final containers: Array<String> = RefactorSupport.classLikeContainerKinds(shape);
-		final members: Array<String> = shape.memberDeclKinds ?? [];
-		final fieldKinds: Array<String> = shape.fieldDeclKinds ?? [];
-		final mutable: Array<String> = shape.mutableFieldDeclKinds ?? [];
-		final visibility: Array<String> = shape.visibilityModifierKinds ?? [];
-		final defaultVis: Null<String> = shape.defaultVisibilityModifierText;
-		final staticKind: Null<String> = shape.staticModifierKind;
-		final literalKinds: Array<String> = shape.inlineConstantLiteralKinds ?? [];
-		if (
-			containers.length == 0 || members.length == 0 || fieldKinds.length == 0 || visibility.length == 0 || defaultVis == null
-			|| staticKind == null || literalKinds.length == 0
-		)
-			return null;
-		final finalFieldKinds: Array<String> = [for (k in fieldKinds) if (!mutable.contains(k)) k];
-		return finalFieldKinds.length == 0 ? null : {
-			containers: containers,
-			members: members,
-			finalFieldKinds: finalFieldKinds,
-			visibility: visibility,
-			defaultVis: defaultVis,
-			staticKind: staticKind,
-			inlineKind: shape.inlineModifierKind,
-			metaKinds: plugin.metaShape().metaKinds,
-			literalKinds: literalKinds,
-			stringLiteralKinds: shape.stringLiteralKinds ?? [],
-			numericKinds: shape.numericLiteralKinds ?? [],
-			negationKind: shape.negationKind,
-			stringFold: plugin.stringFoldSupport()
-		};
-	}
-
 }
-
-/** The resolved seams `StaticConstant` reads. */
-private typedef Seams = {
-	final containers: Array<String>;
-	final members: Array<String>;
-	final finalFieldKinds: Array<String>;
-	final visibility: Array<String>;
-	final defaultVis: String;
-	final staticKind: String;
-	final inlineKind: Null<String>;
-	final metaKinds: Array<String>;
-	final literalKinds: Array<String>;
-	final stringLiteralKinds: Array<String>;
-	final numericKinds: Array<String>;
-	final negationKind: Null<String>;
-	final stringFold: Null<StringFoldSupport>;
-};
 
 /** The per-file state the container walk threads down to `consider`. */
 private typedef Ctx = {
 	final out: Array<Violation>;
 	final file: String;
 	final source: String;
-	final seams: Seams;
+	final seams: ConstantFieldSeams;
 	final reflected: Array<String>;
 	final index: SymbolIndex;
 	final plugin: GrammarPlugin;

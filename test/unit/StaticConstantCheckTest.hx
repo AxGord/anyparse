@@ -3,8 +3,6 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.check.Check;
-import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.Violation;
 import anyparse.check.InlineConstant;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
@@ -70,7 +68,8 @@ class StaticConstantCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tprivate final _closeAction:String = \'$${UUID.uuid()}: close\';\n\tfunction f():String return _closeAction;\n}'
+				'class C {\n\tprivate final _closeAction:String = \'$${UUID.uuid()}: close\';\n'
+				+ '\tfunction f():String return _closeAction;\n}'
 			).length
 		);
 	}

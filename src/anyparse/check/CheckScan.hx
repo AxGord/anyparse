@@ -13,8 +13,6 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.Refs;
 import anyparse.query.NominalTypes;
-import anyparse.query.StringFold.StringFoldSupport;
-import anyparse.query.StringFold.StringLiteral;
 
 using StringTools;
 
@@ -122,35 +120,6 @@ final class CheckScan {
 	/** The `<file>#<from>:<to>` key one declaration is memoised under between a check's `run` and its `fix`. */
 	public static inline function spanKey(file: String, span: Span): String {
 		return '$file#${span.from}:${span.to}';
-	}
-
-	/**
-	 * The raw content of every PLAIN string literal across `files` — the names a member might be
-	 * reached by through reflection. Both `inline-constant` and `static-constant` erase a member's
-	 * value from `Reflect.field` (the first by folding it into every use site, the second by moving
-	 * it off the instance), so both refuse a member whose name appears as any string in scope.
-	 * Interpolated literals are absent by construction: `literalOf` answers only for a plain one.
-	 * Duplicates are kept — every caller reads membership, not counts, except the one that
-	 * subtracts a member's OWN value from the count.
-	 */
-	public static function plainStringContents(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, stringFold: Null<StringFoldSupport>
-	): Array<String> {
-		final out: Array<String> = [];
-		if (stringFold == null) return out;
-		final fold: StringFoldSupport = stringFold;
-		for (entry in files) {
-			final tree: Null<QueryNode> = parseOrNull(plugin, entry.source);
-			if (tree != null) collectStrings(tree, entry.source, fold, out);
-		}
-		return out;
-	}
-
-	/** Append every plain string literal's content in `node`'s subtree to `out` (duplicates kept). */
-	private static function collectStrings(node: QueryNode, source: String, stringFold: StringFoldSupport, out: Array<String>): Void {
-		final literal: Null<StringLiteral> = stringFold.literalOf(node, source);
-		if (literal != null) out.push(literal.content);
-		for (child in node.children) collectStrings(child, source, stringFold, out);
 	}
 
 	/**
