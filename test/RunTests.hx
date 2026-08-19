@@ -418,6 +418,7 @@ import unit.HxMethodChainDotBreakOverReglueSliceTest;
 import unit.HxObjectLitArrowBodyPadSliceTest;
 import unit.HxMethodChainCallParamRestAwareSliceTest;
 import unit.HxParenTernaryOpenWrapSliceTest;
+import unit.HxParenValueIfOpenWrapSliceTest;
 import unit.HxOpAddTrailingParenGlueSliceTest;
 import unit.HxCompareOperandBreakSliceTest;
 import unit.HxCallGroupRestProbeCasePatternTest;
@@ -805,6 +806,7 @@ class RunTests {
 		addCase(new HxStringInterpNoFormatSliceTest());
 		addCase(new HxParenWrapSourceNewlineSliceTest());
 		addCase(new HxParenTernaryOpenWrapSliceTest());
+		addCase(new HxParenValueIfOpenWrapSliceTest());
 		addCase(new HxTernaryCallArgRestAwareTest());
 		addCase(new HxTernaryBranchChainIndentTest());
 		addCase(new HxTernaryDeclInitRestAwareTest());

@@ -560,6 +560,34 @@ class WrapList {
 		return question && colon && !other;
 	}
 
+	// omega-paren-value-if-open: true iff `d` is a VALUE-position `if` chain — its
+	// first visible token is the `if` keyword. Sister discriminator to
+	// `isTopLevelTernary`, and it answers the same question (which arm of the
+	// expression-paren cascade owns this inner), but it cannot be a depth-1
+	// separator walk: an `if` ladder carries no infix separator at all, only the
+	// keyword leading each branch.
+	//
+	// A left-spine first-token read is enough BECAUSE of where it is consumed. The
+	// only caller is the `@:wrap('(', ')')` hard-flatten cascade on
+	// `HxExpr.ParenExpr`, whose inner is one expression; in that slot the sole
+	// construct whose first emitted token is `if` IS the value-`if`. Two neighbours
+	// that could be confused with it are excluded by the same read rather than by a
+	// second gate: a conditional-compilation region emits `#if`, and a paren whose
+	// inner is itself parenthesised / a call / a literal emits its own open delim
+	// first. `firstVisibleText` resolves every render decision on its FLAT side, so
+	// the answer is width-independent — which arm is chosen must not depend on the
+	// column the paren happens to land in; whether that arm OPENS is the
+	// `IfFullLineExceeds` probe's decision, made later and at the true column.
+	public static function isTopLevelValueIf(d: Doc): Bool {
+		final head: Null<String> = DocMeasure.firstVisibleText(d);
+		if (head == null) return false;
+		// Trimmed rather than compared raw: whether the kw's trailing space rides
+		// the `Text` leaf or arrives as a separate `OptSpace` is a
+		// `whitespace.ifPolicy` decision, and this discriminator must not turn on it.
+		final token: String = head;
+		return token.trim() == 'if';
+	}
+
 	/**
 	 * Returns the de-duplicated set of `LineLengthLargerThan` thresholds
 	 * appearing in `rules.rules` whose value differs from `lineWidth`.

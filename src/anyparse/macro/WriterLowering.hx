@@ -8152,7 +8152,25 @@ class WriterLowering {
 	 * `@:fmt(expressionParenHardFlatten)` wrap shape (ω-hardflatten
 	 * increment-2): expression-paren collapse consumer. Emits the
 	 * width-driven `IfFullLineExceeds(OPEN, GLUED)` cascade with the
-	 * keep-chain / pure-opAddSub / ternary special cases.
+	 * keep-chain / pure-opAddSub / ternary / value-`if` special cases.
+	 *
+	 * ω-paren-value-if-open: the value-`if` arm is the ternary arm's sister
+	 * and emits the same OPEN shape, but it exists as its own arm rather
+	 * than as a widened `isTopLevelTernary` because the two are told apart
+	 * by different reads (depth-1 separators vs the leading keyword) and
+	 * because only this one HAS to bypass the generic tail. The generic tail
+	 * wraps its open branch in a `CollapseProbe`, and
+	 * `Renderer.collapseParenCommitsOpen` then refuses to open unless the
+	 * inner can be made ONE FITTING FLAT LINE. That rule is right for an
+	 * opBool chain and for an object literal (both keep breaking at their
+	 * own indent inside a glued paren — `comprehension_struct_in_expr_parens_fits`),
+	 * and it is exactly inverted for an `if` ladder: a ladder that overflows
+	 * can NEVER become one fitting flat line, yet opening the paren is
+	 * precisely what it needs — otherwise its `else` keywords lay out at the
+	 * ENCLOSING STATEMENT's indent (`sameLine.expressionIf: "next"` anchors
+	 * there) and the ladder reads as if it belonged to the statement rather
+	 * than to the parens. Emitting the probe-free `IfFullLineExceeds` lets
+	 * the raw width answer decide, so a ladder that FITS still glues.
 	 */
 	private function kwRefWrapHardFlatten(leadDoc: Expr, innerDoc: Expr, trailDoc: Expr, wrapOpenNewlineExpr: Null<Expr>): Expr {
 		// Leading-hardline (opBool/ternary already one-per-line)
@@ -8246,7 +8264,7 @@ class WriterLowering {
 										]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
 										: _dc([$leadDoc, _wrapInner, _wrapTrail])
 								)
-								: opt._parenInCondition
+								: anyparse.format.wrap.WrapList.isTopLevelValueIf(_wrapInner)
 									&& anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
 									? _dfle(opt.lineWidth + 1, _dc([
 										$leadDoc,
@@ -8254,12 +8272,20 @@ class WriterLowering {
 										_dhl(),
 										_wrapTrail
 									]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
-									: _dfle(opt.lineWidth + 1, _dc([
-										$leadDoc,
-										_dn(_cols, _dc([_dhl(), _dcp(_wrapInner)])),
-										_dhl(),
-										_wrapTrail
-									]), _dc([$leadDoc, _wrapInner, _wrapTrail]));
+									: opt._parenInCondition
+										&& anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
+										? _dfle(opt.lineWidth + 1, _dc([
+											$leadDoc,
+											_dn(_cols, _dc([_dhl(), _wrapInner])),
+											_dhl(),
+											_wrapTrail
+										]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
+										: _dfle(opt.lineWidth + 1, _dc([
+											$leadDoc,
+											_dn(_cols, _dc([_dhl(), _dcp(_wrapInner)])),
+											_dhl(),
+											_wrapTrail
+										]), _dc([$leadDoc, _wrapInner, _wrapTrail]));
 		};
 	}
 
