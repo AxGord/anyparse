@@ -179,6 +179,23 @@ private typedef GuardedCtorInit = {
 	final param: String;
 	final terminator: String;
 };
+
+/**
+ * The constructor side of a CONDITIONAL field-default fold: the whole `if (C) { x = E; … }`
+ * statement, the assignment STATEMENT opening its branch, the assignment target, the
+ * condition node, the assigned value, whether that assignment is the branch's SOLE statement
+ * (so the whole `if` is replaced rather than survived), and the bytes the assignment ended
+ * with.
+ */
+private typedef ConditionalCtorInit = {
+	final ifStmt: Span;
+	final assignStmt: Span;
+	final target: Span;
+	final condition: QueryNode;
+	final value: Span;
+	final sole: Bool;
+	final terminator: String;
+};
 /**
  * Cursor-resolution and identifier/span primitives shared by the scope-correct refactoring
  * operations (`Rename`, `Inline`). Every member is `public static` and behaviour-preserving: the
@@ -3204,18 +3221,17 @@ final class RefactorSupport {
 	): Null<Array<{ span: Span, text: String }>> {
 		final shape: RefShape = plugin.refShape();
 		final coalesce: Null<String> = shape.nullCoalesceOperatorText;
-		if (coalesce == null || source.substring(declSpan.from, declSpan.to).indexOf('=') < 0) return null;
-		final spans: Array<Null<Span>> = [declSpan];
-		final edits: Array<{ span: Span, text: String }> = varKeywordToFinalEdits(source, spans);
-		if (edits.length != 1) return null;
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
-		if (tree == null) return null;
-		final loc: Null<{ container: QueryNode, field: QueryNode }> = classLikeFieldAt(tree, declSpan.from, shape);
-		if (loc == null) return null;
-		final decl: Null<FoldableDecl> = foldableDeclaration(source, loc, declSpan, shape);
-		final ctor: Null<QueryNode> = soleConstructor(loc.container, shape);
-		if (decl == null || ctor == null) return null;
-		final guarded: Null<GuardedCtorInit> = soleGuardedCtorFieldInit(source, loc.container, ctor, loc.field, shape);
+		final base: Null<{
+			container: QueryNode,
+			field: QueryNode,
+			decl: FoldableDecl,
+			ctor: QueryNode
+		}> = foldableCtorDefault(source, declSpan, plugin, shape);
+		if (coalesce == null || base == null) return null;
+		final edits: Array<{ span: Span, text: String }> = varKeywordToFinalEdits(source, [declSpan]);
+		final decl: FoldableDecl = base.decl;
+		final ctor: QueryNode = base.ctor;
+		final guarded: Null<GuardedCtorInit> = soleGuardedCtorFieldInit(source, base.container, ctor, base.field, shape);
 		if (guarded == null || !ctorParamIsNullable(source, ctor, guarded.param, shape)) return null;
 		if (!guardReachedIntact(source, ctor, decl.name, guarded.stmt.from, shape)) return null;
 		if (
@@ -4448,22 +4464,10 @@ final class RefactorSupport {
 	 * whose shape differs in any way. A statement that writes the field through some
 	 * OTHER shape is not matched here — the caller's whole-file write scan rejects it.
 	 */
-	private static function soleGuardedCtorFieldInit(
+	private static inline function soleGuardedCtorFieldInit(
 		source: String, container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape
 	): Null<GuardedCtorInit> {
-		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
-		final fieldSpan: Null<Span> = field.span;
-		final fieldName: Null<String> = field.name;
-		final body: Null<QueryNode> = ctor.children.find(c -> c.kind == shape.blockBodyKind);
-		if (fieldSpan == null || fieldName == null || body == null) return null;
-		var match: Null<GuardedCtorInit> = null;
-		for (stmt in body.children) if (ifKinds.contains(stmt.kind)) {
-			final found: Null<GuardedCtorInit> = guardedFieldAssign(source, stmt, fieldSpan.from, fieldName, container, shape);
-			if (found == null) continue;
-			if (match != null) return null;
-			match = found;
-		}
-		return match;
+		return soleMatchedCtorIf(source, container, ctor, field, shape, guardedFieldAssign);
 	}
 
 	/**
@@ -4764,6 +4768,293 @@ final class RefactorSupport {
 		}
 		walk(tree);
 		return out;
+	}
+
+
+	/**
+	 * The two-or-three-edit fold of a CONDITIONALLY OVERWRITTEN constructor default — the
+	 * general sibling of `ctorConditionalDefaultFinalEdits`, whose `??` shape it widens from
+	 * "the guard tests the very parameter assigned" to "any condition, any value". A field
+	 * declared `var x:T = D;` whose only write beyond that initializer is one assignment
+	 * `x = E;` opening the then-branch of an `else`-less top-level constructor `if (C)`
+	 * becomes `var x:T;` plus `x = C ? E : D;` in the `if`'s place. Returns the edits when the
+	 * fold applies, `null` otherwise — the non-null result IS the fix, so a rule's `run` and
+	 * `fix` can never disagree about a candidate.
+	 *
+	 * ONE UNCONDITIONAL ASSIGNMENT CARRYING A CONDITIONAL VALUE is the target form, and it is
+	 * forced by a measurement rather than by taste: Haxe runs NO definite-assignment analysis
+	 * for a `final` FIELD. `class V { final _d:Int; function new(c) if (c) _d = 1; }` compiles
+	 * silently on `--interp`, `-js` and `--jvm`, and the field reads as `null` on the path that
+	 * skipped the write; only `@:nullSafety(Strict)` diagnoses it. So a fold that emitted
+	 * "assign in every branch" would have its completeness checked by nothing. The conditional
+	 * VALUE proves completeness structurally — there is one assignment, and it always runs.
+	 *
+	 * The rewrite keeps `var`: making the now-single-write field `final` is `prefer-final-field`'s
+	 * job, and it reaches this shape by itself once the fold has removed the second write.
+	 *
+	 * Fails closed on every doubt. All single-file gates live HERE rather than in the consumer,
+	 * exactly as for the `??` sibling:
+	 *
+	 *  - the declaration is a plain non-static `var` (no accessor head — the `(default, null)`
+	 *    pair the `??` fold accepts is out of scope here, since this fold does not finalize)
+	 *    whose initializer is MOVE-SAFE (`foldableDeclaration` / `defaultIsMoveSafe`: a numeric /
+	 *    boolean / non-interpolated string literal, a negated numeric literal, or a dotted
+	 *    constant chain). An allocation, a call or a bare identifier would change allocation
+	 *    identity or evaluation order when it moves down into the constructor;
+	 *  - the enclosing type has exactly one constructor, and exactly ONE of its top-level
+	 *    statements is an `else`-less `if` whose then-branch OPENS with `x = E;`
+	 *    (`soleConditionalCtorFieldInit`). Opening the branch is what makes the hoist
+	 *    order-preserving: the statements that stay behind in the branch all ran AFTER the
+	 *    assignment and still do. An assignment deeper in the branch is refused and reaches the
+	 *    same end state one `--fix` pass later, once the one ahead of it has moved out;
+	 *  - the condition is SIDE-EFFECT-FREE (`isSideEffectFree`) whenever the `if` SURVIVES the
+	 *    fold, since it is then evaluated twice. When the assignment is the branch's sole
+	 *    statement the whole `if` is replaced and the condition still runs exactly once, so no
+	 *    purity is demanded — the shape is a pure re-spelling;
+	 *  - the constructor reaches the `if` with the field still in the state the declaration
+	 *    default put it in (`guardReachedIntact`): no early exit before it, and the field name
+	 *    unmentioned in the prefix;
+	 *  - every explicit `super(...)` call starts AFTER the `if`. The prologue runs ahead of the
+	 *    base constructor, so a default that moves below a `super(...)` is a default an
+	 *    overridden method called from the base constructor no longer sees. With the call seams
+	 *    unset the gate falls back to refusing every subclass;
+	 *  - no `#if` region anywhere in the constructor or the declaration. A conditional-splice
+	 *    region is a raw span with no branch nodes, so neither the statement geometry nor the
+	 *    write count can be read across it;
+	 *  - the value assigned does not itself read the field, and no comment sits in a byte range
+	 *    the fold regenerates;
+	 *  - no other write to the field name appears ANYWHERE in the file — the same conservative
+	 *    raw-text scan (`MemberWriteScan.writtenInRange`, which sees `#if` bodies) the `??` fold
+	 *    uses, with the declaration and that one constructor target excluded.
+	 *
+	 * Cross-file soundness (an external, subtype or unresolved write, an `@:access` grantee) stays
+	 * the CONSUMER's job, as for `ctorSoleAssignmentFinalizable`.
+	 */
+	public static function ctorConditionalDefaultTernaryEdits(
+		source: String, declSpan: Span, plugin: GrammarPlugin
+	): Null<Array<{ span: Span, text: String }>> {
+		final shape: RefShape = plugin.refShape();
+		final base: Null<{
+			container: QueryNode,
+			field: QueryNode,
+			decl: FoldableDecl,
+			ctor: QueryNode
+		}> = foldableCtorDefault(source, declSpan, plugin, shape);
+		// An accessor head stays out of scope here: this fold does not finalize, so a `(default, null)`
+		// pair the `??` sibling would rewrite has nothing to gain and would only lose its own spelling.
+		if (base == null || base.decl.dropped != null) return null;
+		final decl: FoldableDecl = base.decl;
+		final ctor: QueryNode = base.ctor;
+		if (holdsConditionalRegion(ctor) || holdsConditionalRegion(base.field)) return null;
+		final init: Null<ConditionalCtorInit> = soleConditionalCtorFieldInit(source, base.container, ctor, base.field, shape);
+		if (init == null) return null;
+		final guardFrom: Int = init.ifStmt.from;
+		if (!guardReachedIntact(source, ctor, decl.name, guardFrom, shape)) return null;
+		if (!superCallsFollow(base.container, ctor, guardFrom, shape)) return null;
+		if (
+			MemberWriteScan.writtenInRange(source, decl.name, init.target, 0, decl.span.from)
+			|| MemberWriteScan.writtenInRange(source, decl.name, init.target, decl.span.to, source.length)
+		)
+			return null;
+		final targetText: String = source.substring(init.target.from, init.target.to);
+		final condText: String = ternaryConditionText(source, init.condition, shape);
+		final valueText: String = source.substring(init.value.from, init.value.to);
+		final defaultText: String = source.substring(decl.initSpan.from, decl.initSpan.to);
+		final folded: String = '$targetText = $condText ? $valueText : $defaultText${init.terminator}';
+		final edits: Array<{ span: Span, text: String }> = [{ span: decl.initDrop, text: '' }];
+		if (init.sole)
+			edits.push({ span: init.ifStmt, text: folded });
+		else {
+			edits.push({ span: new Span(guardFrom, guardFrom), text: '$folded\n' });
+			edits.push({ span: lineExtendedSpan(source, init.assignStmt), text: '' });
+		}
+		return edits;
+	}
+
+
+	/**
+	 * The ONE top-level `else`-less `if` constructor statement whose then-branch OPENS with an
+	 * assignment to `field`, or null when the constructor holds none, more than one, or one whose
+	 * shape differs in any way. A write that sits DEEPER in a branch is not matched here — the
+	 * caller's whole-file write scan then rejects the candidate, and the next `--fix` pass reaches
+	 * it once the assignment ahead of it has moved out.
+	 */
+	private static inline function soleConditionalCtorFieldInit(
+		source: String, container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape
+	): Null<ConditionalCtorInit> {
+		return soleMatchedCtorIf(source, container, ctor, field, shape, conditionalFieldAssign);
+	}
+
+
+	/**
+	 * `stmt` read as `if (C) x = E;` / `if (C) { x = E; … }` — no `else` (a second assignment path
+	 * the ternary cannot express), the then-branch OPENING with a plain `=` assignment statement
+	 * whose target is the field.
+	 *
+	 * The condition must be side-effect-free only when the `if` SURVIVES the fold: with the
+	 * assignment as the branch's sole statement the whole statement is replaced and the condition
+	 * still runs exactly once, while a surviving `if` evaluates it a second time. The value may not
+	 * read the field it initialises (after the fold that is a self-reference against an unset field),
+	 * and no comment may sit in a byte range the fold regenerates — the gaps around the three spans
+	 * copied verbatim, up to the end of the replaced region.
+	 */
+	private static function conditionalFieldAssign(
+		source: String, stmt: QueryNode, fieldFrom: Int, fieldName: String, container: QueryNode, shape: RefShape
+	): Null<ConditionalCtorInit> {
+		final stmtSpan: Null<Span> = stmt.span;
+		if (stmt.children.length != 2 || stmtSpan == null) return null;
+		final cond: QueryNode = stmt.children[0];
+		final condSpan: Null<Span> = cond.span;
+		final branch: QueryNode = stmt.children[1];
+		final braced: Bool = branch.kind == shape.blockStmtKind;
+		final sole: Bool = !braced || branch.children.length == 1;
+		final first: Null<QueryNode> = branchOpeningStatement(branch, braced);
+		if (condSpan == null || first == null || (!sole && !isSideEffectFree(cond))) return null;
+		final firstSpan: Null<Span> = first.span;
+		if (first.kind != shape.exprStatementKind || first.children.length != 1 || firstSpan == null) return null;
+		final assign: QueryNode = first.children[0];
+		final assignSpan: Null<Span> = assign.span;
+		if (assign.kind != shape.assignKind || assign.children.length != 2 || assignSpan == null) return null;
+		final target: QueryNode = assign.children[0];
+		final targetSpan: Null<Span> = target.span;
+		final valueSpan: Null<Span> = assign.children[1].span;
+		return if (targetSpan == null || valueSpan == null)
+			null
+		else if (!ctorTargetIsField(target, fieldFrom, fieldName, container, shape))
+			null
+		else if (referencedInRange(source, fieldName, valueSpan.from, valueSpan.to, []))
+			null
+		else if (!foldRegionCommentFree(source, stmtSpan, condSpan, targetSpan, valueSpan, sole ? stmtSpan.to : firstSpan.to))
+			null
+		else
+			{
+				ifStmt: stmtSpan,
+				assignStmt: firstSpan,
+				target: targetSpan,
+				condition: cond,
+				value: valueSpan,
+				sole: sole,
+				terminator: source.substring(assignSpan.to, firstSpan.to)
+			};
+	}
+
+
+	/** Whether `node`'s subtree holds a `#if…#end` region of any projection (`isConditionalKind`). */
+	private static function holdsConditionalRegion(node: QueryNode): Bool {
+		if (isConditionalKind(node.kind)) return true;
+		for (child in node.children) if (holdsConditionalRegion(child)) return true;
+		return false;
+	}
+
+
+	/**
+	 * Whether every explicit base-constructor call in `ctor` starts at or after `boundary` — the
+	 * gate a default MOVING DOWN into the constructor owes, since the declaration prologue runs
+	 * ahead of the base constructor and an overridden method called from there would stop seeing
+	 * the default. With `superReferenceText` or `callKind` unset the call cannot be recognised at
+	 * all and the gate degrades to refusing every container carrying a supertype clause.
+	 */
+	private static function superCallsFollow(container: QueryNode, ctor: QueryNode, boundary: Int, shape: RefShape): Bool {
+		final superText: Null<String> = shape.superReferenceText;
+		final callKind: Null<String> = shape.callKind;
+		if (superText == null || callKind == null) return !hasSupertypeClause(container, shape);
+		final calls: Array<QueryNode> = [];
+		collectSuperCalls(ctor, superText, callKind, shape.identKind, calls);
+		for (call in calls) {
+			final span: Null<Span> = call.span;
+			if (span == null || span.from < boundary) return false;
+		}
+		return true;
+	}
+
+
+	/** Parenthesise a folded ternary's condition iff it binds no tighter than `?:` (a ternary or an assignment). */
+	private static function ternaryConditionText(source: String, cond: QueryNode, shape: RefShape): String {
+		final span: Null<Span> = cond.span;
+		final text: String = span == null ? '' : source.substring(span.from, span.to);
+		final ternaryKind: Null<String> = shape.ternaryKind;
+		final needsParens: Bool = (ternaryKind != null && cond.kind == ternaryKind) || shape.writeParentKinds.contains(cond.kind);
+		return needsParens ? '($text)' : text;
+	}
+
+
+	/** `branch` reduced to the statement it OPENS with, unwrapping one brace level, or null when it holds none. */
+	private static function branchOpeningStatement(branch: QueryNode, braced: Bool): Null<QueryNode> {
+		final statements: Array<QueryNode> = braced ? branch.children : [branch];
+		return statements.length >= 1 ? statements[0] : null;
+	}
+
+
+	/**
+	 * Whether the byte ranges a conditional-default fold REGENERATES carry no comment — the gaps
+	 * around the three spans it copies verbatim (the condition, the assignment target, the assigned
+	 * value), up to `rebuiltEnd`: the whole `if` statement when the fold replaces it, the assignment
+	 * statement alone when the `if` survives and only that statement is cut out of its branch.
+	 */
+	private static function foldRegionCommentFree(
+		source: String, stmt: Span, cond: Span, target: Span, value: Span, rebuiltEnd: Int
+	): Bool {
+		return !hasCommentMarker(source, stmt.from, cond.from) && !hasCommentMarker(source, cond.to, target.from)
+			&& !hasCommentMarker(source, target.to, value.from) && !hasCommentMarker(source, value.to, rebuiltEnd);
+	}
+
+
+	/**
+	 * The declaration-and-constructor geometry BOTH conditional-default folds
+	 * (`ctorConditionalDefaultFinalEdits`, `ctorConditionalDefaultTernaryEdits`) open with, so the
+	 * shape they agree on is stated once: the field's container and node, its `FoldableDecl` (a
+	 * non-static `var` whose head is plain or exactly `(default, null)` and whose initializer is
+	 * MOVE-SAFE), and the enclosing type's sole constructor.
+	 *
+	 * Null when the declaration carries no `=`, is not a plain `var` (`varKeywordToFinalEdits`
+	 * yielding one edit is the keyword test — the caller that needs that edit recomputes it), does
+	 * not parse, or when any of the four cannot be resolved.
+	 */
+	private static function foldableCtorDefault(source: String, declSpan: Span, plugin: GrammarPlugin, shape: RefShape): Null<{
+		container: QueryNode,
+		field: QueryNode,
+		decl: FoldableDecl,
+		ctor: QueryNode
+	}> {
+		if (source.substring(declSpan.from, declSpan.to).indexOf('=') < 0) return null;
+		if (varKeywordToFinalEdits(source, [declSpan]).length != 1) return null;
+		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
+		if (tree == null) return null;
+		final loc: Null<{ container: QueryNode, field: QueryNode }> = classLikeFieldAt(tree, declSpan.from, shape);
+		if (loc == null) return null;
+		final decl: Null<FoldableDecl> = foldableDeclaration(source, loc, declSpan, shape);
+		final ctor: Null<QueryNode> = soleConstructor(loc.container, shape);
+		return decl == null || ctor == null ? null : {
+			container: loc.container,
+			field: loc.field,
+			decl: decl,
+			ctor: ctor
+		};
+	}
+
+
+	/**
+	 * The ONE top-level `if` statement of `ctor` that `matcher` accepts for `field`, or null when the
+	 * constructor holds none, or more than one. The scan both conditional-default folds run: they
+	 * differ only in WHICH `if` shape they recognise, and that difference is the `matcher` argument.
+	 */
+	private static function soleMatchedCtorIf<T>(
+		source: String, container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape,
+		matcher: (String, QueryNode, Int, String, QueryNode, RefShape) -> Null<T>
+	): Null<T> {
+		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
+		final fieldSpan: Null<Span> = field.span;
+		final fieldName: Null<String> = field.name;
+		final body: Null<QueryNode> = ctor.children.find(c -> c.kind == shape.blockBodyKind);
+		if (fieldSpan == null || fieldName == null || body == null) return null;
+		var match: Null<T> = null;
+		for (stmt in body.children) if (ifKinds.contains(stmt.kind)) {
+			final found: Null<T> = matcher(source, stmt, fieldSpan.from, fieldName, container, shape);
+			if (found == null) continue;
+			if (match != null) return null;
+			match = found;
+		}
+		return match;
 	}
 
 }

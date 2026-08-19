@@ -649,6 +649,7 @@ import unit.HxHeaderWrapLadderSliceTest;
 import unit.HxLoopBodyIfElseSliceTest;
 import unit.HoistBranchStringAffixCheckTest;
 import unit.JoinOverrideChainCheckTest;
+import unit.FieldInitInConstructorCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1144,6 +1145,7 @@ class RunTests {
 		addCase(new PreferFinalFieldCheckTest());
 		addCase(new InlineConstantCheckTest());
 		addCase(new FieldInitAtDeclarationCheckTest());
+		addCase(new FieldInitInConstructorCheckTest());
 		addCase(new PreferFinalAbstractMethodCheckTest());
 		addCase(new PreferFinalPublicFieldCheckTest());
 		addCase(new PreferReadOnlyFieldCheckTest());

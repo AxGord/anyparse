@@ -278,6 +278,10 @@ final class Linter {
 			// that check claims nothing else. Registry order is therefore free.
 			new UnusedPublicMember(),
 			new FieldInitAtDeclaration(),
+			// The mirror direction, and the two can never claim the same field: that rule needs a
+			// field with NO declaration initializer, this one a field that has one. Registry order
+			// is therefore free.
+			new FieldInitInConstructor(),
 			new PreferInline(),
 			new InlineConstant(),
 			new ExtractRepeatedExpression(),
