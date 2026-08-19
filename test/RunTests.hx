@@ -551,6 +551,7 @@ import unit.ShortenTypeRefCheckTest;
 import unit.CondAssignMergeCheckTest;
 import unit.RedundantPropertyAccessCheckTest;
 import unit.HxGroupTrailCommentWriteTest;
+import unit.HxSepStarCloseTrailCommentTest;
 import unit.HxAssignChainWrapSliceTest;
 import unit.PreferDocCommentCheckTest;
 import unit.PreferStaticExtensionCheckTest;
@@ -998,6 +999,7 @@ class RunTests {
 		addCase(new HxCaseCommentWriteTest());
 		addCase(new HxHeadCommentSeamWriteTest());
 		addCase(new HxGroupTrailCommentWriteTest());
+		addCase(new HxSepStarCloseTrailCommentTest());
 		addCase(new HxAssignChainWrapSliceTest());
 		addCase(new HaxeFormatConfigLoaderTest());
 		addCase(new FormatConfigDiscoveryTest());
