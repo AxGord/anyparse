@@ -58,6 +58,18 @@ import anyparse.runtime.Span;
 @:nullSafety(Strict)
 final class MapValueScan {
 
+	/** The one Map member that STORES a value — `m.set(k, v)`, whose value needs the non-null proof. */
+	private static inline final SET_METHOD: String = 'set';
+
+	/** `set(key, value)` plus the callee child: the exact child count of a storing call. */
+	private static inline final SET_CALL_CHILDREN: Int = 3;
+
+	/** A binary assignment has [target, value]. */
+	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
+
+	/** A map-literal entry has [key, value]. */
+	private static inline final ENTRY_CHILD_COUNT: Int = 2;
+
 	/**
 	 * The Map members that can only READ or REMOVE — none of them stores a value, so a
 	 * receiver occurrence under any of them cannot introduce a null.
@@ -74,26 +86,8 @@ final class MapValueScan {
 		'copy'
 	];
 
-	/** The one Map member that STORES a value — `m.set(k, v)`, whose value needs the non-null proof. */
-	private static inline final SET_METHOD: String = 'set';
-
-	/** `set(key, value)` plus the callee child: the exact child count of a storing call. */
-	private static inline final SET_CALL_CHILDREN: Int = 3;
-
-	/** A binary assignment has [target, value]. */
-	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
-
-	/** A map-literal entry has [key, value]. */
-	private static inline final ENTRY_CHILD_COUNT: Int = 2;
-
 	/** The build-macro metadata whose generated members no source scan can see. */
 	private static final BUILD_MACRO_METAS: Array<String> = ['@:build', '@:autoBuild'];
-
-	/** Whether `source` carries a build macro, whose generated members no source scan can see. */
-	private static function carriesBuildMacro(source: String): Bool {
-		for (meta in BUILD_MACRO_METAS) if (source.indexOf(meta) >= 0) return true;
-		return false;
-	}
 
 	/**
 	 * The seams the census reads, or null when the grammar leaves a required one unset — in
@@ -165,12 +159,17 @@ final class MapValueScan {
 		final report: SymbolIndex = index;
 		if (!RefactorSupport.privateMemberScanIsSound(source, report)) return false;
 		final scope: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? report;
-		if (scope.hasAccessGrant(owner)) return false;
-		return !scope.subtypeDeclMatches(owner, name, (subtype, src, span, redeclares) -> {
+		return !scope.hasAccessGrant(owner) && !scope.subtypeDeclMatches(owner, name, (subtype, src, span, redeclares) -> {
 			if (redeclares || carriesBuildMacro(src)) return true;
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, src);
 			return tree == null || !subtreeSafe(tree, null, -1, null, -1, name, span.from, span.to, seams);
 		});
+	}
+
+	/** Whether `source` carries a build macro, whose generated members no source scan can see. */
+	private static function carriesBuildMacro(source: String): Bool {
+		for (meta in BUILD_MACRO_METAS) if (source.indexOf(meta) >= 0) return true;
+		return false;
 	}
 
 	/**
@@ -245,30 +244,43 @@ final class MapValueScan {
 		if (parent == null) return false;
 		final p: QueryNode = parent;
 		// Slots 2 and 3 — index read, index write.
-		if (p.kind == seams.indexAccessKind && parentSlot == 0) {
-			if (grand == null) return true;
-			final g: QueryNode = grand;
-			if (g.kind == seams.assignKind && grandSlot == 0)
-				return g.children.length == ASSIGN_CHILD_COUNT && provenNonNullValue(g.children[1], seams);
-			// A compound assignment or an increment READS the stored value and writes back a
-			// derived one, which no literal gate can prove non-null.
-			return !seams.writeParentKinds.contains(g.kind);
-		}
 		// Slot 4 — a member call.
-		if (p.kind == seams.fieldAccessKind && parentSlot == 0 && grand != null && grand.kind == seams.callKind && grandSlot == 0) {
-			final method: Null<String> = p.name;
-			if (method == null) return false;
-			if (READ_ONLY_METHODS.contains(method)) return true;
-			final g: QueryNode = grand;
-			return method == SET_METHOD && g.children.length == SET_CALL_CHILDREN && provenNonNullValue(g.children[2], seams);
-		}
 		// Slot 5 — the iterable of a `for`. It is the child right before the body, since a
 		// key-value binder occupies a slot of its own that a plain binder does not.
-		if (seams.iterationKinds.contains(p.kind)) return parentSlot == p.children.length - 2;
 		// Slot 6 — a whole-map assignment.
-		if (p.kind == seams.assignKind && parentSlot == 0)
-			return p.children.length == ASSIGN_CHILD_COUNT && provenMapExpr(p.children[1], seams);
-		return false;
+		return if (p.kind == seams.indexAccessKind && parentSlot == 0)
+			indexSlotSafe(grand, grandSlot, seams)
+		else if (p.kind == seams.fieldAccessKind && parentSlot == 0 && grand != null && grand.kind == seams.callKind && grandSlot == 0)
+			memberCallSlotSafe(p.name, grand, seams)
+		else if (seams.iterationKinds.contains(p.kind))
+			parentSlot == p.children.length - 2
+		else
+			p.kind == seams.assignKind && parentSlot == 0 && p.children.length == ASSIGN_CHILD_COUNT && provenMapExpr(p.children[1], seams);
+	}
+
+	/**
+	 * Whether an index access over the map is a safe slot: a plain READ always is, an
+	 * assignment to it only with a proven non-null value. A compound assignment or an
+	 * increment READS the stored value and writes back a derived one, which no literal gate
+	 * can prove non-null.
+	 */
+	private static function indexSlotSafe(grand: Null<QueryNode>, grandSlot: Int, seams: ValueSeams): Bool {
+		if (grand == null) return true;
+		final g: QueryNode = grand;
+		return g.kind == seams.assignKind && grandSlot == 0
+			? g.children.length == ASSIGN_CHILD_COUNT && provenNonNullValue(g.children[1], seams)
+			: !seams.writeParentKinds.contains(g.kind);
+	}
+
+	/**
+	 * Whether a call of the map's member `method` is a safe slot: one of the members that can
+	 * only read or REMOVE always is, `set(k, v)` only with a proven non-null value, and any
+	 * other name — a static extension, a foreign member — fails closed.
+	 */
+	private static function memberCallSlotSafe(method: Null<String>, call: QueryNode, seams: ValueSeams): Bool {
+		return method != null
+			&& (READ_ONLY_METHODS.contains(method)
+				|| (method == SET_METHOD && call.children.length == SET_CALL_CHILDREN && provenNonNullValue(call.children[2], seams)));
 	}
 
 	/**
@@ -299,12 +311,17 @@ final class MapValueScan {
 
 }
 
-/** The grammar seams the no-null-value census reads. */
-/** Where a map binding was declared: its owning type when it is a member of one, and whether that member is public. */
+/**
+ * Where a map binding was declared: its owning type when it is a member of one, and whether
+ * that member is public.
+ */
 typedef Decl = {
 	final owner: Null<String>;
 	final exported: Bool;
 }
+/**
+ * The grammar seams the no-null-value census reads.
+ */
 typedef ValueSeams = {
 	final identKind: String;
 	final fieldAccessKind: String;

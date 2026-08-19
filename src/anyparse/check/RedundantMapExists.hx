@@ -161,8 +161,9 @@ final class RedundantMapExists implements Check implements DefaultOff {
 		final file: String = violations.length > 0 ? violations[0].file : '';
 		return RefactorSupport.dropContainedEdits(CheckScan.applyBySpan(plugin, source, violations, [c.ternaryKind], (node, span) -> {
 			final m: Null<Match> = match(node, source, tree, declaredTypes, declaredTypeSources, c);
-			if (m == null || !isProven(m, file, source, tree, valueSeams, resolved, plugin, proven)) return null;
-			return { span: span, text: '${m.readSource} ?? ${m.fallbackSource}' };
+			return m == null || !isProven(m, file, source, tree, valueSeams, resolved, plugin, proven)
+				? null
+				: { span: span, text: '${m.readSource} ?? ${m.fallbackSource}' };
 		}));
 	}
 
@@ -212,23 +213,12 @@ final class RedundantMapExists implements Check implements DefaultOff {
 		ternary: QueryNode, source: String, root: QueryNode, declaredTypes: Map<Int, String>, declaredTypeSources: Map<Int, String>,
 		cfg: Cfg
 	): Null<Match> {
-		if (ternary.children.length != TERNARY_CHILD_COUNT) return null;
-		final cond: QueryNode = ternary.children[0];
-		final read: QueryNode = ternary.children[1];
-		final fallback: QueryNode = ternary.children[2];
-		if (cond.kind != cfg.callKind || cond.children.length != EXISTS_CALL_CHILDREN) return null;
-		final callee: QueryNode = cond.children[0];
-		final method: Null<String> = callee.name;
-		if (callee.kind != cfg.fieldAccessKind || method == null || !cfg.existsMethods.contains(method) || callee.children.length != 1)
-			return null;
-		final recv: QueryNode = callee.children[0];
-		final name: Null<String> = recv.name;
-		if (recv.kind != cfg.identKind || name == null) return null;
-		final key: QueryNode = cond.children[1];
-		if (read.kind != cfg.indexAccessKind || read.children.length != INDEX_CHILD_COUNT) return null;
-		if (!RefactorSupport.sameSource(recv, read.children[0], source) || !RefactorSupport.sameSource(key, read.children[1], source))
-			return null;
-		for (k in cfg.mutationKinds) if (RefactorSupport.subtreeContainsKind(key, k)) return null;
+		final shape: Null<Shape> = structuralShape(ternary, source, cfg);
+		if (shape == null) return null;
+		final recv: QueryNode = shape.recv;
+		final read: QueryNode = shape.read;
+		final fallback: QueryNode = shape.fallback;
+		final name: String = shape.name;
 		final bindingFrom: Null<Int> = mapBindingOf(recv, root, declaredTypes, declaredTypeSources, cfg);
 		if (bindingFrom == null) return null;
 		final ternarySpan: Null<Span> = ternary.span;
@@ -253,10 +243,37 @@ final class RedundantMapExists implements Check implements DefaultOff {
 	}
 
 	/**
-	 * The offset of `recv`'s binding when its declared type resolves to the grammar's Map
-	 * abstract, else null. The offset is what the no-null-value census anchors on, so the
-	 * type gate and the proof's starting point come out of one lookup.
+	 * The `m.exists(k) ? m[k] : d` shape of `ternary`, with the two `m` and the two `k`
+	 * occurrences proven textually identical and the key proven pure — or null. The TYPE gate and
+	 * the comment gate belong to `match`, which layers them on top; this half needs no resolution.
 	 */
+	private static function structuralShape(ternary: QueryNode, source: String, cfg: Cfg): Null<Shape> {
+		if (ternary.children.length != TERNARY_CHILD_COUNT) return null;
+		final cond: QueryNode = ternary.children[0];
+		final read: QueryNode = ternary.children[1];
+		if (cond.kind != cfg.callKind || cond.children.length != EXISTS_CALL_CHILDREN) return null;
+		final callee: QueryNode = cond.children[0];
+		final method: Null<String> = callee.name;
+		if (callee.kind != cfg.fieldAccessKind || method == null || !cfg.existsMethods.contains(method) || callee.children.length != 1)
+			return null;
+		final recv: QueryNode = callee.children[0];
+		final name: Null<String> = recv.name;
+		if (recv.kind != cfg.identKind || name == null) return null;
+		if (read.kind != cfg.indexAccessKind || read.children.length != INDEX_CHILD_COUNT) return null;
+		final key: QueryNode = cond.children[1];
+		if (!RefactorSupport.sameSource(recv, read.children[0], source) || !RefactorSupport.sameSource(key, read.children[1], source))
+			return null;
+		// `m` and `k` are evaluated TWICE by the ternary and once after the rewrite, so an
+		// impure key means the original is already order-dependent; fail closed there.
+		for (k in cfg.mutationKinds) if (RefactorSupport.subtreeContainsKind(key, k)) return null;
+		return {
+			recv: recv,
+			read: read,
+			fallback: ternary.children[2],
+			name: name
+		};
+	}
+
 	private static function mapBindingOf(
 		recv: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, declaredTypeSources: Map<Int, String>, cfg: Cfg
 	): Null<Int> {
@@ -284,8 +301,7 @@ final class RedundantMapExists implements Check implements DefaultOff {
 		final mapTypes: Array<String> = shape.mapAbstractTypeNames ?? [];
 		if (existsMethods.length == 0 || mapTypes.length == 0) return null;
 		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		if (provider == null) return null;
-		return {
+		return provider == null ? null : {
 			shape: shape,
 			typed: provider,
 			ternaryKind: ternaryKind,
@@ -303,7 +319,18 @@ final class RedundantMapExists implements Check implements DefaultOff {
 
 }
 
-/** One matched `m.exists(k) ? m[k] : d` site and the verbatim parts its rewrite keeps. */
+/**
+ * The structural half of a match — the nodes, before any type or comment gate.
+ */
+private typedef Shape = {
+	final recv: QueryNode;
+	final read: QueryNode;
+	final fallback: QueryNode;
+	final name: String;
+}
+/**
+ * One matched `m.exists(k) ? m[k] : d` site and the verbatim parts its rewrite keeps.
+ */
 private typedef Match = {
 	final span: Span;
 	final name: String;
