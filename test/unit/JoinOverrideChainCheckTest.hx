@@ -9,6 +9,8 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
+import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check;
 
 /**
  * The `join-override-chain` check: a local declaration followed by TWO OR MORE consecutive
@@ -30,6 +32,12 @@ class JoinOverrideChainCheckTest extends Test {
 	private static inline final QUOTED: String = 'class C {\n\tfunction f(a:E, b:E) {\n\t\tfinal e = macro {\n'
 		+ '\t\t\tvar x:String = null;\n' + '\t\t\tswitch a.k {\n\t\t\t\tcase 1: x = \'p\';\n\t\t\t\tcase _:\n\t\t\t}\n'
 		+ '\t\t\tswitch b.k {\n\t\t\t\tcase 3: x = \'r\';\n\t\t\t\tcase _:\n\t\t\t}\n\t\t};\n' + '\t}\n}\n';
+
+	public function testRegisteredAndDefaultOff(): Void {
+		final check: Null<Check> = Linter.byId('join-override-chain');
+		Assert.notNull(check);
+		Assert.isTrue(Std.isOfType(check, DefaultOff), 'join-override-chain is opt-in');
+	}
 
 	public function testChainFlagged(): Void {
 		final vs: Array<Violation> = violations(CHAIN);
