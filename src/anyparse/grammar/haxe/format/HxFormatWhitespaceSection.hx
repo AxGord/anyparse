@@ -161,6 +161,16 @@ package anyparse.grammar.haxe.format;
  *    `successiveParenthesis` policy that removes the brace's `Before`
  *    spacing only under compression. Consumed by the `HxExpr.Call`
  *    paren-open Star in `WriterLowering.lowerPostfixStar`.
+ *
+ * ω-optional-semicolon (E11):
+ *  - `optionalSemicolon` feeds `opt.optionalSemicolon`
+ *    (`anyparse.format.OptionalSemicolon`). Normalizes the trailing `;`
+ *    Haxe lets a `}`-terminated statement omit — `"preserve"` (default,
+ *    byte-inert) keeps the authored choice, `"always"` emits it on
+ *    every participating slot, `"never"` drops it wherever the slot's
+ *    shape gate proves it optional. Consumed by the
+ *    `@:fmt(optionalSemicolon(...))` writer flag on the `@:trailOpt(';')`
+ *    binding / `return` terminators.
  */
 @:peg typedef HxFormatWhitespaceSection = {
 
@@ -201,6 +211,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var compressSuccessiveParenthesis: Bool;
 
 	@:optional var formatStringInterpolation: Bool;
+
+	@:optional var optionalSemicolon: HxFormatOptionalSemicolonPolicy;
 
 	@:optional var parenConfig: HxFormatParenConfigSection;
 

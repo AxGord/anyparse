@@ -53,6 +53,7 @@ import anyparse.grammar.haxe.format.HxFormatWrapRule;
 import anyparse.grammar.haxe.format.HxFormatWrapRules;
 import anyparse.grammar.haxe.format.HxFormatWrappingSection;
 import anyparse.grammar.haxe.format.HxFormatSingleStatementBracesPolicy;
+import anyparse.grammar.haxe.format.HxFormatOptionalSemicolonPolicy;
 import anyparse.grammar.haxe.format.HxFormatSwitchSubjectParensPolicy;
 import anyparse.format.UniformStatementBlanksPolicy;
 import anyparse.grammar.haxe.format.HxFormatUniformStatementBlanksPolicy;
@@ -592,6 +593,7 @@ final class HaxeFormatConfigLoader {
 			expressionIfWithBlocks: base.expressionIfWithBlocks,
 			dropSingleStmtBraces: base.dropSingleStmtBraces,
 			dropSwitchSubjectParens: base.dropSwitchSubjectParens,
+			optionalSemicolon: base.optionalSemicolon,
 			leftCurly: base.leftCurly,
 			emptyCurly: base.emptyCurly,
 			objectLiteralLeftCurly: base.objectLiteralLeftCurly,
@@ -1759,6 +1761,10 @@ final class HaxeFormatConfigLoader {
 		if (section.normalizeLineCommentIndent != null) opt.normalizeLineCommentIndent = section.normalizeLineCommentIndent;
 		if (section.compressSuccessiveParenthesis != null) opt.compressSuccessiveParenthesis = section.compressSuccessiveParenthesis;
 		if (section.formatStringInterpolation != null) opt.formatStringInterpolation = section.formatStringInterpolation;
+		// ω-optional-semicolon (E11): absent key leaves the `Preserve`
+		// default in place, so an existing config is byte-inert.
+		final semi: Null<HxFormatOptionalSemicolonPolicy> = section.optionalSemicolon;
+		if (semi != null) opt.optionalSemicolon = HaxeFormatValues.optionalSemicolonToRuntime(semi);
 	}
 
 }
