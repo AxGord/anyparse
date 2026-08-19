@@ -210,6 +210,14 @@ class PreferForeachCheckTest extends Test {
 		);
 	}
 
+	public function testFlagFormInitializerMatchingTheLoopLiteralNotFlagged(): Void {
+		// The loop's literal is this direction's, but the declaration already opens at it — the loop
+		// can never change the value, so the fold would not be an identity.
+		Assert.equals(
+			0, violations(flagFn('var all:Bool = false;\n\t\tfor (b in bs) if (!b) all = false;\n\t\treturn all;')).length
+		);
+	}
+
 	public function testExistsDirectionFlagFormNotClaimed(): Void {
 		Assert.equals(
 			0, violations(flagFn('var all:Bool = false;\n\t\tfor (x in xs) if (x > 2) all = true;\n\t\treturn all;')).length

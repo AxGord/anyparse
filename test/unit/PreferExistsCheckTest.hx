@@ -301,8 +301,18 @@ class PreferExistsCheckTest extends Test {
 	}
 
 	public function testFlagFormSameLiteralNotFlagged(): Void {
+		// The loop's literal decides the DIRECTION, and `found = false` is the twin's.
 		Assert.equals(
 			0, violations(flagFn('var found:Bool = false;\n\t\tfor (x in xs) if (x > 2) found = false;\n\t\treturn found;')).length
+		);
+	}
+
+	public function testFlagFormInitializerMatchingTheLoopLiteralNotFlagged(): Void {
+		// The OTHER half of the same pairing: the loop's literal is this direction's, but the
+		// declaration already opens at it, so the loop can never change the value and the fold is
+		// not an identity. Pinned separately because the direction check above does not reach it.
+		Assert.equals(
+			0, violations(flagFn('var found:Bool = true;\n\t\tfor (x in xs) if (x > 2) found = true;\n\t\treturn found;')).length
 		);
 	}
 
@@ -340,10 +350,25 @@ class PreferExistsCheckTest extends Test {
 	}
 
 	public function testFlagFormAssigningAnotherNameNotFlagged(): Void {
+		// The loop must write the name the declaration BINDS. Here it writes the parameter `a`, and
+		// `found` gets its one write afterwards — so the single-write gate is satisfied and only the
+		// target-name check stands between this pair and a fold that would be plain wrong.
 		Assert.equals(
 			0,
 			violations(
-				flagFn('var found:Bool = false;\n\t\tvar other:Bool = false;\n\t\tfor (x in xs) if (x > 2) other = true;\n\t\treturn found;')
+				flagFn('var found:Bool = false;\n\t\tfor (x in xs) if (x > 2) a = true;\n\t\tfound = a;\n\t\treturn found;')
+			).length
+		);
+	}
+
+	public function testFlagFormExtraThenBranchStatementNotFlagged(): Void {
+		// ★ The second load-bearing refusal. The purity gate covers the CONDITION only; work done in
+		// the then-BRANCH is refused by the sink shape, which demands the branch BE the assignment.
+		// Folding this would drop every `trace` past the first match.
+		Assert.equals(
+			0,
+			violations(
+				flagFn('var found:Bool = false;\n\t\tfor (x in xs) if (x > 2) { trace(x); found = true; }\n\t\treturn found;')
 			).length
 		);
 	}
