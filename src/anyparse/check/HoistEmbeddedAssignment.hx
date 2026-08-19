@@ -19,7 +19,7 @@ import anyparse.runtime.Span;
 private typedef Spine = {
 	final assign: String;
 	final ident: String;
-	final exprStmt: String;
+	final hosts: Array<String>;
 	final containers: Array<String>;
 	final passThrough: Array<String>;
 	final blocks: Array<String>;
@@ -105,10 +105,13 @@ private typedef HoistSite = {
  *
  * ## What it does not claim
  *
- * The host must be an expression STATEMENT that is a direct child of a statement list. A
- * brace-less `if (c) content = new Col([_h = …]);` has nowhere to insert a second statement, and
- * a local declaration (`final c = new Col([_h = …]);`) is a different host shape with its own
- * initializer seam -- both are deliberate boundaries, not oversights.
+ * The host must be an expression STATEMENT or a LOCAL DECLARATION, and it must be a direct child of
+ * a statement list. A brace-less `if (c) content = new Col([_h = …]);` has nowhere to put a second
+ * statement, so it is refused -- a deliberate boundary, not an oversight. A local declaration is
+ * admitted for the same reason the statement's own root assignment is: the initializer is fully
+ * evaluated before the local is bound, so a candidate inside it already ran ahead of that binding
+ * and still does. A multi-variable continuation (`localDeclContinuationKinds`) is NOT a host: it is
+ * part of the declaration ahead of it, not a statement of its own.
  */
 @:nullSafety(Strict)
 final class HoistEmbeddedAssignment implements Check implements DefaultOff {
@@ -205,6 +208,9 @@ final class HoistEmbeddedAssignment implements Check implements DefaultOff {
 		final assign: Null<String> = shape.assignKind;
 		final exprStmt: Null<String> = shape.exprStatementKind;
 		if (assign == null || exprStmt == null) return null;
+		final continuations: Array<String> = shape.localDeclContinuationKinds ?? [];
+		final hosts: Array<String> = [exprStmt];
+		for (kind in shape.localDeclKinds ?? []) if (!continuations.contains(kind)) hosts.push(kind);
 		final containers: Array<String> = [];
 		final array: Null<String> = shape.arrayLiteralKind;
 		final object: Null<String> = shape.objectLiteralKind;
@@ -223,7 +229,7 @@ final class HoistEmbeddedAssignment implements Check implements DefaultOff {
 		return {
 			assign: assign,
 			ident: shape.identKind,
-			exprStmt: exprStmt,
+			hosts: hosts,
 			containers: containers,
 			passThrough: passThrough,
 			blocks: support.blockKinds()
@@ -238,7 +244,7 @@ final class HoistEmbeddedAssignment implements Check implements DefaultOff {
 	}
 
 	private static function collectSites(node: QueryNode, spine: Spine, out: Array<HoistSite>): Void {
-		if (spine.blocks.contains(node.kind)) for (child in node.children) if (child.kind == spine.exprStmt) {
+		if (spine.blocks.contains(node.kind)) for (child in node.children) if (spine.hosts.contains(child.kind)) {
 			final site: Null<HoistSite> = siteOf(child, spine);
 			if (site != null) out.push(site);
 		}

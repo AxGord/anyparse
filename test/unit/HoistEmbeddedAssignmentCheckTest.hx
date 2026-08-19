@@ -113,6 +113,18 @@ class HoistEmbeddedAssignmentCheckTest extends Test {
 		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\tcontent = new Col([a, b]);\n\t}\n}').length);
 	}
 
+	/**
+	 * A local declaration is a host too: `final col = new Col([_p = …]);` binds `col` only after its
+	 * initializer is fully evaluated, so the hoisted write already ran ahead of that binding. This is
+	 * the shape the TM `PremierPlan` / `ProPlan` sites have.
+	 */
+	public function testLocalDeclarationInitializerHoisted(): Void {
+		Assert.equals(
+			'class C {\n\tfunction f() {\n\t\t_p = new P(1);\n\t\tfinal col:Col = new Col([_p]);\n\t}\n}\n',
+			applyFix('class C {\n\tfunction f() {\n\t\tfinal col:Col = new Col([_p = new P(1)]);\n\t}\n}')
+		);
+	}
+
 	public function testRegisteredAsDefaultOffBuiltin(): Void {
 		final check: Null<Check> = Linter.byId('hoist-embedded-assignment');
 		Assert.notNull(check);
