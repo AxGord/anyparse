@@ -145,6 +145,56 @@ class GuardReturnCheckTest extends Test {
 		Assert.equals(0, scopedViolations(memberPathSource(), 'typedef Res = {\n\tcount:Float\n};\n').length);
 	}
 
+	public function testOrderedFlippedThroughNullableReceiver(): Void {
+		// `Null<T>` is `@:forward abstract Null<T> from T to T`, so `res.count` on a `Null<Res>`
+		// receiver IS `Res.count` — the wrapper changes what is legal to DO with `res`, not which
+		// member `count` names. Before the receiver unwrap the whole path typed nothing and the
+		// ordered comparison was declined for want of an operand type, which is the ONE variable
+		// separating this fixture from `testOrderedFlippedThroughMemberPath`.
+		Assert.isTrue(
+			fixedWith(typedMemberPathSource('Null<Res>'), 'typedef Res = {\n\tcount:Int\n};\n')
+				.indexOf('if (res.count <= 0) return false;') != -1
+		);
+	}
+
+	public function testOrderedFlippedThroughDoublyNullableReceiver(): Void {
+		// `Null<Null<T>>` is legal Haxe and collapses to `Null<T>`; the unwrap runs to a fixed
+		// point rather than peeling one level, so the member lookup reaches `Res` either way.
+		Assert.isTrue(
+			fixedWith(typedMemberPathSource('Null<Null<Res>>'), 'typedef Res = {\n\tcount:Int\n};\n')
+				.indexOf('if (res.count <= 0) return false;') != -1
+		);
+	}
+
+	public function testOrderedFlippedThroughNullableIntermediateMember(): Void {
+		// The wrapper on an INTERMEDIATE link of the path, not on its root: `box.res` is declared
+		// `Null<Res>` and is the receiver of `count`. Same question, one segment further in.
+		final model: String = 'typedef Res = {\n\tcount:Int\n};\n\ntypedef Box = {\n\tres:Null<Res>\n};\n';
+		final source: String = 'class C {\n\tfunction f(box:Box):Bool {\n\t\tif (box.res.count > 0) {\n\t\t\tlog(box);\n'
+			+ '\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t}\n}\n';
+		Assert.isTrue(fixedWith(source, model).indexOf('if (box.res.count <= 0) return false;') != -1);
+	}
+
+	public function testNullableIntOperandStillNotFlagged(): Void {
+		// THE REFUSED ARM. Unwrapping for a MEMBER LOOKUP is not erasing the wrapper: `a` here is
+		// the comparison's own OPERAND, not a receiver, and a `Null<Int>` operand is exactly the
+		// case `!(a > 0)` and `a <= 0` disagree on — with `a == null` the wrap is `true` and the
+		// flip is `false`. The receiver unwrap must not reach an operand's own type, and this
+		// fixture is what proves it does not.
+		final source: String = 'class C {\n\tfunction f(a:Null<Int>):Bool {\n\t\tif (a > 0) {\n\t\t\tlog(a);\n'
+			+ '\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t}\n}\n';
+		Assert.equals(0, vSource(source).length);
+	}
+
+	public function testAliasedNullableReceiverNotFlagged(): Void {
+		// REFUSED, deliberately: the unwrap is TEXTUAL over the written annotation, so a typedef
+		// that RESOLVES to `Null<Res>` carries no wrapper to peel and the path stays unresolved.
+		// Following the alias would mean resolving a type reference inside the probe, which is a
+		// different mechanism; the miss is conservative (the site keeps its positive branch).
+		final model: String = 'typedef Res = {\n\tcount:Int\n};\n\ntypedef MaybeRes = Null<Res>;\n';
+		Assert.equals(0, scopedViolations(typedMemberPathSource('MaybeRes'), model).length);
+	}
+
 	public function testAndDeMorganed(): Void {
 		Assert.isTrue(fx(cond('p && q')).indexOf('if (!p || !q) return false;') != -1);
 	}
@@ -560,8 +610,13 @@ class GuardReturnCheckTest extends Test {
 
 	/** The member-path fixture the resolution tests share: `res.count > 0` wrapping a two-statement branch. */
 	private inline function memberPathSource(): String {
-		return 'class C {\n\tfunction f(res:Res):Bool {\n\t\tif (res.count > 0) {\n\t\t\tlog(res);\n\t\t\treturn true;\n\t\t}\n'
-			+ '\t\treturn false;\n\t}\n}\n';
+		return typedMemberPathSource('Res');
+	}
+
+	/** `memberPathSource` with the receiver's declared type written out — the nullable-wrapper fixtures. */
+	private inline function typedMemberPathSource(typeSource: String): String {
+		return 'class C {\n\tfunction f(res:$typeSource):Bool {\n\t\tif (res.count > 0) {\n\t\t\tlog(res);\n\t\t\treturn true;\n'
+			+ '\t\t}\n\t\treturn false;\n\t}\n}\n';
 	}
 
 	// --- helpers --------------------------------------------------------------------------
