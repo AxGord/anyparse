@@ -319,8 +319,7 @@ final class PreferForIn implements Check implements DefaultOff {
 		final fromType: Null<String> = elementTypeName(decl, ctx);
 		if (fromType != null) candidates.push(fromType);
 		for (fallback in FALLBACK_BINDERS) candidates.push(fallback);
-		for (name in candidates) if (!nameIsLive(scope, name, ctx.seams)) return name;
-		return null;
+		return Lambda.find(candidates, name -> !nameIsLive(scope, name, ctx.seams));
 	}
 
 	/**
@@ -351,8 +350,9 @@ final class PreferForIn implements Check implements DefaultOff {
 		if (!matched) return null;
 		final qualified: String = ELEMENT_TYPE.matched(1);
 		final simple: String = qualified.substring(qualified.lastIndexOf('.') + 1);
-		if (simple.length == 0 || UNINFORMATIVE_TYPES.contains(simple)) return null;
-		return simple.substring(0, 1).toLowerCase() + simple.substring(1);
+		return simple.length == 0 || UNINFORMATIVE_TYPES.contains(simple)
+			? null
+			: simple.substring(0, 1).toLowerCase() + simple.substring(1);
 	}
 
 	/**

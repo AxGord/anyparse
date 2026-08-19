@@ -181,8 +181,8 @@ class PreferForInCheckTest extends Test {
 
 	/** The comprehension header, whose element type is the ONE real naming signal in the source. */
 	public function testComprehensionHeaderTakesTheElementTypeName(): Void {
-		final src: String =
-			'class C {\n\tfunction f(it:Iterator<CodePoint>):Void {\n\t\tfinal a:Array<CodePoint> = [while (it.hasNext()) it.next()];\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(it:Iterator<CodePoint>):Void {\n'
+			+ '\t\tfinal a:Array<CodePoint> = [while (it.hasNext()) it.next()];\n\t}\n}';
 		Assert.stringContains('[for (codePoint in it) codePoint]', applyFix(src));
 	}
 
