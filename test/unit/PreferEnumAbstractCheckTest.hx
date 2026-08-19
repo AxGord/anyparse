@@ -256,6 +256,18 @@ class PreferEnumAbstractCheckTest extends Test {
 		);
 	}
 
+	public function testWholeTypeConditionalMemberNotFlagged(): Void {
+		// A `#if`-guarded member projects as a `Conditional` node, which is not a modifier,
+		// a metadata annotation or a constant — so the whitelist refuses the container. An
+		// enum abstract whose member set depends on a build flag is a different edit.
+		Assert.equals(
+			0,
+			violations(
+				'class Guarded { public static inline final A:String = \'a\'; public static inline final B:String = \'b\';\n#if debug\npublic static inline final C:String = \'c\';\n#end\n }'
+			).length
+		);
+	}
+
 	public function testWholeTypeReportedOnceWhenPrefixArmAlsoMatches(): Void {
 		// The whole-type arm subsumes the prefix arm for the same container: one finding,
 		// not two, when the constants also share a prefix and feed one sink elsewhere.
