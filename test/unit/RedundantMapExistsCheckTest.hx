@@ -123,6 +123,21 @@ class RedundantMapExistsCheckTest extends Test {
 		Assert.isTrue(out.indexOf('return m[k] ?? (a ? k : k);') != -1, out);
 	}
 
+	/**
+	 * A file the grammar cannot parse leaves the REPORT scope incomplete, so the census cannot
+	 * claim it saw every reference and the site stays unproven. This pins which index that gate
+	 * reads: handed the RESOLUTION index instead, whose skipped set is permanently non-empty on
+	 * any project with libraries configured, the gate would be false for every site — and the
+	 * check would report sites as fixable while emitting no edit at all.
+	 */
+	public function testAnUnparseableFileInScopeLeavesTheSiteUnproven(): Void {
+		final vs: Array<Violation> = violations(
+			cls('m', "'a' => 'b'", '').concat([{ file: 'Broken.hx', source: 'class Broken { this is not haxe' }])
+		);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('cannot be ruled out') != -1, vs[0].message);
+	}
+
 	/** A base class with two map fields, one of which a subtype fixture may poison. */
 	private inline function base(): String {
 		return 'class Base {\n\n\tprivate var good:Map<String, String> = [];\n\n\tprivate var bad:Map<String, String> = [];\n\n'

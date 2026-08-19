@@ -149,9 +149,13 @@ final class RedundantMapExists implements Check implements DefaultOff {
 		final c: Cfg = cfg;
 		final valueSeams: Null<ValueSeams> = MapValueScan.seamsOf(c.shape);
 		if (valueSeams == null) return [];
-		final scope: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
-		if (scope == null) return [];
-		final resolved: SymbolIndex = scope;
+		// The REPORT index, exactly as in `run`: the census reads its `skippedFiles` as the
+		// "nothing is hidden" proof and derives its own wider scope for the subtype and
+		// access-grant lookups. Handing it the RESOLUTION index instead makes that gate
+		// permanently false on any project with libraries configured, and every edit vanishes
+		// while the report still says the site is fixable.
+		if (index == null) return [];
+		final report: SymbolIndex = index;
 		final root: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (root == null) return [];
 		final tree: QueryNode = root;
@@ -161,7 +165,7 @@ final class RedundantMapExists implements Check implements DefaultOff {
 		final file: String = violations.length > 0 ? violations[0].file : '';
 		return RefactorSupport.dropContainedEdits(CheckScan.applyBySpan(plugin, source, violations, [c.ternaryKind], (node, span) -> {
 			final m: Null<Match> = match(node, source, tree, declaredTypes, declaredTypeSources, c);
-			return m == null || !isProven(m, file, source, tree, valueSeams, resolved, plugin, proven)
+			return m == null || !isProven(m, file, source, tree, valueSeams, report, plugin, proven)
 				? null
 				: { span: span, text: '${m.readSource} ?? ${m.fallbackSource}' };
 		}));
