@@ -414,9 +414,10 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	 * closed — the element-parameter table carries the obligation that `iterator()` and
 	 * `keyValueIterator()` agree, and the static table is refused for a type any non-std indexed
 	 * file redeclares; and the extension arm answers only after `typeProvablyLacksMember` PROVES the
-	 * receiver's own type declares no such name (a real member BEATS an extension), walks the
-	 * `using`s in the compiler's reverse declaration order, and requires the extension's first
-	 * parameter to accept the receiver by exact nominal or proven subtype. A future arm that merely
+	 * receiver's own type declares no such name (a real member BEATS an extension), walks the `using`s in the compiler's reverse
+	 * declaration order, and requires the extension's first parameter to accept the receiver — by
+	 * exact nominal, by proven subtype, or by MEMBERSHIP of the two structural types the type layer
+	 * models, refused there unless the parameter's element is the signature's own free parameter. A future arm that merely
 	 * widens coverage without that guarantee does NOT belong under this opt-in.
 	 *
 	 * The substitution arm is the one whose failure is NOT closed, and the reason it is still safe
