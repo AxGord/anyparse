@@ -1709,6 +1709,15 @@ typedef RefShape = {
 	@:optional var mapExistsMethods: Array<String>;
 
 	/**
+	 * The map-literal ENTRY node kind — the `key => value` pair inside a map literal
+	 * (Haxe `Arrow` inside an `arrayLiteralKind`). `redundant-map-exists` reads a map
+	 * literal's stored VALUES through it, so that a whole-map assignment can be proven
+	 * to store no null. Optional; unset leaves a non-empty map literal unprovable, and
+	 * the check then reports without fixing.
+	 */
+	@:optional var mapLiteralEntryKind: String;
+
+	/**
 	 * Field names that denote a collection's element count (`length`) — the
 	 * `magic-number` check exempts a numeric literal compared against such a
 	 * field access (`args.length == 3`), a self-documenting structural arity

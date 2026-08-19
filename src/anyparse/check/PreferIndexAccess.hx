@@ -285,18 +285,6 @@ final class PreferIndexAccess implements Check {
 		return nominal != null && nominalIsMap(nominal, src, cfg);
 	}
 
-	/** Whether the verbatim type `source` is `wrapper<Nominal…>` whose inner nominal is a `mapTypes` name. */
-	private static function nullWrapsMap(source: String, wrapper: String, mapTypes: Array<String>): Bool {
-		final s: String = source.trim();
-		final prefix: String = '$wrapper<';
-		if (!s.startsWith(prefix) || !s.endsWith('>')) return false;
-		final inner: String = s.substring(prefix.length, s.length - 1);
-		final lt: Int = inner.indexOf('<');
-		final head: String = lt == -1 ? inner : inner.substring(0, lt);
-		final simple: Null<String> = TypeResolver.simpleNominalName(head);
-		return simple != null && mapTypes.contains(simple);
-	}
-
 
 	/**
 	 * Whether `node`'s subtree contains a null guard — a ternary whose condition compares
@@ -361,10 +349,9 @@ final class PreferIndexAccess implements Check {
 		};
 	}
 
-	/** Whether `nominal` (with optional verbatim `source`) is a `Map`-abstract name, or a nullable wrapper whose inner nominal is one. */
-	private static function nominalIsMap(nominal: String, source: Null<String>, cfg: Cfg): Bool {
-		return cfg.mapTypes.contains(nominal)
-			|| (source != null && cfg.nullableWrappers.contains(nominal) && nullWrapsMap(source, nominal, cfg.mapTypes));
+	/** Whether `nominal` (with optional verbatim `source`) is a `Map`-abstract name, or a nullable wrapper whose inner nominal is one — the shared `CheckScan` predicate. */
+	private static inline function nominalIsMap(nominal: String, source: Null<String>, cfg: Cfg): Bool {
+		return CheckScan.nominalIsMap(nominal, source, cfg.mapTypes, cfg.nullableWrappers);
 	}
 
 }
