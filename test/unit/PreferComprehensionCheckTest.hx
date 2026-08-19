@@ -9,12 +9,20 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 
 /**
- * The `prefer-comprehension` check: an empty-array local `final a = []` immediately followed by a
+ * The `prefer-comprehension` check: an empty-array local `final a = []` followed by a
  * push-only `for (x in xs) a.push(e);` is flagged `Info` and rewritten to
  * `final a = [for (x in xs) e];`. Key-value and nested `for`s and a single trailing `if` guard
- * transfer verbatim; a self-reference, an unread array, a `break`, a non-adjacent loop, a comment in
- * the decl-to-loop gap or in a transcribed header, and a non-empty initializer are all safe misses.
+ * transfer verbatim; a self-reference, an unread array, a `break`, a comment in a DELETED region or
+ * in a transcribed header, and a non-empty initializer are all safe misses.
  * The raw fix emits tight brackets (`[...]`); the linter's canonicalizing `--fix` spaces them.
+ *
+ * The loop need not be the declaration's next sibling. When statements stand between them the
+ * DECLARATION moves down to the loop — the motivating shape has the gap statement declaring the
+ * loop's own subject — which makes it a TWO-span edit. The gap fixtures pin what carries that: a
+ * whitelist of admissible gap statement kinds (so every control-flow break, and everything that can
+ * hold one, ends the walk rather than being stepped over), no textual occurrence of the array's name
+ * in the gap (a read, a write, or a shadowing redeclaration), each statement owning its own line, and
+ * a comment refused only where the edit DELETES — the declaration's line, never the untouched gap.
  *
  * A braced body holding a CHAIN of single-use `final` locals feeding the push is admitted too, each
  * link inlined into its one use. The refusals around that arm carry most of the fixtures here: a
