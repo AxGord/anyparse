@@ -466,6 +466,7 @@ import unit.PreferKeyValueLoopCheckTest;
 import unit.DeadBinderCounterLoopCheckTest;
 import unit.RedundantReplaceLoopCheckTest;
 import unit.TrivialGetterCheckTest;
+import unit.TrivialGetterIsVarTest;
 import unit.NullableSwitchMissingNullCheckTest;
 import unit.DuplicateCodeCheckTest;
 import unit.RedundantThisUsingExtensionTest;
@@ -1141,6 +1142,7 @@ class RunTests {
 		addCase(new DeadBinderCounterLoopCheckTest());
 		addCase(new RedundantReplaceLoopCheckTest());
 		addCase(new TrivialGetterCheckTest());
+		addCase(new TrivialGetterIsVarTest());
 		addCase(new TrivialGetterShapeCollapseTest());
 		addCase(new TrivialGetterStaticShadowTest());
 		addCase(new PreferInlineCheckTest());
