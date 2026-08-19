@@ -26,7 +26,8 @@ class PreferLpadCheckTest extends Test {
 
 	public function testLadderInLiteralRangeLoopFlagged(): Void {
 		final vs: Array<Violation> = violations(
-			"class C {\n\tfunction f() {\n\t\tfor (i in 1...145) items.push(if (i < 10) 'p000$i' else if (i < 100) 'p00$i' else 'p0$i');\n\t}\n}"
+			'class C {\n\tfunction f() {\n'
+			+ "\t\tfor (i in 1...145) items.push(if (i < 10) 'p000$i' else if (i < 100) 'p00$i' else 'p0$i');\n\t}\n}"
 		);
 		Assert.equals(1, vs.length);
 		Assert.equals('prefer-lpad', vs[0].rule);
@@ -39,7 +40,8 @@ class PreferLpadCheckTest extends Test {
 		Assert.equals(
 			"using StringTools;\n\nclass C {\n\tfunction f() {\n\t\tfor (i in 1...145) items.push('p' + '$i'.lpad('0', 4));\n\t}\n}\n",
 			applyFix(
-				"class C {\n\tfunction f() {\n\t\tfor (i in 1...145) items.push(if (i < 10) 'p000$i' else if (i < 100) 'p00$i' else 'p0$i');\n\t}\n}"
+				'class C {\n\tfunction f() {\n'
+				+ "\t\tfor (i in 1...145) items.push(if (i < 10) 'p000$i' else if (i < 100) 'p00$i' else 'p0$i');\n\t}\n}"
 			)
 		);
 	}
@@ -47,7 +49,8 @@ class PreferLpadCheckTest extends Test {
 	/** A trailing segment is shared text, not padding: it rides along after the call. */
 	public function testSuffixCarriedIntoRewrite(): Void {
 		Assert.equals(
-			"using StringTools;\n\nclass C {\n\tfunction f() {\n\t\tfor (i in 0...100) items.push('p' + '$i'.lpad('0', 2) + '.png');\n\t}\n}\n",
+			"using StringTools;\n\nclass C {\n\tfunction f() {\n\t\tfor (i in 0...100) items.push('p' + '$i'.lpad('0', 2) + '.png');\n"
+			+ '\t}\n}\n',
 			applyFix("class C {\n\tfunction f() {\n\t\tfor (i in 0...100) items.push(if (i < 10) 'p0$i.png' else 'p$i.png');\n\t}\n}")
 		);
 	}
@@ -57,7 +60,8 @@ class PreferLpadCheckTest extends Test {
 		Assert.equals(
 			"using StringTools;\n\nclass C {\n\tfunction f() {\n\t\tfor (i in 0...100) items.push('$i'.lpad('0', 3));\n\t}\n}\n",
 			applyFix(
-				"using StringTools;\n\nclass C {\n\tfunction f() {\n\t\tfor (i in 0...100) items.push(if (i < 10) '00$i' else '0$i');\n\t}\n}"
+				"using StringTools;\n\nclass C {\n\tfunction f() {\n\t\tfor (i in 0...100) items.push(if (i < 10) '00$i' else '0$i');\n"
+				+ '\t}\n}'
 			)
 		);
 	}

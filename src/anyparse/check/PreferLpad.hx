@@ -117,7 +117,7 @@ final class PreferLpad implements Check implements DefaultOff {
 	private static inline final HOLE_SIGIL: String = "$";
 
 	/** A segment holding this is refused rather than split -- its trailing `0` may belong to an escape. */
-	private static inline final ESCAPE: String = "\\";
+	private static inline final ESCAPE: String = '\\';
 
 	/** The numeric base the ladder's thresholds step through. */
 	private static inline final BASE: Int = 10;
@@ -185,9 +185,9 @@ final class PreferLpad implements Check implements DefaultOff {
 			final span: Null<Span> = v.span;
 			if (span != null) wanted['${span.from}:${span.to}'] = true;
 		}
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (site in sitesOf(tree, seams, source)) if (site.proven && wanted.exists('${site.span.from}:${site.span.to}'))
-			edits.push({ span: site.span, text: replacement(site.ladder) });
+		final edits: Array<{ span: Span, text: String }> = [for (site in sitesOf(tree, seams, source)) if (
+			site.proven && wanted.exists('${site.span.from}:${site.span.to}')
+		) { span: site.span, text: replacement(site.ladder) }];
 		if (edits.length == 0) return edits;
 		final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
 		final symbols: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
@@ -212,8 +212,7 @@ final class PreferLpad implements Check implements DefaultOff {
 		final intervalKind: Null<String> = shape.intervalKind;
 		final ltKind: Null<String> = shape.ltKind;
 		final interpIdentKind: Null<String> = shape.stringInterpIdentKind;
-		if (forKind == null || intervalKind == null || ltKind == null || interpIdentKind == null) return null;
-		return {
+		return forKind == null || intervalKind == null || ltKind == null || interpIdentKind == null ? null : {
 			ifKinds: ifKinds,
 			stringKinds: stringKinds,
 			numericKinds: numericKinds,
@@ -228,7 +227,8 @@ final class PreferLpad implements Check implements DefaultOff {
 	/** Every ladder in `tree`, each already carrying the range verdict of the scope it sits in. */
 	private static function sitesOf(tree: QueryNode, s: LpadSeams, source: String): Array<LpadSite> {
 		final out: Array<LpadSite> = [];
-		collect(tree, new Map(), s, source, out);
+		final env: Map<String, Int> = [];
+		collect(tree, env, s, source, out);
 		return out;
 	}
 
@@ -295,7 +295,7 @@ final class PreferLpad implements Check implements DefaultOff {
 		if (span == null) return null;
 		final text: String = source.substring(span.from, span.to);
 		final value: Null<Int> = Std.parseInt(text);
-		return value != null && Std.string(value) == text ? value : null;
+		return value != null && '$value' == text ? value : null;
 	}
 
 	/** The ladder `node` forms, or null when any of the shape gates in the type doc refuses it. */
@@ -329,8 +329,7 @@ final class PreferLpad implements Check implements DefaultOff {
 			cursor = tail;
 		}
 		final name: Null<String> = subject;
-		if (name == null || values.length < MIN_BRANCHES) return null;
-		return ladderOfValues(values, name, threshold, s);
+		return name == null || values.length < MIN_BRANCHES ? null : ladderOfValues(values, name, threshold, s);
 	}
 
 	/** The affix / width agreement across a ladder's branch values -- the arithmetic half of the shape gate. */
@@ -383,9 +382,7 @@ final class PreferLpad implements Check implements DefaultOff {
 	private static function replacement(ladder: LpadLadder): String {
 		final parts: Array<String> = [];
 		if (ladder.base != '') parts.push(QUOTE + ladder.base + QUOTE);
-		parts.push(
-			QUOTE + HOLE_SIGIL + ladder.subject + QUOTE + '.' + LPAD_METHOD + '(' + QUOTE + PAD_CHAR + QUOTE + ', ' + ladder.width + ')'
-		);
+		parts.push('${QUOTE + HOLE_SIGIL + ladder.subject + QUOTE}.$LPAD_METHOD($QUOTE$PAD_CHAR$QUOTE, ${ladder.width})');
 		if (ladder.suffix != '') parts.push(QUOTE + ladder.suffix + QUOTE);
 		return parts.join(' + ');
 	}
