@@ -372,11 +372,9 @@ class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 			{ file: 'Named.hx', source: 'interface Named {\n\tpublic var label(get, never):String;\n}' },
 			{ file: 'C.hx', source: classSrc }
 		];
-		final check: TrivialGetter = new TrivialGetter();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
-		Assert.equals(1, vs.length);
+		final r: { check: TrivialGetter, vs: Array<Violation> } = runFilesAndExpectOne(files);
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
-		Assert.isTrue(check.fix(classSrc, vs, new HaxeQueryPlugin(), index).length > 0);
+		Assert.isTrue(r.check.fix(classSrc, r.vs, new HaxeQueryPlugin(), index).length > 0);
 	}
 
 	// --- (b) shadowed-property rewrite: renaming the backing field `_x` to the property `x`

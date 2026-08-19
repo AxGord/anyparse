@@ -33,6 +33,12 @@ using StringTools;
  * is already a property (an accessor clause after its name), or one whose
  * `get_<field>` / `set_<field>` accessor already exists. Writer-emitted
  * and canonical-gated (like the other structural-insert ops).
+ *
+ * The emitted pair is a SEAM, and until logic lands in it both accessors
+ * are trivial — which is precisely what the `trivial-getter` check's
+ * self-backed arm reports (`Info`) and its `--fix` collapses back. Fill the
+ * accessors in before running `lint --fix` over the file, or the round trip
+ * is a no-op.
  */
 @:nullSafety(Strict)
 final class EncapsulateField {
