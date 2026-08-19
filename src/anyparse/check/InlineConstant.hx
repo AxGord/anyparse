@@ -331,8 +331,8 @@ final class InlineConstant implements Check {
 	 * module surface).
 	 */
 	private static function consider(
-		out: Array<Violation>, file: String, field: QueryNode, seams: ConstantFieldSeams, reflected: Array<String>, macroConsumed: Array<String>,
-		container: QueryNode, exported: Bool, proof: InitProof
+		out: Array<Violation>, file: String, field: QueryNode, seams: ConstantFieldSeams, reflected: Array<String>,
+		macroConsumed: Array<String>, container: QueryNode, exported: Bool, proof: InitProof
 	): Void {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
