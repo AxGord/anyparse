@@ -9,6 +9,8 @@ import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * Flags an anonymous structure TYPE that is written out three or more times
  * (configurable) across the lint scope — a shape that has earned a name.
@@ -103,7 +105,6 @@ final class AnonTypeDup implements Check implements ConfigAware implements Defau
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return [];
 		final shape: RefShape = plugin.refShape();
 		final ctx: Null<AnonCtx> = buildCtx(shape);
 		if (ctx == null || files.length == 0) return [];
@@ -116,7 +117,7 @@ final class AnonTypeDup implements Check implements ConfigAware implements Defau
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			collect(tree, null, entry.file, ctx, minFields, groups, order);
+			collect(tree, null, entry.file, entry.source, ctx, minFields, groups, order);
 		}
 		return report(groups, order, minOcc);
 	}
@@ -158,11 +159,14 @@ final class AnonTypeDup implements Check implements ConfigAware implements Defau
 	 * order (`Map<A, B>` → `Map<A, B>`). Null when the field projects no type,
 	 * which makes the whole structure unkeyable.
 	 *
-	 * The join is FLAT, so two differently-nested spellings over the same
-	 * nominals (`A<B<C>, D>` and `A<B, C<D>>`) render alike. A known,
-	 * conservative limit shared with `uses`: it can only ever MERGE two shapes
-	 * into one finding, never split a real group, and the report names the shape
-	 * for a human to act on.
+	 * The projection is FLAT — `Array<Array<X>>` reaches this function as the three
+	 * nominals `Array`, `Array`, `X` with the nesting gone — so two differently
+	 * nested spellings over the SAME nominals in the same order (`A<B<C>, D>` and
+	 * `A<B, C<D>>`) key alike. A known limit shared with `uses`: it can only ever
+	 * MERGE two shapes into one finding, never split a real group. It is also why
+	 * the finding MESSAGE quotes the anchor occurrence's SOURCE text rather than
+	 * this rendering, which would spell that same `Array<Array<X>>` as the
+	 * nonexistent `Array<Array, X>`.
 	 */
 	private static function typeKey(field: QueryNode, ctx: AnonCtx): Null<String> {
 		final kids: Array<QueryNode> = field.children;
@@ -184,7 +188,7 @@ final class AnonTypeDup implements Check implements ConfigAware implements Defau
 	 * `typedef T = { … }` is the naming TARGET, never one of the duplicates.
 	 */
 	private static function collect(
-		node: QueryNode, parentKind: Null<String>, file: String, ctx: AnonCtx, minFields: Int,
+		node: QueryNode, parentKind: Null<String>, file: String, source: String, ctx: AnonCtx, minFields: Int,
 		groups: Map<String, Array<Occurrence>>, order: Array<String>
 	): Void {
 		if (node.kind == ctx.anonKind && !(parentKind != null && ctx.typeDeclKinds.contains(parentKind))) {
@@ -196,14 +200,14 @@ final class AnonTypeDup implements Check implements ConfigAware implements Defau
 				final at: Span = span;
 				final bucket: Null<Array<Occurrence>> = groups[key];
 				if (bucket == null) {
-					groups[key] = [{ file: file, at: at }];
+					groups[key] = [{ file: file, at: at, text: collapse(source.substring(at.from, at.to)) }];
 					order.push(key);
 				} else {
-					bucket.push({ file: file, at: at });
+					bucket.push({ file: file, at: at, text: '' });
 				}
 			}
 		}
-		for (child in node.children) collect(child, node.kind, file, ctx, minFields, groups, order);
+		for (child in node.children) collect(child, node.kind, file, source, ctx, minFields, groups, order);
 	}
 
 	/**
@@ -225,7 +229,7 @@ final class AnonTypeDup implements Check implements ConfigAware implements Defau
 				span: anchor.at,
 				rule: RULE_ID,
 				severity: Severity.Info,
-				message: 'anonymous structure ${preview(key)} written ${hits.length} times $where — extract a typedef'
+				message: 'anonymous structure ${preview(anchor.text)} written ${hits.length} times $where — extract a typedef'
 			});
 		}
 		return out;
@@ -236,9 +240,31 @@ final class AnonTypeDup implements Check implements ConfigAware implements Defau
 		return value != null && value > 0 ? value : fallback;
 	}
 
-	/** `key` elided to `MESSAGE_PREVIEW` characters so a wide structure does not bloat the report. */
-	private static function preview(key: String): String {
-		return key.length > MESSAGE_PREVIEW ? '${key.substr(0, MESSAGE_PREVIEW)}…' : key;
+	/** `text` elided to `MESSAGE_PREVIEW` characters so a wide structure does not bloat the report. */
+	private static function preview(text: String): String {
+		return text.length > MESSAGE_PREVIEW ? '${text.substr(0, MESSAGE_PREVIEW)}…' : text;
+	}
+
+	/**
+	 * `text` with every whitespace run reduced to one space and the ends trimmed —
+	 * a structure written across several source lines still reads as one line in the
+	 * report.
+	 */
+	private static function collapse(text: String): String {
+		final out: StringBuf = new StringBuf();
+		var space: Bool = false;
+		for (i in 0...text.length) {
+			final c: Int = text.fastCodeAt(i);
+			final blank: Bool = c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
+			if (blank) {
+				space = out.length > 0;
+				continue;
+			}
+			if (space) out.addChar(' '.code);
+			space = false;
+			out.addChar(c);
+		}
+		return out.toString();
 	}
 
 	/** The resolved kind sets, or null when the grammar names no anonymous-structure type. */
@@ -267,8 +293,12 @@ typedef AnonCtx = {
 	final typeDeclKinds: Array<String>;
 };
 
-/** One written-out occurrence of a shape: the file it sits in and its span. */
+/**
+ * One written-out occurrence of a shape: the file it sits in, its span, and — for
+ * the group's FIRST occurrence only — its source text as the report quotes it.
+ */
 private typedef Occurrence = {
 	final file: String;
 	final at: Span;
+	final text: String;
 };
