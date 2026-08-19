@@ -108,6 +108,48 @@ class PreferForeachCheckTest extends Test {
 		Assert.isTrue(out.indexOf('return (a ? xs : xs).foreach(x -> !(x > 2));') != -1, out);
 	}
 
+	/**
+	 * The static-extension arm: `S` declares no `items`, so `using ExtArray` is what supplies it
+	 * and the call resolves to `Array<Int>` — the same proof an ordinary member return gives.
+	 */
+	public function testStaticExtensionCallIterableFlagged(): Void {
+		final vs: Array<Violation> = extViolations('using ExtArray;', '');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('s.items().foreach(x -> !(x > 2))') != -1, vs[0].message);
+	}
+
+	/**
+	 * A real MEMBER beats an in-scope extension of the same name, and the extension is not
+	 * consulted at all — verified against the compiler: under `using E`, `d.tag()` on a `D`
+	 * declaring `tag():Void` binds to the member and fails as `Void should be Dynamic`, never to
+	 * `E.tag(d:D):String`. A `Void` return has no readable nominal, so this is exactly the shape
+	 * where the member answer (unknown) and the extension answer (`Array`) differ.
+	 */
+	public function testReceiverMemberBeatsStaticExtension(): Void {
+		Assert.equals(0, extViolations('using ExtArray;', '\n\tpublic function items():Void {}\n').length);
+	}
+
+	/** Haxe resolves static extensions in REVERSE declaration order — the LATER `using` wins. */
+	public function testLaterUsingWinsOverEarlierOne(): Void {
+		Assert.equals(0, extViolations('using ExtArray;\nusing ExtIter;', '').length);
+		Assert.equals(1, extViolations('using ExtIter;\nusing ExtArray;', '').length);
+	}
+
+	/**
+	 * An extension applies only to a receiver its FIRST PARAMETER accepts. `ExtInt.items(n:Int)`
+	 * does not accept an `S`, so it supplies nothing — declared alone it leaves the call
+	 * unresolved, and declared LAST it does not displace the earlier `using` that does apply.
+	 */
+	public function testFirstParameterMustAcceptTheReceiver(): Void {
+		Assert.equals(0, extViolations('using ExtInt;', '').length);
+		Assert.equals(1, extViolations('using ExtArray;\nusing ExtInt;', '').length);
+	}
+
+	/** No `using` brings `items` into scope, so the call stays unresolved and keeps the blanket refusal. */
+	public function testNoUsingKeepsTheCallRefused(): Void {
+		Assert.equals(0, extViolations('', '').length);
+	}
+
 	private function fn(body: String): String {
 		return 'class C {\n\tfunction f(xs:Array<Int>, m:Map<String, Int>, n:Null<Array<Int>>, a:Bool, b:Bool):Bool {\n\t\t$body\n\t}\n\n'
 			+ '\tfunction keep(x:Int):Bool {\n\t\treturn x > 0;\n\t}\n}';
@@ -121,6 +163,29 @@ class PreferForeachCheckTest extends Test {
 
 	private function file(body: String, withUsing: Bool): String {
 		return 'package p;\n\n' + (withUsing ? 'using Lambda;\n\n' : '') + fn(body);
+	}
+
+	/**
+	 * The static-extension fixture: `C` iterates `s.items()` under `usings`, `S` carries `sBody`,
+	 * and three modules declare `items` with returns that read DIFFERENTLY through this rule's
+	 * accept list — `ExtArray` an `Array<Int>` (claimed), `ExtIter` an `Iterator<Int>` (refused),
+	 * `ExtInt` an `Array<Int>` off an `Int` receiver (not applicable to an `S` at all). Which
+	 * candidate won is therefore legible from the finding COUNT alone.
+	 */
+	private function extViolations(usings: String, sBody: String): Array<Violation> {
+		return new PreferForeach().run([
+			{
+				file: 'C.hx',
+				source: '$usings\nclass C {\n\tfunction f(s:S):Bool {\n\t\tfor (x in s.items()) if (x > 2) return false;\n\t\treturn true;\n\t}\n}'
+			},
+			{ file: 'S.hx', source: 'class S {$sBody}' },
+			{ file: 'ExtArray.hx', source: 'class ExtArray {\n\tpublic static function items(s:S):Array<Int> {\n\t\treturn [];\n\t}\n}' },
+			{
+				file: 'ExtIter.hx',
+				source: 'class ExtIter {\n\tpublic static function items(s:S):Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}'
+			},
+			{ file: 'ExtInt.hx', source: 'class ExtInt {\n\tpublic static function items(n:Int):Array<Int> {\n\t\treturn [];\n\t}\n}' }
+		], new HaxeQueryPlugin());
 	}
 
 	private function violations(source: String): Array<Violation> {
