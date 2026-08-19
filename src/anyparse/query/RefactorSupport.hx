@@ -3330,6 +3330,13 @@ final class RefactorSupport {
 	 * Standalone-identifier matching rather than a bare substring: a real reference is a
 	 * token, so `tagName` does not count as a mention of `tag`, and an interpolated `$tag`
 	 * still does (a `$` is not an identifier character).
+	 *
+	 * CONSUMED BY BOTH SUBSYSTEMS, which is why the mutating ops and `lint --fix` are not in
+	 * fact asymmetric over an unparsed region: the name-driven ops ask through
+	 * `opaqueCondRegionInAny`, and the one CHECK whose fix is itself a rename (`naming`) asks
+	 * this directly. No other check needs it — their fixes are span-local rewrites of
+	 * constructs the tree DID project, a region with no interior nodes yields no edit, and the
+	 * writer re-emits it byte-verbatim.
 	 */
 	public static function opaqueCondRegionMentioning(scope: QueryNode, source: String, name: String, shape: RefShape): Null<Span> {
 		final kinds: Array<String> = shape.opaqueCondRegionKinds ?? [];
