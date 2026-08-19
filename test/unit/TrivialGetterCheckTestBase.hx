@@ -48,8 +48,20 @@ class TrivialGetterCheckTestBase extends Test {
 	}
 
 	private function runAndExpectOne(src: String): { check: TrivialGetter, vs: Array<Violation> } {
+		return runFilesAndExpectOne([{ file: 'C.hx', source: src }]);
+	}
+
+	/**
+	 * The multi-file arm of `runAndExpectOne`: run the check over a whole file set (an interface,
+	 * a subtype, an owner) and assert exactly one finding, handing back the check so the caller can
+	 * drive `fix` / `crossFileFix` with the same instance.
+	 */
+	private function runFilesAndExpectOne(files: Array<{ file: String, source: String }>): {
+		check: TrivialGetter,
+		vs: Array<Violation>
+	} {
 		final check: TrivialGetter = new TrivialGetter();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
 		return { check: check, vs: vs };
 	}

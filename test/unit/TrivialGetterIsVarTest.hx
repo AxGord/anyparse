@@ -164,11 +164,9 @@ class TrivialGetterIsVarTest extends TrivialGetterCheckTestBase {
 			+ '\tfunction set_angle(v:Float):Float { redraw(); return angle = v; }\n}';
 		final sub: String = 'class D extends C {\n\tfunction show():Void { trace(angle); }\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: base }, { file: 'D.hx', source: sub }];
-		final check: TrivialGetter = new TrivialGetter();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
-		Assert.equals(1, vs.length);
+		final r: { check: TrivialGetter, vs: Array<Violation> } = runFilesAndExpectOne(files);
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		Assert.equals(0, check.crossFileFix(files, vs, plugin, SymbolIndex.build(files, plugin)).length);
+		Assert.equals(0, r.check.crossFileFix(files, r.vs, plugin, SymbolIndex.build(files, plugin)).length);
 	}
 
 }
