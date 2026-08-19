@@ -208,6 +208,11 @@ final class StdlibDifferential {
 		'Bool' => ['true', 'false']
 	];
 
+	/** Whether a mapping is one of the trivial baselines rather than a pooled stdlib call. */
+	public static inline function isTrivial(mapping: Mapping): Bool {
+		return mapping.fn.id == TRIVIAL_ID;
+	}
+
 	/**
 	 * The baselines a real finding has to beat: each parameter of the return type passed straight
 	 * through, and each body literal of the return type returned as-is. Empty when the candidate's
@@ -230,11 +235,6 @@ final class StdlibDifferential {
 		for (literal in candidate.literals) if (literal.type == candidate.returnType)
 			out.push({ fn: entry, code: literal.code, display: literal.code });
 		return out;
-	}
-
-	/** Whether a mapping is one of the trivial baselines rather than a pooled stdlib call. */
-	public static inline function isTrivial(mapping: Mapping): Bool {
-		return mapping.fn.id == TRIVIAL_ID;
 	}
 
 	/**
@@ -308,11 +308,14 @@ final class StdlibDifferential {
 
 	/** Why the harness refuses this candidate outright, or null when it will drive it. */
 	public static function refusal(candidate: StdlibCandidate, maps: Array<Mapping>): Null<String> {
-		return RESERVED_NAMES.contains(candidate.name)
-			? 'the probe module owns the name "${candidate.name}"'
-			: maps.length == 0
-				? 'no type-consistent mapping onto any pooled stdlib call'
-				: maps.length > MAX_MAPPINGS ? '${maps.length} mappings exceeds the ${MAX_MAPPINGS} cap' : null;
+		return if (RESERVED_NAMES.contains(candidate.name))
+			'the probe module owns the name "${candidate.name}"';
+		else if (maps.length == 0)
+			'no type-consistent mapping onto any pooled stdlib call';
+		else if (maps.length > MAX_MAPPINGS)
+			'${maps.length} mappings exceeds the ${MAX_MAPPINGS} cap';
+		else
+			null;
 	}
 
 	/**

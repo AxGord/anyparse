@@ -133,7 +133,7 @@ class StdlibDupScanTest extends Test {
 	}
 
 	/** The motivating case, spelled the way the real tree spells it. */
-	private static function padDigitSource(): String {
+	private static inline function padDigitSource(): String {
 		return "class C {\n" + "\tprivate function padDigit(i:Int, digits:Int):String {\n" + "\t\tvar str:String = '$i';\n"
 			+ "\t\twhile (str.length < digits) str = '0$str';\n" + "\t\treturn str;\n" + "\t}\n" + "}";
 	}
