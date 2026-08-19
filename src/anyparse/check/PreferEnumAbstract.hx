@@ -16,12 +16,23 @@ using StringTools;
  * than flagging a defect; `Info`, report-only (the conversion picks an operator
  * flavour a mechanical edit cannot choose — see below).
  *
- * ## What is flagged
+ * ## What is flagged — two arms
  *
- * A type in `RefShape.visibilityContainerKinds` (class / abstract) declaring THREE
- * OR MORE `static [inline] final <NAME> = <numericLiteral>` members that share a
- * common name prefix (the segment before the first `_`: `RANK_ACCESSOR` /
- * `RANK_CONSTRUCTOR` → `RANK`) AND are USED INTERCHANGEABLY.
+ * **Whole-type arm.** A type in `RefShape.visibilityContainerKinds` whose ENTIRE body
+ * is THREE OR MORE `static inline final` members of ONE primitive type, every value a
+ * distinct literal, and nothing else — no method, no constructor, no supertype clause,
+ * no mutable or instance field. Such a type IS the enumeration already; it has no
+ * behaviour an `enum abstract` could not carry, and its members are read from other
+ * files, so no in-file use is required as evidence.
+ *
+ * **Prefix arm.** A type declaring THREE OR MORE `static [inline] final <NAME> =
+ * <numericLiteral>` members that share a common name prefix (the segment before the
+ * first `_`: `RANK_ACCESSOR` / `RANK_CONSTRUCTOR` → `RANK`) AND are USED
+ * INTERCHANGEABLY. Used for constants that live INSIDE a type with other members,
+ * where the type itself carries no signal.
+ *
+ * A container flagged by the whole-type arm is not re-examined by the prefix arm — the
+ * whole-type finding already names every constant the type declares.
  *
  * ## Why the interchangeability gate
  *
@@ -41,9 +52,18 @@ using StringTools;
  *
  * An existing `enum abstract` (its values are not `fieldDeclKinds`, its decl kind
  * not a container kind); a mutable `static var` (`mutableFieldDeclKinds`); an
- * instance (non-`static`) `final` field; a non-numeric constant; fewer than three
- * sharing a prefix; a prefix-less name; a prefix group whose members are never
- * used interchangeably (a knob namespace).
+ * instance (non-`static`) `final` field; fewer than three members.
+ *
+ * Prefix arm only: a non-numeric constant; a prefix-less name; a prefix group whose
+ * members are never used interchangeably (a knob namespace).
+ *
+ * Whole-type arm only: a member without `inline` (storage, not a compile-time
+ * substituted value — and a non-`inline` constant bag is far more often a namespace of
+ * unrelated knobs than an enumeration); a value that is not a literal; two primitive
+ * types in one body; two members on the SAME value (aliases, not distinct members); any
+ * child node that is neither a modifier, a metadata annotation nor a qualifying
+ * constant — which is what refuses a method, a constructor, an `extends` / `implements`
+ * clause and an `abstract`'s underlying-type node, without a per-shape exclusion list.
  *
  * ## Why report-only
  *
@@ -71,7 +91,7 @@ final class PreferEnumAbstract implements Check {
 	}
 
 	public function description(): String {
-		return 'related static-final int constants used interchangeably as a closed enumeration';
+		return 'a constant-only type, or related static-final int constants, reading as a closed enumeration';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -87,6 +107,9 @@ final class PreferEnumAbstract implements Check {
 		final cfg: EnumAbstractCfg = {
 			constKinds: constKinds,
 			staticKind: staticKindValue,
+			inlineKind: shape.inlineModifierKind ?? '',
+			metaKinds: plugin.metaShape().metaKinds,
+			literalTypeNames: shape.literalTypeNames ?? [],
 			modifierKinds: shape.modifierOrderKinds ?? [],
 			numericKinds: numericKinds,
 			negationKind: shape.negationKind ?? '',
@@ -184,7 +207,16 @@ final class PreferEnumAbstract implements Check {
 		out: Array<Violation>, file: String, source: String, tree: QueryNode, containerKinds: Array<String>, cfg: EnumAbstractCfg
 	): Void {
 		final groups: Array<Group> = [];
-		collectGroups(groups, tree, containerKinds, cfg);
+		final whole: Array<WholeType> = [];
+		collectGroups(groups, whole, tree, source, containerKinds, cfg);
+		for (w in whole) out.push({
+			file: file,
+			span: w.span,
+			rule: 'prefer-enum-abstract',
+			severity: Severity.Info,
+			message: '\'${w.name}\' declares nothing but ${w.count} distinct static-inline-final ${w.typeName} '
+			+ 'constants — the type already IS a closed enumeration; consider enum abstract ${w.name}(${w.typeName})'
+		});
 		if (groups.length == 0) return;
 		final names: Array<String> = [];
 		for (g in groups) for (n in g.members) if (!names.contains(n)) names.push(n);
@@ -200,24 +232,95 @@ final class PreferEnumAbstract implements Check {
 		});
 	}
 
-	/** Walk `node`; append a `Group` for every container's `MIN_GROUP`+ same-prefix constant group. */
-	private static function collectGroups(out: Array<Group>, node: QueryNode, containerKinds: Array<String>, cfg: EnumAbstractCfg): Void {
+	/**
+	 * Walk `node`; for every container either record a whole-type finding (its body is
+	 * nothing but a same-typed constant set) or, failing that, append a `Group` for each
+	 * of its `MIN_GROUP`+ same-prefix constant groups. A whole-type finding already names
+	 * every constant the type declares, so the prefix arm is not run on that container.
+	 */
+	private static function collectGroups(
+		out: Array<Group>, whole: Array<WholeType>, node: QueryNode, source: String, containerKinds: Array<String>, cfg: EnumAbstractCfg
+	): Void {
 		if (containerKinds.contains(node.kind)) {
-			final byPrefix: Map<String, Array<ConstDecl>> = [];
-			for (decl in collectConsts(node, cfg)) {
-				final existing: Null<Array<ConstDecl>> = byPrefix[decl.prefix];
-				if (existing == null)
-					byPrefix[decl.prefix] = [decl];
-				else
-					existing.push(decl);
+			final wt: Null<WholeType> = wholeType(node, source, cfg);
+			if (wt != null)
+				whole.push(wt);
+			else {
+				final byPrefix: Map<String, Array<ConstDecl>> = [];
+				for (decl in collectConsts(node, cfg)) {
+					final existing: Null<Array<ConstDecl>> = byPrefix[decl.prefix];
+					if (existing == null)
+						byPrefix[decl.prefix] = [decl];
+					else
+						existing.push(decl);
+				}
+				for (prefix => group in byPrefix) if (group.length >= MIN_GROUP) out.push({
+					prefix: prefix,
+					span: group[0].span,
+					members: [for (d in group) d.name]
+				});
 			}
-			for (prefix => group in byPrefix) if (group.length >= MIN_GROUP) out.push({
-				prefix: prefix,
-				span: group[0].span,
-				members: [for (d in group) d.name]
-			});
 		}
-		for (child in node.children) collectGroups(out, child, containerKinds, cfg);
+		for (child in node.children) collectGroups(out, whole, child, source, containerKinds, cfg);
+	}
+
+	/**
+	 * The whole-type finding for `container`, or null when its body is anything other than
+	 * `MIN_GROUP`+ `static inline final` members of ONE primitive type carrying DISTINCT
+	 * literal values. Every child must be a modifier, a metadata annotation or a qualifying
+	 * constant — a positive whitelist, so a method, a constructor, a supertype clause, an
+	 * `abstract`'s underlying-type node and any member shape not thought of here all refuse
+	 * the container rather than leaking through a list of exclusions.
+	 */
+	private static function wholeType(container: QueryNode, source: String, cfg: EnumAbstractCfg): Null<WholeType> {
+		final name: Null<String> = container.name;
+		final span: Null<Span> = container.span;
+		if (cfg.inlineKind == '' || name == null || span == null) return null;
+		final kids: Array<QueryNode> = container.children;
+		final values: Array<String> = [];
+		var typeName: String = '';
+		for (i in 0...kids.length) {
+			final node: QueryNode = kids[i];
+			final kind: String = node.kind;
+			if (cfg.modifierKinds.contains(kind) || cfg.metaKinds.contains(kind)) continue;
+			if (!cfg.constKinds.contains(kind) || !staticInline(kids, i, cfg)) return null;
+			final literal: Null<QueryNode> = valueLiteral(node, cfg);
+			if (literal == null) return null;
+			final t: Null<String> = cfg.literalTypeNames[literal.kind];
+			if (t == null || (typeName != '' && t != typeName)) return null;
+			final text: String = spanText(node.children[0], source);
+			if (values.contains(text)) return null;
+			typeName = t;
+			values.push(text);
+		}
+		if (values.length < MIN_GROUP) return null;
+		final nameValue: String = name;
+		final spanValue: Span = span;
+		return { span: spanValue, name: nameValue, count: values.length, typeName: typeName };
+	}
+
+	/** Whether the member at `kids[i]` carries BOTH a `Static` and an `inline` modifier. */
+	private static function staticInline(kids: Array<QueryNode>, i: Int, cfg: EnumAbstractCfg): Bool {
+		var hasStatic: Bool = false;
+		var hasInline: Bool = false;
+		var j: Int = i - 1;
+		while (j >= 0) {
+			final kind: String = kids[j].kind;
+			if (kind == cfg.staticKind)
+				hasStatic = true;
+			else if (kind == cfg.inlineKind)
+				hasInline = true;
+			else if (!cfg.modifierKinds.contains(kind) && !cfg.metaKinds.contains(kind)) break;
+			j--;
+		}
+		return hasStatic && hasInline;
+	}
+
+	/** `node`'s value — its first child, unwrapped through a negation — or null when it has none. */
+	private static function valueLiteral(node: QueryNode, cfg: EnumAbstractCfg): Null<QueryNode> {
+		if (node.children.length == 0) return null;
+		final value: QueryNode = node.children[0];
+		return cfg.negationKind != '' && value.kind == cfg.negationKind && value.children.length > 0 ? value.children[0] : value;
 	}
 
 	/**
@@ -297,6 +400,9 @@ private typedef ConstDecl = {
 private typedef EnumAbstractCfg = {
 	final constKinds: Array<String>;
 	final staticKind: String;
+	final inlineKind: String;
+	final metaKinds: Array<String>;
+	final literalTypeNames: Map<String, String>;
 	final modifierKinds: Array<String>;
 	final numericKinds: Array<String>;
 	final negationKind: String;
@@ -306,6 +412,13 @@ private typedef EnumAbstractCfg = {
 	final assignKinds: Array<String>;
 	final ternaryKind: String;
 	final resultContainerKinds: Array<String>;
+};
+
+private typedef WholeType = {
+	final span: Span;
+	final name: String;
+	final count: Int;
+	final typeName: String;
 };
 
 private typedef Group = {
