@@ -28,8 +28,7 @@ class PreferEnumAbstractCheckTest extends Test {
 			'class C { static inline final RANK_A:Int = 0; static final RANK_B = 1; static final RANK_C = 2; static function r(x:Int):Int { return x == 0 ? RANK_A : RANK_B; } }'
 		);
 		Assert.equals(1, vs.length);
-		Assert.equals('prefer-enum-abstract', vs[0].rule);
-		Assert.equals(Severity.Info, vs[0].severity);
+		assertAdvisory(vs[0]);
 		Assert.isTrue(vs[0].message.contains("'RANK_*'"));
 		Assert.isTrue(vs[0].message.contains('3'));
 	}
@@ -117,6 +116,169 @@ class PreferEnumAbstractCheckTest extends Test {
 				'class C { static final MODE_A = 0; static final MODE_B = 1; static final MODE_C = 2; static function pick(x:Int):Int { var m:Int = 0; if (x > 0) m = MODE_A; else m = MODE_B; return m; } }'
 			).length
 		);
+	}
+
+	public function testWholeTypeStringConstantsFlagged(): Void {
+		// A type declaring NOTHING but same-typed distinct `static inline final` constants
+		// IS the enumeration — no in-file use is needed as evidence, and the alignment-style
+		// constants that motivate this arm are read only from other files.
+		final vs: Array<Violation> = violations(
+			'class Align { public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; public static inline final RIGHT:String = \'right\'; }'
+		);
+		Assert.equals(1, vs.length);
+		assertAdvisory(vs[0]);
+		Assert.isTrue(vs[0].message.contains('String'));
+		Assert.isTrue(vs[0].message.contains('3'));
+	}
+
+	public function testWholeTypeIntConstantsFlagged(): Void {
+		Assert.equals(
+			1,
+			violations(
+				'class Level { public static inline final LOW:Int = 0; public static inline final MID:Int = 1; public static inline final HIGH:Int = 2; }'
+			).length
+		);
+	}
+
+	public function testWholeTypeWithMethodNotFlagged(): Void {
+		// A method makes the type more than a constant namespace — an enum abstract would
+		// have to carry it, which is a judgement the check does not make.
+		Assert.equals(
+			0,
+			violations(
+				'class Align { public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; public static inline final RIGHT:String = \'right\'; public static function all():Int { return 3; } }'
+			).length
+		);
+	}
+
+	public function testWholeTypeWithConstructorNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class Align { public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; public static inline final RIGHT:String = \'right\'; public function new() {} }'
+			).length
+		);
+	}
+
+	public function testWholeTypeWithInheritanceNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class Align extends Base { public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; public static inline final RIGHT:String = \'right\'; }'
+			).length
+		);
+	}
+
+	public function testWholeTypeMixedPrimitivesNotFlagged(): Void {
+		// Two primitive types are two concepts — no single underlying type to pick.
+		Assert.equals(
+			0,
+			violations(
+				'class Mix { public static inline final A:String = \'a\'; public static inline final B:Int = 1; public static inline final C:String = \'c\'; }'
+			).length
+		);
+	}
+
+	public function testWholeTypeDuplicateValuesNotFlagged(): Void {
+		// Two names on one value are aliases, not distinct enumeration members.
+		Assert.equals(
+			0,
+			violations(
+				'class Dup { public static inline final A:String = \'x\'; public static inline final B:String = \'x\'; public static inline final C:String = \'y\'; }'
+			).length
+		);
+	}
+
+	public function testWholeTypeNonInlineNotFlagged(): Void {
+		// Without `inline` the members are storage, not compile-time substituted values.
+		Assert.equals(
+			0,
+			violations(
+				'class Align { public static final CENTER:String = \'center\'; public static final LEFT:String = \'left\'; public static final RIGHT:String = \'right\'; }'
+			).length
+		);
+	}
+
+	public function testWholeTypeNonLiteralValueNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class Align { public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; public static inline final BOTH:String = CENTER + LEFT; }'
+			).length
+		);
+	}
+
+	public function testWholeTypeMutableMemberNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class Align { public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; public static inline final RIGHT:String = \'right\'; static var current:String = \'center\'; }'
+			).length
+		);
+	}
+
+	public function testWholeTypeInstanceMemberNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class Align { public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; public static inline final RIGHT:String = \'right\'; final own:String = \'x\'; }'
+			).length
+		);
+	}
+
+	public function testWholeTypeBelowThresholdNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations('class Pair { public static inline final A:String = \'a\'; public static inline final B:String = \'b\'; }').length
+		);
+	}
+
+	public function testWholeTypeAbstractUnderlyingNotFlagged(): Void {
+		// An `abstract A(Int)` already carries an underlying type; converting it is a
+		// different edit, and its underlying-type node is not a constant member.
+		Assert.equals(
+			0,
+			violations(
+				'abstract A(Int) { public static inline final X:Int = 1; public static inline final Y:Int = 2; public static inline final Z:Int = 3; }'
+			).length
+		);
+	}
+
+	public function testWholeTypeMetadataOnMemberStillFlagged(): Void {
+		// Metadata annotates a member without adding behaviour to the type.
+		Assert.equals(
+			1,
+			violations(
+				'class Align { @:keep public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; public static inline final RIGHT:String = \'right\'; }'
+			).length
+		);
+	}
+
+	public function testWholeTypeConditionalMemberNotFlagged(): Void {
+		// A `#if`-guarded member projects as a `Conditional` node, which is not a modifier,
+		// a metadata annotation or a constant — so the whitelist refuses the container. An
+		// enum abstract whose member set depends on a build flag is a different edit.
+		Assert.equals(
+			0,
+			violations(
+				'class Guarded { public static inline final A:String = \'a\'; public static inline final B:String = \'b\';\n#if debug\npublic static inline final C:String = \'c\';\n#end\n }'
+			).length
+		);
+	}
+
+	public function testWholeTypeReportedOnceWhenPrefixArmAlsoMatches(): Void {
+		// The whole-type arm subsumes the prefix arm for the same container: one finding,
+		// not two, when the constants also share a prefix and feed one sink elsewhere.
+		final vs: Array<Violation> = violations(
+			'class E { public static inline final RANK_A:Int = 0; public static inline final RANK_B:Int = 1; public static inline final RANK_C:Int = 2; }\nclass U { static function r(x:Int):Int { return x == 0 ? RANK_A : RANK_B; } }'
+		);
+		Assert.equals(1, vs.length);
+	}
+
+	/** Every finding of this check is a report-only `prefer-enum-abstract` advisory. */
+	private function assertAdvisory(v: Violation): Void {
+		Assert.equals('prefer-enum-abstract', v.rule);
+		Assert.equals(Severity.Info, v.severity);
 	}
 
 	private function violations(src: String): Array<Violation> {
