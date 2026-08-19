@@ -44,36 +44,24 @@ final class HxParenValueIfOpenWrapSliceTest extends Test {
 	 */
 	public function testOverWideParenValueIfOpens(): Void {
 		final src: String = 'class Sample {\n\tfunction run() {\n'
-			+ '\t\tmarkerSprite.y = MeasureMap.PANEL_ROW_GRID_ITEM_HEIGHT - image.height - ($LADDER);\n'
-			+ '\t}\n}';
+			+ '\t\tmarkerSprite.y = MeasureMap.PANEL_ROW_GRID_ITEM_HEIGHT - image.height - ($LADDER);\n' + '\t}\n}';
 		final out: String = 'class Sample {\n\tfunction run() {\n'
-			+ '\t\tmarkerSprite.y = MeasureMap.PANEL_ROW_GRID_ITEM_HEIGHT - image.height - (\n'
-			+ OPEN_LADDER_3
-			+ '\t\t);\n'
-			+ '\t}\n}';
+			+ '\t\tmarkerSprite.y = MeasureMap.PANEL_ROW_GRID_ITEM_HEIGHT - image.height - (\n' + OPEN_LADDER_3 + '\t\t);\n' + '\t}\n}';
 		Assert.equals(out, triviaWrite(src, CFG));
 	}
 
 	/** The same shape with NO arithmetic around it — the paren alone is what owns the indent level. */
 	public function testOverWideParenValueIfOpensWithoutChain(): Void {
-		final src: String = 'class Sample {\n\tfunction run() {\n'
-			+ '\t\tmarkerSpriteBucketHolder.yPositionValue = ($LADDER);\n'
-			+ '\t}\n}';
-		final out: String = 'class Sample {\n\tfunction run() {\n'
-			+ '\t\tmarkerSpriteBucketHolder.yPositionValue = (\n'
-			+ OPEN_LADDER_3
-			+ '\t\t);\n'
-			+ '\t}\n}';
+		final src: String = 'class Sample {\n\tfunction run() {\n' + '\t\tmarkerSpriteBucketHolder.yPositionValue = ($LADDER);\n' + '\t}\n}';
+		final out: String = 'class Sample {\n\tfunction run() {\n' + '\t\tmarkerSpriteBucketHolder.yPositionValue = (\n' + OPEN_LADDER_3
+			+ '\t\t);\n' + '\t}\n}';
 		Assert.equals(out, triviaWrite(src, CFG));
 	}
 
 	/** Idempotent: the opened shape re-formats to itself byte-for-byte. */
 	public function testOpenedParenValueIfIsIdempotent(): Void {
 		final out: String = 'class Sample {\n\tfunction run() {\n'
-			+ '\t\tmarkerSprite.y = MeasureMap.PANEL_ROW_GRID_ITEM_HEIGHT - image.height - (\n'
-			+ OPEN_LADDER_3
-			+ '\t\t);\n'
-			+ '\t}\n}';
+			+ '\t\tmarkerSprite.y = MeasureMap.PANEL_ROW_GRID_ITEM_HEIGHT - image.height - (\n' + OPEN_LADDER_3 + '\t\t);\n' + '\t}\n}';
 		Assert.equals(out, triviaWrite(out, CFG));
 	}
 
@@ -88,17 +76,11 @@ final class HxParenValueIfOpenWrapSliceTest extends Test {
 	 * hard-flattened, exactly as before the slice — fork default-config parity.
 	 */
 	public function testDefaultExpressionWrapKeepsParenValueIfGlued(): Void {
-		final src: String = 'class Sample {\n\tfunction run() {\n'
-			+ '\t\tmarkerSpriteBucketHolder.yPositionValue = ($LADDER);\n'
-			+ '\t}\n}';
-		final out: String = 'class Sample {\n\tfunction run() {\n'
-			+ '\t\tmarkerSpriteBucketHolder.yPositionValue = (if (!bucket)\n'
-			+ '\t\t\tMeasureMap.PANEL_ROW_GRID_MARKICON_BOTTOM_PAD\n'
-			+ '\t\telse if (sharedBucket)\n'
-			+ '\t\t\tMeasureMap.PANEL_ROW_GRID_MARKICON_SHARED_BUCKET_BOT_PAD\n'
-			+ '\t\telse\n'
-			+ '\t\t\tMeasureMap.PANEL_ROW_GRID_MARKICON_BUCKET_BOTTOM_PAD);\n'
-			+ '\t}\n}';
+		final src: String = 'class Sample {\n\tfunction run() {\n' + '\t\tmarkerSpriteBucketHolder.yPositionValue = ($LADDER);\n' + '\t}\n}';
+		final out: String = 'class Sample {\n\tfunction run() {\n' + '\t\tmarkerSpriteBucketHolder.yPositionValue = (if (!bucket)\n'
+			+ '\t\t\tMeasureMap.PANEL_ROW_GRID_MARKICON_BOTTOM_PAD\n' + '\t\telse if (sharedBucket)\n'
+			+ '\t\t\tMeasureMap.PANEL_ROW_GRID_MARKICON_SHARED_BUCKET_BOT_PAD\n' + '\t\telse\n'
+			+ '\t\t\tMeasureMap.PANEL_ROW_GRID_MARKICON_BUCKET_BOTTOM_PAD);\n' + '\t}\n}';
 		Assert.equals(out, triviaWrite(src, NO_EXPR_WRAP));
 	}
 
