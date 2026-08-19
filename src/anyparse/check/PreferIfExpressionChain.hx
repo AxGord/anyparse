@@ -64,9 +64,12 @@ import anyparse.runtime.Span;
  *   single ternary IS the canon and is left alone; this minimum is the whole
  *   disjointness proof against `prefer-ternary-expression`.
  * - **At least one ternary rung.** A chain already written entirely as if-expressions is the
- *   canon — flagging it would report a fixed point. A MIXED chain (`c1 ? v1 : if (c2) v2
- *   else v3`, which neither this check's predecessor nor `prefer-ternary-expression` could
- *   move) does have one, and converges here.
+ *   canon — flagging it would report a fixed point. The count is taken of the SPINE and asked
+ *   BEFORE the inversion below folds anything in, so a canonical chain whose last rung VALUE
+ *   happens to hold a ternary stays out: nobody wrote THAT as a nested `?:`, and folding it in
+ *   inverts the emphasis the author chose (measured on `ShardPlan.compareEntries`). A MIXED
+ *   chain (`c1 ? v1 : if (c2) v2 else v3`, which neither this check's predecessor nor
+ *   `prefer-ternary-expression` could move) does have one, and converges here.
  * - **No claim by `prefer-switch-expression`.** An equality-shaped chain over a uniform
  *   discriminant tuple in a host THAT check accepts belongs to it, and this check defers by
  *   asking it directly (`PreferSwitchExpression.claims`) rather than mirroring its gate
@@ -346,14 +349,18 @@ final class PreferIfExpressionChain implements Check {
 		if (headSpan == null) return null;
 		final chain: Chain = spine(head, s);
 		final rawEnd: Null<Span> = chain.terminal.span;
-		if (chain.rungs.length == 0 || rawEnd == null) return null;
+		// The ternary-rung minimum is asked of the SPINE, BEFORE any inversion. A chain the author
+		// already wrote as if-expressions is the canon whatever its branch VALUES hold, and asking
+		// after the fold would claim one whose only ternary sits in the last rung's value — a shape
+		// nobody wrote as a nested `?:`, and one the fold demonstrably makes read worse.
+		if (chain.rungs.length == 0 || chain.ternaryRungs == 0 || rawEnd == null) return null;
 		// The EDIT stops at the ORIGINAL terminal's last token. That node is the chain's rightmost
 		// piece whatever the inversion does to the EMISSION order, and the terminal the rebuild
 		// finally writes can sit well before it.
 		final chainEnd: Span = IfExpressionChain.tokenSpan(rawEnd, source, comments);
 		final inverted: Bool = invertTail(chain, source, s, lazy);
 		final rawTerminal: Null<Span> = chain.terminal.span;
-		if (chain.ternaryRungs == 0 || rawTerminal == null) return null;
+		if (rawTerminal == null) return null;
 		final terminalSpan: Span = IfExpressionChain.tokenSpan(rawTerminal, source, comments);
 		final emitted: Null<Array<Emitted>> = emit(chain, source, comments, s, lazy, inverted);
 		if (emitted == null || emitted.length < MIN_RUNGS) return null;
@@ -457,7 +464,6 @@ final class PreferIfExpressionChain implements Check {
 			chain.rungs.push({ cond: last.cond, value: chain.terminal, invert: true });
 			for (rung in inner.rungs) chain.rungs.push(rung);
 			chain.terminal = inner.terminal;
-			chain.ternaryRungs += inner.ternaryRungs;
 			inverted = true;
 		}
 		return inverted;
@@ -523,8 +529,9 @@ private typedef Rung = {
 
 /**
  * A chain read as a spine: its rungs, the terminal the last `else` holds, and how many of its
- * links the author wrote as a ternary. `invertTail` mutates all three as it folds a nested
- * ternary in, which is why the three travel together rather than as three returns.
+ * links the author wrote as a ternary. `invertTail` mutates the first two as it folds a nested
+ * ternary in, which is why they travel together rather than as separate returns; the count is
+ * read BEFORE that, so it stays a fact about the SPINE the author wrote.
  */
 private typedef Chain = {
 	var rungs: Array<Rung>;

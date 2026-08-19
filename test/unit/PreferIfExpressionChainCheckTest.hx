@@ -40,6 +40,10 @@ class PreferIfExpressionChainCheckTest extends Test {
 	private static inline final CASE_ARM_CHAIN: String =
 		'class C {\n\tfunction f(v:Int):Void {\n\t\tswitch v {\n\t\t\tcase 1:\n\t\t\t\ta ? 1 : b ? 2 : 3;\n\t\t\tcase _:\n\t\t}\n\t}\n}';
 
+	/** anyparse's own `ShardPlan.compareEntries`: an if-chain the author wrote, whose LAST rung value is a ternary. */
+	private static inline final CANONICAL_CHAIN_WITH_TERNARY_RUNG_VALUE: String =
+		'class C {\n\tfunction f(a:Entry, b:Entry):Int {\n\t\treturn if (a.sticky != b.sticky)\n\t\t\ta.sticky ? -1 : 1\n\t\telse if (a.weight != b.weight)\n\t\t\ta.weight > b.weight ? -1 : 1\n\t\telse\n\t\t\tcompareNames(a.cls, b.cls);\n\t}\n}';
+
 	/** The TM `FileSystemBase` cloud-queue comparator — already canonical, so a 0-finding fixed point (anonymized). */
 	private static inline final TM_IF_CHAIN_COMPARATOR: String =
 		'class C {\n\tfunction f():Void {\n\t\tstack.sort((a:StoredEntryRecord, b:StoredEntryRecord) ->\n\t\t\tif (a.nested && !b.nested)\n\t\t\t\t-1\n\t\t\telse if (!a.nested && b.nested)\n\t\t\t\t1\n\t\t\telse\n\t\t\t\tSortHelper.orderTextValuesForKey(a.nodeName, b.nodeName)\n\t\t);\n\t}\n}';
@@ -80,6 +84,16 @@ class PreferIfExpressionChainCheckTest extends Test {
 	/** The already-canonical TM comparator: a chain with no ternary rung is the 0-finding fixed point. */
 	public function testIfExpressionChainNotFlagged(): Void {
 		Assert.equals(0, violations(TM_IF_CHAIN_COMPARATOR).length);
+	}
+
+	/**
+	 * The ternary-rung minimum is asked of the SPINE, BEFORE the inversion folds anything in.
+	 * anyparse's own `ShardPlan.compareEntries` is the shape: an if-chain the author wrote,
+	 * whose last rung VALUE happens to be a ternary. Folding it in would claim a chain nobody
+	 * wrote as a nested `?:` and invert the emphasis its author chose, so it stays out.
+	 */
+	public function testCanonicalChainWithATernaryRungValueNotFlagged(): Void {
+		Assert.equals(0, violations(CANONICAL_CHAIN_WITH_TERNARY_RUNG_VALUE).length);
 	}
 
 	/** Neither direction moves the canon: a 2-rung ternary and a 3-rung if-chain are fixed points of BOTH rules. */
