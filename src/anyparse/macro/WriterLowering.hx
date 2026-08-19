@@ -11367,8 +11367,7 @@ class WriterLowering {
 		final args: Null<Array<String>> = branch.fmtReadStringArgs('optionalSemicolon');
 		if (args == null || args.length == 0 || args.length > 2) return null;
 		var pathExpr: Expr = macro $i{rootArg};
-		if (args.length == 2) for (segment in args[1].split('.'))
-			pathExpr = { expr: EField(pathExpr, segment), pos: Context.currentPos() };
+		if (args.length == 2) for (segment in args[1].split('.')) pathExpr = { expr: EField(pathExpr, segment), pos: Context.currentPos() };
 		final gateCall: Expr = AstPredLowering.predCallExpr(_shape.root, _ctx.trivia, false, args[0], [pathExpr]);
 		return macro switch opt.optionalSemicolon {
 			case anyparse.format.OptionalSemicolon.Always: _dt($v{trailText});
