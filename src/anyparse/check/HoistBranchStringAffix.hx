@@ -213,6 +213,22 @@ final class HoistBranchStringAffix implements Check implements DefaultOff {
 		return source.charAt(leading ? lit.from + k : lit.to - 1 - k);
 	}
 
+	/** `shared` when hoisting it beats the two quotes and the ` + ` it costs, else nothing at all. */
+	private static inline function worthIt(branches: Array<Branch>, shared: Int): Int {
+		return (branches.length - 1) * shared <= AFFIX_SYNTAX_COST ? 0 : shared;
+	}
+
+	/**
+	 * How many characters of its first (or last) operand a branch may give up. A branch with SEVERAL
+	 * operands may give up the whole one -- the remainder then starts at the next operand. A
+	 * single-operand branch must keep a character of its own, and its tail is additionally capped by
+	 * the head cut already taken out of the same interior.
+	 */
+	private static inline function budgetOf(b: Branch, leading: Bool, head: Int): Int {
+		final lit: Literal = leading ? b.head : b.tail;
+		return b.count == 1 ? lit.to - lit.from - 1 - head : lit.to - lit.from;
+	}
+
 	/** Whether `raw` is text a cut may fall inside -- no escape introducer, no interpolation sigil. */
 	private static inline function plainText(raw: String): Bool {
 		return raw.indexOf('\\') == -1 && raw.indexOf('$') == -1;
@@ -388,38 +404,40 @@ final class HoistBranchStringAffix implements Check implements DefaultOff {
 	private static function affixesOf(branches: Array<Branch>, region: Span, directives: Array<CondDirective>, ctx: Ctx): Null<Match> {
 		final quote: String = branches[0].head.quote;
 		for (b in branches) if (b.head.quote != quote || b.tail.quote != quote) return null;
-		var head: Int = sharedRun(branches, ctx, true, [for (b in branches) b.head.to - b.head.from - (b.count == 1 ? 1 : 0)]);
-		if ((branches.length - 1) * head <= AFFIX_SYNTAX_COST) head = 0;
-		final budgets: Array<Int> = [
-			for (b in branches) b.count == 1 ? b.tail.to - b.tail.from - 1 - head : b.tail.to - b.tail.from
-		];
-		var tail: Int = sharedRun(branches, ctx, false, budgets);
-		if ((branches.length - 1) * tail <= AFFIX_SYNTAX_COST) tail = 0;
+		final head: Int = worthIt(branches, sharedRun(branches, ctx, true, [for (b in branches) budgetOf(b, true, 0)]));
+		final tail: Int = worthIt(branches, sharedRun(branches, ctx, false, [for (b in branches) budgetOf(b, false, head)]));
 		if (head == 0 && tail == 0) return null;
 		final kept: Array<Span> = [for (d in directives) d.span];
-		final texts: Array<String> = [];
-		for (b in branches) {
-			final start: Int = b.head.from + head;
-			final end: Int = b.tail.to - tail;
-			// Both outer operands eaten whole with nothing between them leaves the branch no value at
-			// all -- the shape where every branch wrote the same string.
-			if (b.count <= 2 && start == b.head.to && end == b.tail.from) return null;
-			kept.push(new Span(start, end));
-			texts.push(remainderText(b, start, end, ctx));
-		}
-		// Nothing varies: the branches wrote one string N times, which is a merge rather than a hoist.
-		var varies: Bool = false;
-		for (t in texts) if (t != texts[0]) varies = true;
-		if (!varies) return null;
+		final texts: Null<Array<String>> = remaindersOf(branches, head, tail, kept, ctx);
+		if (texts == null || IfExpressionChain.droppedComment(region, kept, ctx.comments)) return null;
 		final first: Literal = branches[0].head;
 		final last: Literal = branches[0].tail;
-		return IfExpressionChain.droppedComment(region, kept, ctx.comments) ? null : {
+		return {
 			region: new Span(directives[0].span.from, directives[directives.length - 1].span.to),
 			head: head == 0 ? '' : quote + ctx.source.substring(first.from, first.from + head) + quote,
 			tail: tail == 0 ? '' : quote + ctx.source.substring(last.to - tail, last.to) + quote,
 			directives: [for (d in directives) CondDirectives.text(ctx.source, d)],
 			branches: texts
 		};
+	}
+
+
+	/**
+	 * Each branch's surviving text, and the spans of it that the rebuild copies verbatim appended to
+	 * `kept`. Null when a branch would be left with no value at all, or when every branch's remainder
+	 * comes out the same -- nothing varies, which is a merge rather than a hoist.
+	 */
+	private static function remaindersOf(branches: Array<Branch>, head: Int, tail: Int, kept: Array<Span>, ctx: Ctx): Null<Array<String>> {
+		final texts: Array<String> = [];
+		for (b in branches) {
+			final start: Int = b.head.from + head;
+			final end: Int = b.tail.to - tail;
+			if (b.count <= 2 && start == b.head.to && end == b.tail.from) return null;
+			kept.push(new Span(start, end));
+			texts.push(remainderText(b, start, end, ctx));
+		}
+		for (t in texts) if (t != texts[0]) return texts;
+		return null;
 	}
 
 	/**
@@ -479,9 +497,7 @@ final class HoistBranchStringAffix implements Check implements DefaultOff {
 		final closeEaten: Bool = end == b.tail.from;
 		// The middle slice starts and ends at the seam an eaten operand leaves behind, so the `+` that
 		// joined it is dropped with it.
-		final middle: String = ctx.source.substring(
-			openEaten ? b.secondFrom : b.head.close, closeEaten ? b.penultimateTo : b.tail.open
-		);
+		final middle: String = ctx.source.substring(openEaten ? b.secondFrom : b.head.close, closeEaten ? b.penultimateTo : b.tail.open);
 		return (openEaten ? '' : q + ctx.source.substring(start, b.head.to) + q) + middle
 			+ (closeEaten ? '' : q + ctx.source.substring(b.tail.from, end) + q);
 	}
