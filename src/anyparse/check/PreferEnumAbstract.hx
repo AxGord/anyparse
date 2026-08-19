@@ -1,5 +1,7 @@
 package anyparse.check;
 
+import anyparse.check.Check.GroupedEdit;
+import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
@@ -102,6 +104,9 @@ using StringTools;
  * to report-only when any call site anywhere breaks. With no `compilerOracle` configured the
  * fix never runs at all.
  *
+ * One conversion is also ONE atomic group (`GroupedFix`), because the verifier's per-edit
+ * bisect would otherwise find a COMPILING subset that is silently wrong — see `fixGrouped`.
+ *
  * What the oracle cannot catch is a change that still COMPILES, and there is exactly one
  * class of those: an `enum abstract` erases to its underlying type at runtime, so every
  * VALUE behaves identically, but the TYPE stops existing as a runtime class. So the
@@ -129,7 +134,7 @@ using StringTools;
  * that slot unset keeps the rule exactly as report-only as it was before the fix existed.
  */
 @:nullSafety(Strict)
-final class PreferEnumAbstract implements Check implements RiskyFix {
+final class PreferEnumAbstract implements Check implements RiskyFix implements GroupedFix {
 
 	/** This check's rule id, as it appears on every violation it reports. */
 	private static inline final RULE_ID: String = 'prefer-enum-abstract';
@@ -228,14 +233,33 @@ final class PreferEnumAbstract implements Check implements RiskyFix {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final out: Array<{ span: Span, text: String }> = [];
+		return [for (e in fixGrouped(source, violations, plugin, index)) { span: e.span, text: e.text }];
+	}
+
+	/**
+	 * The same edits, each tagged with the CONTAINER it converts — one group per converted type,
+	 * so the risky-fix verifier's bisect can keep or drop a whole conversion and never half of one.
+	 *
+	 * This is not a nicety. Measured before the grouping existed: a fixture whose one call site
+	 * broke was bisected down to a subset that COMPILED — an `enum abstract` whose first member
+	 * kept its `public static inline final A = 'a'`. That is a plain static field on the abstract,
+	 * not a value of it: the type still compiles, `Align.A` still reads, and the member has
+	 * silently left the enumeration a `switch` is checked against. A verifier probing subsets
+	 * cannot tell that apart from a good result, which is exactly the case `GroupedFix` exists for.
+	 */
+	public function fixGrouped(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<GroupedEdit> {
+		final out: Array<GroupedEdit> = [];
+		var group: Int = 0;
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
 			final plan: Null<ConversionPlan> = plans[planKey(v.file, span.from)];
 			if (plan == null || source.substring(span.from, span.to) != plan.declSource) continue;
 			if (index != null && (index.hasSubtype(plan.name) || index.transitivelyCarriesRtti(plan.name))) continue;
-			for (e in plan.edits) out.push(e);
+			for (e in plan.edits) out.push({ span: e.span, text: e.text, group: group });
+			group++;
 		}
 		return out;
 	}
