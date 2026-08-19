@@ -2,10 +2,18 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
+import anyparse.check.MemberOrder.MemberRank;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NamingPolicy.HoistedConstant;
+import anyparse.query.NamingPolicy.NamingRule;
+import anyparse.query.NamingPolicy.NamingSupport;
+import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+
+using Lambda;
+using StringTools;
 
 /**
  * Flags a private instance field whose CONSTANT declaration default is overwritten by exactly
@@ -99,6 +107,23 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 	private static inline final MESSAGE: String =
 		'this field default is overwritten by one conditional constructor write - fold the pair into a single unconditional assignment of a conditional value';
 
+	/**
+	 * The suffix a derived constant name carries. Fixed rather than inferred from the file: the only
+	 * available signal for "this file spells its defaults some other way" is a constant whose name
+	 * EXTENDS a field's name, and that fires on ordinary compound names — a type holding
+	 * `HEADER_HEIGHT` next to a `_header` field would teach the derivation to emit `..._HEIGHT`. A
+	 * wrong suffix is a name nobody asked for, so the derivation stays the one everybody can predict.
+	 */
+	private static inline final DEFAULT_SUFFIX: String = '_DEFAULT';
+
+	/**
+	 * The constant names this `--fix` PASS has already minted, so a second field of the same type
+	 * deriving the SAME name defers instead of landing a redefinition — see `RenameClaims`, whose
+	 * hierarchy test answers "defer" for two claims on one type and "land" for two provably
+	 * unrelated ones.
+	 */
+	private final _runClaims: RenameClaims = new RenameClaims();
+
 	public function new() {}
 
 	public function id(): String {
@@ -135,14 +160,211 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final edits: Array<{ span: Span, text: String }> = [];
+		// One insertion PER OFFSET, not per constant: two zero-width edits sharing an offset are
+		// contained in one another, so `dropContainedEdits` would keep exactly one of them.
+		final inserts: Array<{ at: Int, text: String }> = [];
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final file: String = violations.length == 0 ? '' : violations[0].file;
+		// The inherited-member proof walks the FULL supertype closure, so it resolves against the
+		// plugin's resolution scope (report files UNION the configured libraries) when there is one —
+		// the same index `naming` asks the same question of.
+		final resolution: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
-			final fold: Null<Array<{ span: Span, text: String }>> =
-				RefactorSupport.ctorConditionalDefaultTernaryEdits(source, span, plugin);
+			final fold: Null<Array<{ span: Span, text: String }>> = RefactorSupport.ctorConditionalDefaultTernaryEdits(
+				source, span, plugin,
+				site -> tree == null ? null : extractedConstant(site, source, file, tree, plugin, resolution, inserts)
+			);
 			if (fold != null) for (edit in fold) edits.push(edit);
 		}
+		for (slot in inserts) edits.push({ span: new Span(slot.at, slot.at), text: slot.text });
 		return RefactorSupport.dropContainedEdits(edits);
+	}
+
+	/**
+	 * The reference to write in the ternary's ELSE arm instead of the literal the fold is moving, or
+	 * null to keep the literal — the `extract` seam of `ctorConditionalDefaultTernaryEdits`.
+	 *
+	 * A default that is a BARE literal is not an anonymous number in an expression: it is the default
+	 * OF A NAMED FIELD, so its constant name is DERIVED (`_cellsNumX` -> `CELLS_NUM_X_DEFAULT`) rather
+	 * than invented. That is the whole difference from `magic-number`, which meets the same literal one
+	 * step later with no field to derive from and therefore stays report-only. Emitting it HERE rather
+	 * than there is the same argument: this rule is what moves the literal out of the declaration, so it
+	 * is the one that knows the field, and the one that would otherwise leave a half-finished state
+	 * nobody else is equipped to recognise.
+	 *
+	 * Every gate fails CLOSED to the literal — the fold itself is unaffected either way:
+	 *
+	 *  - the default is a bare numeric / boolean / string literal. A negation (`-5`) or a dotted
+	 *    constant chain (`Defaults.CELLS`) is refused: the first is computed, the second is ALREADY a
+	 *    named constant and extracting it would mint a second name for one value. A string carries no
+	 *    interpolation — the fold's own move-safety whitelist proved that before this is asked;
+	 *  - the declaration states a type. The constant transcribes it, and a head that states none gives
+	 *    it nothing to transcribe (and nothing to match a reuse candidate against);
+	 *  - an index is available. Haxe rejects a static whose name matches an INHERITED INSTANCE field
+	 *    ("Same field name can't be used for both static and instance"), and without a resolvable
+	 *    supertype closure that cannot be ruled out — the same refusal `ConstantHoist` makes;
+	 *  - the type may hold a static at all (`ConstantHoist.staticsForbidden` — Haxe's `@:generic`
+	 *    forbids it) and is a CLASS declared in this file;
+	 *  - the derived name occurs NOWHERE in the file. A brand-new name has no declaration to resolve,
+	 *    so the question is genuinely textual: any occurrence at all is a member it would redefine, a
+	 *    binding it would shadow, or a mention that would start reading as a reference to it;
+	 *  - the policy governing the member the grammar renders accepts the name — emitting one `naming`
+	 *    would immediately re-flag is worse than leaving the literal;
+	 *  - no OTHER field of the same type claimed the name earlier in this pass (`RenameClaims`);
+	 *  - the constants rank of the type has a splice point.
+	 *
+	 * The field's PRIVACY is not re-checked here: `run` reports only a non-exported field, and `fix`
+	 * re-derives every fold from a span `run` produced.
+	 */
+	private function extractedConstant(
+		site: CtorDefaultSite, source: String, file: String, tree: QueryNode, plugin: GrammarPlugin, index: Null<SymbolIndex>,
+		inserts: Array<{ at: Int, text: String }>
+	): Null<String> {
+		final shape: RefShape = plugin.refShape();
+		final owner: Null<String> = site.container.name;
+		final annotation: Null<String> = site.typeAnnotation;
+		if (owner == null || annotation == null || index == null || !isBareLiteral(site.defaultNode, shape)) return null;
+		final reused: Null<String> = constantHoldingTheDefault(site, source, shape, annotation);
+		if (reused != null) return reused;
+		final ownerName: String = owner;
+		final idx: SymbolIndex = index;
+		final name: Null<String> = derivedConstantName(site.fieldName);
+		final decl: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(tree, ownerName, shape.classDeclKinds ?? []);
+		final support: Null<NamingSupport> = plugin.namingSupport();
+		if (name == null || decl == null || support == null) return null;
+		final newName: String = name;
+		final member: Null<HoistedConstant> = support.hoistedConstant('final $newName:$annotation = ${site.defaultText};', true);
+		if (member == null) return null;
+		final emitted: HoistedConstant = member;
+		final rule: Null<NamingRule> = ConstantHoist.constantRule(support.policyFor(file), emitted.mods);
+		if (rule == null || !rule.format.match(newName)) return null;
+		if (ConstantHoist.staticsForbidden(tree, decl, plugin)) return null;
+		if (RefactorSupport.referencedInRange(source, newName, 0, source.length, [])) return null;
+		if (!idx.typeProvablyLacksMember(ownerName, newName, file)) return null;
+		if (_runClaims.defers(ownerName, newName, idx)) return null;
+		final at: Null<Int> = constantsRankSplice(site.container, decl, source, shape, ownerName);
+		if (at == null) return null;
+		_runClaims.claim(ownerName, newName, idx);
+		stage(inserts, at, '\n\t${emitted.text}');
+		return newName;
+	}
+
+	/**
+	 * The name of a constant the type ALREADY declares for this exact default — same verbatim
+	 * initializer text AND same written type — or null when it declares none. Reusing it is what keeps
+	 * one value from acquiring a second name; the TYPE has to match too, since a `Float` constant read
+	 * where an `Int` is declared does not compile.
+	 *
+	 * Only an UNCONDITIONAL static immutable field qualifies: one declared inside a `#if` region exists
+	 * in some builds and not others, and a reference to it would be a build-configuration error rather
+	 * than a reuse.
+	 */
+	private static function constantHoldingTheDefault(
+		site: CtorDefaultSite, source: String, shape: RefShape, annotation: String
+	): Null<String> {
+		for (m in MemberSlots.collectMembers(site.container, source, shape, [])) {
+			final init: Null<QueryNode> = m.initNode;
+			final name: Null<String> = m.node.name;
+			final declSpan: Null<Span> = m.node.span;
+			final initSpan: Null<Span> = init?.span;
+			if (m.condition != null || !isConstantRank(m.rank) || init == null || name == null || declSpan == null || initSpan == null)
+				continue;
+			if (!isBareLiteral(init, shape) || source.substring(initSpan.from, initSpan.to) != site.defaultText) continue;
+			if (RefactorSupport.declaredTypeAnnotation(source, declSpan, initSpan, name) == annotation) return name;
+		}
+		return null;
+	}
+
+	/**
+	 * Where a `private static` constant goes in `container` so `member-order` stays satisfied: just
+	 * after the LAST unconditional member that outranks it, and at the top of the body when there is
+	 * none. Splicing before the FIRST member — what `extract-constant` does — would put it ahead of a
+	 * `public static` one, which is a member-order violation the emitting rule would be creating.
+	 *
+	 * A member inside a `#if` region is no anchor: the splice must land in every build.
+	 */
+	private static function constantsRankSplice(
+		container: QueryNode, decl: TypeDeclMatch, source: String, shape: RefShape, ownerName: String
+	): Null<Int> {
+		var at: Int = -1;
+		for (m in MemberSlots.collectMembers(container, source, shape, [])) if (
+			m.condition == null && m.rank - MemberRank.StaticPrivateImmutableField <= 0
+		)
+			at = m.span.to;
+		if (at >= 0) return at;
+		final brace: Null<Int> = RefactorSupport.typeBodyBraceOffset(source, decl, ownerName);
+		return brace == null ? null : brace + 1;
+	}
+
+	/** Whether `rank` is a STATIC IMMUTABLE field — the rank a reusable constant occupies, in either visibility. */
+	private static inline function isConstantRank(rank: MemberRank): Bool {
+		return rank == MemberRank.StaticPublicImmutableField || rank == MemberRank.StaticPrivateImmutableField;
+	}
+
+	/**
+	 * Whether `node` is a BARE literal — a number, a boolean, or a string. Deliberately narrower than
+	 * the fold's own move-safety whitelist, which also admits a negation and a dotted constant chain:
+	 * naming those two is either wrong (`-5` is computed) or redundant (a chain is already a name).
+	 */
+	private static function isBareLiteral(node: QueryNode, shape: RefShape): Bool {
+		return (shape.numericLiteralKinds ?? []).contains(node.kind) || node.kind == shape.boolLitKind
+			|| (shape.stringLiteralKinds ?? []).contains(node.kind);
+	}
+
+	/** The constant name derived from a field name (`_cellsNumX` -> `CELLS_NUM_X_DEFAULT`), or null when nothing survives. */
+	private static function derivedConstantName(fieldName: String): Null<String> {
+		final core: String = upperSnake(fieldName);
+		final name: String = '$core$DEFAULT_SUFFIX';
+		return core == '' || !RefactorSupport.isIdentifier(name) ? null : name;
+	}
+
+	/**
+	 * `name` respelled UPPER_SNAKE: leading and internal underscores separate segments, and so does
+	 * every capital that OPENS a word — one preceded by a lower-case letter or a digit (`cellsNum` ->
+	 * `CELLS_NUM`), or one closing an acronym run before a new word (`urlPath` -> `URL_PATH`). An
+	 * already-UPPER_SNAKE name survives unchanged, which is what a field the `naming` step has not
+	 * reached yet still carries.
+	 */
+	private static function upperSnake(name: String): String {
+		final segments: Array<String> = [];
+		var current: StringBuf = new StringBuf();
+		for (i in 0...name.length) {
+			final code: Int = name.fastCodeAt(i);
+			if (code == '_'.code || (isUpperCode(code) && current.length > 0 && opensWord(name, i))) {
+				if (current.length > 0) segments.push(current.toString());
+				current = new StringBuf();
+			}
+			if (code != '_'.code) current.addChar(code);
+		}
+		if (current.length > 0) segments.push(current.toString());
+		return segments.join('_').toUpperCase();
+	}
+
+	/**
+	 * Whether the capital at `at` OPENS a word: the character before it is not a capital (a lower-case
+	 * letter or a digit ends the previous word), or it is one and the NEXT character is lower-case (the
+	 * capital is the head of a word trailing an acronym run, as the `P` of `URLPath`).
+	 */
+	private static function opensWord(name: String, at: Int): Bool {
+		if (!isUpperCode(name.fastCodeAt(at - 1))) return true;
+		final next: Int = at + 1 < name.length ? name.fastCodeAt(at + 1) : 0;
+		return next >= 'a'.code && next <= 'z'.code;
+	}
+
+	/** Whether `code` is an ASCII capital. */
+	private static inline function isUpperCode(code: Int): Bool {
+		return code >= 'A'.code && code <= 'Z'.code;
+	}
+
+	/** Record one member to splice at `at`, merging it into the insertion already pending there. */
+	private static function stage(inserts: Array<{ at: Int, text: String }>, at: Int, text: String): Void {
+		final slot: Null<{ at: Int, text: String }> = inserts.find(pending -> pending.at == at);
+		if (slot == null)
+			inserts.push({ at: at, text: text });
+		else
+			slot.text += text;
 	}
 
 }

@@ -86,9 +86,7 @@ final class ConstantHoist {
 			declKinds: declKinds,
 			classKinds: classKinds,
 			blockKinds: blockKinds,
-			staticlessMetas: shape.staticlessTypeMetaNames ?? [],
-			modifierKinds: shape.modifierOrderKinds ?? [],
-			metaKinds: plugin.metaShape().metaKinds,
+
 			plugin: plugin,
 			support: support,
 			flaggedFroms: flaggedFroms,
@@ -211,7 +209,7 @@ final class ConstantHoist {
 	 * say the hoisted name is correct, and emitting one it would immediately re-flag is worse than
 	 * renaming in place.
 	 */
-	private static function constantRule(policy: NamingPolicy, mods: Array<String>): Null<NamingRule> {
+	public static function constantRule(policy: NamingPolicy, mods: Array<String>): Null<NamingRule> {
 		return policy.find(
 			rule ->
 				rule.category == NamingCategory.Constant && rule.requireMods.foreach(m -> mods.contains(m))
@@ -273,10 +271,12 @@ final class ConstantHoist {
 	 * gate would notice: the re-parse validation accepts the member and the type closure has nothing
 	 * to say about it.
 	 */
-	private static function staticsForbidden(tree: QueryNode, decl: TypeDeclMatch, ctx: HoistContext): Bool {
-		if (ctx.staticlessMetas.length == 0) return false;
-		final metas: Array<String> = precedingMetaNames(tree, decl.fullSpan, ctx.metaKinds, ctx.modifierKinds);
-		return metas.exists(meta -> ctx.staticlessMetas.contains(meta));
+	public static function staticsForbidden(tree: QueryNode, decl: TypeDeclMatch, plugin: GrammarPlugin): Bool {
+		final shape: RefShape = plugin.refShape();
+		final staticless: Array<String> = shape.staticlessTypeMetaNames ?? [];
+		if (staticless.length == 0) return false;
+		final metas: Array<String> = precedingMetaNames(tree, decl.fullSpan, plugin.metaShape().metaKinds, shape.modifierOrderKinds ?? []);
+		return metas.exists(meta -> staticless.contains(meta));
 	}
 
 	/**
@@ -380,7 +380,7 @@ final class ConstantHoist {
 	 * rides along because it too asks only whether the move is safe, not what to write.
 	 */
 	private static function receivable(match: TypeDeclMatch, name: String, ownerName: String, declSpan: Span, ctx: HoistContext): Bool {
-		return !staticsForbidden(ctx.tree, match, ctx) && ctx.index.typeProvablyLacksMember(ownerName, name, ctx.file)
+		return !staticsForbidden(ctx.tree, match, ctx.plugin) && ctx.index.typeProvablyLacksMember(ownerName, name, ctx.file)
 			&& !conditionalBetween(match.nameNode, declSpan.from) && !commentAbove(ctx.source, declSpan)
 			&& occupiesNameAlone(name, declSpan.from, ctx);
 	}
@@ -440,10 +440,6 @@ private typedef HoistContext = {
 	/** The statement-list hosts — a declaration must be a DIRECT child of one. */
 	final blockKinds: Array<String>;
 
-	/** The metas under which the language forbids statics on the receiving type. */
-	final staticlessMetas: Array<String>;
-	final modifierKinds: Array<String>;
-	final metaKinds: Array<String>;
 	final plugin: GrammarPlugin;
 	final support: NamingSupport;
 	final flaggedFroms: Array<Int>;
