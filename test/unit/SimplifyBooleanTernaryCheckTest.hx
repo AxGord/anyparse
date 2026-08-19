@@ -183,6 +183,74 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 		Assert.equals(1, violations('return s < t ? false : x > 0;').length);
 	}
 
+	/**
+	 * THE SLICE: a ternary that is the RETURNED value of a function declaring `:Bool`
+	 * reduces even with a non-provably-Bool branch — the declared return type is the proof.
+	 * `boolFnSimplifyOf` wraps in `static function f(...): Bool`, the other helpers in
+	 * `: Dynamic`, so the two populations stay separated.
+	 */
+	public function testCallBranchInBoolReturnSimplified(): Void {
+		Assert.equals('!p && g()', boolFnSimplifyOf('return p ? false : g();'));
+		Assert.equals('p || g()', boolFnSimplifyOf('return p ? true : g();'));
+		Assert.equals('p && g()', boolFnSimplifyOf('return p ? g() : false;'));
+		Assert.equals('!p || g()', boolFnSimplifyOf('return p ? g() : true;'));
+	}
+
+	/** The same ternary in a `:Dynamic` function keeps the old refusal. */
+	public function testCallBranchInDynamicReturnNotSimplified(): Void {
+		Assert.equals('', simplifyOf('return p ? false : g();'));
+	}
+
+	/** `Null<Bool>` proves nothing — refused. */
+	public function testCallBranchInNullBoolReturnNotSimplified(): Void {
+		Assert.equals('', nullBoolFnSimplifyOf('return p ? false : g();'));
+	}
+
+	/** An EXPRESSION body (`function f(): Bool return …`) is the function's returned value too. */
+	public function testCallBranchInBoolExpressionBodySimplified(): Void {
+		Assert.equals('!p && g()', boolFnExprBodySimplifyOf('p ? false : g()'));
+	}
+
+	/** Only the DIRECT returned value: a ternary nested inside the returned expression is not licensed. */
+	public function testNestedTernaryInBoolReturnNotSimplified(): Void {
+		Assert.equals('', boolFnSimplifyOf('return h(p ? false : g());'));
+	}
+
+	/** A `null` branch stays refused even in a `:Bool` function — `!p && null` is degenerate. */
+	public function testNullBranchInBoolReturnNotSimplified(): Void {
+		Assert.equals('', boolFnSimplifyOf('return p ? false : null;'));
+	}
+
+	/** A statement-like branch stays refused even in a `:Bool` function. */
+	public function testStatementLikeBranchInBoolReturnNotSimplified(): Void {
+		Assert.equals('', boolFnSimplifyOf('return p ? false : try g() catch (e:Dynamic) false;'));
+		Assert.equals('', boolFnSimplifyOf('return p ? false : switch (x) { case 1: true; case _: false; };'));
+	}
+
+	/** The rewrite text for the first ternary in `body`, wrapped in a `: Bool` function. */
+	private function boolFnSimplifyOf(body: String): String {
+		return firstEdit('class C { static function f(a: Int, b: Int, c: Bool, p: Bool, x: Int): Bool ${body} }');
+	}
+
+	/** As `boolFnSimplifyOf`, but the function declares `: Null<Bool>`. */
+	private function nullBoolFnSimplifyOf(body: String): String {
+		return firstEdit('class C { static function f(a: Int, b: Int, c: Bool, p: Bool, x: Int): Null<Bool> ${body} }');
+	}
+
+	/** As `boolFnSimplifyOf`, but the body is an EXPRESSION body rather than a `return` statement. */
+	private function boolFnExprBodySimplifyOf(body: String): String {
+		return firstEdit('class C { static function f(a: Int, b: Int, c: Bool, p: Bool, x: Int): Bool return ${body}; }');
+	}
+
+	/** The first rewrite `fix` emits for `src`, or an empty string when there is none. */
+	private function firstEdit(src: String): String {
+		final check: SimplifyBooleanTernary = new SimplifyBooleanTernary();
+		final edits: Array<{ span: Span, text: String }> = check.fix(
+			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
+		);
+		return edits.length > 0 ? edits[0].text : '';
+	}
+
 	private function violations(body: String): Array<Violation> {
 		final src: String =
 			'class C { static function f(a: Int, b: Int, c: Bool, p: Bool, x: Int, s: String, t: String, y: Float): Dynamic ${body} }';

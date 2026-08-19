@@ -239,6 +239,89 @@ class PreferTernaryReturnCheckTest extends Test {
 		Assert.equals('return a\n? 1 /* linked */\n: 0;', es[0].text);
 	}
 
+	/**
+	 * THE SLICE: a `Call` tail in a function DECLARING `:Bool` collapses. The declared
+	 * return type is the proof `provablyBoolOperand` cannot supply — under
+	 * `@:nullSafety(Strict)` the original `return g();` cannot compile unless `g()` is a
+	 * non-null `Bool`, and without Strict the guard / ternary / `&&` forms are
+	 * observationally identical anyway (measured over `{null,true,false}` x `{true,false}`
+	 * on `--interp`, `js` and `--jvm`).
+	 */
+	public function testCallTailInBoolFunctionFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f(c:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn g();\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('return c ? true : g();', es[0].text);
+	}
+
+	/** The motivating shape: a null guard with a `false` default and a method-call tail. */
+	public function testNullGuardCallTailInBoolFunctionFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class C {\n\tfunction f():Bool {\n\t\tif (xs == null) return false;\n\t\treturn xs.foreach(p);\n\t}\n}'
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('return xs == null ? false : xs.foreach(p);', es[0].text);
+	}
+
+	/** `Null<Bool>` gives no such guarantee — a nullable declared return type stays refused. */
+	public function testCallTailInNullBoolFunctionNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations('class C {\n\tfunction f(c:Bool):Null<Bool> {\n\t\tif (c) return true;\n\t\treturn g();\n\t}\n}').length
+		);
+	}
+
+	/** A MISSING return type annotation infers nothing and proves nothing — refused. */
+	public function testCallTailInUnannotatedFunctionNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C {\n\tfunction f(c:Bool) {\n\t\tif (c) return true;\n\t\treturn g();\n\t}\n}').length
+		);
+	}
+
+	/** `Dynamic` / `Any` are null-safety escape hatches, not the non-null `Bool` nominal — refused. */
+	public function testCallTailInDynamicFunctionNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations('class C {\n\tfunction f(c:Bool):Dynamic {\n\t\tif (c) return true;\n\t\treturn g();\n\t}\n}').length
+		);
+	}
+
+	/** The proof is the NEAREST enclosing function's: a `:Bool` outer does not license an inner lambda. */
+	public function testInnerLambdaDoesNotInheritOuterBoolReturn(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f():Bool {\n\t\tvar h = function(c:Bool) {\n\t\t\tif (c) return true;\n'
+				+ '\t\t\treturn g();\n\t\t};\n\t\treturn h(true);\n\t}\n}'
+			).length
+		);
+	}
+
+	/** A `null`-literal tail stays refused: `!c && null` is degenerate, and under Strict the site cannot exist. */
+	public function testNullLiteralTailInBoolFunctionNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C {\n\tfunction f(c:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn null;\n\t}\n}').length
+		);
+	}
+
+	/** A statement-like tail (`switch` / `try` / `if` expression) stays refused: the flat form is uglier than the guard. */
+	public function testStatementLikeTailInBoolFunctionNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f(c:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn switch (x) {\n'
+				+ '\t\t\tcase 1: true;\n\t\t\tcase _: false;\n\t\t}\n\t}\n}'
+			).length
+		);
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f(c:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn try g() catch (e:Dynamic) false;\n'
+				+ '\t}\n}'
+			).length
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferTernaryReturn().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
