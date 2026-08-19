@@ -181,19 +181,23 @@ class PreferForInCheckTest extends Test {
 
 	/** The comprehension header, whose element type is the ONE real naming signal in the source. */
 	public function testComprehensionHeaderTakesTheElementTypeName(): Void {
-		final src: String = 'class C {\n\tfunction f(it:Iterator<CodePoint>):Void {\n\t\tfinal a:Array<CodePoint> = [while (it.hasNext()) it.next()];\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction f(it:Iterator<CodePoint>):Void {\n\t\tfinal a:Array<CodePoint> = [while (it.hasNext()) it.next()];\n\t}\n}';
 		Assert.stringContains('[for (codePoint in it) codePoint]', applyFix(src));
 	}
 
 	/** A BASIC element type reads as a type, not as a value, so it falls through to the generic name. */
 	public function testBasicElementTypeFallsBackToTheGenericBinder(): Void {
-		final src: String = 'class C {\n\tfunction f(it:Iterator<Int>):Void {\n\t\tfinal a:Array<Int> = [while (it.hasNext()) it.next()];\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction f(it:Iterator<Int>):Void {\n\t\tfinal a:Array<Int> = [while (it.hasNext()) it.next()];\n\t}\n}';
 		Assert.stringContains('[for (value in it) value]', applyFix(src));
 	}
 
 	/** A derived name already live at the loop is skipped, so the rewrite can never capture it. */
 	public function testLiveBinderNameIsSkipped(): Void {
-		Assert.stringContains('for (element in it) use(element);', applyFix(fn('final value = 1;\n\t\twhile (it.hasNext()) use(it.next());')));
+		Assert.stringContains(
+			'for (element in it) use(element);', applyFix(fn('final value = 1;\n\t\twhile (it.hasNext()) use(it.next());'))
+		);
 	}
 
 	/** TWO `next()` calls advance the iterator twice where `for` advances once — refused. */

@@ -279,8 +279,11 @@ final class PreferForIn implements Check implements DefaultOff {
 		// A braced body holding ONLY the `next()` binding is a loop that drains and does nothing;
 		// it was refused before this arm existed and stays refused, since rewriting it buys the
 		// reader nothing and the dead binding is `unused-local`'s finding, not this rule's.
-		if (body.kind == s.blockStmtKind && body.children.length < MIN_BODY_STATEMENTS
-			&& body.children.length == 1 && s.localDeclKinds.contains(body.children[0].kind)) return null;
+		if (
+			body.kind == s.blockStmtKind && body.children.length < MIN_BODY_STATEMENTS && body.children.length == 1
+			&& s.localDeclKinds.contains(body.children[0].kind)
+		)
+			return null;
 		final drain: Null<QueryNode> = findProtocolCall(body, iterator, s);
 		if (drain == null) return null;
 		final loopSpan: Null<Span> = loop.span;
