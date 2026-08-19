@@ -26,6 +26,9 @@ using StringTools;
  */
 class ApqMatcherTest extends Test {
 
+	private static final ARITY_SOURCE: String = 'class X {\n\tfunction f() {\n\t\tvar a = new Foo();\n\t\tvar b = new Foo(1);\n'
+		+ '\t\tvar c = new Foo(1, 2);\n\t\tvar d = new Foo(1, 2, 3);\n\t\tg();\n\t\tg(1);\n\t\tg(1, 2);\n\t}\n}';
+
 	public function testThrowNewMatchesEveryThrowNewSite(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final source: String = 'class X {
@@ -479,7 +482,7 @@ class Y {
 		for (m in matches) {
 			final keys: Array<String> = [for (k in m.bindings.keys()) k];
 			keys.sort(Reflect.compare);
-			Assert.equals('T', keys.join(','), 'only the name metavar binds - got ${keys.join(",")}');
+			Assert.equals('T', keys.join(','), 'only the name metavar binds - got ${keys.join(',')}');
 		}
 	}
 
@@ -491,7 +494,8 @@ class Y {
 	public function testRangeAndSpreadPatternsAreUntouched(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: QueryNode = plugin.parseFile(
-			'class Q {\n\tfunction f(arr:Array<Int>, n:Int) {\n\t\tfor (i in 0...n) trace(i);\n\t\tg(...arr);\n\t}\n\tfunction g(...xs:Int) {}\n}'
+			'class Q {\n\tfunction f(arr:Array<Int>, n:Int) {\n\t\tfor (i in 0...n) trace(i);\n\t\tg(...arr);\n\t}\n'
+			+ '\tfunction g(...xs:Int) {}\n}'
 		);
 		Assert.equals(
 			1, Matcher.search(plugin.parsePattern("for ($i in 0...$n) $b"), tree).length, 'the range operator still parses as a range'
@@ -531,9 +535,6 @@ class Y {
 			4, Matcher.search(plugin.parsePattern("new $T(...)"), tree).length, 'the bare star still sees all four constructions'
 		);
 	}
-
-	private static final ARITY_SOURCE: String = 'class X {\n\tfunction f() {\n\t\tvar a = new Foo();\n\t\tvar b = new Foo(1);\n'
-		+ '\t\tvar c = new Foo(1, 2);\n\t\tvar d = new Foo(1, 2, 3);\n\t\tg();\n\t\tg(1);\n\t\tg(1, 2);\n\t}\n}';
 
 	/** The names each match bound to the given metavariable, in match order. */
 	private static function boundNames(matches: Array<Match>, metavar: String): Array<String> {

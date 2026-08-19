@@ -238,7 +238,7 @@ class PatternParseProbe extends Test {
 		try {
 			new HaxeQueryPlugin().parsePattern(source);
 			return false;
-		} catch (_: Dynamic)
+		} catch (_: Exception)
 			return true;
 	}
 
