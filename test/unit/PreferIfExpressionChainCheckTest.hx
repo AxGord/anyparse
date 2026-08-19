@@ -29,6 +29,10 @@ class PreferIfExpressionChainCheckTest extends Test {
 	private static inline final TM_RELINK_DECISION: String =
 		'class C {\n\tfunction f():RebindDecision {\n\t\treturn !visible || remoteHostTag < 0\n\t\t\t? KeepLink\n\t\t\t: dbLocalTag == remoteHostTag\n\t\t\t\t? KeepLink // already correctly paired\n\t\t\t\t: groupAllowEdit && pendingAction == QUEUED_STATE_LOCAL_PENDING ? RebindAsEdit : RebindAsSteady;\n\t}\n}';
 
+	/** A ternary chain as the value of a `case` arm — the shape TM's `getColorPickerType` writes five times over. */
+	private static inline final CASE_ARM_CHAIN: String =
+		'class C {\n\tfunction f(v:Int):Void {\n\t\tswitch v {\n\t\t\tcase 1:\n\t\t\t\ta ? 1 : b ? 2 : 3;\n\t\t\tcase _:\n\t\t}\n\t}\n}';
+
 	/** The TM `FileSystemBase` cloud-queue comparator — already canonical, so a 0-finding fixed point (anonymized). */
 	private static inline final TM_IF_CHAIN_COMPARATOR: String =
 		'class C {\n\tfunction f():Void {\n\t\tstack.sort((a:StoredEntryRecord, b:StoredEntryRecord) ->\n\t\t\tif (a.nested && !b.nested)\n\t\t\t\t-1\n\t\t\telse if (!a.nested && b.nested)\n\t\t\t\t1\n\t\t\telse\n\t\t\t\tSortHelper.orderTextValuesForKey(a.nodeName, b.nodeName)\n\t\t);\n\t}\n}';
@@ -260,6 +264,43 @@ class PreferIfExpressionChainCheckTest extends Test {
 		// nothing: `VarExpr` is not a host kind and the host gate would reject it first.
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tfinal e = macro return a ? 1 : b ? 2 : 3;\n\t}\n}').length);
 		Assert.equals(1, violations('class C {\n\tfunction f():Int {\n\t\treturn a ? 1 : b ? 2 : 3;\n\t}\n}').length);
+	}
+
+	/**
+	 * The VALUE POSITION OF A `case` ARM is a host: the arm's `:` and the statement's `;`
+	 * delimit it exactly as a `return` does, and the formatter renders the ladder there under
+	 * `expressionIf: "next"`. The five `getColorPickerType` arms in TM are the shape.
+	 */
+	public function testCaseArmValueFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(CASE_ARM_CHAIN);
+		Assert.equals(1, es.length);
+		Assert.equals('if (a) 1 else if (b) 2 else 3', es[0].text);
+	}
+
+	/** A `default:` arm is the same value slot as a `case` one. */
+	public function testDefaultArmValueFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class C {\n\tfunction f(v:Int):Void {\n\t\tswitch v {\n\t\t\tdefault:\n\t\t\t\ta ? 1 : b ? 2 : 3;\n\t\t}\n\t}\n}'
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('if (a) 1 else if (b) 2 else 3', es[0].text);
+	}
+
+	/**
+	 * The arm host reaches the chain THROUGH the expression-statement wrapper, and that
+	 * transparency is scoped to an arm: a bare expression statement in an ordinary block is
+	 * NOT a host, so the gate cannot come off wider than the slot it was opened for.
+	 */
+	public function testBareExpressionStatementNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\ta ? 1 : b ? 2 : 3;\n\t}\n}').length);
+	}
+
+	/** The emitted arm is the fixed point: the if-chain form draws nothing back. */
+	public function testCaseArmOutputIsAFixedPoint(): Void {
+		final once: String = RefactorSupport.applyEdits(CASE_ARM_CHAIN, edits(CASE_ARM_CHAIN));
+		Assert.equals(0, violations(once).length);
+		Assert.equals(0, ternaryExpressionViolations(once).length);
+		Assert.equals(0, switchExpressionViolations(once).length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {
