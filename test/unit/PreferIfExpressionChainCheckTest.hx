@@ -125,12 +125,15 @@ class PreferIfExpressionChainCheckTest extends Test {
 	}
 
 	/**
-	 * A chain in the THEN-arm of an enclosing ternary is refused by the host gate for free — its
-	 * parent kind is a chain kind, which is no host — which is what keeps the emitted `else`-arm
-	 * from having to reason about the enclosing `:`.
+	 * A chain in the THEN-arm of an enclosing ternary is never reported as its OWN head — its
+	 * parent kind is a chain kind, which is no host — so the site yields ONE finding, taken
+	 * through the enclosing chain, which flattens the then-arm conjunctively.
 	 */
-	public function testThenArmChainNotFlagged(): Void {
-		Assert.equals(0, violations('class C {\n\tfunction f():Int {\n\t\treturn x ? a ? 1 : b ? 2 : 3 : y;\n\t}\n}').length);
+	public function testThenArmChainReportedOnceThroughItsHead(): Void {
+		final src: String = 'class C {\n\tfunction f():Int {\n\t\treturn x ? a ? 1 : b ? 2 : 3 : y;\n\t}\n}';
+		final es: Array<{ span: Span, text: String }> = edits(src);
+		Assert.equals(1, es.length);
+		Assert.equals('if (x && a) 1 else if (x) b ? 2 : 3 else y', es[0].text);
 	}
 
 	/**
