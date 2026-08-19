@@ -401,7 +401,7 @@ final class BoolLoopScan {
 	 * Haxe binds a real member before any `using` static extension, so `m.exists(x -> …)` on a
 	 * `Map` resolves to `Map.exists(key:K)` and puts the lambda where a key belongs: a rewrite
 	 * that cannot compile, which the oracle reverts on every run rather than once. The question is
-	 * `CheckScan.memberShadowsExtension`, the same one `prefer-static-extension` has always asked.
+	 * `SymbolIndex.memberShadowsExtension`, the same one `prefer-static-extension` has always asked.
 	 *
 	 * It applies to EVERY iterable shape, not just the CALL one the `Iterable` proof above gates —
 	 * the two ask about different things (what the receiver IS versus what it DECLARES) and a
@@ -419,7 +419,7 @@ final class BoolLoopScan {
 		final nominal: Null<String> = resolve == null ? null : resolve(iterable);
 		if (nominal == null) return false;
 		final index: Null<SymbolIndex> = probe.index();
-		return index != null && CheckScan.memberShadowsExtension(index, nominal, probe.method);
+		return index != null && index.memberShadowsExtension(nominal, probe.method);
 	}
 
 	/**
@@ -447,7 +447,7 @@ final class BoolLoopScan {
 			receiver: () -> {
 				if (!recvBuilt) {
 					recvBuilt = true;
-					recv = CheckScan.receiverNominalResolver(source, plugin, tree, file, index());
+					recv = CheckScan.typeNominalResolver(source, plugin, tree, file, index(), true);
 				}
 				return recv;
 			},

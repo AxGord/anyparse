@@ -400,7 +400,7 @@ final class PreferFind implements Check {
 	 * own type provably DECLARES `find`, in which case Haxe binds that member and the `using
 	 * Lambda;` the fix inserts is never consulted at the call.
 	 *
-	 * The question is `CheckScan.memberShadowsExtension`, shared with the three other
+	 * The question is `SymbolIndex.memberShadowsExtension`, shared with the three other
 	 * `Lambda`-targeting rules and with `prefer-static-extension`. No container in the resolution
 	 * scope declares `find` (measured on the 4.3 std: `Lambda` alone, and it is static), so this
 	 * gate is about PROJECT types — a `Repo.find(id)` receiver whose loop would otherwise be
@@ -412,19 +412,29 @@ final class PreferFind implements Check {
 	private static function memberProbe(
 		source: String, plugin: GrammarPlugin, tree: QueryNode, file: String, index: () -> Null<SymbolIndex>
 	): MemberProbe {
-		var resolver: Null<(QueryNode) -> Null<String>> = null;
-		var built: Bool = false;
+		final lazy: () -> Null<(QueryNode) -> Null<String>> = lazyReceiverResolver(source, plugin, tree, file, index);
 		return iterable -> {
-			if (!built) {
-				built = true;
-				resolver = CheckScan.receiverNominalResolver(source, plugin, tree, file, index());
-			}
-			final resolve: Null<(QueryNode) -> Null<String>> = resolver;
+			final resolve: Null<(QueryNode) -> Null<String>> = lazy();
 			if (resolve == null) return false;
 			final nominal: Null<String> = resolve(iterable);
 			if (nominal == null) return false;
 			final symbols: Null<SymbolIndex> = index();
-			return symbols != null && CheckScan.memberShadowsExtension(symbols, nominal, FIND_METHOD);
+			return symbols != null && symbols.memberShadowsExtension(nominal, FIND_METHOD);
+		};
+	}
+
+	/** The RECEIVER-position nominal resolver, built at most once per file and only when a loop was recovered. */
+	private static function lazyReceiverResolver(
+		source: String, plugin: GrammarPlugin, tree: QueryNode, file: String, index: () -> Null<SymbolIndex>
+	): () -> Null<(QueryNode) -> Null<String>> {
+		var resolver: Null<(QueryNode) -> Null<String>> = null;
+		var built: Bool = false;
+		return () -> {
+			if (!built) {
+				built = true;
+				resolver = CheckScan.typeNominalResolver(source, plugin, tree, file, index(), true);
+			}
+			return resolver;
 		};
 	}
 

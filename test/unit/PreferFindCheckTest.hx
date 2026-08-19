@@ -365,6 +365,18 @@ class PreferFindCheckTest extends Test {
 		Assert.isTrue(out.indexOf('if (frame1Xml != null)') == -1, out);
 	}
 
+	public function testReceiverDeclaringFindNotFlagged(): Void {
+		// A real MEMBER always beats a `using` static extension: `m.find(x -> …)` on a receiver whose
+		// own type declares `find` binds to THAT member. No stdlib container declares the name, so a
+		// PROJECT type is the live case this gate is about.
+		Assert.equals(0, violations(memberFn('for (x in m) if (x > 2) return x;\n\t\treturn null;')).length);
+	}
+
+	public function testReceiverDeclaringAnotherMemberStillFlagged(): Void {
+		// The gate is about the ONE name the rewrite wants — `exists` is a different member.
+		Assert.equals(1, violations(otherMemberFn('for (x in m) if (x > 2) return x;\n\t\treturn null;')).length);
+	}
+
 	/** A guarded capture-and-break loop over a nullable local — the cascade fixture. */
 	private inline function compositionSource(): String {
 		return 'package p;\n\nusing Lambda;\n\nclass C {\n\tfunction f(xml:Xml):Void {\n'
@@ -416,18 +428,6 @@ class PreferFindCheckTest extends Test {
 				Assert.fail('canonicalize Err: $message');
 		}
 		return '';
-	}
-
-	public function testReceiverDeclaringFindNotFlagged(): Void {
-		// A real MEMBER always beats a `using` static extension: `m.find(x -> …)` on a receiver whose
-		// own type declares `find` binds to THAT member. No stdlib container declares the name, so a
-		// PROJECT type is the live case this gate is about.
-		Assert.equals(0, violations(memberFn('for (x in m) if (x > 2) return x;\n\t\treturn null;')).length);
-	}
-
-	public function testReceiverDeclaringAnotherMemberStillFlagged(): Void {
-		// The gate is about the ONE name the rewrite wants — `exists` is a different member.
-		Assert.equals(1, violations(otherMemberFn('for (x in m) if (x > 2) return x;\n\t\treturn null;')).length);
 	}
 
 	/** A receiver whose OWN type declares `find` — the name this rule rewrites to. */

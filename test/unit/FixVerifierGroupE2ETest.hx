@@ -242,7 +242,6 @@ private class TableFake implements Check implements RiskyFix implements GroupedF
 	private static inline final RULE_ID: String = 'table-fake';
 
 	private final _table: Array<FakeEdit>;
-
 	private final _id: String;
 
 	public function new(table: Array<FakeEdit>, ?id: String) {
