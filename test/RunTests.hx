@@ -646,6 +646,7 @@ import unit.WhileTrueConditionCheckTest;
 import unit.HxComplexItemWrapTest;
 import unit.HxHeaderWrapLadderSliceTest;
 import unit.HxLoopBodyIfElseSliceTest;
+import unit.HoistBranchStringAffixCheckTest;
 import unit.JoinOverrideChainCheckTest;
 
 /**
@@ -1246,6 +1247,7 @@ class RunTests {
 		addCase(new PreferTryExpressionReturnCheckTest());
 		addCase(new TryCatchNullGuardCheckTest());
 		addCase(new JoinDeclarationAssignmentCheckTest());
+		addCase(new HoistBranchStringAffixCheckTest());
 		addCase(new JoinOverrideChainCheckTest());
 		addCase(new JoinStringAppendCheckTest());
 		addCase(new JoinReturnCheckTest());
