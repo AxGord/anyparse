@@ -188,7 +188,11 @@ final class AssignmentTreeHoist {
 			buf.add(header);
 			buf.add(': ');
 			buf.add(unit.text);
-			buf.add(';');
+			// A `}`-terminated arm value already terminates itself, and the writer strands the extra
+			// token on a line of its own. Verified on `-cpp` and `--interp` with a further `case`
+			// following, for every brace-terminated shape this builds: a nested `switch`, an
+			// `if`/`else`, an object literal, a `function` literal and a block-bodied arrow lambda.
+			if (!unit.text.endsWith('}')) buf.add(';');
 			final hs: Null<Span> = headerKeptSpan(branch, s);
 			if (hs != null) kept.push(hs);
 			for (k in unit.kept) kept.push(k);
