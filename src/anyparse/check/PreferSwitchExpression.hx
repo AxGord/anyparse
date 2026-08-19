@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.SwitchChain.ChainScope;
 import anyparse.check.SwitchChain.ChainSeams;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -115,16 +116,17 @@ final class PreferSwitchExpression implements Check {
 	 * rewrite takes the rest (including every equality-shaped chain in a host this rule's
 	 * narrower whitelist does not accept).
 	 *
-	 * `resolveIndex` must be the resolver THIS rule would have used — `SwitchChain.lazyIndexOf`
-	 * over the same file set. A weaker one leaves a qualified-static constant unprovable, and
-	 * an under-reported claim is exactly the direction that double-claims.
+	 * `scope` must be what THIS rule would have used — the caller's own parsed root for the file
+	 * `source` came from, and a `SwitchChain.lazyIndexOf` resolver over the same file set. A
+	 * weaker index leaves a qualified-static constant unprovable and a foreign root leaves a
+	 * bare one unprovable; an under-reported claim is exactly the direction that double-claims.
 	 */
 	public static function claims(
-		source: String, head: QueryNode, parentKind: Null<String>, plugin: GrammarPlugin, resolveIndex: () -> Null<SymbolIndex>
+		source: String, head: QueryNode, parentKind: Null<String>, plugin: GrammarPlugin, scope: ChainScope
 	): Bool {
 		final config: Null<Config> = configOf(plugin);
 		if (config == null || !hostAccepts(config.hosts, parentKind)) return false;
-		return SwitchChain.claims(source, head, config.seams, resolveIndex);
+		return SwitchChain.claims(source, head, config.seams, scope);
 	}
 
 	/**

@@ -6,6 +6,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -57,10 +58,22 @@ using StringTools;
  *    `callKind` cannot prove call-freedom at all, so this gate then rejects EVERY chain
  *    rather than waving one through unchecked.
  * 6. **Pattern-valid constants.** An operand qualifies as a `case` pattern when it is
- *    either
+ *    one of
  *    (a) a non-string literal kind (`litKinds`) or an interpolation-free string (via
  *        `stringFold.literalOf`, which yields null for an interpolated `'$x'`, whose
- *        value is not a compile-time constant); or
+ *        value is not a compile-time constant);
+ *    (c) a BARE identifier (`identKind` leaf) whose OCCURRENCE the resolver binds to a
+ *        `fieldKinds` declaration — `TypeResolver.bareFieldOwner` — whose owning type then
+ *        satisfies the same index proof as (b). The binding, not the name, is what decides:
+ *        written bare, a `case` pattern naming a static inline field COMPARES, while one
+ *        naming a LOCAL is a CAPTURE that matches everything and silently kills every later
+ *        arm (measured on 4.3.7: `case target:` over a local left `pick('a','a')` and
+ *        `pick('zzz','a')` both returning the first arm, with only a `WUnusedPattern` on the
+ *        dead `case _`). A local SHADOWING a same-named constant reads identically to the
+ *        constant, so a name-keyed lookup cannot separate them and a positive binding proof
+ *        can. `Refs` is per-FILE, so an import-static, an inherited or a cross-file constant
+ *        resolves to nothing and is refused — a miss, which costs a finding, where a wrong
+ *        yes costs a behaviour; or
  *    (b) a QUALIFIED STATIC reference `T.M` — a `fieldAccessKind` node over a bare
  *        `identKind` receiver — that the `SymbolIndex` resolves to at least one member
  *        declaration, EVERY one of which is an unguarded field that is either an
@@ -77,7 +90,16 @@ using StringTools;
  *        spots (anonymous fields, `> Base` extension scope, conditional types), so the
  *        answer to any uncertainty is SKIP, never guess. A DOTTED receiver
  *        (`pkg.Mod.CONST`) and a plain-enum constructor (`E.X`, provable but needing a
- *        constructor-arity check) are follow-ups.
+ *        constructor-arity check) are follow-ups. The dotted one is a legal PATTERN in
+ *        Haxe; what is missing is not the language's permission but the index's key —
+ *        `memberDeclarationsOf` is keyed by a type NAME, and matching a whole module PATH
+ *        is its own piece of work.
+ *
+ *    (b) and (c) share ONE proof (`provesConstantMember`), so the qualified and the bare
+ *    spelling of a constant can never disagree about whether it is a legal pattern. Both
+ *    refuse a non-inline `static final`, which the compiler DOES accept when it holds a
+ *    scalar: the index cannot see the initializer, and a non-scalar one
+ *    (`static final A:Array<Int> = [1]`) is `Incompatible pattern` at the case site.
  * 7. **A trailing `else`, unconditionally.** The chain must end in an else-slot, whose value
  *    is rendered as `case _`; a converted chain therefore ALWAYS carries a wildcard, and an
  *    else-less chain is not flagged at all. This is a deliberate retreat. A waiver did ship,
@@ -186,6 +208,7 @@ final class SwitchChain {
 		final eqKind: Null<String> = shape.eqKind;
 		final litKinds: Array<String> = shape.caseLiteralKinds ?? [];
 		return chainKinds.length == 0 || eqKind == null || litKinds.length == 0 ? null : {
+			shape: shape,
 			chainKinds: chainKinds,
 			bodyTerminator: bodyTerminator,
 			eqKind: eqKind,
@@ -215,13 +238,17 @@ final class SwitchChain {
 		final resolveIndex: () -> Null<SymbolIndex> = lazyIndexOf(files, plugin);
 		final out: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+			final parsed: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			if (parsed == null) continue;
+			// Re-bind to a non-null local — Strict null-safety takes a struct literal's field type
+			// from the declared type, not the narrowed one.
+			final tree: QueryNode = parsed;
 			final file: String = entry.file;
 			final source: String = entry.source;
+			final scope: ChainScope = { root: tree, resolveIndex: resolveIndex };
 			eachHead(tree, seams, hostAccepts, head -> {
 				final span: Null<Span> = head.span;
-				final scanned: Null<ChainScan> = span == null ? null : scan(source, head, seams, resolveIndex);
+				final scanned: Null<ChainScan> = span == null ? null : scan(source, head, seams, scope);
 				if (span == null || scanned == null) return;
 				final subject: Null<String> = subjectText(scanned, seams);
 				if (subject == null) return;
@@ -257,15 +284,16 @@ final class SwitchChain {
 			if (span != null) flagged.push(span.from);
 		}
 		if (flagged.length == 0) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final resolveIndex: () -> Null<SymbolIndex> = lazyIndexOf([{ file: '', source: source }], plugin, index);
+		final parsed: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		if (parsed == null) return [];
+		final tree: QueryNode = parsed;
+		final scope: ChainScope = { root: tree, resolveIndex: lazyIndexOf([{ file: '', source: source }], plugin, index) };
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
 		final edits: Array<{ span: Span, text: String }> = [];
 		eachHead(tree, seams, hostAccepts, head -> {
 			final span: Null<Span> = head.span;
 			if (span == null || !flagged.contains(span.from) || carriesComment(comments, span.from, span.to)) return;
-			final scanned: Null<ChainScan> = scan(source, head, seams, resolveIndex);
+			final scanned: Null<ChainScan> = scan(source, head, seams, scope);
 			if (scanned == null) return;
 			final text: Null<String> = render(scanned, source, seams);
 			if (text != null) edits.push({ span: span, text: text });
@@ -284,13 +312,14 @@ final class SwitchChain {
 	 * scanner rather than mirroring its gates structurally: a mirror is a second implementation
 	 * of one question and drifts the moment a gate here moves.
 	 *
-	 * `resolveIndex` must be the SAME resolver the switch rule would use — a caller that hands
-	 * in a thunk yielding null makes every qualified-static constant unprovable and
-	 * under-reports the claim, which is the direction that DOUBLE-claims. Build it with
-	 * `lazyIndexOf` over the same file set.
+	 * `scope` must be the SAME pair the switch rule would use — the file's own parsed ROOT and
+	 * a resolver built with `lazyIndexOf` over the same file set. A caller handing in a thunk
+	 * that yields null makes every qualified-static constant unprovable, and a caller handing
+	 * in another file's root makes every BARE constant unprovable; both under-report the claim,
+	 * which is the direction that DOUBLE-claims a site.
 	 */
-	public static function claims(source: String, head: QueryNode, seams: ChainSeams, resolveIndex: () -> Null<SymbolIndex>): Bool {
-		final scanned: Null<ChainScan> = scan(source, head, seams, resolveIndex);
+	public static function claims(source: String, head: QueryNode, seams: ChainSeams, scope: ChainScope): Bool {
+		final scanned: Null<ChainScan> = scan(source, head, seams, scope);
 		return scanned != null && subjectText(scanned, seams) != null;
 	}
 
@@ -347,14 +376,12 @@ final class SwitchChain {
 
 	/**
 	 * Scan the chain at `head` into the pieces a switch is rendered from, or null when any
-	 * gate rejects it (see the type doc). `resolveIndex` is consulted ONLY for a
-	 * qualified-static constant candidate — a structurally cheap pre-check runs first — so
-	 * a file whose chains are all literal never pays for building an index; it may return
-	 * null, which makes every qualified-static candidate unprovable and skips those chains.
+	 * gate rejects it (see the type doc). `scope.resolveIndex` is consulted ONLY for a
+	 * NAMED-constant candidate — a structurally cheap pre-check runs first — so a file whose
+	 * chains are all literal never pays for building an index; it may return null, which makes
+	 * every named candidate unprovable and skips those chains.
 	 */
-	private static function scan(
-		source: String, head: QueryNode, seams: ChainSeams, resolveIndex: () -> Null<SymbolIndex>
-	): Null<ChainScan> {
+	private static function scan(source: String, head: QueryNode, seams: ChainSeams, scope: ChainScope): Null<ChainScan> {
 		var discs: Null<Array<QueryNode>> = null;
 		var discTexts: Null<Array<String>> = null;
 		final rungs: Array<ChainRung> = [];
@@ -366,7 +393,7 @@ final class SwitchChain {
 		// A fall-out would in any case leave `elseBody` null, which `completeScan` rejects.
 		while (seams.chainKinds.contains(cur.kind)) {
 			if (cur.children.length < BINARY_CHILD_COUNT) return null;
-			final pairs: Null<Array<EqPair>> = conditionPairs(cur.children[0], seams, resolveIndex, source);
+			final pairs: Null<Array<EqPair>> = conditionPairs(cur.children[0], seams, scope, source);
 			// A tuple subject cannot be spelled without the grammar's delimiters.
 			if (pairs == null || (pairs.length > 1 && seams.tuple == null) || cannotProveCallFree(pairs, seams.callKind)) return null;
 			final nullableBody: Null<Span> = cur.children[1].span;
@@ -500,11 +527,11 @@ final class SwitchChain {
 	 * pattern-valid constant — or null when any conjunct fails that shape.
 	 */
 	private static function conditionPairs(
-		cond: QueryNode, seams: ChainSeams, resolveIndex: () -> Null<SymbolIndex>, source: String
+		cond: QueryNode, seams: ChainSeams, scope: ChainScope, source: String
 	): Null<Array<EqPair>> {
 		final out: Array<EqPair> = [];
 		for (conjunct in flattenConjunction(cond, seams)) {
-			final pair: Null<EqPair> = eqPair(conjunct, seams, resolveIndex, source);
+			final pair: Null<EqPair> = eqPair(conjunct, seams, scope, source);
 			if (pair == null) return null;
 			out.push(pair);
 		}
@@ -537,14 +564,12 @@ final class SwitchChain {
 	 * paired with the discriminant node, or null when `node` is not an equality or its
 	 * operands are both / neither pattern-valid constants.
 	 */
-	private static function eqPair(
-		node: QueryNode, seams: ChainSeams, resolveIndex: () -> Null<SymbolIndex>, source: String
-	): Null<EqPair> {
+	private static function eqPair(node: QueryNode, seams: ChainSeams, scope: ChainScope, source: String): Null<EqPair> {
 		if (node.kind != seams.eqKind || node.children.length != BINARY_CHILD_COUNT) return null;
 		final a: QueryNode = node.children[0];
 		final b: QueryNode = node.children[1];
-		final aPattern: Null<String> = patternTextOf(a, seams, resolveIndex, source);
-		final bPattern: Null<String> = patternTextOf(b, seams, resolveIndex, source);
+		final aPattern: Null<String> = patternTextOf(a, seams, scope, source);
+		final bPattern: Null<String> = patternTextOf(b, seams, scope, source);
 		return if (aPattern != null && bPattern == null)
 			{ pattern: aPattern, disc: b }
 		else if (bPattern != null && aPattern == null)
@@ -557,15 +582,13 @@ final class SwitchChain {
 	 * The verbatim `case`-pattern source for `node` when it is a pattern-valid constant
 	 * (gate 6 of the type doc), else null.
 	 */
-	private static function patternTextOf(
-		node: QueryNode, seams: ChainSeams, resolveIndex: () -> Null<SymbolIndex>, source: String
-	): Null<String> {
+	private static function patternTextOf(node: QueryNode, seams: ChainSeams, scope: ChainScope, source: String): Null<String> {
 		final span: Null<Span> = node.span;
 		return if (span == null)
 			null
 		else if (seams.stringFold?.literalOf(node, source) != null || seams.litKinds.contains(node.kind))
 			spanText(source, span)
-		else if (provesConstantReference(node, seams, resolveIndex))
+		else if (provesConstantReference(node, seams, scope) || provesBareConstant(node, span, seams, scope))
 			spanText(source, span)
 		else
 			null;
@@ -579,13 +602,51 @@ final class SwitchChain {
 	 * test runs BEFORE the index is demanded, so a chain with no such candidate never
 	 * triggers the build.
 	 */
-	private static function provesConstantReference(node: QueryNode, seams: ChainSeams, resolveIndex: () -> Null<SymbolIndex>): Bool {
+	private static function provesConstantReference(node: QueryNode, seams: ChainSeams, scope: ChainScope): Bool {
 		final accessKind: Null<String> = seams.fieldAccessKind;
 		if (accessKind == null || node.kind != accessKind || node.children.length != 1) return false;
 		final memberName: Null<String> = node.name;
 		final typeName: Null<String> = node.children[0].name;
 		if (memberName == null || typeName == null || node.children[0].kind != seams.identKind) return false;
-		final index: Null<SymbolIndex> = resolveIndex();
+		return provesConstantMember(typeName, memberName, seams, scope);
+	}
+
+	/**
+	 * Whether `node` is a BARE identifier the resolver proves usable as a `case` pattern: an
+	 * `identKind` leaf whose occurrence BINDS to a `fieldKinds` declaration
+	 * (`TypeResolver.bareFieldOwner`), that declaration's owning type resolving through the
+	 * index to members that all pass `isPatternConstant`.
+	 *
+	 * The binding proof is the whole point, and it is POSITIVE. Written bare, a `case` pattern
+	 * that names a static inline field COMPARES against it, while one that names a LOCAL is a
+	 * capture variable that matches everything and silently kills every later arm — measured on
+	 * 4.3.7, where `case target:` over a local left `pick('a','a')` and `pick('zzz','a')` both
+	 * returning the first arm, with nothing louder than a `WUnusedPattern` on the dead `case _`.
+	 * A name-keyed lookup cannot tell the two apart: a local SHADOWING a same-named constant
+	 * reads identically. Asking what the occurrence binds to answers both at once, and answers
+	 * null — a refusal — for every reference the per-file resolver cannot place (an
+	 * import-static, an inherited or a cross-file constant), which is the safe direction.
+	 *
+	 * Structurally cheap first: the leaf test rejects every discriminant before the resolver is
+	 * touched, and the resolver runs against `shape.refsCache` in a real lint run, so the walk
+	 * is one memoised `Refs.findMulti` per file rather than one per candidate.
+	 */
+	private static function provesBareConstant(node: QueryNode, span: Span, seams: ChainSeams, scope: ChainScope): Bool {
+		if (node.kind != seams.identKind || node.children.length != 0) return false;
+		final name: Null<String> = node.name;
+		if (name == null) return false;
+		final owner: Null<String> = TypeResolver.bareFieldOwner(name, span, scope.root, seams.shape, seams.fieldKinds);
+		return owner != null && provesConstantMember(owner, name, seams, scope);
+	}
+
+	/**
+	 * Whether `T.M` resolves through the index to at least one member declaration, EVERY one of
+	 * which `isPatternConstant` accepts. An empty resolution means "unknown", never "absent", so
+	 * it is a rejection too. Shared by the qualified and the bare arm so the two spellings of one
+	 * constant can never disagree about whether it is a legal pattern.
+	 */
+	private static function provesConstantMember(typeName: String, memberName: String, seams: ChainSeams, scope: ChainScope): Bool {
+		final index: Null<SymbolIndex> = scope.resolveIndex();
 		if (index == null) return false;
 		final decls: Array<{ type: TypeDeclInfo, member: MemberInfo }> = index.memberDeclarationsOf(typeName, memberName);
 		if (decls.length == 0) return false;
@@ -634,6 +695,22 @@ private typedef ChainScan = {
 };
 
 /**
+ * The two per-FILE services a constant proof asks for: the file's own parsed `root`, against
+ * which a BARE identifier's binding is resolved, and the lazy cross-file `SymbolIndex` a named
+ * constant's modifiers are read from.
+ *
+ * A pair rather than two parameters because they must describe the SAME file — a root from one
+ * file with an index over another silently answers "unprovable" for every bare constant, and a
+ * check that under-reports its claim is the direction that lets a sibling rewrite double-claim
+ * the site. Both are values the caller owns for the length of one run; nothing here is cached
+ * across a `run` / `fix` pair, `SwitchChain` holding no state of its own.
+ */
+typedef ChainScope = {
+	final root: QueryNode;
+	final resolveIndex: () -> Null<SymbolIndex>;
+};
+
+/**
  * The per-rule configuration a switch chain is scanned and rendered against, resolved once
  * per run by `SwitchChain.seamsOf`. The first two fields are the CALLER's policy:
  * `chainKinds` (the statement rule passes `ifStatementKinds`, the expression rule
@@ -642,6 +719,13 @@ private typedef ChainScan = {
  * rest are `RefShape` seams, each degrading on its own when the grammar leaves it unset.
  */
 typedef ChainSeams = {
+	/**
+	 * The whole `RefShape`, carried because the bare-identifier constant proof asks the
+	 * RESOLVER (`TypeResolver.bareFieldOwner`) rather than a kind list, and the resolver takes
+	 * a shape. The individual kind fields below stay because the scanner reads them per node.
+	 */
+	final shape: RefShape;
+
 	final chainKinds: Array<String>;
 	final bodyTerminator: String;
 	final eqKind: String;

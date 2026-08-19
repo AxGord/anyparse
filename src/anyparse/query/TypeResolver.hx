@@ -469,6 +469,41 @@ final class TypeResolver {
 	}
 
 	/**
+	 * The name of the type DECLARING the field that a BARE occurrence of `name` at `refSpan`
+	 * binds to, or null when the occurrence binds to anything else — a local, a parameter, a
+	 * `for` / `catch` binder, a phantom, or nothing the walk could resolve.
+	 *
+	 * The mirror image of `bindsToValueDeclaration`, and asked for the opposite reason. That
+	 * one proves a reference IS a local so a caller can bail out; this one proves a reference
+	 * is NOT — it names the owning type only when the resolver bound the occurrence to a
+	 * `fieldDeclKinds` DECLARATION NODE, which a local, a parameter and an unresolved name each
+	 * fail for a different reason. `prefer-switch` / `prefer-switch-expression` is the caller:
+	 * a bare identifier written as a `case` pattern is a compile-time constant when it names a
+	 * static inline field and a CAPTURE that matches everything when it names a local, and only
+	 * the binding tells the two apart. Handing back the owner's NAME rather than the node is
+	 * what lets the caller finish the proof against the `SymbolIndex`, which is keyed by type
+	 * name and holds the modifiers a raw declaration node does not spell.
+	 *
+	 * Null is the answer to every uncertainty. `Refs` is per-FILE, so an import-static, an
+	 * inherited or a cross-file constant resolves to nothing and is refused; so is a binding
+	 * node with no span, and a field declared outside any type declaration (a module-level
+	 * field). A caller reading a non-null as permission to EMIT still owes the constness proof
+	 * — this answers "which type declares it", never "is it constant".
+	 */
+	public static function bareFieldOwner(
+		name: String, refSpan: Span, tree: QueryNode, shape: RefShape, fieldDeclKinds: Array<String>
+	): Null<String> {
+		final hit: Null<RefHit> = resolveBindingHit(name, refSpan, tree, shape);
+		if (hit == null) return null;
+		final binding: Null<QueryNode> = hit.bindingNode;
+		if (binding == null || !fieldDeclKinds.contains(binding.kind)) return null;
+		final declSpan: Null<Span> = binding.span;
+		if (declSpan == null) return null;
+		final owner: Null<TypeDeclMatch> = innermostTypeDecl(tree, declSpan);
+		return owner == null ? null : owner.name;
+	}
+
+	/**
 	 * Whether null-safety is ACTIVE over `span`. A `@:nullSafety(disableArg)`
 	 * (`@:nullSafety(Off)`) whose declaration scope — member (field / method), type
 	 * (class), or module — covers `span` REFUSES (`false`): Haxe does not re-enable a

@@ -357,16 +357,21 @@ class PreferSwitchExpressionCheckTest extends Test {
 	}
 
 	/**
-	 * A local SHADOWING a same-class constant of the same name. The resolver, not the name,
-	 * decides: the occurrence binds to the local, so the chain is refused even though a
-	 * `static inline final ALPHA` is right there. Without the binding proof a name-keyed
-	 * lookup would accept this and emit a capturing `case ALPHA`.
+	 * A local SHADOWING a same-class constant of the same name — the ONE refusal a name-keyed
+	 * gate gets wrong, and the reason the proof asks the resolver. Measured on 4.3.7: a pattern
+	 * identifier does not see locals at all, so `case alpha:` next to `final alpha = 'x';`
+	 * resolves to NOTHING and becomes a capture — `f('x')`, `f('y')`, `f('zzz')` and `f('a')`
+	 * ALL returned 1, with two `WUnusedPattern` warnings the only complaint. The names are
+	 * lower-case deliberately: an UPPER-case one fails loudly instead (`Unknown identifier :
+	 * ALPHA, pattern variables must be lower-case`), so the lower-case spelling is the silent
+	 * half of the same bug. Substituting a name-keyed lookup for the binding proof makes this
+	 * fixture — and only this fixture — report.
 	 */
 	public function testBareConstantShadowedByLocalNotFlagged(): Void {
 		Assert.equals(0, violations(
-			"class C {\n\tstatic inline final ALPHA:String = 'a';\n\tstatic inline final BETA:String = 'b';\n"
-			+ "\tstatic function f(text:String):Int {\n\t\tfinal ALPHA = 'x';\n\t\tfinal BETA = 'y';\n"
-			+ '\t\treturn text == ALPHA ? 1 : text == BETA ? 2 : 0;\n\t}\n}'
+			"class C {\n\tstatic inline final alpha:String = 'a';\n\tstatic inline final beta:String = 'b';\n"
+			+ "\tstatic function f(text:String):Int {\n\t\tfinal alpha = 'x';\n\t\tfinal beta = 'y';\n"
+			+ '\t\treturn text == alpha ? 1 : text == beta ? 2 : 0;\n\t}\n}'
 		).length);
 	}
 

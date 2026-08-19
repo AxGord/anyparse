@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan.NegationSeams;
 import anyparse.check.IfExpressionChain.Carried;
 import anyparse.check.IfExpressionChain.CarrySeat;
+import anyparse.check.SwitchChain.ChainScope;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -290,7 +291,7 @@ final class PreferIfExpressionChain implements Check {
 			asked = true;
 			return cached = CheckScan.typeNominalResolver(source, plugin, root, file, index);
 		}
-		return { resolveIndex: resolveIndex, types: types };
+		return { switchScope: { root: root, resolveIndex: resolveIndex }, types: types };
 	}
 
 	/**
@@ -369,7 +370,7 @@ final class PreferIfExpressionChain implements Check {
 		final terminalSpan: Span = IfExpressionChain.tokenSpan(rawTerminal, source, comments);
 		final emitted: Null<Array<Emitted>> = emit(chain, source, comments, s, lazy, inverted);
 		if (emitted == null || emitted.length < MIN_RUNGS) return null;
-		if (PreferSwitchExpression.claims(source, head, parentKind, plugin, lazy.resolveIndex)) return null;
+		if (PreferSwitchExpression.claims(source, head, parentKind, plugin, lazy.switchScope)) return null;
 		final kept: Array<Span> = [terminalSpan];
 		for (rung in emitted) {
 			kept.push(rung.condSpan);
@@ -563,13 +564,13 @@ private typedef Emitted = {
 }
 
 /**
- * The two lazily-resolved services the walk carries — the symbol index the
- * `prefer-switch-expression` deferral asks for, and the operand-type probe the negation engine asks of
- * a condition the inversion complements. Bundled so the walk's parameter list does not grow one
- * entry per service.
+ * The two services the walk carries — the root-plus-index pair the `prefer-switch-expression`
+ * deferral is asked with, and the lazily-resolved operand-type probe the negation engine asks of a
+ * condition the inversion complements. Bundled so the walk's parameter list does not grow one entry
+ * per service.
  */
 private typedef Lazy = {
-	var resolveIndex: () -> Null<SymbolIndex>;
+	var switchScope: ChainScope;
 	var types: () -> Null<(QueryNode) -> Null<String>>;
 }
 
