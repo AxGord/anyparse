@@ -77,8 +77,11 @@ final class NominalTypes {
 	 * `wrappers` is `RefShape.memberTransparentWrapperTypeNames`, whose doc carries the rule: a
 	 * wrapper belongs there only when its member set IS its argument's (Haxe's `@:forward`
 	 * `Null<T>`), and the answer may be used ONLY to decide which member a name resolves to. It is
-	 * NOT the value's type: `Null<Int>` still is not an `Int` for an arithmetic or ordered
-	 * comparison, where a null operand and an `Int` operand genuinely differ.
+	 * NOT the value's type: `Null<Int>` still is not an `Int` for an arithmetic or ordered comparison. `null` is not a
+	 * value `<` orders, and what the raw comparison DOES with it is TARGET-SPECIFIC — measured on Haxe 4.3.7, `null >
+	 * 0` is `false` on js and `true` on `-cpp`. That the wrap and the flip happen to agree for a null `Null<Int>` on
+	 * js, `-cpp` and `--interp` alike settles nothing: the same probe has a null `String` operand DISAGREEING on js
+	 * and `--interp` while AGREEING on `-cpp`.
 	 *
 	 * The peel is TEXTUAL over the written annotation, so a typedef that RESOLVES to `Null<T>`
 	 * carries no wrapper to peel and is left alone — following the alias would mean resolving a
@@ -463,9 +466,8 @@ final class NominalTypes {
 		// looks `trim` up on `String`. A receiver that is ITSELF a call keeps today's answer — its
 		// type arrives from `returnNominalOf`, already reduced to the bare nominal `Null`, with no
 		// argument left to peel; recovering it needs a return-SOURCE lookup the index does not have.
-		final receiver: Null<String> = expressionNominalWalk(
-			callee.children[0], root, shape, declaredTypes, index, file, chain, seen, true
-		);
+		final receiver: Null<String> =
+			expressionNominalWalk(callee.children[0], root, shape, declaredTypes, index, file, chain, seen, true);
 		if (receiver == null) return null;
 		final member: Null<String> = index.returnNominalOf(receiver, method);
 		return member ?? staticExtensionNominal(receiver, method, chain, index, file);
@@ -516,8 +518,11 @@ final class NominalTypes {
 	 *
 	 * `asReceiver` peels a member-TRANSPARENT wrapper off first (`Null<String>` -> `String`), and is
 	 * set ONLY where the answer is about to seed a member lookup. It is deliberately NOT the default:
-	 * an expression's own nominal is what a consumer reads to decide what is legal to DO with the
-	 * value, and `Null<Int>` is not `Int` there — `!(a > 0)` and `a <= 0` disagree for a null `a`.
+	 * an expression's own nominal is what a consumer reads to decide what is legal to DO with the value, and
+	 * `Null<Int>` is not `Int` there. `null` is not a value `<` orders, and what the raw comparison DOES with it is
+	 * TARGET-SPECIFIC — measured on Haxe 4.3.7, `null > 0` is `false` on js and `true` on `-cpp`. That the wrap and
+	 * the flip happen to agree for a null `Null<Int>` on js, `-cpp` and `--interp` alike settles nothing: the same
+	 * probe has a null `String` operand DISAGREEING on js and `--interp` while AGREEING on `-cpp`.
 	 */
 	private static function valueNominalDeep(
 		node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, chain: ChainTypeContext,

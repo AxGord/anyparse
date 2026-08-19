@@ -177,10 +177,14 @@ class GuardReturnCheckTest extends Test {
 
 	public function testNullableIntOperandStillNotFlagged(): Void {
 		// THE REFUSED ARM. Unwrapping for a MEMBER LOOKUP is not erasing the wrapper: `a` here is
-		// the comparison's own OPERAND, not a receiver, and a `Null<Int>` operand is exactly the
-		// case `!(a > 0)` and `a <= 0` disagree on — with `a == null` the wrap is `true` and the
-		// flip is `false`. The receiver unwrap must not reach an operand's own type, and this
-		// fixture is what proves it does not.
+		// the comparison's own OPERAND, not a receiver, and `null` is not a value `<` orders. What
+		// the raw comparison DOES with it is target-specific — compiled and run on Haxe 4.3.7,
+		// `null > 0` is `false` on js and `true` on `-cpp`. The wrap and the flip happening to
+		// agree for a null `Null<Int>` on js / `-cpp` / `--interp` settles nothing: the same probe
+		// has a null `String` operand DISAGREEING on js and `--interp` while AGREEING on `-cpp`, so
+		// a licence taken from one target's null coercion would ship an unsound flip to another.
+		// The receiver unwrap must not reach an operand's own type, and this fixture proves it does
+		// not.
 		final source: String = 'class C {\n\tfunction f(a:Null<Int>):Bool {\n\t\tif (a > 0) {\n\t\t\tlog(a);\n'
 			+ '\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t}\n}\n';
 		Assert.equals(0, vSource(source).length);
