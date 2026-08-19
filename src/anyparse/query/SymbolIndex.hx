@@ -1055,7 +1055,11 @@ final class SymbolIndex {
 	private function structuralMemberOf(
 		typeName: String, fromFile: Null<String>, member: String, seen: Array<String>
 	): Null<{ member: MemberInfo, file: String }> {
-		final start: Null<ResolvedType> = resolveStartType(typeName, fromFile);
+		// A member's written return may name a type that resolves nowhere near the reading file —
+		// `Array.iterator()` answers `haxe.iterators.ArrayIterator`, written QUALIFIED and imported
+		// by nobody, so the scope-aware step finds nothing and the package-blind one (a simple name
+		// unique among indexed decls) is the only way the link is followed at all.
+		final start: Null<ResolvedType> = resolveStartType(typeName, fromFile) ?? resolveStartType(typeName, null);
 		if (start == null || !markSeen(start, seen)) return null;
 		final own: Null<MemberInfo> = start.type.members.find(m -> m.name == member);
 		if (own != null) return { member: own, file: start.file.file };

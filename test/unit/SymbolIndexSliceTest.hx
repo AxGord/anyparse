@@ -1542,6 +1542,10 @@ class SymbolIndexSliceTest extends Test {
 		Assert.isFalse(index.satisfiesIterable('FieldBag'));
 		// An `Iterator` is not an `Iterable` — the two memberships are separate.
 		Assert.isFalse(index.satisfiesIterable('BagIter'));
+		// The `iterator()` return is written QUALIFIED and imported by nobody — the shape of
+		// `Array.iterator():haxe.iterators.ArrayIterator`, and unreachable without the
+		// package-blind fallback.
+		Assert.isTrue(index.satisfiesIterable('DeepBag'));
 
 		Assert.isTrue(index.satisfiesIterator('BagIter'));
 		// One half of the membership is not the membership.
@@ -1587,6 +1591,12 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'HalfIter.hx', source: 'class HalfIter {\n\tpublic function hasNext():Bool return false;\n}' },
 			{ file: 'FieldIter.hx', source: 'class FieldIter {\n\tpublic var hasNext:Bool;\n\n\tpublic var next:Widget;\n}' },
 			{ file: 'Widget.hx', source: 'class Widget {}' },
+			{
+				file: 'deep/DeepIter.hx',
+				source: 'package deep;\n\nclass DeepIter {\n\tpublic function hasNext():Bool return false;\n\n'
+					+ '\tpublic function next():Widget return null;\n}'
+			},
+			{ file: 'DeepBag.hx', source: 'class DeepBag {\n\tpublic function iterator():deep.DeepIter return null;\n}' },
 			{
 				file: 'IterExt.hx',
 				source: 'class IterExt {\n\tpublic static function pick<T>(it:Iterable<T>):Widget return null;\n\n'
