@@ -86,6 +86,54 @@ class HxMethodChainEmitTest extends Test {
 		Assert.isTrue(out.indexOf('\n\t\t\t.d()') != -1, 'expected .d() on own indented line: <$out>');
 	}
 
+	/**
+	 * F3 ω-methodchain-config-key — the same policy semantic reached through
+	 * `hxformat.json` instead of a hand-built struct. `wrapping.methodChain`
+	 * is rebuilt from scratch by `HaxeFormatConfigLoader.wrapRulesFromConfig`,
+	 * so before this slice a configured cascade could not carry
+	 * `chainItemsAfterCloseParenOnly` at all — a user section silently dropped
+	 * the Haxe layout policy and stranded two-token heads (`Actuate` above
+	 * `.tween(…)`, `API` above `.logs…`). `itemsAfterCloseParenOnly` is the
+	 * opt-in that makes it reachable.
+	 */
+	public function testConfiguredCascadeOptsIntoTheCloseParenItemRule(): Void {
+		final src: String = 'class Foo { static function f() { a.b().c().d(); } }';
+		final cfg: String = '{"wrapping":{"methodChain":{"defaultWrap":"onePerLine","itemsAfterCloseParenOnly":true,"rules":[]}}}';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('a.b()') != -1, 'expected the non-chain-item `.b()` glued to the head: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\t.c()') != -1, 'expected .c() on own indented line: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\t.d()') != -1, 'expected .d() on own indented line: <$out>');
+	}
+
+	/**
+	 * The default half of the pair: an `onePerLine` section that does NOT name
+	 * the key keeps the fork's literal every-segment semantic. This is the
+	 * fork-parity contract five corpus fixtures rest on, and the reason the key
+	 * is opt-in rather than inherited from the built-in cascade.
+	 */
+	public function testConfiguredCascadeWithoutTheKeyKeepsForkLiteralItems(): Void {
+		final src: String = 'class Foo { static function f() { a.b().c().d(); } }';
+		final cfg: String = '{"wrapping":{"methodChain":{"defaultWrap":"onePerLine","rules":[]}}}';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('a\n') != -1, 'expected receiver alone on first line: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\t.b()') != -1, 'expected .b() on own indented line: <$out>');
+	}
+
+	/**
+	 * An explicit `false` is the same as absent — spelling it out must not
+	 * accidentally re-enable the policy through some other seam.
+	 */
+	public function testConfiguredCascadeExplicitFalseKeepsForkLiteralItems(): Void {
+		final src: String = 'class Foo { static function f() { a.b().c().d(); } }';
+		final cfg: String = '{"wrapping":{"methodChain":{"defaultWrap":"onePerLine","itemsAfterCloseParenOnly":false,"rules":[]}}}';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('a\n') != -1, 'expected receiver alone on first line: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\t.b()') != -1, 'expected .b() on own indented line: <$out>');
+	}
+
 	public function testThreeSegmentChainOnePerLineAfterFirstKeepsFirstInline(): Void {
 		final src: String = 'class Foo { static function f() { a.b().c().d(); } }';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
