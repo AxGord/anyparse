@@ -70,6 +70,63 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 */
 	private static inline final QUERY_TYPE_REF_META: String = ':queryTypeRef';
 
+	/**
+	 * Grammar opt-in on a `type` field: WALK it in the default tree, exactly as
+	 * an ordinary field is walked.
+	 *
+	 * The sibling of `QUERY_TYPE_REF_META`, and the other answer to the same
+	 * question. `@:queryTypeRef` routes the slot through `_typeRefs`, which
+	 * FLATTENS a type into one `TypeRef` node per nominal name; that is right for
+	 * an anon field, whose identity is its field names and their types and whose
+	 * consumers only ever ask "which names appear". `@:queryType` keeps the
+	 * type's own shape: one node whose kind is the `HxType` ctor (`Named`,
+	 * `Anon`, `Arrow`, `ArrowFn`, …), the projection a function's return type and
+	 * an `extends` clause already carry.
+	 *
+	 * Two properties are load-bearing where a DECLARATION hosts the slot. The
+	 * node count is FIXED at one, so every consumer indexing a declaration's
+	 * children moves by a constant rather than by an amount that depends on how
+	 * many nominals the annotation happens to mention. And nesting survives:
+	 * `Map<String, Array<Int>>` is `(Named Map (Named String) (Named Array (Named
+	 * Int)))`, where the flat form cannot tell a second argument from the second
+	 * argument's own argument.
+	 *
+	 * The tag moves the DEFAULT tree only — `parseFileTypeRefs` keeps its flat
+	 * `TypeRef` projection, so the two trees stay the two answers they are.
+	 */
+	private static inline final QUERY_TYPE_META: String = ':queryType';
+
+	/**
+	 * Grammar opt-in on a `type` field: project it into the ENCLOSING addressable
+	 * node's `QueryNode.type` SLOT, leaving that node's children exactly as they were.
+	 *
+	 * The third answer to the `type`-slot question, and the only one a DECLARATION can
+	 * take. `@:queryType` makes the annotation a child, which is right where the host
+	 * has no other children to displace (a type argument, an `extends` clause) and wrong
+	 * on a `var` / `final`: a declaration's children are its initializer and its
+	 * comma-continuations, and the checks read them positionally — `decl.children[0]` IS
+	 * the initializer in some forty rules. Measured on this tree: tagging
+	 * `HxVarDecl.type` `@:queryType` turned 25611 assertions into 369 failures and 64
+	 * errors across ~50 test classes, every one of them an index that moved.
+	 *
+	 * A dedicated child KIND would not have rescued it either. `declTypeChildKinds`
+	 * already exists for exactly this filtering, and it cannot express the Haxe answer:
+	 * `Arrow` is both `HxType.Arrow` (`Int->Void`, an annotation) and `HxExpr.Arrow`
+	 * (`k => v`, an initializer), so "which child is the type" has no kind-level answer.
+	 * A slot has no such ambiguity, which is the same reason `name` is a slot.
+	 *
+	 * The tagged field is walked into a private accumulator and the FIRST node lands in
+	 * the slot; whatever the pre-existing arm contributed to `into` is untouched, so the
+	 * `Anon` decl-host descent (`var x:{a:Int}` publishes its fields as declarations)
+	 * keeps working and every children-walking consumer sees a byte-identical tree.
+	 */
+	private static inline final QUERY_TYPE_SLOT_META: String = ':queryTypeSlot';
+
+	/** Name of the `_walk` parameter carrying the enclosing node's type slot, and of the local a node-forming rule allocates for its own. */
+	private static inline final TYPE_OUT_PARAM: String = 'typeOut';
+
+	private static inline final TYPE_SLOT_LOCAL: String = '_typeSlot';
+
 	/** Struct fields consulted, in order, for a String-valued display name. */
 	private static final NAME_STRING_SLOTS: Array<String> = ['name', 'type', 'varName'];
 
@@ -157,14 +214,14 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		};
 	}
 
-	private inline function descendCore(child: ShapeNode, access: Expr, intoName: String, depth: Int): Array<Expr> {
+	private inline function descendCore(child: ShapeNode, access: Expr, intoName: String, typeOutName: String, depth: Int): Array<Expr> {
 		return switch child.kind {
 			case Ref:
 				final ref: String = child.annotations[AnnotationKeys.BASE_REF];
-				isTerminalRule(ref) ? [] : [call(walkFnName(ref), [access, ident(intoName), ident('withTypeRefs')])];
+				isTerminalRule(ref) ? [] : [call(walkFnName(ref), [access, ident(intoName), ident(typeOutName), ident('withTypeRefs')])];
 			case Star:
 				final loopVar: String = '_e$depth';
-				final body: Array<Expr> = descend(child.children[0], ident(loopVar), intoName, depth + 1);
+				final body: Array<Expr> = descend(child.children[0], ident(loopVar), intoName, typeOutName, depth + 1);
 				body.length == 0 ? [] : [macro for ($i{loopVar} in $access) $e{block(body)}];
 			case Terminal: [];
 			case Seq, Alt, Opt:
@@ -231,10 +288,10 @@ class QueryWalkerLowering extends PairedShapeLowering {
 				{ expr: ESwitch(ident('v'), [for (branch in node.children) walkCase(rule, branch)], null), pos: Context.currentPos() };
 			case Seq: lowerWalkSeq(rule, node);
 			case Star:
-				block(descend(node.children[0], ident('_e0'), 'into', 0).length == 0 ? [] : [
-					macro for (_e0 in v) $e{block(descend(node.children[0], ident('_e0'), 'into', 0))}
+				block(descend(node.children[0], ident('_e0'), 'into', TYPE_OUT_PARAM, 0).length == 0 ? [] : [
+					macro for (_e0 in v) $e{block(descend(node.children[0], ident('_e0'), 'into', TYPE_OUT_PARAM, 0))}
 				]);
-			case Ref: block(descend(node, ident('v'), 'into', 0));
+			case Ref: block(descend(node, ident('v'), 'into', TYPE_OUT_PARAM, 0));
 			case Terminal, Opt: macro {};
 		};
 	}
@@ -249,14 +306,15 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		final argNames: Array<String> = [for (i in 0...branch.children.length) '_a$i'];
 		final pattern: Expr = ctorPattern(rule, ctor, argNames);
 
-		final body: Array<Expr> = [macro final _children: Array<anyparse.query.QueryNode> = []];
-		for (i in 0...branch.children.length) for (e in descend(branch.children[i], ident(argNames[i]), '_children', 0)) body.push(e);
+		final body: Array<Expr> = [(macro final _children: Array<anyparse.query.QueryNode> = []),
+			(macro final _typeSlot: Array<anyparse.query.QueryNode> = [])];
+		for (i in 0...branch.children.length) for (e in descend(branch.children[i], ident(argNames[i]), '_children', TYPE_SLOT_LOCAL, 0))
+			body.push(e);
 		final nameExpr: Expr = firstNonNullName([
 			for (i in 0...branch.children.length) nameOfValue(branch.children[i], ident(argNames[i]))
 		]);
-		body.push(macro into.push(
-			new anyparse.query.QueryNode($v{ctor}, $nameExpr, anyparse.query.QueryWalkSupport.orderBySpan(_children), _span)
-		));
+		body.push(macro into.push(new anyparse.query.QueryNode($v{ctor}, $nameExpr,
+			anyparse.query.QueryWalkSupport.orderBySpan(_children), _span, anyparse.query.QueryWalkSupport.first(_typeSlot))));
 		return { values: [pattern], expr: block(body) };
 	}
 
@@ -269,20 +327,26 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 */
 	private function lowerWalkSeq(rule: String, node: ShapeNode): Expr {
 		final envelope: Null<ShapeNode> = seqField(node, PairedShapeLowering.ENVELOPE_FIELD);
-		if (envelope != null) return block(descend(envelope, field(ident('v'), PairedShapeLowering.ENVELOPE_FIELD), 'into', 0));
+		if (envelope != null)
+			return block(descend(envelope, field(ident('v'), PairedShapeLowering.ENVELOPE_FIELD), 'into', TYPE_OUT_PARAM, 0));
 
+		// A transparent Seq forwards the CALLER's slot: `HxVarDecl` materialises no node
+		// of its own, so its `type` field belongs to the `VarStmt` / `VarMember` / … ctor
+		// node that hosts it.
 		if (!isSpanned(node)) {
-			final out: Array<Expr> = [for (child in node.children) for (e in seqFieldDescent(child, 'into', null)) e];
+			final out: Array<Expr> = [for (child in node.children) for (e in seqFieldDescent(child, 'into', TYPE_OUT_PARAM, null)) e];
 			return block(out);
 		}
 
-		final body: Array<Expr> = [macro final _children: Array<anyparse.query.QueryNode> = []];
-		for (child in node.children) for (e in seqFieldDescent(child, '_children', field(ident('v'), PairedShapeLowering.SPAN_FIELD)))
-			body.push(e);
+		final body: Array<Expr> = [(macro final _children: Array<anyparse.query.QueryNode> = []),
+			(macro final _typeSlot: Array<anyparse.query.QueryNode> = [])];
+		for (child in node.children)
+			for (e in seqFieldDescent(child, '_children', TYPE_SLOT_LOCAL, field(ident('v'), PairedShapeLowering.SPAN_FIELD)))
+				body.push(e);
 		final nameExpr: Expr = call(nameFnName(rule), [ident('v')]);
-		body.push(macro into.push(
-			new anyparse.query.QueryNode(v._kind, $nameExpr, anyparse.query.QueryWalkSupport.orderBySpan(_children), v._span)
-		));
+		body.push(macro into.push(new anyparse.query.QueryNode(v._kind, $nameExpr,
+			anyparse.query.QueryWalkSupport.orderBySpan(_children), v._span,
+			anyparse.query.QueryWalkSupport.first(_typeSlot))));
 		return block(body);
 	}
 
@@ -291,14 +355,16 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 * a child. A `type` slot is a name-slot leaf and is skipped - except an
 	 * `HxType.Anon`, whose body hosts declarations, except under
 	 * `withTypeRefs`, where the skipped type is surfaced as `TypeRef` nodes,
-	 * and except a slot the grammar tagged `@:queryTypeRef`, which surfaces
-	 * those same `TypeRef` nodes unconditionally (see `QUERY_TYPE_REF_META`).
+	 * except a slot the grammar tagged `@:queryTypeRef`, which surfaces
+	 * those same `TypeRef` nodes unconditionally (see `QUERY_TYPE_REF_META`),
+	 * and except a slot tagged `@:queryType`, which is WALKED like any ordinary
+	 * field in the default tree (see `QUERY_TYPE_META`).
 	 */
-	private function seqFieldDescent(child: ShapeNode, intoName: String, fallbackSpan: Null<Expr>): Array<Expr> {
+	private function seqFieldDescent(child: ShapeNode, intoName: String, typeOutName: String, fallbackSpan: Null<Expr>): Array<Expr> {
 		final name: String = fieldNameOf(child);
 		if (name == 'name') return [];
 		final access: Expr = field(ident('v'), name);
-		if (name != 'type') return descend(child, access, intoName, 0);
+		if (name != 'type') return descend(child, access, intoName, typeOutName, 0);
 
 		final ref: Null<String> = refOf(child);
 		// A `Null<HxType>` slot is bound to a local first: the switch below must
@@ -310,20 +376,45 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		final refsCall: Expr = ref != null && _typeRefRules.contains(ref)
 			? call(typeRefsFnName(ref), [value, ident(intoName), fallback])
 			: macro {};
+		final walkArm: Expr = block(descendCore(child, value, intoName, typeOutName, 0));
 		final skipArm: Expr = child.hasMeta(QUERY_TYPE_REF_META) ? refsCall : macro if (withTypeRefs) $refsCall;
-		final core: Expr = if (ref == null || !altHasCtor(ref, ANON_CTOR))
+		final refsAware: Expr = if (ref == null || !altHasCtor(ref, ANON_CTOR))
 			skipArm;
 		else {
 			final anonPattern: Expr = ctorPattern(ref, ANON_CTOR, [for (_ in 0...ctorArity(ref, ANON_CTOR)) '_']);
-			final descendArm: Expr = block(descendCore(child, value, intoName, 0));
 			{
 				expr: ESwitch(value, [
-					{ values: [anonPattern], expr: descendArm },
+					{ values: [anonPattern], expr: walkArm },
 					{ values: [macro _], expr: skipArm }
 				], null),
 				pos: Context.currentPos()
 			};
 		}
+
+		// `@:queryType` moves the DEFAULT tree only. Under `withTypeRefs` the arm
+		// is the unchanged one, so `parseFileTypeRefs` - and every consumer keyed
+		// on its flat `TypeRef` kind: `uses`, `blast`, `mentions`, `CrossRename`,
+		// `MoveSymbol`, `Naming`, `UnusedImport` - sees a byte-identical tree.
+		final core: Expr = if (child.hasMeta(QUERY_TYPE_META))
+			macro if (withTypeRefs) $refsAware else $walkArm;
+		else if (child.hasMeta(QUERY_TYPE_SLOT_META)) {
+			// The slot is filled from a walk of its own, so the pre-existing arm's
+			// contribution to `into` stays exactly what it was.
+			final slotWalk: Expr = block(descendCore(child, value, TYPE_SLOT_LOCAL + 'Own', TYPE_SLOT_LOCAL + 'Own', 0));
+			macro {
+				$refsAware;
+				// The slot is a DEFAULT-tree projection: `parseFileTypeRefs` answers with its
+				// flat `TypeRef` run and its consumers never read the slot, so filling it
+				// there would only cost a second walk of every annotation and print twice.
+				if (!withTypeRefs) {
+					final _typeSlotOwn: Array<anyparse.query.QueryNode> = [];
+					final withTypeRefs: Bool = false;
+					$slotWalk;
+					if (_typeSlotOwn.length > 0) $i{typeOutName}.push(_typeSlotOwn[0]);
+				}
+			};
+		} else
+			refsAware;
 
 		return !optional ? [core] : [
 			block([
@@ -338,11 +429,11 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 * a `Star`. A Terminal contributes nothing - it is a primitive leaf.
 	 * `depth` keeps nested `Star` loop variables from colliding.
 	 */
-	private function descend(child: ShapeNode, access: Expr, intoName: String, depth: Int): Array<Expr> {
-		final inner: Array<Expr> = descendCore(child, access, intoName, depth);
+	private function descend(child: ShapeNode, access: Expr, intoName: String, typeOutName: String, depth: Int): Array<Expr> {
+		final inner: Array<Expr> = descendCore(child, access, intoName, typeOutName, depth);
 		if (inner.length == 0 || !isOptional(child)) return inner;
 		final local: String = '_o$depth';
-		final guarded: Array<Expr> = descendCore(child, ident(local), intoName, depth);
+		final guarded: Array<Expr> = descendCore(child, ident(local), intoName, typeOutName, depth);
 		return [
 			block([
 				{ expr: EVars([{ name: local, type: null, expr: access }]), pos: Context.currentPos() },

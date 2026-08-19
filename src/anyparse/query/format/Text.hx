@@ -240,6 +240,14 @@ final class Text {
 		return flat.trim();
 	}
 
+	/**
+	 * The `QueryNode.type` slot renders as a `(: <type>)` group between the name and the
+	 * children — a slot, so it is NOT one of them, and the `:` head says so at a glance
+	 * (`(FinalStmt arr (: (Named Array (Named CodePoint))) (Call (IdentExpr mk)))`).
+	 * A node with no declared type prints exactly as it did before the slot existed.
+	 */
+	private static inline final TYPE_SLOT_HEAD: String = ':';
+
 	private static function toSValue(node: QueryNode, spans: Bool = false): SValue {
 		final items: Array<SValue> = [SAtom(node.kind)];
 		final n: Null<String> = node.name;
@@ -248,6 +256,8 @@ final class Text {
 			final span: Null<Span> = node.span;
 			if (span != null) items.push(SAtom('@${span.from}-${span.to}'));
 		}
+		final declared: Null<QueryNode> = node.type;
+		if (declared != null) items.push(SList([SAtom(TYPE_SLOT_HEAD), toSValue(declared, spans)]));
 		for (c in node.children) items.push(toSValue(c, spans));
 		return SList(items);
 	}

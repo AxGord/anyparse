@@ -38,8 +38,16 @@ class ApqAstTypeRefsCliTest extends Test {
 	private static final MIXED_TYPE_REFS: String = '(module\n  (ClassDecl\n    C\n    (VarMember a (TypeRef Int))\n'
 		+ '    (FinalMember b (TypeRef Map) (TypeRef String) (TypeRef Foo))\n    (FnMember\n      f\n'
 		+ '      (Required p (TypeRef haxe.io.Bytes))\n      (Named Null (TypeRef Bar))\n      (ExprBody (ReturnExpr (NullLit))))))\n';
-	private static final MIXED_DEFAULT: String = '(module\n  (ClassDecl\n    C\n    (VarMember a)\n    (FinalMember b)\n'
-		+ '    (FnMember f (Required p) (Named Null) (ExprBody (ReturnExpr (NullLit))))))\n';
+	/**
+	 * The default dump still drops the type POSITIONS the `--type-refs` projection exists
+	 * for — a parameter's annotation is absent, and nothing renders as a `TypeRef`. What it
+	 * now carries is the `QueryNode.type` SLOT of a var / final declaration, printed as a
+	 * `(: …)` group ahead of the children, and the type ARGUMENTS of a type that already
+	 * projected (the `Null<Bar>` return type).
+	 */
+	private static final MIXED_DEFAULT: String = '(module\n  (ClassDecl\n    C\n    (VarMember a (: (Named Int)))\n'
+		+ '    (FinalMember b (: (Named Map (Named String) (Named Foo))))\n'
+		+ '    (FnMember f (Required p) (Named Null (Named Bar)) (ExprBody (ReturnExpr (NullLit))))))\n';
 
 	/**
 	 * `Array<{ node: Doc, crosses: Bool }>` projects the anonymous structure's
