@@ -122,6 +122,15 @@ final class Linter {
 			// claims a `Conditional` node's span, and the rebuilt `return` it emits is a shape
 			// `fold-adjacent-string-literals` may fold further on a later fixed-point pass.
 			new HoistBranchStringAffix(),
+			// Registered AHEAD of `prefer-comprehension`, whose array-comprehension rewrite can cover
+			// the loop a ladder sits in. Both edits are then in flight for one region and
+			// `Cli.computeFileLintEdits` keeps the first, so this one lands and the comprehension is
+			// re-detected on the next `--fix` pass -- the order that composes; the reverse loses the
+			// ladder's `for` header and with it the literal range the fix is gated on. Measured
+			// 2026-08-19: no other builtin claims a value-position `if` chain of string literals
+			// (`prefer-ternary-expression` refuses a three-branch chain), so nothing else is ordered
+			// against it.
+			new PreferLpad(),
 			new JoinReturn(),
 			// Registry order is free: the two claim DISJOINT shapes. `join-return` needs the next
 			// statement to BE `return <name>;`, and this check refuses exactly that shape (it would
