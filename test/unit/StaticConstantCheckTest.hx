@@ -26,7 +26,8 @@ import anyparse.query.RefactorSupport;
 class StaticConstantCheckTest extends Test {
 
 	public function testScalarInstanceFinalFlagged(): Void {
-		final vs: Array<Violation> = violations('class C {\n\tprivate final _minScale:Float = 0.5;\n\tfunction f():Float return _minScale;\n}');
+		final vs: Array<Violation> =
+			violations('class C {\n\tprivate final _minScale:Float = 0.5;\n\tfunction f():Float return _minScale;\n}');
 		Assert.equals(1, vs.length);
 		Assert.equals('static-constant', vs[0].rule);
 		Assert.equals(Severity.Info, vs[0].severity);
@@ -49,7 +50,9 @@ class StaticConstantCheckTest extends Test {
 	public function testMutatedArrayInitializerRefused(): Void {
 		Assert.equals(
 			0,
-			violations('class C {\n\tprivate final _lists:Array<Int> = [];\n\tfunction f():Void {\n\t\t_lists.push(1);\n\t\t_lists.pop();\n\t}\n}').length
+			violations(
+				'class C {\n\tprivate final _lists:Array<Int> = [];\n\tfunction f():Void {\n\t\t_lists.push(1);\n\t\t_lists.pop();\n\t}\n}'
+			).length
 		);
 	}
 
@@ -65,7 +68,10 @@ class StaticConstantCheckTest extends Test {
 	 */
 	public function testInterpolatedStringInitializerRefused(): Void {
 		Assert.equals(
-			0, violations('class C {\n\tprivate final _closeAction:String = \'$${UUID.uuid()}: close\';\n\tfunction f():String return _closeAction;\n}').length
+			0,
+			violations(
+				'class C {\n\tprivate final _closeAction:String = \'$${UUID.uuid()}: close\';\n\tfunction f():String return _closeAction;\n}'
+			).length
 		);
 	}
 
@@ -83,7 +89,9 @@ class StaticConstantCheckTest extends Test {
 	}
 
 	public function testBoolFlagged(): Void {
-		Assert.equals(1, violations('class C {\n\tprivate final _allowMove:Bool = true;\n\tfunction f():Bool return _allowMove;\n}').length);
+		Assert.equals(
+			1, violations('class C {\n\tprivate final _allowMove:Bool = true;\n\tfunction f():Bool return _allowMove;\n}').length
+		);
 	}
 
 	/**
@@ -94,16 +102,14 @@ class StaticConstantCheckTest extends Test {
 	 */
 	public function testConstructorReassignedFinalRefused(): Void {
 		Assert.equals(
-			0,
-			violations('class C {\n\tprivate final _n:Int = 5;\n\tpublic function new(f:Bool) {\n\t\tif (f) _n = 9;\n\t}\n}').length
+			0, violations('class C {\n\tprivate final _n:Int = 5;\n\tpublic function new(f:Bool) {\n\t\tif (f) _n = 9;\n\t}\n}').length
 		);
 	}
 
 	/** The same shape with the constructor write removed — the one-variable twin that proves the gate above is what refuses. */
 	public function testUnwrittenFinalWithConstructorFlagged(): Void {
 		Assert.equals(
-			1,
-			violations('class C {\n\tprivate final _n:Int = 5;\n\tpublic function new(f:Bool) {\n\t\tif (f) g();\n\t}\n}').length
+			1, violations('class C {\n\tprivate final _n:Int = 5;\n\tpublic function new(f:Bool) {\n\t\tif (f) g();\n\t}\n}').length
 		);
 	}
 
@@ -195,7 +201,8 @@ class StaticConstantCheckTest extends Test {
 	public function testConstantReferenceInitializerRefused(): Void {
 		Assert.equals(
 			0,
-			violations('class C {\n\tprivate static inline final K:Int = 5;\n\tprivate final _n:Int = K;\n\tfunction f():Int return _n;\n}').length
+			violations('class C {\n\tprivate static inline final K:Int = 5;\n\tprivate final _n:Int = K;\n\tfunction f():Int return _n;\n}')
+				.length
 		);
 	}
 
