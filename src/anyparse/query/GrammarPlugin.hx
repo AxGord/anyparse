@@ -557,6 +557,23 @@ typedef RefShape = {
 	@:optional var boolLitKind: String;
 
 	/**
+	 * The nominal name of the NON-NULLABLE boolean type (Haxe `Bool`). Its ONE job is to
+	 * read a function's declared return type as a proof that the function's returned
+	 * expression is a non-null boolean — the proof `RefactorSupport.provablyBoolOperand`
+	 * cannot supply from a node kind, and the seam behind
+	 * `RefactorSupport.declaresNonNullBool`.
+	 *
+	 * The match is on the WHOLE printed return type after trimming, deliberately: `Bool`
+	 * admits, and `Null<Bool>`, `Dynamic`, `Any` and a missing annotation all refuse,
+	 * without this seam needing to know what any of those mean. A name-suffix or
+	 * substring match would admit `Null<Bool>`, which is exactly the case the proof does
+	 * not cover.
+	 *
+	 * Optional; unset makes every consumer fall back to its kind-only proof.
+	 */
+	@:optional var nonNullBoolTypeName: String;
+
+	/**
 	 * Conditional node kinds whose `children[0]` is the condition — the
 	 * `constant-condition` check flags a `boolLitKind` condition here (`if (true)`
 	 * / `if (false)`: a branch always or never taken). Loops are intentionally

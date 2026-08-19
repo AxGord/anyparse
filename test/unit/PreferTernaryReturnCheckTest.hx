@@ -159,9 +159,15 @@ class PreferTernaryReturnCheckTest extends Test {
 		);
 	}
 
-	/** `if (c) return true; return g();` would be a stuck `c ? true : g()` (g() not provably Bool): left as a guard. */
+	/**
+	 * `if (c) return true; return g();` would be a stuck `c ? true : g()` (`g()` not provably
+	 * Bool): left as a guard. The host function is UNANNOTATED — the gate now has a second
+	 * proof (`RefactorSupport.declaresNonNullBool`) and an inferred return type supplies
+	 * none, so this pins the refusal that survives it. The declared-`:Bool` twin of this
+	 * shape is `testCallTailInBoolFunctionFlagged`, which collapses.
+	 */
 	public function testStuckBooleanCallNotFlagged(): Void {
-		Assert.equals(0, violations('class C {\n\tfunction f(c:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn g();\n\t}\n}').length);
+		Assert.equals(0, violations('class C {\n\tfunction f(c:Bool) {\n\t\tif (c) return true;\n\t\treturn g();\n\t}\n}').length);
 	}
 
 	/** A provably-Bool other side (`x > 0`) collapses — simplify-boolean-ternary then reduces it cleanly. */
@@ -271,13 +277,6 @@ class PreferTernaryReturnCheckTest extends Test {
 		);
 	}
 
-	/** A MISSING return type annotation infers nothing and proves nothing — refused. */
-	public function testCallTailInUnannotatedFunctionNotFlagged(): Void {
-		Assert.equals(
-			0, violations('class C {\n\tfunction f(c:Bool) {\n\t\tif (c) return true;\n\t\treturn g();\n\t}\n}').length
-		);
-	}
-
 	/** `Dynamic` / `Any` are null-safety escape hatches, not the non-null `Bool` nominal — refused. */
 	public function testCallTailInDynamicFunctionNotFlagged(): Void {
 		Assert.equals(
@@ -286,13 +285,25 @@ class PreferTernaryReturnCheckTest extends Test {
 		);
 	}
 
-	/** The proof is the NEAREST enclosing function's: a `:Bool` outer does not license an inner lambda. */
+	/**
+	 * The proof is the NEAREST enclosing function's: a `:Bool` outer does not license an inner
+	 * lambda, which promises nothing. Both lambda spellings, because `FnExpr` and
+	 * `ThinParenLambdaExpr` live in `lambdaKinds` and NOT in `functionKinds` — a walk rebinding
+	 * on `functionKinds` alone leaks the method's `Bool` into every lambda inside it.
+	 */
 	public function testInnerLambdaDoesNotInheritOuterBoolReturn(): Void {
 		Assert.equals(
 			0,
 			violations(
 				'class C {\n\tfunction f():Bool {\n\t\tvar h = function(c:Bool) {\n\t\t\tif (c) return true;\n'
 				+ '\t\t\treturn g();\n\t\t};\n\t\treturn h(true);\n\t}\n}'
+			).length
+		);
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f():Bool {\n\t\tvar k = (c:Bool) -> {\n\t\t\tif (c) return true;\n'
+				+ '\t\t\treturn g();\n\t\t};\n\t\treturn k(true);\n\t}\n}'
 			).length
 		);
 	}

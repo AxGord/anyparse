@@ -2147,6 +2147,62 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * Whether `returnTypeSource` — the verbatim source of a function's EXPLICIT return type,
+	 * as `TypeResolver.functionReturnTypeSource` returns it — is the non-nullable boolean
+	 * nominal (`RefShape.nonNullBoolTypeName`). The SECOND proof that a `return`ed expression
+	 * is a non-null `Bool`, and the one `provablyBoolOperand` structurally cannot give: it
+	 * reads the node's KIND, and a `Call` / field access / identifier has no kind that says
+	 * `Bool`. This one reads the CONTRACT the enclosing function states instead.
+	 *
+	 * ★ What it actually proves, because the obvious reading is wrong. Haxe does NOT reject
+	 * `function f():Bool return someNullBool;` — `Null<Bool>` unifies with `Bool` silently on
+	 * every target (measured: `--interp` -> `null`, `js` -> `undefined`, `--jvm` -> `false`,
+	 * all exit 0). So a declared `:Bool` is not, by itself, a runtime non-null guarantee.
+	 *
+	 * It does not need to be. The hazard the boolean-collapse gates guard is COMPILE
+	 * ACCEPTANCE under `@:nullSafety(Strict)`, not meaning: `cond ? false : <tail>` and
+	 * `!cond && <tail>` are observationally identical for a null `<tail>` too (18/18 cells on
+	 * `--interp` / `js` / `--jvm`, both guard polarities). And under Strict a `:Bool` function
+	 * CANNOT host a `return <nullable>;` ("Null safety: Cannot return nullable value of
+	 * Null<Bool> as Bool") — so if the pre-rewrite source compiles, the tail is a non-null
+	 * `Bool` and the post-rewrite source compiles too. Both readings of the world are covered,
+	 * which is why the trimmed WHOLE-type match is the right strictness: `Null<Bool>` refuses.
+	 */
+	public static function declaresNonNullBool(returnTypeSource: Null<String>, shape: RefShape): Bool {
+		final boolName: Null<String> = shape.nonNullBoolTypeName;
+		return boolName != null && returnTypeSource != null && StringTools.trim(returnTypeSource) == boolName;
+	}
+
+	/**
+	 * Whether `operand` is a tail the declared-return-type proof must NOT license, even inside
+	 * a function declaring the non-null boolean nominal. Two families, each for its own reason:
+	 *
+	 *  - the `null` LITERAL. `!cond && null` is behaviour-preserving (the null propagates
+	 *    through `&&` exactly as it did through the guard's fall-through) but degenerate, and
+	 *    under `@:nullSafety(Strict)` a `return null;` in a `:Bool` function does not compile,
+	 *    so the site can only exist where nothing is checking. Emitting `&& null` there trades
+	 *    a readable guard for an expression that reads like a bug.
+	 *  - a STATEMENT-LIKE expression — `switch`, `try`, `throw`, an `if` used as a value, a
+	 *    block. These reduce soundly (the non-literal branch is always the RIGHT operand of the
+	 *    emitted `&&` / `||`, so nothing can swallow rightward), but the gate being relaxed
+	 *    exists to stop a collapse that is "uglier than the guard", and gluing a multi-line
+	 *    construct onto `&&` is exactly that. Refusing them keeps the relaxation to the case
+	 *    that motivated it: a compact value expression.
+	 *
+	 * Parentheses are unwrapped first, so `(switch …)` refuses like a bare one.
+	 */
+	public static function statementLikeOrNullTail(operand: QueryNode, shape: RefShape): Bool {
+		final kind: String = unwrapParens(operand, shape.parenKind).kind;
+		if (kind == shape.nullLiteralKind) return true;
+		final blockStmtKind: Null<String> = shape.blockStmtKind;
+		if (blockStmtKind != null && kind == blockStmtKind) return true;
+		for (kinds in [shape.ifExpressionKinds, shape.tryExpressionKinds, shape.switchKinds, shape.throwKinds]) {
+			if (kinds != null && kinds.contains(kind)) return true;
+		}
+		return false;
+	}
+
+	/**
 	 * `node` with every enclosing parenthesis layer peeled off — `((e))` yields `e`.
 	 * The grammar-agnostic paren seam: an UNSET `parenKind` (the grammar declares no
 	 * parenthesized-expression kind) returns `node` unchanged, so a caller degrades to

@@ -667,6 +667,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			parenKind: 'ParenExpr',
 			macroModifierKind: 'Macro',
 			boolLitKind: 'BoolLit',
+			nonNullBoolTypeName: 'Bool',
 			branchConditionKinds: ['IfStmt', 'IfExpr'],
 			emptyStmtKind: 'EmptyStmt',
 			emptyMemberKind: 'EmptySemiMember',

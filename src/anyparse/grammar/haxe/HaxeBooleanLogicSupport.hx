@@ -108,7 +108,9 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 
 	public function new() {}
 
-	public function simplifyBooleanTernary(ternary: QueryNode, source: String, ?typeNominalOf: (QueryNode) -> Null<String>): Null<String> {
+	public function simplifyBooleanTernary(
+		ternary: QueryNode, source: String, ?typeNominalOf: (QueryNode) -> Null<String>, ?resultIsNonNullBool: Bool
+	): Null<String> {
 		if (ternary.kind != 'Ternary' || ternary.children.length != 3) return null;
 		final cond: QueryNode = ternary.children[0];
 		final thenNode: QueryNode = ternary.children[1];
@@ -123,13 +125,17 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 		else
 			null;
 		// Exactly one branch is a boolean literal; the other becomes an operand of
-		// `&&` / `||`. That reduction is sound only when the non-literal branch is a
-		// non-null `Bool` — a boolean-operator result. A `null` literal, a bare
-		// identifier (possibly a `Null<Bool>` local) or a call / field access would
-		// change meaning AND fail `@:nullSafety(Strict)` (`cond || null`), so the
-		// ternary is left alone — mirroring `ComparisonToBoolean`'s `provablyBool` gate.
+		// `&&` / `||`. That reduction needs the non-literal branch to be a non-null `Bool`,
+		// and there are exactly TWO proofs of it. The FIRST is the branch's own kind — a
+		// boolean-operator result (`provablyBool`); a bare identifier (possibly a
+		// `Null<Bool>` local), a call or a field access has no such kind. The SECOND comes
+		// from the caller as `resultIsNonNullBool`: the ternary's VALUE is a non-null
+		// boolean by contract (it is returned from a function declaring the non-null bool
+		// nominal), which types either branch. Neither proof -> left alone, mirroring
+		// `ComparisonToBoolean`'s `provablyBool` gate. The caller's flag is trusted for
+		// TYPE only; every readability gate on the branch is the caller's to apply first.
 		final other: QueryNode = thenBool != null ? elseNode : thenNode;
-		return if (!provablyBool(other))
+		return if (!provablyBool(other) && resultIsNonNullBool != true)
 			null
 		else if (thenBool != null)
 			thenBool
