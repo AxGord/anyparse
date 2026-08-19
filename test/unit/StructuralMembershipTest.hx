@@ -89,6 +89,10 @@ class StructuralMembershipTest extends Test {
 		Assert.isFalse(index.satisfiesIterable('Outside', 'Use.hx'));
 		// An alias to an anonymous structure hosts no nominal target at all.
 		Assert.isFalse(index.satisfiesIterable('Anon', 'Use.hx'));
+		// An anon-struct typedef is NOT an alias: it hosts its own fields, and a `> Base`
+		// structural extension is a SUPERTYPE link the walk below must still take.
+		Assert.isTrue(index.satisfiesIterable('IterStruct', 'Use.hx'));
+		Assert.isTrue(index.satisfiesIterable('SubStruct', 'Use.hx'));
 		// A function-type alias has no nominal head to follow.
 		Assert.isFalse(index.satisfiesIterable('Fn', 'Use.hx'));
 		// The head is RAW source, so a comment before the path rides along in it. The raw answer
@@ -136,6 +140,8 @@ class StructuralMembershipTest extends Test {
 			{ file: 'Outside.hx', source: 'typedef Outside = nowhere.Gone;' },
 			{ file: 'Anon.hx', source: 'typedef Anon = { var a:Int; };' },
 			{ file: 'Fn.hx', source: 'typedef Fn = Bag -> Widget;' },
+			{ file: 'IterStruct.hx', source: 'typedef IterStruct = {\n\tfunction iterator():BagIter;\n}' },
+			{ file: 'SubStruct.hx', source: 'typedef SubStruct = {\n\t> IterStruct,\n\tvar a:Widget;\n}' },
 			{ file: 'Commented.hx', source: 'typedef Commented = /* c */ deep.Sack;' },
 			{ file: 'CommentedDup.hx', source: 'typedef CommentedDup = /* c */ deep.Twin;' },
 			{ file: 'deep/Twin.hx', source: 'package deep;\n\nclass Twin {\n\tpublic function iterator():DeepIter return null;\n}' },
