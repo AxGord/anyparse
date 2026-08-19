@@ -74,6 +74,18 @@ typedef MemberInfo = {
 	/** The member's VERBATIM declared type SOURCE — the written `:Type` text (`Null<T>` preserved), or null for an unannotated / inference-typed / function member (whose annotation is a `returnType`, not a `type`). Drives cross-file `Type.staticField` read-type resolution. */
 	var typeSource: Null<String>;
 
+	/**
+	 * The VERBATIM declared type SOURCE of the member's FIRST parameter (`static function
+	 * trim(s:String)` → `String`), or null when the member declares no parameter, its first
+	 * parameter carries no annotation, or it is not a function at all.
+	 *
+	 * The one fact a `using` STATIC EXTENSION needs that no other field here carries. `using M`
+	 * makes `M.m(first, …)` reachable as `<recv>.m(…)` ONLY for a receiver the first parameter
+	 * accepts, so nothing may take `returnNominal` as such a call's type without matching the
+	 * receiver against THIS source first — `extensionReturnNominal` is that join.
+	 */
+	var firstParamTypeSource: Null<String>;
+
 	/** The member's EXPLICIT visibility keyword as WRITTEN (`public` / `private`), or null when its modifier run carries none. Drives cross-file override-visibility resolution. */
 	var visibility: Null<String>;
 
@@ -758,6 +770,49 @@ final class SymbolIndex {
 			for (fi in _files) for (t in fi.types) if (t.name == typeName) for (m in t.members) if (m.name == memberName)
 				{ type: t, member: m }
 		];
+	}
+
+	/**
+	 * The RETURN nominal a `using <module>` STATIC EXTENSION gives at `<recv>.<method>(…)`, where
+	 * `recv` carries the simple type `receiver` — or null when nothing here proves one.
+	 *
+	 * `module` resolves the same way `typeProvablyLacksMember` resolves its start type: against
+	 * `fromFile`'s import scope when one is given, else by its own dotted path, else as a simple
+	 * name that must be unique among indexed decls. Pass the `using` declaration's text verbatim
+	 * and the file that declared it.
+	 *
+	 * Every gate fails closed, and one of them is the whole reason this is not `returnNominalOf`
+	 * on the module: the first parameter must ACCEPT the receiver, not merely exist. Accepted are
+	 * an exact nominal match and a proven NOMINAL subtype (`isSubtype`); a structural unification
+	 * is NOT modelled, so `Lambda.exists(it:Iterable<A>, …)` answers null for an `Array` receiver
+	 * — a miss, never a wrong type. The rest: the member must be STATIC (an instance method is
+	 * not reachable through a `using`), and must carry a WRITTEN return — an inference-typed one
+	 * names no type at all, while `:Void` resolves to the nominal `Void`, exactly as
+	 * `returnNominalOf` already answers it for an ordinary member. Every declaration of the name
+	 * must agree, since a `#if` pair returning two different types proves nothing branch-blind. A
+	 * module declaring the name with a non-accepting first parameter answers null rather than the
+	 * next candidate's return: that IS the correct answer for that module, and the caller walks
+	 * its remaining `using`s itself.
+	 *
+	 * What this deliberately does NOT decide is whether the receiver's own type declares `method`
+	 * — a real member BEATS an extension and the extension must not be consulted at all. That
+	 * gate belongs to the caller, which holds the receiver and must prove absence with
+	 * `typeProvablyLacksMember` BEFORE asking here (`NominalTypes.staticExtensionNominal`).
+	 */
+	public function extensionReturnNominal(module: String, method: String, receiver: String, ?fromFile: String): Null<String> {
+		final host: Null<ResolvedType> = resolveStartType(module, fromFile);
+		if (host == null) return null;
+		var found: Null<String> = null;
+		for (m in host.type.members) if (m.name == method) {
+			final paramSource: Null<String> = m.firstParamTypeSource;
+			final ret: Null<String> = m.returnNominal;
+			if (!m.isStatic || paramSource == null || ret == null) return null;
+			final accepts: Null<String> = NominalTypes.outerNominalOf(paramSource);
+			if (accepts == null || (accepts != receiver && !isSubtype(receiver, accepts))) return null;
+			if (found != null && found != ret) return null;
+			found = ret;
+		}
+		return found;
 	}
 
 	/**

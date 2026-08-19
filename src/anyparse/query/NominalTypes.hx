@@ -31,9 +31,10 @@ using StringTools;
  * - **Typing a value or an expression.** `valueTypeNominal` and `expressionTypeNominal` are
  *   the entry points the analysis checks call. The private deep walk below them keeps the
  *   answer at SOURCE level (type arguments intact, for substitution) and adds the arms a
- *   plain path has not got: a method call resolved through `SymbolIndex.returnNominalOf`, a
- *   tabled `Type.method` static call, and the loop binder whose type is the ELEMENT type of
- *   what it iterates (`iterationValueBinder` / `iterationIterable` /
+ *   plain path has not got: a method call resolved through `SymbolIndex.returnNominalOf` or, when
+ *   the receiver provably lacks the member, through a `using` STATIC EXTENSION
+ *   (`staticExtensionNominal`); a tabled `Type.method` static call; and the loop binder whose
+ *   type is the ELEMENT type of what it iterates (`iterationValueBinder` / `iterationIterable` /
  *   `forBindingElementTypeSource`).
  *
  * Every resolution entry point answers null for "unknown" rather than guessing, so a consumer that
@@ -256,7 +257,7 @@ final class NominalTypes {
 	 * SITE rather than a widening, and each consumer decides for itself.
 	 *
 	 * `chain` is the second, deeper opt-in — null gives EXACTLY the answer above, non-null adds
-	 * three proof capacities the nominal-only walk structurally cannot have:
+	 * four proof capacities the nominal-only walk structurally cannot have:
 	 *
 	 *  - a `for` BINDER's type, read off the iterable's element parameter. The binder carries no
 	 *    `:Type`, so `declaredTypes` has no entry for it and the shallow walk answers null.
@@ -265,13 +266,16 @@ final class NominalTypes {
 	 *  - TYPE-ARGUMENT SUBSTITUTION along the member chain: a member declared `T` on
 	 *    `Box<T:Item>`, reached through a receiver written `Box<Item>`, resolves to `Item`. The
 	 *    shallow walk keeps the verbatim `T`, which resolves to nothing.
+	 *  - a `using`-brought STATIC EXTENSION on the call tail (`staticExtensionNominal`), reached
+	 *    only after the receiver's own type is PROVEN not to declare the name. Without it a chain
+	 *    dies at its first extension link — `text.trim().toLowerCase()` typed nothing at all.
 	 *
 	 * Two consumers take the deep opt-in: `CheckScan.typeNominalResolver`'s ordered-comparison gate,
 	 * where more proof can only turn a conservative wrap into a licensed flip; and
 	 * `prefer-static-extension`, which ACTS on the answer and whose own doc records why each arm
 	 * clears the higher bar that demands.
 	 *
-	 * The three fail closed everywhere they are unsure, with ONE documented leak an acting consumer
+	 * The four fail closed everywhere they are unsure, with ONE documented leak an acting consumer
 	 * must handle itself: `SymbolIndex.resolveGenericPathFinalMemberTypeSource` refuses an effective
 	 * source that still mentions a parameter name, but that refusal is the SUBSTITUTING walk's, not
 	 * the whole answer's — `pathReceiverMemberTypeSource` still runs its package-blind fallback
@@ -283,7 +287,9 @@ final class NominalTypes {
 	 * Deliberately NOT resolved (safe misses, each a null): a bare `f()` / `this.f()` call, whose
 	 * enclosing-type lookup is a different mechanism; a `Type.staticMethod()` whose receiver is a
 	 * SINGLE unbound identifier and whose `Type.method` is NOT in `staticMethodReturns`, since the
-	 * walk will not otherwise guess that an unbound name is a type.
+	 * walk will not otherwise guess that an unbound name is a type; and an extension whose first
+	 * parameter accepts the receiver only STRUCTURALLY (`Lambda.exists(it:Iterable<A>, …)` on an
+	 * `Array`), which no nominal table can prove.
 	 */
 	public static function expressionTypeNominal(
 		node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>, file: String,
@@ -413,7 +419,48 @@ final class NominalTypes {
 		final method: Null<String> = callee.name;
 		if (callee.kind != fieldKind || method == null || callee.children.length != 1) return null;
 		final receiver: Null<String> = expressionNominalWalk(callee.children[0], root, shape, declaredTypes, index, file, chain, seen);
-		return receiver == null ? null : index.returnNominalOf(receiver, method);
+		if (receiver == null) return null;
+		final member: Null<String> = index.returnNominalOf(receiver, method);
+		return member ?? staticExtensionNominal(receiver, method, chain, index, file);
+	}
+
+	/**
+	 * The return nominal a `using`-brought STATIC EXTENSION gives at `<recv>.<method>(…)`, where
+	 * `recv` carries the type `receiver` — the arm that runs only after the receiver's own type has
+	 * been proven NOT to declare `method`. Null everywhere it is unsure, so a caller keeps its
+	 * conservative branch exactly as it did before this arm existed.
+	 *
+	 * The gate is `SymbolIndex.typeProvablyLacksMember`, and nothing weaker will do. A real member
+	 * BEATS an extension — verified against the compiler: under `using E`, a `d.tag()` on a `D`
+	 * declaring `tag():Void` binds to the MEMBER and errors as `Void should be Dynamic`, never to
+	 * `E.tag(d:D):String`. The member-side lookup that ran first (`returnNominalOf`) cannot stand in
+	 * for that proof, because it answers null for a `Void` / inference-typed member exactly as it
+	 * does for an absent one — reading its null as "no such member" would hand the extension's type
+	 * to a call the extension never receives. Only the POSITIVE proof of absence separates the two,
+	 * and it fails closed for a receiver whose type, or any type in its supertype closure, the run
+	 * does not index.
+	 *
+	 * `usings` is walked BACKWARDS because Haxe resolves static extensions in reverse declaration
+	 * order (measured: `using A; using B;` binds `B.tag`, the reverse binds `A.tag`). The first
+	 * module that ANSWERS wins; one declaring the name with a first parameter the receiver does not
+	 * fit answers null and the walk continues to the earlier ones — which is the compiler's own
+	 * behaviour (`using A; using C;` with `C.tag(s:Int)` binds `A.tag(s:String)` for a `String`).
+	 *
+	 * Deliberately unreachable in SHALLOW mode: `chain` is the opt-in every deep arm sits behind,
+	 * and this one carries the same obligation as its siblings — it resolves not merely MORE but
+	 * type-CORRECTLY, each of the three compiler-verified rules above written as its own gate.
+	 */
+	private static function staticExtensionNominal(
+		receiver: String, method: String, chain: Null<ChainTypeContext>, index: SymbolIndex, file: String
+	): Null<String> {
+		if (chain == null) return null;
+		final usings: Array<String> = chain.usings;
+		if (usings.length == 0 || !index.typeProvablyLacksMember(receiver, method, file)) return null;
+		for (k in 0...usings.length) {
+			final ret: Null<String> = index.extensionReturnNominal(usings[usings.length - 1 - k], method, receiver, file);
+			if (ret != null) return ret;
+		}
+		return null;
 	}
 
 	/** `valueTypeNominal`'s deep-mode twin: `valueTypeSourceDeep`'s written type source, reduced to its outer nominal. */
@@ -635,4 +682,13 @@ typedef ChainTypeContext = {
 
 	/** Source text of the file being probed — the for-binding arm reads the loop HEADER text to refuse the key-value form. */
 	final source: String;
+
+	/**
+	 * The module paths of every `using` the file declares, in DECLARATION order
+	 * (`UsingScan.usingModules`). The static-extension arm reads them BACKWARDS, because Haxe
+	 * resolves a static extension in reverse declaration order — the later `using` wins.
+	 * An empty array switches the arm off, which is what a consumer that has not thought about
+	 * static extensions should pass.
+	 */
+	final usings: Array<String>;
 }

@@ -1480,6 +1480,48 @@ class SymbolIndexSliceTest extends Test {
 		if (solo != null) Assert.equals(0, solo.length);
 	}
 
+	/**
+	 * The two facts a `using` STATIC EXTENSION needs beyond an ordinary member lookup: the type
+	 * its FIRST PARAMETER accepts (`firstParamTypeSource`) and, joined with the receiver, the
+	 * return it hands back (`extensionReturnNominal`).
+	 */
+	public function testStaticExtensionSignature(): Void {
+		final index: SymbolIndex = SymbolIndex.build(extensionFiles(), plugin());
+
+		Assert.equals('String', memberOf(fileInfoOf(index, 'Ext.hx').types[0], 'tag').firstParamTypeSource);
+		Assert.isNull(memberOf(fileInfoOf(index, 'Ext.hx').types[0], 'bare').firstParamTypeSource);
+
+		Assert.equals('Int', index.extensionReturnNominal('Ext', 'tag', 'String'));
+		// The first parameter must ACCEPT the receiver, not merely exist.
+		Assert.isNull(index.extensionReturnNominal('Ext', 'ints', 'String'));
+		// A parameterless static is not an extension at all, and neither is an instance method.
+		Assert.isNull(index.extensionReturnNominal('Ext', 'bare', 'String'));
+		Assert.isNull(index.extensionReturnNominal('Inst', 'tag', 'String'));
+		// An unannotated return names no type, so it proves nothing.
+		Assert.isNull(index.extensionReturnNominal('Ext', 'inferred', 'String'));
+		// A SUBTYPE of the first parameter's type is accepted; an unrelated receiver is not.
+		Assert.equals('Base', index.extensionReturnNominal('BaseExt', 'id', 'Sub'));
+		Assert.isNull(index.extensionReturnNominal('BaseExt', 'id', 'String'));
+		// A module the index does not hold answers nothing.
+		Assert.isNull(index.extensionReturnNominal('Missing', 'tag', 'String'));
+	}
+
+	/** The static-extension fixture set: one module of statics, one instance host, and a two-level `extends` pair. */
+	private function extensionFiles(): Array<{ file: String, source: String }> {
+		return [
+			{
+				file: 'Ext.hx',
+				source: 'class Ext {\n\tpublic static function tag(s:String):Int return 0;\n\n'
+					+ '\tpublic static function ints(i:Int):String return null;\n\n'
+					+ '\tpublic static function bare():Int return 0;\n\n\tpublic static function inferred(s:String) return 0;\n}'
+			},
+			{ file: 'Inst.hx', source: 'class Inst {\n\tpublic function tag(s:String):Int return 0;\n}' },
+			{ file: 'Base.hx', source: 'class Base {}' },
+			{ file: 'Sub.hx', source: 'class Sub extends Base {}' },
+			{ file: 'BaseExt.hx', source: 'class BaseExt {\n\tpublic static function id(b:Base):Base return b;\n}' }
+		];
+	}
+
 	/** Build a one-type index from `source` and assert its single declaration's type-parameter arity and names. */
 	private function assertHeaderParams(source: String, arity: Int, names: Array<String>): Void {
 		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/H.hx', source: source }], plugin());
