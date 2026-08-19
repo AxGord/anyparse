@@ -7,6 +7,7 @@ import anyparse.format.EmptyCurly;
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.MetadataLineEndPolicy;
+import anyparse.format.OptionalSemicolon;
 import anyparse.format.RightCurlyPlacement;
 import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
@@ -1099,6 +1100,15 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// grammar). Default `false` (keep parens — byte-inert). Fed by
 	// `whitespace.parenConfig.switchSubjectParens` (`"remove"` → true).
 	dropSwitchSubjectParens: Bool,
+	// ω-optional-semicolon (E11): three-way policy for the `@:trailOpt(';')`
+	// statement terminator Haxe lets a `}`-terminated statement omit.
+	// `Preserve` (default) re-emits source presence — byte-inert, fork
+	// parity. `Always` emits it on every slot carrying
+	// `@:fmt(optionalSemicolon(...))`; `Never` drops it wherever that
+	// flag's shape gate proves it optional. Trivia-mode writer only; the
+	// plain writer keeps its `trailOptShapeGate` AST-shape gate. Fed by
+	// `whitespace.optionalSemicolon`.
+	optionalSemicolon: OptionalSemicolon,
 	accessBracketsOpen: WhitespacePolicy,
 	accessBracketsClose: WhitespacePolicy,
 	arrayLiteralBracketsOpen: WhitespacePolicy,

@@ -506,6 +506,7 @@ import unit.HxCondSpliceOwnLineSliceTest;
 import unit.CollapsibleElseIfCheckTest;
 import unit.HaxelibResolverTest;
 import unit.LintUnusedImportResolutionScopeTest;
+import unit.HxOptionalSemicolonSliceTest;
 import unit.HxSwitchSubjectParensStripSliceTest;
 import unit.PreferInlineCheckTest;
 import unit.InlineConstantCheckTest;
@@ -698,6 +699,7 @@ class RunTests {
 		addCase(new HxPrattOpsTest());
 		addCase(new HxParenSliceTest());
 		addCase(new HxSwitchAfterParenSpaceSliceTest());
+		addCase(new HxOptionalSemicolonSliceTest());
 		addCase(new HxSwitchSubjectParensStripSliceTest());
 		addCase(new HxAssignSliceTest());
 		addCase(new HxBitwiseSliceTest());

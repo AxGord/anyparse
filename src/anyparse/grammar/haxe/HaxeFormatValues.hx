@@ -13,6 +13,8 @@ import anyparse.grammar.haxe.format.HxFormatLeftCurlyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.grammar.haxe.format.HxFormatEmptyCurlyPolicy;
 import anyparse.format.EmptyCurly;
+import anyparse.grammar.haxe.format.HxFormatOptionalSemicolonPolicy;
+import anyparse.format.OptionalSemicolon;
 import anyparse.grammar.haxe.format.HxFormatRightCurlyPolicy;
 import anyparse.format.RightCurlyPlacement;
 import anyparse.grammar.haxe.format.HxFormatLineEndCharacter;
@@ -159,6 +161,14 @@ final class HaxeFormatValues {
 		return switch policy {
 			case HxFormatEmptyCurlyPolicy.Break: EmptyCurly.Break;
 			case _: EmptyCurly.Same;
+		};
+	}
+
+	private static function optionalSemicolonToRuntime(policy: HxFormatOptionalSemicolonPolicy): OptionalSemicolon {
+		return switch policy {
+			case HxFormatOptionalSemicolonPolicy.Always: OptionalSemicolon.Always;
+			case HxFormatOptionalSemicolonPolicy.Never: OptionalSemicolon.Never;
+			case _: OptionalSemicolon.Preserve;
 		};
 	}
 

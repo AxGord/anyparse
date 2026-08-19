@@ -27,6 +27,7 @@ final class HxAstPredLowering extends AstPredLowering {
 	private static inline final HX_MEMBER_DECL: String = 'anyparse.grammar.haxe.HxMemberDecl';
 	private static inline final HX_FN_EXPR_BODY: String = 'anyparse.grammar.haxe.HxFnExprBody';
 	private static inline final HX_TRY_CATCH_EXPR: String = 'anyparse.grammar.haxe.HxTryCatchExpr';
+	private static inline final HX_VAR_DECL: String = 'anyparse.grammar.haxe.HxVarDecl';
 	private static inline final HX_COND_DECL: String = 'anyparse.grammar.haxe.HxConditionalDecl';
 	private static inline final HX_ELSEIF_DECL: String = 'anyparse.grammar.haxe.HxElseifDecl';
 
@@ -217,6 +218,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		return [
 			arrayBracketKindField(),
 			endsWithCloseBraceField(),
+			varDeclTailEndsWithCloseBraceField(),
 			operandIsBlockExprField(),
 			tailStmtReadsExprPositionField(),
 			elementIsConditionalEnumField(HX_STATEMENT, 's'),
@@ -308,6 +310,36 @@ final class HxAstPredLowering extends AstPredLowering {
 			'endsWithCloseBrace',
 			[valueArg('e', HX_EXPR)],
 			macro :Bool, body, 'True iff the expression\'s surface form ends with `}` for the var/final-rhs `;` gate (recursive).'
+		);
+	}
+
+	/**
+	 * `varDeclTailEndsWithCloseBrace(d) → Bool` — `endsWithCloseBrace`
+	 * asked of the binding that actually OWNS the statement's trailing
+	 * `;`, i.e. the LAST one in a multi-variable declaration. `HxVarDecl`
+	 * is right-recursive through `more[0].decl` (see `HxVarMore`), so
+	 * `var a = { … }, b = 2;` reaches the writer as a head whose `init`
+	 * is brace-terminated while the token before the `;` is `2`.
+	 *
+	 * Drives `@:fmt(optionalSemicolon('varDeclTailEndsWithCloseBrace'))`
+	 * on the `var` / `final` family. Reading the HEAD's `init` there —
+	 * which is what the plain-mode `trailOptShapeGate('endsWithCloseBrace',
+	 * 'init')` still does — drops the `;` off that statement and emits
+	 * `var a = { … }, b = 2` before a `}`, which is `Missing ;`.
+	 */
+	private function varDeclTailEndsWithCloseBraceField(): Field {
+		final tailDecl: Expr = field(starElem(HX_VAR_DECL, 'more', macro _m[_m.length - 1]), 'decl');
+		final recTail: Expr = { expr: ECall(ident('varDeclTailEndsWithCloseBrace'), [tailDecl]), pos: Context.currentPos() };
+		final headInit: Expr = { expr: ECall(ident('endsWithCloseBrace'), [field(ident('d'), 'init')]), pos: Context.currentPos() };
+		final body: Expr = macro {
+			if (d == null) return false;
+			final _m = d.more;
+			_m.length == 0 ? $headInit : $recTail;
+		};
+		return predField(
+			'varDeclTailEndsWithCloseBrace',
+			[valueArg('d', HX_VAR_DECL)],
+			macro :Bool, body, 'True iff the LAST binding of a (possibly multi-variable) declaration ends with `}`.'
 		);
 	}
 

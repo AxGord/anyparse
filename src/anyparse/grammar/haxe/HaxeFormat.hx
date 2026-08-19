@@ -11,6 +11,7 @@ import anyparse.format.Encoding;
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.MetadataLineEndPolicy;
+import anyparse.format.OptionalSemicolon;
 import anyparse.format.RightCurlyPlacement;
 import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
@@ -680,6 +681,7 @@ final class HaxeFormat implements TextFormat {
 		expressionIfWithBlocks: false,
 		dropSingleStmtBraces: false,
 		dropSwitchSubjectParens: false,
+		optionalSemicolon: OptionalSemicolon.Preserve,
 		leftCurly: BracePlacement.Same,
 		emptyCurly: EmptyCurly.Same,
 		objectLiteralLeftCurly: BracePlacement.Same,
