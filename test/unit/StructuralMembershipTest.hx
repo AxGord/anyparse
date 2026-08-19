@@ -117,6 +117,45 @@ class StructuralMembershipTest extends Test {
 		Assert.isNull(index.extensionReturnNominal('IterExt', 'pick', 'PlainAlias', 'Use.hx'));
 	}
 
+	/**
+	 * `aliasTargetNominal` and `aliasTargetRaw` come from ONE source read and must never disagree:
+	 * the nominal is `simpleName` of the raw, for every alias form the fixtures carry. Two of the
+	 * nominal's three consumers compare it against another SIMPLE name — `PreferCaseGuard` looks
+	 * it up through `declaringFiles`, `ComparisonToBoolean.typeNameIsPinned` tests it for equality
+	 * with the receiver type — so re-pointing the FIELD, rather than adding one beside it, would
+	 * have broken both silently.
+	 */
+	public function testAliasTargetPairAgrees(): Void {
+		final index: SymbolIndex = SymbolIndex.build(aliasFiles(), new HaxeQueryPlugin());
+
+		Assert.equals('List', aliasNominal(index, 'List'));
+		Assert.equals('haxe.ds.List', aliasRaw(index, 'List'));
+		Assert.equals('Map', aliasNominal(index, 'Map'));
+		Assert.equals('haxe.ds.Map', aliasRaw(index, 'Map'));
+		Assert.equals('Sack', aliasNominal(index, 'Renamed'));
+		Assert.equals('deep.Sack', aliasRaw(index, 'Renamed'));
+		// The comment fallback answers the SIMPLE name on both sides, never the raw head.
+		Assert.equals('Sack', aliasNominal(index, 'Commented'));
+		Assert.equals('Sack', aliasRaw(index, 'Commented'));
+		// Null on one side is null on the other, for every form that yields none.
+		for (form in ['Anon', 'Fn', 'Bag', 'IterStruct']) {
+			Assert.isNull(aliasNominal(index, form), 'expected no alias nominal for $form');
+			Assert.isNull(aliasRaw(index, form), 'expected no alias raw for $form');
+		}
+	}
+
+	/** The `aliasTargetNominal` of the single decl named `name`, or null. */
+	private function aliasNominal(index: SymbolIndex, name: String): Null<String> {
+		for (fi in index.declaringFiles(name)) for (t in fi.types) if (t.name == name) return t.aliasTargetNominal;
+		return null;
+	}
+
+	/** The `aliasTargetRaw` of the single decl named `name`, or null. */
+	private function aliasRaw(index: SymbolIndex, name: String): Null<String> {
+		for (fi in index.declaringFiles(name)) for (t in fi.types) if (t.name == name) return t.aliasTargetRaw;
+		return null;
+	}
+
 	/** The alias fixture set: the two std container shapes verbatim, plus one refusal per alias form. */
 	private function aliasFiles(): Array<{ file: String, source: String }> {
 		return iterableFiles().concat([
