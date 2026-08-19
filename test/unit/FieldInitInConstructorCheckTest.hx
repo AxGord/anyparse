@@ -331,11 +331,39 @@ class FieldInitInConstructorCheckTest extends Test {
 
 	/**
 	 * With NO index the extraction arm is OFF - the inherited-member proof has nothing to ask, and
-	 * Haxe rejects a static whose name matches an inherited INSTANCE field. The fold is unaffected,
-	 * which is why every gate fixture above it still reads the literal inline.
+	 * Haxe rejects a static whose name matches an inherited INSTANCE field. Both arms of the SAME
+	 * input are asserted here: without an index the literal, with one the constant. The negative half
+	 * alone would pass on a build where the whole feature is absent.
 	 */
 	public function testNoIndexLeavesTheLiteralInline(): Void {
-		final out: String = applyFixOnce(wrap(ONE_FIELD, ONE_GUARD));
+		final src: String = wrap(ONE_FIELD, ONE_GUARD);
+		final bare: String = applyFixOnce(src);
+		Assert.isTrue(bare.indexOf('_cellsNumX = palette != null ? palette.length : 20;') != -1);
+		Assert.equals(-1, bare.indexOf('CELLS_NUM_X_DEFAULT'));
+		Assert.isTrue(applyIndexedFixOnce(src).indexOf('CELLS_NUM_X_DEFAULT') != -1);
+	}
+
+	/**
+	 * An UNRESOLVABLE supertype leaves the literal inline: Haxe rejects a static whose name matches an
+	 * inherited INSTANCE field, and a closure the index cannot walk cannot rule one out. The fold
+	 * itself is unaffected - `testSuperCallAfterGuardFlagged` folds the same `extends` shape.
+	 */
+	public function testUnresolvableSupertypeLeavesTheLiteralInline(): Void {
+		final out: String = applyIndexedFixOnce(wrap(ONE_FIELD, ONE_GUARD, ' extends Panel'));
+		Assert.isTrue(out.indexOf('_cellsNumX = palette != null ? palette.length : 20;') != -1);
+		Assert.equals(-1, out.indexOf('CELLS_NUM_X_DEFAULT'));
+	}
+
+	/**
+	 * A type the language forbids statics on (`@:generic`) leaves the literal inline. Nothing else
+	 * would notice: the emitted member re-parses, and the supertype closure has nothing to say about
+	 * a member the compiler rejects for the type's own annotation.
+	 */
+	public function testGenericTypeLeavesTheLiteralInline(): Void {
+		final out: String = applyIndexedFixOnce(
+			'@:generic class Picker<T> {\n\n' + ONE_FIELD + '\n\n\tpublic function new(?palette:Array<Int>) {\n' + ONE_GUARD
+			+ '\n\t}\n\n}\n'
+		);
 		Assert.isTrue(out.indexOf('_cellsNumX = palette != null ? palette.length : 20;') != -1);
 		Assert.equals(-1, out.indexOf('CELLS_NUM_X_DEFAULT'));
 	}
