@@ -124,7 +124,8 @@ class QueryWalkerCodegen {
 		return {
 			name: fn.fnName,
 			access: [APrivate, AStatic],
-			doc: 'Append the `QueryNode`s of a `${fn.typePath}` value to `into`; a `@:queryTypeSlot` field of it fills `typeOut`, which the enclosing node reads into `QueryNode.type`.',
+			doc: 'Append the `QueryNode`s of a `${fn.typePath}` value to `into`; a `@:queryTypeSlot` field of it fills `typeOut`, which '
+				+ 'the enclosing node reads into `QueryNode.type`.',
 			kind: FFun({
 				args: [
 					{ name: 'v', type: fn.paramCT },

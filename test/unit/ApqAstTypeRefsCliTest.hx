@@ -47,9 +47,8 @@ class ApqAstTypeRefsCliTest extends Test {
 	 * the two are what this test pins apart.
 	 */
 	private static final MIXED_DEFAULT: String = '(module\n  (ClassDecl\n    C\n    (VarMember a (: (Named Int)))\n'
-		+ '    (FinalMember b (: (Named Map (Named String) (Named Foo))))\n'
-		+ '    (FnMember\n      f\n      (Required p (: (Named haxe.io.Bytes)))\n      (Named Null (Named Bar))\n'
-		+ '      (ExprBody (ReturnExpr (NullLit))))))\n';
+		+ '    (FinalMember b (: (Named Map (Named String) (Named Foo))))\n    (FnMember\n      f\n'
+		+ '      (Required p (: (Named haxe.io.Bytes)))\n      (Named Null (Named Bar))\n      (ExprBody (ReturnExpr (NullLit))))))\n';
 
 	/**
 	 * `Array<{ node: Doc, crosses: Bool }>` projects the anonymous structure's

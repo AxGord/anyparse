@@ -127,6 +127,9 @@ class QueryWalkerLowering extends PairedShapeLowering {
 
 	private static inline final TYPE_SLOT_LOCAL: String = '_typeSlot';
 
+	/** Name of the local a `@:queryTypeSlot` field walks into before its first node becomes the slot. */
+	private static inline final TYPE_SLOT_OWN_LOCAL: String = '_typeSlotOwn';
+
 	/** Struct fields consulted, in order, for a String-valued display name. */
 	private static final NAME_STRING_SLOTS: Array<String> = ['name', 'type', 'varName'];
 
@@ -413,7 +416,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		else if (child.hasMeta(QUERY_TYPE_SLOT_META)) {
 			// The slot is filled from a walk of its own, so the pre-existing arm's
 			// contribution to `into` stays exactly what it was.
-			final slotWalk: Expr = block(descendCore(child, value, TYPE_SLOT_LOCAL + 'Own', TYPE_SLOT_LOCAL + 'Own', 0));
+			final slotWalk: Expr = block(descendCore(child, value, TYPE_SLOT_OWN_LOCAL, TYPE_SLOT_OWN_LOCAL, 0));
 			macro {
 				$refsAware;
 				// The slot is a DEFAULT-tree projection: `parseFileTypeRefs` answers with its
