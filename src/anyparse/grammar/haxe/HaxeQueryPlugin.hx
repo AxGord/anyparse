@@ -1276,7 +1276,14 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// return type — is a name-position metavar, and collapsing it
 			// erased its kind, turning the pattern into a match-everything
 			// wildcard.
-			final reclassified: QueryNode = Metavar.reclassify(rooted, refShape().identKind);
+			// The `...` ellipsis first, so the metavar path never sees the star
+			// placeholder: a star is not a metavar (it does not bind), and the
+			// same `reclassify` collapse that erased `new $x()` would erase a
+			// starred node just as silently.
+			final starred: QueryNode = PatternStar.reclassify(rooted);
+			final refusal: Null<String> = PatternStar.validate(starred);
+			if (refusal != null) throw refusal;
+			final reclassified: QueryNode = Metavar.reclassify(starred, refShape().identKind);
 			return new Pattern(
 				reclassified, attempt.category, source, SEARCH_KIND_EQUIVALENCE, Metavar.ignoredNames(variant, reclassified)
 			);

@@ -179,6 +179,69 @@ class PatternParseProbe extends Test {
 		Assert.equals('', plain.ignoredMetavars.join(','), 'a pattern that keeps every metavar reports none');
 	}
 
+	/** `...` reclassifies into its own `Star` kind node - not a `Metavar`, since it does not bind. */
+	public function testEllipsisBecomesAStarNode(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final pattern: Pattern = plugin.parsePattern('g(...)');
+		Assert.equals('Call', pattern.root.kind);
+		Assert.equals(2, pattern.root.children.length);
+		Assert.equals(PatternStar.KIND, pattern.root.children[1].kind);
+		Assert.isNull(pattern.root.children[1].name, 'a star carries no name - nothing can reference it');
+		Assert.isFalse(pattern.isDegenerate(), 'a starred call still carries the callee as shape');
+	}
+
+	/** A star in a type-argument slot is the same node - the grammar projects `new Map<X>()` type args as `Named` siblings. */
+	public function testEllipsisInATypeArgumentSlotIsAlsoAStar(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final pattern: Pattern = plugin.parsePattern("new $T<...>()");
+		Assert.equals('NewExpr', pattern.root.kind);
+		Assert.equals("$T", pattern.root.name);
+		Assert.equals(1, pattern.root.children.length);
+		Assert.equals(PatternStar.KIND, pattern.root.children[0].kind);
+	}
+
+	/** A bare `...` is the whole-tree wildcard, which is not a pattern - it is refused, not silently matched. */
+	public function testBareEllipsisIsRefused(): Void {
+		Assert.isTrue(refused('...'), 'a bare ellipsis must be refused');
+		Assert.isTrue(refused('new ...()'), 'an ellipsis in a NAME slot must be refused');
+	}
+
+	/**
+	 * Two stars in ONE child list is refused. The matcher anchors a prefix from
+	 * the left and a suffix from the right around exactly one star; a second one
+	 * needs backtracking, and for the position that motivates it
+	 * (`new $T<...>(...)`) it would be a lie anyway - `NewExpr` flattens type
+	 * args and value args into one list, so the two stars could not be told
+	 * apart and the pattern would mean exactly the same as `new $T(...)`.
+	 */
+	public function testTwoEllipsesInOneChildListAreRefused(): Void {
+		Assert.isTrue(refused('h(..., 1, ...)'), 'two stars in one argument list must be refused');
+		Assert.isTrue(refused("new $T<...>(...)"), 'type-arg star + value-arg star land in ONE NewExpr child list');
+	}
+
+	/** Two stars in DIFFERENT child lists are fine - each list anchors independently. */
+	public function testTwoEllipsesInDifferentChildListsAreAccepted(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final pattern: Pattern = plugin.parsePattern('h(..., k(...))');
+		Assert.equals('Call', pattern.root.kind);
+	}
+
+	/** A star is not a metavariable: it never appears in `ignoredMetavars`, and it never shows up as a `$` name. */
+	public function testStarIsNotReportedAsAnIgnoredMetavar(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		Assert.equals('', plugin.parsePattern('g(...)').ignoredMetavars.join(','));
+		Assert.equals('t', plugin.parsePattern("final $n:$t = g(...);").ignoredMetavars.join(','));
+	}
+
+	/** True when `parsePattern` refuses `source` outright. */
+	private static function refused(source: String): Bool {
+		try {
+			new HaxeQueryPlugin().parsePattern(source);
+			return false;
+		} catch (_: Dynamic)
+			return true;
+	}
+
 	private static function collectMetavarNames(node: QueryNode, into: Array<String>): Void {
 		if (node.kind == Metavar.KIND) {
 			final n: Null<String> = node.name;

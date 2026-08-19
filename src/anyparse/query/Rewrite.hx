@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.Matcher.Match;
+import anyparse.query.Pattern.PatternStar;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -24,6 +25,10 @@ using StringTools;
 @:nullSafety(Strict)
 final class Rewrite {
 
+	private static final STAR_REFUSAL: String = 'rewrite: the pattern contains `...`, which matches a run of children but binds nothing, '
+		+ 'so the replacement cannot name them and they would be dropped — use `apq search` to '
+		+ 'census with `...`, and an explicit-arity pattern to rewrite';
+
 	/**
 	 * Rewrite every match of `patternText` in `source` using `replacementText`.
 	 * Returns `Ok(rewritten)` or an `Err` describing why the rewrite failed
@@ -41,6 +46,15 @@ final class Rewrite {
 		final pattern: Pattern = try plugin.parsePattern(patternText) catch (exception: Exception) return Err(
 			'pattern: ${exception.message}'
 		);
+
+		// A `...` cannot survive a rewrite. The star absorbs a RUN of children
+		// and does not bind, so the replacement template has no name for what it
+		// took, and `Rewrite` splices over the whole matched span: `rewrite
+		// 'g(...)' 'k()'` reads as "leave the arguments alone" and would delete
+		// every one of them, silently and re-parseably. Refuse instead. `search`
+		// and the `--match` op locator keep working — the locator only ADDRESSES
+		// a node, it never rebuilds one from the pattern.
+		if (PatternStar.contains(pattern.root)) return Err(STAR_REFUSAL);
 
 		final matches: Array<Match> = Matcher.search(pattern, tree);
 		if (matches.length == 0) return Err('no match for the pattern');

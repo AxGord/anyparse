@@ -272,6 +272,7 @@ The pattern is parsed by the active grammar plugin **with a metavariable extensi
 |-------------------|----------------------------------------------------------------------------|
 | `$X`              | Bind one node. Reusing the same name must match the same subtree.          |
 | `$_`              | Wildcard. Matches one node. Does not bind. Multiple `$_` in one pattern are independent — each matches any subtree without cross-constraint. |
+| `...`             | Ellipsis. Matches a RUN of siblings, zero or more, in one child list. Does not bind. At most one per child list. |
 
 The matcher walks the input AST and tries to unify each subtree with the pattern AST node-for-node, treating metavariables as holes.
 
@@ -283,11 +284,66 @@ apq search '$x = $x + 1' file.hx
 
 matches every self-increment-by-1 in `file.hx` and binds `$x` to the actual variable expression at each site.
 
+### The `...` ellipsis
+
+Without it a pattern cannot say "any arity", because the matcher's child loop
+gates on an exact length. "A `new` of ANY arity" therefore needed one pattern
+per arity — measured over TM's `src/`, `new $T()` / `new $T($a)` /
+`new $T($a, $b)` see 932 / 881 / 1104 sites and the tail up to arity 12 adds
+1323 more, so a census written as the first pattern alone under-counts by 78 %.
+`new $T(...)` is all 4240 in one, and the count is exactly the sum of the
+per-arity counts.
+
+```
+apq search 'new $T(...)'   every construction, any arity
+apq search 'f(...)'        every call to f
+apq search '[...]'         every array literal
+apq search 'g(1, ...)'     calls whose FIRST argument is 1
+apq search 'g(..., 1)'     calls whose LAST argument is 1
+apq search 'g(1, ..., 1)'  calls with 1 at both ends
+```
+
+**Anchored, not greedy.** The pattern children before the `...` anchor
+left-to-right from the start of the input's child list; those after it anchor
+right-to-left from the end; the star absorbs the (possibly empty) run between.
+Both anchors must FIT — `g(1, ..., 1)` does not match `g(1)`, because one
+argument cannot serve both ends. There is no backtracking and no ambiguity,
+which is exactly what **one star per child list** buys; a second one in the same
+list is refused with a message rather than guessed at.
+
+**It does not bind.** A star absorbs a run of nodes, and a match binding is one
+name to one node (`search --json`'s binding schema is frozen as
+`{name, text, span}`). So nothing can reference what a star took, and
+`apq rewrite` **refuses** a pattern containing one — its replacement template
+would silently delete the absorbed children. The `--match` op locator does
+accept a star: it only addresses a node, and the op that follows edits it under
+its own semantics.
+
+**A bare `...` is refused**, as is `...` in a name slot (`new ...()`). "Any one
+node" is `$_`; "any node at all" is not a pattern.
+
+**Constructor type arguments.** A `new T<K,V>(a)` projects its type arguments and
+its value arguments into ONE flat child list (`NewExpr T (Named K) (Named V)
+(IdentExpr a)`), so `new $T(...)` counts `new Map<String,Int>()` as a
+construction too — it is one. It is not a new confusion: `new $T($a, $b)`
+already matches `new Map<String,Int>()` today. When the type arguments are the
+question, write them out — `new $T<$K>(...)` matches only a construction that
+carries at least one type argument, because a metavar in a type-argument slot
+projects as `Named` and no value argument ever does (the partition is the
+plugin's own `typeAnnotationKinds`). Measured over TM's `src/`: 56 of the 4240
+constructions carry an explicit type argument, 21 carry two.
+
+Note also that the projection of type arguments is shallow and `NewExpr`-only:
+`new Map<String, Array<Int>>()` projects `(Named String) (Named Array)` — the
+nested `Int` is gone — and `extends Base<Int,String>`, `implements IFace<Float>`,
+`function f<T,U>()`, a `typedef`'s parameters and every type annotation project
+their type arguments as no node at all. A type-parameter census over anything
+but `new` is therefore not a `search` question today.
+
 ### Non-features in v1
 
 These are intentionally deferred to keep the v1 surface small and the semantics tight:
 
-- Ellipsis `...` for "any number of nodes". Phase 2+ candidate.
 - Type filters (`$X:Int` to constrain matches by type). Requires type resolution — deferred indefinitely.
 - Regex on identifiers (`$X /pattern/`). Phase 2+ candidate.
 - Negative patterns / `not(...)`. Phase 2+ candidate.
@@ -674,7 +730,7 @@ A pattern matching a container of children (a class body, a block of statements)
 So `class { var $X; var $Y; }` matches a class whose body **begins with** two consecutive `var` fields (in source order). It does not match a class with the two `var`s separated by other members.
 
 - Rejected: order-insensitive set matching — exponentially expensive and rarely the intended semantics for code patterns.
-- The "anywhere in this container" form is reserved for a future ellipsis syntax (`...`), deferred to Phase 2+.
+- The "anywhere in this container" form is the `...` ellipsis, now implemented — see "The `...` ellipsis" above. It is anchored (prefix from the left, suffix from the right), one per child list, and does not bind.
 
 ### Whitespace and comments in patterns: both ignored
 
