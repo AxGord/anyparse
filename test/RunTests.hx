@@ -651,6 +651,7 @@ import unit.HxLoopBodyIfElseSliceTest;
 import unit.HoistBranchStringAffixCheckTest;
 import unit.JoinOverrideChainCheckTest;
 import unit.FieldInitInConstructorCheckTest;
+import unit.HoistEmbeddedAssignmentCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1254,6 +1255,7 @@ class RunTests {
 		addCase(new TryCatchNullGuardCheckTest());
 		addCase(new JoinDeclarationAssignmentCheckTest());
 		addCase(new HoistBranchStringAffixCheckTest());
+		addCase(new HoistEmbeddedAssignmentCheckTest());
 		addCase(new JoinOverrideChainCheckTest());
 		addCase(new JoinStringAppendCheckTest());
 		addCase(new JoinReturnCheckTest());
