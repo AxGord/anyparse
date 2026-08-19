@@ -21,7 +21,7 @@ import anyparse.runtime.Span;
 class JoinSingleUseLocalCheckTest extends Test {
 
 	/** The count of builtin checks -- bumped by one when a new check is registered. */
-	private static inline final BUILTIN_CHECK_COUNT: Int = 171;
+	private static inline final BUILTIN_CHECK_COUNT: Int = 172;
 
 	// --- positive: the motivating shape and its fix ---
 
