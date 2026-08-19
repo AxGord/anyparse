@@ -255,7 +255,10 @@ final class PreferComprehension implements Check {
 	 * between them are not part of the rewrite and must not be re-emitted. Narrow edits are the better
 	 * shape for the adjacent case too: `computeFileLintEdits` drops a whole check's edits when any one
 	 * of them overlaps an earlier check's, and a span reaching across the gap would collide with every
-	 * other rule firing inside it.
+	 * other rule firing inside it. The skeleton around that loop repeats `applyTextMatches`'s, and
+	 * `duplicate-code` says so: the shared home is a `CheckScan` sibling taking an edit LIST, deferred
+	 * because `CheckScan` already stands at the 50-member `oversized-type` budget, so adding it there
+	 * today trades a report-only info for a warning.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
