@@ -38,6 +38,22 @@ using StringTools;
  * one (`-5`), or a PLAIN string literal — one the grammar's `stringFoldSupport().literalOf` accepts,
  * which is exactly the no-interpolation case. Everything else refuses by construction.
  *
+ * ## …and the initializer is a DEFAULT, not the value — the write gate is the OTHER half
+ *
+ * The lesson above has a second layer that a literal initializer hides completely: an INSTANCE
+ * `final` with a declaration initializer can still be REASSIGNED in the constructor. Measured on
+ * Haxe 4.3.7 — `final _n:Int = 5;` plus `public function new(f:Bool) if (f) _n = 9;` compiles, and
+ * the two constructions print 5 and 9. The `static` form of the same class rejects that write with
+ * `This expression cannot be accessed for writing`, so the promotion would not compile. (Outside a
+ * constructor the write is already illegal, for the instance form too.)
+ *
+ * So "the initializer is a compile-time literal" does NOT mean "every instance holds that value" —
+ * it means every instance STARTS there. `MemberWriteScan.writtenInRange` supplies the missing half,
+ * the same conservative complete write scan `prefer-final-field` proves `var -> final` with: any
+ * assignment to the name anywhere in the file, outside the declaration, refuses. Found by
+ * typechecking a `--fix` over a real 805-file tree; the unit suite was green, and six of the
+ * fifteen sites did not compile.
+ *
  * The interpolation half of that is load-bearing and invisible to a type-based reading: a CALL
  * inside a `'…'` literal makes the value differ per instance just as much as a call in value
  * position — `private final _closeAction:String = '${UUID.uuid()}: close';` is a distinct token per
@@ -85,7 +101,8 @@ using StringTools;
  * 2. A class-like container only (`RefactorSupport.classLikeContainerKinds`), so an `enum abstract`
  *    value — which a crude census reads as a scalar field — is structurally excluded.
  * 3. PRIVATE only (see above).
- * 4. The initializer proves itself (see above).
+ * 4. The initializer proves itself (see above), AND nothing assigns the name anywhere in the file
+ *    outside its declaration — a constructor may reassign an instance `final`, a static one not.
  * 5. NO member access on the name in the declaring file — `this.NAME` / `obj.NAME` do not compile
  *    against a static.
  * 6. NO subtype in scope mentions the name, and no `@:access(Owner)` grantee does; the hierarchy
@@ -231,6 +248,7 @@ final class StaticConstant implements Check implements DefaultOff {
 		if (name == null || span == null || owner == null) return;
 		final init: Null<QueryNode> = initializerOf(field);
 		if (init == null || !isConstantLiteral(init, ctx.source, ctx.seams)) return;
+		if (MemberWriteScan.writtenInRange(ctx.source, name, span, 0, ctx.source.length)) return;
 		if (ctx.reflected.contains(name)) return;
 		if (memberAccessedInFile(ctx.source, name, span)) return;
 		if (!RefactorSupport.privateMemberScanIsSound(ctx.source, ctx.index)) return;

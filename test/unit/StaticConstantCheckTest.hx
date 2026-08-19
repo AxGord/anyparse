@@ -86,6 +86,27 @@ class StaticConstantCheckTest extends Test {
 		Assert.equals(1, violations('class C {\n\tprivate final _allowMove:Bool = true;\n\tfunction f():Bool return _allowMove;\n}').length);
 	}
 
+	/**
+	 * THE hole a green unit suite could not see and a real-tree typecheck did: an INSTANCE `final`
+	 * with a declaration initializer is still writable in the CONSTRUCTOR, so the literal is a
+	 * DEFAULT and not the value. Measured — the two constructions print 5 and 9 — while the `static`
+	 * form rejects the same write with `This expression cannot be accessed for writing`.
+	 */
+	public function testConstructorReassignedFinalRefused(): Void {
+		Assert.equals(
+			0,
+			violations('class C {\n\tprivate final _n:Int = 5;\n\tpublic function new(f:Bool) {\n\t\tif (f) _n = 9;\n\t}\n}').length
+		);
+	}
+
+	/** The same shape with the constructor write removed — the one-variable twin that proves the gate above is what refuses. */
+	public function testUnwrittenFinalWithConstructorFlagged(): Void {
+		Assert.equals(
+			1,
+			violations('class C {\n\tprivate final _n:Int = 5;\n\tpublic function new(f:Bool) {\n\t\tif (f) g();\n\t}\n}').length
+		);
+	}
+
 	/** A `var` is shared MUTABLE state once static — only `final` qualifies. */
 	public function testMutableFieldRefused(): Void {
 		Assert.equals(0, violations('class C {\n\tprivate var _n:Int = 5;\n\tfunction f():Int return _n;\n}').length);
