@@ -215,7 +215,8 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 	}
 
 	private function accessorIds(decl: HxVarSemiCondInitDecl): String {
-		return decl == null ? '<none>' : '<none>';
+		final access: Null<anyparse.grammar.haxe.HxAccessClause> = decl.access;
+		return access == null ? '<none>' : access.ids.map(id -> (id : String)).join(',');
 	}
 
 	private function soleReturnExpr(source: String): HxExpr {
