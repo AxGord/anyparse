@@ -29,6 +29,13 @@ class PreferIfExpressionChainCheckTest extends Test {
 	private static inline final TM_RELINK_DECISION: String =
 		'class C {\n\tfunction f():RebindDecision {\n\t\treturn !visible || remoteHostTag < 0\n\t\t\t? KeepLink\n\t\t\t: dbLocalTag == remoteHostTag\n\t\t\t\t? KeepLink // already correctly paired\n\t\t\t\t: groupAllowEdit && pendingAction == QUEUED_STATE_LOCAL_PENDING ? RebindAsEdit : RebindAsSteady;\n\t}\n}';
 
+	/** A ternary nested in the THEN arm — the conjunctive shape, silent before the flattening. */
+	private static inline final THEN_NESTED: String = 'class C {\n\tfunction f():Int {\n\t\treturn a ? b ? 1 : 2 : 3;\n\t}\n}';
+
+	/** TM `TimeInput.get_hrs` (anonymized) — a null guard duplicated into the conjunction, held by short-circuiting. */
+	private static inline final TM_NULL_GUARDED_ACCESSOR: String =
+		"class C {\n\tfunction f():String {\n\t\treturn sel != null ? sel.data.data == -1 ? 'N/A' : sel.data.text : '';\n\t}\n}";
+
 	/** A ternary chain as the value of a `case` arm — the shape TM's `getColorPickerType` writes five times over. */
 	private static inline final CASE_ARM_CHAIN: String =
 		'class C {\n\tfunction f(v:Int):Void {\n\t\tswitch v {\n\t\t\tcase 1:\n\t\t\t\ta ? 1 : b ? 2 : 3;\n\t\t\tcase _:\n\t\t}\n\t}\n}';
@@ -301,6 +308,84 @@ class PreferIfExpressionChainCheckTest extends Test {
 		Assert.equals(0, violations(once).length);
 		Assert.equals(0, ternaryExpressionViolations(once).length);
 		Assert.equals(0, switchExpressionViolations(once).length);
+	}
+
+	/**
+	 * A ternary nested in the THEN arm leaves only ONE condition on the else spine, below the
+	 * minimum — so the chain was silent. The CONJUNCTIVE flattening reaches it:
+	 * `a ? (b ? A : B) : C` is `if (a && b) A else if (a) B else C`, which preserves evaluation
+	 * order and needs no implication between `a` and `b`.
+	 */
+	public function testConjunctiveThenNestedChainFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(THEN_NESTED);
+		Assert.equals(1, es.length);
+		Assert.equals('if (a && b) 1 else if (a) 2 else 3', es[0].text);
+	}
+
+	/** The duplicated condition is an OPERAND of the emitted `&&`, so a looser one takes parentheses. */
+	public function testConjunctiveWrapsLoosePrecedenceConditions(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Int {\n\t\treturn a || c ? b ? 1 : 2 : 3;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('if ((a || c) && b) 1 else if (a || c) 2 else 3', es[0].text);
+	}
+
+	/** An expanded rung joins the else spine, so a chain that mixes both shapes flattens in one pass. */
+	public function testConjunctiveExpansionJoinsTheElseSpine(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Int {\n\t\treturn a ? b ? 1 : 2 : c ? 3 : 4;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('if (a && b) 1 else if (a) 2 else if (c) 3 else 4', es[0].text);
+	}
+
+	/**
+	 * DEPTH CAP. The conjunction duplicates the outer condition at every level, so growth is
+	 * quadratic; exactly ONE level is expanded and a deeper nest stays the two-branch ternary
+	 * that IS the canon.
+	 */
+	public function testConjunctiveExpandsOneLevelOnly(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Int {\n\t\treturn a ? b ? c ? 1 : 2 : 3 : 4;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('if (a && b) c ? 1 : 2 else if (a) 3 else 4', es[0].text);
+	}
+
+	/**
+	 * The TM `TimeInput` accessor (anonymized): the guard `sel != null` is duplicated, and `&&`
+	 * short-circuiting is what keeps the second read of `sel.data` behind it.
+	 */
+	public function testConjunctiveNullGuardIsPreservedByShortCircuit(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(TM_NULL_GUARDED_ACCESSOR);
+		Assert.equals(1, es.length);
+		Assert.equals("if (sel != null && sel.data.data == -1) 'N/A' else if (sel != null) sel.data.text else ''", es[0].text);
+		Assert.equals(0, violations(RefactorSupport.applyEdits(TM_NULL_GUARDED_ACCESSOR, es)).length);
+	}
+
+	/** The output is the fixed point: `prefer-ternary-expression` refuses an if-expression whose then-branch is a ternary. */
+	public function testConjunctiveOutputIsAFixedPoint(): Void {
+		final once: String = RefactorSupport.applyEdits(THEN_NESTED, edits(THEN_NESTED));
+		Assert.equals(0, violations(once).length);
+		Assert.equals(0, ternaryExpressionViolations(once).length);
+	}
+
+	/**
+	 * The duplicated condition is evaluated TWICE, so it must be pure and cheap. A call is
+	 * unproven and refuses; so does a read of a property whose getter runs code.
+	 */
+	public function testConjunctiveRefusesAnImpureDuplicatedCondition(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Int {\n\t\treturn g() ? b ? 1 : 2 : 3;\n\t}\n}').length);
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tpublic var p(get, never):Bool;\n\n\tfunction get_p():Bool {\n\t\treturn true;\n\t}\n\n'
+				+ '\tfunction f():Int {\n\t\treturn p ? b ? 1 : 2 : 3;\n\t}\n}'
+			).length
+		);
+	}
+
+	/** A chain whose one condition is impure keeps its old answer: no expansion, one spine rung, below the minimum. */
+	public function testConjunctiveRefusalLeavesTheChainSilent(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Int {\n\t\tvar x = g() ? b ? 1 : 2 : 3;\n\t}\n}').length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {
