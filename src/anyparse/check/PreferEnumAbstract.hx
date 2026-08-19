@@ -81,13 +81,16 @@ using StringTools;
 @:nullSafety(Strict)
 final class PreferEnumAbstract implements Check {
 
+	/** This check's rule id, as it appears on every violation it reports. */
+	private static inline final RULE_ID: String = 'prefer-enum-abstract';
+
 	/** The minimum same-prefix constant group worth an enum-abstract suggestion — a pair is not yet a set. */
 	private static inline final MIN_GROUP: Int = 3;
 
 	public function new() {}
 
 	public function id(): String {
-		return 'prefer-enum-abstract';
+		return RULE_ID;
 	}
 
 	public function description(): String {
@@ -212,7 +215,7 @@ final class PreferEnumAbstract implements Check {
 		for (w in whole) out.push({
 			file: file,
 			span: w.span,
-			rule: 'prefer-enum-abstract',
+			rule: RULE_ID,
 			severity: Severity.Info,
 			message: '\'${w.name}\' declares nothing but ${w.count} distinct static-inline-final ${w.typeName} '
 			+ 'constants — the type already IS a closed enumeration; consider enum abstract ${w.name}(${w.typeName})'
@@ -225,7 +228,7 @@ final class PreferEnumAbstract implements Check {
 		for (g in groups) if (interchangeable(g.members, sinks)) out.push({
 			file: file,
 			span: g.span,
-			rule: 'prefer-enum-abstract',
+			rule: RULE_ID,
 			severity: Severity.Info,
 			message: '${g.members.length} \'${g.prefix}'
 			+ '_*\' static-final constants read as a closed enumeration — consider an enum abstract for a distinct type'

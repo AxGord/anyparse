@@ -28,8 +28,7 @@ class PreferEnumAbstractCheckTest extends Test {
 			'class C { static inline final RANK_A:Int = 0; static final RANK_B = 1; static final RANK_C = 2; static function r(x:Int):Int { return x == 0 ? RANK_A : RANK_B; } }'
 		);
 		Assert.equals(1, vs.length);
-		Assert.equals('prefer-enum-abstract', vs[0].rule);
-		Assert.equals(Severity.Info, vs[0].severity);
+		assertAdvisory(vs[0]);
 		Assert.isTrue(vs[0].message.contains("'RANK_*'"));
 		Assert.isTrue(vs[0].message.contains('3'));
 	}
@@ -127,8 +126,7 @@ class PreferEnumAbstractCheckTest extends Test {
 			'class Align { public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; public static inline final RIGHT:String = \'right\'; }'
 		);
 		Assert.equals(1, vs.length);
-		Assert.equals('prefer-enum-abstract', vs[0].rule);
-		Assert.equals(Severity.Info, vs[0].severity);
+		assertAdvisory(vs[0]);
 		Assert.isTrue(vs[0].message.contains('String'));
 		Assert.isTrue(vs[0].message.contains('3'));
 	}
@@ -275,6 +273,12 @@ class PreferEnumAbstractCheckTest extends Test {
 			'class E { public static inline final RANK_A:Int = 0; public static inline final RANK_B:Int = 1; public static inline final RANK_C:Int = 2; }\nclass U { static function r(x:Int):Int { return x == 0 ? RANK_A : RANK_B; } }'
 		);
 		Assert.equals(1, vs.length);
+	}
+
+	/** Every finding of this check is a report-only `prefer-enum-abstract` advisory. */
+	private function assertAdvisory(v: Violation): Void {
+		Assert.equals('prefer-enum-abstract', v.rule);
+		Assert.equals(Severity.Info, v.severity);
 	}
 
 	private function violations(src: String): Array<Violation> {
