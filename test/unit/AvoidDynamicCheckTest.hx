@@ -164,6 +164,26 @@ class AvoidDynamicCheckTest extends Test {
 		Assert.isTrue(vs[0].message.contains('field'));
 	}
 
+	/**
+	 * The SHORT anon-field form `f:Dynamic` (no `var` keyword) is the same field
+	 * position. It reads the annotation as SOURCE TEXT bounded by the field's
+	 * first child, so the projected `(TypeRef Dynamic)` child must not be taken
+	 * for an initializer and cut the region to nothing.
+	 */
+	public function testTypedefShortFieldFlagged(): Void {
+		final vs: Array<Violation> = violations('typedef T = {\n\tf:Dynamic\n}');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains('field'));
+		Assert.equals('Dynamic', slice('typedef T = {\n\tf:Dynamic\n}', vs[0]));
+	}
+
+	/** A short anon field whose type is a generic argument still reports the ARGUMENT position. */
+	public function testTypedefShortFieldTypeArgumentFlagged(): Void {
+		final vs: Array<Violation> = violations('typedef T = {\n\tm:Map<String, Dynamic>\n}');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains('type argument'));
+	}
+
 	private function slice(src: String, v: Violation): String {
 		final span: Null<Span> = v.span;
 		return span == null ? '' : src.substring(span.from, span.to);

@@ -842,7 +842,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			stringInterpBlockKind: 'Block',
 			reservedWords: HaxeNamingSupport.KEYWORDS,
 
-			declTypeChildKinds: ['Anon'],
+			declTypeChildKinds: ['Anon', 'TypeRef'],
+			typeRefChildKinds: ['TypeRef'],
 			defaultBranchKind: 'DefaultBranch',
 			plainCasePatternKind: 'Plain',
 			wildcardPatternName: '_',
