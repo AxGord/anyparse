@@ -161,6 +161,14 @@ final class Linter {
 			// `var f; f = function(){};` pair first; this rule's overlapping edits are then deferred one
 			// fixed-point pass and land on the joined `var f = function(){};` form.
 			new PreferLocalFunction(),
+			// The eta-reduction terminator of the same lambda cascade: `prefer-arrow-callback` and
+			// `prefer-lambda-expression-body` normalise a wrapper into the `x -> f(x)` arrow form this
+			// rule then removes entirely, so registering it AFTER them lets one fixed-point run reach
+			// the bare `f` from a `function(x) { return f(x); }` literal. Never collides with
+			// `prefer-bind`: that rule needs a zero-parameter lambda wrapping a call WITH arguments,
+			// this one needs the argument list to BE the parameter list, and the only lambda both
+			// could see — `() -> f()` — is the zero-argument call `prefer-bind` refuses outright.
+			new RedundantLambdaWrapper(),
 			new RedundantMapIterKey(),
 			new UnusedParameter(),
 			new SwallowedException(),
