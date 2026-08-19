@@ -177,7 +177,7 @@ class DocCoverageCheckTest extends Test {
 		Assert.notNull(Linter.byId('doc-coverage'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.isTrue(ids.contains('doc-coverage'));
-		Assert.equals(166, Linter.builtins().length);
+		Assert.equals(167, Linter.builtins().length);
 	}
 
 	/** Run with member coverage opted in and the type requirement off (isolates member findings). */
