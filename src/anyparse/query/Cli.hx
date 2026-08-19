@@ -2065,6 +2065,7 @@ final class Cli {
 		var fixedCount: Int = 0;
 		var passes: Int = 0;
 		var hitCap: Bool = false;
+		final reportedByRule: Map<String, Int> = [];
 
 		while (active.length > 0) {
 			if (passes >= maxPasses) {
@@ -2074,7 +2075,7 @@ final class Cli {
 			passes++;
 			final pass: LintPassResult = applyLintPass(
 				active, files, cached, split.activeScope, split.fullScope, split.safe, resolveConfig, applyEnablement, optsByFile, passes,
-				noted, changedFiles
+				noted, changedFiles, reportedByRule
 			);
 			fixedCount += pass.fixedDelta;
 			active = pass.nextActive;
@@ -2105,9 +2106,14 @@ final class Cli {
 
 		final skipTail: String = noted.length > 0 ? ', ${noted.length} file(s) skipped' : '';
 		final capTail: String = hitCap ? ' (stopped at $maxPasses passes — re-run if more remain)' : '';
+		// `fixed 0 issue(s)` cannot be told apart from "there was nothing to fix", and that one
+		// ambiguous line was read twice tonight as "this rule has no autofix" when the rule had one
+		// and a gate declined it for want of scope. Only a run that changed NOTHING gets the tail —
+		// a productive run's unfixed report-only findings are not news.
+		final declinedTail: String = fixedCount == 0 ? declinedFixNudge(reportedByRule) : '';
 		stderr(
 			'apq lint --fix: fixed $fixedCount issue(s) in ${changedFiles.length} file(s) over $passes pass(es)$skipTail$capTail'
-			+ '$riskyTail$oracleTail\n'
+			+ '$riskyTail$oracleTail$declinedTail\n'
 		);
 		return EXIT_OK;
 	}
@@ -9936,7 +9942,8 @@ final class Cli {
 	private static function applyLintPass(
 		active: Array<{ file: String, source: String }>, files: Array<{ file: String, source: String }>, cached: CachingGrammarPlugin,
 		activeScopeChecks: Array<Check>, fullScopeChecks: Array<Check>, checks: Array<Check>, resolveConfig: (String) -> LintConfig,
-		applyEnablement: Bool, optsByFile: Map<String, Null<String>>, passes: Int, noted: Array<String>, changedFiles: Array<String>
+		applyEnablement: Bool, optsByFile: Map<String, Null<String>>, passes: Int, noted: Array<String>, changedFiles: Array<String>,
+		reportedByRule: Map<String, Int>
 	): LintPassResult {
 		// The `index` PASSED to each check's `fix` is REPORT-scoped (the mutated report sources
 		// only): a fix's report-scope gates — naming's confinement / reflection-string / rtti proofs,
@@ -9950,6 +9957,10 @@ final class Cli {
 		if (resolutionFiles != null) cached.setResolutionIndex(SymbolIndex.build(resolutionFiles, cached));
 		final violations: Array<Violation> = Linter.run(active, cached, activeScopeChecks, resolveConfig, applyEnablement);
 		for (v in Linter.run(files, cached, fullScopeChecks, resolveConfig, applyEnablement)) violations.push(v);
+		// The FIRST pass's report is the one a reader compares `fixed N` against: later passes see
+		// only what an earlier edit exposed. Recorded here so a run that changes nothing can say
+		// WHICH rules reported, instead of leaving `fixed 0 issue(s)` to read as "nothing to fix".
+		if (passes == 1) for (v in violations) reportedByRule[v.rule] = (reportedByRule[v.rule] ?? 0) + 1;
 		final nextActive: Array<{ file: String, source: String }> = [];
 		var fixedDelta: Int = 0;
 		// Cross-file fixes (naming's non-confined private / public member rename) run FIRST, against this
@@ -16176,6 +16187,38 @@ final class Cli {
 		sysPrint('  -h, --help       Show this help\n');
 	}
 	#end
+
+
+	/**
+	 * The tail `lint --fix` prints when it changed NOTHING. `fixed 0 issue(s)` alone reads exactly
+	 * like "there was nothing to fix", and that ambiguity cost two slices a wrong conclusion:
+	 * a check whose fix a gate declined was read as a check with no fix at all. Naming the rules
+	 * that DID report separates the two — the finding exists, it is the FIX that was withheld —
+	 * and points at the commonest cause, a scope too narrow to prove the rewrite safe.
+	 *
+	 * Empty when nothing was reported either: then `fixed 0` is the whole truth.
+	 */
+	private static function declinedFixNudge(reportedByRule: Map<String, Int>): String {
+		final rules: Array<String> = [for (id in reportedByRule.keys()) id];
+		if (rules.length == 0) return '';
+		rules.sort((a, b) -> {
+			final byCount: Int = (reportedByRule[b] ?? 0) - (reportedByRule[a] ?? 0);
+			return byCount != 0 ? byCount : (a < b ? -1 : (a > b ? 1 : 0));
+		});
+		final shown: Array<String> = [
+			for (id in rules.slice(0, DECLINED_RULES_SHOWN)) '$id ${reportedByRule[id] ?? 0}'
+		];
+		final more: Int = rules.length - shown.length;
+		final tail: String = more > 0 ? ', +$more more rule(s)' : '';
+		return ' — but the run REPORTED: ${shown.join(', ')}$tail. A reported finding stays unfixed when the check has no'
+			+ ' autofix, or when its fix declined here — most often because proving the rewrite safe needs a WIDER scope than'
+			+ ' this run (a member rename must see every file that could collide). Re-run over the project root before'
+			+ ' concluding the rule cannot fix it.';
+	}
+
+
+	/** How many rule ids `declinedFixNudge` names before it summarises the rest as a count. */
+	private static final DECLINED_RULES_SHOWN: Int = 6;
 
 }
 
