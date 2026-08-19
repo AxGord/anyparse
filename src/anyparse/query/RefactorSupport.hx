@@ -4467,19 +4467,7 @@ final class RefactorSupport {
 	private static function soleGuardedCtorFieldInit(
 		source: String, container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape
 	): Null<GuardedCtorInit> {
-		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
-		final fieldSpan: Null<Span> = field.span;
-		final fieldName: Null<String> = field.name;
-		final body: Null<QueryNode> = ctor.children.find(c -> c.kind == shape.blockBodyKind);
-		if (fieldSpan == null || fieldName == null || body == null) return null;
-		var match: Null<GuardedCtorInit> = null;
-		for (stmt in body.children) if (ifKinds.contains(stmt.kind)) {
-			final found: Null<GuardedCtorInit> = guardedFieldAssign(source, stmt, fieldSpan.from, fieldName, container, shape);
-			if (found == null) continue;
-			if (match != null) return null;
-			match = found;
-		}
-		return match;
+		return soleMatchedCtorIf(source, container, ctor, field, shape, guardedFieldAssign);
 	}
 
 	/**
@@ -4894,19 +4882,7 @@ final class RefactorSupport {
 	private static function soleConditionalCtorFieldInit(
 		source: String, container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape
 	): Null<ConditionalCtorInit> {
-		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
-		final fieldSpan: Null<Span> = field.span;
-		final fieldName: Null<String> = field.name;
-		final body: Null<QueryNode> = ctor.children.find(c -> c.kind == shape.blockBodyKind);
-		if (fieldSpan == null || fieldName == null || body == null) return null;
-		var match: Null<ConditionalCtorInit> = null;
-		for (stmt in body.children) if (ifKinds.contains(stmt.kind)) {
-			final found: Null<ConditionalCtorInit> = conditionalFieldAssign(source, stmt, fieldSpan.from, fieldName, container, shape);
-			if (found == null) continue;
-			if (match != null) return null;
-			match = found;
-		}
-		return match;
+		return soleMatchedCtorIf(source, container, ctor, field, shape, conditionalFieldAssign);
 	}
 
 
@@ -4942,10 +4918,13 @@ final class RefactorSupport {
 		final target: QueryNode = assign.children[0];
 		final targetSpan: Null<Span> = target.span;
 		final valueSpan: Null<Span> = assign.children[1].span;
-		if (targetSpan == null || valueSpan == null) return null;
-		if (!ctorTargetIsField(target, fieldFrom, fieldName, container, shape)) return null;
-		if (referencedInRange(source, fieldName, valueSpan.from, valueSpan.to, [])) return null;
-		return if (!foldRegionCommentFree(source, stmtSpan, condSpan, targetSpan, valueSpan, sole ? stmtSpan.to : firstSpan.to))
+		return if (targetSpan == null || valueSpan == null)
+			null
+		else if (!ctorTargetIsField(target, fieldFrom, fieldName, container, shape))
+			null
+		else if (referencedInRange(source, fieldName, valueSpan.from, valueSpan.to, []))
+			null
+		else if (!foldRegionCommentFree(source, stmtSpan, condSpan, targetSpan, valueSpan, sole ? stmtSpan.to : firstSpan.to))
 			null
 		else
 			{
@@ -5051,6 +5030,31 @@ final class RefactorSupport {
 			decl: decl,
 			ctor: ctor
 		};
+	}
+
+
+	/**
+	 * The ONE top-level `if` statement of `ctor` that `matcher` accepts for `field`, or null when the
+	 * constructor holds none, or more than one. The scan both conditional-default folds run: they
+	 * differ only in WHICH `if` shape they recognise, and that difference is the `matcher` argument.
+	 */
+	private static function soleMatchedCtorIf<T>(
+		source: String, container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape,
+		matcher: (String, QueryNode, Int, String, QueryNode, RefShape) -> Null<T>
+	): Null<T> {
+		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
+		final fieldSpan: Null<Span> = field.span;
+		final fieldName: Null<String> = field.name;
+		final body: Null<QueryNode> = ctor.children.find(c -> c.kind == shape.blockBodyKind);
+		if (fieldSpan == null || fieldName == null || body == null) return null;
+		var match: Null<T> = null;
+		for (stmt in body.children) if (ifKinds.contains(stmt.kind)) {
+			final found: Null<T> = matcher(source, stmt, fieldSpan.from, fieldName, container, shape);
+			if (found == null) continue;
+			if (match != null) return null;
+			match = found;
+		}
+		return match;
 	}
 
 }
