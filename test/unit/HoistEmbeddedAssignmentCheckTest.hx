@@ -125,10 +125,16 @@ class HoistEmbeddedAssignmentCheckTest extends Test {
 		);
 	}
 
-	public function testRegisteredAsDefaultOffBuiltin(): Void {
+	/**
+	 * `RiskyFix` is load-bearing, not decoration: the hoist is structurally sound and still not
+	 * type-neutral (see the check's doc for the measured null-safety narrowing loss), so the edit
+	 * must go through the oracle's verify-and-revert path.
+	 */
+	public function testRegisteredAsDefaultOffRiskyBuiltin(): Void {
 		final check: Null<Check> = Linter.byId('hoist-embedded-assignment');
 		Assert.notNull(check);
 		Assert.isTrue(check is DefaultOff);
+		Assert.isTrue(check is RiskyFix);
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.isTrue(ids.contains('hoist-embedded-assignment'));
 	}

@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
@@ -103,6 +104,22 @@ private typedef HoistSite = {
  * With several candidates in one statement, ALL of them hoist, in source order -- a partial hoist
  * would reverse two writes against each other, so `fix` declines a subset.
  *
+ * ## Why the fix is `RiskyFix`
+ *
+ * The hoist is structurally sound and still not type-NEUTRAL, so the edit goes through the
+ * compiler-oracle verify-and-revert path instead of being trusted. Two measured reasons, neither
+ * of them provable from the tree:
+ *
+ * - STRICT NULL SAFETY loses a narrowing as soon as there are SEVERAL candidates. A field read
+ *   IMMEDIATELY after its own assignment is still narrowed, so a lone hoist typechecks; the
+ *   second hoisted statement resets the first field's narrowing, and the literal then rejects
+ *   the `Null<T>` read. Measured on Haxe 4.3.7 / `--interp`:
+ *   `_a = new L(); _b = new L(); new Row2([_a, _b]);` under `@:nullSafety(Strict)` gives
+ *   `Null safety: Cannot use nullable value of Null<L> as an item in Array<L>`, while the same
+ *   code with both assignments left inside the literal compiles.
+ * - A PROPERTY target with an asymmetric accessor pair changes VALUE: `_h = v` yields whatever
+ *   `set_h` returns, and the hoisted literal reads `get_h()` instead.
+ *
  * ## What it does not claim
  *
  * The host must be an expression STATEMENT or a LOCAL DECLARATION, and it must be a direct child of
@@ -114,7 +131,7 @@ private typedef HoistSite = {
  * part of the declaration ahead of it, not a statement of its own.
  */
 @:nullSafety(Strict)
-final class HoistEmbeddedAssignment implements Check implements DefaultOff {
+final class HoistEmbeddedAssignment implements Check implements DefaultOff implements RiskyFix {
 
 	private static inline final ID: String = 'hoist-embedded-assignment';
 
