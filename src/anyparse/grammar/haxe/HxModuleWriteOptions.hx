@@ -10,12 +10,12 @@ import anyparse.format.MetadataLineEndPolicy;
 import anyparse.format.OptionalSemicolon;
 import anyparse.format.RightCurlyPlacement;
 import anyparse.format.SameLinePolicy;
+import anyparse.format.UniformStatementBlanksPolicy;
 import anyparse.format.WhitespacePolicy;
 import anyparse.format.WriteOptions;
 import anyparse.format.wrap.WrapMode;
 import anyparse.format.wrap.WrapRules;
 import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
-import anyparse.format.UniformStatementBlanksPolicy;
 
 /**
  * Write options specific to the Haxe module grammar (`HxModule`).

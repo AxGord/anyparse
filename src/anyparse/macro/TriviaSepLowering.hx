@@ -190,7 +190,7 @@ final class TriviaSepLowering {
 		}
 		final triviaElemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, elemOptArg]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final emptyText: String = openText + closeText;
 		final trailBB: Expr = trailBBAccess ?? macro false;
@@ -274,7 +274,7 @@ final class TriviaSepLowering {
 			forceModeExpr: forceModeExpr,
 			flatTrailingCommaExpr: flatTrailingCommaExpr,
 			reflowSourceMultiline: reflowSourceMultiline,
-			complexItems: complexItems,
+			complexItems: complexItems
 		});
 		final sepCtx: WriterLowering.SepStarCtx = {
 			openText: openText,
@@ -295,7 +295,7 @@ final class TriviaSepLowering {
 			noTriviaBranch: noTriviaBranch,
 			reflowSourceMultiline: reflowSourceMultiline,
 			matrixWrap: matrixWrap,
-			uniformStmtBlanks: uniformStmtBlanks,
+			uniformStmtBlanks: uniformStmtBlanks
 		}
 		final predicateScan: Expr = triviaSepPredicateScanExpr(reflowSourceMultiline, uniformStmtBlanks, triviaElemCall);
 		final matrixSucc: Expr = triviaSepMatrixSucceedsExpr(
@@ -312,7 +312,7 @@ final class TriviaSepLowering {
 			matrixSucceedsExpr: matrixSucc,
 			keepMatrixComputeExpr: keepMatrixComputeExpr,
 			forceMultiExpr: triviaSepForceMultiExpr(sepCtx),
-			noTriviaBranch: noTriviaBranch,
+			noTriviaBranch: noTriviaBranch
 		}
 		return macro {
 			final _arr = $fieldAccess;
@@ -594,7 +594,7 @@ final class TriviaSepLowering {
 			typedefEndExpr: curly.typedefEndExpr,
 			typedefBetweenExpr: curly.typedefBetweenExpr,
 			blankBeforeExpr: blankBeforeExpr,
-			initCurrDocCommentExpr: initCurrDocCommentExpr,
+			initCurrDocCommentExpr: initCurrDocCommentExpr
 		};
 	}
 
@@ -709,7 +709,7 @@ final class TriviaSepLowering {
 		// a hardline before the open brace, regardless of knob value.
 		final knobNextOrEmpty: Expr = knobExpr == null ? macro _de() : {
 			expr: ESwitch(knobExpr, [{ values: [nextPat], expr: macro _doh(), guard: null }], macro _de()),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final triviaLeadDoc: Expr = knobNextOrEmpty;
 		final wrapLeadFlatDoc: Expr = macro _de();
@@ -728,7 +728,7 @@ final class TriviaSepLowering {
 		final inlinePat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'RightCurlyPlacement', 'Inline']);
 		final triviaTrailDoc: Expr = rightCurlyKnobExpr == null ? macro _dhl() : {
 			expr: ESwitch(rightCurlyKnobExpr, [{ values: [inlinePat], expr: macro _de(), guard: null }], macro _dhl()),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		// ω-wraplist-trailbreakdoc: wrap-engine close placement reads
 		// the same knob as the trivia branch's `triviaTrailDoc`.
@@ -763,7 +763,7 @@ final class TriviaSepLowering {
 			wrapLeadFlatDoc: wrapLeadFlatDoc,
 			wrapLeadBreakDoc: wrapLeadBreakDoc,
 			wrapTrailBreakDoc: wrapTrailBreakDoc,
-			triviaTrailDocKeepAware: triviaTrailDocKeepAware,
+			triviaTrailDocKeepAware: triviaTrailDocKeepAware
 		};
 	}
 
@@ -883,7 +883,7 @@ final class TriviaSepLowering {
 			appendTrailingCommaExpr: appendTrailingCommaExpr,
 			flatTrailingCommaExpr: flatTrailingCommaExpr,
 			keepMatrixComputeExpr: keepMatrixComputeExpr,
-			forceModeExpr: forceModeExpr,
+			forceModeExpr: forceModeExpr
 		};
 	}
 
@@ -1419,7 +1419,7 @@ final class TriviaSepLowering {
 			keepCurlyEndExpr: oc.keepCurlyEndExpr,
 			typedefBeginExpr: ins.typedefBeginExpr,
 			typedefEndExpr: ins.typedefEndExpr,
-			typedefBetweenExpr: ins.typedefBetweenExpr,
+			typedefBetweenExpr: ins.typedefBetweenExpr
 		};
 	}
 
@@ -1525,7 +1525,7 @@ final class TriviaSepLowering {
 			: macro {};
 		return {
 			keepCurlyBeginExpr: keepCurlyBeginExpr,
-			keepCurlyEndExpr: keepCurlyEndExpr,
+			keepCurlyEndExpr: keepCurlyEndExpr
 		};
 	}
 
@@ -1575,7 +1575,7 @@ final class TriviaSepLowering {
 		return {
 			typedefBeginExpr: typedefBeginExpr,
 			typedefEndExpr: typedefEndExpr,
-			typedefBetweenExpr: typedefBetweenExpr,
+			typedefBetweenExpr: typedefBetweenExpr
 		};
 	}
 

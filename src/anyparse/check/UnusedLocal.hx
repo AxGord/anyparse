@@ -4,10 +4,10 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
-import anyparse.runtime.Span;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TypeResolver;
 import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeResolver;
+import anyparse.runtime.Span;
 
 using Lambda;
 using StringTools;
@@ -358,8 +358,7 @@ final class UnusedLocal implements Check {
 		final span: Null<Span> = node.span;
 		if (span != null && (offset < span.from || offset >= span.to)) return false;
 		if (CheckScan.opensConditionalRegion(node, ctx.source, ctx.conditionalIfKeyword)) return true;
-		for (c in node.children) if (withinConditional(ctx, c, offset)) return true;
-		return false;
+		return node.children.exists(c -> withinConditional(ctx, c, offset));
 	}
 
 	/**

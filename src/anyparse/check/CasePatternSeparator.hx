@@ -10,6 +10,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -274,8 +275,7 @@ final class CasePatternSeparator implements Check implements DefaultOff implemen
 
 	/** Whether every operand of the or-pattern `node` is joinable; its operands sit at the same level `node` does. */
 	private static function joinableOperands(seams: SeparatorSeams, node: QueryNode, whole: Bool): Bool {
-		for (child in node.children) if (!joinable(seams, child, whole)) return false;
-		return true;
+		return node.children.foreach(child -> joinable(seams, child, whole));
 	}
 
 	/**

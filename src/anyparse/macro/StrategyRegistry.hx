@@ -1,10 +1,10 @@
 package anyparse.macro;
 
 #if macro
-import haxe.macro.Context;
 import anyparse.core.LoweringCtx;
 import anyparse.core.ShapeTree;
 import anyparse.core.Strategy;
+import haxe.macro.Context;
 
 /**
  * Registers the set of strategies active for a macro build, validates

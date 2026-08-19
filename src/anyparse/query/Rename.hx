@@ -1,12 +1,12 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import anyparse.query.RefactorSupport.TypeDeclMatch;
 
 using Lambda;
 
@@ -102,9 +102,7 @@ final class Rename {
 	): RenameResult {
 		if (!RefactorSupport.isIdentifier(newName)) return Err('new name "$newName" is not a valid identifier');
 
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
-			'source does not parse: ${exception.toString()}'
-		)
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		// line:col is 1-based, as apq refs / ast --at / source print.
@@ -123,7 +121,7 @@ final class Rename {
 		if (rewritten == source) return Err('rename to "$newName" is a no-op');
 
 		final newTree: QueryNode = try plugin.parseFile(rewritten) catch (exception: ParseError) return Err(
-			'rewritten source does not parse: ${exception.toString()}'
+			'rewritten source does not parse: $exception'
 		)
 		catch (exception: Exception) return Err('rewritten source does not parse: ${exception.message}');
 
@@ -638,8 +636,7 @@ final class Rename {
 
 	/** Does `fn` declare a parameter named `name`? */
 	private static function declaresParam(fn: QueryNode, name: String, paramKinds: Array<String>): Bool {
-		for (child in fn.children) if (paramKinds.contains(child.kind) && child.name == name) return true;
-		return false;
+		return fn.children.exists(child -> paramKinds.contains(child.kind) && child.name == name);
 	}
 
 	/**
@@ -677,7 +674,7 @@ final class Rename {
 	): RenameResult {
 		final qualified: String = qualification.source;
 		final tree: QueryNode = try plugin.parseFile(qualified) catch (exception: ParseError) return Err(
-			'qualified rewrite does not parse: ${exception.toString()}'
+			'qualified rewrite does not parse: $exception'
 		)
 		catch (exception: Exception) return Err('qualified rewrite does not parse: ${exception.message}');
 

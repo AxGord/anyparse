@@ -507,8 +507,7 @@ final class DeadStore implements Check {
 	/** Whether `node`'s subtree contains a node of `kind`. */
 	private static function containsKind(node: QueryNode, kind: String): Bool {
 		if (node.kind == kind) return true;
-		for (c in node.children) if (containsKind(c, kind)) return true;
-		return false;
+		return node.children.exists(c -> containsKind(c, kind));
 	}
 
 	/** A null-safe call: fold the conditionally-evaluated arguments in isolation and union, then the callee (whose receiver read is unconditional). */

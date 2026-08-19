@@ -326,8 +326,7 @@ final class DuplicateCode implements Check {
 	 */
 	private static function buildGrams(blocks: Array<Array<DupStmt>>): Map<String, Array<DupPos>> {
 		final grams: Map<String, Array<DupPos>> = [];
-		for (b in 0...blocks.length) {
-			final stmts: Array<DupStmt> = blocks[b];
+		for (b => stmts in blocks) {
 			for (i in 0...stmts.length - (MIN_STATEMENTS - 1)) {
 				final key: String = stmts[i].norm + GRAM_SEP + stmts[i + 1].norm + GRAM_SEP + stmts[i + 2].norm;
 				final bucket: Null<Array<DupPos>> = grams[key];

@@ -15,6 +15,8 @@ import anyparse.query.Refs;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * Flags a local declaration followed by a CHAIN of conditional overwrites of that local -- two or
  * more consecutive statement-position `switch`es, each assigning the local on some paths and
@@ -351,9 +353,9 @@ final class JoinOverrideChain implements Check implements DefaultOff {
 	 */
 	private static function pureValue(node: QueryNode, s: Seams, purity: PurityCtx): Bool {
 		if (node.kind == s.stringInterpIdentKind) return true;
-		if (node.kind == s.identKind || !RefactorSupport.isSafeKind(node.kind)) return PurityScan.isPure(node, purity);
-		for (c in node.children) if (!pureValue(c, s, purity)) return false;
-		return true;
+		return node.kind == s.identKind || !RefactorSupport.isSafeKind(node.kind)
+			? PurityScan.isPure(node, purity)
+			: node.children.foreach(c -> pureValue(c, s, purity));
 	}
 
 	/**

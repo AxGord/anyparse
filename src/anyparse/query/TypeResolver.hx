@@ -1,10 +1,11 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.runtime.Span;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
+import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -94,7 +95,7 @@ final class TypeResolver {
 		'Path.normalize',
 		'Path.addTrailingSlash',
 		'Path.removeTrailingSlash',
-		'Path.isAbsolute',
+		'Path.isAbsolute'
 	];
 
 	/**
@@ -164,8 +165,7 @@ final class TypeResolver {
 		if (RefactorSupport.isSideEffectFree(node)) return true;
 		final arrayLiteralKind: Null<String> = shape.arrayLiteralKind;
 		if (arrayLiteralKind != null && node.kind == arrayLiteralKind) {
-			for (c in node.children) if (!isDeletionPure(c, tree, shape, declaredTypes, index)) return false;
-			return true;
+			return node.children.foreach(c -> isDeletionPure(c, tree, shape, declaredTypes, index));
 		}
 		final parenKind: Null<String> = shape.parenKind;
 		if (parenKind != null && node.kind == parenKind && node.children.length == 1)
@@ -850,8 +850,7 @@ final class TypeResolver {
 	/** Whether `node` or any descendant carries the name `name`. */
 	private static function subtreeHasName(node: QueryNode, name: String): Bool {
 		if (node.name == name) return true;
-		for (c in node.children) if (subtreeHasName(c, name)) return true;
-		return false;
+		return node.children.exists(c -> subtreeHasName(c, name));
 	}
 
 	/**

@@ -64,8 +64,7 @@ final class FormatterOff {
 		final outLines: Array<String> = written.split('\n');
 		final result: Array<String> = [];
 		var cursor: Int = 0;
-		for (k in 0...outRegions.length) {
-			final out: Region = outRegions[k];
+		for (k => out in outRegions) {
 			final src: Region = srcRegions[k];
 			if (out.from < cursor || out.to >= outLines.length || src.to >= srcLines.length) return written;
 			if (out.headCode != src.headCode || out.tailCode != src.tailCode) return written;

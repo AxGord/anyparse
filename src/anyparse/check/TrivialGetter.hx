@@ -1,20 +1,19 @@
 package anyparse.check;
 
+import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.CrossFileEdits;
+import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.Violation;
+import anyparse.check.LintConfig;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 using StringTools;
 using Lambda;
-
-import anyparse.query.RefactorSupport;
-import anyparse.check.Check.ConfigAware;
-import anyparse.check.LintConfig;
-import anyparse.check.Check.CrossFileFix;
-import anyparse.check.Check.CrossFileEdits;
 
 /**
  * Flags a property that only bridges a private same-class backing field through trivial
@@ -298,9 +297,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	/** Whether `node` opens a new function scope (method / local fn / lambda) that binds parameters and locals. */
 	private static inline function isFnScope(node: QueryNode): Bool {
 		return switch node.kind {
-			case 'FnMember' | 'FinalModifiedMember' | 'LocalFnStmt' | 'LocalInlineFnStmt' | 'FnExpr' | 'NamedFnExpr' | 'ThinParenLambdaExpr'
-				| 'ParenLambdaExpr'
-				| 'ThinArrow': true;
+			case 'FnMember', 'FinalModifiedMember', 'LocalFnStmt', 'LocalInlineFnStmt', 'FnExpr', 'NamedFnExpr', 'ThinParenLambdaExpr',
+				'ParenLambdaExpr', 'ThinArrow': true;
 			case _: false;
 		}
 	}
@@ -637,7 +635,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			if (!renameWalk(c, source, field, skipSpans, fieldNode, propName, nowPattern, childShadows, className, childQualified, out))
 				return false;
 			mods = switch c.kind {
-				case 'VarMember' | 'FinalMember' | 'FnMember' | 'FinalModifiedMember': [];
+				case 'VarMember', 'FinalMember', 'FnMember', 'FinalModifiedMember': [];
 				case _: mods.concat([c.kind]);
 			};
 		}
@@ -653,8 +651,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 */
 	private static function functionBindsName(node: QueryNode, name: String): Bool {
 		if (bindsNameHere(node, name)) return true;
-		for (c in node.children) if (functionBindsName(c, name)) return true;
-		return false;
+		return node.children.exists(c -> functionBindsName(c, name));
 	}
 
 	/**
@@ -672,17 +669,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 */
 	private static function bindsNameHere(node: QueryNode, name: String): Bool {
 		return switch node.kind {
-			case 'Required' | 'Optional' | 'Rest' | 'LambdaParam' | 'VarStmt' | 'FinalStmt' | 'VarExpr' | 'FinalExpr' | 'VarMore'
-				| 'StaticVarStmt'
-				| 'StaticFinalStmt'
-				| 'LocalFnStmt'
-				| 'LocalInlineFnStmt'
-				| 'NamedFnExpr'
-				| 'CatchClause'
-				| 'ForStmt'
-				| 'ForExpr'
-				| 'KeyValueBinder'
-				| 'Capture': node.name == name;
+			case 'Required', 'Optional', 'Rest', 'LambdaParam', 'VarStmt', 'FinalStmt', 'VarExpr', 'FinalExpr', 'VarMore',
+				'StaticVarStmt', 'StaticFinalStmt', 'LocalFnStmt', 'LocalInlineFnStmt', 'NamedFnExpr', 'CatchClause', 'ForStmt',
+				'ForExpr', 'KeyValueBinder', 'Capture': node.name == name;
 			case 'ThinArrow':
 				node.children.length > 0 && node.children[0].kind == 'IdentExpr' && node.children[0].name == name;
 			case 'Plain': mentionsField(node, name);
@@ -726,8 +715,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		if (ifaces.length == 0) return false;
 		if (index == null) return true;
 		// The clause's SIMPLE names resolve against this file's own imports / package.
-		for (iface in ifaces) if (!index.typeProvablyLacksMember(iface, propName, file)) return true;
-		return false;
+		return ifaces.exists(iface -> !index.typeProvablyLacksMember(iface, propName, file));
 	}
 
 	/** The simple names of every interface in `cls`'s `implements` clauses. */
@@ -798,7 +786,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			if (!certain) return;
 			final mods: Array<String> = [for (mod in run) mod.kind];
 			switch child.kind {
-				case 'VarMember' | 'FinalMember':
+				case 'VarMember', 'FinalMember':
 					final name: Null<String> = child.name;
 					final span: Null<Span> = child.span;
 					if (name != null && span != null) {
@@ -868,10 +856,10 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 */
 	private static function hidesBindingNamed(node: QueryNode, span: Null<Span>, source: String, field: String): Bool {
 		switch node.kind {
-			case 'VarStmt' | 'FinalStmt':
+			case 'VarStmt', 'FinalStmt':
 				if (span == null) return true;
 				return node.children.exists(c -> c.kind == 'VarMore') && RefactorSupport.identTokenOffset(source, span, field) >= 0;
-			case 'ForStmt' | 'ForExpr' | 'KeyValueBinder':
+			case 'ForStmt', 'ForExpr', 'KeyValueBinder':
 				return span == null || node.name == field;
 			case _:
 				return false;
@@ -1059,15 +1047,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	/** The field targeted by an assignment / compound-assignment / incr / decr node (bare or `this.`), else null. */
 	private static function writeTargetField(node: QueryNode): Null<String> {
 		final isWrite: Bool = switch node.kind {
-			case 'Assign' | 'AddAssign' | 'SubAssign' | 'MulAssign' | 'DivAssign' | 'ModAssign' | 'BitAndAssign' | 'BitOrAssign'
-				| 'BitXorAssign'
-				| 'ShlAssign'
-				| 'ShrAssign'
-				| 'UShrAssign'
-				| 'PreIncr'
-				| 'PostIncr'
-				| 'PreDecr'
-				| 'PostDecr': true;
+			case 'Assign', 'AddAssign', 'SubAssign', 'MulAssign', 'DivAssign', 'ModAssign', 'BitAndAssign', 'BitOrAssign', 'BitXorAssign',
+				'ShlAssign', 'ShrAssign', 'UShrAssign', 'PreIncr', 'PostIncr', 'PreDecr', 'PostDecr': true;
 			case _: false;
 		}
 		return isWrite && node.children.length >= 1 ? fieldRefName(node.children[0]) : null;
@@ -1106,8 +1087,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	/** Whether `node` is a compile-time literal safe to relocate to a field-initializer position. */
 	private static function isMovableLiteral(node: QueryNode): Bool {
 		return switch node.kind {
-			case 'IntLit' | 'FloatLit' | 'BoolLit' | 'NullLit': true;
-			case 'DoubleStringExpr': true;
+			case 'IntLit', 'FloatLit', 'BoolLit', 'NullLit', 'DoubleStringExpr': true;
 			case 'SingleStringExpr':
 				node.name != null && node.name.indexOf('$') == -1;
 			case _: false;
@@ -1117,8 +1097,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	/** Whether `node`'s subtree references `field` (bare `IdentExpr` / `this.<field>`, read or write target). */
 	private static function mentionsField(node: QueryNode, field: String): Bool {
 		if (fieldRefName(node) == field) return true;
-		for (child in node.children) if (mentionsField(child, field)) return true;
-		return false;
+		return node.children.exists(child -> mentionsField(child, field));
 	}
 
 	/** The span to delete for a plain-field collapse — ` (read, write)` after `var <name>`, leading space included. */
@@ -1232,8 +1211,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			return false;
 		}
 		if (fieldRefName(node) == field) return true;
-		for (child in node.children) if (hasExternalRead(child, field, exclude)) return true;
-		return false;
+		return node.children.exists(child -> hasExternalRead(child, field, exclude));
 	}
 
 	/**
@@ -1289,12 +1267,10 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		if (node == allowStmt) return true;
 		if (node.kind == 'ExprStmt' && node.children.length == 1 && writeTargetField(node.children[0]) == field) {
 			out.push(node);
-			for (c in node.children[0].children) if (!collectExternalWritesInto(c, field, exclude, allowStmt, out)) return false;
-			return true;
+			return node.children[0].children.foreach(c -> collectExternalWritesInto(c, field, exclude, allowStmt, out));
 		}
 		if (writeTargetField(node) == field) return false;
-		for (c in node.children) if (!collectExternalWritesInto(c, field, exclude, allowStmt, out)) return false;
-		return true;
+		return node.children.foreach(c -> collectExternalWritesInto(c, field, exclude, allowStmt, out));
 	}
 
 	/**
@@ -1435,15 +1411,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	/** Whether `kind` is an assignment / compound-assignment / increment / decrement whose first child is its write target. */
 	private static function isWriteNodeKind(kind: String): Bool {
 		return switch kind {
-			case 'Assign' | 'AddAssign' | 'SubAssign' | 'MulAssign' | 'DivAssign' | 'ModAssign' | 'BitAndAssign' | 'BitOrAssign'
-				| 'BitXorAssign'
-				| 'ShlAssign'
-				| 'ShrAssign'
-				| 'UShrAssign'
-				| 'PreIncr'
-				| 'PostIncr'
-				| 'PreDecr'
-				| 'PostDecr': true;
+			case 'Assign', 'AddAssign', 'SubAssign', 'MulAssign', 'DivAssign', 'ModAssign', 'BitAndAssign', 'BitOrAssign', 'BitXorAssign',
+				'ShlAssign', 'ShrAssign', 'UShrAssign', 'PreIncr', 'PostIncr', 'PreDecr', 'PostDecr': true;
 			case _: false;
 		}
 	}
@@ -1634,7 +1603,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 						edits.push({ span: occ.span, text: propName });
 					// Neither renamed nor a blocker: a word inside a longer literal is prose, and a
 					// non-distinctive comment mention cannot make the collapse unsafe.
-					case OccurrenceClass.StringWord | OccurrenceClass.CommentTrivia:
+					case OccurrenceClass.StringWord, OccurrenceClass.CommentTrivia:
 					case _:
 						return null;
 				}

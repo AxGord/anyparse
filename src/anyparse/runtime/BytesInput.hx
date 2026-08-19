@@ -1,5 +1,7 @@
 package anyparse.runtime;
 
+import haxe.io.Bytes;
+
 /**
  * `Input` implementation backed by `haxe.io.Bytes`.
  *
@@ -13,9 +15,9 @@ final class BytesInput implements Input {
 
 	public var length(get, never): Int;
 
-	private final _source: haxe.io.Bytes;
+	private final _source: Bytes;
 
-	public function new(source: haxe.io.Bytes) {
+	public function new(source: Bytes) {
 		_source = source;
 	}
 
@@ -31,7 +33,7 @@ final class BytesInput implements Input {
 		return _source.getString(from, to - from);
 	}
 
-	public inline function bytes(from: Int, to: Int): haxe.io.Bytes {
+	public inline function bytes(from: Int, to: Int): Bytes {
 		return _source.sub(from, to - from);
 	}
 

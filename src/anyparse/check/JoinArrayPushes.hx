@@ -614,8 +614,7 @@ final class JoinArrayPushes implements Check {
 	/** Whether `node`'s subtree holds a call or a construction — anything that runs code of its own. */
 	private static function runsCode(node: QueryNode, s: Seams): Bool {
 		if (node.kind == s.callKind || node.kind == s.newExprKind) return true;
-		for (child in node.children) if (runsCode(child, s)) return true;
-		return false;
+		return node.children.exists(child -> runsCode(child, s));
 	}
 
 	/** The offset of the newline ending `at`'s line, or the source length when it is the last line. */
@@ -632,9 +631,9 @@ final class JoinArrayPushes implements Check {
 	 */
 	private static function receiversDenoteField(run: Array<Push>, container: QueryNode, fieldFrom: Int, ctx: Ctx): Bool {
 		final shape: RefShape = ctx.seams.shape;
-		for (push in run) if (!push.qualified && TypeResolver.resolveBindingFrom(push.name, push.receiver, container, shape) != fieldFrom)
-			return false;
-		return true;
+		return run.foreach(
+			push -> push.qualified || TypeResolver.resolveBindingFrom(push.name, push.receiver, container, shape) == fieldFrom
+		);
 	}
 
 	/**
@@ -738,9 +737,9 @@ final class JoinArrayPushes implements Check {
 	 * be merging two allocations into one and must not admit it.
 	 */
 	private static function constantElement(node: QueryNode, purity: PurityCtx, s: Seams): Bool {
-		if (!s.collectionKinds.contains(node.kind)) return PurityScan.isPure(node, purity);
-		for (child in node.children) if (!constantElement(child, purity, s)) return false;
-		return true;
+		return !s.collectionKinds.contains(node.kind)
+			? PurityScan.isPure(node, purity)
+			: node.children.foreach(child -> constantElement(child, purity, s));
 	}
 
 	/**
@@ -752,8 +751,7 @@ final class JoinArrayPushes implements Check {
 	private static function referencesName(node: QueryNode, name: String, s: Seams): Bool {
 		if (s.opaqueKinds.contains(node.kind)) return true;
 		if (node.name == name && (node.kind == s.identKind || node.kind == s.interpIdentKind)) return true;
-		for (child in node.children) if (referencesName(child, name, s)) return true;
-		return false;
+		return node.children.exists(child -> referencesName(child, name, s));
 	}
 
 	/**

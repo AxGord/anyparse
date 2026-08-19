@@ -246,10 +246,10 @@ final class OracleCache {
 				final token: String = tokens[i];
 				final value: Null<String> = i + 1 < tokens.length ? tokens[i + 1] : null;
 				switch token {
-					case '-cp' | '-p' | '--class-path':
+					case '-cp', '-p', '--class-path':
 						if (value != null) classPaths.push(value);
 						i += 2;
-					case '-lib' | '-L' | '--library':
+					case '-lib', '-L', '--library':
 						if (value != null) libs.push(libName(value));
 						i += 2;
 					case _:
@@ -305,11 +305,7 @@ final class OracleCache {
 	 * dominating the very typecheck this cache exists to avoid.
 	 */
 	private static function md5(data: String): String {
-		#if nodejs
-		return js.node.Crypto.createHash('md5').update(data, 'utf8').digest('hex');
-		#else
-		return haxe.crypto.Md5.encode(data);
-		#end
+		return #if nodejs js.node.Crypto.createHash('md5').update(data, 'utf8').digest('hex') #else haxe.crypto.Md5.encode(data) #end;
 	}
 
 	#if (sys || nodejs)

@@ -439,9 +439,8 @@ final class BodyFit {
 			case Doc.Concat(items):
 				for (it in items) if (carriesCollapseProbe(it)) return true;
 				return false;
-			case Doc.Nest(_, inner) | Doc.Group(inner) | Doc.BodyGroup(inner) | Doc.GroupWithRestProbe(inner) | Doc.Flatten(inner) | Doc.HardFlatten(
-				inner
-			) | Doc.WrapBoundary(inner):
+			case Doc.Nest(_, inner), Doc.Group(inner), Doc.BodyGroup(inner), Doc.GroupWithRestProbe(inner), Doc.Flatten(inner),
+				Doc.HardFlatten(inner), Doc.WrapBoundary(inner):
 				return carriesCollapseProbe(inner);
 			case _:
 				return false;

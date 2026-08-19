@@ -7,6 +7,8 @@ import anyparse.check.Linter;
 import anyparse.check.OversizedType;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import sys.FileSystem;
+import sys.io.File;
 
 using StringTools;
 
@@ -98,18 +100,18 @@ class OversizedTypeCheckTest extends Test {
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
 		final base: String = tmp != null && tmp.length > 0 ? tmp : '/tmp';
 		final dir: String = '$base/anyparse_ot_cfg_${Sys.time()}';
-		sys.FileSystem.createDirectory(dir);
-		sys.io.File.saveContent('$dir/apqlint.json', '{"rules": {"oversized-type": {"maxMembers": 2, "maxLines": 3}}}');
+		FileSystem.createDirectory(dir);
+		File.saveContent('$dir/apqlint.json', '{"rules": {"oversized-type": {"maxMembers": 2, "maxLines": 3}}}');
 		final path: String = '$dir/Foo.hx';
 		final src: String = 'class Foo {\n\tvar a:Int;\n\tvar b:Int;\n\tvar c:Int;\n}';
-		sys.io.File.saveContent(path, src);
+		File.saveContent(path, src);
 		final vs: Array<Violation> = new OversizedType().run([{ file: path, source: src }], new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains('3 members (max 2)'));
 		Assert.isTrue(vs[0].message.contains('5 lines (max 3)'));
-		sys.FileSystem.deleteFile(path);
-		sys.FileSystem.deleteFile('$dir/apqlint.json');
-		sys.FileSystem.deleteDirectory(dir);
+		FileSystem.deleteFile(path);
+		FileSystem.deleteFile('$dir/apqlint.json');
+		FileSystem.deleteDirectory(dir);
 	}
 
 	private function violations(src: String): Array<Violation> {

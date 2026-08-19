@@ -5,6 +5,7 @@ import anyparse.check.MemberOrder.LayoutIssue;
 import anyparse.check.MemberOrder.OrderedMember;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -114,8 +115,7 @@ final class MemberSpacing {
 
 	/** Whether any member is `#if`-guarded - such a container rebuilds through `buildConditionalRegion`, never the slot-swap path. */
 	public static function hasConditionalMember(members: Array<OrderedMember>): Bool {
-		for (m in members) if (m.condition != null) return true;
-		return false;
+		return members.exists(m -> m.condition != null);
 	}
 
 	/**

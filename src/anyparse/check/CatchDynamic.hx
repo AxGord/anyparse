@@ -1,16 +1,17 @@
 package anyparse.check;
 
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
-import anyparse.query.TypeInfoProvider;
-import anyparse.check.Check.ConfigAware;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -294,8 +295,7 @@ final class CatchDynamic implements Check implements ConfigAware {
 	/** Whether any node in `node`'s subtree carries `name` — catches plain identifiers, field-access names, and string-interpolation idents alike (a conservative reference test). */
 	private static function mentionsName(node: QueryNode, name: String): Bool {
 		if (node.name == name) return true;
-		for (c in node.children) if (mentionsName(c, name)) return true;
-		return false;
+		return node.children.exists(c -> mentionsName(c, name));
 	}
 
 	/** The catch-clause kind, catch-all type names and canonical exception path, or null when the grammar sets none of them (the check is then a no-op). */

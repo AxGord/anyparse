@@ -1,5 +1,7 @@
 package anyparse.runtime;
 
+import haxe.io.Bytes;
+
 /**
  * `Input` implementation backed by a Haxe `String`.
  *
@@ -31,8 +33,8 @@ final class StringInput implements Input {
 		return _source.substring(from, to);
 	}
 
-	public inline function bytes(from: Int, to: Int): haxe.io.Bytes {
-		return haxe.io.Bytes.ofString(_source.substring(from, to));
+	public inline function bytes(from: Int, to: Int): Bytes {
+		return Bytes.ofString(_source.substring(from, to));
 	}
 
 }

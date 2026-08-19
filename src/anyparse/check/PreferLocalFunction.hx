@@ -8,6 +8,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -503,8 +504,7 @@ final class PreferLocalFunction implements Check {
 
 	/** Whether any comment token overlaps `[from, to)` — a span the rewrite drops. */
 	private static function commentOverlaps(comments: Array<{ from: Int, to: Int, isLine: Bool }>, from: Int, to: Int): Bool {
-		for (tok in comments) if (tok.from < to && tok.to > from) return true;
-		return false;
+		return comments.exists(tok -> tok.from < to && tok.to > from);
 	}
 
 }

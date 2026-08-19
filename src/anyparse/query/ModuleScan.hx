@@ -1,11 +1,11 @@
 package anyparse.query;
 
-import anyparse.query.SymbolIndex.FileInfo;
-import anyparse.query.SymbolIndex.TypeDeclInfo;
-import anyparse.query.RefactorSupport.TypeDeclMatch;
-import anyparse.runtime.Span;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.ModulePath;
+import anyparse.query.RefactorSupport.TypeDeclMatch;
+import anyparse.query.SymbolIndex.FileInfo;
+import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.runtime.Span;
 
 using StringTools;
 using Lambda;
@@ -116,8 +116,7 @@ final class ModuleScan {
 
 	/** Whether the file carries a `package` declaration whose span the grammar did not record. */
 	private static function hasSpanlessPackage(root: QueryNode): Bool {
-		for (c in root.children) if (PACKAGE_DECL_KINDS.contains(c.kind) && c.span == null) return true;
-		return false;
+		return root.children.exists(c -> PACKAGE_DECL_KINDS.contains(c.kind) && c.span == null);
 	}
 
 	/**

@@ -2,8 +2,8 @@ package anyparse.check;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
-import anyparse.query.TypeResolver;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeResolver;
 
 /**
  * Recognises whether an expression is a **provably-nullable source** — the shared

@@ -2,10 +2,10 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberWriteScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.query.MemberWriteScan;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
 

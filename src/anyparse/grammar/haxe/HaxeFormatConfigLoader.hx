@@ -4,6 +4,7 @@ import anyparse.format.ArrayMatrixWrap;
 import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.format.CommentEmptyLinesPolicy;
+import anyparse.format.CommentStyle;
 import anyparse.format.ConditionalIndentationPolicy;
 import anyparse.format.EmptyCurly;
 import anyparse.format.KeepEmptyLinesPolicy;
@@ -11,6 +12,8 @@ import anyparse.format.KeywordPlacement;
 import anyparse.format.MetadataLineEndPolicy;
 import anyparse.format.RightCurlyPlacement;
 import anyparse.format.SameLinePolicy;
+import anyparse.format.TrailingCommaPolicy;
+import anyparse.format.UniformStatementBlanksPolicy;
 import anyparse.format.WhitespacePolicy;
 import anyparse.format.wrap.WrapCondition;
 import anyparse.format.wrap.WrapConditionType;
@@ -24,6 +27,7 @@ import anyparse.grammar.haxe.format.HxFormatBracesConfigSection;
 import anyparse.grammar.haxe.format.HxFormatBracketConfigSection;
 import anyparse.grammar.haxe.format.HxFormatClassEmptyLinesConfig;
 import anyparse.grammar.haxe.format.HxFormatCommentEmptyLinesPolicy;
+import anyparse.grammar.haxe.format.HxFormatCommentsSection;
 import anyparse.grammar.haxe.format.HxFormatConfig;
 import anyparse.grammar.haxe.format.HxFormatConfigParser;
 import anyparse.grammar.haxe.format.HxFormatCurlyLineEndPolicy;
@@ -38,28 +42,24 @@ import anyparse.grammar.haxe.format.HxFormatLeftCurlyPolicy;
 import anyparse.grammar.haxe.format.HxFormatLineEndCharacter;
 import anyparse.grammar.haxe.format.HxFormatLineEndsSection;
 import anyparse.grammar.haxe.format.HxFormatMetadataLineEndPolicy;
+import anyparse.grammar.haxe.format.HxFormatOptionalSemicolonPolicy;
 import anyparse.grammar.haxe.format.HxFormatParenConfigSection;
 import anyparse.grammar.haxe.format.HxFormatParenPolicySection;
 import anyparse.grammar.haxe.format.HxFormatRightCurlyPolicy;
 import anyparse.grammar.haxe.format.HxFormatSameLinePolicy;
 import anyparse.grammar.haxe.format.HxFormatSameLineSection;
+import anyparse.grammar.haxe.format.HxFormatSingleStatementBracesPolicy;
+import anyparse.grammar.haxe.format.HxFormatSwitchSubjectParensPolicy;
 import anyparse.grammar.haxe.format.HxFormatTrailingCommaPolicy;
 import anyparse.grammar.haxe.format.HxFormatTrailingCommasSection;
 import anyparse.grammar.haxe.format.HxFormatTypedefEmptyLinesConfig;
+import anyparse.grammar.haxe.format.HxFormatUniformStatementBlanksPolicy;
 import anyparse.grammar.haxe.format.HxFormatWhitespacePolicy;
 import anyparse.grammar.haxe.format.HxFormatWhitespaceSection;
 import anyparse.grammar.haxe.format.HxFormatWrapCondition;
 import anyparse.grammar.haxe.format.HxFormatWrapRule;
 import anyparse.grammar.haxe.format.HxFormatWrapRules;
 import anyparse.grammar.haxe.format.HxFormatWrappingSection;
-import anyparse.grammar.haxe.format.HxFormatSingleStatementBracesPolicy;
-import anyparse.grammar.haxe.format.HxFormatOptionalSemicolonPolicy;
-import anyparse.grammar.haxe.format.HxFormatSwitchSubjectParensPolicy;
-import anyparse.format.UniformStatementBlanksPolicy;
-import anyparse.grammar.haxe.format.HxFormatUniformStatementBlanksPolicy;
-import anyparse.format.CommentStyle;
-import anyparse.grammar.haxe.format.HxFormatCommentsSection;
-import anyparse.format.TrailingCommaPolicy;
 import anyparse.grammar.haxe.format.HxFormatWrappingTrailingCommaPolicy;
 
 /**
@@ -766,7 +766,7 @@ final class HaxeFormatConfigLoader {
 			_intersectionOperandBreak: base._intersectionOperandBreak,
 			blockCommentAdapter: base.blockCommentAdapter,
 			lineCommentAdapter: base.lineCommentAdapter,
-			betweenImportsPathDiffers: base.betweenImportsPathDiffers,
+			betweenImportsPathDiffers: base.betweenImportsPathDiffers
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);

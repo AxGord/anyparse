@@ -9,6 +9,8 @@ import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * The statement-position spine an embedded assignment may sit under, resolved once per run from
  * `RefShape` + `ControlFlowSupport`. `containers` are the DATA-STRUCTURE literals that separate a
@@ -288,8 +290,7 @@ final class HoistEmbeddedAssignment implements Check implements DefaultOff imple
 	private static function descend(node: QueryNode, spine: Spine, inContainer: Bool, statementRoot: Bool, found: Array<QueryNode>): Bool {
 		if (node.kind == spine.assign) {
 			if (statementRoot) {
-				for (child in node.children) if (!descend(child, spine, inContainer, false, found)) return false;
-				return true;
+				return node.children.foreach(child -> descend(child, spine, inContainer, false, found));
 			}
 			if (!inContainer || node.children.length != 2) return false;
 			final target: QueryNode = node.children[0];
@@ -300,8 +301,7 @@ final class HoistEmbeddedAssignment implements Check implements DefaultOff imple
 		}
 		if (!spine.passThrough.contains(node.kind)) return !subtreeHas(node, spine.assign);
 		final within: Bool = inContainer || spine.containers.contains(node.kind);
-		for (child in node.children) if (!descend(child, spine, within, false, found)) return false;
-		return true;
+		return node.children.foreach(child -> descend(child, spine, within, false, found));
 	}
 
 	/** The bare name an assignment writes, or null when its l-value is not one. */
@@ -311,8 +311,7 @@ final class HoistEmbeddedAssignment implements Check implements DefaultOff imple
 
 	private static function subtreeHas(node: QueryNode, kind: String): Bool {
 		if (node.kind == kind) return true;
-		for (child in node.children) if (subtreeHas(child, kind)) return true;
-		return false;
+		return node.children.exists(child -> subtreeHas(child, kind));
 	}
 
 	/** How many nodes in `node`'s subtree carry `name` — any kind, so a read through any form counts. */

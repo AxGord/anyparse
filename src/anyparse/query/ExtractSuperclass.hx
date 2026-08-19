@@ -73,7 +73,7 @@ final class ExtractSuperclass {
 		if (memberNames.length == 0) return Err('no members named — nothing to pull up');
 
 		final tree: QueryNode = try plugin.parseFile(srcSource) catch (exception: ParseError) return Err(
-			'$srcFile does not parse: ${exception.toString()}'
+			'$srcFile does not parse: $exception'
 		)
 		catch (exception: Exception) return Err('$srcFile does not parse: ${exception.message}');
 
@@ -109,7 +109,7 @@ final class ExtractSuperclass {
 		try
 			plugin.parseFile(newSrc)
 		catch (exception: ParseError)
-			return Err('rewritten $srcFile does not parse: ${exception.toString()}')
+			return Err('rewritten $srcFile does not parse: $exception')
 		catch (exception: Exception)
 			return Err('rewritten $srcFile does not parse: ${exception.message}');
 
@@ -117,7 +117,7 @@ final class ExtractSuperclass {
 			+ '" — subclass access preserved by inheritance; the superclass has no constructor (the source constructor is unchanged).';
 		final changes: Array<MoveChange> = [
 			{ file: superFile, newSource: superSource },
-			{ file: srcFile, newSource: newSrc },
+			{ file: srcFile, newSource: newSrc }
 		];
 		return Ok(changes, advisory);
 	}
@@ -263,7 +263,7 @@ final class ExtractSuperclass {
 		sb.add(blocks.join('\n\n'));
 		sb.add('\n\n}\n');
 		final canonical: Null<String> = try plugin.writeRoundTrip(sb.toString(), null) catch (exception: ParseError) {
-			return Left('assembled superclass does not parse: ${exception.toString()}');
+			return Left('assembled superclass does not parse: $exception');
 		} catch (exception: CommentLossException) {
 			return Left('the assembled superclass cannot be written without losing the comment `${exception.comment}`');
 		} catch (exception: Exception) {

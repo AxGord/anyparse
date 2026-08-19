@@ -125,7 +125,7 @@ final class FixVerifier {
 		final baseline: OracleOutcome = CompilerOracle.typecheck(oracleHxml, oracleDir);
 		switch baseline {
 			case Confirmed:
-			case Rejected(_) | Unavailable(_):
+			case Rejected(_), Unavailable(_):
 				return {
 					baseline: baseline,
 					applied: applied,

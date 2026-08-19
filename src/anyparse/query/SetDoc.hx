@@ -1,10 +1,10 @@
 package anyparse.query;
 
 import anyparse.query.RefactorSupport.EditResult;
+import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import anyparse.query.RefactorSupport.TypeDeclMatch;
 
 /**
  * Add or replace the doc-comment of the declaration at a cursor — the
@@ -37,9 +37,7 @@ final class SetDoc {
 	public static function setDoc(
 		source: String, line: Int, col: Int, docText: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
 	): EditResult {
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
-			'source does not parse: ${exception.toString()}'
-		)
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		final cursor: Int = Span.offsetOf(source, line, col);

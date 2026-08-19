@@ -5,6 +5,8 @@ import anyparse.core.DocMeasure;
 import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
 
+using Lambda;
+
 /**
  * Runtime helper that emits a `Doc` for a binary-op chain construct
  * (`a || b || c` / `a + b - c + d` — left-assoc nested `BinOp(left,
@@ -334,7 +336,7 @@ final class BinaryChainEmit {
 	 */
 	private static function isChainOps(ops: Array<String>): Bool {
 		for (o in ops) switch o {
-			case '&&' | '||' | '+' | '-':
+			case '&&', '||', '+', '-':
 			case _:
 				return false;
 		}
@@ -351,7 +353,7 @@ final class BinaryChainEmit {
 	 */
 	private static function isOpBoolOps(ops: Array<String>): Bool {
 		for (o in ops) switch o {
-			case '&&' | '||':
+			case '&&', '||':
 			case _:
 				return false;
 		}
@@ -366,8 +368,7 @@ final class BinaryChainEmit {
 	 * after, so the marker is skipped (byte-inert).
 	 */
 	private static function containsCallOperand(items: Array<Doc>): Bool {
-		for (it in items) if (DocMeasure.operandIsCall(it)) return true;
-		return false;
+		return items.exists(it -> DocMeasure.operandIsCall(it));
 	}
 
 	/**
@@ -394,7 +395,7 @@ final class BinaryChainEmit {
 	 */
 	private static function isAddSubOps(ops: Array<String>): Bool {
 		for (o in ops) switch o {
-			case '+' | '-':
+			case '+', '-':
 			case _:
 				return false;
 		}
@@ -421,22 +422,21 @@ final class BinaryChainEmit {
 				var hit: Bool = false;
 				var done: Bool = false;
 				for (it in arr) if (!done) switch it {
-					case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
-						| OptHardlineSkipBeforeHardline:
+					case Empty, Line(_), OptSpace(_), OptSpaceSkipAfterHardline, OptHardline, OptHardlineSkipAtOpenDelim,
+						OptHardlineSkipBeforeHardline:
 					case _:
 						done = true;
 						hit = leadingOperandOpensDelim(it, parenOnly);
 				}
 				hit;
-			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(
-				i
-			) | CollapseBoolProbe(i) | CollapseChainProbe(i) | WrapBoundary(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
+			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), Flatten(i), HardFlatten(i), CollapseProbe(i),
+				CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i), ConditionalMarkerZero(i),
+				ConditionalMarkerDecrease(i):
 				leadingOperandOpensDelim(i, parenOnly);
-			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfResidualLineExceeds(
-				_, _, flat
-			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineExceedsWithRest(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(
-				_, _, flat
-			) | IfArrowContinuationFits(_, _, _, _, flat) | IfIndentWidthExceeds(_, _, _, flat) | IfGluedFirstLineExceeds(_, _, _, flat):
+			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
+				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
+				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
+				IfArrowContinuationFits(_, _, _, _, flat), IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
 				// PROBE FAMILY (Doc.hx header table), flat side for all three:
 				//  - `IfArrowContinuationFits` is a two-SHAPE probe like the natural
 				//    siblings above, and its two shapes always share a leading token —
@@ -454,9 +454,8 @@ final class BinaryChainEmit {
 				//    content-walker convention (`CollapsePass.walk`,
 				//    `MatrixWrap.isMultiline`, `Renderer.findCollapseProbe`).
 				leadingOperandOpensDelim(flat, parenOnly);
-			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
-				| OptHardlineSkipBeforeHardline
-				| Fill(_, _, _) | FillWithRestProbe(_, _, _) | FillBreakAfterWrap(_, _, _):
+			case Empty, Line(_), OptSpace(_), OptSpaceSkipAfterHardline, OptHardline, OptHardlineSkipAtOpenDelim,
+				OptHardlineSkipBeforeHardline, Fill(_, _, _), FillWithRestProbe(_, _, _), FillBreakAfterWrap(_, _, _):
 				// Layout atoms carry no token; a `Fill` is the wrap engine's own
 				// packing of a LIST, never a single operand's head shape. Enumerated
 				// rather than left to `case _` so a new `Doc` ctor fails to compile
@@ -473,7 +472,7 @@ final class BinaryChainEmit {
 			case NoWrap: shapeNoWrap(items, ops);
 			case OnePerLine: shapeOnePerLine(items, ops, cols, location);
 			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(items, ops, cols, location);
-			case FillLine | FillLineWithLeadingBreak:
+			case FillLine, FillLineWithLeadingBreak:
 				shapeFillLine(items, ops, cols, indentUnit, location);
 			// ω-keep-chain (increment 2): JSON `"defaultWrap": "keep"` on chain
 			// configs (opAddSubChain, opBoolChain) preserves the source's
@@ -959,8 +958,7 @@ final class BinaryChainEmit {
 		var total: Int = 0;
 		var maxLen: Int = 0;
 		var anyHardline: Bool = false;
-		for (i in 0...items.length) {
-			final item: Doc = items[i];
+		for (i => item in items) {
 			if (WrapList.flatLength(item) < 0) anyHardline = true;
 			final w: Int = DocMeasure.flatTokenWidth(item);
 			total += w;

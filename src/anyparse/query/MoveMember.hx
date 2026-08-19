@@ -7,6 +7,7 @@ import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
 import anyparse.query.RefactorSupport.ModulePath;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
+import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
@@ -17,8 +18,6 @@ import haxe.Exception;
 
 using StringTools;
 using Lambda;
-
-import anyparse.query.Refs.RefHit;
 
 /**
  * One resolved member of a type declaration: the member node, the
@@ -406,7 +405,7 @@ final class MoveMember {
 					if (offset >= 0 && !out.exists(h -> h.span.from == offset)) out.push({
 						span: new Span(offset, offset + path.length),
 						text: dotted ? destPath : prep.destTypeName,
-						needsImport: !dotted,
+						needsImport: !dotted
 					});
 				}
 			}
@@ -562,7 +561,7 @@ final class MoveMember {
 			destSource: destSourceNN,
 			srcInfo: srcInfoNN,
 			destInfo: destInfoNN,
-			shape: plugin.refShape(),
+			shape: plugin.refShape()
 		});
 	}
 
@@ -721,7 +720,7 @@ final class MoveMember {
 					+ 'moved body\'s reference to it; rename the capture first',
 				fieldDeps: [],
 				accessMembers: [],
-				missingDestFields: [],
+				missingDestFields: []
 			};
 		}
 		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti(
@@ -732,7 +731,7 @@ final class MoveMember {
 			accessMembers: [],
 			staysBehind: [],
 			mutableDeps: [],
-			missingDestFields: [],
+			missingDestFields: []
 		};
 		for (sibling in candidates) scanSibling(prep, sibling, hitsByName[sibling.member.name ?? ''] ?? [], movedTextEdits, state);
 		final problems: Array<String> = siblingProblems(prep, state, scaffold);
@@ -747,7 +746,7 @@ final class MoveMember {
 				error: null,
 				fieldDeps: state.fieldDeps,
 				accessMembers: state.accessMembers,
-				missingDestFields: state.missingDestFields,
+				missingDestFields: state.missingDestFields
 			};
 	}
 
@@ -792,7 +791,7 @@ final class MoveMember {
 		else
 			movedTextEdits.push({
 				span: new Span(m.group.groupSpan.from, m.group.groupSpan.from),
-				text: '@:access($accessPath) ',
+				text: '@:access($accessPath) '
 			});
 		advisoryExtras.push(
 			'moved body of "${m.name}" references private member(s) of "${prep.srcTypeName}" — added @:access($accessPath)'
@@ -849,7 +848,7 @@ final class MoveMember {
 			try
 				plugin.parseFile(newSource)
 			catch (exception: ParseError)
-				return Err('rewritten $file does not parse: ${exception.toString()}')
+				return Err('rewritten $file does not parse: $exception')
 			catch (exception: Exception)
 				return Err('rewritten $file does not parse: ${exception.message}');
 			changes.push({ file: file, newSource: newSource });
@@ -1127,7 +1126,7 @@ final class MoveMember {
 				group: groupNN,
 				span: memberSpanNN,
 				cut: cutSpanOf(srcSource, groupNN),
-				isStatic: modifierStatic || hostStatic,
+				isStatic: modifierStatic || hostStatic
 			});
 		}
 		moved.sort((a, b) -> a.cut.from - b.cut.from);
@@ -1319,7 +1318,7 @@ final class MoveMember {
 			final type: Null<String> = gSpan != null ? typeSources[gSpan.from] : null;
 			if (type == null) return {
 				error: 'cannot --scaffold field "$name": its type on "${prep.srcTypeName}" is not an explicit nominal annotation',
-				fields: [],
+				fields: []
 			};
 			final typeNN: String = type;
 			fields.push({ name: name, type: typeNN });
@@ -1342,7 +1341,7 @@ final class MoveMember {
 		if (!isTrivialCtor(prep.destSource, ctor)) return {
 			error: '"${prep.destTypeName}" already has a constructor — --scaffold targets an empty destination '
 				+ '(a bare `new() {}` or no constructor)',
-			prependBlock: '',
+			prependBlock: ''
 		};
 		final from: Int = lineStartOf(prep.destSource, ctor.groupSpan.from);
 		editsFor(editsByFile, prep.destFile).push({ span: new Span(from, ctor.groupSpan.to), text: block });
@@ -1362,7 +1361,7 @@ final class MoveMember {
 		final fieldFrom: Int = lineStartOf(prep.srcSource, ctor.groupSpan.from);
 		editsFor(editsByFile, prep.srcFile).push({
 			span: new Span(fieldFrom, fieldFrom),
-			text: '\tprivate final $viaName: ${prep.destTypeName};\n\n',
+			text: '\tprivate final $viaName: ${prep.destTypeName};\n\n'
 		});
 		final bodyClose: Null<Int> = ctorBodyClose(prep.srcSource, ctor.member);
 		if (bodyClose == null) return 'cannot --scaffold via field "$viaName": could not locate the "${prep.srcTypeName}" constructor body';
@@ -1371,7 +1370,7 @@ final class MoveMember {
 		final args: String = [for (f in fields) f.name].join(', ');
 		editsFor(editsByFile, prep.srcFile).push({
 			span: new Span(wsStart, bodyClose),
-			text: '\n\t\t$viaName = new ${prep.destTypeName}($args);\n\t',
+			text: '\n\t\t$viaName = new ${prep.destTypeName}($args);\n\t'
 		});
 		return null;
 	}

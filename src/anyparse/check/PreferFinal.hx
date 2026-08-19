@@ -9,6 +9,8 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * Flags a local `var` declaration that is never reassigned — a mutable
  * binding the immutable `final` should replace — and rewrites `var` to
@@ -199,8 +201,7 @@ final class PreferFinal implements Check {
 
 	/** Whether any reassignment position in `writes` falls within `scope`. */
 	private static function reassignedInScope(writes: Array<Span>, scope: Span): Bool {
-		for (w in writes) if (w.from >= scope.from && w.from < scope.to) return true;
-		return false;
+		return writes.exists(w -> w.from >= scope.from && w.from < scope.to);
 	}
 
 }

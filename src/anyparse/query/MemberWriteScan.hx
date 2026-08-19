@@ -1,7 +1,7 @@
 package anyparse.query;
 
-import anyparse.runtime.Span;
 import anyparse.query.GrammarPlugin;
+import anyparse.runtime.Span;
 
 using StringTools;
 
@@ -183,10 +183,8 @@ final class MemberWriteScan {
 	/** Whether `c` is an operator character that can form an assignment token. */
 	private static inline function isOperatorChar(c: Int): Bool {
 		return switch c {
-			case '='.code | '+'.code | '-'.code | '*'.code | '/'.code | '%'.code | '&'.code | '|'.code | '^'.code | '<'.code | '>'.code
-				| '?'.code
-				| '~'.code
-				| '!'.code: true;
+			case '='.code, '+'.code, '-'.code, '*'.code, '/'.code, '%'.code, '&'.code, '|'.code, '^'.code, '<'.code, '>'.code, '?'.code,
+				'~'.code, '!'.code: true;
 			case _: false;
 		};
 	}

@@ -6,6 +6,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * The subtree scans the two COLLECTION-LOOP rewrite rules share — `prefer-keyvalue-loop` (an indexed `for` whose body opens by binding `X[i]`) and `dead-binder-counter-loop` (a `var i = 0;` counter threaded through a `for`-in whose binder nothing reads). Both move a name into, or drop one out of, a loop HEADER, so both must prove the same things about the body: the names involved are not written, not re-declared, not captured by a closure, and — for the collection itself — used only in positions that cannot change its LENGTH.
  *
@@ -116,16 +118,14 @@ final class LoopScan {
 	public static function declares(node: QueryNode, name: String, s: LoopSeams): Bool {
 		if (s.opaqueKinds.contains(node.kind)) return false;
 		if (s.localDeclKinds.contains(node.kind) && node.name == name) return true;
-		for (c in node.children) if (declares(c, name, s)) return true;
-		return false;
+		return node.children.exists(c -> declares(c, name, s));
 	}
 
 	/** Whether `node`'s subtree contains a node of `kind`, skipping reification subtrees. */
 	public static function containsKind(node: QueryNode, kind: String, s: LoopSeams): Bool {
 		if (s.opaqueKinds.contains(node.kind)) return false;
 		if (node.kind == kind) return true;
-		for (c in node.children) if (containsKind(c, kind, s)) return true;
-		return false;
+		return node.children.exists(c -> containsKind(c, kind, s));
 	}
 
 	/**
@@ -140,8 +140,7 @@ final class LoopScan {
 			final span: Null<Span> = scope.span;
 			if (span != null && RefactorSupport.referencedInRange(source, name, span.from, span.to, [])) return true;
 		}
-		for (c in scope.children) if (capturedByClosure(c, source, name, s)) return true;
-		return false;
+		return scope.children.exists(c -> capturedByClosure(c, source, name, s));
 	}
 
 	/** Whether `node` is the numeric literal `0` — the only lower bound either rewrite can transcribe. */
@@ -234,8 +233,7 @@ final class LoopScan {
 		if (s.hardExitKinds.contains(node.kind)) return true;
 		if (!inInnerLoop && s.loopJumpKinds.contains(node.kind)) return true;
 		final inner: Bool = inInnerLoop || isLoop(node, s);
-		for (c in node.children) if (escapesIteration(c, s, inner)) return true;
-		return false;
+		return node.children.exists(c -> escapesIteration(c, s, inner));
 	}
 
 	/**
@@ -258,8 +256,7 @@ final class LoopScan {
 	): Bool {
 		if (s.opaqueKinds.contains(node.kind)) return true;
 		if (node.kind == s.identKind && node.name == name && !isStablePosition(node, parent, grandParent, sizeMember, s)) return false;
-		for (c in node.children) if (!stableUseScan(c, node, parent, name, sizeMember, s)) return false;
-		return true;
+		return node.children.foreach(c -> stableUseScan(c, node, parent, name, sizeMember, s));
 	}
 
 	/**

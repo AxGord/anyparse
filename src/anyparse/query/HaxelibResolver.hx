@@ -1,8 +1,9 @@
 package anyparse.query;
 
-import haxe.Exception;
 import anyparse.query.format.json.HaxelibJson;
 import anyparse.query.format.json.HaxelibJsonParser;
+import haxe.Exception;
+import haxe.io.Path;
 #if nodejs
 import js.node.ChildProcess.ChildProcessSpawnSyncResult;
 #end
@@ -66,7 +67,7 @@ final class HaxelibResolver {
 		if (parsed == null) return null;
 		final classPathRaw: Null<String> = parsed.classPath;
 		final classPath: String = classPathRaw != null ? StringTools.trim(classPathRaw) : '';
-		return haxe.io.Path.normalize(classPath == '' ? root : haxe.io.Path.join([root, classPath]));
+		return Path.normalize(classPath == '' ? root : Path.join([root, classPath]));
 	}
 
 	/** The library root: the trimmed `haxelib libpath` output, or null when it is empty (lib not installed / no path printed). */
@@ -105,12 +106,9 @@ final class HaxelibResolver {
 
 	/** Read `<root>/haxelib.json`, or null when it is missing/unreadable (graceful — the lib is then skipped). A null `root` (empty libpath) short-circuits to null. */
 	private static function readHaxelibJson(root: Null<String>): Null<String> {
-		if (root == null) return null;
-		#if (sys || nodejs)
-		return try sys.io.File.getContent(haxe.io.Path.join([root, 'haxelib.json'])) catch (exception: haxe.Exception) null;
-		#else
-		return null;
-		#end
+		return root == null
+			? null
+			: #if (sys || nodejs) try sys.io.File.getContent(haxe.io.Path.join([root, 'haxelib.json'])) catch (exception: haxe.Exception) null #else null #end;
 	}
 
 }

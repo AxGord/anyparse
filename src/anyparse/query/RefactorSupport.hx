@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.format.comment.CommentLossException;
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
@@ -10,8 +11,6 @@ import haxe.Exception;
 
 using StringTools;
 using Lambda;
-
-import anyparse.query.GrammarPlugin.RefShape;
 
 /**
  * Outcome of a source-mutation operation: `Ok` carries the rewritten
@@ -250,7 +249,7 @@ final class RefactorSupport {
 		'VarMember',
 		'FinalMember',
 		'VarField',
-		'FinalField',
+		'FinalField'
 	];
 
 	/**
@@ -263,7 +262,7 @@ final class RefactorSupport {
 	public static final FIELD_MEMBER_KINDS: Array<String> = DATA_FIELD_KINDS.concat([
 		'FnMember',
 		'FinalModifiedMember',
-		'FnField',
+		'FnField'
 	]);
 
 	/**
@@ -280,7 +279,7 @@ final class RefactorSupport {
 	public static final FN_DECL_KINDS: Array<String> = [
 		'FnMember',
 		'FinalModifiedMember',
-		'LocalFnStmt',
+		'LocalFnStmt'
 	];
 
 	/**
@@ -298,7 +297,7 @@ final class RefactorSupport {
 		'EnumDecl',
 		'EnumAbstractDecl',
 		'TypedefDecl',
-		'AbstractDecl',
+		'AbstractDecl'
 	];
 
 	/**
@@ -427,7 +426,7 @@ final class RefactorSupport {
 		'Neg',
 		'Not',
 		'BitNot',
-		'Ternary',
+		'Ternary'
 	];
 
 	/**
@@ -1299,9 +1298,7 @@ final class RefactorSupport {
 	): EditResult {
 		if (!reformat) {
 			final canon: Null<String> =
-				try plugin.writeRoundTrip(
-					source, optsJson
-				) catch (exception: ParseError) return Err('source does not parse: ${exception.toString()}')
+				try plugin.writeRoundTrip(source, optsJson) catch (exception: ParseError) return Err('source does not parse: $exception')
 				catch (exception: CommentLossException) return Err(
 					'this file cannot be rewritten without losing the comment `${exception.comment}`'
 				)
@@ -1320,9 +1317,7 @@ final class RefactorSupport {
 
 		final spliced: String = applyEdits(source, edits);
 		final result: Null<String> =
-			try plugin.writeRoundTrip(
-				spliced, optsJson
-			) catch (exception: ParseError) return Err('result does not parse: ${exception.toString()}')
+			try plugin.writeRoundTrip(spliced, optsJson) catch (exception: ParseError) return Err('result does not parse: $exception')
 			catch (exception: CommentLossException) return Err(
 				'the edit cannot be applied without losing the comment `${exception.comment}` (it may sit anywhere in the file)'
 			)
@@ -1798,7 +1793,7 @@ final class RefactorSupport {
 				out.push({ from: region.from, to: region.to, isLine: true });
 			case BlockComment:
 				out.push({ from: region.from, to: region.to, isLine: false });
-			case StringLit | RegexLit:
+			case StringLit, RegexLit:
 		}
 		return out;
 	}
@@ -1919,8 +1914,7 @@ final class RefactorSupport {
 	/** Whether the subtree rooted at `node` contains any node of kind `kind`. */
 	public static function subtreeContainsKind(node: QueryNode, kind: String): Bool {
 		if (node.kind == kind) return true;
-		for (c in node.children) if (subtreeContainsKind(c, kind)) return true;
-		return false;
+		return node.children.exists(c -> subtreeContainsKind(c, kind));
 	}
 
 	/**
@@ -2367,9 +2361,7 @@ final class RefactorSupport {
 		final body: Null<QueryNode> = ctor.children.find(c -> c.kind == bodyKind);
 		if (body == null) return false;
 		final transparent: Array<String> = unconditionalOperandKinds(shape);
-		for (stmt in body.children) if (transparent.contains(stmt.kind) && reachesThroughOperands(stmt, writeFrom, transparent))
-			return true;
-		return false;
+		return body.children.exists(stmt -> transparent.contains(stmt.kind) && reachesThroughOperands(stmt, writeFrom, transparent));
 	}
 
 	/**
@@ -2489,27 +2481,25 @@ final class RefactorSupport {
 		// `IdentExpr` - it is a reference all the same, and the resolver binds it by the
 		// same scope rules, so the two share one arm (`${p}` blocks carry a regular
 		// IdentExpr child and were already reached by the child walk).
-		if (node.kind == identKind || node.kind == shape.stringInterpIdentKind) {
-			final name: Null<String> = node.name;
-			final span: Null<Span> = node.span;
-			if (name == null || span == null) return false;
-			if (selfText != null && name == selfText) return false;
-			final bf: Null<Int> = TypeResolver.resolveBindingFrom(name, span, container, shape);
-			// An unresolved ident is the provably-global case (imports/statics) - UNLESS the
-			// container has a supertype clause: an INHERITED member is invisible to the
-			// single-file resolver and indistinguishable from a global, so under `extends` /
-			// `implements` an unresolved lowercase ident fails closed too (type refs like
-			// `Colors.WHITE` keep their uppercase root and stay movable).
-			if (bf != null) return allowStatics && statics.contains(bf);
-			if (!hasSupertypeClause(container, shape)) return true;
-			final c0: Int = StringTools.fastCodeAt(name, 0);
-			// An uppercase root is a TYPE reference (`Colors.WHITE`) — never an inherited member, and
-			// decided without touching the index. A lowercase one asks the index whether any ancestor
-			// could declare it.
-			return c0 >= 'A'.code && c0 <= 'Z'.code || !mayBeInherited(name);
-		}
-		for (child in node.children) if (!contextFreeRhs(child, container, statics, shape, allowStatics, mayBeInherited)) return false;
-		return true;
+		if (node.kind != identKind && node.kind != shape.stringInterpIdentKind)
+			return node.children.foreach(child -> contextFreeRhs(child, container, statics, shape, allowStatics, mayBeInherited));
+		final name: Null<String> = node.name;
+		final span: Null<Span> = node.span;
+		if (name == null || span == null) return false;
+		if (selfText != null && name == selfText) return false;
+		final bf: Null<Int> = TypeResolver.resolveBindingFrom(name, span, container, shape);
+		// An unresolved ident is the provably-global case (imports/statics) - UNLESS the
+		// container has a supertype clause: an INHERITED member is invisible to the
+		// single-file resolver and indistinguishable from a global, so under `extends` /
+		// `implements` an unresolved lowercase ident fails closed too (type refs like
+		// `Colors.WHITE` keep their uppercase root and stay movable).
+		if (bf != null) return allowStatics && statics.contains(bf);
+		if (!hasSupertypeClause(container, shape)) return true;
+		final c0: Int = StringTools.fastCodeAt(name, 0);
+		// An uppercase root is a TYPE reference (`Colors.WHITE`) — never an inherited member, and
+		// decided without touching the index. A lowercase one asks the index whether any ancestor
+		// could declare it.
+		return c0 >= 'A'.code && c0 <= 'Z'.code || !mayBeInherited(name);
 	}
 
 	/**
@@ -2526,8 +2516,7 @@ final class RefactorSupport {
 	public static function hasSupertypeClause(container: QueryNode, shape: RefShape): Bool {
 		final clauses: Array<String> = shape.supertypeClauseKinds ?? [];
 		if (clauses.length == 0) return false;
-		for (c in container.children) if (clauses.contains(c.kind)) return true;
-		return false;
+		return container.children.exists(c -> clauses.contains(c.kind));
 	}
 
 	/**
@@ -2841,8 +2830,7 @@ final class RefactorSupport {
 	 * as a separator makes a rewrite refuse a shape it handles perfectly.
 	 */
 	public static function isMultiDeclarator(decl: QueryNode, continuationKinds: Array<String>): Bool {
-		for (child in decl.children) if (continuationKinds.contains(child.kind)) return true;
-		return false;
+		return decl.children.exists(child -> continuationKinds.contains(child.kind));
 	}
 
 	/**
@@ -2988,8 +2976,7 @@ final class RefactorSupport {
 
 	/** Is `offset` inside any of `spans` (`from`-inclusive, `to`-exclusive)? */
 	public static function offsetWithinAny(offset: Int, spans: Array<Span>): Bool {
-		for (s in spans) if (offset >= s.from && offset < s.to) return true;
-		return false;
+		return spans.exists(s -> offset >= s.from && offset < s.to);
 	}
 
 	/**
@@ -3171,7 +3158,7 @@ final class RefactorSupport {
 		final regions: Array<LexRegion> = scanLexicalRegions(source);
 		for (occ in classified) switch occ.kind {
 			// A word inside a longer literal binds nothing, whatever the literal interpolates.
-			case CommentTrivia | DirectiveComment | StringWord:
+			case CommentTrivia, DirectiveComment, StringWord:
 			case StringLiteral if (!interpolatingLiteralAt(source, occ.span.from, regions)):
 			case _:
 				if (!isMemberNamePosition(source, occ.span.from)) return true;
@@ -3886,8 +3873,8 @@ final class RefactorSupport {
 	 */
 	private static function offsetWithinComment(offset: Int, regions: Array<LexRegion>): Bool {
 		for (region in regions) if (offset >= region.from && offset < region.to) return switch region.kind {
-			case LineComment | BlockComment: true;
-			case StringLit | RegexLit: false;
+			case LineComment, BlockComment: true;
+			case StringLit, RegexLit: false;
 		};
 		return false;
 	}
@@ -4074,8 +4061,7 @@ final class RefactorSupport {
 		if (span == null) return false;
 		if (span.from == writeFrom) return true;
 		if (!transparent.contains(node.kind)) return false;
-		for (child in node.children) if (reachesThroughOperands(child, writeFrom, transparent)) return true;
-		return false;
+		return node.children.exists(child -> reachesThroughOperands(child, writeFrom, transparent));
 	}
 
 	/** Recursively find the class-like container whose direct field member starts at `fieldFrom`. */
@@ -4470,7 +4456,7 @@ final class RefactorSupport {
 			// A regex body is inert literal text, and no by-name lookup reads one, but nothing needs
 			// the relaxation - the conservative reading stays.
 			case RegexLit: StringLiteral;
-			case LineComment | BlockComment: isNoqaComment(source, region) ? DirectiveComment : CommentTrivia;
+			case LineComment, BlockComment: isNoqaComment(source, region) ? DirectiveComment : CommentTrivia;
 		};
 		return offsetWithinAny(at, condSpans) ? ConditionalRaw : ActiveCode;
 	}
@@ -4701,8 +4687,7 @@ final class RefactorSupport {
 	/** Whether `node`'s subtree carries a string-interpolation hole, which reads surrounding bindings. */
 	private static function containsInterpolation(node: QueryNode, shape: RefShape): Bool {
 		if (node.kind == shape.stringInterpIdentKind || (shape.interpolationKinds ?? []).contains(node.kind)) return true;
-		for (child in node.children) if (containsInterpolation(child, shape)) return true;
-		return false;
+		return node.children.exists(child -> containsInterpolation(child, shape));
 	}
 
 	/**
@@ -4726,8 +4711,7 @@ final class RefactorSupport {
 		final head: String = root.charAt(0);
 		if (head == head.toLowerCase()) return false;
 		segments.push(root);
-		for (segment in segments) if (MemberWriteScan.writtenInRange(source, segment, null, 0, source.length)) return false;
-		return true;
+		return segments.foreach(segment -> !(MemberWriteScan.writtenInRange(source, segment, null, 0, source.length)));
 	}
 
 	/**
@@ -4784,8 +4768,7 @@ final class RefactorSupport {
 			final colon: Int = text.indexOf(':');
 			if (colon < 0) return false;
 			final declared: String = text.substring(colon + 1).trim();
-			for (wrapper in wrappers) if (declared == wrapper || declared.startsWith('$wrapper<')) return true;
-			return false;
+			return wrappers.exists(wrapper -> declared == wrapper || declared.startsWith('$wrapper<'));
 		}
 		return false;
 	}
@@ -4854,8 +4837,7 @@ final class RefactorSupport {
 		// Spans are monotone, so a subtree starting past the boundary holds no match.
 		if (span != null && span.from >= boundary) return false;
 		if (span != null && kinds.contains(node.kind)) return true;
-		for (child in node.children) if (kindStartsBefore(child, kinds, boundary)) return true;
-		return false;
+		return node.children.exists(child -> kindStartsBefore(child, kinds, boundary));
 	}
 
 	/**
@@ -4988,8 +4970,7 @@ final class RefactorSupport {
 	/** Whether `node`'s subtree holds a `#if…#end` region of any projection (`isConditionalKind`). */
 	private static function holdsConditionalRegion(node: QueryNode): Bool {
 		if (isConditionalKind(node.kind)) return true;
-		for (child in node.children) if (holdsConditionalRegion(child)) return true;
-		return false;
+		return node.children.exists(child -> holdsConditionalRegion(child));
 	}
 
 	/**

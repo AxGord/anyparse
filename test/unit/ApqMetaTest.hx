@@ -7,6 +7,7 @@ import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.Meta;
 import anyparse.query.QueryNode;
 import anyparse.query.format.Json;
+import anyparse.runtime.Span;
 
 using Lambda;
 
@@ -103,8 +104,8 @@ class ApqMetaTest extends Test {
 	public function testHitsCarryPositiveSpans(): Void {
 		final hits: Array<MetaHit> = findIn('class X { @:foo var n:Int; }');
 		for (h in hits) {
-			final ms: Null<anyparse.runtime.Span> = h.metaSpan;
-			final ds: Null<anyparse.runtime.Span> = h.declSpan;
+			final ms: Null<Span> = h.metaSpan;
+			final ds: Null<Span> = h.declSpan;
 			Assert.notNull(ms, 'annotation span expected');
 			Assert.notNull(ds, 'decl span expected');
 			if (ms != null) Assert.isTrue(ms.from >= 0 && ms.to >= ms.from, 'meta span well-formed');

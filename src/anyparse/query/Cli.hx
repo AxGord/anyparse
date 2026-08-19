@@ -1,71 +1,72 @@
 package anyparse.query;
 
 import anyparse.check.Check;
-import anyparse.format.comment.CommentInventory;
+import anyparse.check.CompilerServer;
+import anyparse.check.LintConfig;
 import anyparse.check.Linter;
+import anyparse.check.OracleCache;
 import anyparse.check.Severity;
+import anyparse.core.EnvFlag;
+import anyparse.format.comment.CommentInventory;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.AddElement;
+import anyparse.query.AddImport;
+import anyparse.query.AddMember;
+import anyparse.query.AddParam;
+import anyparse.query.Address.AddressIndex;
+import anyparse.query.CallGraph.CallEdge;
+import anyparse.query.CallGraph.EdgeKind;
+import anyparse.query.CallGraph.FnNode;
+import anyparse.query.Cases.CasesHit;
+import anyparse.query.ChangeSig;
+import anyparse.query.Clusters.ClusterReport;
+import anyparse.query.CrossRename;
+import anyparse.query.Diff;
+import anyparse.query.ExtractMethod;
+import anyparse.query.ExtractVar;
 import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
-import anyparse.query.Diff;
-import anyparse.query.Cases.CasesHit;
+import anyparse.query.Inline;
+import anyparse.query.InlineMethod;
 import anyparse.query.Lit.LitHit;
 import anyparse.query.Matcher.Match;
 import anyparse.query.Meta.MetaHit;
-import anyparse.query.Inline;
-import anyparse.query.InlineMethod;
-import anyparse.query.ExtractVar;
-import anyparse.query.ExtractMethod;
-import anyparse.query.AddParam;
-import anyparse.query.ChangeSig;
-import anyparse.query.RemoveParam;
-import anyparse.query.AddMember;
-import anyparse.query.AddImport;
-import anyparse.query.AddElement;
-import anyparse.query.ReplaceNode;
-import anyparse.query.RefactorSupport.EditResult;
-import anyparse.query.CrossRename;
 import anyparse.query.MoveSymbol;
-import anyparse.query.SymbolQuery;
+import anyparse.query.MutationVerdict.MutationVerdictResult;
+import anyparse.query.NewFile.NewFileResult;
+import anyparse.query.NewFile.NewFileSpec;
+import anyparse.query.Pattern.KindEquivalence;
+import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
+import anyparse.query.RemoveParam;
 import anyparse.query.Rename;
+import anyparse.query.ReplaceNode;
+import anyparse.query.ShardPlan.ShardPlacement;
+import anyparse.query.ShardPlan.ShardPlanResult;
+import anyparse.query.StdlibDifferential.DifferentialOutcome;
+import anyparse.query.SymbolQuery;
 import anyparse.query.Uses.UsesHit;
 import anyparse.query.format.Json;
+import anyparse.query.format.LintFormat;
 import anyparse.query.format.Text;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import anyparse.query.NewFile.NewFileSpec;
-import anyparse.query.NewFile.NewFileResult;
-import anyparse.query.format.LintFormat;
-import anyparse.check.LintConfig;
-import anyparse.query.CallGraph.EdgeKind;
-import anyparse.query.CallGraph.FnNode;
-import anyparse.query.CallGraph.CallEdge;
-import anyparse.query.Clusters.ClusterReport;
-import anyparse.check.CompilerServer;
-import anyparse.core.EnvFlag;
-import anyparse.query.Address.AddressIndex;
-import anyparse.query.Pattern.KindEquivalence;
-import anyparse.query.MutationVerdict.MutationVerdictResult;
-import anyparse.check.OracleCache;
-import anyparse.query.ShardPlan.ShardPlanResult;
-import anyparse.query.ShardPlan.ShardPlacement;
-import anyparse.query.StdlibDifferential.DifferentialOutcome;
+import haxe.io.Path;
 import anyparse.query.ExitCode.*;
+import anyparse.check.CompilerDisplayOracle;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
-import anyparse.check.CompilerDisplayOracle;
-import anyparse.query.CachingGrammarPlugin.ResolutionSources;
-import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
-import anyparse.query.format.json.SweepSnapshot;
-import anyparse.query.format.json.SweepSnapshotParser;
-import anyparse.query.format.json.SweepFixture;
+import anyparse.query.CachingGrammarPlugin.ResolutionScope;
+import anyparse.query.CachingGrammarPlugin.ResolutionSources;
 import anyparse.query.LintDiff.LintDiffResult;
 import anyparse.query.format.json.LintFindingJson;
+import anyparse.query.format.json.SweepFixture;
+import anyparse.query.format.json.SweepSnapshot;
+import anyparse.query.format.json.SweepSnapshotParser;
 
 using StringTools;
 using Lambda;
@@ -547,7 +548,7 @@ final class Cli {
 		'--diff',
 		'--stdin',
 		'--spans',
-		'--type-refs',
+		'--type-refs'
 	];
 
 	#if (sys || nodejs)
@@ -1834,7 +1835,7 @@ final class Cli {
 		// for every file, so behaviour there is unchanged.
 		final configByDir: Map<String, LintConfig> = [];
 		function resolveConfig(file: String): LintConfig {
-			final dir: String = haxe.io.Path.directory(file);
+			final dir: String = Path.directory(file);
 			final cached: Null<LintConfig> = configByDir[dir];
 			if (cached != null) return cached;
 			final discovered: LintConfig = LintConfig.discover(file);
@@ -3663,14 +3664,14 @@ final class Cli {
 		final sourceA: String = readSourceForParse(a);
 		final sourceB: String = readSourceForParse(b);
 		final treeA: QueryNode = try plugin.parseFile(sourceA) catch (e: ParseError) {
-			stderr('apq diff: $a: ${e.toString()}\n');
+			stderr('apq diff: $a: $e\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {
 			stderr('apq diff: $a: ${e.message}\n');
 			return EXIT_RUNTIME;
 		}
 		final treeB: QueryNode = try plugin.parseFile(sourceB) catch (e: ParseError) {
-			stderr('apq diff: $b: ${e.toString()}\n');
+			stderr('apq diff: $b: $e\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {
 			stderr('apq diff: $b: ${e.message}\n');
@@ -3930,8 +3931,7 @@ final class Cli {
 	 */
 	private static function compileStripRegexes(tool: String, patterns: Array<String>): Null<Array<EReg>> {
 		final out: Array<EReg> = [];
-		for (idx in 0...patterns.length) {
-			final pat: String = patterns[idx];
+		for (idx => pat in patterns) {
 			try {
 				out.push(new EReg(pat, 'g'));
 			} catch (e: Exception) {
@@ -4067,7 +4067,7 @@ final class Cli {
 		final emitted: Null<String> = try (
 			plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)
 		) catch (e: ParseError) {
-			stderr('apq writer-equals: $inputPathFinal: ${e.toString()}\n');
+			stderr('apq writer-equals: $inputPathFinal: $e\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {
 			stderr('apq writer-equals: $inputPathFinal: ${e.message}\n');
@@ -4503,7 +4503,7 @@ final class Cli {
 				declKind: h.declKind,
 				declName: h.declName,
 				gateKind: extracted.gateKind,
-				predicate: extracted.predicate,
+				predicate: extracted.predicate
 			});
 		}
 		return out;
@@ -4568,7 +4568,7 @@ final class Cli {
 				declKind: first.declKind,
 				declName: first.declName,
 				gateKind: '', // unused for non-trail-opt mechanisms
-				predicate: (label: String),
+				predicate: (label: String)
 			});
 		}
 		return out;
@@ -4877,15 +4877,13 @@ final class Cli {
 	}
 
 	private static function spanInsideAny(span: Span, outer: Array<Span>): Bool {
-		for (o in outer) if (o.from <= span.from && span.to <= o.to) return true;
-		return false;
+		return outer.exists(o -> o.from <= span.from && span.to <= o.to);
 	}
 
 	private static function argMatches(args: Array<String>, sub: Null<String>): Bool {
 		if (sub == null) return true;
 		final needle: String = sub;
-		for (a in args) if (a.indexOf(needle) >= 0) return true;
-		return false;
+		return args.exists(a -> a.indexOf(needle) >= 0);
 	}
 
 	/**
@@ -5118,7 +5116,7 @@ final class Cli {
 		// the same code path the default tree uses, so the dump is directly
 		// comparable with a plain `ast` run of the same file.
 		final tree: QueryNode = try (o.typeRefs ? plugin.parseFileTypeRefs(source) : plugin.parseFile(source)) catch (e: ParseError) {
-			stderr('apq ast: $fileLabel: ${e.toString()}\n');
+			stderr('apq ast: $fileLabel: $e\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {
 			stderr('apq ast: $fileLabel: ${e.message}\n');
@@ -5147,9 +5145,8 @@ final class Cli {
 	 * negative inputs are no-ops.
 	 */
 	private static function shapeAstOutput(node: QueryNode, depth: Int, childrenLimit: Int): QueryNode {
-		var out: QueryNode = depth < 0 ? node : Engine.truncate(node, depth);
-		if (childrenLimit >= 0) out = Engine.truncateChildren(out, childrenLimit);
-		return out;
+		final out: QueryNode = depth < 0 ? node : Engine.truncate(node, depth);
+		return childrenLimit >= 0 ? Engine.truncateChildren(out, childrenLimit) : out;
 	}
 
 	/**
@@ -5378,7 +5375,7 @@ final class Cli {
 		final emitted: Null<String> = try (
 			plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)
 		) catch (e: ParseError) {
-			stderr('apq writer-probe: $label: $file: ${e.toString()}\n');
+			stderr('apq writer-probe: $label: $file: $e\n');
 			return false;
 		} catch (e: Exception) {
 			stderr('apq writer-probe: $label: $file: ${e.message}\n');
@@ -5651,8 +5648,7 @@ final class Cli {
 		if (parts.length != 3) return content;
 		var section: String = parts[sectionIdx];
 		if (section.length > 0 && section.charAt(0) == '\n') section = section.substr(1);
-		if (section.length > 0 && section.charAt(section.length - 1) == '\n') section = section.substr(0, section.length - 1);
-		return section;
+		return section.length > 0 && section.charAt(section.length - 1) == '\n' ? section.substr(0, section.length - 1) : section;
 	}
 
 	/**
@@ -5671,9 +5667,8 @@ final class Cli {
 		final content: String = readFile(path);
 		final parts: Array<String> = content.split('\n---\n');
 		if (parts.length != 3) return null;
-		var section: String = parts[0];
-		if (section.length > 0 && section.charAt(section.length - 1) == '\n') section = section.substr(0, section.length - 1);
-		return section;
+		final section: String = parts[0];
+		return section.length > 0 && section.charAt(section.length - 1) == '\n' ? section.substr(0, section.length - 1) : section;
 	}
 
 	private static function expectValue(args: Array<String>, idx: Int, flag: String): String {
@@ -6781,7 +6776,7 @@ final class Cli {
 		return !singleFile && searchKey != null && source.indexOf(searchKey) < 0
 			? null
 			: try parse(source) catch (exception: ParseError) {
-				if (singleFile) stderr('apq $cmd: $path: ${exception.toString()}\n');
+				if (singleFile) stderr('apq $cmd: $path: $exception\n');
 				skipOut?.push({ path: path, locus: formatParseErrorLocus(exception, source) });
 				null;
 			}
@@ -6996,11 +6991,7 @@ final class Cli {
 	private static function looksLikePath(s: String): Bool {
 		if (s.indexOf('/') >= 0) return true;
 		if (s.endsWith('.hx')) return true;
-		#if (sys || nodejs)
-		return sys.FileSystem.exists(s);
-		#else
-		return false;
-		#end
+		return #if (sys || nodejs) sys.FileSystem.exists(s) #else false #end;
 	}
 
 	/**
@@ -7016,7 +7007,7 @@ final class Cli {
 			case 'Metavar':
 				'${prefix}is a lone metavar — matches every node. Narrow with structural context ('
 					+ 'e.g. "$$x.field", "func($$x)"), or look up by name: apq refs <name> --decls / apq uses <Type>. Searching anyway.';
-			case 'Literal' | 'StringLit' | 'BoolLit' | 'IntLit' | 'FloatLit' | 'SingleStringExpr' | 'DoubleStringExpr' | 'RawString':
+			case 'Literal', 'StringLit', 'BoolLit', 'IntLit', 'FloatLit', 'SingleStringExpr', 'DoubleStringExpr', 'RawString':
 				'${prefix}is a bare literal — for literal-content lookup use: apq lit \'$patternStr\' <files>. Searching anyway.';
 			case _:
 				// Bare identifier (IdentExpr) and anything else that
@@ -7392,7 +7383,7 @@ final class Cli {
 	 * The class name for a new file: its basename without the `.hx` extension.
 	 */
 	private static function newFileClassName(path: String): String {
-		final base: String = haxe.io.Path.withoutDirectory(path);
+		final base: String = Path.withoutDirectory(path);
 		return base.endsWith('.hx') ? base.substr(0, base.length - 3) : base;
 	}
 
@@ -7403,7 +7394,7 @@ final class Cli {
 	 * a root, or outside any root, is package-less (`''`).
 	 */
 	private static function derivePackage(path: String): String {
-		final dir: String = '${haxe.io.Path.directory(FileSystem.absolutePath(path))}/';
+		final dir: String = '${Path.directory(FileSystem.absolutePath(path))}/';
 		for (root in ['/src/', '/test/']) {
 			final at: Int = dir.lastIndexOf(root);
 			if (at < 0) continue;
@@ -7435,7 +7426,7 @@ final class Cli {
 		final dot: Int = iface.lastIndexOf('.');
 		if (dot >= 0) {
 			final simple: String = iface.substr(dot + 1);
-			final dir: String = '${haxe.io.Path.directory(FileSystem.absolutePath(newPath))}/';
+			final dir: String = '${Path.directory(FileSystem.absolutePath(newPath))}/';
 			var srcRoot: Null<String> = null;
 			for (root in ['/src/', '/test/']) {
 				final at: Int = dir.lastIndexOf(root);
@@ -7447,7 +7438,7 @@ final class Cli {
 			final file: String = '${srcRoot + iface.split('.').join('/')}.hx';
 			return !FileSystem.exists(file) ? null : { source: readFile(file), ifaceModule: iface, simple: simple };
 		}
-		final file: String = '${haxe.io.Path.directory(FileSystem.absolutePath(newPath))}/$iface.hx';
+		final file: String = '${Path.directory(FileSystem.absolutePath(newPath))}/$iface.hx';
 		if (!FileSystem.exists(file)) return null;
 		final newPkg: String = derivePackage(newPath);
 		return { source: readFile(file), ifaceModule: newPkg == '' ? iface : '$newPkg.$iface', simple: iface };
@@ -8128,8 +8119,7 @@ final class Cli {
 		// sibling pattern in the same call did match. Use the
 		// global zero case for a stronger error message.
 		var anyZero: Bool = false;
-		for (idx in 0...patterns.length) {
-			final pat: String = patterns[idx];
+		for (idx => pat in patterns) {
 			final total: Int = patternHits[idx];
 			if (total == 0) anyZero = true;
 			sysPrint('  pattern[$idx] "$pat" — $total match${total == 1 ? '' : 'es'}\n');
@@ -8228,7 +8218,7 @@ final class Cli {
 			sysPrint('${prefix}PARSE OK\n');
 			return { changed: changed, status: 0 };
 		} catch (e: ParseError) {
-			sysPrint('${prefix}PARSE FAIL: ${e.toString()}\n');
+			sysPrint('${prefix}PARSE FAIL: $e\n');
 			return { changed: changed, status: 1 };
 		} catch (e: Exception) {
 			sysPrint('${prefix}PARSE FAIL: ${e.message}\n');
@@ -8846,7 +8836,7 @@ final class Cli {
 		final emitted: Null<String> = try (
 			writerOutputPlain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)
 		) catch (e: ParseError) {
-			stderr('apq ast: $fileLabel: ${e.toString()}\n');
+			stderr('apq ast: $fileLabel: $e\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {
 			stderr('apq ast: $fileLabel: ${e.message}\n');
@@ -8863,14 +8853,14 @@ final class Cli {
 		}
 		final emittedSrc: String = emitted;
 		final treeIn: QueryNode = try plugin.parseFile(source) catch (e: ParseError) {
-			stderr('apq ast: --writer-output --diff: input $fileLabel: ${e.toString()}\n');
+			stderr('apq ast: --writer-output --diff: input $fileLabel: $e\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {
 			stderr('apq ast: --writer-output --diff: input $fileLabel: ${e.message}\n');
 			return EXIT_RUNTIME;
 		}
 		final treeOut: QueryNode = try plugin.parseFile(emittedSrc) catch (e: ParseError) {
-			stderr('apq ast: --writer-output --diff: writer output failed to re-parse: ${e.toString()}\n');
+			stderr('apq ast: --writer-output --diff: writer output failed to re-parse: $e\n');
 			stderr('--- writer output ---\n$emittedSrc\n--- end ---\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {
@@ -9462,7 +9452,7 @@ final class Cli {
 			ifaceSimple: ifaceSimple,
 			ifaceModule: ifaceModule,
 			ifaceSource: ifaceSource,
-			bodiesRaw: bodiesRaw,
+			bodiesRaw: bodiesRaw
 		};
 		final res: NewFileResult = NewFile.create(spec, plugin, optsJson);
 		return emitNew(filePath, res.result, res.stubbed, o.write);
@@ -10167,8 +10157,7 @@ final class Cli {
 
 	/** Whether `list` already holds an entry for `name`. */
 	private static function containsFile(list: Array<{ file: String, source: String }>, name: String): Bool {
-		for (e in list) if (e.file == name) return true;
-		return false;
+		return list.exists(e -> e.file == name);
 	}
 
 	/**
@@ -10312,7 +10301,7 @@ final class Cli {
 			declKind: first.declKind,
 			declName: first.declName,
 			lead: leadStr,
-			trail: trailStr,
+			trail: trailStr
 		};
 	}
 
@@ -12370,7 +12359,7 @@ final class Cli {
 		final dir: String = slash < 0 ? '' : srcFileNN.substring(0, slash + 1);
 		final ifaceFile: String = out ?? '$dir$ifaceNameNN.hx';
 
-		final source: String = try readFile(srcFileNN) catch (exception: haxe.Exception) {
+		final source: String = try readFile(srcFileNN) catch (exception: Exception) {
 			stderr('apq extract-interface: $srcFileNN: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
@@ -12547,7 +12536,7 @@ final class Cli {
 		final dir: String = slash < 0 ? '' : srcFileNN.substring(0, slash + 1);
 		final superFile: String = out ?? '$dir$superNameNN.hx';
 
-		final source: String = try readFile(srcFileNN) catch (exception: haxe.Exception) {
+		final source: String = try readFile(srcFileNN) catch (exception: Exception) {
 			stderr('apq extract-superclass: $srcFileNN: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
@@ -12716,7 +12705,7 @@ final class Cli {
 		final filePath: String = file;
 		final fieldNameNN: String = fieldName;
 		final typeNameNN: String = typeName ?? RefactorSupport.baseNameOf(filePath);
-		final source: String = try readFile(filePath) catch (exception: haxe.Exception) {
+		final source: String = try readFile(filePath) catch (exception: Exception) {
 			stderr('apq encapsulate-field: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
@@ -12803,7 +12792,7 @@ final class Cli {
 		final scopeFiles: Null<Array<{ file: String, source: String }>> = scopeDir == null ? [
 			{
 				file: filePath,
-				source: try readFile(filePath) catch (exception: haxe.Exception) {
+				source: try readFile(filePath) catch (exception: Exception) {
 					stderr('apq make-final: $filePath: ${exception.message}\n');
 					return EXIT_RUNTIME;
 				}
@@ -12900,7 +12889,7 @@ final class Cli {
 		final filePath: String = file;
 		final paramsNN: String = params;
 		final typeNameNN: String = typeName;
-		final source: String = try readFile(filePath) catch (exception: haxe.Exception) {
+		final source: String = try readFile(filePath) catch (exception: Exception) {
 			stderr('apq introduce-parameter-object: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
@@ -13624,7 +13613,7 @@ final class Cli {
 
 	/** Whether any error line's leading `path:` token equals `full`, IS its basename, or ends with `/<basename>`. */
 	private static function errorMentionsFile(errors: String, full: String): Bool {
-		final base: String = haxe.io.Path.withoutDirectory(full);
+		final base: String = Path.withoutDirectory(full);
 		for (line in errors.split('\n')) {
 			final colon: Int = line.indexOf(':');
 			if (colon <= 0) continue;
@@ -13877,8 +13866,7 @@ final class Cli {
 	private static function looksLikeTinkTranscript(lines: Array<String>): Bool {
 		final assertRe: EReg = ~/^\s*-\s*\[(OK|FAIL)\]\s*\[[^\]]+\]/;
 		final summaryRe: EReg = ~/^\d+\s+Assertions?\s+\d+\s+Success\s+\d+\s+Failures?\s+\d+\s+Errors?\s*$/;
-		for (line in lines) if (assertRe.match(line) || summaryRe.match(line)) return true;
-		return false;
+		return lines.exists(line -> assertRe.match(line) || summaryRe.match(line));
 	}
 
 	/**
@@ -14829,7 +14817,7 @@ final class Cli {
 		final emittedRaw: Null<String> = try (
 			plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)
 		) catch (e: ParseError) {
-			sysPrint('WRITER FAIL :: ${e.toString()}\n');
+			sysPrint('WRITER FAIL :: $e\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {
 			sysPrint('WRITER FAIL :: ${e.message}\n');
@@ -14902,8 +14890,7 @@ final class Cli {
 			}
 		}
 		// Per-pattern totals — same typo guard contract as sweep mode.
-		for (idx in 0...patterns.length) {
-			final pat: String = patterns[idx];
+		for (idx => pat in patterns) {
 			final total: Int = patternHits[idx];
 			sysPrint('  pattern[$idx] "$pat" — $total match${total == 1 ? '' : 'es'}\n');
 		}
@@ -15016,7 +15003,7 @@ final class Cli {
 						source: source,
 						skipLine: 'SKIP $relPath :: ${pos.line}:${pos.col} expected="$exp" :: src="$snip"',
 						line: pos.line,
-						col: pos.col,
+						col: pos.col
 					});
 				} catch (exception: Exception) {
 					final relPath: String = stripRootPrefix(path, root);
@@ -15028,7 +15015,7 @@ final class Cli {
 						source: source,
 						skipLine: 'SKIP $relPath :: $key',
 						line: 0,
-						col: 0,
+						col: 0
 					});
 				}
 			}
@@ -15260,8 +15247,7 @@ final class Cli {
 		final scope: String = clusterFilter == null ? 'whole sweep' : 'cluster "$clusterFilter"';
 		sysPrint('--- predict-strip ($scope): ${records.length} skip-parse file${plural(records.length)}; ');
 		sysPrint('$unblockCount would unblock, $stillFailCount still fail, $noMatchCount unchanged ---\n');
-		for (idx in 0...patterns.length) {
-			final pat: String = patterns[idx];
+		for (idx => pat in patterns) {
 			final total: Int = patternHits[idx];
 			sysPrint('  pattern[$idx] "$pat" — $total match${total == 1 ? '' : 'es'}\n');
 		}
@@ -15835,7 +15821,7 @@ final class Cli {
 					skipParse: skipParse,
 					skipWrite: snapshot.skipWrite ?? 0,
 					skipConfig: snapshot.skipConfig ?? 0,
-					skipMalformed: snapshot.skipMalformed ?? 0,
+					skipMalformed: snapshot.skipMalformed ?? 0
 				};
 			} catch (_: Exception) null;
 	}

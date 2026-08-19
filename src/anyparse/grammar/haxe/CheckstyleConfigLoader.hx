@@ -5,12 +5,11 @@ import anyparse.grammar.haxe.checkstyle.CheckstyleCheckProps;
 import anyparse.grammar.haxe.checkstyle.CheckstyleConfig;
 import anyparse.grammar.haxe.checkstyle.CheckstyleConfigParser;
 import anyparse.grammar.haxe.checkstyle.CheckstyleThreshold;
+import anyparse.query.GrammarPlugin.CheckOverrides;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingPolicy;
 
 using Lambda;
-
-import anyparse.query.GrammarPlugin.CheckOverrides;
 
 /**
  * Adapts an existing haxe-checkstyle `checkstyle.json` onto the neutral

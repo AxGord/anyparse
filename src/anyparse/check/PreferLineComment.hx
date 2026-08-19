@@ -9,6 +9,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -248,8 +249,7 @@ final class PreferLineComment implements Check implements DefaultOff {
 	private static function startsNodeOfKind(node: QueryNode, offset: Int, kinds: Array<String>): Bool {
 		final span: Null<Span> = node.span;
 		if (span != null && span.from == offset && kinds.contains(node.kind)) return true;
-		for (child in node.children) if (startsNodeOfKind(child, offset, kinds)) return true;
-		return false;
+		return node.children.exists(child -> startsNodeOfKind(child, offset, kinds));
 	}
 
 	/** The offset the comment body starts at — past `/*` and any further stars of a `/***` open. */

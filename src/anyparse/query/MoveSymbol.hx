@@ -392,7 +392,7 @@ final class MoveSymbol {
 		final edits: Array<{ span: Span, text: String }> = [];
 
 		if (carried.length > 0) {
-			final importLines: String = carried.map(imp -> importLineFor(imp)).join('\n');
+			final importLines: String = carried.map(importLineFor).join('\n');
 			final anchor: ImportAnchor = importAnchor(destSource, plugin);
 			// Insert as its own line(s) after the anchor.
 			edits.push({ span: new Span(anchor.offset, anchor.offset), text: '${anchor.lead}$importLines\n' });
@@ -536,7 +536,7 @@ final class MoveSymbol {
 		// 2. Resolve the type declaration the cursor sits on. `fullSpan` is the
 		//    FULL decl span — for a `final class` the OUTER `FinalDecl` span.
 		final cursorTree: QueryNode = try plugin.parseFile(cursorSource) catch (exception: ParseError) return PErr(
-			'$cursorFile does not parse: ${exception.toString()}'
+			'$cursorFile does not parse: $exception'
 		)
 		catch (exception: Exception) return PErr('$cursorFile does not parse: ${exception.message}');
 		final cursor: Int = Span.offsetOf(cursorSource, line, col);
@@ -641,7 +641,7 @@ final class MoveSymbol {
 			try
 				plugin.parseFile(newSource)
 			catch (exception: ParseError)
-				return Err('rewritten $file does not parse: ${exception.toString()}')
+				return Err('rewritten $file does not parse: $exception')
 			catch (exception: Exception)
 				return Err('rewritten $file does not parse: ${exception.message}');
 

@@ -7,6 +7,7 @@ import anyparse.format.WriteOptions;
 import anyparse.format.text.TextFormat.BlockCommentDelims;
 import anyparse.format.text.TextFormat.BoolLiterals;
 import anyparse.format.text.TextFormat.UnescapeResult;
+import haxe.Exception;
 
 using StringTools;
 
@@ -84,7 +85,7 @@ final class SExprFormat implements TextFormat {
 		methodChainCuddledLinks: false,
 		addLineCommentSpace: true,
 		normalizeLineCommentIndent: false,
-		compressSuccessiveParenthesis: true,
+		compressSuccessiveParenthesis: true
 	};
 
 	private function new() {}
@@ -106,7 +107,7 @@ final class SExprFormat implements TextFormat {
 
 	public function unescapeChar(input: String, pos: Int): UnescapeResult {
 		final esc: Null<Int> = input.charCodeAt(pos);
-		if (esc == null) throw new haxe.Exception('unterminated escape at $pos');
+		if (esc == null) throw new Exception('unterminated escape at $pos');
 		return switch esc {
 			case '"'.code: { char: '"'.code, consumed: 1 };
 			case '\\'.code: { char: '\\'.code, consumed: 1 };
@@ -114,7 +115,7 @@ final class SExprFormat implements TextFormat {
 			case 'r'.code: { char: '\r'.code, consumed: 1 };
 			case 't'.code: { char: '\t'.code, consumed: 1 };
 			case _:
-				throw new haxe.Exception('invalid escape: \\${String.fromCharCode(esc)}');
+				throw new Exception('invalid escape: \\${String.fromCharCode(esc)}');
 		};
 	}
 

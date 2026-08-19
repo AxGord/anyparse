@@ -96,14 +96,14 @@ class D {
 			case Text(_): d;
 			case Line(flat): flat == '\n' ? Empty : Text(flat);
 			case Nest(_, inner): flatten(inner);
-			case Group(inner) | GroupWithRestProbe(inner): flatten(inner);
+			case Group(inner), GroupWithRestProbe(inner): flatten(inner);
 			case BodyGroup(inner): flatten(inner);
 			case Concat(items): Concat([for (i in items) flatten(i)]);
-			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
+			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
 				final flatSep: Doc = flatten(sep);
 				Concat(intersperse([for (i in items) flatten(i)], flatSep));
 			case OptSpace(s): Text(s);
-			case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline: Empty;
+			case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline: Empty;
 			case OptSpaceSkipAfterHardline:
 				Text(' ');
 			// ω-force-flat-engine slice A: all four markers collapse —
@@ -111,9 +111,8 @@ class D {
 			// a nested `Flatten`/`HardFlatten`/`CollapseProbe` is idempotent
 			// and a nested `WrapBoundary` is moot (we commit to flat at the
 			// structural level).
-			case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(
-				inner
-			) | CollapseChainProbe(inner):
+			case Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
+				CollapseBoolProbe(inner), CollapseChainProbe(inner):
 				flatten(inner);
 			// ω-cond-indent-policy FixedZero: render-time marker, structurally
 			// transparent to the flatten transform — descend `inner`. The
@@ -126,11 +125,10 @@ class D {
 			// `inner`. The uniform -1 re-indent is render-only and moot under a
 			// forced-flat collapse.
 			case ConditionalMarkerDecrease(inner): flatten(inner);
-			case IfBreak(_, _) | IfWidthExceeds(_, _, _) | IfFirstLineExceeds(_, _, _) | IfLineExceeds(_, _, _) | IfResidualLineExceeds(
-				_, _, _
-			) | IfFullLineExceeds(_, _, _) | IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineExceedsWithRest(_, _, _) | IfNaturalFirstLineFitsOpenDelim(
-				_, _, _
-			) | IfArrowContinuationFits(_, _, _, _, _) | IfIndentWidthExceeds(_, _, _, _) | IfGluedFirstLineExceeds(_, _, _, _):
+			case IfBreak(_, _), IfWidthExceeds(_, _, _), IfFirstLineExceeds(_, _, _), IfLineExceeds(_, _, _),
+				IfResidualLineExceeds(_, _, _), IfFullLineExceeds(_, _, _), IfNaturalFirstLineExceeds(_, _, _),
+				IfNaturalFirstLineExceedsWithRest(_, _, _), IfNaturalFirstLineFitsOpenDelim(_, _, _),
+				IfArrowContinuationFits(_, _, _, _, _), IfIndentWidthExceeds(_, _, _, _), IfGluedFirstLineExceeds(_, _, _, _):
 				// Handled above by `flattenConditional`; unreachable here, kept
 				// only for switch exhaustiveness.
 				Empty;
@@ -151,9 +149,9 @@ class D {
 			case IfLineExceeds(_, _, fl): flatten(fl);
 			case IfResidualLineExceeds(_, _, fl): flatten(fl);
 			case IfFullLineExceeds(_, _, fl): flatten(fl);
-			case IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineExceedsWithRest(_, _, fl): flatten(fl);
+			case IfNaturalFirstLineExceeds(_, _, fl), IfNaturalFirstLineExceedsWithRest(_, _, fl): flatten(fl);
 			case IfNaturalFirstLineFitsOpenDelim(_, _, fl): flatten(fl);
-			case IfArrowContinuationFits(_, _, _, _, fl) | IfIndentWidthExceeds(_, _, _, fl) | IfGluedFirstLineExceeds(_, _, _, fl): flatten(
+			case IfArrowContinuationFits(_, _, _, _, fl), IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl): flatten(
 				fl
 			);
 			case _: null;

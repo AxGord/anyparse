@@ -45,9 +45,7 @@ final class Patch {
 		?optsJson: String, all: Bool = false
 	): EditResult {
 		if (pairs.length == 0) return Err('no fragment pairs given');
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
-			'source does not parse: ${exception.toString()}'
-		)
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		final node: QueryNode = switch ReplaceNode.resolveTarget(source, tree, target, plugin) {

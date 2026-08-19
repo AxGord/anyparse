@@ -15,6 +15,8 @@ import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using Lambda;
+
 /**
  * Flags `while (x.indexOf(S) != -1) x = x.replace(S, B);` — a search-and-replace
  * loop that is redundant BY CONSTRUCTION: `StringTools.replace` already replaces
@@ -482,8 +484,7 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 	 * own. Deliberately the WIDEST reading, the opposite direction from `dominatingGuards`.
 	 */
 	private static function isParameterOfAny(fns: Array<QueryNode>, bindingFrom: Int, s: Seams): Bool {
-		for (fn in fns) if (isParameterOf(fn, bindingFrom, s)) return true;
-		return false;
+		return fns.exists(fn -> isParameterOf(fn, bindingFrom, s));
 	}
 
 	/** Whether the binding at `bindingFrom` is one of `fn`'s own parameter declarations (`Seams.paramKinds`). */

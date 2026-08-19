@@ -2,13 +2,13 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan.NegationSeams;
+import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import anyparse.query.BooleanLogic.BooleanLogicSupport;
 
 using Lambda;
 
@@ -376,8 +376,7 @@ final class GuardContinue implements Check {
 		final h: Null<HoistSeams> = s.hoist;
 		if (h == null) return true;
 		if ((node.kind == h.identKind || node.kind == h.interpIdentKind) && node.name == name) return true;
-		for (c in node.children) if (mentionsName(c, name, s)) return true;
-		return false;
+		return node.children.exists(c -> mentionsName(c, name, s));
 	}
 
 	/**
@@ -499,8 +498,7 @@ final class GuardContinue implements Check {
 	 */
 	private static function namedAnywhere(node: QueryNode, name: String): Bool {
 		if (node.name == name) return true;
-		for (c in node.children) if (namedAnywhere(c, name)) return true;
-		return false;
+		return node.children.exists(c -> namedAnywhere(c, name));
 	}
 
 	/**
@@ -512,17 +510,14 @@ final class GuardContinue implements Check {
 	private static function bindsName(node: QueryNode, name: String, s: Seams, ?except: QueryNode): Bool {
 		final binds: Bool = s.localDeclKinds.contains(node.kind) || s.localDeclExprKinds.contains(node.kind) || isLoop(node, s);
 		if (binds && node.name == name && node != except) return true;
-		for (c in node.children) if (bindsName(c, name, s, except)) return true;
-		return false;
+		return node.children.exists(c -> bindsName(c, name, s, except));
 	}
 
 	/** Whether a nested function / lambda subtree inside `node` mentions `name` — that inner scope may own it. */
 	private static function nestedScopeMentions(node: QueryNode, name: String, s: Seams): Bool {
 		final h: Null<HoistSeams> = s.hoist;
 		if (h == null) return true;
-		for (c in node.children) if (h.nestedScopeKinds.contains(c.kind) ? mentionsName(c, name, s) : nestedScopeMentions(c, name, s))
-			return true;
-		return false;
+		return node.children.exists(c -> h.nestedScopeKinds.contains(c.kind) ? mentionsName(c, name, s) : nestedScopeMentions(c, name, s));
 	}
 
 	/**

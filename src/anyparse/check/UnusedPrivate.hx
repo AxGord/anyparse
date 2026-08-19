@@ -7,12 +7,13 @@ import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.StringFold.StringFoldSupport;
+import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndexHost;
 import anyparse.runtime.Span;
-import anyparse.query.StringFold.StringFoldSupport;
-import anyparse.query.StringFold.StringLiteral;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -387,8 +388,7 @@ final class UnusedPrivate implements Check {
 	 * children (`(ClassForm C (ExtendsClause …) …)`).
 	 */
 	private static function classDeclaresExtends(node: QueryNode): Bool {
-		for (child in node.children) if (child.kind == 'ExtendsClause') return true;
-		return false;
+		return node.children.exists(child -> child.kind == 'ExtendsClause');
 	}
 
 	/**
@@ -484,8 +484,7 @@ final class UnusedPrivate implements Check {
 
 	/** Whether `name` occurs as a word inside any collected string-literal content (a possible reflection target). */
 	private static function mentionedInStrings(name: String, contents: Array<String>): Bool {
-		for (c in contents) if (RefactorSupport.referencedInRange(c, name, 0, c.length, [])) return true;
-		return false;
+		return contents.exists(c -> RefactorSupport.referencedInRange(c, name, 0, c.length, []));
 	}
 
 	/**
@@ -579,14 +578,12 @@ final class UnusedPrivate implements Check {
 
 	/** Whether the class carries at least one `static` member (the utility-class shape). */
 	private static function hasStaticMember(classNode: QueryNode): Bool {
-		for (child in classNode.children) if (child.kind == 'Static') return true;
-		return false;
+		return classNode.children.exists(child -> child.kind == 'Static');
 	}
 
 	/** Whether `className` is instantiated (`new ClassName`) anywhere in the file set. */
 	private static function isInstantiatedAnywhere(className: String, files: Array<{ file: String, source: String }>): Bool {
-		for (entry in files) if (containsInstantiation(entry.source, className)) return true;
-		return false;
+		return files.exists(entry -> containsInstantiation(entry.source, className));
 	}
 
 	/**

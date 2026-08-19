@@ -1,9 +1,9 @@
 package anyparse.macro;
 
 #if macro
+import anyparse.core.ShapeTree;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import anyparse.core.ShapeTree;
 
 using anyparse.macro.MetaInspect;
 
@@ -79,7 +79,7 @@ class BinaryWriterLowering {
 
 			final fieldAccess: Expr = {
 				expr: EField(macro value, fieldName),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			};
 
 			// @:length — write length-prefix bytes before the lead/field.
@@ -198,7 +198,7 @@ class BinaryWriterLowering {
 		final elemFn: String = 'write${simpleName(elemRefName)}';
 		final elemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _arr[_i], macro output]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		steps.push(macro {
 			final _arr = $fieldAccess;

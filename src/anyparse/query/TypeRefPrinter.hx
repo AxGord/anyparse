@@ -633,7 +633,7 @@ final class TypeRefPrinter {
 				case 'ImportDecl':
 					if (RefactorSupport.lastSegment(raw) == simple && raw != canonical) return true;
 				// The grammar's name slot for an alias declaration IS the alias, never the aliased path.
-				case 'ImportAliasDecl' | 'ImportAliasInDecl':
+				case 'ImportAliasDecl', 'ImportAliasInDecl':
 					if (raw == simple && (span == null || ModuleScan.aliasTargetOf(source.substring(span.from, span.to)) != canonical))
 						return true;
 				case _:

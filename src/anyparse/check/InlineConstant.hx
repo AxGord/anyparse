@@ -10,6 +10,7 @@ import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -549,8 +550,7 @@ final class InlineConstant implements Check {
 			'#elseif (macro',
 			'macro function'
 		];
-		for (signal in signals) if (source.indexOf(signal) >= 0) return true;
-		return false;
+		return signals.exists(signal -> source.indexOf(signal) >= 0);
 	}
 
 	/** Append every capitalised identifier token (a type / module name) in `source` to `out`, de-duplicated. */

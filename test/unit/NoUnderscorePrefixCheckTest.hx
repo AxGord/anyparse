@@ -9,6 +9,8 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import sys.FileSystem;
+import sys.io.File;
 import utest.Assert;
 import utest.Test;
 
@@ -672,17 +674,17 @@ class NoUnderscorePrefixCheckTest extends Test {
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
 		final base: String = tmp != null && tmp.length > 0 ? tmp : '/tmp';
 		final dir: String = '$base/anyparse_nup_cfg_${Sys.time()}';
-		sys.FileSystem.createDirectory(dir);
-		sys.io.File.saveContent('$dir/checkstyle.json', checkstyle);
+		FileSystem.createDirectory(dir);
+		File.saveContent('$dir/checkstyle.json', checkstyle);
 		final path: String = '$dir/C.hx';
-		sys.io.File.saveContent(path, src);
+		File.saveContent(path, src);
 		final files: Array<{ file: String, source: String }> = [{ file: path, source: src }];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: NoUnderscorePrefix = new NoUnderscorePrefix();
 		final out: Array<{ span: Span, text: String }> = check.fix(src, check.run(files, plugin), plugin, SymbolIndex.build(files, plugin));
-		sys.FileSystem.deleteFile(path);
-		sys.FileSystem.deleteFile('$dir/checkstyle.json');
-		sys.FileSystem.deleteDirectory(dir);
+		FileSystem.deleteFile(path);
+		FileSystem.deleteFile('$dir/checkstyle.json');
+		FileSystem.deleteDirectory(dir);
 		return out;
 	}
 

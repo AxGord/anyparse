@@ -12,6 +12,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -373,8 +374,7 @@ final class WhileTrueCondition implements Check implements DefaultOff {
 
 	/** Whether `[from, to)` sits inside one of `spans`. */
 	private static function containedIn(from: Int, to: Int, spans: Array<Span>): Bool {
-		for (span in spans) if (from >= span.from && to <= span.to) return true;
-		return false;
+		return spans.exists(span -> from >= span.from && to <= span.to);
 	}
 
 	/** Whether `node` is the boolean literal `true` — the only header an always-true loop can be written with. */

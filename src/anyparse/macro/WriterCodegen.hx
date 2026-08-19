@@ -186,11 +186,11 @@ class WriterCodegen {
 		final fmtParts: Array<String> = formatInfo.schemaTypePath.split('.');
 		final defaultOptsExpr: Expr = {
 			expr: EField(macro $p{fmtParts}.instance, 'defaultWriteOptions'),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final writeCall: Expr = {
 			expr: ECall(macro $i{rootFn}, [macro value, macro _opt]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final body: Expr = macro {
 			final _opt: $optionsCT = options ?? $defaultOptsExpr;
@@ -206,12 +206,12 @@ class WriterCodegen {
 			kind: FFun({
 				args: [
 					{ name: 'value', type: rootReturnCT },
-					{ name: 'options', type: macro :Null<$optionsCT>, value: macro null },
+					{ name: 'options', type: macro :Null<$optionsCT>, value: macro null }
 				],
 				ret: macro :String,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -230,11 +230,11 @@ class WriterCodegen {
 		final fmtParts: Array<String> = formatInfo.schemaTypePath.split('.');
 		final defaultOptsExpr: Expr = {
 			expr: EField(macro $p{fmtParts}.instance, 'defaultWriteOptions'),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final writeCall: Expr = {
 			expr: ECall(macro $i{rootFn}, [macro value, macro _opt]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final body: Expr = macro {
 			final _opt: $optionsCT = options ?? $defaultOptsExpr;
@@ -246,12 +246,12 @@ class WriterCodegen {
 			kind: FFun({
 				args: [
 					{ name: 'value', type: rootReturnCT },
-					{ name: 'options', type: macro :Null<$optionsCT>, value: macro null },
+					{ name: 'options', type: macro :Null<$optionsCT>, value: macro null }
 				],
 				ret: macro :anyparse.core.Doc,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -347,7 +347,7 @@ class WriterCodegen {
 		final rootFn: String = 'write${simpleName(rootTypePath)}';
 		final writeCall: Expr = {
 			expr: ECall(macro $i{rootFn}, [macro value, macro output]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final body: Expr = macro {
 			final output: haxe.io.BytesOutput = new haxe.io.BytesOutput();
@@ -360,9 +360,9 @@ class WriterCodegen {
 			kind: FFun({
 				args: [{ name: 'value', type: rootReturnCT }],
 				ret: macro :haxe.io.Bytes,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -373,12 +373,12 @@ class WriterCodegen {
 			kind: FFun({
 				args: [
 					{ name: 'value', type: rule.valueCT },
-					{ name: 'output', type: macro :haxe.io.BytesOutput },
+					{ name: 'output', type: macro :haxe.io.BytesOutput }
 				],
 				ret: macro :Void,
-				expr: rule.body,
+				expr: rule.body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -387,7 +387,7 @@ class WriterCodegen {
 	private static function ruleField(rule: WriterLowering.WriterRule, optionsCT: ComplexType): Field {
 		final args: Array<FunctionArg> = [
 			{ name: 'value', type: rule.valueCT },
-			{ name: 'opt', type: optionsCT },
+			{ name: 'opt', type: optionsCT }
 		];
 		if (rule.hasCtxPrec) args.push({ name: 'ctxPrec', type: macro :Int, value: macro -1 });
 		return {
@@ -396,9 +396,9 @@ class WriterCodegen {
 			kind: FFun({
 				args: args,
 				ret: macro :anyparse.core.Doc,
-				expr: rule.body,
+				expr: rule.body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -553,7 +553,7 @@ class WriterCodegen {
 			// `opt.conditionalPolicy == AlignedDecrease`. Structurally transparent.
 			docHelper(
 				'_dcmd', [{ name: 'inner', type: macro :anyparse.core.Doc }], macro anyparse.core.Doc.ConditionalMarkerDecrease(inner)
-			),
+			)
 		];
 	}
 
@@ -562,7 +562,7 @@ class WriterCodegen {
 			name: name,
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({ args: args, ret: macro :anyparse.core.Doc, expr: macro return $body }),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -620,7 +620,7 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			meta: fallback ? [{ name: ':nullSafety', params: [macro Off], pos: pos }] : [],
 			kind: FFun({ args: [{ name: 'o', type: optionsCT }], ret: optionsCT, expr: body }),
-			pos: pos,
+			pos: pos
 		};
 	}
 
@@ -673,9 +673,9 @@ class WriterCodegen {
 			kind: FFun({
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -719,9 +719,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._caseSiblingFlatWidth = w;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -737,9 +737,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inValueIfBranch = true;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -768,9 +768,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inValueIfBranch = false;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -812,9 +812,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._arrowValueIfElemTrailComment = true;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -830,9 +830,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._arrowValueIfBlocked = true;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -848,9 +848,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inArrowLambdaBody = true;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -866,9 +866,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inArrowLambdaBody = false;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -897,9 +897,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inExprPosition = false;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -923,9 +923,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inElseIfBranch = true;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -949,9 +949,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inElseIfBranch = false;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -978,9 +978,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inAnonFnBody = true;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1009,9 +1009,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inAnonFnBody = false;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1039,9 +1039,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inTypedefBody = true;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1070,9 +1070,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inTypedefBody = false;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1099,9 +1099,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._intersectionOperandBreak = true;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1128,9 +1128,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inFieldLevelVar = true;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1157,9 +1157,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inFieldLevelVar = false;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1187,9 +1187,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._callArgChainNest = true;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1217,9 +1217,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._callArgChainNest = false;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1240,7 +1240,7 @@ class WriterCodegen {
 				args: [
 					{ name: 'o', type: optionsCT },
 					{ name: 'v', type: macro :Bool },
-					chainBaseArg(optionsCT),
+					chainBaseArg(optionsCT)
 				],
 				ret: optionsCT,
 				expr: macro {
@@ -1248,9 +1248,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._parenInCondition = v;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1270,7 +1270,7 @@ class WriterCodegen {
 				args: [
 					{ name: 'o', type: optionsCT },
 					{ name: 'v', type: macro :Bool },
-					chainBaseArg(optionsCT),
+					chainBaseArg(optionsCT)
 				],
 				ret: optionsCT,
 				expr: macro {
@@ -1278,9 +1278,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inTernaryCond = v;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1302,7 +1302,7 @@ class WriterCodegen {
 				args: [
 					{ name: 'o', type: optionsCT },
 					{ name: 'v', type: macro :Bool },
-					chainBaseArg(optionsCT),
+					chainBaseArg(optionsCT)
 				],
 				ret: optionsCT,
 				expr: macro {
@@ -1310,9 +1310,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._suppressCallRestProbe = v;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1336,9 +1336,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._suppressComplexItems = true;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1362,9 +1362,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._parenInCondition = false;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1385,7 +1385,7 @@ class WriterCodegen {
 				args: [
 					{ name: 'o', type: optionsCT },
 					{ name: 'v', type: macro :Bool },
-					chainBaseArg(optionsCT),
+					chainBaseArg(optionsCT)
 				],
 				ret: optionsCT,
 				expr: macro {
@@ -1393,9 +1393,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._varKwNewline = v;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1419,9 +1419,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._varKwNewline = false;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1442,7 +1442,7 @@ class WriterCodegen {
 				args: [
 					{ name: 'o', type: optionsCT },
 					{ name: 'v', type: macro :Bool },
-					chainBaseArg(optionsCT),
+					chainBaseArg(optionsCT)
 				],
 				ret: optionsCT,
 				expr: macro {
@@ -1450,9 +1450,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._keepFlatInner = v;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1474,9 +1474,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._keepFlatInner = false;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1494,7 +1494,7 @@ class WriterCodegen {
 				args: [
 					{ name: 'o', type: optionsCT },
 					{ name: 'v', type: macro :Bool },
-					chainBaseArg(optionsCT),
+					chainBaseArg(optionsCT)
 				],
 				ret: optionsCT,
 				expr: macro {
@@ -1502,9 +1502,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._keepChainInParen = v;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1525,9 +1525,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._keepChainInParen = false;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1552,9 +1552,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._suppressMore = true;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1578,9 +1578,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._suppressMore = false;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1609,7 +1609,7 @@ class WriterCodegen {
 				args: [
 					{ name: 'o', type: optionsCT },
 					{ name: 'mode', type: macro :Null<anyparse.format.wrap.WrapMode> },
-					chainBaseArg(optionsCT),
+					chainBaseArg(optionsCT)
 				],
 				ret: optionsCT,
 				expr: macro {
@@ -1636,9 +1636,9 @@ class WriterCodegen {
 					_c.opBoolChainWrap = { rules: [], defaultMode: _mode, defaultLocation: _boolLoc };
 					_c.opAddSubChainWrap = { rules: [], defaultMode: _mode, defaultLocation: _addSubLoc };
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1667,9 +1667,9 @@ class WriterCodegen {
 						if (_loc != null) return _loc;
 					}
 					return anyparse.format.wrap.WrappingLocation.BeforeLast;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1697,12 +1697,12 @@ class WriterCodegen {
 					{ name: 'open', type: macro :String },
 					{ name: 'close', type: macro :String },
 					{ name: 'docs', type: macro :Array<anyparse.core.Doc> },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
 				],
 				ret: macro :anyparse.core.Doc,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1777,12 +1777,12 @@ class WriterCodegen {
 					{ name: 'openInside', type: macro :anyparse.core.Doc },
 					{ name: 'closeInside', type: macro :anyparse.core.Doc },
 					{ name: 'keepInnerWhenEmpty', type: macro :Bool },
-					{ name: 'cuddleHead', type: macro :Bool },
+					{ name: 'cuddleHead', type: macro :Bool }
 				],
 				ret: macro :anyparse.core.Doc,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1837,12 +1837,12 @@ class WriterCodegen {
 					{ name: 'openInside', type: macro :anyparse.core.Doc },
 					{ name: 'closeInside', type: macro :anyparse.core.Doc },
 					{ name: 'keepInnerWhenEmpty', type: macro :Bool },
-					{ name: 'doubleIndent', type: macro :Bool },
+					{ name: 'doubleIndent', type: macro :Bool }
 				],
 				ret: macro :anyparse.core.Doc,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1860,9 +1860,9 @@ class WriterCodegen {
 			kind: FFun({
 				args: [{ name: 'value', type: macro :Float }],
 				ret: macro :String,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1896,12 +1896,12 @@ class WriterCodegen {
 			kind: FFun({
 				args: [
 					{ name: 'content', type: macro :String },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
 				],
 				ret: macro :anyparse.core.Doc,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1927,12 +1927,12 @@ class WriterCodegen {
 				args: [
 					{ name: 'run', type: macro :Array<String> },
 					{ name: 'index', type: macro :Int },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
 				],
 				ret: macro :String,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1959,12 +1959,12 @@ class WriterCodegen {
 				args: [
 					{ name: 'run', type: macro :Array<String> },
 					{ name: 'index', type: macro :Int },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
 				],
 				ret: macro :anyparse.core.Doc,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1988,12 +1988,12 @@ class WriterCodegen {
 			kind: FFun({
 				args: [
 					{ name: 'content', type: macro :String },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
 				],
 				ret: macro :anyparse.core.Doc,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -2022,12 +2022,12 @@ class WriterCodegen {
 			kind: FFun({
 				args: [
 					{ name: 'content', type: macro :String },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
 				],
 				ret: macro :anyparse.core.Doc,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -2060,12 +2060,12 @@ class WriterCodegen {
 			kind: FFun({
 				args: [
 					{ name: 'content', type: macro :String },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
 				],
 				ret: macro :anyparse.core.Doc,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -2101,12 +2101,12 @@ class WriterCodegen {
 			kind: FFun({
 				args: [
 					{ name: 'doc', type: macro :anyparse.core.Doc },
-					{ name: 'trailing', type: macro :anyparse.core.Doc },
+					{ name: 'trailing', type: macro :anyparse.core.Doc }
 				],
 				ret: macro :anyparse.core.Doc,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -2153,12 +2153,12 @@ class WriterCodegen {
 			kind: FFun({
 				args: [
 					{ name: 'doc', type: macro :anyparse.core.Doc },
-					{ name: 'trailing', type: macro :anyparse.core.Doc },
+					{ name: 'trailing', type: macro :anyparse.core.Doc }
 				],
 				ret: macro :Null<anyparse.core.Doc>,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -2179,12 +2179,12 @@ class WriterCodegen {
 			kind: FFun({
 				args: [
 					{ name: 'inner', type: macro :anyparse.core.Doc },
-					{ name: 'trailing', type: macro :anyparse.core.Doc },
+					{ name: 'trailing', type: macro :anyparse.core.Doc }
 				],
 				ret: macro :anyparse.core.Doc,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -2233,12 +2233,12 @@ class WriterCodegen {
 				args: [
 					{ name: 'beforeKwLeading', type: macro :Array<String> },
 					{ name: 'sepDoc', type: macro :anyparse.core.Doc },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
 				],
 				ret: macro :anyparse.core.Doc,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -2263,12 +2263,12 @@ class WriterCodegen {
 				args: [
 					{ name: 'trailing', type: macro :Null<String> },
 					{ name: 'sepDoc', type: macro :anyparse.core.Doc },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
 				],
 				ret: macro :anyparse.core.Doc,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -2303,12 +2303,12 @@ class WriterCodegen {
 					{ name: 'kwLeading', type: macro :Array<String> },
 					{ name: 'cols', type: macro :Int },
 					{ name: 'nextCurly', type: macro :Bool },
-					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions }
 				],
 				ret: macro :anyparse.core.Doc,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -2356,12 +2356,12 @@ class WriterCodegen {
 					// `arrowValueIfReflowSite` can hand in a SOFT `Line(' ')` the enclosing `Group`
 					// may flatten. The comment separators below stay hard: a captured comment
 					// refuses the re-flow outright, so they are only ever reached with a hard gap.
-					{ name: 'gap', type: macro :anyparse.core.Doc },
+					{ name: 'gap', type: macro :anyparse.core.Doc }
 				],
 				ret: macro :anyparse.core.Doc,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -2386,9 +2386,9 @@ class WriterCodegen {
 			kind: FFun({
 				args: [{ name: 'value', type: macro :String }],
 				ret: macro :String,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -2610,9 +2610,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inEnumAbstract = true;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -2643,9 +2643,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._ssbSuppress = true;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -2675,9 +2675,9 @@ class WriterCodegen {
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._ssbChainSuppress = v;
 					return _c;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 

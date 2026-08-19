@@ -12,6 +12,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -474,8 +475,7 @@ final class PreferCaseGuard implements Check implements RiskyFix {
 		final kind: Null<String> = seams.conditionalKind;
 		if (kind == null) return false;
 		if (node.kind == kind) return true;
-		for (child in node.children) if (containsConditional(child, seams)) return true;
-		return false;
+		return node.children.exists(child -> containsConditional(child, seams));
 	}
 
 	/**

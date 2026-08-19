@@ -1,18 +1,18 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.Refs;
+import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import anyparse.query.ControlFlow.ControlFlowSupport;
-import anyparse.query.BooleanLogic.BooleanLogicSupport;
-import anyparse.query.SymbolIndex;
-import anyparse.query.TypeInfoProvider;
-import anyparse.query.Refs;
-import anyparse.query.NominalTypes;
 
 using StringTools;
 

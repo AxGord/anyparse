@@ -10,6 +10,8 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * Flags a redundant intermediate local: an IMMUTABLE single-variable declaration whose
  * initializer is a TRIVIAL PURE READ and whose one and only reference sits in the
@@ -193,11 +195,9 @@ final class JoinSingleUseLocal implements Check {
 	 * over the already-shortened source, so the chain still collapses, one link per pass.
 	 */
 	private static function readSwallowed(m: Match, selected: Array<Match>): Bool {
-		for (other in selected) if (
-			other.declSpan.from != m.declSpan.from && m.readSpan.from >= other.dropSpan.from && m.readSpan.to <= other.dropSpan.to
-		)
-			return true;
-		return false;
+		return selected.exists(
+			other -> other.declSpan.from != m.declSpan.from && m.readSpan.from >= other.dropSpan.from && m.readSpan.to <= other.dropSpan.to
+		);
 	}
 
 	/** Parse `source` and collect every inlinable pair in it, or nothing when it does not parse. */
@@ -580,14 +580,12 @@ final class JoinSingleUseLocal implements Check {
 
 	/** Whether any comment overlaps `dropSpan`, the declaration line the fix deletes whole. */
 	private static function commentInDroppedRegion(comments: Array<{ from: Int, to: Int, isLine: Bool }>, dropSpan: Span): Bool {
-		for (tok in comments) if (tok.to > dropSpan.from && tok.from < dropSpan.to) return true;
-		return false;
+		return comments.exists(tok -> tok.to > dropSpan.from && tok.from < dropSpan.to);
 	}
 
 	/** Whether any node on `path` evaluates the read CONDITIONALLY (`RefShape.branchKinds`). */
 	private static function pathIsConditional(path: Array<QueryNode>, s: Seams): Bool {
-		for (n in path) if (s.branchKinds.contains(n.kind)) return true;
-		return false;
+		return path.exists(n -> s.branchKinds.contains(n.kind));
 	}
 
 	/** The node chain from `root` down to the node whose span is exactly `target`, or null when there is none. */
@@ -604,8 +602,7 @@ final class JoinSingleUseLocal implements Check {
 
 	/** Whether no node on `path` repeats the read (a loop) or defers it (a nested function). */
 	private static function evaluatedOnceEagerly(path: Array<QueryNode>, s: Seams): Bool {
-		for (n in path) if (s.barrierKinds.contains(n.kind)) return false;
-		return true;
+		return path.foreach(n -> !(s.barrierKinds.contains(n.kind)));
 	}
 
 	/**

@@ -1,13 +1,21 @@
 package anyparse.check;
 
+import anyparse.check.Check.CrossFileEdits;
+import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.Violation;
 import anyparse.check.ConstantHoist.Hoist;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NamingPolicy.NamedDecl;
+import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.NamingPolicy.NamingRule;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
+import anyparse.query.Refs;
+import anyparse.query.Rename;
+import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.query.Uses;
 import anyparse.runtime.Span;
@@ -15,15 +23,6 @@ import haxe.Exception;
 
 using StringTools;
 using Lambda;
-
-import anyparse.query.Rename;
-import anyparse.query.NamingPolicy.NamingCategory;
-import anyparse.query.SymbolIndex;
-import anyparse.query.RefactorSupport;
-import anyparse.check.Check.CrossFileFix;
-import anyparse.check.Check.CrossFileEdits;
-import anyparse.query.Refs;
-import anyparse.query.TypeInfoProvider;
 
 /**
  * Flags declarations whose identifier violates a naming convention. The check
@@ -312,8 +311,8 @@ final class Naming implements Check implements CrossFileFix {
 	 */
 	private static inline function qualifiableBinding(decl: NamedDecl): Bool {
 		return switch decl.category {
-			case NamingCategory.Field | NamingCategory.Method: !decl.mods.contains('static');
-			case NamingCategory.Local | NamingCategory.Param | NamingCategory.CatchVar: true;
+			case NamingCategory.Field, NamingCategory.Method: !decl.mods.contains('static');
+			case NamingCategory.Local, NamingCategory.Param, NamingCategory.CatchVar: true;
 			case _: false;
 		}
 	}
@@ -916,7 +915,7 @@ final class Naming implements Check implements CrossFileFix {
 			// comment does not execute, so no form of it can make a rename unsafe — the worst case is
 			// a stale sentence, which is not worth refusing a correct rename over. The distinctive arm
 			// above still rewrites the mention; `DirectiveComment` (a `noqa`) still refuses.
-			case OccurrenceClass.StringWord | OccurrenceClass.CommentTrivia:
+			case OccurrenceClass.StringWord, OccurrenceClass.CommentTrivia:
 			case _:
 				return null;
 		}
@@ -971,7 +970,7 @@ final class Naming implements Check implements CrossFileFix {
 			case OccurrenceClass.CommentTrivia if (distinctive):
 				spans.push(occ.span);
 			// Neither renamed nor a blocker — same reading as the declaring file's.
-			case OccurrenceClass.StringWord | OccurrenceClass.CommentTrivia:
+			case OccurrenceClass.StringWord, OccurrenceClass.CommentTrivia:
 			case _:
 				return null;
 		}
@@ -1095,7 +1094,7 @@ final class Naming implements Check implements CrossFileFix {
 	 */
 	private static function crossFileCategory(decl: NamedDecl): Bool {
 		return switch decl.category {
-			case NamingCategory.Field | NamingCategory.Constant: true;
+			case NamingCategory.Field, NamingCategory.Constant: true;
 			case NamingCategory.Method:
 				!decl.mods.contains('override') && decl.implicitlyReachable != true;
 			case _: false;

@@ -3,10 +3,9 @@ package anyparse.query;
 import anyparse.query.CondBranchProjection;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
+import anyparse.runtime.Span;
 
 using Lambda;
-
-import anyparse.runtime.Span;
 
 /**
  * The branch-aware member-run fold: how a member-scanning check reads a container's children

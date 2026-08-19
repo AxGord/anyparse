@@ -74,11 +74,11 @@ final class TriviaBlockLowering {
 			final pos: Position = Context.currentPos();
 			final classifierAccess: Expr = {
 				expr: EField(macro _t.node, condLeadingDocInfo.classifierFieldName),
-				pos: pos,
+				pos: pos
 			};
 			final bodyAccess: Expr = {
 				expr: EField(macro _inner, condLeadingDocInfo.bodyFieldName),
-				pos: pos,
+				pos: pos
 			};
 			final scanBody: Expr = macro {
 				final _condBody = $bodyAccess;
@@ -95,7 +95,7 @@ final class TriviaBlockLowering {
 			};
 			final lookThroughSwitch: Expr = {
 				expr: ESwitch(classifierAccess, [{ values: [condLeadingDocInfo.condCasePattern], guard: null, expr: scanBody }], macro {}),
-				pos: pos,
+				pos: pos
 			};
 			macro if (!_currHasDocComment) $lookThroughSwitch;
 		} : macro {};
@@ -128,7 +128,7 @@ final class TriviaBlockLowering {
 			final pos: Position = Context.currentPos();
 			final modAccess: Expr = {
 				expr: EField(macro _t.node, staticVarSubdivInfo.modifierFieldName),
-				pos: pos,
+				pos: pos
 			};
 			final staticIdent: Expr = { expr: EConst(CIdent(staticVarSubdivInfo.staticCtorName)), pos: pos };
 			macro {
@@ -141,11 +141,11 @@ final class TriviaBlockLowering {
 		return interMember ? {
 			final classifierAccess: Expr = {
 				expr: EField(macro _t.node, interMemberInfo.classifierFieldName),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			};
 			final switchExpr: Expr = {
 				expr: ESwitch(classifierAccess, interMemberInfo.classifyCases, null),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			};
 			macro {
 				_currKind = $switchExpr;
@@ -168,15 +168,15 @@ final class TriviaBlockLowering {
 		final pos: Position = Context.currentPos();
 		final betweenVarsAccess: Expr = {
 			expr: EField(macro opt, interMemberInfo.betweenVarsField),
-			pos: pos,
+			pos: pos
 		};
 		final betweenFnAccess: Expr = {
 			expr: EField(macro opt, interMemberInfo.betweenFunctionsField),
-			pos: pos,
+			pos: pos
 		};
 		final afterVarsAccess: Expr = {
 			expr: EField(macro opt, interMemberInfo.afterVarsField),
-			pos: pos,
+			pos: pos
 		};
 		// ω-extern-class-no-blanks: `_classExtern` is propagated from
 		// `HxTopLevelDecl.decl` via `@:fmt(setBoolFlagFromStarCtor(...))` when the
@@ -194,11 +194,11 @@ final class TriviaBlockLowering {
 		if (!staticVarSubdiv) return triviaBlockInterMemberPlainExpr(betweenVarsAccess, betweenFnAccess, afterVarsAccess);
 		final afterStaticVarsAccess: Expr = {
 			expr: EField(macro opt, staticVarSubdivInfo.afterStaticVarsField),
-			pos: pos,
+			pos: pos
 		};
 		final betweenStaticFnAccess: Expr = {
 			expr: EField(macro opt, staticVarSubdivInfo.betweenStaticFunctionsField),
-			pos: pos,
+			pos: pos
 		};
 		return triviaBlockInterMemberSubdivExpr(
 			betweenVarsAccess, betweenFnAccess, afterVarsAccess, afterStaticVarsAccess, betweenStaticFnAccess
@@ -271,7 +271,7 @@ final class TriviaBlockLowering {
 			addByDocExpr: addByDocExpr,
 			addByCurrDocExpr: addByCurrDocExpr,
 			addByInterMemberExpr: addByInterMemberExpr,
-			addByUniformBetweenExpr: addByUniformBetweenExpr,
+			addByUniformBetweenExpr: addByUniformBetweenExpr
 		});
 	}
 
@@ -410,7 +410,7 @@ final class TriviaBlockLowering {
 		if (!uniformBetween) return macro false;
 		final optAccess: Expr = {
 			expr: EField(macro opt, uniformBetweenOptField),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		return macro $optAccess > 0;
 	}
@@ -702,7 +702,7 @@ final class TriviaBlockLowering {
 			caseSiblingWidthExpr: caseSiblingWidthExpr,
 			blankAroundMarkExpr: blankAround.markExpr,
 			blankAroundSeenExpr: blankAround.seenExpr,
-			blankAroundApplyExpr: blankAround.applyExpr,
+			blankAroundApplyExpr: blankAround.applyExpr
 		};
 		return triviaBlockMainExpr(ctx);
 	}
@@ -781,7 +781,7 @@ final class TriviaBlockLowering {
 			elemOptExpr;
 		return {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, elemCallOptArg]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -935,7 +935,7 @@ final class TriviaBlockLowering {
 		return {
 			leadingSplitGateExpr: leadingSplitGateExpr,
 			blockLeadingBetweenExpr: blockLeadingBetweenExpr,
-			blockTrailBetweenExpr: blockTrailBetweenExpr,
+			blockTrailBetweenExpr: blockTrailBetweenExpr
 		};
 	}
 
@@ -957,7 +957,7 @@ final class TriviaBlockLowering {
 		final fmtParts: Array<String> = blockEndedSchemaPath.split('.');
 		return {
 			expr: ECall({ expr: EField(macro $p{fmtParts}.instance, blockEndedPredicate), pos: Context.currentPos() }, [elemAccess]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1049,7 +1049,7 @@ final class TriviaBlockLowering {
 			trackPrevKindExpr: interMember ? macro _prevKind = _currKind : macro {},
 			trackDocCommentExpr: trackDocCommentExpr,
 			innerWrapExpr: innerWrapExpr,
-			extraInnerTrailBlankExpr: extraInnerTrailBlankExpr,
+			extraInnerTrailBlankExpr: extraInnerTrailBlankExpr
 		};
 	}
 

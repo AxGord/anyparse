@@ -1,15 +1,15 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.UsingScan.UsingHeader;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import anyparse.query.RefactorSupport;
-import anyparse.check.UsingScan.UsingHeader;
-import anyparse.query.NominalTypes;
 
 using StringTools;
 using Lambda;
@@ -636,8 +636,7 @@ final class PreferFind implements Check {
 		if (k.endsWith('Assign') || k.indexOf('Incr') != -1 || k.indexOf('Decr') != -1) return false;
 		if (k == s.newExprKind) return false;
 		if (k == s.callKind && !calleeIsAccessor(node, s)) return false;
-		for (c in node.children) if (!condIsPure(c, s)) return false;
-		return true;
+		return node.children.foreach(c -> condIsPure(c, s));
 	}
 
 	/** Whether a call's callee (`children[0]`) is a field-access chain (`a.b` / `a?.b` / `a!.b`) — a method call, not a free-function call. */

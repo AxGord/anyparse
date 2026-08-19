@@ -8,6 +8,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -443,8 +444,7 @@ final class AssignmentTreeHoist {
 	 */
 	private static function isEmptyArm(branch: QueryNode, s: TreeSeams): Bool {
 		final guard: Null<QueryNode> = caseGuard(branch, s);
-		for (c in branch.children) if (c.kind != s.plainCasePatternKind && c != guard) return false;
-		return true;
+		return branch.children.foreach(c -> c.kind == s.plainCasePatternKind || c == guard);
 	}
 
 	/**

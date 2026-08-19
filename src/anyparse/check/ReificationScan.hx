@@ -1,10 +1,12 @@
 package anyparse.check;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.Check.QuotationAware;
+import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
+
+using Lambda;
 
 /**
  * The REIFICATION gate every source-rewriting check owes the `macro …` quotation.
@@ -90,8 +92,7 @@ final class ReificationScan {
 
 	/** Whether `span` sits inside one of `regions` — containing one does not count, only being contained by it. */
 	private static function insideAny(regions: Array<Span>, span: Span): Bool {
-		for (region in regions) if (region.from <= span.from && span.to <= region.to) return true;
-		return false;
+		return regions.exists(region -> region.from <= span.from && span.to <= region.to);
 	}
 
 	/** `file`'s quotation spans, computed on first ask and memoised in `cache` for the rest of the run. */

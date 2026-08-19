@@ -83,9 +83,7 @@ final class ChangeSig {
 	public static function changeSig(
 		source: String, line: Int, col: Int, perm: String, plugin: GrammarPlugin, shape: RefShape
 	): ChangeSigResult {
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
-			'source does not parse: ${exception.toString()}'
-		)
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		// line:col is 1-based, as apq refs / ast --at / source print.
@@ -159,7 +157,7 @@ final class ChangeSig {
 		try
 			plugin.parseFile(rewritten)
 		catch (exception: ParseError)
-			return Err('rewritten source does not parse: ${exception.toString()}')
+			return Err('rewritten source does not parse: $exception')
 		catch (exception: Exception)
 			return Err('rewritten source does not parse: ${exception.message}');
 

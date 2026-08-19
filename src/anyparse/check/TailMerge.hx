@@ -450,16 +450,14 @@ final class TailMerge implements Check {
 	/** Whether any of `names` is read as an identifier anywhere in the `tail` subtrees. */
 	private static function referencesAny(tail: Array<QueryNode>, names: Array<String>, identKinds: Array<String>): Bool {
 		if (names.length == 0) return false;
-		for (s in tail) if (mentionsName(s, names, identKinds)) return true;
-		return false;
+		return tail.exists(s -> mentionsName(s, names, identKinds));
 	}
 
 	/** Whether `node`'s subtree holds an identifier (or string-interpolation identifier) named in `names`. */
 	private static function mentionsName(node: QueryNode, names: Array<String>, identKinds: Array<String>): Bool {
 		final nm: Null<String> = node.name;
 		if (nm != null && identKinds.contains(node.kind) && names.contains(nm)) return true;
-		for (c in node.children) if (mentionsName(c, names, identKinds)) return true;
-		return false;
+		return node.children.exists(c -> mentionsName(c, names, identKinds));
 	}
 
 	/**
@@ -470,8 +468,7 @@ final class TailMerge implements Check {
 	private static function hasConditionalCompilation(source: String, from: Int, to: Int): Bool {
 		if (from >= to) return false;
 		final s: String = source.substring(from, to);
-		for (d in CONDITIONAL_DIRECTIVES) if (s.indexOf(d) != -1) return true;
-		return false;
+		return CONDITIONAL_DIRECTIVES.exists(d -> s.indexOf(d) != -1);
 	}
 
 	/**

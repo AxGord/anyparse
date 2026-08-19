@@ -8,6 +8,7 @@ import anyparse.grammar.haxe.HxDecl;
 import anyparse.grammar.haxe.HxMemberModifier;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModifier;
+import anyparse.grammar.haxe.HxModuleWriter;
 
 /**
  * Slice 29 — `abstract class` top-level form + member-level
@@ -121,8 +122,8 @@ class HxAbstractClassSliceTest extends HxTestHelpers {
 	}
 
 	private function roundTripModule(source: String, ?label: String): Void {
-		final written1: String = anyparse.grammar.haxe.HxModuleWriter.write(HaxeModuleParser.parse(source));
-		final written2: String = anyparse.grammar.haxe.HxModuleWriter.write(HaxeModuleParser.parse(written1));
+		final written1: String = HxModuleWriter.write(HaxeModuleParser.parse(source));
+		final written2: String = HxModuleWriter.write(HaxeModuleParser.parse(written1));
 		Assert.equals(written1, written2, 'idempotency failed for ${label ?? source}');
 	}
 

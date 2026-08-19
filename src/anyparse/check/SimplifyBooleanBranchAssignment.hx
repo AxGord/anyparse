@@ -10,6 +10,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * Flags an `if (cond) { a = true; b = false; } else { a = false; b = true; }` -- an `if`/`else`
  * whose branches assign OPPOSITE boolean literals to the same ordered set of two or more targets
@@ -252,8 +254,7 @@ final class SimplifyBooleanBranchAssignment implements Check {
 	 * value an earlier emitted statement has already overwritten.
 	 */
 	private static function sharesSegment(condPath: Array<String>, lvalue: String): Bool {
-		for (segment in lvalue.split('.')) if (condPath.contains(segment)) return true;
-		return false;
+		return lvalue.split('.').exists(segment -> condPath.contains(segment));
 	}
 
 	/** The value of `node` when it is a boolean literal, else null. */

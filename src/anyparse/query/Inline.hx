@@ -73,7 +73,7 @@ final class Inline {
 		'DoubleStringExpr',
 		'SingleStringExpr',
 		'IdentExpr',
-		'ParenExpr',
+		'ParenExpr'
 	];
 
 	/**
@@ -96,9 +96,7 @@ final class Inline {
 	 * and `Inline.inline(...)` does not parse at the call site.
 	 */
 	public static function inlineVar(source: String, line: Int, col: Int, plugin: GrammarPlugin, shape: RefShape): InlineResult {
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
-			'source does not parse: ${exception.toString()}'
-		)
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		// line:col is 1-based, as apq refs / ast --at / source print.
@@ -336,7 +334,7 @@ final class Inline {
 		try
 			plugin.parseFile(rewritten)
 		catch (exception: ParseError)
-			return Err('rewritten source does not parse: ${exception.toString()}')
+			return Err('rewritten source does not parse: $exception')
 		catch (exception: Exception)
 			return Err('rewritten source does not parse: ${exception.message}');
 

@@ -1,13 +1,14 @@
 package anyparse.macro;
 
 #if macro
+import anyparse.core.LoweringCtx;
+import anyparse.core.ShapeTree;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.ExprTools;
 import haxe.macro.MacroStringTools;
-import anyparse.core.LoweringCtx;
-import anyparse.core.ShapeTree;
 
+using Lambda;
 using StringTools;
 using anyparse.macro.MetaInspect;
 
@@ -231,7 +232,7 @@ class Lowering {
 		return switch e.expr {
 			case ECall(fn, args):
 				{ expr: ECall(fn, args.concat([spanArg])), pos: e.pos };
-			case EField(_, _) | EConst(CIdent(_)):
+			case EField(_, _), EConst(CIdent(_)):
 				{ expr: ECall(e, [spanArg]), pos: e.pos };
 			case _: e;
 		};
@@ -373,7 +374,7 @@ class Lowering {
 		final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
 		return {
 			expr: ECall({ expr: EField(macro $p{fmtParts}.instance, predicateName), pos: Context.currentPos() }, [lastElem]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -552,7 +553,7 @@ class Lowering {
 		final atomFnName: String = '${loopFnName}Atom';
 		final atomCall: Expr = {
 			expr: ECall(macro $i{atomFnName}, [macro ctx]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final operatorBranches: Array<ShapeNode> = [
 			for (b in node.children)
@@ -596,7 +597,7 @@ class Lowering {
 		final skipFnName: String = _ctx.trivia ? 'skipWsAndStash' : 'skipWs';
 		final skipCall: Expr = {
 			expr: ECall(macro $i{skipFnName}, [macro ctx]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		var opChain: Expr = macro _matched = false;
 		for (i in 0...operatorBranches.length) {
@@ -606,7 +607,7 @@ class Lowering {
 			final matchFnName: String = endsWithWordChar(opText) ? 'matchKw' : 'matchLit';
 			final matchCall: Expr = {
 				expr: ECall(macro $i{matchFnName}, [macro ctx, macro $v{opText}]),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			};
 			opChain = macro if ($matchCall)
 				$branchBody
@@ -690,7 +691,7 @@ class Lowering {
 		final selfFnName: String = parseFnName(typePath);
 		final coreCall: Expr = {
 			expr: ECall(macro $i{coreFnName}, [macro ctx]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final postfixBranches: Array<ShapeNode> = [
 			for (b in node.children) if (b.annotations.get(AnnotationKeys.POSTFIX_OP) != null) b
@@ -1139,7 +1140,7 @@ class Lowering {
 		final elemCT: ComplexType = ruleReturnCT(elemRefName);
 		final elemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro ctx]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final openText: Null<String> = starNode.annotations[AnnotationKeys.LIT_LEAD_TEXT];
 		final closeText: Null<String> = starNode.annotations[AnnotationKeys.LIT_TRAIL_TEXT];
@@ -1209,10 +1210,10 @@ class Lowering {
 					name: localName,
 					type: accumCT,
 					expr: macro [],
-					isFinal: true,
+					isFinal: true
 				}
 			]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		});
 		final accumRef: Expr = macro $i{localName};
 		if (closeText == null && sepText != null && starNode.hasMeta(':tryparse')) {
@@ -1280,7 +1281,7 @@ class Lowering {
 		final elemCT: ComplexType = ruleReturnCT(elemRefName);
 		final elemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro ctx]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		// `@:lead` and `@:trail` are guaranteed non-null at this point —
 		// the validation block in `lowerStruct` rejects optional Star
@@ -1344,10 +1345,10 @@ class Lowering {
 							null;
 						}
 					},
-					isFinal: true,
+					isFinal: true
 				}
 			]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		});
 	}
 
@@ -1416,7 +1417,7 @@ class Lowering {
 		final elemCT: ComplexType = ruleReturnCT(elemRefName);
 		final elemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro ctx]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final isTriviaCollects: Bool = _ctx.trivia && starNode.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true;
 		// Element wrap and accumulator types — Trivial<T> in trivia mode.
@@ -1448,7 +1449,7 @@ class Lowering {
 						isFinal: false
 					}
 				]),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			});
 			// ω-keep-fnsig-newline: sibling zero-init local so the struct-literal
 			// push of TrailingNewlineBefore has a defined value on this path too.
@@ -1461,7 +1462,7 @@ class Lowering {
 						isFinal: false
 					}
 				]),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			});
 			parseSteps.push({
 				expr: EVars([
@@ -1472,7 +1473,7 @@ class Lowering {
 						isFinal: false
 					}
 				]),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			});
 		}
 		final loopBody: Expr = buildOptKwStarLoopBody(
@@ -1537,10 +1538,10 @@ class Lowering {
 					name: localName,
 					type: optAccumCT,
 					expr: valueExpr,
-					isFinal: true,
+					isFinal: true
 				}
 			]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		});
 	}
 
@@ -1641,10 +1642,10 @@ class Lowering {
 							name: trailOpenLocal,
 							type: nullStrCT,
 							expr: macro collectTrailingFull(ctx),
-							isFinal: true,
+							isFinal: true
 						}
 					]),
-					pos: Context.currentPos(),
+					pos: Context.currentPos()
 				});
 			}
 		}
@@ -1660,10 +1661,10 @@ class Lowering {
 					name: localName,
 					type: accumCT,
 					expr: macro [],
-					isFinal: true,
+					isFinal: true
 				}
 			]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		});
 		// ω-orphan-trivia: two mutable locals capture the trivia scanned
 		// on the final iteration (the one that hits the termination
@@ -1693,10 +1694,10 @@ class Lowering {
 					name: trailBBLocal,
 					type: boolCT,
 					expr: macro false,
-					isFinal: false,
+					isFinal: false
 				}
 			]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		});
 		// ω-keep-fnsig-newline: sibling close-newline local, declared
 		// unconditionally next to `trailBBLocal`. Assigned from the terminal
@@ -1707,10 +1708,10 @@ class Lowering {
 					name: trailNLLocal,
 					type: boolCT,
 					expr: macro false,
-					isFinal: false,
+					isFinal: false
 				}
 			]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		});
 		parseSteps.push({
 			expr: EVars([
@@ -1718,10 +1719,10 @@ class Lowering {
 					name: trailLCLocal,
 					type: arrayStrCT,
 					expr: macro [],
-					isFinal: false,
+					isFinal: false
 				}
 			]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		});
 		// ω-trail-blank-after: tryparse + nestBody Stars carry an extra Bool
 		// slot that records whether the source had a blank line BETWEEN the
@@ -1737,10 +1738,10 @@ class Lowering {
 						name: trailBALocal,
 						type: boolCT,
 						expr: macro false,
-						isFinal: false,
+						isFinal: false
 					}
 				]),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			});
 		}
 		// ω-objectlit-source-trail-comma: sep-Stars with a close literal
@@ -1758,10 +1759,10 @@ class Lowering {
 						name: trailPresentLocal,
 						type: boolCT,
 						expr: macro false,
-						isFinal: false,
+						isFinal: false
 					}
 				]),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			});
 		}
 		final accumRef: Expr = macro $i{localName};
@@ -1890,10 +1891,10 @@ class Lowering {
 					name: trailCloseLocal,
 					type: nullStrCT,
 					expr: macro collectTrailingFull(ctx),
-					isFinal: true,
+					isFinal: true
 				}
 			]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		});
 	}
 
@@ -2013,7 +2014,7 @@ class Lowering {
 			for (v in values)
 				{
 					values: [{ expr: EConst(CString(v.value)), pos: Context.currentPos() }],
-					expr: MacroStringTools.toFieldExpr(pack.concat([simple, v.name])),
+					expr: MacroStringTools.toFieldExpr(pack.concat([simple, v.name]))
 				}
 		];
 		final defaultExpr: Expr = macro throw new anyparse.runtime.ParseError(
@@ -2091,12 +2092,12 @@ class Lowering {
 						isFinal: false
 					}
 				]),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			});
 			final parseCall: Expr = byNameFieldParseExpr(child, fieldName);
 			switchCases.push({
 				values: [{ expr: EConst(CString(fieldName)), pos: Context.currentPos() }],
-				expr: macro $i{localName} = $parseCall,
+				expr: macro $i{localName} = $parseCall
 			});
 			if (isOptional) {
 				structFields.push({ field: fieldName, expr: macro $i{localName} });
@@ -2118,10 +2119,10 @@ class Lowering {
 							name: checkedName,
 							type: fieldCT,
 							expr: macro $i{localName},
-							isFinal: true,
+							isFinal: true
 						}
 					]),
-					pos: Context.currentPos(),
+					pos: Context.currentPos()
 				});
 				structFields.push({ field: fieldName, expr: macro $i{checkedName} });
 			}
@@ -2323,10 +2324,10 @@ class Lowering {
 					name: keyLocal,
 					type: macro :String,
 					expr: { expr: ECall(macro $i{keyFn}, [macro ctx]), pos: Context.currentPos() },
-					isFinal: true,
+					isFinal: true
 				}
 			]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final mappingOpen: String = _formatInfo.mappingOpen;
 		final mappingClose: String = _formatInfo.mappingClose;
@@ -2588,7 +2589,7 @@ class Lowering {
 			final sepText: String = branch.annotations[AnnotationKeys.TERNARY_SEP];
 			final fullExprCall: Expr = {
 				expr: ECall(macro $i{loopFnName}, [macro ctx, macro $v{0}]),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			};
 			// ω-keep-ternary-operand-comment: `@:fmt(captureTernaryTrail)` grows
 			// two operand-trailing slots. The CONDITION's comment is already in
@@ -2608,7 +2609,7 @@ class Lowering {
 			}
 			final ctorCall: Expr = {
 				expr: ECall(ctorRef, ctorArgs),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			};
 			final thenTrailCapture: Expr = captureTernaryTrail
 				? macro final _thenTrailComment: Null<String> = collectTrailingFull(ctx)
@@ -2650,9 +2651,9 @@ class Lowering {
 			final isAsymmetric: Bool = rightRef != null && simpleName(rightRef) != simple;
 			final rightCT: ComplexType = isAsymmetric ? ruleReturnCT(rightRef) : returnCT;
 			final rightCall: Expr = if (isAsymmetric)
-				{ expr: ECall(macro $i{parseFnName(rightRef)}, [macro ctx]), pos: Context.currentPos(), }
+				{ expr: ECall(macro $i{parseFnName(rightRef)}, [macro ctx]), pos: Context.currentPos() }
 			else
-				{ expr: ECall(macro $i{loopFnName}, [macro ctx, macro $v{nextMinPrec}]), pos: Context.currentPos(), };
+				{ expr: ECall(macro $i{loopFnName}, [macro ctx, macro $v{nextMinPrec}]), pos: Context.currentPos() };
 			// ω-keep-chain (increment 2): in Trivia mode, infix ctors carrying
 			// `@:fmt(captureChainNewline)` (the chain ctors Add/Sub/And/Or)
 			// grow a 3rd positional `chainNewline:Bool` synth arg holding
@@ -3366,7 +3367,7 @@ class Lowering {
 		final elemFn: String = simpleName(elemRefName) == enumSimple ? selfFnName : parseFnName(elemRefName);
 		final elemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro ctx]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final elemCT: ComplexType = ruleReturnCT(elemRefName);
 		// See struct-field close-peek (emitStarFieldSteps) for why
@@ -3404,7 +3405,7 @@ class Lowering {
 				macro _argsInnerComment,
 				macro _callLeadingComment
 			]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		// ω-postfix-starsuffix-trivia: when TriviaAnalysis marks
 		// this Star with `trivia.starCollects=true` (auto-set for
@@ -3661,7 +3662,7 @@ class Lowering {
 		final suffixFn: String = simpleName(suffixRef) == enumSimple ? selfFnName : parseFnName(suffixRef);
 		final suffixCall: Expr = {
 			expr: ECall(macro $i{suffixFn}, [macro ctx]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final suffixCT: ComplexType = ruleReturnCT(suffixRef);
 		// ω-keep-chain (increment 9): a `@:postfix('.')` ctor carrying
@@ -3714,7 +3715,7 @@ class Lowering {
 							macro _suffix
 						]
 			),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		return if (close != null)
 			macro {
@@ -4169,10 +4170,10 @@ class Lowering {
 					name: sepBeforeLocal,
 					type: macro :Bool,
 					expr: macro false,
-					isFinal: false,
+					isFinal: false
 				}
 			]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		});
 		parseSteps.push(macro {
 			final _savedPos: Int = ctx.pos;
@@ -4302,7 +4303,7 @@ class Lowering {
 		final operandCT: ComplexType = ruleReturnCT(typePath);
 		final recurseCall: Expr = {
 			expr: ECall(macro $i{recurseFnName}, [macro ctx]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final ctorCall: Expr = { expr: ECall(ctorRef, [macro _operand]), pos: Context.currentPos() };
 		return macro {
@@ -4372,7 +4373,7 @@ class Lowering {
 			final call: Expr = { expr: ECall(ctorRef, [valueExpr]), pos: Context.currentPos() };
 			final matchCall: Expr = {
 				expr: ECall(macro $i{matchFnName}, [macro ctx, macro $v{lit}]),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			};
 			attempts.push(macro if ($matchCall) return $call);
 		}
@@ -4564,7 +4565,7 @@ class Lowering {
 		}
 		final ctorCallTrivia: Expr = {
 			expr: ECall(ctorRef, ctorArgsTrivia),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final sepMatchExpr: Expr = if (sepText != null) {
 			// Same horizontal-whitespace-only skip as the struct-field
@@ -4806,7 +4807,7 @@ class Lowering {
 		final subFnName: String = atomOperand ? '${parseFnName(refName)}Atom' : parseFnName(refName);
 		final callSub: Expr = {
 			expr: ECall(macro $i{subFnName}, [macro ctx]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final trailOptional: Bool = branch.annotations[AnnotationKeys.LIT_TRAIL_OPTIONAL] == true;
 		// ω-trailopt-source-track: in trivia mode, paired Alt ctors
@@ -4922,10 +4923,10 @@ class Lowering {
 					name: '_raw',
 					type: null,
 					expr: callSub,
-					isFinal: true,
+					isFinal: true
 				}
 			]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		});
 		if (trailText != null) appendKwRefTrailStep(steps, trailText, triviaTrailOpt, triviaCaptureSource, trailOptional, parseGateCall);
 		appendRejectFollowKwStep(steps, branch);
@@ -5207,7 +5208,7 @@ class Lowering {
 		final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
 		return {
 			expr: ECall({ expr: EField(macro $p{fmtParts}.instance, parseGate[0]), pos: Context.currentPos() }, [macro _raw]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -5230,7 +5231,7 @@ class Lowering {
 		final elemCT: ComplexType = ruleReturnCT(elemRefName);
 		final elemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro ctx]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		// See struct-field close-peek (emitStarFieldSteps) for why
 		// we flip to full-string `peekLit` when close is multi-byte.
@@ -5305,7 +5306,7 @@ class Lowering {
 		final refName: String = child.annotations[AnnotationKeys.BASE_REF];
 		final subCallRaw: Expr = {
 			expr: ECall(macro $i{parseFnName(refName)}, [macro ctx]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		// ω-optional-ref-trail: consume the per-field `@:trail`
 		// literal AFTER the sub-rule parse, INSIDE the lead-led
@@ -5406,10 +5407,10 @@ class Lowering {
 						name: localName,
 						type: fieldCT,
 						expr: absentOnValueExpr,
-						isFinal: true,
+						isFinal: true
 					}
 				]),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			});
 		} else {
 			emitOptionalRefLeadCommit(
@@ -5512,7 +5513,7 @@ class Lowering {
 			isOptionalKwStar: isOptionalKwStar,
 			hasBeforeNewlineSlot: hasBeforeNewlineSlot,
 			hasBeforeLeadingSlot: hasBeforeLeadingSlot,
-			optStarWithLead: optStarWithLead,
+			optStarWithLead: optStarWithLead
 		};
 	}
 
@@ -5673,10 +5674,10 @@ class Lowering {
 						name: '_afterTrail_$fieldName',
 						type: macro :Null<String>,
 						expr: macro null,
-						isFinal: false,
+						isFinal: false
 					}
 				]),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			});
 		}
 		// ω-struct-trailopt-source-track (Session 14 Phase 3): struct
@@ -5702,10 +5703,10 @@ class Lowering {
 						name: trailPresentLocal,
 						type: macro :Bool,
 						expr: macro false,
-						isFinal: false,
+						isFinal: false
 					}
 				]),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			});
 		}
 		// Splicing the same `Expr` into two `macro` blocks is safe —
@@ -5716,7 +5717,7 @@ class Lowering {
 		return {
 			hasOptionalRefAfterTrailSlot: hasOptionalRefAfterTrailSlot,
 			hasStructFieldTrailOptSlot: hasStructFieldTrailOptSlot,
-			captureTrailPresentExpr: captureTrailPresentExpr,
+			captureTrailPresentExpr: captureTrailPresentExpr
 		};
 	}
 
@@ -5746,7 +5747,7 @@ class Lowering {
 				final refName: String = child.annotations[AnnotationKeys.BASE_REF];
 				final callExpr: Expr = {
 					expr: ECall(macro $i{parseFnName(refName)}, [macro ctx]),
-					pos: Context.currentPos(),
+					pos: Context.currentPos()
 				};
 				parseSteps.push({
 					expr: EVars([
@@ -5754,10 +5755,10 @@ class Lowering {
 							name: localName,
 							type: null,
 							expr: callExpr,
-							isFinal: true,
+							isFinal: true
 						}
 					]),
-					pos: Context.currentPos(),
+					pos: Context.currentPos()
 				});
 			case Star if (isOptional && kwLead != null):
 				emitOptionalKwStarFieldSteps(
@@ -5812,10 +5813,10 @@ class Lowering {
 						name: newlineAfterLocal,
 						type: macro :Bool,
 						expr: macro false,
-						isFinal: false,
+						isFinal: false
 					}
 				]),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			});
 			parseSteps.push(macro {
 				final _captured = collectTrivia(ctx);
@@ -6029,10 +6030,10 @@ class Lowering {
 					name: localName,
 					type: fieldCT,
 					expr: valueExpr,
-					isFinal: true,
+					isFinal: true
 				}
 			]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		});
 	}
 
@@ -6129,16 +6130,13 @@ class Lowering {
 	}
 
 	private static function hasPrattBranch(node: ShapeNode): Bool {
-		for (branch in node.children) {
-			if (branch.annotations.get(AnnotationKeys.PRATT_PREC) != null || branch.annotations.get(AnnotationKeys.TERNARY_OP) != null)
-				return true;
-		}
-		return false;
+		return node.children.exists(
+			branch -> branch.annotations.get(AnnotationKeys.PRATT_PREC) != null || branch.annotations.get(AnnotationKeys.TERNARY_OP) != null
+		);
 	}
 
 	private static function hasPostfixBranch(node: ShapeNode): Bool {
-		for (branch in node.children) if (branch.annotations.get(AnnotationKeys.POSTFIX_OP) != null) return true;
-		return false;
+		return node.children.exists(branch -> branch.annotations.get(AnnotationKeys.POSTFIX_OP) != null);
 	}
 
 	/** Returns the operator literal for a branch in the Pratt dispatch chain.
@@ -6204,10 +6202,10 @@ class Lowering {
 						ctx.pos += $v{len};
 						_s;
 					},
-					isFinal: true,
+					isFinal: true
 				}
 			]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		});
 	}
 
@@ -6234,10 +6232,10 @@ class Lowering {
 						ctx.pos += _len;
 						_b;
 					},
-					isFinal: true,
+					isFinal: true
 				}
 			]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		});
 	}
 
@@ -6260,10 +6258,10 @@ class Lowering {
 						ctx.pos += $v{width};
 						$decodeExpr;
 					},
-					isFinal: true,
+					isFinal: true
 				}
 			]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		});
 	}
 
@@ -6283,10 +6281,10 @@ class Lowering {
 						ctx.pos += $lenRef;
 						_b;
 					},
-					isFinal: true,
+					isFinal: true
 				}
 			]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		});
 	}
 
@@ -6385,10 +6383,10 @@ class Lowering {
 					name: name,
 					type: type,
 					expr: value,
-					isFinal: true,
+					isFinal: true
 				}
 			]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -6979,8 +6977,7 @@ class Lowering {
 	/** Set equality for the first-token payloads — same length, same members. */
 	private static function sameSet<T>(x: Array<T>, y: Array<T>): Bool {
 		if (x.length != y.length) return false;
-		for (v in x) if (!y.contains(v)) return false;
-		return true;
+		return x.foreach(v -> y.contains(v));
 	}
 
 	/**
@@ -7323,7 +7320,7 @@ class Lowering {
 						isFinal: false
 					}
 				]),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			});
 		}
 		pushVar(afterKwLocal, macro :Null<String>, macro null);
@@ -7358,10 +7355,10 @@ class Lowering {
 						name: afterTrailLocal,
 						type: macro :Null<String>,
 						expr: macro collectTrailingFull(ctx),
-						isFinal: true,
+						isFinal: true
 					}
 				]),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			});
 		}
 		if (!isStar && !isOptional && trailText != null) {
@@ -7382,10 +7379,10 @@ class Lowering {
 							name: afterTrailLocal,
 							type: macro :Null<String>,
 							expr: macro collectTrailingFull(ctx),
-							isFinal: true,
+							isFinal: true
 						}
 					]),
-					pos: Context.currentPos(),
+					pos: Context.currentPos()
 				});
 			}
 		}
@@ -7472,10 +7469,10 @@ class Lowering {
 							name: beforeNlLocal,
 							type: macro :Bool,
 							expr: macro _beforeTrivia.newlineBefore,
-							isFinal: true,
+							isFinal: true
 						}
 					]),
-					pos: Context.currentPos(),
+					pos: Context.currentPos()
 				});
 				parseSteps.push({
 					expr: EVars([
@@ -7483,10 +7480,10 @@ class Lowering {
 							name: beforeLeadingLocal,
 							type: arrayStrCT,
 							expr: macro _beforeTrivia.leadingComments,
-							isFinal: true,
+							isFinal: true
 						}
 					]),
-					pos: Context.currentPos(),
+					pos: Context.currentPos()
 				});
 			} else if (hasBeforeNewlineSlot) {
 				// Route through `collectTrivia` — drains any
@@ -7500,10 +7497,10 @@ class Lowering {
 							name: beforeNlLocal,
 							type: macro :Bool,
 							expr: macro collectTrivia(ctx).newlineBefore,
-							isFinal: true,
+							isFinal: true
 						}
 					]),
-					pos: Context.currentPos(),
+					pos: Context.currentPos()
 				});
 			} else
 				parseSteps.push(macro skipWs(ctx));
@@ -7521,10 +7518,10 @@ class Lowering {
 					name: condOpenNewlineLocal,
 					type: macro :Bool,
 					expr: macro hasNewlineIn(ctx.input, _condLeadEnd, ctx.pos),
-					isFinal: true,
+					isFinal: true
 				}
 			]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		});
 	}
 

@@ -9,6 +9,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * Flags a logical-not that simplifies to a form carrying strictly fewer `!` operators.
  * `Severity.Info` with an autofix. Two shapes reach the rule:
@@ -159,8 +161,7 @@ final class SimplifyNegatedCompound implements Check {
 	private static function hasShape(node: QueryNode, s: Seams): Bool {
 		if (s.opaqueKinds.contains(node.kind)) return false;
 		if (s.support.negatedOperandOf(node) != null) return true;
-		for (c in node.children) if (hasShape(c, s)) return true;
-		return false;
+		return node.children.exists(c -> hasShape(c, s));
 	}
 
 	/**
@@ -207,8 +208,7 @@ final class SimplifyNegatedCompound implements Check {
 	/** Whether a `#if … #end` region sits anywhere in `node` — block, expression or mid-expression splice alike. */
 	private static function hasConditionalRegion(node: QueryNode): Bool {
 		if (RefactorSupport.isConditionalKind(node.kind)) return true;
-		for (c in node.children) if (hasConditionalRegion(c)) return true;
-		return false;
+		return node.children.exists(c -> hasConditionalRegion(c));
 	}
 
 	/**

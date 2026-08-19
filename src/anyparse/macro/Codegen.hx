@@ -70,7 +70,7 @@ class Codegen {
 		final rootFn: String = rootFnName ?? 'parse${simpleName(rootTypePath)}';
 		final parseCall: Expr = {
 			expr: ECall(macro $i{rootFn}, [macro ctx]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		// Span-mode (`{spans:true}`) routes the root function through the
 		// paired `*S` typed AST whose enum values each carry a `_span`
@@ -116,9 +116,9 @@ class Codegen {
 			kind: FFun({
 				args: [{ name: 'source', type: macro :String }],
 				ret: rootReturnCT,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -126,7 +126,7 @@ class Codegen {
 		final rootFn: String = rootFnName ?? 'parse${simpleName(rootTypePath)}';
 		final parseCall: Expr = {
 			expr: ECall(macro $i{rootFn}, [macro ctx]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final body: Expr = macro {
 			final ctx: anyparse.runtime.Parser = new anyparse.runtime.Parser(new anyparse.runtime.BytesInput(source));
@@ -142,9 +142,9 @@ class Codegen {
 			kind: FFun({
 				args: [{ name: 'source', type: macro :haxe.io.Bytes }],
 				ret: rootReturnCT,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -167,7 +167,7 @@ class Codegen {
 			args.push({
 				name: 'minPrec',
 				type: macro :Int,
-				value: macro 0,
+				value: macro 0
 			});
 		}
 		return {
@@ -176,9 +176,9 @@ class Codegen {
 			kind: FFun({
 				args: args,
 				ret: rule.returnCT,
-				expr: rule.body,
+				expr: rule.body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -188,7 +188,7 @@ class Codegen {
 			name: spec.varName,
 			access: [APrivate, AStatic, AFinal],
 			kind: FVar(macro :EReg, { expr: EConst(CRegexp(anchored, '')), pos: Context.currentPos() }),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -223,9 +223,9 @@ class Codegen {
 			kind: FFun({
 				args: [{ name: 'ctx', type: macro :anyparse.runtime.Parser }],
 				ret: macro :Void,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -292,9 +292,9 @@ class Codegen {
 			kind: FFun({
 				args: [{ name: 'ctx', type: macro :anyparse.runtime.Parser }],
 				ret: macro :Void,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -418,12 +418,12 @@ class Codegen {
 			kind: FFun({
 				args: [
 					{ name: 'ctx', type: macro :anyparse.runtime.Parser },
-					{ name: 'lit', type: macro :String },
+					{ name: 'lit', type: macro :String }
 				],
 				ret: macro :Bool,
-				expr: macro $b{steps},
+				expr: macro $b{steps}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -447,12 +447,12 @@ class Codegen {
 			kind: FFun({
 				args: [
 					{ name: 'ctx', type: macro :anyparse.runtime.Parser },
-					{ name: 'lit', type: macro :String },
+					{ name: 'lit', type: macro :String }
 				],
 				ret: macro :Bool,
-				expr: macro $b{steps},
+				expr: macro $b{steps}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -487,12 +487,12 @@ class Codegen {
 			kind: FFun({
 				args: [
 					{ name: 'ctx', type: macro :anyparse.runtime.Parser },
-					{ name: 'keyword', type: macro :String },
+					{ name: 'keyword', type: macro :String }
 				],
 				ret: macro :Bool,
-				expr: macro $b{steps},
+				expr: macro $b{steps}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -544,9 +544,9 @@ class Codegen {
 						p++;
 					}
 					return input.substring(start, p);
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -557,16 +557,16 @@ class Codegen {
 			kind: FFun({
 				args: [
 					{ name: 'ctx', type: macro :anyparse.runtime.Parser },
-					{ name: 'lit', type: macro :String },
+					{ name: 'lit', type: macro :String }
 				],
 				ret: macro :Void,
 				expr: macro {
 					if (!matchLit(ctx, lit)) {
 						throw anyparse.runtime.ParseError.backtrack;
 					}
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -590,7 +590,7 @@ class Codegen {
 			kind: FFun({
 				args: [
 					{ name: 'ctx', type: macro :anyparse.runtime.Parser },
-					{ name: 'keyword', type: macro :String },
+					{ name: 'keyword', type: macro :String }
 				],
 				ret: macro :Bool,
 				expr: macro {
@@ -605,9 +605,9 @@ class Codegen {
 						}
 					}
 					return true;
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -629,7 +629,7 @@ class Codegen {
 			kind: FFun({
 				args: [
 					{ name: 'ctx', type: macro :anyparse.runtime.Parser },
-					{ name: 'keyword', type: macro :String },
+					{ name: 'keyword', type: macro :String }
 				],
 				ret: macro :Void,
 				expr: macro {
@@ -643,9 +643,9 @@ class Codegen {
 							throw anyparse.runtime.ParseError.backtrack;
 						}
 					}
-				},
+				}
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -750,9 +750,9 @@ class Codegen {
 					newlineAfterLeadingComments: Bool,
 					leadingComments: Array<String>
 				},
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -790,9 +790,9 @@ class Codegen {
 			kind: FFun({
 				args: [{ name: 'ctx', type: macro :anyparse.runtime.Parser }],
 				ret: macro :Null<String>,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -819,12 +819,12 @@ class Codegen {
 				args: [
 					{ name: 'input', type: macro :anyparse.runtime.Input },
 					{ name: 'from', type: macro :Int },
-					{ name: 'to', type: macro :Int },
+					{ name: 'to', type: macro :Int }
 				],
 				ret: macro :Bool,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -866,12 +866,12 @@ class Codegen {
 			kind: FFun({
 				args: [
 					{ name: 'input', type: macro :anyparse.runtime.Input },
-					{ name: 'pos', type: macro :Int },
+					{ name: 'pos', type: macro :Int }
 				],
 				ret: macro :Bool,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -922,12 +922,12 @@ class Codegen {
 			kind: FFun({
 				args: [
 					{ name: 'input', type: macro :anyparse.runtime.Input },
-					{ name: 'from', type: macro :Int },
+					{ name: 'from', type: macro :Int }
 				],
 				ret: macro :Bool,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1141,9 +1141,9 @@ class Codegen {
 			kind: FFun({
 				args: [{ name: 'ctx', type: macro :anyparse.runtime.Parser }],
 				ret: macro :Null<String>,
-				expr: body,
+				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 

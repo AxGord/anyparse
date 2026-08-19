@@ -1307,8 +1307,7 @@ final class NullFlow {
 	/** Whether `node`'s subtree contains any logical-`||` operator — the compound-predicate refusal trigger. */
 	private static function containsOr(node: QueryNode): Bool {
 		if (node.kind == BOOL_OR_KIND) return true;
-		for (c in node.children) if (containsOr(c)) return true;
-		return false;
+		return node.children.exists(c -> containsOr(c));
 	}
 
 	/**

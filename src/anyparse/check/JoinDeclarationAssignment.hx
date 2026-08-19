@@ -8,6 +8,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -192,8 +193,7 @@ final class JoinDeclarationAssignment implements Check {
 	 */
 	private static function referencesName(node: QueryNode, name: String, s: Seams): Bool {
 		if ((node.kind == s.identKind || node.kind == s.stringInterpKind) && node.name == name) return true;
-		for (c in node.children) if (referencesName(c, name, s)) return true;
-		return false;
+		return node.children.exists(c -> referencesName(c, name, s));
 	}
 
 	/**

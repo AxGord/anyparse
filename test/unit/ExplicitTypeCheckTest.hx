@@ -9,6 +9,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 import anyparse.query.SymbolIndex;
+import sys.io.File;
 
 /**
  * The `explicit-type` check: a member field with no `:Type`, a function parameter
@@ -101,10 +102,10 @@ class ExplicitTypeCheckTest extends Test {
 		final base: String = tmp != null && tmp.length > 0 ? tmp : '/tmp';
 		final dir: String = '$base/anyparse_et_cs_${Sys.time()}';
 		sys.FileSystem.createDirectory(dir);
-		sys.io.File.saveContent('$dir/checkstyle.json', '{"checks":[{"type":"Type","props":{"ignoreEnumAbstractValues":false}}]}');
+		File.saveContent('$dir/checkstyle.json', '{"checks":[{"type":"Type","props":{"ignoreEnumAbstractValues":false}}]}');
 		final path: String = '$dir/EA.hx';
 		final src: String = 'enum abstract E(Int) {\n\tvar A = 1;\n}';
-		sys.io.File.saveContent(path, src);
+		File.saveContent(path, src);
 		Assert.isTrue(new ExplicitType().run([{ file: path, source: src }], new HaxeQueryPlugin()).length >= 1);
 		CliFixture.removeDir(dir);
 	}

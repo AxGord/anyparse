@@ -1,14 +1,14 @@
 package anyparse.macro.strategy;
 
 #if macro
-import anyparse.macro.AnnotationKeys;
-import haxe.macro.Context;
-import haxe.macro.Expr;
 import anyparse.core.CoreIR;
 import anyparse.core.LoweringCtx;
 import anyparse.core.RuntimeContrib;
 import anyparse.core.ShapeTree;
 import anyparse.core.Strategy;
+import anyparse.macro.AnnotationKeys;
+import haxe.macro.Context;
+import haxe.macro.Expr;
 
 /**
  * Lit strategy — owns literal text glue.
@@ -102,7 +102,7 @@ class Lit implements Strategy {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return false;
 		for (entry in meta) switch entry.name {
-			case ':lit' | ':lead' | ':trail' | ':trailOpt' | ':wrap' | ':sep' | ':sepAlt':
+			case ':lit', ':lead', ':trail', ':trailOpt', ':wrap', ':sep', ':sepAlt':
 				return true;
 			case _:
 		}

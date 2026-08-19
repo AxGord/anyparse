@@ -439,9 +439,7 @@ class BlockCommentNormalizer {
 
 		final interior: Array<String> = [];
 		final contents: Array<String> = [];
-		for (i in 0...stripped.length) {
-			final p: StrippedLine = stripped[i];
-			if ((i == 0 || i == last) && p.content.length == 0) continue;
+		for (i => p in stripped) if (i != 0 && i != last || p.content.length != 0) {
 			final relWs: String = p.marker || p.ws.length <= commonLen ? '' : p.ws.substr(commonLen);
 			if (p.content.length == 0) {
 				interior.push(wantStars ? ' *' : '');

@@ -1,12 +1,12 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.NullableSource.NullableSourceCfg;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
-import anyparse.check.NullableSource.NullableSourceCfg;
 
 /**
  * Flags a dereference of a provably-nullable expression with no null check — a

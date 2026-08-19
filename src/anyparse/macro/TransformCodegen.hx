@@ -55,7 +55,7 @@ class TransformCodegen {
 					kind: FVar(TFunction([hook.ct], hook.ct)),
 					access: [],
 					meta: [{ name: ':optional', params: [], pos: Context.currentPos() }],
-					pos: Context.currentPos(),
+					pos: Context.currentPos()
 				}
 		];
 
@@ -68,7 +68,7 @@ class TransformCodegen {
 			doc: 'Per-type rewrite hooks for the generated deep transform. Each optional field is a `T -> T` rewrite applied to every '
 			+ 'node of that type during the bottom-up walk. An empty `{}` is a structural identity; setting one hook is the rewrite '
 			+ 'primitive for that node type.',
-			meta: [],
+			meta: []
 		});
 	}
 
@@ -78,7 +78,7 @@ class TransformCodegen {
 	private static function transformField(fn: TransformLowering.TransformFn, visitCT: ComplexType): Field {
 		final args: Array<FunctionArg> = [
 			{ name: 'node', type: fn.paramCT },
-			{ name: 'visit', type: visitCT },
+			{ name: 'visit', type: visitCT }
 		];
 		return {
 			name: fn.fnName,
@@ -86,7 +86,7 @@ class TransformCodegen {
 			doc: 'Deep transform of `${fn.typePath}`: recurse each grammar-typed '
 				+ 'child via its own `_transform`, rebuild this node, then apply the matching `visit` hook if set.',
 			kind: FFun({ args: args, ret: fn.paramCT, expr: fn.body }),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -98,12 +98,12 @@ class TransformCodegen {
 		final rootCT: ComplexType = result.rootCT;
 		final args: Array<FunctionArg> = [
 			{ name: 'root', type: rootCT },
-			{ name: 'visit', type: visitCT },
+			{ name: 'visit', type: visitCT }
 		];
 		final callee: Expr = { expr: EConst(CIdent(result.rootFnName)), pos: Context.currentPos() };
 		final body: Expr = {
 			expr: EReturn({ expr: ECall(callee, [macro root, macro visit]), pos: Context.currentPos() }),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		return {
 			name: 'transform',
@@ -111,7 +111,7 @@ class TransformCodegen {
 			doc: 'Deep whole-tree transform: bottom-up walk applying each set `visit` hook to every node of its type. An empty `visit` ('
 				+ '`{}`) is a structural identity.',
 			kind: FFun({ args: args, ret: rootCT, expr: body }),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 

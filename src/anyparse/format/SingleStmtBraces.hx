@@ -1,5 +1,6 @@
 package anyparse.format;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -280,16 +281,16 @@ class SingleStmtBraces {
 	 */
 	private static function innerSelfTerminates(inner: EnumValue): Bool {
 		return switch Type.enumConstructor(inner) {
-			case 'ReturnStmt' | 'ExprStmt': Type.enumParameters(inner)[1] == true;
-			case 'VoidReturnStmt' | 'ThrowStmt' | 'BreakStmt' | 'ContinueStmt' | 'DoWhileStmt': true;
-			case 'IfStmt' | 'WhileStmt' | 'ForStmt' | 'SwitchStmt' | 'SwitchStmtBare' | 'TryCatchStmt' | 'TryCatchStmtBare':
+			case 'ReturnStmt', 'ExprStmt': Type.enumParameters(inner)[1] == true;
+			case 'VoidReturnStmt', 'ThrowStmt', 'BreakStmt', 'ContinueStmt', 'DoWhileStmt', 'IfStmt', 'WhileStmt', 'ForStmt',
+				'SwitchStmt', 'SwitchStmtBare', 'TryCatchStmt', 'TryCatchStmtBare':
 				true;
 			// Brace-bearing already - it self-terminates on `}`, but neither caller wants it:
 			// gate 3 would unwrap `{ { x; } }` one level (that is `unnecessary-block`'s job) and
 			// the gate-7 repair arm would wrap an ALREADY braced branch a second time. This arm
 			// is the only thing keeping either from happening, so do not move it to the `true`
 			// side without giving both callers their own guard.
-			case 'BlockStmt' | 'BlockBody': false;
+			case 'BlockStmt', 'BlockBody': false;
 			case _: false;
 		};
 	}
@@ -339,11 +340,10 @@ class SingleStmtBraces {
 			case 'IfExpr':
 				elseTailDanglingIf(head, 'elseBranch');
 			// Loop / lambda / function typedefs whose LAST field is the body.
-			case 'WhileStmt' | 'WhileExpr' | 'ForStmt' | 'ForExpr' | 'ForReifExpr':
+			case 'WhileStmt', 'WhileExpr', 'ForStmt', 'ForExpr', 'ForReifExpr', 'ThinParenLambdaExpr', 'ParenLambdaExpr', 'FnExpr',
+				'NamedFnExpr', 'LocalFnStmt', 'LocalInlineFnStmt':
 				fieldTailDanglingIf(head, 'body');
-			case 'ThinParenLambdaExpr' | 'ParenLambdaExpr' | 'FnExpr' | 'NamedFnExpr' | 'LocalFnStmt' | 'LocalInlineFnStmt':
-				fieldTailDanglingIf(head, 'body');
-			case 'TryCatchStmt' | 'TryCatchStmtBare' | 'TryExpr': tailCatchDanglingIf(head);
+			case 'TryCatchStmt', 'TryCatchStmtBare', 'TryExpr': tailCatchDanglingIf(head);
 			case 'MetaExpr': fieldTailDanglingIf(head, 'expr');
 			case 'MetaStmt': fieldTailDanglingIf(head, 'stmt');
 			case _: containsIf(e);
@@ -401,22 +401,21 @@ class SingleStmtBraces {
 	private static function tailSealed(ctor: String): Bool {
 		return switch ctor {
 			// Statements closed by `}` (block / switch / untyped block).
-			case 'BlockStmt' | 'SwitchStmt' | 'SwitchStmtBare' | 'UntypedBlockStmt':
+			case 'BlockStmt', 'SwitchStmt', 'SwitchStmtBare', 'UntypedBlockStmt':
 				true;
 			// Keyword statements closed by their own `;` or by the do-while `)`.
-			case 'DoWhileStmt' | 'BreakStmt' | 'ContinueStmt' | 'VoidReturnStmt' | 'EmptyStmt' | 'EllipsisStmt' | 'ErrorStmt':
+			case 'DoWhileStmt', 'BreakStmt', 'ContinueStmt', 'VoidReturnStmt', 'EmptyStmt', 'EllipsisStmt', 'ErrorStmt':
 				true;
 			// Function / do-while body wrappers that carry their own braces or `;`.
-			case 'BlockBody' | 'UntypedBlockBody' | 'NoBody':
+			case 'BlockBody', 'UntypedBlockBody', 'NoBody':
 				true;
 			// Expressions closed by a brace or a paren.
-			case 'ArrayExpr' | 'ObjectLit' | 'BlockExpr' | 'ParenExpr' | 'ECheckTypeExpr' | 'NewExpr' | 'TypedCastExpr':
-				true;
-			case 'SwitchExpr' | 'SwitchExprBare' | 'DollarBlockExpr' | 'DollarReifExpr':
+			case 'ArrayExpr', 'ObjectLit', 'BlockExpr', 'ParenExpr', 'ECheckTypeExpr', 'NewExpr', 'TypedCastExpr', 'SwitchExpr',
+				'SwitchExprBare', 'DollarBlockExpr', 'DollarReifExpr':
 				true;
 			// Postfix operators and member access - the last token is a bracket, an
 			// operator or a name.
-			case 'IndexAccess' | 'Call' | 'FieldAccess' | 'SafeFieldAccess' | 'ForceFieldAccess' | 'PostIncr' | 'PostDecr':
+			case 'IndexAccess', 'Call', 'FieldAccess', 'SafeFieldAccess', 'ForceFieldAccess', 'PostIncr', 'PostDecr':
 				true;
 			case _: false;
 		};
@@ -436,20 +435,14 @@ class SingleStmtBraces {
 				2;
 			// Every binary infix operator, incl. the arrows: the right operand is last.
 			// `Is` / `HxType.Arrow` put a type there, which the walk treats conservatively.
-			case 'Mul' | 'Div' | 'Mod' | 'Add' | 'Sub' | 'Shl' | 'UShr' | 'Shr' | 'BitOr' | 'BitAnd' | 'BitXor':
-				1;
-			case 'Eq' | 'NotEq' | 'LtEq' | 'GtEq' | 'Lt' | 'Gt' | 'Interval' | 'Is' | 'And' | 'Or' | 'NullCoal' | 'In':
-				1;
-			case 'Assign' | 'AddAssign' | 'SubAssign' | 'MulAssign' | 'DivAssign' | 'ModAssign' | 'ShlAssign':
-				1;
-			case 'UShrAssign' | 'ShrAssign' | 'BitOrAssign' | 'BitAndAssign' | 'BitXorAssign' | 'NullCoalAssign':
-				1;
-			case 'BoolAndAssign' | 'BoolOrAssign' | 'ThinArrow' | 'Arrow':
+			case 'Mul', 'Div', 'Mod', 'Add', 'Sub', 'Shl', 'UShr', 'Shr', 'BitOr', 'BitAnd', 'BitXor', 'Eq', 'NotEq', 'LtEq', 'GtEq',
+				'Lt', 'Gt', 'Interval', 'Is', 'And', 'Or', 'NullCoal', 'In', 'Assign', 'AddAssign', 'SubAssign', 'MulAssign', 'DivAssign',
+				'ModAssign', 'ShlAssign', 'UShrAssign', 'ShrAssign', 'BitOrAssign', 'BitAndAssign', 'BitXorAssign', 'NullCoalAssign',
+				'BoolAndAssign', 'BoolOrAssign', 'ThinArrow', 'Arrow':
 				1;
 			// Single-operand statements, prefix operators and keyword-atom expressions.
-			case 'ReturnStmt' | 'ExprStmt' | 'ThrowStmt' | 'ExprBody' | 'ReturnExpr' | 'ThrowExpr' | 'UntypedExpr':
-				0;
-			case 'CastExpr' | 'InlineExpr' | 'MacroExpr' | 'Neg' | 'Not' | 'BitNot' | 'PreIncr' | 'PreDecr' | 'Spread':
+			case 'ReturnStmt', 'ExprStmt', 'ThrowStmt', 'ExprBody', 'ReturnExpr', 'ThrowExpr', 'UntypedExpr', 'CastExpr', 'InlineExpr',
+				'MacroExpr', 'Neg', 'Not', 'BitNot', 'PreIncr', 'PreDecr', 'Spread':
 				0;
 			case _: -1;
 		};
@@ -467,12 +460,10 @@ class SingleStmtBraces {
 		}
 		if (Std.isOfType(v, Array)) {
 			final arr: Array<Dynamic> = v;
-			for (x in arr) if (containsIf(x)) return true;
-			return false;
+			return arr.exists(x -> containsIf(x));
 		}
 		if (!Reflect.isObject(v)) return false;
-		for (f in Reflect.fields(v)) if (containsIf(Reflect.field(v, f))) return true;
-		return false;
+		return Reflect.fields(v).exists(f -> containsIf(Reflect.field(v, f)));
 	}
 
 	/**

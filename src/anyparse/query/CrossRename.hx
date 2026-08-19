@@ -148,7 +148,7 @@ final class CrossRename {
 
 		// 1. Resolve the type declaration the cursor sits on.
 		final cursorTree: QueryNode = try plugin.parseFile(cursorSource) catch (exception: ParseError) return Err(
-			'$cursorFile does not parse: ${exception.toString()}'
+			'$cursorFile does not parse: $exception'
 		)
 		catch (exception: Exception) return Err('$cursorFile does not parse: ${exception.message}');
 
@@ -351,7 +351,7 @@ final class CrossRename {
 			try
 				plugin.parseFile(newSource)
 			catch (exception: ParseError)
-				return Err('rewritten ${entry.file} does not parse: ${exception.toString()}')
+				return Err('rewritten ${entry.file} does not parse: $exception')
 			catch (exception: Exception)
 				return Err('rewritten ${entry.file} does not parse: ${exception.message}');
 

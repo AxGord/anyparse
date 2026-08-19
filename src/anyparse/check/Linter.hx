@@ -1,15 +1,14 @@
 package anyparse.check;
 
+import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
+import anyparse.check.SimplifyBooleanTernary;
+import anyparse.check.SimplifyNegatedCompound;
+import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.GrammarPlugin;
 
 using Lambda;
-
-import anyparse.query.CachingGrammarPlugin;
-import anyparse.check.SimplifyBooleanTernary;
-import anyparse.check.SimplifyNegatedCompound;
-import anyparse.check.Check.ConfigAware;
-import anyparse.check.Check.DefaultOff;
 
 /**
  * Runs a set of `Check`s over a file set and concatenates their

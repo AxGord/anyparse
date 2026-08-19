@@ -110,7 +110,7 @@ final class Meta {
 			declKind: owner.kind,
 			declName: owner.name,
 			declSpan: owner.span,
-			metaSpan: metaNode.span,
+			metaSpan: metaNode.span
 		};
 	}
 

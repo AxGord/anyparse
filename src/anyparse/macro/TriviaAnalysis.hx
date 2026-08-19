@@ -4,6 +4,8 @@ package anyparse.macro;
 import anyparse.core.ShapeTree;
 import haxe.macro.Expr;
 
+using Lambda;
+
 /**
  * Phase-3 analysis pass run between `ShapeBuilder` and `Lowering`.
  *
@@ -105,20 +107,17 @@ class TriviaAnalysis {
 
 	private static function hasPostfixPair(meta: Null<Metadata>): Bool {
 		if (meta == null) return false;
-		for (e in meta) if (e.name == ':postfix' && e.params.length == 2) return true;
-		return false;
+		return meta.exists(e -> e.name == ':postfix' && e.params.length == 2);
 	}
 
 	private static function hasTrivia(meta: Null<Metadata>): Bool {
 		if (meta == null) return false;
-		for (e in meta) if (e.name == ':trivia') return true;
-		return false;
+		return meta.exists(e -> e.name == ':trivia');
 	}
 
 	private static function hasAnyTriviaStar(node: ShapeNode): Bool {
 		if (node.kind == Star && node.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true) return true;
-		for (child in node.children) if (hasAnyTriviaStar(child)) return true;
-		return false;
+		return node.children.exists(child -> hasAnyTriviaStar(child));
 	}
 
 	private static function collectRefs(node: ShapeNode): Array<String> {

@@ -11,6 +11,8 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 using StringTools;
 
 import anyparse.grammar.haxe.CheckstyleConfigLoader;
+import sys.FileSystem;
+import sys.io.File;
 
 /**
  * The `complexity` check: a function whose cyclomatic complexity (1 + decision
@@ -147,20 +149,20 @@ class ComplexityCheckTest extends Test {
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
 		final base: String = tmp != null && tmp.length > 0 ? tmp : '/tmp';
 		final dir: String = '$base/anyparse_cx_cfg_${Sys.time()}';
-		sys.FileSystem.createDirectory(dir);
-		sys.io.File.saveContent(
+		FileSystem.createDirectory(dir);
+		File.saveContent(
 			'$dir/checkstyle.json',
 			'{"checks":[{"type":"CyclomaticComplexity","props":{"thresholds":[{"severity":"WARNING","complexity":3}]}}]}'
 		);
 		final path: String = '$dir/Foo.hx';
 		final src: String = 'class Foo {\n\tfunction f(a:Bool):Bool { return a && a && a; }\n}';
-		sys.io.File.saveContent(path, src);
+		File.saveContent(path, src);
 		final vs: Array<Violation> = new Complexity().run([{ file: path, source: src }], new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains('max 2'));
-		sys.FileSystem.deleteFile(path);
-		sys.FileSystem.deleteFile('$dir/checkstyle.json');
-		sys.FileSystem.deleteDirectory(dir);
+		FileSystem.deleteFile(path);
+		FileSystem.deleteFile('$dir/checkstyle.json');
+		FileSystem.deleteDirectory(dir);
 	}
 
 	public function testDispatcherSwitchNotInflated(): Void {

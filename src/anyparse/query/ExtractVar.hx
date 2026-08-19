@@ -4,6 +4,7 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -87,7 +88,7 @@ final class ExtractVar {
 		'Decl',
 		'Named',
 		'Required',
-		'Optional',
+		'Optional'
 	];
 
 	/**
@@ -114,7 +115,7 @@ final class ExtractVar {
 		// The VALUE binder of `for (k => v in m)` — the loop node names only the KEY, so
 		// without this a collision with `v` goes unseen and the new binding captures it.
 		'KeyValueBinder',
-		'CatchClause',
+		'CatchClause'
 	];
 
 	/**
@@ -132,9 +133,7 @@ final class ExtractVar {
 	): ExtractResult {
 		if (!RefactorSupport.isIdentifier(name)) return Err('new name "$name" is not a valid identifier');
 
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
-			'source does not parse: ${exception.toString()}'
-		)
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		// line:col is 1-based, as apq refs / ast --at / source print.
@@ -174,11 +173,11 @@ final class ExtractVar {
 
 		final insertEdit: { span: Span, text: String } = {
 			span: new Span(lineStart, lineStart),
-			text: '${indent}final $name = $exprText;\n',
+			text: '${indent}final $name = $exprText;\n'
 		};
 		final replaceEdit: { span: Span, text: String } = {
 			span: new Span(targetSpan.from, effTo),
-			text: name,
+			text: name
 		};
 
 		final rewritten: String = RefactorSupport.applyEdits(source, [insertEdit, replaceEdit]);
@@ -187,7 +186,7 @@ final class ExtractVar {
 		try
 			plugin.parseFile(rewritten)
 		catch (exception: ParseError)
-			return Err('rewritten source does not parse: ${exception.toString()}')
+			return Err('rewritten source does not parse: $exception')
 		catch (exception: Exception)
 			return Err('rewritten source does not parse: ${exception.message}');
 
@@ -289,8 +288,7 @@ final class ExtractVar {
 	 */
 	private static function isStructural(kind: String): Bool {
 		if (STRUCTURAL_KINDS.contains(kind)) return true;
-		for (suffix in STRUCTURAL_SUFFIXES) if (kind.endsWith(suffix)) return true;
-		return false;
+		return STRUCTURAL_SUFFIXES.exists(suffix -> kind.endsWith(suffix));
 	}
 
 	/** Offset of the first byte after the previous `\n` before `at` (or 0). */

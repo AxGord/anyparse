@@ -10,6 +10,8 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * Flags a runtime-CHECKED cast `cast(e, T)` sitting in a position whose expected type is
  * EXPLICITLY annotated exactly `T` — the annotation already pins the type, so the checked
@@ -379,8 +381,7 @@ final class RedundantCastType implements Check implements DefaultOff {
 	 * type is the one that survives projection), so anything else is the default.
 	 */
 	private static function hasDefaultValue(param: QueryNode, annotationKinds: Array<String>): Bool {
-		for (child in param.children) if (!annotationKinds.contains(child.kind)) return true;
-		return false;
+		return param.children.exists(child -> !annotationKinds.contains(child.kind));
 	}
 
 	/**
@@ -462,8 +463,7 @@ final class RedundantCastType implements Check implements DefaultOff {
 	 */
 	private static function ownsFunctionBody(node: QueryNode, functionKinds: Array<String>, bodyKinds: Array<String>): Bool {
 		if (functionKinds.contains(node.kind)) return true;
-		for (child in node.children) if (bodyKinds.contains(child.kind)) return true;
-		return false;
+		return node.children.exists(child -> bodyKinds.contains(child.kind));
 	}
 
 	/**

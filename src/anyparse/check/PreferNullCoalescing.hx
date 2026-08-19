@@ -5,9 +5,11 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.Span;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
+import anyparse.runtime.Span;
+
+using Lambda;
 
 /**
  * Flags a null-guarding ternary that the null-coalescing operator `??` replaces —
@@ -163,8 +165,7 @@ final class PreferNullCoalescing implements Check {
 
 	/** Whether `node`'s subtree contains any of `unsafeKinds` (a binding-write or a call). */
 	private static function subtreeMutates(node: QueryNode, unsafeKinds: Array<String>): Bool {
-		for (k in unsafeKinds) if (RefactorSupport.subtreeContainsKind(node, k)) return true;
-		return false;
+		return unsafeKinds.exists(k -> RefactorSupport.subtreeContainsKind(node, k));
 	}
 
 	/**

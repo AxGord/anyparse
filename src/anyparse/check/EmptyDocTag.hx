@@ -206,7 +206,7 @@ final class EmptyDocTag implements Check {
 		final rest: String = source.substring(from, to).trim();
 		return switch name {
 			case 'param': !hasSpace(rest);
-			case 'return' | 'returns' | 'throws' | 'exception' | 'see': rest == '';
+			case 'return', 'returns', 'throws', 'exception', 'see': rest == '';
 			case _: false;
 		};
 	}

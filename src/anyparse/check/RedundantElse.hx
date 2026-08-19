@@ -8,6 +8,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * Flags an `else` that follows an `if` branch which always exits — a
  * `return` / `throw` / `break` / `continue`. The `else` adds needless nesting:
@@ -168,8 +170,7 @@ final class RedundantElse implements Check {
 		final thenSpan: Null<Span> = ifNode.children[1].span;
 		final run: Null<Span> = deNestedRun(ifNode.children[2], support);
 		if (ifSpan == null || thenSpan == null || run == null) return false;
-		for (tok in comments) if (tok.from >= thenSpan.to && tok.to <= ifSpan.to && (tok.to <= run.from || tok.from >= run.to)) return true;
-		return false;
+		return comments.exists(tok -> tok.from >= thenSpan.to && tok.to <= ifSpan.to && (tok.to <= run.from || tok.from >= run.to));
 	}
 
 	/**

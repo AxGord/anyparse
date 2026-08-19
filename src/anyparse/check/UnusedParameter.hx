@@ -1,15 +1,16 @@
 package anyparse.check;
 
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
+import anyparse.query.CallSites;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.RemoveParam;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import anyparse.query.CallSites;
-import anyparse.query.RemoveParam;
-import anyparse.check.Check.ConfigAware;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -252,15 +253,13 @@ final class UnusedParameter implements Check implements ConfigAware {
 
 	/** Whether `parent` (a function's enclosing node) carries a supertype clause — making the function a contract candidate. */
 	private static function isContractCandidate(parent: QueryNode, supertypeClauseKinds: Array<String>): Bool {
-		for (c in parent.children) if (supertypeClauseKinds.contains(c.kind)) return true;
-		return false;
+		return parent.children.exists(c -> supertypeClauseKinds.contains(c.kind));
 	}
 
 	/** Whether `fn` is a body-less declaration (an interface / abstract method). */
 	private static function hasNoBody(fn: QueryNode, noBodyKind: Null<String>): Bool {
 		if (noBodyKind == null) return false;
-		for (c in fn.children) if (c.kind == noBodyKind) return true;
-		return false;
+		return fn.children.exists(c -> c.kind == noBodyKind);
 	}
 
 	/**
@@ -295,8 +294,7 @@ final class UnusedParameter implements Check implements ConfigAware {
 				&& RefactorSupport.isPrivateMemberConfined(ownerName, source, index));
 		final capturedAsValue: Bool = fnName != null && captured.contains(fnName);
 		final params: Array<QueryNode> = CallSites.leadingParams(fn);
-		for (pi in 0...params.length) {
-			final p: QueryNode = params[pi];
+		for (pi => p in params) {
 			final name: Null<String> = p.name;
 			final pspan: Null<Span> = p.span;
 			if (name == null || pspan == null) continue;

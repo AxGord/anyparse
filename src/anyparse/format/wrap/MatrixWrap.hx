@@ -95,23 +95,21 @@ final class MatrixWrap {
 		while (stack.length > 0) {
 			final node: Doc = stack.pop();
 			switch node {
-				case Empty | Text(_) | OptSpace(_) | OptSpaceSkipAfterHardline:
+				case Empty, Text(_), OptSpace(_), OptSpaceSkipAfterHardline:
 				case Line(flat):
 					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return true;
-				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+				case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 					return true;
-				case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
-					inner
-				) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
-					inner
-				) | ConditionalMarkerDecrease(inner):
+				case Nest(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner), WrapBoundary(inner),
+					HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
+					CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(parts):
 					for (p in parts) stack.push(p);
-				case Fill(parts, sep, _) | FillWithRestProbe(parts, sep, _) | FillBreakAfterWrap(parts, sep, _):
+				case Fill(parts, sep, _), FillWithRestProbe(parts, sep, _), FillBreakAfterWrap(parts, sep, _):
 					for (p in parts) stack.push(p);
 					stack.push(sep);
-				case IfIndentWidthExceeds(_, _, _, flat) | IfGluedFirstLineExceeds(_, _, _, flat):
+				case IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
 					// ω-case-sym-linear + ω-glue-width: both `BodyFit` width probes are
 					// EXCLUDED from the both-branch descent, for COST alone — descending
 					// both doubles the visited node count per nested probe, 2^depth for
@@ -123,11 +121,10 @@ final class MatrixWrap {
 					// `WrapList.flatLength(body) == -1`, so the body already carries a
 					// hardline and both sides answer `true`.
 					stack.push(flat);
-				case IfBreak(brk, flat) | IfWidthExceeds(_, brk, flat) | IfFirstLineExceeds(_, brk, flat) | IfLineExceeds(_, brk, flat) | IfResidualLineExceeds(
-					_, brk, flat
-				) | IfFullLineExceeds(_, brk, flat) | IfNaturalFirstLineExceeds(_, brk, flat) | IfNaturalFirstLineExceedsWithRest(
-					_, brk, flat
-				) | IfNaturalFirstLineFitsOpenDelim(_, brk, flat) | IfArrowContinuationFits(_, _, _, brk, flat):
+				case IfBreak(brk, flat), IfWidthExceeds(_, brk, flat), IfFirstLineExceeds(_, brk, flat), IfLineExceeds(_, brk, flat),
+					IfResidualLineExceeds(_, brk, flat), IfFullLineExceeds(_, brk, flat), IfNaturalFirstLineExceeds(_, brk, flat),
+					IfNaturalFirstLineExceedsWithRest(_, brk, flat), IfNaturalFirstLineFitsOpenDelim(_, brk, flat),
+					IfArrowContinuationFits(_, _, _, brk, flat):
 					stack.push(brk);
 					stack.push(flat);
 			}

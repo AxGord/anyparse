@@ -1,25 +1,27 @@
 package anyparse.grammar.haxe;
 
+import anyparse.format.IndentChar;
 import anyparse.format.comment.CommentInventory;
 import anyparse.format.comment.CommentLossException;
 import anyparse.format.comment.FormatterOff;
+import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.CondBranchProjection;
+import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NamingPolicy.NamingSupport;
+import anyparse.query.ParsedRootProvider;
 import anyparse.query.Pattern;
 import anyparse.query.QueryNode;
+import anyparse.query.SpanTypeInfoProvider;
+import anyparse.query.StdResolver;
+import anyparse.query.StringFold.StringFoldSupport;
+import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
-import anyparse.query.NamingPolicy.NamingSupport;
-import anyparse.query.StringFold.StringFoldSupport;
-import anyparse.query.ControlFlow.ControlFlowSupport;
-import anyparse.query.BooleanLogic.BooleanLogicSupport;
-import anyparse.format.IndentChar;
-import anyparse.query.TypeInfoProvider;
-import anyparse.query.SpanTypeInfoProvider;
-import anyparse.query.StdResolver;
-import anyparse.query.CondBranchProjection;
-import anyparse.query.FormatConfigDiscovery;
-import anyparse.query.ParsedRootProvider;
+
+using Lambda;
 
 /**
  * Haxe grammar binding for the `apq` query engine.
@@ -138,7 +140,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		'VarField',
 		'FinalField',
 		'FnField',
-		'KeyValueBinder',
+		'KeyValueBinder'
 	];
 
 	/**
@@ -163,7 +165,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		'BitXorAssign',
 		'NullCoalAssign',
 		'BoolAndAssign',
-		'BoolOrAssign',
+		'BoolOrAssign'
 	];
 
 	/**
@@ -186,7 +188,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		'AbstractDecl',
 		'EnumAbstractDecl',
 		'EnumDecl',
-		'TypedefDecl',
+		'TypedefDecl'
 	];
 
 	/**
@@ -228,7 +230,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		'BlockStmt',
 		'ForStmt',
 		'ForExpr',
-		'CatchClause',
+		'CatchClause'
 	];
 
 	/**
@@ -258,7 +260,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		'FinalStmt',
 		'VarMember',
 		'FinalMember',
-		'Assign',
+		'Assign'
 	];
 
 	/**
@@ -326,7 +328,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	private static final SEARCH_KIND_EQUIVALENCE: KindEquivalence = new KindEquivalence([
 		['VarDecl', 'VarMember', 'VarStmt'],
 		['FnDecl', 'FnMember', 'LocalFnStmt'],
-		['VarForm', 'FinalMember', 'FinalStmt'],
+		['VarForm', 'FinalMember', 'FinalStmt']
 	]);
 
 	/**
@@ -620,7 +622,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			selfScopeDeclKinds: [
 				'ForStmt',
 				'ForExpr',
-				'CatchClause',
+				'CatchClause'
 			],
 			// A data member of an abstract is static whether or not it says so: Haxe refuses
 			// `Cannot declare member variable in abstract`, which is what makes every value of
@@ -858,7 +860,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'CondSpliceBlockClose',
 				'CondSpliceCase',
 				'CondSpliceMember',
-				'CondSharedBodyDecl',
+				'CondSharedBodyDecl'
 			],
 			stringInterpIdentKind: 'Ident',
 			stringInterpBlockKind: 'Block',
@@ -874,7 +876,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			nullCoalAssignKind: 'NullCoalAssign',
 			numericOperatorKinds: [
 				'Add', 'Sub', 'Mul', 'Div', 'Mod', 'Lt', 'Gt', 'LtEq', 'GtEq', 'BitAnd', 'BitOr', 'BitXor', 'Shl', 'Shr', 'UShr', 'Neg',
-				'BitNot',
+				'BitNot'
 			],
 			nullableNumericReturnCalls: ['Std.parseInt', 'Std.parseFloat'],
 			stringLiteralKinds: ['SingleStringExpr', 'DoubleStringExpr'],
@@ -926,7 +928,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'IntMap.get',
 				'ObjectMap.get',
 				'EnumValueMap.get',
-				'WeakMap.get',
+				'WeakMap.get'
 			],
 			nullableReturnMarkerTypes: ['Null'],
 			nullableFlowExcludedCalls: ['Array.pop', 'Array.shift', 'List.pop', 'List.first', 'List.last'],
@@ -1020,7 +1022,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'ReturnExpr',
 				'ArrayExpr',
 				'Field',
-				'NewExpr',
+				'NewExpr'
 			],
 			// `Call`'s child 0 is the callee — an operand position, where parens can be
 			// load-bearing (`(a ? b : c)(x)`); the arguments after it are delimited by
@@ -1096,7 +1098,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'ForceFieldAccess',
 				'IndexAccess',
 				'ArrayExpr',
-				'NewExpr',
+				'NewExpr'
 			],
 			// Self-delimiting content: no operator outside can bind into it. `IdentExpr`
 			// covers `this`. `SingleStringExpr` projects its segments and `${…}`
@@ -1110,7 +1112,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'BoolLit',
 				'NullLit',
 				'SingleStringExpr',
-				'DoubleStringExpr',
+				'DoubleStringExpr'
 			],
 			// A transparent link: `a.b.c` is one atom, while `f().b` / `arr[i].b` /
 			// `a?.b` are not — their unlisted child stops the chain.
@@ -1190,7 +1192,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'ForReifExpr',
 				'WhileExpr',
 				'TryExpr',
-				'Ternary',
+				'Ternary'
 			],
 			// `a + (-b * c)` bare reads `a + -b * c` — a `Mul` root over a leading
 			// minus, the same defect a bare `Neg` root is excluded for.
@@ -1209,11 +1211,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'SwitchExpr',
 				'SwitchExprBare',
 				'MetaCall',
-				'MetaExpr',
+				'MetaExpr'
 			],
 			// Inside a `macro` quotation a paren reifies as `EParenthesis`; inside a case
 			// pattern the syntax is matched structurally, not by expression precedence.
-			parenOpaqueSubtreeKinds: ['MacroExpr', 'Plain'],
+			parenOpaqueSubtreeKinds: ['MacroExpr', 'Plain']
 		};
 	}
 
@@ -1228,7 +1230,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		// walker recognises.
 		return {
 			metaKinds: ['MetaCall', 'Meta', 'PlainMeta'],
-			declHostKinds: DECL_HOST_KINDS,
+			declHostKinds: DECL_HOST_KINDS
 		};
 	}
 
@@ -1246,7 +1248,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			{ wrap: src -> src, extract: HaxePatternFragment.extractFirstDecl, category: PatternCategory.Decl },
 			{ wrap: HaxePatternFragment.wrapAsStmt, extract: HaxePatternFragment.extractFirstStmt, category: PatternCategory.Stmt },
 			{ wrap: HaxePatternFragment.wrapAsExpr, extract: HaxePatternFragment.extractFirstExpr, category: PatternCategory.Expr },
-			{ wrap: HaxePatternFragment.wrapAsMetaArgs, extract: HaxePatternFragment.extractFirstMeta, category: PatternCategory.MetaArgs },
+			{ wrap: HaxePatternFragment.wrapAsMetaArgs, extract: HaxePatternFragment.extractFirstMeta, category: PatternCategory.MetaArgs }
 		];
 		// A declaration / statement fragment whose only defect is the missing
 		// terminator (`final x:T = []`) parses with a `;` appended — retried as a
@@ -1584,8 +1586,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 
 	/** Whether `fn` declares at least one parameter (a `Required` / `Optional` / `Rest` child) — the `using`-eligibility gate. */
 	private static function hasParam(fn: QueryNode): Bool {
-		for (c in fn.children) if (c.kind == 'Required' || c.kind == 'Optional' || c.kind == 'Rest') return true;
-		return false;
+		return fn.children.exists(c -> c.kind == 'Required' || c.kind == 'Optional' || c.kind == 'Rest');
 	}
 
 	/** The all-empty bundle returned when the source does not parse - the six maps are simply unpopulated, never null. */

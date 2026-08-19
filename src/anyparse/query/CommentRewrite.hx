@@ -43,7 +43,7 @@ final class CommentRewrite {
 		try
 			plugin.parseFile(source)
 		catch (exception: ParseError)
-			return Err('source does not parse: ${exception.toString()}')
+			return Err('source does not parse: $exception')
 		catch (exception: Exception)
 			return Err('source does not parse: ${exception.message}');
 

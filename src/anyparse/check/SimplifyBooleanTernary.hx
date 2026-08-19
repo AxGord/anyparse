@@ -4,9 +4,9 @@ import anyparse.check.Check.Violation;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import anyparse.query.RefactorSupport;
 
 /**
  * Flags a ternary whose then- or else-branch is a boolean literal — a

@@ -61,12 +61,12 @@ class SpanInfoCodegen {
 					{ name: 'cur', type: NULL_SPAN_CT },
 					{ name: 'b', type: BUNDLE_CT },
 					{ name: 'source', type: STRING_CT },
-					{ name: 'tp', type: TPath({ pack: [], name: 'Array', params: [TPType(STRING_CT)] }) },
+					{ name: 'tp', type: TPath({ pack: [], name: 'Array', params: [TPType(STRING_CT)] }) }
 				],
 				ret: VOID_CT,
 				expr: fn.body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -77,7 +77,7 @@ class SpanInfoCodegen {
 			access: [APrivate, AStatic],
 			doc: doc,
 			kind: FFun({ args: [{ name: 'v', type: fn.paramCT }], ret: ret, expr: fn.body }),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -100,12 +100,12 @@ class SpanInfoCodegen {
 			kind: FFun({
 				args: [
 					{ name: 'ids', type: TPath({ pack: [], name: 'Array', params: [TPType(idCT)] }) },
-					{ name: 'slot', type: INT_CT },
+					{ name: 'slot', type: INT_CT }
 				],
 				ret: BOOL_CT,
 				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -121,7 +121,7 @@ class SpanInfoCodegen {
 				{ expr: EConst(CIdent(result.rootFnName)), pos: Context.currentPos() },
 				[macro _r, macro null, macro b, macro source, macro tp]
 			),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final body: Expr = macro {
 			final tp: Array<String> = [];
@@ -144,12 +144,12 @@ class SpanInfoCodegen {
 			kind: FFun({
 				args: [
 					{ name: 'root', type: QueryWalkerCodegen.nullRootCT(result.rootCT) },
-					{ name: 'source', type: STRING_CT },
+					{ name: 'source', type: STRING_CT }
 				],
 				ret: BUNDLE_CT,
 				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -165,7 +165,7 @@ class SpanInfoCodegen {
 				ret: BUNDLE_CT,
 				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -181,7 +181,7 @@ class SpanInfoCodegen {
 				{ expr: EConst(CIdent(result.rootFnName)), pos: Context.currentPos() },
 				[macro _r, macro null, macro b, macro source, macro tp]
 			),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final body: Expr = macro {
 			final tp: Array<String> = [];
@@ -204,12 +204,12 @@ class SpanInfoCodegen {
 			kind: FFun({
 				args: [
 					{ name: 'root', type: QueryWalkerCodegen.nullRootCT(result.rootCT) },
-					{ name: 'source', type: STRING_CT },
+					{ name: 'source', type: STRING_CT }
 				],
 				ret: TPath({ pack: [], name: 'Array', params: [TPType(STRING_CT)] }),
 				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -225,7 +225,7 @@ class SpanInfoCodegen {
 				ret: TPath({ pack: [], name: 'Array', params: [TPType(STRING_CT)] }),
 				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 

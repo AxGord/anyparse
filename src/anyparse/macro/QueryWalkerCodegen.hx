@@ -66,7 +66,7 @@ class QueryWalkerCodegen {
 			access: [APrivate, AStatic],
 			doc: 'Source string `_memoRoot` was parsed from, or null before the first parse.',
 			kind: FVar(TPath({ pack: [], name: 'Null', params: [TPType(STRING_CT)] }), macro null),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -78,7 +78,7 @@ class QueryWalkerCodegen {
 			doc: 'Parse root of `_memoSource`, or null when that source did not parse. A failed parse is memoised too, so a skip-parse '
 				+ 'file is not retried by every projection.',
 			kind: FVar(nullRootCT(result.rootCT), macro null),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -95,7 +95,7 @@ class QueryWalkerCodegen {
 	private static function rootField(result: QueryWalkerLowering.QueryWalkerResult, parserPath: String): Field {
 		final parseCall: Expr = {
 			expr: ECall(field(haxe.macro.MacroStringTools.toFieldExpr(parserPath.split('.')), 'parse'), [macro source]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final body: Expr = macro {
 			if (_memoSource == source) return _memoRoot;
@@ -112,7 +112,7 @@ class QueryWalkerCodegen {
 				ret: nullRootCT(result.rootCT),
 				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -130,12 +130,12 @@ class QueryWalkerCodegen {
 				args: [
 					{ name: 'v', type: fn.paramCT },
 					{ name: 'into', type: NODE_ARRAY_CT },
-					WITH_TYPE_REFS_ARG,
+					WITH_TYPE_REFS_ARG
 				],
 				ret: VOID_CT,
 				expr: fn.body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -146,7 +146,7 @@ class QueryWalkerCodegen {
 			access: [APrivate, AStatic],
 			doc: 'Display name of a `${fn.typePath}` value, or null when it carries none.',
 			kind: FFun({ args: [{ name: 'v', type: fn.paramCT }], ret: NULL_STRING_CT, expr: fn.body }),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -160,12 +160,12 @@ class QueryWalkerCodegen {
 				args: [
 					{ name: 'v', type: fn.paramCT },
 					{ name: 'into', type: NODE_ARRAY_CT },
-					{ name: 'fallbackSpan', type: NULL_SPAN_CT },
+					{ name: 'fallbackSpan', type: NULL_SPAN_CT }
 				],
 				ret: VOID_CT,
 				expr: fn.body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -185,7 +185,7 @@ class QueryWalkerCodegen {
 				ret: nullRootCT(result.rootCT),
 				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -197,7 +197,7 @@ class QueryWalkerCodegen {
 	private static function publicWalkRootField(result: QueryWalkerLowering.QueryWalkerResult): Field {
 		final rootCall: Expr = {
 			expr: ECall({ expr: EConst(CIdent(result.rootFnName)), pos: Context.currentPos() }, [macro _r, macro into, macro withTypeRefs]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final body: Expr = macro {
 			final _r = root;
@@ -214,12 +214,12 @@ class QueryWalkerCodegen {
 			kind: FFun({
 				args: [
 					{ name: 'root', type: nullRootCT(result.rootCT) },
-					WITH_TYPE_REFS_ARG,
+					WITH_TYPE_REFS_ARG
 				],
 				ret: NODE_ARRAY_CT,
 				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -237,12 +237,12 @@ class QueryWalkerCodegen {
 			kind: FFun({
 				args: [
 					SOURCE_ARG,
-					WITH_TYPE_REFS_ARG,
+					WITH_TYPE_REFS_ARG
 				],
 				ret: NODE_ARRAY_CT,
 				expr: body
 			}),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 

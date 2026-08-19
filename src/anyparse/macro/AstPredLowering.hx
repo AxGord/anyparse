@@ -1,10 +1,10 @@
 package anyparse.macro;
 
 #if macro
+import anyparse.core.ShapeTree;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.MacroStringTools;
-import anyparse.core.ShapeTree;
 
 using Lambda;
 
@@ -224,7 +224,7 @@ class AstPredLowering {
 			access: [APublic, AStatic],
 			kind: FFun({ args: args, ret: ret, expr: macro return $body }),
 			pos: Context.currentPos(),
-			doc: doc,
+			doc: doc
 		};
 	}
 

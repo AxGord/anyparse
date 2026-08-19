@@ -4,6 +4,8 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using Lambda;
+
 /** One parameter of a candidate: the name it is written under and its declared primitive type. */
 typedef CandidateParam = {
 	final name: String;
@@ -321,8 +323,7 @@ final class StdlibDupScan {
 		final free: Bool = kind == shape.identKind || kind == shape.stringInterpIdentKind;
 		if (free && (name == null || (!bound.contains(name) && !STDLIB_NAMES.contains(name)))) return false;
 		if (kind == shape.fieldAccessKind && name != null && NONDETERMINISTIC_MEMBERS.contains(name)) return false;
-		for (child in node.children) if (!isSelfContained(child, shape, bound)) return false;
-		return true;
+		return node.children.foreach(child -> isSelfContained(child, shape, bound));
 	}
 
 	/** The first `MAX_LITERALS` distinct literals of the body, in document order. */

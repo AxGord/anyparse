@@ -1,14 +1,16 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.FieldWriteIndex;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
-import anyparse.query.FieldWriteIndex;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 import haxe.Exception;
+
+using Lambda;
 
 /**
  * Flags an INSTANCE field (`var` or `final`) that has NO declaration initializer but
@@ -677,8 +679,7 @@ final class FieldInitAtDeclaration implements Check {
 	): Bool {
 		final span: Null<Span> = node.span;
 		if (span != null && span.from < boundary && denotesMember(node, fieldFrom, fieldName, container, shape)) return true;
-		for (child in node.children) if (readBeforeInit(child, fieldFrom, fieldName, boundary, container, shape)) return true;
-		return false;
+		return node.children.exists(child -> readBeforeInit(child, fieldFrom, fieldName, boundary, container, shape));
 	}
 
 	/**

@@ -2,15 +2,16 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.Span;
-import anyparse.query.TypeResolver;
 import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeResolver;
+import anyparse.runtime.Span;
 import haxe.Exception;
-import anyparse.query.NominalTypes;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -427,8 +428,7 @@ final class ComparisonToBoolean implements Check {
 	 */
 	private static function memberLookupIsPinned(recvType: String, field: String, index: SymbolIndex): Bool {
 		if (index.isAnonStructType(recvType) || !typeNameIsPinned(recvType, index)) return false;
-		for (declaration in index.memberDeclarationsOf(recvType, field)) if (declaration.member.guarded) return false;
-		return true;
+		return index.memberDeclarationsOf(recvType, field).foreach(declaration -> !(declaration.member.guarded));
 	}
 
 	/**
@@ -494,8 +494,7 @@ final class ComparisonToBoolean implements Check {
 
 	/** Whether `operand`'s subtree reaches any kind whose nullness the check cannot rule out. */
 	private static function operandIsNullable(operand: QueryNode, nullableKinds: Array<String>): Bool {
-		for (k in nullableKinds) if (RefactorSupport.subtreeContainsKind(operand, k)) return true;
-		return false;
+		return nullableKinds.exists(k -> RefactorSupport.subtreeContainsKind(operand, k));
 	}
 
 	/**

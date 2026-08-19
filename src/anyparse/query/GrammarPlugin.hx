@@ -1,10 +1,10 @@
 package anyparse.query;
 
-import anyparse.query.Pattern.KindEquivalence;
-import anyparse.query.NamingPolicy.NamingSupport;
-import anyparse.query.StringFold.StringFoldSupport;
-import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.NamingPolicy.NamingSupport;
+import anyparse.query.Pattern.KindEquivalence;
+import anyparse.query.StringFold.StringFoldSupport;
 
 /**
  * Plugin contract for a grammar that the query engine can operate on.

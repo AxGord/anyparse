@@ -7,6 +7,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TreePath;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -157,8 +158,7 @@ final class CasePatternScan {
 	public static function containsAnyKind(node: QueryNode, kinds: Array<String>): Bool {
 		if (kinds.length == 0) return false;
 		if (kinds.contains(node.kind)) return true;
-		for (child in node.children) if (containsAnyKind(child, kinds)) return true;
-		return false;
+		return node.children.exists(child -> containsAnyKind(child, kinds));
 	}
 
 	/**
@@ -470,8 +470,7 @@ final class CasePatternScan {
 
 	/** An array pattern: every element subpattern must scan clean. */
 	private static function scanArrayPattern(seams: CaseSeams, node: QueryNode, out: Array<PatternBinder>): Bool {
-		for (child in node.children) if (!scanPattern(seams, child, false, out)) return false;
-		return true;
+		return node.children.foreach(child -> scanPattern(seams, child, false, out));
 	}
 
 	/** A structure pattern: every child must be a field whose value subpattern scans clean. */
@@ -501,8 +500,7 @@ final class CasePatternScan {
 
 	/** Whether any direct child of `nodes` whose kind is in `kinds` declares `name`. */
 	private static function declaresNamed(kinds: Array<String>, nodes: Array<QueryNode>, name: String): Bool {
-		for (node in nodes) if (kinds.contains(node.kind) && node.name == name) return true;
-		return false;
+		return nodes.exists(node -> kinds.contains(node.kind) && node.name == name);
 	}
 
 
@@ -515,8 +513,7 @@ final class CasePatternScan {
 		if (scope == arm) return false;
 		final span: Null<Span> = scope.span;
 		if (seams.scope.bindingDeclKinds.contains(scope.kind) && scope.name == name && span != null && span.from < at.from) return true;
-		for (child in scope.children) if (declaresBefore(seams, child, arm, at, name)) return true;
-		return false;
+		return scope.children.exists(child -> declaresBefore(seams, child, arm, at, name));
 	}
 
 

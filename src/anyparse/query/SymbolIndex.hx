@@ -1084,7 +1084,7 @@ final class SymbolIndex {
 				if ((dot < 0 ? imp.raw : imp.raw.substr(dot + 1)) == name) return true;
 			case ImportKind.Alias:
 				if (imp.alias == name) return true;
-			case ImportKind.Wild | ImportKind.Using:
+			case ImportKind.Wild, ImportKind.Using:
 		}
 		return false;
 	}
@@ -1996,7 +1996,7 @@ final class SymbolIndex {
 		final path: String = importPathFor(fi, t);
 		final wild: String = '${fi.pkg}.*';
 		for (imp in fromFile.imports) switch imp.kind {
-			case ImportKind.Import | ImportKind.Using:
+			case ImportKind.Import, ImportKind.Using:
 				// A module import carries EVERY type the module declares into simple-name scope,
 				// not just its main one — `import pkg.Mod;` makes a sub-module `pkg.Mod.Sub`
 				// referable as `Sub`, which is how a response typedef beside its main type is used.
@@ -2291,8 +2291,7 @@ final class SymbolIndex {
 	private static function moduleRefInScope(fromFile: FileInfo, fi: FileInfo): Bool {
 		if (fi.pkg == fromFile.pkg) return true;
 		final wild: String = '${fi.pkg}.*';
-		for (imp in fromFile.imports) if (imp.kind == ImportKind.Wild && imp.raw == wild) return true;
-		return false;
+		return fromFile.imports.exists(imp -> imp.kind == ImportKind.Wild && imp.raw == wild);
 	}
 
 	/** Whether `text` names any of `params` as a WHOLE identifier token — `Item` does not mention `T`, `Array<T>` does. */

@@ -80,9 +80,7 @@ final class IntroduceParameterObject {
 		if (!RefactorSupport.isIdentifier(typeName)) return Err('type name "$typeName" is not a valid identifier');
 		if (paramNames.length == 0) return Err('no parameters named — nothing to fold');
 
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
-			'source does not parse: ${exception.toString()}'
-		)
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		final prep: Prep = switch resolvePrep(source, tree, line, col, paramNames, typeName, objName, plugin, shape) {
@@ -106,7 +104,7 @@ final class IntroduceParameterObject {
 		try
 			plugin.parseFile(rewritten)
 		catch (exception: ParseError)
-			return Err('rewritten source does not parse: ${exception.toString()}')
+			return Err('rewritten source does not parse: $exception')
 		catch (exception: Exception)
 			return Err('rewritten source does not parse: ${exception.message}');
 		return Ok(rewritten);

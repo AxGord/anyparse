@@ -1,12 +1,13 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.runtime.Span;
-import haxe.Exception;
-import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportKind;
+import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.runtime.Span;
+import haxe.Exception;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -195,8 +196,7 @@ final class FieldWriteIndex {
 
 	/** Whether any resolved write targets `type`.`field` anywhere in the file set. */
 	public function writtenAnywhere(type: String, field: String): Bool {
-		for (w in _writes) if (w.owner == type && w.field == field) return true;
-		return false;
+		return _writes.exists(w -> w.owner == type && w.field == field);
 	}
 
 	/**
@@ -243,8 +243,7 @@ final class FieldWriteIndex {
 	 * candidate, so a consumer must not rewrite a field whose name appears here.
 	 */
 	public function hasUnresolvedWrite(field: String): Bool {
-		for (u in _unresolved) if (u.field == field) return true;
-		return false;
+		return _unresolved.exists(u -> u.field == field);
 	}
 
 	/**
@@ -745,8 +744,7 @@ final class FieldWriteIndex {
 		if (c.builtinNames.contains(owner)) return true;
 		final decls: Array<TypeDeclInfo> = declsNamedIn(c.index, owner);
 		if (decls.length == 0) return false;
-		for (d in decls) if (c.aliasKinds.contains(d.kind)) return false;
-		return true;
+		return decls.foreach(d -> !(c.aliasKinds.contains(d.kind)));
 	}
 
 	/**

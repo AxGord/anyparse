@@ -70,9 +70,9 @@ final class MapScopeScan {
 	): Void {
 		final name: Null<String> = node.name;
 		if (name != null) switch node.kind {
-			case IMPORT_DECL_KIND | UsingScan.USING_DECL_KIND:
+			case IMPORT_DECL_KIND, UsingScan.USING_DECL_KIND:
 				scope.imports[CheckScan.simpleModuleName(name)] = name;
-			case WILDCARD_IMPORT_KIND | WILDCARD_USING_KIND:
+			case WILDCARD_IMPORT_KIND, WILDCARD_USING_KIND:
 				if (StringTools.endsWith(name, WILDCARD_SUFFIX)) scope.wildcards.push(name.substr(0, name.length - WILDCARD_SUFFIX.length));
 			case _:
 				if (ALIAS_IMPORT_KINDS.contains(node.kind)) scope.aliases.push(name);
