@@ -596,6 +596,32 @@ class RenameSliceTest extends Test {
 	}
 
 	/**
+	 * The guard did not get switched off with the operands - it NARROWED. `CondSpliceOpExpr`
+	 * is in `opaqueCondRegionKinds` like its raw sibling, and
+	 * `RefactorSupport.opaqueCondRegionMentioning` walks the parts of an opaque node's span no
+	 * CHILD covers. The operands are children now; the `#if <cond>` head is not. So a binding
+	 * whose name is spelled by the CONDITION is still refused, from the same modelled region
+	 * whose operand rename the test above performs.
+	 */
+	public function testModelledSpliceConditionOccurrenceStillRefused(): Void {
+		final src: String = 'class B {\n\tstatic function f():String {\n\t\tvar flash:String = "a";\n'
+			+ "\t\treturn 'x' + #if flash tag + #end 'y' + flash;\n\t}\n}";
+		assertRenameErr(src, 3, 7, 'label', 'unparsed conditional-compilation region at 4:16');
+	}
+
+	/**
+	 * A fragment the operand-run production cannot represent - here one carrying its own
+	 * `#else` - still lands in the RAW `CondSpliceExpr`, and still refuses. The ordered choice
+	 * degrades where the new production does not apply, so the fallback is narrowed rather
+	 * than removed.
+	 */
+	public function testNonOperandRunExpressionSpliceStillRefused(): Void {
+		final src: String = 'class B {\n\tstatic function f():String {\n\t\tvar tag:String = "a";\n'
+			+ "\t\treturn 'x' + #if flash tag + #else 'z' + #end 'y' + tag;\n\t}\n}";
+		assertRenameErr(src, 3, 7, 'label', 'unparsed conditional-compilation region at 4:16');
+	}
+
+	/**
 	 * The POSTFIX splice form (`CondSpliceTail` - an infix tail spliced onto a complete
 	 * operand) hides an occurrence exactly the same way, and refuses the same way.
 	 */
