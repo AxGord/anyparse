@@ -659,6 +659,7 @@ import unit.PreferLpadCheckTest;
 import unit.StdlibDupScanTest;
 import unit.StdlibDifferentialTest;
 import unit.RedundantLambdaWrapperCheckTest;
+import unit.StructuralMembershipTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1064,6 +1065,7 @@ class RunTests {
 		addCase(new MakeFinalSliceTest());
 		addCase(new IntroduceParameterObjectSliceTest());
 		addCase(new SymbolIndexSliceTest());
+		addCase(new StructuralMembershipTest());
 		addCase(new SpanTypeInfoPinTest());
 		addCase(new StdlibDupScanTest());
 		addCase(new StdlibDifferentialTest());

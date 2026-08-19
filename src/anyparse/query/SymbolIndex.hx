@@ -325,6 +325,26 @@ final class SymbolIndex {
 	private static final ABSTRACT_DECL_KIND: String = 'AbstractDecl';
 
 	/**
+	 * The two STRUCTURAL types the layer models, by MEMBERSHIP rather than by unification:
+	 * `Iterable<A>` is whatever declares `iterator():Iterator<A>`, `Iterator<A>` is whatever
+	 * declares `hasNext()` and `next()`. No stdlib container carries an `implements` clause for
+	 * either, so a nominal subtype proof answers null for every one of them.
+	 */
+	private static final ITERABLE_TYPE_NAME: String = 'Iterable';
+
+	/** The structural ITERATOR type's name — see `ITERABLE_TYPE_NAME`. */
+	private static final ITERATOR_TYPE_NAME: String = 'Iterator';
+
+	/** The member whose declaration IS `Iterable` membership. */
+	private static final ITERATOR_MEMBER_NAME: String = 'iterator';
+
+	/** The first of the two members whose declaration IS `Iterator` membership. */
+	private static final HAS_NEXT_MEMBER_NAME: String = 'hasNext';
+
+	/** The second of the two members whose declaration IS `Iterator` membership. */
+	private static final NEXT_MEMBER_NAME: String = 'next';
+
+	/**
 	 * The owner decl kinds whose member a subtype may implement WITHOUT the override modifier — an
 	 * interface method, and an `abstract` method on an abstract class. Under any other kind Haxe
 	 * rejects a redeclaration that omits `override`, which makes the modifier a reliable filter on
@@ -783,10 +803,13 @@ final class SymbolIndex {
 	 *
 	 * Every gate fails closed, and one of them is the whole reason this is not `returnNominalOf`
 	 * on the module: the first parameter must ACCEPT the receiver, not merely exist. Accepted are
-	 * an exact nominal match and a proven NOMINAL subtype (`isSubtype`); a structural unification
-	 * is NOT modelled, so `Lambda.exists(it:Iterable<A>, …)` answers null for an `Array` receiver
-	 * — a miss, never a wrong type. The rest: the member must be STATIC (an instance method is
-	 * not reachable through a `using`), and must carry a WRITTEN return — an inference-typed one
+	 * an exact nominal match, a proven NOMINAL subtype (`isSubtype`), and — only for the two
+	 * structural types the layer models by MEMBERSHIP — a receiver that satisfies `Iterable` /
+	 * `Iterator` while implementing neither (`receiverFitsParameter`), which is what lets
+	 * `Lambda.exists(it:Iterable<A>, …)` bind on an `Array`.
+	 *
+	 * The rest: the member must be STATIC (an instance method is not reachable through a
+	 * `using`), and must carry a WRITTEN return — an inference-typed one
 	 * names no type at all, while `:Void` resolves to the nominal `Void`, exactly as
 	 * `returnNominalOf` already answers it for an ordinary member. Every declaration of the name
 	 * must agree, since a `#if` pair returning two different types proves nothing branch-blind. A
@@ -808,11 +831,55 @@ final class SymbolIndex {
 			final ret: Null<String> = m.returnNominal;
 			if (!m.isStatic || paramSource == null || ret == null) return null;
 			final accepts: Null<String> = NominalTypes.outerNominalOf(paramSource);
-			if (accepts == null || (accepts != receiver && !isSubtype(receiver, accepts))) return null;
+			if (accepts == null || !receiverFitsParameter(receiver, accepts, paramSource, host, fromFile)) return null;
 			if (found != null && found != ret) return null;
 			found = ret;
 		}
 		return found;
+	}
+
+	/**
+	 * Whether a `using` extension whose FIRST parameter is written `paramSource` (outer nominal
+	 * `accepts`) binds at a call on a receiver of type `receiver` — the accept half of
+	 * `extensionReturnNominal`, kept apart because it answers in three ways and only the first is
+	 * nominal.
+	 *
+	 * An exact nominal match and a proven nominal subtype are the whole of what a nominal index
+	 * can say. The third way is STRUCTURAL, and it exists because `Lambda`'s entire surface takes
+	 * `Iterable<A>` while no container in the language declares that it implements one:
+	 * `satisfiesIterable` / `satisfiesIterator` decide membership from the receiver's own declared
+	 * members, which is exactly what the compiler unifies against.
+	 *
+	 * The structural way carries a gate the nominal ways do not need — the ELEMENT type. Proving
+	 * the receiver is iterable is not proving that its element type binds the signature's
+	 * parameter: `Iterable<Widget>` accepts a `Bag` of widgets and no other, while `Iterable<T>`
+	 * over the method's own `T` accepts every one. A receiver NOMINAL carries no element type, so
+	 * only the second form is provable, and it is recognised by the one fact that separates a
+	 * method's type PARAMETER from a real type — the name resolves to no declaration in the scope
+	 * where the signature is written. Everything else is refused: a concrete element
+	 * (`Iterable<Widget>`), a nested application (`Iterable<Iterable<A>>`, so `Lambda.flatten`),
+	 * and an unapplied `Iterable` naming no element at all.
+	 *
+	 * That refusal set is the per-member verdict on `Lambda` itself. CLAIMED, all generic in their
+	 * element: `array` / `list` / `map` / `mapi` / `flatMap` / `has` / `exists` / `foreach` /
+	 * `empty` / `count` / `indexOf` / `findIndex` / `iterator`. REFUSED here: `flatten`, whose
+	 * parameter's element is itself an application. Refused one gate EARLIER, by
+	 * `extensionReturnNominal`'s written-return requirement: `filter`, which the std declares with
+	 * an inferred return. Refused DOWNSTREAM, where the answer names a type nothing declares:
+	 * `fold` / `foldi`, returning a bare method type parameter, and `find`, returning `Null<T>` —
+	 * both resolve to no unique declaration, so every consumer that must act keeps its
+	 * conservative branch.
+	 */
+	private function receiverFitsParameter(
+		receiver: String, accepts: String, paramSource: String, host: ResolvedType, fromFile: Null<String>
+	): Bool {
+		if (accepts == receiver || isSubtype(receiver, accepts)) return true;
+		if (accepts != ITERABLE_TYPE_NAME && accepts != ITERATOR_TYPE_NAME) return false;
+		final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(paramSource);
+		if (args == null || args.length != 1) return false;
+		final element: String = args[0];
+		if (!RefactorSupport.isIdentifier(element) || resolveTypeRef(element, host.file) != null) return false;
+		return accepts == ITERABLE_TYPE_NAME ? satisfiesIterable(receiver, fromFile) : satisfiesIterator(receiver, fromFile);
 	}
 
 	/**
@@ -920,6 +987,87 @@ final class SymbolIndex {
 	 */
 	public function isSubtype(sub: String, sup: String): Bool {
 		return closureContains(sub, sup, [sub]);
+	}
+
+	/**
+	 * Whether `typeName` satisfies the structural `Iterable` — it DECLARES, itself or anywhere in
+	 * its supertype closure, an `iterator()` method whose return satisfies `Iterator`. That is the
+	 * whole definition of `Iterable<A>` in the language, and it is the only reason `Lambda`'s
+	 * statics reach an `Array`: no stdlib container implements an interface for it, so
+	 * `isSubtype` answers (correctly) false and a nominal proof can never be found.
+	 *
+	 * MEMBERSHIP, deliberately not unification. Three facts about the declaration are checked and
+	 * nothing else is inferred: it carries a WRITTEN return (a FIELD named `iterator` answers null
+	 * here — a field's type is a `typeSource`, never a `returnNominal` — and so does an
+	 * inference-typed method, which names no type to follow), it declares no annotated FIRST
+	 * parameter (an `iterator(n:Int)` is a different method that happens to share the name), and
+	 * its return is the structural `Iterator` by name or by its own membership. The element TYPE
+	 * is not part of the answer: this says the receiver is iterable, never over WHAT — the caller
+	 * that needs the element type must gate on it separately.
+	 *
+	 * The `Iterator`-by-name shortcut is what makes the std reachable without indexing
+	 * `StdTypes`: `Map.iterator():Iterator<V>` names it directly, while
+	 * `Array.iterator():haxe.iterators.ArrayIterator<T>` is followed one link further into
+	 * `ArrayIterator`'s own membership. A project type named `Iterator` that is not an iterator
+	 * would be taken at its word — a false accept whose only consumer is a disambiguation gate
+	 * between two `using` modules, never a rewrite.
+	 *
+	 * False for a receiver whose type, or a link in its supertype closure, the run does not index:
+	 * this is a positive PROOF, and it fails closed exactly like `typeProvablyLacksMember`.
+	 */
+	public function satisfiesIterable(typeName: String, ?fromFile: String): Bool {
+		if (typeName == ITERABLE_TYPE_NAME) return true;
+		final found: Null<{ member: MemberInfo, file: String }> = structuralMemberOf(typeName, fromFile, ITERATOR_MEMBER_NAME, []);
+		if (found == null) return false;
+		final ret: Null<String> = found.member.returnNominal;
+		return
+			ret != null && found.member.firstParamTypeSource == null && (ret == ITERATOR_TYPE_NAME || satisfiesIterator(ret, found.file));
+	}
+
+	/**
+	 * Whether `typeName` satisfies the structural `Iterator` — it DECLARES, itself or anywhere in
+	 * its supertype closure, both `hasNext()` and `next()`, neither of them an annotated FIELD.
+	 *
+	 * The field test is the only discriminator available, and that is a measured limit rather than
+	 * a choice: `haxe.iterators.ArrayIterator` writes both methods with an INFERRED return, so a
+	 * membership rule demanding `hasNext():Bool` would refuse the single most common iterator in
+	 * the language. An unannotated `var hasNext = false;` therefore passes; the failure direction
+	 * is one extra candidate offered to a `using`-disambiguation gate, never a rewrite.
+	 */
+	public function satisfiesIterator(typeName: String, ?fromFile: String): Bool {
+		if (typeName == ITERATOR_TYPE_NAME) return true;
+		final has: Null<{ member: MemberInfo, file: String }> = structuralMemberOf(typeName, fromFile, HAS_NEXT_MEMBER_NAME, []);
+		final next: Null<{ member: MemberInfo, file: String }> = structuralMemberOf(typeName, fromFile, NEXT_MEMBER_NAME, []);
+		return has != null && next != null && has.member.typeSource == null && next.member.typeSource == null;
+	}
+
+	/**
+	 * The `member` declaration `typeName`'s own body or its supertype closure carries, together
+	 * with the file that declared it — null when the closure declares none, or when any link in it
+	 * is unresolvable. The declaring file rides along because a member's WRITTEN return is a
+	 * reference in THAT file's scope: `Array.iterator()` names `haxe.iterators.ArrayIterator`,
+	 * which resolves from `Array.hx` and from nowhere the call site can see.
+	 *
+	 * Each supertype is re-entered through `resolveStartType` against the CURRENT file, the same
+	 * import-aware step `lacksMemberClosure` takes, so a simple name shared by several packages
+	 * picks the one actually in scope. `seen` stops a supertype cycle.
+	 */
+	private function structuralMemberOf(
+		typeName: String, fromFile: Null<String>, member: String, seen: Array<String>
+	): Null<{ member: MemberInfo, file: String }> {
+		// A member's written return may name a type that resolves nowhere near the reading file —
+		// `Array.iterator()` answers `haxe.iterators.ArrayIterator`, written QUALIFIED and imported
+		// by nobody, so the scope-aware step finds nothing and the package-blind one (a simple name
+		// unique among indexed decls) is the only way the link is followed at all.
+		final start: Null<ResolvedType> = resolveStartType(typeName, fromFile) ?? resolveStartType(typeName, null);
+		if (start == null || !markSeen(start, seen)) return null;
+		final own: Null<MemberInfo> = start.type.members.find(m -> m.name == member);
+		if (own != null) return { member: own, file: start.file.file };
+		for (raw in start.type.supertypesRaw) {
+			final up: Null<{ member: MemberInfo, file: String }> = structuralMemberOf(raw, start.file.file, member, seen);
+			if (up != null) return up;
+		}
+		return null;
 	}
 
 	/**

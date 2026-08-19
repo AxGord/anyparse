@@ -331,9 +331,10 @@ final class NominalTypes {
 	 * Deliberately NOT resolved (safe misses, each a null): a bare `f()` / `this.f()` call, whose
 	 * enclosing-type lookup is a different mechanism; a `Type.staticMethod()` whose receiver is a
 	 * SINGLE unbound identifier and whose `Type.method` is NOT in `staticMethodReturns`, since the
-	 * walk will not otherwise guess that an unbound name is a type; and an extension whose first
-	 * parameter accepts the receiver only STRUCTURALLY (`Lambda.exists(it:Iterable<A>, …)` on an
-	 * `Array`), which no nominal table can prove.
+	 * walk will not otherwise guess that an unbound name is a type; and an extension whose first parameter names a
+	 * structural type OTHER than `Iterable` / `Iterator`, or whose ELEMENT type a receiver nominal
+	 * cannot bind (`Iterable<Widget>`, `Iterable<Iterable<A>>`) — the two the layer does model, it
+	 * models by MEMBERSHIP (`SymbolIndex.satisfiesIterable`), never by unification.
 	 */
 	public static function expressionTypeNominal(
 		node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>, file: String,
