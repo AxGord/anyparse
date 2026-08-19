@@ -199,7 +199,7 @@ class LoopGuardCheckTest extends Test {
 		Assert.notNull(Linter.byId('loop-guard'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.isTrue(ids.contains('loop-guard'));
-		Assert.equals(170, Linter.builtins().length);
+		Assert.equals(171, Linter.builtins().length);
 	}
 
 	public function testSkipParseNoCrash(): Void {
