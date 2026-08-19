@@ -29,7 +29,7 @@ class PreferIfExpressionChainCheckTest extends Test {
 	private static inline final TM_RELINK_DECISION: String =
 		'class C {\n\tfunction f():RebindDecision {\n\t\treturn !visible || remoteHostTag < 0\n\t\t\t? KeepLink\n\t\t\t: dbLocalTag == remoteHostTag\n\t\t\t\t? KeepLink // already correctly paired\n\t\t\t\t: groupAllowEdit && pendingAction == QUEUED_STATE_LOCAL_PENDING ? RebindAsEdit : RebindAsSteady;\n\t}\n}';
 
-	/** A ternary nested in the THEN arm — the conjunctive shape, silent before the flattening. */
+	/** A ternary nested in the THEN arm — the shape inversion reaches, silent before it. */
 	private static inline final THEN_NESTED: String = 'class C {\n\tfunction f():Int {\n\t\treturn a ? b ? 1 : 2 : 3;\n\t}\n}';
 
 	/** TM `TimeInput.get_hrs` (anonymized) — a null guard duplicated into the conjunction, held by short-circuiting. */
@@ -39,6 +39,10 @@ class PreferIfExpressionChainCheckTest extends Test {
 	/** A ternary chain as the value of a `case` arm — the shape TM's `getColorPickerType` writes five times over. */
 	private static inline final CASE_ARM_CHAIN: String =
 		'class C {\n\tfunction f(v:Int):Void {\n\t\tswitch v {\n\t\t\tcase 1:\n\t\t\t\ta ? 1 : b ? 2 : 3;\n\t\t\tcase _:\n\t\t}\n\t}\n}';
+
+	/** anyparse's own `ShardPlan.compareEntries`: an if-chain the author wrote, whose LAST rung value is a ternary. */
+	private static inline final CANONICAL_CHAIN_WITH_TERNARY_RUNG_VALUE: String =
+		'class C {\n\tfunction f(a:Entry, b:Entry):Int {\n\t\treturn if (a.sticky != b.sticky)\n\t\t\ta.sticky ? -1 : 1\n\t\telse if (a.weight != b.weight)\n\t\t\ta.weight > b.weight ? -1 : 1\n\t\telse\n\t\t\tcompareNames(a.cls, b.cls);\n\t}\n}';
 
 	/** The TM `FileSystemBase` cloud-queue comparator — already canonical, so a 0-finding fixed point (anonymized). */
 	private static inline final TM_IF_CHAIN_COMPARATOR: String =
@@ -80,6 +84,16 @@ class PreferIfExpressionChainCheckTest extends Test {
 	/** The already-canonical TM comparator: a chain with no ternary rung is the 0-finding fixed point. */
 	public function testIfExpressionChainNotFlagged(): Void {
 		Assert.equals(0, violations(TM_IF_CHAIN_COMPARATOR).length);
+	}
+
+	/**
+	 * The ternary-rung minimum is asked of the SPINE, BEFORE the inversion folds anything in.
+	 * anyparse's own `ShardPlan.compareEntries` is the shape: an if-chain the author wrote,
+	 * whose last rung VALUE happens to be a ternary. Folding it in would claim a chain nobody
+	 * wrote as a nested `?:` and invert the emphasis its author chose, so it stays out.
+	 */
+	public function testCanonicalChainWithATernaryRungValueNotFlagged(): Void {
+		Assert.equals(0, violations(CANONICAL_CHAIN_WITH_TERNARY_RUNG_VALUE).length);
 	}
 
 	/** Neither direction moves the canon: a 2-rung ternary and a 3-rung if-chain are fixed points of BOTH rules. */
@@ -127,13 +141,14 @@ class PreferIfExpressionChainCheckTest extends Test {
 	/**
 	 * A chain in the THEN-arm of an enclosing ternary is never reported as its OWN head — its
 	 * parent kind is a chain kind, which is no host — so the site yields ONE finding, taken
-	 * through the enclosing chain, which flattens the then-arm conjunctively.
+	 * through the enclosing chain, whose inversion flattens the whole nest in one
+	 * pass.
 	 */
 	public function testThenArmChainReportedOnceThroughItsHead(): Void {
 		final src: String = 'class C {\n\tfunction f():Int {\n\t\treturn x ? a ? 1 : b ? 2 : 3 : y;\n\t}\n}';
 		final es: Array<{ span: Span, text: String }> = edits(src);
 		Assert.equals(1, es.length);
-		Assert.equals('if (x && a) 1 else if (x) b ? 2 : 3 else y', es[0].text);
+		Assert.equals('if (!x) y else if (a) 1 else if (b) 2 else 3', es[0].text);
 	}
 
 	/**
@@ -315,70 +330,118 @@ class PreferIfExpressionChainCheckTest extends Test {
 
 	/**
 	 * A ternary nested in the THEN arm leaves only ONE condition on the else spine, below the
-	 * minimum — so the chain was silent. The CONJUNCTIVE flattening reaches it:
-	 * `a ? (b ? A : B) : C` is `if (a && b) A else if (a) B else C`, which preserves evaluation
-	 * order and needs no implication between `a` and `b`.
+	 * minimum — so the chain was silent. INVERSION reaches it: `a ? (b ? A : B) : C` is
+	 * `if (!a) C else if (b) A else B`. Both readings enumerate the same three outcomes,
+	 * starting from opposite ends, so no implication between `a` and `b` is needed — and `a` is
+	 * evaluated exactly ONCE, as the ternary evaluated it.
 	 */
-	public function testConjunctiveThenNestedChainFlagged(): Void {
+	public function testInvertedThenNestedChainFlagged(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(THEN_NESTED);
 		Assert.equals(1, es.length);
-		Assert.equals('if (a && b) 1 else if (a) 2 else 3', es[0].text);
+		Assert.equals('if (!a) 3 else if (b) 1 else 2', es[0].text);
 	}
 
-	/** The duplicated condition is an OPERAND of the emitted `&&`, so a looser one takes parentheses. */
-	public function testConjunctiveWrapsLoosePrecedenceConditions(): Void {
+	/** The negation goes through the `guard-*` family's engine, so a `||` compound De Morgans instead of taking a `!( … )` wrap. */
+	public function testInvertedConditionDeMorgansACompound(): Void {
 		final es: Array<{ span: Span, text: String }> =
 			edits('class C {\n\tfunction f():Int {\n\t\treturn a || c ? b ? 1 : 2 : 3;\n\t}\n}');
 		Assert.equals(1, es.length);
-		Assert.equals('if ((a || c) && b) 1 else if (a || c) 2 else 3', es[0].text);
+		Assert.equals('if (!a && !c) 3 else if (b) 1 else 2', es[0].text);
 	}
 
-	/** An expanded rung joins the else spine, so a chain that mixes both shapes flattens in one pass. */
-	public function testConjunctiveExpansionJoinsTheElseSpine(): Void {
+	/** The same engine FLIPS an equality operator rather than wrapping it — `n == 0` negates to `n != 0`, which is what a reader expects. */
+	public function testInvertedConditionFlipsAnEqualityOperator(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Int {\n\t\treturn n == 0 ? b ? 1 : 2 : 3;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('if (n != 0) 3 else if (b) 1 else 2', es[0].text);
+	}
+
+	/**
+	 * The engine's own WORTH GATE is honoured where declining costs nothing: this chain already
+	 * holds the minimum rungs, so the fold would buy ONE more and pay a `!( … )` wrap for it —
+	 * the ordered comparison cannot be proven NaN- and null-free, so the rung keeps its inner
+	 * ternary, which IS the canon.
+	 */
+	public function testInversionDeclinedForAnUnprovableOrderedComparison(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Int {\n\t\treturn d ? 0 : a < b ? c ? 1 : 2 : 3;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('if (d) 0 else if (a < b) c ? 1 : 2 else 3', es[0].text);
+	}
+
+	/**
+	 * Below the minimum the same wrap IS taken, because declining would leave exactly the nested
+	 * ternary this rule exists to remove — and the conjunctive form it replaces paid for that
+	 * chain with the whole condition DUPLICATED, worse than one wrap on every axis.
+	 */
+	public function testUnprovableOrderedComparisonStillFoldsWhenTheFoldIsTheFinding(): Void {
+		final es: Array<{ span: Span, text: String }> = edits('class C {\n\tfunction f():Int {\n\t\treturn a < b ? c ? 1 : 2 : 3;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('if (!(a < b)) 3 else if (c) 1 else 2', es[0].text);
+	}
+
+	/** With the operand types known the same comparison DOES flip — which is what proves the engine is being ASKED rather than mirrored. */
+	public function testInversionFlipsAProvenOrderedComparison(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f(a:Int, b:Int):Int {\n\t\treturn a < b ? c ? 1 : 2 : 3;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('if (a >= b) 3 else if (c) 1 else 2', es[0].text);
+	}
+
+	/**
+	 * Only the LAST rung can invert. A nested rung with more chain behind it has no flat form at
+	 * all — every flat chain must test its condition, and one branch would still need the other
+	 * condition — so its inner ternary survives, which IS the canon.
+	 */
+	public function testNonFinalNestedRungKeepsItsTernary(): Void {
 		final es: Array<{ span: Span, text: String }> =
 			edits('class C {\n\tfunction f():Int {\n\t\treturn a ? b ? 1 : 2 : c ? 3 : 4;\n\t}\n}');
 		Assert.equals(1, es.length);
-		Assert.equals('if (a && b) 1 else if (a) 2 else if (c) 3 else 4', es[0].text);
+		Assert.equals('if (a) b ? 1 : 2 else if (c) 3 else 4', es[0].text);
 	}
 
 	/**
-	 * DEPTH CAP. The conjunction duplicates the outer condition at every level, so growth is
-	 * quadratic; exactly ONE level is expanded and a deeper nest stays the two-branch ternary
-	 * that IS the canon.
+	 * NO DEPTH CAP. Inversion duplicates nothing, so it recurses: each level moves the current
+	 * terminal up into a rung and exposes the next nested ternary as the new last rung. Growth is
+	 * linear, and the whole nest flattens in one pass.
 	 */
-	public function testConjunctiveExpandsOneLevelOnly(): Void {
+	public function testInversionRecursesThroughEveryNestedLevel(): Void {
 		final es: Array<{ span: Span, text: String }> =
 			edits('class C {\n\tfunction f():Int {\n\t\treturn a ? b ? c ? 1 : 2 : 3 : 4;\n\t}\n}');
 		Assert.equals(1, es.length);
-		Assert.equals('if (a && b) c ? 1 : 2 else if (a) 3 else 4', es[0].text);
+		Assert.equals('if (!a) 4 else if (!b) 3 else if (c) 1 else 2', es[0].text);
 	}
 
 	/**
-	 * The TM `TimeInput` accessor (anonymized): the guard `sel != null` is duplicated, and `&&`
-	 * short-circuiting is what keeps the second read of `sel.data` behind it.
+	 * The TM `TimeInput` accessor (anonymized): the null guard inverts to `if (sel == null) …`,
+	 * and `sel` still narrows to non-null in every branch behind it.
 	 */
-	public function testConjunctiveNullGuardIsPreservedByShortCircuit(): Void {
+	public function testInvertedNullGuardStillNarrows(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(TM_NULL_GUARDED_ACCESSOR);
 		Assert.equals(1, es.length);
-		Assert.equals("if (sel != null && sel.data.data == -1) 'N/A' else if (sel != null) sel.data.text else ''", es[0].text);
+		Assert.equals("if (sel == null) '' else if (sel.data.data == -1) 'N/A' else sel.data.text", es[0].text);
 		Assert.equals(0, violations(RefactorSupport.applyEdits(TM_NULL_GUARDED_ACCESSOR, es)).length);
 	}
 
-	/** The output is the fixed point: `prefer-ternary-expression` refuses an if-expression whose then-branch is a ternary. */
-	public function testConjunctiveOutputIsAFixedPoint(): Void {
+	/** The output is the fixed point: the emitted chain has no ternary rung left, so nothing draws it back. */
+	public function testInvertedOutputIsAFixedPoint(): Void {
 		final once: String = RefactorSupport.applyEdits(THEN_NESTED, edits(THEN_NESTED));
 		Assert.equals(0, violations(once).length);
 		Assert.equals(0, ternaryExpressionViolations(once).length);
 	}
 
 	/**
-	 * The duplicated condition is evaluated TWICE, so it must be pure and cheap. A call is
-	 * unproven and refuses; so does a read of a property whose getter runs code.
+	 * The condition is evaluated ONCE, so nothing has to be pure. A call and a getter-backed
+	 * property read both convert now; both were refused while the emitted form duplicated the
+	 * condition, and that gate is gone with the duplication.
 	 */
-	public function testConjunctiveRefusesAnImpureDuplicatedCondition(): Void {
-		Assert.equals(0, violations('class C {\n\tfunction f():Int {\n\t\treturn g() ? b ? 1 : 2 : 3;\n\t}\n}').length);
+	public function testImpureConditionInverts(): Void {
+		final es: Array<{ span: Span, text: String }> = edits('class C {\n\tfunction f():Int {\n\t\treturn g() ? b ? 1 : 2 : 3;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('if (!g()) 3 else if (b) 1 else 2', es[0].text);
 		Assert.equals(
-			0,
+			1,
 			violations(
 				'class C {\n\tpublic var p(get, never):Bool;\n\n\tfunction get_p():Bool {\n\t\treturn true;\n\t}\n\n'
 				+ '\tfunction f():Int {\n\t\treturn p ? b ? 1 : 2 : 3;\n\t}\n}'
@@ -386,9 +449,39 @@ class PreferIfExpressionChainCheckTest extends Test {
 		);
 	}
 
-	/** A chain whose one condition is impure keeps its old answer: no expansion, one spine rung, below the minimum. */
-	public function testConjunctiveRefusalLeavesTheChainSilent(): Void {
-		Assert.equals(0, violations('class C {\n\tfunction f():Int {\n\t\tvar x = g() ? b ? 1 : 2 : 3;\n\t}\n}').length);
+	/**
+	 * A comment inside the condition span would be welded into a negation the engine REBUILDS, so
+	 * the inversion fails closed. The chain still converts through its else spine, with the
+	 * comment carried into the slot it came from and the nested ternary left alone.
+	 */
+	public function testCommentInTheConditionDeclinesTheInversion(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Int {\n\t\treturn d ? 0 : a == c // why\n\t\t\t? b ? 1 : 2 : 3;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('if (d) 0 else if (a == c) // why\nb ? 1 : 2 else 3', es[0].text);
+	}
+
+	/**
+	 * The chain's OWN terminal is exempt from the else-less scan, and that exemption is about
+	 * THAT node's parse. An inverted chain ends on a DIFFERENT node, so it is scanned like a rung
+	 * value — an ` else ` written after the whole chain would otherwise re-parent onto it.
+	 */
+	public function testElseLessTerminalOfAnInvertedChainNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tg(() -> a ? b ? p() : if (q) s() : r());\n\t}\n}').length);
+	}
+
+	/** The chain's terminal MOVES into a rung value, where the emitted ` else ` follows it — so an else-less conditional there is refused too. */
+	public function testElseLessMovedTerminalNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tg(() -> a ? b ? p() : r() : if (q) s());\n\t}\n}').length);
+	}
+
+	/** The replaced region still ends at the ORIGINAL chain's last token, not at the terminal the inversion promoted. */
+	public function testInvertedEditSpanCoversTheWholeChain(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar x = a ? b ? 1 : 2 : 3 ;\n\t}\n}';
+		final es: Array<{ span: Span, text: String }> = edits(src);
+		Assert.equals(1, es.length);
+		Assert.equals('if (!a) 3 else if (b) 1 else 2', es[0].text);
+		Assert.equals(src.indexOf('3 ;') + 1, es[0].span.to);
 	}
 
 	public function testRegisteredInBuiltins(): Void {

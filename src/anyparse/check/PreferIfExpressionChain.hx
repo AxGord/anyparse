@@ -1,9 +1,10 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.CheckScan.NegationSeams;
 import anyparse.check.IfExpressionChain.Carried;
 import anyparse.check.IfExpressionChain.CarrySeat;
-import anyparse.check.PurityScan.PurityCtx;
+import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -59,13 +60,16 @@ import anyparse.runtime.Span;
  *   to the positions where a multi-line chain belongs. It also removes the one shape that
  *   would need thought — a chain in the then-arm of an enclosing ternary, whose parent kind
  *   is a chain kind and so is never a host.
- * - **At least two conditions** (three leaf values) once the conjunctive flattening below has
- *   run. A single ternary IS the canon and is left alone; this minimum is the whole
+ * - **At least two conditions** (three leaf values) once the inversion below has run. A
+ *   single ternary IS the canon and is left alone; this minimum is the whole
  *   disjointness proof against `prefer-ternary-expression`.
  * - **At least one ternary rung.** A chain already written entirely as if-expressions is the
- *   canon — flagging it would report a fixed point. A MIXED chain (`c1 ? v1 : if (c2) v2
- *   else v3`, which neither this check's predecessor nor `prefer-ternary-expression` could
- *   move) does have one, and converges here.
+ *   canon — flagging it would report a fixed point. The count is taken of the SPINE and asked
+ *   BEFORE the inversion below folds anything in, so a canonical chain whose last rung VALUE
+ *   happens to hold a ternary stays out: nobody wrote THAT as a nested `?:`, and folding it in
+ *   inverts the emphasis the author chose (measured on `ShardPlan.compareEntries`). A MIXED
+ *   chain (`c1 ? v1 : if (c2) v2 else v3`, which neither this check's predecessor nor
+ *   `prefer-ternary-expression` could move) does have one, and converges here.
  * - **No claim by `prefer-switch-expression`.** An equality-shaped chain over a uniform
  *   discriminant tuple in a host THAT check accepts belongs to it, and this check defers by
  *   asking it directly (`PreferSwitchExpression.claims`) rather than mirroring its gate
@@ -81,11 +85,13 @@ import anyparse.runtime.Span;
  *   the output re-parses, so the `--fix` re-parse gate would wave it through. The scan
  *   covers the whole value subtree rather than only its right spine: an else-less `if` in a
  *   delimited interior is harmless, but proving which is which costs more than the rare
- *   cleanup it buys. The TERMINAL value needs no such gate, and that is a fact about the
- *   PARSE rather than an omission — an `else` that could have followed the chain was already
- *   bound INTO the terminal (`a ? 1 : if (q) p() else X` parses as
+ *   cleanup it buys. The chain's OWN terminal needs no such gate, and that is a fact about
+ *   the PARSE rather than an omission — an `else` that could have followed the chain was
+ *   already bound INTO the terminal (`a ? 1 : if (q) p() else X` parses as
  *   `a ? 1 : (if (q) p() else X)`), which makes that node a RUNG; so a terminal that is
- *   else-less proves nothing follows it that could re-parent. The scan and that exemption
+ *   else-less proves nothing follows it that could re-parent. An INVERTED chain ends on a
+ *   DIFFERENT node, about which that argument says nothing, so THAT node is scanned like a
+ *   rung value. The scan and the exemption
  *   live in `IfExpressionChain.holdsElseLessConditional`, shared with
  *   `prefer-if-expression-return` and `prefer-if-expression-assignment`: those collapse an
  *   `if` CHAIN rather than a ternary one, but emit the same ` else ` and so carry the same
@@ -100,32 +106,52 @@ import anyparse.runtime.Span;
  *   for the same reason), so a comment the parser folded into a node's TRAILING trivia —
  *   `a < b // why` before the `?` — is seen by the slot machinery at all, instead of being
  *   welded into the copied condition where it would comment out everything the rebuild puts
- *   after it.
+ *   after it. An INVERTED chain opens NO slot: it emits its pieces in a different order from
+ *   the one the source wrote them in, so "between this value and the next piece" no longer
+ *   describes where a comment would land, and every comment outside a copied span fails the
+ *   site closed — the family's original guard, which is what the slot machinery degrades to
+ *   with no gaps.
  *
  * A reification subtree (`RefShape.opaqueKinds`, Haxe's `macro { … }`) is skipped wholesale,
  * as in the sibling rewrite rules: its interior is spliced code a consumer may pattern-match
  * on, not source a human reads.
  *
- * ## Conjunctive flattening
+ * ## Inversion
  *
  * The walk follows the ELSE spine, so a ternary nested in the THEN arm contributes only ONE
- * condition and stays below the minimum. `flatten` reaches it: `a ? (b ? A : B) : C` emits
- * `if (a && b) A else if (a) B else C`.
+ * condition and stays below the minimum. `invertTail` reaches it, by INVERTING the rung that
+ * holds it: `a ? (b ? A : B) : C` emits `if (!a) C else if (b) A else B`. The chain's terminal
+ * moves up into the inverted rung's value, and the nested ternary's own spine takes its place.
  *
- * That rewrite is ALWAYS sound, and needs no implication between the two conditions. `a` is
- * evaluated first either way; `b` only under `a`, because the emitted `&&` short-circuits —
- * which is also what keeps a null GUARD guarding, the shape TM writes as
- * `sel != null ? sel.data.data == -1 ? x : y : z`. The SWAP form `b ? A : a ? B : C` would
- * require `b` to imply `a` and is deliberately NOT what this does.
+ * That rewrite is ALWAYS sound and needs no implication between the two conditions — both
+ * readings enumerate the same three outcomes, one starting from `a` and the other from `!a`.
+ * It also costs nothing: evaluation order is preserved and `a` is evaluated exactly ONCE, as
+ * the ternary evaluated it. Measured over all four combinations with a counting probe: zero
+ * divergences, and one evaluation of `a` per run against the two a CONJUNCTIVE form
+ * (`if (a && b) A else if (a) B else C`) spends whenever `b` is false. Nothing here has to be
+ * pure, and there is no depth cap: the loop recurses because it duplicates nothing, so a
+ * deeper nest folds in one level per turn and growth is linear.
  *
- * What the conjunction does cost is `a` a SECOND time whenever `b` is false, so `PurityScan`
- * must prove it duplicable: a call, and a property read whose getter runs code, both refuse,
- * and the chain then keeps its old silent answer rather than being rewritten.
+ * Only the LAST rung can invert, and that is a proof rather than a simplification. A flat
+ * chain tests its conditions in order, so a nested rung with more chain behind it would have
+ * to test `a` — whose branch still needs `b` to pick a value — or `!a`, whose branch still
+ * holds the whole remaining chain. Neither is one value, and duplicating `a` is the only way
+ * around it. Such a rung keeps its inner two-branch ternary, which IS the canon. Only a
+ * TERNARY value folds in: an if-expression in the same slot is already the form this family
+ * emits.
  *
- * DEPTH CAP of one level. The outer condition is duplicated at every level, so recursion
- * would grow quadratically (`a ? b ? c ? …` giving `a && b && c`, then `a && b`, then `a`);
- * a deeper nest keeps its inner two-branch ternary, which IS the canon. Only a TERNARY value
- * expands — an if-expression in the same slot is already the form this family emits.
+ * The negation is `NegationScan`'s, the same engine the `guard-*` family inverts with, so a
+ * comparison operator FLIPS (`content == ''` becomes `content != ''`) and a compound De
+ * Morgans rather than taking a `!( … )` wrap. Its WORTH GATE is asked too — an ordered
+ * comparison the engine cannot prove NaN- and null-free stays wrapped, which reads worse than
+ * the positive form — but only where declining COSTS nothing: a chain that already holds the
+ * minimum rungs converts WITHOUT the fold, so a wrap there buys one more rung and pays for it,
+ * while a chain below the minimum converts only BECAUSE of the fold, and declining would leave
+ * exactly the nested ternary this rule exists to remove. (The conjunctive form paid for those
+ * same chains with the whole condition DUPLICATED, which is worse than one wrap on every axis.)
+ * A comment anywhere in the condition span declines the inversion outright — that one is
+ * correctness, not worth: the engine rebuilds the condition from its operands and would drop
+ * the glue the comment sits in.
  *
  * ## Autofix
  *
@@ -138,10 +164,12 @@ import anyparse.runtime.Span;
  * the result. No parentheses are ADDED: every piece already sat in a `?:` operand slot, and
  * both the `if` condition and its branches accept an expression of any precedence.
  *
- * The replaced region stops at the TERMINAL VALUE's last TOKEN — not at the chain head's own
- * end, and not at the terminal's raw span end either: an expression node's span runs on
- * through the trivia after its last token, and splicing that away welds the emitted chain
- * onto whatever follows.
+ * The replaced region stops at the ORIGINAL chain's TERMINAL VALUE, at its last TOKEN — not
+ * at the chain head's own end, and not at the terminal's raw span end either: an expression
+ * node's span runs on through the trivia after its last token, and splicing that away welds
+ * the emitted chain onto whatever follows. It is the ORIGINAL terminal because that node is
+ * the chain's rightmost piece whatever the inversion does to the emission order — the
+ * terminal the rebuild finally writes can sit well before it.
  *
  * `run` and `fix` share one `collect`, so neither can encode a gate the other misses.
  *
@@ -155,8 +183,10 @@ import anyparse.runtime.Span;
  *
  * `ternaryKind` plus `ifExpressionKinds` are the chain kinds, `ifStatementKinds` joins them
  * for the else-less scan, `ifExpressionChainHostKinds` is the host gate, `parenKind` the
- * condition unwrap and `opaqueKinds` the subtrees to skip. No `ternaryKind` (nothing to
- * convert) or no host kind → the check is a no-op.
+ * condition unwrap and `opaqueKinds` the subtrees to skip. The inversion additionally needs
+ * the grammar's `BooleanLogicSupport` and `NegationScan.negationSeams`; without them the
+ * negation falls back to a verbatim `!( … )` wrap, which is still correct. No `ternaryKind`
+ * (nothing to convert) or no host kind → the check is a no-op.
  */
 @:nullSafety(Strict)
 final class PreferIfExpressionChain implements Check {
@@ -185,7 +215,7 @@ final class PreferIfExpressionChain implements Check {
 		if (seams == null) return [];
 		final resolveIndex: () -> Null<SymbolIndex> = SwitchChain.lazyIndexOf(files, plugin);
 		return [
-			for (entry in files) for (m in collect(plugin, entry.source, seams, resolveIndex))
+			for (entry in files) for (m in collect(plugin, entry.file, entry.source, seams, resolveIndex))
 				{
 					file: entry.file,
 					span: m.span,
@@ -201,21 +231,13 @@ final class PreferIfExpressionChain implements Check {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
-		final resolveIndex: () -> Null<SymbolIndex> = SwitchChain.lazyIndexOf([{ file: '', source: source }], plugin, index);
+		final file: String = violations.length == 0 ? '' : violations[0].file;
+		final resolveIndex: () -> Null<SymbolIndex> = SwitchChain.lazyIndexOf([{ file: file, source: source }], plugin, index);
 		final byKey: Map<String, Match> = [];
-		for (m in collect(plugin, source, seams, resolveIndex)) byKey['${m.span.from}:${m.span.to}'] = m;
+		for (m in collect(plugin, file, source, seams, resolveIndex, index)) byKey['${m.span.from}:${m.span.to}'] = m;
 		return RefactorSupport.dropContainedEdits(
 			CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: m.text }))
 		);
-	}
-
-	/**
-	 * `text` as an operand of the emitted `&&`, parenthesized when its node binds LOOSER than the
-	 * conjunction (`RefShape.andLowerPrecedenceKinds`) — the same vocabulary and the same reason
-	 * `collapsible-if` merges two conditions with.
-	 */
-	private static inline function andOperand(text: String, node: QueryNode, s: Seams): String {
-		return s.andLowerPrecedence.contains(node.kind) ? '($text)' : text;
 	}
 
 	/**
@@ -234,45 +256,41 @@ final class PreferIfExpressionChain implements Check {
 	}
 
 	/**
-	 * Where the FIRST piece the rebuild copies for `rung` starts — its leading condition span, or
-	 * its value when the rung copies no condition at all. Only the SECOND half of a conjunctive
-	 * expansion is that shape: its condition is the outer one, already copied by the first half.
-	 */
-	private static inline function firstCopiedPiece(rung: Emitted): Int {
-		return rung.condSpans.length > 0 ? rung.condSpans[0].from : rung.value.from;
-	}
-
-	/**
 	 * Every convertible chain in `source` (empty when it does not parse). `run` and `fix`
 	 * both go through it, so neither can encode a gate the other misses.
 	 */
-	private static function collect(plugin: GrammarPlugin, source: String, s: Seams, resolveIndex: () -> Null<SymbolIndex>): Array<Match> {
+	private static function collect(
+		plugin: GrammarPlugin, file: String, source: String, s: Seams, resolveIndex: () -> Null<SymbolIndex>, ?index: SymbolIndex
+	): Array<Match> {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final out: Array<Match> = [];
 		walk(
-			tree, source, RefactorSupport.collectCommentTokens(source), s, plugin, lazyOf(plugin, source, tree, resolveIndex), out, null,
-			false
+			tree, source, RefactorSupport.collectCommentTokens(source), s, plugin, lazyOf(plugin, file, source, tree, resolveIndex, index),
+			out, null, false
 		);
 		return out;
 	}
 
 	/**
 	 * The two lazily-resolved services the walk carries: the symbol index the switch-expression
-	 * deferral asks for, and the purity context the conjunctive flattening asks of a condition it
-	 * is about to DUPLICATE. Both are memoised and both are only demanded by a site that reaches
-	 * their gate, so a file with no such site pays for neither.
+	 * deferral asks for, and the operand-type probe the negation engine asks of a condition the
+	 * inversion is about to complement — the same probe the `guard-*` family passes it, and what
+	 * licenses flipping an ordered comparison rather than wrapping it. Both are memoised and both
+	 * are only demanded by a site that reaches their gate, so a file with no such site pays for
+	 * neither.
 	 */
-	private static function lazyOf(plugin: GrammarPlugin, source: String, root: QueryNode, resolveIndex: () -> Null<SymbolIndex>): Lazy {
-		var cached: Null<PurityCtx> = null;
+	private static function lazyOf(
+		plugin: GrammarPlugin, file: String, source: String, root: QueryNode, resolveIndex: () -> Null<SymbolIndex>, ?index: SymbolIndex
+	): Lazy {
+		var cached: Null<(QueryNode) -> Null<String>> = null;
 		var asked: Bool = false;
-		function purity(): Null<PurityCtx> {
+		function types(): Null<(QueryNode) -> Null<String>> {
 			if (asked) return cached;
 			asked = true;
-			final index: Null<SymbolIndex> = resolveIndex();
-			return cached = index == null ? null : PurityScan.contextOf(plugin, source, root, index);
+			return cached = CheckScan.typeNominalResolver(source, plugin, root, file, index);
 		}
-		return { resolveIndex: resolveIndex, purity: purity };
+		return { resolveIndex: resolveIndex, types: types };
 	}
 
 	/**
@@ -294,8 +312,8 @@ final class PreferIfExpressionChain implements Check {
 			hostKinds: hostKinds,
 			exprStatementKind: shape.exprStatementKind,
 			armKinds: [for (k in [shape.caseBranchKind, shape.defaultBranchKind]) if (k != null) k],
-			andOperatorText: shape.andOperatorText,
-			andLowerPrecedence: shape.andLowerPrecedenceKinds ?? [],
+			negation: NegationScan.negationSeams(shape),
+			logic: plugin.booleanLogicSupport(),
 			parenKind: shape.parenKind,
 			opaqueKinds: shape.opaqueKinds ?? []
 		};
@@ -334,34 +352,40 @@ final class PreferIfExpressionChain implements Check {
 	): Null<Match> {
 		final headSpan: Null<Span> = head.span;
 		if (headSpan == null) return null;
-		final rungs: Array<Rung> = [];
-		var ternaryRungs: Int = 0;
-		var cur: QueryNode = head;
-		while (s.chainKinds.contains(cur.kind) && cur.children.length == CHAIN_WITH_ELSE_CHILD_COUNT) {
-			if (cur.kind == s.ternaryKind) ternaryRungs++;
-			// The emitted `if (` … `)` supplies its own delimiters, so a copied paren pair would
-			// only draw a `redundant-parens` finding on the result; nothing inside a condition
-			// slot can be load-bearing, the construct bounding it on both sides.
-			rungs.push({ cond: RefactorSupport.unwrapParens(cur.children[0], s.parenKind), value: cur.children[1] });
-			cur = cur.children[ELSE_SLOT_INDEX];
-		}
-		final rawTerminal: Null<Span> = cur.span;
-		if (rungs.length == 0 || ternaryRungs == 0 || rawTerminal == null) return null;
+		final chain: Chain = spine(head, s);
+		final rawEnd: Null<Span> = chain.terminal.span;
+		// The ternary-rung minimum is asked of the SPINE, BEFORE any inversion. A chain the author
+		// already wrote as if-expressions is the canon whatever its branch VALUES hold, and asking
+		// after the fold would claim one whose only ternary sits in the last rung's value — a shape
+		// nobody wrote as a nested `?:`, and one the fold demonstrably makes read worse.
+		if (chain.rungs.length == 0 || chain.ternaryRungs == 0 || rawEnd == null) return null;
+		// The EDIT stops at the ORIGINAL terminal's last token. That node is the chain's rightmost
+		// piece whatever the inversion does to the EMISSION order, and the terminal the rebuild
+		// finally writes can sit well before it.
+		final chainEnd: Span = IfExpressionChain.tokenSpan(rawEnd, source, comments);
+		final inverted: Bool = invertTail(chain, source, s, lazy);
+		final rawTerminal: Null<Span> = chain.terminal.span;
+		if (rawTerminal == null) return null;
 		final terminalSpan: Span = IfExpressionChain.tokenSpan(rawTerminal, source, comments);
-		final emitted: Null<Array<Emitted>> = flatten(rungs, source, comments, s, lazy);
+		final emitted: Null<Array<Emitted>> = emit(chain, source, comments, s, lazy, inverted);
 		if (emitted == null || emitted.length < MIN_RUNGS) return null;
 		if (PreferSwitchExpression.claims(source, head, parentKind, plugin, lazy.resolveIndex)) return null;
 		final kept: Array<Span> = [terminalSpan];
 		for (rung in emitted) {
-			for (condSpan in rung.condSpans) kept.push(condSpan);
+			kept.push(rung.condSpan);
 			kept.push(rung.value);
 		}
-		final seats: Array<CarrySeat> = [
+		// An INVERTED chain emits its pieces in a different order from the one the source wrote
+		// them in, so a seat's "between this value and the next piece" region no longer describes
+		// where a comment would land. No seat is opened, and every comment outside a copied span
+		// fails the site closed — the family's original guard, which is what `carriedComments`
+		// degrades to with no gaps.
+		final seats: Array<CarrySeat> = inverted ? [] : [
 			for (i in 0...emitted.length)
 				{
-					condEnd: emitted[i].condEnd,
+					condEnd: emitted[i].condSpan.to,
 					value: emitted[i].value,
-					nextStart: i + 1 < emitted.length ? firstCopiedPiece(emitted[i + 1]) : terminalSpan.from
+					nextStart: i + 1 < emitted.length ? emitted[i + 1].condSpan.from : terminalSpan.from
 				}
 		];
 		final carried: Null<Carried> = IfExpressionChain.carriedComments(
@@ -373,99 +397,122 @@ final class PreferIfExpressionChain implements Check {
 		];
 		return {
 			span: headSpan,
-			editSpan: new Span(headSpan.from, terminalSpan.to),
+			editSpan: new Span(headSpan.from, chainEnd.to),
 			text: IfExpressionChain.buildValue(pairs, source.substring(terminalSpan.from, terminalSpan.to))
 		};
 	}
 
 
 	/**
-	 * The spine rungs as the rebuild EMITS them. A rung whose value is itself a conditional is
-	 * flattened CONJUNCTIVELY — `a ? (b ? A : B) : C` emits `if (a && b) A else if (a) B` — which
-	 * is what reaches a chain nested in the THEN arm, where the else spine holds only one
-	 * condition and the minimum is two. Null when a gate refuses the whole chain.
-	 *
-	 * The conjunction preserves evaluation order and requires NO implication between `a` and `b`:
-	 * `a` is evaluated first in both forms, `b` only under `a`, and short-circuiting keeps a null
-	 * guard doing its job. What it does cost is `a` a SECOND time when `b` is false, which is why
-	 * `PurityScan` must prove it duplicable.
-	 *
-	 * DEPTH CAP of one level. The outer condition is duplicated at every level, so a recursive
-	 * expansion grows quadratically (`a ? b ? c ? …` would emit `a && b && c`, `a && b`, `a`);
-	 * a deeper nest keeps its inner two-branch ternary, which IS the canon.
+	 * The chain rooted at `head` read as a SPINE: one rung per `else`-nested link, the terminal
+	 * the last `else` holds, and how many of those links the author wrote as a TERNARY. Reading
+	 * the spine of a NESTED value is exactly what the inversion below recurses with, so the walk
+	 * lives in one function instead of inline in `match`.
 	 */
-	private static function flatten(
-		rungs: Array<Rung>, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, lazy: Lazy
-	): Null<Array<Emitted>> {
-		final out: Array<Emitted> = [];
-		for (rung in rungs) {
-			final rawCond: Null<Span> = rung.cond.span;
-			final rawValue: Null<Span> = rung.value.span;
-			// The emitted ` else ` follows every NON-terminal value, and only an else-less
-			// conditional can absorb it — the value would silently become that `if`'s else
-			// branch. The terminal needs no such gate: an `else` that could follow the chain
-			// was already bound INTO the terminal by the parser, which turns it into a rung.
-			// Asking it of the WHOLE value subtree also covers both halves of an expansion.
-			if (rawCond == null || rawValue == null || IfExpressionChain.holdsElseLessConditional(rung.value, s.conditionalKinds))
-				return null;
-			final condSpan: Span = IfExpressionChain.tokenSpan(rawCond, source, comments);
-			final expanded: Null<Array<Emitted>> = expand(rung, condSpan, source, comments, s, lazy);
-			if (expanded == null)
-				out.push({
-					condText: source.substring(condSpan.from, condSpan.to),
-					condSpans: [condSpan],
-					condEnd: condSpan.to,
-					value: IfExpressionChain.tokenSpan(rawValue, source, comments)
-				})
-			else
-				for (half in expanded) out.push(half);
+	private static function spine(head: QueryNode, s: Seams): Chain {
+		final rungs: Array<Rung> = [];
+		var ternaryRungs: Int = 0;
+		var cur: QueryNode = head;
+		while (s.chainKinds.contains(cur.kind) && cur.children.length == CHAIN_WITH_ELSE_CHILD_COUNT) {
+			if (cur.kind == s.ternaryKind) ternaryRungs++;
+			// The emitted `if (` … `)` supplies its own delimiters, so a copied paren pair would
+			// only draw a `redundant-parens` finding on the result; nothing inside a condition
+			// slot can be load-bearing, the construct bounding it on both sides.
+			rungs.push({ cond: RefactorSupport.unwrapParens(cur.children[0], s.parenKind), value: cur.children[1], invert: false });
+			cur = cur.children[ELSE_SLOT_INDEX];
 		}
-		return out;
+		return { rungs: rungs, terminal: cur, ternaryRungs: ternaryRungs };
 	}
 
 	/**
-	 * The two rungs `a ? (b ? A : B) : …` flattens into, or null when this rung is not the
-	 * conjunctive shape — the value is no conditional, the grammar spells no `&&`, a span is
-	 * unmeasurable, or `a` is not provably duplicable. Null is a FALLBACK, not a refusal: the
-	 * caller then emits the rung unexpanded, exactly as before.
+	 * Fold a ternary nested in the LAST rung's THEN arm into the spine by INVERTING that rung —
+	 * `a ? (b ? A : B) : C` becomes `if (!a) C else if (b) A else B`. The chain's terminal moves up
+	 * into the inverted rung's value, and the nested ternary's own spine takes its place, so the
+	 * result is FLAT. `chain` is mutated; the return says whether anything inverted.
 	 *
-	 * The second half copies NO condition span of its own — it reuses the outer condition's TEXT,
-	 * which the first half already copied — so its carry seat opens where the first half's value
-	 * ends.
+	 * ALWAYS sound, and needing no implication between `a` and `b`: both readings enumerate the
+	 * same three outcomes, one starting from `a`, the other from `!a`. Evaluation order is
+	 * preserved and `a` is evaluated exactly ONCE — as the ternary evaluated it — which is why
+	 * nothing here has to be pure.
+	 *
+	 * The loop RECURSES because inversion duplicates nothing: after one step the nested chain's own
+	 * last rung is the new last rung, and a deeper nest folds in on the next turn. Growth is
+	 * linear, so there is no depth cap.
+	 *
+	 * Only the LAST rung can invert, and that is a proof rather than a simplification. A flat chain
+	 * tests its conditions in order, so a nested rung with more chain behind it would have to test
+	 * `a` (whose branch still needs `b` to pick a value) or `!a` (whose branch still holds the whole
+	 * remaining chain) — neither is one value. Duplicating `a` is the only way to flatten that, and
+	 * duplicating is what this rewrite exists to stop doing. Such a rung keeps its inner ternary,
+	 * which IS the canon.
+	 *
+	 * Only a TERNARY value folds in. An if-expression in the same slot is already the form this
+	 * family emits, and pulling it apart would rewrite a shape nobody asked to change.
 	 */
-	private static function expand(
-		rung: Rung, condSpan: Span, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, lazy: Lazy
+	private static function invertTail(chain: Chain, source: String, s: Seams, lazy: Lazy): Bool {
+		var inverted: Bool = false;
+		while (true) {
+			final count: Int = chain.rungs.length;
+			if (count == 0) break;
+			final last: Rung = chain.rungs[count - 1];
+			final nested: QueryNode = last.value;
+			if (nested.kind != s.ternaryKind || nested.children.length != CHAIN_WITH_ELSE_CHILD_COUNT) break;
+			final condSpan: Null<Span> = last.cond.span;
+			// The negation engine REBUILDS the condition from its operands, dropping the glue between
+			// them — so a comment anywhere in that span would be lost or welded into a position the
+			// author did not write. Decline, and the rung stays unexpanded.
+			if (condSpan == null || CheckScan.hasCommentMarker(source, condSpan.from, condSpan.to)) break;
+			// The engine's OWN worth gate, the one `guard-return` / `guard-continue` / `loop-guard`
+			// ask before they invert: an ordered comparison it cannot prove NaN- and null-free stays
+			// wrapped `!(a < b)`, which reads worse than the positive form.
+			//
+			// It is asked only where declining COSTS nothing. A chain that already holds the minimum
+			// rungs converts WITHOUT this fold, so a wrapped negation there buys one more rung and
+			// pays a `!( … )` for it — decline, and the nested ternary stays, which IS the canon. A
+			// chain BELOW the minimum converts only BECAUSE of the fold: declining leaves exactly the
+			// nested ternary this rule exists to remove, and the alternative the conjunctive form used
+			// to take was the whole condition DUPLICATED — worse than one wrap on every axis.
+			if (count >= MIN_RUNGS && !NegationScan.negationIsClean(last.cond, source, s.logic, lazy.types())) break;
+			final inner: Chain = spine(nested, s);
+			chain.rungs.pop();
+			chain.rungs.push({ cond: last.cond, value: chain.terminal, invert: true });
+			for (rung in inner.rungs) chain.rungs.push(rung);
+			chain.terminal = inner.terminal;
+			inverted = true;
+		}
+		return inverted;
+	}
+
+	/**
+	 * The spine rungs as the rebuild EMITS them — the condition TEXT (the verbatim source, or its
+	 * negation for an inverted rung) and the two spans the rebuild copies. Null when a gate refuses
+	 * the whole chain.
+	 */
+	private static function emit(
+		chain: Chain, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, lazy: Lazy, inverted: Bool
 	): Null<Array<Emitted>> {
-		final andOp: Null<String> = s.andOperatorText;
-		final value: QueryNode = rung.value;
-		// A TERNARY value only. An if-expression in the same slot is already the canon this
-		// family emits, and pulling it apart would rewrite a shape nobody asked to change.
-		if (andOp == null || value.kind != s.ternaryKind || value.children.length != CHAIN_WITH_ELSE_CHILD_COUNT) return null;
-		final innerCond: QueryNode = RefactorSupport.unwrapParens(value.children[0], s.parenKind);
-		final rawInnerCond: Null<Span> = innerCond.span;
-		final rawThen: Null<Span> = value.children[1].span;
-		final rawElse: Null<Span> = value.children[ELSE_SLOT_INDEX].span;
-		if (rawInnerCond == null || rawThen == null || rawElse == null) return null;
-		final ctx: Null<PurityCtx> = lazy.purity();
-		if (ctx == null || !PurityScan.isPure(rung.cond, ctx)) return null;
-		final innerCondSpan: Span = IfExpressionChain.tokenSpan(rawInnerCond, source, comments);
-		final outerText: String = source.substring(condSpan.from, condSpan.to);
-		final innerText: String = andOperand(source.substring(innerCondSpan.from, innerCondSpan.to), innerCond, s);
-		final thenSpan: Span = IfExpressionChain.tokenSpan(rawThen, source, comments);
-		return [
-			{
-				condText: '${andOperand(outerText, rung.cond, s)} $andOp $innerText',
-				condSpans: [condSpan, innerCondSpan],
-				condEnd: innerCondSpan.to,
-				value: thenSpan
-			},
-			{
-				condText: outerText,
-				condSpans: [],
-				condEnd: thenSpan.to,
-				value: IfExpressionChain.tokenSpan(rawElse, source, comments)
-			}
-		];
+		// The chain's OWN terminal is exempt from the else-less gate below, and that exemption is a
+		// fact about ITS parse: an `else` that could have followed the chain was already bound INTO
+		// it, which would have made it a rung. An INVERTED chain ends on a DIFFERENT node, about
+		// which that argument says nothing — an `else` written after the whole chain would re-parent
+		// onto it — so it is scanned like a rung value.
+		if (inverted && IfExpressionChain.holdsElseLessConditional(chain.terminal, s.conditionalKinds)) return null;
+		final out: Array<Emitted> = [];
+		for (rung in chain.rungs) {
+			final rawCond: Null<Span> = rung.cond.span;
+			final rawValue: Null<Span> = rung.value.span;
+			// The emitted ` else ` follows every NON-terminal value, and only an else-less
+			// conditional can absorb it — the value would silently become that `if`'s else branch.
+			// The whole value subtree is scanned, not just its right spine.
+			if (rawCond == null || rawValue == null || IfExpressionChain.holdsElseLessConditional(rung.value, s.conditionalKinds))
+				return null;
+			final condSpan: Span = IfExpressionChain.tokenSpan(rawCond, source, comments);
+			final condText: String = rung.invert
+				? NegationScan.negateConditionText(rung.cond, source, s.negation, s.logic, lazy.types())
+				: source.substring(condSpan.from, condSpan.to);
+			out.push({ condText: condText, condSpan: condSpan, value: IfExpressionChain.tokenSpan(rawValue, source, comments) });
+		}
+		return out;
 	}
 
 }
@@ -478,39 +525,52 @@ private typedef Seams = {
 	var hostKinds: Array<String>;
 	var exprStatementKind: Null<String>;
 	var armKinds: Array<String>;
-	var andOperatorText: Null<String>;
-	var andLowerPrecedence: Array<String>;
+	var negation: NegationSeams;
+	var logic: Null<BooleanLogicSupport>;
 	var parenKind: Null<String>;
 	var opaqueKinds: Array<String>;
 }
 
-/** One rung of a scanned chain: its condition (parens already stripped) and its value. */
+/**
+ * One rung of a scanned chain: its condition (parens already stripped), its value, and whether
+ * the rebuild emits that condition NEGATED — which is what an INVERTED rung is.
+ */
 private typedef Rung = {
 	var cond: QueryNode;
 	var value: QueryNode;
+	var invert: Bool;
 }
 
 /**
- * One rung as the rebuild EMITS it: the condition TEXT, the condition spans it copies verbatim
- * (two for the first half of a conjunctive expansion, NONE for the second, which reuses the
- * outer condition's text), where the last copied condition piece ends, and the value span.
+ * A chain read as a spine: its rungs, the terminal the last `else` holds, and how many of its
+ * links the author wrote as a ternary. `invertTail` mutates the first two as it folds a nested
+ * ternary in, which is why they travel together rather than as separate returns; the count is
+ * read BEFORE that, so it stays a fact about the SPINE the author wrote.
+ */
+private typedef Chain = {
+	var rungs: Array<Rung>;
+	var terminal: QueryNode;
+	var ternaryRungs: Int;
+}
+
+/**
+ * One rung as the rebuild EMITS it: the condition TEXT, the condition span it copies, and the value span.
  */
 private typedef Emitted = {
 	var condText: String;
-	var condSpans: Array<Span>;
-	var condEnd: Int;
+	var condSpan: Span;
 	var value: Span;
 }
 
 /**
  * The two lazily-resolved services the walk carries — the symbol index the
- * `prefer-switch-expression` deferral asks for, and the purity context the conjunctive
- * flattening asks of a condition it is about to duplicate. Bundled so the walk's parameter list
- * does not grow one entry per service.
+ * `prefer-switch-expression` deferral asks for, and the operand-type probe the negation engine asks of
+ * a condition the inversion complements. Bundled so the walk's parameter list does not grow one
+ * entry per service.
  */
 private typedef Lazy = {
 	var resolveIndex: () -> Null<SymbolIndex>;
-	var purity: () -> Null<PurityCtx>;
+	var types: () -> Null<(QueryNode) -> Null<String>>;
 }
 
 /** A convertible chain: the finding key span, the (trivia-trimmed) replaced span, and the if-chain text. */
