@@ -76,6 +76,7 @@ import unit.HxTypeArrowSliceTest;
 import unit.HxTypeAnonSliceTest;
 import unit.AnonTypeDupCheckTest;
 import unit.HxAnonFieldTypeProjectionTest;
+import unit.LocalTypeAnnotationProjectionTest;
 import unit.HxAnonVarFieldSliceTest;
 import unit.HxAnonMemberSliceTest;
 import unit.HxLocalVarMetaSliceTest;
@@ -724,6 +725,7 @@ class RunTests {
 		addCase(new HxTypeAnonSliceTest());
 		addCase(new AnonTypeDupCheckTest());
 		addCase(new HxAnonFieldTypeProjectionTest());
+		addCase(new LocalTypeAnnotationProjectionTest());
 		addCase(new HxAnonVarFieldSliceTest());
 		addCase(new HxAnonMemberSliceTest());
 		addCase(new HxLocalVarMetaSliceTest());

@@ -120,16 +120,18 @@ class QueryWalkerCodegen {
 		return { expr: EField(target, name), pos: Context.currentPos() };
 	}
 
-	/** One `private static function _walk<T>(v, into, withTypeRefs): Void`. */
+	/** One `private static function _walk<T>(v, into, typeOut, withTypeRefs): Void`. */
 	private static function walkField(fn: QueryWalkerLowering.WalkerFn): Field {
 		return {
 			name: fn.fnName,
 			access: [APrivate, AStatic],
-			doc: 'Append the `QueryNode`s of a `${fn.typePath}` value to `into`.',
+			doc: 'Append the `QueryNode`s of a `${fn.typePath}` value to `into`; a `@:queryTypeSlot` field of it fills `typeOut`, which '
+				+ 'the enclosing node reads into `QueryNode.type`.',
 			kind: FFun({
 				args: [
 					{ name: 'v', type: fn.paramCT },
 					{ name: 'into', type: NODE_ARRAY_CT },
+					{ name: 'typeOut', type: NODE_ARRAY_CT },
 					WITH_TYPE_REFS_ARG
 				],
 				ret: VOID_CT,
@@ -196,13 +198,18 @@ class QueryWalkerCodegen {
 	 */
 	private static function publicWalkRootField(result: QueryWalkerLowering.QueryWalkerResult): Field {
 		final rootCall: Expr = {
-			expr: ECall({ expr: EConst(CIdent(result.rootFnName)), pos: Context.currentPos() }, [macro _r, macro into, macro withTypeRefs]),
+			expr: ECall(
+				{ expr: EConst(CIdent(result.rootFnName)), pos: Context.currentPos() },
+				[macro _r, macro into, macro _rootTypeOut, macro withTypeRefs]
+			),
 			pos: Context.currentPos()
 		};
 		final body: Expr = macro {
 			final _r = root;
 			if (_r == null) throw new haxe.Exception('parse failed');
 			final into: Array<anyparse.query.QueryNode> = [];
+			// The root rule forms no node of its own, so nothing ever reads this back.
+			final _rootTypeOut: Array<anyparse.query.QueryNode> = [];
 			$rootCall;
 			return anyparse.query.QueryWalkSupport.orderBySpan(into);
 		};

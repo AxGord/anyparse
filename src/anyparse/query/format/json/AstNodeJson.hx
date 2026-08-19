@@ -25,6 +25,11 @@ package anyparse.query.format.json;
  * `optionsComplexType` path resolution does not hit the sub-module
  * gotcha (see `feedback_writerlowering_mirror_lowering_byname.md`).
  *
+ * `type` is the node's DECLARED TYPE — the `QueryNode.type` slot, whose subtree is the
+ * same node shape. Its own key rather than a child, so a consumer walking `children`
+ * sees the list it always saw; `@:optional`, so a node with no annotation prints
+ * byte-identically to before the slot existed.
+ *
  * `doc` / `source` are the `--doc` / `--source` opt-ins, populated by
  * `Json.renderMatches` on the per-match ROOT node only (never on
  * recursed children). Both are `@:optional` — the writer omits the
@@ -37,6 +42,7 @@ typedef AstNodeJson = {
 	@:optional var name: String;
 	var children: Array<AstNodeJson>;
 	@:optional var span: AstSearchSpan;
+	@:optional var type: AstNodeJson;
 	@:optional var doc: String;
 	@:optional var source: String;
 };

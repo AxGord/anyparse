@@ -12,6 +12,19 @@ import anyparse.runtime.Span;
 final class QueryWalkSupport {
 
 	/**
+	 * The first node of a one-slot accumulator, or null when nothing filled it.
+	 *
+	 * The generated walker hands a node-forming rule a private array for its
+	 * `QueryNode.type` slot: a grammar field tagged `@:queryTypeSlot` pushes into it,
+	 * every other field leaves it empty. An index read would be the same expression, but
+	 * out of range it is target-defined - null on js, undefined behaviour on a static
+	 * target - and the core has to answer the same on all of them.
+	 */
+	public static inline function first(nodes: Array<QueryNode>): Null<QueryNode> {
+		return nodes.length > 0 ? nodes[0] : null;
+	}
+
+	/**
 	 * Order a node's children by source position. The generated walker already
 	 * emits fields in DECLARED order, which is deterministic on every target -
 	 * unlike the reflective walker this replaced, whose `Reflect.fields` order

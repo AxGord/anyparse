@@ -143,6 +143,10 @@ final class Json {
 		if (n != null) ast.name = n;
 		final span: Null<Span> = node.span;
 		if (span != null) ast.span = spanToJson(span, source);
+		// The declared-type SLOT, not a child - emitted under its own key so a JSON
+		// consumer walking `children` sees the same list it always did.
+		final declared: Null<QueryNode> = node.type;
+		if (declared != null) ast.type = toAst(declared, source);
 		return ast;
 	}
 

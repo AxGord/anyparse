@@ -38,8 +38,17 @@ class ApqAstTypeRefsCliTest extends Test {
 	private static final MIXED_TYPE_REFS: String = '(module\n  (ClassDecl\n    C\n    (VarMember a (TypeRef Int))\n'
 		+ '    (FinalMember b (TypeRef Map) (TypeRef String) (TypeRef Foo))\n    (FnMember\n      f\n'
 		+ '      (Required p (TypeRef haxe.io.Bytes))\n      (Named Null (TypeRef Bar))\n      (ExprBody (ReturnExpr (NullLit))))))\n';
-	private static final MIXED_DEFAULT: String = '(module\n  (ClassDecl\n    C\n    (VarMember a)\n    (FinalMember b)\n'
-		+ '    (FnMember f (Required p) (Named Null) (ExprBody (ReturnExpr (NullLit))))))\n';
+
+	/**
+	 * The default dump carries the `QueryNode.type` SLOT of every BINDING — var, final and
+	 * function parameter — printed as a `(: …)` group ahead of the children, plus the type
+	 * ARGUMENTS of a type that already projected (the `Null<Bar>` return type). Nothing here
+	 * renders as a `TypeRef`: that flat form stays the `--type-refs` projection's own, and
+	 * the two are what this test pins apart.
+	 */
+	private static final MIXED_DEFAULT: String = '(module\n  (ClassDecl\n    C\n    (VarMember a (: (Named Int)))\n'
+		+ '    (FinalMember b (: (Named Map (Named String) (Named Foo))))\n    (FnMember\n      f\n'
+		+ '      (Required p (: (Named haxe.io.Bytes)))\n      (Named Null (Named Bar))\n      (ExprBody (ReturnExpr (NullLit))))))\n';
 
 	/**
 	 * `Array<{ node: Doc, crosses: Bool }>` projects the anonymous structure's

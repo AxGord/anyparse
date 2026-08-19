@@ -39,6 +39,14 @@ using StringTools;
 @:nullSafety(Strict)
 final class Text {
 
+	/**
+	 * The `QueryNode.type` slot renders as a `(: <type>)` group between the name and the
+	 * children — a slot, so it is NOT one of them, and the `:` head says so at a glance
+	 * (`(FinalStmt arr (: (Named Array (Named CodePoint))) (Call (IdentExpr mk)))`).
+	 * A node with no declared type prints exactly as it did before the slot existed.
+	 */
+	private static inline final TYPE_SLOT_HEAD: String = ':';
+
 	public static function render(node: QueryNode, spans: Bool = false): String {
 		return '${SValueWriter.write(toSValue(node, spans), SExprFormat.instance.defaultWriteOptions)}\n';
 	}
@@ -237,6 +245,8 @@ final class Text {
 			final span: Null<Span> = node.span;
 			if (span != null) items.push(SAtom('@${span.from}-${span.to}'));
 		}
+		final declared: Null<QueryNode> = node.type;
+		if (declared != null) items.push(SList([SAtom(TYPE_SLOT_HEAD), toSValue(declared, spans)]));
 		for (c in node.children) items.push(toSValue(c, spans));
 		return SList(items);
 	}

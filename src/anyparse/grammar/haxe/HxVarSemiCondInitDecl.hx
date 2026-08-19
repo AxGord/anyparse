@@ -70,6 +70,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxVarSemiCondInitDecl = {
 	var name: HxVarNameLit;
-	@:optional @:fmt(typeHintColon) @:lead(':') var type: Null<HxType>;
+	@:optional @:fmt(typeHintColon) @:lead(':') @:queryTypeSlot var type: Null<HxType>;
 	var region: HxVarSemiInitRegion;
 }

@@ -113,10 +113,54 @@ about). No scope/binding resolution — a type occurrence has no
 shadowing semantics. No cross-file resolution.
 
 Implementation note: the default parse tree (consumed by
-`ast`/`search`/`refs`/`meta`) intentionally drops type-position nodes
-to stay lean; `uses` runs on a separate projection
+`ast`/`search`/`refs`/`meta`) drops type-position nodes from its
+CHILDREN to stay lean; `uses` runs on a separate projection
 (`GrammarPlugin.parseFileTypeRefs`), so adding it leaves the other four
 commands byte-identical by construction.
+
+#### The `type` slot — a binding's declared type in the DEFAULT tree
+
+What a binding is DECLARED as is a different question from what types a
+file references, and it is answered in the default tree, on the binding
+itself. `QueryNode.type` is a slot beside `name`, not a child: a
+declaration's children are its initializer and its comma-continuations,
+and the rules read them positionally, so an annotation among them would
+move every one of those indices — but only where the source happened to
+be annotated.
+
+The slot is filled for every BINDING: local `var` / `final`, class and
+static members, anon-struct `var` / `final` fields, the bindings after a
+comma in `var a, b`, function and lambda parameters, and a `catch`
+binding. Its subtree is the type's own shape — kind = the grammar's type
+constructor, name = the nominal head, children = the type ARGUMENTS:
+
+```
+$ apq probe 'class C { function f() { final xs:Array<CodePoint> = mk(); } }'
+(module
+  (ClassDecl
+    C
+    (FnMember
+      f
+      (BlockBody (FinalStmt xs (: (Named Array (Named CodePoint))) (Call (IdentExpr mk)))))))
+```
+
+`(: …)` is how the S-expr renderer prints the slot — between the name
+and the children, with a `:` head so it does not read as one of them. In
+`--json` it is the node's own `type` key, again beside `children`.
+
+A rule asks the tree instead of the text: `prefer-for-in` derives its
+loop binder from `decl.type` (head in `Array` / `Iterator` / `Iterable`,
+element = `type.children[0]`) where it used to match a regular
+expression against the declaration's source slice.
+
+A KIND could not have carried this. In Haxe `Arrow` is both
+`HxType.Arrow` (`Int->Void`, an annotation) and `HxExpr.Arrow`
+(`k => v`, an initializer), so "which child is the type" has no
+kind-level answer — the same reason `name` is a slot.
+
+The `--type-refs` projection is unaffected: it keeps its flat `TypeRef`
+run and fills no slot, so `uses` / `blast` / `mentions` and the
+rewriting ops see exactly the tree they always saw.
 
 #### `apq ast --type-refs` — dump that projection
 
