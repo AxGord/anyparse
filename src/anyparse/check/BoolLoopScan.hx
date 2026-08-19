@@ -368,12 +368,12 @@ final class BoolLoopScan {
 				if (cand != null) {
 					emit(cand);
 					inner = null;
-					// The FLAG pairing reads the SAME two slots in the opposite roles — declaration
+				} else if (i < kids.length - 1) {
+					// The FLAG pairing reads the same two slots in the OPPOSITE roles — declaration
 					// then loop, where the return form has loop then return — so the two can never
 					// claim one pair: a node is either a declaration or a loop. Trying it only where
-					// the return form declined keeps that statement true by construction rather than
-					// by a disjointness argument nothing tests.
-				} else if (i < kids.length - 1) {
+					// the return form declined keeps that true by construction rather than by a
+					// disjointness argument nothing tests.
 					final flagged: Null<Cand> = flagCandidateAt(kids[i], kids[i + 1], node, source, s, kind, probe);
 					if (flagged != null) emit(flagged);
 				}
@@ -533,9 +533,7 @@ final class BoolLoopScan {
 	 * were the refusal dropped, a key-value loop would reach `FOR_CHILD_COUNT` exactly like a
 	 * single-binder one and be rewritten, so the refusal is the sole gate and a test can prove it.
 	 */
-	private static function forIfHead(
-		forNode: QueryNode, source: String, s: Seams, probe: Probes, sink: Null<FlagSink> = null
-	): Null<Head> {
+	private static function forIfHead(forNode: QueryNode, source: String, s: Seams, probe: Probes, ?sink: FlagSink): Null<Head> {
 		if (forNode.kind != s.forStmtKind || NominalTypes.hasIterationValueBinder(forNode, s.valueBinderKinds)) return null;
 		final operands: Array<QueryNode> = RefactorSupport.loopOperands(forNode, s.valueBinderKinds);
 		final loopVar: Null<String> = forNode.name;

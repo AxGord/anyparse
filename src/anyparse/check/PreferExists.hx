@@ -11,14 +11,27 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 /**
- * Flags a manual ANY-MATCH `for` loop — one that iterates a collection and returns `true` from
- * the first element satisfying a condition, with a `return false;` right after — which the
- * user's rule replaces with `Lambda.exists`. `Severity.Info`, with an autofix that rewrites the
- * loop to `xs.exists(x -> cond)` and inserts a `using Lambda;` when the file lacks one. The
- * GUARDED variant `if (g) for (x in xs) if (cond) return true;` + `return false;` collapses to
- * `return g && xs.exists(x -> cond);` — more than half the real sites measured on a ~800-file
- * application are that one. Purely structural; the shape recovery, the gates and the edit all
- * live in `BoolLoopScan`, shared with the twin `prefer-foreach`.
+ * Flags a manual ANY-MATCH `for` loop — one that iterates a collection and records that some
+ * element satisfies a condition — which the user's rule replaces with `Lambda.exists`.
+ * `Severity.Info`, with an autofix that rewrites the loop and inserts a `using Lambda;` when the
+ * file lacks one. Purely structural; the shape recovery, the gates and the edit all live in
+ * `BoolLoopScan`, shared with the twin `prefer-foreach`.
+ *
+ * Two SINKS carry the answer, and the rule claims both:
+ *
+ * - the RETURN form, `for (x in xs) if (cond) return true;` + `return false;`, which becomes
+ *   `return xs.exists(x -> cond);`. Its GUARDED variant
+ *   `if (g) for (x in xs) if (cond) return true;` collapses to `return g && xs.exists(x -> cond);`
+ *   — more than half the real sites measured on a ~800-file application are that one;
+ * - the FLAG form, `var f:Bool = false;` immediately followed by
+ *   `for (x in xs) if (cond) f = true;`, which becomes `final f:Bool = xs.exists(x -> cond);`.
+ *   Eleven sites over that same application, and it is the form the code actually writes.
+ *
+ * The flag form carries a gate the return form does not need: the CONDITION must be side-effect
+ * free (`PurityScan.isPure`). A `return` leaves the loop at the first match, so the emitted call's
+ * short-circuit is invisible; a flag assignment does not, and five of those eleven sites call a
+ * function that does the loop's work on every element. `BoolLoopScan`'s type doc has the full
+ * reasoning and names them.
  *
  * ## Why `DefaultOff`
  *
@@ -53,7 +66,7 @@ final class PreferExists implements Check implements DefaultOff implements Risky
 	}
 
 	public function description(): String {
-		return 'a manual any-match for loop (return true / return false) replaceable with Lambda.exists';
+		return 'a manual any-match for loop (returning, or setting a bool flag) replaceable with Lambda.exists';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

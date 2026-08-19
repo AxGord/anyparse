@@ -286,7 +286,7 @@ class CondBranchSplitTest extends Test {
 
 	/** Whether no run's span reaches a `#` — the "a branch span never covers a directive line" invariant. */
 	private static function noDirectiveInSpans(src: String, runs: Array<CondBranchRun>): Bool {
-		return runs.foreach(run -> !(src.substring(run.span.from, run.span.to).indexOf('#') != -1));
+		return runs.foreach(run -> src.substring(run.span.from, run.span.to).indexOf('#') == -1);
 	}
 
 	/** The first `ClassDecl` named `name` under `node` — the anchor for the structural-sharing identity checks. */

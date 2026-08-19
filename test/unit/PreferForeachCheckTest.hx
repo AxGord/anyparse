@@ -172,18 +172,11 @@ class PreferForeachCheckTest extends Test {
 		Assert.equals(1, violations(existsMemberFn('for (x in m) if (x > 2) return false;\n\t\treturn true;')).length);
 	}
 
-	/** A receiver whose OWN type declares `foreach` — the name this direction rewrites to. */
-	private function memberFn(body: String): String {
-		return 'class C {\n\tfunction f(m:M):Bool {\n\t\t$body\n\t}\n}\n\nclass M {\n\tpublic function foreach(key:Int):Bool {\n'
-			+ '\t\treturn false;\n\t}\n\n\tpublic function iterator():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}';
-	}
-
-	/** A receiver declaring the TWIN direction's name and not this one — the gate must not fire. */
 	public function testFlagFormFlagged(): Void {
+		// The rule id and severity ride on the shared violation builder, which `testBareFormFlagged`
+		// already pins — what is this arm's own is the SINK the message names.
 		final vs: Array<Violation> = violations(flagFn('var all:Bool = true;\n\t\tfor (b in bs) if (!b) all = false;\n\t\treturn all;'));
 		Assert.equals(1, vs.length);
-		Assert.equals('prefer-foreach', vs[0].rule);
-		Assert.equals(Severity.Info, vs[0].severity);
 		Assert.isTrue(vs[0].message.indexOf('final all = bs.foreach(b -> b)') != -1, vs[0].message);
 	}
 
@@ -225,12 +218,19 @@ class PreferForeachCheckTest extends Test {
 		Assert.equals(-1, out.indexOf('for (b in bs)'));
 	}
 
+	/** A receiver whose OWN type declares `foreach` — the name this direction rewrites to. */
+	private function memberFn(body: String): String {
+		return 'class C {\n\tfunction f(m:M):Bool {\n\t\t$body\n\t}\n}\n\nclass M {\n\tpublic function foreach(key:Int):Bool {\n'
+			+ '\t\treturn false;\n\t}\n\n\tpublic function iterator():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}';
+	}
+
 	/** The FLAG form's fixture: `bs` carries the already-negated condition, `keep` the effectful one. */
 	private function flagFn(body: String): String {
 		return 'class C {\n\tfunction f(xs:Array<Int>, bs:Array<Bool>, a:Bool):Bool {\n\t\t$body\n\t}\n\n'
 			+ '\tfunction keep(x:Int):Bool {\n\t\treturn x > 0;\n\t}\n}';
 	}
 
+	/** A receiver declaring the TWIN direction's name and not this one — the gate must not fire. */
 	private function existsMemberFn(body: String): String {
 		return 'class C {\n\tfunction f(m:M):Bool {\n\t\t$body\n\t}\n}\n\nclass M {\n\tpublic function exists(key:Int):Bool {\n'
 			+ '\t\treturn false;\n\t}\n\n\tpublic function iterator():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}';

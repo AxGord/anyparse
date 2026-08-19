@@ -265,11 +265,11 @@ class PreferExistsCheckTest extends Test {
 	}
 
 	public function testFlagFormFlagged(): Void {
+		// The rule id and severity ride on the shared violation builder, which `testBareFormFlagged`
+		// already pins — what is this arm's own is the SINK the message names.
 		final vs: Array<Violation> =
 			violations(flagFn('var found:Bool = false;\n\t\tfor (x in xs) if (x > 2) found = true;\n\t\treturn found;'));
 		Assert.equals(1, vs.length);
-		Assert.equals('prefer-exists', vs[0].rule);
-		Assert.equals(Severity.Info, vs[0].severity);
 		Assert.isTrue(vs[0].message.indexOf('final found = xs.exists(x -> x > 2)') != -1, vs[0].message);
 	}
 
@@ -405,9 +405,8 @@ class PreferExistsCheckTest extends Test {
 			new PreferExists().run([
 				{
 					file: 'C.hx',
-					source: 'class C {\n\tfunction f(m:M):Bool {\n\t\tvar found:Bool = false;\n'
-					+ '\t\tfor (x in m) if (x > 2) found = true;\n\t\treturn found;\n\t}\n}\n\nclass M {\n'
-					+ '\tpublic function exists(key:Int):Bool {\n\t\treturn false;\n\t}\n\n'
+					source: 'class C {\n\tfunction f(m:M):Bool {\n\t\tvar found:Bool = false;\n\t\tfor (x in m) if (x > 2) found = true;\n'
+					+ '\t\treturn found;\n\t}\n}\n\nclass M {\n\tpublic function exists(key:Int):Bool {\n\t\treturn false;\n\t}\n\n'
 					+ '\tpublic function iterator():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}'
 				}
 			], new HaxeQueryPlugin()).length

@@ -8,14 +8,20 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 /**
- * Flags a manual ALL-MATCH `for` loop — one that iterates a collection and returns `false` from
- * the first element satisfying a condition, with a `return true;` right after — which the
- * user's rule replaces with `Lambda.foreach`. `Severity.Info`, with an autofix that rewrites the
- * loop to `xs.foreach(x -> !(cond))` and inserts a `using Lambda;` when the file lacks one. The
- * inversion is a WRAP, never De Morgan (distributing `!` through a chain reorders the operands a
- * null narrowing depends on); a condition that is already a `!` drops it instead of gaining a
- * second. Purely structural; the shape recovery, the gates and the edit all live in
- * `BoolLoopScan`, shared with the twin `prefer-exists`.
+ * Flags a manual ALL-MATCH `for` loop — one that iterates a collection and records that some
+ * element FAILS a condition — which the user's rule replaces with `Lambda.foreach`.
+ * `Severity.Info`, with an autofix that rewrites the loop to `xs.foreach(x -> !(cond))` and
+ * inserts a `using Lambda;` when the file lacks one. The inversion is a WRAP, never De Morgan
+ * (distributing `!` through a chain reorders the operands a null narrowing depends on); a
+ * condition that is already a `!` drops it instead of gaining a second. Purely structural; the
+ * shape recovery, the gates and the edit all live in `BoolLoopScan`, shared with the twin
+ * `prefer-exists`.
+ *
+ * Two SINKS, as in that twin and in this direction's polarity: the RETURN form
+ * `for (x in xs) if (cond) return false;` + `return true;`, and the FLAG form
+ * `var f:Bool = true;` + `for (x in xs) if (cond) f = false;` -> `final f:Bool = xs.foreach(x -> !(cond));`.
+ * `Lambda.foreach` short-circuits on the first `false` exactly as `exists` does on the first
+ * `true`, so the flag form's PURITY gate is load-bearing here too — see `BoolLoopScan`.
  *
  * The GUARDED variant that twin claims has no counterpart here: `if (g) for … return false;` +
  * `return true;` reads as `!g || xs.foreach(…)`, and negating a guard — a null test, at every
@@ -44,7 +50,7 @@ final class PreferForeach implements Check implements DefaultOff {
 	}
 
 	public function description(): String {
-		return 'a manual all-match for loop (return false / return true) replaceable with Lambda.foreach';
+		return 'a manual all-match for loop (returning, or setting a bool flag) replaceable with Lambda.foreach';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
