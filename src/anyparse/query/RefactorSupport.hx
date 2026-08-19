@@ -3221,18 +3221,17 @@ final class RefactorSupport {
 	): Null<Array<{ span: Span, text: String }>> {
 		final shape: RefShape = plugin.refShape();
 		final coalesce: Null<String> = shape.nullCoalesceOperatorText;
-		if (coalesce == null || source.substring(declSpan.from, declSpan.to).indexOf('=') < 0) return null;
-		final spans: Array<Null<Span>> = [declSpan];
-		final edits: Array<{ span: Span, text: String }> = varKeywordToFinalEdits(source, spans);
-		if (edits.length != 1) return null;
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
-		if (tree == null) return null;
-		final loc: Null<{ container: QueryNode, field: QueryNode }> = classLikeFieldAt(tree, declSpan.from, shape);
-		if (loc == null) return null;
-		final decl: Null<FoldableDecl> = foldableDeclaration(source, loc, declSpan, shape);
-		final ctor: Null<QueryNode> = soleConstructor(loc.container, shape);
-		if (decl == null || ctor == null) return null;
-		final guarded: Null<GuardedCtorInit> = soleGuardedCtorFieldInit(source, loc.container, ctor, loc.field, shape);
+		final base: Null<{
+			container: QueryNode,
+			field: QueryNode,
+			decl: FoldableDecl,
+			ctor: QueryNode
+		}> = foldableCtorDefault(source, declSpan, plugin, shape);
+		if (coalesce == null || base == null) return null;
+		final edits: Array<{ span: Span, text: String }> = varKeywordToFinalEdits(source, [declSpan]);
+		final decl: FoldableDecl = base.decl;
+		final ctor: QueryNode = base.ctor;
+		final guarded: Null<GuardedCtorInit> = soleGuardedCtorFieldInit(source, base.container, ctor, base.field, shape);
 		if (guarded == null || !ctorParamIsNullable(source, ctor, guarded.param, shape)) return null;
 		if (!guardReachedIntact(source, ctor, decl.name, guarded.stmt.from, shape)) return null;
 		if (
@@ -4847,23 +4846,23 @@ final class RefactorSupport {
 		source: String, declSpan: Span, plugin: GrammarPlugin
 	): Null<Array<{ span: Span, text: String }>> {
 		final shape: RefShape = plugin.refShape();
-		if (source.substring(declSpan.from, declSpan.to).indexOf('=') < 0) return null;
-		// A plain-`var` gate borrowed from the `??` sibling: the head reader assumes the `var`
-		// keyword, and a `final` field carrying an initializer cannot be reassigned anyway.
-		if (varKeywordToFinalEdits(source, [declSpan]).length != 1) return null;
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
-		if (tree == null) return null;
-		final loc: Null<{ container: QueryNode, field: QueryNode }> = classLikeFieldAt(tree, declSpan.from, shape);
-		if (loc == null) return null;
-		final decl: Null<FoldableDecl> = foldableDeclaration(source, loc, declSpan, shape);
-		final ctor: Null<QueryNode> = soleConstructor(loc.container, shape);
-		if (decl == null || decl.dropped != null || ctor == null) return null;
-		if (holdsConditionalRegion(ctor) || holdsConditionalRegion(loc.field)) return null;
-		final init: Null<ConditionalCtorInit> = soleConditionalCtorFieldInit(source, loc.container, ctor, loc.field, shape);
+		final base: Null<{
+			container: QueryNode,
+			field: QueryNode,
+			decl: FoldableDecl,
+			ctor: QueryNode
+		}> = foldableCtorDefault(source, declSpan, plugin, shape);
+		// An accessor head stays out of scope here: this fold does not finalize, so a `(default, null)`
+		// pair the `??` sibling would rewrite has nothing to gain and would only lose its own spelling.
+		if (base == null || base.decl.dropped != null) return null;
+		final decl: FoldableDecl = base.decl;
+		final ctor: QueryNode = base.ctor;
+		if (holdsConditionalRegion(ctor) || holdsConditionalRegion(base.field)) return null;
+		final init: Null<ConditionalCtorInit> = soleConditionalCtorFieldInit(source, base.container, ctor, base.field, shape);
 		if (init == null) return null;
 		final guardFrom: Int = init.ifStmt.from;
 		if (!guardReachedIntact(source, ctor, decl.name, guardFrom, shape)) return null;
-		if (!superCallsFollow(loc.container, ctor, guardFrom, shape)) return null;
+		if (!superCallsFollow(base.container, ctor, guardFrom, shape)) return null;
 		if (
 			MemberWriteScan.writtenInRange(source, decl.name, init.target, 0, decl.span.from)
 			|| MemberWriteScan.writtenInRange(source, decl.name, init.target, decl.span.to, source.length)
@@ -4946,16 +4945,18 @@ final class RefactorSupport {
 		if (targetSpan == null || valueSpan == null) return null;
 		if (!ctorTargetIsField(target, fieldFrom, fieldName, container, shape)) return null;
 		if (referencedInRange(source, fieldName, valueSpan.from, valueSpan.to, [])) return null;
-		if (!foldRegionCommentFree(source, stmtSpan, condSpan, targetSpan, valueSpan, sole ? stmtSpan.to : firstSpan.to)) return null;
-		return {
-			ifStmt: stmtSpan,
-			assignStmt: firstSpan,
-			target: targetSpan,
-			condition: cond,
-			value: valueSpan,
-			sole: sole,
-			terminator: source.substring(assignSpan.to, firstSpan.to)
-		};
+		return if (!foldRegionCommentFree(source, stmtSpan, condSpan, targetSpan, valueSpan, sole ? stmtSpan.to : firstSpan.to))
+			null
+		else
+			{
+				ifStmt: stmtSpan,
+				assignStmt: firstSpan,
+				target: targetSpan,
+				condition: cond,
+				value: valueSpan,
+				sole: sole,
+				terminator: source.substring(assignSpan.to, firstSpan.to)
+			};
 	}
 
 
@@ -5000,8 +5001,8 @@ final class RefactorSupport {
 
 	/** `branch` reduced to the statement it OPENS with, unwrapping one brace level, or null when it holds none. */
 	private static function branchOpeningStatement(branch: QueryNode, braced: Bool): Null<QueryNode> {
-		if (!braced) return branch;
-		return branch.children.length >= 1 ? branch.children[0] : null;
+		final statements: Array<QueryNode> = braced ? branch.children : [branch];
+		return statements.length >= 1 ? statements[0] : null;
 	}
 
 
@@ -5016,6 +5017,40 @@ final class RefactorSupport {
 	): Bool {
 		return !hasCommentMarker(source, stmt.from, cond.from) && !hasCommentMarker(source, cond.to, target.from)
 			&& !hasCommentMarker(source, target.to, value.from) && !hasCommentMarker(source, value.to, rebuiltEnd);
+	}
+
+
+	/**
+	 * The declaration-and-constructor geometry BOTH conditional-default folds
+	 * (`ctorConditionalDefaultFinalEdits`, `ctorConditionalDefaultTernaryEdits`) open with, so the
+	 * shape they agree on is stated once: the field's container and node, its `FoldableDecl` (a
+	 * non-static `var` whose head is plain or exactly `(default, null)` and whose initializer is
+	 * MOVE-SAFE), and the enclosing type's sole constructor.
+	 *
+	 * Null when the declaration carries no `=`, is not a plain `var` (`varKeywordToFinalEdits`
+	 * yielding one edit is the keyword test — the caller that needs that edit recomputes it), does
+	 * not parse, or when any of the four cannot be resolved.
+	 */
+	private static function foldableCtorDefault(source: String, declSpan: Span, plugin: GrammarPlugin, shape: RefShape): Null<{
+		container: QueryNode,
+		field: QueryNode,
+		decl: FoldableDecl,
+		ctor: QueryNode
+	}> {
+		if (source.substring(declSpan.from, declSpan.to).indexOf('=') < 0) return null;
+		if (varKeywordToFinalEdits(source, [declSpan]).length != 1) return null;
+		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
+		if (tree == null) return null;
+		final loc: Null<{ container: QueryNode, field: QueryNode }> = classLikeFieldAt(tree, declSpan.from, shape);
+		if (loc == null) return null;
+		final decl: Null<FoldableDecl> = foldableDeclaration(source, loc, declSpan, shape);
+		final ctor: Null<QueryNode> = soleConstructor(loc.container, shape);
+		return decl == null || ctor == null ? null : {
+			container: loc.container,
+			field: loc.field,
+			decl: decl,
+			ctor: ctor
+		};
 	}
 
 }

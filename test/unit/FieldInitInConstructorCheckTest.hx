@@ -40,7 +40,8 @@ class FieldInitInConstructorCheckTest extends Test {
 		Assert.equals('field-init-in-constructor', vs[0].rule);
 		Assert.equals(Severity.Info, vs[0].severity);
 		Assert.equals(
-			'this field default is overwritten by one conditional constructor write - fold the pair into a single unconditional assignment of a conditional value',
+			'this field default is overwritten by one conditional constructor write - fold the pair into a single '
+			+ 'unconditional assignment of a conditional value',
 			vs[0].message
 		);
 	}
