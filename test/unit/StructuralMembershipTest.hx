@@ -65,6 +65,72 @@ class StructuralMembershipTest extends Test {
 		Assert.isNull(index.extensionReturnNominal('IterExt', 'bare', 'Bag'));
 	}
 
+	/**
+	 * A top-level `typedef` re-pointing at a PACKAGED type of the same simple name — the exact
+	 * shape `/std/List.hx` and `/std/Map.hx` carry — is followed to the target that declares the
+	 * members. The fixtures reproduce the std sources verbatim in shape: the alias writes its
+	 * target QUALIFIED and imports nothing, so only the written PATH can name the target.
+	 */
+	public function testAliasedContainerSatisfiesIterable(): Void {
+		final index: SymbolIndex = SymbolIndex.build(aliasFiles(), new HaxeQueryPlugin());
+
+		// `typedef List<T> = haxe.ds.List<T>` -> a class whose `iterator()` returns a sub-module
+		// type of its OWN module, which only the target's file can resolve.
+		Assert.isTrue(index.satisfiesIterable('List', 'Use.hx'));
+		// `typedef Map<K, V> = haxe.ds.Map<K, V>` -> an abstract naming `Iterator` directly.
+		Assert.isTrue(index.satisfiesIterable('Map', 'Use.hx'));
+		// The same hop where the alias and its target do NOT share a simple name.
+		Assert.isTrue(index.satisfiesIterable('Renamed', 'Use.hx'));
+		// Two hops: an alias to an alias.
+		Assert.isTrue(index.satisfiesIterable('Chained', 'Use.hx'));
+		// The hop carries no proof of its own — a target that is not iterable stays refused.
+		Assert.isFalse(index.satisfiesIterable('PlainAlias', 'Use.hx'));
+		// An alias whose target nothing indexes is unresolvable, not iterable.
+		Assert.isFalse(index.satisfiesIterable('Outside', 'Use.hx'));
+		// An alias to an anonymous structure hosts no nominal target at all.
+		Assert.isFalse(index.satisfiesIterable('Anon', 'Use.hx'));
+		// A function-type alias has no nominal head to follow.
+		Assert.isFalse(index.satisfiesIterable('Fn', 'Use.hx'));
+
+		// The second half of the same hop, and the one the REAL path reaches first:
+		// `NominalTypes.staticExtensionNominal` consults an extension only after the receiver is
+		// PROVEN to declare no such member, and that proof walks the alias too.
+		Assert.isTrue(index.typeProvablyLacksMember('List', 'pick', 'Use.hx'));
+		Assert.isTrue(index.typeProvablyLacksMember('Map', 'pick', 'Use.hx'));
+		// The hop proves presence as readily as absence — `iterator()` IS declared on the target.
+		Assert.isFalse(index.typeProvablyLacksMember('List', 'iterator', 'Use.hx'));
+
+		// The accept gate consumes it: `Lambda`-shaped extensions now bind on an aliased container.
+		Assert.equals('Widget', index.extensionReturnNominal('IterExt', 'pick', 'List', 'Use.hx'));
+		Assert.equals('Widget', index.extensionReturnNominal('IterExt', 'pick', 'Map', 'Use.hx'));
+		Assert.isNull(index.extensionReturnNominal('IterExt', 'pick', 'PlainAlias', 'Use.hx'));
+	}
+
+	/** The alias fixture set: the two std container shapes verbatim, plus one refusal per alias form. */
+	private function aliasFiles(): Array<{ file: String, source: String }> {
+		return iterableFiles().concat([
+			{ file: 'Use.hx', source: 'class Use {}' },
+			{ file: 'List.hx', source: 'typedef List<T> = haxe.ds.List<T>;' },
+			{
+				file: 'haxe/ds/List.hx',
+				source: 'package haxe.ds;\n\nclass List<T> {\n\tpublic function iterator():ListIterator<T> return null;\n}\n\n'
+					+ 'private class ListIterator<T> {\n\tpublic function hasNext() return false;\n\n\tpublic function next() return null;\n}'
+			},
+			{ file: 'Map.hx', source: 'typedef Map<K, V> = haxe.ds.Map<K, V>;' },
+			{
+				file: 'haxe/ds/Map.hx',
+				source: 'package haxe.ds;\n\nabstract Map<K, V>(IMap<K, V>) {\n\tpublic inline function iterator():Iterator<V> return null;\n}'
+			},
+			{ file: 'Renamed.hx', source: 'typedef Renamed = deep.Sack;' },
+			{ file: 'deep/Sack.hx', source: 'package deep;\n\nclass Sack {\n\tpublic function iterator():DeepIter return null;\n}' },
+			{ file: 'Chained.hx', source: 'typedef Chained = Renamed;' },
+			{ file: 'PlainAlias.hx', source: 'typedef PlainAlias = Widget;' },
+			{ file: 'Outside.hx', source: 'typedef Outside = nowhere.Gone;' },
+			{ file: 'Anon.hx', source: 'typedef Anon = { var a:Int; };' },
+			{ file: 'Fn.hx', source: 'typedef Fn = Bag -> Widget;' }
+		]);
+	}
+
 	/** The fixture set: one iterable pair, six near-misses, a cross-package iterator, and a generic extension module. */
 	private function iterableFiles(): Array<{ file: String, source: String }> {
 		return [
