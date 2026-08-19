@@ -296,7 +296,12 @@ final class PreferEnumAbstract implements Check {
 		if (values.length < MIN_GROUP) return null;
 		final nameValue: String = name;
 		final spanValue: Span = span;
-		return { span: spanValue, name: nameValue, count: values.length, typeName: typeName };
+		return {
+			span: spanValue,
+			name: nameValue,
+			count: values.length,
+			typeName: typeName
+		};
 	}
 
 	/** Whether the member at `kids[i]` carries BOTH a `Static` and an `inline` modifier. */
@@ -310,7 +315,8 @@ final class PreferEnumAbstract implements Check {
 				hasStatic = true;
 			else if (kind == cfg.inlineKind)
 				hasInline = true;
-			else if (!cfg.modifierKinds.contains(kind) && !cfg.metaKinds.contains(kind)) break;
+			else if (!cfg.modifierKinds.contains(kind) && !cfg.metaKinds.contains(kind))
+				break;
 			j--;
 		}
 		return hasStatic && hasInline;
