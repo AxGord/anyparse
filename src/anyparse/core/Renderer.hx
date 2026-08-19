@@ -11,21 +11,6 @@ using StringTools;
 	the emit helpers can mutate the shared state by reference instead of
 	threading eight accumulators through every signature.
 **/
-/**
-	The three widths `Renderer.embeddedLineWidths` reports for one Doc: the
-	first and last physical line of a VERBATIM multi-line token (`first` /
-	`last`, both `-1` when the shape does not apply), and `condSpliceFirstLine`
-	— the same first-line measurement for a conditional-compilation splice
-	operand whose break is a real hardline rather than a `Text`-embedded
-	newline. Named because three signatures carry it; see the function's own
-	doc for what each `-1` means and which caller reads which field.
-**/
-private typedef EmbeddedLineWidths = {
-	final first: Int;
-	final last: Int;
-	final condSpliceFirstLine: Int;
-};
-
 private typedef RenderCtx = {
 	final buf: StringBuf;
 	final indentChar: IndentChar;
@@ -42,6 +27,21 @@ private typedef RenderCtx = {
 	var lineCount: Int;
 	var markerZeroDepth: Int;
 	var markerDecreaseDepth: Int;
+};
+
+/**
+	The three widths `Renderer.embeddedLineWidths` reports for one Doc: the
+	first and last physical line of a VERBATIM multi-line token (`first` /
+	`last`, both `-1` when the shape does not apply), and `condSpliceFirstLine`
+	— the same first-line measurement for a conditional-compilation splice
+	operand whose break is a real hardline rather than a `Text`-embedded
+	newline. Named because three signatures carry it; see the function's own
+	doc for what each `-1` means and which caller reads which field.
+**/
+private typedef EmbeddedLineWidths = {
+	final first: Int;
+	final last: Int;
+	final condSpliceFirstLine: Int;
 };
 
 /**
