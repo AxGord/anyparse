@@ -471,25 +471,6 @@ class PreferStaticExtensionCheckTest extends Test {
 		assertUnresolvedReceiver(bagFiles('Ext.deco(b.fixed(), 1);'));
 	}
 
-	/** The structural-membership fixture set: a `Bag` that only DECLARES `iterator()`, a plain type, and a generic extension module. */
-	private function bagFiles(body: String): Array<{ file: String, source: String }> {
-		return fileSet(
-			'using Ext;\nusing IterExt;\n\nclass C {\n\tfunction f(b:Bag, p:Plain):Void {\n\t\t$body\n\t}\n}\n', WIDGET_SOURCE, [
-				{ file: 'Bag.hx', source: 'class Bag {\n\tpublic function iterator(): BagIter return null;\n}\n' },
-				{
-					file: 'BagIter.hx',
-					source: 'class BagIter {\n\tpublic function hasNext(): Bool return false;\n\n\tpublic function next(): Widget return null;\n}\n'
-				},
-				{ file: 'Plain.hx', source: 'class Plain {}\n' },
-				{
-					file: 'IterExt.hx',
-					source: 'class IterExt {\n\tpublic static function pick<T>(it: Iterable<T>): Widget return null;\n\n'
-					+ '\tpublic static function fixed(it: Iterable<Widget>): Widget return null;\n}\n'
-				}
-			]
-		);
-	}
-
 	public function testForBinderOverTabledStaticCallResolvesReceiver(): Void {
 		// The TM shape: `for (key in Reflect.fields(o)) StringTools.urlEncode(key)`. The iterable is
 		// a TABLED stdlib static (`Reflect.fields` -> `Array<String>`), so the binder's element type
@@ -687,6 +668,26 @@ class PreferStaticExtensionCheckTest extends Test {
 				source: 'class Maker {\n\tpublic function make(): Widget return null;\n\n\tpublic function self(): Maker return this;\n}\n'
 			}
 		]);
+	}
+
+	/** The structural-membership fixture set: a `Bag` that only DECLARES `iterator()`, a plain type, and a generic extension module. */
+	private function bagFiles(body: String): Array<{ file: String, source: String }> {
+		return fileSet(
+			'using Ext;\nusing IterExt;\n\nclass C {\n\tfunction f(b:Bag, p:Plain):Void {\n\t\t$body\n\t}\n}\n', WIDGET_SOURCE, [
+				{ file: 'Bag.hx', source: 'class Bag {\n\tpublic function iterator(): BagIter return null;\n}\n' },
+				{
+					file: 'BagIter.hx',
+					source: 'class BagIter {\n\tpublic function hasNext(): Bool return false;\n\n'
+					+ '\tpublic function next(): Widget return null;\n}\n'
+				},
+				{ file: 'Plain.hx', source: 'class Plain {}\n' },
+				{
+					file: 'IterExt.hx',
+					source: 'class IterExt {\n\tpublic static function pick<T>(it: Iterable<T>): Widget return null;\n\n'
+					+ '\tpublic static function fixed(it: Iterable<Widget>): Widget return null;\n}\n'
+				}
+			]
+		);
 	}
 
 	/** A `C.hx` calling `StringTools.<method>` on an UNANNOTATED parameter (an unresolvable receiver). */

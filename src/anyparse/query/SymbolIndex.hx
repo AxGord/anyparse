@@ -1020,8 +1020,9 @@ final class SymbolIndex {
 		final found: Null<{ member: MemberInfo, file: String }> = structuralMemberOf(typeName, fromFile, ITERATOR_MEMBER_NAME, []);
 		if (found == null) return false;
 		final ret: Null<String> = found.member.returnNominal;
-		if (ret == null || found.member.firstParamTypeSource != null) return false;
-		return ret == ITERATOR_TYPE_NAME || satisfiesIterator(ret, found.file);
+		return ret == null || found.member.firstParamTypeSource != null
+			? false
+			: ret == ITERATOR_TYPE_NAME || satisfiesIterator(ret, found.file);
 	}
 
 	/**
