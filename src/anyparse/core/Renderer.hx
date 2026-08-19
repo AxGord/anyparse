@@ -11,6 +11,21 @@ using StringTools;
 	the emit helpers can mutate the shared state by reference instead of
 	threading eight accumulators through every signature.
 **/
+/**
+	The three widths `Renderer.embeddedLineWidths` reports for one Doc: the
+	first and last physical line of a VERBATIM multi-line token (`first` /
+	`last`, both `-1` when the shape does not apply), and `condSpliceFirstLine`
+	— the same first-line measurement for a conditional-compilation splice
+	operand whose break is a real hardline rather than a `Text`-embedded
+	newline. Named because three signatures carry it; see the function's own
+	doc for what each `-1` means and which caller reads which field.
+**/
+private typedef EmbeddedLineWidths = {
+	final first: Int;
+	final last: Int;
+	final condSpliceFirstLine: Int;
+};
+
 private typedef RenderCtx = {
 	final buf: StringBuf;
 	final indentChar: IndentChar;
@@ -472,7 +487,7 @@ class Renderer {
 	 * multi-line arguments a fill is supposed to refuse.
 	 */
 	private static inline function embeddedFirstLineWidth(d: Doc): Int {
-		final w: { first: Int, last: Int, condSpliceFirstLine: Int } = embeddedLineWidths(d);
+		final w: EmbeddedLineWidths = embeddedLineWidths(d);
 		return w.first >= 0 ? w.first : w.condSpliceFirstLine;
 	}
 
@@ -721,7 +736,7 @@ class Renderer {
 		// token -- content this measure cannot place, and content the walk
 		// refuses outright (`fitsFlatStep` reports a hardline as `broke`).
 		// Committing such a doc to flat would emit its hardlines unindented.
-		final embedded: { first: Int, last: Int, condSpliceFirstLine: Int } = embeddedLineWidths(d);
+		final embedded: EmbeddedLineWidths = embeddedLineWidths(d);
 		if (embedded.first >= 0 && embedded.last >= 0) return embedded.first <= remaining && embedded.last <= remaining;
 		final local: Array<Frame> = [new Frame(indent, MFlat, d)];
 		var budget: Int = remaining;
@@ -3234,7 +3249,7 @@ class Renderer {
 	 * flat when the line it opens and the line it closes both fit) and
 	 * `embeddedFirstLineWidth` (the `Fill` packing probe, `first` alone).
 	 */
-	private static function embeddedLineWidths(d: Doc): { first: Int, last: Int, condSpliceFirstLine: Int } {
+	private static function embeddedLineWidths(d: Doc): EmbeddedLineWidths {
 		final stack: Array<Doc> = [d];
 		var total: Int = 0;
 		var first: Int = -1;
@@ -3244,7 +3259,7 @@ class Renderer {
 			final node: Doc = stack.pop();
 			switch (node) {
 				case Text(s):
-					if (!sawCondDirective && StringTools.startsWith(StringTools.ltrim(s), '#if')) sawCondDirective = true;
+					if (!sawCondDirective && s.ltrim().startsWith('#if')) sawCondDirective = true;
 					final nl: Int = s.indexOf('\n');
 					if (nl < 0) {
 						total += s.length;
