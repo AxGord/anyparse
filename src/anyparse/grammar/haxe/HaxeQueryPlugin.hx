@@ -687,6 +687,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			restParamKind: 'Rest',
 			structureFieldHostKinds: ['Anon', 'ObjectLit'],
 			nullableWrapperTypeNames: ['Null', 'Dynamic', 'Any'],
+			memberTransparentWrapperTypeNames: ['Null'],
 			nullSafetyDisableArg: 'Off',
 			nonNullableTypeNames: ['Int', 'Float', 'Bool', 'UInt'],
 			nullSafetyMetaName: '@:nullSafety',

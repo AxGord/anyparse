@@ -390,7 +390,7 @@ final class SymbolIndex {
 	public inline function resolvePathFinalMemberTypeSource(
 		fromFile: String, startTypeName: String, memberPath: Array<String>
 	): Null<String> {
-		return pathFinalMemberWalk(fromFile, startTypeName, memberPath, false);
+		return pathFinalMemberWalk(fromFile, startTypeName, memberPath, false, []);
 	}
 
 	/**
@@ -413,9 +413,9 @@ final class SymbolIndex {
 	 * parameter name is not a type any consumer of this chain acts on.
 	 */
 	public inline function resolveGenericPathFinalMemberTypeSource(
-		fromFile: String, startTypeSource: String, memberPath: Array<String>
+		fromFile: String, startTypeSource: String, memberPath: Array<String>, ?transparentWrappers: Array<String>
 	): Null<String> {
-		return pathFinalMemberWalk(fromFile, startTypeSource, memberPath, true);
+		return pathFinalMemberWalk(fromFile, startTypeSource, memberPath, true, transparentWrappers ?? []);
 	}
 
 	/**
@@ -1349,7 +1349,9 @@ final class SymbolIndex {
 	 * argument and could collide with the NEXT type's parameter of the same name, or with a project
 	 * type literally called `T` / `K` / `V`.
 	 */
-	private function pathFinalMemberWalk(fromFile: String, startSource: String, memberPath: Array<String>, substitute: Bool): Null<String> {
+	private function pathFinalMemberWalk(
+		fromFile: String, startSource: String, memberPath: Array<String>, substitute: Bool, transparentWrappers: Array<String>
+	): Null<String> {
 		if (memberPath.length == 0) return null;
 		final origin: Null<FileInfo> = _files.find(f -> f.file == fromFile);
 		if (origin == null) return null;
@@ -1372,8 +1374,12 @@ final class SymbolIndex {
 			if (memberSource == null) return null;
 			final effective: Null<String> = substitute ? substitutedMemberSource(cur, memberPath[i], memberSource, args) : memberSource;
 			if (effective == null) return null;
-			if (substitute) args = NominalTypes.typeArgumentSourcesOf(effective) ?? [];
-			final nominal: String = StringTools.trim(effective.split('<')[0]);
+			// An INTERMEDIATE link is a receiver for the next segment, so a member-transparent
+			// wrapper on it is peeled (`res: Null<Res>` in `box.res.count`). The FINAL member's
+			// source, returned below, is never peeled — a read of `Null<T>` IS `Null<T>`.
+			final carried: String = NominalTypes.memberLookupReceiverSource(effective, transparentWrappers);
+			if (substitute) args = NominalTypes.typeArgumentSourcesOf(carried) ?? [];
+			final nominal: String = StringTools.trim(carried.split('<')[0]);
 			current = resolveTypeRef(nominal, cur.file);
 		}
 		if (current == null) return null;

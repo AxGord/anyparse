@@ -1355,6 +1355,23 @@ typedef RefShape = {
 	@:optional var nullableWrapperTypeNames: Array<String>;
 
 	/**
+	 * Nominal type names whose MEMBER SET is exactly their type argument's — a wrapper
+	 * that is transparent to a member lookup, so `W<T>.m` resolves to `T.m`. Haxe's
+	 * `Null` is the one entry: `@:forward @:coreType abstract Null<T> from T to T {}`,
+	 * whose `@:forward` IS this fact.
+	 *
+	 * DELIBERATELY NOT `nullableWrapperTypeNames`, which answers a different question
+	 * ("does this stay nullable under a null-safety meta") and holds `Dynamic` / `Any`
+	 * for it. `Dynamic<T>` is not member-transparent — EVERY field of it is typed `T`,
+	 * so unwrapping it to `T` and then looking `T.m` up would be wrong.
+	 *
+	 * Read ONLY where the question is which member a name resolves to, never to decide
+	 * what is legal to DO with the value: a `Null<Int>` is still not an `Int` for an
+	 * arithmetic or ordered-comparison purpose. Optional; unset disables the unwrap.
+	 */
+	@:optional var memberTransparentWrapperTypeNames: Array<String>;
+
+	/**
 	 * The argument identifier of the null-safety meta that DISABLES checking
 	 * (Haxe `@:nullSafety(Off)`). When the enclosing type's null-safety meta
 	 * carries it, `unnecessary-null-check` does not treat the type as null-checked.
