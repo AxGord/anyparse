@@ -49,8 +49,8 @@ import anyparse.runtime.Span;
  * calling `Lambda.map` and starts calling `Array.map` — which COMPILES, while changing the
  * result type (`List<T>` → `Array<T>`) and sometimes the semantics. No compiler oracle catches
  * that, so such a site is never rewritten. A member the index sees DIRECTLY on the receiver
- * type or on one of its supertypes (`SymbolIndex.typeDeclaresMember` /
- * `supertypeDeclaresMember`) DROPS it entirely: no finding at all, not even report-only. A
+ * type or on one of its supertypes (`CheckScan.memberShadowsExtension`) DROPS it entirely: no
+ * finding at all, not even report-only. A
  * member reachable only through a link those two do not follow — a `typedef` alias, a
  * `@:forward` abstract's underlying — is caught one gate later, where
  * `typeProvablyLacksMember` (which DOES follow both) fails to prove absence: the site degrades
@@ -376,7 +376,10 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	/**
 	 * The receiver verdict for the resolved nominal `nominal`, or null when the site must be
 	 * DROPPED because the receiver type — or a supertype — declares `method` itself: Haxe picks
-	 * that instance member over the extension, so the rewrite would silently retarget.
+	 * that instance member over the extension, so the rewrite would silently retarget. That shadow
+	 * question is `CheckScan.memberShadowsExtension`, shared with the four `Lambda`-targeting rules
+	 * that emit the same call shape; this rule is the only one that also needs the ABSENCE half,
+	 * because it reports a hedged finding where they simply keep quiet.
 	 */
 	private static function verdictFor(
 		nominal: Null<String>, method: String, symbols: () -> Null<SymbolIndex>, file: String
@@ -385,7 +388,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		if (nominal == null || resolved == null) return Verdict.UnresolvedReceiver;
 		final receiverType: String = nominal;
 		final index: SymbolIndex = resolved;
-		return if (index.typeDeclaresMember(receiverType, method) || index.supertypeDeclaresMember(receiverType, method))
+		return if (CheckScan.memberShadowsExtension(index, receiverType, method))
 			null
 		else if (index.typeProvablyLacksMember(receiverType, method, file))
 			Verdict.Fixable

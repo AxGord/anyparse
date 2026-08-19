@@ -104,6 +104,16 @@ class PreferExistsCheckTest extends Test {
 		Assert.equals(0, violations(inheritedMemberFn('for (x in m) if (x > 2) return true;\n\t\treturn false;')).length);
 	}
 
+	public function testNullableReceiverDeclaringExistsNotFlagged(): Void {
+		// ★ The receiver is `Null<M>`, and Haxe's `Null` is member-TRANSPARENT: `m.exists(…)` looks
+		// `exists` up on `M` all the same. Asking the VALUE nominal answers `Null`, which declares
+		// nothing — which is why the gate asks `CheckScan.receiverNominalResolver`. This is the
+		// second of the two measured TM sites (`baseData:Null<Map<Int, ObjectFrameData>>`).
+		Assert.equals(
+			0, violations(nullableMemberFn('if (m != null) for (x in m) if (x > 2) return true;\n\t\treturn false;')).length
+		);
+	}
+
 	public function testReceiverDeclaringAnotherMemberStillFlagged(): Void {
 		// The gate is about the ONE name the rewrite wants: a receiver declaring `foreach` and not
 		// `exists` is still rewritten by this direction.
@@ -266,6 +276,12 @@ class PreferExistsCheckTest extends Test {
 		return 'class C {\n\tfunction f(m:M):Bool {\n\t\t$body\n\t}\n}\n\nclass Base {\n\tpublic function exists(key:Int):Bool {\n'
 			+ '\t\treturn false;\n\t}\n}\n\nclass M extends Base {\n\tpublic function iterator():Iterator<Int> {\n'
 			+ '\t\treturn [].iterator();\n\t}\n}';
+	}
+
+	/** The same shape behind a member-TRANSPARENT `Null<…>` wrapper — the shape the TM guarded site has. */
+	private function nullableMemberFn(body: String): String {
+		return 'class C {\n\tfunction f(m:Null<M>):Bool {\n\t\t$body\n\t}\n}\n\nclass M {\n\tpublic function exists(key:Int):Bool {\n'
+			+ '\t\treturn false;\n\t}\n\n\tpublic function iterator():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}';
 	}
 
 	/** A receiver declaring the TWIN direction's name and not this one — the gate must not fire. */

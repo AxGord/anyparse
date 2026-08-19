@@ -70,6 +70,12 @@ final class FixVerifierGroupE2ETest extends Test {
 		{ find: 'alpha', text: 'NoSuchType.value', group: 0 }
 	];
 
+	/** The same doomed shape aimed at DIFFERENT literals, so a second fake rule reverts the same file independently. */
+	private static final OTHER_SINGLE_GROUP_TABLE: Array<FakeEdit> = [
+		{ find: '"aaa"', text: '"AAA"', group: 0 },
+		{ find: '"ccc"', text: 'NoSuchType.value', group: 0 }
+	];
+
 	private static final HXML: String = '-cp .\n-main Main\n';
 	#end
 
@@ -159,6 +165,46 @@ final class FixVerifierGroupE2ETest extends Test {
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
 		Assert.equals(0, result.partials.length, 'a single unit is not bisected, so no partial is reported');
 		Assert.equals(1, result.reverted.length, 'the file reverts whole');
+		// A revert names WHICH file and WHICH rule. Counting them alone forced an md5 snapshot of
+		// 809 files plus eleven single-rule runs to identify three reverts on a real tree, and still
+		// left two unattributed — the pair is the whole diagnostic.
+		Assert.equals('$dir/Main.hx', result.reverted[0].file);
+		Assert.equals('table-fake', result.reverted[0].rule);
+		Assert.equals(DEPENDENT_MAIN, File.getContent('$dir/Main.hx'), 'disk is byte-identical to the input');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Two rules, ONE file, two reverts — each named separately. A diagnostic that keyed on the file
+	 * alone would collapse them and hand the reader half an answer, which is the failure mode the
+	 * pair exists to prevent: on a real tree, the two files that took an md5 snapshot and eleven
+	 * runs to identify each came from a DIFFERENT rule.
+	 */
+	public function testTwoRulesRevertingOneFileAreNamedSeparately(): Void {
+		#if (sys || nodejs)
+		if (!oracleWorks()) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final dir: String = CliFixture.writeDir('fixverifgroup', [
+			{ name: 'Main.hx', source: DEPENDENT_MAIN },
+			{ name: 'check.hxml', source: HXML }
+		]);
+		final files: Array<{ file: String, source: String }> = [{ file: '$dir/Main.hx', source: DEPENDENT_MAIN }];
+		final result: FixVerifyResult = FixVerifier.verify(
+			files,
+			[new TableFake(SINGLE_GROUP_TABLE, 'fake-one'), new TableFake(OTHER_SINGLE_GROUP_TABLE, 'fake-two')],
+			new HaxeQueryPlugin(), 'check.hxml', dir, File.saveContent
+		);
+		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
+		Assert.equals(2, result.reverted.length, 'one entry per RULE, not one per file');
+		Assert.equals('fake-one', result.reverted[0].rule);
+		Assert.equals('fake-two', result.reverted[1].rule);
+		Assert.equals('$dir/Main.hx', result.reverted[0].file);
+		Assert.equals('$dir/Main.hx', result.reverted[1].file);
 		Assert.equals(DEPENDENT_MAIN, File.getContent('$dir/Main.hx'), 'disk is byte-identical to the input');
 		CliFixture.removeDir(dir);
 		#else
@@ -193,17 +239,20 @@ final class FixVerifierGroupE2ETest extends Test {
 @:nullSafety(Strict)
 private class TableFake implements Check implements RiskyFix implements GroupedFix {
 
-	/** The rule id the verifier filters this fake's own findings by. */
+	/** The rule id the verifier filters this fake's own findings by — overridable, so two fakes can be told apart in one run. */
 	private static inline final RULE_ID: String = 'table-fake';
 
 	private final _table: Array<FakeEdit>;
 
-	public function new(table: Array<FakeEdit>) {
+	private final _id: String;
+
+	public function new(table: Array<FakeEdit>, ?id: String) {
 		_table = table;
+		_id = id ?? RULE_ID;
 	}
 
 	public function id(): String {
-		return RULE_ID;
+		return _id;
 	}
 
 	public function description(): String {
@@ -216,7 +265,7 @@ private class TableFake implements Check implements RiskyFix implements GroupedF
 				{
 					file: entry.file,
 					span: null,
-					rule: RULE_ID,
+					rule: _id,
 					severity: Severity.Warning,
 					message: 'test double finding'
 				}

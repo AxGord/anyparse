@@ -331,6 +331,31 @@ final class CheckScan {
 	public static function typeNominalResolver(
 		source: String, plugin: GrammarPlugin, tree: QueryNode, file: String, ?index: SymbolIndex
 	): Null<(QueryNode) -> Null<String>> {
+		return nominalResolverIn(source, plugin, tree, file, index, false);
+	}
+
+	/**
+	 * `typeNominalResolver`'s MEMBER-LOOKUP twin: the same walk, asked about each node as a
+	 * RECEIVER rather than as a value, so a member-transparent wrapper is peeled off the top and a
+	 * `Null<Map<K, V>>` binding answers `Map`.
+	 *
+	 * The distinction is not cosmetic and the two are not interchangeable. A value's own nominal is
+	 * what a consumer reads to decide what is legal to DO with it, and `Null<Int>` is not `Int`
+	 * there. This answer may be used for ONE thing: deciding which member a name resolves to on
+	 * that receiver — which is exactly what a rule splicing `<recv>.<member>(…)` has to know, and
+	 * why the measured `baseData:Null<Map<Int, ObjectFrameData>>` site needs it while the
+	 * `Iterable`-shape proof next to it must keep asking the value question.
+	 */
+	public static function receiverNominalResolver(
+		source: String, plugin: GrammarPlugin, tree: QueryNode, file: String, ?index: SymbolIndex
+	): Null<(QueryNode) -> Null<String>> {
+		return nominalResolverIn(source, plugin, tree, file, index, true);
+	}
+
+	/** The shared construction behind both resolvers — `asReceiver` is the only thing that differs. */
+	private static function nominalResolverIn(
+		source: String, plugin: GrammarPlugin, tree: QueryNode, file: String, index: Null<SymbolIndex>, asReceiver: Bool
+	): Null<(QueryNode) -> Null<String>> {
 		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		if (provider == null) return null;
 		final declaredTypes: Map<Int, String> = provider.declaredTypes(source);
@@ -343,7 +368,36 @@ final class CheckScan {
 			source: source,
 			usings: UsingScan.usingModules(UsingScan.headerOf(tree, source, plugin))
 		};
-		return node -> NominalTypes.expressionTypeNominal(node, tree, shape, declaredTypes, resolved, file, chain);
+		return node -> NominalTypes.expressionTypeNominal(node, tree, shape, declaredTypes, resolved, file, chain, asReceiver);
+	}
+
+	/**
+	 * Whether a receiver whose type is the nominal `typeName` reaches an INSTANCE member named
+	 * `member` — declared by its own body or anywhere in its supertype closure — so a `using`
+	 * static extension of that name would never be consulted at the call.
+	 *
+	 * Haxe resolves a real member BEFORE any static extension, which makes this the one question a
+	 * rule rewriting `<recv>.<member>(…)` through a `using` has to ask about the receiver. The
+	 * measured case is `Map`: `haxe.ds.Map` declares `exists(key:K)`, so `m.exists(x -> …)` binds
+	 * the lambda into the KEY slot and does not compile. `prefer-exists`, `prefer-foreach`,
+	 * `prefer-find`, `dead-binder-counter-loop` and `prefer-static-extension` all emit such a call
+	 * and all ask here, so there is ONE spelling of the answer rather than five.
+	 *
+	 * A POSITIVE proof, and the direction matters: a true means "a member provably shadows the
+	 * extension, do not rewrite", while a false unions "provably no such member" with "this run
+	 * cannot tell". Callers therefore keep whatever they already did on a false — the alternative,
+	 * refusing everything unproven, would drop every site whose receiver type is out of the
+	 * resolution scope. The absence half is a DIFFERENT question with a different answer
+	 * (`typeProvablyLacksMember`), which `prefer-static-extension` asks as well because it must
+	 * distinguish a claimable site from a hedged one.
+	 *
+	 * `typeDeclaresMember` answers the DIRECT half by simple-name union across the index, which is
+	 * conservative in the safe direction (some type of that name has it -> do not rewrite) and is
+	 * what reaches `haxe.ds.Map` past the top-level `typedef Map` whose package the index drops;
+	 * `supertypeDeclaresMember` answers the INHERITED half.
+	 */
+	public static inline function memberShadowsExtension(index: SymbolIndex, typeName: String, member: String): Bool {
+		return index.typeDeclaresMember(typeName, member) || index.supertypeDeclaresMember(typeName, member);
 	}
 
 	/**

@@ -2091,7 +2091,7 @@ final class Cli {
 		// candidate is typechecked and reverted if it breaks the build (FixVerifier);
 		// otherwise left report-only. With no risky check present this block is a
 		// no-op, so a real run (no risky builtin) is byte-identical to before the key.
-		final risky: { tail: String, appliedCount: Int } = verifyRiskyFixes(
+		final risky: { tail: String, appliedCount: Int, reverts: Array<FixVerifyRevert> } = verifyRiskyFixes(
 			files, split.risky, cached, oracleHxml, oracleDir, optsByFile, changedFiles
 		);
 		fixedCount += risky.appliedCount;
@@ -2119,6 +2119,10 @@ final class Cli {
 			'apq lint --fix: fixed $fixedCount issue(s) in ${changedFiles.length} file(s) over $passes pass(es)$skipTail$capTail'
 			+ '$riskyTail$oracleTail$declinedTail\n'
 		);
+		// The summary says HOW MANY reverted; these say WHICH, and by which rule. One line per
+		// revert, nothing else: attributing three of them on an 809-file tree otherwise costs an
+		// md5 snapshot before and after plus one run per candidate rule.
+		for (r in risky.reverts) stderr('apq lint --fix: risky-fix REVERTED ${r.file} (${r.rule})\n');
 		return EXIT_OK;
 	}
 
@@ -12972,10 +12976,13 @@ final class Cli {
 	private static function verifyRiskyFixes(
 		files: Array<{ file: String, source: String }>, riskyChecks: Array<Check>, cached: GrammarPlugin, oracleHxml: Null<String>,
 		oracleDir: Null<String>, optsByFile: Map<String, Null<String>>, changedFiles: Array<String>
-	): { tail: String, appliedCount: Int } {
-		if (riskyChecks.length == 0) return { tail: '', appliedCount: 0 };
-		if (oracleHxml == null)
-			return { tail: ', ${riskyChecks.length} risky-fix rule(s) left report-only (no compilerOracle configured)', appliedCount: 0 };
+	): { tail: String, appliedCount: Int, reverts: Array<FixVerifyRevert> } {
+		if (riskyChecks.length == 0) return { tail: '', appliedCount: 0, reverts: [] };
+		if (oracleHxml == null) return {
+			tail: ', ${riskyChecks.length} risky-fix rule(s) left report-only (no compilerOracle configured)',
+			appliedCount: 0,
+			reverts: []
+		};
 		final verified: FixVerifyResult = FixVerifier.verify(files, riskyChecks, cached, oracleHxml, oracleDir, writeFile, optsByFile);
 		switch verified.baseline {
 			case Confirmed:
@@ -12983,12 +12990,13 @@ final class Cli {
 				return {
 					tail: ', risky-fix verified: ${verified.applied.length} file(s) applied, ${verified.reverted.length} reverted to report-only'
 						+ bisectTail(verified.partials),
-					appliedCount: verified.appliedEdits
+					appliedCount: verified.appliedEdits,
+					reverts: verified.reverted
 				};
 			case Unavailable(reason):
-				return { tail: ', risky-fix skipped (oracle unavailable: $reason)', appliedCount: 0 };
+				return { tail: ', risky-fix skipped (oracle unavailable: $reason)', appliedCount: 0, reverts: [] };
 			case Rejected(_):
-				return { tail: ', risky-fix skipped (oracle baseline does not typecheck)', appliedCount: 0 };
+				return { tail: ', risky-fix skipped (oracle baseline does not typecheck)', appliedCount: 0, reverts: [] };
 		}
 	}
 

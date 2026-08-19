@@ -111,10 +111,13 @@ final class PreferFind implements Check {
 		if (seams == null) return [];
 		final s: Seams = seams;
 		final violations: Array<Violation> = [];
+		// Lazy: the resolution scope reads the std and the configured libraries, and only a recovered
+		// loop demands it — a file holding none never forces the index.
+		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		for (entry in files) {
 			final tree: Null<QueryNode> =
 				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null) walk(tree, entry.file, entry.source, s, violations);
+			if (tree != null) walk(tree, entry.file, entry.source, s, memberProbe(entry.source, plugin, tree, entry.file, index), violations);
 		}
 		return violations;
 	}
@@ -152,7 +155,10 @@ final class PreferFind implements Check {
 		final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
 		if (UsingScan.conflictingUsing(UsingScan.usingModules(header), LAMBDA_MODULE, FIND_METHOD, plugin, () -> symbols, [])) return [];
 		final byKey: Map<String, FixCandidate> = [];
-		collectFixCandidates(tree, source, s, byKey);
+		// The same file the violations name, so the shadow proof resolves imports from where the
+		// loop is written — the report pass proved it against exactly that context.
+		final file: String = violations.length == 0 ? '' : violations[0].file;
+		collectFixCandidates(tree, source, s, memberProbe(source, plugin, tree, file, () -> symbols), byKey);
 		final edits: Array<{ span: Span, text: String }> = [];
 		var rewrote: Bool = false;
 		for (v in violations) {
@@ -216,29 +222,31 @@ final class PreferFind implements Check {
 	}
 
 	/** Descend `node`, testing each adjacent child pair against both forms and recursing; skip reification subtrees. */
-	private static function walk(node: QueryNode, file: String, source: String, s: Seams, out: Array<Violation>): Void {
+	private static function walk(
+		node: QueryNode, file: String, source: String, s: Seams, probe: MemberProbe, out: Array<Violation>
+	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		final kids: Array<QueryNode> = node.children;
 		if (s.blockKinds.contains(node.kind)) for (i in 0...kids.length - 1) {
-			final v: Null<Violation> = tryReturnForm(kids[i], kids[i + 1], file, source, s) ?? tryBreakForm(
-				kids[i], kids[i + 1], file, source, s
-			) ?? tryGuardedBreakForm(kids[i], kids[i + 1], file, source, s);
+			final v: Null<Violation> = tryReturnForm(kids[i], kids[i + 1], file, source, s, probe) ?? tryBreakForm(
+				kids[i], kids[i + 1], file, source, s, probe
+			) ?? tryGuardedBreakForm(kids[i], kids[i + 1], file, source, s, probe);
 			if (v != null) out.push(v);
 		}
-		for (c in kids) walk(c, file, source, s, out);
+		for (c in kids) walk(c, file, source, s, probe, out);
 	}
 
 	/**
 	 * Form A: `forNode` is `for (v in xs) if (cond) return v;` and `next` is a
 	 * value-returning `return` fallback. Returns the violation when so, else null.
 	 */
-	private static function tryReturnForm(forNode: QueryNode, next: QueryNode, file: String, source: String, s: Seams): Null<Violation> {
+	private static function tryReturnForm(forNode: QueryNode, next: QueryNode, file: String, source: String, s: Seams, probe: MemberProbe): Null<Violation> {
 		final head: Null<{
 			loopVar: String,
 			iterable: QueryNode,
 			cond: QueryNode,
 			then: QueryNode
-		}> = forIfHead(forNode, s);
+		}> = forIfHead(forNode, s, probe);
 		if (head == null) return null;
 		final returned: Null<QueryNode> = returnValue(head.then, s);
 		if (returned == null || returned.kind != s.identKind || returned.name != head.loopVar) return null;
@@ -252,7 +260,7 @@ final class PreferFind implements Check {
 	 * Form B: `decl` is a null-initialized local and `forNode` is
 	 * `for (v in xs) if (cond) { r = v; break; }`. Returns the violation when so, else null.
 	 */
-	private static function tryBreakForm(decl: QueryNode, forNode: QueryNode, file: String, source: String, s: Seams): Null<Violation> {
+	private static function tryBreakForm(decl: QueryNode, forNode: QueryNode, file: String, source: String, s: Seams, probe: MemberProbe): Null<Violation> {
 		final declName: Null<String> = nullInitLocalName(decl, s);
 		if (declName == null) return null;
 		final head: Null<{
@@ -260,7 +268,7 @@ final class PreferFind implements Check {
 			iterable: QueryNode,
 			cond: QueryNode,
 			then: QueryNode
-		}> = forIfHead(forNode, s);
+		}> = forIfHead(forNode, s, probe);
 		return head != null && isAssignBreakBody(head.then, declName, head.loopVar, s)
 			? buildViolation(forNode, head.iterable, head.loopVar, head.cond, '', file, source)
 			: null;
@@ -272,9 +280,9 @@ final class PreferFind implements Check {
 	 * guard's SOLE statement. Returns the violation, anchored at the loop, when so, else null.
 	 */
 	private static function tryGuardedBreakForm(
-		decl: QueryNode, ifNode: QueryNode, file: String, source: String, s: Seams
+		decl: QueryNode, ifNode: QueryNode, file: String, source: String, s: Seams, probe: MemberProbe
 	): Null<Violation> {
-		final found: Null<GuardedBreak> = guardedBreakOf(decl, ifNode, s);
+		final found: Null<GuardedBreak> = guardedBreakOf(decl, ifNode, s, probe);
 		return found == null ? null : buildViolation(found.forNode, found.iterable, found.loopVar, found.cond, '', file, source);
 	}
 
@@ -289,7 +297,7 @@ final class PreferFind implements Check {
 	 * no-match path. An `else` branch is refused: the loop is then no longer the guard's sole
 	 * statement, and the shape the transformation is proven on is `if (g) <loop>`.
 	 */
-	private static function guardedBreakOf(decl: QueryNode, ifNode: QueryNode, s: Seams): Null<GuardedBreak> {
+	private static function guardedBreakOf(decl: QueryNode, ifNode: QueryNode, s: Seams, probe: MemberProbe): Null<GuardedBreak> {
 		final declName: Null<String> = nullInitLocalName(decl, s);
 		if (declName == null || !s.ifKinds.contains(ifNode.kind) || ifNode.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
 		// The guard runs BETWEEN the declaration and the loop — the one place the unguarded form
@@ -304,7 +312,7 @@ final class PreferFind implements Check {
 			iterable: QueryNode,
 			cond: QueryNode,
 			then: QueryNode
-		}> = forIfHead(loop, s);
+		}> = forIfHead(loop, s, probe);
 		return head == null || !isAssignBreakBody(head.then, declName, head.loopVar, s) ? null : {
 			forNode: loop,
 			declName: declName,
@@ -384,6 +392,39 @@ final class PreferFind implements Check {
 	}
 
 
+	/**
+	 * The per-file receiver-shadow probe, memoised and built on FIRST demand: whether an iterable's
+	 * own type provably DECLARES `find`, in which case Haxe binds that member and the `using
+	 * Lambda;` the fix inserts is never consulted at the call.
+	 *
+	 * The question is `CheckScan.memberShadowsExtension`, shared with the three other
+	 * `Lambda`-targeting rules and with `prefer-static-extension`. No container in the resolution
+	 * scope declares `find` (measured on the 4.3 std: `Lambda` alone, and it is static), so this
+	 * gate is about PROJECT types — a `Repo.find(id)` receiver whose loop would otherwise be
+	 * rewritten into a call that silently retargets to it.
+	 *
+	 * Every step fails closed: no `TypeInfoProvider`, an unresolved receiver, or no index at all
+	 * leaves the answer false, which is exactly the behaviour that shipped before this gate.
+	 */
+	private static function memberProbe(
+		source: String, plugin: GrammarPlugin, tree: QueryNode, file: String, index: () -> Null<SymbolIndex>
+	): MemberProbe {
+		var resolver: Null<(QueryNode) -> Null<String>> = null;
+		var built: Bool = false;
+		return iterable -> {
+			if (!built) {
+				built = true;
+				resolver = CheckScan.receiverNominalResolver(source, plugin, tree, file, index());
+			}
+			final resolve: Null<(QueryNode) -> Null<String>> = resolver;
+			if (resolve == null) return false;
+			final nominal: Null<String> = resolve(iterable);
+			if (nominal == null) return false;
+			final symbols: Null<SymbolIndex> = index();
+			return symbols != null && CheckScan.memberShadowsExtension(symbols, nominal, FIND_METHOD);
+		};
+	}
+
 	/** Whether the iterable is a range `a...b` — its `IntIterator` is not `Iterable`, so `Lambda.find` would not compile. */
 	private static function isRangeIterable(iterable: QueryNode, s: Seams): Bool {
 		final intervalKind: Null<String> = s.intervalKind;
@@ -440,7 +481,7 @@ final class PreferFind implements Check {
 	 * `Lambda.find` iterates values, so rewriting a `k => v` loop would bind the value where the loop
 	 * bound the key.
 	 */
-	private static function forIfHead(forNode: QueryNode, s: Seams): Null<{
+	private static function forIfHead(forNode: QueryNode, s: Seams, probe: MemberProbe): Null<{
 		loopVar: String,
 		iterable: QueryNode,
 		cond: QueryNode,
@@ -451,7 +492,7 @@ final class PreferFind implements Check {
 		final loopVar: Null<String> = forNode.name;
 		if (loopVar == null || operands.length != FOR_CHILD_COUNT) return null;
 		final iterable: QueryNode = operands[0];
-		if (isRangeIterable(iterable, s) || isCallIterable(iterable, s)) return null;
+		if (isRangeIterable(iterable, s) || isCallIterable(iterable, s) || probe(iterable)) return null;
 		final body: QueryNode = unwrapSole(operands[1], s);
 		return !s.ifKinds.contains(body.kind) || body.children.length != IF_NO_ELSE_CHILD_COUNT ? null : {
 			loopVar: loopVar,
@@ -463,7 +504,9 @@ final class PreferFind implements Check {
 
 
 	/** Re-run the two-form shape analysis, keying a fix candidate by its loop's `from:to` span — the same key `run` anchors a violation on. */
-	private static function collectFixCandidates(node: QueryNode, source: String, s: Seams, out: Map<String, FixCandidate>): Void {
+	private static function collectFixCandidates(
+		node: QueryNode, source: String, s: Seams, probe: MemberProbe, out: Map<String, FixCandidate>
+	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		final kids: Array<QueryNode> = node.children;
 		if (s.blockKinds.contains(node.kind)) for (i in 0...kids.length - 1) {
@@ -474,7 +517,7 @@ final class PreferFind implements Check {
 				iterable: QueryNode,
 				cond: QueryNode,
 				then: QueryNode
-			}> = forIfHead(a, s);
+			}> = forIfHead(a, s, probe);
 			if (headA != null) {
 				final returned: Null<QueryNode> = returnValue(headA.then, s);
 				if (
@@ -495,7 +538,7 @@ final class PreferFind implements Check {
 			}
 			final declName: Null<String> = nullInitLocalName(a, s);
 			if (declName == null) continue;
-			final guarded: Null<GuardedBreak> = guardedBreakOf(a, b, s);
+			final guarded: Null<GuardedBreak> = guardedBreakOf(a, b, s, probe);
 			if (guarded != null) {
 				final guardedSpan: Null<Span> = guarded.forNode.span;
 				if (guardedSpan != null) out['${guardedSpan.from}:${guardedSpan.to}'] = {
@@ -514,7 +557,7 @@ final class PreferFind implements Check {
 				iterable: QueryNode,
 				cond: QueryNode,
 				then: QueryNode
-			}> = forIfHead(b, s);
+			}> = forIfHead(b, s, probe);
 			if (!(headB != null && isAssignBreakBody(headB.then, declName, headB.loopVar, s))) continue;
 			final span: Null<Span> = b.span;
 			if (span != null) out['${span.from}:${span.to}'] = {
@@ -527,7 +570,7 @@ final class PreferFind implements Check {
 				cond: headB.cond
 			};
 		}
-		for (c in kids) collectFixCandidates(c, source, s, out);
+		for (c in kids) collectFixCandidates(c, source, s, probe, out);
 	}
 
 	/** The span edits rewriting `cand`'s loop to `xs.find(v -> cond)`, or null when a fix gate refuses it (then it stays a finding). */
@@ -713,3 +756,9 @@ private enum abstract FindForm(Int) {
 	final GuardedBreak = 2;
 
 }
+
+/**
+ * Whether an iterable's own type provably declares `find` — the receiver-shadow gate, deferred so a
+ * file holding no recovered loop never builds a resolver, and false for everything this run cannot prove.
+ */
+private typedef MemberProbe = (QueryNode) -> Bool;
