@@ -652,6 +652,7 @@ import unit.HoistBranchStringAffixCheckTest;
 import unit.JoinOverrideChainCheckTest;
 import unit.FieldInitInConstructorCheckTest;
 import unit.HoistEmbeddedAssignmentCheckTest;
+import unit.PreferLpadCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1140,6 +1141,7 @@ class RunTests {
 		addCase(new MemberOrderCheckTest());
 		addCase(new FragmentedDocCommentCheckTest());
 		addCase(new PreferLineCommentCheckTest());
+		addCase(new PreferLpadCheckTest());
 		addCase(new PreferDocCommentCheckTest());
 		addCase(new ExplicitTypeCheckTest());
 		addCase(new RedundantVoidReturnCheckTest());
