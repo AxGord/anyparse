@@ -71,12 +71,18 @@ class HxMultiVarDeclSliceTest extends HxTestHelpers {
 	 * nested-init writes, so the inner `var inX = 1, inY = 2;` stays a
 	 * single (short, FillLine) line and the outer breaks one-per-line.
 	 */
+	/**
+	 * The `;` belongs to the LAST binding: the head's `function() { … }` init ends with `}` but
+	 * `longNameBBBBBBBBBBBBBBBB = 3` does not, and the terminator-less form is `Missing ;` under
+	 * `haxe -cpp` (both arms compiled). The expected block carried the elided form until the
+	 * plain-mode gate was switched to `varDeclTailEndsWithCloseBrace`.
+	 */
 	public inline function testNestedInitKeepsOwnList(): Void {
 		writerEquals(
 			'class Main {\n\tstatic function main() {\n'
 			+ '\t\tvar longNameAAAAAAAAAAAAAAAA = function() { var inX = 1, inY = 2; return inX; }, longNameBBBBBBBBBBBBBBBB = 3;\n\t}\n}',
 			'class Main {\n\tstatic function main() {\n\t\tvar longNameAAAAAAAAAAAAAAAA = function() {\n\t\t\tvar inX = 1, inY = 2;\n'
-			+ '\t\t\treturn inX;\n\t\t},\n\t\t\tlongNameBBBBBBBBBBBBBBBB = 3\n\t}\n}\n'
+			+ '\t\t\treturn inX;\n\t\t},\n\t\t\tlongNameBBBBBBBBBBBBBBBB = 3;\n\t}\n}\n'
 		);
 	}
 

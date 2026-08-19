@@ -11345,11 +11345,14 @@ class WriterLowering {
 		final trailOptional: Bool = branch.annotations[AnnotationKeys.LIT_TRAIL_OPTIONAL] == true;
 		if (!trailOptional) return null;
 		final args: Null<Array<String>> = branch.fmtReadStringArgs('trailOptShapeGate');
-		if (args == null || args.length != 2) return null;
+		if (args == null || args.length == 0 || args.length > 2) return null;
 		final predName: String = args[0];
-		final argPath: String = args[1];
 		var pathExpr: Expr = macro $i{rootArg};
-		for (segment in argPath.split('.')) pathExpr = { expr: EField(pathExpr, segment), pos: Context.currentPos() };
+		// ONE argument = the predicate takes the Ref arg WHOLE. The `var` / `final` family needs
+		// that: the `;` belongs to the LAST binding of a right-recursive `HxVarDecl`, which no
+		// path into the head's `init` can reach (`varDeclTailEndsWithCloseBrace`). Two arguments
+		// keep the original field-path form for gates whose question really is about one field.
+		if (args.length == 2) for (segment in args[1].split('.')) pathExpr = { expr: EField(pathExpr, segment), pos: Context.currentPos() };
 		// The gate is the generated typed predicate of this build's AST
 		// family (a grammar carrying `trailOptShapeGate` must provide the
 		// marker classes); a null field value answers the predicate's own
