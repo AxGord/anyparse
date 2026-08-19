@@ -526,9 +526,7 @@ final class SwitchChain {
 	 * flattened `andKind` conjunction with every conjunct read as an equality against a
 	 * pattern-valid constant — or null when any conjunct fails that shape.
 	 */
-	private static function conditionPairs(
-		cond: QueryNode, seams: ChainSeams, scope: ChainScope, source: String
-	): Null<Array<EqPair>> {
+	private static function conditionPairs(cond: QueryNode, seams: ChainSeams, scope: ChainScope, source: String): Null<Array<EqPair>> {
 		final out: Array<EqPair> = [];
 		for (conjunct in flattenConjunction(cond, seams)) {
 			final pair: Null<EqPair> = eqPair(conjunct, seams, scope, source);

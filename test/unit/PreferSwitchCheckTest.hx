@@ -291,10 +291,13 @@ class PreferSwitchCheckTest extends Test {
 	 * first arm swallow every value; the statement rule inherits the binding proof unchanged.
 	 */
 	public function testBareLocalOperandChainNotFlagged(): Void {
-		Assert.equals(0, violations(
-			"class C {\n\tstatic function f(text:String):Void {\n\t\tfinal target = 'a';\n\t\tfinal other = 'b';\n"
-			+ '\t\tif (text == target) p(); else if (text == other) q(); else r();\n\t}\n}'
-		).length);
+		Assert.equals(
+			0,
+			violations(
+				"class C {\n\tstatic function f(text:String):Void {\n\t\tfinal target = 'a';\n\t\tfinal other = 'b';\n"
+				+ '\t\tif (text == target) p(); else if (text == other) q(); else r();\n\t}\n}'
+			).length
+		);
 	}
 
 	private inline function wrap(body: String): String {

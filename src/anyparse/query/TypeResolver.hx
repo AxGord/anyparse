@@ -499,8 +499,7 @@ final class TypeResolver {
 		if (binding == null || !fieldDeclKinds.contains(binding.kind)) return null;
 		final declSpan: Null<Span> = binding.span;
 		if (declSpan == null) return null;
-		final owner: Null<TypeDeclMatch> = innermostTypeDecl(tree, declSpan);
-		return owner == null ? null : owner.name;
+		return innermostTypeDecl(tree, declSpan)?.name;
 	}
 
 	/**

@@ -317,17 +317,22 @@ class PreferSwitchExpressionCheckTest extends Test {
 	 * with only a `WUnusedPattern` warning on the now-unreachable `case _`.
 	 */
 	public function testBareLocalOperandNotFlagged(): Void {
-		Assert.equals(0, violations(wrap(
-			"final target = 'a';\n\t\tfinal other = 'b';\n\t\tfinal v = text == target ? 1 : text == other ? 2 : 0;"
-		)).length);
+		Assert.equals(
+			0,
+			violations(wrap("final target = 'a';\n\t\tfinal other = 'b';\n\t\tfinal v = text == target ? 1 : text == other ? 2 : 0;"))
+				.length
+		);
 	}
 
 	/** A PARAMETER is a local by another name, and captures in a pattern exactly the same way. */
 	public function testBareParameterOperandNotFlagged(): Void {
-		Assert.equals(0, violations(
-			'class C {\n\tfunction f(text:String, target:String, other:String):Int {\n'
-			+ '\t\treturn text == target ? 1 : text == other ? 2 : 0;\n\t}\n}'
-		).length);
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f(text:String, target:String, other:String):Int {\n'
+				+ '\t\treturn text == target ? 1 : text == other ? 2 : 0;\n\t}\n}'
+			).length
+		);
 	}
 
 	/**
@@ -337,10 +342,13 @@ class PreferSwitchExpressionCheckTest extends Test {
 	 * the compiler to catch it, `--fix` writing the file before anyone typechecks it.
 	 */
 	public function testBareMutableInstanceFieldNotFlagged(): Void {
-		Assert.equals(0, violations(
-			"class C {\n\tvar alpha:String = 'a';\n\tvar beta:String = 'b';\n"
-			+ '\tfunction f(text:String):Int {\n\t\treturn text == alpha ? 1 : text == beta ? 2 : 0;\n\t}\n}'
-		).length);
+		Assert.equals(
+			0,
+			violations(
+				"class C {\n\tvar alpha:String = 'a';\n\tvar beta:String = 'b';\n"
+				+ '\tfunction f(text:String):Int {\n\t\treturn text == alpha ? 1 : text == beta ? 2 : 0;\n\t}\n}'
+			).length
+		);
 	}
 
 	/**
@@ -350,10 +358,13 @@ class PreferSwitchExpressionCheckTest extends Test {
 	 * proof, so they cannot disagree.
 	 */
 	public function testBareStaticFinalNotFlagged(): Void {
-		Assert.equals(0, violations(
-			"class C {\n\tstatic final ALPHA:String = 'a';\n\tstatic final BETA:String = 'b';\n"
-			+ '\tstatic function f(text:String):Int {\n\t\treturn text == ALPHA ? 1 : text == BETA ? 2 : 0;\n\t}\n}'
-		).length);
+		Assert.equals(
+			0,
+			violations(
+				"class C {\n\tstatic final ALPHA:String = 'a';\n\tstatic final BETA:String = 'b';\n"
+				+ '\tstatic function f(text:String):Int {\n\t\treturn text == ALPHA ? 1 : text == BETA ? 2 : 0;\n\t}\n}'
+			).length
+		);
 	}
 
 	/**
@@ -368,11 +379,14 @@ class PreferSwitchExpressionCheckTest extends Test {
 	 * fixture — and only this fixture — report.
 	 */
 	public function testBareConstantShadowedByLocalNotFlagged(): Void {
-		Assert.equals(0, violations(
-			"class C {\n\tstatic inline final alpha:String = 'a';\n\tstatic inline final beta:String = 'b';\n"
-			+ "\tstatic function f(text:String):Int {\n\t\tfinal alpha = 'x';\n\t\tfinal beta = 'y';\n"
-			+ '\t\treturn text == alpha ? 1 : text == beta ? 2 : 0;\n\t}\n}'
-		).length);
+		Assert.equals(
+			0,
+			violations(
+				"class C {\n\tstatic inline final alpha:String = 'a';\n\tstatic inline final beta:String = 'b';\n"
+				+ "\tstatic function f(text:String):Int {\n\t\tfinal alpha = 'x';\n\t\tfinal beta = 'y';\n"
+				+ '\t\treturn text == alpha ? 1 : text == beta ? 2 : 0;\n\t}\n}'
+			).length
+		);
 	}
 
 	/**
@@ -380,10 +394,13 @@ class PreferSwitchExpressionCheckTest extends Test {
 	 * constant carrying no `static` modifier, the same arm the qualified `T.M` proof accepts.
 	 */
 	public function testBareEnumAbstractValueFlagged(): Void {
-		Assert.equals(1, violations(
-			'enum abstract Mode(String) {\n\tfinal ALPHA = \'a\';\n\tfinal BETA = \'b\';\n'
-			+ '\tpublic function rank():Int {\n\t\treturn this == ALPHA ? 1 : this == BETA ? 2 : 0;\n\t}\n}'
-		).length);
+		Assert.equals(
+			1,
+			violations(
+				'enum abstract Mode(String) {\n\tfinal ALPHA = \'a\';\n\tfinal BETA = \'b\';\n'
+				+ '\tpublic function rank():Int {\n\t\treturn this == ALPHA ? 1 : this == BETA ? 2 : 0;\n\t}\n}'
+			).length
+		);
 	}
 
 	/**
