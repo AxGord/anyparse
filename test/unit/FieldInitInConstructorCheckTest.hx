@@ -363,8 +363,7 @@ class FieldInitInConstructorCheckTest extends Test {
 	 */
 	public function testGenericTypeLeavesTheLiteralInline(): Void {
 		final out: String = applyIndexedFixOnce(
-			'@:generic class Picker<T> {\n\n' + ONE_FIELD + '\n\n\tpublic function new(?palette:Array<Int>) {\n' + ONE_GUARD
-			+ '\n\t}\n\n}\n'
+			'@:generic class Picker<T> {\n\n$ONE_FIELD\n\n\tpublic function new(?palette:Array<Int>) {\n$ONE_GUARD\n\t}\n\n}\n'
 		);
 		Assert.isTrue(out.indexOf('_cellsNumX = palette != null ? palette.length : 20;') != -1);
 		Assert.equals(-1, out.indexOf('CELLS_NUM_X_DEFAULT'));

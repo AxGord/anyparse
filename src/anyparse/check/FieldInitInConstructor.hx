@@ -254,6 +254,16 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 		return newName;
 	}
 
+	/** Whether `rank` is a STATIC IMMUTABLE field — the rank a reusable constant occupies, in either visibility. */
+	private static inline function isConstantRank(rank: MemberRank): Bool {
+		return rank == MemberRank.StaticPublicImmutableField || rank == MemberRank.StaticPrivateImmutableField;
+	}
+
+	/** Whether `code` is an ASCII capital. */
+	private static inline function isUpperCode(code: Int): Bool {
+		return code >= 'A'.code && code <= 'Z'.code;
+	}
+
 	/**
 	 * The name of a constant the type ALREADY declares for this exact default — same verbatim
 	 * initializer text AND same written type — or null when it declares none. Reusing it is what keeps
@@ -299,11 +309,6 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 		if (at >= 0) return at;
 		final brace: Null<Int> = RefactorSupport.typeBodyBraceOffset(source, decl, ownerName);
 		return brace == null ? null : brace + 1;
-	}
-
-	/** Whether `rank` is a STATIC IMMUTABLE field — the rank a reusable constant occupies, in either visibility. */
-	private static inline function isConstantRank(rank: MemberRank): Bool {
-		return rank == MemberRank.StaticPublicImmutableField || rank == MemberRank.StaticPrivateImmutableField;
 	}
 
 	/**
@@ -354,11 +359,6 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 		if (!isUpperCode(name.fastCodeAt(at - 1))) return true;
 		final next: Int = at + 1 < name.length ? name.fastCodeAt(at + 1) : 0;
 		return next >= 'a'.code && next <= 'z'.code;
-	}
-
-	/** Whether `code` is an ASCII capital. */
-	private static inline function isUpperCode(code: Int): Bool {
-		return code >= 'A'.code && code <= 'Z'.code;
 	}
 
 	/** Record one member to splice at `at`, merging it into the insertion already pending there. */

@@ -132,6 +132,35 @@ final class ConstantHoist {
 	}
 
 	/**
+	 * The rule governing a Constant carrying `mods` — the same first-applicable walk
+	 * `Naming.applicableRule` makes for a projected declaration, asked of the modifier run the
+	 * grammar actually renders. Null refuses the hoist: a policy that governs no such member cannot
+	 * say the hoisted name is correct, and emitting one it would immediately re-flag is worse than
+	 * renaming in place.
+	 */
+	public static function constantRule(policy: NamingPolicy, mods: Array<String>): Null<NamingRule> {
+		return policy.find(
+			rule ->
+				rule.category == NamingCategory.Constant && rule.requireMods.foreach(m -> mods.contains(m))
+				&& !rule.forbidMods.exists(m -> mods.contains(m))
+		);
+	}
+
+	/**
+	 * Whether the receiving type carries a metadata tag under which the language forbids STATIC
+	 * members (`RefShape.staticlessTypeMetaNames`). Adding one there does not compile, and no other
+	 * gate would notice: the re-parse validation accepts the member and the type closure has nothing
+	 * to say about it.
+	 */
+	public static function staticsForbidden(tree: QueryNode, decl: TypeDeclMatch, plugin: GrammarPlugin): Bool {
+		final shape: RefShape = plugin.refShape();
+		final staticless: Array<String> = shape.staticlessTypeMetaNames ?? [];
+		if (staticless.length == 0) return false;
+		final metas: Array<String> = precedingMetaNames(tree, decl.fullSpan, plugin.metaShape().metaKinds, shape.modifierOrderKinds ?? []);
+		return metas.exists(meta -> staticless.contains(meta));
+	}
+
+	/**
 	 * The hoist for one projected declaration, or null when a gate refuses it — and then the caller's
 	 * ordinary rename arm takes it, unchanged. The gates, cheapest and most selective first:
 	 *
@@ -203,21 +232,6 @@ final class ConstantHoist {
 	}
 
 	/**
-	 * The rule governing a Constant carrying `mods` — the same first-applicable walk
-	 * `Naming.applicableRule` makes for a projected declaration, asked of the modifier run the
-	 * grammar actually renders. Null refuses the hoist: a policy that governs no such member cannot
-	 * say the hoisted name is correct, and emitting one it would immediately re-flag is worse than
-	 * renaming in place.
-	 */
-	public static function constantRule(policy: NamingPolicy, mods: Array<String>): Null<NamingRule> {
-		return policy.find(
-			rule ->
-				rule.category == NamingCategory.Constant && rule.requireMods.foreach(m -> mods.contains(m))
-				&& !rule.forbidMods.exists(m -> mods.contains(m))
-		);
-	}
-
-	/**
 	 * The local-declaration kinds binding an IMMUTABLE local: `localDeclKinds` minus the mutable ones
 	 * and minus the comma-continuation kind — the same subtraction `InlineConstant.resolveSeams`
 	 * makes to reach the final FIELD hosts. Only such a binding can become a constant: a `var` may be
@@ -263,20 +277,6 @@ final class ConstantHoist {
 			if (s != null && declFrom >= s.from && declFrom < s.to) return conditionalBetween(child, declFrom);
 		}
 		return false;
-	}
-
-	/**
-	 * Whether the receiving type carries a metadata tag under which the language forbids STATIC
-	 * members (`RefShape.staticlessTypeMetaNames`). Adding one there does not compile, and no other
-	 * gate would notice: the re-parse validation accepts the member and the type closure has nothing
-	 * to say about it.
-	 */
-	public static function staticsForbidden(tree: QueryNode, decl: TypeDeclMatch, plugin: GrammarPlugin): Bool {
-		final shape: RefShape = plugin.refShape();
-		final staticless: Array<String> = shape.staticlessTypeMetaNames ?? [];
-		if (staticless.length == 0) return false;
-		final metas: Array<String> = precedingMetaNames(tree, decl.fullSpan, plugin.metaShape().metaKinds, shape.modifierOrderKinds ?? []);
-		return metas.exists(meta -> staticless.contains(meta));
 	}
 
 	/**
