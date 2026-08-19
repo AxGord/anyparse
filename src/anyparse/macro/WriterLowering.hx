@@ -11341,41 +11341,6 @@ class WriterLowering {
 	 * (that wrapping is Star-element-only), so a future Star-element
 	 * path through this gate would have to pass `.node` itself.
 	 */
-	/**
-	 * ω-optional-semicolon (E11): routes a trivia-mode `@:trailOpt(LIT)`
-	 * trail through the runtime `opt.optionalSemicolon` policy instead of
-	 * the recorded source presence. Activates only on a branch carrying
-	 * `@:fmt(optionalSemicolon('<gatePredicate>'[, '<argFieldPath>']))`;
-	 * returns `null` otherwise, so every other `@:trailOpt` ctor keeps
-	 * preserving and the whitelist stays POSITIVE — a slot participates
-	 * only where both directions have been checked to be legal.
-	 *
-	 * `gatePredicate` is a generated typed AST predicate answering "is
-	 * the trail omittable here?" (`endsWithCloseBrace` for Haxe). It is
-	 * mandatory: `Never` may only drop the token where the language
-	 * permits omission — `return 42` before `}` is `Missing ;`. `Always`
-	 * needs no gate (the token is legal wherever the grammar declares
-	 * the slot), and `Preserve` reproduces the caller's own fallback.
-	 *
-	 * `argFieldPath` is the optional dot-separated chain rooted at the
-	 * single Ref arg, exactly as in `trailOptShapeGateWrap` — omitted
-	 * means the predicate is applied to that arg itself
-	 * (`ReturnStmt(value)`), `'init'` reaches `HxVarDecl.init` for the
-	 * `var` / `final` family.
-	 */
-	private function optionalSemicolonWrap(branch: ShapeNode, trailText: String, rootArg: String, presentFlag: Expr): Null<Expr> {
-		final args: Null<Array<String>> = branch.fmtReadStringArgs('optionalSemicolon');
-		if (args == null || args.length == 0 || args.length > 2) return null;
-		var pathExpr: Expr = macro $i{rootArg};
-		if (args.length == 2) for (segment in args[1].split('.')) pathExpr = { expr: EField(pathExpr, segment), pos: Context.currentPos() };
-		final gateCall: Expr = AstPredLowering.predCallExpr(_shape.root, _ctx.trivia, false, args[0], [pathExpr]);
-		return macro switch opt.optionalSemicolon {
-			case anyparse.format.OptionalSemicolon.Always: _dt($v{trailText});
-			case anyparse.format.OptionalSemicolon.Never: $gateCall ? _de() : _dt($v{trailText});
-			case _: $presentFlag ? _dt($v{trailText}) : _de();
-		};
-	}
-
 	private function trailOptShapeGateWrap(branch: ShapeNode, trailText: String, rootArg: String): Null<Expr> {
 		final trailOptional: Bool = branch.annotations[AnnotationKeys.LIT_TRAIL_OPTIONAL] == true;
 		if (!trailOptional) return null;
@@ -11391,6 +11356,40 @@ class WriterLowering {
 		// false → the unconditional `_dt(trail)` branch, same as before.
 		final gateCall: Expr = AstPredLowering.predCallExpr(_shape.root, _ctx.trivia, false, predName, [pathExpr]);
 		return macro ($gateCall ? _de() : _dt($v{trailText}));
+	}
+
+	/**
+	 * ω-optional-semicolon (E11): routes a trivia-mode `@:trailOpt(LIT)`
+	 * trail through the runtime `opt.optionalSemicolon` policy instead of
+	 * the recorded source presence. Activates only on a branch carrying
+	 * `@:fmt(optionalSemicolon('<gatePredicate>'))`; returns `null`
+	 * otherwise, so every other `@:trailOpt` ctor keeps preserving and
+	 * the whitelist stays POSITIVE — a slot participates only where both
+	 * directions have been checked to be legal.
+	 *
+	 * `gatePredicate` is a generated typed AST predicate over the single
+	 * Ref arg, answering "is the trail omittable here?". It is mandatory:
+	 * `Never` may only drop the token where the language permits
+	 * omission — `return 42` before `}` is `Missing ;`. `Always` needs no
+	 * gate (the token is legal wherever the grammar declares the slot),
+	 * and `Preserve` reproduces the caller's own fallback.
+	 *
+	 * Unlike `trailOptShapeGateWrap` the predicate takes the Ref arg
+	 * WHOLE rather than a field path into it. That is not a
+	 * simplification: for the `var` / `final` family the answer depends
+	 * on the LAST binding of a multi-variable declaration, which a path
+	 * to the head's `init` cannot reach — see
+	 * `varDeclTailEndsWithCloseBrace`.
+	 */
+	private function optionalSemicolonWrap(branch: ShapeNode, trailText: String, rootArg: String, presentFlag: Expr): Null<Expr> {
+		final args: Null<Array<String>> = branch.fmtReadStringArgs('optionalSemicolon');
+		if (args == null || args.length != 1) return null;
+		final gateCall: Expr = AstPredLowering.predCallExpr(_shape.root, _ctx.trivia, false, args[0], [macro $i{rootArg}]);
+		return macro switch opt.optionalSemicolon {
+			case anyparse.format.OptionalSemicolon.Always: _dt($v{trailText});
+			case anyparse.format.OptionalSemicolon.Never: $gateCall ? _de() : _dt($v{trailText});
+			case _: $presentFlag ? _dt($v{trailText}) : _de();
+		};
 	}
 
 	/**

@@ -42,9 +42,7 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 final class HxOptionalSemicolonSliceTest extends Test {
 
 	private static final ALWAYS: String = '{"whitespace": {"optionalSemicolon": "always"}}';
-
 	private static final NEVER: String = '{"whitespace": {"optionalSemicolon": "never"}}';
-
 	private static final PRESERVE: String = '{"whitespace": {"optionalSemicolon": "preserve"}}';
 
 	public function new(): Void {
@@ -93,6 +91,24 @@ final class HxOptionalSemicolonSliceTest extends Test {
 		final input: String = 'class C {\n\tfunction f() {\n\t\tvar a = {x: 1};\n\t\tvar b = 2;\n\t\treturn {c: 3};\n\t}\n}\n';
 		final expected: String = 'class C {\n\tfunction f() {\n\t\tvar a = {x: 1}\n\t\tvar b = 2;\n\t\treturn {c: 3}\n\t}\n}\n';
 		Assert.equals(expected, triviaWrite(input, NEVER));
+	}
+
+	// A multi-variable declaration's `;` belongs to its LAST binding, not
+	// its head. `var a = {x: 1}, b = 2` before a `}` is `Missing ;`, so
+	// "never" must read the tail: the brace-headed list KEEPS its `;`
+	// while the brace-TAILED one loses it — one assertion over both, so
+	// neither half can pass alone.
+	public function testNeverReadsTheLastBindingOfAMultiVarDecl(): Void {
+		final input: String = 'class C {\n\tfunction f() {\n\t\tvar a = {x: 1}, b = 2;\n\t\tvar c = 3, d = {y: 4};\n\t\ttrace(a);\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f() {\n\t\tvar a = {x: 1}, b = 2;\n\t\tvar c = 3, d = {y: 4}\n\t\ttrace(a);\n\t}\n}\n';
+		Assert.equals(expected, triviaWrite(input, NEVER));
+	}
+
+	// "always" over the same pair is unconditional — both keep their `;`.
+	public function testAlwaysKeepsMultiVarSemicolons(): Void {
+		final input: String = 'class C {\n\tfunction f() {\n\t\tvar a = {x: 1}, b = 2;\n\t\tvar c = 3, d = {y: 4}\n\t\ttrace(a);\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f() {\n\t\tvar a = {x: 1}, b = 2;\n\t\tvar c = 3, d = {y: 4};\n\t\ttrace(a);\n\t}\n}\n';
+		Assert.equals(expected, triviaWrite(input, ALWAYS));
 	}
 
 	// The catch-all `ExprStmt` is out of the whitelist: a bare block
