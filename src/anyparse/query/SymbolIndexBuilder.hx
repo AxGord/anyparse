@@ -38,6 +38,7 @@ private typedef MemberSeams = {
 	final inlineKind: Null<String>;
 	final macroKind: Null<String>;
 	final conditionalKind: Null<String>;
+	final paramKinds: Array<String>;
 };
 
 /**
@@ -396,6 +397,7 @@ final class SymbolIndexBuilder {
 							hasSetter: writeAccessors[sp.from] ?? false,
 							returnNominal: returnTypes[sp.from],
 							typeSource: typeSources[sp.from],
+							firstParamTypeSource: firstParamTypeSourceOf(child, typeSources, seams.paramKinds),
 							visibility: runVisibility,
 							isOverride: runOverride,
 							kind: child.kind,
@@ -427,6 +429,26 @@ final class SymbolIndexBuilder {
 	}
 
 	/**
+	 * The VERBATIM `:Type` source of `member`'s FIRST parameter — the type a `using` static
+	 * extension accepts as its receiver — or null when it declares no parameter, the first one
+	 * carries no annotation, or the member is not a function at all.
+	 *
+	 * Read off the SAME `declaredTypeSources` map the member's own `typeSource` comes from: a
+	 * parameter is an ordinary typed binding, keyed by its declaration span. Only the first
+	 * parameter is captured, because that is the only one a `using` gives a meaning to; the rest
+	 * stay ordinary call arguments no cross-file query has ever asked about.
+	 */
+	private static function firstParamTypeSourceOf(
+		member: QueryNode, typeSources: Map<Int, String>, paramKinds: Array<String>
+	): Null<String> {
+		for (child in member.children) if (paramKinds.contains(child.kind)) {
+			final sp: Null<Span> = child.span;
+			return sp == null ? null : typeSources[sp.from];
+		}
+		return null;
+	}
+
+	/**
 	 * The `RefShape` kinds `collectMembers` reads, resolved ONCE per run rather than per
 	 * type: the modifier siblings it recognises and the conditional-compilation host kind
 	 * that marks a member `guarded`.
@@ -438,7 +460,8 @@ final class SymbolIndexBuilder {
 			staticKind: shape.staticModifierKind,
 			inlineKind: shape.inlineModifierKind,
 			macroKind: shape.macroModifierKind,
-			conditionalKind: shape.conditionalMemberKind
+			conditionalKind: shape.conditionalMemberKind,
+			paramKinds: shape.paramKinds ?? []
 		};
 	}
 

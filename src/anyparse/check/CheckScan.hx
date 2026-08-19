@@ -335,7 +335,11 @@ final class CheckScan {
 		// The resolution index sees the std + configured libraries, so a member type such as
 		// `Array.length` resolves; the report index alone would stop at the project boundary.
 		final resolved: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
-		final chain: ChainTypeContext = { declaredTypeSources: provider.declaredTypeSources(source), source: source };
+		final chain: ChainTypeContext = {
+			declaredTypeSources: provider.declaredTypeSources(source),
+			source: source,
+			usings: UsingScan.usingModules(UsingScan.headerOf(tree, source, plugin))
+		};
 		return node -> NominalTypes.expressionTypeNominal(node, tree, shape, declaredTypes, resolved, file, chain);
 	}
 
