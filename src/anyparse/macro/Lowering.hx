@@ -5745,8 +5745,21 @@ class Lowering {
 				);
 			case Ref:
 				final refName: String = child.annotations[AnnotationKeys.BASE_REF];
+				// ω-splice-operand-run: `@:fmt(atomOperand)` on a bare struct Ref
+				// retargets the call to the `${parseFn}Atom` variant of the
+				// sub-rule, exactly as the single-Ref ENUM BRANCH arm already does
+				// (`lowerKwRefBranch`, shipped for `HxExpr.CastExpr`). The operand
+				// then binds at ATOM level — prefix and the whole postfix loop
+				// included, infix Pratt excluded — so a trailing binary operator is
+				// left for the NEXT field of the same struct instead of being
+				// swallowed into the operand. That is what lets a struct model
+				// `<operand> <operator>` as a pair without the Pratt loop ever
+				// needing to rewind a failed right operand (`HxCondSpliceOpTerm`).
+				final subFnName: String = child.fmtHasFlag('atomOperand')
+					? '${parseFnName(refName)}Atom'
+					: parseFnName(refName);
 				final callExpr: Expr = {
-					expr: ECall(macro $i{parseFnName(refName)}, [macro ctx]),
+					expr: ECall(macro $i{subFnName}, [macro ctx]),
 					pos: Context.currentPos()
 				};
 				parseSteps.push({

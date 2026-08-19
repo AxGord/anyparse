@@ -854,6 +854,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			conditionalEndKeyword: '#end',
 			opaqueCondRegionKinds: [
 				'CondSpliceExpr',
+				'CondSpliceOpExpr',
 				'CondSpliceTail',
 				'CondSpliceStmt',
 				'CondSpliceBlockOpen',

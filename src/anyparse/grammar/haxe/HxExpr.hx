@@ -499,6 +499,16 @@ enum HxExpr {
 	ConditionalArgs(inner: HxConditionalArgs);
 
 	/**
+	 * Token-splice `#if` region whose fragment is a run of complete
+	 * operands each followed by an operator whose right operand lives
+	 * after the `#end` — see `HxCondSpliceOpExpr`. Dispatched BEFORE
+	 * the raw `CondSpliceExpr` so the eight dangling-operator census
+	 * sites and the one half-ternary keep their operands as nodes.
+	 */
+	@:kw('#if')
+	CondSpliceOpExpr(inner: HxCondSpliceOpExpr);
+
+	/**
 	 * Token-splice fallback for `#if` regions no structural
 	 * conditional can represent — see `HxCondSpliceExpr`.
 	 */
