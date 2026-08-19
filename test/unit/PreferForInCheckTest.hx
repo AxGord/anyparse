@@ -137,8 +137,13 @@ class PreferForInCheckTest extends Test {
 		);
 	}
 
-	public function testUnbracedBodyNotFlagged(): Void {
-		Assert.equals(0, violations(fn('while (it.hasNext()) out.push(it.next());')).length);
+	/**
+	 * An unbraced drain body USED to be refused, on the stated ground that it has no statement to
+	 * take the binder's name from and inventing one is not a fixer's job. It converts now because
+	 * the name is DERIVED rather than invented — see `deriveBinder`.
+	 */
+	public function testUnbracedBodyConverts(): Void {
+		Assert.stringContains('for (value in it) out.push(value);', applyFix(fn('while (it.hasNext()) out.push(it.next());')));
 	}
 
 	public function testDrainOnlyBodyNotFlagged(): Void {
@@ -167,6 +172,42 @@ class PreferForInCheckTest extends Test {
 				+ '\n\t\t\t\tuse(cp);\n\t\t\t}\n\t\t};\n\t}\n}'
 			).length
 		);
+	}
+
+	/** The drain shape: no statement to take a name from, so the binder is the generic fallback. */
+	public function testInlineBodyLoopConverts(): Void {
+		Assert.stringContains('for (value in it) use(value);', applyFix(fn('while (it.hasNext()) use(it.next());')));
+	}
+
+	/** The comprehension header, whose element type is the ONE real naming signal in the source. */
+	public function testComprehensionHeaderTakesTheElementTypeName(): Void {
+		final src: String = 'class C {\n\tfunction f(it:Iterator<CodePoint>):Void {\n'
+			+ '\t\tfinal a:Array<CodePoint> = [while (it.hasNext()) it.next()];\n\t}\n}';
+		Assert.stringContains('[for (codePoint in it) codePoint]', applyFix(src));
+	}
+
+	/** A BASIC element type reads as a type, not as a value, so it falls through to the generic name. */
+	public function testBasicElementTypeFallsBackToTheGenericBinder(): Void {
+		final src: String =
+			'class C {\n\tfunction f(it:Iterator<Int>):Void {\n\t\tfinal a:Array<Int> = [while (it.hasNext()) it.next()];\n\t}\n}';
+		Assert.stringContains('[for (value in it) value]', applyFix(src));
+	}
+
+	/** A derived name already live at the loop is skipped, so the rewrite can never capture it. */
+	public function testLiveBinderNameIsSkipped(): Void {
+		Assert.stringContains(
+			'for (element in it) use(element);', applyFix(fn('final value = 1;\n\t\twhile (it.hasNext()) use(it.next());'))
+		);
+	}
+
+	/** TWO `next()` calls advance the iterator twice where `for` advances once — refused. */
+	public function testTwoNextCallsRefused(): Void {
+		Assert.equals(0, violations(fn('while (it.hasNext()) use(it.next() + it.next());')).length);
+	}
+
+	/** `hasNext()` must be the WHOLE condition. */
+	public function testCompoundConditionRefused(): Void {
+		Assert.equals(0, violations(fn('while (it.hasNext() && xs.length > 0) use(it.next());')).length);
 	}
 
 	public function testSkipParseNoCrash(): Void {

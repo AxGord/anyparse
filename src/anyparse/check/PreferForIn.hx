@@ -10,6 +10,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -98,6 +99,20 @@ final class PreferForIn implements Check implements DefaultOff {
 	/** `hasNext()` in the condition and `next()` in the binding, and nothing else reads the iterator. */
 	private static inline final PROTOCOL_OCCURRENCES: Int = 2;
 
+	/**
+	 * Element types whose name makes a POOR binder — the basic types, whose lower-cased name
+	 * (`int`, `string`, `bool`) reads as a type rather than as the value it holds and tells the
+	 * reader nothing the annotation did not. A domain type (`CodePoint` -> `codePoint`) does, which
+	 * is the whole reason the derivation is worth having. These fall through to the generic names.
+	 */
+	private static final UNINFORMATIVE_TYPES: Array<String> = ['Int', 'Float', 'Bool', 'String', 'Dynamic', 'Any', 'UInt'];
+
+	/** Binder names to fall back on, in order, when the declaration carries no element type. */
+	private static final FALLBACK_BINDERS: Array<String> = ['value', 'element', 'item'];
+
+	/** The element type of an `Array<T>` / `Iterator<T>` / `Iterable<T>` annotation on the enclosing declaration. */
+	private static final ELEMENT_TYPE: EReg = ~/:\s*(?:Array|Iterator|Iterable)\s*<\s*([A-Za-z_][A-Za-z0-9_.]*)/;
+
 	public function new() {}
 
 	public function id(): String {
@@ -152,6 +167,7 @@ final class PreferForIn implements Check implements DefaultOff {
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
 		return localDeclKinds.length == 0 ? null : {
 			whileStmtKind: whileStmtKind,
+			whileExprKind: shape.whileExprKind,
 			blockStmtKind: blockStmtKind,
 			callKind: callKind,
 			fieldAccessKind: fieldAccessKind,
@@ -183,7 +199,7 @@ final class PreferForIn implements Check implements DefaultOff {
 	private static function collectMatches(tree: QueryNode, source: String, s: Seams): Array<Match> {
 		final ctx: Ctx = { source: source, seams: s };
 		final out: Array<Match> = [];
-		walk(tree, tree, ctx, out);
+		walk(tree, tree, null, ctx, out);
 		return out;
 	}
 
@@ -193,29 +209,37 @@ final class PreferForIn implements Check implements DefaultOff {
 	 * visibility and so bounds the inlining arm's occurrence scan. A reification subtree
 	 * (`opaqueKinds`) is skipped wholesale.
 	 */
-	private static function walk(node: QueryNode, scope: QueryNode, ctx: Ctx, out: Array<Match>): Void {
+	private static function walk(node: QueryNode, scope: QueryNode, decl: Null<QueryNode>, ctx: Ctx, out: Array<Match>): Void {
 		if (ctx.seams.opaqueKinds.contains(node.kind)) return;
 		final here: QueryNode = ctx.seams.scopeKinds.contains(node.kind) ? node : scope;
+		final holder: Null<QueryNode> = ctx.seams.localDeclKinds.contains(node.kind) ? node : decl;
 		final kids: Array<QueryNode> = node.children;
 		for (i in 0...kids.length) {
-			final m: Null<Match> = tryMatch(kids[i], i == 0 ? null : kids[i - 1], here, ctx);
+			final m: Null<Match> = tryMatch(kids[i], i == 0 ? null : kids[i - 1], here, holder, ctx);
 			if (m != null) out.push(m);
 		}
-		for (c in kids) walk(c, here, ctx, out);
+		for (c in kids) walk(c, here, holder, ctx, out);
 	}
 
 	/**
 	 * Whether `loop` is the hand-rolled protocol; returns the replacement span and text when so,
 	 * else null. `prev` is the loop's preceding sibling, the inlining arm's only candidate.
 	 */
-	private static function tryMatch(loop: QueryNode, prev: Null<QueryNode>, scope: QueryNode, ctx: Ctx): Null<Match> {
+	private static function tryMatch(
+		loop: QueryNode, prev: Null<QueryNode>, scope: QueryNode, decl: Null<QueryNode>, ctx: Ctx
+	): Null<Match> {
 		final s: Seams = ctx.seams;
-		if (loop.kind != s.whileStmtKind || loop.children.length != WHILE_CHILD_COUNT) return null;
+		final isWhile: Bool = loop.kind == s.whileStmtKind || (s.whileExprKind != null && loop.kind == s.whileExprKind);
+		if (!isWhile || loop.children.length != WHILE_CHILD_COUNT) return null;
 		final body: QueryNode = loop.children[1];
 		final iterator: Null<String> = protocolReceiver(loop.children[0], HAS_NEXT_METHOD, s);
-		if (iterator == null || body.kind != s.blockStmtKind || body.children.length < MIN_BODY_STATEMENTS) return null;
+		if (iterator == null) return null;
+		if (body.kind != s.blockStmtKind || body.children.length < MIN_BODY_STATEMENTS) {
+			return tryUnbound(loop, body, iterator, scope, decl, ctx);
+		}
 		final binding: QueryNode = body.children[0];
 		final binder: Null<String> = binding.name;
+		if (loop.kind != s.whileStmtKind) return tryUnbound(loop, body, iterator, scope, decl, ctx);
 		if (!s.localDeclKinds.contains(binding.kind) || binding.children.length != SOLE_CHILD_COUNT) return null;
 		if (binder == null || binder == iterator) return null;
 		if (protocolReceiver(binding.children[0], NEXT_METHOD, s) != iterator) return null;
@@ -229,6 +253,107 @@ final class PreferForIn implements Check implements DefaultOff {
 			+ source.substring(bodySpan.from + 1, bindSpan.from).rtrim() + source.substring(bindSpan.to, bodySpan.to);
 		final inlined: Null<Match> = inlineDeclaration(prev, scope, loopSpan, iterator, binder, interior, ctx);
 		return inlined ?? { span: loopSpan, text: 'for ($binder in $iterator) $interior' };
+	}
+
+	/**
+	 * The arm for a loop that binds NOTHING — `while (it.hasNext()) out.push(it.next());` and the
+	 * comprehension header `[while (it.hasNext()) it.next()]`. Both are the same protocol as the
+	 * bound form; what they lack is a statement to take the `for` binder's NAME from, which is why
+	 * this rule refused them until now.
+	 *
+	 * The name is DERIVED, never invented — the order is the enclosing declaration's element type
+	 * (`final a:Array<CodePoint> = [while …]` gives `codePoint`), then the fallback `value`. A
+	 * derived name that is already live at the loop's position is skipped for the next candidate,
+	 * so the rewrite can never capture an existing binding.
+	 *
+	 * `occurrences == PROTOCOL_OCCURRENCES` carries the whole soundness argument, exactly as it
+	 * does for the bound arm: the iterator's identifier appears TWICE in the loop, once in
+	 * `hasNext()` and once in `next()`. That proves in one test that `next()` runs exactly once per
+	 * iteration (two calls would advance the iterator twice where `for` advances once), that the
+	 * iterator is not re-assigned, and that nothing else reads it.
+	 */
+	private static function tryUnbound(
+		loop: QueryNode, body: QueryNode, iterator: String, scope: QueryNode, decl: Null<QueryNode>, ctx: Ctx
+	): Null<Match> {
+		final s: Seams = ctx.seams;
+		if (occurrences(loop, iterator, s) != PROTOCOL_OCCURRENCES) return null;
+		// A braced body holding ONLY the `next()` binding is a loop that drains and does nothing;
+		// it was refused before this arm existed and stays refused, since rewriting it buys the
+		// reader nothing and the dead binding is `unused-local`'s finding, not this rule's.
+		if (
+			body.kind == s.blockStmtKind && body.children.length < MIN_BODY_STATEMENTS && body.children.length == 1
+			&& s.localDeclKinds.contains(body.children[0].kind)
+		)
+			return null;
+		final drain: Null<QueryNode> = findProtocolCall(body, iterator, s);
+		if (drain == null) return null;
+		final loopSpan: Null<Span> = loop.span;
+		final bodySpan: Null<Span> = body.span;
+		final drainSpan: Null<Span> = drain.span;
+		if (loopSpan == null || bodySpan == null || drainSpan == null) return null;
+		if (drainSpan.from < bodySpan.from || drainSpan.to > bodySpan.to) return null;
+		final binder: Null<String> = deriveBinder(decl, scope, ctx);
+		if (binder == null) return null;
+		final source: String = ctx.source;
+		final interior: String = source.substring(bodySpan.from, drainSpan.from) + binder + source.substring(drainSpan.to, bodySpan.to);
+		return { span: loopSpan, text: 'for ($binder in $iterator) $interior' };
+	}
+
+	/** The one `<iterator>.next()` call in `node`'s subtree, or null when the subtree holds none. */
+	private static function findProtocolCall(node: QueryNode, iterator: String, s: Seams): Null<QueryNode> {
+		if (protocolReceiver(node, NEXT_METHOD, s) == iterator) return node;
+		for (c in node.children) {
+			final found: Null<QueryNode> = findProtocolCall(c, iterator, s);
+			if (found != null) return found;
+		}
+		return null;
+	}
+
+	/**
+	 * A binder name derived from the source, or null when every candidate is already live. The
+	 * element type of the enclosing declaration is the only real signal — a type ARGUMENT projects
+	 * no node in this grammar, so it is read from the declaration's own source slice rather than
+	 * from the tree.
+	 */
+	private static function deriveBinder(decl: Null<QueryNode>, scope: QueryNode, ctx: Ctx): Null<String> {
+		final candidates: Array<String> = [];
+		final fromType: Null<String> = elementTypeName(decl, ctx);
+		if (fromType != null) candidates.push(fromType);
+		for (fallback in FALLBACK_BINDERS) candidates.push(fallback);
+		return candidates.find(name -> !nameIsLive(scope, name, ctx.seams));
+	}
+
+	/**
+	 * Whether `name` is already taken anywhere in `scope` — as a read, as an interpolation, or as a
+	 * DECLARATION. The declaration arm is the load-bearing one: `occurrences` counts identifier
+	 * nodes, and a `final value = 1;` carries its name on the declaration node instead, so a check
+	 * built on reads alone would hand the loop a binder that shadows a live local.
+	 */
+	private static function nameIsLive(node: QueryNode, name: String, s: Seams): Bool {
+		final self: Bool = node.name == name
+			&& (node.kind == s.identKind || node.kind == s.interpIdentKind || s.localDeclKinds.contains(node.kind));
+		if (self) return true;
+		for (c in node.children) if (nameIsLive(c, name, s)) return true;
+		return false;
+	}
+
+	/** `final a:Array<CodePoint> = …` -> `codePoint`; null when the declaration carries no such annotation. */
+	private static function elementTypeName(decl: Null<QueryNode>, ctx: Ctx): Null<String> {
+		if (decl == null || decl.children.length == 0) return null;
+		final declSpan: Null<Span> = decl.span;
+		final initSpan: Null<Span> = decl.children[0].span;
+		if (declSpan == null || initSpan == null) return null;
+		final ds: Span = declSpan;
+		final is: Span = initSpan;
+		if (is.from <= ds.from) return null;
+		final head: String = ctx.source.substring(ds.from, is.from);
+		final matched: Bool = ELEMENT_TYPE.match(head);
+		if (!matched) return null;
+		final qualified: String = ELEMENT_TYPE.matched(1);
+		final simple: String = qualified.substring(qualified.lastIndexOf('.') + 1);
+		return simple.length == 0 || UNINFORMATIVE_TYPES.contains(simple)
+			? null
+			: simple.substring(0, 1).toLowerCase() + simple.substring(1);
 	}
 
 	/**
@@ -284,6 +409,7 @@ final class PreferForIn implements Check implements DefaultOff {
 /** The `RefShape` kinds `PreferForIn` reads, bundled once so the walkers take one argument. */
 private typedef Seams = {
 	var whileStmtKind: String;
+	var whileExprKind: Null<String>;
 	var blockStmtKind: String;
 	var callKind: String;
 	var fieldAccessKind: String;
