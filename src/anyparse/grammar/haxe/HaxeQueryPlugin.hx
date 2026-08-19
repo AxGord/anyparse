@@ -744,7 +744,16 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// wrapper, which `prefer-if-expression-chain` makes transparent only inside an arm —
 			// a bare expression statement in a block is no host. `concat` copies, so the shared
 			// static array is never aliased into the shape.
-			ifExpressionChainHostKinds: SWITCH_EXPRESSION_HOST_KINDS.concat(['ThinArrow', 'ThinParenLambdaExpr', 'ParenLambdaExpr'])
+			// …plus an explicit `ParenExpr`. A ternary the author already wrapped in parens has the
+			// same clean delimiters the other hosts do — the `(` and `)` themselves — so the ladder
+			// goes INSIDE the existing parens and the rule adds no punctuation. This matters for a
+			// ternary in operand position: `h - ih - (c ? a : b)` is legal as `h - ih - (if …)`, but
+			// only WITH the parens; drop them and a following operand binds into the `else` branch
+			// (measured: `h - if (c) 1.0 else 2.0 - ih` is 118, the parenthesised form 78, and both
+			// compile). Requiring the parens in the SOURCE is what makes this host safe.
+			ifExpressionChainHostKinds: SWITCH_EXPRESSION_HOST_KINDS.concat(
+				['ThinArrow', 'ThinParenLambdaExpr', 'ParenLambdaExpr', 'ParenExpr']
+			)
 				.concat(BRANCH_SCOPE_KINDS),
 			nullLiteralKind: 'NullLit',
 			nullCoalesceKind: 'NullCoal',

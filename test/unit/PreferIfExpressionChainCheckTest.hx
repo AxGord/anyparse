@@ -484,6 +484,32 @@ class PreferIfExpressionChainCheckTest extends Test {
 		Assert.equals(src.indexOf('3 ;') + 1, es[0].span.to);
 	}
 
+	/**
+	 * An explicit `ParenExpr` is a host: the parens the author already wrote are the value's
+	 * delimiters, so the ladder goes INSIDE them and the rule adds no punctuation of its own.
+	 */
+	public function testParenthesisedOperandIsAHost(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class C {\n\tfunction f():Float {\n\t\treturn h - ih - (folder ? shared ? 1.0 : 2.0 : 3.0);\n\t}\n}'
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('if (!folder) 3.0 else if (shared) 1.0 else 2.0', es[0].text);
+	}
+
+	/**
+	 * The edit replaces the ternary only, never the parens around it — which is the whole reason
+	 * this host is safe. Dropping them would let a FOLLOWING operand bind into the `else` branch:
+	 * measured on `-cpp` and `--interp`, `h - if (c) 1.0 else 2.0 - ih` is 118 where the
+	 * parenthesised form is 78, and both compile, so nothing would catch the change.
+	 */
+	public function testParenthesisedOperandKeepsItsParens(): Void {
+		final src: String = 'class C {\n\tfunction f():Float {\n\t\treturn (a ? b ? 1.0 : 2.0 : 3.0) / k;\n\t}\n}';
+		final es: Array<{ span: Span, text: String }> = edits(src);
+		Assert.equals(1, es.length);
+		final rewritten: String = src.substring(0, es[0].span.from) + es[0].text + src.substring(es[0].span.to);
+		Assert.isTrue(rewritten.indexOf('(if (!a) 3.0 else if (b) 1.0 else 2.0) / k') >= 0);
+	}
+
 	public function testRegisteredInBuiltins(): Void {
 		Assert.notNull(Linter.byId('prefer-if-expression-chain'));
 		Assert.isTrue([for (c in Linter.builtins()) c.id()].contains('prefer-if-expression-chain'));
