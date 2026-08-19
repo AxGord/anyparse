@@ -7,8 +7,6 @@ import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
-import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxModuleWriter;
 
 /**
  * E11 — `whitespace.optionalSemicolon` normalizes the OPTIONAL trailing
@@ -141,16 +139,6 @@ final class HxOptionalSemicolonSliceTest extends Test {
 		Assert.equals(never, triviaWrite(never, NEVER));
 	}
 
-	private inline function triviaWrite(src: String, json: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-	}
-
-	private inline function triviaWriteDefault(src: String): String {
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormat.instance.defaultWriteOptions);
-	}
-
-
 	/**
 	 * The PLAIN writer's own `;`-elision gate had the same head-binding flaw the `never` mode was
 	 * fixed for: `trailOptShapeGate('endsWithCloseBrace', 'init')` asks the HEAD binding of a
@@ -169,12 +157,16 @@ final class HxOptionalSemicolonSliceTest extends Test {
 		Assert.isTrue(out.indexOf('var a = {x: 1}\n') != -1, 'a lone brace-terminated init keeps eliding - got: <$out>');
 	}
 
+	private inline function triviaWrite(src: String, json: String): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+	}
+
+	private inline function triviaWriteDefault(src: String): String {
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormat.instance.defaultWriteOptions);
+	}
 
 	/** The PLAIN writer (no trivia): the `optionalSemicolon` knob does not reach it, its own gate decides. */
-	private inline function plainWrite(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		opts.finalNewline = false;
-		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
-	}
+	private inline function plainWrite(src: String): String return HxWriteFixture.plainWrite(src, '{}');
 
 }

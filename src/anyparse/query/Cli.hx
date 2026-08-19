@@ -444,6 +444,10 @@ typedef StripResult = {
 final class Cli {
 
 	private static inline final SKIP_PATHS_SHOWN: Int = 5;
+
+	/** How many rule ids `declinedFixNudge` names before it summarises the rest as a count. */
+	private static inline final DECLINED_RULES_SHOWN: Int = 6;
+
 	private static inline final FUZZY_MAX_DIST: Int = 3;
 
 	/** The maximum 32-bit signed integer — a null-span sort sentinel and the unbounded `--top` / `--all` count. */
@@ -4973,12 +4977,12 @@ final class Cli {
 		// one written (a `:$t` annotation, a `cast($x, $T)` target type) or, for an
 		// undecodable name slot such as `@:$m`, a question nothing can answer. Say
 		// which ones, so a census built on the pattern is not read as exact.
-		if (parsed.ignoredMetavars.length != 0)
-			stderr(
-				'apq search: metavariable(s) $' + parsed.ignoredMetavars.join(', $')
-				+ ' are not part of the parsed pattern - the grammar projects no node at that position, so the search'
-				+ ' is WIDER than written (a declared type is not a node; a metadata name is not decoded). Searching anyway.\n'
-			);
+		if (parsed.ignoredMetavars.length != 0) {
+			final ignored: String = 'apq search: metavariable(s) $$${parsed.ignoredMetavars.join(', $')} are not part of the parsed '
+				+ 'pattern - the grammar projects no node at that position, so the search is WIDER than written (a declared type is '
+				+ 'not a node; a metadata name is not decoded). Searching anyway.\n';
+			stderr(ignored);
+		}
 
 		// `--explain`: emit the parsed pattern's S-expr to stderr at
 		// scan start. When 0 matches across all scanned files the
@@ -16186,8 +16190,6 @@ final class Cli {
 		sysPrint('  --format <fmt>   lines (default) or filters\n');
 		sysPrint('  -h, --help       Show this help\n');
 	}
-	#end
-
 
 	/**
 	 * The tail `lint --fix` prints when it changed NOTHING. `fixed 0 issue(s)` alone reads exactly
@@ -16203,22 +16205,18 @@ final class Cli {
 		if (rules.length == 0) return '';
 		rules.sort((a, b) -> {
 			final byCount: Int = (reportedByRule[b] ?? 0) - (reportedByRule[a] ?? 0);
-			return byCount != 0 ? byCount : (a < b ? -1 : (a > b ? 1 : 0));
+			return byCount != 0 ? byCount : Reflect.compare(a, b);
 		});
 		final shown: Array<String> = [
 			for (id in rules.slice(0, DECLINED_RULES_SHOWN)) '$id ${reportedByRule[id] ?? 0}'
 		];
 		final more: Int = rules.length - shown.length;
 		final tail: String = more > 0 ? ', +$more more rule(s)' : '';
-		return ' — but the run REPORTED: ${shown.join(', ')}$tail. A reported finding stays unfixed when the check has no'
-			+ ' autofix, or when its fix declined here — most often because proving the rewrite safe needs a WIDER scope than'
-			+ ' this run (a member rename must see every file that could collide). Re-run over the project root before'
-			+ ' concluding the rule cannot fix it.';
+		return ' — but the run REPORTED: ${shown.join(', ')}$tail. A reported finding stays unfixed when the check has no autofix, or '
+			+ 'when its fix declined here — most often because proving the rewrite safe needs a WIDER scope than this run (a member '
+			+ 'rename must see every file that could collide). Re-run over the project root before concluding the rule cannot fix it.';
 	}
-
-
-	/** How many rule ids `declinedFixNudge` names before it summarises the rest as a count. */
-	private static final DECLINED_RULES_SHOWN: Int = 6;
+	#end
 
 }
 

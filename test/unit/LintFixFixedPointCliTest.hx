@@ -269,7 +269,8 @@ class LintFixFixedPointCliTest extends Test {
 		Assert.isTrue(tail.indexOf('dead-store 1') >= 0, 'every reporting rule is named - got: $tail');
 		Assert.isTrue(tail.indexOf('naming 2, dead-store 1') >= 0, 'rules are ordered by finding count - got: $tail');
 		Assert.isTrue(tail.indexOf('WIDER scope') >= 0, 'the tail must point at scope - got: $tail');
-		Assert.equals('', Cli.declinedFixNudge(new Map()), 'nothing reported means fixed 0 is the whole truth');
+		final none: Map<String, Int> = [];
+		Assert.equals('', Cli.declinedFixNudge(none), 'nothing reported means fixed 0 is the whole truth');
 	}
 
 }

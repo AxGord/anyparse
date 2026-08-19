@@ -356,7 +356,6 @@ class Y {
 		Assert.equals(1, Matcher.search(pattern, tree).length);
 	}
 
-
 	/**
 	 * A single-binder `for` pattern no longer matches a KEY-VALUE loop. While the value binder had
 	 * no node the two shapes were indistinguishable, so `for ($v in $m)` matched `for (k => v in m)`
@@ -377,17 +376,6 @@ class Y {
 		Assert.equals(1, keyValue.length, 'the key-value pattern matches exactly the key-value loop');
 	}
 
-	/** The names each match bound to the given metavariable, in match order. */
-	private static function boundNames(matches: Array<Match>, metavar: String): Array<String> {
-		return [
-			for (m in matches) {
-				final n: Null<QueryNode> = m.bindings.get(metavar);
-				n == null ? '<none>' : (n.name ?? '<noname>');
-			}
-		];
-	}
-
-
 	public function testArgumentlessNewDeclarationMatchesOnlyNewInitializers(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final source: String = 'class X {
@@ -397,6 +385,16 @@ class Y {
 		final tree: QueryNode = plugin.parseFile(source);
 		final matches: Array<Match> = Matcher.search(pattern, tree);
 		Assert.equals(1, matches.length, 'only the new-initialised final may match - got ${matches.length}');
+	}
+
+	/** The names each match bound to the given metavariable, in match order. */
+	private static function boundNames(matches: Array<Match>, metavar: String): Array<String> {
+		return [
+			for (m in matches) {
+				final n: Null<QueryNode> = m.bindings.get(metavar);
+				n == null ? '<none>' : (n.name ?? '<noname>');
+			}
+		];
 	}
 
 }

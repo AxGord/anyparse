@@ -65,14 +65,12 @@ class HxMultiVarDeclSliceTest extends HxTestHelpers {
 	}
 
 	/**
-	 * Consumed-once `_suppressMore`: a multi-var declaration nested inside
-	 * an initializer keeps its OWN binding list intact even while the
-	 * outer declaration wraps. The flag is cleared before the head's
-	 * nested-init writes, so the inner `var inX = 1, inY = 2;` stays a
-	 * single (short, FillLine) line and the outer breaks one-per-line.
-	 */
-	/**
-	 * The `;` belongs to the LAST binding: the head's `function() { … }` init ends with `}` but
+	 * Consumed-once `_suppressMore`: a multi-var declaration nested inside an initializer keeps its
+	 * OWN binding list intact even while the outer declaration wraps. The flag is cleared before the
+	 * head's nested-init writes, so the inner `var inX = 1, inY = 2;` stays a single (short, FillLine)
+	 * line and the outer breaks one-per-line.
+	 *
+	 * The outer `;` belongs to the LAST binding: the head's `function() { … }` init ends with `}` but
 	 * `longNameBBBBBBBBBBBBBBBB = 3` does not, and the terminator-less form is `Missing ;` under
 	 * `haxe -cpp` (both arms compiled). The expected block carried the elided form until the
 	 * plain-mode gate was switched to `varDeclTailEndsWithCloseBrace`.

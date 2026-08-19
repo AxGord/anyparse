@@ -2,11 +2,7 @@ package unit;
 
 import utest.Assert;
 import utest.Test;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
-import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
-import anyparse.grammar.haxe.HxModuleWriter;
-import anyparse.grammar.haxe.HxModuleWriteOptions;
 
 /**
  * Stray `;` after a member function body — legal Haxe
@@ -57,10 +53,6 @@ final class HxFnMemberTrailSemiSliceTest extends Test {
 		return HxWriteFixture.triviaWrite(src, '{}');
 	}
 
-	private inline function plainWrite(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		opts.finalNewline = false;
-		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
-	}
+	private inline function plainWrite(src: String): String return HxWriteFixture.plainWrite(src, '{}');
 
 }
