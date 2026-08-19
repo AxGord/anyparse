@@ -910,6 +910,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			assertTrueCalls: ['Assert.isTrue'],
 			assertFalseCalls: ['Assert.isFalse'],
 			mapExistsMethods: ['exists'],
+			mapLiteralEntryKind: 'Arrow',
 			finalClassMetaName: '@:final',
 			// `@:generic` expands its class per type parameter, so there is no single class to hold a
 			// static — Haxe rejects one with "A generic class can't have static fields" (verified 4.3.7).

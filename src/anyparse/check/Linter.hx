@@ -189,6 +189,12 @@ final class Linter {
 			new UnguardedNullableDeref(),
 			new OversizedType(),
 			new PreferIndexAccess(),
+			// Beside `prefer-index-access`, and the two COMPOSE rather than collide: that
+			// rule turns `m.get(k)` into `m[k]`, which is one of the two halves this rule's
+			// shape needs, and this one then claims the whole `m.exists(k) ? m[k] : d`
+			// ternary. Disjoint from `prefer-null-coalescing` by CONDITION — that one wants a
+			// null comparison, this one an `exists` call.
+			new RedundantMapExists(),
 			new CatchDynamic(),
 			new PreferCaseWildcard(),
 			new PreferCaseGuard(),

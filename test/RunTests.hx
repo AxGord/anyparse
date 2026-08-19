@@ -536,6 +536,7 @@ import unit.GuardReturnCheckTest;
 import unit.NoUnderscorePrefixCheckTest;
 import unit.ImportBlockOrderCheckTest;
 import unit.RedundantImportCheckTest;
+import unit.RedundantMapExistsCheckTest;
 import unit.MisplacedTypeDocCheckTest;
 import unit.PreferTypedThrowCheckTest;
 import unit.TypeRefPrinterTest;
@@ -1219,6 +1220,7 @@ class RunTests {
 		addCase(new ImportBlockOrderCheckTest());
 		addCase(new ImportOutsideGuardCheckTest());
 		addCase(new RedundantImportCheckTest());
+		addCase(new RedundantMapExistsCheckTest());
 		addCase(new MisplacedTypeDocCheckTest());
 		addCase(new PreferTypedThrowCheckTest());
 		addCase(new ShortenTypeRefCheckTest());

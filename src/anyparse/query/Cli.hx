@@ -2140,6 +2140,11 @@ final class Cli {
 			// declaring type reads as unresolvable and a Map get/set finding re-exposed by an earlier
 			// pass (a nested lookup) is re-skipped, so the fixed-point loop never converges on it.
 			'prefer-index-access',
+			// Its no-null-value census enumerates every occurrence of the map's name across the
+			// scope it is given. On the active SUBSET a writer in an untouched file is invisible,
+			// which would turn an unprovable site into a wrongly PROVEN one — the unsound
+			// direction, unlike the misses the other ids here guard against.
+			'redundant-map-exists',
 			// prefer-static-extension's shadow gate resolves the receiver type — and its whole
 			// supertype / alias closure — through the index. On the active SUBSET a declaring type
 			// or a `typedef` target declared elsewhere reads as unresolvable, so a site an earlier
