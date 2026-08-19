@@ -2,11 +2,15 @@ package unit;
 
 import utest.Assert;
 import utest.Test;
+import anyparse.check.Check.GroupedEdit;
+import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.PreferEnumAbstract;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.SymbolIndex;
+import anyparse.runtime.Span;
 
 using StringTools;
 
@@ -20,6 +24,10 @@ using StringTools;
  * sub-threshold group and a prefix-less name are all left alone. Report-only.
  */
 class PreferEnumAbstractCheckTest extends Test {
+
+	/** The three-constant `Align` fixture every whole-type FIX test starts from. */
+	private static inline final THREE_STRING_CONSTANTS: String = 'class Align { public static inline final A:String = \'a\'; public '
+		+ 'static inline final B:String = \'b\'; public static inline final C:String = \'c\'; }';
 
 	public function testCandidateFlagged(): Void {
 		// RANK_A and RANK_B are returned as the two branches of one ternary — the
@@ -296,10 +304,181 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.equals(1, vs.length);
 	}
 
+	public function testWholeTypeStringFixEmitsEnumAbstract(): Void {
+		// The motivating conversion, pinned verbatim: the class head becomes an `enum abstract`
+		// over the constants' own primitive with a `to` clause, and each member loses the
+		// modifiers and the type annotation that an enum-abstract value may not carry.
+		final src: String = 'class HorizontalAlignment {\n\tpublic static inline final CENTER:String = \'center\';\n\tpublic static '
+			+ 'inline final LEFT:String = \'left\';\n\tpublic static inline final NONE:String = \'none\';\n\tpublic static inline '
+			+ 'final RIGHT:String = \'right\';\n\tpublic static inline final STRETCH:String = \'stretch\';\n}';
+		Assert.equals(
+			'enum abstract HorizontalAlignment(String) to String {\n\tfinal CENTER = \'center\';\n\tfinal LEFT = \'left\';\n\t'
+			+ 'final NONE = \'none\';\n\tfinal RIGHT = \'right\';\n\tfinal STRETCH = \'stretch\';\n}',
+			fixedSource(src)
+		);
+	}
+
+	public function testWholeTypeIntFixEmitsToIntClause(): Void {
+		// The Int arm takes the same shape: `to Int` is what keeps `keyCode == Codes.LEFT`
+		// compiling against an Int-typed field.
+		Assert.equals(
+			'enum abstract Codes(Int) to Int {\n\tfinal LEFT = 37;\n\tfinal UP = 38;\n\tfinal RIGHT = 39;\n}',
+			fixedSource(
+				'class Codes {\n\tpublic static inline final LEFT:Int = 37;\n\tpublic static inline final UP:Int = 38;\n\tpublic '
+				+ 'static inline final RIGHT:Int = 39;\n}'
+			)
+		);
+	}
+
+	public function testFixKeepsDocsMetadataAndOrder(): Void {
+		// The edits are the head replacement plus two deletions per member and nothing else, so a
+		// doc comment, a per-member annotation, a line comment and the blank lines between
+		// members all survive verbatim, in source order.
+		final src: String = 'class Kind {\n\t/** first. */\n\tpublic static inline final B:String = \'b\';\n\n\t// second\n\t'
+			+ '@:deprecated public static inline final A:String = \'a\';\n\tpublic static inline final C:String = \'c\';\n}';
+		Assert.equals(
+			'enum abstract Kind(String) to String {\n\t/** first. */\n\tfinal B = \'b\';\n\n\t// second\n\t@:deprecated final A = '
+			+ '\'a\';\n\tfinal C = \'c\';\n}',
+			fixedSource(src)
+		);
+	}
+
+	public function testFixHandlesMemberWithoutAnnotation(): Void {
+		// No `:T` annotation means no annotation edit — the member is already in the target shape
+		// once its modifiers go.
+		Assert.equals(
+			'enum abstract Kind(String) to String { final A = \'a\'; final B = \'b\'; final C = \'c\'; }',
+			fixedSource(
+				'class Kind { public static inline final A = \'a\'; public static inline final B = \'b\'; public static '
+				+ 'inline final C = \'c\'; }'
+			)
+		);
+	}
+
+	public function testFixRefusesAnnotatedContainer(): Void {
+		// `@:keep` / `@:rtti` / `@:build` attach behaviour to a CLASS declaration; whether it
+		// survives the change of declaration kind is not knowable from the annotation's name, and
+		// the reflection cases are the one hazard the compiler oracle cannot see. Still REPORTED.
+		final src: String = '@:keep class Align { public static inline final A:String = \'a\'; public static inline final B:String = '
+			+ '\'b\'; public static inline final C:String = \'c\'; }';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(src, fixedSource(src));
+	}
+
+	public function testFixRefusesTypeParameters(): Void {
+		// `class Generic<T>` and `class Plain` have identical subtrees — the parameter list is
+		// textual only — so the head gate is what refuses it, and the template never silently
+		// drops a `<T>`.
+		final src: String = 'class Generic<T> { public static inline final A:String = \'a\'; public static inline final B:String = '
+			+ '\'b\'; public static inline final C:String = \'c\'; }';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(src, fixedSource(src));
+	}
+
+	public function testFixRefusesReflectionNamedType(): Void {
+		// A converted type stops existing as a runtime class, so a `Type.resolveClass('Align')`
+		// anywhere in scope keeps compiling and starts answering null — the one silent breakage,
+		// and the reason the fix does not lean on the oracle alone.
+		Assert.equals(0, alignFixEdits('class Use { static function f() { return Type.resolveClass(\'Align\'); } }', false));
+	}
+
+	public function testFixConvertsWhenTheStringNamesSomethingElse(): Void {
+		// The discriminating half of the pair above: same two files, same reflection call, a
+		// different name inside the literal — and the conversion goes through.
+		Assert.equals(7, alignFixEdits('class Use { static function f() { return Type.resolveClass(\'Other\'); } }', false));
+	}
+
+	public function testFixWithoutRunYieldsNothing(): Void {
+		// Fail-closed: the whole-scope refusals live in `run`, so a `fix` that skipped it must
+		// not convert anything at all.
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final vs: Array<Violation> = new PreferEnumAbstract().run([{ file: 'Align.hx', source: THREE_STRING_CONSTANTS }], plugin);
+		Assert.equals(0, new PreferEnumAbstract().fix(THREE_STRING_CONSTANTS, vs, plugin).length);
+	}
+
+	public function testFixRefusesSubtypedContainer(): Void {
+		// An abstract cannot host a subtype. The index knows; the oracle would too, as a compile
+		// error, but refusing here saves the spawn and names the reason.
+		Assert.equals(0, alignFixEdits('class Sub extends Align {}', true));
+	}
+
+	public function testFixIsRiskyAndSoLeftReportOnlyWithoutAnOracle(): Void {
+		// The marker is the contract: two residual breakage shapes (an inferred local used as the
+		// underlying type, an inferred collection) need real inference, so every conversion is
+		// typechecked project-wide and reverted per file when a call site breaks.
+		Assert.isTrue((new PreferEnumAbstract(): Dynamic) is RiskyFix);
+	}
+
+	public function testFixGroupsEveryEditOfOneConversion(): Void {
+		// One conversion is one atomic unit for the verifier's bisect. Before this, a fixture whose
+		// call site broke bisected down to a COMPILING subset that kept `public static inline final
+		// A = 'a'` inside the `enum abstract` — a plain static field, no longer a value of the
+		// enumeration, and indistinguishable from success to anything that only asks "does it build".
+		final edits: Array<GroupedEdit> = groupedEdits(THREE_STRING_CONSTANTS);
+		Assert.equals(7, edits.length);
+		for (e in edits) Assert.equals(0, e.group);
+	}
+
+	public function testFixGroupsTwoContainersApart(): Void {
+		// Two conversions in one file are INDEPENDENT: the verifier may keep one and drop the other.
+		final decl: String = 'class A { public static inline final X:String = \'x\'; public static inline final Y:String = \'y\'; '
+			+ 'public static inline final Z:String = \'z\'; }\nclass B { public static inline final P:Int = 1; public static inline '
+			+ 'final Q:Int = 2; public static inline final R:Int = 3; }';
+		final edits: Array<GroupedEdit> = groupedEdits(decl);
+		final groups: Array<Null<Int>> = [];
+		for (e in edits) if (!groups.contains(e.group)) groups.push(e.group);
+		Assert.equals(2, groups.length);
+	}
+
+	public function testFixIsThePureProjectionOfFixGrouped(): Void {
+		// The `GroupedFix` contract: the two views may disagree about how edits SPLIT, never about
+		// which edits there are. Nothing else detects a divergence.
+		final decl: String = THREE_STRING_CONSTANTS;
+		final check: PreferEnumAbstract = new PreferEnumAbstract();
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final vs: Array<Violation> = check.run([{ file: 'A.hx', source: decl }], plugin);
+		final flat: Array<{ span: Span, text: String }> = check.fix(decl, vs, plugin);
+		final grouped: Array<GroupedEdit> = check.fixGrouped(decl, vs, plugin);
+		Assert.equals(grouped.length, flat.length);
+		for (i in 0...flat.length) {
+			Assert.equals(grouped[i].span.from, flat[i].span.from);
+			Assert.equals(grouped[i].span.to, flat[i].span.to);
+			Assert.equals(grouped[i].text, flat[i].text);
+		}
+	}
+
+	/**
+	 * The number of fix edits `THREE_STRING_CONSTANTS` yields when `other` is the second file in
+	 * scope — 7 for a conversion (one head plus two per member), 0 for a refusal. `withIndex`
+	 * supplies the `SymbolIndex` the resolution-backed gates read.
+	 */
+	private function alignFixEdits(other: String, withIndex: Bool): Int {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'Align.hx', source: THREE_STRING_CONSTANTS },
+			{ file: 'Other.hx', source: other }
+		];
+		final check: PreferEnumAbstract = new PreferEnumAbstract();
+		final vs: Array<Violation> = check.run(files, plugin);
+		final index: Null<SymbolIndex> = withIndex ? SymbolIndex.build(files, plugin) : null;
+		return check.fix(THREE_STRING_CONSTANTS, vs, plugin, index).length;
+	}
+
+	/** `decl`'s own grouped fix edits, run and fixed on one instance over a single-file scope. */
+	private function groupedEdits(decl: String): Array<GroupedEdit> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: PreferEnumAbstract = new PreferEnumAbstract();
+		return check.fixGrouped(decl, check.run([{ file: 'A.hx', source: decl }], plugin), plugin);
+	}
+
 	/** Every finding of this check is a report-only `prefer-enum-abstract` advisory. */
 	private function assertAdvisory(v: Violation): Void {
 		Assert.equals('prefer-enum-abstract', v.rule);
 		Assert.equals(Severity.Info, v.severity);
+	}
+
+	private function fixedSource(src: String): String {
+		return CheckFixture.fixedSource(new PreferEnumAbstract(), src);
 	}
 
 	private function violations(src: String): Array<Violation> {

@@ -1,11 +1,15 @@
 package anyparse.check;
 
+import anyparse.check.Check.GroupedEdit;
+import anyparse.check.Check.GroupedFix;
+import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -13,8 +17,8 @@ using StringTools;
  * `enum abstract` — the constants read as a closed enumeration but carry no
  * distinct type, so any `Int` flows where one is expected and the set is not
  * visible as one concept. An advisory that proposes a STRUCTURAL refactor rather
- * than flagging a defect; `Info`, report-only (the conversion picks an operator
- * flavour a mechanical edit cannot choose — see below).
+ * than flagging a defect; `Info`. The WHOLE-TYPE arm carries a verified autofix
+ * (`RiskyFix`, see below); the prefix arm is report-only.
  *
  * ## What is flagged — two arms
  *
@@ -65,27 +69,105 @@ using StringTools;
  * constant — which is what refuses a method, a constructor, an `extends` / `implements`
  * clause and an `abstract`'s underlying-type node, without a per-shape exclusion list.
  *
- * ## Why report-only
+ * ## The autofix — WHOLE-TYPE arm only, and `RiskyFix`
  *
- * The right enum-abstract FLAVOUR depends on how the values are used, which the
- * check does not decide: ordinal comparison (`<`) needs `@:op(A < B)`, bitwise
- * combination (bit-flags) needs `from Int to Int`, pure `==` / `switch` needs
- * neither. A blind rewrite would pick the wrong one, so the fix is the author's;
- * `fix` yields no edits.
+ * The whole-type arm converts in place: the head `class Name` becomes the grammar's
+ * enum-abstract spelling (`RefShape.enumAbstractSyntax`, Haxe `enum abstract Name(U) to U`)
+ * and each constant sheds the modifiers and the `:U` annotation an enum-abstract value may
+ * not carry (`static` makes it a private static field instead of a value; a `:U` annotation
+ * types it as `U` instead of the abstract). Everything else — member order, doc comments,
+ * per-member metadata, blank lines — is left untouched, because the edits are the two
+ * deletions and the one head replacement and nothing more.
+ *
+ * The PREFIX arm has no fix and is not going to get one here: its constants live inside a
+ * type with other members, so converting them means SYNTHESISING a type that does not exist
+ * yet, naming it, and rewriting every reference — a different operation from rewriting a
+ * declaration in place.
+ *
+ * **The `to <underlying>` clause is always emitted, and that is what keeps the fix
+ * single-file.** An `enum abstract T(U)` does not implicitly convert to `U`, so without the
+ * clause every reference that flowed into a `U`-typed slot stops compiling; with it, none
+ * does. Measured on the motivating project: converting ONE five-constant type without the
+ * clause produced >= 22 errors across >= 17 files, and with it the whole project typechecked
+ * unchanged — nine such types converted at once, zero other files touched. `to` costs
+ * nothing the conversion is for: only a `from` clause would let a bare `U` back in and
+ * dissolve the distinct type, and exhaustive `switch` — the payoff — is unaffected.
+ *
+ * ## Why `RiskyFix`, and what the structural gates still have to catch
+ *
+ * `to U` is not a proof. Two residual shapes still break, and neither is decidable without
+ * real type inference: a value bound to an inferred local and then used as a `U`
+ * (`var a = T.CENTER; a.toUpperCase()` — `T has no field toUpperCase`), and a collection
+ * whose element type is inferred from the members (`[T.A, T.B].indexOf(u)` — `U should be
+ * T`). Both are COMPILE ERRORS, so the compiler oracle is the right net: the check is
+ * `RiskyFix`, every conversion is typechecked project-wide and the ONE edited file reverts
+ * to report-only when any call site anywhere breaks. With no `compilerOracle` configured the
+ * fix never runs at all.
+ *
+ * One conversion is also ONE atomic group (`GroupedFix`), because the verifier's per-edit
+ * bisect would otherwise find a COMPILING subset that is silently wrong — see `fixGrouped`.
+ *
+ * What the oracle cannot catch is a change that still COMPILES, and there is exactly one
+ * class of those: an `enum abstract` erases to its underlying type at runtime, so every
+ * VALUE behaves identically, but the TYPE stops existing as a runtime class. So the
+ * structural refusals target reflection on the type itself and nothing else:
+ *
+ * - the container carries ANY metadata (a preceding `metaKinds` sibling) — `@:rtti` /
+ *   `@:keep` / `@:build` attach behaviour to a CLASS declaration, and whether it survives
+ *   the change of declaration kind is not knowable from the annotation's name;
+ * - the type's NAME occurs as a plain string literal anywhere in scope — the
+ *   `Type.resolveClass('Name')` shape, which compiles before and after and returns null
+ *   after (`ConstantFieldScan.reflectedNames`, the same proof `static-constant` uses);
+ * - the index reports a subtype or a transitive `@:rtti` hierarchy for the name.
+ *
+ * Two more refusals are about what the head TEMPLATE would silently drop, since neither
+ * projects as a tree child: a declaration keyword that is more than one word (`abstract
+ * class`), and anything between the type name and the body opener — type parameters above
+ * all, `class Generic<T>` being indistinguishable from `class Plain` in the tree.
  *
  * ## Grammar-agnostic
  *
  * Container / field / modifier / literal / return / assignment / result-container
- * kinds all come from the plugin; a grammar declaring none makes the check a no-op.
+ * kinds all come from the plugin; a grammar declaring none makes the check a no-op. The
+ * fix spells no target syntax of its own either: the declaration head template and the
+ * body-opening character come from `RefShape.enumAbstractSyntax`, and a grammar that leaves
+ * that slot unset keeps the rule exactly as report-only as it was before the fix existed.
  */
 @:nullSafety(Strict)
-final class PreferEnumAbstract implements Check {
+final class PreferEnumAbstract implements Check implements RiskyFix implements GroupedFix {
 
 	/** This check's rule id, as it appears on every violation it reports. */
 	private static inline final RULE_ID: String = 'prefer-enum-abstract';
 
 	/** The minimum same-prefix constant group worth an enum-abstract suggestion — a pair is not yet a set. */
 	private static inline final MIN_GROUP: Int = 3;
+
+	/** The `EnumAbstractSyntax.head` placeholder for the converted type's own name. */
+	private static inline final NAME_SLOT: String = '{name}';
+
+	/** The `EnumAbstractSyntax.head` placeholder for the underlying primitive the constants share. */
+	private static inline final UNDER_SLOT: String = '{under}';
+
+	/**
+	 * The character introducing a declaration's type annotation. Textual because the tree does
+	 * not carry it: the `type` slot spans the TYPE (`String`), not the `:String` region the fix
+	 * has to delete — the same reading `LiteralInfer.hasTypeBeforeInit` already takes.
+	 */
+	private static inline final ANNOTATION_SEPARATOR: String = ':';
+
+	/**
+	 * The conversion plan for every whole-type finding the LAST `run` accepted, keyed
+	 * `<file>#<container span.from>` — the key a `fix` violation reconstructs from its own
+	 * `file` / `span`. Instance state, run-scoped and rebuilt from scratch on every `run`
+	 * (never static — see the project's zero-global-state invariant); the callers that ask
+	 * for edits (`Cli.applyLintPass`, `FixVerifier.verify`) always run the check first, on
+	 * this same instance.
+	 *
+	 * Empty is FAIL-CLOSED and deliberately so: a `fix` reached without a preceding `run`
+	 * finds no plan and yields no edits, rather than converting a type whose whole-project
+	 * refusals were never evaluated.
+	 */
+	private var _plans: Map<String, ConversionPlan> = [];
 
 	public function new() {}
 
@@ -98,6 +180,74 @@ final class PreferEnumAbstract implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		final cfg: Null<EnumAbstractCfg> = config(plugin);
+		if (cfg == null) return [];
+		final containerKinds: Array<String> = plugin.refShape().visibilityContainerKinds ?? [];
+		final violations: Array<Violation> = [];
+		final candidates: Array<ConversionPlan> = [];
+		for (entry in files) {
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			if (tree != null) flagFile(violations, candidates, entry.file, entry.source, tree, containerKinds, cfg);
+		}
+		_plans = [];
+		for (plan in acceptedPlans(files, plugin, candidates)) _plans[planKey(plan.file, plan.from)] = plan;
+		return violations;
+	}
+
+	/**
+	 * The whole-type conversion edits for `violations` — one head replacement plus, per
+	 * constant, the modifier-run and type-annotation deletions (see the class doc). A prefix-arm
+	 * finding, a finding whose container the plan phase refused, and every finding at all when
+	 * `run` has not been called on this instance all yield nothing.
+	 *
+	 * `index` adds the two whole-project refusals that need resolution rather than text: a
+	 * SUBTYPE of the converted type (`class Sub extends Name`, which an abstract cannot host)
+	 * and a transitive `@:rtti` hierarchy. Both are cheap and precise here, and both are
+	 * belt-and-braces for the `RiskyFix` oracle, which would reject the first as a compile
+	 * error anyway.
+	 */
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		return [
+			for (e in fixGrouped(source, violations, plugin, index)) { span: e.span, text: e.text }
+		];
+	}
+
+	/**
+	 * The same edits, each tagged with the CONTAINER it converts — one group per converted type,
+	 * so the risky-fix verifier's bisect can keep or drop a whole conversion and never half of one.
+	 *
+	 * This is not a nicety. Measured before the grouping existed: a fixture whose one call site
+	 * broke was bisected down to a subset that COMPILED — an `enum abstract` whose first member
+	 * kept its `public static inline final A = 'a'`. That is a plain static field on the abstract,
+	 * not a value of it: the type still compiles, `Align.A` still reads, and the member has
+	 * silently left the enumeration a `switch` is checked against. A verifier probing subsets
+	 * cannot tell that apart from a good result, which is exactly the case `GroupedFix` exists for.
+	 */
+	public function fixGrouped(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<GroupedEdit> {
+		final out: Array<GroupedEdit> = [];
+		var group: Int = 0;
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span == null) continue;
+			final plan: Null<ConversionPlan> = _plans[planKey(v.file, span.from)];
+			if (plan == null || source.substring(span.from, span.to) != plan.declSource) continue;
+			if (index != null && (index.hasSubtype(plan.name) || index.transitivelyCarriesRtti(plan.name))) continue;
+			for (e in plan.edits) out.push({ span: e.span, text: e.text, group: group });
+			group++;
+		}
+		return out;
+	}
+
+	/**
+	 * Every grammar seam both arms read, resolved once, or null when one the check cannot work
+	 * without is unset — the grammar-agnostic gate that makes this a no-op for a language that
+	 * describes no containers, no constant fields, no static modifier or no numeric literals.
+	 */
+	private static function config(plugin: GrammarPlugin): Null<EnumAbstractCfg> {
 		final shape: RefShape = plugin.refShape();
 		final containerKinds: Array<String> = shape.visibilityContainerKinds ?? [];
 		final mutableKinds: Array<String> = shape.mutableFieldDeclKinds ?? [];
@@ -105,9 +255,9 @@ final class PreferEnumAbstract implements Check {
 		final constKinds: Array<String> = [for (k in fieldKinds) if (!mutableKinds.contains(k)) k];
 		final staticKind: Null<String> = shape.staticModifierKind;
 		final numericKinds: Array<String> = shape.numericLiteralKinds ?? [];
-		if (staticKind == null || containerKinds.length == 0 || constKinds.length == 0 || numericKinds.length == 0) return [];
+		if (staticKind == null || containerKinds.length == 0 || constKinds.length == 0 || numericKinds.length == 0) return null;
 		final staticKindValue: String = staticKind;
-		final cfg: EnumAbstractCfg = {
+		return {
 			constKinds: constKinds,
 			staticKind: staticKindValue,
 			inlineKind: shape.inlineModifierKind ?? '',
@@ -121,21 +271,41 @@ final class PreferEnumAbstract implements Check {
 			returnKind: shape.returnStatementKind ?? '',
 			assignKinds: shape.writeParentKinds,
 			ternaryKind: shape.ternaryKind ?? '',
-			resultContainerKinds: resultContainers(shape)
+			resultContainerKinds: resultContainers(shape),
+			classKinds: shape.classDeclKinds ?? [],
+			syntax: shape.enumAbstractSyntax
 		};
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) flagFile(violations, entry.file, entry.source, tree, containerKinds, cfg);
-		}
-		return violations;
 	}
 
-	/** No mechanical autofix — the enum-abstract flavour depends on usage the check does not analyse. */
-	public function fix(
-		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
-	): Array<{ span: Span, text: String }> {
-		return [];
+	/** The `plans` key for one container: its file plus the container's own start offset. */
+	private static function planKey(file: String, from: Int): String {
+		return '$file#$from';
+	}
+
+	/**
+	 * The subset of `candidates` no whole-scope refusal rejects. The one such refusal is the
+	 * REFLECTION-NAME gate: a converted type stops existing as a runtime class, so a
+	 * `Type.resolveClass('Name')` anywhere in scope keeps compiling and starts returning null.
+	 * The proof is `static-constant`'s — every plain string literal in scope — narrowed to the
+	 * files whose raw text even MENTIONS a candidate name, since parsing 800 files to find out
+	 * that nine names appear in fifty of them is the same answer for a fraction of the walk.
+	 */
+	private static function acceptedPlans(
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, candidates: Array<ConversionPlan>
+	): Array<ConversionPlan> {
+		if (candidates.length == 0) return candidates;
+		final names: Array<String> = [];
+		for (c in candidates) if (!names.contains(c.name)) names.push(c.name);
+		final mentioning: Array<{ file: String, source: String }> = [
+			for (entry in files) if (mentionsAny(entry.source, names)) entry
+		];
+		final literals: Array<String> = ConstantFieldScan.reflectedNames(mentioning, plugin, plugin.stringFoldSupport());
+		return [for (c in candidates) if (!literals.contains(c.name)) c];
+	}
+
+	/** Whether `source` contains any of `names` as raw text — the cheap pre-filter ahead of the literal scan. */
+	private static function mentionsAny(source: String, names: Array<String>): Bool {
+		return names.exists(n -> source.indexOf(n) >= 0);
 	}
 
 	/**
@@ -207,11 +377,22 @@ final class PreferEnumAbstract implements Check {
 	 * throughout the file, not only near their declaration.
 	 */
 	private static function flagFile(
-		out: Array<Violation>, file: String, source: String, tree: QueryNode, containerKinds: Array<String>, cfg: EnumAbstractCfg
+		out: Array<Violation>, plans: Array<ConversionPlan>, file: String, source: String, tree: QueryNode, containerKinds: Array<String>,
+		cfg: EnumAbstractCfg
 	): Void {
 		final groups: Array<Group> = [];
 		final whole: Array<WholeType> = [];
-		collectGroups(groups, whole, tree, source, containerKinds, cfg);
+		collectGroups(groups, whole, tree, [], -1, source, containerKinds, cfg);
+		for (w in whole) {
+			final plan: Null<ConversionPlan> = w.plan;
+			if (plan != null) plans.push({
+				file: file,
+				from: plan.from,
+				name: plan.name,
+				declSource: plan.declSource,
+				edits: plan.edits
+			});
+		}
 		for (w in whole) out.push({
 			file: file,
 			span: w.span,
@@ -242,10 +423,11 @@ final class PreferEnumAbstract implements Check {
 	 * every constant the type declares, so the prefix arm is not run on that container.
 	 */
 	private static function collectGroups(
-		out: Array<Group>, whole: Array<WholeType>, node: QueryNode, source: String, containerKinds: Array<String>, cfg: EnumAbstractCfg
+		out: Array<Group>, whole: Array<WholeType>, node: QueryNode, siblings: Array<QueryNode>, selfIndex: Int, source: String,
+		containerKinds: Array<String>, cfg: EnumAbstractCfg
 	): Void {
 		if (containerKinds.contains(node.kind)) {
-			final wt: Null<WholeType> = wholeType(node, source, cfg);
+			final wt: Null<WholeType> = wholeType(node, siblings, selfIndex, source, cfg);
 			if (wt != null)
 				whole.push(wt);
 			else {
@@ -264,7 +446,7 @@ final class PreferEnumAbstract implements Check {
 				});
 			}
 		}
-		for (child in node.children) collectGroups(out, whole, child, source, containerKinds, cfg);
+		for (i in 0...node.children.length) collectGroups(out, whole, node.children[i], node.children, i, source, containerKinds, cfg);
 	}
 
 	/**
@@ -275,7 +457,9 @@ final class PreferEnumAbstract implements Check {
 	 * `abstract`'s underlying-type node and any member shape not thought of here all refuse
 	 * the container rather than leaking through a list of exclusions.
 	 */
-	private static function wholeType(container: QueryNode, source: String, cfg: EnumAbstractCfg): Null<WholeType> {
+	private static function wholeType(
+		container: QueryNode, siblings: Array<QueryNode>, selfIndex: Int, source: String, cfg: EnumAbstractCfg
+	): Null<WholeType> {
 		final name: Null<String> = container.name;
 		final span: Null<Span> = container.span;
 		if (cfg.inlineKind == '' || name == null || span == null) return null;
@@ -303,8 +487,142 @@ final class PreferEnumAbstract implements Check {
 			span: spanValue,
 			name: nameValue,
 			count: values.length,
-			typeName: typeName
+			typeName: typeName,
+			plan: conversionPlan(container, siblings, selfIndex, source, nameValue, spanValue, typeName, cfg)
 		};
+	}
+
+	/**
+	 * The in-file conversion plan for an accepted whole-type `container` — the head
+	 * replacement plus every member's deletions — or null at the first refusal (see the class
+	 * doc's autofix section). Null is the norm rather than an error: the finding is reported
+	 * either way, and only a container this function fully accepts is ever rewritten.
+	 */
+	private static function conversionPlan(
+		container: QueryNode, siblings: Array<QueryNode>, selfIndex: Int, source: String, name: String, span: Span, typeName: String,
+		cfg: EnumAbstractCfg
+	): Null<ConversionPlan> {
+		final syntax: Null<EnumAbstractSyntax> = cfg.syntax;
+		if (syntax == null || !cfg.classKinds.contains(container.kind)) return null;
+		// Metadata / a declaration modifier projects as a PRECEDING SIBLING, not a child, so the
+		// body whitelist never sees it: `@:keep class C` and `class C` have identical subtrees.
+		if (selfIndex > 0) {
+			final prev: String = siblings[selfIndex - 1].kind;
+			if (cfg.metaKinds.contains(prev) || cfg.modifierKinds.contains(prev)) return null;
+		}
+		final head: Null<{ span: Span, text: String }> = headEdit(container, source, name, span, typeName, syntax);
+		if (head == null) return null;
+		final edits: Array<{ span: Span, text: String }> = [head];
+		final kids: Array<QueryNode> = container.children;
+		for (i in 0...kids.length) if (cfg.constKinds.contains(kids[i].kind) && !memberEdits(kids, i, source, cfg, edits)) return null;
+		return {
+			file: '',
+			from: span.from,
+			name: name,
+			declSource: source.substring(span.from, span.to),
+			edits: edits
+		};
+	}
+
+	/**
+	 * The edit that replaces the container's own `<keyword> <Name>` with the grammar's
+	 * enum-abstract head, or null when the head carries anything the template would silently
+	 * drop. Both refusals are textual because neither shape projects into the tree: a
+	 * multi-word declaration keyword (`abstract class`), and anything at all between the name
+	 * and the body opener — a type parameter list above all, `class Generic<T>` being
+	 * indistinguishable from `class Plain` in the AST.
+	 */
+	private static function headEdit(
+		container: QueryNode, source: String, name: String, span: Span, typeName: String, syntax: EnumAbstractSyntax
+	): Null<{ span: Span, text: String }> {
+		final limit: Int = headLimit(container, span);
+		final nameStart: Int = wordIndex(source, name, span.from, limit);
+		if (nameStart <= span.from) return null;
+		final keyword: String = source.substring(span.from, nameStart).trim();
+		if (keyword.length == 0 || !isBareWord(keyword)) return null;
+		var after: Int = nameStart + name.length;
+		while (after < limit && isSpace(source.charAt(after))) after++;
+		return after >= source.length || source.charAt(after) != syntax.bodyOpen ? null : {
+			span: new Span(span.from, nameStart + name.length),
+			text: syntax.head.replace(NAME_SLOT, name).replace(UNDER_SLOT, typeName)
+		};
+	}
+
+	/** Where the declaration HEAD ends at the latest: the first child's start, else the container's own end. */
+	private static function headLimit(container: QueryNode, span: Span): Int {
+		for (child in container.children) {
+			final childSpan: Null<Span> = child.span;
+			if (childSpan != null) return childSpan.from;
+		}
+		return span.to;
+	}
+
+	/**
+	 * Append the member at `kids[i]`'s deletions to `edits` — the modifier run before it
+	 * (`static` makes an enum-abstract value a private static field) and its `:T` annotation
+	 * (which would type the value as `T` rather than as the abstract). False = refuse the whole
+	 * container: a comment inside either deleted region, or an annotation whose separator is not
+	 * where it should be, is a shape this rewrite has no answer for.
+	 */
+	private static function memberEdits(
+		kids: Array<QueryNode>, i: Int, source: String, cfg: EnumAbstractCfg, edits: Array<{ span: Span, text: String }>
+	): Bool {
+		final member: QueryNode = kids[i];
+		final memberSpan: Null<Span> = member.span;
+		if (memberSpan == null) return false;
+		var runStart: Int = -1;
+		var j: Int = i - 1;
+		while (j >= 0 && cfg.modifierKinds.contains(kids[j].kind)) {
+			final s: Null<Span> = kids[j].span;
+			if (s == null) return false;
+			runStart = s.from;
+			j--;
+		}
+		if (runStart >= 0) {
+			if (CheckScan.hasCommentMarker(source, runStart, memberSpan.from)) return false;
+			edits.push({ span: new Span(runStart, memberSpan.from), text: '' });
+		}
+		final annotation: Null<QueryNode> = member.type;
+		if (annotation == null) return true;
+		final annSpan: Null<Span> = annotation.span;
+		if (annSpan == null) return false;
+		var sep: Int = annSpan.from - 1;
+		while (sep > memberSpan.from && isSpace(source.charAt(sep))) sep--;
+		if (sep <= memberSpan.from || source.charAt(sep) != ANNOTATION_SEPARATOR) return false;
+		if (CheckScan.hasCommentMarker(source, sep, annSpan.to)) return false;
+		edits.push({ span: new Span(sep, annSpan.to), text: '' });
+		return true;
+	}
+
+	/** The index of `needle` in `[from, limit)` as a WHOLE word (no identifier character either side), or -1. */
+	private static function wordIndex(haystack: String, needle: String, from: Int, limit: Int): Int {
+		var at: Int = haystack.indexOf(needle, from);
+		while (at >= 0 && at + needle.length <= limit) {
+			final before: String = at == 0 ? ' ' : haystack.charAt(at - 1);
+			final after: String = haystack.charAt(at + needle.length);
+			if (!isWordChar(before) && !isWordChar(after)) return at;
+			at = haystack.indexOf(needle, at + 1);
+		}
+		return -1;
+	}
+
+	/** Whether `text` is one bare word — letters and underscores only, which is what a declaration keyword is. */
+	private static function isBareWord(text: String): Bool {
+		for (i in 0...text.length) {
+			final c: String = text.charAt(i);
+			if (!isWordChar(c) || (c >= '0' && c <= '9')) return false;
+		}
+		return true;
+	}
+
+	/** Whether `c` can appear inside an identifier — a letter, a digit or an underscore. */
+	private static function isWordChar(c: String): Bool {
+		return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
+	}
+
+	/** Whether `c` is source whitespace (space, tab, CR or LF). */
+	private static function isSpace(c: String): Bool {
+		return c == ' ' || c == '\t' || c == '\r' || c == '\n';
 	}
 
 	/** Whether the member at `kids[i]` carries BOTH a `Static` and an `inline` modifier. */
@@ -421,6 +739,8 @@ private typedef EnumAbstractCfg = {
 	final assignKinds: Array<String>;
 	final ternaryKind: String;
 	final resultContainerKinds: Array<String>;
+	final classKinds: Array<String>;
+	final syntax: Null<EnumAbstractSyntax>;
 };
 
 private typedef WholeType = {
@@ -428,6 +748,26 @@ private typedef WholeType = {
 	final name: String;
 	final count: Int;
 	final typeName: String;
+
+	/** The conversion edits for this container, or null when a refusal declined the rewrite. */
+	final plan: Null<ConversionPlan>;
+};
+
+/**
+ * One accepted whole-type conversion: which container, and the edits that convert it.
+ *
+ * `from` is the container's own start offset, which with `file` is the key `fix` reconstructs
+ * from a violation's `span`. `declSource` is the declaration's verbatim text at plan time —
+ * `fix` re-checks it against the source it is handed, so a plan can never be applied to a file
+ * that moved underneath it (the fix loop re-runs the check per pass, but a stale plan would
+ * splice at offsets that no longer mean anything).
+ */
+private typedef ConversionPlan = {
+	final file: String;
+	final from: Int;
+	final name: String;
+	final declSource: String;
+	final edits: Array<{ span: Span, text: String }>;
 };
 
 private typedef Group = {
