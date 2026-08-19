@@ -896,6 +896,15 @@ final class HaxeFormatConfigLoader {
 	 * the chain callsites; every other wrap class keeps the rules-
 	 * preserve default. Only triggers when `defaultWrap` resolved (an
 	 * unrecognised string falls through to the preserve path).
+	 *
+	 * `itemsAfterCloseParenOnly` (F3 ω-methodchain-config-key) is the one
+	 * runtime field this converter does NOT inherit from `base`. It carries
+	 * `WrapRules.chainItemsAfterCloseParenOnly`, which only `wrapping.methodChain`
+	 * consumes, and inheriting it would silently put every explicitly configured
+	 * `onePerLine` chain cascade on the Haxe layout policy — the opposite of the
+	 * fork-parity semantic five corpus fixtures encode. Absent == off, i.e. the
+	 * pre-slice behaviour; a project that wants a configured cascade AND the
+	 * policy names the key.
 	 */
 	private static function wrapRulesFromConfig(cfg: HxFormatWrapRules, base: WrapRules, clearRulesOnDefaultWrap: Bool = false): WrapRules {
 		final resolvedDefault: Null<WrapMode> = cfg.defaultWrap != null ? HaxeFormatValues.wrapModeFromString(cfg.defaultWrap) : null;
@@ -904,6 +913,12 @@ final class HaxeFormatConfigLoader {
 			? HaxeFormatValues.wrappingLocationFromString(cfg.defaultLocation) ?? base.defaultLocation
 			: base.defaultLocation;
 		final defaultAdditionalIndent: Null<Int> = cfg.defaultAdditionalIndent ?? base.defaultAdditionalIndent;
+		// F3 ω-methodchain-config-key: NOT `?? base.chainItemsAfterCloseParenOnly`.
+		// A configured cascade opts in by naming the key; inheriting the built-in
+		// cascade's `true` would put every explicit `onePerLine` on the Haxe
+		// policy and break the fork-parity fixtures that encode the literal
+		// every-segment reading. Absent == off, which is the pre-slice behaviour.
+		final itemsAfterCloseParen: Null<Bool> = cfg.itemsAfterCloseParenOnly;
 		final src: Null<Array<HxFormatWrapRule>> = cfg.rules;
 		if (src == null) {
 			final clearing: Bool = clearRulesOnDefaultWrap && resolvedDefault != null;
@@ -922,7 +937,8 @@ final class HaxeFormatConfigLoader {
 				rules: inheritedRules,
 				defaultMode: defaultMode,
 				defaultLocation: defaultLocation,
-				defaultAdditionalIndent: clearedIndent
+				defaultAdditionalIndent: clearedIndent,
+				chainItemsAfterCloseParenOnly: itemsAfterCloseParen
 			};
 		}
 		final rules: Array<WrapRule> = [];
@@ -934,7 +950,8 @@ final class HaxeFormatConfigLoader {
 			rules: rules,
 			defaultMode: defaultMode,
 			defaultLocation: defaultLocation,
-			defaultAdditionalIndent: defaultAdditionalIndent
+			defaultAdditionalIndent: defaultAdditionalIndent,
+			chainItemsAfterCloseParenOnly: itemsAfterCloseParen
 		};
 	}
 

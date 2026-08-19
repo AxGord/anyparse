@@ -81,9 +81,48 @@ class HxMethodChainEmitTest extends Test {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.methodChainWrap = { rules: [], defaultMode: WrapMode.OnePerLine, chainItemsAfterCloseParenOnly: true };
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
-		Assert.isTrue(out.indexOf('a.b()') != -1, 'expected the non-chain-item `.b()` glued to the head: <$out>');
-		Assert.isTrue(out.indexOf('\n\t\t\t.c()') != -1, 'expected .c() on own indented line: <$out>');
-		Assert.isTrue(out.indexOf('\n\t\t\t.d()') != -1, 'expected .d() on own indented line: <$out>');
+		assertHeadGluedTailBroken(out);
+	}
+
+	/**
+	 * F3 ω-methodchain-config-key — the same policy semantic reached through
+	 * `hxformat.json` instead of a hand-built struct. `wrapping.methodChain`
+	 * is rebuilt from scratch by `HaxeFormatConfigLoader.wrapRulesFromConfig`,
+	 * so before this slice a configured cascade could not carry
+	 * `chainItemsAfterCloseParenOnly` at all — a user section silently dropped
+	 * the Haxe layout policy and stranded two-token heads (`Actuate` above
+	 * `.tween(…)`, `API` above `.logs…`). `itemsAfterCloseParenOnly` is the
+	 * opt-in that makes it reachable.
+	 */
+	public function testConfiguredCascadeOptsIntoTheCloseParenItemRule(): Void {
+		final out: String = abcdChainUnderConfig(
+			'{"wrapping":{"methodChain":{"defaultWrap":"onePerLine","itemsAfterCloseParenOnly":true,"rules":[]}}}'
+		);
+		assertHeadGluedTailBroken(out);
+	}
+
+	/**
+	 * The default half of the pair: an `onePerLine` section that does NOT name
+	 * the key keeps the fork's literal every-segment semantic. This is the
+	 * fork-parity contract five corpus fixtures rest on, and the reason the key
+	 * is opt-in rather than inherited from the built-in cascade.
+	 */
+	public function testConfiguredCascadeWithoutTheKeyKeepsForkLiteralItems(): Void {
+		final out: String = abcdChainUnderConfig('{"wrapping":{"methodChain":{"defaultWrap":"onePerLine","rules":[]}}}');
+		Assert.isTrue(out.indexOf('a\n') != -1, 'expected receiver alone on first line: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\t.b()') != -1, 'expected .b() on own indented line: <$out>');
+	}
+
+	/**
+	 * An explicit `false` is the same as absent — spelling it out must not
+	 * accidentally re-enable the policy through some other seam.
+	 */
+	public function testConfiguredCascadeExplicitFalseKeepsForkLiteralItems(): Void {
+		final out: String = abcdChainUnderConfig(
+			'{"wrapping":{"methodChain":{"defaultWrap":"onePerLine","itemsAfterCloseParenOnly":false,"rules":[]}}}'
+		);
+		Assert.isTrue(out.indexOf('a\n') != -1, 'expected receiver alone on first line: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\t.b()') != -1, 'expected .b() on own indented line: <$out>');
 	}
 
 	public function testThreeSegmentChainOnePerLineAfterFirstKeepsFirstInline(): Void {
@@ -155,6 +194,32 @@ class HxMethodChainEmitTest extends Test {
 			out.indexOf('\n\t\t\t.c(function(x)\n\t\t\t{\n\t\t\t\tstmt;\n\t\t\t});') != -1,
 			'expected lambda `{` at chain seg column, body one tab deeper: <$out>'
 		);
+	}
+
+	/**
+	 * F3 ω-methodchain-config-key — the three config-path tests above differ only
+	 * in the `wrapping.methodChain` JSON they load, so the chain under test and the
+	 * writer call live here. `a.b().c().d()`: the head `a` is not a call, so under
+	 * the close-paren item rule `.b()` is not a chain item and stays glued to it.
+	 */
+	private static function abcdChainUnderConfig(cfg: String): String {
+		final src: String = 'class Foo { static function f() { a.b().c().d(); } }';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+	}
+
+
+	/**
+	 * The close-paren item rule's whole observable effect on `a.b().c().d()` under a
+	 * break mode: the head keeps `.b()` (its dot follows the ident `a`, not a `)`),
+	 * and the two real chain items each take a line. Asserted identically by the
+	 * struct-driven test and by the config-driven one, which is the point — the key
+	 * must reach exactly the semantic the built-in cascade already had.
+	 */
+	private static function assertHeadGluedTailBroken(out: String): Void {
+		Assert.isTrue(out.indexOf('a.b()') != -1, 'expected the non-chain-item `.b()` glued to the head: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\t.c()') != -1, 'expected .c() on own indented line: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\t.d()') != -1, 'expected .d() on own indented line: <$out>');
 	}
 
 }

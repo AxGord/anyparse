@@ -61,12 +61,15 @@ typedef WrapRules = {
 	 * `Actuate.tween(…)` stays whole instead of stranding `Actuate` on a line
 	 * of its own.
 	 *
-	 * Set ONLY by `HaxeFormat.defaultMethodChainWrap`, i.e. by the Haxe policy
-	 * cascade. A user `wrapping.methodChain` section is rebuilt by
-	 * `HaxeFormatConfigLoader.wrapRulesFromConfig`, which does not carry the
-	 * field, so an explicitly configured `onePerLine` keeps the fork's literal
-	 * every-segment semantic (five fork corpus fixtures depend on that). Absent
-	 * or `false` = pre-slice behaviour everywhere.
+	 * Set by `HaxeFormat.defaultMethodChainWrap`, i.e. by the Haxe policy
+	 * cascade, and by an explicit `wrapping.methodChain.itemsAfterCloseParenOnly`
+	 * in `hxformat.json` (slice F3 ω-methodchain-config-key). A user
+	 * `wrapping.methodChain` section is rebuilt from scratch by
+	 * `HaxeFormatConfigLoader.wrapRulesFromConfig`, which does NOT inherit the
+	 * field from the built-in cascade — so an explicitly configured `onePerLine`
+	 * that stays silent about the key keeps the fork's literal every-segment
+	 * semantic (five fork corpus fixtures depend on that). Absent or `false` =
+	 * pre-slice behaviour everywhere.
 	 */
 	@:optional var chainItemsAfterCloseParenOnly: Bool;
 };

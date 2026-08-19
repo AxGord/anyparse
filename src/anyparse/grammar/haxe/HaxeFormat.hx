@@ -1303,8 +1303,9 @@ final class HaxeFormat implements TextFormat {
 			// ω-methodchain-all-or-nothing: this cascade is the Haxe layout
 			// POLICY, so it uses fork's isDotAfterPClose item rule. A user
 			// `wrapping.methodChain` section replaces the whole struct and does
-			// not carry the flag, keeping explicit modes on fork's literal
-			// semantics.
+			// not inherit the flag, keeping explicit modes on fork's literal
+			// semantics; such a section opts back in with
+			// `itemsAfterCloseParenOnly: true` (slice F3).
 			chainItemsAfterCloseParenOnly: true,
 		};
 	}
