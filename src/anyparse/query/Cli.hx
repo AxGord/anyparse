@@ -5886,11 +5886,20 @@ final class Cli {
 			final where: String = stdlibDupPosition(candidate, sourceOf[candidate.file] ?? '');
 			switch (StdlibDifferential.run(candidate, maps, dir)) {
 				case Matched(hits, inputs):
-					for (hit in hits) {
-						found++;
-						sysPrint('$where: info: ${stdlibDupSubject(candidate)} looks like ${hit.display}');
-						sysPrint(' — agreed on $inputs generated inputs, ${maps.length} mapping(s) tried [stdlib-dup]\n');
-					}
+					// A candidate that also agrees with a TRIVIAL baseline returns an argument or a
+					// body constant unchanged over the whole grid; every stdlib call it "matches" is
+					// matching that identity, not the candidate. Report the reason, never the calls.
+					final trivial: Array<StdlibDifferential.Mapping> = hits.filter(StdlibDifferential.isTrivial);
+					if (trivial.length > 0)
+						stderr(
+							'apq stdlib-dup: $where: ${stdlibDupSubject(candidate)}: trivial — returns ${trivial[0].display} unchanged over the grid\n'
+						)
+					else
+						for (hit in hits) {
+							found++;
+							sysPrint('$where: info: ${stdlibDupSubject(candidate)} looks like ${hit.display}');
+							sysPrint(' — agreed on $inputs generated inputs, ${maps.length} mapping(s) tried [stdlib-dup]\n');
+						}
 				case NoMatch(inputs, tried):
 					stderr('apq stdlib-dup: $where: ${stdlibDupSubject(candidate)}: no match ($tried mapping(s), $inputs inputs)\n');
 				case Skipped(reason):

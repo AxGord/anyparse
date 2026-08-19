@@ -95,6 +95,17 @@ final class StdlibDifferential {
 	/** Beyond this the enumeration stops being worth generating; such a candidate is skipped. */
 	public static inline final MAX_MAPPINGS: Int = 4000;
 
+	/**
+	 * The pool id every TRIVIAL baseline carries. A candidate that agrees with one of these across
+	 * the whole grid returns an argument -- or a body constant -- unchanged, and is therefore not a
+	 * reimplementation of anything: it is a setter, an accessor, or a guard whose interesting
+	 * behaviour lies outside the grid. Measured on a real 806-file tree: WITHOUT this gate five
+	 * such functions produced 55 of 161 findings, each agreeing with a fistful of identity-shaped
+	 * stdlib calls at once (`urlDecode`, `htmlEscape`, `htmlUnescape`, `Std.string`,
+	 * `replace(v, v, v)`) for one and the same reason.
+	 */
+	public static inline final TRIVIAL_ID: String = '(unchanged)';
+
 	/** Identifiers the generated program owns; a candidate carrying one of these names is skipped. */
 	private static final RESERVED_NAMES: Array<String> = ['Probe', 'main', 'live', '__apqEval', '__apqBase'];
 
@@ -173,10 +184,49 @@ final class StdlibDifferential {
 			"'123'",
 			"'-5'",
 			"'Hello'",
-			"'A_b'"
+			"'A_b'",
+			"'a/b/c.txt'",
+			"'/x/y/'",
+			"'name.ext'",
+			"'  pad  '",
+			"'a+b'",
+			"'a&b'",
+			"'%20z'",
+			"'<i>t</i>'",
+			"'A B C'",
+			"'.hidden'"
 		],
 		'Bool' => ['true', 'false']
 	];
+
+	/**
+	 * The baselines a real finding has to beat: each parameter of the return type passed straight
+	 * through, and each body literal of the return type returned as-is. Empty when the candidate's
+	 * return type matches neither, which is the common case and costs nothing.
+	 */
+	public static function trivials(candidate: StdlibCandidate): Array<Mapping> {
+		final entry: StdlibFn = {
+			id: TRIVIAL_ID,
+			ret: candidate.returnType,
+			params: [],
+			instance: false,
+			property: false,
+			marker: ''
+		};
+		final out: Array<Mapping> = [];
+		for (index in 0...candidate.params.length) {
+			final param: CandidateParam = candidate.params[index];
+			if (param.type == candidate.returnType) out.push({ fn: entry, code: 'a$index', display: param.name });
+		}
+		for (literal in candidate.literals) if (literal.type == candidate.returnType)
+			out.push({ fn: entry, code: literal.code, display: literal.code });
+		return out;
+	}
+
+	/** Whether a mapping is one of the trivial baselines rather than a pooled stdlib call. */
+	public static function isTrivial(mapping: Mapping): Bool {
+		return mapping.fn.id == TRIVIAL_ID;
+	}
 
 	/**
 	 * Every stdlib call the candidate could be equivalent to, with every type-consistent filling of
@@ -193,7 +243,7 @@ final class StdlibDifferential {
 			fill(entry, candidate, [], out);
 			if (out.length > MAX_MAPPINGS) return out;
 		}
-		return out;
+		return out.length == 0 ? out : trivials(candidate).concat(out);
 	}
 
 	/**

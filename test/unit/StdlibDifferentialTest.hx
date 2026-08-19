@@ -30,13 +30,36 @@ class StdlibDifferentialTest extends Test {
 		Assert.isTrue(displays(maps).contains("StringTools.lpad('$i', '0', digits)"), 'displays: ${displays(maps)}');
 	}
 
-	/** Every enumerated mapping consumes every candidate parameter -- one that drops one is a different function. */
+	/** Every enumerated stdlib mapping consumes every candidate parameter -- one that drops one is a different function. */
 	public function testEveryMappingUsesEveryParameter(): Void {
 		final candidate: StdlibCandidate = padDigit();
 		final maps: Array<Mapping> = StdlibDifferential.mappings(candidate);
 		Assert.isTrue(maps.length > 0);
-		for (map in maps) for (param in candidate.params)
+		for (map in maps) if (!StdlibDifferential.isTrivial(map)) for (param in candidate.params)
 			Assert.isTrue(map.display.indexOf(param.name) >= 0, '${map.display} drops ${param.name}');
+	}
+
+	/**
+	 * A candidate that returns one of its own arguments unchanged is measured against that
+	 * baseline alongside the pool, and the baseline is flagged as trivial. Without it a
+	 * pass-through setter agrees with every identity-shaped stdlib call at once -- five such
+	 * functions produced 55 of 161 findings on a real 806-file tree before this gate existed.
+	 */
+	public function testTrivialBaselineAccompaniesEveryEnumeration(): Void {
+		final candidate: StdlibCandidate = one("class C {\n\tfunction set_value(value:String):String return value;\n}");
+		final maps: Array<Mapping> = StdlibDifferential.mappings(candidate);
+		final trivial: Array<Mapping> = maps.filter(StdlibDifferential.isTrivial);
+		Assert.equals(1, trivial.length, 'the sole String parameter is the sole baseline');
+		Assert.equals('value', trivial[0].display);
+		Assert.isTrue(maps.length > trivial.length, 'the pool mappings are still enumerated beside it');
+		Assert.isFalse(StdlibDifferential.isTrivial(maps[trivial.length]), 'baselines lead, pool entries follow');
+	}
+
+	/** A body constant of the return type is a baseline too -- a constant function is no reimplementation. */
+	public function testBodyConstantIsABaseline(): Void {
+		final candidate: StdlibCandidate = one("class C {\n\tfunction f(n:Int):String return n > 0 ? '0' : '0';\n}");
+		final displays: Array<String> = [for (map in StdlibDifferential.trivials(candidate)) map.display];
+		Assert.isTrue(displays.contains("'0'"), 'baselines: $displays');
 	}
 
 	/**
