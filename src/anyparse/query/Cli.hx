@@ -2091,9 +2091,11 @@ final class Cli {
 		// candidate is typechecked and reverted if it breaks the build (FixVerifier);
 		// otherwise left report-only. With no risky check present this block is a
 		// no-op, so a real run (no risky builtin) is byte-identical to before the key.
-		final risky: { tail: String, appliedCount: Int, reverts: Array<FixVerifyRevert> } = verifyRiskyFixes(
-			files, split.risky, cached, oracleHxml, oracleDir, optsByFile, changedFiles
-		);
+		final risky: {
+			tail: String,
+			appliedCount: Int,
+			reverts: Array<FixVerifyRevert>
+		} = verifyRiskyFixes(files, split.risky, cached, oracleHxml, oracleDir, optsByFile, changedFiles);
 		fixedCount += risky.appliedCount;
 		final riskyTail: String = risky.tail;
 

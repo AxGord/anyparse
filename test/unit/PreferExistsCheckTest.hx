@@ -109,9 +109,7 @@ class PreferExistsCheckTest extends Test {
 		// `exists` up on `M` all the same. Asking the VALUE nominal answers `Null`, which declares
 		// nothing — which is why the gate asks `CheckScan.receiverNominalResolver`. This is the
 		// second of the two measured TM sites (`baseData:Null<Map<Int, ObjectFrameData>>`).
-		Assert.equals(
-			0, violations(nullableMemberFn('if (m != null) for (x in m) if (x > 2) return true;\n\t\treturn false;')).length
-		);
+		Assert.equals(0, violations(nullableMemberFn('if (m != null) for (x in m) if (x > 2) return true;\n\t\treturn false;')).length);
 	}
 
 	public function testReceiverDeclaringAnotherMemberStillFlagged(): Void {

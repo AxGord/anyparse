@@ -194,11 +194,10 @@ final class FixVerifierGroupE2ETest extends Test {
 			{ name: 'check.hxml', source: HXML }
 		]);
 		final files: Array<{ file: String, source: String }> = [{ file: '$dir/Main.hx', source: DEPENDENT_MAIN }];
-		final result: FixVerifyResult = FixVerifier.verify(
-			files,
-			[new TableFake(SINGLE_GROUP_TABLE, 'fake-one'), new TableFake(OTHER_SINGLE_GROUP_TABLE, 'fake-two')],
-			new HaxeQueryPlugin(), 'check.hxml', dir, File.saveContent
-		);
+		final result: FixVerifyResult = FixVerifier.verify(files, [
+			new TableFake(SINGLE_GROUP_TABLE, 'fake-one'),
+			new TableFake(OTHER_SINGLE_GROUP_TABLE, 'fake-two')
+		], new HaxeQueryPlugin(), 'check.hxml', dir, File.saveContent);
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
 		Assert.equals(2, result.reverted.length, 'one entry per RULE, not one per file');
 		Assert.equals('fake-one', result.reverted[0].rule);

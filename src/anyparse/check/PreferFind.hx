@@ -117,7 +117,8 @@ final class PreferFind implements Check {
 		for (entry in files) {
 			final tree: Null<QueryNode> =
 				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null) walk(tree, entry.file, entry.source, s, memberProbe(entry.source, plugin, tree, entry.file, index), violations);
+			if (tree != null)
+				walk(tree, entry.file, entry.source, s, memberProbe(entry.source, plugin, tree, entry.file, index), violations);
 		}
 		return violations;
 	}
@@ -222,9 +223,7 @@ final class PreferFind implements Check {
 	}
 
 	/** Descend `node`, testing each adjacent child pair against both forms and recursing; skip reification subtrees. */
-	private static function walk(
-		node: QueryNode, file: String, source: String, s: Seams, probe: MemberProbe, out: Array<Violation>
-	): Void {
+	private static function walk(node: QueryNode, file: String, source: String, s: Seams, probe: MemberProbe, out: Array<Violation>): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		final kids: Array<QueryNode> = node.children;
 		if (s.blockKinds.contains(node.kind)) for (i in 0...kids.length - 1) {
@@ -240,7 +239,9 @@ final class PreferFind implements Check {
 	 * Form A: `forNode` is `for (v in xs) if (cond) return v;` and `next` is a
 	 * value-returning `return` fallback. Returns the violation when so, else null.
 	 */
-	private static function tryReturnForm(forNode: QueryNode, next: QueryNode, file: String, source: String, s: Seams, probe: MemberProbe): Null<Violation> {
+	private static function tryReturnForm(
+		forNode: QueryNode, next: QueryNode, file: String, source: String, s: Seams, probe: MemberProbe
+	): Null<Violation> {
 		final head: Null<{
 			loopVar: String,
 			iterable: QueryNode,
@@ -260,7 +261,9 @@ final class PreferFind implements Check {
 	 * Form B: `decl` is a null-initialized local and `forNode` is
 	 * `for (v in xs) if (cond) { r = v; break; }`. Returns the violation when so, else null.
 	 */
-	private static function tryBreakForm(decl: QueryNode, forNode: QueryNode, file: String, source: String, s: Seams, probe: MemberProbe): Null<Violation> {
+	private static function tryBreakForm(
+		decl: QueryNode, forNode: QueryNode, file: String, source: String, s: Seams, probe: MemberProbe
+	): Null<Violation> {
 		final declName: Null<String> = nullInitLocalName(decl, s);
 		if (declName == null) return null;
 		final head: Null<{
