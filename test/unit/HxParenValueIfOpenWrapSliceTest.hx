@@ -70,6 +70,26 @@ final class HxParenValueIfOpenWrapSliceTest extends Test {
 	}
 
 	/**
+	 * BOUNDARY, glued half: a paren-value-`if` whose rendered line is EXACTLY
+	 * maxLineLength (140) stays flat — the open probe is the strict `>` one the
+	 * ternary arm shares (`lineWidth + 1`), so a line AT the limit does not exceed it.
+	 */
+	public function testExactMaxLineLengthKeepsParenValueIfFlat(): Void {
+		final src: String = 'class Sample {\n\tfunction run() {\n\t\tfinal padValue = (if (bucketFlagHere) alphaOne'
+			+ ' else if (sharedBucketFlag) betaTwoValue else gammaThreeValueXXXXXXXXXXXXXXXXXXXXXXX);\n\t}\n}';
+		Assert.equals(src, triviaWrite(src, CFG));
+	}
+
+	/** BOUNDARY, open half: one column wider (141) and the same paren opens. */
+	public function testOneOverMaxLineLengthOpensParenValueIf(): Void {
+		final ladder: String =
+			'if (bucketFlagHere) alphaOne else if (sharedBucketFlag) betaTwoValue else gammaThreeValueXXXXXXXXXXXXXXXXXXXXXXXX';
+		final src: String = 'class Sample {\n\tfunction run() {\n\t\tfinal padValue = ($ladder);\n\t}\n}';
+		final out: String = 'class Sample {\n\tfunction run() {\n\t\tfinal padValue = (\n\t\t\t$ladder\n\t\t);\n\t}\n}';
+		Assert.equals(out, triviaWrite(src, CFG));
+	}
+
+	/**
 	 * Config gate: without a fillLine-family `expressionWrapping` the paren stays
 	 * hard-flattened, exactly as before the slice — fork default-config parity.
 	 */
