@@ -826,7 +826,12 @@ class TriviaTypeSynth {
 	 */
 	private static function buildConvertersClass(convertedNames: Array<String>, synthPack: Array<String>): TypeDefinition {
 		final pos: Position = Context.currentPos();
-		convertedNames.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
+		convertedNames.sort((a: String, b: String) -> if (a < b)
+			-1
+		else if (a > b)
+			1
+		else
+			0);
 		final shape: ShapeBuilder.ShapeResult = shapes[shapes.length - 1];
 		final fns: Array<Field> = [];
 		for (origName in convertedNames) {

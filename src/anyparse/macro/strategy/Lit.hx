@@ -1,7 +1,7 @@
 package anyparse.macro.strategy;
 
-import anyparse.macro.AnnotationKeys;
 #if macro
+import anyparse.macro.AnnotationKeys;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import anyparse.core.CoreIR;
@@ -170,7 +170,8 @@ class Lit implements Strategy {
 	private static function annotateSep(node: ShapeNode, entry: MetadataEntry): Void {
 		if (entry.params.length == 0 || entry.params.length > 3)
 			Context.fatalError(
-				'@:sep expects 1-3 arguments: @:sep("text"), @:sep("text", tailRelax | sepFaithful), or @:sep("text", tailRelax, blockEnded[(\'<predicate>\'[, sepStartsElement])])',
+				'@:sep expects 1-3 arguments: @:sep("text"), @:sep("text", tailRelax | sepFaithful), or @:sep("text", tailRelax, '
+				+ 'blockEnded[(\'<predicate>\'[, sepStartsElement])])',
 				entry.pos
 			);
 		node.annotations[AnnotationKeys.LIT_SEP_TEXT] = stringOrFail(entry.params[0], ':sep');

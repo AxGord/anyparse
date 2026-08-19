@@ -114,7 +114,7 @@ final class ExtractSuperclass {
 			return Err('rewritten $srcFile does not parse: ${exception.message}');
 
 		final advisory: String = 'pulled ${moved.length} member(s) up into new superclass "$superName'
-			+ '" — subclass access preserved by inheritance; ' + 'the superclass has no constructor (the source constructor is unchanged).';
+			+ '" — subclass access preserved by inheritance; the superclass has no constructor (the source constructor is unchanged).';
 		final changes: Array<MoveChange> = [
 			{ file: superFile, newSource: superSource },
 			{ file: srcFile, newSource: newSrc },
@@ -182,7 +182,8 @@ final class ExtractSuperclass {
 			// pasting it into the superclass unguarded gives it to builds that never had it.
 			if (MemberBranchScan.isGuardedMember(decl, shape, source, hitNN.node))
 				return Left(
-					'"$name" is declared inside a conditional-compilation region — pulling it out of its branch would change which builds declare it'
+					'"$name" is declared inside a conditional-compilation region — pulling it out of its branch would change which '
+					+ 'builds declare it'
 				);
 			final groupSpan: Span = RefactorSupport.declGroupSpan(hitNN.node, decl.nameNode, hitNN.span);
 			out.push({ name: name, node: hitNN.node, cut: cutSpanOf(source, groupSpan) });

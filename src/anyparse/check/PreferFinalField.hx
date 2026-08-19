@@ -92,8 +92,8 @@ final class PreferFinalField implements Check {
 	}
 
 	public function description(): String {
-		return
-			'a private var field never reassigned — assigned only at its declaration or by a sole constructor assignment — that can be final';
+		return 'a private var field never reassigned — assigned only at its declaration or by a sole constructor assignment — that can be '
+			+ 'final';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -421,7 +421,8 @@ class PreferFinalPublicFieldCheckTest extends Test {
 				{ file: 'Base3.hx', source: 'class Base3 { public var item:Tab3; }' },
 				{
 					file: 'Sub3.hx',
-					source: 'class Sub3 extends Base3 { public function f(o:Dynamic):Void { switch o { case Some(item): item.x = g(); case _: } } function g():Int { return 0; } }'
+					source: 'class Sub3 extends Base3 { public function f(o:Dynamic):Void { switch o {'
+					+ ' case Some(item): item.x = g(); case _: } } function g():Int { return 0; } }'
 				},
 				{ file: 'Tab3.hx', source: 'class Tab3 { public var x:Int = 0; }' },
 				{ file: 'A3.hx', source: 'class A3 { public var x:Int = 0; }' }
@@ -457,7 +458,8 @@ class PreferFinalPublicFieldCheckTest extends Test {
 			multi([
 				{
 					file: 'T1.hx',
-					source: 'class Widget { public var w:Int = 0; } class Helper { public static function reset<T:Widget>(s:T):Void { s.w = 5; } }'
+					source: 'class Widget { public var w:Int = 0; } class Helper { public static function reset<T:Widget>(s:T):Void {'
+					+ ' s.w = 5; } }'
 				}
 			]).length
 		);
@@ -473,7 +475,9 @@ class PreferFinalPublicFieldCheckTest extends Test {
 			multi([
 				{
 					file: 'T2.hx',
-					source: 'class Boxed { public var count:Int = 0; } class Other { public var count2:Int = 0; } enum Wrap { Leaf(b:Boxed); } class User { public function go(v:Wrap, outer:Other):Void { outer.count2 = 1; switch v { case Leaf(outer): outer.count = 5; case _: } } }'
+					source: 'class Boxed { public var count:Int = 0; } class Other { public var count2:Int = 0; } enum Wrap {'
+					+ ' Leaf(b:Boxed); } class User { public function go(v:Wrap, outer:Other):Void { outer.count2 = 1; switch v {'
+					+ ' case Leaf(outer): outer.count = 5; case _: } } }'
 				}
 			]).length
 		);
@@ -490,7 +494,8 @@ class PreferFinalPublicFieldCheckTest extends Test {
 			multi([
 				{
 					file: 'T3.hx',
-					source: 'typedef Handle = Widget2; class Widget2 { public var visible:Bool = true; } class C2 { public function f(h:Handle):Void { h.visible = false; } }'
+					source: 'typedef Handle = Widget2; class Widget2 { public var visible:Bool = true; } class C2 {'
+					+ ' public function f(h:Handle):Void { h.visible = false; } }'
 				}
 			]).length
 		);
@@ -507,7 +512,9 @@ class PreferFinalPublicFieldCheckTest extends Test {
 			for (v in multi([
 				{
 					file: 'T4.hx',
-					source: 'class Other4 { public var sx2:Int = 1; } class Sprite4 { public var sx:Int = 0; } class Base4 { public var item:Other4 = new Other4(); } class D4 extends Base4 { public function pick(v:Sprite4):Void { switch v { case var item: item.sx = 5; } } }'
+					source: 'class Other4 { public var sx2:Int = 1; } class Sprite4 { public var sx:Int = 0; } class Base4 {'
+					+ ' public var item:Other4 = new Other4(); } class D4 extends Base4 { public function pick(v:Sprite4):Void {'
+					+ ' switch v { case var item: item.sx = 5; } } }'
 				}
 			])) v.message
 		];
@@ -526,7 +533,8 @@ class PreferFinalPublicFieldCheckTest extends Test {
 			multi([
 				{
 					file: 'T5.hx',
-					source: 'class Cont<T> { public var item:Null<T>; } class P5 { public var px:Int = 0; } class U5 { public function go(c:Cont<P5>):Void { c.item.px = 9; } }'
+					source: 'class Cont<T> { public var item:Null<T>; } class P5 { public var px:Int = 0; } class U5 {'
+					+ ' public function go(c:Cont<P5>):Void { c.item.px = 9; } }'
 				}
 			]).length
 		);
@@ -549,7 +557,8 @@ class PreferFinalPublicFieldCheckTest extends Test {
 			multi([
 				{
 					file: 'T7.hx',
-					source: 'class Plain7 {} class C7 { public var p:Plain7 = new Plain7(); } class U7 { public function f(d:Dynamic):Void { d.p = "s"; } }'
+					source: 'class Plain7 {} class C7 { public var p:Plain7 = new Plain7(); } class U7 {'
+					+ ' public function f(d:Dynamic):Void { d.p = "s"; } }'
 				}
 			]).length
 		);
@@ -668,12 +677,14 @@ class PreferFinalPublicFieldCheckTest extends Test {
 		final vs: Array<Violation> = multi([
 			{
 				file: 'Btn.hx',
-				source: 'abstract class Btn { public var title(get, set):String; function get_title():String { return "x"; } function set_title(v:String):String { return v; } }'
+				source: 'abstract class Btn { public var title(get, set):String; function get_title():String { return "x"; } '
+				+ 'function set_title(v:String):String { return v; } }'
 			},
 			{ file: 'BaseT.hx', source: 'class BaseT { public var tabs:Map<String, Btn>; }' },
 			{
 				file: 'SubT.hx',
-				source: 'class SubT extends BaseT { public function f():Void { tabs["k"].title = g(); } function g():String { return "t"; } }'
+				source: 'class SubT extends BaseT { public function f():Void { tabs["k"].title = g(); } function g():String {'
+				+ ' return "t"; } }'
 			},
 			{ file: 'A.hx', source: 'class A { public var title:String = "a"; }' }
 		]);
@@ -733,7 +744,8 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	 */
 	public function testCtorConditionalDefaultPropertyFlagged(): Void {
 		final vs: Array<Violation> = violations(
-			'class C { public var mode(default, null):String = Defaults.MODE; public function new(?mode:String) { if (mode != null) this.mode = mode; } }'
+			'class C { public var mode(default, null):String = Defaults.MODE; public function new(?mode:String) { if (mode != null) '
+			+ 'this.mode = mode; } }'
 		);
 		Assert.equals(1, vs.length);
 		Assert.equals('prefer-final-public-field', vs[0].rule);
@@ -744,7 +756,8 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	/** The fold is TWO edits: the declaration loses its property head and default, the ctor gains `??`. */
 	public function testCtorConditionalDefaultPropertyFixed(): Void {
 		final fixed: String = fixedSource(
-			'class C { public var mode(default, null):String = Defaults.MODE; public function new(?mode:String) { if (mode != null) this.mode = mode; } }'
+			'class C { public var mode(default, null):String = Defaults.MODE; public function new(?mode:String) { if (mode != null) '
+			+ 'this.mode = mode; } }'
 		);
 		Assert.isTrue(fixed.indexOf('public final mode:String;') >= 0);
 		Assert.equals(-1, fixed.indexOf('(default, null)'));

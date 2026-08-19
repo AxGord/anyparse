@@ -235,9 +235,8 @@ class RedundantReplaceLoopCheckTest extends Test {
 		// caller-chosen as the lambda's own, so the parameter test walks OUTWARD through every
 		// enclosing scope, not only the innermost one.
 		final src: String = 'class C {\n\tpublic static function f(word:String, replace:String):String {\n'
-			+ '\t\tfinal strip = function(line:String):String {\n'
-			+ '\t\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);\n\t\t\treturn line;\n\t\t};\n'
-			+ '\t\treturn strip(\'x\');\n\t}\n}';
+			+ '\t\tfinal strip = function(line:String):String {\n\t\t\twhile (line.indexOf(word) != -1) '
+			+ 'line = line.replace(word, replace);\n\t\t\treturn line;\n\t\t};\n\t\treturn strip(\'x\');\n\t}\n}';
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		if (vs.length != 1) return;
@@ -345,9 +344,8 @@ class RedundantReplaceLoopCheckTest extends Test {
 		// Dominance is rooted at the INNERMOST function, so the guard is never read — the opposite
 		// direction from the parameter test, which walks every enclosing scope.
 		final src: String = 'class C {\n\tpublic static function f(word:String, replace:String):String {\n'
-			+ '\t\tif (replace.indexOf(word) != -1) return word;\n\t\tfinal strip = function(line:String):String {\n'
-			+ '\t\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);\n\t\t\treturn line;\n\t\t};\n'
-			+ '\t\treturn strip(\'x\');\n\t}\n}';
+			+ '\t\tif (replace.indexOf(word) != -1) return word;\n\t\tfinal strip = function(line:String):String {\n\t\t\twhile ('
+			+ 'line.indexOf(word) != -1) line = line.replace(word, replace);\n\t\t\treturn line;\n\t\t};\n\t\treturn strip(\'x\');\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 	}
 
@@ -355,9 +353,8 @@ class RedundantReplaceLoopCheckTest extends Test {
 		// The same guard MOVED into the lambda does dominate the loop — the discriminating half of
 		// the pair above, so neither test can pass for the other's reason.
 		final src: String = 'class C {\n\tpublic static function f(word:String, replace:String):String {\n'
-			+ '\t\tfinal strip = function(line:String):String {\n\t\t\tif (replace.indexOf(word) != -1) return line;\n'
-			+ '\t\t\twhile (line.indexOf(word) != -1) line = line.replace(word, replace);\n\t\t\treturn line;\n\t\t};\n'
-			+ '\t\treturn strip(\'x\');\n\t}\n}';
+			+ '\t\tfinal strip = function(line:String):String {\n\t\t\tif (replace.indexOf(word) != -1) return line;\n\t\t\twhile ('
+			+ 'line.indexOf(word) != -1) line = line.replace(word, replace);\n\t\t\treturn line;\n\t\t};\n\t\treturn strip(\'x\');\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -538,21 +535,24 @@ class RedundantReplaceLoopCheckTest extends Test {
 
 	public function testArmAMessageUnchanged(): Void {
 		Assert.equals(
-			'this while (now.indexOf(\' \') != -1) loop runs at most once — replace() already replaces every occurrence; collapses to now = now.replace(\' \', \'_\');',
+			'this while (now.indexOf(\' \') != -1) loop runs at most once — replace() '
+			+ 'already replaces every occurrence; collapses to now = now.replace(\' \', \'_\');',
 			violations(wrapFn('while (now.indexOf(\' \') != -1) now = now.replace(\' \', \'_\');'))[0].message
 		);
 	}
 
 	public function testArmBMessageUnchanged(): Void {
 		Assert.equals(
-			'this loop never terminates for any now containing \'a\' — replace(\'a\', \'aa\') reintroduces it every time, since \'aa\' itself contains \'a\'',
+			'this loop never terminates for any now containing \'a\' — replace(\'a\', \'aa\') '
+			+ 'reintroduces it every time, since \'aa\' itself contains \'a\'',
 			violations(wrapFn('while (now.indexOf(\'a\') != -1) now = now.replace(\'a\', \'aa\');'))[0].message
 		);
 	}
 
 	public function testArmCBothParametersMessageUnchanged(): Void {
 		Assert.equals(
-			'potential infinite loop when replace contains word — replace(word, replace) reinserts word on every pass, so the guard never goes false',
+			'potential infinite loop when replace contains word — replace(word, replace) '
+			+ 'reinserts word on every pass, so the guard never goes false',
 			violations(wrapParams('while (line.indexOf(word) != -1) line = line.replace(word, replace);'))[0].message
 		);
 	}
@@ -561,7 +561,8 @@ class RedundantReplaceLoopCheckTest extends Test {
 		// The MIRROR mix — a literal `S` with a parameter `B` — is still undecidable and keeps the
 		// generic arm-C wording; only a literal `B` moved into the split.
 		Assert.equals(
-			'potential infinite loop when replace contains \' \' — replace(\' \', replace) reinserts \' \' on every pass, so the guard never goes false',
+			'potential infinite loop when replace contains \' \' — replace(\' \', replace) '
+			+ 'reinserts \' \' on every pass, so the guard never goes false',
 			violations(wrapParams('while (line.indexOf(\' \') != -1) line = line.replace(\' \', replace);'))[0].message
 		);
 	}

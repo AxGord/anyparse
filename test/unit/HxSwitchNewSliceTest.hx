@@ -29,7 +29,8 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 
 	public inline function testNewTypeParamsRoundTrip(): Void {
 		roundTrip(
-			'class C { function f():Void { var h = new Holder<RecordItem1, RecordItem1, Void>("a", true, "b"); var m = new Map<String, Int>(); } }'
+			'class C { function f():Void {'
+			+ ' var h = new Holder<RecordItem1, RecordItem1, Void>("a", true, "b"); var m = new Map<String, Int>(); } }'
 		);
 	}
 

@@ -518,7 +518,7 @@ final class StdlibDifferential {
 	#if nodejs
 	/** Coerce a possibly-null spawn stream field (Buffer|String under utf8) to a String. */
 	private static function text(value: Dynamic): String {
-		return value == null ? '' : Std.string(value);
+		return value == null ? '' : '$value';
 	}
 	#end
 

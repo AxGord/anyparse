@@ -148,7 +148,7 @@ class ApqTextRenderTest extends Test {
 		final to: Int = span.to > source.length ? source.length : span.to;
 		if (from >= to) return '';
 		final slice: String = source.substring(from, to);
-		final flat: String = StringTools.replace(slice.replace('\n', ' '), '\r', '');
+		final flat: String = slice.replace('\n', ' ').replace('\r', '');
 		return flat.trim();
 	}
 

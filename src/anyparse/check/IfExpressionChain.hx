@@ -316,11 +316,21 @@ final class IfExpressionChain {
 			// different statements from the one it makes where it stands. Otherwise the single space
 			// `buildValue` does not supply goes on the side the slot needs it.
 			final own: Bool = crossesLine(source, gap.from, tok.from) && !prev.endsWith('\n');
-			final head: String = own ? '\n' : (gap.before ? '' : ' ');
+			final head: String = if (own)
+				'\n'
+			else if (gap.before)
+				''
+			else
+				' ';
 			// A LINE comment runs to the end of its line, so whatever the rebuild welds after it has
 			// to start on the next one — that newline is the only legal layout, and the writer
 			// re-flows the spliced file anyway. A block comment rides inline.
-			final tail: String = tok.isLine ? '\n' : (gap.before ? ' ' : '');
+			final tail: String = if (tok.isLine)
+				'\n'
+			else if (gap.before)
+				' '
+			else
+				'';
 			map[gap.key] = '$prev$head$text$tail';
 		}
 		return carried;
@@ -483,7 +493,12 @@ final class IfExpressionChain {
 	 * statements (a deliberately grouped body is never collapsed).
 	 */
 	private static function singleStmt(branch: QueryNode, blockStmtKind: String): Null<QueryNode> {
-		return branch.kind == blockStmtKind ? branch.children.length == 1 ? branch.children[0] : null : branch;
+		return if (branch.kind != blockStmtKind)
+			branch
+		else if (branch.children.length == 1)
+			branch.children[0]
+		else
+			null;
 	}
 
 	/** Collapse whitespace runs to a single space and trim. */

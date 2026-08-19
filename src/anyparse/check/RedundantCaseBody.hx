@@ -98,8 +98,8 @@ final class RedundantCaseBody implements Check {
 	}
 
 	public function description(): String {
-		return
-			'a switch arm whose body its immediate neighbour repeats — deletable under a catch-all, mergeable into one or-pattern otherwise';
+		return 'a switch arm whose body its immediate neighbour repeats — deletable under a catch-all, mergeable into one or-pattern '
+			+ 'otherwise';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

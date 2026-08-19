@@ -62,7 +62,8 @@ class RedundantUpcastTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class Base {} class Sub extends Base {} class C { function f() { var b = cast(make(), Base); } function make():Sub return null; }'
+				'class Base {} class Sub extends Base {} class C { function f() { var b = cast(make(), Base); } '
+				+ 'function make():Sub return null; }'
 			).length
 		);
 	}

@@ -182,7 +182,8 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(wrap(
-				'var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\t#if debug\n\t\t\tcase 2: x = \'b\';\n\t\t\t#end\n\t\t\tcase _: x = \'d\';\n\t\t}'
+				'var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\t#if debug\n\t\t\tcase 2: x = \'b\';\n\t\t\t#end\n'
+				+ '\t\t\tcase _: x = \'d\';\n\t\t}'
 			)).length
 		);
 	}
@@ -353,7 +354,8 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(wrap(
-				'switch v {\n\t\t\tcase 1: obj.y = 1;\n\t\t\t#if debug\n\t\t\tcase 2: obj.y = 2;\n\t\t\t#end\n\t\t\tcase _: obj.y = 0;\n\t\t}'
+				'switch v {\n\t\t\tcase 1: obj.y = 1;\n\t\t\t#if debug\n\t\t\tcase 2: obj.y = 2;\n\t\t\t#end\n\t\t\tcase _: obj.y = 0;\n'
+				+ '\t\t}'
 			)).length
 		);
 	}
@@ -446,7 +448,8 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(wrap(
-				'var x:Int;\n\t\tswitch v {\n\t\t\tcase 1: if (e) {\n\t\t\t\tx = if (q) 2;\n\t\t\t} else {\n\t\t\t\tx = 5;\n\t\t\t}\n\t\t\tcase _: x = 9;\n\t\t}'
+				'var x:Int;\n\t\tswitch v {\n\t\t\tcase 1: if (e) {\n\t\t\t\tx = if (q) 2;\n\t\t\t} else {\n\t\t\t\tx = 5;\n\t\t\t}\n'
+				+ '\t\t\tcase _: x = 9;\n\t\t}'
 			)).length
 		);
 	}

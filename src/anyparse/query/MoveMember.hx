@@ -221,9 +221,9 @@ private enum ViaResult {
 @:nullSafety(Strict)
 final class MoveMember {
 
-	private static final ADVISORY: String =
-		'import-carrying is best-effort (type-position dependencies only) — a missed import fails the destination compile loudly; references through strings, Reflect, or macro-built identifiers are not rewritten.';
-
+	private static final ADVISORY: String = 'import-carrying is best-effort (type-position dependencies only) '
+		+ '— a missed import fails the destination compile loudly; references through strings, Reflect, or '
+		+ 'macro-built identifiers are not rewritten.';
 	private static final FINAL_FIELD_KINDS: Array<String> = ['FinalMember', 'FinalField'];
 
 	/**
@@ -1094,7 +1094,8 @@ final class MoveMember {
 			// and leaves the emptied directives behind.
 			if (MemberBranchScan.isGuardedMember(srcDecl, shape, srcSource, group.member))
 				return
-					'"$name" is declared inside a conditional-compilation region — moving it out of its branch would change which builds declare it';
+					'"$name" is declared inside a conditional-compilation region — moving it out of its branch would change which builds '
+						+ 'declare it';
 			if (memberGroupOf(destDecl, name, destSource, shape) != null) return 'type "$destTypeName" already declares a member "$name"';
 			// Re-bind: Strict does not propagate narrowing into anonymous
 			// struct fields.
@@ -1293,7 +1294,7 @@ final class MoveMember {
 		final assigns: String = [
 			for (f in fields) {
 				final p: String = paramNameOf(f.name);
-				'\t\t' + (p == f.name ? 'this.${f.name} = $p;' : '${f.name} = $p;');
+				'\t\t${p == f.name ? 'this.${f.name} = $p;' : '${f.name} = $p;'}';
 			}
 		].join('\n');
 		return '$fieldLines\n\n\tpublic function new($params) {\n$assigns\n\t}';

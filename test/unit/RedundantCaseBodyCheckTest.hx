@@ -135,9 +135,8 @@ class RedundantCaseBodyCheckTest extends Test {
 	 * second pass deletes it.
 	 */
 	public function testComposesWithUnusedCaseBinder(): Void {
-		final src: String = 'class C {\n\tfunction f(data: Dynamic): String {\n\t\treturn switch data.role {\n'
-			+ '\t\t\tcase "Owner": t("Owner", 10149);\n\t\t\tcase "User": t("User", 10150);\n'
-			+ '\t\t\tcase _data: t("User", 10150);\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(data: Dynamic): String {\n\t\treturn switch data.role {\n\t\t\tcase "Owner": '
+			+ 't("Owner", 10149);\n\t\t\tcase "User": t("User", 10150);\n\t\t\tcase _data: t("User", 10150);\n\t\t}\n\t}\n}';
 		final once: String = applyBinderFix(src);
 		Assert.stringContains('case _:', once);
 		final twice: String = applyFixOnce(once);

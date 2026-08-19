@@ -124,7 +124,12 @@ class ApqPrefilterCliTest extends Test {
 	#if (sys || nodejs)
 	private static function tempDir(): String {
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
-		return tmp != null && tmp.length > 0 ? StringTools.endsWith(tmp, '/') ? tmp.substring(0, tmp.length - 1) : tmp : '/tmp';
+		return if (tmp == null || tmp.length <= 0)
+			'/tmp'
+		else if (StringTools.endsWith(tmp, '/'))
+			tmp.substring(0, tmp.length - 1)
+		else
+			tmp;
 	}
 
 	private static function writeFile(source: String): String {

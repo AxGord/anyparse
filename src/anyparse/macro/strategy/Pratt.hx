@@ -1,7 +1,7 @@
 package anyparse.macro.strategy;
 
-import anyparse.macro.AnnotationKeys;
 #if macro
+import anyparse.macro.AnnotationKeys;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import anyparse.core.CoreIR;

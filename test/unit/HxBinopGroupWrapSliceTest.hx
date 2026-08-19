@@ -58,8 +58,8 @@ class HxBinopGroupWrapSliceTest extends HxTestHelpers {
 	}
 
 	public function testLongChainBreaks(): Void {
-		final src: String =
-			'class C { static function m():Void { dirty = aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee; } }';
+		final src: String = 'class C { static function m():Void {'
+			+ ' dirty = aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee; } }';
 		final out: String = writeWithLineWidth(src, 80);
 		Assert.isTrue(out.indexOf('|| bbbbbbbbbbbb') != -1, 'expected `|| bbb` segment in: <$out>');
 		Assert.isTrue(out.indexOf('||\n') == -1, 'op should stay attached to next operand, not lead the next line in: <$out>');
@@ -93,8 +93,8 @@ class HxBinopGroupWrapSliceTest extends HxTestHelpers {
 		// `||` chain is non-assign and DOES wrap, so the break lands at
 		// each `||`, not at `=`. Expected shape (or close): `dirty = aaaa
 		// \n\t|| bbbb\n\t|| cccc...`.
-		final src: String =
-			'class C { static function m():Void { dirty = aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee; } }';
+		final src: String = 'class C { static function m():Void {'
+			+ ' dirty = aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee; } }';
 		final out: String = writeWithLineWidth(src, 80);
 		Assert.isTrue(out.indexOf('=\n') == -1, '`=` should stay on the lead line, not be followed by hardline in: <$out>');
 		Assert.isTrue(out.indexOf('dirty = aaaaaaaaaaaa') != -1, '`dirty = aaaa…` lead-line shape preserved in: <$out>');
@@ -105,8 +105,8 @@ class HxBinopGroupWrapSliceTest extends HxTestHelpers {
 		// NoWrap cascade -- it no longer takes the per-binary Group path, so a
 		// comment-free bare-operand chain stays glued past the width (fork
 		// parity), never breaking at the operator.
-		final src: String =
-			'class C { static function m():Void { var v:Int = aaaaaaaaaaaa ?? bbbbbbbbbbbb ?? cccccccccccc ?? dddddddddddd ?? eeeeeeeeeeee; } }';
+		final src: String = 'class C { static function m():Void {'
+			+ ' var v:Int = aaaaaaaaaaaa ?? bbbbbbbbbbbb ?? cccccccccccc ?? dddddddddddd ?? eeeeeeeeeeee; } }';
 		final out: String = writeWithLineWidth(src, 80);
 		Assert.isTrue(out.indexOf('aaaaaaaaaaaa ?? bbbbbbbbbbbb') != -1, 'operands stay glued in: <$out>');
 		Assert.isTrue(out.indexOf('\n\t\t\t?? ') == -1, 'no leading `??` operator break in: <$out>');
@@ -125,8 +125,8 @@ class HxBinopGroupWrapSliceTest extends HxTestHelpers {
 	}
 
 	public function testIdempotencyRoundTripLongChain(): Void {
-		final src: String =
-			'class C { static function m():Void { dirty = aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee; } }';
+		final src: String = 'class C { static function m():Void {'
+			+ ' dirty = aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee; } }';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.lineWidth = 80;
 		final w1: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);

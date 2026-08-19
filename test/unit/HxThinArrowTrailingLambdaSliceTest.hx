@@ -16,24 +16,23 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxThinArrowTrailingLambdaSliceTest extends Test {
 
-	private static final CONFIG: String =
-		'{"wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}}';
+	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 140, "callParameter": {'
+		+ '"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}}';
 
 	public function new(): Void {
 		super();
 	}
 
 	public function testMultiArgTrailingThinBlockLambdaGluesHead(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n'
-			+ '\t\tmanager.registerHandler(HandlerKind.PRIMARY, HandlerScope.GLOBAL, result -> {\n\t\t\tprocess(result);\n'
-			+ '\t\t});\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n\t\tmanager.registerHandler(HandlerKind.PRIMARY, HandlerScope.GLOBAL, result '
+			+ '-> {\n\t\t\tprocess(result);\n\t\t});\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testMultiArgTrailingParenBlockLambdaStaysGlued(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n'
-			+ '\t\tmanager.registerHandler(HandlerKind.PRIMARY, HandlerScope.GLOBAL, (result) -> {\n\t\t\tprocess(result);\n'
-			+ '\t\t});\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n\t\tmanager.registerHandler(HandlerKind.PRIMARY, HandlerScope.GLOBAL, ('
+			+ 'result) -> {\n\t\t\tprocess(result);\n\t\t});\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -56,9 +55,8 @@ final class HxThinArrowTrailingLambdaSliceTest extends Test {
 	}
 
 	public function testMultiArgNoLambdaStillLeadingBreaks(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\tmanager.invokeHandlerCallback(\n'
-			+ '\t\t\targumentAlphaLongValueHere, argumentBravoLongValueHere, argumentCharlieLongValueHere, argDeltaEpsilonZetaValue\n'
-			+ '\t\t);\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n\t\tmanager.invokeHandlerCallback(\n\t\t\targumentAlphaLongValueHere, '
+			+ 'argumentBravoLongValueHere, argumentCharlieLongValueHere, argDeltaEpsilonZetaValue\n\t\t);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

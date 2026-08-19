@@ -174,10 +174,9 @@ final class RedundantTrailingComma implements Check implements DefaultOff {
 		for (child in node.children) {
 			final span: Null<Span> = child.span;
 			if (span == null || (kinds != null && !kinds.contains(child.kind))) continue;
-			if (span.to > end) {
-				out = child;
-				end = span.to;
-			}
+			if (span.to <= end) continue;
+			out = child;
+			end = span.to;
 		}
 		return out;
 	}

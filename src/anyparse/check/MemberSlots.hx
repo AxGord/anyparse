@@ -80,19 +80,26 @@ final class MemberSlots {
 		node: QueryNode, isStatic: Bool, isPublic: Bool, accessors: Map<Int, Bool>, shape: RefShape
 	): MemberRank {
 		final mutable: Bool = (shape.mutableFieldDeclKinds ?? []).contains(node.kind);
-		if (isStatic)
-			return !mutable
-				? (isPublic ? StaticPublicImmutableField : StaticPrivateImmutableField)
-				: (isPublic ? StaticPublicMutableField : StaticPrivateMutableField);
+		if (isStatic) return if (!mutable)
+			(isPublic ? StaticPublicImmutableField : StaticPrivateImmutableField)
+		else if (isPublic)
+			StaticPublicMutableField
+		else
+			StaticPrivateMutableField;
 		final span: Null<Span> = node.span;
-		if (span == null || !accessors.exists(span.from))
-			return !mutable
-				? (isPublic ? PublicImmutableField : PrivateImmutableField)
-				: (isPublic ? PublicMutableField : PrivateMutableField);
+		if (span == null || !accessors.exists(span.from)) return if (!mutable)
+			(isPublic ? PublicImmutableField : PrivateImmutableField)
+		else if (isPublic)
+			PublicMutableField
+		else
+			PrivateMutableField;
 		final getter: Bool = accessors[span.from] == true;
-		return isPublic
-			? (getter ? PublicGetterProperty : PublicReadOnlyProperty)
-			: (getter ? PrivateGetterProperty : PrivateReadOnlyProperty);
+		return if (isPublic)
+			(getter ? PublicGetterProperty : PublicReadOnlyProperty)
+		else if (getter)
+			PrivateGetterProperty
+		else
+			PrivateReadOnlyProperty;
 	}
 
 	/** Whether `name` begins with a property-accessor prefix (`get_` / `set_`). */

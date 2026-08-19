@@ -115,11 +115,15 @@ class ApqHxqDxV10CliTest extends Test {
 		#if sys
 		final cur: String = CliFixture.writeAs(
 			'apq_sweep_v10_cur', 'json',
-			'{"pass":2,"fail":1,"skipParse":0,"fixtures":[{"path":"test/testcases/whitespace/inline_calls.hxtest","status":"PASS"},{"path":"test/testcases/whitespace/static_locals.hxtest","status":"FAIL"},{"path":"test/testcases/whitespace/keep.hxtest","status":"PASS"}]}'
+			'{"pass":2,"fail":1,"skipParse":0,"fixtures":[{"path":"test/testcases/whitespace/inline_calls.hxtest","status":"PASS"},{'
+			+ '"path":"test/testcases/whitespace/static_locals.hxtest","status":"FAIL"},{'
+			+ '"path":"test/testcases/whitespace/keep.hxtest","status":"PASS"}]}'
 		);
 		final prev: String = CliFixture.writeAs(
 			'apq_sweep_v10_prev', 'json',
-			'{"pass":1,"fail":1,"skipParse":1,"fixtures":[{"path":"test/testcases/whitespace/inline_calls.hxtest","status":"FAIL"},{"path":"test/testcases/whitespace/static_locals.hxtest","status":"SKIP_PARSE"},{"path":"test/testcases/whitespace/keep.hxtest","status":"PASS"}]}'
+			'{"pass":1,"fail":1,"skipParse":1,"fixtures":[{"path":"test/testcases/whitespace/inline_calls.hxtest","status":"FAIL"},{'
+			+ '"path":"test/testcases/whitespace/static_locals.hxtest","status":"SKIP_PARSE"},{'
+			+ '"path":"test/testcases/whitespace/keep.hxtest","status":"PASS"}]}'
 		);
 		Assert.equals(0, Cli.run(['sweep', '--file', cur, '--diff', prev]));
 		FileSystem.deleteFile(cur);

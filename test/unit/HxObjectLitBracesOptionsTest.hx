@@ -77,8 +77,8 @@ final class HxObjectLitBracesOptionsTest extends Test {
 	}
 
 	public function testJsonLoaderIgnoresUnknownBracesKey(): Void {
-		final json: String =
-			'{ "whitespace": { "bracesConfig": { "objectLiteralBraces": { "openingPolicy": "after", "closingPolicy": "before", "removeInnerWhenEmpty": false } } } }';
+		final json: String = '{ "whitespace": { "bracesConfig": { "objectLiteralBraces": {'
+			+ ' "openingPolicy": "after", "closingPolicy": "before", "removeInnerWhenEmpty": false } } } }';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
 		Assert.equals(WhitespacePolicy.After, opts.objectLiteralBracesOpen);
 		Assert.equals(WhitespacePolicy.Before, opts.objectLiteralBracesClose);

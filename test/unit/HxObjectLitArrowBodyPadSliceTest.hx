@@ -17,12 +17,15 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxObjectLitArrowBodyPadSliceTest extends Test {
 
-	private static final CONFIG: String =
-		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before"}}}}';
-	private static final CONFIG_KEEP_PAD: String =
-		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true}}}}';
-	private static final CONFIG_REFLOW: String =
-		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true, "arrowBodyReflow": true}}}}';
+	private static final CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {'
+		+ '"openingPolicy": "after", "closingPolicy": "before"}}}}';
+	private static final CONFIG_KEEP_PAD: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {'
+		+ '"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true}}}}';
+	private static final CONFIG_REFLOW: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": '
+		+ '"after", "closingPolicy": "before", "arrowBodyOpenPad": true, "arrowBodyReflow": true}}}}';
 
 	public function new(): Void {
 		super();

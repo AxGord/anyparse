@@ -51,8 +51,8 @@ final class PossibleNullDereference implements Check {
 	}
 
 	public function description(): String {
-		return
-			'a dereference of a nullable result (map[key], Array/List pop/shift, Null<T>-returning call) with no null check — a possible NPE';
+		return 'a dereference of a nullable result (map[key], Array/List pop/shift, Null<T>-returning call) '
+			+ 'with no null check — a possible NPE';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

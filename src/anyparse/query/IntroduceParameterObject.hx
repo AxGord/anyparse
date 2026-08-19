@@ -99,7 +99,7 @@ final class IntroduceParameterObject {
 		final callErr: Null<String> = callSiteEdits(prep, tree, source, shape, edits);
 		if (callErr != null) return Err(callErr);
 
-		final typedefText: String = 'typedef $typeName = { ' + [for (f in prep.fields) '${f.name}:${f.type}'].join(', ') + ' }';
+		final typedefText: String = 'typedef $typeName = { ${[for (f in prep.fields) '${f.name}:${f.type}'].join(', ')} }';
 		edits.push({ span: new Span(source.length, source.length), text: '\n\n$typedefText\n' });
 
 		final rewritten: String = collapseBlankRuns(RefactorSupport.applyEdits(source, edits));

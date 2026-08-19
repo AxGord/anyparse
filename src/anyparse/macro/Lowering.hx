@@ -1,7 +1,5 @@
 package anyparse.macro;
 
-using StringTools;
-
 #if macro
 import haxe.macro.Context;
 import haxe.macro.Expr;
@@ -10,6 +8,7 @@ import haxe.macro.MacroStringTools;
 import anyparse.core.LoweringCtx;
 import anyparse.core.ShapeTree;
 
+using StringTools;
 using anyparse.macro.MetaInspect;
 
 /**
@@ -501,10 +500,10 @@ class Lowering {
 		for (i in 0...branches.length) {
 			final trial: Expr = tryBranch(branches[i], typePath, recurseFnName);
 			final guard: Null<Expr> = dispatch ? guards[i] : null;
-			if (guard == null)
-				statements.push(trial);
+			statements.push(if (guard == null)
+				trial
 			else
-				statements.push(macro if ($guard) $trial);
+				macro if ($guard) $trial);
 		}
 		statements.push(macro throw anyparse.runtime.ParseError.backtrack);
 		return macro $b{statements};
@@ -1407,7 +1406,8 @@ class Lowering {
 		final kwStarSepFaithful: Bool = starNode.annotations['lit.sepFaithful'] == true;
 		if (sepText != null && !blockEndedFlag && !kwStarSepFaithful) {
 			Context.fatalError(
-				'Lowering: @:optional @:kw Star + @:sep requires the blockEnded flag (@:sep(text, tailRelax, blockEnded)) or sepFaithful — termination semantic undefined otherwise',
+				'Lowering: @:optional @:kw Star + @:sep requires the blockEnded flag (@:sep(text, tailRelax, blockEnded)) '
+				+ 'or sepFaithful — termination semantic undefined otherwise',
 				Context.currentPos()
 			);
 		}
@@ -1598,7 +1598,8 @@ class Lowering {
 		final sepFaithfulFlag: Bool = starNode.annotations['lit.sepFaithful'] == true;
 		if (sepText != null && starNode.hasMeta(':tryparse') && !blockEndedFlag && !sepFaithfulFlag) {
 			Context.fatalError(
-				'Lowering: @:trivia + @:sep + @:tryparse requires the blockEnded flag (@:sep(text, tailRelax, blockEnded)) or sepFaithful (@:sep(text, sepFaithful)) — termination semantic undefined otherwise',
+				'Lowering: @:trivia + @:sep + @:tryparse requires the blockEnded flag (@:sep(text, tailRelax, blockEnded)) '
+				+ 'or sepFaithful (@:sep(text, sepFaithful)) — termination semantic undefined otherwise',
 				Context.currentPos()
 			);
 		}
@@ -3715,31 +3716,32 @@ class Lowering {
 			),
 			pos: Context.currentPos(),
 		};
-		return close == null
-			? captureChainNl
-				? macro {
-					final _chainNl: Bool = hasNewlineIn(ctx.input, _preWsPos, ctx.pos);
-					skipWs(ctx);
-					final _suffix: $suffixCT = $suffixCall;
-					left = $ctorCall;
-				}
-				: captureOpSpace
-					? macro {
-						final _opSpaceBefore: Bool = ctx.pos - _preWsPos > $v{postfixOpLen};
-						skipWs(ctx);
-						final _suffix: $suffixCT = $suffixCall;
-						left = $ctorCall;
-					}
-					: macro {
-						skipWs(ctx);
-						final _suffix: $suffixCT = $suffixCall;
-						left = $ctorCall;
-					}
-			: macro {
+		return if (close != null)
+			macro {
 				skipWs(ctx);
 				final _suffix: $suffixCT = $suffixCall;
 				skipWs(ctx);
 				expectLit(ctx, $v{close});
+				left = $ctorCall;
+			}
+		else if (captureChainNl)
+			macro {
+				final _chainNl: Bool = hasNewlineIn(ctx.input, _preWsPos, ctx.pos);
+				skipWs(ctx);
+				final _suffix: $suffixCT = $suffixCall;
+				left = $ctorCall;
+			}
+		else if (captureOpSpace)
+			macro {
+				final _opSpaceBefore: Bool = ctx.pos - _preWsPos > $v{postfixOpLen};
+				skipWs(ctx);
+				final _suffix: $suffixCT = $suffixCall;
+				left = $ctorCall;
+			}
+		else
+			macro {
+				skipWs(ctx);
+				final _suffix: $suffixCT = $suffixCall;
 				left = $ctorCall;
 			};
 	}
@@ -4902,7 +4904,8 @@ class Lowering {
 		// different routes — combining them is a grammar error.
 		if (forwardNewlineForBody && triviaBodyPolicyKw)
 			Context.fatalError(
-				'Lowering: @:fmt(forwardNewlineForBody) on a @:fmt(bodyPolicy(...)) branch is a conflict — both channels capture the post-kw newline; pick one.',
+				'Lowering: @:fmt(forwardNewlineForBody) on a @:fmt(bodyPolicy(...)) '
+				+ 'branch is a conflict — both channels capture the post-kw newline; pick one.',
 				Context.currentPos()
 			);
 		appendKwRefLeadSteps(steps, kwLead, leadText, triviaKwNewline, triviaBodyPolicyKw, forwardNewlineForBody, triviaWrapOpenNewline);
@@ -5149,22 +5152,24 @@ class Lowering {
 			? (macro ($parseGateCall || peekKw(ctx, 'else') || peekLit(ctx, '}') || peekKw(ctx, 'case') || peekKw(ctx, 'default')
 				|| peekKw(ctx, '#end') || peekKw(ctx, '#else') || peekKw(ctx, '#elseif')))
 			: null;
-		if (parseGateCall != null && triviaTrailOpt)
-			steps.push(macro final _trailPresent: Bool = $gateCond ? matchLit(ctx, $v{trailText}) : {
-				expectLit(ctx, $v{trailText});
-				true;
-			});
-		else if (parseGateCall != null && trailOptional)
-			steps.push(macro if ($gateCond)
-				matchLit(ctx, $v{trailText})
+		steps.push(
+			if (parseGateCall != null && triviaTrailOpt)
+				macro final _trailPresent: Bool = $gateCond ? matchLit(ctx, $v{trailText}) : {
+					expectLit(ctx, $v{trailText});
+					true;
+				}
+			else if (parseGateCall != null && trailOptional)
+				macro if ($gateCond)
+					matchLit(ctx, $v{trailText})
+				else
+					expectLit(ctx, $v{trailText})
+			else if (triviaTrailOpt)
+				macro final _trailPresent: Bool = matchLit(ctx, $v{trailText})
+			else if (trailOptional)
+				macro matchLit(ctx, $v{trailText})
 			else
-				expectLit(ctx, $v{trailText}));
-		else if (triviaTrailOpt)
-			steps.push(macro final _trailPresent: Bool = matchLit(ctx, $v{trailText}));
-		else if (trailOptional)
-			steps.push(macro matchLit(ctx, $v{trailText}));
-		else
-			steps.push(macro expectLit(ctx, $v{trailText}));
+				macro expectLit(ctx, $v{trailText})
+		);
 	}
 
 	/**

@@ -195,7 +195,7 @@ class ApqUsesTest extends Test {
 	}
 
 	private static function describe(hits: Array<UsesHit>): String {
-		return '[' + hits.map(h -> '${h.name}@${h.span.from}-${h.span.to}').join(', ') + ']';
+		return '[${hits.map(h -> '${h.name}@${h.span.from}-${h.span.to}').join(', ')}]';
 	}
 
 }

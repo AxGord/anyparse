@@ -92,9 +92,8 @@ class HxCondSpliceScopeSliceTest extends HxTestHelpers {
 	 */
 	public function testCaseLabelSpliceSharedBodyRoundTrips(): Void {
 		final src: String = 'class C {\n\tfunction texture(asset:String):Tile {\n\t\treturn switch ext(asset) {\n\t\t\t#if hxbitmini\n'
-			+ '\t\t\tcase ATLAS, BINATLAS:\n\t\t\t#else\n\t\t\tcase ATLAS:\n\t\t\t#end\n\t\t\tif (name == null) throw ERROR;\n'
-			+ '\t\t\tvar p:Atlas = atlases[asset];\n\t\t\tp.get(name);\n\t\t\tcase PNG: tiles[asset];\n\t\t\tcase _: throw ERROR;\n\t\t};\n'
-			+ '\t}\n}';
+			+ '\t\t\tcase ATLAS, BINATLAS:\n\t\t\t#else\n\t\t\tcase ATLAS:\n\t\t\t#end\n\t\t\tif (name == null) throw ERROR;\n\t\t\tvar '
+			+ 'p:Atlas = atlases[asset];\n\t\t\tp.get(name);\n\t\t\tcase PNG: tiles[asset];\n\t\t\tcase _: throw ERROR;\n\t\t};\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

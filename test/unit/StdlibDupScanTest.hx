@@ -41,8 +41,8 @@ class StdlibDupScanTest extends Test {
 
 	/** A body reading an instance field is not self-contained -- it reaches the last gate and dies there. */
 	public function testInstanceStateRefused(): Void {
-		final source: String = "class C {\n" + "\tvar width:Int = 2;\n" + "\tfunction pad(i:Int):String {\n"
-			+ "\t\tvar s:String = '' + i;\n" + "\t\twhile (s.length < width) s = '0' + s;\n" + "\t\treturn s;\n" + "\t}\n" + "}";
+		final source: String = "class C {\n\tvar width:Int = 2;\n\tfunction pad(i:Int):String {\n\t\tvar s:String = '' + i;\n"
+			+ "\t\twhile (s.length < width) s = '0' + s;\n\t\treturn s;\n\t}\n}";
 		final result: ScanResult = scan(source);
 		Assert.equals(0, result.candidates.length);
 		Assert.equals(1, result.stages.primitiveSig, 'the signature gate must PASS so the refusal is the self-containment one');
@@ -51,7 +51,7 @@ class StdlibDupScanTest extends Test {
 
 	/** A body calling into project code is not self-contained, however primitive its signature is. */
 	public function testProjectCallRefused(): Void {
-		final source: String = "class C {\n\tfunction pad(i:Int):String return Helper.pad(i);\n}";
+		final source: String = 'class C {\n\tfunction pad(i:Int):String return Helper.pad(i);\n}';
 		final result: ScanResult = scan(source);
 		Assert.equals(0, result.candidates.length);
 		Assert.equals(1, result.stages.primitiveSig);
@@ -73,46 +73,46 @@ class StdlibDupScanTest extends Test {
 		Assert.equals(1, parametric.stages.arityOk, 'arity is fine; the TYPE is what refuses it');
 		Assert.equals(0, parametric.stages.primitiveSig);
 
-		final inferred: ScanResult = scan("class C {\n\tfunction twice(i:Int) return i * 2;\n}");
+		final inferred: ScanResult = scan('class C {\n\tfunction twice(i:Int) return i * 2;\n}');
 		Assert.equals(1, inferred.stages.arityOk);
 		Assert.equals(0, inferred.stages.primitiveSig, 'an un-annotated return is refused, never inferred');
 	}
 
 	/** Arity above the cap, an optional parameter, and a defaulted one are each refused before typing. */
 	public function testArityAndOptionalityRefused(): Void {
-		final wide: ScanResult = scan("class C {\n\tfunction f(a:Int, b:Int, c:Int, d:Int):Int return a;\n}");
+		final wide: ScanResult = scan('class C {\n\tfunction f(a:Int, b:Int, c:Int, d:Int):Int return a;\n}');
 		Assert.equals(1, wide.stages.bodied);
 		Assert.equals(0, wide.stages.arityOk);
 
-		final optional: ScanResult = scan("class C {\n\tfunction f(?a:Int):Int return 1;\n}");
+		final optional: ScanResult = scan('class C {\n\tfunction f(?a:Int):Int return 1;\n}');
 		Assert.equals(0, optional.stages.arityOk);
 
-		final defaulted: ScanResult = scan("class C {\n\tfunction f(a:Int = 2):Int return a;\n}");
+		final defaulted: ScanResult = scan('class C {\n\tfunction f(a:Int = 2):Int return a;\n}');
 		Assert.equals(0, defaulted.stages.arityOk);
 
-		final nullary: ScanResult = scan("class C {\n\tfunction f():Int return 1;\n}");
+		final nullary: ScanResult = scan('class C {\n\tfunction f():Int return 1;\n}');
 		Assert.equals(0, nullary.stages.arityOk, 'a nullary function has no input to drive a differential with');
 	}
 
 	/** A body may recurse, declare locals, loop, and call the deterministic stdlib -- all still self-contained. */
 	public function testRecursionLocalsAndStdlibAdmitted(): Void {
-		final source: String = "class C {\n" + "\tfunction repeat(s:String, n:Int):String {\n" + "\t\tvar out:String = '';\n"
-			+ "\t\tfor (step in 0...n) out = out + s;\n" + "\t\treturn out + Std.string(Math.abs(n));\n" + "\t}\n"
-			+ "\tfunction down(n:Int):Int return n <= 0 ? 0 : down(n - 1);\n" + "}";
+		final source: String = "class C {\n\tfunction repeat(s:String, n:Int):String {\n\t\tvar out:String = '';\n"
+			+ '\t\tfor (step in 0...n) out = out + s;\n\t\treturn out + Std.string(Math.abs(n));\n\t}\n'
+			+ '\tfunction down(n:Int):Int return n <= 0 ? 0 : down(n - 1);\n}';
 		final result: ScanResult = scan(source);
 		Assert.equals(2, result.candidates.length, 'the loop binder, the local and the recursion are all bound names');
 	}
 
 	/** A non-deterministic stdlib member cannot be differentially compared, so a body touching one is refused. */
 	public function testNonDeterministicRefused(): Void {
-		final result: ScanResult = scan("class C {\n\tfunction pick(n:Int):Int return Std.int(Math.random() * n);\n}");
+		final result: ScanResult = scan('class C {\n\tfunction pick(n:Int):Int return Std.int(Math.random() * n);\n}');
 		Assert.equals(1, result.stages.primitiveSig);
 		Assert.equals(0, result.stages.selfContained);
 	}
 
 	/** Allocation and `throw` are refused outright -- neither survives being lifted into a bare probe module. */
 	public function testAllocationAndThrowRefused(): Void {
-		final allocating: ScanResult = scan("class C {\n\tfunction f(n:Int):String return new StringBuf().toString() + n;\n}");
+		final allocating: ScanResult = scan('class C {\n\tfunction f(n:Int):String return new StringBuf().toString() + n;\n}');
 		Assert.equals(0, allocating.stages.selfContained);
 
 		final throwing: ScanResult = scan("class C {\n\tfunction f(n:Int):Int {\n\t\tif (n < 0) throw 'bad';\n\t\treturn n;\n\t}\n}");
@@ -124,7 +124,7 @@ class StdlibDupScanTest extends Test {
 	public function testScanAllAggregates(): Void {
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'src/A.hx', source: padDigitSource() },
-			{ file: 'src/B.hx', source: "class B {\n\tfunction twice(i:Int):Int return i * 2;\n}" }
+			{ file: 'src/B.hx', source: 'class B {\n\tfunction twice(i:Int):Int return i * 2;\n}' }
 		];
 		final result: ScanResult = StdlibDupScan.scanAll(files, new HaxeQueryPlugin());
 		Assert.equals(2, result.stages.selfContained);
@@ -134,8 +134,8 @@ class StdlibDupScanTest extends Test {
 
 	/** The motivating case, spelled the way the real tree spells it. */
 	private static inline function padDigitSource(): String {
-		return "class C {\n" + "\tprivate function padDigit(i:Int, digits:Int):String {\n" + "\t\tvar str:String = '$i';\n"
-			+ "\t\twhile (str.length < digits) str = '0$str';\n" + "\t\treturn str;\n" + "\t}\n" + "}";
+		return "class C {\n\tprivate function padDigit(i:Int, digits:Int):String {\n\t\tvar str:String = '$i';\n"
+			+ "\t\twhile (str.length < digits) str = '0$str';\n\t\treturn str;\n\t}\n}";
 	}
 
 	/** The verbatim spellings of a candidate's lifted body literals. */

@@ -284,7 +284,8 @@ class PreferComprehensionCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(fnRet(
-				'final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal a = f(x);\n\t\t\tfinal b = g(x);\n\t\t\tout.push(h(b, a));\n\t\t}'
+				'final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal a = f(x);\n\t\t\tfinal b = g(x);\n'
+				+ '\t\t\tout.push(h(b, a));\n\t\t}'
 			)).length
 		);
 	}
@@ -384,7 +385,8 @@ class PreferComprehensionCheckTest extends Test {
 		Assert.equals(
 			fnRet('final out:Array<Int> = [for (x in xs) (x + 1).foo];'),
 			applyFix(fnRet(
-				'final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal a = x + 1;\n\t\t\tfinal b = a;\n\t\t\tfinal c = b.foo;\n\t\t\tout.push(c);\n\t\t}'
+				'final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal a = x + 1;\n\t\t\tfinal b = a;\n\t\t\tfinal c = b.foo;\n'
+				+ '\t\t\tout.push(c);\n\t\t}'
 			))
 		);
 	}
@@ -478,7 +480,8 @@ class PreferComprehensionCheckTest extends Test {
 		Assert.equals(
 			fnRet('final out:Array<Dynamic> = [for (x in xs) (new Map() : Map<String, Int>)];'),
 			applyFix(fnRet(
-				'final out:Array<Dynamic> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal m:Map<String, Int> = new Map();\n\t\t\tout.push(m);\n\t\t}'
+				'final out:Array<Dynamic> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal m:Map<String, Int> = new Map();\n\t\t\tout.push(m);\n'
+				+ '\t\t}'
 			))
 		);
 	}
@@ -490,7 +493,8 @@ class PreferComprehensionCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(fnRet(
-				"final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal t = f(x);\n\t\t\tfinal msg = 'got $t';\n\t\t\tout.push(t + msg);\n\t\t}"
+				"final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal t = f(x);\n\t\t\tfinal msg = 'got $t';\n"
+				+ '\t\t\tout.push(t + msg);\n\t\t}'
 			)).length
 		);
 	}
@@ -504,7 +508,8 @@ class PreferComprehensionCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(fnRet(
-				"final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal k = f(x);\n\t\t\tfinal e = macro trace($v{k});\n\t\t\tout.push(g(k, e));\n\t\t}"
+				"final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal k = f(x);\n\t\t\tfinal e = macro trace($v{k});\n"
+				+ '\t\t\tout.push(g(k, e));\n\t\t}'
 			)).length
 		);
 	}

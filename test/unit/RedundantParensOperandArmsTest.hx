@@ -423,7 +423,8 @@ class RedundantParensOperandArmsTest extends RedundantParensOperandArmsTestBase 
 	/** Every opt-in arm at once — what a project switching the whole family on gets. */
 	private inline function allArms(): (String) -> LintConfig {
 		return configured(
-			'{"rules": {"redundant-parens": {"atoms": true, "sameOperatorLeft": true, "comparisonOperands": true, "additiveOperands": true}}}'
+			'{"rules": {"redundant-parens": {'
+			+ '"atoms": true, "sameOperatorLeft": true, "comparisonOperands": true, "additiveOperands": true}}}'
 		);
 	}
 

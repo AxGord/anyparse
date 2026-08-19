@@ -170,10 +170,8 @@ final class AddMember {
 	 */
 	private static function carriesOpaqueMemberRegion(typeBody: QueryNode): Bool {
 		var found: Bool = false;
-		RefactorSupport.eachMemberHost(typeBody, host -> {
-			for (child in host.children) if (RefactorSupport.isOpaqueMemberKind(child.kind))
-				found = true;
-		});
+		RefactorSupport.eachMemberHost(typeBody, host -> for (child in host.children) if (RefactorSupport.isOpaqueMemberKind(child.kind))
+			found = true);
 		return found;
 	}
 

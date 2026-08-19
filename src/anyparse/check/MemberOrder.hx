@@ -101,8 +101,10 @@ final class MemberOrder implements Check implements ConfigAware {
 	}
 
 	public function description(): String {
-		return
-			'type members not in canonical order (constants, properties, fields, constructor, methods; public before private; conditional members grouped into one #if block per condition and branch shape, sorted at the rank their members share - or pinned to the end of their section when they span several ranks) or rank groups and conditional blocks not separated by blank lines';
+		return 'type members not in canonical order ('
+			+ 'constants, properties, fields, constructor, methods; public before private; conditional members grouped into one #if block '
+			+ 'per condition and branch shape, sorted at the rank their members share - or pinned to the end of their section when they '
+			+ 'span several ranks) or rank groups and conditional blocks not separated by blank lines';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -370,7 +372,7 @@ final class MemberOrder implements Check implements ConfigAware {
 		final newExprKind: Null<String> = shape.newExprKind;
 		if (newExprKind == null || init.kind != newExprKind) return false;
 		final span: Null<Span> = init.span;
-		return span != null && StringTools.endsWith(source.substring(span.from, span.to).rtrim(), '()');
+		return span != null && source.substring(span.from, span.to).rtrim().endsWith('()');
 	}
 
 	/** Index of `node` (by identity) in `members`, or -1. */

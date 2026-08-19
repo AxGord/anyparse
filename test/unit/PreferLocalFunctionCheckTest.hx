@@ -141,7 +141,8 @@ class PreferLocalFunctionCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tvar h:Void->Void;\n\t\tfunction other():Void { h(); }\n\t\th = function():Void { other(); };\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tvar h:Void->Void;\n\t\tfunction other():Void { h(); }\n'
+				+ '\t\th = function():Void { other(); };\n\t}\n}'
 			).length
 		);
 	}
@@ -154,7 +155,8 @@ class PreferLocalFunctionCheckTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tvar h:Void->Void;\n\t\tfunction other():Void { p(); }\n\t\th = function():Void { other(); };\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tvar h:Void->Void;\n\t\tfunction other():Void { p(); }\n'
+				+ '\t\th = function():Void { other(); };\n\t}\n}'
 			).length
 		);
 	}
@@ -228,7 +230,8 @@ class PreferLocalFunctionCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tvar h:Listener1<Int> = null;\n\t\th = function(e:Int):Void { p(e); };\n\t\tg(h);\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tvar h:Listener1<Int> = null;\n\t\th = function(e:Int):Void { p(e); };\n\t\tg(h);\n'
+				+ '\t}\n}'
 			).length
 		);
 	}
@@ -251,7 +254,8 @@ class PreferLocalFunctionCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tvar h:Null<Int->Void> = null;\n\t\th = function(e:Int):Void { p(e); };\n\t\tg(h);\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tvar h:Null<Int->Void> = null;\n\t\th = function(e:Int):Void { p(e); };\n'
+				+ '\t\tg(h);\n\t}\n}'
 			).length
 		);
 	}

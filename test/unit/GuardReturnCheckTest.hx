@@ -274,7 +274,8 @@ class GuardReturnCheckTest extends Test {
 		Assert.equals(
 			0,
 			v(
-				'if (ok) {\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t} else if (p) {\n\t\t\tlog(a);\n\t\t\treturn false;\n\t\t}\n\t\treturn false;'
+				'if (ok) {\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t} else if (p) {\n\t\t\tlog(a);\n\t\t\treturn false;\n\t\t}\n'
+				+ '\t\treturn false;'
 			).length
 		);
 	}

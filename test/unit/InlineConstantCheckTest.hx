@@ -400,7 +400,8 @@ class InlineConstantCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { static inline final A:Int = 1; static final MYCONST:Int = A; function f():Void { Reflect.field(C, "MYCONST"); } }'
+				'class C { static inline final A:Int = 1; static final MYCONST:Int = A; function f():Void {'
+				+ ' Reflect.field(C, "MYCONST"); } }'
 			).length
 		);
 	}

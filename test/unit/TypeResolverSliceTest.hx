@@ -32,8 +32,8 @@ class TypeResolverSliceTest extends Test {
 	}
 
 	public function testUnannotatedReceiverKept(): Void {
-		final src: String =
-			'typedef Ctx = { var f:Int; }; class C { static function mk():Ctx { return null; } static function m():Void { final c = mk(); final dead = c.f; } }';
+		final src: String = 'typedef Ctx = { var f:Int; }; class C { static function mk():Ctx { return null; } static function m():Void {'
+			+ ' final c = mk(); final dead = c.f; } }';
 		Assert.equals(0, fixEdits(src).length, 'no annotation on the receiver → unresolved → kept');
 	}
 
@@ -174,7 +174,8 @@ class TypeResolverSliceTest extends Test {
 	public function testNonNullMemberStrictWithoutClassNotAffirmed(): Void {
 		Assert.isFalse(
 			nonNull('class C { @:nullSafety(Strict) static function m(x:Foo):Void { if (x != null) {} } }'),
-			'a member-level @:nullSafety without a class/module annotation does not affirm — kept strictly no-more-affirming than the class-level predicate'
+			'a member-level @:nullSafety without a class/module annotation does not affirm — kept strictly no-more-affirming than the '
+			+ 'class-level predicate'
 		);
 	}
 
@@ -207,7 +208,8 @@ class TypeResolverSliceTest extends Test {
 		// (mirrors `identDeclaredTypeSource`). This is the root of the 8-consumer family.
 		Assert.isFalse(
 			nonNull(
-				'@:nullSafety(Strict) class C { static function m(n:Null<String>):Void { if (n == null) return; final n:String = n; trace(n); } }'
+				'@:nullSafety(Strict) class C { static function m(n:Null<String>):Void { if (n == null) '
+				+ 'return; final n:String = n; trace(n); } }'
 			),
 			'a nullable param re-shadowed by a later same-name non-null local is NOT provably non-null at the earlier guard'
 		);
@@ -255,8 +257,8 @@ class TypeResolverSliceTest extends Test {
 	 * variable (the receiver resolves to a binding, not a type reference).
 	 */
 	public function testStdlibShadowKept(): Void {
-		final project: String =
-			'class Path { public static function join(a:Array<String>):String { return ""; } } class C { static function m():Int { final dead = Path.join(["a"]); return 1; } }';
+		final project: String = 'class Path { public static function join(a:Array<String>):String { return ""; } } class C {'
+			+ ' static function m():Int { final dead = Path.join(["a"]); return 1; } }';
 		Assert.equals(0, fixEdits(project).length, 'a project-declared Path shadows stdlib — kept');
 		final local: String = 'class C { static function m():Int { final Date = 0; final dead = Date.now(); return 1; } }';
 		Assert.equals(0, fixEdits(local).length, 'a local Date binding is not the stdlib type — kept');
@@ -268,15 +270,15 @@ class TypeResolverSliceTest extends Test {
 	 * must delete the local.
 	 */
 	public function testInheritedPlainFieldDeleted(): Void {
-		final src: String =
-			'class Base<T> { public final d:T; } class Sub extends Base<Int> {} class C { static function m(s:Sub):Int { final dead = cast s.d; return 1; } }';
+		final src: String = 'class Base<T> { public final d:T; } class Sub extends Base<Int> {} class C { static function m(s:Sub):Int {'
+			+ ' final dead = cast s.d; return 1; } }';
 		Assert.equals(1, fixEdits(src).length, 'an inherited plain field read is side-effect-free — deletable');
 	}
 
 	/** The same shape with a GETTER on the base: reading it may run code, so the local stays. */
 	public function testInheritedGetterFieldKept(): Void {
-		final src: String =
-			'class Base<T> { public var f(get, never):Int; } class Sub extends Base<Int> {} class C { static function m(s:Sub):Int { final dead = cast s.f; return 1; } }';
+		final src: String = 'class Base<T> { public var f(get, never):Int; } class Sub extends Base<Int> {} class C {'
+			+ ' static function m(s:Sub):Int { final dead = cast s.f; return 1; } }';
 		Assert.equals(0, fixEdits(src).length, 'an inherited getter property read may run code — kept');
 	}
 

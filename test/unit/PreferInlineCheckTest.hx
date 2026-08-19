@@ -462,7 +462,8 @@ class PreferInlineCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C extends B {\n\toverride\n\t#if cpp\n\tpublic function get():Int return 1;\n\t#else\n\tpublic function calc():Int return 2;\n\t#end\n}'
+				'class C extends B {\n\toverride\n\t#if cpp\n\tpublic function get():Int return 1;\n\t#else\n'
+				+ '\tpublic function calc():Int return 2;\n\t#end\n}'
 			).length
 		);
 	}
@@ -477,7 +478,8 @@ class PreferInlineCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\t@:native(\'nativeThing\')\n\tprivate static function nativeThing(a:Int):Int return 0;\n\tpublic static function use(a:Int):Bool return nativeThing(a) == 0;\n}'
+				'class C {\n\t@:native(\'nativeThing\')\n\tprivate static function nativeThing(a:Int):Int return 0;\n'
+				+ '\tpublic static function use(a:Int):Bool return nativeThing(a) == 0;\n}'
 			).length
 		);
 	}

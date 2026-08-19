@@ -82,13 +82,13 @@ final class HxCallParamOuterFirstWrapSliceTest extends Test {
 	 * whole argument on one 138-column line, so that is what the writer now picks.
 	 */
 	public function testSoleArgFittingAtContinuationOpensTheCallParens(): Void {
-		final src: String = 'class OuterFits {\n\tprivate function load():Void {\n\t\ttry {\n'
-			+ "\t\t\tfinal resultSet:ResultSet = _datasource.execute('SELECT filepath FROM files WHERE bucket = ' + (bucket ? '1 AND bucket_plain_id = $entryId' : '0 AND plain_id = $entryId'));\n"
-			+ "\t\t} catch (exception:Exception) {\n\t\t\tlog('boom');\n\t\t}\n\t}\n}";
+		final src: String = 'class OuterFits {\n\tprivate function load():Void {\n\t\ttry {\n\t\t\tfinal resultSet:ResultSet = '
+			+ "_datasource.execute('SELECT filepath FROM files WHERE bucket = ' + (bucket ? '1 AND bucket_plain_id = $entryId' : '0 AND "
+			+ "plain_id = $entryId'));\n\t\t} catch (exception:Exception) {\n\t\t\tlog('boom');\n\t\t}\n\t}\n}";
 		final expected: String = 'class OuterFits {\n\tprivate function load():Void {\n\t\ttry {\n'
 			+ '\t\t\tfinal resultSet:ResultSet = _datasource.execute(\n'
-			+ "\t\t\t\t'SELECT filepath FROM files WHERE bucket = ' + (bucket ? '1 AND bucket_plain_id = $entryId' : '0 AND plain_id = $entryId')\n"
-			+ "\t\t\t);\n\t\t} catch (exception:Exception) {\n\t\t\tlog('boom');\n\t\t}\n\t}\n}";
+			+ "\t\t\t\t'SELECT filepath FROM files WHERE bucket = ' + (bucket ? '1 AND bucket_plain_id = $entryId' : '0 AND "
+			+ "plain_id = $entryId')\n\t\t\t);\n\t\t} catch (exception:Exception) {\n\t\t\tlog('boom');\n\t\t}\n\t}\n}";
 		assertWrite(expected, src);
 	}
 
@@ -101,12 +101,10 @@ final class HxCallParamOuterFirstWrapSliceTest extends Test {
 	 * onto its own line is not dragged into the new shape.
 	 */
 	public function testSoleArgOverflowingContinuationKeepsTheNestedParenBreak(): Void {
-		final src: String = 'class OuterOverflows {\n\tprivate function assign():Void {\n\t\ttry {\n'
-			+ "\t\t\t_datasource.execute('UPDATE files SET ' + (\n\t\t\t\tbucket\n"
-			+ "\t\t\t\t\t? 'plain_id = NULL, bucket_plain_id = $entryId WHERE bucket = 1'\n"
-			+ "\t\t\t\t\t: 'bucket_plain_id = NULL, plain_id = $entryId WHERE bucket = 0'\n"
-			+ "\t\t\t) + ' AND filepath = ${_datasource.quote(itemPath)}');\n\t\t} catch (exception:Exception) {\n"
-			+ "\t\t\tlog('boom');\n\t\t}\n\t}\n}";
+		final src: String = 'class OuterOverflows {\n\tprivate function assign():Void {\n\t\ttry {\n\t\t\t_datasource.execute(\'UPDATE '
+			+ "files SET ' + (\n\t\t\t\tbucket\n\t\t\t\t\t? 'plain_id = NULL, bucket_plain_id = $entryId WHERE bucket = 1'\n"
+			+ "\t\t\t\t\t: 'bucket_plain_id = NULL, plain_id = $entryId WHERE bucket = 0'\n\t\t\t) + ' AND filepath = "
+			+ "${_datasource.quote(itemPath)}');\n\t\t} catch (exception:Exception) {\n\t\t\tlog('boom');\n\t\t}\n\t}\n}";
 		assertWrite(src, src);
 	}
 
@@ -117,11 +115,11 @@ final class HxCallParamOuterFirstWrapSliceTest extends Test {
 	 */
 	public function testContinuationExactlyAtLineLimitOpensTheCallParens(): Void {
 		final src: String = 'class EdgeAtLimit {\n\tprivate function edge():Void {\n'
-			+ "\t\tfinal row:ResultRow = store.query('SELECT filepath FROM files WHERE folder = xxxxxxxxxxxxxxxxxxx' + (flag ? '1 AND folder_id = $rowId' : '0 AND plain_id = $rowX'));\n"
-			+ '\t}\n}';
+			+ "\t\tfinal row:ResultRow = store.query('SELECT filepath FROM files WHERE folder = xxxxxxxxxxxxxxxxxxx' + ("
+			+ 'flag ? \'1 AND folder_id = $$rowId\' : \'0 AND plain_id = $$rowX\'));\n\t}\n}';
 		final expected: String = 'class EdgeAtLimit {\n\tprivate function edge():Void {\n\t\tfinal row:ResultRow = store.query(\n'
-			+ "\t\t\t'SELECT filepath FROM files WHERE folder = xxxxxxxxxxxxxxxxxxx' + (flag ? '1 AND folder_id = $rowId' : '0 AND plain_id = $rowX')\n"
-			+ '\t\t);\n\t}\n}';
+			+ "\t\t\t'SELECT filepath FROM files WHERE folder = xxxxxxxxxxxxxxxxxxx' + ("
+			+ 'flag ? \'1 AND folder_id = $$rowId\' : \'0 AND plain_id = $$rowX\')\n\t\t);\n\t}\n}';
 		assertWrite(expected, src);
 	}
 
@@ -136,8 +134,8 @@ final class HxCallParamOuterFirstWrapSliceTest extends Test {
 	 */
 	public function testContinuationOneColumnPastLineLimitWrapsAtTheOperator(): Void {
 		final src: String = 'class EdgePastLimit {\n\tprivate function edge():Void {\n'
-			+ "\t\tfinal row:ResultRow = store.query('SELECT filepath FROM files WHERE folder = xxxxxxxxxxxxxxxxxxxx' + (flag ? '1 AND folder_id = $rowId' : '0 AND plain_id = $rowX'));\n"
-			+ '\t}\n}';
+			+ "\t\tfinal row:ResultRow = store.query('SELECT filepath FROM files WHERE folder = xxxxxxxxxxxxxxxxxxxx' + ("
+			+ 'flag ? \'1 AND folder_id = $$rowId\' : \'0 AND plain_id = $$rowX\'));\n\t}\n}';
 		final expected: String = 'class EdgePastLimit {\n\tprivate function edge():Void {\n\t\tfinal row:ResultRow = store.query(\n'
 			+ "\t\t\t'SELECT filepath FROM files WHERE folder = xxxxxxxxxxxxxxxxxxxx'\n"
 			+ "\t\t\t+ (flag ? '1 AND folder_id = $rowId' : '0 AND plain_id = $rowX')\n\t\t);\n\t}\n}";
@@ -151,9 +149,8 @@ final class HxCallParamOuterFirstWrapSliceTest extends Test {
 	 * already got right.
 	 */
 	public function testNonGluableSoleArgStillOpensTheCallParens(): Void {
-		final src: String = 'class NonGluable {\n\tprivate function plain():Void {\n'
-			+ "\t\tfinal row:ResultRow = store.query('SELECT filepath FROM files WHERE folder = 1 AND folder_id AND some AND more AND yet AND plenty AND still');\n"
-			+ '\t}\n}';
+		final src: String = 'class NonGluable {\n\tprivate function plain():Void {\n\t\tfinal row:ResultRow = store.query(\'SELECT '
+			+ 'filepath FROM files WHERE folder = 1 AND folder_id AND some AND more AND yet AND plenty AND still\');\n\t}\n}';
 		final expected: String = 'class NonGluable {\n\tprivate function plain():Void {\n\t\tfinal row:ResultRow = store.query(\n'
 			+ "\t\t\t'SELECT filepath FROM files WHERE folder = 1 AND folder_id AND some AND more AND yet AND plenty AND still'\n\t\t);\n"
 			+ '\t}\n}';
@@ -180,8 +177,8 @@ final class HxCallParamOuterFirstWrapSliceTest extends Test {
 	 * fall-through the at-limit / past-limit pair above pins directly.
 	 */
 	public function testRedundantParenSoleArgStaysWholeAtTheContinuation(): Void {
-		final src: String = 'class RedundantParen {\n\tprivate function wrap():Void {\n'
-			+ "\t\tfinal payload:String = encodeIt(('zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz'));\n"
+		final src: String = 'class RedundantParen {\n\tprivate function wrap():Void {\n\t\tfinal payload:String = '
+			+ "encodeIt(('zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz'));\n"
 			+ '\t}\n}';
 		final expected: String = 'class RedundantParen {\n\tprivate function wrap():Void {\n\t\tfinal payload:String = encodeIt(\n'
 			+ "\t\t\t('zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz')\n"
@@ -204,9 +201,8 @@ final class HxCallParamOuterFirstWrapSliceTest extends Test {
 		final src: String = 'class HardlineArg {\n\tprivate function build():Void {\n\t\tpanel.content = new Column(cast [\n'
 			+ '\t\t\tnew Caption(message, Styles.dialogText(), width, LINE_HEIGHT, HorizontalAlign.LEFT, VerticalAlign.TOP),\n'
 			+ '\t\t\tnew Caption(headline, Styles.dialogText(), width, LINE_HEIGHT, HorizontalAlign.LEFT, VerticalAlign.TOP)\n'
-			+ '\t\t].concat(entries.map(\n'
-			+ '\t\t\tpath -> new Caption(shortenPath(path), Styles.dialogPlain(), width, LINE_HEIGHT, HorizontalAlign.LEFT, VerticalAlign.TOP)\n'
-			+ '\t\t)));\n\t}\n}';
+			+ '\t\t].concat(entries.map(\n\t\t\tpath -> new Caption(shortenPath(path), Styles.dialogPlain(), width, LINE_HEIGHT, '
+			+ 'HorizontalAlign.LEFT, VerticalAlign.TOP)\n\t\t)));\n\t}\n}';
 		assertWrite(src, src);
 	}
 
@@ -220,11 +216,11 @@ final class HxCallParamOuterFirstWrapSliceTest extends Test {
 	 */
 	public function testNestedCallSoleArgHugsWhenTheInnerCallLeadingBreaks(): Void {
 		final src: String = 'class NestedCall {\n\tprivate function nested():Void {\n'
-			+ "\t\tassertNull(narrowIt('class C {\\n\\tfunction f(s:String):Void {\\n\\t\\tvar x:Dynamic = s;\\n\\t\\tx.trim();\\n\\t\\tvar y:String = x;\\n\\t\\tvar z:String = y;\\n\\t}\\n}'));\n"
-			+ '\t}\n}';
+			+ "\t\tassertNull(narrowIt('class C {\\n\\tfunction f(s:String):Void {\\n\\t\\tvar x:Dynamic = "
+			+ 's;\\n\\t\\tx.trim();\\n\\t\\tvar y:String = x;\\n\\t\\tvar z:String = y;\\n\\t}\\n}\'));\n\t}\n}';
 		final expected: String = 'class NestedCall {\n\tprivate function nested():Void {\n\t\tassertNull(narrowIt(\n'
-			+ "\t\t\t'class C {\\n\\tfunction f(s:String):Void {\\n\\t\\tvar x:Dynamic = s;\\n\\t\\tx.trim();\\n\\t\\tvar y:String = x;\\n\\t\\tvar z:String = y;\\n\\t}\\n}'\n"
-			+ '\t\t));\n\t}\n}';
+			+ "\t\t\t'class C {\\n\\tfunction f(s:String):Void {\\n\\t\\tvar x:Dynamic = s;\\n\\t\\tx.trim();\\n\\t\\tvar y:String = "
+			+ 'x;\\n\\t\\tvar z:String = y;\\n\\t}\\n}\'\n\t\t));\n\t}\n}';
 		assertWrite(expected, src);
 	}
 
@@ -243,9 +239,8 @@ final class HxCallParamOuterFirstWrapSliceTest extends Test {
 	 * by reverting the slice).
 	 */
 	public function testBracketSoleArgKeepsTheCallHugged(): Void {
-		final src: String = 'class BracketArg {\n\tprivate function register():Void {\n'
-			+ '\t\tregisterHandlers([alphaHandler, betaHandler, gammaHandler, deltaHandler, epsilonHandler, zetaHandler, etaHandlerx, thetaHandler]);\n'
-			+ '\t}\n}';
+		final src: String = 'class BracketArg {\n\tprivate function register():Void {\n\t\tregisterHandlers([alphaHandler, betaHandler, '
+			+ 'gammaHandler, deltaHandler, epsilonHandler, zetaHandler, etaHandlerx, thetaHandler]);\n\t}\n}';
 		final expected: String = 'class BracketArg {\n\tprivate function register():Void {\n\t\tregisterHandlers([\n\t\t\talphaHandler,\n'
 			+ '\t\t\tbetaHandler,\n\t\t\tgammaHandler,\n\t\t\tdeltaHandler,\n\t\t\tepsilonHandler,\n\t\t\tzetaHandler,\n'
 			+ '\t\t\tetaHandlerx,\n\t\t\tthetaHandler\n\t\t]);\n\t}\n}';
@@ -260,8 +255,8 @@ final class HxCallParamOuterFirstWrapSliceTest extends Test {
 	 */
 	public function testCondCompSoleArgOpensTheCallParens(): Void {
 		final src: String = 'class CondCompArg {\n\tprivate function guarded():Void {\n'
-			+ "\t\tfinal row:ResultRow = store.query(#if debug 'SELECT filepath FROM files WHERE bucket = ' + (flag ? '1 AND fx' : '0 AND gx') #else 'x' #end);\n"
-			+ '\t}\n}';
+			+ "\t\tfinal row:ResultRow = store.query(#if debug 'SELECT filepath FROM files WHERE bucket = ' + ("
+			+ 'flag ? \'1 AND fx\' : \'0 AND gx\') #else \'x\' #end);\n\t}\n}';
 		final expected: String = 'class CondCompArg {\n\tprivate function guarded():Void {\n\t\tfinal row:ResultRow = store.query(\n'
 			+ "\t\t\t#if debug 'SELECT filepath FROM files WHERE bucket = ' + (flag ? '1 AND fx' : '0 AND gx') #else 'x' #end\n\t\t);\n"
 			+ '\t}\n}';

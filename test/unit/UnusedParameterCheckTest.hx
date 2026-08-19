@@ -175,8 +175,8 @@ class UnusedParameterCheckTest extends Test {
 		// A callee the call site COMPUTES rather than names hands both functions to an
 		// expression that selects between them as VALUES — a capture, so neither is
 		// flagged.
-		final src: String = 'class C {\n\tpublic function m(cond:Bool):Void {\n\t\t(cond ? cb : alt)(1);\n\t}\n\n'
-			+ '\tpublic function cb(value:Int):Void {\n\t\tg();\n\t}\n\n\tpublic function alt(other:Int):Void {\n\t\tg();\n' + '\t}\n}';
+		final src: String = 'class C {\n\tpublic function m(cond:Bool):Void {\n\t\t(cond ? cb : alt)(1);\n\t}\n\n\tpublic function '
+			+ 'cb(value:Int):Void {\n\t\tg();\n\t}\n\n\tpublic function alt(other:Int):Void {\n\t\tg();\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 

@@ -79,9 +79,7 @@ class HxEnumAbstractSliceTest extends HxTestHelpers {
 	public function testWriterPreservesEnumKeyword(): Void {
 		final src: String = 'enum abstract Mode(Int) { final Fast = 0; final Tolerant = 1; }';
 		final written: String = HxModuleWriter.write(HaxeModuleParser.parse(src));
-		Assert.isTrue(
-			StringTools.startsWith(written.ltrim(), 'enum abstract '), 'expected output to start with "enum abstract ", got <$written>'
-		);
+		Assert.isTrue(written.ltrim().startsWith('enum abstract '), 'expected output to start with "enum abstract ", got <$written>');
 		// Reparse must still classify as EnumAbstractDecl (keyword not lost).
 		final reparsed: HxModule = HaxeModuleParser.parse(written);
 		expectEnumAbstractDecl(reparsed.decls[0]);

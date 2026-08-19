@@ -421,7 +421,12 @@ final class AddElement {
 			);
 		final at: Int = lastContent + 1;
 		if (afterComments < 0) {
-			final text: String = empty ? trimmed : (isComma ? ', $trimmed' : '\n$trimmed');
+			final text: String = if (empty)
+				trimmed
+			else if (isComma)
+				', $trimmed'
+			else
+				'\n$trimmed';
 			final edit: { span: Span, text: String } = { span: new Span(at, at), text: text };
 			return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
 		}

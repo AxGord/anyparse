@@ -48,9 +48,8 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 	 * whole. Pre-T37 this glued the call open and broke inside the parens.
 	 */
 	public function testOverflowingSoleArgWrapsAtItsTopLevelOperator(): Void {
-		final src: String = HEAD
-			+ "\t\t\tfinal queryRows:RowCursor = _datasource.execute('SELECT itempath_movedfromsource FROM items WHERE bucket = ' + "
-			+ '$TERNARY);\n$TAIL';
+		final src: String = '$HEAD\t\t\tfinal queryRows:RowCursor = _datasource.execute(\'SELECT itempath_movedfromsource FROM items WHERE '
+			+ 'bucket = \' + $TERNARY);\n$TAIL';
 		final expected: String = '$HEAD\t\t\tfinal queryRows:RowCursor = _datasource.execute(\n'
 			+ '\t\t\t\t\'SELECT itempath_movedfromsource FROM items WHERE bucket = \'\n\t\t\t\t+ $TERNARY\n\t\t\t);\n$TAIL';
 		assertWrite(expected, src);
@@ -139,9 +138,8 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 			+ "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy')";
 		final src: String =
 			'$HEAD\t\t\tfinal queryRows:RowCursor = _datasource.execute(\'SELECT itempath FROM items WHERE bucket = \' + $wide);\n$TAIL';
-		final expected: String = HEAD
-			+ "\t\t\tfinal queryRows:RowCursor = _datasource.execute('SELECT itempath FROM items WHERE bucket = ' + (\n"
-			+ "\t\t\t\tbucket\n\t\t\t\t\t? '1 AND bucket_entry_id = '\n"
+		final expected: String = '$HEAD\t\t\tfinal queryRows:RowCursor = _datasource.execute(\'SELECT itempath FROM items WHERE bucket = '
+			+ "' + (\n\t\t\t\tbucket\n\t\t\t\t\t? '1 AND bucket_entry_id = '\n"
 			+ "\t\t\t\t\t: '0 AND yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy'\n"
 			+ '\t\t\t));\n' + TAIL;
 		assertWrite(expected, src);
@@ -154,9 +152,8 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 	 * the same scope `HxOpAddTrailingParenGlueSliceTest` pins from its own side.
 	 */
 	public function testThreeOperandChainKeepsTheGlue(): Void {
-		final src: String = HEAD
-			+ "\t\t\tfinal queryRows:RowCursor = _datasource.execute('SELECT itempath ' + 'FROM items WHERE bucket = ' + "
-			+ '$TERNARY);\n$TAIL';
+		final src: String = '$HEAD\t\t\tfinal queryRows:RowCursor = _datasource.execute(\'SELECT itempath \' + \'FROM items WHERE bucket = '
+			+ '\' + $TERNARY);\n$TAIL';
 		final expected: String = HEAD
 			+ "\t\t\tfinal queryRows:RowCursor = _datasource.execute('SELECT itempath ' + 'FROM items WHERE bucket = ' + (\n"
 			+ '\t\t\t\tbucket ? \'1 AND bucket_entry_id = $$entryId\' : \'0 AND entry_id = $$entryId\'\n\t\t\t));\n$TAIL';
@@ -183,10 +180,9 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 			+ "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy')";
 		final src: String =
 			'$HEAD\t\t\tfinal queryRows:RowCursor = _datasource.execute(\'SELECT itempath FROM items WHERE bucket = \' + $tail);\n$TAIL';
-		final expected: String = '$HEAD\t\t\tfinal queryRows:RowCursor = _datasource.execute(\n'
-			+ "\t\t\t\t'SELECT itempath FROM items WHERE bucket = ' + (\n\t\t\t\t\tbucket\n" + "\t\t\t\t\t\t? '1 AND bucket_entry_id = '\n"
-			+ "\t\t\t\t\t\t: '0 AND yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy'\n"
-			+ '\t\t\t\t)\n\t\t\t);\n$TAIL';
+		final expected: String = '$HEAD\t\t\tfinal queryRows:RowCursor = _datasource.execute(\n\t\t\t\t\'SELECT itempath FROM items WHERE '
+			+ "bucket = ' + (\n\t\t\t\t\tbucket\n\t\t\t\t\t\t? '1 AND bucket_entry_id = '\n\t\t\t\t\t\t: '0 AND "
+			+ 'yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\'\n\t\t\t\t)\n' + '\t\t\t);\n$TAIL';
 		assertWrite(expected, src);
 	}
 

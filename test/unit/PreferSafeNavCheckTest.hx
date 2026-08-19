@@ -422,7 +422,8 @@ class PreferSafeNavCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tvar r:Null<Int>;\n\tfunction f(x:Null<Sys>):Void {\n\t\t#if js\n\t\tvar r:Null<Int> = null;\n\t\t#else\n\t\tif (x != null) r = x.count();\n\t\t#end\n\t}\n}'
+				'class C {\n\tvar r:Null<Int>;\n\tfunction f(x:Null<Sys>):Void {\n\t\t#if js\n\t\tvar r:Null<Int> = null;\n\t\t#else\n'
+				+ '\t\tif (x != null) r = x.count();\n\t\t#end\n\t}\n}'
 			).length
 		);
 	}

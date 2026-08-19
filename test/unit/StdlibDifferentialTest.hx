@@ -44,7 +44,7 @@ class StdlibDifferentialTest extends Test {
 	 * functions produced 55 of 161 findings on a real 806-file tree before this gate existed.
 	 */
 	public function testTrivialBaselineAccompaniesEveryEnumeration(): Void {
-		final candidate: StdlibCandidate = one("class C {\n\tfunction set_value(value:String):String return value;\n}");
+		final candidate: StdlibCandidate = one('class C {\n\tfunction set_value(value:String):String return value;\n}');
 		final maps: Array<Mapping> = StdlibDifferential.mappings(candidate);
 		final trivial: Array<Mapping> = maps.filter(StdlibDifferential.isTrivial);
 		Assert.equals(1, trivial.length, 'the sole String parameter is the sole baseline');
@@ -116,7 +116,7 @@ class StdlibDifferentialTest extends Test {
 	 * dropped, while the rest of the pool stays available.
 	 */
 	public function testThinWrapperExcludesItsOwnPoolEntry(): Void {
-		final candidate: StdlibCandidate = one("class C {\n\tfunction toInt(s:String):Int return Std.parseInt(s) + 0;\n}");
+		final candidate: StdlibCandidate = one('class C {\n\tfunction toInt(s:String):Int return Std.parseInt(s) + 0;\n}');
 		for (map in StdlibDifferential.mappings(candidate))
 			Assert.isTrue(map.display.indexOf('Std.parseInt') < 0, 'the wrapper\'s own call came back as a finding: ${map.display}');
 	}
@@ -132,7 +132,7 @@ class StdlibDifferentialTest extends Test {
 		final program: String = StdlibDifferential.program(candidate, maps);
 
 		Assert.isTrue(program.indexOf('class ${StdlibDifferential.PROBE_CLASS} {') >= 0);
-		Assert.isTrue(program.indexOf('\tstatic ' + candidate.source) >= 0, 'the candidate must be spliced verbatim');
+		Assert.isTrue(program.indexOf('\tstatic ${candidate.source}') >= 0, 'the candidate must be spliced verbatim');
 		Assert.equals(2, occurrences(program, 'for (a'), 'one input loop per parameter');
 		Assert.equals(maps.length, occurrences(program, '] && __apqEval('), 'one comparison per mapping');
 		Assert.isTrue(program.indexOf('__apqEval(() -> padDigit(a0, a1))') >= 0, 'the candidate is the baseline of every comparison');
@@ -159,7 +159,7 @@ class StdlibDifferentialTest extends Test {
 
 	/** A candidate whose name the probe module owns is refused before anything is staged. */
 	public function testReservedNameRefused(): Void {
-		final candidate: StdlibCandidate = one("class C {\n\tfunction main(i:Int):Int return i;\n}");
+		final candidate: StdlibCandidate = one('class C {\n\tfunction main(i:Int):Int return i;\n}');
 		Assert.notNull(StdlibDifferential.refusal(candidate, StdlibDifferential.mappings(candidate)));
 	}
 
@@ -168,7 +168,7 @@ class StdlibDifferentialTest extends Test {
 	 * enumeration DID fill is not -- both directions, so the gate cannot pass by refusing everything.
 	 */
 	public function testEmptyEnumerationRefused(): Void {
-		final candidate: StdlibCandidate = one("class C {\n\tfunction flip(b:Bool):Bool return !b;\n}");
+		final candidate: StdlibCandidate = one('class C {\n\tfunction flip(b:Bool):Bool return !b;\n}');
 		Assert.notNull(StdlibDifferential.refusal(candidate, []));
 		Assert.isNull(StdlibDifferential.refusal(candidate, StdlibDifferential.mappings(candidate)));
 	}
@@ -176,8 +176,8 @@ class StdlibDifferentialTest extends Test {
 	/** The motivating case, scanned into a candidate the way the CLI does. */
 	private static function padDigit(): StdlibCandidate {
 		return one(
-			"class C {\n" + "\tprivate function padDigit(i:Int, digits:Int):String {\n" + "\t\tvar str:String = '$i';\n"
-			+ "\t\twhile (str.length < digits) str = '0$str';\n" + "\t\treturn str;\n" + "\t}\n" + "}"
+			"class C {\n\tprivate function padDigit(i:Int, digits:Int):String {\n\t\tvar str:String = '$i';\n"
+			+ "\t\twhile (str.length < digits) str = '0$str';\n\t\treturn str;\n\t}\n}"
 		);
 	}
 

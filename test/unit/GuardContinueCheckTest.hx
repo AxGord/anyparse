@@ -49,15 +49,18 @@ class GuardContinueCheckTest extends Test {
 		Assert.equals(
 			1,
 			v(
-				'for (id in xs) {\n\t\t\tfinal a = load(id);\n\t\t\tif (a != null) {\n\t\t\t\tfinal b = find(a);\n\t\t\t\tif (b != null) {\n\t\t\t\t\tuse(b);\n\t\t\t\t}\n\t\t\t}\n\t\t}'
+				'for (id in xs) {\n\t\t\tfinal a = load(id);\n\t\t\tif (a != null) {\n\t\t\t\tfinal b = find(a);\n'
+				+ '\t\t\t\tif (b != null) {\n\t\t\t\t\tuse(b);\n\t\t\t\t}\n\t\t\t}\n\t\t}'
 			).length
 		);
 		Assert.equals(
 			wrap(
-				'for (id in xs) {\n\t\t\tfinal a = load(id);\n\t\t\tif (a == null) continue;\n\t\t\tfinal b = find(a);\n\t\t\tif (b == null) continue;\n\t\t\tuse(b);\n\t\t}'
+				'for (id in xs) {\n\t\t\tfinal a = load(id);\n\t\t\tif (a == null) continue;\n\t\t\tfinal b = find(a);\n'
+				+ '\t\t\tif (b == null) continue;\n\t\t\tuse(b);\n\t\t}'
 			),
 			fx(
-				'for (id in xs) {\n\t\t\tfinal a = load(id);\n\t\t\tif (a != null) {\n\t\t\t\tfinal b = find(a);\n\t\t\t\tif (b != null) {\n\t\t\t\t\tuse(b);\n\t\t\t\t}\n\t\t\t}\n\t\t}'
+				'for (id in xs) {\n\t\t\tfinal a = load(id);\n\t\t\tif (a != null) {\n\t\t\t\tfinal b = find(a);\n'
+				+ '\t\t\t\tif (b != null) {\n\t\t\t\t\tuse(b);\n\t\t\t\t}\n\t\t\t}\n\t\t}'
 			)
 		);
 	}
@@ -300,15 +303,18 @@ class GuardContinueCheckTest extends Test {
 		Assert.equals(
 			1,
 			v(
-				'for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tfor (y in ys) {\n\t\t\t\t\tif (y == 0) break;\n\t\t\t\t}\n\t\t\t}\n\t\t}'
+				'for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tfor (y in ys) {\n\t\t\t\t\tif (y == 0) break;\n\t\t\t\t}\n'
+				+ '\t\t\t}\n\t\t}'
 			).length
 		);
 		Assert.equals(
 			wrap(
-				'for (x in xs) {\n\t\t\tpre();\n\t\t\tif (!cond) continue;\n\t\t\tfor (y in ys) {\n\t\t\t\tif (y == 0) break;\n\t\t\t}\n\t\t}'
+				'for (x in xs) {\n\t\t\tpre();\n\t\t\tif (!cond) continue;\n\t\t\tfor (y in ys) {\n\t\t\t\tif (y == 0) break;\n\t\t\t}\n'
+				+ '\t\t}'
 			),
 			fx(
-				'for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tfor (y in ys) {\n\t\t\t\t\tif (y == 0) break;\n\t\t\t\t}\n\t\t\t}\n\t\t}'
+				'for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tfor (y in ys) {\n\t\t\t\t\tif (y == 0) break;\n\t\t\t\t}\n'
+				+ '\t\t\t}\n\t\t}'
 			)
 		);
 	}
@@ -341,7 +347,8 @@ class GuardContinueCheckTest extends Test {
 				'for (x in xs) {\n\t\t\tpre();\n\t\t\tdone = true;\n\t\t\tcount = 0;\n\t\t\tif (a == null) continue;\n\t\t\tbody(a);\n\t\t}'
 			),
 			fx(
-				'for (x in xs) {\n\t\t\tpre();\n\t\t\tif (a != null) {\n\t\t\t\tbody(a);\n\t\t\t}\n\t\t\tdone = true;\n\t\t\tcount = 0;\n\t\t}'
+				'for (x in xs) {\n\t\t\tpre();\n\t\t\tif (a != null) {\n\t\t\t\tbody(a);\n\t\t\t}\n\t\t\tdone = true;\n\t\t\tcount = 0;\n'
+				+ '\t\t}'
 			)
 		);
 	}
@@ -352,7 +359,8 @@ class GuardContinueCheckTest extends Test {
 		Assert.equals(
 			1,
 			v(
-				'for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\twhile (go()) {\n\t\t\t\t\tif (x == 0) break;\n\t\t\t\t}\n\t\t\t}\n\t\t\tdone = true;\n\t\t}'
+				'for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\twhile (go()) {\n\t\t\t\t\tif (x == 0) break;\n\t\t\t\t}\n'
+				+ '\t\t\t}\n\t\t\tdone = true;\n\t\t}'
 			).length
 		);
 	}
@@ -363,7 +371,8 @@ class GuardContinueCheckTest extends Test {
 		Assert.equals(
 			0,
 			v(
-				'for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tdone = false;\n\t\t\t\tbody();\n\t\t\t}\n\t\t\tdone = true;\n\t\t}'
+				'for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tdone = false;\n\t\t\t\tbody();\n\t\t\t}\n\t\t\tdone = true;\n'
+				+ '\t\t}'
 			).length
 		);
 	}
@@ -402,7 +411,8 @@ class GuardContinueCheckTest extends Test {
 		Assert.equals(
 			1,
 			v(
-				'for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tfinal g = function() { return 1; };\n\t\t\t\tuse(g);\n\t\t\t}\n\t\t}'
+				'for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tfinal g = function() { return 1; };\n\t\t\t\tuse(g);\n'
+				+ '\t\t\t}\n\t\t}'
 			).length
 		);
 	}
@@ -411,7 +421,8 @@ class GuardContinueCheckTest extends Test {
 		Assert.equals(
 			0,
 			v(
-				'for (x in xs) {\n\t\t\tpre();\n\t\t\tswitch (x) {\n\t\t\t\tcase 0:\n\t\t\t\t\tif (cond) {\n\t\t\t\t\t\tbody();\n\t\t\t\t\t}\n\t\t\t\tdefault:\n\t\t\t}\n\t\t}'
+				'for (x in xs) {\n\t\t\tpre();\n\t\t\tswitch (x) {\n\t\t\t\tcase 0:\n\t\t\t\t\tif (cond) {\n\t\t\t\t\t\tbody();\n'
+				+ '\t\t\t\t\t}\n\t\t\t\tdefault:\n\t\t\t}\n\t\t}'
 			).length
 		);
 	}
@@ -420,7 +431,8 @@ class GuardContinueCheckTest extends Test {
 		Assert.equals(
 			0,
 			v(
-				'for (x in xs) {\n\t\t\tpre();\n\t\t\ttry {\n\t\t\t\tif (cond) {\n\t\t\t\t\tbody();\n\t\t\t\t}\n\t\t\t} catch (e:Dynamic) {}\n\t\t}'
+				'for (x in xs) {\n\t\t\tpre();\n\t\t\ttry {\n\t\t\t\tif (cond) {\n\t\t\t\t\tbody();\n\t\t\t\t}\n'
+				+ '\t\t\t} catch (e:Dynamic) {}\n\t\t}'
 			).length
 		);
 	}
@@ -453,10 +465,12 @@ class GuardContinueCheckTest extends Test {
 		// inside string interpolation (double-quoted here so the host string is literal).
 		Assert.equals(
 			wrap(
-				"for (x in xs) {\n\t\t\tfinal p = pre();\n\t\t\tif (!cond) continue;\n\t\t\tvar p2 = start();\n\t\t\tp2 = 'a/$p2';\n\t\t\tuse('$p2-x');\n\t\t}"
+				"for (x in xs) {\n\t\t\tfinal p = pre();\n\t\t\tif (!cond) continue;\n\t\t\tvar p2 = start();\n\t\t\tp2 = 'a/$p2';\n"
+				+ "\t\t\tuse('$p2-x');\n\t\t}"
 			),
 			fx(
-				"for (x in xs) {\n\t\t\tfinal p = pre();\n\t\t\tif (cond) {\n\t\t\t\tvar p = start();\n\t\t\t\tp = 'a/$p';\n\t\t\t\tuse('$p-x');\n\t\t\t}\n\t\t}"
+				"for (x in xs) {\n\t\t\tfinal p = pre();\n\t\t\tif (cond) {\n\t\t\t\tvar p = start();\n\t\t\t\tp = 'a/$p';\n"
+				+ "\t\t\t\tuse('$p-x');\n\t\t\t}\n\t\t}"
 			)
 		);
 	}
@@ -467,7 +481,8 @@ class GuardContinueCheckTest extends Test {
 		Assert.equals(
 			0,
 			v(
-				'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (cond) {\n\t\t\t\tvar b = 1;\n\t\t\t\tif (q) {\n\t\t\t\t\tvar b = 2;\n\t\t\t\t\ttrace(b);\n\t\t\t\t}\n\t\t\t}\n\t\t}'
+				'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (cond) {\n\t\t\t\tvar b = 1;\n\t\t\t\tif (q) {\n\t\t\t\t\tvar b = 2;\n'
+				+ '\t\t\t\t\ttrace(b);\n\t\t\t\t}\n\t\t\t}\n\t\t}'
 			).length
 		);
 	}
@@ -485,10 +500,12 @@ class GuardContinueCheckTest extends Test {
 		// `b2` is already bound in the loop body, so the fresh name walks on to `b3`.
 		Assert.equals(
 			wrap(
-				'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tfinal b2 = spare();\n\t\t\tif (!cond) continue;\n\t\t\tfinal b3 = other();\n\t\t\tuse(b3);\n\t\t}'
+				'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tfinal b2 = spare();\n\t\t\tif (!cond) continue;\n'
+				+ '\t\t\tfinal b3 = other();\n\t\t\tuse(b3);\n\t\t}'
 			),
 			fx(
-				'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tfinal b2 = spare();\n\t\t\tif (cond) {\n\t\t\t\tfinal b = other();\n\t\t\t\tuse(b);\n\t\t\t}\n\t\t}'
+				'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tfinal b2 = spare();\n\t\t\tif (cond) {\n\t\t\t\tfinal b = other();\n'
+				+ '\t\t\t\tuse(b);\n\t\t\t}\n\t\t}'
 			)
 		);
 	}
@@ -499,7 +516,8 @@ class GuardContinueCheckTest extends Test {
 		Assert.equals(
 			0,
 			v(
-				'for (x in xs) {\n\t\t\tfinal path = pre();\n\t\t\tif (cond) {\n\t\t\t\tfinal path = path + "/sub";\n\t\t\t\tuse(path);\n\t\t\t}\n\t\t}'
+				'for (x in xs) {\n\t\t\tfinal path = pre();\n\t\t\tif (cond) {\n\t\t\t\tfinal path = path + "/sub";\n\t\t\t\tuse(path);\n'
+				+ '\t\t\t}\n\t\t}'
 			).length
 		);
 	}
@@ -509,7 +527,8 @@ class GuardContinueCheckTest extends Test {
 		Assert.equals(
 			0,
 			v(
-				'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (cond) {\n\t\t\t\tuse(b);\n\t\t\t\tfinal b = other();\n\t\t\t\tuse(b);\n\t\t\t}\n\t\t}'
+				'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (cond) {\n\t\t\t\tuse(b);\n\t\t\t\tfinal b = other();\n'
+				+ '\t\t\t\tuse(b);\n\t\t\t}\n\t\t}'
 			).length
 		);
 	}
@@ -538,7 +557,8 @@ class GuardContinueCheckTest extends Test {
 		Assert.equals(1, v(code).length);
 		Assert.equals(
 			canon(wrap(
-				'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (!cond) continue;\n\t\t\t@:nullSafety(Off) var b2:String = other();\n\t\t\tuse(b2);\n\t\t}'
+				'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (!cond) continue;\n\t\t\t@:nullSafety(Off) var b2:String = other();\n'
+				+ '\t\t\tuse(b2);\n\t\t}'
 			)),
 			fx(code)
 		);
@@ -551,7 +571,8 @@ class GuardContinueCheckTest extends Test {
 		Assert.equals(1, v(code).length);
 		Assert.equals(
 			canon(wrap(
-				'for (x in xs) {\n\t\t\t@:nullSafety(Off) var b:String = pre();\n\t\t\tif (!cond) continue;\n\t\t\tfinal b2 = other();\n\t\t\tuse(b2);\n\t\t}'
+				'for (x in xs) {\n\t\t\t@:nullSafety(Off) var b:String = pre();\n\t\t\tif (!cond) continue;\n\t\t\tfinal b2 = other();\n'
+				+ '\t\t\tuse(b2);\n\t\t}'
 			)),
 			fx(code)
 		);

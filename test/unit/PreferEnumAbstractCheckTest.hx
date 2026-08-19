@@ -25,7 +25,8 @@ class PreferEnumAbstractCheckTest extends Test {
 		// RANK_A and RANK_B are returned as the two branches of one ternary — the
 		// interchangeable-use signal that marks the group an enumeration.
 		final vs: Array<Violation> = violations(
-			'class C { static inline final RANK_A:Int = 0; static final RANK_B = 1; static final RANK_C = 2; static function r(x:Int):Int { return x == 0 ? RANK_A : RANK_B; } }'
+			'class C { static inline final RANK_A:Int = 0; static final RANK_B = 1; static final RANK_C = 2; static function '
+			+ 'r(x:Int):Int { return x == 0 ? RANK_A : RANK_B; } }'
 		);
 		Assert.equals(1, vs.length);
 		assertAdvisory(vs[0]);
@@ -62,14 +63,16 @@ class PreferEnumAbstractCheckTest extends Test {
 
 	public function testTwoPrefixGroupsBothFlagged(): Void {
 		final vs: Array<Violation> = violations(
-			'class C { static final RANK_A = 0; static final RANK_B = 1; static final RANK_C = 2; static final KIND_A = 0; static final KIND_B = 1; static final KIND_C = 2; static function r(x:Int):Int { return x == 0 ? RANK_A : RANK_B; } static function k(x:Int):Int { return x == 0 ? KIND_A : KIND_B; } }'
+			'class C { static final RANK_A = 0; static final RANK_B = 1; static final RANK_C = 2; static final KIND_A = 0; static final '
+			+ 'KIND_B = 1; static final KIND_C = 2; static function r(x:Int):Int { return x == 0 ? RANK_A : RANK_B; } '
+			+ 'static function k(x:Int):Int { return x == 0 ? KIND_A : KIND_B; } }'
 		);
 		Assert.equals(2, vs.length);
 	}
 
 	public function testFixReturnsEmpty(): Void {
-		final src: String =
-			'class C { static final RANK_A = 0; static final RANK_B = 1; static final RANK_C = 2; static function r(x:Int):Int { return x == 0 ? RANK_A : RANK_B; } }';
+		final src: String = 'class C { static final RANK_A = 0; static final RANK_B = 1; static final RANK_C = 2; static function '
+			+ 'r(x:Int):Int { return x == 0 ? RANK_A : RANK_B; } }';
 		final check: PreferEnumAbstract = new PreferEnumAbstract();
 		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
 	}
@@ -90,7 +93,8 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class C { static final RANK_UNKNOWN = -1; static final RANK_LOW = 0; static final RANK_HIGH = 1; static function r(x:Int):Int { return x < 0 ? RANK_UNKNOWN : RANK_LOW; } }'
+				'class C { static final RANK_UNKNOWN = -1; static final RANK_LOW = 0; static final RANK_HIGH = 1; static function '
+				+ 'r(x:Int):Int { return x < 0 ? RANK_UNKNOWN : RANK_LOW; } }'
 			).length
 		);
 	}
@@ -102,7 +106,8 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { static final CFG_MIN = 3; static final CFG_MAX = 9; static final CFG_STEP = 2; static function f(a:Int, b:Int):Bool { return a >= CFG_MIN && b <= CFG_MAX && a % CFG_STEP == 0; } }'
+				'class C { static final CFG_MIN = 3; static final CFG_MAX = 9; static final CFG_STEP = 2; static function f(a:Int, '
+				+ 'b:Int):Bool { return a >= CFG_MIN && b <= CFG_MAX && a % CFG_STEP == 0; } }'
 			).length
 		);
 	}
@@ -113,7 +118,8 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class C { static final MODE_A = 0; static final MODE_B = 1; static final MODE_C = 2; static function pick(x:Int):Int { var m:Int = 0; if (x > 0) m = MODE_A; else m = MODE_B; return m; } }'
+				'class C { static final MODE_A = 0; static final MODE_B = 1; static final MODE_C = 2; static function pick(x:Int):Int {'
+				+ ' var m:Int = 0; if (x > 0) m = MODE_A; else m = MODE_B; return m; } }'
 			).length
 		);
 	}
@@ -123,7 +129,8 @@ class PreferEnumAbstractCheckTest extends Test {
 		// IS the enumeration — no in-file use is needed as evidence, and the alignment-style
 		// constants that motivate this arm are read only from other files.
 		final vs: Array<Violation> = violations(
-			'class Align { public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; public static inline final RIGHT:String = \'right\'; }'
+			'class Align { public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; '
+			+ 'public static inline final RIGHT:String = \'right\'; }'
 		);
 		Assert.equals(1, vs.length);
 		assertAdvisory(vs[0]);
@@ -135,7 +142,8 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class Level { public static inline final LOW:Int = 0; public static inline final MID:Int = 1; public static inline final HIGH:Int = 2; }'
+				'class Level { public static inline final LOW:Int = 0; public static inline final MID:Int = 1; public static inline '
+				+ 'final HIGH:Int = 2; }'
 			).length
 		);
 	}
@@ -146,7 +154,8 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class Align { public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; public static inline final RIGHT:String = \'right\'; public static function all():Int { return 3; } }'
+				'class Align { public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; '
+				+ 'public static inline final RIGHT:String = \'right\'; public static function all():Int { return 3; } }'
 			).length
 		);
 	}
@@ -155,7 +164,8 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class Align { public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; public static inline final RIGHT:String = \'right\'; public function new() {} }'
+				'class Align { public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; '
+				+ 'public static inline final RIGHT:String = \'right\'; public function new() {} }'
 			).length
 		);
 	}
@@ -164,7 +174,8 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class Align extends Base { public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; public static inline final RIGHT:String = \'right\'; }'
+				'class Align extends Base { public static inline final CENTER:String = \'center\'; public static inline final '
+				+ 'LEFT:String = \'left\'; public static inline final RIGHT:String = \'right\'; }'
 			).length
 		);
 	}
@@ -174,7 +185,8 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class Mix { public static inline final A:String = \'a\'; public static inline final B:Int = 1; public static inline final C:String = \'c\'; }'
+				'class Mix { public static inline final A:String = \'a\'; public static inline final B:Int = 1; public static inline '
+				+ 'final C:String = \'c\'; }'
 			).length
 		);
 	}
@@ -184,7 +196,8 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class Dup { public static inline final A:String = \'x\'; public static inline final B:String = \'x\'; public static inline final C:String = \'y\'; }'
+				'class Dup { public static inline final A:String = \'x\'; public static inline final B:String = \'x\'; public static '
+				+ 'inline final C:String = \'y\'; }'
 			).length
 		);
 	}
@@ -194,7 +207,8 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class Align { public static final CENTER:String = \'center\'; public static final LEFT:String = \'left\'; public static final RIGHT:String = \'right\'; }'
+				'class Align { public static final CENTER:String = \'center\'; public static final LEFT:String = \'left\'; public static '
+				+ 'final RIGHT:String = \'right\'; }'
 			).length
 		);
 	}
@@ -203,7 +217,8 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class Align { public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; public static inline final BOTH:String = CENTER + LEFT; }'
+				'class Align { public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; '
+				+ 'public static inline final BOTH:String = CENTER + LEFT; }'
 			).length
 		);
 	}
@@ -212,7 +227,8 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class Align { public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; public static inline final RIGHT:String = \'right\'; static var current:String = \'center\'; }'
+				'class Align { public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; '
+				+ 'public static inline final RIGHT:String = \'right\'; static var current:String = \'center\'; }'
 			).length
 		);
 	}
@@ -221,7 +237,8 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class Align { public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; public static inline final RIGHT:String = \'right\'; final own:String = \'x\'; }'
+				'class Align { public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; '
+				+ 'public static inline final RIGHT:String = \'right\'; final own:String = \'x\'; }'
 			).length
 		);
 	}
@@ -239,7 +256,8 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'abstract A(Int) { public static inline final X:Int = 1; public static inline final Y:Int = 2; public static inline final Z:Int = 3; }'
+				'abstract A(Int) {'
+				+ ' public static inline final X:Int = 1; public static inline final Y:Int = 2; public static inline final Z:Int = 3; }'
 			).length
 		);
 	}
@@ -249,7 +267,8 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class Align { @:keep public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = \'left\'; public static inline final RIGHT:String = \'right\'; }'
+				'class Align { @:keep public static inline final CENTER:String = \'center\'; public static inline final LEFT:String = '
+				+ '\'left\'; public static inline final RIGHT:String = \'right\'; }'
 			).length
 		);
 	}
@@ -261,7 +280,8 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class Guarded { public static inline final A:String = \'a\'; public static inline final B:String = \'b\';\n#if debug\npublic static inline final C:String = \'c\';\n#end\n }'
+				'class Guarded { public static inline final A:String = \'a\'; public static inline final B:String = \'b\';\n#if debug\n'
+				+ 'public static inline final C:String = \'c\';\n#end\n }'
 			).length
 		);
 	}
@@ -270,7 +290,8 @@ class PreferEnumAbstractCheckTest extends Test {
 		// The whole-type arm subsumes the prefix arm for the same container: one finding,
 		// not two, when the constants also share a prefix and feed one sink elsewhere.
 		final vs: Array<Violation> = violations(
-			'class E { public static inline final RANK_A:Int = 0; public static inline final RANK_B:Int = 1; public static inline final RANK_C:Int = 2; }\nclass U { static function r(x:Int):Int { return x == 0 ? RANK_A : RANK_B; } }'
+			'class E { public static inline final RANK_A:Int = 0; public static inline final RANK_B:Int = 1; public static inline final '
+			+ 'RANK_C:Int = 2; }\nclass U { static function r(x:Int):Int { return x == 0 ? RANK_A : RANK_B; } }'
 		);
 		Assert.equals(1, vs.length);
 	}

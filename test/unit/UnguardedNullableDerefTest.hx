@@ -90,7 +90,8 @@ class UnguardedNullableDerefTest extends Test {
 				{ file: 'Box.hx', source: 'class Box { public function get():Null<Foo> return null; }' },
 				{
 					file: 'Main.hx',
-					source: 'class Safe { public function get():Foo return null; } class Main { function run() { var Box = new Safe(); var v = Box.get(); v.name; } }'
+					source: 'class Safe { public function get():Foo return null; } class Main { function run() {'
+					+ ' var Box = new Safe(); var v = Box.get(); v.name; } }'
 				}
 			]).length
 		);
@@ -241,7 +242,8 @@ class UnguardedNullableDerefTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class C { function f(m:Map<String,Foo>, k:String) { if (m.exists(k)) { k = other(); var u = m[k]; u.foo; } } function other():String return ""; }'
+				'class C { function f(m:Map<String,Foo>, k:String) { if (m.exists(k)) { k = other(); var u = m[k]; u.foo; } } '
+				+ 'function other():String return ""; }'
 			).length
 		);
 	}
@@ -251,7 +253,8 @@ class UnguardedNullableDerefTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class C { function f(m:Map<String,Foo>, k:String) { if (m.exists(k)) { m = other(); var u = m[k]; u.foo; } } function other():Map<String,Foo> return null; }'
+				'class C { function f(m:Map<String,Foo>, k:String) { if (m.exists(k)) { m = other(); var u = m[k]; u.foo; } } '
+				+ 'function other():Map<String,Foo> return null; }'
 			).length
 		);
 	}
@@ -339,7 +342,8 @@ class UnguardedNullableDerefTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class C { function f(m:Map<String,Foo>) { var u = m[k]; var g = function() { Assert.isTrue(u != null); return 0; }; u.foo; } }'
+				'class C { function f(m:Map<String,Foo>) { var u = m[k]; var g = function() {'
+				+ ' Assert.isTrue(u != null); return 0; }; u.foo; } }'
 			).length
 		);
 	}

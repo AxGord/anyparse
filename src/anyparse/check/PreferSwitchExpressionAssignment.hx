@@ -132,8 +132,8 @@ final class PreferSwitchExpressionAssignment implements Check {
 	}
 
 	public function description(): String {
-		return
-			'a switch that assigns the same target in every arm (optionally paired with its preceding local declaration), collapsible to a single switch-expression assignment';
+		return 'a switch that assigns the same target in every arm ('
+			+ 'optionally paired with its preceding local declaration), collapsible to a single switch-expression assignment';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

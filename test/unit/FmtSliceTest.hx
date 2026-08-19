@@ -92,7 +92,12 @@ class FmtSliceTest extends Test {
 	private static function fixture(source: String): String {
 		counter++;
 		final env: Null<String> = Sys.getEnv('TMPDIR');
-		final base: String = env != null && env.length > 0 ? env.endsWith('/') ? env.substr(0, env.length - 1) : env : '/tmp';
+		final base: String = if (env == null || env.length <= 0)
+			'/tmp'
+		else if (env.endsWith('/'))
+			env.substr(0, env.length - 1)
+		else
+			env;
 		final path: String = '$base/tmp_apq_fmt_${Sys.time()}_$counter.hx';
 		File.saveContent(path, source);
 		return path;

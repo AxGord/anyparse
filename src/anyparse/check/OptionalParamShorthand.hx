@@ -139,8 +139,8 @@ final class OptionalParamShorthand implements Check {
 	}
 
 	public function description(): String {
-		return
-			'a nullable-defaulted parameter (name:Null<T> = null or name:T = null) the ? shorthand (?name:T) replaces, a redundant = null default on an already-optional ?name:T, or a redundant ? on ?name:T = <non-null default>';
+		return 'a nullable-defaulted parameter (name:Null<T> = null or name:T = null) the ? shorthand (?name:T) '
+			+ 'replaces, a redundant = null default on an already-optional ?name:T, or a redundant ? on ?name:T = <non-null default>';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -209,7 +209,8 @@ final class OptionalParamShorthand implements Check {
 						span: span,
 						rule: RULE_ID,
 						severity: Severity.Info,
-						message: 'drop the redundant ? on ?$name:$rawType - a non-null default already makes the parameter optional, and the ? widens its body type to Null<$rawType>'
+						message: 'drop the redundant ? on ?$name:$rawType'
+						+ ' - a non-null default already makes the parameter optional, and the ? widens its body type to Null<$rawType>'
 					});
 				}
 			}

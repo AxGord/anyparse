@@ -68,10 +68,7 @@ final class Lit {
 		for (h in hits) {
 			final pos: Position = h.span.lineCol(source);
 			final shown: String = displayText(h.name);
-			if (flat)
-				buf.add('$file:${pos.line}:${pos.col}: ${h.kind} \'$shown\'\n');
-			else
-				buf.add('  ${pos.line}:${pos.col}: ${h.kind} \'$shown\'\n');
+			buf.add(flat ? '$file:${pos.line}:${pos.col}: ${h.kind} \'$shown\'\n' : '  ${pos.line}:${pos.col}: ${h.kind} \'$shown\'\n');
 		}
 		return buf.toString();
 	}

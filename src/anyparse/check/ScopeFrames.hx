@@ -67,11 +67,11 @@ final class ScopeFrames {
 		ownParams: Null<Array<String>>
 	): Array<String> {
 		return ownParams ?? (
-			seams.scopeKinds.contains(child.kind)
-				? []
-				: seams.blockKinds.contains(node.kind) && child.kind == seams.condKind
-					? inherited.concat(frameLocalNames(node, seams, child))
-					: scopeNames
+			if (seams.scopeKinds.contains(child.kind))
+				[] else if (seams.blockKinds.contains(node.kind) && child.kind == seams.condKind)
+				inherited.concat(frameLocalNames(node, seams, child))
+			else
+				scopeNames
 		);
 	}
 

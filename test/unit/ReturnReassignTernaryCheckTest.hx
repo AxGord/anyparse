@@ -224,9 +224,8 @@ class ReturnReassignTernaryCheckTest extends Test {
 	public function testLongMergedTernaryWrapsThroughWriter(): Void {
 		final src: String = canon(
 			'class C {\n\tfunction f():Int {\n\t\tvar someRatherLongLocalNameHere = computeDefault(alphaValue);\n'
-			+ '\t\tif (conditionHolds(alphaValue, betaValue, gammaValue)) someRatherLongLocalNameHere = '
-			+ 'computeAlternateValue(alphaValue, betaValue, gammaValue, deltaValue, epsilonValue);\n'
-			+ '\t\treturn someRatherLongLocalNameHere;\n\t}\n}'
+			+ '\t\tif (conditionHolds(alphaValue, betaValue, gammaValue)) someRatherLongLocalNameHere = computeAlternateValue(alphaValue, '
+			+ 'betaValue, gammaValue, deltaValue, epsilonValue);\n\t\treturn someRatherLongLocalNameHere;\n\t}\n}'
 		);
 		final out: String = applyFixOnce(src);
 		Assert.notEquals(src, out);

@@ -58,7 +58,8 @@ class LambdaBranchingBodyBlockCheckTest extends Test {
 	public function testSwitchBodyWrappedWithoutExtraSemicolon(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tpost(v -> switch v { case 1: f(); case _: g(); }, onError);\n\t}\n}';
 		Assert.equals(
-			'class C {\n\tfunction f():Void {\n\t\tpost(v -> {\n\t\t\tswitch v {\n\t\t\t\tcase 1: f();\n\t\t\t\tcase _: g();\n\t\t\t}\n\t\t}, onError);\n\t}\n}\n',
+			'class C {\n\tfunction f():Void {\n\t\tpost(v -> {\n\t\t\tswitch v {\n\t\t\t\tcase 1: f();\n\t\t\t\tcase _: g();\n\t\t\t}\n'
+			+ '\t\t}, onError);\n\t}\n}\n',
 			applied(src)
 		);
 	}

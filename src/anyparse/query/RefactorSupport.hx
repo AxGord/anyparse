@@ -321,6 +321,18 @@ final class RefactorSupport {
 	 */
 	public static final META_KINDS: Array<String> = ['Meta', 'MetaCall', 'PlainMeta'];
 
+	/** The grammar kind a dotted member access projects as — one link of a receiver chain. */
+	public static final FIELD_ACCESS_KIND: String = 'FieldAccess';
+
+	/** The grammar kind a bare identifier projects as — the root of a receiver chain. */
+	public static final IDENT_EXPR_KIND: String = 'IdentExpr';
+
+	/**
+	 * How many characters of an unparsed conditional-compilation region a refusal diagnostic quotes
+	 * back — enough to recognise the region in the file, short enough to keep the message one line.
+	 */
+	private static inline final REGION_EXCERPT_CHARS: Int = 60;
+
 	/**
 	 * Class-member declaration kinds (fields / methods). A binding whose
 	 * decl node carries one of these kinds is a class member, not a local
@@ -337,21 +349,8 @@ final class RefactorSupport {
 	/** The grammar kind a `typedef` projects as — the only member host whose members sit under an `Anon`. */
 	private static final TYPEDEF_DECL_KIND: String = 'TypedefDecl';
 
-	/**
-	 * How many characters of an unparsed conditional-compilation region a refusal diagnostic quotes
-	 * back — enough to recognise the region in the file, short enough to keep the message one line.
-	 */
-	private static inline final REGION_EXCERPT_CHARS: Int = 60;
-
-
 	/** The grammar kind an anonymous structure projects as, in BOTH a typedef body and a type expression. */
 	private static final ANON_KIND: String = 'Anon';
-
-	/** The grammar kind a dotted member access projects as — one link of a receiver chain. */
-	public static final FIELD_ACCESS_KIND: String = 'FieldAccess';
-
-	/** The grammar kind a bare identifier projects as — the root of a receiver chain. */
-	public static final IDENT_EXPR_KIND: String = 'IdentExpr';
 
 	/** The numeric escapes that spell the interpolation trigger `$` (see `interpolationEscapeBefore`). */
 	private static final DOLLAR_ESCAPES: Array<String> = ['\\x24', '\\u0024'];
@@ -379,15 +378,6 @@ final class RefactorSupport {
 		'Dynamic',
 		'Abstract'
 	]);
-
-	/**
-	 * Whether `kind` is one of the modifier / metadata siblings a declaration projects BEFORE itself
-	 * (`MODIFIER_META_KINDS`). Address resolution asks this to walk a bare line number past a
-	 * `public static` prefix onto the declaration the line actually declares.
-	 */
-	public static inline function isModifierOrMetaKind(kind: String): Bool {
-		return MODIFIER_META_KINDS.contains(kind);
-	}
 
 	/**
 	 * Node kinds an expression subtree may contain and still be
@@ -470,6 +460,15 @@ final class RefactorSupport {
 		'Xml'
 	];
 
+	/**
+	 * Whether `kind` is one of the modifier / metadata siblings a declaration projects BEFORE itself
+	 * (`MODIFIER_META_KINDS`). Address resolution asks this to walk a bare line number past a
+	 * `public static` prefix onto the declaration the line actually declares.
+	 */
+	public static inline function isModifierOrMetaKind(kind: String): Bool {
+		return MODIFIER_META_KINDS.contains(kind);
+	}
+
 	/** Is `kind` a class-member declaration (field / method)? */
 	public static inline function isFieldMemberKind(kind: String): Bool {
 		return FIELD_MEMBER_KINDS.contains(kind);
@@ -478,28 +477,6 @@ final class RefactorSupport {
 	/** Is `kind` a member that HOLDS a value — a data field rather than a method? */
 	public static inline function isDataFieldKind(kind: String): Bool {
 		return DATA_FIELD_KINDS.contains(kind);
-	}
-
-	/**
-	 * Whether a member of a `declKind` type is static WITHOUT saying so — the grammar's
-	 * `RefShape.implicitStaticFieldHostKinds` answer, narrowed to data members because an
-	 * abstract's METHODS may be either and there the modifier still decides.
-	 *
-	 * Shared by the member operations, because a MODIFIER-only read routes an `enum abstract`
-	 * value to the INSTANCE path — whose receiver resolution looks for a binding holding a
-	 * VALUE of the type, and so never matches the type used as a namespace.
-	 *
-	 * OVER-REPORTS THE PROPERTY FORM, compiler-probed: `abstract A(Int) { public var
-	 * length(get, never): Int; }` is legal and `length` is an INSTANCE member (`a.length`
-	 * compiles; `A.length` errors `Cannot access non-static abstract field statically`), yet
-	 * the query projection drops the accessor clause — it emits a bare `(VarMember length)`,
-	 * indistinguishable from an `enum abstract` value. A caller that only picks a resolution
-	 * path over-approximates harmlessly; a caller that WRITES must refuse the shape instead of
-	 * trusting the answer (`MoveMember.resolveMovedMembers` does).
-	 */
-	public static function implicitlyStaticMember(declKind: String, memberKind: String, refShape: RefShape): Bool {
-		final hosts: Null<Array<String>> = refShape.implicitStaticFieldHostKinds;
-		return hosts != null && hosts.contains(declKind) && isDataFieldKind(memberKind);
 	}
 
 	/**
@@ -747,6 +724,48 @@ final class RefactorSupport {
 	 */
 	public static inline function isConditionalKind(kind: String): Bool {
 		return kind == 'Conditional' || kind == 'ConditionalExpr' || kind.startsWith('CondSplice');
+	}
+
+	/**
+	 * Whether a BARE `typeName` needs no import to resolve from a file in `filePkg` — which only a
+	 * module's MAIN type read from that module's OWN package ever does. A SUB-MODULE type is
+	 * invisible bare outside its own module, a sibling file in the same package included.
+	 *
+	 * The proof every import decision owes before it omits an import. "The two files share a
+	 * package" is not that proof, and reading it as one leaves the file naming a type the compiler
+	 * cannot find.
+	 *
+	 * Deliberately conservative in one place: a ROOT-package main type IS visible bare from every
+	 * package, but only until the reading file's own package declares the same name, and nothing
+	 * here can see out of scope to rule that out — so the answer stays `false` and the caller emits
+	 * an `import Mod;` that is redundant rather than a bare name that could bind to the wrong type.
+	 * The same-MODULE case (both types in one file, where the bare name always resolves) is not
+	 * expressible from `filePkg` alone and is the caller's to exclude.
+	 */
+	public static inline function bareNameResolves(typeName: String, module: ModulePath, filePkg: String): Bool {
+		return typeName == module.base && filePkg == module.pkg;
+	}
+
+	/**
+	 * Whether a member of a `declKind` type is static WITHOUT saying so — the grammar's
+	 * `RefShape.implicitStaticFieldHostKinds` answer, narrowed to data members because an
+	 * abstract's METHODS may be either and there the modifier still decides.
+	 *
+	 * Shared by the member operations, because a MODIFIER-only read routes an `enum abstract`
+	 * value to the INSTANCE path — whose receiver resolution looks for a binding holding a
+	 * VALUE of the type, and so never matches the type used as a namespace.
+	 *
+	 * OVER-REPORTS THE PROPERTY FORM, compiler-probed: `abstract A(Int) { public var
+	 * length(get, never): Int; }` is legal and `length` is an INSTANCE member (`a.length`
+	 * compiles; `A.length` errors `Cannot access non-static abstract field statically`), yet
+	 * the query projection drops the accessor clause — it emits a bare `(VarMember length)`,
+	 * indistinguishable from an `enum abstract` value. A caller that only picks a resolution
+	 * path over-approximates harmlessly; a caller that WRITES must refuse the shape instead of
+	 * trusting the answer (`MoveMember.resolveMovedMembers` does).
+	 */
+	public static function implicitlyStaticMember(declKind: String, memberKind: String, refShape: RefShape): Bool {
+		final hosts: Null<Array<String>> = refShape.implicitStaticFieldHostKinds;
+		return hosts != null && hosts.contains(declKind) && isDataFieldKind(memberKind);
 	}
 
 	/**
@@ -1010,7 +1029,6 @@ final class RefactorSupport {
 		return tail.endsWith('.hx') ? tail.substr(0, tail.length - '.hx'.length) : tail;
 	}
 
-
 	/**
 	 * Every DOTTED path by which a file in package `filePkg` may legally name `typeName`
 	 * declared in `module` — the whole set a qualified reference is matched against.
@@ -1046,26 +1064,6 @@ final class RefactorSupport {
 	 */
 	public static function rootQualifiedPath(typeName: String, module: ModulePath): String {
 		return typeName == module.base ? module.path : '${module.path}.$typeName';
-	}
-
-	/**
-	 * Whether a BARE `typeName` needs no import to resolve from a file in `filePkg` — which only a
-	 * module's MAIN type read from that module's OWN package ever does. A SUB-MODULE type is
-	 * invisible bare outside its own module, a sibling file in the same package included.
-	 *
-	 * The proof every import decision owes before it omits an import. "The two files share a
-	 * package" is not that proof, and reading it as one leaves the file naming a type the compiler
-	 * cannot find.
-	 *
-	 * Deliberately conservative in one place: a ROOT-package main type IS visible bare from every
-	 * package, but only until the reading file's own package declares the same name, and nothing
-	 * here can see out of scope to rule that out — so the answer stays `false` and the caller emits
-	 * an `import Mod;` that is redundant rather than a bare name that could bind to the wrong type.
-	 * The same-MODULE case (both types in one file, where the bare name always resolves) is not
-	 * expressible from `filePkg` alone and is the caller's to exclude.
-	 */
-	public static inline function bareNameResolves(typeName: String, module: ModulePath, filePkg: String): Bool {
-		return typeName == module.base && filePkg == module.pkg;
 	}
 
 	/** The dotted path a receiver chain spells (`a.b.C`), or `''` when a link is not a plain name. */
@@ -1315,7 +1313,8 @@ final class RefactorSupport {
 			// user after a flag their command rejects.
 			if (canon != source)
 				return Err(
-					'file is not in canonical form — format it first (`apq fmt --write <file>`); a command that accepts `--reformat` can canonicalise the whole file in place instead'
+					'file is not in canonical form — format it first ('
+					+ '`apq fmt --write <file>`); a command that accepts `--reformat` can canonicalise the whole file in place instead'
 				);
 		}
 
@@ -1451,7 +1450,6 @@ final class RefactorSupport {
 		final declSpan: Null<Span> = siblings[declIndex].span;
 		return startSpan == null || declSpan == null ? nodeSpan : new Span(startSpan.from, declSpan.to);
 	}
-
 
 	/**
 	 * Remove `node` (with its modifier / meta group, via `declGroupSpan`)
@@ -1652,11 +1650,6 @@ final class RefactorSupport {
 		while (below < source.length && isHorizontalSpace(source.fastCodeAt(below))) below++;
 		// End of file is not a blank line — there is no separator left to give back.
 		return below < source.length && source.fastCodeAt(below) == '\n'.code ? new Span(span.from, below + 1) : span;
-	}
-
-	/** Whether `code` is whitespace that does NOT end a line — space, tab, carriage return. */
-	private static inline function isHorizontalSpace(code: Int): Bool {
-		return code == ' '.code || code == '\t'.code || code == '\r'.code;
 	}
 
 	/**
@@ -3425,50 +3418,6 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * A single-line excerpt of `span`'s source text for a diagnostic — whitespace runs collapsed
-	 * to one space and the result capped at `REGION_EXCERPT_CHARS`, so a region spanning several
-	 * source lines still names itself in one message line.
-	 */
-	private static function regionExcerpt(source: String, span: Span): String {
-		final flat: String = ~/\s+/g.replace(source.substring(span.from, span.to), ' ').trim();
-		return flat.length <= REGION_EXCERPT_CHARS ? flat : '${flat.substr(0, REGION_EXCERPT_CHARS)}...';
-	}
-
-	/**
-	 * The parts of `span` that none of `node`'s direct children cover — the bytes the model
-	 * dropped. Children are taken in span order and a child with no span contributes nothing,
-	 * which widens the gap rather than narrowing it: the safe direction for a fail-closed gate.
-	 */
-	private static function unmodelledGaps(node: QueryNode, span: Span): Array<Span> {
-		final covered: Array<Span> = [for (c in node.children) if (c.span != null) (c.span: Span)];
-		covered.sort((a, b) -> a.from - b.from);
-		final out: Array<Span> = [];
-		var at: Int = span.from;
-		for (c in covered) {
-			if (c.from > at) out.push(new Span(at, c.from < span.to ? c.from : span.to));
-			if (c.to > at) at = c.to;
-		}
-		if (at < span.to) out.push(new Span(at, span.to));
-		return out;
-	}
-
-	/**
-	 * Whether `source` spells `name` as a standalone identifier token anywhere inside `span`.
-	 *
-	 * A `#`-prefixed spelling is skipped: `#end` / `#if` / `#else` are the directive keywords that
-	 * DELIMIT the region, not references inside it, and every such region ends in one — counting
-	 * them would refuse every rename of a binding called `end` in any file carrying a splice.
-	 */
-	private static function mentionsIdent(source: String, span: Span, name: String): Bool {
-		var at: Int = source.indexOf(name, span.from);
-		while (at >= 0 && at + name.length <= span.to) {
-			if (standaloneIdentAt(source, name, at) && (at == 0 || source.fastCodeAt(at - 1) != '#'.code)) return true;
-			at = source.indexOf(name, at + 1);
-		}
-		return false;
-	}
-
-	/**
 	 * The deepest function / lambda subtree containing `cursor`, or the whole tree when none
 	 * does — the region a local binding can be referenced from, and therefore the scope a
 	 * name-agnostic net (an unreadable interpolation hole, a same-block re-declaration) has
@@ -3577,6 +3526,235 @@ final class RefactorSupport {
 		return found;
 	}
 
+	/**
+	 * Whether only spaces and tabs separate `at` from the start of its line — the test that tells a declaration's own leading comment from the PREVIOUS declaration's trailing
+	 * one. Both end just above the next declaration and are equally adjacent to it; only
+	 * the line the comment opens on says whose it is.
+	 */
+	public static function startsItsLine(source: String, at: Int): Bool {
+		var i: Int = at - 1;
+		while (i >= 0 && (source.fastCodeAt(i) == ' '.code || source.fastCodeAt(i) == '\t'.code)) i--;
+		return i < 0 || source.fastCodeAt(i) == '\n'.code;
+	}
+
+	/**
+	 * Remove EVERY node in `targets` from `source` in one canonicalisation — the multi-node
+	 * form of `deleteNode`, which is this with a single target.
+	 *
+	 * One call rather than a fold of single deletions because each `deleteNode` returns
+	 * REWRITTEN source: the second call would have to re-parse it and re-resolve its target,
+	 * and the writer may by then have moved the very span the caller measured. Collecting the
+	 * spans against ONE tree and handing them to `canonicalize` together keeps every span in
+	 * the coordinate system it was computed in.
+	 *
+	 * That is also why OVERLAP is refused rather than tolerated. `applyEdits` splices each span
+	 * independently, so a target nested inside another (a member and the region holding it, or
+	 * two nested regions) makes the second splice run on coordinates the first already shifted —
+	 * it deletes unrelated code, and the re-parse does not catch it because the wreckage usually
+	 * still parses. A caller that means to remove a node and its container passes the CONTAINER
+	 * alone. Spans widened to their line can also collide between neighbours that share a
+	 * line, which the same check catches.
+	 *
+	 * Each cut is widened once more, over ONE flanking blank line, so the deletion gives
+	 * back the separator the declaration owned (`blankExtendedSpan`). Two targets
+	 * separated by exactly one blank line then produce TOUCHING spans rather than
+	 * overlapping ones — the earlier cut ends where the later one begins — so a run of
+	 * adjacent declarations closes to a single blank however many of them one call
+	 * removes, and the disjointness check above still passes.
+	 */
+	public static function deleteNodes(
+		source: String, targets: Array<{ node: QueryNode, parent: Null<QueryNode> }>, reformat: Bool, plugin: GrammarPlugin,
+		withDoc: Bool = true, ?optsJson: String
+	): EditResult {
+		if (targets.length == 0) return Err('no node to remove');
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (target in targets) {
+			final nodeSpan: Null<Span> = target.node.span;
+			if (nodeSpan == null) return Err('the node to remove has no source span');
+			final group: Span = trailingTrimmedSpan(source, declGroupSpan(target.node, target.parent, nodeSpan));
+			// A declaration's doc comment is trivia OUTSIDE its node span, so the group span
+			// stops short of it and the block is left in the file — where it silently becomes
+			// the documentation of whatever declaration follows. Removing it WITH the node is
+			// therefore the default; `withDoc = false` is the deliberate opt-out for a caller
+			// that keeps the comment on purpose. The line/comma extension then runs on top.
+			final span: Span = withDoc ? docExtendedSpan(source, group, true) : group;
+
+			var isComma: Bool = adjacentToComma(source, span);
+			final parent: Null<QueryNode> = target.parent;
+			if (!isComma && parent != null) isComma = COMMA_CONTAINER_KINDS.contains(parent.kind);
+
+			// A comma list has no blank separators, so only the line branch gives one back.
+			final cut: Span = isComma ? commaExtendedSpan(source, span) : blankExtendedSpan(source, lineExtendedSpan(source, span));
+			edits.push({ span: cut, text: '' });
+		}
+		// A target nested in another — a member and the region holding it, two nested regions — is
+		// dropped in favour of the outer one, which removes it anyway. `isContainedEdit` is the same
+		// containment test `lint --fix` uses to keep an edit set atomic, and it already carries which
+		// geometries survive `applyEdits`' right-to-left splice.
+		final kept: Array<{ span: Span, text: String }> = [for (i => edit in edits) if (!isContainedEdit(edits, i)) edit];
+		final ordered: Array<{ span: Span, text: String }> = kept.copy();
+		ordered.sort((a, b) -> a.span.from - b.span.from);
+		// What is left must be disjoint. Node spans never partially overlap, but a span widened to
+		// its whole line does when two targets share a line — splicing those would delete the shared
+		// text twice over and take the survivor with it.
+		for (i in 1...ordered.length) if (ordered[i].span.from < ordered[i - 1].span.to)
+			return Err('the nodes to remove share a line — removing them together would delete more than the two');
+		return canonicalize(source, kept, reformat, plugin, optsJson);
+	}
+
+	/**
+	 * Every identifier a `case` pattern in `tree` BINDS — the pattern wrapper is a case
+	 * branch's first child. Sibling case-branch captures flatten into ONE scope frame, so a
+	 * member sharing a capture's name can be mis-attributed by the resolver; the member
+	 * operations refuse a rename or a move when the member name is in this set.
+	 *
+	 * An identifier the LANGUAGE cannot bind as a pattern variable is left out: it is a
+	 * reference to a constant, and counting it as a capture refused every rename of an
+	 * `enum abstract` value that its own type spells in a `switch`. Governed by
+	 * `RefShape.upperInitialNeverCaptures`; unset keeps every pattern identifier.
+	 */
+	public static function casePatternCaptures(tree: QueryNode, shape: RefShape): Array<String> {
+		final out: Array<String> = [];
+		final identKind: String = shape.identKind;
+		final caseBranchKind: Null<String> = shape.caseBranchKind;
+		if (caseBranchKind == null) return out;
+		final skipUpperInitial: Bool = shape.upperInitialNeverCaptures == true;
+		function walkPattern(node: QueryNode): Void {
+			final name: Null<String> = node.name;
+			if (node.kind == identKind && name != null && !(skipUpperInitial && isUpperInitial(name)) && !out.contains(name))
+				out.push(name);
+			for (c in node.children) walkPattern(c);
+		}
+		function walk(node: QueryNode): Void {
+			if (node.kind == caseBranchKind && node.children.length > 0) walkPattern(node.children[0]);
+			for (c in node.children) walk(c);
+		}
+		walk(tree);
+		return out;
+	}
+
+	/**
+	 * The two-or-three-edit fold of a CONDITIONALLY OVERWRITTEN constructor default — the
+	 * general sibling of `ctorConditionalDefaultFinalEdits`, whose `??` shape it widens from
+	 * "the guard tests the very parameter assigned" to "any condition, any value". A field
+	 * declared `var x:T = D;` whose only write beyond that initializer is one assignment
+	 * `x = E;` opening the then-branch of an `else`-less top-level constructor `if (C)`
+	 * becomes `var x:T;` plus `x = C ? E : D;` in the `if`'s place. Returns the edits when the
+	 * fold applies, `null` otherwise — the non-null result IS the fix, so a rule's `run` and
+	 * `fix` can never disagree about a candidate.
+	 *
+	 * ONE UNCONDITIONAL ASSIGNMENT CARRYING A CONDITIONAL VALUE is the target form, and it is
+	 * forced by a measurement rather than by taste: Haxe runs NO definite-assignment analysis
+	 * for a `final` FIELD. `class V { final _d:Int; function new(c) if (c) _d = 1; }` compiles
+	 * silently on `--interp`, `-js` and `--jvm`, and the field reads as `null` on the path that
+	 * skipped the write; only `@:nullSafety(Strict)` diagnoses it. So a fold that emitted
+	 * "assign in every branch" would have its completeness checked by nothing. The conditional
+	 * VALUE proves completeness structurally — there is one assignment, and it always runs.
+	 *
+	 * The rewrite keeps `var`: making the now-single-write field `final` is `prefer-final-field`'s
+	 * job, and it reaches this shape by itself once the fold has removed the second write.
+	 *
+	 * Fails closed on every doubt. All single-file gates live HERE rather than in the consumer,
+	 * exactly as for the `??` sibling:
+	 *
+	 *  - the declaration is a plain non-static `var` (no accessor head — the `(default, null)`
+	 *    pair the `??` fold accepts is out of scope here, since this fold does not finalize)
+	 *    whose initializer is MOVE-SAFE (`foldableDeclaration` / `defaultIsMoveSafe`: a numeric /
+	 *    boolean / non-interpolated string literal, a negated numeric literal, or a dotted
+	 *    constant chain). An allocation, a call or a bare identifier would change allocation
+	 *    identity or evaluation order when it moves down into the constructor;
+	 *  - the enclosing type has exactly one constructor, and exactly ONE of its top-level
+	 *    statements is an `else`-less `if` whose then-branch OPENS with `x = E;`
+	 *    (`soleConditionalCtorFieldInit`). Opening the branch is what makes the hoist
+	 *    order-preserving: the statements that stay behind in the branch all ran AFTER the
+	 *    assignment and still do. An assignment deeper in the branch is refused and reaches the
+	 *    same end state one `--fix` pass later, once the one ahead of it has moved out;
+	 *  - the condition is SIDE-EFFECT-FREE (`isSideEffectFree`) whenever the `if` SURVIVES the
+	 *    fold, since it is then evaluated twice. When the assignment is the branch's sole
+	 *    statement the whole `if` is replaced and the condition still runs exactly once, so no
+	 *    purity is demanded — the shape is a pure re-spelling;
+	 *  - the constructor reaches the `if` with the field still in the state the declaration
+	 *    default put it in (`guardReachedIntact`): no early exit before it, and the field name
+	 *    unmentioned in the prefix;
+	 *  - every explicit `super(...)` call starts AFTER the `if`. The prologue runs ahead of the
+	 *    base constructor, so a default that moves below a `super(...)` is a default an
+	 *    overridden method called from the base constructor no longer sees. With the call seams
+	 *    unset the gate falls back to refusing every subclass;
+	 *  - no `#if` region anywhere in the constructor or the declaration. A conditional-splice
+	 *    region is a raw span with no branch nodes, so neither the statement geometry nor the
+	 *    write count can be read across it;
+	 *  - the value assigned does not itself read the field, and no comment sits in a byte range
+	 *    the fold regenerates;
+	 *  - no other write to the field name appears ANYWHERE in the file — the same conservative
+	 *    raw-text scan (`MemberWriteScan.writtenInRange`, which sees `#if` bodies) the `??` fold
+	 *    uses, with the declaration and that one constructor target excluded.
+	 *
+	 * Cross-file soundness (an external, subtype or unresolved write, an `@:access` grantee) stays
+	 * the CONSUMER's job, as for `ctorSoleAssignmentFinalizable`.
+	 *
+	 * `extract`, when supplied, is offered the default the fold is about to move and may answer
+	 * with the TEXT to write in the ternary's else arm instead of it - a reference to a constant it
+	 * emits itself. It is asked LAST, after every gate has passed, so a caller may claim a name or
+	 * stage a member insertion inside it without having to undo either. Answering null keeps the
+	 * literal, which is what every caller that passes no seam at all gets.
+	 */
+	public static function ctorConditionalDefaultTernaryEdits(
+		source: String, declSpan: Span, plugin: GrammarPlugin, ?extract: (CtorDefaultSite) -> Null<String>
+	): Null<Array<{ span: Span, text: String }>> {
+		final shape: RefShape = plugin.refShape();
+		final base: Null<{
+			container: QueryNode,
+			field: QueryNode,
+			decl: FoldableDecl,
+			ctor: QueryNode
+		}> = foldableCtorDefault(source, declSpan, plugin, shape);
+		// An accessor head stays out of scope here: this fold does not finalize, so a `(default, null)`
+		// pair the `??` sibling would rewrite has nothing to gain and would only lose its own spelling.
+		if (base == null || base.decl.dropped != null) return null;
+		final decl: FoldableDecl = base.decl;
+		final ctor: QueryNode = base.ctor;
+		if (holdsConditionalRegion(ctor) || holdsConditionalRegion(base.field)) return null;
+		final init: Null<ConditionalCtorInit> = soleConditionalCtorFieldInit(source, base.container, ctor, base.field, shape);
+		if (init == null) return null;
+		final guardFrom: Int = init.ifStmt.from;
+		if (!guardReachedIntact(source, ctor, decl.name, guardFrom, shape)) return null;
+		if (!superCallsFollow(base.container, ctor, guardFrom, shape)) return null;
+		if (
+			MemberWriteScan.writtenInRange(source, decl.name, init.target, 0, decl.span.from)
+			|| MemberWriteScan.writtenInRange(source, decl.name, init.target, decl.span.to, source.length)
+		)
+			return null;
+		final targetText: String = source.substring(init.target.from, init.target.to);
+		final condText: String = ternaryConditionText(source, init.condition, shape);
+		final valueText: String = source.substring(init.value.from, init.value.to);
+		final defaultText: String = source.substring(decl.initSpan.from, decl.initSpan.to);
+		// Asked LAST, once every gate has passed: `extract` may have side effects (a name ledger, a
+		// pending member insertion), and a caller must not pay them for a fold that then refuses.
+		final elseText: String = (extract == null
+			? null
+			: extract({
+				container: base.container,
+				fieldName: decl.name,
+				typeAnnotation: declaredTypeAnnotation(source, decl.span, decl.initSpan, decl.name),
+				defaultNode: decl.initNode,
+				defaultText: defaultText
+			})) ?? defaultText;
+		final folded: String = '$targetText = $condText ? $valueText : $elseText${init.terminator}';
+		final edits: Array<{ span: Span, text: String }> = [{ span: decl.initDrop, text: '' }];
+		if (init.sole)
+			edits.push({ span: init.ifStmt, text: folded });
+		else {
+			edits.push({ span: new Span(guardFrom, guardFrom), text: '$folded\n' });
+			edits.push({ span: lineExtendedSpan(source, init.assignStmt), text: '' });
+		}
+		return edits;
+	}
+
+	/** Whether `code` is whitespace that does NOT end a line — space, tab, carriage return. */
+	private static inline function isHorizontalSpace(code: Int): Bool {
+		return code == ' '.code || code == '\t'.code || code == '\r'.code;
+	}
+
 	/** Whether the occurrence of `name` at `at` in `head` stands alone — no identifier character on either side. */
 	private static inline function standaloneIdentAt(head: String, name: String, at: Int): Bool {
 		final after: Int = at + name.length;
@@ -3597,6 +3775,80 @@ final class RefactorSupport {
 	/** One of the flag letters Haxe accepts after a regex literal's closing `/`. */
 	private static inline function isRegexFlag(c: Int): Bool {
 		return c == 'g'.code || c == 'i'.code || c == 'm'.code || c == 's'.code || c == 'u'.code;
+	}
+
+	/** Whether the block comment opening at `open` is a `/**` doc rather than a plain block. */
+	private static inline function isDocOpener(source: String, open: Int): Bool {
+		return open + 2 < source.length && source.fastCodeAt(open + 2) == '*'.code;
+	}
+
+	/**
+	 * The ONE top-level `if (<param> != null) <field> = <param>;` constructor statement
+	 * writing `field`, or null when the constructor holds none, more than one, or one
+	 * whose shape differs in any way. A statement that writes the field through some
+	 * OTHER shape is not matched here — the caller's whole-file write scan rejects it.
+	 */
+	private static inline function soleGuardedCtorFieldInit(
+		source: String, container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape
+	): Null<GuardedCtorInit> {
+		return soleMatchedCtorIf(source, container, ctor, field, shape, guardedFieldAssign);
+	}
+
+	/**
+	 * The ONE top-level `else`-less `if` constructor statement whose then-branch OPENS with an
+	 * assignment to `field`, or null when the constructor holds none, more than one, or one whose
+	 * shape differs in any way. A write that sits DEEPER in a branch is not matched here — the
+	 * caller's whole-file write scan then rejects the candidate, and the next `--fix` pass reaches
+	 * it once the assignment ahead of it has moved out.
+	 */
+	private static inline function soleConditionalCtorFieldInit(
+		source: String, container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape
+	): Null<ConditionalCtorInit> {
+		return soleMatchedCtorIf(source, container, ctor, field, shape, conditionalFieldAssign);
+	}
+
+	/**
+	 * A single-line excerpt of `span`'s source text for a diagnostic — whitespace runs collapsed
+	 * to one space and the result capped at `REGION_EXCERPT_CHARS`, so a region spanning several
+	 * source lines still names itself in one message line.
+	 */
+	private static function regionExcerpt(source: String, span: Span): String {
+		final flat: String = ~/\s+/g.replace(source.substring(span.from, span.to), ' ').trim();
+		return flat.length <= REGION_EXCERPT_CHARS ? flat : '${flat.substr(0, REGION_EXCERPT_CHARS)}...';
+	}
+
+	/**
+	 * The parts of `span` that none of `node`'s direct children cover — the bytes the model
+	 * dropped. Children are taken in span order and a child with no span contributes nothing,
+	 * which widens the gap rather than narrowing it: the safe direction for a fail-closed gate.
+	 */
+	private static function unmodelledGaps(node: QueryNode, span: Span): Array<Span> {
+		final covered: Array<Span> = [for (c in node.children) if (c.span != null) (c.span: Span)];
+		covered.sort((a, b) -> a.from - b.from);
+		final out: Array<Span> = [];
+		var at: Int = span.from;
+		for (c in covered) {
+			if (c.from > at) out.push(new Span(at, c.from < span.to ? c.from : span.to));
+			if (c.to > at) at = c.to;
+		}
+		if (at < span.to) out.push(new Span(at, span.to));
+		return out;
+	}
+
+	/**
+	 * Whether `source` spells `name` as a standalone identifier token anywhere inside `span`.
+	 *
+	 * A `#`-prefixed spelling is skipped: `#end` / `#if` / `#else` are the directive keywords that
+	 * DELIMIT the region, not references inside it, and every such region ends in one — counting
+	 * them would refuse every rename of a binding called `end` in any file carrying a splice.
+	 */
+	private static function mentionsIdent(source: String, span: Span, name: String): Bool {
+		var at: Int = source.indexOf(name, span.from);
+		while (at >= 0 && at + name.length <= span.to) {
+			if (standaloneIdentAt(source, name, at) && (at == 0 || source.fastCodeAt(at - 1) != '#'.code)) return true;
+			at = source.indexOf(name, at + 1);
+		}
+		return false;
 	}
 
 	/** The index of the LAST occurrence of `name` in `head` that stands alone as an identifier, or -1. */
@@ -4272,22 +4524,6 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * Whether only spaces and tabs separate `at` from the start of its line — the test that tells a declaration's own leading comment from the PREVIOUS declaration's trailing
-	 * one. Both end just above the next declaration and are equally adjacent to it; only
-	 * the line the comment opens on says whose it is.
-	 */
-	public static function startsItsLine(source: String, at: Int): Bool {
-		var i: Int = at - 1;
-		while (i >= 0 && (source.fastCodeAt(i) == ' '.code || source.fastCodeAt(i) == '\t'.code)) i--;
-		return i < 0 || source.fastCodeAt(i) == '\n'.code;
-	}
-
-	/** Whether the block comment opening at `open` is a `/**` doc rather than a plain block. */
-	private static inline function isDocOpener(source: String, open: Int): Bool {
-		return open + 2 < source.length && source.fastCodeAt(open + 2) == '*'.code;
-	}
-
-	/**
 	 * End offset (exclusive) of the Haxe regex literal opened by `~/` at `open`,
 	 * flags included; -1 when it is not terminated on its own line. Matches the
 	 * compiler's own lexer: the body runs to the first unescaped `/`, and a
@@ -4495,18 +4731,6 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * The ONE top-level `if (<param> != null) <field> = <param>;` constructor statement
-	 * writing `field`, or null when the constructor holds none, more than one, or one
-	 * whose shape differs in any way. A statement that writes the field through some
-	 * OTHER shape is not matched here — the caller's whole-file write scan rejects it.
-	 */
-	private static inline function soleGuardedCtorFieldInit(
-		source: String, container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape
-	): Null<GuardedCtorInit> {
-		return soleMatchedCtorIf(source, container, ctor, field, shape, guardedFieldAssign);
-	}
-
-	/**
 	 * `stmt` read as `if (<param> != null) <field> = <param>;` — the guard must be a bare
 	 * `!= null` test of the very identifier assigned, the branch a single assignment
 	 * statement (braced or not), and there must be no `else`. `terminator` carries the
@@ -4709,237 +4933,6 @@ final class RefactorSupport {
 		return pending;
 	}
 
-
-	/**
-	 * Remove EVERY node in `targets` from `source` in one canonicalisation — the multi-node
-	 * form of `deleteNode`, which is this with a single target.
-	 *
-	 * One call rather than a fold of single deletions because each `deleteNode` returns
-	 * REWRITTEN source: the second call would have to re-parse it and re-resolve its target,
-	 * and the writer may by then have moved the very span the caller measured. Collecting the
-	 * spans against ONE tree and handing them to `canonicalize` together keeps every span in
-	 * the coordinate system it was computed in.
-	 *
-	 * That is also why OVERLAP is refused rather than tolerated. `applyEdits` splices each span
-	 * independently, so a target nested inside another (a member and the region holding it, or
-	 * two nested regions) makes the second splice run on coordinates the first already shifted —
-	 * it deletes unrelated code, and the re-parse does not catch it because the wreckage usually
-	 * still parses. A caller that means to remove a node and its container passes the CONTAINER
-	 * alone. Spans widened to their line can also collide between neighbours that share a
-	 * line, which the same check catches.
-	 *
-	 * Each cut is widened once more, over ONE flanking blank line, so the deletion gives
-	 * back the separator the declaration owned (`blankExtendedSpan`). Two targets
-	 * separated by exactly one blank line then produce TOUCHING spans rather than
-	 * overlapping ones — the earlier cut ends where the later one begins — so a run of
-	 * adjacent declarations closes to a single blank however many of them one call
-	 * removes, and the disjointness check above still passes.
-	 */
-	public static function deleteNodes(
-		source: String, targets: Array<{ node: QueryNode, parent: Null<QueryNode> }>, reformat: Bool, plugin: GrammarPlugin,
-		withDoc: Bool = true, ?optsJson: String
-	): EditResult {
-		if (targets.length == 0) return Err('no node to remove');
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (target in targets) {
-			final nodeSpan: Null<Span> = target.node.span;
-			if (nodeSpan == null) return Err('the node to remove has no source span');
-			final group: Span = trailingTrimmedSpan(source, declGroupSpan(target.node, target.parent, nodeSpan));
-			// A declaration's doc comment is trivia OUTSIDE its node span, so the group span
-			// stops short of it and the block is left in the file — where it silently becomes
-			// the documentation of whatever declaration follows. Removing it WITH the node is
-			// therefore the default; `withDoc = false` is the deliberate opt-out for a caller
-			// that keeps the comment on purpose. The line/comma extension then runs on top.
-			final span: Span = withDoc ? docExtendedSpan(source, group, true) : group;
-
-			var isComma: Bool = adjacentToComma(source, span);
-			final parent: Null<QueryNode> = target.parent;
-			if (!isComma && parent != null) isComma = COMMA_CONTAINER_KINDS.contains(parent.kind);
-
-			// A comma list has no blank separators, so only the line branch gives one back.
-			final cut: Span = isComma ? commaExtendedSpan(source, span) : blankExtendedSpan(source, lineExtendedSpan(source, span));
-			edits.push({ span: cut, text: '' });
-		}
-		// A target nested in another — a member and the region holding it, two nested regions — is
-		// dropped in favour of the outer one, which removes it anyway. `isContainedEdit` is the same
-		// containment test `lint --fix` uses to keep an edit set atomic, and it already carries which
-		// geometries survive `applyEdits`' right-to-left splice.
-		final kept: Array<{ span: Span, text: String }> = [for (i => edit in edits) if (!isContainedEdit(edits, i)) edit];
-		final ordered: Array<{ span: Span, text: String }> = kept.copy();
-		ordered.sort((a, b) -> a.span.from - b.span.from);
-		// What is left must be disjoint. Node spans never partially overlap, but a span widened to
-		// its whole line does when two targets share a line — splicing those would delete the shared
-		// text twice over and take the survivor with it.
-		for (i in 1...ordered.length) if (ordered[i].span.from < ordered[i - 1].span.to)
-			return Err('the nodes to remove share a line — removing them together would delete more than the two');
-		return canonicalize(source, kept, reformat, plugin, optsJson);
-	}
-
-
-	/**
-	 * Every identifier a `case` pattern in `tree` BINDS — the pattern wrapper is a case
-	 * branch's first child. Sibling case-branch captures flatten into ONE scope frame, so a
-	 * member sharing a capture's name can be mis-attributed by the resolver; the member
-	 * operations refuse a rename or a move when the member name is in this set.
-	 *
-	 * An identifier the LANGUAGE cannot bind as a pattern variable is left out: it is a
-	 * reference to a constant, and counting it as a capture refused every rename of an
-	 * `enum abstract` value that its own type spells in a `switch`. Governed by
-	 * `RefShape.upperInitialNeverCaptures`; unset keeps every pattern identifier.
-	 */
-	public static function casePatternCaptures(tree: QueryNode, shape: RefShape): Array<String> {
-		final out: Array<String> = [];
-		final identKind: String = shape.identKind;
-		final caseBranchKind: Null<String> = shape.caseBranchKind;
-		if (caseBranchKind == null) return out;
-		final skipUpperInitial: Bool = shape.upperInitialNeverCaptures == true;
-		function walkPattern(node: QueryNode): Void {
-			final name: Null<String> = node.name;
-			if (node.kind == identKind && name != null && !(skipUpperInitial && isUpperInitial(name)) && !out.contains(name))
-				out.push(name);
-			for (c in node.children) walkPattern(c);
-		}
-		function walk(node: QueryNode): Void {
-			if (node.kind == caseBranchKind && node.children.length > 0) walkPattern(node.children[0]);
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return out;
-	}
-
-
-	/**
-	 * The two-or-three-edit fold of a CONDITIONALLY OVERWRITTEN constructor default — the
-	 * general sibling of `ctorConditionalDefaultFinalEdits`, whose `??` shape it widens from
-	 * "the guard tests the very parameter assigned" to "any condition, any value". A field
-	 * declared `var x:T = D;` whose only write beyond that initializer is one assignment
-	 * `x = E;` opening the then-branch of an `else`-less top-level constructor `if (C)`
-	 * becomes `var x:T;` plus `x = C ? E : D;` in the `if`'s place. Returns the edits when the
-	 * fold applies, `null` otherwise — the non-null result IS the fix, so a rule's `run` and
-	 * `fix` can never disagree about a candidate.
-	 *
-	 * ONE UNCONDITIONAL ASSIGNMENT CARRYING A CONDITIONAL VALUE is the target form, and it is
-	 * forced by a measurement rather than by taste: Haxe runs NO definite-assignment analysis
-	 * for a `final` FIELD. `class V { final _d:Int; function new(c) if (c) _d = 1; }` compiles
-	 * silently on `--interp`, `-js` and `--jvm`, and the field reads as `null` on the path that
-	 * skipped the write; only `@:nullSafety(Strict)` diagnoses it. So a fold that emitted
-	 * "assign in every branch" would have its completeness checked by nothing. The conditional
-	 * VALUE proves completeness structurally — there is one assignment, and it always runs.
-	 *
-	 * The rewrite keeps `var`: making the now-single-write field `final` is `prefer-final-field`'s
-	 * job, and it reaches this shape by itself once the fold has removed the second write.
-	 *
-	 * Fails closed on every doubt. All single-file gates live HERE rather than in the consumer,
-	 * exactly as for the `??` sibling:
-	 *
-	 *  - the declaration is a plain non-static `var` (no accessor head — the `(default, null)`
-	 *    pair the `??` fold accepts is out of scope here, since this fold does not finalize)
-	 *    whose initializer is MOVE-SAFE (`foldableDeclaration` / `defaultIsMoveSafe`: a numeric /
-	 *    boolean / non-interpolated string literal, a negated numeric literal, or a dotted
-	 *    constant chain). An allocation, a call or a bare identifier would change allocation
-	 *    identity or evaluation order when it moves down into the constructor;
-	 *  - the enclosing type has exactly one constructor, and exactly ONE of its top-level
-	 *    statements is an `else`-less `if` whose then-branch OPENS with `x = E;`
-	 *    (`soleConditionalCtorFieldInit`). Opening the branch is what makes the hoist
-	 *    order-preserving: the statements that stay behind in the branch all ran AFTER the
-	 *    assignment and still do. An assignment deeper in the branch is refused and reaches the
-	 *    same end state one `--fix` pass later, once the one ahead of it has moved out;
-	 *  - the condition is SIDE-EFFECT-FREE (`isSideEffectFree`) whenever the `if` SURVIVES the
-	 *    fold, since it is then evaluated twice. When the assignment is the branch's sole
-	 *    statement the whole `if` is replaced and the condition still runs exactly once, so no
-	 *    purity is demanded — the shape is a pure re-spelling;
-	 *  - the constructor reaches the `if` with the field still in the state the declaration
-	 *    default put it in (`guardReachedIntact`): no early exit before it, and the field name
-	 *    unmentioned in the prefix;
-	 *  - every explicit `super(...)` call starts AFTER the `if`. The prologue runs ahead of the
-	 *    base constructor, so a default that moves below a `super(...)` is a default an
-	 *    overridden method called from the base constructor no longer sees. With the call seams
-	 *    unset the gate falls back to refusing every subclass;
-	 *  - no `#if` region anywhere in the constructor or the declaration. A conditional-splice
-	 *    region is a raw span with no branch nodes, so neither the statement geometry nor the
-	 *    write count can be read across it;
-	 *  - the value assigned does not itself read the field, and no comment sits in a byte range
-	 *    the fold regenerates;
-	 *  - no other write to the field name appears ANYWHERE in the file — the same conservative
-	 *    raw-text scan (`MemberWriteScan.writtenInRange`, which sees `#if` bodies) the `??` fold
-	 *    uses, with the declaration and that one constructor target excluded.
-	 *
-	 * Cross-file soundness (an external, subtype or unresolved write, an `@:access` grantee) stays
-	 * the CONSUMER's job, as for `ctorSoleAssignmentFinalizable`.
-	 *
-	 * `extract`, when supplied, is offered the default the fold is about to move and may answer
-	 * with the TEXT to write in the ternary's else arm instead of it - a reference to a constant it
-	 * emits itself. It is asked LAST, after every gate has passed, so a caller may claim a name or
-	 * stage a member insertion inside it without having to undo either. Answering null keeps the
-	 * literal, which is what every caller that passes no seam at all gets.
-	 */
-	public static function ctorConditionalDefaultTernaryEdits(
-		source: String, declSpan: Span, plugin: GrammarPlugin, ?extract: (CtorDefaultSite) -> Null<String>
-	): Null<Array<{ span: Span, text: String }>> {
-		final shape: RefShape = plugin.refShape();
-		final base: Null<{
-			container: QueryNode,
-			field: QueryNode,
-			decl: FoldableDecl,
-			ctor: QueryNode
-		}> = foldableCtorDefault(source, declSpan, plugin, shape);
-		// An accessor head stays out of scope here: this fold does not finalize, so a `(default, null)`
-		// pair the `??` sibling would rewrite has nothing to gain and would only lose its own spelling.
-		if (base == null || base.decl.dropped != null) return null;
-		final decl: FoldableDecl = base.decl;
-		final ctor: QueryNode = base.ctor;
-		if (holdsConditionalRegion(ctor) || holdsConditionalRegion(base.field)) return null;
-		final init: Null<ConditionalCtorInit> = soleConditionalCtorFieldInit(source, base.container, ctor, base.field, shape);
-		if (init == null) return null;
-		final guardFrom: Int = init.ifStmt.from;
-		if (!guardReachedIntact(source, ctor, decl.name, guardFrom, shape)) return null;
-		if (!superCallsFollow(base.container, ctor, guardFrom, shape)) return null;
-		if (
-			MemberWriteScan.writtenInRange(source, decl.name, init.target, 0, decl.span.from)
-			|| MemberWriteScan.writtenInRange(source, decl.name, init.target, decl.span.to, source.length)
-		)
-			return null;
-		final targetText: String = source.substring(init.target.from, init.target.to);
-		final condText: String = ternaryConditionText(source, init.condition, shape);
-		final valueText: String = source.substring(init.value.from, init.value.to);
-		final defaultText: String = source.substring(decl.initSpan.from, decl.initSpan.to);
-		// Asked LAST, once every gate has passed: `extract` may have side effects (a name ledger, a
-		// pending member insertion), and a caller must not pay them for a fold that then refuses.
-		final elseText: String = (extract == null
-			? null
-			: extract({
-				container: base.container,
-				fieldName: decl.name,
-				typeAnnotation: declaredTypeAnnotation(source, decl.span, decl.initSpan, decl.name),
-				defaultNode: decl.initNode,
-				defaultText: defaultText
-			})) ?? defaultText;
-		final folded: String = '$targetText = $condText ? $valueText : $elseText${init.terminator}';
-		final edits: Array<{ span: Span, text: String }> = [{ span: decl.initDrop, text: '' }];
-		if (init.sole)
-			edits.push({ span: init.ifStmt, text: folded });
-		else {
-			edits.push({ span: new Span(guardFrom, guardFrom), text: '$folded\n' });
-			edits.push({ span: lineExtendedSpan(source, init.assignStmt), text: '' });
-		}
-		return edits;
-	}
-
-
-	/**
-	 * The ONE top-level `else`-less `if` constructor statement whose then-branch OPENS with an
-	 * assignment to `field`, or null when the constructor holds none, more than one, or one whose
-	 * shape differs in any way. A write that sits DEEPER in a branch is not matched here — the
-	 * caller's whole-file write scan then rejects the candidate, and the next `--fix` pass reaches
-	 * it once the assignment ahead of it has moved out.
-	 */
-	private static inline function soleConditionalCtorFieldInit(
-		source: String, container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape
-	): Null<ConditionalCtorInit> {
-		return soleMatchedCtorIf(source, container, ctor, field, shape, conditionalFieldAssign);
-	}
-
-
 	/**
 	 * `stmt` read as `if (C) x = E;` / `if (C) { x = E; … }` — no `else` (a second assignment path
 	 * the ternary cannot express), the then-branch OPENING with a plain `=` assignment statement
@@ -4992,14 +4985,12 @@ final class RefactorSupport {
 			};
 	}
 
-
 	/** Whether `node`'s subtree holds a `#if…#end` region of any projection (`isConditionalKind`). */
 	private static function holdsConditionalRegion(node: QueryNode): Bool {
 		if (isConditionalKind(node.kind)) return true;
 		for (child in node.children) if (holdsConditionalRegion(child)) return true;
 		return false;
 	}
-
 
 	/**
 	 * Whether every explicit base-constructor call in `ctor` starts at or after `boundary` — the
@@ -5021,7 +5012,6 @@ final class RefactorSupport {
 		return true;
 	}
 
-
 	/** Parenthesise a folded ternary's condition iff it binds no tighter than `?:` (a ternary or an assignment). */
 	private static function ternaryConditionText(source: String, cond: QueryNode, shape: RefShape): String {
 		final span: Null<Span> = cond.span;
@@ -5031,13 +5021,11 @@ final class RefactorSupport {
 		return needsParens ? '($text)' : text;
 	}
 
-
 	/** `branch` reduced to the statement it OPENS with, unwrapping one brace level, or null when it holds none. */
 	private static function branchOpeningStatement(branch: QueryNode, braced: Bool): Null<QueryNode> {
 		final statements: Array<QueryNode> = braced ? branch.children : [branch];
 		return statements.length >= 1 ? statements[0] : null;
 	}
-
 
 	/**
 	 * Whether the byte ranges a conditional-default fold REGENERATES carry no comment — the gaps
@@ -5051,7 +5039,6 @@ final class RefactorSupport {
 		return !hasCommentMarker(source, stmt.from, cond.from) && !hasCommentMarker(source, cond.to, target.from)
 			&& !hasCommentMarker(source, target.to, value.from) && !hasCommentMarker(source, value.to, rebuiltEnd);
 	}
-
 
 	/**
 	 * The declaration-and-constructor geometry BOTH conditional-default folds
@@ -5085,7 +5072,6 @@ final class RefactorSupport {
 			ctor: ctor
 		};
 	}
-
 
 	/**
 	 * The ONE top-level `if` statement of `ctor` that `matcher` accepts for `field`, or null when the

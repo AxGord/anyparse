@@ -48,7 +48,8 @@ class PreferTryExpressionReturnCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn parse(text);\n\t\t} catch (e:String) // why\n\t\t{\n\t\t\treturn 0;\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn parse(text);\n\t\t} catch (e:String) // why\n\t\t{\n'
+				+ '\t\t\treturn 0;\n\t\t}\n\t}\n}'
 			).length
 		);
 	}
@@ -58,7 +59,8 @@ class PreferTryExpressionReturnCheckTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn parse(\n\t\t\t\ttext, // raw\n\t\t\t\t2\n\t\t\t);\n\t\t} catch (e:String) {\n\t\t\treturn 0;\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn parse(\n\t\t\t\ttext, // raw\n\t\t\t\t2\n\t\t\t);\n'
+				+ '\t\t} catch (e:String) {\n\t\t\treturn 0;\n\t\t}\n\t}\n}'
 			).length
 		);
 	}
@@ -126,7 +128,8 @@ class PreferTryExpressionReturnCheckTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class C {\n\tfunction f():Int {\n\t\t#if sys\n\t\ttry {\n\t\t\treturn parse(text);\n\t\t} catch (e:String) {\n\t\t\treturn 0;\n\t\t}\n\t\t#end\n\t}\n}'
+				'class C {\n\tfunction f():Int {\n\t\t#if sys\n\t\ttry {\n\t\t\treturn parse(text);\n\t\t} catch (e:String) {\n'
+				+ '\t\t\treturn 0;\n\t\t}\n\t\t#end\n\t}\n}'
 			).length
 		);
 	}
@@ -135,7 +138,8 @@ class PreferTryExpressionReturnCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn parse(text);\n\t\t} catch (e:String) {\n\t\t\treturn;\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn parse(text);\n\t\t} catch (e:String) {\n\t\t\treturn;\n\t\t}\n'
+				+ '\t}\n}'
 			).length
 		);
 	}
@@ -144,7 +148,8 @@ class PreferTryExpressionReturnCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn parse(text);\n\t\t} catch (e:String) {\n\t\t\tlog(e);\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn parse(text);\n\t\t} catch (e:String) {\n\t\t\tlog(e);\n\t\t}\n'
+				+ '\t}\n}'
 			).length
 		);
 	}
@@ -160,7 +165,8 @@ class PreferTryExpressionReturnCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn parse(text);\n\t\t} catch (e:String) {\n\t\t\treturn 0;\n\t\t} catch (e:Exception) {\n\t\t\tthrow e;\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn parse(text);\n\t\t} catch (e:String) {\n\t\t\treturn 0;\n'
+				+ '\t\t} catch (e:Exception) {\n\t\t\tthrow e;\n\t\t}\n\t}\n}'
 			).length
 		);
 	}
@@ -174,7 +180,8 @@ class PreferTryExpressionReturnCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn parse(text);\n\t\t\tlog(text);\n\t\t} catch (e:String) {\n\t\t\treturn 0;\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn parse(text);\n\t\t\tlog(text);\n\t\t} catch (e:String) {\n'
+				+ '\t\t\treturn 0;\n\t\t}\n\t}\n}'
 			).length
 		);
 	}
@@ -184,7 +191,8 @@ class PreferTryExpressionReturnCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\t/* fast path */\n\t\t\treturn parse(text);\n\t\t} catch (e:String) {\n\t\t\treturn 0;\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\t/* fast path */\n\t\t\treturn parse(text);\n\t\t} catch (e:String) {\n'
+				+ '\t\t\treturn 0;\n\t\t}\n\t}\n}'
 			).length
 		);
 	}
@@ -194,7 +202,8 @@ class PreferTryExpressionReturnCheckTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn parse(/* raw */ text);\n\t\t} catch (e:String) {\n\t\t\treturn 0;\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn parse(/* raw */ text);\n\t\t} catch (e:String) {\n'
+				+ '\t\t\treturn 0;\n\t\t}\n\t}\n}'
 			).length
 		);
 	}

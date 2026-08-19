@@ -179,8 +179,8 @@ final class CondAssignMerge implements Check implements DefaultOff {
 	}
 
 	public function description(): String {
-		return
-			'a `#if … #else … #end` region whose every branch assigns the same target, or returns / throws — mergeable into one conditional value; an `#else`-less region of exits also absorbs the exit that follows it';
+		return 'a `#if … #else … #end` region whose every branch assigns the same target, or returns / throws — mergeable into one '
+			+ 'conditional value; an `#else`-less region of exits also absorbs the exit that follows it';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

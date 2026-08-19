@@ -167,7 +167,8 @@ class DeadStoreTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(n:Int):Int { var x = 0; var i = 0; while (i < n) { x = i; if (x > 3) break; x = 0; i = i + 1; } return x; } }'
+				'class C { function f(n:Int):Int { var x = 0; var i = 0; while (i < n) { x = i; if (x > 3) break; x = 0; i = i + 1; } '
+				+ 'return x; } }'
 			).length
 		);
 	}
@@ -214,7 +215,8 @@ class DeadStoreTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(s:Int, p:Null<String>):Dynamic { var c = mk(); if (!c && p != null) c = mk2(); final e:{ t:String } = switch s { case 1: { t: c ? "a" : "b" }; case _: { t: c ? "x" : "y" }; }; return e; } }'
+				'class C { function f(s:Int, p:Null<String>):Dynamic { var c = mk(); if (!c && p != null) c = mk2(); final e:{ t:String '
+				+ '} = switch s { case 1: { t: c ? "a" : "b" }; case _: { t: c ? "x" : "y" }; }; return e; } }'
 			).length
 		);
 	}
@@ -257,7 +259,8 @@ class DeadStoreTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { var x:Int; function f():Void { function g():Void { var x = 1; trace(x); } x = 5; g(); } function other():Int { return x; } }'
+				'class C { var x:Int; function f():Void { function g():Void { var x = 1; trace(x); } x = 5; g(); } function other():Int {'
+				+ ' return x; } }'
 			).length
 		);
 	}
@@ -295,15 +298,15 @@ class DeadStoreTest extends Test {
 	public function testFixStripsInheritedPlainFieldInit(): Void {
 		// The dead initializer reads a plain field declared on a SUPERTYPE — `isPlainFieldRead`
 		// proves it accessor-less through the index, so the initializer is stripped.
-		final src: String =
-			'class Base { public var d:Int; } class Sub extends Base {} class C { static function f(s:Sub):Int { var x = s.d; x = 1; return x; } }';
+		final src: String = 'class Base { public var d:Int; } class Sub extends Base {} class C { static function f(s:Sub):Int {'
+			+ ' var x = s.d; x = 1; return x; } }';
 		Assert.equals(1, indexedFixEdits(src).length);
 	}
 
 	public function testFixKeepsInheritedGetterInit(): Void {
 		// The same shape with a getter on the supertype: reading it runs code, so the init stays.
-		final src: String =
-			'class Base { public var d(get, never):Int; } class Sub extends Base {} class C { static function f(s:Sub):Int { var x = s.d; x = 1; return x; } }';
+		final src: String = 'class Base { public var d(get, never):Int; } class Sub extends Base {} class C {'
+			+ ' static function f(s:Sub):Int { var x = s.d; x = 1; return x; } }';
 		Assert.equals(0, indexedFixEdits(src).length);
 	}
 

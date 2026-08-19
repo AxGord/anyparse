@@ -40,7 +40,8 @@ class SwallowedExceptionCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tpublic function f():Void {\n\t\ttry { g(); } catch (e:Exception) {\n\t\t\tcleanup();\n\t\t\treturn;\n\t\t}\n\t}\n}'
+				'class C {\n\tpublic function f():Void {\n\t\ttry { g(); } catch (e:Exception) {\n\t\t\tcleanup();\n\t\t\treturn;\n'
+				+ '\t\t}\n\t}\n}'
 			).length
 		);
 	}

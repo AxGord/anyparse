@@ -62,12 +62,14 @@ class HxGroupTrailCommentWriteTest extends Test {
 	 * project ships; the second rule (`itemCount <= 1` + `totalItemLength
 	 * <= 100`) is the one that pins the cascade flat.
 	 */
-	private static final CFG_NOWRAP: String =
-		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
+	private static final CFG_NOWRAP: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, '
+		+ '"callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": '
+		+ '"exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= '
+		+ 'n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
 
 	/** The minimal reproducer: no rules at all, the DEFAULT is `noWrap`. */
-	private static final CFG_DEFAULT_NOWRAP: String =
-		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "noWrap", "rules": []}}}';
+	private static final CFG_DEFAULT_NOWRAP: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 140, "callParameter": {"defaultWrap": "noWrap", "rules": []}}}';
 
 	// --- 4. the same shapes under a `NoWrap`-resolving cascade ----------
 	// Compiled defaults never resolve `callParameter` to `NoWrap` for these

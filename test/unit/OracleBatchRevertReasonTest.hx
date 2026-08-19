@@ -21,29 +21,6 @@ import sys.io.File;
 @:access(anyparse.query.Cli)
 class OracleBatchRevertReasonTest extends Test {
 
-	#if (sys || nodejs)
-	/** Canned verdicts, consumed one per typecheck; the last one repeats once the list runs out. */
-	private static function canned(outcomes: Array<OracleOutcome>): (String, Null<String>) -> OracleOutcome {
-		var at: Int = 0;
-		return (_, _) -> {
-			final i: Int = at < outcomes.length ? at : outcomes.length - 1;
-			at++;
-			return outcomes[i];
-		};
-	}
-
-	/** `n` candidates named `f0.hx`…, each rewritten from `before <k>` to `after <k>`. */
-	private static function batch(dir: String, n: Int): Array<{ file: String, before: String, after: String }> {
-		return [
-			for (k in 0...n) { file: '$dir/f$k.hx', before: 'before $k\n', after: 'after $k\n' }
-		];
-	}
-
-	private static function makeDir(n: Int): String {
-		return CliFixture.writeDir('orbatch', [for (k in 0...n) { name: 'f$k.hx', source: 'before $k\n' }]);
-	}
-	#end
-
 	public function new() {
 		super();
 	}
@@ -52,7 +29,7 @@ class OracleBatchRevertReasonTest extends Test {
 	public function testCompilerRejectedRevertsTheNamedFile(): Void {
 		#if (sys || nodejs)
 		final dir: String = makeDir(3);
-		final candidates = batch(dir, 3);
+		final candidates: Array<{ file: String, before: String, after: String }> = batch(dir, 3);
 		final result = Cli.verifyOracleBatch(candidates, 'check.hxml', dir, canned([
 			Rejected('$dir/f1.hx:1: characters 1-2 : boom'),
 			Confirmed
@@ -115,5 +92,28 @@ class OracleBatchRevertReasonTest extends Test {
 		Assert.pass('non-sys target');
 		#end
 	}
+
+	#if (sys || nodejs)
+	/** Canned verdicts, consumed one per typecheck; the last one repeats once the list runs out. */
+	private static function canned(outcomes: Array<OracleOutcome>): (String, Null<String>) -> OracleOutcome {
+		var at: Int = 0;
+		return (_, _) -> {
+			final i: Int = at < outcomes.length ? at : outcomes.length - 1;
+			at++;
+			return outcomes[i];
+		};
+	}
+
+	/** `n` candidates named `f0.hx`…, each rewritten from `before <k>` to `after <k>`. */
+	private static function batch(dir: String, n: Int): Array<{ file: String, before: String, after: String }> {
+		return [
+			for (k in 0...n) { file: '$dir/f$k.hx', before: 'before $k\n', after: 'after $k\n' }
+		];
+	}
+
+	private static function makeDir(n: Int): String {
+		return CliFixture.writeDir('orbatch', [for (k in 0...n) { name: 'f$k.hx', source: 'before $k\n' }]);
+	}
+	#end
 
 }

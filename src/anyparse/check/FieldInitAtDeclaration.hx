@@ -625,11 +625,18 @@ final class FieldInitAtDeclaration implements Check {
 	): Null<{ name: String, span: Span, rhs: QueryNode }> {
 		final mv: Null<{ name: String, span: Span, rhs: QueryNode }> = assignedMovableField(stmt, container, statics, source, shape);
 		final span: Null<Span> = stmt.span;
-		if (mv == null || span == null) return null;
-		if (!RefactorSupport.contextFreeRhs(mv.rhs, container, statics, shape, true, mayBeInherited)) return null;
-		if (!RefactorSupport.ctorPrefixUnconditional(ctor, span.from, shape)) return null;
-		if (hoistCrossesSuper(ctor, container, span.from, shape)) return null;
-		return readBeforeInit(ctor, mv.span.from, mv.name, span.from, container, shape) ? null : mv;
+		return if (mv == null || span == null)
+			null
+		else if (!RefactorSupport.contextFreeRhs(mv.rhs, container, statics, shape, true, mayBeInherited))
+			null
+		else if (!RefactorSupport.ctorPrefixUnconditional(ctor, span.from, shape))
+			null
+		else if (hoistCrossesSuper(ctor, container, span.from, shape))
+			null
+		else if (readBeforeInit(ctor, mv.span.from, mv.name, span.from, container, shape))
+			null
+		else
+			mv;
 	}
 
 	/**

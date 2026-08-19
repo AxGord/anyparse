@@ -18,8 +18,23 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxChainFillBoundaryCallOperandTest extends Test {
 
-	private static final CONFIG: String =
-		'{"wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}, "opBoolChain": {"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": "itemCount <= n", "value": 3}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "totalItemLength <= n", "value": 120}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"}]}, "expressionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}, "opAddSubChain": {"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"}]}, "conditionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "whitespace": {"commaPolicy": "after", "binopPolicy": "around", "arrowFunctionsPolicy": "around", "functionTypeHaxe3Policy": "none", "functionTypeHaxe4Policy": "none"}, "sameLine": {"expressionIf": "next"}}';
+	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 140, "callParameter": {'
+		+ '"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": ['
+		+ '{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": '
+		+ '"noWrap"}]}, "opBoolChain": {"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": "itemCount '
+		+ '<= n", "value": 3}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {'
+		+ '"conditions": [{"cond": "totalItemLength <= n", "value": 120}, {"cond": "exceedsMaxLineLength", '
+		+ '"value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], '
+		+ '"type": "fillLine", "location": "beforeLast"}]}, "expressionWrapping": {"defaultWrap": '
+		+ '"fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], '
+		+ '"type": "noWrap"}]}, "opAddSubChain": {"defaultWrap": "noWrap", "rules": [{"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"}]}, '
+		+ '"conditionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "whitespace": {"commaPolicy": '
+		+ '"after", "binopPolicy": "around", "arrowFunctionsPolicy": "around", "functionTypeHaxe3Policy": '
+		+ '"none", "functionTypeHaxe4Policy": "none"}, "sameLine": {"expressionIf": "next"}}';
 
 	public function new(): Void {
 		super();
@@ -27,8 +42,8 @@ final class HxChainFillBoundaryCallOperandTest extends Test {
 
 	public function testCallOperandEndingAtLimitKeepsChainBreak(): Void {
 		final flat: String = 'class C {\n\tfunction f() {\n'
-			+ "\t\treturn 'DiagReport' + line() + '{' + line() + '  aa : ' + hostId + line() + '  mem: ' + memoryValue + ' KB (' + toUnits(memoryValue) + ' GB)' + line() + '  cpu: ' + coreTag + '}';\n"
-			+ '\t}\n}';
+			+ '\t\treturn \'DiagReport\' + line() + \'{\' + line() + \'  aa : \' + hostId + line() + \'  mem: \' + '
+			+ 'memoryValue + \' KB (\' + toUnits(memoryValue) + \' GB)\' + line() + \'  cpu: \' + coreTag + \'}\';\n\t}\n}';
 		final wrapped: String = 'class C {\n\tfunction f() {\n'
 			+ "\t\treturn 'DiagReport' + line() + '{' + line() + '  aa : ' + hostId + line() + '  mem: ' + memoryValue + ' KB ('\n"
 			+ "\t\t\t+ toUnits(memoryValue) + ' GB)' + line() + '  cpu: ' + coreTag + '}';\n\t}\n}";

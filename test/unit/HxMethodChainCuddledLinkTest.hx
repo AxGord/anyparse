@@ -69,10 +69,9 @@ final class HxMethodChainCuddledLinkTest extends Test {
 	/** The same chain compacted: every link rides the previous link's `})` line, and every body sits one level below the statement head. */
 	private static final FLUENT_CUDDLED: String = 'class SignalReporter {\n\tprivate function signalHandle(keeper:EventDumper):Void {\n'
 		+ '\t\tSVC.unit.sendMessage.postLocked(null, {\n\t\t\tOwnerName: title,\n\t\t\tRankCode: 4,\n\t\t\tNoteDetail: \'osTextAndInfo\',\n'
-		+ '\t\t\tStampTime: Date.now().toString(),\n\t\t}).applied((output:svc.types.OutcomeBase12) -> {\n'
-		+ '\t\t\tif (!output.Handled) trace(\': sendMessage: \', SVC.collectFaultText2(output));\n'
-		+ '\t\t}).fault((incoming:svc.types.FaultResponse) -> {\n\t\t\ttrace(\': sendMessage: \', SVC.collectFaultText(incoming));\n'
-		+ '\t\t});\n\t}\n}';
+		+ '\t\t\tStampTime: Date.now().toString(),\n\t\t}).applied((output:svc.types.OutcomeBase12) -> {\n\t\t\tif (!output.Handled) '
+		+ 'trace(\': sendMessage: \', SVC.collectFaultText2(output));\n\t\t}).fault((incoming:svc.types.FaultResponse) -> {\n'
+		+ '\t\t\ttrace(\': sendMessage: \', SVC.collectFaultText(incoming));\n\t\t});\n\t}\n}';
 
 	/** A dot-broken chain whose links carry only plain args and expression-bodied arrows — nothing in it forces a hardline. */
 	private static final PLAIN_ARGS_EXPLODED: String = 'class PlainChain {\n\tprivate function f():Void {\n'
@@ -82,10 +81,9 @@ final class HxMethodChainCuddledLinkTest extends Test {
 
 	/** A chain whose first two links end multi-line and whose last three carry plain args. Pre-knob: every link on its own line. */
 	private static final MIXED_EXPLODED: String = 'class MixedChain {\n\tprivate function f():Void {\n\t\tremoteClient.first(null, {\n'
-		+ '\t\t\talphaField: alphaValue,\n\t\t\tbetaField: betaValue,\n\t\t})\n'
-		+ '\t\t\t.second((r:ResponsePayload) -> {\n\t\t\t\thandleResult(r);\n\t\t\t})\n'
-		+ '\t\t\t.third(plainArgumentValue)\n\t\t\t.fourth(anotherPlainArgumentValue)\n'
-		+ '\t\t\t.fifth(yetAnotherPlainArgumentValue);\n\t}\n}';
+		+ '\t\t\talphaField: alphaValue,\n\t\t\tbetaField: betaValue,\n\t\t})\n\t\t\t.second((r:ResponsePayload) '
+		+ '-> {\n\t\t\t\thandleResult(r);\n\t\t\t})\n\t\t\t.third(plainArgumentValue)\n'
+		+ '\t\t\t.fourth(anotherPlainArgumentValue)\n\t\t\t.fifth(yetAnotherPlainArgumentValue);\n\t}\n}';
 
 	/** Same chain with only the two post-multiline-close gaps cuddled; `.fourth` / `.fifth` keep their own indented lines. */
 	private static final MIXED_CUDDLED: String = 'class MixedChain {\n\tprivate function f():Void {\n\t\tremoteClient.first(null, {\n'
@@ -101,8 +99,8 @@ final class HxMethodChainCuddledLinkTest extends Test {
 
 	/** Two dot-broken chains, the inner one living inside the outer one's lambda body. Pre-knob: both exploded. */
 	private static final NESTED_EXPLODED: String = 'class NestedChain {\n\tprivate function f():Void {\n'
-		+ '\t\touterService.beginRequest(null, {\n\t\t\talphaField: alphaValue,\n' + '\t\t\tbetaField: betaValue,\n\t\t})\n'
-		+ '\t\t\t.completed((outerResult:svc.types.OutcomeBase12) -> {\n'
+		+ '\t\touterService.beginRequest(null, {\n\t\t\talphaField: alphaValue,\n\t\t\tbetaField: '
+		+ 'betaValue,\n\t\t})\n\t\t\t.completed((outerResult:svc.types.OutcomeBase12) -> {\n'
 		+ '\t\t\t\tinnerService.beginRequest(null, {\n\t\t\t\t\tgammaField: gammaValue,\n'
 		+ '\t\t\t\t\tdeltaField: deltaValue,\n\t\t\t\t})\n' + '\t\t\t\t\t.completed((innerResult:svc.types.OutcomeBase12) -> {\n'
 		+ '\t\t\t\t\t\thandleInnerSuccess(innerResult);\n\t\t\t\t\t})\n' + '\t\t\t\t\t.failed((innerError:svc.types.FaultResponse) -> {\n'
@@ -140,8 +138,8 @@ final class HxMethodChainCuddledLinkTest extends Test {
 	 * the first gap then has a link before it like every other gap.
 	 */
 	private static final RECEIVER_EXPLODED: String = 'class OnePerLineChain {\n\tprivate function f():Void {\n\t\tbuildSource({\n'
-		+ '\t\t\talphaField: alphaValue,\n\t\t\tbetaField: betaValue,\n\t\t})\n' + '\t\t\t.second(anotherPlainArgumentValue)\n'
-		+ '\t\t\t.third(yetAnotherPlainArgumentValue);\n' + '\t}\n' + '}';
+		+ '\t\t\talphaField: alphaValue,\n\t\t\tbetaField: betaValue,\n\t\t})\n'
+		+ '\t\t\t.second(anotherPlainArgumentValue)\n\t\t\t.third(yetAnotherPlainArgumentValue);\n' + '\t}\n}';
 
 	/** Same chain with `.second` riding the receiver's `})` at BASE indent (no run open yet), `.third` still breaking to base + 1. */
 	private static final RECEIVER_CUDDLED: String = 'class OnePerLineChain {\n\tprivate function f():Void {\n\t\tbuildSource({\n'

@@ -30,8 +30,8 @@ final class AvoidDynamicRiskyFixE2ETest extends Test {
 	// A local `Dynamic` provably holding a `Good` (typed init) with a corroborating typed
 	// sink — the narrowing to `Good` typechecks and is applied.
 	// Trivia-writer-canonical (blank line between members) so RefactorSupport.canonicalize accepts it.
-	private static final APPLIES: String = 'class Good {\n\tpublic function new() {}\n\n\tstatic function main() {\n'
-		+ '\t\tfinal a:Good = new Good();\n\t\tvar x:Dynamic = a;\n\t\tvar y:Good = x;\n\t\ttrace(y);\n' + '\t}\n}\n';
+	private static final APPLIES: String = 'class Good {\n\tpublic function new() {}\n\n\tstatic function main() {\n\t\tfinal a:Good = new '
+		+ 'Good();\n\t\tvar x:Dynamic = a;\n\t\tvar y:Good = x;\n\t\ttrace(y);\n\t}\n}\n';
 
 	// The optional-param nullability blind spot: `?b:Good` records nominal `Good` in
 	// `declaredTypes` (its `Null<…>` is the projection's known lossy gap), so the classifier

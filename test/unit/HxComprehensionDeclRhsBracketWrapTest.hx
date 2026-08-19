@@ -61,11 +61,10 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "fitLine"}}';
 
 	/** Same, plus the project's `callParameter` cascade — needed by the call-host fixtures, whose hug depends on its `totalItemLength <= 100` rule. */
-	private static final CFG_CALL: String = '{"indentation": {"character": "tab", "tabWidth": 4},'
-		+ ' "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true,'
-		+ ' "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": ['
-		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"},'
-		+ '{"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}},'
+	private static final CFG_CALL: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 140, "comprehensionCuddledOpen": true, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": ['
+		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"},{"conditions": ['
+		+ '{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}},'
 		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "fitLine"}}';
 
 	/** `CFG` without `wrapping.comprehensionCuddledOpen` — the gate-1 disarm is config-independent and must hold here too. */
@@ -78,9 +77,8 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 
 	/** The motivating shape: a typed declaration whose comprehension overflows breaks at the `[`, not after the `=`. */
 	public function testOverflowingDeclComprehensionBreaksInsideBrackets(): Void {
-		final src: String = 'class Renderer {\n\tprivate function collect():Void {\n'
-			+ '\t\tfinal selectedUnits:Array<SceneNode<NodePayload>> = [for (sceneNode in _sceneLayer.sceneNodes) if (sceneNode is UnitBase) sceneNode];'
-			+ '\n\t}\n}';
+		final src: String = 'class Renderer {\n\tprivate function collect():Void {\n\t\tfinal selectedUnits:Array<SceneNode<NodePayload>> '
+			+ '= [for (sceneNode in _sceneLayer.sceneNodes) if (sceneNode is UnitBase) sceneNode];\n\t}\n}';
 		final expected: String = 'class Renderer {\n\tprivate function collect():Void {\n'
 			+ '\t\tfinal selectedUnits:Array<SceneNode<NodePayload>> = [\n'
 			+ '\t\t\tfor (sceneNode in _sceneLayer.sceneNodes) if (sceneNode is UnitBase) sceneNode\n\t\t];\n\t}\n}';
@@ -96,12 +94,10 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 	 * line.
 	 */
 	public function testComprehensionAtLimitStaysFlat(): Void {
-		final src: String = 'class Boundary {\n\tprivate function edge():Void {\n'
-			+ '\t\tfinal atLimit:Array<Item> = [for (o in list) if (o is UnitXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX) o];'
-			+ '\n\t}\n}';
-		final expected: String = 'class Boundary {\n\tprivate function edge():Void {\n'
-			+ '\t\tfinal atLimit:Array<Item> = [ for (o in list) if (o is UnitXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX) o ];'
-			+ '\n\t}\n}';
+		final src: String = 'class Boundary {\n\tprivate function edge():Void {\n\t\tfinal atLimit:Array<Item> = [for (o in list) if ('
+			+ 'o is UnitXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX) o];\n\t}\n}';
+		final expected: String = 'class Boundary {\n\tprivate function edge():Void {\n\t\tfinal atLimit:Array<Item> = [ for (o in list) '
+			+ 'if (o is UnitXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX) o ];\n\t}\n}';
 		assertWrite(expected, src, CFG);
 	}
 
@@ -114,9 +110,8 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 	 * other.
 	 */
 	public function testComprehensionOnePastLimitBreaksInsideBrackets(): Void {
-		final src: String = 'class Boundary {\n\tprivate function edge():Void {\n'
-			+ '\t\tfinal atLimit:Array<Item> = [for (o in list) if (o is UnitXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX) o];'
-			+ '\n\t}\n}';
+		final src: String = 'class Boundary {\n\tprivate function edge():Void {\n\t\tfinal atLimit:Array<Item> = [for (o in list) if ('
+			+ 'o is UnitXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX) o];\n\t}\n}';
 		final expected: String = 'class Boundary {\n\tprivate function edge():Void {\n\t\tfinal atLimit:Array<Item> = [\n'
 			+ '\t\t\tfor (o in list) if (o is UnitXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX) o\n\t\t];\n\t}\n}';
 		assertWrite(expected, src, CFG);
@@ -124,16 +119,13 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 
 	/** The same boundary pair with `comprehensionCuddledOpen` absent — the fit cascade and the gate-1 disarm do not depend on that knob. */
 	public function testBoundaryHoldsWithoutCuddledOpen(): Void {
-		final atLimitSrc: String = 'class NoCuddle {\n\tprivate function edge():Void {\n'
-			+ '\t\tfinal atLimit:Array<Item> = [for (o in list) if (o is UnitXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX) o];'
-			+ '\n\t}\n}';
-		final atLimitOut: String = 'class NoCuddle {\n\tprivate function edge():Void {\n'
-			+ '\t\tfinal atLimit:Array<Item> = [ for (o in list) if (o is UnitXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX) o ];'
-			+ '\n\t}\n}';
+		final atLimitSrc: String = 'class NoCuddle {\n\tprivate function edge():Void {\n\t\tfinal atLimit:Array<Item> = [for (o in list) '
+			+ 'if (o is UnitXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX) o];\n\t}\n}';
+		final atLimitOut: String = 'class NoCuddle {\n\tprivate function edge():Void {\n\t\tfinal atLimit:Array<Item> = [ for (o in list) '
+			+ 'if (o is UnitXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX) o ];\n\t}\n}';
 		assertWrite(atLimitOut, atLimitSrc, CFG_NO_CUDDLE);
-		final pastSrc: String = 'class NoCuddle {\n\tprivate function edge():Void {\n'
-			+ '\t\tfinal atLimit:Array<Item> = [for (o in list) if (o is UnitXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX) o];'
-			+ '\n\t}\n}';
+		final pastSrc: String = 'class NoCuddle {\n\tprivate function edge():Void {\n\t\tfinal atLimit:Array<Item> = [for (o in list) if ('
+			+ 'o is UnitXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX) o];\n\t}\n}';
 		final pastOut: String = 'class NoCuddle {\n\tprivate function edge():Void {\n\t\tfinal atLimit:Array<Item> = [\n'
 			+ '\t\t\tfor (o in list) if (o is UnitXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX) o\n\t\t];\n\t}\n}';
 		assertWrite(pastOut, pastSrc, CFG_NO_CUDDLE);
@@ -141,9 +133,8 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 
 	/** Assignment RHS (no declaration, no type hint) takes the same bracket break. */
 	public function testAssignmentRhsComprehensionBreaksInsideBrackets(): Void {
-		final src: String = 'class Assign {\n\tprivate function run():Void {\n'
-			+ '\t\tunitRegistryTable = [for (sceneNode in _sceneLayer.sceneNodes) if (sceneNode is UnitBaseDerivedNameXXXXXXXXXXXXXXXXXXXXXXXXXXXX) sceneNode];'
-			+ '\n\t}\n}';
+		final src: String = 'class Assign {\n\tprivate function run():Void {\n\t\tunitRegistryTable = [for (sceneNode in '
+			+ '_sceneLayer.sceneNodes) if (sceneNode is UnitBaseDerivedNameXXXXXXXXXXXXXXXXXXXXXXXXXXXX) sceneNode];\n\t}\n}';
 		final expected: String = 'class Assign {\n\tprivate function run():Void {\n\t\tunitRegistryTable = [\n'
 			+ '\t\t\tfor (sceneNode in _sceneLayer.sceneNodes) if (sceneNode is UnitBaseDerivedNameXXXXXXXXXXXXXXXXXXXXXXXXXXXX) sceneNode'
 			+ '\n\t\t];\n\t}\n}';
@@ -152,9 +143,8 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 
 	/** A map comprehension (`k => v` generator body) is the same list ctor and takes the same shape. */
 	public function testMapComprehensionBreaksInsideBrackets(): Void {
-		final src: String = 'class Renderer {\n\tprivate function collect():Void {\n'
-			+ '\t\tfinal lookupTable:Map<String, SceneNode> = [for (sceneNode in _sceneLayer.sceneNodes) if (sceneNode is UnitBase) sceneNode.key => sceneNode];'
-			+ '\n\t}\n}';
+		final src: String = 'class Renderer {\n\tprivate function collect():Void {\n\t\tfinal lookupTable:Map<String, SceneNode> = [for ('
+			+ 'sceneNode in _sceneLayer.sceneNodes) if (sceneNode is UnitBase) sceneNode.key => sceneNode];\n\t}\n}';
 		final expected: String = 'class Renderer {\n\tprivate function collect():Void {\n\t\tfinal lookupTable:Map<String, SceneNode> = [\n'
 			+ '\t\t\tfor (sceneNode in _sceneLayer.sceneNodes) if (sceneNode is UnitBase) sceneNode.key => sceneNode\n\t\t];\n\t}\n}';
 		assertWrite(expected, src, CFG);
@@ -169,9 +159,8 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 	 * have been under test.
 	 */
 	public function testWhileComprehensionBreaksInsideBrackets(): Void {
-		final src: String = 'class Whiles {\n\tprivate function run():Void {\n'
-			+ '\t\tfinal drainedNodes:Array<SceneNode<NodePayload>> = [while (_pendingQueue.hasNext()) if (_pendingQueue.peekIsReady()) _pendingQueue.takeNext()];'
-			+ '\n\t}\n}';
+		final src: String = 'class Whiles {\n\tprivate function run():Void {\n\t\tfinal drainedNodes:Array<SceneNode<NodePayload>> = ['
+			+ 'while (_pendingQueue.hasNext()) if (_pendingQueue.peekIsReady()) _pendingQueue.takeNext()];\n\t}\n}';
 		final expected: String = 'class Whiles {\n\tprivate function run():Void {\n\t\tfinal drainedNodes:Array<SceneNode<NodePayload>> = ['
 			+ '\n\t\t\twhile (_pendingQueue.hasNext()) if (_pendingQueue.peekIsReady()) _pendingQueue.takeNext()\n\t\t];' + '\n' + '\t}'
 			+ '\n' + '}';
@@ -181,23 +170,22 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 	/** A generator that STILL overflows on its own line keeps the opened bracket and lets the existing inner wrap take the rest. */
 	public function testInnerOverflowKeepsOpenBracketAndWrapsBody(): Void {
 		final src: String = 'class Inner {\n\tprivate function run():Void {\n'
-			+ '\t\tfinal removedPaths:Array<String> = [for (entry in pendingEntries) if (entry.state == REMOVED && entry.path.startsWith(Const.SHARED_ROOT_PREFIX_WITH_TRAILING_SLASH)) entry.path];'
-			+ '\n\t}\n}';
+			+ '\t\tfinal removedPaths:Array<String> = [for (entry in pendingEntries) if (entry.state == REMOVED && '
+			+ 'entry.path.startsWith(Const.SHARED_ROOT_PREFIX_WITH_TRAILING_SLASH)) entry.path];\n\t}\n}';
 		final expected: String = 'class Inner {\n\tprivate function run():Void {\n\t\tfinal removedPaths:Array<String> = [\n'
-			+ '\t\t\tfor (entry in pendingEntries) if (entry.state == REMOVED && entry.path.startsWith(Const.SHARED_ROOT_PREFIX_WITH_TRAILING_SLASH))'
-			+ '\n\t\t\t\tentry.path\n\t\t];\n\t}\n}';
+			+ '\t\t\tfor (entry in pendingEntries) if (entry.state == REMOVED && '
+			+ 'entry.path.startsWith(Const.SHARED_ROOT_PREFIX_WITH_TRAILING_SLASH))\n\t\t\t\tentry.path\n\t\t];\n\t}\n}';
 		assertWrite(expected, src, CFG_CALL);
 	}
 
 	/** A call whose sole arg is an over-long comprehension keeps the call hugged and opens only the bracket. */
 	public function testCallArgComprehensionHugsTheCallAndOpensBracket(): Void {
 		final src: String = 'class CallHost {\n\tprivate function run(payload:NodePayload, nodes:Array<SceneNode<NodePayload>>):Void {\n'
-			+ '\t\tdispatchNodeUpdate([for (sceneNode in nodes) if (payload.kind == sceneNode.kind) new UpdateNodePropsCommand(this, cast sceneNode, payload)]);'
-			+ '\n\t}\n}';
+			+ '\t\tdispatchNodeUpdate([for (sceneNode in nodes) if (payload.kind == sceneNode.kind) '
+			+ 'new UpdateNodePropsCommand(this, cast sceneNode, payload)]);\n\t}\n}';
 		final expected: String = 'class CallHost {\n\tprivate function run(payload:NodePayload, nodes:Array<SceneNode<NodePayload>>):Void {'
-			+ '\n\t\tdispatchNodeUpdate([\n'
-			+ '\t\t\tfor (sceneNode in nodes) if (payload.kind == sceneNode.kind) new UpdateNodePropsCommand(this, cast sceneNode, payload)'
-			+ '\n' + '\t\t]);' + '\n' + '\t}' + '\n' + '}';
+			+ '\n\t\tdispatchNodeUpdate([\n\t\t\tfor (sceneNode in nodes) if (payload.kind == sceneNode.kind) '
+			+ 'new UpdateNodePropsCommand(this, cast sceneNode, payload)\n\t\t]);\n\t}\n}';
 		assertWrite(expected, src, CFG_CALL);
 	}
 
@@ -212,9 +200,8 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 		final src: String = 'class NodeHost {\n'
 			+ '\tprivate function updateNodeLabels(payload:NodePayload, nodes:Array<SceneNode<NodePayload>>):Void {\n'
 			+ '\t\tswitch payload.kind {\n\t\t\tcase UnitPayload.KIND_KEEPER, UnitPayload.KIND_FIELD, UnitPayload.KIND_BENCH:\n'
-			+ '\t\t\t\tdispatchNodeUpdate([ for (sceneNode in nodes)\n'
-			+ '\t\t\t\t\tif (payload.kind == sceneNode.kind) new UpdateNodePropsCommand(this, cast sceneNode, payload)\n'
-			+ '\t\t\t\t]);\n\t\t\tcase _:\n\t\t}\n\t}\n}';
+			+ '\t\t\t\tdispatchNodeUpdate([ for (sceneNode in nodes)\n\t\t\t\t\tif (payload.kind == sceneNode.kind) '
+			+ 'new UpdateNodePropsCommand(this, cast sceneNode, payload)\n\t\t\t\t]);\n\t\t\tcase _:\n\t\t}\n\t}\n}';
 		assertWrite(src, src, CFG_CALL);
 	}
 

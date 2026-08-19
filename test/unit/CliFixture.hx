@@ -1,10 +1,10 @@
 package unit;
 
-using StringTools;
-
 #if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;
+
+using StringTools;
 
 /**
  * Shared on-disk fixture writer for the `apq` CLI end-to-end tests.

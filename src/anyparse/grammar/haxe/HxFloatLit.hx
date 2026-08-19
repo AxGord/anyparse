@@ -58,7 +58,7 @@ using StringTools;
 abstract HxFloatLit(String) from String to String {
 
 	@:to public inline function toFloat(): Float {
-		var s: String = StringTools.replace(this, '_', '');
+		var s: String = this.replace('_', '');
 		if (s.endsWith('f32'))
 			s = s.substr(0, s.length - 3);
 		else if (s.endsWith('f64'))

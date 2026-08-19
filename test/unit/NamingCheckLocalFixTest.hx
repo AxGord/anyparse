@@ -490,8 +490,8 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 	 * function binds into is the enclosing body, so the two share it.
 	 */
 	public function testLocalFunctionCollidingWithSiblingSkipped(): Void {
-		final src: String = 'package pkg;\nclass C {\n\tpublic function f() {\n\t\tfunction drawGrid(n:Int) {\n'
-			+ '\t\t\tif (n > 0) drawGrid(n - 1);\n\t\t}\n\t\tfunction draw_grid() {\n\t\t\ttrace(1);\n\t\t}\n' + '\t\tdraw_grid();\n\t}\n}';
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f() {\n\t\tfunction drawGrid(n:Int) {\n\t\t\tif (n > 0) '
+			+ 'drawGrid(n - 1);\n\t\t}\n\t\tfunction draw_grid() {\n\t\t\ttrace(1);\n\t\t}\n\t\tdraw_grid();\n\t}\n}';
 		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 

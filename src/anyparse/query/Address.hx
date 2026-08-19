@@ -199,7 +199,7 @@ final class Address {
 			// Only a node that STARTS here is the thing the line declares. Anything else means the walk
 			// ran into trivia (a comment between the prefix and the declaration) and `Engine.at` answered
 			// with the enclosing type — keep the prefix node rather than widen the address to a container.
-			final aheadSpan: Null<Span> = ahead == null ? null : ahead.span;
+			final aheadSpan: Null<Span> = ahead?.span;
 			if (aheadSpan == null || aheadSpan.from != next) break;
 			at = next;
 			node = ahead;
@@ -262,7 +262,7 @@ final class Address {
 		if (span == null) return '(no span) ${node.kind}';
 		final pos: Position = span.lineCol(source);
 		final name: Null<String> = node.name;
-		return '${pos.line}:${pos.col} ${node.kind}' + (name != null ? ':$name' : '');
+		return '${pos.line}:${pos.col} ${node.kind}${name != null ? ':$name' : ''}';
 	}
 
 	/** The first pre-order node whose span equals `span` exactly — a `Match.span` is always some input node's span. */

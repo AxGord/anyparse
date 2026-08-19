@@ -22,47 +22,51 @@ import utest.Test;
 final class HxExprParenObjectLitGlueTest extends Test {
 
 	/** project-shaped config: tab indent, `maxLineLength` 140, packed-or-one-per-line collections, fillLine `expressionWrapping`. */
-	private static final FILL_LINE: String = '{"indentation": {"character": "tab", "tabWidth": 4},'
-		+ ' "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true,'
-		+ ' "objectLiteral": {"defaultWrap": "ignore", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "packedOrOnePerLine"}]},'
-		+ ' "arrayWrap": {"defaultWrap": "ignore", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "packedOrOnePerLine"}]},'
-		+ ' "expressionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}},'
+	private static final FILL_LINE: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 140, "comprehensionCuddledOpen": true, "objectLiteral": {"defaultWrap": "ignore", "rules": [{"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 1}], "type": "packedOrOnePerLine"}]}, "arrayWrap": {"defaultWrap": "ignore", "rules": '
+		+ '[{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 1}], "type": "packedOrOnePerLine"}]}, "expressionWrapping": {"defaultWrap": '
+		+ '"fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}},'
 		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "fitLine"}}';
 
 	/** Same config with `wrapping.expressionWrapping` absent - the universal default (`NoWrap`) cascade. */
-	private static final DEFAULT_WRAP: String = '{"indentation": {"character": "tab", "tabWidth": 4},'
-		+ ' "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true,'
-		+ ' "objectLiteral": {"defaultWrap": "ignore", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "packedOrOnePerLine"}]},'
-		+ ' "arrayWrap": {"defaultWrap": "ignore", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "packedOrOnePerLine"}]}},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "fitLine"}}';
+	private static final DEFAULT_WRAP: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 140, "comprehensionCuddledOpen": true, "objectLiteral": {"defaultWrap": "ignore", "rules": [{"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": '
+		+ '1}], "type": "packedOrOnePerLine"}]}, "arrayWrap": {"defaultWrap": "ignore", "rules": [{"conditions": [{"cond": '
+		+ '"exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], '
+		+ '"type": "packedOrOnePerLine"}]}}, "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "fitLine"}}';
 
 	/** Exploded `(\n\t{...}\n)` parens in the three positions a paren-wrapped literal reaches: decl init, call arg, `return`. */
 	private static final POSITIONS_EXPLODED: String = 'class C {\n\tfunction test() {\n\t\tfinal declValue = (\n\t\t\t{\n'
-		+ '\t\t\t\tcaptionValue: elementValue.captionValue,\n' + '\t\t\t\tdetailValue: elementValue.detailValue,\n'
-		+ '\t\t\t\tidentityValue: elementValue.identityValue,\n'
+		+ '\t\t\t\tcaptionValue: elementValue.captionValue,\n\t\t\t\tdetailValue: '
+		+ 'elementValue.detailValue,\n\t\t\t\tidentityValue: elementValue.identityValue,\n'
 		+ '\t\t\t\taddressValue: elementValue.addressValue,\n\t\t\t\taccessValue: VIEWVALUE,\n'
 		+ '\t\t\t\tpictureValue: elementValue.pictureValue\n\t\t\t}\n\t\t);\n\t\tconsumeCollectedValue((\n'
-		+ '\t\t\t{\n\t\t\t\tcaptionValue: elementValue.captionValue,\n' + '\t\t\t\tdetailValue: elementValue.detailValue,\n'
-		+ '\t\t\t\tidentityValue: elementValue.identityValue,\n'
+		+ '\t\t\t{\n\t\t\t\tcaptionValue: elementValue.captionValue,\n\t\t\t\tdetailValue: '
+		+ 'elementValue.detailValue,\n\t\t\t\tidentityValue: elementValue.identityValue,\n'
 		+ '\t\t\t\taddressValue: elementValue.addressValue,\n\t\t\t\taccessValue: VIEWVALUE,\n'
 		+ '\t\t\t\tpictureValue: elementValue.pictureValue\n\t\t\t}\n\t\t));\n\t\treturn (\n\t\t\t{\n'
-		+ '\t\t\t\tcaptionValue: elementValue.captionValue,\n' + '\t\t\t\tdetailValue: elementValue.detailValue,\n'
-		+ '\t\t\t\tidentityValue: elementValue.identityValue,\n'
+		+ '\t\t\t\tcaptionValue: elementValue.captionValue,\n\t\t\t\tdetailValue: '
+		+ 'elementValue.detailValue,\n\t\t\t\tidentityValue: elementValue.identityValue,\n'
 		+ '\t\t\t\taddressValue: elementValue.addressValue,\n\t\t\t\taccessValue: VIEWVALUE,\n'
 		+ '\t\t\t\tpictureValue: elementValue.pictureValue\n\t\t\t}\n\t\t);\n\t}\n}';
 
 	/** The same three positions with the paren glued to the literal's braces. */
-	private static final POSITIONS_GLUED: String = 'class C {\n\tfunction test() {\n\t\tfinal declValue = ({\n'
-		+ '\t\t\tcaptionValue: elementValue.captionValue,\n\t\t\tdetailValue: elementValue.detailValue,\n'
-		+ '\t\t\tidentityValue: elementValue.identityValue,\n\t\t\taddressValue: elementValue.addressValue,\n'
-		+ '\t\t\taccessValue: VIEWVALUE,\n' + '\t\t\tpictureValue: elementValue.pictureValue\n' + '\t\t});\n'
-		+ '\t\tconsumeCollectedValue(({\n' + '\t\t\tcaptionValue: elementValue.captionValue,\n'
-		+ '\t\t\tdetailValue: elementValue.detailValue,\n' + '\t\t\tidentityValue: elementValue.identityValue,\n'
-		+ '\t\t\taddressValue: elementValue.addressValue,\n' + '\t\t\taccessValue: VIEWVALUE,\n'
-		+ '\t\t\tpictureValue: elementValue.pictureValue\n' + '\t\t}));\n' + '\t\treturn ({\n'
-		+ '\t\t\tcaptionValue: elementValue.captionValue,\n' + '\t\t\tdetailValue: elementValue.detailValue,\n'
-		+ '\t\t\tidentityValue: elementValue.identityValue,\n' + '\t\t\taddressValue: elementValue.addressValue,\n'
-		+ '\t\t\taccessValue: VIEWVALUE,\n' + '\t\t\tpictureValue: elementValue.pictureValue\n' + '\t\t});\n' + '\t}\n' + '}';
+	private static final POSITIONS_GLUED: String = 'class C {\n\tfunction test() {\n\t\tfinal declValue = ({\n\t\t\tcaptionValue: '
+		+ 'elementValue.captionValue,\n\t\t\tdetailValue: elementValue.detailValue,\n\t\t\tidentityValue: '
+		+ 'elementValue.identityValue,\n\t\t\taddressValue: elementValue.addressValue,\n'
+		+ '\t\t\taccessValue: VIEWVALUE,\n\t\t\tpictureValue: elementValue.pictureValue\n\t\t});\n'
+		+ '\t\tconsumeCollectedValue(({\n\t\t\tcaptionValue: elementValue.captionValue,\n'
+		+ '\t\t\tdetailValue: elementValue.detailValue,\n\t\t\tidentityValue: '
+		+ 'elementValue.identityValue,\n\t\t\taddressValue: elementValue.addressValue,\n'
+		+ '\t\t\taccessValue: VIEWVALUE,\n\t\t\tpictureValue: elementValue.pictureValue\n\t\t}));\n'
+		+ '\t\treturn ({\n\t\t\tcaptionValue: elementValue.captionValue,\n'
+		+ '\t\t\tdetailValue: elementValue.detailValue,\n\t\t\tidentityValue: '
+		+ 'elementValue.identityValue,\n\t\t\taddressValue: elementValue.addressValue,\n' + '\t\t\taccessValue: VIEWVALUE,\n'
+		+ '\t\t\tpictureValue: elementValue.pictureValue\n' + '\t\t});\n' + '\t}\n' + '}';
 
 	/** The reported real-world shape: a comprehension filter body wrapping its object literal in parens, exploded. */
 	private static final COMPREHENSION_EXPLODED: String = 'class SampleContainer {\n'
@@ -84,19 +88,19 @@ final class HxExprParenObjectLitGlueTest extends Test {
 		+ '\t\t\t\t\t\timage: item.Image\n\t\t\t\t\t})\n\t\t\t]\n\t\t};\n\t}\n}';
 
 	/** A real ternary inner, written flat past `maxLineLength`. */
-	private static final TERNARY_FLAT: String = 'class C {\n\tfunction test() {\n'
-		+ '\t\tfinal ternaryValue = (someConditionValueNameThatIsQuiteLong ? firstAlternativeValueNameLongEnough : secondAlternativeValueNameThatIsLongEnoughHere);\n'
-		+ '\t}\n}';
+	private static final TERNARY_FLAT: String = 'class C {\n\tfunction test() {\n\t\tfinal ternaryValue = ('
+		+ 'someConditionValueNameThatIsQuiteLong ? firstAlternativeValueNameLongEnough : '
+		+ 'secondAlternativeValueNameThatIsLongEnoughHere);\n\t}\n}';
 
 	/** The ternary inner opens its paren: content on its own line at +1, `)` back at statement indent. */
 	private static final TERNARY_OPENED: String = 'class C {\n\tfunction test() {\n\t\tfinal ternaryValue = (\n'
-		+ '\t\t\tsomeConditionValueNameThatIsQuiteLong ? firstAlternativeValueNameLongEnough : secondAlternativeValueNameThatIsLongEnoughHere\n'
-		+ '\t\t);\n\t}\n}';
+		+ '\t\t\tsomeConditionValueNameThatIsQuiteLong ? firstAlternativeValueNameLongEnough : '
+		+ 'secondAlternativeValueNameThatIsLongEnoughHere\n\t\t);\n\t}\n}';
 
 	/** An array-literal inner, written flat past `maxLineLength`. */
-	private static final ARRAY_FLAT: String = 'class C {\n\tfunction test() {\n'
-		+ '\t\tfinal arrayValue = ([firstElementValueNameLonger, secondElementValueNameLonger, thirdElementValueNameLonger, fourthElementValueNameLonger, fifthElementValueNameLonger, sixthElementValueNameLonger]);\n'
-		+ '\t}\n}';
+	private static final ARRAY_FLAT: String = 'class C {\n\tfunction test() {\n\t\tfinal arrayValue = ('
+		+ '[firstElementValueNameLonger, secondElementValueNameLonger, thirdElementValueNameLonger, '
+		+ 'fourthElementValueNameLonger, fifthElementValueNameLonger, sixthElementValueNameLonger]);\n\t}\n}';
 
 	/** The array-literal inner breaks INSIDE its own brackets, paren glued on both sides. */
 	private static final ARRAY_GLUED: String = 'class C {\n\tfunction test() {\n\t\tfinal arrayValue = ([\n'

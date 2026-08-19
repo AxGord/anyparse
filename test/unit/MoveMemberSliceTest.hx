@@ -799,8 +799,8 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testAbstractModifierlessPropertyRefused(): Void {
-		final meters: String = 'package pkg;\n\nabstract Meters(Int) {\n\tpublic var length(get, never):Int;\n\n'
-			+ '\tfunction get_length():Int return 0;\n}';
+		final meters: String =
+			'package pkg;\n\nabstract Meters(Int) {\n\tpublic var length(get, never):Int;\n\n\tfunction get_length():Int return 0;\n}';
 		final box: String = 'package pkg;\n\nclass Box {}';
 		assertErrContains(move('pkg/Meters.hx', 'Meters', 'length', 'Box', [
 			{ file: 'pkg/Meters.hx', source: meters },
@@ -809,8 +809,8 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testExplicitStaticInsideEnumAbstractStillMoves(): Void {
-		final colour: String = 'package pal;\n\nenum abstract Colour(Int) {\n\tvar RED = 1;\n\n'
-			+ '\tpublic static function hue():Int return 7;\n}';
+		final colour: String =
+			'package pal;\n\nenum abstract Colour(Int) {\n\tvar RED = 1;\n\n\tpublic static function hue():Int return 7;\n}';
 		final palette: String = 'package pal;\n\nclass Palette {\n\tpublic static var COUNT = 0;\n}';
 		final user: String = 'package pal;\n\nclass User {\n\tpublic static function pick():Int return Colour.hue();\n}';
 		final changes: Array<MoveChange> = okChanges('pal/Colour.hx', 'Colour', 'hue', 'Palette', [
@@ -845,8 +845,8 @@ class MoveMemberSliceTest extends Test {
 		final boxes: String = 'package pkg;\n\nclass Boxes {\n\tpublic static function tag():Int return 5;\n}';
 		final foreign: String = 'package other;\n\nclass Boxes {\n\tpublic static function tag():Int return 7;\n}';
 		final dest: String = 'package dst;\n\nclass Dest {}';
-		final main: String = 'package app;\n\nimport pkg.Boxes;\n\nclass Main {\n'
-			+ '\tstatic function run():Int return Boxes.tag() + other.Boxes.tag();\n}';
+		final main: String =
+			'package app;\n\nimport pkg.Boxes;\n\nclass Main {\n\tstatic function run():Int return Boxes.tag() + other.Boxes.tag();\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/Boxes.hx', 'Boxes', 'tag', 'Dest', [
 			{ file: 'pkg/Boxes.hx', source: boxes },
 			{ file: 'dst/Dest.hx', source: dest },

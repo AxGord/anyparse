@@ -662,7 +662,7 @@ final class PreferFind implements Check {
 		final colon: Int = prefix.indexOf(':');
 		if (colon == -1) return true;
 		final eq: Int = prefix.lastIndexOf('=');
-		return StringTools.startsWith(prefix.substring(colon + 1, eq == -1 ? prefix.length : eq).trim(), 'Null');
+		return prefix.substring(colon + 1, eq == -1 ? prefix.length : eq).trim().startsWith('Null');
 	}
 
 

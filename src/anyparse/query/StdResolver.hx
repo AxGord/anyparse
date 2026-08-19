@@ -226,7 +226,7 @@ final class StdResolver {
 		final status: Null<Int> = (res.status: Null<Int>);
 		if (status == null || status != 0) return null;
 		final out: Dynamic = res.stdout;
-		final s: Null<String> = out == null ? null : StringTools.trim(Std.string(out));
+		final s: Null<String> = out == null ? null : '$out'.trim();
 		return s == null || s == '' ? null : s;
 		#elseif sys
 		try {

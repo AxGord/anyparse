@@ -54,24 +54,22 @@ final class _ReconSkipParse { // noqa: naming
 		// non-flag arg is the single-file probe path.
 		var topN: Int = TOP_N_DEFAULT;
 		var probePath: Null<String> = null;
-		{
-			var i: Int = 0;
-			while (i < args.length) {
-				final a: String = args[i];
-				switch a {
-					case '--top':
-						if (i + 1 < args.length) {
-							final v: Null<Int> = Std.parseInt(args[i + 1]);
-							if (v != null && v > 0) topN = v;
-							i++;
-						}
-					case '--all':
-						topN = 999999;
-					case _:
-						if (!a.startsWith('--') && probePath == null) probePath = a;
-				}
-				i++;
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--top':
+					if (i + 1 < args.length) {
+						final v: Null<Int> = Std.parseInt(args[i + 1]);
+						if (v != null && v > 0) topN = v;
+						i++;
+					}
+				case '--all':
+					topN = 999999;
+				case _:
+					if (!a.startsWith('--') && probePath == null) probePath = a;
 			}
+			i++;
 		}
 		if (probePath != null) {
 			probeFile(probePath);
@@ -92,7 +90,12 @@ final class _ReconSkipParse { // noqa: naming
 			final dir: String = '$root/test/testcases/$bucket';
 			if (!FileSystem.exists(dir) || !FileSystem.isDirectory(dir)) continue;
 			final names: Array<String> = FileSystem.readDirectory(dir);
-			names.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
+			names.sort((a: String, b: String) -> if (a < b)
+				-1
+			else if (a > b)
+				1
+			else
+				0);
 			for (name in names) if (name.endsWith(HXTEST_EXT)) {
 				final tc: Null<HxTestCase> = HxFormatterCorpusHelpers.readHxTest('$dir/$name');
 				if (tc == null) continue;
@@ -238,7 +241,7 @@ final class _ReconSkipParse { // noqa: naming
 
 	private static function head(input: String): String {
 		final cut: String = input.length > HEAD_LEN ? input.substr(0, HEAD_LEN) : input;
-		return StringTools.replace(cut.replace('\n', '\\n'), '\t', '\\t');
+		return cut.replace('\n', '\\n').replace('\t', '\\t');
 	}
 
 }

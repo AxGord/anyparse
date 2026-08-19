@@ -89,8 +89,8 @@ final class PreferSwitchExpression implements Check {
 	}
 
 	public function description(): String {
-		return
-			'a value-position ternary / if-expression chain testing one or more expressions against constants — clearer as a switch expression';
+		return 'a value-position ternary / if-expression chain testing one or more expressions against constants — clearer as a switch '
+			+ 'expression';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

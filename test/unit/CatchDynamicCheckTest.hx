@@ -186,8 +186,8 @@ class CatchDynamicCheckTest extends Test {
 		final out: String = applyFixLogging(
 			"class C { public function f():Void { try g() catch (msg:Dynamic) { trace('error creating SystemData : $msg'); } } }"
 		);
-		final expected: String = 'import haxe.Exception;\n'
-			+ "class C { public function f():Void { try g() catch (exception:Exception) { trace('error creating SystemData : $exception'); } } }";
+		final expected: String = 'import haxe.Exception;\nclass C { public function f():Void { try g() catch (exception:Exception) {'
+			+ " trace('error creating SystemData : $exception'); } } }";
 		Assert.equals(expected, out);
 	}
 
@@ -206,10 +206,11 @@ class CatchDynamicCheckTest extends Test {
 		// here binds, so it resolves through something this rule cannot see (an `import.hx`, a
 		// same-package type) — adding `import haxe.Exception;` would silently retarget it.
 		final out: String = applyFixLogging(
-			"class C { public function f():Void { try a() catch (msg:Dynamic) { trace('err: $msg'); try b() catch (e:Exception) { recover(); } } } }"
+			"class C { public function f():Void { try a() catch (msg:Dynamic) { trace('err: $msg'); try b() catch (e:Exception) {"
+			+ ' recover(); } } } }'
 		);
-		final expected: String =
-			"class C { public function f():Void { try a() catch (exception:haxe.Exception) { trace('err: $exception'); try b() catch (e:Exception) { recover(); } } } }";
+		final expected: String = 'class C { public function f():Void { try a() catch (exception:haxe.Exception) {'
+			+ " trace('err: $exception'); try b() catch (e:Exception) { recover(); } } } }";
 		Assert.equals(expected, out);
 	}
 

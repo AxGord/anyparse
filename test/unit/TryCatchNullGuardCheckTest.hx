@@ -21,9 +21,8 @@ import anyparse.runtime.Span;
 class TryCatchNullGuardCheckTest extends Test {
 
 	/** The canary shape (`TM-Haxe4/src/crashdumper/SystemData.hx:158`, anonymized). */
-	private static final BASIC: String = 'class C {\n\tfunction f():Void {\n'
-		+ '\t\tfinal p:Process = try new Process(cmd, args) catch (msg:String) null;\n\t\tif (p == null) return;\n'
-		+ '\t\tp.exitCode();\n\t}\n}';
+	private static final BASIC: String = 'class C {\n\tfunction f():Void {\n\t\tfinal p:Process = try new Process(cmd, args) catch ('
+		+ 'msg:String) null;\n\t\tif (p == null) return;\n\t\tp.exitCode();\n\t}\n}';
 
 	public function testRegisteredInBuiltins(): Void {
 		Assert.notNull(Linter.byId('try-catch-null-guard'));
@@ -59,7 +58,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			'var p = try new Process() catch (msg:String) return;',
 			one(
-				'class C {\n\tfunction f():Void {\n\t\tvar p = try new Process() catch (msg:String) null;\n\t\tif (p == null) return;\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tvar p = try new Process() catch (msg:String) null;\n\t\tif (p == null) return;\n'
+				+ '\t}\n}'
 			)
 		);
 	}
@@ -69,7 +69,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			'final p:Null<Process> = try new Process() catch (msg:String) return;',
 			one(
-				'class C {\n\tfunction f():Void {\n\t\tfinal p:Null<Process> = try new Process() catch (msg:String) null;\n\t\tif (p == null) return;\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tfinal p:Null<Process> = try new Process() catch (msg:String) null;\n'
+				+ '\t\tif (p == null) return;\n\t}\n}'
 			)
 		);
 	}
@@ -79,7 +80,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			'final p = try new Process() catch (msg:String) return;',
 			one(
-				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (null == p) return;\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (null == p) return;\n'
+				+ '\t}\n}'
 			)
 		);
 	}
@@ -88,7 +90,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			"final p = try new Process() catch (msg:String) throw new Error('no');",
 			one(
-				"class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (p == null) throw new Error('no');\n\t}\n}"
+				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n'
+				+ "\t\tif (p == null) throw new Error('no');\n\t}\n}"
 			)
 		);
 	}
@@ -97,7 +100,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			'final p = try new Process() catch (msg:String) return 0;',
 			one(
-				'class C {\n\tfunction f():Int {\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (p == null) return 0;\n\t\treturn 1;\n\t}\n}'
+				'class C {\n\tfunction f():Int {\n\t\tfinal p = try new Process() catch (msg:String) null;\n'
+				+ '\t\tif (p == null) return 0;\n\t\treturn 1;\n\t}\n}'
 			)
 		);
 	}
@@ -107,7 +111,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			'final p = try new Process() catch (m:String) return catch (e:Exception) return;',
 			one(
-				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (m:String) null catch (e:Exception) null;\n\t\tif (p == null) return;\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (m:String) null catch (e:Exception) null;\n'
+				+ '\t\tif (p == null) return;\n\t}\n}'
 			)
 		);
 	}
@@ -117,7 +122,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			'final p = try new Process() catch (msg:String) return;',
 			one(
-				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (p == null) {\n\t\t\treturn;\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (p == null) {\n'
+				+ '\t\t\treturn;\n\t\t}\n\t}\n}'
 			)
 		);
 	}
@@ -127,7 +133,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			'final p = try new Process() catch (msg:String) return;',
 			one(
-				'class C {\n\tfunction f():Void {\n\t\t#if sys\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (p == null) return;\n\t\t#end\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\t#if sys\n\t\tfinal p = try new Process() catch (msg:String) null;\n'
+				+ '\t\tif (p == null) return;\n\t\t#end\n\t}\n}'
 			)
 		);
 	}
@@ -161,7 +168,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tfinal p = try open(path) catch (msg:String) null;\n\t\tif (p == null) return;\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tfinal p = try open(path) catch (msg:String) null;\n\t\tif (p == null) return;\n'
+				+ '\t}\n}'
 			).length
 		);
 	}
@@ -181,7 +189,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) fallback;\n\t\tif (p == null) return;\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) fallback;\n'
+				+ '\t\tif (p == null) return;\n\t}\n}'
 			).length
 		);
 	}
@@ -191,7 +200,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (m:String) null catch (e:Exception) fallback;\n\t\tif (p == null) return;\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (m:String) null catch (e:Exception) fallback;\n'
+				+ '\t\tif (p == null) return;\n\t}\n}'
 			).length
 		);
 	}
@@ -201,7 +211,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tlog(p);\n\t\tif (p == null) return;\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tlog(p);\n'
+				+ '\t\tif (p == null) return;\n\t}\n}'
 			).length
 		);
 	}
@@ -211,7 +222,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\t// spawn may fail\n\t\tif (p == null) return;\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\t// spawn may fail\n'
+				+ '\t\tif (p == null) return;\n\t}\n}'
 			).length
 		);
 	}
@@ -225,7 +237,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			'final p = try new Process() catch (msg:String) /* give up */ return;',
 			one(
-				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) /* give up */ null;\n\t\tif (p == null) return;\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) /* give up */ null;\n'
+				+ '\t\tif (p == null) return;\n\t}\n}'
 			)
 		);
 	}
@@ -238,7 +251,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (p == null) {\n\t\t\treturn; // gone\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (p == null) {\n'
+				+ '\t\t\treturn; // gone\n\t\t}\n\t}\n}'
 			).length
 		);
 	}
@@ -251,7 +265,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tfinal p:Process // spawned\n\t\t\t= try new Process() catch (msg:String) null;\n\t\tif (p == null) return;\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tfinal p:Process // spawned\n\t\t\t= try new Process() catch (msg:String) null;\n'
+				+ '\t\tif (p == null) return;\n\t}\n}'
 			).length
 		);
 	}
@@ -261,7 +276,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process(/* argv */ cmd) catch (msg:String) null;\n\t\tif (p == null) return;\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process(/* argv */ cmd) catch (msg:String) null;\n'
+				+ '\t\tif (p == null) return;\n\t}\n}'
 			).length
 		);
 	}
@@ -271,7 +287,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (p == null) return; else log(p);\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n'
+				+ '\t\tif (p == null) return; else log(p);\n\t}\n}'
 			).length
 		);
 	}
@@ -281,7 +298,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (q == null) return;\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (q == null) return;\n'
+				+ '\t}\n}'
 			).length
 		);
 	}
@@ -291,7 +309,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (p != null) return;\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (p != null) return;\n'
+				+ '\t}\n}'
 			).length
 		);
 	}
@@ -304,7 +323,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Dynamic {\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (p == null) return p;\n\t}\n}'
+				'class C {\n\tfunction f():Dynamic {\n\t\tfinal p = try new Process() catch (msg:String) null;\n'
+				+ '\t\tif (p == null) return p;\n\t}\n}'
 			).length
 		);
 	}
@@ -318,7 +338,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				"class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (p == null) throw new Error('bad: $p');\n\t}\n}"
+				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n'
+				+ "\t\tif (p == null) throw new Error('bad: $p');\n\t}\n}"
 			).length
 		);
 	}
@@ -328,7 +349,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				"class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (p == null) throw new Error('bad: ${p}');\n\t}\n}"
+				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n'
+				+ "\t\tif (p == null) throw new Error('bad: ${p}');\n\t}\n}"
 			).length
 		);
 	}
@@ -338,7 +360,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tfor (i in 0...2) {\n\t\t\tfinal p = try new Process() catch (msg:String) null;\n\t\t\tif (p == null) break;\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tfor (i in 0...2) {\n\t\t\tfinal p = try new Process() catch (msg:String) null;\n'
+				+ '\t\t\tif (p == null) break;\n\t\t}\n\t}\n}'
 			).length
 		);
 	}
@@ -348,7 +371,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tvar p = try new Process() catch (msg:String) null, q = 2;\n\t\tif (p == null) return;\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tvar p = try new Process() catch (msg:String) null, q = 2;\n'
+				+ '\t\tif (p == null) return;\n\t}\n}'
 			).length
 		);
 	}
@@ -363,7 +387,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Int {\n\t\tfinal p = try new Process() catch (m:String) null catch (i:Int) null;\n\t\tif (p == null) return try g() catch (e:String) 0;\n\t}\n}'
+				'class C {\n\tfunction f():Int {\n\t\tfinal p = try new Process() catch (m:String) null catch (i:Int) null;\n'
+				+ '\t\tif (p == null) return try g() catch (e:String) 0;\n\t}\n}'
 			).length
 		);
 	}
@@ -376,7 +401,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			'final p = try new Process() catch (msg:String) return;',
 			one(
-				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (p == null) return; // gave up\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n'
+				+ '\t\tif (p == null) return; // gave up\n\t}\n}'
 			)
 		);
 	}
@@ -390,7 +416,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) {};\n\t\tif (p == null) return;\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) {};\n\t\tif (p == null) return;\n'
+				+ '\t}\n}'
 			).length
 		);
 	}
@@ -403,7 +430,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				"class C {\n\tfunction f():String {\n\t\tfinal msg:String = 'default';\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (p == null) return msg;\n\t\treturn 'ok';\n\t}\n}"
+				"class C {\n\tfunction f():String {\n\t\tfinal msg:String = 'default';\n"
+				+ "\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (p == null) return msg;\n\t\treturn 'ok';\n\t}\n}"
 			).length
 		);
 	}
@@ -413,7 +441,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				"class C {\n\tfunction f():Void {\n\t\tfinal msg:String = 'default';\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (p == null) throw new Error('bad: $msg');\n\t}\n}"
+				"class C {\n\tfunction f():Void {\n\t\tfinal msg:String = 'default';\n"
+				+ "\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (p == null) throw new Error('bad: $msg');\n\t}\n}"
 			).length
 		);
 	}
@@ -423,7 +452,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			'final p = try new Process() catch (e:String) return msg;',
 			one(
-				"class C {\n\tfunction f():String {\n\t\tfinal msg:String = 'default';\n\t\tfinal p = try new Process() catch (e:String) null;\n\t\tif (p == null) return msg;\n\t\treturn 'ok';\n\t}\n}"
+				"class C {\n\tfunction f():String {\n\t\tfinal msg:String = 'default';\n"
+				+ "\t\tfinal p = try new Process() catch (e:String) null;\n\t\tif (p == null) return msg;\n\t\treturn 'ok';\n\t}\n}"
 			)
 		);
 	}
@@ -437,7 +467,8 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n\t\tif (p == null) return // give up\n\t\t\t;\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tfinal p = try new Process() catch (msg:String) null;\n'
+				+ '\t\tif (p == null) return // give up\n\t\t\t;\n\t}\n}'
 			).length
 		);
 	}

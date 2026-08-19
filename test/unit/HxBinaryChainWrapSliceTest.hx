@@ -57,11 +57,15 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 	 * `testCondChainHeadGluesToOpeningParen`): a 7-operand `||` subchain as the
 	 * last operand of a condition `&&` chain, plus a non-NoWrap wrapping config.
 	 */
-	private static final CONDITION_CHAIN_SRC: String =
-		'class C { static function m():Void { if (alphaCondVal && betaCondVal && (cccccccccccc || dddddddddddd || eeeeeeeeeeee || ffffffffffff || gggggggggggg || hhhhhhhhhhhh || iiiiiiiiiiii)) return; } }';
+	private static final CONDITION_CHAIN_SRC: String = 'class C { static function m():Void { if (alphaCondVal && betaCondVal && ('
+		+ 'cccccccccccc || dddddddddddd || eeeeeeeeeeee || ffffffffffff || gggggggggggg || hhhhhhhhhhhh || iiiiiiiiiiii)) return; } }';
 
-	private static final CONDITION_CHAIN_CFG: String =
-		'{ "wrapping": { "conditionWrapping": { "defaultWrap": "fillLineWithLeadingBreak", "rules": [{ "conditions": [{ "cond": "exceedsMaxLineLength", "value": 0 }], "type": "noWrap" }] }, "expressionWrapping": { "defaultWrap": "fillLineWithLeadingBreak", "rules": [{ "conditions": [{ "cond": "exceedsMaxLineLength", "value": 0 }], "type": "noWrap" }] }, "opBoolChain": { "defaultWrap": "noWrap", "rules": [{ "conditions": [{ "cond": "exceedsMaxLineLength", "value": 1 }], "type": "fillLine", "location": "beforeLast" }] } } }';
+	private static final CONDITION_CHAIN_CFG: String = '{ "wrapping": { "conditionWrapping": { "defaultWrap": "fillLineWithLeadingBreak", "rules": ['
+		+ '{ "conditions": [{ "cond": "exceedsMaxLineLength", "value": 0 }], "type": "noWrap" }] '
+		+ '}, "expressionWrapping": { "defaultWrap": "fillLineWithLeadingBreak", "rules": [{ "conditions": ['
+		+ '{ "cond": "exceedsMaxLineLength", "value": 0 }], "type": "noWrap" }] }, "opBoolChain": {'
+		+ ' "defaultWrap": "noWrap", "rules": [{ "conditions": ['
+		+ '{ "cond": "exceedsMaxLineLength", "value": 1 }], "type": "fillLine", "location": "beforeLast" }] } } }';
 
 	public function testShortBoolChainStaysFlat(): Void {
 		final src: String = 'class C { var x:Bool = a || b || c; }';
@@ -71,8 +75,8 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 	}
 
 	public function testLongBoolChainBreaksOPLAfterFirst(): Void {
-		final src: String =
-			'class C { static function m():Void { dirty = aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee; } }';
+		final src: String = 'class C { static function m():Void {'
+			+ ' dirty = aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee; } }';
 		final out: String = writeWithLineWidth(src, 80);
 		// items[0] == 'aaaaaaaaaaaa' stays glued to `dirty = `.
 		Assert.isTrue(out.indexOf('dirty = aaaaaaaaaaaa') != -1, 'expected `dirty = aaaa…` lead-line shape in: <$out>');
@@ -90,8 +94,8 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 		// items=[a, b, c, d] and ops=['||','&&','||']. A break should
 		// land all four operators at the same indent depth, not split
 		// the chain at the `&&` boundary.
-		final src: String =
-			'class C { static function m():Void { dirty = aaaaaaaaaaaaaaaa || bbbbbbbbbbbbbbbb && cccccccccccccccc || dddddddddddddddd; } }';
+		final src: String = 'class C { static function m():Void {'
+			+ ' dirty = aaaaaaaaaaaaaaaa || bbbbbbbbbbbbbbbb && cccccccccccccccc || dddddddddddddddd; } }';
 		final out: String = writeWithLineWidth(src, 80);
 		// All four operators continuation-led at same indent (3 tabs).
 		Assert.isTrue(
@@ -102,8 +106,8 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 
 	public function testLongAddSubChainBreaksOPLAfterFirst(): Void {
 		// Mirror of issue_179: long string concat chain.
-		final src: String =
-			"class C { static function m():Void { trace(\"can't insert node\" + key + \" with size of \" + width + \"; \" + height + \" in atlas \" + name); } }";
+		final src: String = 'class C { static function m():Void {'
+			+ " trace(\"can't insert node\" + key + \" with size of \" + width + \"; \" + height + \" in atlas \" + name); } }";
 		final out: String = writeWithLineWidth(src, 80);
 		// Continuation `\n + ` (BeforeLast `+ ` placement). Indent
 		// depth is class > fn-body > Nest cols = 3 tabs; the chain is
@@ -140,8 +144,8 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 		// `<<` is shift, not a chain class. Long chain still breaks, but
 		// through the G.1 per-binary Group path (each `<<` Group decides
 		// independently), not the BinaryChainEmit cascade.
-		final src: String =
-			'class C { static function m():Void { var v:Int = aaaaaaaaaaaa << bbbbbbbbbbbb << cccccccccccc << dddddddddddd << eeeeeeeeeeee; } }';
+		final src: String = 'class C { static function m():Void {'
+			+ ' var v:Int = aaaaaaaaaaaa << bbbbbbbbbbbb << cccccccccccc << dddddddddddd << eeeeeeeeeeee; } }';
 		final out: String = writeWithLineWidth(src, 80);
 		Assert.isTrue(out.indexOf('<< bbbbbbbbbbbb') != -1, 'expected `<< bbb` segment in: <$out>');
 		// G.1 emits op-before-operand on continuation, same shape as G.4
@@ -216,8 +220,8 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 		// in the pre-slice `lead + inner + trail` flat shape — close `)`
 		// glued to last item. Mirrors the expected default-config layout
 		// of issue_187_multi_line_wrapped_assignment.
-		final src: String =
-			'class C { static function m():Void { var v:Bool = (aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee); } }';
+		final src: String = 'class C { static function m():Void { var v:Bool = ('
+			+ 'aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee); } }';
 		final out: String = writeWithLineWidth(src, 80);
 		// Close paren must be glued to the last operand `eeee...);`.
 		Assert.isTrue(out.indexOf('eeeeeeeeeeee);') != -1, 'expected close `)` glued to last item for OPLAfterFirst inner in: <$out>');
@@ -271,8 +275,8 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 	}
 
 	public function testIdempotencyLongBoolChain(): Void {
-		final src: String =
-			'class C { static function m():Void { dirty = aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee; } }';
+		final src: String = 'class C { static function m():Void {'
+			+ ' dirty = aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee; } }';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.lineWidth = 80;
 		final w1: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
@@ -289,8 +293,8 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 		// re-measure workaround that diverged from the reference formatter,
 		// which fillLine-packs a bare-value add-chain.
 		final src: String = 'class C { static function m():Void { total = alphaaaa + betaaaaa + gammaaaa + deltaaaa + epsiloon; } }';
-		final cfg: String =
-			'{ "wrapping": { "opAddSubChain": { "defaultWrap": "noWrap", "rules": [ {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"} ] } } }';
+		final cfg: String = '{ "wrapping": { "opAddSubChain": { "defaultWrap": "noWrap", "rules": [ {"conditions": ['
+			+ '{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"} ] } } }';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
 		opts.lineWidth = 60;
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
@@ -309,10 +313,13 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 		// direct head-break removal — the wide call head stays alone on its
 		// continuation line and the `+ ... > upperLimit` tail glues flat one
 		// indent deeper.
-		final src: String =
-			'class Main { static function main() { if (conditionAlpha && computeValue(longParameterA, longParameterB, longParameterC) + additionalValue + extraOffset > upperLimit) { doWork(); } } }';
-		final cfg: String =
-			'{ "wrapping": { "opBoolChain": { "defaultWrap": "noWrap", "rules": [ {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "onePerLineAfterFirst", "location": "beforeLast"} ] }, "opAddSubChain": { "defaultWrap": "noWrap", "rules": [ {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"} ] }, "callParameter": { "defaultWrap": "fillLineWithLeadingBreak", "rules": [ {"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"} ] } } }';
+		final src: String = 'class Main { static function main() { if (conditionAlpha && computeValue(longParameterA, longParameterB, '
+			+ 'longParameterC) + additionalValue + extraOffset > upperLimit) { doWork(); } } }';
+		final cfg: String = '{ "wrapping": { "opBoolChain": { "defaultWrap": "noWrap", "rules": [ {"conditions": ['
+			+ '{"cond": "exceedsMaxLineLength", "value": 1}], "type": "onePerLineAfterFirst", "location": "beforeLast"} ] '
+			+ '}, "opAddSubChain": { "defaultWrap": "noWrap", "rules": [ {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], '
+			+ '"type": "fillLine", "location": "beforeLast"} ] }, "callParameter": { "defaultWrap": "fillLineWithLeadingBreak", "rules": ['
+			+ ' {"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"} ] } } }';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
 		opts.lineWidth = 100;
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);

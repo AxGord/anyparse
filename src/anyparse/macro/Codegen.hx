@@ -33,12 +33,11 @@ class Codegen {
 
 	public static function emit(
 		rules: Array<GeneratedRule>, rootTypePath: String, rootReturnCT: ComplexType, formatInfo: FormatReader.FormatInfo,
-		?trivia: Bool = false, ?rootFnName: Null<String>
+		trivia: Bool = false, ?rootFnName: Null<String>
 	): Array<Field> {
-		final fields: Array<Field> = [];
-		fields.push(
+		final fields: Array<Field> = [
 			formatInfo.isBinary ? binaryEntry(rootTypePath, rootReturnCT, rootFnName) : publicEntry(rootTypePath, rootReturnCT, rootFnName)
-		);
+		];
 		for (rule in rules) {
 			for (ereg in rule.eregs) fields.push(eregField(ereg));
 			fields.push(ruleField(rule));

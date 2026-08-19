@@ -631,12 +631,13 @@ final class TriviaSepLowering {
 		// that one context (var-init / call-arg object literals keep their
 		// source-multiline shape because the flag is cleared on every
 		// expression-position descent).
-		final ignoreBase: Expr = ignoreSourceNewlinesForWrap
-			? macro true
-			: (wrapRulesField != null ? {
-				final rulesAccess: Expr = WriterLowering.optFieldAccess(wrapRulesField);
-				macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.Ignore;
-			} : macro false);
+		final ignoreBase: Expr = if (ignoreSourceNewlinesForWrap)
+			macro true
+		else if (wrapRulesField != null) {
+			final rulesAccess: Expr = WriterLowering.optFieldAccess(wrapRulesField);
+			macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.Ignore;
+		} else
+			macro false;
 		// ω-arrow-body-objlit-reflow: a FOURTH disjunct on the same
 		// `@:fmt(reflowInExprPosition)` Star (HxObjectLit.fields) — Ignore
 		// also fires when the literal is an arrow-lambda body (runtime

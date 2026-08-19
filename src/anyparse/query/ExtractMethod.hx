@@ -194,14 +194,13 @@ final class ExtractMethod {
 			);
 			if (opaque != null) return Err(opaque);
 			final dup: Null<Span> = RefactorSupport.sameBlockRedeclaration(scope, nm, plugin, shape);
-			if (dup != null) {
-				final at: Position = dup.lineCol(source);
-				return Err(
-					'cannot extract: local "$nm" is declared more than once in the block at ${at.line}:${at.col}, where'
-					+ ' reference resolution mis-binds — a read after the range binds to the FIRST declaration, so whether the'
-					+ ' extracted local is read after the range cannot be decided. Split the scopes or rename the other declaration first'
-				);
-			}
+			if (dup == null) continue;
+			final at: Position = dup.lineCol(source);
+			return Err(
+				'cannot extract: local "$nm" is declared more than once in the block at ${at.line}:${at.col}, where'
+				+ ' reference resolution mis-binds — a read after the range binds to the FIRST declaration, so whether the'
+				+ ' extracted local is read after the range cannot be decided. Split the scopes or rename the other declaration first'
+			);
 		}
 
 		final returnVars: Array<ReturnVar> = [];

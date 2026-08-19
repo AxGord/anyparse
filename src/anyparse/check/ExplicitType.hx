@@ -225,7 +225,6 @@ final class ExplicitType implements Check implements OracleAssisted {
 		return ret.length == 0 ? null : ret;
 	}
 
-
 	/** Whether `c` is a space or tab — horizontal whitespace, excluding line breaks. */
 	private static inline function isInlineSpace(c: Int): Bool {
 		return c == ' '.code || c == '\t'.code;
@@ -236,7 +235,6 @@ final class ExplicitType implements Check implements OracleAssisted {
 		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code
 			|| c == '.'.code;
 	}
-
 
 	/**
 	 * The annotation edit for ONE flagged function, or null when any gate fails. Split out of

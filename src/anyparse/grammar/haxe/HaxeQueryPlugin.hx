@@ -1302,10 +1302,9 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		// string, so leaking it (`expected HxDecl at 0`) only misleads.
 		// Report the actionable fact: the fragment is not valid in any
 		// supported pattern position.
-		throw 'pattern: not valid as a declaration, statement, expression, or metadata argument'
-			+ ' (a statement fragment is retried with a trailing ";" automatically; a MODIFIER-bearing declaration'
-			+ ' cannot be a pattern — modifiers project as separate nodes; for those and for non-standalone fragments'
-			+ ' such as object fields use `apq patch` or `replace-node --select`)';
+		throw 'pattern: not valid as a declaration, statement, expression, or metadata argument (a statement fragment is retried with a '
+			+ 'trailing ";" automatically; a MODIFIER-bearing declaration cannot be a pattern — modifiers project as separate nodes; for '
+			+ 'those and for non-standalone fragments such as object fields use `apq patch` or `replace-node --select`)';
 	}
 
 	/** The Haxe naming-convention capability — projects declarations and resolves a file's policy. */

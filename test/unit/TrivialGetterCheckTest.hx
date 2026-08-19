@@ -34,7 +34,8 @@ class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 		Assert.equals('trivial-getter', vs[0].rule);
 		Assert.equals(Severity.Info, vs[0].severity);
 		Assert.equals(
-			'property \'active\' has a trivial getter returning backing field \'_active\'; use \'var active(default, null)\' and remove get_active',
+			'property \'active\' has a trivial getter returning backing field \'_active\'; use \'var active(default, null)\' and remove '
+			+ 'get_active',
 			vs[0].message
 		);
 	}
@@ -43,7 +44,8 @@ class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 		Assert.equals(
 			1,
 			violations(cls(
-				'public var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tprivate inline function get_active():Bool return _active;'
+				'public var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'
+				+ '\tprivate inline function get_active():Bool return _active;'
 			)).length
 		);
 	}
@@ -52,7 +54,8 @@ class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 		Assert.equals(
 			1,
 			violations(cls(
-				'public var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool { return this._active; }'
+				'public var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'
+				+ '\tfunction get_active():Bool { return this._active; }'
 			)).length
 		);
 	}
@@ -76,7 +79,8 @@ class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 		Assert.equals(
 			1,
 			violations(
-				'abstract class C {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tprivate function get_active():Bool { return _active; }\n}'
+				'abstract class C {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'
+				+ '\tprivate function get_active():Bool { return _active; }\n}'
 			).length,
 			'an abstract class body is inspected like a plain class'
 		);
@@ -104,7 +108,8 @@ class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 		Assert.equals(
 			0,
 			violations(cls(
-				'public var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool { trace(\'x\'); return _active; }'
+				'public var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'
+				+ '\tfunction get_active():Bool { trace(\'x\'); return _active; }'
 			)).length
 		);
 	}
@@ -117,7 +122,8 @@ class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 		Assert.equals(
 			0,
 			violations(cls(
-				'public var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tdynamic function get_active():Bool return _active;'
+				'public var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'
+				+ '\tdynamic function get_active():Bool return _active;'
 			)).length
 		);
 	}
@@ -138,7 +144,8 @@ class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 		Assert.equals(
 			0,
 			violations(cls(
-				'public var headers(get, never):ReadOnlyArray<Header>;\n\tprivate final _headers:Array<Header> = [];\n\tprivate inline function get_headers():ReadOnlyArray<Header> return _headers;'
+				'public var headers(get, never):ReadOnlyArray<Header>;\n\tprivate final _headers:Array<Header> = [];\n'
+				+ '\tprivate inline function get_headers():ReadOnlyArray<Header> return _headers;'
 			)).length
 		);
 	}
@@ -218,25 +225,22 @@ class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 	 */
 	public function testMultiVarDeclStillRefusesFix(): Void {
 		assertFixRefused(cls(
-			'public var frame(get, never):Int;\n\tprivate var _currentFrame:Int = 0;\n'
-			+ '\tprivate inline function get_frame():Int return _currentFrame;\n'
-			+ '\tpublic function touch():Void { var a = _currentFrame, frame = 2; trace(a + frame); }'
+			'public var frame(get, never):Int;\n\tprivate var _currentFrame:Int = 0;\n\tprivate inline function get_frame():Int return '
+			+ '_currentFrame;\n\tpublic function touch():Void { var a = _currentFrame, frame = 2; trace(a + frame); }'
 		));
 	}
 
 	public function testFixRefusesKeyValueForShadow(): Void {
 		// The grammar keeps only the KEY name of a key-value for header, so a shadowing
 		// value variable `_tag` is invisible as a node — the fix must refuse on the header.
-		final src: String = 'class C {\n\tpublic var tag(get, never):Int;\n\tprivate var _tag:Int = 0;\n'
-			+ '\tfunction get_tag():Int return _tag;\n\tfunction m(mp:Map<Int, Int>):Void {\n'
-			+ '\t\tfor (k => _tag in mp) trace(_tag);\n\t}\n}';
+		final src: String = 'class C {\n\tpublic var tag(get, never):Int;\n\tprivate var _tag:Int = 0;\n\tfunction get_tag():Int return '
+			+ '_tag;\n\tfunction m(mp:Map<Int, Int>):Void {\n\t\tfor (k => _tag in mp) trace(_tag);\n\t}\n}';
 		assertFixRefused(src);
 	}
 
 	public function testFixRefusesCasePatternCapture(): Void {
-		final src: String = 'class C {\n\tpublic var kind(get, never):Int;\n\tprivate var _kind:Int = 1;\n'
-			+ '\tfunction get_kind():Int return _kind;\n'
-			+ '\tfunction m(x:Any):Void { switch x { case _kind: trace(_kind); case _: trace(0); } }\n}';
+		final src: String = 'class C {\n\tpublic var kind(get, never):Int;\n\tprivate var _kind:Int = 1;\n\tfunction get_kind():Int return '
+			+ '_kind;\n\tfunction m(x:Any):Void { switch x { case _kind: trace(_kind); case _: trace(0); } }\n}';
 		assertFixRefused(src);
 	}
 
@@ -424,9 +428,8 @@ class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 
 	public function testFixShadowedComprehensionVarUsesThis(): Void {
 		final src: String = cls(
-			'public var count(get, never):Int;\n\tprivate var _count:Int = 0;\n\tprivate var _items:Array<Int> = [];\n'
-			+ '\tfunction get_count():Int return _count;\n'
-			+ '\tfunction m():Void { var xs = [for (count in _items) count + _count]; trace(xs); }'
+			'public var count(get, never):Int;\n\tprivate var _count:Int = 0;\n\tprivate var _items:Array<Int> = [];\n\tfunction '
+			+ 'get_count():Int return _count;\n\tfunction m():Void { var xs = [for (count in _items) count + _count]; trace(xs); }'
 		);
 		assertFixContains(src, 'count + this.count');
 	}
@@ -508,9 +511,8 @@ class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 		// The FIELD-name side of the same dropped slot: a comprehension whose key-value header
 		// binds the BACKING FIELD name must refuse — renaming its reads would silently retarget
 		// them at the property.
-		final src: String = 'class C {\n\tpublic var tag(get, never):Int;\n\tprivate var _tag:Int = 0;\n'
-			+ '\tfunction get_tag():Int return _tag;\n\tfunction m(mp:Map<Int, Int>):Array<Int> {\n'
-			+ '\t\treturn [for (k => _tag in mp) _tag + k];\n\t}\n}';
+		final src: String = 'class C {\n\tpublic var tag(get, never):Int;\n\tprivate var _tag:Int = 0;\n\tfunction get_tag():Int return '
+			+ '_tag;\n\tfunction m(mp:Map<Int, Int>):Array<Int> {\n\t\treturn [for (k => _tag in mp) _tag + k];\n\t}\n}';
 		assertFixRefused(src);
 	}
 

@@ -551,7 +551,8 @@ class UnusedPrivateCheckTest extends Test {
 		final vs: Array<Violation> = violations([
 			{
 				file: 'Base.hx',
-				source: 'abstract class Base {\n\tpublic function run():Void {\n\t\tstep();\n\t}\n\n\tabstract private function step():Void;\n}'
+				source: 'abstract class Base {\n\tpublic function run():Void {\n\t\tstep();\n\t}\n\n'
+				+ '\tabstract private function step():Void;\n}'
 			},
 			{ file: 'Impl.hx', source: 'class Impl extends Base {\n\tprivate function step():Void {\n\t\ttrace(1);\n\t}\n}' }
 		]);

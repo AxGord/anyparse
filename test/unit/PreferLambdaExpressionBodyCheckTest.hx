@@ -321,7 +321,8 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tif (x)\n\t\t\t#if A\n\t\t\tcb = () -> { if (c) g(); };\n\t\t\t#else\n\t\t\tcb = null;\n\t\t\t#end\n\t\telse\n\t\t\th();\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tif (x)\n\t\t\t#if A\n\t\t\tcb = () -> { if (c) g(); };\n\t\t\t#else\n'
+				+ '\t\t\tcb = null;\n\t\t\t#end\n\t\telse\n\t\t\th();\n\t}\n}'
 			).length
 		);
 	}
@@ -517,7 +518,8 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\twaitToken(success -> {\n\t\t\tif (success)\n\t\t\t\tdoRequest();\n\t\t\telse\n\t\t\t\ttokenError(); // handlers\n\t\t});\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\twaitToken(success -> {\n\t\t\tif (success)\n\t\t\t\tdoRequest();\n\t\t\telse\n'
+				+ '\t\t\t\ttokenError(); // handlers\n\t\t});\n\t}\n}'
 			).length
 		);
 	}

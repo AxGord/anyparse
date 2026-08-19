@@ -613,7 +613,12 @@ final class Rename {
 			}
 		}
 		scan(host);
-		return isStatic ? false : (instance ? true : null);
+		return if (isStatic)
+			false
+		else if (instance)
+			true
+		else
+			null;
 	}
 
 	/** The innermost node of one of `kinds` whose span contains `offset`, or null. */

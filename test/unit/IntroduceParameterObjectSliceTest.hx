@@ -20,9 +20,8 @@ class IntroduceParameterObjectSliceTest extends Test {
 
 	/** The signature, body, call sites, and generated typedef are all rewritten. */
 	public function testBasicFold(): Void {
-		final src: String = 'package pkg;\n\nclass Mover {\n\tpublic function new() {}\n'
-			+ '\tpublic function move(x:Int, y:Int, dur:Float):Int return x + y + Std.int(dur);\n'
-			+ '\tpublic function run():Int return move(1, 2, 0.5);\n}';
+		final src: String = 'package pkg;\n\nclass Mover {\n\tpublic function new() {}\n\tpublic function move(x:Int, y:Int, '
+			+ 'dur:Float):Int return x + y + Std.int(dur);\n\tpublic function run():Int return move(1, 2, 0.5);\n}';
 		final text: String = okFold(src, 'move', ['x', 'y'], 'Point', null);
 		Assert.isTrue(text.contains('move(point:Point, dur:Float)'), 'signature folded');
 		Assert.isTrue(text.contains('point.x + point.y'), 'body references rewritten');

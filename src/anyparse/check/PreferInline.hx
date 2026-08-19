@@ -174,8 +174,10 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	}
 
 	public function description(): String {
-		return
-			'a method whose inlining buys something — empty body, accessor / thin forward / trivial mutator, or a foldable constant/arithmetic expression (<=32 AST nodes); Info, --fix inserts inline. Allocations, builders, loops, switches, lambda/computed args are never candidates. Skips methods referenced as a value, override / subtype-overridden, interface-declared, dynamic / macro / constructor / @:keep / Reflect-accessed methods';
+		return 'a method whose inlining buys something — empty body, accessor / thin forward / trivial mutator, or a foldable '
+			+ 'constant/arithmetic expression (<=32 AST nodes); Info, --fix inserts inline. Allocations, builders, loops, switches, '
+			+ 'lambda/computed args are never candidates. Skips methods referenced as a value, override / subtype-overridden, '
+			+ 'interface-declared, dynamic / macro / constructor / @:keep / Reflect-accessed methods';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

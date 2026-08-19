@@ -61,7 +61,12 @@ class TransformLowering {
 		final ruleNames: Array<String> = [for (name in _shape.rules.keys()) name];
 		// Deterministic order — keep generated field order stable across
 		// compiles regardless of Map iteration order.
-		ruleNames.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
+		ruleNames.sort((a: String, b: String) -> if (a < b)
+			-1
+		else if (a > b)
+			1
+		else
+			0);
 
 		final fns: Array<TransformFn> = [];
 		final hooks: Array<TransformHook> = [];

@@ -102,7 +102,8 @@ class NullDereferenceTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'enum E { Some(s:String); None; } class C { function f(k:E) { var x:Null<String> = null; switch k { case Some(x): trace(x.length); case None: } } }'
+				'enum E { Some(s:String); None; } class C { function f(k:E) { var x:Null<String> = null; switch k {'
+				+ ' case Some(x): trace(x.length); case None: } } }'
 			).length
 		);
 	}
@@ -167,7 +168,8 @@ class NullDereferenceTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'enum E { a(v:Int); b(v:Int); } class C { function f(e:E) { var b = null; switch e { case a(v), b(v): trace(v); case _: trace(b); } } }'
+				'enum E { a(v:Int); b(v:Int); } class C { function f(e:E) { var b = null; switch e {'
+				+ ' case a(v), b(v): trace(v); case _: trace(b); } } }'
 			).length
 		);
 	}
@@ -189,7 +191,8 @@ class NullDereferenceTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(?u:String) { var ok = u == null && (u = mk()) != null; if (ok) u.charAt(0); } function mk():String return "x"; }'
+				'class C { function f(?u:String) { var ok = u == null && (u = mk()) != null; if (ok) u.charAt(0); } '
+				+ 'function mk():String return "x"; }'
 			).length
 		);
 	}

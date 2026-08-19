@@ -241,7 +241,8 @@ class HxCondTypeSlotSliceTest extends HxTestHelpers {
 		// `getPositions`'s type and closes two parameters later, so the
 		// trailing parameter rides the type-position region.
 		final fn: HxFnDecl = parseSingleFnDecl(
-			'class S {function f(getPositions:#if (js && html5) Void->Array<Float>, wordKey:String = null #else TextLayout #end):Int {return 1;}}'
+			'class S {function f(getPositions:#if (js && html5) Void->Array<Float>, wordKey:String = null #else TextLayout #end):Int {'
+			+ 'return 1;}}'
 		);
 		Assert.equals(1, fn.params.length);
 		final body: HxParamBody = paramBody(fn.params[0]);
@@ -268,9 +269,8 @@ class HxCondTypeSlotSliceTest extends HxTestHelpers {
 		);
 		triviaRoundTrip('package p;\n\nclass C {\n\t#if (a || (b || (c || d)))\n\tvar x:Int;\n\t#end\n}');
 		triviaRoundTrip(
-			'package p;\n\nclass S {\n'
-			+ '\tfunction f(getPositions:#if (js && html5) Void->Array<Float>, wordKey:String = null #else TextLayout #end):Int {\n'
-			+ '\t\treturn 1;\n\t}\n}'
+			'package p;\n\nclass S {\n\tfunction f(getPositions:#if (js && html5) '
+			+ 'Void->Array<Float>, wordKey:String = null #else TextLayout #end):Int {\n\t\treturn 1;\n\t}\n}'
 		);
 	}
 

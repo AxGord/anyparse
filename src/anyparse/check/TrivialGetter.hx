@@ -123,8 +123,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	}
 
 	public function description(): String {
-		return
-			'a property bridging a private backing field through trivial accessors — (get, never)/(get, null) collapses to (default, null); (get, set) collapses to (default, set) when only the getter is trivial, or to a plain field when both are';
+		return 'a property bridging a private backing field through trivial accessors — (get, never)/(get, null) collapses to ('
+			+ 'default, null); (get, set) collapses to (default, set) when only the getter is trivial, or to a plain field when both are';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -492,9 +492,12 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			return gSpan == null ? null : [{ span: new Span(gSpan.from, gSpan.from), text: 'inline ' }];
 		}
 		final edits: Array<{ span: Span, text: String }> = [{ span: c.clauseSpan, text: c.clauseText }];
-		final initSpan: Null<Span> = c.ctorInit != null
-			? c.ctorInit.rhsSpan
-			: (c.fieldNode.children.length >= 1 ? c.fieldNode.children[0].span : null);
+		final initSpan: Null<Span> = if (c.ctorInit != null)
+			c.ctorInit.rhsSpan
+		else if (c.fieldNode.children.length >= 1)
+			c.fieldNode.children[0].span
+		else
+			null;
 		if (initSpan != null) {
 			final semi: Int = propSpan.to - 1;
 			if (semi < 0 || semi >= source.length || source.fastCodeAt(semi) != ';'.code) return null;

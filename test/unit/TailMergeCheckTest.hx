@@ -43,7 +43,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals('', es[1].text);
 		final result: String = RefactorSupport.applyEdits(REFERENCE_SHAPE, es);
 		Assert.equals(
-			'class C {\n\tfunction set_p(v:String):String {\n\t\tif (cond1) {\n\t\t\tif (c2) {\n\t\t\t\twork();\n\t\t\t} else if (c3) {\n\t\t\t\twork2();\n\t\t\t}\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}',
+			'class C {\n\tfunction set_p(v:String):String {\n\t\tif (cond1) {\n\t\t\tif (c2) {\n\t\t\t\twork();\n\t\t\t} else if (c3) {\n'
+			+ '\t\t\t\twork2();\n\t\t\t}\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}',
 			result
 		);
 		Assert.notNull(CheckScan.parseOrNull(new HaxeQueryPlugin(), result));
@@ -60,7 +61,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			2,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tif (a) {\n\t\t\tp();\n\t\t\tt();\n\t\t\treturn;\n\t\t} else {\n\t\t\tq();\n\t\t\tt();\n\t\t\treturn;\n\t\t}\n\t\tt();\n\t\treturn;\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tif (a) {\n\t\t\tp();\n\t\t\tt();\n\t\t\treturn;\n\t\t} else {\n\t\t\tq();\n'
+				+ '\t\t\tt();\n\t\t\treturn;\n\t\t}\n\t\tt();\n\t\treturn;\n\t}\n}'
 			).length
 		);
 	}
@@ -69,7 +71,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(v:String):Void {\n\t\tif (b) {\n\t\t\twork();\n\t\t\thelper(v);\n\t\t\tmore();\n\t\t}\n\t\thelper(v);\n\t\tmore();\n\t}\n}'
+				'class C {\n\tfunction f(v:String):Void {\n\t\tif (b) {\n\t\t\twork();\n\t\t\thelper(v);\n\t\t\tmore();\n\t\t}\n'
+				+ '\t\thelper(v);\n\t\tmore();\n\t}\n}'
 			).length
 		);
 	}
@@ -78,7 +81,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\twhile (c) {\n\t\t\tif (b) {\n\t\t\t\twork();\n\t\t\t\thelper();\n\t\t\t\tbreak;\n\t\t\t}\n\t\t\thelper();\n\t\t\tbreak;\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\twhile (c) {\n\t\t\tif (b) {\n\t\t\t\twork();\n\t\t\t\thelper();\n\t\t\t\tbreak;\n'
+				+ '\t\t\t}\n\t\t\thelper();\n\t\t\tbreak;\n\t\t}\n\t}\n}'
 			).length
 		);
 	}
@@ -87,7 +91,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(v:String):String {\n\t\tif (a) {\n\t\t\tif (b) {\n\t\t\t\twork();\n\t\t\t\thelper(v);\n\t\t\t\treturn v;\n\t\t\t}\n\t\t\tmore();\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}'
+				'class C {\n\tfunction f(v:String):String {\n\t\tif (a) {\n\t\t\tif (b) {\n\t\t\t\twork();\n\t\t\t\thelper(v);\n'
+				+ '\t\t\t\treturn v;\n\t\t\t}\n\t\t\tmore();\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}'
 			).length
 		);
 	}
@@ -96,7 +101,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\tp();\n\t\t\tr();\n\t\t\treturn v;\n\t\t}\n\t\tq();\n\t\tr();\n\t\treturn v;\n\t}\n}'
+				'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\tp();\n\t\t\tr();\n\t\t\treturn v;\n\t\t}\n\t\tq();\n'
+				+ '\t\tr();\n\t\treturn v;\n\t}\n}'
 			).length
 		);
 	}
@@ -105,7 +111,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\thelper(v);\n\t\t\treturn v;\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}'
+				'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\thelper(v);\n\t\t\treturn v;\n\t\t}\n\t\thelper(v);\n'
+				+ '\t\treturn v;\n\t}\n}'
 			).length
 		);
 	}
@@ -114,7 +121,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(v:String, w:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\thelper(w);\n\t\t\treturn v;\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}'
+				'class C {\n\tfunction f(v:String, w:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\thelper(w);\n\t\t\treturn v;\n'
+				+ '\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}'
 			).length
 		);
 	}
@@ -125,7 +133,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\thelper(#if debug v #else null #end);\n\t\t\treturn v;\n\t\t}\n\t\thelper(#if debug v #else null #end);\n\t\treturn v;\n\t}\n}'
+				'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\thelper(#if debug v #else null #end);\n'
+				+ '\t\t\treturn v;\n\t\t}\n\t\thelper(#if debug v #else null #end);\n\t\treturn v;\n\t}\n}'
 			).length
 		);
 	}
@@ -135,7 +144,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(v:String):Void {\n\t\twhile (c) {\n\t\t\tif (b) {\n\t\t\t\twork();\n\t\t\t\thelper(v);\n\t\t\t\treturn;\n\t\t\t}\n\t\t}\n\t\thelper(v);\n\t\treturn;\n\t}\n}'
+				'class C {\n\tfunction f(v:String):Void {\n\t\twhile (c) {\n\t\t\tif (b) {\n\t\t\t\twork();\n\t\t\t\thelper(v);\n'
+				+ '\t\t\t\treturn;\n\t\t\t}\n\t\t}\n\t\thelper(v);\n\t\treturn;\n\t}\n}'
 			).length
 		);
 	}
@@ -146,7 +156,9 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(v:String):String {\n\t\tswitch (k) {\n\t\t\tcase 1:\n\t\t\t\tif (b) {\n\t\t\t\t\twork();\n\t\t\t\t\thelper(v);\n\t\t\t\t\treturn v;\n\t\t\t\t}\n\t\t\tcase _:\n\t\t\t\twork2();\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}'
+				'class C {\n\tfunction f(v:String):String {\n\t\tswitch (k) {\n\t\t\tcase 1:\n\t\t\t\tif (b) {\n\t\t\t\t\twork();\n'
+				+ '\t\t\t\t\thelper(v);\n\t\t\t\t\treturn v;\n\t\t\t\t}\n\t\t\tcase _:\n\t\t\t\twork2();\n\t\t}\n\t\thelper(v);\n'
+				+ '\t\treturn v;\n\t}\n}'
 			).length
 		);
 	}
@@ -156,7 +168,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tmacro static function m(v:String):String {\n\t\treturn macro {\n\t\t\tif (b) {\n\t\t\t\twork();\n\t\t\t\thelper(v);\n\t\t\t\treturn v;\n\t\t\t}\n\t\t\thelper(v);\n\t\t\treturn v;\n\t\t};\n\t}\n}'
+				'class C {\n\tmacro static function m(v:String):String {\n\t\treturn macro {\n\t\t\tif (b) {\n\t\t\t\twork();\n'
+				+ '\t\t\t\thelper(v);\n\t\t\t\treturn v;\n\t\t\t}\n\t\t\thelper(v);\n\t\t\treturn v;\n\t\t};\n\t}\n}'
 			).length
 		);
 	}
@@ -167,7 +180,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\thelper("a  b");\n\t\t\treturn v;\n\t\t}\n\t\thelper("a b");\n\t\treturn v;\n\t}\n}'
+				'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\thelper("a  b");\n\t\t\treturn v;\n\t\t}\n'
+				+ '\t\thelper("a b");\n\t\treturn v;\n\t}\n}'
 			).length
 		);
 	}
@@ -178,7 +192,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\thelper(v /* alpha */);\n\t\t\treturn v;\n\t\t}\n\t\thelper(v /* beta */);\n\t\treturn v;\n\t}\n}'
+				'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\thelper(v /* alpha */);\n\t\t\treturn v;\n'
+				+ '\t\t}\n\t\thelper(v /* beta */);\n\t\treturn v;\n\t}\n}'
 			).length
 		);
 	}
@@ -187,7 +202,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\thelper(v);\n\t\t\tthrow "e";\n\t\t}\n\t\thelper(v);\n\t\tthrow "e";\n\t}\n}'
+				'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\thelper(v);\n\t\t\tthrow "e";\n\t\t}\n'
+				+ '\t\thelper(v);\n\t\tthrow "e";\n\t}\n}'
 			).length
 		);
 	}
@@ -196,7 +212,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class C {\n\tfunction f(v:String):Void {\n\t\tif (b) {\n\t\t\twork();\n\t\t\thelper(v);\n\t\t\treturn;\n\t\t}\n\t\thelper(v);\n\t\treturn;\n\t}\n}'
+				'class C {\n\tfunction f(v:String):Void {\n\t\tif (b) {\n\t\t\twork();\n\t\t\thelper(v);\n\t\t\treturn;\n\t\t}\n'
+				+ '\t\thelper(v);\n\t\treturn;\n\t}\n}'
 			).length
 		);
 	}
@@ -205,7 +222,9 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			3,
 			violations(
-				'class C {\n\tfunction f(v:String):String {\n\t\tif (a) {\n\t\t\tp();\n\t\t\thelper(v);\n\t\t\treturn v;\n\t\t} else if (b) {\n\t\t\tq();\n\t\t\thelper(v);\n\t\t\treturn v;\n\t\t} else {\n\t\t\tr();\n\t\t\thelper(v);\n\t\t\treturn v;\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}'
+				'class C {\n\tfunction f(v:String):String {\n\t\tif (a) {\n\t\t\tp();\n\t\t\thelper(v);\n\t\t\treturn v;\n'
+				+ '\t\t} else if (b) {\n\t\t\tq();\n\t\t\thelper(v);\n\t\t\treturn v;\n\t\t} else {\n\t\t\tr();\n\t\t\thelper(v);\n'
+				+ '\t\t\treturn v;\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}'
 			).length
 		);
 	}
@@ -217,7 +236,8 @@ class TailMergeCheckTest extends Test {
 			+ '\t\t\t\treturn v;\n\t\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(
-			'class C {\n\tfunction f(v:String):String {\n\t\tif (a)\n\t\t\tif (b) {\n\t\t\t\twork();\n\t\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}',
+			'class C {\n\tfunction f(v:String):String {\n\t\tif (a)\n\t\t\tif (b) {\n\t\t\t\twork();\n\t\t\t}\n\t\thelper(v);\n'
+			+ '\t\treturn v;\n\t}\n}',
 			RefactorSupport.applyEdits(src, edits(src))
 		);
 	}
@@ -229,7 +249,8 @@ class TailMergeCheckTest extends Test {
 			+ '\t\t\t\treturn v;\n\t\t\t}\n\t\t\thelper(v);\n\t\t\treturn v;\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}';
 		Assert.equals(2, violations(src).length);
 		Assert.equals(
-			'class C {\n\tfunction f(v:String):String {\n\t\tif (a) {\n\t\t\tif (b) {\n\t\t\t\tp();\n\t\t\t}\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}',
+			'class C {\n\tfunction f(v:String):String {\n\t\tif (a) {\n\t\t\tif (b) {\n\t\t\t\tp();\n\t\t\t}\n\t\t}\n\t\thelper(v);\n'
+			+ '\t\treturn v;\n\t}\n}',
 			RefactorSupport.applyEdits(src, edits(src))
 		);
 	}
@@ -245,7 +266,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(t:String):String {\n\t\tif (b) {\n\t\t\tvar t = c();\n\t\t\thelper(t);\n\t\t\treturn t;\n\t\t}\n\t\thelper(t);\n\t\treturn t;\n\t}\n}'
+				'class C {\n\tfunction f(t:String):String {\n\t\tif (b) {\n\t\t\tvar t = c();\n\t\t\thelper(t);\n\t\t\treturn t;\n\t\t}\n'
+				+ '\t\thelper(t);\n\t\treturn t;\n\t}\n}'
 			).length
 		);
 	}
@@ -255,7 +277,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(t:String):String {\n\t\tif (b) {\n\t\t\tfunction helper(x:String):String return x;\n\t\t\thelper(t);\n\t\t\treturn t;\n\t\t}\n\t\thelper(t);\n\t\treturn t;\n\t}\n}'
+				'class C {\n\tfunction f(t:String):String {\n\t\tif (b) {\n\t\t\tfunction helper(x:String):String return x;\n'
+				+ '\t\t\thelper(t);\n\t\t\treturn t;\n\t\t}\n\t\thelper(t);\n\t\treturn t;\n\t}\n}'
 			).length
 		);
 	}
@@ -265,7 +288,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(t:String):String {\n\t\tif (b) {\n\t\t\tinline function helper(x:String):String return x;\n\t\t\thelper(t);\n\t\t\treturn t;\n\t\t}\n\t\thelper(t);\n\t\treturn t;\n\t}\n}'
+				'class C {\n\tfunction f(t:String):String {\n\t\tif (b) {\n\t\t\tinline function helper(x:String):String return x;\n'
+				+ '\t\t\thelper(t);\n\t\t\treturn t;\n\t\t}\n\t\thelper(t);\n\t\treturn t;\n\t}\n}'
 			).length
 		);
 	}
@@ -276,7 +300,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(v:String, t:String):String {\n\t\tif (b) {\n\t\t\t@:nullSafety(Off) var t = v;\n\t\t\thelper(t);\n\t\t\treturn t;\n\t\t}\n\t\thelper(t);\n\t\treturn t;\n\t}\n}'
+				'class C {\n\tfunction f(v:String, t:String):String {\n\t\tif (b) {\n\t\t\t@:nullSafety(Off) var t = v;\n'
+				+ '\t\t\thelper(t);\n\t\t\treturn t;\n\t\t}\n\t\thelper(t);\n\t\treturn t;\n\t}\n}'
 			).length
 		);
 	}
@@ -288,7 +313,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(v:String, t:String):String {\n\t\tif (b) {\n\t\t\tvar p = 1, t = v;\n\t\t\thelper(t);\n\t\t\treturn t;\n\t\t}\n\t\thelper(t);\n\t\treturn t;\n\t}\n}'
+				'class C {\n\tfunction f(v:String, t:String):String {\n\t\tif (b) {\n\t\t\tvar p = 1, t = v;\n\t\t\thelper(t);\n'
+				+ '\t\t\treturn t;\n\t\t}\n\t\thelper(t);\n\t\treturn t;\n\t}\n}'
 			).length
 		);
 	}
@@ -299,7 +325,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(v:String, t:String):String {\n\t\tif (b) {\n\t\t\tvar p:Int, t = v;\n\t\t\thelper(t);\n\t\t\treturn t;\n\t\t}\n\t\thelper(t);\n\t\treturn t;\n\t}\n}'
+				'class C {\n\tfunction f(v:String, t:String):String {\n\t\tif (b) {\n\t\t\tvar p:Int, t = v;\n\t\t\thelper(t);\n'
+				+ '\t\t\treturn t;\n\t\t}\n\t\thelper(t);\n\t\treturn t;\n\t}\n}'
 			).length
 		);
 	}
@@ -309,7 +336,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(v:String, t:String):String {\n\t\tif (b) {\n\t\t\tvar p = 1, t;\n\t\t\tt = v;\n\t\t\thelper(t);\n\t\t\treturn t;\n\t\t}\n\t\thelper(t);\n\t\treturn t;\n\t}\n}'
+				'class C {\n\tfunction f(v:String, t:String):String {\n\t\tif (b) {\n\t\t\tvar p = 1, t;\n\t\t\tt = v;\n'
+				+ '\t\t\thelper(t);\n\t\t\treturn t;\n\t\t}\n\t\thelper(t);\n\t\treturn t;\n\t}\n}'
 			).length
 		);
 	}
@@ -319,7 +347,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(v:String, t:String):String {\n\t\tif (b) {\n\t\t\tvar p:Int, t:String;\n\t\t\tt = v;\n\t\t\thelper(t);\n\t\t\treturn t;\n\t\t}\n\t\thelper(t);\n\t\treturn t;\n\t}\n}'
+				'class C {\n\tfunction f(v:String, t:String):String {\n\t\tif (b) {\n\t\t\tvar p:Int, t:String;\n\t\t\tt = v;\n'
+				+ '\t\t\thelper(t);\n\t\t\treturn t;\n\t\t}\n\t\thelper(t);\n\t\treturn t;\n\t}\n}'
 			).length
 		);
 	}
@@ -330,7 +359,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\tvar g:Int -> Int = x -> x;\n\t\t\thelper(v);\n\t\t\treturn v;\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}'
+				'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\tvar g:Int -> Int = x -> x;\n\t\t\thelper(v);\n'
+				+ '\t\t\treturn v;\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}'
 			).length
 		);
 	}
@@ -341,7 +371,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\tvar m:Map<String, Int> = g(a, b);\n\t\t\thelper(v);\n\t\t\treturn v;\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}'
+				'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\tvar m:Map<String, Int> = g(a, b);\n\t\t\thelper(v);\n'
+				+ '\t\t\treturn v;\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}'
 			).length
 		);
 	}
@@ -352,7 +383,8 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\tvar q = h(v);\n\t\t\treturn q;\n\t\t}\n\t\tvar q = h(v);\n\t\treturn q;\n\t}\n}'
+				'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\tvar q = h(v);\n\t\t\treturn q;\n\t\t}\n'
+				+ '\t\tvar q = h(v);\n\t\treturn q;\n\t}\n}'
 			).length
 		);
 	}

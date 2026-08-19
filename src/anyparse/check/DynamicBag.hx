@@ -456,18 +456,19 @@ final class DynamicBag {
 		final callee: QueryNode = parent.children[0];
 		final m: Null<String> = callee.name;
 		if (
-			callee.kind == ctx.fieldAccessKind && m != null && BAG_METHODS.contains(m) && callee.children.length == 1
-			&& callee.children[0].kind == shape.identKind && callee.children[0].name == 'Reflect'
-		) {
-			final method: String = m;
-			return {
-				call: parent,
-				method: method,
-				direct: true,
-				bag: occ
-			};
-		}
-		return null;
+			callee.kind != ctx.fieldAccessKind || (
+				m == null || !BAG_METHODS.contains(m) || callee.children.length != 1 || callee.children[0].kind != shape.identKind
+				|| callee.children[0].name != 'Reflect'
+			)
+		)
+			return null;
+		final method: String = m;
+		return {
+			call: parent,
+			method: method,
+			direct: true,
+			bag: occ
+		};
 	}
 
 	/**
@@ -479,19 +480,20 @@ final class DynamicBag {
 	): Null<BagOp> {
 		final m: Null<String> = parent.name;
 		if (
-			usingReflect && parent.kind == ctx.fieldAccessKind && ci == 0 && m != null && BAG_METHODS.contains(m) && g != null
-			&& g.kind == ctx.callKind && g.children.length > 0 && g.children[0] == parent
-		) {
-			final method: String = m;
-			final call: QueryNode = g;
-			return {
-				call: call,
-				method: method,
-				direct: false,
-				bag: occ
-			};
-		}
-		return null;
+			!usingReflect || parent.kind != ctx.fieldAccessKind || ci != 0 || (
+				m == null || !BAG_METHODS.contains(m)
+				|| (g == null || g.kind != ctx.callKind || g.children.length <= 0 || g.children[0] != parent)
+			)
+		)
+			return null;
+		final method: String = m;
+		final call: QueryNode = g;
+		return {
+			call: call,
+			method: method,
+			direct: false,
+			bag: occ
+		};
 	}
 
 	/** Record `op` and, when it is a `setField`, its stored value (child `valueIndex`) into `acc`. */
