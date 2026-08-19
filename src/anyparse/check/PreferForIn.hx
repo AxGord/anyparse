@@ -110,8 +110,13 @@ final class PreferForIn implements Check implements DefaultOff {
 	/** Binder names to fall back on, in order, when the declaration carries no element type. */
 	private static final FALLBACK_BINDERS: Array<String> = ['value', 'element', 'item'];
 
-	/** The element type of an `Array<T>` / `Iterator<T>` / `Iterable<T>` annotation on the enclosing declaration. */
-	private static final ELEMENT_TYPE: EReg = ~/:\s*(?:Array|Iterator|Iterable)\s*<\s*([A-Za-z_][A-Za-z0-9_.]*)/;
+	/**
+	 * Annotation heads whose single type ARGUMENT is the element the loop binds. Matched
+	 * against `QueryNode.type`'s own name, so a same-named field or a qualified lookalike
+	 * cannot stand in for one — which a scan of the declaration's source text could not
+	 * promise.
+	 */
+	private static final ELEMENT_TYPE_HEADS: Array<String> = ['Array', 'Iterator', 'Iterable'];
 
 	public function new() {}
 
@@ -310,14 +315,12 @@ final class PreferForIn implements Check implements DefaultOff {
 	}
 
 	/**
-	 * A binder name derived from the source, or null when every candidate is already live. The
-	 * element type of the enclosing declaration is the only real signal — a type ARGUMENT projects
-	 * no node in this grammar, so it is read from the declaration's own source slice rather than
-	 * from the tree.
+	 * A binder name derived from the declaration, or null when every candidate is already live.
+	 * The element type of the enclosing declaration is the only real signal.
 	 */
 	private static function deriveBinder(decl: Null<QueryNode>, scope: QueryNode, ctx: Ctx): Null<String> {
 		final candidates: Array<String> = [];
-		final fromType: Null<String> = elementTypeName(decl, ctx);
+		final fromType: Null<String> = elementTypeName(decl);
 		if (fromType != null) candidates.push(fromType);
 		for (fallback in FALLBACK_BINDERS) candidates.push(fallback);
 		return candidates.find(name -> !nameIsLive(scope, name, ctx.seams));
@@ -337,19 +340,30 @@ final class PreferForIn implements Check implements DefaultOff {
 		return false;
 	}
 
-	/** `final a:Array<CodePoint> = …` -> `codePoint`; null when the declaration carries no such annotation. */
-	private static function elementTypeName(decl: Null<QueryNode>, ctx: Ctx): Null<String> {
-		if (decl == null || decl.children.length == 0) return null;
-		final declSpan: Null<Span> = decl.span;
-		final initSpan: Null<Span> = decl.children[0].span;
-		if (declSpan == null || initSpan == null) return null;
-		final ds: Span = declSpan;
-		final is: Span = initSpan;
-		if (is.from <= ds.from) return null;
-		final head: String = ctx.source.substring(ds.from, is.from);
-		final matched: Bool = ELEMENT_TYPE.match(head);
-		if (!matched) return null;
-		final qualified: String = ELEMENT_TYPE.matched(1);
+	/**
+	 * `final a:Array<CodePoint> = …` -> `codePoint`; null when the declaration carries no such
+	 * annotation, or when its element type says nothing a binder should repeat.
+	 *
+	 * Asks the TREE. It used to match
+	 * `~/:\s*(?:Array|Iterator|Iterable)\s*<\s*([A-Za-z_][A-Za-z0-9_.]*)/` against the source
+	 * between the declaration's start and its initializer's, because the grammar projected no
+	 * node for a type annotation at all. `QueryNode.type` now carries it — kind = the type
+	 * ctor, name = the nominal head, children = the type ARGUMENTS — so the head is compared
+	 * to a list instead of being spelled inside a pattern, and the element is a node rather
+	 * than a capture group.
+	 *
+	 * Two inputs the regex answered and the tree declines, both pathological and both landing
+	 * on the generic binder rather than on a wrong one: a first argument that is not nominal
+	 * (`Array<Foo->Bar>` scanned as `Foo`) and an `Array<T>` nested inside an anon annotation
+	 * (`var x:{a:Array<Foo>}`, where the regex found the INNER `:` and the node it is asked
+	 * about is the anon).
+	 */
+	private static function elementTypeName(decl: Null<QueryNode>): Null<String> {
+		if (decl == null) return null;
+		final annotation: Null<QueryNode> = decl.type;
+		if (annotation == null || !ELEMENT_TYPE_HEADS.contains(annotation.name) || annotation.children.length == 0) return null;
+		final qualified: Null<String> = annotation.children[0].name;
+		if (qualified == null) return null;
 		final simple: String = qualified.substring(qualified.lastIndexOf('.') + 1);
 		return simple.length == 0 || UNINFORMATIVE_TYPES.contains(simple)
 			? null
