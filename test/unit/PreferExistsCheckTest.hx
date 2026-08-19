@@ -69,7 +69,26 @@ class PreferExistsCheckTest extends Test {
 
 	public function testCallIterableNotFlagged(): Void {
 		// A call iterable may yield an Iterator, not an Iterable — `Lambda.exists` would not compile.
+		// `Map.keys` lives in a std this index does not see, so the type stays UNRESOLVED and is refused.
 		Assert.equals(0, violations(fn('for (k in m.keys()) if (m[k] > 2) return true;\n\t\treturn false;')).length);
+	}
+
+	public function testCallIterableResolvingToArrayFlagged(): Void {
+		final vs: Array<Violation> = violations(typedFn('for (x in b.items()) if (x > 2) return true;\n\t\treturn false;'));
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('b.items().exists(x -> x > 2)') != -1, vs[0].message);
+	}
+
+	public function testCallIterableResolvingToIteratorNotFlagged(): Void {
+		// The TYPED refusal, not the unresolved one: `Iterator<T>` is not an `Iterable<T>`.
+		Assert.equals(0, violations(typedFn('for (x in b.walker()) if (x > 2) return true;\n\t\treturn false;')).length);
+	}
+
+	public function testCallIterableFixRewritesToExists(): Void {
+		final out: String = fixResult(
+			'package p;\n\nusing Lambda;\n\n' + typedFn('for (x in b.items()) if (x > 2) return true;\n\t\treturn false;')
+		);
+		Assert.isTrue(out.indexOf('return b.items().exists(x -> x > 2);') != -1, out);
 	}
 
 	public function testRangeLoopNotFlagged(): Void {
@@ -209,6 +228,13 @@ class PreferExistsCheckTest extends Test {
 
 	private function fn(body: String): String {
 		return 'class C {\n\tfunction f(xs:Array<Int>, m:Map<String, Int>, n:Null<Array<Int>>, a:Bool, b:Bool):Bool {\n\t\t${body}\n\t}\n}';
+	}
+
+	/** A fixture whose CALL iterables are RESOLVABLE: `B` is indexed alongside `C`, so its members' written return types answer. */
+	private function typedFn(body: String): String {
+		return 'class C {\n\tfunction f(b:B, a:Bool):Bool {\n\t\t$body\n\t}\n}\n\n'
+			+ 'class B {\n\tpublic function items():Array<Int> {\n\t\treturn [];\n\t}\n\n'
+			+ '\tpublic function walker():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}';
 	}
 
 	private function file(body: String, withUsing: Bool): String {
