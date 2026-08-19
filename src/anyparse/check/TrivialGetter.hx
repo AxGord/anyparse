@@ -48,7 +48,8 @@ using Lambda;
  * 1. The read accessor is exactly `get`; the write is `never` / `null` / `set`. A custom-named
  *    accessor or a plain stored slot is skipped — only the standard `get_` / `set_` resolve.
  * 2. Neither accessor is `dynamic` (re-bindable at runtime — real behaviour).
- * 3. The backing field is private and declared in the SAME class. Interfaces (no accessor bodies) are skipped wholesale:
+ * 3. The backing field is private and declared in the SAME class, or is the property itself (the
+ *    SELF-BACKED spelling below). Interfaces (no accessor bodies) are skipped wholesale:
  * every class body — plain / `final` / `abstract class` (`CheckScan.isClassBodyKind`) — is inspected.
  * 4. No (transitive) subtype overrides the property accessor or redeclares it
  *    (`SymbolIndex.subtypeOverridesProperty`) AND no subtype references the private backing field directly (`SymbolIndex.subtypeReferencesField`) — the collapse deletes the field, and a subclass reading it (private members are subclass-visible) would break; both queries run over report + resolution scope. A subclass merely extending the class without touching the property no longer blocks; an override is attributed to the type declaring the member it overrides, so only an unattributable one keeps an unresolvable subtype hierarchy blocked conservatively.
@@ -126,7 +127,11 @@ using Lambda;
  * exempt (nothing is deleted, so no subtype reference is stranded) and there is no cross-file
  * slice for the same reason. The supertype side is new — an `override` accessor refuses, because
  * a self-backed property can legally sit over a supertype's plain `get_x` and deleting the
- * override would re-point every call on that implementation.
+ * override would re-point every call on that implementation. One shared gate is over-strict here
+ * rather than wrong: `collapseConfinedToBranch` refuses a GUARDED self-backed property whose name
+ * appears outside its `#if` region, a rule that exists because the bridged collapse RENAMES the
+ * field into the property's name. The self-backed collapse renames nothing, so the refusal costs
+ * only a missed finding on a shape neither corpus contains.
  *
  * NOTE the interaction with `hxq encapsulate-field`, which emits exactly the self-backed
  * both-trivial shape (`@:isVar var x(get, set)` plus a forwarding pair) as a SEAM for logic the
