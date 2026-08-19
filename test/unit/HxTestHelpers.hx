@@ -27,6 +27,7 @@ import anyparse.grammar.haxe.HxErrorMsg;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxIdentLit;
+import anyparse.grammar.haxe.HxVarSemiCondInitDecl;
 import anyparse.grammar.haxe.HxInterfaceDecl;
 import anyparse.grammar.haxe.HxLambdaParam;
 import anyparse.grammar.haxe.HxLambdaParamBody;
@@ -101,6 +102,24 @@ class HxTestHelpers extends Test {
 		final ast: HxClassDecl = HaxeParser.parse(source);
 		Assert.equals(1, ast.members.length);
 		return expectFnMember(ast.members[0].member);
+	}
+
+	/**
+	 * The sole member of a single-class source. Shared rather than
+	 * per-class: three cond-region slice classes asked the same question
+	 * with the same two lines, which `duplicate-code` reports cross-file.
+	 */
+	private function singleMember(source: String): HxClassMember {
+		final ast: HxClassDecl = HaxeParser.parse(source);
+		Assert.equals(1, ast.members.length);
+		return ast.members[0].member;
+	}
+
+	private function expectVarSemiCondInitMember(member: HxClassMember): HxVarSemiCondInitDecl {
+		return switch member {
+			case VarSemiCondInitMember(decl): decl;
+			case _: throw 'expected VarSemiCondInitMember, got $member';
+		};
 	}
 
 	private function expectVarMember(member: HxClassMember): HxVarDecl {

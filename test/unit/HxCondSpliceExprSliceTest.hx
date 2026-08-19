@@ -3,7 +3,6 @@ package unit;
 import utest.Assert;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnBody;
 import anyparse.grammar.haxe.HxStatement;
@@ -98,7 +97,7 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 			'class C {\n\tpublic var b(default, null):Int = #if js 1; #end\n}',
 			'class C {\n\tpublic var c(get, set):Int = #if js 1; #else 2; #end\n}'
 		]) {
-			expectVarSemiCondInitMember(singleMember(src));
+			Assert.notNull(expectVarSemiCondInitMember(singleMember(src)).access, 'accessor clause bound: $src');
 			triviaEquals(src, src);
 		}
 	}
@@ -117,7 +116,7 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 			'class C {\n\tpublic var c(get, never):Int = #if js 1 #else 2 #end;\n}',
 			'class C {\n\tpublic var d(get, set):Int = f(1);\n}'
 		]) {
-			expectVarMember(singleMember(src));
+			Assert.notNull(expectVarMember(singleMember(src)).access, 'accessor clause still bound on the ordinary path: $src');
 			triviaEquals(src, src);
 		}
 	}
@@ -263,19 +262,6 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 		};
 		Assert.equals(1, stmts.length);
 		return stmts[0];
-	}
-
-	private function singleMember(source: String): HxClassMember {
-		final ast: HxClassDecl = HaxeParser.parse(source);
-		Assert.equals(1, ast.members.length);
-		return ast.members[0].member;
-	}
-
-	private function expectVarSemiCondInitMember(member: HxClassMember): HxVarSemiCondInitDecl {
-		return switch member {
-			case VarSemiCondInitMember(decl): decl;
-			case _: throw 'expected VarSemiCondInitMember, got $member';
-		};
 	}
 
 	/**
