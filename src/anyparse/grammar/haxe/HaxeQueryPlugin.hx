@@ -242,9 +242,12 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 
 	/**
 	 * The value-position hosts a conditional chain may be rewritten inside. Shared so
-	 * `switchExpressionHostKinds` and `ifExpressionChainHostKinds` (which adds the
-	 * arrow-lambda bodies) cannot drift: a new value host is added here once and both
-	 * follow. A `case` arm and a bare expression STATEMENT are deliberately absent — a
+	  * `switchExpressionHostKinds` and `ifExpressionChainHostKinds` (which adds the
+	 * arrow-lambda bodies and the two switch-ARM kinds) cannot drift: a new value host is
+	 * added here once and both follow. A `case` arm is deliberately absent from THIS
+	 * constant — a `switch` spliced into a `switch` arm reads worse than the chain it
+	 * replaced, while an if-chain there is the ladder the formatter already renders, so
+	 * only the if-chain seam adds it. A bare expression STATEMENT is absent from both: a
 	 * chain there yields no value anyone reads, and rewriting it would hand the site to
 	 * the statement-side rule family instead.
 	 */
@@ -733,7 +736,15 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// The switch hosts plus the three arrow-lambda bodies: a comparator written as
 			// `(a, b) -> if (…) -1 else if (…) 1 else 0` is the established TM shape, while a
 			// `switch` in that slot is not — so the if-chain seam is a proper superset.
-			ifExpressionChainHostKinds: SWITCH_EXPRESSION_HOST_KINDS.concat(['ThinArrow', 'ThinParenLambdaExpr', 'ParenLambdaExpr']),
+			// …plus the switch ARMS, taken from the one list that already names them. An arm's
+			// value is delimited by the `:` that opens it and the `;` that ends it, exactly as a
+			// `return` value is, and the formatter renders the ladder there under
+			// `expressionIf: "next"`. The arm is reached through the expression-STATEMENT
+			// wrapper, which `prefer-if-expression-chain` makes transparent only inside an arm —
+			// a bare expression statement in a block is no host. `concat` copies, so the shared
+			// static array is never aliased into the shape.
+			ifExpressionChainHostKinds: SWITCH_EXPRESSION_HOST_KINDS.concat(['ThinArrow', 'ThinParenLambdaExpr', 'ParenLambdaExpr'])
+				.concat(BRANCH_SCOPE_KINDS),
 			nullLiteralKind: 'NullLit',
 			nullCoalesceKind: 'NullCoal',
 			nullCoalesceOperatorText: '??',

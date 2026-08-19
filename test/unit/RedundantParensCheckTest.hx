@@ -271,6 +271,44 @@ class RedundantParensCheckTest extends Test {
 		Assert.equals(0, violations(inFn('x = c ? (a) : (b);')).length);
 	}
 
+	/**
+	 * A ternary in the ELSE ARM of a ternary. `?:` is right-associative, so the arm is
+	 * parsed at the ternary's own precedence and the bare inner re-parses to the tree it
+	 * already had — the pair is transparent. Dropping it is what lets
+	 * `prefer-if-expression-chain` see the chain the parentheses had cut in two.
+	 */
+	public function testTernaryElseArmTernaryFlagged(): Void {
+		final vs: Array<Violation> = violations(inFn('x = a ? 1 : (b ? 2 : 3);'));
+		Assert.equals(1, vs.length);
+		Assert.equals('redundant-parens', vs[0].rule);
+		Assert.equals(inFn('x = a ? 1 : b ? 2 : 3;'), fixed(inFn('x = a ? 1 : (b ? 2 : 3);')));
+	}
+
+	/**
+	 * The THEN arm is a different slot and stays out: `a ? b ? 1 : 2 : 3` parses, but the
+	 * pair there is the readability the author wrote, and `prefer-if-expression-chain`
+	 * reaches that shape by conjunction rather than by unwrapping.
+	 */
+	public function testTernaryThenArmTernaryKeepsParens(): Void {
+		Assert.equals(0, violations(inFn('x = a ? (b ? 1 : 2) : 3;')).length);
+	}
+
+	/** Fail-closed content whitelist: only a nested ternary drops, so no looser arm re-associates. */
+	public function testTernaryElseArmNonTernaryKeepsParens(): Void {
+		Assert.equals(0, violations(inFn('x = a ? 1 : (b + c);')).length);
+		Assert.equals(0, violations(inFn('x = a ? 1 : (b = c);')).length);
+	}
+
+	/** A separator-greedy tail keeps the pair here too — bare, the declaration eats the `,` that ends the argument. */
+	public function testTernaryElseArmSeparatorGreedyKeepsParens(): Void {
+		Assert.equals(0, violations(inFn('f(a ? 1 : (b ? 2 : macro final w = 1), x);')).length);
+	}
+
+	public function testTernaryElseArmIdempotent(): Void {
+		final once: String = fixed(inFn('x = a ? 1 : (b ? 2 : 3);'));
+		Assert.equals(once, fixed(once));
+	}
+
 	public function testSwitchSubjectNotFlagged(): Void {
 		Assert.equals(0, violations(inFn('switch ((v)) {\n\t\t\tcase _:\n\t\t}')).length);
 	}

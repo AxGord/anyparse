@@ -11,7 +11,7 @@ import anyparse.runtime.Span;
 using StringTools;
 
 /**
- * Flags redundant parentheses in three shapes. A parenthesized expression wrapped
+ * Flags redundant parentheses in four shapes. A parenthesized expression wrapped
  * directly in another (`((e))`) — the outer pair adds nothing wherever it sits. And a
  * LONE `(e)` sitting in a DELIMITED position: one where the surrounding construct
  * supplies its own boundaries on both sides, so no operator can bind across the
@@ -25,6 +25,16 @@ using StringTools;
  * inner binds strictly tighter than `?:` (`RefShape.ternaryConditionUnwrapKinds`),
  * never for a loose / right-greedy inner (assignment, a nested ternary, an arrow, an
  * `untyped` / `macro` / metadata wrapper) that would absorb the `? … : …` on unwrap.
+ *
+ * The FOURTH shape is the ELSE ARM of a ternary: `a ? 1 : (b ? 2 : 3)`. That arm is the
+ * RIGHTMOST operand of a right-associative `?:`, so a nested ternary there is parsed at the
+ * ternary tier either way and re-parses to the tree it already had. Only a nested ternary
+ * drops — a fail-closed whitelist, so no looser arm re-associates — and a SEPARATOR-greedy
+ * tail keeps the pair as it does in a delimited slot. The RIGHT-greedy gate is deliberately
+ * not asked here: the pair IS the whole arm, so the bare content ends exactly where the arm
+ * ends, and `Ternary` is itself a `rightGreedyExprKinds` member, which would refuse the arm
+ * outright. Dropping the pair is what lets `prefer-if-expression-chain` see a chain the
+ * parentheses had cut in two.
  *
  * In a delimited position the content's PRECEDENCE is irrelevant — `f((a + b))`
  * unwraps as safely as `f((x))` — but its SYNTAX is not: two content shapes keep
@@ -128,10 +138,11 @@ using StringTools;
  *   `a + b * c`, and a map-literal key `[(a ? b : c) => d]` ≢ `[a ? b : c => d]` (bare: `Unexpected =>`, measured).
  *   That is why a call's CALLEE and an assignment's TARGET are excluded while their
  *   tails are not, and why the map-literal `=>` VALUE is left alone even though its
- *   right-associative prec-0 operator would make it provably safe. The lone exception
- *   is a ternary CONDITION, which the precedence-gated third shape above handles.
+ *   right-associative prec-0 operator would make it provably safe. The two exceptions are
+ *   a ternary CONDITION and a ternary ELSE ARM, which the
+ *   precedence-gated shapes above handle.
  *
- * The three arms compose without overlapping: the check flags the OUTERMOST paren of a
+ * The arms compose without overlapping: the check flags the OUTERMOST paren of a
  * chain and does not descend into it, so a site yields one finding and one edit, and
  * in a delimited position `((e))` collapses to `e` outright.
  *
@@ -232,10 +243,11 @@ using StringTools;
  *
  * ## Two gates every PRECEDENCE-GATED slot shares
  *
- * The three opt-in arms and the shipped ternary condition all prove the drop from the
+ * The three opt-in arms and the shipped ternary CONDITION all prove the drop from the
  * content's ROOT kind. Two things a root cannot see make the parentheses load-bearing
- * anyway, so both gates run for all four slots — and the ternary one is default-ON, which
- * is where each bug was actually shipping.
+ * anyway, so both gates run for those four slots — the ternary ELSE ARM is the one
+ * precedence-gated slot that asks neither, and says why where it is decided. The ternary
+ * CONDITION arm is default-ON, which is where each bug was actually shipping.
  *
  * A RIGHT-GREEDY TAIL. A construct whose extent ends only at its enclosing bracket, sitting
  * at the right edge of the content, eats whatever followed the pair:
@@ -286,6 +298,9 @@ using StringTools;
  */
 @:nullSafety(Strict)
 final class RedundantParens implements Check implements ConfigAware {
+
+	/** A ternary's else-arm child index — `[condition, then, else]`. */
+	private static inline final TERNARY_ELSE_CHILD_INDEX: Int = 2;
 
 	/** The rule id — also the `apqlint.json` key its four opt-in options hang off. */
 	private static final ID: String = 'redundant-parens';
@@ -561,6 +576,13 @@ final class RedundantParens implements Check implements ConfigAware {
 			// tighter than `?:` — otherwise unwrapping lets it absorb the `? … : …` branches.
 			case SlotKind.TernaryCondition:
 				(atom || slots.ternaryUnwrap.contains(bare.kind)) && ungreedy;
+			// The else arm is the RIGHTMOST operand of a right-associative `?:`, so a nested
+			// ternary there parses at the same precedence bare and the pair is transparent. The
+			// right-greedy gate is not asked: the pair IS the whole arm, so the bare content ends
+			// exactly where the arm does. A SEPARATOR-greedy tail is a different question and does
+			// gate — a declaration continuation reaches past the `,` that ends the enclosing slot.
+			case SlotKind.TernaryElse:
+				atom || bare.kind == slots.ternaryKind && !spineEndsWith(bare, slots.greedy);
 			case SlotKind.Delimited:
 				atom || !spineEndsWith(bare, slots.greedy);
 			case SlotKind.DelimitedSplice:
@@ -671,6 +693,8 @@ final class RedundantParens implements Check implements ConfigAware {
 			SlotKind.Required
 		else if (parent.kind == slots.ternaryKind && i == 0)
 			SlotKind.TernaryCondition
+		else if (parent.kind == slots.ternaryKind && i == TERNARY_ELSE_CHILD_INDEX)
+			SlotKind.TernaryElse
 		else if (i == 0 && sameFamilyLeftOperand(parent, slots))
 			SlotKind.SameFamilyLeft
 		else if (tighterTierOperand(parent, i, slots.comparisonHost, slots.comparisonUnwrap, slots))
@@ -855,10 +879,14 @@ private typedef ParenSite = {
  * `RefShape.additiveOperandUnwrapKinds` under the identical sibling rule — the opt-in
  * `additiveOperands` arm.
  *
- * The four PRECEDENCE-GATED slots — `TernaryCondition`, `SameFamilyLeft`,
- * `ComparisonOperand`, `AdditiveOperand` — additionally refuse content ending in a
- * `RefShape.rightGreedyExprKinds` construct, and the two whitelist ones refuse content
- * whose leftmost token is a `RefShape.unaryMinusKinds`. `dropsParens` switches over this
+ * `TernaryElse` — a ternary's else-arm child, the RIGHTMOST operand of a right-associative
+ * `?:`, where a nested ternary re-parses to the tree it already had; a fail-closed whitelist
+ * of one kind, gated only on the SEPARATOR-greedy tail.
+ *
+ * The four PRECEDENCE-GATED slots that prove the drop from the content's ROOT kind —
+ * `TernaryCondition`, `SameFamilyLeft`, `ComparisonOperand`, `AdditiveOperand` —
+ * additionally refuse content ending in a `RefShape.rightGreedyExprKinds` construct, and the two whitelist
+ * ones refuse content whose leftmost token is a `RefShape.unaryMinusKinds`. `dropsParens` switches over this
  * enum EXHAUSTIVELY, so a new member fails to compile until it states which of those it
  * wants.
  */
@@ -879,5 +907,7 @@ private enum abstract SlotKind(Int) {
 	final ComparisonOperand = 6;
 
 	final AdditiveOperand = 7;
+
+	final TernaryElse = 8;
 
 }

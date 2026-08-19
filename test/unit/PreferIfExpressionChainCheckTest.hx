@@ -29,6 +29,17 @@ class PreferIfExpressionChainCheckTest extends Test {
 	private static inline final TM_RELINK_DECISION: String =
 		'class C {\n\tfunction f():RebindDecision {\n\t\treturn !visible || remoteHostTag < 0\n\t\t\t? KeepLink\n\t\t\t: dbLocalTag == remoteHostTag\n\t\t\t\t? KeepLink // already correctly paired\n\t\t\t\t: groupAllowEdit && pendingAction == QUEUED_STATE_LOCAL_PENDING ? RebindAsEdit : RebindAsSteady;\n\t}\n}';
 
+	/** A ternary nested in the THEN arm — the conjunctive shape, silent before the flattening. */
+	private static inline final THEN_NESTED: String = 'class C {\n\tfunction f():Int {\n\t\treturn a ? b ? 1 : 2 : 3;\n\t}\n}';
+
+	/** TM `TimeInput.get_hrs` (anonymized) — a null guard duplicated into the conjunction, held by short-circuiting. */
+	private static inline final TM_NULL_GUARDED_ACCESSOR: String =
+		"class C {\n\tfunction f():String {\n\t\treturn sel != null ? sel.data.data == -1 ? 'N/A' : sel.data.text : '';\n\t}\n}";
+
+	/** A ternary chain as the value of a `case` arm — the shape TM's `getColorPickerType` writes five times over. */
+	private static inline final CASE_ARM_CHAIN: String =
+		'class C {\n\tfunction f(v:Int):Void {\n\t\tswitch v {\n\t\t\tcase 1:\n\t\t\t\ta ? 1 : b ? 2 : 3;\n\t\t\tcase _:\n\t\t}\n\t}\n}';
+
 	/** The TM `FileSystemBase` cloud-queue comparator — already canonical, so a 0-finding fixed point (anonymized). */
 	private static inline final TM_IF_CHAIN_COMPARATOR: String =
 		'class C {\n\tfunction f():Void {\n\t\tstack.sort((a:StoredEntryRecord, b:StoredEntryRecord) ->\n\t\t\tif (a.nested && !b.nested)\n\t\t\t\t-1\n\t\t\telse if (!a.nested && b.nested)\n\t\t\t\t1\n\t\t\telse\n\t\t\t\tSortHelper.orderTextValuesForKey(a.nodeName, b.nodeName)\n\t\t);\n\t}\n}';
@@ -114,12 +125,15 @@ class PreferIfExpressionChainCheckTest extends Test {
 	}
 
 	/**
-	 * A chain in the THEN-arm of an enclosing ternary is refused by the host gate for free — its
-	 * parent kind is a chain kind, which is no host — which is what keeps the emitted `else`-arm
-	 * from having to reason about the enclosing `:`.
+	 * A chain in the THEN-arm of an enclosing ternary is never reported as its OWN head — its
+	 * parent kind is a chain kind, which is no host — so the site yields ONE finding, taken
+	 * through the enclosing chain, which flattens the then-arm conjunctively.
 	 */
-	public function testThenArmChainNotFlagged(): Void {
-		Assert.equals(0, violations('class C {\n\tfunction f():Int {\n\t\treturn x ? a ? 1 : b ? 2 : 3 : y;\n\t}\n}').length);
+	public function testThenArmChainReportedOnceThroughItsHead(): Void {
+		final src: String = 'class C {\n\tfunction f():Int {\n\t\treturn x ? a ? 1 : b ? 2 : 3 : y;\n\t}\n}';
+		final es: Array<{ span: Span, text: String }> = edits(src);
+		Assert.equals(1, es.length);
+		Assert.equals('if (x && a) 1 else if (x) b ? 2 : 3 else y', es[0].text);
 	}
 
 	/**
@@ -260,6 +274,121 @@ class PreferIfExpressionChainCheckTest extends Test {
 		// nothing: `VarExpr` is not a host kind and the host gate would reject it first.
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tfinal e = macro return a ? 1 : b ? 2 : 3;\n\t}\n}').length);
 		Assert.equals(1, violations('class C {\n\tfunction f():Int {\n\t\treturn a ? 1 : b ? 2 : 3;\n\t}\n}').length);
+	}
+
+	/**
+	 * The VALUE POSITION OF A `case` ARM is a host: the arm's `:` and the statement's `;`
+	 * delimit it exactly as a `return` does, and the formatter renders the ladder there under
+	 * `expressionIf: "next"`. The five `getColorPickerType` arms in TM are the shape.
+	 */
+	public function testCaseArmValueFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(CASE_ARM_CHAIN);
+		Assert.equals(1, es.length);
+		Assert.equals('if (a) 1 else if (b) 2 else 3', es[0].text);
+	}
+
+	/** A `default:` arm is the same value slot as a `case` one. */
+	public function testDefaultArmValueFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class C {\n\tfunction f(v:Int):Void {\n\t\tswitch v {\n\t\t\tdefault:\n\t\t\t\ta ? 1 : b ? 2 : 3;\n\t\t}\n\t}\n}'
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('if (a) 1 else if (b) 2 else 3', es[0].text);
+	}
+
+	/**
+	 * The arm host reaches the chain THROUGH the expression-statement wrapper, and that
+	 * transparency is scoped to an arm: a bare expression statement in an ordinary block is
+	 * NOT a host, so the gate cannot come off wider than the slot it was opened for.
+	 */
+	public function testBareExpressionStatementNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\ta ? 1 : b ? 2 : 3;\n\t}\n}').length);
+	}
+
+	/** The emitted arm is the fixed point: the if-chain form draws nothing back. */
+	public function testCaseArmOutputIsAFixedPoint(): Void {
+		final once: String = RefactorSupport.applyEdits(CASE_ARM_CHAIN, edits(CASE_ARM_CHAIN));
+		Assert.equals(0, violations(once).length);
+		Assert.equals(0, ternaryExpressionViolations(once).length);
+		Assert.equals(0, switchExpressionViolations(once).length);
+	}
+
+	/**
+	 * A ternary nested in the THEN arm leaves only ONE condition on the else spine, below the
+	 * minimum — so the chain was silent. The CONJUNCTIVE flattening reaches it:
+	 * `a ? (b ? A : B) : C` is `if (a && b) A else if (a) B else C`, which preserves evaluation
+	 * order and needs no implication between `a` and `b`.
+	 */
+	public function testConjunctiveThenNestedChainFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(THEN_NESTED);
+		Assert.equals(1, es.length);
+		Assert.equals('if (a && b) 1 else if (a) 2 else 3', es[0].text);
+	}
+
+	/** The duplicated condition is an OPERAND of the emitted `&&`, so a looser one takes parentheses. */
+	public function testConjunctiveWrapsLoosePrecedenceConditions(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Int {\n\t\treturn a || c ? b ? 1 : 2 : 3;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('if ((a || c) && b) 1 else if (a || c) 2 else 3', es[0].text);
+	}
+
+	/** An expanded rung joins the else spine, so a chain that mixes both shapes flattens in one pass. */
+	public function testConjunctiveExpansionJoinsTheElseSpine(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Int {\n\t\treturn a ? b ? 1 : 2 : c ? 3 : 4;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('if (a && b) 1 else if (a) 2 else if (c) 3 else 4', es[0].text);
+	}
+
+	/**
+	 * DEPTH CAP. The conjunction duplicates the outer condition at every level, so growth is
+	 * quadratic; exactly ONE level is expanded and a deeper nest stays the two-branch ternary
+	 * that IS the canon.
+	 */
+	public function testConjunctiveExpandsOneLevelOnly(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Int {\n\t\treturn a ? b ? c ? 1 : 2 : 3 : 4;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('if (a && b) c ? 1 : 2 else if (a) 3 else 4', es[0].text);
+	}
+
+	/**
+	 * The TM `TimeInput` accessor (anonymized): the guard `sel != null` is duplicated, and `&&`
+	 * short-circuiting is what keeps the second read of `sel.data` behind it.
+	 */
+	public function testConjunctiveNullGuardIsPreservedByShortCircuit(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(TM_NULL_GUARDED_ACCESSOR);
+		Assert.equals(1, es.length);
+		Assert.equals("if (sel != null && sel.data.data == -1) 'N/A' else if (sel != null) sel.data.text else ''", es[0].text);
+		Assert.equals(0, violations(RefactorSupport.applyEdits(TM_NULL_GUARDED_ACCESSOR, es)).length);
+	}
+
+	/** The output is the fixed point: `prefer-ternary-expression` refuses an if-expression whose then-branch is a ternary. */
+	public function testConjunctiveOutputIsAFixedPoint(): Void {
+		final once: String = RefactorSupport.applyEdits(THEN_NESTED, edits(THEN_NESTED));
+		Assert.equals(0, violations(once).length);
+		Assert.equals(0, ternaryExpressionViolations(once).length);
+	}
+
+	/**
+	 * The duplicated condition is evaluated TWICE, so it must be pure and cheap. A call is
+	 * unproven and refuses; so does a read of a property whose getter runs code.
+	 */
+	public function testConjunctiveRefusesAnImpureDuplicatedCondition(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Int {\n\t\treturn g() ? b ? 1 : 2 : 3;\n\t}\n}').length);
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tpublic var p(get, never):Bool;\n\n\tfunction get_p():Bool {\n\t\treturn true;\n\t}\n\n'
+				+ '\tfunction f():Int {\n\t\treturn p ? b ? 1 : 2 : 3;\n\t}\n}'
+			).length
+		);
+	}
+
+	/** A chain whose one condition is impure keeps its old answer: no expansion, one spine rung, below the minimum. */
+	public function testConjunctiveRefusalLeavesTheChainSilent(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Int {\n\t\tvar x = g() ? b ? 1 : 2 : 3;\n\t}\n}').length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {

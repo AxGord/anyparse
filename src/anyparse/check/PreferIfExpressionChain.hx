@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.IfExpressionChain.Carried;
 import anyparse.check.IfExpressionChain.CarrySeat;
+import anyparse.check.PurityScan.PurityCtx;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -46,8 +47,11 @@ import anyparse.runtime.Span;
  * chain node's else-slot, so an inner rung is never re-reported — with:
  *
  * - **A whitelisted host.** The head's PARENT kind must be in `ifExpressionChainHostKinds`
- *   (a `return`, a local / member initializer, an assignment r-value, an arrow-lambda
- *   body). This is a READABILITY gate, not a correctness one: an `if`-expression is a legal
+ *   (a `return`, a local /
+ *   member initializer, an assignment r-value, an arrow-lambda body, a `switch` ARM's
+ *   value — the last reached through the expression-statement wrapper, which `slotKindOf`
+ *   makes transparent inside an arm and nowhere else). This is a READABILITY gate, not a
+ *   correctness one: an `if`-expression is a legal
  *   expression atom everywhere a ternary is, and its else-arm parses at the same precedence
  *   as the ternary's, so no slot re-associates (verified on 4.3.7 in a call argument, an
  *   array element and index, an object-literal value, a map value, and the then-arm of an
@@ -55,9 +59,9 @@ import anyparse.runtime.Span;
  *   to the positions where a multi-line chain belongs. It also removes the one shape that
  *   would need thought — a chain in the then-arm of an enclosing ternary, whose parent kind
  *   is a chain kind and so is never a host.
- * - **At least two conditions** (three leaf values). A single ternary IS the canon and is
- *   left alone; this minimum is the whole disjointness proof against
- *   `prefer-ternary-expression`.
+ * - **At least two conditions** (three leaf values) once the conjunctive flattening below has
+ *   run. A single ternary IS the canon and is left alone; this minimum is the whole
+ *   disjointness proof against `prefer-ternary-expression`.
  * - **At least one ternary rung.** A chain already written entirely as if-expressions is the
  *   canon — flagging it would report a fixed point. A MIXED chain (`c1 ? v1 : if (c2) v2
  *   else v3`, which neither this check's predecessor nor `prefer-ternary-expression` could
@@ -101,6 +105,27 @@ import anyparse.runtime.Span;
  * A reification subtree (`RefShape.opaqueKinds`, Haxe's `macro { … }`) is skipped wholesale,
  * as in the sibling rewrite rules: its interior is spliced code a consumer may pattern-match
  * on, not source a human reads.
+ *
+ * ## Conjunctive flattening
+ *
+ * The walk follows the ELSE spine, so a ternary nested in the THEN arm contributes only ONE
+ * condition and stays below the minimum. `flatten` reaches it: `a ? (b ? A : B) : C` emits
+ * `if (a && b) A else if (a) B else C`.
+ *
+ * That rewrite is ALWAYS sound, and needs no implication between the two conditions. `a` is
+ * evaluated first either way; `b` only under `a`, because the emitted `&&` short-circuits —
+ * which is also what keeps a null GUARD guarding, the shape TM writes as
+ * `sel != null ? sel.data.data == -1 ? x : y : z`. The SWAP form `b ? A : a ? B : C` would
+ * require `b` to imply `a` and is deliberately NOT what this does.
+ *
+ * What the conjunction does cost is `a` a SECOND time whenever `b` is false, so `PurityScan`
+ * must prove it duplicable: a call, and a property read whose getter runs code, both refuse,
+ * and the chain then keeps its old silent answer rather than being rewritten.
+ *
+ * DEPTH CAP of one level. The outer condition is duplicated at every level, so recursion
+ * would grow quadratically (`a ? b ? c ? …` giving `a && b && c`, then `a && b`, then `a`);
+ * a deeper nest keeps its inner two-branch ternary, which IS the canon. Only a TERNARY value
+ * expands — an if-expression in the same slot is already the form this family emits.
  *
  * ## Autofix
  *
@@ -185,6 +210,39 @@ final class PreferIfExpressionChain implements Check {
 	}
 
 	/**
+	 * `text` as an operand of the emitted `&&`, parenthesized when its node binds LOOSER than the
+	 * conjunction (`RefShape.andLowerPrecedenceKinds`) — the same vocabulary and the same reason
+	 * `collapsible-if` merges two conditions with.
+	 */
+	private static inline function andOperand(text: String, node: QueryNode, s: Seams): String {
+		return s.andLowerPrecedence.contains(node.kind) ? '($text)' : text;
+	}
+
+	/**
+	 * The kind the walk hands a child as its SLOT — normally the parent's own kind, but the
+	 * ARM kind when the parent is the expression-STATEMENT wrapper of a switch arm's value.
+	 * That wrapper is what stands between an arm and the chain it holds, and it is
+	 * transparent HERE ONLY: a bare expression statement in an ordinary block keeps its own
+	 * kind and so is no host, which is what scopes the arm host to the arm.
+	 *
+	 * The carried value is the SLOT rather than the true parent kind, and the two differ only
+	 * across that one rewrite — a statement wrapper never nests in another — so the test can
+	 * read `parentKind` as the wrapper's real parent.
+	 */
+	private static inline function slotKindOf(node: QueryNode, parentKind: Null<String>, s: Seams): String {
+		return node.kind == s.exprStatementKind && parentKind != null && s.armKinds.contains(parentKind) ? parentKind : node.kind;
+	}
+
+	/**
+	 * Where the FIRST piece the rebuild copies for `rung` starts — its leading condition span, or
+	 * its value when the rung copies no condition at all. Only the SECOND half of a conjunctive
+	 * expansion is that shape: its condition is the outer one, already copied by the first half.
+	 */
+	private static inline function firstCopiedPiece(rung: Emitted): Int {
+		return rung.condSpans.length > 0 ? rung.condSpans[0].from : rung.value.from;
+	}
+
+	/**
 	 * Every convertible chain in `source` (empty when it does not parse). `run` and `fix`
 	 * both go through it, so neither can encode a gate the other misses.
 	 */
@@ -192,8 +250,29 @@ final class PreferIfExpressionChain implements Check {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final out: Array<Match> = [];
-		walk(tree, source, RefactorSupport.collectCommentTokens(source), s, plugin, resolveIndex, out, null, false);
+		walk(
+			tree, source, RefactorSupport.collectCommentTokens(source), s, plugin, lazyOf(plugin, source, tree, resolveIndex), out, null,
+			false
+		);
 		return out;
+	}
+
+	/**
+	 * The two lazily-resolved services the walk carries: the symbol index the switch-expression
+	 * deferral asks for, and the purity context the conjunctive flattening asks of a condition it
+	 * is about to DUPLICATE. Both are memoised and both are only demanded by a site that reaches
+	 * their gate, so a file with no such site pays for neither.
+	 */
+	private static function lazyOf(plugin: GrammarPlugin, source: String, root: QueryNode, resolveIndex: () -> Null<SymbolIndex>): Lazy {
+		var cached: Null<PurityCtx> = null;
+		var asked: Bool = false;
+		function purity(): Null<PurityCtx> {
+			if (asked) return cached;
+			asked = true;
+			final index: Null<SymbolIndex> = resolveIndex();
+			return cached = index == null ? null : PurityScan.contextOf(plugin, source, root, index);
+		}
+		return { resolveIndex: resolveIndex, purity: purity };
 	}
 
 	/**
@@ -213,6 +292,10 @@ final class PreferIfExpressionChain implements Check {
 			chainKinds: chainKinds,
 			conditionalKinds: IfExpressionChain.conditionalKinds(shape),
 			hostKinds: hostKinds,
+			exprStatementKind: shape.exprStatementKind,
+			armKinds: [for (k in [shape.caseBranchKind, shape.defaultBranchKind]) if (k != null) k],
+			andOperatorText: shape.andOperatorText,
+			andLowerPrecedence: shape.andLowerPrecedenceKinds ?? [],
 			parenKind: shape.parenKind,
 			opaqueKinds: shape.opaqueKinds ?? []
 		};
@@ -226,18 +309,19 @@ final class PreferIfExpressionChain implements Check {
 	 */
 	private static function walk(
 		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, plugin: GrammarPlugin,
-		resolveIndex: () -> Null<SymbolIndex>, out: Array<Match>, parentKind: Null<String>, inElseSlot: Bool
+		lazy: Lazy, out: Array<Match>, parentKind: Null<String>, inElseSlot: Bool
 	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		final isChain: Bool = s.chainKinds.contains(node.kind);
 		if (isChain && !inElseSlot && parentKind != null && s.hostKinds.contains(parentKind)) {
-			final m: Null<Match> = match(node, source, comments, s, plugin, resolveIndex, parentKind);
+			final m: Null<Match> = match(node, source, comments, s, plugin, lazy, parentKind);
 			if (m != null) out.push(m);
 		}
 		final elseSlot: Int = isChain ? ELSE_SLOT_INDEX : -1;
-		for (i in 0...node.children.length)
-			walk(node.children[i], source, comments, s, plugin, resolveIndex, out, node.kind, i == elseSlot);
+		final childHost: String = slotKindOf(node, parentKind, s);
+		for (i in 0...node.children.length) walk(node.children[i], source, comments, s, plugin, lazy, out, childHost, i == elseSlot);
 	}
+
 
 	/**
 	 * The rewrite of the chain at `head`, or null when a gate refuses it (see the class doc).
@@ -246,7 +330,7 @@ final class PreferIfExpressionChain implements Check {
 	 */
 	private static function match(
 		head: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, plugin: GrammarPlugin,
-		resolveIndex: () -> Null<SymbolIndex>, parentKind: String
+		lazy: Lazy, parentKind: String
 	): Null<Match> {
 		final headSpan: Null<Span> = head.span;
 		if (headSpan == null) return null;
@@ -262,32 +346,22 @@ final class PreferIfExpressionChain implements Check {
 			cur = cur.children[ELSE_SLOT_INDEX];
 		}
 		final rawTerminal: Null<Span> = cur.span;
-		if (rungs.length < MIN_RUNGS || ternaryRungs == 0 || rawTerminal == null) return null;
-		if (PreferSwitchExpression.claims(source, head, parentKind, plugin, resolveIndex)) return null;
+		if (rungs.length == 0 || ternaryRungs == 0 || rawTerminal == null) return null;
 		final terminalSpan: Span = IfExpressionChain.tokenSpan(rawTerminal, source, comments);
+		final emitted: Null<Array<Emitted>> = flatten(rungs, source, comments, s, lazy);
+		if (emitted == null || emitted.length < MIN_RUNGS) return null;
+		if (PreferSwitchExpression.claims(source, head, parentKind, plugin, lazy.resolveIndex)) return null;
 		final kept: Array<Span> = [terminalSpan];
-		final spans: Array<{ cond: Span, value: Span }> = [];
-		for (rung in rungs) {
-			final rawCond: Null<Span> = rung.cond.span;
-			final rawValue: Null<Span> = rung.value.span;
-			// The emitted ` else ` follows every NON-terminal value, and only an else-less
-			// conditional can absorb it — the value would silently become that `if`'s else
-			// branch. The terminal needs no such gate: an `else` that could follow the chain
-			// was already bound INTO the terminal by the parser, which turns it into a rung.
-			if (rawCond == null || rawValue == null || IfExpressionChain.holdsElseLessConditional(rung.value, s.conditionalKinds))
-				return null;
-			final condSpan: Span = IfExpressionChain.tokenSpan(rawCond, source, comments);
-			final valueSpan: Span = IfExpressionChain.tokenSpan(rawValue, source, comments);
-			kept.push(condSpan);
-			kept.push(valueSpan);
-			spans.push({ cond: condSpan, value: valueSpan });
+		for (rung in emitted) {
+			for (condSpan in rung.condSpans) kept.push(condSpan);
+			kept.push(rung.value);
 		}
 		final seats: Array<CarrySeat> = [
-			for (i in 0...spans.length)
+			for (i in 0...emitted.length)
 				{
-					condEnd: spans[i].cond.to,
-					value: spans[i].value,
-					nextStart: i + 1 < spans.length ? spans[i + 1].cond.from : terminalSpan.from
+					condEnd: emitted[i].condEnd,
+					value: emitted[i].value,
+					nextStart: i + 1 < emitted.length ? firstCopiedPiece(emitted[i + 1]) : terminalSpan.from
 				}
 		];
 		final carried: Null<Carried> = IfExpressionChain.carriedComments(
@@ -295,14 +369,103 @@ final class PreferIfExpressionChain implements Check {
 		);
 		if (carried == null) return null;
 		final pairs: Array<{ cond: String, value: String }> = [
-			for (p in spans)
-				{ cond: source.substring(p.cond.from, p.cond.to), value: IfExpressionChain.spanText(source, p.value, carried) }
+			for (rung in emitted) { cond: rung.condText, value: IfExpressionChain.spanText(source, rung.value, carried) }
 		];
 		return {
 			span: headSpan,
 			editSpan: new Span(headSpan.from, terminalSpan.to),
 			text: IfExpressionChain.buildValue(pairs, source.substring(terminalSpan.from, terminalSpan.to))
 		};
+	}
+
+
+	/**
+	 * The spine rungs as the rebuild EMITS them. A rung whose value is itself a conditional is
+	 * flattened CONJUNCTIVELY — `a ? (b ? A : B) : C` emits `if (a && b) A else if (a) B` — which
+	 * is what reaches a chain nested in the THEN arm, where the else spine holds only one
+	 * condition and the minimum is two. Null when a gate refuses the whole chain.
+	 *
+	 * The conjunction preserves evaluation order and requires NO implication between `a` and `b`:
+	 * `a` is evaluated first in both forms, `b` only under `a`, and short-circuiting keeps a null
+	 * guard doing its job. What it does cost is `a` a SECOND time when `b` is false, which is why
+	 * `PurityScan` must prove it duplicable.
+	 *
+	 * DEPTH CAP of one level. The outer condition is duplicated at every level, so a recursive
+	 * expansion grows quadratically (`a ? b ? c ? …` would emit `a && b && c`, `a && b`, `a`);
+	 * a deeper nest keeps its inner two-branch ternary, which IS the canon.
+	 */
+	private static function flatten(
+		rungs: Array<Rung>, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, lazy: Lazy
+	): Null<Array<Emitted>> {
+		final out: Array<Emitted> = [];
+		for (rung in rungs) {
+			final rawCond: Null<Span> = rung.cond.span;
+			final rawValue: Null<Span> = rung.value.span;
+			// The emitted ` else ` follows every NON-terminal value, and only an else-less
+			// conditional can absorb it — the value would silently become that `if`'s else
+			// branch. The terminal needs no such gate: an `else` that could follow the chain
+			// was already bound INTO the terminal by the parser, which turns it into a rung.
+			// Asking it of the WHOLE value subtree also covers both halves of an expansion.
+			if (rawCond == null || rawValue == null || IfExpressionChain.holdsElseLessConditional(rung.value, s.conditionalKinds))
+				return null;
+			final condSpan: Span = IfExpressionChain.tokenSpan(rawCond, source, comments);
+			final expanded: Null<Array<Emitted>> = expand(rung, condSpan, source, comments, s, lazy);
+			if (expanded == null)
+				out.push({
+					condText: source.substring(condSpan.from, condSpan.to),
+					condSpans: [condSpan],
+					condEnd: condSpan.to,
+					value: IfExpressionChain.tokenSpan(rawValue, source, comments)
+				})
+			else
+				for (half in expanded) out.push(half);
+		}
+		return out;
+	}
+
+	/**
+	 * The two rungs `a ? (b ? A : B) : …` flattens into, or null when this rung is not the
+	 * conjunctive shape — the value is no conditional, the grammar spells no `&&`, a span is
+	 * unmeasurable, or `a` is not provably duplicable. Null is a FALLBACK, not a refusal: the
+	 * caller then emits the rung unexpanded, exactly as before.
+	 *
+	 * The second half copies NO condition span of its own — it reuses the outer condition's TEXT,
+	 * which the first half already copied — so its carry seat opens where the first half's value
+	 * ends.
+	 */
+	private static function expand(
+		rung: Rung, condSpan: Span, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, lazy: Lazy
+	): Null<Array<Emitted>> {
+		final andOp: Null<String> = s.andOperatorText;
+		final value: QueryNode = rung.value;
+		// A TERNARY value only. An if-expression in the same slot is already the canon this
+		// family emits, and pulling it apart would rewrite a shape nobody asked to change.
+		if (andOp == null || value.kind != s.ternaryKind || value.children.length != CHAIN_WITH_ELSE_CHILD_COUNT) return null;
+		final innerCond: QueryNode = RefactorSupport.unwrapParens(value.children[0], s.parenKind);
+		final rawInnerCond: Null<Span> = innerCond.span;
+		final rawThen: Null<Span> = value.children[1].span;
+		final rawElse: Null<Span> = value.children[ELSE_SLOT_INDEX].span;
+		if (rawInnerCond == null || rawThen == null || rawElse == null) return null;
+		final ctx: Null<PurityCtx> = lazy.purity();
+		if (ctx == null || !PurityScan.isPure(rung.cond, ctx)) return null;
+		final innerCondSpan: Span = IfExpressionChain.tokenSpan(rawInnerCond, source, comments);
+		final outerText: String = source.substring(condSpan.from, condSpan.to);
+		final innerText: String = andOperand(source.substring(innerCondSpan.from, innerCondSpan.to), innerCond, s);
+		final thenSpan: Span = IfExpressionChain.tokenSpan(rawThen, source, comments);
+		return [
+			{
+				condText: '${andOperand(outerText, rung.cond, s)} $andOp $innerText',
+				condSpans: [condSpan, innerCondSpan],
+				condEnd: innerCondSpan.to,
+				value: thenSpan
+			},
+			{
+				condText: outerText,
+				condSpans: [],
+				condEnd: thenSpan.to,
+				value: IfExpressionChain.tokenSpan(rawElse, source, comments)
+			}
+		];
 	}
 
 }
@@ -313,6 +476,10 @@ private typedef Seams = {
 	var chainKinds: Array<String>;
 	var conditionalKinds: Array<String>;
 	var hostKinds: Array<String>;
+	var exprStatementKind: Null<String>;
+	var armKinds: Array<String>;
+	var andOperatorText: Null<String>;
+	var andLowerPrecedence: Array<String>;
 	var parenKind: Null<String>;
 	var opaqueKinds: Array<String>;
 }
@@ -321,6 +488,29 @@ private typedef Seams = {
 private typedef Rung = {
 	var cond: QueryNode;
 	var value: QueryNode;
+}
+
+/**
+ * One rung as the rebuild EMITS it: the condition TEXT, the condition spans it copies verbatim
+ * (two for the first half of a conjunctive expansion, NONE for the second, which reuses the
+ * outer condition's text), where the last copied condition piece ends, and the value span.
+ */
+private typedef Emitted = {
+	var condText: String;
+	var condSpans: Array<Span>;
+	var condEnd: Int;
+	var value: Span;
+}
+
+/**
+ * The two lazily-resolved services the walk carries — the symbol index the
+ * `prefer-switch-expression` deferral asks for, and the purity context the conjunctive
+ * flattening asks of a condition it is about to duplicate. Bundled so the walk's parameter list
+ * does not grow one entry per service.
+ */
+private typedef Lazy = {
+	var resolveIndex: () -> Null<SymbolIndex>;
+	var purity: () -> Null<PurityCtx>;
 }
 
 /** A convertible chain: the finding key span, the (trivia-trimmed) replaced span, and the if-chain text. */
