@@ -285,6 +285,10 @@ final class Linter {
 			new PreferInline(),
 			new InlineConstant(),
 			new StaticConstant(),
+			// Claims an `Assign` node that sits inside an array / object literal; every other
+			// rule that touches an assignment claims either a whole statement or a condition
+			// slot, so registry order is free.
+			new HoistEmbeddedAssignment(),
 			new ExtractRepeatedExpression(),
 			new TailMerge(),
 			new NoUnderscorePrefix(),
