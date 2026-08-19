@@ -4962,6 +4962,18 @@ final class Cli {
 		//                        plausible depending on intent.
 		if (parsed.isDegenerate()) stderr('${degenerateNudge(patternStr, parsed.root.kind)}\n');
 
+		// A metavar the grammar does not project as a node is dropped from the
+		// pattern SILENTLY, and the search then answers a wider question than the
+		// one written (a `:$t` annotation, a `cast($x, $T)` target type) or, for an
+		// undecodable name slot such as `@:$m`, a question nothing can answer. Say
+		// which ones, so a census built on the pattern is not read as exact.
+		if (parsed.ignoredMetavars.length != 0)
+			stderr(
+				'apq search: metavariable(s) $' + parsed.ignoredMetavars.join(', $')
+				+ ' are not part of the parsed pattern - the grammar projects no node at that position, so the search'
+				+ ' is WIDER than written (a declared type is not a node; a metadata name is not decoded). Searching anyway.\n'
+			);
+
 		// `--explain`: emit the parsed pattern's S-expr to stderr at
 		// scan start. When 0 matches across all scanned files the
 		// closing diagnostic also prints the top input-kind histogram

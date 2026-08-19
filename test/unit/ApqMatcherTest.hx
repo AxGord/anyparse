@@ -387,4 +387,16 @@ class Y {
 		];
 	}
 
+
+	public function testArgumentlessNewDeclarationMatchesOnlyNewInitializers(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final source: String = 'class X {
+		static function a() { final p = new Point(); final q = 42; final r = compute(); }
+	}';
+		final pattern: Pattern = plugin.parsePattern("final $n = new $x();");
+		final tree: QueryNode = plugin.parseFile(source);
+		final matches: Array<Match> = Matcher.search(pattern, tree);
+		Assert.equals(1, matches.length, 'only the new-initialised final may match - got ${matches.length}');
+	}
+
 }

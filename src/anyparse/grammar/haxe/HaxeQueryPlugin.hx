@@ -1268,8 +1268,17 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// onto the named inner node — after the `consumesVariant` gate above, which
 			// needs the wrapper's span.
 			final rooted: QueryNode = HaxePatternFragment.rerootFinalVarDecl(extracted);
-			final reclassified: QueryNode = Metavar.reclassify(rooted);
-			return new Pattern(reclassified, attempt.category, source, SEARCH_KIND_EQUIVALENCE);
+			// Only a bare-identifier node may collapse into a whole-subtree
+			// metavar: it is the one position where `$x` genuinely stands for
+			// "any expression". A metavar landing in the NAME slot of a node
+			// that happens to be childless — `new $x()`, `extends $B`, a
+			// return type — is a name-position metavar, and collapsing it
+			// erased its kind, turning the pattern into a match-everything
+			// wildcard.
+			final reclassified: QueryNode = Metavar.reclassify(rooted, refShape().identKind);
+			return new Pattern(
+				reclassified, attempt.category, source, SEARCH_KIND_EQUIVALENCE, Metavar.ignoredNames(variant, reclassified)
+			);
 		}
 		// Every attempt's parser error is offset into a synthetic wrapper
 		// string, so leaking it (`expected HxDecl at 0`) only misleads.

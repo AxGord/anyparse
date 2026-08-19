@@ -167,4 +167,37 @@ class PatternParseProbe extends Test {
 		return count;
 	}
 
+
+	public function testArgumentlessNewKeepsItsConstructorKind(): Void {
+		// A metavar in a NAME slot must not swallow its own node when that node is
+		// childless. `new $x()` used to reclassify wholesale into a lone `Metavar`,
+		// which matches EVERY node: `final $n:$t = new $x();` and the shapeless
+		// `final $n = $v;` both returned 7781 hits over TM's src.
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final pattern: Pattern = plugin.parsePattern("new $x()");
+		Assert.equals('NewExpr', pattern.root.kind, 'argumentless new must keep its kind - got ${pattern.root.kind}');
+		Assert.equals("$x", pattern.root.name);
+	}
+
+
+	public function testDeclarationWithArgumentlessNewKeepsTheNewConstraint(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final pattern: Pattern = plugin.parsePattern("final $n = new $x();");
+		Assert.equals('VarForm', pattern.root.kind);
+		Assert.equals(1, pattern.root.children.length);
+		Assert.equals('NewExpr', pattern.root.children[0].kind, 'the initializer must stay a NewExpr constraint');
+	}
+
+
+	public function testTypeAnnotationMetavarIsReportedAsIgnored(): Void {
+		// A declared type is not a node in the Haxe model, so `:$t` vanishes from the
+		// parsed pattern and the search is WIDER than what the user wrote. The
+		// pattern records the loss instead of hiding it.
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final annotated: Pattern = plugin.parsePattern("final $n:$t = $v;");
+		Assert.equals('t', annotated.ignoredMetavars.join(','), 'the dropped :$$t must be reported');
+		final plain: Pattern = plugin.parsePattern("final $n = $v;");
+		Assert.equals('', plain.ignoredMetavars.join(','), 'a pattern that keeps every metavar reports none');
+	}
+
 }
