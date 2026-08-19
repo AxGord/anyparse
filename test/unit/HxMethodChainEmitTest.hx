@@ -81,9 +81,7 @@ class HxMethodChainEmitTest extends Test {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.methodChainWrap = { rules: [], defaultMode: WrapMode.OnePerLine, chainItemsAfterCloseParenOnly: true };
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
-		Assert.isTrue(out.indexOf('a.b()') != -1, 'expected the non-chain-item `.b()` glued to the head: <$out>');
-		Assert.isTrue(out.indexOf('\n\t\t\t.c()') != -1, 'expected .c() on own indented line: <$out>');
-		Assert.isTrue(out.indexOf('\n\t\t\t.d()') != -1, 'expected .d() on own indented line: <$out>');
+		assertHeadGluedTailBroken(out);
 	}
 
 	/**
@@ -100,9 +98,7 @@ class HxMethodChainEmitTest extends Test {
 		final out: String = abcdChainUnderConfig(
 			'{"wrapping":{"methodChain":{"defaultWrap":"onePerLine","itemsAfterCloseParenOnly":true,"rules":[]}}}'
 		);
-		Assert.isTrue(out.indexOf('a.b()') != -1, 'expected the non-chain-item `.b()` glued to the head: <$out>');
-		Assert.isTrue(out.indexOf('\n\t\t\t.c()') != -1, 'expected .c() on own indented line: <$out>');
-		Assert.isTrue(out.indexOf('\n\t\t\t.d()') != -1, 'expected .d() on own indented line: <$out>');
+		assertHeadGluedTailBroken(out);
 	}
 
 	/**
@@ -200,7 +196,6 @@ class HxMethodChainEmitTest extends Test {
 		);
 	}
 
-
 	/**
 	 * F3 ω-methodchain-config-key — the three config-path tests above differ only
 	 * in the `wrapping.methodChain` JSON they load, so the chain under test and the
@@ -211,6 +206,20 @@ class HxMethodChainEmitTest extends Test {
 		final src: String = 'class Foo { static function f() { a.b().c().d(); } }';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+	}
+
+
+	/**
+	 * The close-paren item rule's whole observable effect on `a.b().c().d()` under a
+	 * break mode: the head keeps `.b()` (its dot follows the ident `a`, not a `)`),
+	 * and the two real chain items each take a line. Asserted identically by the
+	 * struct-driven test and by the config-driven one, which is the point — the key
+	 * must reach exactly the semantic the built-in cascade already had.
+	 */
+	private static function assertHeadGluedTailBroken(out: String): Void {
+		Assert.isTrue(out.indexOf('a.b()') != -1, 'expected the non-chain-item `.b()` glued to the head: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\t.c()') != -1, 'expected .c() on own indented line: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\t.d()') != -1, 'expected .d() on own indented line: <$out>');
 	}
 
 }
