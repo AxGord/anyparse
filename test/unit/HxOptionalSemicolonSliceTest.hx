@@ -7,6 +7,8 @@ import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.grammar.haxe.HaxeModuleParser;
+import anyparse.grammar.haxe.HxModuleWriter;
 
 /**
  * E11 — `whitespace.optionalSemicolon` normalizes the OPTIONAL trailing
@@ -146,6 +148,33 @@ final class HxOptionalSemicolonSliceTest extends Test {
 
 	private inline function triviaWriteDefault(src: String): String {
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormat.instance.defaultWriteOptions);
+	}
+
+
+	/**
+	 * The PLAIN writer's own `;`-elision gate had the same head-binding flaw the `never` mode was
+	 * fixed for: `trailOptShapeGate('endsWithCloseBrace', 'init')` asks the HEAD binding of a
+	 * right-recursive `HxVarDecl`, so `var a = {x: 1}, b = 2;` lost its terminator and the emitted
+	 * text is `Missing ;` under `haxe -cpp` (verified by compiling both arms; the single-binding
+	 * `var a = {x: 1}` with no `;` compiles clean, which is why only the multi-var form moves).
+	 */
+	public function testPlainWriterKeepsTheSemicolonOfAMultiVarDecl(): Void {
+		final out: String = plainWrite('class C {\n\tfunction f() {\n\t\tvar a = {x: 1}, b = 2;\n\t\ttrace(b);\n\t}\n}');
+		Assert.isTrue(out.indexOf('var a = {x: 1}, b = 2;') != -1, 'the last binding owns the `;` - got: <$out>');
+	}
+
+	/** Control: a SINGLE brace-terminated binding still elides, so the fix costs no elision it used to make. */
+	public function testPlainWriterStillElidesAfterASingleBraceTerminatedInit(): Void {
+		final out: String = plainWrite('class C {\n\tfunction f() {\n\t\tvar a = {x: 1};\n\t\ttrace(a);\n\t}\n}');
+		Assert.isTrue(out.indexOf('var a = {x: 1}\n') != -1, 'a lone brace-terminated init keeps eliding - got: <$out>');
+	}
+
+
+	/** The PLAIN writer (no trivia): the `optionalSemicolon` knob does not reach it, its own gate decides. */
+	private inline function plainWrite(src: String): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.finalNewline = false;
+		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
 
 }
