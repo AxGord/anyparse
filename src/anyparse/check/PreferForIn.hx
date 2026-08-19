@@ -10,6 +10,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -319,7 +320,7 @@ final class PreferForIn implements Check implements DefaultOff {
 		final fromType: Null<String> = elementTypeName(decl, ctx);
 		if (fromType != null) candidates.push(fromType);
 		for (fallback in FALLBACK_BINDERS) candidates.push(fallback);
-		return Lambda.find(candidates, name -> !nameIsLive(scope, name, ctx.seams));
+		return candidates.find(name -> !nameIsLive(scope, name, ctx.seams));
 	}
 
 	/**
