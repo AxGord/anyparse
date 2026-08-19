@@ -363,6 +363,44 @@ class FoldStringLiteralsCheckTest extends FoldStringLiteralsCheckTestBase {
 	}
 
 	/**
+	 * A CONDITIONAL-COMPILATION region in EXPRESSION position is an ordinary operand: it
+	 * merges into the interpolated literal like any other expression segment. The compiler
+	 * accepts a `#if` inside a `${ … }` block — verified compile-and-run on `--interp` and
+	 * `-cpp`, in BOTH configurations (the branch taken and not taken), byte-identical output
+	 * to the unfolded chain. Pinned here because nothing else states it: the region carries
+	 * no per-branch nodes for the planner to reason about, so its safety rests entirely on
+	 * the `SegExpr` gate reading its RAW source (see the backslash sibling below).
+	 */
+	public function testConditionalExprOperandMergesIntoBlock(): Void {
+		Assert.equals(
+			"'a: ${#if FOO \"F\" + x #else \"N\" #end}\\n'",
+			foldOf('class C { function f(x:String) { final a = "a: " + #if FOO "F" + x #else "N" #end + "\\n"; } }')
+		);
+	}
+
+	/**
+	 * The SPLICE spelling of the same thing — a region that is not a whole expression
+	 * (`#if FOO "F" + #end` leaves a dangling `+`), which the grammar projects as one opaque
+	 * raw span. It merges too, and to the same effect in both configurations.
+	 */
+	public function testCondSpliceRegionMergesIntoBlock(): Void {
+		Assert.equals(
+			"'a: ${#if FOO \"F\" + #end \"tail \" + x}'",
+			foldOf('class C { function f(x:String) { final a = "a: " + #if FOO "F" + #end "tail " + x; } }')
+		);
+	}
+
+	/**
+	 * ...and what keeps that sound: the region's raw source goes through the same `SegExpr`
+	 * refusals as any other expression operand, so a BACKSLASH inside it (an escape the outer
+	 * literal would decode one level up) forces it into a bare group of its own. Only the
+	 * operands AFTER the region fold.
+	 */
+	public function testCondSpliceWithBackslashStaysBare(): Void {
+		Assert.equals("'tail $x'", foldOf('class C { function f(x:String) { final a = "a: " + #if FOO "F\\n" + #end "tail " + x; } }'));
+	}
+
+	/**
 	 * A `g(<head> + '<aLen a>' + '<bLen b>');` at three tabs, sized so the greedy fill
 	 * cannot join `head` to the first text but CAN join the two texts — the shape whose
 	 * first group is a lone non-text segment, and so the only one where the leading-bare
