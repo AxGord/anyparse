@@ -97,10 +97,9 @@ class HxMethodChainEmitTest extends Test {
 	 * opt-in that makes it reachable.
 	 */
 	public function testConfiguredCascadeOptsIntoTheCloseParenItemRule(): Void {
-		final src: String = 'class Foo { static function f() { a.b().c().d(); } }';
-		final cfg: String = '{"wrapping":{"methodChain":{"defaultWrap":"onePerLine","itemsAfterCloseParenOnly":true,"rules":[]}}}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
-		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		final out: String = abcdChainUnderConfig(
+			'{"wrapping":{"methodChain":{"defaultWrap":"onePerLine","itemsAfterCloseParenOnly":true,"rules":[]}}}'
+		);
 		Assert.isTrue(out.indexOf('a.b()') != -1, 'expected the non-chain-item `.b()` glued to the head: <$out>');
 		Assert.isTrue(out.indexOf('\n\t\t\t.c()') != -1, 'expected .c() on own indented line: <$out>');
 		Assert.isTrue(out.indexOf('\n\t\t\t.d()') != -1, 'expected .d() on own indented line: <$out>');
@@ -113,10 +112,7 @@ class HxMethodChainEmitTest extends Test {
 	 * is opt-in rather than inherited from the built-in cascade.
 	 */
 	public function testConfiguredCascadeWithoutTheKeyKeepsForkLiteralItems(): Void {
-		final src: String = 'class Foo { static function f() { a.b().c().d(); } }';
-		final cfg: String = '{"wrapping":{"methodChain":{"defaultWrap":"onePerLine","rules":[]}}}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
-		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		final out: String = abcdChainUnderConfig('{"wrapping":{"methodChain":{"defaultWrap":"onePerLine","rules":[]}}}');
 		Assert.isTrue(out.indexOf('a\n') != -1, 'expected receiver alone on first line: <$out>');
 		Assert.isTrue(out.indexOf('\n\t\t\t.b()') != -1, 'expected .b() on own indented line: <$out>');
 	}
@@ -126,10 +122,9 @@ class HxMethodChainEmitTest extends Test {
 	 * accidentally re-enable the policy through some other seam.
 	 */
 	public function testConfiguredCascadeExplicitFalseKeepsForkLiteralItems(): Void {
-		final src: String = 'class Foo { static function f() { a.b().c().d(); } }';
-		final cfg: String = '{"wrapping":{"methodChain":{"defaultWrap":"onePerLine","itemsAfterCloseParenOnly":false,"rules":[]}}}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
-		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		final out: String = abcdChainUnderConfig(
+			'{"wrapping":{"methodChain":{"defaultWrap":"onePerLine","itemsAfterCloseParenOnly":false,"rules":[]}}}'
+		);
 		Assert.isTrue(out.indexOf('a\n') != -1, 'expected receiver alone on first line: <$out>');
 		Assert.isTrue(out.indexOf('\n\t\t\t.b()') != -1, 'expected .b() on own indented line: <$out>');
 	}
@@ -203,6 +198,19 @@ class HxMethodChainEmitTest extends Test {
 			out.indexOf('\n\t\t\t.c(function(x)\n\t\t\t{\n\t\t\t\tstmt;\n\t\t\t});') != -1,
 			'expected lambda `{` at chain seg column, body one tab deeper: <$out>'
 		);
+	}
+
+
+	/**
+	 * F3 ω-methodchain-config-key — the three config-path tests above differ only
+	 * in the `wrapping.methodChain` JSON they load, so the chain under test and the
+	 * writer call live here. `a.b().c().d()`: the head `a` is not a call, so under
+	 * the close-paren item rule `.b()` is not a chain item and stays glued to it.
+	 */
+	private static function abcdChainUnderConfig(cfg: String): String {
+		final src: String = 'class Foo { static function f() { a.b().c().d(); } }';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
 
 }
