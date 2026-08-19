@@ -327,9 +327,18 @@ final class CheckScan {
 	 *
 	 * Null when the grammar carries no type information at all: the caller then passes nothing
 	 * and every ordered comparison stays wrapped, exactly as before this seam existed.
+	 *
+	 * `asReceiver` asks about each node in MEMBER-LOOKUP position rather than as a value, so a
+	 * member-transparent wrapper is peeled off the top and a `Null<Map<K, V>>` binding answers
+	 * `Map`. The distinction is not cosmetic and the two modes are not interchangeable: a value's
+	 * own nominal is what a consumer reads to decide what is legal to DO with the value, and
+	 * `Null<Int>` is not `Int` there. The receiver answer may be used for ONE thing — deciding which
+	 * member a name resolves to on that receiver — which is what a rule splicing `<recv>.<member>(…)`
+	 * has to know, and why the measured `baseData:Null<Map<Int, ObjectFrameData>>` site needs it
+	 * while the `Iterable`-shape proof next to it must keep asking the value question.
 	 */
 	public static function typeNominalResolver(
-		source: String, plugin: GrammarPlugin, tree: QueryNode, file: String, ?index: SymbolIndex
+		source: String, plugin: GrammarPlugin, tree: QueryNode, file: String, ?index: SymbolIndex, asReceiver: Bool = false
 	): Null<(QueryNode) -> Null<String>> {
 		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		if (provider == null) return null;
@@ -343,7 +352,7 @@ final class CheckScan {
 			source: source,
 			usings: UsingScan.usingModules(UsingScan.headerOf(tree, source, plugin))
 		};
-		return node -> NominalTypes.expressionTypeNominal(node, tree, shape, declaredTypes, resolved, file, chain);
+		return node -> NominalTypes.expressionTypeNominal(node, tree, shape, declaredTypes, resolved, file, chain, asReceiver);
 	}
 
 	/**

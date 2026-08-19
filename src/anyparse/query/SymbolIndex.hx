@@ -1191,6 +1191,34 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * Whether a receiver of type `typeName` reaches an INSTANCE member named `member` — declared by
+	 * its own body or anywhere in its supertype closure — so a `using` static extension of that name
+	 * is never consulted at the call.
+	 *
+	 * Haxe resolves a real member BEFORE any static extension, which makes this the one question a
+	 * rule rewriting `<recv>.<member>(…)` through a `using` has to ask about its receiver. The
+	 * measured case is `Map`: `haxe.ds.Map` declares `exists(key:K)`, so `m.exists(x -> …)` binds
+	 * the lambda into the KEY slot and does not compile. `prefer-exists`, `prefer-foreach`,
+	 * `prefer-find`, `dead-binder-counter-loop` and `prefer-static-extension` all emit such a call
+	 * and all ask here, so there is ONE spelling of the answer rather than five.
+	 *
+	 * A POSITIVE proof, and the direction matters: true means "a member provably shadows the
+	 * extension, do not rewrite", while false unions "provably no such member" with "this run cannot
+	 * tell". Callers keep whatever they already did on a false — refusing everything unproven would
+	 * drop every site whose receiver type is outside the resolution scope. The absence half is a
+	 * DIFFERENT question with a different answer (`typeProvablyLacksMember`), which
+	 * `prefer-static-extension` asks as well because it must tell a claimable site from a hedged one.
+	 *
+	 * The two halves are the pair `typeDeclaresMember` / `supertypeDeclaresMember` already name in
+	 * their own docs. The direct half unions across same-simple-name decls, which is conservative in
+	 * the safe direction and is what reaches `haxe.ds.Map` past the top-level `typedef Map` whose
+	 * package `aliasTargetNominal` drops.
+	 */
+	public function memberShadowsExtension(typeName: String, member: String): Bool {
+		return typeDeclaresMember(typeName, member) || supertypeDeclaresMember(typeName, member);
+	}
+
+	/**
 	 * An ancestor of `typeName` — superclass or interface — that declares `member`, or null when
 	 * none does. This is the UPWARD question `overrideFamilyOf` never asks: it models the family
 	 * from the BASE down, so a cursor sitting on an implementation finds nothing. In Haxe an

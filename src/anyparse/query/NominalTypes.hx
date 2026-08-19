@@ -335,12 +335,20 @@ final class NominalTypes {
 	 * structural type OTHER than `Iterable` / `Iterator`, or whose ELEMENT type a receiver nominal
 	 * cannot bind (`Iterable<Widget>`, `Iterable<Iterable<A>>`) — the two the layer does model, it
 	 * models by MEMBERSHIP (`SymbolIndex.satisfiesIterable`), never by unification.
+	 *
+	 * `asReceiver` answers about the node in MEMBER-LOOKUP position rather than as a value: a
+	 * member-TRANSPARENT wrapper is peeled off the top, so a `Null<Map<K, V>>` binding answers
+	 * `Map`. It carries the obligation `valueNominalDeep` spells out — the answer may decide which
+	 * member a name resolves to and nothing else, because `Null<Int>` is not an `Int` for anything
+	 * that ORDERS or arithmetically combines the value. The intermediate seats of a path walk have
+	 * always been asked this way; the flag exposes the same question about the node a caller is
+	 * itself about to splice a `.member(…)` onto.
 	 */
 	public static function expressionTypeNominal(
 		node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>, file: String,
-		?chain: ChainTypeContext
+		?chain: ChainTypeContext, asReceiver: Bool = false
 	): Null<String> {
-		return expressionNominalWalk(node, root, shape, declaredTypes, index, file, chain, []);
+		return expressionNominalWalk(node, root, shape, declaredTypes, index, file, chain, [], asReceiver);
 	}
 
 	/**

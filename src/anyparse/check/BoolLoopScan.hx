@@ -145,7 +145,7 @@ final class BoolLoopScan {
 			if (tree == null) continue;
 			final source: String = entry.source;
 			final file: String = entry.file;
-			scan(tree, null, source, s, kind, lazyTypeProbe(source, plugin, tree, file, index), cand -> {
+			scan(tree, null, source, s, kind, lazyTypeProbe(source, plugin, tree, file, index, method(kind)), cand -> {
 				final v: Null<Violation> = buildViolation(cand, source, s, kind, ruleId, file);
 				if (v != null) out.push(v);
 			});
@@ -178,7 +178,7 @@ final class BoolLoopScan {
 		// where the loop is written — the report pass proved it against exactly that context.
 		final file: String = violations.length == 0 ? '' : violations[0].file;
 		final probe: TypeProbe = lazyTypeProbe(
-			source, plugin, tree, file, RefactorSupport.lazySymbolIndex([{ file: file, source: source }], plugin, index)
+			source, plugin, tree, file, RefactorSupport.lazySymbolIndex([{ file: file, source: source }], plugin, index), method(kind)
 		);
 		final byKey: Map<String, Cand> = [];
 		scan(tree, null, source, s, kind, probe, cand -> {
@@ -353,6 +353,7 @@ final class BoolLoopScan {
 		final iterable: QueryNode = operands[0];
 		if (iterable.kind == s.intervalKind) return null;
 		if (iterable.kind == s.callKind && !callIterableIsIterable(iterable, probe)) return null;
+		if (receiverDeclaresMethod(iterable, probe)) return null;
 		final body: QueryNode = unwrapSole(operands[1], s);
 		if (!s.ifKinds.contains(body.kind) || body.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
 		final lit: Null<QueryNode> = boolReturnLiteral(unwrapSole(body.children[1], s), s);
@@ -387,10 +388,38 @@ final class BoolLoopScan {
 	 * has to unify with `Iterable<A>`.
 	 */
 	private static function callIterableIsIterable(iterable: QueryNode, probe: TypeProbe): Bool {
-		final resolve: Null<(QueryNode) -> Null<String>> = probe();
+		final resolve: Null<(QueryNode) -> Null<String>> = probe.nominal();
 		if (resolve == null) return false;
 		final nominal: Null<String> = resolve(iterable);
 		return nominal != null && ITERABLE_TYPE_NAMES.contains(nominal);
+	}
+
+	/**
+	 * Whether the iterable's own type provably DECLARES the method this direction rewrites to —
+	 * the gate that keeps a `Map` receiver out of the `exists` direction.
+	 *
+	 * Haxe binds a real member before any `using` static extension, so `m.exists(x -> …)` on a
+	 * `Map` resolves to `Map.exists(key:K)` and puts the lambda where a key belongs: a rewrite
+	 * that cannot compile, which the oracle reverts on every run rather than once. The question is
+	 * `SymbolIndex.memberShadowsExtension`, the same one `prefer-static-extension` has always asked.
+	 *
+	 * It applies to EVERY iterable shape, not just the CALL one the `Iterable` proof above gates —
+	 * the two ask about different things (what the receiver IS versus what it DECLARES) and a
+	 * plain identifier is exactly where the measured `Map` sites live. Both fail closed on an
+	 * unresolved receiver, in opposite directions and correctly: an unproven `Iterable` refuses the
+	 * rewrite, an unproven member does not force one.
+	 */
+	private static function receiverDeclaresMethod(iterable: QueryNode, probe: TypeProbe): Bool {
+		// The RECEIVER-position resolver, not the value one: the measured
+		// `baseData:Null<Map<Int, ObjectFrameData>>` site names `Null` as a value and `Map` as a
+		// member host, and it is the member host the rewrite binds against. The `Iterable` proof
+		// above keeps the value question — peeling a `Null<Array<T>>` there would claim a shape the
+		// loop's own iterable does not have.
+		final resolve: Null<(QueryNode) -> Null<String>> = probe.receiver();
+		final nominal: Null<String> = resolve == null ? null : resolve(iterable);
+		if (nominal == null) return false;
+		final index: Null<SymbolIndex> = probe.index();
+		return index != null && index.memberShadowsExtension(nominal, probe.method);
 	}
 
 	/**
@@ -401,16 +430,29 @@ final class BoolLoopScan {
 	 * information) makes every call iterable unprovable, i.e. exactly the old refusal.
 	 */
 	private static function lazyTypeProbe(
-		source: String, plugin: GrammarPlugin, tree: QueryNode, file: String, index: () -> Null<SymbolIndex>
+		source: String, plugin: GrammarPlugin, tree: QueryNode, file: String, index: () -> Null<SymbolIndex>, method: String
 	): TypeProbe {
-		var resolver: Null<(QueryNode) -> Null<String>> = null;
-		var built: Bool = false;
-		return () -> {
-			if (!built) {
-				built = true;
-				resolver = CheckScan.typeNominalResolver(source, plugin, tree, file, index());
-			}
-			return resolver;
+		var value: Null<(QueryNode) -> Null<String>> = null;
+		var valueBuilt: Bool = false;
+		var recv: Null<(QueryNode) -> Null<String>> = null;
+		var recvBuilt: Bool = false;
+		return {
+			nominal: () -> {
+				if (!valueBuilt) {
+					valueBuilt = true;
+					value = CheckScan.typeNominalResolver(source, plugin, tree, file, index());
+				}
+				return value;
+			},
+			receiver: () -> {
+				if (!recvBuilt) {
+					recvBuilt = true;
+					recv = CheckScan.typeNominalResolver(source, plugin, tree, file, index(), true);
+				}
+				return recv;
+			},
+			index: index,
+			method: method
 		};
 	}
 
@@ -628,7 +670,17 @@ private typedef Parts = {
 }
 
 /**
- * The memoised nominal-type resolver a CALL iterable is proved against, or null when the grammar
- * carries no type information — deferred so a scan that meets no call iterable never builds one.
+ * Everything the two receiver gates need, deferred: the memoised nominal-type resolver a receiver
+ * is proved against (null when the grammar carries no type information, and never built by a scan
+ * that meets no gate), the run's equally lazy resolution index, and the ONE method name this
+ * direction rewrites to — bound once at construction, since a scan runs for a single `BoolLoopKind`.
  */
-private typedef TypeProbe = () -> Null<(QueryNode) -> Null<String>>;
+private typedef TypeProbe = {
+	/** The VALUE resolver, behind the `Iterable`-shape proof a CALL iterable must clear. */
+	var nominal: () -> Null<(QueryNode) -> Null<String>>;
+
+	/** The MEMBER-LOOKUP resolver, behind the receiver-shadow gate — a `Null<T>` receiver answers `T`. */
+	var receiver: () -> Null<(QueryNode) -> Null<String>>;
+	var index: () -> Null<SymbolIndex>;
+	var method: String;
+}

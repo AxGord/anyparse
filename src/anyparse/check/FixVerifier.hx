@@ -15,8 +15,8 @@ import anyparse.runtime.Span;
  * when it is `Confirmed`, so a compile failure is always attributable to the
  * risky edit rather than to pre-existing breakage. `applied` lists the files
  * whose risky edit survived the compile (fully OR partially — a partially-applied
- * file changed on disk and belongs here); `reverted` lists the files whose risky
- * edits were all rolled back to report-only. `partials` carries per-file detail
+ * file changed on disk and belongs here); `reverted` names the (file, rule) pairs
+ * whose risky edits were all rolled back to report-only. `partials` carries per-file detail
  * for every file whose full edit set failed and was bisected (see below).
  */
 typedef FixVerifyResult = {
@@ -25,8 +25,26 @@ typedef FixVerifyResult = {
 
 	/** Total EDITS that survived verification — the honest "issues fixed" contribution, unlike the FILE count. */
 	var appliedEdits: Int;
-	var reverted: Array<String>;
+	var reverted: Array<FixVerifyRevert>;
 	var partials: Array<FixVerifyPartial>;
+}
+
+/**
+ * One rolled-back risky edit set: the FILE it targeted and the RULE that proposed it.
+ *
+ * The pair, not the count. A verifier that says only HOW MANY reverted leaves the reader with a
+ * search rather than an answer — attributing three reverts on an 809-file tree took an md5 snapshot
+ * of every file before and after a sweep, then eleven single-rule runs to name the rule, and STILL
+ * left two of the three unattributed because they revert only when every rule runs together. The
+ * rule id is already in hand at the moment of the revert (`verify` iterates the risky checks), so
+ * carrying it costs nothing and turns that search into one line of output.
+ *
+ * A file appears once per RULE that reverted on it, which is the honest shape: two rules can each
+ * propose a doomed edit set for the same file, and collapsing them would hide one.
+ */
+typedef FixVerifyRevert = {
+	var file: String;
+	var rule: String;
 }
 
 /**
@@ -101,7 +119,7 @@ final class FixVerifier {
 		oracleDir: Null<String>, write: (String, String) -> Void, ?optsByFile: Map<String, Null<String>>
 	): FixVerifyResult {
 		final applied: Array<String> = [];
-		final reverted: Array<String> = [];
+		final reverted: Array<FixVerifyRevert> = [];
 		final partials: Array<FixVerifyPartial> = [];
 		var appliedEdits: Int = 0;
 		final baseline: OracleOutcome = CompilerOracle.typecheck(oracleHxml, oracleDir);
@@ -149,13 +167,13 @@ final class FixVerifier {
 						applied.push(entry.file);
 						appliedEdits += edits.length;
 					case Reverted:
-						reverted.push(entry.file);
+						reverted.push({ file: entry.file, rule: check.id() });
 					case Partial(keptEdits, revertedEdits, probes):
 						appliedEdits += keptEdits;
 						if (keptEdits > 0)
 							applied.push(entry.file)
 						else
-							reverted.push(entry.file);
+							reverted.push({ file: entry.file, rule: check.id() });
 						partials.push({
 							file: entry.file,
 							rule: check.id(),

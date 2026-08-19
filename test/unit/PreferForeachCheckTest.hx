@@ -150,6 +150,31 @@ class PreferForeachCheckTest extends Test {
 		Assert.equals(0, extViolations('', '').length);
 	}
 
+	public function testReceiverDeclaringForeachNotFlagged(): Void {
+		// A real MEMBER always beats a `using` static extension: on a receiver whose own type
+		// declares `foreach`, `m.foreach(x -> …)` binds to THAT member and the lambda lands in its
+		// parameter slot. No stdlib container declares the name — a PROJECT type is the live case.
+		Assert.equals(0, violations(memberFn('for (x in m) if (x > 2) return false;\n\t\treturn true;')).length);
+	}
+
+	public function testReceiverDeclaringExistsStillFlagged(): Void {
+		// The gate is about the ONE name this direction rewrites to: a receiver declaring `exists`
+		// (the `Map` shape the twin refuses) is still rewritten by `foreach`.
+		Assert.equals(1, violations(existsMemberFn('for (x in m) if (x > 2) return false;\n\t\treturn true;')).length);
+	}
+
+	/** A receiver whose OWN type declares `foreach` — the name this direction rewrites to. */
+	private function memberFn(body: String): String {
+		return 'class C {\n\tfunction f(m:M):Bool {\n\t\t$body\n\t}\n}\n\nclass M {\n\tpublic function foreach(key:Int):Bool {\n'
+			+ '\t\treturn false;\n\t}\n\n\tpublic function iterator():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}';
+	}
+
+	/** A receiver declaring the TWIN direction's name and not this one — the gate must not fire. */
+	private function existsMemberFn(body: String): String {
+		return 'class C {\n\tfunction f(m:M):Bool {\n\t\t$body\n\t}\n}\n\nclass M {\n\tpublic function exists(key:Int):Bool {\n'
+			+ '\t\treturn false;\n\t}\n\n\tpublic function iterator():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}';
+	}
+
 	private function fn(body: String): String {
 		return 'class C {\n\tfunction f(xs:Array<Int>, m:Map<String, Int>, n:Null<Array<Int>>, a:Bool, b:Bool):Bool {\n\t\t$body\n\t}\n\n'
 			+ '\tfunction keep(x:Int):Bool {\n\t\treturn x > 0;\n\t}\n}';

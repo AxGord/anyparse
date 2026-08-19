@@ -214,6 +214,24 @@ class DeadBinderCounterLoopCheckTest extends Test {
 		Assert.equals(0, violations(wrapArray(body)).length);
 	}
 
+	public function testContainerDeclaringCountNotFlagged(): Void {
+		// The `count()` arm emits a `using Lambda;` call, and a real MEMBER beats a `using`. The
+		// whitelist matches a SIMPLE nominal, so a project type named after a std container is the
+		// residual this rule's own doc names — with the gate it is a silent skip, not a rewrite
+		// whose `count()` binds somewhere else.
+		final src: String = wrapMap('var i = 0;\n\t\tfor (x in table) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}')
+			+ '\n\nclass Map {\n\tpublic function count():Int {\n\t\treturn 0;\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testLengthContainerDeclaringCountStillFlagged(): Void {
+		// The `length` arm needs no `Lambda` at all, so a same-file `count` member is irrelevant to
+		// it — the gate is scoped to the name the rewrite actually emits.
+		final src: String = wrapArray('var i = 0;\n\t\tfor (x in items) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}')
+			+ '\n\nclass Array2 {\n\tpublic function count():Int {\n\t\treturn 0;\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+	}
+
 	private inline function wrapArray(body: String): String {
 		return wrapParam('items:Array<Item>', body);
 	}

@@ -105,11 +105,14 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		final s: Seams = seams;
 		final typed: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final violations: Array<Violation> = [];
+		// Lazy: only the `count()` arm asks the index, so a project holding no map-counted loop
+		// never builds the resolution scope.
+		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final types: Null<Map<Int, String>> = typed?.declaredTypeSources(entry.source);
-			walk(tree, tree, entry.file, entry.source, types, s, violations);
+			walk(tree, tree, entry.file, entry.source, types, s, index, violations);
 		}
 		return violations;
 	}
@@ -142,7 +145,7 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 			if (span != null) wanted.push('${span.from}:${span.to}');
 		}
 		final collected: Array<CountEdit> = [];
-		fixWalk(tree, tree, source, types, s, wanted, lambdaBlocked, collected);
+		fixWalk(tree, tree, source, types, s, wanted, lambdaBlocked, () -> symbols, collected);
 		// The containment filter runs BEFORE the `using` decision, not after: a nested rewrite whose
 		// edit an enclosing one swallows is not in the output, so neither is the `count()` that
 		// needed `Lambda` — deciding first would leave an unused `using Lambda;` behind, which
@@ -196,12 +199,13 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 	 * skipped wholesale.
 	 */
 	private static function walk(
-		node: QueryNode, root: QueryNode, file: String, source: String, types: Null<Map<Int, String>>, s: Seams, out: Array<Violation>
+		node: QueryNode, root: QueryNode, file: String, source: String, types: Null<Map<Int, String>>, s: Seams,
+		index: () -> Null<SymbolIndex>, out: Array<Violation>
 	): Void {
 		if (s.core.opaqueKinds.contains(node.kind)) return;
 		final kids: Array<QueryNode> = node.children;
 		if (s.blockKinds.contains(node.kind)) for (i in 0...kids.length - 1) {
-			final m: Null<Match> = analyze(kids[i], kids[i + 1], node, root, source, types, s);
+			final m: Null<Match> = analyze(kids[i], kids[i + 1], node, root, source, types, s, index);
 			if (m != null) out.push({
 				file: file,
 				span: m.declSpan,
@@ -210,18 +214,18 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 				message: 'this loop discards its binder and counts by hand — it can be for (${m.counter} in 0...${m.bound})'
 			});
 		}
-		for (c in kids) walk(c, root, file, source, types, s, out);
+		for (c in kids) walk(c, root, file, source, types, s, index, out);
 	}
 
 	/** Mirror of `walk` for the fix path: emit the range-loop rewrite for each wanted, rewritable pair. */
 	private static function fixWalk(
 		node: QueryNode, root: QueryNode, source: String, types: Null<Map<Int, String>>, s: Seams, wanted: Array<String>,
-		lambdaBlocked: Bool, out: Array<CountEdit>
+		lambdaBlocked: Bool, index: () -> Null<SymbolIndex>, out: Array<CountEdit>
 	): Void {
 		if (s.core.opaqueKinds.contains(node.kind)) return;
 		final kids: Array<QueryNode> = node.children;
 		if (s.blockKinds.contains(node.kind)) for (i in 0...kids.length - 1) {
-			final m: Null<Match> = analyze(kids[i], kids[i + 1], node, root, source, types, s);
+			final m: Null<Match> = analyze(kids[i], kids[i + 1], node, root, source, types, s, index);
 			if (m == null || !wanted.contains('${m.declSpan.from}:${m.declSpan.to}')) continue;
 			if (m.needsLambda && lambdaBlocked) continue;
 			final e: Null<{ span: Span, text: String }> = buildEdit(m, source);
@@ -230,7 +234,7 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 			final edit: { span: Span, text: String } = e;
 			out.push({ edit: edit, lambda: m.needsLambda });
 		}
-		for (c in kids) fixWalk(c, root, source, types, s, wanted, lambdaBlocked, out);
+		for (c in kids) fixWalk(c, root, source, types, s, wanted, lambdaBlocked, index, out);
 	}
 
 	/**
@@ -239,7 +243,8 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 	 * Shared by `walk` (report) and `fixWalk` (rewrite) so both see one decision.
 	 */
 	private static function analyze(
-		decl: QueryNode, forNode: QueryNode, scope: QueryNode, root: QueryNode, source: String, types: Null<Map<Int, String>>, s: Seams
+		decl: QueryNode, forNode: QueryNode, scope: QueryNode, root: QueryNode, source: String, types: Null<Map<Int, String>>, s: Seams,
+		index: () -> Null<SymbolIndex>
 	): Null<Match> {
 		final core: LoopSeams = s.core;
 		final shape = matchShape(decl, forNode, source, s);
@@ -259,7 +264,7 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		if (!bodyAdmitsRewrite(sh.body, sh.counter, sh.collection, s)) return null;
 		if (RefactorSupport.referencedInRange(source, sh.counter, forSpan.to, scopeSpan.to, [])) return null;
 		if (LoopScan.capturedByClosure(scope, source, sh.counter, core)) return null;
-		final bound: Null<Bound> = boundOf(sh.collection, LoopScan.identTypeSource(sh.iterable, root, types, core));
+		final bound: Null<Bound> = boundOf(sh.collection, LoopScan.identTypeSource(sh.iterable, root, types, core), index);
 		return bound == null ? null : {
 			declSpan: declSpan,
 			forSpan: forSpan,
@@ -326,18 +331,35 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		return incr.kind == s.postIncrKind && incr.children.length >= 1 && LoopScan.bareIdentName(incr.children[0], s.core) == counter;
 	}
 
-	/** The bound expression counting `collection`, or null when its declared container is not one this rewrite can spell. */
-	private static function boundOf(collection: String, typeSource: Null<String>): Null<Bound> {
+	/**
+	 * The bound expression counting `collection`, or null when its declared container is not one
+	 * this rewrite can spell — or when the `count()` form would not reach `Lambda`.
+	 *
+	 * The whitelist matches a SIMPLE nominal, which is what makes a project type named after a std
+	 * container the residual this check's type doc names. For the `length` arm that residual is
+	 * harmless (a `length` member is a real member either way); for the `count()` arm it is not,
+	 * because the emitted call goes through the `using Lambda;` the fix inserts and Haxe binds a
+	 * real MEMBER first. `SymbolIndex.memberShadowsExtension` — the one question shared with
+	 * `prefer-exists` / `prefer-foreach` / `prefer-find` / `prefer-static-extension` — turns that
+	 * into a silent skip instead of a rewrite whose `count()` lands somewhere else.
+	 */
+	private static function boundOf(collection: String, typeSource: Null<String>, index: () -> Null<SymbolIndex>): Null<Bound> {
 		if (typeSource == null || !stdlibSpelling(typeSource)) return null;
 		final nominal: Null<String> = NominalTypes.outerNominalOf(typeSource);
 		return if (nominal == null)
 			null
 		else if (LENGTH_TYPES.contains(nominal))
 			{ expr: '${collection}.$LENGTH_MEMBER', lambda: false }
-		else if (COUNT_TYPES.contains(nominal))
+		else if (COUNT_TYPES.contains(nominal) && !countShadowed(nominal, index))
 			{ expr: '${collection}.$COUNT_METHOD()', lambda: true }
 		else
 			null;
+	}
+
+	/** Whether `nominal` provably declares a `count` member of its own, which the inserted `using Lambda;` would never beat. */
+	private static function countShadowed(nominal: String, index: () -> Null<SymbolIndex>): Bool {
+		final symbols: Null<SymbolIndex> = index();
+		return symbols != null && symbols.memberShadowsExtension(nominal, COUNT_METHOD);
 	}
 
 	/**
