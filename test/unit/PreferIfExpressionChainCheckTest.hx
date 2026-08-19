@@ -451,8 +451,8 @@ class PreferIfExpressionChainCheckTest extends Test {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar x = a ? b ? 1 : 2 : 3 ;\n\t}\n}';
 		final es: Array<{ span: Span, text: String }> = edits(src);
 		Assert.equals(1, es.length);
-		Assert.equals(src.indexOf('3 ;') + 1, es[0].span.to);
 		Assert.equals('if (!a) 3 else if (b) 1 else 2', es[0].text);
+		Assert.equals(src.indexOf('3 ;') + 1, es[0].span.to);
 	}
 
 	public function testRegisteredInBuiltins(): Void {
