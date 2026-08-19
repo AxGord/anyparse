@@ -96,6 +96,13 @@ final class StdlibDifferential {
 	public static inline final MAX_MAPPINGS: Int = 4000;
 
 	/**
+	 * How many values one parameter is driven over, by the candidate's arity. The product is what
+	 * the probe actually runs, so the cap shrinks as the arity grows -- one parameter gets a wide
+	 * grid, three get a narrow one, and neither run takes more than seconds.
+	 */
+	private static final GRID_CAP_BY_ARITY: Array<Int> = [36, 36, 22, 14];
+
+	/**
 	 * The pool id every TRIVIAL baseline carries. A candidate that agrees with one of these across
 	 * the whole grid returns an argument -- or a body constant -- unchanged, and is therefore not a
 	 * reimplementation of anything: it is a setter, an accessor, or a guard whose interesting
@@ -397,11 +404,8 @@ final class StdlibDifferential {
 			}
 		}
 		for (value in GRID[type] ?? []) add(value);
-		final cap: Int = switch (candidate.params.length) {
-			case 1: 36;
-			case 2: 22;
-			case _: 14;
-		}
+		final arity: Int = candidate.params.length;
+		final cap: Int = arity < GRID_CAP_BY_ARITY.length ? GRID_CAP_BY_ARITY[arity] : GRID_CAP_BY_ARITY[GRID_CAP_BY_ARITY.length - 1];
 		return values.length > cap ? values.slice(0, cap) : values;
 	}
 

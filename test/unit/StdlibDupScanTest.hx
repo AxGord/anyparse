@@ -2,8 +2,6 @@ package unit;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.StdlibDupScan;
-import anyparse.query.StdlibDupScan.ScanResult;
-import anyparse.query.StdlibDupScan.StdlibCandidate;
 import utest.Assert;
 import utest.Test;
 

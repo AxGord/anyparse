@@ -197,27 +197,13 @@ final class StdlibDupScan {
 		if (body == null || fnName == null || span == null) return;
 		stages.bodied++;
 
-		final paramKinds: Array<String> = shape.paramKinds ?? [];
-		final params: Array<QueryNode> = fn.children.filter(c -> paramKinds.contains(c.kind));
-		if (params.length < 1 || params.length > MAX_ARITY) return;
-		for (param in params) {
-			if (param.kind == shape.optionalParamKind || param.kind == shape.restParamKind) return;
-			if (param.children.length > 0) return; // a default value; the probe's call shape would be ambiguous
-			if (param.name == null || param.span == null) return;
-		}
+		final params: Null<Array<QueryNode>> = plainParams(fn, shape);
+		if (params == null) return;
 		stages.arityOk++;
 
-		final typed: Array<CandidateParam> = [];
-		for (param in params) {
-			final paramName: Null<String> = param.name;
-			final paramSpan: Null<Span> = param.span;
-			if (paramName == null || paramSpan == null) return;
-			final declared: Null<String> = declaredTypes[paramSpan.from];
-			if (declared == null || !PRIMITIVE_TYPES.contains(declared)) return;
-			final type: String = declared;
-			final bindingName: String = paramName;
-			typed.push({ name: bindingName, type: type });
-		}
+		final resolved: Null<Array<CandidateParam>> = primitiveParams(params, declaredTypes);
+		if (resolved == null) return;
+		final typed: Array<CandidateParam> = resolved;
 		final written: Null<String> = returnTypeOf(fn, shape);
 		if (written == null || !PRIMITIVE_TYPES.contains(written)) return;
 		final returnType: String = written;
@@ -240,6 +226,44 @@ final class StdlibDupScan {
 			span: declaredSpan,
 			source: source.substring(declaredSpan.from, declaredSpan.to)
 		});
+	}
+
+	/**
+	 * The function's parameters when every one of them is plain -- no optional, no rest, no default
+	 * -- and there are between one and `MAX_ARITY` of them. Null when any of that fails: a nullary
+	 * function has no input to drive a differential with, and an omitted argument would leave the
+	 * probe's call shape ambiguous.
+	 */
+	private static function plainParams(fn: QueryNode, shape: RefShape): Null<Array<QueryNode>> {
+		final paramKinds: Array<String> = shape.paramKinds ?? [];
+		final params: Array<QueryNode> = fn.children.filter(c -> paramKinds.contains(c.kind));
+		if (params.length < 1 || params.length > MAX_ARITY) return null;
+		for (param in params) {
+			if (param.kind == shape.optionalParamKind || param.kind == shape.restParamKind) return null;
+			if (param.children.length > 0) return null;
+			if (param.name == null || param.span == null) return null;
+		}
+		return params;
+	}
+
+	/**
+	 * The parameters paired with their declared types, or null when any one of them lacks a
+	 * `TypeInfoProvider` entry or carries a non-primitive type. The `QueryNode` projection drops
+	 * parameter types, so the index is the only source -- and its absence is a refusal, never a guess.
+	 */
+	private static function primitiveParams(params: Array<QueryNode>, declaredTypes: Map<Int, String>): Null<Array<CandidateParam>> {
+		final typed: Array<CandidateParam> = [];
+		for (param in params) {
+			final paramName: Null<String> = param.name;
+			final paramSpan: Null<Span> = param.span;
+			if (paramName == null || paramSpan == null) return null;
+			final declared: Null<String> = declaredTypes[paramSpan.from];
+			if (declared == null || !PRIMITIVE_TYPES.contains(declared)) return null;
+			final type: String = declared;
+			final bindingName: String = paramName;
+			typed.push({ name: bindingName, type: type });
+		}
+		return typed;
 	}
 
 	/** The function's real body, or null when it declares none (an interface method, an `extern`). */
@@ -294,10 +318,8 @@ final class StdlibDupScan {
 		if ((shape.throwKinds ?? []).contains(kind)) return false;
 		if ((shape.untypedKinds ?? []).contains(kind)) return false;
 		final name: Null<String> = node.name;
-		if (kind == shape.identKind || kind == shape.stringInterpIdentKind) if (
-			name == null || (!bound.contains(name) && !STDLIB_NAMES.contains(name))
-		)
-			return false;
+		final free: Bool = kind == shape.identKind || kind == shape.stringInterpIdentKind;
+		if (free && (name == null || (!bound.contains(name) && !STDLIB_NAMES.contains(name)))) return false;
 		if (kind == shape.fieldAccessKind && name != null && NONDETERMINISTIC_MEMBERS.contains(name)) return false;
 		for (child in node.children) if (!isSelfContained(child, shape, bound)) return false;
 		return true;
