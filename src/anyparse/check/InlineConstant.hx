@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.ConstantFieldScan.ConstantFieldSeams;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.QueryNode;
@@ -42,7 +43,7 @@ using StringTools;
  * check cannot even prove to be a TYPE.
  *
  * The String exclusion applies TRANSITIVELY for free: `inlineConstantLiteralKinds` omits the
- * string kinds, so a reference to a String constant fails `isInlinableLiteral` on the TARGET; no
+ * string kinds, so a reference to a String constant fails `ConstantFieldScan.isScalarLiteral` on the TARGET; no
  * second check is needed. Likewise the reflection-name and macro-consumption gates cover the new
  * candidates unchanged, because `consider` runs both BEFORE testing the initializer — extending
  * only the initializer predicate routes the reference arm through them automatically.
@@ -174,10 +175,10 @@ final class InlineConstant implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final resolved: Null<Seams> = resolveSeams(plugin);
+		final resolved: Null<ConstantFieldSeams> = ConstantFieldScan.seams(plugin);
 		if (resolved == null) return [];
-		final seams: Seams = resolved;
-		final reflected: Array<String> = collectReflectedNames(files, plugin, seams.stringFold);
+		final seams: ConstantFieldSeams = resolved;
+		final reflected: Array<String> = ConstantFieldScan.reflectedNames(files, plugin, seams.stringFold);
 		final macroConsumed: Array<String> = collectMacroConsumedModules(files);
 		final proof: InitProof = (container, init) -> isInlinableInitializer(container, init, seams);
 		final violations: Array<Violation> = [];
@@ -223,12 +224,12 @@ final class InlineConstant implements Check {
 	 * check applies before adding `inline`, published so `naming`'s constant-hoist arm asks THIS
 	 * question rather than re-deriving it: both act on the answer by emitting an `inline` keyword, and
 	 * a second opinion about what folds would be a second, worse copy of the policy. False when the
-	 * grammar leaves a seam the proof needs unset (see `resolveSeams`). String literals are absent by
+	 * grammar leaves a seam the proof needs unset (see `ConstantFieldScan.seams`). String literals are absent by
 	 * construction — `inlineConstantLiteralKinds` omits them (see the hxcpp note on this class).
 	 */
 	public static function isConstantScalarInitializer(init: QueryNode, plugin: GrammarPlugin): Bool {
-		final resolved: Null<Seams> = resolveSeams(plugin);
-		return resolved != null && isInlinableLiteral(init, resolved);
+		final resolved: Null<ConstantFieldSeams> = ConstantFieldScan.seams(plugin);
+		return resolved != null && ConstantFieldScan.isScalarLiteral(init, resolved);
 	}
 
 	/**
@@ -265,7 +266,7 @@ final class InlineConstant implements Check {
 	 * (`inheritedPin`) to reach the container one level down.
 	 */
 	private static function walk(
-		out: Array<Violation>, file: String, source: String, node: QueryNode, seams: Seams, reflected: Array<String>,
+		out: Array<Violation>, file: String, source: String, node: QueryNode, seams: ConstantFieldSeams, reflected: Array<String>,
 		macroConsumed: Array<String>, inheritedPin: Bool, proof: InitProof, branch: MemberBranchSeams
 	): Void {
 		var classPinned: Bool = inheritedPin;
@@ -292,7 +293,7 @@ final class InlineConstant implements Check {
 	 * member is skipped.
 	 */
 	private static function scanContainer(
-		out: Array<Violation>, file: String, source: String, container: QueryNode, seams: Seams, reflected: Array<String>,
+		out: Array<Violation>, file: String, source: String, container: QueryNode, seams: ConstantFieldSeams, reflected: Array<String>,
 		macroConsumed: Array<String>, classPinned: Bool, proof: InitProof, branch: MemberBranchSeams
 	): Void {
 		MemberBranchScan.eachMember(branch, container, child -> seams.members.contains(child.kind), (member, run, certain) -> {
@@ -310,7 +311,7 @@ final class InlineConstant implements Check {
 				else if (seams.inlineKind != null && mod.kind == seams.inlineKind)
 					sawInline = true;
 				else if (seams.visibility.contains(mod.kind))
-					exported = exported || isExportedVisibility(source, mod, seams.defaultVis);
+					exported = exported || ConstantFieldScan.isExportedVisibility(source, mod, seams.defaultVis);
 				else if (seams.metaKinds.contains(mod.kind))
 					sawKeep = sawKeep || isPinMeta(mod.name);
 			}
@@ -319,12 +320,6 @@ final class InlineConstant implements Check {
 			else if (seams.mutableFieldKinds.contains(kind) && sawStatic && sawInline && !sawKeep)
 				considerInlineVar(out, file, source, member, seams, reflected);
 		});
-	}
-
-	/** Whether `child` (a visibility modifier) is a non-default (exported) keyword — `public` rather than the private default. */
-	private static function isExportedVisibility(source: String, child: QueryNode, defaultVis: String): Bool {
-		final span: Null<Span> = child.span;
-		return span != null && source.substring(span.from, span.to).trim() != defaultVis;
 	}
 
 	/**
@@ -336,8 +331,8 @@ final class InlineConstant implements Check {
 	 * module surface).
 	 */
 	private static function consider(
-		out: Array<Violation>, file: String, field: QueryNode, seams: Seams, reflected: Array<String>, macroConsumed: Array<String>,
-		container: QueryNode, exported: Bool, proof: InitProof
+		out: Array<Violation>, file: String, field: QueryNode, seams: ConstantFieldSeams, reflected: Array<String>,
+		macroConsumed: Array<String>, container: QueryNode, exported: Bool, proof: InitProof
 	): Void {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
@@ -345,23 +340,10 @@ final class InlineConstant implements Check {
 		if (reflected.contains(name)) return;
 		final containerName: Null<String> = container.name;
 		if (exported && containerName != null && macroConsumed.contains(containerName)) return;
-		final init: Null<QueryNode> = initializerOf(field);
+		final init: Null<QueryNode> = ConstantFieldScan.initializerOf(field);
 		if (init == null || !proof(container, init)) return;
-		final detail: String = isInlinableLiteral(init, seams) ? 'is a scalar literal' : 'folds to an inline constant';
+		final detail: String = ConstantFieldScan.isScalarLiteral(init, seams) ? 'is a scalar literal' : 'folds to an inline constant';
 		flag(out, file, span, 'static constant \'$name\' $detail; use inline');
-	}
-
-	/** The member host's initializer — its last child (the value expression; the type annotation is not a child). */
-	private static function initializerOf(field: QueryNode): Null<QueryNode> {
-		final count: Int = field.children.length;
-		return count >= 1 ? field.children[count - 1] : null;
-	}
-
-	/** Whether `init` is a basic scalar literal in `inlineConstantLiteralKinds`, or a negation wrapping a numeric one (`-5`). */
-	private static function isInlinableLiteral(init: QueryNode, seams: Seams): Bool {
-		if (seams.literalKinds.contains(init.kind)) return true;
-		if (seams.negationKind == null || init.kind != seams.negationKind || init.children.length != 1) return false;
-		return seams.numericKinds.contains(init.children[0].kind);
 	}
 
 	/**
@@ -422,12 +404,12 @@ final class InlineConstant implements Check {
 	 * work, which buys nothing until such a corpus exists.
 	 *
 	 * The String exclusion applies transitively for free: `inlineConstantLiteralKinds` omits the string
-	 * kinds, so a reference to a String constant fails `isInlinableLiteral` ON THE TARGET. Constant
+	 * kinds, so a reference to a String constant fails `ConstantFieldScan.isScalarLiteral` ON THE TARGET. Constant
 	 * ARITHMETIC over references (`A * 2`, which also compiles) is likewise out of scope — a known
 	 * conservative miss, deferred rather than half-proven.
 	 */
-	private static function isInlinableInitializer(container: QueryNode, init: QueryNode, seams: Seams): Bool {
-		if (isInlinableLiteral(init, seams)) return true;
+	private static function isInlinableInitializer(container: QueryNode, init: QueryNode, seams: ConstantFieldSeams): Bool {
+		if (ConstantFieldScan.isScalarLiteral(init, seams)) return true;
 		final name: Null<String> = init.name;
 		return name != null && init.kind == seams.identKind && declaresInlineConstant(container, name, seams);
 	}
@@ -454,7 +436,7 @@ final class InlineConstant implements Check {
 	 * terminal literal test either. It states the intent (a fold target is a FIELD) and costs
 	 * nothing, but no fixture can isolate it.
 	 */
-	private static function declaresInlineConstant(container: QueryNode, name: String, seams: Seams): Bool {
+	private static function declaresInlineConstant(container: QueryNode, name: String, seams: ConstantFieldSeams): Bool {
 		var sawStatic: Bool = false;
 		var sawInline: Bool = false;
 		for (child in container.children) {
@@ -466,71 +448,14 @@ final class InlineConstant implements Check {
 			else if (seams.members.contains(kind)) {
 				if (child.name == name) {
 					final isField: Bool = seams.finalFieldKinds.contains(kind) || seams.mutableFieldKinds.contains(kind);
-					final init: Null<QueryNode> = initializerOf(child);
-					return isField && sawStatic && sawInline && init != null && isInlinableLiteral(init, seams);
+					final init: Null<QueryNode> = ConstantFieldScan.initializerOf(child);
+					return isField && sawStatic && sawInline && init != null && ConstantFieldScan.isScalarLiteral(init, seams);
 				}
 				sawStatic = false;
 				sawInline = false;
 			}
 		}
 		return false;
-	}
-
-	/** Every plain string literal's raw content across `files` — the names a constant might be reflected by. */
-	private static function collectReflectedNames(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, stringFold: Null<StringFoldSupport>
-	): Array<String> {
-		final out: Array<String> = [];
-		if (stringFold == null) return out;
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) collectStrings(tree, entry.source, stringFold, out);
-		}
-		return out;
-	}
-
-	/** Append every plain string literal's content in `node`'s subtree to `out` (duplicates kept — only membership is read). */
-	private static function collectStrings(node: QueryNode, source: String, stringFold: StringFoldSupport, out: Array<String>): Void {
-		final literal: Null<StringLiteral> = stringFold.literalOf(node, source);
-		if (literal != null) out.push(literal.content);
-		for (child in node.children) collectStrings(child, source, stringFold, out);
-	}
-
-	/** Resolve every seam the check reads, or null when a required one is unset (the check no-ops). */
-	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
-		final shape: RefShape = plugin.refShape();
-		final containers: Array<String> = shape.visibilityContainerKinds ?? [];
-		final members: Array<String> = shape.memberDeclKinds ?? [];
-		final fieldKinds: Array<String> = shape.fieldDeclKinds ?? [];
-		final mutable: Array<String> = shape.mutableFieldDeclKinds ?? [];
-		final visibility: Array<String> = shape.visibilityModifierKinds ?? [];
-		final defaultVis: Null<String> = shape.defaultVisibilityModifierText;
-		final staticKind: Null<String> = shape.staticModifierKind;
-		final literalKinds: Array<String> = shape.inlineConstantLiteralKinds ?? [];
-		final stringKinds: Array<String> = shape.stringLiteralKinds ?? [];
-		if (
-			containers.length == 0 || members.length == 0 || fieldKinds.length == 0 || visibility.length == 0 || defaultVis == null
-			|| staticKind == null || literalKinds.length == 0
-		)
-			return null;
-		final finalFieldKinds: Array<String> = [for (k in fieldKinds) if (!mutable.contains(k)) k];
-		return finalFieldKinds.length == 0 ? null : {
-			containers: containers,
-			members: members,
-			finalFieldKinds: finalFieldKinds,
-			mutableFieldKinds: mutable,
-			visibility: visibility,
-			defaultVis: defaultVis,
-			staticKind: staticKind,
-			inlineKind: shape.inlineModifierKind,
-			identKind: shape.identKind,
-			metaKinds: plugin.metaShape().metaKinds,
-			literalKinds: literalKinds,
-			stringLiteralKinds: stringKinds,
-			numericKinds: shape.numericLiteralKinds ?? [],
-			negationKind: shape.negationKind,
-			stringFold: plugin.stringFoldSupport()
-		};
 	}
 
 	/**
@@ -542,12 +467,12 @@ final class InlineConstant implements Check {
 	 * `inline` / `@:keep` gates are applied by the caller.
 	 */
 	private static function considerInlineVar(
-		out: Array<Violation>, file: String, source: String, field: QueryNode, seams: Seams, reflected: Array<String>
+		out: Array<Violation>, file: String, source: String, field: QueryNode, seams: ConstantFieldSeams, reflected: Array<String>
 	): Void {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
 		if (name == null || span == null) return;
-		final init: Null<QueryNode> = initializerOf(field);
+		final init: Null<QueryNode> = ConstantFieldScan.initializerOf(field);
 		if (init == null || !isConstLiteral(init, seams)) return;
 		if (reflectedElsewhere(name, init, source, seams, reflected)) return;
 		flag(out, file, span, 'static inline var \'$name\' is a constant; use final');
@@ -555,13 +480,13 @@ final class InlineConstant implements Check {
 
 	/**
 	 * Whether `init` is a compile-time constant literal for the `var` -> `final` case: a
-	 * scalar (`isInlinableLiteral`) OR a String literal. Unlike the add-inline case, String
+	 * scalar (`ConstantFieldScan.isScalarLiteral`) OR a String literal. Unlike the add-inline case, String
 	 * is accepted here - the field is already inline, so there is no per-use-site codegen
 	 * change, only the keyword. Rejects arithmetic, calls, identifiers and an
 	 * `#if`-divergent value (a `ConditionalExpr`, not a literal).
 	 */
-	private static function isConstLiteral(init: QueryNode, seams: Seams): Bool {
-		return isInlinableLiteral(init, seams) || seams.stringLiteralKinds.contains(init.kind);
+	private static function isConstLiteral(init: QueryNode, seams: ConstantFieldSeams): Bool {
+		return ConstantFieldScan.isScalarLiteral(init, seams) || seams.stringLiteralKinds.contains(init.kind);
 	}
 
 	/**
@@ -572,7 +497,7 @@ final class InlineConstant implements Check {
 	 * keeps the field a `var`. The field's own value string is subtracted from the count.
 	 */
 	private static function reflectedElsewhere(
-		name: String, init: QueryNode, source: String, seams: Seams, reflected: Array<String>
+		name: String, init: QueryNode, source: String, seams: ConstantFieldSeams, reflected: Array<String>
 	): Bool {
 		var count: Int = 0;
 		for (s in reflected) if (s == name) count++;
@@ -646,25 +571,6 @@ final class InlineConstant implements Check {
 	}
 
 }
-
-/** The resolved seams `InlineConstant` reads across `run` / `fix` helpers. */
-private typedef Seams = {
-	final containers: Array<String>;
-	final members: Array<String>;
-	final finalFieldKinds: Array<String>;
-	final mutableFieldKinds: Array<String>;
-	final visibility: Array<String>;
-	final defaultVis: String;
-	final staticKind: String;
-	final inlineKind: Null<String>;
-	final identKind: String;
-	final metaKinds: Array<String>;
-	final literalKinds: Array<String>;
-	final stringLiteralKinds: Array<String>;
-	final numericKinds: Array<String>;
-	final negationKind: Null<String>;
-	final stringFold: Null<StringFoldSupport>;
-};
 
 /**
  * The initializer proof `scanContainer` threads down to `consider` — "does this member's

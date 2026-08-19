@@ -284,6 +284,7 @@ final class Linter {
 			new FieldInitInConstructor(),
 			new PreferInline(),
 			new InlineConstant(),
+			new StaticConstant(),
 			new ExtractRepeatedExpression(),
 			new TailMerge(),
 			new NoUnderscorePrefix(),

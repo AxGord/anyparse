@@ -2191,7 +2191,13 @@ final class Cli {
 			// partition `safeChecks`, which a RiskyFix check never joins (it is not
 			// `OracleRelaxable`), so the entry is INERT today — it is kept because it would carry
 			// the fixes again if the rule ever stopped being risky.
-			'unused-public-member'
+			'unused-public-member',
+			// static-constant's reachability gates are all whole-project: the subtype MENTION gate
+			// (a subtype's unqualified read of a private static does not resolve) and the
+			// reflection-name scan over every string literal in scope. On the active SUBSET a
+			// subtype or a `Reflect.field(o, "NAME")` in an unchanged file reads as absent, so a
+			// later pass would promote a field whose read then fails to compile.
+			'static-constant'
 		];
 		return {
 			risky: [for (c in checks) if (c is RiskyFix && !relaxableNoOracle(c)) c],
