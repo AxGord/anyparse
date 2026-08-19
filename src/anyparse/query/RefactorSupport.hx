@@ -4464,7 +4464,7 @@ final class RefactorSupport {
 	 * whose shape differs in any way. A statement that writes the field through some
 	 * OTHER shape is not matched here — the caller's whole-file write scan rejects it.
 	 */
-	private static function soleGuardedCtorFieldInit(
+	private static inline function soleGuardedCtorFieldInit(
 		source: String, container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape
 	): Null<GuardedCtorInit> {
 		return soleMatchedCtorIf(source, container, ctor, field, shape, guardedFieldAssign);
@@ -4879,7 +4879,7 @@ final class RefactorSupport {
 	 * caller's whole-file write scan then rejects the candidate, and the next `--fix` pass reaches
 	 * it once the assignment ahead of it has moved out.
 	 */
-	private static function soleConditionalCtorFieldInit(
+	private static inline function soleConditionalCtorFieldInit(
 		source: String, container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape
 	): Null<ConditionalCtorInit> {
 		return soleMatchedCtorIf(source, container, ctor, field, shape, conditionalFieldAssign);
