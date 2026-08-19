@@ -281,9 +281,7 @@ final class RedundantMapExists implements Check implements DefaultOff {
 		if (bindingFrom == null) return null;
 		final at: Int = bindingFrom;
 		final typeName: Null<String> = declaredTypes[at];
-		return typeName != null && CheckScan.nominalIsMap(typeName, declaredTypeSources[at], cfg.mapTypes, cfg.nullableWrappers)
-			? at
-			: null;
+		return typeName != null && MapNominal.isMap(typeName, declaredTypeSources[at], cfg.mapTypes, cfg.nullableWrappers) ? at : null;
 	}
 
 	/** Resolve the per-grammar seams + type provider, or null when the grammar lacks a needed kind / type info. */

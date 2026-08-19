@@ -149,6 +149,11 @@ final class PreferIndexAccess implements Check {
 		}));
 	}
 
+	/** Whether `nominal` (with optional verbatim `source`) is a `Map`-abstract name, or a nullable wrapper whose inner nominal is one — the shared `CheckScan` predicate. */
+	private static inline function nominalIsMap(nominal: String, source: Null<String>, cfg: Cfg): Bool {
+		return MapNominal.isMap(nominal, source, cfg.mapTypes, cfg.nullableWrappers);
+	}
+
 	/** Resolve the per-grammar seams + type provider, or null when the grammar lacks a needed kind / type info. */
 	private static function config(plugin: GrammarPlugin): Null<Cfg> {
 		final shape: RefShape = plugin.refShape();
@@ -285,7 +290,6 @@ final class PreferIndexAccess implements Check {
 		return nominal != null && nominalIsMap(nominal, src, cfg);
 	}
 
-
 	/**
 	 * Whether `node`'s subtree contains a null guard — a ternary whose condition compares
 	 * against the null literal, or a `??` — whose FALLBACK operand (the branch taken when the
@@ -317,7 +321,6 @@ final class PreferIndexAccess implements Check {
 		return false;
 	}
 
-
 	/**
 	 * The structural shape of a `get(k)` / `set(k, v)` call on an identifier or path receiver —
 	 * the arity check, the receiver as a plain path, and the key / value / statement-position
@@ -347,11 +350,6 @@ final class PreferIndexAccess implements Check {
 			isSet: isSet,
 			isStatement: parentKind == cfg.exprStmtKind
 		};
-	}
-
-	/** Whether `nominal` (with optional verbatim `source`) is a `Map`-abstract name, or a nullable wrapper whose inner nominal is one — the shared `CheckScan` predicate. */
-	private static inline function nominalIsMap(nominal: String, source: Null<String>, cfg: Cfg): Bool {
-		return CheckScan.nominalIsMap(nominal, source, cfg.mapTypes, cfg.nullableWrappers);
 	}
 
 }

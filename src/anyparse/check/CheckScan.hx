@@ -13,7 +13,6 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.Refs;
 import anyparse.query.NominalTypes;
-import anyparse.query.TypeResolver;
 
 using StringTools;
 
@@ -855,34 +854,6 @@ final class CheckScan {
 			&& !ScopeFrames.collidesWithScope(body.children, seams.localDeclKinds, frames[parent] ?? [])
 			? source.substring(bs.from + 1, bs.to - 1).trim()
 			: whole;
-	}
-
-
-	/**
-	 * Whether `nominal` (with the optional verbatim type `source` it was read from) names the
-	 * grammar's Map ABSTRACT — directly (`Map`), or through a nullable wrapper whose inner
-	 * nominal is one (`Null<Map<…>>`). Shared by `prefer-index-access` (whose `[]` rewrite is
-	 * legal only on the abstract) and `redundant-map-exists` (whose `??` rewrite relies on a
-	 * missing key reading as `null`).
-	 */
-	public static function nominalIsMap(
-		nominal: String, source: Null<String>, mapTypes: Array<String>, nullableWrappers: Array<String>
-	): Bool {
-		return mapTypes.contains(nominal)
-			|| (source != null && nullableWrappers.contains(nominal) && nullWrapsMap(source, nominal, mapTypes));
-	}
-
-
-	/** Whether the verbatim type `source` is `wrapper<Nominal…>` whose inner nominal is a `mapTypes` name. */
-	private static function nullWrapsMap(source: String, wrapper: String, mapTypes: Array<String>): Bool {
-		final s: String = source.trim();
-		final prefix: String = '$wrapper<';
-		if (!s.startsWith(prefix) || !s.endsWith('>')) return false;
-		final inner: String = s.substring(prefix.length, s.length - 1);
-		final lt: Int = inner.indexOf('<');
-		final head: String = lt == -1 ? inner : inner.substring(0, lt);
-		final simple: Null<String> = TypeResolver.simpleNominalName(head);
-		return simple != null && mapTypes.contains(simple);
 	}
 
 }

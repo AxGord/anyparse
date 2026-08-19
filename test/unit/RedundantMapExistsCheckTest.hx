@@ -42,7 +42,8 @@ class RedundantMapExistsCheckTest extends Test {
 		// The map OBJECT reaches a callee, which can store a null through the same reference.
 		final vs: Array<Violation> = violations(cls(
 			'm', "'a' => 'b'",
-			"\n\tpublic function leak():Void {\n\t\thand(m);\n\t}\n\n\tprivate function hand(o:Map<String, String>):Void {\n\t\to['y'] = null;\n\t}\n"
+			'\n\tpublic function leak():Void {\n\t\thand(m);\n\t}\n\n\tprivate function hand(o:Map<String, String>):Void {\n'
+			+ "\t\to['y'] = null;\n\t}\n"
 		));
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('cannot be ruled out') != -1, vs[0].message);
@@ -122,6 +123,13 @@ class RedundantMapExistsCheckTest extends Test {
 		Assert.isTrue(out.indexOf('return m[k] ?? (a ? k : k);') != -1, out);
 	}
 
+	/** A base class with two map fields, one of which a subtype fixture may poison. */
+	private inline function base(): String {
+		return 'class Base {\n\n\tprivate var good:Map<String, String> = [];\n\n\tprivate var bad:Map<String, String> = [];\n\n'
+			+ '\tpublic function new() {}\n\n\tpublic function readGood(k:String):String {\n\t\treturn good.exists(k) ? good[k] : k;\n\t}\n'
+			+ '\n\tpublic function readBad(k:String):String {\n\t\treturn bad.exists(k) ? bad[k] : k;\n\t}\n\n}';
+	}
+
 	/** One class with a map field, a lookup over it, and an optional extra member block. */
 	private function cls(
 		name: String, entries: String, extra: String, ?visibility: String, ?lookup: String
@@ -132,18 +140,11 @@ class RedundantMapExistsCheckTest extends Test {
 			{
 				file: 'C.hx',
 				source: 'class C {\n\n\t$vis var $name:Map<String, String> = [$entries];\n\n\tvar n:Map<String, String> = [];\n\n'
-					+ '\tvar arr:Array<String> = [];\n\n\tvar other:String = \'o\';\n\n\tvar a:Bool = true;\n\n\tpublic function new() {}\n\n'
-					+ '\tpublic function read(k:String):String {\n\t\treturn $expr;\n\t}\n\n'
-					+ '\tprivate function f(s:String):String {\n\t\treturn s;\n\t}\n$extra\n}'
+					+ '\tvar arr:Array<String> = [];\n\n\tvar other:String = \'o\';\n\n\tvar a:Bool = true;\n\n\tpublic function new() {}\n'
+					+ '\n\tpublic function read(k:String):String {\n\t\treturn $expr;\n\t}\n\n\tprivate function f(s:String):String {\n'
+					+ '\t\treturn s;\n\t}\n$extra\n}'
 			}
 		];
-	}
-
-	/** A base class with two map fields, one of which a subtype fixture may poison. */
-	private function base(): String {
-		return 'class Base {\n\n\tprivate var good:Map<String, String> = [];\n\n\tprivate var bad:Map<String, String> = [];\n\n'
-			+ '\tpublic function new() {}\n\n\tpublic function readGood(k:String):String {\n\t\treturn good.exists(k) ? good[k] : k;\n\t}\n\n'
-			+ '\tpublic function readBad(k:String):String {\n\t\treturn bad.exists(k) ? bad[k] : k;\n\t}\n\n}';
 	}
 
 	private function violations(files: Array<{ file: String, source: String }>): Array<Violation> {
