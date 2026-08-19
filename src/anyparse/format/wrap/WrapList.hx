@@ -579,8 +579,13 @@ class WrapList {
 	// column the paren happens to land in; whether that arm OPENS is the
 	// `IfFullLineExceeds` probe's decision, made later and at the true column.
 	public static function isTopLevelValueIf(d: Doc): Bool {
-		final head: Null<String> = anyparse.core.DocMeasure.firstVisibleText(d);
-		return head != null && StringTools.trim(head) == 'if';
+		final head: Null<String> = DocMeasure.firstVisibleText(d);
+		if (head == null) return false;
+		// Trimmed rather than compared raw: whether the kw's trailing space rides
+		// the `Text` leaf or arrives as a separate `OptSpace` is a
+		// `whitespace.ifPolicy` decision, and this discriminator must not turn on it.
+		final token: String = head;
+		return token.trim() == 'if';
 	}
 
 	/**
